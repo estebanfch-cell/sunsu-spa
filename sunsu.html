@@ -639,8 +639,7 @@ function renderTicket(c){
       <div class="card">
         <div class="card-title">👤 Cliente</div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" oninput="onCed(this.value)">
-          <div id="cli-msg" style="display:none;margin-top:5px;padding:8px 11px;border-radius:8px;font-size:0.74rem;font-weight:600"></div>
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" >
         </div>
         <div class="two-col">
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre"></div>
@@ -684,49 +683,7 @@ function updateSunsuUI(){
   if(sw) sw.className='tsw'+(T.esSunsu?' on':'');
   if(sec) sec.style.display=T.esSunsu?'none':'block';
 }
-function onCed(v){
-  var el=document.getElementById('cli-msg');if(!el)return;
-  if(v.length>=4){
-    el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='Buscando...';
-    var buscar=function(reg){
-      var ced=v.trim().split('.')[0].replace(/[^0-9]/g,'');
-      var found=null;
-      for(var i=0;i<reg.length;i++){
-        if(reg[i].c===ced){found=reg[i];break;}
-      }
-      if(found){
-        var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-        if(n&&!n.value) n.value=found.n;
-        if(a&&!a.value) a.value=found.ap;
-        el.style.background='var(--green-l)';el.style.color='var(--green)';
-        el.textContent='✅ '+found.n+' '+found.ap;T._clienteNuevo=false;
-      }else{
-        el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-        el.textContent='🆕 Nueva clienta — completa nombre y apellido';T._clienteNuevo=true;
-      }
-    };
-    if(window._regCache){buscar(window._regCache);return;}
-    fetch(APPS_SCRIPT_URL+'?action=buscarCliente&cedula='+encodeURIComponent(v.trim().split('.')[0]))
-      .then(function(r){return r.json();})
-      .then(function(data){
-        if(data.encontrado){
-          window._regCache=window._regCache||[];
-          buscar([{c:data.cedula,n:data.nombre,ap:data.apellido}]);
-        } else {
-          buscar([]);
-        }
-      })
-      .catch(function(){
-        // Fallback: let user type manually, don't show error
-        el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-        el.textContent='🆕 Completa nombre y apellido';T._clienteNuevo=true;
-      });
-  }else{
-    el.style.display='none';
-    // Clear auto-filled fields only if user cleared the cedula
-    if(v.length===0) window._regCache=null;
-  }
-}
+function onCed(v){}
 function selFacial(sku){
   T.facial=T.facial===sku?null:sku;
   document.querySelectorAll('[id^="cf-"]').forEach(e=>e.classList.remove('sel-pink'));
@@ -1054,7 +1011,7 @@ function enviarTicket(){
     pack6:          pack6Txt,
     extras:         extrasTexto,
     productos:      productosPayload,
-    clienteNuevo:   T._clienteNuevo||false,
+
     prodColMap:     PROD_COL_MAP,
   };
 
@@ -1135,40 +1092,7 @@ function renderGCVenta(c){
   updateGCPrev();
 }
 
-function onCedGC(v){
-  var el=document.getElementById('gc-cli-msg');
-  var nomEl=document.getElementById('gc-nom');
-  var apeEl=document.getElementById('gc-ape');
-  if(!el) return;
-  if(v.length>=4){
-    el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='Buscando...';
-    var buscar=function(reg){
-      var ced=v.trim().split('.')[0].replace(/[^0-9]/g,'');
-      var found=null;
-      for(var i=0;i<reg.length;i++){if(reg[i].c===ced){found=reg[i];break;}}
-      if(found){
-        GC.nombre=found.n; GC.apellido=found.ap;
-        if(nomEl&&!nomEl.value) nomEl.value=found.n;
-        if(apeEl&&!apeEl.value) apeEl.value=found.ap;
-        el.style.background='var(--green-l)';el.style.color='var(--green)';
-        el.textContent='✅ '+found.n+' '+found.ap;
-      }else{
-        el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-        el.textContent='🆕 Comprador nuevo';
-      }
-    };
-    if(window._regCache){buscar(window._regCache);return;}
-    fetch(APPS_SCRIPT_URL+'?action=buscarCliente&cedula='+encodeURIComponent(v.trim().split('.')[0]))
-      .then(function(r){return r.json();})
-      .then(function(data){
-        if(data.encontrado){
-          window._regCache=window._regCache||[];
-          buscar([{c:data.cedula,n:data.nombre,ap:data.apellido}]);
-        }else{buscar([]);}
-      })
-      .catch(function(){el.style.display='none';});
-  }else{el.style.display='none';}
-}
+function onCedGC(v){}
 function selGCT(t){GC.tipo=t;document.getElementById('gct-digital').classList.toggle('sel',t==='digital');document.getElementById('gct-fisica').classList.toggle('sel',t==='fisica');updateGCPrev();}
 function onGCVal(v){const cf=document.getElementById('gc-custom');if(v==='custom'){cf.style.display='block';GC.valor=0;}else{cf.style.display='none';GC.valor=parseFloat(v);}updateGCPrev();}
 function updateGCPrev(){
@@ -1228,7 +1152,7 @@ function enviarGC(){
     pack6:          '',
     extras:         '',
     productos:      {},
-    clienteNuevo:   false,
+
     prodColMap:     {},
   };
 
@@ -2254,35 +2178,21 @@ function guardarAcuity(){
 initLogin();
 
 function irATicket(btn){
-  T=newT();
-  T.nombre=btn.getAttribute('data-nom')||'';
-  T.apellido=btn.getAttribute('data-ape')||'';
-  T.cedula='';
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  var ft=document.querySelector('.tab');if(ft)ft.classList.add('active');
-  renderTicket(document.getElementById('content'));
+  var nom=btn.getAttribute('data-nom')||'';
+  var ape=btn.getAttribute('data-ape')||'';
+  var ced=btn.getAttribute('data-ced')||'';
+  T.nombre=nom; T.apellido=ape; T.cedula=ced;
+  switchTab('ticket');
+  var c=document.getElementById('content');
+  renderTicket(c);
   setTimeout(function(){
-    var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-    if(n)n.value=T.nombre;if(a)a.value=T.apellido;
-    var buscarCed=function(reg){
-      var bn=T.nombre.toLowerCase().trim();var bap=T.apellido.toLowerCase().trim();
-      var found=null;
-      for(var i=0;i<reg.length;i++){
-        if(reg[i].n.toLowerCase().trim()===bn&&reg[i].ap.toLowerCase().trim()===bap){found=reg[i];break;}
-      }
-      var ce=document.getElementById('inp-ced');var el=document.getElementById('cli-msg');
-      if(found&&ce){
-        ce.value=found.c;T.cedula=found.c;T._clienteNuevo=false;
-        if(el){el.style.display='block';el.style.background='var(--green-l)';el.style.color='var(--green)';el.textContent='Cliente: '+found.n+' '+found.ap;}
-      }else{
-        T._clienteNuevo=true;
-        if(el){el.style.display='block';el.style.background='var(--gold-l)';el.style.color='var(--gold)';el.textContent='Cliente nueva - ingresa cedula';}
-      }
-    };
-    if(window._regCache){buscarCed(window._regCache);}
-    else{fetch(APPS_SCRIPT_URL+'?action=buscarCliente&cedula='+encodeURIComponent((T.cedula||'').split('.')[0])).then(function(r){return r.json();}).then(function(data){if(data.encontrado){var reg=[{c:data.cedula,n:data.nombre,ap:data.apellido}];window._regCache=reg;buscarCed(reg);}else{buscarCed([]);}});}
-    toast('Ticket para '+T.nombre,'#6A9E7A');
-  },200);
+    var nomEl=document.getElementById('inp-nom');
+    var apeEl=document.getElementById('inp-ape');
+    var cedEl=document.getElementById('inp-ced');
+    if(nomEl&&nom) nomEl.value=nom;
+    if(apeEl&&ape) apeEl.value=ape;
+    if(cedEl&&ced) cedEl.value=ced;
+  },100);
 }
 
 function parseCsvLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++){if(line[i]==='"'){q=!q;}else if(line[i]===','&&!q){r.push(c);c='';}else{c+=line[i];}}r.push(c);return r;}
