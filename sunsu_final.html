@@ -598,25 +598,17 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
 
 
 function generarTicketDesdeCita(btn){
-  var id = btn.getAttribute('data-cita-id');
-  // Buscar en todas las listas de citas
-  var todasCitas = (window._citasHoy||[]);
-  var ci = null;
-  for(var i=0;i<todasCitas.length;i++){ if(String(todasCitas[i].id)===String(id)){ci=todasCitas[i];break;} }
-  if(!ci){ toast('No se encontró la cita','#B86B6B'); return; }
-  // Pre-fill ticket state con datos REALES de Acuity
+  const id = btn.getAttribute('data-cita-id');
+  const ci = (window._citasHoy||[]).find(c=>c.id===id) || DEMO_CITAS[0];
+  const cliente=buscarClienteEnRegistro(ci.clienteCedula, ci.clienteNombre);
+  // Pre-fill ticket state
   T=newT();
-  var cedula = (ci.phone||ci.clienteCedula||'').replace(/[^0-9]/g,'');
-  var firstName = ci.firstName||ci.clienteNombre||'';
-  var lastName = ci.lastName||ci.clienteApellido||'';
-  if(!firstName && ci.clienteNombre) {
-    var parts = ci.clienteNombre.split(' ');
-    firstName = parts[0]||'';
-    lastName = parts.slice(1).join(' ')||'';
+  if(ci.clienteCedula) T.cedula=ci.clienteCedula;
+  if(cliente){ T.nombre=cliente.nombre; T.apellido=cliente.apellido; }
+  else{
+    const parts=ci.clienteNombre.split(' ');
+    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
   }
-  T.cedula = cedula;
-  T.nombre = firstName;
-  T.apellido = lastName;
   // Switch to ticket tab
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const ticketTab=document.querySelector('.tab');
@@ -682,45 +674,36 @@ function guardarAcuity(){
 }
 
 
+// ══ CITAS AYER/HOY/MANANA ══
 function mostrarCitasDia(c,offset){
   var hoy=new Date();
   var dia=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+offset);
   var pad=function(n){return String(n).padStart(2,'0');};
-  var ds=dia.getFullYear()+'-'+pad(dia.getMonth()+1)+'-'+pad(dia.getDate());
   var dl=dia.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
-  var lbs=[['Ayer',-1],['Hoy',0],['Manana',1]];
+  var lbs=[['Ayer',-1],['Hoy',0],['ÑManana',1]];
   var nav='<div style="display:flex;gap:8px;padding:14px 14px 6px">'+
-    lbs.map(function(l){var a=l[1]===offset;return '<button onclick="mostrarCitasDia(document.getElementById(\'content\'),'+l[1]+')" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid '+(a?'#2D3B6B':'#ECEEF4')+';background:'+(a?'#2D3B6B':'white')+';color:'+(a?'white':'#7A8499')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+l[0]+'</button>';}).join('')+
+    lbs.map(function(l){var a=l[1]===offset;return '<button onclick="mostrarCitasDia(document.getElementById('content'),'+l[1]+')" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid '+(a?'#2D3B6B':'#ECEEF4')+';background:'+(a?'#2D3B6B':'white')+';color:'+(a?'white':'#7A8499')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+l[0]+'</button>';}).join('')+
   '</div><div style="font-size:0.72rem;color:#7A8499;padding:2px 14px 10px;text-transform:capitalize">'+dl+'</div>';
   c.innerHTML=nav+'<div id="citas-body" style="padding:0 14px 14px"><div style="text-align:center;padding:20px;color:#7A8499">Cargando...</div></div>';
   var body=document.getElementById('citas-body');
-  var csvUrls = {
-    "-1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv",
-    "0":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv",
-    "1":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv"
-  };
-  if(offset===0||offset===-1||offset===1){
-    fetch(csvUrls[String(offset)])
-      .then(function(r){return r.text();})
-      .then(function(txt){var j=txt.trim();if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');renderListaCitas(body,JSON.parse(j),offset);})
-      .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
-  } else {
-    var cb='cbc'+Date.now();
-    window[cb]=function(data){window[cb]=null;if(!data||data.error){body.innerHTML='<div style="padding:20px;color:orange">Sin citas</div>';return;}renderListaCitas(body,data,offset);};
-    var sc=document.createElement('script');
-    sc.src="https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec"+'?callback='+cb+'&minDate='+encodeURIComponent(ds+'T00:00:00')+'&maxDate='+encodeURIComponent(ds+'T23:59:59');
-    sc.onerror=function(){body.innerHTML='<div style="padding:20px;color:red">Error conexion</div>';};
-    setTimeout(function(){if(window[cb]){window[cb]=null;body.innerHTML='<div style="padding:20px;color:orange">Timeout</div>';}},10000);
-    document.head.appendChild(sc);
-  }
+  var urls={'-1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv','0':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv','1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv'};
+  fetch(urls[String(offset)])
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var j=txt.trim();
+      if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');
+      var data=JSON.parse(j);
+      window._citasHoy=data;
+      renderListaCitas(body,data,offset);
+    })
+    .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
 }
 
 function renderListaCitas(container,data,offset){
   var isAdmin=CU.role==='admin'||CU.role==='admin_master';
   var citas=data.filter(function(a){return !a.canceled;}).sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
   if(!isAdmin)citas=citas.filter(function(ci){return(ci.calendar||'').toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0].toLowerCase())>=0;});
-  window._citasHoy=citas; // store filtered sorted list
-  if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499"><br>No hay citas</div>';return;}
+  if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499">No hay citas</div>';return;}
   var html='<div style="font-size:0.72rem;color:#7A8499;margin-bottom:10px;font-weight:600">'+citas.length+' citas'+(isAdmin?'':' para ti')+'</div>';
   citas.forEach(function(apt){
     var dt=new Date(apt.datetime);
@@ -739,7 +722,7 @@ function renderListaCitas(container,data,offset){
     html+='</div>';
     if(apt.notes)html+='<div style="font-size:0.72rem;color:#2D3B6B;background:#F3F0FA;border-radius:8px;padding:6px 10px;margin-top:8px">'+apt.notes+'</div>';
     if(offset!==1){
-      if(!completada)html+='<button onclick="generarTicketDesdeCita(this)" data-cita-id="'+apt.id+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">Generar Ticket para '+apt.firstName+'</button>';
+      if(!completada)html+='<button onclick="generarDesde(this)" data-id="'+apt.id+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">Generar Ticket para '+apt.firstName+'</button>';
       else html+='<div style="text-align:center;font-size:0.75rem;color:#aaa;margin-top:8px">Completada</div>';
     }
     html+='</div>';
@@ -747,53 +730,29 @@ function renderListaCitas(container,data,offset){
   container.innerHTML=html;
 }
 
-function buscarClienteEnRegistro(ced,nom){return null;}
-
-function buscarCedulaEnRegistro(cedula){
-  if(!cedula||cedula.length<5) return;
-  var el=document.getElementById('cli-msg');
-  if(!el) return;
-  el.style.display='block';
-  el.style.background='var(--blue-l)';
-  el.style.color='var(--blue)';
-  el.textContent='Buscando...';
-  var cb='bcc'+Date.now();
-  window[cb]=function(data){
-    window[cb]=null;
-    if(data&&data.encontrado){
-      var n=document.getElementById('inp-nom');
-      var a=document.getElementById('inp-ape');
-      if(n) n.value=data.nombre;
-      if(a) a.value=data.apellido;
-      el.style.background='var(--green-l)';
-      el.style.color='var(--green)';
-      el.textContent='✅ '+data.nombre+' '+data.apellido+' — cliente registrada';
-      T._clienteNuevo=false;
-    } else {
-      el.style.background='var(--gold-l)';
-      el.style.color='var(--gold)';
-      el.textContent='🆕 Cliente nueva — se registrará al enviar el ticket';
-      T._clienteNuevo=true;
-    }
-  };
-  var sc=document.createElement('script');
-  sc.src='https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec?action=buscarCliente&cedula='+encodeURIComponent(cedula.trim())+'&callback='+cb;
-  sc.onerror=function(){
-    el.style.background='var(--gray-l)';
-    el.style.color='var(--gray)';
-    el.textContent='Completa nombre y apellido manualmente';
-  };
-  document.head.appendChild(sc);
-}
-
-function calcEstimado(){
-  var est=0,esCanje=T.cobro==='paquete'||T.cobro==='giftcard';
-  if(T.facial&&!esCanje){for(var i=0;i<FACIALES.length;i++){if(FACIALES[i].sku===T.facial){est+=FACIALES[i].p*1.15;break;}}}
-  EXTRAS.forEach(function(e){if(T.extras[e.sku])est+=e.t;});
-  if(T.pack3){for(var i=0;i<PAQ3.length;i++){if(PAQ3[i].sku===T.pack3){est+=PAQ3[i].p;break;}}}
-  if(T.pack6){for(var i=0;i<PAQ6.length;i++){if(PAQ6[i].sku===T.pack6){est+=PAQ6[i].p;break;}}}
-  PROVS.forEach(function(pv){pv.prods.forEach(function(p){var q=T.productos[p.sku]||0;if(q>0)est+=p.p*q;});});
-  return est.toFixed(2);
+function generarDesde(btn){
+  var id=btn.getAttribute('data-id');
+  var data=window._citasHoy||[];
+  var apt=null;
+  for(var i=0;i<data.length;i++){if(String(data[i].id)===String(id)){apt=data[i];break;}}
+  if(!apt){toast('No se encontro la cita','#B86B6B');return;}
+  T=newT();
+  T.nombre=apt.firstName||'';
+  T.apellido=apt.lastName||'';
+  T.cedula=(apt.phone||'').replace(/[^0-9]/g,'');
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  var firstTab=document.querySelector('.tab');
+  if(firstTab)firstTab.classList.add('active');
+  var c=document.getElementById('content');
+  renderTicket(c);
+  setTimeout(function(){
+    var ce=document.getElementById('inp-ced');var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
+    if(ce)ce.value=T.cedula;
+    if(n)n.value=T.nombre;
+    if(a)a.value=T.apellido;
+    if(T.cedula) onCed(T.cedula);
+    toast('Ticket prellenado para '+T.nombre,'#6A9E7A');
+  },150);
 }
 
 initLogin();
@@ -1099,6 +1058,12 @@ function enviarTicket(){
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica como se cobra el facial','#B86B6B');return;}
   var extrasArr=[];Object.keys(T.extras).forEach(function(k){if(T.extras[k])extrasArr.push(k);});if(T.otroExtra)extrasArr.push(T.otroExtra);
+  var est=0;var esCanje=T.cobro==='paquete'||T.cobro==='giftcard';
+  if(T.facial&&!esCanje){for(var i=0;i<FACIALES.length;i++){if(FACIALES[i].sku===T.facial){est+=FACIALES[i].p*1.15;break;}}}
+  EXTRAS.forEach(function(e){if(T.extras[e.sku])est+=e.t;});
+  if(T.pack3){for(var i=0;i<PAQ3.length;i++){if(PAQ3[i].sku===T.pack3){est+=PAQ3[i].p;break;}}}
+  if(T.pack6){for(var i=0;i<PAQ6.length;i++){if(PAQ6[i].sku===T.pack6){est+=PAQ6[i].p;break;}}}
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){var q=T.productos[p.sku]||0;if(q>0)est+=p.p*q;});});
   var ticket={cosmetologa:CU.name,cedula:T.esSunsu?'1793219469001':ced,
     nombre:document.getElementById('inp-nom')?document.getElementById('inp-nom').value:'',
     apellido:document.getElementById('inp-ape')?document.getElementById('inp-ape').value:'',
@@ -1109,7 +1074,7 @@ function enviarTicket(){
     facial:T.facial||'',cobro:T.cobro||'',usoPaq:T.usoPaq||'',codigoGC:T.codigoGC||'',
     pack3:T.pack3||'',pack6:T.pack6||'',tienePaquete:!!(T.pack3||T.pack6),
     canjeGC:T.cobro==='giftcard'?(T.codigoGC||'SI'):'',ventaGC:T.giftCardVenta?'SI':'',
-    extras:extrasArr.join(', '),productos:T.productos,estimado:calcEstimado(),
+    extras:extrasArr.join(', '),productos:T.productos,estimado:est.toFixed(2),
     esSunsu:T.esSunsu,clienteNuevo:T._clienteNuevo||false};
   var btn=document.querySelector('.submit-btn');
   if(btn){btn.disabled=true;btn.textContent='Enviando...';}
@@ -1568,25 +1533,17 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
 
 
 function generarTicketDesdeCita(btn){
-  var id = btn.getAttribute('data-cita-id');
-  // Buscar en todas las listas de citas
-  var todasCitas = (window._citasHoy||[]);
-  var ci = null;
-  for(var i=0;i<todasCitas.length;i++){ if(String(todasCitas[i].id)===String(id)){ci=todasCitas[i];break;} }
-  if(!ci){ toast('No se encontró la cita','#B86B6B'); return; }
-  // Pre-fill ticket state con datos REALES de Acuity
+  const id = btn.getAttribute('data-cita-id');
+  const ci = (window._citasHoy||[]).find(c=>c.id===id) || DEMO_CITAS[0];
+  const cliente=buscarClienteEnRegistro(ci.clienteCedula, ci.clienteNombre);
+  // Pre-fill ticket state
   T=newT();
-  var cedula = (ci.phone||ci.clienteCedula||'').replace(/[^0-9]/g,'');
-  var firstName = ci.firstName||ci.clienteNombre||'';
-  var lastName = ci.lastName||ci.clienteApellido||'';
-  if(!firstName && ci.clienteNombre) {
-    var parts = ci.clienteNombre.split(' ');
-    firstName = parts[0]||'';
-    lastName = parts.slice(1).join(' ')||'';
+  if(ci.clienteCedula) T.cedula=ci.clienteCedula;
+  if(cliente){ T.nombre=cliente.nombre; T.apellido=cliente.apellido; }
+  else{
+    const parts=ci.clienteNombre.split(' ');
+    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
   }
-  T.cedula = cedula;
-  T.nombre = firstName;
-  T.apellido = lastName;
   // Switch to ticket tab
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const ticketTab=document.querySelector('.tab');
@@ -1652,45 +1609,36 @@ function guardarAcuity(){
 }
 
 
+// ══ CITAS AYER/HOY/MANANA ══
 function mostrarCitasDia(c,offset){
   var hoy=new Date();
   var dia=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+offset);
   var pad=function(n){return String(n).padStart(2,'0');};
-  var ds=dia.getFullYear()+'-'+pad(dia.getMonth()+1)+'-'+pad(dia.getDate());
   var dl=dia.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
-  var lbs=[['Ayer',-1],['Hoy',0],['Manana',1]];
+  var lbs=[['Ayer',-1],['Hoy',0],['ÑManana',1]];
   var nav='<div style="display:flex;gap:8px;padding:14px 14px 6px">'+
-    lbs.map(function(l){var a=l[1]===offset;return '<button onclick="mostrarCitasDia(document.getElementById(\'content\'),'+l[1]+')" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid '+(a?'#2D3B6B':'#ECEEF4')+';background:'+(a?'#2D3B6B':'white')+';color:'+(a?'white':'#7A8499')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+l[0]+'</button>';}).join('')+
+    lbs.map(function(l){var a=l[1]===offset;return '<button onclick="mostrarCitasDia(document.getElementById('content'),'+l[1]+')" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid '+(a?'#2D3B6B':'#ECEEF4')+';background:'+(a?'#2D3B6B':'white')+';color:'+(a?'white':'#7A8499')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+l[0]+'</button>';}).join('')+
   '</div><div style="font-size:0.72rem;color:#7A8499;padding:2px 14px 10px;text-transform:capitalize">'+dl+'</div>';
   c.innerHTML=nav+'<div id="citas-body" style="padding:0 14px 14px"><div style="text-align:center;padding:20px;color:#7A8499">Cargando...</div></div>';
   var body=document.getElementById('citas-body');
-  var csvUrls = {
-    "-1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv",
-    "0":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv",
-    "1":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv"
-  };
-  if(offset===0||offset===-1||offset===1){
-    fetch(csvUrls[String(offset)])
-      .then(function(r){return r.text();})
-      .then(function(txt){var j=txt.trim();if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');renderListaCitas(body,JSON.parse(j),offset);})
-      .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
-  } else {
-    var cb='cbc'+Date.now();
-    window[cb]=function(data){window[cb]=null;if(!data||data.error){body.innerHTML='<div style="padding:20px;color:orange">Sin citas</div>';return;}renderListaCitas(body,data,offset);};
-    var sc=document.createElement('script');
-    sc.src="https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec"+'?callback='+cb+'&minDate='+encodeURIComponent(ds+'T00:00:00')+'&maxDate='+encodeURIComponent(ds+'T23:59:59');
-    sc.onerror=function(){body.innerHTML='<div style="padding:20px;color:red">Error conexion</div>';};
-    setTimeout(function(){if(window[cb]){window[cb]=null;body.innerHTML='<div style="padding:20px;color:orange">Timeout</div>';}},10000);
-    document.head.appendChild(sc);
-  }
+  var urls={'-1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv','0':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv','1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv'};
+  fetch(urls[String(offset)])
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var j=txt.trim();
+      if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');
+      var data=JSON.parse(j);
+      window._citasHoy=data;
+      renderListaCitas(body,data,offset);
+    })
+    .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
 }
 
 function renderListaCitas(container,data,offset){
   var isAdmin=CU.role==='admin'||CU.role==='admin_master';
   var citas=data.filter(function(a){return !a.canceled;}).sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
   if(!isAdmin)citas=citas.filter(function(ci){return(ci.calendar||'').toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0].toLowerCase())>=0;});
-  window._citasHoy=citas; // store filtered sorted list
-  if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499"><br>No hay citas</div>';return;}
+  if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499">No hay citas</div>';return;}
   var html='<div style="font-size:0.72rem;color:#7A8499;margin-bottom:10px;font-weight:600">'+citas.length+' citas'+(isAdmin?'':' para ti')+'</div>';
   citas.forEach(function(apt){
     var dt=new Date(apt.datetime);
@@ -1709,7 +1657,7 @@ function renderListaCitas(container,data,offset){
     html+='</div>';
     if(apt.notes)html+='<div style="font-size:0.72rem;color:#2D3B6B;background:#F3F0FA;border-radius:8px;padding:6px 10px;margin-top:8px">'+apt.notes+'</div>';
     if(offset!==1){
-      if(!completada)html+='<button onclick="generarTicketDesdeCita(this)" data-cita-id="'+apt.id+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">Generar Ticket para '+apt.firstName+'</button>';
+      if(!completada)html+='<button onclick="generarDesde(this)" data-id="'+apt.id+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">Generar Ticket para '+apt.firstName+'</button>';
       else html+='<div style="text-align:center;font-size:0.75rem;color:#aaa;margin-top:8px">Completada</div>';
     }
     html+='</div>';
@@ -1717,53 +1665,29 @@ function renderListaCitas(container,data,offset){
   container.innerHTML=html;
 }
 
-function buscarClienteEnRegistro(ced,nom){return null;}
-
-function buscarCedulaEnRegistro(cedula){
-  if(!cedula||cedula.length<5) return;
-  var el=document.getElementById('cli-msg');
-  if(!el) return;
-  el.style.display='block';
-  el.style.background='var(--blue-l)';
-  el.style.color='var(--blue)';
-  el.textContent='Buscando...';
-  var cb='bcc'+Date.now();
-  window[cb]=function(data){
-    window[cb]=null;
-    if(data&&data.encontrado){
-      var n=document.getElementById('inp-nom');
-      var a=document.getElementById('inp-ape');
-      if(n) n.value=data.nombre;
-      if(a) a.value=data.apellido;
-      el.style.background='var(--green-l)';
-      el.style.color='var(--green)';
-      el.textContent='✅ '+data.nombre+' '+data.apellido+' — cliente registrada';
-      T._clienteNuevo=false;
-    } else {
-      el.style.background='var(--gold-l)';
-      el.style.color='var(--gold)';
-      el.textContent='🆕 Cliente nueva — se registrará al enviar el ticket';
-      T._clienteNuevo=true;
-    }
-  };
-  var sc=document.createElement('script');
-  sc.src='https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec?action=buscarCliente&cedula='+encodeURIComponent(cedula.trim())+'&callback='+cb;
-  sc.onerror=function(){
-    el.style.background='var(--gray-l)';
-    el.style.color='var(--gray)';
-    el.textContent='Completa nombre y apellido manualmente';
-  };
-  document.head.appendChild(sc);
-}
-
-function calcEstimado(){
-  var est=0,esCanje=T.cobro==='paquete'||T.cobro==='giftcard';
-  if(T.facial&&!esCanje){for(var i=0;i<FACIALES.length;i++){if(FACIALES[i].sku===T.facial){est+=FACIALES[i].p*1.15;break;}}}
-  EXTRAS.forEach(function(e){if(T.extras[e.sku])est+=e.t;});
-  if(T.pack3){for(var i=0;i<PAQ3.length;i++){if(PAQ3[i].sku===T.pack3){est+=PAQ3[i].p;break;}}}
-  if(T.pack6){for(var i=0;i<PAQ6.length;i++){if(PAQ6[i].sku===T.pack6){est+=PAQ6[i].p;break;}}}
-  PROVS.forEach(function(pv){pv.prods.forEach(function(p){var q=T.productos[p.sku]||0;if(q>0)est+=p.p*q;});});
-  return est.toFixed(2);
+function generarDesde(btn){
+  var id=btn.getAttribute('data-id');
+  var data=window._citasHoy||[];
+  var apt=null;
+  for(var i=0;i<data.length;i++){if(String(data[i].id)===String(id)){apt=data[i];break;}}
+  if(!apt){toast('No se encontro la cita','#B86B6B');return;}
+  T=newT();
+  T.nombre=apt.firstName||'';
+  T.apellido=apt.lastName||'';
+  T.cedula=(apt.phone||'').replace(/[^0-9]/g,'');
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  var firstTab=document.querySelector('.tab');
+  if(firstTab)firstTab.classList.add('active');
+  var c=document.getElementById('content');
+  renderTicket(c);
+  setTimeout(function(){
+    var ce=document.getElementById('inp-ced');var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
+    if(ce)ce.value=T.cedula;
+    if(n)n.value=T.nombre;
+    if(a)a.value=T.apellido;
+    if(T.cedula) onCed(T.cedula);
+    toast('Ticket prellenado para '+T.nombre,'#6A9E7A');
+  },150);
 }
 
 initLogin();
