@@ -1643,6 +1643,12 @@ function cargarCatalogo(){
         var arr=pv.id==='ht'?nHT:pv.id==='as'?nAS:pv.id==='ml'?nML:pv.id==='ph'?nPH:[];
         if(arr.length){pv.prods.length=0;arr.forEach(function(x){pv.prods.push(x);});}
       });
+      // Re-render ticket if currently on ticket tab
+      var activeTab = document.querySelector('.tab.active');
+      if(activeTab && activeTab.textContent.indexOf('Ticket')>=0){
+        var c = document.getElementById('content');
+        if(c) renderTicket(c);
+      }
     })
     .catch(function(e){console.log('Catalogo error:',e.message);});
 }
