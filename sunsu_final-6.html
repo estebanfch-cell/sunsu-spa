@@ -1620,7 +1620,7 @@ function cargarCatalogo(){
     .then(function(csv){
       var lines=csv.split('\n');
       var nF=[],nE=[],nP3=[],nP6=[],nHT=[],nAS=[],nML=[],nPH=[];
-      for(var i=2;i<lines.length;i++){
+      for(var i=1;i<lines.length;i++){
         var cols=parseCsvLine(lines[i]);
         if(!cols[0])continue;
         var sku=cols[0].trim().replace(/"/g,'');
