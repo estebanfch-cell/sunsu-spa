@@ -1587,18 +1587,50 @@ function irATicket(btn){
   T=newT();
   T.nombre=btn.getAttribute('data-nom')||'';
   T.apellido=btn.getAttribute('data-ape')||'';
-  T.cedula=(btn.getAttribute('data-tel')||'').replace(/[^0-9]/g,'');
+  var tel=(btn.getAttribute('data-tel')||'').replace(/[^0-9]/g,'');
+  // Don't use phone as cedula - search registro by name instead
+  T.cedula='';
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   var ft=document.querySelector('.tab');if(ft)ft.classList.add('active');
   renderTicket(document.getElementById('content'));
   setTimeout(function(){
-    var ce=document.getElementById('inp-ced');
     var n=document.getElementById('inp-nom');
     var a=document.getElementById('inp-ape');
-    if(ce&&T.cedula)ce.value=T.cedula;
     if(n)n.value=T.nombre;
     if(a)a.value=T.apellido;
-    if(T.cedula){onCed(T.cedula);}
+    // Search registro by name to get cedula
+    var buscarPorNombre=function(reg){
+      var nomBuscar=(T.nombre+' '+T.apellido).toLowerCase().trim();
+      var found=null;
+      for(var i=0;i<reg.length;i++){
+        var regNom=(reg[i].n+' '+reg[i].ap).toLowerCase().trim();
+        if(regNom===nomBuscar||reg[i].n.toLowerCase()===T.nombre.toLowerCase()){found=reg[i];break;}
+      }
+      var ce=document.getElementById('inp-ced');
+      var el=document.getElementById('cli-msg');
+      if(found&&ce){
+        ce.value=found.c;
+        T.cedula=found.c;
+        T._clienteNuevo=false;
+        if(el){el.style.display='block';el.style.background='var(--green-l)';el.style.color='var(--green)';el.textContent='Cliente encontrada: '+found.n+' '+found.ap;}
+      } else {
+        T._clienteNuevo=true;
+        if(el){el.style.display='block';el.style.background='var(--gold-l)';el.style.color='var(--gold)';el.textContent='Cliente nueva - ingresa cedula';}
+      }
+    };
+    if(window._regCache){buscarPorNombre(window._regCache);}
+    else{
+      var CSV='https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1320990476&single=true&output=csv';
+      fetch(CSV).then(function(r){return r.text();}).then(function(csv){
+        var lines=csv.split('\n');var reg=[];
+        for(var i=1;i<lines.length;i++){
+          var cols=lines[i].split(',');
+          if(cols[1])reg.push({c:cols[1].trim().replace(/"/g,'').split('.')[0],n:(cols[2]||'').trim().replace(/"/g,''),ap:(cols[3]||'').trim().replace(/"/g,'')});
+        }
+        window._regCache=reg;
+        buscarPorNombre(reg);
+      });
+    }
     toast('Ticket para '+T.nombre,'#6A9E7A');
   },200);
 }
