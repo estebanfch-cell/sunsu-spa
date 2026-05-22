@@ -1636,6 +1636,9 @@ function cargarCatalogo(){
         else if(sku.indexOf('-PH-')>=0)nPH.push({sku:sku,n:nom,p:p});
       }
       if(nF.length){FACIALES.length=0;nF.forEach(function(x){FACIALES.push(x);});}
+      // Debug - show first facial price
+      if(nF.length>0) toast('Catalogo OK: '+nF[0].sku+' $'+nF[0].p,'#6A9E7A');
+      else toast('Catalogo: 0 faciales encontrados','#B86B6B');
       if(nE.length){EXTRAS.length=0;nE.forEach(function(x){EXTRAS.push(x);});}
       if(nP3.length){PAQ3.length=0;nP3.forEach(function(x){PAQ3.push(x);});}
       if(nP6.length){PAQ6.length=0;nP6.forEach(function(x){PAQ6.push(x);});}
