@@ -598,17 +598,25 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
 
 
 function generarTicketDesdeCita(btn){
-  const id = btn.getAttribute('data-cita-id');
-  const ci = (window._citasHoy||[]).find(c=>c.id===id) || DEMO_CITAS[0];
-  const cliente=buscarClienteEnRegistro(ci.clienteCedula, ci.clienteNombre);
-  // Pre-fill ticket state
+  var id = btn.getAttribute('data-cita-id');
+  // Buscar en todas las listas de citas
+  var todasCitas = (window._citasHoy||[]);
+  var ci = null;
+  for(var i=0;i<todasCitas.length;i++){ if(String(todasCitas[i].id)===String(id)){ci=todasCitas[i];break;} }
+  if(!ci){ toast('No se encontró la cita','#B86B6B'); return; }
+  // Pre-fill ticket state con datos REALES de Acuity
   T=newT();
-  if(ci.clienteCedula) T.cedula=ci.clienteCedula;
-  if(cliente){ T.nombre=cliente.nombre; T.apellido=cliente.apellido; }
-  else{
-    const parts=ci.clienteNombre.split(' ');
-    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
+  var cedula = (ci.phone||ci.clienteCedula||'').replace(/[^0-9]/g,'');
+  var firstName = ci.firstName||ci.clienteNombre||'';
+  var lastName = ci.lastName||ci.clienteApellido||'';
+  if(!firstName && ci.clienteNombre) {
+    var parts = ci.clienteNombre.split(' ');
+    firstName = parts[0]||'';
+    lastName = parts.slice(1).join(' ')||'';
   }
+  T.cedula = cedula;
+  T.nombre = firstName;
+  T.apellido = lastName;
   // Switch to ticket tab
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const ticketTab=document.querySelector('.tab');
@@ -711,7 +719,7 @@ function renderListaCitas(container,data,offset){
   var isAdmin=CU.role==='admin'||CU.role==='admin_master';
   var citas=data.filter(function(a){return !a.canceled;}).sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
   if(!isAdmin)citas=citas.filter(function(ci){return(ci.calendar||'').toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0].toLowerCase())>=0;});
-  window._citasHoy=data;
+  window._citasHoy=citas; // store filtered sorted list
   if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499"><br>No hay citas</div>';return;}
   var html='<div style="font-size:0.72rem;color:#7A8499;margin-bottom:10px;font-weight:600">'+citas.length+' citas'+(isAdmin?'':' para ti')+'</div>';
   citas.forEach(function(apt){
@@ -1560,17 +1568,25 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
 
 
 function generarTicketDesdeCita(btn){
-  const id = btn.getAttribute('data-cita-id');
-  const ci = (window._citasHoy||[]).find(c=>c.id===id) || DEMO_CITAS[0];
-  const cliente=buscarClienteEnRegistro(ci.clienteCedula, ci.clienteNombre);
-  // Pre-fill ticket state
+  var id = btn.getAttribute('data-cita-id');
+  // Buscar en todas las listas de citas
+  var todasCitas = (window._citasHoy||[]);
+  var ci = null;
+  for(var i=0;i<todasCitas.length;i++){ if(String(todasCitas[i].id)===String(id)){ci=todasCitas[i];break;} }
+  if(!ci){ toast('No se encontró la cita','#B86B6B'); return; }
+  // Pre-fill ticket state con datos REALES de Acuity
   T=newT();
-  if(ci.clienteCedula) T.cedula=ci.clienteCedula;
-  if(cliente){ T.nombre=cliente.nombre; T.apellido=cliente.apellido; }
-  else{
-    const parts=ci.clienteNombre.split(' ');
-    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
+  var cedula = (ci.phone||ci.clienteCedula||'').replace(/[^0-9]/g,'');
+  var firstName = ci.firstName||ci.clienteNombre||'';
+  var lastName = ci.lastName||ci.clienteApellido||'';
+  if(!firstName && ci.clienteNombre) {
+    var parts = ci.clienteNombre.split(' ');
+    firstName = parts[0]||'';
+    lastName = parts.slice(1).join(' ')||'';
   }
+  T.cedula = cedula;
+  T.nombre = firstName;
+  T.apellido = lastName;
   // Switch to ticket tab
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const ticketTab=document.querySelector('.tab');
@@ -1673,7 +1689,7 @@ function renderListaCitas(container,data,offset){
   var isAdmin=CU.role==='admin'||CU.role==='admin_master';
   var citas=data.filter(function(a){return !a.canceled;}).sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
   if(!isAdmin)citas=citas.filter(function(ci){return(ci.calendar||'').toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0].toLowerCase())>=0;});
-  window._citasHoy=data;
+  window._citasHoy=citas; // store filtered sorted list
   if(!citas.length){container.innerHTML='<div style="padding:24px;text-align:center;color:#7A8499"><br>No hay citas</div>';return;}
   var html='<div style="font-size:0.72rem;color:#7A8499;margin-bottom:10px;font-weight:600">'+citas.length+' citas'+(isAdmin?'':' para ti')+'</div>';
   citas.forEach(function(apt){
