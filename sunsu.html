@@ -403,8 +403,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['dash-cosm','📊 Mi Avance']];
+    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   showTab(allTabs[0][0]);
@@ -417,6 +417,7 @@ function showTab(id,btn){
   else if(id==='gc-venta') renderGCVenta(c);
   else if(id==='citas') verCitas(c,0);
   else if(id==='dash-cosm') renderDashCosm(c);
+  else if(id==='historial') renderHistorial(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
   else if(id==='admin') renderAdmin(c);
@@ -745,7 +746,7 @@ function selCobro(tipo){
   if(gb) gb.style.display=T.cobro==='giftcard'?'block':'none';
   updatePreview();
 }
-function toggleOtro(v){const b=document.getElementById('otro-box');if(b)b.style.display=v?'block':'none';}
+function toggleOtro(v){T.canjeOtro=v;const b=document.getElementById('otro-box');if(b)b.style.display=v?'block':'none';}
 function toggleGCOtro(v){const b=document.getElementById('gc-otro-box');if(b)b.style.display=v?'block':'none';}
 function selP3(sku){
   T.pack3=T.pack3===sku?null:sku;T.pack6=null;
@@ -776,22 +777,41 @@ function selP6(sku){
 function selEx(sku){
   T.extras[sku]=!T.extras[sku];
   if(!T.extras[sku]) delete T.extrasCourtesy[sku];
-  // Re-render so courtesy button appears/disappears
-  const wasOpen=document.getElementById('ab-extras')&&document.getElementById('ab-extras').classList.contains('open');
+  // Save inputs and scroll before re-render
+  const scrollY=window.scrollY;
+  const cedVal=document.getElementById('inp-ced')?.value||'';
+  const nomVal=document.getElementById('inp-nom')?.value||'';
+  const apeVal=document.getElementById('inp-ape')?.value||'';
+  const recomVal=document.getElementById('inp-recom')?.value||'';
+  const notasVal=document.getElementById('inp-notas')?.value||'';
+  const wasExtrasOpen=document.getElementById('ab-extras')?.classList.contains('open');
   renderTicket(document.getElementById('content'));
-  if(wasOpen){
-    const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');
-    if(b)b.classList.add('open');if(a)a.classList.add('open');
-  }
+  // Restore
+  if(cedVal&&document.getElementById('inp-ced')) document.getElementById('inp-ced').value=cedVal;
+  if(nomVal&&document.getElementById('inp-nom')) document.getElementById('inp-nom').value=nomVal;
+  if(apeVal&&document.getElementById('inp-ape')) document.getElementById('inp-ape').value=apeVal;
+  if(recomVal&&document.getElementById('inp-recom')) document.getElementById('inp-recom').value=recomVal;
+  if(notasVal&&document.getElementById('inp-notas')) document.getElementById('inp-notas').value=notasVal;
+  if(wasExtrasOpen){const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');if(b)b.classList.add('open');if(a)a.classList.add('open');}
+  window.scrollTo(0,scrollY);
 }
 function toggleCourtesy(sku){
   T.extrasCourtesy[sku]=!T.extrasCourtesy[sku];
-  const wasOpen=document.getElementById('ab-extras')&&document.getElementById('ab-extras').classList.contains('open');
+  const scrollY=window.scrollY;
+  const cedVal=document.getElementById('inp-ced')?.value||'';
+  const nomVal=document.getElementById('inp-nom')?.value||'';
+  const apeVal=document.getElementById('inp-ape')?.value||'';
+  const recomVal=document.getElementById('inp-recom')?.value||'';
+  const notasVal=document.getElementById('inp-notas')?.value||'';
+  const wasExtrasOpen=document.getElementById('ab-extras')?.classList.contains('open');
   renderTicket(document.getElementById('content'));
-  if(wasOpen){
-    const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');
-    if(b)b.classList.add('open');if(a)a.classList.add('open');
-  }
+  if(cedVal&&document.getElementById('inp-ced')) document.getElementById('inp-ced').value=cedVal;
+  if(nomVal&&document.getElementById('inp-nom')) document.getElementById('inp-nom').value=nomVal;
+  if(apeVal&&document.getElementById('inp-ape')) document.getElementById('inp-ape').value=apeVal;
+  if(recomVal&&document.getElementById('inp-recom')) document.getElementById('inp-recom').value=recomVal;
+  if(notasVal&&document.getElementById('inp-notas')) document.getElementById('inp-notas').value=notasVal;
+  if(wasExtrasOpen){const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');if(b)b.classList.add('open');if(a)a.classList.add('open');}
+  window.scrollTo(0,scrollY);
 }
 function toggleProv(id){
   const body=document.getElementById('pb-body-'+id), arrow=document.getElementById('pa-'+id);
@@ -946,19 +966,23 @@ function enviarTicket(){
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
   const facialTxt=T.facial?(_fac.sku+' '+_fac.n).trim():'';
 
-  // Col Q: Paquete?
+  // Col Q: Canje de paquete — SOLO cuando el facial se cobra con paquete
+  // Formato: "SI, 1/3, nota"
   let colQ='';
   if(T.cobro==='paquete'){
     colQ='SI';
-    if(T.usoPaq) colQ+=', '+T.usoPaq;
+    if(T.usoPaq) colQ+=', '+T.usoPaq;          // ej: "1/3"
     if(T.canjeOtro&&T.notaCanje) colQ+=', '+T.notaCanje;
-  } else if(T.pack3||T.pack6){
-    colQ='SI';
-    if(T.paq2gc&&T.paq2gcNota) colQ+=', '+T.paq2gcNota;
   }
+  // Si compran paquete nuevo pero NO lo usan para cobrar el facial → col Q vacía, solo va en U/V
 
-  // Col R: Gift Card canje
-  const colR=T.cobro==='giftcard'?'SI'+(T.codigoGC?', '+T.codigoGC:''):'';
+  // Col R: Gift Card canje (cobran facial con GC) O conversión de sesiones a GC
+  let colR='';
+  if(T.cobro==='giftcard'){
+    colR='SI'+(T.codigoGC?', '+T.codigoGC:'');
+  } else if(T.paq2gc&&T.paq2gcNota){
+    colR='GC, '+T.paq2gcNota;  // conversión de sesiones a gift card
+  }
 
   // Col S: Venta Gift Card (desde accordion del ticket)
   const gcV=T.gcVenta;
@@ -1037,6 +1061,11 @@ function enviarTicket(){
   const btn=document.querySelector('.submit-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ Enviando...';}
 
+  // Generar número de ticket local para mostrar (el definitivo lo genera el script)
+  const _now=new Date();
+  const _pad=n=>String(n).padStart(2,'0');
+  const _tkNum='TK-'+_now.getFullYear()+_pad(_now.getMonth()+1)+_pad(_now.getDate())+'-'+String(Math.floor(Math.random()*9000)+1000);
+
   fetch(APPS_SCRIPT_URL,{
     method:'POST',
     mode:'no-cors',
@@ -1044,7 +1073,7 @@ function enviarTicket(){
     body:JSON.stringify(payload),
   })
   .then(()=>{
-    toast('✅ Ticket enviado','#6A9E7A');
+    toast('✅ '+_tkNum+' registrado','#6A9E7A');
     T=newT();
     renderTicket(document.getElementById('content'));
   })
@@ -1293,6 +1322,514 @@ function mostrarDashCosmData(c,d){
       <div style="font-size:0.72rem;opacity:0.55;margin-top:3px">${d.periodoLabel||''}</div>
     </div>`;
 }
+
+// ══════ HISTORIAL ══════
+var _histData=null;
+
+function _histPrecioFacial(txt){
+  if(!txt) return {n:'',p:0};
+  var f=FACIALES.find(function(x){return txt.indexOf(x.sku)>=0;});
+  return f?{n:f.n,p:f.p,sku:f.sku}:{n:txt,p:0,sku:''};
+}
+function _histPrecioPaq(txt){
+  if(!txt) return null;
+  var p=PAQ3.find(function(x){return txt.indexOf(x.sku)>=0;})||PAQ6.find(function(x){return txt.indexOf(x.sku)>=0;});
+  return p?{n:p.n,p:p.p,sku:p.sku}:null;
+}
+function _histPrecioExtra(sku){
+  var e=EXTRAS.find(function(x){return x.sku===sku;});
+  return e?e.t:0;
+}
+function _histPrecioProducto(skuQty){
+  var parts=skuQty.split(' ×');
+  var sku=parts[0].trim(), qty=parseInt(parts[1])||1;
+  var prod=null;
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){if(p.sku===sku)prod=p;});});
+  return prod?{n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
+}
+
+// Build one ticket card — showPrices=false for staff
+function _buildTicketCard(t, showPrices){
+  var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
+  var esCanjeP=t.colQ&&t.colQ.indexOf('SI')===0;
+  var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
+  var esCanje=esCanjeP||esCanjeGC;
+  var facialInfo=t.facial?_histPrecioFacial(t.facial):null;
+  var facialP=facialInfo&&!esCanje?facialInfo.p:0;
+  var packInfo=t.pack3?_histPrecioPaq(t.pack3):t.pack6?_histPrecioPaq(t.pack6):null;
+  var prodsDetalle=[],prodTotal=0;
+  if(t.productos&&t.productos.length){t.productos.forEach(function(pq){var pi=_histPrecioProducto(pq);if(pi){prodsDetalle.push(pi);prodTotal+=pi.total;}});}
+  var gcVenta=null;
+  if(t.colS&&t.colS.indexOf('SI')===0){var gp=t.colS.split(',');gcVenta={codigo:(gp[1]||'').trim(),nota:(gp[2]||'').trim(),valor:65};}
+  var totalCliente=parseFloat(t.estimado)||0;
+
+  var rs='display:flex;justify-content:space-between;font-size:0.74rem;padding:3px 0;';
+  var rg='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75;';
+  // When no prices, use simpler row with no right column
+  var rowItem=function(icon,label,priceStr){
+    if(showPrices){
+      return '<div style="'+rs+'"><span>'+icon+' '+label+'</span><span style="font-weight:700">'+priceStr+'</span></div>';
+    } else {
+      return '<div style="font-size:0.74rem;padding:3px 0"><span>'+icon+' '+label+'</span></div>';
+    }
+  };
+  var rowSub=function(icon,label,priceStr){
+    if(showPrices){
+      return '<div style="'+rg+'"><span>'+icon+' '+label+'</span><span>'+priceStr+'</span></div>';
+    } else {
+      return '<div style="font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75"><span>'+icon+' '+label+'</span></div>';
+    }
+  };
+  var breakdown='';
+
+  if(facialInfo){
+    breakdown+=rowItem('💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+facialP.toFixed(2));
+  }
+  if(t.extras){
+    t.extras.split('|').forEach(function(ex){
+      ex=ex.trim(); if(!ex) return;
+      var cort=ex.indexOf('[CORTESIA]')>=0;
+      var esku=ex.match(/(SUNSU-\d+)/);
+      if(esku){
+        var ep=_histPrecioExtra(esku[1]);
+        var eo=EXTRAS.find(function(x){return x.sku===esku[1];});
+        breakdown+=rowSub('✨',(eo?eo.n:ex)+(cort?' 🎁':''),cort?'Cortesía':'$'+ep.toFixed(2));
+      }
+    });
+  }
+  if(packInfo){
+    breakdown+=rowItem('📋',packInfo.n,'$'+packInfo.p.toFixed(2));
+  }
+  if(prodsDetalle.length){
+    breakdown+=rowItem('🧴','Productos','$'+prodTotal.toFixed(2));
+    prodsDetalle.forEach(function(pd){
+      breakdown+=rowSub('',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+pd.total.toFixed(2));
+    });
+  }
+  if(gcVenta){
+    breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),'$'+gcVenta.valor.toFixed(2));
+    if(gcVenta.nota) breakdown+=rowSub('📝',gcVenta.nota,'');
+  }
+  if(t.colQ&&t.colQ.indexOf('SI')===0){
+    breakdown+='<div style="'+rg+';color:#7A5FA0"><span>📋 Canje paquete: '+t.colQ+'</span><span></span></div>';
+  }
+  if(t.colR){
+    var rLabel=t.colR.indexOf('GC,')===0?'♻️ Conv. a GC: '+t.colR:'🎁 Canje GC: '+t.colR;
+    breakdown+='<div style="'+rg+';color:#5B8FA8"><span>'+rLabel+'</span><span></span></div>';
+  }
+  var notasBlock='';
+  if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:600;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
+  if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:600;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
+
+  var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
+  card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+    +'<div>'
+    +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
+    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.hora+'</div>'
+    +'</div>'
+    +(showPrices
+      ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
+      :'')
+    +'</div>';
+  if(breakdown) card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">'+breakdown+'</div>';
+  card+=notasBlock+'</div>';
+  return card;
+}
+
+function renderHistorial(c){
+  var isAdmin=CU.role==='admin'||CU.role==='admin_master';
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+  fetch(APPS_SCRIPT_URL+'?action=getHistorial')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
+      _histData=data;
+      if(isAdmin){
+        mostrarHistorialAdmin(c,fechaHoy,fechaHoy);
+      } else {
+        mostrarHistorialStaff(c,fechaHoy);
+      }
+    })
+    .catch(function(err){
+      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br><button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
+    });
+}
+
+// ── STAFF: sus propios tickets, rango de fechas, SIN precios ──
+function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
+  if(!_histData) return;
+  if(!fechaHasta) fechaHasta=fechaDesde;
+  var tickets=_histData.filter(function(t){
+    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
+    return t.cosmetologa&&t.cosmetologa.toLowerCase().indexOf(CU.name.toLowerCase().split(' ')[0].toLowerCase())>=0;
+  });
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
+    +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Mis tickets</div>'
+    +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'</div>';
+
+  // Same date filters as admin but calls staff version
+  html+='<div class="card" style="padding:12px;margin-bottom:10px">'
+    +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +'<button onclick="aplicarFiltroStaff(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
+    +'<button onclick="aplicarFiltroStaff(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
+    +'<button onclick="aplicarFiltroStaff(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
+    +'<button onclick="aplicarFiltroStaff(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<input type="date" id="hist-desde-s" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
+    +'<span style="font-size:0.7rem;color:var(--gray)">→</span>'
+    +'<input type="date" id="hist-hasta-s" value="'+fechaHasta+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
+    +'<button onclick="aplicarFiltroFechaStaff()" style="padding:7px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">OK</button>'
+    +'</div>'
+    +'</div>';
+
+  // Counter only — no total $ for staff
+  html+='<div style="background:var(--blue-l);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;gap:10px;align-items:center">'
+    +'<div style="font-size:1.8rem;font-weight:900;color:var(--navy)">'+tickets.length+'</div>'
+    +'<div><div style="font-size:0.78rem;font-weight:700;color:var(--navy)">Tickets enviados</div>'
+    +'<div style="font-size:0.68rem;color:var(--gray)">'+CU.name+'</div></div>'
+    +'</div>';
+
+  if(tickets.length===0){
+    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets en este rango</div>';
+  } else {
+    // showPrices = false
+    tickets.forEach(function(t){ html+=_buildTicketCard(t, false); });
+  }
+  c.innerHTML=html;
+}
+
+function aplicarFiltroStaff(tipo){
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var desde,hasta;
+  hasta=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+  if(tipo==='hoy'){desde=hasta;}
+  else if(tipo==='ayer'){var ay=new Date(hoy);ay.setDate(ay.getDate()-1);desde=hasta=ay.getFullYear()+'-'+pad(ay.getMonth()+1)+'-'+pad(ay.getDate());}
+  else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
+  else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
+  mostrarHistorialStaff(document.getElementById('content'),desde,hasta);
+}
+
+function aplicarFiltroFechaStaff(){
+  var desde=document.getElementById('hist-desde-s')?.value;
+  var hasta=document.getElementById('hist-hasta-s')?.value;
+  if(!desde||!hasta){toast('Selecciona rango de fechas','#B86B6B');return;}
+  if(desde>hasta){toast('Fecha desde no puede ser mayor a hasta','#B86B6B');return;}
+  mostrarHistorialStaff(document.getElementById('content'),desde,hasta);
+}
+
+// ── ADMIN: todos los tickets, rango de fechas, precios, PDF ──
+function mostrarHistorialAdmin(c, fechaDesde, fechaHasta){
+  if(!_histData) return;
+  var tickets=_histData.filter(function(t){
+    return t.fecha&&t.fecha>=fechaDesde&&t.fecha<=fechaHasta;
+  });
+  var totalIngresos=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
+    +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Historial</div>'
+    +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'</div>';
+
+  // Filters
+  html+='<div class="card" style="padding:12px;margin-bottom:10px">'
+    +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +'<button onclick="aplicarFiltroRapido(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
+    +'<button onclick="aplicarFiltroRapido(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
+    +'<button onclick="aplicarFiltroRapido(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
+    +'<button onclick="aplicarFiltroRapido(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<input type="date" id="hist-desde" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
+    +'<span style="font-size:0.7rem;color:var(--gray)">→</span>'
+    +'<input type="date" id="hist-hasta" value="'+fechaHasta+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
+    +'<button onclick="aplicarFiltroFecha()" style="padding:7px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">OK</button>'
+    +'</div>'
+    +'</div>';
+
+  // KPIs
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div style="background:var(--blue-l);border-radius:11px;padding:10px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:var(--navy)">'+tickets.length+'</div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase">Tickets</div></div>'
+    +'<div style="background:var(--green-l);border-radius:11px;padding:10px;text-align:center"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalIngresos.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase">Total</div></div>'
+    +'<div style="background:var(--pink-l);border-radius:11px;padding:10px;text-align:center"><div style="font-size:1.1rem;font-weight:900;color:var(--pink)">$'+(tickets.length?totalIngresos/tickets.length:0).toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase">Promedio</div></div>'
+    +'</div>';
+
+  if(tickets.length===0){
+    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets en este rango</div>';
+  } else {
+    html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
+    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
+  }
+  window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
+  c.innerHTML=html;
+}
+
+function aplicarFiltroRapido(tipo){
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var desde,hasta;
+  hasta=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+  if(tipo==='hoy'){desde=hasta;}
+  else if(tipo==='ayer'){var ay=new Date(hoy);ay.setDate(ay.getDate()-1);desde=hasta=ay.getFullYear()+'-'+pad(ay.getMonth()+1)+'-'+pad(ay.getDate());}
+  else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
+  else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
+  mostrarHistorialAdmin(document.getElementById('content'),desde,hasta);
+}
+
+function aplicarFiltroFecha(){
+  var desde=document.getElementById('hist-desde')?.value;
+  var hasta=document.getElementById('hist-hasta')?.value;
+  if(!desde||!hasta){toast('Selecciona rango de fechas','#B86B6B');return;}
+  if(desde>hasta){toast('Fecha desde no puede ser mayor a hasta','#B86B6B');return;}
+  mostrarHistorialAdmin(document.getElementById('content'),desde,hasta);
+}
+
+function descargarPDFHistorial(){
+  if(!_histData||!window._histFiltroActual) return;
+  var desde=window._histFiltroActual.desde, hasta=window._histFiltroActual.hasta;
+  var tickets=_histData.filter(function(t){return t.fecha&&t.fecha>=desde&&t.fecha<=hasta;});
+  if(!tickets.length){toast('Sin tickets para imprimir','#B86B6B');return;}
+  var total=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
+  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var fmtLabel=function(f){var d=new Date(f+'T12:00:00');return d.getDate()+' '+meses[d.getMonth()]+' '+d.getFullYear();};
+  var rangoLabel=desde===hasta?fmtLabel(desde):fmtLabel(desde)+' — '+fmtLabel(hasta);
+
+  var cardsHTML='';
+  tickets.forEach(function(t){
+    var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
+    var esCanjeP=t.colQ&&t.colQ.indexOf('SI')===0;
+    var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
+    var esCanje=esCanjeP||esCanjeGC;
+    var facialInfo=t.facial?_histPrecioFacial(t.facial):null;
+    var facialP=facialInfo&&!esCanje?facialInfo.p:0;
+    var packInfo=t.pack3?_histPrecioPaq(t.pack3):t.pack6?_histPrecioPaq(t.pack6):null;
+    var prodsDetalle=[],prodTotal=0;
+    if(t.productos&&t.productos.length){t.productos.forEach(function(pq){var pi=_histPrecioProducto(pq);if(pi){prodsDetalle.push(pi);prodTotal+=pi.total;}});}
+    var gcVenta=null;
+    if(t.colS&&t.colS.indexOf('SI')===0){var gp=t.colS.split(',');gcVenta={codigo:(gp[1]||'').trim(),nota:(gp[2]||'').trim(),valor:65};}
+    var totalCliente=parseFloat(t.estimado)||0;
+    cardsHTML+='<div class="ticket" style="border-left:4px solid '+cosCol+'">'
+      +'<div class="th"><div><div class="cosm" style="color:'+cosCol+'">'+t.cosmetologa+'</div><div class="cli">'+t.nombre+' '+t.apellido+'</div><div class="sub">'+t.cedula+' · '+t.hora+'</div></div>'
+      +(totalCliente?'<div class="tot">$'+totalCliente.toFixed(2)+'</div>':'')+'</div>';
+    if(facialInfo) cardsHTML+='<div class="row"><span class="lbl">💆 '+facialInfo.n+(esCanje?' (canje)':'')+'</span><span>$'+facialP.toFixed(2)+'</span></div>';
+    if(t.extras){t.extras.split('|').forEach(function(ex){ex=ex.trim();if(!ex)return;var cort=ex.indexOf('[CORTESIA]')>=0;var esku=ex.match(/(SUNSU-\d+)/);if(esku){var ep=_histPrecioExtra(esku[1]);var eo=EXTRAS.find(function(x){return x.sku===esku[1];});cardsHTML+='<div class="row sub"><span class="lbl">✨ '+(eo?eo.n:ex)+(cort?' 🎁':'')+'</span><span>'+(cort?'Cortesía':'$'+ep.toFixed(2))+'</span></div>';}});}
+    if(packInfo) cardsHTML+='<div class="row"><span class="lbl">📋 '+packInfo.n+'</span><span>$'+packInfo.p.toFixed(2)+'</span></div>';
+    if(prodsDetalle.length){cardsHTML+='<div class="row"><span class="lbl">🧴 Productos</span><span>$'+prodTotal.toFixed(2)+'</span></div>';prodsDetalle.forEach(function(pd){cardsHTML+='<div class="row sub"><span class="lbl">'+pd.n+(pd.qty>1?' ×'+pd.qty:'')+'</span><span>$'+pd.total.toFixed(2)+'</span></div>';});}
+    if(gcVenta) cardsHTML+='<div class="row"><span class="lbl">🎁 GC '+gcVenta.codigo+'</span><span>$'+gcVenta.valor.toFixed(2)+'</span></div>';
+    if(t.colQ&&t.colQ.indexOf('SI')===0) cardsHTML+='<div class="row sub"><span class="lbl">Canje paq: '+t.colQ+'</span><span></span></div>';
+    if(t.colR) cardsHTML+='<div class="row sub"><span class="lbl">'+(t.colR.indexOf('GC,')===0?'Conv GC: ':'Canje GC: ')+t.colR+'</span><span></span></div>';
+    if(t.recomendaciones) cardsHTML+='<div class="nota"><b>📝 Recom:</b> '+t.recomendaciones+'</div>';
+    if(t.notas) cardsHTML+='<div class="nota"><b>🗒 Notas:</b> '+t.notas+'</div>';
+    cardsHTML+='</div>';
+  });
+
+  var win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Historial Sunsu '+rangoLabel+'</title><style>'
+    +'body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:20px;max-width:800px}'
+    +'h1{font-size:15px;color:#C2185B;margin:0 0 2px}'
+    +'.summary{display:flex;gap:16px;background:#f8f8f8;border-radius:8px;padding:10px;margin:10px 0}'
+    +'.sbox{text-align:center;flex:1}.snum{font-size:16px;font-weight:900}.slbl{font-size:9px;color:#888;text-transform:uppercase}'
+    +'.ticket{border-left:4px solid #ccc;border-radius:6px;padding:10px;margin-bottom:10px;background:white;border:1px solid #eee;page-break-inside:avoid}'
+    +'.th{display:flex;justify-content:space-between;margin-bottom:6px}'
+    +'.cosm{font-size:9px;font-weight:700;text-transform:uppercase}'
+    +'.cli{font-size:12px;font-weight:800;color:#1A237E}.sub{font-size:9px;color:#888}.tot{font-size:14px;font-weight:900;color:#2E7D32;text-align:right}'
+    +'.row{display:flex;justify-content:space-between;padding:2px 0;border-top:1px solid #f5f5f5;font-size:10px}'
+    +'.row.sub{padding-left:14px;opacity:0.75}.lbl{flex:1;color:#444}'
+    +'.nota{font-size:9px;color:#666;margin-top:4px;padding-top:4px;border-top:1px solid #f0f0f4}'
+    +'@media print{.noprint{display:none}}'
+    +'</style></head><body>'
+    +'<h1>🌸 SUNSU SPA — Historial '+rangoLabel+'</h1>'
+    +'<p style="color:#888;font-size:9px;margin:0 0 8px">Generado '+new Date().toLocaleString()+'</p>'
+    +'<div class="summary">'
+    +'<div class="sbox"><div class="snum" style="color:#1A237E">'+tickets.length+'</div><div class="slbl">Tickets</div></div>'
+    +'<div class="sbox"><div class="snum" style="color:#2E7D32">$'+total.toFixed(2)+'</div><div class="slbl">Total cobrado</div></div>'
+    +'<div class="sbox"><div class="snum" style="color:#C2185B">$'+(tickets.length?total/tickets.length:0).toFixed(2)+'</div><div class="slbl">Promedio</div></div>'
+    +'</div>'
+    +cardsHTML
+    +'<br><button class="noprint" onclick="window.print()" style="padding:9px 22px;background:#C2185B;color:white;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">🖨️ Imprimir / Guardar PDF</button>'
+    +'</body></html>');
+  win.document.close();
+}
+
+function _histPrecioFacial(txt){
+  if(!txt) return {n:'',p:0};
+  var canje=false;
+  // Check colQ — if there's a colQ it means it was paid with paquete
+  var f=FACIALES.find(function(x){return txt.indexOf(x.sku)>=0;});
+  return f?{n:f.n,p:f.p,sku:f.sku}:{n:txt,p:0,sku:''};
+}
+function _histPrecioPaq(txt){
+  if(!txt) return null;
+  var p=PAQ3.find(function(x){return txt.indexOf(x.sku)>=0;})||PAQ6.find(function(x){return txt.indexOf(x.sku)>=0;});
+  return p?{n:p.n,p:p.p,sku:p.sku}:null;
+}
+function _histPrecioExtra(sku){
+  var e=EXTRAS.find(function(x){return x.sku===sku;});
+  return e?e.t:0;
+}
+function _histPrecioProducto(skuQty){
+  // format: "SUNSU-HT-002 ×2"
+  var parts=skuQty.split(' ×');
+  var sku=parts[0].trim(), qty=parseInt(parts[1])||1;
+  var prod=null;
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){if(p.sku===sku)prod=p;});});
+  return prod?{n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
+}
+
+function _buildTicketCard(t, forPDF){
+  var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
+
+  var esCanjeP=t.colQ&&t.colQ.indexOf('SI')===0;
+  var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
+  var esCanje=esCanjeP||esCanjeGC;
+
+  // ── Facial ──
+  var facialInfo=t.facial?_histPrecioFacial(t.facial):null;
+  var facialP=facialInfo&&!esCanje?facialInfo.p:0;
+
+  // ── Extras ──
+  var extrasDetalle=[];
+  if(t.extras){
+    t.extras.split('|').forEach(function(ex){
+      ex=ex.trim(); if(!ex) return;
+      var cort=ex.indexOf('[CORTESIA]')>=0;
+      var esku=ex.match(/(SUNSU-\d+)/);
+      if(esku){
+        var ep=_histPrecioExtra(esku[1]);
+        var eObj=EXTRAS.find(function(x){return x.sku===esku[1];});
+        extrasDetalle.push({n:eObj?eObj.n:ex,p:cort?0:ep,cort:cort});
+      }
+    });
+  }
+  var extrasTotal=extrasDetalle.reduce(function(s,e){return s+(e.cort?0:e.p);},0);
+
+  // ── Paquetes vendidos ──
+  var packInfo=null;
+  if(t.pack3) packInfo=_histPrecioPaq(t.pack3);
+  if(!packInfo&&t.pack6) packInfo=_histPrecioPaq(t.pack6);
+
+  // ── Productos ──
+  var prodsDetalle=[];
+  var prodTotal=0;
+  if(t.productos&&t.productos.length){
+    t.productos.forEach(function(pq){
+      var pi=_histPrecioProducto(pq);
+      if(pi){prodsDetalle.push(pi);prodTotal+=pi.total;}
+    });
+  }
+
+  // ── GC Venta ──
+  var gcVenta=null;
+  if(t.colS&&t.colS.indexOf('SI')===0){
+    var gcParts=t.colS.split(',');
+    var gcCod=(gcParts[1]||'').trim();
+    var gcNota=(gcParts[2]||'').trim();
+    gcVenta={codigo:gcCod,nota:gcNota,valor:65};
+  }
+
+  // ── Total ──
+  var totalCliente=parseFloat(t.estimado)||0;
+
+  var rs='display:flex;justify-content:space-between;font-size:0.74rem;padding:3px 0;';
+  var rg='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75;';
+
+  var breakdown='';
+
+  if(facialInfo){
+    breakdown+='<div style="'+rs+'"><span>💆 '+facialInfo.n+(esCanje?' <span style=\'font-size:0.62rem;color:#888\'>(canje)</span>':'')+'</span><span style="font-weight:700">$'+facialP.toFixed(2)+'</span></div>';
+  }
+  extrasDetalle.forEach(function(ex){
+    breakdown+='<div style="'+rg+'"><span>✨ '+ex.n+(ex.cort?' 🎁':'')+'</span><span>'+(ex.cort?'Cortesía':'$'+ex.p.toFixed(2))+'</span></div>';
+  });
+  if(packInfo){
+    breakdown+='<div style="'+rs+'"><span>📋 '+packInfo.n+'</span><span style="font-weight:700">$'+packInfo.p.toFixed(2)+'</span></div>';
+  }
+  if(prodsDetalle.length){
+    breakdown+='<div style="'+rs+';opacity:0.7"><span>🧴 Productos</span><span>$'+prodTotal.toFixed(2)+'</span></div>';
+    prodsDetalle.forEach(function(pd){
+      breakdown+='<div style="'+rg+'"><span>'+pd.n+(pd.qty>1?' ×'+pd.qty:'')+'</span><span>$'+pd.total.toFixed(2)+'</span></div>';
+    });
+  }
+  if(gcVenta){
+    breakdown+='<div style="'+rs+'"><span>🎁 Gift Card'+( gcVenta.codigo?' · '+gcVenta.codigo:'')+'</span><span style="font-weight:700">$'+gcVenta.valor.toFixed(2)+'</span></div>';
+    if(gcVenta.nota) breakdown+='<div style="'+rg+'"><span>📝 '+gcVenta.nota+'</span><span></span></div>';
+  }
+  if(t.colQ&&t.colQ.indexOf('SI')===0){
+    breakdown+='<div style="'+rg+';color:#7A5FA0"><span>📋 Canje paquete: '+t.colQ+'</span><span></span></div>';
+  }
+  if(t.colR){
+    var rLabel=t.colR.indexOf('GC,')===0?'♻️ Conv. a GC: '+t.colR:'🎁 Canje GC: '+t.colR;
+    breakdown+='<div style="'+rg+';color:#5B8FA8"><span>'+rLabel+'</span><span></span></div>';
+  }
+
+  var notasBlock='';
+  if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:600;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
+  if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:600;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
+
+  var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
+  // Header
+  card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+    +'<div>'
+    +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
+    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.hora+'</div>'
+    +'</div>'
+    +'<div style="text-align:right">'
+    +'<div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div>'
+    +'<div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div>'
+    +'</div>'
+    +'</div>';
+  // Breakdown
+  if(breakdown){
+    card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">';
+    card+=breakdown;
+    card+='</div>';
+  }
+  card+=notasBlock;
+  card+='</div>';
+  return card;
+}
+
+function renderHistorial(c){
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+  fetch(APPS_SCRIPT_URL+'?action=getHistorial')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
+      _histData=data;
+      if(isAdmin){
+        mostrarHistorialAdmin(c, fechaHoy, fechaHoy);
+      } else {
+        mostrarHistorialStaff(c, fechaHoy, fechaHoy);
+      }
+    })
+    .catch(function(err){
+      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br><button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
+    });
+}
+
+
+
+
 
 // ══════ DASH ADMIN ══════
 function renderDashAdmin(c){
