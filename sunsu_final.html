@@ -742,28 +742,39 @@ function renderListaCitas(container,data,offset){
 function buscarClienteEnRegistro(ced,nom){return null;}
 
 function buscarCedulaEnRegistro(cedula){
-  if(!cedula||cedula.length<7)return;
+  if(!cedula||cedula.length<5) return;
   var el=document.getElementById('cli-msg');
-  if(!el)return;
-  el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='Buscando en el registro...';
+  if(!el) return;
+  el.style.display='block';
+  el.style.background='var(--blue-l)';
+  el.style.color='var(--blue)';
+  el.textContent='Buscando...';
   var cb='bcc'+Date.now();
   window[cb]=function(data){
     window[cb]=null;
     if(data&&data.encontrado){
-      var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-      if(n)n.value=data.nombre;if(a)a.value=data.apellido;
-      el.style.background='var(--green-l)';el.style.color='var(--green)';
-      el.textContent='Cliente encontrada: '+data.nombre+' '+data.apellido;
+      var n=document.getElementById('inp-nom');
+      var a=document.getElementById('inp-ape');
+      if(n) n.value=data.nombre;
+      if(a) a.value=data.apellido;
+      el.style.background='var(--green-l)';
+      el.style.color='var(--green)';
+      el.textContent='✅ '+data.nombre+' '+data.apellido+' — cliente registrada';
       T._clienteNuevo=false;
     } else {
-      el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-      el.textContent='Cliente nueva - se registrara al enviar';
+      el.style.background='var(--gold-l)';
+      el.style.color='var(--gold)';
+      el.textContent='🆕 Cliente nueva — se registrará al enviar el ticket';
       T._clienteNuevo=true;
     }
   };
   var sc=document.createElement('script');
-  sc.src="https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec"+'?action=buscarCliente&cedula='+encodeURIComponent(cedula)+'&callback='+cb;
-  sc.onerror=function(){el.textContent='Completa nombre y apellido manualmente';};
+  sc.src='https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec?action=buscarCliente&cedula='+encodeURIComponent(cedula.trim())+'&callback='+cb;
+  sc.onerror=function(){
+    el.style.background='var(--gray-l)';
+    el.style.color='var(--gray)';
+    el.textContent='Completa nombre y apellido manualmente';
+  };
   document.head.appendChild(sc);
 }
 
@@ -1693,28 +1704,39 @@ function renderListaCitas(container,data,offset){
 function buscarClienteEnRegistro(ced,nom){return null;}
 
 function buscarCedulaEnRegistro(cedula){
-  if(!cedula||cedula.length<7)return;
+  if(!cedula||cedula.length<5) return;
   var el=document.getElementById('cli-msg');
-  if(!el)return;
-  el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='Buscando en el registro...';
+  if(!el) return;
+  el.style.display='block';
+  el.style.background='var(--blue-l)';
+  el.style.color='var(--blue)';
+  el.textContent='Buscando...';
   var cb='bcc'+Date.now();
   window[cb]=function(data){
     window[cb]=null;
     if(data&&data.encontrado){
-      var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-      if(n)n.value=data.nombre;if(a)a.value=data.apellido;
-      el.style.background='var(--green-l)';el.style.color='var(--green)';
-      el.textContent='Cliente encontrada: '+data.nombre+' '+data.apellido;
+      var n=document.getElementById('inp-nom');
+      var a=document.getElementById('inp-ape');
+      if(n) n.value=data.nombre;
+      if(a) a.value=data.apellido;
+      el.style.background='var(--green-l)';
+      el.style.color='var(--green)';
+      el.textContent='✅ '+data.nombre+' '+data.apellido+' — cliente registrada';
       T._clienteNuevo=false;
     } else {
-      el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-      el.textContent='Cliente nueva - se registrara al enviar';
+      el.style.background='var(--gold-l)';
+      el.style.color='var(--gold)';
+      el.textContent='🆕 Cliente nueva — se registrará al enviar el ticket';
       T._clienteNuevo=true;
     }
   };
   var sc=document.createElement('script');
-  sc.src="https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec"+'?action=buscarCliente&cedula='+encodeURIComponent(cedula)+'&callback='+cb;
-  sc.onerror=function(){el.textContent='Completa nombre y apellido manualmente';};
+  sc.src='https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec?action=buscarCliente&cedula='+encodeURIComponent(cedula.trim())+'&callback='+cb;
+  sc.onerror=function(){
+    el.style.background='var(--gray-l)';
+    el.style.color='var(--gray)';
+    el.textContent='Completa nombre y apellido manualmente';
+  };
   document.head.appendChild(sc);
 }
 
