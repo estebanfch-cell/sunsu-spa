@@ -436,7 +436,7 @@ function renderCitas(c){
     c.innerHTML = '<div style="padding:20px;font-size:14px;color:#333">Cargando citas...</div>';
     
     var cbName = 'sunsu_cb_' + Date.now();
-    var PROXY = 'https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec';
+    var PROXY = 'https://script.google.com/macros/s/AKfycbxvtutVd0fJr2GmoRC4ETyPXlT4xBUJ9gi8oBbh3e2E0ULAYczuKUhRiI5l4E7uant6/exec';
     
     window[cbName] = function(data) {
       try {
@@ -1078,7 +1078,7 @@ function enviarTicket(){
     esSunsu:T.esSunsu,clienteNuevo:T._clienteNuevo||false};
   var btn=document.querySelector('.submit-btn');
   if(btn){btn.disabled=true;btn.textContent='Enviando...';}
-  fetch('https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ticket)})
+  fetch('https://script.google.com/macros/s/AKfycbxvtutVd0fJr2GmoRC4ETyPXlT4xBUJ9gi8oBbh3e2E0ULAYczuKUhRiI5l4E7uant6/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ticket)})
   .then(function(r){return r.json();})
   .then(function(data){
     if(data.ok){toast('Ticket guardado correctamente','#6A9E7A');T=newT();renderTicket(document.getElementById('content'));}
