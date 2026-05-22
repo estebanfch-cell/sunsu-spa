@@ -1653,7 +1653,7 @@ function cargarCatalogo(){
         if(c) renderTicket(c);
       }
     })
-    .catch(function(e){console.log('Catalogo error:',e.message);});
+    .catch(function(e){toast('Catalogo error: '+e.message,'#B86B6B');});
 }
 
 function verCitas(c,o){
