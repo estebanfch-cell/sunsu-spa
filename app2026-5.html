@@ -1069,12 +1069,83 @@ function updatePreview(){
   </div>`;
 }
 function enviarTicket(){
-  if(!T.esSunsu&&!document.getElementById('inp-ced')?.value){toast('Ingresa la cédula del cliente','#B86B6B');return;}
-  const tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(v=>v)||Object.values(T.productos).some(q=>q>0);
+  var cedula = document.getElementById('inp-ced') ? document.getElementById('inp-ced').value : '';
+  if(!T.esSunsu && !cedula){toast('Ingresa la cédula del cliente','#B86B6B');return;}
+  var tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(function(v){return v;})||Object.values(T.productos).some(function(q){return q>0;});
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica cómo se cobra el facial','#B86B6B');return;}
-  toast('✅ Ticket enviado','#6A9E7A');
-  T=newT();renderTicket(document.getElementById('content'));
+
+  // Armar objeto del ticket
+  var extrasArr = [];
+  Object.keys(T.extras).forEach(function(k){ if(T.extras[k]) extrasArr.push(k); });
+  if(T.otroExtra) extrasArr.push(T.otroExtra);
+
+  var ticket = {
+    cosmetologa: CU.name,
+    cedula: T.esSunsu ? '1793219469001' : cedula,
+    nombre: document.getElementById('inp-nom') ? document.getElementById('inp-nom').value : '',
+    apellido: document.getElementById('inp-ape') ? document.getElementById('inp-ape').value : '',
+    factura: document.getElementById('inp-fac') ? document.getElementById('inp-fac').value : '',
+    fechaRetorno: document.getElementById('inp-ret') ? document.getElementById('inp-ret').value : '',
+    recomendaciones: document.getElementById('inp-recom') ? document.getElementById('inp-recom').value : '',
+    notas: document.getElementById('inp-notas') ? document.getElementById('inp-notas').value : '',
+    facial: T.facial || '',
+    cobro: T.cobro || '',
+    usoPaq: T.usoPaq || '',
+    codigoGC: T.codigoGC || '',
+    pack3: T.pack3 || '',
+    pack6: T.pack6 || '',
+    tienePaquete: !!(T.pack3||T.pack6),
+    canjeGC: T.cobro==='giftcard' ? (T.codigoGC||'SI') : '',
+    ventaGC: T.giftCardVenta ? 'SI' : '',
+    extras: extrasArr.join(', '),
+    productos: T.productos,
+    estimado: calcEstimado(),
+    esSunsu: T.esSunsu,
+    clienteNuevo: T._clienteNuevo || false,
+    paq2gcNota: T.paq2gcNota || '',
+  };
+
+  // Mostrar spinner
+  var btn = document.querySelector('.submit-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Enviando...'; }
+
+  // Enviar al Apps Script via fetch POST
+  fetch('https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(ticket)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.ok){
+      toast('✅ Ticket guardado en el sistema','#6A9E7A');
+      T=newT();
+      renderTicket(document.getElementById('content'));
+    } else {
+      toast('Error: '+(data.error||'desconocido'),'#B86B6B');
+      if(btn){ btn.disabled=false; btn.textContent='✓ Enviar Ticket'; }
+    }
+  })
+  .catch(function(err){
+    toast('Error de conexión: '+err.message,'#B86B6B');
+    if(btn){ btn.disabled=false; btn.textContent='✓ Enviar Ticket'; }
+  });
+}
+
+function calcEstimado(){
+  var est = 0;
+  var esCanje = T.cobro==='paquete'||T.cobro==='giftcard';
+  if(T.facial && !esCanje){
+    var f = null;
+    for(var i=0;i<FACIALES.length;i++){ if(FACIALES[i].sku===T.facial){f=FACIALES[i];break;} }
+    if(f) est += f.p * 1.15;
+  }
+  EXTRAS.forEach(function(e){ if(T.extras[e.sku]) est += e.t; });
+  if(T.pack3){ for(var i=0;i<PAQ3.length;i++){ if(PAQ3[i].sku===T.pack3){est+=PAQ3[i].p;break;} } }
+  if(T.pack6){ for(var i=0;i<PAQ6.length;i++){ if(PAQ6[i].sku===T.pack6){est+=PAQ6[i].p;break;} } }
+  PROVS.forEach(function(pv){ pv.prods.forEach(function(p){ var q=T.productos[p.sku]||0; if(q>0) est+=p.p*q; }); });
+  return est.toFixed(2);
 }
 
 // ══════ GIFT CARD VENTA ══════
