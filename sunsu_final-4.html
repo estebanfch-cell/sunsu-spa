@@ -673,7 +673,96 @@ function guardarAcuity(){
   renderCitas(document.getElementById('content'));
 }
 
-initLogin();
+
+// ══════ CATALOGO DESDE GOOGLE SHEET ══════
+var _catalogoCargado = false;
+
+function cargarCatalogo(callback) {
+  if (_catalogoCargado) { if(callback) callback(); return; }
+  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv')
+    .then(function(r) { return r.text(); })
+    .then(function(csv) {
+      var lines = csv.split('\n');
+      var faciales = [], extras = [], paq3 = [], paq6 = [], productos = [];
+      
+      for (var i = 2; i < lines.length; i++) {
+        var cols = parseCsvLine(lines[i]);
+        if (!cols[0]) continue;
+        var sku = cols[0].trim().replace(/"/g,'');
+        var nombre = (cols[1]||'').trim().replace(/"/g,'');
+        var tipo = (cols[2]||'').trim().replace(/"/g,'').toUpperCase();
+        var precio = parseFloat((cols[3]||'0').replace(/"/g,'')) || 0;
+        var precioIVA = parseFloat((cols[5]||'0').replace(/"/g,'')) || 0;
+        var compra = parseFloat((cols[6]||'0').replace(/"/g,'')) || 0;
+
+        if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('FACIAL') >= 0) {
+          var com = (sku==='SUNSU-40'||sku==='SUNSU-41'||sku==='SUNSU-42'||sku==='SUNSU-43'||sku==='SUNSU-52') ? 3 : 2;
+          faciales.push({sku:sku, n:nombre, p:precio, com:com});
+        } else if (sku.match(/^SUNSU-\d+$/) && (tipo.indexOf('EXTRA')>=0 || tipo.indexOf('ADICIONAL')>=0 || [7,15,16,31,32,33,36,37,38,39].indexOf(parseInt(sku.replace('SUNSU-','')))>=0)) {
+          extras.push({sku:sku, n:nombre, t:precioIVA||precio});
+        } else if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('X3')>=0) {
+          paq3.push({sku:sku, n:nombre, p:precio});
+        } else if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('X6')>=0) {
+          paq6.push({sku:sku, n:nombre, p:precio});
+        } else if (sku.match(/SUNSU-(HT|AS|ML|PH|JN)/)) {
+          var prov = sku.indexOf('-HT-')>=0?'ANUA':sku.indexOf('-AS-')>=0?'Eyenlip':sku.indexOf('-ML-')>=0?'Dr.esthe':sku.indexOf('-PH-')>=0?'APHLORA':'RiRe';
+          productos.push({sku:sku, n:nombre, p:precio, marca:prov});
+        }
+      }
+
+      if (faciales.length > 0) {
+        FACIALES.length = 0;
+        faciales.forEach(function(f){ FACIALES.push(f); });
+      }
+      if (extras.length > 0) {
+        EXTRAS.length = 0;
+        extras.forEach(function(e){ EXTRAS.push(e); });
+      }
+      if (paq3.length > 0) {
+        PAQ3.length = 0;
+        paq3.forEach(function(p){ PAQ3.push(p); });
+      }
+      if (paq6.length > 0) {
+        PAQ6.length = 0;
+        paq6.forEach(function(p){ PAQ6.push(p); });
+      }
+      // Update PROVS products
+      if (productos.length > 0) {
+        var provMap = {'ANUA':'ht','Eyenlip':'as','Dr.esthe':'ml','APHLORA':'ph','RiRe':'jn'};
+        PROVS.forEach(function(pv) {
+          var nuevosProds = productos.filter(function(p){ return p.marca === pv.label.split(' ')[0] || pv.prods.some(function(ex){return ex.sku.split('-')[1]===p.sku.split('-')[1];}); });
+          if (nuevosProds.length > 0) {
+            pv.prods.forEach(function(ep) {
+              var nuevo = null;
+              for(var j=0;j<productos.length;j++){ if(productos[j].sku===ep.sku){nuevo=productos[j];break;} }
+              if (nuevo) { ep.p = nuevo.p; ep.n = nuevo.n; }
+            });
+          }
+        });
+      }
+
+      _catalogoCargado = true;
+      if (callback) callback();
+    })
+    .catch(function(e) {
+      console.log('Error cargando catalogo:', e.message);
+      if (callback) callback();
+    });
+}
+
+function parseCsvLine(line) {
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQ = !inQ; }
+    else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += line[i]; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// Cargar catalogo al iniciar
+cargarCatalogo(function(){ initLogin(); });
 }
 
 // ══════ APP ══════
@@ -867,44 +956,9 @@ function updateSunsuUI(){
   if(sec) sec.style.display=T.esSunsu?'none':'block';
 }
 function onCed(v){
-  var el=document.getElementById('cli-msg');if(!el)return;
-  if(v.length>=5){
-    el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='Buscando...';
-    var buscar=function(reg){
-      var ced=v.trim().split('.')[0];
-      var found=null;
-      for(var i=0;i<reg.length;i++){if(reg[i].c===ced){found=reg[i];break;}}
-      if(found){
-        var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-        if(n)n.value=found.n;if(a)a.value=found.ap;
-        el.style.background='var(--green-l)';el.style.color='var(--green)';
-        el.textContent='Cliente: '+found.n+' '+found.ap;T._clienteNuevo=false;
-      }else{
-        el.style.background='var(--gold-l)';el.style.color='var(--gold)';
-        el.textContent='Cliente nueva - completa nombre y apellido';T._clienteNuevo=true;
-      }
-    };
-    if(window._regCache){buscar(window._regCache);return;}
-    fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1320990476&single=true&output=csv')
-      .then(function(r){return r.text();})
-      .then(function(csv){
-        var lines=csv.split('\n');
-        var reg=[];
-        for(var i=1;i<lines.length;i++){
-          var cols=lines[i].split(',');
-          if(cols[1]){
-            reg.push({
-              c:cols[1].trim().replace(/"/g,'').split('.')[0],
-              n:(cols[2]||'').trim().replace(/"/g,''),
-              ap:(cols[3]||'').trim().replace(/"/g,'')
-            });
-          }
-        }
-        window._regCache=reg;
-        buscar(reg);
-      })
-      .catch(function(){el.textContent='Completa nombre y apellido';});
-  }else{el.style.display='none';}
+  const el=document.getElementById('cli-msg');
+  if(v.length>=7){el.style.display='block';el.style.background='var(--blue-l)';el.style.color='var(--blue)';el.textContent='🔍 Buscando...';setTimeout(()=>{el.textContent='ℹ️ Si es nuevo, completa nombre y apellido';},700);}
+  else el.style.display='none';
 }
 function selFacial(sku){
   T.facial=T.facial===sku?null:sku;
@@ -1534,7 +1588,96 @@ function guardarAcuity(){
   renderCitas(document.getElementById('content'));
 }
 
-initLogin();
+
+// ══════ CATALOGO DESDE GOOGLE SHEET ══════
+var _catalogoCargado = false;
+
+function cargarCatalogo(callback) {
+  if (_catalogoCargado) { if(callback) callback(); return; }
+  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv')
+    .then(function(r) { return r.text(); })
+    .then(function(csv) {
+      var lines = csv.split('\n');
+      var faciales = [], extras = [], paq3 = [], paq6 = [], productos = [];
+      
+      for (var i = 2; i < lines.length; i++) {
+        var cols = parseCsvLine(lines[i]);
+        if (!cols[0]) continue;
+        var sku = cols[0].trim().replace(/"/g,'');
+        var nombre = (cols[1]||'').trim().replace(/"/g,'');
+        var tipo = (cols[2]||'').trim().replace(/"/g,'').toUpperCase();
+        var precio = parseFloat((cols[3]||'0').replace(/"/g,'')) || 0;
+        var precioIVA = parseFloat((cols[5]||'0').replace(/"/g,'')) || 0;
+        var compra = parseFloat((cols[6]||'0').replace(/"/g,'')) || 0;
+
+        if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('FACIAL') >= 0) {
+          var com = (sku==='SUNSU-40'||sku==='SUNSU-41'||sku==='SUNSU-42'||sku==='SUNSU-43'||sku==='SUNSU-52') ? 3 : 2;
+          faciales.push({sku:sku, n:nombre, p:precio, com:com});
+        } else if (sku.match(/^SUNSU-\d+$/) && (tipo.indexOf('EXTRA')>=0 || tipo.indexOf('ADICIONAL')>=0 || [7,15,16,31,32,33,36,37,38,39].indexOf(parseInt(sku.replace('SUNSU-','')))>=0)) {
+          extras.push({sku:sku, n:nombre, t:precioIVA||precio});
+        } else if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('X3')>=0) {
+          paq3.push({sku:sku, n:nombre, p:precio});
+        } else if (sku.match(/^SUNSU-\d+$/) && nombre.toUpperCase().indexOf('X6')>=0) {
+          paq6.push({sku:sku, n:nombre, p:precio});
+        } else if (sku.match(/SUNSU-(HT|AS|ML|PH|JN)/)) {
+          var prov = sku.indexOf('-HT-')>=0?'ANUA':sku.indexOf('-AS-')>=0?'Eyenlip':sku.indexOf('-ML-')>=0?'Dr.esthe':sku.indexOf('-PH-')>=0?'APHLORA':'RiRe';
+          productos.push({sku:sku, n:nombre, p:precio, marca:prov});
+        }
+      }
+
+      if (faciales.length > 0) {
+        FACIALES.length = 0;
+        faciales.forEach(function(f){ FACIALES.push(f); });
+      }
+      if (extras.length > 0) {
+        EXTRAS.length = 0;
+        extras.forEach(function(e){ EXTRAS.push(e); });
+      }
+      if (paq3.length > 0) {
+        PAQ3.length = 0;
+        paq3.forEach(function(p){ PAQ3.push(p); });
+      }
+      if (paq6.length > 0) {
+        PAQ6.length = 0;
+        paq6.forEach(function(p){ PAQ6.push(p); });
+      }
+      // Update PROVS products
+      if (productos.length > 0) {
+        var provMap = {'ANUA':'ht','Eyenlip':'as','Dr.esthe':'ml','APHLORA':'ph','RiRe':'jn'};
+        PROVS.forEach(function(pv) {
+          var nuevosProds = productos.filter(function(p){ return p.marca === pv.label.split(' ')[0] || pv.prods.some(function(ex){return ex.sku.split('-')[1]===p.sku.split('-')[1];}); });
+          if (nuevosProds.length > 0) {
+            pv.prods.forEach(function(ep) {
+              var nuevo = null;
+              for(var j=0;j<productos.length;j++){ if(productos[j].sku===ep.sku){nuevo=productos[j];break;} }
+              if (nuevo) { ep.p = nuevo.p; ep.n = nuevo.n; }
+            });
+          }
+        });
+      }
+
+      _catalogoCargado = true;
+      if (callback) callback();
+    })
+    .catch(function(e) {
+      console.log('Error cargando catalogo:', e.message);
+      if (callback) callback();
+    });
+}
+
+function parseCsvLine(line) {
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQ = !inQ; }
+    else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += line[i]; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// Cargar catalogo al iniciar
+cargarCatalogo(function(){ initLogin(); });
 
 function verCitas(c,o){
   var csvs={'-1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv','0':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv','1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv'};
@@ -1587,56 +1730,18 @@ function irATicket(btn){
   T=newT();
   T.nombre=btn.getAttribute('data-nom')||'';
   T.apellido=btn.getAttribute('data-ape')||'';
-  var tel=(btn.getAttribute('data-tel')||'').replace(/[^0-9]/g,'');
-  // Don't use phone as cedula - search registro by name instead
-  T.cedula='';
+  T.cedula=(btn.getAttribute('data-tel')||'').replace(/[^0-9]/g,'');
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   var ft=document.querySelector('.tab');if(ft)ft.classList.add('active');
   renderTicket(document.getElementById('content'));
   setTimeout(function(){
+    var ce=document.getElementById('inp-ced');
     var n=document.getElementById('inp-nom');
     var a=document.getElementById('inp-ape');
+    if(ce&&T.cedula)ce.value=T.cedula;
     if(n)n.value=T.nombre;
     if(a)a.value=T.apellido;
-    // Search registro by name to get cedula
-    var buscarPorNombre=function(reg){
-      var nomBuscar=(T.nombre+' '+T.apellido).toLowerCase().trim();
-      var found=null;
-      for(var i=0;i<reg.length;i++){
-        var rn=reg[i].n.toLowerCase().trim();
-        var rap=reg[i].ap.toLowerCase().trim();
-        var bn=T.nombre.toLowerCase().trim();
-        var bap=T.apellido.toLowerCase().trim();
-        // Match requires nombre AND apellido
-        if(rn===bn && rap===bap){found=reg[i];break;}
-        // Fallback: full name match
-        if((rn+' '+rap)===(bn+' '+bap)){found=reg[i];break;}
-      }
-      var ce=document.getElementById('inp-ced');
-      var el=document.getElementById('cli-msg');
-      if(found&&ce){
-        ce.value=found.c;
-        T.cedula=found.c;
-        T._clienteNuevo=false;
-        if(el){el.style.display='block';el.style.background='var(--green-l)';el.style.color='var(--green)';el.textContent='Cliente encontrada: '+found.n+' '+found.ap;}
-      } else {
-        T._clienteNuevo=true;
-        if(el){el.style.display='block';el.style.background='var(--gold-l)';el.style.color='var(--gold)';el.textContent='Cliente nueva - ingresa cedula';}
-      }
-    };
-    if(window._regCache){buscarPorNombre(window._regCache);}
-    else{
-      var CSV='https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1320990476&single=true&output=csv';
-      fetch(CSV).then(function(r){return r.text();}).then(function(csv){
-        var lines=csv.split('\n');var reg=[];
-        for(var i=1;i<lines.length;i++){
-          var cols=lines[i].split(',');
-          if(cols[1])reg.push({c:cols[1].trim().replace(/"/g,'').split('.')[0],n:(cols[2]||'').trim().replace(/"/g,''),ap:(cols[3]||'').trim().replace(/"/g,'')});
-        }
-        window._regCache=reg;
-        buscarPorNombre(reg);
-      });
-    }
+    if(T.cedula){onCed(T.cedula);}
     toast('Ticket para '+T.nombre,'#6A9E7A');
   },200);
 }
