@@ -686,8 +686,13 @@ function mostrarCitasDia(c,offset){
   '</div><div style="font-size:0.72rem;color:#7A8499;padding:2px 14px 10px;text-transform:capitalize">'+dl+'</div>';
   c.innerHTML=nav+'<div id="citas-body" style="padding:0 14px 14px"><div style="text-align:center;padding:20px;color:#7A8499">Cargando...</div></div>';
   var body=document.getElementById('citas-body');
-  if(offset===0){
-    fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv")
+  var csvUrls = {
+    "-1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv",
+    "0":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv",
+    "1":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv"
+  };
+  if(offset===0||offset===-1||offset===1){
+    fetch(csvUrls[String(offset)])
       .then(function(r){return r.text();})
       .then(function(txt){var j=txt.trim();if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');renderListaCitas(body,JSON.parse(j),offset);})
       .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
@@ -1632,8 +1637,13 @@ function mostrarCitasDia(c,offset){
   '</div><div style="font-size:0.72rem;color:#7A8499;padding:2px 14px 10px;text-transform:capitalize">'+dl+'</div>';
   c.innerHTML=nav+'<div id="citas-body" style="padding:0 14px 14px"><div style="text-align:center;padding:20px;color:#7A8499">Cargando...</div></div>';
   var body=document.getElementById('citas-body');
-  if(offset===0){
-    fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv")
+  var csvUrls = {
+    "-1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv",
+    "0":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv",
+    "1":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv"
+  };
+  if(offset===0||offset===-1||offset===1){
+    fetch(csvUrls[String(offset)])
       .then(function(r){return r.text();})
       .then(function(txt){var j=txt.trim();if(j.startsWith('"'))j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');renderListaCitas(body,JSON.parse(j),offset);})
       .catch(function(e){body.innerHTML='<div style="padding:20px;color:red">Error: '+e.message+'</div>';});
