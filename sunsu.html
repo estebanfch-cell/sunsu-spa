@@ -354,7 +354,7 @@ const PROVS=[
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',extras:{},extrasCourtesy:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:''}};}
+function newT(){return{esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',extras:{},extrasCourtesy:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -582,9 +582,10 @@ function renderTicket(c){
   const _gcDig=!T.gcVenta||T.gcVenta.tipo==='digital';
   const _gcFis=T.gcVenta&&T.gcVenta.tipo==='fisica';
   const _gcCustom=T.gcVenta&&T.gcVenta.valor!==65&&T.gcVenta.valor>0;
+  const _gcCort=T.gcVenta&&T.gcVenta.cortesia;
   const gcVentaAcc=mkAcc('gcventa','🎁','var(--pink)','Venta Gift Card',
     T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo
-      ?'<span style="color:var(--pink-d);font-weight:600">'+(_gcFis?'📦':'📱')+' '+T.gcVenta.codigo+' · $'+(_gcFis?(T.gcVenta.valor+3):(T.gcVenta.valor||65)).toFixed(2)+'</span>'
+      ?'<span style="color:var(--pink-d);font-weight:600">'+(_gcFis?'📦':'📱')+' '+T.gcVenta.codigo+(_gcCort?' 🎁 Cortesía':' · $'+(_gcFis?(T.gcVenta.valor+3):(T.gcVenta.valor||65)).toFixed(2))+'</span>'
       :'No vendida',
     '<div style="display:flex;gap:10px;margin-bottom:12px">'+
       '<div id="gcbtn-digital" onclick="selGCTipo(\'digital\')" style="flex:1;padding:12px 8px;border-radius:11px;text-align:center;cursor:pointer;transition:all 0.15s;border:2px solid '+(_gcDig?'var(--pink)':'#ECEEF4')+';background:'+(_gcDig?'var(--pink-l)':'white')+'">'+
@@ -597,16 +598,22 @@ function renderTicket(c){
         '<div style="font-weight:700;font-size:0.78rem;color:'+(_gcFis?'var(--pink-d)':'#888')+'">Física + caja</div>'+
         '<div style="font-size:0.65rem;color:#aaa">+$3.00</div>'+
       '</div>'+
+      '<div id="gcbtn-cortesia" onclick="toggleGCCortesia()" style="flex:1;padding:12px 8px;border-radius:11px;text-align:center;cursor:pointer;transition:all 0.15s;border:2px solid '+(_gcCort?'var(--green)':'#ECEEF4')+';background:'+(_gcCort?'var(--green-l)':'white')+'">'+
+        '<div style="font-size:1.4rem">🎁</div>'+
+        '<div style="font-weight:700;font-size:0.78rem;color:'+(_gcCort?'var(--green)':'#888')+'">Cortesía</div>'+
+        '<div style="font-size:0.65rem;color:#aaa">Sin cobro</div>'+
+      '</div>'+
     '</div>'+
     '<div class="field"><label>Valor</label>'+
-      '<select id="gcv-sel" onchange="selGCVal(this.value)">'+
+      '<select id="gcv-sel" onchange="selGCVal(this.value)" '+(_gcCort?'disabled style="opacity:0.4"':'')+'>'+
         '<option value="65" '+(!_gcCustom?'selected':'')+'>$65.00 — Estándar</option>'+
         '<option value="custom" '+(_gcCustom?'selected':'')+'>Personalizado...</option>'+
       '</select>'+
     '</div>'+
-    '<div id="gcv-custom" style="display:'+(_gcCustom?'block':'none')+'"><div class="field"><label>Valor personalizado ($)</label>'+
+    '<div id="gcv-custom" style="display:'+(_gcCustom&&!_gcCort?'block':'none')+'"><div class="field"><label>Valor personalizado ($)</label>'+
       '<input type="number" placeholder="0.00" value="'+(_gcCustom&&T.gcVenta?T.gcVenta.valor:'')+'" oninput="if(T.gcVenta){T.gcVenta.valor=parseFloat(this.value)||0;updatePreview();}">'+
     '</div></div>'+
+    (_gcCort?'<div style="background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:0.78rem;color:var(--green);font-weight:600">🎁 Gift Card de cortesía — $0.00 para el cliente</div>':'')+
     '<div class="field"><label>Código GC</label>'+
       '<input type="text" placeholder="Ej: 26-071..." value="'+(T.gcVenta&&T.gcVenta.codigo||'')+'" oninput="if(T.gcVenta){T.gcVenta.codigo=this.value;updatePreview();}">'+
     '</div>'+
@@ -804,6 +811,22 @@ function chgQ(sku,d,provId){
 }
 function toggleP2GC(v){T.paq2gc=v;const b=document.getElementById('p2gc-box');if(b)b.style.display=v?'block':'none';}
 
+function toggleGCCortesia(){
+  if(!T.gcVenta) return;
+  T.gcVenta.cortesia=!T.gcVenta.cortesia;
+  if(T.gcVenta.cortesia){
+    T.gcVenta.tipo='digital'; // cortesía siempre digital
+  }
+  renderTicket(document.getElementById('content'));
+  // Re-open GC accordion
+  setTimeout(function(){
+    var body=document.getElementById('ab-gcventa');
+    var arrow=document.getElementById('aa-gcventa');
+    if(body){body.classList.add('open');if(arrow)arrow.classList.add('open');}
+    T.gcVenta.activo=true;
+    updatePreview();
+  },50);
+}
 function selGCTipo(t){
   if(!T.gcVenta) return;
   T.gcVenta.tipo=t;
@@ -866,7 +889,8 @@ function updatePreview(){
 
   // Gift Card venta
   const gcV=T.gcVenta;
-  const gcVTotal=(gcV&&gcV.activo&&gcV.codigo)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
+  const gcEsCort=gcV&&gcV.cortesia;
+  const gcVTotal=(gcV&&gcV.activo&&gcV.codigo&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
 
   const estF=facialP+extrasTotal;
   const totC=comF+comP, totE=estF+estPack+estProd+gcVTotal;
@@ -898,8 +922,12 @@ function updatePreview(){
   }
 
   // Gift Card row
-  if(gcVTotal>0){
-    breakdown+=`<div style="${rowStyle}"><span>🎁 Gift Card ${gcV.tipo==='fisica'?'física':'digital'}${gcV.codigo?' · '+gcV.codigo:''}</span><span>$${gcVTotal.toFixed(2)}</span></div>`;
+  if(gcV&&gcV.activo&&gcV.codigo){
+    if(gcEsCort){
+      breakdown+=`<div style="${rowStyle}"><span>🎁 Gift Card Cortesía${gcV.codigo?' · '+gcV.codigo:''}</span><span style="color:var(--green);font-weight:700">$0.00 🎁</span></div>`;
+    } else if(gcVTotal>0){
+      breakdown+=`<div style="${rowStyle}"><span>🎁 Gift Card ${gcV.tipo==='fisica'?'física':'digital'}${gcV.codigo?' · '+gcV.codigo:''}</span><span>$${gcVTotal.toFixed(2)}</span></div>`;
+    }
   }
 
   box.innerHTML=`<div class="preview">
@@ -956,7 +984,9 @@ function enviarTicket(){
   // Col S: Venta Gift Card (desde accordion del ticket)
   const gcV=T.gcVenta;
   const colS=(gcV&&gcV.activo&&gcV.codigo)
-    ?'SI, '+gcV.codigo+(gcV.nota?', '+gcV.nota:'')
+    ?(gcV.cortesia
+      ?'CORTESIA, '+gcV.codigo+(gcV.nota?', '+gcV.nota:'')
+      :'SI, '+gcV.codigo+(gcV.nota?', '+gcV.nota:''))
     :'';
 
   // Col U/V: Paquetes
