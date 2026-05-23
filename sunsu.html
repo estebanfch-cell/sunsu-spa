@@ -414,8 +414,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance']];
+    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   showTab(allTabs[0][0]);
@@ -429,6 +429,7 @@ function showTab(id,btn){
   else if(id==='citas') verCitas(c,0);
   else if(id==='dash-cosm') renderDashCosm(c);
   else if(id==='historial') renderHistorial(c);
+  else if(id==='buscar') renderBuscar(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
   else if(id==='admin') renderAdmin(c);
@@ -1280,7 +1281,7 @@ function _histPrecioProducto(skuQty){
   var sku=parts[0].trim(), qty=parseInt(parts[1])||1;
   var prod=null;
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){if(p.sku===sku)prod=p;});});
-  return prod?{n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
+  return prod?{sku:sku,n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
 }
 
 // Build one ticket card — showPrices=false for staff
@@ -1315,10 +1316,16 @@ function _buildTicketCard(t, showPrices){
       return '<div style="font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75"><span>'+icon+' '+label+'</span></div>';
     }
   };
+  var skuBadge=function(sku,color){
+    if(!sku) return '';
+    return '<span style="font-size:0.58rem;font-family:monospace;background:'+(color||'var(--blue-l)')+';color:'+(color?'white':'var(--blue)')+';padding:1px 5px;border-radius:4px;margin-right:5px;flex-shrink:0">'+sku+'</span>';
+  };
   var breakdown='';
 
   if(facialInfo){
-    breakdown+=rowItem('💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+facialP.toFixed(2));
+    var facSku=t.facial?t.facial.match(/(SUNSU-\d+)/):null;
+    var facSkuStr=facSku?skuBadge(facSku[1]):'';
+    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+facialP.toFixed(2));
   }
   if(t.extras){
     t.extras.split('|').forEach(function(ex){
@@ -1328,17 +1335,19 @@ function _buildTicketCard(t, showPrices){
       if(esku){
         var ep=_histPrecioExtra(esku[1]);
         var eo=EXTRAS.find(function(x){return x.sku===esku[1];});
-        breakdown+=rowSub('✨',(eo?eo.n:ex)+(cort?' 🎁':''),cort?'Cortesía':'$'+ep.toFixed(2));
+        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎁':''),cort?'Cortesía':'$'+ep.toFixed(2));
       }
     });
   }
   if(packInfo){
-    breakdown+=rowItem('📋',packInfo.n,'$'+packInfo.p.toFixed(2));
+    var pakSku=t.pack3?t.pack3.match(/(SUNSU-\d+)/):t.pack6?t.pack6.match(/(SUNSU-\d+)/):null;
+    var pakSkuStr=pakSku?skuBadge(pakSku[1]):'';
+    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,'$'+packInfo.p.toFixed(2));
   }
   if(prodsDetalle.length){
     breakdown+=rowItem('🧴','Productos','$'+prodTotal.toFixed(2));
     prodsDetalle.forEach(function(pd){
-      breakdown+=rowSub('',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+pd.total.toFixed(2));
+      breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+pd.total.toFixed(2));
     });
   }
   if(gcVenta){
@@ -1361,7 +1370,7 @@ function _buildTicketCard(t, showPrices){
     +'<div>'
     +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
     +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.hora+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.fecha+' '+t.hora+(t.tkRow?' · #'+t.tkRow:'')+'</div>'
     +'</div>'
     +(showPrices
       ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
@@ -1372,8 +1381,9 @@ function _buildTicketCard(t, showPrices){
   return card;
 }
 
+// ══════ HISTORIAL ══════
 function renderHistorial(c){
-  var isAdmin=CU.role==='admin'||CU.role==='admin_master';
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
@@ -1383,15 +1393,31 @@ function renderHistorial(c){
     .then(function(data){
       if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
       _histData=data;
-      if(isAdmin){
-        mostrarHistorialAdmin(c,fechaHoy,fechaHoy);
-      } else {
-        mostrarHistorialStaff(c,fechaHoy);
-      }
+      if(isAdmin) mostrarHistorialAdmin(c,fechaHoy,fechaHoy);
+      else mostrarHistorialStaff(c,fechaHoy,fechaHoy);
     })
     .catch(function(err){
-      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br><button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
+      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br>'
+        +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
     });
+}
+
+function renderBuscar(c){
+  if(!_histData){
+    c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando datos...</div>';
+    fetch(APPS_SCRIPT_URL+'?action=getHistorial')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
+        _histData=data;
+        mostrarBuscarCliente(c);
+      })
+      .catch(function(err){
+        c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small></div>';
+      });
+  } else {
+    mostrarBuscarCliente(c);
+  }
 }
 
 // ── STAFF: sus propios tickets, rango de fechas, SIN precios ──
@@ -1415,10 +1441,10 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button onclick="aplicarFiltroStaff(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
-    +'<button onclick="aplicarFiltroStaff(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
-    +'<button onclick="aplicarFiltroStaff(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
-    +'<button onclick="aplicarFiltroStaff(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
+    +'<button id="sf-hoy" onclick="aplicarFiltroStaff(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
+    +'<button id="sf-ayer" onclick="aplicarFiltroStaff(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
+    +'<button id="sf-semana" onclick="aplicarFiltroStaff(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
+    +'<button id="sf-mes" onclick="aplicarFiltroStaff(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
     +'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<input type="date" id="hist-desde-s" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
@@ -1438,10 +1464,19 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets en este rango</div>';
   } else {
-    // showPrices = false
-    tickets.forEach(function(t){ html+=_buildTicketCard(t, false); });
+    // showPrices = true — mostrar precios siempre
+    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
   }
   c.innerHTML=html;
+}
+
+function _highlightFiltroBtn(prefix, tipo){
+  ['hoy','ayer','semana','mes'].forEach(function(t){
+    var btn=document.getElementById(prefix+t);
+    if(!btn) return;
+    if(t===tipo){btn.style.background='var(--navy)';btn.style.color='white';btn.style.borderColor='var(--navy)';}
+    else{btn.style.background='white';btn.style.color='var(--navy)';btn.style.borderColor='#ECEEF4';}
+  });
 }
 
 function aplicarFiltroStaff(tipo){
@@ -1454,6 +1489,7 @@ function aplicarFiltroStaff(tipo){
   else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
   else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
   mostrarHistorialStaff(document.getElementById('content'),desde,hasta);
+  setTimeout(function(){ _highlightFiltroBtn('sf-',tipo); },50);
 }
 
 function aplicarFiltroFechaStaff(){
@@ -1484,10 +1520,10 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta){
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button onclick="aplicarFiltroRapido(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
-    +'<button onclick="aplicarFiltroRapido(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
-    +'<button onclick="aplicarFiltroRapido(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
-    +'<button onclick="aplicarFiltroRapido(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
+    +'<button id="af-hoy" onclick="aplicarFiltroRapido(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
+    +'<button id="af-ayer" onclick="aplicarFiltroRapido(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
+    +'<button id="af-semana" onclick="aplicarFiltroRapido(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
+    +'<button id="af-mes" onclick="aplicarFiltroRapido(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
     +'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<input type="date" id="hist-desde" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
@@ -1524,6 +1560,8 @@ function aplicarFiltroRapido(tipo){
   else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
   else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
   mostrarHistorialAdmin(document.getElementById('content'),desde,hasta);
+  // Re-highlight after render (buttons get re-created in mostrarHistorialAdmin)
+  setTimeout(function(){ _highlightFiltroBtn('af-',tipo); },50);
 }
 
 function aplicarFiltroFecha(){
@@ -1617,154 +1655,6 @@ function _histPrecioExtra(sku){
   var e=EXTRAS.find(function(x){return x.sku===sku;});
   return e?e.t:0;
 }
-function _histPrecioProducto(skuQty){
-  // format: "SUNSU-HT-002 ×2"
-  var parts=skuQty.split(' ×');
-  var sku=parts[0].trim(), qty=parseInt(parts[1])||1;
-  var prod=null;
-  PROVS.forEach(function(pv){pv.prods.forEach(function(p){if(p.sku===sku)prod=p;});});
-  return prod?{n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
-}
-
-function _buildTicketCard(t, forPDF){
-  var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
-
-  var esCanjeP=t.colQ&&t.colQ.indexOf('SI')===0;
-  var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
-  var esCanje=esCanjeP||esCanjeGC;
-
-  // ── Facial ──
-  var facialInfo=t.facial?_histPrecioFacial(t.facial):null;
-  var facialP=facialInfo&&!esCanje?facialInfo.p:0;
-
-  // ── Extras ──
-  var extrasDetalle=[];
-  if(t.extras){
-    t.extras.split('|').forEach(function(ex){
-      ex=ex.trim(); if(!ex) return;
-      var cort=ex.indexOf('[CORTESIA]')>=0;
-      var esku=ex.match(/(SUNSU-\d+)/);
-      if(esku){
-        var ep=_histPrecioExtra(esku[1]);
-        var eObj=EXTRAS.find(function(x){return x.sku===esku[1];});
-        extrasDetalle.push({n:eObj?eObj.n:ex,p:cort?0:ep,cort:cort});
-      }
-    });
-  }
-  var extrasTotal=extrasDetalle.reduce(function(s,e){return s+(e.cort?0:e.p);},0);
-
-  // ── Paquetes vendidos ──
-  var packInfo=null;
-  if(t.pack3) packInfo=_histPrecioPaq(t.pack3);
-  if(!packInfo&&t.pack6) packInfo=_histPrecioPaq(t.pack6);
-
-  // ── Productos ──
-  var prodsDetalle=[];
-  var prodTotal=0;
-  if(t.productos&&t.productos.length){
-    t.productos.forEach(function(pq){
-      var pi=_histPrecioProducto(pq);
-      if(pi){prodsDetalle.push(pi);prodTotal+=pi.total;}
-    });
-  }
-
-  // ── GC Venta ──
-  var gcVenta=null;
-  if(t.colS&&t.colS.indexOf('SI')===0){
-    var gcParts=t.colS.split(',');
-    var gcCod=(gcParts[1]||'').trim();
-    var gcNota=(gcParts[2]||'').trim();
-    gcVenta={codigo:gcCod,nota:gcNota,valor:65};
-  }
-
-  // ── Total ──
-  var totalCliente=parseFloat(t.estimado)||0;
-
-  var rs='display:flex;justify-content:space-between;font-size:0.74rem;padding:3px 0;';
-  var rg='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75;';
-
-  var breakdown='';
-
-  if(facialInfo){
-    breakdown+='<div style="'+rs+'"><span>💆 '+facialInfo.n+(esCanje?' <span style=\'font-size:0.62rem;color:#888\'>(canje)</span>':'')+'</span><span style="font-weight:700">$'+facialP.toFixed(2)+'</span></div>';
-  }
-  extrasDetalle.forEach(function(ex){
-    breakdown+='<div style="'+rg+'"><span>✨ '+ex.n+(ex.cort?' 🎁':'')+'</span><span>'+(ex.cort?'Cortesía':'$'+ex.p.toFixed(2))+'</span></div>';
-  });
-  if(packInfo){
-    breakdown+='<div style="'+rs+'"><span>📋 '+packInfo.n+'</span><span style="font-weight:700">$'+packInfo.p.toFixed(2)+'</span></div>';
-  }
-  if(prodsDetalle.length){
-    breakdown+='<div style="'+rs+';opacity:0.7"><span>🧴 Productos</span><span>$'+prodTotal.toFixed(2)+'</span></div>';
-    prodsDetalle.forEach(function(pd){
-      breakdown+='<div style="'+rg+'"><span>'+pd.n+(pd.qty>1?' ×'+pd.qty:'')+'</span><span>$'+pd.total.toFixed(2)+'</span></div>';
-    });
-  }
-  if(gcVenta){
-    breakdown+='<div style="'+rs+'"><span>🎁 Gift Card'+( gcVenta.codigo?' · '+gcVenta.codigo:'')+'</span><span style="font-weight:700">$'+gcVenta.valor.toFixed(2)+'</span></div>';
-    if(gcVenta.nota) breakdown+='<div style="'+rg+'"><span>📝 '+gcVenta.nota+'</span><span></span></div>';
-  }
-  if(t.colQ&&t.colQ.indexOf('SI')===0){
-    breakdown+='<div style="'+rg+';color:#7A5FA0"><span>📋 Canje paquete: '+t.colQ+'</span><span></span></div>';
-  }
-  if(t.colR){
-    var rLabel=t.colR.indexOf('GC,')===0?'♻️ Conv. a GC: '+t.colR:'🎁 Canje GC: '+t.colR;
-    breakdown+='<div style="'+rg+';color:#5B8FA8"><span>'+rLabel+'</span><span></span></div>';
-  }
-
-  var notasBlock='';
-  if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:600;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
-  if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:600;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
-
-  var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
-  // Header
-  card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-    +'<div>'
-    +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
-    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.hora+'</div>'
-    +'</div>'
-    +'<div style="text-align:right">'
-    +'<div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div>'
-    +'<div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div>'
-    +'</div>'
-    +'</div>';
-  // Breakdown
-  if(breakdown){
-    card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">';
-    card+=breakdown;
-    card+='</div>';
-  }
-  card+=notasBlock;
-  card+='</div>';
-  return card;
-}
-
-function renderHistorial(c){
-  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
-  var hoy=new Date();
-  var pad=function(n){return String(n).padStart(2,'0');};
-  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  fetch(APPS_SCRIPT_URL+'?action=getHistorial')
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
-      _histData=data;
-      if(isAdmin){
-        mostrarHistorialAdmin(c, fechaHoy, fechaHoy);
-      } else {
-        mostrarHistorialStaff(c, fechaHoy, fechaHoy);
-      }
-    })
-    .catch(function(err){
-      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br><button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
-    });
-}
-
-
-
-
 
 // ══════ DASH ADMIN ══════
 function renderDashAdmin(c){
@@ -2189,21 +2079,35 @@ function guardarAcuity(){
 initLogin();
 
 function irATicket(btn){
-  var nom=btn.getAttribute('data-nom')||'';
-  var ape=btn.getAttribute('data-ape')||'';
-  var ced=btn.getAttribute('data-ced')||'';
-  T.nombre=nom; T.apellido=ape; T.cedula=ced;
-  switchTab('ticket');
-  var c=document.getElementById('content');
-  renderTicket(c);
+  T=newT();
+  T.nombre=btn.getAttribute('data-nom')||'';
+  T.apellido=btn.getAttribute('data-ape')||'';
+  T.cedula='';
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  var ft=document.querySelector('.tab');if(ft)ft.classList.add('active');
+  renderTicket(document.getElementById('content'));
   setTimeout(function(){
-    var nomEl=document.getElementById('inp-nom');
-    var apeEl=document.getElementById('inp-ape');
-    var cedEl=document.getElementById('inp-ced');
-    if(nomEl&&nom) nomEl.value=nom;
-    if(apeEl&&ape) apeEl.value=ape;
-    if(cedEl&&ced) cedEl.value=ced;
-  },100);
+    var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
+    if(n)n.value=T.nombre;if(a)a.value=T.apellido;
+    var buscarCed=function(reg){
+      var bn=T.nombre.toLowerCase().trim();var bap=T.apellido.toLowerCase().trim();
+      var found=null;
+      for(var i=0;i<reg.length;i++){
+        if(reg[i].n.toLowerCase().trim()===bn&&reg[i].ap.toLowerCase().trim()===bap){found=reg[i];break;}
+      }
+      var ce=document.getElementById('inp-ced');var el=document.getElementById('cli-msg');
+      if(found&&ce){
+        ce.value=found.c;T.cedula=found.c;T._clienteNuevo=false;
+        if(el){el.style.display='block';el.style.background='var(--green-l)';el.style.color='var(--green)';el.textContent='Cliente: '+found.n+' '+found.ap;}
+      }else{
+        T._clienteNuevo=true;
+        if(el){el.style.display='block';el.style.background='var(--gold-l)';el.style.color='var(--gold)';el.textContent='Cliente nueva - ingresa cedula';}
+      }
+    };
+    if(window._regCache){buscarCed(window._regCache);}
+    else{fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1320990476&single=true&output=csv').then(function(r){return r.text();}).then(function(csv){var lines=csv.split('\n'),reg=[];for(var i=1;i<lines.length;i++){var c=lines[i].split(',');if(c[1])reg.push({c:c[1].trim().replace(/"/g,'').split('.')[0],n:(c[2]||'').trim().replace(/"/g,''),ap:(c[3]||'').trim().replace(/"/g,'')});}window._regCache=reg;buscarCed(reg);});}
+    toast('Ticket para '+T.nombre,'#6A9E7A');
+  },200);
 }
 
 function parseCsvLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++){if(line[i]==='"'){q=!q;}else if(line[i]===','&&!q){r.push(c);c='';}else{c+=line[i];}}r.push(c);return r;}
@@ -2214,7 +2118,7 @@ function cargarCatalogo(){
   var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-47','SUNSU-53','SUNSU-55'];
   var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-51','SUNSU-54','SUNSU-56'];
   var C3=['SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
-  fetch(APPS_SCRIPT_URL+'?action=getCatalogo')
+  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv')
     .then(function(r){return r.text();})
     .then(function(csv){
       var lines=csv.split('\n');
@@ -2288,8 +2192,11 @@ function cargarCatalogo(){
 }
 
 function verCitas(c,o){
-  // Citas via Apps Script proxy (evita CORS de GitHub Pages)
-  var DIA_KEY={'-1':'ayer','0':'hoy','1':'manana'};
+  var URLS={
+    '-1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv',
+    '0':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv',
+    '1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv'
+  };
   var dias=[['Ayer',-1],['Hoy',0],['Mañana',1]];
   var hoy=new Date();
   var dia=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+o);
@@ -2307,7 +2214,7 @@ function verCitas(c,o){
 
   var body=function(){return document.getElementById('cb');};
 
-  fetch(APPS_SCRIPT_URL+'?action=getCitas&dia='+DIA_KEY[String(o)])
+  fetch(URLS[String(o)])
     .then(function(r){return r.text();})
     .then(function(raw){
       // The sheet cell stores raw JSON from Acuity
@@ -2380,6 +2287,61 @@ function verCitas(c,o){
     });
 }
 
+function mostrarBuscarCliente(c){
+  c.innerHTML=''
+    +'<div class="card" style="padding:14px;margin-bottom:10px">'
+    +'<div style="font-size:0.78rem;font-weight:700;color:var(--navy);margin-bottom:10px">🔍 Buscar por nombre o cédula</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<input id="buscar-q" type="text" placeholder="Nombre, apellido o cédula..." oninput="ejecutarBusqueda()" '
+    +'style="flex:1;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.85rem;outline:none;font-family:inherit;background:var(--gray-ll)">'
+    +'<button onclick="ejecutarBusqueda()" style="padding:9px 14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;flex-shrink:0">Buscar</button>'
+    +'</div>'
+    +'</div>'
+    +'<div id="buscar-res"><div style="text-align:center;color:var(--gray);font-size:0.8rem;padding:20px">Escribe para buscar...</div></div>';
+  setTimeout(function(){var i=document.getElementById('buscar-q');if(i)i.focus();},100);
+}
+
+function ejecutarBusqueda(){
+  if(!_histData) return;
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var q=((document.getElementById('buscar-q')||{}).value||'').trim().toLowerCase();
+  var res=document.getElementById('buscar-res');
+  if(!res) return;
+  if(q.length<2){
+    res.innerHTML='<div style="text-align:center;color:var(--gray);font-size:0.8rem;padding:16px">Escribe al menos 2 caracteres</div>';
+    return;
+  }
+  var matches=_histData.filter(function(t){
+    var nom=((t.nombre||'')+' '+(t.apellido||'')).toLowerCase();
+    var ced=(t.cedula||'').toLowerCase();
+    return nom.indexOf(q)>=0||ced.indexOf(q)>=0;
+  });
+  if(!matches.length){
+    res.innerHTML='<div style="text-align:center;color:var(--gray);font-size:0.82rem;padding:20px">Sin resultados para "'+q+'"</div>';
+    return;
+  }
+  var totFac=0,totPaq=0,totProd=0,totGasto=0;
+  matches.forEach(function(t){
+    if(t.facial) totFac++;
+    if(t.pack3||t.pack6) totPaq++;
+    if(t.productos) totProd+=t.productos.length;
+    totGasto+=parseFloat(t.estimado)||0;
+  });
+  var html='<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:14px">'
+    +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">Resumen — '+matches.length+' ticket(s)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px">'
+    +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
+    +'<div style="background:var(--green-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--green)">'+totPaq+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>'
+    +'<div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">'+totProd+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>'
+    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+totGasto.toFixed(2)+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>'
+    +'</div></div>';
+  matches.forEach(function(t){
+    html+=_buildTicketCard(t, true);
+  });
+  res.innerHTML=html;
+}
+
+cargarCatalogo();
 cargarCatalogo();
 </script>
 </body>
