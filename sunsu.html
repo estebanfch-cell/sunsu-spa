@@ -269,86 +269,117 @@ function saveUsers(u){localStorage.setItem('sunsu_users',JSON.stringify(u));}
 
 // ══════ DATA ══════
 const FACIALES=[
-  {sku:'SUNSU-01',n:'Facial S.O.S',p:75.0,com:2},
-  {sku:'SUNSU-02',n:'Purificación Facial',p:65.0,com:2},
-  {sku:'SUNSU-03',n:'7 Pieles (Arroz+H₂O)',p:65.0,com:2},
-  {sku:'SUNSU-04',n:'Gold-Aging',p:65.0,com:2},
-  {sku:'SUNSU-05',n:'Porcelana',p:65.0,com:2},
-  {sku:'SUNSU-06',n:'Rice Flow',p:80.5,com:2},
-  {sku:'SUNSU-40',n:'Skin Reset',p:95.0,com:3},
-  {sku:'SUNSU-41',n:'Domo de Oxígeno',p:95.0,com:3},
-  {sku:'SUNSU-42',n:'Peeling Marino',p:145.0,com:3},
-  {sku:'SUNSU-43',n:'Facial de Geisha',p:145.0,com:3},
-  {sku:'SUNSU-52',n:'Facial de Ginseng',p:80.0,com:3},
+  {sku:'SUNSU-01',n:'Facial S.O.S',p:75.00,com:2},
+  {sku:'SUNSU-02',n:'Facial Reparación',p:65.00,com:2},
+  {sku:'SUNSU-03',n:'7 Pieles (Arroz+H₂O)',p:65.00,com:2},
+  {sku:'SUNSU-04',n:'Facial Gold-Aging',p:65.00,com:2},
+  {sku:'SUNSU-05',n:'Facial Porcelana',p:65.00,com:2},
+  {sku:'SUNSU-06',n:'Facial Rice Flow',p:80.50,com:2},
+  {sku:'SUNSU-40',n:'Facial Reset 3x1',p:95.00,com:3},
+  {sku:'SUNSU-41',n:'Facial Domo de Oxígeno',p:95.00,com:3},
+  {sku:'SUNSU-42',n:'Facial Peeling Marino de Perla',p:145.00,com:3},
+  {sku:'SUNSU-43',n:'Facial de Geisha',p:145.00,com:3},
+  {sku:'SUNSU-52',n:'Facial de Ginseng',p:80.00,com:3},
 ];
 const EXTRAS=[
-  {sku:'SUNSU-07',n:'Dermaplaning',t:15.0},
-  {sku:'SUNSU-15',n:'Ampolla Especial',t:15.0},
-  {sku:'SUNSU-16',n:'Peeling Enzimático',t:15.0},
-  {sku:'SUNSU-31',n:'PDRN Serum',t:15.0},
-  {sku:'SUNSU-32',n:'Exosome Serum',t:15.0},
-  {sku:'SUNSU-33',n:'Skin Analysis',t:25.0},
-  {sku:'SUNSU-36',n:'Yoga Facial',t:15.0},
-  {sku:'SUNSU-37',n:'Depil. Cejas+Bigote',t:15.0},
-  {sku:'SUNSU-38',n:'Depilación Cejas',t:15.0},
-  {sku:'SUNSU-39',n:'Purif. Espalda',t:46.0},
+  {sku:'SUNSU-07',n:'Dermaplaning',t:15.00},
+  {sku:'SUNSU-08',n:'Mascarilla Hidroplástica Aqua',t:15.00},
+  {sku:'SUNSU-12',n:'Ampolla Especial Brillo',t:15.00},
+  {sku:'SUNSU-13',n:'Ampolla Especial Elasticidad',t:15.00},
+  {sku:'SUNSU-14',n:'Ampolla Especial Hidratación',t:15.00},
+  {sku:'SUNSU-15',n:'Ampolla Especial Purificación',t:15.00},
+  {sku:'SUNSU-16',n:'Peeling Enzimático',t:15.00},
+  {sku:'SUNSU-31',n:'PDRN Serum',t:15.00},
+  {sku:'SUNSU-32',n:'Exosome Serum',t:15.00},
+  {sku:'SUNSU-33',n:'Skin Análisis',t:25.00},
+  {sku:'SUNSU-36',n:'Yoga Facial Drenante',t:15.00},
+  {sku:'SUNSU-37',n:'Depilación Hilo Cejas y Bigote',t:15.00},
+  {sku:'SUNSU-38',n:'Depilación Hilo Cejas',t:15.00},
+  {sku:'SUNSU-39',n:'Purificación de Espalda',t:46.00},
 ];
 const PAQ3=[
-  {sku:'SUNSU-17',n:'x3 S.O.S',p:203.55},{sku:'SUNSU-18',n:'x3 Purificación',p:175.95},
-  {sku:'SUNSU-19',n:'x3 7 Pieles',p:175.95},{sku:'SUNSU-20',n:'x3 Gold-Aging',p:175.95},
-  {sku:'SUNSU-21',n:'x3 Porcelana',p:175.95},{sku:'SUNSU-22',n:'x3 Rice Flow',p:217.35},
-  {sku:'SUNSU-29',n:'x3 Mixtos',p:187.45},{sku:'SUNSU-44',n:'x3 Skin Reset',p:324.00},
-  {sku:'SUNSU-45',n:'x3 Domo de Oxígeno',p:270.00},{sku:'SUNSU-46',n:'x3 Peeling Marino',p:391.50},
-  {sku:'SUNSU-47',n:'x3 Geisha',p:445.50},{sku:'SUNSU-53',n:'x3 Ginseng',p:216.00},
-  {sku:'SUNSU-55',n:'x3 Glass Skin+',p:387.01},
+  {sku:'SUNSU-17',n:'x3 Facial S.O.S',p:203.55},
+  {sku:'SUNSU-18',n:'x3 Facial Reparación',p:175.95},
+  {sku:'SUNSU-19',n:'x3 7 Pieles',p:175.95},
+  {sku:'SUNSU-20',n:'x3 Facial Gold-Aging',p:175.95},
+  {sku:'SUNSU-21',n:'x3 Facial Porcelana',p:175.95},
+  {sku:'SUNSU-22',n:'x3 Facial Rice Flow',p:217.35},
+  {sku:'SUNSU-29',n:'x3 Faciales Mixtos',p:187.45},
+  {sku:'SUNSU-44',n:'x3 Facial Reset 3x1',p:324.00},
+  {sku:'SUNSU-45',n:'x3 Facial Domo de Oxígeno',p:270.00},
+  {sku:'SUNSU-46',n:'x3 Facial Peeling Marino',p:391.50},
+  {sku:'SUNSU-47',n:'x3 Facial de Geisha',p:445.50},
+  {sku:'SUNSU-53',n:'x3 Facial de Ginseng',p:216.00},
+  {sku:'SUNSU-55',n:'x3 Glass Skin + Facial Advance',p:387.01},
 ];
 const PAQ6=[
-  {sku:'SUNSU-23',n:'x6 S.O.S',p:382.95},{sku:'SUNSU-24',n:'x6 Purificación',p:332.35},
-  {sku:'SUNSU-25',n:'x6 7 Pieles',p:332.35},{sku:'SUNSU-26',n:'x6 Gold-Aging',p:332.35},
-  {sku:'SUNSU-27',n:'x6 Porcelana',p:332.35},{sku:'SUNSU-28',n:'x6 Rice Flow',p:410.55},
-  {sku:'SUNSU-30',n:'x6 Mixtos',p:354.2},{sku:'SUNSU-48',n:'x6 Skin Reset',p:612.0},
-  {sku:'SUNSU-51',n:'x6 Geisha',p:841.5},{sku:'SUNSU-54',n:'x6 Ginseng',p:408.0},
-  {sku:'SUNSU-56',n:'x6 Glass Skin+',p:731.01},
+  {sku:'SUNSU-23',n:'x6 Facial S.O.S',p:382.95},
+  {sku:'SUNSU-24',n:'x6 Facial Reparación',p:332.35},
+  {sku:'SUNSU-25',n:'x6 7 Pieles',p:332.35},
+  {sku:'SUNSU-26',n:'x6 Facial Gold-Aging',p:332.35},
+  {sku:'SUNSU-27',n:'x6 Facial Porcelana',p:332.35},
+  {sku:'SUNSU-28',n:'x6 Facial Rice Flow',p:410.55},
+  {sku:'SUNSU-30',n:'x6 Faciales Mixtos',p:354.20},
+  {sku:'SUNSU-48',n:'x6 Facial Reset 3x1',p:612.00},
+  {sku:'SUNSU-49',n:'x6 Facial Domo de Oxígeno',p:510.00},
+  {sku:'SUNSU-50',n:'x6 Facial Peeling Marino',p:739.50},
+  {sku:'SUNSU-51',n:'x6 Facial de Geisha',p:841.50},
+  {sku:'SUNSU-54',n:'x6 Facial de Ginseng',p:408.00},
+  {sku:'SUNSU-56',n:'x6 Glass Skin + Facial Advance',p:731.01},
 ];
 const PROVS=[
   {id:'ht',label:'HT — ANUA',sub:'Hebetronic S.A',color:'var(--ht)',colorL:'var(--ht-l)',badge:'#5B8FA8',
    prods:[
     {sku:'SUNSU-HT-001',n:'Heartleaf Cleansing Oil 200ml',p:35.99},
-    {sku:'SUNSU-HT-002',n:'Niacinamide 10%+TXA 4% Serum',p:43.99},
-    {sku:'SUNSU-HT-003',n:'Heartleaf Quercetinol Foam',p:26.99},
-    {sku:'SUNSU-HT-004',n:'Heartleaf 77% Soothing Toner',p:38.99},
-    {sku:'SUNSU-HT-006',n:'Peach 70% Niacinamide Serum',p:40.99},
-    {sku:'SUNSU-HT-007',n:'Rice Ceramide 7 Serum 50ml',p:43.99},
-    {sku:'SUNSU-HT-011',n:'Protector Solar Vitamin C SPF50+',p:26.99},
-    {sku:'SUNSU-HT-012',n:'Crema Hidratante Vitamin C',p:26.99},
-    {sku:'SUNSU-HT-013',n:'Suero Iluminador Vitamin C',p:25.0},
-    {sku:'SUNSU-HT-014',n:'Azelaic Acid 10 Hyaluron Serum',p:40.0},
+    {sku:'SUNSU-HT-002',n:'Niacinamide 10%+TXA 4% Serum 30ml',p:43.99},
+    {sku:'SUNSU-HT-003',n:'Heartleaf Quercetinol Cleansing Foam',p:26.99},
+    {sku:'SUNSU-HT-004',n:'Heartleaf 77% Soothing Toner 250ml',p:38.99},
+    {sku:'SUNSU-HT-005',n:'Heartleaf 77 Toner Pad 70 Pads',p:41.99},
+    {sku:'SUNSU-HT-006',n:'Peach 70% Niacinamide Serum 30ml',p:40.99},
+    {sku:'SUNSU-HT-007',n:'Rice Ceramide 7 Hydrating Serum 50ml',p:43.99},
+    {sku:'SUNSU-HT-008',n:'Heartleaf 80% Moisture Soothing Ampoule',p:47.99},
+    {sku:'SUNSU-HT-009',n:'Peach 77 Niacinamide Essence Toner 250ml',p:38.99},
+    {sku:'SUNSU-HT-010',n:'BHA 2% Gentle Exfoliating Toner 150ml',p:42.99},
+    {sku:'SUNSU-HT-011',n:'Protector Solar Vitamin C Brightening SPF50+',p:26.99},
+    {sku:'SUNSU-HT-012',n:'Crema Hidratante Vitamin C Brightening',p:26.99},
+    {sku:'SUNSU-HT-013',n:'Suero Iluminador Vitamin C Brightening',p:25.00},
+    {sku:'SUNSU-HT-014',n:'Azelaic Acid 10 Hyaluron Soothing Serum',p:40.00},
   ]},
   {id:'as',label:'AS — Eyenlip',sub:'Allskin Company S.A.S',color:'var(--as)',colorL:'var(--as-l)',badge:'#7A9E6A',
    prods:[
     {sku:'SUNSU-AS-001',n:'Aceite Limpiador',p:28.99},
-    {sku:'SUNSU-AS-002',n:'Jabón Ceramide Foam',p:18.99},
-    {sku:'SUNSU-AS-003',n:'Crema Centella Resurrection',p:33.99},
-    {sku:'SUNSU-AS-004',n:'Tónico Centella Resurrection',p:27.99},
-    {sku:'SUNSU-AS-005',n:'Serum Centella Resurrection',p:30.99},
-    {sku:'SUNSU-AS-006',n:'AC Clear Spot Patch',p:15.0},
-    {sku:'SUNSU-AS-007',n:'Aqua Relaxing Sun Cream SPF50+',p:35.0},
+    {sku:'SUNSU-AS-002',n:'Jabón Limpiador Ceramide Foam',p:18.99},
+    {sku:'SUNSU-AS-003',n:'Crema Centella Skin Resurrection',p:33.99},
+    {sku:'SUNSU-AS-004',n:'Tónico Centella Skin Resurrection',p:27.99},
+    {sku:'SUNSU-AS-005',n:'Serum Centella Skin Resurrection',p:30.99},
+    {sku:'SUNSU-AS-006',n:'AC Clear Spot Patch',p:15.00},
+    {sku:'SUNSU-AS-007',n:'Bloqueador Aqua Relaxing Sun Cream SPF50+',p:35.00},
   ]},
   {id:'ml',label:'ML — Dr.esthe',sub:'Atencio Aguas Francisco Javier',color:'var(--ml)',colorL:'var(--ml-l)',badge:'#9B7EC4',
    prods:[
-    {sku:'SUNSU-ML-001',n:'PDRN Salmon Ampoule',p:110.0},
-    {sku:'SUNSU-ML-002',n:'C.Tox Eye Cream',p:100.0},
-    {sku:'SUNSU-ML-003',n:'AC Control Mousse Cleanser',p:75.0},
-    {sku:'SUNSU-ML-005',n:'Whitening A Serum',p:95.0},
-    {sku:'SUNSU-ML-007',n:'Sun Protection Mild',p:75.0},
-    {sku:'SUNSU-ML-009',n:'PEEL-N-GLOW Pearl Mask',p:20.0},
+    {sku:'SUNSU-ML-001',n:'Rejuvenating Ampoule PDRN Salmon',p:110.00},
+    {sku:'SUNSU-ML-002',n:'C.Tox Eye Cream',p:100.00},
+    {sku:'SUNSU-ML-003',n:'AC Control Mousse Cleanser',p:75.00},
+    {sku:'SUNSU-ML-004',n:'Skin Laser Toner',p:75.00},
+    {sku:'SUNSU-ML-005',n:'Whitening A Serum',p:95.00},
+    {sku:'SUNSU-ML-006',n:'Cica Pepta Cream',p:130.00},
+    {sku:'SUNSU-ML-007',n:'Sun Protection Mild',p:75.00},
+    {sku:'SUNSU-ML-008',n:'AC Solution Swab',p:97.23},
+    {sku:'SUNSU-ML-009',n:'PEEL-N-GLOW Cooling Pearl Mask',p:20.00},
   ]},
   {id:'ph',label:'PH — APHLORA',sub:'APHLORA',color:'var(--ph)',colorL:'var(--ph-l)',badge:'#C4956A',
    prods:[
     {sku:'SUNSU-PH-001',n:'Full Moon Balance',p:44.85},
-    {sku:'SUNSU-PH-002',n:'Bump Balance',p:46.0},
+    {sku:'SUNSU-PH-002',n:'Bump Balance',p:46.00},
+    {sku:'SUNSU-PH-004',n:'Gut Bliss (Digestive Balance)',p:20.70},
+    {sku:'SUNSU-PH-005',n:'Reset Balance (Purifying Balance)',p:20.70},
     {sku:'SUNSU-PH-007',n:'Skin Drops',p:28.75},
-    {sku:'SUNSU-PH-008',n:'Harmony Drops',p:28.75},
+    {sku:'SUNSU-PH-008',n:'Harmony Drops (Rejuvenate Tonic)',p:28.75},
+  ]},
+  {id:'jn',label:'JN — Varios',sub:'Varios',color:'var(--sage)',colorL:'var(--sage-l)',badge:'#7A9E8A',
+   prods:[
+    {sku:'SUNSU-JN-001',n:'Premium White Goat Milk Cream - RiRe',p:48.00},
+    {sku:'SUNSU-JN-002',n:'Aloe Soothing Sun Cream SPF50 - Holika Holika',p:35.99},
   ]},
 ];
 
@@ -414,7 +445,7 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],['multas','⚠️ Multas'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
@@ -430,6 +461,7 @@ function showTab(id,btn){
   else if(id==='dash-cosm') renderDashCosm(c);
   else if(id==='historial') renderHistorial(c);
   else if(id==='buscar') renderBuscar(c);
+  else if(id==='multas') renderMultas(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
   else if(id==='admin') renderAdmin(c);
@@ -1220,7 +1252,7 @@ function enviarGC(){
 
 // ══════ DASH COSM ══════
 function renderDashCosm(c){
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando tu avance del sheet...</div>';
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando tu avance...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getDashCosm&cosmetologa='+encodeURIComponent(CU.name))
     .then(function(r){return r.json();})
     .then(function(data){
@@ -1395,19 +1427,40 @@ function _buildTicketCard(t, showPrices){
   if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:600;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
   if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:600;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
 
+  var isAdminView=CU&&(CU.role==='admin'||CU.role==='admin_master');
   var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
   card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-    +'<div>'
+    +'<div style="flex:1">'
     +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
     +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.fecha+' '+t.hora+(t.tkRow?' · #'+t.tkRow:'')+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.fecha+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace">#'+t.tkRow+'</span>':'')+'</div>'
+    +(isAdminView&&t.tkRow
+      ?'<div style="display:flex;gap:5px;margin-top:6px">'
+        +'<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>'
+        +'<button onclick="abrirModalMulta('+t.tkRow+')" style="padding:4px 10px;background:var(--red-l);color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">⚠️ Multa</button>'
+        +'</div>'
+      :'')
     +'</div>'
+    +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
     +(showPrices
       ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
       :'')
+    +'</div>'
     +'</div>';
   if(breakdown) card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">'+breakdown+'</div>';
-  card+=notasBlock+'</div>';
+  card+=notasBlock;
+  // Dropdown exclusión comisión — solo admins
+  if(isAdminView&&t.tkRow){
+    var exclFac=t.exclFacial||false, exclPaq=t.exclPaquete||false, exclProd=t.exclProducto||false;
+    card+='<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px">'
+      +'<div style="font-size:0.62rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:5px">⚙️ Excluir de comisión</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button onclick="toggleExclusion('+t.tkRow+',\'facial\')" style="padding:4px 10px;border-radius:7px;border:1.5px solid '+(exclFac?'var(--red)':'var(--gray-l)')+';background:'+(exclFac?'var(--red-l)':'white')+';color:'+(exclFac?'var(--red)':'var(--gray)')+';font-size:0.65rem;font-weight:700;cursor:pointer" id="excl-fac-'+t.tkRow+'">'+(exclFac?'✓ ':'')+'💆 Facial</button>'
+      +'<button onclick="toggleExclusion('+t.tkRow+',\'paquete\')" style="padding:4px 10px;border-radius:7px;border:1.5px solid '+(exclPaq?'var(--red)':'var(--gray-l)')+';background:'+(exclPaq?'var(--red-l)':'white')+';color:'+(exclPaq?'var(--red)':'var(--gray)')+';font-size:0.65rem;font-weight:700;cursor:pointer" id="excl-paq-'+t.tkRow+'">'+(exclPaq?'✓ ':'')+'📋 Paquete</button>'
+      +'<button onclick="toggleExclusion('+t.tkRow+',\'producto\')" style="padding:4px 10px;border-radius:7px;border:1.5px solid '+(exclProd?'var(--red)':'var(--gray-l)')+';background:'+(exclProd?'var(--red-l)':'white')+';color:'+(exclProd?'var(--red)':'var(--gray)')+';font-size:0.65rem;font-weight:700;cursor:pointer" id="excl-prod-'+t.tkRow+'">'+(exclProd?'✓ ':'')+'🧴 Producto</button>'
+      +'</div></div>';
+  }
+  card+='</div>';
   return card;
 }
 
@@ -1688,63 +1741,221 @@ function _histPrecioExtra(sku){
 
 // ══════ DASH ADMIN ══════
 function renderDashAdmin(c){
-  c.innerHTML=`<div class="loading"><div class="spinner"></div>Cargando comisiones...</div>`;
-  const D=[
-    {name:'Andrea Robles',color:'#7A8FAF',f:65,paq:26,n:'N9',cf:141,cp:405,cprod:146.12,m:0,d:25,t:667.12},
-    {name:'Daniela Mora',color:'#9B8EC4',f:62,paq:15,n:'N6',cf:135,cp:180,cprod:110.67,m:0,d:25,t:400.67},
-    {name:'Dejaneira Espinoza',color:'#6A9E7A',f:36,paq:10,n:'N5',cf:87,cp:125,cprod:117.23,m:0,d:25,t:304.23},
-    {name:'Alejandra Rodriguez',color:'#C4956A',f:0,paq:4,n:'N1',cf:0,cp:5,cprod:1.58,m:50,d:0,t:0},
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando comisiones...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getReporteAdmin')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error||!data.cosmetologas||!data.cosmetologas.length){
+        _renderDashAdminData(c,null);
+      } else {
+        _renderDashAdminData(c,data);
+      }
+    })
+    .catch(function(){ _renderDashAdminData(c,null); });
+}
+
+function _renderDashAdminData(c, data){
+  // Source of truth: Mi Avance sheet (período 26 Abr - 25 May 2026)
+  var cosms = data&&data.cosmetologas ? data.cosmetologas : [
+    {name:'Andrea Robles',     color:'#5B7FA6',f:73,paq:27,n:'N8',cf:158,   cp:320,   cprod:173.21,m:0,d:25,  t:626.21, nextN:'N9', faltanPaq:3,  nextCp:405},
+    {name:'Daniela Mora',      color:'#C4943A',f:75,paq:19,n:'N6',cf:167,   cp:180,   cprod:169.45,m:0,d:25,  t:491.45, nextN:'N7', faltanPaq:1,  nextCp:245},
+    {name:'Dejaneira Espinoza',color:'#7A9E8A',f:51,paq:12,n:'N4',cf:105,   cp:80,    cprod:139.39,m:0,d:25,  t:299.39, nextN:'N5', faltanPaq:1,  nextCp:125},
+    {name:'Alejandra Rodriguez',color:'#D4956A',f:0, paq:4, n:'N1',cf:0,    cp:5,     cprod:1.58,  m:0,d:0,   t:6.58,   nextN:'N2', faltanPaq:1,  nextCp:20},
   ];
-  setTimeout(()=>{
-    c.innerHTML=D.map(d=>`<div class="cosm-card">
-      <div class="cosm-hdr" style="background:${d.color}"><span>${d.name}</span><span>$${d.t.toFixed(2)}</span></div>
-      <div class="cosm-body">
-        <div class="crow"><span>Faciales · comisión</span><span class="v">${d.f} · <span style="color:var(--green)">$${d.cf.toFixed(2)}</span></span></div>
-        <div class="crow"><span>Paquetes · nivel · com.</span><span class="v">${d.paq} · ${d.n} · <span style="color:var(--green)">$${d.cp.toFixed(2)}</span></span></div>
-        <div class="crow"><span>Com. productos</span><span class="v" style="color:var(--green)">$${d.cprod.toFixed(2)}</span></div>
-        ${d.m>0?`<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$${d.m.toFixed(2)}</span></div>`:''}
-        ${d.d>0?`<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$${d.d.toFixed(2)}</span></div>`:''}
-        <div class="ctotal"><span>💰 Neto</span><span style="color:${d.color}">$${d.t.toFixed(2)}</span></div>
-      </div>
-    </div>`).join('');
-  },600);
+
+  var totCF=0,totCP=0,totCProd=0,totM=0,totD=0,totNeto=0;
+  cosms.forEach(function(d){totCF+=d.cf;totCP+=d.cp;totCProd+=d.cprod;totM+=d.m||0;totD+=d.d||0;totNeto+=d.t;});
+
+  var html=''
+  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+  +'<div style="font-size:0.82rem;font-weight:800;color:var(--navy)">📊 Comisiones</div>'
+  +'<button onclick="renderDashAdmin(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+  +'</div>'
+
+  // Resumen total
+  +'<div style="background:linear-gradient(135deg,#1A2744,var(--navy));border-radius:16px;padding:16px;margin-bottom:14px;color:white">'
+  +'<div style="font-size:0.6rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Total a pagar este período</div>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'
+  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCF.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Faciales</div></div>'
+  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCP.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Paquetes</div></div>'
+  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCProd.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Productos</div></div>'
+  +'</div>'
+  +(totD>0||totM>0?'<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +(totD>0?'<div style="flex:1;background:rgba(255,255,255,0.1);border-radius:9px;padding:8px;text-align:center"><div style="font-size:0.85rem;font-weight:800;color:#E8C07A">−$'+totD.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase">Descuentos</div></div>':'')
+    +(totM>0?'<div style="flex:1;background:rgba(255,255,255,0.1);border-radius:9px;padding:8px;text-align:center"><div style="font-size:0.85rem;font-weight:800;color:#F4A0A0">−$'+totM.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase">Multas</div></div>':'')
+    +'</div>':'')
+  +'<div style="border-top:1px solid rgba(255,255,255,0.18);padding-top:10px;display:flex;justify-content:space-between;align-items:center">'
+  +'<span style="font-size:0.78rem;opacity:0.7">💰 Total neto a pagar</span>'
+  +'<span style="font-size:1.5rem;font-weight:900">$'+totNeto.toFixed(2)+'</span>'
+  +'</div></div>';
+
+  // Individual cards
+  cosms.forEach(function(d){
+    html+='<div class="cosm-card">'
+      +'<div class="cosm-hdr" style="background:'+d.color+'"><span>'+d.name+'</span><span>$'+d.t.toFixed(2)+'</span></div>'
+      +'<div class="cosm-body">'
+      +'<div class="crow"><span>Faciales · comisión</span><span class="v">'+d.f+' · <span style="color:var(--green)">$'+d.cf.toFixed(2)+'</span></span></div>'
+      +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v">'+d.paq+' · '+d.n+' · <span style="color:var(--green)">$'+d.cp.toFixed(2)+'</span></span></div>'
+      +'<div class="crow"><span>Com. productos</span><span class="v" style="color:var(--green)">$'+d.cprod.toFixed(2)+'</span></div>'
+      +((d.m||0)>0?'<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$'+d.m.toFixed(2)+'</span></div>':'')
+      +((d.d||0)>0?'<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$'+d.d.toFixed(2)+'</span></div>':'')
+      +'<div class="ctotal"><span>💰 Neto</span><span style="color:'+d.color+'">$'+d.t.toFixed(2)+'</span></div>'
+      +(d.nextN?'<div style="font-size:0.65rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🎯 Faltan '+d.faltanPaq+' paquete(s) para '+d.nextN+(d.nextCp?' (+$'+d.nextCp+' acumulado)':'')+'</div>':'')
+      +(d.descNota?'<div style="font-size:0.63rem;color:var(--gold);margin-top:4px">🟡 '+d.descNota+'</div>':'')
+      +'</div></div>';
+  });
+  c.innerHTML=html;
 }
 
 // ══════ KPIS ══════
 function renderKpis(c){
-  c.innerHTML=`<div class="loading"><div class="spinner"></div>Cargando KPIs...</div>`;
-  setTimeout(()=>{
-    c.innerHTML=`
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="kv">134</div><div class="kl">Clientas únicas</div></div>
-        <div class="kpi-card"><div class="kv">140</div><div class="kl">Faciales</div></div>
-        <div class="kpi-card"><div class="kv" style="color:var(--pink)">62</div><div class="kl">Paquetes</div></div>
-        <div class="kpi-card"><div class="kv" style="color:var(--peach)">119</div><div class="kl">Productos</div></div>
-      </div>
-      <div class="card" style="background:linear-gradient(135deg,var(--navy),var(--blue));color:white">
-        <div style="font-size:0.62rem;opacity:0.55;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Ingreso bruto estimado — Mayo 2026</div>
-        <div style="font-size:2.3rem;font-weight:900">$21,600.68</div>
-        <div style="display:flex;gap:12px;margin-top:8px;font-size:0.71rem;opacity:0.7">
-          <span>Faciales $9,265</span><span>Paquetes $8,197</span><span>Productos $4,138</span>
-        </div>
-      </div>
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="kv" style="color:var(--pink-d)">52</div><div class="kl">Gift Cards</div></div>
-        <div class="kpi-card"><div class="kv" style="color:var(--green)">9%</div><div class="kl">Retención</div></div>
-      </div>
-      <div class="card">
-        <div class="card-title">📊 Comisiones totales</div>
-        <div class="drow"><span>Faciales</span><strong style="color:var(--green)">$363.00</strong></div>
-        <div class="drow"><span>Paquetes</span><strong style="color:var(--green)">$715.00</strong></div>
-        <div class="drow"><span>Productos</span><strong style="color:var(--green)">$375.60</strong></div>
-        <div class="drow"><span style="font-weight:700">Total</span><strong style="color:var(--pink-d)">$1,453.60</strong></div>
-      </div>
-      <div class="card">
-        <div class="card-title">📈 Crecimiento</div>
-        <div class="drow"><span>Abr 2026</span><strong>$12,285</strong></div>
-        <div class="drow"><span style="color:var(--green);font-weight:700">May 2026</span><strong style="color:var(--green)">$21,600 ↑ 75.8%</strong></div>
-      </div>`;
-  },700);
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando KPIs...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getKpis')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error) _renderKpisData(c,null);
+      else _renderKpisData(c,d);
+    })
+    .catch(function(){ _renderKpisData(c,null); });
+}
+
+function _renderKpisData(c, d){
+  // Real May 2026 data from TICKET_FICHA col J
+  var K = d || {
+    mes:'Mayo 2026',
+    ingresos:17352.89,
+    clientas:187, recurrentes:15,
+    faciales:169, paquetes:49, productos:153,
+    avgTicket:156.95,
+    ingrFaciales:11391.81, ingrPaquetes:9006.85, ingrProd:5434.46,
+    comTotal:1540.45,
+    topFaciales:[
+      {n:'Facial Reparación',    c:53, sku:'SUNSU-02'},
+      {n:'Facial Porcelana',     c:26, sku:'SUNSU-05'},
+      {n:'7 Pieles (Arroz+H₂O)',c:21, sku:'SUNSU-03'},
+      {n:'Facial Gold-Aging',    c:18, sku:'SUNSU-04'},
+      {n:'Facial S.O.S',         c:12, sku:'SUNSU-01'},
+      {n:'Peeling Marino',       c:10, sku:'SUNSU-42'},
+    ],
+    topProductos:[
+      {n:'Jabón Limpiador Ceramide Foam', sku:'SUNSU-AS-002', c:19},
+      {n:'Tónico Centella Resurrection',  sku:'SUNSU-AS-004', c:19},
+      {n:'Rice Ceramide 7 Hydrating Serum',sku:'SUNSU-HT-007',c:14},
+      {n:'Serum Centella Resurrection',   sku:'SUNSU-AS-005', c:14},
+      {n:'Crema Centella Resurrection',   sku:'SUNSU-AS-003', c:12},
+      {n:'Niacinamide 10%+TXA 4% Serum', sku:'SUNSU-HT-002', c:10},
+      {n:'Azelaic Acid 10 Hyaluron Serum',sku:'SUNSU-HT-014',c:10},
+      {n:'Heartleaf Quercetinol Foam',    sku:'SUNSU-HT-003', c:10},
+    ],
+    topCosm:[
+      {n:'Andrea Robles',    rev:7444.52, color:'#5B7FA6'},
+      {n:'Daniela Mora',     rev:5434.59, color:'#C4943A'},
+      {n:'Dejaneira Espinoza',rev:2582.70,color:'#7A9E8A'},
+      {n:'Alejandra Rodriguez',rev:703.80,color:'#D4956A'},
+    ],
+    diasPico:[
+      {d:'Viernes',c:52},{d:'Sábado',c:44},{d:'Martes',c:35},
+      {d:'Jueves',c:32},{d:'Miércoles',c:28},{d:'Lunes',c:12},
+    ],
+  };
+
+  var maxDia = Math.max.apply(null, K.diasPico.map(function(x){return x.c;}));
+  var maxFac = K.topFaciales[0]?K.topFaciales[0].c:1;
+  var maxProd = K.topProductos[0]?K.topProductos[0].c:1;
+  var retencion = K.clientas>0?(K.recurrentes/K.clientas*100).toFixed(0):0;
+
+  var html = ''
+  // Refresh button
+  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+  +'<div style="font-size:0.82rem;font-weight:800;color:var(--navy)">📈 KPIs — '+K.mes+'</div>'
+  +'<button onclick="renderKpis(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+  +'</div>'
+
+  // Hero — ingreso bruto
+  +'<div style="background:linear-gradient(135deg,var(--navy-d,#1A2744),var(--navy));border-radius:16px;padding:16px;margin-bottom:12px;color:white">'
+  +'<div style="font-size:0.6rem;opacity:0.55;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Ingreso bruto — '+K.mes+'</div>'
+  +'<div style="font-size:2.2rem;font-weight:900">$'+K.ingresos.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>'
+  +'<div style="display:flex;gap:10px;margin-top:8px;font-size:0.68rem;opacity:0.7">'
+  +'<span>Faciales $'+K.ingrFaciales.toLocaleString()+'</span>'
+  +'<span>Paquetes $'+K.ingrPaquetes.toLocaleString()+'</span>'
+  +'<span>Productos $'+K.ingrProd.toLocaleString()+'</span>'
+  +'</div></div>'
+
+  // Grid KPIs
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px">'
+  +_kpiCard(K.clientas,'Clientas únicas','var(--blue-l)','var(--navy)')
+  +_kpiCard(K.recurrentes+'  ('+retencion+'%)','Recurrentes','var(--green-l)','var(--green)')
+  +_kpiCard(K.faciales,'Faciales','var(--lavender-l,#F3F0FA)','var(--lavender,#9B8EC4)')
+  +_kpiCard(K.paquetes,'Paquetes','var(--peach-l)','var(--peach)')
+  +_kpiCard(K.productos,'Productos vendidos','var(--gold-l)','var(--gold)')
+  +_kpiCard('$'+K.avgTicket.toFixed(2),'Ticket promedio','var(--sage-l,#EDF5F1)','var(--sage,#7A9E8A)')
+  +'</div>'
+
+  // Top faciales
+  +'<div class="card" style="margin-bottom:12px">'
+  +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:10px">💆 Top faciales</div>'
+  +K.topFaciales.map(function(f){
+    var pct=Math.round(f.c/maxFac*100);
+    return '<div style="margin-bottom:7px">'
+      +'<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:3px">'
+      +'<span style="color:var(--text)"><span style="font-size:0.58rem;font-family:monospace;background:var(--blue-l);color:var(--blue);padding:1px 4px;border-radius:4px;margin-right:4px">'+f.sku+'</span>'+f.n+'</span>'
+      +'<span style="font-weight:700;color:var(--navy)">'+f.c+'</span></div>'
+      +'<div style="background:var(--gray-ll);border-radius:4px;height:6px"><div style="background:var(--blue);border-radius:4px;height:6px;width:'+pct+'%"></div></div>'
+      +'</div>';
+  }).join('')
+  +'</div>'
+
+  // Top productos
+  +'<div class="card" style="margin-bottom:12px">'
+  +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:10px">🧴 Top productos</div>'
+  +K.topProductos.map(function(p){
+    var pct=Math.round(p.c/maxProd*100);
+    return '<div style="margin-bottom:7px">'
+      +'<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:3px">'
+      +'<span style="color:var(--text)"><span style="font-size:0.58rem;font-family:monospace;background:var(--peach-l);color:var(--peach);padding:1px 4px;border-radius:4px;margin-right:4px">'+p.sku+'</span>'+p.n+'</span>'
+      +'<span style="font-weight:700;color:var(--peach)">'+p.c+'</span></div>'
+      +'<div style="background:var(--gray-ll);border-radius:4px;height:6px"><div style="background:var(--peach);border-radius:4px;height:6px;width:'+pct+'%"></div></div>'
+      +'</div>';
+  }).join('')
+  +'</div>'
+
+  // Revenue por cosmetóloga
+  +'<div class="card" style="margin-bottom:12px">'
+  +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:10px">💰 Ingresos por cosmetóloga</div>'
+  +K.topCosm.map(function(cm){
+    var pct=Math.round(cm.rev/K.topCosm[0].rev*100);
+    var pctTotal=K.ingresos>0?(cm.rev/K.ingresos*100).toFixed(0):'0';
+    return '<div style="margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;font-size:0.73rem;margin-bottom:3px">'
+      +'<span style="font-weight:600;color:'+cm.color+'">'+cm.n+'</span>'
+      +'<span style="font-weight:700;color:var(--navy)">$'+cm.rev.toLocaleString('en-US',{minimumFractionDigits:2})+' <span style="font-weight:400;color:var(--gray);font-size:0.65rem">('+pctTotal+'%)</span></span>'
+      +'</div>'
+      +'<div style="background:var(--gray-ll);border-radius:4px;height:7px"><div style="background:'+cm.color+';border-radius:4px;height:7px;width:'+pct+'%"></div></div>'
+      +'</div>';
+  }).join('')
+  +'</div>'
+
+  // Días pico
+  +'<div class="card" style="margin-bottom:12px">'
+  +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:10px">📅 Días más activos</div>'
+  +'<div style="display:flex;gap:6px;align-items:flex-end;height:80px">'
+  +K.diasPico.map(function(d){
+    var h=Math.round(d.c/maxDia*70);
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
+      +'<div style="font-size:0.62rem;font-weight:700;color:var(--navy)">'+d.c+'</div>'
+      +'<div style="background:var(--navy);border-radius:4px 4px 0 0;width:100%;height:'+h+'px"></div>'
+      +'<div style="font-size:0.55rem;color:var(--gray);text-align:center">'+d.d.substring(0,3)+'</div>'
+      +'</div>';
+  }).join('')
+  +'</div></div>';
+
+  c.innerHTML=html;
+}
+function _kpiCard(val,label,bg,fg){
+  return '<div style="background:'+bg+';border-radius:12px;padding:12px;text-align:center">'
+    +'<div style="font-size:1.4rem;font-weight:900;color:'+fg+'">'+val+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;margin-top:2px">'+label+'</div>'
+    +'</div>';
 }
 
 // ══════ ADMIN PANEL ══════
@@ -1844,7 +2055,7 @@ function buscarClienteEnRegistro(cedula, nombre){
 function renderCitas(c){
   const hoy=new Date();
   const fecha=hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
-  const isAdmin=CU.role==='admin'||CU.role==='admin_master';
+  const isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
 
   // Filter by current user if staff
   let citas=DEMO_CITAS;
@@ -1912,7 +2123,7 @@ function mostrarErrorCitas(c, msg) {
     '<div style="font-size:0.78rem;color:#666;word-break:break-all;margin-bottom:12px">' + msg + '</div>' +
     '<div style="font-size:0.75rem;color:#999;margin-bottom:8px">Mostrando datos demo:</div>' +
     '</div>';
-  const isAdmin = CU.role==='admin'||CU.role==='admin_master';
+  const isAdmin = CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
   const hoy = new Date();
   const fecha = hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
   mostrarCitas(c, DEMO_CITAS, isAdmin, fecha, false, true);
@@ -1952,7 +2163,7 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
       });
   } catch(e) { citas = []; }
 
-  if(!isAdmin) citas = citas.filter(function(ci){ return ci.nombre.toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0].toLowerCase()) >= 0; });
+  if(!isAdmin) citas = citas.filter(function(ci){ return (ci.calendar||ci.nombre||'').toLowerCase().indexOf((CU.short||'').toLowerCase().split(' ')[0].toLowerCase()) >= 0; });
   window._citasHoy = citas;
 
   const btnColor = hasAcuity ? 'var(--green-l)' : 'var(--gold-l)';
@@ -2222,67 +2433,53 @@ function cargarCatalogo(){
 }
 
 function verCitas(c,o){
-  var URLS={
-    '-1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=54457547&single=true&output=csv',
-    '0':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1907245777&single=true&output=csv',
-    '1':'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=758710757&single=true&output=csv'
-  };
   var dias=[['Ayer',-1],['Hoy',0],['Mañana',1]];
   var hoy=new Date();
   var dia=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+o);
   var dl=dia.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
+  var diaNom=o===-1?'ayer':o===1?'manana':'hoy';
 
-  // Nav buttons
   var nav='<div style="display:flex;gap:8px;padding:14px 14px 0">';
   dias.forEach(function(d){
     var a=d[1]===o;
-    nav+='<button onclick="verCitas(document.getElementById(\'content\'),'+d[1]+')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid '+(a?'#2D3B6B':'#ECEEF4')+';background:'+(a?'#2D3B6B':'white')+';color:'+(a?'white':'#7A8499')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+d[0]+'</button>';
+    nav+='<button onclick="verCitas(document.getElementById(\'content\'),'+d[1]+')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid '+(a?'var(--navy)':'#ECEEF4')+';background:'+(a?'var(--navy)':'white')+';color:'+(a?'white':'var(--gray)')+';font-size:0.78rem;font-weight:700;cursor:pointer">'+d[0]+'</button>';
   });
-  nav+='</div><div style="font-size:0.7rem;color:#7A8499;padding:4px 14px 10px;text-transform:capitalize">'+dl+'</div>';
-
-  c.innerHTML=nav+'<div id="cb" style="padding:0 14px 14px"><div style="text-align:center;padding:30px;color:#7A8499"><div style="font-size:1.5rem;margin-bottom:8px">⏳</div>Cargando citas...</div></div>';
+  nav+='</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 14px 10px">'
+    +'<div style="font-size:0.7rem;color:var(--gray);text-transform:capitalize">'+dl+'</div>'
+    +'<button onclick="verCitas(document.getElementById(\'content\'),'+o+')" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:4px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'</div>';
+  c.innerHTML=nav+'<div id="cb" style="padding:0 14px 14px"><div style="text-align:center;padding:30px;color:var(--gray)"><div style="font-size:1.5rem;margin-bottom:8px">⏳</div>Cargando citas...</div></div>';
 
   var body=function(){return document.getElementById('cb');};
 
-  fetch(URLS[String(o)])
-    .then(function(r){return r.text();})
-    .then(function(raw){
-      // The sheet cell stores raw JSON from Acuity
-      // The CSV wraps it in quotes and escapes inner quotes
-      var j=raw.trim();
-      // Strip outer CSV quotes if present
-      if(j.charAt(0)==='"') j=j.slice(1,j.lastIndexOf('"')).replace(/""/g,'"');
-      // Try parse
-      var data;
-      try{ data=JSON.parse(j); }
-      catch(err){
-        // Cell empty or not yet synced
-        if(body()) body().innerHTML=
-          '<div style="background:var(--gold-l);border-radius:12px;padding:20px;text-align:center">'
+  fetch(APPS_SCRIPT_URL+'?action=getCitas&dia='+diaNom)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!body()) return;
+      if(data.error){
+        body().innerHTML='<div style="background:var(--gold-l);border-radius:12px;padding:20px;text-align:center">'
           +'<div style="font-size:1.5rem;margin-bottom:8px">📅</div>'
-          +'<div style="font-size:0.84rem;font-weight:700;color:var(--gold);margin-bottom:6px">Sin datos de Acuity</div>'
-          +'<div style="font-size:0.72rem;color:var(--gray)">La hoja CITAS_HOY/AYER/MANANA está vacía.<br>Ejecuta <strong>guardarTodasLasCitas()</strong> en Apps Script para sincronizar.</div>'
-          +'</div>';
+          +'<div style="font-size:0.84rem;font-weight:700;color:var(--gold);margin-bottom:6px">Sin datos</div>'
+          +'<div style="font-size:0.72rem;color:var(--gray)">'+data.error+'</div></div>';
         return;
       }
       if(!Array.isArray(data)){
-        if(body()) body().innerHTML='<div style="padding:20px;color:var(--gray);text-align:center">Formato inesperado</div>';
+        body().innerHTML='<div style="padding:20px;color:var(--gray);text-align:center">Sin citas disponibles</div>';
         return;
       }
-      window._citasHoy=data;
-      var isAdmin=CU.role==='admin'||CU.role==='admin_master';
+      var isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
       var citas=data
         .filter(function(a){return !a.canceled;})
         .sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
       if(!isAdmin) citas=citas.filter(function(ci){
         return (ci.calendar||'').toLowerCase().indexOf(CU.short.toLowerCase().split(' ')[0])>=0;
       });
-      if(!body()) return;
       if(!citas.length){
         body().innerHTML='<div style="padding:32px;text-align:center;color:var(--gray)"><div style="font-size:2rem;margin-bottom:8px">🗓</div>No hay citas</div>';
         return;
       }
-      var h='<div style="font-size:0.72rem;color:#7A8499;margin-bottom:10px;font-weight:600">'+citas.length+' cita'+(citas.length!==1?'s':'')+(isAdmin?'':' para ti')+'</div>';
+      var h='<div style="font-size:0.72rem;color:var(--gray);margin-bottom:10px;font-weight:600">'+citas.length+' cita'+(citas.length!==1?'s':'')+(isAdmin?'':' para ti')+'</div>';
       citas.forEach(function(apt){
         var dt=new Date(apt.datetime);
         var hora=dt.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true});
@@ -2315,6 +2512,363 @@ function verCitas(c,o){
         +'<button onclick="verCitas(document.getElementById(\'content\'),'+o+')" style="margin-top:12px;padding:8px 16px;background:#2D3B6B;color:white;border:none;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer">🔄 Reintentar</button>'
         +'</div>';
     });
+}
+
+function editarTicket(tkRow){
+  if(!tkRow){toast('Sin # de ticket','#B86B6B');return;}
+  var t=_histData&&_histData.find(function(x){return x.tkRow===tkRow;});
+  if(!t){toast('Ticket no encontrado','#B86B6B');return;}
+
+  var overlay=document.createElement('div');
+  overlay.id='edit-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+
+  var lbl=function(text){return '<label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:4px">'+text+'</label>';};
+  var ti=function(id,val,type){
+    var s='width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box';
+    if(type==='ta') return '<textarea id="'+id+'" style="'+s+';resize:none;height:72px">'+(val||'')+'</textarea>';
+    if(type==='num') return '<input id="'+id+'" type="number" step="0.01" value="'+(val||'')+'" style="'+s+'">';
+    return '<input id="'+id+'" type="text" value="'+(val||'')+'" style="'+s+'">';
+  };
+  var sel=function(id,opts){return '<select id="'+id+'" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.82rem;font-family:inherit;outline:none;box-sizing:border-box">'+opts+'</select>';};
+  var sec=function(icon,text){return '<div style="font-size:0.68rem;font-weight:700;color:var(--blue);text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1.5px solid var(--blue-l)">'+icon+' '+text+'</div>';};
+  var fld=function(label,content){return '<div style="margin-bottom:10px">'+lbl(label)+content+'</div>';};
+
+  // Facial options
+  var facOpts='<option value="">— Ninguno —</option>'+FACIALES.map(function(f){
+    return '<option value="'+f.sku+'" '+(t.facial&&t.facial.indexOf(f.sku)>=0?'selected':'')+'>'+f.sku+' · '+f.n+'</option>';
+  }).join('');
+  // Pack x3
+  var p3Opts='<option value="">— Ninguno —</option>'+PAQ3.map(function(p){
+    return '<option value="'+p.sku+'" '+(t.pack3&&t.pack3.indexOf(p.sku)>=0?'selected':'')+'>'+p.sku+' · '+p.n+' ($'+p.p+')</option>';
+  }).join('');
+  // Pack x6
+  var p6Opts='<option value="">— Ninguno —</option>'+PAQ6.map(function(p){
+    return '<option value="'+p.sku+'" '+(t.pack6&&t.pack6.indexOf(p.sku)>=0?'selected':'')+'>'+p.sku+' · '+p.n+' ($'+p.p+')</option>';
+  }).join('');
+  // Cobro (col I: Efec/Tarje/Trans/mixtos)
+  var cobroOpts=['Efec','Tarje','Trans','Efec, Tarje','Efec, Trans','Trans, Tarje','Paquete','Gift Card'].map(function(c){
+    return '<option '+(t.cobro===c||t.colI===c?'selected':'')+'>'+c+'</option>';
+  }).join('');
+  // Extras checkboxes
+  var extrasHtml=EXTRAS.map(function(ex){
+    var ck=t.extras&&t.extras.indexOf(ex.sku)>=0?'checked':'';
+    var cort=t.extras&&t.extras.indexOf(ex.sku)>=0&&t.extras.indexOf('[CORTESIA]')>=0&&t.extras.split('|').some(function(s){return s.indexOf(ex.sku)>=0&&s.indexOf('[CORTESIA]')>=0;})?'checked':'';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--gray-ll)">'
+      +'<input type="checkbox" id="ex-'+ex.sku+'" '+ck+' style="width:15px;height:15px;flex-shrink:0">'
+      +'<span style="font-size:0.72rem;flex:1"><span style="font-size:0.58rem;font-family:monospace;background:var(--blue-l);color:var(--blue);padding:1px 4px;border-radius:3px">'+ex.sku+'</span> '+ex.n+'</span>'
+      +'<label style="font-size:0.62rem;color:var(--green);display:flex;align-items:center;gap:3px"><input type="checkbox" id="ec-'+ex.sku+'" '+cort+' style="width:13px;height:13px">🎁</label>'
+      +'</div>';
+  }).join('');
+  // Productos
+  var prodsHtml=PROVS.map(function(pv){
+    var items=pv.prods.map(function(p){
+      var curQty=0;
+      if(t.productos&&t.productos.length){
+        t.productos.forEach(function(pq){if(pq.indexOf(p.sku)>=0){var m=pq.match(/x(\d+)|×(\d+)/);curQty=m?parseInt(m[1]||m[2]):1;}});
+      }
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--gray-ll)">'
+        +'<span style="font-size:0.68rem;flex:1"><span style="font-size:0.55rem;font-family:monospace;background:var(--peach-l);color:var(--peach);padding:1px 3px;border-radius:3px">'+p.sku+'</span> '+p.n+'</span>'
+        +'<input type="number" id="pq-'+p.sku+'" min="0" max="10" value="'+curQty+'" style="width:46px;padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font-size:0.82rem;text-align:center;outline:none">'
+        +'</div>';
+    }).join('');
+    return '<div style="margin-bottom:8px"><div style="font-size:0.63rem;font-weight:700;color:'+pv.badge+';margin:4px 0 3px">'+pv.label+'</div>'+items+'</div>';
+  }).join('');
+  // GC venta
+  var gcParts=(t.colS||'').split(',');
+  var gcTipo=t.colS&&t.colS.indexOf('CORTESIA')>=0?'CORTESIA':t.colS&&t.colS.indexOf('SI')>=0?'SI':'';
+  var gcCod=(gcParts[1]||'').trim();
+  var gcNota=(gcParts[2]||'').trim();
+
+  var modal=document.createElement('div');
+  modal.style.cssText='background:white;border-radius:18px;padding:20px;width:100%;max-width:480px;margin-top:8px;margin-bottom:40px;box-shadow:0 8px 40px rgba(91,127,166,0.2)';
+  modal.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
+    +'<div><div style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase">✏️ Ticket #'+tkRow+'</div>'
+    +'<div style="font-size:0.92rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.fecha+' · '+t.cosmetologa+'</div></div>'
+    +'<button onclick="document.getElementById(\'edit-overlay\').remove()" style="background:var(--gray-l);border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;flex-shrink:0">×</button>'
+    +'</div>'
+    +sec('👤','Cliente')+fld('Cédula',ti('et-ced',t.cedula))+fld('Nombre',ti('et-nom',t.nombre))+fld('Apellido',ti('et-ape',t.apellido))
+    +sec('💆','Facial')+fld('Facial hecho',sel('et-facial',facOpts))
+    +sec('📋','Paquetes')+fld('Paquete x3',sel('et-pack3',p3Opts))+fld('Paquete x6',sel('et-pack6',p6Opts))
+    +sec('✨','Extras / Add-ons')+'<div style="margin-bottom:8px;font-size:0.63rem;color:var(--gray)">Marca 🎁 para cortesía sin cobro</div>'+extrasHtml
+    +sec('🧴','Productos')+prodsHtml
+    +sec('💳','Cobro')+fld('Tipo cobro (col I)',sel('et-cobro',cobroOpts))+fld('$$ Estimado — total cobrado (col J)',ti('et-total',t.estimado,'num'))+fld('Fecha retorno (col K)',ti('et-fret',t.fechaRet||''))
+    +sec('🎁','GC Canje (col R)')+fld('Código GC canjeado',ti('et-colR',t.colR||''))
+    +sec('🎁','Venta Gift Card (col S)')
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +'<button onclick="document.getElementById(\'et-gc-tipo\').value=\'SI\'" style="flex:1;padding:7px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;cursor:pointer">📱 Normal</button>'
+    +'<button onclick="document.getElementById(\'et-gc-tipo\').value=\'CORTESIA\'" style="flex:1;padding:7px;border:1.5px solid var(--green);border-radius:9px;font-size:0.7rem;cursor:pointer;color:var(--green);font-weight:700">🎁 Cortesía</button>'
+    +'<button onclick="document.getElementById(\'et-gc-tipo\').value=\'\'" style="flex:1;padding:7px;border:1.5px solid var(--gray-l);border-radius:9px;font-size:0.7rem;cursor:pointer;color:var(--gray)">✕ Sin GC</button>'
+    +'</div>'
+    +fld('Tipo (SI / CORTESIA / vacío)',ti('et-gc-tipo',gcTipo))+fld('Código GC vendido',ti('et-gc-cod',gcCod))+fld('Nota GC',ti('et-gc-nota',gcNota))
+    +sec('📝','Notas')+fld('Recomendaciones (col N)',ti('et-recom',t.recomendaciones,'ta'))+fld('Notas de la piel (col O)',ti('et-notas',t.notas,'ta'))
+    +'<div id="et-msg" style="display:none;padding:9px 12px;border-radius:9px;font-size:0.8rem;font-weight:600;margin-top:10px;text-align:center"></div>'
+    +'<button id="et-btn" onclick="guardarEdicionTicket('+tkRow+')" style="width:100%;padding:13px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.88rem;font-weight:700;cursor:pointer;margin-top:12px">💾 Guardar cambios</button>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+}
+
+function guardarEdicionTicket(tkRow){
+  var btn=document.getElementById('et-btn');
+  var msg=document.getElementById('et-msg');
+  var get=function(id){var el=document.getElementById(id);return el?el.value:'';};
+
+  // Build extras string (col W) same format as enviarTicket
+  var extrasArr=[];
+  EXTRAS.forEach(function(ex){
+    var ck=document.getElementById('ex-'+ex.sku);
+    if(ck&&ck.checked){
+      var cort=document.getElementById('ec-'+ex.sku);
+      var str=ex.sku+' '+ex.n;
+      if(cort&&cort.checked) str+=' [CORTESIA]';
+      extrasArr.push(str);
+    }
+  });
+  var extrasStr=extrasArr.join(' | ');
+
+  // Build productos object same as enviarTicket
+  var PROD_COL_MAP={
+    'SUNSU-HT-002':25,'SUNSU-HT-003':26,'SUNSU-HT-004':27,'SUNSU-HT-006':28,'SUNSU-HT-007':29,
+    'SUNSU-HT-011':30,'SUNSU-HT-012':31,'SUNSU-HT-013':32,'SUNSU-HT-014':33,
+    'SUNSU-AS-001':34,'SUNSU-AS-002':35,'SUNSU-AS-003':36,'SUNSU-AS-004':37,
+    'SUNSU-AS-005':38,'SUNSU-AS-006':39,'SUNSU-AS-007':40,
+    'SUNSU-ML-001':41,'SUNSU-ML-002':42,'SUNSU-ML-003':43,'SUNSU-ML-004':44,
+    'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-009':48,
+    'SUNSU-PH-001':49,'SUNSU-PH-002':50,'SUNSU-PH-007':53,'SUNSU-PH-008':54,
+  };
+  var productosPayload={};
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){
+    var qEl=document.getElementById('pq-'+p.sku);
+    var q=qEl?parseInt(qEl.value)||0:0;
+    if(q>0) productosPayload[p.sku]=q;
+  });});
+
+  // Facial text
+  var facSku=get('et-facial');
+  var facObj=facSku?FACIALES.find(function(f){return f.sku===facSku;}):null;
+  var facTxt=facObj?(facSku+' '+facObj.n):'';
+
+  // Pack3 text
+  var p3Sku=get('et-pack3');
+  var p3Obj=p3Sku?PAQ3.find(function(p){return p.sku===p3Sku;}):null;
+  var p3Txt=p3Obj?(p3Sku+' '+p3Obj.n):'';
+
+  // Pack6 text
+  var p6Sku=get('et-pack6');
+  var p6Obj=p6Sku?PAQ6.find(function(p){return p.sku===p6Sku;}):null;
+  var p6Txt=p6Obj?(p6Sku+' '+p6Obj.n):'';
+
+  // GC colS
+  var gcTipo=get('et-gc-tipo').trim();
+  var gcCod=get('et-gc-cod').trim();
+  var gcNota=get('et-gc-nota').trim();
+  var colS=gcTipo?(gcTipo+(gcCod?', '+gcCod:'')+(gcNota?', '+gcNota:'')):'';
+
+  var payload={
+    accion:'editarTicket',
+    tkRow: tkRow,
+    cedula:   get('et-ced'),
+    nombre:   get('et-nom'),
+    apellido: get('et-ape'),
+    facial:   facTxt,
+    pack3:    p3Txt,
+    pack6:    p6Txt,
+    extras:   extrasStr,
+    cobro:    get('et-cobro'),
+    estimado: parseFloat(get('et-total'))||0,
+    fechaRetorno: get('et-fret'),
+    colR:     get('et-colR'),
+    colS:     colS,
+    recomendaciones: get('et-recom'),
+    notas:    get('et-notas'),
+    productos: productosPayload,
+    prodColMap: PROD_COL_MAP,
+  };
+
+  btn.disabled=true; btn.textContent='⏳ Guardando...';
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false; btn.textContent='💾 Guardar cambios';
+    if(d.ok){
+      msg.style.display='block'; msg.style.background='var(--green-l)'; msg.style.color='var(--green)';
+      msg.textContent='✅ Guardado correctamente';
+      if(_histData){
+        var t=_histData.find(function(x){return x.tkRow===tkRow;});
+        if(t){t.cedula=payload.cedula;t.nombre=payload.nombre;t.apellido=payload.apellido;
+          t.recomendaciones=payload.recomendaciones;t.notas=payload.notas;
+          t.facial=payload.facial;t.pack3=payload.pack3;t.pack6=payload.pack6;
+          t.estimado=String(payload.estimado);t.extras=payload.extras;t.colS=payload.colS;t.colR=payload.colR;}
+      }
+      setTimeout(function(){var ov=document.getElementById('edit-overlay');if(ov)ov.remove();},1200);
+    } else {
+      msg.style.display='block'; msg.style.background='var(--red-l)'; msg.style.color='var(--red)';
+      msg.textContent='❌ '+(d.error||'Error al guardar');
+    }
+  })
+  .catch(function(){
+    btn.disabled=false; btn.textContent='💾 Guardar cambios';
+    msg.style.display='block'; msg.style.background='var(--red-l)'; msg.style.color='var(--red)';
+    msg.textContent='❌ Error de conexión';
+  });
+}
+
+function toggleExclusion(tkRow, tipo){
+  var colMap={facial:55, paquete:56, producto:57}; // BC=55, BD=56, BE=57 (1-based)
+  var idMap={facial:'excl-fac-', paquete:'excl-paq-', producto:'excl-prod-'};
+  var labelMap={facial:'💆 Facial', paquete:'📋 Paquete', producto:'🧴 Producto'};
+  var col=colMap[tipo];
+  var btn=document.getElementById(idMap[tipo]+tkRow);
+  if(!btn) return;
+
+  // Toggle current state
+  var isActive=btn.style.borderColor.indexOf('red')>=0||btn.dataset.active==='1';
+  var newVal=!isActive;
+  btn.dataset.active=newVal?'1':'0';
+
+  // Update button style
+  if(newVal){
+    btn.style.borderColor='var(--red)'; btn.style.background='var(--red-l)'; btn.style.color='var(--red)';
+    btn.textContent='✓ '+labelMap[tipo];
+  } else {
+    btn.style.borderColor='var(--gray-l)'; btn.style.background='white'; btn.style.color='var(--gray)';
+    btn.textContent=labelMap[tipo];
+  }
+
+  // Save to sheet
+  toast('Guardando...','var(--navy)');
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'excluirComision', tkRow:tkRow, col:col, valor:newVal})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){
+      toast(newVal?'❌ Excluido de comisión':'✅ Incluido en comisión', newVal?'#B86B6B':'var(--green)');
+      // Update local cache
+      if(_histData){
+        var t=_histData.find(function(x){return x.tkRow===tkRow;});
+        if(t){
+          if(tipo==='facial') t.exclFacial=newVal;
+          else if(tipo==='paquete') t.exclPaquete=newVal;
+          else if(tipo==='producto') t.exclProducto=newVal;
+        }
+      }
+    } else { toast('Error: '+(d.error||''),'#B86B6B'); }
+  })
+  .catch(function(){ toast('Error de conexión','#B86B6B'); });
+}
+
+// ══════ MULTAS ══════
+function renderMultas(c){
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  if(!isAdmin){c.innerHTML='<div class="card">Sin acceso</div>';return;}
+  var cosmsOpts=['Andrea Robles','Daniela Mora','Dejaneira Espinoza','Alejandra Rodriguez'].map(function(n){
+    return '<option>'+n+'</option>';
+  }).join('');
+  c.innerHTML=
+    '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:14px">⚠️ Registrar Multa o Descuento</div>'
+    +'<div class="card" style="padding:16px">'
+    +'<div class="field"><label>Cosmetóloga</label>'
+    +'<select id="mul-cosm" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none">'+cosmsOpts+'</select></div>'
+    +'<div class="field"><label>Tipo</label>'
+    +'<select id="mul-tipo" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none">'
+    +'<option value="MULTA">MULTA</option><option value="DESCUENTO">DESCUENTO</option></select></div>'
+    +'<div class="field"><label>Monto ($)</label>'
+    +'<input id="mul-monto" type="number" step="0.01" min="0" placeholder="0.00" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div class="field"><label>Motivo</label>'
+    +'<textarea id="mul-motivo" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;resize:none;height:70px;box-sizing:border-box" placeholder="Descripción del motivo..."></textarea></div>'
+    +'<div id="mul-msg" style="display:none;padding:9px;border-radius:9px;font-size:0.8rem;font-weight:600;margin-bottom:8px;text-align:center"></div>'
+    +'<button id="mul-btn" onclick="guardarMulta(null)" style="width:100%;padding:13px;background:var(--red);color:white;border:none;border-radius:11px;font-size:0.88rem;font-weight:700;cursor:pointer">⚠️ Registrar</button>'
+    +'</div>';
+}
+
+function abrirModalMulta(tkRow){
+  // Modal de multa relacionada a un ticket
+  var t=_histData&&_histData.find(function(x){return x.tkRow===tkRow;});
+  var overlay=document.createElement('div');
+  overlay.id='multa-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
+  var cosmsOpts=['Andrea Robles','Daniela Mora','Dejaneira Espinoza','Alejandra Rodriguez'].map(function(n){
+    return '<option '+(t&&t.cosmetologa===n?'selected':'')+'>'+n+'</option>';
+  }).join('');
+  var modal=document.createElement('div');
+  modal.style.cssText='background:white;border-radius:18px;padding:20px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(184,107,107,0.25)';
+  modal.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div><div style="font-size:0.68rem;font-weight:700;color:var(--red);text-transform:uppercase">⚠️ Aplicar multa</div>'
+    +(t?'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">Ticket #'+tkRow+' · '+t.nombre+' '+t.apellido+'</div>'
+       :'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">Ticket #'+tkRow+'</div>')
+    +'</div>'
+    +'<button onclick="document.getElementById(\'multa-overlay\').remove()" style="background:var(--gray-l);border:none;border-radius:50%;width:30px;height:30px;font-size:1rem;cursor:pointer">×</button>'
+    +'</div>'
+    +'<div class="field"><label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Cosmetóloga</label>'
+    +'<select id="mtk-cosm" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box">'+cosmsOpts+'</select></div>'
+    +'<div class="field"><label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Tipo</label>'
+    +'<select id="mtk-tipo" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box">'
+    +'<option value="MULTA">MULTA</option><option value="DESCUENTO">DESCUENTO</option></select></div>'
+    +'<div class="field"><label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Monto ($)</label>'
+    +'<input id="mtk-monto" type="number" step="0.01" min="0" placeholder="0.00" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div class="field"><label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Motivo</label>'
+    +'<textarea id="mtk-motivo" style="width:100%;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.84rem;font-family:inherit;outline:none;resize:none;height:65px;box-sizing:border-box" placeholder="Motivo de la multa..."></textarea></div>'
+    +'<div id="mtk-msg" style="display:none;padding:8px;border-radius:9px;font-size:0.8rem;font-weight:600;margin-bottom:8px;text-align:center"></div>'
+    +'<button id="mtk-btn" onclick="guardarMulta('+tkRow+')" style="width:100%;padding:12px;background:var(--red);color:white;border:none;border-radius:11px;font-size:0.86rem;font-weight:700;cursor:pointer">⚠️ Aplicar multa</button>';
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+}
+
+function guardarMulta(tkRow){
+  var isTicket=tkRow!=null;
+  var prefix=isTicket?'mtk-':'mul-';
+  var get=function(id){var el=document.getElementById(prefix+id);return el?el.value.trim():'';};
+  var btn=document.getElementById(prefix+'btn');
+  var msg=document.getElementById(prefix+'msg');
+  var cosm=get('cosm'), tipo=get('tipo'), montoStr=get('monto'), motivo=get('motivo');
+  var monto=parseFloat(montoStr)||0;
+  if(!cosm||!monto||!motivo){
+    msg.style.display='block'; msg.style.background='var(--red-l)'; msg.style.color='var(--red)';
+    msg.textContent='❌ Completa cosmetóloga, monto y motivo';
+    return;
+  }
+  btn.disabled=true; btn.textContent='⏳ Guardando...';
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({
+      accion:'registrarMulta',
+      cosmetologa: cosm,
+      tipo: tipo,
+      monto: monto,
+      motivo: motivo,
+      tkRow: tkRow||'',
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false; btn.textContent=isTicket?'⚠️ Aplicar multa':'⚠️ Registrar';
+    if(d.ok){
+      msg.style.display='block'; msg.style.background='var(--green-l)'; msg.style.color='var(--green)';
+      msg.textContent='✅ Registrado correctamente';
+      setTimeout(function(){
+        if(isTicket){var ov=document.getElementById('multa-overlay');if(ov)ov.remove();}
+        else{renderMultas(document.getElementById('content'));}
+      },1300);
+    } else {
+      msg.style.display='block'; msg.style.background='var(--red-l)'; msg.style.color='var(--red)';
+      msg.textContent='❌ '+(d.error||'Error al guardar');
+    }
+  })
+  .catch(function(){
+    btn.disabled=false; btn.textContent=isTicket?'⚠️ Aplicar multa':'⚠️ Registrar';
+    msg.style.display='block'; msg.style.background='var(--red-l)'; msg.style.color='var(--red)';
+    msg.textContent='❌ Error de conexión';
+  });
 }
 
 function mostrarBuscarCliente(c){
