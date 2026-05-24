@@ -1345,6 +1345,8 @@ function enviarTicket(){
     fechaRetorno:   (retEl?.value||''),
     estimado:       estTotalFinal||'',
     descuento:      _dscLabel||'',
+    paq2gcSlots3:   (T.paq2gcSlots3||[]).filter(function(s){return s&&s.codigo;}),
+    paq2gcSlots6:   (T.paq2gcSlots6||[]).filter(function(s){return s&&s.codigo;}),
     cobrado:        cobrado,
     cobTipo:        compTxt,
     colQ:           colQ,
@@ -1384,6 +1386,7 @@ function enviarTicket(){
     : Promise.resolve(null);
 
   // Registrar todos los slots de conversión paquete→GC
+  // Registrar GCs en sheet GIFT CARDS (slots de ambos packs)
   const _slotsGC = (T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]).filter(function(s){return s&&s.codigo&&s.gcFila;});
   const _slotPromises = _slotsGC.map(function(s){
     return fetch(APPS_SCRIPT_URL+'?action=registrarGC'
@@ -1396,7 +1399,32 @@ function enviarTicket(){
       ).catch(function(){return null;});
   });
 
-  Promise.all([_gcPromise].concat(_slotPromises)).then(function(){
+  // Marcar usos como GC en sheet PAQUETES
+  var _paqGCPromises = [];
+  if(T.paq2gcSlots3&&T.paq2gcSlots3.length&&T.pack3){
+    var _sku3 = T.pack3;
+    var _s3 = T.paq2gcSlots3.filter(function(s){return s&&s.codigo;});
+    if(_s3.length){
+      _paqGCPromises.push(fetch(APPS_SCRIPT_URL+'?action=marcarUsoGC'
+        +'&cedula='+encodeURIComponent(payload.cedula||'')
+        +'&sku='+encodeURIComponent(_sku3)
+        +'&slots='+encodeURIComponent(JSON.stringify(_s3.map(function(s){return {codigo:s.codigo,tipo:s.tipo};})))
+      ).catch(function(){return null;}));
+    }
+  }
+  if(T.paq2gcSlots6&&T.paq2gcSlots6.length&&T.pack6){
+    var _sku6 = T.pack6;
+    var _s6 = T.paq2gcSlots6.filter(function(s){return s&&s.codigo;});
+    if(_s6.length){
+      _paqGCPromises.push(fetch(APPS_SCRIPT_URL+'?action=marcarUsoGC'
+        +'&cedula='+encodeURIComponent(payload.cedula||'')
+        +'&sku='+encodeURIComponent(_sku6)
+        +'&slots='+encodeURIComponent(JSON.stringify(_s6.map(function(s){return {codigo:s.codigo,tipo:s.tipo};})))
+      ).catch(function(){return null;}));
+    }
+  }
+
+  Promise.all([_gcPromise].concat(_slotPromises).concat(_paqGCPromises)).then(function(){
     return fetch(APPS_SCRIPT_URL,{
       method:'POST',
       mode:'no-cors',
