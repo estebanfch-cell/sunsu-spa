@@ -445,8 +445,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],['multas','⚠️ Multas'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
+    ?[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['dash-admin','📊 Comisiones'],['kpis','📈 KPIs'],['multas','⚠️ Multas'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   showTab(allTabs[0][0]);
@@ -461,6 +461,8 @@ function showTab(id,btn){
   else if(id==='dash-cosm') renderDashCosm(c);
   else if(id==='historial') renderHistorial(c);
   else if(id==='buscar') renderBuscar(c);
+  else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
+  else if(id==='buscar-gc') renderBuscarGC(c);
   else if(id==='multas') renderMultas(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
@@ -1122,7 +1124,7 @@ function updatePreview(){
     dscLabel = '💼 Pago Directo';
   }
 
-  const totEFinal = Math.max(0, totE - dscMonto);
+  const totEFinal = (T.descuento&&T.descuento.tipo==='directo') ? 0 : Math.max(0, totE - dscMonto);
   const box=document.getElementById('preview-box');if(!box) return;
   if(totC===0&&totE===0&&!T.facial&&!T.pack3&&!T.pack6){box.style.display='none';return;}
   box.style.display='block';
@@ -1320,7 +1322,7 @@ function enviarTicket(){
   const estTotal=Math.max(0,_totBruto-_dscMonto);
   // Caja física de GCs de conversión paquete (+$3 cada una)
   var _cajasGC=(T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
-  const estTotalFinal=estTotal+(_cajasGC*3);
+  const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : Math.max(0, estTotal+(_cajasGC*3));
 
   // Productos → columna exacta en el sheet
   const PROD_COL_MAP={
@@ -3176,7 +3178,318 @@ function toggleExclusion(tkRow, tipo){
   .catch(function(){ toast('Error de conexión','#B86B6B'); });
 }
 
+// ══════ BUSCAR GIFT CARDS ══════
+function renderBuscarGC(c){
+  c.innerHTML=
+    '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🎁 Buscar Gift Cards</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+    +'<input id="bgc-inp" type="text" placeholder="Código GC, nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
+    +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
+    +'</div>'
+    +'<div id="bgc-results"></div>';
+  var inp=document.getElementById('bgc-inp');
+  if(inp){
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarGC();});
+    inp.addEventListener('input',function(){
+      clearTimeout(window._bgcTimer);
+      window._bgcTimer=setTimeout(function(){
+        if(inp.value.trim().length>=2) ejecutarBuscarGC();
+      },400);
+    });
+  }
+}
+
+function ejecutarBuscarGC(){
+  var q=(document.getElementById('bgc-inp')||{}).value||'';
+  if(!q.trim()) return;
+  var res=document.getElementById('bgc-results');
+  if(!res) return;
+  res.innerHTML='<div class="loading"><div class="spinner"></div>Buscando...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent(q.trim()))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){res.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var arr=d.resultados||[];
+      if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+q+'"</div>';return;}
+      res.innerHTML=arr.map(function(g){return _buildGCCard(g);}).join('');
+    })
+    .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
+}
+
+function _buildGCCard(g){
+  var usado=g.usado;
+  var borderCol=usado?'var(--gray-l)':'var(--green)';
+  var headerBg=usado?'#8A90A0':'var(--green)';
+  var fecha=(g.dia||'?')+'/'+(g.mes||'?')+'/'+(g.ano||'?');
+  var slotId='gc-uso-'+g.fila;
+
+  // Facial autocomplete for quick select
+  var facOptsHtml=FACIALES.map(function(f){
+    return '<option value="'+f.n+'">'+f.n+'</option>';
+  }).join('');
+
+  var interactivo=!usado?
+    '<div id="row-'+slotId+'" style="margin-top:10px;border-top:1px solid var(--gray-ll);padding-top:10px">'
+    +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:7px">✅ Marcar como usada</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+    +'<input type="checkbox" id="chk-'+slotId+'" onchange="toggleGCUso(this,\''+slotId+'\')" style="width:16px;height:16px;cursor:pointer;flex-shrink:0">'
+    +'<label style="font-size:0.72rem;color:var(--gray);cursor:pointer" for="chk-'+slotId+'">Marcar GC como usada</label>'
+    +'</div>'
+    +'<div id="inputs-'+slotId+'" style="display:none">'
+    // Facial hecho
+    +'<div style="margin-bottom:6px"><label style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:3px">💆 Facial hecho (col L)</label>'
+    +'<input list="faclist-'+slotId+'" id="facial-'+slotId+'" placeholder="Escribe el facial..." style="width:100%;padding:7px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box">'
+    +'<datalist id="faclist-'+slotId+'">'+facOptsHtml+'</datalist></div>'
+    // Usado por
+    +'<div style="margin-bottom:6px"><label style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:3px">👤 Usado por (col M)</label>'
+    +'<input id="usadopor-'+slotId+'" type="text" placeholder="Nombre de quien usó la GC..." style="width:100%;padding:7px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    // Notas
+    +'<div style="margin-bottom:8px"><label style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:3px">📝 Notas (col N)</label>'
+    +'<input id="notas-'+slotId+'" type="text" placeholder="Nota adicional..." style="width:100%;padding:7px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<button id="btn-'+slotId+'" onclick="guardarGCUsada('+g.fila+',\''+slotId+'\')" style="width:100%;padding:10px;background:var(--green);color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer">✅ Confirmar uso</button>'
+    +'</div>'
+    +'</div>'
+    :'';
+
+  return '<div style="background:white;border:1.5px solid '+borderCol+';border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+    +'<div style="background:'+headerBg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><div style="font-size:0.8rem;font-weight:800;color:white;font-family:monospace">'+g.codigo+'</div>'
+    +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.8)">'+g.nombre+' '+g.apellido+' · '+g.cedula+'</div></div>'
+    +'<div style="text-align:right">'
+    +(usado?'<div style="font-size:0.65rem;color:rgba(255,255,255,0.9);font-weight:700">✅ USADA</div>':'<div style="font-size:0.65rem;color:rgba(255,255,255,0.9);font-weight:700">🟢 DISPONIBLE</div>')
+    +'</div></div>'
+    +'<div style="padding:12px 14px">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+    +(g.valor?'<span style="font-size:0.65rem;background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:6px;font-weight:700">💰 '+g.valor+'</span>':'')
+    +(g.sku?'<span style="font-size:0.65rem;background:var(--blue-l);color:var(--navy);padding:2px 8px;border-radius:6px">'+g.sku+'</span>':'')
+    +(g.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+g.factura+'</span>':'')
+    +'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">📅 Comprada: '+fecha+'</span>'
+    +'</div>'
+    +(usado?
+      '<div style="background:var(--gray-l);border-radius:9px;padding:8px 10px;font-size:0.72rem;color:var(--gray)">'
+      +(g.fechaUso?'<div>📅 Usada: <strong>'+g.fechaUso+'</strong></div>':'')
+      +(g.usadoPor?'<div>👤 Por: <strong>'+g.usadoPor+'</strong></div>':'')
+      +(g.notas?'<div>📝 '+g.notas+'</div>':'')
+      +'</div>'
+      :'')
+    +interactivo
+    +'</div></div>';
+}
+
+function toggleGCUso(chk, slotId){
+  var div=document.getElementById('inputs-'+slotId);
+  if(div){
+    div.style.display=chk.checked?'block':'none';
+    if(chk.checked){
+      var f=document.getElementById('facial-'+slotId);
+      if(f) setTimeout(function(){f.focus();},50);
+    }
+  }
+}
+
+function guardarGCUsada(fila, slotId){
+  var btn=document.getElementById('btn-'+slotId);
+  var facial=(document.getElementById('facial-'+slotId)||{}).value||'';
+  var usadoPor=(document.getElementById('usadopor-'+slotId)||{}).value||'';
+  var notas=(document.getElementById('notas-'+slotId)||{}).value||'';
+  if(!facial.trim()){toast('Escribe el facial hecho','#B86B6B');return;}
+  // Auto fecha + facial + usuario
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaStr=pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2);
+  var usuario=CU?CU.name:'—';
+  var fechaUso=fechaStr+' '+facial.trim()+' · '+usuario;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Guardando...';}
+  fetch(APPS_SCRIPT_URL+'?action=marcarGCUsada'
+    +'&fila='+encodeURIComponent(fila)
+    +'&fechaUso='+encodeURIComponent(fechaUso)
+    +'&usadoPor='+encodeURIComponent(usadoPor.trim())
+    +'&notas='+encodeURIComponent(notas.trim()))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){
+        toast('✅ Gift Card marcada como usada','var(--green)');
+        var row=document.getElementById('row-'+slotId);
+        if(row) row.innerHTML='<div style="background:var(--gray-l);border-radius:9px;padding:8px 10px;font-size:0.72rem;color:var(--gray);margin-top:8px">'
+          +'<div>📅 Usada: <strong>'+fechaUso+'</strong></div>'
+          +(usadoPor?'<div>👤 Por: <strong>'+usadoPor+'</strong></div>':'')
+          +(notas?'<div>📝 '+notas+'</div>':'')
+          +'</div>';
+      } else {
+        if(btn){btn.disabled=false;btn.textContent='✅ Confirmar uso';}
+        toast('❌ '+(d.error||'Error'),'#B86B6B');
+      }
+    })
+    .catch(function(){
+      if(btn){btn.disabled=false;btn.textContent='✅ Confirmar uso';}
+      toast('❌ Error de conexión','#B86B6B');
+    });
+}
+
 // ══════ MULTAS ══════
+// ══════ BUSCAR PAQUETES ══════
+function togglePaqUso(chk, fila, idx, total){
+  var slotId='paq-uso-'+fila+'-'+idx;
+  var inputsDiv=document.getElementById('inputs-'+slotId);
+  var notaEl=document.getElementById('nota-'+slotId);
+  if(chk.checked){
+    if(inputsDiv){inputsDiv.style.display='flex';}
+    if(notaEl) setTimeout(function(){notaEl.focus();},50);
+  } else {
+    if(inputsDiv) inputsDiv.style.display='none';
+    if(notaEl) notaEl.value='';
+  }
+}
+
+function guardarPaqUso(fila, idx, total){
+  var slotId='paq-uso-'+fila+'-'+idx;
+  var chk=document.getElementById('chk-'+slotId);
+  var notaEl=document.getElementById('nota-'+slotId);
+  var btn=document.getElementById('btn-'+slotId);
+  var facialNota=(notaEl?notaEl.value.trim():'');
+  if(!facialNota){toast('Escribe el facial hecho','#B86B6B');notaEl&&notaEl.focus();return;}
+  // Auto-note: fecha · facial · usuario
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fechaStr=pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2);
+  var usuario=CU?CU.name:'—';
+  var notaFinal=fechaStr+' '+facialNota+' · '+usuario;
+  if(btn){btn.disabled=true;btn.textContent='⏳';}
+  fetch(APPS_SCRIPT_URL+'?action=marcarUsoManual'
+    +'&fila='+encodeURIComponent(fila)
+    +'&idx='+encodeURIComponent(idx)
+    +'&nota='+encodeURIComponent(notaFinal)
+    +'&total='+encodeURIComponent(total))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){
+        toast('✅ Sesión '+(idx+1)+'/'+total+' marcada','var(--green)');
+        var row=document.getElementById('row-'+slotId);
+        if(row) row.innerHTML='<span style="font-size:0.68rem;font-weight:700;color:var(--green);min-width:28px">'+(idx+1)+'/'+total+'</span>'
+          +'<span style="font-size:0.72rem;color:var(--green)">✅</span>'
+          +'<span style="font-size:0.7rem;color:var(--text);flex:1">'+notaFinal+'</span>';
+      } else {
+        if(btn){btn.disabled=false;btn.textContent='✓';}
+        toast('❌ '+(d.error||'Error'),'#B86B6B');
+      }
+    })
+    .catch(function(){
+      if(btn){btn.disabled=false;btn.textContent='✓';}
+      toast('❌ Error de conexión','#B86B6B');
+    });
+}
+
+function renderBuscarPaquetes(c){
+  c.innerHTML=
+    '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📦 Buscar Paquetes</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+    +'<input id="bpq-inp" type="text" placeholder="Nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
+    +'<button onclick="ejecutarBuscarPaquetes()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
+    +'</div>'
+    +'<div id="bpq-results"></div>';
+  var inp=document.getElementById('bpq-inp');
+  if(inp){
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarPaquetes();});
+    inp.addEventListener('input',function(){
+      clearTimeout(window._bpqTimer);
+      window._bpqTimer=setTimeout(function(){
+        if(inp.value.trim().length>=2) ejecutarBuscarPaquetes();
+      },400);
+    });
+  }
+}
+
+function ejecutarBuscarPaquetes(){
+  var q=(document.getElementById('bpq-inp')||{}).value||'';
+  if(!q.trim()){return;}
+  var res=document.getElementById('bpq-results');
+  if(!res) return;
+  res.innerHTML='<div class="loading"><div class="spinner"></div>Buscando...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(q.trim()))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){res.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var arr=d.resultados||[];
+      if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+q+'"</div>';return;}
+      res.innerHTML=arr.map(function(p){return _buildPaqueteCard(p);}).join('');
+    })
+    .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
+}
+
+function _buildPaqueteCard(p){
+  var completo = p.completo;
+  var borderCol = completo ? 'var(--red)' : 'var(--cream-d)';
+  var headerBg  = completo ? 'var(--red)' : 'var(--navy)';
+  var fecha = (p.dia||'?')+'/'+(p.mes||'?')+'/'+(p.ano||'?');
+  var usados = p.usados||0;
+  var total  = p.totalSes||3;
+  var restantes = total - usados;
+
+  // Progress bar
+  var pct = Math.round((usados/total)*100);
+  var barCol = completo ? 'var(--red)' : usados===0 ? 'var(--blue)' : usados===total ? 'var(--red)' : 'var(--green)';
+
+  // Usos detail — all users can mark unused sessions
+  var usosHtml = (p.usos||[]).map(function(u, i){
+    var label = (i+1)+'/'+total;
+    var isGC = u.fecha && u.fecha.indexOf('Gift Card')>=0;
+    if(u.usado){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--gray-ll)">'
+        +'<span style="font-size:0.68rem;font-weight:700;color:var(--green);min-width:28px">'+label+'</span>'
+        +'<span style="font-size:0.72rem;color:var(--green)">✅</span>'
+        +'<span style="font-size:0.7rem;color:'+(isGC?'var(--lavender)':'var(--text)')+';flex:1">'+(u.fecha||'—')+(isGC?' 🎁':'')+'</span>'
+        +'</div>';
+    } else {
+      var slotId='paq-uso-'+p.fila+'-'+i;
+      // Facial options for quick select (first 4 letters match)
+      var facOptsHtml='<option value="">💆 Facial hecho...</option>'
+        +FACIALES.map(function(f){
+          return '<option value="'+f.n+'">'+f.n+'</option>';
+        }).join('');
+      return '<div id="row-'+slotId+'" style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--gray-ll)">'
+        +'<span style="font-size:0.68rem;font-weight:700;color:var(--gray);min-width:28px">'+label+'</span>'
+        +'<input type="checkbox" id="chk-'+slotId+'" onchange="togglePaqUso(this,'+p.fila+','+i+','+total+')" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">'
+        +'<div id="inputs-'+slotId+'" style="display:none;flex:1;display:none;gap:5px;align-items:center">'
+        +'<input list="faclist-'+slotId+'" id="nota-'+slotId+'" placeholder="Facial..." style="flex:1;padding:4px 8px;border:1.5px solid var(--cream-d);border-radius:7px;font-size:0.72rem;font-family:inherit;outline:none;min-width:0">'
+        +'<datalist id="faclist-'+slotId+'">'+facOptsHtml+'</datalist>'
+        +'<button id="btn-'+slotId+'" onclick="guardarPaqUso('+p.fila+','+i+','+total+')" style="padding:4px 10px;background:var(--green);color:white;border:none;border-radius:7px;font-size:0.65rem;font-weight:700;cursor:pointer;flex-shrink:0">✓</button>'
+        +'</div>'
+        +'</div>';
+    }
+  }).join('');
+
+  return '<div style="background:white;border:1.5px solid '+borderCol+';border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+    // Header
+    +'<div style="background:'+headerBg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><div style="font-size:0.78rem;font-weight:800;color:white">'+p.nombre+' '+p.apellido+'</div>'
+    +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.75)">'+p.cedula+' · '+fecha+'</div></div>'
+    +'<div style="text-align:right"><div style="font-size:0.65rem;font-family:monospace;color:rgba(255,255,255,0.9);background:rgba(0,0,0,0.2);padding:2px 7px;border-radius:6px">'+p.sku+'</div>'
+    +(completo?'<div style="font-size:0.6rem;color:#FFB3B3;margin-top:3px;font-weight:700">🔴 PAQUETE TERMINADO</div>':'')
+    +'</div></div>'
+    // Body
+    +'<div style="padding:12px 14px">'
+    // Info
+    +'<div style="font-size:0.78rem;font-weight:700;color:var(--navy);margin-bottom:6px">'+p.paquete+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<span style="font-size:0.65rem;background:var(--blue-l);color:var(--navy);padding:2px 8px;border-radius:6px;font-weight:600">👤 '+p.vendidoPor+'</span>'
+    +(p.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+p.factura+'</span>':'')
+    +(p.saldo?'<span style="font-size:0.65rem;background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:6px;font-weight:600">💰 Saldo: '+p.saldo+'</span>':'')
+    +'</div>'
+    // Progress bar
+    +'<div style="margin-bottom:8px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--gray);margin-bottom:3px">'
+    +'<span>Sesiones usadas: <strong>'+usados+'/'+total+'</strong></span>'
+    +'<span style="color:'+(completo?'var(--red)':restantes>0?'var(--green)':'var(--gray)')+'">'+( completo?'Terminado':restantes+' restante'+(restantes!==1?'s':''))+'</span>'
+    +'</div>'
+    +'<div style="background:var(--gray-l);border-radius:99px;height:6px">'
+    +'<div style="background:'+barCol+';width:'+pct+'%;height:6px;border-radius:99px;transition:width 0.3s"></div>'
+    +'</div></div>'
+    // Usos detail
+    +usosHtml
+    +(p.notas?'<div style="margin-top:8px;font-size:0.68rem;color:var(--gray);background:var(--cream);padding:6px 9px;border-radius:8px">📝 '+p.notas+'</div>':'')
+    +'</div></div>';
+}
+
 function renderMultas(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   if(!isAdmin){c.innerHTML='<div class="card">Sin acceso</div>';return;}
