@@ -444,8 +444,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // Load catalog to update prices from Google Sheet
@@ -490,6 +490,7 @@ function showTab(id,btn){
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
   else if(id==='buscar-gc') renderBuscarGC(c);
   else if(id==='facturacion') renderFacturacion(c);
+  else if(id==='entradas') renderEntradas(c);
   else if(id==='multas') renderMultas(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
@@ -3290,6 +3291,293 @@ function toggleExclusion(tkRow, tipo){
   .catch(function(){ toast('Error de conexión','#B86B6B'); });
 }
 
+// ══════ ENTRADAS DE PRODUCTOS ══════
+// ══════ ENTRADAS DE PRODUCTOS ══════
+function renderEntradas(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando órdenes...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getEntradas')
+    .then(function(r){return r.text();})
+    .then(function(txt2){
+      var d; try{d=JSON.parse(txt2);}catch(e){d={error:txt2.slice(0,100)};}
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var items=d.items||[];
+      var prefixNames={'HT':'CÓDIGOS HT','AS':'CÓDIGOS AS','PH':'CÓDIGOS PH','FT':'CÓDIGOS FT','PR':'CÓDIGOS PR'};
+      var grupos={};
+      items.forEach(function(it){
+        var match=it.sku.match(/SUNSU-([A-Z]+)-/);
+        var prefix=match?match[1]:'OTROS';
+        var gn=prefixNames[prefix]||('CÓDIGOS '+prefix);
+        if(!grupos[gn]) grupos[gn]={items:[]};
+        grupos[gn].items.push(it);
+      });
+      // Hide groups where ALL items already marked
+      var gruposActivos={};
+      Object.keys(grupos).forEach(function(g){
+        var allDone=grupos[g].items.every(function(it){return it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined;});
+        if(!allDone) gruposActivos[g]=grupos[g];
+      });
+      var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>';
+      if(!Object.keys(gruposActivos).length){
+        html+='<div class="card" style="text-align:center;padding:24px;color:var(--gray)"><div style="font-size:1.5rem;margin-bottom:8px">✅</div><div style="font-weight:700">Todas las órdenes procesadas</div></div>';
+        c.innerHTML=html; return;
+      }
+      Object.keys(gruposActivos).forEach(function(groupName,gi){
+        var g=gruposActivos[groupName];
+        var pendientes=g.items.filter(function(it){return it.recibida===''||it.recibida===null||it.recibida===undefined;}).length;
+        var orden=g.items[0]?g.items[0].orden:'';
+        var gid='grp-'+gi;
+        html+='<div style="background:white;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+          // Header — click on left part to toggle, Cerrar pedido button on right
+          +'<div style="background:var(--navy);padding:11px 14px;display:flex;justify-content:space-between;align-items:center">'
+          +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="flex:1;cursor:pointer;user-select:none">'
+          +'<div style="font-size:0.85rem;font-weight:800;color:white;letter-spacing:1px">'+groupName+'</div>'
+          +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.6)">'+(orden?'Orden: '+orden+' &middot; ':'')+g.items.length+' productos</div>'
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:0.68rem;font-weight:700;color:'+(pendientes===0?'#A8E6A3':'#FFD580')+'">'+(pendientes===0?'✅ Listo':pendientes+' pendientes')+'</span>'
+          +'<button data-gname="'+groupName+'" data-orden="'+orden+'" data-prov="'+(g.items[0]?g.items[0].proveedor||groupName:groupName)+'" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 PDF</button>'
+          +'<button data-gname="'+groupName+'" onclick="cerrarPedidoGrupo(this)" style="padding:4px 9px;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">Cerrar</button>'
+          +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
+          +'</div></div>'
+          +'<div id="'+gid+'" style="display:none;padding:10px 14px">';
+        g.items.forEach(function(it){
+          var marcado=it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined;
+          var v=parseFloat(it.recibida);
+          var eLabel=!marcado?'':(v===0?'❌ No llegó':v>=it.pedida?'✅ Completo':'⚠️ Parcial '+v+'/'+it.pedida);
+          var eColor=!marcado?'var(--gray)':(v===0?'var(--red)':v>=it.pedida?'var(--green)':'var(--gold)');
+          html+='<div id="erow-'+it.fila+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
+            +'<div style="flex:1"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+'</div></div>'
+            +'<div style="font-size:0.7rem;color:var(--gray)">Pedido: <strong style="color:var(--navy);font-size:0.82rem">'+it.pedida+'</strong></div>'
+            +'</div>'
+            +'<div id="ebtn-'+it.fila+'">'
+            +(marcado
+              ?'<span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
+              :'<div style="display:flex;gap:6px">'
+               +'<button data-f="'+it.fila+'" data-p="'+it.pedida+'" data-t="completo" onclick="registrarEntradaBtn(this)" style="flex:1;padding:8px 4px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✅ Completo</button>'
+               +'<button data-f="'+it.fila+'" data-p="'+it.pedida+'" data-t="parcial" onclick="mostrarParcialBtn(this)" style="flex:1;padding:8px 4px;background:var(--gold);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">⚠️ Parcial</button>'
+               +'<button data-f="'+it.fila+'" data-p="'+it.pedida+'" data-t="nollego" onclick="registrarEntradaBtn(this)" style="flex:1;padding:8px 4px;background:var(--red);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">❌ No llegó</button>'
+               +'</div>'
+            )
+            +'</div></div>';
+        });
+        html+='</div></div>';
+      });
+      window._gruposEntrada=gruposActivos; // save for PDF
+      c.innerHTML=html;
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function cerrarPedidoGrupo(btn){
+  var gname=btn.getAttribute('data-gname');
+  if(!window._gruposEntrada||!window._gruposEntrada[gname]) return;
+  var items=window._gruposEntrada[gname].items;
+  var pendientes=items.filter(function(it){
+    return it.recibida===''||it.recibida===null||it.recibida===undefined;
+  });
+  if(pendientes.length>0){
+    toast('⚠️ Faltan '+pendientes.length+' producto(s) por marcar','#C4943A');
+    return;
+  }
+  // All marked — remove from view
+  delete window._gruposEntrada[gname];
+  // Find and hide the card
+  var allCards=document.querySelectorAll('[data-gname="'+gname+'"]');
+  allCards.forEach(function(el){
+    var card=el.closest('[style*="border-radius:14px"]');
+    if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){if(card.parentNode)card.parentNode.removeChild(card);},350);}
+  });
+  toast('✅ Pedido '+gname+' cerrado','var(--green)');
+}
+
+function toggleGrupoEntrada(gid){
+  var body=document.getElementById(gid);
+  var arrow=document.getElementById('arrow-'+gid);
+  if(!body) return;
+  var open=body.style.display==='none'||body.style.display==='';
+  body.style.display=open?'block':'none';
+  if(arrow) arrow.textContent=open?'▼':'▶';
+}
+
+function generarActaEntrega(btn){
+  var gname=btn.getAttribute('data-gname');
+  var orden=btn.getAttribute('data-orden')||'—';
+  var proveedorReal=btn.getAttribute('data-prov')||gname;
+  if(!window._gruposEntrada||!window._gruposEntrada[gname]){toast('Sin datos del grupo','#B86B6B');return;}
+  var items=window._gruposEntrada[gname].items;
+  var ahora=new Date();
+  var fecha=ahora.toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Guayaquil'});
+  var hora=ahora.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',timeZone:'America/Guayaquil'});
+
+  var rows=items.map(function(it){
+    var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?String(it.recibida):'—';
+    var pv=parseFloat(v);
+    var estado=v==='—'?'Pendiente':pv===0?'No llegó':pv>=it.pedida?'Completo':'Parcial';
+    var col=v==='—'?'#888':pv===0?'#C00':pv>=it.pedida?'#2E7D52':'#C4943A';
+    var ts=it.timestamp||'—';
+    var usr=it.usuario||'—';
+    return '<tr>'
+      +'<td>'+it.sku+'</td>'
+      +'<td>'+it.nombre+'</td>'
+      +'<td style="text-align:center">'+it.pedida+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+v+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+col+'">'+estado+'</td>'
+      +'<td>'+usr+'</td>'
+      +'<td>'+ts+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;padding:30px;color:#222;font-size:12px}'
+    +'.top{border-bottom:3px solid #1A2744;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between}'
+    +'.logo{font-size:20px;font-weight:900;color:#1A2744}.logo em{color:#C4943A;font-style:normal}'
+    +'.right{text-align:right;font-size:11px;color:#555}'
+    +'.info{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;background:#f5f6fa;border-radius:8px;padding:12px;margin-bottom:16px}'
+    +'.lbl{font-size:9px;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:2px}'
+    +'.val{font-size:12px;font-weight:600;color:#1A2744}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:28px}'
+    +'thead tr{background:#1A2744}'
+    +'th{color:white;padding:7px 8px;font-size:10px;text-align:left;text-transform:uppercase}'
+    +'td{padding:6px 8px;font-size:11px;border-bottom:1px solid #eee}'
+    +'tr:nth-child(even){background:#fafafa}'
+    +'.sigs{display:flex;gap:40px;justify-content:center;margin-top:40px}'
+    +'.sig{width:200px;text-align:center}'
+    +'.sig-line{border-top:1.5px solid #aaa;padding-top:6px;margin-top:36px;font-size:10px;color:#777}'
+    +'</style></head><body>'
+    +'<div class="top">'
+    +'<div><div class="logo">&#xC21C;&#xC218; <em>SUNSU</em> SPA</div>'
+    +'<div style="font-size:10px;color:#888;margin-top:3px">Acta de Entrega y Recepci&#xF3;n</div></div>'
+    +'<div class="right"><strong style="font-size:13px">'+fecha+'</strong><br>'+hora+'</div>'
+    +'</div>'
+    +'<div class="info">'
+    +'<div><div class="lbl">Proveedor</div><div class="val">'+proveedorReal+'</div></div>'
+    +'<div><div class="lbl">RUC / Identificaci&#xF3;n</div><div class="val" style="border-bottom:1px solid #aaa;min-width:120px">&nbsp;</div></div>'
+    +'<div><div class="lbl">Orden de Compra</div><div class="val">'+orden+'</div></div>'
+    +'</div>'
+    +'<table><thead><tr>'
+    +'<th>SKU</th><th>Producto</th>'
+    +'<th style="text-align:center">Pedido</th>'
+    +'<th style="text-align:center">Recibido</th>'
+    +'<th style="text-align:center">Estado</th>'
+    +'<th>Recibido por</th>'
+    +'<th>Timestamp</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div class="sigs">'
+    +'<div class="sig"><div class="sig-line">Entregado por<br><strong>'+proveedorReal+'</strong></div></div>'
+    +'<div class="sig"><div class="sig-line">Recibido por<br><strong>SUNSU SPA</strong></div></div>'
+    +'</div>'
+    +'</body></html>';
+
+  // Download as HTML file that opens as PDF-ready print page
+  var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download='Acta_'+gname.replace(/\s/g,'_')+'_'+fecha.replace(/\//g,'-')+'.html';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+  toast('📄 Acta descargada — ábrela y usa Ctrl+P para PDF','var(--blue)');
+}
+function registrarEntradaBtn(btn){
+  var fila=parseInt(btn.getAttribute('data-f'));
+  var pedida=parseFloat(btn.getAttribute('data-p'));
+  var tipo=btn.getAttribute('data-t');
+  registrarEntrada(fila,pedida,tipo);
+}
+function mostrarParcialBtn(btn){
+  var fila=parseInt(btn.getAttribute('data-f'));
+  var pedida=parseFloat(btn.getAttribute('data-p'));
+  mostrarParcial(fila,pedida);
+}
+
+function mostrarParcial(fila,pedida){
+  var d=document.getElementById('ebtn-'+fila); if(!d) return;
+  d.innerHTML='<div style="display:flex;gap:6px;align-items:center">'
+    +'<input type="number" id="pi-'+fila+'" min="0" max="'+pedida+'" placeholder="Cant. recibida" style="flex:1;padding:7px 10px;border:1.5px solid var(--gold);border-radius:9px;font-size:0.82rem;outline:none;font-family:inherit">'
+    +'<button data-f="'+fila+'" data-p="'+pedida+'" data-t="parcial" onclick="registrarEntradaBtn(this)" style="padding:7px 12px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✓</button>'
+    +'<button onclick="cancelarParcial('+fila+','+pedida+')" style="padding:7px 10px;background:var(--cream);color:var(--gray);border:none;border-radius:9px;font-size:0.68rem;cursor:pointer">✕</button>'
+    +'</div>';
+  setTimeout(function(){var i=document.getElementById('pi-'+fila);if(i)i.focus();},50);
+}
+
+function cancelarParcial(fila,pedida){
+  var d=document.getElementById('ebtn-'+fila); if(!d) return;
+    d.innerHTML='<div style="display:flex;gap:6px">'
+    +'<button data-f="'+fila+'" data-p="'+pedida+'" data-t="completo" onclick="registrarEntradaBtn(this)" style="flex:1;padding:8px 4px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✅ Completo</button>'
+    +'<button data-f="'+fila+'" data-p="'+pedida+'" data-t="parcial" onclick="mostrarParcialBtn(this)" style="flex:1;padding:8px 4px;background:var(--gold);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">⚠️ Parcial</button>'
+    +'<button data-f="'+fila+'" data-p="'+pedida+'" data-t="nollego" onclick="registrarEntradaBtn(this)" style="flex:1;padding:8px 4px;background:var(--red);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">❌ No llegó</button>'
+    +'</div>';
+}
+
+function registrarEntrada(fila,pedida,tipo){
+  var cantidad=tipo==='completo'?pedida:tipo==='nollego'?0:(parseFloat((document.getElementById('pi-'+fila)||{}).value)||0);
+  if(tipo==='parcial'&&!(document.getElementById('pi-'+fila)||{}).value){toast('Escribe la cantidad','#B86B6B');return;}
+  var d=document.getElementById('ebtn-'+fila);
+  if(d) d.innerHTML='<div style="font-size:0.7rem;color:var(--gray)">⏳ Guardando...</div>';
+  var usuario=CU?CU.name:'—';
+  var tsRecep=new Date().toLocaleString('es',{timeZone:'America/Guayaquil',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  fetch(APPS_SCRIPT_URL+'?action=registrarEntrada&fila='+encodeURIComponent(fila)+'&cantidad='+encodeURIComponent(cantidad)+'&usuario='+encodeURIComponent(usuario))
+    .then(function(r){return r.text();})
+    .then(function(t){
+      var res; try{res=JSON.parse(t);}catch(e){res={error:t.slice(0,80)};}
+      if(res.ok){
+        var el=cantidad===0?'❌ No llegó':cantidad>=pedida?'✅ Completo':'⚠️ Parcial '+cantidad+'/'+pedida;
+        var ec=cantidad===0?'var(--red)':cantidad>=pedida?'var(--green)':'var(--gold)';
+        if(d) d.innerHTML='<span style="font-size:0.72rem;font-weight:700;color:'+ec+'">'+el+'</span>';
+        toast('✅ Registrado','var(--green)');
+        // Update in-memory data for PDF (no page reload)
+        if(window._gruposEntrada){
+          Object.keys(window._gruposEntrada).forEach(function(gname){
+            window._gruposEntrada[gname].items.forEach(function(it){
+              if(it.fila===fila){
+                it.recibida=cantidad;
+                it.usuario=usuario;
+                it.timestamp=tsRecep;
+              }
+            });
+          });
+        }
+        // Update pending counter in group header
+        _actualizarContadorGrupo(fila);
+        // NO automatic page reload — user closes with "Cerrar pedido"
+      } else {
+        cancelarParcial(fila,pedida);
+        toast('❌ '+(res.error||'Error'),'#B86B6B');
+      }
+    })
+    .catch(function(){cancelarParcial(fila,pedida);toast('❌ Error de conexión','#B86B6B');});
+}
+
+function _actualizarContadorGrupo(filaActualizada){
+  if(!window._gruposEntrada) return;
+  Object.keys(window._gruposEntrada).forEach(function(gname){
+    var g=window._gruposEntrada[gname];
+    var tieneEsta=g.items.some(function(it){return it.fila===filaActualizada;});
+    if(!tieneEsta) return;
+    var pendientes=g.items.filter(function(it){return it.recibida===''||it.recibida===null||it.recibida===undefined;}).length;
+    // Find the header span for this group
+    Object.keys(window._gruposEntrada).forEach(function(gn,gi){
+      if(gn!==gname) return;
+      var gid='grp-'+gi;
+      var arrow=document.getElementById('arrow-'+gid);
+      if(arrow){
+        var span=arrow.parentElement?arrow.parentElement.querySelector('span:first-child'):null;
+        if(span){
+          span.textContent=pendientes===0?'✅ Listo':pendientes+' pendientes';
+          span.style.color=pendientes===0?'#A8E6A3':'#FFD580';
+        }
+      }
+    });
+  });
+}
+
+
 // ══════ FACTURACIÓN Y COBRO ══════
 var _facDia = 0; // 0=hoy, 1=ayer
 
@@ -3351,13 +3639,13 @@ function _buildFacCard(t){
     // Factura row
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
     +'<div style="flex:1;font-size:0.75rem;color:'+(facDone?'var(--green)':'var(--gray)')+'">🧾 '+facLabel+'</div>'
-    +(!facDone?'<button onclick="abrirModalUnificado('+t.fila+','+t.estimado+',false)" style="padding:5px 12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:0.72rem;font-weight:700;cursor:pointer">Facturar</button>':'')
-    +(!facDone?'<button onclick="abrirModalUnificado('+t.fila+','+t.estimado+',true)" style="padding:5px 12px;background:var(--gray-l);color:var(--gray);border:none;border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer">Sin factura</button>':'')
+    +(!facDone?'<button data-fila="'+t.fila+'" data-est="'+t.estimado+'" data-sinfac="false" onclick="abrirModalUnificadoBtn(this,false)" style="padding:5px 12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:0.72rem;font-weight:700;cursor:pointer">Facturar</button>':'')
+    +(!facDone?'<button data-fila="'+t.fila+'" data-est="'+t.estimado+'" data-sinfac="true" onclick="abrirModalUnificadoBtn(this,false)" style="padding:5px 12px;background:var(--gray-l);color:var(--gray);border:none;border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer">Sin factura</button>':'')
     +'</div>'
     // Cobro row
     +'<div style="display:flex;align-items:center;gap:8px">'
     +'<div style="flex:1;font-size:0.75rem;color:'+(cobDone?'var(--green)':'var(--gray)')+'">💳 '+cobLabel+'</div>'
-    +(!cobDone&&facDone?'<button onclick="abrirModalUnificado('+t.fila+','+t.estimado+','+(t.numFac==='SIN FACTURA'?'true':'false')+',true)" style="padding:5px 12px;background:var(--green);color:white;border:none;border-radius:8px;font-size:0.72rem;font-weight:700;cursor:pointer">Cobro</button>':'')
+    +(!cobDone&&facDone?'<button data-fila="'+t.fila+'" data-est="'+t.estimado+'" data-sinfac="'+String(t.numFac==='SIN FACTURA')+'" onclick="abrirModalUnificadoBtn(this,true)" style="padding:5px 12px;background:var(--green);color:white;border:none;border-radius:8px;font-size:0.72rem;font-weight:700;cursor:pointer">Cobro</button>':'')
     +'</div></div></div>';
 }
 
@@ -3365,35 +3653,51 @@ function marcarSinFactura(fila){ abrirModalUnificado(fila,0,true); }
 
 // ── Modal Unificado Factura + Cobro ──
 var _cobroSelects={};
+function abrirModalUnificadoBtn(btn, soloCobro){
+  var fila=parseInt(btn.getAttribute('data-fila'));
+  var est=parseFloat(btn.getAttribute('data-est'))||0;
+  var sinFac=btn.getAttribute('data-sinfac')==='true';
+  abrirModalUnificado(fila,est,sinFac,soloCobro);
+}
+
 function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
+  try {
+  console.log('abrirModalUnificado called:', fila, estimado, sinFac, soloCobro);
+  var ex=document.getElementById('modal-uni-'+fila);
+  if(ex&&ex.parentNode) ex.parentNode.removeChild(ex);
   _cobroSelects[fila]={};
   var tipos=sinFac?['Canje','Corte']:['Trans','Tarje','Efect'];
   var icons={'Trans':'🏦','Tarje':'💳','Efect':'💵','Canje':'🔄','Corte':'🎀'};
-  var needsDetail={'Trans':'Comprobante','Tarje':'N° de voucher','Efect':'Valor recibido'};
+  var needs={'Trans':'Comprobante','Tarje':'N° de voucher','Efect':'Valor recibido'};
   var overlay=document.createElement('div');
   overlay.id='modal-uni-'+fila;
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
-  overlay.innerHTML='<div style="background:white;border-radius:20px 20px 0 0;padding:22px 20px 36px;width:100%;max-width:480px">'
-    +'<div style="width:36px;height:4px;background:var(--cream-d);border-radius:99px;margin:0 auto 16px"></div>'
-    +(sinFac
-      ?'<div style="font-size:0.9rem;font-weight:800;color:var(--navy);margin-bottom:6px">🧾 Sin Factura + Cobro</div><div style="font-size:0.7rem;background:var(--gold-l);color:var(--gold);padding:5px 9px;border-radius:7px;margin-bottom:14px;font-weight:600">⚠️ Solo Canje o Cortesía</div>'
-      :(soloCobro
-        ?'<div style="font-size:0.9rem;font-weight:800;color:var(--navy);margin-bottom:14px">💳 Registrar Cobro</div>'
-        :'<div style="font-size:0.9rem;font-weight:800;color:var(--navy);margin-bottom:14px">🧾 Factura + Cobro</div>'
-      )
-    )
-    +(!sinFac&&!soloCobro
-      ?'<label style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">N° de Factura</label><input id="inp-fac-'+fila+'" type="text" placeholder="001-001-000001842" style="width:100%;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.88rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:14px">'
-      :'')
-    +'<div style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">Método de cobro</div>'
-    +tipos.map(function(tipo){
-      return '<div style="margin-bottom:7px"><button data-fila="'+fila+'" data-tipo="'+tipo+'" onclick="toggleCobro(this)" id="cobtn-'+fila+'-'+tipo+'" style="width:100%;padding:9px 13px;background:var(--cream);color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;text-align:left">'+icons[tipo]+' '+tipo+'</button>'+(needsDetail[tipo]?'<input type="text" id="cobdet-'+fila+'-'+tipo+'" placeholder="'+needsDetail[tipo]+'" style="display:none;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box">':'')+'</div>';
-    }).join('')
-    +'<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:var(--red);margin-bottom:8px;display:none">Selecciona al menos un método</div>'
-    +'<div style="display:flex;gap:8px;margin-top:12px"><button onclick="cerrarModal(\'modal-uni-'+fila+'\')" style="flex:1;padding:11px;background:var(--cream);color:var(--gray);border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">Cancelar</button>'
-    +'<button onclick="guardarUnificado('+fila+','+sinFac+','+!!soloCobro+')" style="flex:2;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">✅ Confirmar</button></div></div>';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  overlay.onclick=function(ev){if(ev.target===overlay&&overlay.parentNode)overlay.parentNode.removeChild(overlay);};
+  var inner=document.createElement('div');
+  inner.style.cssText='background:white;border-radius:20px 20px 0 0;padding:22px 20px 36px;width:100%;max-width:480px';
+  var html='<div style="width:36px;height:4px;background:#eee;border-radius:99px;margin:0 auto 16px"></div>';
+  if(sinFac) html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:6px">🧾 Sin Factura + Cobro</div><div style="font-size:0.7rem;background:#FFF9E6;color:#C4943A;padding:5px 9px;border-radius:7px;margin-bottom:14px;font-weight:600">⚠️ Solo Canje o Cortesía</div>';
+  else if(soloCobro) html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:14px">💳 Registrar Cobro</div>';
+  else html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:14px">🧾 Factura + Cobro</div>';
+  if(!sinFac&&!soloCobro) html+='<label style="font-size:0.68rem;font-weight:700;color:#999;text-transform:uppercase;display:block;margin-bottom:4px">N° de Factura</label><input id="inp-fac-'+fila+'" type="text" placeholder="001-001-000001842" style="width:100%;padding:10px 13px;border:1.5px solid #eee;border-radius:10px;font-size:0.88rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:14px">';
+  html+='<div style="font-size:0.68rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:8px">Método de cobro</div>';
+  tipos.forEach(function(t){
+    html+='<div style="margin-bottom:7px"><button id="cobtn-'+fila+'-'+t+'" data-fila="'+fila+'" data-tipo="'+t+'" onclick="toggleCobro(this)" style="width:100%;padding:9px 13px;background:#F4F5F8;color:#1A2744;border:1.5px solid #E5E7EF;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;text-align:left">'+icons[t]+' '+t+'</button>';
+    if(needs[t]) html+='<input type="text" id="cobdet-'+fila+'-'+t+'" placeholder="'+needs[t]+'" style="display:none;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid #eee;border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box">';
+    html+='</div>';
+  });
+  html+='<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:red;margin-bottom:8px;display:none">Selecciona al menos un método</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button id="btn-cancel-'+fila+'" style="flex:1;padding:11px;background:#F4F5F8;color:#999;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'<button id="btn-confirm-'+fila+'" style="flex:2;padding:11px;background:#1A2744;color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">✅ Confirmar</button>'
+    +'</div>';
+  inner.innerHTML=html;
+  overlay.appendChild(inner);
   document.body.appendChild(overlay);
+  document.getElementById('btn-cancel-'+fila).onclick=function(){if(overlay.parentNode)overlay.parentNode.removeChild(overlay);};
+  document.getElementById('btn-confirm-'+fila).onclick=function(){guardarUnificado(fila,sinFac,!!soloCobro);};
   if(!sinFac&&!soloCobro) setTimeout(function(){var el=document.getElementById('inp-fac-'+fila);if(el)el.focus();},100);
+  } catch(err){console.error('abrirModalUnificado error:',err);toast('❌ Error al abrir modal: '+err.message,'#B86B6B');}
 }
 
 function toggleCobro(btn){
@@ -3428,30 +3732,8 @@ function abrirModalFactura(fila){abrirModalUnificado(fila,0,false,false);}
 function abrirModalCobro(fila,estimado){abrirModalUnificado(fila,estimado,false,true);}
 
 function _refreshOrRemoveCard(fila){
-  // Re-fetch to check if ticket is now complete (both fac+cob done) → remove card
-  fetch(APPS_SCRIPT_URL+'?action=getTicketsDia&offset='+_facDia)
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var stillPending=(d.tickets||[]).find(function(t){return t.fila===fila;});
-      var card=document.getElementById('fac-card-'+fila);
-      if(!stillPending&&card){
-        card.style.transition='opacity 0.4s';
-        card.style.opacity='0';
-        setTimeout(function(){
-          if(card.parentNode) card.parentNode.removeChild(card);
-          // Check if no more cards
-          var cont=document.getElementById('fac-tickets');
-          if(cont&&!cont.querySelector('[id^="fac-card-"]')){
-            cont.innerHTML='<div class="card" style="text-align:center;padding:24px;color:var(--gray)">'
-              +'<div style="font-size:1.5rem;margin-bottom:8px">✅</div>'
-              +'<div style="font-weight:700">Todos los tickets completados</div></div>';
-          }
-        },400);
-      } else if(card) {
-        // Refresh card content
-        cargarTicketsDia(_facDia);
-      }
-    }).catch(function(){});
+  // Wait 1.5s for sheet to update then reload
+  setTimeout(function(){cargarTicketsDia(_facDia);},1500);
 }
 
 function cerrarModal(id){
