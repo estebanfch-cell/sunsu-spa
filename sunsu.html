@@ -318,13 +318,13 @@ const PAQ6=[
   {sku:'SUNSU-26',n:'x6 Facial Gold-Aging',p:332.35},
   {sku:'SUNSU-27',n:'x6 Facial Porcelana',p:332.35},
   {sku:'SUNSU-28',n:'x6 Facial Rice Flow',p:410.55},
-  {sku:'SUNSU-30',n:'x6 Faciales Mixtos',p:354.20},
-  {sku:'SUNSU-48',n:'x6 Facial Reset 3x1',p:612.00},
-  {sku:'SUNSU-49',n:'x6 Facial Domo de Oxígeno',p:510.00},
+  {sku:'SUNSU-30',n:'x6 Faciales Mixtos',p:348.50},
+  {sku:'SUNSU-48',n:'x6 Facial Skin Reset',p:640.55},
+  {sku:'SUNSU-49',n:'x6 Facial Domo de Oxígeno',p:640.55},
   {sku:'SUNSU-50',n:'x6 Facial Peeling Marino',p:739.50},
-  {sku:'SUNSU-51',n:'x6 Facial de Geisha',p:841.50},
-  {sku:'SUNSU-54',n:'x6 Facial de Ginseng',p:408.00},
-  {sku:'SUNSU-56',n:'x6 Glass Skin + Facial Advance',p:731.01},
+  {sku:'SUNSU-51',n:'x6 Facial de Geisha',p:739.50},
+  {sku:'SUNSU-54',n:'x6 Facial de Ginseng',p:640.55},
+  {sku:'SUNSU-56',n:'x6 Glass Skin + Facial Advance',p:673.67},
 ];
 const PROVS=[
   {id:'ht',label:'HT — ANUA',sub:'Hebetronic S.A',color:'var(--ht)',colorL:'var(--ht-l)',badge:'#5B8FA8',
@@ -375,10 +375,12 @@ const PROVS=[
     {sku:'SUNSU-PH-007',n:'Skin Drops',p:28.75},
     {sku:'SUNSU-PH-008',n:'Harmony Drops (Rejuvenate Tonic)',p:28.75},
   ]},
-  {id:'jn',label:'JN — Varios',sub:'Varios',color:'var(--sage)',colorL:'var(--sage-l)',badge:'#7A9E8A',
+  {id:'jn',label:'JN — Varios',sub:'Varios',color:'#7B68B5',colorL:'#EEE8F8',badge:'#7B68B5',
    prods:[
     {sku:'SUNSU-JN-001',n:'Premium White Goat Milk Cream - RiRe',p:48.00},
     {sku:'SUNSU-JN-002',n:'Aloe Soothing Sun Cream SPF50 - Holika Holika',p:35.99},
+    {sku:'SUNSU-JN-003',n:'Aloe Cooling Sunscreen Stick SPF/PA ++++',p:35.99},
+    {sku:'SUNSU-JN-004',n:'Air Light Anti-Wrinkle Sun Stick SPF50',p:35.99},
   ]},
 ];
 
@@ -444,38 +446,55 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
-  // Load catalog to update prices from Google Sheet
-  fetch(APPS_SCRIPT_URL+'?action=getCatalogo')
-    .then(function(r){return r.json();})
-    .then(function(items){
-      if(!Array.isArray(items)) return;
+  // Load catalog + inventario to update prices and filter inactive products
+  Promise.all([
+    fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).catch(function(){return [];}),
+    fetch(APPS_SCRIPT_URL+'?action=getInventario').then(function(r){return r.json();}).catch(function(){return {items:[]};})
+  ]).then(function(results){
+    var items=results[0]||[];
+    var invData=results[1]||{};
+    var activeSkus=new Set();
+    (invData.items||[]).forEach(function(it){activeSkus.add(it.sku);});
+
+    if(Array.isArray(items)){
       items.forEach(function(item){
-        // Update FACIALES prices
         var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
         if(fi>=0&&item.total>0) FACIALES[fi].p=item.total;
-        // Update EXTRAS prices
         var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
         if(ei>=0&&item.total>0) EXTRAS[ei].t=item.total;
-        // Update PROVS products
         PROVS.forEach(function(pv){
           var pi=pv.prods.findIndex(function(p){return p.sku===item.sku;});
           if(pi>=0&&item.total>0) pv.prods[pi].p=item.total;
         });
-        // Update PAQ3/PAQ6
         var p3=PAQ3.findIndex(function(p){return p.sku===item.sku;});
         if(p3>=0&&item.total>0) PAQ3[p3].p=item.total;
         var p6=PAQ6.findIndex(function(p){return p.sku===item.sku;});
         if(p6>=0&&item.total>0) PAQ6[p6].p=item.total;
       });
-    })
-    .catch(function(){}) // fail silently — use hardcoded prices as fallback
-    .finally(function(){
-      showTab(allTabs[0][0]);
-    });
+    }
+
+    // Filter inactive products from PROVS
+    // Only hide if col L explicitly = FALSE. Empty/missing = show.
+    if(activeSkus.size>0){
+      var allSkusArr=invData.allSkus||[];
+      PROVS.forEach(function(pv){
+        pv.prods=pv.prods.filter(function(p){
+          var managed=allSkusArr.indexOf(p.sku)>=0;
+          if(!managed) return true;          // not in inventory → always show
+          return activeSkus.has(p.sku);      // in inventory → only if active
+        });
+      });
+      for(var i=PROVS.length-1;i>=0;i--){
+        if(PROVS[i].prods.length===0) PROVS.splice(i,1);
+      }
+    }
+  }).catch(function(){}).finally(function(){
+    showTab(allTabs[0][0]);
+  });
 }
 function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -491,6 +510,7 @@ function showTab(id,btn){
   else if(id==='buscar-gc') renderBuscarGC(c);
   else if(id==='facturacion') renderFacturacion(c);
   else if(id==='entradas') renderEntradas(c);
+  else if(id==='inventario') renderInventario(c);
   else if(id==='multas') renderMultas(c);
   else if(id==='dash-admin') renderDashAdmin(c);
   else if(id==='kpis') renderKpis(c);
@@ -1435,8 +1455,9 @@ function enviarTicket(){
     'SUNSU-AS-001':34,'SUNSU-AS-002':35,'SUNSU-AS-003':36,'SUNSU-AS-004':37,
     'SUNSU-AS-005':38,'SUNSU-AS-006':39,'SUNSU-AS-007':40,
     'SUNSU-ML-001':41,'SUNSU-ML-002':42,'SUNSU-ML-003':43,'SUNSU-ML-004':44,
-    'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-009':48,
+    'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-008':47,'SUNSU-ML-009':48,
     'SUNSU-PH-001':49,'SUNSU-PH-002':50,'SUNSU-PH-007':53,'SUNSU-PH-008':54,
+    'SUNSU-JN-001':55,'SUNSU-JN-002':56,'SUNSU-JN-003':57,'SUNSU-JN-004':58,
   };
   const productosPayload={};
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
@@ -3164,8 +3185,9 @@ function guardarEdicionTicket(tkRow){
     'SUNSU-AS-001':34,'SUNSU-AS-002':35,'SUNSU-AS-003':36,'SUNSU-AS-004':37,
     'SUNSU-AS-005':38,'SUNSU-AS-006':39,'SUNSU-AS-007':40,
     'SUNSU-ML-001':41,'SUNSU-ML-002':42,'SUNSU-ML-003':43,'SUNSU-ML-004':44,
-    'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-009':48,
+    'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-008':47,'SUNSU-ML-009':48,
     'SUNSU-PH-001':49,'SUNSU-PH-002':50,'SUNSU-PH-007':53,'SUNSU-PH-008':54,
+    'SUNSU-JN-001':55,'SUNSU-JN-002':56,'SUNSU-JN-003':57,'SUNSU-JN-004':58,
   };
   var productosPayload={};
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
@@ -3245,7 +3267,7 @@ function guardarEdicionTicket(tkRow){
 }
 
 function toggleExclusion(tkRow, tipo){
-  var colMap={facial:55, paquete:56, producto:57}; // BC=55, BD=56, BE=57 (1-based)
+  var colMap={facial:59, paquete:60, producto:61}; // BG=59, BH=60, BI=61 (1-based, after JN cols)
   var idMap={facial:'excl-fac-', paquete:'excl-paq-', producto:'excl-prod-'};
   var labelMap={facial:'💆 Facial', paquete:'📋 Paquete', producto:'🧴 Producto'};
   var col=colMap[tipo];
@@ -3291,7 +3313,86 @@ function toggleExclusion(tkRow, tipo){
   .catch(function(){ toast('Error de conexión','#B86B6B'); });
 }
 
-// ══════ ENTRADAS DE PRODUCTOS ══════
+// ══════ INVENTARIO ══════
+function renderInventario(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando inventario...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getInventario')
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,100)};}
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var items=d.items||[];
+      if(!items.length){c.innerHTML='<div class="card">Sin datos</div>';return;}
+      var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios'};
+      var grupos={};
+      items.forEach(function(it){
+        var m=it.sku.match(/SUNSU-([A-Z]+)-/);
+        var prefix=m?m[1]:'OTROS';
+        var gn=prefixNames[prefix]||('CÓDIGOS '+prefix);
+        if(!grupos[gn]) grupos[gn]=[];
+        grupos[gn].push(it);
+      });
+      var sinStock=items.filter(function(i){return i.alerta==='SIN STOCK';}).length;
+      var bajo=items.filter(function(i){return i.alerta==='BAJO STOCK';}).length;
+      var ok=items.filter(function(i){return i.alerta==='OK';}).length;
+      var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
+        +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+        +'<div style="flex:1;background:#FEE2E2;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C00">'+sinStock+'</div><div style="font-size:0.6rem;color:#C00;font-weight:700">SIN STOCK</div></div>'
+        +'<div style="flex:1;background:#FFF9E6;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C4943A">'+bajo+'</div><div style="font-size:0.6rem;color:#C4943A;font-weight:700">BAJO STOCK</div></div>'
+        +'<div style="flex:1;background:#E8F8EE;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#2E7D52">'+ok+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">OK</div></div>'
+        +'</div>';
+      Object.keys(grupos).forEach(function(gn,gi){
+        var gItems=grupos[gn];
+        var gid='inv-grp-'+gi;
+        var gSin=gItems.filter(function(i){return i.alerta==='SIN STOCK';}).length;
+        var gBajo=gItems.filter(function(i){return i.alerta==='BAJO STOCK';}).length;
+        var aLabel=gSin>0?(gSin+' sin stock'):gBajo>0?(gBajo+' bajo stock'):'✅ OK';
+        var aCol=gSin>0?'#FEE2E2':gBajo>0?'#FFF9E6':'#E8F8EE';
+        var aTxt=gSin>0?'#C00':gBajo>0?'#C4943A':'#2E7D52';
+        html+='<div style="background:white;border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+          +'<div onclick="toggleInvGrupo(\''+gid+'\')" style="background:var(--navy);padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">'
+          +'<div style="font-size:0.82rem;font-weight:800;color:white">'+gn+'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:0.65rem;font-weight:700;background:'+aCol+';color:'+aTxt+';padding:2px 8px;border-radius:6px">'+aLabel+'</span>'
+          +'<span id="inv-arrow-'+gid+'" style="color:white;font-size:0.75rem">▶</span>'
+          +'</div></div>'
+          +'<div id="'+gid+'" style="display:none">'
+          +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--cream)">'
+          +'<th style="padding:7px 10px;font-size:0.6rem;text-align:left;color:var(--gray);font-weight:700">SKU</th>'
+          +'<th style="padding:7px 10px;font-size:0.6rem;text-align:left;color:var(--gray);font-weight:700">PRODUCTO</th>'
+          +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">STOCK</th>'
+          +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">MÍN</th>'
+          +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">ALERTA</th>'
+          +'</tr></thead><tbody>';
+        gItems.forEach(function(it,i){
+          var ac=it.alerta==='SIN STOCK'?'#C00':it.alerta==='BAJO STOCK'?'#C4943A':it.alerta==='OK'?'#2E7D52':'#aaa';
+          var ab=it.alerta==='SIN STOCK'?'#FEE2E2':it.alerta==='BAJO STOCK'?'#FFF9E6':it.alerta==='OK'?'#E8F8EE':'transparent';
+          var ai=it.alerta==='SIN STOCK'?'🔴':it.alerta==='BAJO STOCK'?'🟡':it.alerta==='OK'?'🟢':'⚪';
+          html+='<tr style="background:'+(i%2===0?'white':'var(--cream)')+';border-bottom:1px solid var(--cream-d)">'
+            +'<td style="padding:7px 10px;font-size:0.6rem;font-family:monospace;color:#666">'+it.sku+'</td>'
+            +'<td style="padding:7px 10px;font-size:0.7rem;color:var(--navy)">'+it.nombre+'</td>'
+            +'<td style="padding:7px 10px;text-align:center;font-size:0.88rem;font-weight:900;color:'+(it.stock===0?'#C00':it.stock<=it.minimo?'#C4943A':'var(--navy)')+'">'+it.stock+'</td>'
+            +'<td style="padding:7px 10px;text-align:center;font-size:0.72rem;color:var(--gray)">'+it.minimo+'</td>'
+            +'<td style="padding:7px 6px;text-align:center"><span style="font-size:0.58rem;font-weight:700;color:'+ac+';background:'+ab+';padding:2px 6px;border-radius:5px">'+ai+' '+it.alerta+'</span></td>'
+            +'</tr>';
+        });
+        html+='</tbody></table></div></div>';
+      });
+      c.innerHTML=html;
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function toggleInvGrupo(gid){
+  var body=document.getElementById(gid);
+  var arrow=document.getElementById('inv-arrow-'+gid);
+  if(!body) return;
+  var open=body.style.display==='none'||body.style.display==='';
+  body.style.display=open?'block':'none';
+  if(arrow) arrow.textContent=open?'▼':'▶';
+}
+
 // ══════ ENTRADAS DE PRODUCTOS ══════
 function renderEntradas(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>'
