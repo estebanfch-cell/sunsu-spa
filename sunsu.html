@@ -384,7 +384,7 @@ const PROVS=[
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0}};}
+function newT(){return{esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -448,7 +448,34 @@ function initApp(){
     :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
-  showTab(allTabs[0][0]);
+  // Load catalog to update prices from Google Sheet
+  fetch(APPS_SCRIPT_URL+'?action=getCatalogo')
+    .then(function(r){return r.json();})
+    .then(function(items){
+      if(!Array.isArray(items)) return;
+      items.forEach(function(item){
+        // Update FACIALES prices
+        var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
+        if(fi>=0&&item.total>0) FACIALES[fi].p=item.total;
+        // Update EXTRAS prices
+        var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
+        if(ei>=0&&item.total>0) EXTRAS[ei].t=item.total;
+        // Update PROVS products
+        PROVS.forEach(function(pv){
+          var pi=pv.prods.findIndex(function(p){return p.sku===item.sku;});
+          if(pi>=0&&item.total>0) pv.prods[pi].p=item.total;
+        });
+        // Update PAQ3/PAQ6
+        var p3=PAQ3.findIndex(function(p){return p.sku===item.sku;});
+        if(p3>=0&&item.total>0) PAQ3[p3].p=item.total;
+        var p6=PAQ6.findIndex(function(p){return p.sku===item.sku;});
+        if(p6>=0&&item.total>0) PAQ6[p6].p=item.total;
+      });
+    })
+    .catch(function(){}) // fail silently — use hardcoded prices as fallback
+    .finally(function(){
+      showTab(allTabs[0][0]);
+    });
 }
 function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -512,8 +539,8 @@ function mkExtraChip(e){
     var cortBg=cort?'#FFF8E1':'#F4F5F8';
     var cortBorder=cort?'#EDD89A':'#ECEEF4';
     var cortColor=cort?'#C4A45A':'#7A8499';
-    var cortLabel=cort?'🎁 Cortesía ✓':'🎁 Cortesía';
-    chip+='<span id="cort-'+e.sku+'" onclick="toggleCourtesy(\''+e.sku+'\')" '+
+    var cortLabel=cort?('🎀 '+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]||'Cortesía')):'🎀 Cortesía';
+    chip+='<span id="cort-btn-'+e.sku+'" onclick="toggleCourtesy(\''+e.sku+'\')" '+
       'style="display:inline-block;margin:0 4px 5px;padding:2px 9px;border-radius:6px;'+
       'font-size:0.62rem;font-weight:700;cursor:pointer;'+
       'border:1.5px solid '+cortBorder+';background:'+cortBg+';color:'+cortColor+'">'+ cortLabel+'</span>';
@@ -851,42 +878,74 @@ function selP6(sku){
 }
 function selEx(sku){
   T.extras[sku]=!T.extras[sku];
-  if(!T.extras[sku]) delete T.extrasCourtesy[sku];
-  // Save inputs and scroll before re-render
-  const scrollY=window.scrollY;
-  const cedVal=document.getElementById('inp-ced')?.value||'';
-  const nomVal=document.getElementById('inp-nom')?.value||'';
-  const apeVal=document.getElementById('inp-ape')?.value||'';
-  const recomVal=document.getElementById('inp-recom')?.value||'';
-  const notasVal=document.getElementById('inp-notas')?.value||'';
-  const wasExtrasOpen=document.getElementById('ab-extras')?.classList.contains('open');
-  renderTicket(document.getElementById('content'));
-  // Restore
-  if(cedVal&&document.getElementById('inp-ced')) document.getElementById('inp-ced').value=cedVal;
-  if(nomVal&&document.getElementById('inp-nom')) document.getElementById('inp-nom').value=nomVal;
-  if(apeVal&&document.getElementById('inp-ape')) document.getElementById('inp-ape').value=apeVal;
-  if(recomVal&&document.getElementById('inp-recom')) document.getElementById('inp-recom').value=recomVal;
-  if(notasVal&&document.getElementById('inp-notas')) document.getElementById('inp-notas').value=notasVal;
-  if(wasExtrasOpen){const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');if(b)b.classList.add('open');if(a)a.classList.add('open');}
-  window.scrollTo(0,scrollY);
+  if(!T.extras[sku]){delete T.extrasCourtesy[sku];delete T.extrasCourtesyReason[sku];}
+  // Update chip appearance without full re-render (no scroll)
+  var chip=document.getElementById('ce-'+sku);
+  if(chip) chip.className='chip '+(T.extras[sku]?'sel-pink':'');
+  // Show/hide cortesia button
+  var cortBtn=document.getElementById('cort-btn-'+sku);
+  if(T.extras[sku]&&!cortBtn){
+    // Add cortesia button after chip
+    var btn=document.createElement('span');
+    btn.id='cort-btn-'+sku;
+    btn.onclick=function(){toggleCourtesy(sku);};
+    btn.style.cssText='display:inline-block;margin:0 4px 5px;padding:2px 9px;border-radius:6px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:#F4F5F8;color:#7A8499';
+    btn.textContent='🎀 Cortesía';
+    if(chip&&chip.parentNode) chip.parentNode.insertBefore(btn, chip.nextSibling);
+  } else if(!T.extras[sku]&&cortBtn){
+    cortBtn.parentNode.removeChild(cortBtn);
+    var reason=document.getElementById('cort-reason-'+sku);
+    if(reason&&reason.parentNode) reason.parentNode.removeChild(reason);
+  }
+  updatePreview();
 }
 function toggleCourtesy(sku){
-  T.extrasCourtesy[sku]=!T.extrasCourtesy[sku];
-  const scrollY=window.scrollY;
-  const cedVal=document.getElementById('inp-ced')?.value||'';
-  const nomVal=document.getElementById('inp-nom')?.value||'';
-  const apeVal=document.getElementById('inp-ape')?.value||'';
-  const recomVal=document.getElementById('inp-recom')?.value||'';
-  const notasVal=document.getElementById('inp-notas')?.value||'';
-  const wasExtrasOpen=document.getElementById('ab-extras')?.classList.contains('open');
-  renderTicket(document.getElementById('content'));
-  if(cedVal&&document.getElementById('inp-ced')) document.getElementById('inp-ced').value=cedVal;
-  if(nomVal&&document.getElementById('inp-nom')) document.getElementById('inp-nom').value=nomVal;
-  if(apeVal&&document.getElementById('inp-ape')) document.getElementById('inp-ape').value=apeVal;
-  if(recomVal&&document.getElementById('inp-recom')) document.getElementById('inp-recom').value=recomVal;
-  if(notasVal&&document.getElementById('inp-notas')) document.getElementById('inp-notas').value=notasVal;
-  if(wasExtrasOpen){const b=document.getElementById('ab-extras'),a=document.getElementById('aa-extras');if(b)b.classList.add('open');if(a)a.classList.add('open');}
-  window.scrollTo(0,scrollY);
+  if(!T.extrasCourtesy) T.extrasCourtesy={};
+  var wasActive=T.extrasCourtesy[sku];
+  if(wasActive){
+    delete T.extrasCourtesy[sku];
+    delete T.extrasCourtesyReason[sku];
+    updatePreview();
+    return;
+  }
+  // Show reason modal inline — no re-render, no scroll
+  var cortBtn=document.getElementById('cort-btn-'+sku);
+  var existing=document.getElementById('cort-reason-'+sku);
+  if(existing){existing.parentNode.removeChild(existing);return;}
+  var div=document.createElement('div');
+  div.id='cort-reason-'+sku;
+  div.style.cssText='background:var(--gold-l);border:1.5px solid var(--gold);border-radius:10px;padding:10px;margin-top:6px';
+  var presets=['Cumpleaños','Comentario Google','Influencer','Colaboración','Error nuestro','VIP/EMI'];
+  div.innerHTML='<div style="font-size:0.65rem;font-weight:700;color:var(--gold);margin-bottom:6px">🎀 Razón de cortesía</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">'
+    +presets.map(function(p){return '<button onclick="selCortesiaReason(\''+sku+'\',\''+p+'\')" style="padding:4px 9px;background:white;border:1.5px solid var(--gold);border-radius:7px;font-size:0.68rem;color:var(--gold);font-weight:600;cursor:pointer">'+p+'</button>';}).join('')
+    +'</div>'
+    +'<input id="cort-inp-'+sku+'" type="text" placeholder="Escribe la razón..." style="width:100%;padding:7px 10px;border:1.5px solid var(--gold);border-radius:8px;font-size:0.75rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:7px">'
+    +'<button onclick="confirmCortesia(\''+sku+'\')" style="width:100%;padding:7px;background:var(--gold);color:white;border:none;border-radius:8px;font-size:0.75rem;font-weight:700;cursor:pointer">✅ Confirmar</button>';
+  if(cortBtn&&cortBtn.parentNode){
+    cortBtn.parentNode.insertBefore(div, cortBtn.nextSibling);
+    setTimeout(function(){var inp=document.getElementById('cort-inp-'+sku);if(inp)inp.focus();},50);
+  }
+}
+
+function selCortesiaReason(sku, txt){
+  var inp=document.getElementById('cort-inp-'+sku);
+  if(inp) inp.value=txt;
+}
+
+function confirmCortesia(sku){
+  var inp=document.getElementById('cort-inp-'+sku);
+  var reason=(inp?inp.value.trim():'');
+  if(!reason){if(inp)inp.focus();return;}
+  if(!T.extrasCourtesyReason) T.extrasCourtesyReason={};
+  T.extrasCourtesy[sku]=true;
+  T.extrasCourtesyReason[sku]=reason;
+  var div=document.getElementById('cort-reason-'+sku);
+  if(div&&div.parentNode) div.parentNode.removeChild(div);
+  updatePreview();
+  // Update cortesia button appearance without full re-render
+  var btn=document.getElementById('cort-btn-'+sku);
+  if(btn){btn.style.background='var(--green)';btn.style.color='white';btn.textContent='🎀 '+reason;}
 }
 function toggleProv(id){
   const body=document.getElementById('pb-body-'+id), arrow=document.getElementById('pa-'+id);
@@ -1111,14 +1170,22 @@ function updatePreview(){
   const totC=comF+comP;
   const totE=estF+estPack+estProd+gcVTotal;
 
-  // Descuento — FF 15% sobre facial, personalizado sobre total, directo 100%
+  // Descuento — FF 15% sobre facial (o total si es canje), personalizado sobre total, directo 100%
   var dscMonto = 0, dscLabel = '';
   if(T.descuento && T.descuento.tipo === 'ff'){
-    dscMonto = Math.round(facialP * 0.15 * 100) / 100;
+    dscMonto = Math.round(facialP * 0.15 * 100) / 100; // solo sobre facial cobrado
     dscLabel = '🤝 Friends & Family −15%';
-  } else if(T.descuento && T.descuento.tipo === 'custom' && T.descuento.custom > 0){
-    dscMonto = Math.min(T.descuento.custom, totE);
-    dscLabel = '🏷️ Descuento personalizado';
+  } else if(T.descuento && T.descuento.tipo === 'custom'){
+    if(T.descuento.customMode==='pct' && T.descuento.customPct>0){
+      var pct=T.descuento.customPct/100;
+      var target=T.descuento.customTarget||'Total';
+      var base=target==='Facial'?facialP:target==='Paquete'?estPack:target==='Productos'?estProd:target==='Gift Card'?gcVTotal:totE;
+      dscMonto=Math.round(base*pct*100)/100;
+      dscLabel='🏷️ −'+T.descuento.customPct+'% sobre '+target;
+    } else if(T.descuento.custom>0){
+      dscMonto=Math.min(T.descuento.custom,totE);
+      dscLabel='🏷️ Descuento personalizado';
+    }
   } else if(T.descuento && T.descuento.tipo === 'directo'){
     dscMonto = totE; // 100% — pago directo
     dscLabel = '💼 Pago Directo';
@@ -1134,18 +1201,17 @@ function updatePreview(){
   const rowGray='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.6;';
   let breakdown='';
 
-  // Facial row
-  breakdown+=`<div style="${rowStyle}"><span>💆 Facial${T.cobro==='cortesia'?' (cortesía)':esCanje?' (canje)':''}</span><span>$${facialP.toFixed(2)}</span></div>`;
+  // 1. Facial
+  if(T.facial){
+    breakdown+=`<div style="${rowStyle}"><span>💆 Facial${T.cobro==='cortesia'?' (cortesía)':esCanje?' (canje)':''}</span><span>$${facialP.toFixed(2)}</span></div>`;
+    extrasDetalle.forEach(ex=>{
+      breakdown+=`<div style="${rowGray}"><span>✨ ${ex.n}${ex.cort?' 🎁':''}</span><span>${ex.cort?'Cortesía':'$'+ex.p.toFixed(2)}</span></div>`;
+    });
+  }
 
-  // Extras rows — each one
-  extrasDetalle.forEach(ex=>{
-    breakdown+=`<div style="${rowGray}"><span>✨ ${ex.n}${ex.cort?' 🎁':''}</span><span>${ex.cort?'Cortesía':'$'+ex.p.toFixed(2)}</span></div>`;
-  });
-
-  // Paquete row
+  // 2. Paquete
   if(T.pack3||T.pack6){
     breakdown+=`<div style="${rowStyle}"><span>📋 ${packNombre||'Paquete'}</span><span>$${estPack.toFixed(2)}</span></div>`;
-    // GC conversión note — combine both packs
     var _allGCSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
     if(T.paq2gc && _allGCSlots.length>0){
       var gcCodes = _allGCSlots.filter(function(s){return s&&s.codigo;});
@@ -1159,9 +1225,15 @@ function updatePreview(){
     }
   }
 
-  // Productos row
+  // 3. Productos — Total primero, luego detalle
   if(estProd>0){
-    breakdown+=`<div style="${rowStyle}"><span>🧴 Productos</span><span>$${estProd.toFixed(2)}</span></div>`;
+    breakdown+=`<div style="${rowStyle};font-weight:700"><span>🧴 Total productos</span><span>$${estProd.toFixed(2)}</span></div>`;
+    PROVS.forEach(pv=>pv.prods.forEach(p=>{
+      const q=T.productos[p.sku]||0;
+      if(q<=0) return;
+      const lineTotal=p.p*q;
+      breakdown+=`<div style="${rowGray}"><span><span style="color:rgba(255,255,255,0.45);font-size:0.6rem">${p.sku}</span> ${p.n}${q>1?' ×'+q:''}</span><span>$${lineTotal.toFixed(2)}</span></div>`;
+    }));
   }
 
   // Gift Card row
@@ -1196,12 +1268,22 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      ${customActive?`<div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:0.7rem;opacity:0.7">$</span>
-        <input type="number" id="dsc-custom-inp" min="0" step="0.01" value="${T.descuento.custom||''}" placeholder="0.00"
-          oninput="T.descuento.custom=parseFloat(this.value)||0;updatePreview()"
-          style="flex:1;padding:6px 9px;border:1.5px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:0.82rem;outline:none">
-        <span style="font-size:0.65rem;opacity:0.6">del total</span>
+      ${customActive?`<div style="margin-top:6px">
+        <div style="display:flex;gap:5px;margin-bottom:7px">
+          <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
+          <button onclick="T.descuento.customMode='pct';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${T.descuento.customMode==='pct'?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${T.descuento.customMode==='pct'?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">% Porcentaje</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:${T.descuento.customMode==='pct'?'7px':'0'}">
+          <span style="font-size:0.7rem;opacity:0.7">${T.descuento.customMode==='pct'?'%':'$'}</span>
+          <input type="number" id="dsc-custom-inp" min="0" step="${T.descuento.customMode==='pct'?'1':'0.01'}" max="${T.descuento.customMode==='pct'?'100':''}" value="${T.descuento.customMode==='pct'?(T.descuento.customPct||''):(T.descuento.custom||'')}" placeholder="${T.descuento.customMode==='pct'?'0 %':'0.00'}"
+            oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}clearTimeout(window._dscTimer);window._dscTimer=setTimeout(updatePreview,400)"
+            onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}updatePreview()"
+            style="flex:1;padding:6px 9px;border:1.5px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:0.82rem;outline:none">
+          <span style="font-size:0.65rem;opacity:0.6">${T.descuento.customMode==='pct'?'sobre':'del total'}</span>
+        </div>
+        ${T.descuento.customMode==='pct'?`<div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${['Facial','Paquete','Productos','Gift Card','Total'].map(op=>`<button onclick="T.descuento.customTarget='${op}';updatePreview()" style="padding:4px 9px;border-radius:7px;border:1.5px solid ${T.descuento.customTarget===op?'rgba(255,255,255,0.8)':'rgba(255,255,255,0.2)'};background:${T.descuento.customTarget===op?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.65rem;font-weight:${T.descuento.customTarget===op?'700':'400'};cursor:pointer">${op}</button>`).join('')}
+        </div>`:''}
       </div>`:''}
       ${directoActive?`<div style="font-size:0.68rem;color:#E8C07A;margin-top:4px;opacity:0.85">💼 Pago directo — $0.00 para Sunsu</div>`:''}
     </div>`;
@@ -1215,6 +1297,8 @@ function updatePreview(){
     <div class="psec">💳 Desglose a cobrar</div>
     ${breakdown}
     <div class="pdiv"></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>Subtotal sin IVA</span><span>$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>IVA 15%</span><span>$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
     <div class="ptotal"><span>Total cliente</span><span>$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
@@ -1228,8 +1312,10 @@ function toggleDescuento(tipo){
     T.descuento.tipo=tipo;
     if(tipo!=='custom') T.descuento.custom=0;
   }
+  // Force preview box visible so discount shows
+  const box=document.getElementById('preview-box');
+  if(box) box.style.display='block';
   updatePreview();
-  // Refocus custom input if just opened
   if(T.descuento.tipo==='custom'){
     setTimeout(function(){var el=document.getElementById('dsc-custom-inp');if(el)el.focus();},80);
   }
@@ -1294,7 +1380,7 @@ function enviarTicket(){
   // Col W: Extras — cortesia marcada con [CORTESIA]
   const extrasTexto=EXTRAS
     .filter(e=>T.extras[e.sku])
-    .map(e=>e.sku+' '+e.n+(T.extrasCourtesy[e.sku]?' [CORTESIA]':''))
+    .map(e=>e.sku+' '+e.n+(T.extrasCourtesy[e.sku]?' [CORTESIA'+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]?': '+T.extrasCourtesyReason[e.sku]:'')+']':''))
     .concat(T.extras['otros']&&T.otroExtra?['OTRO: '+T.otroExtra]:[])
     .join(' | ');
 
@@ -1317,14 +1403,31 @@ function enviarTicket(){
   // Apply discount
   let _dscMonto=0, _dscLabel='';
   if(T.descuento&&T.descuento.tipo==='ff'){_dscMonto=Math.round(_estF*0.15*100)/100;_dscLabel='FF15%';}
-  else if(T.descuento&&T.descuento.tipo==='custom'&&T.descuento.custom>0){_dscMonto=Math.min(T.descuento.custom,_totBruto);_dscLabel='Desc$'+_dscMonto.toFixed(2);}
+  else if(T.descuento&&T.descuento.tipo==='custom'){
+    if(T.descuento.customMode==='pct'&&T.descuento.customPct>0){
+      var _pct=T.descuento.customPct/100;
+      var _tgt=T.descuento.customTarget||'Total';
+      var _base=_tgt==='Facial'?_estF:_tgt==='Paquete'?_estPack:_tgt==='Productos'?_estProd:_totBruto;
+      _dscMonto=Math.round(_base*_pct*100)/100;_dscLabel=_tgt+'−'+T.descuento.customPct+'%';
+    } else if(T.descuento.custom>0){_dscMonto=Math.min(T.descuento.custom,_totBruto);_dscLabel='Desc$'+_dscMonto.toFixed(2);}
+  }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
   const estTotal=Math.max(0,_totBruto-_dscMonto);
   // Caja física de GCs de conversión paquete (+$3 cada una)
   var _cajasGC=(T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
   const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : Math.max(0, estTotal+(_cajasGC*3));
 
-  // Productos → columna exacta en el sheet
+  // Fix fecha retorno format: input gives yyyy-MM-dd, sheet needs MM/dd/yyyy
+  var _retRaw=(retEl?.value||'').trim();
+  var _retFmt='';
+  if(_retRaw){
+    var _rp=_retRaw.split('-');
+    if(_rp.length===3) _retFmt=_rp[1]+'/'+_rp[2]+'/'+_rp[0]; // MM/dd/yyyy
+    else _retFmt=_retRaw;
+  }
+
+  // esSunsu = consumo interno → estimado $0
+  const _finalEstimado = T.esSunsu ? 0 : (estTotalFinal||'');
   const PROD_COL_MAP={
     'SUNSU-HT-002':25,'SUNSU-HT-003':26,'SUNSU-HT-004':27,'SUNSU-HT-006':28,'SUNSU-HT-007':29,
     'SUNSU-HT-011':30,'SUNSU-HT-012':31,'SUNSU-HT-013':32,'SUNSU-HT-014':33,
@@ -1344,8 +1447,8 @@ function enviarTicket(){
     nombre:         (nomEl?.value||'').trim(),
     apellido:       (apeEl?.value||'').trim(),
     factura:        (facEl?.value||'').trim(),
-    fechaRetorno:   (retEl?.value||''),
-    estimado:       estTotalFinal||'',
+    fechaRetorno:   _retFmt,
+    estimado:       _finalEstimado,
     descuento:      _dscLabel||'',
     paq2gcSlots3:   (T.paq2gcSlots3||[]).filter(function(s){return s&&s.codigo;}),
     paq2gcSlots6:   (T.paq2gcSlots6||[]).filter(function(s){return s&&s.codigo;}),
@@ -1757,6 +1860,7 @@ function _buildTicketCard(t, showPrices){
   };
   var breakdown='';
 
+  // 1. Facial + extras
   if(facialInfo){
     var facSku=t.facial?t.facial.match(/(SUNSU-\d+)/):null;
     var facSkuStr=facSku?skuBadge(facSku[1]):'';
@@ -1765,26 +1869,34 @@ function _buildTicketCard(t, showPrices){
   if(t.extras){
     t.extras.split('|').forEach(function(ex){
       ex=ex.trim(); if(!ex) return;
-      var cort=ex.indexOf('[CORTESIA]')>=0;
+      var cortMatch=ex.match(/\[CORTESIA(?::\s*([^\]]+))?\]/);
+      var cort=!!cortMatch;
+      var cortReason=cortMatch&&cortMatch[1]?cortMatch[1]:'';
       var esku=ex.match(/(SUNSU-\d+)/);
       if(esku){
         var ep=_histPrecioExtra(esku[1]);
         var eo=EXTRAS.find(function(x){return x.sku===esku[1];});
-        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎁':''),cort?'Cortesía':'$'+ep.toFixed(2));
+        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎀'+(cortReason?' ('+cortReason+')':''):''),cort?'Cortesía':'$'+ep.toFixed(2));
       }
     });
   }
+
+  // 2. Paquete
   if(packInfo){
     var pakSku=t.pack3?t.pack3.match(/(SUNSU-\d+)/):t.pack6?t.pack6.match(/(SUNSU-\d+)/):null;
     var pakSkuStr=pakSku?skuBadge(pakSku[1]):'';
     breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,'$'+packInfo.p.toFixed(2));
   }
+
+  // 3. Productos — total first, then individual
   if(prodsDetalle.length){
-    breakdown+=rowItem('🧴','Productos','$'+prodTotal.toFixed(2));
+    breakdown+=rowItem('🧴','Total productos','$'+prodTotal.toFixed(2));
     prodsDetalle.forEach(function(pd){
       breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+pd.total.toFixed(2));
     });
   }
+
+  // 4. Gift Card
   if(gcVenta){
     breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),'$'+gcVenta.valor.toFixed(2));
     if(gcVenta.nota) breakdown+=rowSub('📝',gcVenta.nota,'');
@@ -1796,9 +1908,21 @@ function _buildTicketCard(t, showPrices){
     var rLabel=t.colR.indexOf('GC,')===0?'♻️ Conv. a GC: '+t.colR:'🎁 Canje GC: '+t.colR;
     breakdown+='<div style="'+rg+';color:#5B8FA8"><span>'+rLabel+'</span><span></span></div>';
   }
-  var notasBlock='';
-  if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:600;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
-  if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:600;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
+
+  // 5. Subtotal / IVA reference
+  if(showPrices && totalCliente>0){
+    breakdown+='<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px">'
+      +'<div style="'+rg+'opacity:0.6"><span>Subtotal sin IVA</span><span>$'+(totalCliente/1.15).toFixed(2)+'</span></div>'
+      +'<div style="'+rg+'opacity:0.6"><span>IVA 15%</span><span>$'+(totalCliente-totalCliente/1.15).toFixed(2)+'</span></div>'
+      +'</div>';
+  }
+  // Fix date to dd/mm/yyyy
+  var fechaFmt=t.fecha||'';
+  if(fechaFmt.match(/^\d{4}-\d{2}-\d{2}$/)){
+    var fp=fechaFmt.split('-');fechaFmt=fp[2]+'/'+fp[1]+'/'+fp[0];
+  } else if(fechaFmt.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var fp2=fechaFmt.split('/');fechaFmt=fp2[1]+'/'+fp2[0]+'/'+fp2[2];
+  }
 
   var isAdminView=CU&&(CU.role==='admin'||CU.role==='admin_master');
   var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
@@ -1806,7 +1930,7 @@ function _buildTicketCard(t, showPrices){
     +'<div style="flex:1">'
     +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
     +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+t.fecha+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace">#'+t.tkRow+'</span>':'')+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+fechaFmt+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">#'+t.tkRow+'</span>':'')+'</div>'
     +(isAdminView&&t.tkRow
       ?'<div style="display:flex;gap:5px;margin-top:6px">'
         +'<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>'
@@ -1821,6 +1945,10 @@ function _buildTicketCard(t, showPrices){
     +'</div>'
     +'</div>';
   if(breakdown) card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">'+breakdown+'</div>';
+  // Recomendaciones y notas
+  var notasBlock='';
+  if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:700;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
+  if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:700;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
   card+=notasBlock;
   // Dropdown exclusión comisión — solo admins
   if(isAdminView&&t.tkRow){
