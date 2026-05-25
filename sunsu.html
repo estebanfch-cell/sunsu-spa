@@ -2297,7 +2297,7 @@ function _renderKpisData(c,d,desde,hasta){
   +_kpiCard(d.productos||0,'Productos','var(--peach-l,#FDF0E8)','var(--peach,#C4943A)')
   +'</div>'
   // Avg ticket
-  +(d.avgTicket?'<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.72rem;color:var(--gray)">💳 Ticket promedio</div><div style="font-size:1.1rem;font-weight:800;color:var(--navy)">$'+d.avgTicket.toFixed(2)+'</div></div>':'')
+  +'<div class="card" style="margin-bottom:12px;display:flex;gap:12px">'+'<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Sin IVA (÷1.15)</div><div style="font-size:1.1rem;font-weight:900;color:var(--navy)">$'+((d.ingresos||0)/1.15).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>'+'<div style="width:1px;background:var(--cream-d)"></div>'+(d.avgTicket?'<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Ticket promedio</div><div style="font-size:1.1rem;font-weight:900;color:var(--navy)">$'+d.avgTicket.toFixed(2)+'</div></div>':'')+'</div>'
   // Top cosm
   +(d.topCosm&&d.topCosm.length?
     '<div class="card" style="margin-bottom:12px"><div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:10px">👤 Por cosmetóloga</div>'
