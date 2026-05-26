@@ -1853,48 +1853,31 @@ function mostrarDashCosmError(c,msg){
 function mostrarDashCosmData(c,d){
   const col=CU.color;
   const neto=Math.max(0,(d.comFaciales||0)+(d.comPaquetes||0)+(d.comProductos||0)-(d.multas||0)-(d.descuentos||0));
+  const isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   c.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
-      <div style="font-size:0.76rem;font-weight:700;color:var(--navy)">📊 Mi Avance — Período activo</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:0.76rem;font-weight:700;color:var(--navy)">📊 Mi Avance</div>
       <button onclick="renderDashCosm(document.getElementById('content'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>
     </div>
-    <div class="card" style="border-left:4px solid ${col}">
-      <div class="card-title">💆 Faciales del período</div>
-      <div style="display:flex;gap:14px;align-items:center">
-        <div style="font-size:2.8rem;font-weight:900;color:${col}">${d.faciales||0}</div>
-        <div><div style="font-size:0.66rem;color:var(--gray);text-transform:uppercase">Comisión</div>
-        <div style="font-size:1.3rem;font-weight:800;color:var(--green)">$${(d.comFaciales||0).toFixed(2)}</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
+      <div style="font-size:0.65rem;color:var(--gray)">📅 ${d.periodoLabel||d.periodo||'Período activo'}</div>
+      <button onclick="renderHistorialComisiones(document.getElementById('content'),${isAdmin})" style="background:var(--cream);color:var(--navy);border:1.5px solid var(--cream-d);padding:5px 11px;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">📋 Historial</button>
+    </div>
+    <div class="cosm-card">
+      <div class="cosm-hdr" style="background:${col}"><span>${CU.name}</span><span>$${neto.toFixed(2)}</span></div>
+      <div class="cosm-body">
+        <div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.faciales||0}</span> · <span style="color:var(--green)">$${(d.comFaciales||0).toFixed(2)}</span></span></div>
+        <div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.paquetes||0} · ${d.nivelAlcanzado||'—'}</span> · <span style="color:var(--green)">$${(d.comPaquetes||0).toFixed(2)}</span></span></div>
+        <div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.totalProductos||0}</span> · <span style="color:var(--green)">$${(d.comProductos||0).toFixed(2)}</span></span></div>
+        ${d.multas>0?`<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$${d.multas.toFixed(2)}</span></div>`:''}
+        ${d.descuentos>0?`<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$${d.descuentos.toFixed(2)}</span></div>`:''}
+        <div class="ctotal"><span>💰 Neto</span><span style="color:${col}">$${neto.toFixed(2)}</span></div>
+        ${d.bonoActivo
+          ?(d.siguienteNivel
+            ?`<div style="font-size:0.65rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🎯 Faltan ${d.paqParaSiguiente} paquete(s) para N${d.siguienteNivel} — +$${d.premioSiguiente} acumulado</div>`
+            :`<div style="font-size:0.65rem;color:var(--green);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🏆 ¡Nivel máximo alcanzado!</div>`)
+          :`<div style="font-size:0.65rem;color:var(--gold);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">⏳ Bono activo con 60+ clientas — van ${d.totalClientas||0}</div>`}
       </div>
-    </div>
-    <div class="card" style="border-left:4px solid var(--pink)">
-      <div class="card-title">📋 Nivel de paquetes</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
-        <span class="nivel-pill">${d.nivelAlcanzado||'—'}</span>
-        <div style="text-align:right">
-          <div style="font-size:1.2rem;font-weight:800;color:var(--green)">$${(d.comPaquetes||0).toFixed(2)}</div>
-          <div style="font-size:0.65rem;color:var(--gray)">${d.paquetes||0} paquetes vendidos</div>
-        </div>
-      </div>
-      ${d.bonoActivo
-        ?(d.siguienteNivel
-          ?`<div style="background:var(--pink-l);border-radius:9px;padding:9px 11px;font-size:0.75rem;color:var(--pink-d);font-weight:600">🎯 Faltan ${d.paqParaSiguiente} paquete(s) para N${d.siguienteNivel} — +$${d.premioSiguiente} acumulado</div>`
-          :`<div style="background:var(--green-l);border-radius:9px;padding:9px 11px;font-size:0.75rem;color:var(--green);font-weight:600">🏆 ¡Nivel máximo alcanzado!</div>`)
-        :`<div style="background:var(--gold-l);border-radius:9px;padding:9px 11px;font-size:0.75rem;color:var(--gold);font-weight:600">⏳ Bono activo con 60+ clientas — van ${d.totalClientas||0}</div>`}
-    </div>
-    <div class="card" style="border-left:4px solid var(--peach)">
-      <div class="card-title">🧴 Productos — ${d.totalProductos||0} uds.</div>
-      <div class="drow"><span style="color:var(--gray)">Comisión productos</span><strong style="color:var(--green)">$${(d.comProductos||0).toFixed(2)}</strong></div>
-    </div>
-    ${(d.multas>0||d.descuentos>0)?`
-    <div class="card" style="border-left:4px solid var(--red)">
-      <div class="card-title">🔴 Deducciones</div>
-      ${d.multas>0?`<div class="drow"><span>Multas</span><strong style="color:var(--red)">−$${d.multas.toFixed(2)}</strong></div>`:''}
-      ${d.descuentos>0?`<div class="drow"><span>Descuentos</span><strong style="color:var(--gold)">−$${d.descuentos.toFixed(2)}</strong></div>`:''}
-    </div>`:''}
-    <div class="card" style="background:linear-gradient(135deg,var(--navy),var(--blue));color:white">
-      <div style="font-size:0.62rem;opacity:0.55;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">💰 Neto del período</div>
-      <div style="font-size:2.6rem;font-weight:900">$${neto.toFixed(2)}</div>
-      <div style="font-size:0.72rem;opacity:0.55;margin-top:3px">${d.periodoLabel||''}</div>
     </div>`;
 }
 
@@ -2386,60 +2369,46 @@ function _histPrecioExtra(sku){
 function renderDashAdmin(c){
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando comisiones...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getReporteAdmin')
-    .then(function(r){return r.json();})
-    .then(function(data){
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var data; try{data=JSON.parse(txt);}catch(e){data={error:txt.slice(0,80)};}
       if(data.error||!data.cosmetologas||!data.cosmetologas.length){
-        _renderDashAdminData(c,null);
+        _renderDashAdminData(c,null,null);
       } else {
-        _renderDashAdminData(c,data);
+        _renderDashAdminData(c,data,data.periodo);
       }
     })
-    .catch(function(){ _renderDashAdminData(c,null); });
+    .catch(function(){ _renderDashAdminData(c,null,null); });
 }
 
-function _renderDashAdminData(c, data){
-  // Source of truth: Mi Avance sheet (período 26 Abr - 25 May 2026)
-  var cosms = data&&data.cosmetologas ? data.cosmetologas : [
-    {name:'Andrea Robles',     color:'#5B7FA6',f:73,paq:27,n:'N8',cf:158,   cp:320,   cprod:173.21,m:0,d:25,  t:626.21, nextN:'N9', faltanPaq:3,  nextCp:405},
-    {name:'Daniela Mora',      color:'#C4943A',f:75,paq:19,n:'N6',cf:167,   cp:180,   cprod:169.45,m:0,d:25,  t:491.45, nextN:'N7', faltanPaq:1,  nextCp:245},
-    {name:'Dejaneira Espinoza',color:'#7A9E8A',f:51,paq:12,n:'N4',cf:105,   cp:80,    cprod:139.39,m:0,d:25,  t:299.39, nextN:'N5', faltanPaq:1,  nextCp:125},
-    {name:'Alejandra Rodriguez',color:'#D4956A',f:0, paq:4, n:'N1',cf:0,    cp:5,     cprod:1.58,  m:0,d:0,   t:6.58,   nextN:'N2', faltanPaq:1,  nextCp:20},
-  ];
+function _renderDashAdminData(c, data, periodo){
+  var cosms = data&&data.cosmetologas ? data.cosmetologas : [];
+  var periodoLabel = periodo || (data&&data.periodo) || 'Período actual';
+  var bonoActivo = data ? data.bonoActivo : false;
+  var totalClientas = data ? data.totalClientas : 0;
 
   var totCF=0,totCP=0,totCProd=0,totM=0,totD=0,totNeto=0;
   cosms.forEach(function(d){totCF+=d.cf;totCP+=d.cp;totCProd+=d.cprod;totM+=d.m||0;totD+=d.d||0;totNeto+=d.t;});
 
   var html=''
-  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
   +'<div style="font-size:0.82rem;font-weight:800;color:var(--navy)">📊 Comisiones</div>'
   +'<button onclick="renderDashAdmin(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
   +'</div>'
-
-  // Resumen total
-  +'<div style="background:linear-gradient(135deg,#1A2744,var(--navy));border-radius:16px;padding:16px;margin-bottom:14px;color:white">'
-  +'<div style="font-size:0.6rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Total a pagar este período</div>'
-  +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'
-  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCF.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Faciales</div></div>'
-  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCP.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Paquetes</div></div>'
-  +'<div style="background:rgba(255,255,255,0.1);border-radius:9px;padding:9px;text-align:center"><div style="font-size:0.92rem;font-weight:800">$'+totCProd.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase;margin-top:2px">Productos</div></div>'
+  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+  +'<div style="font-size:0.65rem;color:var(--gray)">📅 '+periodoLabel+'</div>'
+  +'<button onclick="renderHistorialComisiones(document.getElementById(\'content\'),true)" style="background:var(--cream);color:var(--navy);border:1.5px solid var(--cream-d);padding:5px 11px;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">📋 Historial</button>'
   +'</div>'
-  +(totD>0||totM>0?'<div style="display:flex;gap:8px;margin-bottom:10px">'
-    +(totD>0?'<div style="flex:1;background:rgba(255,255,255,0.1);border-radius:9px;padding:8px;text-align:center"><div style="font-size:0.85rem;font-weight:800;color:#E8C07A">−$'+totD.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase">Descuentos</div></div>':'')
-    +(totM>0?'<div style="flex:1;background:rgba(255,255,255,0.1);border-radius:9px;padding:8px;text-align:center"><div style="font-size:0.85rem;font-weight:800;color:#F4A0A0">−$'+totM.toFixed(2)+'</div><div style="font-size:0.58rem;opacity:0.65;text-transform:uppercase">Multas</div></div>':'')
-    +'</div>':'')
-  +'<div style="border-top:1px solid rgba(255,255,255,0.18);padding-top:10px;display:flex;justify-content:space-between;align-items:center">'
-  +'<span style="font-size:0.78rem;opacity:0.7">💰 Total neto a pagar</span>'
-  +'<span style="font-size:1.5rem;font-weight:900">$'+totNeto.toFixed(2)+'</span>'
-  +'</div></div>';
 
   // Individual cards
   cosms.forEach(function(d){
+    var dedTotal=(d.m||0)+(d.d||0);
     html+='<div class="cosm-card">'
       +'<div class="cosm-hdr" style="background:'+d.color+'"><span>'+d.name+'</span><span>$'+d.t.toFixed(2)+'</span></div>'
       +'<div class="cosm-body">'
-      +'<div class="crow"><span>Faciales · comisión</span><span class="v">'+d.f+' · <span style="color:var(--green)">$'+d.cf.toFixed(2)+'</span></span></div>'
-      +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v">'+d.paq+' · '+d.n+' · <span style="color:var(--green)">$'+d.cp.toFixed(2)+'</span></span></div>'
-      +'<div class="crow"><span>Com. productos</span><span class="v" style="color:var(--green)">$'+d.cprod.toFixed(2)+'</span></div>'
+      +'<div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+d.f+'</span> · <span style="color:var(--green)">$'+d.cf.toFixed(2)+'</span></span></div>'
+      +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">'+d.paq+' · '+d.n+'</span> · <span style="color:var(--green)">$'+d.cp.toFixed(2)+'</span></span></div>'
+      +'<div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+(d.totalProd||0)+'</span> · <span style="color:var(--green)">$'+d.cprod.toFixed(2)+'</span></span></div>'
       +((d.m||0)>0?'<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$'+d.m.toFixed(2)+'</span></div>':'')
       +((d.d||0)>0?'<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$'+d.d.toFixed(2)+'</span></div>':'')
       +'<div class="ctotal"><span>💰 Neto</span><span style="color:'+d.color+'">$'+d.t.toFixed(2)+'</span></div>'
@@ -2583,6 +2552,101 @@ function _kpiCard(val,label,bg,fg){
     +'<div style="font-size:1.4rem;font-weight:900;color:'+fg+'">'+val+'</div>'
     +'<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;margin-top:2px">'+label+'</div>'
     +'</div>';
+}
+
+// ══════ HISTORIAL DE COMISIONES ══════
+function renderHistorialComisiones(c, isAdmin){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Historial de Comisiones</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando períodos...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getHistorialComisiones')
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,80)};}
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var periodos=d.periodos||[];
+      if(!periodos.length){
+        c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Historial de Comisiones</div>'
+          +'<div class="card" style="text-align:center;color:var(--gray)">No hay períodos anteriores aún</div>';
+        return;
+      }
+      var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+        +'<button onclick="'+(isAdmin?'renderDashAdmin':'renderDashCosm')+'(document.getElementById(\'content\'))" style="padding:6px 12px;background:var(--cream);color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">← Volver</button>'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📋 Historial de Comisiones</div>'
+        +'</div>';
+      periodos.forEach(function(p){
+        var label=p.titulo||p.nombre;
+        html+='<div style="background:white;border-radius:12px;padding:13px 15px;margin-bottom:8px;box-shadow:var(--shadow-sm);display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-size:0.78rem;font-weight:700;color:var(--navy)">'+label+'</div>'
+          +'<div style="font-size:0.62rem;color:var(--gray)">'+p.nombre+'</div></div>'
+          +'<button data-nombre="'+p.nombre+'" data-titulo="'+label+'" data-isadmin="'+isAdmin+'" onclick="verPeriodoComision(this)" '
+          +'style="padding:6px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">Ver →</button>'
+          +'</div>';
+      });
+      c.innerHTML=html;
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function verPeriodoComision(btn){
+  var nombre=btn.getAttribute('data-nombre');
+  var isAdmin=btn.getAttribute('data-isadmin')==='true';
+  var c=document.getElementById('content');
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando '+nombre+'...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getPeriodoComision&nombre='+encodeURIComponent(nombre))
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,80)};}
+      var titulo=btn.getAttribute('data-titulo')||nombre;
+      var backBtn='<button onclick="renderHistorialComisiones(document.getElementById(\'content\'),'+isAdmin+')" style="padding:6px 12px;background:var(--cream);color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">← Volver</button>';
+      if(d.error){
+        c.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+backBtn
+          +'<div style="font-size:0.82rem;font-weight:800;color:var(--navy)">'+nombre+'</div></div>'
+          +'<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';
+        return;
+      }
+      var pd=d.data||{};
+      var cosms=pd.cosmetologas||[];
+      var clientas=pd.clientas||'—';
+      var bonoActivo=pd.bonoActivo;
+      var tituloMostrar=pd.titulo||titulo;
+
+      var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+backBtn
+        +'<div style="font-size:0.82rem;font-weight:800;color:var(--navy)">'+tituloMostrar+'</div></div>'
+        +'<div style="background:var(--cream);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;gap:20px">'
+        +'<div><div style="font-size:0.58rem;color:var(--gray);text-transform:uppercase">Clientas</div>'
+        +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+clientas+'</div></div>'
+        +'<div><div style="font-size:0.58rem;color:var(--gray);text-transform:uppercase">Bono</div>'
+        +'<div style="font-size:0.8rem;font-weight:700;color:'+(bonoActivo?'#2E7D52':'#888')+'">'+( bonoActivo?'✅ Activo':'❌ Inactivo')+'</div></div>'
+        +'</div>';
+
+      cosms.forEach(function(cosm){
+        var name=cosm.name||'';
+        if(!name) return;
+        if(!isAdmin&&CU&&name.toUpperCase()!==CU.name.toUpperCase()) return;
+        var f=parseFloat(cosm.f)||0, paq=parseFloat(cosm.paq)||0, niv=cosm.niv||'—';
+        var cf=parseFloat(cosm.cf)||0, cpaq=parseFloat(cosm.cpaq)||0;
+        var cprod=parseFloat(cosm.cprod)||0, total=parseFloat(cosm.total)||0;
+        var multas=parseFloat(cosm.m)||0, desc=parseFloat(cosm.d)||0;
+        // Find cosm color
+        var cosmColor=(DEFAULT_USERS.find(function(u){return u.name.toUpperCase()===name.toUpperCase();})||{}).color||'var(--navy)';
+        html+='<div class="cosm-card">'
+          +'<div class="cosm-hdr" style="background:'+cosmColor+'"><span>'+name+'</span><span>$'+total.toFixed(2)+'</span></div>'
+          +'<div class="cosm-body">'
+          +'<div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+f+'</span> · <span style="color:var(--green)">$'+cf.toFixed(2)+'</span></span></div>'
+          +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">'+paq+' · '+niv+'</span> · <span style="color:var(--green)">$'+cpaq.toFixed(2)+'</span></span></div>'
+          +'<div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+(cosm.totalProd||cosm.prods||0)+'</span> · <span style="color:var(--green)">$'+cprod.toFixed(2)+'</span></span></div>'
+          +(multas>0?'<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$'+multas.toFixed(2)+'</span></div>':'')
+          +(desc>0?'<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$'+desc.toFixed(2)+'</span></div>':'')
+          +'<div class="ctotal"><span>💰 Neto</span><span style="color:'+cosmColor+'">$'+total.toFixed(2)+'</span></div>'
+          +'</div></div>';
+      });
+
+      if(!html.includes('💆')){
+        html+='<div class="card" style="text-align:center;color:var(--gray)">Sin datos para este período</div>';
+      }
+      c.innerHTML=html;
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
 }
 
 // ══════ ADMIN PANEL ══════
