@@ -264,7 +264,21 @@ const DEFAULT_USERS=[
   {id:'alejandra',name:'Alejandra Rodriguez',short:'Alejandra',role:'reception',color:'#D4956A',pin:'5555'},
 ];
 function getUsers(){try{return JSON.parse(localStorage.getItem('sunsu_users'))||DEFAULT_USERS;}catch(e){return DEFAULT_USERS;}}
-function saveUsers(u){localStorage.setItem('sunsu_users',JSON.stringify(u));}
+function saveUsers(u){
+  localStorage.setItem('sunsu_users',JSON.stringify(u));
+  // Sync to server so all devices get updated PINs
+  fetch(APPS_SCRIPT_URL,{method:'POST',body:JSON.stringify({accion:'saveUsuarios',users:u})})
+    .catch(function(){});
+}
+function syncUsersFromServer(){
+  fetch(APPS_SCRIPT_URL+'?action=getUsuarios')
+    .then(function(r){return r.json();})
+    .then(function(serverUsers){
+      if(Array.isArray(serverUsers)&&serverUsers.length>0){
+        localStorage.setItem('sunsu_users',JSON.stringify(serverUsers));
+      }
+    }).catch(function(){});
+}
 
 // ══════ DATA ══════
 const FACIALES=[
@@ -381,14 +395,18 @@ let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:'
 
 // ══════ LOGIN ══════
 function initLogin(){
-  const users=getUsers();
-  document.getElementById('user-grid').innerHTML=users.map(u=>`
-    <div class="ubtn" id="ub-${u.id}" onclick="selU('${u.id}')">
-      <div class="uav" style="background:${u.color}">${u.short.charAt(0)}</div>
-      <div class="uname">${u.short}</div>
-      <div class="urole">${rLabel(u.role)}</div>
-    </div>`).join('');
-  document.getElementById('pin-section').style.display='none';
+  // Sync PINs from server first, then render
+  syncUsersFromServer();
+  setTimeout(function(){
+    const users=getUsers();
+    document.getElementById('user-grid').innerHTML=users.map(u=>`
+      <div class="ubtn" id="ub-${u.id}" onclick="selU('${u.id}')">
+        <div class="uav" style="background:${u.color}">${u.short.charAt(0)}</div>
+        <div class="uname">${u.short}</div>
+        <div class="urole">${rLabel(u.role)}</div>
+      </div>`).join('');
+    document.getElementById('pin-section').style.display='none';
+  }, 600); // wait 600ms for server sync
 }
 function rLabel(r){return r==='admin_master'?'👑 Admin Master':r==='admin'?'👑 Admin':r==='reception'?'📋 Recepción':'Cosmetóloga';}
 function selU(id){
