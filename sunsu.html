@@ -6,12 +6,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.05.25.22 -->
+<!-- v2026.05.25.23 -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Force cache bust on load — if URL doesn't have version param, add it
 (function(){
-  var v='20260525.22';
+  var v='20260525.23';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -302,7 +302,9 @@ const FACIALES=[
   {sku:'SUNSU-03',n:'7 Pieles (Arroz+H₂O)',p:65.00,com:2},
   {sku:'SUNSU-04',n:'Facial Gold-Aging',p:65.00,com:2},
   {sku:'SUNSU-05',n:'Facial Porcelana',p:65.00,com:2},
+  {sku:'SUNSU-06',n:'Facial Rice Flow',p:80.50,com:2},
   {sku:'SUNSU-40',n:'Facial Reset 3x1',p:95.00,com:3},
+  {sku:'SUNSU-41',n:'Facial Domo de Oxígeno',p:95.00,com:3},
   {sku:'SUNSU-42',n:'Facial Peeling Marino de Perla',p:145.00,com:3},
   {sku:'SUNSU-43',n:'Facial de Geisha',p:145.00,com:3},
   {sku:'SUNSU-52',n:'Facial de Ginseng',p:95.00,com:3},
@@ -310,6 +312,10 @@ const FACIALES=[
 
 const EXTRAS=[
   {sku:'SUNSU-07',n:'Dermaplaning',t:15.00},
+  {sku:'SUNSU-08',n:'Mascarilla Hidroplástica Aqua',t:12.00},
+  {sku:'SUNSU-12',n:'Ampolla Especial Brillo',t:10.00},
+  {sku:'SUNSU-13',n:'Ampolla Especial Elasticidad',t:10.00},
+  {sku:'SUNSU-14',n:'Ampolla Especial Hidratación',t:10.00},
   {sku:'SUNSU-15',n:'Ampolla Especial Purificación',t:10.00},
   {sku:'SUNSU-16',n:'Peeling Enzimático',t:12.00},
   {sku:'SUNSU-31',n:'PDRN Serum',t:20.00},
@@ -327,8 +333,10 @@ const PAQ3=[
   {sku:'SUNSU-19',n:'x3 7 Pieles',p:166.20},
   {sku:'SUNSU-20',n:'x3 Facial Gold-Aging',p:166.20},
   {sku:'SUNSU-21',n:'x3 Facial Porcelana',p:166.20},
+  {sku:'SUNSU-22',n:'x3 Facial Rice Flow',p:205.28},
   {sku:'SUNSU-29',n:'x3 Faciales Mixtos',p:174.25},
   {sku:'SUNSU-44',n:'x3 Facial Reset 3x1',p:243.22},
+  {sku:'SUNSU-45',n:'x3 Facial Domo de Oxígeno',p:243.22},
   {sku:'SUNSU-46',n:'x3 Facial Peeling Marino',p:370.70},
   {sku:'SUNSU-47',n:'x3 Facial de Geisha',p:370.70},
   {sku:'SUNSU-53',n:'x3 Facial de Ginseng',p:243.22},
@@ -341,8 +349,10 @@ const PAQ6=[
   {sku:'SUNSU-25',n:'x6 7 Pieles',p:332.35},
   {sku:'SUNSU-26',n:'x6 Facial Gold-Aging',p:332.35},
   {sku:'SUNSU-27',n:'x6 Facial Porcelana',p:332.35},
+  {sku:'SUNSU-28',n:'x6 Facial Rice Flow',p:410.55},
   {sku:'SUNSU-30',n:'x6 Faciales Mixtos',p:348.50},
   {sku:'SUNSU-48',n:'x6 Facial Reset 3x1',p:486.45},
+  {sku:'SUNSU-49',n:'x6 Facial Domo de Oxígeno',p:486.45},
   {sku:'SUNSU-50',n:'x6 Facial Peeling Marino',p:739.50},
   {sku:'SUNSU-51',n:'x6 Facial de Geisha',p:739.50},
   {sku:'SUNSU-54',n:'x6 Facial de Ginseng',p:486.45},
@@ -352,12 +362,15 @@ const PAQ6=[
 const PROVS=[
   {id:'ht',label:'HT — ANUA',sub:'Hebetronic S.A',color:'var(--ht)',colorL:'var(--ht-l)',badge:'#5B8FA8',
    prods:[
+    {sku:'SUNSU-HT-001',n:'Heartleaf Cleansing Oil 200ml',p:35.99},
     {sku:'SUNSU-HT-002',n:'Niacinamide 10%+TXA 4% Serum 30ml',p:43.99},
     {sku:'SUNSU-HT-003',n:'Heartleaf Quercetinol Cleansing Foam',p:26.99},
     {sku:'SUNSU-HT-004',n:'Heartleaf 77% Soothing Toner 250ml',p:38.99},
     {sku:'SUNSU-HT-005',n:'Heartleaf 77 Toner Pad 70 Pads',p:41.99},
     {sku:'SUNSU-HT-006',n:'Peach 70% Niacinamide Serum 30ml',p:40.99},
     {sku:'SUNSU-HT-007',n:'Rice Ceramide 7 Hydrating Serum 50ml',p:43.99},
+    {sku:'SUNSU-HT-008',n:'Heartleaf 80% Moisture Soothing Ampoule',p:47.99},
+    {sku:'SUNSU-HT-009',n:'Peach 77 Niacinamide Essence Toner 250ml',p:38.99},
     {sku:'SUNSU-HT-010',n:'BHA 2% Gentle Exfoliating Toner 150ml',p:42.99},
     {sku:'SUNSU-HT-011',n:'Protector Solar Vitamin C SPF50+',p:26.99},
     {sku:'SUNSU-HT-012',n:'Crema Hidratante Vitamin C Brightening',p:26.99},
@@ -373,6 +386,7 @@ const PROVS=[
     {sku:'SUNSU-AS-005',n:'Serum Centella Skin Resurrection',p:30.99},
     {sku:'SUNSU-AS-006',n:'AC Clear Spot Patch',p:15.00},
     {sku:'SUNSU-AS-007',n:'Bloqueador Aqua Relaxing Sun Cream SPF50+',p:35.00},
+    {sku:'SUNSU-AS-008',n:'Cica Blemish Clear Cream',p:35.00},
   ]},
   {id:'ml',label:'ML — Dr.esthe',sub:'Dr.esthe',color:'var(--ml)',colorL:'var(--ml-l)',badge:'#7A8FB5',
    prods:[
@@ -381,6 +395,7 @@ const PROVS=[
     {sku:'SUNSU-ML-003',n:'AC Control Mousse Cleanser',p:75.00},
     {sku:'SUNSU-ML-004',n:'Skin Laser Toner',p:75.00},
     {sku:'SUNSU-ML-005',n:'Whitening A Serum',p:95.00},
+    {sku:'SUNSU-ML-006',n:'Cica Pepta Cream',p:130.00},
     {sku:'SUNSU-ML-007',n:'Sun Protection Mild',p:75.00},
     {sku:'SUNSU-ML-008',n:'AC Solution Swab',p:15.00},
     {sku:'SUNSU-ML-009',n:'PEEL-N-GLOW Cooling Pearl Mask',p:20.00},
@@ -389,17 +404,27 @@ const PROVS=[
   {id:'ph',label:'PH — APHLORA',sub:'APHLORA',color:'var(--ph)',colorL:'var(--ph-l)',badge:'#C4956A',
    prods:[
     {sku:'SUNSU-PH-001',n:'Full Moon Balance',p:44.85},
+    {sku:'SUNSU-PH-002',n:'Bump Balance',p:46.00},
     {sku:'SUNSU-PH-003',n:'Woman Balance',p:46.00},
     {sku:'SUNSU-PH-004',n:'Gut Bliss (Digestive Balance)',p:20.70},
+    {sku:'SUNSU-PH-005',n:'Reset Balance (Purifying Balance)',p:20.70},
+    {sku:'SUNSU-PH-006',n:'Mom to be Balance',p:20.70},
     {sku:'SUNSU-PH-007',n:'Skin Drops',p:28.75},
     {sku:'SUNSU-PH-008',n:'Harmony Drops (Rejuvenate Tonic)',p:28.75},
+    {sku:'SUNSU-PH-009',n:'Sleep Tonic',p:28.75},
+    {sku:'SUNSU-PH-010',n:'Scarph',p:25.00},
+    {sku:'SUNSU-PH-011',n:'Tool',p:15.00},
+    {sku:'SUNSU-PH-012',n:'Ring',p:15.00},
   ]},
   {id:'jn',label:'JN — Varios',sub:'Varios',color:'#7B68B5',colorL:'#EEE8F8',badge:'#7B68B5',
    prods:[
+    {sku:'SUNSU-JN-001',n:'Premium White Goat Milk Cream - RiRe',p:48.00},
     {sku:'SUNSU-JN-002',n:'Aloe Soothing Sun Cream SPF50 70ml',p:35.99},
     {sku:'SUNSU-JN-003',n:'Aloe Cooling Sunscreen Stick SPF/PA ++++',p:35.99},
+    {sku:'SUNSU-JN-004',n:'Air Light Anti-Wrinkle Sun Stick SPF50',p:35.99},
   ]},
 ];
+
 
 
 // ══════ STATE ══════
