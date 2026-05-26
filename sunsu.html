@@ -296,7 +296,7 @@ function syncUsersFromServer(){
 }
 
 // ══════ DATA ══════
-const FACIALES=[
+let FACIALES=[
   {sku:'SUNSU-01',n:'Facial S.O.S',p:75.00,com:2},
   {sku:'SUNSU-02',n:'Facial Reparación',p:65.00,com:2},
   {sku:'SUNSU-03',n:'7 Pieles (Arroz+H₂O)',p:65.00,com:2},
@@ -310,7 +310,7 @@ const FACIALES=[
   {sku:'SUNSU-52',n:'Facial de Ginseng',p:95.00,com:3},
 ];
 
-const EXTRAS=[
+let EXTRAS=[
   {sku:'SUNSU-07',n:'Dermaplaning',t:15.00},
   {sku:'SUNSU-08',n:'Mascarilla Hidroplástica Aqua',t:12.00},
   {sku:'SUNSU-12',n:'Ampolla Especial Brillo',t:10.00},
@@ -327,7 +327,7 @@ const EXTRAS=[
   {sku:'SUNSU-39',n:'Purificación de Espalda',t:46.00},
 ];
 
-const PAQ3=[
+let PAQ3=[
   {sku:'SUNSU-17',n:'x3 Facial S.O.S',p:191.48},
   {sku:'SUNSU-18',n:'x3 Facial Reparación',p:166.20},
   {sku:'SUNSU-19',n:'x3 7 Pieles',p:166.20},
@@ -343,7 +343,7 @@ const PAQ3=[
   {sku:'SUNSU-55',n:'x3 Glass Skin + Facial Advance',p:320.08},
 ];
 
-const PAQ6=[
+let PAQ6=[
   {sku:'SUNSU-23',n:'x6 Facial S.O.S',p:382.95},
   {sku:'SUNSU-24',n:'x6 Facial Reparación',p:332.35},
   {sku:'SUNSU-25',n:'x6 7 Pieles',p:332.35},
@@ -359,7 +359,7 @@ const PAQ6=[
   {sku:'SUNSU-56',n:'x6 Glass Skin + Facial Advance',p:673.67},
 ];
 
-const PROVS=[
+let PROVS=[
   {id:'ht',label:'HT — ANUA',sub:'Hebetronic S.A',color:'var(--ht)',colorL:'var(--ht-l)',badge:'#5B8FA8',
    prods:[
     {sku:'SUNSU-HT-001',n:'Heartleaf Cleansing Oil 200ml',p:35.99},
@@ -510,7 +510,7 @@ function initApp(){
     if(!Array.isArray(items)||!items.length) return;
 
     items.forEach(function(item){
-      var activo=item.activo===true; // ONLY true if explicitly true from catalog col J
+      var activo=item.activo===true; // true only if col J = checked
 
       // ── FACIALES ──
       var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
@@ -546,8 +546,8 @@ function initApp(){
       });
     });
 
-    // Filter inactive — only keep items explicitly marked active (activo===true)
-    // Items not in catalog = keep (unknown = show)
+    // Filter: hide items explicitly marked inactive (_activo===false)
+    // Items with no _activo flag (not in catalog) = show by default
     FACIALES=FACIALES.filter(function(f){return f._activo!==false;});
     EXTRAS=EXTRAS.filter(function(e){return e._activo!==false;});
     PAQ3=PAQ3.filter(function(p){return p._activo!==false;});
