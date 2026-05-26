@@ -2982,10 +2982,33 @@ function parseCsvLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++)
 
 function cargarCatalogo(){
   var FACS=['SUNSU-01','SUNSU-02','SUNSU-03','SUNSU-04','SUNSU-05','SUNSU-06','SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
-  var EXTS=['SUNSU-07','SUNSU-15','SUNSU-16','SUNSU-31','SUNSU-32','SUNSU-33','SUNSU-36','SUNSU-37','SUNSU-38','SUNSU-39'];
-  var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-47','SUNSU-53','SUNSU-55'];
-  var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-51','SUNSU-54','SUNSU-56'];
+  var EXTS=['SUNSU-07','SUNSU-08','SUNSU-12','SUNSU-13','SUNSU-14','SUNSU-15','SUNSU-16','SUNSU-31','SUNSU-32','SUNSU-33','SUNSU-36','SUNSU-37','SUNSU-38','SUNSU-39'];
+  var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55'];
+  var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56'];
   var C3=['SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
+  // Name map — use clean names, not catalog UPPERCASE
+  var NOMBRES={
+    'SUNSU-01':'Facial S.O.S','SUNSU-02':'Facial Reparación','SUNSU-03':'7 Pieles (Arroz+H₂O)',
+    'SUNSU-04':'Facial Gold-Aging','SUNSU-05':'Facial Porcelana','SUNSU-06':'Facial Rice Flow',
+    'SUNSU-40':'Facial Reset 3x1','SUNSU-41':'Facial Domo de Oxígeno','SUNSU-42':'Facial Peeling Marino de Perla',
+    'SUNSU-43':'Facial de Geisha','SUNSU-52':'Facial de Ginseng',
+    'SUNSU-07':'Dermaplaning','SUNSU-08':'Mascarilla Hidroplástica','SUNSU-12':'Ampolla Especial Brillo',
+    'SUNSU-13':'Ampolla Especial Elasticidad','SUNSU-14':'Ampolla Especial Hidratación',
+    'SUNSU-15':'Ampolla Especial Purificación','SUNSU-16':'Peeling Enzimático',
+    'SUNSU-31':'PDRN Serum','SUNSU-32':'Exosome Serum','SUNSU-33':'Skin Análisis',
+    'SUNSU-36':'Yoga Facial Drenante','SUNSU-37':'Depilación Hilo Cejas y Bigote',
+    'SUNSU-38':'Depilación Hilo Cejas','SUNSU-39':'Purificación de Espalda',
+    'SUNSU-17':'x3 Facial S.O.S','SUNSU-18':'x3 Facial Reparación','SUNSU-19':'x3 7 Pieles',
+    'SUNSU-20':'x3 Facial Gold-Aging','SUNSU-21':'x3 Facial Porcelana','SUNSU-22':'x3 Facial Rice Flow',
+    'SUNSU-29':'x3 Faciales Mixtos','SUNSU-44':'x3 Facial Reset 3x1','SUNSU-45':'x3 Facial Domo de Oxígeno',
+    'SUNSU-46':'x3 Facial Peeling Marino','SUNSU-47':'x3 Facial de Geisha','SUNSU-53':'x3 Facial de Ginseng',
+    'SUNSU-55':'x3 Glass Skin + Facial Advance',
+    'SUNSU-23':'x6 Facial S.O.S','SUNSU-24':'x6 Facial Reparación','SUNSU-25':'x6 7 Pieles',
+    'SUNSU-26':'x6 Facial Gold-Aging','SUNSU-27':'x6 Facial Porcelana','SUNSU-28':'x6 Facial Rice Flow',
+    'SUNSU-30':'x6 Faciales Mixtos','SUNSU-48':'x6 Facial Reset 3x1','SUNSU-49':'x6 Facial Domo de Oxígeno',
+    'SUNSU-50':'x6 Facial Peeling Marino','SUNSU-51':'x6 Facial de Geisha','SUNSU-54':'x6 Facial de Ginseng',
+    'SUNSU-56':'x6 Glass Skin + Facial Advance',
+  };
   fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv')
     .then(function(r){return r.text();})
     .then(function(csv){
@@ -3009,8 +3032,9 @@ function cargarCatalogo(){
       if(iNom<0) iNom=1;
       if(iTot<0) iTot=5;
       if(iSub<0) iSub=3;
+      var iActivo=9; // col J (index 9) = ACTIVO checkbox
 
-      var nF=[],nE=[],nP3=[],nP6=[],nHT=[],nAS=[],nML=[],nPH=[];
+      var nF=[],nE=[],nP3=[],nP6=[],nHT=[],nAS=[],nML=[],nPH=[],nJN=[];
 
       // Datos inician en fila 2 (saltar título + headers)
       var startRow=2;
@@ -3020,24 +3044,28 @@ function cargarCatalogo(){
         if(!cols[iSku])continue;
         var sku=cols[iSku].trim().replace(/"/g,'');
         if(!sku||sku==='SKU')continue;
-        var nom=(cols[iNom]||'').trim().replace(/"/g,'');
+        var nom=NOMBRES[sku]||(cols[iNom]||'').trim().replace(/"/g,'');
+
+        // Check activo — col J. Empty = active, FALSE/0 = inactive
+        var activoRaw=(cols[iActivo]||'').trim().replace(/"/g,'').toUpperCase();
+        var isActivo=activoRaw!=='FALSE'&&activoRaw!=='0'&&activoRaw!=='FALSO';
 
         // Precio: preferir TOTAL CON IVA, luego SUBTOTAL
-        // parseNumCat limpia guiones, puntos de miles, comas decimales
         var rawTot=(cols[iTot]||'').replace(/"/g,'').replace(/,/g,'').trim();
         var rawSub=(cols[iSub]||'').replace(/"/g,'').replace(/,/g,'').trim();
         var p=parseFloat(rawTot)||parseFloat(rawSub)||0;
 
-        if(p===0) continue; // saltar filas sin precio (separadores, etc.)
+        if(p===0) continue; // saltar filas sin precio
 
-        if(FACS.indexOf(sku)>=0)       nF.push({sku:sku,n:nom,p:p,com:C3.indexOf(sku)>=0?3:2});
-        else if(EXTS.indexOf(sku)>=0)  nE.push({sku:sku,n:nom,t:p});
-        else if(P3S.indexOf(sku)>=0)   nP3.push({sku:sku,n:nom,p:p});
-        else if(P6S.indexOf(sku)>=0)   nP6.push({sku:sku,n:nom,p:p});
-        else if(sku.indexOf('-HT-')>=0) nHT.push({sku:sku,n:nom,p:p});
-        else if(sku.indexOf('-AS-')>=0) nAS.push({sku:sku,n:nom,p:p});
-        else if(sku.indexOf('-ML-')>=0) nML.push({sku:sku,n:nom,p:p});
-        else if(sku.indexOf('-PH-')>=0) nPH.push({sku:sku,n:nom,p:p});
+        if(FACS.indexOf(sku)>=0)       {if(isActivo)nF.push({sku:sku,n:nom,p:p,com:C3.indexOf(sku)>=0?3:2});}
+        else if(EXTS.indexOf(sku)>=0)  {if(isActivo)nE.push({sku:sku,n:nom,t:p});}
+        else if(P3S.indexOf(sku)>=0)   {if(isActivo)nP3.push({sku:sku,n:nom,p:p});}
+        else if(P6S.indexOf(sku)>=0)   {if(isActivo)nP6.push({sku:sku,n:nom,p:p});}
+        else if(sku.indexOf('-HT-')>=0) {if(isActivo)nHT.push({sku:sku,n:nom,p:p});}
+        else if(sku.indexOf('-AS-')>=0) {if(isActivo)nAS.push({sku:sku,n:nom,p:p});}
+        else if(sku.indexOf('-ML-')>=0) {if(isActivo)nML.push({sku:sku,n:nom,p:p});}
+        else if(sku.indexOf('-PH-')>=0) {if(isActivo)nPH.push({sku:sku,n:nom,p:p});}
+        else if(sku.indexOf('-JN-')>=0) {if(isActivo)nJN.push({sku:sku,n:nom,p:p});}
       }
 
       if(nF.length){FACIALES.length=0;nF.forEach(function(x){FACIALES.push(x);});}
@@ -3045,7 +3073,7 @@ function cargarCatalogo(){
       if(nP3.length){PAQ3.length=0;nP3.forEach(function(x){PAQ3.push(x);});}
       if(nP6.length){PAQ6.length=0;nP6.forEach(function(x){PAQ6.push(x);});}
       PROVS.forEach(function(pv){
-        var arr=pv.id==='ht'?nHT:pv.id==='as'?nAS:pv.id==='ml'?nML:pv.id==='ph'?nPH:[];
+        var arr=pv.id==='ht'?nHT:pv.id==='as'?nAS:pv.id==='ml'?nML:pv.id==='ph'?nPH:pv.id==='jn'?nJN:[];
         if(arr.length){pv.prods.length=0;arr.forEach(function(x){pv.prods.push(x);});}
       });
 
