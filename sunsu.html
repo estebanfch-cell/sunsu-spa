@@ -480,28 +480,24 @@ function initApp(){
       var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
       if(fi>=0){
         if(item.total>0) FACIALES[fi].p=item.total;
-        if(item.nombre) FACIALES[fi].n=item.nombre;
         FACIALES[fi]._activo=activo;
       }
       // ── EXTRAS ──
       var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
       if(ei>=0){
         if(item.total>0) EXTRAS[ei].t=item.total;
-        if(item.nombre) EXTRAS[ei].n=item.nombre;
         EXTRAS[ei]._activo=activo;
       }
       // ── PAQ3 ──
       var p3=PAQ3.findIndex(function(p){return p.sku===item.sku;});
       if(p3>=0){
         if(item.total>0) PAQ3[p3].p=item.total;
-        if(item.nombre) PAQ3[p3].n=item.nombre;
         PAQ3[p3]._activo=activo;
       }
       // ── PAQ6 ──
       var p6=PAQ6.findIndex(function(p){return p.sku===item.sku;});
       if(p6>=0){
         if(item.total>0) PAQ6[p6].p=item.total;
-        if(item.nombre) PAQ6[p6].n=item.nombre;
         PAQ6[p6]._activo=activo;
       }
       // ── PROVS (products) ──
@@ -509,7 +505,6 @@ function initApp(){
         var pi=pv.prods.findIndex(function(p){return p.sku===item.sku;});
         if(pi>=0){
           if(item.total>0) pv.prods[pi].p=item.total;
-          if(item.nombre) pv.prods[pi].n=item.nombre;
           pv.prods[pi]._activo=activo;
         }
       });
