@@ -6,12 +6,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.05.25.23 -->
+<!-- v2026.05.25.24 -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Force cache bust on load — if URL doesn't have version param, add it
 (function(){
-  var v='20260525.23';
+  var v='20260525.24';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -4435,8 +4435,7 @@ function ejecutarBusqueda(){
   res.innerHTML=html;
 }
 
-cargarCatalogo();
-cargarCatalogo();
+// cargarCatalogo handled by initApp via getCatalogo endpoint
 </script>
 </body>
 </html>
