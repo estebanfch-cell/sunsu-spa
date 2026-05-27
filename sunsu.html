@@ -492,8 +492,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],['caja','💵 Caja'],['roles','📄 Roles']];
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // Load catalog to update prices, names and filter inactive items
@@ -579,6 +579,7 @@ function showTab(id,btn){
   else if(id==='admin') renderAdmin(c);
   else if(id==='caja') renderCajaChica(c);
   else if(id==='roles') renderRoles(c).catch(function(e){ c.innerHTML='<div style="padding:20px;color:red">❌ Error: '+e.message+'</div>'; });
+  else if(id==='permisos') renderPermisos(c).catch(function(e){ c.innerHTML='<div style="padding:20px;color:red">❌ Error: '+e.message+'</div>'; });
 }
 
 // ══════ ACCORDION HELPERS ══════
@@ -4858,7 +4859,15 @@ async function descargarRol(sheetName, cedula, btnEl) {
     return;
   }
 
-  var html = generarHtmlRol(res.data, sheetName.replace('_',' '));
+  // Fetch multas detail for this employee
+  var multasDetalle = [];
+  try {
+    var cedula2 = cedula;
+    // Get multas from the historial if available, or from the rol data
+    // For now use what came in res.data - extend with separate call if needed
+    multasDetalle = res.data.multasDetalle || [];
+  } catch(e2) {}
+  var html = generarHtmlRol(res.data, sheetName.replace('_',' '), multasDetalle);
 
   // Modal inline
   var modal = document.getElementById('rol-modal');
@@ -4897,7 +4906,7 @@ function imprimirRol() {
   if (iframe) iframe.contentWindow.print();
 }
 
-function generarHtmlRol(d, mes) {
+function generarHtmlRol(d, mes, multas) {
   const fmt = v => '$' + (parseFloat(v)||0).toFixed(2);
   return `<!DOCTYPE html>
 <html>
@@ -4954,7 +4963,11 @@ function generarHtmlRol(d, mes) {
     <div>
       <div class="section-title">DEDUCCIONES</div>
       <div class="row"><span>Aporte IESS 9.45%</span><span>${fmt(d.iess)}</span></div>
-      <div class="row"><span>Otros egresos</span><span>${fmt(d.egresos)}</span></div>
+      ${parseFloat(d.anticipo||0)>0 ? '<div class="row"><span>Anticipo / Préstamo</span><span>'+fmt(d.anticipo)+'</span></div>' : ''}
+      ${parseFloat(d.prestHip||0)>0 ? '<div class="row"><span>Préstamo IESS Hipotecario</span><span>'+fmt(d.prestHip)+'</span></div>' : ''}
+      ${parseFloat(d.prestQuir||0)>0 ? '<div class="row"><span>Préstamo IESS Quirografario</span><span>'+fmt(d.prestQuir)+'</span></div>' : ''}
+      ${multas && multas.filter(function(m){return m.tipo==='DESCUENTO';}).length>0 ? '<div class="row"><span>Descuentos</span><span>'+fmt(multas.filter(function(m){return m.tipo==='DESCUENTO';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
+      ${multas && multas.filter(function(m){return m.tipo==='MULTA';}).length>0 ? '<div class="row"><span>Multas</span><span>'+fmt(multas.filter(function(m){return m.tipo==='MULTA';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
       <div class="total-row"><span>TOTAL DEDUCCIONES</span><span>${fmt(parseFloat(d.iess)+parseFloat(d.egresos))}</span></div>
     </div>
   </div>
@@ -4968,8 +4981,321 @@ function generarHtmlRol(d, mes) {
     <div class="firma">${d.nombre.toUpperCase()}</div>
     <p style="margin-top:4px;font-size:10px;color:#888">Recibí conforme</p>
   </div>
+
+  ${multas && multas.length > 0 ? '<div style="margin-top:24px;border-top:2px solid #3D5A7A;padding-top:12px">' +
+    '<div style="background:#3D5A7A;color:#fff;padding:6px 10px;font-weight:bold;font-size:11px;border-radius:4px 4px 0 0">DETALLE MULTAS Y DESCUENTOS</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:10px">' +
+      '<tr style="background:#EEF3FA">' +
+        '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #ddd">TIPO</th>' +
+        '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #ddd">MOTIVO</th>' +
+        '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #ddd">MONTO</th>' +
+      '</tr>' +
+      multas.map(function(m,i){ return '<tr style="background:' + (i%2===0?'#fff':'#f9f9f9') + '">' +
+        '<td style="padding:5px 8px;color:' + (m.tipo==='MULTA'?'#B86B6B':'#C4943A') + ';font-weight:600">' + m.tipo + '</td>' +
+        '<td style="padding:5px 8px">' + m.motivo + '</td>' +
+        '<td style="padding:5px 8px;text-align:right">$' + parseFloat(m.monto).toFixed(2) + '</td>' +
+      '</tr>'; }).join('') +
+    '</table>' +
+    '<p style="font-size:9px;color:#888;margin-top:6px">MULTA = Descuento por incumplimiento de normas internas | DESCUENTO = Descuento acordado (ej: productos, sándalo)</p>' +
+  '</div>' : ''}
 </body>
 </html>`;
+}
+
+
+// ════════════════════════════════════════════
+// 🏖️ PERMISOS — solicitudes de tiempo libre
+// ════════════════════════════════════════════
+var TIPOS_PERMISO = [
+  {id:'medico',    label:'Permiso médico / cita IESS / judicial', unidad:'horas',  remunerado:true},
+  {id:'personal',  label:'Permiso personal no remunerado',        unidad:'horas',  remunerado:false},
+  {id:'enfermedad',label:'Enfermedad justificada con certificado', unidad:'dias',   remunerado:true},
+  {id:'calamidad', label:'Fallecimiento / calamidad familiar',     unidad:'dias',   remunerado:true},
+  {id:'maternidad',label:'Licencia de maternidad',                 unidad:'dias',   remunerado:true},
+  {id:'capacit',   label:'Capacitación o reunión interna',        unidad:'dias',   remunerado:true},
+  {id:'vacaciones',label:'Vacaciones anuales',                     unidad:'dias',   remunerado:true},
+];
+
+async function renderPermisos(c) {
+  var isAdmin = CU && (CU.role==='admin' || CU.role==='admin_master');
+  c.innerHTML =
+    '<div style="padding:16px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+      '<h2 style="font-size:16px;font-weight:600;margin:0">🏖️ Permisos</h2>' +
+      (!isAdmin ? '<button onclick="abrirSolicitudPermiso()" style="background:#3D5A7A;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:600">+ Solicitar Permiso</button>' : '') +
+    '</div>' +
+    '<div id="permisos-loading" style="text-align:center;color:#888;padding:40px">⏳ Cargando...</div>' +
+    '<div id="permisos-content" style="display:none"></div>' +
+    '</div>';
+
+  var res;
+  try {
+    var r = await fetch(APPS_SCRIPT_URL + '?action=getPermisos&_t=' + Date.now());
+    res = await r.json();
+  } catch(e) {
+    document.getElementById('permisos-loading').innerHTML = '<div style="color:red">❌ Error: ' + e.message + '</div>';
+    return;
+  }
+
+  document.getElementById('permisos-loading').style.display = 'none';
+  var ct = document.getElementById('permisos-content');
+  ct.style.display = 'block';
+
+  var permisos = (res.ok && res.data) ? res.data : [];
+
+  // Filtrar según rol
+  if (!isAdmin) {
+    var miNombre = CU.name || '';
+    permisos = permisos.filter(function(p) {
+      return p.empleada && p.empleada.toLowerCase().indexOf(miNombre.toLowerCase().split(' ')[0]) >= 0;
+    });
+  }
+
+  // Separar pendientes y resto
+  var pendientes = permisos.filter(function(p){ return p.estado === 'PENDIENTE'; });
+  var otros      = permisos.filter(function(p){ return p.estado !== 'PENDIENTE'; });
+
+  var html = '';
+
+  // Pendientes (admins con botones de acción)
+  if (pendientes.length > 0) {
+    html += '<div style="margin-bottom:20px">' +
+      '<div style="background:#C4943A;color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;font-weight:600;font-size:13px">' +
+        '⏳ Pendientes (' + pendientes.length + ')' +
+      '</div>' +
+      '<div style="border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px">';
+
+    pendientes.forEach(function(p, i) {
+      html += renderPermisoRow(p, i, isAdmin, true);
+    });
+    html += '</div></div>';
+  }
+
+  // Historial
+  if (otros.length > 0) {
+    html += '<div>' +
+      '<div style="background:#5B7FA6;color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;font-weight:600;font-size:13px">' +
+        '📋 Historial' +
+      '</div>' +
+      '<div style="border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px">';
+    otros.forEach(function(p, i) {
+      html += renderPermisoRow(p, i, isAdmin, false);
+    });
+    html += '</div></div>';
+  }
+
+  if (!pendientes.length && !otros.length) {
+    html = '<div style="text-align:center;color:#888;padding:40px">No hay solicitudes de permiso aún.</div>';
+  }
+
+  ct.innerHTML = html;
+}
+
+function renderPermisoRow(p, i, isAdmin, showActions) {
+  var estadoColor = p.estado==='APROBADO' ? '#2D7A4F' : p.estado==='RECHAZADO' ? '#B86B6B' : '#C4943A';
+  var estadoIcon  = p.estado==='APROBADO' ? '✅' : p.estado==='RECHAZADO' ? '❌' : '⏳';
+  var tipo = TIPOS_PERMISO.find(function(t){ return t.id === p.tipo; });
+  var tipoLabel = tipo ? tipo.label : p.tipo;
+  var remLabel = (tipo && !tipo.remunerado) ? ' · No remunerado' : '';
+
+  var row = '<div style="padding:12px 14px;border-bottom:1px solid #f5f5f5;background:' + (i%2===0?'#fff':'#f9f9f9') + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+      '<div style="flex:1">' +
+        '<div style="font-weight:600;font-size:13px">' + p.empleada + '</div>' +
+        '<div style="font-size:12px;color:#555;margin-top:2px">' + tipoLabel + remLabel + '</div>' +
+        '<div style="font-size:11px;color:#888;margin-top:2px">' +
+          p.fechaInicio + (p.fechaFin && p.fechaFin!==p.fechaInicio ? ' → ' + p.fechaFin : '') +
+          (p.horas ? ' · ' + p.horas + 'h' : '') +
+        '</div>' +
+        (p.motivo ? '<div style="font-size:11px;color:#666;margin-top:3px;font-style:italic">"' + p.motivo + '"</div>' : '') +
+        (p.urlFoto ? '<a href="' + p.urlFoto + '" target="_blank" style="font-size:11px;color:#3D5A7A;text-decoration:none">📎 Ver certificado</a>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:8px">' +
+        '<span style="font-size:11px;font-weight:600;color:' + estadoColor + '">' + estadoIcon + ' ' + p.estado + '</span>';
+
+  if (isAdmin && showActions) {
+    row +=
+      '<div style="display:flex;gap:6px">' +
+        '<button data-pid="' + p.id + '" data-est="APROBADO" onclick="accionPermiso(this)" ' +
+          'style="background:#2D7A4F;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">✅ Aprobar</button>' +
+        '<button data-pid="' + p.id + '" data-est="RECHAZADO" onclick="accionPermiso(this)" ' +
+          'style="background:#B86B6B;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">❌ Rechazar</button>' +
+      '</div>';
+  }
+
+  row += '</div></div></div>';
+  return row;
+}
+
+function abrirSolicitudPermiso() {
+  var modal = document.getElementById('permiso-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'permiso-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    document.body.appendChild(modal);
+  }
+
+  var opcionesHtml = TIPOS_PERMISO.map(function(t){
+    return '<option value="' + t.id + '" data-unidad="' + t.unidad + '">' + t.label + '</option>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+        '<h3 style="margin:0;font-size:15px;color:#3D5A7A">🏖️ Solicitar Permiso</h3>' +
+        '<button onclick="document.getElementById(\'permiso-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>' +
+      '</div>' +
+
+      '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">Tipo de permiso</label>' +
+      '<select id="perm-tipo" onchange="actualizarFormPermiso()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:12px">' +
+        opcionesHtml +
+      '</select>' +
+
+      '<div id="perm-fecha-unica" style="margin-bottom:12px">' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">Fecha inicio</label>' +
+        '<input type="date" id="perm-fecha-inicio" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box">' +
+      '</div>' +
+
+      '<div id="perm-fecha-fin-div" style="margin-bottom:12px">' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">Fecha fin</label>' +
+        '<input type="date" id="perm-fecha-fin" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box">' +
+      '</div>' +
+
+      '<div id="perm-horas-div" style="margin-bottom:12px;display:none">' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">Horas solicitadas</label>' +
+        '<input type="number" id="perm-horas" min="0.5" max="8" step="0.5" value="1" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box">' +
+      '</div>' +
+
+      '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">Motivo</label>' +
+      '<textarea id="perm-motivo" rows="3" placeholder="Describe brevemente el motivo..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;resize:none;margin-bottom:12px"></textarea>' +
+
+      '<div id="perm-foto-div" style="display:none;margin-bottom:16px">' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px">📎 Foto del certificado médico</label>' +
+        '<input type="file" id="perm-foto" accept="image/*" capture="camera" ' +
+          'style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box">' +
+        '<div id="perm-foto-preview" style="margin-top:8px"></div>' +
+      '</div>' +
+
+      '<button onclick="enviarSolicitudPermiso()" style="width:100%;background:#3D5A7A;color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Enviar Solicitud</button>' +
+    '</div>';
+
+  // Set today as default date
+  var hoy = new Date().toISOString().slice(0,10);
+  document.getElementById('perm-fecha-inicio').value = hoy;
+  document.getElementById('perm-fecha-fin').value = hoy;
+  actualizarFormPermiso();
+}
+
+function actualizarFormPermiso() {
+  var sel = document.getElementById('perm-tipo');
+  if (!sel) return;
+  var unidad = sel.options[sel.selectedIndex].getAttribute('data-unidad');
+  var tipo = sel.value;
+  document.getElementById('perm-horas-div').style.display = unidad === 'horas' ? 'block' : 'none';
+  document.getElementById('perm-fecha-fin-div').style.display = unidad === 'dias' ? 'block' : 'none';
+  // Mostrar campo de foto solo para permiso médico y enfermedad
+  var fotoDiv = document.getElementById('perm-foto-div');
+  if (fotoDiv) fotoDiv.style.display = (tipo === 'medico' || tipo === 'enfermedad') ? 'block' : 'none';
+  // Preview de foto
+  var fotoInput = document.getElementById('perm-foto');
+  if (fotoInput) fotoInput.onchange = function() {
+    var preview = document.getElementById('perm-foto-preview');
+    if (this.files && this.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:6px;margin-top:4px">';
+      };
+      reader.readAsDataURL(this.files[0]);
+    }
+  };
+}
+
+async function enviarSolicitudPermiso() {
+  // Prevent double submission
+  var submitBtn = document.querySelector('#permiso-modal button:last-child');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Enviando...'; }
+  var tipo       = document.getElementById('perm-tipo').value;
+  var fechaInicio= document.getElementById('perm-fecha-inicio').value;
+  var fechaFin   = document.getElementById('perm-fecha-fin').value || fechaInicio;
+  var horas      = document.getElementById('perm-horas').value;
+  var motivo     = document.getElementById('perm-motivo').value.trim();
+  var sel        = document.getElementById('perm-tipo');
+  var unidad     = sel.options[sel.selectedIndex].getAttribute('data-unidad');
+
+  if (!fechaInicio) { alert('Selecciona una fecha'); return; }
+  if (!motivo)      { alert('Escribe el motivo'); return; }
+
+  // Leer foto si existe (como base64)
+  var fotoBase64 = null;
+  var fotoInput = document.getElementById('perm-foto');
+  if (fotoInput && fotoInput.files && fotoInput.files[0]) {
+    fotoBase64 = await new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function(e) { resolve(e.target.result); };
+      reader.readAsDataURL(fotoInput.files[0]);
+    });
+  }
+
+  var payload = {
+    empleada:   CU.name,
+    tipo:       tipo,
+    fechaInicio:fechaInicio,
+    fechaFin:   unidad === 'dias' ? fechaFin : fechaInicio,
+    horas:      unidad === 'horas' ? horas : null,
+    motivo:     motivo,
+    estado:     'PENDIENTE',
+    solicitado: new Date().toISOString().slice(0,10),
+    foto:       fotoBase64,
+  };
+
+  try {
+    var r = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({accion: 'savePermiso', permiso: payload})
+    });
+    var res = await r.json();
+    if (res.ok) {
+      var m = document.getElementById('permiso-modal');
+      if (m) m.remove();
+      alert('✅ Solicitud enviada. Pendiente de aprobación.');
+      var ct = document.getElementById('content');
+      if (ct) renderPermisos(ct);
+    } else {
+      alert('❌ Error: ' + (res.error||'No se pudo enviar'));
+    }
+  } catch(e) {
+    alert('❌ Error de conexión: ' + e.message);
+  }
+}
+
+async function accionPermiso(btn) {
+  var id     = btn.dataset ? btn.dataset.pid : btn.getAttribute('data-pid');
+  var estado = btn.dataset ? btn.dataset.est : btn.getAttribute('data-est');
+  if (!id || !estado) { alert('Error: datos del permiso no disponibles'); return; }
+  var confirmMsg = estado === 'APROBADO'
+    ? '¿Aprobar este permiso? Recuerda registrarlo también en Jibble.'
+    : '¿Rechazar este permiso?';
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    var r = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({accion: 'updatePermiso', id: id, estado: estado, aprobadoPor: CU.name})
+    });
+    var res = await r.json();
+    if (res.ok) {
+      var ct = document.getElementById('content');
+      renderPermisos(ct);
+      if (estado === 'APROBADO') {
+        alert('✅ Permiso aprobado. Regístralo en Jibble → Tiempo Libre.');
+      }
+    } else {
+      alert('❌ Error: ' + (res.error||'No se pudo actualizar'));
+    }
+  } catch(e) {
+    alert('❌ Error: ' + e.message);
+  }
 }
 
 </script>
