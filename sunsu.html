@@ -492,8 +492,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],['caja','💵 Caja']];
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],['caja','💵 Caja'],['roles','📄 Roles']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // Load catalog to update prices, names and filter inactive items
@@ -578,6 +578,7 @@ function showTab(id,btn){
   else if(id==='kpis') renderKpis(c);
   else if(id==='admin') renderAdmin(c);
   else if(id==='caja') renderCajaChica(c);
+  else if(id==='roles') renderRoles(c).catch(function(e){ c.innerHTML='<div style="padding:20px;color:red">❌ Error: '+e.message+'</div>'; });
 }
 
 // ══════ ACCORDION HELPERS ══════
@@ -4589,17 +4590,26 @@ function _cajaEnviarGasto(){
   if(!monto||monto<=0){toast('Ingresa un monto válido','#B86B6B');return;}
   var btn=document.querySelector('#caja-forms button');
   _cajaSetLoading(true,'cg');
-  fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({cajaAction:'gasto',desc:desc.trim(),monto:monto,quien:quien,justif:justif.trim(),
-      registradoPor:CU.name, tsApp:new Date().toISOString()})})
-    .then(function(){
+  var _cgUrl=APPS_SCRIPT_URL
+    +'?action=cajaGasto'
+    +'&desc='+encodeURIComponent(desc.trim())
+    +'&monto='+encodeURIComponent(monto)
+    +'&quien='+encodeURIComponent(quien)
+    +'&justif='+encodeURIComponent(justif.trim())
+    +'&registradoPor='+encodeURIComponent(CU.name)
+    +'&tsApp='+encodeURIComponent(new Date().toISOString())
+    +'&_t='+Date.now();
+  fetch(_cgUrl)
+    .then(function(r){return r.json();})
+    .then(function(d){
       _cajaSetLoading(false,'cg');
-      _cajaMsg('✅ Gasto registrado — $'+monto.toFixed(2)+' · '+desc.trim(),true);
+      if(d.error){_cajaMsg('❌ '+d.error,false);return;}
+      _cajaMsg(d.msg||'✅ Gasto registrado',true);
       document.getElementById('cg-desc').value='';
       document.getElementById('cg-monto').value='';
       document.getElementById('cg-justif').value='';
-      // Esperar 2s para que GAS procese y luego refrescar
-      setTimeout(function(){_cajaCargarSaldo();_cajaCargarMovimientos();},2000);
+      _cajaCargarSaldo();
+      _cajaCargarMovimientos();
     })
     .catch(function(e){_cajaSetLoading(false,'cg');_cajaMsg('❌ Error: '+e.message,false);});
 }
@@ -4612,26 +4622,39 @@ function _cajaEnviarDeposito(){
   if(!monto||monto<=0){toast('Ingresa un monto válido','#B86B6B');return;}
   if(!deposita.trim()){toast('Escribe quién deposita','#B86B6B');return;}
   _cajaSetLoading(true,'cd');
-  fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({cajaAction:'deposito',monto:monto,entrega:entrega,deposita:deposita.trim(),banco:banco.trim(),
-      registradoPor:CU.name, tsApp:new Date().toISOString()})})
-    .then(function(){
+  var _cdUrl=APPS_SCRIPT_URL
+    +'?action=cajaDeposito'
+    +'&monto='+encodeURIComponent(monto)
+    +'&entrega='+encodeURIComponent(entrega)
+    +'&deposita='+encodeURIComponent(deposita.trim())
+    +'&banco='+encodeURIComponent(banco.trim())
+    +'&registradoPor='+encodeURIComponent(CU.name)
+    +'&tsApp='+encodeURIComponent(new Date().toISOString())
+    +'&_t='+Date.now();
+  fetch(_cdUrl)
+    .then(function(r){return r.json();})
+    .then(function(d){
       _cajaSetLoading(false,'cd');
-      _cajaMsg('✅ Depósito registrado — $'+monto.toFixed(2),true);
+      if(d.error){_cajaMsg('❌ '+d.error,false);return;}
+      _cajaMsg(d.msg||'✅ Depósito registrado',true);
       document.getElementById('cd-monto').value='';
       document.getElementById('cd-deposita').value='';
       document.getElementById('cd-banco').value='';
-      setTimeout(function(){_cajaCargarSaldo();_cajaCargarMovimientos();},2000);
+      _cajaCargarSaldo();
+      _cajaCargarMovimientos();
     })
     .catch(function(e){_cajaSetLoading(false,'cd');_cajaMsg('❌ Error: '+e.message,false);});
 }
 
 function _cajaSincronizar(){
   _cajaSetLoadingBtn('caja-sync-btn',true,'⏳ Sincronizando...');
-  fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({cajaAction:'sync'})})
-    .then(function(){
-      _cajaMsg('✅ Sincronizando... los datos aparecerán en unos segundos',true);
-      setTimeout(function(){_cajaCargarSaldo();_cajaCargarMovimientos();},3000);
+  fetch(APPS_SCRIPT_URL+'?action=cajaSync&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){_cajaMsg('❌ '+d.error,false);return;}
+      _cajaMsg(d.msg||'✅ Sincronizado',true);
+      _cajaCargarSaldo();
+      _cajaCargarMovimientos();
     })
     .catch(function(e){_cajaMsg('❌ Error: '+e.message,false);});
 }
@@ -4680,6 +4703,275 @@ function _cajaCargarMovimientos(){
 }
 
 // cargarCatalogo handled by initApp via getCatalogo endpoint
+
+// ════════════════════════════════════════════
+// 📄 ROLES — historial de roles de pago
+// ════════════════════════════════════════════
+// Mapa de cédulas por user id
+var CEDULAS_MAP = {
+  'andrea':    '1726468133',
+  'daniela':   '1004665699',
+  'dejaneira': '1725502312',
+  'alejandra': '1750552596',
+};
+
+async function renderRoles(c) {
+  const isAdmin = CU && (CU.role==='admin' || CU.role==='admin_master');
+  const miCedula = CEDULAS_MAP[CU && CU.id] || '';
+
+  c.innerHTML = '<div style="padding:16px">' +
+    '<h2 style="font-size:16px;font-weight:600;margin-bottom:16px">📄 Roles de Pago</h2>' +
+    '<div id="roles-loading" style="text-align:center;color:#888;padding:40px">' +
+      '<div style="font-size:24px;margin-bottom:8px">⏳</div>' +
+      'Cargando historial...' +
+    '</div>' +
+    '<div id="roles-content" style="display:none"></div>' +
+  '</div>';
+
+  let res;
+  try {
+    const url = APPS_SCRIPT_URL + '?action=getRoles&_t=' + Date.now();
+    const r = await fetch(url);
+    const txt = await r.text();
+    res = JSON.parse(txt);
+  } catch(err) {
+    document.getElementById('roles-loading').innerHTML = '<div style="color:red">❌ Error: ' + err.message + '</div>';
+    return;
+  }
+  if (!res || !res.ok) {
+    document.getElementById('roles-loading').innerHTML = '<div style="color:red">❌ ' + (res&&res.error ? res.error : 'Redesplegar Sistema Central') + '</div>';
+    return;
+  }
+
+  const meses = res.data && res.data.meses ? res.data.meses : [];
+  document.getElementById('roles-loading').style.display = 'none';
+  const ct = document.getElementById('roles-content');
+  ct.style.display = 'block';
+
+  if (!meses.length) {
+    ct.innerHTML = '<div style="text-align:center;color:#888;padding:40px">No hay roles generados aún.<br>Genera el primer rol desde el sheet SUNSU RRHH.</div>';
+    return;
+  }
+
+  // Agrupar por año
+  const porAnio = {};
+  meses.forEach(function(m) {
+    const k = m.anio;
+    if (!porAnio[k]) porAnio[k] = [];
+    porAnio[k].push(m);
+  });
+
+  let html = '';
+  Object.keys(porAnio).sort().reverse().forEach(function(anio) {
+    html += '<div style="margin-bottom:20px">' +
+      '<div style="background:#3D5A7A;color:#fff;padding:10px 14px;border-radius:8px 8px 0 0;font-weight:600;cursor:pointer" onclick="toggleAnio(\'' + anio + '\')">' +
+        '📁 Roles ' + anio +
+        '<span id="arrow-' + anio + '" style="float:right">▼</span>' +
+      '</div>' +
+      '<div id="anio-' + anio + '" style="border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden">';
+
+    porAnio[anio].forEach(function(mes) {
+      const mesKey = mes.mes.toUpperCase() + '_' + mes.anio;
+
+      if (isAdmin) {
+        html += '<div style="border-bottom:1px solid #f0f0f0">' +
+          '<div style="background:#f5f8fc;padding:10px 14px;font-weight:600;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="toggleMes(\'' + mesKey + '\')">' +
+            '<span>📋 ' + mes.mes + ' ' + mes.anio + '</span>' +
+            '<span style="font-size:12px;color:#666">' + (mes.empleadas ? mes.empleadas.length : 0) + ' empleadas ▾</span>' +
+          '</div>' +
+          '<div id="mes-' + mesKey + '" style="display:none;padding:12px">' +
+            renderResumenAdmin(mes, mesKey) +
+          '</div>' +
+        '</div>';
+      } else {
+        html += '<div style="padding:12px 14px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:14px">📋 ' + mes.mes + ' ' + mes.anio + '</span>' +
+          '<button onclick="descargarRol(\'' + mesKey + '\',\'' + miCedula + '\',this)" style="background:#3D5A7A;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">⬇️ Descargar</button>' +
+        '</div>';
+      }
+    });
+    html += '</div></div>';
+  });
+
+  ct.innerHTML = html;
+}
+
+function renderResumenAdmin(mes, mesKey) {
+  var totalIngr = 0, totalPatronal = 0, totalCosto = 0;
+  var emps = mes.empleadas || [];
+  var rows = emps.map(function(emp) {
+    totalIngr     += parseFloat(emp.totalIngresos) || 0;
+    totalPatronal += parseFloat(emp.iessPatronal)  || 0;
+    totalCosto    += parseFloat(emp.costoEmpresa)  || 0;
+    var empCed = (emp.cedula||'').toString().replace('.','');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:13px">' +
+      '<div>' +
+        '<div style="font-weight:500">' + emp.nombre + '</div>' +
+        '<div style="color:#888;font-size:11px">Total: $' + (parseFloat(emp.totalIngresos)||0).toFixed(2) + ' | Patronal: $' + (parseFloat(emp.iessPatronal)||0).toFixed(2) + '</div>' +
+      '</div>' +
+      '<button onclick="descargarRol(\'' + mesKey + '\',\'' + empCed + '\',this)" style="background:#5B7FA6;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">⬇️ Descargar</button>' +
+    '</div>';
+  }).join('');
+
+  return rows +
+    '<div style="background:#EEF3FA;border-radius:8px;padding:12px;margin-top:12px">' +
+      '<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#3D5A7A">💰 Resumen del mes</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+        '<div style="background:#fff;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Total Ingresos</div><div style="font-size:15px;font-weight:600;color:#3D5A7A">$' + totalIngr.toFixed(2) + '</div></div>' +
+        '<div style="background:#fff;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">IESS Patronal</div><div style="font-size:15px;font-weight:600;color:#C4943A">$' + totalPatronal.toFixed(2) + '</div></div>' +
+        '<div style="background:#fff;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Costo Total</div><div style="font-size:15px;font-weight:600;color:#2D7A4F">$' + totalCosto.toFixed(2) + '</div></div>' +
+      '</div>' +
+    '</div>';
+}
+
+function toggleAnio(anio) {
+  var el = document.getElementById('anio-'+anio);
+  var arrow = document.getElementById('arrow-'+anio);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  arrow.textContent = el.style.display === 'none' ? '▶' : '▼';
+}
+
+function toggleMes(mesKey) {
+  var el = document.getElementById('mes-'+mesKey);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function descargarRol(sheetName, cedula, btnEl) {
+  var btn = btnEl || event.target;
+  var origText = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+
+  var res;
+  try {
+    var r = await fetch(APPS_SCRIPT_URL + '?action=getRolIndividual&sheet=' + encodeURIComponent(sheetName) + '&cedula=' + encodeURIComponent(cedula) + '&_t=' + Date.now());
+    res = await r.json();
+  } catch(err) {
+    btn.textContent = origText; btn.disabled = false;
+    alert('Error de conexión: ' + err.message);
+    return;
+  }
+
+  if (!res || !res.ok || !res.data) {
+    btn.textContent = origText; btn.disabled = false;
+    alert('No se encontró el rol. Verifica que el rol fue generado y el Sistema Central redesplegado.');
+    return;
+  }
+
+  var html = generarHtmlRol(res.data, sheetName.replace('_',' '));
+
+  // Modal inline
+  var modal = document.getElementById('rol-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rol-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:16px;box-sizing:border-box';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:700px;border-radius:8px;overflow:hidden">' +
+      '<div style="background:#3D5A7A;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="color:#fff;font-weight:600">Rol de Pagos</span>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="imprimirRol()" style="background:#fff;color:#3D5A7A;border:none;border-radius:4px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600">🖨️ Imprimir</button>' +
+          '<button onclick="document.getElementById(\'rol-modal\').remove()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:16px">✕</button>' +
+        '</div>' +
+      '</div>' +
+      '<iframe id="rol-iframe" style="width:100%;height:75vh;border:none"></iframe>' +
+    '</div>';
+  modal.style.display = 'flex';
+
+  // Load HTML into iframe via blob URL
+  var blob = new Blob([html], {type:'text/html'});
+  var blobUrl = URL.createObjectURL(blob);
+  var iframe = document.getElementById('rol-iframe');
+  iframe.src = blobUrl;
+
+  btn.textContent = origText;
+  btn.disabled = false;
+}
+
+
+function imprimirRol() {
+  var iframe = document.getElementById('rol-iframe');
+  if (iframe) iframe.contentWindow.print();
+}
+
+function generarHtmlRol(d, mes) {
+  const fmt = v => '$' + (parseFloat(v)||0).toFixed(2);
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rol de Pagos - ${d.nombre} - ${mes}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; color: #222; }
+    .header { text-align: center; background: #3D5A7A; color: white; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+    .header h1 { margin: 0; font-size: 16px; }
+    .header p { margin: 2px 0; font-size: 12px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 16px; }
+    .info-row { display: flex; gap: 8px; }
+    .info-label { font-weight: bold; min-width: 80px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .section-title { background: #ddd; padding: 4px 8px; font-weight: bold; margin-bottom: 4px; border-radius: 3px; }
+    .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #f0f0f0; }
+    .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-weight: bold; border-top: 2px solid #3D5A7A; margin-top: 4px; }
+    .gran-total { background: #EEF3FA; padding: 10px; border-radius: 6px; text-align: right; margin-top: 12px; }
+    .gran-total-num { font-size: 20px; font-weight: bold; color: #3D5A7A; }
+    .firma { margin-top: 40px; border-top: 1px solid #333; padding-top: 4px; width: 200px; text-align: center; }
+    @media print { body { margin: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>SUNSU S.A.</h1>
+    <p>RUC: 1793219469001</p>
+    <p>ROL DE PAGOS — ${mes}</p>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-row"><span class="info-label">Empleado:</span> ${d.nombre}</div>
+    <div class="info-row"><span class="info-label">C.I.:</span> ${d.cedula}</div>
+    <div class="info-row"><span class="info-label">Cargo:</span> ${d.cargo}</div>
+    <div class="info-row"><span class="info-label">Período:</span> ${mes}</div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="section-title">INGRESOS</div>
+      <div class="row"><span>Sueldo</span><span>${fmt(d.sueldo)}</span></div>
+      <div class="row"><span>Bono fijo</span><span>${fmt(d.bono)}</span></div>
+      <div class="row"><span>Com. Faciales</span><span>${fmt(d.comFaciales)}</span></div>
+      <div class="row"><span>Com. Paquetes</span><span>${fmt(d.comPaquetes)}</span></div>
+      <div class="row"><span>Com. Productos</span><span>${fmt(d.comProductos)}</span></div>
+      <div class="row"><span>Hrs Supl. 50% (${d.hrsSupl}h)</span><span>${fmt(d.valSupl)}</span></div>
+      <div class="row"><span>Hrs Extr. 100% (${d.hrsExtr}h)</span><span>${fmt(d.valExtr)}</span></div>
+      <div class="row"><span>13° Sueldo</span><span>${fmt(d.dec13)}</span></div>
+      <div class="row"><span>14° Sueldo</span><span>${fmt(d.dec14)}</span></div>
+      ${parseFloat(d.fondoReserva) > 0 ? `<div class="row"><span>Fondo de Reserva</span><span>${fmt(d.fondoReserva)}</span></div>` : ''}
+      <div class="total-row"><span>TOTAL INGRESOS</span><span>${fmt(d.totalIngresos)}</span></div>
+    </div>
+    <div>
+      <div class="section-title">DEDUCCIONES</div>
+      <div class="row"><span>Aporte IESS 9.45%</span><span>${fmt(d.iess)}</span></div>
+      <div class="row"><span>Otros egresos</span><span>${fmt(d.egresos)}</span></div>
+      <div class="total-row"><span>TOTAL DEDUCCIONES</span><span>${fmt(parseFloat(d.iess)+parseFloat(d.egresos))}</span></div>
+    </div>
+  </div>
+
+  <div class="gran-total">
+    <div style="font-size:12px;color:#666;margin-bottom:4px">TOTAL A RECIBIR</div>
+    <div class="gran-total-num">${fmt(d.totalRecibir)}</div>
+  </div>
+
+  <div style="margin-top:40px">
+    <div class="firma">${d.nombre.toUpperCase()}</div>
+    <p style="margin-top:4px;font-size:10px;color:#888">Recibí conforme</p>
+  </div>
+</body>
+</html>`;
+}
+
 </script>
 </body>
 </html>
