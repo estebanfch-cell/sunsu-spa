@@ -402,6 +402,7 @@ let PROVS=[
     {sku:'SUNSU-ML-008',n:'AC Solution Swab',p:15.00},
     {sku:'SUNSU-ML-009',n:'PEEL-N-GLOW Cooling Pearl Mask',p:20.00},
     {sku:'SUNSU-ML-010',n:'Rejuvenating Lifting Mask',p:25.00},
+    {sku:'SUNSU-ML-011',n:'Moisture Clensing Gel',p:80.00},
   ]},
   {id:'ph',label:'PH — APHLORA',sub:'APHLORA',color:'var(--ph)',colorL:'var(--ph-l)',badge:'#C4956A',
    prods:[
@@ -1540,9 +1541,10 @@ function enviarTicket(){
     'SUNSU-AS-005':38,'SUNSU-AS-006':39,'SUNSU-AS-007':40,
     'SUNSU-ML-001':41,'SUNSU-ML-002':42,'SUNSU-ML-003':43,'SUNSU-ML-004':44,
     'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-008':47,'SUNSU-ML-009':48,
-    'SUNSU-PH-001':49,'SUNSU-PH-002':50,'SUNSU-PH-003':51,'SUNSU-PH-004':52,
-    'SUNSU-PH-007':53,'SUNSU-PH-008':54,
-    'SUNSU-JN-001':55,'SUNSU-JN-002':56,'SUNSU-JN-003':57,'SUNSU-JN-004':58,
+    'SUNSU-ML-010':49,'SUNSU-ML-011':50,
+    'SUNSU-PH-001':51,'SUNSU-PH-002':52,'SUNSU-PH-003':53,'SUNSU-PH-004':54,
+    'SUNSU-PH-007':55,'SUNSU-PH-008':56,
+    'SUNSU-JN-001':57,'SUNSU-JN-002':58,'SUNSU-JN-003':59,'SUNSU-JN-004':60,
   };
   const productosPayload={};
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
