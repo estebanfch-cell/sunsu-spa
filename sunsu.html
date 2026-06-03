@@ -3004,12 +3004,19 @@ function generarTicketDesdeCita(btn){
     toast('Ticket para ' + ci.clienteNombre, '#6A9E7A');
   }, 100);
 
-  // Buscar cédula en REGISTRO por nombre+apellido
-  // Delay de 1200ms para asegurar que DOM y red estén listos
+  // Buscar cédula en REGISTRO — esperar hasta que inp-ced exista en el DOM
   if(_nombreCompleto.length >= 3) {
-    setTimeout(function(){
-      buscarEnRegistroSheet('q', _nombreCompleto);
-    }, 1200);
+    var _intentos = 0;
+    var _intervalo = setInterval(function(){
+      _intentos++;
+      var cedEl = document.getElementById('inp-ced');
+      if(cedEl) {
+        clearInterval(_intervalo);
+        buscarEnRegistroSheet('q', _nombreCompleto);
+      } else if(_intentos > 20) {
+        clearInterval(_intervalo); // máximo 2 segundos
+      }
+    }, 100);
   }
 }
 
