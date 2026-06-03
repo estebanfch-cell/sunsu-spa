@@ -845,11 +845,11 @@ function renderTicket(c){
       <div class="card">
         <div class="card-title">👤 Cliente</div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" >
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" oninput="T.cedula=this.value;clearTimeout(window._regTimer);window._regTimer=setTimeout(function(){buscarEnRegistroSheet('ced',document.getElementById('inp-ced').value);},600)">
         </div>
         <div class="two-col">
-          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre"></div>
-          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" oninput="T.nombre=this.value;clearTimeout(window._regTimerN);window._regTimerN=setTimeout(function(){var nom=document.getElementById('inp-nom').value.trim();var ape=document.getElementById('inp-ape').value.trim();if(nom&&ape){buscarEnRegistroSheet('q',nom+' '+ape);}},1000)"></div>
+          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" oninput="T.apellido=this.value;clearTimeout(window._regTimerA);window._regTimerA=setTimeout(function(){var n=document.getElementById('inp-nom').value+' '+document.getElementById('inp-ape').value;buscarEnRegistroSheet('q',n.trim());},800)"></div>
         </div>
 
         <div class="field"><label>Fecha de retorno</label><input type="date" id="inp-ret"></div>
@@ -1382,8 +1382,8 @@ function updatePreview(){
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:${T.descuento.customMode==='pct'?'7px':'0'}">
           <span style="font-size:0.7rem;opacity:0.7">${T.descuento.customMode==='pct'?'%':'$'}</span>
           <input type="number" id="dsc-custom-inp" min="0" step="${T.descuento.customMode==='pct'?'1':'0.01'}" max="${T.descuento.customMode==='pct'?'100':''}" value="${T.descuento.customMode==='pct'?(T.descuento.customPct||''):(T.descuento.custom||'')}" placeholder="${T.descuento.customMode==='pct'?'0 %':'0.00'}"
-            oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}clearTimeout(window._dscTimer);window._dscTimer=setTimeout(updatePreview,400)"
-            onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}updatePreview()"
+            oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}clearTimeout(window._dscTimer);window._dscTimer=setTimeout(function(){var v=document.getElementById('dsc-custom-inp');var sv=v?v.value:'';updatePreview();var v2=document.getElementById('dsc-custom-inp');if(v2&&document.activeElement!==v2){v2.value=sv;}},600)"
+            onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}"
             style="flex:1;padding:6px 9px;border:1.5px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:0.82rem;outline:none">
           <span style="font-size:0.65rem;opacity:0.6">${T.descuento.customMode==='pct'?'sobre':'del total'}</span>
         </div>
@@ -2756,6 +2756,38 @@ function buscarClienteEnRegistro(cedula, nombre){
   return null;
 }
 
+// ── Búsqueda de cliente en REGISTRO del sheet (bidireccional) ──
+async function buscarEnRegistroSheet(tipo, valor) {
+  if (!valor || valor.length < 3) return;
+  try {
+    var url = APPS_SCRIPT_URL + '?action=getRegistro&' + tipo + '=' + encodeURIComponent(valor) + '&_t=' + Date.now();
+    var r = await fetch(url);
+    var text = await r.text();
+    var res;
+    try { res = JSON.parse(text); } catch(pe) { console.error('Parse error:', text.slice(0,200)); return; }
+    console.log('getRegistro result for', tipo, valor, ':', res);
+    if (!res.ok || !res.data || !res.data.length) { console.log('No results found'); return; }
+    var cliente = res.data[0];
+    if (tipo === 'ced') {
+      // Buscamos por cédula → rellenar nombre y apellido
+      var nom = document.getElementById('inp-nom');
+      var ape = document.getElementById('inp-ape');
+      if (nom && !nom.value) { nom.value = cliente.nombre; T.nombre = cliente.nombre; }
+      if (ape && !ape.value) { ape.value = cliente.apellido; T.apellido = cliente.apellido; }
+    } else {
+      // Buscamos por nombre → rellenar cédula si hay match exacto
+      if (res.data.length === 1 && cliente.cedula) {
+        var ced = document.getElementById('inp-ced');
+        if (ced) {
+          ced.value = cliente.cedula;
+          T.cedula = cliente.cedula;
+          console.log('Cédula llenada:', cliente.cedula);
+        }
+      }
+    }
+  } catch(e) { /* silencioso */ }
+}
+
 function renderCitas(c){
   const hoy=new Date();
   const fecha=hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
@@ -2991,6 +3023,13 @@ function generarTicketDesdeCita(btn){
     }
     toast('Ticket prellenado para '+ci.clienteNombre,'#6A9E7A');
   },100);
+  // Buscar cédula en REGISTRO por nombre (independiente del render)
+  var _bnNom = (T.nombre+' '+T.apellido).trim();
+  if(_bnNom.length >= 3) {
+    setTimeout(function() {
+      buscarEnRegistroSheet('q', _bnNom);
+    }, 800);
+  }
 }
 
 function showAcuityConfig(){
