@@ -845,11 +845,11 @@ function renderTicket(c){
       <div class="card">
         <div class="card-title">👤 Cliente</div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" oninput="T.cedula=this.value;clearTimeout(window._regTimer);window._regTimer=setTimeout(function(){buscarEnRegistroSheet('ced',document.getElementById('inp-ced').value);},600)">
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" oninput="T.cedula=this.value;clearTimeout(window._regTimer);var _cv=this.value;if(_cv.length>=10){buscarEnRegistroSheet('ced',_cv);}else{clearTimeout(window._regTimer);window._regTimer=setTimeout(function(){buscarEnRegistroSheet('ced',document.getElementById('inp-ced').value);},300);}">
         </div>
         <div class="two-col">
-          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" oninput="T.nombre=this.value;clearTimeout(window._regTimerN);window._regTimerN=setTimeout(function(){var nom=document.getElementById('inp-nom').value.trim();var ape=document.getElementById('inp-ape').value.trim();if(nom&&ape){buscarEnRegistroSheet('q',nom+' '+ape);}},1000)"></div>
-          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" oninput="T.apellido=this.value;clearTimeout(window._regTimerA);window._regTimerA=setTimeout(function(){var n=document.getElementById('inp-nom').value+' '+document.getElementById('inp-ape').value;buscarEnRegistroSheet('q',n.trim());},800)"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" oninput="T.nombre=this.value;clearTimeout(window._regTimerN);clearTimeout(window._regTimerN);window._regTimerN=setTimeout(function(){var nom=document.getElementById('inp-nom').value.trim();var ape=document.getElementById('inp-ape').value.trim();if(nom&&ape){buscarEnRegistroSheet('q',nom+' '+ape);}},200)"></div>
+          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" oninput="T.apellido=this.value;clearTimeout(window._regTimerA);clearTimeout(window._regTimerA);var _an=document.getElementById('inp-nom').value.trim();var _aa=this.value.trim();if(_an&&_aa.length>=2){buscarEnRegistroSheet('q',_an+' '+_aa);}else{window._regTimerA=setTimeout(function(){var n=document.getElementById('inp-nom').value+' '+document.getElementById('inp-ape').value;buscarEnRegistroSheet('q',n.trim());},200);}"></div>
         </div>
 
         <div class="field"><label>Fecha de retorno</label><input type="date" id="inp-ret"></div>
@@ -2769,20 +2769,16 @@ async function buscarEnRegistroSheet(tipo, valor) {
     if (!res.ok || !res.data || !res.data.length) { console.log('No results found'); return; }
     var cliente = res.data[0];
     if (tipo === 'ced') {
-      // Buscamos por cédula → rellenar nombre y apellido
+      // Buscamos por cédula → rellenar nombre y apellido si están vacíos
       var nom = document.getElementById('inp-nom');
       var ape = document.getElementById('inp-ape');
       if (nom && !nom.value) { nom.value = cliente.nombre; T.nombre = cliente.nombre; }
       if (ape && !ape.value) { ape.value = cliente.apellido; T.apellido = cliente.apellido; }
     } else {
-      // Buscamos por nombre → rellenar cédula si hay match exacto
+      // Buscamos por nombre → siempre rellenar cédula si hay 1 resultado exacto
       if (res.data.length === 1 && cliente.cedula) {
         var ced = document.getElementById('inp-ced');
-        if (ced) {
-          ced.value = cliente.cedula;
-          T.cedula = cliente.cedula;
-          console.log('Cédula llenada:', cliente.cedula);
-        }
+        if (ced) { ced.value = cliente.cedula; T.cedula = cliente.cedula; }
       }
     }
   } catch(e) { /* silencioso */ }
@@ -2888,7 +2884,7 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
           nombre: (apt.calendar||'').trim(),
           clienteNombre: ((apt.firstName||'')+' '+(apt.lastName||'')).trim(),
           clienteEmail: apt.email||'',
-          clienteCedula: apt.phone||'',
+          clienteCedula: '',  // No usar teléfono de Acuity como cédula - REGISTRO lo llena
           servicio: apt.type||'',
           duracion: parseInt(apt.duration)||60,
           notas: apt.notes||'',
@@ -2979,56 +2975,41 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
 
 function generarTicketDesdeCita(btn){
   const id = btn.getAttribute('data-cita-id');
-  const ci = (window._citasHoy||[]).find(c=>c.id===id) || DEMO_CITAS[0];
-  const cliente=buscarClienteEnRegistro(ci.clienteCedula, ci.clienteNombre);
-  // Pre-fill ticket state
-  T=newT();
-  if(ci.clienteCedula) T.cedula=ci.clienteCedula;
-  if(cliente){ T.nombre=cliente.nombre; T.apellido=cliente.apellido; }
-  else{
-    const parts=ci.clienteNombre.split(' ');
-    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
-  }
+  const ci = (window._citasHoy||[]).find(function(c){return c.id===id;}) || DEMO_CITAS[0];
+
+  // Extraer nombre y apellido desde ci.clienteNombre (ignorar cedula de Acuity)
+  const parts = ci.clienteNombre.trim().split(' ');
+  const _nom = parts[0] || '';
+  const _ape = parts.slice(1).join(' ') || '';
+  const _nombreCompleto = (_nom + ' ' + _ape).trim();
+
+  // Pre-fill ticket state (sin cedula - la busca el REGISTRO)
+  T = newT();
+  T.nombre   = _nom;
+  T.apellido = _ape;
+
   // Switch to ticket tab
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  const ticketTab=document.querySelector('.tab');
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  const ticketTab = document.querySelector('.tab');
   if(ticketTab) ticketTab.classList.add('active');
-  const c=document.getElementById('content');
-  renderTicket(c);
-  // Fill in fields after render
-  setTimeout(()=>{
-    const ced=document.getElementById('inp-ced');
-    const nom=document.getElementById('inp-nom');
-    const ape=document.getElementById('inp-ape');
-    if(ced&&T.cedula) ced.value=T.cedula;
-    if(nom&&T.nombre) nom.value=T.nombre;
-    if(ape&&T.apellido) ape.value=T.apellido;
-    if(!cliente){
-      // Show registro notice
-      const msg=document.getElementById('cli-msg');
-      if(msg){
-        msg.style.display='block';
-        msg.style.background='var(--gold-l)';
-        msg.style.color='var(--gold)';
-        msg.textContent='🆕 Cliente nueva — completa los datos y se registrará al enviar el ticket';
-      }
-    } else {
-      const msg=document.getElementById('cli-msg');
-      if(msg){
-        msg.style.display='block';
-        msg.style.background='var(--green-l)';
-        msg.style.color='var(--green)';
-        msg.textContent='✅ Clienta encontrada — '+cliente.nombre+' '+cliente.apellido+' · '+cliente.visitas+' visitas previas';
-      }
-    }
-    toast('Ticket prellenado para '+ci.clienteNombre,'#6A9E7A');
-  },100);
-  // Buscar cédula en REGISTRO por nombre (independiente del render)
-  var _bnNom = (T.nombre+' '+T.apellido).trim();
-  if(_bnNom.length >= 3) {
-    setTimeout(function() {
-      buscarEnRegistroSheet('q', _bnNom);
-    }, 800);
+  const _cont = document.getElementById('content');
+  renderTicket(_cont);
+
+  // Llenar campos después del render
+  setTimeout(function(){
+    var nomEl = document.getElementById('inp-nom');
+    var apeEl = document.getElementById('inp-ape');
+    if(nomEl) nomEl.value = _nom;
+    if(apeEl) apeEl.value = _ape;
+    toast('Ticket para ' + ci.clienteNombre, '#6A9E7A');
+  }, 100);
+
+  // Buscar cédula en REGISTRO por nombre+apellido
+  // Delay de 1200ms para asegurar que DOM y red estén listos
+  if(_nombreCompleto.length >= 3) {
+    setTimeout(function(){
+      buscarEnRegistroSheet('q', _nombreCompleto);
+    }, 1200);
   }
 }
 
