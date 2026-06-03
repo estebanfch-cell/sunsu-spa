@@ -2777,8 +2777,18 @@ async function buscarEnRegistroSheet(tipo, valor) {
     } else {
       // Buscamos por nombre → siempre rellenar cédula si hay 1 resultado exacto
       if (res.data.length === 1 && cliente.cedula) {
+        T.cedula = cliente.cedula;
+        // Query fresh - DOM may have re-rendered
         var ced = document.getElementById('inp-ced');
-        if (ced) { ced.value = cliente.cedula; T.cedula = cliente.cedula; }
+        if (ced) {
+          ced.value = cliente.cedula;
+        } else {
+          // Try again after short delay in case DOM is still rendering
+          setTimeout(function() {
+            var ced2 = document.getElementById('inp-ced');
+            if (ced2) ced2.value = cliente.cedula;
+          }, 300);
+        }
       }
     }
   } catch(e) { /* silencioso */ }
