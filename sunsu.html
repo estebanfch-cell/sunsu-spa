@@ -426,6 +426,10 @@ let PROVS=[
     {sku:'SUNSU-JN-003',n:'Aloe Cooling Sunscreen Stick SPF/PA ++++',p:35.99},
     {sku:'SUNSU-JN-004',n:'Air Light Anti-Wrinkle Sun Stick SPF50',p:35.99},
   ]},
+  {id:'bv',label:'BV — Bruno Vassari',sub:'Bruno Vassari',color:'#8B5E83',colorL:'#F5EEF8',badge:'#8B5E83',
+   prods:[
+    {sku:'SUNSU-BV-001',n:'Lab Tech Cryo SOS Cream 15ml',p:27.00},
+  ]},
 ];
 
 
@@ -1545,6 +1549,7 @@ function enviarTicket(){
     'SUNSU-PH-001':51,'SUNSU-PH-002':52,'SUNSU-PH-003':53,'SUNSU-PH-004':54,
     'SUNSU-PH-007':55,'SUNSU-PH-008':56,
     'SUNSU-JN-001':57,'SUNSU-JN-002':58,'SUNSU-JN-003':59,'SUNSU-JN-004':60,
+    'SUNSU-BV-001':61,
   };
   const productosPayload={};
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
