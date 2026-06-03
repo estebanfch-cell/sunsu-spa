@@ -3014,7 +3014,7 @@ function generarTicketDesdeCita(btn){
     toast('Ticket para ' + ci.clienteNombre, '#6A9E7A');
   }, 100);
 
-  // Disparar búsqueda simulando oninput en apellido — esperar que DOM esté listo
+  // Simular borrar y reponer última letra del apellido para disparar búsqueda
   if(_nombreCompleto.length >= 3) {
     var _intentos = 0;
     var _intervalo = setInterval(function(){
@@ -3023,10 +3023,18 @@ function generarTicketDesdeCita(btn){
       var nomEl = document.getElementById('inp-nom');
       if(apeEl && nomEl && apeEl.value && nomEl.value) {
         clearInterval(_intervalo);
-        // Llamar directamente con el nombre completo
-        var _nom = nomEl.value.trim();
-        var _ape = apeEl.value.trim();
-        buscarEnRegistroSheet('q', _nom + ' ' + _ape);
+        var _apeVal = apeEl.value;
+        var _ultima = _apeVal.slice(-1);
+        // Quitar última letra
+        apeEl.value = _apeVal.slice(0, -1);
+        // Volver a poner después de 50ms — igual que cuando el usuario lo hace
+        setTimeout(function(){
+          apeEl.value = _apeVal;
+          // Llamar directamente la función de búsqueda
+          var n = nomEl ? nomEl.value.trim() : '';
+          var a = apeEl ? apeEl.value.trim() : '';
+          if(n && a) buscarEnRegistroSheet('q', n + ' ' + a);
+        }, 50);
       } else if(_intentos > 30) {
         clearInterval(_intervalo);
       }
