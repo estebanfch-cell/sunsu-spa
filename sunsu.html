@@ -3021,17 +3021,12 @@ function generarTicketDesdeCita(btn){
       _intentos++;
       var apeEl = document.getElementById('inp-ape');
       var nomEl = document.getElementById('inp-nom');
-      if(apeEl && nomEl && apeEl.value) {
+      if(apeEl && nomEl && apeEl.value && nomEl.value) {
         clearInterval(_intervalo);
-        // Simular escritura: quitar última letra y volver a ponerla
-        var valorOriginal = apeEl.value;
-        apeEl.value = valorOriginal.slice(0, -1);
-        setTimeout(function(){
-          apeEl.value = valorOriginal;
-          // Disparar oninput manualmente
-          var evt = new Event('input', {bubbles:true});
-          apeEl.dispatchEvent(evt);
-        }, 50);
+        // Llamar directamente con el nombre completo
+        var _nom = nomEl.value.trim();
+        var _ape = apeEl.value.trim();
+        buscarEnRegistroSheet('q', _nom + ' ' + _ape);
       } else if(_intentos > 30) {
         clearInterval(_intervalo);
       }
