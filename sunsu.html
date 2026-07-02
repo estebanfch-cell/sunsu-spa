@@ -3593,8 +3593,8 @@ function renderInventario(c){
         var m=it.sku.match(/SUNSU-([A-Z]+)-/);
         var prefix=m?m[1]:'OTROS';
         var gn=prefixNames[prefix]||('CÓDIGOS '+prefix);
-        if(!grupos[gn]) grupos[gn]=[];
-        grupos[gn].push(it);
+        if(!grupos[gnKey]) grupos[gnKey]=[];
+        grupos[gnKey].push(it);
       });
       var sinStock=items.filter(function(i){return i.alerta==='SIN STOCK';}).length;
       var bajo=items.filter(function(i){return i.alerta==='STOCK BAJO';}).length;
@@ -3672,8 +3672,9 @@ function renderEntradas(c){
         var match=it.sku.match(/SUNSU-([A-Z]+)-/);
         var prefix=match?match[1]:'OTROS';
         var gn=prefixNames[prefix]||('CÓDIGOS '+prefix);
-        if(!grupos[gn]) grupos[gn]={items:[]};
-        grupos[gn].items.push(it);
+        var gnKey=gn+'||'+(it.orden||'SIN-OC');
+        if(!grupos[gnKey]) grupos[gnKey]={nombre:gn, orden:it.orden||'', items:[]};
+        grupos[gnKey].items.push(it);
       });
       // Hide groups where ALL items already marked
       var gruposActivos={};
@@ -3688,19 +3689,20 @@ function renderEntradas(c){
       }
       Object.keys(gruposActivos).forEach(function(groupName,gi){
         var g=gruposActivos[groupName];
+        var displayName=g.nombre||groupName.split('||')[0];
         var pendientes=g.items.filter(function(it){return it.recibida===''||it.recibida===null||it.recibida===undefined;}).length;
-        var orden=g.items[0]?g.items[0].orden:'';
+        var orden=g.orden||'';
         var gid='grp-'+gi;
         html+='<div style="background:white;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'
           // Header — click on left part to toggle, Cerrar pedido button on right
           +'<div style="background:var(--navy);padding:11px 14px;display:flex;justify-content:space-between;align-items:center">'
           +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="flex:1;cursor:pointer;user-select:none">'
-          +'<div style="font-size:0.85rem;font-weight:800;color:white;letter-spacing:1px">'+groupName+'</div>'
+          +'<div style="font-size:0.85rem;font-weight:800;color:white;letter-spacing:1px">'+displayName+'</div>'
           +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.6)">'+(orden?'Orden: '+orden+' &middot; ':'')+g.items.length+' productos</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.68rem;font-weight:700;color:'+(pendientes===0?'#A8E6A3':'#FFD580')+'">'+(pendientes===0?'✅ Listo':pendientes+' pendientes')+'</span>'
-          +'<button data-gname="'+groupName+'" data-orden="'+orden+'" data-prov="'+(g.items[0]?g.items[0].proveedor||groupName:groupName)+'" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 PDF</button>'
+          +'<button data-gname="'+groupName+'" data-orden="'+orden+'" data-prov="'+(g.items[0]?g.items[0].proveedor||displayName:displayName)+'" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 PDF</button>'
           +'<button data-gname="'+groupName+'" onclick="cerrarPedidoGrupo(this)" style="padding:4px 9px;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">Cerrar</button>'
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
