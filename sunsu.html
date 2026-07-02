@@ -430,6 +430,16 @@ let PROVS=[
    prods:[
     {sku:'SUNSU-BV-001',n:'Lab Tech Cryo SOS Cream 15ml',p:27.00},
   ]},
+  {id:'su',label:'SU — SUNSU',sub:'SUNSU',color:'#B08968',colorL:'#F7F1EA',badge:'#B08968',
+   prods:[
+    {sku:'SUNSU-SU-001',n:'Lipoexosome Proxy Powder - MATRIGEN',p:75.00},
+    {sku:'SUNSU-SU-002',n:'Lipoexosome B-Archive Complex - MATRIGEN',p:75.00},
+    {sku:'SUNSU-SU-003',n:'Lipoexosome Gravity Furrow Complex - MATRIGEN',p:75.00},
+    {sku:'SUNSU-SU-004',n:'Azulene Relaxer Ampoule 50 ml - MATRIGEN',p:135.00},
+    {sku:'SUNSU-SU-005',n:'Ampoule Cleansing Foam 120 ml - LAMINARIA',p:35.00},
+    {sku:'SUNSU-SU-006',n:'Greenery Serum 35 ml - LAMINARIA',p:55.00},
+    {sku:'SUNSU-SU-007',n:'Glazed Cream 50 g - LAMINARIA',p:60.00},
+  ]},
 ];
 
 
@@ -1550,6 +1560,8 @@ function enviarTicket(){
     'SUNSU-PH-007':55,'SUNSU-PH-008':56,
     'SUNSU-JN-001':57,'SUNSU-JN-002':58,'SUNSU-JN-003':59,'SUNSU-JN-004':60,
     'SUNSU-BV-001':61,
+    'SUNSU-SU-001':62,'SUNSU-SU-002':63,'SUNSU-SU-003':64,'SUNSU-SU-004':65,
+    'SUNSU-SU-005':66,'SUNSU-SU-006':67,'SUNSU-SU-007':68,
   };
   const productosPayload={};
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
@@ -3435,9 +3447,13 @@ function guardarEdicionTicket(tkRow){
     'SUNSU-AS-005':38,'SUNSU-AS-006':39,'SUNSU-AS-007':40,
     'SUNSU-ML-001':41,'SUNSU-ML-002':42,'SUNSU-ML-003':43,'SUNSU-ML-004':44,
     'SUNSU-ML-005':45,'SUNSU-ML-007':46,'SUNSU-ML-008':47,'SUNSU-ML-009':48,
-    'SUNSU-PH-001':49,'SUNSU-PH-002':50,'SUNSU-PH-003':51,'SUNSU-PH-004':52,
-    'SUNSU-PH-007':53,'SUNSU-PH-008':54,
-    'SUNSU-JN-001':55,'SUNSU-JN-002':56,'SUNSU-JN-003':57,'SUNSU-JN-004':58,
+    'SUNSU-ML-010':49,'SUNSU-ML-011':50,
+    'SUNSU-PH-001':51,'SUNSU-PH-002':52,'SUNSU-PH-003':53,'SUNSU-PH-004':54,
+    'SUNSU-PH-007':55,'SUNSU-PH-008':56,
+    'SUNSU-JN-001':57,'SUNSU-JN-002':58,'SUNSU-JN-003':59,'SUNSU-JN-004':60,
+    'SUNSU-BV-001':61,
+    'SUNSU-SU-001':62,'SUNSU-SU-002':63,'SUNSU-SU-003':64,'SUNSU-SU-004':65,
+    'SUNSU-SU-005':66,'SUNSU-SU-006':67,'SUNSU-SU-007':68,
   };
   var productosPayload={};
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
@@ -3517,7 +3533,7 @@ function guardarEdicionTicket(tkRow){
 }
 
 function toggleExclusion(tkRow, tipo){
-  var colMap={facial:59, paquete:60, producto:61}; // BG=59, BH=60, BI=61 (1-based, after JN cols)
+  var colMap={facial:69, paquete:70, producto:71}; // BQ=69, BR=70, BS=71 (1-based, después de SU-001..007 en BJ-BP)
   var idMap={facial:'excl-fac-', paquete:'excl-paq-', producto:'excl-prod-'};
   var labelMap={facial:'💆 Facial', paquete:'📋 Paquete', producto:'🧴 Producto'};
   var col=colMap[tipo];
@@ -3587,14 +3603,14 @@ function renderInventario(c){
       return true; // not in catalog = show
     });
       if(!items.length){c.innerHTML='<div class="card">Sin datos</div>';return;}
-      var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios'};
+      var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios','BV':'BV — Bruno Vassari','SU':'SU — SUNSU'};
       var grupos={};
       items.forEach(function(it){
         var m=it.sku.match(/SUNSU-([A-Z]+)-/);
         var prefix=m?m[1]:'OTROS';
         var gn=prefixNames[prefix]||('CÓDIGOS '+prefix);
-        if(!grupos[gnKey]) grupos[gnKey]=[];
-        grupos[gnKey].push(it);
+        if(!grupos[gn]) grupos[gn]=[];
+        grupos[gn].push(it);
       });
       var sinStock=items.filter(function(i){return i.alerta==='SIN STOCK';}).length;
       var bajo=items.filter(function(i){return i.alerta==='STOCK BAJO';}).length;
