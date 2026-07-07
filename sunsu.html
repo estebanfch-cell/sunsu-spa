@@ -3698,7 +3698,10 @@ function renderEntradas(c){
         var allDone=grupos[g].items.every(function(it){return it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined;});
         if(!allDone) gruposActivos[g]=grupos[g];
       });
-      var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>';
+      var isAdminEnt=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      var btnHistOC=isAdminEnt?'<button onclick="renderHistorialOC()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Historial OC</button>':'';
+      var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📥 Entradas de Productos</div>'+btnHistOC+'</div>';
       if(!Object.keys(gruposActivos).length){
         html+='<div class="card" style="text-align:center;padding:24px;color:var(--gray)"><div style="font-size:1.5rem;margin-bottom:8px">✅</div><div style="font-weight:700">Todas las órdenes procesadas</div></div>';
         c.innerHTML=html; return;
@@ -3788,8 +3791,10 @@ function generarActaEntrega(btn){
   var gname=btn.getAttribute('data-gname');
   var orden=btn.getAttribute('data-orden')||'—';
   var proveedorReal=btn.getAttribute('data-prov')||gname;
-  if(!window._gruposEntrada||!window._gruposEntrada[gname]){toast('Sin datos del grupo','#B86B6B');return;}
-  var items=window._gruposEntrada[gname].items;
+  var src=btn.getAttribute('data-src')||'pend';
+  var store=src==='hist'?window._gruposHistOC:window._gruposEntrada;
+  if(!store||!store[gname]){toast('Sin datos del grupo','#B86B6B');return;}
+  var items=store[gname].items;
   var ahora=new Date();
   var fecha=ahora.toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Guayaquil'});
   var hora=ahora.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',timeZone:'America/Guayaquil'});
@@ -3860,11 +3865,144 @@ function generarActaEntrega(btn){
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
   a.href=url;
-  a.download='Acta_'+gname.replace(/\s/g,'_')+'_'+fecha.replace(/\//g,'-')+'.html';
+  a.download='Acta_'+gname.replace(/\s/g,'_').replace(/\|/g,'-')+'_'+fecha.replace(/\//g,'-')+'.html';
   document.body.appendChild(a);
   a.click();
   setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
   toast('📄 Acta descargada — ábrela y usa Ctrl+P para PDF','var(--blue)');
+}
+
+// ══════ HISTORIAL DE ÓRDENES DE COMPRA (admin) ══════
+function renderHistorialOC(){
+  var c=document.getElementById('content');
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  if(!isAdmin){toast('Solo administradores','#B86B6B');return;}
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📜 Historial de Órdenes de Compra</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getEntradasHistorial')
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,100)};}
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      var items=d.items||[];
+      var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios','BV':'BV — Bruno Vassari','SU':'SU — SUNSU'};
+      var grupos={};
+      items.forEach(function(it){
+        var m=it.sku.match(/SUNSU-([A-Z]+)-/);
+        var prefix=m?m[1]:'OTROS';
+        var fam=prefixNames[prefix]||('CÓDIGOS '+prefix);
+        var key=(it.orden||'SIN-OC')+'||'+fam;
+        if(!grupos[key]) grupos[key]={orden:it.orden||'',fam:fam,prov:it.proveedor||fam,creada:it.creada||'',items:[]};
+        if(!grupos[key].creada&&it.creada) grupos[key].creada=it.creada;
+        grupos[key].items.push(it);
+      });
+      var keys=Object.keys(grupos);
+      keys.sort(function(a,b){
+        var oa=grupos[a].orden||'',ob=grupos[b].orden||'';
+        if(!oa&&!ob) return 0; if(!oa) return 1; if(!ob) return -1;
+        return ob.localeCompare(oa); // OC más reciente primero
+      });
+      var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 Historial de Órdenes de Compra</div>'
+        +'<button onclick="renderEntradas(document.getElementById(\'content\'))" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Pendientes</button>'
+        +'</div>';
+      if(!keys.length){
+        html+='<div class="card" style="text-align:center;padding:24px;color:var(--gray)">Sin órdenes registradas</div>';
+        c.innerHTML=html; return;
+      }
+      keys.forEach(function(key,gi){
+        var g=grupos[key];
+        var gid='hoc-'+gi;
+        var nComp=g.items.filter(function(i){return i.estado.indexOf('Completo')>=0;}).length;
+        var nParc=g.items.filter(function(i){return i.estado.indexOf('Parcial')>=0;}).length;
+        var nNo=g.items.filter(function(i){return i.estado.indexOf('No llegó')>=0;}).length;
+        var nPend=g.items.length-nComp-nParc-nNo;
+        var resumen=(nComp?nComp+' ✅ ':'')+(nParc?nParc+' ⚠️ ':'')+(nNo?nNo+' ❌ ':'')+(nPend?nPend+' ⏳':'');
+        html+='<div style="background:white;border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+          +'<div style="background:var(--navy);padding:11px 14px;display:flex;justify-content:space-between;align-items:center">'
+          +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="flex:1;cursor:pointer;user-select:none">'
+          +'<div style="font-size:0.85rem;font-weight:800;color:white;letter-spacing:0.5px">'+(g.orden||'SIN OC')+'</div>'
+          +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.6)">'+g.fam+' · '+g.items.length+' productos'+(g.creada?' · 📅 '+g.creada:'')+'</div>'
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
+          +'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>'
+          +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
+          +'</div></div>'
+          +'<div id="'+gid+'" style="display:none;padding:10px 14px">';
+        g.items.forEach(function(it){
+          var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?parseFloat(it.recibida):null;
+          var eLabel=v===null?'⏳ Pendiente':(v===0?'❌ No llegó':v>=it.pedida?'✅ Completo':'⚠️ Parcial '+v+'/'+it.pedida);
+          var eColor=v===null?'var(--gray)':(v===0?'var(--red)':v>=it.pedida?'var(--green)':'var(--gold)');
+          var quien=(it.usuario?('por '+it.usuario):'')+(it.timestamp?(' · '+it.timestamp):'');
+          html+='<div style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+            +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+' · Pedido: '+it.pedida+'</div></div>'
+            +'<div style="text-align:right;flex-shrink:0">'
+            +'<div id="hst-'+it.fila+'"><span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
+            +'<div style="font-size:0.55rem;color:var(--gray)">'+quien+'</div></div>'
+            +'</div>'
+            +'<div id="hedit-'+it.fila+'" style="flex-shrink:0"><button onclick="editarEntregaHist('+it.fila+','+it.pedida+')" style="padding:6px 9px;background:var(--cream);border:none;border-radius:8px;font-size:0.75rem;cursor:pointer">✏️</button></div>'
+            +'</div></div>';
+        });
+        html+='</div></div>';
+      });
+      window._gruposHistOC=grupos; // para regenerar actas
+      c.innerHTML=html;
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function editarEntregaHist(fila,pedida){
+  var d=document.getElementById('hedit-'+fila); if(!d) return;
+  d.innerHTML='<div style="display:flex;gap:4px;align-items:center">'
+    +'<input type="number" id="hi-'+fila+'" min="0" placeholder="Cant." style="width:64px;padding:6px 8px;border:1.5px solid var(--navy);border-radius:8px;font-size:0.78rem;outline:none;font-family:inherit">'
+    +'<button onclick="guardarEdicionEntrega('+fila+','+pedida+')" style="padding:6px 10px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">✓</button>'
+    +'<button onclick="cancelarEdicionEntrega('+fila+','+pedida+')" style="padding:6px 8px;background:var(--cream);color:var(--gray);border:none;border-radius:8px;font-size:0.68rem;cursor:pointer">✕</button>'
+    +'</div>';
+  setTimeout(function(){var i=document.getElementById('hi-'+fila);if(i)i.focus();},50);
+}
+
+function cancelarEdicionEntrega(fila,pedida){
+  var d=document.getElementById('hedit-'+fila); if(!d) return;
+  d.innerHTML='<button onclick="editarEntregaHist('+fila+','+pedida+')" style="padding:6px 9px;background:var(--cream);border:none;border-radius:8px;font-size:0.75rem;cursor:pointer">✏️</button>';
+}
+
+function guardarEdicionEntrega(fila,pedida){
+  var inp=document.getElementById('hi-'+fila);
+  if(!inp||inp.value===''){toast('Escribe la cantidad','#B86B6B');return;}
+  var cantidad=parseFloat(inp.value);
+  if(isNaN(cantidad)||cantidad<0){toast('Cantidad inválida','#B86B6B');return;}
+  var usuario=CU?CU.name:'—';
+  var d=document.getElementById('hedit-'+fila);
+  if(d) d.innerHTML='<div style="font-size:0.65rem;color:var(--gray)">⏳</div>';
+  fetch(APPS_SCRIPT_URL+'?action=editarEntrada&fila='+encodeURIComponent(fila)+'&cantidad='+encodeURIComponent(cantidad)+'&usuario='+encodeURIComponent(usuario))
+    .then(function(r){return r.text();})
+    .then(function(t){
+      var res; try{res=JSON.parse(t);}catch(e){res={error:t.slice(0,80)};}
+      if(res.ok){
+        var eLabel=cantidad===0?'❌ No llegó':cantidad>=pedida?'✅ Completo':'⚠️ Parcial '+cantidad+'/'+pedida;
+        var eColor=cantidad===0?'var(--red)':cantidad>=pedida?'var(--green)':'var(--gold)';
+        var st=document.getElementById('hst-'+fila);
+        if(st) st.innerHTML='<span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
+          +'<div style="font-size:0.55rem;color:var(--gray)">por '+usuario+' · '+(res.ts||'')+'</div>';
+        cancelarEdicionEntrega(fila,pedida);
+        // Actualizar memoria para regenerar actas sin recargar
+        if(window._gruposHistOC){
+          Object.keys(window._gruposHistOC).forEach(function(k){
+            window._gruposHistOC[k].items.forEach(function(it){
+              if(it.fila===fila){it.recibida=cantidad;it.usuario=usuario;it.timestamp=res.ts||'';it.estado=res.estado||'';}
+            });
+          });
+        }
+        toast('✏️ Entrega actualizada','var(--green)');
+      } else {
+        cancelarEdicionEntrega(fila,pedida);
+        toast('❌ '+(res.error||'Error'),'#B86B6B');
+      }
+    })
+    .catch(function(){cancelarEdicionEntrega(fila,pedida);toast('❌ Error de conexión','#B86B6B');});
 }
 function registrarEntradaBtn(btn){
   var fila=parseInt(btn.getAttribute('data-f'));
