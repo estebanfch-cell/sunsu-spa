@@ -509,8 +509,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // Load catalog to update prices, names and filter inactive items
@@ -595,6 +595,7 @@ function showTab(id,btn){
   else if(id==='citas') verCitas(c,0);
   else if(id==='dash-cosm') renderDashCosm(c);
   else if(id==='recepcion') renderRecepcion(c);
+  else if(id==='seguimiento') renderSeguimiento(c);
   else if(id==='historial') renderHistorial(c);
   else if(id==='buscar') renderBuscar(c);
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
@@ -1872,6 +1873,114 @@ function enviarGC(){
 }
 
 // ══════ DASH COSM ══════
+// ══════ SEGUIMIENTO DE RETORNO DE CLIENTAS (reagendamiento) ══════
+function renderSeguimiento(c){
+  var esPermitido=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  if(!esPermitido){toast('Sin acceso','#B86B6B');return;}
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando seguimiento...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getSeguimiento')
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,100)};}
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      window._segItems=d.items||[];
+      window._segHoy=d.hoy||'';
+      var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
+        +'<button onclick="renderSeguimiento(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
+        +'</div>'
+        +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
+        +'<input id="seg-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="pintarSeguimiento()" '
+        +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
+        +'</div>'
+        +'<div id="seg-grupos"></div>';
+      c.innerHTML=html;
+      pintarSeguimiento();
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function pintarSeguimiento(){
+  var cont=document.getElementById('seg-grupos'); if(!cont) return;
+  var q=((document.getElementById('seg-q')||{}).value||'').trim().toLowerCase();
+  var items=(window._segItems||[]).filter(function(it){
+    if(!q) return true;
+    return ((it.nombre||'')+' '+(it.apellido||'')).toLowerCase().indexOf(q)>=0||(it.cedula||'').indexOf(q)>=0;
+  });
+  var GRUPOS=[
+    {est:'🔴 Atrasada',       titulo:'🔴 Atrasadas',                 color:'#B86B6B', hint:'ya pasó su fecha de retorno — escribirles YA'},
+    {est:'🟡 Próxima',        titulo:'🟡 Próximas (7 días)',         color:'#C9A227', hint:'su retorno es esta semana — ideal para agendar'},
+    {est:'🟢 A tiempo',       titulo:'🟢 A tiempo',                  color:'#6B9080', hint:'aún no toca contactarlas'},
+    {est:'⛔ No ha regresado', titulo:'⛔ No han regresado (6+ meses)',color:'#8A8A8A', hint:'para campañas de recuperación'},
+  ];
+  function diasDesde(fecha){
+    if(!fecha||!window._segHoy) return null;
+    var a=fecha.split('-'), b=window._segHoy.split('-');
+    if(a.length<3) return null;
+    var d1=new Date(a[0],a[1]-1,a[2]), d2=new Date(b[0],b[1]-1,b[2]);
+    return Math.round((d2-d1)/(1000*60*60*24));
+  }
+  var html='';
+  GRUPOS.forEach(function(g,gi){
+    var lista=items.filter(function(it){return it.estado===g.est;});
+    lista.sort(function(a,b){return (a.retorno||'').localeCompare(b.retorno||'');});
+    var gid='seg-g'+gi;
+    html+='<div style="background:white;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="background:'+g.color+';padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
+      +'<div><div style="font-size:0.8rem;font-weight:800;color:white">'+g.titulo+' ('+lista.length+')</div>'
+      +'<div style="font-size:0.58rem;color:rgba(255,255,255,0.75)">'+g.hint+'</div></div>'
+      +'<span id="arrow-'+gid+'" style="color:white;font-size:0.75rem">▶</span>'
+      +'</div>'
+      +'<div id="'+gid+'" style="display:none;padding:8px 14px">';
+    if(!lista.length){
+      html+='<div style="padding:10px 0;font-size:0.72rem;color:var(--gray);text-align:center">Ninguna clienta en este grupo</div>';
+    }
+    lista.forEach(function(it){
+      var dd=diasDesde(it.retorno);
+      var retFmt=it.retorno?it.retorno.split('-').reverse().join('/'):'—';
+      var visFmt=it.visita?it.visita.split('-').reverse().join('/'):'—';
+      var diasTxt=dd===null?'':(dd>0?('hace '+dd+' día'+(dd===1?'':'s')):dd===0?'HOY':('en '+(-dd)+' día'+(dd===-1?'':'s')));
+      // Botón WhatsApp si Acuity tiene su teléfono
+      var telD=(it.telefono||'').replace(/[^0-9]/g,'');
+      if(telD.length===10&&telD.charAt(0)==='0') telD='593'+telD.slice(1); // 09XXXXXXXX → 5939XXXXXXXX
+      if(telD.length===9&&telD.charAt(0)==='9') telD='593'+telD;
+      var waMsg=encodeURIComponent('Hola '+(it.nombre||'').trim()+' 🌸 ¡Te saludamos de Sunsu Spa! Ya se acerca la fecha recomendada para tu próximo facial. ¿Te gustaría agendar tu cita? 💆‍♀️✨');
+      var waBtn=telD?'<a href="https://wa.me/'+telD+'?text='+waMsg+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'';
+      html+='<div id="segit-'+it.tkRow+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d);display:flex;justify-content:space-between;align-items:center;gap:6px">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+it.nombre+' '+it.apellido+'</div>'
+        +'<div style="font-size:0.6rem;color:var(--gray)">'+(it.cedula||'s/cédula')+(it.telefono?' · 📱 '+it.telefono:'')+' · última visita '+visFmt+' · '+it.cosmetologa+'</div>'
+        +'<div style="font-size:0.64rem;font-weight:700;color:'+g.color+'">Retorno: '+retFmt+(diasTxt?' · '+diasTxt:'')+'</div>'
+        +'</div>'
+        +waBtn
+        +'<button onclick="marcarAgendada('+it.tkRow+',\''+(it.cedula||'')+'\')" style="padding:6px 11px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer;flex-shrink:0">✅ Agendada</button>'
+        +'</div>';
+    });
+    html+='</div></div>';
+  });
+  cont.innerHTML=html;
+}
+
+function marcarAgendada(tkRow, cedula){
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'marcarAgendada', tkRow:tkRow, cedula:cedula, usuario:CU?CU.name:'—'})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){
+      window._segItems=(window._segItems||[]).filter(function(x){return x.tkRow!==tkRow;});
+      pintarSeguimiento(); // re-pinta con contadores actualizados, mantiene la búsqueda
+      toast('✅ Clienta marcada como agendada','var(--green)');
+    } else {
+      toast('❌ '+(d.error||'Error'),'#B86B6B');
+    }
+  })
+  .catch(function(){toast('❌ Error de conexión','#B86B6B');});
+}
+
 // ══════ CONTROL COMISIÓN RECEPCIÓN (Alejandra) ══════
 function renderRecepcion(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📅 Control de Agenda</div>'
@@ -2111,6 +2220,7 @@ function _buildTicketCard(t, showPrices){
       ?'<div style="display:flex;gap:5px;margin-top:6px">'
         +'<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>'
         +'<button onclick="abrirModalMulta('+t.tkRow+')" style="padding:4px 10px;background:var(--red-l);color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">⚠️ Multa</button>'
+        +'<button onclick="eliminarTicket('+t.tkRow+')" style="padding:4px 10px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">🗑️ Eliminar</button>'
         +'</div>'
       :'')
     +'</div>'
@@ -3394,6 +3504,38 @@ function _renderCitasList(bd, data, diaNom){
         h+='</div>';
       });
       bd.innerHTML=h;
+}
+
+// ══════ ELIMINAR TICKET (admin) — borra la fila completa en TICKET_FICHA ══════
+function eliminarTicket(tkRow){
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  var t=_histData?_histData.find(function(x){return x.tkRow===tkRow;}):null;
+  var nombreT=t?((t.nombre||'')+' '+(t.apellido||'')).trim():'';
+  if(!confirm('🗑️ ¿Eliminar el ticket #'+tkRow+(nombreT?' de '+nombreT:'')+'?\n\nSe borra TODA la fila en el sheet: facial, productos, extras y comisiones de ese ticket.\nEsta acción no se puede deshacer desde el app.')) return;
+  toast('⏳ Eliminando...','var(--navy)');
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'eliminarTicket', tkRow:tkRow, nombre:t?(t.nombre||''):'', apellido:t?(t.apellido||''):'', usuario:CU?CU.name:'—'})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){
+      toast('🗑️ Ticket eliminado','var(--green)');
+      // Las filas de abajo se corren una posición: recargar datos y refrescar la vista
+      _histData=null;
+      var c=document.getElementById('content');
+      if(document.getElementById('buscar-res')){
+        window._buscarPrefill=((document.getElementById('buscar-q')||{}).value||'');
+        renderBuscar(c);
+      } else {
+        renderHistorial(c);
+      }
+    } else {
+      toast('❌ '+(d.error||'Error'),'#B86B6B');
+    }
+  })
+  .catch(function(){toast('❌ Error de conexión','#B86B6B');});
 }
 
 function editarTicket(tkRow){
@@ -4772,7 +4914,13 @@ function mostrarBuscarCliente(c){
     +'</div>'
     +'</div>'
     +'<div id="buscar-res"><div style="text-align:center;color:var(--gray);font-size:0.8rem;padding:20px">Escribe para buscar...</div></div>';
-  setTimeout(function(){var i=document.getElementById('buscar-q');if(i)i.focus();},100);
+  setTimeout(function(){
+    var i=document.getElementById('buscar-q');
+    if(i){
+      i.focus();
+      if(window._buscarPrefill){ i.value=window._buscarPrefill; window._buscarPrefill=''; ejecutarBusqueda(); }
+    }
+  },100);
 }
 
 function ejecutarBusqueda(){
