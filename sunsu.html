@@ -1699,10 +1699,194 @@ function enviarTicket(){
   });
 }
 // ══════ GIFT CARD VENTA ══════
+// ══════ GENERADOR DE GIFT CARD DIGITAL ══════
+// Recrea la tarjeta azul de Sunsu en un canvas y permite descargarla/compartirla
+// con el mensaje de WhatsApp (plantilla editable en ⚙ CONFIGURACION: MENSAJE GIFT CARD).
+var GCD={para:'',de:'',facial:'Facial Premium',mensaje:'',codigo:'',valido:''};
+var GCD_PORTADA_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_portada.jpg';
+
+function _validoDefault(){
+  var MES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var d=new Date(); d.setMonth(d.getMonth()+6);
+  return MES[d.getMonth()]+' '+d.getFullYear();
+}
+
+function renderGiftCardDigital(pre){
+  var c=document.getElementById('content');
+  if(!CU){toast('Inicia sesión','#B86B6B');return;}
+  pre=pre||{};
+  GCD={para:pre.para||'', de:pre.de||'', facial:pre.facial||'Facial Premium', mensaje:pre.mensaje||'', codigo:pre.codigo||'', valido:pre.valido||_validoDefault()};
+  // Cargar plantilla del mensaje (se crea sola en CONFIGURACION si no existe)
+  if(!window._gcMsgTpl){
+    fetch(APPS_SCRIPT_URL+'?action=getPlantillaGC').then(function(r){return r.json();})
+      .then(function(d){window._gcMsgTpl=d.mensaje||'';}).catch(function(){});
+  }
+  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🎨 Gift Card Digital</div>'
+    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Venta GC</button>'
+    +'</div>'
+    +'<div class="card" style="padding:14px">'
+    +_gcdInput('Para (quien recibe)','gcd-para',GCD.para)
+    +_gcdInput('De (quien regala)','gcd-de',GCD.de)
+    +_gcdInput('Facial','gcd-facial',GCD.facial)
+    +_gcdInput('Mensaje (ej. Feliz cumpleaños)','gcd-msg',GCD.mensaje)
+    +'<div style="display:flex;gap:8px">'
+    +'<div style="flex:1">'+_gcdInput('# Código','gcd-cod',GCD.codigo)+'</div>'
+    +'<div style="flex:1">'+_gcdInput('Válido hasta','gcd-val',GCD.valido)+'</div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="margin-top:12px;text-align:center">'
+    +'<img src="'+GCD_PORTADA_URL+'" onerror="this.style.display=\'none\'" style="width:100%;max-width:480px;border-radius:12px;box-shadow:var(--shadow-sm);margin-bottom:8px;display:block;margin-left:auto;margin-right:auto">'
+    +'<canvas id="gcd-canvas" style="width:100%;max-width:480px;border-radius:12px;box-shadow:var(--shadow-sm)"></canvas>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button onclick="descargarGiftCard()" style="flex:1;padding:12px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer">⬇️ Descargar</button>'
+    +'<button onclick="compartirGiftCard()" style="flex:1;padding:12px;background:#25D366;color:white;border:none;border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer">💬 WhatsApp</button>'
+    +'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-top:8px;text-align:center">El mensaje de WhatsApp se edita en ⚙ CONFIGURACION → MENSAJE GIFT CARD</div>';
+  dibujarGiftCard();
+}
+
+function _gcdInput(label,id,val){
+  return '<div style="margin-bottom:9px"><div style="font-size:0.62rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:3px">'+label+'</div>'
+    +'<input type="text" id="'+id+'" value="'+String(val||'').replace(/"/g,'&quot;')+'" oninput="dibujarGiftCard()" '
+    +'style="width:100%;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.85rem;outline:none;font-family:inherit;box-sizing:border-box"></div>';
+}
+
+function _gcdVal(id){var e=document.getElementById(id);return e?e.value.trim():'';}
+
+function dibujarGiftCard(){
+  var cv=document.getElementById('gcd-canvas'); if(!cv) return;
+  var W=1348, H=896; // proporción del diseño original, 2x para nitidez
+  cv.width=W; cv.height=H;
+  var x=cv.getContext('2d');
+  var para=_gcdVal('gcd-para'), de=_gcdVal('gcd-de'), facial=_gcdVal('gcd-facial'),
+      msj=_gcdVal('gcd-msg'), cod=_gcdVal('gcd-cod'), val=_gcdVal('gcd-val');
+
+  // Fondo azul
+  x.fillStyle='#8FA2C4'; x.fillRect(0,0,W,H);
+
+  // Encabezado
+  x.fillStyle='#FFFFFF'; x.textAlign='center';
+  x.font='42px Arial'; x.fillText('순 수', W/2, 92);
+  x.font='800 84px Trebuchet MS, Arial'; _gcdSpaced(x,'SUNSU',W/2,182,18);
+  x.font='400 26px Arial';
+  _gcdSpaced(x,'GLASS SKIN',W/2,242,9);
+  _gcdSpaced(x,'FACIALES COREANOS',W/2,282,9);
+
+  // Píldoras blancas
+  var pilX=230, pilW=880, pilH=76, r=38;
+  var filas=[
+    {label:'Para:', valor:para},
+    {label:'De:',   valor:de},
+    {label:'Facial:', valor:facial},
+    {label:'',      valor:msj},
+  ];
+  var y0=352, gap=104;
+  filas.forEach(function(f,i){
+    var y=y0+i*gap;
+    _gcdPill(x,pilX,y,pilW,pilH,r,'#FFFFFF');
+    x.fillStyle='#5B7194';
+    if(f.label){
+      x.textAlign='left'; x.font='800 34px Trebuchet MS, Arial';
+      x.fillText(f.label, pilX+34, y+pilH/2+12);
+    }
+    x.textAlign='center'; x.font='400 32px Arial';
+    x.fillText(f.valor||'', pilX+pilW/2+(f.label?40:0), y+pilH/2+11);
+  });
+
+  // Código vertical (derecha)
+  var codX=1180, codY=430, codW=64, codH=260;
+  _gcdPill(x,codX,codY-codH/2,codW,codH,32,'#FFFFFF');
+  x.save(); x.translate(codX+codW/2,codY); x.rotate(-Math.PI/2);
+  x.fillStyle='#5B7194'; x.textAlign='center'; x.font='700 30px Arial';
+  x.fillText('# '+(cod||'—'),0,10); x.restore();
+
+  // Válido hasta (texto rotado suave)
+  x.save(); x.translate(1290,430); x.rotate(-Math.PI/2);
+  x.fillStyle='rgba(255,255,255,0.75)'; x.textAlign='center'; x.font='400 24px Arial';
+  x.fillText('Válido hasta '+(val||''),0,0); x.restore();
+
+  // Pie
+  x.fillStyle='#FFFFFF'; x.textAlign='center'; x.font='400 26px Arial';
+  _gcdSpaced(x,'CENTRO COMERCIAL LA ESQUINA, CUMBAYÁ',W/2,H-46,7);
+}
+
+function _gcdSpaced(x,txt,cx,y,sp){
+  // Texto con espaciado entre letras, centrado
+  var total=0, widths=[];
+  for(var i=0;i<txt.length;i++){var w=x.measureText(txt[i]).width;widths.push(w);total+=w+(i<txt.length-1?sp:0);}
+  var px=cx-total/2, prevAlign=x.textAlign; x.textAlign='left';
+  for(var j=0;j<txt.length;j++){x.fillText(txt[j],px,y);px+=widths[j]+sp;}
+  x.textAlign=prevAlign;
+}
+
+function _gcdPill(x,px,py,w,h,r,color){
+  x.fillStyle=color; x.beginPath();
+  x.moveTo(px+r,py); x.arcTo(px+w,py,px+w,py+h,r); x.arcTo(px+w,py+h,px,py+h,r);
+  x.arcTo(px,py+h,px,py,r); x.arcTo(px,py,px+w,py,r); x.closePath(); x.fill();
+}
+
+function _gcdArchivo(cb){
+  var cv=document.getElementById('gcd-canvas'); if(!cv){toast('Genera la tarjeta primero','#B86B6B');return;}
+  var cod=_gcdVal('gcd-cod')||'SUNSU';
+  cv.toBlob(function(blob){ cb(blob, 'GiftCard_'+cod.replace(/[^A-Za-z0-9-]/g,'')+'.png'); },'image/png');
+}
+
+function _gcdMensaje(){
+  var tpl=window._gcMsgTpl||'{mensaje} {para}, un facial & un momento especial solo para ti ❤️ Te esperamos en Sunsu Spa ✨ Agenda tu cita en el link ⤵️ https://app.acuityscheduling.com/schedule.php?owner=35065947  Wsp📲 099-066-5112';
+  return tpl.replace(/\{para\}/g,_gcdVal('gcd-para')).replace(/\{de\}/g,_gcdVal('gcd-de'))
+    .replace(/\{mensaje\}/g,_gcdVal('gcd-msg')).replace(/\{codigo\}/g,_gcdVal('gcd-cod'));
+}
+
+function descargarGiftCard(){
+  _gcdArchivo(function(blob,nombre){
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
+    // Descargar también la portada
+    fetch(GCD_PORTADA_URL).then(function(r){return r.ok?r.blob():null;}).catch(function(){return null;})
+    .then(function(pBlob){
+      if(pBlob){
+        var b=document.createElement('a');
+        b.href=URL.createObjectURL(pBlob); b.download='GiftCard_Sunsu_portada.jpg'; b.click();
+        setTimeout(function(){URL.revokeObjectURL(b.href);},4000);
+      }
+    });
+    toast('⬇️ Gift Card descargada','var(--green)');
+  });
+}
+
+function compartirGiftCard(){
+  _gcdArchivo(function(blob,nombre){
+    var texto=_gcdMensaje();
+    var tarjeta=new File([blob],nombre,{type:'image/png'});
+    // Intentar incluir la portada (grulla) como primera imagen
+    fetch(GCD_PORTADA_URL).then(function(r){return r.ok?r.blob():null;}).catch(function(){return null;})
+    .then(function(pBlob){
+      var files=[];
+      if(pBlob) files.push(new File([pBlob],'GiftCard_Sunsu_portada.jpg',{type:'image/jpeg'}));
+      files.push(tarjeta);
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:files})){
+        // iPhone/Android: comparte portada + tarjeta + texto directo a WhatsApp
+        navigator.share({files:files,text:texto}).catch(function(){});
+      } else {
+        // Escritorio: descarga las imágenes y abre WhatsApp con el texto para adjuntarlas
+        descargarGiftCard();
+        window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+        toast('Imágenes descargadas — adjúntalas en WhatsApp','var(--blue)');
+      }
+    });
+  });
+}
+
 function renderGCVenta(c){
+  window._gcvContainer=c;
   c.innerHTML=`
     <div class="card">
-      <div class="card-title">🎁 Vender Gift Card</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">🎁 Vender Gift Card
+        <button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 GC Digital</button>
+      </div>
 
       <div class="field"><label>Cédula del comprador</label>
         <input type="text" id="gc-ced" inputmode="numeric" placeholder="Ingresa la cédula..."
@@ -1865,8 +2049,15 @@ function enviarGC(){
   })
   .then(()=>{
     toast('✅ Gift Card registrada — '+GC.codigo,'#6A9E7A');
+    var eraDigital=(GC.tipo!=='fisica');
+    var pre={codigo:GC.codigo, de:(GC.nombre+' '+(GC.apellido||'')).trim()};
     GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
-    renderGCVenta(document.getElementById('content'));
+    if(eraDigital){
+      // Venta digital → armar la Gift Card digital de una vez
+      renderGiftCardDigital(pre);
+    } else {
+      renderGCVenta(document.getElementById('content'));
+    }
   })
   .catch(err=>{
     toast('❌ Error: '+err.message,'#B86B6B');
