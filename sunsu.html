@@ -225,7 +225,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
 .badge-multa{background:var(--red-l);color:var(--red);font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;}
 
 /* TOAST */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:11px;font-weight:600;font-size:0.8rem;box-shadow:var(--shadow);opacity:0;transition:opacity 0.25s;z-index:999;pointer-events:none;color:var(--white);white-space:nowrap;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:11px;font-weight:600;font-size:0.8rem;box-shadow:var(--shadow);opacity:0;transition:opacity 0.25s;z-index:999999;pointer-events:none;color:var(--white);white-space:nowrap;}
 .toast.show{opacity:1;}
 .loading{text-align:center;padding:36px 20px;color:var(--gray);}
 .spinner{width:26px;height:26px;border:2.5px solid var(--blue-l);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 11px;}
@@ -4970,10 +4970,21 @@ function quitarComprobante(fila){
 }
 
 function guardarUnificado(fila,sinFac,soloCobro){
+  try{
+  var errEl=document.getElementById('cob-error-'+fila);
   var seleccionados=Object.keys(_cobroSelects[fila]||{}).filter(function(t){return _cobroSelects[fila][t];});
-  if(!seleccionados.length){var e=document.getElementById('cob-error-'+fila);if(e)e.style.display='block';return;}
+  if(!seleccionados.length){if(errEl){errEl.textContent='Selecciona al menos un método de cobro';errEl.style.display='block';}return;}
   var numFac=sinFac?'SIN FACTURA':'';
-  if(!sinFac&&!soloCobro){numFac=(document.getElementById('inp-fac-'+fila)||{}).value||'';if(!numFac.trim()){toast('Escribe el número de factura','#B86B6B');return;}}
+  if(!sinFac&&!soloCobro){
+    var facInp=document.getElementById('inp-fac-'+fila);
+    numFac=(facInp||{}).value||'';
+    if(!numFac.trim()){
+      if(errEl){errEl.textContent='⚠️ Escribe el número de factura arriba';errEl.style.display='block';}
+      if(facInp){facInp.style.borderColor='#B86B6B';facInp.focus();}
+      toast('Escribe el número de factura','#B86B6B');
+      return;
+    }
+  }
   var compStr=seleccionados.map(function(tipo){var det=document.getElementById('cobdet-'+fila+'-'+tipo);var val=det?det.value.trim():'';return val?tipo+':'+val:tipo;}).join(', ');
   cerrarModal('modal-uni-'+fila);
   // Si hay foto de comprobante (transferencia), subirla primero a Drive
@@ -5005,6 +5016,11 @@ function guardarUnificado(fila,sinFac,soloCobro){
       })
       .catch(function(err){toast('❌ Error: '+err.message,'#B86B6B');});
   });
+  }catch(errGU){
+    // Blindaje: ante cualquier error, cerrar el modal para nunca dejar la pantalla bloqueada
+    try{cerrarModal('modal-uni-'+fila);}catch(e2){}
+    toast('❌ Error: '+errGU.message,'#B86B6B');
+  }
 }
 
 function abrirModalFactura(fila){abrirModalUnificado(fila,0,false,false);}
