@@ -1888,6 +1888,8 @@ function renderSeguimiento(c){
       if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
       window._segItems=d.items||[];
       window._segHoy=d.hoy||'';
+      window._segMsgAtr=d.msgAtrasada||'';
+      window._segMsgProx=d.msgProxima||'';
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
         +'<button onclick="renderSeguimiento(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
@@ -1947,7 +1949,11 @@ function pintarSeguimiento(){
       var telD=(it.telefono||'').replace(/[^0-9]/g,'');
       if(telD.length===10&&telD.charAt(0)==='0') telD='593'+telD.slice(1); // 09XXXXXXXX → 5939XXXXXXXX
       if(telD.length===9&&telD.charAt(0)==='9') telD='593'+telD;
-      var waMsg=encodeURIComponent('Hola '+(it.nombre||'').trim()+' 🌸 ¡Te saludamos de Sunsu Spa! Ya se acerca la fecha recomendada para tu próximo facial. ¿Te gustaría agendar tu cita? 💆‍♀️✨');
+      // Plantilla según el grupo: atrasadas (y no-regresó) vs próximas (y a tiempo) — editables en ⚙ CONFIGURACION
+      var esAtrasadaMsg=(g.est.indexOf('Atrasada')>=0||g.est.indexOf('⛔')>=0);
+      var plantilla=esAtrasadaMsg?(window._segMsgAtr||''):(window._segMsgProx||'');
+      if(!plantilla) plantilla='Hola {nombre} 🌸 ¡Te saludamos de Sunsu Spa! Ya se acerca la fecha recomendada para tu próximo facial. ¿Te gustaría agendar tu cita? 💆‍♀️✨';
+      var waMsg=encodeURIComponent(plantilla.replace(/\{nombre\}/g,(it.nombre||'').trim()).replace(/\{fecha\}/g,retFmt));
       var waBtn=telD?'<a href="https://wa.me/'+telD+'?text='+waMsg+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'';
       var intentosTxt=(it.intentos&&it.intentos>0)?'<span style="color:var(--red);font-weight:700"> · 📵 '+it.intentos+' intento'+(it.intentos===1?'':'s')+' sin respuesta</span>':'';
       var argsSeg=it.tkRow+',\''+(it.cedula||'')+'\',\''+(it.nombre||'').replace(/'/g,'')+'\',\''+(it.apellido||'').replace(/'/g,'')+'\'';
