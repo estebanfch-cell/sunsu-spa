@@ -1719,10 +1719,8 @@ function renderGCDigitales(){
   if(!CU){toast('Inicia sesión','#B86B6B');return;}
   c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 GC Digitales</div>'
-    +'<div style="display:flex;gap:6px">'
-    +'<button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 Nueva</button>'
-    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
-    +'</div></div>'
+    +'<button onclick="showTab(\'buscar-gc\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Volver</button>'
+    +'</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getGCDigitales')
     .then(function(r){return r.json();})
@@ -1730,10 +1728,8 @@ function renderGCDigitales(){
       window._gcdHist=d.items||[];
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 GC Digitales ('+window._gcdHist.length+')</div>'
-        +'<div style="display:flex;gap:6px">'
-        +'<button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 Nueva</button>'
         +'<button onclick="showTab(\'buscar-gc\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Volver</button>'
-        +'</div></div>'
+        +'</div>'
         +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
         +'<input id="gcdh-q" type="text" placeholder="Buscar por código, para o de..." oninput="pintarGCDigitales()" '
         +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
@@ -1767,10 +1763,31 @@ function pintarGCDigitales(){
       +'<div style="font-size:0.6rem;color:var(--gray)">'+(g.facial||'')+(g.mensaje?' · "'+g.mensaje+'"':'')+'</div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">🕐 '+(g.ts||'')+(g.u?' · por '+g.u:'')+'</div>'
       +'</div>'
-      +'<button onclick="abrirGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Abrir</button>'
+      +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">'
+      +'<button onclick="abrirGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️ Abrir</button>'
+      +'<button onclick="eliminarGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:6px 13px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑️ Borrar</button>'
+      +'</div>'
       +'</div>';
   });
   cont.innerHTML=html;
+}
+
+function eliminarGCDigital(codigo){
+  if(!confirm('🗑️ ¿Borrar el registro digital de la '+codigo+'?\n\n(Solo borra este registro del historial — no toca la hoja GIFT CARDS)')) return;
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'eliminarGCDigital', codigo:codigo, usuario:CU?CU.name:'—'})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){
+      window._gcdHist=(window._gcdHist||[]).filter(function(x){return x.codigo!==codigo;});
+      pintarGCDigitales();
+      toast('🗑️ Registro borrado','var(--green)');
+    } else { toast('❌ '+(d.error||'Error'),'#B86B6B'); }
+  })
+  .catch(function(){toast('❌ Error de conexión','#B86B6B');});
 }
 
 function abrirGCDigital(codigo){
