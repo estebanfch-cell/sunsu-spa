@@ -1690,8 +1690,17 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+_tkNum+' registrado'+_gcMsg,'#6A9E7A');
+    // Si el ticket incluyó venta de Gift Card DIGITAL → abrir el generador de la tarjeta
+    // con el código y la compradora prellenados (todo editable)
+    var _gcDigVendida=(_gcV&&_gcV.activo&&_gcV.codigo&&_gcV.tipo!=='fisica');
+    var _gcPre={codigo:(_gcV&&_gcV.codigo)||'', de:((payload.nombre||'')+' '+(payload.apellido||'')).trim()};
     T=newT();
-    renderTicket(document.getElementById('content'));
+    if(_gcDigVendida){
+      renderGiftCardDigital(_gcPre);
+      toast('🎨 Arma la Gift Card Digital y envíala por WhatsApp','var(--blue)');
+    } else {
+      renderTicket(document.getElementById('content'));
+    }
   })
   .catch(err=>{
     toast('❌ Error: '+err.message,'#B86B6B');
