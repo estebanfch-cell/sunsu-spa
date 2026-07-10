@@ -1300,7 +1300,7 @@ function updatePreview(){
   const gcVTotal=(gcV&&gcV.activo&&gcV.codigo&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
 
   const estF=facialP+extrasTotal;
-  const totC=comF+comP+comE;
+  const totC=T.esSunsu?0:(comF+comP+comE);
   const totE=estF+estPack+estProd+gcVTotal;
 
   // Descuento — FF 15% sobre facial (o total si es canje), personalizado sobre total, directo 100%
@@ -1427,8 +1427,8 @@ function updatePreview(){
   box.innerHTML=`<div class="preview">
     <div class="plbl">💰 Comisión estimada</div>
     <div class="prow"><span>Facial</span><span>$${comF.toFixed(2)}</span></div>
-    <div class="prow"><span>Productos</span><span>$${comP.toFixed(2)}</span></div>
-    ${extrasDetalle.length?`<div class="prow"><span>Extras (${nExtrasVendidos} × $1.00)</span><span>$${comE.toFixed(2)}</span></div>`:''}
+    ${T.esSunsu?`<div class="prow" style="color:#B08968;font-weight:700"><span>🏠 Consumo interno Sunsu</span><span>sin comisiones</span></div>`:`<div class="prow"><span>Productos</span><span>$${comP.toFixed(2)}</span></div>
+    ${extrasDetalle.length?`<div class="prow"><span>Extras (${nExtrasVendidos} × $1.00)</span><span>$${comE.toFixed(2)}</span></div>`:''}`}
     <div class="pdiv"></div>
     <div class="ptotal"><span>Total comisión</span><span>$${totC.toFixed(2)}</span></div>
     <div class="psec">💳 Desglose a cobrar</div>
@@ -1589,11 +1589,11 @@ function enviarTicket(){
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
 
   const payload={
-    cosmetologa:    T.esSunsu?'SUNSU':CU.name,
+    cosmetologa:    CU.name, // siempre la usuaria real — el consumo interno se identifica por el cliente
     esSunsu:        T.esSunsu,
     cedula:         T.esSunsu?'1793219469001':(cedEl?.value||'').trim(),
-    nombre:         (nomEl?.value||'').trim(),
-    apellido:       (apeEl?.value||'').trim(),
+    nombre:         T.esSunsu?'Sunsu':(nomEl?.value||'').trim(),
+    apellido:       T.esSunsu?'Spa':(apeEl?.value||'').trim(),
     factura:        (facEl?.value||'').trim(),
     fechaRetorno:   _retFmt,
     estimado:       _finalEstimado,
@@ -1695,7 +1695,32 @@ function enviarTicket(){
     var _gcVendida=(_gcV&&_gcV.activo&&_gcV.codigo);
     var _gcEsDigital=_gcVendida&&_gcV.tipo!=='fisica';
     var _gcPre={codigo:(_gcV&&_gcV.codigo)||'', de:((payload.nombre||'')+' '+(payload.apellido||'')).trim()};
+    // Canjes: datos capturados ANTES de resetear el ticket
+    var _cobro=T.cobro, _codGC=(T.codigoGC||'').trim();
+    var _cedCli=payload.cedula||'', _cliNom=((payload.nombre||'')+' '+(payload.apellido||'')).trim();
     T=newT();
+    // ── Canje con GIFT CARD: marcarla usada automáticamente por su código ──
+    if(_cobro==='giftcard'&&_codGC){
+      var _pd=function(n){return String(n).padStart(2,'0');};
+      var _hd=new Date();
+      var _fUso=_pd(_hd.getDate())+'/'+_pd(_hd.getMonth()+1)+'/'+String(_hd.getFullYear()).slice(2)+' '+(facialTxt||'facial')+' · '+(CU?CU.name:'—');
+      var _gcFallo=function(msj){
+        // No se pudo marcar automáticamente → llevar directo a Buscar GC (como en paquetes)
+        toast('⚠️ '+msj,'#C9A227');
+        if(!document.getElementById('gcd-canvas')){ // no interrumpir si está armando la GC digital
+          window._bgcPrefill=_codGC||_cliNom||_cedCli;
+          showTab('buscar-gc');
+        }
+      };
+      fetch(APPS_SCRIPT_URL+'?action=marcarGCUsada&codigo='+encodeURIComponent(_codGC)
+        +'&fechaUso='+encodeURIComponent(_fUso)+'&usadoPor='+encodeURIComponent(_cliNom))
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.ok) toast('🎁 GC '+_codGC+' marcada como USADA','var(--green)');
+          else _gcFallo('GC '+_codGC+': '+(d.error||'no encontrada')+' — búscala y márcala aquí');
+        })
+        .catch(function(){_gcFallo('No se pudo marcar la GC '+_codGC+' — búscala y márcala aquí');});
+    }
     if(_gcEsDigital){
       // GC digital → armar la tarjeta de una vez
       renderGiftCardDigital(_gcPre);
@@ -1703,6 +1728,16 @@ function enviarTicket(){
     } else if(_gcVendida && confirm('🎨 ¿Generar también la Gift Card DIGITAL de la '+_gcPre.codigo+'?\n\n(Aceptar = armar la tarjeta · Cancelar = seguir normal)')){
       // GC física: opcional generar la digital también
       renderGiftCardDigital(_gcPre);
+    } else if(_cobro==='paquete'){
+      // ── Canje de PAQUETE: llevar directo al paquete de la clienta para marcar la sesión ──
+      window._paqPrefill=_cedCli||_cliNom;
+      showTab('buscar-paquetes');
+      toast('📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),'#7A5FA0');
+    } else if(_cobro==='giftcard'&&!_codGC){
+      // Canje GC sin código escrito: llevar al buscador para marcarla
+      window._bgcPrefill=_cliNom||_cedCli;
+      showTab('buscar-gc');
+      toast('🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada','#C9A227');
     } else {
       renderTicket(document.getElementById('content'));
     }
@@ -4936,6 +4971,7 @@ function renderBuscarGC(c){
     +'<div id="bgc-results"></div>';
   var inp=document.getElementById('bgc-inp');
   if(inp){
+    if(window._bgcPrefill){inp.value=window._bgcPrefill;window._bgcPrefill='';setTimeout(ejecutarBuscarGC,50);}
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarGC();});
     inp.addEventListener('input',function(){
       clearTimeout(window._bgcTimer);
@@ -5144,6 +5180,7 @@ function renderBuscarPaquetes(c){
     +'<div id="bpq-results"></div>';
   var inp=document.getElementById('bpq-inp');
   if(inp){
+    if(window._paqPrefill){inp.value=window._paqPrefill;window._paqPrefill='';setTimeout(ejecutarBuscarPaquetes,50);}
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarPaquetes();});
     inp.addEventListener('input',function(){
       clearTimeout(window._bpqTimer);
