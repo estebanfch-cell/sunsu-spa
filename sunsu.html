@@ -1713,6 +1713,72 @@ function enviarTicket(){
   });
 }
 // ══════ GIFT CARD VENTA ══════
+// ══════ HISTORIAL DE GIFT CARDS DIGITALES ══════
+function renderGCDigitales(){
+  var c=document.getElementById('content');
+  if(!CU){toast('Inicia sesión','#B86B6B');return;}
+  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 GC Digitales</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 Nueva</button>'
+    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
+    +'</div></div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getGCDigitales')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      window._gcdHist=d.items||[];
+      var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 GC Digitales ('+window._gcdHist.length+')</div>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 Nueva</button>'
+        +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
+        +'</div></div>'
+        +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
+        +'<input id="gcdh-q" type="text" placeholder="Buscar por código, para o de..." oninput="pintarGCDigitales()" '
+        +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
+        +'</div>'
+        +'<div id="gcdh-lista"></div>';
+      c.innerHTML=html;
+      pintarGCDigitales();
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function pintarGCDigitales(){
+  var cont=document.getElementById('gcdh-lista'); if(!cont) return;
+  var q=((document.getElementById('gcdh-q')||{}).value||'').trim().toLowerCase();
+  var items=(window._gcdHist||[]).filter(function(g){
+    if(!q) return true;
+    return (g.codigo||'').toLowerCase().indexOf(q)>=0
+      ||(g.para||'').toLowerCase().indexOf(q)>=0
+      ||(g.de||'').toLowerCase().indexOf(q)>=0;
+  });
+  if(!items.length){
+    cont.innerHTML='<div class="card" style="text-align:center;padding:22px;color:var(--gray)">'+(q?'Sin resultados para "'+q+'"':'Aún no se ha generado ninguna Gift Card digital')+'</div>';
+    return;
+  }
+  var html='';
+  items.forEach(function(g){
+    html+='<div class="card" style="padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:0.78rem;font-weight:800;color:var(--navy);font-family:monospace"># '+g.codigo+'</div>'
+      +'<div style="font-size:0.66rem;color:var(--gray)">Para: <b>'+(g.para||'—')+'</b> · De: <b>'+(g.de||'—')+'</b></div>'
+      +'<div style="font-size:0.6rem;color:var(--gray)">'+(g.facial||'')+(g.mensaje?' · "'+g.mensaje+'"':'')+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">🕐 '+(g.ts||'')+(g.u?' · por '+g.u:'')+'</div>'
+      +'</div>'
+      +'<button onclick="abrirGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Abrir</button>'
+      +'</div>';
+  });
+  cont.innerHTML=html;
+}
+
+function abrirGCDigital(codigo){
+  var g=(window._gcdHist||[]).find(function(x){return x.codigo===codigo;});
+  if(!g){toast('No encontrada','#B86B6B');return;}
+  renderGiftCardDigital({codigo:g.codigo, para:g.para, de:g.de, facial:g.facial, mensaje:g.mensaje, valido:g.valido});
+}
+
 // ══════ GENERADOR DE GIFT CARD DIGITAL ══════
 // Recrea la tarjeta azul de Sunsu en un canvas y permite descargarla/compartirla
 // con el mensaje de WhatsApp (plantilla editable en ⚙ CONFIGURACION: MENSAJE GIFT CARD).
@@ -1737,7 +1803,10 @@ function renderGiftCardDigital(pre){
   }
   c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🎨 Gift Card Digital</div>'
-    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Venta GC</button>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="renderGCDigitales()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Digitales</button>'
+    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
+    +'</div>'
     +'</div>'
     +'<div class="card" style="padding:14px">'
     +_gcdInput('Para (quien recibe)','gcd-para',GCD.para)
@@ -1905,7 +1974,20 @@ function _gcdPDF(cb){
   });
 }
 
+function _gcdGuardarRegistro(){
+  // Registrar la GC digital en el historial (para reenvío/edición futura)
+  var cod=_gcdVal('gcd-cod'); if(!cod) return;
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'guardarGCDigital', codigo:cod,
+      para:_gcdVal('gcd-para'), de:_gcdVal('gcd-de'), facial:_gcdVal('gcd-facial'),
+      mensaje:_gcdVal('gcd-msg'), valido:_gcdVal('gcd-val'), usuario:CU?CU.name:'—'})
+  }).catch(function(){});
+}
+
 function descargarGiftCard(){
+  _gcdGuardarRegistro();
   _gcdPDF(function(blob,nombre){
     if(blob){
       var a=document.createElement('a');
@@ -1924,6 +2006,7 @@ function descargarGiftCard(){
 }
 
 function compartirGiftCard(){
+  _gcdGuardarRegistro();
   var texto=_gcdMensaje();
   _gcdPDF(function(blob,nombre){
     if(blob){
@@ -1958,7 +2041,10 @@ function renderGCVenta(c){
   c.innerHTML=`
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">🎁 Vender Gift Card
+        <span style="display:flex;gap:6px">
         <button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 GC Digital</button>
+        <button onclick="renderGCDigitales()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Digitales</button>
+        </span>
       </div>
 
       <div class="field"><label>Cédula del comprador</label>
