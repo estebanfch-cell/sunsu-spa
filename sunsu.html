@@ -2013,6 +2013,13 @@ function _gcdPDF(cb){
           var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[1348,896]});
           if(portadaData){ pdf.addImage(portadaData,'JPEG',0,0,1348,896); pdf.addPage([1348,896],'landscape'); }
           pdf.addImage(tarjetaData,'JPEG',0,0,1348,896);
+          // PDF interactivo: el tercio inferior de la tarjeta es clickeable → agenda la cita
+          try{
+            var msjLnk=_gcdMensaje();
+            var mUrl=msjLnk.match(/https?:\/\/[^\s]+/);
+            var urlAg=mUrl?mUrl[0]:'https://app.acuityscheduling.com/schedule.php?owner=35065947';
+            pdf.link(0,760,1348,136,{url:urlAg});
+          }catch(eLnk){}
           cb(pdf.output('blob'),'Certificado de regalo GIFT CARD SUNSU '+cod+'.pdf');
         }catch(e){cb(null);}
       }
@@ -2057,6 +2064,19 @@ function descargarGiftCard(){
   });
 }
 
+function _copiarTexto_(txt){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt);return;}
+  }catch(e){}
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=txt; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }catch(e2){}
+}
+
 function _esMovil_(){
   // Celular o tablet (incluye iPad en modo escritorio, que se identifica como Mac pero tiene touch)
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -2076,12 +2096,13 @@ function compartirGiftCard(){
           .catch(function(){});
         return;
       }
-      // Computadora: descargar el PDF y abrir WhatsApp directo con el mensaje listo
+      // Computadora: descargar el PDF, COPIAR el mensaje al portapapeles y abrir WhatsApp
       var a=document.createElement('a');
       a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
-      window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
-      toast('📄 PDF descargado — en WhatsApp adjúntalo desde Descargas','var(--blue)');
+      _copiarTexto_(texto);
+      window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(texto),'_blank');
+      toast('📄 PDF descargado · mensaje copiado 📋 — pégalo con Cmd+V si no aparece','var(--blue)');
     } else {
       _gcdArchivo(function(b,n){
         var f=new File([b],n,{type:'image/png'});
