@@ -1732,7 +1732,7 @@ function renderGCDigitales(){
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📜 GC Digitales ('+window._gcdHist.length+')</div>'
         +'<div style="display:flex;gap:6px">'
         +'<button onclick="renderGiftCardDigital()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">🎨 Nueva</button>'
-        +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
+        +'<button onclick="showTab(\'buscar-gc\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← Volver</button>'
         +'</div></div>'
         +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
         +'<input id="gcdh-q" type="text" placeholder="Buscar por código, para o de..." oninput="pintarGCDigitales()" '
@@ -1803,9 +1803,9 @@ function renderGiftCardDigital(pre){
   }
   c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🎨 Gift Card Digital</div>'
-    +'<div style="display:flex;gap:6px">'
+    +'<div style="display:flex;gap:6px;align-items:center">'
     +'<button onclick="renderGCDigitales()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Digitales</button>'
-    +'<button onclick="showTab(\'gc-venta\')" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">← GC</button>'
+    +'<button onclick="showTab(\'ticket\')" title="Salir" style="padding:5px 12px;background:white;color:var(--gray);border:1.5px solid var(--gray-l);border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer;line-height:1">✕</button>'
     +'</div>'
     +'</div>'
     +'<div class="card" style="padding:14px">'
@@ -2012,7 +2012,9 @@ function compartirGiftCard(){
     if(blob){
       var file=new File([blob],nombre,{type:'application/pdf'});
       if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        navigator.share({files:[file],text:texto}).catch(function(){});
+        navigator.share({files:[file],text:texto})
+          .then(function(){toast('✅ Gift Card enviada — toca ✕ para salir','var(--green)');})
+          .catch(function(){});
         return;
       }
       var a=document.createElement('a');
@@ -4906,7 +4908,10 @@ function cerrarModal(id){
 // ══════ BUSCAR GIFT CARDS ══════
 function renderBuscarGC(c){
   c.innerHTML=
-    '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🎁 Buscar Gift Cards</div>'
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🎁 Buscar Gift Cards</div>'
+    +'</div>'
+    +'<button onclick="renderGCDigitales()" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px">📜 Historial de Gift Cards Digitales <span style="font-size:0.62rem;font-weight:400;opacity:0.8">ver · editar · reenviar</span></button>'
     +'<div style="display:flex;gap:8px;margin-bottom:14px">'
     +'<input id="bgc-inp" type="text" placeholder="Código GC, nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
     +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
