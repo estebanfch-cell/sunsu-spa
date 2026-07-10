@@ -560,6 +560,7 @@ function initApp(){
           enProvs=true;
           if(item.total>0) pv.prods[pi].p=item.total;
           pv.prods[pi]._activo=activo;
+          pv.prods[pi]._com=item.com||0; // comisión real por unidad (catálogo col I)
         }
       });
       // Auto-agregar productos nuevos del catálogo a su familia (SU-010, ML-012, etc.)
@@ -568,7 +569,7 @@ function initApp(){
         var famM=item.sku.match(/^SUNSU-([A-Z]{2,3})-\d{3}$/);
         if(famM){
           var pvFam=PROVS.find(function(g){return g.id===famM[1].toLowerCase();});
-          if(pvFam) pvFam.prods.push({sku:item.sku,n:item.nombre,p:item.total,_activo:activo});
+          if(pvFam) pvFam.prods.push({sku:item.sku,n:item.nombre,p:item.total,_activo:activo,_com:item.com||0});
         }
       }
     });
@@ -1290,7 +1291,8 @@ function updatePreview(){
 
   // Productos
   let estProd=0;
-  PROVS.forEach(pv=>pv.prods.forEach(p=>{const q=T.productos[p.sku]||0;if(q>0){estProd+=p.p*q;comP+=p.p*0.5*0.30*q;}}));
+  // Comisión de productos = valor REAL del catálogo (col I) por unidad, igual que Mi Avance
+  PROVS.forEach(pv=>pv.prods.forEach(p=>{const q=T.productos[p.sku]||0;if(q>0){estProd+=p.p*q;comP+=(p._com||0)*q;}}));
 
   // Gift Card venta
   const gcV=T.gcVenta;
