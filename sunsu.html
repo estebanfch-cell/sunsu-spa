@@ -1947,14 +1947,18 @@ function pintarSeguimiento(){
       if(telD.length===9&&telD.charAt(0)==='9') telD='593'+telD;
       var waMsg=encodeURIComponent('Hola '+(it.nombre||'').trim()+' 🌸 ¡Te saludamos de Sunsu Spa! Ya se acerca la fecha recomendada para tu próximo facial. ¿Te gustaría agendar tu cita? 💆‍♀️✨');
       var waBtn=telD?'<a href="https://wa.me/'+telD+'?text='+waMsg+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'';
-      html+='<div id="segit-'+it.tkRow+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d);display:flex;justify-content:space-between;align-items:center;gap:6px">'
-        +'<div style="flex:1;min-width:0">'
+      var intentosTxt=(it.intentos&&it.intentos>0)?'<span style="color:var(--red);font-weight:700"> · 📵 '+it.intentos+' intento'+(it.intentos===1?'':'s')+' sin respuesta</span>':'';
+      var argsSeg=it.tkRow+',\''+(it.cedula||'')+'\',\''+(it.nombre||'').replace(/'/g,'')+'\',\''+(it.apellido||'').replace(/'/g,'')+'\'';
+      html+='<div id="segit-'+it.tkRow+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
         +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+it.nombre+' '+it.apellido+'</div>'
         +'<div style="font-size:0.6rem;color:var(--gray)">'+(it.cedula||'s/cédula')+(it.telefono?' · 📱 '+it.telefono:'')+' · última visita '+visFmt+' · '+it.cosmetologa+'</div>'
-        +'<div style="font-size:0.64rem;font-weight:700;color:'+g.color+'">Retorno: '+retFmt+(diasTxt?' · '+diasTxt:'')+'</div>'
-        +'</div>'
+        +'<div style="font-size:0.64rem;font-weight:700;color:'+g.color+'">Retorno: '+retFmt+(diasTxt?' · '+diasTxt:'')+intentosTxt+'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">'
         +waBtn
-        +'<button onclick="marcarAgendada('+it.tkRow+',\''+(it.cedula||'')+'\')" style="padding:6px 11px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer;flex-shrink:0">✅ Agendada</button>'
+        +'<button onclick="marcarAgendada('+argsSeg+')" style="padding:5px 10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">✅ Agendada</button>'
+        +'<button onclick="resultadoSeguimiento('+argsSeg+',\'nc\')" style="padding:5px 10px;background:white;color:var(--gold);border:1.5px solid var(--gold);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">📵 No contestó</button>'
+        +'<button onclick="resultadoSeguimiento('+argsSeg+',\'nd\')" style="padding:5px 10px;background:white;color:var(--gray);border:1.5px solid var(--gray-l);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🔕 No desea</button>'
+        +'</div>'
         +'</div>';
     });
     html+='</div></div>';
@@ -1962,7 +1966,7 @@ function pintarSeguimiento(){
   cont.innerHTML=html;
 }
 
-function marcarAgendada(tkRow, cedula){
+function marcarAgendada(tkRow, cedula, nombre, apellido){
   fetch(APPS_SCRIPT_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain'},
@@ -1974,6 +1978,30 @@ function marcarAgendada(tkRow, cedula){
       window._segItems=(window._segItems||[]).filter(function(x){return x.tkRow!==tkRow;});
       pintarSeguimiento(); // re-pinta con contadores actualizados, mantiene la búsqueda
       toast('✅ Clienta marcada como agendada','var(--green)');
+    } else {
+      toast('❌ '+(d.error||'Error'),'#B86B6B');
+    }
+  })
+  .catch(function(){toast('❌ Error de conexión','#B86B6B');});
+}
+
+function resultadoSeguimiento(tkRow, cedula, nombre, apellido, tipo){
+  if(tipo==='nd'){
+    if(!confirm('🔕 ¿Marcar que '+(nombre||'la clienta')+' NO desea agendar?\n\nSaldrá de la lista definitivamente y no se le volverá a contactar en este ciclo.')) return;
+  }
+  fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'resultadoSeguimiento', tkRow:tkRow, cedula:cedula, nombre:nombre, apellido:apellido, tipo:tipo, usuario:CU?CU.name:'—'})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){
+      window._segItems=(window._segItems||[]).filter(function(x){return x.tkRow!==tkRow;});
+      pintarSeguimiento();
+      if(d.estado==='nd') toast('🔕 No se volverá a contactar','var(--gray)');
+      else if(d.estado==='sr') toast('📵 3 intentos sin respuesta — archivada','#B86B6B');
+      else toast('📵 Intento '+d.intentos+' de 3 — reaparecerá en 7 días','var(--gold)');
     } else {
       toast('❌ '+(d.error||'Error'),'#B86B6B');
     }
