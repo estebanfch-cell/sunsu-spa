@@ -2714,6 +2714,7 @@ function _buildTicketCard(t, showPrices){
   var notasBlock='';
   if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:700;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
   if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:700;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
+  if(t.comprobante) notasBlock+='<div style="font-size:0.7rem;margin-top:5px"><a href="'+t.comprobante+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">📎 Ver comprobante de transferencia</a></div>';
   card+=notasBlock;
   // Dropdown exclusión comisión — solo admins
   if(isAdminView&&t.tkRow){
@@ -4900,6 +4901,15 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
   tipos.forEach(function(t){
     html+='<div style="margin-bottom:7px"><button id="cobtn-'+fila+'-'+t+'" data-fila="'+fila+'" data-tipo="'+t+'" onclick="toggleCobro(this)" style="width:100%;padding:9px 13px;background:#F4F5F8;color:#1A2744;border:1.5px solid #E5E7EF;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;text-align:left">'+icons[t]+' '+t+'</button>';
     if(needs[t]) html+='<input type="text" id="cobdet-'+fila+'-'+t+'" placeholder="'+needs[t]+'" style="display:none;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid #eee;border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box">';
+    if(t==='Trans') html+='<div id="cobfoto-'+fila+'" style="display:none;margin-top:6px">'
+      +'<div style="display:flex;gap:6px">'
+      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">📷 Tomar foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
+      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">🖼️ Galería<input type="file" accept="image/*" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
+      +'</div>'
+      +'<div id="cobfoto-prev-'+fila+'" style="display:none;margin-top:6px;position:relative">'
+      +'<img id="cobfoto-img-'+fila+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:9px;border:1.5px solid #E5E7EF">'
+      +'<button onclick="quitarComprobante(\''+fila+'\')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:99px;width:26px;height:26px;font-size:0.8rem;cursor:pointer;line-height:1">✕</button>'
+      +'</div></div>';
     html+='</div>';
   });
   html+='<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:red;margin-bottom:8px;display:none">Selecciona al menos un método</div>'
@@ -4925,6 +4935,38 @@ function toggleCobro(btn){
   _cobroSelects[fila][tipo]=active;
   btn.style.background=active?'var(--navy)':'var(--cream)';btn.style.color=active?'white':'var(--navy)';btn.style.borderColor=active?'var(--navy)':'var(--cream-d)';
   if(det){det.style.display=active?'block':'none';if(active)setTimeout(function(){det.focus();},50);}
+  if(tipo==='Trans'){var fb=document.getElementById('cobfoto-'+fila);if(fb)fb.style.display=active?'block':'none';}
+}
+
+// ══════ FOTO DE COMPROBANTE DE TRANSFERENCIA ══════
+var _compFotos={};
+function cargarComprobante(input,fila){
+  var f=input.files&&input.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      // Comprimir a máx 1280px JPEG para subida rápida
+      var MAX=1280, w=img.width, h=img.height;
+      if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
+      var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      _compFotos[fila]=cv.toDataURL('image/jpeg',0.8);
+      var prev=document.getElementById('cobfoto-prev-'+fila), im=document.getElementById('cobfoto-img-'+fila);
+      if(im)im.src=_compFotos[fila];
+      if(prev)prev.style.display='block';
+      toast('📎 Comprobante adjuntado','var(--green)');
+    };
+    img.onerror=function(){toast('❌ No se pudo leer la imagen','#B86B6B');};
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+  input.value='';
+}
+function quitarComprobante(fila){
+  delete _compFotos[fila];
+  var prev=document.getElementById('cobfoto-prev-'+fila);
+  if(prev)prev.style.display='none';
 }
 
 function guardarUnificado(fila,sinFac,soloCobro){
@@ -4934,14 +4976,35 @@ function guardarUnificado(fila,sinFac,soloCobro){
   if(!sinFac&&!soloCobro){numFac=(document.getElementById('inp-fac-'+fila)||{}).value||'';if(!numFac.trim()){toast('Escribe el número de factura','#B86B6B');return;}}
   var compStr=seleccionados.map(function(tipo){var det=document.getElementById('cobdet-'+fila+'-'+tipo);var val=det?det.value.trim():'';return val?tipo+':'+val:tipo;}).join(', ');
   cerrarModal('modal-uni-'+fila);
-  fetch(APPS_SCRIPT_URL+'?action=registrarFacturaCobro&fila='+encodeURIComponent(fila)+(numFac?'&numFac='+encodeURIComponent(numFac):'')+'&comp='+encodeURIComponent(compStr)+'&soloCobro='+(soloCobro?'1':'0'))
-    .then(function(r){return r.text();})
-    .then(function(txt){
-      var d; try{d=JSON.parse(txt);}catch(ex){d={error:'Respuesta inválida: '+txt.slice(0,80)};}
-      if(d.ok){toast('✅ Registrado','var(--green)');_refreshOrRemoveCard(fila);}
-      else toast('❌ '+(d.error||'Error'),'#B86B6B');
+  // Si hay foto de comprobante (transferencia), subirla primero a Drive
+  var _fotoComp=(seleccionados.indexOf('Trans')>=0)?(_compFotos[fila]||null):null;
+  var _subida=Promise.resolve('');
+  if(_fotoComp){
+    toast('⏳ Subiendo comprobante...','var(--navy)');
+    _subida=fetch(APPS_SCRIPT_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({accion:'subirComprobante', imagen:_fotoComp, nombre:'ticket fila '+fila, usuario:CU?CU.name:'—'})
     })
-    .catch(function(err){toast('❌ Error: '+err.message,'#B86B6B');});
+    .then(function(r){return r.json();})
+    .then(function(d){return (d&&d.url)||'';})
+    .catch(function(){return '';});
+  }
+  _subida.then(function(urlComp){
+    if(_fotoComp&&!urlComp) toast('⚠️ No se pudo subir la foto — el cobro se registra sin comprobante','#C9A227');
+    fetch(APPS_SCRIPT_URL+'?action=registrarFacturaCobro&fila='+encodeURIComponent(fila)+(numFac?'&numFac='+encodeURIComponent(numFac):'')+'&comp='+encodeURIComponent(compStr)+'&soloCobro='+(soloCobro?'1':'0')+(urlComp?'&comprobanteUrl='+encodeURIComponent(urlComp):''))
+      .then(function(r){return r.text();})
+      .then(function(txt){
+        var d; try{d=JSON.parse(txt);}catch(ex){d={error:'Respuesta inválida: '+txt.slice(0,80)};}
+        if(d.ok){
+          toast(urlComp?'✅ Registrado con comprobante 📎':'✅ Registrado','var(--green)');
+          delete _compFotos[fila];
+          _refreshOrRemoveCard(fila);
+        }
+        else toast('❌ '+(d.error||'Error'),'#B86B6B');
+      })
+      .catch(function(err){toast('❌ Error: '+err.message,'#B86B6B');});
+  });
 }
 
 function abrirModalFactura(fila){abrirModalUnificado(fila,0,false,false);}
