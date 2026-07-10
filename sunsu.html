@@ -1890,6 +1890,9 @@ function renderSeguimiento(c){
       window._segHoy=d.hoy||'';
       window._segMsgAtr=d.msgAtrasada||'';
       window._segMsgProx=d.msgProxima||'';
+      window._segMsgCum=d.msgCumple||'';
+      window._segCumples=d.cumples||[];
+      window._segStats=d.stats||null;
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
         +'<button onclick="renderSeguimiento(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
@@ -1897,12 +1900,48 @@ function renderSeguimiento(c){
         +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
         +'<input id="seg-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="pintarSeguimiento()" '
         +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
+        +(d.stats?'<div style="font-size:0.62rem;color:var(--gray);margin-top:7px">📊 Este mes: <b style="color:var(--green)">'+(d.stats.agendadas||0)+' agendadas</b> · '+(d.stats.intentos||0)+' en reintento · '+(d.stats.sinRespuesta||0)+' sin respuesta · '+(d.stats.noDesea||0)+' no desean</div>':'')
         +'</div>'
+        +'<div id="seg-cumples"></div>'
         +'<div id="seg-grupos"></div>';
       c.innerHTML=html;
+      pintarCumples();
       pintarSeguimiento();
     })
     .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+}
+
+function pintarCumples(){
+  var cont=document.getElementById('seg-cumples'); if(!cont) return;
+  var lista=window._segCumples||[];
+  if(!lista.length){cont.innerHTML='';return;}
+  var MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var mesNombre=MESES[new Date().getMonth()];
+  var hoyDia=new Date().getDate();
+  var html='<div style="background:white;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+    +'<div onclick="toggleGrupoEntrada(\'seg-cum\')" style="background:#C77D9E;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
+    +'<div><div style="font-size:0.8rem;font-weight:800;color:white">🎂 Cumpleaños de '+mesNombre+' ('+lista.length+')</div>'
+    +'<div style="font-size:0.58rem;color:rgba(255,255,255,0.75)">felicítalas y ofréceles su atención especial</div></div>'
+    +'<span id="arrow-seg-cum" style="color:white;font-size:0.75rem">▶</span>'
+    +'</div>'
+    +'<div id="seg-cum" style="display:none;padding:8px 14px">';
+  lista.forEach(function(cu){
+    var esHoy=cu.dia===hoyDia;
+    var telD=(cu.telefono||'').replace(/[^0-9]/g,'');
+    if(telD.length===10&&telD.charAt(0)==='0') telD='593'+telD.slice(1);
+    if(telD.length===9&&telD.charAt(0)==='9') telD='593'+telD;
+    var plantillaC=window._segMsgCum||'¡Feliz cumpleaños {nombre}! 🎂🌸 Todo el equipo de Sunsu Spa te desea un día maravilloso.';
+    var waMsgC=encodeURIComponent(plantillaC.replace(/\{nombre\}/g,(cu.nombre||'').trim()).replace(/\{fecha\}/g,cu.dia+' de '+mesNombre));
+    html+='<div style="padding:8px 0;border-bottom:1px solid var(--cream-d);display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+cu.nombre+' '+cu.apellido+(esHoy?' <span style="color:#C77D9E;font-weight:800">🎉 ¡HOY!</span>':'')+'</div>'
+      +'<div style="font-size:0.6rem;color:var(--gray)">🎂 '+cu.dia+' de '+mesNombre+(cu.telefono?' · 📱 '+cu.telefono:'')+'</div>'
+      +'</div>'
+      +(telD?'<a href="https://wa.me/'+telD+'?text='+waMsgC+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'')
+      +'</div>';
+  });
+  html+='</div></div>';
+  cont.innerHTML=html;
 }
 
 function pintarSeguimiento(){
