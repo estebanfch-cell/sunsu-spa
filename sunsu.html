@@ -1692,12 +1692,17 @@ function enviarTicket(){
     toast('✅ '+_tkNum+' registrado'+_gcMsg,'#6A9E7A');
     // Si el ticket incluyó venta de Gift Card DIGITAL → abrir el generador de la tarjeta
     // con el código y la compradora prellenados (todo editable)
-    var _gcDigVendida=(_gcV&&_gcV.activo&&_gcV.codigo&&_gcV.tipo!=='fisica');
+    var _gcVendida=(_gcV&&_gcV.activo&&_gcV.codigo);
+    var _gcEsDigital=_gcVendida&&_gcV.tipo!=='fisica';
     var _gcPre={codigo:(_gcV&&_gcV.codigo)||'', de:((payload.nombre||'')+' '+(payload.apellido||'')).trim()};
     T=newT();
-    if(_gcDigVendida){
+    if(_gcEsDigital){
+      // GC digital → armar la tarjeta de una vez
       renderGiftCardDigital(_gcPre);
       toast('🎨 Arma la Gift Card Digital y envíala por WhatsApp','var(--blue)');
+    } else if(_gcVendida && confirm('🎨 ¿Generar también la Gift Card DIGITAL de la '+_gcPre.codigo+'?\n\n(Aceptar = armar la tarjeta · Cancelar = seguir normal)')){
+      // GC física: opcional generar la digital también
+      renderGiftCardDigital(_gcPre);
     } else {
       renderTicket(document.getElementById('content'));
     }
@@ -1749,7 +1754,7 @@ function renderGiftCardDigital(pre){
     +'<canvas id="gcd-canvas" style="width:100%;max-width:480px;border-radius:12px;box-shadow:var(--shadow-sm)"></canvas>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
-    +'<button onclick="descargarGiftCard()" style="flex:1;padding:12px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer">⬇️ Descargar</button>'
+    +'<button onclick="descargarGiftCard()" style="flex:1;padding:12px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer">⬇️ PDF</button>'
     +'<button onclick="compartirGiftCard()" style="flex:1;padding:12px;background:#25D366;color:white;border:none;border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer">💬 WhatsApp</button>'
     +'</div>'
     +'<div style="font-size:0.6rem;color:var(--gray);margin-top:8px;text-align:center">El mensaje de WhatsApp se edita en ⚙ CONFIGURACION → MENSAJE GIFT CARD</div>';
@@ -1764,61 +1769,76 @@ function _gcdInput(label,id,val){
 
 function _gcdVal(id){var e=document.getElementById(id);return e?e.value.trim():'';}
 
+var GCD_BASE_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_tarjeta_base.jpg';
+var _gcdBaseImg=null;
+
 function dibujarGiftCard(){
   var cv=document.getElementById('gcd-canvas'); if(!cv) return;
-  var W=1348, H=896; // proporción del diseño original, 2x para nitidez
+  var W=1348, H=896;
   cv.width=W; cv.height=H;
   var x=cv.getContext('2d');
   var para=_gcdVal('gcd-para'), de=_gcdVal('gcd-de'), facial=_gcdVal('gcd-facial'),
       msj=_gcdVal('gcd-msg'), cod=_gcdVal('gcd-cod'), val=_gcdVal('gcd-val');
+  var AZUL='#90A7CA', TXT='#5C7494';
 
-  // Fondo azul
-  x.fillStyle='#8FA2C4'; x.fillRect(0,0,W,H);
+  // Cargar la plantilla base (página 2 del PDF: logo y diseño originales) una sola vez
+  if(!_gcdBaseImg){
+    _gcdBaseImg=new Image();
+    _gcdBaseImg.crossOrigin='anonymous';
+    _gcdBaseImg.onload=function(){dibujarGiftCard();};
+    _gcdBaseImg.onerror=function(){_gcdBaseImg._fallo=true;dibujarGiftCard();};
+    _gcdBaseImg.src=GCD_BASE_URL;
+  }
+  var conPlantilla=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
 
-  // Encabezado
-  x.fillStyle='#FFFFFF'; x.textAlign='center';
-  x.font='42px Arial'; x.fillText('순 수', W/2, 92);
-  x.font='800 84px Trebuchet MS, Arial'; _gcdSpaced(x,'SUNSU',W/2,182,18);
-  x.font='400 26px Arial';
-  _gcdSpaced(x,'GLASS SKIN',W/2,242,9);
-  _gcdSpaced(x,'FACIALES COREANOS',W/2,282,9);
+  if(conPlantilla){
+    x.drawImage(_gcdBaseImg,0,0,W,H);
+  } else {
+    // Fallback dibujado a mano (mientras la plantilla no esté subida a GitHub)
+    x.fillStyle=AZUL; x.fillRect(0,0,W,H);
+    x.fillStyle='#FFFFFF'; x.textAlign='center';
+    x.font='42px Arial'; x.fillText('순 수', W/2, 92);
+    x.font='800 84px Trebuchet MS, Arial'; _gcdSpaced(x,'SUNSU',W/2,182,18);
+    x.font='400 26px Arial';
+    _gcdSpaced(x,'GLASS SKIN',W/2,242,9);
+    _gcdSpaced(x,'FACIALES COREANOS',W/2,282,9);
+    x.font='400 26px Arial';
+    _gcdSpaced(x,'CENTRO COMERCIAL LA ESQUINA, CUMBAYÁ',W/2,H-46,7);
+  }
 
-  // Píldoras blancas
-  var pilX=230, pilW=880, pilH=76, r=38;
-  var filas=[
-    {label:'Para:', valor:para},
-    {label:'De:',   valor:de},
-    {label:'Facial:', valor:facial},
-    {label:'',      valor:msj},
+  // ── Píldoras (coordenadas exactas medidas del PDF original) ──
+  var PILL_X=232, PILL_W=866;
+  var FILAS=[
+    {y:346,h:68, label:'Para:',   valor:para},
+    {y:448,h:73, label:'De:',     valor:de},
+    {y:557,h:72, label:'Facial:', valor:facial},
+    {y:653,h:73, label:'',        valor:msj},
   ];
-  var y0=352, gap=104;
-  filas.forEach(function(f,i){
-    var y=y0+i*gap;
-    _gcdPill(x,pilX,y,pilW,pilH,r,'#FFFFFF');
-    x.fillStyle='#5B7194';
+  FILAS.forEach(function(f){
+    _gcdPill(x,PILL_X,f.y,PILL_W,f.h,f.h/2,'#FFFFFF');
+    x.fillStyle=TXT;
     if(f.label){
-      x.textAlign='left'; x.font='800 34px Trebuchet MS, Arial';
-      x.fillText(f.label, pilX+34, y+pilH/2+12);
+      x.textAlign='left'; x.font='800 33px Trebuchet MS, Arial';
+      x.fillText(f.label, PILL_X+38, f.y+f.h/2+12);
     }
-    x.textAlign='center'; x.font='400 32px Arial';
-    x.fillText(f.valor||'', pilX+pilW/2+(f.label?40:0), y+pilH/2+11);
+    x.textAlign='center'; x.font='400 31px Arial';
+    x.fillText(f.valor||'', PILL_X+PILL_W/2, f.y+f.h/2+11);
   });
 
-  // Código vertical (derecha)
-  var codX=1180, codY=430, codW=64, codH=260;
-  _gcdPill(x,codX,codY-codH/2,codW,codH,32,'#FFFFFF');
-  x.save(); x.translate(codX+codW/2,codY); x.rotate(-Math.PI/2);
-  x.fillStyle='#5B7194'; x.textAlign='center'; x.font='700 30px Arial';
+  // ── Código y validez: centrados verticalmente respecto al bloque de píldoras ──
+  var CY=(FILAS[0].y+FILAS[3].y+FILAS[3].h)/2; // centro del bloque blanco
+  // Borrar la zona derecha de la plantilla (píldora y texto originales)
+  x.fillStyle=AZUL; x.fillRect(1195,240,153,540);
+  // Píldora vertical del código
+  var codW=66, codH=330;
+  _gcdPill(x,1212,CY-codH/2,codW,codH,codW/2,'#FFFFFF');
+  x.save(); x.translate(1212+codW/2,CY); x.rotate(-Math.PI/2);
+  x.fillStyle=TXT; x.textAlign='center'; x.font='700 30px Arial';
   x.fillText('# '+(cod||'—'),0,10); x.restore();
-
-  // Válido hasta (texto rotado suave)
-  x.save(); x.translate(1290,430); x.rotate(-Math.PI/2);
-  x.fillStyle='rgba(255,255,255,0.75)'; x.textAlign='center'; x.font='400 24px Arial';
-  x.fillText('Válido hasta '+(val||''),0,0); x.restore();
-
-  // Pie
-  x.fillStyle='#FFFFFF'; x.textAlign='center'; x.font='400 26px Arial';
-  _gcdSpaced(x,'CENTRO COMERCIAL LA ESQUINA, CUMBAYÁ',W/2,H-46,7);
+  // Válido hasta
+  x.save(); x.translate(1312,CY); x.rotate(-Math.PI/2);
+  x.fillStyle='rgba(255,255,255,0.85)'; x.textAlign='center'; x.font='400 24px Arial';
+  x.fillText('Válido hasta '+(val||''),0,8); x.restore();
 }
 
 function _gcdSpaced(x,txt,cx,y,sp){
@@ -1848,44 +1868,88 @@ function _gcdMensaje(){
     .replace(/\{mensaje\}/g,_gcdVal('gcd-msg')).replace(/\{codigo\}/g,_gcdVal('gcd-cod'));
 }
 
-function descargarGiftCard(){
-  _gcdArchivo(function(blob,nombre){
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
-    setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
-    // Descargar también la portada
+// Cargar jsPDF bajo demanda (para armar el PDF de 2 páginas como el original)
+function _gcdCargarJsPDF(cb){
+  if(window.jspdf&&window.jspdf.jsPDF){cb(true);return;}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  s.onload=function(){cb(!!(window.jspdf&&window.jspdf.jsPDF));};
+  s.onerror=function(){cb(false);};
+  document.head.appendChild(s);
+}
+
+// Construye el PDF de 2 páginas (portada + tarjeta personalizada)
+function _gcdPDF(cb){
+  var cv=document.getElementById('gcd-canvas'); if(!cv){toast('Genera la tarjeta primero','#B86B6B');cb(null);return;}
+  var cod=(_gcdVal('gcd-cod')||'SUNSU').replace(/[^A-Za-z0-9-]/g,'');
+  _gcdCargarJsPDF(function(ok){
+    if(!ok){cb(null);return;}
     fetch(GCD_PORTADA_URL).then(function(r){return r.ok?r.blob():null;}).catch(function(){return null;})
     .then(function(pBlob){
-      if(pBlob){
-        var b=document.createElement('a');
-        b.href=URL.createObjectURL(pBlob); b.download='GiftCard_Sunsu_portada.jpg'; b.click();
-        setTimeout(function(){URL.revokeObjectURL(b.href);},4000);
+      var tarjetaData=cv.toDataURL('image/jpeg',0.92);
+      function armar(portadaData){
+        try{
+          var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[1348,896]});
+          if(portadaData){ pdf.addImage(portadaData,'JPEG',0,0,1348,896); pdf.addPage([1348,896],'landscape'); }
+          pdf.addImage(tarjetaData,'JPEG',0,0,1348,896);
+          cb(pdf.output('blob'),'Certificado de regalo GIFT CARD SUNSU '+cod+'.pdf');
+        }catch(e){cb(null);}
       }
+      if(pBlob){
+        var rd=new FileReader();
+        rd.onload=function(){armar(rd.result);};
+        rd.onerror=function(){armar(null);};
+        rd.readAsDataURL(pBlob);
+      } else armar(null);
     });
-    toast('⬇️ Gift Card descargada','var(--green)');
+  });
+}
+
+function descargarGiftCard(){
+  _gcdPDF(function(blob,nombre){
+    if(blob){
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
+      toast('⬇️ PDF de la Gift Card descargado','var(--green)');
+    } else {
+      _gcdArchivo(function(b,n){
+        var a=document.createElement('a');
+        a.href=URL.createObjectURL(b); a.download=n; a.click();
+        setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
+        toast('⬇️ Gift Card descargada (imagen)','var(--green)');
+      });
+    }
   });
 }
 
 function compartirGiftCard(){
-  _gcdArchivo(function(blob,nombre){
-    var texto=_gcdMensaje();
-    var tarjeta=new File([blob],nombre,{type:'image/png'});
-    // Intentar incluir la portada (grulla) como primera imagen
-    fetch(GCD_PORTADA_URL).then(function(r){return r.ok?r.blob():null;}).catch(function(){return null;})
-    .then(function(pBlob){
-      var files=[];
-      if(pBlob) files.push(new File([pBlob],'GiftCard_Sunsu_portada.jpg',{type:'image/jpeg'}));
-      files.push(tarjeta);
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:files})){
-        // iPhone/Android: comparte portada + tarjeta + texto directo a WhatsApp
-        navigator.share({files:files,text:texto}).catch(function(){});
-      } else {
-        // Escritorio: descarga las imágenes y abre WhatsApp con el texto para adjuntarlas
-        descargarGiftCard();
-        window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
-        toast('Imágenes descargadas — adjúntalas en WhatsApp','var(--blue)');
+  var texto=_gcdMensaje();
+  _gcdPDF(function(blob,nombre){
+    if(blob){
+      var file=new File([blob],nombre,{type:'application/pdf'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        navigator.share({files:[file],text:texto}).catch(function(){});
+        return;
       }
-    });
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
+      window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+      toast('PDF descargado — adjúntalo en WhatsApp','var(--blue)');
+    } else {
+      _gcdArchivo(function(b,n){
+        var f=new File([b],n,{type:'image/png'});
+        if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){
+          navigator.share({files:[f],text:texto}).catch(function(){});
+        } else {
+          var a=document.createElement('a');
+          a.href=URL.createObjectURL(b); a.download=n; a.click();
+          window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+          toast('Imagen descargada — adjúntala en WhatsApp','var(--blue)');
+        }
+      });
+    }
   });
 }
 
@@ -4832,6 +4896,7 @@ function _buildGCCard(g){
     +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.8)">'+g.nombre+' '+g.apellido+' · '+g.cedula+'</div></div>'
     +'<div style="text-align:right">'
     +(usado?'<div style="font-size:0.65rem;color:rgba(255,255,255,0.9);font-weight:700">✅ USADA</div>':'<div style="font-size:0.65rem;color:rgba(255,255,255,0.9);font-weight:700">🟢 DISPONIBLE</div>')
+    +'<button onclick="event.stopPropagation();renderGiftCardDigital({codigo:\''+(g.codigo||'').toString().replace(/'/g,'')+'\',de:\''+((g.nombre||'')+' '+(g.apellido||'')).trim().replace(/'/g,'')+'\'})" style="margin-top:5px;padding:4px 9px;background:rgba(255,255,255,0.25);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:8px;font-size:0.6rem;font-weight:700;cursor:pointer">🎨 Digital</button>'
     +'</div></div>'
     +'<div style="padding:12px 14px">'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
