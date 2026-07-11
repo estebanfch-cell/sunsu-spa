@@ -1680,8 +1680,10 @@ function enviarTicket(){
     // Nota con el mismo formato del marcado manual: fecha · facial hecho · usuaria
     var _puHoy=new Date();
     var _puPad=function(n){return String(n).padStart(2,'0');};
+    // Solo el NOMBRE del facial, sin el SKU
+    var _puFacialNombre=(T.facial&&_fac&&_fac.n)?_fac.n:'Facial';
     var _puNota=_puPad(_puHoy.getDate())+'/'+_puPad(_puHoy.getMonth()+1)+'/'+String(_puHoy.getFullYear()).slice(2)
-      +' '+(facialTxt||'Facial')+' · '+(CU?CU.name:'—');
+      +' '+_puFacialNombre+' · '+(CU?CU.name:'—');
     _primerUsoUrl = APPS_SCRIPT_URL+'?action=marcarPrimerUsoPaquete'
       +'&cedula='+encodeURIComponent(payload.cedula||'')
       +'&sku='+encodeURIComponent(_packNuevo)
@@ -1785,7 +1787,7 @@ function enviarTicket(){
       var _pc=window._gcdPostCola; window._gcdPostCola=null;
       window[_pc.prefVar]=_pc.prefill;
       showTab(_pc.tab);
-      toast(_pc.toastMsg,_pc.color);
+      setTimeout(function(){avisoGrande(_pc.toastMsg,_pc.color);},400);
     } else {
       renderTicket(document.getElementById('content'));
     }
@@ -1796,6 +1798,21 @@ function enviarTicket(){
   });
 }
 // ══════ GIFT CARD VENTA ══════
+// ══════ AVISO GRANDE CENTRADO (para confirmaciones importantes) ══════
+function avisoGrande(msg, color){
+  var prev=document.getElementById('aviso-grande'); if(prev) prev.remove();
+  var ov=document.createElement('div');
+  ov.id='aviso-grande';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(26,39,68,0.45);z-index:999998;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML='<div style="background:white;border-radius:18px;padding:26px 22px;max-width:360px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,0.3);position:relative;border-top:6px solid '+(color||'#6A9E7A')+'">'
+    +'<button onclick="document.getElementById(\'aviso-grande\').remove()" style="position:absolute;top:10px;right:12px;background:none;border:none;font-size:1.15rem;color:var(--gray);cursor:pointer;line-height:1;padding:4px">✕</button>'
+    +'<div style="font-size:1rem;font-weight:800;color:var(--navy);line-height:1.5;margin:6px 4px 16px">'+msg+'</div>'
+    +'<button onclick="document.getElementById(\'aviso-grande\').remove()" style="padding:11px 30px;background:'+(color||'#6A9E7A')+';color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">Entendido ✓</button>'
+    +'</div>';
+  ov.addEventListener('click',function(ev){if(ev.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+}
+
 // ══════ COLA DE GIFT CARDS DIGITALES (venta + conversiones de paquete) ══════
 function procesarColaGCD(){
   var cola=window._gcdCola||[];
@@ -1806,7 +1823,7 @@ function procesarColaGCD(){
     if(pc){
       window[pc.prefVar]=pc.prefill;
       showTab(pc.tab);
-      toast(pc.toastMsg,pc.color);
+      setTimeout(function(){avisoGrande(pc.toastMsg,pc.color);},400);
     } else {
       showTab('ticket');
       toast('✅ Todas las Gift Cards listas','var(--green)');
