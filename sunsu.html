@@ -1705,16 +1705,19 @@ function enviarTicket(){
     toast('✅ '+_tkNum+' registrado'+_gcMsg,'#6A9E7A');
     // ── Marcaciones en PAQUETES (el POST ya creó el paquete): 1º la sesión usada, luego las conversiones ──
     (function(){
+      // Contador de marcaciones en curso: la búsqueda de paquetes espera a que llegue a 0
+      window._paqMarcasPendientes=(_primerUsoUrl?1:0)+_paqGCUrls.length;
+      var _fin=function(){window._paqMarcasPendientes=Math.max(0,(window._paqMarcasPendientes||0)-1);};
       // Marca con REINTENTO: si el paquete aún no aparece (sincronización lenta), reintenta a los 4s
       var _marca=function(u, okMsg, failMsg, luego, intento){
         fetch(u).then(function(r){return r.json();})
           .then(function(d){
-            if(d.ok){ toast(okMsg(d),'var(--green)'); if(luego) luego(); }
+            if(d.ok){ toast(okMsg(d),'var(--green)'); _fin(); if(luego) luego(); }
             else if(!intento && (d.error||'').indexOf('no encontrado')>=0){
               setTimeout(function(){_marca(u, okMsg, failMsg, luego, 1);}, 4000);
-            } else { toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); if(luego) luego(); }
+            } else { toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego(); }
           })
-          .catch(function(){toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); if(luego) luego();});
+          .catch(function(){toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego();});
       };
       var _marcarConv=function(){
         _paqGCUrls.forEach(function(u){
@@ -5489,7 +5492,19 @@ function renderBuscarPaquetes(c){
     +'<div id="bpq-results"></div>';
   var inp=document.getElementById('bpq-inp');
   if(inp){
-    if(window._paqPrefill){inp.value=window._paqPrefill;window._paqPrefill='';setTimeout(ejecutarBuscarPaquetes,50);}
+    if(window._paqPrefill){
+      inp.value=window._paqPrefill;window._paqPrefill='';
+      // Esperar a que las marcaciones automáticas terminen antes de buscar (evita ver el paquete desactualizado)
+      var _esperarMarcas=function(n){
+        if((window._paqMarcasPendientes||0)>0 && n<13){
+          if(n===0) toast('⏳ Actualizando el paquete...','var(--blue)');
+          setTimeout(function(){_esperarMarcas(n+1);},800);
+        } else {
+          ejecutarBuscarPaquetes();
+        }
+      };
+      setTimeout(function(){_esperarMarcas(0);},50);
+    }
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarPaquetes();});
     inp.addEventListener('input',function(){
       clearTimeout(window._bpqTimer);
