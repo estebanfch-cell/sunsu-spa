@@ -1767,7 +1767,9 @@ function enviarTicket(){
     (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
-    if(_cobro==='paquete'){
+    if(_cobro==='paquete' && !_primerUsoUrl){
+      // Canje de paquete EXISTENTE → recordatorio de marcar la sesión manualmente.
+      // (Si es compra nueva con 1/3, el sistema ya la marcó automático — sin redirect.)
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
         toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'), color:'#7A5FA0'};
     } else if(_cobro==='giftcard'&&!_codGC){
