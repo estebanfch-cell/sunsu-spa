@@ -2171,33 +2171,32 @@ function _esMovil_(){
 
 function compartirGiftCard(){
   _gcdGuardarRegistro();
-  var texto=_gcdMensaje();
+  // El mensaje ya viaja DENTRO del PDF (página 3) — se envía solo el archivo, sin texto
   _gcdPDF(function(blob,nombre){
     if(blob){
       var file=new File([blob],nombre,{type:'application/pdf'});
-      // Celular/tablet: menú de compartir nativo (WhatsApp con PDF + texto de una)
+      // Celular/tablet: menú de compartir nativo, solo el PDF
       if(_esMovil_()&&navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        navigator.share({files:[file],text:texto})
+        navigator.share({files:[file]})
           .then(function(){toast('✅ Gift Card enviada — toca ✕ para salir','var(--green)');})
           .catch(function(){});
         return;
       }
-      // Computadora: descargar el PDF, COPIAR el mensaje al portapapeles y abrir WhatsApp
+      // Computadora: descargar el PDF y abrir WhatsApp para adjuntarlo
       var a=document.createElement('a');
       a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
-      _copiarTexto_(texto);
-      window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(texto),'_blank');
-      toast('📄 PDF descargado · mensaje copiado 📋 — pégalo con Cmd+V si no aparece','var(--blue)');
+      window.open('https://web.whatsapp.com','_blank');
+      toast('📄 PDF descargado — adjúntalo en WhatsApp desde Descargas','var(--blue)');
     } else {
       _gcdArchivo(function(b,n){
         var f=new File([b],n,{type:'image/png'});
         if(_esMovil_()&&navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){
-          navigator.share({files:[f],text:texto}).catch(function(){});
+          navigator.share({files:[f]}).catch(function(){});
         } else {
           var a=document.createElement('a');
           a.href=URL.createObjectURL(b); a.download=n; a.click();
-          window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+          window.open('https://web.whatsapp.com','_blank');
           toast('🖼️ Imagen descargada — adjúntala en WhatsApp','var(--blue)');
         }
       });
