@@ -1652,32 +1652,37 @@ function enviarTicket(){
       ).catch(function(){return null;});
   });
 
-  // Marcar usos como GC en sheet PAQUETES
-  var _paqGCPromises = [];
+  // Marcar usos como GC en sheet PAQUETES — DIFERIDO hasta después del POST del ticket,
+  // porque el paquete comprado en este mismo ticket recién se crea en ese POST.
+  var _paqGCUrls = [];
   if(T.paq2gcSlots3&&T.paq2gcSlots3.length&&T.pack3){
-    var _sku3 = T.pack3;
     var _s3 = T.paq2gcSlots3.filter(function(s){return s&&s.codigo;});
     if(_s3.length){
-      _paqGCPromises.push(fetch(APPS_SCRIPT_URL+'?action=marcarUsoGC'
+      _paqGCUrls.push(APPS_SCRIPT_URL+'?action=marcarUsoGC'
         +'&cedula='+encodeURIComponent(payload.cedula||'')
-        +'&sku='+encodeURIComponent(_sku3)
-        +'&slots='+encodeURIComponent(JSON.stringify(_s3.map(function(s){return {codigo:s.codigo,tipo:s.tipo};})))
-      ).catch(function(){return null;}));
+        +'&sku='+encodeURIComponent(T.pack3)
+        +'&slots='+encodeURIComponent(JSON.stringify(_s3.map(function(s){return {codigo:s.codigo,tipo:s.tipo};}))));
     }
   }
   if(T.paq2gcSlots6&&T.paq2gcSlots6.length&&T.pack6){
-    var _sku6 = T.pack6;
     var _s6 = T.paq2gcSlots6.filter(function(s){return s&&s.codigo;});
     if(_s6.length){
-      _paqGCPromises.push(fetch(APPS_SCRIPT_URL+'?action=marcarUsoGC'
+      _paqGCUrls.push(APPS_SCRIPT_URL+'?action=marcarUsoGC'
         +'&cedula='+encodeURIComponent(payload.cedula||'')
-        +'&sku='+encodeURIComponent(_sku6)
-        +'&slots='+encodeURIComponent(JSON.stringify(_s6.map(function(s){return {codigo:s.codigo,tipo:s.tipo};})))
-      ).catch(function(){return null;}));
+        +'&sku='+encodeURIComponent(T.pack6)
+        +'&slots='+encodeURIComponent(JSON.stringify(_s6.map(function(s){return {codigo:s.codigo,tipo:s.tipo};}))));
     }
   }
+  // Primer uso del paquete NUEVO: si compró paquete y el facial se cobró con él
+  var _primerUsoUrl = null;
+  var _packNuevo = T.pack3||T.pack6;
+  if(_packNuevo && T.cobro==='paquete'){
+    _primerUsoUrl = APPS_SCRIPT_URL+'?action=marcarPrimerUsoPaquete'
+      +'&cedula='+encodeURIComponent(payload.cedula||'')
+      +'&sku='+encodeURIComponent(_packNuevo);
+  }
 
-  Promise.all([_gcPromise].concat(_slotPromises).concat(_paqGCPromises)).then(function(){
+  Promise.all([_gcPromise].concat(_slotPromises)).then(function(){
     return fetch(APPS_SCRIPT_URL,{
       method:'POST',
       mode:'no-cors',
@@ -1690,6 +1695,34 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+_tkNum+' registrado'+_gcMsg,'#6A9E7A');
+    // ── Marcaciones en PAQUETES (el POST ya creó el paquete): 1º la sesión usada, luego las conversiones ──
+    (function(){
+      // Marca con REINTENTO: si el paquete aún no aparece (sincronización lenta), reintenta a los 4s
+      var _marca=function(u, okMsg, failMsg, luego, intento){
+        fetch(u).then(function(r){return r.json();})
+          .then(function(d){
+            if(d.ok){ toast(okMsg(d),'var(--green)'); if(luego) luego(); }
+            else if(!intento && (d.error||'').indexOf('no encontrado')>=0){
+              setTimeout(function(){_marca(u, okMsg, failMsg, luego, 1);}, 4000);
+            } else { toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); if(luego) luego(); }
+          })
+          .catch(function(){toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); if(luego) luego();});
+      };
+      var _marcarConv=function(){
+        _paqGCUrls.forEach(function(u){
+          _marca(u,
+            function(d){return '📦 Paquete: '+d.filled+' sesión(es) marcadas como Gift Card';},
+            'No se marcó la conversión', null, 0);
+        });
+      };
+      if(_primerUsoUrl){
+        _marca(_primerUsoUrl,
+          function(d){return '📦 Paquete: sesión '+d.slot+' marcada (uso de hoy)';},
+          'No se marcó el uso de hoy', _marcarConv, 0);
+      } else {
+        _marcarConv();
+      }
+    })();
     // Si el ticket incluyó venta de Gift Card DIGITAL → abrir el generador de la tarjeta
     // con el código y la compradora prellenados (todo editable)
     var _gcVendida=(_gcV&&_gcV.activo&&_gcV.codigo);
