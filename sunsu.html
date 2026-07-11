@@ -3007,7 +3007,14 @@ function _buildTicketCard(t, showPrices){
   if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:700;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
   if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:700;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
   if(t.comprobante) notasBlock+='<div style="font-size:0.7rem;margin-top:5px"><a href="'+t.comprobante+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">📎 Ver comprobante de transferencia</a></div>';
-  if(t.fotos) notasBlock+='<div style="font-size:0.7rem;margin-top:5px">'+t.fotos.split(' | ').map(function(u,i){return '<a href="'+u+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none;margin-right:10px">📷 Foto '+(i+1)+'</a>';}).join('')+'</div>';
+  if(t.fotos) notasBlock+='<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'+t.fotos.split(' | ').map(function(u,i){
+    var m=u.match(/\/d\/([^\/]+)/);
+    var th=m?('https://drive.google.com/thumbnail?id='+m[1]+'&sz=w400'):'';
+    return '<a href="'+u.trim()+'" target="_blank" style="text-decoration:none">'
+      +(th?'<img src="'+th+'" loading="lazy" style="width:74px;height:74px;object-fit:cover;border-radius:9px;border:1.5px solid var(--cream-d);display:block" alt="📷 Foto '+(i+1)+'">'
+          :'<span style="color:var(--blue);font-weight:700;font-size:0.7rem">📷 Foto '+(i+1)+'</span>')
+      +'</a>';
+  }).join('')+'</div>';
   card+=notasBlock;
   // Dropdown exclusión comisión — solo admins
   if(isAdminView&&t.tkRow){
