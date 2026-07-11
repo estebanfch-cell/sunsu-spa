@@ -1767,11 +1767,14 @@ function enviarTicket(){
     (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
-    if(_cobro==='paquete' && !_primerUsoUrl){
-      // Canje de paquete EXISTENTE → recordatorio de marcar la sesión manualmente.
-      // (Si es compra nueva con 1/3, el sistema ya la marcó automático — sin redirect.)
+    if(_cobro==='paquete'){
+      // Siempre llevar a Paquetes: si fue compra nueva (marcado automático) es solo
+      // para CONFIRMAR visualmente; si es paquete existente, para marcar la sesión.
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
-        toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'), color:'#7A5FA0'};
+        toastMsg:_primerUsoUrl
+          ?'👀 Confirma que la sesión se haya marcado bien en el paquete de '+(_cliNom||'la clienta')
+          :'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
+        color:_primerUsoUrl?'#6A9E7A':'#7A5FA0'};
     } else if(_cobro==='giftcard'&&!_codGC){
       window._gcdPostCola={tab:'buscar-gc', prefill:_cliNom||_cedCli, prefVar:'_bgcPrefill',
         toastMsg:'🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada', color:'#C9A227'};
