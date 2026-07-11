@@ -86,6 +86,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
 .t-name{color:var(--gold-m);font-size:0.75rem;font-weight:600;}
 .logout-btn{background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.22);color:rgba(255,255,255,0.75);padding:3px 9px;border-radius:7px;font-size:0.68rem;cursor:pointer;}
 .tabs{display:flex;flex-wrap:wrap;background:var(--white);border-bottom:1.5px solid var(--cream-d);}
+#nav-movil{display:none;background:var(--white);border-bottom:1.5px solid var(--cream-d);padding:8px 10px;gap:8px;align-items:center;}
+#nav-movil .nm-btn{padding:9px 14px;border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;}
+@media(max-width:700px){.tabs{display:none;}#nav-movil{display:flex;}}
+#nav-panel{position:fixed;inset:0;background:rgba(26,39,68,0.5);z-index:99997;display:none;align-items:flex-start;justify-content:center;padding:16px;}
+#nav-panel.abierto{display:flex;}
+#nav-panel .np-card{background:white;border-radius:16px;padding:16px;width:100%;max-width:420px;max-height:82vh;overflow-y:auto;box-shadow:0 18px 50px rgba(0,0,0,0.3);margin-top:40px;}
+#nav-panel .np-item{display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:11px;font-size:0.82rem;font-weight:700;color:var(--navy);cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit;}
+#nav-panel .np-item.activo{background:var(--navy);color:white;}
+#nav-panel .np-item:not(.activo):active{background:var(--gray-ll,#F0F1F5);}
 .tab{padding:8px 12px;font-size:0.72rem;font-weight:600;color:var(--gray);border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;margin-bottom:0;}
 .tab.active{color:var(--navy);border-bottom-color:var(--gold);}
 .content{flex:1;padding:13px;max-width:580px;margin:0 auto;width:100%;padding-bottom:36px;}
@@ -513,6 +522,22 @@ function initApp(){
     :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['buscar','🔍 Buscar'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
+  // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
+  window._allTabs=allTabs;
+  var prevNM=document.getElementById('nav-movil'); if(prevNM)prevNM.remove();
+  var prevNP=document.getElementById('nav-panel'); if(prevNP)prevNP.remove();
+  document.getElementById('tabs').insertAdjacentHTML('afterend',
+    '<div id="nav-movil">'
+    +'<button class="nm-btn" id="nm-ticket" onclick="showTab(\'ticket\')" style="background:var(--navy);color:white">🎫 Ticket</button>'
+    +'<button class="nm-btn" id="nm-actual" onclick="_navPanel(true)" style="flex:1;background:var(--gray-ll,#F0F1F5);color:var(--navy);text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></button>'
+    +'<button class="nm-btn" onclick="_navPanel(true)" style="background:white;color:var(--navy);border:1.5px solid var(--navy)">☰</button>'
+    +'</div>'
+    +'<div id="nav-panel" onclick="if(event.target===this)_navPanel(false)"><div class="np-card">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:0.82rem;font-weight:800;color:var(--navy)">Menú</div>'
+    +'<button onclick="_navPanel(false)" style="background:none;border:none;font-size:1.1rem;color:var(--gray);cursor:pointer;padding:4px">✕</button></div>'
+    +allTabs.map(function(t){return '<button class="np-item" data-tab="'+t[0]+'" onclick="_navPanel(false);showTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')
+    +'</div></div>');
+  _navActualizar('ticket');
   // Load catalog to update prices, names and filter inactive items
   Promise.all([
     fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).catch(function(){return [];}),
@@ -587,9 +612,27 @@ function initApp(){
     showTab(allTabs[0][0]);
   });
 }
+function _navPanel(abrir){
+  var p=document.getElementById('nav-panel');
+  if(p) p.classList[abrir?'add':'remove']('abierto');
+}
+function _navActualizar(id){
+  var tabs=window._allTabs||[];
+  var t=tabs.find(function(x){return x[0]===id;});
+  var lbl=document.getElementById('nm-actual');
+  if(lbl) lbl.textContent=t?('📍 '+t[1].replace(/^[^ ]+ /,'')):'';
+  document.querySelectorAll('#nav-panel .np-item').forEach(function(b){
+    b.classList[b.getAttribute('data-tab')===id?'add':'remove']('activo');
+  });
+  // Sincronizar tambien la barra de escritorio cuando showTab se llama sin boton
+  document.querySelectorAll('.tab').forEach(function(tb,i){
+    tb.classList[tabs[i]&&tabs[i][0]===id?'add':'remove']('active');
+  });
+}
 function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  _navActualizar(id);
   const c=document.getElementById('content');
   if(id==='ticket') renderTicket(c);
   else if(id==='gc-venta') renderGCVenta(c);
@@ -2161,9 +2204,9 @@ function _gcdPaginaMensaje(){
   var waOK=_gcdIconoWA&&_gcdIconoWA.complete&&_gcdIconoWA.naturalWidth>0&&!_gcdIconoWA._fallo;
   var iconos=[
     {emoji:'📅', img:null,                  label:'Agenda',    url:urlAg},
-    {emoji:'📸', img:igOK?_gcdIconoIG:null, label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
-    {emoji:'🌐', img:null,                  label:'Web',       url:'https://www.sunsuspa.com'},
     {emoji:'💬', img:waOK?_gcdIconoWA:null, label:'WhatsApp',  url:'https://wa.me/593990665112'},
+    {emoji:'🌐', img:null,                  label:'Web',       url:'https://www.sunsuspa.com'},
+    {emoji:'📸', img:igOK?_gcdIconoIG:null, label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
     {emoji:'📍', img:null,                  label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'},
   ];
   var r=58, gap=44, total=iconos.length*2*r+(iconos.length-1)*gap;
