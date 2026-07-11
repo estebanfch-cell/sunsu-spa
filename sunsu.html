@@ -1721,23 +1721,27 @@ function enviarTicket(){
         })
         .catch(function(){_gcFallo('No se pudo marcar la GC '+_codGC+' — búscala y márcala aquí');});
     }
-    if(_gcEsDigital){
-      // GC digital → armar la tarjeta de una vez
-      renderGiftCardDigital(_gcPre);
-      toast('🎨 Arma la Gift Card Digital y envíala por WhatsApp','var(--blue)');
-    } else if(_gcVendida && confirm('🎨 ¿Generar también la Gift Card DIGITAL de la '+_gcPre.codigo+'?\n\n(Aceptar = armar la tarjeta · Cancelar = seguir normal)')){
-      // GC física: opcional generar la digital también
-      renderGiftCardDigital(_gcPre);
-    } else if(_cobro==='paquete'){
-      // ── Canje de PAQUETE: llevar directo al paquete de la clienta para marcar la sesión ──
-      window._paqPrefill=_cedCli||_cliNom;
-      showTab('buscar-paquetes');
-      toast('📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),'#7A5FA0');
+    // ── COLA de Gift Cards Digitales: venta directa + conversiones de paquete ──
+    // Digitales → se arman de una; físicas → se pregunta; varias → botón ➡️ Siguiente
+    window._gcdCola=[];
+    if(_gcVendida) window._gcdCola.push({codigo:_gcV.codigo, de:_cliNom, tipo:_gcV.tipo||'digital'});
+    (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
+    // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
+    window._gcdPostCola=null;
+    if(_cobro==='paquete'){
+      window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
+        toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'), color:'#7A5FA0'};
     } else if(_cobro==='giftcard'&&!_codGC){
-      // Canje GC sin código escrito: llevar al buscador para marcarla
-      window._bgcPrefill=_cliNom||_cedCli;
-      showTab('buscar-gc');
-      toast('🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada','#C9A227');
+      window._gcdPostCola={tab:'buscar-gc', prefill:_cliNom||_cedCli, prefVar:'_bgcPrefill',
+        toastMsg:'🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada', color:'#C9A227'};
+    }
+    if(window._gcdCola.length){
+      procesarColaGCD();
+    } else if(window._gcdPostCola){
+      var _pc=window._gcdPostCola; window._gcdPostCola=null;
+      window[_pc.prefVar]=_pc.prefill;
+      showTab(_pc.tab);
+      toast(_pc.toastMsg,_pc.color);
     } else {
       renderTicket(document.getElementById('content'));
     }
@@ -1748,6 +1752,37 @@ function enviarTicket(){
   });
 }
 // ══════ GIFT CARD VENTA ══════
+// ══════ COLA DE GIFT CARDS DIGITALES (venta + conversiones de paquete) ══════
+function procesarColaGCD(){
+  var cola=window._gcdCola||[];
+  if(!cola.length){
+    // Cola terminada → ejecutar la redirección pendiente (canje) o volver al ticket
+    var pc=window._gcdPostCola;
+    window._gcdPostCola=null;
+    if(pc){
+      window[pc.prefVar]=pc.prefill;
+      showTab(pc.tab);
+      toast(pc.toastMsg,pc.color);
+    } else {
+      showTab('ticket');
+      toast('✅ Todas las Gift Cards listas','var(--green)');
+    }
+    return;
+  }
+  var item=cola[0];
+  var esDig=(item.tipo!=='fisica');
+  var quedan=cola.length-1;
+  if(esDig || confirm('🎨 La GC '+item.codigo+' es FÍSICA — ¿generar también su versión digital?'+(quedan?'\n\n(Después vienen '+quedan+' GC más)':'')+'\n\n(Aceptar = armar la tarjeta · Cancelar = saltarla)')){
+    cola.shift();
+    renderGiftCardDigital({codigo:item.codigo, de:item.de});
+    if(quedan) toast('🎨 GC '+item.codigo+' — quedan '+quedan+' en cola: usa ➡️ Siguiente','var(--blue)');
+    else toast('🎨 Arma la Gift Card y envíala por WhatsApp','var(--blue)');
+  } else {
+    cola.shift();
+    procesarColaGCD();
+  }
+}
+
 // ══════ HISTORIAL DE GIFT CARDS DIGITALES ══════
 function renderGCDigitales(){
   var c=document.getElementById('content');
@@ -1856,8 +1891,9 @@ function renderGiftCardDigital(pre){
   c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🎨 Gift Card Digital</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
+    +((window._gcdCola&&window._gcdCola.length)?'<button onclick="procesarColaGCD()" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">➡️ Siguiente ('+window._gcdCola.length+')</button>':'')
     +'<button onclick="renderGCDigitales()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Digitales</button>'
-    +'<button onclick="showTab(\'ticket\')" title="Salir" style="padding:5px 12px;background:white;color:var(--gray);border:1.5px solid var(--gray-l);border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer;line-height:1">✕</button>'
+    +'<button onclick="window._gcdCola=[];window._gcdPostCola=null;showTab(\'ticket\')" title="Salir" style="padding:5px 12px;background:white;color:var(--gray);border:1.5px solid var(--gray-l);border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer;line-height:1">✕</button>'
     +'</div>'
     +'</div>'
     +'<div class="card" style="padding:14px">'
@@ -2196,16 +2232,18 @@ function compartirGiftCard(){
       // Celular/tablet: menú de compartir nativo, solo el PDF
       if(_esMovil_()&&navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
         navigator.share({files:[file]})
-          .then(function(){toast('✅ Gift Card enviada — toca ✕ para salir','var(--green)');})
+          .then(function(){
+            if(window._gcdCola&&window._gcdCola.length) toast('✅ Enviada — toca ➡️ Siguiente para la próxima GC','var(--green)');
+            else toast('✅ Gift Card enviada — toca ✕ para salir','var(--green)');
+          })
           .catch(function(){});
         return;
       }
-      // Computadora: descargar el PDF y abrir WhatsApp para adjuntarlo
+      // Computadora: solo descargar el PDF (se arrastra a WhatsApp o donde se necesite)
       var a=document.createElement('a');
       a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
-      window.open('https://web.whatsapp.com','_blank');
-      toast('📄 PDF descargado — adjúntalo en WhatsApp desde Descargas','var(--blue)');
+      toast('📄 PDF descargado — arrástralo a WhatsApp','var(--green)');
     } else {
       _gcdArchivo(function(b,n){
         var f=new File([b],n,{type:'image/png'});
@@ -2214,8 +2252,7 @@ function compartirGiftCard(){
         } else {
           var a=document.createElement('a');
           a.href=URL.createObjectURL(b); a.download=n; a.click();
-          window.open('https://web.whatsapp.com','_blank');
-          toast('🖼️ Imagen descargada — adjúntala en WhatsApp','var(--blue)');
+          toast('🖼️ Imagen descargada — arrástrala a WhatsApp','var(--green)');
         }
       });
     }
