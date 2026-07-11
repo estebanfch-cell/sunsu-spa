@@ -1677,9 +1677,15 @@ function enviarTicket(){
   var _primerUsoUrl = null;
   var _packNuevo = T.pack3||T.pack6;
   if(_packNuevo && T.cobro==='paquete'){
+    // Nota con el mismo formato del marcado manual: fecha · facial hecho · usuaria
+    var _puHoy=new Date();
+    var _puPad=function(n){return String(n).padStart(2,'0');};
+    var _puNota=_puPad(_puHoy.getDate())+'/'+_puPad(_puHoy.getMonth()+1)+'/'+String(_puHoy.getFullYear()).slice(2)
+      +' '+(facialTxt||'Facial')+' · '+(CU?CU.name:'—');
     _primerUsoUrl = APPS_SCRIPT_URL+'?action=marcarPrimerUsoPaquete'
       +'&cedula='+encodeURIComponent(payload.cedula||'')
-      +'&sku='+encodeURIComponent(_packNuevo);
+      +'&sku='+encodeURIComponent(_packNuevo)
+      +'&nota='+encodeURIComponent(_puNota);
   }
 
   Promise.all([_gcPromise].concat(_slotPromises)).then(function(){
