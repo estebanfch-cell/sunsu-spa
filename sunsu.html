@@ -2213,7 +2213,7 @@ function _gcdPaginaMensaje(){
   var tY=y0+lineas.length*lh+52;
   x.fillStyle=colTxt;
   x.font='800 30px Trebuchet MS, Arial';
-  _gcdTxtCentrado(x,'Agenda tu cita en cualquiera de estas opciones:', tY);
+  _gcdTxtCentrado(x,'Para agendar: haz click en los ⚪️ con cada opción.', tY);
 
   // 5 iconos clickeables (Instagram y WhatsApp con sus logos reales)
   var igOK=_gcdIconoIG&&_gcdIconoIG.complete&&_gcdIconoIG.naturalWidth>0&&!_gcdIconoIG._fallo;
@@ -2247,7 +2247,7 @@ function _gcdPaginaMensaje(){
 
   // Indicación final
   x.fillStyle=colTxt; x.font='400 26px Arial';
-  _gcdTxtCentrado(x,'✨ Toca cualquier ícono y te llevará directo ✨', Math.min(cy+r+96, 866));
+  _gcdTxtCentrado(x,'¡¡ TOCA LOS ÍCONOS 👆🏼 !!', Math.min(cy+r+96, 866));
 
   return {data:cv.toDataURL('image/jpeg',0.92), links:links};
 }
