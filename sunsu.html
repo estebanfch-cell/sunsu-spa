@@ -457,7 +457,7 @@ let PROVS=[
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{fotos:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -937,12 +937,27 @@ function renderTicket(c){
 
     <div class="card">
       <div class="card-title">📝 Notas</div>
-      <div class="field"><label>Recomendaciones para el cliente</label>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center"><label>Recomendaciones para el cliente</label>
+        <button type="button" id="mic-inp-recom" onclick="_dictar('inp-recom')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
         <textarea id="inp-recom" placeholder="Rutina, productos sugeridos..."></textarea>
       </div>
-      <div class="field"><label>Notas generales</label>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center"><label>Notas generales</label>
+        <button type="button" id="mic-inp-notas" onclick="_dictar('inp-notas')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
         <textarea id="inp-notas" placeholder="Observaciones del facial, piel del cliente..."></textarea>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📷 Fotos de la clienta <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">(opcional · máx 3)</span></div>
+      <div style="display:flex;gap:8px">
+        <label style="flex:1;display:block;padding:10px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.7rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this)"></label>
+        <label style="flex:1;display:block;padding:10px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.7rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
+          <input type="file" accept="image/*" style="display:none" onchange="cargarFotoClienta(this)"></label>
+      </div>
+      <div id="fotos-cli-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
     </div>
 
     <div id="preview-box" style="display:none"></div>
@@ -1648,6 +1663,7 @@ function enviarTicket(){
     colQ:           colQ,
     colR:           colR,
     colS:           colS,
+    fotos:          T.fotos||[],
     recomendaciones:(recomEl?.value||'').trim(),
     notas:          ((notasEl?.value||'').trim()+(T.descuento&&T.descuento.tipo==='directo'?'\nPago Directo EGB':'')).trim(),
     tienePaquete:   !!(T.pack3||T.pack6),
@@ -2991,6 +3007,7 @@ function _buildTicketCard(t, showPrices){
   if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:700;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
   if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:700;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
   if(t.comprobante) notasBlock+='<div style="font-size:0.7rem;margin-top:5px"><a href="'+t.comprobante+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">📎 Ver comprobante de transferencia</a></div>';
+  if(t.fotos) notasBlock+='<div style="font-size:0.7rem;margin-top:5px">'+t.fotos.split(' | ').map(function(u,i){return '<a href="'+u+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none;margin-right:10px">📷 Foto '+(i+1)+'</a>';}).join('')+'</div>';
   card+=notasBlock;
   // Dropdown exclusión comisión — solo admins
   if(isAdminView&&t.tkRow){
@@ -5450,6 +5467,80 @@ function toggleCobro(btn){
 
 // ══════ FOTO DE COMPROBANTE DE TRANSFERENCIA ══════
 var _compFotos={};
+// ══════ DICTADO POR VOZ (Notas y Recomendaciones del ticket) ══════
+var _dictadoAct=null;
+function _dictar(targetId){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  var btn=document.getElementById('mic-'+targetId);
+  if(!SR){
+    toast('🎤 En iPhone usa el micrófono del teclado para dictar','var(--blue)');
+    return;
+  }
+  // Si ya está grabando este campo → detener
+  if(_dictadoAct&&_dictadoAct.target===targetId){
+    _dictadoAct.rec.stop();
+    return;
+  }
+  if(_dictadoAct){ try{_dictadoAct.rec.stop();}catch(e){} }
+  var rec=new SR();
+  rec.lang='es-EC'; rec.continuous=true; rec.interimResults=true;
+  var el=document.getElementById(targetId);
+  var base=el?el.value:'';
+  rec.onresult=function(ev){
+    var fin='', inter='';
+    for(var i=0;i<ev.results.length;i++){
+      if(ev.results[i].isFinal) fin+=ev.results[i][0].transcript;
+      else inter+=ev.results[i][0].transcript;
+    }
+    if(el) el.value=(base+(base&&(fin||inter)?' ':'')+fin+inter).replace(/ {2,}/g,' ');
+  };
+  rec.onend=function(){
+    if(btn){btn.textContent='🎤';btn.style.background='white';btn.style.color='';}
+    _dictadoAct=null;
+  };
+  rec.onerror=function(ev){
+    if(ev.error==='not-allowed') toast('🎤 Permite el acceso al micrófono en el navegador','#C9A227');
+    rec.onend();
+  };
+  try{
+    rec.start();
+    _dictadoAct={rec:rec,target:targetId};
+    if(btn){btn.textContent='🔴 Detener';btn.style.background='#B86B6B';btn.style.color='white';}
+    toast('🎤 Escuchando... habla y toca 🔴 al terminar','var(--blue)');
+  }catch(eD){toast('❌ No se pudo iniciar el dictado','#B86B6B');}
+}
+
+// ══════ FOTOS DE LA CLIENTA EN EL TICKET ══════
+function cargarFotoClienta(input){
+  var f=input.files&&input.files[0]; if(!f) return;
+  if((T.fotos||[]).length>=3){toast('Máximo 3 fotos por ticket','#C9A227');input.value='';return;}
+  var rd=new FileReader();
+  rd.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var MAX=1280, w=img.width, h=img.height;
+      if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
+      var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      T.fotos=T.fotos||[];
+      T.fotos.push(cv.toDataURL('image/jpeg',0.8));
+      _fotosCliRender();
+      toast('📷 Foto '+T.fotos.length+' agregada','var(--green)');
+    };
+    img.onerror=function(){toast('❌ No se pudo leer la imagen','#B86B6B');};
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+  input.value='';
+}
+function _fotosCliRender(){
+  var box=document.getElementById('fotos-cli-prev'); if(!box) return;
+  box.innerHTML=(T.fotos||[]).map(function(d,i){
+    return '<div style="position:relative"><img src="'+d+'" style="width:78px;height:78px;object-fit:cover;border-radius:10px;border:1.5px solid var(--cream-d)">'
+      +'<button onclick="T.fotos.splice('+i+',1);_fotosCliRender()" style="position:absolute;top:-6px;right:-6px;background:#B86B6B;color:white;border:none;border-radius:99px;width:20px;height:20px;font-size:0.7rem;cursor:pointer;line-height:1">✕</button></div>';
+  }).join('');
+}
+
 function cargarComprobante(input,fila){
   var f=input.files&&input.files[0]; if(!f) return;
   var rd=new FileReader();
