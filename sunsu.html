@@ -2040,7 +2040,7 @@ function _gcdPaginaMensaje(){
   // Mensaje envuelto, centrado manualmente línea por línea
   x.fillStyle=colTxt;
   x.font='400 34px Arial';
-  var maxW=780, palabras=cuerpo.split(' '), lineas=[], lin='';
+  var maxW=870, palabras=cuerpo.split(' '), lineas=[], lin='';
   palabras.forEach(function(p){
     var prueba=lin?lin+' '+p:p;
     if(x.measureText(prueba).width>maxW&&lin){lineas.push(lin);lin=p;}
@@ -2074,7 +2074,7 @@ function _gcdPaginaMensaje(){
     x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle='#90A7CA'; x.fill();
     x.beginPath(); x.arc(cx,cy,r-4,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
     if(ic.img){
-      var s=88; x.drawImage(ic.img, cx-s/2, cy-s/2, s, s);
+      var s=62; x.drawImage(ic.img, cx-s/2, cy-s/2, s, s);
     } else {
       x.font='52px Arial';
       var we=x.measureText(ic.emoji).width;
