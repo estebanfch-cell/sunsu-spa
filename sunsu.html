@@ -1891,7 +1891,9 @@ function _gcdInput(label,id,val){
 function _gcdVal(id){var e=document.getElementById(id);return e?e.value.trim():'';}
 
 var GCD_BASE_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_tarjeta_base.jpg';
+var GCD_PAG3_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_pag3_fondo.jpg';
 var _gcdBaseImg=null;
+var _gcdPag3Img=null;
 
 function dibujarGiftCard(){
   var cv=document.getElementById('gcd-canvas'); if(!cv) return;
@@ -1909,6 +1911,12 @@ function dibujarGiftCard(){
     _gcdBaseImg.onload=function(){dibujarGiftCard();};
     _gcdBaseImg.onerror=function(){_gcdBaseImg._fallo=true;dibujarGiftCard();};
     _gcdBaseImg.src=GCD_BASE_URL;
+  }
+  if(!_gcdPag3Img){
+    _gcdPag3Img=new Image();
+    _gcdPag3Img.crossOrigin='anonymous';
+    _gcdPag3Img.onerror=function(){_gcdPag3Img._fallo=true;};
+    _gcdPag3Img.src=GCD_PAG3_URL;
   }
   var conPlantilla=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
 
@@ -1999,54 +2007,72 @@ function _gcdPaginaMensaje(){
   var urlAg=mUrl?mUrl[0]:'https://app.acuityscheduling.com/schedule.php?owner=35065947';
   var cuerpo=msj.replace(/https?:\/\/[^\s]+/g,'').replace(/[ ]{2,}/g,' ').trim();
 
-  // Fondo azul de la marca
-  x.fillStyle='#90A7CA'; x.fillRect(0,0,W,H);
-
-  // Encabezado: EXACTAMENTE el de la página 2 (recortado de la plantilla original)
-  var conPlantilla=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
-  if(conPlantilla){
-    x.drawImage(_gcdBaseImg, 0,0,1348,330, 0,0,1348,330);
+  // Fondo: portada solo con laterales florales + logo SUNSU azul (horneado en la imagen)
+  var conFondo=_gcdPag3Img&&_gcdPag3Img.complete&&_gcdPag3Img.naturalWidth>0&&!_gcdPag3Img._fallo;
+  var conBase=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
+  var colTxt;
+  if(conFondo){
+    x.drawImage(_gcdPag3Img,0,0,W,H);
+    colTxt='#5C7494';
   } else {
-    x.fillStyle='#FFFFFF'; x.textAlign='center';
-    x.font='42px Arial'; x.fillText('순 수', W/2, 92);
-    x.font='800 84px Trebuchet MS, Arial'; _gcdSpaced(x,'SUNSU',W/2,182,18);
-    x.font='400 26px Arial';
-    _gcdSpaced(x,'GLASS SKIN',W/2,242,9);
-    _gcdSpaced(x,'FACIALES COREANOS',W/2,282,9);
+    // Respaldo: fondo azul con el encabezado de la plantilla
+    x.fillStyle='#90A7CA'; x.fillRect(0,0,W,H);
+    if(conBase) x.drawImage(_gcdBaseImg, 0,0,1348,300, 0,0,1348,300);
+    colTxt='#FFFFFF';
   }
 
-  // Mensaje envuelto y SIEMPRE centrado
-  x.fillStyle='#FFFFFF';
+  // Mensaje centrado
+  x.fillStyle=colTxt;
   x.textAlign='center';
-  x.font='400 36px Arial';
-  var maxW=1000, palabras=cuerpo.split(' '), lineas=[], lin='';
+  x.font='400 34px Arial';
+  var maxW=820, palabras=cuerpo.split(' '), lineas=[], lin='';
   palabras.forEach(function(p){
     var prueba=lin?lin+' '+p:p;
     if(x.measureText(prueba).width>maxW&&lin){lineas.push(lin);lin=p;}
     else lin=prueba;
   });
   if(lin)lineas.push(lin);
-  var lh=58, y0=Math.max(410, 520-(lineas.length*lh)/2);
-  lineas.forEach(function(l,i){x.fillText(l, W/2, y0+i*lh);});
+  var lh=52, y0=Math.max(365, 455-(lineas.length*lh)/2);
+  lineas.forEach(function(l,i){
+    x.textAlign='center';
+    x.fillText(l, W/2, y0+i*lh);
+  });
 
-  // Botón de agendamiento (píldora blanca, centrada)
-  var btnW=620, btnH=92, btnX=(W-btnW)/2, btnY=Math.max(y0+lineas.length*lh+56, 650);
-  if(btnY+btnH>H-115) btnY=H-115-btnH;
-  _gcdPill(x,btnX,btnY,btnW,btnH,btnH/2,'#FFFFFF');
-  x.fillStyle='#5C7494'; x.textAlign='center'; x.font='800 38px Trebuchet MS, Arial';
-  x.fillText('📅 Agendar mi cita', W/2, btnY+btnH/2+13);
-  x.fillStyle='rgba(255,255,255,0.85)'; x.textAlign='center'; x.font='400 26px Arial';
-  x.fillText('(toca el botón para reservar en línea)', W/2, btnY+btnH+44);
+  // Título de las opciones
+  var tY=y0+lineas.length*lh+52;
+  x.textAlign='center'; x.fillStyle=colTxt;
+  x.font='800 30px Trebuchet MS, Arial';
+  x.fillText('Agenda tu cita en cualquiera de estas opciones:', W/2, tY);
 
-  // Pie (igual a la página 2 si hay plantilla: recortado de la franja inferior)
-  if(conPlantilla){
-    x.drawImage(_gcdBaseImg, 0,796,1348,100, 0,796,1348,100);
-  } else {
-    x.fillStyle='#FFFFFF'; x.textAlign='center'; x.font='400 26px Arial';
-    _gcdSpaced(x,'CENTRO COMERCIAL LA ESQUINA, CUMBAYÁ',W/2,H-46,7);
-  }
+  // 5 iconos clickeables en círculos
+  var iconos=[
+    {emoji:'📅', label:'Agenda',    url:urlAg},
+    {emoji:'📸', label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
+    {emoji:'🌐', label:'Web',       url:'https://www.sunsuspa.com'},
+    {emoji:'💬', label:'WhatsApp',  url:'https://wa.me/593990665112'},
+    {emoji:'📍', label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'},
+  ];
+  var r=58, gap=44, total=iconos.length*2*r+(iconos.length-1)*gap;
+  var cy=Math.min(tY+120, 700);
+  var links=[];
+  iconos.forEach(function(ic,i){
+    var cx=(W-total)/2+r+i*(2*r+gap);
+    // Círculo azul de la marca
+    x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle='#90A7CA'; x.fill();
+    x.beginPath(); x.arc(cx,cy,r-4,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
+    x.textAlign='center'; x.font='52px Arial';
+    x.fillText(ic.emoji, cx, cy+18);
+    x.fillStyle=colTxt; x.font='700 23px Arial';
+    x.fillText(ic.label, cx, cy+r+34);
+    // Zona clickeable: círculo + etiqueta
+    links.push({x:cx-r-8, y:cy-r-8, w:2*r+16, h:2*r+56, url:ic.url});
+  });
 
-  return {data:cv.toDataURL('image/jpeg',0.92), btn:{x:btnX,y:btnY,w:btnW,h:btnH}, url:urlAg};
+  // Indicación final
+  x.textAlign='center'; x.fillStyle=colTxt; x.font='400 26px Arial';
+  x.fillText('✨ Toca cualquier ícono y te llevará directo ✨', W/2, Math.min(cy+r+96, 866));
+
+  return {data:cv.toDataURL('image/jpeg',0.92), links:links};
 }
 
 // Cargar jsPDF bajo demanda (para armar el PDF de 2 páginas como el original)
@@ -2073,12 +2099,12 @@ function _gcdPDF(cb){
           var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[1348,896]});
           if(portadaData){ pdf.addImage(portadaData,'JPEG',0,0,1348,896); pdf.addPage([1348,896],'landscape'); }
           pdf.addImage(tarjetaData,'JPEG',0,0,1348,896);
-          // Página 3: mensaje personalizado con botón de agendamiento clickeable
+          // Página 3: mensaje personalizado + iconos de contacto clickeables
           try{
             var pag3=_gcdPaginaMensaje();
             pdf.addPage([1348,896],'landscape');
             pdf.addImage(pag3.data,'JPEG',0,0,1348,896);
-            pdf.link(pag3.btn.x,pag3.btn.y,pag3.btn.w,pag3.btn.h,{url:pag3.url});
+            pag3.links.forEach(function(lk){ pdf.link(lk.x,lk.y,lk.w,lk.h,{url:lk.url}); });
           }catch(eP3){}
           cb(pdf.output('blob'),'Certificado de regalo GIFT CARD SUNSU '+cod+'.pdf');
         }catch(e){cb(null);}
