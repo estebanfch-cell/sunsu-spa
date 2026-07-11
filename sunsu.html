@@ -1892,8 +1892,12 @@ function _gcdVal(id){var e=document.getElementById(id);return e?e.value.trim():'
 
 var GCD_BASE_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_tarjeta_base.jpg';
 var GCD_PAG3_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_pag3_fondo.jpg';
+var GCD_ICONO_IG_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_icono_ig.png';
+var GCD_ICONO_WA_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_icono_wa.png';
 var _gcdBaseImg=null;
 var _gcdPag3Img=null;
+var _gcdIconoIG=null;
+var _gcdIconoWA=null;
 
 function dibujarGiftCard(){
   var cv=document.getElementById('gcd-canvas'); if(!cv) return;
@@ -1917,6 +1921,12 @@ function dibujarGiftCard(){
     _gcdPag3Img.crossOrigin='anonymous';
     _gcdPag3Img.onerror=function(){_gcdPag3Img._fallo=true;};
     _gcdPag3Img.src=GCD_PAG3_URL;
+    _gcdIconoIG=new Image(); _gcdIconoIG.crossOrigin='anonymous';
+    _gcdIconoIG.onerror=function(){_gcdIconoIG._fallo=true;};
+    _gcdIconoIG.src=GCD_ICONO_IG_URL;
+    _gcdIconoWA=new Image(); _gcdIconoWA.crossOrigin='anonymous';
+    _gcdIconoWA.onerror=function(){_gcdIconoWA._fallo=true;};
+    _gcdIconoWA.src=GCD_ICONO_WA_URL;
   }
   var conPlantilla=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
 
@@ -1998,6 +2008,14 @@ function _gcdMensaje(){
 }
 
 // Página 3 del PDF: el mensaje personalizado con botón de agendamiento clickeable
+// Texto centrado MANUALMENTE: calcula el ancho y posiciona — inmune a estados del navegador
+function _gcdTxtCentrado(x,txt,cy){
+  var w=x.measureText(txt).width;
+  var prev=x.textAlign; x.textAlign='left';
+  x.fillText(txt,(1348-w)/2,cy);
+  x.textAlign=prev;
+}
+
 function _gcdPaginaMensaje(){
   var W=1348,H=896;
   var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
@@ -2007,7 +2025,6 @@ function _gcdPaginaMensaje(){
   var urlAg=mUrl?mUrl[0]:'https://app.acuityscheduling.com/schedule.php?owner=35065947';
   var cuerpo=msj.replace(/https?:\/\/[^\s]+/g,'').replace(/[ ]{2,}/g,' ').trim();
 
-  // Fondo: portada solo con laterales florales + logo SUNSU azul (horneado en la imagen)
   var conFondo=_gcdPag3Img&&_gcdPag3Img.complete&&_gcdPag3Img.naturalWidth>0&&!_gcdPag3Img._fallo;
   var conBase=_gcdBaseImg&&_gcdBaseImg.complete&&_gcdBaseImg.naturalWidth>0&&!_gcdBaseImg._fallo;
   var colTxt;
@@ -2015,17 +2032,15 @@ function _gcdPaginaMensaje(){
     x.drawImage(_gcdPag3Img,0,0,W,H);
     colTxt='#5C7494';
   } else {
-    // Respaldo: fondo azul con el encabezado de la plantilla
     x.fillStyle='#90A7CA'; x.fillRect(0,0,W,H);
     if(conBase) x.drawImage(_gcdBaseImg, 0,0,1348,300, 0,0,1348,300);
     colTxt='#FFFFFF';
   }
 
-  // Mensaje centrado
+  // Mensaje envuelto, centrado manualmente línea por línea
   x.fillStyle=colTxt;
-  x.textAlign='center';
   x.font='400 34px Arial';
-  var maxW=820, palabras=cuerpo.split(' '), lineas=[], lin='';
+  var maxW=780, palabras=cuerpo.split(' '), lineas=[], lin='';
   palabras.forEach(function(p){
     var prueba=lin?lin+' '+p:p;
     if(x.measureText(prueba).width>maxW&&lin){lineas.push(lin);lin=p;}
@@ -2033,44 +2048,47 @@ function _gcdPaginaMensaje(){
   });
   if(lin)lineas.push(lin);
   var lh=52, y0=Math.max(365, 455-(lineas.length*lh)/2);
-  lineas.forEach(function(l,i){
-    x.textAlign='center';
-    x.fillText(l, W/2, y0+i*lh);
-  });
+  lineas.forEach(function(l,i){ _gcdTxtCentrado(x, l, y0+i*lh); });
 
-  // Título de las opciones
+  // Título de opciones
   var tY=y0+lineas.length*lh+52;
-  x.textAlign='center'; x.fillStyle=colTxt;
+  x.fillStyle=colTxt;
   x.font='800 30px Trebuchet MS, Arial';
-  x.fillText('Agenda tu cita en cualquiera de estas opciones:', W/2, tY);
+  _gcdTxtCentrado(x,'Agenda tu cita en cualquiera de estas opciones:', tY);
 
-  // 5 iconos clickeables en círculos
+  // 5 iconos clickeables (Instagram y WhatsApp con sus logos reales)
+  var igOK=_gcdIconoIG&&_gcdIconoIG.complete&&_gcdIconoIG.naturalWidth>0&&!_gcdIconoIG._fallo;
+  var waOK=_gcdIconoWA&&_gcdIconoWA.complete&&_gcdIconoWA.naturalWidth>0&&!_gcdIconoWA._fallo;
   var iconos=[
-    {emoji:'📅', label:'Agenda',    url:urlAg},
-    {emoji:'📸', label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
-    {emoji:'🌐', label:'Web',       url:'https://www.sunsuspa.com'},
-    {emoji:'💬', label:'WhatsApp',  url:'https://wa.me/593990665112'},
-    {emoji:'📍', label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'},
+    {emoji:'📅', img:null,                  label:'Agenda',    url:urlAg},
+    {emoji:'📸', img:igOK?_gcdIconoIG:null, label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
+    {emoji:'🌐', img:null,                  label:'Web',       url:'https://www.sunsuspa.com'},
+    {emoji:'💬', img:waOK?_gcdIconoWA:null, label:'WhatsApp',  url:'https://wa.me/593990665112'},
+    {emoji:'📍', img:null,                  label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'},
   ];
   var r=58, gap=44, total=iconos.length*2*r+(iconos.length-1)*gap;
   var cy=Math.min(tY+120, 700);
   var links=[];
   iconos.forEach(function(ic,i){
     var cx=(W-total)/2+r+i*(2*r+gap);
-    // Círculo azul de la marca
     x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle='#90A7CA'; x.fill();
     x.beginPath(); x.arc(cx,cy,r-4,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
-    x.textAlign='center'; x.font='52px Arial';
-    x.fillText(ic.emoji, cx, cy+18);
+    if(ic.img){
+      var s=88; x.drawImage(ic.img, cx-s/2, cy-s/2, s, s);
+    } else {
+      x.font='52px Arial';
+      var we=x.measureText(ic.emoji).width;
+      x.textAlign='left'; x.fillText(ic.emoji, cx-we/2, cy+18);
+    }
     x.fillStyle=colTxt; x.font='700 23px Arial';
-    x.fillText(ic.label, cx, cy+r+34);
-    // Zona clickeable: círculo + etiqueta
+    var wl=x.measureText(ic.label).width;
+    x.textAlign='left'; x.fillText(ic.label, cx-wl/2, cy+r+34);
     links.push({x:cx-r-8, y:cy-r-8, w:2*r+16, h:2*r+56, url:ic.url});
   });
 
   // Indicación final
-  x.textAlign='center'; x.fillStyle=colTxt; x.font='400 26px Arial';
-  x.fillText('✨ Toca cualquier ícono y te llevará directo ✨', W/2, Math.min(cy+r+96, 866));
+  x.fillStyle=colTxt; x.font='400 26px Arial';
+  _gcdTxtCentrado(x,'✨ Toca cualquier ícono y te llevará directo ✨', Math.min(cy+r+96, 866));
 
   return {data:cv.toDataURL('image/jpeg',0.92), links:links};
 }
