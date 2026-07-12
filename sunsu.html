@@ -914,11 +914,11 @@ function renderTicket(c){
       <div class="card">
         <div class="card-title">👤 Cliente</div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" oninput="T.cedula=this.value;clearTimeout(window._regTimer);var _cv=this.value;if(_cv.length>=10){buscarEnRegistroSheet('ced',_cv);}else{clearTimeout(window._regTimer);window._regTimer=setTimeout(function(){buscarEnRegistroSheet('ced',document.getElementById('inp-ced').value);},300);}">
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" oninput="T.cedula=this.value;window._cedAutofill=false;var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);}">
         </div>
         <div class="two-col">
-          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" oninput="T.nombre=this.value;clearTimeout(window._regTimerN);clearTimeout(window._regTimerN);window._regTimerN=setTimeout(function(){var nom=document.getElementById('inp-nom').value.trim();var ape=document.getElementById('inp-ape').value.trim();if(nom&&ape){buscarEnRegistroSheet('q',nom+' '+ape);}},200)"></div>
-          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" oninput="T.apellido=this.value;clearTimeout(window._regTimerA);clearTimeout(window._regTimerA);var _an=document.getElementById('inp-nom').value.trim();var _aa=this.value.trim();if(_an&&_aa.length>=2){buscarEnRegistroSheet('q',_an+' '+_aa);}else{window._regTimerA=setTimeout(function(){var n=document.getElementById('inp-nom').value+' '+document.getElementById('inp-ape').value;buscarEnRegistroSheet('q',n.trim());},200);}"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
+          <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" autocomplete="off" oninput="T.apellido=this.value;_lookupNombreTicket()"></div>
         </div>
 
         <div class="field"><label>Fecha de retorno</label><input type="date" id="inp-ret"></div>
@@ -4038,7 +4038,31 @@ function buscarClienteEnRegistro(cedula, nombre){
 }
 
 // ── Búsqueda de cliente en REGISTRO del sheet (bidireccional) ──
-async function buscarEnRegistroSheet(tipo, valor) {
+// Espera a que un elemento exista (la vista puede estar renderizándose) y le pone el valor
+function _setCampoTicket(id, val, intentos){
+  var el=document.getElementById(id);
+  if(el){el.value=val;return true;}
+  if((intentos||0)<12) setTimeout(function(){_setCampoTicket(id,val,(intentos||0)+1);},100);
+  return false;
+}
+function _cliMsgTicket(texto, tipo){ // tipo: 'ok' | 'nueva'
+  var el=document.getElementById('cli-msg');
+  if(!el) return;
+  el.style.display='block';
+  if(tipo==='ok'){el.style.background='var(--green-l)';el.style.color='var(--green)';}
+  else{el.style.background='var(--gold-l)';el.style.color='var(--gold)';}
+  el.textContent=texto;
+}
+// Lookup unificado nombre+apellido del formulario del ticket (debounce 250ms)
+function _lookupNombreTicket(){
+  clearTimeout(window._regTimerN);
+  window._regTimerN=setTimeout(function(){
+    var nomEl=document.getElementById('inp-nom'), apeEl=document.getElementById('inp-ape');
+    var nom=(nomEl?nomEl.value:'').trim(), ape=(apeEl?apeEl.value:'').trim();
+    if(nom.length>=2&&ape.length>=2) buscarEnRegistroSheet('q', nom+' '+ape);
+  },250);
+}
+async function buscarEnRegistroSheet(tipo, valor, avisarNueva) {
   if (!valor || valor.length < 3) return;
   try {
     var url = APPS_SCRIPT_URL + '?action=getRegistro&' + tipo + '=' + encodeURIComponent(valor) + '&_t=' + Date.now();
@@ -4046,35 +4070,47 @@ async function buscarEnRegistroSheet(tipo, valor) {
     var text = await r.text();
     var res;
     try { res = JSON.parse(text); } catch(pe) { console.error('Parse error:', text.slice(0,200)); return; }
-    console.log('getRegistro result for', tipo, valor, ':', res);
-    if (!res.ok || !res.data || !res.data.length) { console.log('No results found'); return; }
-    var cliente = res.data[0];
+    if (!res.ok || !res.data || !res.data.length) {
+      if (avisarNueva) { T._clienteNuevo=true; _cliMsgTicket('Cliente nueva — ingresa la cédula','nueva'); }
+      return;
+    }
     if (tipo === 'ced') {
-      // Buscamos por cédula → rellenar nombre y apellido si están vacíos
+      var cliente = res.data[0];
+      // Cédula completa → llenar nombre/apellido si están vacíos
       var nom = document.getElementById('inp-nom');
       var ape = document.getElementById('inp-ape');
-      if (nom && !nom.value) { nom.value = cliente.nombre; T.nombre = cliente.nombre; }
-      if (ape && !ape.value) { ape.value = cliente.apellido; T.apellido = cliente.apellido; }
+      if (nom && !nom.value.trim()) { nom.value = cliente.nombre; T.nombre = cliente.nombre; }
+      if (ape && !ape.value.trim()) { ape.value = cliente.apellido; T.apellido = cliente.apellido; }
+      T._clienteNuevo=false;
+      _cliMsgTicket('Cliente: '+cliente.nombre+' '+cliente.apellido,'ok');
     } else {
-      // Buscamos por nombre → siempre rellenar cédula si hay 1 resultado exacto
-      if (res.data.length === 1 && cliente.cedula) {
-        T.cedula = cliente.cedula;
-        // Query fresh - DOM may have re-rendered
+      // Búsqueda por nombre → elegir el MEJOR match:
+      // 1º coincidencia exacta nombre+apellido (o invertido), 2º único resultado
+      var q = valor.toLowerCase().trim();
+      var exacto = res.data.find(function(d){
+        var f=((d.nombre||'')+' '+(d.apellido||'')).toLowerCase().trim();
+        var fi=((d.apellido||'')+' '+(d.nombre||'')).toLowerCase().trim();
+        return f===q||fi===q;
+      });
+      var cliente = exacto || (res.data.length===1 ? res.data[0] : null);
+      if (cliente && cliente.cedula) {
         var ced = document.getElementById('inp-ced');
-        if (ced) {
-          ced.value = cliente.cedula;
-        } else {
-          // Try again after short delay in case DOM is still rendering
-          setTimeout(function() {
-            var ced2 = document.getElementById('inp-ced');
-            if (ced2) ced2.value = cliente.cedula;
-          }, 300);
+        var cedActual = ced ? ced.value.trim() : '';
+        // Solo escribir si el campo está vacío o si el valor actual lo puso el autofill
+        if (!cedActual || window._cedAutofill) {
+          T.cedula = cliente.cedula;
+          window._cedAutofill = true;
+          _setCampoTicket('inp-ced', cliente.cedula);
         }
+        T._clienteNuevo=false;
+        _cliMsgTicket('Cliente: '+cliente.nombre+' '+cliente.apellido+' · '+cliente.cedula,'ok');
+      } else if (avisarNueva) {
+        T._clienteNuevo=true;
+        _cliMsgTicket('Cliente nueva — ingresa la cédula','nueva');
       }
     }
   } catch(e) { /* silencioso */ }
 }
-
 function renderCitas(c){
   const hoy=new Date();
   const fecha=hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
@@ -4356,33 +4392,21 @@ function irATicket(btn){
   T.nombre=btn.getAttribute('data-nom')||'';
   T.apellido=btn.getAttribute('data-ape')||'';
   T.cedula='';
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  var ft=document.querySelector('.tab');if(ft)ft.classList.add('active');
-  renderTicket(document.getElementById('content'));
-  setTimeout(function(){
-    var n=document.getElementById('inp-nom');var a=document.getElementById('inp-ape');
-    if(n)n.value=T.nombre;if(a)a.value=T.apellido;
-    var buscarCed=function(reg){
-      var bn=T.nombre.toLowerCase().trim();var bap=T.apellido.toLowerCase().trim();
-      var found=null;
-      for(var i=0;i<reg.length;i++){
-        if(reg[i].n.toLowerCase().trim()===bn&&reg[i].ap.toLowerCase().trim()===bap){found=reg[i];break;}
-      }
-      var ce=document.getElementById('inp-ced');var el=document.getElementById('cli-msg');
-      if(found&&ce){
-        ce.value=found.c;T.cedula=found.c;T._clienteNuevo=false;
-        if(el){el.style.display='block';el.style.background='var(--green-l)';el.style.color='var(--green)';el.textContent='Cliente: '+found.n+' '+found.ap;}
-      }else{
-        T._clienteNuevo=true;
-        if(el){el.style.display='block';el.style.background='var(--gold-l)';el.style.color='var(--gold)';el.textContent='Cliente nueva - ingresa cedula';}
-      }
-    };
-    if(window._regCache){buscarCed(window._regCache);}
-    else{fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=1320990476&single=true&output=csv').then(function(r){return r.text();}).then(function(csv){var lines=csv.split('\n'),reg=[];for(var i=1;i<lines.length;i++){var c=lines[i].split(',');if(c[1])reg.push({c:c[1].trim().replace(/"/g,'').split('.')[0],n:(c[2]||'').trim().replace(/"/g,''),ap:(c[3]||'').trim().replace(/"/g,'')});}window._regCache=reg;buscarCed(reg);});}
-    toast('Ticket para '+T.nombre,'#6A9E7A');
-  },200);
+  window._cedAutofill=true; // la cédula que aparezca vendrá del registro → se puede sobrescribir
+  showTab('ticket');
+  toast('Ticket para '+T.nombre,'#6A9E7A');
+  // Esperar a que el formulario exista (sin depender de un timeout ciego),
+  // poner nombre/apellido y disparar la MISMA búsqueda del endpoint que usan los campos
+  var intentos=0;
+  var precargar=function(){
+    var n=document.getElementById('inp-nom');
+    var a=document.getElementById('inp-ape');
+    if(!n||!a){ if(intentos++<20) setTimeout(precargar,100); return; }
+    n.value=T.nombre; a.value=T.apellido;
+    buscarEnRegistroSheet('q', (T.nombre+' '+T.apellido).trim(), true); // true = avisar si es clienta nueva
+  };
+  precargar();
 }
-
 function parseCsvLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++){if(line[i]==='"'){q=!q;}else if(line[i]===','&&!q){r.push(c);c='';}else{c+=line[i];}}r.push(c);return r;}
 
 function cargarCatalogo(){
@@ -4517,6 +4541,7 @@ function verCitas(c,o,forzar){
 
   var body=function(){return document.getElementById('cb');};
 
+  if(forzar) _histData=null; // refrescar también los tickets al actualizar (para el cruce cita↔ticket)
   // Usar cache si existe y no expiró y no es forzado
   var cached=window._citasCache[diaNom];
   if(!forzar && cached && (Date.now()-cached.ts) < CITAS_TTL){
@@ -4549,8 +4574,45 @@ function verCitas(c,o,forzar){
     });
 }
 
+// ── Cruce cita ↔ tickets: una cita cuenta como completada si ese día existe un
+//    ticket de la misma clienta (haya salido del botón 🎫 o creado a mano) ──
+function _normNomCita(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zñ\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+function _citaTieneTicket(apt, fechaStr){
+  if(!window._histData) return false;
+  var pn=_normNomCita(apt.firstName).split(' ')[0]; // primer nombre
+  var pa=_normNomCita(apt.lastName).split(' ')[0];  // primer apellido
+  if(pn.length<2) return false;
+  for(var i=0;i<_histData.length;i++){
+    var t=_histData[i];
+    if(t.fecha!==fechaStr) continue;
+    var full=_normNomCita((t.nombre||'')+' '+(t.apellido||''));
+    if(full.indexOf(pn)>=0 && (!pa || pa.length<2 || full.indexOf(pa)>=0)) return true;
+  }
+  return false;
+}
 function _renderCitasList(bd, data, diaNom){
   var o=diaNom==='ayer'?-1:diaNom==='manana'?1:0;
+  // Si el historial de tickets aún no está cargado, traerlo y re-pintar (una sola vez)
+  if(!window._histData && !window._histFetchCitas){
+    window._histFetchCitas=true;
+    fetch(APPS_SCRIPT_URL+'?action=getHistorial')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        window._histFetchCitas=false;
+        if(Array.isArray(d)){
+          _histData=d;
+          var bd2=document.getElementById('cb');
+          if(bd2) _renderCitasList(bd2, data, diaNom);
+        }
+      })
+      .catch(function(){window._histFetchCitas=false;});
+  }
+  var hoyC=new Date();
+  var diaC=new Date(hoyC.getFullYear(),hoyC.getMonth(),hoyC.getDate()+o);
+  var padC=function(n){return String(n).padStart(2,'0');};
+  var fechaStrC=diaC.getFullYear()+'-'+padC(diaC.getMonth()+1)+'-'+padC(diaC.getDate());
       if(!Array.isArray(data)){
         bd.innerHTML='<div style="padding:20px;color:var(--gray);text-align:center">Sin citas disponibles</div>';
         return;
@@ -4572,7 +4634,9 @@ function _renderCitasList(bd, data, diaNom){
         var hora=dt.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true});
         var nombre=((apt.firstName||'')+' '+(apt.lastName||'')).trim();
         var nueva=(apt.type||'').toUpperCase().indexOf('PRIMERA')>=0;
-        var ok=apt.labels&&apt.labels.some(function(l){return l.name==='COMPLETADO';});
+        var okLabel=apt.labels&&apt.labels.some(function(l){return l.name==='COMPLETADO';});
+        var okTicket=!okLabel&&o!==1&&_citaTieneTicket(apt, fechaStrC);
+        var ok=okLabel||okTicket;
         var col=ok?'#ccc':nueva?'#C4A45A':'#6A9E7A';
         h+='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+col+';box-shadow:0 1px 4px rgba(0,0,0,0.06);opacity:'+(ok?'0.6':'1')+'">';
         h+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
@@ -4586,7 +4650,8 @@ function _renderCitasList(bd, data, diaNom){
         h+='</div>';
         if(apt.notes) h+='<div style="font-size:0.72rem;color:#333;background:#F3F0FA;border-radius:8px;padding:7px 10px;margin-top:9px">📌 '+apt.notes+'</div>';
         if(o!==1&&!ok) h+='<button onclick="irATicket(this)" data-nom="'+apt.firstName+'" data-ape="'+apt.lastName+'" data-tel="'+(apt.phone||'')+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">🎫 Ticket para '+apt.firstName+'</button>';
-        if(ok) h+='<div style="text-align:center;font-size:0.75rem;color:#aaa;margin-top:8px">✓ Completada</div>';
+        if(okTicket) h+='<div style="text-align:center;font-size:0.75rem;font-weight:700;color:#6A9E7A;background:#EDF5EF;border-radius:9px;padding:7px;margin-top:8px">🎫 Ticket ya registrado ✓</div>';
+        else if(ok) h+='<div style="text-align:center;font-size:0.75rem;color:#aaa;margin-top:8px">✓ Completada</div>';
         h+='</div>';
       });
       bd.innerHTML=h;
