@@ -3095,12 +3095,27 @@ function renderBuscar(c){
 function _histBuscarGo(esStaff){
   var el=document.getElementById('hist-buscar');
   var q=(el?el.value:'').trim();
-  if(!q){toast('Escribe cédula o nombre para buscar','#C9A227');return;}
-  window._histBusqueda=q;
+  window._histBusqueda=q; // vacío = volver a la vista normal
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
   if(esStaff) mostrarHistorialStaff(c,fh,fh); else mostrarHistorialAdmin(c,fh,fh,window._histCosmFiltro);
+  // Devolver el foco y el cursor al final para seguir escribiendo sin interrupciones
+  setTimeout(function(){
+    var el2=document.getElementById('hist-buscar');
+    if(el2){el2.focus();var L=el2.value.length;try{el2.setSelectionRange(L,L);}catch(eSR){}}
+  },30);
+}
+// Búsqueda EN VIVO: re-filtra sola 350ms después de dejar de teclear (mín. 2 caracteres)
+function _histBuscarLive(esStaff){
+  clearTimeout(window._histBuscarTimer);
+  window._histBuscarTimer=setTimeout(function(){
+    var el=document.getElementById('hist-buscar');
+    var q=(el?el.value:'').trim();
+    if(q.length===1) return; // 1 letra traería demasiado — espera la segunda
+    if(q===(window._histBusqueda||'')) return; // sin cambios
+    _histBuscarGo(esStaff);
+  },350);
 }
 function _histBuscarClear(esStaff){
   window._histBusqueda='';
@@ -3117,7 +3132,7 @@ function _histMatchBusq(t, busq){
 function _histBuscarUI(esStaff, busq){
   return '<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">🔍 Buscar clienta</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:12px">'
-    +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Cédula o nombre..." onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
+    +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Cédula o nombre..." autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
     +'<button onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
     +(busq?'<button onclick="_histBuscarClear('+esStaff+')" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>':'')
     +'</div>'
