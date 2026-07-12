@@ -3096,15 +3096,14 @@ function _histBuscarGo(esStaff){
   var el=document.getElementById('hist-buscar');
   var q=(el?el.value:'').trim();
   window._histBusqueda=q; // vacío = volver a la vista normal
+  // Actualizar SOLO los resultados: el input no se recrea → el teclado del iPhone
+  // mantiene su modo (números/letras) y el cursor no se pierde
+  if(_histActualizarRes(esStaff)) return;
+  // Respaldo (vista aún no montada): render completo
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
   if(esStaff) mostrarHistorialStaff(c,fh,fh); else mostrarHistorialAdmin(c,fh,fh,window._histCosmFiltro);
-  // Devolver el foco y el cursor al final para seguir escribiendo sin interrupciones
-  setTimeout(function(){
-    var el2=document.getElementById('hist-buscar');
-    if(el2){el2.focus();var L=el2.value.length;try{el2.setSelectionRange(L,L);}catch(eSR){}}
-  },30);
 }
 // Búsqueda EN VIVO: re-filtra sola 350ms después de dejar de teclear (mín. 2 caracteres)
 function _histBuscarLive(esStaff){
@@ -3119,10 +3118,87 @@ function _histBuscarLive(esStaff){
 }
 function _histBuscarClear(esStaff){
   window._histBusqueda='';
+  var elC=document.getElementById('hist-buscar');
+  if(elC) elC.value='';
+  if(_histActualizarRes(esStaff)) return;
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
   if(esStaff) mostrarHistorialStaff(c,fh,fh); else mostrarHistorialAdmin(c,fh,fh,window._histCosmFiltro);
+}
+// Filtra tickets según búsqueda (todo el historial) o fecha/cosmetóloga
+function _histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro){
+  return _histData.filter(function(t){
+    if(busq) return _histMatchBusq(t, busq);
+    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
+    if(cosmFiltro && t.cosmetologa !== cosmFiltro) return false;
+    return true;
+  });
+}
+function _histFiltrarStaff(busq, fechaDesde, fechaHasta){
+  return _histData.filter(function(t){
+    if(busq) return _histMatchBusq(t, busq);
+    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
+    return t.cosmetologa&&t.cosmetologa.toLowerCase().indexOf(CU.name.toLowerCase().split(' ')[0].toLowerCase())>=0;
+  });
+}
+// HTML de SOLO los resultados (resumen + tarjetas) — se actualiza sin tocar el buscador,
+// así el teclado del iPhone no se reinicia mientras escribes
+function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
+  var totalIngresos=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
+  var totFac=0, totPaq=0, totProd=0;
+  tickets.forEach(function(t){
+    if(t.facial) totFac++;
+    if(t.pack3||t.pack6) totPaq++;
+    if(t.productos&&t.productos.length) totProd+=t.productos.length;
+  });
+  var avgTicket=tickets.length?totalIngresos/tickets.length:0;
+  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
+  html+='<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:12px">'
+    +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">'
+    +'Resumen'+(busq?' · 🔍 "'+busq+'" (todo el historial)':((cosmFiltro?' · '+cosmFiltro:'')+' · '+fechaDesde+(fechaDesde!==fechaHasta?' → '+fechaHasta:'')))+(tickets.length?' · '+tickets.length+' ticket'+(tickets.length!==1?'s':''):'')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin-bottom:8px">'
+    +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
+    +'<div style="background:var(--lavender-l,#F3F0FA);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--lavender,#9B8EC4)">'+totPaq+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>'
+    +'<div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">'+totProd+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>'
+    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+totalIngresos.toFixed(2)+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>'
+    +'</div>'
+    +(tickets.length?'<div style="font-size:0.68rem;color:var(--gray);text-align:right">Promedio por ticket: <strong>$'+avgTicket.toFixed(2)+'</strong></div>':'')
+    +'</div>';
+  if(tickets.length===0){
+    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
+  } else {
+    html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
+    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
+  }
+  return html;
+}
+function _histResStaffHTML(tickets, busq){
+  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'"</div>':'');
+  html+='<div style="background:var(--blue-l);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;gap:10px;align-items:center">'
+    +'<div style="font-size:1.8rem;font-weight:900;color:var(--navy)">'+tickets.length+'</div>'
+    +'<div><div style="font-size:0.78rem;font-weight:700;color:var(--navy)">'+(busq?'Tickets de la clienta':'Tickets enviados')+'</div>'
+    +'<div style="font-size:0.68rem;color:var(--gray)">'+(busq?('🔍 '+busq):CU.name)+'</div></div>'
+    +'</div>';
+  if(tickets.length===0){
+    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
+  } else {
+    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
+  }
+  return html;
+}
+// Actualiza SOLO el contenedor de resultados (el buscador y el teclado quedan intactos)
+function _histActualizarRes(esStaff){
+  var res=document.getElementById('hist-res'); if(!res) return false;
+  var busq=(window._histBusqueda||'').trim().toLowerCase();
+  var f=window._histFiltroActual||{};
+  var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
+  var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
+  var fd=f.desde||fh, fha=f.hasta||fh;
+  if(esStaff) res.innerHTML=_histResStaffHTML(_histFiltrarStaff(busq,fd,fha), busq);
+  else res.innerHTML=_histResAdminHTML(_histFiltrarAdmin(busq,fd,fha,window._histCosmFiltro||''), window._histCosmFiltro||'', fd, fha, busq);
+  return true;
 }
 function _histMatchBusq(t, busq){
   var full=((t.nombre||'')+' '+(t.apellido||'')).toLowerCase();
@@ -3134,20 +3210,16 @@ function _histBuscarUI(esStaff, busq){
     +'<div style="display:flex;gap:6px;margin-bottom:12px">'
     +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Cédula o nombre..." autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
     +'<button onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
-    +(busq?'<button onclick="_histBuscarClear('+esStaff+')" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>':'')
-    +'</div>'
-    +(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
+    +'<button onclick="_histBuscarClear('+esStaff+')" title="Limpiar búsqueda" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>'
+    +'</div>';
 }
 
 function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   if(!_histData) return;
   if(!fechaHasta) fechaHasta=fechaDesde;
   var busq=(window._histBusqueda||'').trim().toLowerCase();
-  var tickets=_histData.filter(function(t){
-    if(busq) return _histMatchBusq(t, busq); // búsqueda de clienta: todo su historial
-    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
-    return t.cosmetologa&&t.cosmetologa.toLowerCase().indexOf(CU.name.toLowerCase().split(' ')[0].toLowerCase())>=0;
-  });
+  var tickets=_histFiltrarStaff(busq, fechaDesde, fechaHasta);
+  window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
@@ -3175,19 +3247,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
     +'</div>'
     +'</div>';
 
-  // Counter only — no total $ for staff
-  html+='<div style="background:var(--blue-l);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;gap:10px;align-items:center">'
-    +'<div style="font-size:1.8rem;font-weight:900;color:var(--navy)">'+tickets.length+'</div>'
-    +'<div><div style="font-size:0.78rem;font-weight:700;color:var(--navy)">Tickets enviados</div>'
-    +'<div style="font-size:0.68rem;color:var(--gray)">'+CU.name+'</div></div>'
-    +'</div>';
-
-  if(tickets.length===0){
-    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets en este rango</div>';
-  } else {
-    // showPrices = true — mostrar precios siempre
-    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
-  }
+  html+='<div id="hist-res">'+_histResStaffHTML(tickets, busq)+'</div>';
   c.innerHTML=html;
 }
 
@@ -3226,13 +3286,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   if(!_histData) return;
   cosmFiltro = cosmFiltro || window._histCosmFiltro || '';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
-  var tickets=_histData.filter(function(t){
-    if(busq) return _histMatchBusq(t, busq); // búsqueda: todo el historial de la clienta
-    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
-    if(cosmFiltro && t.cosmetologa !== cosmFiltro) return false;
-    return true;
-  });
-  var totalIngresos=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
+  var tickets=_histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro);
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
@@ -3272,36 +3326,9 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
     +'</div>'
     +'</div>';
 
-  // KPIs — igual que resumen de búsqueda
-  var totFac=0, totPaq=0, totProd=0;
-  tickets.forEach(function(t){
-    if(t.facial) totFac++;
-    if(t.pack3||t.pack6) totPaq++;
-    if(t.productos&&t.productos.length) totProd+=t.productos.length;
-  });
-  var avgTicket=tickets.length?totalIngresos/tickets.length:0;
-
-  html+='<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:12px">'
-    +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">'
-    +'Resumen'+(busq?' · 🔍 "'+busq+'" (todo el historial)':((cosmFiltro?' · '+cosmFiltro:'')+' · '+fechaDesde+(fechaDesde!==fechaHasta?' → '+fechaHasta:'')))+(tickets.length?' · '+tickets.length+' ticket'+(tickets.length!==1?'s':''):'')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin-bottom:8px">'
-    +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
-    +'<div style="background:var(--lavender-l,#F3F0FA);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--lavender,#9B8EC4)">'+totPaq+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>'
-    +'<div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">'+totProd+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>'
-    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+totalIngresos.toFixed(2)+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>'
-    +'</div>'
-    +(tickets.length?'<div style="font-size:0.68rem;color:var(--gray);text-align:right">Promedio por ticket: <strong>$'+avgTicket.toFixed(2)+'</strong></div>':'')
-    +'</div>';
-
-  if(tickets.length===0){
-    html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(cosmFiltro?' de '+cosmFiltro:'')+'</div>';
-  } else {
-    html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
-    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
-  }
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
   window._histCosmFiltro=cosmFiltro;
+  html+='<div id="hist-res">'+_histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq)+'</div>';
   c.innerHTML=html;
 }
 
