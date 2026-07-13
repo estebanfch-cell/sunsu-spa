@@ -5506,7 +5506,12 @@ function cargarBorradorOC(){
   .then(function(r){return r.json();})
   .then(function(d){
     if(d.error){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
-    window._ocBorrador={prov:p,qLabel:d.qLabel,items:(d.items||[]).map(function(it){it.cant=it.sugerido;return it;})};
+    var itemsB=(d.items||[]).map(function(it){it.cant=it.sugerido;return it;});
+    window._ocBorrador={prov:p,qLabel:d.qLabel,items:itemsB,
+      // Bloque de facturación EDITABLE: cantidades vendidas y precios (los productos
+      // propios de Sunsu que no son a consignación se quitan aquí con ✕)
+      fact:itemsB.filter(function(it){return (it.vendido||0)>0;})
+        .map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido,compra:it.compra};})};
     _pintarBorradorOC();
   })
   .catch(function(e){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
@@ -5516,15 +5521,37 @@ function _pintarBorradorOC(){
   if(!B||!box) return;
   var conCant=B.items.filter(function(it){return (it.cant||0)>0;});
   var total=conCant.reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
-  var html='<div class="card" style="padding:14px;margin-bottom:10px">'
-    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">📝 Borrador — '+B.prov.nombre+'</div>'
-    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Base: vendido en '+B.qLabel+' + 20% · Solo productos ACTIVOS · Edita cantidades o quita con ✕ — nada se envía hasta que aprietes Generar</div>';
+  var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
+  // ── BLOQUE 1: FACTURACIÓN editable (consignación — lo vendido que se paga al proveedor) ──
+  var html='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #8A6D1A">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">💵 Facturación — vendido en '+B.qLabel+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Lo que el proveedor te factura (consignación). Edita cantidades y precios, o quita con ✕ los productos propios de Sunsu que no van a consignación.</div>';
+  if(!(B.fact||[]).length){html+='<div style="text-align:center;color:var(--gray);font-size:0.7rem;padding:10px">Sin ventas en esta quincena</div>';}
+  (B.fact||[]).forEach(function(it,i){
+    html+='<div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+'</div></div>'
+      +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">VENDIDO</div>'
+      +'<input type="number" inputmode="numeric" min="0" value="'+(it.vendido||0)+'" oninput="window._ocBorrador.fact['+i+'].vendido=parseFloat(this.value)||0;_ocTotal()" style="width:52px;padding:7px;border:1.5px solid #C4943A;border-radius:9px;font-size:0.82rem;font-weight:800;text-align:center;color:var(--navy);outline:none"></div>'
+      +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">PRECIO $</div>'
+      +'<input type="number" inputmode="decimal" min="0" step="0.01" value="'+(it.compra||0)+'" oninput="window._ocBorrador.fact['+i+'].compra=parseFloat(this.value)||0;_ocTotal()" style="width:64px;padding:7px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;font-weight:700;text-align:center;color:var(--navy);outline:none"></div>'
+      +'<button onclick="window._ocBorrador.fact.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:24px;height:24px;font-size:0.66rem;cursor:pointer;flex-shrink:0">✕</button>'
+      +'</div>';
+  });
+  html+='<div id="oc-total-fact" style="text-align:right;font-size:0.76rem;font-weight:800;color:#8A6D1A;padding-top:9px">Total a facturar: $'+totalF.toFixed(2)+'</div></div>';
+  // ── BLOQUE 2: RESTOCK ──
+  html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid var(--navy)">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">📦 Orden de restock — '+B.prov.nombre+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Sugerido: vendido + 20% · Solo productos ACTIVOS · Compara con el STOCK y edita — nada se envía hasta que aprietes Generar</div>';
   if(!B.items.length){html+='<div style="text-align:center;color:var(--gray);font-size:0.72rem;padding:14px">Sin productos activos en esta familia</div>';}
   B.items.forEach(function(it,i){
+    var stCol=it.stock<=0?'#B86B6B':(it.stock<=it.minimo?'#C4943A':'var(--navy)');
     html+='<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
-      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · stock '+it.stock+' · vendido '+it.vendido+' · $'+(it.compra||0).toFixed(2)+' c/u</div></div>'
-      +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.items['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:60px;padding:8px;border:1.5px solid '+((it.cant||0)>0?'var(--navy)':'#ECEEF4')+';border-radius:9px;font-size:0.84rem;font-weight:800;text-align:center;color:var(--navy);outline:none">'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · vendido '+it.vendido+' · $'+(it.compra||0).toFixed(2)+' c/u</div></div>'
+      +'<div style="text-align:center;flex-shrink:0;min-width:36px"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">STOCK</div><div style="font-size:0.84rem;font-weight:900;color:'+stCol+'">'+it.stock+'</div></div>'
+      +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">PEDIR</div>'
+      +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.items['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:56px;padding:7px;border:1.5px solid '+((it.cant||0)>0?'var(--navy)':'#ECEEF4')+';border-radius:9px;font-size:0.84rem;font-weight:800;text-align:center;color:var(--navy);outline:none"></div>'
       +'<button onclick="window._ocBorrador.items.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:26px;height:26px;font-size:0.7rem;cursor:pointer;flex-shrink:0">✕</button>'
       +'</div>';
   });
@@ -5539,162 +5566,171 @@ function _ocTotal(){
   var total=conCant.reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
   var el=document.getElementById('oc-total');
   if(el) el.textContent='Total estimado: $'+total.toFixed(2)+' · '+conCant.length+' productos';
+  var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
+  var elF=document.getElementById('oc-total-fact');
+  if(elF) elF.textContent='Total a facturar: $'+totalF.toFixed(2);
 }
 function generarOCApp(){
   var B=window._ocBorrador;
   var items=B.items.filter(function(it){return (it.cant||0)>0;}).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant,compra:it.compra};});
-  if(!items.length){toast('La orden está vacía — pon cantidades','#C9A227');return;}
-  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nProductos: '+items.length+'\n\nSe registrará en Entregas y se descargará el PDF. ¿Continuar?')) return;
+  var factF=(B.fact||[]).filter(function(it){return (it.vendido||0)>0;});
+  // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
+  if(!items.length&&!factF.length){toast('La orden está vacía: ni facturación ni restock','#C9A227');return;}
+  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||'0 — solo facturación')+' productos\n\n'+(items.length?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
   toast('⏳ Generando orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,provData:B.prov,usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
     toast('✅ Orden '+d.numOrden+' generada y registrada en Entregas','var(--green)');
-    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items);
+    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items, factF);
     setTimeout(function(){showTab('entradas');},1800);
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
-function _pdfOC(numOrden, fecha, prov, qLabel, items){
-  // Cargar el fondo floral del gift card (trae el logo SUNSU horneado) y armar el PDF con él;
-  // si la imagen no carga, cae al diseño plano de respaldo.
+// ── Fondo A4 vertical compuesto desde el arte del gift card:
+//    crema + logo 순수 SUNSU limpio (sin "GLASS SKIN / FACIALES COREANOS") arriba,
+//    florales en las esquinas inferiores. Medidas exactas del asset (1348x896):
+//    logo y50-195 x480-870 · floral izq x0-300 y330-896 · floral der x1130-1348 y340-896
+function _fondoA4Sunsu(fondo){
+  if(window._fondoA4Cache) return window._fondoA4Cache;
+  var CW=1240, CH=1754; // A4 a ~150dpi
+  var cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+  var ctx=cv.getContext('2d');
+  ctx.fillStyle='rgb(253,250,241)'; ctx.fillRect(0,0,CW,CH);
+  try{
+    // Logo limpio, centrado arriba
+    var lw=340, lh=lw*(145/390);
+    ctx.drawImage(fondo, 480,50,390,145, (CW-lw)/2, 60, lw, lh);
+    // Florales inferiores
+    var fiW=330, fiH=fiW*(566/300);
+    ctx.drawImage(fondo, 0,330,300,566, 0, CH-fiH, fiW, fiH);
+    var fdW=240, fdH=fdW*(556/218);
+    ctx.drawImage(fondo, 1130,340,218,556, CW-fdW, CH-fdH, fdW, fdH);
+  }catch(eC){}
+  window._fondoA4Cache=cv.toDataURL('image/jpeg',0.85);
+  return window._fondoA4Cache;
+}
+
+function _pdfOC(numOrden, fecha, prov, qLabel, items, itemsFact){
   var img=new Image();
   img.crossOrigin='anonymous';
-  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,img);};
-  img.onerror=function(){_pdfOCPlano(numOrden,fecha,prov,qLabel,items);};
+  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,img);};
+  img.onerror=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,null);};
   img.src=GCD_PAG3_URL;
 }
-function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, fondo){
+function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
-    var W=fondo.naturalWidth||1348, H=fondo.naturalHeight||953;
-    var doc=new window.jspdf.jsPDF({orientation:W>H?'l':'p',unit:'pt',format:[W,H]});
-    var NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A';
-    var xIzq=(W-870)/2, xDer=xIzq+870; // zona limpia entre florales (igual que la pág. 3)
-    var pintarFondo=function(){doc.addImage(fondo,'JPEG',0,0,W,H);};
-    pintarFondo();
-    var y=200;
-    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(34);
-    doc.text('ORDEN DE PEDIDO',W/2,y,{align:'center'}); y+=34;
-    doc.setFontSize(17); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-    doc.text('Pre-factura de consignación · Sunsu Spa · Quito',W/2,y,{align:'center'}); y+=44;
-    // Datos de la orden y del proveedor
-    doc.setFontSize(16);
-    var fila=function(l,v,destacar){
+    var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}); // A4 vertical: 595 x 842
+    var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A';
+    var xI=55, ANCHO=485, xD=xI+ANCHO;
+    var bg=fondo?_fondoA4Sunsu(fondo):null;
+    var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); };
+    pintar();
+    var y=150;
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
+    doc.text('ORDEN DE PEDIDO',W/2,y,{align:'center'}); y+=17;
+    doc.setFontSize(9.5); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+    doc.text('Pre-factura de consignación · Sunsu Spa · Quito',W/2,y,{align:'center'}); y+=26;
+    doc.setFontSize(9);
+    var fila=function(l,v,dest){
       if(!v) return;
-      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text(l,xIzq,y);
-      doc.setFont('helvetica',destacar?'bold':'normal'); doc.setTextColor(destacar?GOLD:TXT);
-      doc.text(v.toString(),xIzq+200,y);
-      y+=24;
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text(l,xI,y);
+      doc.setFont('helvetica',dest?'bold':'normal'); doc.setTextColor(dest?GOLD:TXT);
+      doc.text(v.toString(),xI+118,y); y+=14;
     };
     fila('# ORDEN:',numOrden,true);
     fila('FECHA:',fecha);
-    fila('QUINCENA BASE:',qLabel);
+    fila('QUINCENA:',qLabel);
     fila('PROVEEDOR:',prov.nombre);
     fila('RUC:',prov.ruc);
     fila('TELÉFONO:',prov.telefono);
-    fila('DIRECCIÓN:',(prov.direccion||'').slice(0,52));
+    fila('DIRECCIÓN:',(prov.direccion||'').slice(0,58));
     fila('SOLICITADO POR:','Sunsu Spa — Administración');
-    y+=14;
-    // Tabla
-    var cab=function(){
+    y+=6;
+    var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
+    var barra=function(titulo){
+      salto(40);
       doc.setFillColor(61,90,122);
-      doc.roundedRect(xIzq,y,870,30,6,6,'F');
-      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(13);
-      doc.text('SKU',xIzq+12,y+20); doc.text('PRODUCTO',xIzq+120,y+20);
-      doc.text('CANT.',xIzq+620,y+20,{align:'right'});
-      doc.text('P. COMPRA',xIzq+740,y+20,{align:'right'});
-      doc.text('TOTAL',xDer-12,y+20,{align:'right'});
-      y+=30;
+      doc.roundedRect(xI,y,ANCHO,20,4,4,'F');
+      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      doc.text(titulo,xI+8,y+13.5); y+=20;
     };
-    cab();
-    doc.setFont('helvetica','normal'); doc.setFontSize(13);
-    var total=0, limY=H-130;
-    items.forEach(function(it,i){
-      if(y>limY){doc.addPage([W,H],W>H?'l':'p');pintarFondo();y=200;cab();doc.setFont('helvetica','normal');doc.setFontSize(13);}
-      if(i%2===0){doc.setFillColor(255,255,255);doc.rect(xIzq,y,870,26,'F');}
-      else{doc.setFillColor(246,244,238);doc.rect(xIzq,y,870,26,'F');}
-      var sub=(it.cant||0)*(it.compra||0); total+=sub;
-      doc.setTextColor(TXT);
-      doc.text(it.sku.replace('SUNSU-',''),xIzq+12,y+18);
-      doc.text((it.nombre||'').slice(0,44),xIzq+120,y+18);
-      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text(String(it.cant),xIzq+620,y+18,{align:'right'});
-      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text('$'+(it.compra||0).toFixed(2),xIzq+740,y+18,{align:'right'});
-      doc.text('$'+sub.toFixed(2),xDer-12,y+18,{align:'right'});
-      y+=26;
-    });
-    y+=16;
-    doc.setFont('helvetica','bold'); doc.setFontSize(19); doc.setTextColor(NAVY);
-    doc.text('TOTAL: $'+total.toFixed(2),xDer-12,y,{align:'right'});
+    var cabTabla=function(cLbl, conPrecios){
+      doc.setFillColor(238,234,222);
+      doc.rect(xI,y,ANCHO,15,'F');
+      doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(7.8);
+      doc.text('SKU',xI+6,y+10.5); doc.text('PRODUCTO',xI+62,y+10.5);
+      if(conPrecios){
+        doc.text(cLbl,xI+340,y+10.5,{align:'right'});
+        doc.text('P. COMPRA',xI+412,y+10.5,{align:'right'});
+        doc.text('TOTAL',xD-6,y+10.5,{align:'right'});
+      } else {
+        doc.text(cLbl,xD-6,y+10.5,{align:'right'});
+      }
+      y+=15;
+    };
+    var tabla=function(lista, campoCant, cLbl, conPrecios){
+      cabTabla(cLbl, conPrecios);
+      doc.setFontSize(8);
+      var tot=0;
+      lista.forEach(function(it,i){
+        salto(16);
+        if(i%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y,ANCHO,14,'F');}
+        else{doc.setFillColor(255,255,255);doc.rect(xI,y,ANCHO,14,'F');}
+        var cant=it[campoCant]||0, sub=cant*(it.compra||0); tot+=sub;
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        doc.text(it.sku.replace('SUNSU-',''),xI+6,y+10);
+        doc.text((it.nombre||'').slice(0,46),xI+62,y+10);
+        doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+        doc.text(String(cant),(conPrecios?xI+340:xD-6),y+10,{align:'right'});
+        if(conPrecios){
+          doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+          doc.text('$'+(it.compra||0).toFixed(2),xI+412,y+10,{align:'right'});
+          doc.text('$'+sub.toFixed(2),xD-6,y+10,{align:'right'});
+        }
+        y+=14;
+      });
+      return tot;
+    };
+    // ── SECCIÓN 1: FACTURACIÓN por consignación (lo vendido en la quincena = lo que pagamos) ──
+    var fact=(itemsFact||[]).filter(function(it){return (it.vendido||0)>0;});
+    barra('FACTURACIÓN — VENDIDO EN '+qLabel.toUpperCase()+' (CONSIGNACIÓN)');
+    if(fact.length){
+      var totF=tabla(fact,'vendido','VENDIDO',true);
+      salto(20); y+=4;
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(GOLD);
+      doc.text('TOTAL A FACTURAR: $'+totF.toFixed(2),xD-6,y+6,{align:'right'});
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('Valor a pagar por Sunsu Spa según unidades vendidas en la quincena',xI,y+6);
+      y+=22;
+    } else {
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
+      doc.text('Sin ventas en esta quincena',xI+6,y+13); y+=22;
+    }
+    // ── SECCIÓN 2: ORDEN DE RESTOCK (el repedido editado en el app) ──
+    salto(60);
+    barra('ORDEN DE RESTOCK — REPEDIDO');
+    if(items.length){
+      tabla(items,'cant','CANT.',false); // restock: solo cantidades, sin precios
+      y+=14;
+    } else {
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
+      doc.text('Sin repedido en esta orden',xI+6,y+13); y+=22;
+    }
     // Firmas
-    var yF=Math.min(y+80,H-70);
-    doc.setDrawColor(90,110,140); doc.setLineWidth(1);
-    doc.line(xIzq+40,yF,xIzq+330,yF); doc.line(xDer-330,yF,xDer-40,yF);
-    doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(TXT);
-    doc.text('Sunsu Spa',xIzq+185,yF+20,{align:'center'});
-    doc.text((prov.nombre||'').slice(0,34),xDer-185,yF+20,{align:'center'});
+    salto(70);
+    var yF=Math.min(y+45,H-55);
+    doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
+    doc.line(xI+20,yF,xI+190,yF); doc.line(xD-190,yF,xD-20,yF);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
+    doc.text('Sunsu Spa',xI+105,yF+11,{align:'center'});
+    doc.text((prov.nombre||'').slice(0,32),xD-105,yF+11,{align:'center'});
     doc.save(numOrden+' '+prov.nombre.split(' ')[0]+'.pdf');
   });
 }
-function _pdfOCPlano(numOrden, fecha, prov, qLabel, items){
-  _gcdCargarJsPDF(function(ok){
-    if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
-    var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
-    var NAVY=[26,39,68], GOLD=[201,162,39];
-    doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]); doc.rect(0,0,210,26,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(15); doc.setFont(undefined,'bold');
-    doc.text('SUNSU SPA — ORDEN DE PEDIDO',105,11,{align:'center'});
-    doc.setFontSize(8.5); doc.setFont(undefined,'normal');
-    doc.text('Pre-factura de consignación · Quito, Ecuador',105,18,{align:'center'});
-    doc.setTextColor(30,30,30); doc.setFontSize(9);
-    var y=35;
-    var fila=function(l,v,bold){doc.setFont(undefined,'bold');doc.text(l,14,y);doc.setFont(undefined,bold?'bold':'normal');if(bold)doc.setTextColor(GOLD[0],GOLD[1],GOLD[2]);doc.text((v||'—').toString(),60,y);doc.setTextColor(30,30,30);y+=6;};
-    fila('# ORDEN:',numOrden,true);
-    fila('FECHA:',fecha);
-    fila('QUINCENA BASE:',qLabel);
-    fila('PROVEEDOR:',prov.nombre);
-    fila('RUC:',prov.ruc);
-    if(prov.telefono) fila('TELÉFONO:',prov.telefono);
-    if(prov.direccion) fila('DIRECCIÓN:',prov.direccion);
-    if(prov.email) fila('EMAIL:',prov.email);
-    fila('SOLICITADO POR:','Sunsu Spa — Administración');
-    y+=4;
-    doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
-    doc.rect(14,y,182,8,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont(undefined,'bold');
-    doc.text('SKU',16,y+5.5); doc.text('PRODUCTO',42,y+5.5); doc.text('CANT.',142,y+5.5,{align:'right'}); doc.text('P. COMPRA',166,y+5.5,{align:'right'}); doc.text('TOTAL',194,y+5.5,{align:'right'});
-    y+=8;
-    doc.setTextColor(30,30,30); doc.setFont(undefined,'normal'); doc.setFontSize(8);
-    var total=0;
-    items.forEach(function(it,i){
-      if(y>270){doc.addPage();y=20;}
-      if(i%2===0){doc.setFillColor(243,244,248);doc.rect(14,y,182,7,'F');}
-      var sub=(it.cant||0)*(it.compra||0); total+=sub;
-      doc.text(it.sku.replace('SUNSU-',''),16,y+5);
-      doc.text(it.nombre.slice(0,52),42,y+5);
-      doc.text(String(it.cant),142,y+5,{align:'right'});
-      doc.text('$'+(it.compra||0).toFixed(2),166,y+5,{align:'right'});
-      doc.text('$'+sub.toFixed(2),194,y+5,{align:'right'});
-      y+=7;
-    });
-    y+=3;
-    doc.setFont(undefined,'bold'); doc.setFontSize(10);
-    doc.text('TOTAL: $'+total.toFixed(2),194,y+5,{align:'right'});
-    y+=20;
-    if(y>265){doc.addPage();y=30;}
-    doc.setFontSize(8); doc.setFont(undefined,'normal');
-    doc.line(20,y,85,y); doc.line(120,y,185,y);
-    doc.text('Sunsu Spa',52,y+5,{align:'center'});
-    doc.text(prov.nombre.slice(0,34),152,y+5,{align:'center'});
-    doc.save(numOrden+' '+prov.nombre.split(' ')[0]+'.pdf');
-  });
-}
-
 function renderEntradas(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando órdenes...</div>';
@@ -5813,6 +5849,20 @@ function toggleGrupoEntrada(gid){
   if(arrow) arrow.textContent=open?'▼':'▶';
 }
 
+// ── Re-descargar el PDF exacto de una orden generada desde el app (solo admins) ──
+function descargarPDFOrdenApp(numOrden){
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  toast('⏳ Buscando la orden...','var(--blue)');
+  fetch(APPS_SCRIPT_URL+'?action=getOCDataApp&orden='+encodeURIComponent(numOrden))
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('📄 '+(d.error||'Sin datos de esta orden'),'#C4943A');return;}
+    var s=d.snap||{};
+    _pdfOC(d.numOrden, d.fecha, s.prov||{nombre:''}, s.qLabel||'', s.items||[], s.fact||[]);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+
 // ── Acta de entrega con el diseño SUNSU (fondo floral + logo, igual que la OC) ──
 function generarActaEntrega(btn){
   var img=new Image();
@@ -5834,83 +5884,79 @@ function _actaEntregaFondo(btn, fondo){
   var hora=ahora.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',timeZone:'America/Guayaquil'});
   _gcdCargarJsPDF(function(ok){
     if(!ok){_actaEntregaHTML(btn);return;}
-    var W=fondo.naturalWidth||1348, H=fondo.naturalHeight||953;
-    var doc=new window.jspdf.jsPDF({orientation:W>H?'l':'p',unit:'pt',format:[W,H]});
-    var NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A';
-    var xIzq=(W-960)/2, ANCHO=960, xDer=xIzq+ANCHO; // acta usa zona un poco más ancha (7 columnas)
-    var pintarFondo=function(){doc.addImage(fondo,'JPEG',0,0,W,H);};
-    pintarFondo();
-    var y=200;
-    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(32);
-    doc.text('ACTA DE ENTREGA',W/2,y,{align:'center'}); y+=32;
-    doc.setFontSize(16); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-    doc.text('Recepción de mercadería · Sunsu Spa · Quito',W/2,y,{align:'center'}); y+=40;
-    doc.setFontSize(15);
-    var fila=function(l,v,destacar){
+    var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}); // A4 vertical
+    var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A';
+    var xI=48, ANCHO=499, xD=xI+ANCHO;
+    var bg=fondo?_fondoA4Sunsu(fondo):null;
+    var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); };
+    pintar();
+    var y=150;
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
+    doc.text('ACTA DE ENTREGA',W/2,y,{align:'center'}); y+=17;
+    doc.setFontSize(9.5); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+    doc.text('Recepción de mercadería · Sunsu Spa · Quito',W/2,y,{align:'center'}); y+=26;
+    doc.setFontSize(9);
+    var fila=function(l,v,dest){
       if(!v) return;
-      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text(l,xIzq,y);
-      doc.setFont('helvetica',destacar?'bold':'normal'); doc.setTextColor(destacar?GOLD:TXT);
-      doc.text(v.toString(),xIzq+190,y);
-      y+=23;
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text(l,xI,y);
+      doc.setFont('helvetica',dest?'bold':'normal'); doc.setTextColor(dest?GOLD:TXT);
+      doc.text(v.toString(),xI+118,y); y+=14;
     };
     fila('# ORDEN:',orden,true);
     fila('PROVEEDOR:',proveedorReal);
     fila('FECHA DEL ACTA:',fecha+' '+hora);
     fila('GENERADA POR:',CU?CU.name:'—');
-    y+=12;
-    // Tabla: SKU | Producto | Ped | Rec | Estado | Usuario | Registro
+    y+=8;
+    // Columnas: SKU | Producto | Ped | Rec | Estado | Usuario | Registro (caben en 499pt)
     var cols=[
-      {t:'SKU', x:12, w:95},
-      {t:'PRODUCTO', x:112, w:315},
-      {t:'PED.', x:465, w:45, al:'right'},
-      {t:'REC.', x:520, w:45, al:'right'},
-      {t:'ESTADO', x:580, w:105},
-      {t:'USUARIO', x:690, w:120},
-      {t:'REGISTRO', x:815, w:140}
+      {t:'SKU',x:5,w:48},{t:'PRODUCTO',x:56,w:158},{t:'PED.',x:218,w:26,al:'right'},
+      {t:'REC.',x:250,w:26,al:'right'},{t:'ESTADO',x:284,w:52},{t:'USUARIO',x:340,w:62},{t:'REGISTRO',x:406,w:90}
     ];
+    var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;cab();} };
     var cab=function(){
       doc.setFillColor(61,90,122);
-      doc.roundedRect(xIzq,y,ANCHO,28,6,6,'F');
-      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(11.5);
-      cols.forEach(function(cc){doc.text(cc.t, xIzq+cc.x+(cc.al==='right'?cc.w:0), y+19, cc.al==='right'?{align:'right'}:undefined);});
-      y+=28;
+      doc.roundedRect(xI,y,ANCHO,18,4,4,'F');
+      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
+      cols.forEach(function(cc){doc.text(cc.t, xI+cc.x+(cc.al==='right'?cc.w:0), y+12.5, cc.al==='right'?{align:'right'}:undefined);});
+      y+=18;
     };
     cab();
-    doc.setFontSize(11.5);
-    var limY=H-150, comp=0, parc=0, noLl=0, pend=0;
+    var comp=0,parc=0,noLl=0,pend=0;
     items.forEach(function(it,i){
-      if(y>limY){doc.addPage([W,H],W>H?'l':'p');pintarFondo();y=200;cab();doc.setFontSize(11.5);}
-      if(i%2===0){doc.setFillColor(255,255,255);}else{doc.setFillColor(246,244,238);}
-      doc.rect(xIzq,y,ANCHO,24,'F');
+      salto(15);
+      if(i%2===1){doc.setFillColor(246,243,234);}else{doc.setFillColor(255,255,255);}
+      doc.rect(xI,y,ANCHO,13,'F');
       var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?String(it.recibida):'—';
       var pv=parseFloat(v);
       var estado=v==='—'?'Pendiente':pv===0?'No llegó':pv>=it.pedida?'Completo':'Parcial';
       if(estado==='Completo')comp++;else if(estado==='Parcial')parc++;else if(estado==='No llegó')noLl++;else pend++;
       var colE=estado==='Pendiente'?'#888888':estado==='No llegó'?'#B84040':estado==='Completo'?'#2E7D52':'#C4943A';
+      doc.setFontSize(7.2);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text(it.sku.replace('SUNSU-',''),xIzq+cols[0].x,y+16.5);
-      doc.text((it.nombre||'').slice(0,40),xIzq+cols[1].x,y+16.5);
-      doc.text(String(it.pedida),xIzq+cols[2].x+cols[2].w,y+16.5,{align:'right'});
+      doc.text(it.sku.replace('SUNSU-',''),xI+cols[0].x,y+9.5);
+      doc.text((it.nombre||'').slice(0,38),xI+cols[1].x,y+9.5);
+      doc.text(String(it.pedida),xI+cols[2].x+cols[2].w,y+9.5,{align:'right'});
       doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text(v,xIzq+cols[3].x+cols[3].w,y+16.5,{align:'right'});
+      doc.text(v,xI+cols[3].x+cols[3].w,y+9.5,{align:'right'});
       doc.setTextColor(colE);
-      doc.text(estado,xIzq+cols[4].x,y+16.5);
+      doc.text(estado,xI+cols[4].x,y+9.5);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text((it.usuario||'—').split(' ')[0],xIzq+cols[5].x,y+16.5);
-      doc.text((it.timestamp||'—').toString().slice(0,16),xIzq+cols[6].x,y+16.5);
-      y+=24;
+      doc.text((it.usuario||'—').split(' ')[0].slice(0,12),xI+cols[5].x,y+9.5);
+      doc.text((it.timestamp||'—').toString().slice(0,16),xI+cols[6].x,y+9.5);
+      y+=13;
     });
-    y+=18;
-    doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(NAVY);
-    doc.text('Resumen: '+comp+' completos · '+parc+' parciales · '+noLl+' no llegaron · '+pend+' pendientes', W/2, y, {align:'center'});
+    y+=10;
+    salto(30);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(NAVY);
+    doc.text('Resumen: '+comp+' completos · '+parc+' parciales · '+noLl+' no llegaron · '+pend+' pendientes',W/2,y,{align:'center'});
     // Firmas
-    var yF=Math.min(y+80,H-70);
-    doc.setDrawColor(90,110,140); doc.setLineWidth(1);
-    doc.line(xIzq+60,yF,xIzq+360,yF); doc.line(xDer-360,yF,xDer-60,yF);
-    doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(TXT);
-    doc.text('Recibido por — Sunsu Spa',xIzq+210,yF+20,{align:'center'});
-    doc.text('Entregado por — '+(proveedorReal||'').slice(0,28),xDer-210,yF+20,{align:'center'});
+    salto(70);
+    var yF=Math.min(y+45,H-55);
+    doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
+    doc.line(xI+20,yF,xI+195,yF); doc.line(xD-195,yF,xD-20,yF);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
+    doc.text('Recibido por — Sunsu Spa',xI+107,yF+11,{align:'center'});
+    doc.text('Entregado por — '+(proveedorReal||'').slice(0,26),xD-107,yF+11,{align:'center'});
     doc.save('ACTA '+orden+' '+proveedorReal.split(' ')[0]+'.pdf');
     toast('📄 Acta descargada','var(--green)');
   });
@@ -6070,6 +6116,7 @@ function renderHistorialOC(){
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
+          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>':'')
           +'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>'
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
