@@ -5538,7 +5538,7 @@ function _pintarBorradorOC(){
       +'<button onclick="window._ocBorrador.fact.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:24px;height:24px;font-size:0.66rem;cursor:pointer;flex-shrink:0">✕</button>'
       +'</div>';
   });
-  html+='<div id="oc-total-fact" style="text-align:right;font-size:0.76rem;font-weight:800;color:#8A6D1A;padding-top:9px">Total a facturar: $'+totalF.toFixed(2)+'</div></div>';
+  html+='<div id="oc-total-fact" style="text-align:right;font-size:0.7rem;font-weight:700;color:#8A6D1A;padding-top:9px">Subtotal: $'+totalF.toFixed(2)+' · IVA 15%: $'+(totalF*0.15).toFixed(2)+' · <b style="font-size:0.8rem">Total a facturar: $'+(totalF*1.15).toFixed(2)+'</b></div></div>';
   // ── BLOQUE 2: RESTOCK ──
   html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid var(--navy)">'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">📦 Orden de restock — '+B.prov.nombre+'</div>'
@@ -5568,7 +5568,7 @@ function _ocTotal(){
   if(el) el.textContent='Total estimado: $'+total.toFixed(2)+' · '+conCant.length+' productos';
   var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
   var elF=document.getElementById('oc-total-fact');
-  if(elF) elF.textContent='Total a facturar: $'+totalF.toFixed(2);
+  if(elF) elF.innerHTML='Subtotal: $'+totalF.toFixed(2)+' · IVA 15%: $'+(totalF*0.15).toFixed(2)+' · <b style="font-size:0.8rem">Total a facturar: $'+(totalF*1.15).toFixed(2)+'</b>';
 }
 function generarOCApp(){
   var B=window._ocBorrador;
@@ -5695,17 +5695,64 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
       });
       return tot;
     };
-    // ── SECCIÓN 1: FACTURACIÓN por consignación (lo vendido en la quincena = lo que pagamos) ──
+    // ── SECCIÓN 1: FACTURACIÓN por consignación — formato factura completo:
+    //    P. unitario (sin IVA) · Subtotal · IVA 15% · Total, con sumas al pie ──
     var fact=(itemsFact||[]).filter(function(it){return (it.vendido||0)>0;});
     barra('FACTURACIÓN — VENDIDO EN '+qLabel.toUpperCase()+' (CONSIGNACIÓN)');
     if(fact.length){
-      var totF=tabla(fact,'vendido','VENDIDO',true);
-      salto(20); y+=4;
+      var IVA_PCT=0.15;
+      // Cabecera de la tabla de factura
+      doc.setFillColor(238,234,222);
+      doc.rect(xI,y,ANCHO,15,'F');
+      doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
+      doc.text('SKU',xI+6,y+10.5);
+      doc.text('PRODUCTO',xI+52,y+10.5);
+      doc.text('CANT.',xI+242,y+10.5,{align:'right'});
+      doc.text('P. UNIT.',xI+300,y+10.5,{align:'right'});
+      doc.text('SUBTOTAL',xI+365,y+10.5,{align:'right'});
+      doc.text('IVA 15%',xI+422,y+10.5,{align:'right'});
+      doc.text('TOTAL',xD-6,y+10.5,{align:'right'});
+      y+=15;
+      doc.setFontSize(7.4);
+      var sumSub=0, sumIva=0, sumTot=0;
+      fact.forEach(function(it,i){
+        salto(16);
+        if(i%2===1){doc.setFillColor(246,243,234);}else{doc.setFillColor(255,255,255);}
+        doc.rect(xI,y,ANCHO,13,'F');
+        var pu=it.compra||0, sub=(it.vendido||0)*pu, iva=sub*IVA_PCT, tot=sub+iva;
+        sumSub+=sub; sumIva+=iva; sumTot+=tot;
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        doc.text(it.sku.replace('SUNSU-',''),xI+6,y+9.5);
+        doc.text((it.nombre||'').slice(0,38),xI+52,y+9.5);
+        doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+        doc.text(String(it.vendido),xI+242,y+9.5,{align:'right'});
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        doc.text('$'+pu.toFixed(2),xI+300,y+9.5,{align:'right'});
+        doc.text('$'+sub.toFixed(2),xI+365,y+9.5,{align:'right'});
+        doc.text('$'+iva.toFixed(2),xI+422,y+9.5,{align:'right'});
+        doc.setFont('helvetica','bold');
+        doc.text('$'+tot.toFixed(2),xD-6,y+9.5,{align:'right'});
+        y+=13;
+      });
+      // Sumas al pie: subtotal + IVA + total
+      salto(52); y+=6;
+      doc.setDrawColor(90,110,140); doc.setLineWidth(0.6);
+      doc.line(xI+300,y,xD,y); y+=4;
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+      doc.text('SUBTOTAL:',xI+365,y+8,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+sumSub.toFixed(2),xD-6,y+8,{align:'right'}); y+=13;
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+      doc.text('IVA 15%:',xI+365,y+8,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+sumIva.toFixed(2),xD-6,y+8,{align:'right'}); y+=14;
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(GOLD);
-      doc.text('TOTAL A FACTURAR: $'+totF.toFixed(2),xD-6,y+6,{align:'right'});
+      doc.text('TOTAL A FACTURAR:',xI+365,y+9,{align:'right'});
+      doc.text('$'+sumTot.toFixed(2),xD-6,y+9,{align:'right'});
       doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text('Valor a pagar por Sunsu Spa según unidades vendidas en la quincena',xI,y+6);
-      y+=22;
+      doc.text('Valor a pagar por Sunsu Spa según unidades vendidas en la quincena',xI,y+9);
+      y+=24;
     } else {
       doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
       doc.text('Sin ventas en esta quincena',xI+6,y+13); y+=22;
