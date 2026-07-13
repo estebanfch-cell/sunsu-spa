@@ -4987,7 +4987,11 @@ function renderInvFisico(c){
     (grupos[gn]=grupos[gn]||[]).push({it:it,idx:idx});
   });
   var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:4px">📋 Inventario físico</div>'
-    +'<div style="font-size:0.66rem;color:var(--gray);margin-bottom:12px">Cuenta cada producto en percha/bodega y anota la cantidad real. Deja vacío lo que no cuentes hoy.</div>'
+    +'<div style="font-size:0.66rem;color:var(--gray);margin-bottom:10px">Cuenta cada producto en percha/bodega y anota la cantidad real. Deja vacío lo que no cuentes hoy.</div>'
+    +'<div style="background:#FFF9E6;border:1.5px solid #E8D9A0;border-radius:12px;padding:11px;margin-bottom:12px">'
+    +'<div style="font-size:0.68rem;font-weight:800;color:#8A6D1A;margin-bottom:4px">📢 Política de inventario</div>'
+    +'<div style="font-size:0.64rem;color:#8A6D1A;line-height:1.5">El inventario debe cuadrar siempre. Si falta producto por un ticket no registrado a tiempo o un consumo interno sin registrar, se aplica <b>multa de $10</b> a la responsable y <b>no se paga comisión</b> sobre ese producto. Cuenta con calma y anota la cantidad real — las diferencias siempre se investigan antes de aplicar cualquier multa.</div>'
+    +'</div>'
     +'<div style="position:sticky;top:0;z-index:50;background:var(--cream);padding:8px 0;margin-bottom:8px"><div id="if-progreso" style="background:var(--navy);color:white;border-radius:10px;padding:9px;text-align:center;font-size:0.74rem;font-weight:800">0 / '+items.length+' contados</div></div>';
   Object.keys(grupos).forEach(function(gn){
     html+='<div class="card" style="padding:12px;margin-bottom:10px"><div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+gn+'</div>';
@@ -5205,7 +5209,7 @@ function renderInvFisicoDetalle(id){
           +(f.nota?'<div style="font-size:0.6rem;color:var(--gray);margin-top:4px;white-space:pre-line;background:var(--cream);border-radius:8px;padding:6px">'+f.nota+'</div>':'')
           +'<div style="display:flex;gap:6px;margin-top:8px">'
           +'<button onclick="verMovimientosSku(\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="flex:1;padding:8px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🔎 Rastrear</button>'
-          +(esAdminIF?'<button onclick="corregirConteoIF(\''+d.id+'\',\''+f.sku+'\','+f.fisico+')" style="flex:1;padding:8px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️ Corregir conteo</button>':'')
+          +'<button onclick="corregirConteoIF(\''+d.id+'\',\''+f.sku+'\','+f.fisico+')" style="flex:1;padding:8px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️ Corregir conteo</button>'
           +(esAdminIF?'<button onclick="resolverIF(\''+d.id+'\',\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="flex:1;padding:8px;background:#6A9E7A;color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✔️ Resolver</button>':'')
           +'</div><div id="mov-'+f.sku.replace(/[^A-Za-z0-9]/g,'')+'"></div></div>';
       });
@@ -5232,14 +5236,20 @@ function renderInventario(c){
     try{cat=JSON.parse(results[1]);}catch(e){cat=[];}
     if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
 
-    // Build active SKU set from catalog col J
+    // Build active SKU set from catalog col J.
+    // OJO: el catálogo usa 'HT-101' y el inventario 'SUNSU-HT-101' → normalizamos
+    // quitando el prefijo en ambos lados para que el filtro de verdad funcione.
     var activoCat={};
-    if(Array.isArray(cat)) cat.forEach(function(it){activoCat[it.sku]=it.activo===true;});
+    if(Array.isArray(cat)) cat.forEach(function(it){
+      var cod=(it.sku||'').toString().trim().replace(/^SUNSU-/,'');
+      if(cod) activoCat[cod]=it.activo===true;
+    });
 
-    // Filter: only show items where catalog says activo=true (or not in catalog)
+    // Solo mostrar productos activos en catálogo (fuera de catálogo = mostrar)
     var items=(d.items||[]).filter(function(it){
-      if(activoCat.hasOwnProperty(it.sku)) return activoCat[it.sku]===true;
-      return true; // not in catalog = show
+      var cod=(it.sku||'').toString().trim().replace(/^SUNSU-/,'');
+      if(activoCat.hasOwnProperty(cod)) return activoCat[cod]===true;
+      return true; // no está en catálogo = mostrar
     });
       if(!items.length){c.innerHTML='<div class="card">Sin datos</div>';return;}
       var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios','BV':'BV — Bruno Vassari','SU':'SU — SUNSU'};
