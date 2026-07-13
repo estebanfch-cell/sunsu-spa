@@ -5086,6 +5086,71 @@ function verMovimientosSku(sku, nombre){
   .catch(function(e){box.innerHTML='<div style="font-size:0.62rem;color:#B86B6B">❌ '+e.message+'</div>';});
 }
 
+// ══════ HISTORIAL DE INVENTARIOS FÍSICOS (con re-cruce) ══════
+function renderInvFisicoHist(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📜 Historial de inventarios físicos</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getInvFisicoSesiones')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📜 Historial de inventarios físicos</div>';
+    if(!(d.sesiones||[]).length){
+      html+='<div class="card" style="text-align:center;color:var(--gray);padding:22px">Aún no hay inventarios físicos guardados</div>';
+    } else {
+      html+='<div style="font-size:0.64rem;color:var(--gray);margin-bottom:10px">Toca un inventario para re-cruzarlo contra el stock ACTUAL — si ya corregiste el error, la diferencia debe salir en cero.</div>';
+      d.sesiones.forEach(function(s){
+        html+='<div class="card" onclick="renderInvFisicoDetalle(\''+s.id+'\')" style="padding:12px;margin-bottom:9px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-left:4px solid '+(s.difs?'#C4943A':'#6A9E7A')+'">'
+          +'<div><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📋 '+s.fecha+'</div>'
+          +'<div style="font-size:0.62rem;color:var(--gray)">'+s.usuario+' · '+s.total+' productos contados</div></div>'
+          +'<span style="font-size:0.64rem;font-weight:800;padding:4px 10px;border-radius:8px;background:'+(s.difs?'#FFF9E6':'#E8F8EE')+';color:'+(s.difs?'#C4943A':'#2E7D52')+'">'+(s.difs?s.difs+' dif.':'✓ cuadró')+'</span>'
+          +'</div>';
+      });
+    }
+    html+='<button onclick="renderInventario(document.getElementById(\'content\'))" style="width:100%;padding:11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Volver al inventario</button>';
+    c.innerHTML=html;
+  })
+  .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function renderInvFisicoDetalle(id){
+  var c=document.getElementById('content');
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Re-cruce del inventario</div>'
+    +'<div class="loading"><div class="spinner"></div>Re-cruzando contra el stock actual...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getInvFisicoDetalle&id='+encodeURIComponent(id))
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var items=d.items||[];
+    var pend=items.filter(function(i){return i.difAhora!==null&&i.difAhora!==0;});
+    var resueltos=items.filter(function(i){return i.difOriginal!==0&&i.difAhora===0;}).length;
+    var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:4px">📋 Inventario del '+d.fecha+'</div>'
+      +'<div style="font-size:0.64rem;color:var(--gray);margin-bottom:12px">'+d.usuario+' · '+items.length+' productos · re-cruzado contra el stock de AHORA</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+      +'<div style="flex:1;background:#E8F8EE;border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:#2E7D52">'+(items.length-pend.length)+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">CUADRAN HOY ✓</div></div>'
+      +'<div style="flex:1;background:'+(pend.length?'#FEE2E2':'#E8F8EE')+';border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:'+(pend.length?'#C00':'#2E7D52')+'">'+pend.length+'</div><div style="font-size:0.6rem;color:'+(pend.length?'#C00':'#2E7D52')+';font-weight:700">PENDIENTES</div></div>'
+      +'</div>';
+    if(resueltos>0) html+='<div style="background:#E8F8EE;border-radius:10px;padding:9px;text-align:center;font-size:0.7rem;font-weight:800;color:#2E7D52;margin-bottom:10px">🎉 '+resueltos+' error(es) del conteo original ya corregido(s)</div>';
+    if(!pend.length){
+      html+='<div class="card" style="text-align:center;padding:22px;color:#2E7D52;font-weight:800">✅ ¡Inventario completo! Todo lo contado cuadra con el sistema actual.</div>';
+    } else {
+      pend.forEach(function(f){
+        var falta=f.difAhora<0;
+        html+='<div class="card" style="padding:12px;margin-bottom:9px;border-left:4px solid '+(falta?'#B86B6B':'#C4943A')+'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:0.72rem;font-weight:800;color:var(--navy)">'+f.nombre+'</div>'
+          +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+f.sku+'</div>'
+          +'<div style="font-size:0.68rem;margin-top:4px">Contado: <b>'+f.fisico+'</b> · Sistema hoy: <b>'+f.sistemaAhora+'</b> → <b style="color:'+(falta?'#B86B6B':'#C4943A')+'">'+(f.difAhora>0?'+':'')+f.difAhora+' '+(falta?'FALTAN':'SOBRAN')+'</b>'
+          +(f.difOriginal!==f.difAhora?' <span style="color:var(--gray);font-size:0.58rem">(original: '+(f.difOriginal>0?'+':'')+f.difOriginal+')</span>':'')+'</div></div>'
+          +'<button onclick="verMovimientosSku(\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="padding:9px 12px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap">🔎 Rastrear</button>'
+          +'</div><div id="mov-'+f.sku.replace(/[^A-Za-z0-9]/g,'')+'"></div></div>';
+      });
+      html+='<div style="font-size:0.58rem;color:var(--gray);margin-bottom:8px">💡 El re-cruce compara tu conteo contra el stock ACTUAL. Ojo: si hubo ventas o entradas después del conteo, esas mueven el stock y pueden explicar la diferencia sin ser error.</div>';
+    }
+    html+='<button onclick="renderInvFisicoHist(document.getElementById(\'content\'))" style="width:100%;padding:11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Historial de inventarios</button>';
+    c.innerHTML=html;
+    window.scrollTo(0,0);
+  })
+  .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+
 // ══════ INVENTARIO ══════
 function renderInventario(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
@@ -5124,7 +5189,10 @@ function renderInventario(c){
       var ok=items.filter(function(i){return i.alerta==='OK';}).length;
       window._invItems=items; // para el inventario físico
       var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
-        +'<button onclick="renderInvFisico(document.getElementById(\'content\'))" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.82rem;font-weight:800;cursor:pointer;margin-bottom:8px">📋 Hacer inventario físico</button>'
+        +'<div style="display:flex;gap:8px;margin-bottom:8px">'
+        +'<button onclick="renderInvFisico(document.getElementById(\'content\'))" style="flex:1;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.78rem;font-weight:800;cursor:pointer">📋 Hacer inventario físico</button>'
+        +'<button onclick="renderInvFisicoHist(document.getElementById(\'content\'))" style="padding:12px 14px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:12px;font-size:0.78rem;font-weight:800;cursor:pointer">📜</button>'
+        +'</div>'
         +(d.ultimoFisico?'<div style="font-size:0.62rem;color:var(--gray);text-align:center;margin-bottom:10px">Último inventario físico: <b>'+d.ultimoFisico+'</b></div>':'<div style="font-size:0.62rem;color:#C4943A;text-align:center;margin-bottom:10px;font-weight:700">⚠️ Nunca se ha hecho un inventario físico</div>')
         +'<div style="display:flex;gap:8px;margin-bottom:14px">'
         +'<div style="flex:1;background:#FEE2E2;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C00">'+sinStock+'</div><div style="font-size:0.6rem;color:#C00;font-weight:700">SIN STOCK</div></div>'
