@@ -5392,8 +5392,232 @@ function toggleInvGrupo(gid){
 }
 
 // ══════ ENTRADAS DE PRODUCTOS ══════
+// ══════ PROVEEDORES (gestión desde el app) ══════
+function renderProveedores(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getProveedoresApp')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    window._provsApp=d.proveedores||[];
+    var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>';
+    window._provsApp.forEach(function(p,i){
+      html+='<div class="card" style="padding:12px;margin-bottom:9px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+p.nombre+' <span style="font-size:0.6rem;background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px">'+p.familia+'</span></div>'
+        +'<div style="font-size:0.62rem;color:var(--gray);margin-top:3px">RUC: '+(p.ruc||'—')+(p.telefono?' · 📞 '+p.telefono:'')+(p.email?' · ✉️ '+p.email:'')+'</div>'
+        +(p.direccion?'<div style="font-size:0.62rem;color:var(--gray)">📍 '+p.direccion+'</div>':'')
+        +(p.notas?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+p.notas+'</div>':'')+'</div>'
+        +'<div style="display:flex;gap:5px">'
+        +'<button onclick="formProveedor('+i+')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️</button>'
+        +'<button onclick="eliminarProveedor('+i+')" style="padding:7px 10px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🗑️</button>'
+        +'</div></div></div>';
+    });
+    html+='<button onclick="formProveedor(-1)" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar proveedor</button>'
+      +'<div id="prov-form"></div>'
+      +'<button onclick="showTab(\'entradas\')" style="width:100%;padding:10px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Volver a Entradas</button>';
+    c.innerHTML=html;
+  })
+  .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function formProveedor(i){
+  var p=i>=0?window._provsApp[i]:{nombre:'',ruc:'',telefono:'',direccion:'',email:'',familia:'',notas:'',fila:0};
+  var f=function(lbl,id,val,ph){return '<div style="margin-bottom:8px"><div style="font-size:0.62rem;font-weight:700;color:var(--gray);margin-bottom:3px">'+lbl+'</div><input type="text" id="'+id+'" value="'+(val||'').replace(/"/g,'&quot;')+'" placeholder="'+(ph||'')+'" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>';};
+  document.getElementById('prov-form').innerHTML='<div class="card" style="padding:14px;margin:10px 0;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy);margin-bottom:10px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' proveedor</div>'
+    +f('Nombre *','pv-nombre',p.nombre,'Ej. Hebetronic S.A')
+    +f('RUC','pv-ruc',p.ruc,'179...')
+    +f('Teléfono','pv-tel',p.telefono,'09...')
+    +f('Dirección','pv-dir',p.direccion,'')
+    +f('Email','pv-email',p.email,'')
+    +f('Familia (prefijo de SKU) *','pv-fam',p.familia,'Ej. HT, AS, ML, SU')
+    +f('Notas','pv-notas',p.notas,'')
+    +'<div style="display:flex;gap:8px;margin-top:4px">'
+    +'<button onclick="guardarProveedor('+(p.fila||0)+')" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Guardar</button>'
+    +'<button onclick="document.getElementById(\'prov-form\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.76rem;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.getElementById('prov-form').scrollIntoView({behavior:'smooth'});
+}
+function guardarProveedor(fila){
+  var g=function(id){return (document.getElementById(id)||{}).value||'';};
+  var payload={accion:'guardarProveedorApp',fila:fila,nombre:g('pv-nombre').trim(),ruc:g('pv-ruc').trim(),
+    telefono:g('pv-tel').trim(),direccion:g('pv-dir').trim(),email:g('pv-email').trim(),
+    familia:g('pv-fam').trim().toUpperCase(),notas:g('pv-notas').trim()};
+  if(!payload.nombre||!payload.familia){toast('Nombre y familia son obligatorios','#C9A227');return;}
+  toast('⏳ Guardando...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('✅ Proveedor guardado','var(--green)');
+    renderProveedores(document.getElementById('content'));
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function eliminarProveedor(i){
+  var p=window._provsApp[i];
+  if(!confirm('🗑️ ¿Eliminar el proveedor "'+p.nombre+'"?\nSus órdenes pasadas no se afectan.')) return;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({accion:'eliminarProveedorApp',fila:p.fila})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('🗑️ Proveedor eliminado','var(--gray)');
+    renderProveedores(document.getElementById('content'));
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+
+// ══════ NUEVA ORDEN DE COMPRA (borrador editable → generar → PDF) ══════
+function renderNuevaOC(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🛒 Nueva orden de compra</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando proveedores...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getProveedoresApp')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    window._provsApp=d.proveedores||[];
+    if(!window._provsApp.length){c.innerHTML='<div class="card">No hay proveedores — agrégalos primero en 🏭</div>';return;}
+    // Quincenas: la anterior (default) y las 3 previas + la actual
+    var hoy=new Date(), ops=[], cur={m:hoy.getMonth()+1,a:hoy.getFullYear(),q:hoy.getDate()<=15?1:2};
+    var back=function(o){var q=o.q-1,m=o.m,a=o.a;if(q<1){q=2;m--;if(m<1){m=12;a--;}}return {m:m,a:a,q:q};};
+    var lbl=function(o){return (o.q===1?'1-15':'16-fin')+' '+['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][o.m-1]+' '+o.a;};
+    var o=cur; for(var k=0;k<5;k++){ops.push(o);o=back(o);}
+    var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🛒 Nueva orden de compra</div>'
+      +'<div class="card" style="padding:14px;margin-bottom:10px">'
+      +'<div style="font-size:0.62rem;font-weight:700;color:var(--gray);margin-bottom:4px">PROVEEDOR</div>'
+      +'<select id="oc-prov" style="width:100%;padding:10px;border:1.5px solid var(--navy);border-radius:10px;font-size:0.78rem;font-weight:700;color:var(--navy);font-family:inherit;background:white;margin-bottom:10px">'
+      +window._provsApp.map(function(p,i){return '<option value="'+i+'">'+p.nombre+' ('+p.familia+')</option>';}).join('')
+      +'</select>'
+      +'<div style="font-size:0.62rem;font-weight:700;color:var(--gray);margin-bottom:4px">QUINCENA DE VENTAS (base del pedido)</div>'
+      +'<select id="oc-q" style="width:100%;padding:10px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.78rem;font-family:inherit;background:white;margin-bottom:10px">'
+      +ops.map(function(op,i){return '<option value="'+op.q+'|'+op.m+'|'+op.a+'"'+(i===1?' selected':'')+'>'+lbl(op)+(i===0?' (en curso)':'')+'</option>';}).join('')
+      +'</select>'
+      +'<button onclick="cargarBorradorOC()" style="width:100%;padding:11px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">📝 Cargar borrador</button>'
+      +'</div>'
+      +'<div id="oc-borrador"></div>'
+      +'<button onclick="showTab(\'entradas\')" style="width:100%;padding:10px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Volver a Entradas</button>';
+    c.innerHTML=html;
+  })
+  .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function cargarBorradorOC(){
+  var p=window._provsApp[parseInt(document.getElementById('oc-prov').value)];
+  var qp=document.getElementById('oc-q').value.split('|');
+  var box=document.getElementById('oc-borrador');
+  box.innerHTML='<div class="loading"><div class="spinner"></div>Calculando ventas y stock de '+p.familia+'...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getBorradorOCApp&familia='+encodeURIComponent(p.familia)+'&quincena='+qp[0]+'&mes='+qp[1]+'&anio='+qp[2])
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.error){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
+    window._ocBorrador={prov:p,qLabel:d.qLabel,items:(d.items||[]).map(function(it){it.cant=it.sugerido;return it;})};
+    _pintarBorradorOC();
+  })
+  .catch(function(e){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function _pintarBorradorOC(){
+  var B=window._ocBorrador, box=document.getElementById('oc-borrador');
+  if(!B||!box) return;
+  var conCant=B.items.filter(function(it){return (it.cant||0)>0;});
+  var total=conCant.reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
+  var html='<div class="card" style="padding:14px;margin-bottom:10px">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">📝 Borrador — '+B.prov.nombre+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Base: vendido en '+B.qLabel+' + 20% · Solo productos ACTIVOS · Edita cantidades o quita con ✕ — nada se envía hasta que aprietes Generar</div>';
+  if(!B.items.length){html+='<div style="text-align:center;color:var(--gray);font-size:0.72rem;padding:14px">Sin productos activos en esta familia</div>';}
+  B.items.forEach(function(it,i){
+    html+='<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · stock '+it.stock+' · vendido '+it.vendido+' · $'+(it.compra||0).toFixed(2)+' c/u</div></div>'
+      +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.items['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:60px;padding:8px;border:1.5px solid '+((it.cant||0)>0?'var(--navy)':'#ECEEF4')+';border-radius:9px;font-size:0.84rem;font-weight:800;text-align:center;color:var(--navy);outline:none">'
+      +'<button onclick="window._ocBorrador.items.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:26px;height:26px;font-size:0.7rem;cursor:pointer;flex-shrink:0">✕</button>'
+      +'</div>';
+  });
+  html+='<div id="oc-total" style="text-align:right;font-size:0.76rem;font-weight:800;color:var(--navy);padding-top:9px">Total estimado: $'+total.toFixed(2)+' · '+conCant.length+' productos</div>'
+    +'<button onclick="generarOCApp()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.84rem;font-weight:800;cursor:pointer;margin-top:10px">✓ Generar orden de compra</button>'
+    +'</div>';
+  box.innerHTML=html;
+}
+function _ocTotal(){
+  var B=window._ocBorrador;
+  var conCant=B.items.filter(function(it){return (it.cant||0)>0;});
+  var total=conCant.reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
+  var el=document.getElementById('oc-total');
+  if(el) el.textContent='Total estimado: $'+total.toFixed(2)+' · '+conCant.length+' productos';
+}
+function generarOCApp(){
+  var B=window._ocBorrador;
+  var items=B.items.filter(function(it){return (it.cant||0)>0;}).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant,compra:it.compra};});
+  if(!items.length){toast('La orden está vacía — pon cantidades','#C9A227');return;}
+  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nProductos: '+items.length+'\n\nSe registrará en Entregas y se descargará el PDF. ¿Continuar?')) return;
+  toast('⏳ Generando orden...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('✅ Orden '+d.numOrden+' generada y registrada en Entregas','var(--green)');
+    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items);
+    setTimeout(function(){showTab('entradas');},1800);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function _pdfOC(numOrden, fecha, prov, qLabel, items){
+  _gcdCargarJsPDF(function(ok){
+    if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
+    var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+    var NAVY=[26,39,68], GOLD=[201,162,39];
+    doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]); doc.rect(0,0,210,26,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(15); doc.setFont(undefined,'bold');
+    doc.text('SUNSU SPA — ORDEN DE PEDIDO',105,11,{align:'center'});
+    doc.setFontSize(8.5); doc.setFont(undefined,'normal');
+    doc.text('Pre-factura de consignación · Quito, Ecuador',105,18,{align:'center'});
+    doc.setTextColor(30,30,30); doc.setFontSize(9);
+    var y=35;
+    var fila=function(l,v,bold){doc.setFont(undefined,'bold');doc.text(l,14,y);doc.setFont(undefined,bold?'bold':'normal');if(bold)doc.setTextColor(GOLD[0],GOLD[1],GOLD[2]);doc.text((v||'—').toString(),60,y);doc.setTextColor(30,30,30);y+=6;};
+    fila('# ORDEN:',numOrden,true);
+    fila('FECHA:',fecha);
+    fila('QUINCENA BASE:',qLabel);
+    fila('PROVEEDOR:',prov.nombre);
+    fila('RUC:',prov.ruc);
+    if(prov.telefono) fila('TELÉFONO:',prov.telefono);
+    if(prov.direccion) fila('DIRECCIÓN:',prov.direccion);
+    if(prov.email) fila('EMAIL:',prov.email);
+    fila('SOLICITADO POR:','Sunsu Spa — Administración');
+    y+=4;
+    doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.rect(14,y,182,8,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont(undefined,'bold');
+    doc.text('SKU',16,y+5.5); doc.text('PRODUCTO',42,y+5.5); doc.text('CANT.',142,y+5.5,{align:'right'}); doc.text('P. COMPRA',166,y+5.5,{align:'right'}); doc.text('TOTAL',194,y+5.5,{align:'right'});
+    y+=8;
+    doc.setTextColor(30,30,30); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+    var total=0;
+    items.forEach(function(it,i){
+      if(y>270){doc.addPage();y=20;}
+      if(i%2===0){doc.setFillColor(243,244,248);doc.rect(14,y,182,7,'F');}
+      var sub=(it.cant||0)*(it.compra||0); total+=sub;
+      doc.text(it.sku.replace('SUNSU-',''),16,y+5);
+      doc.text(it.nombre.slice(0,52),42,y+5);
+      doc.text(String(it.cant),142,y+5,{align:'right'});
+      doc.text('$'+(it.compra||0).toFixed(2),166,y+5,{align:'right'});
+      doc.text('$'+sub.toFixed(2),194,y+5,{align:'right'});
+      y+=7;
+    });
+    y+=3;
+    doc.setFont(undefined,'bold'); doc.setFontSize(10);
+    doc.text('TOTAL: $'+total.toFixed(2),194,y+5,{align:'right'});
+    y+=20;
+    if(y>265){doc.addPage();y=30;}
+    doc.setFontSize(8); doc.setFont(undefined,'normal');
+    doc.line(20,y,85,y); doc.line(120,y,185,y);
+    doc.text('Sunsu Spa',52,y+5,{align:'center'});
+    doc.text(prov.nombre.slice(0,34),152,y+5,{align:'center'});
+    doc.save(numOrden+' '+prov.nombre.split(' ')[0]+'.pdf');
+  });
+}
+
 function renderEntradas(c){
+  var esAdminOC=CU&&(CU.role==='admin'||CU.role==='admin_master');
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📥 Entradas de Productos</div>'
+    +(esAdminOC?'<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +'<button onclick="renderNuevaOC(document.getElementById(\'content\'))" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">🛒 Nueva orden de compra</button>'
+      +'<button onclick="renderProveedores(document.getElementById(\'content\'))" style="padding:11px 14px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">🏭</button>'
+      +'</div>':'')
     +'<div class="loading"><div class="spinner"></div>Cargando órdenes...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getEntradas')
     .then(function(r){return r.text();})
