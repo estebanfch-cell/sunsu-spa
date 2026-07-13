@@ -5059,6 +5059,52 @@ function _invFisicoResultados(d){
   c.innerHTML=html;
   window.scrollTo(0,0);
 }
+// ── Corregir un conteo mal tipeado (solo admin, con justificación obligatoria) ──
+function corregirConteoIF(id, sku, actual){
+  var nuevo=prompt('✏️ CORREGIR CONTEO\n\nCantidad registrada: '+actual+'\n¿Cuál es la cantidad REAL contada en percha?');
+  if(nuevo===null) return;
+  nuevo=parseFloat(nuevo);
+  if(isNaN(nuevo)||nuevo<0){toast('Cantidad inválida','#C9A227');return;}
+  var nota=prompt('Justificación (obligatoria):\nEj. "error de tipeo, se recontó en percha y son '+nuevo+'"');
+  if(!nota||!nota.trim()){toast('La justificación es obligatoria','#C9A227');return;}
+  toast('⏳ Corrigiendo...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'resolverInvFisico',modo:'corregir',id:id,sku:sku,nuevoFisico:nuevo,nota:nota.trim(),usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast(d.nuevaDif===0?'✅ Corregido — ahora cuadra':'✏️ Corregido — dif ahora: '+(d.nuevaDif>0?'+':'')+d.nuevaDif,'var(--green)');
+    renderInvFisicoDetalle(id);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+// ── Resolver una diferencia con explicación (ticket tardío, consumo interno, etc.) ──
+function resolverIF(id, sku, nombre){
+  var nota=prompt('✔️ RESOLVER DIFERENCIA — '+nombre+'\n\nExplica la corrección (obligatorio):\nEj. "faltó ticket de venta del 08/07, ingresado hoy por Daniela" o "consumo interno SUNSU no registrado"');
+  if(!nota||!nota.trim()){if(nota!==null)toast('La justificación es obligatoria','#C9A227');return;}
+  toast('⏳ Resolviendo...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'resolverInvFisico',modo:'resolver',id:id,sku:sku,nota:nota.trim(),usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('✅ Diferencia resuelta y documentada','var(--green)');
+    // Política: producto no registrado a tiempo → multa $10 a la responsable
+    if(confirm('📋 Política de inventario:\n¿Registrar MULTA de $10 a la responsable por no registrar a tiempo?')){
+      var quien=prompt('Nombre de la responsable (como aparece en Multas):');
+      if(quien&&quien.trim()){
+        fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+          body:JSON.stringify({accion:'registrarMulta',cosmetologa:quien.trim(),tipo:'MULTA',monto:10,
+            motivo:'Inventario físico — '+nombre+' ('+sku+'): '+nota.trim()})})
+        .then(function(r){return r.json();})
+        .then(function(m){toast(m.ok?'⚠️ Multa de $10 registrada a '+quien.trim():'❌ No se pudo registrar la multa','#C4943A');})
+        .catch(function(){toast('❌ Error registrando la multa','#B86B6B');});
+      }
+    }
+    setTimeout(function(){renderInvFisicoDetalle(id);},400);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
 function verMovimientosSku(sku, nombre){
   var boxId='mov-'+sku.replace(/[^A-Za-z0-9]/g,'');
   var box=document.getElementById(boxId);
@@ -5099,10 +5145,17 @@ function renderInvFisicoHist(c){
     } else {
       html+='<div style="font-size:0.64rem;color:var(--gray);margin-bottom:10px">Toca un inventario para re-cruzarlo contra el stock ACTUAL — si ya corregiste el error, la diferencia debe salir en cero.</div>';
       d.sesiones.forEach(function(s){
-        html+='<div class="card" onclick="renderInvFisicoDetalle(\''+s.id+'\')" style="padding:12px;margin-bottom:9px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-left:4px solid '+(s.difs?'#C4943A':'#6A9E7A')+'">'
-          +'<div><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📋 '+s.fecha+'</div>'
-          +'<div style="font-size:0.62rem;color:var(--gray)">'+s.usuario+' · '+s.total+' productos contados</div></div>'
-          +'<span style="font-size:0.64rem;font-weight:800;padding:4px 10px;border-radius:8px;background:'+(s.difs?'#FFF9E6':'#E8F8EE')+';color:'+(s.difs?'#C4943A':'#2E7D52')+'">'+(s.difs?s.difs+' dif.':'✓ cuadró')+'</span>'
+        var todasRes=s.difs>0&&(s.resueltas||0)>=s.difs;
+        var badgeTxt, badgeBg, badgeCol, bordCol, subCuadre='';
+        if(!s.difs){ badgeTxt='✓ cuadró'; badgeBg='#E8F8EE'; badgeCol='#2E7D52'; bordCol='#6A9E7A'; }
+        else if(todasRes){ badgeTxt='hubo '+s.difs+' dif. → ✓ cuadrado'; badgeBg='#E8F8EE'; badgeCol='#2E7D52'; bordCol='#6A9E7A';
+          if(s.fechaCuadre) subCuadre='<div style="font-size:0.58rem;color:#2E7D52;font-weight:700;margin-top:2px">✓ Cuadrado el '+s.fechaCuadre+'</div>'; }
+        else if(s.resueltas>0){ badgeTxt=s.difs+' dif. · '+s.resueltas+' resuelta'+(s.resueltas!==1?'s':''); badgeBg='#FFF9E6'; badgeCol='#C4943A'; bordCol='#C4943A'; }
+        else { badgeTxt=s.difs+' dif. pendiente'+(s.difs!==1?'s':''); badgeBg='#FEE2E2'; badgeCol='#C00'; bordCol='#B86B6B'; }
+        html+='<div class="card" onclick="renderInvFisicoDetalle(\''+s.id+'\')" style="padding:12px;margin-bottom:9px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border-left:4px solid '+bordCol+'">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📋 '+s.fecha+'</div>'
+          +'<div style="font-size:0.62rem;color:var(--gray)">'+s.usuario+' · '+s.total+' productos contados</div>'+subCuadre+'</div>'
+          +'<span style="font-size:0.62rem;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;background:'+badgeBg+';color:'+badgeCol+'">'+badgeTxt+'</span>'
           +'</div>';
       });
     }
@@ -5119,27 +5172,41 @@ function renderInvFisicoDetalle(id){
   .then(function(r){return r.json();})
   .then(function(d){
     var items=d.items||[];
-    var pend=items.filter(function(i){return i.difAhora!==null&&i.difAhora!==0;});
-    var resueltos=items.filter(function(i){return i.difOriginal!==0&&i.difAhora===0;}).length;
+    // Resuelto = SELLADO (tiene fecha de resolución) o verificado en cero ahora mismo.
+    // Pendiente = dif original sin resolver que sigue sin cuadrar.
+    var pend=items.filter(function(i){return i.difOriginal!==0&&!i.resuelto&&i.difAhora!==null&&i.difAhora!==0;});
+    var resItems=items.filter(function(i){return i.difOriginal!==0&&(i.resuelto||i.difAhora===0);});
+    var resueltos=resItems.length;
     var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:4px">📋 Inventario del '+d.fecha+'</div>'
       +'<div style="font-size:0.64rem;color:var(--gray);margin-bottom:12px">'+d.usuario+' · '+items.length+' productos · re-cruzado contra el stock de AHORA</div>'
       +'<div style="display:flex;gap:8px;margin-bottom:14px">'
       +'<div style="flex:1;background:#E8F8EE;border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:#2E7D52">'+(items.length-pend.length)+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">CUADRAN HOY ✓</div></div>'
       +'<div style="flex:1;background:'+(pend.length?'#FEE2E2':'#E8F8EE')+';border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:'+(pend.length?'#C00':'#2E7D52')+'">'+pend.length+'</div><div style="font-size:0.6rem;color:'+(pend.length?'#C00':'#2E7D52')+';font-weight:700">PENDIENTES</div></div>'
       +'</div>';
-    if(resueltos>0) html+='<div style="background:#E8F8EE;border-radius:10px;padding:9px;text-align:center;font-size:0.7rem;font-weight:800;color:#2E7D52;margin-bottom:10px">🎉 '+resueltos+' error(es) del conteo original ya corregido(s)</div>';
+    if(resueltos>0){
+      html+='<div style="background:#E8F8EE;border-radius:10px;padding:10px;font-size:0.7rem;font-weight:800;color:#2E7D52;margin-bottom:10px">🎉 '+resueltos+' error(es) del conteo original corregido(s):';
+      resItems.forEach(function(ri){
+        html+='<div style="font-size:0.62rem;font-weight:700;margin-top:4px">✓ '+ri.nombre+' <span style="font-weight:400">('+(ri.difOriginal>0?'+':'')+ri.difOriginal+')</span>'+(ri.resuelto?' — cuadrado el '+ri.resuelto:'')
+          +(ri.nota?'<div style="font-weight:400;color:#2E7D52;white-space:pre-line;margin-top:2px">'+ri.nota+'</div>':'')+'</div>';
+      });
+      html+='</div>';
+    }
     if(!pend.length){
       html+='<div class="card" style="text-align:center;padding:22px;color:#2E7D52;font-weight:800">✅ ¡Inventario completo! Todo lo contado cuadra con el sistema actual.</div>';
     } else {
+      var esAdminIF=CU&&(CU.role==='admin'||CU.role==='admin_master');
       pend.forEach(function(f){
         var falta=f.difAhora<0;
         html+='<div class="card" style="padding:12px;margin-bottom:9px;border-left:4px solid '+(falta?'#B86B6B':'#C4943A')+'">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
           +'<div style="flex:1;min-width:0"><div style="font-size:0.72rem;font-weight:800;color:var(--navy)">'+f.nombre+'</div>'
           +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+f.sku+'</div>'
           +'<div style="font-size:0.68rem;margin-top:4px">Contado: <b>'+f.fisico+'</b> · Sistema hoy: <b>'+f.sistemaAhora+'</b> → <b style="color:'+(falta?'#B86B6B':'#C4943A')+'">'+(f.difAhora>0?'+':'')+f.difAhora+' '+(falta?'FALTAN':'SOBRAN')+'</b>'
-          +(f.difOriginal!==f.difAhora?' <span style="color:var(--gray);font-size:0.58rem">(original: '+(f.difOriginal>0?'+':'')+f.difOriginal+')</span>':'')+'</div></div>'
-          +'<button onclick="verMovimientosSku(\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="padding:9px 12px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap">🔎 Rastrear</button>'
+          +(f.difOriginal!==f.difAhora?' <span style="color:var(--gray);font-size:0.58rem">(original: '+(f.difOriginal>0?'+':'')+f.difOriginal+')</span>':'')+'</div>'
+          +(f.nota?'<div style="font-size:0.6rem;color:var(--gray);margin-top:4px;white-space:pre-line;background:var(--cream);border-radius:8px;padding:6px">'+f.nota+'</div>':'')
+          +'<div style="display:flex;gap:6px;margin-top:8px">'
+          +'<button onclick="verMovimientosSku(\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="flex:1;padding:8px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🔎 Rastrear</button>'
+          +(esAdminIF?'<button onclick="corregirConteoIF(\''+d.id+'\',\''+f.sku+'\','+f.fisico+')" style="flex:1;padding:8px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️ Corregir conteo</button>':'')
+          +(esAdminIF?'<button onclick="resolverIF(\''+d.id+'\',\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="flex:1;padding:8px;background:#6A9E7A;color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✔️ Resolver</button>':'')
           +'</div><div id="mov-'+f.sku.replace(/[^A-Za-z0-9]/g,'')+'"></div></div>';
       });
       html+='<div style="font-size:0.58rem;color:var(--gray);margin-bottom:8px">💡 El re-cruce compara tu conteo contra el stock ACTUAL. Ojo: si hubo ventas o entradas después del conteo, esas mueven el stock y pueden explicar la diferencia sin ser error.</div>';
