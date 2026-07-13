@@ -4974,6 +4974,118 @@ function toggleExclusion(tkRow, tipo){
   .catch(function(){ toast('Error de conexión','#B86B6B'); });
 }
 
+// ══════ INVENTARIO FÍSICO SEMANAL ══════
+// Conteo A CIEGAS: no se muestra el stock del sistema para que el conteo sea honesto.
+function renderInvFisico(c){
+  var items=window._invItems||[];
+  if(!items.length){toast('Abre primero el Inventario','#C9A227');renderInventario(c);return;}
+  var prefixNames={'HT':'HT — ANUA','AS':'AS — Eyenlip','ML':'ML — Dr.esthe','PH':'PH — APHLORA','JN':'JN — Varios','BV':'BV — Bruno Vassari','SU':'SU — SUNSU'};
+  var grupos={};
+  items.forEach(function(it,idx){
+    var m=it.sku.match(/SUNSU-([A-Z]+)-/);
+    var gn=prefixNames[m?m[1]:'OTROS']||('CÓDIGOS '+(m?m[1]:'OTROS'));
+    (grupos[gn]=grupos[gn]||[]).push({it:it,idx:idx});
+  });
+  var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:4px">📋 Inventario físico</div>'
+    +'<div style="font-size:0.66rem;color:var(--gray);margin-bottom:12px">Cuenta cada producto en percha/bodega y anota la cantidad real. Deja vacío lo que no cuentes hoy.</div>'
+    +'<div style="position:sticky;top:0;z-index:50;background:var(--cream);padding:8px 0;margin-bottom:8px"><div id="if-progreso" style="background:var(--navy);color:white;border-radius:10px;padding:9px;text-align:center;font-size:0.74rem;font-weight:800">0 / '+items.length+' contados</div></div>';
+  Object.keys(grupos).forEach(function(gn){
+    html+='<div class="card" style="padding:12px;margin-bottom:10px"><div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+gn+'</div>';
+    grupos[gn].forEach(function(par){
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d)">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+par.it.nombre+'</div>'
+        +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+par.it.sku+'</div></div>'
+        +'<input type="number" inputmode="numeric" min="0" id="if-'+par.idx+'" oninput="_ifProgreso()" placeholder="—" style="width:72px;padding:9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.9rem;font-weight:800;text-align:center;color:var(--navy);outline:none">'
+        +'</div>';
+    });
+    html+='</div>';
+  });
+  html+='<button onclick="guardarInvFisico()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer;margin-bottom:8px">✓ Guardar y cruzar con el sistema</button>'
+    +'<button onclick="renderInventario(document.getElementById(\'content\'))" style="width:100%;padding:10px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;margin-bottom:24px">← Volver al inventario</button>';
+  c.innerHTML=html;
+}
+function _ifProgreso(){
+  var items=window._invItems||[], n=0;
+  for(var i=0;i<items.length;i++){
+    var el=document.getElementById('if-'+i);
+    if(el&&el.value!=='') n++;
+  }
+  var p=document.getElementById('if-progreso');
+  if(p){p.textContent=n+' / '+items.length+' contados';p.style.background=n===items.length?'#6A9E7A':'var(--navy)';}
+}
+function guardarInvFisico(){
+  var items=window._invItems||[];
+  var conteos=[], sinContar=0;
+  items.forEach(function(it,i){
+    var el=document.getElementById('if-'+i);
+    if(el&&el.value!==''){conteos.push({sku:it.sku,nombre:it.nombre,sistema:it.stock,fisico:parseFloat(el.value)||0});}
+    else sinContar++;
+  });
+  if(!conteos.length){toast('No has contado ningún producto','#C9A227');return;}
+  if(sinContar>0&&!confirm('Hay '+sinContar+' producto(s) sin contar (quedaron vacíos).\n\n¿Guardar solo los '+conteos.length+' contados?')) return;
+  toast('⏳ Guardando y cruzando...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'guardarInvFisico',usuario:CU?CU.name:'—',conteos:conteos})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error al guardar'),'#B86B6B');return;}
+    _invFisicoResultados(d);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function _invFisicoResultados(d){
+  var c=document.getElementById('content');
+  var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Resultado del cruce</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+    +'<div style="flex:1;background:#E8F8EE;border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:#2E7D52">'+d.cuadran+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">CUADRAN ✓</div></div>'
+    +'<div style="flex:1;background:'+(d.difs.length?'#FEE2E2':'#E8F8EE')+';border-radius:11px;padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:900;color:'+(d.difs.length?'#C00':'#2E7D52')+'">'+d.difs.length+'</div><div style="font-size:0.6rem;color:'+(d.difs.length?'#C00':'#2E7D52')+';font-weight:700">DIFERENCIAS</div></div>'
+    +'</div>';
+  if(!d.difs.length){
+    html+='<div class="card" style="text-align:center;padding:22px;color:#2E7D52;font-weight:800">🎉 ¡Inventario perfecto! Todo cuadra con el sistema.</div>';
+  } else {
+    html+='<div style="font-size:0.64rem;color:var(--gray);margin-bottom:10px">Toca 🔎 para ver los movimientos del producto (tickets que lo vendieron y entradas) y cazar dónde está el error. Cruza la factura del ticket sospechoso con Mi Negocio.</div>';
+    d.difs.forEach(function(f){
+      var falta=f.dif<0;
+      html+='<div class="card" style="padding:12px;margin-bottom:9px;border-left:4px solid '+(falta?'#B86B6B':'#C4943A')+'">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:0.72rem;font-weight:800;color:var(--navy)">'+f.nombre+'</div>'
+        +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+f.sku+'</div>'
+        +'<div style="font-size:0.68rem;margin-top:4px">Sistema: <b>'+f.sistema+'</b> · Físico: <b>'+f.fisico+'</b> → <b style="color:'+(falta?'#B86B6B':'#C4943A')+'">'+(f.dif>0?'+':'')+f.dif+' '+(falta?'FALTAN':'SOBRAN')+'</b></div></div>'
+        +'<button onclick="verMovimientosSku(\''+f.sku+'\',\''+f.nombre.replace(/'/g,'')+'\')" style="padding:9px 12px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap">🔎 Rastrear</button>'
+        +'</div><div id="mov-'+f.sku.replace(/[^A-Za-z0-9]/g,'')+'"></div></div>';
+    });
+  }
+  html+='<button onclick="renderInventario(document.getElementById(\'content\'))" style="width:100%;padding:11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:11px;font-size:0.78rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Volver al inventario</button>';
+  c.innerHTML=html;
+  window.scrollTo(0,0);
+}
+function verMovimientosSku(sku, nombre){
+  var boxId='mov-'+sku.replace(/[^A-Za-z0-9]/g,'');
+  var box=document.getElementById(boxId);
+  if(!box) return;
+  if(box.innerHTML){box.innerHTML='';return;} // toggle
+  box.innerHTML='<div style="font-size:0.62rem;color:var(--gray);padding:8px 0">⏳ Buscando movimientos...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getMovimientosSku&sku='+encodeURIComponent(sku)+'&dias=60')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var h='<div style="margin-top:10px;padding-top:9px;border-top:1px dashed var(--cream-d)">';
+    h+='<div style="font-size:0.62rem;font-weight:800;color:var(--navy);margin-bottom:5px">📥 Entradas recibidas (60 días): '+((d.entradas||[]).reduce(function(s,e){return s+e.cant;},0))+' unidades</div>';
+    (d.entradas||[]).forEach(function(en){
+      h+='<div style="font-size:0.62rem;color:var(--gray);padding:2px 0">'+en.fecha+' · +'+en.cant+'u · OC '+(en.orden||'—')+' · '+(en.proveedor||'')+'</div>';
+    });
+    if(!(d.entradas||[]).length) h+='<div style="font-size:0.6rem;color:var(--gray)">Sin entradas en 60 días</div>';
+    h+='<div style="font-size:0.62rem;font-weight:800;color:var(--navy);margin:8px 0 5px">🎫 Ventas en tickets (60 días): '+((d.ventas||[]).reduce(function(s,v){return s+v.cant;},0))+' unidades</div>';
+    (d.ventas||[]).forEach(function(v){
+      h+='<div style="font-size:0.62rem;padding:3px 0;border-bottom:1px solid var(--cream)">'
+        +'<b>'+v.fecha+'</b> · '+v.clienta+' · <b>'+v.cant+'u</b> · Fact: <b style="color:var(--navy)">'+(v.factura||'SIN FACTURA ⚠️')+'</b> · '+v.cosmetologa.split(' ')[0]+' · fila '+v.fila+'</div>';
+    });
+    if(!(d.ventas||[]).length) h+='<div style="font-size:0.6rem;color:var(--gray)">Sin ventas en tickets en 60 días</div>';
+    h+='<div style="font-size:0.58rem;color:#C4943A;font-weight:700;margin-top:7px">💡 Compara estas facturas con Mi Negocio: un ticket sin factura o una factura sin ticket suele ser el error. Si faltan unidades sin venta registrada, pudo salir producto sin ticket.</div></div>';
+    box.innerHTML=h;
+  })
+  .catch(function(e){box.innerHTML='<div style="font-size:0.62rem;color:#B86B6B">❌ '+e.message+'</div>';});
+}
+
 // ══════ INVENTARIO ══════
 function renderInventario(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
@@ -5010,7 +5122,10 @@ function renderInventario(c){
       var sinStock=items.filter(function(i){return i.alerta==='SIN STOCK';}).length;
       var bajo=items.filter(function(i){return i.alerta==='STOCK BAJO';}).length;
       var ok=items.filter(function(i){return i.alerta==='OK';}).length;
+      window._invItems=items; // para el inventario físico
       var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Inventario</div>'
+        +'<button onclick="renderInvFisico(document.getElementById(\'content\'))" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.82rem;font-weight:800;cursor:pointer;margin-bottom:8px">📋 Hacer inventario físico</button>'
+        +(d.ultimoFisico?'<div style="font-size:0.62rem;color:var(--gray);text-align:center;margin-bottom:10px">Último inventario físico: <b>'+d.ultimoFisico+'</b></div>':'<div style="font-size:0.62rem;color:#C4943A;text-align:center;margin-bottom:10px;font-weight:700">⚠️ Nunca se ha hecho un inventario físico</div>')
         +'<div style="display:flex;gap:8px;margin-bottom:14px">'
         +'<div style="flex:1;background:#FEE2E2;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C00">'+sinStock+'</div><div style="font-size:0.6rem;color:#C00;font-weight:700">SIN STOCK</div></div>'
         +'<div style="flex:1;background:#FFF9E6;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C4943A">'+bajo+'</div><div style="font-size:0.6rem;color:#C4943A;font-weight:700">STOCK BAJO</div></div>'
