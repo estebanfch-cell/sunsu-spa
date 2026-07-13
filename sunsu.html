@@ -250,14 +250,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
     <div class="logo-s">SUNSU · GLASS SKIN · QUITO</div>
   </div>
   <div class="login-card">
-    <h2>Selecciona tu usuario</h2>
-    <div class="user-grid" id="user-grid"></div>
-    <div class="pin-section" id="pin-section" style="display:none">
-      <div class="pin-lbl">Ingresa tu PIN</div>
-      <div class="pin-dots" id="pin-dots"></div>
-      <div class="pin-pad" id="pin-pad"></div>
+    <!-- Puerta biométrica: aparece si el equipo tiene sesión guardada + Face ID/huella activada -->
+    <div id="bio-gate" style="display:none;text-align:center">
+      <div id="bio-nombre" style="font-size:0.82rem;font-weight:800;color:var(--navy);margin-bottom:14px"></div>
+      <button class="login-btn" onclick="bioEntrar()" style="font-size:1rem;padding:16px">🔒 Entrar con Face ID / Huella</button>
+      <div onclick="mostrarPinLogin()" style="margin-top:14px;font-size:0.7rem;color:var(--gray);cursor:pointer;text-decoration:underline">Usar PIN</div>
     </div>
-    <button class="login-btn" onclick="doLogin()" style="margin-top:10px">Ingresar →</button>
+    <!-- Login por PIN: el PIN identifica al usuario (la lista ya no se muestra) -->
+    <div id="pin-login" style="display:none">
+      <h2>Ingresa tu PIN</h2>
+      <div class="pin-section" id="pin-section" style="display:block">
+        <div class="pin-dots" id="pin-dots"></div>
+        <div class="pin-pad" id="pin-pad"></div>
+      </div>
+      <div id="login-sync" style="text-align:center;font-size:0.62rem;color:var(--gray);margin-top:8px"></div>
+    </div>
   </div>
 </div>
 
@@ -462,25 +469,84 @@ let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
 // ══════ LOGIN ══════
+// ══════ LOGIN: PIN identifica al usuario · sesión persistente · Face ID/huella ══════
+function _sesionGet(){try{return JSON.parse(localStorage.getItem('sunsu_sesion'));}catch(e){return null;}}
+function _sesionSet(uid){localStorage.setItem('sunsu_sesion',JSON.stringify({uid:uid,ts:Date.now()}));}
+function _bioGet(){try{return JSON.parse(localStorage.getItem('sunsu_bio'));}catch(e){return null;}}
+function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
+function _b64inv(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a.buffer;}
+
 function initLogin(){
-  // Mostrar spinner mientras se sincronizan los usuarios desde el servidor
-  document.getElementById('user-grid').innerHTML=
-    '<div style="grid-column:1/-1;text-align:center;padding:18px 0;color:#8A90A0;font-size:0.8rem">'    +'<div class="spinner" style="margin:0 auto 8px"></div>Sincronizando...</div>';
-  document.getElementById('pin-section').style.display='none';
-  syncUsersFromServer(function(){
-    const users=getUsers();
-    document.getElementById('user-grid').innerHTML=users.map(u=>
-      '<div class="ubtn" id="ub-'+u.id+'" onclick="selU(\''+u.id+'\')">'      +'<div class="uav" style="background:'+u.color+'">'+u.short.charAt(0)+'</div>'      +'<div class="uname">'+u.short+'</div>'      +'<div class="urole">'+rLabel(u.role)+'</div>'      +'</div>'    ).join('');
+  var ses=_sesionGet(), bio=_bioGet();
+  var gate=document.getElementById('bio-gate'), pinL=document.getElementById('pin-login');
+  if(ses){
+    var u=getUsers().find(function(x){return x.id===ses.uid;});
+    if(u){
+      if(bio&&window.PublicKeyCredential){
+        // Sesión guardada + biometría activada → puerta Face ID/huella
+        gate.style.display='block'; pinL.style.display='none';
+        document.getElementById('bio-nombre').textContent='👋 Hola, '+u.short;
+        return;
+      }
+      // Sesión guardada sin biometría → entrar directo
+      _entrarComo(u);
+      return;
+    }
+  }
+  mostrarPinLogin();
+}
+function mostrarPinLogin(){
+  document.getElementById('bio-gate').style.display='none';
+  document.getElementById('pin-login').style.display='block';
+  pinInput=''; renderPin();
+  // Sincronizar PINs desde el servidor en segundo plano (sin bloquear el teclado)
+  var syncEl=document.getElementById('login-sync');
+  if(syncEl) syncEl.textContent='Sincronizando usuarios...';
+  syncUsersFromServer(function(){ if(syncEl) syncEl.textContent=''; });
+}
+function bioEntrar(){
+  var bio=_bioGet(), ses=_sesionGet();
+  if(!bio||!ses){mostrarPinLogin();return;}
+  var reto=new Uint8Array(32); crypto.getRandomValues(reto);
+  navigator.credentials.get({publicKey:{
+    challenge:reto,
+    allowCredentials:[{type:'public-key', id:_b64inv(bio.credId)}],
+    userVerification:'required', timeout:60000
+  }}).then(function(){
+    var u=getUsers().find(function(x){return x.id===ses.uid;});
+    if(u) _entrarComo(u); else mostrarPinLogin();
+  }).catch(function(){
+    toast('No se pudo verificar — usa tu PIN','#C9A227');
+    mostrarPinLogin();
   });
 }
-function rLabel(r){return r==='admin_master'?'👑 Admin Master':r==='admin'?'👑 Admin':r==='reception'?'📋 Recepción':'Cosmetóloga';}
-function selU(id){
-  document.querySelectorAll('.ubtn').forEach(b=>b.classList.remove('sel'));
-  document.getElementById('ub-'+id).classList.add('sel');
-  selUID=id; pinInput='';
-  document.getElementById('pin-section').style.display='block';
-  renderPin();
+function _ofrecerBiometria(u){
+  if(!window.PublicKeyCredential||_bioGet()) return;
+  setTimeout(function(){
+    if(!confirm('🔒 ¿Proteger este equipo con Face ID / huella?\n\nLa próxima vez entras sin PIN, con tu cara o tu dedo.')) return;
+    var reto=new Uint8Array(32); crypto.getRandomValues(reto);
+    var uid=new Uint8Array(16); crypto.getRandomValues(uid);
+    navigator.credentials.create({publicKey:{
+      challenge:reto,
+      rp:{name:'SUNSU Spa'},
+      user:{id:uid, name:u.id, displayName:u.name},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+      timeout:60000
+    }}).then(function(cred){
+      localStorage.setItem('sunsu_bio',JSON.stringify({credId:_b64(cred.rawId)}));
+      toast('🔒 Face ID / huella activada en este equipo','var(--green)');
+    }).catch(function(){toast('No se pudo activar la biometría','#C9A227');});
+  },600);
 }
+function _entrarComo(u){
+  CU=u;
+  _sesionSet(u.id);
+  document.getElementById('screen-login').style.display='none';
+  document.getElementById('screen-app').style.cssText='display:flex;flex-direction:column;';
+  initApp();
+}
+function rLabel(r){return r==='admin_master'?'👑 Admin Master':r==='admin'?'👑 Admin':r==='reception'?'📋 Recepción':'Cosmetóloga';}
 function renderPin(){
   document.getElementById('pin-dots').innerHTML=[0,1,2,3].map(i=>
     `<div class="pin-dot ${i<pinInput.length?'filled':''}" id="pd-${i}"></div>`).join('');
@@ -496,21 +562,19 @@ function pk(k){
   if(pinInput.length===4) setTimeout(doLogin,120);
 }
 function doLogin(){
-  const users=getUsers(), u=users.find(u=>u.id===selUID);
-  if(!u){toast('Selecciona usuario','#B86B6B');return;}
-  if(u.pin&&u.pin!==pinInput){toast('PIN incorrecto','#B86B6B');pinInput='';renderPin();return;}
-  CU=u;
-  document.getElementById('screen-login').style.display='none';
-  document.getElementById('screen-app').style.cssText='display:flex;flex-direction:column;';
-  initApp();
+  // El PIN identifica al usuario — ya no se elige de una lista
+  const users=getUsers(), u=users.find(x=>x.pin===pinInput);
+  if(!u){toast('PIN incorrecto','#B86B6B');pinInput='';renderPin();return;}
+  _entrarComo(u);
+  _ofrecerBiometria(u);
 }
 function doLogout(){
   CU=null;T=newT();pinInput='';selUID=null;
+  localStorage.removeItem('sunsu_sesion'); // cerrar sesión de este equipo (la biometría queda para el próximo login)
   document.getElementById('screen-app').style.display='none';
   document.getElementById('screen-login').style.display='flex';
-  initLogin();
+  mostrarPinLogin();
 }
-
 // ══════ APP ══════
 function initApp(){
   document.getElementById('t-av').textContent=CU.short.charAt(0);
