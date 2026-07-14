@@ -6159,9 +6159,22 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg){
       return;
     }
   }catch(eS){}
-  // Computadora: descargar para arrastrar al chat abierto
-  (est.docs||[]).forEach(function(r){ try{ r.doc.save(r.nom); }catch(eD){} });
-  toast('📄 PDF'+(est.files.length!==1?'s':'')+' descargado'+(est.files.length!==1?'s':'')+' — arrástralo'+(est.files.length!==1?'s':'')+' al chat abierto','var(--blue)');
+  // Computadora: descargar para arrastrar al chat abierto.
+  // ESCALONADO (900ms) — los navegadores bloquean la 2ª descarga automática seguida
+  var colaD=(est.docs||[]).slice(), iD=0;
+  var bajar=function(){
+    if(iD>=colaD.length) return;
+    var r=colaD[iD++];
+    try{
+      var urlB=URL.createObjectURL(r.doc.output('blob'));
+      var aB=document.createElement('a'); aB.href=urlB; aB.download=r.nom;
+      document.body.appendChild(aB); aB.click(); aB.remove();
+      setTimeout(function(){URL.revokeObjectURL(urlB);},5000);
+    }catch(eD){ try{ r.doc.save(r.nom); }catch(eD2){} }
+    if(iD<colaD.length) setTimeout(bajar, 900);
+  };
+  bajar();
+  toast('📄 '+colaD.length+' PDF'+(colaD.length!==1?'s':'')+' descargándose — arrástralo'+(colaD.length!==1?'s':'')+' al chat abierto','var(--blue)');
 }
 function tarjetaPaqDeCed(ced){
   var x=(window._tarjPaqRef||{})['c'+ced];
