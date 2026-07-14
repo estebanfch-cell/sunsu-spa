@@ -3231,6 +3231,13 @@ function _histPrecioProducto(skuQty){
 }
 
 // Build one ticket card — showPrices=false for staff
+// Abre/cierra el detalle (recom, notas, comprobante y fotos) de un ticket del historial.
+function _toggleDetTicket(id, btn){
+  var el=document.getElementById(id); if(!el) return;
+  var abrir = el.style.display==='none';
+  el.style.display = abrir?'block':'none';
+  if(btn) btn.textContent = abrir?'▴':'▾';
+}
 function _buildTicketCard(t, showPrices){
   if(t&&t.tkRow){(window._tkCards=window._tkCards||{})[t.tkRow]=t;}
   var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
@@ -3377,7 +3384,25 @@ function _buildTicketCard(t, showPrices){
   if(t.fotosAntes)   notasBlock+=_fotosFila(t.fotosAntes,'🌑 ANTES');
   if(t.fotosDespues) notasBlock+=_fotosFila(t.fotosDespues,'✨ DESPUÉS');
   if(t.fotos)        notasBlock+=_fotosFila(t.fotos,'');
-  card+=notasBlock;
+  // Las fotos hacian el ticket enorme: el detalle va colapsado tras un resumen
+  // con ✓/✕ (fotos, recom, notas) y se abre solo con la flecha.
+  var _nFotos=function(s){ return s ? s.split(' | ').filter(function(u){return u.trim();}).length : 0; };
+  var _hayFotos=(_nFotos(t.fotosAntes)+_nFotos(t.fotosDespues)+_nFotos(t.fotos))>0;
+  var _chip=function(ic,txt,ok){
+    return '<span style="font-size:0.57rem;font-weight:700;white-space:nowrap;border-radius:6px;padding:2px 6px;color:'
+      +(ok?'#2E7D52':'#A8AEBC')+';background:'+(ok?'#E8F8EE':'#F4F5F8')+'">'+ic+' '+txt+' '+(ok?'✓':'✕')+'</span>';
+  };
+  var _resumen='<div style="margin-top:8px;padding-top:7px;border-top:1px solid #f0f0f4;display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+    +_chip('📷','Fotos',_hayFotos)+_chip('📝','Recom',!!t.recomendaciones)+_chip('🗒','Notas',!!t.notas);
+  if(notasBlock){
+    var _idDet='det'+(window._tcSeq=(window._tcSeq||0)+1);
+    card+=_resumen
+      +'<button onclick="_toggleDetTicket(\''+_idDet+'\',this)" title="Ver fotos y notas" style="margin-left:auto;padding:3px 10px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:7px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
+      +'</div>'
+      +'<div id="'+_idDet+'" style="display:none">'+notasBlock+'</div>';
+  } else {
+    card+=_resumen+'</div>'; // sin nada que abrir: solo el resumen
+  }
   // Dropdown exclusión comisión — solo admins
   if(isAdminView&&t.tkRow){
     var exclFac=t.exclFacial||false, exclPaq=t.exclPaquete||false, exclProd=t.exclProducto||false, exclExt=t.exclExtras||false;
