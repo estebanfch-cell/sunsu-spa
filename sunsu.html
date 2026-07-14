@@ -539,9 +539,16 @@ function _ofrecerBiometria(u){
     }).catch(function(){toast('No se pudo activar la biometría','#C9A227');});
   },600);
 }
+function _cargarProdColMap(){
+  fetch(APPS_SCRIPT_URL+'?action=getProdColMap&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){ if(d.mapa&&Object.keys(d.mapa).length) window._prodColMap=d.mapa; })
+    .catch(function(){});
+}
 function _entrarComo(u){
   CU=u;
   _sesionSet(u.id);
+  _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
   document.getElementById('screen-login').style.display='none';
   document.getElementById('screen-app').style.cssText='display:flex;flex-direction:column;';
   initApp();
@@ -582,7 +589,7 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
@@ -705,6 +712,7 @@ function showTab(id,btn){
   else if(id==='recepcion') renderRecepcion(c);
   else if(id==='seguimiento') renderSeguimiento(c);
   else if(id==='historial') renderHistorial(c);
+  else if(id==='catalogo') renderCatalogoAdmin(c);
   else if(id==='buscar') renderBuscar(c);
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
   else if(id==='buscar-gc') renderBuscarGC(c);
@@ -1700,7 +1708,8 @@ function enviarTicket(){
 
   // esSunsu = consumo interno → estimado $0
   const _finalEstimado = T.esSunsu ? 0 : (estTotalFinal||'');
-  const PROD_COL_MAP={
+  // Mapa dinámico (encabezados reales de TICKET_FICHA) con respaldo harcodeado
+  const PROD_COL_MAP=window._prodColMap||{
     'SUNSU-HT-002':25,'SUNSU-HT-003':26,'SUNSU-HT-004':27,'SUNSU-HT-006':28,'SUNSU-HT-007':29,
     'SUNSU-HT-011':30,'SUNSU-HT-012':31,'SUNSU-HT-013':32,'SUNSU-HT-014':33,
     'SUNSU-AS-001':34,'SUNSU-AS-002':35,'SUNSU-AS-003':36,'SUNSU-AS-004':37,
@@ -2418,6 +2427,20 @@ function _esMovil_(){
   // Celular o tablet (incluye iPad en modo escritorio, que se identifica como Mac pero tiene touch)
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
     || (navigator.maxTouchPoints>1 && /Mac/.test(navigator.userAgent));
+}
+
+// Entrega un PDF de jsPDF SIN link fantasma: en celular abre la hoja de compartir
+// nativa con SOLO el archivo (igual que el gift card); en compu, descarga directa.
+function _entregarPDF(doc, nombre){
+  try{
+    var blob=doc.output('blob');
+    var file=new File([blob], nombre, {type:'application/pdf'});
+    if(_esMovil_()&&navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file]}).catch(function(){ doc.save(nombre); });
+      return;
+    }
+  }catch(ePd){}
+  doc.save(nombre);
 }
 
 function compartirGiftCard(){
@@ -4897,7 +4920,7 @@ function guardarEdicionTicket(tkRow){
   var extrasStr=extrasArr.join(' | ');
 
   // Build productos object same as enviarTicket
-  var PROD_COL_MAP={
+  var PROD_COL_MAP=window._prodColMap||{
     'SUNSU-HT-002':25,'SUNSU-HT-003':26,'SUNSU-HT-004':27,'SUNSU-HT-006':28,'SUNSU-HT-007':29,
     'SUNSU-HT-011':30,'SUNSU-HT-012':31,'SUNSU-HT-013':32,'SUNSU-HT-014':33,
     'SUNSU-AS-001':34,'SUNSU-AS-002':35,'SUNSU-AS-003':36,'SUNSU-AS-004':37,
@@ -5392,6 +5415,281 @@ function toggleInvGrupo(gid){
 }
 
 // ══════ ENTRADAS DE PRODUCTOS ══════
+// ══════ CATÁLOGO (administración completa desde el app — solo admin) ══════
+function renderCatalogoAdmin(c){
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){c.innerHTML='<div class="card">Solo administradores</div>';return;}
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏷️ Catálogo</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando catálogo...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getCatalogo&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(items){
+    if(!Array.isArray(items)){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+(items.error||'Error')+'</div>';return;}
+    // TODO el catálogo (productos, faciales, servicios, paquetes, gift cards)
+    window._catAdmin=items.filter(function(it){return (it.sku||'').toString().trim();});
+    _catShell(c);           // cascarón fijo (el buscador NO se recrea al teclear)
+    _pintarCatalogoAdmin(); // resultados en su propio contenedor
+  })
+  .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function _skuVista(sku){ // productos con el prefijo SUNSU-; otros códigos tal cual
+  var s=(sku||'').toString().trim().toUpperCase();
+  if(/^SUNSU-/.test(s)) return s;
+  return /^[A-Z]{2,3}-\d{3}$/.test(s)?('SUNSU-'+s):s;
+}
+function _catShell(c){
+  var items=window._catAdmin||[];
+  var nInact=items.filter(function(it){return !it.activo;}).length;
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏷️ Catálogo <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">· '+items.length+' productos · '+nInact+' inactivos</span></div>'
+    +'<button onclick="formNuevoProducto()" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Nuevo producto</button>'
+    +'<div id="cat-form"></div>'
+    +'<input type="text" id="cat-buscar" autocomplete="off" value="'+(window._catQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Buscar por nombre o SKU..." oninput="window._catQ=this.value;clearTimeout(window._catQT);window._catQT=setTimeout(_pintarCatalogoAdmin,250)" style="width:100%;padding:10px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px">'
+    +'<div id="cat-res"></div>';
+}
+function _pintarCatalogoAdmin(){
+  // Solo repinta los RESULTADOS — el buscador queda intacto y el teclado no se pierde
+  var c=document.getElementById('cat-res');
+  if(!c){ var cont=document.getElementById('content'); if(cont){_catShell(cont); c=document.getElementById('cat-res');} }
+  if(!c) return;
+  var items=window._catAdmin||[];
+  var q=(window._catQ||'').toLowerCase().trim();
+  window._catShowInact=window._catShowInact||{};
+  var html='';
+  // Carpetas por TIPO con orden canónico: Producto → Facial → Servicio → Paquetes → Gift card
+  var _carpetaDe=function(it){
+    var t=(it.tipo||'').trim().toUpperCase();
+    var s=(it.sku||'').toString().toUpperCase();
+    if(t.indexOf('FACIAL')>=0||t.indexOf('LIMPIEZA')>=0) return '💆 Faciales';
+    if(t.indexOf('EXTRA')>=0||t.indexOf('ADD')>=0||t.indexOf('SERVICIO')>=0) return '✨ Servicios add-on';
+    if(t.indexOf('PAQ')>=0||/^(SUNSU-)?X[36]/.test(s)) return '📦 Paquetes';
+    if(t.indexOf('GIFT')>=0||s.indexOf('GIFT')>=0||s.indexOf('GC')===0) return '🎁 Gift cards';
+    if(t.indexOf('PROD')>=0||/^(SUNSU-)?[A-Z]{2,3}-\d{3}$/.test(s)) return '🛍️ Productos';
+    return '📁 '+(t||'Otros');
+  };
+  var ordenCarp=['🛍️ Productos','💆 Faciales','✨ Servicios add-on','📦 Paquetes','🎁 Gift cards'];
+  var fams={};
+  items.forEach(function(it,i){
+    if(q && _skuVista(it.sku).toLowerCase().indexOf(q)<0 && (it.nombre||'').toLowerCase().indexOf(q)<0) return;
+    var f=_carpetaDe(it);
+    (fams[f]=fams[f]||[]).push({it:it,i:i});
+  });
+  window._catAbierta=window._catAbierta||{};
+  window._catFamAbierta=window._catFamAbierta||{};
+  var buscando=!!q; // buscando → todo abierto para que los resultados se vean
+  var filaProd=function(par){
+    var it=par.it, i=par.i;
+    var util=(it.subtotal||0)-(it.compra||0);
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--cream-d);'+(it.activo?'':'opacity:0.45')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+_skuVista(it.sku)+(it.activo?'':' · DESACTIVADO')+'</div></div>'
+      +'<button onclick="toggleActivoCat('+i+')" style="padding:6px 10px;border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1.5px solid '+(it.activo?'#6A9E7A;background:#E8F8EE;color:#2E7D52':'#B86B6B;background:white;color:#B86B6B')+'">'+(it.activo?'✓ Activo':'✕ Inactivo')+'</button>'
+      +'<button onclick="formEditarProducto('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️</button>'
+      +'</div>'
+      +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;font-size:0.56rem">'
+      +'<span style="background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px;font-weight:700">Venta $'+(it.subtotal||0).toFixed(2)+' s/IVA</span>'
+      +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">c/IVA $'+((it.subtotal||0)*1.15).toFixed(2)+'</span>'
+      +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">Compra $'+(it.compra||0).toFixed(2)+'</span>'
+      +'<span style="background:'+(util>0?'#E8F8EE;color:#2E7D52':'#FEE2E2;color:#C00')+';padding:2px 7px;border-radius:6px;font-weight:700">Util. $'+util.toFixed(2)+'</span>'
+      +'<span style="background:#FFF9E6;color:#8A6D1A;padding:2px 7px;border-radius:6px;font-weight:700">Com. $'+(it.com||0).toFixed(2)+'</span>'
+      +'</div><div id="cat-edit-'+i+'"></div></div>';
+  };
+  Object.keys(fams).sort(function(a,b){
+    var ia=ordenCarp.indexOf(a), ib=ordenCarp.indexOf(b);
+    if(ia<0) ia=99; if(ib<0) ib=99;
+    return ia-ib || a.localeCompare(b);
+  }).forEach(function(f){
+    var todos=fams[f];
+    var activos=todos.filter(function(p){return p.it.activo;});
+    var inactivos=todos.filter(function(p){return !p.it.activo;});
+    var verInact=!!window._catShowInact[f]||buscando;
+    var abierta=!!window._catAbierta[f]||buscando;
+    var fKey=f.replace(/'/g,'');
+    // Cabecera desplegable de la carpeta
+    html+='<div class="card" style="padding:12px;margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div onclick="window._catAbierta[\''+fKey+'\']='+(abierta?'false':'true')+';_pintarCatalogoAdmin()" style="flex:1;display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none">'
+      +'<span style="font-size:0.8rem;color:var(--navy)">'+(abierta?'▾':'▸')+'</span>'
+      +'<span style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+f+'</span>'
+      +'<span style="font-weight:400;color:var(--gray);font-size:0.6rem">('+activos.length+' activos'+(inactivos.length?' · '+inactivos.length+' inact.':'')+')</span></div>'
+      +(abierta&&inactivos.length?'<button onclick="window._catShowInact[\''+fKey+'\']='+(verInact?'false':'true')+';_pintarCatalogoAdmin()" style="padding:4px 9px;background:'+(verInact?'var(--gray-ll,#F0F1F5)':'white')+';color:var(--gray);border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.58rem;font-weight:700;cursor:pointer">'+(verInact?'🙈':'👁')+' '+inactivos.length+'</button>':'')
+      +'</div>';
+    if(abierta){
+      var lista=verInact?activos.concat(inactivos):activos;
+      // ¿Los items son productos con código de familia? → subdividir por familia desplegable
+      var esProductos=lista.length&&lista.every(function(p){return /^(SUNSU-)?[A-Z]{2,3}-\d{3}$/i.test((p.it.sku||'').trim());});
+      if(esProductos){
+        var subFams={};
+        lista.forEach(function(p){
+          var famC=_skuVista(p.it.sku).replace(/^SUNSU-/,'').split('-')[0];
+          (subFams[famC]=subFams[famC]||[]).push(p);
+        });
+        Object.keys(subFams).sort().forEach(function(famC){
+          var famAb=!!window._catFamAbierta[famC]||buscando;
+          var nAct=subFams[famC].filter(function(p){return p.it.activo;}).length;
+          html+='<div onclick="window._catFamAbierta[\''+famC+'\']='+(famAb?'false':'true')+';_pintarCatalogoAdmin()" style="display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;padding:9px 6px;margin-top:6px;background:var(--cream);border-radius:9px">'
+            +'<span style="font-size:0.72rem;color:var(--navy)">'+(famAb?'▾':'▸')+'</span>'
+            +'<span style="font-size:0.68rem;font-weight:800;color:var(--navy)">'+famC+'</span>'
+            +'<span style="font-size:0.56rem;color:var(--gray)">('+nAct+' activos'+(subFams[famC].length-nAct?' · '+(subFams[famC].length-nAct)+' inact.':'')+')</span></div>';
+          if(famAb) subFams[famC].forEach(function(p){ html+=filaProd(p); });
+        });
+      } else {
+        if(!lista.length) html+='<div style="text-align:center;color:var(--gray);font-size:0.64rem;padding:8px">Sin productos activos</div>';
+        lista.forEach(function(p){ html+=filaProd(p); });
+      }
+    }
+    html+='</div>';
+  });
+  c.innerHTML=html;
+}
+function toggleActivoCat(i){
+  var it=window._catAdmin[i];
+  var nuevo=!it.activo;
+  if(!confirm((nuevo?'✓ ACTIVAR':'✕ DESACTIVAR')+' '+it.sku+' — '+it.nombre+'\n\n'+(nuevo?'Volverá a salir en el ticket, inventario y órdenes.':'Desaparecerá del ticket, inventario, conteo físico y órdenes.'))) return;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'toggleActivoCatalogo',sku:it.sku,activo:nuevo,usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    it.activo=nuevo;
+    toast(nuevo?'✓ '+it.sku+' activado':'✕ '+it.sku+' desactivado', nuevo?'var(--green)':'var(--gray)');
+    _pintarCatalogoAdmin();
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function _catFld(lbl,id,val,ph,tipo){
+  return '<div style="margin-bottom:7px"><div style="font-size:0.58rem;font-weight:700;color:var(--gray);margin-bottom:2px">'+lbl+'</div>'
+    +'<input type="'+(tipo||'text')+'" '+(tipo==='number'?'step="0.01" inputmode="decimal" ':'')+'id="'+id+'" value="'+String(val===undefined||val===null?'':val).replace(/"/g,'&quot;')+'" placeholder="'+(ph||'')+'" oninput="_catCalc()" style="width:100%;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+}
+function _catCalc(){
+  var sub=parseFloat((document.getElementById('cp-sub')||{}).value)||0;
+  var comp=parseFloat((document.getElementById('cp-compcat')||{}).value)||0;
+  var compReal=parseFloat((document.getElementById('cp-compprov')||{}).value)||0;
+  var util=sub-comp; // utilidad col H = subtotal (D) − compra catálogo (G)
+  var el=document.getElementById('cp-calc');
+  if(!el) return;
+  var html='IVA 15%: <b>$'+(sub*0.15).toFixed(2)+'</b> · Total c/IVA: <b>$'+(sub*1.15).toFixed(2)+'</b> · Utilidad catálogo (col H): <b style="color:'+(util>0?'#2E7D52':'#C00')+'">$'+util.toFixed(2)+'</b>';
+  // Regla Sunsu: comisión = 30% de la utilidad de la col H
+  var comEst=Math.max(0, util*0.30);
+  if(sub>0){
+    html+='<br>💁 Comisión por chica: <b style="color:#8A6D1A">$'+comEst.toFixed(2)+'</b> <span style="font-size:0.56rem">(30% de la utilidad: 0.30 × $'+util.toFixed(2)+')</span>';
+  }
+  // Utilidad REAL por producto vendido: venta s/IVA − compra REAL al proveedor − comisión
+  if(sub>0){
+    var compBase=compReal>0?compReal:comp;
+    var utilReal=sub-compBase-comEst;
+    html+='<br>💰 <b>Utilidad REAL por unidad vendida:</b> <b style="font-size:0.78rem;color:'+(utilReal>0?'#2E7D52':'#C00')+'">$'+utilReal.toFixed(2)+'</b>'
+      +' <span style="font-size:0.56rem">= $'+sub.toFixed(2)+' venta − $'+compBase.toFixed(2)+' compra '+(compReal>0?'real':'catálogo*')+' − $'+comEst.toFixed(2)+' comisión</span>'
+      +(compReal>0?'':'<br><span style="font-size:0.54rem;color:#C4943A">* Pon la compra REAL del proveedor para el cálculo exacto</span>');
+  }
+  el.innerHTML=html;
+}
+function formNuevoProducto(){
+  var fams={};
+  (window._catAdmin||[]).forEach(function(it){
+    var p=it.sku.split('-');
+    var n=parseInt(p[1])||0;
+    if(!fams[p[0]]||n>fams[p[0]]) fams[p[0]]=n;
+  });
+  var sug=Object.keys(fams).sort().map(function(f){return f+'-'+String(fams[f]+1).padStart(3,'0');}).join(' · ');
+  document.getElementById('cat-form').innerHTML='<div class="card" style="padding:14px;margin:8px 0;border:2px solid #6A9E7A">'
+    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy);margin-bottom:4px">＋ Nuevo producto</div>'
+    +'<div style="font-size:0.56rem;color:var(--gray);margin-bottom:10px">Siguientes disponibles: '+sug+'</div>'
+    +_catFld('SKU * (se guarda como SUNSU-FAM-###)','cp-sku','','Ej. HT-015 o SUNSU-HT-015')
+    +_catFld('Nombre *','cp-nombre','','Nombre del producto')
+    +(function(){
+      // Tipos ya existentes en el catálogo (únicos, ordenados) + opción de crear uno nuevo
+      var tipos={};
+      (window._catAdmin||[]).forEach(function(it){var t=(it.tipo||'').trim();if(t)tipos[t]=1;});
+      var lista=Object.keys(tipos).sort();
+      return '<div style="margin-bottom:7px"><div style="font-size:0.58rem;font-weight:700;color:var(--gray);margin-bottom:2px">Tipo (división del catálogo)</div>'
+        +'<select id="cp-tipo-sel" onchange="document.getElementById(\'cp-tipo-nuevo-box\').style.display=this.value===\'__nuevo__\'?\'block\':\'none\'" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;background:white;outline:none;box-sizing:border-box">'
+        +lista.map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'">'+t+'</option>';}).join('')
+        +'<option value="__nuevo__">➕ Crear nuevo tipo…</option>'
+        +'</select>'
+        +'<div id="cp-tipo-nuevo-box" style="display:none;margin-top:6px">'
+        +'<input type="text" id="cp-tipo-nuevo" placeholder="Escribe el nuevo tipo (ej. AMPOLLA)" style="width:100%;padding:9px;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box">'
+        +'</div></div>';
+    })()
+    +_catFld('Precio de venta SIN IVA (subtotal) *','cp-sub','','0.00','number')
+    +_catFld('Compra catálogo (para utilidad/comisión)','cp-compcat','','0.00','number')
+    +_catFld('Compra REAL proveedor (→ INVENTARIO col G)','cp-compprov','','0.00','number')
+    +'<div id="cp-calc" style="font-size:0.64rem;color:var(--gray);margin:4px 0 10px;line-height:1.7"></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="guardarNuevoProducto()" style="flex:1;padding:11px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">✓ Crear producto</button>'
+    +'<button onclick="document.getElementById(\'cat-form\').innerHTML=\'\'" style="padding:11px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.76rem;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.getElementById('cat-form').scrollIntoView({behavior:'smooth'});
+}
+function guardarNuevoProducto(){
+  var g=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
+  var tipoSel=g('cp-tipo-sel');
+  var tipoFinal=tipoSel==='__nuevo__'?g('cp-tipo-nuevo').toUpperCase():tipoSel;
+  if(tipoSel==='__nuevo__'&&!tipoFinal){toast('Escribe el nombre del nuevo tipo','#C9A227');return;}
+  var payload={accion:'crearProductoApp',sku:g('cp-sku').toUpperCase().replace(/^SUNSU-/,''),nombre:g('cp-nombre'),tipo:tipoFinal||'PRODUCTO',
+    subtotal:g('cp-sub'),compraCat:g('cp-compcat'),compraProv:g('cp-compprov'),comision:g('cp-com'),usuario:CU?CU.name:'—'};
+  if(!/^[A-Z]{2,3}-\d{3}$/.test(payload.sku)){toast('SKU inválido — formato FAM-### (ej. HT-015)','#C9A227');return;}
+  if(!payload.nombre||!payload.subtotal){toast('Nombre y precio de venta son obligatorios','#C9A227');return;}
+  if(!confirm('＋ CREAR PRODUCTO '+payload.sku+'\n'+payload.nombre+'\nVenta: $'+payload.subtotal+' s/IVA\n\nSe agrega al CATALOGO, se crea su columna en TICKET_FICHA y su fila en INVENTARIO. ¿Continuar?')) return;
+  toast('⏳ Creando producto en las 3 hojas...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('✅ '+d.sku+' creado — Catálogo + TICKET_FICHA + INVENTARIO','var(--green)');
+    if(d.avisoInventario) setTimeout(function(){alert('⚠️ '+d.avisoInventario);},600);
+    _cargarProdColMap(); // refrescar el mapa de columnas con el producto nuevo
+    renderCatalogoAdmin(document.getElementById('content'));
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function formEditarProducto(i){
+  var it=window._catAdmin[i];
+  var box=document.getElementById('cat-edit-'+i);
+  if(box.innerHTML){box.innerHTML='';return;}
+  box.innerHTML='<div style="background:var(--cream);border-radius:11px;padding:11px;margin-top:7px">'
+    +_catFld('Nombre','cp-nombre',it.nombre)
+    +_catFld('Venta SIN IVA (subtotal)','cp-sub',it.subtotal,'','number')
+    +_catFld('Compra catálogo','cp-compcat',it.compra,'','number')
+    +_catFld('Compra REAL proveedor (INVENTARIO col G — vacío = no tocar)','cp-compprov','','','number')
+    +_catFld('Comisión por unidad (vacío = no tocar)','cp-com',it.com,'','number')
+    +'<div id="cp-calc" style="font-size:0.64rem;color:var(--gray);margin:4px 0 10px"></div>'
+    +'<button onclick="guardarEdicionProducto('+i+')" style="width:100%;padding:10px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Guardar cambios</button>'
+    +'<button onclick="eliminarProductoCat('+i+')" style="width:100%;padding:9px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:10px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:6px">🗑️ Eliminar producto por completo</button>'
+    +'</div>';
+  _catCalc();
+}
+function eliminarProductoCat(i){
+  var it=window._catAdmin[i];
+  var cod=_skuVista(it.sku).replace(/^SUNSU-/,'');
+  if(!confirm('🗑️ ELIMINAR '+_skuVista(it.sku)+' — '+it.nombre+'\n\n⚠️ ESTO BORRA:\n· La fila del catálogo\n· La COLUMNA en TICKET_FICHA (¡se pierde el historial de ventas de este producto!)\n· La fila del inventario\n\nSi solo quieres sacarlo de la venta, usa ✕ Desactivar.\n\n¿Eliminar de todas formas?')) return;
+  var teclea=prompt('Para confirmar, escribe el código exacto:\n'+cod);
+  if(teclea===null) return;
+  if((teclea||'').trim().toUpperCase().replace(/^SUNSU-/,'')!==cod){toast('El código no coincide — cancelado','#C9A227');return;}
+  toast('⏳ Eliminando de las 3 hojas...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'eliminarProductoApp',sku:it.sku,usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    var r2=d.res||{};
+    toast('🗑️ Eliminado — catálogo:'+(r2.catalogo?'✓':'✗')+' ticket:'+(r2.ticket?'✓':'✗')+' inventario:'+(r2.inventario?'✓':'✗'),'var(--gray)');
+    _cargarProdColMap(); // el mapa de columnas cambió
+    renderCatalogoAdmin(document.getElementById('content'));
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function guardarEdicionProducto(i){
+  var it=window._catAdmin[i];
+  var g=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
+  var payload={accion:'editarProductoCatalogo',sku:it.sku,nombre:g('cp-nombre'),subtotal:g('cp-sub'),
+    compraCat:g('cp-compcat'),compraProv:g('cp-compprov'),comision:g('cp-com'),usuario:CU?CU.name:'—'};
+  toast('⏳ Guardando...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast('✅ '+it.sku+' actualizado','var(--green)');
+    renderCatalogoAdmin(document.getElementById('content'));
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+
 // ══════ PROVEEDORES (gestión desde el app) ══════
 function renderProveedores(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>'
@@ -5775,7 +6073,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
     doc.text('Sunsu Spa',xI+105,yF+11,{align:'center'});
     doc.text((prov.nombre||'').slice(0,32),xD-105,yF+11,{align:'center'});
-    doc.save(numOrden+' '+prov.nombre.split(' ')[0]+'.pdf');
+    _entregarPDF(doc, numOrden+' '+prov.nombre.split(' ')[0]+'.pdf');
   });
 }
 function renderEntradas(c){
@@ -6004,8 +6302,8 @@ function _actaEntregaFondo(btn, fondo){
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
     doc.text('Recibido por — Sunsu Spa',xI+107,yF+11,{align:'center'});
     doc.text('Entregado por — '+(proveedorReal||'').slice(0,26),xD-107,yF+11,{align:'center'});
-    doc.save('ACTA '+orden+' '+proveedorReal.split(' ')[0]+'.pdf');
-    toast('📄 Acta descargada','var(--green)');
+    _entregarPDF(doc, 'ACTA '+orden+' '+proveedorReal.split(' ')[0]+'.pdf');
+    toast('📄 Acta lista','var(--green)');
   });
 }
 function _actaEntregaHTML(btn){
