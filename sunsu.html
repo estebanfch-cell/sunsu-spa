@@ -292,13 +292,16 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
 
 <script>
 // ══════ USERS ══════
+// SIN PIN a proposito: este archivo es PUBLICO en GitHub Pages.
+// Los PIN viven solo en el servidor (Script Properties) y se validan alla.
+// Esta lista es respaldo para nombres/colores/roles mientras carga el servidor.
 const DEFAULT_USERS=[
-  {id:'efch',name:'EFCH',short:'EFCH',role:'admin_master',color:'#3D5A7A',pin:'0000'},
-  {id:'emi',name:'Emi',short:'Emi',role:'admin',color:'#8FA8C8',pin:'1111'},
-  {id:'andrea',name:'Andrea Robles',short:'Andrea',role:'staff',color:'#5B7FA6',pin:'2222'},
-  {id:'daniela',name:'Daniela Mora',short:'Daniela',role:'staff',color:'#C4943A',pin:'3333'},
-  {id:'dejaneira',name:'Dejaneira Espinoza',short:'Dejaneira',role:'staff',color:'#7A9E8A',pin:'4444'},
-  {id:'alejandra',name:'Alejandra Rodriguez',short:'Alejandra',role:'reception',color:'#D4956A',pin:'5555'},
+  {id:'efch',name:'EFCH',short:'EFCH',role:'admin_master',color:'#3D5A7A'},
+  {id:'emi',name:'Emi',short:'Emi',role:'admin',color:'#8FA8C8'},
+  {id:'andrea',name:'Andrea Robles',short:'Andrea',role:'staff',color:'#5B7FA6'},
+  {id:'daniela',name:'Daniela Mora',short:'Daniela',role:'staff',color:'#C4943A'},
+  {id:'dejaneira',name:'Dejaneira Espinoza',short:'Dejaneira',role:'staff',color:'#7A9E8A'},
+  {id:'alejandra',name:'Alejandra Rodriguez',short:'Alejandra',role:'reception',color:'#D4956A'},
 ];
 function getUsers(){try{return JSON.parse(localStorage.getItem('sunsu_users'))||DEFAULT_USERS;}catch(e){return DEFAULT_USERS;}}
 function saveUsers(u){
@@ -482,6 +485,7 @@ function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf
 function _b64inv(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a.buffer;}
 
 function initLogin(){
+  try{ window._token=localStorage.getItem('sunsu_token')||null; }catch(eTk){}
   var ses=_sesionGet(), bio=_bioGet();
   var gate=document.getElementById('bio-gate'), pinL=document.getElementById('pin-login');
   if(ses){
@@ -639,15 +643,31 @@ function pk(k){
   if(pinInput.length===4) setTimeout(doLogin,120);
 }
 function doLogin(){
-  // El PIN identifica al usuario — ya no se elige de una lista
-  const users=getUsers(), u=users.find(x=>x.pin===pinInput);
-  if(!u){toast('PIN incorrecto','#B86B6B');pinInput='';renderPin();return;}
-  _entrarComo(u);
-  _ofrecerBiometria(u);
+  // El PIN identifica al usuario, pero YA NO se compara aqui: viaja al servidor.
+  // Asi el HTML publico no contiene ningun PIN y nadie puede leerlos del codigo.
+  var _pin=pinInput;
+  var sync=document.getElementById('login-sync');
+  if(sync) sync.textContent='Verificando...';
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'login', pin:_pin})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(sync) sync.textContent='';
+    if(!d||!d.ok||!d.user){ toast(d&&d.error?d.error:'PIN incorrecto','#B86B6B'); pinInput=''; renderPin(); return; }
+    try{ localStorage.setItem('sunsu_token', d.token); }catch(eTk){}
+    window._token=d.token;
+    _entrarComo(d.user);
+    _ofrecerBiometria(d.user);
+  })
+  .catch(function(){
+    if(sync) sync.textContent='';
+    toast('Sin conexion — intenta de nuevo','#B86B6B'); pinInput=''; renderPin();
+  });
 }
 function doLogout(){
   CU=null;T=newT();pinInput='';selUID=null;
   localStorage.removeItem('sunsu_sesion'); // cerrar sesión de este equipo (la biometría queda para el próximo login)
+  localStorage.removeItem('sunsu_token'); window._token=null;
   document.getElementById('screen-app').style.display='none';
   document.getElementById('screen-login').style.display='flex';
   mostrarPinLogin();
