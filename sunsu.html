@@ -4543,6 +4543,61 @@ function mostrarErrorCitas(c, msg) {
   mostrarCitas(c, DEMO_CITAS, isAdmin, fecha, false, true);
 }
 
+// ── Ficha del REGISTRO para una clienta (por cédula o nombre, con cruce aproximado) ──
+function _fichaHTMLDe(nombreCompleto, cedula){
+  var fr=window._fichasReg;
+  if(!fr||fr.cargando) return '';
+  var nrm=(typeof _normNomCli==='function')?_normNomCli(nombreCompleto||''):(nombreCompleto||'').toLowerCase();
+  var fh=(cedula&&fr.porCedula[(cedula||'').toString().split('.')[0]])||fr.porNombre[nrm];
+  if(!fh){
+    var parts=nrm.split(' ').filter(Boolean);
+    if(parts.length>=2){
+      var pn=parts[0], pa=parts[parts.length-1];
+      var ks=Object.keys(fr.porNombre||{});
+      for(var ki=0;ki<ks.length;ki++){
+        if(ks[ki].indexOf(pn)===0 && ks[ki].indexOf(pa)>=0){ fh=fr.porNombre[ks[ki]]; break; }
+      }
+      if(!fh) for(var kj=0;kj<ks.length;kj++){
+        if(nrm.indexOf(ks[kj].split(' ')[0])===0 && ks[kj].split(' ').some(function(w){return w.length>2&&nrm.indexOf(w)>=0;})){ fh=fr.porNombre[ks[kj]]; break; }
+      }
+    }
+  }
+  if(!fh) return '';
+  var out='';
+  if((fh.autorizaFotos||'').toUpperCase()==='NO')
+    out+='<div style="font-size:0.74rem;font-weight:800;color:white;background:#E8543F;border-radius:8px;padding:8px 11px;margin-top:9px">🚫 NO AUTORIZA FOTOGRAFÍAS — no tomar antes/después</div>';
+  var fila=function(icono,lbl,val,destacar){
+    if(!val||/^(ninguna|ninguno|no|n\/a|na|-)$/i.test((val||'').trim())) return '';
+    return '<div style="font-size:0.68rem;color:'+(destacar?'#B4541E':'#7A8499')+';margin-bottom:3px;'+(destacar?'font-weight:700':'')+'">'+icono+' <b style="color:#2D3B6B">'+lbl+':</b> '+val+'</div>';
+  };
+  var cuerpo=''
+    +fila('🧴','Piel',[fh.tipoPiel,fh.estado].filter(Boolean).join(' · '))
+    +fila('⚠️','Alergias',fh.alergias,true)
+    +fila('💊','Medicación',fh.medicacion,true)
+    +fila('🏥','Condiciones',fh.condiciones,true)
+    +fila('🔄','Reacciones previas',fh.reacciones,true)
+    +fila('🧪','Retinoides/exfoliantes',(fh.retinoides&&!/^ninguno$/i.test(fh.retinoides.trim()))?fh.retinoides:'',true)
+    +fila('🌸','Ciclo',(fh.ciclo&&!/NO APLICA/i.test(fh.ciclo))?fh.ciclo:'')
+    +fila('✂️','Extracciones',fh.extracciones==='SI'?'Sí desea':(fh.extracciones==='NO'?'NO desea':''),fh.extracciones==='NO')
+    +fila('💆','Cortesía preferida',fh.cortesia)
+    +((fh.autorizaFotos||'').toUpperCase()==='SI'?'<div style="font-size:0.66rem;color:#2E7D52;margin-bottom:3px">📸 <b>Fotos:</b> ✓ autoriza antes/después</div>':'');
+  if(!cuerpo) return out;
+  return out+'<div style="background:#F2F5FA;border:1px solid #D9E1EE;border-radius:9px;padding:9px 11px;margin-top:9px">'
+    +'<div style="font-size:0.64rem;font-weight:800;color:#2D3B6B;margin-bottom:5px">📋 FICHA DE LA CLIENTA</div>'+cuerpo+'</div>';
+}
+function _cargarFichasReg(cb){
+  if(window._fichasReg&&!window._fichasReg.cargando){ if(cb)cb(); return; }
+  if(window._fichasReg&&window._fichasReg.cargando){ window._fichasCb=cb; return; }
+  window._fichasReg={porCedula:{},porNombre:{},cargando:true};
+  fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      window._fichasReg={porCedula:d.porCedula||{},porNombre:d.porNombre||{}};
+      if(cb)cb();
+      if(window._fichasCb){window._fichasCb();window._fichasCb=null;}
+    })
+    .catch(function(){window._fichasReg={porCedula:{},porNombre:{}};});
+}
 function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
   // Fichas del REGISTRO (condiciones, alergias, fotos...): cargar y re-pintar
   if(!window._fichasReg){
@@ -4645,47 +4700,7 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
             '🆕 ' + (ci.esPrimera ? 'Primera vez — incluye Skin Analysis' : 'Clienta nueva') +
           '</div>'
         ) +
-        (function(){
-          var fr=window._fichasReg||{porCedula:{},porNombre:{}};
-          var nrm=(typeof _normNomCli==='function')?_normNomCli(ci.clienteNombre||''):(ci.clienteNombre||'').toLowerCase();
-          var fh=fr.porCedula[(ci.clienteCedula||'').toString().split('.')[0]]||fr.porNombre[nrm];
-          if(!fh){
-            // Cruce aproximado: primer nombre como prefijo + algún apellido contenido
-            var parts=nrm.split(' ').filter(Boolean);
-            if(parts.length>=2){
-              var pn=parts[0], pa=parts[parts.length-1];
-              var ks=Object.keys(fr.porNombre||{});
-              for(var ki=0;ki<ks.length;ki++){
-                if(ks[ki].indexOf(pn)===0 && ks[ki].indexOf(pa)>=0){ fh=fr.porNombre[ks[ki]]; break; }
-              }
-              if(!fh) for(var kj=0;kj<ks.length;kj++){
-                if(nrm.indexOf(ks[kj].split(' ')[0])===0 && ks[kj].split(' ').some(function(w){return w.length>2&&nrm.indexOf(w)>=0;})){ fh=fr.porNombre[ks[kj]]; break; }
-              }
-            }
-          }
-          if(!fh) return '';
-          var out='';
-          if((fh.autorizaFotos||'').toUpperCase()==='NO')
-            out+='<div style="font-size:0.74rem;font-weight:800;color:white;background:#E8543F;border-radius:8px;padding:8px 11px;margin-bottom:8px">🚫 NO AUTORIZA FOTOGRAFÍAS — no tomar antes/después</div>';
-          var fila=function(icono,lbl,val,destacar){
-            if(!val||/^(ninguna|ninguno|no|n\/a|-)$/i.test(val.trim())) return '';
-            return '<div style="font-size:0.68rem;color:'+(destacar?'#B4541E':'var(--gray)')+';margin-bottom:3px;'+(destacar?'font-weight:700':'')+'">'+icono+' <b style="color:var(--navy)">'+lbl+':</b> '+val+'</div>';
-          };
-          var cuerpo=''
-            +fila('🧴','Piel',[fh.tipoPiel,fh.estado].filter(Boolean).join(' · '))
-            +fila('⚠️','Alergias',fh.alergias,true)
-            +fila('💊','Medicación',fh.medicacion,true)
-            +fila('🏥','Condiciones',fh.condiciones,true)
-            +fila('🔄','Reacciones previas',fh.reacciones,true)
-            +fila('🧪','Retinoides/exfoliantes',(fh.retinoides&&!/^ninguno$/i.test(fh.retinoides))?fh.retinoides:'',true)
-            +fila('🌸','Ciclo',(fh.ciclo&&!/NO APLICA/i.test(fh.ciclo))?fh.ciclo:'')
-            +fila('✂️','Extracciones',fh.extracciones==='SI'?'Sí desea':(fh.extracciones==='NO'?'NO desea':''),fh.extracciones==='NO')
-            +fila('💆','Cortesía preferida',fh.cortesia)
-            +((fh.autorizaFotos||'').toUpperCase()==='SI'?'<div style="font-size:0.66rem;color:#2E7D52;margin-bottom:3px">📸 <b>Fotos:</b> ✓ autoriza antes/después</div>':'');
-          if(!cuerpo) return out;
-          return out+'<div style="background:#F2F5FA;border:1px solid #D9E1EE;border-radius:9px;padding:9px 11px;margin-bottom:10px">'
-            +'<div style="font-size:0.64rem;font-weight:800;color:var(--navy);margin-bottom:5px">📋 FICHA DE LA CLIENTA</div>'+cuerpo+'</div>';
-        })() +
+        _fichaHTMLDe(ci.clienteNombre||'', ci.clienteCedula||'') +
         (ci.notas ? '<div style="font-size:0.72rem;color:var(--navy);background:var(--lavender-l);border:1px solid #C8C0E0;border-radius:8px;padding:7px 10px;margin-bottom:10px">📌 ' + ci.notas + '</div>' : '') +
         (ci.tipoPiel ? '<div style="font-size:0.7rem;color:var(--gray);margin-bottom:8px">🧴 Tipo piel: <strong>' + ci.tipoPiel + '</strong></div>' : '') +
         (!ci.completada ?
@@ -5047,6 +5062,8 @@ function _renderCitasList(bd, data, diaNom){
         bd.innerHTML='<div style="padding:32px;text-align:center;color:var(--gray)"><div style="font-size:2rem;margin-bottom:8px">🗓</div>No hay citas</div>';
         return;
       }
+      // Fichas del REGISTRO: cargarlas y re-pintar este día al llegar
+      if(!window._fichasReg){ _cargarFichasReg(function(){ var bd2=document.getElementById('cb'); if(bd2) _renderCitasList(bd2, data, diaNom); }); }
       var h='<div style="font-size:0.72rem;color:var(--gray);margin-bottom:10px;font-weight:600">'+citas.length+' cita'+(citas.length!==1?'s':'')+(isAdmin?'':' para ti')+'</div>';
       citas.forEach(function(apt){
         var dt=new Date(apt.datetime);
@@ -5067,6 +5084,7 @@ function _renderCitasList(bd, data, diaNom){
         h+='</div>';
         h+='<span style="background:'+(nueva?'#FBF6EC':'#EDF5EF')+';color:'+(nueva?'#C4A45A':'#6A9E7A')+';font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:8px;margin-left:8px;white-space:nowrap">'+(nueva?'🆕 Nueva':'⭐ Antigua')+'</span>';
         h+='</div>';
+        h+=_fichaHTMLDe(nombre, '');
         if(apt.notes) h+='<div style="font-size:0.72rem;color:#333;background:#F3F0FA;border-radius:8px;padding:7px 10px;margin-top:9px">📌 '+apt.notes+'</div>';
         if(o!==1&&!ok) h+='<button onclick="irATicket(this)" data-nom="'+apt.firstName+'" data-ape="'+apt.lastName+'" data-tel="'+(apt.phone||'')+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">🎫 Ticket para '+apt.firstName+'</button>';
         if(okTicket) h+='<div style="text-align:center;font-size:0.75rem;font-weight:700;color:#6A9E7A;background:#EDF5EF;border-radius:9px;padding:7px;margin-top:8px">🎫 Ticket ya registrado ✓</div>';
