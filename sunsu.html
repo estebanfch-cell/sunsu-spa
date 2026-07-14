@@ -630,8 +630,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
+    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
@@ -756,6 +756,7 @@ function showTab(id,btn){
   else if(id==='historial') renderHistorial(c);
   else if(id==='catalogo') renderCatalogoAdmin(c);
   else if(id==='tarjetas') renderTarjetasPendientes(c);
+  else if(id==='registro-cliente') renderRegistroCliente(c);
   else if(id==='buscar') renderBuscar(c);
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
   else if(id==='buscar-gc') renderBuscarGC(c);
@@ -4543,6 +4544,17 @@ function mostrarErrorCitas(c, msg) {
 }
 
 function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
+  // Fichas del REGISTRO (condiciones, alergias, fotos...): cargar y re-pintar
+  if(!window._fichasReg){
+    window._fichasReg={porCedula:{},porNombre:{},cargando:true};
+    fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now())
+      .then(function(r){return r.json();})
+      .then(function(d){
+        window._fichasReg={porCedula:d.porCedula||{},porNombre:d.porNombre||{}};
+        try{ mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError); }catch(eR){}
+      })
+      .catch(function(){ window._fichasReg={porCedula:{},porNombre:{}}; });
+  }
   let citas = [];
   try {
     citas = rawData
@@ -4633,6 +4645,33 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
             '🆕 ' + (ci.esPrimera ? 'Primera vez — incluye Skin Analysis' : 'Clienta nueva') +
           '</div>'
         ) +
+        (function(){
+          var fr=window._fichasReg||{porCedula:{},porNombre:{}};
+          var nrm=(typeof _normNomCli==='function')?_normNomCli(ci.clienteNombre||''):(ci.clienteNombre||'').toLowerCase();
+          var fh=fr.porCedula[(ci.clienteCedula||'').toString().split('.')[0]]||fr.porNombre[nrm];
+          if(!fh) return '';
+          var out='';
+          if((fh.autorizaFotos||'').toUpperCase()==='NO')
+            out+='<div style="font-size:0.74rem;font-weight:800;color:white;background:#E8543F;border-radius:8px;padding:8px 11px;margin-bottom:8px">🚫 NO AUTORIZA FOTOGRAFÍAS — no tomar antes/después</div>';
+          var fila=function(icono,lbl,val,destacar){
+            if(!val||/^(ninguna|ninguno|no|n\/a|-)$/i.test(val.trim())) return '';
+            return '<div style="font-size:0.68rem;color:'+(destacar?'#B4541E':'var(--gray)')+';margin-bottom:3px;'+(destacar?'font-weight:700':'')+'">'+icono+' <b style="color:var(--navy)">'+lbl+':</b> '+val+'</div>';
+          };
+          var cuerpo=''
+            +fila('🧴','Piel',[fh.tipoPiel,fh.estado].filter(Boolean).join(' · '))
+            +fila('⚠️','Alergias',fh.alergias,true)
+            +fila('💊','Medicación',fh.medicacion,true)
+            +fila('🏥','Condiciones',fh.condiciones,true)
+            +fila('🔄','Reacciones previas',fh.reacciones,true)
+            +fila('🧪','Retinoides/exfoliantes',(fh.retinoides&&!/^ninguno$/i.test(fh.retinoides))?fh.retinoides:'',true)
+            +fila('🌸','Ciclo',(fh.ciclo&&!/NO APLICA/i.test(fh.ciclo))?fh.ciclo:'')
+            +fila('✂️','Extracciones',fh.extracciones==='SI'?'Sí desea':(fh.extracciones==='NO'?'NO desea':''),fh.extracciones==='NO')
+            +fila('💆','Cortesía preferida',fh.cortesia)
+            +((fh.autorizaFotos||'').toUpperCase()==='SI'?'<div style="font-size:0.66rem;color:#2E7D52;margin-bottom:3px">📸 <b>Fotos:</b> ✓ autoriza antes/después</div>':'');
+          if(!cuerpo) return out;
+          return out+'<div style="background:#F2F5FA;border:1px solid #D9E1EE;border-radius:9px;padding:9px 11px;margin-bottom:10px">'
+            +'<div style="font-size:0.64rem;font-weight:800;color:var(--navy);margin-bottom:5px">📋 FICHA DE LA CLIENTA</div>'+cuerpo+'</div>';
+        })() +
         (ci.notas ? '<div style="font-size:0.72rem;color:var(--navy);background:var(--lavender-l);border:1px solid #C8C0E0;border-radius:8px;padding:7px 10px;margin-bottom:10px">📌 ' + ci.notas + '</div>' : '') +
         (ci.tipoPiel ? '<div style="font-size:0.7rem;color:var(--gray);margin-bottom:8px">🧴 Tipo piel: <strong>' + ci.tipoPiel + '</strong></div>' : '') +
         (!ci.completada ?
@@ -5960,6 +5999,140 @@ function guardarEdicionProducto(i){
     toast('✅ '+it.sku+' actualizado','var(--green)');
     renderCatalogoAdmin(document.getElementById('content'));
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+
+// ══════ TARJETA DE REGISTRO (reemplaza el Google Forms, escribe en REGISTRO) ══════
+function _regChips(id, opciones, multi){
+  window._regSel=window._regSel||{};
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap">'+opciones.map(function(op){
+    var sel=multi?((window._regSel[id]||[]).indexOf(op)>=0):(window._regSel[id]===op);
+    return '<button onclick="regToggle(\''+id+'\',\''+op.replace(/'/g,'')+'\','+(multi?'true':'false')+')" data-chip="'+id+'" data-val="'+op+'" style="padding:8px 12px;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid '+(sel?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">'+op+'</button>';
+  }).join('')+'</div>';
+}
+function regToggle(id, val, multi){
+  window._regSel=window._regSel||{};
+  if(multi){
+    var arr=window._regSel[id]||[];
+    var i=arr.indexOf(val);
+    if(i>=0)arr.splice(i,1);else arr.push(val);
+    if(val==='Ninguno'||val==='NO APLICA') window._regSel[id]=arr.indexOf(val)>=0?[val]:arr;
+    else window._regSel[id]=arr.filter(function(x){return x!=='Ninguno'&&x!=='NO APLICA';});
+  } else {
+    window._regSel[id]=window._regSel[id]===val?'':val;
+  }
+  document.querySelectorAll('[data-chip="'+id+'"]').forEach(function(b){
+    var on=multi?((window._regSel[id]||[]).indexOf(b.dataset.val)>=0):(window._regSel[id]===b.dataset.val);
+    b.style.background=on?'var(--navy)':'white';
+    b.style.color=on?'white':'var(--gray)';
+    b.style.borderColor=on?'var(--navy)':'var(--cream-d)';
+  });
+}
+function renderRegistroCliente(c){
+  window._regSel={};
+  var inp=function(id,lbl,ph,tipo){
+    return '<div style="margin-bottom:11px"><div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin-bottom:4px">'+lbl+'</div>'
+      +'<input id="'+id+'" type="'+(tipo||'text')+'" placeholder="'+(ph||'')+'" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+  };
+  var grupo=function(lbl,html){
+    return '<div style="margin-bottom:13px"><div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin-bottom:6px">'+lbl+'</div>'+html+'</div>';
+  };
+  var tarj=function(titulo,contenido){
+    return '<div class="card" style="padding:14px;margin-bottom:12px"><div style="font-size:0.78rem;font-weight:800;color:var(--navy);border-bottom:2px solid var(--cream-d);padding-bottom:7px;margin-bottom:12px">'+titulo+'</div>'+contenido+'</div>';
+  };
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:3px">📝 Tarjeta de Registro</div>'
+    +'<div style="font-size:0.62rem;color:var(--gray);margin-bottom:13px">Registro inicial de clientes · Sunsu Spa</div>'
+    +tarj('👤 Datos personales',
+      inp('rg-cedula','Cédula *','1712345678','tel')
+      +inp('rg-nombre','Nombre *','María José')
+      +inp('rg-apellido','Apellido *','Torres')
+      +inp('rg-nac','Fecha de nacimiento *','', 'date')
+      +inp('rg-sector','Sector donde vive *','Cumbayá')
+      +inp('rg-tel','Teléfono / WhatsApp *','0991234567','tel'))
+    +tarj('✨ Tu piel',
+      grupo('Tipo de piel', _regChips('tipoPiel',['Grasa','Seca','Mixta','Normal']))
+      +grupo('Estado actual', _regChips('estado',['Estable','Sensibilizada / inflamada','Deshidratada','Congestionada']))
+      +inp('rg-alergias','Alergias','Ninguna')
+      +inp('rg-medicacion','Medicación','Ninguna')
+      +inp('rg-condiciones','Condiciones médicas o dermatológicas','Que debamos saber'))
+    +tarj('🧴 Historial',
+      grupo('Reacciones previas a tratamientos', _regChips('reacciones',['Ardor intenso/enrojecimiento','Brotes post facial','Manchas','Ninguno'],true))
+      +grupo('Uso de exfoliantes / retinoides', _regChips('retinoides',['Retinoides (Adapaleno, Retinol, Tretinoína)','Isotretinoína oral (Roacutan)','Ninguno'],true))
+      +grupo('Ciclo menstrual (si aplica)', _regChips('ciclo',['Regular','Irregular','SOP','Embarazo','Lactancia','Menopausia','NO APLICA'],true))
+      +grupo('¿Deseas extracciones de comedones o espinillas si es necesario?', _regChips('extracciones',['SI','NO']))
+      +grupo('Cortesía complementaria', _regChips('cortesia',['Masaje Capilar','Masaje Manos'])))
+    +tarj('📸 Autorización de fotografías',
+      '<div style="font-size:0.68rem;color:var(--gray);margin-bottom:8px">¿Autorizas a Sunsu Spa a tomar fotografías del antes y después para tu registro de tratamiento?</div>'
+      +_regChips('autorizaFotos',['SI','NO']))
+    +'<button onclick="enviarRegistroCliente(this)" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:800;cursor:pointer;margin-bottom:20px">✅ Registrar clienta</button>';
+}
+// Reintento con los últimos datos (actualizar la fila existente) — para el staff
+function reintentarRegistro(){
+  if(!window._regUltimoPayload){toast('❌ No hay datos para actualizar','#B86B6B');return;}
+  toast('⏳ Actualizando registro...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(window._regUltimoPayload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    window._afMapa=null;
+    toast('✅ Registro actualizado (fila '+d.fila+')','var(--green)');
+    renderRegistroCliente(document.getElementById('content'));
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function enviarRegistroCliente(btn, forzar){
+  var v=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
+  var s=window._regSel||{};
+  var m=function(id){return (s[id]||[]).join(', ');};
+  if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('❌ Cédula, nombre y apellido son obligatorios','#B86B6B');return;}
+  if(!v('rg-tel')){toast('❌ El teléfono es obligatorio','#B86B6B');return;}
+  if(!s.autorizaFotos){toast('❌ Falta responder la autorización de fotos','#B86B6B');return;}
+  var nac=v('rg-nac');
+  if(nac){var p=nac.split('-'); if(p.length===3) nac=p[1]+'/'+p[2]+'/'+p[0];} // MM/DD/YYYY como el forms
+  if(btn){btn.textContent='⏳ Registrando...';btn.disabled=true;}
+  window._regUltimoPayload={accion:'registrarCliente', forzar:'actualizar',
+      cedula:v('rg-cedula'), nombre:v('rg-nombre'), apellido:v('rg-apellido'),
+      nacimiento:nac, sector:v('rg-sector'), telefono:v('rg-tel'),
+      tipoPiel:s.tipoPiel||'', estado:s.estado||'',
+      alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),
+      reacciones:m('reacciones'), retinoides:m('retinoides'), ciclo:m('ciclo'),
+      extracciones:s.extracciones||'', cortesia:s.cortesia||'',
+      autorizaFotos:s.autorizaFotos||''};
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'registrarCliente', forzar:forzar||'',
+      cedula:v('rg-cedula'), nombre:v('rg-nombre'), apellido:v('rg-apellido'),
+      nacimiento:nac, sector:v('rg-sector'), telefono:v('rg-tel'),
+      tipoPiel:s.tipoPiel||'', estado:s.estado||'',
+      alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),
+      reacciones:m('reacciones'), retinoides:m('retinoides'), ciclo:m('ciclo'),
+      extracciones:s.extracciones||'', cortesia:s.cortesia||'',
+      autorizaFotos:s.autorizaFotos||''})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.existe&&!forzar){
+      // Ya registrada: mensaje cálido y elegante (mucha gente llena dos veces)
+      var nomYa=v('rg-nombre').split(' ')[0]||'';
+      var cont=document.getElementById('content');
+      cont.innerHTML='<div class="card" style="text-align:center;padding:34px 22px;margin-top:24px">'
+        +'<div style="font-size:2.4rem;margin-bottom:10px">💙</div>'
+        +'<div style="font-size:1rem;font-weight:800;color:var(--navy);margin-bottom:10px">¡Gracias'+(nomYa?', '+nomYa:'')+'!</div>'
+        +'<div style="font-size:0.8rem;color:var(--gray);line-height:1.65;max-width:420px;margin:0 auto">'
+        +'Qué gusto tenerte de vuelta. Ya te tenemos registrada en nuestra familia Sunsu, '
+        +'así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras. '
+        +'Relájate, que de los detalles nos encargamos nosotras. ✨</div>'
+        +'<div style="font-size:0.68rem;color:var(--gray);margin-top:16px">¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</div>'
+        +'<div style="display:flex;gap:8px;justify-content:center;margin-top:22px;flex-wrap:wrap">'
+        +'<button onclick="renderRegistroCliente(document.getElementById(\'content\'))" style="padding:11px 18px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">📝 Nuevo registro</button>'
+        +'<button onclick="if(confirm(\'Actualizar la fila '+d.fila+' con los datos ingresados?\'))reintentarRegistro()" style="padding:11px 18px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.76rem;font-weight:700;cursor:pointer">✏️ Actualizar datos (staff)</button>'
+        +'</div></div>';
+      window._regDatosPend=true;
+      return;
+    }
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✅ Registrar clienta';btn.disabled=false;}return;}
+    window._afMapa=null; // refrescar el mapa de autorizaciones en citas
+    toast(d.actualizado?'✅ Registro actualizado (fila '+d.fila+')':'✅ Clienta registrada correctamente','var(--green)');
+    renderRegistroCliente(document.getElementById('content'));
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='✅ Registrar clienta';btn.disabled=false;}});
 }
 
 // ══════ TARJETAS DE TRATAMIENTO NO ENVIADAS (envío por WhatsApp) ══════
