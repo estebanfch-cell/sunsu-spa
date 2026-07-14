@@ -6060,10 +6060,48 @@ function renderRegistroCliente(c){
       +grupo('Ciclo menstrual (si aplica)', _regChips('ciclo',['Regular','Irregular','SOP','Embarazo','Lactancia','Menopausia','NO APLICA'],true))
       +grupo('¿Deseas extracciones de comedones o espinillas si es necesario?', _regChips('extracciones',['SI','NO']))
       +grupo('Cortesía complementaria', _regChips('cortesia',['Masaje Capilar','Masaje Manos'])))
+    +tarj('📋 Consentimiento informado',
+      '<div style="max-height:200px;overflow-y:auto;background:var(--cream);border:1.5px solid var(--cream-d);border-radius:10px;padding:11px;font-size:0.64rem;color:#4A5568;line-height:1.6;margin-bottom:10px">'
+      +'<b style="color:var(--navy)">CONSENTIMIENTO INFORMADO — TRATAMIENTOS FACIALES SUNSU SPA</b><br><br>'
+      +'Declaro que la información proporcionada es verídica y completa, y que he informado sobre mis alergias, medicación, condiciones médicas y uso de productos (incluidos retinoides o isotretinoína).<br><br>'
+      +'Entiendo que los tratamientos faciales son procedimientos estéticos no médicos, que los resultados pueden variar, y que pueden presentarse reacciones temporales normales como enrojecimiento, sensibilidad o brotes de purga.<br><br>'
+      +'Acepto voluntariamente los tratamientos y libero a Sunsu Spa de responsabilidad por reacciones derivadas de información omitida o inexacta, o del incumplimiento del cuidado posterior recomendado.<br><br>'
+      +'Autorizo el uso de mis datos personales exclusivamente para la gestión de mis citas y tratamientos.</div>'
+      +grupo('He leído y acepto *', _regChips('consentimiento',['✓ ACEPTO el consentimiento informado']))
+      +inp('rg-firma','Firma (nombre completo) *','María José Torres Vela'))
     +tarj('📸 Autorización de fotografías',
       '<div style="font-size:0.68rem;color:var(--gray);margin-bottom:8px">¿Autorizas a Sunsu Spa a tomar fotografías del antes y después para tu registro de tratamiento?</div>'
       +_regChips('autorizaFotos',['SI','NO']))
-    +'<button onclick="enviarRegistroCliente(this)" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:800;cursor:pointer;margin-bottom:20px">✅ Registrar clienta</button>';
+    +'<button onclick="enviarRegistroCliente(this)" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:800;cursor:pointer;margin-bottom:20px">✅ Registrar cliente</button>';
+  // Verificación instantánea de cédula mientras teclea
+  var inpCed=document.getElementById('rg-cedula');
+  if(inpCed){
+    inpCed.addEventListener('input',function(){
+      clearTimeout(window._cedChkT);
+      var ced=inpCed.value.replace(/[^0-9]/g,'');
+      if(ced.length<9) return;
+      window._cedChkT=setTimeout(function(){
+        fetch(APPS_SCRIPT_URL+'?action=existeCedula&ced='+ced+'&_t='+Date.now())
+          .then(function(r){return r.json();})
+          .then(function(d){
+            if(d.existe && inpCed.value.replace(/[^0-9]/g,'')===ced){
+              toast('💙 '+(d.nombre||'Esta persona')+' ya está en el registro (fila '+d.fila+') — no hace falta llenar de nuevo','var(--blue)');
+              inpCed.style.borderColor='#4A90D9';
+              var av=document.getElementById('rg-ced-aviso');
+              if(!av){
+                av=document.createElement('div'); av.id='rg-ced-aviso';
+                av.style.cssText='font-size:0.66rem;color:#2E5A8F;background:#EAF2FC;border:1.5px solid #B8D4F0;border-radius:9px;padding:8px 11px;margin:-6px 0 11px';
+                inpCed.parentNode.insertBefore(av, inpCed.nextSibling);
+              }
+              av.innerHTML='💙 <b>'+(d.nombre||'Esta persona')+' ya está en la familia Sunsu</b> (fila '+d.fila+') — no necesita llenar la tarjeta otra vez. Si quiere actualizar datos, completa el formulario y usa ✏️ Actualizar.';
+            } else {
+              var av2=document.getElementById('rg-ced-aviso'); if(av2)av2.remove();
+              inpCed.style.borderColor='var(--cream-d)';
+            }
+          }).catch(function(){});
+      },450);
+    });
+  }
 }
 // Reintento con los últimos datos (actualizar la fila existente) — para el staff
 function reintentarRegistro(){
@@ -6086,6 +6124,8 @@ function enviarRegistroCliente(btn, forzar){
   if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('❌ Cédula, nombre y apellido son obligatorios','#B86B6B');return;}
   if(!v('rg-tel')){toast('❌ El teléfono es obligatorio','#B86B6B');return;}
   if(!s.autorizaFotos){toast('❌ Falta responder la autorización de fotos','#B86B6B');return;}
+  if(!s.consentimiento){toast('❌ Falta aceptar el consentimiento informado','#B86B6B');return;}
+  if(!v('rg-firma')){toast('❌ Falta la firma (nombre completo)','#B86B6B');return;}
   var nac=v('rg-nac');
   if(nac){var p=nac.split('-'); if(p.length===3) nac=p[1]+'/'+p[2]+'/'+p[0];} // MM/DD/YYYY como el forms
   if(btn){btn.textContent='⏳ Registrando...';btn.disabled=true;}
@@ -6096,7 +6136,7 @@ function enviarRegistroCliente(btn, forzar){
       alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),
       reacciones:m('reacciones'), retinoides:m('retinoides'), ciclo:m('ciclo'),
       extracciones:s.extracciones||'', cortesia:s.cortesia||'',
-      autorizaFotos:s.autorizaFotos||''};
+      autorizaFotos:s.autorizaFotos||'', consentimiento:'SI', firma:v('rg-firma')};
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'registrarCliente', forzar:forzar||'',
       cedula:v('rg-cedula'), nombre:v('rg-nombre'), apellido:v('rg-apellido'),
@@ -6105,7 +6145,7 @@ function enviarRegistroCliente(btn, forzar){
       alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),
       reacciones:m('reacciones'), retinoides:m('retinoides'), ciclo:m('ciclo'),
       extracciones:s.extracciones||'', cortesia:s.cortesia||'',
-      autorizaFotos:s.autorizaFotos||''})})
+      autorizaFotos:s.autorizaFotos||'', consentimiento:'SI', firma:v('rg-firma')})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(d.existe&&!forzar){
@@ -6116,7 +6156,7 @@ function enviarRegistroCliente(btn, forzar){
         +'<div style="font-size:2.4rem;margin-bottom:10px">💙</div>'
         +'<div style="font-size:1rem;font-weight:800;color:var(--navy);margin-bottom:10px">¡Gracias'+(nomYa?', '+nomYa:'')+'!</div>'
         +'<div style="font-size:0.8rem;color:var(--gray);line-height:1.65;max-width:420px;margin:0 auto">'
-        +'Qué gusto tenerte de vuelta. Ya te tenemos registrada en nuestra familia Sunsu, '
+        +'Qué gusto tenerte de vuelta. Ya eres parte de nuestro registro en la familia Sunsu, '
         +'así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras. '
         +'Relájate, que de los detalles nos encargamos nosotras. ✨</div>'
         +'<div style="font-size:0.68rem;color:var(--gray);margin-top:16px">¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</div>'
@@ -6127,12 +6167,12 @@ function enviarRegistroCliente(btn, forzar){
       window._regDatosPend=true;
       return;
     }
-    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✅ Registrar clienta';btn.disabled=false;}return;}
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✅ Registrar cliente';btn.disabled=false;}return;}
     window._afMapa=null; // refrescar el mapa de autorizaciones en citas
-    toast(d.actualizado?'✅ Registro actualizado (fila '+d.fila+')':'✅ Clienta registrada correctamente','var(--green)');
+    toast(d.actualizado?'✅ Registro actualizado (fila '+d.fila+')':'✅ Cliente registrado correctamente','var(--green)');
     renderRegistroCliente(document.getElementById('content'));
   })
-  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='✅ Registrar clienta';btn.disabled=false;}});
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='✅ Registrar cliente';btn.disabled=false;}});
 }
 
 // ══════ TARJETAS DE TRATAMIENTO NO ENVIADAS (envío por WhatsApp) ══════

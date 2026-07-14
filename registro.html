@@ -104,7 +104,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbxvtutVd0fJr2GmoRC4ETyPXlT4xBUJ9gi8oBbh3e2E0ULAYczuKUhRiI5l4E7uant6/exec';
+var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbx2vx2JU04s8N0Or61-yZb0MPiMW-mA8iPyjZ4Sz3ABNGYb-Czj8IQ_3qLi_VYe2drg/exec';
 var OPCIONES={
   tipoPiel:['Grasa','Seca','Mixta','Normal'],
   estado:['Estable','Sensibilizada / inflamada','Deshidratada','Congestionada'],
@@ -145,23 +145,25 @@ function toast(t){var el=document.getElementById('toast');el.textContent=t;el.st
 function pantallaYaRegistrada(nom){
   document.getElementById('app').innerHTML='<div class="logo"><div class="logo-img"></div></div>'
     +'<div class="fin"><div class="emo">💙</div><h3>¡Gracias'+(nom?', '+nom:'')+'!</h3>'
-    +'<p>Qué gusto tenerte de vuelta. Ya te tenemos registrada en nuestra familia Sunsu, así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras.<br><br>Relájate, que de los detalles nos encargamos nosotras. ✨<br><br><small>¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</small></p></div>';
+    +'<p>Qué gusto tenerte de vuelta. Ya eres parte de nuestro registro en la familia Sunsu, así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras.<br><br>Relájate, que de los detalles nos encargamos nosotras. ✨<br><br><small>¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</small></p></div>';
 }
 (function(){
   var inp=document.getElementById('rg-cedula');
   if(!inp) return;
   var t=null;
-  inp.addEventListener('input',function(){
-    clearTimeout(t);
+  var chequear=function(){
     var ced=inp.value.replace(/[^0-9]/g,'');
     if(ced.length<9) return;
-    t=setTimeout(function(){
-      fetch(APPS_SCRIPT_URL+'?action=existeCedula&ced='+ced+'&_t='+Date.now())
-        .then(function(r){return r.json();})
-        .then(function(d){ if(d.existe && inp.value.replace(/[^0-9]/g,'')===ced) pantallaYaRegistrada(d.nombre?d.nombre.split(' ')[0]:''); })
-        .catch(function(){});
-    },450);
-  });
+    fetch(APPS_SCRIPT_URL+'?action=existeCedula&ced='+ced+'&_t='+Date.now())
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d.existe && inp.value.replace(/[^0-9]/g,'')===ced) pantallaYaRegistrada(d.nombre?d.nombre.split(' ')[0]:''); })
+      .catch(function(){});
+  };
+  // Al terminar la cédula y pasar al nombre → chequeo INMEDIATO
+  inp.addEventListener('blur', chequear);
+  inp.addEventListener('change', chequear);
+  // Y mientras teclea (por si no cambia de campo)
+  inp.addEventListener('input',function(){ clearTimeout(t); t=setTimeout(chequear,450); });
 })();
 function v(id){return (document.getElementById(id)||{value:''}).value.trim();}
 function enviar(){
@@ -187,15 +189,10 @@ function enviar(){
   .then(function(r){return r.json();})
   .then(function(d){
     var nom=v('rg-nombre').split(' ')[0];
-    if(d.existe){
-      document.getElementById('app').innerHTML='<div class="logo"><div class="logo-img"></div></div>'
-        +'<div class="fin"><div class="emo">💙</div><h3>¡Gracias, '+nom+'!</h3>'
-        +'<p>Qué gusto tenerte de vuelta. Ya te tenemos registrada en nuestra familia Sunsu, así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras.<br><br>Relájate, que de los detalles nos encargamos nosotras. ✨<br><br><small>¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</small></p></div>';
-      return;
-    }
+    if(d.existe){ pantallaYaRegistrada(nom); return; }
     if(!d.ok){toast('Ups: '+(d.error||'no se pudo enviar, inténtalo de nuevo'));btn.textContent='✅ Enviar mi registro';btn.disabled=false;return;}
     document.getElementById('app').innerHTML='<div class="logo"><div class="logo-img"></div></div>'
-      +'<div class="fin"><div class="emo">🌸</div><h3>¡Bienvenida, '+nom+'!</h3>'
+      +'<div class="fin"><div class="emo">🌸</div><h3>¡Bienvenido/a, '+nom+'!</h3>'
       +'<p>Tu registro se guardó con éxito. Gracias por confiarnos el cuidado de tu piel — desde hoy eres parte de la familia Sunsu.<br><br>Nos vemos en tu cita. ✨</p></div>';
   })
   .catch(function(e){toast('Sin conexión — inténtalo de nuevo');btn.textContent='✅ Enviar mi registro';btn.disabled=false;});
