@@ -2796,14 +2796,28 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
       if(usada){
         // Fila 1: fecha · Fila 2: facial · Fila 3: cosmetóloga
         doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
-        // SOLO la fecha (la nota puede traer texto extra pegado)
-        var mFec=(uso.f||'').toString().match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
+        // El slot (uso.f) YA trae 'FECHA Facial · Quien' por POSICION, p.ej.
+        // '14/07/26 7 Pieles (Arroz+H2O) · EFCH'. Leemos facial y cosmetologa de AHI,
+        // NO de uso.fac/uso.por: esos los deriva el backend por fecha y se cruzan cuando
+        // dos sesiones caen el mismo dia (una pisa a la otra). El slot es correcto siempre.
+        var rawF=(uso.f||'').toString().trim();
+        var mFec=rawF.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
         doc.text(mFec?mFec[0]:'',cx,cy+33,{align:'center'});
-        var facTxt=limpiaFac(uso.fac||'');
+        var restoF = mFec ? rawF.slice(rawF.indexOf(mFec[0])+mFec[0].length).trim() : rawF;
+        var facTxt='', porTxt='';
+        if(restoF){
+          var ip=restoF.lastIndexOf(' · ');
+          if(ip>=0){ facTxt=restoF.slice(0,ip).trim(); porTxt=restoF.slice(ip+3).trim(); }
+          else { facTxt=restoF; }
+        }
+        // Respaldo si el slot no trae texto extra (solo fecha o 'Gift Card, XX'): backend.
+        if(!facTxt && uso.fac) facTxt=uso.fac;
+        if(!porTxt && uso.por) porTxt=uso.por;
+        facTxt=limpiaFac(facTxt);
         if(facTxt.length>28) facTxt=facTxt.slice(0,26)+'..';
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT); doc.setFontSize(6.8);
         if(facTxt) doc.text(facTxt,cx,cy+43,{align:'center'});
-        if(uso.por) doc.text(uso.por,cx,cy+52,{align:'center'});
+        if(porTxt) doc.text(porTxt,cx,cy+52,{align:'center'});
       } else {
         doc.setTextColor('#9AA1B0'); doc.setFont('helvetica','normal'); doc.setFontSize(6.8);
         doc.text('Disponible',cx,cy+33,{align:'center'});
@@ -6404,13 +6418,7 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
     window._waEstado[key]={listo:false, files:[]};
     // Saludo CORTO: 'Hola X, te saludamos de Sunsu Spa!' — se envía y el chat
     // queda vivo en recientes. Los mensajes completos van de leyenda con cada PDF.
-    // CELULAR: saludo corto (los mensajes completos van de leyenda con cada PDF).
-    // COMPUTADOR: mensaje COMPLETO de una (saludo + tarjeta + paquete si hay),
-    // porque los PDFs se arrastran desde Descargas y allá no llevan leyenda.
-    var txtT1 = _esMovil_()
-      ? (msgHola||msg)
-      : (msgHola||'') + '%0A%0A' + (msg||'') + (conPaq && msgPaq ? '%0A%0A' + msgPaq : '');
-    var wURL='https://wa.me/'+tel+'?text='+txtT1;
+    var wURL='https://wa.me/'+tel+'?text='+(msgHola||msg);
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
     // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
