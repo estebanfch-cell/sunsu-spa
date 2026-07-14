@@ -8013,11 +8013,11 @@ function cargarFotoClienta(input, seccion){
     rd.onload=function(){
       var img=new Image();
       img.onload=function(){
-        var MAX=1280, w=img.width, h=img.height;
+        var MAX=1100, w=img.width, h=img.height;
         if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
         var cv=document.createElement('canvas');cv.width=w;cv.height=h;
         cv.getContext('2d').drawImage(img,0,0,w,h);
-        T[key].push(cv.toDataURL('image/jpeg',0.8));
+        T[key].push(cv.toDataURL('image/jpeg',0.74));
         agregadas++;
         _fotosCliRender(); // preview progresivo: cada foto aparece apenas se procesa
         procesar(idx+1);
