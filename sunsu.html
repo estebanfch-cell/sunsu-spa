@@ -585,10 +585,39 @@ function _cargarProdColMap(){
     .then(function(d){ if(d.mapa&&Object.keys(d.mapa).length) window._prodColMap=d.mapa; })
     .catch(function(){});
 }
+// ════ MENSAJES A CLIENTAS — editables en ⚙ CONFIGURACION del Sheet ════
+// Si el Sheet no responde, se usan estos textos: el app nunca se queda mudo.
+var MSG_DEF={
+ 'LINK REGISTRO':'estebanfch-cell.github.io/sunsu-spa/registro.html',
+ 'MENSAJE CONFIRMACION CITA':'Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}¿Nos confirmas tu asistencia? 💙',
+ 'MENSAJE REGISTRO PRIMERA VISITA':'Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n📝 Tarjeta de registro\n{link}\n\n',
+ 'MENSAJE TARJETA SALUDO':'Hola {nombre}, te saludamos de Sunsu Spa!',
+ 'MENSAJE TARJETA TRATAMIENTO':'Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!',
+ 'MENSAJE TARJETA PAQUETE PENDIENTE':'Y aquí está el control de tu paquete: has disfrutado {usados} de {total} sesiones — ¡te esperamos en la siguiente!',
+ 'MENSAJE TARJETA PAQUETE COMPLETO':'Y aquí está el control de tu paquete: has disfrutado {usados} de {total} sesiones — ¡paquete completado!',
+ 'MENSAJE TARJETA AMBAS':'Hola! Te compartimos la tarjeta de tu tratamiento y el control de tu paquete en Sunsu Spa.',
+ 'MENSAJE PAQUETE DIGITAL PENDIENTE':'Hola {nombre}! Te compartimos la tarjeta digital de tu paquete en Sunsu Spa. Ya disfrutaste {usados} de {total} sesiones — te esperamos para la siguiente. Escríbenos para agendar tu cita.',
+ 'MENSAJE PAQUETE DIGITAL COMPLETO':'Hola {nombre}! Te compartimos la tarjeta digital de tu paquete en Sunsu Spa. Completaste tus {total} sesiones — gracias por confiar en nosotras.',
+ 'MENSAJE PAQUETE CONTROL':'Hola {nombre}! Te compartimos el control de tu paquete en Sunsu Spa.'
+};
+function _msg(clave, vars){
+  var t=(window._msgs&&window._msgs[clave])||MSG_DEF[clave]||'';
+  var v=vars||{};
+  Object.keys(v).forEach(function(k){ t=t.split('{'+k+'}').join(v[k]); });
+  return t;
+}
+function _cargarMsgs(cb){
+  if(window._msgs){ if(cb)cb(); return; }
+  fetch(APPS_SCRIPT_URL+'?action=getMensajes&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){ window._msgs=d.msgs||{}; if(cb)cb(); })
+    .catch(function(){ window._msgs={}; if(cb)cb(); });
+}
 function _entrarComo(u){
   CU=u;
   _sesionSet(u.id);
   _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
+  _cargarMsgs(); // textos a clientas desde ⚙ CONFIGURACION
   setTimeout(_checkRolPendiente, 1200); // banner de rol pendiente (no bloquea el arranque)
   document.getElementById('screen-login').style.display='none';
   document.getElementById('screen-app').style.cssText='display:flex;flex-direction:column;';
@@ -2909,7 +2938,7 @@ function renderSegPaquetes(c){
           var iGlobal=items.indexOf(x);
           var telP=(x.p.telefono||'').replace(/[^0-9]/g,'');
           if(telP&&telP.length===10&&telP.charAt(0)==='0') telP='593'+telP.slice(1);
-          var msgP=encodeURIComponent('Hola '+(x.p.nombre||'').split(' ')[0]+'! Te compartimos la tarjeta digital de tu paquete en Sunsu Spa. '+(x.pend>0?('Ya disfrutaste '+x.usados+' de '+x.total+' sesiones — te esperamos para la siguiente. Escríbenos para agendar tu cita.'):'Completaste tus '+x.total+' sesiones — gracias por confiar en nosotras.'));
+          var msgP=encodeURIComponent(_msg(x.pend>0?'MENSAJE PAQUETE DIGITAL PENDIENTE':'MENSAJE PAQUETE DIGITAL COMPLETO',{nombre:(x.p.nombre||'').split(' ')[0],usados:x.usados,total:x.total}));
           return '<div style="display:flex;gap:6px;margin-top:9px">'
             +'<button onclick="tarjetaPaquete('+iGlobal+')" style="flex:1;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">📄 Tarjeta digital</button>'
             +(telP?'<a href="https://wa.me/'+telP+'?text='+msgP+'" target="_blank" style="padding:9px 13px;background:#25D366;color:white;border-radius:9px;font-size:0.68rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':'')
@@ -5074,9 +5103,6 @@ function _citaTieneTicket(apt, fechaStr){
 // ══════ CONFIRMACION DE CITAS (etiquetas de Acuity) ══════
 // Acuity admite UNA etiqueta por cita: cada estado reemplaza al anterior.
 // ESPERANDO CONFIR -> CONFIRMADA -> COMPLETADO -> INGRESADO Y COMP (azul) / NO LLEGO.
-// Sin 'https://' a proposito: WhatsApp reconoce el dominio igual y lo pinta azul,
-// y el mensaje se ve mucho mas limpio para la clienta.
-var REGISTRO_URL='estebanfch-cell.github.io/sunsu-spa/registro.html';
 var ETQ_COL={'COMPLETADO':['#D9646E','#ffffff'],'CONFIRMADA':['#F2D24B','#3A3000'],'ESPERANDO':['#3E8E5A','#ffffff'],'INGRESADO':['#3B7DEC','#ffffff'],'NO LLEGO':['#2E2E2E','#ffffff']};
 function _etqDeCita(apt){
   var l=(apt.labels||[])[0];
@@ -5128,11 +5154,8 @@ function _waConfirmarCita(aptId, diaNom, btn){
   var hora=dt.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true});
   var full=((apt.firstName||'')+' '+(apt.lastName||'')).trim();
   var sinFicha=!_fichaDe(full,'');
-  var msg='Hola '+nom+' 🌸 Te saludamos de Sunsu Spa!\n\n'
-    +'Te escribimos para confirmar tu cita de mañana '+dia+' a las '+hora+' 💆‍♀️\n\n';
-  if(sinFicha) msg+='Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n'
-    +'📝 Tarjeta de registro\n'+REGISTRO_URL+'\n\n';
-  msg+='¿Nos confirmas tu asistencia? 💙';
+  var bloqueReg=sinFicha?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
+  var msg=_msg('MENSAJE CONFIRMACION CITA',{nombre:nom, dia:dia, hora:hora, registro:bloqueReg});
   var url='https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
   var v=window.open(url,'_blank');
   if(!v) window.location.href=url;
@@ -6445,9 +6468,9 @@ function _pintarTarjetasPend(){
     // terminado en 2025 que hoy vino a un facial suelto no muestra nada de paquete.
     var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0];
     // Tres mensajes: saludo corto (abre y siembra el chat) + cada PDF con el suyo
-    var msgHola=encodeURIComponent('Hola '+(t.nombre||'').split(' ')[0]+', te saludamos de Sunsu Spa!');
-    var msg=encodeURIComponent('Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!');
-    var msgPaq=encodeURIComponent(paqAct?('Y aquí está el control de tu paquete: has disfrutado '+paqAct.usados+' de '+paqAct.total+' sesiones'+(paqAct.pend>0?' — ¡te esperamos en la siguiente!':' — ¡paquete completado!')) :'');
+    var msgHola=encodeURIComponent(_msg('MENSAJE TARJETA SALUDO',{nombre:(t.nombre||'').split(' ')[0]}));
+    var msg=encodeURIComponent(_msg('MENSAJE TARJETA TRATAMIENTO',{}));
+    var msgPaq=encodeURIComponent(paqAct?_msg(paqAct.pend>0?'MENSAJE TARJETA PAQUETE PENDIENTE':'MENSAJE TARJETA PAQUETE COMPLETO',{usados:paqAct.usados,total:paqAct.total}):'');
     if(paqAct) window._tarjPaqRef=window._tarjPaqRef||{};
     if(paqAct){(window._tarjPaqRef['c'+ced]=paqAct);}
     html+='<div class="card" style="padding:12px;margin-bottom:9px">'
@@ -6486,7 +6509,7 @@ function enviarAmbasTarjetas(tkRow, ced, telAmb){
     // (sin necesidad de tener el contacto guardado) + descargar los 2 PDFs para adjuntar.
     rr.forEach(function(r){ try{ r.doc.save(r.nom); }catch(eS){} });
     if(telAmb){
-      var msgAmb=encodeURIComponent('Hola! Te compartimos la tarjeta de tu tratamiento y el control de tu paquete en Sunsu Spa.');
+      var msgAmb=encodeURIComponent(_msg('MENSAJE TARJETA AMBAS',{}));
       // window.open puede ser bloqueado tras trabajo asíncrono → respaldo con location
       var wURL='https://wa.me/'+telAmb+'?text='+msgAmb;
       var vent=window.open(wURL,'_blank');
@@ -8585,7 +8608,7 @@ function _pintarTodosPaquetes(){
       +(function(){
         var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
         if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
-        return telQ?'<a href="https://wa.me/'+telQ+'?text='+encodeURIComponent('Hola '+(p.nombre||'').split(' ')[0]+'! Te compartimos el control de tu paquete en Sunsu Spa.')+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
+        return telQ?'<a href="https://wa.me/'+telQ+'?text='+encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]}))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
       })()
       +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
       +'</div><div id="paq-exp-'+p.fila+'"></div></div>';
