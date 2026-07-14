@@ -2829,21 +2829,26 @@ function renderSegPaquetes(c){
       return new Date(a, parseInt(m[2])-1, parseInt(m[1]));
     };
     var items=(d.items||[]).map(function(p){
+      // El total (3 o 6) lo determina el SERVIDOR por el código del paquete;
+      // respaldo local por listas si viniera vacío
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
-      var esP6=P6.some(function(s){return p.sku.indexOf(s)>=0;});
-      var total=esP3?3:(esP6?6:6);
+      var total=p.total||(esP3?3:6);
       var usados=0, ultima=null;
       p.usos.slice(0,total).forEach(function(u){
         if(u.u||u.f) usados++;
         var f=parseF(u.f);
         if(f&&(!ultima||f>ultima)) ultima=f;
       });
-      if(!ultima) ultima=new Date(parseInt(p.ano),parseInt(p.mes)-1,parseInt(p.dia));
+      if(!ultima){
+        var aC=parseInt(p.ano)||0; if(aC>0&&aC<100)aC+=2000; // filas históricas con año de 2 dígitos
+        ultima=new Date(aC,parseInt(p.mes)-1,parseInt(p.dia));
+      }
       var diasSin=Math.floor((hoy-ultima)/86400000);
-      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),ultima:ultima,diasSin:isNaN(diasSin)?0:diasSin};
+      if(isNaN(diasSin)||diasSin<0||diasSin>3700) diasSin=null; // fecha ilegible → no mostrar días
+      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),ultima:ultima,diasSin:diasSin};
     });
     window._segPaqItems=items; // para los botones de tarjeta/WhatsApp
-    var pendientes=items.filter(function(x){return x.pend>0;}).sort(function(a,b){return b.diasSin-a.diasSin;});
+    var pendientes=items.filter(function(x){return x.pend>0;}).sort(function(a,b){return (b.diasSin===null?-1:b.diasSin)-(a.diasSin===null?-1:a.diasSin);});
     var completos=items.filter(function(x){return x.pend===0;});
     var mostrar=window._segPaqFiltro==='completos'?completos:pendientes;
     var fStr=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
@@ -2856,7 +2861,7 @@ function renderSegPaquetes(c){
     if(!mostrar.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin paquetes en esta lista</div>';
     mostrar.forEach(function(x){
       var p=x.p;
-      var alerta=x.pend>0&&x.diasSin>30;
+      var alerta=x.pend>0&&x.diasSin!==null&&x.diasSin>30;
       var puntos='';
       for(var i=0;i<x.total;i++){
         var usado=i<x.usados;
@@ -2873,7 +2878,7 @@ function renderSegPaquetes(c){
         +'<div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">'
         +'<span>'+puntos+'</span>'
         +'<span style="font-size:0.68rem;font-weight:800;color:'+(x.pend>0?'var(--navy)':'#2E7D52')+'">'+(x.pend>0?('Consumido '+x.usados+' de '+x.total+' — queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Paquete completo')+'</span>'
-        +'<span style="font-size:0.62rem;color:var(--gray)">Última visita: '+fStr(x.ultima)+(x.pend>0?' ('+x.diasSin+' días)':'')+'</span>'
+        +'<span style="font-size:0.62rem;color:var(--gray)">'+(x.diasSin!==null?('Última visita: '+fStr(x.ultima)+(x.pend>0?' ('+x.diasSin+' días)':'')):'Última visita: —')+'</span>'
         +'</div>'
         +(function(){
           var iGlobal=items.indexOf(x);
@@ -2914,6 +2919,7 @@ function _renderSeguimientoFacial(c){
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
         +'<button onclick="renderSeguimiento(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
         +'</div>'
+        +_segToggleHTML()
         +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
         +'<input id="seg-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="pintarSeguimiento()" '
         +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
@@ -7481,10 +7487,11 @@ function _cargarTodosPaquetes(){
     var parseF=function(s){var m=(s||'').toString().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);if(!m)return null;var a=parseInt(m[3]);if(a<100)a+=2000;return new Date(a,parseInt(m[2])-1,parseInt(m[1]));};
     window._todosPaq=(d.items||[]).map(function(p){
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
-      var total=esP3?3:6;
+      var total=p.total||(esP3?3:6);
       var usados=0;
       p.usos.slice(0,total).forEach(function(u){if(u.u||u.f)usados++;});
-      var compra=new Date(parseInt(p.ano),parseInt(p.mes)-1,parseInt(p.dia));
+      var aL=parseInt(p.ano)||0; if(aL>0&&aL<100)aL+=2000;
+      var compra=new Date(aL,parseInt(p.mes)-1,parseInt(p.dia));
       return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),compra:isNaN(compra)?new Date(0):compra};
     });
     window._paqOrden=window._paqOrden||'desc';
