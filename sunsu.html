@@ -6106,6 +6106,22 @@ function enviarAmbasTarjetas(tkRow, ced, telAmb){
     }
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
+// Descarga escalonada (900ms) — los navegadores bloquean la 2ª descarga seguida
+function _descargarDocsEscalonado(docs){
+  var colaD=(docs||[]).slice(), iD=0;
+  var bajar=function(){
+    if(iD>=colaD.length) return;
+    var r=colaD[iD++];
+    try{
+      var urlB=URL.createObjectURL(r.doc.output('blob'));
+      var aB=document.createElement('a'); aB.href=urlB; aB.download=r.nom;
+      document.body.appendChild(aB); aB.click(); aB.remove();
+      setTimeout(function(){URL.revokeObjectURL(urlB);},5000);
+    }catch(eD){ try{ r.doc.save(r.nom); }catch(eD2){} }
+    if(iD<colaD.length) setTimeout(bajar, 900);
+  };
+  bajar();
+}
 // ── Flujo WhatsApp en 2 toques ──
 // Toque 1: abre el chat DIRECTO AL NÚMERO (queda en recientes) y pre-genera los PDFs.
 // Toque 2: comparte los PDFs ya listos → WhatsApp → la clienta aparece en recientes.
@@ -6139,8 +6155,16 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg){
       });
       window._waEstado[key]={listo:true, files:files, docs:rr.filter(Boolean)};
       var b2=document.getElementById('wa-btn-'+tkRow);
-      if(b2){b2.textContent='📎 Enviar '+files.length+' PDF'+(files.length!==1?'s':'');b2.disabled=false;b2.style.background='#128C7E';}
-      toast('✅ PDF'+(files.length!==1?'s':'')+' listo'+(files.length!==1?'s':'')+' — vuelve y toca 📎 Enviar','var(--green)');
+      if(_esMovil_()){
+        // iPhone: la hoja de compartir EXIGE un toque fresco → botón 📎 para el segundo toque
+        if(b2){b2.textContent='📎 Enviar '+files.length+' PDF'+(files.length!==1?'s':'');b2.disabled=false;b2.style.background='#128C7E';}
+        toast('✅ PDF'+(files.length!==1?'s':'')+' listo'+(files.length!==1?'s':'')+' — vuelve y toca 📎 Enviar','var(--green)');
+      } else {
+        // Computadora: descargar AUTOMÁTICAMENTE, sin segundo toque
+        _descargarDocsEscalonado(rr.filter(Boolean));
+        if(b2){b2.textContent='⬇️ Re-descargar PDF'+(files.length!==1?'s':'');b2.disabled=false;b2.style.background='#128C7E';}
+        toast('📄 '+files.length+' PDF'+(files.length!==1?'s':'')+' descargándose — arrástralo'+(files.length!==1?'s':'')+' al chat abierto','var(--green)');
+      }
     }).catch(function(e){
       var b3=document.getElementById('wa-btn-'+tkRow);
       if(b3){b3.textContent='💬 WhatsApp';b3.disabled=false;}
@@ -6159,22 +6183,9 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg){
       return;
     }
   }catch(eS){}
-  // Computadora: descargar para arrastrar al chat abierto.
-  // ESCALONADO (900ms) — los navegadores bloquean la 2ª descarga automática seguida
-  var colaD=(est.docs||[]).slice(), iD=0;
-  var bajar=function(){
-    if(iD>=colaD.length) return;
-    var r=colaD[iD++];
-    try{
-      var urlB=URL.createObjectURL(r.doc.output('blob'));
-      var aB=document.createElement('a'); aB.href=urlB; aB.download=r.nom;
-      document.body.appendChild(aB); aB.click(); aB.remove();
-      setTimeout(function(){URL.revokeObjectURL(urlB);},5000);
-    }catch(eD){ try{ r.doc.save(r.nom); }catch(eD2){} }
-    if(iD<colaD.length) setTimeout(bajar, 900);
-  };
-  bajar();
-  toast('📄 '+colaD.length+' PDF'+(colaD.length!==1?'s':'')+' descargándose — arrástralo'+(colaD.length!==1?'s':'')+' al chat abierto','var(--blue)');
+  // Computadora (re-descarga con el mismo botón)
+  _descargarDocsEscalonado(est.docs||[]);
+  toast('📄 '+(est.docs||[]).length+' PDF'+((est.docs||[]).length!==1?'s':'')+' descargándose — arrástralo'+((est.docs||[]).length!==1?'s':'')+' al chat abierto','var(--blue)');
 }
 function tarjetaPaqDeCed(ced){
   var x=(window._tarjPaqRef||{})['c'+ced];
@@ -6309,7 +6320,10 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52';
     var xI=55, ANCHO=485, xD=xI+ANCHO;
     if(fondo) doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H);
-    var limpia=function(s){return (s||'').toString().replace(/SUNSU-\d+\s*[-—:·]*\s*/gi,'').trim();};
+    var limpia=function(s){return (s||'').toString()
+      .replace(/SUNSU-[A-Z]{0,3}-?\d+\s*[-—:·]*\s*/gi,'')   // SUNSU-17, SUNSU-HT-101
+      .replace(/\b[A-Z]{2,3}-\d{3}\b\s*[-—:·]*\s*/g,'')      // HT-101 suelto
+      .replace(/\s{2,}/g,' ').trim();};
     // Nombres de productos desde el catálogo del app (código → nombre, sin precios)
     var nomProd=function(code){
       code=(code||'').trim();
@@ -6354,8 +6368,11 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     lineaTx('Paquete adquirido:', paq?paq+(t.pack3?' (3 sesiones)':' (6 sesiones)'):'');
     if((t.productos||[]).length){
       lineaTx('Productos:', t.productos.map(function(p){
-        var m=p.match(/^(\S+)\s*(×\d+)?/);
-        return nomProd(m?m[1]:p)+(m&&m[2]?' '+m[2].replace('×','x'):'');
+        // El servidor ya manda 'Nombre ×2'; si viniera un código viejo, se traduce y limpia
+        var m=p.match(/^(.*?)\s*(×\d+)?$/);
+        var base=(m&&m[1])||p;
+        if(/^[A-Z]{2,3}-\d{3}$/.test(base.trim())) base=nomProd(base.trim());
+        return limpia(base)+(m&&m[2]?' '+m[2].replace('×','x'):'');
       }).join('  ·  '));
     }
     y+=4;
