@@ -6407,6 +6407,9 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
     var wURL='https://wa.me/'+tel+'?text='+(msgHola||msg);
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
+    // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
+    // así al volver al app no hay que cerrar nada y el 📎 está listo de una.
+    if(vent){ setTimeout(function(){ try{ vent.close(); }catch(eC){} }, 2800); }
     if(btn){btn.textContent='⏳ Preparando PDF'+(conPaq?'s':'')+'...';btn.disabled=true;}
     // Pre-generar en segundo plano mientras la chica manda el saludo
     var gens=[ new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); }) ];
@@ -6717,11 +6720,12 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     doc.text('Atendida por '+(t.cosmetologa||''),W/2,y,{align:'center'}); y+=15;
     var salto=function(n){ if(y+n>H-64){doc.addPage(); if(fondo)doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H); y=140;} };
     var seccion=function(titulo){
-      salto(32);
+      y+=6; // aire ANTES de cada cajón azul (separación entre secciones)
+      salto(38);
       doc.setFillColor(61,90,122);
       doc.roundedRect(xI,y,ANCHO,17,4,4,'F');
       doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(8.4);
-      doc.text(titulo,xI+9,y+12); y+=23;
+      doc.text(titulo,xI+9,y+12); y+=27; // y aire DESPUÉS, antes del contenido
     };
     var lineaTx=function(lbl,txt){
       if(!txt) return;
