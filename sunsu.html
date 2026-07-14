@@ -2818,6 +2818,7 @@ function renderSegPaquetes(c){
   fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){
+    if(window._segSecc!=='paquetes') return; // el usuario ya cambió de sección
     if(d.error){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
     var P3=window._P3S||[], P6=window._P6S||[];
     var hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -2899,6 +2900,7 @@ function _renderSeguimientoFacial(c){
   fetch(APPS_SCRIPT_URL+'?action=getSeguimiento')
     .then(function(r){return r.text();})
     .then(function(txt){
+      if(window._segSecc&&window._segSecc!=='facial') return; // el usuario ya está en Paquetes
       var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,100)};}
       if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
       window._segItems=d.items||[];
@@ -7273,9 +7275,14 @@ function ejecutarBuscarGC(){
 }
 
 function _gcVencimiento(g){
-  // Vigencia: 6 meses desde la fecha de compra
+  // Vigencia: 6 meses desde la fecha de compra.
+  // REGLA: aplica solo a gift cards vendidas DESDE el 14/07/2026 — las anteriores
+  // salieron sin caducidad marcada, así que siguen vigentes indefinidamente.
+  var CORTE=new Date(2026,6,14); // 14 jul 2026
   var d=parseInt(g.dia), m=parseInt(g.mes), a=parseInt(g.ano);
   if(!d||!m||!a) return null;
+  var compra=new Date(a, m-1, d);
+  if(compra<CORTE) return {venc:null, cad:false, dias:99999, sinCad:true, str:''};
   var venc=new Date(a, m-1+6, d);
   var hoy=new Date(); hoy.setHours(0,0,0,0);
   return {venc:venc, cad:hoy>venc, dias:Math.ceil((venc-hoy)/86400000),
@@ -7336,7 +7343,9 @@ function _buildGCCard(g){
         ?''
         :(caducada
           ?'<span style="font-size:0.65rem;background:#E8543F;color:white;padding:2px 8px;border-radius:6px;font-weight:800">⛔ CADUCADA — venció el '+vc.str+'</span>'
-          :'<span style="font-size:0.65rem;background:'+(vc.dias<=30?'#FFF3E0;color:#C4661F':'#E8F8EE;color:#2E7D52')+';padding:2px 8px;border-radius:6px;font-weight:700">'+(vc.dias<=30?'⏳ Vence en '+vc.dias+' días ('+vc.str+')':'✓ Vigente hasta '+vc.str)+'</span>')):'')
+          :(vc.sinCad
+            ?'<span style="font-size:0.65rem;background:#E8F8EE;color:#2E7D52;padding:2px 8px;border-radius:6px;font-weight:700">✓ Vigente (venta anterior — sin caducidad)</span>'
+            :'<span style="font-size:0.65rem;background:'+(vc.dias<=30?'#FFF3E0;color:#C4661F':'#E8F8EE;color:#2E7D52')+';padding:2px 8px;border-radius:6px;font-weight:700">'+(vc.dias<=30?'⏳ Vence en '+vc.dias+' días ('+vc.str+')':'✓ Vigente hasta '+vc.str)+'</span>'))):'')
     +'</div>'
     +(usado?
       '<div style="background:var(--gray-l);border-radius:9px;padding:8px 10px;font-size:0.72rem;color:var(--gray)">'
@@ -7459,6 +7468,72 @@ function guardarPaqUso(fila, idx, total){
     });
 }
 
+// ── Listado completo de paquetes en la pestaña 📦 (resumen + tarjeta digital) ──
+function _cargarTodosPaquetes(){
+  var cont=document.getElementById('bpq-todos');
+  if(!cont) return;
+  cont.innerHTML='<div class="loading"><div class="spinner"></div>Cargando todos los paquetes...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.error){cont.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
+    var P3=window._P3S||[], P6=window._P6S||[];
+    var parseF=function(s){var m=(s||'').toString().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);if(!m)return null;var a=parseInt(m[3]);if(a<100)a+=2000;return new Date(a,parseInt(m[2])-1,parseInt(m[1]));};
+    window._todosPaq=(d.items||[]).map(function(p){
+      var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
+      var total=esP3?3:6;
+      var usados=0;
+      p.usos.slice(0,total).forEach(function(u){if(u.u||u.f)usados++;});
+      var compra=new Date(parseInt(p.ano),parseInt(p.mes)-1,parseInt(p.dia));
+      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),compra:isNaN(compra)?new Date(0):compra};
+    });
+    window._paqOrden=window._paqOrden||'desc';
+    _pintarTodosPaquetes();
+  })
+  .catch(function(e){cont.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function _pintarTodosPaquetes(){
+  var cont=document.getElementById('bpq-todos');
+  if(!cont) return;
+  var arr=(window._todosPaq||[]).slice();
+  var q=(window._paqQ||'').toLowerCase().trim();
+  if(q) arr=arr.filter(function(x){
+    return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0;
+  });
+  arr.sort(function(a,b){return window._paqOrden==='desc'?b.compra-a.compra:a.compra-b.compra;});
+  var fS=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">'
+    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📦 Todos los paquetes <span style="font-weight:400;font-size:0.6rem;color:var(--gray)">('+arr.length+')</span></div>'
+    +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Más nuevos primero':'⬆ Más antiguos primero')+'</button>'
+    +'</div>'
+    +'<input type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarTodosPaquetes,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:10px">';
+  if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
+  arr.forEach(function(x){
+    var p=x.p;
+    var iSeg=(window._todosPaq||[]).indexOf(x);
+    html+='<div class="card" style="padding:11px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+(p.nombre+' '+p.apellido).trim()+'</div>'
+      +'<div style="font-size:0.57rem;color:var(--gray)">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
+      +'</div>'
+      +'<span style="font-size:0.64rem;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;'+(x.pend>0?'background:var(--blue-l);color:var(--navy)':'background:#E8F8EE;color:#2E7D52')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</span>'
+      +'<button onclick="tarjetaPaqueteDe('+iSeg+')" style="padding:7px 10px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>'
+      +'</div></div>';
+  });
+  cont.innerHTML=html;
+}
+// La tarjeta digital desde el listado (contexto _todosPaq, con diasSin calculado al vuelo)
+function tarjetaPaqueteDe(i){
+  var x=(window._todosPaq||[])[i];
+  if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  toast('⏳ Generando tarjeta...','var(--blue)');
+  var img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){_pdfTarjetaPaquete(x, img);};
+  img.onerror=function(){_pdfTarjetaPaquete(x, null);};
+  img.src=GCD_PAG3_URL;
+}
 function renderBuscarPaquetes(c){
   c.innerHTML=
     '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📦 Buscar Paquetes</div>'
@@ -7466,7 +7541,9 @@ function renderBuscarPaquetes(c){
     +'<input id="bpq-inp" type="text" placeholder="Nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
     +'<button onclick="ejecutarBuscarPaquetes()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
     +'</div>'
-    +'<div id="bpq-results"></div>';
+    +'<div id="bpq-results"></div>'
+    +'<div id="bpq-todos"></div>';
+  _cargarTodosPaquetes();
   var inp=document.getElementById('bpq-inp');
   if(inp){
     if(window._paqPrefill){
