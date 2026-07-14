@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Tarjeta de Registro · Sunsu Spa</title>
+<style>
+  :root{--navy:#3D5A7A;--navy-d:#1A2744;--cream:#FDFAF1;--cream-d:#ECE6D4;--gray:#7A8494;--gold:#8A6D1A;--green:#2E7D52;--red:#E8543F;}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--cream);color:#2A3342;min-height:100vh;}
+  .wrap{max-width:520px;margin:0 auto;padding:22px 16px 50px;}
+  .logo{text-align:center;padding:26px 0 6px;}
+  .logo .kr{font-size:1rem;letter-spacing:0.5em;color:var(--navy);font-weight:700;margin-left:0.5em;}
+  .logo .nm{font-size:1.7rem;letter-spacing:0.45em;color:var(--navy);font-weight:800;margin-left:0.45em;}
+  .sub{text-align:center;font-size:0.72rem;color:var(--gray);margin-bottom:4px;}
+  h1{text-align:center;font-size:1.05rem;color:var(--navy);margin:10px 0 2px;}
+  .desc{text-align:center;font-size:0.7rem;color:var(--gray);margin-bottom:18px;}
+  .card{background:#fff;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 6px rgba(26,39,68,0.07);}
+  .card h2{font-size:0.82rem;color:var(--navy);border-bottom:2px solid var(--cream-d);padding-bottom:8px;margin-bottom:14px;}
+  label{display:block;font-size:0.68rem;font-weight:800;color:var(--navy);margin-bottom:5px;}
+  input{width:100%;padding:12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:16px;font-family:inherit;outline:none;margin-bottom:13px;background:#fff;}
+  input:focus{border-color:var(--navy);}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+  .chip{padding:9px 13px;border-radius:10px;font-size:0.72rem;font-weight:700;cursor:pointer;border:1.5px solid var(--cream-d);background:#fff;color:var(--gray);}
+  .chip.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .glabel{font-size:0.68rem;font-weight:800;color:var(--navy);margin-bottom:7px;}
+  .btn{width:100%;padding:15px;background:var(--navy);color:#fff;border:none;border-radius:12px;font-size:0.92rem;font-weight:800;cursor:pointer;font-family:inherit;}
+  .btn:disabled{opacity:0.6;}
+  .fin{text-align:center;padding:46px 20px;}
+  .fin .emo{font-size:2.8rem;margin-bottom:12px;}
+  .fin h3{color:var(--navy);font-size:1.05rem;margin-bottom:12px;}
+  .fin p{font-size:0.8rem;color:var(--gray);line-height:1.7;max-width:400px;margin:0 auto;}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:11px 18px;border-radius:11px;font-size:0.76rem;font-weight:700;z-index:99;max-width:90%;text-align:center;display:none;}
+  .foto-q{font-size:0.72rem;color:var(--gray);margin-bottom:10px;line-height:1.5;}
+  /* Florales Sunsu fijos: acompañan mientras bajas la página */
+  .floral{position:fixed;bottom:0;z-index:0;pointer-events:none;background-image:url('https://estebanfch-cell.github.io/sunsu-spa/giftcard_pag3_fondo.jpg');background-repeat:no-repeat;}
+  .floral-izq{left:0;width:186px;height:351px;background-size:836px 556px;background-position:0px -205px;}
+  .floral-der{right:0;width:135px;height:345px;background-size:836px 556px;background-position:-701px -211px;}
+  .wrap{position:relative;z-index:1;}
+  .consent-box{max-height:230px;overflow-y:auto;background:var(--cream);border:1.5px solid var(--cream-d);border-radius:10px;padding:12px;font-size:0.68rem;color:#4A5568;line-height:1.65;margin-bottom:12px;}
+  .consent-box b{color:var(--navy);}
+  @media (max-width:430px){.floral-izq{width:130px;height:246px;background-size:586px 390px;background-position:0 -144px;}.floral-der{width:95px;height:242px;background-size:586px 390px;background-position:-491px -148px;}}
+</style>
+</head>
+<body>
+<div class="floral floral-izq"></div>
+<div class="floral floral-der"></div>
+<div class="wrap" id="app">
+  <div class="logo"><div class="kr">순수</div><div class="nm">SUNSU</div></div>
+  <div class="sub">Glass Skin · Quito</div>
+  <h1>📝 Tarjeta de Registro</h1>
+  <div class="desc">Cuéntanos de ti para cuidar tu piel como se merece — toma menos de 2 minutos ✨</div>
+
+  <div class="card">
+    <h2>👤 Tus datos</h2>
+    <label>Cédula *</label><input id="rg-cedula" type="tel" placeholder="1712345678">
+    <label>Nombre *</label><input id="rg-nombre" placeholder="María José">
+    <label>Apellido *</label><input id="rg-apellido" placeholder="Torres">
+    <label>Fecha de nacimiento *</label><input id="rg-nac" type="date">
+    <label>Sector donde vives *</label><input id="rg-sector" placeholder="Cumbayá">
+    <label>Teléfono / WhatsApp *</label><input id="rg-tel" type="tel" placeholder="0991234567">
+  </div>
+
+  <div class="card">
+    <h2>✨ Tu piel</h2>
+    <div class="glabel">Tipo de piel</div><div class="chips" data-g="tipoPiel" data-multi="0"></div>
+    <div class="glabel">Estado actual</div><div class="chips" data-g="estado" data-multi="0"></div>
+    <label>Alergias</label><input id="rg-alergias" placeholder="Ninguna">
+    <label>Medicación</label><input id="rg-medicacion" placeholder="Ninguna">
+    <label>Condiciones médicas o dermatológicas</label><input id="rg-condiciones" placeholder="Que debamos saber">
+  </div>
+
+  <div class="card">
+    <h2>🧴 Tu historial</h2>
+    <div class="glabel">Reacciones previas a tratamientos</div><div class="chips" data-g="reacciones" data-multi="1"></div>
+    <div class="glabel">Uso de exfoliantes / retinoides</div><div class="chips" data-g="retinoides" data-multi="1"></div>
+    <div class="glabel">Ciclo menstrual (si aplica)</div><div class="chips" data-g="ciclo" data-multi="1"></div>
+    <div class="glabel">¿Deseas extracciones de comedones o espinillas si es necesario?</div><div class="chips" data-g="extracciones" data-multi="0"></div>
+    <div class="glabel">Cortesía complementaria</div><div class="chips" data-g="cortesia" data-multi="0"></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Consentimiento informado</h2>
+    <div class="consent-box">
+      <b>CONSENTIMIENTO INFORMADO — TRATAMIENTOS FACIALES SUNSU SPA</b><br><br>
+      Declaro que la información proporcionada en esta tarjeta de registro es verídica y completa, y que he informado a Sunsu Spa sobre mis alergias, medicación, condiciones médicas o dermatológicas y uso de productos (incluidos retinoides o isotretinoína).<br><br>
+      Entiendo que los tratamientos faciales son procedimientos estéticos no médicos, que los resultados pueden variar según cada tipo de piel, y que pueden presentarse reacciones temporales normales como enrojecimiento, sensibilidad o brotes de purga.<br><br>
+      Acepto voluntariamente recibir los tratamientos y libero a Sunsu Spa y a su personal de responsabilidad por reacciones derivadas de información omitida o inexacta de mi parte, o del incumplimiento de las recomendaciones de cuidado posterior.<br><br>
+      Autorizo el tratamiento de mis datos personales exclusivamente para la gestión de mis citas, tratamientos y comunicación con Sunsu Spa.
+    </div>
+    <div class="glabel">He leído y acepto el consentimiento informado *</div>
+    <div class="chips" data-g="consentimiento" data-multi="0"></div>
+    <label>Firma (escribe tu nombre completo) *</label>
+    <input id="rg-firma" placeholder="María José Torres Vela">
+  </div>
+
+  <div class="card">
+    <h2>📸 Fotografías</h2>
+    <div class="foto-q">¿Autorizas a Sunsu Spa a tomar fotografías del antes y después de tu tratamiento, para tu registro personal?</div>
+    <div class="chips" data-g="autorizaFotos" data-multi="0"></div>
+  </div>
+
+  <button class="btn" id="btn-enviar" onclick="enviar()">✅ Enviar mi registro</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbxvtutVd0fJr2GmoRC4ETyPXlT4xBUJ9gi8oBbh3e2E0ULAYczuKUhRiI5l4E7uant6/exec';
+var OPCIONES={
+  tipoPiel:['Grasa','Seca','Mixta','Normal'],
+  estado:['Estable','Sensibilizada / inflamada','Deshidratada','Congestionada'],
+  reacciones:['Ardor intenso/enrojecimiento','Brotes post facial','Manchas','Ninguno'],
+  retinoides:['Retinoides (Adapaleno, Retinol, Tretinoína)','Isotretinoína oral (Roacutan)','Ninguno'],
+  ciclo:['Regular','Irregular','SOP','Embarazo','Lactancia','Menopausia','NO APLICA'],
+  extracciones:['SI','NO'],
+  cortesia:['Masaje Capilar','Masaje Manos'],
+  autorizaFotos:['SI, autorizo','NO autorizo'],
+  consentimiento:['✓ ACEPTO el consentimiento informado']
+};
+var SEL={};
+document.querySelectorAll('.chips').forEach(function(g){
+  var id=g.dataset.g, multi=g.dataset.multi==='1';
+  OPCIONES[id].forEach(function(op){
+    var b=document.createElement('div');
+    b.className='chip'; b.textContent=op;
+    b.onclick=function(){
+      if(multi){
+        var arr=SEL[id]||[];
+        var i=arr.indexOf(op);
+        if(i>=0)arr.splice(i,1);else arr.push(op);
+        if(op==='Ninguno'||op==='NO APLICA') SEL[id]=arr.indexOf(op)>=0?[op]:arr;
+        else SEL[id]=arr.filter(function(x){return x!=='Ninguno'&&x!=='NO APLICA';});
+      } else {
+        SEL[id]=SEL[id]===op?'':op;
+      }
+      g.querySelectorAll('.chip').forEach(function(c){
+        var on=multi?((SEL[id]||[]).indexOf(c.textContent)>=0):(SEL[id]===c.textContent);
+        c.classList.toggle('on',on);
+      });
+    };
+    g.appendChild(b);
+  });
+});
+function toast(t){var el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(function(){el.style.display='none';},3500);}
+function v(id){return (document.getElementById(id)||{value:''}).value.trim();}
+function enviar(){
+  if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('Por favor completa cédula, nombre y apellido');return;}
+  if(!v('rg-tel')){toast('Por favor escribe tu teléfono');return;}
+  if(!v('rg-nac')||!v('rg-sector')){toast('Por favor completa tu fecha de nacimiento y sector');return;}
+  if(!SEL.autorizaFotos){toast('Por favor responde la autorización de fotografías');return;}
+  if(!SEL.consentimiento){toast('Por favor acepta el consentimiento informado');return;}
+  if(!v('rg-firma')){toast('Por favor escribe tu nombre completo como firma');return;}
+  var nac=v('rg-nac'); var p=nac.split('-'); if(p.length===3)nac=p[1]+'/'+p[2]+'/'+p[0];
+  var btn=document.getElementById('btn-enviar');
+  btn.textContent='⏳ Enviando...'; btn.disabled=true;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'registrarCliente',
+      cedula:v('rg-cedula'),nombre:v('rg-nombre'),apellido:v('rg-apellido'),
+      nacimiento:nac,sector:v('rg-sector'),telefono:v('rg-tel'),
+      tipoPiel:SEL.tipoPiel||'',estado:SEL.estado||'',
+      alergias:v('rg-alergias'),medicacion:v('rg-medicacion'),condiciones:v('rg-condiciones'),
+      reacciones:(SEL.reacciones||[]).join(', '),retinoides:(SEL.retinoides||[]).join(', '),
+      ciclo:(SEL.ciclo||[]).join(', '),extracciones:SEL.extracciones||'',cortesia:SEL.cortesia||'',
+      autorizaFotos:(SEL.autorizaFotos||'').indexOf('SI')===0?'SI':'NO',
+      consentimiento:'SI', firma:v('rg-firma')})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var nom=v('rg-nombre').split(' ')[0];
+    if(d.existe){
+      document.getElementById('app').innerHTML='<div class="logo"><div class="kr">순수</div><div class="nm">SUNSU</div></div>'
+        +'<div class="fin"><div class="emo">💙</div><h3>¡Gracias, '+nom+'!</h3>'
+        +'<p>Qué gusto tenerte de vuelta. Ya te tenemos registrada en nuestra familia Sunsu, así que no necesitas llenar la tarjeta otra vez — tu información está segura con nosotras.<br><br>Relájate, que de los detalles nos encargamos nosotras. ✨<br><br><small>¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</small></p></div>';
+      return;
+    }
+    if(!d.ok){toast('Ups: '+(d.error||'no se pudo enviar, inténtalo de nuevo'));btn.textContent='✅ Enviar mi registro';btn.disabled=false;return;}
+    document.getElementById('app').innerHTML='<div class="logo"><div class="kr">순수</div><div class="nm">SUNSU</div></div>'
+      +'<div class="fin"><div class="emo">🌸</div><h3>¡Bienvenida, '+nom+'!</h3>'
+      +'<p>Tu registro se guardó con éxito. Gracias por confiarnos el cuidado de tu piel — desde hoy eres parte de la familia Sunsu.<br><br>Nos vemos en tu cita. ✨</p></div>';
+  })
+  .catch(function(e){toast('Sin conexión — inténtalo de nuevo');btn.textContent='✅ Enviar mi registro';btn.disabled=false;});
+}
+</script>
+</body>
+</html>
