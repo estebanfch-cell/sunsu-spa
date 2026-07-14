@@ -630,8 +630,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
+    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
@@ -641,6 +641,7 @@ function initApp(){
   document.getElementById('tabs').insertAdjacentHTML('afterend',
     '<div id="nav-movil">'
     +'<button class="nm-btn" id="nm-ticket" onclick="showTab(\'ticket\')" style="background:var(--navy);color:white">🎫 Ticket</button>'
+    +'<button class="nm-btn" onclick="showTab(\'tarjetas\')" style="background:#B08968;color:white">📤</button>'
     +'<button class="nm-btn" id="nm-actual" onclick="_navPanel(true)" style="flex:1;background:var(--gray-ll,#F0F1F5);color:var(--navy);text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></button>'
     +'<button class="nm-btn" onclick="_navPanel(true)" style="background:white;color:var(--navy);border:1.5px solid var(--navy)">☰</button>'
     +'</div>'
@@ -754,6 +755,7 @@ function showTab(id,btn){
   else if(id==='seguimiento') renderSeguimiento(c);
   else if(id==='historial') renderHistorial(c);
   else if(id==='catalogo') renderCatalogoAdmin(c);
+  else if(id==='tarjetas') renderTarjetasPendientes(c);
   else if(id==='buscar') renderBuscar(c);
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
   else if(id==='buscar-gc') renderBuscarGC(c);
@@ -2755,7 +2757,7 @@ function tarjetaPaquete(i){
   img.onerror=function(){_pdfTarjetaPaquete(x, null);};
   img.src=GCD_PAG3_URL;
 }
-function _pdfTarjetaPaquete(x, fondo){
+function _pdfTarjetaPaquete(x, fondo, cbTP){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
     var W=560, H=330;
@@ -2764,50 +2766,56 @@ function _pdfTarjetaPaquete(x, fondo){
     if(fondo) doc.addImage(_fondoCardSunsu(fondo),'JPEG',0,0,W,H);
     var p=x.p;
     var nomCli=((p.nombre||'')+' '+(p.apellido||'')).trim();
+    var limpiaFac=function(s){return (s||'').toString().replace(/SUNSU-\d+\s*[-—:·]*\s*/gi,'').trim();};
     var y=96;
     doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(13);
-    doc.text('TARJETA DE TRATAMIENTO',W/2,y,{align:'center'}); y+=15;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(TXT);
-    doc.text(nomCli+'  ·  Paquete de '+x.total+' sesiones ('+p.sku+')',W/2,y,{align:'center'}); y+=12;
-    doc.setFontSize(7.5); doc.setTextColor(GOLD);
+    doc.text('CONTROL DE TU PAQUETE',W/2,y,{align:'center'}); y+=15;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(TXT);
+    doc.text(nomCli,W/2,y,{align:'center'}); y+=12;
+    var nomPaqL=limpiaFac(p.nombrePaq||'');
+    doc.setFontSize(8); doc.setTextColor(NAVY); doc.setFont('helvetica','bold');
+    doc.text((p.sku+' - Paquete '+x.total+(nomPaqL?' - '+nomPaqL:'')),W/2,y,{align:'center'}); y+=11;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GOLD);
     doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,y,{align:'center'});
-    // ── Rejilla de sesiones: 3 → una fila; 6 → dos filas de 3 ──
+    // ── Rejilla de sesiones CENTRADA verticalmente ──
     var cols=3, filas=Math.ceil(x.total/cols);
     var gx=40, gw=W-80, cw=gw/cols;
-    var gy=y+16, ch=(filas===1?150:78);
+    var ch=(filas===1?92:86);
+    var topZona=y+8, botZona=H-52;               // espacio disponible entre encabezado y pie
+    var gy=topZona+((botZona-topZona)-filas*ch)/2+6;
     for(var s=0;s<x.total;s++){
       var cx=gx+(s%cols)*cw+cw/2;
       var cy=gy+Math.floor(s/cols)*ch;
       var uso=(p.usos||[])[s]||{};
       var usada=s<x.usados;
-      // Círculo con el número de sesión
-      if(usada){ doc.setFillColor(61,90,122); doc.circle(cx,cy+14,11,'F'); doc.setTextColor('#FFFFFF'); }
-      else { doc.setDrawColor(61,90,122); doc.setLineWidth(1.2); doc.circle(cx,cy+14,11,'D'); doc.setTextColor(NAVY); }
+      if(usada){ doc.setFillColor(61,90,122); doc.circle(cx,cy+12,11,'F'); doc.setTextColor('#FFFFFF'); }
+      else { doc.setDrawColor(61,90,122); doc.setLineWidth(1.2); doc.circle(cx,cy+12,11,'D'); doc.setTextColor(NAVY); }
       doc.setFont('helvetica','bold'); doc.setFontSize(10);
-      doc.text(String(s+1),cx,cy+17.5,{align:'center'});
-      // Detalle debajo
-      doc.setFontSize(6.8);
+      doc.text(String(s+1),cx,cy+15.5,{align:'center'});
       if(usada){
-        doc.setTextColor(NAVY); doc.setFont('helvetica','bold');
-        doc.text(uso.f||'',cx,cy+34,{align:'center'});
-        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-        var facTxt=(uso.fac||'').toString();
-        if(facTxt.length>26) facTxt=facTxt.slice(0,24)+'..';
+        // Fila 1: fecha · Fila 2: facial · Fila 3: cosmetóloga
+        doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
+        // SOLO la fecha (la nota puede traer texto extra pegado)
+        var mFec=(uso.f||'').toString().match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
+        doc.text(mFec?mFec[0]:'',cx,cy+33,{align:'center'});
+        var facTxt=limpiaFac(uso.fac||'');
+        if(facTxt.length>28) facTxt=facTxt.slice(0,26)+'..';
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT); doc.setFontSize(6.8);
         if(facTxt) doc.text(facTxt,cx,cy+43,{align:'center'});
-        if(uso.por) doc.text('por '+uso.por.split(' ')[0],cx,cy+52,{align:'center'});
+        if(uso.por) doc.text(uso.por,cx,cy+52,{align:'center'});
       } else {
-        doc.setTextColor('#9AA1B0'); doc.setFont('helvetica','normal');
-        doc.text('Disponible',cx,cy+34,{align:'center'});
+        doc.setTextColor('#9AA1B0'); doc.setFont('helvetica','normal'); doc.setFontSize(6.8);
+        doc.text('Disponible',cx,cy+33,{align:'center'});
       }
     }
-    // Resumen al pie
-    var yR=gy+filas*ch+(filas===1?-72:6);
     doc.setFont('helvetica','bold'); doc.setFontSize(9);
     doc.setTextColor(x.pend>0?NAVY:VERDE);
     doc.text(x.pend>0?('Has disfrutado '+x.usados+' de '+x.total+' sesiones - te '+(x.pend===1?'espera 1 sesion':'esperan '+x.pend+' sesiones')+' mas!'):'Paquete completado - gracias por acompanarnos!',W/2,H-38,{align:'center'});
     doc.setFont('helvetica','normal'); doc.setFontSize(6.4); doc.setTextColor(TXT);
     doc.text('Sunsu Spa - Glass Skin - Quito',W/2,H-26,{align:'center'});
-    _entregarPDF(doc,'Tarjeta '+(p.nombre||'').split(' ')[0]+' '+p.sku+'.pdf');
+    var nomArchTP='Paquete '+(p.nombre||'').split(' ')[0]+' '+p.sku+'.pdf';
+    if(cbTP){ cbTP(doc, nomArchTP); return; }
+    _entregarPDF(doc, nomArchTP);
     toast('📄 Tarjeta lista — compártela por WhatsApp','var(--green)');
   });
 }
@@ -3207,6 +3215,7 @@ function _histPrecioProducto(skuQty){
 
 // Build one ticket card — showPrices=false for staff
 function _buildTicketCard(t, showPrices){
+  if(t&&t.tkRow){(window._tkCards=window._tkCards||{})[t.tkRow]=t;}
   var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
   var esCanjeP=t.colQ&&t.colQ.indexOf('SI')===0;
   var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
@@ -3326,6 +3335,7 @@ function _buildTicketCard(t, showPrices){
     +(showPrices
       ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
       :'')
+    +(t.tkRow?'<button onclick="tarjetaTicket('+t.tkRow+')" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.63rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>':'')
     +'</div>'
     +'</div>';
   if(breakdown) card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">'+breakdown+'</div>';
@@ -5952,6 +5962,400 @@ function guardarEdicionProducto(i){
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 
+// ══════ TARJETAS DE TRATAMIENTO NO ENVIADAS (envío por WhatsApp) ══════
+function renderTarjetasPendientes(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📤 Tarjetas de tratamiento</div>'
+    +'<div class="loading"><div class="spinner"></div>Cargando tickets...</div>';
+  Promise.all([
+    // SIEMPRE fresco: el ticket recién enviado debe aparecer de inmediato
+    fetch(APPS_SCRIPT_URL+'?action=getHistorial&_t='+Date.now()).then(function(r){return r.json();}),
+    fetch(APPS_SCRIPT_URL+'?action=getTarjetasInfo&_t='+Date.now()).then(function(r){return r.json();}),
+    fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};})
+  ]).then(function(rr){
+    var data=rr[0], info=rr[1]||{}, paqs=rr[2]||{};
+    if(data.error){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+data.error+'</div>';return;}
+    _histData=data;
+    window._tarjEnv=info.enviadas||{};
+    window._tarjTelCed=info.telCed||{};
+    window._tarjTelNom=info.telNom||{};
+    window._tarjTelAcu=info.telAcu||{};
+    // Paquetes por cédula (para adjuntar el control de paquete cuando aplica)
+    var P3=window._P3S||[];
+    window._tarjPaqPorCed={};
+    ((paqs.items)||[]).forEach(function(p){
+      var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
+      var total=p.total||(esP3?3:6);
+      var usados=0; p.usos.slice(0,total).forEach(function(u){if(u.u||u.f)usados++;});
+      var it={p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados)};
+      var k=(p.cedula||'').split('.')[0];
+      if(k){(window._tarjPaqPorCed[k]=window._tarjPaqPorCed[k]||[]).push(it);}
+    });
+    window._tarjDia=window._tarjDia||0; // 0=hoy 1=ayer 2=antier
+    _pintarTarjetasPend();
+  }).catch(function(e){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function _tarjClave(t){ return 'tk'+t.tkRow+'_'+(t.fecha||''); }
+function _normNomCli(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+}
+function _telDeTicket(t){
+  // Prioridad: ACUITY (ahí se actualizan los números) → REGISTRO → Acuity por aproximación
+  var ced=(t.cedula||'').split('.')[0];
+  var full=_normNomCli((t.nombre||'')+' '+(t.apellido||''));
+  var tel=window._tarjTelAcu[full]||'';
+  if(!tel){ // Acuity por prefijo nombre+apellido
+    var pn=_normNomCli(t.nombre).split(' ')[0], pa=_normNomCli(t.apellido).split(' ')[0];
+    if(pn&&pa){
+      var ks=Object.keys(window._tarjTelAcu||{});
+      for(var i=0;i<ks.length;i++){ if(ks[i].indexOf(pn)===0&&ks[i].indexOf(pa)>=0){tel=window._tarjTelAcu[ks[i]];break;} }
+    }
+  }
+  if(!tel) tel=(ced&&window._tarjTelCed[ced])||'';
+  if(!tel) tel=window._tarjTelNom[full]||'';
+  tel=(tel||'').replace(/[^0-9]/g,'');
+  if(tel&&tel.length===10&&tel.charAt(0)==='0') tel='593'+tel.slice(1);
+  if(tel&&tel.length===9) tel='593'+tel; // celular sin el 0 inicial
+  return tel;
+}
+function _pintarTarjetasPend(){
+  var c=document.getElementById('content');
+  var esAdminT=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  var dia=window._tarjDia||0;
+  var f=new Date(); f.setDate(f.getDate()-dia);
+  var fStr=f.getFullYear()+'-'+('0'+(f.getMonth()+1)).slice(-2)+'-'+('0'+f.getDate()).slice(-2);
+  var fFmtDia=('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2);
+  var lista=(_histData||[]).filter(function(t){
+    if(t.fecha!==fStr) return false;                       // solo el día elegido
+    if((t.cosmetologa||'').toUpperCase()==='SUNSU') return false;
+    if(((t.cedula||'').toString().split('.')[0])==='1793219469001') return false;   // consumo interno Sunsu Spa
+    if(((t.nombre||'')+' '+(t.apellido||'')).toUpperCase().indexOf('SUNSU')>=0) return false;
+    if(window._tarjEnv[_tarjClave(t)]) return false;
+    if(!esAdminT && (t.cosmetologa||'').toLowerCase().indexOf((CU.name||'').split(' ')[0].toLowerCase())<0) return false;
+    return true;
+  });
+  var chip=function(d,lbl){
+    var on=(window._tarjDia||0)===d;
+    return '<button onclick="window._tarjDia='+d+';_pintarTarjetasPend()" style="flex:1;padding:8px;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer;border:1.5px solid '+(on?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">'+lbl+'</button>';
+  };
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📤 Tarjetas de tratamiento</div>'
+    +'<button onclick="refrescarTelefonosApp(this)" style="padding:5px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🔄 Teléfonos</button>'
+    +'</div>'
+    +'<div style="font-size:0.62rem;color:var(--gray);margin-bottom:10px">Enviar diario a las clientas · '+lista.length+' por enviar del '+fFmtDia+'</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:12px">'+chip(0,'Hoy')+chip(1,'Ayer')+chip(2,'Antier')+'</div>';
+  if(!lista.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:22px">🎉 Todas las tarjetas de este día están enviadas</div>';
+  lista.forEach(function(t){
+    (window._tkCards=window._tkCards||{})[t.tkRow]=t;
+    var tel=_telDeTicket(t);
+    var fp=(t.fecha||'').split('-');
+    var fFmt=fp.length===3?(fp[2]+'/'+fp[1]+'/'+fp[0]):t.fecha;
+    var msg=encodeURIComponent('Hola '+(t.nombre||'').split(' ')[0]+'! Te compartimos la tarjeta de tu tratamiento en Sunsu Spa con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!');
+    // ¿La clienta tiene paquete? → botón para adjuntar también su control de paquete
+    var ced=(t.cedula||'').split('.')[0];
+    var paqsCli=(window._tarjPaqPorCed||{})[ced]||[];
+    var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0]||paqsCli[0];
+    if(paqAct) window._tarjPaqRef=window._tarjPaqRef||{};
+    if(paqAct){(window._tarjPaqRef['c'+ced]=paqAct);}
+    html+='<div class="card" style="padding:12px;margin-bottom:9px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+((t.nombre||'')+' '+(t.apellido||'')).trim()+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+fFmt+' · '+(t.cosmetologa||'')+(tel?' · 📱 '+tel:' · ⚠️ sin teléfono')+(paqAct?' · 📦 tiene paquete':'')+'</div>'
+      +'</div></div>'
+      +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
+      +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
+      +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
+      +(paqAct
+        ?'<button onclick="enviarAmbasTarjetas('+t.tkRow+',\''+ced+'\',\''+tel+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 Enviar 2 PDFs</button>'
+        :(tel?'<a href="https://wa.me/'+tel+'?text='+msg+'" target="_blank" style="flex:1;min-width:100px;padding:9px;background:#25D366;color:white;border-radius:9px;font-size:0.66rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':''))
+      +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this)" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
+      +'</div></div>';
+  });
+  c.innerHTML=html;
+}
+// Enviar tarjeta de tratamiento + control de paquete JUNTOS (un solo compartir)
+function enviarAmbasTarjetas(tkRow, ced, telAmb){
+  var x=(window._tarjPaqRef||{})['c'+ced];
+  if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  toast('⏳ Generando los 2 PDFs...','var(--blue)');
+  var p1=new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); });
+  var p2=new Promise(function(res){
+    var img=new Image(); img.crossOrigin='anonymous';
+    img.onload=function(){_pdfTarjetaPaquete(x, img, function(doc,nom){res({doc:doc,nom:nom});});};
+    img.onerror=function(){_pdfTarjetaPaquete(x, null, function(doc,nom){res({doc:doc,nom:nom});});};
+    img.src=GCD_PAG3_URL;
+  });
+  Promise.all([p1,p2]).then(function(rr){
+    // FLUJO ÚNICO (celular y computadora): abrir el chat de WhatsApp DIRECTO AL NÚMERO
+    // (sin necesidad de tener el contacto guardado) + descargar los 2 PDFs para adjuntar.
+    rr.forEach(function(r){ try{ r.doc.save(r.nom); }catch(eS){} });
+    if(telAmb){
+      var msgAmb=encodeURIComponent('Hola! Te compartimos la tarjeta de tu tratamiento y el control de tu paquete en Sunsu Spa.');
+      // window.open puede ser bloqueado tras trabajo asíncrono → respaldo con location
+      var wURL='https://wa.me/'+telAmb+'?text='+msgAmb;
+      var vent=window.open(wURL,'_blank');
+      if(!vent) window.location.href=wURL;
+      toast('📄 2 PDFs descargados — adjúntalos en el chat (📎 → Documento → Descargas)','var(--blue)');
+    } else {
+      toast('📄 2 PDFs descargados — la clienta no tiene teléfono registrado','#C9A227');
+    }
+  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+function tarjetaPaqDeCed(ced){
+  var x=(window._tarjPaqRef||{})['c'+ced];
+  if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  toast('⏳ Generando control de paquete...','var(--blue)');
+  var img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){_pdfTarjetaPaquete(x, img);};
+  img.onerror=function(){_pdfTarjetaPaquete(x, null);};
+  img.src=GCD_PAG3_URL;
+}
+// Refresco instantáneo de teléfonos (limpia el caché de Acuity de 6 horas)
+function refrescarTelefonosApp(btn){
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  fetch(APPS_SCRIPT_URL+'?action=refrescarTelefonos&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    toast('✅ Teléfonos actualizados desde Acuity ('+(d.total||0)+' contactos)','var(--green)');
+    renderTarjetasPendientes(document.getElementById('content'));
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='🔄 Teléfonos';btn.disabled=false;}});
+}
+function marcarTarjetaEnviada(clave, btn){
+  if(!confirm('✓ Marcar esta tarjeta como ENVIADA a la clienta?')) return;
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'marcarTarjetaEnviada',clave:clave,usuario:CU?CU.name:''})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✓ Enviada';btn.disabled=false;}return;}
+    window._tarjEnv[clave]={f:'ahora'};
+    toast('✅ Tarjeta marcada como enviada','var(--green)');
+    _pintarTarjetasPend();
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='✓ Enviada';btn.disabled=false;}});
+}
+
+// ══════ TARJETA DE TRATAMIENTO POR TICKET (PDF A4 para la clienta) ══════
+function _cargarFotoTk(url){
+  // El navegador NO puede leer fotos de Drive (CORS) → el SERVIDOR las manda en base64
+  return new Promise(function(res){
+    try{
+      var m=(url||'').toString().match(/[-\w]{25,}/);
+      if(!m){res(null);return;}
+      var to=setTimeout(function(){res(null);},12000);
+      fetch(APPS_SCRIPT_URL+'?action=fotoB64&id='+m[0]+'&_t='+Date.now())
+      .then(function(r){return r.json();})
+      .then(function(d){
+        clearTimeout(to);
+        if(!d.ok||!d.b64){res(null);return;}
+        var data='data:'+(d.mime||'image/jpeg')+';base64,'+d.b64;
+        var img=new Image();
+        img.onload=function(){res({data:data, w:img.width, h:img.height});};
+        img.onerror=function(){res(null);};
+        img.src=data;
+      })
+      .catch(function(){clearTimeout(to);res(null);});
+    }catch(e){res(null);}
+  });
+}
+// Precargar los logos de WhatsApp e Instagram (normalmente solo cargan en el módulo GC)
+function _precargarIconosGcd(){
+  return new Promise(function(res){
+    var falta=0, fin=function(){ if(--falta<=0) res(true); };
+    var carga=function(nombre,url){
+      if(window[nombre]&&window[nombre].complete&&window[nombre].naturalWidth>0){return;}
+      falta++;
+      var im=new Image(); im.crossOrigin='anonymous';
+      im.onload=fin; im.onerror=function(){im._fallo=true;fin();};
+      im.src=url; window[nombre]=im;
+    };
+    try{ carga('_gcdIconoWA', GCD_ICONO_WA_URL); carga('_gcdIconoIG', GCD_ICONO_IG_URL); }catch(e){}
+    if(!falta) res(true);
+    setTimeout(function(){res(true);},4000);
+  });
+}
+// Tira de 5 iconitos de contacto — pequeños, elegantes y discretos
+function _stripAgendaSunsu(){
+  var igOK=window._gcdIconoIG&&_gcdIconoIG.complete&&_gcdIconoIG.naturalWidth>0&&!_gcdIconoIG._fallo;
+  var waOK=window._gcdIconoWA&&_gcdIconoWA.complete&&_gcdIconoWA.naturalWidth>0&&!_gcdIconoWA._fallo;
+  var iconos=[
+    {emoji:'📅', img:null,                  label:'Agenda',    url:'https://app.acuityscheduling.com/schedule.php?owner=35065947'},
+    {emoji:'💬', img:waOK?_gcdIconoWA:null, label:'WhatsApp',  url:'https://wa.me/593990665112'},
+    {emoji:'🌐', img:null,                  label:'Web',       url:'https://www.sunsuspa.com'},
+    {emoji:'📸', img:igOK?_gcdIconoIG:null, label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
+    {emoji:'📍', img:null,                  label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'}
+  ];
+  // Discreto y elegante: círculos pequeños con aro fino, todos idénticos (dibujado @2x)
+  var r=34, gap=58;
+  var total=iconos.length*2*r+(iconos.length-1)*gap;
+  var CW=total+24, CH=2*r+40;
+  var cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+  var x=cv.getContext('2d');
+  var cy=r+3, links=[];
+  iconos.forEach(function(ic,i){
+    var cx=12+r+i*(2*r+gap);
+    x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
+    x.lineWidth=2.5; x.strokeStyle='#9FB2CC'; x.stroke();
+    if(ic.img){
+      var s=r*1.15; try{ x.drawImage(ic.img, cx-s/2, cy-s/2, s, s); }catch(eI){}
+    } else {
+      x.font=Math.round(r*1.05)+'px Arial'; x.textAlign='left';
+      var we=x.measureText(ic.emoji).width;
+      x.fillText(ic.emoji, cx-we/2, cy+r*0.38);
+    }
+    x.fillStyle='#5A6E8C'; x.font='600 '+Math.round(r*0.42)+'px Arial'; x.textAlign='left';
+    var wl=x.measureText(ic.label).width;
+    x.fillText(ic.label, cx-wl/2, cy+r+22);
+    links.push({x:cx-r-4, y:cy-r-4, w:2*r+8, h:2*r+30, url:ic.url});
+  });
+  return {data:cv.toDataURL('image/png'), w:CW, h:CH, links:links};
+}
+function tarjetaTicket(tkRow, cbTk){
+  var t=(window._tkCards||{})[tkRow];
+  if(!t){toast('❌ No encontré el ticket','#B86B6B');return;}
+  toast('⏳ Generando tarjeta (cargando fotos)...','var(--blue)');
+  // Extraer TODOS los IDs de Drive del texto de la celda (a prueba de cualquier separador)
+  var idsDe=function(s){ return ((s||'').toString().match(/[-\w]{25,}/g)||[]).slice(0,3); };
+  var urlsA=idsDe(t.fotosAntes);
+  var urlsD=idsDe(t.fotosDespues);
+  Promise.all([
+    new Promise(function(res){var i=new Image();i.crossOrigin='anonymous';i.onload=function(){res(i);};i.onerror=function(){res(null);};i.src=GCD_PAG3_URL;}),
+    Promise.all(urlsA.map(_cargarFotoTk)),
+    Promise.all(urlsD.map(_cargarFotoTk)),
+    _precargarIconosGcd() // logos reales de WhatsApp e Instagram para los iconitos
+  ]).then(function(r){ _pdfTarjetaTicket(t, r[0], r[1].filter(Boolean), r[2].filter(Boolean), cbTk); });
+}
+function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
+  _gcdCargarJsPDF(function(ok){
+    if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
+    var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
+    var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52';
+    var xI=55, ANCHO=485, xD=xI+ANCHO;
+    if(fondo) doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H);
+    var limpia=function(s){return (s||'').toString().replace(/SUNSU-\d+\s*[-—:·]*\s*/gi,'').trim();};
+    // Nombres de productos desde el catálogo del app (código → nombre, sin precios)
+    var nomProd=function(code){
+      code=(code||'').trim();
+      var hit=null;
+      (window.PROVS||[]).some(function(pv){return (pv.prods||[]).some(function(pr){if(pr.sku.indexOf(code)>=0||code.indexOf(pr.sku)>=0){hit=pr.n;return true;}return false;});});
+      return hit||code;
+    };
+    var fechaT=(t.fecha||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    var fechaFmt=fechaT?(fechaT[3]+'/'+fechaT[2]+'/'+fechaT[1]):(t.fecha||'');
+    var y=150;
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
+    doc.text('TARJETA DE TRATAMIENTO',W/2,y,{align:'center'}); y+=16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(TXT);
+    doc.text('Sunsu Spa - Glass Skin - '+fechaFmt,W/2,y,{align:'center'}); y+=24;
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+    doc.text(((t.nombre||'')+' '+(t.apellido||'')).trim(),W/2,y,{align:'center'}); y+=13;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.2); doc.setTextColor(TXT);
+    doc.text('Atendida por '+(t.cosmetologa||''),W/2,y,{align:'center'}); y+=20;
+    var salto=function(n){ if(y+n>H-64){doc.addPage(); if(fondo)doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H); y=140;} };
+    var seccion=function(titulo){
+      salto(34);
+      doc.setFillColor(61,90,122);
+      doc.roundedRect(xI,y,ANCHO,18,4,4,'F');
+      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(8.6);
+      doc.text(titulo,xI+9,y+12.5); y+=26;
+    };
+    var lineaTx=function(lbl,txt){
+      if(!txt) return;
+      salto(16);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.2); doc.setTextColor(NAVY);
+      doc.text(lbl,xI+4,y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      var ls=doc.splitTextToSize(txt, ANCHO-120);
+      doc.text(ls,xI+118,y);
+      y+=Math.max(13, ls.length*11+2);
+    };
+    // ── TU EXPERIENCIA ──
+    seccion('TU EXPERIENCIA DE HOY');
+    lineaTx('Facial:', limpia(t.facial));
+    lineaTx('Extras:', limpia(t.extras));
+    var paq=limpia(t.pack3)||limpia(t.pack6);
+    lineaTx('Paquete adquirido:', paq?paq+(t.pack3?' (3 sesiones)':' (6 sesiones)'):'');
+    if((t.productos||[]).length){
+      lineaTx('Productos:', t.productos.map(function(p){
+        var m=p.match(/^(\S+)\s*(×\d+)?/);
+        return nomProd(m?m[1]:p)+(m&&m[2]?' '+m[2].replace('×','x'):'');
+      }).join('  ·  '));
+    }
+    y+=4;
+    // ── RECOMENDACIONES / NOTAS ──
+    if(t.recomendaciones||t.notas){
+      seccion('RECOMENDACIONES PARA TU PIEL');
+      if(t.recomendaciones){
+        salto(20);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8.4); doc.setTextColor(TXT);
+        var lR=doc.splitTextToSize(t.recomendaciones, ANCHO-16);
+        doc.text(lR,xI+8,y); y+=lR.length*11+8;
+      }
+      if(t.notas){
+        salto(20);
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(GOLD);
+        doc.text('Notas de tu piel:',xI+8,y); y+=11;
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
+        var lN=doc.splitTextToSize(t.notas, ANCHO-16);
+        doc.text(lN,xI+8,y); y+=lN.length*11+6;
+      }
+    }
+    // ── FOTOS ANTES / DESPUÉS: incrustadas, hasta 3 por lado, una debajo de otra ──
+    if((fotosA&&fotosA.length)||(fotosD&&fotosD.length)){
+      seccion('TU ANTES Y DESPUES');
+      var fw=(ANCHO-20)/2;
+      // Alto por foto según cuántas hay: TODAS deben entrar en la hoja
+      var maxFotos=Math.max((fotosA||[]).length,(fotosD||[]).length);
+      var altoFoto=maxFotos>=3?92:(maxFotos===2?125:155);
+      var colFotos=function(lista,x0,lbl){
+        var yy=y;
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(NAVY);
+        doc.text(lbl,x0+fw/2,yy,{align:'center'}); yy+=7;
+        (lista||[]).forEach(function(img){
+          var esc=Math.min(fw/img.w, altoFoto/img.h);
+          var iw=img.w*esc, ih=img.h*esc;
+          doc.addImage(img.data,'JPEG',x0+(fw-iw)/2,yy,iw,ih);
+          yy+=ih+6;
+        });
+        return yy;
+      };
+      salto(20+maxFotos*(altoFoto+8));
+      var yA=(fotosA&&fotosA.length)?colFotos(fotosA,xI,'ANTES'):y;
+      var yD=(fotosD&&fotosD.length)?colFotos(fotosD,xI+fw+20,'DESPUES'):y;
+      y=Math.max(yA,yD)+10;
+    }
+    // ── PRÓXIMA CITA RECOMENDADA ──
+    if(t.retorno){
+      salto(40);
+      var rM=(t.retorno||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      var retFmt=rM?(rM[3]+'/'+rM[2]+'/'+rM[1]):t.retorno;
+      doc.setFillColor(253,247,230);
+      doc.roundedRect(xI,y,ANCHO,28,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.6); doc.setTextColor(GOLD);
+      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,y+18,{align:'center'});
+      y+=40;
+    }
+    // ── AGENDA TU SIGUIENTE CITA — DISCOS estilo gift card, anclados al fondo ──
+    var strip=_stripAgendaSunsu();
+    var dw=250, dh=dw*strip.h/strip.w; // pequeño y discreto
+    var sx=(W-dw)/2, sy=H-dh-12;       // lo más abajo posible
+    if(y>sy-14){doc.addPage(); if(fondo)doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H);}
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
+    doc.text('Agenda tu siguiente cita - toca una opcion:',W/2,sy-4,{align:'center'});
+    doc.addImage(strip.data,'PNG',sx,sy,dw,dh);
+    var escS=dw/strip.w;
+    strip.links.forEach(function(l){ doc.link(sx+l.x*escS, sy+l.y*escS, l.w*escS, l.h*escS, {url:l.url}); });
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); doc.setTextColor(TXT);
+    doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,sy-13,{align:'center'});
+    var nomArchTT='Tarjeta '+(t.nombre||'').split(' ')[0]+' '+fechaFmt.replace(/\//g,'-')+'.pdf';
+    if(cbTT){ cbTT(doc, nomArchTT); return; }
+    _entregarPDF(doc, nomArchTT);
+    toast('📄 Tarjeta lista — compártela por WhatsApp','var(--green)');
+  });
+}
+
 // ══════ PROVEEDORES (gestión desde el app) ══════
 function renderProveedores(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>'
@@ -7507,12 +7911,18 @@ function _pintarTodosPaquetes(){
   if(q) arr=arr.filter(function(x){
     return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0;
   });
+  window._paqVer=window._paqVer||'pend';
+  var nComp=arr.filter(function(x){return x.pend===0;}).length;
+  var nPend=arr.length-nComp;
+  if(window._paqVer==='pend'&&!q) arr=arr.filter(function(x){return x.pend>0;}); // buscando se ven todos
   arr.sort(function(a,b){return window._paqOrden==='desc'?b.compra-a.compra:a.compra-b.compra;});
   var fS=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">'
     +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📦 Todos los paquetes <span style="font-weight:400;font-size:0.6rem;color:var(--gray)">('+arr.length+')</span></div>'
-    +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Más nuevos primero':'⬆ Más antiguos primero')+'</button>'
-    +'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="window._paqVer=window._paqVer===\'pend\'?\'todos\':\'pend\';_pintarTodosPaquetes()" style="padding:6px 11px;background:'+(window._paqVer==='pend'?'var(--blue-l)':'white')+';color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqVer==='pend'?'⏳ Por completar ('+nPend+')':'📋 Todos ('+(nPend+nComp)+')')+'</button>'
+    +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Nuevos':'⬆ Antiguos')+'</button>'
+    +'</div></div>'
     +'<input type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarTodosPaquetes,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:10px">';
   if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
   arr.forEach(function(x){
@@ -7526,11 +7936,33 @@ function _pintarTodosPaquetes(){
       +'</div>'
       +'<span style="font-size:0.64rem;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;'+(x.pend>0?'background:var(--blue-l);color:var(--navy)':'background:#E8F8EE;color:#2E7D52')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</span>'
       +'<button onclick="tarjetaPaqueteDe('+iSeg+')" style="padding:7px 10px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>'
-      +'</div></div>';
+      +(function(){
+        var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
+        if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
+        return telQ?'<a href="https://wa.me/'+telQ+'?text='+encodeURIComponent('Hola '+(p.nombre||'').split(' ')[0]+'! Te compartimos el control de tu paquete en Sunsu Spa.')+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
+      })()
+      +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
+      +'</div><div id="paq-exp-'+p.fila+'"></div></div>';
   });
   cont.innerHTML=html;
 }
 // La tarjeta digital desde el listado (contexto _todosPaq, con diasSin calculado al vuelo)
+// Desplegable de una fila: trae la tarjeta de marcado completa (la misma de siempre)
+function paqDesplegar(fila, cedula){
+  var box=document.getElementById('paq-exp-'+fila);
+  if(!box) return;
+  if(box.innerHTML){box.innerHTML='';return;}
+  box.innerHTML='<div class="loading" style="padding:10px"><div class="spinner"></div>Cargando paquete...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(cedula)+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var arr=(d.resultados||[]).filter(function(r2){return r2.fila===fila;});
+    if(!arr.length) arr=d.resultados||[];
+    box.innerHTML=arr.length?('<div style="margin-top:8px">'+arr.map(function(p){return _buildPaqueteCard(p);}).join('')+'</div>')
+      :'<div style="padding:8px;color:var(--gray);font-size:0.66rem">No pude cargar el detalle</div>';
+  })
+  .catch(function(e){box.innerHTML='<div style="padding:8px;color:#B86B6B;font-size:0.66rem">❌ '+e.message+'</div>';});
+}
 function tarjetaPaqueteDe(i){
   var x=(window._todosPaq||[])[i];
   if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
@@ -7544,10 +7976,7 @@ function tarjetaPaqueteDe(i){
 function renderBuscarPaquetes(c){
   c.innerHTML=
     '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📦 Buscar Paquetes</div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
-    +'<input id="bpq-inp" type="text" placeholder="Nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
-    +'<button onclick="ejecutarBuscarPaquetes()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
-    +'</div>'
+    +'<input id="bpq-inp" type="text" style="display:none">'
     +'<div id="bpq-results"></div>'
     +'<div id="bpq-todos"></div>';
   _cargarTodosPaquetes();
