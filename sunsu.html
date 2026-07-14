@@ -1072,7 +1072,7 @@ function renderTicket(c){
         <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
           <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
         <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
+          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
       </div>
       <div id="fotos-antes-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
       <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin:12px 0 6px">✨ DESPUÉS del facial</div>
@@ -1080,7 +1080,7 @@ function renderTicket(c){
         <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
           <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
         <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
+          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
       </div>
       <div id="fotos-despues-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
     </div>
@@ -7990,27 +7990,45 @@ function _dictar(targetId){
 
 // ══════ FOTOS DE LA CLIENTA EN EL TICKET ══════
 function cargarFotoClienta(input, seccion){
-  var f=input.files&&input.files[0]; if(!f) return;
-  var key=seccion==='despues'?'fotosDespues':'fotosAntes';
-  T[key]=T[key]||[];
-  if(T[key].length>=3){toast('Máximo 3 fotos de '+(seccion==='despues'?'después':'antes'),'#C9A227');input.value='';return;}
-  var rd=new FileReader();
-  rd.onload=function(){
-    var img=new Image();
-    img.onload=function(){
-      var MAX=1280, w=img.width, h=img.height;
-      if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
-      var cv=document.createElement('canvas');cv.width=w;cv.height=h;
-      cv.getContext('2d').drawImage(img,0,0,w,h);
-      T[key].push(cv.toDataURL('image/jpeg',0.8));
-      _fotosCliRender();
-      toast('📷 Foto '+(seccion==='despues'?'después':'antes')+' '+T[key].length+' agregada','var(--green)');
-    };
-    img.onerror=function(){toast('❌ No se pudo leer la imagen','#B86B6B');};
-    img.src=rd.result;
-  };
-  rd.readAsDataURL(f);
+  var archivos=Array.prototype.slice.call(input.files||[]);
   input.value='';
+  if(!archivos.length) return;
+  var key=seccion==='despues'?'fotosDespues':'fotosAntes';
+  var lbl=seccion==='despues'?'después':'antes';
+  T[key]=T[key]||[];
+  var espacio=3-T[key].length;
+  if(espacio<=0){toast('Máximo 3 fotos de '+lbl,'#C9A227');return;}
+  if(archivos.length>espacio){
+    toast('⚠️ Solo caben '+espacio+' más (máx. 3) — tomo la'+(espacio>1?'s primeras '+espacio:' primera'),'#C9A227');
+    archivos=archivos.slice(0,espacio);
+  }
+  var agregadas=0;
+  var procesar=function(idx){
+    if(idx>=archivos.length){
+      _fotosCliRender();
+      if(agregadas) toast('📷 '+agregadas+' foto'+(agregadas>1?'s':'')+' de '+lbl+' agregada'+(agregadas>1?'s':'')+' ('+T[key].length+'/3)','var(--green)');
+      return;
+    }
+    var rd=new FileReader();
+    rd.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        var MAX=1280, w=img.width, h=img.height;
+        if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
+        var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        T[key].push(cv.toDataURL('image/jpeg',0.8));
+        agregadas++;
+        _fotosCliRender(); // preview progresivo: cada foto aparece apenas se procesa
+        procesar(idx+1);
+      };
+      img.onerror=function(){toast('❌ No se pudo leer una imagen','#B86B6B');procesar(idx+1);};
+      img.src=rd.result;
+    };
+    rd.onerror=function(){procesar(idx+1);};
+    rd.readAsDataURL(archivos[idx]);
+  };
+  procesar(0);
 }
 function _fotosCliRender(){
   [['fotosAntes','fotos-antes-prev'],['fotosDespues','fotos-despues-prev']].forEach(function(par){
