@@ -6072,7 +6072,7 @@ function _pintarTarjetasPend(){
       +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
       +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
-      +(tel?'<a href="https://wa.me/'+tel+'?text='+msg+'" target="_blank" style="flex:1;min-width:100px;padding:9px;background:#25D366;color:white;border-radius:9px;font-size:0.66rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':'')
+      +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
       +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this)" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
       +'</div></div>';
   });
@@ -6105,6 +6105,63 @@ function enviarAmbasTarjetas(tkRow, ced, telAmb){
       toast('📄 2 PDFs descargados — la clienta no tiene teléfono registrado','#C9A227');
     }
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
+// ── Flujo WhatsApp en 2 toques ──
+// Toque 1: abre el chat DIRECTO AL NÚMERO (queda en recientes) y pre-genera los PDFs.
+// Toque 2: comparte los PDFs ya listos → WhatsApp → la clienta aparece en recientes.
+// (wa.me no puede llevar archivos — es límite de WhatsApp, no del app)
+function flujoWhatsApp(tkRow, ced, tel, conPaq, msg){
+  window._waEstado=window._waEstado||{};
+  var key='k'+tkRow;
+  var est=window._waEstado[key];
+  var btn=document.getElementById('wa-btn-'+tkRow);
+  if(!est){ // ── TOQUE 1 ──
+    window._waEstado[key]={listo:false, files:[]};
+    var vent=window.open('https://wa.me/'+tel+'?text='+msg,'_blank');
+    if(!vent) window.location.href='https://wa.me/'+tel+'?text='+msg;
+    if(btn){btn.textContent='⏳ Preparando PDF'+(conPaq?'s':'')+'...';btn.disabled=true;}
+    // Pre-generar en segundo plano mientras la chica manda el saludo
+    var gens=[ new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); }) ];
+    if(conPaq){
+      gens.push(new Promise(function(res){
+        var x=(window._tarjPaqRef||{})['c'+ced];
+        if(!x){res(null);return;}
+        var img=new Image(); img.crossOrigin='anonymous';
+        img.onload=function(){_pdfTarjetaPaquete(x, img, function(doc,nom){res({doc:doc,nom:nom});});};
+        img.onerror=function(){_pdfTarjetaPaquete(x, null, function(doc,nom){res({doc:doc,nom:nom});});};
+        img.src=GCD_PAG3_URL;
+      }));
+    }
+    Promise.all(gens).then(function(rr){
+      var files=[];
+      rr.filter(Boolean).forEach(function(r){
+        try{ files.push(new File([r.doc.output('blob')], r.nom, {type:'application/pdf'})); }catch(eF){}
+      });
+      window._waEstado[key]={listo:true, files:files, docs:rr.filter(Boolean)};
+      var b2=document.getElementById('wa-btn-'+tkRow);
+      if(b2){b2.textContent='📎 Enviar '+files.length+' PDF'+(files.length!==1?'s':'');b2.disabled=false;b2.style.background='#128C7E';}
+      toast('✅ PDF'+(files.length!==1?'s':'')+' listo'+(files.length!==1?'s':'')+' — vuelve y toca 📎 Enviar','var(--green)');
+    }).catch(function(e){
+      var b3=document.getElementById('wa-btn-'+tkRow);
+      if(b3){b3.textContent='💬 WhatsApp';b3.disabled=false;}
+      delete window._waEstado[key];
+      toast('❌ '+e.message,'#B86B6B');
+    });
+    return;
+  }
+  if(!est.listo){toast('⏳ Todavía preparando los PDFs...','var(--blue)');return;}
+  // ── TOQUE 2: compartir los archivos ya listos (gesto fresco → iOS lo permite) ──
+  try{
+    if(_esMovil_() && navigator.canShare && navigator.canShare({files:est.files})){
+      navigator.share({files:est.files, title:'Sunsu Spa'}).then(function(){
+        toast('✅ Enviado — la clienta aparece en tus chats recientes','var(--green)');
+      }).catch(function(){});
+      return;
+    }
+  }catch(eS){}
+  // Computadora: descargar para arrastrar al chat abierto
+  (est.docs||[]).forEach(function(r){ try{ r.doc.save(r.nom); }catch(eD){} });
+  toast('📄 PDF'+(est.files.length!==1?'s':'')+' descargado'+(est.files.length!==1?'s':'')+' — arrástralo'+(est.files.length!==1?'s':'')+' al chat abierto','var(--blue)');
 }
 function tarjetaPaqDeCed(ced){
   var x=(window._tarjPaqRef||{})['c'+ced];
