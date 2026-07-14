@@ -5071,6 +5071,73 @@ function _citaTieneTicket(apt, fechaStr){
   }
   return false;
 }
+// ══════ CONFIRMACION DE CITAS (etiquetas de Acuity) ══════
+// Acuity admite UNA etiqueta por cita: cada estado reemplaza al anterior.
+// ESPERANDO CONFIR -> CONFIRMADA -> COMPLETADO -> INGRESADO Y COMP (azul) / NO LLEGO.
+// Sin 'https://' a proposito: WhatsApp reconoce el dominio igual y lo pinta azul,
+// y el mensaje se ve mucho mas limpio para la clienta.
+var REGISTRO_URL='estebanfch-cell.github.io/sunsu-spa/registro.html';
+var ETQ_COL={'COMPLETADO':['#D9646E','#ffffff'],'CONFIRMADA':['#F2D24B','#3A3000'],'ESPERANDO':['#3E8E5A','#ffffff'],'INGRESADO':['#3B7DEC','#ffffff'],'NO LLEGO':['#2E2E2E','#ffffff']};
+function _etqDeCita(apt){
+  var l=(apt.labels||[])[0];
+  return l?(l.name||'').toString().toUpperCase().trim():'';
+}
+function _etqBadge(nom){
+  if(!nom) return '';
+  var c=['#8A90A0','#ffffff'];
+  Object.keys(ETQ_COL).forEach(function(k){ if(nom.indexOf(k)>=0) c=ETQ_COL[k]; });
+  return '<span style="background:'+c[0]+';color:'+c[1]+';font-size:0.6rem;font-weight:800;padding:3px 9px;border-radius:8px;white-space:nowrap">🏷 '+nom+'</span>';
+}
+function _telWaCita(t){
+  var x=(t||'').toString().replace(/[^0-9]/g,'');
+  if(x.length===10&&x.charAt(0)==='0') x='593'+x.slice(1);
+  return x;
+}
+// Escribe la etiqueta en Acuity y repinta la lista con el estado nuevo.
+function _marcarEtqCita(aptId, etiqueta, diaNom, btn){
+  if(btn){ btn.disabled=true; btn.style.opacity='0.5'; }
+  var _rest=function(){ if(btn){ btn.disabled=false; btn.style.opacity='1'; } };
+  toast('⏳ Marcando en Acuity...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'marcarEtiquetaAcuity',aptId:aptId,etiqueta:etiqueta,usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    _rest();
+    if(!d.ok){ toast('❌ '+(d.error||'No se pudo marcar'),'#B86B6B'); return; }
+    toast('🏷 '+d.etiqueta,'var(--green)');
+    var ch=(window._citasCache||{})[diaNom];
+    if(ch&&Array.isArray(ch.data)){
+      ch.data.forEach(function(a){ if(String(a.id)===String(aptId)) a.labels=[{name:d.etiqueta}]; });
+      var bd2=document.getElementById('cb');
+      if(bd2) _renderCitasList(bd2, ch.data, diaNom);
+    }
+  })
+  .catch(function(){ _rest(); toast('❌ Sin conexión','#B86B6B'); });
+}
+// Abre WhatsApp con el mensaje ya escrito y deja la cita en ESPERANDO CONFIR.
+// El link de registro va SOLO si la clienta no tiene ficha en REGISTRO.
+function _waConfirmarCita(aptId, diaNom, btn){
+  var ch=(window._citasCache||{})[diaNom];
+  var apt=(ch&&Array.isArray(ch.data))?ch.data.filter(function(a){return String(a.id)===String(aptId);})[0]:null;
+  if(!apt){ toast('❌ No encontré la cita','#B86B6B'); return; }
+  var tel=_telWaCita(apt.phone);
+  if(!tel){ toast('⚠️ Esta cita no tiene teléfono en Acuity','#B86B6B'); return; }
+  var nom=(apt.firstName||'').split(' ')[0];
+  var dt=new Date(apt.datetime);
+  var dia=dt.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
+  var hora=dt.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true});
+  var full=((apt.firstName||'')+' '+(apt.lastName||'')).trim();
+  var sinFicha=!_fichaDe(full,'');
+  var msg='Hola '+nom+' 🌸 Te saludamos de Sunsu Spa!\n\n'
+    +'Te escribimos para confirmar tu cita de mañana '+dia+' a las '+hora+' 💆‍♀️\n\n';
+  if(sinFicha) msg+='Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n'
+    +'📝 Tarjeta de registro\n'+REGISTRO_URL+'\n\n';
+  msg+='¿Nos confirmas tu asistencia? 💙';
+  var url='https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
+  var v=window.open(url,'_blank');
+  if(!v) window.location.href=url;
+  _marcarEtqCita(aptId,'ESPERANDO',diaNom,btn);
+}
 function _renderCitasList(bd, data, diaNom){
   var o=diaNom==='ayer'?-1:diaNom==='manana'?1:0;
   // Si el historial de tickets aún no está cargado, traerlo y re-pintar (una sola vez)
@@ -5130,6 +5197,17 @@ function _renderCitasList(bd, data, diaNom){
         h+='<span style="background:'+(nueva?'#FBF6EC':'#EDF5EF')+';color:'+(nueva?'#C4A45A':'#6A9E7A')+';font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:8px;margin-left:8px;white-space:nowrap">'+(nueva?'🆕 Nueva':'⭐ Antigua')+'</span>';
         h+='</div>';
         h+=_fichaHTMLDe(nombre, '');
+        // Estado actual en Acuity + acciones de confirmacion
+        var _etq=_etqDeCita(apt);
+        if(_etq) h+='<div style="margin-top:9px">'+_etqBadge(_etq)+'</div>';
+        if(o===1){ // MANANA: confirmar antes de que venga
+          h+='<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
+            +'<button onclick="_waConfirmarCita(\''+apt.id+'\',\'manana\',this)" style="flex:1;min-width:120px;padding:10px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>'
+            +'<button onclick="_marcarEtqCita(\''+apt.id+'\',\'CONFIRMADA\',\'manana\',this)" style="flex:1;min-width:110px;padding:10px;background:#F2D24B;color:#3A3000;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">✅ Confirmó</button>'
+            +'</div>';
+        } else if(o===0 && !ok){ // HOY: la que no se presento
+          h+='<button onclick="_marcarEtqCita(\''+apt.id+'\',\'NO LLEGO\',\'hoy\',this)" style="width:100%;padding:8px;margin-top:7px;background:white;color:#2E2E2E;border:1.5px solid #2E2E2E;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">⚫ No llegó</button>';
+        }
         if(apt.notes) h+='<div style="font-size:0.72rem;color:#333;background:#F3F0FA;border-radius:8px;padding:7px 10px;margin-top:9px">📌 '+apt.notes+'</div>';
         if(o!==1&&!ok) h+='<button onclick="irATicket(this)" data-nom="'+apt.firstName+'" data-ape="'+apt.lastName+'" data-tel="'+(apt.phone||'')+'" style="width:100%;padding:10px;background:#2D3B6B;color:white;border:none;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:10px">🎫 Ticket para '+apt.firstName+'</button>';
         if(okTicket) h+='<div style="text-align:center;font-size:0.75rem;font-weight:700;color:#6A9E7A;background:#EDF5EF;border-radius:9px;padding:7px;margin-top:8px">🎫 Ticket ya registrado ✓</div>';
