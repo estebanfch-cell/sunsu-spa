@@ -6063,8 +6063,9 @@ function _pintarTarjetasPend(){
     var ced=(t.cedula||'').split('.')[0];
     var paqsCli=(window._tarjPaqPorCed||{})[ced]||[];
     var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0]||paqsCli[0];
-    // Dos mensajes: cada PDF viaja con el suyo
-    var msg=encodeURIComponent('Hola '+(t.nombre||'').split(' ')[0]+'! Te compartimos la tarjeta de tu tratamiento en Sunsu Spa con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!');
+    // Tres mensajes: saludo corto (abre y siembra el chat) + cada PDF con el suyo
+    var msgHola=encodeURIComponent('Hola '+(t.nombre||'').split(' ')[0]+', te saludamos de Sunsu Spa!');
+    var msg=encodeURIComponent('Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!');
     var msgPaq=encodeURIComponent(paqAct?('Y aquí está el control de tu paquete: has disfrutado '+paqAct.usados+' de '+paqAct.total+' sesiones'+(paqAct.pend>0?' — ¡te esperamos en la siguiente!':' — ¡paquete completado!')) :'');
     if(paqAct) window._tarjPaqRef=window._tarjPaqRef||{};
     if(paqAct){(window._tarjPaqRef['c'+ced]=paqAct);}
@@ -6081,7 +6082,7 @@ function _pintarTarjetasPend(){
       })()
       +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
-      +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\',\''+msgPaq+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
+      +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\',\''+msgPaq+'\',\''+msgHola+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
       +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this,'+t.tkRow+',\''+tel+'\','+(paqAct?'true':'false')+')" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
       +'</div></div>';
   });
@@ -6135,16 +6136,16 @@ function _descargarDocsEscalonado(docs){
 // Toque 1: abre el chat DIRECTO AL NÚMERO (queda en recientes) y pre-genera los PDFs.
 // Toque 2: comparte los PDFs ya listos → WhatsApp → la clienta aparece en recientes.
 // (wa.me no puede llevar archivos — es límite de WhatsApp, no del app)
-function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq){
+function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
   window._waEstado=window._waEstado||{};
   var key='k'+tkRow;
   var est=window._waEstado[key];
   var btn=document.getElementById('wa-btn-'+tkRow);
   if(!est){ // ── TOQUE 1 ──
     window._waEstado[key]={listo:false, files:[]};
-    // Celular: abrir el chat SIN texto — el mensaje viaja como leyenda de cada PDF
-    // (así no se duplica). Computadora: sí con texto (allá no hay leyendas).
-    var wURL='https://wa.me/'+tel+(_esMovil_()?'':'?text='+msg);
+    // Saludo CORTO: 'Hola X, te saludamos de Sunsu Spa!' — se envía y el chat
+    // queda vivo en recientes. Los mensajes completos van de leyenda con cada PDF.
+    var wURL='https://wa.me/'+tel+'?text='+(msgHola||msg);
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
     if(btn){btn.textContent='⏳ Preparando PDF'+(conPaq?'s':'')+'...';btn.disabled=true;}
