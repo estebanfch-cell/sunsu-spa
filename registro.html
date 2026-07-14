@@ -31,6 +31,11 @@
   .fin p{font-size:0.8rem;color:var(--gray);line-height:1.7;max-width:400px;margin:0 auto;}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:11px 18px;border-radius:11px;font-size:0.76rem;font-weight:700;z-index:99;max-width:90%;text-align:center;display:none;}
   .foto-q{font-size:0.72rem;color:var(--gray);margin-bottom:10px;line-height:1.5;}
+  .hint{font-weight:600;font-size:0.62rem;color:var(--gray);}
+  .fila-ning{display:flex;gap:8px;align-items:stretch;margin-bottom:13px;}
+  .fila-ning input{flex:1;min-width:0;margin-bottom:0;}
+  .bt-ning{padding:0 15px;border:1.5px solid var(--cream-d);border-radius:10px;background:#fff;color:var(--gray);font-size:0.72rem;font-weight:800;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  .bt-ning.on{background:var(--navy);color:#fff;border-color:var(--navy);}
   /* Florales Sunsu fijos: acompañan mientras bajas la página */
   .floral{position:fixed;bottom:0;z-index:0;pointer-events:none;background-image:url('https://estebanfch-cell.github.io/sunsu-spa/giftcard_pag3_fondo.jpg');background-repeat:no-repeat;}
   .floral-izq{left:0;width:186px;height:351px;background-size:836px 556px;background-position:0px -205px;}
@@ -55,7 +60,7 @@
     <label>Cédula *</label><input id="rg-cedula" type="tel">
     <label>Nombre *</label><input id="rg-nombre">
     <label>Apellido *</label><input id="rg-apellido">
-    <label>Fecha de nacimiento *</label><input id="rg-nac" type="date">
+    <label>Fecha de nacimiento * <span class="hint">(mm/dd/aaaa)</span></label><input id="rg-nac" type="date">
     <label>Sector donde vives *</label><input id="rg-sector">
     <label>Teléfono / WhatsApp *</label><input id="rg-tel" type="tel">
   </div>
@@ -64,9 +69,12 @@
     <h2>✨ Tu piel</h2>
     <div class="glabel">Tipo de piel</div><div class="chips" data-g="tipoPiel" data-multi="0"></div>
     <div class="glabel">Estado actual</div><div class="chips" data-g="estado" data-multi="0"></div>
-    <label>Alergias</label><input id="rg-alergias" placeholder="Ninguna">
-    <label>Medicación</label><input id="rg-medicacion" placeholder="Ninguna">
-    <label>Condiciones médicas o dermatológicas</label><input id="rg-condiciones" placeholder="Que debamos saber">
+    <label>Alergias</label>
+    <div class="fila-ning"><input id="rg-alergias"><button type="button" class="bt-ning" id="bn-rg-alergias" onclick="ponNinguna('rg-alergias')">Ninguna</button></div>
+    <label>Medicación</label>
+    <div class="fila-ning"><input id="rg-medicacion"><button type="button" class="bt-ning" id="bn-rg-medicacion" onclick="ponNinguna('rg-medicacion')">Ninguna</button></div>
+    <label>Condiciones médicas o dermatológicas</label>
+    <div class="fila-ning"><input id="rg-condiciones"><button type="button" class="bt-ning" id="bn-rg-condiciones" onclick="ponNinguna('rg-condiciones')">Ninguna</button></div>
   </div>
 
   <div class="card">
@@ -90,7 +98,7 @@
     <div class="glabel">He leído y acepto el consentimiento informado *</div>
     <div class="chips" data-g="consentimiento" data-multi="0"></div>
     <label>Firma (escribe tu nombre completo) *</label>
-    <input id="rg-firma" placeholder="María José Torres Vela">
+    <input id="rg-firma">
   </div>
 
   <div class="card">
@@ -165,6 +173,22 @@ function pantallaYaRegistrada(nom){
   // Y mientras teclea (por si no cambia de campo)
   inp.addEventListener('input',function(){ clearTimeout(t); t=setTimeout(chequear,450); });
 })();
+// Boton 'Ninguna': llena la caja de un toque; volver a tocarlo la limpia (igual que los chips).
+function ponNinguna(id){
+  var el=document.getElementById(id); if(!el) return;
+  var yaEsta=el.value.trim().toLowerCase()==='ninguna';
+  el.value=yaEsta?'':'Ninguna';
+  _syncNing(id);
+}
+function _syncNing(id){
+  var el=document.getElementById(id), b=document.getElementById('bn-'+id);
+  if(!el||!b) return;
+  b.classList.toggle('on', el.value.trim().toLowerCase()==='ninguna');
+}
+['rg-alergias','rg-medicacion','rg-condiciones'].forEach(function(id){
+  var el=document.getElementById(id);
+  if(el) el.addEventListener('input',function(){_syncNing(id);});
+});
 function v(id){return (document.getElementById(id)||{value:''}).value.trim();}
 function enviar(){
   if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('Por favor completa cédula, nombre y apellido');return;}
