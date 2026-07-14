@@ -89,6 +89,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
 #nav-movil{display:none;background:var(--white);border-bottom:1.5px solid var(--cream-d);padding:8px 10px;gap:8px;align-items:center;}
 #nav-movil .nm-btn{padding:9px 14px;border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;}
 @media(max-width:700px){.tabs{display:none;}#nav-movil{display:flex;}}
+/* Barra superior congelada: el app ocupa la pantalla y SOLO el contenido scrollea */
+#screen-app{height:100vh;height:100dvh;overflow:hidden;}
+#screen-app .content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.topbar,.tabs,#nav-movil{flex-shrink:0;}
 #nav-panel{position:fixed;inset:0;background:rgba(26,39,68,0.5);z-index:99997;display:none;align-items:flex-start;justify-content:center;padding:16px;}
 #nav-panel.abierto{display:flex;}
 #nav-panel .np-card{background:white;border-radius:16px;padding:16px;width:100%;max-width:420px;max-height:82vh;overflow-y:auto;box-shadow:0 18px 50px rgba(0,0,0,0.3);margin-top:40px;}
@@ -279,6 +283,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
     </div>
   </div>
   <div class="tabs" id="tabs"></div>
+  <div id="banner-rol" style="display:none"></div>
   <div class="content" id="content"></div>
 </div>
 
@@ -539,6 +544,41 @@ function _ofrecerBiometria(u){
     }).catch(function(){toast('No se pudo activar la biometría','#C9A227');});
   },600);
 }
+// ── Banner: rol de pagos pendiente de aprobar (solo chicas con cédula en el sistema) ──
+function _checkRolPendiente(){
+  try{
+    if(!CU||CU.role==='admin'||CU.role==='admin_master') return;
+    var ced=(window.CEDULAS_MAP||{})[CU.id]||'';
+    if(!ced) return;
+    fetch(APPS_SCRIPT_URL+'?action=getRoles&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(res){
+      var meses=(res&&res.ok&&res.data&&res.data.meses)||[];
+      if(!meses.length) return;
+      // Último mes generado (mayor año, y dentro del año el último de la lista)
+      var mesesMapN={ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+      var ult=meses.slice().sort(function(a,b){
+        var ka=(parseInt(a.anio)||0)*100+(mesesMapN[(a.mes||'').toUpperCase()]||0);
+        var kb=(parseInt(b.anio)||0)*100+(mesesMapN[(b.mes||'').toUpperCase()]||0);
+        return kb-ka;
+      })[0];
+      var mesKey=ult.mes.toUpperCase()+'_'+ult.anio;
+      fetch(APPS_SCRIPT_URL+'?action=getAprobacionesRol&sheet='+encodeURIComponent(mesKey)+'&_t='+Date.now())
+      .then(function(r2){return r2.json();})
+      .then(function(d2){
+        var ap=(d2.aprobaciones||{})[ced.replace('.','')];
+        var ban=document.getElementById('banner-rol');
+        if(!ban) return;
+        if(ap){ban.style.display='none';return;}
+        ban.style.display='block';
+        ban.innerHTML='<div onclick="showTab(\'roles\')" style="background:#FFF9E6;border-bottom:1.5px solid #E8D9A0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">'
+          +'<span style="font-size:0.74rem;font-weight:700;color:#8A6D1A">📄 Tienes tu rol de '+ult.mes+' '+ult.anio+' pendiente de aprobar — toca aquí</span>'
+          +'<span onclick="event.stopPropagation();document.getElementById(\'banner-rol\').style.display=\'none\'" style="color:#8A6D1A;font-weight:800;padding:2px 8px;cursor:pointer">✕</span>'
+          +'</div>';
+      }).catch(function(){});
+    }).catch(function(){});
+  }catch(eB){}
+}
 function _cargarProdColMap(){
   fetch(APPS_SCRIPT_URL+'?action=getProdColMap&_t='+Date.now())
     .then(function(r){return r.json();})
@@ -549,6 +589,7 @@ function _entrarComo(u){
   CU=u;
   _sesionSet(u.id);
   _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
+  setTimeout(_checkRolPendiente, 1200); // banner de rol pendiente (no bloquea el arranque)
   document.getElementById('screen-login').style.display='none';
   document.getElementById('screen-app').style.cssText='display:flex;flex-direction:column;';
   initApp();
@@ -7743,6 +7784,8 @@ async function renderRoles(c) {
       } else {
         html += '<div style="padding:12px 14px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center">' +
           '<span style="font-size:14px">📋 ' + mes.mes + ' ' + mes.anio + '</span>' +
+          '<button onclick="visualizarRol(\'' + mesKey + '\',\'' + miCedula + '\',this)" style="background:#6A9E7A;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;margin-right:6px">👁 Visualizar</button>' +
+          (isAdmin?'<button onclick="verAprobacionesRol(\'' + mesKey + '\')" style="background:white;color:#3D5A7A;border:1px solid #3D5A7A;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;margin-right:6px">👁 Aprob.</button>':'') +
           '<button onclick="descargarRol(\'' + mesKey + '\',\'' + miCedula + '\',this)" style="background:#3D5A7A;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">⬇️ Descargar</button>' +
         '</div>';
       }
@@ -7798,70 +7841,260 @@ async function descargarRol(sheetName, cedula, btnEl) {
   var origText = btn.textContent;
   btn.textContent = '⏳';
   btn.disabled = true;
-
-  var res;
+  var fin=function(){btn.textContent=origText;btn.disabled=false;};
+  var res, apro=null;
   try {
     var r = await fetch(APPS_SCRIPT_URL + '?action=getRolIndividual&sheet=' + encodeURIComponent(sheetName) + '&cedula=' + encodeURIComponent(cedula) + '&_t=' + Date.now());
     res = await r.json();
+    // Aprobación digital (si existe) para sellar el PDF
+    try {
+      var rA = await fetch(APPS_SCRIPT_URL + '?action=getAprobacionesRol&sheet=' + encodeURIComponent(sheetName) + '&_t=' + Date.now());
+      var dA = await rA.json();
+      apro = (dA.aprobaciones||{})[(cedula||'').replace('.','')] || null;
+    } catch(eA){}
   } catch(err) {
-    btn.textContent = origText; btn.disabled = false;
-    alert('Error de conexión: ' + err.message);
-    return;
+    fin(); alert('Error de conexión: ' + err.message); return;
   }
-
   if (!res || !res.ok || !res.data) {
-    btn.textContent = origText; btn.disabled = false;
-    alert('No se encontró el rol. Verifica que el rol fue generado y el Sistema Central redesplegado.');
+    fin(); alert('No se encontró el rol. Verifica que el rol fue generado y el Sistema Central redesplegado.'); return;
+  }
+  // Regla: las chicas solo pueden DESCARGAR su rol después de APROBARLO (los admins sí pueden siempre)
+  var esAdminRol=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  if(!esAdminRol && !apro){
+    fin();
+    toast('👁 Primero visualiza y aprueba tu rol para poder descargarlo','#C9A227');
+    visualizarRol(sheetName, cedula);
     return;
   }
+  var img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){_pdfRolFondo(res.data, sheetName, apro, img); fin();};
+  img.onerror=function(){_pdfRolFondo(res.data, sheetName, apro, null); fin();};
+  img.src=GCD_PAG3_URL;
+}
 
-  // Fetch multas detail for this employee
-  var multasDetalle = [];
+// ── Rol de pagos en PDF con la identidad SUNSU (mismo fondo que OC y actas) ──
+// OJO tipografía: jsPDF (helvetica estándar) solo codifica latin-1 — nada de ✔ ni −
+function _pdfRolFondo(d, sheetName, apro, fondo){
+  _gcdCargarJsPDF(function(ok){
+    if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
+    var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
+    var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52', ROJO='#B84040';
+    var xI=55, ANCHO=485, xD=xI+ANCHO, FILA=17;
+    var bg=fondo?_fondoA4Sunsu(fondo):null;
+    var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); };
+    pintar();
+    var mesLabel=(sheetName||'').replace('_',' ');
+    var y=150;
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
+    doc.text('ROL DE PAGOS',W/2,y,{align:'center'}); y+=17;
+    doc.setFontSize(9.5); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+    doc.text('Sunsu Spa - Quito - Período: '+mesLabel,W/2,y,{align:'center'}); y+=26;
+    doc.setFontSize(9);
+    var n2=function(v){return '$'+(parseFloat(v)||0).toFixed(2);};
+    var fila=function(l,v){
+      if(v===undefined||v===null||v==='') return;
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text(l,xI,y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text(v.toString(),xI+130,y); y+=14;
+    };
+    fila('EMPLEADA:',d.nombre);
+    fila('CÉDULA:',d.cedula);
+    fila('CARGO:',d.cargo);
+    // Días REALES contados en Jibble (días con marcación) — nunca derivados de horas
+    fila('DÍAS TRABAJADOS:',(d.diasJibble?d.diasJibble+' días (según registro Jibble)':'—'));
+    y+=6;
+    var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
+    var barra=function(titulo,cRGB){
+      salto(60);
+      doc.setFillColor(cRGB[0],cRGB[1],cRGB[2]);
+      doc.roundedRect(xI,y,ANCHO,20,4,4,'F');
+      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      doc.text(titulo,xI+10,y+13.5);
+      y+=20; // las filas empiezan JUSTO debajo de la barra, sin traslape
+    };
+    // Fila de tabla perfectamente cuadrada: zebra + concepto izq + monto der, misma tipografía
+    var linea=function(concepto,monto,color,idx){
+      var m=parseFloat(monto)||0;
+      if(m===0) return 0;
+      salto(FILA+4);
+      if(idx%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y,ANCHO,FILA,'F');}
+      else{doc.setFillColor(255,255,255);doc.rect(xI,y,ANCHO,FILA,'F');}
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
+      doc.text(concepto,xI+10,y+12);
+      doc.setFont('helvetica','bold'); doc.setTextColor(color);
+      doc.text(n2(m),xD-10,y+12,{align:'right'});
+      y+=FILA;
+      return m;
+    };
+    var totalLinea=function(lbl,monto,color){
+      salto(24); y+=6;
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(color);
+      doc.text(lbl+': '+n2(monto),xD-10,y+6,{align:'right'});
+      y+=20;
+    };
+    // ── INGRESOS ──
+    barra('INGRESOS',[46,125,82]);
+    var iIdx=0;
+    [['Sueldo',d.sueldo],['Bono',d.bono],['Comisión faciales',d.comFaciales],['Comisión paquetes',d.comPaquetes],
+     ['Comisión productos',d.comProductos],['Horas suplementarias ('+(d.hrsSupl||0)+'h)',d.valSupl],
+     ['Horas extraordinarias ('+(d.hrsExtr||0)+'h)',d.valExtr],['Décimo tercero',d.dec13],['Décimo cuarto',d.dec14],
+     ['Fondo de reserva',d.fondoReserva]].forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx)) iIdx++; });
+    totalLinea('TOTAL INGRESOS',d.totalIngresos,VERDE);
+    // ── EGRESOS (mismo formato y tipografía que ingresos, montos en rojo) ──
+    barra('EGRESOS',[184,64,64]);
+    var eIdx=0;
+    [['Aporte IESS (9.45%)',d.iess],['Anticipo de sueldo',d.anticipo],['Préstamo hipotecario',d.prestHip],
+     ['Préstamo quirografario',d.prestQuir]].forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx)) eIdx++; });
+    // Multas y descuentos: SOLO tipo, fecha y valor (el detalle va en el cuadro del pie)
+    var multas=(d.multasDetalle||[]).filter(function(m){return (parseFloat(m.monto)||0)>0;});
+    multas.forEach(function(m){
+      var lbl=((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:''));
+      linea(lbl,m.monto,ROJO,eIdx); eIdx++;
+    });
+    totalLinea('TOTAL EGRESOS',d.egresos,ROJO);
+    // ── NETO ──
+    salto(40); y+=4;
+    doc.setFillColor(253,247,230);
+    doc.roundedRect(xI,y,ANCHO,32,6,6,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(GOLD);
+    doc.text('NETO A RECIBIR:',xI+12,y+21);
+    doc.text(n2(d.totalRecibir),xD-12,y+21,{align:'right'});
+    y+=46;
+    // ── Cuadro de explicaciones de multas y descuentos ──
+    if(multas.length){
+      var expl=[];
+      doc.setFontSize(7.6);
+      multas.forEach(function(m){
+        var txt=(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' '+m.fecha:'')+' ('+n2(m.monto)+'): '+((m.motivo||m.detalle||'—').toString());
+        doc.splitTextToSize(txt, ANCHO-24).forEach(function(l){expl.push(l);});
+      });
+      var altoEx=26+expl.length*10+8;
+      salto(altoEx+8);
+      doc.setDrawColor(196,148,58); doc.setLineWidth(0.8);
+      doc.setFillColor(255,252,242);
+      doc.roundedRect(xI,y,ANCHO,altoEx,6,6,'FD');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(GOLD);
+      doc.text('DETALLE DE MULTAS Y DESCUENTOS',xI+12,y+16);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.6); doc.setTextColor(TXT);
+      var yEx=y+28;
+      expl.forEach(function(l){doc.text(l,xI+12,yEx);yEx+=10;});
+      y+=altoEx+14;
+    }
+    // ── Aceptación: sello digital o línea de firma ──
+    salto(70);
+    if(apro&&apro.fecha){
+      doc.setFillColor(232,248,238);
+      doc.roundedRect(xI,y,ANCHO,42,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(VERDE);
+      doc.text('ROL APROBADO DIGITALMENTE',xI+12,y+16);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
+      doc.text('Por '+(d.nombre||'')+' el '+apro.fecha+' desde el app SUNSU - constancia de recepción y aceptación',xI+12,y+30);
+      y+=54;
+    } else {
+      var yF=y+30;
+      doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
+      doc.line(xI+130,yF,xD-130,yF);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
+      doc.text('Recibí conforme - '+(d.nombre||''),W/2,yF+11,{align:'center'});
+      y=yF+20;
+    }
+    _entregarPDF(doc, 'ROL '+mesLabel+' '+(d.nombre||'').split(' ')[0]+'.pdf');
+    toast('📄 Rol listo','var(--green)');
+  });
+}
+// ── Visualizar el rol en el app (con aprobación rápida y descarga desbloqueada) ──
+async function visualizarRol(sheetName, cedula, btnEl){
+  var btn=btnEl; var t0=btn?btn.textContent:'';
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  var fin=function(){if(btn){btn.textContent=t0;btn.disabled=false;}};
+  var res, apro=null;
   try {
-    var cedula2 = cedula;
-    // Get multas from the historial if available, or from the rol data
-    // For now use what came in res.data - extend with separate call if needed
-    multasDetalle = res.data.multasDetalle || [];
-  } catch(e2) {}
-  var html = generarHtmlRol(res.data, sheetName.replace('_',' '), multasDetalle);
-
-  // Modal inline
-  var modal = document.getElementById('rol-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'rol-modal';
-    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:16px;box-sizing:border-box';
+    var r = await fetch(APPS_SCRIPT_URL + '?action=getRolIndividual&sheet=' + encodeURIComponent(sheetName) + '&cedula=' + encodeURIComponent(cedula) + '&_t=' + Date.now());
+    res = await r.json();
+    try {
+      var rA = await fetch(APPS_SCRIPT_URL + '?action=getAprobacionesRol&sheet=' + encodeURIComponent(sheetName) + '&_t=' + Date.now());
+      var dA = await rA.json();
+      apro = (dA.aprobaciones||{})[(cedula||'').replace('.','')] || null;
+    } catch(eA){}
+  } catch(err){ fin(); toast('❌ '+err.message,'#B86B6B'); return; }
+  fin();
+  if(!res||!res.ok||!res.data){ toast('No se encontró el rol','#B86B6B'); return; }
+  var htmlRol='';
+  try { htmlRol=generarHtmlRol(res.data, sheetName.replace('_',' '), res.data.multasDetalle||[]); }
+  catch(eH){ htmlRol='<div style="padding:14px;color:#B86B6B">No se pudo armar la vista</div>'; }
+  var modal=document.getElementById('rol-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='rol-modal';
+    modal.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:14px;box-sizing:border-box';
     document.body.appendChild(modal);
   }
-  modal.innerHTML =
-    '<div style="background:#fff;width:100%;max-width:700px;border-radius:8px;overflow:hidden">' +
-      '<div style="background:#3D5A7A;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">' +
-        '<span style="color:#fff;font-weight:600">Rol de Pagos</span>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button onclick="imprimirRol()" style="background:#fff;color:#3D5A7A;border:none;border-radius:4px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600">🖨️ Imprimir</button>' +
-          '<button onclick="document.getElementById(\'rol-modal\').remove()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:16px">✕</button>' +
-        '</div>' +
-      '</div>' +
-      '<iframe id="rol-iframe" style="width:100%;height:75vh;border:none"></iframe>' +
-    '</div>';
-  modal.style.display = 'flex';
-
-  // Load HTML into iframe via blob URL
-  var blob = new Blob([html], {type:'text/html'});
-  var blobUrl = URL.createObjectURL(blob);
-  var iframe = document.getElementById('rol-iframe');
-  iframe.src = blobUrl;
-
-  btn.textContent = origText;
-  btn.disabled = false;
+  var esAdminV=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var footBtns=function(aprobado){
+    return '<div style="display:flex;gap:8px;padding:12px;background:#F6F3EA">'
+      +(!aprobado&&!esAdminV?'<button onclick="_aprobarDesdeVista(\''+sheetName+'\',\''+cedula+'\')" style="flex:1;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.85rem;font-weight:800;cursor:pointer">✅ Aprobar mi rol</button>':'')
+      +(aprobado?'<div style="flex:1;padding:12px;background:#E8F8EE;border-radius:11px;text-align:center;font-size:0.72rem;font-weight:800;color:#2E7D52">✔ Aprobado el '+(aprobado.fecha||'')+'</div>':'')
+      +'<button onclick="descargarRol(\''+sheetName+'\',\''+cedula+'\',this)" '+((aprobado||esAdminV)?'':'disabled ')+'style="flex:1;padding:13px;background:'+((aprobado||esAdminV)?'#3D5A7A':'#C9CDD6')+';color:white;border:none;border-radius:11px;font-size:0.85rem;font-weight:800;cursor:'+((aprobado||esAdminV)?'pointer':'not-allowed')+'">⬇️ Descargar PDF</button>'
+      +'<button onclick="document.getElementById(\'rol-modal\').remove()" style="padding:13px 16px;background:white;color:var(--gray);border:1.5px solid #DDD;border-radius:11px;font-size:0.85rem;font-weight:700;cursor:pointer">✕</button>'
+      +'</div>';
+  };
+  modal.innerHTML='<div style="background:#fff;width:100%;max-width:700px;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;max-height:94vh">'
+    +'<div style="background:#3D5A7A;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'
+    +'<span style="color:#fff;font-weight:700">📄 Rol de Pagos — '+sheetName.replace('_',' ')+'</span>'
+    +'<span onclick="document.getElementById(\'rol-modal\').remove()" style="color:#fff;cursor:pointer;font-weight:800;padding:2px 8px">✕</span></div>'
+    +'<div style="overflow-y:auto;flex:1">'+htmlRol+'</div>'
+    +'<div id="rol-vista-foot" style="flex-shrink:0">'+footBtns(apro)+'</div>'
+    +'</div>';
+  window._rolFootBtns=footBtns;
+}
+function _aprobarDesdeVista(sheetName, cedula){
+  if(!confirm('✅ APROBAR MI ROL — '+sheetName.replace('_',' ')+'\n\nAl aprobar confirmas que revisaste tu rol y estás de acuerdo con los valores.\nQuedará registrado con fecha y hora.\n\n¿Aprobar?')) return;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'aprobarRol',sheet:sheetName,cedula:cedula,nombre:CU?CU.name:'',usuario:CU?CU.name:'app'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast(d.ya?'✔ Ya lo habías aprobado':'✅ Rol aprobado — ya puedes descargarlo','var(--green)');
+    var foot=document.getElementById('rol-vista-foot');
+    if(foot&&window._rolFootBtns) foot.innerHTML=window._rolFootBtns({fecha:d.fecha||''});
+    var banA=document.getElementById('banner-rol'); if(banA) banA.style.display='none';
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 
-
-function imprimirRol() {
-  var iframe = document.getElementById('rol-iframe');
-  if (iframe) iframe.contentWindow.print();
+// ── Aprobación digital del rol por la chica ──
+function aprobarRolApp(sheetName, cedula, btnEl){
+  if(!confirm('✅ APROBAR MI ROL — '+sheetName.replace('_',' ')+'\n\nAl aprobar confirmas que revisaste tu rol de pagos y estás de acuerdo con los valores.\nQuedará registrado con fecha y hora como constancia de aceptación.\n\n¿Aprobar?')) return;
+  var btn=btnEl; var t0=btn?btn.textContent:'';
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'aprobarRol',sheet:sheetName,cedula:cedula,nombre:CU?CU.name:'',usuario:CU?CU.name:'app'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent=t0;btn.disabled=false;}return;}
+    if(btn){btn.textContent='✔ Aprobado';btn.style.background='#E8F8EE';btn.style.color='#2E7D52';btn.style.border='1.5px solid #6A9E7A';}
+    var banA=document.getElementById('banner-rol'); if(banA) banA.style.display='none';
+    toast(d.ya?('✔ Ya lo habías aprobado el '+d.fecha):'✅ Rol aprobado — quedó registrado con fecha y hora','var(--green)');
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent=t0;btn.disabled=false;}});
 }
 
+// ── Admin: ver quién aprobó su rol de un mes ──
+function verAprobacionesRol(sheetName){
+  toast('⏳ Consultando aprobaciones...','var(--blue)');
+  fetch(APPS_SCRIPT_URL+'?action=getAprobacionesRol&sheet='+encodeURIComponent(sheetName)+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var ap=d.aprobaciones||{};
+    var keys=Object.keys(ap);
+    if(!keys.length){alert('📋 '+sheetName.replace('_',' ')+'\n\nNadie ha aprobado su rol todavía.');return;}
+    var txt='📋 APROBACIONES — '+sheetName.replace('_',' ')+'\n\n';
+    keys.forEach(function(c){txt+='✔ '+ap[c].nombre+' — '+ap[c].fecha+'\n';});
+    alert(txt);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
 function generarHtmlRol(d, mes, multas) {
   const fmt = v => '$' + (parseFloat(v)||0).toFixed(2);
   return `<!DOCTYPE html>
