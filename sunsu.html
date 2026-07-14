@@ -4552,7 +4552,7 @@ function cargarCatalogo(){
     'SUNSU-50':'x6 Facial Peeling Marino','SUNSU-51':'x6 Facial de Geisha','SUNSU-54':'x6 Facial de Ginseng',
     'SUNSU-56':'x6 Glass Skin + Facial Advance',
   };
-  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv')
+  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv&_cb='+Date.now())
     .then(function(r){return r.text();})
     .then(function(csv){
       var lines=csv.split('\n');
@@ -4577,7 +4577,8 @@ function cargarCatalogo(){
       if(iSub<0) iSub=3;
       var iActivo=9; // col J (index 9) = ACTIVO checkbox
 
-      var nF=[],nE=[],nP3=[],nP6=[],nHT=[],nAS=[],nML=[],nPH=[],nJN=[];
+      var nF=[],nE=[],nP3=[],nP6=[];
+      var nFams={}; // productos por familia — GENÉRICO: cualquier prefijo (HT, AS, SU, BV, o familias futuras)
 
       // Datos inician en fila 2 (saltar título + headers)
       var startRow=2;
@@ -4604,20 +4605,28 @@ function cargarCatalogo(){
         else if(EXTS.indexOf(sku)>=0)  {if(isActivo)nE.push({sku:sku,n:nom,t:p});}
         else if(P3S.indexOf(sku)>=0)   {if(isActivo)nP3.push({sku:sku,n:nom,p:p});}
         else if(P6S.indexOf(sku)>=0)   {if(isActivo)nP6.push({sku:sku,n:nom,p:p});}
-        else if(sku.indexOf('-HT-')>=0) {if(isActivo)nHT.push({sku:sku,n:nom,p:p});}
-        else if(sku.indexOf('-AS-')>=0) {if(isActivo)nAS.push({sku:sku,n:nom,p:p});}
-        else if(sku.indexOf('-ML-')>=0) {if(isActivo)nML.push({sku:sku,n:nom,p:p});}
-        else if(sku.indexOf('-PH-')>=0) {if(isActivo)nPH.push({sku:sku,n:nom,p:p});}
-        else if(sku.indexOf('-JN-')>=0) {if(isActivo)nJN.push({sku:sku,n:nom,p:p});}
+        else {
+          // Producto de familia (SUNSU-XX-###): recolectar por prefijo, sea cual sea
+          var mFam=sku.toUpperCase().match(/(?:^|-)([A-Z]{2,3})-(\d{3})$/);
+          if(mFam&&isActivo){(nFams[mFam[1]]=nFams[mFam[1]]||[]).push({sku:sku,n:nom,p:p});}
+        }
       }
 
       if(nF.length){FACIALES.length=0;nF.forEach(function(x){FACIALES.push(x);});}
       if(nE.length){EXTRAS.length=0;nE.forEach(function(x){EXTRAS.push(x);});}
       if(nP3.length){PAQ3.length=0;nP3.forEach(function(x){PAQ3.push(x);});}
       if(nP6.length){PAQ6.length=0;nP6.forEach(function(x){PAQ6.push(x);});}
+      // Refrescar TODOS los grupos de proveedor desde el CSV (HT, AS, ML, PH, JN, BV, SU, ...)
       PROVS.forEach(function(pv){
-        var arr=pv.id==='ht'?nHT:pv.id==='as'?nAS:pv.id==='ml'?nML:pv.id==='ph'?nPH:pv.id==='jn'?nJN:[];
+        var arr=nFams[pv.id.toUpperCase()]||[];
         if(arr.length){pv.prods.length=0;arr.forEach(function(x){pv.prods.push(x);});}
+      });
+      // Familias del catálogo que aún no tienen grupo en el ticket → crearlo al vuelo
+      Object.keys(nFams).forEach(function(fam){
+        var existe=PROVS.some(function(pv){return pv.id.toUpperCase()===fam;});
+        if(!existe&&nFams[fam].length){
+          PROVS.push({id:fam.toLowerCase(),label:fam+' — Nuevos',sub:'',color:'var(--navy)',colorL:'var(--blue-l)',badge:'#5B7A9E',prods:nFams[fam]});
+        }
       });
 
       // Re-render ticket si está activo
@@ -5637,7 +5646,12 @@ function guardarNuevoProducto(){
     toast('✅ '+d.sku+' creado — Catálogo + TICKET_FICHA + INVENTARIO','var(--green)');
     if(d.avisoInventario) setTimeout(function(){alert('⚠️ '+d.avisoInventario);},600);
     _cargarProdColMap(); // refrescar el mapa de columnas con el producto nuevo
+    // Abrir la carpeta y la familia del producto nuevo para verlo de inmediato
+    window._catAbierta=window._catAbierta||{}; window._catFamAbierta=window._catFamAbierta||{};
+    window._catAbierta['🛍️ Productos']=true;
+    window._catFamAbierta[(d.sku||'').split('-')[0]]=true;
     renderCatalogoAdmin(document.getElementById('content'));
+    setTimeout(function(){toast('ℹ️ En el TICKET aparece en ~5 min (caché de Google) tras recargar el app','var(--blue)');},2200);
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 function formEditarProducto(i){
