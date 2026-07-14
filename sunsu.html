@@ -2803,16 +2803,18 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
         var rawF=(uso.f||'').toString().trim();
         var mFec=rawF.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
         doc.text(mFec?mFec[0]:'',cx,cy+33,{align:'center'});
-        var restoF = mFec ? rawF.slice(rawF.indexOf(mFec[0])+mFec[0].length).trim() : rawF;
         var facTxt='', porTxt='';
-        if(restoF){
-          var ip=restoF.lastIndexOf(' · ');
-          if(ip>=0){ facTxt=restoF.slice(0,ip).trim(); porTxt=restoF.slice(ip+3).trim(); }
-          else { facTxt=restoF; }
+        if(mFec){ // sin fecha (p.ej. 'Gift Card, SUNSU-XX') se deja en blanco, como siempre
+          var restoF=rawF.slice(rawF.indexOf(mFec[0])+mFec[0].length).trim();
+          if(restoF){
+            var ip=restoF.lastIndexOf(' · ');
+            if(ip>=0){ facTxt=restoF.slice(0,ip).trim(); porTxt=restoF.slice(ip+3).trim(); }
+            else { facTxt=restoF; }
+          }
+          // Respaldo si el slot solo trae la fecha: lo que derive el backend.
+          if(!facTxt && uso.fac) facTxt=uso.fac;
+          if(!porTxt && uso.por) porTxt=uso.por;
         }
-        // Respaldo si el slot no trae texto extra (solo fecha o 'Gift Card, XX'): backend.
-        if(!facTxt && uso.fac) facTxt=uso.fac;
-        if(!porTxt && uso.por) porTxt=uso.por;
         facTxt=limpiaFac(facTxt);
         if(facTxt.length>28) facTxt=facTxt.slice(0,26)+'..';
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT); doc.setFontSize(6.8);
@@ -6418,7 +6420,13 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
     window._waEstado[key]={listo:false, files:[]};
     // Saludo CORTO: 'Hola X, te saludamos de Sunsu Spa!' — se envía y el chat
     // queda vivo en recientes. Los mensajes completos van de leyenda con cada PDF.
-    var wURL='https://wa.me/'+tel+'?text='+(msgHola||msg);
+    // CELULAR: saludo corto (los mensajes completos van de leyenda con cada PDF).
+    // COMPUTADOR: mensaje COMPLETO de una (saludo + tarjeta + paquete si hay),
+    // porque los PDFs se arrastran desde Descargas y allá no llevan leyenda.
+    var txtT1 = _esMovil_()
+      ? (msgHola||msg)
+      : (msgHola||'') + '%0A%0A' + (msg||'') + (conPaq && msgPaq ? '%0A%0A' + msgPaq : '');
+    var wURL='https://wa.me/'+tel+'?text='+txtT1;
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
     // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
