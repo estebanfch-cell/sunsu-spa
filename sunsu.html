@@ -2710,10 +2710,191 @@ function enviarGC(){
 
 // ══════ DASH COSM ══════
 // ══════ SEGUIMIENTO DE RETORNO DE CLIENTAS (reagendamiento) ══════
-function renderSeguimiento(c){
+function renderSeguimiento(c, seccion){
+  var esPermitidoSeg=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  if(!esPermitidoSeg){toast('Sin acceso','#B86B6B');return;}
+  window._segSecc=seccion||window._segSecc||'facial';
+  if(window._segSecc==='paquetes'){ renderSegPaquetes(c); return; }
+  return _renderSeguimientoFacial(c);
+}
+function _segToggleHTML(){
+  var s=window._segSecc||'facial';
+  var b=function(id,lbl){
+    var on=s===id;
+    return '<button onclick="renderSeguimiento(document.getElementById(\'content\'),\''+id+'\')" style="flex:1;padding:9px;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1.5px solid '+(on?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">'+lbl+'</button>';
+  };
+  return '<div style="display:flex;gap:8px;margin-bottom:12px">'+b('facial','💆 Post-facial')+b('paquetes','📦 Paquetes')+'</div>';
+}
+// ── Seguimiento de PAQUETES: sesiones restantes y clientas que no vuelven ──
+// Fondo SUNSU en formato tarjeta apaisada (logo arriba, florales en las esquinas)
+function _fondoCardSunsu(fondo){
+  if(window._fondoCardCache) return window._fondoCardCache;
+  var CW=1120, CH=660;
+  var cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+  var ctx=cv.getContext('2d');
+  ctx.fillStyle='rgb(253,250,241)'; ctx.fillRect(0,0,CW,CH);
+  try{
+    var lw=250, lh=lw*(145/390);
+    ctx.drawImage(fondo, 480,50,390,145, (CW-lw)/2, 34, lw, lh);
+    var fiW=185, fiH=fiW*(566/300);
+    ctx.drawImage(fondo, 0,330,300,566, 0, CH-fiH, fiW, fiH);
+    var fdW=140, fdH=fdW*(556/218);
+    ctx.drawImage(fondo, 1130,340,218,556, CW-fdW, CH-fdH, fdW, fdH);
+  }catch(eC){}
+  window._fondoCardCache=cv.toDataURL('image/jpeg',0.85);
+  return window._fondoCardCache;
+}
+// ── Tarjeta digital del paquete: PDF pequeño para enviar a la clienta ──
+function tarjetaPaquete(i){
+  var x=(window._segPaqItems||[])[i];
+  if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  toast('⏳ Generando tarjeta...','var(--blue)');
+  var img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){_pdfTarjetaPaquete(x, img);};
+  img.onerror=function(){_pdfTarjetaPaquete(x, null);};
+  img.src=GCD_PAG3_URL;
+}
+function _pdfTarjetaPaquete(x, fondo){
+  _gcdCargarJsPDF(function(ok){
+    if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
+    var W=560, H=330;
+    var doc=new window.jspdf.jsPDF({unit:'pt',format:[W,H],orientation:'landscape'});
+    var NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52';
+    if(fondo) doc.addImage(_fondoCardSunsu(fondo),'JPEG',0,0,W,H);
+    var p=x.p;
+    var nomCli=((p.nombre||'')+' '+(p.apellido||'')).trim();
+    var y=96;
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.text('TARJETA DE TRATAMIENTO',W/2,y,{align:'center'}); y+=15;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(TXT);
+    doc.text(nomCli+'  ·  Paquete de '+x.total+' sesiones ('+p.sku+')',W/2,y,{align:'center'}); y+=12;
+    doc.setFontSize(7.5); doc.setTextColor(GOLD);
+    doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,y,{align:'center'});
+    // ── Rejilla de sesiones: 3 → una fila; 6 → dos filas de 3 ──
+    var cols=3, filas=Math.ceil(x.total/cols);
+    var gx=40, gw=W-80, cw=gw/cols;
+    var gy=y+16, ch=(filas===1?150:78);
+    for(var s=0;s<x.total;s++){
+      var cx=gx+(s%cols)*cw+cw/2;
+      var cy=gy+Math.floor(s/cols)*ch;
+      var uso=(p.usos||[])[s]||{};
+      var usada=s<x.usados;
+      // Círculo con el número de sesión
+      if(usada){ doc.setFillColor(61,90,122); doc.circle(cx,cy+14,11,'F'); doc.setTextColor('#FFFFFF'); }
+      else { doc.setDrawColor(61,90,122); doc.setLineWidth(1.2); doc.circle(cx,cy+14,11,'D'); doc.setTextColor(NAVY); }
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text(String(s+1),cx,cy+17.5,{align:'center'});
+      // Detalle debajo
+      doc.setFontSize(6.8);
+      if(usada){
+        doc.setTextColor(NAVY); doc.setFont('helvetica','bold');
+        doc.text(uso.f||'',cx,cy+34,{align:'center'});
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        var facTxt=(uso.fac||'').toString();
+        if(facTxt.length>26) facTxt=facTxt.slice(0,24)+'..';
+        if(facTxt) doc.text(facTxt,cx,cy+43,{align:'center'});
+        if(uso.por) doc.text('por '+uso.por.split(' ')[0],cx,cy+52,{align:'center'});
+      } else {
+        doc.setTextColor('#9AA1B0'); doc.setFont('helvetica','normal');
+        doc.text('Disponible',cx,cy+34,{align:'center'});
+      }
+    }
+    // Resumen al pie
+    var yR=gy+filas*ch+(filas===1?-72:6);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.setTextColor(x.pend>0?NAVY:VERDE);
+    doc.text(x.pend>0?('Has disfrutado '+x.usados+' de '+x.total+' sesiones - te '+(x.pend===1?'espera 1 sesion':'esperan '+x.pend+' sesiones')+' mas!'):'Paquete completado - gracias por acompanarnos!',W/2,H-38,{align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); doc.setTextColor(TXT);
+    doc.text('Sunsu Spa - Glass Skin - Quito',W/2,H-26,{align:'center'});
+    _entregarPDF(doc,'Tarjeta '+(p.nombre||'').split(' ')[0]+' '+p.sku+'.pdf');
+    toast('📄 Tarjeta lista — compártela por WhatsApp','var(--green)');
+  });
+}
+function renderSegPaquetes(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
+    +_segToggleHTML()
+    +'<div class="loading"><div class="spinner"></div>Cargando paquetes...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.error){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
+    var P3=window._P3S||[], P6=window._P6S||[];
+    var hoy=new Date(); hoy.setHours(0,0,0,0);
+    var parseF=function(s){ // 'dd/MM/yy'
+      var m=(s||'').toString().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if(!m) return null;
+      var a=parseInt(m[3]); if(a<100)a+=2000;
+      return new Date(a, parseInt(m[2])-1, parseInt(m[1]));
+    };
+    var items=(d.items||[]).map(function(p){
+      var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
+      var esP6=P6.some(function(s){return p.sku.indexOf(s)>=0;});
+      var total=esP3?3:(esP6?6:6);
+      var usados=0, ultima=null;
+      p.usos.slice(0,total).forEach(function(u){
+        if(u.u||u.f) usados++;
+        var f=parseF(u.f);
+        if(f&&(!ultima||f>ultima)) ultima=f;
+      });
+      if(!ultima) ultima=new Date(parseInt(p.ano),parseInt(p.mes)-1,parseInt(p.dia));
+      var diasSin=Math.floor((hoy-ultima)/86400000);
+      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),ultima:ultima,diasSin:isNaN(diasSin)?0:diasSin};
+    });
+    window._segPaqItems=items; // para los botones de tarjeta/WhatsApp
+    var pendientes=items.filter(function(x){return x.pend>0;}).sort(function(a,b){return b.diasSin-a.diasSin;});
+    var completos=items.filter(function(x){return x.pend===0;});
+    var mostrar=window._segPaqFiltro==='completos'?completos:pendientes;
+    var fStr=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
+    var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
+      +_segToggleHTML()
+      +'<div style="display:flex;gap:6px;margin-bottom:12px">'
+      +'<button onclick="window._segPaqFiltro=\'pendientes\';renderSegPaquetes(document.getElementById(\'content\'))" style="padding:7px 12px;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer;border:1.5px solid '+(window._segPaqFiltro!=='completos'?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">⏳ Pendientes ('+pendientes.length+')</button>'
+      +'<button onclick="window._segPaqFiltro=\'completos\';renderSegPaquetes(document.getElementById(\'content\'))" style="padding:7px 12px;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer;border:1.5px solid '+(window._segPaqFiltro==='completos'?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">✓ Completos ('+completos.length+')</button>'
+      +'</div>';
+    if(!mostrar.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin paquetes en esta lista</div>';
+    mostrar.forEach(function(x){
+      var p=x.p;
+      var alerta=x.pend>0&&x.diasSin>30;
+      var puntos='';
+      for(var i=0;i<x.total;i++){
+        var usado=i<x.usados;
+        puntos+='<span style="display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:4px;'+(usado?'background:var(--navy)':'background:white;border:1.5px solid var(--navy)')+'"></span>';
+      }
+      html+='<div class="card" style="padding:12px;margin-bottom:9px;'+(alerta?'border:1.5px solid #E8543F':'')+'">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+(p.nombre+' '+p.apellido).trim()+'</div>'
+        +'<div style="font-size:0.58rem;color:var(--gray)">'+p.cedula+' · 📦 '+p.sku+' ('+x.total+' sesiones) · comprado '+(p.dia+'/'+p.mes+'/'+p.ano)+'</div>'
+        +'</div>'
+        +(alerta?'<span style="background:#E8543F;color:white;padding:3px 8px;border-radius:7px;font-size:0.58rem;font-weight:800;white-space:nowrap">⏰ +'+x.diasSin+' días sin venir</span>':'')
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">'
+        +'<span>'+puntos+'</span>'
+        +'<span style="font-size:0.68rem;font-weight:800;color:'+(x.pend>0?'var(--navy)':'#2E7D52')+'">'+(x.pend>0?('Consumido '+x.usados+' de '+x.total+' — queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Paquete completo')+'</span>'
+        +'<span style="font-size:0.62rem;color:var(--gray)">Última visita: '+fStr(x.ultima)+(x.pend>0?' ('+x.diasSin+' días)':'')+'</span>'
+        +'</div>'
+        +(function(){
+          var iGlobal=items.indexOf(x);
+          var telP=(x.p.telefono||'').replace(/[^0-9]/g,'');
+          if(telP&&telP.length===10&&telP.charAt(0)==='0') telP='593'+telP.slice(1);
+          var msgP=encodeURIComponent('Hola '+(x.p.nombre||'').split(' ')[0]+'! Te compartimos la tarjeta digital de tu paquete en Sunsu Spa. '+(x.pend>0?('Ya disfrutaste '+x.usados+' de '+x.total+' sesiones — te esperamos para la siguiente. Escríbenos para agendar tu cita.'):'Completaste tus '+x.total+' sesiones — gracias por confiar en nosotras.'));
+          return '<div style="display:flex;gap:6px;margin-top:9px">'
+            +'<button onclick="tarjetaPaquete('+iGlobal+')" style="flex:1;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">📄 Tarjeta digital</button>'
+            +(telP?'<a href="https://wa.me/'+telP+'?text='+msgP+'" target="_blank" style="padding:9px 13px;background:#25D366;color:white;border-radius:9px;font-size:0.68rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':'')
+            +'</div>';
+        })()
+        +'</div>';
+    });
+    c.innerHTML=html;
+  })
+  .catch(function(e){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+function _renderSeguimientoFacial(c){
   var esPermitido=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
   if(!esPermitido){toast('Sin acceso','#B86B6B');return;}
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
+    +_segToggleHTML()
     +'<div class="loading"><div class="spinner"></div>Cargando seguimiento...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getSeguimiento')
     .then(function(r){return r.text();})
@@ -4569,6 +4750,7 @@ function cargarCatalogo(){
   var EXTS=['SUNSU-07','SUNSU-08','SUNSU-12','SUNSU-13','SUNSU-14','SUNSU-15','SUNSU-16','SUNSU-31','SUNSU-32','SUNSU-33','SUNSU-36','SUNSU-37','SUNSU-38','SUNSU-39'];
   var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55'];
   var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56'];
+  window._P3S=P3S; window._P6S=P6S; // globales para el seguimiento de paquetes
   var C3=['SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
   // Name map — use clean names, not catalog UPPERCASE
   var NOMBRES={
@@ -7025,6 +7207,30 @@ function cerrarModal(id){
 }
 
 // ══════ BUSCAR GIFT CARDS ══════
+function verTodasGC(filtro){
+  var res=document.getElementById('bgc-results');
+  if(!res) return;
+  res.innerHTML='<div class="loading"><div class="spinner"></div>Cargando todas las gift cards...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent('*')+'&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var arr=d.resultados||[];
+      var conEstado=arr.map(function(g){var vc=_gcVencimiento(g);return {g:g,cad:!g.usado&&vc&&vc.cad,vig:!g.usado&&vc&&!vc.cad};});
+      var nCad=conEstado.filter(function(x){return x.cad;}).length;
+      var nVig=conEstado.filter(function(x){return x.vig;}).length;
+      var nUso=arr.length-nCad-nVig;
+      var lista=conEstado.filter(function(x){
+        if(filtro==='cad') return x.cad;
+        if(filtro==='vig') return x.vig;
+        return true;
+      });
+      // Caducadas primero, luego por vencer, luego el resto
+      lista.sort(function(a,b){return (b.cad?2:(b.vig?1:0))-(a.cad?2:(a.vig?1:0));});
+      res.innerHTML='<div style="font-size:0.66rem;color:var(--gray);margin-bottom:8px">'+arr.length+' gift cards · <b style="color:#2E7D52">'+nVig+' vigentes</b> · <b style="color:#E8543F">'+nCad+' caducadas</b> · '+nUso+' consumidas</div>'
+        +(lista.length?lista.map(function(x){return _buildGCCard(x.g);}).join(''):'<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin gift cards en este filtro</div>');
+    })
+    .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
+}
 function renderBuscarGC(c){
   c.innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
@@ -7035,7 +7241,7 @@ function renderBuscarGC(c){
     +'<input id="bgc-inp" type="text" placeholder="Código GC, nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
     +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
     +'</div>'
-    +'<div id="bgc-results"></div>';
+    +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"><button onclick="verTodasGC()" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button><button onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button><button onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div><div id="bgc-results"></div>';
   var inp=document.getElementById('bgc-inp');
   if(inp){
     if(window._bgcPrefill){inp.value=window._bgcPrefill;window._bgcPrefill='';setTimeout(ejecutarBuscarGC,50);}
@@ -7066,10 +7272,21 @@ function ejecutarBuscarGC(){
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
 }
 
+function _gcVencimiento(g){
+  // Vigencia: 6 meses desde la fecha de compra
+  var d=parseInt(g.dia), m=parseInt(g.mes), a=parseInt(g.ano);
+  if(!d||!m||!a) return null;
+  var venc=new Date(a, m-1+6, d);
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  return {venc:venc, cad:hoy>venc, dias:Math.ceil((venc-hoy)/86400000),
+    str:('0'+venc.getDate()).slice(-2)+'/'+('0'+(venc.getMonth()+1)).slice(-2)+'/'+venc.getFullYear()};
+}
 function _buildGCCard(g){
   var usado=g.usado;
-  var borderCol=usado?'var(--gray-l)':'var(--green)';
-  var headerBg=usado?'#8A90A0':'var(--green)';
+  var vc=_gcVencimiento(g);
+  var caducada=!usado&&vc&&vc.cad;
+  var borderCol=usado?'var(--gray-l)':(caducada?'#E8543F':'var(--green)');
+  var headerBg=usado?'#8A90A0':(caducada?'#E8543F':'var(--green)');
   var fecha=(g.dia||'?')+'/'+(g.mes||'?')+'/'+(g.ano||'?');
   var slotId='gc-uso-'+g.fila;
 
@@ -7115,6 +7332,11 @@ function _buildGCCard(g){
     +(g.sku?'<span style="font-size:0.65rem;background:var(--blue-l);color:var(--navy);padding:2px 8px;border-radius:6px">'+g.sku+'</span>':'')
     +(g.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+g.factura+'</span>':'')
     +'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">📅 Comprada: '+fecha+'</span>'
+    +(vc?(usado
+        ?''
+        :(caducada
+          ?'<span style="font-size:0.65rem;background:#E8543F;color:white;padding:2px 8px;border-radius:6px;font-weight:800">⛔ CADUCADA — venció el '+vc.str+'</span>'
+          :'<span style="font-size:0.65rem;background:'+(vc.dias<=30?'#FFF3E0;color:#C4661F':'#E8F8EE;color:#2E7D52')+';padding:2px 8px;border-radius:6px;font-weight:700">'+(vc.dias<=30?'⏳ Vence en '+vc.dias+' días ('+vc.str+')':'✓ Vigente hasta '+vc.str)+'</span>')):'')
     +'</div>'
     +(usado?
       '<div style="background:var(--gray-l);border-radius:9px;padding:8px 10px;font-size:0.72rem;color:var(--gray)">'
