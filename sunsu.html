@@ -4649,6 +4649,20 @@ function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
           var fr=window._fichasReg||{porCedula:{},porNombre:{}};
           var nrm=(typeof _normNomCli==='function')?_normNomCli(ci.clienteNombre||''):(ci.clienteNombre||'').toLowerCase();
           var fh=fr.porCedula[(ci.clienteCedula||'').toString().split('.')[0]]||fr.porNombre[nrm];
+          if(!fh){
+            // Cruce aproximado: primer nombre como prefijo + algún apellido contenido
+            var parts=nrm.split(' ').filter(Boolean);
+            if(parts.length>=2){
+              var pn=parts[0], pa=parts[parts.length-1];
+              var ks=Object.keys(fr.porNombre||{});
+              for(var ki=0;ki<ks.length;ki++){
+                if(ks[ki].indexOf(pn)===0 && ks[ki].indexOf(pa)>=0){ fh=fr.porNombre[ks[ki]]; break; }
+              }
+              if(!fh) for(var kj=0;kj<ks.length;kj++){
+                if(nrm.indexOf(ks[kj].split(' ')[0])===0 && ks[kj].split(' ').some(function(w){return w.length>2&&nrm.indexOf(w)>=0;})){ fh=fr.porNombre[ks[kj]]; break; }
+              }
+            }
+          }
           if(!fh) return '';
           var out='';
           if((fh.autorizaFotos||'').toUpperCase()==='NO')
