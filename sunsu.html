@@ -6046,7 +6046,10 @@ function _pintarTarjetasPend(){
   };
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📤 Tarjetas de tratamiento</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="verHistorialEnvios()" style="padding:5px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🕘 Envíos</button>'
     +'<button onclick="refrescarTelefonosApp(this)" style="padding:5px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🔄 Teléfonos</button>'
+    +'</div>'
     +'</div>'
     +'<div style="font-size:0.62rem;color:var(--gray);margin-bottom:10px">Enviar diario a las clientas · '+lista.length+' por enviar del '+fFmtDia+'</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:12px">'+chip(0,'Hoy')+chip(1,'Ayer')+chip(2,'Antier')+'</div>';
@@ -6073,7 +6076,7 @@ function _pintarTarjetasPend(){
       +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
       +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
-      +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this)" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
+      +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this,'+t.tkRow+',\''+tel+'\','+(paqAct?'true':'false')+')" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
       +'</div></div>';
   });
   c.innerHTML=html;
@@ -6208,11 +6211,57 @@ function refrescarTelefonosApp(btn){
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='🔄 Teléfonos';btn.disabled=false;}});
 }
-function marcarTarjetaEnviada(clave, btn){
-  if(!confirm('✓ Marcar esta tarjeta como ENVIADA a la clienta?')) return;
+// ── Historial de envíos: la prueba de cuándo, a qué número y qué se mandó ──
+function verHistorialEnvios(){
+  var modal=document.getElementById('env-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='env-modal';
+    modal.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box';
+    modal.onclick=function(e){if(e.target===modal)modal.remove();};
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML='<div style="background:#fff;width:100%;max-width:640px;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">'
+    +'<div style="background:#3D5A7A;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'
+    +'<span style="color:#fff;font-weight:700">🕘 Historial de envíos</span>'
+    +'<span onclick="document.getElementById(\'env-modal\').remove()" style="color:#fff;cursor:pointer;font-weight:800;padding:2px 8px">✕</span></div>'
+    +'<div style="padding:12px"><input type="text" id="env-q" placeholder="🔍 Filtrar por clienta, cédula o teléfono..." oninput="clearTimeout(window._envQT);window._envQT=setTimeout(_pintarEnvios,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div id="env-lista" style="overflow-y:auto;flex:1;padding:0 12px 12px"><div class="loading"><div class="spinner"></div>Cargando envíos...</div></div>'
+    +'</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getHistorialEnvios&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){ window._enviosData=d.items||[]; _pintarEnvios(); })
+  .catch(function(e){var el=document.getElementById('env-lista');if(el)el.innerHTML='<div style="color:#B86B6B;padding:10px">❌ '+e.message+'</div>';});
+}
+function _pintarEnvios(){
+  var el=document.getElementById('env-lista');
+  if(!el) return;
+  var q=((document.getElementById('env-q')||{}).value||'').toLowerCase().trim();
+  var arr=(window._enviosData||[]).filter(function(x){
+    if(!q) return true;
+    return (x.clienta||'').toLowerCase().indexOf(q)>=0||(x.cedula||'').indexOf(q)>=0||(x.telefono||'').indexOf(q)>=0;
+  });
+  if(!arr.length){el.innerHTML='<div style="text-align:center;color:var(--gray);padding:18px;font-size:0.72rem">Sin envíos registrados'+(q?' para "'+q+'"':'')+'</div>';return;}
+  el.innerHTML=arr.map(function(x){
+    return '<div style="padding:9px 4px;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px">'
+      +'<span style="font-size:0.72rem;font-weight:800;color:var(--navy)">'+x.clienta+'</span>'
+      +'<span style="font-size:0.62rem;color:var(--gray);white-space:nowrap">'+x.fecha+'</span></div>'
+      +'<div style="font-size:0.6rem;color:var(--gray)">📱 '+(x.telefono||'—')+' · '+x.contenido+' · ticket del '+(x.fechaTicket||'—')+' · enviado por '+(x.por||'—')+'</div>'
+      +'</div>';
+  }).join('');
+}
+function marcarTarjetaEnviada(clave, btn, tkRow, tel, conPaq){
+  if(!confirm('✓ Marcar esta tarjeta como ENVIADA a la clienta?\n\nQuedará en el registro de envíos (fecha, número y contenido).')) return;
   if(btn){btn.textContent='⏳';btn.disabled=true;}
+  var tAud=(window._tkCards||{})[tkRow]||{};
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'marcarTarjetaEnviada',clave:clave,usuario:CU?CU.name:''})})
+    body:JSON.stringify({accion:'marcarTarjetaEnviada',clave:clave,usuario:CU?CU.name:'',
+      clienta:((tAud.nombre||'')+' '+(tAud.apellido||'')).trim(),
+      cedula:(tAud.cedula||''),
+      telefono:tel||'',
+      contenido:conPaq?'Tarjeta de tratamiento + Control de paquete':'Tarjeta de tratamiento',
+      fechaTicket:(tAud.fecha||'')})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✓ Enviada';btn.disabled=false;}return;}
@@ -6360,22 +6409,49 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       doc.text(ls,xI+118,y);
       y+=Math.max(13, ls.length*11+2);
     };
-    // ── TU EXPERIENCIA ──
+    // ── TU EXPERIENCIA: tablita vertical (cantidad | detalle | tipo) ──
     seccion('TU EXPERIENCIA DE HOY');
-    lineaTx('Facial:', limpia(t.facial));
-    lineaTx('Extras:', limpia(t.extras));
-    var paq=limpia(t.pack3)||limpia(t.pack6);
-    lineaTx('Paquete adquirido:', paq?paq+(t.pack3?' (3 sesiones)':' (6 sesiones)'):'');
-    if((t.productos||[]).length){
-      lineaTx('Productos:', t.productos.map(function(p){
-        // El servidor ya manda 'Nombre ×2'; si viniera un código viejo, se traduce y limpia
-        var m=p.match(/^(.*?)\s*(×\d+)?$/);
-        var base=(m&&m[1])||p;
-        if(/^[A-Z]{2,3}-\d{3}$/.test(base.trim())) base=nomProd(base.trim());
-        return limpia(base)+(m&&m[2]?' '+m[2].replace('×','x'):'');
-      }).join('  ·  '));
+    var filasExp=[];
+    if(limpia(t.facial)) filasExp.push({c:1, d:limpia(t.facial), tp:'Facial'});
+    (limpia(t.extras)||'').split(/\s*[,;+]\s*/).forEach(function(ex){
+      if(ex.trim()) filasExp.push({c:1, d:ex.trim(), tp:'Extra'});
+    });
+    var paqExp=limpia(t.pack3)||limpia(t.pack6);
+    if(paqExp) filasExp.push({c:1, d:paqExp+(t.pack3?' (3 sesiones)':' (6 sesiones)'), tp:'Paquete'});
+    (t.productos||[]).forEach(function(p){
+      var m=p.match(/^(.*?)\s*×(\d+)\s*$/);
+      var base=m?m[1]:p, cant=m?parseInt(m[2]):1;
+      if(/^[A-Z]{2,3}-\d{3}$/.test(base.trim())) base=nomProd(base.trim());
+      filasExp.push({c:cant, d:limpia(base), tp:'Producto'});
+    });
+    if(/^\s*SI\b/i.test(t.colS||'')) filasExp.push({c:1, d:'Canje de Gift Card', tp:'Gift card'});
+    if(filasExp.length){
+      // Agrupar por tipo, cada grupo con su encabezado propio
+      var ordenGr=['Facial','Paquete','Producto','Gift card','Extra'];
+      var titGr={'Facial':'FACIAL','Paquete':'PAQUETES','Producto':'PRODUCTOS','Gift card':'GIFT CARDS','Extra':'EXTRAS'};
+      ordenGr.forEach(function(gr){
+        var filasGr=filasExp.filter(function(f){return f.tp===gr;});
+        if(!filasGr.length) return;
+        salto(18+filasGr.length*15);
+        // Encabezado del grupo
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.4); doc.setTextColor(NAVY);
+        doc.text(titGr[gr],xI+4,y);
+        doc.setDrawColor(220,224,232); doc.setLineWidth(0.6);
+        doc.line(xI,y+3,xD,y+3); y+=8;
+        filasGr.forEach(function(f,i){
+          salto(16);
+          if(i%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y-2,ANCHO,15,'F');}
+          doc.setFont('helvetica','bold'); doc.setFontSize(8.2); doc.setTextColor(NAVY);
+          doc.text(String(f.c),xI+14,y+8.5,{align:'center'});
+          doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+          var dTx=f.d.length>68?f.d.slice(0,66)+'..':f.d;
+          doc.text(dTx,xI+38,y+8.5);
+          y+=15;
+        });
+        y+=7; // aire entre grupos
+      });
+      y+=4;
     }
-    y+=4;
     // ── RECOMENDACIONES / NOTAS ──
     if(t.recomendaciones||t.notas){
       seccion('RECOMENDACIONES PARA TU PIEL');
