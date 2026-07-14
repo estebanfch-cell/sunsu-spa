@@ -6404,7 +6404,13 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
     window._waEstado[key]={listo:false, files:[]};
     // Saludo CORTO: 'Hola X, te saludamos de Sunsu Spa!' — se envía y el chat
     // queda vivo en recientes. Los mensajes completos van de leyenda con cada PDF.
-    var wURL='https://wa.me/'+tel+'?text='+(msgHola||msg);
+    // CELULAR: saludo corto (los mensajes completos van de leyenda con cada PDF).
+    // COMPUTADOR: mensaje COMPLETO de una (saludo + tarjeta + paquete si hay),
+    // porque los PDFs se arrastran desde Descargas y allá no llevan leyenda.
+    var txtT1 = _esMovil_()
+      ? (msgHola||msg)
+      : (msgHola||'') + '%0A%0A' + (msg||'') + (conPaq && msgPaq ? '%0A%0A' + msgPaq : '');
+    var wURL='https://wa.me/'+tel+'?text='+txtT1;
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
     // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
