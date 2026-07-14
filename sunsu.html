@@ -5999,7 +5999,14 @@ function _normNomCli(s){
   return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
 }
 function _telDeTicket(t){
-  // Prioridad: ACUITY (ahí se actualizan los números) → REGISTRO → Acuity por aproximación
+  // 1º el teléfono resuelto por el SERVIDOR (una sola lógica de nombres)
+  if(t.telefono){
+    var tS=(t.telefono||'').toString().replace(/[^0-9]/g,'');
+    if(tS.length===10&&tS.charAt(0)==='0') tS='593'+tS.slice(1);
+    if(tS.length===9) tS='593'+tS;
+    if(tS) return tS;
+  }
+  // Respaldo local: ACUITY → REGISTRO → aproximación
   var ced=(t.cedula||'').split('.')[0];
   var full=_normNomCli((t.nombre||'')+' '+(t.apellido||''));
   var tel=window._tarjTelAcu[full]||'';
@@ -6065,9 +6072,7 @@ function _pintarTarjetasPend(){
       +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
       +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
-      +(paqAct
-        ?'<button onclick="enviarAmbasTarjetas('+t.tkRow+',\''+ced+'\',\''+tel+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 Enviar 2 PDFs</button>'
-        :(tel?'<a href="https://wa.me/'+tel+'?text='+msg+'" target="_blank" style="flex:1;min-width:100px;padding:9px;background:#25D366;color:white;border-radius:9px;font-size:0.66rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':''))
+      +(tel?'<a href="https://wa.me/'+tel+'?text='+msg+'" target="_blank" style="flex:1;min-width:100px;padding:9px;background:#25D366;color:white;border-radius:9px;font-size:0.66rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':'')
       +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this)" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
       +'</div></div>';
   });
