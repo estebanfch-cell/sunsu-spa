@@ -6142,8 +6142,11 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq){
   var btn=document.getElementById('wa-btn-'+tkRow);
   if(!est){ // ── TOQUE 1 ──
     window._waEstado[key]={listo:false, files:[]};
-    var vent=window.open('https://wa.me/'+tel+'?text='+msg,'_blank');
-    if(!vent) window.location.href='https://wa.me/'+tel+'?text='+msg;
+    // Celular: abrir el chat SIN texto — el mensaje viaja como leyenda de cada PDF
+    // (así no se duplica). Computadora: sí con texto (allá no hay leyendas).
+    var wURL='https://wa.me/'+tel+(_esMovil_()?'':'?text='+msg);
+    var vent=window.open(wURL,'_blank');
+    if(!vent) window.location.href=wURL;
     if(btn){btn.textContent='⏳ Preparando PDF'+(conPaq?'s':'')+'...';btn.disabled=true;}
     // Pre-generar en segundo plano mientras la chica manda el saludo
     var gens=[ new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); }) ];
