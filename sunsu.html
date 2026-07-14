@@ -6073,6 +6073,10 @@ function _pintarTarjetasPend(){
       +'<div style="font-size:0.58rem;color:var(--gray)">'+fFmt+' · '+(t.cosmetologa||'')+(tel?' · 📱 '+tel:' · ⚠️ sin teléfono')+(paqAct?' · 📦 tiene paquete':'')+'</div>'
       +'</div></div>'
       +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
+      +(function(){
+        var sinF=(window._tarjSinFotos||{})[t.tkRow];
+        return '<button id="foto-tgl-'+t.tkRow+'" onclick="toggleFotosTarjeta('+t.tkRow+')" title="Incluir o excluir las fotos del PDF" style="padding:9px 11px;background:'+(sinF?'#E8543F':'white')+';color:'+(sinF?'white':'var(--navy)')+';border:1.5px solid '+(sinF?'#E8543F':'var(--cream-d)')+';border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">'+(sinF?'🚫 Sin fotos':'📷 Fotos')+'</button>';
+      })()
       +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
       +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
@@ -6177,11 +6181,12 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg){
     return;
   }
   if(!est.listo){toast('⏳ Todavía preparando los PDFs...','var(--blue)');return;}
-  // ── TOQUE 2: compartir los archivos ya listos (gesto fresco → iOS lo permite) ──
+  // ── TOQUE 2: compartir los archivos + EL MENSAJE juntos (un solo envío) ──
   try{
     if(_esMovil_() && navigator.canShare && navigator.canShare({files:est.files})){
-      navigator.share({files:est.files, title:'Sunsu Spa'}).then(function(){
-        toast('✅ Enviado — la clienta aparece en tus chats recientes','var(--green)');
+      var txtMsg=''; try{ txtMsg=decodeURIComponent(msg||''); }catch(eM){ txtMsg=msg||''; }
+      navigator.share({files:est.files, text:txtMsg, title:'Sunsu Spa'}).then(function(){
+        toast('✅ PDFs + mensaje enviados juntos','var(--green)');
       }).catch(function(){});
       return;
     }
@@ -6250,6 +6255,23 @@ function _pintarEnvios(){
       +'<div style="font-size:0.6rem;color:var(--gray)">📱 '+(x.telefono||'—')+' · '+x.contenido+' · ticket del '+(x.fechaTicket||'—')+' · enviado por '+(x.por||'—')+'</div>'
       +'</div>';
   }).join('');
+}
+// Alternar la inclusión de fotos en el PDF de un ticket (default: CON fotos)
+function toggleFotosTarjeta(tkRow){
+  window._tarjSinFotos=window._tarjSinFotos||{};
+  window._tarjSinFotos[tkRow]=!window._tarjSinFotos[tkRow];
+  var sinF=window._tarjSinFotos[tkRow];
+  var b=document.getElementById('foto-tgl-'+tkRow);
+  if(b){
+    b.textContent=sinF?'🚫 Sin fotos':'📷 Fotos';
+    b.style.background=sinF?'#E8543F':'white';
+    b.style.color=sinF?'white':'var(--navy)';
+    b.style.borderColor=sinF?'#E8543F':'var(--cream-d)';
+  }
+  delete (window._waEstado||{})['k'+tkRow]; // invalidar PDFs pre-generados con la otra opción
+  var b2=document.getElementById('wa-btn-'+tkRow);
+  if(b2){b2.textContent='💬 WhatsApp';b2.disabled=false;b2.style.background='#25D366';}
+  toast(sinF?'🚫 Las fotos NO irán en el PDF de este ticket':'📷 Las fotos SÍ irán en el PDF','var(--blue)');
 }
 function marcarTarjetaEnviada(clave, btn, tkRow, tel, conPaq){
   if(!confirm('✓ Marcar esta tarjeta como ENVIADA a la clienta?\n\nQuedará en el registro de envíos (fecha, número y contenido).')) return;
@@ -6350,11 +6372,12 @@ function _stripAgendaSunsu(){
 function tarjetaTicket(tkRow, cbTk){
   var t=(window._tkCards||{})[tkRow];
   if(!t){toast('❌ No encontré el ticket','#B86B6B');return;}
-  toast('⏳ Generando tarjeta (cargando fotos)...','var(--blue)');
+  var sinFotos=(window._tarjSinFotos||{})[tkRow];
+  toast(sinFotos?'⏳ Generando tarjeta (sin fotos)...':'⏳ Generando tarjeta (cargando fotos)...','var(--blue)');
   // Extraer TODOS los IDs de Drive del texto de la celda (a prueba de cualquier separador)
   var idsDe=function(s){ return ((s||'').toString().match(/[-\w]{25,}/g)||[]).slice(0,3); };
-  var urlsA=idsDe(t.fotosAntes);
-  var urlsD=idsDe(t.fotosDespues);
+  var urlsA=sinFotos?[]:idsDe(t.fotosAntes);
+  var urlsD=sinFotos?[]:idsDe(t.fotosDespues);
   Promise.all([
     new Promise(function(res){var i=new Image();i.crossOrigin='anonymous';i.onload=function(){res(i);};i.onerror=function(){res(null);};i.src=GCD_PAG3_URL;}),
     Promise.all(urlsA.map(_cargarFotoTk)),
@@ -6382,22 +6405,22 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     };
     var fechaT=(t.fecha||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     var fechaFmt=fechaT?(fechaT[3]+'/'+fechaT[2]+'/'+fechaT[1]):(t.fecha||'');
-    var y=150;
-    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
-    doc.text('TARJETA DE TRATAMIENTO',W/2,y,{align:'center'}); y+=16;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(TXT);
-    doc.text('Sunsu Spa - Glass Skin - '+fechaFmt,W/2,y,{align:'center'}); y+=24;
-    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-    doc.text(((t.nombre||'')+' '+(t.apellido||'')).trim(),W/2,y,{align:'center'}); y+=13;
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.2); doc.setTextColor(TXT);
-    doc.text('Atendida por '+(t.cosmetologa||''),W/2,y,{align:'center'}); y+=20;
+    var y=116; // pegado al logo: TODO debe caber en UNA hoja A4
+    doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(17);
+    doc.text('TARJETA DE TRATAMIENTO',W/2,y,{align:'center'}); y+=14;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(TXT);
+    doc.text('Sunsu Spa - Glass Skin - '+fechaFmt,W/2,y,{align:'center'}); y+=17;
+    doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+    doc.text(((t.nombre||'')+' '+(t.apellido||'')).trim(),W/2,y,{align:'center'}); y+=11;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
+    doc.text('Atendida por '+(t.cosmetologa||''),W/2,y,{align:'center'}); y+=15;
     var salto=function(n){ if(y+n>H-64){doc.addPage(); if(fondo)doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H); y=140;} };
     var seccion=function(titulo){
-      salto(34);
+      salto(32);
       doc.setFillColor(61,90,122);
-      doc.roundedRect(xI,y,ANCHO,18,4,4,'F');
-      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(8.6);
-      doc.text(titulo,xI+9,y+12.5); y+=26;
+      doc.roundedRect(xI,y,ANCHO,17,4,4,'F');
+      doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(8.4);
+      doc.text(titulo,xI+9,y+12); y+=23;
     };
     var lineaTx=function(lbl,txt){
       if(!txt) return;
@@ -6439,16 +6462,16 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
         doc.setDrawColor(220,224,232); doc.setLineWidth(0.6);
         doc.line(xI,y+3,xD,y+3); y+=8;
         filasGr.forEach(function(f,i){
-          salto(16);
-          if(i%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y-2,ANCHO,15,'F');}
-          doc.setFont('helvetica','bold'); doc.setFontSize(8.2); doc.setTextColor(NAVY);
-          doc.text(String(f.c),xI+14,y+8.5,{align:'center'});
+          salto(15);
+          if(i%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y-2,ANCHO,13.5,'F');}
+          doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(NAVY);
+          doc.text(String(f.c),xI+14,y+7.8,{align:'center'});
           doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
           var dTx=f.d.length>68?f.d.slice(0,66)+'..':f.d;
-          doc.text(dTx,xI+38,y+8.5);
-          y+=15;
+          doc.text(dTx,xI+38,y+7.8);
+          y+=13.5;
         });
-        y+=7; // aire entre grupos
+        y+=5; // aire entre grupos
       });
       y+=4;
     }
@@ -6474,9 +6497,14 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     if((fotosA&&fotosA.length)||(fotosD&&fotosD.length)){
       seccion('TU ANTES Y DESPUES');
       var fw=(ANCHO-20)/2;
-      // Alto por foto según cuántas hay: TODAS deben entrar en la hoja
+      // ALTO AUTO-AJUSTABLE: se calcula con el espacio que QUEDA en la hoja
+      // (menos lo reservado para retorno + tira de agenda) — matemáticamente
+      // imposible que se pase a una segunda página.
       var maxFotos=Math.max((fotosA||[]).length,(fotosD||[]).length);
-      var altoFoto=maxFotos>=3?92:(maxFotos===2?125:155);
+      var reservaAbajo=(t.retorno?34:0)+62; // caja de retorno + tira de agenda
+      var dispF=(H-reservaAbajo)-y-16;      // espacio vertical disponible para las fotos
+      var base=maxFotos>=3?90:(maxFotos===2?122:150);
+      var altoFoto=Math.max(52, Math.min(base, Math.floor(dispF/maxFotos)-9));
       var colFotos=function(lista,x0,lbl){
         var yy=y;
         doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(NAVY);
@@ -6485,7 +6513,7 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
           var esc=Math.min(fw/img.w, altoFoto/img.h);
           var iw=img.w*esc, ih=img.h*esc;
           doc.addImage(img.data,'JPEG',x0+(fw-iw)/2,yy,iw,ih);
-          yy+=ih+6;
+          yy+=ih+4;
         });
         return yy;
       };
@@ -6500,16 +6528,15 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       var rM=(t.retorno||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
       var retFmt=rM?(rM[3]+'/'+rM[2]+'/'+rM[1]):t.retorno;
       doc.setFillColor(253,247,230);
-      doc.roundedRect(xI,y,ANCHO,28,6,6,'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.6); doc.setTextColor(GOLD);
-      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,y+18,{align:'center'});
-      y+=40;
+      doc.roundedRect(xI,y,ANCHO,24,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.2); doc.setTextColor(GOLD);
+      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,y+16,{align:'center'});
+      y+=32;
     }
     // ── AGENDA TU SIGUIENTE CITA — DISCOS estilo gift card, anclados al fondo ──
     var strip=_stripAgendaSunsu();
     var dw=250, dh=dw*strip.h/strip.w; // pequeño y discreto
-    var sx=(W-dw)/2, sy=H-dh-12;       // lo más abajo posible
-    if(y>sy-14){doc.addPage(); if(fondo)doc.addImage(_fondoA4Sunsu(fondo),'JPEG',0,0,W,H);}
+    var sx=(W-dw)/2, sy=H-dh-10;       // lo más abajo posible — SIEMPRE en la misma hoja
     doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
     doc.text('Agenda tu siguiente cita - toca una opcion:',W/2,sy-4,{align:'center'});
     doc.addImage(strip.data,'PNG',sx,sy,dw,dh);
