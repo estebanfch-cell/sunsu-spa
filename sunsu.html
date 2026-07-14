@@ -4594,9 +4594,11 @@ function cargarCatalogo(){
         var activoRaw=(cols[iActivo]||'').trim().replace(/"/g,'').toUpperCase();
         var isActivo=activoRaw!=='FALSE'&&activoRaw!=='0'&&activoRaw!=='FALSO';
 
-        // Precio: preferir TOTAL CON IVA, luego SUBTOTAL
-        var rawTot=(cols[iTot]||'').replace(/"/g,'').replace(/,/g,'').trim();
-        var rawSub=(cols[iSub]||'').replace(/"/g,'').replace(/,/g,'').trim();
+        // Precio: preferir TOTAL CON IVA, luego SUBTOTAL.
+        // OJO: el CSV publicado exporta con formato ("$23.00") — hay que limpiar
+        // todo lo no-numérico o parseFloat da NaN y el producto se descartaba.
+        var rawTot=(cols[iTot]||'').replace(/[^0-9.\-]/g,'');
+        var rawSub=(cols[iSub]||'').replace(/[^0-9.\-]/g,'');
         var p=parseFloat(rawTot)||parseFloat(rawSub)||0;
 
         if(p===0) continue; // saltar filas sin precio
@@ -5498,8 +5500,15 @@ function _pintarCatalogoAdmin(){
       +'<span style="background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px;font-weight:700">Venta $'+(it.subtotal||0).toFixed(2)+' s/IVA</span>'
       +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">c/IVA $'+((it.subtotal||0)*1.15).toFixed(2)+'</span>'
       +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">Compra $'+(it.compra||0).toFixed(2)+'</span>'
-      +'<span style="background:'+(util>0?'#E8F8EE;color:#2E7D52':'#FEE2E2;color:#C00')+';padding:2px 7px;border-radius:6px;font-weight:700">Util. $'+util.toFixed(2)+'</span>'
+      +((it.compraReal&&Math.abs(it.compraReal-(it.compra||0))>0.01)?'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">C.real $'+it.compraReal.toFixed(2)+'</span>':'')
+      +'<span style="background:'+(util>0?'#E8F8EE;color:#2E7D52':'#FEE2E2;color:#C00')+';padding:2px 7px;border-radius:6px;font-weight:700">Util. H $'+util.toFixed(2)+'</span>'
       +'<span style="background:#FFF9E6;color:#8A6D1A;padding:2px 7px;border-radius:6px;font-weight:700">Com. $'+(it.com||0).toFixed(2)+'</span>'
+      +(function(){
+        // Utilidad REAL = venta s/IVA − compra REAL proveedor − comisión (igual que el cálculo del editor)
+        if(!(it.compraReal>0)) return '';
+        var uReal=(it.subtotal||0)-it.compraReal-(it.com||0);
+        return '<span style="background:'+(uReal>0?'#DCF2E4;color:#1D6B42':'#FEE2E2;color:#C00')+';padding:2px 7px;border-radius:6px;font-weight:800">💰 Real $'+uReal.toFixed(2)+'</span>';
+      })()
       +'</div><div id="cat-edit-'+i+'"></div></div>';
   };
   Object.keys(fams).sort(function(a,b){
@@ -5611,7 +5620,7 @@ function formNuevoProducto(){
       var lista=Object.keys(tipos).sort();
       return '<div style="margin-bottom:7px"><div style="font-size:0.58rem;font-weight:700;color:var(--gray);margin-bottom:2px">Tipo (división del catálogo)</div>'
         +'<select id="cp-tipo-sel" onchange="document.getElementById(\'cp-tipo-nuevo-box\').style.display=this.value===\'__nuevo__\'?\'block\':\'none\'" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;background:white;outline:none;box-sizing:border-box">'
-        +lista.map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'">'+t+'</option>';}).join('')
+        +lista.map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'"'+(t.toUpperCase()==='PRODUCTO'?' selected':'')+'>'+t+'</option>';}).join('')
         +'<option value="__nuevo__">➕ Crear nuevo tipo…</option>'
         +'</select>'
         +'<div id="cp-tipo-nuevo-box" style="display:none;margin-top:6px">'
@@ -5658,12 +5667,20 @@ function formEditarProducto(i){
   var it=window._catAdmin[i];
   var box=document.getElementById('cat-edit-'+i);
   if(box.innerHTML){box.innerHTML='';return;}
+  var r2=function(v){return Math.round((parseFloat(v)||0)*100)/100;};
+  var tiposEd={};
+  (window._catAdmin||[]).forEach(function(x){var t=(x.tipo||'').trim();if(t)tiposEd[t]=1;});
+  tiposEd[(it.tipo||'').trim()||'PRODUCTO']=1;
   box.innerHTML='<div style="background:var(--cream);border-radius:11px;padding:11px;margin-top:7px">'
     +_catFld('Nombre','cp-nombre',it.nombre)
+    +'<div style="margin-bottom:7px"><div style="font-size:0.58rem;font-weight:700;color:var(--gray);margin-bottom:2px">Tipo (carpeta del catálogo)</div>'
+    +'<select id="cp-tipo-ed" style="width:100%;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;background:white;outline:none;box-sizing:border-box">'
+    +Object.keys(tiposEd).sort().map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'"'+(t===(it.tipo||'').trim()?' selected':'')+'>'+t+'</option>';}).join('')
+    +'</select></div>'
     +_catFld('Venta SIN IVA (subtotal)','cp-sub',it.subtotal,'','number')
     +_catFld('Compra catálogo','cp-compcat',it.compra,'','number')
-    +_catFld('Compra REAL proveedor (INVENTARIO col G — vacío = no tocar)','cp-compprov','','','number')
-    +_catFld('Comisión por unidad (vacío = no tocar)','cp-com',it.com,'','number')
+    +_catFld('Compra REAL proveedor (se guarda en INVENTARIO col G)','cp-compprov',it.compraReal?r2(it.compraReal):'','0.00','number')
+    +_catFld('Comisión por unidad (vacío = no tocar)','cp-com',it.com?r2(it.com):'','','number')
     +'<div id="cp-calc" style="font-size:0.64rem;color:var(--gray);margin:4px 0 10px"></div>'
     +'<button onclick="guardarEdicionProducto('+i+')" style="width:100%;padding:10px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Guardar cambios</button>'
     +'<button onclick="eliminarProductoCat('+i+')" style="width:100%;padding:9px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:10px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:6px">🗑️ Eliminar producto por completo</button>'
@@ -5692,7 +5709,7 @@ function eliminarProductoCat(i){
 function guardarEdicionProducto(i){
   var it=window._catAdmin[i];
   var g=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
-  var payload={accion:'editarProductoCatalogo',sku:it.sku,nombre:g('cp-nombre'),subtotal:g('cp-sub'),
+  var payload={accion:'editarProductoCatalogo',sku:it.sku,nombre:g('cp-nombre'),tipo:g('cp-tipo-ed'),subtotal:g('cp-sub'),
     compraCat:g('cp-compcat'),compraProv:g('cp-compprov'),comision:g('cp-com'),usuario:CU?CU.name:'—'};
   toast('⏳ Guardando...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
