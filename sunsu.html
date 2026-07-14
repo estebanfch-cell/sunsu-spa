@@ -4544,9 +4544,9 @@ function mostrarErrorCitas(c, msg) {
 }
 
 // ── Ficha del REGISTRO para una clienta (por cédula o nombre, con cruce aproximado) ──
-function _fichaHTMLDe(nombreCompleto, cedula){
+function _fichaDe(nombreCompleto, cedula){
   var fr=window._fichasReg;
-  if(!fr||fr.cargando) return '';
+  if(!fr||fr.cargando) return null;
   var nrm=(typeof _normNomCli==='function')?_normNomCli(nombreCompleto||''):(nombreCompleto||'').toLowerCase();
   var fh=(cedula&&fr.porCedula[(cedula||'').toString().split('.')[0]])||fr.porNombre[nrm];
   if(!fh){
@@ -4562,6 +4562,10 @@ function _fichaHTMLDe(nombreCompleto, cedula){
       }
     }
   }
+  return fh||null;
+}
+function _fichaHTMLDe(nombreCompleto, cedula){
+  var fh=_fichaDe(nombreCompleto, cedula);
   if(!fh) return '';
   var out='';
   if((fh.autorizaFotos||'').toUpperCase()==='NO')
@@ -6215,8 +6219,10 @@ function renderTarjetasPendientes(c){
     // SIEMPRE fresco: el ticket recién enviado debe aparecer de inmediato
     fetch(APPS_SCRIPT_URL+'?action=getHistorial&_t='+Date.now()).then(function(r){return r.json();}),
     fetch(APPS_SCRIPT_URL+'?action=getTarjetasInfo&_t='+Date.now()).then(function(r){return r.json();}),
-    fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};})
+    fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(rr){
+    window._fichasReg={porCedula:(rr[3]||{}).porCedula||{},porNombre:(rr[3]||{}).porNombre||{}};
     var data=rr[0], info=rr[1]||{}, paqs=rr[2]||{};
     if(data.error){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+data.error+'</div>';return;}
     _histData=data;
@@ -6239,7 +6245,10 @@ function renderTarjetasPendientes(c){
     _pintarTarjetasPend();
   }).catch(function(e){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
 }
-function _tarjClave(t){ return 'tk'+t.tkRow+'_'+(t.fecha||''); }
+function _tarjClave(t){
+  // Clave por CONTENIDO (no por fila): inmune a filas borradas/corridas en TICKET_FICHA
+  return 'tk_'+(t.fecha||'')+'_'+((t.hora||'').toString().replace(/[^0-9]/g,''))+'_'+((t.cedula||'').toString().split('.')[0]);
+}
 function _normNomCli(s){
   return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
 }
@@ -6302,6 +6311,11 @@ function _pintarTarjetasPend(){
   lista.forEach(function(t){
     (window._tkCards=window._tkCards||{})[t.tkRow]=t;
     var tel=_telDeTicket(t);
+    // Registro dice NO autoriza fotos → marcar SIN FOTOS automáticamente
+    var fhT=_fichaDe(((t.nombre||'')+' '+(t.apellido||'')).trim(), t.cedula||'');
+    var noAutoriza=fhT&&(fhT.autorizaFotos||'').toUpperCase()==='NO';
+    window._tarjSinFotos=window._tarjSinFotos||{};
+    if(noAutoriza&&window._tarjSinFotos[t.tkRow]===undefined) window._tarjSinFotos[t.tkRow]=true;
     var fp=(t.fecha||'').split('-');
     var fFmt=fp.length===3?(fp[2]+'/'+fp[1]+'/'+fp[0]):t.fecha;
     // ¿La clienta tiene paquete? → botón para adjuntar también su control de paquete
@@ -6318,15 +6332,15 @@ function _pintarTarjetasPend(){
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+((t.nombre||'')+' '+(t.apellido||'')).trim()+'</div>'
-      +'<div style="font-size:0.58rem;color:var(--gray)">'+fFmt+' · '+(t.cosmetologa||'')+(tel?' · 📱 '+tel:' · ⚠️ sin teléfono')+(paqAct?' · 📦 tiene paquete':'')+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+fFmt+' · '+(t.cosmetologa||'')+(tel?' · 📱 '+tel:' · ⚠️ sin teléfono')+(paqAct?' · 📦 tiene paquete':'')+(noAutoriza?' · <b style="color:#E8543F">🚫 no autoriza fotos</b>':'')+'</div>'
       +'</div></div>'
       +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
       +(function(){
         var sinF=(window._tarjSinFotos||{})[t.tkRow];
         return '<button id="foto-tgl-'+t.tkRow+'" onclick="toggleFotosTarjeta('+t.tkRow+')" title="Incluir o excluir las fotos del PDF" style="padding:9px 11px;background:'+(sinF?'#E8543F':'white')+';color:'+(sinF?'white':'var(--navy)')+';border:1.5px solid '+(sinF?'#E8543F':'var(--cream-d)')+';border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">'+(sinF?'🚫 Sin fotos':'📷 Fotos')+'</button>';
       })()
-      +'<button onclick="tarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
-      +(paqAct?'<button onclick="tarjetaPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
+      +'<button onclick="previewTarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
+      +(paqAct?'<button onclick="previewPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
       +(tel?'<button id="wa-btn-'+t.tkRow+'" onclick="flujoWhatsApp('+t.tkRow+',\''+ced+'\',\''+tel+'\','+(paqAct?'true':'false')+',\''+msg+'\',\''+msgPaq+'\',\''+msgHola+'\')" style="flex:1;min-width:110px;padding:9px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>':'')
       +'<button onclick="marcarTarjetaEnviada(\''+_tarjClave(t)+'\',this,'+t.tkRow+',\''+tel+'\','+(paqAct?'true':'false')+')" style="padding:9px 12px;background:white;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">✓ Enviada</button>'
       +'</div></div>';
@@ -6535,6 +6549,30 @@ function toggleFotosTarjeta(tkRow){
   var b2=document.getElementById('wa-btn-'+tkRow);
   if(b2){b2.textContent='💬 WhatsApp';b2.disabled=false;b2.style.background='#25D366';}
   toast(sinF?'🚫 Las fotos NO irán en el PDF de este ticket':'📷 Las fotos SÍ irán en el PDF','var(--blue)');
+}
+// ── PREVISUALIZAR un PDF (sin descargarlo): abre en pestaña nueva ──
+function _previewPDF(win, doc){
+  try{
+    var url=URL.createObjectURL(doc.output('blob'));
+    if(win&&!win.closed){ win.location=url; }
+    else { var w2=window.open(url,'_blank'); if(!w2) window.location.href=url; }
+    setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  }catch(e){ toast('❌ '+e.message,'#B86B6B'); }
+}
+function previewTarjetaTicket(tkRow){
+  var win=window.open('about:blank','_blank'); // abrir DURANTE el toque (iOS lo permite)
+  try{ if(win) win.document.write('<body style="font-family:sans-serif;background:#FDFAF1;color:#3D5A7A;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">Generando tarjeta...</body>'); }catch(eW){}
+  tarjetaTicket(tkRow, function(doc){ _previewPDF(win, doc); });
+}
+function previewPaqDeCed(ced){
+  var x=(window._tarjPaqRef||{})['c'+ced];
+  if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  var win=window.open('about:blank','_blank');
+  try{ if(win) win.document.write('<body style="font-family:sans-serif;background:#FDFAF1;color:#3D5A7A;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">Generando control de paquete...</body>'); }catch(eW){}
+  var img=new Image(); img.crossOrigin='anonymous';
+  img.onload=function(){_pdfTarjetaPaquete(x, img, function(doc){ _previewPDF(win, doc); });};
+  img.onerror=function(){_pdfTarjetaPaquete(x, null, function(doc){ _previewPDF(win, doc); });};
+  img.src=GCD_PAG3_URL;
 }
 function marcarTarjetaEnviada(clave, btn, tkRow, tel, conPaq){
   if(!confirm('✓ Marcar esta tarjeta como ENVIADA a la clienta?\n\nQuedará en el registro de envíos (fecha, número y contenido).')) return;
