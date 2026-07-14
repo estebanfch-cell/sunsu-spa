@@ -6337,7 +6337,10 @@ function _pintarTarjetasPend(){
     // ¿La clienta tiene paquete? → botón para adjuntar también su control de paquete
     var ced=(t.cedula||'').split('.')[0];
     var paqsCli=(window._tarjPaqPorCed||{})[ced]||[];
-    var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0]||paqsCli[0];
+    // SOLO paquetes VIGENTES (con sesiones por usar). Un paquete ya completo
+    // no se ofrece: sin el fallback a paqsCli[0], una clienta con su paquete
+    // terminado en 2025 que hoy vino a un facial suelto no muestra nada de paquete.
+    var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0];
     // Tres mensajes: saludo corto (abre y siembra el chat) + cada PDF con el suyo
     var msgHola=encodeURIComponent('Hola '+(t.nombre||'').split(' ')[0]+', te saludamos de Sunsu Spa!');
     var msg=encodeURIComponent('Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!');
