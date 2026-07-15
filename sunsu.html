@@ -679,8 +679,8 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
-    :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
+    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
@@ -879,6 +879,7 @@ function showTab(id,btn){
   else if(id==='catalogo') renderCatalogoAdmin(c);
   else if(id==='tarjetas') renderTarjetasPendientes(c);
   else if(id==='registro-cliente') renderRegistroCliente(c);
+  else if(id==='cabina') renderCabina(c);
   else if(id==='buscar') renderBuscar(c);
   else if(id==='buscar-paquetes') renderBuscarPaquetes(c);
   else if(id==='buscar-gc') renderBuscarGC(c);
@@ -5437,6 +5438,297 @@ function _citaTieneTicket(apt, fechaStr){
     if(full.indexOf(pn)>=0 && (!pa || pa.length<2 || full.indexOf(pa)>=0)) return true;
   }
   return false;
+}
+// ══════ SUNSU CABINA — protocolos, inventario de uso interno y activos ══════
+// Todas VEN (los protocolos son la guia de trabajo de las chicas); editar es solo
+// de admins (tu y Emi), validado en el servidor por token. Fase 1: sin descuento
+// automatico todavia — eso llega en fase 2, cuando los protocolos reales esten cargados.
+function renderCabina(c){
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando cabina...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getCabina&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.sinEstructura){
+      var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🧪 Cabina</div>'
+        +(esAdmin
+          ?'<div class="card" style="padding:16px"><div style="font-size:0.78rem;font-weight:800;color:var(--navy);margin-bottom:8px">🚀 Crear la estructura SUNSU CABINA</div>'
+            +'<div style="font-size:0.66rem;color:var(--gray);margin-bottom:12px;line-height:1.5">Se crea un archivo NUEVO de Google Sheets con 6 pestañas: inventario de cabina, activos, protocolos (uno por cada facial del catálogo, listos para llenar), pasos, consumos y aperturas de botella.</div>'
+            +'<button onclick="_cabCrear(this)" style="width:100%;padding:13px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer">🚀 Crear estructura</button></div>'
+          :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
+      return;
+    }
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[]};
+    _pintarCabina(c);
+  })
+  .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la cabina</div>'; });
+}
+function _cabCrear(btn){
+  if(!confirm('🚀 ¿Crear el archivo SUNSU CABINA?\n\nSe sembrará un protocolo vacío por cada facial del catálogo.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
+  var facs=(window.FACIALES||[]).map(function(f){return {sku:f.sku, n:f.n};});
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaCrearEstructura', token:window._token||'', faciales:facs, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🚀 Crear estructura';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🚀 SUNSU CABINA creada','var(--green)');
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🚀 Crear estructura';} toast('❌ Sin conexión','#B86B6B'); });
+}
+function _pintarCabina(c){
+  var sec=window._cabSec||'pro';
+  var chip=function(val,txt){
+    var on=sec===val;
+    return '<button onclick="window._cabSec=\''+val+'\';_pintarCabina(document.getElementById(\'content\'))" style="padding:7px 13px;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+  };
+  var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:10px">🧪 Cabina</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
+    +chip('pro','📋 Protocolos ('+(window._cab.pro||[]).length+')')
+    +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
+    +chip('act','🛠 Activos ('+(window._cab.act||[]).length+')')
+    +'</div><div id="cab-body"></div>';
+  c.innerHTML=html;
+  if(sec==='pro') _cabPintarProtocolos();
+  else if(sec==='inv') _cabPintarInventario();
+  else _cabPintarActivos();
+}
+function _cabEsAdmin(){ return CU&&(CU.role==='admin'||CU.role==='admin_master'); }
+function _cabProdDe(cod){
+  return (window._cab.inv||[]).find(function(p){return p.codigo===cod;})||null;
+}
+// ── PROTOCOLOS ──
+function _cabPintarProtocolos(){
+  var b=document.getElementById('cab-body'); if(!b) return;
+  var html='';
+  (window._cab.pro||[]).forEach(function(p,i){
+    var costoProd=(p.pasos||[]).reduce(function(a,ps){
+      var pr=_cabProdDe(ps.productoCod);
+      return a+(pr?ps.cantidad*pr.costoUnidad:0);
+    },0);
+    html+='<div class="card" style="padding:0;margin-bottom:8px;overflow:hidden">'
+      +'<div onclick="_cabProToggle('+i+')" style="padding:11px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
+      +'<div><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+p.nombre+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+p.sku+' · v'+p.version+' · '+(p.pasos||[]).length+' paso'+((p.pasos||[]).length===1?'':'s')
+      +(costoProd?' · producto $'+costoProd.toFixed(2):'')+(p.manoObra?' · M.O. $'+p.manoObra.toFixed(2):'')+'</div></div>'
+      +'<span id="cab-pro-ar-'+i+'" style="color:var(--gray)">▾</span>'
+      +'</div><div id="cab-pro-b-'+i+'" style="display:none;padding:0 13px 12px"></div></div>';
+  });
+  if(!html) html='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin protocolos</div>';
+  b.innerHTML=html;
+}
+function _cabProToggle(i){
+  var bd=document.getElementById('cab-pro-b-'+i), ar=document.getElementById('cab-pro-ar-'+i);
+  if(!bd) return;
+  var abrir=bd.style.display==='none';
+  bd.style.display=abrir?'block':'none';
+  if(ar) ar.textContent=abrir?'▴':'▾';
+  if(abrir) _cabProCuerpo(i,false);
+}
+function _cabProCuerpo(i,editando){
+  var p=(window._cab.pro||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
+  if(!p||!bd) return;
+  if(!editando){
+    var h='';
+    if(!(p.pasos||[]).length) h+='<div style="font-size:0.66rem;color:var(--gray);font-style:italic">Protocolo por definir</div>';
+    (p.pasos||[]).forEach(function(ps){
+      var pr=_cabProdDe(ps.productoCod);
+      h+='<div style="padding:6px 0;border-bottom:1px solid var(--cream-d)">'
+        +'<div style="font-size:0.68rem;color:#4A5568"><b style="color:var(--navy)">'+ps.paso+'.</b> '+ps.desc+'</div>'
+        +(ps.productoCod?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">🧴 '+(pr?pr.producto:ps.productoCod)+' — '+ps.cantidad+' '+ps.unidad+(pr?' ($'+(ps.cantidad*pr.costoUnidad).toFixed(2)+')':'')+'</div>':'')
+        +'</div>';
+    });
+    if(p.video) h+='<div style="margin-top:7px"><a href="'+p.video+'" target="_blank" style="font-size:0.64rem;font-weight:800;color:var(--blue)">🎥 Ver video tutorial</a></div>';
+    if(p.notas&&p.notas!=='Protocolo por definir') h+='<div style="font-size:0.6rem;color:var(--gray);margin-top:5px">🗒 '+p.notas+'</div>';
+    h+='<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">Actualizado '+(p.actualizado||'—')+(p.por?' por '+p.por:'')+'</div>';
+    if(_cabEsAdmin()) h+='<button onclick="_cabProCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar protocolo</button>';
+    bd.innerHTML=h;
+    return;
+  }
+  // ── Edicion: pasos dinamicos ──
+  window._cabEd=JSON.parse(JSON.stringify(p.pasos||[]));
+  if(!window._cabEd.length) window._cabEd=[{desc:'',productoCod:'',cantidad:0,unidad:'ml'}];
+  window._cabEdIdx=i;
+  _cabProFormPintar();
+}
+function _cabProFormPintar(){
+  var i=window._cabEdIdx; var p=(window._cab.pro||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
+  if(!p||!bd) return;
+  var selProd=function(sel){
+    var o='<option value="">— sin producto —</option>';
+    (window._cab.inv||[]).forEach(function(pr){ o+='<option value="'+pr.codigo+'"'+(sel===pr.codigo?' selected':'')+'>'+pr.producto+' ('+pr.unidad+')</option>'; });
+    return o;
+  };
+  var h='<div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin:4px 0 6px">Editando — se guardará como v'+(p.version+1)+'</div>';
+  window._cabEd.forEach(function(ps,pi){
+    h+='<div class="card" style="padding:9px;margin-bottom:6px;background:var(--gray-ll,#F7F8FA)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><b style="font-size:0.62rem;color:var(--navy)">Paso '+(pi+1)+'</b>'
+      +'<button onclick="_cabEd.splice('+pi+',1);_cabProFormPintar()" style="background:none;border:none;color:#B86B6B;font-size:0.7rem;font-weight:800;cursor:pointer">🗑</button></div>'
+      +'<input value="'+String(ps.desc||'').replace(/"/g,'&quot;')+'" oninput="_cabEd['+pi+'].desc=this.value" placeholder="Descripción del paso" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
+      +'<div style="display:flex;gap:5px">'
+      +'<select onchange="_cabEd['+pi+'].productoCod=this.value" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.66rem;font-family:inherit;outline:none;background:white">'+selProd(ps.productoCod)+'</select>'
+      +'<input type="number" step="0.1" value="'+(ps.cantidad||'')+'" oninput="_cabEd['+pi+'].cantidad=parseFloat(this.value)||0" placeholder="Cant." style="width:64px;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<input value="'+(ps.unidad||'ml')+'" oninput="_cabEd['+pi+'].unidad=this.value" placeholder="ml" style="width:46px;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'</div></div>';
+  });
+  h+='<button onclick="_cabEd.push({desc:\'\',productoCod:\'\',cantidad:0,unidad:\'ml\'});_cabProFormPintar()" style="width:100%;padding:8px;background:white;color:var(--navy);border:1.5px dashed var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar paso</button>'
+    +'<div style="display:flex;gap:5px;margin-bottom:8px">'
+    +'<input id="cab-mo-'+i+'" type="number" step="0.5" value="'+(p.manoObra||'')+'" placeholder="Mano de obra $" style="flex:1;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.74rem;font-family:inherit;outline:none">'
+    +'</div>'
+    +'<input id="cab-vid-'+i+'" value="'+String(p.video||'').replace(/"/g,'&quot;')+'" placeholder="Link de video (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
+    +'<input id="cab-not-'+i+'" value="'+String(p.notas||'').replace(/"/g,'&quot;')+'" placeholder="Notas (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabProGuardar('+i+',this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">💾 Guardar v'+(p.version+1)+'</button>'
+    +'<button onclick="_cabProCuerpo('+i+',false)" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div>';
+  bd.innerHTML=h;
+}
+function _cabProGuardar(i,btn){
+  var p=(window._cab.pro||[])[i]; if(!p) return;
+  var pasos=(window._cabEd||[]).filter(function(ps){return (ps.desc||'').trim();});
+  if(!pasos.length){ toast('⚠️ Agrega al menos un paso','#C9A227'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Guardando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaSaveProtocolo', token:window._token||'', sku:p.sku, nombre:p.nombre,
+      manoObra:parseFloat((document.getElementById('cab-mo-'+i)||{}).value)||0,
+      video:((document.getElementById('cab-vid-'+i)||{}).value||'').trim(),
+      notas:((document.getElementById('cab-not-'+i)||{}).value||'').trim(),
+      pasos:pasos, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('💾 Protocolo guardado como v'+d.version,'var(--green)');
+    renderCabina(document.getElementById('content'));
+    window._cabSec='pro';
+  })
+  .catch(function(){ if(btn){btn.disabled=false;} toast('❌ Sin conexión','#B86B6B'); });
+}
+// ── INVENTARIO CABINA ──
+function _cabPintarInventario(){
+  var b=document.getElementById('cab-body'); if(!b) return;
+  var html=_cabEsAdmin()?'<button onclick="_cabInvForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo producto de cabina</button><div id="cab-inv-form"></div>':'';
+  (window._cab.inv||[]).forEach(function(p,i){
+    var bajo=p.minimo>0&&(p.cerrados<=p.minimo);
+    html+='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(bajo?';border:1.5px solid #E8543F':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+p.codigo+(p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad+' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')</div>'
+      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">📦 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad+' · <b>total '+p.stock+p.unidad+'</b></div></div>'
+      +(_cabEsAdmin()?'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
+      +'</div></div>';
+  });
+  if(!(window._cab.inv||[]).length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos de cabina todavía</div>';
+  b.innerHTML=html;
+}
+function _cabInvForm(i){
+  var f=document.getElementById('cab-inv-form'); if(!f) return;
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,minimo:1,notas:'',row:0};
+  var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
+  f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
+    +inp('producto','Producto *',p.producto)+inp('proveedor','Proveedor',p.proveedor)
+    +'<div style="display:flex;gap:5px">'
+    +'<div style="flex:1">'+inp('contenido','Contenido envase *',p.contenido,'number')+'</div>'
+    +'<div style="width:70px">'+inp('unidad','Unidad',p.unidad)+'</div>'
+    +'<div style="flex:1">'+inp('costo','Costo envase $ *',p.costoEnvase,'number')+'</div></div>'
+    +'<div style="display:flex;gap:5px">'
+    +'<div style="flex:1">'+inp('cerrados','Envases cerrados',p.cerrados,'number')+'</div>'
+    +'<div style="flex:1">'+inp('abierto','Abierto: restante',p.abierto,'number')+'</div>'
+    +'<div style="flex:1">'+inp('minimo','Mínimo (envases)',p.minimo,'number')+'</div></div>'
+    +inp('notas','Notas',p.notas)
+    +'<div style="display:flex;gap:6px;margin-top:4px">'
+    +'<button onclick="_cabInvGuardar('+i+','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +(i>=0?'<button onclick="_cabBorrar(\'inv\','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
+    +'<button onclick="document.getElementById(\'cab-inv-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  f.scrollIntoView({behavior:'smooth'});
+}
+function _cabInvGuardar(i,row,codigo,btn){
+  var v=function(id){ var el=document.getElementById('cbi-'+id); return el?el.value.trim():''; };
+  if(!v('producto')||!v('contenido')||!v('costo')){ toast('⚠️ Producto, contenido y costo son obligatorios','#C9A227'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
+      campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
+        unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
+        minimo:v('minimo'), notas:v('notas')},
+      usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('💾 Guardado','var(--green)');
+    window._cabSec='inv';
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ Sin conexión','#B86B6B'); });
+}
+// Borrar producto o activo. El servidor protege: un producto usado por un
+// protocolo vigente NO se puede borrar (te dice cuales lo usan).
+function _cabBorrar(hoja, row, codigo, btn){
+  if(!confirm('🗑 ¿Borrar '+codigo+'?\n\nEsta acción no se puede deshacer.')) return;
+  if(btn){ btn.disabled=true; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaBorrarFila', token:window._token||'', hoja:hoja, row:row, codigo:codigo, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'No se pudo borrar'),'#B86B6B'); return; }
+    toast('🗑 Borrado','var(--green)');
+    window._cabSec=hoja==='act'?'act':'inv';
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;} toast('❌ Sin conexión','#B86B6B'); });
+}
+// ── ACTIVOS ──
+function _cabPintarActivos(){
+  var b=document.getElementById('cab-body'); if(!b) return;
+  var html=_cabEsAdmin()?'<button onclick="_cabActForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo activo</button><div id="cab-act-form"></div>':'';
+  (window._cab.act||[]).forEach(function(a,i){
+    html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span></div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(a.costo?' · $'+a.costo:'')+'</div>'
+      +(a.notas?'<div style="font-size:0.56rem;color:var(--gray)">'+a.notas+'</div>':'')+'</div>'
+      +(_cabEsAdmin()?'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
+      +'</div></div>';
+  });
+  if(!(window._cab.act||[]).length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin activos registrados</div>';
+  b.innerHTML=html;
+}
+function _cabActForm(i){
+  var f=document.getElementById('cab-act-form'); if(!f) return;
+  var a=i>=0?(window._cab.act||[])[i]:{codigo:'',activo:'',categoria:'',cantidad:'',ubicacion:'',estado:'Buen estado',fechaCompra:'',costo:'',notas:'',row:0};
+  var inp=function(id,lbl,v){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cba-'+id+'" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
+  f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
+    +inp('activo','Activo *',a.activo)+inp('categoria','Categoría',a.categoria)
+    +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('cantidad','Cantidad',a.cantidad)+'</div><div style="flex:2">'+inp('ubicacion','Ubicación',a.ubicacion)+'</div></div>'
+    +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('estado','Estado',a.estado)+'</div><div style="flex:1">'+inp('fecha','Fecha compra',a.fechaCompra)+'</div><div style="flex:1">'+inp('costo','Costo $',a.costo)+'</div></div>'
+    +inp('notas','Notas',a.notas)
+    +'<div style="display:flex;gap:6px;margin-top:4px">'
+    +'<button onclick="_cabActGuardar('+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +(i>=0?'<button onclick="_cabBorrar(\'act\','+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
+    +'<button onclick="document.getElementById(\'cab-act-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  f.scrollIntoView({behavior:'smooth'});
+}
+function _cabActGuardar(row,codigo,btn){
+  var v=function(id){ var el=document.getElementById('cba-'+id); return el?el.value.trim():''; };
+  if(!v('activo')){ toast('⚠️ El nombre del activo es obligatorio','#C9A227'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaSaveActivo', token:window._token||'', row:row,
+      campos:{codigo:codigo, activo:v('activo'), categoria:v('categoria'), cantidad:v('cantidad'),
+        ubicacion:v('ubicacion'), estado:v('estado'), fechaCompra:v('fecha'), costo:v('costo'), notas:v('notas')},
+      usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('💾 Guardado','var(--green)');
+    window._cabSec='act';
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ Sin conexión','#B86B6B'); });
 }
 // ══════ DIRECTORIO DE CLIENTAS (pestaña Registro) ══════
 // Todas ven las fichas; el TELEFONO llega solo si el servidor lo autoriza por rol
