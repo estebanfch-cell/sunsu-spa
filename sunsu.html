@@ -4654,6 +4654,18 @@ function _fichaDe(nombreCompleto, cedula){
   }
   return fh||null;
 }
+// Edad a partir de la fecha de nacimiento de la ficha ('dd/MM/yyyy'). '' si no se puede.
+function _edadDe(nacStr){
+  var m=(nacStr||'').toString().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(!m) return '';
+  var a=parseInt(m[3]); if(a<100) a+=(a>26?1900:2000); // 2 digitos: 27-99 -> 19xx, 00-26 -> 20xx
+  var nac=new Date(a, parseInt(m[2])-1, parseInt(m[1]));
+  if(isNaN(nac)) return '';
+  var hoy=new Date();
+  var ed=hoy.getFullYear()-nac.getFullYear();
+  if(hoy.getMonth()<nac.getMonth()||(hoy.getMonth()===nac.getMonth()&&hoy.getDate()<nac.getDate())) ed--;
+  return (ed>=5&&ed<=110)?ed:''; // fuera de rango = fecha mal digitada, mejor no mostrar
+}
 function _fichaHTMLDe(nombreCompleto, cedula){
   var fh=_fichaDe(nombreCompleto, cedula);
   if(!fh) return '';
@@ -4664,7 +4676,9 @@ function _fichaHTMLDe(nombreCompleto, cedula){
     if(!val||/^(ninguna|ninguno|no|n\/a|na|-)$/i.test((val||'').trim())) return '';
     return '<div style="font-size:0.68rem;color:'+(destacar?'#B4541E':'#7A8499')+';margin-bottom:3px;'+(destacar?'font-weight:700':'')+'">'+icono+' <b style="color:#2D3B6B">'+lbl+':</b> '+val+'</div>';
   };
+  var _ed=_edadDe(fh.nacimiento);
   var cuerpo=''
+    +fila('🎂','Edad',_ed?(_ed+' años'):'')
     +fila('🧴','Piel',[fh.tipoPiel,fh.estado].filter(Boolean).join(' · '))
     +fila('⚠️','Alergias',fh.alergias,true)
     +fila('💊','Medicación',fh.medicacion,true)
@@ -5049,6 +5063,7 @@ window._citasCache = window._citasCache || {};
 var CITAS_TTL = 2 * 60 * 1000; // 2 minutos
 
 function verCitas(c,o,forzar){
+  window._citasDiaActivo=(o===-1?'ayer':o===1?'manana':'hoy'); // para descartar repintados tardíos de otro día
   var dias=[['Ayer',-1],['Hoy',0],['Mañana',1]];
   var hoy=new Date();
   var dia=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+o);
@@ -5179,9 +5194,16 @@ function _waConfirmarCita(aptId, diaNom, btn){
   var url='https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
   var v=window.open(url,'_blank');
   if(!v) window.location.href=url;
+  // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
+  // igual que en el flujo de tarjetas: al volver al app no hay nada que cerrar.
+  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
   _marcarEtqCita(aptId,'ESPERANDO',diaNom,btn);
 }
 function _renderCitasList(bd, data, diaNom){
+  // BUG carrera: los fetches en segundo plano (historial/fichas) y la marca de etiqueta
+  // repintaban con el dia con el que ARRANCARON. Si mientras tanto cambiaste de dia,
+  // te saltaba de vuelta. Un repintado de un dia que ya no esta activo se descarta.
+  if(window._citasDiaActivo && diaNom!==window._citasDiaActivo) return;
   var o=diaNom==='ayer'?-1:diaNom==='manana'?1:0;
   // Si el historial de tickets aún no está cargado, traerlo y re-pintar (una sola vez)
   if(!window._histData && !window._histFetchCitas){
