@@ -592,7 +592,7 @@ function _cargarProdColMap(){
 // ════ MENSAJES A CLIENTAS — editables en ⚙ CONFIGURACION del Sheet ════
 // Si el Sheet no responde, se usan estos textos: el app nunca se queda mudo.
 var MSG_DEF={
- 'LINK REGISTRO':'estebanfch-cell.github.io/sunsu-spa/registro.html',
+ 'LINK REGISTRO':'app.sunsuspa.com/registro.html',
  'MENSAJE CONFIRMACION CITA':'Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}¿Nos confirmas tu asistencia? 💙',
  'MENSAJE REGISTRO PRIMERA VISITA':'Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n📝 Tarjeta de registro\n{link}\n\n',
  'MENSAJE TARJETA SALUDO':'Hola {nombre}, te saludamos de Sunsu Spa!',
@@ -2169,7 +2169,7 @@ function abrirGCDigital(codigo){
 // Recrea la tarjeta azul de Sunsu en un canvas y permite descargarla/compartirla
 // con el mensaje de WhatsApp (plantilla editable en ⚙ CONFIGURACION: MENSAJE GIFT CARD).
 var GCD={para:'',de:'',facial:'Facial Premium',mensaje:'',codigo:'',valido:''};
-var GCD_PORTADA_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_portada.jpg';
+var GCD_PORTADA_URL='https://app.sunsuspa.com/giftcard_portada.jpg';
 
 function _validoDefault(){
   var MES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2225,10 +2225,10 @@ function _gcdInput(label,id,val){
 
 function _gcdVal(id){var e=document.getElementById(id);return e?e.value.trim():'';}
 
-var GCD_BASE_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_tarjeta_base.jpg';
-var GCD_PAG3_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_pag3_fondo.jpg';
-var GCD_ICONO_IG_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_icono_ig.png';
-var GCD_ICONO_WA_URL='https://estebanfch-cell.github.io/sunsu-spa/giftcard_icono_wa.png';
+var GCD_BASE_URL='https://app.sunsuspa.com/giftcard_tarjeta_base.jpg';
+var GCD_PAG3_URL='https://app.sunsuspa.com/giftcard_pag3_fondo.jpg';
+var GCD_ICONO_IG_URL='https://app.sunsuspa.com/giftcard_icono_ig.png';
+var GCD_ICONO_WA_URL='https://app.sunsuspa.com/giftcard_icono_wa.png';
 var _gcdBaseImg=null;
 var _gcdPag3Img=null;
 var _gcdIconoIG=null;
@@ -5187,9 +5187,14 @@ function _waConfirmarCita(aptId, diaNom, btn){
   var dt=new Date(apt.datetime);
   var dia=dt.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
   var hora=dt.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true});
-  var full=((apt.firstName||'')+' '+(apt.lastName||'')).trim();
-  var sinFicha=!_fichaDe(full,'');
-  var bloqueReg=sinFicha?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
+  // NUEVA vs ANTIGUA: lo decide el TIPO de cita en Acuity — el mismo criterio del badge.
+  // 'ES TU PRIMERA VEZ' = nueva -> lleva el bloque de registro.
+  // 'GRACIAS POR REGRESAR' = antigua -> sin bloque.
+  // Antes se decidia buscando la ficha en REGISTRO por nombre aproximado, pero ese
+  // cruce podia 'encontrar' la ficha de otra clienta con nombre parecido y saltarse
+  // el registro en una clienta nueva de verdad. Acuity es la fuente directa.
+  var esNueva=(apt.type||'').toUpperCase().indexOf('PRIMERA')>=0;
+  var bloqueReg=esNueva?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
   var msg=_msg('MENSAJE CONFIRMACION CITA',{nombre:nom, dia:dia, hora:hora, registro:bloqueReg});
   var url='https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
   var v=window.open(url,'_blank');
