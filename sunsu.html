@@ -2589,6 +2589,13 @@ function _copiarTexto_(txt){
   }catch(e2){}
 }
 
+// En Windows, wa.me abre la APP de escritorio de WhatsApp, cuyo manejador de
+// enlaces corrompe los emojis (llegan como '?'). web.whatsapp.com los respeta
+// porque todo queda en el navegador. En celular, wa.me sigue siendo lo correcto.
+function _waURL(tel, encTxt){
+  return _esMovil_() ? 'https://wa.me/'+tel+'?text='+encTxt
+                     : 'https://web.whatsapp.com/send?phone='+tel+'&text='+encTxt;
+}
 function _esMovil_(){
   // Celular o tablet (incluye iPad en modo escritorio, que se identifica como Mac pero tiene touch)
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -2992,7 +2999,10 @@ function renderSegPaquetes(c){
       }
       var diasSin=Math.floor((hoy-ultima)/86400000);
       if(isNaN(diasSin)||diasSin<0||diasSin>3700) diasSin=null; // fecha ilegible → no mostrar días
-      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),ultima:ultima,diasSin:diasSin};
+      var claveWa=(p.cedula||'')+'|'+(p.sku||'')+'|'+p.dia+'/'+p.mes+'/'+p.ano;
+      var regWa=(d.waEnviados||{})[claveWa];
+      return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),ultima:ultima,diasSin:diasSin,
+              claveWa:claveWa,waEnviado:!!regWa,waFecha:regWa?regWa.ts:'',waPor:regWa?regWa.u:''};
     });
     window._segPaqItems=items; // para los botones de tarjeta/WhatsApp
     var pendientes=items.filter(function(x){return x.pend>0;}).sort(function(a,b){return (b.diasSin===null?-1:b.diasSin)-(a.diasSin===null?-1:a.diasSin);});
@@ -3004,7 +3014,23 @@ function renderSegPaquetes(c){
       +'<div style="display:flex;gap:6px;margin-bottom:12px">'
       +'<button onclick="window._segPaqFiltro=\'pendientes\';renderSegPaquetes(document.getElementById(\'content\'))" style="padding:7px 12px;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer;border:1.5px solid '+(window._segPaqFiltro!=='completos'?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">⏳ Pendientes ('+pendientes.length+')</button>'
       +'<button onclick="window._segPaqFiltro=\'completos\';renderSegPaquetes(document.getElementById(\'content\'))" style="padding:7px 12px;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer;border:1.5px solid '+(window._segPaqFiltro==='completos'?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">✓ Completos ('+completos.length+')</button>'
+      +'</div>'
+      +'<input id="paq-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="_paqBuscarLocal(this.value)" '
+      +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:white;box-sizing:border-box;margin-bottom:8px">';
+    // Chips de WhatsApp enviado (igual que en el seguimiento de faciales)
+    var nEnvP=mostrar.filter(function(x){return x.waEnviado;}).length;
+    var fWaP=window._segPaqWaF||'todos';
+    var chipP=function(val,txt){
+      var on=fWaP===val;
+      return '<button onclick="window._segPaqWaF=\''+val+'\';renderSegPaquetes(document.getElementById(\'content\'))" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+    };
+    html+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'
+      +chipP('todos','Todas ('+mostrar.length+')')
+      +chipP('sin','✉️ Sin enviar ('+(mostrar.length-nEnvP)+')')
+      +chipP('env','✓ Enviadas ('+nEnvP+')')
       +'</div>';
+    if(fWaP==='sin') mostrar=mostrar.filter(function(x){return !x.waEnviado;});
+    else if(fWaP==='env') mostrar=mostrar.filter(function(x){return x.waEnviado;});
     if(!mostrar.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin paquetes en esta lista</div>';
     mostrar.forEach(function(x){
       var p=x.p;
@@ -3014,7 +3040,7 @@ function renderSegPaquetes(c){
         var usado=i<x.usados;
         puntos+='<span style="display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:4px;'+(usado?'background:var(--navy)':'background:white;border:1.5px solid var(--navy)')+'"></span>';
       }
-      html+='<div class="card" style="padding:12px;margin-bottom:9px;'+(alerta?'border:1.5px solid #E8543F':'')+'">'
+      html+='<div class="card paq-card" data-search="'+_normNomCli((p.nombre||'')+' '+(p.apellido||'')+' '+(p.cedula||''))+'" style="padding:12px;margin-bottom:9px;'+(alerta?'border:1.5px solid #E8543F':'')+'">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+(p.nombre+' '+p.apellido).trim()+'</div>'
@@ -3027,21 +3053,54 @@ function renderSegPaquetes(c){
         +'<span style="font-size:0.68rem;font-weight:800;color:'+(x.pend>0?'var(--navy)':'#2E7D52')+'">'+(x.pend>0?('Consumido '+x.usados+' de '+x.total+' — queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Paquete completo')+'</span>'
         +'<span style="font-size:0.62rem;color:var(--gray)">'+(x.diasSin!==null?('Última visita: '+fStr(x.ultima)+(x.pend>0?' ('+x.diasSin+' días)':'')):'Última visita: —')+'</span>'
         +'</div>'
+        +(x.waEnviado?'<div style="margin-top:6px"><span style="font-size:0.6rem;font-weight:800;color:#2E7D52;background:#EAF6EE;border-radius:6px;padding:2px 7px;white-space:nowrap">✉️ Enviado '+((x.waFecha||'').split('-').reverse().join('/'))+(x.waPor?(' · '+x.waPor):'')+'</span></div>':'')
         +(function(){
           var iGlobal=items.indexOf(x);
           var telP=(x.p.telefono||'').replace(/[^0-9]/g,'');
           if(telP&&telP.length===10&&telP.charAt(0)==='0') telP='593'+telP.slice(1);
-          var msgP=encodeURIComponent(_msg(x.pend>0?'MENSAJE PAQUETE DIGITAL PENDIENTE':'MENSAJE PAQUETE DIGITAL COMPLETO',{nombre:(x.p.nombre||'').split(' ')[0],usados:x.usados,total:x.total}));
           return '<div style="display:flex;gap:6px;margin-top:9px">'
             +'<button onclick="tarjetaPaquete('+iGlobal+')" style="flex:1;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">📄 Tarjeta digital</button>'
-            +(telP?'<a href="https://wa.me/'+telP+'?text='+msgP+'" target="_blank" style="padding:9px 13px;background:#25D366;color:white;border-radius:9px;font-size:0.68rem;font-weight:800;text-decoration:none;text-align:center">💬 WhatsApp</a>':'')
+            +(telP?'<button onclick="_paqWaEnviar('+iGlobal+')" style="padding:9px 13px;background:'+(x.waEnviado?'#8FBF9F':'#25D366')+';color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💬'+(x.waEnviado?' ✓':' WhatsApp')+'</button>':'')
             +'</div>';
         })()
         +'</div>';
     });
     c.innerHTML=html;
+    var qEl=document.getElementById('paq-q');
+    if(qEl&&window._segPaqQ){ qEl.value=window._segPaqQ; _paqBuscarLocal(window._segPaqQ); }
   })
   .catch(function(e){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
+}
+// Busqueda local (sin refetch): oculta/muestra los cards por nombre o cedula.
+function _paqBuscarLocal(q){
+  window._segPaqQ=q||'';
+  var nq=_normNomCli(q||'');
+  document.querySelectorAll('.paq-card').forEach(function(cd){
+    cd.style.display=(!nq||(cd.getAttribute('data-search')||'').indexOf(nq)>=0)?'block':'none';
+  });
+}
+// Abre WhatsApp con la plantilla del paquete y anota "enviado" en el servidor.
+function _paqWaEnviar(iGlobal){
+  var x=(window._segPaqItems||[])[iGlobal];
+  if(!x){ toast('❌ Refresca la lista','#B86B6B'); return; }
+  var tel=(x.p.telefono||'').replace(/[^0-9]/g,'');
+  if(tel.length===10&&tel.charAt(0)==='0') tel='593'+tel.slice(1);
+  if(!tel){ toast('⚠️ Sin teléfono','#B86B6B'); return; }
+  var msgP=encodeURIComponent(_msg(x.pend>0?'MENSAJE PAQUETE DIGITAL PENDIENTE':'MENSAJE PAQUETE DIGITAL COMPLETO',{nombre:(x.p.nombre||'').split(' ')[0],usados:x.usados,total:x.total}));
+  var _u=_waURL(tel,msgP);
+  var v=window.open(_u,'_blank');
+  if(!v) window.location.href=_u;
+  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'segPaqWaEnviado', clave:x.claveWa, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok) return;
+    x.waEnviado=true; x.waFecha=new Date().toISOString().slice(0,10); x.waPor=CU?CU.short||CU.name:'';
+    toast('✉️ Mensaje registrado como enviado','var(--green)');
+    renderSegPaquetes(document.getElementById('content'));
+  })
+  .catch(function(){});
 }
 function _renderSeguimientoFacial(c){
   var esPermitido=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
@@ -3111,7 +3170,7 @@ function pintarCumples(){
       +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+cu.nombre+' '+cu.apellido+(esHoy?' <span style="color:#C77D9E;font-weight:800">🎉 ¡HOY!</span>':'')+'</div>'
       +'<div style="font-size:0.6rem;color:var(--gray)">🎂 '+cu.dia+' de '+mesNombre+(cu.telefono?' · 📱 '+cu.telefono:'')+'</div>'
       +'</div>'
-      +(telD?'<a href="https://wa.me/'+telD+'?text='+waMsgC+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'')
+      +(telD?'<a href="'+_waURL(telD,waMsgC)+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'')
       +'</div>';
   });
   html+='</div></div>';
@@ -3262,8 +3321,9 @@ function _segConfirmarTodas(){
 }
 // Abre WhatsApp con la plantilla y anota "enviado" en el servidor (fecha+quien).
 function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
-  var v=window.open('https://wa.me/'+tel+'?text='+waMsg,'_blank');
-  if(!v) window.location.href='https://wa.me/'+tel+'?text='+waMsg;
+  var _uWa=_waURL(tel,waMsg);
+  var v=window.open(_uWa,'_blank');
+  if(!v) window.location.href=_uWa;
   if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); } // pestana puente fuera
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'seguimientoWaEnviado', tkRow:tkRow, cedula:cedula, nombre:nombre, apellido:apellido, usuario:CU?CU.name:'—'})})
@@ -4809,24 +4869,38 @@ function mostrarErrorCitas(c, msg) {
 
 // ── Ficha del REGISTRO para una clienta (por cédula o nombre, con cruce aproximado) ──
 function _fichaDe(nombreCompleto, cedula){
+  // ESTRICTO a proposito: la ficha alimenta decisiones de tratamiento (alergias,
+  // condiciones, edad). Mostrar la ficha de OTRA persona es peor que no mostrar nada.
+  // Reglas: 1) cedula exacta gana. 2) nombre completo exacto gana. 3) por tokens:
+  // el PRIMER nombre debe coincidir exacto Y al menos un APELLIDO completo (>2 letras)
+  // debe estar en ambos. 4) si dos fichas empatan como candidatas -> NINGUNA (ambiguo).
+  // El bug anterior emparejaba por primer nombre solo: cualquier 'Monica' del registro
+  // le calzaba a cualquier 'Monica' de Acuity.
   var fr=window._fichasReg;
   if(!fr||fr.cargando) return null;
+  var ced=(cedula||'').toString().split('.')[0];
+  if(ced&&fr.porCedula[ced]) return fr.porCedula[ced];
   var nrm=(typeof _normNomCli==='function')?_normNomCli(nombreCompleto||''):(nombreCompleto||'').toLowerCase();
-  var fh=(cedula&&fr.porCedula[(cedula||'').toString().split('.')[0]])||fr.porNombre[nrm];
-  if(!fh){
-    var parts=nrm.split(' ').filter(Boolean);
-    if(parts.length>=2){
-      var pn=parts[0], pa=parts[parts.length-1];
-      var ks=Object.keys(fr.porNombre||{});
-      for(var ki=0;ki<ks.length;ki++){
-        if(ks[ki].indexOf(pn)===0 && ks[ki].indexOf(pa)>=0){ fh=fr.porNombre[ks[ki]]; break; }
-      }
-      if(!fh) for(var kj=0;kj<ks.length;kj++){
-        if(nrm.indexOf(ks[kj].split(' ')[0])===0 && ks[kj].split(' ').some(function(w){return w.length>2&&nrm.indexOf(w)>=0;})){ fh=fr.porNombre[ks[kj]]; break; }
-      }
-    }
-  }
-  return fh||null;
+  if(!nrm) return null;
+  if(fr.porNombre[nrm]) return fr.porNombre[nrm];
+  var tks=nrm.split(' ').filter(Boolean);
+  if(tks.length<2) return null;
+  var apCita=tks.slice(1);
+  var cands=[];
+  Object.keys(fr.porNombre||{}).forEach(function(k){
+    var ft=k.split(' ').filter(Boolean);
+    if(ft.length<2) return;
+    if(ft[0]!==tks[0]) return;                    // primer nombre: igualdad exacta
+    var apFicha=ft.slice(1);
+    var hayApellido=apFicha.some(function(a){return a.length>2&&apCita.indexOf(a)>=0;});
+    if(!hayApellido) return;                      // sin apellido compartido: fuera
+    var score=ft.filter(function(w){return tks.indexOf(w)>=0;}).length;
+    cands.push({k:k,score:score});
+  });
+  if(!cands.length) return null;
+  cands.sort(function(a,b){return b.score-a.score;});
+  if(cands.length>1&&cands[0].score===cands[1].score) return null; // ambiguo: nada
+  return fr.porNombre[cands[0].k];
 }
 // Edad a partir de la fecha de nacimiento de la ficha ('dd/MM/yyyy'). '' si no se puede.
 function _edadDe(nacStr){
@@ -4868,13 +4942,18 @@ function _fichaHTMLDe(nombreCompleto, cedula){
     +'<div style="font-size:0.64rem;font-weight:800;color:#2D3B6B;margin-bottom:5px">📋 FICHA DE LA CLIENTA</div>'+cuerpo+'</div>';
 }
 function _cargarFichasReg(cb){
-  if(window._fichasReg&&!window._fichasReg.cargando){ if(cb)cb(); return; }
+  // Vence a los 10 min: una clienta que se registra en recepcion aparece en su cita
+  // de hoy sin tener que cerrar el app (antes el cache vivia toda la sesion).
+  var _vencido=window._fichasReg&&!window._fichasReg.cargando&&(Date.now()-(window._fichasRegTs||0))>600000;
+  if(window._fichasReg&&!window._fichasReg.cargando&&!_vencido){ if(cb)cb(); return; }
+  if(_vencido) window._fichasReg=null;
   if(window._fichasReg&&window._fichasReg.cargando){ window._fichasCb=cb; return; }
   window._fichasReg={porCedula:{},porNombre:{},cargando:true};
   fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now())
     .then(function(r){return r.json();})
     .then(function(d){
       window._fichasReg={porCedula:d.porCedula||{},porNombre:d.porNombre||{}};
+      window._fichasRegTs=Date.now();
       if(cb)cb();
       if(window._fichasCb){window._fichasCb();window._fichasCb=null;}
     })
@@ -4882,12 +4961,14 @@ function _cargarFichasReg(cb){
 }
 function mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError) {
   // Fichas del REGISTRO (condiciones, alergias, fotos...): cargar y re-pintar
+  if(window._fichasReg&&!window._fichasReg.cargando&&(Date.now()-(window._fichasRegTs||0))>600000) window._fichasReg=null;
   if(!window._fichasReg){
     window._fichasReg={porCedula:{},porNombre:{},cargando:true};
     fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now())
       .then(function(r){return r.json();})
       .then(function(d){
         window._fichasReg={porCedula:d.porCedula||{},porNombre:d.porNombre||{}};
+        window._fichasRegTs=Date.now();
         try{ mostrarCitas(c, rawData, isAdmin, fecha, hasAcuity, hasError); }catch(eR){}
       })
       .catch(function(){ window._fichasReg={porCedula:{},porNombre:{}}; });
@@ -5309,6 +5390,113 @@ function _citaTieneTicket(apt, fechaStr){
   }
   return false;
 }
+// ══════ DIRECTORIO DE CLIENTAS (pestaña Registro) ══════
+// Todas ven las fichas; el TELEFONO llega solo si el servidor lo autoriza por rol
+// (cosmetologas: nunca viaja). Editar: solo admins, validado en el servidor.
+function renderRegistroCliente(c){
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando clientas...</div>';
+  var tok=window._token||'';
+  fetch(APPS_SCRIPT_URL+'?action=getRegistroClientes&token='+encodeURIComponent(tok)+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    window._regDirItems=d.items||[];
+    window._regDirConTel=!!d.conTel;
+    _pintarRegDir(c);
+  })
+  .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar el registro</div>'; });
+}
+function _pintarRegDir(c){
+  var items=window._regDirItems||[];
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📇 Registro de Clientas ('+items.length+')</div>'
+    +'<button onclick="renderRegistroForm(document.getElementById(\'content\'))" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer;white-space:nowrap">➕ Crear nuevo registro</button>'
+    +'</div>'
+    +'<input id="regdir-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="_regDirBuscar(this.value)" '
+    +'style="width:100%;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:white;box-sizing:border-box;margin-bottom:10px">';
+  if(!items.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin clientas registradas</div>';
+  items.forEach(function(it,i){
+    var ed=_edadDe(it.nacimiento);
+    html+='<div class="card regdir-card" data-search="'+_normNomCli((it.nombre||'')+' '+(it.apellido||'')+' '+(it.cedula||''))+'" style="padding:0;margin-bottom:7px;overflow:hidden">'
+      +'<div onclick="_regDirToggle('+i+')" style="padding:11px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
+      +'<div><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+(it.nombre+' '+it.apellido).trim()+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+(it.cedula||'s/cédula')+(ed?' · '+ed+' años':'')+'</div></div>'
+      +'<span id="regdir-ar-'+i+'" style="color:var(--gray);font-size:0.8rem">▾</span>'
+      +'</div>'
+      +'<div id="regdir-b-'+i+'" style="display:none;padding:0 13px 12px"></div>'
+      +'</div>';
+  });
+  c.innerHTML=html;
+  if(window._regDirQ){ var qe=document.getElementById('regdir-q'); if(qe){qe.value=window._regDirQ; _regDirBuscar(window._regDirQ);} }
+}
+function _regDirBuscar(q){
+  window._regDirQ=q||'';
+  var nq=_normNomCli(q||'');
+  document.querySelectorAll('.regdir-card').forEach(function(cd){
+    cd.style.display=(!nq||(cd.getAttribute('data-search')||'').indexOf(nq)>=0)?'block':'none';
+  });
+}
+function _regDirToggle(i){
+  var b=document.getElementById('regdir-b-'+i), ar=document.getElementById('regdir-ar-'+i);
+  if(!b) return;
+  var abrir=b.style.display==='none';
+  b.style.display=abrir?'block':'none';
+  if(ar) ar.textContent=abrir?'▴':'▾';
+  if(abrir) _regDirCuerpo(i,false);
+}
+function _regDirCuerpo(i,editando){
+  var it=(window._regDirItems||[])[i]; var b=document.getElementById('regdir-b-'+i);
+  if(!it||!b) return;
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var fila=function(ic,lbl,v){ return v?'<div style="font-size:0.68rem;margin:3px 0"><b style="color:var(--navy)">'+ic+' '+lbl+':</b> <span style="color:#4A5568">'+v+'</span></div>':''; };
+  if(!editando){
+    b.innerHTML=fila('🎂','Nacimiento',it.nacimiento)
+      +fila('📍','Sector',it.sector)
+      +(window._regDirConTel?fila('📱','Teléfono',it.telefono):'')
+      +fila('🧴','Piel',[it.tipoPiel,it.estado].filter(Boolean).join(' · '))
+      +fila('⚠️','Alergias',it.alergias)
+      +fila('💊','Medicación',it.medicacion)
+      +fila('🩺','Condiciones',it.condiciones)
+      +fila('🌸','Ciclo',it.ciclo)
+      +fila('✂️','Extracciones',it.extracciones)
+      +fila('💆','Cortesía',it.cortesia)
+      +fila('📸','Fotos',it.autorizaFotos)
+      +(esAdmin?'<button onclick="_regDirCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar</button>':'');
+    return;
+  }
+  // Modo edicion (solo admins; el servidor lo re-valida igual)
+  var inp=function(id,lbl,v){ return '<div style="margin:6px 0"><div style="font-size:0.6rem;font-weight:800;color:var(--navy)">'+lbl+'</div>'
+    +'<input id="rde-'+id+'-'+i+'" value="'+String(v||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
+  b.innerHTML=inp('nombre','Nombre',it.nombre)+inp('apellido','Apellido',it.apellido)
+    +(window._regDirConTel?inp('telefono','Teléfono',it.telefono):'')
+    +inp('sector','Sector',it.sector)+inp('tipoPiel','Tipo de piel',it.tipoPiel)+inp('estado','Estado',it.estado)
+    +inp('alergias','Alergias',it.alergias)+inp('medicacion','Medicación',it.medicacion)+inp('condiciones','Condiciones',it.condiciones)
+    +'<div style="display:flex;gap:6px;margin-top:9px">'
+    +'<button onclick="_regDirGuardar('+i+',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="_regDirCuerpo('+i+',false)" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div>';
+}
+function _regDirGuardar(i,btn){
+  var it=(window._regDirItems||[])[i]; if(!it) return;
+  var v=function(id){ var el=document.getElementById('rde-'+id+'-'+i); return el?el.value.trim():null; };
+  var campos={};
+  ['nombre','apellido','telefono','sector','tipoPiel','estado','alergias','medicacion','condiciones'].forEach(function(k){
+    var val=v(k); if(val!==null) campos[k]=val;
+  });
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Guardando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'saveRegistroCliente', token:window._token||'', row:it.row, cedula:it.cedula||'', campos:campos, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(btn){ btn.disabled=false; btn.textContent='💾 Guardar'; }
+    if(!d.ok){ toast('❌ '+(d.error||'No se pudo guardar'),'#B86B6B'); return; }
+    Object.keys(campos).forEach(function(k){ it[k]=campos[k]; });
+    window._fichasReg=null; // las fichas de citas se refrescan con el dato nuevo
+    _regDirCuerpo(i,false);
+    toast('💾 Ficha actualizada','var(--green)');
+  })
+  .catch(function(){ if(btn){ btn.disabled=false; btn.textContent='💾 Guardar'; } toast('❌ Sin conexión','#B86B6B'); });
+}
 // ══════ CONFIRMACION DE CITAS (etiquetas de Acuity) ══════
 // Acuity admite UNA etiqueta por cita: cada estado reemplaza al anterior.
 // ESPERANDO CONFIR -> CONFIRMADA -> COMPLETADO -> INGRESADO Y COMP (azul) / NO LLEGO.
@@ -5349,6 +5537,29 @@ function _marcarEtqCita(aptId, etiqueta, diaNom, btn){
   })
   .catch(function(){ _rest(); toast('❌ Sin conexión','#B86B6B'); });
 }
+// Cancela la cita en Acuity: el horario queda LIBRE en el calendario de una.
+// Doble confirmacion porque es destructivo y no hay deshacer desde el app.
+function _cancelarCita(aptId, diaNom, btn){
+  var ch=(window._citasCache||{})[diaNom];
+  var apt=(ch&&Array.isArray(ch.data))?ch.data.filter(function(a){return String(a.id)===String(aptId);})[0]:null;
+  var quien=apt?((apt.firstName||'')+' '+(apt.lastName||'')).trim():'esta clienta';
+  var hora=apt&&apt.datetime?new Date(apt.datetime).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+  if(!confirm('🗑 ¿Cancelar la cita de '+quien+(hora?' ('+hora+')':'')+'?\n\nEl horario quedará LIBRE en el calendario de Acuity. Esta acción no se puede deshacer desde el app.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Cancelando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cancelarCitaAcuity', aptId:aptId, detalle:quien, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🗑 Cancelar cita (libera el horario)';} toast('❌ '+(d.error||'No se pudo cancelar'),'#B86B6B'); return; }
+    toast('🗑 Cita cancelada — horario liberado','var(--green)');
+    if(ch&&Array.isArray(ch.data)){
+      ch.data=ch.data.filter(function(a){return String(a.id)!==String(aptId);});
+      var bd2=document.getElementById('cb');
+      if(bd2) _renderCitasList(bd2, ch.data, diaNom);
+    }
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🗑 Cancelar cita (libera el horario)';} toast('❌ Sin conexión','#B86B6B'); });
+}
 // Abre WhatsApp con el mensaje ya escrito y deja la cita en ESPERANDO CONFIR.
 // El link de registro va SOLO si la clienta no tiene ficha en REGISTRO.
 function _waConfirmarCita(aptId, diaNom, btn){
@@ -5370,7 +5581,7 @@ function _waConfirmarCita(aptId, diaNom, btn){
   var esNueva=(apt.type||'').toUpperCase().indexOf('PRIMERA')>=0;
   var bloqueReg=esNueva?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
   var msg=_msg('MENSAJE CONFIRMACION CITA',{nombre:nom, dia:dia, hora:hora, registro:bloqueReg});
-  var url='https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
+  var url=_waURL(tel,encodeURIComponent(msg));
   var v=window.open(url,'_blank');
   if(!v) window.location.href=url;
   // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
@@ -5448,7 +5659,8 @@ function _renderCitasList(bd, data, diaNom){
           h+='<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
             +'<button onclick="_waConfirmarCita(\''+apt.id+'\',\'manana\',this)" style="flex:1;min-width:120px;padding:10px;background:#25D366;color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">💬 WhatsApp</button>'
             +'<button onclick="_marcarEtqCita(\''+apt.id+'\',\'CONFIRMADA\',\'manana\',this)" style="flex:1;min-width:110px;padding:10px;background:#F2D24B;color:#3A3000;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">✅ Confirmó</button>'
-            +'</div>';
+            +'</div>'
+            +'<button onclick="_cancelarCita(\''+apt.id+'\',\'manana\',this)" style="width:100%;padding:7px;margin-top:6px;background:white;color:#B86B6B;border:1.5px solid #E5C4C4;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🗑 Cancelar cita (libera el horario)</button>';
         } else if(o===0 && !ok){ // HOY: la que no se presento
           h+='<button onclick="_marcarEtqCita(\''+apt.id+'\',\'NO LLEGO\',\'hoy\',this)" style="width:100%;padding:8px;margin-top:7px;background:white;color:#2E2E2E;border:1.5px solid #2E2E2E;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">⚫ No llegó</button>';
         }
@@ -6426,7 +6638,7 @@ function regToggle(id, val, multi){
     b.style.borderColor=on?'var(--navy)':'var(--cream-d)';
   });
 }
-function renderRegistroCliente(c){
+function renderRegistroForm(c){
   window._regSel={};
   var inp=function(id,lbl,ph,tipo){
     return '<div style="margin-bottom:11px"><div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin-bottom:4px">'+lbl+'</div>'
@@ -6512,7 +6724,7 @@ function reintentarRegistro(){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
     window._afMapa=null;
     toast('✅ Registro actualizado (fila '+d.fila+')','var(--green)');
-    renderRegistroCliente(document.getElementById('content'));
+    renderRegistroForm(document.getElementById('content'));
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
@@ -6560,7 +6772,7 @@ function enviarRegistroCliente(btn, forzar){
         +'Relájate, que de los detalles nos encargamos nosotras. ✨</div>'
         +'<div style="font-size:0.68rem;color:var(--gray);margin-top:16px">¿Cambió tu teléfono o algún dato? Coméntanos en recepción y lo actualizamos al instante.</div>'
         +'<div style="display:flex;gap:8px;justify-content:center;margin-top:22px;flex-wrap:wrap">'
-        +'<button onclick="renderRegistroCliente(document.getElementById(\'content\'))" style="padding:11px 18px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">📝 Nuevo registro</button>'
+        +'<button onclick="renderRegistroForm(document.getElementById(\'content\'))" style="padding:11px 18px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">📝 Nuevo registro</button>'
         +'<button onclick="if(confirm(\'Actualizar la fila '+d.fila+' con los datos ingresados?\'))reintentarRegistro()" style="padding:11px 18px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.76rem;font-weight:700;cursor:pointer">✏️ Actualizar datos (staff)</button>'
         +'</div></div>';
       window._regDatosPend=true;
@@ -6569,7 +6781,7 @@ function enviarRegistroCliente(btn, forzar){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.textContent='✅ Registrar cliente';btn.disabled=false;}return;}
     window._afMapa=null; // refrescar el mapa de autorizaciones en citas
     toast(d.actualizado?'✅ Registro actualizado (fila '+d.fila+')':'✅ Cliente registrado correctamente','var(--green)');
-    renderRegistroCliente(document.getElementById('content'));
+    renderRegistroForm(document.getElementById('content'));
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.textContent='✅ Registrar cliente';btn.disabled=false;}});
 }
@@ -6732,7 +6944,7 @@ function enviarAmbasTarjetas(tkRow, ced, telAmb){
     if(telAmb){
       var msgAmb=encodeURIComponent(_msg('MENSAJE TARJETA AMBAS',{}));
       // window.open puede ser bloqueado tras trabajo asíncrono → respaldo con location
-      var wURL='https://wa.me/'+telAmb+'?text='+msgAmb;
+      var wURL=_waURL(telAmb,msgAmb);
       var vent=window.open(wURL,'_blank');
       if(!vent) window.location.href=wURL;
       toast('📄 2 PDFs descargados — adjúntalos en el chat (📎 → Documento → Descargas)','var(--blue)');
@@ -6776,7 +6988,7 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
     var txtT1 = _esMovil_()
       ? (msgHola||msg)
       : (msgHola||'') + '%0A%0A' + (msg||'') + (conPaq && msgPaq ? '%0A%0A' + msgPaq : '');
-    var wURL='https://wa.me/'+tel+'?text='+txtT1;
+    var wURL=_waURL(tel,txtT1);
     var vent=window.open(wURL,'_blank');
     if(!vent) window.location.href=wURL;
     // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
@@ -8829,7 +9041,7 @@ function _pintarTodosPaquetes(){
       +(function(){
         var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
         if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
-        return telQ?'<a href="https://wa.me/'+telQ+'?text='+encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]}))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
+        return telQ?'<a href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
       })()
       +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
       +'</div><div id="paq-exp-'+p.fila+'"></div></div>';
