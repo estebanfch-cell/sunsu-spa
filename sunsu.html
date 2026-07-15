@@ -7322,28 +7322,60 @@ function _stripAgendaSunsu(){
     {emoji:'📸', img:igOK?_gcdIconoIG:null, label:'Instagram', url:'https://www.instagram.com/sunsuspa?igsh=MWg2aHJ2ZDNoeTgzNg=='},
     {emoji:'📍', img:null,                  label:'Ubicación', url:'https://maps.app.goo.gl/ztHyuXZ1NyL3dFBB6'}
   ];
-  // Discreto y elegante: círculos pequeños con aro fino, todos idénticos (dibujado @2x)
-  var r=34, gap=58;
+  // Monocromo Sunsu: discos crema con aro navy, iconos como SILUETAS navy uniformes.
+  // Los logos reales (WA/IG) se TIÑEN al navy con un canvas auxiliar; los demas se
+  // dibujan a mano como iconos de linea del mismo trazo. Etiquetas navy en negrita.
+  var NAVY_S='#3D5A7A', CREMA_S='#FDFAF1';
+  var r=44, gap=46;
   var total=iconos.length*2*r+(iconos.length-1)*gap;
-  var CW=total+24, CH=2*r+40;
+  var CW=total+24, CH=2*r+46;
   var cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
   var x=cv.getContext('2d');
-  var cy=r+3, links=[];
+  var cy=r+4, links=[];
+  // Tinte navy de un logo PNG (usa su transparencia como mascara)
+  var tintar=function(img,tam){
+    var oc=document.createElement('canvas'); oc.width=tam; oc.height=tam;
+    var ox=oc.getContext('2d');
+    ox.drawImage(img,0,0,tam,tam);
+    ox.globalCompositeOperation='source-in';
+    ox.fillStyle=NAVY_S; ox.fillRect(0,0,tam,tam);
+    return oc;
+  };
+  var trazo=function(){ x.lineWidth=6; x.strokeStyle=NAVY_S; x.lineJoin='round'; x.lineCap='round'; };
+  var dibujar={
+    'Agenda':function(cx){ var sA=r*0.58; trazo();
+      x.strokeRect(cx-sA, cy-sA*0.72, 2*sA, 1.62*sA);
+      x.beginPath(); x.moveTo(cx-sA, cy-sA*0.72+sA*0.5); x.lineTo(cx+sA, cy-sA*0.72+sA*0.5); x.stroke();
+      x.beginPath(); x.moveTo(cx-sA*0.45, cy-sA*1.02); x.lineTo(cx-sA*0.45, cy-sA*0.5);
+      x.moveTo(cx+sA*0.45, cy-sA*1.02); x.lineTo(cx+sA*0.45, cy-sA*0.5); x.stroke(); },
+    'Web':function(cx){ var sW=r*0.58; trazo();
+      x.beginPath(); x.arc(cx,cy,sW,0,Math.PI*2); x.stroke();
+      x.beginPath(); x.moveTo(cx-sW,cy); x.lineTo(cx+sW,cy); x.stroke();
+      x.beginPath(); x.ellipse(cx,cy,sW*0.42,sW,0,0,Math.PI*2); x.stroke(); },
+    'Ubicación':function(cx){ var sU=r*0.6; trazo();
+      x.beginPath(); x.arc(cx,cy-sU*0.28,sU*0.55,Math.PI*0.95,Math.PI*0.05);
+      x.lineTo(cx,cy+sU*0.92); x.closePath(); x.stroke();
+      x.beginPath(); x.arc(cx,cy-sU*0.28,sU*0.2,0,Math.PI*2); x.fillStyle=NAVY_S; x.fill(); }
+  };
   iconos.forEach(function(ic,i){
     var cx=12+r+i*(2*r+gap);
-    x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
-    x.lineWidth=2.5; x.strokeStyle='#9FB2CC'; x.stroke();
+    x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fillStyle=CREMA_S; x.fill();
+    x.lineWidth=4.5; x.strokeStyle=NAVY_S; x.stroke();
     if(ic.img){
-      var s=r*1.15; try{ x.drawImage(ic.img, cx-s/2, cy-s/2, s, s); }catch(eI){}
+      var tam=Math.round(r*1.12);
+      try{ x.drawImage(tintar(ic.img,tam*2), cx-tam/2, cy-tam/2, tam, tam); }
+      catch(eI){ if(dibujar[ic.label]) dibujar[ic.label](cx); }
+    } else if(dibujar[ic.label]) {
+      dibujar[ic.label](cx);
     } else {
-      x.font=Math.round(r*1.05)+'px Arial'; x.textAlign='left';
+      x.font=Math.round(r*1.0)+'px Arial'; x.textAlign='left';
       var we=x.measureText(ic.emoji).width;
-      x.fillText(ic.emoji, cx-we/2, cy+r*0.38);
+      x.fillText(ic.emoji, cx-we/2, cy+r*0.36);
     }
-    x.fillStyle='#5A6E8C'; x.font='600 '+Math.round(r*0.42)+'px Arial'; x.textAlign='left';
+    x.fillStyle=NAVY_S; x.font='800 '+Math.round(r*0.46)+'px Arial'; x.textAlign='left';
     var wl=x.measureText(ic.label).width;
-    x.fillText(ic.label, cx-wl/2, cy+r+22);
-    links.push({x:cx-r-4, y:cy-r-4, w:2*r+8, h:2*r+30, url:ic.url});
+    x.fillText(ic.label, cx-wl/2, cy+r+30);
+    links.push({x:cx-r-4, y:cy-r-4, w:2*r+8, h:2*r+38, url:ic.url});
   });
   return {data:cv.toDataURL('image/png'), w:CW, h:CH, links:links};
 }
@@ -7514,15 +7546,19 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     }
     // ── AGENDA TU SIGUIENTE CITA — DISCOS estilo gift card, anclados al fondo ──
     var strip=_stripAgendaSunsu();
-    var dw=250, dh=dw*strip.h/strip.w; // pequeño y discreto
-    var sx=(W-dw)/2, sy=H-dh-10;       // lo más abajo posible — SIEMPRE en la misma hoja
-    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
-    doc.text('Agenda tu siguiente cita - toca una opcion:',W/2,sy-4,{align:'center'});
+    // Protagonista, ya no discreto: iconos grandes en el tema Sunsu, titulo claro
+    // de que se puede reagendar tocando, subtitulo dorado con la instruccion.
+    var dw=360, dh=dw*strip.h/strip.w;
+    var sx=(W-dw)/2, sy=H-dh-12;       // anclado al fondo — SIEMPRE en la misma hoja
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.6); doc.setTextColor(TXT);
+    doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,sy-26,{align:'center'});
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(NAVY);
+    doc.text('AGENDA TU SIGUIENTE CITA',W/2,sy-14,{align:'center'});
+    doc.setFont('helvetica','italic'); doc.setFontSize(7.2); doc.setTextColor(GOLD);
+    doc.text('toca cualquier ícono para reservar',W/2,sy-5,{align:'center'});
     doc.addImage(strip.data,'PNG',sx,sy,dw,dh);
     var escS=dw/strip.w;
     strip.links.forEach(function(l){ doc.link(sx+l.x*escS, sy+l.y*escS, l.w*escS, l.h*escS, {url:l.url}); });
-    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); doc.setTextColor(TXT);
-    doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,sy-13,{align:'center'});
     var nomArchTT='Tarjeta '+(t.nombre||'').split(' ')[0]+' '+fechaFmt.replace(/\//g,'-')+'.pdf';
     if(cbTT){ cbTT(doc, nomArchTT); return; }
     _entregarPDF(doc, nomArchTT);
