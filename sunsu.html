@@ -3120,6 +3120,7 @@ function _renderSeguimientoFacial(c){
       window._segMsgProx=d.msgProxima||'';
       window._segMsgCum=d.msgCumple||'';
       window._segCumples=d.cumples||[];
+      window._segWaCum=d.waCumples||{};
       window._segStats=d.stats||null;
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
@@ -3151,14 +3152,28 @@ function pintarCumples(){
   var MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   var mesNombre=MESES[new Date().getMonth()];
   var hoyDia=new Date().getDate();
+  // Clave por clienta+año: un saludo por año. El envio se anota en el servidor.
+  var anioCum=new Date().getFullYear();
+  var claveCum=function(cu){ return ((cu.cedula||'').toString().split('.')[0]||_normNomCli(cu.nombre+' '+cu.apellido))+'|'+anioCum; };
+  lista.forEach(function(cu){ var r=(window._segWaCum||{})[claveCum(cu)]; cu._waEnv=!!r; cu._waF=r?r.ts:''; cu._waPor=r?r.u:''; });
+  var nEnvC=lista.filter(function(x){return x._waEnv;}).length;
+  var fC=window._segCumF||'todos';
+  var vista=fC==='sin'?lista.filter(function(x){return !x._waEnv;}):fC==='env'?lista.filter(function(x){return x._waEnv;}):lista;
+  var chipC=function(val,txt){
+    var on=fC===val;
+    return '<button onclick="window._segCumF=\''+val+'\';window._segMantenerAbierto=\'seg-cum\';pintarCumples()" style="padding:4px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;border:1.2px solid #C77D9E;background:'+(on?'#C77D9E':'white')+';color:'+(on?'white':'#C77D9E')+'">'+txt+'</button>';
+  };
   var html='<div style="background:white;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)">'
     +'<div onclick="toggleGrupoEntrada(\'seg-cum\')" style="background:#C77D9E;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
     +'<div><div style="font-size:0.8rem;font-weight:800;color:white">🎂 Cumpleaños de '+mesNombre+' ('+lista.length+')</div>'
     +'<div style="font-size:0.58rem;color:rgba(255,255,255,0.75)">felicítalas y ofréceles su atención especial</div></div>'
     +'<span id="arrow-seg-cum" style="color:white;font-size:0.75rem">▶</span>'
     +'</div>'
-    +'<div id="seg-cum" style="display:none;padding:8px 14px">';
-  lista.forEach(function(cu){
+    +'<div id="seg-cum" style="display:none;padding:8px 14px">'
+    +'<div style="display:flex;gap:5px;flex-wrap:wrap;padding:2px 0 8px">'
+    +chipC('todos','Todas ('+lista.length+')')+chipC('sin','✉️ Sin enviar ('+(lista.length-nEnvC)+')')+chipC('env','✓ Enviadas ('+nEnvC+')')
+    +'</div>';
+  vista.forEach(function(cu){
     var esHoy=cu.dia===hoyDia;
     var telD=(cu.telefono||'').replace(/[^0-9]/g,'');
     if(telD.length===10&&telD.charAt(0)==='0') telD='593'+telD.slice(1);
@@ -3170,15 +3185,29 @@ function pintarCumples(){
       +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+cu.nombre+' '+cu.apellido+(esHoy?' <span style="color:#C77D9E;font-weight:800">🎉 ¡HOY!</span>':'')+'</div>'
       +'<div style="font-size:0.6rem;color:var(--gray)">🎂 '+cu.dia+' de '+mesNombre+(cu.telefono?' · 📱 '+cu.telefono:'')+'</div>'
       +'</div>'
-      +(telD?'<a href="'+_waURL(telD,waMsgC)+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'')
-      +'</div>';
+      +(telD?'<button onclick="_cumWaEnviar(\''+telD+'\',\''+waMsgC+'\',\''+claveCum(cu).replace(/'/g,'')+'\')" style="padding:6px 10px;background:'+(cu._waEnv?'#8FBF9F':'#25D366')+';color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer;flex-shrink:0">💬'+(cu._waEnv?' ✓':'')+'</button>':'')
+      +'</div>'
+      +(cu._waEnv?'<div style="padding:0 0 7px"><span style="font-size:0.58rem;font-weight:800;color:#2E7D52;background:#EAF6EE;border-radius:6px;padding:2px 7px">✉️ Enviado '+((cu._waF||'').split('-').reverse().join('/'))+(cu._waPor?' · '+cu._waPor:'')+'</span></div>':'');
   });
   html+='</div></div>';
   cont.innerHTML=html;
+  if(window._segMantenerAbierto==='seg-cum'){
+    var gC=document.getElementById('seg-cum'), aC=document.getElementById('arrow-seg-cum');
+    if(gC){ gC.style.display='block'; if(aC) aC.textContent='▼'; }
+    window._segMantenerAbierto=null;
+  }
 }
 
 function pintarSeguimiento(){
   var cont=document.getElementById('seg-grupos'); if(!cont) return;
+  // Antes de redibujar, recordar que carpetas estan ABIERTAS: marcar un WhatsApp,
+  // una agendada o un resultado repinta la lista, y sin esto todas nacian cerradas
+  // - volvias de WhatsApp y tu carpeta (Atrasadas, etc.) estaba colapsada.
+  var _abiertos={};
+  document.querySelectorAll('[id^="seg-g"]').forEach(function(el){
+    if(/^seg-g\d+$/.test(el.id) && el.style.display==='block') _abiertos[el.id]=true;
+  });
+  if(window._segMantenerAbierto) _abiertos[window._segMantenerAbierto]=true;
   var q=((document.getElementById('seg-q')||{}).value||'').trim().toLowerCase();
   var items=(window._segItems||[]).filter(function(it){
     if(!q) return true;
@@ -3215,9 +3244,9 @@ function pintarSeguimiento(){
       +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="background:'+g.color+';padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
       +'<div><div style="font-size:0.8rem;font-weight:800;color:white">'+g.titulo+' ('+lista.length+')</div>'
       +'<div style="font-size:0.58rem;color:rgba(255,255,255,0.75)">'+g.hint+'</div></div>'
-      +'<span id="arrow-'+gid+'" style="color:white;font-size:0.75rem">▶</span>'
+      +'<span id="arrow-'+gid+'" style="color:white;font-size:0.75rem">'+(_abiertos[gid]?'▼':'▶')+'</span>'
       +'</div>'
-      +'<div id="'+gid+'" style="display:none;padding:8px 14px">';
+      +'<div id="'+gid+'" style="display:'+(_abiertos[gid]?'block':'none')+';padding:8px 14px">';
     // Filtro por carpeta: a quien ya se escribio y a quien falta
     var nEnv=lista.filter(function(x){return x.waEnviado;}).length;
     if(lista.length){
@@ -3335,6 +3364,25 @@ function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
     });
     pintarSeguimiento();
     toast('✉️ Mensaje registrado como enviado','var(--green)');
+  })
+  .catch(function(){});
+}
+// Abre WhatsApp de cumpleanos y anota el envio (uno por clienta por ano).
+function _cumWaEnviar(tel, waMsg, clave){
+  var _u=_waURL(tel,waMsg);
+  var v=window.open(_u,'_blank');
+  if(!v) window.location.href=_u;
+  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cumpleWaEnviado', clave:clave, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok) return;
+    window._segWaCum=window._segWaCum||{};
+    window._segWaCum[clave]={ts:new Date().toISOString().slice(0,10), u:CU?CU.short||CU.name:''};
+    window._segMantenerAbierto='seg-cum';
+    pintarCumples();
+    toast('✉️ Saludo registrado como enviado','var(--green)');
   })
   .catch(function(){});
 }
@@ -6787,8 +6835,50 @@ function enviarRegistroCliente(btn, forzar){
 }
 
 // ══════ TARJETAS DE TRATAMIENTO NO ENVIADAS (envío por WhatsApp) ══════
+// Historial de tarjetas ENVIADAS, agrupado por dia (de la hoja de auditoria).
+function _verEnviosTarjetas(btn){
+  var cont=document.getElementById('tj-envios'); if(!cont) return;
+  if(cont.innerHTML){ cont.innerHTML=''; if(btn) btn.textContent='📚 Historial de envíos'; return; }
+  if(btn) btn.textContent='⏳ Cargando...';
+  fetch(APPS_SCRIPT_URL+'?action=getEnviosTarjetas&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(btn) btn.textContent='✕ Cerrar historial';
+    var envios=d.envios||[];
+    if(!envios.length){ cont.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin envíos registrados</div>'; return; }
+    var dias=[], porDia={};
+    envios.forEach(function(ev){
+      var dia=(ev.f||'').split(' ')[0]||'—';
+      if(!porDia[dia]){ porDia[dia]=[]; dias.push(dia); }
+      porDia[dia].push(ev);
+    });
+    var html='';
+    dias.forEach(function(dia,di){
+      var le=porDia[dia]; var gid='tjenv'+di;
+      html+='<div style="background:white;border-radius:12px;margin-bottom:7px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+        +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+        +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy)">📅 '+dia+' <span style="font-weight:700;color:var(--gray)">('+le.length+' envío'+(le.length===1?'':'s')+')</span></div>'
+        +'<span id="arrow-'+gid+'" style="color:var(--gray);font-size:0.75rem">'+(di===0?'▼':'▶')+'</span>'
+        +'</div>'
+        +'<div id="'+gid+'" style="display:'+(di===0?'block':'none')+';padding:4px 13px 9px">';
+      le.forEach(function(ev){
+        var hora=((ev.f||'').split(' ')[1]||'');
+        html+='<div style="padding:7px 0;border-bottom:1px solid var(--cream-d)">'
+          +'<div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+ev.clienta+'</div>'
+          +'<div style="font-size:0.58rem;color:var(--gray)">'+hora+' · '+(ev.que||'—')+(ev.telefono?' · 📱 '+ev.telefono:'')+' · ticket del '+(ev.fTicket||'—')+' · por '+(ev.por||'—')+'</div>'
+          +'</div>';
+      });
+      html+='</div></div>';
+    });
+    cont.innerHTML=html;
+  })
+  .catch(function(){ if(btn) btn.textContent='📚 Historial de envíos'; toast('❌ No se pudo cargar el historial','#B86B6B'); });
+}
 function renderTarjetasPendientes(c){
-  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📤 Tarjetas de tratamiento</div>'
+  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📤 Tarjetas de tratamiento</div>'
+    +'<button onclick="_verEnviosTarjetas(this)" style="background:white;color:var(--navy);border:1.5px solid var(--navy);padding:6px 11px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">📚 Historial de envíos</button>'
+    +'</div><div id="tj-envios"></div>'
     +'<div class="loading"><div class="spinner"></div>Cargando tickets...</div>';
   Promise.all([
     // SIEMPRE fresco: el ticket recién enviado debe aparecer de inmediato
@@ -9365,7 +9455,135 @@ function ejecutarBusqueda(){
 }
 
 // ══════ CAJA CHICA ══════
+// ══════ CAJA CHICA V2 — libro limpio, sin cierres diarios ══════
+// Mismas reglas de siempre (el efectivo de los tickets entra solo, con candado
+// anti-duplicado), pero un solo libro corrido: cada fila un movimiento, saldo
+// acumulado. Descargas exigen justificativo. La V1 queda en el Sheet como historico.
 function renderCajaChica(c){
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando caja...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getCajaV2&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    window._cajaV2={saldo:d.saldo||0, movs:d.movs||[], iniciada:!!d.iniciada};
+    _pintarCajaV2(c);
+  })
+  .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la caja</div>'; });
+}
+function _pintarCajaV2(c){
+  var d=window._cajaV2||{};
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  if(!d.iniciada){
+    c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">💵 Caja Chica</div>'
+      +(esAdmin
+        ?'<div class="card" style="padding:16px"><div style="font-size:0.78rem;font-weight:800;color:var(--navy);margin-bottom:8px">⚖️ Iniciar caja con saldo nuevo</div>'
+          +'<div style="font-size:0.64rem;color:var(--gray);margin-bottom:10px">La caja anterior queda intacta en el Sheet como histórico. Esta arranca de cero.</div>'
+          +'<input id="cv2-ini" type="number" step="0.01" min="0" placeholder="Saldo inicial ($)" style="width:100%;padding:11px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.86rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:10px">'
+          +'<button onclick="_cajaV2Iniciar(this)" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer">⚖️ Iniciar caja</button></div>'
+        :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La caja nueva aún no se inicia — pide a un administrador que la abra</div>');
+    return;
+  }
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">💵 Caja Chica</div>'
+    +'<button onclick="renderCajaChica(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
+    +'</div>'
+    +'<div class="card" style="padding:16px;text-align:center;margin-bottom:10px">'
+    +'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);letter-spacing:0.06em">SALDO ACTUAL</div>'
+    +'<div style="font-size:1.7rem;font-weight:800;color:var(--navy)">$'+(d.saldo||0).toFixed(2)+'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;margin-bottom:10px">'
+    +'<button onclick="_cajaV2Form(\'descarga\')" style="flex:1;padding:11px;background:#B86B6B;color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">💸 Descarga</button>'
+    +'<button onclick="_cajaV2Form(\'deposito\')" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">🏦 Depósito</button>'
+    +'</div>'
+    +'<div id="cv2-form"></div>'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin:6px 0 8px">📒 Movimientos</div>'
+    +'<div id="cv2-movs"></div>';
+  c.innerHTML=html;
+  _pintarCajaV2Movs();
+}
+function _cajaV2Form(tipo){
+  var f=document.getElementById('cv2-form'); if(!f) return;
+  if(f.getAttribute('data-t')===tipo){ f.innerHTML=''; f.removeAttribute('data-t'); return; }
+  f.setAttribute('data-t',tipo);
+  var esD=tipo==='descarga';
+  f.innerHTML='<div class="card" style="padding:13px;margin-bottom:10px;border:1.5px solid '+(esD?'#E5C4C4':'var(--cream-d)')+'">'
+    +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(esD?'💸 Descarga de caja':'🏦 Depósito al banco')+'</div>'
+    +'<input id="cv2-monto" type="number" step="0.01" min="0" placeholder="Monto ($)" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:8px">'
+    +'<input id="cv2-just" type="text" placeholder="'+(esD?'Justificativo (obligatorio)':'Detalle / banco (opcional)')+'" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.8rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
+    +'<button onclick="_cajaV2Enviar(\''+tipo+'\',this)" style="width:100%;padding:11px;background:'+(esD?'#B86B6B':'var(--navy)')+';color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Registrar</button>'
+    +'</div>';
+}
+function _cajaV2Enviar(tipo,btn){
+  var m=parseFloat((document.getElementById('cv2-monto')||{}).value);
+  var j=((document.getElementById('cv2-just')||{}).value||'').trim();
+  if(isNaN(m)||m<=0){ toast('⚠️ Escribe el monto','#C9A227'); return; }
+  if(tipo==='descarga'&&!j){ toast('⚠️ La descarga necesita justificativo','#C9A227'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Registrando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cajaV2Mov', tipo:tipo, monto:m, justificativo:j, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Registrar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast((tipo==='descarga'?'💸':'🏦')+' Registrado — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
+    renderCajaChica(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Registrar';} toast('❌ Sin conexión','#B86B6B'); });
+}
+function _cajaV2Iniciar(btn){
+  var m=parseFloat((document.getElementById('cv2-ini')||{}).value);
+  if(isNaN(m)||m<0){ toast('⚠️ Escribe el saldo inicial','#C9A227'); return; }
+  if(!confirm('⚖️ ¿Iniciar la caja nueva con $'+m.toFixed(2)+'?')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cajaV2Iniciar', token:window._token||'', monto:m, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='⚖️ Iniciar caja';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('⚖️ Caja iniciada','var(--green)');
+    renderCajaChica(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='⚖️ Iniciar caja';} toast('❌ Sin conexión','#B86B6B'); });
+}
+function _pintarCajaV2Movs(){
+  var cont=document.getElementById('cv2-movs'); if(!cont) return;
+  var movs=(window._cajaV2||{}).movs||[];
+  if(!movs.length){ cont.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin movimientos todavía</div>'; return; }
+  // Agrupar por dia (mas reciente primero); el primer dia llega abierto
+  var dias=[], porDia={};
+  movs.forEach(function(mv){
+    var dia=(mv.f||'').split(' ')[0]||'—';
+    if(!porDia[dia]){ porDia[dia]=[]; dias.push(dia); }
+    porDia[dia].push(mv);
+  });
+  var html='';
+  dias.forEach(function(dia,di){
+    var lm=porDia[dia];
+    var ent=lm.reduce(function(a,m){return a+(m.entrada||0);},0);
+    var sal=lm.reduce(function(a,m){return a+(m.salida||0);},0);
+    var gid='cv2d'+di;
+    html+='<div style="background:white;border-radius:12px;margin-bottom:7px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy)">📅 '+dia+' <span style="font-weight:700;color:var(--gray)">('+lm.length+')</span></div>'
+      +'<div style="font-size:0.62rem;font-weight:800">'+(ent?'<span style="color:#2E7D52">+$'+ent.toFixed(2)+'</span> ':'')+(sal?'<span style="color:#B86B6B">−$'+sal.toFixed(2)+'</span>':'')+' <span id="arrow-'+gid+'" style="color:var(--gray)">'+(di===0?'▼':'▶')+'</span></div>'
+      +'</div>'
+      +'<div id="'+gid+'" style="display:'+(di===0?'block':'none')+';padding:4px 13px 9px">';
+    lm.forEach(function(mv){
+      var hora=((mv.f||'').split(' ')[1]||'');
+      var esEnt=(mv.entrada||0)>0;
+      html+='<div style="padding:7px 0;border-bottom:1px solid var(--cream-d);display:flex;justify-content:space-between;gap:8px;align-items:center">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+mv.tipo+'</div>'
+        +'<div style="font-size:0.6rem;color:var(--gray)">'+hora+(mv.detalle?' · '+mv.detalle:'')+(mv.por&&mv.por!=='auto'?' · '+mv.por:'')+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;white-space:nowrap">'
+        +'<div style="font-size:0.72rem;font-weight:800;color:'+(esEnt?'#2E7D52':'#B86B6B')+'">'+(esEnt?'+$'+(mv.entrada||0).toFixed(2):'−$'+(mv.salida||0).toFixed(2))+'</div>'
+        +'<div style="font-size:0.56rem;color:var(--gray)">saldo $'+(mv.saldo||0).toFixed(2)+'</div>'
+        +'</div></div>';
+    });
+    html+='</div></div>';
+  });
+  cont.innerHTML=html;
+}
+function _renderCajaChicaVieja(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:14px">💵 Caja Chica</div>'    +'<div id="caja-saldo-card" class="card" style="margin-bottom:12px;text-align:center;padding:18px">'    +'<div class="spinner" style="margin:0 auto 8px"></div><div style="font-size:0.75rem;color:var(--gray)">Cargando saldo...</div>'    +'</div>'    +'<div id="caja-forms"></div>'    +'<div id="caja-msg"></div>';
 
   _cajaCargarSaldo();
