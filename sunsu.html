@@ -685,20 +685,7 @@ function initApp(){
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
   window._allTabs=allTabs;
-  var prevNM=document.getElementById('nav-movil'); if(prevNM)prevNM.remove();
-  var prevNP=document.getElementById('nav-panel'); if(prevNP)prevNP.remove();
-  document.getElementById('tabs').insertAdjacentHTML('afterend',
-    '<div id="nav-movil">'
-    +'<button class="nm-btn" id="nm-ticket" onclick="showTab(\'ticket\')" style="background:var(--navy);color:white">🎫 Ticket</button>'
-    +'<button class="nm-btn" onclick="showTab(\'tarjetas\')" style="background:#B08968;color:white">📤</button>'
-    +'<button class="nm-btn" id="nm-actual" onclick="_navPanel(true)" style="flex:1;background:var(--gray-ll,#F0F1F5);color:var(--navy);text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></button>'
-    +'<button class="nm-btn" onclick="_navPanel(true)" style="background:white;color:var(--navy);border:1.5px solid var(--navy)">☰</button>'
-    +'</div>'
-    +'<div id="nav-panel" onclick="if(event.target===this)_navPanel(false)"><div class="np-card">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:0.82rem;font-weight:800;color:var(--navy)">Menú</div>'
-    +'<button onclick="_navPanel(false)" style="background:none;border:none;font-size:1.1rem;color:var(--gray);cursor:pointer;padding:4px">✕</button></div>'
-    +allTabs.map(function(t){return '<button class="np-item" data-tab="'+t[0]+'" onclick="_navPanel(false);showTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')
-    +'</div></div>');
+  _pintarNavMovil();
   _navActualizar('ticket');
   // Load catalog to update prices, names and filter inactive items
   Promise.all([
@@ -778,7 +765,73 @@ function _navPanel(abrir){
   var p=document.getElementById('nav-panel');
   if(p) p.classList[abrir?'add':'remove']('abierto');
 }
+// ══ ACCESOS RAPIDOS por usuaria: cada una elige hasta 3 pestañas para su barra ══
+// Ticket SIEMPRE va fijo. Se guarda por usuaria EN SU CELULAR (localStorage);
+// sin configurar, queda 📤 Tarjetas como siempre. Editable desde ☰ → ⭐.
+var NAV_QUICK_MAX=3;
+function _quickKey(){ return 'sunsu_quick_'+(CU&&CU.id?CU.id:'x'); }
+function _quickGet(){
+  try{
+    var v=JSON.parse(localStorage.getItem(_quickKey()));
+    if(Array.isArray(v)) return v.filter(function(id){ return id!=='ticket' && (window._allTabs||[]).some(function(t){return t[0]===id;}); }).slice(0,NAV_QUICK_MAX);
+  }catch(e){}
+  return ['tarjetas']; // por defecto, la barra de siempre
+}
+function _quickSet(arr){ try{ localStorage.setItem(_quickKey(), JSON.stringify(arr.slice(0,NAV_QUICK_MAX))); }catch(e){} }
+function _pintarNavMovil(){
+  var allTabs=window._allTabs||[];
+  var prevNM=document.getElementById('nav-movil'); if(prevNM)prevNM.remove();
+  var prevNP=document.getElementById('nav-panel'); if(prevNP)prevNP.remove();
+  var quick=_quickGet();
+  var COLQ={'tarjetas':'#B08968','citas':'#6A9E7A','roles':'#7A8FB5','historial':'#8A6D9E','caja':'#5B8FA8','inventario':'#C4943A','buscar-paquetes':'#B08968','seguimiento':'#6B9080','recepcion':'#D4956A'};
+  var qBtns=quick.map(function(id){
+    var t=allTabs.find(function(x){return x[0]===id;}); if(!t) return '';
+    var ic=(t[1].split(' ')[0])||'⭐';
+    return '<button class="nm-btn" onclick="showTab(\''+id+'\')" title="'+t[1]+'" style="background:'+(COLQ[id]||'#8A90A0')+';color:white">'+ic+'</button>';
+  }).join('');
+  document.getElementById('tabs').insertAdjacentHTML('afterend',
+    '<div id="nav-movil">'
+    +'<button class="nm-btn" id="nm-ticket" onclick="showTab(\'ticket\')" style="background:var(--navy);color:white">🎫 Ticket</button>'
+    +qBtns
+    +'<button class="nm-btn" id="nm-actual" onclick="_navPanel(true)" style="flex:1;background:var(--gray-ll,#F0F1F5);color:var(--navy);text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></button>'
+    +'<button class="nm-btn" onclick="_navPanel(true)" style="background:white;color:var(--navy);border:1.5px solid var(--navy)">☰</button>'
+    +'</div>'
+    +'<div id="nav-panel" onclick="if(event.target===this)_navPanel(false)"><div class="np-card">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:0.82rem;font-weight:800;color:var(--navy)">Menú</div>'
+    +'<div style="display:flex;gap:10px;align-items:center">'
+    +'<button onclick="_quickEditToggle()" id="np-edit" title="Elegir accesos rápidos" style="background:none;border:none;font-size:0.72rem;font-weight:800;color:var(--gold);cursor:pointer;padding:4px">⭐ Editar accesos</button>'
+    +'<button onclick="_navPanel(false)" style="background:none;border:none;font-size:1.1rem;color:var(--gray);cursor:pointer;padding:4px">✕</button></div></div>'
+    +'<div id="np-hint" style="display:none;font-size:0.64rem;color:var(--gray);margin-bottom:6px">Toca las estrellas para elegir hasta '+NAV_QUICK_MAX+' accesos rápidos (🎫 Ticket siempre queda fijo)</div>'
+    +allTabs.map(function(t){
+      if(t[0]==='ticket') return '<div style="display:flex;align-items:center;gap:4px"><button class="np-item" data-tab="ticket" style="flex:1" onclick="_navPanel(false);showTab(\'ticket\')">'+t[1]+'</button><span class="np-star" style="visibility:hidden">⭐</span></div>';
+      var on=quick.indexOf(t[0])>=0;
+      return '<div style="display:flex;align-items:center;gap:4px">'
+        +'<button class="np-item" data-tab="'+t[0]+'" style="flex:1" onclick="_navPanel(false);showTab(\''+t[0]+'\')">'+t[1]+'</button>'
+        +'<span class="np-star" data-q="'+t[0]+'" onclick="_quickStar(this)" style="display:none;cursor:pointer;font-size:1rem;padding:4px;opacity:'+(on?'1':'0.25')+'">⭐</span>'
+        +'</div>';
+    }).join('')
+    +'</div></div>');
+}
+function _quickEditToggle(){
+  var editando=document.querySelector('.np-star[data-q]') && document.querySelector('.np-star[data-q]').style.display!=='none';
+  document.querySelectorAll('.np-star[data-q]').forEach(function(st){ st.style.display=editando?'none':'inline'; });
+  var h=document.getElementById('np-hint'); if(h) h.style.display=editando?'none':'block';
+  var b=document.getElementById('np-edit'); if(b) b.textContent=editando?'⭐ Editar accesos':'✓ Listo';
+  if(editando){ _pintarNavMovil(); _navActualizar(window._tabActual||'ticket'); } // al terminar: repintar barra
+}
+function _quickStar(el){
+  var id=el.getAttribute('data-q');
+  var q=_quickGet();
+  var i=q.indexOf(id);
+  if(i>=0){ q.splice(i,1); el.style.opacity='0.25'; }
+  else {
+    if(q.length>=NAV_QUICK_MAX){ toast('Máximo '+NAV_QUICK_MAX+' accesos — quita uno primero','#C9A227'); return; }
+    q.push(id); el.style.opacity='1';
+  }
+  _quickSet(q);
+}
 function _navActualizar(id){
+  window._tabActual=id;
   var tabs=window._allTabs||[];
   var t=tabs.find(function(x){return x[0]===id;});
   var lbl=document.getElementById('nm-actual');
