@@ -3159,6 +3159,22 @@ function pintarSeguimiento(){
       +'<span id="arrow-'+gid+'" style="color:white;font-size:0.75rem">▶</span>'
       +'</div>'
       +'<div id="'+gid+'" style="display:none;padding:8px 14px">';
+    // Filtro por carpeta: a quien ya se escribio y a quien falta
+    var nEnv=lista.filter(function(x){return x.waEnviado;}).length;
+    if(lista.length){
+      var fSel=window._segFiltroWa&&window._segFiltroWa[gid]||'todos';
+      var chip=function(val,txt){
+        var on=fSel===val;
+        return '<button onclick="_segFiltroWaSet(\''+gid+'\',\''+val+'\')" style="padding:4px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;border:1.2px solid '+g.color+';background:'+(on?g.color:'white')+';color:'+(on?'white':g.color)+'">'+txt+'</button>';
+      };
+      html+='<div style="display:flex;gap:5px;flex-wrap:wrap;padding:2px 0 8px">'
+        +chip('todos','Todas ('+lista.length+')')
+        +chip('sin','✉️ Sin enviar ('+(lista.length-nEnv)+')')
+        +chip('env','✓ Enviadas ('+nEnv+')')
+        +'</div>';
+      if(fSel==='sin') lista=lista.filter(function(x){return !x.waEnviado;});
+      else if(fSel==='env') lista=lista.filter(function(x){return x.waEnviado;});
+    }
     if(!lista.length){
       html+='<div style="padding:10px 0;font-size:0.72rem;color:var(--gray);text-align:center">Ninguna clienta en este grupo</div>';
     }
@@ -3176,7 +3192,10 @@ function pintarSeguimiento(){
       var plantilla=esAtrasadaMsg?(window._segMsgAtr||''):(window._segMsgProx||'');
       if(!plantilla) plantilla='Hola {nombre} 🌸 ¡Te saludamos de Sunsu Spa! Ya se acerca la fecha recomendada para tu próximo facial. ¿Te gustaría agendar tu cita? 💆‍♀️✨';
       var waMsg=encodeURIComponent(plantilla.replace(/\{nombre\}/g,(it.nombre||'').trim()).replace(/\{fecha\}/g,retFmt));
-      var waBtn=telD?'<a href="https://wa.me/'+telD+'?text='+waMsg+'" target="_blank" style="padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.72rem;font-weight:700;text-decoration:none;flex-shrink:0">💬</a>':'';
+      // El boton abre WhatsApp Y anota "enviado" en el servidor: asi Alejandra (y todas)
+      // ven a quien ya se le escribio y a quien no, sin re-enviar dos veces.
+      var waBtn=telD?'<button onclick="_segWaEnviar('+it.tkRow+',\''+telD+'\',\''+waMsg+'\',\''+(it.cedula||'')+'\',\''+(it.nombre||'').replace(/'/g,'')+'\',\''+(it.apellido||'').replace(/'/g,'')+'\')" style="padding:6px 10px;background:'+(it.waEnviado?'#8FBF9F':'#25D366')+';color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer;flex-shrink:0">💬'+(it.waEnviado?' ✓':'')+'</button>':'';
+      var waTag=it.waEnviado?'<span style="font-size:0.6rem;font-weight:800;color:#2E7D52;background:#EAF6EE;border-radius:6px;padding:2px 7px;white-space:nowrap">✉️ Enviado '+((it.waFecha||'').split('-').reverse().join('/'))+(it.waPor?(' · '+it.waPor):'')+' — esperando respuesta</span>':'';
       var intentosTxt=(it.intentos&&it.intentos>0)?'<span style="color:var(--red);font-weight:700"> · 📵 '+it.intentos+' intento'+(it.intentos===1?'':'s')+' sin respuesta</span>':'';
       var argsSeg=it.tkRow+',\''+(it.cedula||'')+'\',\''+(it.nombre||'').replace(/'/g,'')+'\',\''+(it.apellido||'').replace(/'/g,'')+'\'';
       // Ya agendo por su cuenta en Acuity (deteccion automatica del backend, hoy+60d):
@@ -3192,6 +3211,7 @@ function pintarSeguimiento(){
         +'<div style="font-size:0.76rem;font-weight:700;color:var(--navy)">'+it.nombre+' '+it.apellido+'</div>'
         +'<div style="font-size:0.6rem;color:var(--gray)">'+(it.cedula||'s/cédula')+(it.telefono?' · 📱 '+it.telefono:'')+' · última visita '+visFmt+' · '+it.cosmetologa+'</div>'
         +'<div style="font-size:0.64rem;font-weight:700;color:'+g.color+'">Retorno: '+retFmt+(diasTxt?' · '+diasTxt:'')+intentosTxt+'</div>'
+        +(waTag?'<div style="margin-top:4px">'+waTag+'</div>':'')
         +yaAg
         +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">'
         +botones
@@ -3201,6 +3221,13 @@ function pintarSeguimiento(){
     html+='</div></div>';
   });
   cont.innerHTML=html;
+  // Si el repintado vino de un chip de filtro, esa carpeta se queda abierta
+  if(window._segMantenerAbierto){
+    var gAb=document.getElementById(window._segMantenerAbierto);
+    var arAb=document.getElementById('arrow-'+window._segMantenerAbierto);
+    if(gAb){ gAb.style.display='block'; if(arAb) arAb.textContent='▼'; }
+    window._segMantenerAbierto=null;
+  }
 }
 
 // Chip "Ya agendaron": alterna entre ver todo y ver solo las detectadas por Acuity.
@@ -3232,6 +3259,30 @@ function _segConfirmarTodas(){
     toast(msg, d.fallidas&&d.fallidas.length?'#C9A227':'var(--green)');
   })
   .catch(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Confirmar todas'; } toast('❌ Sin conexión','#B86B6B'); });
+}
+// Abre WhatsApp con la plantilla y anota "enviado" en el servidor (fecha+quien).
+function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
+  var v=window.open('https://wa.me/'+tel+'?text='+waMsg,'_blank');
+  if(!v) window.location.href='https://wa.me/'+tel+'?text='+waMsg;
+  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); } // pestana puente fuera
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'seguimientoWaEnviado', tkRow:tkRow, cedula:cedula, nombre:nombre, apellido:apellido, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok) return; // si fallo la anotacion, no estorbar: el WhatsApp ya salio
+    (window._segItems||[]).forEach(function(x){
+      if(x.tkRow===tkRow){ x.waEnviado=true; x.waFecha=new Date().toISOString().slice(0,10); x.waPor=CU?CU.short||CU.name:''; }
+    });
+    pintarSeguimiento();
+    toast('✉️ Mensaje registrado como enviado','var(--green)');
+  })
+  .catch(function(){});
+}
+function _segFiltroWaSet(gid, val){
+  window._segFiltroWa=window._segFiltroWa||{};
+  window._segFiltroWa[gid]=val;
+  window._segMantenerAbierto=gid; // que la carpeta no se cierre al repintar
+  pintarSeguimiento();
 }
 function marcarAgendada(tkRow, cedula, nombre, apellido){
   fetch(APPS_SCRIPT_URL,{
