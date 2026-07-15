@@ -3070,6 +3070,10 @@ function _renderSeguimientoFacial(c){
         +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
         +'<input id="seg-q" type="text" placeholder="Buscar clienta por nombre o cédula..." oninput="pintarSeguimiento()" '
         +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
+        +'<div id="seg-filtro-ag" style="display:none;margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+        +'<button id="seg-chip-ag" onclick="_segFiltroAg()" style="padding:6px 12px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid #2E7D52;background:white;color:#2E7D52">📅 Ya agendaron (<span id="seg-ag-n">0</span>)</button>'
+        +'<button id="seg-conf-todas" onclick="_segConfirmarTodas()" style="display:none;padding:6px 12px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:none;background:var(--green);color:white">✅ Confirmar todas</button>'
+        +'</div>'
         +(d.stats?'<div style="font-size:0.62rem;color:var(--gray);margin-top:7px">📊 Este mes: <b style="color:var(--green)">'+(d.stats.agendadas||0)+' agendadas</b> · '+(d.stats.intentos||0)+' en reintento · '+(d.stats.sinRespuesta||0)+' sin respuesta · '+(d.stats.noDesea||0)+' no desean</div>':'')
         +'</div>'
         +'<div id="seg-cumples"></div>'
@@ -3121,6 +3125,15 @@ function pintarSeguimiento(){
     if(!q) return true;
     return ((it.nombre||'')+' '+(it.apellido||'')).toLowerCase().indexOf(q)>=0||(it.cedula||'').indexOf(q)>=0;
   });
+  // Filtro "Ya agendaron": el chip solo aparece si el detector encontro alguna.
+  var nAg=(window._segItems||[]).filter(function(it){return it.yaAgendo;}).length;
+  var contAgEl=document.getElementById('seg-ag-n'); if(contAgEl) contAgEl.textContent=nAg;
+  var filaAg=document.getElementById('seg-filtro-ag'); if(filaAg) filaAg.style.display=nAg>0?'flex':'none';
+  if(nAg===0) window._segSoloAg=false;
+  if(window._segSoloAg) items=items.filter(function(it){return it.yaAgendo;});
+  var chipAg=document.getElementById('seg-chip-ag');
+  if(chipAg){ chipAg.style.background=window._segSoloAg?'#2E7D52':'white'; chipAg.style.color=window._segSoloAg?'white':'#2E7D52'; }
+  var btnTodasEl=document.getElementById('seg-conf-todas'); if(btnTodasEl) btnTodasEl.style.display=(window._segSoloAg&&nAg>0)?'inline-block':'none';
   var GRUPOS=[
     {est:'🔴 Atrasada',       titulo:'🔴 Atrasadas',                 color:'#B86B6B', hint:'ya pasó su fecha de retorno — escribirles YA'},
     {est:'🟡 Próxima',        titulo:'🟡 Próximas (7 días)',         color:'#C9A227', hint:'su retorno es esta semana — ideal para agendar'},
@@ -3190,6 +3203,36 @@ function pintarSeguimiento(){
   cont.innerHTML=html;
 }
 
+// Chip "Ya agendaron": alterna entre ver todo y ver solo las detectadas por Acuity.
+function _segFiltroAg(){
+  window._segSoloAg=!window._segSoloAg;
+  pintarSeguimiento();
+}
+// Confirmar TODAS las detectadas en una sola llamada (accion de lote en el backend).
+function _segConfirmarTodas(){
+  var lista=(window._segItems||[]).filter(function(it){return it.yaAgendo;});
+  if(!lista.length){ toast('No hay clientas por confirmar','#C9A227'); return; }
+  if(!confirm('✅ ¿Confirmar '+lista.length+' clienta'+(lista.length===1?'':'s')+' como agendada'+(lista.length===1?'':'s')+'?\n\nSaldrán de la lista de seguimiento.')) return;
+  var btn=document.getElementById('seg-conf-todas');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Confirmando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'marcarAgendadasLote',
+      items:lista.map(function(it){return {tkRow:it.tkRow, cedula:it.cedula||'', nombre:it.nombre||'', apellido:it.apellido||''};}),
+      usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(btn){ btn.disabled=false; btn.textContent='✅ Confirmar todas'; }
+    if(!d.ok){ toast('❌ '+(d.error||'No se pudo confirmar'),'#B86B6B'); return; }
+    var marc=d.marcadas||[];
+    window._segItems=(window._segItems||[]).filter(function(x){return marc.indexOf(x.tkRow)<0;});
+    window._segSoloAg=false;
+    pintarSeguimiento();
+    var msg='✅ '+marc.length+' clienta'+(marc.length===1?'':'s')+' confirmada'+(marc.length===1?'':'s');
+    if(d.fallidas&&d.fallidas.length) msg+=' · '+d.fallidas.length+' no coincidieron (refresca la lista)';
+    toast(msg, d.fallidas&&d.fallidas.length?'#C9A227':'var(--green)');
+  })
+  .catch(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Confirmar todas'; } toast('❌ Sin conexión','#B86B6B'); });
+}
 function marcarAgendada(tkRow, cedula, nombre, apellido){
   fetch(APPS_SCRIPT_URL,{
     method:'POST',
