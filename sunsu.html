@@ -9508,18 +9508,21 @@ function _cajaV2Form(tipo){
   f.innerHTML='<div class="card" style="padding:13px;margin-bottom:10px;border:1.5px solid '+(esD?'#E5C4C4':'var(--cream-d)')+'">'
     +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(esD?'💸 Descarga de caja':'🏦 Depósito al banco')+'</div>'
     +'<input id="cv2-monto" type="number" step="0.01" min="0" placeholder="Monto ($)" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.84rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:8px">'
-    +'<input id="cv2-just" type="text" placeholder="'+(esD?'Justificativo (obligatorio)':'Detalle / banco (opcional)')+'" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.8rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
+    +'<input id="cv2-just" type="text" placeholder="'+(esD?'Justificativo (obligatorio)':'Detalle / banco (opcional)')+'" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.8rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:8px">'
+    +'<input id="cv2-quien" type="text" placeholder="'+(esD?'¿Quién retira / recibe? (obligatorio)':'¿Quién deposita? (obligatorio)')+'" style="width:100%;padding:10px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.8rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
     +'<button onclick="_cajaV2Enviar(\''+tipo+'\',this)" style="width:100%;padding:11px;background:'+(esD?'#B86B6B':'var(--navy)')+';color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Registrar</button>'
     +'</div>';
 }
 function _cajaV2Enviar(tipo,btn){
   var m=parseFloat((document.getElementById('cv2-monto')||{}).value);
   var j=((document.getElementById('cv2-just')||{}).value||'').trim();
+  var q=((document.getElementById('cv2-quien')||{}).value||'').trim();
   if(isNaN(m)||m<=0){ toast('⚠️ Escribe el monto','#C9A227'); return; }
   if(tipo==='descarga'&&!j){ toast('⚠️ La descarga necesita justificativo','#C9A227'); return; }
+  if(!q){ toast('⚠️ Indica quién hace la transacción','#C9A227'); return; }
   if(btn){ btn.disabled=true; btn.textContent='⏳ Registrando...'; }
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'cajaV2Mov', tipo:tipo, monto:m, justificativo:j, usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'cajaV2Mov', tipo:tipo, monto:m, justificativo:j, quien:q, usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Registrar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
@@ -9572,7 +9575,7 @@ function _pintarCajaV2Movs(){
       html+='<div style="padding:7px 0;border-bottom:1px solid var(--cream-d);display:flex;justify-content:space-between;gap:8px;align-items:center">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+mv.tipo+'</div>'
-        +'<div style="font-size:0.6rem;color:var(--gray)">'+hora+(mv.detalle?' · '+mv.detalle:'')+(mv.por&&mv.por!=='auto'?' · '+mv.por:'')+'</div>'
+        +'<div style="font-size:0.6rem;color:var(--gray)">'+hora+(mv.quien?' · 👤 '+mv.quien:'')+(mv.detalle?' · '+mv.detalle:'')+(mv.por&&mv.por!=='auto'&&mv.por!==mv.quien?' · reg: '+mv.por:'')+'</div>'
         +'</div>'
         +'<div style="text-align:right;white-space:nowrap">'
         +'<div style="font-size:0.72rem;font-weight:800;color:'+(esEnt?'#2E7D52':'#B86B6B')+'">'+(esEnt?'+$'+(mv.entrada||0).toFixed(2):'−$'+(mv.salida||0).toFixed(2))+'</div>'
