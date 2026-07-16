@@ -5466,7 +5466,7 @@ function renderCabina(c){
           :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
       return;
     }
-    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[]};
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
     _pintarCabina(c);
   })
   .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la cabina</div>'; });
@@ -5493,8 +5493,12 @@ function _pintarCabina(c){
   };
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🧪 Cabina</div>'
-    +(_cabEsAdmin()?'<button onclick="_cabResembrar(this)" style="background:white;color:var(--gray);border:1.5px solid var(--cream-d);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">📥 Reponer base del Excel</button>':'')
+    +(_cabEsAdmin()?'<div style="display:flex;gap:5px">'
+      +'<button onclick="_cabFijosForm()" style="background:white;color:var(--navy);border:1.5px solid var(--navy);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">🏢 Fijos</button>'
+      +'<button onclick="_cabResembrar(this)" style="background:white;color:var(--gray);border:1.5px solid var(--cream-d);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">📥 Base Excel</button>'
+      +'</div>':'')
     +'</div>'
+    +'<div id="cab-fijos-form"></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
     +chip('pro','📋 Protocolos ('+(window.FACIALES||[]).length+')')
     +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
@@ -5522,6 +5526,63 @@ function _cabResembrar(btn){
     renderCabina(document.getElementById('content'));
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='📥 Reponer base del Excel';} toast('❌ Sin conexión','#B86B6B'); });
+}
+// Prorrateo de fijos POR TIEMPO: la renta se paga por hora de local, y un facial
+// de 145 min ocupa mas local que uno de 100. Tarifa = fijos del mes / horas de
+// facial del mes (faciales realizados x duracion promedio de los protocolos).
+// Fijo del protocolo = tarifa/hora x su duracion. Sin minutos aun -> usa el promedio.
+// Editor de COSTOS FIJOS mensuales, en el app: renta, luz, agua, internet,
+// lavanderia de toallas, pauta... Se guardan como filas FIJO * en CONFIGURACION.
+function _cabFijosForm(){
+  var f=document.getElementById('cab-fijos-form'); if(!f) return;
+  if(f.innerHTML){ f.innerHTML=''; return; }
+  var det=(window._cab&&window._cab.fijosDetalle)||[];
+  if(!det.length) det=[{k:'RENTA',v:0},{k:'LUZ',v:0},{k:'AGUA',v:0},{k:'INTERNET',v:0},{k:'LAVANDERÍA TOALLAS',v:0},{k:'PAUTA / PUBLICIDAD',v:0},{k:'OTROS',v:0}];
+  window._cabFijosEd=JSON.parse(JSON.stringify(det));
+  _cabFijosPintar();
+}
+function _cabFijosPintar(){
+  var f=document.getElementById('cab-fijos-form'); if(!f) return;
+  var ed=window._cabFijosEd||[];
+  var tot=ed.reduce(function(a,x){return a+(parseFloat(x.v)||0);},0);
+  var h='<div class="card" style="padding:13px;margin-bottom:10px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:3px">🏢 Costos fijos mensuales</div>'
+    +'<div style="font-size:0.58rem;color:var(--gray);margin-bottom:9px">Se reparten entre los faciales por HORA de cabina. Total: <b style="color:var(--navy)">$'+tot.toFixed(2)+'/mes</b></div>';
+  ed.forEach(function(x,i){
+    h+='<div style="display:flex;gap:5px;margin-bottom:5px;align-items:center">'
+      +'<input value="'+String(x.k||'').replace(/"/g,'&quot;')+'" oninput="_cabFijosEd['+i+'].k=this.value" placeholder="Concepto" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<input type="number" step="0.01" value="'+(x.v||'')+'" oninput="_cabFijosEd['+i+'].v=parseFloat(this.value)||0;" placeholder="$/mes" style="width:86px;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<button onclick="_cabFijosEd.splice('+i+',1);_cabFijosPintar()" style="background:none;border:none;color:#B86B6B;font-size:0.72rem;font-weight:800;cursor:pointer;padding:4px">🗑</button>'
+      +'</div>';
+  });
+  h+='<button onclick="_cabFijosEd.push({k:\'\',v:0});_cabFijosPintar()" style="width:100%;padding:8px;background:white;color:var(--navy);border:1.5px dashed var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer;margin:3px 0 8px">＋ Agregar costo fijo</button>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabFijosGuardar(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">💾 Guardar fijos</button>'
+    +'<button onclick="document.getElementById(\'cab-fijos-form\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  f.innerHTML=h;
+}
+function _cabFijosGuardar(btn){
+  var items=(window._cabFijosEd||[]).filter(function(x){return (x.k||'').trim();});
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Guardando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaFijosGuardar', token:window._token||'', items:items, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar fijos';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🏢 Fijos guardados: $'+(d.total||0).toFixed(2)+'/mes','var(--green)');
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar fijos';} toast('❌ Sin conexión','#B86B6B'); });
+}
+function _cabFijoInfo(p){
+  var c=window._cab||{}; var fm=c.fijosMensuales||0, nf=c.facialesMesRef||0;
+  var durs=((c.proView||c.pro)||[]).map(function(x){return (x.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);}).filter(function(m){return m>0;});
+  var avg=durs.length?durs.reduce(function(a,b){return a+b;},0)/durs.length:60;
+  var mins=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0)||avg;
+  if(!(fm>0&&nf>0)) return {fijo:0, mins:mins, tarifaH:0, avg:avg};
+  var tarifaH=fm/(nf*avg/60);
+  return {fijo:tarifaH*mins/60, mins:mins, tarifaH:tarifaH, avg:avg};
 }
 function _cabEsAdmin(){ return CU&&(CU.role==='admin'||CU.role==='admin_master'); }
 function _cabProdDe(cod){
@@ -5555,7 +5616,7 @@ function _cabPintarProtocolos(){
           +(function(){var tm=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);return tm>0?' · ⏱ '+(tm%1?tm.toFixed(1):tm)+' min':'';})()
           +(function(){
             if(!_cabEsAdmin()) return '';
-            var ct=costoProd+(p.manoObra||0);
+            var ct=costoProd+(p.manoObra||0)+_cabFijoInfo(p).fijo;
             var fcS=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
             var prS=fcS?(fcS.p||0):0;
             var sfx=ct>0?' · costo $'+ct.toFixed(2):'';
@@ -5631,7 +5692,9 @@ function _cabProCuerpo(i,editando){
       });
       if(!orden.length) h+='<div style="font-size:0.64rem;color:var(--gray);font-style:italic;padding:6px 0">Ningún paso tiene producto vinculado todavía</div>';
       var mo=p.manoObra||0;
-      var costoTotal=totProd+mo;
+      var fiF=_cabFijoInfo(p);
+      var fijoF=fiF.fijo;
+      var costoTotal=totProd+mo+fijoF;
       var fc=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
       var precio=fc?(fc.p||0):0;
       var util=precio-costoTotal;
@@ -5639,6 +5702,10 @@ function _cabProCuerpo(i,editando){
       h+='<div style="margin-top:9px;background:var(--gray-ll,#F4F5F8);border-radius:10px;padding:9px 12px">'
         +filaT('🧴 Producto','$'+totProd.toFixed(2))
         +filaT('💇 Mano de obra','$'+mo.toFixed(2))
+        +(fijoF>0
+          ? filaT('🏢 Fijos ('+(fiF.mins%1?fiF.mins.toFixed(0):fiF.mins)+' min × $'+fiF.tarifaH.toFixed(2)+'/h)','$'+fijoF.toFixed(2))
+            +'<div style="font-size:0.52rem;color:var(--gray);margin:-2px 0 2px">$'+((window._cab.fijosMensuales)||0).toFixed(0)+'/mes ÷ ('+((window._cab.facialesMesRef)||0)+' fac de '+((window._cab.mesRef)||'—')+' × ~'+Math.round(fiF.avg)+' min) = $'+fiF.tarifaH.toFixed(2)+' por hora de cabina</div>'
+          : '<div style="font-size:0.56rem;color:var(--gray);padding:2px 0">🏢 Fijos: tócalos en el botón 🏢 Fijos de arriba (renta, luz, lavandería, pauta...) y entrarán aquí por hora</div>')
         +filaT('💵 Costo total del facial','$'+costoTotal.toFixed(2),';border-top:1px solid var(--cream-d)')
         +(precio>0
           ? filaT('🏷 Precio de venta','$'+precio.toFixed(2))
@@ -5742,10 +5809,10 @@ function _cabMOSugerir(i,btn){
   .then(function(d){
     if(btn){ btn.disabled=false; btn.textContent='🧮 Sugerir'; }
     var lineas=(d.meses||[]).map(function(m){
-      return m.mes+': '+m.faciales+' faciales · sueldos $'+m.rol.toFixed(0)+(m.rolAuto?'':' (manual)')+' + com $'+m.comisiones.toFixed(0)+(m.comAuto?' (auto)':' (manual)');
+      return m.mes+': '+m.faciales+' faciales · nómina $'+(m.nomina||0).toFixed(0)+' ('+(m.fuente||'—')+')';
     }).join('\n');
     if(!d.conDatos){
-      alert('🧮 Falta un solo dato, y es de UNA vez:\n\n'+lineas+'\n\nEn ⚙ CONFIGURACION ya se creó la fila SUELDOS COSMETOLOGAS — pon ahí la suma de sueldos mensuales de las cosmetólogas (solo el número). Las comisiones salen solas del historial. No hay que repetirlo cada mes.');
+      alert('🧮 Sin datos de nómina:\n\n'+lineas+'\n\nNo encontré roles de esos meses en RRHH. Genera los roles del mes en 📄 Roles y este cálculo saldrá solo — sin configurar nada.');
       return;
     }
     var sug=Math.round(d.sugerido*100)/100;
