@@ -5553,7 +5553,15 @@ function _cabPintarProtocolos(){
         ? p.sku+' · <span style="color:var(--gold);font-weight:800">por definir</span>'
         : p.sku+' · v'+p.version+' · '+(p.pasos||[]).length+' paso'+((p.pasos||[]).length===1?'':'s')
           +(function(){var tm=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);return tm>0?' · ⏱ '+(tm%1?tm.toFixed(1):tm)+' min':'';})()
-          +(costoProd?' · producto $'+costoProd.toFixed(2):'')+(p.manoObra?' · M.O. $'+p.manoObra.toFixed(2):''))+'</div></div>'
+          +(function(){
+            if(!_cabEsAdmin()) return '';
+            var ct=costoProd+(p.manoObra||0);
+            var fcS=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
+            var prS=fcS?(fcS.p||0):0;
+            var sfx=ct>0?' · costo $'+ct.toFixed(2):'';
+            if(prS>0&&ct>0){ var uS=prS-ct; sfx+=' · <span style="color:'+(uS>=0?'#2E7D52':'#B86B6B')+';font-weight:800">util $'+uS.toFixed(2)+'</span>'; }
+            return sfx;
+          })())+'</div></div>'
       +'<span id="cab-pro-ar-'+i+'" style="color:var(--gray)">▾</span>'
       +'</div><div id="cab-pro-b-'+i+'" style="display:none;padding:0 13px 12px"></div></div>';
   });
@@ -5572,21 +5580,74 @@ function _cabProCuerpo(i,editando){
   var p=(window._cab.proView||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
   if(!p||!bd) return;
   if(!editando){
+    // DOS VISTAS del mismo protocolo (una sola receta por debajo):
+    // 👣 Pasos = la guia de trabajo de las chicas (que hacer, con que, cuanto tiempo).
+    // 💰 Costos = la vista del negocio (solo admins): consumo por producto,
+    //           costo total y UTILIDAD contra el precio del catalogo.
+    var esAdm=_cabEsAdmin();
+    window._cabProTab=window._cabProTab||{};
+    var tab=esAdm?(window._cabProTab[i]||'pasos'):'pasos';
     var h='';
+    if(esAdm){
+      var chT=function(val,txt){
+        var on=tab===val;
+        return '<button onclick="window._cabProTab['+i+']=\''+val+'\';_cabProCuerpo('+i+',false)" style="padding:5px 12px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+      };
+      h+='<div style="display:flex;gap:5px;padding:4px 0 8px">'+chT('pasos','👣 Pasos')+chT('costos','💰 Costos')+'</div>';
+    }
     if(!(p.pasos||[]).length) h+='<div style="font-size:0.66rem;color:var(--gray);font-style:italic">Protocolo por definir</div>';
-    var totMin=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);
-    if(totMin>0) h+='<div style="font-size:0.64rem;font-weight:800;color:var(--navy);padding:4px 0 6px">⏱ Duración total: '+(totMin%1?totMin.toFixed(1):totMin)+' min</div>';
-    (p.pasos||[]).forEach(function(ps){
-      var pr=_cabProdDe(ps.productoCod);
-      h+='<div style="padding:6px 0;border-bottom:1px solid var(--cream-d)">'
-        +'<div style="font-size:0.68rem;color:#4A5568"><b style="color:var(--navy)">'+ps.paso+'.</b> '+ps.desc+(ps.minutos?' <span style="color:var(--gold);font-weight:800;font-size:0.58rem">⏱ '+(ps.minutos%1?ps.minutos.toFixed(1):ps.minutos)+' min</span>':'')+'</div>'
-        +(ps.productoCod?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">🧴 '+(pr?pr.producto:ps.productoCod)+' — '+ps.cantidad+' '+ps.unidad+(pr?' ($'+(ps.cantidad*pr.costoUnidad).toFixed(2)+')':'')+'</div>':'')
+    if(tab==='pasos'){
+      // La guia: limpia, sin dolares (los costos viven en su propia pestana)
+      var totMin=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);
+      if(totMin>0) h+='<div style="font-size:0.64rem;font-weight:800;color:var(--navy);padding:0 0 6px">⏱ Duración total: '+(totMin%1?totMin.toFixed(1):totMin)+' min</div>';
+      (p.pasos||[]).forEach(function(ps){
+        var pr=_cabProdDe(ps.productoCod);
+        h+='<div style="padding:6px 0;border-bottom:1px solid var(--cream-d)">'
+          +'<div style="font-size:0.68rem;color:#4A5568"><b style="color:var(--navy)">'+ps.paso+'.</b> '+ps.desc+(ps.minutos?' <span style="color:var(--gold);font-weight:800;font-size:0.58rem">⏱ '+(ps.minutos%1?ps.minutos.toFixed(1):ps.minutos)+' min</span>':'')+'</div>'
+          +(ps.productoCod?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">🧴 '+(pr?pr.producto:ps.productoCod)+' — '+ps.cantidad+' '+ps.unidad+'</div>':'')
+          +'</div>';
+      });
+      if(p.video) h+='<div style="margin-top:7px"><a href="'+p.video+'" target="_blank" style="font-size:0.64rem;font-weight:800;color:var(--blue)">🎥 Ver video tutorial</a></div>';
+      if(p.notas&&p.notas!=='Protocolo por definir') h+='<div style="font-size:0.6rem;color:var(--gray);margin-top:5px">🗒 '+p.notas+'</div>';
+    } else {
+      // La vista del negocio: consumo AGRUPADO por producto + costo + utilidad
+      var porProd={}, orden=[];
+      (p.pasos||[]).forEach(function(ps){
+        if(!ps.productoCod) return;
+        if(!porProd[ps.productoCod]){ porProd[ps.productoCod]={cant:0, unidad:ps.unidad}; orden.push(ps.productoCod); }
+        porProd[ps.productoCod].cant+=ps.cantidad||0;
+      });
+      var totProd=0;
+      orden.forEach(function(cod){
+        var pr=_cabProdDe(cod);
+        var g=porProd[cod];
+        var cst=pr?g.cant*pr.costoUnidad:0;
+        totProd+=cst;
+        h+='<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d)">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+(pr?pr.producto:cod)+'</div>'
+          +'<div style="font-size:0.56rem;color:var(--gray)">'+cod+' · '+(g.cant%1?g.cant.toFixed(1):g.cant)+' '+(g.unidad||(pr?pr.unidad:''))+(pr?' × $'+pr.costoUnidad.toFixed(3):'')+'</div></div>'
+          +'<div style="font-size:0.68rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+cst.toFixed(2)+'</div>'
+          +'</div>';
+      });
+      if(!orden.length) h+='<div style="font-size:0.64rem;color:var(--gray);font-style:italic;padding:6px 0">Ningún paso tiene producto vinculado todavía</div>';
+      var mo=p.manoObra||0;
+      var costoTotal=totProd+mo;
+      var fc=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
+      var precio=fc?(fc.p||0):0;
+      var util=precio-costoTotal;
+      var filaT=function(lbl,val,extra){ return '<div style="display:flex;justify-content:space-between;padding:4px 0'+(extra||'')+'"><span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+lbl+'</span><span style="font-size:0.7rem;font-weight:800;color:var(--navy)">'+val+'</span></div>'; };
+      h+='<div style="margin-top:9px;background:var(--gray-ll,#F4F5F8);border-radius:10px;padding:9px 12px">'
+        +filaT('🧴 Producto','$'+totProd.toFixed(2))
+        +filaT('💇 Mano de obra','$'+mo.toFixed(2))
+        +filaT('💵 Costo total del facial','$'+costoTotal.toFixed(2),';border-top:1px solid var(--cream-d)')
+        +(precio>0
+          ? filaT('🏷 Precio de venta','$'+precio.toFixed(2))
+            +'<div style="display:flex;justify-content:space-between;padding:6px 0 2px;border-top:1.5px solid var(--navy)"><span style="font-size:0.7rem;font-weight:800;color:'+(util>=0?'#2E7D52':'#B86B6B')+'">💰 UTILIDAD</span><span style="font-size:0.8rem;font-weight:800;color:'+(util>=0?'#2E7D52':'#B86B6B')+'">$'+util.toFixed(2)+' ('+(precio>0?Math.round(util/precio*100):0)+'%)</span></div>'
+          : '<div style="font-size:0.58rem;color:var(--gray);padding-top:4px">Sin precio en el catálogo — no se puede calcular utilidad</div>')
         +'</div>';
-    });
-    if(p.video) h+='<div style="margin-top:7px"><a href="'+p.video+'" target="_blank" style="font-size:0.64rem;font-weight:800;color:var(--blue)">🎥 Ver video tutorial</a></div>';
-    if(p.notas&&p.notas!=='Protocolo por definir') h+='<div style="font-size:0.6rem;color:var(--gray);margin-top:5px">🗒 '+p.notas+'</div>';
-    h+='<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">Actualizado '+(p.actualizado||'—')+(p.por?' por '+p.por:'')+'</div>';
-    if(_cabEsAdmin()) h+='<button onclick="_cabProCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar protocolo</button>';
+    }
+    h+='<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">v'+p.version+' · Actualizado '+(p.actualizado||'—')+(p.por?' por '+p.por:'')+'</div>';
+    if(esAdm) h+='<button onclick="_cabProCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar protocolo</button>';
     bd.innerHTML=h;
     return;
   }
@@ -5681,10 +5742,10 @@ function _cabMOSugerir(i,btn){
   .then(function(d){
     if(btn){ btn.disabled=false; btn.textContent='🧮 Sugerir'; }
     var lineas=(d.meses||[]).map(function(m){
-      return m.mes+': '+m.faciales+' faciales'+(m.sesionesPaq?' ('+m.sesionesPaq+' ses. paquete)':'')+' · rol $'+m.rol.toFixed(0)+' + com $'+m.comisiones.toFixed(0);
+      return m.mes+': '+m.faciales+' faciales · sueldos $'+m.rol.toFixed(0)+(m.rolAuto?'':' (manual)')+' + com $'+m.comisiones.toFixed(0)+(m.comAuto?' (auto)':' (manual)');
     }).join('\n');
     if(!d.conDatos){
-      alert('🧮 No hay datos suficientes:\n\n'+lineas+'\n\nLlena las filas ROL yyyy-mm y COMISIONES yyyy-mm en ⚙ CONFIGURACION (las mismas de los KPIs) y vuelve a intentar.');
+      alert('🧮 Falta un solo dato, y es de UNA vez:\n\n'+lineas+'\n\nEn ⚙ CONFIGURACION ya se creó la fila SUELDOS COSMETOLOGAS — pon ahí la suma de sueldos mensuales de las cosmetólogas (solo el número). Las comisiones salen solas del historial. No hay que repetirlo cada mes.');
       return;
     }
     var sug=Math.round(d.sugerido*100)/100;
