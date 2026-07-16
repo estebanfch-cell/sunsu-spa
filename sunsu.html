@@ -5479,7 +5479,7 @@ function renderCabina(c,fresh){
           :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
       return;
     }
-    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], tras:d.traspasos||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
     _pintarCabina(c);
   };
   var cachedCb=fresh?null:_swrLee('cabina');
@@ -5847,7 +5847,7 @@ function _cabPbuscar(pi){
   if(!q){ cont.innerHTML=''; return; }
   var hits=(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false; // desactivados no se ofrecen para pasos nuevos
-    return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
+    return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
   cont.innerHTML=hits.map(function(p){
     return '<div onclick="_cabPelegir('+pi+',\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
@@ -5902,7 +5902,7 @@ function _cabRepBuscar(i){
   if(!q){ res.innerHTML=''; return; }
   var hits=(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false;
-    return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
+    return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
   res.innerHTML=hits.map(function(p){
     return '<div onclick="_cabRepElegir(\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
@@ -5961,6 +5961,8 @@ function _cabPintarInventario(){
   var elIn=document.getElementById('cab-inv-inact');
   if(elIn&&elIn.style.display==='block') inactAbierto=true;
   var todos=window._cab.inv||[];
+  // Si se escaneo un codigo, mostrar SOLO ese producto (chip ✕ para volver)
+  if(window._cabInvScan) todos=todos.filter(function(p){return (p.barras||'')===window._cabInvScan||p.codigo===window._cabInvScan;});
   var activosL=[], inactivosL=[];
   todos.forEach(function(p,i){ ((p.activo||'SI')==='NO'?inactivosL:activosL).push({p:p,i:i}); });
   // La tarjeta: precios SOLO para admins; tocar la tarjeta (admin) despliega el detalle
@@ -5975,7 +5977,13 @@ function _cabPintarInventario(){
       +'<div style="flex:1;min-width:0'+(esAdm?';cursor:pointer':'')+'"'+(esAdm?' onclick="_cabInvDetalle('+i+')"':'')+'>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo&&!inac?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+(inac?' <span style="font-size:0.54rem;color:var(--gray);font-weight:800">⏸ INACTIVO</span>':'')+'</div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+sub+'</div>'
-      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">📦 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad+' · <b>total '+p.stock+p.unidad+'</b></div>'
+      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">'
+      +(lug==='local'
+        ? '🏪 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad
+        : lug==='bodega'
+        ? '🏠 bodega: '+(p.bodega||0)+' cerrado'+((p.bodega||0)===1?'':'s')
+        : '🏪 local: '+p.cerrados+' + abierto '+p.abierto+p.unidad+' · 🏠 bodega: '+(p.bodega||0)+' · <b>total '+p.stock+p.unidad+'</b>')
+      +'</div>'
       +'</div>'
       +(esAdm?'<div style="display:flex;gap:4px;flex-shrink:0">'
         +'<button onclick="_cabInvActivo('+i+',this)" title="'+(inac?'Reactivar':'Desactivar')+'" style="padding:6px 9px;background:white;color:'+(inac?'#2E7D52':'var(--gray)')+';border:1.5px solid '+(inac?'#8FBF9F':'var(--cream-d)')+';border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">'+(inac?'▶':'⏸')+'</button>'
@@ -5986,7 +5994,20 @@ function _cabPintarInventario(){
       +'</div>';
     return h;
   };
-  var html=esAdm?'<button onclick="_cabInvForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo producto de cabina</button><div id="cab-inv-form"></div>':'';
+  var lug=window._cabInvLugar||'todo';
+  var chipL=function(val,txt){
+    var on=lug===val;
+    return '<button onclick="window._cabInvLugar=\''+val+'\';_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+  };
+  var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;align-items:center">'
+    +chipL('todo','🌐 Todo')+chipL('local','🏪 Sunsu')+chipL('bodega','🏠 Bodega central')
+    +'<button onclick="_cabScanBuscar()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:white;color:var(--navy)">📷 Escanear</button>'
+    +(window._cabInvScan?'<button onclick="window._cabInvScan=null;_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid #B86B6B;background:#FBF0EC;color:#B86B6B">✕ Mostrar todos</button>':'')
+    +'</div>';
+  html+=esAdm?'<div style="display:flex;gap:6px;margin-bottom:9px">'
+    +'<button onclick="_cabInvForm(-1)" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">＋ Nuevo producto</button>'
+    +'<button onclick="_cabTrasForm()" style="flex:1;padding:10px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">🚚 Traspaso</button>'
+    +'</div><div id="cab-inv-form"></div><div id="cab-tras-form"></div>':'';
   activosL.forEach(function(par){ html+=card(par); });
   if(!activosL.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos activos</div>';
   // Carpeta plegable de desactivados: fuera de la vista hasta que la abras
@@ -6001,6 +6022,141 @@ function _cabPintarInventario(){
     html+='</div></div>';
   }
   b.innerHTML=html;
+}
+// Escanear para ENCONTRAR: la chica apunta a la botella y aparece su producto
+// (si el codigo aun no esta cargado, avisa; los admins lo cargan en ✏️).
+function _cabScanBuscar(){
+  _scanAbrir(function(txt){
+    var hit=(window._cab.inv||[]).find(function(p){return (p.barras||'')===txt;});
+    if(!hit){ toast('📷 '+txt+' — ningún producto tiene este código cargado','#C9A227'); return; }
+    window._cabInvScan=txt;
+    window._cabSec='inv';
+    _cabPintarInventario();
+    toast('📷 '+hit.producto,'var(--green)');
+  });
+}
+// ── ESCANER DE CODIGO DE BARRAS ──
+// Usa la camara del navegador con ZXing (cargado del CDN solo al primer uso).
+// Funciona en Safari de iPhone: video en vivo, HTTPS ya lo tenemos. Al leer un
+// codigo llama al callback y cierra. Boton Cancelar siempre visible.
+function _scanAbrir(cb){
+  var arrancar=function(){
+    var ov=document.createElement('div');
+    ov.id='scan-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,16,30,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="color:white;font-size:0.78rem;font-weight:800;margin-bottom:10px">📷 Apunta al código de barras</div>'
+      +'<video id="scan-vid" playsinline style="width:100%;max-width:420px;border-radius:14px;background:black"></video>'
+      +'<button id="scan-cancel" style="margin-top:14px;padding:11px 22px;background:white;color:var(--navy);border:none;border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">Cancelar</button>';
+    document.body.appendChild(ov);
+    var reader=new ZXing.BrowserMultiFormatReader();
+    var cerrar=function(){
+      try{ reader.reset(); }catch(eR){}
+      var o2=document.getElementById('scan-ov'); if(o2) o2.remove();
+    };
+    document.getElementById('scan-cancel').onclick=cerrar;
+    reader.decodeFromConstraints({video:{facingMode:'environment'}}, document.getElementById('scan-vid'), function(result, err){
+      if(result){
+        var txt=result.getText();
+        cerrar();
+        if(navigator.vibrate) navigator.vibrate(60);
+        cb(txt);
+      }
+    }).catch(function(){
+      cerrar();
+      toast('❌ No se pudo abrir la cámara — revisa el permiso en Safari','#B86B6B');
+    });
+  };
+  if(window.ZXing){ arrancar(); return; }
+  toast('⏳ Cargando escáner...','var(--navy)');
+  var sc=document.createElement('script');
+  sc.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+  sc.onload=arrancar;
+  sc.onerror=function(){ toast('❌ Sin conexión para cargar el escáner','#B86B6B'); };
+  document.head.appendChild(sc);
+}
+// ── TRASPASOS: mover envases entre Bodega Central y Local Sunsu ──
+// Mismos codigos, solo cambian de lado. El servidor valida el stock del origen
+// (todo o nada) y deja el registro en 🚚 TRASPASOS.
+function _cabTrasForm(){
+  var f=document.getElementById('cab-tras-form'); if(!f) return;
+  if(f.innerHTML){ f.innerHTML=''; return; }
+  window._cabTrasItems=[];
+  window._cabTrasDe=window._cabTrasDe||'bodega';
+  _cabTrasPintar();
+}
+function _cabTrasPintar(){
+  var f=document.getElementById('cab-tras-form'); if(!f) return;
+  var de=window._cabTrasDe;
+  var its=window._cabTrasItems||[];
+  var h='<div class="card" style="padding:13px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">🚚 Traspaso de bodega</div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:8px">'
+    +'<button onclick="window._cabTrasDe=\'bodega\';window._cabTrasItems=[];_cabTrasPintar()" style="flex:1;padding:8px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(de==='bodega'?'var(--navy)':'white')+';color:'+(de==='bodega'?'white':'var(--navy)')+'">🏠 Bodega → 🏪 Sunsu</button>'
+    +'<button onclick="window._cabTrasDe=\'local\';window._cabTrasItems=[];_cabTrasPintar()" style="flex:1;padding:8px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(de==='local'?'var(--navy)':'white')+';color:'+(de==='local'?'white':'var(--navy)')+'">🏪 Sunsu → 🏠 Bodega</button>'
+    +'</div><div id="cab-tras-items">';
+  its.forEach(function(it,i){
+    var pr=_cabProdDe(it.codigo);
+    var disp=pr?(de==='bodega'?(pr.bodega||0):pr.cerrados):0;
+    h+='<div style="background:var(--gray-ll,#F7F8FA);border-radius:9px;padding:8px;margin-bottom:5px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+it.producto+' <span style="font-weight:400;color:var(--gray)">(hay '+disp+' en origen)</span></span>'
+      +'<span onclick="_cabTrasItems.splice('+i+',1);_cabTrasPintar()" style="color:#B86B6B;font-weight:800;cursor:pointer;font-size:0.7rem;padding:0 4px">🗑</span></div>'
+      +'<input type="number" min="1" max="'+disp+'" step="1" value="'+it.envases+'" oninput="_cabTrasItems['+i+'].envases=parseFloat(this.value)||0" placeholder="Envases a mover" style="width:100%;padding:7px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box">'
+      +'</div>';
+  });
+  h+='</div>'
+    +'<input id="cab-tras-q" oninput="_cabTrasBuscar()" placeholder="🔍 Agregar producto..." style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:3px">'
+    +'<div id="cab-tras-res"></div>'
+    +'<div style="display:flex;gap:6px;margin-top:7px">'
+    +'<button onclick="_cabTrasEjecutar(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">🚚 Ejecutar traspaso</button>'
+    +'<button onclick="document.getElementById(\'cab-tras-form\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div>'
+    +((window._cab.tras||[]).length?'<div style="font-size:0.6rem;font-weight:800;color:var(--navy);margin:10px 0 4px">📜 Últimos traspasos</div>'
+      +(window._cab.tras||[]).slice(0,5).map(function(t){
+        return '<div style="font-size:0.58rem;color:var(--gray);padding:3px 0;border-bottom:1px solid var(--cream-d)">'+t.num+' · '+t.fecha+' · '+t.ruta+' · '+(t.items||[]).map(function(x){return x.producto+' ×'+x.envases;}).join(', ')+' · '+t.por+'</div>';
+      }).join(''):'')
+    +'</div>';
+  f.innerHTML=h;
+}
+function _cabTrasBuscar(){
+  var q=_normNomCli((document.getElementById('cab-tras-q')||{}).value||'');
+  var res=document.getElementById('cab-tras-res'); if(!res) return;
+  if(!q){ res.innerHTML=''; return; }
+  var de=window._cabTrasDe;
+  var hits=(window._cab.inv||[]).filter(function(p){
+    if((p.activo||'SI')==='NO') return false;
+    if(((de==='bodega'?(p.bodega||0):p.cerrados))<=0) return false; // sin stock en el origen: no se ofrece
+    return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
+  }).slice(0,8);
+  res.innerHTML=hits.map(function(p){
+    var disp=de==='bodega'?(p.bodega||0):p.cerrados;
+    return '<div onclick="_cabTrasAgregar(\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
+      +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+p.producto+'</span> '
+      +'<span style="font-size:0.56rem;color:var(--gray)">'+p.codigo+' · '+disp+' en origen</span></div>';
+  }).join('')||'<div style="font-size:0.6rem;color:var(--gray);padding:4px">Nada con stock en el origen</div>';
+}
+function _cabTrasAgregar(cod){
+  var p=_cabProdDe(cod); if(!p) return;
+  if((window._cabTrasItems||[]).some(function(x){return x.codigo===cod;})){ toast('⚠️ Ya está en el traspaso','#C9A227'); return; }
+  window._cabTrasItems.push({codigo:cod, producto:p.producto, envases:1});
+  _cabTrasPintar();
+}
+function _cabTrasEjecutar(btn){
+  var its=(window._cabTrasItems||[]).filter(function(x){return (x.envases||0)>0;});
+  if(!its.length){ toast('⚠️ Agrega al menos un producto','#C9A227'); return; }
+  var de=window._cabTrasDe;
+  if(!confirm('🚚 ¿Ejecutar el traspaso '+(de==='bodega'?'🏠 Bodega → 🏪 Sunsu':'🏪 Sunsu → 🏠 Bodega')+'?\n\n'+its.map(function(x){return '· '+x.producto+' ×'+x.envases;}).join('\n'))) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Moviendo...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaTraspaso', token:window._token||'', de:de, items:its, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🚚 Ejecutar traspaso';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🚚 Traspaso '+d.num+' hecho','var(--green)');
+    window._cabSec='inv';
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🚚 Ejecutar traspaso';} toast('❌ Sin conexión','#B86B6B'); });
 }
 // Activar / desactivar: el producto desactivado se va a su carpeta y no aparece
 // en el buscador de los protocolos. Nada se borra.
@@ -6032,12 +6188,14 @@ function _cabInvDetalle(i){
     +fila('Código',p.codigo)
     +fila('Proveedor',p.proveedor&&p.proveedor!=='—'?p.proveedor:'')
     +fila('SKU catálogo (venta)',p.skuCat||'')
+    +fila('Código de barras',p.barras||'')
     +fila('Envase',p.contenido+' '+p.unidad)
     +fila('Costo del envase','$'+p.costoEnvase.toFixed(2))
     +fila('Costo por '+p.unidad,'$'+p.costoUnidad.toFixed(4))
-    +fila('Envases cerrados',String(p.cerrados))
-    +fila('Abierto: restante',p.abierto+' '+p.unidad)
-    +fila('Stock total',p.stock+' '+p.unidad)
+    +fila('🏪 Local: cerrados',String(p.cerrados))
+    +fila('🏪 Local: abierto',p.abierto+' '+p.unidad)
+    +fila('🏠 Bodega central: cerrados',String(p.bodega||0))
+    +fila('Stock total (todo lado)',p.stock+' '+p.unidad)
     +fila('Mínimo de alerta',p.minimo+' envase'+(p.minimo===1?'':'s'))
     +fila('Estado',(p.activo||'SI')==='NO'?'⏸ Inactivo':'✓ Activo')
     +(p.notas?'<div style="font-size:0.58rem;color:var(--gray);padding:4px 0;clear:both">🗒 '+p.notas+'</div>':'')
@@ -6048,7 +6206,7 @@ function _cabInvDetalle(i){
 function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
   window._cabFotoPend=null;
-  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,minimo:1,notas:'',skuCat:'',activo:'SI',row:0};
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
@@ -6058,10 +6216,16 @@ function _cabInvForm(i){
     +'<div style="width:80px"><div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div>'+'<select id="cbi-unidad" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+_cabUnidadesOpts(p.unidad)+'</select></div></div>'
     +'<div style="flex:1">'+inp('costo','Costo envase $ *',p.costoEnvase,'number')+'</div></div>'
     +'<div style="display:flex;gap:5px">'
-    +'<div style="flex:1">'+inp('cerrados','Envases cerrados',p.cerrados,'number')+'</div>'
-    +'<div style="flex:1">'+inp('abierto','Abierto: restante',p.abierto,'number')+'</div>'
-    +'<div style="flex:1">'+inp('minimo','Mínimo (envases)',p.minimo,'number')+'</div></div>'
+    +'<div style="flex:1">'+inp('cerrados','🏪 Cerrados LOCAL',p.cerrados,'number')+'</div>'
+    +'<div style="flex:1">'+inp('abierto','🏪 Abierto: restante',p.abierto,'number')+'</div>'
+    +'<div style="flex:1">'+inp('bodega','🏠 Cerrados BODEGA',p.bodega,'number')+'</div>'
+    +'<div style="flex:1">'+inp('minimo','Mín. (local)',p.minimo,'number')+'</div></div>'
     +inp('skucat','SKU catálogo — solo si viene del inventario de venta (ej. SUNSU-HT-001)',p.skuCat)
+    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Código de barras</div>'
+    +'<div style="display:flex;gap:6px;margin-top:2px">'
+    +'<input id="cbi-barras" value="'+String(p.barras||'').replace(/"/g,'&quot;')+'" placeholder="Escánealo o escríbelo" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none">'
+    +'<button onclick="_scanAbrir(function(t){var e=document.getElementById(\'cbi-barras\');if(e)e.value=t;toast(\'📷 \'+t,\'var(--green)\')})" style="padding:8px 12px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.7rem;font-weight:800;cursor:pointer">📷</button>'
+    +'</div></div>'
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Foto del producto</div>'
     +'<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'
     +'<img id="cbi-foto-prev" src="'+(p.foto||('productos/'+(p.codigo||'X')+'.jpg'))+'" onerror="this.style.display=\'none\'" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1.5px solid var(--cream-d)">'
@@ -6122,7 +6286,7 @@ function _cabInvGuardar(i,row,codigo,btn){
     body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
       campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
-        minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
+        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'), activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
@@ -6171,7 +6335,8 @@ function _cabPintarOC(){
     });
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px">'
       +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy)">Total $'+(oc.total||0).toFixed(2)+'</div>'
-      +(pend?'<button onclick="_cabOCRecibir('+i+',this)" style="padding:7px 12px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✓ Marcar recibida</button>'
+      +(pend?'<div style="display:flex;gap:4px"><button onclick="_cabOCRecibir('+i+',this,\'local\')" style="padding:7px 10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.6rem;font-weight:800;cursor:pointer">✓ en 🏪 Sunsu</button>'
+        +'<button onclick="_cabOCRecibir('+i+',this,\'bodega\')" style="padding:7px 10px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.6rem;font-weight:800;cursor:pointer">✓ en 🏠 Bodega</button></div>'
         :'<div style="font-size:0.54rem;color:var(--gray)">Recibida '+oc.recibida+(oc.recibidaPor?' · '+oc.recibidaPor:'')+'</div>')
       +'</div></div>';
   });
@@ -6202,7 +6367,7 @@ function _cabOCBuscar(){
   if(!q){ res.innerHTML=''; return; }
   var hits=(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false;
-    return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
+    return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
   res.innerHTML=hits.map(function(p){
     return '<div onclick="_cabOCAgregar(\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
@@ -6254,30 +6419,38 @@ function _cabOCGuardar(btn){
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Crear orden';} toast('❌ Sin conexión','#B86B6B'); });
 }
-function _cabOCRecibir(i,btn){
+function _cabOCRecibir(i,btn,destino){
   var oc=(window._cab.ocs||[])[i]; if(!oc) return;
-  if(!confirm('✓ ¿Marcar '+oc.num+' como RECIBIDA?\n\nLos envases se SUMAN al stock de cada producto y el costo del envase se actualiza si cambió.')) return;
+  destino=destino==='bodega'?'bodega':'local';
+  if(!confirm('✓ ¿Marcar '+oc.num+' como RECIBIDA en '+(destino==='bodega'?'🏠 BODEGA CENTRAL':'🏪 el LOCAL')+'?\n\nLos envases se SUMAN al stock de ese lado y el costo del envase se actualiza si cambió.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'cabinaOCRecibir', token:window._token||'', row:oc.row, num:oc.num, usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'cabinaOCRecibir', token:window._token||'', row:oc.row, num:oc.num, destino:destino, usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
-    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Marcar recibida';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     if((d.noEncontrados||[]).length) toast('⚠️ Sin ficha en inventario: '+d.noEncontrados.join(', '),'#C9A227');
     else toast('✓ Recibida — stock actualizado','var(--green)');
     window._cabSec='oc';
     renderCabina(document.getElementById('content'),true);
   })
-  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Marcar recibida';} toast('❌ Sin conexión','#B86B6B'); });
+  .catch(function(){ if(btn){btn.disabled=false;} toast('❌ Sin conexión','#B86B6B'); });
 }
 // ── ACTIVOS ──
 function _cabPintarActivos(){
   var b=document.getElementById('cab-body'); if(!b) return;
-  var html=_cabEsAdmin()?'<button onclick="_cabActForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo activo</button><div id="cab-act-form"></div>':'';
-  (window._cab.act||[]).forEach(function(a,i){
+  var lugA=window._cabActLugar||'todo';
+  var chipA=function(val,txt){
+    var on=lugA===val;
+    return '<button onclick="window._cabActLugar=\''+val+'\';_cabPintarActivos()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+  };
+  var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">'+chipA('todo','🌐 Todos')+chipA('SUNSU','🏪 Sunsu')+chipA('BODEGA','🏠 Bodega')+'</div>';
+  html+=_cabEsAdmin()?'<button onclick="_cabActForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo activo</button><div id="cab-act-form"></div>':'';
+  (window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);}).forEach(function(a,ix){
+    var i=(window._cab.act||[]).indexOf(a);
     html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span></div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span> <span style="font-size:0.54rem;font-weight:800;color:var(--gray)">'+((a.lugar||'SUNSU')==='BODEGA'?'🏠':'🏪')+'</span></div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+'</div>'
       +(a.notas?'<div style="font-size:0.56rem;color:var(--gray)">'+a.notas+'</div>':'')+'</div>'
       +(_cabEsAdmin()?'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
@@ -6288,10 +6461,11 @@ function _cabPintarActivos(){
 }
 function _cabActForm(i){
   var f=document.getElementById('cab-act-form'); if(!f) return;
-  var a=i>=0?(window._cab.act||[])[i]:{codigo:'',activo:'',categoria:'',cantidad:'',ubicacion:'',estado:'Buen estado',fechaCompra:'',costo:'',notas:'',row:0};
+  var a=i>=0?(window._cab.act||[])[i]:{codigo:'',activo:'',categoria:'',cantidad:'',ubicacion:'',estado:'Buen estado',fechaCompra:'',costo:'',notas:'',lugar:'SUNSU',row:0};
   var inp=function(id,lbl,v){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cba-'+id+'" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
+    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Lugar</div><select id="cba-lugar" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white"><option value="SUNSU"'+(a.lugar!=='BODEGA'?' selected':'')+'>🏪 Local Sunsu</option><option value="BODEGA"'+(a.lugar==='BODEGA'?' selected':'')+'>🏠 Bodega central</option></select></div>'
     +inp('activo','Activo *',a.activo)+inp('categoria','Categoría',a.categoria)
     +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('cantidad','Cantidad',a.cantidad)+'</div><div style="flex:2">'+inp('ubicacion','Ubicación',a.ubicacion)+'</div></div>'
     +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('estado','Estado',a.estado)+'</div><div style="flex:1">'+inp('fecha','Fecha compra',a.fechaCompra)+'</div><div style="flex:1">'+inp('costo','Costo $',a.costo)+'</div></div>'
@@ -6310,7 +6484,7 @@ function _cabActGuardar(row,codigo,btn){
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cabinaSaveActivo', token:window._token||'', row:row,
       campos:{codigo:codigo, activo:v('activo'), categoria:v('categoria'), cantidad:v('cantidad'),
-        ubicacion:v('ubicacion'), estado:v('estado'), fechaCompra:v('fecha'), costo:v('costo'), notas:v('notas')},
+        ubicacion:v('ubicacion'), estado:v('estado'), fechaCompra:v('fecha'), costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU')},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
