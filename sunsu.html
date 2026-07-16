@@ -10017,6 +10017,18 @@ function _cargarTodosPaquetes(){
 function _pintarTodosPaquetes(){
   var cont=document.getElementById('bpq-todos');
   if(!cont) return;
+  // FIX teclado iOS: el buscador se crea UNA sola vez y cada tecla repinta SOLO
+  // la lista (bpq-lista). Antes el input se reconstruia a si mismo en cada
+  // repintado → el foco moria y el teclado del iPhone se cerraba a mitad de palabra.
+  if(!document.getElementById('bpq-lista')){
+    cont.innerHTML='<input id="bpq-q" type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarPaqLista,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin:16px 0 2px">'
+      +'<div id="bpq-lista"></div>';
+  }
+  _pintarPaqLista();
+}
+function _pintarPaqLista(){
+  var cont=document.getElementById('bpq-lista');
+  if(!cont) return;
   var arr=(window._todosPaq||[]).slice();
   var q=(window._paqQ||'').toLowerCase().trim();
   if(q) arr=arr.filter(function(x){
@@ -10034,7 +10046,7 @@ function _pintarTodosPaquetes(){
     +'<button onclick="window._paqVer=window._paqVer===\'pend\'?\'todos\':\'pend\';_pintarTodosPaquetes()" style="padding:6px 11px;background:'+(window._paqVer==='pend'?'var(--blue-l)':'white')+';color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqVer==='pend'?'⏳ Por completar ('+nPend+')':'📋 Todos ('+(nPend+nComp)+')')+'</button>'
     +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Nuevos':'⬆ Antiguos')+'</button>'
     +'</div></div>'
-    +'<input type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarTodosPaquetes,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:10px">';
+    ;
   if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
   arr.forEach(function(x){
     var p=x.p;
