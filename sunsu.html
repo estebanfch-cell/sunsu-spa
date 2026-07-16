@@ -5447,15 +5447,28 @@ function _citaTieneTicket(apt, fechaStr){
   }
   return false;
 }
+// ══════ PINTADO INSTANTANEO (stale-while-revalidate) ══════
+// Las pestanas pesadas guardan su ultima respuesta en el telefono. Al abrirlas:
+// 1) se pintan AL INSTANTE con lo de hace un rato, 2) se pide lo fresco detras,
+// 3) si algo cambio Y no hay trabajo en curso (un formulario abierto), se repinta.
+// Tras cualquier guardado se refresca en firme (fresh=true), saltando la memoria.
+function _swrLee(k){
+  try { return JSON.parse(localStorage.getItem('sunsu_swr_'+k)||'null'); } catch(e){ return null; }
+}
+function _swrGuarda(k,d){
+  var nuevo='';
+  try { nuevo=JSON.stringify(d); } catch(e){ return true; }
+  var viejo='';
+  try { viejo=localStorage.getItem('sunsu_swr_'+k)||''; } catch(e){}
+  try { localStorage.setItem('sunsu_swr_'+k, nuevo); } catch(e){}
+  return nuevo!==viejo; // true = hay cambios
+}
 // ══════ SUNSU CABINA — protocolos, inventario de uso interno y activos ══════
 // Todas VEN (los protocolos son la guia de trabajo de las chicas); editar es solo
 // de admins (tu y Emi), validado en el servidor por token. Fase 1: sin descuento
 // automatico todavia — eso llega en fase 2, cuando los protocolos reales esten cargados.
-function renderCabina(c){
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando cabina...</div>';
-  fetch(APPS_SCRIPT_URL+'?action=getCabina&_t='+Date.now())
-  .then(function(r){return r.json();})
-  .then(function(d){
+function renderCabina(c,fresh){
+  var aplicarCb=function(d){
     if(d.sinEstructura){
       var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
       c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🧪 Cabina</div>'
@@ -5466,10 +5479,36 @@ function renderCabina(c){
           :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
       return;
     }
-    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
     _pintarCabina(c);
+  };
+  var cachedCb=fresh?null:_swrLee('cabina');
+  if(cachedCb) aplicarCb(cachedCb);
+  else c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando cabina...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getCabina&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var cambioCb=_swrGuarda('cabina',d);
+    if(!cachedCb){ aplicarCb(d); return; }
+    if(!cambioCb) return;               // nada nuevo: la pantalla ya esta bien
+    if(_cabHayTrabajoAbierto()) return; // no pisar un formulario o ficha abierta
+    aplicarCb(d);
   })
-  .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la cabina</div>'; });
+  .catch(function(){ if(!cachedCb) c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la cabina</div>'; });
+}
+// Detecta trabajo en curso en Cabina: si hay algo abierto, el refresco de fondo
+// NO repinta (los datos frescos llegaran en la proxima apertura o guardado).
+function _cabHayTrabajoAbierto(){
+  var ids=['cab-inv-form','cab-oc-form','cab-fijos-form'];
+  for(var i=0;i<ids.length;i++){ var el=document.getElementById(ids[i]); if(el&&el.innerHTML) return true; }
+  var sel=['[id^="cab-pro-b-"]','[id^="cab-invd-"]'];
+  for(var j=0;j<sel.length;j++){
+    var ns=document.querySelectorAll(sel[j]);
+    for(var k=0;k<ns.length;k++){ if(ns[k].style.display==='block') return true; }
+  }
+  var inact=document.getElementById('cab-inv-inact');
+  if(inact&&inact.style.display==='block') return true;
+  return false;
 }
 function _cabCrear(btn){
   if(!confirm('🚀 ¿Crear el archivo SUNSU CABINA?\n\nSe sembrará un protocolo vacío por cada facial del catálogo.')) return;
@@ -5481,7 +5520,7 @@ function _cabCrear(btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🚀 Crear estructura';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('🚀 SUNSU CABINA creada','var(--green)');
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🚀 Crear estructura';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -5503,10 +5542,12 @@ function _pintarCabina(c){
     +chip('pro','📋 Protocolos ('+(window.FACIALES||[]).length+')')
     +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
     +chip('act','🛠 Activos ('+(window._cab.act||[]).length+')')
+    +(_cabEsAdmin()?chip('oc','🛒 Órdenes ('+((window._cab.ocs||[]).filter(function(o){return o.estado==='PENDIENTE';}).length)+')'):'')
     +'</div><div id="cab-body"></div>';
   c.innerHTML=html;
   if(sec==='pro') _cabPintarProtocolos();
   else if(sec==='inv') _cabPintarInventario();
+  else if(sec==='oc') _cabPintarOC();
   else _cabPintarActivos();
 }
 // Repone TODA la base migrada del Excel (productos, Focuskin, 6 protocolos con
@@ -5523,7 +5564,7 @@ function _cabResembrar(btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='📥 Reponer base del Excel';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('📥 Base del Excel repuesta','var(--green)');
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='📥 Reponer base del Excel';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -5571,7 +5612,7 @@ function _cabFijosGuardar(btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar fijos';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('🏢 Fijos guardados: $'+(d.total||0).toFixed(2)+'/mes','var(--green)');
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar fijos';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -5657,6 +5698,25 @@ function _cabProCuerpo(i,editando){
       h+='<div style="display:flex;gap:5px;padding:4px 0 8px">'+chT('pasos','👣 Pasos')+chT('costos','💰 Costos')+'</div>';
     }
     if(!(p.pasos||[]).length) h+='<div style="font-size:0.66rem;color:var(--gray);font-style:italic">Protocolo por definir</div>';
+    // Productos DESACTIVADOS que este protocolo todavia usa: aviso + reemplazo ahi mismo.
+    // Las chicas ven el aviso (no deben seguir usando ese producto); el boton es de admins.
+    var inactUsados=[];
+    (p.pasos||[]).forEach(function(ps){
+      if(!ps.productoCod) return;
+      var prI=_cabProdDe(ps.productoCod);
+      if(prI&&(prI.activo||'SI')==='NO'){
+        var ya=inactUsados.find(function(x){return x.cod===ps.productoCod;});
+        if(ya) ya.pasos.push(ps.paso); else inactUsados.push({cod:ps.productoCod, nombre:prI.producto, pasos:[ps.paso]});
+      }
+    });
+    inactUsados.forEach(function(iu){
+      h+='<div style="background:#FBF0EC;border:1.5px solid #E8B4A4;border-radius:10px;padding:9px 11px;margin-bottom:7px">'
+        +'<div style="font-size:0.64rem;font-weight:800;color:#B85C3F">⚠ Producto desactivado en uso</div>'
+        +'<div style="font-size:0.6rem;color:#8A5A44;margin-top:2px">'+iu.nombre+' ('+iu.cod+') — paso'+(iu.pasos.length===1?'':'s')+' '+iu.pasos.join(', ')+'</div>'
+        +(esAdm?'<button onclick="_cabProReemplazar('+i+',\''+iu.cod+'\')" style="margin-top:6px;padding:6px 11px;background:#B85C3F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer">🔁 Reemplazar producto</button>'
+          +'<div id="cab-rep-'+i+'" style="display:none;margin-top:7px"></div>':'')
+        +'</div>';
+    });
     if(tab==='pasos'){
       // La guia: limpia, sin dolares (los costos viven en su propia pestana)
       var totMin=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);
@@ -5786,6 +5846,7 @@ function _cabPbuscar(pi){
   var cont=document.getElementById('cab-pr-'+pi); if(!cont) return;
   if(!q){ cont.innerHTML=''; return; }
   var hits=(window._cab.inv||[]).filter(function(p){
+    if((p.activo||'SI')==='NO') return false; // desactivados no se ofrecen para pasos nuevos
     return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
   }).slice(0,8);
   cont.innerHTML=hits.map(function(p){
@@ -5823,6 +5884,54 @@ function _cabMOSugerir(i,btn){
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🧮 Sugerir';} toast('❌ Sin conexión','#B86B6B'); });
 }
+// Reemplazo en sitio: elige el producto nuevo (buscador, solo activos) y se cambia
+// en TODOS los pasos que usaban el viejo — mismas cantidades y unidades, que Emi
+// puede afinar despues. Se guarda como version nueva, como cualquier cambio.
+function _cabProReemplazar(i,codViejo){
+  var cont=document.getElementById('cab-rep-'+i); if(!cont) return;
+  if(cont.style.display==='block'){ cont.style.display='none'; cont.innerHTML=''; return; }
+  window._cabRep={i:i, viejo:codViejo};
+  cont.style.display='block';
+  cont.innerHTML='<input id="cab-repq-'+i+'" oninput="_cabRepBuscar('+i+')" placeholder="🔍 Buscar el producto NUEVO..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:3px">'
+    +'<div id="cab-repr-'+i+'"></div>';
+  var qEl=document.getElementById('cab-repq-'+i); if(qEl) qEl.focus();
+}
+function _cabRepBuscar(i){
+  var q=_normNomCli((document.getElementById('cab-repq-'+i)||{}).value||'');
+  var res=document.getElementById('cab-repr-'+i); if(!res) return;
+  if(!q){ res.innerHTML=''; return; }
+  var hits=(window._cab.inv||[]).filter(function(p){
+    if((p.activo||'SI')==='NO') return false;
+    return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
+  }).slice(0,8);
+  res.innerHTML=hits.map(function(p){
+    return '<div onclick="_cabRepElegir(\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
+      +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+p.producto+'</span> '
+      +'<span style="font-size:0.56rem;color:var(--gray)">'+p.codigo+'</span></div>';
+  }).join('')||'<div style="font-size:0.6rem;color:var(--gray);padding:4px">Sin coincidencias (solo se ofrecen activos)</div>';
+}
+function _cabRepElegir(codNuevo){
+  var ctx=window._cabRep||{};
+  var p=(window._cab.proView||[])[ctx.i]; if(!p) return;
+  var prV=_cabProdDe(ctx.viejo), prN=_cabProdDe(codNuevo);
+  var n=(p.pasos||[]).filter(function(ps){return ps.productoCod===ctx.viejo;}).length;
+  if(!confirm('🔁 Reemplazar '+(prV?prV.producto:ctx.viejo)+' por '+(prN?prN.producto:codNuevo)+' en '+n+' paso'+(n===1?'':'s')+'?\n\nSe guarda como v'+(p.version+1)+'. Las cantidades quedan iguales — revísalas si el producto nuevo se dosifica distinto.')) return;
+  var pasos=(p.pasos||[]).map(function(ps){
+    var c=JSON.parse(JSON.stringify(ps));
+    if(c.productoCod===ctx.viejo) c.productoCod=codNuevo;
+    return c;
+  });
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaSaveProtocolo', token:window._token||'', sku:p.sku, nombre:p.nombre,
+      manoObra:p.manoObra||0, video:p.video||'', notas:p.notas||'', pasos:pasos, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🔁 Reemplazado — guardado como v'+d.version,'var(--green)');
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cabProGuardar(i,btn){
   var p=(window._cab.proView||[])[i]; if(!p) return;
   var pasos=(window._cabEd||[]).filter(function(ps){return (ps.desc||'').trim();});
@@ -5838,7 +5947,7 @@ function _cabProGuardar(i,btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('💾 Protocolo guardado como v'+d.version,'var(--green)');
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
     window._cabSec='pro';
   })
   .catch(function(){ if(btn){btn.disabled=false;} toast('❌ Sin conexión','#B86B6B'); });
@@ -5846,23 +5955,100 @@ function _cabProGuardar(i,btn){
 // ── INVENTARIO CABINA ──
 function _cabPintarInventario(){
   var b=document.getElementById('cab-body'); if(!b) return;
-  var html=_cabEsAdmin()?'<button onclick="_cabInvForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo producto de cabina</button><div id="cab-inv-form"></div>':'';
-  (window._cab.inv||[]).forEach(function(p,i){
+  var esAdm=_cabEsAdmin();
+  // Recordar si la carpeta de desactivados estaba abierta (patron del seguimiento)
+  var inactAbierto=false;
+  var elIn=document.getElementById('cab-inv-inact');
+  if(elIn&&elIn.style.display==='block') inactAbierto=true;
+  var todos=window._cab.inv||[];
+  var activosL=[], inactivosL=[];
+  todos.forEach(function(p,i){ ((p.activo||'SI')==='NO'?inactivosL:activosL).push({p:p,i:i}); });
+  // La tarjeta: precios SOLO para admins; tocar la tarjeta (admin) despliega el detalle
+  var card=function(par){
+    var p=par.p, i=par.i;
     var bajo=p.minimo>0&&(p.cerrados<=p.minimo);
-    html+='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(bajo?';border:1.5px solid #E8543F':'')+'">'
+    var inac=(p.activo||'SI')==='NO';
+    var sub=p.codigo+(esAdm&&p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad
+      +(esAdm?' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')':'');
+    var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+'</div>'
-      +'<div style="font-size:0.58rem;color:var(--gray)">'+p.codigo+(p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad+' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')</div>'
-      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">📦 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad+' · <b>total '+p.stock+p.unidad+'</b></div></div>'
-      +(_cabEsAdmin()?'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
-      +'</div></div>';
-  });
-  if(!(window._cab.inv||[]).length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos de cabina todavía</div>';
+      +'<div style="flex:1;min-width:0'+(esAdm?';cursor:pointer':'')+'"'+(esAdm?' onclick="_cabInvDetalle('+i+')"':'')+'>'
+      +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo&&!inac?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+(inac?' <span style="font-size:0.54rem;color:var(--gray);font-weight:800">⏸ INACTIVO</span>':'')+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+sub+'</div>'
+      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">📦 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad+' · <b>total '+p.stock+p.unidad+'</b></div>'
+      +'</div>'
+      +(esAdm?'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +'<button onclick="_cabInvActivo('+i+',this)" title="'+(inac?'Reactivar':'Desactivar')+'" style="padding:6px 9px;background:white;color:'+(inac?'#2E7D52':'var(--gray)')+';border:1.5px solid '+(inac?'#8FBF9F':'var(--cream-d)')+';border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">'+(inac?'▶':'⏸')+'</button>'
+        +'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>'
+        +'</div>':'')
+      +'</div>'
+      +(esAdm?'<div id="cab-invd-'+i+'" style="display:none"></div>':'')
+      +'</div>';
+    return h;
+  };
+  var html=esAdm?'<button onclick="_cabInvForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo producto de cabina</button><div id="cab-inv-form"></div>':'';
+  activosL.forEach(function(par){ html+=card(par); });
+  if(!activosL.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos activos</div>';
+  // Carpeta plegable de desactivados: fuera de la vista hasta que la abras
+  if(inactivosL.length){
+    html+='<div style="background:white;border-radius:12px;margin-top:4px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\'cab-inv-inact\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--gray)">⏸ Desactivados ('+inactivosL.length+')</div>'
+      +'<span id="arrow-cab-inv-inact" style="color:var(--gray);font-size:0.75rem">'+(inactAbierto?'▼':'▶')+'</span>'
+      +'</div>'
+      +'<div id="cab-inv-inact" style="display:'+(inactAbierto?'block':'none')+';padding:8px 10px">';
+    inactivosL.forEach(function(par){ html+=card(par); });
+    html+='</div></div>';
+  }
   b.innerHTML=html;
+}
+// Activar / desactivar: el producto desactivado se va a su carpeta y no aparece
+// en el buscador de los protocolos. Nada se borra.
+function _cabInvActivo(i,btn){
+  var p=(window._cab.inv||[])[i]; if(!p) return;
+  var nuevo=(p.activo||'SI')==='NO'?'SI':'NO';
+  if(btn) btn.disabled=true;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaProductoActivo', token:window._token||'', row:p.row, codigo:p.codigo, activo:nuevo, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn)btn.disabled=false; toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    p.activo=nuevo;
+    toast(nuevo==='NO'?'⏸ Desactivado':'▶ Reactivado','var(--green)');
+    _cabPintarInventario();
+  })
+  .catch(function(){ if(btn)btn.disabled=false; toast('❌ Sin conexión','#B86B6B'); });
+}
+// Detalle desplegable del producto (solo admins): toda la ficha + foto si existe
+// en el repo (productos/CODIGO.jpg) — si no hay foto, simplemente no se muestra.
+function _cabInvDetalle(i){
+  var p=(window._cab.inv||[])[i];
+  var dv=document.getElementById('cab-invd-'+i);
+  if(!p||!dv) return;
+  if(dv.style.display==='block'){ dv.style.display='none'; dv.innerHTML=''; return; }
+  var fila=function(l,v){ return v?'<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0"><span style="font-size:0.6rem;font-weight:700;color:var(--gray)">'+l+'</span><span style="font-size:0.62rem;font-weight:700;color:var(--navy);text-align:right">'+v+'</span></div>':''; };
+  dv.innerHTML='<div style="margin-top:9px;border-top:1px solid var(--cream-d);padding-top:8px">'
+    +'<img src="'+(p.foto||('productos/'+p.codigo+'.jpg'))+'" onerror="if(!this.dataset.f){this.dataset.f=1;this.src=\'productos/'+p.codigo+'.jpg\';}else{this.style.display=\'none\';}" style="max-width:110px;max-height:110px;border-radius:10px;float:right;margin:0 0 6px 8px">'
+    +fila('Código',p.codigo)
+    +fila('Proveedor',p.proveedor&&p.proveedor!=='—'?p.proveedor:'')
+    +fila('SKU catálogo (venta)',p.skuCat||'')
+    +fila('Envase',p.contenido+' '+p.unidad)
+    +fila('Costo del envase','$'+p.costoEnvase.toFixed(2))
+    +fila('Costo por '+p.unidad,'$'+p.costoUnidad.toFixed(4))
+    +fila('Envases cerrados',String(p.cerrados))
+    +fila('Abierto: restante',p.abierto+' '+p.unidad)
+    +fila('Stock total',p.stock+' '+p.unidad)
+    +fila('Mínimo de alerta',p.minimo+' envase'+(p.minimo===1?'':'s'))
+    +fila('Estado',(p.activo||'SI')==='NO'?'⏸ Inactivo':'✓ Activo')
+    +(p.notas?'<div style="font-size:0.58rem;color:var(--gray);padding:4px 0;clear:both">🗒 '+p.notas+'</div>':'')
+    +'<div style="font-size:0.54rem;color:var(--gray);padding-top:4px;clear:both">📈 Historial de compras y consumos: llega con la Fase 2</div>'
+    +'</div>';
+  dv.style.display='block';
 }
 function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
-  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,minimo:1,notas:'',row:0};
+  window._cabFotoPend=null;
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,minimo:1,notas:'',skuCat:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
@@ -5875,6 +6061,13 @@ function _cabInvForm(i){
     +'<div style="flex:1">'+inp('cerrados','Envases cerrados',p.cerrados,'number')+'</div>'
     +'<div style="flex:1">'+inp('abierto','Abierto: restante',p.abierto,'number')+'</div>'
     +'<div style="flex:1">'+inp('minimo','Mínimo (envases)',p.minimo,'number')+'</div></div>'
+    +inp('skucat','SKU catálogo — solo si viene del inventario de venta (ej. SUNSU-HT-001)',p.skuCat)
+    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Foto del producto</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'
+    +'<img id="cbi-foto-prev" src="'+(p.foto||('productos/'+(p.codigo||'X')+'.jpg'))+'" onerror="this.style.display=\'none\'" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1.5px solid var(--cream-d)">'
+    +'<button onclick="document.getElementById(\'cbi-foto-file\').click()" style="padding:9px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📷 Tomar o subir foto</button>'
+    +'<input id="cbi-foto-file" type="file" accept="image/*" style="display:none" onchange="_cabFotoSel(this)">'
+    +'</div></div>'
     +inp('notas','Notas',p.notas)
     +'<div style="display:flex;gap:6px;margin-top:4px">'
     +'<button onclick="_cabInvGuardar('+i+','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
@@ -5882,6 +6075,44 @@ function _cabInvForm(i){
     +'<button onclick="document.getElementById(\'cab-inv-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
     +'</div></div>';
   f.scrollIntoView({behavior:'smooth'});
+}
+// La foto se achica en el celular (max 600px, JPEG) antes de subir — pesa ~100KB.
+// En iPhone el input abre el menu nativo: Tomar foto / Fototeca / Elegir archivo.
+function _cabFotoSel(inp){
+  var f=inp.files&&inp.files[0]; if(!f) return;
+  var pr=document.getElementById('cbi-foto-prev');
+  var listo=function(dataUrl){
+    window._cabFotoPend=dataUrl.split(',')[1];
+    if(pr){ pr.src=dataUrl; pr.style.display='block'; }
+    toast('📷 Foto lista — se sube al guardar','var(--green)');
+  };
+  var dibujar=function(src,w,h){
+    var esc=Math.min(1,600/Math.max(w,h));
+    var cv=document.createElement('canvas');
+    cv.width=Math.round(w*esc); cv.height=Math.round(h*esc);
+    cv.getContext('2d').drawImage(src,0,0,cv.width,cv.height);
+    listo(cv.toDataURL('image/jpeg',0.82));
+  };
+  var clasico=function(){
+    var u=URL.createObjectURL(f);
+    var im=new Image();
+    im.onload=function(){ dibujar(im,im.naturalWidth,im.naturalHeight); URL.revokeObjectURL(u); };
+    im.src=u;
+  };
+  if(window.createImageBitmap){
+    createImageBitmap(f,{imageOrientation:'from-image'})
+      .then(function(b){ dibujar(b,b.width,b.height); })
+      .catch(clasico);
+  } else clasico();
+}
+function _cabFotoSubir(codigo){
+  if(!window._cabFotoPend||!codigo) return Promise.resolve();
+  var b64=window._cabFotoPend; window._cabFotoPend=null;
+  return fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaFoto', token:window._token||'', codigo:codigo, dataB64:b64, mime:'image/jpeg', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){ if(d.ok) toast('📷 Foto guardada en Drive','var(--green)'); else toast('⚠️ La foto no se subió: '+(d.error||''),'#C9A227'); })
+  .catch(function(){ toast('⚠️ La foto no se subió (sin conexión)','#C9A227'); });
 }
 function _cabInvGuardar(i,row,codigo,btn){
   var v=function(id){ var el=document.getElementById('cbi-'+id); return el?el.value.trim():''; };
@@ -5891,14 +6122,14 @@ function _cabInvGuardar(i,row,codigo,btn){
     body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
       campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
-        minimo:v('minimo'), notas:v('notas')},
+        minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('💾 Guardado','var(--green)');
     window._cabSec='inv';
-    renderCabina(document.getElementById('content'));
+    _cabFotoSubir(d.codigo||codigo).then(function(){ renderCabina(document.getElementById('content'),true); });
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -5914,9 +6145,130 @@ function _cabBorrar(hoja, row, codigo, btn){
     if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'No se pudo borrar'),'#B86B6B'); return; }
     toast('🗑 Borrado','var(--green)');
     window._cabSec=hoja==='act'?'act':'inv';
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;} toast('❌ Sin conexión','#B86B6B'); });
+}
+// ── ORDENES DE COMPRA DE CABINA (solo admins) ──
+// Crear orden: proveedor (se sugiere de los existentes, o escribes uno nuevo) +
+// productos con envases y costo. Al marcarla RECIBIDA, el stock sube solo y el
+// costo del envase se actualiza si cambio.
+function _cabPintarOC(){
+  var b=document.getElementById('cab-body'); if(!b) return;
+  var ocs=(window._cab.ocs||[]);
+  var html='<button onclick="_cabOCForm()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nueva orden de compra</button><div id="cab-oc-form"></div>';
+  if(!ocs.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin órdenes todavía</div>';
+  ocs.forEach(function(oc,i){
+    var pend=oc.estado==='PENDIENTE';
+    html+='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(pend?';border:1.5px solid var(--gold)':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+oc.num+' · '+oc.proveedor+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+oc.fecha+' · por '+(oc.por||'—')+'</div></div>'
+      +'<span style="font-size:0.56rem;font-weight:800;padding:3px 8px;border-radius:7px;background:'+(pend?'#FBF3DC':'#EAF6EE')+';color:'+(pend?'#9A7B1E':'#2E7D52')+'">'+(pend?'⏳ PENDIENTE':'✓ RECIBIDA')+'</span>'
+      +'</div>';
+    (oc.items||[]).forEach(function(it){
+      html+='<div style="font-size:0.62rem;color:#4A5568;padding:3px 0;border-bottom:1px solid var(--cream-d)">'+it.producto+' <span style="color:var(--gray)">('+it.codigo+')</span> — '+it.envases+' envase'+(it.envases===1?'':'s')+' × $'+(it.costoEnvase||0).toFixed(2)+'</div>';
+    });
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy)">Total $'+(oc.total||0).toFixed(2)+'</div>'
+      +(pend?'<button onclick="_cabOCRecibir('+i+',this)" style="padding:7px 12px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✓ Marcar recibida</button>'
+        :'<div style="font-size:0.54rem;color:var(--gray)">Recibida '+oc.recibida+(oc.recibidaPor?' · '+oc.recibidaPor:'')+'</div>')
+      +'</div></div>';
+  });
+  b.innerHTML=html;
+}
+function _cabOCForm(){
+  var f=document.getElementById('cab-oc-form'); if(!f) return;
+  if(f.innerHTML){ f.innerHTML=''; return; }
+  window._cabOCItems=[];
+  var provs={};
+  (window._cab.inv||[]).forEach(function(p){ if(p.proveedor&&p.proveedor!=='—') provs[p.proveedor]=true; });
+  var dl='<datalist id="cab-oc-provs">'+Object.keys(provs).sort().map(function(pv){return '<option value="'+String(pv).replace(/"/g,'&quot;')+'">';}).join('')+'</datalist>';
+  f.innerHTML='<div class="card" style="padding:13px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy);margin-bottom:8px">＋ Nueva orden de compra</div>'
+    +'<input id="cab-oc-prov" list="cab-oc-provs" placeholder="Proveedor (elige o escribe uno nuevo)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.74rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:8px">'+dl
+    +'<div id="cab-oc-items"></div>'
+    +'<input id="cab-oc-q" oninput="_cabOCBuscar()" placeholder="🔍 Agregar producto..." style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:3px">'
+    +'<div id="cab-oc-res"></div>'
+    +'<div id="cab-oc-tot" style="font-size:0.7rem;font-weight:800;color:var(--navy);padding:7px 0">Total $0.00</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabOCGuardar(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">💾 Crear orden</button>'
+    +'<button onclick="document.getElementById(\'cab-oc-form\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+}
+function _cabOCBuscar(){
+  var q=_normNomCli((document.getElementById('cab-oc-q')||{}).value||'');
+  var res=document.getElementById('cab-oc-res'); if(!res) return;
+  if(!q){ res.innerHTML=''; return; }
+  var hits=(window._cab.inv||[]).filter(function(p){
+    if((p.activo||'SI')==='NO') return false;
+    return _normNomCli(p.producto+' '+p.codigo).indexOf(q)>=0;
+  }).slice(0,8);
+  res.innerHTML=hits.map(function(p){
+    return '<div onclick="_cabOCAgregar(\''+p.codigo+'\')" style="padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;margin-bottom:3px;cursor:pointer;background:white">'
+      +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+p.producto+'</span> '
+      +'<span style="font-size:0.56rem;color:var(--gray)">'+p.codigo+' · envase $'+p.costoEnvase.toFixed(2)+'</span></div>';
+  }).join('')||'<div style="font-size:0.6rem;color:var(--gray);padding:4px">Sin coincidencias</div>';
+}
+function _cabOCAgregar(cod){
+  var p=_cabProdDe(cod); if(!p) return;
+  if((window._cabOCItems||[]).some(function(x){return x.codigo===cod;})){ toast('⚠️ Ya está en la orden','#C9A227'); return; }
+  window._cabOCItems.push({codigo:cod, producto:p.producto, envases:1, costoEnvase:p.costoEnvase});
+  var qEl=document.getElementById('cab-oc-q'); if(qEl) qEl.value='';
+  var rEl=document.getElementById('cab-oc-res'); if(rEl) rEl.innerHTML='';
+  _cabOCPintarItems();
+}
+function _cabOCPintarItems(){
+  var c=document.getElementById('cab-oc-items'); if(!c) return;
+  var its=window._cabOCItems||[];
+  c.innerHTML=its.map(function(it,i){
+    return '<div style="background:var(--gray-ll,#F7F8FA);border-radius:9px;padding:8px;margin-bottom:5px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+it.producto+'</span>'
+      +'<span onclick="_cabOCItems.splice('+i+',1);_cabOCPintarItems()" style="color:#B86B6B;font-weight:800;cursor:pointer;font-size:0.7rem;padding:0 4px">🗑</span></div>'
+      +'<div style="display:flex;gap:5px">'
+      +'<input type="number" min="1" step="1" value="'+it.envases+'" oninput="_cabOCItems['+i+'].envases=parseFloat(this.value)||0;_cabOCTotal()" placeholder="Envases" style="flex:1;padding:7px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<input type="number" min="0" step="0.01" value="'+it.costoEnvase+'" oninput="_cabOCItems['+i+'].costoEnvase=parseFloat(this.value)||0;_cabOCTotal()" placeholder="$ envase" style="flex:1;padding:7px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'</div></div>';
+  }).join('');
+  _cabOCTotal();
+}
+function _cabOCTotal(){
+  var t=(window._cabOCItems||[]).reduce(function(a,it){return a+(it.envases||0)*(it.costoEnvase||0);},0);
+  var el=document.getElementById('cab-oc-tot'); if(el) el.textContent='Total $'+t.toFixed(2);
+}
+function _cabOCGuardar(btn){
+  var prov=((document.getElementById('cab-oc-prov')||{}).value||'').trim();
+  var its=(window._cabOCItems||[]).filter(function(x){return (x.envases||0)>0;});
+  if(!prov){ toast('⚠️ Falta el proveedor','#C9A227'); return; }
+  if(!its.length){ toast('⚠️ Agrega al menos un producto','#C9A227'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaOCGuardar', token:window._token||'', proveedor:prov, items:its, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Crear orden';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🛒 Orden '+d.num+' creada','var(--green)');
+    window._cabSec='oc';
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Crear orden';} toast('❌ Sin conexión','#B86B6B'); });
+}
+function _cabOCRecibir(i,btn){
+  var oc=(window._cab.ocs||[])[i]; if(!oc) return;
+  if(!confirm('✓ ¿Marcar '+oc.num+' como RECIBIDA?\n\nLos envases se SUMAN al stock de cada producto y el costo del envase se actualiza si cambió.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaOCRecibir', token:window._token||'', row:oc.row, num:oc.num, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Marcar recibida';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    if((d.noEncontrados||[]).length) toast('⚠️ Sin ficha en inventario: '+d.noEncontrados.join(', '),'#C9A227');
+    else toast('✓ Recibida — stock actualizado','var(--green)');
+    window._cabSec='oc';
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Marcar recibida';} toast('❌ Sin conexión','#B86B6B'); });
 }
 // ── ACTIVOS ──
 function _cabPintarActivos(){
@@ -5926,7 +6278,7 @@ function _cabPintarActivos(){
     html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span></div>'
-      +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(a.costo?' · $'+a.costo:'')+'</div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+'</div>'
       +(a.notas?'<div style="font-size:0.56rem;color:var(--gray)">'+a.notas+'</div>':'')+'</div>'
       +(_cabEsAdmin()?'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
       +'</div></div>';
@@ -5965,7 +6317,7 @@ function _cabActGuardar(row,codigo,btn){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('💾 Guardado','var(--green)');
     window._cabSec='act';
-    renderCabina(document.getElementById('content'));
+    renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -10026,15 +10378,25 @@ function ejecutarBusqueda(){
 // Mismas reglas de siempre (el efectivo de los tickets entra solo, con candado
 // anti-duplicado), pero un solo libro corrido: cada fila un movimiento, saldo
 // acumulado. Descargas exigen justificativo. La V1 queda en el Sheet como historico.
-function renderCajaChica(c){
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando caja...</div>';
+function renderCajaChica(c,fresh){
+  var aplicarCj=function(d){
+    window._cajaV2={saldo:d.saldo||0, movs:d.movs||[], iniciada:!!d.iniciada};
+    _pintarCajaV2(c);
+  };
+  var cachedCj=fresh?null:_swrLee('cajav2');
+  if(cachedCj) aplicarCj(cachedCj);
+  else c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando caja...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getCajaV2&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){
-    window._cajaV2={saldo:d.saldo||0, movs:d.movs||[], iniciada:!!d.iniciada};
-    _pintarCajaV2(c);
+    var cambioCj=_swrGuarda('cajav2',d);
+    if(!cachedCj){ aplicarCj(d); return; }
+    if(!cambioCj) return;
+    var fAb=document.getElementById('cv2-form');
+    if(fAb&&fAb.innerHTML) return; // formulario de descarga/deposito abierto: no pisar
+    aplicarCj(d);
   })
-  .catch(function(){ c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la caja</div>'; });
+  .catch(function(){ if(!cachedCj) c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la caja</div>'; });
 }
 function _pintarCajaV2(c){
   var d=window._cajaV2||{};
@@ -10051,7 +10413,7 @@ function _pintarCajaV2(c){
   }
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">💵 Caja Chica</div>'
-    +'<button onclick="renderCajaChica(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
+    +'<button onclick="renderCajaChica(document.getElementById(\'content\'),true)" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
     +'</div>'
     +'<div class="card" style="padding:16px;text-align:center;margin-bottom:10px">'
     +'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);letter-spacing:0.06em">SALDO ACTUAL</div>'
@@ -10094,7 +10456,7 @@ function _cajaV2Enviar(tipo,btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Registrar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast((tipo==='descarga'?'💸':'🏦')+' Registrado — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
-    renderCajaChica(document.getElementById('content'));
+    renderCajaChica(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Registrar';} toast('❌ Sin conexión','#B86B6B'); });
 }
@@ -10109,7 +10471,7 @@ function _cajaV2Iniciar(btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='⚖️ Iniciar caja';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('⚖️ Caja iniciada','var(--green)');
-    renderCajaChica(document.getElementById('content'));
+    renderCajaChica(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='⚖️ Iniciar caja';} toast('❌ Sin conexión','#B86B6B'); });
 }
