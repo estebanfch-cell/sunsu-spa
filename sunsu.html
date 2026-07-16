@@ -708,6 +708,12 @@ function initApp(){
         if(item.total>0) FACIALES[fi].p=item.total;
         FACIALES[fi]._activo=activo;
       }
+      // Auto-agregar faciales nuevos del catalogo: la REGLA es la columna TIPO —
+      // 'FACIAL' o 'FACIAL ESPECIAL' = facial vendible. Asi un facial creado en
+      // el catalogo aparece solo en el ticket y en el selector de protocolos de Cabina.
+      else if(activo && /^FACIAL/i.test((item.tipo||'').trim())){
+        FACIALES.push({sku:item.sku, n:item.nombre, p:item.total, com:item.com||2, _activo:activo});
+      }
       // ── EXTRAS ──
       var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
       if(ei>=0){
@@ -5483,9 +5489,12 @@ function _pintarCabina(c){
     var on=sec===val;
     return '<button onclick="window._cabSec=\''+val+'\';_pintarCabina(document.getElementById(\'content\'))" style="padding:7px 13px;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
   };
-  var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:10px">🧪 Cabina</div>'
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🧪 Cabina</div>'
+    +(_cabEsAdmin()?'<button onclick="_cabResembrar(this)" style="background:white;color:var(--gray);border:1.5px solid var(--cream-d);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">📥 Reponer base del Excel</button>':'')
+    +'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
-    +chip('pro','📋 Protocolos ('+(window._cab.pro||[]).length+')')
+    +chip('pro','📋 Protocolos ('+(window.FACIALES||[]).length+')')
     +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
     +chip('act','🛠 Activos ('+(window._cab.act||[]).length+')')
     +'</div><div id="cab-body"></div>';
@@ -5494,6 +5503,24 @@ function _pintarCabina(c){
   else if(sec==='inv') _cabPintarInventario();
   else _cabPintarActivos();
 }
+// Repone TODA la base migrada del Excel (productos, Focuskin, 6 protocolos con
+// pasos, cantidades y tiempos) sobre la estructura existente. Borra lo actual de
+// esas 4 pestanas — consumos y aperturas no se tocan. Doble confirmacion.
+function _cabResembrar(btn){
+  if(!confirm('📥 ¿Reponer la base del Excel?\n\nSe BORRA todo lo que haya ahora en Protocolos, Inventario de cabina y Activos, y se repone la base migrada (64 productos + 6 protocolos con pasos, cantidades y tiempos).')) return;
+  if(!confirm('Última confirmación: lo editado hasta ahora en Cabina se pierde. ¿Continuar?')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Reponiendo...'; }
+  var facs=(window.FACIALES||[]).map(function(f){return {sku:f.sku, n:f.n};});
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaResembrar', token:window._token||'', faciales:facs, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='📥 Reponer base del Excel';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('📥 Base del Excel repuesta','var(--green)');
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='📥 Reponer base del Excel';} toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cabEsAdmin(){ return CU&&(CU.role==='admin'||CU.role==='admin_master'); }
 function _cabProdDe(cod){
   return (window._cab.inv||[]).find(function(p){return p.codigo===cod;})||null;
@@ -5501,8 +5528,18 @@ function _cabProdDe(cod){
 // ── PROTOCOLOS ──
 function _cabPintarProtocolos(){
   var b=document.getElementById('cab-body'); if(!b) return;
-  var html=_cabEsAdmin()?'<button onclick="_cabProNuevoForm()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo protocolo</button><div id="cab-pro-nuevo"></div>':'';
-  (window._cab.pro||[]).forEach(function(p,i){
+  // La lista NO se crea a mano: es un ESPEJO del catalogo. Cada fila del CATALOGO
+  // con TIPO 'FACIAL' o 'FACIAL ESPECIAL' aparece aqui automaticamente — con su
+  // protocolo si ya existe, o 'por definir' listo para armar (el primer guardado
+  // lo crea como v1). Protocolos de faciales que ya no estan en el catalogo se
+  // conservan en el Sheet pero no se muestran.
+  var porSku={};
+  (window._cab.pro||[]).forEach(function(p){ porSku[(p.sku||'').trim()]=p; });
+  window._cab.proView=(window.FACIALES||[]).map(function(fc){
+    return porSku[fc.sku] || {sku:fc.sku, nombre:fc.n, version:0, vigente:'', manoObra:0, video:'', notas:'', actualizado:'', por:'', pasos:[], _nuevo:true};
+  });
+  var html='';
+  (window._cab.proView||[]).forEach(function(p,i){
     var costoProd=(p.pasos||[]).reduce(function(a,ps){
       var pr=_cabProdDe(ps.productoCod);
       return a+(pr?ps.cantidad*pr.costoUnidad:0);
@@ -5510,64 +5547,16 @@ function _cabPintarProtocolos(){
     html+='<div class="card" style="padding:0;margin-bottom:8px;overflow:hidden">'
       +'<div onclick="_cabProToggle('+i+')" style="padding:11px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
       +'<div><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+p.nombre+'</div>'
-      +'<div style="font-size:0.58rem;color:var(--gray)">'+p.sku+' · v'+p.version+' · '+(p.pasos||[]).length+' paso'+((p.pasos||[]).length===1?'':'s')
-      +(costoProd?' · producto $'+costoProd.toFixed(2):'')+(p.manoObra?' · M.O. $'+p.manoObra.toFixed(2):'')+'</div></div>'
+      +'<div style="font-size:0.58rem;color:var(--gray)">'+(p._nuevo
+        ? p.sku+' · <span style="color:var(--gold);font-weight:800">por definir</span>'
+        : p.sku+' · v'+p.version+' · '+(p.pasos||[]).length+' paso'+((p.pasos||[]).length===1?'':'s')
+          +(function(){var tm=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);return tm>0?' · ⏱ '+(tm%1?tm.toFixed(1):tm)+' min':'';})()
+          +(costoProd?' · producto $'+costoProd.toFixed(2):'')+(p.manoObra?' · M.O. $'+p.manoObra.toFixed(2):''))+'</div></div>'
       +'<span id="cab-pro-ar-'+i+'" style="color:var(--gray)">▾</span>'
       +'</div><div id="cab-pro-b-'+i+'" style="display:none;padding:0 13px 12px"></div></div>';
   });
-  if(!html) html='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin protocolos</div>';
+  if(!html) html='<div class="card" style="text-align:center;color:var(--gray);padding:18px">No hay faciales con TIPO \'FACIAL\' en el catálogo</div>';
   b.innerHTML=html;
-  // Recien creado desde "Nuevo protocolo": abrirlo directo en modo edicion
-  if(window._cabAbrirSku){
-    var iNv=(window._cab.pro||[]).findIndex(function(p){return p.sku===window._cabAbrirSku;});
-    window._cabAbrirSku=null;
-    if(iNv>=0){
-      var bdNv=document.getElementById('cab-pro-b-'+iNv), arNv=document.getElementById('cab-pro-ar-'+iNv);
-      if(bdNv){ bdNv.style.display='block'; if(arNv) arNv.textContent='▴'; _cabProCuerpo(iNv,true);
-        var cardNv=bdNv.parentElement; if(cardNv&&cardNv.scrollIntoView) cardNv.scrollIntoView({behavior:'smooth'}); }
-    }
-  }
-}
-// Nuevo protocolo: se elige el facial del CATALOGO (nunca se tipea el codigo a mano).
-// Solo aparecen los faciales que AUN no tienen protocolo — los demas se editan directo.
-function _cabProNuevoForm(){
-  var f=document.getElementById('cab-pro-nuevo'); if(!f) return;
-  if(f.innerHTML){ f.innerHTML=''; return; }
-  var conProto={};
-  (window._cab.pro||[]).forEach(function(p){ conProto[p.sku]=true; });
-  var faltan=(window.FACIALES||[]).filter(function(fc){ return !conProto[fc.sku]; });
-  if(!faltan.length){
-    f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;font-size:0.66rem;color:var(--gray)">Todos los faciales del catálogo ya tienen su protocolo. Si vas a lanzar un facial nuevo, créalo primero en 🏷️ Catálogo y su protocolo aparecerá aquí para armar.</div>';
-    return;
-  }
-  var ops='';
-  faltan.forEach(function(fc){ ops+='<option value="'+fc.sku+'">'+fc.sku+' — '+fc.n+'</option>'; });
-  f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
-    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">＋ Nuevo protocolo</div>'
-    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:6px">Elige el facial (códigos del catálogo):</div>'
-    +'<select id="cab-pro-nuevo-sku" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.74rem;font-family:inherit;outline:none;background:white;box-sizing:border-box;margin-bottom:9px">'+ops+'</select>'
-    +'<div style="display:flex;gap:6px">'
-    +'<button onclick="_cabProCrear(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">✓ Crear y armar pasos</button>'
-    +'<button onclick="document.getElementById(\'cab-pro-nuevo\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
-    +'</div></div>';
-}
-function _cabProCrear(btn){
-  var sel=document.getElementById('cab-pro-nuevo-sku'); if(!sel||!sel.value) return;
-  var sku=sel.value;
-  var fc=(window.FACIALES||[]).find(function(x){return x.sku===sku;});
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
-  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'cabinaSaveProtocolo', token:window._token||'', sku:sku, nombre:fc?fc.n:sku,
-      manoObra:0, video:'', notas:'', pasos:[], usuario:CU?CU.name:'—'})})
-  .then(function(r){return r.json();})
-  .then(function(d){
-    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Crear y armar pasos';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
-    toast('✓ Protocolo creado — arma los pasos','var(--green)');
-    window._cabAbrirSku=sku;
-    window._cabSec='pro';
-    renderCabina(document.getElementById('content'));
-  })
-  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Crear y armar pasos';} toast('❌ Sin conexión','#B86B6B'); });
 }
 function _cabProToggle(i){
   var bd=document.getElementById('cab-pro-b-'+i), ar=document.getElementById('cab-pro-ar-'+i);
@@ -5578,15 +5567,17 @@ function _cabProToggle(i){
   if(abrir) _cabProCuerpo(i,false);
 }
 function _cabProCuerpo(i,editando){
-  var p=(window._cab.pro||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
+  var p=(window._cab.proView||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
   if(!p||!bd) return;
   if(!editando){
     var h='';
     if(!(p.pasos||[]).length) h+='<div style="font-size:0.66rem;color:var(--gray);font-style:italic">Protocolo por definir</div>';
+    var totMin=(p.pasos||[]).reduce(function(a,ps){return a+(ps.minutos||0);},0);
+    if(totMin>0) h+='<div style="font-size:0.64rem;font-weight:800;color:var(--navy);padding:4px 0 6px">⏱ Duración total: '+(totMin%1?totMin.toFixed(1):totMin)+' min</div>';
     (p.pasos||[]).forEach(function(ps){
       var pr=_cabProdDe(ps.productoCod);
       h+='<div style="padding:6px 0;border-bottom:1px solid var(--cream-d)">'
-        +'<div style="font-size:0.68rem;color:#4A5568"><b style="color:var(--navy)">'+ps.paso+'.</b> '+ps.desc+'</div>'
+        +'<div style="font-size:0.68rem;color:#4A5568"><b style="color:var(--navy)">'+ps.paso+'.</b> '+ps.desc+(ps.minutos?' <span style="color:var(--gold);font-weight:800;font-size:0.58rem">⏱ '+(ps.minutos%1?ps.minutos.toFixed(1):ps.minutos)+' min</span>':'')+'</div>'
         +(ps.productoCod?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">🧴 '+(pr?pr.producto:ps.productoCod)+' — '+ps.cantidad+' '+ps.unidad+(pr?' ($'+(ps.cantidad*pr.costoUnidad).toFixed(2)+')':'')+'</div>':'')
         +'</div>';
     });
@@ -5599,12 +5590,12 @@ function _cabProCuerpo(i,editando){
   }
   // ── Edicion: pasos dinamicos ──
   window._cabEd=JSON.parse(JSON.stringify(p.pasos||[]));
-  if(!window._cabEd.length) window._cabEd=[{desc:'',productoCod:'',cantidad:0,unidad:'ml'}];
+  if(!window._cabEd.length) window._cabEd=[{desc:'',productoCod:'',cantidad:0,unidad:'ml',minutos:0}];
   window._cabEdIdx=i;
   _cabProFormPintar();
 }
 function _cabProFormPintar(){
-  var i=window._cabEdIdx; var p=(window._cab.pro||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
+  var i=window._cabEdIdx; var p=(window._cab.proView||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
   if(!p||!bd) return;
   var h='<div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin:4px 0 6px">Editando — se guardará como v'+(p.version+1)+'</div>';
   window._cabEd.forEach(function(ps,pi){
@@ -5616,14 +5607,16 @@ function _cabProFormPintar(){
       +'<div id="cab-pchip-'+pi+'" style="margin-bottom:5px">'+_cabChipProd(pi,ps.productoCod)+'</div>'
       +'<input id="cab-pq-'+pi+'" oninput="_cabPbuscar('+pi+')" placeholder="🔍 Buscar producto por nombre o código..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:3px">'
       +'<div id="cab-pr-'+pi+'"></div>'
-      +'<div style="display:flex;gap:5px;margin-top:5px">'
-      +'<input type="number" step="0.1" value="'+(ps.cantidad||'')+'" oninput="_cabEd['+pi+'].cantidad=parseFloat(this.value)||0" placeholder="Cantidad" style="flex:1;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
-      +'<input value="'+(ps.unidad||'ml')+'" oninput="_cabEd['+pi+'].unidad=this.value" placeholder="ml" style="width:56px;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<div style="display:flex;gap:5px;margin-top:5px;align-items:center">'
+      +'<input type="number" step="0.1" value="'+(ps.cantidad||'')+'" oninput="_cabEd['+pi+'].cantidad=parseFloat(this.value)||0" placeholder="Cantidad" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
+      +'<select onchange="_cabEd['+pi+'].unidad=this.value" style="width:74px;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.66rem;font-family:inherit;outline:none;background:white">'+_cabUnidadesOpts(ps.unidad)+'</select>'
+      +'<input type="number" step="0.5" min="0" value="'+(ps.minutos||'')+'" oninput="_cabEd['+pi+'].minutos=parseFloat(this.value)||0" placeholder="⏱ min" title="Minutos del paso" style="width:64px;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none">'
       +'</div></div>';
   });
-  h+='<button onclick="_cabEd.push({desc:\'\',productoCod:\'\',cantidad:0,unidad:\'ml\'});_cabProFormPintar()" style="width:100%;padding:8px;background:white;color:var(--navy);border:1.5px dashed var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar paso</button>'
+  h+='<button onclick="_cabEd.push({desc:\'\',productoCod:\'\',cantidad:0,unidad:\'ml\',minutos:0});_cabProFormPintar()" style="width:100%;padding:8px;background:white;color:var(--navy);border:1.5px dashed var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar paso</button>'
     +'<div style="display:flex;gap:5px;margin-bottom:8px">'
     +'<input id="cab-mo-'+i+'" type="number" step="0.5" value="'+(p.manoObra||'')+'" placeholder="Mano de obra $" style="flex:1;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.74rem;font-family:inherit;outline:none">'
+    +'<button onclick="_cabMOSugerir('+i+',this)" style="padding:9px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;white-space:nowrap">🧮 Sugerir</button>'
     +'</div>'
     +'<input id="cab-vid-'+i+'" value="'+String(p.video||'').replace(/"/g,'&quot;')+'" placeholder="Link de video (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
     +'<input id="cab-not-'+i+'" value="'+String(p.notas||'').replace(/"/g,'&quot;')+'" placeholder="Notas (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
@@ -5635,6 +5628,15 @@ function _cabProFormPintar(){
 }
 // Acciones tipicas de un protocolo de spa: dropdown para armar pasos rapido.
 // Llena la descripcion (editable) — la ultima opcion es escribir uno propio.
+// Unidades tipicas de los envases y su consumo. Si un protocolo migrado trae una
+// unidad rara, se agrega al vuelo para no perderla.
+var CAB_UNIDADES=['ml','g','mg','kg','oz','lb','unidad','gotas','pump'];
+function _cabUnidadesOpts(sel){
+  var lista=CAB_UNIDADES.slice();
+  var s2=(sel||'').trim();
+  if(s2&&lista.map(function(u){return u.toLowerCase();}).indexOf(s2.toLowerCase())<0) lista.unshift(s2);
+  return lista.map(function(u){ return '<option value="'+u+'"'+((s2||'ml').toLowerCase()===u.toLowerCase()?' selected':'')+'>'+u+'</option>'; }).join('');
+}
 var CAB_ACCIONES=['Desmaquillar','Limpieza','Doble limpieza','Análisis de piel','Toalla caliente','Vapor','Exfoliación','Extracción','Masaje facial','Masaje drenante','Masaje capilar','Alta frecuencia','Microcorriente','Aplicar tónico','Aplicar esencia / booster','Aplicar sérum','Aplicar ampolla','Aplicar mascarilla','Retirar mascarilla','Aplicar contorno de ojos','Aplicar crema hidratante','Aplicar protector solar'];
 function _cabAccionesOpts(){
   var h='<option value="">⚡ Acción rápida...</option>';
@@ -5668,8 +5670,31 @@ function _cabPelegir(pi,cod){
   var qEl=document.getElementById('cab-pq-'+pi); if(qEl) qEl.value='';
   var res=document.getElementById('cab-pr-'+pi); if(res) res.innerHTML='';
 }
+// Mano de obra sugerida: (ROL + COMISIONES del mes, de CONFIGURACION) / faciales
+// realizados ese mes (contados de los tickets). Promedio de los 2 meses completos.
+function _cabMOSugerir(i,btn){
+  if(btn){ btn.disabled=true; btn.textContent='⏳'; }
+  fetch(APPS_SCRIPT_URL+'?action=cabinaManoObraSugerida&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(btn){ btn.disabled=false; btn.textContent='🧮 Sugerir'; }
+    var lineas=(d.meses||[]).map(function(m){
+      return m.mes+': '+m.faciales+' faciales'+(m.sesionesPaq?' ('+m.sesionesPaq+' ses. paquete)':'')+' · rol $'+m.rol.toFixed(0)+' + com $'+m.comisiones.toFixed(0);
+    }).join('\n');
+    if(!d.conDatos){
+      alert('🧮 No hay datos suficientes:\n\n'+lineas+'\n\nLlena las filas ROL yyyy-mm y COMISIONES yyyy-mm en ⚙ CONFIGURACION (las mismas de los KPIs) y vuelve a intentar.');
+      return;
+    }
+    var sug=Math.round(d.sugerido*100)/100;
+    if(confirm('🧮 Mano de obra sugerida: $'+sug.toFixed(2)+' por facial\n\n'+lineas+'\n\n¿Usar este valor?')){
+      var el=document.getElementById('cab-mo-'+i);
+      if(el) el.value=sug;
+    }
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🧮 Sugerir';} toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cabProGuardar(i,btn){
-  var p=(window._cab.pro||[])[i]; if(!p) return;
+  var p=(window._cab.proView||[])[i]; if(!p) return;
   var pasos=(window._cabEd||[]).filter(function(ps){return (ps.desc||'').trim();});
   if(!pasos.length){ toast('⚠️ Agrega al menos un paso','#C9A227'); return; }
   if(btn){ btn.disabled=true; btn.textContent='⏳ Guardando...'; }
@@ -5714,7 +5739,7 @@ function _cabInvForm(i){
     +inp('producto','Producto *',p.producto)+inp('proveedor','Proveedor',p.proveedor)
     +'<div style="display:flex;gap:5px">'
     +'<div style="flex:1">'+inp('contenido','Contenido envase *',p.contenido,'number')+'</div>'
-    +'<div style="width:70px">'+inp('unidad','Unidad',p.unidad)+'</div>'
+    +'<div style="width:80px"><div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div>'+'<select id="cbi-unidad" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+_cabUnidadesOpts(p.unidad)+'</select></div></div>'
     +'<div style="flex:1">'+inp('costo','Costo envase $ *',p.costoEnvase,'number')+'</div></div>'
     +'<div style="display:flex;gap:5px">'
     +'<div style="flex:1">'+inp('cerrados','Envases cerrados',p.cerrados,'number')+'</div>'
