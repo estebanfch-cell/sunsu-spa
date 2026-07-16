@@ -5501,7 +5501,7 @@ function _cabProdDe(cod){
 // ── PROTOCOLOS ──
 function _cabPintarProtocolos(){
   var b=document.getElementById('cab-body'); if(!b) return;
-  var html='';
+  var html=_cabEsAdmin()?'<button onclick="_cabProNuevoForm()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo protocolo</button><div id="cab-pro-nuevo"></div>':'';
   (window._cab.pro||[]).forEach(function(p,i){
     var costoProd=(p.pasos||[]).reduce(function(a,ps){
       var pr=_cabProdDe(ps.productoCod);
@@ -5517,6 +5517,57 @@ function _cabPintarProtocolos(){
   });
   if(!html) html='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin protocolos</div>';
   b.innerHTML=html;
+  // Recien creado desde "Nuevo protocolo": abrirlo directo en modo edicion
+  if(window._cabAbrirSku){
+    var iNv=(window._cab.pro||[]).findIndex(function(p){return p.sku===window._cabAbrirSku;});
+    window._cabAbrirSku=null;
+    if(iNv>=0){
+      var bdNv=document.getElementById('cab-pro-b-'+iNv), arNv=document.getElementById('cab-pro-ar-'+iNv);
+      if(bdNv){ bdNv.style.display='block'; if(arNv) arNv.textContent='▴'; _cabProCuerpo(iNv,true);
+        var cardNv=bdNv.parentElement; if(cardNv&&cardNv.scrollIntoView) cardNv.scrollIntoView({behavior:'smooth'}); }
+    }
+  }
+}
+// Nuevo protocolo: se elige el facial del CATALOGO (nunca se tipea el codigo a mano).
+// Solo aparecen los faciales que AUN no tienen protocolo — los demas se editan directo.
+function _cabProNuevoForm(){
+  var f=document.getElementById('cab-pro-nuevo'); if(!f) return;
+  if(f.innerHTML){ f.innerHTML=''; return; }
+  var conProto={};
+  (window._cab.pro||[]).forEach(function(p){ conProto[p.sku]=true; });
+  var faltan=(window.FACIALES||[]).filter(function(fc){ return !conProto[fc.sku]; });
+  if(!faltan.length){
+    f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;font-size:0.66rem;color:var(--gray)">Todos los faciales del catálogo ya tienen su protocolo. Si vas a lanzar un facial nuevo, créalo primero en 🏷️ Catálogo y su protocolo aparecerá aquí para armar.</div>';
+    return;
+  }
+  var ops='';
+  faltan.forEach(function(fc){ ops+='<option value="'+fc.sku+'">'+fc.sku+' — '+fc.n+'</option>'; });
+  f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">＋ Nuevo protocolo</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:6px">Elige el facial (códigos del catálogo):</div>'
+    +'<select id="cab-pro-nuevo-sku" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.74rem;font-family:inherit;outline:none;background:white;box-sizing:border-box;margin-bottom:9px">'+ops+'</select>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabProCrear(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">✓ Crear y armar pasos</button>'
+    +'<button onclick="document.getElementById(\'cab-pro-nuevo\').innerHTML=\'\'" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+}
+function _cabProCrear(btn){
+  var sel=document.getElementById('cab-pro-nuevo-sku'); if(!sel||!sel.value) return;
+  var sku=sel.value;
+  var fc=(window.FACIALES||[]).find(function(x){return x.sku===sku;});
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaSaveProtocolo', token:window._token||'', sku:sku, nombre:fc?fc.n:sku,
+      manoObra:0, video:'', notas:'', pasos:[], usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='✓ Crear y armar pasos';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('✓ Protocolo creado — arma los pasos','var(--green)');
+    window._cabAbrirSku=sku;
+    window._cabSec='pro';
+    renderCabina(document.getElementById('content'));
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='✓ Crear y armar pasos';} toast('❌ Sin conexión','#B86B6B'); });
 }
 function _cabProToggle(i){
   var bd=document.getElementById('cab-pro-b-'+i), ar=document.getElementById('cab-pro-ar-'+i);
