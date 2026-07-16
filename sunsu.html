@@ -335,6 +335,7 @@ let FACIALES=[
   {sku:'SUNSU-43',n:'Facial de Geisha',p:145.00,com:3},
   {sku:'SUNSU-52',n:'Facial de Ginseng',p:95.00,com:3},
 ];
+window.FACIALES=FACIALES; // 'let' NO crea window.FACIALES — y Cabina lee de ahi. Sin esto, la lista llegaba vacia.
 
 let EXTRAS=[
   {sku:'SUNSU-07',n:'Dermaplaning',t:15.00},
@@ -757,6 +758,7 @@ function initApp(){
     // Filter: hide items explicitly marked inactive (_activo===false)
     // Items with no _activo flag (not in catalog) = show by default
     FACIALES=FACIALES.filter(function(f){return f._activo!==false;});
+    window.FACIALES=FACIALES; // el filter crea un array nuevo: re-exponer
     EXTRAS=EXTRAS.filter(function(e){return e._activo!==false;});
     PAQ3=PAQ3.filter(function(p){return p._activo!==false;});
     PAQ6=PAQ6.filter(function(p){return p._activo!==false;});
