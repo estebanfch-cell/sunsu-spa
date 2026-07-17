@@ -6426,7 +6426,14 @@ function _cabInvDetalle(i){
   if(dv.style.display==='block'){ dv.style.display='none'; dv.innerHTML=''; return; }
   var fila=function(l,v){ return v?'<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0"><span style="font-size:0.6rem;font-weight:700;color:var(--gray)">'+l+'</span><span style="font-size:0.62rem;font-weight:700;color:var(--navy);text-align:right">'+v+'</span></div>':''; };
   dv.innerHTML='<div style="margin-top:9px;border-top:1px solid var(--cream-d);padding-top:8px">'
-    +'<img src="'+(p.foto||('productos/'+p.codigo+'.jpg'))+'" onerror="if(!this.dataset.f){this.dataset.f=1;this.src=\'productos/'+p.codigo+'.jpg\';}else{this.style.display=\'none\';}" style="max-width:110px;max-height:110px;border-radius:10px;float:right;margin:0 0 6px 8px">'
+    +(function(){
+      // La foto es REFERENCIAL: una presentacion sin foto propia hereda la del
+      // padre (Drive del hijo → Drive del padre → repo del hijo → repo del padre).
+      // Si algun dia le toman foto propia, esa gana.
+      var paF=p.base?(window._cab.inv||[]).find(function(x){return x.codigo===p.base;}):null;
+      var cand=[p.foto, paF&&paF.foto, 'productos/'+p.codigo+'.jpg', paF?'productos/'+paF.codigo+'.jpg':''].filter(function(x){return !!x;});
+      return '<img src="'+cand[0]+'" data-c="'+cand.join('|')+'" data-i="0" onerror="var c=(this.dataset.c||\'\').split(\'|\');var i=(parseInt(this.dataset.i)||0)+1;if(i<c.length){this.dataset.i=i;this.src=c[i];}else{this.style.display=\'none\';}" style="max-width:110px;max-height:110px;border-radius:10px;float:right;margin:0 0 6px 8px">';
+    })()
     +fila('Código',p.codigo)
     +fila('Proveedor',p.proveedor&&p.proveedor!=='—'?p.proveedor:'')
     +fila('SKU catálogo (venta)',p.skuCat||'')
@@ -6461,7 +6468,14 @@ function _cabInvFormPresentacion(i){
   pon('proveedor', padre.proveedor==='—'?'':padre.proveedor);
   pon('unidad', padre.unidad);
   pon('skucat', padre.skuCat);
-  toast('👪 Nueva presentación de '+padre.producto+' — pon tamaño, costo y barras','var(--navy)');
+  // Herencia visible: la vista previa muestra la foto del padre — no hay que
+  // tomarla de nuevo, es la misma referencia de producto
+  var prevF=document.getElementById('cbi-foto-prev');
+  if(prevF){
+    var srcPa=padre.foto||('productos/'+padre.codigo+'.jpg');
+    prevF.src=srcPa; prevF.style.display='block';
+  }
+  toast('👪 Nueva presentación de '+padre.producto+' — solo tamaño, costo y su código de barras','var(--navy)');
 }
 function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
