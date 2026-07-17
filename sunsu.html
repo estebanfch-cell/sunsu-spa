@@ -5526,6 +5526,7 @@ function _cabCrear(btn){
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🚀 Crear estructura';} toast('❌ Sin conexión','#B86B6B'); });
 }
 function _pintarCabina(c){
+  if(window._cabSec==='act'){ window._cabSec='inv'; window._cabTipo='act'; }
   var sec=window._cabSec||'pro';
   var chip=function(val,txt){
     var on=sec===val;
@@ -5541,15 +5542,14 @@ function _pintarCabina(c){
     +'<div id="cab-fijos-form"></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
     +chip('pro','📋 Protocolos ('+(window.FACIALES||[]).length+')')
-    +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
-    +chip('act','🛠 Activos ('+(window._cab.act||[]).length+')')
+    +chip('inv','📦 Inventario ('+((window._cab.inv||[]).length+(window._cab.act||[]).length)+')')
     +(_cabEsAdmin()?chip('oc','🛒 Órdenes ('+((window._cab.ocs||[]).filter(function(o){return o.estado==='PENDIENTE';}).length)+')'):'')
     +'</div>'
     // El buscador vive FUERA de cab-body: escribir repinta SOLO la lista de abajo,
     // el input nunca se reconstruye y el teclado del iPhone no se cierra.
     +(function(){
       window._cabQ=window._cabQ||{};
-      var phS={pro:'🔍 Buscar facial o protocolo...', inv:'🔍 Buscar producto, código, barras, proveedor...', act:'🔍 Buscar activo, código o categoría...', oc:'🔍 Buscar orden o proveedor...'};
+      var phS={pro:'🔍 Buscar facial o protocolo...', inv:'🔍 Buscar producto o activo: nombre, código, barras...', act:'🔍 Buscar activo, código o categoría...', oc:'🔍 Buscar orden o proveedor...'};
       var secQ=window._cabSec||'pro';
       return '<div style="display:flex;gap:6px;margin:0 0 9px">'
         +'<input id="cab-q" type="text" value="'+String(window._cabQ[secQ]||'').replace(/"/g,'&quot;')+'" placeholder="'+(phS[secQ]||phS.pro)+'" oninput="window._cabQ[window._cabSec||\'pro\']=this.value;clearTimeout(window._cabQT2);window._cabQT2=setTimeout(_cabRepintaSec,200)" style="flex:1;min-width:0;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;background:white;box-sizing:border-box">'
@@ -5564,6 +5564,7 @@ function _pintarCabina(c){
   else _cabPintarActivos();
 }
 function _cabRepintaSec(){
+  if(window._cabSec==='act'){ window._cabSec='inv'; window._cabTipo='act'; }
   var sec=window._cabSec||'pro';
   if(sec==='pro') _cabPintarProtocolos();
   else if(sec==='inv') _cabPintarInventario();
@@ -5981,6 +5982,23 @@ function _cabProGuardar(i,btn){
 // ── INVENTARIO CABINA ──
 function _cabPintarInventario(){
   var b=document.getElementById('cab-body'); if(!b) return;
+  // INVENTARIO UNIFICADO: consumibles y activos viven en la misma pestana,
+  // separados por chips de tipo. Un solo buscador, un solo escaner, un solo lugar.
+  var tipoI=window._cabTipo||'cons';
+  var chipT=function(val,txt){
+    var on=tipoI===val;
+    return '<button onclick="window._cabTipo=\''+val+'\';_cabPintarInventario()" style="padding:6px 13px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+  };
+  var chipsTipo='<div style="display:flex;gap:6px;margin-bottom:9px">'
+    +chipT('cons','🧴 Consumibles ('+(window._cab.inv||[]).length+')')
+    +chipT('act','🛠 Activos ('+(window._cab.act||[]).length+')')
+    +'</div>';
+  if(tipoI==='act'){
+    b.innerHTML=chipsTipo+'<div id="cab-inv-cuerpo"></div>';
+    _cabPintarActivos();
+    return;
+  }
+  window._cabChipsTipo=chipsTipo;
   var esAdm=_cabEsAdmin();
   // Recordar si la carpeta de desactivados estaba abierta (patron del seguimiento)
   var inactAbierto=false;
@@ -6081,6 +6099,8 @@ function _cabPintarInventario(){
     var on=lug===val;
     return '<button onclick="window._cabInvLugar=\''+val+'\';_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
   };
+  b.innerHTML=window._cabChipsTipo+'<div id="cab-inv-cuerpo"></div>';
+  b=document.getElementById('cab-inv-cuerpo');
   var ordI=window._cabInvOrden||'def';
   var chipO=function(val,txt){
     var on=ordI===val;
@@ -6205,6 +6225,25 @@ function _cabBajaFormProd(i){
   var selL=document.getElementById('cbj-lado-'+i);
   if(selL) selL.onchange=function(){ var nEl=document.getElementById('cbj-n-'+i); if(nEl) nEl.style.display=this.value==='abierto'?'none':'block'; };
 }
+// Convertir entre tipos: mueve la ficha de hoja conservando nombre, proveedor,
+// notas, lugar, barras, ubicacion y foto. El codigo cambia (INV-↔AC-).
+function _cabConvertir(de, codigo){
+  var msj=de==='inv'
+    ? '🔁 ¿Convertir '+codigo+' en ACTIVO?\n\nSe conserva nombre, proveedor, foto, barras, ubicación y lugar. Los envases pasan como cantidad. Recibirá código AC- nuevo.'
+    : '🔁 ¿Convertir '+codigo+' en CONSUMIBLE?\n\nSe conserva nombre, proveedor, foto, barras, ubicación y lugar. La cantidad pasa como envases (contenido 1 unidad — edítalo si es caja). Recibirá código INV- nuevo.';
+  if(!confirm(msj)) return;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaConvertir', token:window._token||'', de:de, codigo:codigo, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🔁 Convertido → '+d.nuevo,'var(--green)');
+    window._cabSec='inv';
+    window._cabTipo=(de==='inv'?'act':'cons');
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cabActDetalle(i){
   var a=(window._cab.act||[])[i];
   var dv=document.getElementById('cab-actd-'+i);
@@ -6313,7 +6352,7 @@ function _cabBajaEjecutar(tipo,i,btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🪦 Dar de baja';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('🪦 Baja '+d.num+' registrada','var(--green)');
-    window._cabSec=tipo==='activo'?'act':'inv';
+    window._cabSec='inv'; window._cabTipo=(tipo==='activo'?'act':'cons');
     renderCabina(document.getElementById('content'),true);
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🪦 Dar de baja';} toast('❌ Sin conexión','#B86B6B'); });
@@ -6328,10 +6367,11 @@ function _cabScanBuscar(){
       var hitA=(window._cab.act||[]).find(function(a){return (a.barras||'')===txt;});
       if(hitA){
         window._cabQ=window._cabQ||{};
-        window._cabQ.act=hitA.codigo;
-        window._cabSec='act';
+        window._cabQ.inv=hitA.codigo;
+        window._cabSec='inv';
+        window._cabTipo='act';
         var qEA=document.getElementById('cab-q'); if(qEA) qEA.value=hitA.codigo;
-        _cabPintarActivos();
+        _cabPintarInventario();
         toast('📷 '+hitA.activo,'var(--green)');
         return;
       }
@@ -6656,6 +6696,7 @@ function _cabInvForm(i){
     +'<input id="cbi-foto-file" type="file" accept="image/*" style="display:none" onchange="_cabFotoSel(this)">'
     +'</div></div>'
     +inp('notas','Notas',p.notas)
+    +(i>=0&&!p.base?'<button onclick="_cabConvertir(\'inv\',\''+p.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a ACTIVO (herramienta/equipo)</button>':'')
     +'<div style="display:flex;gap:6px;margin-top:4px">'
     +'<button onclick="_cabInvGuardar('+i+','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
     +(i>=0?'<button onclick="_cabBorrar(\'inv\','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
@@ -6885,7 +6926,7 @@ function _cabOCRecibir(i,btn,destino){
 }
 // ── ACTIVOS ──
 function _cabPintarActivos(){
-  var b=document.getElementById('cab-body'); if(!b) return;
+  var b=document.getElementById('cab-inv-cuerpo')||document.getElementById('cab-body'); if(!b) return;
   var lugA=window._cabActLugar||'todo';
   var chipA=function(val,txt){
     var on=lugA===val;
@@ -6897,7 +6938,7 @@ function _cabPintarActivos(){
   var elBja=document.getElementById('cab-act-baja');
   if(elBja&&elBja.style.display==='block') bajaAbierto=true;
   var actFil=(window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);});
-  var qAct=_normNomCli((window._cabQ||{}).act||'');
+  var qAct=_normNomCli((window._cabQ||{}).inv||''); // buscador unificado del inventario
   if(qAct) actFil=actFil.filter(function(a){return _normNomCli(a.activo+' '+a.codigo+' '+(a.categoria||'')+' '+(a.notas||'')+' '+(a.barras||'')+' '+(a.ubicacion||'')).indexOf(qAct)>=0;});
   var actVivos=actFil.filter(function(a){return (a.estado||'')!=='DADO DE BAJA';});
   var actBajas=actFil.filter(function(a){return (a.estado||'')==='DADO DE BAJA';});
@@ -7022,6 +7063,7 @@ function _cabActForm(i){
     +'<button onclick="document.getElementById(\'cba-foto-file\').click()" style="padding:9px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📷 Tomar o subir foto</button>'
     +'<input id="cba-foto-file" type="file" accept="image/*" style="display:none" onchange="_cabFotoSel(this,\'cba-foto-prev\')">'
     +'</div></div>'
+    +(i>=0?'<button onclick="_cabConvertir(\'act\',\''+a.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a CONSUMIBLE (producto de uso)</button>':'')
     +'<div style="display:flex;gap:6px;margin-top:4px">'
     +'<button onclick="_cabActGuardar('+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
     +(i>=0?'<button onclick="_cabBorrar(\'act\','+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
@@ -7049,7 +7091,7 @@ function _cabActGuardar(row,codigo,btn){
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
     toast('💾 Guardado','var(--green)');
-    window._cabSec='act';
+    window._cabSec='inv'; window._cabTipo='act';
     _cabFotoSubir(d.codigo||codigo).then(function(){ renderCabina(document.getElementById('content'),true); });
   })
   .catch(function(){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ Sin conexión','#B86B6B'); });
