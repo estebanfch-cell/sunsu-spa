@@ -5985,6 +5985,33 @@ function _cabPintarInventario(){
   // INVENTARIO UNIFICADO: consumibles y activos viven en la misma pestana,
   // separados por chips de tipo. Un solo buscador, un solo escaner, un solo lugar.
   var tipoI=window._cabTipo||'cons';
+  // DASHBOARD: cuanto vale todo lo que tenemos, a costo — por lado y por tipo.
+  // Se recalcula en cada pintado: mientras ingresas stock, lo ves crecer en vivo.
+  var dashHTML='';
+  if(_cabEsAdmin()){
+    var vL=0,vB=0,vAct=0;
+    (window._cab.inv||[]).forEach(function(p){
+      vL+=(p.cerrados||0)*(p.costoEnvase||0)+(p.abierto||0)*(p.costoUnidad||0);
+      vB+=(p.bodega||0)*(p.costoEnvase||0);
+    });
+    var vCons=vL+vB;
+    (window._cab.act||[]).forEach(function(a){
+      if((a.estado||'')==='DADO DE BAJA') return;
+      var cA=parseFloat(String(a.costo||'').replace(/[^0-9.]/g,''))||0;
+      vAct+=cA*((a.cantLocal||0)+(a.cantBodega||0));
+      vL+=cA*(a.cantLocal||0);
+      vB+=cA*(a.cantBodega||0);
+    });
+    var vT=vL+vB;
+    dashHTML='<div class="card" style="padding:11px 14px;margin-bottom:9px">'
+      +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.6px;margin-bottom:4px">💰 VALOR DEL INVENTARIO (A COSTO)</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px">'
+      +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">🏪 $'+vL.toFixed(2)+' · 🏠 $'+vB.toFixed(2)+'</span>'
+      +'<span style="font-size:0.96rem;font-weight:800;color:var(--navy)">🌐 $'+vT.toFixed(2)+'</span>'
+      +'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray);margin-top:2px">🧴 consumibles $'+vCons.toFixed(2)+' · 🛠 activos $'+vAct.toFixed(2)+'</div>'
+      +'</div>';
+  }
   var chipT=function(val,txt){
     var on=tipoI===val;
     return '<button onclick="window._cabTipo=\''+val+'\';_cabPintarInventario()" style="padding:6px 13px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
@@ -5994,11 +6021,11 @@ function _cabPintarInventario(){
     +chipT('act','🛠 Activos ('+(window._cab.act||[]).length+')')
     +'</div>';
   if(tipoI==='act'){
-    b.innerHTML=chipsTipo+'<div id="cab-inv-cuerpo"></div>';
+    b.innerHTML=dashHTML+chipsTipo+'<div id="cab-inv-cuerpo"></div>';
     _cabPintarActivos();
     return;
   }
-  window._cabChipsTipo=chipsTipo;
+  window._cabChipsTipo=dashHTML+chipsTipo;
   var esAdm=_cabEsAdmin();
   // Recordar si la carpeta de desactivados estaba abierta (patron del seguimiento)
   var inactAbierto=false;
@@ -6070,9 +6097,15 @@ function _cabPintarInventario(){
           envT=p.cerrados+(p.bodega||0); mlT=p.stock;
           det='🏪 '+p.cerrados+' · 🏠 '+(p.bodega||0)+(p.abierto>0?' · 🍾 abierto '+p.abierto+p.unidad:'');
         }
+        var valT;
+        if(lug==='local') valT=p.cerrados*(p.costoEnvase||0)+p.abierto*(p.costoUnidad||0);
+        else if(lug==='bodega') valT=(p.bodega||0)*(p.costoEnvase||0);
+        else valT=(p.cerrados+(p.bodega||0))*(p.costoEnvase||0)+p.abierto*(p.costoUnidad||0);
         return '<div style="font-size:0.58rem;color:var(--gray);margin-top:4px">'+det+'</div>'
           +'<div style="margin-top:3px;font-size:0.82rem;font-weight:800;color:var(--navy)">📦 '+envT+' envase'+(envT===1?'':'s')
-          +' <span style="color:var(--cream-d)">|</span> ∑ '+(mlT%1?mlT.toFixed(1):mlT)+' '+p.unidad+'</div>';
+          +' <span style="color:var(--cream-d)">|</span> ∑ '+(mlT%1?mlT.toFixed(1):mlT)+' '+p.unidad
+          +(esAdm?' <span style="color:var(--cream-d)">|</span> <span style="color:#2E7D52">💰 $'+valT.toFixed(2)+'</span>':'')
+          +'</div>';
       })()
       +(hijas.length?'<div style="font-size:0.58rem;font-weight:800;color:var(--gold);margin-top:2px">👪 Familia: '+(p.stock+hijas.reduce(function(a,x){return a+(x.stock||0);},0))+p.unidad+' en total · '+(hijas.length+1)+' presentaciones</div>':'')
       +'</div>'
@@ -6102,19 +6135,11 @@ function _cabPintarInventario(){
   b.innerHTML=window._cabChipsTipo+'<div id="cab-inv-cuerpo"></div>';
   b=document.getElementById('cab-inv-cuerpo');
   var ordI=window._cabInvOrden||'def';
-  var chipO=function(val,txt){
-    var on=ordI===val;
-    return '<button onclick="window._cabInvOrden=window._cabInvOrden===\''+val+'\'?\'def\':\''+val+'\';_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--gold);background:'+(on?'var(--gold)':'white')+';color:'+(on?'white':'#9A7B1E')+'">'+txt+'</button>';
-  };
-  var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;align-items:center">'
-    +chipL('todo','🌐 Todo')+chipL('local','🏪 Sunsu')+chipL('bodega','🏠 Bodega central')
-    +'<span style="width:1px;height:18px;background:var(--cream-d)"></span>'
-    +chipO('mas','⬆ Más stock')+chipO('menos','⬇ Menos stock')
-    +'</div>';
+  var html=_cabFiltroUI('cons');
   html+=esAdm?'<div style="display:flex;gap:6px;margin-bottom:9px">'
-    +'<button onclick="_cabInvForm(-1)" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">＋ Nuevo producto</button>'
+    +'<button onclick="_cabNuevoChooser()" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">＋ Nuevo</button>'
     +'<button onclick="_cabTrasForm()" style="flex:1;padding:10px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">🚚 Traspaso</button>'
-    +'</div><div id="cab-inv-form"></div><div id="cab-tras-form"></div>':'';
+    +'</div><div id="cab-nuevo-ch"></div><div id="cab-inv-form"></div><div id="cab-tras-form"></div>':'';
   activosL.forEach(function(par){ html+=card(par); });
   if(!activosL.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos activos</div>';
   // Carpeta plegable de desactivados: fuera de la vista hasta que la abras
@@ -6177,7 +6202,7 @@ function _cabActFaltas(a){
   if(!((a.costo||'').toString().trim())) f.push('costo');
   if(!((a.categoria||'').toString().trim())) f.push('categoría');
   if(!((a.fechaCompra||'').toString().trim())) f.push('fecha de compra');
-  if(!((a.cantidad||'').toString().trim())) f.push('cantidad');
+
   return f;
 }
 function _cabCarpetaFaltas(idC, titulo, filas){
@@ -6192,6 +6217,74 @@ function _cabCarpetaFaltas(idC, titulo, filas){
     +'<div id="'+idC+'" style="display:'+(ab?'block':'none')+';padding:8px 12px">'
     +filas.join('')
     +'</div></div>';
+}
+// ── FILTRO EN BOTON ──
+// Un solo boton 🔽 Filtrar: abre el panel para elegir lugar y orden.
+// Lo elegido se ve como etiquetas junto al boton, con ✕ para limpiar.
+// ── NUEVO ITEM (unico) ──
+// Un solo boton de agregar: el primer paso es escoger QUE es — consumible o
+// activo — y de ahi se abre el formulario correspondiente.
+function _cabNuevoChooser(){
+  var c=document.getElementById('cab-nuevo-ch'); if(!c) return;
+  if(c.innerHTML){ c.innerHTML=''; return; }
+  c.innerHTML='<div class="card" style="padding:13px;margin-bottom:9px;border:2px solid var(--navy)">'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">¿Qué vas a agregar?</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="_cabNuevoElegir(\'cons\')" style="flex:1;padding:14px 8px;background:white;border:2px solid var(--navy);border-radius:12px;cursor:pointer;text-align:center">'
+    +'<div style="font-size:1.3rem">🧴</div><div style="font-size:0.68rem;font-weight:800;color:var(--navy)">Consumible</div>'
+    +'<div style="font-size:0.52rem;color:var(--gray)">se gasta por facial: cremas, discos, guantes</div></button>'
+    +'<button onclick="_cabNuevoElegir(\'act\')" style="flex:1;padding:14px 8px;background:white;border:2px solid var(--navy);border-radius:12px;cursor:pointer;text-align:center">'
+    +'<div style="font-size:1.3rem">🛠</div><div style="font-size:0.68rem;font-weight:800;color:var(--navy)">Activo</div>'
+    +'<div style="font-size:0.52rem;color:var(--gray)">dura meses: equipos, brochas, mobiliario</div></button>'
+    +'</div></div>';
+}
+function _cabNuevoElegir(tipo){
+  window._cabTipo=tipo;
+  window._cabFiltroAbierto=false;
+  _cabPintarInventario();
+  if(tipo==='cons') _cabInvForm(-1); else _cabActForm(-1);
+}
+function _cabFiltroUI(ctx){
+  var esAct=ctx==='act';
+  var lugC=esAct?(window._cabActLugar||'todo'):(window._cabInvLugar||'todo');
+  var ordC=esAct?'def':(window._cabInvOrden||'def');
+  var badges=[];
+  if(lugC!=='todo') badges.push((lugC==='BODEGA'||lugC==='bodega')?'🏠 Bodega':'🏪 Sunsu');
+  if(ordC==='mas') badges.push('⬆ Más stock');
+  if(ordC==='menos') badges.push('⬇ Menos stock');
+  var h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
+    +'<button onclick="window._cabFiltroAbierto=!window._cabFiltroAbierto;_cabRepintaSec()" style="padding:7px 14px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(badges.length?'var(--navy)':'white')+';color:'+(badges.length?'white':'var(--navy)')+'">🔽 Filtrar'+(badges.length?' ('+badges.length+')':'')+'</button>'
+    +badges.map(function(bd){return '<span style="font-size:0.6rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:4px 10px;border-radius:8px">'+bd+'</span>';}).join('')
+    +(badges.length?'<button onclick="_cabFiltroLimpiar(\''+ctx+'\')" style="padding:5px 9px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid #B86B6B;background:white;color:#B86B6B">✕</button>':'')
+    +'</div>';
+  if(window._cabFiltroAbierto){
+    var chF=function(on,txt,setJs){
+      return '<button onclick="'+setJs+';window._cabFiltroAbierto=true;_cabRepintaSec()" style="padding:6px 12px;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
+    };
+    var setLug=function(v){ return esAct?("window._cabActLugar='"+v+"'"):("window._cabInvLugar='"+v+"'"); };
+    h+='<div class="card" style="padding:12px;margin-bottom:9px;border:1.5px solid var(--navy)">'
+      +'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);margin-bottom:5px">LUGAR</div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">'
+      +chF(lugC==='todo','🌐 Todo',setLug('todo'))
+      +chF(lugC==='local'||lugC==='SUNSU','🏪 Sunsu',setLug(esAct?'SUNSU':'local'))
+      +chF(lugC==='bodega'||lugC==='BODEGA','🏠 Bodega central',setLug(esAct?'BODEGA':'bodega'))
+      +'</div>'
+      +(!esAct?'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);margin-bottom:5px">ORDEN POR STOCK</div>'
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">'
+        +chF(ordC==='def','📄 Normal',"window._cabInvOrden='def'")
+        +chF(ordC==='mas','⬆ Más stock',"window._cabInvOrden='mas'")
+        +chF(ordC==='menos','⬇ Menos stock',"window._cabInvOrden='menos'")
+        +'</div>':'')
+      +'<button onclick="window._cabFiltroAbierto=false;_cabRepintaSec()" style="width:100%;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">✓ Listo</button>'
+      +'</div>';
+  }
+  return h;
+}
+function _cabFiltroLimpiar(ctx){
+  if(ctx==='act'){ window._cabActLugar='todo'; }
+  else { window._cabInvLugar='todo'; window._cabInvOrden='def'; }
+  window._cabFiltroAbierto=false;
+  _cabRepintaSec();
 }
 // ── DAR DE BAJA ──
 // Razon OBLIGATORIA + foto opcional (comprobante). Producto: descuenta del lado
@@ -6255,7 +6348,9 @@ function _cabActDetalle(i){
   var fl=function(l,v){ if(v!==''&&v!==null&&v!==undefined) filas.push({l:l,v:String(v)}); };
   sec('📋 General');
   fl('Categoría', a.categoria||'');
-  fl('Cantidad', a.cantidad||'');
+  fl('🏪 Local', String(a.cantLocal||0)+' '+(a.unidadC||'unidad'));
+  fl('🏠 Bodega central', String(a.cantBodega||0)+' '+(a.unidadC||'unidad'));
+  fl('Total', String((a.cantLocal||0)+(a.cantBodega||0))+' '+(a.unidadC||'unidad'));
   fl('Estado', a.estado||'');
   fl('Proveedor', a.proveedor||'');
   fl('Fecha de compra', a.fechaCompra||'');
@@ -6263,7 +6358,6 @@ function _cabActDetalle(i){
   sec('💰 Costos');
   fl('Costo', a.costo?'$'+a.costo:'');
   sec('📦 Lugar');
-  fl('Lado', (a.lugar||'SUNSU')==='BODEGA'?'🏠 Bodega central':'🏪 Local Sunsu');
   fl('📍 Cuadrante', a.ubicacion||'');
   var zi=0;
   var tabla=filas.map(function(f){
@@ -6928,16 +7022,15 @@ function _cabOCRecibir(i,btn,destino){
 function _cabPintarActivos(){
   var b=document.getElementById('cab-inv-cuerpo')||document.getElementById('cab-body'); if(!b) return;
   var lugA=window._cabActLugar||'todo';
-  var chipA=function(val,txt){
-    var on=lugA===val;
-    return '<button onclick="window._cabActLugar=\''+val+'\';_cabPintarActivos()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
-  };
-  var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">'+chipA('todo','🌐 Todos')+chipA('SUNSU','🏪 Sunsu')+chipA('BODEGA','🏠 Bodega')+'</div>';
-  html+=_cabEsAdmin()?'<button onclick="_cabActForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo activo</button><div id="cab-act-form"></div>':'';
+  var html=_cabFiltroUI('act');
+  html+=_cabEsAdmin()?'<button onclick="_cabNuevoChooser()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo</button><div id="cab-nuevo-ch"></div><div id="cab-act-form"></div>':'';
   var bajaAbierto=false;
   var elBja=document.getElementById('cab-act-baja');
   if(elBja&&elBja.style.display==='block') bajaAbierto=true;
-  var actFil=(window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);});
+  var actFil=(window._cab.act||[]).filter(function(a){
+    if(lugA==='todo') return true;
+    return lugA==='SUNSU'?(a.cantLocal||0)>0:(a.cantBodega||0)>0;
+  });
   var qAct=_normNomCli((window._cabQ||{}).inv||''); // buscador unificado del inventario
   if(qAct) actFil=actFil.filter(function(a){return _normNomCli(a.activo+' '+a.codigo+' '+(a.categoria||'')+' '+(a.notas||'')+' '+(a.barras||'')+' '+(a.ubicacion||'')).indexOf(qAct)>=0;});
   var actVivos=actFil.filter(function(a){return (a.estado||'')!=='DADO DE BAJA';});
@@ -6951,12 +7044,29 @@ function _cabPintarActivos(){
       +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.4px">'+a.codigo+'</div>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span></div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+(a.estado?a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+(a.notas?' · '+a.notas:'')+'</div>'
-      +'<div style="margin-top:3px;font-size:0.82rem;font-weight:800;color:var(--navy)">📦 '+(a.cantidad||'—')+'</div>'
+      +(function(){
+        // Mismo formato que los consumibles: detalle por lado + total grande + valor
+        var cV=parseFloat(String(a.costo||'').replace(/[^0-9.]/g,''))||0;
+        var cL=a.cantLocal||0, cB=a.cantBodega||0;
+        var totA, det;
+        if(lugA==='SUNSU'){ totA=cL; det='🏪 '+cL; }
+        else if(lugA==='BODEGA'){ totA=cB; det='🏠 '+cB; }
+        else { totA=cL+cB; det='🏪 '+cL+' · 🏠 '+cB; }
+        return '<div style="font-size:0.58rem;color:var(--gray);margin-top:4px">'+det+'</div>'
+          +'<div style="margin-top:3px;font-size:0.82rem;font-weight:800;color:var(--navy)">📦 '+totA+' '+(a.unidadC||'unidad')
+          +(_cabEsAdmin()&&cV>0?' <span style="color:var(--cream-d)">|</span> <span style="color:#2E7D52">💰 $'+(cV*totA).toFixed(2)+'</span>':'')
+          +'</div>';
+      })()
       +'</div>'
       +(_cabEsAdmin()?'<div style="display:flex;gap:4px;flex-shrink:0"><button onclick="_cabBajaFormAct('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
       +'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button></div>':'')
       +'</div>'
-      +'<div style="display:flex;justify-content:flex-end;margin-top:5px"><span style="font-size:0.72rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:3px 11px;border-radius:8px">'+((a.lugar||'SUNSU')==='BODEGA'?'🏠 Bodega':'🏪 Local')+((a.ubicacion||'').trim()?' · 📍 '+a.ubicacion:'')+'</span></div>'
+      +(function(){
+        var enL=(a.cantLocal||0)>0, enB=(a.cantBodega||0)>0;
+        var donde=enL&&enB?'🏪 Local + 🏠 Bodega':enB?'🏠 Bodega':enL?'🏪 Local':'';
+        if((a.ubicacion||'').trim()) donde+=(donde?' · ':'')+'📍 '+a.ubicacion;
+        return donde?'<div style="display:flex;justify-content:flex-end;margin-top:5px"><span style="font-size:0.72rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:3px 11px;border-radius:8px">'+donde+'</span></div>':'';
+      })()
       +(_cabEsAdmin()?'<div id="cab-actd-'+i+'" style="display:none"></div><div id="cab-actb-'+i+'"></div>':'')
       +'</div>';
   });
@@ -7002,19 +7112,13 @@ function _cabActForm(i){
   window._cabFotoPend=null;
   var a=i>=0?(window._cab.act||[])[i]:{codigo:'',activo:'',categoria:'',cantidad:'',ubicacion:'',estado:'Buen estado',fechaCompra:'',costo:'',notas:'',lugar:'SUNSU',row:0};
   window._cabActEdit=a; // para conservar campos que ya no estan en el form (ubicacion vieja)
-  // Cantidad puede venir como '3' o '2 par': separar numero y unidad (default: unidad)
-  var mCant=String(a.cantidad||'').trim().match(/^([\d.,]*)\s*(.*)$/);
-  var cantNum=mCant?mCant[1]:'', cantUni=(mCant&&mCant[2])?mCant[2]:'unidad';
   // Fecha dd/MM/yyyy → yyyy-mm-dd para el selector nativo de fecha
   var fISO='';
   var mF=String(a.fechaCompra||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if(mF) fISO=mF[3]+'-'+('0'+mF[2]).slice(-2)+'-'+('0'+mF[1]).slice(-2);
   var inp=function(id,lbl,v){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cba-'+id+'" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
-  var selUniA='';
-  CAB_ACT_UNIDADES.forEach(function(u){ if(cantUni&&CAB_ACT_UNIDADES.indexOf(cantUni.toLowerCase())<0&&u==='unidad') selUniA+='<option value="'+cantUni+'" selected>'+cantUni+'</option>'; selUniA+='<option value="'+u+'"'+(cantUni.toLowerCase()===u?' selected':'')+'>'+u+'</option>'; });
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
-    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Lugar</div><select id="cba-lugar" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white"><option value="SUNSU"'+(a.lugar!=='BODEGA'?' selected':'')+'>🏪 Local Sunsu</option><option value="BODEGA"'+(a.lugar==='BODEGA'?' selected':'')+'>🏠 Bodega central</option></select></div>'
     +inp('activo','Activo *',a.activo)
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">📍 Ubicación (cuadrante)</div>'
     +(function(){
@@ -7035,9 +7139,17 @@ function _cabActForm(i){
     })()
     +'</div>'
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Categoría</div><select id="cba-categoria" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white">'+_cabCatOpts(a.categoria)+'</select></div>'
-    +'<div style="display:flex;gap:5px;margin-bottom:6px">'
-    +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Cantidad</div><input id="cba-cantidad" type="number" min="0" step="1" value="'+String(cantNum).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
-    +'<div style="width:92px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div><select id="cba-cantuni" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+selUniA+'</select></div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:6px;align-items:flex-end">'
+    +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">🏪 Cant. LOCAL</div><input id="cba-cantlocal" type="number" min="0" step="1" value="'+(a.cantLocal||0)+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">🏠 Cant. BODEGA</div><input id="cba-cantbodega" type="number" min="0" step="1" value="'+(a.cantBodega||0)+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div style="width:82px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div><select id="cba-cantuni" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white;box-sizing:border-box">'
+    +(function(){
+      var uSel=(a.unidadC||'unidad').toLowerCase();
+      var lst=CAB_ACT_UNIDADES.slice();
+      if(lst.indexOf(uSel)<0) lst.unshift(uSel);
+      return lst.map(function(u){return '<option value="'+u+'"'+(uSel===u?' selected':'')+'>'+u+'</option>';}).join('');
+    })()
+    +'</select></div>'
     +'</div>'
     +'<div style="display:flex;gap:5px;margin-bottom:6px;align-items:flex-end">'
     +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Estado</div><select id="cba-estado" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white;box-sizing:border-box">'
@@ -7075,17 +7187,14 @@ function _cabActGuardar(row,codigo,btn){
   var v=function(id){ var el=document.getElementById('cba-'+id); return el?el.value.trim():''; };
   if(!v('activo')){ toast('⚠️ El nombre del activo es obligatorio','#C9A227'); return; }
   if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
-  // Cantidad: '3' + 'par' → '3 par' (en 'unidad', solo el numero). Fecha: del
-  // selector nativo (yyyy-mm-dd) al formato del sheet (dd/MM/yyyy).
   var cantU=((document.getElementById('cba-cantuni')||{}).value||'unidad');
-  var cantTxt=v('cantidad')+(cantU&&cantU!=='unidad'&&v('cantidad')?' '+cantU:'');
   var fV=v('fecha'), fTxt='';
   var mFv=fV.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(mFv) fTxt=mFv[3]+'/'+mFv[2]+'/'+mFv[1]; else fTxt=fV;
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cabinaSaveActivo', token:window._token||'', row:row,
-      campos:{codigo:codigo, activo:v('activo'), categoria:((document.getElementById('cba-categoria')||{}).value||''), cantidad:cantTxt,
-        ubicacion:_cabSelVal('cba-ubicacion').toUpperCase(), proveedor:_cabSelVal('cba-proveedor'), estado:((document.getElementById('cba-estado')||{}).value||''), fechaCompra:fTxt, costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU'), barras:v('barras')},
+      campos:{codigo:codigo, activo:v('activo'), categoria:((document.getElementById('cba-categoria')||{}).value||''), cantidadLocal:v('cantlocal'), cantidadBodega:v('cantbodega'), unidadC:cantU,
+        ubicacion:_cabSelVal('cba-ubicacion').toUpperCase(), proveedor:_cabSelVal('cba-proveedor'), estado:((document.getElementById('cba-estado')||{}).value||''), fechaCompra:fTxt, costo:v('costo'), notas:v('notas'), barras:v('barras')},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
