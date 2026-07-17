@@ -5551,7 +5551,10 @@ function _pintarCabina(c){
       window._cabQ=window._cabQ||{};
       var phS={pro:'🔍 Buscar facial o protocolo...', inv:'🔍 Buscar producto, código, barras, proveedor...', act:'🔍 Buscar activo, código o categoría...', oc:'🔍 Buscar orden o proveedor...'};
       var secQ=window._cabSec||'pro';
-      return '<div style="margin:0 0 9px"><input id="cab-q" type="text" value="'+String(window._cabQ[secQ]||'').replace(/"/g,'&quot;')+'" placeholder="'+(phS[secQ]||phS.pro)+'" oninput="window._cabQ[window._cabSec||\'pro\']=this.value;clearTimeout(window._cabQT2);window._cabQT2=setTimeout(_cabRepintaSec,200)" style="width:100%;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;background:white;box-sizing:border-box"></div>';
+      return '<div style="display:flex;gap:6px;margin:0 0 9px">'
+        +'<input id="cab-q" type="text" value="'+String(window._cabQ[secQ]||'').replace(/"/g,'&quot;')+'" placeholder="'+(phS[secQ]||phS.pro)+'" oninput="window._cabQ[window._cabSec||\'pro\']=this.value;clearTimeout(window._cabQT2);window._cabQT2=setTimeout(_cabRepintaSec,200)" style="flex:1;min-width:0;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;background:white;box-sizing:border-box">'
+        +'<button onclick="_cabScanBuscar()" title="Buscar escaneando el código de barras" style="padding:9px 14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">📷</button>'
+        +'</div>';
     })()
     +'<div id="cab-body"></div>';
   c.innerHTML=html;
@@ -5988,7 +5991,7 @@ function _cabPintarInventario(){
   if(window._cabInvScan) todos=todos.filter(function(p){return (p.barras||'')===window._cabInvScan||p.codigo===window._cabInvScan;});
   var qInv=_normNomCli((window._cabQ||{}).inv||'');
   if(qInv){
-    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')+' '+(p.ubicacion||'')).indexOf(qInv)>=0;};
+    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')+' '+(p.ubicacion||'')+' '+(p.notas||'')).indexOf(qInv)>=0;};
     // Cortesia de familia: si el padre calza, sus presentaciones vienen con el (y al reves)
     todos=todos.filter(function(p){
       if(matchI(p)) return true;
@@ -6015,11 +6018,12 @@ function _cabPintarInventario(){
     var inac=(p.activo||'SI')==='NO';
     var esHija=!!(p.base&&(window._cab.inv||[]).some(function(x){return x.codigo===p.base;}));
     var hijas=(window._cab.inv||[]).filter(function(x){return x.base===p.codigo&&(x.activo||'SI')!=='NO';});
-    var sub=p.codigo+(p.ubicacion?' · 📍 '+p.ubicacion:'')+(esAdm&&p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad
+    var sub=(esAdm&&p.proveedor&&p.proveedor!=='—'?p.proveedor+' · ':'')+'envase '+p.contenido+p.unidad
       +(esAdm?' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')':'');
     var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(esHija?';margin-left:16px;border-left:3px solid var(--gold)':'')+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
       +'<div style="flex:1;min-width:0'+(esAdm?';cursor:pointer':'')+'"'+(esAdm?' onclick="_cabInvDetalle('+i+')"':'')+'>'
+      +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.4px">'+p.codigo+'</div>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo&&!inac?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+(inac?' <span style="font-size:0.54rem;color:var(--gray);font-weight:800">⏸ INACTIVO</span>':'')+'</div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+sub+'</div>'
       +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">'
@@ -6038,6 +6042,13 @@ function _cabPintarInventario(){
         +'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>'
         +'</div>':'')
       +'</div>'
+      +(function(){
+        // El LUGAR, protagonista abajo a la derecha: en que lado hay stock + cuadrante
+        var enLoc=p.cerrados>0||p.abierto>0, enBod=(p.bodega||0)>0;
+        var donde=enLoc&&enBod?'🏪 Local + 🏠 Bodega':enBod?'🏠 Bodega':enLoc?'🏪 Local':'';
+        if(p.ubicacion) donde+=(donde?' · ':'')+'📍 '+p.ubicacion;
+        return donde?'<div style="display:flex;justify-content:flex-end;margin-top:5px"><span style="font-size:0.72rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:3px 11px;border-radius:8px">'+donde+'</span></div>':'';
+      })()
       +(esAdm?'<div id="cab-invd-'+i+'" style="display:none"></div>':'')
       +'</div>';
     return h;
@@ -6049,7 +6060,6 @@ function _cabPintarInventario(){
   };
   var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;align-items:center">'
     +chipL('todo','🌐 Todo')+chipL('local','🏪 Sunsu')+chipL('bodega','🏠 Bodega central')
-    +'<button onclick="_cabScanBuscar()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:white;color:var(--navy)">📷 Escanear</button>'
     +(window._cabInvScan?'<button onclick="window._cabInvScan=null;_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid #B86B6B;background:#FBF0EC;color:#B86B6B">✕ Mostrar todos</button>':'')
     +'</div>';
   html+=esAdm?'<div style="display:flex;gap:6px;margin-bottom:9px">'
