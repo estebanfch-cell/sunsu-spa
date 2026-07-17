@@ -5639,7 +5639,11 @@ function _cabF2Correr(btn){
         +((rp.productosInactivos||[]).length?'<div style="font-size:0.6rem;color:#9A7B1E;padding-top:2px">⏸ Pasos con producto INACTIVO:<br>'+rp.productosInactivos.map(function(x){return '· '+x;}).join('<br>')+'</div>':'')
         +'</div>';
     }
-    if(!errH) errH='<div style="background:#EEF7F0;border:1.5px solid #BBDCC4;border-radius:9px;padding:9px 11px;margin-top:8px;font-size:0.64rem;font-weight:800;color:#2E7D52">✅ Cero errores: todos los faciales del periodo tienen protocolo completo y productos vivos</div>';
+    if(!errH){
+      errH = (rp.faciales>0)
+        ? '<div style="background:#EEF7F0;border:1.5px solid #BBDCC4;border-radius:9px;padding:9px 11px;margin-top:8px;font-size:0.64rem;font-weight:800;color:#2E7D52">✅ '+rp.faciales+' faciales revisados, cero errores: todos tienen protocolo completo y productos vivos</div>'
+        : '<div style="background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:9px 11px;margin-top:8px;font-size:0.64rem;font-weight:800;color:#9A7B1E">📭 El barrido no encontró faciales en el período — no hay nada que validar todavía. Revisa el diagnóstico de arriba.</div>';
+    }
     var vistosH=(rp.facialesVistos||[]).length
       ? '<div style="margin-top:8px"><div style="font-size:0.6rem;font-weight:800;color:var(--gray);margin-bottom:3px">FACIALES ENCONTRADOS EN TUS TICKETS</div>'
         +'<div style="display:flex;gap:4px;flex-wrap:wrap">'+rp.facialesVistos.map(function(fv){return '<span style="font-size:0.58rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:3px 9px;border-radius:7px">'+fv.nombre+' ×'+fv.n+'</span>';}).join('')+'</div></div>'
