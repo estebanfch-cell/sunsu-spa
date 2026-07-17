@@ -5988,7 +5988,7 @@ function _cabPintarInventario(){
   if(window._cabInvScan) todos=todos.filter(function(p){return (p.barras||'')===window._cabInvScan||p.codigo===window._cabInvScan;});
   var qInv=_normNomCli((window._cabQ||{}).inv||'');
   if(qInv){
-    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')).indexOf(qInv)>=0;};
+    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')+' '+(p.ubicacion||'')).indexOf(qInv)>=0;};
     // Cortesia de familia: si el padre calza, sus presentaciones vienen con el (y al reves)
     todos=todos.filter(function(p){
       if(matchI(p)) return true;
@@ -6015,7 +6015,7 @@ function _cabPintarInventario(){
     var inac=(p.activo||'SI')==='NO';
     var esHija=!!(p.base&&(window._cab.inv||[]).some(function(x){return x.codigo===p.base;}));
     var hijas=(window._cab.inv||[]).filter(function(x){return x.base===p.codigo&&(x.activo||'SI')!=='NO';});
-    var sub=p.codigo+(esAdm&&p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad
+    var sub=p.codigo+(p.ubicacion?' · 📍 '+p.ubicacion:'')+(esAdm&&p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad
       +(esAdm?' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')':'');
     var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(esHija?';margin-left:16px;border-left:3px solid var(--gold)':'')+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
@@ -6407,6 +6407,7 @@ function _cabInvDetalle(i){
     +fila('SKU catálogo (venta)',p.skuCat||'')
     +fila('Código de barras',p.barras||'')
     +fila('Presentación de',p.base||'')
+    +fila('📍 Ubicación en bodega',p.ubicacion||'')
     +fila('Envase',p.contenido+' '+p.unidad)
     +fila('Costo del envase','$'+p.costoEnvase.toFixed(2))
     +fila('Costo por '+p.unidad,'$'+p.costoUnidad.toFixed(4))
@@ -6442,7 +6443,7 @@ function _cabInvForm(i){
   window._cabFotoPend=null;
   window._cabQuitarBase=null;
   if(i>=0) window._cabPresBase=null;
-  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',activo:'SI',row:0};
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',ubicacion:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
@@ -6456,6 +6457,24 @@ function _cabInvForm(i){
     +'<div style="flex:1">'+inp('abierto','🏪 Abierto: restante',p.abierto,'number')+'</div>'
     +'<div style="flex:1">'+inp('bodega','🏠 Cerrados BODEGA',p.bodega,'number')+'</div>'
     +'<div style="flex:1">'+inp('minimo','Mín. (local)',p.minimo,'number')+'</div></div>'
+    +(function(){
+      // Codigos de cuadrante ya usados: se sugieren solos; escribir uno nuevo lo crea
+      var ubs={};
+      (window._cab.inv||[]).forEach(function(x){ var u=(x.ubicacion||'').trim(); if(u) ubs[u.toUpperCase()]=true; });
+      var codigos=Object.keys(ubs).sort();
+      return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">📍 Ubicación en bodega (cuadrante)</div>'
+        +'<input id="cbi-ubicacion" list="cbi-ubs" value="'+String(p.ubicacion||'').replace(/"/g,'&quot;')+'" placeholder="'+(codigos.length?'Toca un código o crea uno nuevo':'Crea tu primer código: 1-A3, B4...')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;text-transform:uppercase">'
+        +'<datalist id="cbi-ubs">'+codigos.map(function(u){return '<option value="'+u+'">';}).join('')+'</datalist>'
+        // Los codigos ya creados, VISIBLES: un toque y queda puesto. El primero se
+        // crea escribiendo; de ahi en adelante ya solo se escoge.
+        +(codigos.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">'
+          +codigos.map(function(u){
+            var sel=(p.ubicacion||'').toUpperCase()===u;
+            return '<span onclick="var e=document.getElementById(\'cbi-ubicacion\');if(e)e.value=\''+u+'\'" style="padding:4px 10px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:1.2px solid '+(sel?'var(--navy)':'var(--cream-d)')+';background:'+(sel?'var(--navy)':'white')+';color:'+(sel?'white':'var(--navy)')+'">📍 '+u+'</span>';
+          }).join('')
+          +'</div>':'')
+        +'</div>';
+    })()
     +(p.base?'<div id="cbi-fam" style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;margin-bottom:6px">'
       +'<span style="font-size:0.62rem;font-weight:800;color:#9A7B1E">👪 Presentación de '+p.base+'</span>'
       +'<button onclick="window._cabQuitarBase=true;var e=document.getElementById(\'cbi-fam\');if(e)e.innerHTML=\'<span style=&quot;font-size:0.62rem;font-weight:800;color:#2E7D52&quot;>✂️ Al guardar quedará como producto propio</span>\'" style="padding:6px 10px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">✂️ Sacar de la familia</button>'
@@ -6526,7 +6545,7 @@ function _cabInvGuardar(i,row,codigo,btn){
     body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
       campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
-        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'),
+        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'), ubicacion:v('ubicacion'),
         base:(window._cabQuitarBase?'':(i>=0?(((window._cab.inv||[])[i]||{}).base||''):((window._cabPresBase||{}).base||''))),
         activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
