@@ -5646,7 +5646,8 @@ function _cabF2Correr(btn){
         +rp.top.map(function(t,i){return '<tr style="background:'+(i%2?'#FAFBFC':'white')+'"><td style="padding:5px 10px;font-size:0.6rem;font-weight:700;color:var(--gray)">'+t.cod+' '+t.producto+'</td><td style="padding:5px 10px;font-size:0.64rem;font-weight:800;color:var(--navy);text-align:right;white-space:nowrap">'+t.cant+' '+t.uni+'</td></tr>';}).join('')
         +'</table></div></div>'
       : '';
-    res.innerHTML='<div style="font-size:0.64rem;font-weight:800;color:#2E7D52;margin-top:4px">✓ Barrido de '+rp.dias+' días: '+rp.tickets+' tickets · '+rp.faciales+' faciales · '+rp.facialesNuevos+' registrados ahora · '+rp.yaRegistrados+' ya estaban</div>'
+    var diagH=rp.diagnostico?'<div style="background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;margin-top:6px;font-size:0.58rem;color:#9A7B1E"><b>🔎 Diagnóstico:</b> '+rp.diagnostico+' — mándame una captura de esto y lo ajusto.</div>':'';
+    res.innerHTML=diagH+'<div style="font-size:0.64rem;font-weight:800;color:#2E7D52;margin-top:4px">✓ Barrido de '+rp.dias+' días: '+rp.tickets+' tickets · '+rp.faciales+' faciales · '+rp.facialesNuevos+' registrados ahora · '+rp.yaRegistrados+' ya estaban</div>'
       +errH+topH
       +'<div style="font-size:0.54rem;color:var(--gray);margin-top:7px">🪞 Modo espejo: NADA se descontó del inventario. Todo quedó en la hoja 📉 CONSUMOS con MODO=ESPEJO. Corre el barrido cuantas veces quieras: nunca duplica.</div>';
     toast('🔬 Demo corrida','#7B4FA6');
