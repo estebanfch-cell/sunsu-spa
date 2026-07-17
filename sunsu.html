@@ -6525,11 +6525,27 @@ function _cabInvForm(i){
   // presentacion heredaba la familia anterior sin querer. La presentacion la
   // vuelve a poner DESPUES de abrir (ver _cabInvFormPresentacion).
   window._cabPresBase=null;
-  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',ubicacion:'',activo:'SI',row:0};
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:0,notas:'',skuCat:'',barras:'',ubicacion:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
-    +inp('producto','Producto *',p.producto)+inp('proveedor','Proveedor',p.proveedor)
+    +inp('producto','Producto *',p.producto)
+    +(function(){
+      // Proveedores existentes: se sugieren y se tocan; uno nuevo se crea escribiendolo
+      var provsF={};
+      (window._cab.inv||[]).forEach(function(x){ var pv=(x.proveedor||'').trim(); if(pv&&pv!=='—') provsF[pv]=true; });
+      var listaPv=Object.keys(provsF).sort();
+      return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Proveedor</div>'
+        +'<input id="cbi-proveedor" list="cbi-provs" value="'+String(p.proveedor==='—'?'':(p.proveedor||'')).replace(/"/g,'&quot;')+'" placeholder="'+(listaPv.length?'Toca uno o escribe uno nuevo':'Escribe el proveedor')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box">'
+        +'<datalist id="cbi-provs">'+listaPv.map(function(u){return '<option value="'+String(u).replace(/"/g,'&quot;')+'">';}).join('')+'</datalist>'
+        +(listaPv.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">'
+          +listaPv.map(function(u){
+            var selPv=(p.proveedor||'')===u;
+            return '<span onclick="var e=document.getElementById(\'cbi-proveedor\');if(e)e.value=\''+String(u).replace(/'/g,'')+'\'" style="padding:4px 10px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:1.2px solid '+(selPv?'var(--navy)':'var(--cream-d)')+';background:'+(selPv?'var(--navy)':'white')+';color:'+(selPv?'white':'var(--navy)')+'">'+u+'</span>';
+          }).join('')
+          +'</div>':'')
+        +'</div>';
+    })()
     +'<div style="display:flex;gap:5px">'
     +'<div style="flex:1">'+inp('contenido','Contenido envase *',p.contenido,'number')+'</div>'
     +'<div style="width:80px"><div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div>'+'<select id="cbi-unidad" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+_cabUnidadesOpts(p.unidad)+'</select></div></div>'
