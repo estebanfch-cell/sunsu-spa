@@ -5989,36 +5989,57 @@ function _cabPintarInventario(){
   // Se recalcula en cada pintado: mientras ingresas stock, lo ves crecer en vivo.
   var dashHTML='';
   if(_cabEsAdmin()){
-    var vL=0,vB=0,vAct=0;
+    // Tres pisos: consumibles (local / abierto / bodega), activos (local / bodega)
+    // y el TOTAL general. Se recalcula en cada pintado — crece mientras ingresas.
+    var vLc=0,vAb=0,vBc=0;
     (window._cab.inv||[]).forEach(function(p){
-      vL+=(p.cerrados||0)*(p.costoEnvase||0)+(p.abierto||0)*(p.costoUnidad||0);
-      vB+=(p.bodega||0)*(p.costoEnvase||0);
+      vLc+=(p.cerrados||0)*(p.costoEnvase||0);
+      vAb+=(p.abierto||0)*(p.costoUnidad||0);
+      vBc+=(p.bodega||0)*(p.costoEnvase||0);
     });
-    var vCons=vL+vB;
+    var vCons=vLc+vAb+vBc;
+    var aL=0,aB=0;
     (window._cab.act||[]).forEach(function(a){
       if((a.estado||'')==='DADO DE BAJA') return;
       var cA=parseFloat(String(a.costo||'').replace(/[^0-9.]/g,''))||0;
-      vAct+=cA*((a.cantLocal||0)+(a.cantBodega||0));
-      vL+=cA*(a.cantLocal||0);
-      vB+=cA*(a.cantBodega||0);
+      aL+=cA*(a.cantLocal||0);
+      aB+=cA*(a.cantBodega||0);
     });
-    var vT=vL+vB;
+    var vAct=aL+aB;
+    var vT=vCons+vAct;
+    var filaD=function(icono,nombre,desglose,total,grande){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:'+(grande?'7px 0 2px':'4px 0')+(grande?';border-top:1.5px solid var(--navy);margin-top:4px':'')+'">'
+        +'<div style="flex:1;min-width:0"><span style="font-size:'+(grande?'0.72rem':'0.64rem')+';font-weight:800;color:var(--navy)">'+icono+' '+nombre+'</span>'
+        +(desglose?'<div style="font-size:0.56rem;color:var(--gray)">'+desglose+'</div>':'')
+        +'</div>'
+        +'<span style="font-size:'+(grande?'0.96rem':'0.74rem')+';font-weight:800;color:var(--navy);white-space:nowrap">$'+total.toFixed(2)+'</span>'
+        +'</div>';
+    };
     dashHTML='<div class="card" style="padding:11px 14px;margin-bottom:9px">'
-      +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.6px;margin-bottom:4px">💰 VALOR DEL INVENTARIO (A COSTO)</div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px">'
-      +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">🏪 $'+vL.toFixed(2)+' · 🏠 $'+vB.toFixed(2)+'</span>'
-      +'<span style="font-size:0.96rem;font-weight:800;color:var(--navy)">🌐 $'+vT.toFixed(2)+'</span>'
-      +'</div>'
-      +'<div style="font-size:0.56rem;color:var(--gray);margin-top:2px">🧴 consumibles $'+vCons.toFixed(2)+' · 🛠 activos $'+vAct.toFixed(2)+'</div>'
+      +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.6px;margin-bottom:3px">💰 VALOR DEL INVENTARIO (A COSTO)</div>'
+      +filaD('🧴','Consumibles','🏪 local $'+vLc.toFixed(2)+' · 🍾 abierto $'+vAb.toFixed(2)+' · 🏠 bodega $'+vBc.toFixed(2),vCons,false)
+      +filaD('🛠','Activos','🏪 local $'+aL.toFixed(2)+' · 🏠 bodega $'+aB.toFixed(2),vAct,false)
+      +filaD('🌐','TODO','',vT,true)
       +'</div>';
   }
   var chipT=function(val,txt){
     var on=tipoI===val;
     return '<button onclick="window._cabTipo=\''+val+'\';_cabPintarInventario()" style="padding:6px 13px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
   };
-  var chipsTipo='<div style="display:flex;gap:6px;margin-bottom:9px">'
+  // El boton Filtrar vive EN la misma fila de los chips de tipo (una sola fila)
+  var ctxF=tipoI==='act'?'act':'cons';
+  var lugF=ctxF==='act'?(window._cabActLugar||'todo'):(window._cabInvLugar||'todo');
+  var ordF=ctxF==='cons'?(window._cabInvOrden||'def'):'def';
+  var badgesF=[];
+  if(lugF!=='todo') badgesF.push((lugF==='BODEGA'||lugF==='bodega')?'🏠':'🏪');
+  if(ordF==='mas') badgesF.push('⬆');
+  if(ordF==='menos') badgesF.push('⬇');
+  var chipsTipo='<div style="display:flex;gap:6px;margin-bottom:9px;align-items:center;flex-wrap:wrap">'
     +chipT('cons','🧴 Consumibles ('+(window._cab.inv||[]).length+')')
     +chipT('act','🛠 Activos ('+(window._cab.act||[]).length+')')
+    +'<span style="margin-left:auto"></span>'
+    +'<button onclick="window._cabFiltroAbierto=!window._cabFiltroAbierto;_cabRepintaSec()" style="padding:6px 12px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(badgesF.length?'var(--navy)':'white')+';color:'+(badgesF.length?'white':'var(--navy)')+'">🔽 Filtrar'+(badgesF.length?' '+badgesF.join(''):'')+'</button>'
+    +(badgesF.length?'<button onclick="_cabFiltroLimpiar(\''+ctxF+'\')" style="padding:6px 10px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.2px solid #B86B6B;background:white;color:#B86B6B">✕</button>':'')
     +'</div>';
   if(tipoI==='act'){
     b.innerHTML=dashHTML+chipsTipo+'<div id="cab-inv-cuerpo"></div>';
@@ -6245,18 +6266,11 @@ function _cabNuevoElegir(tipo){
   if(tipo==='cons') _cabInvForm(-1); else _cabActForm(-1);
 }
 function _cabFiltroUI(ctx){
+  // Solo el PANEL: el boton vive arriba, en la fila de los chips de tipo
   var esAct=ctx==='act';
   var lugC=esAct?(window._cabActLugar||'todo'):(window._cabInvLugar||'todo');
   var ordC=esAct?'def':(window._cabInvOrden||'def');
-  var badges=[];
-  if(lugC!=='todo') badges.push((lugC==='BODEGA'||lugC==='bodega')?'🏠 Bodega':'🏪 Sunsu');
-  if(ordC==='mas') badges.push('⬆ Más stock');
-  if(ordC==='menos') badges.push('⬇ Menos stock');
-  var h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
-    +'<button onclick="window._cabFiltroAbierto=!window._cabFiltroAbierto;_cabRepintaSec()" style="padding:7px 14px;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer;border:1.5px solid var(--navy);background:'+(badges.length?'var(--navy)':'white')+';color:'+(badges.length?'white':'var(--navy)')+'">🔽 Filtrar'+(badges.length?' ('+badges.length+')':'')+'</button>'
-    +badges.map(function(bd){return '<span style="font-size:0.6rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:4px 10px;border-radius:8px">'+bd+'</span>';}).join('')
-    +(badges.length?'<button onclick="_cabFiltroLimpiar(\''+ctx+'\')" style="padding:5px 9px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid #B86B6B;background:white;color:#B86B6B">✕</button>':'')
-    +'</div>';
+  var h='';
   if(window._cabFiltroAbierto){
     var chF=function(on,txt,setJs){
       return '<button onclick="'+setJs+';window._cabFiltroAbierto=true;_cabRepintaSec()" style="padding:6px 12px;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
