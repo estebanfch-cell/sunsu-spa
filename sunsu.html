@@ -5544,8 +5544,24 @@ function _pintarCabina(c){
     +chip('inv','🧴 Inventario ('+(window._cab.inv||[]).length+')')
     +chip('act','🛠 Activos ('+(window._cab.act||[]).length+')')
     +(_cabEsAdmin()?chip('oc','🛒 Órdenes ('+((window._cab.ocs||[]).filter(function(o){return o.estado==='PENDIENTE';}).length)+')'):'')
-    +'</div><div id="cab-body"></div>';
+    +'</div>'
+    // El buscador vive FUERA de cab-body: escribir repinta SOLO la lista de abajo,
+    // el input nunca se reconstruye y el teclado del iPhone no se cierra.
+    +(function(){
+      window._cabQ=window._cabQ||{};
+      var phS={pro:'🔍 Buscar facial o protocolo...', inv:'🔍 Buscar producto, código, barras, proveedor...', act:'🔍 Buscar activo, código o categoría...', oc:'🔍 Buscar orden o proveedor...'};
+      var secQ=window._cabSec||'pro';
+      return '<div style="margin:0 0 9px"><input id="cab-q" type="text" value="'+String(window._cabQ[secQ]||'').replace(/"/g,'&quot;')+'" placeholder="'+(phS[secQ]||phS.pro)+'" oninput="window._cabQ[window._cabSec||\'pro\']=this.value;clearTimeout(window._cabQT2);window._cabQT2=setTimeout(_cabRepintaSec,200)" style="width:100%;padding:9px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;background:white;box-sizing:border-box"></div>';
+    })()
+    +'<div id="cab-body"></div>';
   c.innerHTML=html;
+  if(sec==='pro') _cabPintarProtocolos();
+  else if(sec==='inv') _cabPintarInventario();
+  else if(sec==='oc') _cabPintarOC();
+  else _cabPintarActivos();
+}
+function _cabRepintaSec(){
+  var sec=window._cabSec||'pro';
   if(sec==='pro') _cabPintarProtocolos();
   else if(sec==='inv') _cabPintarInventario();
   else if(sec==='oc') _cabPintarOC();
@@ -5643,8 +5659,10 @@ function _cabPintarProtocolos(){
   window._cab.proView=(window.FACIALES||[]).map(function(fc){
     return porSku[fc.sku] || {sku:fc.sku, nombre:fc.n, version:0, vigente:'', manoObra:0, video:'', notas:'', actualizado:'', por:'', pasos:[], _nuevo:true};
   });
+  var qPro=_normNomCli((window._cabQ||{}).pro||'');
   var html='';
   (window._cab.proView||[]).forEach(function(p,i){
+    if(qPro && _normNomCli(p.nombre+' '+p.sku).indexOf(qPro)<0) return;
     var costoProd=(p.pasos||[]).reduce(function(a,ps){
       var pr=_cabProdDe(ps.productoCod);
       return a+(pr?ps.cantidad*pr.costoUnidad:0);
@@ -5968,6 +5986,16 @@ function _cabPintarInventario(){
   var todos=window._cab.inv||[];
   // Si se escaneo un codigo, mostrar SOLO ese producto (chip ✕ para volver)
   if(window._cabInvScan) todos=todos.filter(function(p){return (p.barras||'')===window._cabInvScan||p.codigo===window._cabInvScan;});
+  var qInv=_normNomCli((window._cabQ||{}).inv||'');
+  if(qInv){
+    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')).indexOf(qInv)>=0;};
+    // Cortesia de familia: si el padre calza, sus presentaciones vienen con el (y al reves)
+    todos=todos.filter(function(p){
+      if(matchI(p)) return true;
+      if(p.base){ var pa=(window._cab.inv||[]).find(function(x){return x.codigo===p.base;}); if(pa&&matchI(pa)) return true; }
+      return (window._cab.inv||[]).some(function(x){return x.base===p.codigo&&matchI(x);});
+    });
+  }
   // FAMILIAS: una presentacion (base=INV-XXX) se anida bajo su producto padre.
   // El orden queda: padre, sus presentaciones, siguiente padre...
   var hijosDe={};
@@ -6041,7 +6069,7 @@ function _cabPintarInventario(){
     inactivosL.forEach(function(par){ html+=card(par); });
     html+='</div></div>';
   }
-  if(esAdm){
+  if(esAdm&&!qInv){
     var faltasInv=[];
     (window._cab.inv||[]).forEach(function(p,i){
       if((p.activo||'SI')==='NO') return; // los desactivados no molestan aqui
@@ -6054,7 +6082,7 @@ function _cabPintarInventario(){
     });
     html+=_cabCarpetaFaltas('cab-inv-faltas','Les faltan datos',faltasInv);
   }
-  if(esAdm&&(window._cab.bajas||[]).length){
+  if(esAdm&&!qInv&&(window._cab.bajas||[]).length){
     var bjAb=false;
     var elBj2=document.getElementById('cab-inv-bajas');
     if(elBj2&&elBj2.style.display==='block') bjAb=true;
@@ -6412,6 +6440,7 @@ function _cabInvFormPresentacion(i){
 function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
   window._cabFotoPend=null;
+  window._cabQuitarBase=null;
   if(i>=0) window._cabPresBase=null;
   var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
@@ -6427,6 +6456,10 @@ function _cabInvForm(i){
     +'<div style="flex:1">'+inp('abierto','🏪 Abierto: restante',p.abierto,'number')+'</div>'
     +'<div style="flex:1">'+inp('bodega','🏠 Cerrados BODEGA',p.bodega,'number')+'</div>'
     +'<div style="flex:1">'+inp('minimo','Mín. (local)',p.minimo,'number')+'</div></div>'
+    +(p.base?'<div id="cbi-fam" style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;margin-bottom:6px">'
+      +'<span style="font-size:0.62rem;font-weight:800;color:#9A7B1E">👪 Presentación de '+p.base+'</span>'
+      +'<button onclick="window._cabQuitarBase=true;var e=document.getElementById(\'cbi-fam\');if(e)e.innerHTML=\'<span style=&quot;font-size:0.62rem;font-weight:800;color:#2E7D52&quot;>✂️ Al guardar quedará como producto propio</span>\'" style="padding:6px 10px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">✂️ Sacar de la familia</button>'
+      +'</div>':'')
     +inp('skucat','SKU catálogo — solo si viene del inventario de venta (ej. SUNSU-HT-001)',p.skuCat)
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Código de barras</div>'
     +'<div style="display:flex;gap:6px;margin-top:2px">'
@@ -6494,7 +6527,7 @@ function _cabInvGuardar(i,row,codigo,btn){
       campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
         bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'),
-        base:(i>=0?(((window._cab.inv||[])[i]||{}).base||''):((window._cabPresBase||{}).base||'')),
+        base:(window._cabQuitarBase?'':(i>=0?(((window._cab.inv||[])[i]||{}).base||''):((window._cabPresBase||{}).base||''))),
         activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
@@ -6529,6 +6562,10 @@ function _cabBorrar(hoja, row, codigo, btn){
 function _cabPintarOC(){
   var b=document.getElementById('cab-body'); if(!b) return;
   var ocs=(window._cab.ocs||[]);
+  var qOC=_normNomCli((window._cabQ||{}).oc||'');
+  if(qOC) ocs=ocs.filter(function(oc){
+    return _normNomCli(oc.num+' '+oc.proveedor+' '+(oc.items||[]).map(function(it){return it.producto+' '+it.codigo;}).join(' ')).indexOf(qOC)>=0;
+  });
   var html='<button onclick="_cabOCForm()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nueva orden de compra</button><div id="cab-oc-form"></div>';
   if(!ocs.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin órdenes todavía</div>';
   ocs.forEach(function(oc,i){
@@ -6659,6 +6696,8 @@ function _cabPintarActivos(){
   var elBja=document.getElementById('cab-act-baja');
   if(elBja&&elBja.style.display==='block') bajaAbierto=true;
   var actFil=(window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);});
+  var qAct=_normNomCli((window._cabQ||{}).act||'');
+  if(qAct) actFil=actFil.filter(function(a){return _normNomCli(a.activo+' '+a.codigo+' '+(a.categoria||'')+' '+(a.notas||'')).indexOf(qAct)>=0;});
   var actVivos=actFil.filter(function(a){return (a.estado||'')!=='DADO DE BAJA';});
   var actBajas=actFil.filter(function(a){return (a.estado||'')==='DADO DE BAJA';});
   actVivos.forEach(function(a,ix){
@@ -6675,7 +6714,7 @@ function _cabPintarActivos(){
       +'</div>';
   });
   if(!actVivos.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin activos registrados</div>';
-  if(_cabEsAdmin()){
+  if(_cabEsAdmin()&&!qAct){
     var faltasAct=[];
     (window._cab.act||[]).forEach(function(a,i){
       if((a.estado||'')==='DADO DE BAJA') return;
