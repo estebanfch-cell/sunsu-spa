@@ -172,7 +172,17 @@ function pantallaYaRegistrada(nom){
     if(ced.length<9) return;
     fetch(APPS_SCRIPT_URL+'?action=existeCedula&ced='+ced+'&_t='+Date.now())
       .then(function(r){return r.json();})
-      .then(function(d){ if(d.existe && inp.value.replace(/[^0-9]/g,'')===ced) pantallaYaRegistrada(d.nombre?d.nombre.split(' ')[0]:''); })
+      .then(function(d){
+        if(inp.value.replace(/[^0-9]/g,'')!==ced) return;
+        if(d.existe){ pantallaYaRegistrada(d.nombre?d.nombre.split(' ')[0]:''); return; }
+        if(d.completar){
+          // Base antigua sin timestamp: puede llenar el formulario — nombre de cortesia
+          var nEl=document.getElementById('rg-nombre'), aEl=document.getElementById('rg-apellido');
+          if(nEl&&!nEl.value&&d.nombre) nEl.value=d.nombre;
+          if(aEl&&!aEl.value&&d.apellido) aEl.value=d.apellido;
+          if(d.nombre) toast('💙 ¡Hola de nuevo, '+d.nombre.split(' ')[0]+'! Completa tu tarjeta por favor');
+        }
+      })
       .catch(function(){});
   };
   // Al terminar la cédula y pasar al nombre → chequeo INMEDIATO
