@@ -6001,11 +6001,25 @@ function _cabPintarInventario(){
   // El orden queda: padre, sus presentaciones, siguiente padre...
   var hijosDe={};
   todos.forEach(function(p){ if(p.base) (hijosDe[p.base]=hijosDe[p.base]||[]).push(p); });
-  var ordenados=[];
+  var padresL=[];
   todos.forEach(function(p){
     if(p.base && todos.some(function(x){return x.codigo===p.base;})) return; // se pinta bajo su padre
+    padresL.push(p);
+  });
+  // Orden por cantidad: se comparan ENVASES CERRADOS totales (local+bodega, familia
+  // incluida) — la unica medida comparable entre productos de ml, gramos y unidades.
+  if(ordI==='mas'||ordI==='menos'){
+    var envDe=function(p){
+      var e=(p.cerrados||0)+(p.bodega||0);
+      (hijosDe[p.codigo]||[]).forEach(function(h){ e+=(h.cerrados||0)+(h.bodega||0); });
+      return e;
+    };
+    padresL.sort(function(a,b){ var d=envDe(b)-envDe(a); return ordI==='menos'?-d:d; });
+  }
+  var ordenados=[];
+  padresL.forEach(function(p){
     ordenados.push(p);
-    (hijosDe[p.codigo]||[]).forEach(function(h){ ordenados.push(h); });
+    (hijosDe[p.codigo]||[]).forEach(function(h){ if(todos.indexOf(h)>=0) ordenados.push(h); });
   });
   var activosL=[], inactivosL=[];
   ordenados.forEach(function(p){ var i=(window._cab.inv||[]).indexOf(p); ((p.activo||'SI')==='NO'?inactivosL:activosL).push({p:p,i:i}); });
@@ -6024,13 +6038,24 @@ function _cabPintarInventario(){
       +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.4px">'+p.codigo+(esHija?' <span style="color:var(--gold)">· 👪 presentación de '+p.base+'</span>':'')+'</div>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo&&!inac?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+(inac?' <span style="font-size:0.54rem;color:var(--gray);font-weight:800">⏸ INACTIVO</span>':'')+'</div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+sub+'</div>'
-      +'<div style="font-size:0.6rem;color:#4A5568;margin-top:3px">'
-      +(lug==='local'
-        ? '🏪 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+' · 🍾 abierto: '+p.abierto+p.unidad
-        : lug==='bodega'
-        ? '🏠 bodega: '+(p.bodega||0)+' cerrado'+((p.bodega||0)===1?'':'s')
-        : '🏪 local: '+p.cerrados+' + abierto '+p.abierto+p.unidad+' · 🏠 bodega: '+(p.bodega||0)+' · <b>total '+p.stock+p.unidad+'</b>')
-      +'</div>'
+      +(function(){
+        // Piso 1 (chiquito): el detalle por lado. Piso 2 (grande): LOS DOS totales —
+        // envases cerrados y ml/g — porque cuentan cosas distintas y ambas importan.
+        var envT, mlT, det;
+        if(lug==='local'){
+          envT=p.cerrados; mlT=p.cerrados*p.contenido+p.abierto;
+          det='🏪 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+(p.abierto>0?' · 🍾 abierto '+p.abierto+p.unidad:'');
+        } else if(lug==='bodega'){
+          envT=(p.bodega||0); mlT=envT*p.contenido;
+          det='🏠 '+envT+' cerrado'+(envT===1?'':'s');
+        } else {
+          envT=p.cerrados+(p.bodega||0); mlT=p.stock;
+          det='🏪 '+p.cerrados+' · 🏠 '+(p.bodega||0)+(p.abierto>0?' · 🍾 abierto '+p.abierto+p.unidad:'');
+        }
+        return '<div style="font-size:0.58rem;color:var(--gray);margin-top:4px">'+det+'</div>'
+          +'<div style="margin-top:3px;font-size:0.82rem;font-weight:800;color:var(--navy)">📦 '+envT+' envase'+(envT===1?'':'s')
+          +' <span style="color:var(--cream-d)">|</span> ∑ '+(mlT%1?mlT.toFixed(1):mlT)+' '+p.unidad+'</div>';
+      })()
       +(hijas.length?'<div style="font-size:0.58rem;font-weight:800;color:var(--gold);margin-top:2px">👪 Familia: '+(p.stock+hijas.reduce(function(a,x){return a+(x.stock||0);},0))+p.unidad+' en total · '+(hijas.length+1)+' presentaciones</div>':'')
       +'</div>'
       +(esAdm?'<div style="display:flex;gap:4px;flex-shrink:0">'
@@ -6056,8 +6081,15 @@ function _cabPintarInventario(){
     var on=lug===val;
     return '<button onclick="window._cabInvLugar=\''+val+'\';_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+txt+'</button>';
   };
+  var ordI=window._cabInvOrden||'def';
+  var chipO=function(val,txt){
+    var on=ordI===val;
+    return '<button onclick="window._cabInvOrden=window._cabInvOrden===\''+val+'\'?\'def\':\''+val+'\';_cabPintarInventario()" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--gold);background:'+(on?'var(--gold)':'white')+';color:'+(on?'white':'#9A7B1E')+'">'+txt+'</button>';
+  };
   var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;align-items:center">'
     +chipL('todo','🌐 Todo')+chipL('local','🏪 Sunsu')+chipL('bodega','🏠 Bodega central')
+    +'<span style="width:1px;height:18px;background:var(--cream-d)"></span>'
+    +chipO('mas','⬆ Más stock')+chipO('menos','⬇ Menos stock')
     +'</div>';
   html+=esAdm?'<div style="display:flex;gap:6px;margin-bottom:9px">'
     +'<button onclick="_cabInvForm(-1)" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">＋ Nuevo producto</button>'
