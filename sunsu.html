@@ -6278,11 +6278,10 @@ function _scanAbrir(cb){
       +'<video id="scan-vid" playsinline style="width:100%;max-width:420px;border-radius:14px;background:black"></video>'
       +'<button id="scan-cancel" style="margin-top:14px;padding:11px 22px;background:white;color:var(--navy);border:none;border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">Cancelar</button>';
     document.body.appendChild(ov);
-    // TRY_HARDER: ZXing analiza mas a fondo cada cuadro — mejora la lectura de
-    // codigos chicos, curvos o con poca luz (cuesta un poco mas de CPU, vale la pena)
-    var hintsZX;
-    try { hintsZX=new Map(); hintsZX.set(ZXing.DecodeHintType.TRY_HARDER, true); } catch(eHZ) {}
-    var reader=new ZXing.BrowserMultiFormatReader(hintsZX);
+    // Lector simple y probado. (Nota: el intento de pasarle 'hints' TRY_HARDER
+    // al constructor rompia el reconocimiento en esta version de ZXing — no
+    // volver a hacerlo; si algun dia se quiere, probar primero en vivo.)
+    var reader=new ZXing.BrowserMultiFormatReader();
     var cerrar=function(){
       try{ reader.reset(); }catch(eR){}
       var o2=document.getElementById('scan-ov'); if(o2) o2.remove();
