@@ -5500,7 +5500,7 @@ function renderCabina(c,fresh){
 // Detecta trabajo en curso en Cabina: si hay algo abierto, el refresco de fondo
 // NO repinta (los datos frescos llegaran en la proxima apertura o guardado).
 function _cabHayTrabajoAbierto(){
-  var ids=['cab-inv-form','cab-oc-form','cab-fijos-form'];
+  var ids=['cab-inv-form','cab-oc-form','cab-fijos-form','cab-f2-panel'];
   for(var i=0;i<ids.length;i++){ var el=document.getElementById(ids[i]); if(el&&el.innerHTML) return true; }
   var sel=['[id^="cab-pro-b-"]','[id^="cab-invd-"]','[id^="cab-actd-"]'];
   for(var j=0;j<sel.length;j++){
@@ -5535,11 +5535,13 @@ function _pintarCabina(c){
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">🧪 Cabina</div>'
     +(_cabEsAdmin()?'<div style="display:flex;gap:5px">'
+      +'<button onclick="_cabF2Panel()" style="background:white;color:#7B4FA6;border:1.5px solid #7B4FA6;padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">🔬 Demo F2</button>'
       +'<button onclick="_cabFijosForm()" style="background:white;color:var(--navy);border:1.5px solid var(--navy);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">🏢 Fijos</button>'
       +'<button onclick="_cabResembrar(this)" style="background:white;color:var(--gray);border:1.5px solid var(--cream-d);padding:5px 10px;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">📥 Base Excel</button>'
       +'</div>':'')
     +'</div>'
     +'<div id="cab-fijos-form"></div>'
+    +'<div id="cab-f2-panel"></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
     +chip('pro','📋 Protocolos ('+(window.FACIALES||[]).length+')')
     +chip('inv','📦 Inventario ('+((window._cab.inv||[]).length+(window._cab.act||[]).length)+')')
@@ -5595,6 +5597,62 @@ function _cabResembrar(btn){
 // Fijo del protocolo = tarifa/hora x su duracion. Sin minutos aun -> usa el promedio.
 // Editor de COSTOS FIJOS mensuales, en el app: renta, luz, agua, internet,
 // lavanderia de toallas, pauta... Se guardan como filas FIJO * en CONFIGURACION.
+// ── FASE 2: PANEL DEMO (modo espejo) ──
+// Corre el barrido teorico sobre los tickets reales SIN tocar stock, y muestra
+// el reporte: cuanto se habria consumido y — lo mas valioso — QUE FALTA:
+// faciales sin protocolo, pasos con productos inexistentes o inactivos.
+function _cabF2Panel(){
+  var f=document.getElementById('cab-f2-panel'); if(!f) return;
+  if(f.innerHTML){ f.innerHTML=''; return; }
+  f.innerHTML='<div class="card" style="padding:13px;margin-bottom:10px;border:2px solid #7B4FA6">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:#7B4FA6;margin-bottom:4px">🔬 Fase 2 — DEMO (modo espejo)</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:9px">Lee los faciales de tus tickets reales, les aplica el protocolo vigente y calcula el consumo teórico. <b>No descuenta nada del stock</b> — solo registra y te muestra los errores que hay que corregir antes de ir en vivo.</div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px">'
+    +'<div style="width:110px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Días hacia atrás</div><input id="cab-f2-dias" type="number" min="1" max="60" value="7" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<button onclick="_cabF2Correr(this)" style="flex:1;padding:10px;background:#7B4FA6;color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">▶ Correr barrido</button>'
+    +'</div>'
+    +'<div id="cab-f2-res"></div>'
+    +'</div>';
+}
+function _cabF2Correr(btn){
+  var dias=parseInt((document.getElementById('cab-f2-dias')||{}).value)||7;
+  btn.disabled=true; btn.textContent='⏳ Calculando...';
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'fase2Espejo', token:window._token||'', dias:dias, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false; btn.textContent='▶ Correr barrido';
+    if(!d.ok){ toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    var rp=d.reporte, res=document.getElementById('cab-f2-res');
+    if(!res) return;
+    var errH='';
+    if((rp.sinProtocolo||[]).length){
+      errH+='<div style="background:#FBF0EC;border:1.5px solid #E8C4C4;border-radius:9px;padding:9px 11px;margin-top:8px">'
+        +'<div style="font-size:0.62rem;font-weight:800;color:#B86B6B">⚠ Faciales SIN protocolo — estos NO se pueden descontar:</div>'
+        +rp.sinProtocolo.map(function(x){return '<div style="font-size:0.6rem;color:#B86B6B;padding-top:2px">· '+x.nombre+' ('+x.n+' vez'+(x.n===1?'':'es')+')</div>';}).join('')
+        +'</div>';
+    }
+    if((rp.productosFaltantes||[]).length||(rp.productosInactivos||[]).length||(rp.sinPasos||[]).length){
+      errH+='<div style="background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:9px 11px;margin-top:6px">'
+        +((rp.sinPasos||[]).length?'<div style="font-size:0.6rem;font-weight:800;color:#9A7B1E">📝 Protocolos sin pasos: '+rp.sinPasos.join(', ')+'</div>':'')
+        +((rp.productosFaltantes||[]).length?'<div style="font-size:0.6rem;color:#9A7B1E;padding-top:2px">❓ Pasos con producto inexistente:<br>'+rp.productosFaltantes.map(function(x){return '· '+x;}).join('<br>')+'</div>':'')
+        +((rp.productosInactivos||[]).length?'<div style="font-size:0.6rem;color:#9A7B1E;padding-top:2px">⏸ Pasos con producto INACTIVO:<br>'+rp.productosInactivos.map(function(x){return '· '+x;}).join('<br>')+'</div>':'')
+        +'</div>';
+    }
+    if(!errH) errH='<div style="background:#EEF7F0;border:1.5px solid #BBDCC4;border-radius:9px;padding:9px 11px;margin-top:8px;font-size:0.64rem;font-weight:800;color:#2E7D52">✅ Cero errores: todos los faciales del periodo tienen protocolo completo y productos vivos</div>';
+    var topH=(rp.top||[]).length
+      ? '<div style="margin-top:8px"><div style="font-size:0.6rem;font-weight:800;color:var(--gray);margin-bottom:3px">CONSUMO TEÓRICO ACUMULADO (top)</div>'
+        +'<div style="background:white;border:1px solid var(--cream-d);border-radius:10px;overflow:hidden"><table style="width:100%;border-collapse:collapse">'
+        +rp.top.map(function(t,i){return '<tr style="background:'+(i%2?'#FAFBFC':'white')+'"><td style="padding:5px 10px;font-size:0.6rem;font-weight:700;color:var(--gray)">'+t.cod+' '+t.producto+'</td><td style="padding:5px 10px;font-size:0.64rem;font-weight:800;color:var(--navy);text-align:right;white-space:nowrap">'+t.cant+' '+t.uni+'</td></tr>';}).join('')
+        +'</table></div></div>'
+      : '';
+    res.innerHTML='<div style="font-size:0.64rem;font-weight:800;color:#2E7D52;margin-top:4px">✓ Barrido de '+rp.dias+' días: '+rp.tickets+' tickets · '+rp.faciales+' faciales · '+rp.facialesNuevos+' registrados ahora · '+rp.yaRegistrados+' ya estaban</div>'
+      +errH+topH
+      +'<div style="font-size:0.54rem;color:var(--gray);margin-top:7px">🪞 Modo espejo: NADA se descontó del inventario. Todo quedó en la hoja 📉 CONSUMOS con MODO=ESPEJO. Corre el barrido cuantas veces quieras: nunca duplica.</div>';
+    toast('🔬 Demo corrida','#7B4FA6');
+  })
+  .catch(function(){ btn.disabled=false; btn.textContent='▶ Correr barrido'; toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cabFijosForm(){
   var f=document.getElementById('cab-fijos-form'); if(!f) return;
   if(f.innerHTML){ f.innerHTML=''; return; }
@@ -6055,7 +6113,7 @@ function _cabPintarInventario(){
   var todos=window._cab.inv||[];
   var qInv=_normNomCli((window._cabQ||{}).inv||'');
   if(qInv){
-    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')+' '+(p.ubicacion||'')+' '+(p.notas||'')).indexOf(qInv)>=0;};
+    var matchI=function(p){return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')+' '+(p.proveedor||'')+' '+(p.skuCat||'')+' '+(p.ubicacion||'')+' '+(p.ubicacionLocal||'')+' '+(p.ubicacionAbierto||'')+' '+(p.notas||'')).indexOf(qInv)>=0;};
     // Cortesia de familia: si el padre calza, sus presentaciones vienen con el (y al reves)
     todos=todos.filter(function(p){
       if(matchI(p)) return true;
@@ -6138,11 +6196,16 @@ function _cabPintarInventario(){
         +'</div>':'')
       +'</div>'
       +(function(){
-        // El LUGAR, protagonista abajo a la derecha: en que lado hay stock + cuadrante
-        var enLoc=p.cerrados>0||p.abierto>0, enBod=(p.bodega||0)>0;
-        var donde=enLoc&&enBod?'🏪 Local + 🏠 Bodega':enBod?'🏠 Bodega':enLoc?'🏪 Local':'';
-        if(p.ubicacion) donde+=(donde?' · ':'')+'📍 '+p.ubicacion;
-        return donde?'<div style="display:flex;justify-content:flex-end;margin-top:5px"><span style="font-size:0.72rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:3px 11px;border-radius:8px">'+donde+'</span></div>':'';
+        // TRES FILAS apiladas a la derecha: 🏪 local (+su codigo), 🍾 abierto como
+        // subfila (+en que cabina), y 🏠 bodega (+cuadrante). Cada fila aparece
+        // solo si ese lado tiene stock — la ausencia tambien informa.
+        var filasU=[];
+        if(p.cerrados>0||p.ubicacionLocal) filasU.push('🏪 Local'+(p.cerrados>0?' ('+p.cerrados+')':'')+(p.ubicacionLocal?' · 📍 '+p.ubicacionLocal:''));
+        if(p.abierto>0||p.ubicacionAbierto) filasU.push('<span style="opacity:0.75"> 🍾 Abierto'+(p.abierto>0?' ('+p.abierto+p.unidad+')':'')+(p.ubicacionAbierto?' · '+p.ubicacionAbierto:'')+'</span>');
+        if((p.bodega||0)>0||p.ubicacion) filasU.push('🏠 Bodega'+((p.bodega||0)>0?' ('+p.bodega+')':'')+(p.ubicacion?' · 📍 '+p.ubicacion:''));
+        return filasU.length?'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:5px">'
+          +filasU.map(function(fu){return '<span style="font-size:0.66rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:2px 10px;border-radius:7px">'+fu+'</span>';}).join('')
+          +'</div>':'';
       })()
       +(esAdm?'<div id="cab-invd-'+i+'" style="display:none"></div>':'')
       +'</div>';
@@ -6695,7 +6758,9 @@ function _cabInvDetalle(i){
   fl('🏠 Bodega — cerrados', String(p.bodega||0));
   fl('Total (todo lado)', p.stock+' '+p.unidad);
   fl('Mínimo de alerta', p.minimo+' envase'+(p.minimo===1?'':'s'));
-  fl('📍 Ubicación', p.ubicacion||'');
+  fl('🏪 Ubicación en local', p.ubicacionLocal||'');
+  fl('🍾 Abierto en', p.ubicacionAbierto||'');
+  fl('🏠 Ubicación en bodega', p.ubicacion||'');
   fl('Estado', (p.activo||'SI')==='NO'?'⏸ Inactivo':'✓ Activo');
   var zi=0;
   var tabla=filas.map(function(f){
@@ -6757,7 +6822,7 @@ function _cabInvForm(i){
   // presentacion heredaba la familia anterior sin querer. La presentacion la
   // vuelve a poner DESPUES de abrir (ver _cabInvFormPresentacion).
   window._cabPresBase=null;
-  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:0,notas:'',skuCat:'',barras:'',ubicacion:'',activo:'SI',row:0};
+  var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:0,notas:'',skuCat:'',barras:'',ubicacion:'',ubicacionLocal:'',ubicacionAbierto:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
@@ -6773,20 +6838,32 @@ function _cabInvForm(i){
     +'<div style="display:flex;gap:5px;align-items:flex-end">'
     +'<div style="flex:1">'+inp('contenido','Contenido envase/caja *',p.contenido,'number')+'</div>'
     +'<div style="width:80px"><div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div>'+'<select id="cbi-unidad" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+_cabUnidadesOpts(p.unidad)+'</select></div></div>'
-    +'<div style="flex:1">'+inp('costo','Costo envase $ *',p.costoEnvase,'number')+'</div></div>'
+    +'<div style="flex:1">'+inp('costo','Costo envase $ (opcional por ahora)',p.costoEnvase===0?'':p.costoEnvase,'number')+'</div></div>'
     +'<div style="display:flex;gap:5px;align-items:flex-end">'
     +'<div style="flex:1">'+inp('cerrados','🏪 Cerrados LOCAL',p.cerrados,'number')+'</div>'
     +'<div style="flex:1">'+inp('abierto','🏪 Abierto: restante',p.abierto,'number')+'</div>'
     +'<div style="flex:1">'+inp('bodega','🏠 Cerrados BODEGA',p.bodega,'number')+'</div>'
     +'<div style="flex:1">'+inp('minimo','Mín. (local)',p.minimo,'number')+'</div></div>'
-    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">📍 Ubicación en bodega (cuadrante)</div>'
     +(function(){
-      var ubs={};
-      (window._cab.inv||[]).forEach(function(x){ var u=(x.ubicacion||'').trim(); if(u) ubs[u.toUpperCase()]=true; });
-      (window._cab.act||[]).forEach(function(x){ var u=(x.ubicacion||'').trim(); if(u) ubs[u.toUpperCase()]=true; });
-      return _cabSelNuevo('cbi-ubicacion', (p.ubicacion||'').toUpperCase(), Object.keys(ubs).sort(), 'Nuevo cuadrante: 1-A3, B4...');
+      // TRES ubicaciones, cada una con su propio sistema de codigos:
+      // 🏪 donde vive el cerrado en el LOCAL · 🍾 en que CABINA esta el abierto ·
+      // 🏠 cuadrante en la BODEGA central. Pools independientes entre si.
+      var pool=function(campo){
+        var u={};
+        (window._cab.inv||[]).forEach(function(x){ var v=(x[campo]||'').trim(); if(v) u[v.toUpperCase()]=true; });
+        if(campo==='ubicacion') (window._cab.act||[]).forEach(function(x){ var v=(x.ubicacion||'').trim(); if(v) u[v.toUpperCase()]=true; });
+        return Object.keys(u).sort();
+      };
+      return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">🏪 Ubicación en el LOCAL</div>'
+        +_cabSelNuevo('cbi-ubicacion-local', (p.ubicacionLocal||'').toUpperCase(), pool('ubicacionLocal'), 'Código del local: E-1, VITRINA-2...')
+        +'</div>'
+        +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">🍾 Ubicación del ABIERTO (cabina)</div>'
+        +_cabSelNuevo('cbi-ubicacion-abierto', (p.ubicacionAbierto||'').toUpperCase(), pool('ubicacionAbierto'), 'CABINA 1, CABINA 2...')
+        +'</div>'
+        +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">🏠 Ubicación en BODEGA central (cuadrante)</div>'
+        +_cabSelNuevo('cbi-ubicacion', (p.ubicacion||'').toUpperCase(), pool('ubicacion'), 'Cuadrante: 1-A3, 1-C3, B4...')
+        +'</div>';
     })()
-    +'</div>'
     +(p.base?'<div id="cbi-fam" style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;margin-bottom:6px">'
       +'<span style="font-size:0.62rem;font-weight:800;color:#9A7B1E">👪 Presentación de '+p.base+'</span>'
       +'<button onclick="window._cabQuitarBase=true;var e=document.getElementById(\'cbi-fam\');if(e)e.innerHTML=\'<span style=&quot;font-size:0.62rem;font-weight:800;color:#2E7D52&quot;>✂️ Al guardar quedará como producto propio</span>\'" style="padding:6px 10px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer">✂️ Sacar de la familia</button>'
@@ -6870,13 +6947,14 @@ function _cabFotoSubir(codigo){
 }
 function _cabInvGuardar(i,row,codigo,btn){
   var v=function(id){ var el=document.getElementById('cbi-'+id); return el?el.value.trim():''; };
-  if(!v('producto')||!v('contenido')||!v('costo')){ toast('⚠️ Producto, contenido y costo son obligatorios','#C9A227'); return; }
+  if(!v('producto')||!v('contenido')){ toast('⚠️ Producto y contenido son obligatorios','#C9A227'); return; }
+  if(!v('costo')) toast('📝 Sin costo: quedará en "Les faltan datos" para cuando encuentres la factura','var(--gold)');
   if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
       campos:{codigo:codigo, producto:v('producto'), proveedor:_cabSelVal('cbi-proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
-        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'), ubicacion:_cabSelVal('cbi-ubicacion').toUpperCase(),
+        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'), ubicacion:_cabSelVal('cbi-ubicacion').toUpperCase(), ubicacionLocal:_cabSelVal('cbi-ubicacion-local').toUpperCase(), ubicacionAbierto:_cabSelVal('cbi-ubicacion-abierto').toUpperCase(),
         base:(window._cabQuitarBase?'':(i>=0?(((window._cab.inv||[])[i]||{}).base||''):((window._cabPresBase||{}).base||''))),
         activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
