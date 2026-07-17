@@ -707,13 +707,14 @@ function initApp(){
       var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
       if(fi>=0){
         if(item.total>0) FACIALES[fi].p=item.total;
+        if(item.subtotal>0) FACIALES[fi].sub=item.subtotal; // para utilidades: subtotal vs subtotal (el IVA es del estado)
         FACIALES[fi]._activo=activo;
       }
       // Auto-agregar faciales nuevos del catalogo: la REGLA es la columna TIPO —
       // 'FACIAL' o 'FACIAL ESPECIAL' = facial vendible. Asi un facial creado en
       // el catalogo aparece solo en el ticket y en el selector de protocolos de Cabina.
       else if(activo && /^FACIAL/i.test((item.tipo||'').trim())){
-        FACIALES.push({sku:item.sku, n:item.nombre, p:item.total, com:item.com||2, _activo:activo});
+        FACIALES.push({sku:item.sku, n:item.nombre, p:item.total, sub:item.subtotal||0, com:item.com||2, _activo:activo});
       }
       // ── EXTRAS ──
       var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
@@ -5479,7 +5480,7 @@ function renderCabina(c,fresh){
           :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
       return;
     }
-    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], tras:d.traspasos||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], tras:d.traspasos||[], bajas:d.bajas||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
     _pintarCabina(c);
   };
   var cachedCb=fresh?null:_swrLee('cabina');
@@ -5659,7 +5660,7 @@ function _cabPintarProtocolos(){
             if(!_cabEsAdmin()) return '';
             var ct=costoProd+(p.manoObra||0)+_cabFijoInfo(p).fijo;
             var fcS=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
-            var prS=fcS?(fcS.p||0):0;
+            var prS=fcS?((fcS.sub||0)>0?fcS.sub:(fcS.p||0)):0;
             var sfx=ct>0?' · costo $'+ct.toFixed(2):'';
             if(prS>0&&ct>0){ var uS=prS-ct; sfx+=' · <span style="color:'+(uS>=0?'#2E7D52':'#B86B6B')+';font-weight:800">util $'+uS.toFixed(2)+'</span>'; }
             return sfx;
@@ -5756,7 +5757,11 @@ function _cabProCuerpo(i,editando){
       var fijoF=fiF.fijo;
       var costoTotal=totProd+mo+fijoF;
       var fc=(window.FACIALES||[]).find(function(x){return x.sku===p.sku;});
-      var precio=fc?(fc.p||0):0;
+      // La utilidad se calcula SUBTOTAL contra SUBTOTAL: los costos de compra son
+      // sin IVA, y el IVA de la venta va al estado — no es tuyo. Si el catalogo
+      // aun no dio el subtotal (recien cargando), cae al total como respaldo.
+      var precio=fc?((fc.sub||0)>0?fc.sub:(fc.p||0)):0;
+      var esSub=fc&&(fc.sub||0)>0;
       var util=precio-costoTotal;
       var filaT=function(lbl,val,extra){ return '<div style="display:flex;justify-content:space-between;padding:4px 0'+(extra||'')+'"><span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+lbl+'</span><span style="font-size:0.7rem;font-weight:800;color:var(--navy)">'+val+'</span></div>'; };
       h+='<div style="margin-top:9px;background:var(--gray-ll,#F4F5F8);border-radius:10px;padding:9px 12px">'
@@ -5768,7 +5773,7 @@ function _cabProCuerpo(i,editando){
           : '<div style="font-size:0.56rem;color:var(--gray);padding:2px 0">🏢 Fijos: tócalos en el botón 🏢 Fijos de arriba (renta, luz, lavandería, pauta...) y entrarán aquí por hora</div>')
         +filaT('💵 Costo total del facial','$'+costoTotal.toFixed(2),';border-top:1px solid var(--cream-d)')
         +(precio>0
-          ? filaT('🏷 Precio de venta','$'+precio.toFixed(2))
+          ? filaT('🏷 Precio de venta'+(esSub?' (subtotal, sin IVA)':''),'$'+precio.toFixed(2))
             +'<div style="display:flex;justify-content:space-between;padding:6px 0 2px;border-top:1.5px solid var(--navy)"><span style="font-size:0.7rem;font-weight:800;color:'+(util>=0?'#2E7D52':'#B86B6B')+'">💰 UTILIDAD</span><span style="font-size:0.8rem;font-weight:800;color:'+(util>=0?'#2E7D52':'#B86B6B')+'">$'+util.toFixed(2)+' ('+(precio>0?Math.round(util/precio*100):0)+'%)</span></div>'
           : '<div style="font-size:0.58rem;color:var(--gray);padding-top:4px">Sin precio en el catálogo — no se puede calcular utilidad</div>')
         +'</div>';
@@ -5986,6 +5991,7 @@ function _cabPintarInventario(){
       +'</div>'
       +'</div>'
       +(esAdm?'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +'<button onclick="_cabBajaFormProd('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
         +'<button onclick="_cabInvActivo('+i+',this)" title="'+(inac?'Reactivar':'Desactivar')+'" style="padding:6px 9px;background:white;color:'+(inac?'#2E7D52':'var(--gray)')+';border:1.5px solid '+(inac?'#8FBF9F':'var(--cream-d)')+';border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">'+(inac?'▶':'⏸')+'</button>'
         +'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>'
         +'</div>':'')
@@ -6021,7 +6027,176 @@ function _cabPintarInventario(){
     inactivosL.forEach(function(par){ html+=card(par); });
     html+='</div></div>';
   }
+  if(esAdm){
+    var faltasInv=[];
+    (window._cab.inv||[]).forEach(function(p,i){
+      if((p.activo||'SI')==='NO') return; // los desactivados no molestan aqui
+      var f=_cabProdFaltas(p);
+      if(f.length) faltasInv.push('<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
+        +'<div style="flex:1;min-width:0"><span style="font-size:0.64rem;font-weight:700;color:var(--navy)">'+p.producto+'</span><br>'
+        +'<span style="font-size:0.56rem;color:#9A7B1E">falta: '+f.join(', ')+'</span></div>'
+        +'<button onclick="_cabInvForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="padding:5px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;flex-shrink:0">✏️ Llenar</button>'
+        +'</div>');
+    });
+    html+=_cabCarpetaFaltas('cab-inv-faltas','Les faltan datos',faltasInv);
+  }
+  if(esAdm&&(window._cab.bajas||[]).length){
+    var bjAb=false;
+    var elBj2=document.getElementById('cab-inv-bajas');
+    if(elBj2&&elBj2.style.display==='block') bjAb=true;
+    html+='<div style="background:white;border-radius:12px;margin-top:8px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\'cab-inv-bajas\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--gray)">🪦 Últimas bajas ('+(window._cab.bajas||[]).length+')</div>'
+      +'<span id="arrow-cab-inv-bajas" style="color:var(--gray);font-size:0.75rem">'+(bjAb?'▼':'▶')+'</span></div>'
+      +'<div id="cab-inv-bajas" style="display:'+(bjAb?'block':'none')+';padding:8px 12px">'
+      +(window._cab.bajas||[]).map(function(bj){
+        return '<div style="font-size:0.6rem;color:var(--gray);padding:4px 0;border-bottom:1px solid var(--cream-d)">'
+          +'<b style="color:#B86B6B">'+bj.num+'</b> · '+bj.fecha+' · '+bj.nombre+' · '+bj.cantidad+' · «'+bj.razon+'» · '+bj.por
+          +(bj.foto?' · <a href="'+bj.foto+'" target="_blank" style="color:var(--blue);font-weight:800">📷 foto</a>':'')
+          +'</div>';
+      }).join('')
+      +'</div></div>';
+  }
   b.innerHTML=html;
+}
+// ── FICHAS INCOMPLETAS ──
+// Deteccion AUTOMATICA de datos faltantes (nada que marcar a mano): al hacer el
+// inventario real, lo que quede sin costo/proveedor/contenido cae solo a la
+// carpetita 📝 para irlo llenando despues.
+function _cabProdFaltas(p){
+  var f=[];
+  if(!(p.contenido>0)) f.push('contenido del envase');
+  if(!(p.costoEnvase>0)) f.push('costo');
+  if(!p.proveedor||p.proveedor==='—') f.push('proveedor');
+  if(!p.unidad) f.push('unidad');
+  return f;
+}
+function _cabActFaltas(a){
+  var f=[];
+  if(!((a.costo||'').toString().trim())) f.push('costo');
+  if(!((a.categoria||'').toString().trim())) f.push('categoría');
+  if(!((a.fechaCompra||'').toString().trim())) f.push('fecha de compra');
+  if(!((a.cantidad||'').toString().trim())) f.push('cantidad');
+  return f;
+}
+function _cabCarpetaFaltas(idC, titulo, filas){
+  if(!filas.length) return '';
+  var ab=false;
+  var el=document.getElementById(idC);
+  if(el&&el.style.display==='block') ab=true;
+  return '<div style="background:white;border-radius:12px;margin-top:8px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+    +'<div onclick="toggleGrupoEntrada(\''+idC+'\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:#FBF7EC">'
+    +'<div style="font-size:0.7rem;font-weight:800;color:#9A7B1E">📝 '+titulo+' ('+filas.length+')</div>'
+    +'<span id="arrow-'+idC+'" style="color:#9A7B1E;font-size:0.75rem">'+(ab?'▼':'▶')+'</span></div>'
+    +'<div id="'+idC+'" style="display:'+(ab?'block':'none')+';padding:8px 12px">'
+    +filas.join('')
+    +'</div></div>';
+}
+// ── DAR DE BAJA ──
+// Razon OBLIGATORIA + foto opcional (comprobante). Producto: descuenta del lado
+// elegido o vacia el abierto. Activo: pasa a estado DADO DE BAJA (no se borra).
+function _cabBajaFormProd(i){
+  var p=(window._cab.inv||[])[i];
+  var dv=document.getElementById('cab-invd-'+i);
+  if(!p||!dv) return;
+  if(dv.dataset.baja==='1'){ dv.style.display='none'; dv.innerHTML=''; dv.dataset.baja=''; return; }
+  window._cabBajaFotoPend=null;
+  dv.dataset.baja='1';
+  dv.style.display='block';
+  dv.innerHTML='<div style="margin-top:9px;border-top:1px solid var(--cream-d);padding-top:8px;background:#FDF6F4;border-radius:10px;padding:10px">'
+    +'<div style="font-size:0.66rem;font-weight:800;color:#B86B6B;margin-bottom:6px">🪦 Dar de baja: '+p.producto+'</div>'
+    +'<select id="cbj-lado-'+i+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;background:white;margin-bottom:5px">'
+    +'<option value="local">🏪 Envases cerrados del LOCAL (hay '+p.cerrados+')</option>'
+    +'<option value="bodega">🏠 Envases cerrados de BODEGA (hay '+(p.bodega||0)+')</option>'
+    +'<option value="abierto">🍾 El envase ABIERTO ('+p.abierto+p.unidad+' → se vacía)</option>'
+    +'</select>'
+    +'<input id="cbj-n-'+i+'" type="number" min="1" step="1" value="1" placeholder="Envases" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
+    +'<input id="cbj-razon-'+i+'" placeholder="Razón (obligatoria): caducado, roto, contaminado..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">'
+    +'<button onclick="document.getElementById(\'cbj-foto-'+i+'\').click()" style="padding:8px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">📷 Foto (opcional)</button>'
+    +'<span id="cbj-fotook-'+i+'" style="font-size:0.6rem;color:var(--green);font-weight:800"></span>'
+    +'<input id="cbj-foto-'+i+'" type="file" accept="image/*" style="display:none" onchange="_cabBajaFotoSel(this,'+i+')">'
+    +'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabBajaEjecutar(\'producto\','+i+',this)" style="flex:1;padding:9px;background:#B86B6B;color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🪦 Dar de baja</button>'
+    +'<button onclick="_cabBajaFormProd('+i+')" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  var selL=document.getElementById('cbj-lado-'+i);
+  if(selL) selL.onchange=function(){ var nEl=document.getElementById('cbj-n-'+i); if(nEl) nEl.style.display=this.value==='abierto'?'none':'block'; };
+}
+function _cabBajaFormAct(i){
+  var a=(window._cab.act||[])[i];
+  var dv=document.getElementById('cab-actb-'+i);
+  if(!a||!dv) return;
+  if(dv.innerHTML){ dv.innerHTML=''; return; }
+  window._cabBajaFotoPend=null;
+  dv.innerHTML='<div style="margin-top:8px;background:#FDF6F4;border-radius:10px;padding:10px">'
+    +'<div style="font-size:0.66rem;font-weight:800;color:#B86B6B;margin-bottom:6px">🪦 Dar de baja: '+a.activo+'</div>'
+    +'<input id="cbj-razon-a'+i+'" placeholder="Razón (obligatoria): se rompió, se perdió, obsoleto..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">'
+    +'<button onclick="document.getElementById(\'cbj-foto-a'+i+'\').click()" style="padding:8px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">📷 Foto del daño (opcional)</button>'
+    +'<span id="cbj-fotook-a'+i+'" style="font-size:0.6rem;color:var(--green);font-weight:800"></span>'
+    +'<input id="cbj-foto-a'+i+'" type="file" accept="image/*" style="display:none" onchange="_cabBajaFotoSel(this,\'a'+i+'\')">'
+    +'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_cabBajaEjecutar(\'activo\','+i+',this)" style="flex:1;padding:9px;background:#B86B6B;color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🪦 Dar de baja</button>'
+    +'<button onclick="_cabBajaFormAct('+i+')" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+}
+function _cabBajaFotoSel(inp,suf){
+  var f=inp.files&&inp.files[0]; if(!f) return;
+  var listo=function(dataUrl){
+    window._cabBajaFotoPend=dataUrl.split(',')[1];
+    var ok=document.getElementById('cbj-fotook-'+suf); if(ok) ok.textContent='✓ Foto lista';
+  };
+  var dibujar=function(src,w,h){
+    var esc=Math.min(1,600/Math.max(w,h));
+    var cv=document.createElement('canvas');
+    cv.width=Math.round(w*esc); cv.height=Math.round(h*esc);
+    cv.getContext('2d').drawImage(src,0,0,cv.width,cv.height);
+    listo(cv.toDataURL('image/jpeg',0.82));
+  };
+  var clasico=function(){
+    var u=URL.createObjectURL(f);
+    var im=new Image();
+    im.onload=function(){ dibujar(im,im.naturalWidth,im.naturalHeight); URL.revokeObjectURL(u); };
+    im.src=u;
+  };
+  if(window.createImageBitmap){
+    createImageBitmap(f,{imageOrientation:'from-image'}).then(function(b){ dibujar(b,b.width,b.height); }).catch(clasico);
+  } else clasico();
+}
+function _cabBajaEjecutar(tipo,i,btn){
+  var body={accion:'cabinaBaja', token:window._token||'', tipo:tipo, usuario:CU?CU.name:'—'};
+  var nom='';
+  if(tipo==='activo'){
+    var a=(window._cab.act||[])[i]; if(!a) return;
+    nom=a.activo;
+    body.row=a.row; body.codigo=a.codigo;
+    body.razon=((document.getElementById('cbj-razon-a'+i)||{}).value||'').trim();
+  } else {
+    var p=(window._cab.inv||[])[i]; if(!p) return;
+    nom=p.producto;
+    body.codigo=p.codigo;
+    body.lado=((document.getElementById('cbj-lado-'+i)||{}).value||'local');
+    body.envases=parseFloat((document.getElementById('cbj-n-'+i)||{}).value)||0;
+    body.razon=((document.getElementById('cbj-razon-'+i)||{}).value||'').trim();
+  }
+  if(!body.razon){ toast('⚠️ La razón es obligatoria','#C9A227'); return; }
+  if(window._cabBajaFotoPend){ body.fotoB64=window._cabBajaFotoPend; }
+  if(!confirm('🪦 ¿Dar de baja '+nom+'?\n\nRazón: '+body.razon+'\n\nEsto descuenta del inventario y queda registrado.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  window._cabBajaFotoPend=null;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify(body)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='🪦 Dar de baja';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('🪦 Baja '+d.num+' registrada','var(--green)');
+    window._cabSec=tipo==='activo'?'act':'inv';
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(){ if(btn){btn.disabled=false;btn.textContent='🪦 Dar de baja';} toast('❌ Sin conexión','#B86B6B'); });
 }
 // Escanear para ENCONTRAR: la chica apunta a la botella y aparece su producto
 // (si el codigo aun no esta cargado, avisa; los admins lo cargan en ✏️).
@@ -6446,29 +6621,89 @@ function _cabPintarActivos(){
   };
   var html='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">'+chipA('todo','🌐 Todos')+chipA('SUNSU','🏪 Sunsu')+chipA('BODEGA','🏠 Bodega')+'</div>';
   html+=_cabEsAdmin()?'<button onclick="_cabActForm(-1)" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo activo</button><div id="cab-act-form"></div>':'';
-  (window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);}).forEach(function(a,ix){
+  var bajaAbierto=false;
+  var elBja=document.getElementById('cab-act-baja');
+  if(elBja&&elBja.style.display==='block') bajaAbierto=true;
+  var actFil=(window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);});
+  var actVivos=actFil.filter(function(a){return (a.estado||'')!=='DADO DE BAJA';});
+  var actBajas=actFil.filter(function(a){return (a.estado||'')==='DADO DE BAJA';});
+  actVivos.forEach(function(a,ix){
     var i=(window._cab.act||[]).indexOf(a);
     html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span> <span style="font-size:0.54rem;font-weight:800;color:var(--gray)">'+((a.lugar||'SUNSU')==='BODEGA'?'🏠':'🏪')+'</span></div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+'</div>'
       +(a.notas?'<div style="font-size:0.56rem;color:var(--gray)">'+a.notas+'</div>':'')+'</div>'
-      +(_cabEsAdmin()?'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>':'')
-      +'</div></div>';
+      +(_cabEsAdmin()?'<div style="display:flex;gap:4px"><button onclick="_cabBajaFormAct('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
+      +'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button></div>':'')
+      +'</div>'
+      +(_cabEsAdmin()?'<div id="cab-actb-'+i+'"></div>':'')
+      +'</div>';
   });
-  if(!(window._cab.act||[]).length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin activos registrados</div>';
+  if(!actVivos.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin activos registrados</div>';
+  if(_cabEsAdmin()){
+    var faltasAct=[];
+    (window._cab.act||[]).forEach(function(a,i){
+      if((a.estado||'')==='DADO DE BAJA') return;
+      if(lugA!=='todo'&&((a.lugar||'SUNSU')!==lugA)) return;
+      var f=_cabActFaltas(a);
+      if(f.length) faltasAct.push('<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
+        +'<div style="flex:1;min-width:0"><span style="font-size:0.64rem;font-weight:700;color:var(--navy)">'+a.activo+'</span><br>'
+        +'<span style="font-size:0.56rem;color:#9A7B1E">falta: '+f.join(', ')+'</span></div>'
+        +'<button onclick="_cabActForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="padding:5px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;flex-shrink:0">✏️ Llenar</button>'
+        +'</div>');
+    });
+    html+=_cabCarpetaFaltas('cab-act-faltas','Les faltan datos',faltasAct);
+  }
+  if(actBajas.length){
+    html+='<div style="background:white;border-radius:12px;margin-top:4px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\'cab-act-baja\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--gray)">🪦 Dados de baja ('+actBajas.length+')</div>'
+      +'<span id="arrow-cab-act-baja" style="color:var(--gray);font-size:0.75rem">'+(bajaAbierto?'▼':'▶')+'</span></div>'
+      +'<div id="cab-act-baja" style="display:'+(bajaAbierto?'block':'none')+';padding:8px 10px">';
+    actBajas.forEach(function(a){
+      html+='<div style="font-size:0.62rem;color:var(--gray);padding:5px 0;border-bottom:1px solid var(--cream-d)"><b style="color:#B86B6B">'+a.activo+'</b> · '+a.codigo+(a.categoria?' · '+a.categoria:'')+'</div>';
+    });
+    html+='</div></div>';
+  }
   b.innerHTML=html;
 }
+// Categorias rapidas de activos de spa; una desconocida (data vieja) se agrega al vuelo
+var CAB_CATEGORIAS=['Equipos','Mobiliario','Electrodomésticos','Decoración','Lencería','Tecnología','Herramientas','Otros'];
+function _cabCatOpts(sel){
+  var lista=CAB_CATEGORIAS.slice();
+  var s2=(sel||'').trim();
+  if(s2&&lista.map(function(u){return u.toLowerCase();}).indexOf(s2.toLowerCase())<0) lista.unshift(s2);
+  return lista.map(function(u){ return '<option value="'+u+'"'+((s2||'Equipos').toLowerCase()===u.toLowerCase()?' selected':'')+'>'+u+'</option>'; }).join('');
+}
+var CAB_ACT_UNIDADES=['unidad','par','juego','set','caja','kit'];
 function _cabActForm(i){
   var f=document.getElementById('cab-act-form'); if(!f) return;
   var a=i>=0?(window._cab.act||[])[i]:{codigo:'',activo:'',categoria:'',cantidad:'',ubicacion:'',estado:'Buen estado',fechaCompra:'',costo:'',notas:'',lugar:'SUNSU',row:0};
+  window._cabActEdit=a; // para conservar campos que ya no estan en el form (ubicacion vieja)
+  // Cantidad puede venir como '3' o '2 par': separar numero y unidad (default: unidad)
+  var mCant=String(a.cantidad||'').trim().match(/^([\d.,]*)\s*(.*)$/);
+  var cantNum=mCant?mCant[1]:'', cantUni=(mCant&&mCant[2])?mCant[2]:'unidad';
+  // Fecha dd/MM/yyyy → yyyy-mm-dd para el selector nativo de fecha
+  var fISO='';
+  var mF=String(a.fechaCompra||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(mF) fISO=mF[3]+'-'+('0'+mF[2]).slice(-2)+'-'+('0'+mF[1]).slice(-2);
   var inp=function(id,lbl,v){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cba-'+id+'" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
+  var selUniA='';
+  CAB_ACT_UNIDADES.forEach(function(u){ if(cantUni&&CAB_ACT_UNIDADES.indexOf(cantUni.toLowerCase())<0&&u==='unidad') selUniA+='<option value="'+cantUni+'" selected>'+cantUni+'</option>'; selUniA+='<option value="'+u+'"'+(cantUni.toLowerCase()===u?' selected':'')+'>'+u+'</option>'; });
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Lugar</div><select id="cba-lugar" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white"><option value="SUNSU"'+(a.lugar!=='BODEGA'?' selected':'')+'>🏪 Local Sunsu</option><option value="BODEGA"'+(a.lugar==='BODEGA'?' selected':'')+'>🏠 Bodega central</option></select></div>'
-    +inp('activo','Activo *',a.activo)+inp('categoria','Categoría',a.categoria)
-    +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('cantidad','Cantidad',a.cantidad)+'</div><div style="flex:2">'+inp('ubicacion','Ubicación',a.ubicacion)+'</div></div>'
-    +'<div style="display:flex;gap:5px"><div style="flex:1">'+inp('estado','Estado',a.estado)+'</div><div style="flex:1">'+inp('fecha','Fecha compra',a.fechaCompra)+'</div><div style="flex:1">'+inp('costo','Costo $',a.costo)+'</div></div>'
+    +inp('activo','Activo *',a.activo)
+    +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Categoría</div><select id="cba-categoria" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white">'+_cabCatOpts(a.categoria)+'</select></div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:6px">'
+    +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Cantidad</div><input id="cba-cantidad" type="number" min="0" step="1" value="'+String(cantNum).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div style="width:92px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Unidad</div><select id="cba-cantuni" style="width:100%;padding:8px 4px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white">'+selUniA+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:6px">'
+    +'<div style="flex:1">'+inp('estado','Estado',a.estado)+'</div>'
+    +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Fecha compra</div><input id="cba-fecha" type="date" value="'+fISO+'" style="width:100%;padding:7px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div style="flex:1">'+inp('costo','Costo $',a.costo)+'</div></div>'
     +inp('notas','Notas',a.notas)
     +'<div style="display:flex;gap:6px;margin-top:4px">'
     +'<button onclick="_cabActGuardar('+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
@@ -6481,10 +6716,17 @@ function _cabActGuardar(row,codigo,btn){
   var v=function(id){ var el=document.getElementById('cba-'+id); return el?el.value.trim():''; };
   if(!v('activo')){ toast('⚠️ El nombre del activo es obligatorio','#C9A227'); return; }
   if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+  // Cantidad: '3' + 'par' → '3 par' (en 'unidad', solo el numero). Fecha: del
+  // selector nativo (yyyy-mm-dd) al formato del sheet (dd/MM/yyyy).
+  var cantU=((document.getElementById('cba-cantuni')||{}).value||'unidad');
+  var cantTxt=v('cantidad')+(cantU&&cantU!=='unidad'&&v('cantidad')?' '+cantU:'');
+  var fV=v('fecha'), fTxt='';
+  var mFv=fV.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(mFv) fTxt=mFv[3]+'/'+mFv[2]+'/'+mFv[1]; else fTxt=fV;
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cabinaSaveActivo', token:window._token||'', row:row,
-      campos:{codigo:codigo, activo:v('activo'), categoria:v('categoria'), cantidad:v('cantidad'),
-        ubicacion:v('ubicacion'), estado:v('estado'), fechaCompra:v('fecha'), costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU')},
+      campos:{codigo:codigo, activo:v('activo'), categoria:((document.getElementById('cba-categoria')||{}).value||''), cantidad:cantTxt,
+        ubicacion:(window._cabActEdit||{}).ubicacion||'', estado:v('estado'), fechaCompra:fTxt, costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU')},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
@@ -7333,10 +7575,11 @@ function renderInventario(c){
     // Build active SKU set from catalog col J.
     // OJO: el catálogo usa 'HT-101' y el inventario 'SUNSU-HT-101' → normalizamos
     // quitando el prefijo en ambos lados para que el filtro de verdad funcione.
-    var activoCat={};
+    var activoCat={}, compraRealCat={};
+    var esAdmInv=CU&&(CU.role==='admin'||CU.role==='admin_master');
     if(Array.isArray(cat)) cat.forEach(function(it){
       var cod=(it.sku||'').toString().trim().replace(/^SUNSU-/,'');
-      if(cod) activoCat[cod]=it.activo===true;
+      if(cod){ activoCat[cod]=it.activo===true; compraRealCat[cod]=parseFloat(it.compraReal)||0; }
     });
 
     // Solo mostrar productos activos en catálogo (fuera de catálogo = mostrar)
@@ -7369,7 +7612,18 @@ function renderInventario(c){
         +'<div style="flex:1;background:#FEE2E2;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C00">'+sinStock+'</div><div style="font-size:0.6rem;color:#C00;font-weight:700">SIN STOCK</div></div>'
         +'<div style="flex:1;background:#FFF9E6;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C4943A">'+bajo+'</div><div style="font-size:0.6rem;color:#C4943A;font-weight:700">STOCK BAJO</div></div>'
         +'<div style="flex:1;background:#E8F8EE;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#2E7D52">'+ok+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">OK</div></div>'
-        +'</div>';
+        +'</div>'
+        +(esAdmInv?(function(){
+          var vT=0, sinP=0;
+          items.forEach(function(it){
+            var cr=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;
+            if(cr>0) vT+=cr*(it.stock||0); else if((it.stock||0)>0) sinP++;
+          });
+          return '<div class="card" style="padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'
+            +'<span style="font-size:0.66rem;font-weight:800;color:var(--gray)">💰 Valor del inventario (compra real, subtotal)</span>'
+            +'<span style="font-size:0.86rem;font-weight:800;color:var(--navy)">$'+vT.toFixed(2)+(sinP?' <span style="font-size:0.54rem;color:var(--gray);font-weight:700">('+sinP+' sin precio)</span>':'')+'</span>'
+            +'</div>';
+        })():'');
       Object.keys(grupos).forEach(function(gn,gi){
         var gItems=grupos[gn];
         var gid='inv-grp-'+gi;
@@ -7391,6 +7645,7 @@ function renderInventario(c){
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:left;color:var(--gray);font-weight:700">PRODUCTO</th>'
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">STOCK</th>'
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">MÍN</th>'
+          +(esAdmInv?'<th style="padding:7px 10px;font-size:0.6rem;text-align:right;color:var(--gray);font-weight:700">COMPRA REAL</th>':'')
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">ALERTA</th>'
           +'</tr></thead><tbody>';
         gItems.forEach(function(it,i){
@@ -7402,6 +7657,7 @@ function renderInventario(c){
             +'<td style="padding:7px 10px;font-size:0.7rem;color:var(--navy)">'+it.nombre+'</td>'
             +'<td style="padding:7px 10px;text-align:center;font-size:0.88rem;font-weight:900;color:'+(it.stock===0?'#C00':it.stock<=it.minimo?'#C4943A':'var(--navy)')+'">'+it.stock+'</td>'
             +'<td style="padding:7px 10px;text-align:center;font-size:0.72rem;color:var(--gray)">'+it.minimo+'</td>'
+            +(esAdmInv?(function(){var crI=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;return '<td style="padding:7px 10px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--navy)">'+(crI>0?'$'+crI.toFixed(2):'—')+'</td>';})():'')
             +'<td style="padding:7px 6px;text-align:center"><span style="font-size:0.58rem;font-weight:700;color:'+ac+';background:'+ab+';padding:2px 6px;border-radius:5px">'+ai+' '+it.alerta+'</span></td>'
             +'</tr>';
         });
