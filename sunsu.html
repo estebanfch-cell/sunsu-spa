@@ -5968,16 +5968,28 @@ function _cabPintarInventario(){
   var todos=window._cab.inv||[];
   // Si se escaneo un codigo, mostrar SOLO ese producto (chip ✕ para volver)
   if(window._cabInvScan) todos=todos.filter(function(p){return (p.barras||'')===window._cabInvScan||p.codigo===window._cabInvScan;});
+  // FAMILIAS: una presentacion (base=INV-XXX) se anida bajo su producto padre.
+  // El orden queda: padre, sus presentaciones, siguiente padre...
+  var hijosDe={};
+  todos.forEach(function(p){ if(p.base) (hijosDe[p.base]=hijosDe[p.base]||[]).push(p); });
+  var ordenados=[];
+  todos.forEach(function(p){
+    if(p.base && todos.some(function(x){return x.codigo===p.base;})) return; // se pinta bajo su padre
+    ordenados.push(p);
+    (hijosDe[p.codigo]||[]).forEach(function(h){ ordenados.push(h); });
+  });
   var activosL=[], inactivosL=[];
-  todos.forEach(function(p,i){ ((p.activo||'SI')==='NO'?inactivosL:activosL).push({p:p,i:i}); });
+  ordenados.forEach(function(p){ var i=(window._cab.inv||[]).indexOf(p); ((p.activo||'SI')==='NO'?inactivosL:activosL).push({p:p,i:i}); });
   // La tarjeta: precios SOLO para admins; tocar la tarjeta (admin) despliega el detalle
   var card=function(par){
     var p=par.p, i=par.i;
     var bajo=p.minimo>0&&(p.cerrados<=p.minimo);
     var inac=(p.activo||'SI')==='NO';
+    var esHija=!!(p.base&&(window._cab.inv||[]).some(function(x){return x.codigo===p.base;}));
+    var hijas=(window._cab.inv||[]).filter(function(x){return x.base===p.codigo&&(x.activo||'SI')!=='NO';});
     var sub=p.codigo+(esAdm&&p.proveedor&&p.proveedor!=='—'?' · '+p.proveedor:'')+' · envase '+p.contenido+p.unidad
       +(esAdm?' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')':'');
-    var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
+    var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(esHija?';margin-left:16px;border-left:3px solid var(--gold)':'')+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
       +'<div style="flex:1;min-width:0'+(esAdm?';cursor:pointer':'')+'"'+(esAdm?' onclick="_cabInvDetalle('+i+')"':'')+'>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+p.producto+(bajo&&!inac?' <span style="font-size:0.56rem;color:#E8543F;font-weight:800">⚠ BAJO</span>':'')+(inac?' <span style="font-size:0.54rem;color:var(--gray);font-weight:800">⏸ INACTIVO</span>':'')+'</div>'
@@ -5989,8 +6001,10 @@ function _cabPintarInventario(){
         ? '🏠 bodega: '+(p.bodega||0)+' cerrado'+((p.bodega||0)===1?'':'s')
         : '🏪 local: '+p.cerrados+' + abierto '+p.abierto+p.unidad+' · 🏠 bodega: '+(p.bodega||0)+' · <b>total '+p.stock+p.unidad+'</b>')
       +'</div>'
+      +(hijas.length?'<div style="font-size:0.58rem;font-weight:800;color:var(--gold);margin-top:2px">👪 Familia: '+(p.stock+hijas.reduce(function(a,x){return a+(x.stock||0);},0))+p.unidad+' en total · '+(hijas.length+1)+' presentaciones</div>':'')
       +'</div>'
       +(esAdm?'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +(!esHija?'<button onclick="_cabInvFormPresentacion('+i+')" title="Agregar presentación" style="padding:6px 9px;background:white;color:var(--gold);border:1.5px solid var(--gold);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">👪</button>':'')
         +'<button onclick="_cabBajaFormProd('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
         +'<button onclick="_cabInvActivo('+i+',this)" title="'+(inac?'Reactivar':'Desactivar')+'" style="padding:6px 9px;background:white;color:'+(inac?'#2E7D52':'var(--gray)')+';border:1.5px solid '+(inac?'#8FBF9F':'var(--cream-d)')+';border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">'+(inac?'▶':'⏸')+'</button>'
         +'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>'
@@ -6364,6 +6378,7 @@ function _cabInvDetalle(i){
     +fila('Proveedor',p.proveedor&&p.proveedor!=='—'?p.proveedor:'')
     +fila('SKU catálogo (venta)',p.skuCat||'')
     +fila('Código de barras',p.barras||'')
+    +fila('Presentación de',p.base||'')
     +fila('Envase',p.contenido+' '+p.unidad)
     +fila('Costo del envase','$'+p.costoEnvase.toFixed(2))
     +fila('Costo por '+p.unidad,'$'+p.costoUnidad.toFixed(4))
@@ -6378,9 +6393,26 @@ function _cabInvDetalle(i){
     +'</div>';
   dv.style.display='block';
 }
+// ── PRESENTACIONES ──
+// El mismo producto en otro tamano: nueva ficha AMARRADA al padre (col base).
+// Cada presentacion guarda su costo real, su codigo de barras y su stock por
+// bodega — pero la familia se ve junta y el descuento de Fase 2 vera el TOTAL
+// de ml de todas las presentaciones (no importa cual haya en stock).
+function _cabInvFormPresentacion(i){
+  var padre=(window._cab.inv||[])[i]; if(!padre) return;
+  window._cabPresBase={base:padre.codigo, producto:padre.producto, proveedor:padre.proveedor, unidad:padre.unidad, skuCat:padre.skuCat};
+  _cabInvForm(-1);
+  var pon=function(id,v){ var e=document.getElementById('cbi-'+id); if(e) e.value=v||''; };
+  pon('producto', padre.producto);
+  pon('proveedor', padre.proveedor==='—'?'':padre.proveedor);
+  pon('unidad', padre.unidad);
+  pon('skucat', padre.skuCat);
+  toast('👪 Nueva presentación de '+padre.producto+' — pon tamaño, costo y barras','var(--navy)');
+}
 function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
   window._cabFotoPend=null;
+  if(i>=0) window._cabPresBase=null;
   var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
@@ -6461,7 +6493,9 @@ function _cabInvGuardar(i,row,codigo,btn){
     body:JSON.stringify({accion:'cabinaSaveProducto', token:window._token||'', row:row,
       campos:{codigo:codigo, producto:v('producto'), proveedor:v('proveedor'), contenido:v('contenido'),
         unidad:v('unidad')||'ml', costoEnvase:v('costo'), cerrados:v('cerrados'), abierto:v('abierto'),
-        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'), activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
+        bodega:v('bodega'), minimo:v('minimo'), notas:v('notas'), skuCat:v('skucat'), barras:v('barras'),
+        base:(i>=0?(((window._cab.inv||[])[i]||{}).base||''):((window._cabPresBase||{}).base||'')),
+        activo:(i>=0?((window._cab.inv||[])[i]||{}).activo:'SI')||'SI'},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
