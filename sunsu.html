@@ -6827,14 +6827,14 @@ function _cabPintarActivos(){
   if(elBja&&elBja.style.display==='block') bajaAbierto=true;
   var actFil=(window._cab.act||[]).filter(function(a){return lugA==='todo'||((a.lugar||'SUNSU')===lugA);});
   var qAct=_normNomCli((window._cabQ||{}).act||'');
-  if(qAct) actFil=actFil.filter(function(a){return _normNomCli(a.activo+' '+a.codigo+' '+(a.categoria||'')+' '+(a.notas||'')+' '+(a.barras||'')).indexOf(qAct)>=0;});
+  if(qAct) actFil=actFil.filter(function(a){return _normNomCli(a.activo+' '+a.codigo+' '+(a.categoria||'')+' '+(a.notas||'')+' '+(a.barras||'')+' '+(a.ubicacion||'')).indexOf(qAct)>=0;});
   var actVivos=actFil.filter(function(a){return (a.estado||'')!=='DADO DE BAJA';});
   var actBajas=actFil.filter(function(a){return (a.estado||'')==='DADO DE BAJA';});
   actVivos.forEach(function(a,ix){
     var i=(window._cab.act||[]).indexOf(a);
     html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span> <span style="font-size:0.54rem;font-weight:800;color:var(--gray)">'+((a.lugar||'SUNSU')==='BODEGA'?'🏠':'🏪')+'</span></div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span> <span style="font-size:0.54rem;font-weight:800;color:var(--gray)">'+((a.lugar||'SUNSU')==='BODEGA'?'🏠':'🏪')+((a.ubicacion||'').trim()?' 📍 '+a.ubicacion:'')+'</span></div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+a.codigo+' · cant. '+(a.cantidad||'—')+(a.ubicacion?' · 📍 '+a.ubicacion:'')+(a.estado?' · '+a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+'</div>'
       +(a.notas?'<div style="font-size:0.56rem;color:var(--gray)">'+a.notas+'</div>':'')+'</div>'
       +(_cabEsAdmin()?'<div style="display:flex;gap:4px"><button onclick="_cabBajaFormAct('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
@@ -6899,6 +6899,24 @@ function _cabActForm(i){
     +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Lugar</div><select id="cba-lugar" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white"><option value="SUNSU"'+(a.lugar!=='BODEGA'?' selected':'')+'>🏪 Local Sunsu</option><option value="BODEGA"'+(a.lugar==='BODEGA'?' selected':'')+'>🏠 Bodega central</option></select></div>'
     +inp('activo','Activo *',a.activo)
+    +(function(){
+      // Cuadrantes: MISMO pool que el inventario — la bodega es una sola cuadricula.
+      // Los codigos usados en productos O activos se sugieren aqui; uno nuevo se crea escribiendolo.
+      var ubsA={};
+      (window._cab.inv||[]).forEach(function(x){ var u=(x.ubicacion||'').trim(); if(u) ubsA[u.toUpperCase()]=true; });
+      (window._cab.act||[]).forEach(function(x){ var u=(x.ubicacion||'').trim(); if(u) ubsA[u.toUpperCase()]=true; });
+      var codsA=Object.keys(ubsA).sort();
+      return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">📍 Ubicación (cuadrante)</div>'
+        +'<input id="cba-ubicacion" list="cba-ubs" value="'+String(a.ubicacion||'').replace(/"/g,'&quot;')+'" placeholder="'+(codsA.length?'Toca un código o crea uno nuevo':'Crea tu primer código: 1-A3, B4...')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;text-transform:uppercase">'
+        +'<datalist id="cba-ubs">'+codsA.map(function(u){return '<option value="'+u+'">';}).join('')+'</datalist>'
+        +(codsA.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">'
+          +codsA.map(function(u){
+            var selU=(a.ubicacion||'').toUpperCase()===u;
+            return '<span onclick="var e=document.getElementById(\'cba-ubicacion\');if(e)e.value=\''+u+'\'" style="padding:4px 10px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:1.2px solid '+(selU?'var(--navy)':'var(--cream-d)')+';background:'+(selU?'var(--navy)':'white')+';color:'+(selU?'white':'var(--navy)')+'">📍 '+u+'</span>';
+          }).join('')
+          +'</div>':'')
+        +'</div>';
+    })()
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Categoría</div><select id="cba-categoria" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;background:white">'+_cabCatOpts(a.categoria)+'</select></div>'
     +'<div style="display:flex;gap:5px;margin-bottom:6px">'
     +'<div style="flex:1"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Cantidad</div><input id="cba-cantidad" type="number" min="0" step="1" value="'+String(cantNum).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
@@ -6948,7 +6966,7 @@ function _cabActGuardar(row,codigo,btn){
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cabinaSaveActivo', token:window._token||'', row:row,
       campos:{codigo:codigo, activo:v('activo'), categoria:((document.getElementById('cba-categoria')||{}).value||''), cantidad:cantTxt,
-        ubicacion:(window._cabActEdit||{}).ubicacion||'', estado:((document.getElementById('cba-estado')||{}).value||''), fechaCompra:fTxt, costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU'), barras:v('barras')},
+        ubicacion:(((document.getElementById('cba-ubicacion')||{}).value||'')+'').trim().toUpperCase(), estado:((document.getElementById('cba-estado')||{}).value||''), fechaCompra:fTxt, costo:v('costo'), notas:v('notas'), lugar:((document.getElementById('cba-lugar')||{}).value||'SUNSU'), barras:v('barras')},
       usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
