@@ -6461,8 +6461,17 @@ function _cabInvDetalle(i){
 // de ml de todas las presentaciones (no importa cual haya en stock).
 function _cabInvFormPresentacion(i){
   var padre=(window._cab.inv||[])[i]; if(!padre) return;
-  window._cabPresBase={base:padre.codigo, producto:padre.producto, proveedor:padre.proveedor, unidad:padre.unidad, skuCat:padre.skuCat};
-  _cabInvForm(-1);
+  _cabInvForm(-1); // abrir primero (esto limpia estado viejo)...
+  window._cabPresBase={base:padre.codigo, producto:padre.producto, proveedor:padre.proveedor, unidad:padre.unidad, skuCat:padre.skuCat}; // ...y recien marcar la familia
+  // Letrero visible: que siempre se sepa que este form es una PRESENTACION
+  var fBn=document.getElementById('cab-inv-form');
+  var cardBn=fBn&&fBn.firstElementChild;
+  if(cardBn){
+    var bn=document.createElement('div');
+    bn.style.cssText='background:#FBF7EC;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:0.62rem;font-weight:800;color:#9A7B1E';
+    bn.textContent='👪 Nueva presentación de: '+padre.producto+' ('+padre.codigo+')';
+    cardBn.insertBefore(bn, cardBn.firstChild);
+  }
   var pon=function(id,v){ var e=document.getElementById('cbi-'+id); if(e) e.value=v||''; };
   pon('producto', padre.producto);
   pon('proveedor', padre.proveedor==='—'?'':padre.proveedor);
@@ -6481,7 +6490,11 @@ function _cabInvForm(i){
   var f=document.getElementById('cab-inv-form'); if(!f) return;
   window._cabFotoPend=null;
   window._cabQuitarBase=null;
-  if(i>=0) window._cabPresBase=null;
+  // FIX: la marca de familia se limpia SIEMPRE al abrir un form. Antes solo se
+  // limpiaba al editar, asi que '+ Nuevo producto' despues de crear una
+  // presentacion heredaba la familia anterior sin querer. La presentacion la
+  // vuelve a poner DESPUES de abrir (ver _cabInvFormPresentacion).
+  window._cabPresBase=null;
   var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:1,notas:'',skuCat:'',barras:'',ubicacion:'',activo:'SI',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
