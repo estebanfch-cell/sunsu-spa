@@ -6322,7 +6322,10 @@ function _cabTrasPintar(){
       +'</div>';
   });
   h+='</div>'
-    +'<input id="cab-tras-q" oninput="_cabTrasBuscar()" placeholder="🔍 Agregar producto..." style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:3px">'
+    +'<div style="display:flex;gap:6px;margin-bottom:3px">'
+    +'<input id="cab-tras-q" oninput="_cabTrasBuscar()" placeholder="🔍 Agregar producto..." style="flex:1;min-width:0;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box">'
+    +'<button onclick="_cabTrasScan()" style="padding:9px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">📷</button>'
+    +'</div>'
     +'<div id="cab-tras-res"></div>'
     +'<div style="display:flex;gap:6px;margin-top:7px">'
     +'<button onclick="_cabTrasEjecutar(this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">🚚 Ejecutar traspaso</button>'
@@ -6352,10 +6355,32 @@ function _cabTrasBuscar(){
       +'<span style="font-size:0.56rem;color:var(--gray)">'+p.codigo+' · '+disp+' en origen</span></div>';
   }).join('')||'<div style="font-size:0.6rem;color:var(--gray);padding:4px">Nada con stock en el origen</div>';
 }
+// Escanear al traspaso: apuntas a la botella y entra a la orden. Escanear el
+// MISMO producto otra vez suma +1 envase — vas caja por caja, sin teclear.
+function _cabTrasScan(){
+  _scanAbrir(function(txt){
+    var hit=(window._cab.inv||[]).find(function(p){return (p.barras||'')===txt&&(p.activo||'SI')!=='NO';});
+    if(!hit){ toast('📷 '+txt+' — ningún producto tiene este código','#C9A227'); return; }
+    var de=window._cabTrasDe;
+    var disp=de==='bodega'?(hit.bodega||0):hit.cerrados;
+    if(disp<=0){ toast('⚠️ '+hit.producto+': sin stock en '+(de==='bodega'?'bodega':'el local'),'#C9A227'); return; }
+    _cabTrasAgregar(hit.codigo);
+  });
+}
 function _cabTrasAgregar(cod){
   var p=_cabProdDe(cod); if(!p) return;
-  if((window._cabTrasItems||[]).some(function(x){return x.codigo===cod;})){ toast('⚠️ Ya está en el traspaso','#C9A227'); return; }
+  var yaT=(window._cabTrasItems||[]).find(function(x){return x.codigo===cod;});
+  if(yaT){
+    var deT=window._cabTrasDe;
+    var dispT=deT==='bodega'?(p.bodega||0):p.cerrados;
+    if(yaT.envases+1>dispT){ toast('⚠️ Solo hay '+dispT+' en el origen','#C9A227'); return; }
+    yaT.envases+=1;
+    toast('📦 '+p.producto+' ×'+yaT.envases,'var(--green)');
+    _cabTrasPintar();
+    return;
+  }
   window._cabTrasItems.push({codigo:cod, producto:p.producto, envases:1});
+  toast('📦 '+p.producto+' agregado','var(--green)');
   _cabTrasPintar();
 }
 function _cabTrasEjecutar(btn){
