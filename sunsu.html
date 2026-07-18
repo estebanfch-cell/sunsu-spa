@@ -3437,7 +3437,7 @@ function resultadoSeguimiento(tkRow, cedula, nombre, apellido, tipo){
       pintarSeguimiento();
       if(d.estado==='nd') toast('🔕 No se volverá a contactar','var(--gray)');
       else if(d.estado==='sr') toast('📵 3 intentos sin respuesta — archivada','#B86B6B');
-      else toast('📵 Intento '+d.intentos+' de 3 — reaparecerá en 7 días','var(--gold)');
+      else toast('📵 Intento '+d.intentos+' de 3 — reaparecerá en 15 días','var(--gold)');
     } else {
       toast('❌ '+(d.error||'Error'),'#B86B6B');
     }
@@ -3708,7 +3708,12 @@ function _buildTicketCard(t, showPrices){
   var notasBlock='';
   if(t.recomendaciones) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f4"><span style="font-weight:700;color:var(--navy)">📝 Recom:</span> '+t.recomendaciones+'</div>';
   if(t.notas) notasBlock+='<div style="font-size:0.7rem;color:var(--gray);margin-top:3px"><span style="font-weight:700;color:var(--navy)">🗒 Notas:</span> '+t.notas+'</div>';
-  if(t.comprobante) notasBlock+='<div style="font-size:0.7rem;margin-top:5px"><a href="'+t.comprobante+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">📎 Ver comprobante de transferencia</a></div>';
+  if(t.comprobante){
+    var urlsCmp=String(t.comprobante).split(' | ').filter(function(u){return u.trim();});
+    notasBlock+='<div style="font-size:0.7rem;margin-top:5px">'+urlsCmp.map(function(u,i){
+      return '<a href="'+u.trim()+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none;margin-right:10px">📎 Comprobante'+(urlsCmp.length>1?' '+(i+1):' de transferencia')+'</a>';
+    }).join('')+'</div>';
+  }
   var _fotosFila=function(fotosStr, etiqueta){
     if(!fotosStr) return '';
     return '<div style="margin-top:6px">'
@@ -5895,14 +5900,75 @@ function _cabProCuerpo(i,editando){
   window._cabEdIdx=i;
   _cabProFormPintar();
 }
+// COPIAR PROTOCOLO: la base se escribe UNA vez; los demas faciales la clonan y
+// solo se les cambian los productos. La copia cae en el editor del protocolo
+// destino y se guarda como SU siguiente version — nada se pierde ni se duplica.
+function _cabProCopiarMenu(i){
+  var c=document.getElementById('cab-procopy-'+i); if(!c) return;
+  if(c.innerHTML){ c.innerHTML=''; return; }
+  var actual=(window._cab.proView||[])[i];
+  var otros=(window._cab.proView||[]).map(function(pr,ix){return {pr:pr, ix:ix};})
+    .filter(function(x){ return x.ix!==i && (x.pr.pasos||[]).length>0; });
+  if(!otros.length){ toast('⚠️ Ningún otro protocolo tiene pasos todavía','#C9A227'); c.innerHTML=''; return; }
+  c.innerHTML='<div class="card" style="padding:10px;margin-bottom:8px;border:1.5px solid var(--gold)">'
+    +'<div style="font-size:0.62rem;font-weight:800;color:#9A7B1E;margin-bottom:6px">¿De cuál facial copiar los pasos hacia '+(actual?actual.nombre:'')+'?</div>'
+    +otros.map(function(x){
+      return '<button onclick="_cabProCopiarDe('+i+','+x.ix+')" style="display:block;width:100%;text-align:left;background:white;border:1.2px solid var(--cream-d);border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;font-family:inherit">'
+        +'<span style="font-size:0.66rem;font-weight:800;color:var(--navy)">'+x.pr.nombre+'</span>'
+        +'<span style="font-size:0.56rem;color:var(--gray)"> · '+x.pr.sku+' · v'+x.pr.version+' · '+(x.pr.pasos||[]).length+' pasos</span>'
+        +'</button>';
+    }).join('')
+    +'</div>';
+}
+function _cabProCopiarDe(i, srcIx){
+  var src=(window._cab.proView||[])[srcIx]; if(!src) return;
+  if((window._cabEd||[]).some(function(ps){return (ps.desc||'').trim()||ps.productoCod;})){
+    if(!confirm('📋 Esto REEMPLAZA los '+window._cabEd.length+' pasos que tienes en el editor por los '+(src.pasos||[]).length+' de '+src.nombre+'. ¿Continuar?')) return;
+  }
+  // Copia profunda: cantidades, unidades, minutos y productos viajan completos;
+  // luego solo cambias los productos que difieren
+  window._cabEd=JSON.parse(JSON.stringify(src.pasos||[]));
+  var c=document.getElementById('cab-procopy-'+(window._cabEdIdx));
+  if(c) c.innerHTML='';
+  _cabProFormPintar();
+  toast('📋 '+window._cabEd.length+' pasos copiados de '+src.nombre+' — ajusta productos y guarda','var(--green)');
+}
+// Reordenar pasos SIN borrar nada: los numeros se rearman solos porque el
+// numero de paso ES su posicion en la lista.
+function _cabPasoMover(pi, dir){
+  var j=pi+dir;
+  if(j<0||j>=window._cabEd.length) return;
+  var t=window._cabEd[pi]; window._cabEd[pi]=window._cabEd[j]; window._cabEd[j]=t;
+  _cabProFormPintar();
+}
+function _cabPasoMoverA(pi){
+  var destino=prompt('↕ Mover el paso '+(pi+1)+' ¿a qué puesto? (1-'+window._cabEd.length+')');
+  if(destino===null) return;
+  var d=parseInt(destino)||0;
+  if(d<1||d>window._cabEd.length){ toast('⚠️ Puesto entre 1 y '+window._cabEd.length,'#C9A227'); return; }
+  if(d-1===pi) return;
+  var mov=window._cabEd.splice(pi,1)[0];
+  window._cabEd.splice(d-1,0,mov);
+  _cabProFormPintar();
+  toast('↕ Paso movido al puesto '+d+' — todo renumerado','var(--green)');
+}
 function _cabProFormPintar(){
   var i=window._cabEdIdx; var p=(window._cab.proView||[])[i]; var bd=document.getElementById('cab-pro-b-'+i);
   if(!p||!bd) return;
-  var h='<div style="font-size:0.66rem;font-weight:800;color:var(--navy);margin:4px 0 6px">Editando — se guardará como v'+(p.version+1)+'</div>';
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 6px;gap:6px">'
+    +'<span style="font-size:0.66rem;font-weight:800;color:var(--navy)">Editando — se guardará como v'+(p.version+1)+'</span>'
+    +'<button onclick="_cabProCopiarMenu('+i+')" style="background:white;border:1.5px solid var(--gold);color:#9A7B1E;border-radius:8px;padding:5px 10px;font-size:0.6rem;font-weight:800;cursor:pointer;white-space:nowrap">📋 Copiar de otro facial</button>'
+    +'</div>'
+    +'<div id="cab-procopy-'+i+'"></div>';
   window._cabEd.forEach(function(ps,pi){
     h+='<div class="card" style="padding:9px;margin-bottom:6px;background:var(--gray-ll,#F7F8FA)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><b style="font-size:0.62rem;color:var(--navy)">Paso '+(pi+1)+'</b>'
-      +'<button onclick="_cabEd.splice('+pi+',1);_cabProFormPintar()" style="background:none;border:none;color:#B86B6B;font-size:0.7rem;font-weight:800;cursor:pointer">🗑</button></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+      +'<button onclick="_cabPasoMoverA('+pi+')" title="Tocar para mover a otro puesto" style="background:var(--blue-l);border:1.2px solid var(--navy);border-radius:7px;padding:3px 10px;font-size:0.62rem;font-weight:800;color:var(--navy);cursor:pointer;font-family:inherit">↕ Paso '+(pi+1)+'</button>'
+      +'<span style="display:flex;gap:3px;align-items:center">'
+      +(pi>0?'<button onclick="_cabPasoMover('+pi+',-1)" title="Subir un puesto" style="background:white;border:1.2px solid var(--cream-d);border-radius:7px;padding:3px 9px;font-size:0.66rem;font-weight:800;color:var(--navy);cursor:pointer">⬆</button>':'')
+      +(pi<window._cabEd.length-1?'<button onclick="_cabPasoMover('+pi+',1)" title="Bajar un puesto" style="background:white;border:1.2px solid var(--cream-d);border-radius:7px;padding:3px 9px;font-size:0.66rem;font-weight:800;color:var(--navy);cursor:pointer">⬇</button>':'')
+      +'<button onclick="_cabEd.splice('+pi+',1);_cabProFormPintar()" style="background:none;border:none;color:#B86B6B;font-size:0.7rem;font-weight:800;cursor:pointer;padding:3px 4px">🗑</button>'
+      +'</span></div>'
       +'<select onchange="if(this.value&&this.value!==\'__c\'){_cabEd['+pi+'].desc=this.value;document.getElementById(\'cab-pd-'+pi+'\').value=this.value;}else if(this.value===\'__c\'){document.getElementById(\'cab-pd-'+pi+'\').focus();}this.selectedIndex=0;" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.66rem;font-family:inherit;outline:none;background:white;box-sizing:border-box;margin-bottom:5px">'+_cabAccionesOpts()+'</select>'
       +'<input id="cab-pd-'+pi+'" value="'+String(ps.desc||'').replace(/"/g,'&quot;')+'" oninput="_cabEd['+pi+'].desc=this.value" placeholder="Descripción del paso (o elige arriba)" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
       +'<div id="cab-pchip-'+pi+'" style="margin-bottom:5px">'+_cabChipProd(pi,ps.productoCod)+'</div>'
@@ -10522,12 +10588,9 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
     if(t==='Trans') html+='<div id="cobfoto-'+fila+'" style="display:none;margin-top:6px">'
       +'<div style="display:flex;gap:6px">'
       +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">📷 Tomar foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
-      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">🖼️ Galería<input type="file" accept="image/*" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
+      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
       +'</div>'
-      +'<div id="cobfoto-prev-'+fila+'" style="display:none;margin-top:6px;position:relative">'
-      +'<img id="cobfoto-img-'+fila+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:9px;border:1.5px solid #E5E7EF">'
-      +'<button onclick="quitarComprobante(\''+fila+'\')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:99px;width:26px;height:26px;font-size:0.8rem;cursor:pointer;line-height:1">✕</button>'
-      +'</div></div>';
+      +'<div id="cobfoto-prev-'+fila+'" style="display:none;margin-top:6px"></div></div>';
     html+='</div>';
   });
   html+='<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:red;margin-bottom:8px;display:none">Selecciona al menos un método</div>'
@@ -10653,8 +10716,28 @@ function _fotosCliRender(){
   });
 }
 
+// Hasta 4 comprobantes por cobro: la galeria permite elegir varios de una y
+// tambien se pueden agregar de a uno (camara). El limite frena con aviso.
+function _compRender(fila){
+  var prev=document.getElementById('cobfoto-prev-'+fila); if(!prev) return;
+  var lista=_compFotos[fila]||[];
+  if(!lista.length){ prev.style.display='none'; prev.innerHTML=''; return; }
+  prev.style.display='block';
+  prev.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +lista.map(function(d,i){
+      return '<div style="position:relative"><img src="'+d+'" style="width:72px;height:72px;object-fit:cover;border-radius:9px;border:1.5px solid #E5E7EF">'
+        +'<button onclick="_compFotos[\''+fila+'\'].splice('+i+',1);_compRender(\''+fila+'\')" style="position:absolute;top:-6px;right:-6px;background:#B86B6B;color:white;border:none;border-radius:99px;width:20px;height:20px;font-size:0.7rem;cursor:pointer;line-height:1">✕</button></div>';
+    }).join('')
+    +'</div><div style="font-size:0.56rem;color:var(--gray);margin-top:3px">'+lista.length+' de 4 comprobantes</div>';
+}
 function cargarComprobante(input,fila){
-  var f=input.files&&input.files[0]; if(!f) return;
+  var fs=Array.prototype.slice.call(input.files||[]); if(!fs.length) return;
+  _compFotos[fila]=_compFotos[fila]||[];
+  var cupo=4-_compFotos[fila].length;
+  if(cupo<=0){ toast('⚠️ Máximo 4 comprobantes','#C9A227'); input.value=''; return; }
+  if(fs.length>cupo){ toast('⚠️ Solo caben '+cupo+' más (máx 4)','#C9A227'); fs=fs.slice(0,cupo); }
+  var pend=fs.length;
+  fs.forEach(function(f){
   var rd=new FileReader();
   rd.onload=function(){
     var img=new Image();
@@ -10664,22 +10747,20 @@ function cargarComprobante(input,fila){
       if(w>MAX||h>MAX){var esc=Math.min(MAX/w,MAX/h);w=Math.round(w*esc);h=Math.round(h*esc);}
       var cv=document.createElement('canvas');cv.width=w;cv.height=h;
       cv.getContext('2d').drawImage(img,0,0,w,h);
-      _compFotos[fila]=cv.toDataURL('image/jpeg',0.8);
-      var prev=document.getElementById('cobfoto-prev-'+fila), im=document.getElementById('cobfoto-img-'+fila);
-      if(im)im.src=_compFotos[fila];
-      if(prev)prev.style.display='block';
-      toast('📎 Comprobante adjuntado','var(--green)');
+      _compFotos[fila].push(cv.toDataURL('image/jpeg',0.8));
+      pend--;
+      if(pend<=0){ _compRender(fila); toast('📎 '+_compFotos[fila].length+' de 4 comprobantes','var(--green)'); }
     };
     img.onerror=function(){toast('❌ No se pudo leer la imagen','#B86B6B');};
     img.src=rd.result;
   };
   rd.readAsDataURL(f);
+  });
   input.value='';
 }
 function quitarComprobante(fila){
   delete _compFotos[fila];
-  var prev=document.getElementById('cobfoto-prev-'+fila);
-  if(prev)prev.style.display='none';
+  _compRender(fila);
 }
 
 function guardarUnificado(fila,sinFac,soloCobro){
@@ -10701,21 +10782,28 @@ function guardarUnificado(fila,sinFac,soloCobro){
   var compStr=seleccionados.map(function(tipo){var det=document.getElementById('cobdet-'+fila+'-'+tipo);var val=det?det.value.trim():'';return val?tipo+':'+val:tipo;}).join(', ');
   cerrarModal('modal-uni-'+fila);
   // Si hay foto de comprobante (transferencia), subirla primero a Drive
-  var _fotoComp=(seleccionados.indexOf('Trans')>=0)?(_compFotos[fila]||null):null;
-  var _subida=Promise.resolve('');
-  if(_fotoComp){
-    toast('⏳ Subiendo comprobante...','var(--navy)');
-    _subida=fetch(APPS_SCRIPT_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({accion:'subirComprobante', imagen:_fotoComp, nombre:'ticket fila '+fila, usuario:CU?CU.name:'—'})
-    })
-    .then(function(r){return r.json();})
-    .then(function(d){return (d&&d.url)||'';})
-    .catch(function(){return '';});
+  var _fotosComp=(seleccionados.indexOf('Trans')>=0)?((_compFotos[fila]||[]).slice()):[];
+  var _subida=Promise.resolve([]);
+  if(_fotosComp.length){
+    toast('⏳ Subiendo '+_fotosComp.length+' comprobante'+(_fotosComp.length===1?'':'s')+'...','var(--navy)');
+    // Una tras otra (las 4 seguidas), juntando las URLs que devuelva Drive
+    _subida=_fotosComp.reduce(function(prom,foto,ix){
+      return prom.then(function(urls){
+        return fetch(APPS_SCRIPT_URL,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain'},
+          body:JSON.stringify({accion:'subirComprobante', imagen:foto, nombre:'ticket fila '+fila+' ('+(ix+1)+')', usuario:CU?CU.name:'—'})
+        })
+        .then(function(r){return r.json();})
+        .then(function(d){ if(d&&d.url) urls.push(d.url); return urls; })
+        .catch(function(){ return urls; });
+      });
+    }, Promise.resolve([]));
   }
-  _subida.then(function(urlComp){
-    if(_fotoComp&&!urlComp) toast('⚠️ No se pudo subir la foto — el cobro se registra sin comprobante','#C9A227');
+  _subida.then(function(urlsComp){
+    var urlComp=(urlsComp||[]).join(' | ');
+    if(_fotosComp.length&&!urlsComp.length) toast('⚠️ No se pudieron subir las fotos — el cobro se registra sin comprobante','#C9A227');
+    else if(_fotosComp.length&&urlsComp.length<_fotosComp.length) toast('⚠️ Subieron '+urlsComp.length+' de '+_fotosComp.length,'#C9A227');
     fetch(APPS_SCRIPT_URL+'?action=registrarFacturaCobro&fila='+encodeURIComponent(fila)+(numFac?'&numFac='+encodeURIComponent(numFac):'')+'&comp='+encodeURIComponent(compStr)+'&soloCobro='+(soloCobro?'1':'0')+(urlComp?'&comprobanteUrl='+encodeURIComponent(urlComp):''))
       .then(function(r){return r.text();})
       .then(function(txt){
