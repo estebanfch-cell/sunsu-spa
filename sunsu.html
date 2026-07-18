@@ -3460,6 +3460,7 @@ function renderRecepcion(c){
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📅 Control de Agenda</div>'
         +'<button onclick="renderRecepcion(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'<button onclick="_propPanel()" style="background:white;color:#B0578D;border:1.5px solid #B0578D;padding:8px 12px;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer;margin-left:6px">💝 Propinas</button>'
         +'</div>'
         +'<div style="font-size:0.65rem;color:var(--gray);margin-bottom:11px">📅 '+(d.periodoLabel||'Período actual')+'</div>'
         // Resumen
@@ -11636,6 +11637,89 @@ function renderCajaChica(c,fresh){
   })
   .catch(function(){ if(!cachedCj) c.innerHTML='<div class="card" style="color:#B86B6B">❌ No se pudo cargar la caja</div>'; });
 }
+// ── PROPINAS: registro en custodia ──
+// Regla de oro: la propina NUNCA va al ticket (no es venta, descuadra la factura).
+// Efectivo → entra a caja con nombre; tarjeta/transferencia → solo registro;
+// el pago a la chica sale de caja y marca todo como PAGADA.
+function _propPanel(){
+  var p=document.getElementById('prop-panel'); if(!p) return;
+  if(p.innerHTML){ p.innerHTML=''; return; }
+  p.innerHTML='<div class="card" style="padding:12px;margin-bottom:10px;border:1.5px solid #B0578D"><div class="loading"><div class="spinner"></div>Cargando propinas...</div></div>';
+  fetch(APPS_SCRIPT_URL+'?action=getPropinas&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){ _propPintar(d); })
+  .catch(function(){ p.innerHTML=''; toast('❌ Sin conexión','#B86B6B'); });
+}
+function _propPintar(d){
+  var p=document.getElementById('prop-panel'); if(!p) return;
+  var esAdm=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var staff=(d.staff||[]);
+  var h='<div class="card" style="padding:12px;margin-bottom:10px;border:1.5px solid #B0578D">'
+    +'<div style="font-size:0.72rem;font-weight:800;color:#B0578D;margin-bottom:6px">💝 Propinas</div>'
+    +'<div style="font-size:0.56rem;color:var(--gray);margin-bottom:8px">La propina no va al ticket. En <b>efectivo</b>: entra a caja aquí mismo (así el billete cuadra). En <b>tarjeta/transferencia</b>: solo se registra la deuda. Al pagarla, sale de caja.</div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:5px;align-items:flex-end;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:110px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Para quién</div><select id="prop-cos" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;background:white;box-sizing:border-box">'
+    +staff.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join('')+'</select></div>'
+    +'<div style="width:82px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Monto $</div><input id="prop-monto" type="number" step="0.01" min="0" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+    +'<div style="width:118px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Llegó por</div><select id="prop-via" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;background:white;box-sizing:border-box"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select></div>'
+    +'</div>'
+    +'<input id="prop-nota" placeholder="Nota (opcional): clienta, ticket..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.68rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
+    +'<button onclick="_propGuardar(this)" style="width:100%;padding:10px;background:#B0578D;color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">💝 Registrar propina</button>';
+  if((d.pendientes||[]).length){
+    h+='<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin:10px 0 4px">POR PAGAR</div>';
+    d.pendientes.forEach(function(x){
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
+        +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">'+x.cos+'</span>'
+        +'<span style="display:flex;gap:6px;align-items:center"><span style="font-size:0.74rem;font-weight:800;color:#B0578D">$'+x.total.toFixed(2)+'</span>'
+        +(esAdm?'<button onclick="_propPagar(\''+String(x.cos).replace(/'/g,'')+'\',this)" style="background:white;color:#2E7D52;border:1.5px solid #2E7D52;border-radius:8px;padding:5px 10px;font-size:0.6rem;font-weight:800;cursor:pointer">💸 Pagar de caja</button>':'')
+        +'</span></div>';
+    });
+  } else {
+    h+='<div style="font-size:0.6rem;color:var(--gray);margin-top:8px">✓ No hay propinas pendientes de pago</div>';
+  }
+  if((d.ultimas||[]).length){
+    h+='<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin:10px 0 4px">ÚLTIMAS</div>'
+      +d.ultimas.slice(0,8).map(function(u){
+        return '<div style="font-size:0.6rem;color:var(--gray);padding:2px 0">'+u.fecha.split(' ')[0]+' · <b style="color:var(--navy)">'+u.cos+'</b> · $'+u.monto.toFixed(2)+' · '+u.via+' · '+(u.estado==='PAGADA'?'<span style="color:#2E7D52">✓ pagada</span>':'<span style="color:#B0578D">pendiente</span>')+'</div>';
+      }).join('');
+  }
+  h+='</div>';
+  p.innerHTML=h;
+}
+function _propGuardar(btn){
+  var cos=(document.getElementById('prop-cos')||{}).value||'';
+  var monto=parseFloat((document.getElementById('prop-monto')||{}).value)||0;
+  var via=(document.getElementById('prop-via')||{}).value||'Efectivo';
+  var nota=(document.getElementById('prop-nota')||{}).value||'';
+  if(!cos||monto<=0){ toast('⚠️ Elige la cosmetologa y el monto','#C9A227'); return; }
+  btn.disabled=true; btn.textContent='⏳ Guardando...';
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'propinaRegistrar', cosmetologa:cos, monto:monto, via:via, nota:nota, usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(dd){
+    if(!dd.ok){ btn.disabled=false; btn.textContent='💝 Registrar propina'; toast('❌ '+(dd.error||'Error'),'#B86B6B'); return; }
+    toast('💝 $'+monto.toFixed(2)+' para '+cos+(via==='Efectivo'?' — entro a caja':' — registrada'),'var(--green)');
+    document.getElementById('prop-panel').innerHTML='';
+    renderCajaChica(document.getElementById('content'),true);
+    setTimeout(_propPanel,600);
+  })
+  .catch(function(){ btn.disabled=false; btn.textContent='💝 Registrar propina'; toast('❌ Sin conexión','#B86B6B'); });
+}
+function _propPagar(cos,btn){
+  if(!confirm('💸 ¿Pagar de caja TODAS las propinas pendientes de '+cos+'? Saldra el efectivo de caja chica.')) return;
+  btn.disabled=true;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'propinaPagar', cosmetologa:cos, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(dd){
+    if(!dd.ok){ btn.disabled=false; toast('❌ '+(dd.error||'Error'),'#B86B6B'); return; }
+    toast('💸 Pagado $'+dd.pagado.toFixed(2)+' a '+cos+' — saldo caja $'+dd.saldo.toFixed(2),'var(--green)');
+    document.getElementById('prop-panel').innerHTML='';
+    renderCajaChica(document.getElementById('content'),true);
+    setTimeout(_propPanel,600);
+  })
+  .catch(function(){ btn.disabled=false; toast('❌ Sin conexión','#B86B6B'); });
+}
 function _pintarCajaV2(c){
   var d=window._cajaV2||{};
   var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
@@ -11653,6 +11737,7 @@ function _pintarCajaV2(c){
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">💵 Caja Chica</div>'
     +'<button onclick="renderCajaChica(document.getElementById(\'content\'),true)" style="background:var(--navy);color:white;border:none;padding:8px 14px;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">🔄 Actualizar</button>'
     +'</div>'
+    +'<div id="prop-panel"></div>'
     +'<div class="card" style="padding:16px;text-align:center;margin-bottom:10px">'
     +'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);letter-spacing:0.06em">SALDO ACTUAL</div>'
     +'<div style="font-size:1.7rem;font-weight:800;color:var(--navy)">$'+(d.saldo||0).toFixed(2)+'</div>'
