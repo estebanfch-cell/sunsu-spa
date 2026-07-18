@@ -4192,7 +4192,8 @@ function renderInicio(c){
       var pct=pagosTot>0?Math.round(val/pagosTot*100):0;
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
         +'<span style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+icono+' '+label+'</span>'
-        +'<span style="font-size:0.72rem;font-weight:800;color:var(--navy)">$'+val.toFixed(2)+' <span style="color:var(--gray);font-weight:700;font-size:0.58rem">('+pct+'%)</span></span>'
+        +'<span style="text-align:right"><span style="font-size:0.72rem;font-weight:800;color:var(--navy)">$'+sub(val).toFixed(2)+'</span>'
+        +'<span style="color:var(--gray);font-weight:700;font-size:0.56rem"> · c/IVA $'+val.toFixed(2)+' ('+pct+'%)</span></span>'
         +'</div>';
     };
     var chips=function(lista){
@@ -4234,6 +4235,7 @@ function renderInicio(c){
       +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0)
       +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes)
       +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN)
+      +kpi('🎁','Gift Cards hoy',d.gcHoy||0)
       +'</div>'
       // 2 rectangulos: citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
@@ -4250,24 +4252,28 @@ function renderInicio(c){
         +pagoFila('💰','Otros',pg.otros||0)
         +'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 0;border-top:1.2px solid var(--cream-d);margin-top:4px">'
         +'<span style="font-size:0.68rem;font-weight:800;color:var(--navy)">TOTAL</span>'
-        +'<span style="font-size:0.74rem;font-weight:800;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">$'+pagosTot.toFixed(2)+' '+(cuadra?'✓ cuadra con la venta':'⚠ no cuadra ($'+(hoy.venta||0).toFixed(2)+')')+'</span>'
+        +'<span style="text-align:right"><span style="font-size:0.74rem;font-weight:800;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">$'+sub(pagosTot).toFixed(2)+'</span> <span style="font-size:0.56rem;font-weight:700;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">c/IVA $'+pagosTot.toFixed(2)+' '+(cuadra?'✓ cuadra':'⚠ no cuadra con $'+(hoy.venta||0).toFixed(2))+'</span></span>'
         +'</div>'
         +'</div>':'')
       +((hoy.topFac||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
         +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">💆‍♀️ FACIALES DE HOY</div>'+chips(hoy.topFac)+'</div>':'')
-      +((hoy.topProd||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
-        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">🧴 PRODUCTOS DE HOY</div>'+chips(hoy.topProd)+'</div>':'')
+      +((d.gcChips||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">🎁 GIFT CARDS DE HOY</div>'+chips(d.gcChips)+'</div>':'')
+      +'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">🧴 PRODUCTOS VENDIDOS HOY</div>'
+        +((hoy.topProd||[]).length?chips(hoy.topProd):'<div style="font-size:0.62rem;color:var(--gray)">— ninguno hoy —</div>')
+        +'</div>'
       +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
       +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA · subtotal</span>'
-      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(sem.total).toFixed(2)+'</span>'
+      +'<span style="text-align:right"><span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(sem.total).toFixed(2)+'</span> <span style="font-size:0.56rem;font-weight:700;color:var(--gray)">c/IVA $'+(sem.total||0).toFixed(2)+'</span></span>'
       +'</div>'
       +'<div style="display:flex;align-items:flex-end;gap:2px;height:92px">'+barras+'</div>'
       +'</div>'
       +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
       +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">🗓 EL MES ('+(mes.nombre||'')+') · subtotal</span>'
-      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(mes.total).toFixed(2)+'</span>'
+      +'<span style="text-align:right"><span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(mes.total).toFixed(2)+'</span> <span style="font-size:0.56rem;font-weight:700;color:var(--gray)">c/IVA $'+(mes.total||0).toFixed(2)+'</span></span>'
       +'</div>'
       +filasMes
       +'</div>'
