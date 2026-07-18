@@ -3702,7 +3702,16 @@ function _buildTicketCard(t, showPrices){
     +(showPrices
       ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
       :'')
-    +(t.tkRow?'<button onclick="tarjetaTicket('+t.tkRow+')" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.63rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>':'')
+    +(t.tkRow?(function(){
+        var sinFH=(window._tarjSinFotos||{})[t.tkRow];
+        var todasFH=(window._tarjFotosTodas||{})[t.tkRow];
+        var lblH=sinFH?'🚫 Sin fotos':(todasFH?'📷 Todas':'📷 1 foto');
+        var bgH=sinFH?'#E8543F':(todasFH?'#C9A227':'white');
+        var fgH=(sinFH||todasFH)?'white':'var(--navy)';
+        var bdH=sinFH?'#E8543F':(todasFH?'#C9A227':'var(--cream-d)');
+        return '<button id="foto-tgl-'+t.tkRow+'" onclick="toggleFotosTarjeta('+t.tkRow+')" title="Toca para alternar: 1 foto → todas → sin fotos" style="padding:5px 10px;background:'+bgH+';color:'+fgH+';border:1.5px solid '+bdH+';border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;white-space:nowrap;margin-right:4px">'+lblH+'</button>'
+          +'<button onclick="tarjetaTicket('+t.tkRow+')" style="padding:5px 11px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.63rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>';
+      })():'')
     +'</div>'
     +'</div>';
   if(breakdown) card+='<div style="border-top:1px solid #f0f0f4;padding-top:8px">'+breakdown+'</div>';
@@ -9095,7 +9104,12 @@ function _pintarTarjetasPend(){
       +'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
       +(function(){
         var sinF=(window._tarjSinFotos||{})[t.tkRow];
-        return '<button id="foto-tgl-'+t.tkRow+'" onclick="toggleFotosTarjeta('+t.tkRow+')" title="Incluir o excluir las fotos del PDF" style="padding:9px 11px;background:'+(sinF?'#E8543F':'white')+';color:'+(sinF?'white':'var(--navy)')+';border:1.5px solid '+(sinF?'#E8543F':'var(--cream-d)')+';border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">'+(sinF?'🚫 Sin fotos':'📷 Fotos')+'</button>';
+        var todasF=(window._tarjFotosTodas||{})[t.tkRow];
+        var lbl=sinF?'🚫 Sin fotos':(todasF?'📷 Todas las fotos':'📷 1 foto');
+        var bg=sinF?'#E8543F':(todasF?'#C9A227':'white');
+        var fg=(sinF||todasF)?'white':'var(--navy)';
+        var bd=sinF?'#E8543F':(todasF?'#C9A227':'var(--cream-d)');
+        return '<button id="foto-tgl-'+t.tkRow+'" onclick="toggleFotosTarjeta('+t.tkRow+')" title="Toca para alternar: 1 foto → todas → sin fotos" style="padding:9px 11px;background:'+bg+';color:'+fg+';border:1.5px solid '+bd+';border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">'+lbl+'</button>';
       })()
       +'<button onclick="previewTarjetaTicket('+t.tkRow+')" style="flex:1;min-width:100px;padding:9px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📄 Tarjeta</button>'
       +(paqAct?'<button onclick="previewPaqDeCed(\''+ced+'\')" style="flex:1;min-width:100px;padding:9px;background:#B08968;color:white;border:none;border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">🎴 Paquete</button>':'')
@@ -9300,17 +9314,22 @@ function _pintarEnvios(){
       +'</div>';
   }).join('');
 }
-// Alternar la inclusión de fotos en el PDF de un ticket (default: CON fotos)
+// Fotos del PDF por tarjeta, en ciclo: 1 foto (default, respira mejor) →
+// todas (hasta 3 por lado, para cuando el caso lo amerita) → sin fotos → ...
 function toggleFotosTarjeta(tkRow){
   window._tarjSinFotos=window._tarjSinFotos||{};
-  window._tarjSinFotos[tkRow]=!window._tarjSinFotos[tkRow];
-  var sinF=window._tarjSinFotos[tkRow];
+  window._tarjFotosTodas=window._tarjFotosTodas||{};
+  var sinF=window._tarjSinFotos[tkRow], todasF=window._tarjFotosTodas[tkRow];
+  if(!sinF&&!todasF){ window._tarjFotosTodas[tkRow]=true; }            // 1 → todas
+  else if(todasF){ window._tarjFotosTodas[tkRow]=false; window._tarjSinFotos[tkRow]=true; } // todas → sin
+  else { window._tarjSinFotos[tkRow]=false; }                          // sin → 1
+  sinF=window._tarjSinFotos[tkRow]; todasF=window._tarjFotosTodas[tkRow];
   var b=document.getElementById('foto-tgl-'+tkRow);
   if(b){
-    b.textContent=sinF?'🚫 Sin fotos':'📷 Fotos';
-    b.style.background=sinF?'#E8543F':'white';
-    b.style.color=sinF?'white':'var(--navy)';
-    b.style.borderColor=sinF?'#E8543F':'var(--cream-d)';
+    b.textContent=sinF?'🚫 Sin fotos':(todasF?'📷 Todas las fotos':'📷 1 foto');
+    b.style.background=sinF?'#E8543F':(todasF?'#C9A227':'white');
+    b.style.color=(sinF||todasF)?'white':'var(--navy)';
+    b.style.borderColor=sinF?'#E8543F':(todasF?'#C9A227':'var(--cream-d)');
   }
   delete (window._waEstado||{})['k'+tkRow]; // invalidar PDFs pre-generados con la otra opción
   var b2=document.getElementById('wa-btn-'+tkRow);
@@ -9476,8 +9495,10 @@ function tarjetaTicket(tkRow, cbTk){
   toast(sinFotos?'⏳ Generando tarjeta (sin fotos)...':'⏳ Generando tarjeta (cargando fotos)...','var(--blue)');
   // Extraer TODOS los IDs de Drive del texto de la celda (a prueba de cualquier separador)
   var idsDe=function(s){ return ((s||'').toString().match(/[-\w]{25,}/g)||[]).slice(0,3); };
-  var urlsA=sinFotos?[]:idsDe(t.fotosAntes);
-  var urlsD=sinFotos?[]:idsDe(t.fotosDespues);
+  // Default: UNA pareja antes/despues (respira mejor en la hoja). 'Todas' es opcional.
+  var maxFT=((window._tarjFotosTodas||{})[tkRow])?3:1;
+  var urlsA=sinFotos?[]:idsDe(t.fotosAntes).slice(0,maxFT);
+  var urlsD=sinFotos?[]:idsDe(t.fotosDespues).slice(0,maxFT);
   Promise.all([
     new Promise(function(res){var i=new Image();i.crossOrigin='anonymous';i.onload=function(){res(i);};i.onerror=function(){res(null);};i.src=GCD_PAG3_URL;}),
     Promise.all(urlsA.map(_cargarFotoTk)),
@@ -9594,6 +9615,14 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
         doc.text(lN,xI+8,y); y+=lN.length*11+6;
       }
     }
+    // ── EL PIE SE MIDE PRIMERO ── (tira real de iconos + textos + caja de retorno).
+    // Todo lo demas se ajusta al espacio que queda; si ni con fotos al minimo
+    // cabe, LOS ICONOS SE ACHICAN SOLOS. Encimarse: prohibido por construccion.
+    var strip=_stripAgendaSunsu();
+    var dwS=360, dhS=dwS*strip.h/strip.w;
+    var pieTextos=34; // gracias + titulo + 'toca cualquier icono' sobre la tira
+    var pieAlto=function(){ return dhS+12+pieTextos; };
+    var reservaPieTotal=function(){ return pieAlto()+(t.retorno?36:0)+6; };
     // ── FOTOS ANTES / DESPUÉS: incrustadas, hasta 3 por lado, una debajo de otra ──
     if((fotosA&&fotosA.length)||(fotosD&&fotosD.length)){
       seccion('TU ANTES Y DESPUES');
@@ -9602,10 +9631,15 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       // (menos lo reservado para retorno + tira de agenda) — matemáticamente
       // imposible que se pase a una segunda página.
       var maxFotos=Math.max((fotosA||[]).length,(fotosD||[]).length);
-      var reservaAbajo=(t.retorno?34:0)+62; // caja de retorno + tira de agenda
+      // Si ni con las fotos al alto minimo alcanza, la tira de iconos cede tamano
+      while(dwS>240 && ((H-reservaPieTotal())-y-16) < maxFotos*61+8){ dwS-=60; dhS=dwS*strip.h/strip.w; }
+      var reservaAbajo=reservaPieTotal();
       var dispF=(H-reservaAbajo)-y-16;      // espacio vertical disponible para las fotos
       var base=maxFotos>=3?90:(maxFotos===2?122:150);
-      var altoFoto=Math.max(52, Math.min(base, Math.floor(dispF/maxFotos)-9));
+      // Preferimos fotos de 52pt+; pero si ni asi caben, TAMBIEN ceden (hasta 30pt)
+      // — cualquier cosa antes que encimar el pie
+      var altoFoto=Math.min(base, Math.floor(dispF/maxFotos)-9);
+      if(altoFoto<52) altoFoto=Math.max(30, Math.floor(dispF/maxFotos)-9); else altoFoto=Math.max(52, altoFoto);
       var colFotos=function(lista,x0,lbl){
         var yy=y;
         doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(NAVY);
@@ -9623,22 +9657,21 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       var yD=(fotosD&&fotosD.length)?colFotos(fotosD,xI+fw+20,'DESPUES'):y;
       y=Math.max(yA,yD)+10;
     }
-    // ── PRÓXIMA CITA RECOMENDADA ──
+    // ── PRÓXIMA CITA RECOMENDADA ── anclada justo ENCIMA del pie: nunca choca
     if(t.retorno){
-      salto(40);
+      var yRet=H-pieAlto()-34;
+      // Ultimo salvavidas: si el contenido bajo mas de la cuenta, la tira cede
+      while(dwS>240 && yRet < y+4){ dwS-=60; dhS=dwS*strip.h/strip.w; yRet=H-pieAlto()-34; }
+      if(yRet < y+4) yRet=y+4;
       var rM=(t.retorno||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
       var retFmt=rM?(rM[3]+'/'+rM[2]+'/'+rM[1]):t.retorno;
       doc.setFillColor(253,247,230);
-      doc.roundedRect(xI,y,ANCHO,24,6,6,'F');
+      doc.roundedRect(xI,yRet,ANCHO,24,6,6,'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(9.2); doc.setTextColor(GOLD);
-      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,y+16,{align:'center'});
-      y+=32;
+      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,yRet+16,{align:'center'});
     }
-    // ── AGENDA TU SIGUIENTE CITA — DISCOS estilo gift card, anclados al fondo ──
-    var strip=_stripAgendaSunsu();
-    // Protagonista, ya no discreto: iconos grandes en el tema Sunsu, titulo claro
-    // de que se puede reagendar tocando, subtitulo dorado con la instruccion.
-    var dw=360, dh=dw*strip.h/strip.w;
+    // ── AGENDA TU SIGUIENTE CITA — la tira ya medida arriba (dwS pudo achicarse) ──
+    var dw=dwS, dh=dhS;
     var sx=(W-dw)/2, sy=H-dh-12;       // anclado al fondo — SIEMPRE en la misma hoja
     doc.setFont('helvetica','normal'); doc.setFontSize(6.6); doc.setTextColor(TXT);
     doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,sy-26,{align:'center'});
