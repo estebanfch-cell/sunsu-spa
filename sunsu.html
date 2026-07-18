@@ -4166,18 +4166,38 @@ function _histPrecioExtra(sku){
 
 // ══════ DASH ADMIN ══════
 // ── DASHBOARD DE INICIO (admins): el pulso del negocio al abrir la app ──
+// Venta en SUBTOTAL (sin IVA 15%) grande, con IVA en chiquito. Pagos que
+// CUADRAN contra la venta. Layout: 3 cuadrados / 2 rect / pagos / faciales /
+// productos / semana / mes por semanas.
+var IVA_DASH=0.15;
 function renderInicio(c){
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando el pulso del día...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getDashboardHoy&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){
     if(d.error){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">'+d.error+'</div>'; return; }
-    var hoy=d.hoy||{}, sem=d.semana||{}, pg=hoy.pagos||{};
+    var hoy=d.hoy||{}, sem=d.semana||{}, mes=d.mes||{}, pg=hoy.pagos||{};
+    var sub=function(v){ return (v||0)/(1+IVA_DASH); };
     var kpi=function(icono,label,valor,color){
-      return '<div class="card" style="padding:11px 12px;flex:1;min-width:100px;text-align:center">'
-        +'<div style="font-size:1.1rem">'+icono+'</div>'
-        +'<div style="font-size:1.05rem;font-weight:800;color:'+(color||'var(--navy)')+';margin:2px 0">'+valor+'</div>'
-        +'<div style="font-size:0.54rem;font-weight:800;color:var(--gray);letter-spacing:0.4px;text-transform:uppercase">'+label+'</div>'
+      return '<div class="card" style="padding:11px 10px;flex:1;min-width:88px;text-align:center">'
+        +'<div style="font-size:1.05rem">'+icono+'</div>'
+        +'<div style="font-size:1.02rem;font-weight:800;color:'+(color||'var(--navy)')+';margin:2px 0">'+valor+'</div>'
+        +'<div style="font-size:0.52rem;font-weight:800;color:var(--gray);letter-spacing:0.4px;text-transform:uppercase">'+label+'</div>'
+        +'</div>';
+    };
+    var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.mixto||0)+(pg.otros||0);
+    var cuadra=Math.abs(pagosTot-(hoy.venta||0))<=Math.max(1,(hoy.venta||0)*0.02);
+    var pagoFila=function(icono,label,val){
+      if(!(val>0)) return '';
+      var pct=pagosTot>0?Math.round(val/pagosTot*100):0;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
+        +'<span style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+icono+' '+label+'</span>'
+        +'<span style="font-size:0.72rem;font-weight:800;color:var(--navy)">$'+val.toFixed(2)+' <span style="color:var(--gray);font-weight:700;font-size:0.58rem">('+pct+'%)</span></span>'
+        +'</div>';
+    };
+    var chips=function(lista){
+      return '<div style="display:flex;gap:4px;flex-wrap:wrap">'
+        +lista.map(function(f){return '<span style="font-size:0.6rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:4px 10px;border-radius:8px">'+f.nombre+' ×'+f.n+'</span>';}).join('')
         +'</div>';
     };
     var maxSem=Math.max.apply(null,(sem.dias||[]).map(function(x){return x.total;}).concat([1]));
@@ -4185,56 +4205,73 @@ function renderInicio(c){
       var esHoy=i===(sem.dias.length-1);
       var hpx=Math.max(4,Math.round(x.total/maxSem*64));
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
-        +'<div style="font-size:0.5rem;font-weight:800;color:var(--navy)">'+(x.total>0?'$'+Math.round(x.total):'')+'</div>'
+        +'<div style="font-size:0.5rem;font-weight:800;color:var(--navy)">'+(x.total>0?'$'+Math.round(sub(x.total)):'')+'</div>'
         +'<div style="width:70%;height:'+hpx+'px;background:'+(esHoy?'var(--navy)':'var(--blue-l)')+';border-radius:5px 5px 0 0"></div>'
         +'<div style="font-size:0.52rem;font-weight:800;color:'+(esHoy?'var(--navy)':'var(--gray)')+'">'+x.label+'</div>'
         +'</div>';
     }).join('');
-    var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.otros||0);
-    var pagoFila=function(icono,label,val){
-      if(!(val>0)) return '';
-      var pct=pagosTot>0?Math.round(val/pagosTot*100):0;
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
-        +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+icono+' '+label+'</span>'
-        +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">$'+val.toFixed(2)+' <span style="color:var(--gray);font-weight:700;font-size:0.58rem">('+pct+'%)</span></span>'
+    var maxMes=Math.max.apply(null,(mes.semanas||[]).map(function(x){return x.total;}).concat([1]));
+    var filasMes=(mes.semanas||[]).map(function(x){
+      if(!(x.total>0)) return '';
+      var w=Math.max(3,Math.round(x.total/maxMes*100));
+      return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+        +'<span style="font-size:0.6rem;font-weight:700;color:var(--gray);width:86px;flex-shrink:0">'+x.label+'</span>'
+        +'<div style="flex:1;background:var(--gray-ll,#F0F1F5);border-radius:6px;height:14px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--blue-l)"></div></div>'
+        +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+Math.round(sub(x.total))+'</span>'
         +'</div>';
-    };
+    }).join('');
     c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div style="font-size:1rem;font-weight:800;color:var(--navy)">🏠 Hola, '+(CU?CU.short:'')+'</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+(d.actualizado||'')+'</button>'
       +'</div>'
-      // El numero del dia, protagonista
       +'<div class="card" style="padding:14px;text-align:center;margin-bottom:8px;background:var(--navy)">'
-      +'<div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.75);letter-spacing:0.6px">VENTA DE HOY</div>'
-      +'<div style="font-size:1.9rem;font-weight:800;color:white;margin:2px 0">$'+(hoy.venta||0).toFixed(2)+'</div>'
-      +'<div style="font-size:0.62rem;font-weight:700;color:rgba(255,255,255,0.85)">'+(hoy.tickets||0)+' tickets · promedio $'+(hoy.promedio||0).toFixed(2)+'</div>'
+      +'<div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.75);letter-spacing:0.6px">VENTA DE HOY · SUBTOTAL</div>'
+      +'<div style="font-size:1.9rem;font-weight:800;color:white;margin:2px 0">$'+sub(hoy.venta).toFixed(2)+'</div>'
+      +'<div style="font-size:0.62rem;font-weight:700;color:rgba(255,255,255,0.85)">con IVA $'+(hoy.venta||0).toFixed(2)+' · '+(hoy.tickets||0)+' tickets · promedio $'+(hoy.tickets?sub(hoy.venta)/hoy.tickets:0).toFixed(2)+'</div>'
       +'</div>'
-      +'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+      // 3 cuadrados: faciales / paquetes / productos
+      +'<div style="display:flex;gap:6px;margin-bottom:6px">'
       +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0)
-      +(hoy.paquetes!==null&&hoy.paquetes!==undefined?kpi('📦','Paquetes hoy',hoy.paquetes||0):'')
-      +kpi('🗓','Citas hoy',d.citasHoy||0)
-      +kpi('💵','Caja chica','$'+(d.caja||0).toFixed(0),(d.caja||0)<0?'#B86B6B':'#2E7D52')
+      +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes)
+      +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN)
       +'</div>'
+      // 2 rectangulos: citas / caja
+      +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +kpi('🗓','Citas hoy',d.citasHoy||0)
+      +kpi('💵','Caja chica','$'+(d.caja||0).toFixed(2),(d.caja||0)<0?'#B86B6B':'#2E7D52')
+      +'</div>'
+      // Pagos que CUADRAN
       +(pagosTot>0?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
         +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:4px">💳 CÓMO PAGARON HOY</div>'
         +pagoFila('💵','Efectivo',pg.efectivo||0)
         +pagoFila('🏦','Transferencia',pg.transferencia||0)
         +pagoFila('💳','Tarjeta',pg.tarjeta||0)
+        +pagoFila('🔀','Mixto (sin desglose)',pg.mixto||0)
         +pagoFila('💰','Otros',pg.otros||0)
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 0;border-top:1.2px solid var(--cream-d);margin-top:4px">'
+        +'<span style="font-size:0.68rem;font-weight:800;color:var(--navy)">TOTAL</span>'
+        +'<span style="font-size:0.74rem;font-weight:800;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">$'+pagosTot.toFixed(2)+' '+(cuadra?'✓ cuadra con la venta':'⚠ no cuadra ($'+(hoy.venta||0).toFixed(2)+')')+'</span>'
+        +'</div>'
         +'</div>':'')
       +((hoy.topFac||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
-        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">💆‍♀️ FACIALES DE HOY</div>'
-        +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
-        +hoy.topFac.map(function(f){return '<span style="font-size:0.6rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:4px 10px;border-radius:8px">'+f.nombre+' ×'+f.n+'</span>';}).join('')
-        +'</div></div>':'')
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">💆‍♀️ FACIALES DE HOY</div>'+chips(hoy.topFac)+'</div>':'')
+      +((hoy.topProd||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">🧴 PRODUCTOS DE HOY</div>'+chips(hoy.topProd)+'</div>':'')
       +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
-      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA</span>'
-      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+(sem.total||0).toFixed(2)+'</span>'
+      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA · subtotal</span>'
+      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(sem.total).toFixed(2)+'</span>'
       +'</div>'
       +'<div style="display:flex;align-items:flex-end;gap:2px;height:92px">'+barras+'</div>'
       +'</div>'
-      +'<div style="font-size:0.52rem;color:var(--gray);text-align:center;padding-bottom:8px">Venta = total de tickets (col J) · se actualiza con ↻ o al volver a entrar</div>';
+      +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">🗓 EL MES ('+(mes.nombre||'')+') · subtotal</span>'
+      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+sub(mes.total).toFixed(2)+'</span>'
+      +'</div>'
+      +filasMes
+      +'</div>'
+      +'<div style="font-size:0.52rem;color:var(--gray);text-align:center;padding-bottom:8px">Subtotal = sin IVA '+(IVA_DASH*100).toFixed(0)+'% · se actualiza con ↻ o al volver a entrar</div>';
   })
   .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
 }
