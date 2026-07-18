@@ -680,14 +680,15 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    ?[['inicio','🏠 Dashboard'],['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
   window._allTabs=allTabs;
   _pintarNavMovil();
-  _navActualizar('ticket');
+  // Los admins abren la app EN el dashboard; el resto, en Ticket como siempre
+  if(isAdmin){ showTab('inicio'); } else { _navActualizar('ticket'); }
   // Load catalog to update prices, names and filter inactive items
   Promise.all([
     fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).catch(function(){return [];}),
@@ -879,6 +880,7 @@ function showTab(id,btn){
   _navActualizar(id);
   const c=document.getElementById('content');
   if(id==='ticket') renderTicket(c);
+  else if(id==='inicio') renderInicio(c);
   else if(id==='gc-venta') renderGCVenta(c);
   else if(id==='citas') verCitas(c,0);
   else if(id==='dash-cosm') renderDashCosm(c);
@@ -4163,6 +4165,79 @@ function _histPrecioExtra(sku){
 }
 
 // ══════ DASH ADMIN ══════
+// ── DASHBOARD DE INICIO (admins): el pulso del negocio al abrir la app ──
+function renderInicio(c){
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando el pulso del día...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getDashboardHoy&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.error){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">'+d.error+'</div>'; return; }
+    var hoy=d.hoy||{}, sem=d.semana||{}, pg=hoy.pagos||{};
+    var kpi=function(icono,label,valor,color){
+      return '<div class="card" style="padding:11px 12px;flex:1;min-width:100px;text-align:center">'
+        +'<div style="font-size:1.1rem">'+icono+'</div>'
+        +'<div style="font-size:1.05rem;font-weight:800;color:'+(color||'var(--navy)')+';margin:2px 0">'+valor+'</div>'
+        +'<div style="font-size:0.54rem;font-weight:800;color:var(--gray);letter-spacing:0.4px;text-transform:uppercase">'+label+'</div>'
+        +'</div>';
+    };
+    var maxSem=Math.max.apply(null,(sem.dias||[]).map(function(x){return x.total;}).concat([1]));
+    var barras=(sem.dias||[]).map(function(x,i){
+      var esHoy=i===(sem.dias.length-1);
+      var hpx=Math.max(4,Math.round(x.total/maxSem*64));
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
+        +'<div style="font-size:0.5rem;font-weight:800;color:var(--navy)">'+(x.total>0?'$'+Math.round(x.total):'')+'</div>'
+        +'<div style="width:70%;height:'+hpx+'px;background:'+(esHoy?'var(--navy)':'var(--blue-l)')+';border-radius:5px 5px 0 0"></div>'
+        +'<div style="font-size:0.52rem;font-weight:800;color:'+(esHoy?'var(--navy)':'var(--gray)')+'">'+x.label+'</div>'
+        +'</div>';
+    }).join('');
+    var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.otros||0);
+    var pagoFila=function(icono,label,val){
+      if(!(val>0)) return '';
+      var pct=pagosTot>0?Math.round(val/pagosTot*100):0;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
+        +'<span style="font-size:0.66rem;font-weight:700;color:var(--navy)">'+icono+' '+label+'</span>'
+        +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">$'+val.toFixed(2)+' <span style="color:var(--gray);font-weight:700;font-size:0.58rem">('+pct+'%)</span></span>'
+        +'</div>';
+    };
+    c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<div style="font-size:1rem;font-weight:800;color:var(--navy)">🏠 Hola, '+(CU?CU.short:'')+'</div>'
+      +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+(d.actualizado||'')+'</button>'
+      +'</div>'
+      // El numero del dia, protagonista
+      +'<div class="card" style="padding:14px;text-align:center;margin-bottom:8px;background:var(--navy)">'
+      +'<div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.75);letter-spacing:0.6px">VENTA DE HOY</div>'
+      +'<div style="font-size:1.9rem;font-weight:800;color:white;margin:2px 0">$'+(hoy.venta||0).toFixed(2)+'</div>'
+      +'<div style="font-size:0.62rem;font-weight:700;color:rgba(255,255,255,0.85)">'+(hoy.tickets||0)+' tickets · promedio $'+(hoy.promedio||0).toFixed(2)+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+      +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0)
+      +(hoy.paquetes!==null&&hoy.paquetes!==undefined?kpi('📦','Paquetes hoy',hoy.paquetes||0):'')
+      +kpi('🗓','Citas hoy',d.citasHoy||0)
+      +kpi('💵','Caja chica','$'+(d.caja||0).toFixed(0),(d.caja||0)<0?'#B86B6B':'#2E7D52')
+      +'</div>'
+      +(pagosTot>0?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:4px">💳 CÓMO PAGARON HOY</div>'
+        +pagoFila('💵','Efectivo',pg.efectivo||0)
+        +pagoFila('🏦','Transferencia',pg.transferencia||0)
+        +pagoFila('💳','Tarjeta',pg.tarjeta||0)
+        +pagoFila('💰','Otros',pg.otros||0)
+        +'</div>':'')
+      +((hoy.topFac||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">💆‍♀️ FACIALES DE HOY</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
+        +hoy.topFac.map(function(f){return '<span style="font-size:0.6rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:4px 10px;border-radius:8px">'+f.nombre+' ×'+f.n+'</span>';}).join('')
+        +'</div></div>':'')
+      +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA</span>'
+      +'<span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+(sem.total||0).toFixed(2)+'</span>'
+      +'</div>'
+      +'<div style="display:flex;align-items:flex-end;gap:2px;height:92px">'+barras+'</div>'
+      +'</div>'
+      +'<div style="font-size:0.52rem;color:var(--gray);text-align:center;padding-bottom:8px">Venta = total de tickets (col J) · se actualiza con ↻ o al volver a entrar</div>';
+  })
+  .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
+}
 function renderDashAdmin(c){
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando comisiones...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getReporteAdmin')
@@ -11533,7 +11608,7 @@ function _pintarCajaV2(c){
   }
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">💵 Caja Chica</div>'
-    +'<button onclick="renderCajaChica(document.getElementById(\'content\'),true)" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button>'
+    +'<button onclick="renderCajaChica(document.getElementById(\'content\'),true)" style="background:var(--navy);color:white;border:none;padding:8px 14px;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">🔄 Actualizar</button>'
     +'</div>'
     +'<div class="card" style="padding:16px;text-align:center;margin-bottom:10px">'
     +'<div style="font-size:0.6rem;font-weight:800;color:var(--gray);letter-spacing:0.06em">SALDO ACTUAL</div>'
