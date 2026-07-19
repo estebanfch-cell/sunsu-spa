@@ -692,6 +692,7 @@ function initApp(){
   // Promos vigentes HOY (vencidas no llegan: el servidor las filtra)
   fetch(APPS_SCRIPT_URL+'?action=getPromos&_t='+Date.now()).then(function(r){return r.json();})
     .then(function(d){ window._promosVig=d.vigentes||[]; }).catch(function(){});
+  window._pmV2={mech:'%',cods:[]};
   // Load catalog to update prices, names and filter inactive items
   Promise.all([
     fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).catch(function(){return [];}),
@@ -1640,6 +1641,16 @@ function updatePreview(){
       dscMonto=Math.min(T.descuento.custom,totE);
       dscLabel='🏷️ Descuento personalizado';
     }
+  } else if(T.descuento && T.descuento.tipo === 'promo'){
+    var _puUP=_promoUnits();
+    if(T.descuento.promoObj && _promoArmada(T.descuento.promoObj,_puUP)){
+      var _pcUP=_promoCalc(T.descuento.promoObj,_puUP);
+      dscMonto=_pcUP.monto;
+      dscLabel='🎉 '+T.descuento.promo+' '+_pcUP.mech;
+    } else {
+      // Sacaron del ticket un código requerido: la promo se desarma sola
+      T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
+    }
   } else if(T.descuento && T.descuento.tipo === 'directo'){
     dscMonto = totE; // 100% — pago directo
     dscLabel = '💼 Pago Directo';
@@ -1725,7 +1736,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      ${(window._promosVig||[]).length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+(window._promosVig||[]).map(function(p,i){var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">🎉 '+p.nombre+' −'+p.valor+'%'+(on?' ✓':'')+'</button>';}).join('')+'</div>':''}
+      ${(function(){var vs=(window._promosVig||[]);if(!vs.length)return '';var uu=_promoUnits();var chips=vs.map(function(p,i){var coded=p.codigos&&p.codigos.length;if(coded&&!_promoArmada(p,uu))return '';var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">'+(coded?'🎉 Aplicar promoción: ':'🎉 ')+p.nombre+' '+_pmMechTxt(p)+(on?' ✓':'')+'</button>';}).filter(Boolean);return chips.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+chips.join('')+'</div>':'';})()}
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
@@ -1763,9 +1774,58 @@ function updatePreview(){
     ${discountUI}
   </div>`;
 }
+// ── PROMOS V2: helpers compartidos (preview y envío usan EXACTAMENTE el mismo cálculo) ──
+// Unidades cobrables del ticket: cada una {sku, p} (productos: una unidad por cantidad).
+function _promoUnits(){
+  var u=[];
+  var esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
+  if(T.facial&&!esCanje){var f=FACIALES.find(function(x){return x.sku===T.facial;});if(f)u.push({sku:f.sku,p:f.p});}
+  EXTRAS.forEach(function(e){if(T.extras[e.sku]&&!(T.extrasCourtesy&&T.extrasCourtesy[e.sku]))u.push({sku:e.sku,p:e.t});});
+  if(T.pack3){var p3=PAQ3.find(function(x){return x.sku===T.pack3;});if(p3)u.push({sku:p3.sku,p:p3.p,pack:3});}
+  if(T.pack6){var p6=PAQ6.find(function(x){return x.sku===T.pack6;});if(p6)u.push({sku:p6.sku,p:p6.p,pack:6});}
+  PROVS.forEach(function(pv){pv.prods.forEach(function(pr){var q=T.productos[pr.sku]||0;for(var i=0;i<q;i++)u.push({sku:pr.sku,p:pr.p});});});
+  return u;
+}
+// Promo conjunta: despierta SOLO si el ticket lleva TODOS los códigos.
+function _promoArmada(p,units){
+  if(!p||!p.codigos||!p.codigos.length) return false;
+  var u=units||_promoUnits();
+  return p.codigos.every(function(c){return u.some(function(x){return x.sku===c;});});
+}
+// Texto corto del mecanismo (chips del ticket + lista de promos)
+function _pmMechTxt(p){
+  if(p.tipo==='$') return '−$'+(parseFloat(p.valor)||0).toFixed(2);
+  if(p.tipo==='NXM') return Math.round(p.valor)+'×'+Math.round(p.valor2);
+  if(p.tipo==='PACK') return '· paquete a $'+(parseFloat(p.valor)||0).toFixed(2)+' ('+Math.round(p.valor2)+' ses)';
+  return '−'+p.valor+'%';
+}
+// Descuento de la promo: cae SOLO sobre los ítems de sus códigos, nunca sobre el total.
+function _promoCalc(p,units){
+  var u=(units||_promoUnits()).filter(function(x){return p.codigos.indexOf(x.sku)>=0;});
+  var sum=0; u.forEach(function(x){sum+=x.p;});
+  var monto=0;
+  if(p.tipo==='$'){ monto=Math.min(parseFloat(p.valor)||0,sum); }
+  else if(p.tipo==='NXM'){
+    var N=Math.round(p.valor)||0, M=Math.round(p.valor2)||0;
+    if(N>=2&&M>=1&&M<N){
+      // Cobra las M más caras de cada grupo de N llevadas: se regalan las (N−M) más baratas
+      var ps=u.map(function(x){return x.p;}).sort(function(a,b){return b-a;});
+      var libres=Math.floor(ps.length/N)*(N-M);
+      for(var i=ps.length-libres;i<ps.length;i++) monto+=ps[i];
+    }
+  }
+  else if(p.tipo==='PACK'){ u.forEach(function(x){if(x.pack)monto+=Math.max(0,x.p-(parseFloat(p.valor)||0));}); }
+  else { monto=sum*((parseFloat(p.valor)||0)/100); }
+  return {monto:Math.round(monto*100)/100, mech:_pmMechTxt(p)};
+}
 function aplicarPromo(i){
   var p=(window._promosVig||[])[i]; if(!p) return;
-  if(T.descuento&&T.descuento.promo===p.nombre){ T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}; }
+  var vacio={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
+  if(T.descuento&&T.descuento.promo===p.nombre){ T.descuento=vacio; }
+  else if(p.codigos&&p.codigos.length){
+    if(!_promoArmada(p)){ toast('⚠️ El ticket no lleva todos los códigos de la promo','#C9A227'); return; }
+    T.descuento={tipo:'promo',promo:p.nombre,promoObj:p,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
+  }
   else { T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre}; }
   updatePreview();
 }
@@ -1838,9 +1898,9 @@ function enviarTicket(){
 
   // Col U/V: Paquetes
   const _p3=PAQ3.find(p=>p.sku===T.pack3)||{sku:'',n:''};
-  const pack3Txt=T.pack3?(_p3.sku+' '+_p3.n).trim():'';
+  let pack3Txt=T.pack3?(_p3.sku+' '+_p3.n).trim():'';
   const _p6=PAQ6.find(p=>p.sku===T.pack6)||{sku:'',n:''};
-  const pack6Txt=T.pack6?(_p6.sku+' '+_p6.n).trim():'';
+  let pack6Txt=T.pack6?(_p6.sku+' '+_p6.n).trim():'';
 
   // Col W: Extras — cortesia marcada con [CORTESIA]
   const extrasTexto=EXTRAS
@@ -1880,11 +1940,27 @@ function enviarTicket(){
       _dscMonto=Math.round(_base*_pct*100)/100;_dscLabel=T.descuento.promo?('Promo '+T.descuento.promo+' −'+T.descuento.customPct+'%'):(_tgt+'−'+T.descuento.customPct+'%');
     } else if(T.descuento.custom>0){_dscMonto=Math.min(T.descuento.custom,_totBruto);_dscLabel='Desc$'+_dscMonto.toFixed(2);}
   }
+  else if(T.descuento&&T.descuento.tipo==='promo'){
+    var _puE=_promoUnits();
+    if(T.descuento.promoObj&&_promoArmada(T.descuento.promoObj,_puE)){
+      var _pcE=_promoCalc(T.descuento.promoObj,_puE);
+      _dscMonto=_pcE.monto;
+      _dscLabel='Promo '+T.descuento.promo+' ('+_pcE.mech+') −$'+_pcE.monto.toFixed(2);
+    }
+  }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
   const estTotal=Math.max(0,_totBruto-_dscMonto);
   // Caja física de GCs de conversión paquete (+$3 cada una)
   var _cajasGC=(T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
   const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : Math.max(0, estTotal+(_cajasGC*3));
+  // Paquete reducido: el control de sesiones registra las que dice la promo (ej: paquete de 3 vendido como de 2)
+  if(T.descuento&&T.descuento.tipo==='promo'&&T.descuento.promoObj&&T.descuento.promoObj.tipo==='PACK'&&_promoArmada(T.descuento.promoObj)){
+    var _sesPR=Math.round(T.descuento.promoObj.valor2)||0;
+    if(_sesPR>=1&&_sesPR<=6){
+      if(pack3Txt&&T.descuento.promoObj.codigos.indexOf(T.pack3)>=0) pack3Txt+=' [PROMO '+_sesPR+' SESIONES]';
+      if(pack6Txt&&T.descuento.promoObj.codigos.indexOf(T.pack6)>=0) pack6Txt+=' [PROMO '+_sesPR+' SESIONES]';
+    }
+  }
 
   // Fix fecha retorno format: input gives yyyy-MM-dd, sheet needs MM/dd/yyyy
   var _retRaw=(retEl?.value||'').trim();
@@ -4236,43 +4312,171 @@ function _histPrecioExtra(sku){
 // productos / semana / mes por semanas.
 var IVA_DASH=0.15;
 // ── PROMOCIONES (solo admins): crear con vigencia, ver, desactivar ──
+// ── PROMOS V2 ── creación con 4 mecanismos + códigos del catálogo + calculadora de utilidad
+function _pmCatalogo(cb){
+  if(window._pmCat){ cb(window._pmCat); return; }
+  fetch(APPS_SCRIPT_URL+'?action=getCatalogo&_t='+Date.now()).then(function(r){return r.json();})
+  .then(function(items){
+    var map={};
+    (Array.isArray(items)?items:[]).forEach(function(it){
+      if(it.sku&&it.activo!==false) map[it.sku]={sku:it.sku,nombre:(it.nombre||'').toString(),tipo:(it.tipo||'').toString(),
+        total:parseFloat(it.total)||0,subtotal:parseFloat(it.subtotal)||0,compraReal:parseFloat(it.compraReal)||0};
+    });
+    window._pmCat=map; cb(map);
+  }).catch(function(){ cb(window._pmCat||{}); });
+}
+function _pmEsPack(sku){ return PAQ3.some(function(p){return p.sku===sku;})?3:(PAQ6.some(function(p){return p.sku===sku;})?6:0); }
+function _pmSetMech(m){
+  window._pmV2.mech=m;
+  if(m==='PACK'&&window._pmV2.cods.length>1) window._pmV2.cods=window._pmV2.cods.slice(0,1);
+  var row=document.getElementById('pm-mechrow'); if(!row) return;
+  var ops=[['%','−%'],['$','−$ fijo'],['NXM','N×M'],['PACK','Paq. reducido']];
+  row.innerHTML=ops.map(function(o){var on=o[0]===m;return '<button onclick="_pmSetMech(\''+o[0]+'\')" style="flex:1;padding:7px 2px;border-radius:8px;border:1.5px solid '+(on?'var(--navy)':'var(--cream-d)')+';background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+';font-size:0.62rem;font-weight:800;cursor:pointer">'+o[1]+'</button>';}).join('');
+  var vr=document.getElementById('pm-valrow'); if(!vr) return;
+  var mini='width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box';
+  var lbl='font-size:0.56rem;font-weight:800;color:var(--navy)';
+  if(m==='%') vr.innerHTML='<div style="width:110px"><div style="'+lbl+'">Descuento %</div><input id="pm-val" type="number" min="1" max="100" style="'+mini+'" oninput="_pmCalcRender()"></div>';
+  else if(m==='$') vr.innerHTML='<div style="width:110px"><div style="'+lbl+'">Descuento $</div><input id="pm-val" type="number" min="0.01" step="0.01" style="'+mini+'" oninput="_pmCalcRender()"></div>';
+  else if(m==='NXM') vr.innerHTML='<div style="display:flex;gap:5px;align-items:flex-end"><div style="width:80px"><div style="'+lbl+'">Lleva (N)</div><input id="pm-val" type="number" min="2" value="3" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="width:80px"><div style="'+lbl+'">Paga (M)</div><input id="pm-val2" type="number" min="1" value="2" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="flex:1;font-size:0.54rem;color:var(--gray);padding-bottom:8px">Cobra las M más caras de N llevadas</div></div>';
+  else vr.innerHTML='<div style="display:flex;gap:5px"><div style="width:120px"><div style="'+lbl+'">Precio especial $</div><input id="pm-val" type="number" min="0.01" step="0.01" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="width:120px"><div style="'+lbl+'">Sesiones que registra</div><input id="pm-val2" type="number" min="1" max="6" value="2" style="'+mini+'" oninput="_pmCalcRender()"></div></div>';
+  _pmChipsRender(); _pmCalcRender();
+}
+function _pmBuscar(q){
+  var res=document.getElementById('pm-res'); if(!res) return;
+  q=(q||'').trim().toLowerCase();
+  if(q.length<2){ res.innerHTML=''; return; }
+  var cat=window._pmCat||{}, out=[];
+  Object.keys(cat).forEach(function(sku){
+    if(out.length>=8) return;
+    if(window._pmV2.cods.indexOf(sku)>=0) return;
+    var it=cat[sku];
+    if(sku.toLowerCase().indexOf(q)>=0||it.nombre.toLowerCase().indexOf(q)>=0) out.push(it);
+  });
+  res.innerHTML=out.map(function(it){
+    return '<button onclick="_pmAddCod(\''+it.sku+'\')" style="display:block;width:100%;text-align:left;padding:7px 9px;border:1px solid var(--cream-d);border-radius:8px;background:white;font-size:0.64rem;cursor:pointer;margin-bottom:3px;font-family:inherit"><b>'+it.sku+'</b> '+it.nombre+' · $'+it.total.toFixed(2)+'</button>';
+  }).join('');
+}
+function _pmAddCod(sku){
+  var v=window._pmV2;
+  if(v.mech==='PACK'){
+    var sz=_pmEsPack(sku);
+    if(!sz){ toast('⚠️ Paquete reducido: el código debe ser un paquete','#C9A227'); return; }
+    v.cods=[sku];
+    var v2=document.getElementById('pm-val2'); if(v2) v2.value=Math.max(1,sz-1);
+  } else if(v.cods.indexOf(sku)<0) v.cods.push(sku);
+  var b=document.getElementById('pm-buscar'); _pmBuscar(b?b.value:'');
+  _pmChipsRender(); _pmCalcRender();
+}
+function _pmDelCod(sku){
+  window._pmV2.cods=window._pmV2.cods.filter(function(s){return s!==sku;});
+  var b=document.getElementById('pm-buscar'); _pmBuscar(b?b.value:'');
+  _pmChipsRender(); _pmCalcRender();
+}
+function _pmChipsRender(){
+  var el=document.getElementById('pm-chips'); if(!el) return;
+  var cat=window._pmCat||{};
+  el.innerHTML=window._pmV2.cods.map(function(sku){
+    var it=cat[sku]||{nombre:''};
+    return '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--cream,#F6F1E7);border:1px solid var(--cream-d);border-radius:8px;padding:4px 8px;font-size:0.6rem;font-weight:700;color:var(--navy)">'+sku+' '+it.nombre+' <span onclick="_pmDelCod(\''+sku+'\')" style="cursor:pointer;color:#B84A3F;font-weight:800">✕</span></span>';
+  }).join('');
+}
+// Calculadora de utilidad en vivo: canasta mínima que dispara la promo (1 unidad por código;
+// N×M se completa a N repitiendo el código más barato). Utilidad = precio/1.15 − compra real.
+function _pmCalcRender(){
+  var el=document.getElementById('pm-calc'); if(!el) return;
+  var v=window._pmV2, cat=window._pmCat||{};
+  var val=parseFloat((document.getElementById('pm-val')||{}).value)||0;
+  var val2=parseFloat((document.getElementById('pm-val2')||{}).value)||0;
+  if(!v.cods.length||val<=0){ el.innerHTML=''; return; }
+  var unidades=v.cods.map(function(s){return cat[s]||{sku:s,total:0,compraReal:0};});
+  if(v.mech==='NXM'){
+    var N=Math.round(val)||0, M=Math.round(val2)||0;
+    if(N<2||M<1||M>=N){ el.innerHTML=''; return; }
+    var masBarata=unidades.slice().sort(function(a,b){return a.total-b.total;})[0];
+    while(unidades.length<N) unidades.push(masBarata);
+  }
+  var precioCat=0, costo=0;
+  unidades.forEach(function(u){precioCat+=u.total;costo+=u.compraReal;});
+  var precioPromo=precioCat;
+  if(v.mech==='%') precioPromo=precioCat*(1-Math.min(100,val)/100);
+  else if(v.mech==='$') precioPromo=Math.max(0,precioCat-val);
+  else if(v.mech==='NXM'){
+    var ps=unidades.map(function(u){return u.total;}).sort(function(a,b){return b-a;});
+    precioPromo=0; for(var i=0;i<Math.round(val2);i++) precioPromo+=ps[i]||0;
+  }
+  else if(v.mech==='PACK') precioPromo=val;
+  precioPromo=Math.round(precioPromo*100)/100; precioCat=Math.round(precioCat*100)/100;
+  var utilCat=Math.round((precioCat/1.15-costo)*100)/100;
+  var utilPromo=Math.round((precioPromo/1.15-costo)*100)/100;
+  var pctRest=utilCat>0?Math.round(utilPromo/utilCat*1000)/10:null;
+  var mal=utilPromo<=0;
+  var row='display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0';
+  el.innerHTML='<div style="background:'+(mal?'#FBEAE8':'var(--cream,#F6F1E7)')+';border:1px solid '+(mal?'#B84A3F':'var(--cream-d)')+';border-radius:9px;padding:9px 11px">'
+    +'<div style="font-size:0.56rem;font-weight:800;color:var(--navy);margin-bottom:3px">📐 Utilidad de la promo'+(v.mech==='NXM'?' (por cada '+Math.round(val)+' unidades)':'')+'</div>'
+    +'<div style="'+row+'"><span>Precio catálogo</span><span>$'+precioCat.toFixed(2)+'</span></div>'
+    +'<div style="'+row+';font-weight:800"><span>Precio con promo</span><span>$'+precioPromo.toFixed(2)+'</span></div>'
+    +'<div style="'+row+'"><span>Costo de compra (real)</span><span>$'+costo.toFixed(2)+'</span></div>'
+    +'<div style="'+row+';font-weight:800;color:'+(mal?'#B84A3F':'var(--green)')+'"><span>Utilidad</span><span>$'+utilPromo.toFixed(2)+(pctRest!==null?' ('+pctRest.toFixed(1)+'% de la normal)':'')+'</span></div>'
+    +(mal?'<div style="font-size:0.6rem;font-weight:800;color:#B84A3F;margin-top:3px">⚠️ Con esta promo se pierde plata</div>':'')
+    +'</div>';
+}
 function renderPromos(c){
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando promos...</div>';
-  fetch(APPS_SCRIPT_URL+'?action=getPromos&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
-  .then(function(r){return r.json();})
-  .then(function(d){
+  window._pmV2={mech:'%',cods:[]};
+  Promise.all([
+    fetch(APPS_SCRIPT_URL+'?action=getPromos&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now()).then(function(r){return r.json();}),
+    new Promise(function(res){_pmCatalogo(res);})
+  ])
+  .then(function(rr){
+    var d=rr[0]||{};
+    var inp='width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box';
     var h='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:10px">🎉 Promociones</div>'
       +'<div class="card" style="padding:13px;margin-bottom:10px">'
       +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">Nueva promo</div>'
-      +'<input id="pm-nom" placeholder="Nombre (ej: Paquete 3 al precio de 2)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
+      +'<input id="pm-nom" placeholder="Nombre (ej: 3×2 en ampollas)" style="'+inp+';margin-bottom:6px">'
+      +'<div id="pm-mechrow" style="display:flex;gap:5px;margin-bottom:6px"></div>'
+      +'<div id="pm-valrow" style="margin-bottom:6px"></div>'
+      +'<input id="pm-buscar" placeholder="🔍 Código o nombre del catálogo..." style="'+inp+';margin-bottom:4px" oninput="_pmBuscar(this.value)">'
+      +'<div id="pm-res"></div>'
+      +'<div id="pm-chips" style="display:flex;gap:5px;flex-wrap:wrap;margin:4px 0 2px"></div>'
+      +'<div style="font-size:0.54rem;color:var(--gray);margin-bottom:6px">Varios códigos = promo conjunta: solo aplica si el ticket lleva TODOS, y el descuento cae solo sobre esos ítems.</div>'
+      +'<div id="pm-calc" style="margin-bottom:6px"></div>'
       +'<div style="display:flex;gap:5px;margin-bottom:6px">'
-      +'<div style="width:90px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Descuento %</div><input id="pm-val" type="number" min="1" max="100" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
-      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Desde</div><input id="pm-d1" type="date" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
-      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Hasta</div><input id="pm-d2" type="date" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Desde</div><input id="pm-d1" type="date" style="'+inp+';padding:8px;font-size:0.68rem"></div>'
+      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Hasta</div><input id="pm-d2" type="date" style="'+inp+';padding:8px;font-size:0.68rem"></div>'
       +'</div>'
       +'<button onclick="promoCrear(this)" style="width:100%;padding:11px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.74rem;font-weight:800;cursor:pointer">🎉 Crear promo</button>'
-      +'<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">Vigente = aparece sola en el ticket. Vencida = desaparece sola. Las chicas no configuran nada.</div>'
+      +'<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">Vigente = el botón aparece solo en el ticket cuando lleva los códigos. Vencida = desaparece sola. Las chicas no configuran nada.</div>'
       +'</div>';
     (d.todas||[]).slice().reverse().forEach(function(p){
       var viva=(d.vigentes||[]).some(function(v){return v.fila===p.fila;});
       h+='<div class="card" style="padding:11px 13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px'+(p.activa?'':';opacity:0.5')+'">'
-        +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">🎉 '+p.nombre+' −'+p.valor+'%</div>'
+        +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">🎉 '+p.nombre+' '+_pmMechTxt(p)+'</div>'
+        +((p.codigos&&p.codigos.length)?'<div style="font-size:0.56rem;color:var(--lavender);font-weight:700">'+p.codigos.join(' + ')+'</div>':'')
         +'<div style="font-size:0.58rem;color:var(--gray)">'+p.desde+' → '+p.hasta+' · por '+p.por+' · '+(!p.activa?'🚫 desactivada':(viva?'🟢 vigente hoy':'⏸ fuera de fechas'))+'</div></div>'
         +(p.activa?'<button onclick="promoOff('+p.fila+',this)" style="padding:6px 11px;background:white;color:#B84A3F;border:1.5px solid #B84A3F;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;white-space:nowrap">Desactivar</button>':'')
         +'</div>';
     });
     if(!(d.todas||[]).length) h+='<div style="font-size:0.64rem;color:var(--gray);text-align:center;padding:14px">Aún no hay promos — crea la primera</div>';
     c.innerHTML=h;
+    _pmSetMech('%');
   })
   .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión</div>'; });
 }
 function promoCrear(btn){
-  var nom=(document.getElementById('pm-nom')||{}).value||'', val=parseFloat((document.getElementById('pm-val')||{}).value)||0;
+  var v=window._pmV2||{mech:'%',cods:[]};
+  var nom=(document.getElementById('pm-nom')||{}).value||'';
+  var val=parseFloat((document.getElementById('pm-val')||{}).value)||0;
+  var val2=parseFloat((document.getElementById('pm-val2')||{}).value)||0;
   var d1=(document.getElementById('pm-d1')||{}).value||'', d2=(document.getElementById('pm-d2')||{}).value||'';
-  if(!nom.trim()||val<=0||!d1||!d2){ toast('⚠️ Nombre, %, y las dos fechas','#C9A227'); return; }
+  if(!nom.trim()||!d1||!d2){ toast('⚠️ Nombre y las dos fechas','#C9A227'); return; }
+  if(v.mech==='%'&&(val<=0||val>100)){ toast('⚠️ El % debe estar entre 1 y 100','#C9A227'); return; }
+  if(v.mech==='$'&&(val<=0||!v.cods.length)){ toast('⚠️ Monto $ y al menos un código','#C9A227'); return; }
+  if(v.mech==='NXM'&&(Math.round(val)<2||Math.round(val2)<1||Math.round(val2)>=Math.round(val)||!v.cods.length)){ toast('⚠️ N×M inválido (ej: 3×2) o faltan códigos','#C9A227'); return; }
+  if(v.mech==='PACK'&&(val<=0||v.cods.length!==1||Math.round(val2)<1||Math.round(val2)>6)){ toast('⚠️ Precio especial, sesiones (1-6) y exactamente 1 paquete','#C9A227'); return; }
   btn.disabled=true; btn.textContent='⏳ Creando...';
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'promoCrear', nombre:nom, valor:val, desde:d1, hasta:d2, token:window._token||'', usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'promoCrear', nombre:nom, mecanismo:v.mech, valor:val, valor2:val2, codigos:v.cods, desde:d1, hasta:d2, token:window._token||'', usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(dd){
     btn.disabled=false; btn.textContent='🎉 Crear promo';
