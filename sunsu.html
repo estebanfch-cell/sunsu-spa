@@ -3834,11 +3834,11 @@ function _buildTicketCard(t, showPrices){
         var _dscTxt=_dscN[1].trim().replace(/\s*[−-]\$[\d.,]+\s*$/,'');
         breakdown+='<div style="'+rs+'color:#8A6D1F;font-weight:700">'
           +'<span>🏷 '+_dscTxt+'</span>'
-          +'<span style="font-weight:700">−$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+          +'<span style="font-weight:700">−$'+Math.abs(difCob).toFixed(2)+'</span></div>';
       } else {
         breakdown+='<div style="'+rs+'color:'+(difCob<0?'#B84A3F':'#2E7D52')+';font-weight:700">'
           +'<span>'+(difCob<0?'⚠️ Cobrado BAJO catálogo':'➕ Cobrado sobre catálogo')+' <span style="font-size:0.58rem;opacity:0.7">(el catálogo manda)</span></span>'
-          +'<span style="font-weight:700">'+(difCob<0?'−':'+')+'$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+          +'<span style="font-weight:700">'+(difCob<0?'−':'+')+'$'+Math.abs(difCob).toFixed(2)+'</span></div>';
       }
     }
   }
@@ -4602,9 +4602,9 @@ function renderInicio(c){
       if(!(x.total>0)) return '';
       var w=Math.max(3,Math.round(x.total/maxMes*100));
       return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
-        +'<span style="font-size:0.6rem;font-weight:700;color:var(--gray);width:86px;flex-shrink:0">'+x.label+'</span>'
+        +'<span style="font-size:0.6rem;font-weight:700;color:var(--gray);width:100px;flex-shrink:0;white-space:nowrap">'+x.label+'</span>'
         +'<div style="flex:1;background:var(--gray-ll,#F0F1F5);border-radius:6px;height:14px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--blue-l)"></div></div>'
-        +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+fmt0(sub(x.total))+'</span>'
+        +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+fmt(sub(x.total))+'</span>'
         +'</div>';
     }).join('');
     c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
