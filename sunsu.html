@@ -3578,10 +3578,15 @@ function _histPrecioExtra(sku){
 }
 function _histPrecioProducto(skuQty){
   var parts=skuQty.split(' ×');
-  var sku=parts[0].trim(), qty=parseInt(parts[1])||1;
-  var prod=null;
-  PROVS.forEach(function(pv){pv.prods.forEach(function(p){if(p.sku===sku)prod=p;});});
-  return prod?{sku:sku,n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:null;
+  var key=parts[0].trim(), qty=parseInt(parts[1])||1;
+  // El backend manda NOMBRES de catalogo (no SKUs): buscar por ambos
+  var prod=null, kk=key.toLowerCase();
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){
+    if(!prod && (p.sku===key || (p.n&&p.n.toLowerCase()===kk))) prod=p;
+  });});
+  // Nunca esconder un producto vendido: si no se reconoce, sale con $0 y el
+  // cuadre lo delata — invisible jamas
+  return prod?{sku:prod.sku,n:prod.n,p:prod.p,qty:qty,total:prod.p*qty}:{sku:'',n:key,p:0,qty:qty,total:0};
 }
 
 // Build one ticket card — showPrices=false for staff
