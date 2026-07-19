@@ -3623,7 +3623,7 @@ function _buildTicketCard(t, showPrices){
   if(facialInfo){
     var facSku=t.facial?t.facial.match(/(SUNSU-\d+)/):null;
     var facSkuStr=facSku?skuBadge(facSku[1]):'';
-    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+facialP.toFixed(2));
+    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+(facialP/1.15).toFixed(2));
   }
   if(t.extras){
     t.extras.split('|').forEach(function(ex){
@@ -3635,7 +3635,7 @@ function _buildTicketCard(t, showPrices){
       if(esku){
         var ep=_histPrecioExtra(esku[1]);
         var eo=EXTRAS.find(function(x){return x.sku===esku[1];});
-        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎀'+(cortReason?' ('+cortReason+')':''):''),cort?'Cortesía':'$'+ep.toFixed(2));
+        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎀'+(cortReason?' ('+cortReason+')':''):''),cort?'Cortesía':'$'+(ep/1.15).toFixed(2));
       }
     });
   }
@@ -3644,20 +3644,20 @@ function _buildTicketCard(t, showPrices){
   if(packInfo){
     var pakSku=t.pack3?t.pack3.match(/(SUNSU-\d+)/):t.pack6?t.pack6.match(/(SUNSU-\d+)/):null;
     var pakSkuStr=pakSku?skuBadge(pakSku[1]):'';
-    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,'$'+packInfo.p.toFixed(2));
+    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,'$'+(packInfo.p/1.15).toFixed(2));
   }
 
   // 3. Productos — total first, then individual
   if(prodsDetalle.length){
-    breakdown+=rowItem('🧴','Total productos','$'+prodTotal.toFixed(2));
+    breakdown+=rowItem('🧴','Total productos','$'+(prodTotal/1.15).toFixed(2));
     prodsDetalle.forEach(function(pd){
-      breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+pd.total.toFixed(2));
+      breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+(pd.total/1.15).toFixed(2));
     });
   }
 
   // 4. Gift Card
   if(gcVenta){
-    breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),'$'+gcVenta.valor.toFixed(2));
+    breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),'$'+(gcVenta.valor/1.15).toFixed(2));
     if(gcVenta.nota) breakdown+=rowSub('📝',gcVenta.nota,'');
   }
   if(t.colQ&&t.colQ.indexOf('SI')===0){
@@ -3668,11 +3668,26 @@ function _buildTicketCard(t, showPrices){
     breakdown+='<div style="'+rg+';color:#5B8FA8"><span>'+rLabel+'</span><span></span></div>';
   }
 
+  // ── CUADRE CONTRA LO COBRADO ── Las lineas de arriba se pintan con el precio
+  // ACTUAL del catalogo; el total es lo que SE COBRO ese dia. Si difieren
+  // (descuento aplicado, canje, o un precio de catalogo que cambio despues),
+  // la diferencia se muestra EXPLICITA: el ticket siempre cuadra ante los ojos.
+  if(showPrices && totalCliente>0){
+    var sumLineas=facialP+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
+    if(t.extras){ t.extras.split('|').forEach(function(exS){ exS=exS.trim(); if(!exS) return; if(/\[CORTESIA/.test(exS)) return; var eskS=exS.match(/(SUNSU-\d+)/); if(eskS) sumLineas+=_histPrecioExtra(eskS[1]); }); }
+    var difCob=totalCliente-sumLineas;
+    if(Math.abs(difCob)>0.01){
+      breakdown+='<div style="'+rs+'color:'+(difCob<0?'#B84A3F':'#2E7D52')+';font-weight:700">'
+        +'<span>'+(difCob<0?'⚠️ Cobrado BAJO catálogo':'➕ Cobrado sobre catálogo')+' <span style="font-size:0.58rem;opacity:0.7">(el catálogo manda)</span></span>'
+        +'<span style="font-weight:700">'+(difCob<0?'−':'+')+'$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+    }
+  }
   // 5. Subtotal / IVA reference
   if(showPrices && totalCliente>0){
     breakdown+='<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px">'
       +'<div style="'+rg+'opacity:0.6"><span>Subtotal sin IVA</span><span>$'+(totalCliente/1.15).toFixed(2)+'</span></div>'
       +'<div style="'+rg+'opacity:0.6"><span>IVA 15%</span><span>$'+(totalCliente-totalCliente/1.15).toFixed(2)+'</span></div>'
+      +'<div style="'+rg+'font-weight:800;opacity:0.9"><span>Total con IVA</span><span>$'+totalCliente.toFixed(2)+'</span></div>'
       +'</div>';
   }
   // Fix date to dd/mm/yyyy
@@ -3700,7 +3715,7 @@ function _buildTicketCard(t, showPrices){
     +'</div>'
     +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
     +(showPrices
-      ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado</div></div>'
+      ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+(totalCliente/1.15).toFixed(2)+'</div><div style="font-size:0.58rem;color:var(--gray)">c/IVA $'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Subtotal cobrado</div></div>'
       :'')
     +(t.tkRow?(function(){
         var sinFH=(window._tarjSinFotos||{})[t.tkRow];
@@ -3888,9 +3903,9 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
     +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
     +'<div style="background:var(--lavender-l,#F3F0FA);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--lavender,#9B8EC4)">'+totPaq+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>'
     +'<div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">'+totProd+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>'
-    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+totalIngresos.toFixed(2)+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>'
+    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+(totalIngresos/1.15).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div><div style="font-size:0.55rem;color:var(--gray)">c/IVA $'+totalIngresos.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Subtotal</div></div>'
     +'</div>'
-    +(tickets.length?'<div style="font-size:0.68rem;color:var(--gray);text-align:right">Promedio por ticket: <strong>$'+avgTicket.toFixed(2)+'</strong></div>':'')
+    +(tickets.length?'<div style="font-size:0.68rem;color:var(--gray);text-align:right">Promedio por ticket: <strong>$'+(avgTicket/1.15).toFixed(2)+'</strong> <span style="font-size:0.58rem">(c/IVA $'+avgTicket.toFixed(2)+')</span></div>':'')
     +'</div>';
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
