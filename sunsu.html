@@ -9984,6 +9984,8 @@ function generarOCApp(){
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
   if(!items.length&&!factF.length){toast('La orden está vacía: ni facturación ni restock','#C9A227');return;}
   if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||'0 — solo facturación')+' productos\n\n'+(items.length?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
+  // Nota de venta (sin IVA) o factura (con IVA): el PDF respeta al proveedor
+  window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
   toast('⏳ Generando orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,provData:B.prov,usuario:CU?CU.name:'—'})})
@@ -10107,7 +10109,8 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
     var fact=(itemsFact||[]).filter(function(it){return (it.vendido||0)>0;});
     barra('FACTURACIÓN — VENDIDO EN '+qLabel.toUpperCase()+' (CONSIGNACIÓN)');
     if(fact.length){
-      var IVA_PCT=0.15;
+      var IVA_PCT=(window._ocConIVA===false)?0:0.15;
+      var IVA_LBL=IVA_PCT>0?'IVA 15%':'Sin IVA (nota de venta)';
       // Cabecera de la tabla de factura
       doc.setFillColor(238,234,222);
       doc.rect(xI,y,ANCHO,15,'F');
@@ -10117,7 +10120,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
       doc.text('CANT.',xI+242,y+10.5,{align:'right'});
       doc.text('P. UNIT.',xI+300,y+10.5,{align:'right'});
       doc.text('SUBTOTAL',xI+365,y+10.5,{align:'right'});
-      doc.text('IVA 15%',xI+422,y+10.5,{align:'right'});
+      doc.text(IVA_PCT>0?'IVA 15%':'Sin IVA',xI+422,y+10.5,{align:'right'});
       doc.text('TOTAL',xD-6,y+10.5,{align:'right'});
       y+=15;
       doc.setFontSize(7.4);
@@ -10151,7 +10154,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text('$'+sumSub.toFixed(2),xD-6,y+8,{align:'right'}); y+=13;
       doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text('IVA 15%:',xI+365,y+8,{align:'right'});
+      doc.text(IVA_LBL+':',xI+365,y+8,{align:'right'});
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text('$'+sumIva.toFixed(2),xD-6,y+8,{align:'right'}); y+=14;
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(GOLD);
