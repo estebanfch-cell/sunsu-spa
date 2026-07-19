@@ -10050,12 +10050,10 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     // ── AGENDA TU SIGUIENTE CITA — la tira ya medida arriba (dwS pudo achicarse) ──
     var dw=dwS, dh=dhS;
     var sx=(W-dw)/2, sy=H-dh-12;       // anclado al fondo — SIEMPRE en la misma hoja
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.4); doc.setTextColor(TXT);
-    doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,sy-36,{align:'center'});
     doc.setFont('helvetica','bold'); doc.setFontSize(12.5); doc.setTextColor(NAVY);
-    doc.text('AGENDA TU SIGUIENTE CITA',W/2,sy-22,{align:'center'});
-    doc.setFont('helvetica','bolditalic'); doc.setFontSize(8.8); doc.setTextColor(GOLD);
-    doc.text('toca cualquier ícono — son links directos',W/2,sy-10,{align:'center'});
+    doc.text('AGENDA TU SIGUIENTE CITA',W/2,sy-38,{align:'center'});
+    doc.setFont('helvetica','bolditalic'); doc.setFontSize(10.5); doc.setTextColor(GOLD);
+    doc.text('toca cualquier ícono — son links directos',W/2,sy-23,{align:'center'});
     doc.addImage(strip.data,'PNG',sx,sy,dw,dh);
     var escS=dw/strip.w;
     // Flechitas doradas apuntando a CADA icono: que se note que son botones
