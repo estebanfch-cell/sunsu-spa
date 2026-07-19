@@ -680,7 +680,7 @@ function initApp(){
   document.getElementById('t-name').textContent=CU.short;
   const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
   const allTabs=isAdmin
-    ?[['inicio','🏠 Dashboard'],['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
+    ?[['inicio','🏠 Dashboard'],['promos','🎉 Promos'],['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
@@ -689,6 +689,9 @@ function initApp(){
   _pintarNavMovil();
   // Los admins abren la app EN el dashboard; el resto, en Ticket como siempre
   if(isAdmin){ showTab('inicio'); } else { _navActualizar('ticket'); }
+  // Promos vigentes HOY (vencidas no llegan: el servidor las filtra)
+  fetch(APPS_SCRIPT_URL+'?action=getPromos&_t='+Date.now()).then(function(r){return r.json();})
+    .then(function(d){ window._promosVig=d.vigentes||[]; }).catch(function(){});
   // Load catalog to update prices, names and filter inactive items
   Promise.all([
     fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).catch(function(){return [];}),
@@ -881,6 +884,7 @@ function showTab(id,btn){
   const c=document.getElementById('content');
   if(id==='ticket') renderTicket(c);
   else if(id==='inicio') renderInicio(c);
+  else if(id==='promos') renderPromos(c);
   else if(id==='gc-venta') renderGCVenta(c);
   else if(id==='citas') verCitas(c,0);
   else if(id==='dash-cosm') renderDashCosm(c);
@@ -1631,7 +1635,7 @@ function updatePreview(){
       var target=T.descuento.customTarget||'Total';
       var base=target==='Facial'?facialP:target==='Paquete'?estPack:target==='Productos'?estProd:target==='Gift Card'?gcVTotal:totE;
       dscMonto=Math.round(base*pct*100)/100;
-      dscLabel='🏷️ −'+T.descuento.customPct+'% sobre '+target;
+      dscLabel=T.descuento.promo?('🎉 '+T.descuento.promo+' −'+T.descuento.customPct+'%'):('🏷️ −'+T.descuento.customPct+'% sobre '+target);
     } else if(T.descuento.custom>0){
       dscMonto=Math.min(T.descuento.custom,totE);
       dscLabel='🏷️ Descuento personalizado';
@@ -1721,6 +1725,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
+      ${(window._promosVig||[]).length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+(window._promosVig||[]).map(function(p,i){var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">🎉 '+p.nombre+' −'+p.valor+'%'+(on?' ✓':'')+'</button>';}).join('')+'</div>':''}
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
@@ -1757,6 +1762,12 @@ function updatePreview(){
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
   </div>`;
+}
+function aplicarPromo(i){
+  var p=(window._promosVig||[])[i]; if(!p) return;
+  if(T.descuento&&T.descuento.promo===p.nombre){ T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}; }
+  else { T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre}; }
+  updatePreview();
 }
 function toggleDescuento(tipo){
   if(!T.descuento) T.descuento={tipo:null,pct:0,custom:0};
@@ -1866,7 +1877,7 @@ function enviarTicket(){
       var _pct=T.descuento.customPct/100;
       var _tgt=T.descuento.customTarget||'Total';
       var _base=_tgt==='Facial'?_estF:_tgt==='Paquete'?_estPack:_tgt==='Productos'?_estProd:_totBruto;
-      _dscMonto=Math.round(_base*_pct*100)/100;_dscLabel=_tgt+'−'+T.descuento.customPct+'%';
+      _dscMonto=Math.round(_base*_pct*100)/100;_dscLabel=T.descuento.promo?('Promo '+T.descuento.promo+' −'+T.descuento.customPct+'%'):(_tgt+'−'+T.descuento.customPct+'%');
     } else if(T.descuento.custom>0){_dscMonto=Math.min(T.descuento.custom,_totBruto);_dscLabel='Desc$'+_dscMonto.toFixed(2);}
   }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
@@ -4211,6 +4222,68 @@ function _histPrecioExtra(sku){
 // CUADRAN contra la venta. Layout: 3 cuadrados / 2 rect / pagos / faciales /
 // productos / semana / mes por semanas.
 var IVA_DASH=0.15;
+// ── PROMOCIONES (solo admins): crear con vigencia, ver, desactivar ──
+function renderPromos(c){
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando promos...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getPromos&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var h='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:10px">🎉 Promociones</div>'
+      +'<div class="card" style="padding:13px;margin-bottom:10px">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">Nueva promo</div>'
+      +'<input id="pm-nom" placeholder="Nombre (ej: Paquete 3 al precio de 2)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
+      +'<div style="display:flex;gap:5px;margin-bottom:6px">'
+      +'<div style="width:90px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Descuento %</div><input id="pm-val" type="number" min="1" max="100" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Desde</div><input id="pm-d1" type="date" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+      +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Hasta</div><input id="pm-d2" type="date" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
+      +'</div>'
+      +'<button onclick="promoCrear(this)" style="width:100%;padding:11px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.74rem;font-weight:800;cursor:pointer">🎉 Crear promo</button>'
+      +'<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">Vigente = aparece sola en el ticket. Vencida = desaparece sola. Las chicas no configuran nada.</div>'
+      +'</div>';
+    (d.todas||[]).slice().reverse().forEach(function(p){
+      var viva=(d.vigentes||[]).some(function(v){return v.fila===p.fila;});
+      h+='<div class="card" style="padding:11px 13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px'+(p.activa?'':';opacity:0.5')+'">'
+        +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">🎉 '+p.nombre+' −'+p.valor+'%</div>'
+        +'<div style="font-size:0.58rem;color:var(--gray)">'+p.desde+' → '+p.hasta+' · por '+p.por+' · '+(!p.activa?'🚫 desactivada':(viva?'🟢 vigente hoy':'⏸ fuera de fechas'))+'</div></div>'
+        +(p.activa?'<button onclick="promoOff('+p.fila+',this)" style="padding:6px 11px;background:white;color:#B84A3F;border:1.5px solid #B84A3F;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;white-space:nowrap">Desactivar</button>':'')
+        +'</div>';
+    });
+    if(!(d.todas||[]).length) h+='<div style="font-size:0.64rem;color:var(--gray);text-align:center;padding:14px">Aún no hay promos — crea la primera</div>';
+    c.innerHTML=h;
+  })
+  .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión</div>'; });
+}
+function promoCrear(btn){
+  var nom=(document.getElementById('pm-nom')||{}).value||'', val=parseFloat((document.getElementById('pm-val')||{}).value)||0;
+  var d1=(document.getElementById('pm-d1')||{}).value||'', d2=(document.getElementById('pm-d2')||{}).value||'';
+  if(!nom.trim()||val<=0||!d1||!d2){ toast('⚠️ Nombre, %, y las dos fechas','#C9A227'); return; }
+  btn.disabled=true; btn.textContent='⏳ Creando...';
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'promoCrear', nombre:nom, valor:val, desde:d1, hasta:d2, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(dd){
+    btn.disabled=false; btn.textContent='🎉 Crear promo';
+    if(!dd.ok){ toast('❌ '+(dd.error||'Error'),'#B86B6B'); return; }
+    toast('🎉 Promo creada','var(--green)');
+    fetch(APPS_SCRIPT_URL+'?action=getPromos&_t='+Date.now()).then(function(r){return r.json();}).then(function(dv){window._promosVig=dv.vigentes||[];}).catch(function(){});
+    renderPromos(document.getElementById('content'));
+  })
+  .catch(function(){ btn.disabled=false; btn.textContent='🎉 Crear promo'; toast('❌ Sin conexión','#B86B6B'); });
+}
+function promoOff(fila,btn){
+  if(!confirm('¿Desactivar esta promo? Desaparece del ticket al instante.')) return;
+  btn.disabled=true;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'promoDesactivar', fila:fila, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(dd){
+    if(!dd.ok){ btn.disabled=false; toast('❌ '+(dd.error||'Error'),'#B86B6B'); return; }
+    toast('🚫 Promo desactivada','var(--green)');
+    fetch(APPS_SCRIPT_URL+'?action=getPromos&_t='+Date.now()).then(function(r){return r.json();}).then(function(dv){window._promosVig=dv.vigentes||[];}).catch(function(){});
+    renderPromos(document.getElementById('content'));
+  })
+  .catch(function(){ btn.disabled=false; toast('❌ Sin conexión','#B86B6B'); });
+}
 function renderInicio(c){
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando el pulso del día...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getDashboardHoy&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
