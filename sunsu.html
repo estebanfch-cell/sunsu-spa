@@ -3576,6 +3576,8 @@ function _histPrecioExtra(sku){
   var e=EXTRAS.find(function(x){return x.sku===sku;});
   return e?e.t:0;
 }
+// Columnas de factura: subtotal +iva = total (el formato oficial de toda linea)
+function _col3(v){return '<span style="font-size:0.58rem;white-space:nowrap">$'+(v/1.15).toFixed(2)+' <span style="opacity:0.6">+'+(v-v/1.15).toFixed(2)+'</span> = <b>$'+v.toFixed(2)+'</b></span>';}
 function _histPrecioProducto(skuQty){
   var parts=skuQty.split(' ×');
   var key=parts[0].trim(), qty=parseInt(parts[1])||1;
@@ -3654,7 +3656,7 @@ function _buildTicketCard(t, showPrices){
   if(facialInfo){
     var facSku=t.facial?t.facial.match(/(SUNSU-\d+)/):null;
     var facSkuStr=facSku?skuBadge(facSku[1]):'';
-    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),'$'+(facialP/1.15).toFixed(2));
+    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),(esCanje?'$0.00':_col3(facialP)));
   }
   if(t.extras){
     t.extras.split('|').forEach(function(ex){
@@ -3666,7 +3668,7 @@ function _buildTicketCard(t, showPrices){
       if(esku){
         var ep=_histPrecioExtra(esku[1]);
         var eo=EXTRAS.find(function(x){return x.sku===esku[1];});
-        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎀'+(cortReason?' ('+cortReason+')':''):''),cort?'Cortesía':'$'+(ep/1.15).toFixed(2));
+        breakdown+=rowSub(skuBadge(esku[1])+'✨',(eo?eo.n:ex)+(cort?' 🎀'+(cortReason?' ('+cortReason+')':''):''),cort?'Cortesía':_col3(ep));
       }
     });
   }
@@ -3675,7 +3677,7 @@ function _buildTicketCard(t, showPrices){
   if(packInfo){
     var pakSku=t.pack3?t.pack3.match(/(SUNSU-\d+)/):t.pack6?t.pack6.match(/(SUNSU-\d+)/):null;
     var pakSkuStr=pakSku?skuBadge(pakSku[1]):'';
-    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,'$'+(packInfo.p/1.15).toFixed(2));
+    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,_col3(packInfo.p));
   }
 
   // 3. Productos — total first, then individual
@@ -3688,7 +3690,7 @@ function _buildTicketCard(t, showPrices){
 
   // 4. Gift Card
   if(gcVenta){
-    breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),'$'+(gcVenta.valor/1.15).toFixed(2));
+    breakdown+=rowItem('🎁','Gift Card'+(gcVenta.codigo?' · '+gcVenta.codigo:''),_col3(gcVenta.valor));
     if(gcVenta.nota) breakdown+=rowSub('📝',gcVenta.nota,'');
   }
   if(t.colQ&&t.colQ.indexOf('SI')===0){
