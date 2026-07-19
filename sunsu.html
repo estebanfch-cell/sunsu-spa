@@ -3580,9 +3580,13 @@ function _histPrecioProducto(skuQty){
   var parts=skuQty.split(' ×');
   var key=parts[0].trim(), qty=parseInt(parts[1])||1;
   // El backend manda NOMBRES de catalogo (no SKUs): buscar por ambos
-  var prod=null, kk=key.toLowerCase();
+  // Nombres con o sin sufijo de proveedor (' - Eyenlip') deben coincidir igual
+  var normP=function(x){return (x||'').toLowerCase().replace(/\s*-\s*[a-z.\s]+$/i,'').replace(/\s+/g,' ').trim();};
+  var prod=null, kk=key.toLowerCase(), kn=normP(key);
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
-    if(!prod && (p.sku===key || (p.n&&p.n.toLowerCase()===kk))) prod=p;
+    if(prod) return;
+    if(p.sku===key || (p.n&&p.n.toLowerCase()===kk)) prod=p;
+    else if(p.n && normP(p.n)===kn) prod=p;
   });});
   // Nunca esconder un producto vendido: si no se reconoce, sale con $0 y el
   // cuadre lo delata — invisible jamas
