@@ -3595,6 +3595,15 @@ function _buildTicketCard(t, showPrices){
   var gcVenta=null;
   if(t.colS&&t.colS.indexOf('SI')===0){var gp=t.colS.split(',');gcVenta={codigo:(gp[1]||'').trim(),nota:(gp[2]||'').trim(),valor:65};}
   var totalCliente=parseFloat(t.estimado)||0;
+  // Suma de extras cobrables (sin cortesias), a precio de catalogo
+  var extrasCobrables=0;
+  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1]); }); }
+  // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
+  // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
+  // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
+  if(esCanje){
+    totalCliente=extrasCobrables+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
+  }
 
   var rs='display:flex;justify-content:space-between;font-size:0.74rem;padding:3px 0;';
   var rg='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75;';
@@ -3672,9 +3681,8 @@ function _buildTicketCard(t, showPrices){
   // ACTUAL del catalogo; el total es lo que SE COBRO ese dia. Si difieren
   // (descuento aplicado, canje, o un precio de catalogo que cambio despues),
   // la diferencia se muestra EXPLICITA: el ticket siempre cuadra ante los ojos.
-  if(showPrices && totalCliente>0){
-    var sumLineas=facialP+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
-    if(t.extras){ t.extras.split('|').forEach(function(exS){ exS=exS.trim(); if(!exS) return; if(/\[CORTESIA/.test(exS)) return; var eskS=exS.match(/(SUNSU-\d+)/); if(eskS) sumLineas+=_histPrecioExtra(eskS[1]); }); }
+  if(showPrices && totalCliente>0 && !esCanje){
+    var sumLineas=facialP+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0)+extrasCobrables;
     var difCob=totalCliente-sumLineas;
     if(Math.abs(difCob)>0.01){
       breakdown+='<div style="'+rs+'color:'+(difCob<0?'#B84A3F':'#2E7D52')+';font-weight:700">'
@@ -3715,7 +3723,7 @@ function _buildTicketCard(t, showPrices){
     +'</div>'
     +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
     +(showPrices
-      ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+(totalCliente/1.15).toFixed(2)+'</div><div style="font-size:0.58rem;color:var(--gray)">c/IVA $'+totalCliente.toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Subtotal cobrado</div></div>'
+      ?'<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--green)">$'+totalCliente.toFixed(2)+'</div><div style="font-size:0.58rem;color:var(--gray)">sin IVA $'+(totalCliente/1.15).toFixed(2)+'</div><div style="font-size:0.62rem;color:var(--gray)">Total cobrado'+(esCanje?' · 📋 canje':'')+'</div></div>'
       :'')
     +(t.tkRow?(function(){
         var sinFH=(window._tarjSinFotos||{})[t.tkRow];
@@ -4128,6 +4136,15 @@ function descargarPDFHistorial(){
     var gcVenta=null;
     if(t.colS&&t.colS.indexOf('SI')===0){var gp=t.colS.split(',');gcVenta={codigo:(gp[1]||'').trim(),nota:(gp[2]||'').trim(),valor:65};}
     var totalCliente=parseFloat(t.estimado)||0;
+  // Suma de extras cobrables (sin cortesias), a precio de catalogo
+  var extrasCobrables=0;
+  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1]); }); }
+  // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
+  // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
+  // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
+  if(esCanje){
+    totalCliente=extrasCobrables+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
+  }
     cardsHTML+='<div class="ticket" style="border-left:4px solid '+cosCol+'">'
       +'<div class="th"><div><div class="cosm" style="color:'+cosCol+'">'+t.cosmetologa+'</div><div class="cli">'+t.nombre+' '+t.apellido+'</div><div class="sub">'+t.cedula+' · '+t.hora+'</div></div>'
       +(totalCliente?'<div class="tot">$'+totalCliente.toFixed(2)+'</div>':'')+'</div>';
