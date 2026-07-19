@@ -3585,8 +3585,10 @@ function _histPrecioProducto(skuQty){
   var prod=null, kk=key.toLowerCase(), kn=normP(key);
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
     if(prod) return;
+    var pn=p.n?normP(p.n):'';
     if(p.sku===key || (p.n&&p.n.toLowerCase()===kk)) prod=p;
-    else if(p.n && normP(p.n)===kn) prod=p;
+    else if(pn && pn===kn) prod=p;
+    else if(pn && kn && (kn.indexOf(pn)===0 || pn.indexOf(kn)===0)) prod=p;
   });});
   // Nunca esconder un producto vendido: si no se reconoce, sale con $0 y el
   // cuadre lo delata — invisible jamas
@@ -3678,9 +3680,9 @@ function _buildTicketCard(t, showPrices){
 
   // 3. Productos — total first, then individual
   if(prodsDetalle.length){
-    breakdown+=rowItem('🧴','Total productos','$'+(prodTotal/1.15).toFixed(2));
+    breakdown+=rowItem('🧴','Total productos','<span style="font-size:0.62rem;white-space:nowrap">$'+(prodTotal/1.15).toFixed(2)+' <span style="opacity:0.6">+IVA '+(prodTotal-prodTotal/1.15).toFixed(2)+'</span> = <b>$'+prodTotal.toFixed(2)+'</b></span>');
     prodsDetalle.forEach(function(pd){
-      breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'$'+(pd.total/1.15).toFixed(2));
+      breakdown+=rowSub(skuBadge(pd.sku,'#8A90A0')+'',pd.n+(pd.qty>1?' ×'+pd.qty:''),'<span style="font-size:0.58rem;white-space:nowrap">$'+(pd.total/1.15).toFixed(2)+' <span style="opacity:0.6">+'+(pd.total-pd.total/1.15).toFixed(2)+'</span> = <b>$'+pd.total.toFixed(2)+'</b></span>');
     });
   }
 
@@ -4375,7 +4377,8 @@ function renderInicio(c){
         +pagoFila('🏦','Transferencia',pg.transferencia||0)
         +pagoFila('💳','Tarjeta',pg.tarjeta||0)
         +pagoFila('🔀','Mixto (sin desglose)',pg.mixto||0)
-        +pagoFila('💰','Otros',pg.otros||0)
+        +((pg.otros||0)>0.01?pagoFila('❓','Sin método claro',pg.otros||0):'')
+        +((d.hoy&&d.hoy.canjes)?'<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:0.68rem;font-weight:700;color:#7A5FA0">📋 Canjes hoy</span><span style="font-size:0.72rem;font-weight:800;color:#7A5FA0">'+d.hoy.canjes+'</span></div>':'')
         +'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 0;border-top:1.2px solid var(--cream-d);margin-top:4px">'
         +'<span style="font-size:0.68rem;font-weight:800;color:var(--navy)">TOTAL</span>'
         +'<span style="text-align:right"><span style="font-size:0.74rem;font-weight:800;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">$'+fmt(sub(pagosTot))+'</span> <span style="font-size:0.56rem;font-weight:700;color:'+(cuadra?'#2E7D52':'#B86B6B')+'">c/IVA $'+fmt(pagosTot)+' '+(cuadra?'✓ cuadra':'⚠ no cuadra con $'+fmt(hoy.venta||0))+'</span></span>'
@@ -4391,7 +4394,7 @@ function renderInicio(c){
         +'</div>'
       +'<div class="card" style="padding:12px 13px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
-      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA · subtotal</span>'
+      +'<span style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px">📈 LA SEMANA (calendario) · subtotal</span>'
       +'<span style="text-align:right"><span style="font-size:0.82rem;font-weight:800;color:var(--navy)">$'+fmt(sub(sem.total))+'</span> <span style="font-size:0.56rem;font-weight:700;color:var(--gray)">c/IVA $'+fmt(sem.total||0)+'</span></span>'
       +'</div>'
       +'<div style="display:flex;align-items:flex-end;gap:2px;height:92px">'+barras+'</div>'
