@@ -4602,8 +4602,8 @@ function renderInicio(c){
       if(!(x.total>0)) return '';
       var w=Math.max(3,Math.round(x.total/maxMes*100));
       return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
-        +'<span style="font-size:0.6rem;font-weight:700;color:var(--gray);width:100px;flex-shrink:0;white-space:nowrap">'+x.label+'</span>'
-        +'<div style="flex:1;background:var(--gray-ll,#F0F1F5);border-radius:6px;height:14px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--blue-l)"></div></div>'
+        +'<span style="font-size:0.6rem;font-weight:700;color:var(--gray);flex-shrink:0;white-space:nowrap">'+x.label+'</span>'
+        +'<div style="flex:1;background:var(--gray-ll,#F0F1F5);border-radius:6px;height:14px;overflow:hidden;min-width:36px"><div style="width:'+w+'%;height:100%;background:var(--blue)"></div></div>'
         +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+fmt(sub(x.total))+'</span>'
         +'</div>';
     }).join('');
@@ -4644,6 +4644,8 @@ function renderInicio(c){
         +'</div>':'')
       +((hoy.topFac||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
         +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">💆‍♀️ FACIALES DE HOY</div>'+chips(hoy.topFac)+'</div>':'')
+      +((d.paqChips||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
+        +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">📦 PAQUETES VENDIDOS HOY</div>'+chips(d.paqChips)+'</div>':'')
       +((d.gcChips||[]).length?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
         +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.5px;margin-bottom:5px">🎁 GIFT CARDS DE HOY</div>'+chips(d.gcChips)+'</div>':'')
       +'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
