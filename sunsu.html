@@ -1225,7 +1225,7 @@ function renderTicket(c){
     </div>
 
     <div id="preview-box" style="display:none"></div>
-    <button class="submit-btn" onclick="enviarTicket()">✓ Enviar Ticket</button>
+    <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">✓ Enviar Ticket</button>
     <div style="height:28px"></div>
   `;
   updateSunsuUI(); updatePreview();
@@ -1657,6 +1657,8 @@ function updatePreview(){
   }
 
   const totEFinal = (T.descuento&&T.descuento.tipo==='directo') ? 0 : Math.max(0, totE - dscMonto);
+  // Bases para la actualizacion EN VIVO del descuento personalizado (_dscLive)
+  window._pvB={facialP:facialP,estPack:estPack,estProd:estProd,gcVTotal:gcVTotal,totE:totE};
   const box=document.getElementById('preview-box');if(!box) return;
   const hasExtras=extrasDetalle.length>0;
   if(totC===0&&totE===0&&!T.facial&&!T.pack3&&!T.pack6&&!hasExtras){box.style.display='none';return;}
@@ -1713,10 +1715,10 @@ function updatePreview(){
     }
   }
 
-  // Descuento row
-  if(dscMonto > 0){
-    breakdown+=`<div style="${rowStyle};color:var(--green)"><span>${dscLabel}</span><span style="font-weight:700">−$${dscMonto.toFixed(2)}</span></div>`;
-  }
+  // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
+  // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
+  // el input y el teclado iOS se cerraba).
+  breakdown+=`<div id="pv-dsc-row" style="${rowStyle};color:var(--green);${dscMonto>0?'':'display:none'}"><span id="pv-dsc-lbl">${dscLabel}</span><span id="pv-dsc-mto" style="font-weight:700">−$${dscMonto.toFixed(2)}</span></div>`;
 
   // Discount buttons
   const ffActive = T.descuento && T.descuento.tipo==='ff';
@@ -1745,8 +1747,8 @@ function updatePreview(){
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:${T.descuento.customMode==='pct'?'7px':'0'}">
           <span style="font-size:0.7rem;opacity:0.7">${T.descuento.customMode==='pct'?'%':'$'}</span>
           <input type="number" id="dsc-custom-inp" min="0" step="${T.descuento.customMode==='pct'?'1':'0.01'}" max="${T.descuento.customMode==='pct'?'100':''}" value="${T.descuento.customMode==='pct'?(T.descuento.customPct||''):(T.descuento.custom||'')}" placeholder="${T.descuento.customMode==='pct'?'0 %':'0.00'}"
-            oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}clearTimeout(window._dscTimer);window._dscTimer=setTimeout(function(){var v=document.getElementById('dsc-custom-inp');var sv=v?v.value:'';updatePreview();var v2=document.getElementById('dsc-custom-inp');if(v2&&document.activeElement!==v2){v2.value=sv;}},600)"
-            onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}"
+            oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}_dscLive()"
+            onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}_dscLive()"
             style="flex:1;padding:6px 9px;border:1.5px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:0.82rem;outline:none">
           <span style="font-size:0.65rem;opacity:0.6">${T.descuento.customMode==='pct'?'sobre':'del total'}</span>
         </div>
@@ -1767,12 +1769,37 @@ function updatePreview(){
     <div class="psec">💳 Desglose a cobrar</div>
     ${breakdown}
     <div class="pdiv"></div>
-    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>Subtotal sin IVA</span><span>$${(totEFinal/1.15).toFixed(2)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>IVA 15%</span><span>$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
-    <div class="ptotal"><span>Total cliente</span><span>$${totEFinal.toFixed(2)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>Subtotal sin IVA</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0;opacity:0.6"><span>IVA 15%</span><span id="pv-iva">$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
+    <div class="ptotal"><span>Total cliente</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
   </div>`;
+}
+// ── DESCUENTO EN VIVO ── Mientras se teclea en dsc-custom-inp NO se puede
+// re-renderizar el preview (el input se destruye y el teclado iOS se cierra:
+// mismo bug que el buscador del catalogo). Esta funcion actualiza SOLO los
+// numeros por textContent. Las bases vienen de window._pvB (updatePreview).
+function _dscLive(){
+  var b=window._pvB; if(!b) return;
+  var d=T.descuento||{}; var m=0, lbl='';
+  if(d.tipo==='custom'){
+    if(d.customMode==='pct'&&d.customPct>0){
+      var t=d.customTarget||'Total';
+      var base=t==='Facial'?b.facialP:t==='Paquete'?b.estPack:t==='Productos'?b.estProd:t==='Gift Card'?b.gcVTotal:b.totE;
+      m=Math.round(base*(d.customPct/100)*100)/100;
+      lbl='🏷️ −'+d.customPct+'% sobre '+t;
+    } else if(d.customMode!=='pct'&&d.custom>0){
+      m=Math.min(d.custom,b.totE); lbl='🏷️ Descuento personalizado';
+    }
+  }
+  var tf=Math.max(0,b.totE-m);
+  var g=function(id){return document.getElementById(id);};
+  var r=g('pv-dsc-row');
+  if(r){ r.style.display=m>0?'flex':'none'; var l=g('pv-dsc-lbl'); if(l)l.textContent=lbl; var mm=g('pv-dsc-mto'); if(mm)mm.textContent='−$'+m.toFixed(2); }
+  if(g('pv-sub')) g('pv-sub').textContent='$'+(tf/1.15).toFixed(2);
+  if(g('pv-iva')) g('pv-iva').textContent='$'+(tf-tf/1.15).toFixed(2);
+  if(g('pv-tot')) g('pv-tot').textContent='$'+tf.toFixed(2);
 }
 // ── PROMOS V2: helpers compartidos (preview y envío usan EXACTAMENTE el mismo cálculo) ──
 // Unidades cobrables del ticket: cada una {sku, p} (productos: una unidad por cantidad).
@@ -1796,7 +1823,7 @@ function _promoArmada(p,units){
 function _pmMechTxt(p){
   if(p.tipo==='$') return '−$'+(parseFloat(p.valor)||0).toFixed(2);
   if(p.tipo==='NXM') return Math.round(p.valor)+'×'+Math.round(p.valor2);
-  if(p.tipo==='PACK') return '· paquete a $'+(parseFloat(p.valor)||0).toFixed(2)+' ('+Math.round(p.valor2)+' ses)';
+  if(p.tipo==='PACK') return 'paquete a $'+(parseFloat(p.valor)||0).toFixed(2)+' ('+Math.round(p.valor2)+' ses)';
   return '−'+p.valor+'%';
 }
 // Descuento de la promo: cae SOLO sobre los ítems de sus códigos, nunca sobre el total.
@@ -1861,6 +1888,21 @@ function enviarTicket(){
   const tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(v=>v)||Object.values(T.productos).some(q=>q>0)||(T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo);
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica cómo se cobra el facial','#B86B6B');return;}
+
+  // ── CANDADO ANTI-TAP FANTASMA ── El preview (justo arriba del boton) se
+  // re-renderiza con debounce y CAMBIA DE ALTO: el boton se mueve bajo el dedo
+  // (iOS) y un tap perdido caia aqui y mandaba el ticket solo. Ahora un solo
+  // tap ya no manda nada: el 1ro arma (3.5s para confirmar), el 2do envia.
+  var _btnE=document.getElementById('btn-env-tk');
+  if(!window._envArmado){
+    window._envArmado=true;
+    if(_btnE){_btnE.textContent='👆 ¿Confirmar envío? Toca de nuevo';_btnE.style.background='#C9A227';}
+    clearTimeout(window._envArmT);
+    window._envArmT=setTimeout(function(){window._envArmado=false;var b=document.getElementById('btn-env-tk');if(b){b.textContent='✓ Enviar Ticket';b.style.background='';}},3500);
+    return;
+  }
+  window._envArmado=false; clearTimeout(window._envArmT);
+  if(_btnE){_btnE.textContent='✓ Enviar Ticket';_btnE.style.background='';}
 
   // Col T: Facial
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
@@ -3785,9 +3827,19 @@ function _buildTicketCard(t, showPrices){
     var sumLineas=facialP+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0)+extrasCobrables;
     var difCob=totalCliente-sumLineas;
     if(Math.abs(difCob)>0.01){
-      breakdown+='<div style="'+rs+'color:'+(difCob<0?'#B84A3F':'#2E7D52')+';font-weight:700">'
-        +'<span>'+(difCob<0?'⚠️ Cobrado BAJO catálogo':'➕ Cobrado sobre catálogo')+' <span style="font-size:0.58rem;opacity:0.7">(el catálogo manda)</span></span>'
-        +'<span style="font-weight:700">'+(difCob<0?'−':'+')+'$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+      // Si el ticket REGISTRO un descuento (promo, FF, Desc$, %) en notas, la
+      // diferencia contra catalogo NO es una anomalia: se pinta con su nombre.
+      var _dscN=(t.notas||'').toString().match(/Descuento:\s*(.+)$/);
+      if(difCob<0&&_dscN){
+        var _dscTxt=_dscN[1].trim().replace(/\s*[−-]\$[\d.,]+\s*$/,'');
+        breakdown+='<div style="'+rs+'color:#8A6D1F;font-weight:700">'
+          +'<span>🏷 '+_dscTxt+'</span>'
+          +'<span style="font-weight:700">−$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+      } else {
+        breakdown+='<div style="'+rs+'color:'+(difCob<0?'#B84A3F':'#2E7D52')+';font-weight:700">'
+          +'<span>'+(difCob<0?'⚠️ Cobrado BAJO catálogo':'➕ Cobrado sobre catálogo')+' <span style="font-size:0.58rem;opacity:0.7">(el catálogo manda)</span></span>'
+          +'<span style="font-weight:700">'+(difCob<0?'−':'+')+'$'+(Math.abs(difCob)/1.15).toFixed(2)+'</span></div>';
+      }
     }
   }
   // 5. Subtotal / IVA reference
