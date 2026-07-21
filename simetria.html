@@ -83,29 +83,11 @@
   }
 
   #resultados{display:none;margin-top:30px;}
-  .score-panel{
-    text-align:center;padding:30px 20px 26px;
-    background:linear-gradient(180deg,#fff, var(--rosa-suave));
-    border:1px solid var(--linea);border-radius:18px;
-  }
-  .score-num{
-    font-family:'Cormorant Garamond',serif;
-    font-size:72px;font-weight:500;line-height:1;color:var(--tinta);
-  }
-  .score-num small{font-size:26px;color:var(--oro);}
-  .score-label{
-    font-size:12px;letter-spacing:.3em;text-transform:uppercase;
-    color:var(--oro);margin-top:6px;
-  }
-  .score-frase{
-    font-family:'Cormorant Garamond',serif;font-style:italic;
-    font-size:17px;color:var(--tinta-suave);margin-top:12px;
-  }
 
   .detalle{margin-top:8px;}
   .fila{
     display:flex;justify-content:space-between;align-items:center;
-    padding:13px 4px;border-bottom:1px solid var(--linea);
+    padding:13px 4px;border-bottom:1px solid var(--linea);gap:10px;
   }
   .fila:last-child{border-bottom:none;}
   .fila .nombre{font-size:14px;font-weight:400;}
@@ -113,11 +95,12 @@
     font-family:'Cormorant Garamond',serif;font-size:19px;
     font-weight:600;color:var(--tinta);white-space:nowrap;
   }
-  .barra{
-    flex:1;height:3px;background:var(--linea);border-radius:2px;
-    margin:0 14px;overflow:hidden;
+  .lado-pill{
+    font-size:12px;font-weight:700;letter-spacing:.06em;
+    padding:5px 12px;border-radius:14px;white-space:nowrap;
+    border:1.5px solid var(--oro);color:var(--tinta);background:#fff;
   }
-  .barra i{display:block;height:100%;background:var(--rosa);border-radius:2px;}
+  .lado-pill.eq{border-color:var(--linea);color:var(--tinta-suave);}
 
   .nota{
     margin-top:22px;font-size:12px;color:var(--tinta-suave);
@@ -138,7 +121,7 @@
     display:block;margin-bottom:14px;
   }
 
-  /* ---------- cámara con óvalo guía ---------- */
+  /* ---------- cámara ---------- */
   #camModal{
     display:none;position:fixed;inset:0;z-index:1000;background:#000;
   }
@@ -175,7 +158,7 @@
     <img class="logo" id="logo" style="display:none;" alt="Sunsu Spa">
     <div class="marca">Sunsu Spa</div>
     <h1>Análisis Facial<br>K-Lift</h1>
-    <div class="sub">Balance · Contorno · V-Line · Armonía</div>
+    <div class="sub">Equilibrio, no perfección</div>
   </header>
 
   <div class="foto-zona vacia" id="fotoZona">
@@ -198,14 +181,8 @@
   <div class="estado" id="estado">Cargando modelo de análisis…</div>
 
   <div id="resultados">
-    <div class="score-panel">
-      <div class="score-num" id="scoreNum">—<small>%</small></div>
-      <div class="score-label">Índice de Simetría</div>
-      <div class="score-frase" id="scoreFrase"></div>
-    </div>
-
-    <div class="divisor">Detalle por zona</div>
-    <div class="detalle" id="detalleZonas"></div>
+    <div class="divisor">Comparativa Izquierda / Derecha</div>
+    <div class="detalle" id="detalleComparativa"></div>
 
     <div class="divisor">Proporciones</div>
     <div class="detalle" id="detalleProporciones"></div>
@@ -218,9 +195,9 @@
   </div>
 
   <p class="nota" id="notaFinal" style="display:none;">
-    La simetría perfecta no existe: todos los rostros tienen variaciones
-    naturales que los hacen únicos. Este análisis es estético y orientativo,
-    no constituye un diagnóstico médico.
+    El protocolo K-Lift evalúa equilibrio, no perfección: todos los rostros
+    tienen variaciones naturales que los hacen únicos. Este análisis es
+    estético y orientativo, no constituye un diagnóstico médico.
   </p>
 </div>
 
@@ -254,11 +231,9 @@ const LOGO_URL = "";    // ← pegar aquí la URL del logo (ej: logo.png en el r
 const R = {
   blanco:"#FFFFFF", negro:"#141414", gris:"#8A8A8A", borde:"#E8E8E8",
   rosa:"#E8618C", rosaSuave:"#F9D9E4", oscuro:"#1E1E1E",
-  /* colores de marcadores faciales */
   ceja:"#B57FD6", ojo:"#F2C14E", pupila:"#3D9BE9",
   nariz:"#6FBF73", boca:"#E5484D", menton:"#F27BA2"
 };
-/* colores de zonas página 3 */
 const ZCOLORES = ["#F27BA2","#F2A65A","#8ED08E","#B57FD6","#5BC8D8","#F2C14E"];
 
 const $ = id => document.getElementById(id);
@@ -361,6 +336,8 @@ function reflejar(q, p0, d){
 }
 const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 
+/* NOTA DE LADOS: en la foto NO espejada, los índices bajos (33, 105, 159, 61…)
+   caen al lado IZQUIERDO de la imagen = lado DERECHO de la persona. */
 const ZONAS = {
   "Ojos":     [[33,263],[133,362],[159,386],[145,374],[130,359]],
   "Cejas":    [[70,300],[105,334],[46,276],[52,282],[55,285]],
@@ -368,8 +345,8 @@ const ZONAS = {
   "Contorno": [[234,454],[93,323],[132,361],[172,397],[136,365],[150,379],[176,400]]
 };
 const CENTRALES = [10,168,6,197,195,5,4,1,2,164,0,17,18,200,199,152];
-const CEJA_A = [70,63,105,66,107];
-const CEJA_B = [336,296,334,293,300];
+const CEJA_A = [70,63,105,66,107];      /* lado izq. de la imagen = ceja DERECHA de la persona */
+const CEJA_B = [336,296,334,293,300];   /* lado der. de la imagen = ceja IZQUIERDA de la persona */
 const VLINE = [58,172,136,150,149,176,148,152,377,400,378,365,397,288];
 
 const ANCLAS = {
@@ -423,12 +400,12 @@ function analizar(img){
   const ang = 0.5 * Math.atan2(2*sxy, sxx - syy);
   let d = { x: Math.cos(ang), y: Math.sin(ang) };
   if(Math.abs(d.y) < Math.abs(d.x)) d = { x:-d.y, y:d.x };
+  if(d.y < 0){ d.x = -d.x; d.y = -d.y; }   /* eje siempre apuntando hacia abajo */
   const p0 = { x: cx, y: cy };
 
   const anchoCara = dist(lm[234], lm[454]);
 
   const zonasRes = {};
-  let sumaTotal = 0, nTotal = 0;
   for(const [zona, pares] of Object.entries(ZONAS)){
     let suma = 0;
     for(const [a,b] of pares){
@@ -437,10 +414,7 @@ function analizar(img){
     }
     const devPct = (suma / pares.length) * 100;
     zonasRes[zona] = Math.max(0, Math.min(100, 100 - devPct * 9));
-    sumaTotal += suma; nTotal += pares.length;
   }
-  const devGlobal = (sumaTotal / nTotal) * 100;
-  const score = Math.round(Math.max(0, Math.min(100, 100 - devGlobal * 9)));
 
   const angEje = Math.atan2(d.y, d.x);
   const angLinea = (a,b) => {
@@ -452,6 +426,7 @@ function analizar(img){
   const inclBoca = angLinea(61,291);
 
   const proj  = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
+  /* perp > 0 → lado izquierdo de la imagen → lado DERECHO de la persona */
   const perp  = p => (p.x-p0.x)*-d.y + (p.y-p0.y)*d.x;
 
   const t1 = Math.abs(proj(lm[168]) - proj(lm[10]));
@@ -460,44 +435,50 @@ function analizar(img){
   const tt = t1+t2+t3;
   const tercios = [t1/tt*100, t2/tt*100, t3/tt*100];
 
-  const altCejaIzq = Math.abs(proj(lm[105]) - proj(lm[159]));
-  const altCejaDer = Math.abs(proj(lm[334]) - proj(lm[386]));
+  /* lados ANATÓMICOS de la persona */
+  const altCejaDer = Math.abs(proj(lm[105]) - proj(lm[159]));   /* imagen izq. */
+  const altCejaIzq = Math.abs(proj(lm[334]) - proj(lm[386]));   /* imagen der. */
   const difCejas = Math.abs(altCejaIzq - altCejaDer) / anchoCara * 100;
+  const cejaMasAlta = difCejas < 0.6 ? 'equilibrado' : (altCejaIzq > altCejaDer ? 'izquierda' : 'derecha');
 
-  const apIzq = dist(lm[159], lm[145]) / anchoCara * 100;
-  const apDer = dist(lm[386], lm[374]) / anchoCara * 100;
+  const apDer = dist(lm[159], lm[145]) / anchoCara * 100;       /* imagen izq. */
+  const apIzq = dist(lm[386], lm[374]) / anchoCara * 100;       /* imagen der. */
+  const difOjos = Math.abs(apIzq - apDer);
+  const ojoMasAbierto = difOjos < 0.35 ? 'equilibrado' : (apIzq > apDer ? 'izquierda' : 'derecha');
 
-  const desvMenton = Math.abs(perp(lm[152])) / anchoCara * 100;
+  const perpMenton = perp(lm[152]);
+  const desvMenton = Math.abs(perpMenton) / anchoCara * 100;
+  const mentonHacia = desvMenton < 0.5 ? 'centrado' : (perpMenton > 0 ? 'derecha' : 'izquierda');
 
   metricasActuales = {
-    indiceSimetria: score,
-    simetriaPorZona: Object.fromEntries(Object.entries(zonasRes).map(([z,v])=>[z, Math.round(v)])),
+    nota: "Todos los lados son anatómicos (de la persona)",
+    cejaMasAlta, diferenciaCejasPct: +difCejas.toFixed(2),
+    ojoMasAbierto, aperturaOjoIzqPct: +apIzq.toFixed(2), aperturaOjoDerPct: +apDer.toFixed(2),
+    mentonDesviadoHacia: mentonHacia, desviacionMentonPct: +desvMenton.toFixed(2),
     inclinacionOjosGrados: +inclOjos.toFixed(1),
     inclinacionBocaGrados: +inclBoca.toFixed(1),
     terciosFacialesPct: tercios.map(t=>Math.round(t)),
-    diferenciaCejasPct: +difCejas.toFixed(2),
-    aperturaOjoIzqPct: +apIzq.toFixed(2),
-    aperturaOjoDerPct: +apDer.toFixed(2),
-    desviacionMentonPct: +desvMenton.toFixed(2)
+    equilibrioPorZonaPct: Object.fromEntries(Object.entries(zonasRes).map(([z,v])=>[z, Math.round(v)]))
   };
 
-  A = { lm, p0, d, w, h, score, zonas: zonasRes, limpio };
+  A = { lm, p0, d, w, h, zonas: zonasRes, limpio,
+        cejaMasAlta, difCejas, ojoMasAbierto, apIzq, apDer,
+        mentonHacia, desvMenton, perpMenton };
 
   dibujarLineasFaciales(ctx, p => p, 1);
   $('fotoZona').style.display = 'none';
   lienzo.style.display = 'block';
   lienzo.style.borderRadius = '18px';
 
-  mostrarResultados(score, zonasRes, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton);
+  mostrarResultados(inclOjos, inclBoca, tercios);
 }
 
-/* ---------- líneas faciales estilo referencia ---------- */
+/* ---------- líneas faciales ---------- */
 function dibujarLineasFaciales(g, M, s){
   const lm = A.lm, p0 = M(A.p0), d = A.d;
   const L = 4000 * s;
   const gr = Math.max(2, 2.6*s);
 
-  /* eje central blanco */
   g.strokeStyle = "rgba(255,255,255,.95)";
   g.lineWidth = gr;
   g.setLineDash([10*s, 8*s]);
@@ -526,27 +507,22 @@ function dibujarLineasFaciales(g, M, s){
     g.setLineDash([]);
   };
 
-  /* cejas — morado punteado con puntos */
   curva(CEJA_A, R.ceja, [7*s,5*s]);
   curva(CEJA_B, R.ceja, [7*s,5*s]);
   [70,107,336,300].forEach(i => punto(i, R.ceja, 5));
   [105,334].forEach(i => punto(i, R.ceja, 6));
 
-  /* línea de ojos — blanca punteada con esquinas amarillas y pupilas azules */
   curva([33,133], "rgba(255,255,255,.9)", [6*s,4*s]);
   curva([362,263], "rgba(255,255,255,.9)", [6*s,4*s]);
   [33,133,362,263].forEach(i => punto(i, R.ojo, 6));
   if(lm.length > 473){ punto(468, R.pupila, 7); punto(473, R.pupila, 7); }
 
-  /* boca — esquinas rojas */
   curva([61,13,291], "rgba(229,72,77,.85)", [6*s,4*s]);
   [61,291].forEach(i => punto(i, R.boca, 6));
 
-  /* nariz verde y mentón rosa */
   punto(1, R.nariz, 6);
   punto(152, R.menton, 6);
 
-  /* V-Line — curva blanca sólida gruesa */
   g.strokeStyle = "rgba(255,255,255,.98)";
   g.lineWidth = gr*2.1;
   g.lineJoin = "round";
@@ -558,31 +534,28 @@ function dibujarLineasFaciales(g, M, s){
   g.stroke();
 }
 
-function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton){
-  $('scoreNum').innerHTML = score + '<small>%</small>';
-  $('scoreFrase').textContent =
-    score >= 93 ? "Un balance facial excepcional" :
-    score >= 87 ? "Un rostro muy armónico" :
-    score >= 80 ? "Buen balance con carácter propio" :
-                  "Un rostro único, lleno de personalidad";
+const NOMBRE_LADO = l =>
+  l === 'izquierda' ? 'Izquierda' :
+  l === 'derecha' ? 'Derecha' :
+  l === 'centrado' ? 'Centrado' : 'Equilibrado';
 
-  let html = '';
-  for(const [zona, val] of Object.entries(zonas)){
-    html += `<div class="fila">
-      <span class="nombre">${zona}</span>
-      <span class="barra"><i style="width:${val.toFixed(0)}%"></i></span>
-      <span class="valor">${val.toFixed(0)}%</span>
-    </div>`;
-  }
-  $('detalleZonas').innerHTML = html;
+function mostrarResultados(inclOjos, inclBoca, tercios){
+  const pill = l => `<span class="lado-pill ${(l==='equilibrado'||l==='centrado')?'eq':''}">${NOMBRE_LADO(l).toUpperCase()}</span>`;
+
+  $('detalleComparativa').innerHTML = `
+    <div class="fila"><span class="nombre">Ceja más elevada</span>${pill(A.cejaMasAlta)}</div>
+    <div class="fila"><span class="nombre">Ojo más abierto</span>${pill(A.ojoMasAbierto)}</div>
+    <div class="fila"><span class="nombre">Apertura ocular (I / D)</span><span class="valor">${A.apIzq.toFixed(1)} / ${A.apDer.toFixed(1)}</span></div>
+    <div class="fila"><span class="nombre">Mentón</span>${pill(A.mentonHacia)}</div>
+    <div class="fila"><span class="nombre">Equilibrio de cejas</span><span class="valor">${A.zonas["Cejas"].toFixed(0)}%</span></div>
+    <div class="fila"><span class="nombre">Equilibrio de ojos</span><span class="valor">${A.zonas["Ojos"].toFixed(0)}%</span></div>
+    <div class="fila"><span class="nombre">Equilibrio de contorno</span><span class="valor">${A.zonas["Contorno"].toFixed(0)}%</span></div>
+  `;
 
   $('detalleProporciones').innerHTML = `
     <div class="fila"><span class="nombre">Inclinación de ojos</span><span class="valor">${inclOjos.toFixed(1)}°</span></div>
     <div class="fila"><span class="nombre">Inclinación de boca</span><span class="valor">${inclBoca.toFixed(1)}°</span></div>
     <div class="fila"><span class="nombre">Tercios faciales</span><span class="valor">${tercios.map(t=>t.toFixed(0)).join(' · ')}</span></div>
-    <div class="fila"><span class="nombre">Diferencia de cejas</span><span class="valor">${difCejas.toFixed(1)}%</span></div>
-    <div class="fila"><span class="nombre">Apertura de ojos (I / D)</span><span class="valor">${apIzq.toFixed(1)} / ${apDer.toFixed(1)}</span></div>
-    <div class="fila"><span class="nombre">Desviación del mentón</span><span class="valor">${desvMenton.toFixed(1)}%</span></div>
   `;
 
   $('resultados').style.display = 'block';
@@ -615,7 +588,7 @@ $('btnIA').onclick = async () => {
 };
 
 /* =====================================================
-   INFORME K-LIFT — 3 páginas 1080×1527 · estilo referencia
+   INFORME K-LIFT — 3 páginas 1080×1527
    ===================================================== */
 const SW = 1080, SH = 1527;
 
@@ -671,7 +644,6 @@ function encabezado(g, titulo, subtitulo){
   g.fillStyle = R.negro;
   g.font = "900 62px Archivo";
   g.fillText(titulo.toUpperCase(), SW/2, 118);
-  g.fillStyle = R.negro;
   g.font = "600 27px Archivo";
   g.fillText(subtitulo.toUpperCase(), SW/2, 160);
 }
@@ -703,6 +675,11 @@ function flecha(g, x1, y1, x2, y2, color, ancho){
   g.closePath(); g.fill();
 }
 
+function textoSombra(g, on){
+  if(on){ g.shadowColor = "rgba(0,0,0,.8)"; g.shadowBlur = 8; }
+  else { g.shadowColor = "transparent"; g.shadowBlur = 0; }
+}
+
 /* PÁGINA 1 — Escaneo K-Lift */
 function pagina1(anotacionesZona){
   const { c, g } = nuevaPagina(1);
@@ -717,7 +694,7 @@ function pagina1(anotacionesZona){
   g.beginPath(); g.rect(fx, fyTop, fw, fh); g.clip();
   g.drawImage(A.limpio, fx, fyTop, fw, fh);
 
-  /* líneas de tercios rosadas de borde a borde con puntos */
+  /* líneas de tercios rosadas con puntos en los extremos */
   const ysT = [10,168,2,152].map(i => M(A.lm[i]).y);
   g.strokeStyle = R.rosa; g.lineWidth = 3;
   for(const y of ysT){
@@ -728,26 +705,71 @@ function pagina1(anotacionesZona){
   }
 
   dibujarLineasFaciales(g, M, Math.max(1, f.s*1.4));
+
+  /* comparativa de altura de cejas — líneas moradas + flecha de diferencia */
+  const yCejaImgIzq = M(A.lm[105]).y;   /* ceja DERECHA de la persona */
+  const yCejaImgDer = M(A.lm[334]).y;   /* ceja IZQUIERDA de la persona */
+  const cxC = M(A.p0).x;
+  g.strokeStyle = R.ceja; g.lineWidth = 3;
+  g.setLineDash([8,6]);
+  g.beginPath(); g.moveTo(M(A.lm[105]).x-40, yCejaImgIzq); g.lineTo(cxC+8, yCejaImgIzq); g.stroke();
+  g.beginPath(); g.moveTo(M(A.lm[334]).x+40, yCejaImgDer); g.lineTo(cxC-8, yCejaImgDer); g.stroke();
+  g.setLineDash([]);
+  if(A.cejaMasAlta !== 'equilibrado' && Math.abs(yCejaImgIzq-yCejaImgDer) > 8){
+    flecha(g, cxC, Math.max(yCejaImgIzq,yCejaImgDer), cxC, Math.min(yCejaImgIzq,yCejaImgDer), R.ceja, 3.5);
+    textoSombra(g, true);
+    g.fillStyle = "#fff";
+    g.textAlign = "center";
+    g.font = "800 21px Archivo";
+    g.fillText("CEJA " + (A.cejaMasAlta==='izquierda'?'IZQ.':'DER.') + " MÁS ALTA", cxC, Math.min(yCejaImgIzq,yCejaImgDer)-14);
+    textoSombra(g, false);
+  }
+
+  /* apertura ocular — segmentos verticales amarillos con topes */
+  const segOjo = (a,b) => {
+    const pa = M(A.lm[a]), pb = M(A.lm[b]);
+    g.strokeStyle = R.ojo; g.lineWidth = 3.5;
+    g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke();
+    for(const p of [pa,pb]){
+      g.beginPath(); g.moveTo(p.x-9, p.y); g.lineTo(p.x+9, p.y); g.stroke();
+    }
+  };
+  segOjo(159,145);   /* ojo derecho de la persona */
+  segOjo(386,374);   /* ojo izquierdo de la persona */
+  if(A.ojoMasAbierto !== 'equilibrado'){
+    const idx = A.ojoMasAbierto === 'izquierda' ? 386 : 159;
+    const p = M(A.lm[idx]);
+    textoSombra(g, true);
+    g.fillStyle = "#fff";
+    g.textAlign = "center";
+    g.font = "800 20px Archivo";
+    g.fillText("MÁS ABIERTO", p.x, p.y-26);
+    textoSombra(g, false);
+  }
+
+  /* desviación del mentón — flecha rosa desde el eje */
+  if(A.mentonHacia !== 'centrado'){
+    const pm = M(A.lm[152]);
+    const t = ((A.lm[152].x-A.p0.x)*A.d.x + (A.lm[152].y-A.p0.y)*A.d.y);
+    const ejePt = M({ x: A.p0.x + A.d.x*t, y: A.p0.y + A.d.y*t });
+    flecha(g, ejePt.x, ejePt.y, pm.x, pm.y, R.menton, 3.5);
+  }
   g.restore();
 
-  /* etiquetas de tercios — texto blanco bold con sombra */
-  const nombres = [["TERCIO","SUPERIOR","Frente a entrecejo"],["TERCIO","MEDIO","Entrecejo a base nasal"],["TERCIO","INFERIOR","Base nasal a mentón"]];
+  /* etiquetas de tercios */
+  const nombres = [["TERCIO","SUPERIOR"],["TERCIO","MEDIO"],["TERCIO","INFERIOR"]];
   g.textAlign = "left";
   for(let k=0;k<3;k++){
     const ym = (ysT[k]+ysT[k+1])/2;
-    sombra(g, false);
-    g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 8;
+    textoSombra(g, true);
     g.fillStyle = "#fff";
-    g.font = "800 27px Archivo";
-    g.fillText(nombres[k][0], fx+22, ym-14);
-    g.fillText(nombres[k][1], fx+22, ym+16);
-    g.font = "400 19px Karla";
-    g.fillStyle = "rgba(255,255,255,.92)";
-    g.fillText(nombres[k][2], fx+22, ym+44);
-    sombra(g, false);
+    g.font = "800 26px Archivo";
+    g.fillText(nombres[k][0], fx+20, ym-8);
+    g.fillText(nombres[k][1], fx+20, ym+22);
+    textoSombra(g, false);
   }
 
-  /* callouts numerados — tarjetas blancas con sombra y flecha rosa */
+  /* callouts numerados */
   const lista = [];
   (anotacionesZona||[]).slice(0,4).forEach((a,i)=>{
     const idx = ANCLAS[a.zona];
@@ -763,13 +785,13 @@ function pagina1(anotacionesZona){
   const cols = { izq: lista.filter(a=>a.ax < centroX), der: lista.filter(a=>a.ax >= centroX) };
   for(const [lado, ls] of Object.entries(cols)){
     ls.sort((a,b)=>a.ay-b.ay);
-    let prevFin = ry + 150;
+    let prevFin = ry + 130;
     for(const an of ls){
       g.font = "600 22px Karla";
       const lineas = envolver(g, an.texto, cajaW-42);
       const cajaH = 58 + lineas.length*27;
       let by = Math.max(an.ay - cajaH/2, prevFin + gap);
-      if(by + cajaH > ry+rh-16) by = ry+rh-16-cajaH;
+      if(by + cajaH > ry+rh-130) by = ry+rh-130-cajaH;
       const bx = lado === 'izq' ? margen : SW - margen - cajaW;
       prevFin = by + cajaH;
 
@@ -798,7 +820,7 @@ function pagina1(anotacionesZona){
     }
   }
 
-  /* barra de leyenda oscura sobre el borde inferior de la foto */
+  /* leyenda oscura */
   const leyH = 96, leyY = ry+rh-leyH-14;
   g.fillStyle = "rgba(20,20,20,.85)";
   rrect(g, fx+14, leyY, fw-28, leyH, 14); g.fill();
@@ -808,7 +830,6 @@ function pagina1(anotacionesZona){
   ];
   g.font = "600 20px Karla";
   const anchos = ley.map(([t])=> 24 + g.measureText(t).width + 30);
-  const total = anchos.reduce((s,a)=>s+a,0);
   const porFila = 4;
   let lx = fx+14 + (fw-28 - anchos.slice(0,porFila).reduce((s,a)=>s+a,0))/2;
   let ly = leyY+38;
@@ -825,22 +846,36 @@ function pagina1(anotacionesZona){
     lx += anchos[i];
   }
 
-  pie(g, "Este análisis es una estimación basada en una fotografía y tiene fines de orientación estética.");
+  pie(g, "Protocolo K-Lift: equilibrio, no perfección · Estimación basada en una fotografía");
   return c;
 }
 
-/* íconos de línea para página 2 */
+/* íconos página 2 */
 function icono(g, tipo, cx, cy, r){
   g.strokeStyle = R.negro; g.lineWidth = 3; g.lineCap = "round";
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.stroke();
   const u = r*0.52;
   g.lineWidth = 2.6;
   switch(tipo){
-    case 0: /* balance: óvalo de cara + eje */
-      g.beginPath(); g.ellipse(cx, cy, u*0.72, u, 0, 0, Math.PI*2); g.stroke();
-      g.beginPath(); g.moveTo(cx, cy-u); g.lineTo(cx, cy+u); g.stroke();
+    case 0: /* cejas: arco */
+      g.beginPath();
+      g.moveTo(cx-u, cy+u*0.35);
+      g.quadraticCurveTo(cx, cy-u*0.75, cx+u, cy+u*0.35);
+      g.stroke();
       break;
-    case 1: /* tensión: ondas */
+    case 1: /* ojo */
+      g.beginPath();
+      g.moveTo(cx-u, cy);
+      g.quadraticCurveTo(cx, cy-u*0.85, cx+u, cy);
+      g.quadraticCurveTo(cx, cy+u*0.85, cx-u, cy);
+      g.stroke();
+      g.beginPath(); g.arc(cx, cy, u*0.28, 0, Math.PI*2); g.stroke();
+      break;
+    case 2: /* mejillas: dos círculos */
+      g.beginPath(); g.arc(cx-u*0.55, cy, u*0.5, 0, Math.PI*2); g.stroke();
+      g.beginPath(); g.arc(cx+u*0.55, cy, u*0.5, 0, Math.PI*2); g.stroke();
+      break;
+    case 3: /* tensión: ondas */
       for(let k=-1;k<=1;k++){
         g.beginPath();
         g.moveTo(cx-u, cy+k*u*0.6);
@@ -849,41 +884,21 @@ function icono(g, tipo, cx, cy, r){
         g.stroke();
       }
       break;
-    case 2: /* retención: gota */
-      g.beginPath();
-      g.moveTo(cx, cy-u);
-      g.quadraticCurveTo(cx+u*0.95, cy+u*0.25, cx, cy+u);
-      g.quadraticCurveTo(cx-u*0.95, cy+u*0.25, cx, cy-u);
-      g.stroke();
-      break;
-    case 3: /* v-line */
+    case 4: /* v-line */
       g.beginPath();
       g.moveTo(cx-u, cy-u*0.7);
       g.quadraticCurveTo(cx-u*0.5, cy+u*0.6, cx, cy+u*0.85);
       g.quadraticCurveTo(cx+u*0.5, cy+u*0.6, cx+u, cy-u*0.7);
       g.stroke();
       break;
-    case 4: /* mandíbula: U */
-      g.beginPath();
-      g.moveTo(cx-u, cy-u*0.6);
-      g.lineTo(cx-u, cy+u*0.1);
-      g.quadraticCurveTo(cx, cy+u, cx+u, cy+u*0.1);
-      g.lineTo(cx+u, cy-u*0.6);
-      g.stroke();
+    case 5: /* línea media: cara + eje */
+      g.beginPath(); g.ellipse(cx, cy, u*0.72, u, 0, 0, Math.PI*2); g.stroke();
+      g.beginPath(); g.moveTo(cx, cy-u); g.lineTo(cx, cy+u); g.stroke();
       break;
-    case 5: /* ceja: arco */
-      g.beginPath();
-      g.moveTo(cx-u, cy+u*0.35);
-      g.quadraticCurveTo(cx, cy-u*0.75, cx+u, cy+u*0.35);
-      g.stroke();
-      break;
-    case 6: /* cuello: hombros */
-      g.beginPath();
-      g.moveTo(cx-u*0.35, cy-u); g.lineTo(cx-u*0.35, cy);
-      g.quadraticCurveTo(cx-u*0.4, cy+u*0.4, cx-u, cy+u*0.7);
-      g.moveTo(cx+u*0.35, cy-u); g.lineTo(cx+u*0.35, cy);
-      g.quadraticCurveTo(cx+u*0.4, cy+u*0.4, cx+u, cy+u*0.7);
-      g.stroke();
+    case 6: /* óvalo facial */
+      g.setLineDash([5,4]);
+      g.beginPath(); g.ellipse(cx, cy, u*0.75, u, 0, 0, Math.PI*2); g.stroke();
+      g.setLineDash([]);
       break;
   }
 }
@@ -903,6 +918,7 @@ function pagina2(categorias, obsGeneral){
     const cat = cats[ci];
     const p10 = Math.round(Math.max(0, Math.min(100, Number(cat.puntaje)||0))/10);
     const dots5 = Math.max(1, Math.round(p10/2));
+    const lado = (cat.lado||'equilibrado').toLowerCase();
 
     g.font = "400 22px Karla";
     const obsL = envolver(g, cat.observacion, colObsW);
@@ -926,6 +942,20 @@ function pagina2(categorias, obsGeneral){
     g.font = "800 27px Archivo";
     g.fillText(cat.nombre.toUpperCase(), txtX, y+42);
 
+    /* pill de lado */
+    const ladoTxt = lado==='izquierda' ? 'IZQUIERDA' : lado==='derecha' ? 'DERECHA' : 'EQUILIBRADO';
+    g.font = "800 17px Archivo";
+    const ladoW = g.measureText(ladoTxt).width + 30;
+    const esEq = (lado!=='izquierda' && lado!=='derecha');
+    g.strokeStyle = esEq ? R.borde : R.rosa; g.lineWidth = 2;
+    g.fillStyle = esEq ? "#fff" : R.rosaSuave;
+    rrect(g, colRecX-24-ladoW-16, y+22, ladoW, 32, 16); g.fill();
+    rrect(g, colRecX-24-ladoW-16, y+22, ladoW, 32, 16); g.stroke();
+    g.fillStyle = esEq ? R.gris : R.rosa;
+    g.textAlign = "center";
+    g.fillText(ladoTxt, colRecX-24-ladoW-16+ladoW/2, y+44);
+
+    g.textAlign = "left";
     for(let i=0;i<5;i++){
       g.fillStyle = i < dots5 ? R.negro : "#fff";
       g.strokeStyle = R.negro; g.lineWidth = 2.4;
@@ -950,8 +980,7 @@ function pagina2(categorias, obsGeneral){
     y += altura + 14;
   }
 
-  /* frase de cierre */
-  const cierre = obsGeneral || "El cuidado constante y el masaje facial dirigido pueden mejorar visiblemente la simetría, el contorno y la vitalidad de la piel.";
+  const cierre = obsGeneral || "El cuidado constante y el masaje facial dirigido pueden mejorar visiblemente el equilibrio, el contorno y la vitalidad de la piel.";
   g.font = "500 24px Karla";
   const cl = envolver(g, cierre, cardW-120);
   const cierreH = 36 + cl.length*30;
@@ -968,7 +997,6 @@ function pagina2(categorias, obsGeneral){
   return c;
 }
 
-/* corona página 3 */
 function corona(g, cx, cy, s){
   g.fillStyle = R.rosa;
   g.beginPath();
@@ -983,6 +1011,26 @@ function corona(g, cx, cy, s){
   rrect(g, cx-2.2*s, cy+1.35*s, 4.4*s, 0.55*s, 0.2*s); g.fill();
 }
 
+/* punta de flecha */
+function punta(g, x, y, ang, t, color){
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.lineTo(x - t*Math.cos(ang-0.45), y - t*Math.sin(ang-0.45));
+  g.lineTo(x - t*Math.cos(ang+0.45), y - t*Math.sin(ang+0.45));
+  g.closePath(); g.fill();
+}
+
+/* flecha curva (cuadrática) con punta */
+function flechaCurva(g, x1, y1, cxq, cyq, x2, y2, color, ancho, dash){
+  g.strokeStyle = color; g.lineWidth = ancho;
+  g.setLineDash(dash||[]);
+  g.beginPath(); g.moveTo(x1,y1); g.quadraticCurveTo(cxq,cyq,x2,y2); g.stroke();
+  g.setLineDash([]);
+  const ang = Math.atan2(y2-cyq, x2-cxq);
+  punta(g, x2, y2, ang, 13, color);
+}
+
 /* PÁGINA 3 — Áreas Clave */
 function pagina3(focos, fecha){
   const { c, g } = nuevaPagina(3);
@@ -991,11 +1039,11 @@ function pagina3(focos, fecha){
 
   const ls = (focos||[]).slice(0,6);
 
-  /* foto derecha */
   const frx = 452, fry = 196, frw = SW-452-20, frh = 1128;
   const f = ajustarFoto(A.w, A.h, frx, fry, frw, frh);
   const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
   const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
+  const centroX = M(A.p0).x;
 
   g.save();
   g.beginPath(); rrect(g, fx, fyTop, fw, fh, 16); g.clip();
@@ -1011,29 +1059,110 @@ function pagina3(focos, fecha){
   g.stroke();
   g.setLineDash([]);
 
-  /* zonas sombreadas de color por foco */
   const anchoCaraS = dist(M(A.lm[234]), M(A.lm[454]));
+
+  /* gráficos de trabajo por foco — anclados a la anatomía */
+  const JAW_IMG_IZQ = [58,172,136,150,149,176,148,152];   /* imagen izq = lado DERECHO de la persona */
+  const JAW_IMG_DER = [288,397,365,378,400,377,152];
+  const VLINE_BAJA = [172,136,150,149,176,148,152,377,400,378,365,397];
+
+  const trazoJaw = (indices, col) => {
+    g.strokeStyle = col; g.lineWidth = 3.5; g.setLineDash([11,8]);
+    g.beginPath();
+    indices.forEach((idx2,k)=>{
+      const p = M(A.lm[idx2]);
+      const n = (p.x >= centroX ? 1 : -1);
+      const px = p.x + n*10, py2 = p.y + 10;
+      if(k===0) g.moveTo(px,py2); else g.lineTo(px,py2);
+    });
+    g.stroke(); g.setLineDash([]);
+  };
+
+  const flechasJaw = (indices, col) => {
+    /* flecha curva subiendo a lo largo de la mandíbula */
+    const a = M(A.lm[indices[indices.length-1]]);
+    const b = M(A.lm[indices[Math.floor(indices.length/2)]]);
+    const e = M(A.lm[indices[0]]);
+    flechaCurva(g, a.x, a.y+34, b.x+(b.x>=centroX?26:-26), b.y+30, e.x+(e.x>=centroX?14:-14), e.y-6, col, 3.2, []);
+  };
+
+  const grafBrow = (indices, col) => {
+    g.strokeStyle = col; g.lineWidth = 3; g.setLineDash([8,6]);
+    g.beginPath();
+    indices.forEach((idx2,k)=>{ const p=M(A.lm[idx2]); if(k===0)g.moveTo(p.x,p.y-10); else g.lineTo(p.x,p.y-10); });
+    g.stroke(); g.setLineDash([]);
+    [0,2,4].forEach(k=>{
+      const p=M(A.lm[indices[k]]);
+      g.strokeStyle=col; g.lineWidth=3;
+      g.beginPath(); g.moveTo(p.x,p.y-14); g.lineTo(p.x,p.y-42); g.stroke();
+      punta(g,p.x,p.y-46,-Math.PI/2,11,col);
+    });
+  };
+
+  const grafDrenaje = (pt, py, rx, ryE, col) => {
+    for(const k of [-0.45, 0.45]){
+      const x = pt.x + rx*k;
+      const yT = py - ryE*0.55, yB = py + ryE*0.55;
+      g.strokeStyle = col; g.lineWidth = 3.2;
+      g.beginPath(); g.moveTo(x, yT+8); g.lineTo(x, yB-8); g.stroke();
+      punta(g, x, yT, -Math.PI/2, 11, col);
+      punta(g, x, yB, Math.PI/2, 11, col);
+    }
+  };
+
+  const grafCuello = (col) => {
+    const menton = M(A.lm[152]);
+    for(const s of [-1,1]){
+      const x1 = centroX + s*anchoCaraS*0.42, y1 = Math.min(menton.y + fh*0.20, fyTop+fh-24);
+      const ePt = M(A.lm[s>0?288:58]);
+      const xe = ePt.x + s*10, ye = ePt.y + 14;
+      flechaCurva(g, x1, y1, centroX + s*anchoCaraS*0.55, (y1+ye)/2, xe, ye, col, 3.4, []);
+      flechaCurva(g, x1 - s*anchoCaraS*0.14, y1+16, centroX + s*anchoCaraS*0.36, (y1+ye)/2+18, xe - s*anchoCaraS*0.10, ye+22, col, 3.4, []);
+    }
+  };
+
   ls.forEach((fo,i)=>{
-    const idx = ANCLAS[fo.zona];
-    if(idx == null) return;
-    const pt = M(A.lm[idx]);
-    let py = pt.y;
-    if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
     const col = ZCOLORES[i % ZCOLORES.length];
-    const esMejilla = fo.zona.startsWith('mejilla') || fo.zona.startsWith('masetero');
+    const n = (fo.nombre||'').toLowerCase();
+    const z = fo.zona||'';
+    const idx = ANCLAS[z];
+    const pt = idx != null ? M(A.lm[idx]) : {x:centroX, y:fyTop+fh/2};
+    let py = pt.y;
+    if(z === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
+
+    if(n.includes('ceja') || n.includes('elevaci')){
+      if(z === 'ceja_derecha') grafBrow(CEJA_A, col);
+      else if(z === 'ceja_izquierda') grafBrow(CEJA_B, col);
+      else { grafBrow(CEJA_A, col); grafBrow(CEJA_B, col); }
+      return;
+    }
+    if(n.includes('cuello')){ grafCuello(col); return; }
+    if(n.includes('esculpido')){
+      const lado = z === 'mandibula_izquierda' ? JAW_IMG_DER : JAW_IMG_IZQ;
+      trazoJaw(lado, col); flechasJaw(lado, col);
+      return;
+    }
+    if(n.includes('contorno') || n.includes('v-line') || n.includes('vline')){
+      trazoJaw(VLINE_BAJA, col);
+      flechasJaw(JAW_IMG_IZQ, col); flechasJaw(JAW_IMG_DER, col);
+      return;
+    }
+
+    /* elipse de zona (masetero, mejillas, drenaje…) */
+    const esMejilla = z.startsWith('mejilla') || z.startsWith('masetero');
     const rx = esMejilla ? anchoCaraS*0.16 : anchoCaraS*0.12;
     const ryE = esMejilla ? anchoCaraS*0.24 : anchoCaraS*0.13;
-    g.fillStyle = col + "55";
-    g.strokeStyle = col;
-    g.lineWidth = 2.5;
+    g.fillStyle = col + "45";
+    g.strokeStyle = col; g.lineWidth = 2.5;
     g.setLineDash([7,6]);
     g.beginPath(); g.ellipse(pt.x, py, rx, ryE, 0, 0, Math.PI*2);
     g.fill(); g.stroke();
     g.setLineDash([]);
+    if(n.includes('drenaje')) grafDrenaje(pt, py, rx, ryE, col);
   });
   g.restore();
 
-  /* números sobre las zonas (fuera del clip para que no se corten) */
+  /* números con línea conectora a su zona */
   ls.forEach((fo,i)=>{
     const idx = ANCLAS[fo.zona];
     if(idx == null) return;
@@ -1041,14 +1170,18 @@ function pagina3(focos, fecha){
     let py = pt.y;
     if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
     const col = ZCOLORES[i % ZCOLORES.length];
+    const lado = pt.x >= centroX ? 1 : -1;
+    const nx = Math.max(fx+30, Math.min(fx+fw-30, pt.x + lado*anchoCaraS*0.30));
+    g.strokeStyle = col; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(nx - lado*20, py); g.lineTo(pt.x + lado*anchoCaraS*0.12, py); g.stroke();
     g.fillStyle = col;
-    g.beginPath(); g.arc(pt.x, py, 23, 0, Math.PI*2); g.fill();
+    g.beginPath(); g.arc(nx, py, 23, 0, Math.PI*2); g.fill();
     g.strokeStyle = "#fff"; g.lineWidth = 3;
-    g.beginPath(); g.arc(pt.x, py, 23, 0, Math.PI*2); g.stroke();
+    g.beginPath(); g.arc(nx, py, 23, 0, Math.PI*2); g.stroke();
     g.fillStyle = "#fff";
     g.textAlign = "center";
     g.font = "800 26px Archivo";
-    g.fillText(String(i+1), pt.x, py+9);
+    g.fillText(String(i+1), nx, py+9);
   });
 
   /* tarjetas izquierda */
@@ -1090,7 +1223,7 @@ function pagina3(focos, fecha){
     ty += th + 14;
   }
 
-  /* banda de objetivo oscura */
+  /* banda de objetivo */
   const obY = 1352;
   g.fillStyle = R.oscuro;
   rrect(g, 36, obY, SW-72, 104, 16); g.fill();
@@ -1100,9 +1233,8 @@ function pagina3(focos, fecha){
   g.fillText("OBJETIVO:", 64, obY+42);
   g.fillStyle = "#fff";
   g.font = "600 22px Karla";
-  const obj = envolver(g, "Restaurar el balance facial, liberar tensión, reducir retención de líquidos y realzar tu contorno natural y V-Line.", SW-72-320);
+  const obj = envolver(g, "Restaurar el equilibrio facial, liberar tensión, reducir retención de líquidos y realzar tu contorno natural y V-Line.", SW-72-320);
   obj.forEach((ln,i)=> g.fillText(ln, 200, obY+42+i*28));
-  /* corazón */
   g.fillStyle = R.rosa;
   const hx = SW-92, hy = obY+52, hs = 15;
   g.beginPath();
