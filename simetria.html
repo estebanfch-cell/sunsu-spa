@@ -206,16 +206,14 @@
 <div id="camModal">
   <video id="camVideo" autoplay playsinline muted></video>
   <svg id="camOverlay" viewBox="0 0 100 178" preserveAspectRatio="xMidYMid slice">
-    <path d="M0,0 H100 V178 H0 Z M50,28 C63,28 73,42 73,60 C73,78 63,92 50,92 C37,92 27,78 27,60 C27,42 37,28 50,28 Z"
+    <path d="M0,0 H100 V178 H0 Z M50,30 C68,30 82,50 82,76 C82,102 68,122 50,122 C32,122 18,102 18,76 C18,50 32,30 50,30 Z"
           fill="rgba(0,0,0,.5)" fill-rule="evenodd"/>
-    <ellipse cx="50" cy="60" rx="23" ry="32" fill="none"
+    <ellipse cx="50" cy="76" rx="32" ry="46" fill="none"
              stroke="#E8618C" stroke-width="0.8" stroke-dasharray="2.5 2"/>
-    <line x1="30" y1="52" x2="70" y2="52" stroke="rgba(255,255,255,.55)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
-    <line x1="50" y1="30" x2="50" y2="90" stroke="rgba(255,255,255,.35)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
-    <path d="M10,142 Q28,124 46,131" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="0.5" stroke-dasharray="2 2"/>
-    <path d="M90,142 Q72,124 54,131" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <line x1="22" y1="62" x2="78" y2="62" stroke="rgba(255,255,255,.55)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+    <line x1="50" y1="32" x2="50" y2="120" stroke="rgba(255,255,255,.35)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
   </svg>
-  <div class="cam-texto">Rostro dentro del óvalo · aléjate un poco<br><small style="font-weight:300">Ojos sobre la línea · deja ver cuello y hombros</small></div>
+  <div class="cam-texto">Centra tu rostro en el óvalo<br><small style="font-weight:300">Ojos sobre la línea · cabeza recta · el sistema encuadra cuello y hombros solo</small></div>
   <button id="btnCerrarCam">✕</button>
   <div class="cam-controles">
     <button id="btnCapturar" aria-label="Capturar"></button>
@@ -283,16 +281,31 @@ $('inputCamara').onchange = e => procesarArchivo(e.target.files[0]);
 $('inputGaleria').onchange = e => procesarArchivo(e.target.files[0]);
 
 async function abrirCamara(){
-  try{
-    camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1706 } },
-      audio: false
-    });
-    $('camVideo').srcObject = camStream;
-    $('camModal').classList.add('abierta');
-  }catch(e){
-    $('inputCamara').click();
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('inputCamara').click(); return;
   }
+  const intentos = [
+    { video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1706 } }, audio: false },
+    { video: { facingMode: 'user' }, audio: false },
+    { video: true, audio: false }
+  ];
+  camStream = null;
+  for(const cons of intentos){
+    try{ camStream = await navigator.mediaDevices.getUserMedia(cons); break; }
+    catch(e){ camStream = null; }
+  }
+  if(!camStream){ $('inputCamara').click(); return; }
+  const v = $('camVideo');
+  v.srcObject = camStream;
+  try{ await v.play(); }catch(e){}
+  $('camModal').classList.add('abierta');
+  /* si el video no arranca en 4 segundos → cámara nativa */
+  setTimeout(()=>{
+    if(camStream && !v.videoWidth){
+      cerrarCamara();
+      $('inputCamara').click();
+    }
+  }, 4000);
 }
 
 function cerrarCamara(){
@@ -1075,7 +1088,7 @@ function corona(g, cx, cy, s){
   rrect(g, cx-2.2*s, cy+1.35*s, 4.4*s, 0.55*s, 0.2*s); g.fill();
 }
 
-/* PÁGINA 3 — Áreas Clave */
+/* PÁGINA 3 — Áreas Clave (foto protagonista) */
 function pagina3(focos, fecha){
   const { c, g } = nuevaPagina(3);
   encabezado(g, "Áreas Clave", "Para tu K-Lift de hoy");
@@ -1083,16 +1096,20 @@ function pagina3(focos, fecha){
 
   const ls = (focos||[]).slice(0,6);
 
-  const frx = 452, fry = 196, frw = SW-452-20, frh = 1128;
-  const f = ajustarFoto(A.w, A.h, frx, fry, frw, frh);
-  const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
-  const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
+  /* foto a página completa — cover, sin distorsión */
+  const frx = 36, fry = 190, frw = SW-72, frh = 1030;
+  const s = Math.max(frw/A.w, frh/A.h);
+  const ox = frx + (frw - A.w*s)/2;
+  const oy = fry + (frh - A.h*s)/2;
+  const M = p => ({ x: ox + p.x*s, y: oy + p.y*s });
+  const fx = frx, fw = frw, fyTop = fry, fh = frh;
   const centroX = M(A.p0).x;
   const anchoCaraS = dist(M(A.lm[234]), M(A.lm[454]));
+  const obH = 86, obY = fry+frh-obH-12;
 
   g.save();
-  g.beginPath(); rrect(g, fx, fyTop, fw, fh, 16); g.clip();
-  g.drawImage(A.limpio, fx, fyTop, fw, fh);
+  rrect(g, frx, fry, frw, frh, 18); g.clip();
+  g.drawImage(A.limpio, ox, oy, A.w*s, A.h*s);
 
   const p0s = M(A.p0);
   g.strokeStyle = "rgba(255,255,255,.8)";
@@ -1154,12 +1171,12 @@ function pagina3(focos, fecha){
 
   const grafCuello = (col) => {
     const menton = M(A.lm[152]);
-    for(const s of [-1,1]){
-      const x1 = centroX + s*anchoCaraS*0.42, y1 = Math.min(menton.y + fh*0.20, fyTop+fh-24);
-      const ePt = M(A.lm[s>0?288:58]);
-      const xe = ePt.x + s*10, ye = ePt.y + 14;
-      flechaCurva(g, x1, y1, centroX + s*anchoCaraS*0.55, (y1+ye)/2, xe, ye, col, 3.4, []);
-      flechaCurva(g, x1 - s*anchoCaraS*0.14, y1+16, centroX + s*anchoCaraS*0.36, (y1+ye)/2+18, xe - s*anchoCaraS*0.10, ye+22, col, 3.4, []);
+    for(const s2 of [-1,1]){
+      const x1 = centroX + s2*anchoCaraS*0.42, y1 = Math.min(menton.y + fh*0.20, obY-16);
+      const ePt = M(A.lm[s2>0?288:58]);
+      const xe = ePt.x + s2*10, ye = ePt.y + 14;
+      flechaCurva(g, x1, y1, centroX + s2*anchoCaraS*0.55, (y1+ye)/2, xe, ye, col, 3.4, []);
+      flechaCurva(g, x1 - s2*anchoCaraS*0.14, y1+16, centroX + s2*anchoCaraS*0.36, (y1+ye)/2+18, xe - s2*anchoCaraS*0.10, ye+22, col, 3.4, []);
     }
   };
 
@@ -1170,7 +1187,7 @@ function pagina3(focos, fecha){
     const idx = ANCLAS[z];
     const pt = idx != null ? M(A.lm[idx]) : {x:centroX, y:fyTop+fh/2};
     let py = pt.y;
-    if(z === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
+    if(z === 'cuello') py = Math.min(py + fh*0.11, obY-30);
 
     if(n.includes('ceja') || n.includes('elevaci')){
       if(z === 'ceja_derecha') grafBrow(CEJA_A, col);
@@ -1201,16 +1218,35 @@ function pagina3(focos, fecha){
     g.setLineDash([]);
     if(n.includes('drenaje')) grafDrenaje(pt, py, rx, ryE, col);
   });
+
+  /* banda de objetivo sobre el borde inferior de la foto */
+  g.fillStyle = "rgba(20,20,20,.87)";
+  rrect(g, frx+14, obY, frw-28, obH, 14); g.fill();
+  g.textAlign = "left";
+  g.fillStyle = R.rosa;
+  g.font = "800 21px Archivo";
+  g.fillText("OBJETIVO:", frx+38, obY+36);
+  g.fillStyle = "#fff";
+  g.font = "600 20px Karla";
+  const obj = envolver(g, "Restaurar el equilibrio facial, liberar tensión, reducir retención de líquidos y realzar tu contorno natural y V-Line.", frw-28-300);
+  obj.forEach((ln,i)=> g.fillText(ln, frx+168, obY+36+i*26));
+  g.fillStyle = R.rosa;
+  const hx = frx+frw-58, hy = obY+obH/2+4, hs = 13;
+  g.beginPath();
+  g.moveTo(hx, hy+hs*0.75);
+  g.bezierCurveTo(hx-hs*1.4, hy-hs*0.35, hx-hs*0.55, hy-hs*1.15, hx, hy-hs*0.3);
+  g.bezierCurveTo(hx+hs*0.55, hy-hs*1.15, hx+hs*1.4, hy-hs*0.35, hx, hy+hs*0.75);
+  g.fill();
   g.restore();
 
-  /* números apilados en los bordes con conector, sin superponerse */
+  /* números apilados en los bordes con conector */
   const nums = [];
   ls.forEach((fo,i)=>{
     const idx = ANCLAS[fo.zona];
     if(idx == null) return;
     const pt = M(A.lm[idx]);
     let py = pt.y;
-    if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
+    if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, obY-30);
     nums.push({ i, col: ZCOLORES[i % ZCOLORES.length], pt, py, side: pt.x >= centroX ? 1 : -1 });
   });
   for(const side of [-1,1]){
@@ -1218,9 +1254,9 @@ function pagina3(focos, fecha){
     let prev = fyTop + 14;
     for(const nu of grupo){
       let ny = Math.max(nu.py, prev + 52);
-      ny = Math.min(ny, fyTop+fh-30);
+      ny = Math.min(ny, obY-34);
       prev = ny;
-      const nx = side>0 ? fx+fw-34 : fx+34;
+      const nx = side>0 ? fx+fw-36 : fx+36;
       g.strokeStyle = nu.col; g.lineWidth = 2.5;
       g.beginPath();
       g.moveTo(nx - side*22, ny);
@@ -1237,64 +1273,49 @@ function pagina3(focos, fecha){
     }
   }
 
-  /* tarjetas izquierda */
-  const tx = 36, tw = 396;
-  let ty = 200;
-  for(let i=0;i<ls.length;i++){
-    const fo = ls[i];
-    g.font = "800 24px Archivo";
-    const nomL = envolver(g, fo.nombre.toUpperCase(), tw-104);
-    g.font = "400 21px Karla";
-    const desL = envolver(g, fo.descripcion, tw-104);
-    const th = 30 + nomL.length*29 + desL.length*26 + 24;
-
-    sombra(g, true);
-    g.fillStyle = "#fff";
-    rrect(g, tx, ty, tw, th, 16); g.fill();
-    sombra(g, false);
-    g.strokeStyle = R.borde; g.lineWidth = 1.5;
-    rrect(g, tx, ty, tw, th, 16); g.stroke();
-
-    const col = ZCOLORES[i % ZCOLORES.length];
-    g.fillStyle = col;
-    g.beginPath(); g.arc(tx+40, ty+42, 22, 0, Math.PI*2); g.fill();
-    g.strokeStyle = "#fff"; g.lineWidth = 2.5;
-    g.beginPath(); g.arc(tx+40, ty+42, 22, 0, Math.PI*2); g.stroke();
-    g.fillStyle = "#fff";
-    g.textAlign = "center";
-    g.font = "800 24px Archivo";
-    g.fillText(String(i+1), tx+40, ty+51);
-
-    g.textAlign = "left";
-    g.fillStyle = R.negro;
-    g.font = "800 24px Archivo";
-    nomL.forEach((ln,k)=> g.fillText(ln, tx+76, ty+42+k*29));
-    g.fillStyle = "#4A4A4A";
-    g.font = "400 21px Karla";
-    desL.forEach((ln,k)=> g.fillText(ln, tx+76, ty+44+nomL.length*29+k*26));
-
-    ty += th + 14;
+  /* leyenda numerada abajo — filas de 3 */
+  const gy0 = fry + frh + 14;
+  const cols3 = 3, gapC = 12;
+  const colW = (frw - gapC*(cols3-1)) / cols3;
+  const filas = [];
+  g.font = "800 17px Archivo";
+  for(let r=0; r<Math.ceil(ls.length/cols3); r++){
+    let maxH = 0;
+    for(let ci=0; ci<cols3; ci++){
+      const i = r*cols3+ci; if(i>=ls.length) continue;
+      const nomL = envolver(g, ls[i].nombre.toUpperCase(), colW-70);
+      maxH = Math.max(maxH, 22 + nomL.length*21 + 14);
+    }
+    filas.push(maxH);
   }
-
-  /* banda de objetivo */
-  const obY = 1352;
-  g.fillStyle = R.oscuro;
-  rrect(g, 36, obY, SW-72, 104, 16); g.fill();
-  g.textAlign = "left";
-  g.fillStyle = R.rosa;
-  g.font = "800 23px Archivo";
-  g.fillText("OBJETIVO:", 64, obY+42);
-  g.fillStyle = "#fff";
-  g.font = "600 22px Karla";
-  const obj = envolver(g, "Restaurar el equilibrio facial, liberar tensión, reducir retención de líquidos y realzar tu contorno natural y V-Line.", SW-72-320);
-  obj.forEach((ln,i)=> g.fillText(ln, 200, obY+42+i*28));
-  g.fillStyle = R.rosa;
-  const hx = SW-92, hy = obY+52, hs = 15;
-  g.beginPath();
-  g.moveTo(hx, hy+hs*0.75);
-  g.bezierCurveTo(hx-hs*1.4, hy-hs*0.35, hx-hs*0.55, hy-hs*1.15, hx, hy-hs*0.3);
-  g.bezierCurveTo(hx+hs*0.55, hy-hs*1.15, hx+hs*1.4, hy-hs*0.35, hx, hy+hs*0.75);
-  g.fill();
+  let gy = gy0;
+  for(let r=0; r<filas.length; r++){
+    for(let ci=0; ci<cols3; ci++){
+      const i = r*cols3+ci; if(i>=ls.length) continue;
+      const fo = ls[i];
+      const bx = frx + ci*(colW+gapC);
+      const col = ZCOLORES[i % ZCOLORES.length];
+      sombra(g, true);
+      g.fillStyle = "#fff";
+      rrect(g, bx, gy, colW, filas[r], 12); g.fill();
+      sombra(g, false);
+      g.strokeStyle = R.borde; g.lineWidth = 1.5;
+      rrect(g, bx, gy, colW, filas[r], 12); g.stroke();
+      g.fillStyle = col;
+      g.beginPath(); g.arc(bx+28, gy+filas[r]/2, 16, 0, Math.PI*2); g.fill();
+      g.fillStyle = "#fff";
+      g.textAlign = "center";
+      g.font = "800 18px Archivo";
+      g.fillText(String(i+1), bx+28, gy+filas[r]/2+6);
+      g.textAlign = "left";
+      g.fillStyle = R.negro;
+      g.font = "800 17px Archivo";
+      const nomL = envolver(g, fo.nombre.toUpperCase(), colW-70);
+      const ty0 = gy + filas[r]/2 - (nomL.length-1)*10.5 + 6;
+      nomL.forEach((ln,k)=> g.fillText(ln, bx+52, ty0+k*21));
+    }
+    gy += filas[r] + 10;
+  }
 
   pie(g, "Este análisis es una estimación basada en una fotografía · Sunsu Spa · " + fecha);
   return c;
