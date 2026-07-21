@@ -28,6 +28,7 @@
   .wrap{max-width:520px;margin:0 auto;padding:28px 20px 60px;}
 
   header{text-align:center;margin-bottom:26px;}
+  .logo{max-width:120px;max-height:80px;margin:0 auto 12px;display:block;}
   .marca{
     font-family:'Cormorant Garamond',serif;
     font-size:15px;letter-spacing:.35em;text-transform:uppercase;
@@ -39,7 +40,6 @@
   }
   .sub{color:var(--tinta-suave);font-size:14px;margin-top:8px;font-weight:300;}
 
-  /* ---------- zona de foto ---------- */
   .foto-zona{
     background:var(--arena);
     border:1px solid var(--linea);
@@ -62,7 +62,6 @@
   .guia{color:var(--tinta-suave);font-size:13px;line-height:1.6;font-weight:300;max-width:280px;}
   canvas#lienzo{display:block;width:100%;height:auto;}
 
-  /* ---------- botones ---------- */
   .botones{margin-top:18px;display:flex;flex-direction:column;gap:10px;}
   .btn{
     display:block;width:100%;padding:15px;
@@ -74,6 +73,7 @@
   .btn:active{opacity:.75;}
   .btn-principal{background:var(--tinta);color:var(--porcelana);}
   .btn-secundario{background:transparent;color:var(--tinta);border:1px solid var(--tinta);}
+  .btn-oro{background:var(--oro);color:#fff;}
   .btn:disabled{opacity:.4;pointer-events:none;}
   input[type=file]{display:none;}
 
@@ -82,8 +82,7 @@
     margin-top:14px;min-height:18px;font-weight:300;
   }
 
-  /* ---------- resultados ---------- */
-  #resultados{display:none;margin-top:30px;}
+  #resultados,#resultadosIA{display:none;margin-top:30px;}
   .score-panel{
     text-align:center;padding:30px 20px 26px;
     background:linear-gradient(180deg,#fff, var(--rosa-suave));
@@ -103,7 +102,7 @@
     font-size:17px;color:var(--tinta-suave);margin-top:12px;
   }
 
-  .detalle{margin-top:22px;}
+  .detalle{margin-top:8px;}
   .fila{
     display:flex;justify-content:space-between;align-items:center;
     padding:13px 4px;border-bottom:1px solid var(--linea);
@@ -112,7 +111,7 @@
   .fila .nombre{font-size:14px;font-weight:400;}
   .fila .valor{
     font-family:'Cormorant Garamond',serif;font-size:19px;
-    font-weight:600;color:var(--tinta);
+    font-weight:600;color:var(--tinta);white-space:nowrap;
   }
   .barra{
     flex:1;height:3px;background:var(--linea);border-radius:2px;
@@ -132,12 +131,34 @@
   .divisor::before,.divisor::after{
     content:'';flex:1;height:1px;background:var(--linea);
   }
+
+  /* ---------- sección IA ---------- */
+  .anotacion{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:10px 4px;font-size:14px;line-height:1.55;font-weight:300;
+  }
+  .anotacion::before{
+    content:'';flex-shrink:0;width:6px;height:6px;border-radius:50%;
+    background:var(--rosa);margin-top:7px;
+  }
+  .focos{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .foco{
+    background:#fff;border:1px solid var(--oro);color:var(--tinta);
+    border-radius:20px;padding:8px 15px;font-size:13px;font-weight:400;
+  }
+  .obs-general{
+    font-family:'Cormorant Garamond',serif;font-style:italic;
+    font-size:17px;color:var(--tinta);text-align:center;
+    padding:20px 16px;margin-top:22px;line-height:1.5;
+    background:#fff;border:1px solid var(--linea);border-radius:18px;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
+    <img class="logo" id="logo" style="display:none;" alt="Sunsu Spa">
     <div class="marca">Sunsu Spa</div>
     <h1>Análisis de<br>Simetría Facial</h1>
     <div class="sub">Estudio de proporciones y balance del rostro</div>
@@ -155,6 +176,7 @@
   <div class="botones">
     <button class="btn btn-principal" id="btnFoto">Tomar foto</button>
     <button class="btn btn-secundario" id="btnGaleria">Elegir de la galería</button>
+    <button class="btn btn-oro" id="btnIA" style="display:none;">Análisis completo con IA</button>
     <button class="btn btn-principal" id="btnCompartir" style="display:none;">Compartir resultado</button>
   </div>
   <input type="file" id="inputCamara" accept="image/*" capture="user">
@@ -174,25 +196,49 @@
 
     <div class="divisor">Proporciones</div>
     <div class="detalle" id="detalleProporciones"></div>
-
-    <p class="nota">
-      La simetría perfecta no existe: todos los rostros tienen variaciones
-      naturales que los hacen únicos. Este análisis es estético y orientativo,
-      no constituye un diagnóstico médico.
-    </p>
   </div>
+
+  <div id="resultadosIA">
+    <div class="divisor">Observaciones</div>
+    <div id="anotaciones"></div>
+
+    <div class="divisor">Áreas de enfoque</div>
+    <div class="focos" id="focos"></div>
+
+    <div class="divisor">Panel resumen</div>
+    <div class="detalle" id="panelResumen"></div>
+
+    <div class="obs-general" id="obsGeneral"></div>
+  </div>
+
+  <p class="nota" id="notaFinal" style="display:none;">
+    La simetría perfecta no existe: todos los rostros tienen variaciones
+    naturales que los hacen únicos. Este análisis es estético y orientativo,
+    no constituye un diagnóstico médico.
+  </p>
 </div>
 
 <script type="module">
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* ============ CONFIGURACIÓN ============ */
+const IA_URL = "https://script.google.com/macros/s/AKfycbyF1kBv1sh2bvEnpzocEh9anzR7eI5M-wy-eyPYvYeNtLz0iV19isTyn1vtH06WD6Vk0g/exec";
+const LOGO_URL = "";    // ← pegar aquí la URL del logo (ej: logo.png en el repo)
+/* ======================================= */
 
 const $ = id => document.getElementById(id);
 const estado = $('estado');
 const lienzo = $('lienzo');
 const ctx = lienzo.getContext('2d');
 let landmarker = null;
-let imagenActual = null;
 let canvasResultado = null;
+let fotoBase64 = null;
+let metricasActuales = null;
+
+if(LOGO_URL){
+  $('logo').src = LOGO_URL;
+  $('logo').style.display = 'block';
+}
 
 /* ---------- carga del modelo ---------- */
 async function cargarModelo(){
@@ -226,6 +272,7 @@ function procesarArchivo(file){
   if(!file) return;
   if(!landmarker){ estado.textContent = "El modelo aún está cargando, espera un momento…"; return; }
   estado.textContent = "Analizando rostro…";
+  $('resultadosIA').style.display = 'none';
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => { URL.revokeObjectURL(url); analizar(img); };
@@ -237,13 +284,12 @@ function procesarArchivo(file){
 function reflejar(q, p0, d){
   const vx = q.x - p0.x, vy = q.y - p0.y;
   const t = vx*d.x + vy*d.y;
-  const px = t*d.x, py = t*d.y;          // componente paralela
-  const ox = vx - px, oy = vy - py;      // componente perpendicular
+  const px = t*d.x, py = t*d.y;
+  const ox = vx - px, oy = vy - py;
   return { x: p0.x + px - ox, y: p0.y + py - oy };
 }
 const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 
-/* pares espejo (izquierda ↔ derecha de la imagen) por zona */
 const ZONAS = {
   "Ojos":     [[33,263],[133,362],[159,386],[145,374],[130,359]],
   "Cejas":    [[70,300],[105,334],[46,276],[52,282],[55,285]],
@@ -251,15 +297,23 @@ const ZONAS = {
   "Contorno": [[234,454],[93,323],[132,361],[172,397],[136,365],[150,379],[176,400]]
 };
 const CENTRALES = [10,168,6,197,195,5,4,1,2,164,0,17,18,200,199,152];
+/* contorno mandibular de oreja a oreja (guía V-Line) */
+const MANDIBULA = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,365,397,288,361,323,454];
 
 /* ---------- análisis ---------- */
 function analizar(img){
-  // escalar imagen para rendimiento
   const maxW = 1080;
   const esc = Math.min(1, maxW / img.width);
   const w = Math.round(img.width * esc), h = Math.round(img.height * esc);
   lienzo.width = w; lienzo.height = h;
   ctx.drawImage(img, 0, 0, w, h);
+
+  /* copia reducida para la IA (antes de dibujar los overlays) */
+  const cIA = document.createElement('canvas');
+  const escIA = Math.min(1, 800 / w);
+  cIA.width = Math.round(w*escIA); cIA.height = Math.round(h*escIA);
+  cIA.getContext('2d').drawImage(lienzo, 0, 0, cIA.width, cIA.height);
+  fotoBase64 = cIA.toDataURL('image/jpeg', 0.85).split(',')[1];
 
   let res;
   try{ res = landmarker.detect(lienzo); }
@@ -272,7 +326,7 @@ function analizar(img){
 
   const lm = res.faceLandmarks[0].map(p => ({ x:p.x*w, y:p.y*h }));
 
-  /* eje de simetría: ajuste por mínimos cuadrados sobre puntos centrales */
+  /* eje de simetría */
   const pts = CENTRALES.map(i => lm[i]);
   const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
   const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
@@ -283,7 +337,7 @@ function analizar(img){
   }
   const ang = 0.5 * Math.atan2(2*sxy, sxx - syy);
   let d = { x: Math.cos(ang), y: Math.sin(ang) };
-  if(Math.abs(d.y) < Math.abs(d.x)) d = { x:-d.y, y:d.x }; // asegurar dirección vertical
+  if(Math.abs(d.y) < Math.abs(d.x)) d = { x:-d.y, y:d.x };
   const p0 = { x: cx, y: cy };
 
   const anchoCara = dist(lm[234], lm[454]);
@@ -304,7 +358,7 @@ function analizar(img){
   const devGlobal = (sumaTotal / nTotal) * 100;
   const score = Math.round(Math.max(0, Math.min(100, 100 - devGlobal * 9)));
 
-  /* inclinación de ojos y boca (grados respecto al eje) */
+  /* inclinaciones respecto al eje */
   const angEje = Math.atan2(d.y, d.x);
   const angLinea = (a,b) => {
     let g = (Math.atan2(lm[b].y-lm[a].y, lm[b].x-lm[a].x) - (angEje - Math.PI/2)) * 180/Math.PI;
@@ -314,30 +368,81 @@ function analizar(img){
   const inclOjos = angLinea(33,263);
   const inclBoca = angLinea(61,291);
 
-  /* tercios faciales */
-  const proj = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
+  /* proyecciones sobre el eje */
+  const proj  = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
+  const perp  = p => (p.x-p0.x)*-d.y + (p.y-p0.y)*d.x;
+
+  /* tercios */
   const t1 = Math.abs(proj(lm[168]) - proj(lm[10]));
   const t2 = Math.abs(proj(lm[2])   - proj(lm[168]));
   const t3 = Math.abs(proj(lm[152]) - proj(lm[2]));
   const tt = t1+t2+t3;
+  const tercios = [t1/tt*100, t2/tt*100, t3/tt*100];
 
-  dibujar(lm, p0, d, w, h);
-  mostrarResultados(score, zonasRes, inclOjos, inclBoca, [t1/tt*100, t2/tt*100, t3/tt*100], w, h);
-  imagenActual = true;
+  /* diferencia de altura de cejas (ceja a centro de ojo, cada lado) */
+  const altCejaIzq = Math.abs(proj(lm[105]) - proj(lm[159]));
+  const altCejaDer = Math.abs(proj(lm[334]) - proj(lm[386]));
+  const difCejas = Math.abs(altCejaIzq - altCejaDer) / anchoCara * 100;
+
+  /* apertura de ojos */
+  const apIzq = dist(lm[159], lm[145]) / anchoCara * 100;
+  const apDer = dist(lm[386], lm[374]) / anchoCara * 100;
+
+  /* desviación del mentón respecto al eje */
+  const desvMenton = Math.abs(perp(lm[152])) / anchoCara * 100;
+
+  metricasActuales = {
+    indiceSimetria: score,
+    simetriaPorZona: Object.fromEntries(Object.entries(zonasRes).map(([z,v])=>[z, Math.round(v)])),
+    inclinacionOjosGrados: +inclOjos.toFixed(1),
+    inclinacionBocaGrados: +inclBoca.toFixed(1),
+    terciosFacialesPct: tercios.map(t=>Math.round(t)),
+    diferenciaCejasPct: +difCejas.toFixed(2),
+    aperturaOjoIzqPct: +apIzq.toFixed(2),
+    aperturaOjoDerPct: +apDer.toFixed(2),
+    desviacionMentonPct: +desvMenton.toFixed(2)
+  };
+
+  dibujar(lm, p0, d, w, h, proj);
+  mostrarResultados(score, zonasRes, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton, w, h);
 }
 
 /* ---------- visualización ---------- */
-function dibujar(lm, p0, d, w, h){
-  /* eje dorado */
+function dibujar(lm, p0, d, w, h, proj){
   const L = Math.max(w,h);
+  const grosor = Math.max(1.5, w/500);
+
+  /* líneas horizontales de tercios (perpendiculares al eje) */
+  ctx.strokeStyle = "rgba(184,150,95,.45)";
+  ctx.lineWidth = grosor;
+  ctx.setLineDash([3,6]);
+  for(const i of [10,168,2,152]){
+    const t = proj(lm[i]);
+    const px = p0.x + d.x*t, py = p0.y + d.y*t;
+    ctx.beginPath();
+    ctx.moveTo(px - (-d.y)*L, py - d.x*L);
+    ctx.lineTo(px + (-d.y)*L, py + d.x*L);
+    ctx.stroke();
+  }
+
+  /* eje central dorado */
   ctx.strokeStyle = "rgba(184,150,95,.85)";
-  ctx.lineWidth = Math.max(1.5, w/500);
   ctx.setLineDash([6,5]);
   ctx.beginPath();
   ctx.moveTo(p0.x - d.x*L, p0.y - d.y*L);
   ctx.lineTo(p0.x + d.x*L, p0.y + d.y*L);
   ctx.stroke();
   ctx.setLineDash([]);
+
+  /* contorno mandibular / guía V-Line */
+  ctx.strokeStyle = "rgba(217,169,161,.9)";
+  ctx.lineWidth = grosor*1.4;
+  ctx.beginPath();
+  MANDIBULA.forEach((i,k) => {
+    if(k===0) ctx.moveTo(lm[i].x, lm[i].y);
+    else ctx.lineTo(lm[i].x, lm[i].y);
+  });
+  ctx.stroke();
 
   /* puntos por zona */
   const r = Math.max(2, w/300);
@@ -356,7 +461,7 @@ function dibujar(lm, p0, d, w, h){
   lienzo.style.borderRadius = '18px';
 }
 
-function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, w, h){
+function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton, w, h){
   $('scoreNum').innerHTML = score + '<small>%</small>';
   $('scoreFrase').textContent =
     score >= 93 ? "Un balance facial excepcional" :
@@ -378,13 +483,64 @@ function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, w, h){
     <div class="fila"><span class="nombre">Inclinación de ojos</span><span class="valor">${inclOjos.toFixed(1)}°</span></div>
     <div class="fila"><span class="nombre">Inclinación de boca</span><span class="valor">${inclBoca.toFixed(1)}°</span></div>
     <div class="fila"><span class="nombre">Tercios faciales</span><span class="valor">${tercios.map(t=>t.toFixed(0)).join(' · ')}</span></div>
+    <div class="fila"><span class="nombre">Diferencia de cejas</span><span class="valor">${difCejas.toFixed(1)}%</span></div>
+    <div class="fila"><span class="nombre">Apertura de ojos (I / D)</span><span class="valor">${apIzq.toFixed(1)} / ${apDer.toFixed(1)}</span></div>
+    <div class="fila"><span class="nombre">Desviación del mentón</span><span class="valor">${desvMenton.toFixed(1)}%</span></div>
   `;
 
   $('resultados').style.display = 'block';
+  $('notaFinal').style.display = 'block';
   $('btnCompartir').style.display = 'block';
+  $('btnIA').style.display = IA_URL ? 'block' : 'none';
+  $('btnIA').disabled = false;
   estado.textContent = "";
   prepararCompartir(score, zonas, w, h);
   $('resultados').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+/* ---------- análisis con IA ---------- */
+$('btnIA').onclick = async () => {
+  if(!fotoBase64 || !IA_URL) return;
+  $('btnIA').disabled = true;
+  estado.textContent = "Consultando análisis con IA… (10-20 segundos)";
+  try{
+    const res = await fetch(IA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ foto: fotoBase64, metricas: metricasActuales })
+    });
+    const datos = await res.json();
+    if(datos.error){ estado.textContent = "Error: " + datos.error; $('btnIA').disabled = false; return; }
+    mostrarIA(datos);
+  }catch(e){
+    estado.textContent = "No se pudo conectar con el análisis IA. Intenta de nuevo.";
+    $('btnIA').disabled = false;
+  }
+};
+
+function mostrarIA(datos){
+  $('anotaciones').innerHTML = (datos.anotaciones || [])
+    .map(a => `<div class="anotacion">${a}</div>`).join('');
+
+  $('focos').innerHTML = (datos.focos || [])
+    .map(f => `<span class="foco">${f}</span>`).join('');
+
+  let html = '';
+  for(const [cat, val] of Object.entries(datos.resumen || {})){
+    const v = Math.max(0, Math.min(100, Number(val) || 0));
+    html += `<div class="fila">
+      <span class="nombre">${cat}</span>
+      <span class="barra"><i style="width:${v}%"></i></span>
+      <span class="valor">${v}</span>
+    </div>`;
+  }
+  $('panelResumen').innerHTML = html;
+
+  $('obsGeneral').textContent = datos.observacionGeneral || '';
+  $('resultadosIA').style.display = 'block';
+  estado.textContent = "";
+  $('btnIA').style.display = 'none';
+  $('resultadosIA').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 /* ---------- imagen para compartir ---------- */
