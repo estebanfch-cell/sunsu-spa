@@ -165,7 +165,8 @@
     <div class="icono-cara"></div>
     <div class="guia">
       Toma la foto de frente, con buena luz natural,<br>
-      expresión neutra y el rostro despejado.
+      expresión neutra, rostro despejado<br>
+      y que se vean cuello y hombros.
     </div>
   </div>
   <canvas id="lienzo" style="display:none;"></canvas>
@@ -205,14 +206,16 @@
 <div id="camModal">
   <video id="camVideo" autoplay playsinline muted></video>
   <svg id="camOverlay" viewBox="0 0 100 178" preserveAspectRatio="xMidYMid slice">
-    <path d="M0,0 H100 V178 H0 Z M50,38 C67,38 80,56 80,80 C80,104 67,122 50,122 C33,122 20,104 20,80 C20,56 33,38 50,38 Z"
+    <path d="M0,0 H100 V178 H0 Z M50,28 C63,28 73,42 73,60 C73,78 63,92 50,92 C37,92 27,78 27,60 C27,42 37,28 50,28 Z"
           fill="rgba(0,0,0,.5)" fill-rule="evenodd"/>
-    <ellipse cx="50" cy="80" rx="30" ry="42" fill="none"
+    <ellipse cx="50" cy="60" rx="23" ry="32" fill="none"
              stroke="#E8618C" stroke-width="0.8" stroke-dasharray="2.5 2"/>
-    <line x1="26" y1="68" x2="74" y2="68" stroke="rgba(255,255,255,.55)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
-    <line x1="50" y1="40" x2="50" y2="120" stroke="rgba(255,255,255,.35)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+    <line x1="30" y1="52" x2="70" y2="52" stroke="rgba(255,255,255,.55)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+    <line x1="50" y1="30" x2="50" y2="90" stroke="rgba(255,255,255,.35)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+    <path d="M10,142 Q28,124 46,131" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <path d="M90,142 Q72,124 54,131" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="0.5" stroke-dasharray="2 2"/>
   </svg>
-  <div class="cam-texto">Alinea tu rostro dentro del óvalo<br><small style="font-weight:300">Ojos sobre la línea · cabeza recta · expresión neutra</small></div>
+  <div class="cam-texto">Rostro dentro del óvalo · aléjate un poco<br><small style="font-weight:300">Ojos sobre la línea · deja ver cuello y hombros</small></div>
   <button id="btnCerrarCam">✕</button>
   <div class="cam-controles">
     <button id="btnCapturar" aria-label="Capturar"></button>
@@ -227,7 +230,6 @@ const IA_URL = "https://script.google.com/macros/s/AKfycbyF1kBv1sh2bvEnpzocEh9an
 const LOGO_URL = "";    // ← pegar aquí la URL del logo (ej: logo.png en el repo)
 /* ======================================= */
 
-/* paleta del informe — estilo referencia */
 const R = {
   blanco:"#FFFFFF", negro:"#141414", gris:"#8A8A8A", borde:"#E8E8E8",
   rosa:"#E8618C", rosaSuave:"#F9D9E4", oscuro:"#1E1E1E",
@@ -336,7 +338,7 @@ function reflejar(q, p0, d){
 }
 const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 
-/* NOTA DE LADOS: en la foto NO espejada, los índices bajos (33, 105, 159, 61…)
+/* En la foto NO espejada, los índices bajos (33, 105, 159, 61…)
    caen al lado IZQUIERDO de la imagen = lado DERECHO de la persona. */
 const ZONAS = {
   "Ojos":     [[33,263],[133,362],[159,386],[145,374],[130,359]],
@@ -345,8 +347,8 @@ const ZONAS = {
   "Contorno": [[234,454],[93,323],[132,361],[172,397],[136,365],[150,379],[176,400]]
 };
 const CENTRALES = [10,168,6,197,195,5,4,1,2,164,0,17,18,200,199,152];
-const CEJA_A = [70,63,105,66,107];      /* lado izq. de la imagen = ceja DERECHA de la persona */
-const CEJA_B = [336,296,334,293,300];   /* lado der. de la imagen = ceja IZQUIERDA de la persona */
+const CEJA_A = [70,63,105,66,107];
+const CEJA_B = [336,296,334,293,300];
 const VLINE = [58,172,136,150,149,176,148,152,377,400,378,365,397,288];
 
 const ANCLAS = {
@@ -362,24 +364,16 @@ const ANCLAS = {
 
 /* ---------- análisis ---------- */
 function analizar(img){
-  const maxW = 1080;
-  const esc = Math.min(1, maxW / img.width);
-  const w = Math.round(img.width * esc), h = Math.round(img.height * esc);
-  lienzo.width = w; lienzo.height = h;
-  ctx.drawImage(img, 0, 0, w, h);
-
-  const limpio = document.createElement('canvas');
-  limpio.width = w; limpio.height = h;
-  limpio.getContext('2d').drawImage(lienzo, 0, 0);
-
-  const cIA = document.createElement('canvas');
-  const escIA = Math.min(1, 800 / w);
-  cIA.width = Math.round(w*escIA); cIA.height = Math.round(h*escIA);
-  cIA.getContext('2d').drawImage(limpio, 0, 0, cIA.width, cIA.height);
-  fotoBase64 = cIA.toDataURL('image/jpeg', 0.85).split(',')[1];
+  /* 1) detectar sobre la imagen completa (reducida a máx 1600) */
+  const maxDet = 1600;
+  const escD = Math.min(1, maxDet / Math.max(img.width, img.height));
+  const wD = Math.round(img.width * escD), hD = Math.round(img.height * escD);
+  const full = document.createElement('canvas');
+  full.width = wD; full.height = hD;
+  full.getContext('2d').drawImage(img, 0, 0, wD, hD);
 
   let res;
-  try{ res = landmarker.detect(lienzo); }
+  try{ res = landmarker.detect(full); }
   catch(e){ estado.textContent = "Error durante el análisis. Intenta de nuevo."; return; }
 
   if(!res.faceLandmarks || !res.faceLandmarks.length){
@@ -387,8 +381,39 @@ function analizar(img){
     return;
   }
 
-  const lm = res.faceLandmarks[0].map(p => ({ x:p.x*w, y:p.y*h }));
+  let lm = res.faceLandmarks[0].map(p => ({ x:p.x*wD, y:p.y*hD }));
 
+  /* 2) AUTO-RECORTE alrededor del rostro (incluye cuello y hombros) */
+  let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
+  for(const p of lm){
+    if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
+    if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+  }
+  const faceW = maxX-minX, faceH = maxY-minY;
+  const cx0 = Math.max(0, Math.round(minX - 0.75*faceW));
+  const cy0 = Math.max(0, Math.round(minY - 0.70*faceH));
+  const cx1 = Math.min(wD, Math.round(maxX + 0.75*faceW));
+  const cy1 = Math.min(hD, Math.round(maxY + 1.25*faceH));   /* cuello y hombros */
+  const cw = cx1-cx0, ch = cy1-cy0;
+
+  const limpio = document.createElement('canvas');
+  limpio.width = cw; limpio.height = ch;
+  limpio.getContext('2d').drawImage(full, cx0, cy0, cw, ch, 0, 0, cw, ch);
+
+  lm = lm.map(p => ({ x: p.x-cx0, y: p.y-cy0 }));
+  const w = cw, h = ch;
+
+  lienzo.width = w; lienzo.height = h;
+  ctx.drawImage(limpio, 0, 0);
+
+  /* copia reducida para la IA */
+  const cIA = document.createElement('canvas');
+  const escIA = Math.min(1, 800 / w);
+  cIA.width = Math.round(w*escIA); cIA.height = Math.round(h*escIA);
+  cIA.getContext('2d').drawImage(limpio, 0, 0, cIA.width, cIA.height);
+  fotoBase64 = cIA.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+  /* 3) eje y métricas */
   const pts = CENTRALES.map(i => lm[i]);
   const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
   const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
@@ -400,7 +425,7 @@ function analizar(img){
   const ang = 0.5 * Math.atan2(2*sxy, sxx - syy);
   let d = { x: Math.cos(ang), y: Math.sin(ang) };
   if(Math.abs(d.y) < Math.abs(d.x)) d = { x:-d.y, y:d.x };
-  if(d.y < 0){ d.x = -d.x; d.y = -d.y; }   /* eje siempre apuntando hacia abajo */
+  if(d.y < 0){ d.x = -d.x; d.y = -d.y; }
   const p0 = { x: cx, y: cy };
 
   const anchoCara = dist(lm[234], lm[454]);
@@ -426,7 +451,6 @@ function analizar(img){
   const inclBoca = angLinea(61,291);
 
   const proj  = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
-  /* perp > 0 → lado izquierdo de la imagen → lado DERECHO de la persona */
   const perp  = p => (p.x-p0.x)*-d.y + (p.y-p0.y)*d.x;
 
   const t1 = Math.abs(proj(lm[168]) - proj(lm[10]));
@@ -435,14 +459,13 @@ function analizar(img){
   const tt = t1+t2+t3;
   const tercios = [t1/tt*100, t2/tt*100, t3/tt*100];
 
-  /* lados ANATÓMICOS de la persona */
-  const altCejaDer = Math.abs(proj(lm[105]) - proj(lm[159]));   /* imagen izq. */
-  const altCejaIzq = Math.abs(proj(lm[334]) - proj(lm[386]));   /* imagen der. */
+  const altCejaDer = Math.abs(proj(lm[105]) - proj(lm[159]));
+  const altCejaIzq = Math.abs(proj(lm[334]) - proj(lm[386]));
   const difCejas = Math.abs(altCejaIzq - altCejaDer) / anchoCara * 100;
   const cejaMasAlta = difCejas < 0.6 ? 'equilibrado' : (altCejaIzq > altCejaDer ? 'izquierda' : 'derecha');
 
-  const apDer = dist(lm[159], lm[145]) / anchoCara * 100;       /* imagen izq. */
-  const apIzq = dist(lm[386], lm[374]) / anchoCara * 100;       /* imagen der. */
+  const apDer = dist(lm[159], lm[145]) / anchoCara * 100;
+  const apIzq = dist(lm[386], lm[374]) / anchoCara * 100;
   const difOjos = Math.abs(apIzq - apDer);
   const ojoMasAbierto = difOjos < 0.35 ? 'equilibrado' : (apIzq > apDer ? 'izquierda' : 'derecha');
 
@@ -461,11 +484,11 @@ function analizar(img){
     equilibrioPorZonaPct: Object.fromEntries(Object.entries(zonasRes).map(([z,v])=>[z, Math.round(v)]))
   };
 
-  A = { lm, p0, d, w, h, zonas: zonasRes, limpio,
+  A = { lm, p0, d, w, h, anchoCara, zonas: zonasRes, limpio,
         cejaMasAlta, difCejas, ojoMasAbierto, apIzq, apDer,
         mentonHacia, desvMenton, perpMenton };
 
-  dibujarLineasFaciales(ctx, p => p, 1);
+  dibujarLineasFaciales(ctx, p => p, Math.max(0.7, anchoCara/450));
   $('fotoZona').style.display = 'none';
   lienzo.style.display = 'block';
   lienzo.style.borderRadius = '18px';
@@ -473,11 +496,11 @@ function analizar(img){
   mostrarResultados(inclOjos, inclBoca, tercios);
 }
 
-/* ---------- líneas faciales ---------- */
+/* ---------- líneas faciales (grosor según tamaño de cara) ---------- */
 function dibujarLineasFaciales(g, M, s){
   const lm = A.lm, p0 = M(A.p0), d = A.d;
-  const L = 4000 * s;
-  const gr = Math.max(2, 2.6*s);
+  const L = 4000;
+  const gr = Math.max(1.6, 2.6*s);
 
   g.strokeStyle = "rgba(255,255,255,.95)";
   g.lineWidth = gr;
@@ -491,9 +514,9 @@ function dibujarLineasFaciales(g, M, s){
   const punto = (i, color, r) => {
     const p = M(lm[i]);
     g.fillStyle = color;
-    g.beginPath(); g.arc(p.x, p.y, r*s, 0, Math.PI*2); g.fill();
-    g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = 1.4*s;
-    g.beginPath(); g.arc(p.x, p.y, r*s, 0, Math.PI*2); g.stroke();
+    g.beginPath(); g.arc(p.x, p.y, Math.max(2.5, r*s), 0, Math.PI*2); g.fill();
+    g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = Math.max(1, 1.4*s);
+    g.beginPath(); g.arc(p.x, p.y, Math.max(2.5, r*s), 0, Math.PI*2); g.stroke();
   };
   const curva = (indices, color, dash, ancho) => {
     g.strokeStyle = color; g.lineWidth = (ancho||gr);
@@ -509,22 +532,22 @@ function dibujarLineasFaciales(g, M, s){
 
   curva(CEJA_A, R.ceja, [7*s,5*s]);
   curva(CEJA_B, R.ceja, [7*s,5*s]);
-  [70,107,336,300].forEach(i => punto(i, R.ceja, 5));
-  [105,334].forEach(i => punto(i, R.ceja, 6));
+  [70,107,336,300].forEach(i => punto(i, R.ceja, 4.5));
+  [105,334].forEach(i => punto(i, R.ceja, 5.5));
 
   curva([33,133], "rgba(255,255,255,.9)", [6*s,4*s]);
   curva([362,263], "rgba(255,255,255,.9)", [6*s,4*s]);
-  [33,133,362,263].forEach(i => punto(i, R.ojo, 6));
-  if(lm.length > 473){ punto(468, R.pupila, 7); punto(473, R.pupila, 7); }
+  [33,133,362,263].forEach(i => punto(i, R.ojo, 5.5));
+  if(lm.length > 473){ punto(468, R.pupila, 6.5); punto(473, R.pupila, 6.5); }
 
   curva([61,13,291], "rgba(229,72,77,.85)", [6*s,4*s]);
-  [61,291].forEach(i => punto(i, R.boca, 6));
+  [61,291].forEach(i => punto(i, R.boca, 5.5));
 
-  punto(1, R.nariz, 6);
-  punto(152, R.menton, 6);
+  punto(1, R.nariz, 5.5);
+  punto(152, R.menton, 5.5);
 
   g.strokeStyle = "rgba(255,255,255,.98)";
-  g.lineWidth = gr*2.1;
+  g.lineWidth = gr*1.8;
   g.lineJoin = "round";
   g.beginPath();
   VLINE.forEach((i,k)=>{
@@ -675,6 +698,26 @@ function flecha(g, x1, y1, x2, y2, color, ancho){
   g.closePath(); g.fill();
 }
 
+/* punta de flecha */
+function punta(g, x, y, ang, t, color){
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.lineTo(x - t*Math.cos(ang-0.45), y - t*Math.sin(ang-0.45));
+  g.lineTo(x - t*Math.cos(ang+0.45), y - t*Math.sin(ang+0.45));
+  g.closePath(); g.fill();
+}
+
+/* flecha curva (cuadrática) con punta */
+function flechaCurva(g, x1, y1, cxq, cyq, x2, y2, color, ancho, dash){
+  g.strokeStyle = color; g.lineWidth = ancho;
+  g.setLineDash(dash||[]);
+  g.beginPath(); g.moveTo(x1,y1); g.quadraticCurveTo(cxq,cyq,x2,y2); g.stroke();
+  g.setLineDash([]);
+  const ang = Math.atan2(y2-cyq, x2-cxq);
+  punta(g, x2, y2, ang, 13, color);
+}
+
 function textoSombra(g, on){
   if(on){ g.shadowColor = "rgba(0,0,0,.8)"; g.shadowBlur = 8; }
   else { g.shadowColor = "transparent"; g.shadowBlur = 0; }
@@ -689,34 +732,35 @@ function pagina1(anotacionesZona){
   const f = ajustarFoto(A.w, A.h, 0, ry, SW, rh);
   const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
   const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
+  const sCara = Math.max(0.7, (A.anchoCara*f.s)/450);
 
   g.save();
   g.beginPath(); g.rect(fx, fyTop, fw, fh); g.clip();
   g.drawImage(A.limpio, fx, fyTop, fw, fh);
 
-  /* líneas de tercios rosadas con puntos en los extremos */
+  /* líneas de tercios rosadas */
   const ysT = [10,168,2,152].map(i => M(A.lm[i]).y);
-  g.strokeStyle = R.rosa; g.lineWidth = 3;
+  g.strokeStyle = R.rosa; g.lineWidth = Math.max(2, 2.2*sCara);
   for(const y of ysT){
     g.beginPath(); g.moveTo(fx+10, y); g.lineTo(fx+fw-10, y); g.stroke();
     g.fillStyle = R.rosa;
-    g.beginPath(); g.arc(fx+12, y, 8, 0, Math.PI*2); g.fill();
-    g.beginPath(); g.arc(fx+fw-12, y, 8, 0, Math.PI*2); g.fill();
+    g.beginPath(); g.arc(fx+12, y, 6*sCara, 0, Math.PI*2); g.fill();
+    g.beginPath(); g.arc(fx+fw-12, y, 6*sCara, 0, Math.PI*2); g.fill();
   }
 
-  dibujarLineasFaciales(g, M, Math.max(1, f.s*1.4));
+  dibujarLineasFaciales(g, M, sCara);
 
-  /* comparativa de altura de cejas — líneas moradas + flecha de diferencia */
-  const yCejaImgIzq = M(A.lm[105]).y;   /* ceja DERECHA de la persona */
-  const yCejaImgDer = M(A.lm[334]).y;   /* ceja IZQUIERDA de la persona */
+  /* comparativa de cejas */
+  const yCejaImgIzq = M(A.lm[105]).y;
+  const yCejaImgDer = M(A.lm[334]).y;
   const cxC = M(A.p0).x;
-  g.strokeStyle = R.ceja; g.lineWidth = 3;
+  g.strokeStyle = R.ceja; g.lineWidth = Math.max(2, 2.4*sCara);
   g.setLineDash([8,6]);
   g.beginPath(); g.moveTo(M(A.lm[105]).x-40, yCejaImgIzq); g.lineTo(cxC+8, yCejaImgIzq); g.stroke();
   g.beginPath(); g.moveTo(M(A.lm[334]).x+40, yCejaImgDer); g.lineTo(cxC-8, yCejaImgDer); g.stroke();
   g.setLineDash([]);
   if(A.cejaMasAlta !== 'equilibrado' && Math.abs(yCejaImgIzq-yCejaImgDer) > 8){
-    flecha(g, cxC, Math.max(yCejaImgIzq,yCejaImgDer), cxC, Math.min(yCejaImgIzq,yCejaImgDer), R.ceja, 3.5);
+    flecha(g, cxC, Math.max(yCejaImgIzq,yCejaImgDer), cxC, Math.min(yCejaImgIzq,yCejaImgDer), R.ceja, 3);
     textoSombra(g, true);
     g.fillStyle = "#fff";
     g.textAlign = "center";
@@ -725,17 +769,17 @@ function pagina1(anotacionesZona){
     textoSombra(g, false);
   }
 
-  /* apertura ocular — segmentos verticales amarillos con topes */
+  /* apertura ocular */
   const segOjo = (a,b) => {
     const pa = M(A.lm[a]), pb = M(A.lm[b]);
-    g.strokeStyle = R.ojo; g.lineWidth = 3.5;
+    g.strokeStyle = R.ojo; g.lineWidth = Math.max(2.4, 3*sCara);
     g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke();
     for(const p of [pa,pb]){
-      g.beginPath(); g.moveTo(p.x-9, p.y); g.lineTo(p.x+9, p.y); g.stroke();
+      g.beginPath(); g.moveTo(p.x-8*sCara, p.y); g.lineTo(p.x+8*sCara, p.y); g.stroke();
     }
   };
-  segOjo(159,145);   /* ojo derecho de la persona */
-  segOjo(386,374);   /* ojo izquierdo de la persona */
+  segOjo(159,145);
+  segOjo(386,374);
   if(A.ojoMasAbierto !== 'equilibrado'){
     const idx = A.ojoMasAbierto === 'izquierda' ? 386 : 159;
     const p = M(A.lm[idx]);
@@ -743,24 +787,26 @@ function pagina1(anotacionesZona){
     g.fillStyle = "#fff";
     g.textAlign = "center";
     g.font = "800 20px Archivo";
-    g.fillText("MÁS ABIERTO", p.x, p.y-26);
+    g.fillText("MÁS ABIERTO", p.x, p.y-30*sCara);
     textoSombra(g, false);
   }
 
-  /* desviación del mentón — flecha rosa desde el eje */
+  /* desviación del mentón */
   if(A.mentonHacia !== 'centrado'){
     const pm = M(A.lm[152]);
     const t = ((A.lm[152].x-A.p0.x)*A.d.x + (A.lm[152].y-A.p0.y)*A.d.y);
     const ejePt = M({ x: A.p0.x + A.d.x*t, y: A.p0.y + A.d.y*t });
-    flecha(g, ejePt.x, ejePt.y, pm.x, pm.y, R.menton, 3.5);
+    flecha(g, ejePt.x, ejePt.y, pm.x, pm.y, R.menton, 3);
   }
   g.restore();
 
   /* etiquetas de tercios */
   const nombres = [["TERCIO","SUPERIOR"],["TERCIO","MEDIO"],["TERCIO","INFERIOR"]];
+  const ymLabels = [];
   g.textAlign = "left";
   for(let k=0;k<3;k++){
     const ym = (ysT[k]+ysT[k+1])/2;
+    ymLabels.push(ym);
     textoSombra(g, true);
     g.fillStyle = "#fff";
     g.font = "800 26px Archivo";
@@ -769,7 +815,7 @@ function pagina1(anotacionesZona){
     textoSombra(g, false);
   }
 
-  /* callouts numerados */
+  /* callouts numerados (la columna izquierda esquiva las etiquetas de tercios) */
   const lista = [];
   (anotacionesZona||[]).slice(0,4).forEach((a,i)=>{
     const idx = ANCLAS[a.zona];
@@ -785,12 +831,21 @@ function pagina1(anotacionesZona){
   const cols = { izq: lista.filter(a=>a.ax < centroX), der: lista.filter(a=>a.ax >= centroX) };
   for(const [lado, ls] of Object.entries(cols)){
     ls.sort((a,b)=>a.ay-b.ay);
-    let prevFin = ry + 130;
+    let prevFin = ry + 20;
     for(const an of ls){
       g.font = "600 22px Karla";
       const lineas = envolver(g, an.texto, cajaW-42);
       const cajaH = 58 + lineas.length*27;
       let by = Math.max(an.ay - cajaH/2, prevFin + gap);
+      if(lado === 'izq'){
+        let ajustado = true;
+        while(ajustado){
+          ajustado = false;
+          for(const ym of ymLabels){
+            if(by < ym+50 && by+cajaH > ym-50){ by = ym+56; ajustado = true; }
+          }
+        }
+      }
       if(by + cajaH > ry+rh-130) by = ry+rh-130-cajaH;
       const bx = lado === 'izq' ? margen : SW - margen - cajaW;
       prevFin = by + cajaH;
@@ -857,13 +912,13 @@ function icono(g, tipo, cx, cy, r){
   const u = r*0.52;
   g.lineWidth = 2.6;
   switch(tipo){
-    case 0: /* cejas: arco */
+    case 0:
       g.beginPath();
       g.moveTo(cx-u, cy+u*0.35);
       g.quadraticCurveTo(cx, cy-u*0.75, cx+u, cy+u*0.35);
       g.stroke();
       break;
-    case 1: /* ojo */
+    case 1:
       g.beginPath();
       g.moveTo(cx-u, cy);
       g.quadraticCurveTo(cx, cy-u*0.85, cx+u, cy);
@@ -871,11 +926,11 @@ function icono(g, tipo, cx, cy, r){
       g.stroke();
       g.beginPath(); g.arc(cx, cy, u*0.28, 0, Math.PI*2); g.stroke();
       break;
-    case 2: /* mejillas: dos círculos */
+    case 2:
       g.beginPath(); g.arc(cx-u*0.55, cy, u*0.5, 0, Math.PI*2); g.stroke();
       g.beginPath(); g.arc(cx+u*0.55, cy, u*0.5, 0, Math.PI*2); g.stroke();
       break;
-    case 3: /* tensión: ondas */
+    case 3:
       for(let k=-1;k<=1;k++){
         g.beginPath();
         g.moveTo(cx-u, cy+k*u*0.6);
@@ -884,18 +939,18 @@ function icono(g, tipo, cx, cy, r){
         g.stroke();
       }
       break;
-    case 4: /* v-line */
+    case 4:
       g.beginPath();
       g.moveTo(cx-u, cy-u*0.7);
       g.quadraticCurveTo(cx-u*0.5, cy+u*0.6, cx, cy+u*0.85);
       g.quadraticCurveTo(cx+u*0.5, cy+u*0.6, cx+u, cy-u*0.7);
       g.stroke();
       break;
-    case 5: /* línea media: cara + eje */
+    case 5:
       g.beginPath(); g.ellipse(cx, cy, u*0.72, u, 0, 0, Math.PI*2); g.stroke();
       g.beginPath(); g.moveTo(cx, cy-u); g.lineTo(cx, cy+u); g.stroke();
       break;
-    case 6: /* óvalo facial */
+    case 6:
       g.setLineDash([5,4]);
       g.beginPath(); g.ellipse(cx, cy, u*0.75, u, 0, 0, Math.PI*2); g.stroke();
       g.setLineDash([]);
@@ -903,95 +958,104 @@ function icono(g, tipo, cx, cy, r){
   }
 }
 
-/* PÁGINA 2 — Observaciones */
+/* PÁGINA 2 — Observaciones (compacta, sin choques ni cortes) */
 function pagina2(categorias, obsGeneral){
   const { c, g } = nuevaPagina(2);
   encabezado(g, "Observaciones", "Análisis detallado y recomendaciones");
 
   const cats = (categorias||[]).slice(0,7);
   const x0 = 44, cardW = SW-88;
-  const iconX = x0+62, txtX = x0+128;
+  const iconX = x0+58, txtX = x0+118;
   const colObsW = 430, colRecX = x0 + 610, colRecW = cardW - 630;
-  let y = 196;
+  let y = 188;
 
   for(let ci=0; ci<cats.length; ci++){
     const cat = cats[ci];
     const p10 = Math.round(Math.max(0, Math.min(100, Number(cat.puntaje)||0))/10);
     const dots5 = Math.max(1, Math.round(p10/2));
     const lado = (cat.lado||'equilibrado').toLowerCase();
+    const ladoTxt = lado==='izquierda' ? 'IZQUIERDA' : lado==='derecha' ? 'DERECHA' : 'EQUILIBRADO';
+    const esEq = (lado!=='izquierda' && lado!=='derecha');
 
-    g.font = "400 22px Karla";
+    g.font = "400 21px Karla";
     const obsL = envolver(g, cat.observacion, colObsW);
     const recL = envolver(g, cat.recomendacion, colRecW - 12);
-    const altura = Math.max(146, 92 + Math.max(obsL.length, recL.length+0.5)*27 + 14);
+    const altura = Math.max(118, 94 + Math.max(obsL.length, recL.length)*26 + 8);
 
     sombra(g, true);
     g.fillStyle = "#fff";
-    rrect(g, x0, y, cardW, altura, 18); g.fill();
+    rrect(g, x0, y, cardW, altura, 16); g.fill();
     sombra(g, false);
     g.strokeStyle = R.borde; g.lineWidth = 1.5;
-    rrect(g, x0, y, cardW, altura, 18); g.stroke();
+    rrect(g, x0, y, cardW, altura, 16); g.stroke();
 
     g.strokeStyle = R.borde; g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(colRecX-24, y+20); g.lineTo(colRecX-24, y+altura-20); g.stroke();
+    g.beginPath(); g.moveTo(colRecX-24, y+18); g.lineTo(colRecX-24, y+altura-18); g.stroke();
 
-    icono(g, ci, iconX, y+altura/2, 38);
-
-    g.textAlign = "left";
-    g.fillStyle = R.negro;
-    g.font = "800 27px Archivo";
-    g.fillText(cat.nombre.toUpperCase(), txtX, y+42);
+    icono(g, ci, iconX, y+altura/2, 34);
 
     /* pill de lado */
-    const ladoTxt = lado==='izquierda' ? 'IZQUIERDA' : lado==='derecha' ? 'DERECHA' : 'EQUILIBRADO';
-    g.font = "800 17px Archivo";
-    const ladoW = g.measureText(ladoTxt).width + 30;
-    const esEq = (lado!=='izquierda' && lado!=='derecha');
+    g.font = "800 16px Archivo";
+    const ladoW = g.measureText(ladoTxt).width + 28;
+    const pillX = colRecX-24-ladoW-14;
+
+    /* nombre — se encoge hasta caber antes de la pill */
+    g.textAlign = "left";
+    g.fillStyle = R.negro;
+    let fs = 26;
+    g.font = "800 " + fs + "px Archivo";
+    while(g.measureText(cat.nombre.toUpperCase()).width > (pillX - txtX - 14) && fs > 18){
+      fs--; g.font = "800 " + fs + "px Archivo";
+    }
+    g.fillText(cat.nombre.toUpperCase(), txtX, y+38);
+
     g.strokeStyle = esEq ? R.borde : R.rosa; g.lineWidth = 2;
     g.fillStyle = esEq ? "#fff" : R.rosaSuave;
-    rrect(g, colRecX-24-ladoW-16, y+22, ladoW, 32, 16); g.fill();
-    rrect(g, colRecX-24-ladoW-16, y+22, ladoW, 32, 16); g.stroke();
+    rrect(g, pillX, y+16, ladoW, 30, 15); g.fill();
+    rrect(g, pillX, y+16, ladoW, 30, 15); g.stroke();
     g.fillStyle = esEq ? R.gris : R.rosa;
     g.textAlign = "center";
-    g.fillText(ladoTxt, colRecX-24-ladoW-16+ladoW/2, y+44);
+    g.font = "800 16px Archivo";
+    g.fillText(ladoTxt, pillX+ladoW/2, y+37);
 
     g.textAlign = "left";
     for(let i=0;i<5;i++){
       g.fillStyle = i < dots5 ? R.negro : "#fff";
-      g.strokeStyle = R.negro; g.lineWidth = 2.4;
-      g.beginPath(); g.arc(txtX+12+i*32, y+70, 9, 0, Math.PI*2);
+      g.strokeStyle = R.negro; g.lineWidth = 2.2;
+      g.beginPath(); g.arc(txtX+10+i*28, y+62, 8, 0, Math.PI*2);
       g.fill(); g.stroke();
     }
     g.fillStyle = R.negro;
-    g.font = "700 23px Archivo";
-    g.fillText(p10 + "/10", txtX+5*32+18, y+78);
+    g.font = "700 21px Archivo";
+    g.fillText(p10 + "/10", txtX+5*28+14, y+69);
 
     g.fillStyle = "#3A3A3A";
-    g.font = "400 22px Karla";
-    obsL.forEach((ln,i)=> g.fillText(ln, txtX, y+106+i*27));
+    g.font = "400 21px Karla";
+    obsL.forEach((ln,i)=> g.fillText(ln, txtX, y+96+i*26));
 
     g.fillStyle = R.rosa;
-    g.font = "800 20px Archivo";
-    g.fillText("RECOMENDACIÓN", colRecX, y+40);
+    g.font = "800 18px Archivo";
+    g.fillText("RECOMENDACIÓN", colRecX, y+36);
     g.fillStyle = "#3A3A3A";
-    g.font = "400 22px Karla";
-    recL.forEach((ln,i)=> g.fillText(ln, colRecX, y+72+i*27));
+    g.font = "400 21px Karla";
+    recL.forEach((ln,i)=> g.fillText(ln, colRecX, y+64+i*26));
 
-    y += altura + 14;
+    y += altura + 10;
   }
 
+  /* frase de cierre — siempre por encima del pie */
   const cierre = obsGeneral || "El cuidado constante y el masaje facial dirigido pueden mejorar visiblemente el equilibrio, el contorno y la vitalidad de la piel.";
-  g.font = "500 24px Karla";
+  g.font = "500 22px Karla";
   const cl = envolver(g, cierre, cardW-120);
-  const cierreH = 36 + cl.length*30;
-  const cy2 = Math.min(y+4, SH-64-cierreH);
+  const cierreH = 32 + cl.length*28;
+  const cy2 = Math.min(y+4, SH-84-cierreH);
   g.strokeStyle = R.rosa; g.lineWidth = 2;
   g.fillStyle = "#FFF7FA";
   rrect(g, x0, cy2, cardW, cierreH, 14); g.fill();
   rrect(g, x0, cy2, cardW, cierreH, 14); g.stroke();
   g.textAlign = "center";
   g.fillStyle = R.negro;
-  cl.forEach((ln,i)=> g.fillText(ln, SW/2, cy2+34+i*30));
+  cl.forEach((ln,i)=> g.fillText(ln, SW/2, cy2+30+i*28));
 
   pie(g, "Sunsu Spa · Facial Coreano · Quito");
   return c;
@@ -1011,26 +1075,6 @@ function corona(g, cx, cy, s){
   rrect(g, cx-2.2*s, cy+1.35*s, 4.4*s, 0.55*s, 0.2*s); g.fill();
 }
 
-/* punta de flecha */
-function punta(g, x, y, ang, t, color){
-  g.fillStyle = color;
-  g.beginPath();
-  g.moveTo(x, y);
-  g.lineTo(x - t*Math.cos(ang-0.45), y - t*Math.sin(ang-0.45));
-  g.lineTo(x - t*Math.cos(ang+0.45), y - t*Math.sin(ang+0.45));
-  g.closePath(); g.fill();
-}
-
-/* flecha curva (cuadrática) con punta */
-function flechaCurva(g, x1, y1, cxq, cyq, x2, y2, color, ancho, dash){
-  g.strokeStyle = color; g.lineWidth = ancho;
-  g.setLineDash(dash||[]);
-  g.beginPath(); g.moveTo(x1,y1); g.quadraticCurveTo(cxq,cyq,x2,y2); g.stroke();
-  g.setLineDash([]);
-  const ang = Math.atan2(y2-cyq, x2-cxq);
-  punta(g, x2, y2, ang, 13, color);
-}
-
 /* PÁGINA 3 — Áreas Clave */
 function pagina3(focos, fecha){
   const { c, g } = nuevaPagina(3);
@@ -1044,6 +1088,7 @@ function pagina3(focos, fecha){
   const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
   const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
   const centroX = M(A.p0).x;
+  const anchoCaraS = dist(M(A.lm[234]), M(A.lm[454]));
 
   g.save();
   g.beginPath(); rrect(g, fx, fyTop, fw, fh, 16); g.clip();
@@ -1059,10 +1104,8 @@ function pagina3(focos, fecha){
   g.stroke();
   g.setLineDash([]);
 
-  const anchoCaraS = dist(M(A.lm[234]), M(A.lm[454]));
-
-  /* gráficos de trabajo por foco — anclados a la anatomía */
-  const JAW_IMG_IZQ = [58,172,136,150,149,176,148,152];   /* imagen izq = lado DERECHO de la persona */
+  /* gráficos de trabajo por foco */
+  const JAW_IMG_IZQ = [58,172,136,150,149,176,148,152];
   const JAW_IMG_DER = [288,397,365,378,400,377,152];
   const VLINE_BAJA = [172,136,150,149,176,148,152,377,400,378,365,397];
 
@@ -1079,7 +1122,6 @@ function pagina3(focos, fecha){
   };
 
   const flechasJaw = (indices, col) => {
-    /* flecha curva subiendo a lo largo de la mandíbula */
     const a = M(A.lm[indices[indices.length-1]]);
     const b = M(A.lm[indices[Math.floor(indices.length/2)]]);
     const e = M(A.lm[indices[0]]);
@@ -1148,7 +1190,6 @@ function pagina3(focos, fecha){
       return;
     }
 
-    /* elipse de zona (masetero, mejillas, drenaje…) */
     const esMejilla = z.startsWith('mejilla') || z.startsWith('masetero');
     const rx = esMejilla ? anchoCaraS*0.16 : anchoCaraS*0.12;
     const ryE = esMejilla ? anchoCaraS*0.24 : anchoCaraS*0.13;
@@ -1162,27 +1203,39 @@ function pagina3(focos, fecha){
   });
   g.restore();
 
-  /* números con línea conectora a su zona */
+  /* números apilados en los bordes con conector, sin superponerse */
+  const nums = [];
   ls.forEach((fo,i)=>{
     const idx = ANCLAS[fo.zona];
     if(idx == null) return;
     const pt = M(A.lm[idx]);
     let py = pt.y;
     if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
-    const col = ZCOLORES[i % ZCOLORES.length];
-    const lado = pt.x >= centroX ? 1 : -1;
-    const nx = Math.max(fx+30, Math.min(fx+fw-30, pt.x + lado*anchoCaraS*0.30));
-    g.strokeStyle = col; g.lineWidth = 2.5;
-    g.beginPath(); g.moveTo(nx - lado*20, py); g.lineTo(pt.x + lado*anchoCaraS*0.12, py); g.stroke();
-    g.fillStyle = col;
-    g.beginPath(); g.arc(nx, py, 23, 0, Math.PI*2); g.fill();
-    g.strokeStyle = "#fff"; g.lineWidth = 3;
-    g.beginPath(); g.arc(nx, py, 23, 0, Math.PI*2); g.stroke();
-    g.fillStyle = "#fff";
-    g.textAlign = "center";
-    g.font = "800 26px Archivo";
-    g.fillText(String(i+1), nx, py+9);
+    nums.push({ i, col: ZCOLORES[i % ZCOLORES.length], pt, py, side: pt.x >= centroX ? 1 : -1 });
   });
+  for(const side of [-1,1]){
+    const grupo = nums.filter(n=>n.side===side).sort((a,b)=>a.py-b.py);
+    let prev = fyTop + 14;
+    for(const nu of grupo){
+      let ny = Math.max(nu.py, prev + 52);
+      ny = Math.min(ny, fyTop+fh-30);
+      prev = ny;
+      const nx = side>0 ? fx+fw-34 : fx+34;
+      g.strokeStyle = nu.col; g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(nx - side*22, ny);
+      g.lineTo(nu.pt.x + side*Math.min(anchoCaraS*0.10, 40), nu.py);
+      g.stroke();
+      g.fillStyle = nu.col;
+      g.beginPath(); g.arc(nx, ny, 22, 0, Math.PI*2); g.fill();
+      g.strokeStyle = "#fff"; g.lineWidth = 3;
+      g.beginPath(); g.arc(nx, ny, 22, 0, Math.PI*2); g.stroke();
+      g.fillStyle = "#fff";
+      g.textAlign = "center";
+      g.font = "800 25px Archivo";
+      g.fillText(String(nu.i+1), nx, ny+8);
+    }
+  }
 
   /* tarjetas izquierda */
   const tx = 36, tw = 396;
