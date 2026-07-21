@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Sunsu · Análisis de Simetría Facial</title>
+<title>Sunsu · Análisis Facial K-Lift</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Karla:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=Karla:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --porcelana:#FAF6F1;
@@ -45,7 +46,6 @@
     border:1px solid var(--linea);
     border-radius:18px;
     overflow:hidden;
-    position:relative;
     min-height:300px;
     display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:14px;
@@ -132,11 +132,39 @@
     content:'';flex:1;height:1px;background:var(--linea);
   }
 
-  /* ---------- informe de slides ---------- */
   #informe{display:none;margin-top:30px;}
   .slide-img{
-    width:100%;border-radius:18px;border:1px solid var(--linea);
+    width:100%;border-radius:12px;border:1px solid #E8E8E8;
     display:block;margin-bottom:14px;
+  }
+
+  /* ---------- cámara con óvalo guía ---------- */
+  #camModal{
+    display:none;position:fixed;inset:0;z-index:1000;background:#000;
+  }
+  #camModal.abierta{display:block;}
+  #camVideo{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;transform:scaleX(-1);
+  }
+  #camOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .cam-texto{
+    position:absolute;top:max(24px, env(safe-area-inset-top));left:0;right:0;
+    text-align:center;color:#fff;font-size:15px;font-weight:500;
+    text-shadow:0 1px 6px rgba(0,0,0,.6);padding:12px;
+  }
+  .cam-controles{
+    position:absolute;bottom:max(30px, env(safe-area-inset-bottom));left:0;right:0;
+    display:flex;justify-content:center;align-items:center;gap:40px;
+  }
+  #btnCapturar{
+    width:76px;height:76px;border-radius:50%;border:5px solid #fff;
+    background:rgba(255,255,255,.25);cursor:pointer;
+  }
+  #btnCerrarCam{
+    position:absolute;top:max(20px, env(safe-area-inset-top));right:20px;
+    width:42px;height:42px;border-radius:50%;border:none;
+    background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;
   }
 </style>
 </head>
@@ -146,8 +174,8 @@
   <header>
     <img class="logo" id="logo" style="display:none;" alt="Sunsu Spa">
     <div class="marca">Sunsu Spa</div>
-    <h1>Análisis de<br>Simetría Facial</h1>
-    <div class="sub">Estudio de proporciones y balance del rostro</div>
+    <h1>Análisis Facial<br>K-Lift</h1>
+    <div class="sub">Balance · Contorno · V-Line · Armonía</div>
   </header>
 
   <div class="foto-zona vacia" id="fotoZona">
@@ -162,8 +190,7 @@
   <div class="botones">
     <button class="btn btn-principal" id="btnFoto">Tomar foto</button>
     <button class="btn btn-secundario" id="btnGaleria">Elegir de la galería</button>
-    <button class="btn btn-oro" id="btnIA" style="display:none;">Generar informe con IA</button>
-    <button class="btn btn-principal" id="btnCompartir" style="display:none;">Compartir resultado</button>
+    <button class="btn btn-oro" id="btnIA" style="display:none;">Generar informe K-Lift</button>
   </div>
   <input type="file" id="inputCamara" accept="image/*" capture="user">
   <input type="file" id="inputGaleria" accept="image/*">
@@ -185,9 +212,9 @@
   </div>
 
   <div id="informe">
-    <div class="divisor">Informe Sunsu</div>
+    <div class="divisor">Informe K-Lift</div>
     <div id="slidesContenedor"></div>
-    <button class="btn btn-oro" id="btnCompartirInforme">Compartir informe (4 imágenes)</button>
+    <button class="btn btn-oro" id="btnCompartirInforme">Compartir informe PDF</button>
   </div>
 
   <p class="nota" id="notaFinal" style="display:none;">
@@ -195,6 +222,24 @@
     naturales que los hacen únicos. Este análisis es estético y orientativo,
     no constituye un diagnóstico médico.
   </p>
+</div>
+
+<!-- ---------- modal de cámara ---------- -->
+<div id="camModal">
+  <video id="camVideo" autoplay playsinline muted></video>
+  <svg id="camOverlay" viewBox="0 0 100 178" preserveAspectRatio="xMidYMid slice">
+    <path d="M0,0 H100 V178 H0 Z M50,38 C67,38 80,56 80,80 C80,104 67,122 50,122 C33,122 20,104 20,80 C20,56 33,38 50,38 Z"
+          fill="rgba(0,0,0,.5)" fill-rule="evenodd"/>
+    <ellipse cx="50" cy="80" rx="30" ry="42" fill="none"
+             stroke="#E8618C" stroke-width="0.8" stroke-dasharray="2.5 2"/>
+    <line x1="26" y1="68" x2="74" y2="68" stroke="rgba(255,255,255,.55)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+    <line x1="50" y1="40" x2="50" y2="120" stroke="rgba(255,255,255,.35)" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+  </svg>
+  <div class="cam-texto">Alinea tu rostro dentro del óvalo<br><small style="font-weight:300">Ojos sobre la línea · cabeza recta · expresión neutra</small></div>
+  <button id="btnCerrarCam">✕</button>
+  <div class="cam-controles">
+    <button id="btnCapturar" aria-label="Capturar"></button>
+  </div>
 </div>
 
 <script type="module">
@@ -205,22 +250,27 @@ const IA_URL = "https://script.google.com/macros/s/AKfycbyF1kBv1sh2bvEnpzocEh9an
 const LOGO_URL = "";    // ← pegar aquí la URL del logo (ej: logo.png en el repo)
 /* ======================================= */
 
-/* paleta compartida con los slides */
-const C = {
-  porcelana:"#FAF6F1", arena:"#F0E7DD", tinta:"#33403A", tintaSuave:"#6E7A73",
-  rosa:"#D9A9A1", rosaSuave:"#F3E2DE", oro:"#B8965F", linea:"#E4D9CC"
+/* paleta del informe — estilo referencia */
+const R = {
+  blanco:"#FFFFFF", negro:"#141414", gris:"#8A8A8A", borde:"#E8E8E8",
+  rosa:"#E8618C", rosaSuave:"#F9D9E4", oscuro:"#1E1E1E",
+  /* colores de marcadores faciales */
+  ceja:"#B57FD6", ojo:"#F2C14E", pupila:"#3D9BE9",
+  nariz:"#6FBF73", boca:"#E5484D", menton:"#F27BA2"
 };
+/* colores de zonas página 3 */
+const ZCOLORES = ["#F27BA2","#F2A65A","#8ED08E","#B57FD6","#5BC8D8","#F2C14E"];
 
 const $ = id => document.getElementById(id);
 const estado = $('estado');
 const lienzo = $('lienzo');
 const ctx = lienzo.getContext('2d');
 let landmarker = null;
-let canvasResultado = null;
 let fotoBase64 = null;
 let metricasActuales = null;
-let A = null;   // estado del análisis actual: {lm, p0, d, w, h, score, zonas, limpio}
-let slidesBlobs = [];
+let A = null;
+let pdfBlob = null;
+let camStream = null;
 
 if(LOGO_URL){
   $('logo').src = LOGO_URL;
@@ -249,11 +299,43 @@ async function cargarModelo(){
 }
 cargarModelo();
 
-/* ---------- entrada de foto ---------- */
-$('btnFoto').onclick = () => $('inputCamara').click();
+/* ---------- cámara ---------- */
+$('btnFoto').onclick = abrirCamara;
 $('btnGaleria').onclick = () => $('inputGaleria').click();
 $('inputCamara').onchange = e => procesarArchivo(e.target.files[0]);
 $('inputGaleria').onchange = e => procesarArchivo(e.target.files[0]);
+
+async function abrirCamara(){
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1706 } },
+      audio: false
+    });
+    $('camVideo').srcObject = camStream;
+    $('camModal').classList.add('abierta');
+  }catch(e){
+    $('inputCamara').click();
+  }
+}
+
+function cerrarCamara(){
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $('camModal').classList.remove('abierta');
+}
+$('btnCerrarCam').onclick = cerrarCamara;
+
+$('btnCapturar').onclick = () => {
+  const v = $('camVideo');
+  if(!v.videoWidth){ return; }
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  cerrarCamara();
+  estado.textContent = "Analizando rostro…";
+  const img = new Image();
+  img.onload = () => analizar(img);
+  img.src = c.toDataURL('image/jpeg', 0.92);
+};
 
 function procesarArchivo(file){
   if(!file) return;
@@ -261,7 +343,7 @@ function procesarArchivo(file){
   estado.textContent = "Analizando rostro…";
   $('informe').style.display = 'none';
   $('slidesContenedor').innerHTML = '';
-  slidesBlobs = [];
+  pdfBlob = null;
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => { URL.revokeObjectURL(url); analizar(img); };
@@ -286,10 +368,10 @@ const ZONAS = {
   "Contorno": [[234,454],[93,323],[132,361],[172,397],[136,365],[150,379],[176,400]]
 };
 const CENTRALES = [10,168,6,197,195,5,4,1,2,164,0,17,18,200,199,152];
-const MANDIBULA = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,365,397,288,361,323,454];
+const CEJA_A = [70,63,105,66,107];
+const CEJA_B = [336,296,334,293,300];
+const VLINE = [58,172,136,150,149,176,148,152,377,400,378,365,397,288];
 
-/* zona anatómica → índice de landmark (foto NO espejada:
-   la izquierda de la persona aparece al lado derecho de la imagen) */
 const ANCLAS = {
   frente:10,
   ceja_izquierda:334,  ceja_derecha:105,
@@ -309,12 +391,10 @@ function analizar(img){
   lienzo.width = w; lienzo.height = h;
   ctx.drawImage(img, 0, 0, w, h);
 
-  /* copia limpia (sin overlays) para los slides */
   const limpio = document.createElement('canvas');
   limpio.width = w; limpio.height = h;
   limpio.getContext('2d').drawImage(lienzo, 0, 0);
 
-  /* copia reducida para la IA */
   const cIA = document.createElement('canvas');
   const escIA = Math.min(1, 800 / w);
   cIA.width = Math.round(w*escIA); cIA.height = Math.round(h*escIA);
@@ -332,7 +412,6 @@ function analizar(img){
 
   const lm = res.faceLandmarks[0].map(p => ({ x:p.x*w, y:p.y*h }));
 
-  /* eje de simetría */
   const pts = CENTRALES.map(i => lm[i]);
   const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
   const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
@@ -404,74 +483,82 @@ function analizar(img){
 
   A = { lm, p0, d, w, h, score, zonas: zonasRes, limpio };
 
-  dibujar(lm, p0, d, w, h, proj);
-  mostrarResultados(score, zonasRes, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton, w, h);
+  dibujarLineasFaciales(ctx, p => p, 1);
+  $('fotoZona').style.display = 'none';
+  lienzo.style.display = 'block';
+  lienzo.style.borderRadius = '18px';
+
+  mostrarResultados(score, zonasRes, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton);
 }
 
-/* ---------- visualización en pantalla ---------- */
-function dibujarOverlays(g, lm, p0, d, w, h, opciones){
-  const op = opciones || {};
-  const L = Math.max(w,h);
-  const grosor = Math.max(1.5, w/500);
-  const proj = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
+/* ---------- líneas faciales estilo referencia ---------- */
+function dibujarLineasFaciales(g, M, s){
+  const lm = A.lm, p0 = M(A.p0), d = A.d;
+  const L = 4000 * s;
+  const gr = Math.max(2, 2.6*s);
 
-  if(op.tercios !== false){
-    g.strokeStyle = "rgba(184,150,95,.45)";
-    g.lineWidth = grosor;
-    g.setLineDash([3,6]);
-    for(const i of [10,168,2,152]){
-      const t = proj(lm[i]);
-      const px = p0.x + d.x*t, py = p0.y + d.y*t;
-      g.beginPath();
-      g.moveTo(px - (-d.y)*L, py - d.x*L);
-      g.lineTo(px + (-d.y)*L, py + d.x*L);
-      g.stroke();
-    }
-  }
-
-  g.strokeStyle = "rgba(184,150,95,.85)";
-  g.lineWidth = grosor;
-  g.setLineDash([6,5]);
+  /* eje central blanco */
+  g.strokeStyle = "rgba(255,255,255,.95)";
+  g.lineWidth = gr;
+  g.setLineDash([10*s, 8*s]);
   g.beginPath();
   g.moveTo(p0.x - d.x*L, p0.y - d.y*L);
   g.lineTo(p0.x + d.x*L, p0.y + d.y*L);
   g.stroke();
   g.setLineDash([]);
 
-  if(op.mandibula !== false){
-    g.strokeStyle = "rgba(217,169,161,.9)";
-    g.lineWidth = grosor*1.4;
+  const punto = (i, color, r) => {
+    const p = M(lm[i]);
+    g.fillStyle = color;
+    g.beginPath(); g.arc(p.x, p.y, r*s, 0, Math.PI*2); g.fill();
+    g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = 1.4*s;
+    g.beginPath(); g.arc(p.x, p.y, r*s, 0, Math.PI*2); g.stroke();
+  };
+  const curva = (indices, color, dash, ancho) => {
+    g.strokeStyle = color; g.lineWidth = (ancho||gr);
+    g.setLineDash(dash || []);
     g.beginPath();
-    MANDIBULA.forEach((i,k) => {
-      if(k===0) g.moveTo(lm[i].x, lm[i].y);
-      else g.lineTo(lm[i].x, lm[i].y);
+    indices.forEach((i,k)=>{
+      const p = M(lm[i]);
+      if(k===0) g.moveTo(p.x,p.y); else g.lineTo(p.x,p.y);
     });
     g.stroke();
-  }
+    g.setLineDash([]);
+  };
 
-  if(op.puntos !== false){
-    const r = Math.max(2, w/300);
-    g.fillStyle = "rgba(217,169,161,.95)";
-    for(const pares of Object.values(ZONAS)){
-      for(const [a,b] of pares){
-        for(const i of [a,b]){
-          g.beginPath();
-          g.arc(lm[i].x, lm[i].y, r, 0, Math.PI*2);
-          g.fill();
-        }
-      }
-    }
-  }
+  /* cejas — morado punteado con puntos */
+  curva(CEJA_A, R.ceja, [7*s,5*s]);
+  curva(CEJA_B, R.ceja, [7*s,5*s]);
+  [70,107,336,300].forEach(i => punto(i, R.ceja, 5));
+  [105,334].forEach(i => punto(i, R.ceja, 6));
+
+  /* línea de ojos — blanca punteada con esquinas amarillas y pupilas azules */
+  curva([33,133], "rgba(255,255,255,.9)", [6*s,4*s]);
+  curva([362,263], "rgba(255,255,255,.9)", [6*s,4*s]);
+  [33,133,362,263].forEach(i => punto(i, R.ojo, 6));
+  if(lm.length > 473){ punto(468, R.pupila, 7); punto(473, R.pupila, 7); }
+
+  /* boca — esquinas rojas */
+  curva([61,13,291], "rgba(229,72,77,.85)", [6*s,4*s]);
+  [61,291].forEach(i => punto(i, R.boca, 6));
+
+  /* nariz verde y mentón rosa */
+  punto(1, R.nariz, 6);
+  punto(152, R.menton, 6);
+
+  /* V-Line — curva blanca sólida gruesa */
+  g.strokeStyle = "rgba(255,255,255,.98)";
+  g.lineWidth = gr*2.1;
+  g.lineJoin = "round";
+  g.beginPath();
+  VLINE.forEach((i,k)=>{
+    const p = M(lm[i]);
+    if(k===0) g.moveTo(p.x,p.y); else g.lineTo(p.x,p.y);
+  });
+  g.stroke();
 }
 
-function dibujar(lm, p0, d, w, h, proj){
-  dibujarOverlays(ctx, lm, p0, d, w, h, {});
-  $('fotoZona').style.display = 'none';
-  lienzo.style.display = 'block';
-  lienzo.style.borderRadius = '18px';
-}
-
-function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton, w, h){
+function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, difCejas, apIzq, apDer, desvMenton){
   $('scoreNum').innerHTML = score + '<small>%</small>';
   $('scoreFrase').textContent =
     score >= 93 ? "Un balance facial excepcional" :
@@ -500,19 +587,17 @@ function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, difCejas, 
 
   $('resultados').style.display = 'block';
   $('notaFinal').style.display = 'block';
-  $('btnCompartir').style.display = 'block';
   $('btnIA').style.display = IA_URL ? 'block' : 'none';
   $('btnIA').disabled = false;
   estado.textContent = "";
-  prepararCompartirRapido(score, zonas, w, h);
   $('resultados').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
-/* ---------- análisis con IA ---------- */
+/* ---------- llamada a la IA ---------- */
 $('btnIA').onclick = async () => {
   if(!fotoBase64 || !IA_URL || !A) return;
   $('btnIA').disabled = true;
-  estado.textContent = "Generando informe con IA… (10-25 segundos)";
+  estado.textContent = "Generando informe K-Lift… (15-30 segundos)";
   try{
     const res = await fetch(IA_URL, {
       method: 'POST',
@@ -530,16 +615,20 @@ $('btnIA').onclick = async () => {
 };
 
 /* =====================================================
-   GENERADOR DE INFORME — 4 slides de 1080×1350
+   INFORME K-LIFT — 3 páginas 1080×1527 · estilo referencia
    ===================================================== */
-const SW = 1080, SH = 1350;
+const SW = 1080, SH = 1527;
 
-function nuevoSlide(){
+function nuevaPagina(num){
   const c = document.createElement('canvas');
   c.width = SW; c.height = SH;
   const g = c.getContext('2d');
-  g.fillStyle = C.porcelana;
+  g.fillStyle = R.blanco;
   g.fillRect(0,0,SW,SH);
+  g.textAlign = "left";
+  g.fillStyle = R.rosa;
+  g.font = "800 24px Archivo";
+  g.fillText("PÁGINA " + num, 44, 56);
   return { c, g };
 }
 
@@ -553,8 +642,18 @@ function rrect(g, x, y, w, h, r){
   g.closePath();
 }
 
+function sombra(g, on){
+  if(on){
+    g.shadowColor = "rgba(0,0,0,.16)";
+    g.shadowBlur = 14; g.shadowOffsetY = 4;
+  }else{
+    g.shadowColor = "transparent";
+    g.shadowBlur = 0; g.shadowOffsetY = 0;
+  }
+}
+
 function envolver(g, texto, maxW){
-  const palabras = String(texto).split(/\s+/);
+  const palabras = String(texto||'').split(/\s+/).filter(Boolean);
   const lineas = [];
   let linea = '';
   for(const p of palabras){
@@ -569,27 +668,22 @@ function envolver(g, texto, maxW){
 
 function encabezado(g, titulo, subtitulo){
   g.textAlign = "center";
-  g.fillStyle = C.oro;
-  g.font = "600 26px Karla";
-  g.fillText("S U N S U   S P A", SW/2, 62);
-  g.fillStyle = C.tinta;
-  g.font = "500 56px 'Cormorant Garamond'";
-  g.fillText(titulo, SW/2, 122);
-  if(subtitulo){
-    g.fillStyle = C.tintaSuave;
-    g.font = "300 24px Karla";
-    g.fillText(subtitulo, SW/2, 158);
-  }
+  g.fillStyle = R.negro;
+  g.font = "900 62px Archivo";
+  g.fillText(titulo.toUpperCase(), SW/2, 118);
+  g.fillStyle = R.negro;
+  g.font = "600 27px Archivo";
+  g.fillText(subtitulo.toUpperCase(), SW/2, 160);
 }
 
 function pie(g, texto){
   g.textAlign = "center";
-  g.fillStyle = C.tintaSuave;
-  g.font = "300 20px Karla";
-  g.fillText(texto, SW/2, SH-34);
+  g.fillStyle = R.gris;
+  g.font = "400 20px Karla";
+  const lineas = envolver(g, texto, SW-160);
+  lineas.forEach((ln,i)=> g.fillText(ln, SW/2, SH-58+i*26));
 }
 
-/* coloca la foto dentro de un rectángulo manteniendo proporción */
 function ajustarFoto(iw, ih, rx, ry, rw, rh){
   const s = Math.min(rw/iw, rh/ih);
   const ox = rx + (rw - iw*s)/2;
@@ -597,331 +691,482 @@ function ajustarFoto(iw, ih, rx, ry, rw, rh){
   return { s, ox, oy };
 }
 
-/* SLIDE 1 — Estudio: foto con overlays + tercios etiquetados + índice */
-function slideEstudio(fecha){
-  const { c, g } = nuevoSlide();
-  encabezado(g, "Análisis de Simetría Facial", "Balance · Contorno · V-Line · Armonía");
-
-  /* foto anotada (lienzo ya tiene los overlays) */
-  const ry = 190, rh = 940;
-  const f = ajustarFoto(A.w, A.h, 140, ry, SW-280, rh);
-  g.drawImage(lienzo, f.ox, f.oy, A.w*f.s, A.h*f.s);
-
-  /* etiquetas de tercios al costado izquierdo */
-  const ys = [10,168,2,152].map(i => f.oy + A.lm[i].y * f.s);
-  const nombres = ["TERCIO SUPERIOR","TERCIO MEDIO","TERCIO INFERIOR"];
-  g.textAlign = "right";
-  g.fillStyle = C.oro;
-  g.font = "600 20px Karla";
-  for(let k=0;k<3;k++){
-    const ym = (ys[k]+ys[k+1])/2;
-    g.fillText(nombres[k], 128, ym+7);
-    g.strokeStyle = C.oro; g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(134, ys[k]); g.lineTo(134, ys[k+1]); g.stroke();
-    g.beginPath(); g.moveTo(128, ys[k]); g.lineTo(140, ys[k]); g.stroke();
-    g.beginPath(); g.moveTo(128, ys[k+1]); g.lineTo(140, ys[k+1]); g.stroke();
-  }
-
-  /* chip del índice */
-  const chW = 380, chH = 110, chX = (SW-chW)/2, chY = 1165;
-  g.fillStyle = C.tinta;
-  rrect(g, chX, chY, chW, chH, 22); g.fill();
-  g.textAlign = "center";
-  g.fillStyle = C.porcelana;
-  g.font = "500 58px 'Cormorant Garamond'";
-  g.fillText(A.score + "%", SW/2, chY+58);
-  g.fillStyle = C.rosa;
-  g.font = "600 19px Karla";
-  g.fillText("ÍNDICE DE SIMETRÍA", SW/2, chY+90);
-
-  pie(g, "Sunsu Spa · Quito · " + fecha);
-  return c;
+function flecha(g, x1, y1, x2, y2, color, ancho){
+  g.strokeStyle = color; g.fillStyle = color;
+  g.lineWidth = ancho;
+  g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+  const a = Math.atan2(y2-y1, x2-x1), t = 11;
+  g.beginPath();
+  g.moveTo(x2, y2);
+  g.lineTo(x2 - t*Math.cos(a-0.45), y2 - t*Math.sin(a-0.45));
+  g.lineTo(x2 - t*Math.cos(a+0.45), y2 - t*Math.sin(a+0.45));
+  g.closePath(); g.fill();
 }
 
-/* SLIDE 2 — Observaciones con callouts anclados */
-function slideObservaciones(anotaciones){
-  const { c, g } = nuevoSlide();
-  encabezado(g, "Observaciones", "Lectura profesional del rostro");
+/* PÁGINA 1 — Escaneo K-Lift */
+function pagina1(anotacionesZona){
+  const { c, g } = nuevaPagina(1);
+  encabezado(g, "Escaneo K-Lift", "Análisis Izquierda vs Derecha");
 
-  const ry = 190, rh = 1060;
+  const ry = 190, rh = 1108;
   const f = ajustarFoto(A.w, A.h, 0, ry, SW, rh);
-  g.drawImage(A.limpio, f.ox, f.oy, A.w*f.s, A.h*f.s);
+  const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
+  const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
 
-  /* solo eje central sobre la foto limpia */
-  const L = Math.max(SW,SH);
-  g.strokeStyle = "rgba(184,150,95,.7)";
-  g.lineWidth = 2.5;
-  g.setLineDash([8,7]);
-  const p0s = { x: f.ox + A.p0.x*f.s, y: f.oy + A.p0.y*f.s };
-  g.beginPath();
-  g.moveTo(p0s.x - A.d.x*L, p0s.y - A.d.y*L);
-  g.lineTo(p0s.x + A.d.x*L, p0s.y + A.d.y*L);
-  g.stroke();
-  g.setLineDash([]);
+  g.save();
+  g.beginPath(); g.rect(fx, fyTop, fw, fh); g.clip();
+  g.drawImage(A.limpio, fx, fyTop, fw, fh);
 
-  /* separar anotaciones ancladas de generales */
-  const ancladas = [], generales = [];
-  for(const a of (anotaciones||[])){
-    const obj = typeof a === 'string' ? { zona:'rostro_general', texto:a } : a;
-    const idx = ANCLAS[obj.zona];
-    if(idx == null){ generales.push(obj.texto); continue; }
-    const pt = A.lm[idx];
-    let ax = f.ox + pt.x*f.s, ay = f.oy + pt.y*f.s;
-    if(obj.zona === 'cuello') ay += A.h*f.s*0.09;
-    ancladas.push({ texto: obj.texto, ax, ay });
+  /* líneas de tercios rosadas de borde a borde con puntos */
+  const ysT = [10,168,2,152].map(i => M(A.lm[i]).y);
+  g.strokeStyle = R.rosa; g.lineWidth = 3;
+  for(const y of ysT){
+    g.beginPath(); g.moveTo(fx+10, y); g.lineTo(fx+fw-10, y); g.stroke();
+    g.fillStyle = R.rosa;
+    g.beginPath(); g.arc(fx+12, y, 8, 0, Math.PI*2); g.fill();
+    g.beginPath(); g.arc(fx+fw-12, y, 8, 0, Math.PI*2); g.fill();
   }
 
-  /* distribuir callouts en columnas izquierda/derecha */
-  const cajaW = 300, margen = 26, gap = 18;
-  const centroX = f.ox + A.p0.x*f.s;
-  const cols = { izq: [], der: [] };
-  for(const an of ancladas) (an.ax < centroX ? cols.izq : cols.der).push(an);
+  dibujarLineasFaciales(g, M, Math.max(1, f.s*1.4));
+  g.restore();
 
-  g.font = "500 24px Karla";
-  for(const [lado, lista] of Object.entries(cols)){
-    lista.sort((a,b)=>a.ay-b.ay);
-    let prevFin = ry + 10;
-    for(const an of lista){
-      const lineas = envolver(g, an.texto, cajaW-40);
-      const cajaH = 30 + lineas.length*30;
+  /* etiquetas de tercios — texto blanco bold con sombra */
+  const nombres = [["TERCIO","SUPERIOR","Frente a entrecejo"],["TERCIO","MEDIO","Entrecejo a base nasal"],["TERCIO","INFERIOR","Base nasal a mentón"]];
+  g.textAlign = "left";
+  for(let k=0;k<3;k++){
+    const ym = (ysT[k]+ysT[k+1])/2;
+    sombra(g, false);
+    g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 8;
+    g.fillStyle = "#fff";
+    g.font = "800 27px Archivo";
+    g.fillText(nombres[k][0], fx+22, ym-14);
+    g.fillText(nombres[k][1], fx+22, ym+16);
+    g.font = "400 19px Karla";
+    g.fillStyle = "rgba(255,255,255,.92)";
+    g.fillText(nombres[k][2], fx+22, ym+44);
+    sombra(g, false);
+  }
+
+  /* callouts numerados — tarjetas blancas con sombra y flecha rosa */
+  const lista = [];
+  (anotacionesZona||[]).slice(0,4).forEach((a,i)=>{
+    const idx = ANCLAS[a.zona];
+    if(idx == null) return;
+    const pt = M(A.lm[idx]);
+    let ay = pt.y;
+    if(a.zona === 'cuello') ay += fh*0.09;
+    lista.push({ n:i+1, texto:a.texto, ax:pt.x, ay });
+  });
+
+  const cajaW = 268, margen = 20, gap = 18;
+  const centroX = M(A.p0).x;
+  const cols = { izq: lista.filter(a=>a.ax < centroX), der: lista.filter(a=>a.ax >= centroX) };
+  for(const [lado, ls] of Object.entries(cols)){
+    ls.sort((a,b)=>a.ay-b.ay);
+    let prevFin = ry + 150;
+    for(const an of ls){
+      g.font = "600 22px Karla";
+      const lineas = envolver(g, an.texto, cajaW-42);
+      const cajaH = 58 + lineas.length*27;
       let by = Math.max(an.ay - cajaH/2, prevFin + gap);
-      if(by + cajaH > SH-90) by = SH-90-cajaH;
+      if(by + cajaH > ry+rh-16) by = ry+rh-16-cajaH;
       const bx = lado === 'izq' ? margen : SW - margen - cajaW;
       prevFin = by + cajaH;
 
-      /* línea guía + punto ancla */
-      g.strokeStyle = C.oro; g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(lado==='izq' ? bx+cajaW : bx, by + cajaH/2);
-      g.lineTo(an.ax, an.ay);
-      g.stroke();
-      g.fillStyle = C.oro;
-      g.beginPath(); g.arc(an.ax, an.ay, 6, 0, Math.PI*2); g.fill();
+      const sx = lado==='izq' ? bx+cajaW : bx;
+      flecha(g, sx, by+cajaH/2, an.ax, an.ay, R.rosa, 3);
+      g.fillStyle = R.rosa;
+      g.beginPath(); g.arc(an.ax, an.ay, 7, 0, Math.PI*2); g.fill();
+      g.strokeStyle = "#fff"; g.lineWidth = 2;
+      g.beginPath(); g.arc(an.ax, an.ay, 7, 0, Math.PI*2); g.stroke();
 
-      /* caja */
-      g.fillStyle = "rgba(250,246,241,.96)";
+      sombra(g, true);
+      g.fillStyle = "#fff";
       rrect(g, bx, by, cajaW, cajaH, 14); g.fill();
-      g.strokeStyle = C.oro; g.lineWidth = 1.5; rrect(g, bx, by, cajaW, cajaH, 14); g.stroke();
-      g.fillStyle = C.tinta;
-      g.textAlign = "left";
-      lineas.forEach((ln,i)=> g.fillText(ln, bx+20, by+34+i*30));
+      sombra(g, false);
+
+      g.fillStyle = R.rosa;
+      g.beginPath(); g.arc(bx+cajaW/2, by+2, 17, 0, Math.PI*2); g.fill();
+      g.fillStyle = "#fff";
+      g.textAlign = "center";
+      g.font = "800 20px Archivo";
+      g.fillText(String(an.n), bx+cajaW/2, by+9);
+
+      g.fillStyle = R.negro;
+      g.font = "600 22px Karla";
+      lineas.forEach((ln,i)=> g.fillText(ln, bx+cajaW/2, by+46+i*27));
     }
   }
 
-  /* observaciones generales al pie */
-  if(generales.length){
-    g.textAlign = "center";
-    g.fillStyle = C.tinta;
-    g.font = "italic 500 26px 'Cormorant Garamond'";
-    g.fillText(generales[0], SW/2, SH-70);
-  }
-
-  pie(g, "Las asimetrías son naturales — todos los rostros las tienen");
-  return c;
-}
-
-/* SLIDE 3 — Áreas de enfoque Crazy Symmetry */
-function slideFocos(focos){
-  const { c, g } = nuevoSlide();
-
-  /* panel oscuro completo */
-  g.fillStyle = C.tinta;
-  g.fillRect(0,0,SW,SH);
-
-  g.textAlign = "center";
-  g.fillStyle = C.rosa;
-  g.font = "600 26px Karla";
-  g.fillText("S U N S U   S P A", SW/2, 100);
-  g.fillStyle = C.porcelana;
-  g.font = "500 62px 'Cormorant Garamond'";
-  g.fillText("Áreas de Enfoque", SW/2, 190);
-  g.fillStyle = C.oro;
-  g.font = "600 28px Karla";
-  g.fillText("MASAJE CRAZY SYMMETRY", SW/2, 240);
-
-  /* chips de focos */
-  g.font = "600 30px Karla";
-  const chips = (focos||[]).slice(0,6);
-  let cy = 360;
-  for(const foco of chips){
-    const tw = g.measureText(foco).width;
-    const cw = tw + 90, ch = 84;
-    const cx0 = (SW-cw)/2;
-    g.strokeStyle = C.oro; g.lineWidth = 2;
-    rrect(g, cx0, cy, cw, ch, 42); g.stroke();
-    g.fillStyle = "rgba(217,169,161,.12)";
-    rrect(g, cx0, cy, cw, ch, 42); g.fill();
-    g.fillStyle = C.porcelana;
-    g.fillText(foco, SW/2, cy+53);
-    cy += ch + 26;
-  }
-
-  /* objetivo */
-  const objY = Math.max(cy+40, 1080);
-  g.strokeStyle = C.oro; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(180, objY-40); g.lineTo(SW-180, objY-40); g.stroke();
-  g.fillStyle = C.rosa;
-  g.font = "600 22px Karla";
-  g.fillText("OBJETIVO", SW/2, objY);
-  g.fillStyle = C.porcelana;
-  g.font = "italic 500 30px 'Cormorant Garamond'";
-  const obj = envolver(g, "Restaurar el balance, reducir tensión y retención de líquidos, y realzar el contorno natural y V-Line.", 760);
-  obj.forEach((ln,i)=> g.fillText(ln, SW/2, objY+48+i*40));
-
-  g.fillStyle = C.tintaSuave;
-  g.font = "300 20px Karla";
-  g.fillText("Sunsu Spa · Facial Coreano · Quito", SW/2, SH-34);
-  return c;
-}
-
-/* SLIDE 4 — Panel resumen (Harmony Summary) */
-function slideResumen(resumen, obsGeneral, fecha){
-  const { c, g } = nuevoSlide();
-  encabezado(g, "Panel de Armonía", "Resumen del análisis · 100 = estado óptimo");
-
-  const cats = Object.entries(resumen || {});
-  const x0 = 100, barX = 100, barW = SW-200;
-  let y = 280;
-  for(const [cat, val] of cats){
-    const v = Math.max(0, Math.min(100, Number(val) || 0));
-    g.textAlign = "left";
-    g.fillStyle = C.tinta;
-    g.font = "600 28px Karla";
-    g.fillText(cat.toUpperCase(), x0, y);
-    g.textAlign = "right";
-    g.font = "500 40px 'Cormorant Garamond'";
-    g.fillText(v + " / 100", SW-100, y+2);
-
-    g.fillStyle = C.linea;
-    rrect(g, barX, y+22, barW, 14, 7); g.fill();
-    const gr = g.createLinearGradient(barX, 0, barX+barW*v/100, 0);
-    gr.addColorStop(0, C.rosa); gr.addColorStop(1, C.oro);
-    g.fillStyle = gr;
-    rrect(g, barX, y+22, Math.max(14, barW*v/100), 14, 7); g.fill();
-
-    y += 118;
-  }
-
-  /* observación general */
-  if(obsGeneral){
+  /* barra de leyenda oscura sobre el borde inferior de la foto */
+  const leyH = 96, leyY = ry+rh-leyH-14;
+  g.fillStyle = "rgba(20,20,20,.85)";
+  rrect(g, fx+14, leyY, fw-28, leyH, 14); g.fill();
+  const ley = [
+    ["Ceja",R.ceja],["Esq. de ojo",R.ojo],["Pupila",R.pupila],["Punta nasal",R.nariz],
+    ["Esq. de boca",R.boca],["Mentón",R.menton],["Eje y V-Line","#FFFFFF"]
+  ];
+  g.font = "600 20px Karla";
+  const anchos = ley.map(([t])=> 24 + g.measureText(t).width + 30);
+  const total = anchos.reduce((s,a)=>s+a,0);
+  const porFila = 4;
+  let lx = fx+14 + (fw-28 - anchos.slice(0,porFila).reduce((s,a)=>s+a,0))/2;
+  let ly = leyY+38;
+  for(let i=0;i<ley.length;i++){
+    if(i===porFila){
+      lx = fx+14 + (fw-28 - anchos.slice(porFila).reduce((s,a)=>s+a,0))/2;
+      ly = leyY+76;
+    }
+    g.fillStyle = ley[i][1];
+    g.beginPath(); g.arc(lx+9, ly-7, 9, 0, Math.PI*2); g.fill();
     g.fillStyle = "#fff";
-    rrect(g, 90, y+10, SW-180, 200, 20); g.fill();
-    g.strokeStyle = C.linea; g.lineWidth = 1.5;
-    rrect(g, 90, y+10, SW-180, 200, 20); g.stroke();
-    g.textAlign = "center";
-    g.fillStyle = C.tinta;
-    g.font = "italic 500 30px 'Cormorant Garamond'";
-    const lineas = envolver(g, obsGeneral, SW-280).slice(0,4);
-    const yTexto = y+10+100-(lineas.length-1)*20;
-    lineas.forEach((ln,i)=> g.fillText(ln, SW/2, yTexto+i*40));
+    g.textAlign = "left";
+    g.fillText(ley[i][0], lx+24, ly);
+    lx += anchos[i];
   }
 
+  pie(g, "Este análisis es una estimación basada en una fotografía y tiene fines de orientación estética.");
+  return c;
+}
+
+/* íconos de línea para página 2 */
+function icono(g, tipo, cx, cy, r){
+  g.strokeStyle = R.negro; g.lineWidth = 3; g.lineCap = "round";
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.stroke();
+  const u = r*0.52;
+  g.lineWidth = 2.6;
+  switch(tipo){
+    case 0: /* balance: óvalo de cara + eje */
+      g.beginPath(); g.ellipse(cx, cy, u*0.72, u, 0, 0, Math.PI*2); g.stroke();
+      g.beginPath(); g.moveTo(cx, cy-u); g.lineTo(cx, cy+u); g.stroke();
+      break;
+    case 1: /* tensión: ondas */
+      for(let k=-1;k<=1;k++){
+        g.beginPath();
+        g.moveTo(cx-u, cy+k*u*0.6);
+        g.quadraticCurveTo(cx-u/2, cy+k*u*0.6-8, cx, cy+k*u*0.6);
+        g.quadraticCurveTo(cx+u/2, cy+k*u*0.6+8, cx+u, cy+k*u*0.6);
+        g.stroke();
+      }
+      break;
+    case 2: /* retención: gota */
+      g.beginPath();
+      g.moveTo(cx, cy-u);
+      g.quadraticCurveTo(cx+u*0.95, cy+u*0.25, cx, cy+u);
+      g.quadraticCurveTo(cx-u*0.95, cy+u*0.25, cx, cy-u);
+      g.stroke();
+      break;
+    case 3: /* v-line */
+      g.beginPath();
+      g.moveTo(cx-u, cy-u*0.7);
+      g.quadraticCurveTo(cx-u*0.5, cy+u*0.6, cx, cy+u*0.85);
+      g.quadraticCurveTo(cx+u*0.5, cy+u*0.6, cx+u, cy-u*0.7);
+      g.stroke();
+      break;
+    case 4: /* mandíbula: U */
+      g.beginPath();
+      g.moveTo(cx-u, cy-u*0.6);
+      g.lineTo(cx-u, cy+u*0.1);
+      g.quadraticCurveTo(cx, cy+u, cx+u, cy+u*0.1);
+      g.lineTo(cx+u, cy-u*0.6);
+      g.stroke();
+      break;
+    case 5: /* ceja: arco */
+      g.beginPath();
+      g.moveTo(cx-u, cy+u*0.35);
+      g.quadraticCurveTo(cx, cy-u*0.75, cx+u, cy+u*0.35);
+      g.stroke();
+      break;
+    case 6: /* cuello: hombros */
+      g.beginPath();
+      g.moveTo(cx-u*0.35, cy-u); g.lineTo(cx-u*0.35, cy);
+      g.quadraticCurveTo(cx-u*0.4, cy+u*0.4, cx-u, cy+u*0.7);
+      g.moveTo(cx+u*0.35, cy-u); g.lineTo(cx+u*0.35, cy);
+      g.quadraticCurveTo(cx+u*0.4, cy+u*0.4, cx+u, cy+u*0.7);
+      g.stroke();
+      break;
+  }
+}
+
+/* PÁGINA 2 — Observaciones */
+function pagina2(categorias, obsGeneral){
+  const { c, g } = nuevaPagina(2);
+  encabezado(g, "Observaciones", "Análisis detallado y recomendaciones");
+
+  const cats = (categorias||[]).slice(0,7);
+  const x0 = 44, cardW = SW-88;
+  const iconX = x0+62, txtX = x0+128;
+  const colObsW = 430, colRecX = x0 + 610, colRecW = cardW - 630;
+  let y = 196;
+
+  for(let ci=0; ci<cats.length; ci++){
+    const cat = cats[ci];
+    const p10 = Math.round(Math.max(0, Math.min(100, Number(cat.puntaje)||0))/10);
+    const dots5 = Math.max(1, Math.round(p10/2));
+
+    g.font = "400 22px Karla";
+    const obsL = envolver(g, cat.observacion, colObsW);
+    const recL = envolver(g, cat.recomendacion, colRecW - 12);
+    const altura = Math.max(146, 92 + Math.max(obsL.length, recL.length+0.5)*27 + 14);
+
+    sombra(g, true);
+    g.fillStyle = "#fff";
+    rrect(g, x0, y, cardW, altura, 18); g.fill();
+    sombra(g, false);
+    g.strokeStyle = R.borde; g.lineWidth = 1.5;
+    rrect(g, x0, y, cardW, altura, 18); g.stroke();
+
+    g.strokeStyle = R.borde; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(colRecX-24, y+20); g.lineTo(colRecX-24, y+altura-20); g.stroke();
+
+    icono(g, ci, iconX, y+altura/2, 38);
+
+    g.textAlign = "left";
+    g.fillStyle = R.negro;
+    g.font = "800 27px Archivo";
+    g.fillText(cat.nombre.toUpperCase(), txtX, y+42);
+
+    for(let i=0;i<5;i++){
+      g.fillStyle = i < dots5 ? R.negro : "#fff";
+      g.strokeStyle = R.negro; g.lineWidth = 2.4;
+      g.beginPath(); g.arc(txtX+12+i*32, y+70, 9, 0, Math.PI*2);
+      g.fill(); g.stroke();
+    }
+    g.fillStyle = R.negro;
+    g.font = "700 23px Archivo";
+    g.fillText(p10 + "/10", txtX+5*32+18, y+78);
+
+    g.fillStyle = "#3A3A3A";
+    g.font = "400 22px Karla";
+    obsL.forEach((ln,i)=> g.fillText(ln, txtX, y+106+i*27));
+
+    g.fillStyle = R.rosa;
+    g.font = "800 20px Archivo";
+    g.fillText("RECOMENDACIÓN", colRecX, y+40);
+    g.fillStyle = "#3A3A3A";
+    g.font = "400 22px Karla";
+    recL.forEach((ln,i)=> g.fillText(ln, colRecX, y+72+i*27));
+
+    y += altura + 14;
+  }
+
+  /* frase de cierre */
+  const cierre = obsGeneral || "El cuidado constante y el masaje facial dirigido pueden mejorar visiblemente la simetría, el contorno y la vitalidad de la piel.";
+  g.font = "500 24px Karla";
+  const cl = envolver(g, cierre, cardW-120);
+  const cierreH = 36 + cl.length*30;
+  const cy2 = Math.min(y+4, SH-64-cierreH);
+  g.strokeStyle = R.rosa; g.lineWidth = 2;
+  g.fillStyle = "#FFF7FA";
+  rrect(g, x0, cy2, cardW, cierreH, 14); g.fill();
+  rrect(g, x0, cy2, cardW, cierreH, 14); g.stroke();
   g.textAlign = "center";
-  g.fillStyle = C.tintaSuave;
-  g.font = "300 19px Karla";
-  g.fillText("Análisis estético estimado a partir de una fotografía · No constituye diagnóstico médico", SW/2, SH-70);
-  pie(g, "Sunsu Spa · " + fecha);
+  g.fillStyle = R.negro;
+  cl.forEach((ln,i)=> g.fillText(ln, SW/2, cy2+34+i*30));
+
+  pie(g, "Sunsu Spa · Facial Coreano · Quito");
+  return c;
+}
+
+/* corona página 3 */
+function corona(g, cx, cy, s){
+  g.fillStyle = R.rosa;
+  g.beginPath();
+  g.moveTo(cx-2.2*s, cy+1.1*s);
+  g.lineTo(cx-2.6*s, cy-1.0*s);
+  g.lineTo(cx-1.2*s, cy+0.1*s);
+  g.lineTo(cx, cy-1.6*s);
+  g.lineTo(cx+1.2*s, cy+0.1*s);
+  g.lineTo(cx+2.6*s, cy-1.0*s);
+  g.lineTo(cx+2.2*s, cy+1.1*s);
+  g.closePath(); g.fill();
+  rrect(g, cx-2.2*s, cy+1.35*s, 4.4*s, 0.55*s, 0.2*s); g.fill();
+}
+
+/* PÁGINA 3 — Áreas Clave */
+function pagina3(focos, fecha){
+  const { c, g } = nuevaPagina(3);
+  encabezado(g, "Áreas Clave", "Para tu K-Lift de hoy");
+  corona(g, SW-90, 92, 16);
+
+  const ls = (focos||[]).slice(0,6);
+
+  /* foto derecha */
+  const frx = 452, fry = 196, frw = SW-452-20, frh = 1128;
+  const f = ajustarFoto(A.w, A.h, frx, fry, frw, frh);
+  const M = p => ({ x: f.ox + p.x*f.s, y: f.oy + p.y*f.s });
+  const fx = f.ox, fw = A.w*f.s, fyTop = f.oy, fh = A.h*f.s;
+
+  g.save();
+  g.beginPath(); rrect(g, fx, fyTop, fw, fh, 16); g.clip();
+  g.drawImage(A.limpio, fx, fyTop, fw, fh);
+
+  const p0s = M(A.p0);
+  g.strokeStyle = "rgba(255,255,255,.8)";
+  g.lineWidth = 2.4;
+  g.setLineDash([9,7]);
+  g.beginPath();
+  g.moveTo(p0s.x - A.d.x*3000, p0s.y - A.d.y*3000);
+  g.lineTo(p0s.x + A.d.x*3000, p0s.y + A.d.y*3000);
+  g.stroke();
+  g.setLineDash([]);
+
+  /* zonas sombreadas de color por foco */
+  const anchoCaraS = dist(M(A.lm[234]), M(A.lm[454]));
+  ls.forEach((fo,i)=>{
+    const idx = ANCLAS[fo.zona];
+    if(idx == null) return;
+    const pt = M(A.lm[idx]);
+    let py = pt.y;
+    if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
+    const col = ZCOLORES[i % ZCOLORES.length];
+    const esMejilla = fo.zona.startsWith('mejilla') || fo.zona.startsWith('masetero');
+    const rx = esMejilla ? anchoCaraS*0.16 : anchoCaraS*0.12;
+    const ryE = esMejilla ? anchoCaraS*0.24 : anchoCaraS*0.13;
+    g.fillStyle = col + "55";
+    g.strokeStyle = col;
+    g.lineWidth = 2.5;
+    g.setLineDash([7,6]);
+    g.beginPath(); g.ellipse(pt.x, py, rx, ryE, 0, 0, Math.PI*2);
+    g.fill(); g.stroke();
+    g.setLineDash([]);
+  });
+  g.restore();
+
+  /* números sobre las zonas (fuera del clip para que no se corten) */
+  ls.forEach((fo,i)=>{
+    const idx = ANCLAS[fo.zona];
+    if(idx == null) return;
+    const pt = M(A.lm[idx]);
+    let py = pt.y;
+    if(fo.zona === 'cuello') py = Math.min(py + fh*0.11, fyTop+fh-40);
+    const col = ZCOLORES[i % ZCOLORES.length];
+    g.fillStyle = col;
+    g.beginPath(); g.arc(pt.x, py, 23, 0, Math.PI*2); g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 3;
+    g.beginPath(); g.arc(pt.x, py, 23, 0, Math.PI*2); g.stroke();
+    g.fillStyle = "#fff";
+    g.textAlign = "center";
+    g.font = "800 26px Archivo";
+    g.fillText(String(i+1), pt.x, py+9);
+  });
+
+  /* tarjetas izquierda */
+  const tx = 36, tw = 396;
+  let ty = 200;
+  for(let i=0;i<ls.length;i++){
+    const fo = ls[i];
+    g.font = "800 24px Archivo";
+    const nomL = envolver(g, fo.nombre.toUpperCase(), tw-104);
+    g.font = "400 21px Karla";
+    const desL = envolver(g, fo.descripcion, tw-104);
+    const th = 30 + nomL.length*29 + desL.length*26 + 24;
+
+    sombra(g, true);
+    g.fillStyle = "#fff";
+    rrect(g, tx, ty, tw, th, 16); g.fill();
+    sombra(g, false);
+    g.strokeStyle = R.borde; g.lineWidth = 1.5;
+    rrect(g, tx, ty, tw, th, 16); g.stroke();
+
+    const col = ZCOLORES[i % ZCOLORES.length];
+    g.fillStyle = col;
+    g.beginPath(); g.arc(tx+40, ty+42, 22, 0, Math.PI*2); g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 2.5;
+    g.beginPath(); g.arc(tx+40, ty+42, 22, 0, Math.PI*2); g.stroke();
+    g.fillStyle = "#fff";
+    g.textAlign = "center";
+    g.font = "800 24px Archivo";
+    g.fillText(String(i+1), tx+40, ty+51);
+
+    g.textAlign = "left";
+    g.fillStyle = R.negro;
+    g.font = "800 24px Archivo";
+    nomL.forEach((ln,k)=> g.fillText(ln, tx+76, ty+42+k*29));
+    g.fillStyle = "#4A4A4A";
+    g.font = "400 21px Karla";
+    desL.forEach((ln,k)=> g.fillText(ln, tx+76, ty+44+nomL.length*29+k*26));
+
+    ty += th + 14;
+  }
+
+  /* banda de objetivo oscura */
+  const obY = 1352;
+  g.fillStyle = R.oscuro;
+  rrect(g, 36, obY, SW-72, 104, 16); g.fill();
+  g.textAlign = "left";
+  g.fillStyle = R.rosa;
+  g.font = "800 23px Archivo";
+  g.fillText("OBJETIVO:", 64, obY+42);
+  g.fillStyle = "#fff";
+  g.font = "600 22px Karla";
+  const obj = envolver(g, "Restaurar el balance facial, liberar tensión, reducir retención de líquidos y realzar tu contorno natural y V-Line.", SW-72-320);
+  obj.forEach((ln,i)=> g.fillText(ln, 200, obY+42+i*28));
+  /* corazón */
+  g.fillStyle = R.rosa;
+  const hx = SW-92, hy = obY+52, hs = 15;
+  g.beginPath();
+  g.moveTo(hx, hy+hs*0.75);
+  g.bezierCurveTo(hx-hs*1.4, hy-hs*0.35, hx-hs*0.55, hy-hs*1.15, hx, hy-hs*0.3);
+  g.bezierCurveTo(hx+hs*0.55, hy-hs*1.15, hx+hs*1.4, hy-hs*0.35, hx, hy+hs*0.75);
+  g.fill();
+
+  pie(g, "Este análisis es una estimación basada en una fotografía · Sunsu Spa · " + fecha);
   return c;
 }
 
 async function generarInforme(datos){
   await document.fonts.ready;
   await Promise.all([
-    document.fonts.load("500 56px 'Cormorant Garamond'"),
-    document.fonts.load("italic 500 30px 'Cormorant Garamond'"),
-    document.fonts.load("600 28px Karla"),
-    document.fonts.load("300 20px Karla")
+    document.fonts.load("900 62px Archivo"),
+    document.fonts.load("800 24px Archivo"),
+    document.fonts.load("600 22px Karla"),
+    document.fonts.load("400 21px Karla")
   ]);
 
   const fecha = new Date().toLocaleDateString('es-EC', { day:'numeric', month:'long', year:'numeric' });
 
-  const slides = [
-    slideEstudio(fecha),
-    slideObservaciones(datos.anotaciones),
-    slideFocos(datos.focos),
-    slideResumen(datos.resumen, datos.observacionGeneral, fecha)
+  const paginas = [
+    pagina1(datos.anotacionesZona),
+    pagina2(datos.categorias, datos.observacionGeneral),
+    pagina3(datos.focos, fecha)
   ];
 
   const cont = $('slidesContenedor');
   cont.innerHTML = '';
-  slidesBlobs = [];
-
-  for(const s of slides){
-    const blob = await new Promise(r => s.toBlob(r, 'image/png'));
-    slidesBlobs.push(blob);
+  for(const p of paginas){
     const img = document.createElement('img');
     img.className = 'slide-img';
-    img.src = URL.createObjectURL(blob);
+    img.src = p.toDataURL('image/jpeg', 0.9);
     cont.appendChild(img);
   }
 
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+  paginas.forEach((p,i)=>{
+    if(i>0) pdf.addPage();
+    pdf.addImage(p.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
+  });
+  pdfBlob = pdf.output('blob');
+
   $('informe').style.display = 'block';
   $('btnIA').style.display = 'none';
-  $('btnCompartir').style.display = 'none';
   estado.textContent = "";
   $('informe').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 $('btnCompartirInforme').onclick = async () => {
-  if(!slidesBlobs.length) return;
-  const files = slidesBlobs.map((b,i) => new File([b], `sunsu-informe-${i+1}.png`, { type:'image/png' }));
-  if(navigator.canShare && navigator.canShare({ files })){
-    try{ await navigator.share({ files, title:"Informe de Simetría · Sunsu Spa" }); }
+  if(!pdfBlob) return;
+  const file = new File([pdfBlob], "sunsu-informe-klift.pdf", { type:'application/pdf' });
+  if(navigator.canShare && navigator.canShare({ files:[file] })){
+    try{ await navigator.share({ files:[file], title:"Informe K-Lift · Sunsu Spa" }); }
     catch(e){ /* usuario canceló */ }
   }else{
-    files.forEach(f => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(f);
-      a.download = f.name;
-      a.click();
-    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfBlob);
+    a.download = "sunsu-informe-klift.pdf";
+    a.click();
   }
-};
-
-/* ---------- compartir rápido (sin IA) ---------- */
-function prepararCompartirRapido(score, zonas, w, h){
-  const pad = Math.round(w*0.06);
-  const panelH = Math.round(w*0.42);
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h + panelH;
-  const g = c.getContext('2d');
-  g.fillStyle = C.porcelana;
-  g.fillRect(0,0,c.width,c.height);
-  g.drawImage(lienzo, 0, 0);
-
-  const cxp = w/2;
-  g.textAlign = "center";
-  g.fillStyle = C.oro;
-  g.font = `${Math.round(w*0.032)}px Karla, sans-serif`;
-  g.fillText("S U N S U   S P A", cxp, h + pad*1.1);
-  g.fillStyle = C.tinta;
-  g.font = `500 ${Math.round(w*0.13)}px 'Cormorant Garamond', serif`;
-  g.fillText(score + "%", cxp, h + pad + Math.round(w*0.15));
-  g.fillStyle = C.tintaSuave;
-  g.font = `${Math.round(w*0.03)}px Karla, sans-serif`;
-  g.fillText("ÍNDICE DE SIMETRÍA FACIAL", cxp, h + pad + Math.round(w*0.20));
-
-  const vals = Object.entries(zonas).map(([z,v]) => `${z} ${v.toFixed(0)}%`).join("   ·   ");
-  g.font = `${Math.round(w*0.028)}px Karla, sans-serif`;
-  g.fillText(vals, cxp, h + pad + Math.round(w*0.27));
-
-  canvasResultado = c;
-}
-
-$('btnCompartir').onclick = async () => {
-  if(!canvasResultado) return;
-  canvasResultado.toBlob(async blob => {
-    const file = new File([blob], "sunsu-simetria.png", { type:"image/png" });
-    if(navigator.canShare && navigator.canShare({ files:[file] })){
-      try{ await navigator.share({ files:[file], title:"Análisis de Simetría · Sunsu Spa" }); }
-      catch(e){ /* usuario canceló */ }
-    }else{
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = "sunsu-simetria.png";
-      a.click();
-    }
-  }, "image/png");
 };
 </script>
 </body>
