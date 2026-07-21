@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sunsu · Análisis de Simetría Facial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Karla:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --porcelana:#FAF6F1;
+    --arena:#F0E7DD;
+    --tinta:#33403A;
+    --tinta-suave:#6E7A73;
+    --rosa:#D9A9A1;
+    --rosa-suave:#F3E2DE;
+    --oro:#B8965F;
+    --linea:#E4D9CC;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:'Karla',sans-serif;
+    background:var(--porcelana);
+    color:var(--tinta);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:28px 20px 60px;}
+
+  header{text-align:center;margin-bottom:26px;}
+  .marca{
+    font-family:'Cormorant Garamond',serif;
+    font-size:15px;letter-spacing:.35em;text-transform:uppercase;
+    color:var(--oro);margin-bottom:10px;
+  }
+  h1{
+    font-family:'Cormorant Garamond',serif;
+    font-weight:500;font-size:32px;line-height:1.15;
+  }
+  .sub{color:var(--tinta-suave);font-size:14px;margin-top:8px;font-weight:300;}
+
+  /* ---------- zona de foto ---------- */
+  .foto-zona{
+    background:var(--arena);
+    border:1px solid var(--linea);
+    border-radius:18px;
+    overflow:hidden;
+    position:relative;
+    min-height:300px;
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;
+  }
+  .foto-zona.vacia{padding:40px 24px;text-align:center;}
+  .icono-cara{
+    width:64px;height:80px;border:1.5px solid var(--oro);
+    border-radius:50% 50% 46% 46%;position:relative;opacity:.7;
+  }
+  .icono-cara::after{
+    content:'';position:absolute;left:50%;top:8%;bottom:8%;
+    width:1px;background:var(--oro);opacity:.8;
+  }
+  .guia{color:var(--tinta-suave);font-size:13px;line-height:1.6;font-weight:300;max-width:280px;}
+  canvas#lienzo{display:block;width:100%;height:auto;}
+
+  /* ---------- botones ---------- */
+  .botones{margin-top:18px;display:flex;flex-direction:column;gap:10px;}
+  .btn{
+    display:block;width:100%;padding:15px;
+    border:none;border-radius:14px;
+    font-family:'Karla',sans-serif;font-size:15px;font-weight:600;
+    letter-spacing:.04em;cursor:pointer;text-align:center;
+    transition:opacity .2s;
+  }
+  .btn:active{opacity:.75;}
+  .btn-principal{background:var(--tinta);color:var(--porcelana);}
+  .btn-secundario{background:transparent;color:var(--tinta);border:1px solid var(--tinta);}
+  .btn:disabled{opacity:.4;pointer-events:none;}
+  input[type=file]{display:none;}
+
+  .estado{
+    text-align:center;font-size:13px;color:var(--tinta-suave);
+    margin-top:14px;min-height:18px;font-weight:300;
+  }
+
+  /* ---------- resultados ---------- */
+  #resultados{display:none;margin-top:30px;}
+  .score-panel{
+    text-align:center;padding:30px 20px 26px;
+    background:linear-gradient(180deg,#fff, var(--rosa-suave));
+    border:1px solid var(--linea);border-radius:18px;
+  }
+  .score-num{
+    font-family:'Cormorant Garamond',serif;
+    font-size:72px;font-weight:500;line-height:1;color:var(--tinta);
+  }
+  .score-num small{font-size:26px;color:var(--oro);}
+  .score-label{
+    font-size:12px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--oro);margin-top:6px;
+  }
+  .score-frase{
+    font-family:'Cormorant Garamond',serif;font-style:italic;
+    font-size:17px;color:var(--tinta-suave);margin-top:12px;
+  }
+
+  .detalle{margin-top:22px;}
+  .fila{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:13px 4px;border-bottom:1px solid var(--linea);
+  }
+  .fila:last-child{border-bottom:none;}
+  .fila .nombre{font-size:14px;font-weight:400;}
+  .fila .valor{
+    font-family:'Cormorant Garamond',serif;font-size:19px;
+    font-weight:600;color:var(--tinta);
+  }
+  .barra{
+    flex:1;height:3px;background:var(--linea);border-radius:2px;
+    margin:0 14px;overflow:hidden;
+  }
+  .barra i{display:block;height:100%;background:var(--rosa);border-radius:2px;}
+
+  .nota{
+    margin-top:22px;font-size:12px;color:var(--tinta-suave);
+    line-height:1.7;font-weight:300;text-align:center;
+  }
+
+  .divisor{
+    display:flex;align-items:center;gap:12px;margin:26px 0 8px;
+    color:var(--oro);font-size:11px;letter-spacing:.25em;text-transform:uppercase;
+  }
+  .divisor::before,.divisor::after{
+    content:'';flex:1;height:1px;background:var(--linea);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="marca">Sunsu Spa</div>
+    <h1>Análisis de<br>Simetría Facial</h1>
+    <div class="sub">Estudio de proporciones y balance del rostro</div>
+  </header>
+
+  <div class="foto-zona vacia" id="fotoZona">
+    <div class="icono-cara"></div>
+    <div class="guia">
+      Toma la foto de frente, con buena luz natural,<br>
+      expresión neutra y el rostro despejado.
+    </div>
+  </div>
+  <canvas id="lienzo" style="display:none;"></canvas>
+
+  <div class="botones">
+    <button class="btn btn-principal" id="btnFoto">Tomar foto</button>
+    <button class="btn btn-secundario" id="btnGaleria">Elegir de la galería</button>
+    <button class="btn btn-principal" id="btnCompartir" style="display:none;">Compartir resultado</button>
+  </div>
+  <input type="file" id="inputCamara" accept="image/*" capture="user">
+  <input type="file" id="inputGaleria" accept="image/*">
+
+  <div class="estado" id="estado">Cargando modelo de análisis…</div>
+
+  <div id="resultados">
+    <div class="score-panel">
+      <div class="score-num" id="scoreNum">—<small>%</small></div>
+      <div class="score-label">Índice de Simetría</div>
+      <div class="score-frase" id="scoreFrase"></div>
+    </div>
+
+    <div class="divisor">Detalle por zona</div>
+    <div class="detalle" id="detalleZonas"></div>
+
+    <div class="divisor">Proporciones</div>
+    <div class="detalle" id="detalleProporciones"></div>
+
+    <p class="nota">
+      La simetría perfecta no existe: todos los rostros tienen variaciones
+      naturales que los hacen únicos. Este análisis es estético y orientativo,
+      no constituye un diagnóstico médico.
+    </p>
+  </div>
+</div>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $ = id => document.getElementById(id);
+const estado = $('estado');
+const lienzo = $('lienzo');
+const ctx = lienzo.getContext('2d');
+let landmarker = null;
+let imagenActual = null;
+let canvasResultado = null;
+
+/* ---------- carga del modelo ---------- */
+async function cargarModelo(){
+  try{
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU"
+      },
+      runningMode: "IMAGE",
+      numFaces: 1
+    });
+    estado.textContent = "Listo. Toma o elige una foto para comenzar.";
+  }catch(e){
+    estado.textContent = "No se pudo cargar el modelo. Revisa tu conexión y recarga la página.";
+    console.error(e);
+  }
+}
+cargarModelo();
+
+/* ---------- entrada de foto ---------- */
+$('btnFoto').onclick = () => $('inputCamara').click();
+$('btnGaleria').onclick = () => $('inputGaleria').click();
+$('inputCamara').onchange = e => procesarArchivo(e.target.files[0]);
+$('inputGaleria').onchange = e => procesarArchivo(e.target.files[0]);
+
+function procesarArchivo(file){
+  if(!file) return;
+  if(!landmarker){ estado.textContent = "El modelo aún está cargando, espera un momento…"; return; }
+  estado.textContent = "Analizando rostro…";
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); analizar(img); };
+  img.onerror = () => { estado.textContent = "No se pudo leer la imagen."; };
+  img.src = url;
+}
+
+/* ---------- geometría ---------- */
+function reflejar(q, p0, d){
+  const vx = q.x - p0.x, vy = q.y - p0.y;
+  const t = vx*d.x + vy*d.y;
+  const px = t*d.x, py = t*d.y;          // componente paralela
+  const ox = vx - px, oy = vy - py;      // componente perpendicular
+  return { x: p0.x + px - ox, y: p0.y + py - oy };
+}
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+
+/* pares espejo (izquierda ↔ derecha de la imagen) por zona */
+const ZONAS = {
+  "Ojos":     [[33,263],[133,362],[159,386],[145,374],[130,359]],
+  "Cejas":    [[70,300],[105,334],[46,276],[52,282],[55,285]],
+  "Boca":     [[61,291],[78,308],[84,314],[91,321]],
+  "Contorno": [[234,454],[93,323],[132,361],[172,397],[136,365],[150,379],[176,400]]
+};
+const CENTRALES = [10,168,6,197,195,5,4,1,2,164,0,17,18,200,199,152];
+
+/* ---------- análisis ---------- */
+function analizar(img){
+  // escalar imagen para rendimiento
+  const maxW = 1080;
+  const esc = Math.min(1, maxW / img.width);
+  const w = Math.round(img.width * esc), h = Math.round(img.height * esc);
+  lienzo.width = w; lienzo.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+
+  let res;
+  try{ res = landmarker.detect(lienzo); }
+  catch(e){ estado.textContent = "Error durante el análisis. Intenta de nuevo."; return; }
+
+  if(!res.faceLandmarks || !res.faceLandmarks.length){
+    estado.textContent = "No se detectó un rostro. Intenta con la cara de frente y buena luz.";
+    return;
+  }
+
+  const lm = res.faceLandmarks[0].map(p => ({ x:p.x*w, y:p.y*h }));
+
+  /* eje de simetría: ajuste por mínimos cuadrados sobre puntos centrales */
+  const pts = CENTRALES.map(i => lm[i]);
+  const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
+  const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  let sxx=0, sxy=0, syy=0;
+  for(const p of pts){
+    const dx=p.x-cx, dy=p.y-cy;
+    sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;
+  }
+  const ang = 0.5 * Math.atan2(2*sxy, sxx - syy);
+  let d = { x: Math.cos(ang), y: Math.sin(ang) };
+  if(Math.abs(d.y) < Math.abs(d.x)) d = { x:-d.y, y:d.x }; // asegurar dirección vertical
+  const p0 = { x: cx, y: cy };
+
+  const anchoCara = dist(lm[234], lm[454]);
+
+  /* simetría por zona */
+  const zonasRes = {};
+  let sumaTotal = 0, nTotal = 0;
+  for(const [zona, pares] of Object.entries(ZONAS)){
+    let suma = 0;
+    for(const [a,b] of pares){
+      const ref = reflejar(lm[b], p0, d);
+      suma += dist(lm[a], ref) / anchoCara;
+    }
+    const devPct = (suma / pares.length) * 100;
+    zonasRes[zona] = Math.max(0, Math.min(100, 100 - devPct * 9));
+    sumaTotal += suma; nTotal += pares.length;
+  }
+  const devGlobal = (sumaTotal / nTotal) * 100;
+  const score = Math.round(Math.max(0, Math.min(100, 100 - devGlobal * 9)));
+
+  /* inclinación de ojos y boca (grados respecto al eje) */
+  const angEje = Math.atan2(d.y, d.x);
+  const angLinea = (a,b) => {
+    let g = (Math.atan2(lm[b].y-lm[a].y, lm[b].x-lm[a].x) - (angEje - Math.PI/2)) * 180/Math.PI;
+    while(g > 90) g -= 180; while(g < -90) g += 180;
+    return Math.abs(g);
+  };
+  const inclOjos = angLinea(33,263);
+  const inclBoca = angLinea(61,291);
+
+  /* tercios faciales */
+  const proj = p => (p.x-p0.x)*d.x + (p.y-p0.y)*d.y;
+  const t1 = Math.abs(proj(lm[168]) - proj(lm[10]));
+  const t2 = Math.abs(proj(lm[2])   - proj(lm[168]));
+  const t3 = Math.abs(proj(lm[152]) - proj(lm[2]));
+  const tt = t1+t2+t3;
+
+  dibujar(lm, p0, d, w, h);
+  mostrarResultados(score, zonasRes, inclOjos, inclBoca, [t1/tt*100, t2/tt*100, t3/tt*100], w, h);
+  imagenActual = true;
+}
+
+/* ---------- visualización ---------- */
+function dibujar(lm, p0, d, w, h){
+  /* eje dorado */
+  const L = Math.max(w,h);
+  ctx.strokeStyle = "rgba(184,150,95,.85)";
+  ctx.lineWidth = Math.max(1.5, w/500);
+  ctx.setLineDash([6,5]);
+  ctx.beginPath();
+  ctx.moveTo(p0.x - d.x*L, p0.y - d.y*L);
+  ctx.lineTo(p0.x + d.x*L, p0.y + d.y*L);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* puntos por zona */
+  const r = Math.max(2, w/300);
+  ctx.fillStyle = "rgba(217,169,161,.95)";
+  for(const pares of Object.values(ZONAS)){
+    for(const [a,b] of pares){
+      for(const i of [a,b]){
+        ctx.beginPath();
+        ctx.arc(lm[i].x, lm[i].y, r, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+  $('fotoZona').style.display = 'none';
+  lienzo.style.display = 'block';
+  lienzo.style.borderRadius = '18px';
+}
+
+function mostrarResultados(score, zonas, inclOjos, inclBoca, tercios, w, h){
+  $('scoreNum').innerHTML = score + '<small>%</small>';
+  $('scoreFrase').textContent =
+    score >= 93 ? "Un balance facial excepcional" :
+    score >= 87 ? "Un rostro muy armónico" :
+    score >= 80 ? "Buen balance con carácter propio" :
+                  "Un rostro único, lleno de personalidad";
+
+  let html = '';
+  for(const [zona, val] of Object.entries(zonas)){
+    html += `<div class="fila">
+      <span class="nombre">${zona}</span>
+      <span class="barra"><i style="width:${val.toFixed(0)}%"></i></span>
+      <span class="valor">${val.toFixed(0)}%</span>
+    </div>`;
+  }
+  $('detalleZonas').innerHTML = html;
+
+  $('detalleProporciones').innerHTML = `
+    <div class="fila"><span class="nombre">Inclinación de ojos</span><span class="valor">${inclOjos.toFixed(1)}°</span></div>
+    <div class="fila"><span class="nombre">Inclinación de boca</span><span class="valor">${inclBoca.toFixed(1)}°</span></div>
+    <div class="fila"><span class="nombre">Tercios faciales</span><span class="valor">${tercios.map(t=>t.toFixed(0)).join(' · ')}</span></div>
+  `;
+
+  $('resultados').style.display = 'block';
+  $('btnCompartir').style.display = 'block';
+  estado.textContent = "";
+  prepararCompartir(score, zonas, w, h);
+  $('resultados').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+/* ---------- imagen para compartir ---------- */
+function prepararCompartir(score, zonas, w, h){
+  const pad = Math.round(w*0.06);
+  const panelH = Math.round(w*0.42);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h + panelH;
+  const g = c.getContext('2d');
+  g.fillStyle = "#FAF6F1";
+  g.fillRect(0,0,c.width,c.height);
+  g.drawImage(lienzo, 0, 0);
+
+  const cxp = w/2;
+  g.textAlign = "center";
+  g.fillStyle = "#B8965F";
+  g.font = `${Math.round(w*0.032)}px Karla, sans-serif`;
+  g.fillText("S U N S U   S P A", cxp, h + pad*1.1);
+  g.fillStyle = "#33403A";
+  g.font = `500 ${Math.round(w*0.13)}px 'Cormorant Garamond', serif`;
+  g.fillText(score + "%", cxp, h + pad + Math.round(w*0.15));
+  g.fillStyle = "#6E7A73";
+  g.font = `${Math.round(w*0.03)}px Karla, sans-serif`;
+  g.fillText("ÍNDICE DE SIMETRÍA FACIAL", cxp, h + pad + Math.round(w*0.20));
+
+  const vals = Object.entries(zonas).map(([z,v]) => `${z} ${v.toFixed(0)}%`).join("   ·   ");
+  g.font = `${Math.round(w*0.028)}px Karla, sans-serif`;
+  g.fillText(vals, cxp, h + pad + Math.round(w*0.27));
+
+  canvasResultado = c;
+}
+
+$('btnCompartir').onclick = async () => {
+  if(!canvasResultado) return;
+  canvasResultado.toBlob(async blob => {
+    const file = new File([blob], "sunsu-simetria.png", { type:"image/png" });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file], title:"Análisis de Simetría · Sunsu Spa" }); }
+      catch(e){ /* usuario canceló */ }
+    }else{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "sunsu-simetria.png";
+      a.click();
+    }
+  }, "image/png");
+};
+</script>
+</body>
+</html>
