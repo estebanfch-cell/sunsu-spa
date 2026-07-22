@@ -6806,6 +6806,15 @@ function _cabPintarInventario(){
           +filasU.map(function(fu){return '<span style="font-size:0.66rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:2px 10px;border-radius:7px">'+fu+'</span>';}).join('')
           +'</div>':'';
       })()
+      +(function(){
+        // 🍾 ACCESO RÁPIDO (todas las chicas): abrir un envase del local y
+        // marcar que el abierto se acabó — queda registrado quién y cuándo.
+        if(inac) return '';
+        var bs=[];
+        if(p.cerrados>0) bs.push('<button onclick="_cabAbrirRapido('+i+',\'abrir\')" style="flex:1;padding:8px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🍾 Abrir envase</button>');
+        if(p.abierto>0) bs.push('<button onclick="_cabAbrirRapido('+i+',\'acabar\')" style="flex:1;padding:8px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✔ Se acabó el abierto</button>');
+        return bs.length?'<div style="display:flex;gap:6px;margin-top:8px">'+bs.join('')+'</div>':'';
+      })()
       +(esAdm?'<div id="cab-invd-'+i+'" style="display:none"></div>':'')
       +'</div>';
     return h;
@@ -6848,6 +6857,23 @@ function _cabPintarInventario(){
         +'</div>');
     });
     html+=_cabCarpetaFaltas('cab-inv-faltas','Les faltan datos',faltasInv);
+  }
+  if(esAdm&&!qInv&&(window._cab.aperturas||[]).length){
+    var apAb=false;
+    var elAp2=document.getElementById('cab-inv-aps');
+    if(elAp2&&elAp2.style.display==='block') apAb=true;
+    html+='<div style="background:white;border-radius:12px;margin-top:8px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="toggleGrupoEntrada(\'cab-inv-aps\')" style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.7rem;font-weight:800;color:var(--gray)">🍾 Últimas aperturas ('+(window._cab.aperturas||[]).length+')</div>'
+      +'<span id="arrow-cab-inv-aps" style="color:var(--gray);font-size:0.75rem">'+(apAb?'▼':'▶')+'</span></div>'
+      +'<div id="cab-inv-aps" style="display:'+(apAb?'block':'none')+';padding:8px 12px">'
+      +(window._cab.aperturas||[]).map(function(a){
+        return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d);font-size:0.62rem">'
+          +'<div style="flex:1;min-width:0"><b style="color:var(--navy)">'+(a.accion==='APERTURA'?'🍾':'✔')+' '+a.nombre+'</b> · '+a.cantidad
+          +'<br><span style="color:var(--gray)">'+a.fecha+' · '+a.por+'</span></div>'
+          +'<span style="color:var(--gray);flex-shrink:0">'+a.num+'</span></div>';
+      }).join('')
+      +'</div></div>';
   }
   if(esAdm&&!qInv&&(window._cab.bajas||[]).length){
     var bjAb=false;
@@ -6965,6 +6991,23 @@ function _cabFiltroLimpiar(ctx){
 // ── DAR DE BAJA ──
 // Razon OBLIGATORIA + foto opcional (comprobante). Producto: descuenta del lado
 // elegido o vacia el abierto. Activo: pasa a estado DADO DE BAJA (no se borra).
+function _cabAbrirRapido(i,modo){
+  var p=(window._cab&&window._cab.inv||[])[i]; if(!p) return;
+  var msg = modo==='abrir'
+    ? '🍾 ABRIR ENVASE\n\n'+p.producto+'\nSe abre 1 envase de '+p.contenido+p.unidad+'.\nCerrados en local: '+p.cerrados+' → '+(p.cerrados-1)+'\n\n¿Confirmar?'
+    : '✔ SE ACABÓ EL ABIERTO\n\n'+p.producto+'\nAbierto actual: '+p.abierto+p.unidad+((p.abierto>p.contenido&&p.contenido>0)?'\nSe descuenta 1 envase ('+p.contenido+p.unidad+').':'\nEl abierto queda en 0.')+'\n\n¿Confirmar?';
+  if(!confirm(msg)) return;
+  toast('⏳ Guardando...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cabinaAbrirRapido',codigo:p.codigo,modo:modo,usuario:CU?CU.name:'—',token:window._token||''})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast(modo==='abrir'?('🍾 Abierto — registrado '+d.num):('✔ Registrado '+d.num),'var(--green)');
+    renderCabina(document.getElementById('content'),true);
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+}
 function _cabBajaFormProd(i){
   var p=(window._cab.inv||[])[i];
   var dv=document.getElementById('cab-invd-'+i);
