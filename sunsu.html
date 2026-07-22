@@ -10252,6 +10252,8 @@ function generarOCApp(){
   var B=window._ocBorrador;
   var items=B.items.filter(function(it){return (it.cant||0)>0;}).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant,compra:it.compra};});
   var factF=(B.fact||[]).filter(function(it){return (it.vendido||0)>0;});
+  // Stock AL CORTE de la quincena del reporte (viene del backend) — 3ra seccion del PDF
+  var stockL=(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};});
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
   if(!items.length&&!factF.length){toast('La orden está vacía: ni facturación ni restock','#C9A227');return;}
   if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||'0 — solo facturación')+' productos\n\n'+(items.length?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
@@ -10259,12 +10261,12 @@ function generarOCApp(){
   window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
   toast('⏳ Generando orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,provData:B.prov,usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,stock:stockL,provData:B.prov,usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
     toast('✅ Orden '+d.numOrden+' generada y registrada en Entregas','var(--green)');
-    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items, factF);
+    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items, factF, stockL);
     setTimeout(function(){showTab('entradas');},1800);
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
@@ -10293,14 +10295,14 @@ function _fondoA4Sunsu(fondo){
   return window._fondoA4Cache;
 }
 
-function _pdfOC(numOrden, fecha, prov, qLabel, items, itemsFact){
+function _pdfOC(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock){
   var img=new Image();
   img.crossOrigin='anonymous';
-  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,img);};
-  img.onerror=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,null);};
+  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsStock,img);};
+  img.onerror=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsStock,null);};
   img.src=GCD_PAG3_URL;
 }
-function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
+function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock, fondo){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
     var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}); // A4 vertical: 595 x 842
@@ -10448,6 +10450,16 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, fondo){
       doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
       doc.text('Sin repedido en esta orden',xI+6,y+13); y+=22;
     }
+    // ── SECCIÓN 3: STOCK EN SUNSU — al CORTE de la quincena del reporte ──
+    if(itemsStock&&itemsStock.length){
+      salto(60);
+      barra('STOCK EN SUNSU — AL CORTE '+qLabel.toUpperCase());
+      tabla(itemsStock,'stockCorte','STOCK',false);
+      y+=4;
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
+      doc.text('Unidades en Sunsu al cierre del período del reporte (no incluye movimientos posteriores)',xI,y+6);
+      y+=16;
+    }
     // Firmas
     salto(70);
     var yF=Math.min(y+45,H-55);
@@ -10586,7 +10598,7 @@ function descargarPDFOrdenApp(numOrden){
   .then(function(d){
     if(!d.ok){toast('📄 '+(d.error||'Sin datos de esta orden'),'#C4943A');return;}
     var s=d.snap||{};
-    _pdfOC(d.numOrden, d.fecha, s.prov||{nombre:''}, s.qLabel||'', s.items||[], s.fact||[]);
+    _pdfOC(d.numOrden, d.fecha, s.prov||{nombre:''}, s.qLabel||'', s.items||[], s.fact||[], s.stock||[]);
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
