@@ -6651,7 +6651,7 @@ function _cabPintarInventario(){
     var vLc=0,vAb=0,vBc=0;
     (window._cab.inv||[]).forEach(function(p){
       vLc+=(p.cerrados||0)*(p.costoEnvase||0);
-      vAb+=(p.abierto||0)*(p.costoUnidad||0);
+      vAb+=(p.abierto||0)*(p.costoEnvase||0);
       vBc+=(p.bodega||0)*(p.costoEnvase||0);
     });
     var vCons=vLc+vAb+vBc;
@@ -6766,19 +6766,19 @@ function _cabPintarInventario(){
         // envases cerrados y ml/g — porque cuentan cosas distintas y ambas importan.
         var envT, mlT, det;
         if(lug==='local'){
-          envT=p.cerrados; mlT=p.cerrados*p.contenido+p.abierto;
-          det='🏪 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+(p.abierto>0?' · 🍾 abierto '+p.abierto+p.unidad:'');
+          envT=p.cerrados; mlT=(p.cerrados+p.abierto)*p.contenido;
+          det='🏪 '+p.cerrados+' cerrado'+(p.cerrados===1?'':'s')+(p.abierto>0?' · 🍾 '+p.abierto+' abierto'+(p.abierto===1?'':'s'):'');
         } else if(lug==='bodega'){
           envT=(p.bodega||0); mlT=envT*p.contenido;
           det='🏠 '+envT+' cerrado'+(envT===1?'':'s');
         } else {
           envT=p.cerrados+(p.bodega||0); mlT=p.stock;
-          det='🏪 '+p.cerrados+' · 🏠 '+(p.bodega||0)+(p.abierto>0?' · 🍾 abierto '+p.abierto+p.unidad:'');
+          det='🏪 '+p.cerrados+' · 🏠 '+(p.bodega||0)+(p.abierto>0?' · 🍾 '+p.abierto+' abierto'+(p.abierto===1?'':'s'):'');
         }
         var valT;
-        if(lug==='local') valT=p.cerrados*(p.costoEnvase||0)+p.abierto*(p.costoUnidad||0);
+        if(lug==='local') valT=(p.cerrados+p.abierto)*(p.costoEnvase||0);
         else if(lug==='bodega') valT=(p.bodega||0)*(p.costoEnvase||0);
-        else valT=(p.cerrados+(p.bodega||0))*(p.costoEnvase||0)+p.abierto*(p.costoUnidad||0);
+        else valT=(p.cerrados+(p.bodega||0)+p.abierto)*(p.costoEnvase||0);
         return '<div style="font-size:0.58rem;color:var(--gray);margin-top:4px">'+det+'</div>'
           +'<div style="margin-top:3px;font-size:0.82rem;font-weight:800;color:var(--navy)">📦 '+envT+' envase'+(envT===1?'':'s')
           +' <span style="color:var(--cream-d)">|</span> ∑ '+(mlT%1?mlT.toFixed(1):mlT)+' '+p.unidad
@@ -6800,7 +6800,7 @@ function _cabPintarInventario(){
         // solo si ese lado tiene stock — la ausencia tambien informa.
         var filasU=[];
         if(p.cerrados>0||p.ubicacionLocal) filasU.push('🏪 Local'+(p.cerrados>0?' ('+p.cerrados+')':'')+(p.ubicacionLocal?' · 📍 '+p.ubicacionLocal:''));
-        if(p.abierto>0||p.ubicacionAbierto) filasU.push('<span style="opacity:0.75"> 🍾 Abierto'+(p.abierto>0?' ('+p.abierto+p.unidad+')':'')+(p.ubicacionAbierto?' · '+p.ubicacionAbierto:'')+'</span>');
+        if(p.abierto>0||p.ubicacionAbierto) filasU.push('<span style="opacity:0.75"> 🍾 Abierto'+(p.abierto>0?' ('+p.abierto+')':'')+(p.ubicacionAbierto?' · '+p.ubicacionAbierto:'')+'</span>');
         if((p.bodega||0)>0||p.ubicacion) filasU.push('🏠 Bodega'+((p.bodega||0)>0?' ('+p.bodega+')':'')+(p.ubicacion?' · 📍 '+p.ubicacion:''));
         return filasU.length?'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:5px">'
           +filasU.map(function(fu){return '<span style="font-size:0.66rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:2px 10px;border-radius:7px">'+fu+'</span>';}).join('')
@@ -6995,7 +6995,7 @@ function _cabAbrirRapido(i,modo){
   var p=(window._cab&&window._cab.inv||[])[i]; if(!p) return;
   var msg = modo==='abrir'
     ? '🍾 ABRIR ENVASE\n\n'+p.producto+'\nSe abre 1 envase de '+p.contenido+p.unidad+'.\nCerrados en local: '+p.cerrados+' → '+(p.cerrados-1)+'\n\n¿Confirmar?'
-    : '✔ SE ACABÓ EL ABIERTO\n\n'+p.producto+'\nAbierto actual: '+p.abierto+p.unidad+((p.abierto>p.contenido&&p.contenido>0)?'\nSe descuenta 1 envase ('+p.contenido+p.unidad+').':'\nEl abierto queda en 0.')+'\n\n¿Confirmar?';
+    : '✔ SE ACABÓ EL ABIERTO\n\n'+p.producto+'\nSale 1 envase abierto del inventario.\nAbiertos: '+p.abierto+' → '+(p.abierto-1)+'\n\n¿Confirmar?';
   if(!confirm(msg)) return;
   toast('⏳ Guardando...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
@@ -7021,7 +7021,7 @@ function _cabBajaFormProd(i){
     +'<select id="cbj-lado-'+i+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;background:white;margin-bottom:5px">'
     +'<option value="local">🏪 Envases cerrados del LOCAL (hay '+p.cerrados+')</option>'
     +'<option value="bodega">🏠 Envases cerrados de BODEGA (hay '+(p.bodega||0)+')</option>'
-    +'<option value="abierto">🍾 El envase ABIERTO ('+p.abierto+p.unidad+' → se vacía)</option>'
+    +'<option value="abierto">🍾 Abierto'+(p.abierto===1?'':'s')+' ('+p.abierto+' envase'+(p.abierto===1?'':'s')+' → se dan de baja)</option>'
     +'</select>'
     +'<input id="cbj-n-'+i+'" type="number" min="1" step="1" value="1" placeholder="Envases" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
     +'<input id="cbj-razon-'+i+'" placeholder="Razón (obligatoria): caducado, roto, contaminado..." style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:5px">'
@@ -7396,7 +7396,7 @@ function _cabInvDetalle(i){
   fl('Costo por '+p.unidad, '$'+p.costoUnidad.toFixed(2));
   sec('📦 Stock');
   fl('🏪 Local — cerrados', String(p.cerrados));
-  fl('🏪 Local — abierto', p.abierto+' '+p.unidad);
+  fl('🏪 Local — abiertos', p.abierto+' envase'+(p.abierto===1?'':'s'));
   fl('🏠 Bodega — cerrados', String(p.bodega||0));
   fl('Total (todo lado)', p.stock+' '+p.unidad);
   fl('Mínimo de alerta', p.minimo+' envase'+(p.minimo===1?'':'s'));
@@ -7484,7 +7484,7 @@ function _cabInvForm(i){
     +'<div style="flex:1">'+inp('costo','Costo envase $ (opcional por ahora)',p.costoEnvase===0?'':p.costoEnvase,'number')+'</div></div>'
     +'<div style="display:flex;gap:5px;align-items:flex-end">'
     +'<div style="flex:1">'+inp('cerrados','🏪 Cerrados LOCAL',p.cerrados,'number')+'</div>'
-    +'<div style="flex:1">'+inp('abierto','🏪 Abierto: restante',p.abierto,'number')+'</div>'
+    +'<div style="flex:1">'+inp('abierto','🏪 Abiertos (envases)',p.abierto,'number')+'</div>'
     +'<div style="flex:1">'+inp('bodega','🏠 Cerrados BODEGA',p.bodega,'number')+'</div>'
     +'<div style="flex:1">'+inp('minimo','Mín. (local)',p.minimo,'number')+'</div></div>'
     +(function(){
@@ -12152,7 +12152,7 @@ function _propPintar(d){
       h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
         +'<span style="font-size:0.7rem;font-weight:800;color:var(--navy)">'+x.cos+'</span>'
         +'<span style="display:flex;gap:6px;align-items:center"><span style="font-size:0.74rem;font-weight:800;color:#B0578D">$'+x.total.toFixed(2)+'</span>'
-        +(esAdm?'<button onclick="_propPagar(\''+String(x.cos).replace(/'/g,'')+'\',this)" style="background:white;color:#2E7D52;border:1.5px solid #2E7D52;border-radius:8px;padding:5px 10px;font-size:0.6rem;font-weight:800;cursor:pointer">💸 Pagar de caja</button>':'')
+        +((esAdm||(CU&&CU.role==='reception'))?'<button onclick="_propPagar(\''+String(x.cos).replace(/'/g,'')+'\',this)" style="background:white;color:#2E7D52;border:1.5px solid #2E7D52;border-radius:8px;padding:5px 10px;font-size:0.6rem;font-weight:800;cursor:pointer">💸 Pagar de caja</button>':'')
         +'</span></div>';
     });
   } else {
