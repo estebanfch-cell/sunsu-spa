@@ -1643,12 +1643,12 @@ function updatePreview(){
     }
   } else if(T.descuento && T.descuento.tipo === 'promo'){
     var _puUP=_promoUnits();
-    if(T.descuento.promoObj && _promoArmada(T.descuento.promoObj,_puUP)){
-      var _pcUP=_promoCalc(T.descuento.promoObj,_puUP);
+    var _pcUP=(T.descuento.promoObj&&_promoArmada(T.descuento.promoObj,_puUP))?_promoCalc(T.descuento.promoObj,_puUP):null;
+    if(_pcUP && _pcUP.monto>0){
       dscMonto=_pcUP.monto;
       dscLabel='🎉 '+T.descuento.promo+' '+_pcUP.mech;
     } else {
-      // Sacaron del ticket un código requerido: la promo se desarma sola
+      // Sacaron del ticket los códigos (o el descuento cayó a $0): se desarma sola
       T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
     }
   } else if(T.descuento && T.descuento.tipo === 'directo'){
@@ -1738,7 +1738,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      ${(function(){var vs=(window._promosVig||[]);if(!vs.length)return '';var uu=_promoUnits();var chips=vs.map(function(p,i){var coded=p.codigos&&p.codigos.length;if(coded&&!_promoArmada(p,uu))return '';var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">'+(coded?'🎉 Aplicar promoción: ':'🎉 ')+p.nombre+' '+_pmMechTxt(p)+(on?' ✓':'')+'</button>';}).filter(Boolean);return chips.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+chips.join('')+'</div>':'';})()}
+      ${(function(){var vs=(window._promosVig||[]);if(!vs.length)return '';var uu=_promoUnits();var chips=vs.map(function(p,i){var coded=p.codigos&&p.codigos.length;if(coded){if(!_promoArmada(p,uu))return '';var cc0=_promoCalc(p,uu);if(!cc0||cc0.monto<=0)return '';}var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">'+(coded?'🎉 Aplicar promoción: ':'🎉 ')+p.nombre+' '+_pmMechTxt(p)+(on?' ✓':'')+'</button>';}).filter(Boolean);return chips.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+chips.join('')+'</div>':'';})()}
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
@@ -1813,11 +1813,12 @@ function _promoUnits(){
   PROVS.forEach(function(pv){pv.prods.forEach(function(pr){var q=T.productos[pr.sku]||0;for(var i=0;i<q;i++)u.push({sku:pr.sku,p:pr.p});});});
   return u;
 }
-// Promo conjunta: despierta SOLO si el ticket lleva TODOS los códigos.
+// Promo por códigos: despierta si el ticket lleva CUALQUIERA de los códigos
+// (individuales o combinados) — el descuento cae solo sobre los presentes.
 function _promoArmada(p,units){
   if(!p||!p.codigos||!p.codigos.length) return false;
   var u=units||_promoUnits();
-  return p.codigos.every(function(c){return u.some(function(x){return x.sku===c;});});
+  return p.codigos.some(function(c){return u.some(function(x){return x.sku===c;});});
 }
 // Texto corto del mecanismo (chips del ticket + lista de promos)
 function _pmMechTxt(p){
@@ -1850,7 +1851,9 @@ function aplicarPromo(i){
   var vacio={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
   if(T.descuento&&T.descuento.promo===p.nombre){ T.descuento=vacio; }
   else if(p.codigos&&p.codigos.length){
-    if(!_promoArmada(p)){ toast('⚠️ El ticket no lleva todos los códigos de la promo','#C9A227'); return; }
+    if(!_promoArmada(p)){ toast('⚠️ El ticket no lleva ningún producto de esta promo','#C9A227'); return; }
+    var _pcAp=_promoCalc(p);
+    if(!_pcAp||_pcAp.monto<=0){ toast('⚠️ Faltan unidades para que la promo descuente algo','#C9A227'); return; }
     T.descuento={tipo:'promo',promo:p.nombre,promoObj:p,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
   }
   else { T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre}; }
@@ -1986,8 +1989,10 @@ function enviarTicket(){
     var _puE=_promoUnits();
     if(T.descuento.promoObj&&_promoArmada(T.descuento.promoObj,_puE)){
       var _pcE=_promoCalc(T.descuento.promoObj,_puE);
-      _dscMonto=_pcE.monto;
-      _dscLabel='Promo '+T.descuento.promo+' ('+_pcE.mech+') −$'+_pcE.monto.toFixed(2);
+      if(_pcE.monto>0){
+        _dscMonto=_pcE.monto;
+        _dscLabel='Promo '+T.descuento.promo+' ('+_pcE.mech+') −$'+_pcE.monto.toFixed(2);
+      }
     }
   }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
@@ -4491,7 +4496,7 @@ function renderPromos(c){
       +'<input id="pm-buscar" placeholder="🔍 Código o nombre del catálogo..." style="'+inp+';margin-bottom:4px" oninput="_pmBuscar(this.value)">'
       +'<div id="pm-res"></div>'
       +'<div id="pm-chips" style="display:flex;gap:5px;flex-wrap:wrap;margin:4px 0 2px"></div>'
-      +'<div style="font-size:0.54rem;color:var(--gray);margin-bottom:6px">Varios códigos = promo conjunta: solo aplica si el ticket lleva TODOS, y el descuento cae solo sobre esos ítems.</div>'
+      +'<div style="font-size:0.54rem;color:var(--gray);margin-bottom:6px">Varios códigos = la promo aplica con CUALQUIERA de ellos (individuales o combinados), y el descuento cae solo sobre los ítems presentes.</div>'
       +'<div id="pm-calc" style="margin-bottom:6px"></div>'
       +'<div style="display:flex;gap:5px;margin-bottom:6px">'
       +'<div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Desde</div><input id="pm-d1" type="date" style="'+inp+';padding:8px;font-size:0.68rem"></div>'
