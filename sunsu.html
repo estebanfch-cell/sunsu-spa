@@ -12711,9 +12711,9 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       y+=20; // las filas empiezan JUSTO debajo de la barra, sin traslape
     };
     // Fila de tabla perfectamente cuadrada: zebra + concepto izq + monto der, misma tipografía
-    var linea=function(concepto,monto,color,idx){
+    var linea=function(concepto,monto,color,idx,siempre){
       var m=parseFloat(monto)||0;
-      if(m===0) return 0;
+      if(m===0&&!siempre) return 0;
       salto(FILA+4);
       if(idx%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y,ANCHO,FILA,'F');}
       else{doc.setFillColor(255,255,255);doc.rect(xI,y,ANCHO,FILA,'F');}
@@ -12722,7 +12722,7 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       doc.setFont('helvetica','bold'); doc.setTextColor(color);
       doc.text(n2(m),xD-10,y+12,{align:'right'});
       y+=FILA;
-      return m;
+      return 1;
     };
     var totalLinea=function(lbl,monto,color){
       salto(24); y+=6;
@@ -12733,16 +12733,17 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     // ── INGRESOS ──
     barra('INGRESOS',[46,125,82]);
     var iIdx=0;
-    [['Sueldo',d.sueldo],['Bono',d.bono],['Comisión faciales',d.comFaciales],['Comisión paquetes',d.comPaquetes],
-     ['Comisión productos',d.comProductos],['Horas suplementarias ('+(d.hrsSupl||0)+'h)',d.valSupl],
-     ['Horas extraordinarias ('+(d.hrsExtr||0)+'h)',d.valExtr],['Décimo tercero',d.dec13],['Décimo cuarto',d.dec14],
-     ['Fondo de reserva',d.fondoReserva]].forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx)) iIdx++; });
+    [['Sueldo',d.sueldo],['Bono',d.bono],['Com. faciales/extras/recep.',d.comFaciales],['Comisión paquetes',d.comPaquetes],
+     ['Comisión productos',d.comProductos],['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)',d.valSupl],
+     ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)',d.valExtr],['Horas descanso 100% ('+(d.hrsDesc||0)+' hrs)',d.valDesc],
+     ['Décimo tercero',d.dec13],['Décimo cuarto',d.dec14],
+     ['Fondo de reserva',d.fondoReserva]].forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx,true)) iIdx++; });
     totalLinea('TOTAL INGRESOS',d.totalIngresos,VERDE);
     // ── EGRESOS (mismo formato y tipografía que ingresos, montos en rojo) ──
     barra('EGRESOS',[184,64,64]);
     var eIdx=0;
     [['Aporte IESS (9.45%)',d.iess],['Anticipo de sueldo',d.anticipo],['Préstamo hipotecario',d.prestHip],
-     ['Préstamo quirografario',d.prestQuir]].forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx)) eIdx++; });
+     ['Préstamo quirografario',d.prestQuir]].forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx,true)) eIdx++; });
     // Multas y descuentos: SOLO tipo, fecha y valor (el detalle va en el cuadro del pie)
     var multas=(d.multasDetalle||[]).filter(function(m){return (parseFloat(m.monto)||0)>0;});
     multas.forEach(function(m){
