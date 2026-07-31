@@ -12759,34 +12759,47 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     doc.text('NETO A RECIBIR:',xI+12,y+21);
     doc.text(n2(d.totalRecibir),xD-12,y+21,{align:'right'});
     y+=46;
-    // ── Cuadro de explicaciones de multas y descuentos ──
+    // ── Cuadro de multas y descuentos: el contenido SIEMPRE cabe en el marco ──
+    // 1) Limpieza por LISTA BLANCA: solo caracteres imprimibles + acentos —
+    //    backticks, viñetas raras y saltos de línea desaparecen de raíz.
+    // 2) El texto se parte con LA MISMA fuente y tamaño con que se dibuja,
+    //    y con margen holgado (44pt) — imposible que se salga del cuadro.
+    // 3) Cada multa: cabecera en negrita (TIPO · fecha · monto) + motivo debajo.
     if(multas.length){
-      var expl=[];
-      // Tipografía FIJA antes de partir el texto (las métricas del corte y del
-      // dibujo deben ser las mismas) y motivo SANEADO: sin saltos de línea,
-      // viñetas ni backticks — nada se sale del cuadro ni se ve virado.
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.6);
+      var _limpiaM=function(s){
+        return (s||'').toString()
+          .replace(/[\r\n\t]+/g,' ')
+          .replace(/[`´‘’]/g,'')
+          .replace(/[•●▪◦]/g,'·')
+          .replace(/[^\x20-\x7EÁÉÍÓÚÑÜáéíóúñü¿¡·°]/g,' ')
+          .replace(/\s*·\s*/g,' · ')
+          .replace(/(^|· )[-'"\s]+/g,'$1')
+          .replace(/^\s*·\s*/,'')
+          .replace(/\s{2,}/g,' ').trim();
+      };
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.8);
+      var bloquesM=[]; var totLinM=0;
       multas.forEach(function(m){
-        var mot=((m.motivo||m.detalle||'—').toString())
-          .replace(/[\r\n]+/g,' · ')
-          .replace(/[•●▪]/g,'-')
-          .replace(/[`´‘’]/g,"'")
-          .replace(/(^|· )[-'\s]+/g,'$1')
-          .replace(/\s{2,}/g,' ')
-          .trim();
-        var txt=(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' '+m.fecha:'')+' ('+n2(m.monto)+'): '+mot;
-        doc.splitTextToSize(txt, ANCHO-24).forEach(function(l){expl.push(l);});
+        var cabM=(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' · '+m.fecha:'')+' · '+n2(m.monto);
+        var linM=doc.splitTextToSize(_limpiaM(m.motivo||m.detalle||'—'), ANCHO-44);
+        bloquesM.push({cab:cabM, lin:linM});
+        totLinM+=linM.length;
       });
-      var altoEx=26+expl.length*10+8;
+      var altoEx=24+bloquesM.length*15+totLinM*10+8;
       salto(altoEx+8);
       doc.setDrawColor(196,148,58); doc.setLineWidth(0.8);
       doc.setFillColor(255,252,242);
       doc.roundedRect(xI,y,ANCHO,altoEx,6,6,'FD');
       doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(GOLD);
-      doc.text('DETALLE DE MULTAS Y DESCUENTOS',xI+12,y+16);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.6); doc.setTextColor(TXT);
-      var yEx=y+28;
-      expl.forEach(function(l){doc.text(l,xI+12,yEx);yEx+=10;});
+      doc.text('DETALLE DE MULTAS Y DESCUENTOS',xI+14,y+16);
+      var yEx=y+30;
+      bloquesM.forEach(function(b){
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.8); doc.setTextColor(NAVY);
+        doc.text(b.cab,xI+14,yEx); yEx+=12;
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
+        b.lin.forEach(function(l){doc.text(l,xI+14,yEx);yEx+=10;});
+        yEx+=3;
+      });
       y+=altoEx+14;
     }
     // ── Aceptación: sello digital o línea de firma ──
