@@ -12750,7 +12750,7 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       var lbl=((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:''));
       linea(lbl,m.monto,ROJO,eIdx); eIdx++;
     });
-    totalLinea('TOTAL EGRESOS',d.egresos,ROJO);
+    totalLinea('TOTAL EGRESOS',(parseFloat(d.iess)||0)+(parseFloat(d.egresos)||0),ROJO);
     // ── NETO ──
     salto(40); y+=4;
     doc.setFillColor(253,247,230);
@@ -12762,9 +12762,19 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     // ── Cuadro de explicaciones de multas y descuentos ──
     if(multas.length){
       var expl=[];
-      doc.setFontSize(7.6);
+      // Tipografía FIJA antes de partir el texto (las métricas del corte y del
+      // dibujo deben ser las mismas) y motivo SANEADO: sin saltos de línea,
+      // viñetas ni backticks — nada se sale del cuadro ni se ve virado.
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.6);
       multas.forEach(function(m){
-        var txt=(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' '+m.fecha:'')+' ('+n2(m.monto)+'): '+((m.motivo||m.detalle||'—').toString());
+        var mot=((m.motivo||m.detalle||'—').toString())
+          .replace(/[\r\n]+/g,' · ')
+          .replace(/[•●▪]/g,'-')
+          .replace(/[`´‘’]/g,"'")
+          .replace(/(^|· )[-'\s]+/g,'$1')
+          .replace(/\s{2,}/g,' ')
+          .trim();
+        var txt=(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' '+m.fecha:'')+' ('+n2(m.monto)+'): '+mot;
         doc.splitTextToSize(txt, ANCHO-24).forEach(function(l){expl.push(l);});
       });
       var altoEx=26+expl.length*10+8;
