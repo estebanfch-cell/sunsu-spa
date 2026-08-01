@@ -4767,11 +4767,12 @@ function renderInicio(c){
     // Miles con coma, centavos con punto: 5,454.89 — legible de un vistazo
     var fmt=function(v){ return (v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmt0=function(v){ return Math.round(v||0).toLocaleString('en-US'); };
-    var kpi=function(icono,label,valor,color,tab){
+    var kpi=function(icono,label,valor,color,tab,sub){
       return '<div class="card" '+(tab?'onclick="showTab(\''+tab+'\')" ':'')+'style="padding:11px 10px;flex:1;min-width:88px;text-align:center'+(tab?';cursor:pointer':'')+'">'
         +'<div style="font-size:1.05rem">'+icono+'</div>'
         +'<div style="font-size:1.02rem;font-weight:800;color:'+(color||'var(--navy)')+';margin:2px 0">'+valor+'</div>'
         +'<div style="font-size:0.52rem;font-weight:800;color:var(--gray);letter-spacing:0.4px;text-transform:uppercase">'+label+'</div>'
+        +(sub?'<div style="font-size:0.52rem;font-weight:700;color:var(--navy);margin-top:3px;line-height:1.35">'+sub+'</div>':'')
         +'</div>';
     };
     var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.mixto||0)+(pg.otros||0);
@@ -4821,10 +4822,14 @@ function renderInicio(c){
       +'</div>'
       // 3 cuadrados: faciales / paquetes / productos
       +'<div style="display:flex;gap:6px;margin-bottom:6px">'
-      +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0,'','historial')
-      +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes,'','buscar-paquetes')
-      +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN,'','inventario')
-      +kpi('🎁','Gift Cards hoy',d.gcHoy||0,'','buscar-gc')
+      +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0,'','historial',
+        '$'+fmt(hoy.valFac||0)+'<br>c/IVA $'+fmt((hoy.valFac||0)*1.15))
+      +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes,'','buscar-paquetes',
+        '$'+fmt(hoy.valPaq||0)+'<br>c/IVA $'+fmt((hoy.valPaq||0)*1.15))
+      +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN,'','inventario',
+        '$'+fmt(hoy.valProd||0)+' · c/IVA $'+fmt((hoy.valProd||0)*1.15)+'<br><b style="color:#2E7D52">📈 margen $'+fmt(Math.max(0,(hoy.valProd||0)-(hoy.costoProd||0)))+'</b>')
+      +kpi('🎁','Gift Cards hoy',d.gcHoy||0,'','buscar-gc',
+        '$'+fmt(d.gcVal||0))
       +'</div>'
       // 2 rectangulos: citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
@@ -5126,6 +5131,103 @@ function _kpiToggle(activa){
     +'</div>';
 }
 
+// ── RENDIMIENTO DE PRODUCTOS (KPIs): margen real, rotación, rankings ──
+function cargarRendProd(modo){
+  window._rpModo=modo;
+  var bM=document.getElementById('rp-mes'), bA=document.getElementById('rp-anio');
+  if(bM&&bA){
+    var on='border:1.2px solid var(--navy);background:var(--navy);color:white';
+    var off='border:1.2px solid var(--navy);background:white;color:var(--navy)';
+    bM.style.cssText='padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;'+(modo==='mes'?on:off);
+    bA.style.cssText='padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;'+(modo==='anio'?on:off);
+  }
+  var out=document.getElementById('rp-out'); if(!out) return;
+  out.innerHTML='<div class="loading"><div class="spinner"></div>Analizando productos...</div>';
+  fetch(APPS_SCRIPT_URL+'?action=getRendimientoProductos&modo='+modo+'&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.error){out.innerHTML='<div style="color:var(--red);font-size:0.72rem">❌ '+d.error+'</div>';return;}
+    window._rpData=d;
+    _rpPintar();
+  })
+  .catch(function(e){out.innerHTML='<div style="color:var(--red);font-size:0.72rem">❌ '+e.message+'</div>';});
+}
+function _rpFila(x,extra){
+  return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d);font-size:0.64rem">'
+    +'<div style="flex:1;min-width:0;color:var(--navy);font-weight:700">'+x.nombre+'</div>'
+    +'<div style="flex-shrink:0;color:var(--gray);text-align:right">'+extra+'</div></div>';
+}
+function _rpPintar(){
+  var out=document.getElementById('rp-out'); var d=window._rpData; if(!out||!d) return;
+  var items=(d.items||[]);
+  var conVenta=items.filter(function(x){return x.uds>0;});
+  var ventaT=conVenta.reduce(function(s,x){return s+x.venta;},0);
+  var margenT=conVenta.reduce(function(s,x){return s+(x.sinCosto?0:x.margen);},0);
+  var meses=Math.max(0.25,(d.dias||30)/30.44);
+  var html='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:90px;background:var(--gray-ll,#F0F1F5);border-radius:10px;padding:8px;text-align:center"><div style="font-size:0.5rem;font-weight:800;color:var(--gray)">VENTA</div><div style="font-size:0.82rem;font-weight:900;color:var(--navy)">$'+fmt(ventaT)+'</div></div>'
+    +'<div style="flex:1;min-width:90px;background:#EDF5F1;border-radius:10px;padding:8px;text-align:center"><div style="font-size:0.5rem;font-weight:800;color:var(--gray)">MARGEN</div><div style="font-size:0.82rem;font-weight:900;color:#2E7D52">$'+fmt(margenT)+(ventaT>0?' ('+Math.round(margenT/ventaT*100)+'%)':'')+'</div></div>'
+    +'<div style="flex:1;min-width:90px;background:var(--gray-ll,#F0F1F5);border-radius:10px;padding:8px;text-align:center"><div style="font-size:0.5rem;font-weight:800;color:var(--gray)">UDS</div><div style="font-size:0.82rem;font-weight:900;color:var(--navy)">'+conVenta.reduce(function(s,x){return s+x.uds;},0)+'</div></div>'
+    +'</div>';
+  var top=conVenta.filter(function(x){return !x.sinCosto;}).sort(function(a,b){return b.margen-a.margen;}).slice(0,5);
+  if(top.length){
+    html+='<div style="font-size:0.62rem;font-weight:800;color:#2E7D52;margin:6px 0 3px">🏆 Más margen</div>';
+    top.forEach(function(x){html+=_rpFila(x,x.uds+' uds · <b style="color:#2E7D52">$'+fmt(x.margen)+'</b> ('+x.margenPct+'%)');});
+  }
+  var peorPct=conVenta.filter(function(x){return !x.sinCosto&&x.margenPct!==null;}).sort(function(a,b){return a.margenPct-b.margenPct;}).slice(0,3);
+  if(peorPct.length){
+    html+='<div style="font-size:0.62rem;font-weight:800;color:#C9761F;margin:9px 0 3px">🔻 Menor margen %</div>';
+    peorPct.forEach(function(x){html+=_rpFila(x,x.uds+' uds · '+x.margenPct+'% · $'+fmt(x.margen));});
+  }
+  var lentos=conVenta.slice().sort(function(a,b){return a.uds-b.uds;}).slice(0,3);
+  if(lentos.length){
+    html+='<div style="font-size:0.62rem;font-weight:800;color:var(--gray);margin:9px 0 3px">🐌 Menos vendidos (con ventas)</div>';
+    lentos.forEach(function(x){html+=_rpFila(x,x.uds+' uds · stock '+(x.stock===null?'—':x.stock));});
+  }
+  var muertos=items.filter(function(x){return x.uds===0&&(x.stock||0)>0;}).sort(function(a,b){return (b.stock||0)-(a.stock||0);}).slice(0,5);
+  if(muertos.length){
+    html+='<div style="font-size:0.62rem;font-weight:800;color:#B84A3F;margin:9px 0 3px">💤 Sin ventas en el período (con stock)</div>';
+    muertos.forEach(function(x){html+=_rpFila(x,'stock '+x.stock+(x.sinCosto?' · sin p.compra':''));});
+  }
+  var sinC=conVenta.filter(function(x){return x.sinCosto;});
+  if(sinC.length){
+    html+='<div style="font-size:0.56rem;color:#C9761F;margin-top:8px">⚠️ '+sinC.length+' producto(s) vendidos SIN precio de compra en inventario — su margen no se puede calcular.</div>';
+  }
+  html+='<button onclick="_rpRecomendaciones()" style="width:100%;margin-top:11px;padding:10px;background:#2E7D52;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer">💡 Recomendaciones</button>'
+    +'<div id="rp-reco"></div>';
+  out.innerHTML=html;
+}
+function _rpRecomendaciones(){
+  var box=document.getElementById('rp-reco'); var d=window._rpData; if(!box||!d) return;
+  var items=(d.items||[]); var meses=Math.max(0.25,(d.dias||30)/30.44);
+  var conVenta=items.filter(function(x){return x.uds>0;});
+  var recos=[];
+  // Estrellas: buen margen % Y buena rotación
+  conVenta.filter(function(x){return !x.sinCosto&&x.margenPct>=40&&x.uds/meses>=3;})
+    .sort(function(a,b){return b.margen-a.margen;}).slice(0,3)
+    .forEach(function(x){recos.push('🟢 <b>'+x.nombre+'</b>: estrella — '+x.margenPct+'% de margen y rota '+(Math.round(x.uds/meses*10)/10)+' uds/mes. Sigue comprando'+((x.stock!==null&&x.stock<=x.uds/meses)?' · ⚠️ quedan '+x.stock+', repide pronto':'')+'.');});
+  // Alta rotación con poco stock
+  conVenta.filter(function(x){return x.stock!==null&&x.uds/meses>0&&x.stock<x.uds/meses;})
+    .sort(function(a,b){return (b.uds/meses-b.stock)-(a.uds/meses-a.stock);}).slice(0,3)
+    .forEach(function(x){var ya=recos.some(function(r){return r.indexOf('<b>'+x.nombre+'</b>')>=0;});
+      if(!ya) recos.push('🔵 <b>'+x.nombre+'</b>: vende '+(Math.round(x.uds/meses*10)/10)+' uds/mes y solo quedan '+x.stock+' — riesgo de quiebre, repide.');});
+  // Margen flaco
+  conVenta.filter(function(x){return !x.sinCosto&&x.margenPct!==null&&x.margenPct<20;})
+    .sort(function(a,b){return a.margenPct-b.margenPct;}).slice(0,3)
+    .forEach(function(x){recos.push('🟡 <b>'+x.nombre+'</b>: margen flaco ('+x.margenPct+'%) — renegocia la compra ($'+fmt(x.compra)+') o sube el PVP.');});
+  // Muertos con plata parada
+  items.filter(function(x){return x.uds===0&&(x.stock||0)>0;})
+    .sort(function(a,b){return (b.stock*b.compra)-(a.stock*a.compra);}).slice(0,3)
+    .forEach(function(x){recos.push('🔴 <b>'+x.nombre+'</b>: 0 ventas en el período con '+x.stock+' en stock'+(x.compra>0?' ($'+fmt(x.stock*x.compra)+' parados)':'')+' — promo, empuje de las chicas, o no recomprar.');});
+  // Sin costo
+  var sinC=conVenta.filter(function(x){return x.sinCosto;}).slice(0,2);
+  sinC.forEach(function(x){recos.push('⚪ <b>'+x.nombre+'</b>: ponle su precio de compra en el inventario para medirle el margen.');});
+  if(!recos.length) recos.push('✨ Sin alertas: los productos con ventas tienen margen sano y stock razonable.');
+  box.innerHTML='<div style="background:#F4F9F6;border-radius:10px;padding:10px 12px;margin-top:8px">'
+    +'<div style="font-size:0.6rem;font-weight:800;color:#2E7D52;margin-bottom:5px">💡 RECOMENDACIONES · '+(window._rpModo==='anio'?'año':'mes')+'</div>'
+    +recos.map(function(r){return '<div style="font-size:0.64rem;color:var(--navy);line-height:1.5;margin-bottom:5px">'+r+'</div>';}).join('')
+    +'</div>';
+}
 function renderKpis(c){
   if(window._kpiVista==='hist'){renderKPIsHistorico(c);return;}
   var hoy=new Date();
@@ -5147,7 +5249,18 @@ function renderKpis(c){
     +'<button onclick="kpiRango(0)" style="flex:1;padding:6px;background:var(--gray-ll,#F0F1F5);border:none;border-radius:8px;font-size:0.62rem;font-weight:700;color:var(--navy);cursor:pointer">Este mes</button>'
     +'<button onclick="kpiRango(1)" style="flex:1;padding:6px;background:var(--gray-ll,#F0F1F5);border:none;border-radius:8px;font-size:0.62rem;font-weight:700;color:var(--navy);cursor:pointer">Mes pasado</button>'
     +'</div></div>'
-    +'<div id="kpi-out"><div class="loading"><div class="spinner"></div>Calculando...</div></div>';
+    +'<div id="kpi-out"><div class="loading"><div class="spinner"></div>Calculando...</div></div>'
+    +'<div class="card" style="padding:14px;margin-top:12px;border-left:4px solid #2E7D52">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<div style="font-size:0.78rem;font-weight:800;color:var(--navy)">📦 Rendimiento de productos</div>'
+    +'<div style="display:flex;gap:5px">'
+    +'<button id="rp-mes" onclick="cargarRendProd(\'mes\')" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:var(--navy);color:white">Mes</button>'
+    +'<button id="rp-anio" onclick="cargarRendProd(\'anio\')" style="padding:5px 11px;border-radius:8px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid var(--navy);background:white;color:var(--navy)">Año</button>'
+    +'</div></div>'
+    +'<div style="font-size:0.56rem;color:var(--gray);margin-bottom:8px">Margen = venta (sin IVA, según catálogo) − compra REAL del inventario. Solo productos — los faciales tendrán margen en la Fase 2 de protocolos.</div>'
+    +'<div id="rp-out"><div class="loading"><div class="spinner"></div>Analizando productos...</div></div>'
+    +'</div>';
+  cargarRendProd(window._rpModo||'mes');
   cargarKpis();
 }
 
