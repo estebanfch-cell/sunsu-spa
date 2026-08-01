@@ -3008,7 +3008,10 @@ function renderSegAntiguas(c){
     .then(function(d){
       if(window._segSecc!=='antiguas') return;
       if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
-      window._antItems=d.items||[];
+      // Las que YA volvieron al sistema nuevo NO aparecen: de ellas se encarga
+      // el seguimiento post-facial normal.
+      window._antItems=(d.items||[]).filter(function(x){return !x.volvio;});
+      window._antMsg=d.msgAntiguas||'';
       window._antF=window._antF||'sin';
       window._antMax=60;
       c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
@@ -3025,6 +3028,41 @@ function renderSegAntiguas(c){
     })
     .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+e.message+'</div>';});
 }
+// Antigüedad de la última visita: "hace 1 año 7 meses", en color según la vejez
+function _antHace(ultima){
+  var m=(ultima||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return null;
+  var f=new Date(parseInt(m[3],10),parseInt(m[2],10)-1,parseInt(m[1],10));
+  var dias=Math.floor((Date.now()-f.getTime())/86400000);
+  if(dias<0) dias=0;
+  var txt;
+  if(dias<31) txt='hace '+dias+' día'+(dias===1?'':'s');
+  else{
+    var meses=Math.floor(dias/30.44);
+    var anios=Math.floor(meses/12); meses=meses%12;
+    txt='hace '+(anios>0?anios+' año'+(anios===1?'':'s')+(meses>0?' '+meses+' mes'+(meses===1?'':'es'):''):meses+' mes'+(meses===1?'':'es'));
+  }
+  var color = dias>180 ? '#B84A3F' : dias>90 ? '#C9761F' : '#C9A227';
+  return {txt:txt, color:color};
+}
+// Badge de visitas: más visitas = color más fuerte (a quién priorizar)
+function _antVisBadge(n){
+  var bg,fg;
+  if(n>=7){bg='#C9A227';fg='white';}
+  else if(n>=4){bg='#EAD9A8';fg='#6B4F0F';}
+  else if(n>=2){bg='#F5E9CE';fg='#8A6D1F';}
+  else{bg='#EEF0F4';fg='var(--gray)';}
+  return '<span style="background:'+bg+';color:'+fg+';padding:1px 7px;border-radius:7px;font-weight:800">'+n+' visita'+(n===1?'':'s')+'</span>';
+}
+// Dos teléfonos son "el mismo" si sus dígitos normalizados coinciden
+function _antTelIgual(a,b){
+  var n=function(t){t=(t||'').replace(/\D/g,'');
+    if(t.indexOf('09')===0&&t.length===10) t='593'+t.slice(1);
+    else if(t.indexOf('9')===0&&t.length===9) t='593'+t;
+    return t;};
+  var na=n(a), nb=n(b);
+  return !!na && na===nb;
+}
 function _antWa(tel,nombre){
   var t=(tel||'').replace(/\D/g,'');
   if(t.indexOf('593')===0&&t.length>=11) {}
@@ -3032,65 +3070,128 @@ function _antWa(tel,nombre){
   else if(t.indexOf('9')===0&&t.length===9) t='593'+t;
   else if(t.length<9) return '';
   var primerN=(nombre||'').split(' ')[0];
-  var msg='Hola '+primerN+'! Te saludamos de Sunsu Spa 💆‍♀️✨ ¡Te extrañamos! Nos encantaría verte de nuevo en tu próximo facial 💛';
+  // El texto vive en ⚙ CONFIGURACION → 'MENSAJE CLIENTAS ANTIGUAS' ({nombre} se
+  // reemplaza). Ojo al editarlo: emojis SIMPLES (🌸 ✨) — los compuestos como
+  // 💆‍♀️ se rompen en WhatsApp de escritorio al viajar por URL.
+  var plantilla=window._antMsg||'Hola {nombre}, te saludamos de 순수 Sunsu Spa — nos acordamos de ti. Tu piel merece volver a brillar como en tu último facial ✨ ¿Te agendamos un espacio?';
+  var msg=plantilla.split('{nombre}').join(primerN);
   return 'https://wa.me/'+t+'?text='+encodeURIComponent(msg);
 }
 function _antPintar(){
   var cont=document.getElementById('ant-res'); if(!cont) return;
   var items=window._antItems||[];
   var f=window._antF||'sin';
+  if(f==='todas'){f='sin';window._antF='sin';}
   var q=((document.getElementById('ant-q')||{}).value||'').toLowerCase().trim();
-  var sinN=items.filter(function(x){return !x.volvio;}).length;
-  var conN=items.filter(function(x){return x.contactadaPor;}).length;
-  // Chips
+  var porContactarN=items.filter(function(x){return !x.volvio&&x.estado!=='AGENDADA'&&x.estado!=='NO DESEA';}).length;
+  var agN=items.filter(function(x){return x.estado==='AGENDADA';}).length;
+  var reN=items.filter(function(x){return x.estado==='REINTENTO'&&!x.volvio;}).length;
+  var ndN=items.filter(function(x){return x.estado==='NO DESEA';}).length;
+  // Chips con contadores — el de Agendadas es el marcador de recuperadas 🎯
   var chips=document.getElementById('ant-chips');
   if(chips){
     var ch=function(val,txt,color){
       var on=f===val;
       return '<button onclick="window._antF=\''+val+'\';window._antMax=60;_antPintar()" style="padding:5px 11px;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid '+color+';background:'+(on?color:'white')+';color:'+(on?'white':color)+'">'+txt+'</button>';
     };
-    chips.innerHTML=ch('sin','🎯 Sin volver ('+sinN+')','#B86B6B')
-      +ch('cont','✔ Contactadas ('+conN+')','#2E7D52')
-      +ch('todas','Todas ('+items.length+')','var(--gray)');
+    chips.innerHTML=ch('sin','🎯 Por contactar ('+porContactarN+')','#B86B6B')
+      +ch('ag','📅 Agendadas ('+agN+')','#2E7D52')
+      +ch('re','🔁 Reintento ('+reN+')','#C9761F')
+      +ch('nd','🚫 No desean ('+ndN+')','var(--gray)');
   }
   var vista=items.filter(function(x){
-    if(f==='sin'&&x.volvio) return false;
-    if(f==='cont'&&!x.contactadaPor) return false;
+    if(f==='sin'&&(x.volvio||x.estado==='AGENDADA'||x.estado==='NO DESEA')) return false;
+    if(f==='ag'&&x.estado!=='AGENDADA') return false;
+    if(f==='re'&&(x.estado!=='REINTENTO'||x.volvio)) return false;
+    if(f==='nd'&&x.estado!=='NO DESEA') return false;
     if(q&&(x.nombre.toLowerCase().indexOf(q)<0&&x.ced.indexOf(q)<0)) return false;
     return true;
   });
-  var max=window._antMax||60;
-  var html=vista.slice(0,max).map(function(x){
+  // ── CARPETAS por antigüedad de la última visita ── primero las calientes
+  var _antDias=function(ultima){
+    var m=(ultima||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if(!m) return 99999;
+    return Math.floor((Date.now()-new Date(parseInt(m[3],10),parseInt(m[2],10)-1,parseInt(m[1],10)).getTime())/86400000);
+  };
+  var GRUPOS=[
+    {id:'g4', lbl:'🔥 Hace menos de 4 meses', max:122},
+    {id:'g6', lbl:'🟠 De 4 a 6 meses',        max:183},
+    {id:'g12',lbl:'🟡 De 6 meses a 1 año',max:366},
+    {id:'g99',lbl:'🔴 Más de 1 año',  max:99998},
+    {id:'g0', lbl:'❔ Sin fecha',                 max:999999}
+  ];
+  window._antAb=window._antAb||{}; // todas las carpetas cerradas al entrar
+  window._antGMax=window._antGMax||{};
+  var porGrupo={};
+  vista.forEach(function(x){
+    var dv=_antDias(x.ultima);
+    var g=GRUPOS.find(function(gr){return dv<gr.max;})||GRUPOS[GRUPOS.length-1];
+    (porGrupo[g.id]=porGrupo[g.id]||[]).push(x);
+  });
+  var tarjeta=function(x){
     var wa=_antWa(x.tel,x.nombre);
-    return '<div class="card" style="padding:10px 13px;margin-bottom:7px'+(x.contactadaPor?';opacity:0.62':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1;min-width:0">'
+    // Segunda fuente: teléfono de Acuity. Si coincide con el del archivo, uno
+    // solo; si difiere (o el archivo no tenía), aparece la segunda opción.
+    var telAcu=(x.telAcuity||'').trim();
+    var acuDistinto=telAcu&&!_antTelIgual(x.tel,telAcu);
+    var waAcu=acuDistinto?_antWa(telAcu,x.nombre):'';
+    var hace=_antHace(x.ultima);
+    var apagada=(x.estado==='NO DESEA'||x.volvio);
+    var badgeEst='';
+    if(x.estado==='AGENDADA') badgeEst='<div style="font-size:0.6rem;color:#2E7D52;font-weight:800;margin-top:2px">📅 Agendó · '+x.contactadaPor+' · '+x.contactadaF+'</div>';
+    else if(x.estado==='NO DESEA') badgeEst='<div style="font-size:0.6rem;color:var(--gray);font-weight:800;margin-top:2px">🚫 No desea · '+x.contactadaPor+'</div>';
+    else if(x.estado==='REINTENTO') badgeEst='<div style="font-size:0.6rem;color:#C9761F;font-weight:800;margin-top:2px">🔁 '+x.intentos+' intento'+(x.intentos===1?'':'s')+' sin respuesta · '+x.contactadaF+'</div>';
+    else if(x.estado==='CONTACTADA') badgeEst='<div style="font-size:0.6rem;color:#2E7D52;margin-top:2px">✔ Contactada · '+x.contactadaPor+' · '+x.contactadaF+'</div>';
+    var botones='';
+    if(!x.volvio&&x.estado!=='AGENDADA'&&x.estado!=='NO DESEA'){
+      botones='<div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">'
+        +(wa?'<a href="'+wa+'" target="_blank" style="text-decoration:none;text-align:center;padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.6rem;font-weight:800;flex:1;min-width:80px">💬 WhatsApp'+(waAcu?' 1':'')+'</a>':'')
+        +(waAcu?'<a href="'+waAcu+'" target="_blank" style="text-decoration:none;text-align:center;padding:6px 10px;background:#128C7E;color:white;border-radius:9px;font-size:0.6rem;font-weight:800;flex:1;min-width:80px">💬 '+(wa?'WhatsApp 2':'WhatsApp')+' (Acuity)</a>':'')
+        +'<button onclick="_antEstado(\''+x.ced+'\',\'agendada\',this)" style="flex:1;min-width:70px;padding:6px 8px;background:#2E7D52;color:white;border:none;border-radius:9px;font-size:0.6rem;font-weight:800;cursor:pointer">📅 Agendó</button>'
+        +'<button onclick="_antEstado(\''+x.ced+'\',\'reintento\',this)" style="flex:1;min-width:80px;padding:6px 8px;background:white;color:#C9761F;border:1.5px solid #C9761F;border-radius:9px;font-size:0.6rem;font-weight:800;cursor:pointer">🔁 No contestó</button>'
+        +'<button onclick="_antEstado(\''+x.ced+'\',\'nodesea\',this)" style="flex:1;min-width:70px;padding:6px 8px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.6rem;font-weight:800;cursor:pointer">🚫 No desea</button>'
+        +'</div>';
+    }
+    return '<div class="card" style="padding:10px 13px;margin-bottom:7px'+(apagada?';opacity:0.6':'')+'">'
       +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+x.nombre+(x.volvio?' <span style="font-size:0.56rem;color:#2E7D52">↺ volvió</span>':'')+'</div>'
-      +'<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+x.ced+' · última visita '+x.ultima+' · '+x.visitas+' visita'+(x.visitas===1?'':'s')+'</div>'
-      +(x.tel?'<div style="font-size:0.62rem;color:var(--gray)">📱 '+x.tel+(x.email?' · ✉ '+x.email:'')+'</div>':(x.email?'<div style="font-size:0.62rem;color:var(--gray)">✉ '+x.email+'</div>':''))
-      +(x.contactadaPor?'<div style="font-size:0.6rem;color:#2E7D52;margin-top:2px">✔ Contactada por '+x.contactadaPor+' · '+x.contactadaF+'</div>':'')
-      +'</div>'
-      +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">'
-      +(wa?'<a href="'+wa+'" target="_blank" style="text-decoration:none;text-align:center;padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800">💬 WhatsApp</a>':'')
-      +(!x.contactadaPor?'<button onclick="_antContactada(\''+x.ced+'\',this)" style="padding:6px 10px;background:white;color:#2E7D52;border:1.5px solid #2E7D52;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer">✔ Contactada</button>':'')
-      +'</div></div></div>';
-  }).join('');
+      +'<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+x.ced+' · última '+x.ultima+(hace?' · <b style="color:'+hace.color+'">'+hace.txt+'</b>':'')+' · '+_antVisBadge(x.visitas)+'</div>'
+      +((x.tel||telAcu||x.email)?'<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+(x.tel?'📱 '+x.tel:'')+(acuDistinto?(x.tel?' · ':'')+'📆 Acuity: '+telAcu:'')+(x.email?((x.tel||acuDistinto)?' · ':'')+'✉ '+x.email:'')+'</div>':'')
+      +badgeEst
+      +botones
+      +'</div>';
+  };
+  var html='';
+  GRUPOS.forEach(function(g){
+    var lista=porGrupo[g.id]||[];
+    if(!lista.length) return;
+    var abierto=!!window._antAb[g.id];
+    html+='<div style="background:white;border-radius:12px;margin-bottom:8px;overflow:hidden;box-shadow:var(--shadow-sm)">'
+      +'<div onclick="window._antAb.'+g.id+'=!window._antAb.'+g.id+';_antPintar()" style="padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;background:var(--gray-ll,#F0F1F5)">'
+      +'<div style="font-size:0.72rem;font-weight:800;color:var(--navy)">'+g.lbl+' <span style="color:var(--gray)">('+lista.length+')</span></div>'
+      +'<span style="color:var(--gray);font-size:0.75rem">'+(abierto?'▼':'▶')+'</span></div>';
+    if(abierto){
+      var gMax=window._antGMax[g.id]||30;
+      html+='<div style="padding:8px 10px">'+lista.slice(0,gMax).map(tarjeta).join('');
+      if(lista.length>gMax) html+='<button onclick="window._antGMax.'+g.id+'=(window._antGMax.'+g.id+'||30)+30;_antPintar()" style="width:100%;padding:9px;background:white;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;color:var(--gray);cursor:pointer">Ver 30 más ('+(lista.length-gMax)+' restantes)</button>';
+      html+='</div>';
+    }
+    html+='</div>';
+  });
   if(!vista.length) html='<div class="card" style="text-align:center;color:var(--gray);font-size:0.72rem">Sin resultados</div>';
-  if(vista.length>max) html+='<button onclick="window._antMax+=60;_antPintar()" style="width:100%;padding:10px;background:white;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.7rem;font-weight:800;color:var(--gray);cursor:pointer">Ver 60 más ('+(vista.length-max)+' restantes)</button>';
   cont.innerHTML=html;
 }
-function _antContactada(ced,btn){
+function _antEstado(ced,estado,btn){
   if(btn){btn.disabled=true;btn.textContent='⏳';}
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'clientaAntiguaContactada',cedula:ced,usuario:CU?CU.name:'—',token:window._token||''})})
+    body:JSON.stringify({accion:'clientaAntiguaEstado',cedula:ced,estado:estado,usuario:CU?CU.name:'—',token:window._token||''})})
   .then(function(r){return r.json();})
   .then(function(d){
-    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.disabled=false;btn.textContent='✔ Contactada';}return;}
-    (window._antItems||[]).forEach(function(x){ if(x.ced===ced){x.contactadaPor=d.por;x.contactadaF=d.fecha;} });
-    toast('✔ Registrado','var(--green)');
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.disabled=false;}_antPintar();return;}
+    (window._antItems||[]).forEach(function(x){ if(x.ced===ced){x.estado=d.estado;x.intentos=d.intentos;x.contactadaPor=d.por;x.contactadaF=d.fecha;} });
+    toast(d.estado==='AGENDADA'?'📅 ¡Agendada! 🎉':d.estado==='REINTENTO'?'🔁 Intento #'+d.intentos+' anotado':d.estado==='NO DESEA'?'🚫 Anotado':'✔ Registrado','var(--green)');
     _antPintar();
   })
-  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.disabled=false;btn.textContent='✔ Contactada';}});
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.disabled=false;}_antPintar();});
 }
 function _segToggleHTML(){
   var s=window._segSecc||'facial';
