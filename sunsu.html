@@ -2993,7 +2993,104 @@ function renderSeguimiento(c, seccion){
   if(!esPermitidoSeg){toast('Sin acceso','#B86B6B');return;}
   window._segSecc=seccion||window._segSecc||'facial';
   if(window._segSecc==='paquetes'){ renderSegPaquetes(c); return; }
+  if(window._segSecc==='antiguas'){ renderSegAntiguas(c); return; }
   return _renderSeguimientoFacial(c);
+}
+// ── CLIENTAS OLVIDADAS DEL SISTEMA ANTIGUO (VENTAS_SUNSU_2025) ──
+// Lista consolidada por cédula con teléfono/email del archivo viejo, cruzada
+// contra TICKET_FICHA: las que NO volvieron son las que hay que recuperar.
+function renderSegAntiguas(c){
+  c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
+    +_segToggleHTML()
+    +'<div class="loading"><div class="spinner"></div>Cargando sistema antiguo...<br><span style="font-size:0.62rem;color:var(--gray)">La primera vez importa el archivo del Drive (±1 min)</span></div>';
+  fetch(APPS_SCRIPT_URL+'?action=getClientasAntiguas&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(window._segSecc!=='antiguas') return;
+      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
+      window._antItems=d.items||[];
+      window._antF=window._antF||'sin';
+      window._antMax=60;
+      c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📞 Seguimiento de Clientas</div>'
+        +'<button onclick="renderSeguimiento(document.getElementById(\'content\'),\'antiguas\')" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄</button></div>'
+        +_segToggleHTML()
+        +'<div class="card" style="padding:10px 14px;margin-bottom:10px">'
+        +'<input id="ant-q" type="text" placeholder="Buscar por nombre o cédula..." oninput="window._antMax=60;_antPintar()" '
+        +'style="width:100%;padding:8px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.82rem;outline:none;font-family:inherit;background:var(--gray-ll);box-sizing:border-box">'
+        +'<div id="ant-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"></div>'
+        +'</div>'
+        +'<div id="ant-res"></div>';
+      _antPintar();
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+e.message+'</div>';});
+}
+function _antWa(tel,nombre){
+  var t=(tel||'').replace(/\D/g,'');
+  if(t.indexOf('593')===0&&t.length>=11) {}
+  else if(t.indexOf('09')===0&&t.length===10) t='593'+t.slice(1);
+  else if(t.indexOf('9')===0&&t.length===9) t='593'+t;
+  else if(t.length<9) return '';
+  var primerN=(nombre||'').split(' ')[0];
+  var msg='Hola '+primerN+'! Te saludamos de Sunsu Spa 💆‍♀️✨ ¡Te extrañamos! Nos encantaría verte de nuevo en tu próximo facial 💛';
+  return 'https://wa.me/'+t+'?text='+encodeURIComponent(msg);
+}
+function _antPintar(){
+  var cont=document.getElementById('ant-res'); if(!cont) return;
+  var items=window._antItems||[];
+  var f=window._antF||'sin';
+  var q=((document.getElementById('ant-q')||{}).value||'').toLowerCase().trim();
+  var sinN=items.filter(function(x){return !x.volvio;}).length;
+  var conN=items.filter(function(x){return x.contactadaPor;}).length;
+  // Chips
+  var chips=document.getElementById('ant-chips');
+  if(chips){
+    var ch=function(val,txt,color){
+      var on=f===val;
+      return '<button onclick="window._antF=\''+val+'\';window._antMax=60;_antPintar()" style="padding:5px 11px;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;border:1.2px solid '+color+';background:'+(on?color:'white')+';color:'+(on?'white':color)+'">'+txt+'</button>';
+    };
+    chips.innerHTML=ch('sin','🎯 Sin volver ('+sinN+')','#B86B6B')
+      +ch('cont','✔ Contactadas ('+conN+')','#2E7D52')
+      +ch('todas','Todas ('+items.length+')','var(--gray)');
+  }
+  var vista=items.filter(function(x){
+    if(f==='sin'&&x.volvio) return false;
+    if(f==='cont'&&!x.contactadaPor) return false;
+    if(q&&(x.nombre.toLowerCase().indexOf(q)<0&&x.ced.indexOf(q)<0)) return false;
+    return true;
+  });
+  var max=window._antMax||60;
+  var html=vista.slice(0,max).map(function(x){
+    var wa=_antWa(x.tel,x.nombre);
+    return '<div class="card" style="padding:10px 13px;margin-bottom:7px'+(x.contactadaPor?';opacity:0.62':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+x.nombre+(x.volvio?' <span style="font-size:0.56rem;color:#2E7D52">↺ volvió</span>':'')+'</div>'
+      +'<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+x.ced+' · última visita '+x.ultima+' · '+x.visitas+' visita'+(x.visitas===1?'':'s')+'</div>'
+      +(x.tel?'<div style="font-size:0.62rem;color:var(--gray)">📱 '+x.tel+(x.email?' · ✉ '+x.email:'')+'</div>':(x.email?'<div style="font-size:0.62rem;color:var(--gray)">✉ '+x.email+'</div>':''))
+      +(x.contactadaPor?'<div style="font-size:0.6rem;color:#2E7D52;margin-top:2px">✔ Contactada por '+x.contactadaPor+' · '+x.contactadaF+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">'
+      +(wa?'<a href="'+wa+'" target="_blank" style="text-decoration:none;text-align:center;padding:6px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800">💬 WhatsApp</a>':'')
+      +(!x.contactadaPor?'<button onclick="_antContactada(\''+x.ced+'\',this)" style="padding:6px 10px;background:white;color:#2E7D52;border:1.5px solid #2E7D52;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer">✔ Contactada</button>':'')
+      +'</div></div></div>';
+  }).join('');
+  if(!vista.length) html='<div class="card" style="text-align:center;color:var(--gray);font-size:0.72rem">Sin resultados</div>';
+  if(vista.length>max) html+='<button onclick="window._antMax+=60;_antPintar()" style="width:100%;padding:10px;background:white;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.7rem;font-weight:800;color:var(--gray);cursor:pointer">Ver 60 más ('+(vista.length-max)+' restantes)</button>';
+  cont.innerHTML=html;
+}
+function _antContactada(ced,btn){
+  if(btn){btn.disabled=true;btn.textContent='⏳';}
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'clientaAntiguaContactada',cedula:ced,usuario:CU?CU.name:'—',token:window._token||''})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');if(btn){btn.disabled=false;btn.textContent='✔ Contactada';}return;}
+    (window._antItems||[]).forEach(function(x){ if(x.ced===ced){x.contactadaPor=d.por;x.contactadaF=d.fecha;} });
+    toast('✔ Registrado','var(--green)');
+    _antPintar();
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');if(btn){btn.disabled=false;btn.textContent='✔ Contactada';}});
 }
 function _segToggleHTML(){
   var s=window._segSecc||'facial';
@@ -3001,7 +3098,7 @@ function _segToggleHTML(){
     var on=s===id;
     return '<button onclick="renderSeguimiento(document.getElementById(\'content\'),\''+id+'\')" style="flex:1;padding:9px;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1.5px solid '+(on?'var(--navy);background:var(--navy);color:white':'var(--cream-d);background:white;color:var(--gray)')+'">'+lbl+'</button>';
   };
-  return '<div style="display:flex;gap:8px;margin-bottom:12px">'+b('facial','💆 Post-facial')+b('paquetes','📦 Paquetes')+'</div>';
+  return '<div style="display:flex;gap:8px;margin-bottom:12px">'+b('facial','💆 Post-facial')+b('paquetes','📦 Paquetes')+b('antiguas','📜 Antiguas')+'</div>';
 }
 // ── Seguimiento de PAQUETES: sesiones restantes y clientas que no vuelven ──
 // Fondo SUNSU en formato tarjeta apaisada (logo arriba, florales en las esquinas)
@@ -4569,8 +4666,8 @@ function renderInicio(c){
     // Miles con coma, centavos con punto: 5,454.89 — legible de un vistazo
     var fmt=function(v){ return (v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmt0=function(v){ return Math.round(v||0).toLocaleString('en-US'); };
-    var kpi=function(icono,label,valor,color){
-      return '<div class="card" style="padding:11px 10px;flex:1;min-width:88px;text-align:center">'
+    var kpi=function(icono,label,valor,color,tab){
+      return '<div class="card" '+(tab?'onclick="showTab(\''+tab+'\')" ':'')+'style="padding:11px 10px;flex:1;min-width:88px;text-align:center'+(tab?';cursor:pointer':'')+'">'
         +'<div style="font-size:1.05rem">'+icono+'</div>'
         +'<div style="font-size:1.02rem;font-weight:800;color:'+(color||'var(--navy)')+';margin:2px 0">'+valor+'</div>'
         +'<div style="font-size:0.52rem;font-weight:800;color:var(--gray);letter-spacing:0.4px;text-transform:uppercase">'+label+'</div>'
@@ -4616,22 +4713,22 @@ function renderInicio(c){
       +'<div style="font-size:1rem;font-weight:800;color:var(--navy)">🏠 Hola, '+(CU?CU.short:'')+'</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+(d.actualizado||'')+'</button>'
       +'</div>'
-      +'<div class="card" style="padding:14px;text-align:center;margin-bottom:8px;background:var(--navy)">'
+      +'<div class="card" onclick="showTab(\'kpis\')" style="padding:14px;text-align:center;margin-bottom:8px;background:var(--navy);cursor:pointer">'
       +'<div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.75);letter-spacing:0.6px">VENTA DE HOY · SUBTOTAL</div>'
       +'<div style="font-size:1.9rem;font-weight:800;color:white;margin:2px 0">$'+fmt(sub(hoy.venta))+'</div>'
       +'<div style="font-size:0.62rem;font-weight:700;color:rgba(255,255,255,0.85)">con IVA $'+fmt(hoy.venta||0)+' · '+(hoy.tickets||0)+' tickets · promedio $'+fmt(hoy.tickets?sub(hoy.venta)/hoy.tickets:0)+'</div>'
       +'</div>'
       // 3 cuadrados: faciales / paquetes / productos
       +'<div style="display:flex;gap:6px;margin-bottom:6px">'
-      +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0)
-      +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes)
-      +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN)
-      +kpi('🎁','Gift Cards hoy',d.gcHoy||0)
+      +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0,'','historial')
+      +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes,'','buscar-paquetes')
+      +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN,'','inventario')
+      +kpi('🎁','Gift Cards hoy',d.gcHoy||0,'','buscar-gc')
       +'</div>'
       // 2 rectangulos: citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-      +kpi('🗓','Citas hoy',d.citasHoy||0)
-      +kpi('💵','Caja chica','$'+fmt(d.caja||0),(d.caja||0)<0?'#B86B6B':'#2E7D52')
+      +kpi('🗓','Citas hoy',d.citasHoy||0,'','citas')
+      +kpi('💵','Caja chica','$'+fmt(d.caja||0),(d.caja||0)<0?'#B86B6B':'#2E7D52','caja')
       +'</div>'
       // Pagos que CUADRAN
       +(pagosTot>0?'<div class="card" style="padding:11px 13px;margin-bottom:8px">'
