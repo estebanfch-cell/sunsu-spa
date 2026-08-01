@@ -10456,7 +10456,16 @@ function _pintarBorradorOC(){
   var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
   var totalD=(B.directa||[]).reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
   // ── BLOQUE 1: FACTURACIÓN editable (consignación — lo vendido que se paga al proveedor) ──
-  var html='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #8A6D1A">'
+  var html='';
+  if(B.editandoNum){
+    html+='<div class="card" style="padding:11px 14px;margin-bottom:10px;background:#FFF4E0;border-left:4px solid #C9761F">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div><div style="font-size:0.76rem;font-weight:900;color:#8A5A16">✏️ Editando '+B.editandoNum+'</div>'
+      +'<div style="font-size:0.58rem;color:#8A5A16;margin-top:2px">Al guardar se actualiza la MISMA orden: filas en Entregas (agrega/quita/cantidades) y el PDF con el mismo número.</div></div>'
+      +'<button onclick="showTab(\'entradas\')" style="flex-shrink:0;background:white;color:#8A5A16;border:1.5px solid #C9761F;padding:6px 11px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">← Cancelar</button>'
+      +'</div></div>';
+  }
+  html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #8A6D1A">'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">💵 Facturación — vendido en '+B.qLabel+'</div>'
     +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Lo que el proveedor te factura (consignación). Edita cantidades y precios, o quita con ✕ los productos propios de Sunsu que no van a consignación.</div>';
   if(!(B.fact||[]).length){html+='<div style="text-align:center;color:var(--gray);font-size:0.7rem;padding:10px">Sin ventas en esta quincena</div>';}
@@ -10572,6 +10581,22 @@ function generarOCApp(){
   var stockL=(B.stockV||(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})).slice();
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
   if(!items.length&&!factF.length&&!directaF.length){toast('La orden está vacía: ni facturación, ni restock, ni compra directa','#C9A227');return;}
+  // ── MODO EDICIÓN: guardar cambios sobre la MISMA orden ──
+  if(B.editandoNum){
+    if(!confirm('✏️ GUARDAR CAMBIOS — '+B.editandoNum+'\n\nFacturación: '+factF.length+' · Restock: '+items.length+' · Compra directa: '+directaF.length+'\n\nSe actualizará la MISMA orden en Entregas (cantidades, filas agregadas y quitadas — lo ya recibido no se toca) y se descargará el PDF corregido con el mismo número. ¿Continuar?')) return;
+    window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
+    toast('⏳ Guardando cambios...','var(--blue)');
+    fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({accion:'editarOCApp',numOrden:B.editandoNum,proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,directa:directaF,stock:stockL,provData:B.prov,usuario:CU?CU.name:'—'})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+      toast('✏️ '+B.editandoNum+' actualizada'+(d.aviso?' · '+d.aviso:''),'var(--green)');
+      _pdfOC(B.editandoNum, d.fecha, B.prov, B.qLabel, items, factF, directaF, stockL);
+    })
+    .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+    return;
+  }
   if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||0)+' productos\nCompra directa: '+(directaF.length||0)+' productos (stock propio)\n\n'+((items.length||directaF.length)?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
   // Nota de venta (sin IVA) o factura (con IVA): el PDF respeta al proveedor
   window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
@@ -10695,7 +10720,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
     };
     // ── SECCIÓN 1: FACTURACIÓN por consignación — formato factura completo:
     //    P. unitario (sin IVA) · Subtotal · IVA 15% · Total, con sumas al pie ──
-    var totConsigPDF=0, totDirectaPDF=0;
+    var totConsigPDF=0, totDirectaPDF=0, subConsigPDF=0, subDirectaPDF=0;
     var fact=(itemsFact||[]).filter(function(it){return (it.vendido||0)>0;});
     barra('FACTURACIÓN — VENDIDO EN '+qLabel.toUpperCase()+' (CONSIGNACIÓN)');
     if(fact.length){
@@ -10751,6 +10776,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
       doc.text('TOTAL A FACTURAR:',xI+365,y+9,{align:'right'});
       doc.text('$'+sumTot.toFixed(2),xD-6,y+9,{align:'right'});
       totConsigPDF=sumTot;
+      subConsigPDF=sumSub;
       doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text('Valor a pagar por Sunsu Spa según unidades vendidas en la quincena',xI,y+9);
       y+=24;
@@ -10812,14 +10838,28 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
       doc.text('$'+sumTotD.toFixed(2),xD-6,y+9,{align:'right'});
       y+=20;
       totDirectaPDF=sumTotD;
+      subDirectaPDF=sumSubD;
       // ── TOTAL GENERAL: consignación + compra directa, una sola factura ──
-      salto(46);
+      salto(78);
+      // Las 3 cifras SIEMPRE suman: subtotal y total nacen de los impresos,
+      // el IVA se deriva de su diferencia (cero descuadres de centavos).
+      var subGenPDF=parseFloat(subConsigPDF.toFixed(2))+parseFloat(subDirectaPDF.toFixed(2));
+      var totGenPDF=parseFloat(totConsigPDF.toFixed(2))+parseFloat(totDirectaPDF.toFixed(2));
+      var ivaGenPDF=Math.round((totGenPDF-subGenPDF)*100)/100;
       doc.setFillColor(253,247,230);
-      doc.roundedRect(xI,y,ANCHO,26,6,6,'F');
+      doc.roundedRect(xI,y,ANCHO,52,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(NAVY);
+      doc.text('SUBTOTAL GENERAL:',xI+365,y+13,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+subGenPDF.toFixed(2),xD-10,y+13,{align:'right'});
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+      doc.text(((window._ocConIVA===false)?'Sin IVA (nota de venta)':'IVA 15%')+':',xI+365,y+24,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+ivaGenPDF.toFixed(2),xD-10,y+24,{align:'right'});
       doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(GOLD);
-      doc.text('TOTAL GENERAL A FACTURAR:',xI+10,y+17.5);
-      doc.text('$'+(parseFloat(totConsigPDF.toFixed(2))+parseFloat(totDirectaPDF.toFixed(2))).toFixed(2),xD-10,y+17.5,{align:'right'});
-      y+=26;
+      doc.text('TOTAL GENERAL A FACTURAR:',xI+365,y+42,{align:'right'});
+      doc.text('$'+totGenPDF.toFixed(2),xD-10,y+42,{align:'right'});
+      y+=52;
       doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
       doc.text('Consignación $'+totConsigPDF.toFixed(2)+'  +  Compra directa $'+totDirectaPDF.toFixed(2)+'  ·  todo en una sola factura',xI+2,y+8);
       y+=18;
@@ -10978,6 +11018,41 @@ function toggleGrupoEntrada(gid){
   var open=body.style.display==='none'||body.style.display==='';
   body.style.display=open?'block':'none';
   if(arrow) arrow.textContent=open?'▼':'▶';
+}
+
+// ── EDITAR una orden existente: reabre el snapshot en el editor ──
+function editarOrdenApp(numOrden){
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  toast('⏳ Abriendo la orden...','var(--blue)');
+  fetch(APPS_SCRIPT_URL+'?action=getOCDataApp&orden='+encodeURIComponent(numOrden))
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('📄 '+(d.error||'Sin datos de esta orden'),'#C4943A');return;}
+    var s=d.snap||{};
+    // Catálogo para el bloque de compra directa: unión de todo lo conocido
+    var catE={}, addCat=function(it){var k=(it.sku||'').trim();if(!k)return;
+      if(!catE[k]) catE[k]={sku:k,nombre:it.nombre||k,compra:it.compra||0};
+      else if(!catE[k].compra&&it.compra) catE[k].compra=it.compra;};
+    (s.items||[]).forEach(addCat);(s.fact||[]).forEach(addCat);(s.directa||[]).forEach(addCat);(s.stock||[]).forEach(addCat);
+    window._ocBorrador={
+      editandoNum:d.numOrden,
+      prov:s.prov||{nombre:''},
+      qLabel:s.qLabel||'',
+      items:(s.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant||0,compra:it.compra||0,vendido:it.vendido||0,stock:(it.stock!==undefined?it.stock:'—')};}),
+      fact:(s.fact||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido||0,compra:it.compra||0};}),
+      directa:(s.directa||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant||0,compra:it.compra||0};}),
+      stockV:(s.stock||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:it.tipo||'CONSIG',stockCorte:it.stockCorte};}),
+      catalogo:Object.keys(catE).map(function(k){return catE[k];})
+    };
+    var c=document.getElementById('content');
+    if(c){
+      c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">✏️ Editar orden de compra</div>'
+        +'<div id="oc-borrador"></div>';
+      _pintarBorradorOC();
+      window.scrollTo(0,0);
+    }
+  })
+  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 
 // ── Re-descargar el PDF exacto de una orden generada desde el app (solo admins) ──
@@ -11247,7 +11322,7 @@ function renderHistorialOC(){
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
-          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>':'')
+          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Editar la orden (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️ Editar</button>':'')
           +'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>'
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
