@@ -10523,8 +10523,8 @@ function _pintarBorradorOC(){
     +'</div>';
   // ── BLOQUE 3: STOCK EN SUNSU — lo que el proveedor VE en el PDF ──
   html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #6A9E7A">'
-    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🏷 Stock en Sunsu — al corte '+B.qLabel+'</div>'
-    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Lo que el proveedor VERÁ en el PDF (todos los activos, con su stock al corte). Quita con ✕ lo que no quieres mostrarle — p.ej. stock propio de Sunsu que no es a consignación.</div>';
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🏷 Stock en Sunsu — actual</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Lo que el proveedor VERÁ en el PDF: el stock REAL de percha ahora mismo (todos los activos). Quita con ✕ lo que no quieres mostrarle — p.ej. stock propio de Sunsu que no es a consignación.</div>';
   if(!(B.stockV||[]).length){html+='<div style="text-align:center;color:var(--gray);font-size:0.7rem;padding:10px">Sin productos — la sección no saldrá en el PDF</div>';}
   (B.stockV||[]).forEach(function(it,i){
     html+='<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
@@ -10880,7 +10880,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
     // ── SECCIÓN 3: STOCK EN SUNSU — al CORTE de la quincena del reporte ──
     if(itemsStock&&itemsStock.length){
       salto(60);
-      barra('STOCK EN SUNSU — AL CORTE '+qLabel.toUpperCase());
+      barra('STOCK EN SUNSU');
       var stockTag=(itemsStock||[]).map(function(it){
         var tag=(it.tipo==='SUNSU')?' · propio Sunsu':' · consignación';
         return {sku:it.sku, nombre:(it.nombre||'').slice(0,30)+tag, stockCorte:it.stockCorte};
@@ -10888,7 +10888,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
       tabla(stockTag,'stockCorte','STOCK',false);
       y+=4;
       doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
-      doc.text('Unidades en Sunsu al cierre del período del reporte (no incluye movimientos posteriores)',xI,y+6);
+      doc.text('Unidades en Sunsu al momento de generar la orden',xI,y+6);
       y+=16;
     }
     // Firmas
