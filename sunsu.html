@@ -10571,8 +10571,8 @@ function generarOCApp(){
   // Stock AL CORTE de la quincena del reporte (viene del backend) — 3ra seccion del PDF
   var stockL=(B.stockV||(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})).slice();
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
-  if(!items.length&&!factF.length){toast('La orden está vacía: ni facturación ni restock','#C9A227');return;}
-  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||'0 — solo facturación')+' productos\n\n'+(items.length?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
+  if(!items.length&&!factF.length&&!directaF.length){toast('La orden está vacía: ni facturación, ni restock, ni compra directa','#C9A227');return;}
+  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||0)+' productos\nCompra directa: '+(directaF.length||0)+' productos (stock propio)\n\n'+((items.length||directaF.length)?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
   // Nota de venta (sin IVA) o factura (con IVA): el PDF respeta al proveedor
   window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
   toast('⏳ Generando orden...','var(--blue)');
