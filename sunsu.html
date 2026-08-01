@@ -10437,8 +10437,13 @@ function cargarBorradorOC(){
       fact:itemsB.filter(function(it){return (it.vendido||0)>0;})
         .map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido,compra:it.compra};}),
       // Stock al corte que VERÁ el proveedor: lista INDEPENDIENTE con TODOS los
-      // activos — quitar del restock o de facturación NO lo afecta
-      stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})};
+      // activos — quitar del restock o de facturación NO lo afecta. Cada uno con
+      // su tipo: CONSIG (consignación) o SUNSU (stock propio), toggleable.
+      stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
+      // Catálogo congelado del proveedor (para agregar compra directa)
+      catalogo:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,compra:it.compra||0};}),
+      // Compra DIRECTA: stock propio de Sunsu, se paga en la misma factura
+      directa:[]};
     _pintarBorradorOC();
   })
   .catch(function(e){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
@@ -10449,6 +10454,7 @@ function _pintarBorradorOC(){
   var conCant=B.items.filter(function(it){return (it.cant||0)>0;});
   var total=conCant.reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
   var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
+  var totalD=(B.directa||[]).reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
   // ── BLOQUE 1: FACTURACIÓN editable (consignación — lo vendido que se paga al proveedor) ──
   var html='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #8A6D1A">'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">💵 Facturación — vendido en '+B.qLabel+'</div>'
@@ -10466,6 +10472,28 @@ function _pintarBorradorOC(){
       +'</div>';
   });
   html+='<div id="oc-total-fact" style="text-align:right;font-size:0.7rem;font-weight:700;color:#8A6D1A;padding-top:9px">Subtotal: $'+totalF.toFixed(2)+' · IVA 15%: $'+(totalF*0.15).toFixed(2)+' · <b style="font-size:0.8rem">Total a facturar: $'+(totalF*1.15).toFixed(2)+'</b></div></div>';
+  // ── BLOQUE 1B: COMPRA DIRECTA — stock propio, en la MISMA factura ──
+  html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #7A5EA6">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🛍 Compra directa — stock propio Sunsu</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Productos que COMPRAS aparte (no van a consignación) y se pagan en la MISMA factura. También salen en el repedido del PDF.</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +'<select id="oc-dir-sel" style="flex:1;min-width:0;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.7rem;font-family:inherit;background:white">'
+    +(B.catalogo||[]).map(function(pC,iC){return '<option value="'+iC+'">'+pC.nombre+' — $'+(pC.compra||0).toFixed(2)+'</option>';}).join('')
+    +'</select>'
+    +'<button onclick="_ocDirAdd()" style="background:#7A5EA6;color:white;border:none;border-radius:10px;padding:0 16px;font-size:0.86rem;font-weight:800;cursor:pointer;flex-shrink:0">＋</button>'
+    +'</div>';
+  (B.directa||[]).forEach(function(it,i){
+    html+='<div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · stock propio</div></div>'
+      +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">CANT.</div>'
+      +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.directa['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:52px;padding:7px;border:1.5px solid #7A5EA6;border-radius:9px;font-size:0.8rem;font-weight:800;text-align:center;color:var(--navy);outline:none"></div>'
+      +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">PRECIO $</div>'
+      +'<input type="number" inputmode="decimal" min="0" step="0.01" value="'+(it.compra||0)+'" oninput="window._ocBorrador.directa['+i+'].compra=parseFloat(this.value)||0;_ocTotal()" style="width:64px;padding:7px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;font-weight:700;text-align:center;color:var(--navy);outline:none"></div>'
+      +'<button onclick="window._ocBorrador.directa.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:24px;height:24px;font-size:0.66rem;cursor:pointer;flex-shrink:0">✕</button>'
+      +'</div>';
+  });
+  html+='<div id="oc-total-dir" style="text-align:right;font-size:0.7rem;font-weight:700;color:#7A5EA6;padding-top:9px">Compra directa: $'+totalD.toFixed(2)+' + IVA = <b style="font-size:0.8rem">$'+(totalD*1.15).toFixed(2)+'</b></div></div>';
   // ── BLOQUE 2: RESTOCK ──
   html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid var(--navy)">'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">📦 Orden de restock — '+B.prov.nombre+'</div>'
@@ -10494,10 +10522,17 @@ function _pintarBorradorOC(){
       +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
       +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+'</div></div>'
       +'<div style="text-align:center;flex-shrink:0;min-width:44px"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">STOCK</div><div style="font-size:0.84rem;font-weight:900;color:var(--navy)">'+it.stockCorte+'</div></div>'
+      +'<button onclick="window._ocBorrador.stockV['+i+'].tipo=(window._ocBorrador.stockV['+i+'].tipo===\'SUNSU\'?\'CONSIG\':\'SUNSU\');_pintarBorradorOC()" style="flex-shrink:0;padding:5px 8px;border-radius:8px;font-size:0.52rem;font-weight:800;cursor:pointer;'+(it.tipo==='SUNSU'?'border:1.2px solid #7A5EA6;background:#7A5EA6;color:white':'border:1.2px solid var(--blue);background:white;color:var(--blue)')+'">'+(it.tipo==='SUNSU'?'PROPIO':'CONSIG.')+'</button>'
       +'<button onclick="window._ocBorrador.stockV.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:26px;height:26px;font-size:0.7rem;cursor:pointer;flex-shrink:0">✕</button>'
       +'</div>';
   });
-  html+='</div>'
+  html+='</div>';
+  // ── RESUMEN: consignación + compra directa = TOTAL de la factura ──
+  html+='<div class="card" style="padding:12px 14px;margin-bottom:10px;background:#FDF7E6">'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray)"><span>💵 Consignación (vendido en la quincena)</span><b id="oc-res-f" style="color:var(--navy)">$'+(totalF*1.15).toFixed(2)+'</b></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray);margin-top:3px"><span>🛍 Compra directa (stock propio)</span><b id="oc-res-d" style="color:#7A5EA6">$'+(totalD*1.15).toFixed(2)+'</b></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.82rem;font-weight:900;color:#8A6D1A;border-top:1.5px solid #EAD9A8;margin-top:7px;padding-top:7px"><span>TOTAL FACTURA</span><span id="oc-res-t">$'+(parseFloat((totalF*1.15).toFixed(2))+parseFloat((totalD*1.15).toFixed(2))).toFixed(2)+'</span></div>'
+    +'</div>'
     +'<button onclick="generarOCApp()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.84rem;font-weight:800;cursor:pointer;margin-bottom:10px">✓ Generar orden de compra</button>';
   box.innerHTML=html;
 }
@@ -10510,11 +10545,29 @@ function _ocTotal(){
   var totalF=(B.fact||[]).reduce(function(s,it){return s+(it.vendido||0)*(it.compra||0);},0);
   var elF=document.getElementById('oc-total-fact');
   if(elF) elF.innerHTML='Subtotal: $'+totalF.toFixed(2)+' · IVA 15%: $'+(totalF*0.15).toFixed(2)+' · <b style="font-size:0.8rem">Total a facturar: $'+(totalF*1.15).toFixed(2)+'</b>';
+  var totalD2=(B.directa||[]).reduce(function(s,it){return s+(it.cant||0)*(it.compra||0);},0);
+  var elD=document.getElementById('oc-total-dir');
+  if(elD) elD.innerHTML='Compra directa: $'+totalD2.toFixed(2)+' + IVA = <b style="font-size:0.8rem">$'+(totalD2*1.15).toFixed(2)+'</b>';
+  var rF=document.getElementById('oc-res-f'), rD=document.getElementById('oc-res-d'), rT=document.getElementById('oc-res-t');
+  if(rF) rF.textContent='$'+(totalF*1.15).toFixed(2);
+  if(rD) rD.textContent='$'+(totalD2*1.15).toFixed(2);
+  if(rT) rT.textContent='$'+(parseFloat((totalF*1.15).toFixed(2))+parseFloat((totalD2*1.15).toFixed(2))).toFixed(2);
+}
+function _ocDirAdd(){
+  var B=window._ocBorrador; if(!B) return;
+  var sel=document.getElementById('oc-dir-sel'); if(!sel) return;
+  var pD=(B.catalogo||[])[parseInt(sel.value)]; if(!pD) return;
+  B.directa=B.directa||[];
+  var yaD=B.directa.find(function(x){return x.sku===pD.sku;});
+  if(yaD){yaD.cant=(yaD.cant||0)+1;}
+  else B.directa.push({sku:pD.sku,nombre:pD.nombre,cant:1,compra:pD.compra||0});
+  _pintarBorradorOC();
 }
 function generarOCApp(){
   var B=window._ocBorrador;
   var items=B.items.filter(function(it){return (it.cant||0)>0;}).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant,compra:it.compra};});
   var factF=(B.fact||[]).filter(function(it){return (it.vendido||0)>0;});
+  var directaF=(B.directa||[]).filter(function(it){return (it.cant||0)>0;});
   // Stock AL CORTE de la quincena del reporte (viene del backend) — 3ra seccion del PDF
   var stockL=(B.stockV||(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})).slice();
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
@@ -10524,12 +10577,12 @@ function generarOCApp(){
   window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
   toast('⏳ Generando orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,stock:stockL,provData:B.prov,usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'crearOCApp',proveedor:B.prov.nombre,qLabel:B.qLabel,items:items,fact:factF,directa:directaF,stock:stockL,provData:B.prov,usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
     toast('✅ Orden '+d.numOrden+' generada y registrada en Entregas','var(--green)');
-    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items, factF, stockL);
+    _pdfOC(d.numOrden, d.fecha, B.prov, B.qLabel, items, factF, directaF, stockL);
     setTimeout(function(){showTab('entradas');},1800);
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
@@ -10558,14 +10611,14 @@ function _fondoA4Sunsu(fondo){
   return window._fondoA4Cache;
 }
 
-function _pdfOC(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock){
+function _pdfOC(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirecta, itemsStock){
   var img=new Image();
   img.crossOrigin='anonymous';
-  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsStock,img);};
-  img.onerror=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsStock,null);};
+  img.onload=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsDirecta,itemsStock,img);};
+  img.onerror=function(){_pdfOCFondo(numOrden,fecha,prov,qLabel,items,itemsFact,itemsDirecta,itemsStock,null);};
   img.src=GCD_PAG3_URL;
 }
-function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock, fondo){
+function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirecta, itemsStock, fondo){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
     var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}); // A4 vertical: 595 x 842
@@ -10642,6 +10695,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock
     };
     // ── SECCIÓN 1: FACTURACIÓN por consignación — formato factura completo:
     //    P. unitario (sin IVA) · Subtotal · IVA 15% · Total, con sumas al pie ──
+    var totConsigPDF=0, totDirectaPDF=0;
     var fact=(itemsFact||[]).filter(function(it){return (it.vendido||0)>0;});
     barra('FACTURACIÓN — VENDIDO EN '+qLabel.toUpperCase()+' (CONSIGNACIÓN)');
     if(fact.length){
@@ -10696,6 +10750,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(GOLD);
       doc.text('TOTAL A FACTURAR:',xI+365,y+9,{align:'right'});
       doc.text('$'+sumTot.toFixed(2),xD-6,y+9,{align:'right'});
+      totConsigPDF=sumTot;
       doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text('Valor a pagar por Sunsu Spa según unidades vendidas en la quincena',xI,y+9);
       y+=24;
@@ -10703,11 +10758,80 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock
       doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
       doc.text('Sin ventas en esta quincena',xI+6,y+13); y+=22;
     }
+    // ── SECCIÓN 1B: COMPRA DIRECTA — stock PROPIO de Sunsu, misma factura ──
+    if(itemsDirecta&&itemsDirecta.length){
+      salto(60);
+      barra('COMPRA DIRECTA — STOCK PROPIO SUNSU (MISMA FACTURA)');
+      var IVA_PD=(window._ocConIVA===false)?0:0.15;
+      doc.setFillColor(238,234,222);
+      doc.rect(xI,y,ANCHO,15,'F');
+      doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
+      doc.text('SKU',xI+6,y+10.5);
+      doc.text('PRODUCTO',xI+52,y+10.5);
+      doc.text('CANT.',xI+242,y+10.5,{align:'right'});
+      doc.text('P. UNIT.',xI+300,y+10.5,{align:'right'});
+      doc.text('SUBTOTAL',xI+365,y+10.5,{align:'right'});
+      doc.text(IVA_PD>0?'IVA 15%':'Sin IVA',xI+422,y+10.5,{align:'right'});
+      doc.text('TOTAL',xD-6,y+10.5,{align:'right'});
+      y+=15;
+      doc.setFontSize(7.4);
+      var sumSubD=0,sumIvaD=0,sumTotD=0;
+      itemsDirecta.forEach(function(it,i){
+        salto(16);
+        if(i%2===1){doc.setFillColor(246,243,234);}else{doc.setFillColor(255,255,255);}
+        doc.rect(xI,y,ANCHO,13,'F');
+        var puD=it.compra||0, subD=(it.cant||0)*puD, ivaD=subD*IVA_PD, totD=subD+ivaD;
+        sumSubD+=subD; sumIvaD+=ivaD; sumTotD+=totD;
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        doc.text(it.sku.replace('SUNSU-',''),xI+6,y+9.5);
+        doc.text((it.nombre||'').slice(0,38),xI+52,y+9.5);
+        doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+        doc.text(String(it.cant),xI+242,y+9.5,{align:'right'});
+        doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+        doc.text('$'+puD.toFixed(2),xI+300,y+9.5,{align:'right'});
+        doc.text('$'+subD.toFixed(2),xI+365,y+9.5,{align:'right'});
+        doc.text('$'+ivaD.toFixed(2),xI+422,y+9.5,{align:'right'});
+        doc.setFont('helvetica','bold');
+        doc.text('$'+totD.toFixed(2),xD-6,y+9.5,{align:'right'});
+        y+=13;
+      });
+      salto(44); y+=6;
+      doc.setDrawColor(90,110,140); doc.setLineWidth(0.6);
+      doc.line(xI+300,y,xD,y); y+=4;
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+      doc.text('SUBTOTAL:',xI+365,y+8,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+sumSubD.toFixed(2),xD-6,y+8,{align:'right'}); y+=13;
+      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+      doc.text((IVA_PD>0?'IVA 15%':'Sin IVA')+':',xI+365,y+8,{align:'right'});
+      doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
+      doc.text('$'+sumIvaD.toFixed(2),xD-6,y+8,{align:'right'}); y+=14;
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(NAVY);
+      doc.text('TOTAL COMPRA DIRECTA:',xI+365,y+9,{align:'right'});
+      doc.text('$'+sumTotD.toFixed(2),xD-6,y+9,{align:'right'});
+      y+=20;
+      totDirectaPDF=sumTotD;
+      // ── TOTAL GENERAL: consignación + compra directa, una sola factura ──
+      salto(46);
+      doc.setFillColor(253,247,230);
+      doc.roundedRect(xI,y,ANCHO,26,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(GOLD);
+      doc.text('TOTAL GENERAL A FACTURAR:',xI+10,y+17.5);
+      doc.text('$'+(parseFloat(totConsigPDF.toFixed(2))+parseFloat(totDirectaPDF.toFixed(2))).toFixed(2),xD-10,y+17.5,{align:'right'});
+      y+=26;
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
+      doc.text('Consignación $'+totConsigPDF.toFixed(2)+'  +  Compra directa $'+totDirectaPDF.toFixed(2)+'  ·  todo en una sola factura',xI+2,y+8);
+      y+=18;
+    }
     // ── SECCIÓN 2: ORDEN DE RESTOCK (el repedido editado en el app) ──
     salto(60);
     barra('ORDEN DE RESTOCK — REPEDIDO');
-    if(items.length){
-      tabla(items,'cant','CANT.',false); // restock: solo cantidades, sin precios
+    var restockTodo=(items||[]).concat((itemsDirecta||[]).map(function(it){
+      return {sku:it.sku, nombre:(it.nombre||'').slice(0,30)+' · compra directa', cant:it.cant};
+    }));
+    if(restockTodo.length){
+      tabla(restockTodo,'cant','CANT.',false); // restock: solo cantidades, sin precios
       y+=14;
     } else {
       doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
@@ -10717,7 +10841,11 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsStock
     if(itemsStock&&itemsStock.length){
       salto(60);
       barra('STOCK EN SUNSU — AL CORTE '+qLabel.toUpperCase());
-      tabla(itemsStock,'stockCorte','STOCK',false);
+      var stockTag=(itemsStock||[]).map(function(it){
+        var tag=(it.tipo==='SUNSU')?' · propio Sunsu':' · consignación';
+        return {sku:it.sku, nombre:(it.nombre||'').slice(0,30)+tag, stockCorte:it.stockCorte};
+      });
+      tabla(stockTag,'stockCorte','STOCK',false);
       y+=4;
       doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(TXT);
       doc.text('Unidades en Sunsu al cierre del período del reporte (no incluye movimientos posteriores)',xI,y+6);
@@ -10861,7 +10989,7 @@ function descargarPDFOrdenApp(numOrden){
   .then(function(d){
     if(!d.ok){toast('📄 '+(d.error||'Sin datos de esta orden'),'#C4943A');return;}
     var s=d.snap||{};
-    _pdfOC(d.numOrden, d.fecha, s.prov||{nombre:''}, s.qLabel||'', s.items||[], s.fact||[], s.stock||[]);
+    _pdfOC(d.numOrden, d.fecha, s.prov||{nombre:''}, s.qLabel||'', s.items||[], s.fact||[], s.directa||[], s.stock||[]);
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
