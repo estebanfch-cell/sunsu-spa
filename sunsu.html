@@ -10435,7 +10435,10 @@ function cargarBorradorOC(){
       // Bloque de facturación EDITABLE: cantidades vendidas y precios (los productos
       // propios de Sunsu que no son a consignación se quitan aquí con ✕)
       fact:itemsB.filter(function(it){return (it.vendido||0)>0;})
-        .map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido,compra:it.compra};})};
+        .map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido,compra:it.compra};}),
+      // Stock al corte que VERÁ el proveedor: lista INDEPENDIENTE con TODOS los
+      // activos — quitar del restock o de facturación NO lo afecta
+      stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})};
     _pintarBorradorOC();
   })
   .catch(function(e){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
@@ -10480,8 +10483,22 @@ function _pintarBorradorOC(){
       +'</div>';
   });
   html+='<div id="oc-total" style="text-align:right;font-size:0.76rem;font-weight:800;color:var(--navy);padding-top:9px">Total estimado: $'+total.toFixed(2)+' · '+conCant.length+' productos</div>'
-    +'<button onclick="generarOCApp()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.84rem;font-weight:800;cursor:pointer;margin-top:10px">✓ Generar orden de compra</button>'
     +'</div>';
+  // ── BLOQUE 3: STOCK EN SUNSU — lo que el proveedor VE en el PDF ──
+  html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #6A9E7A">'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🏷 Stock en Sunsu — al corte '+B.qLabel+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Lo que el proveedor VERÁ en el PDF (todos los activos, con su stock al corte). Quita con ✕ lo que no quieres mostrarle — p.ej. stock propio de Sunsu que no es a consignación.</div>';
+  if(!(B.stockV||[]).length){html+='<div style="text-align:center;color:var(--gray);font-size:0.7rem;padding:10px">Sin productos — la sección no saldrá en el PDF</div>';}
+  (B.stockV||[]).forEach(function(it,i){
+    html+='<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+'</div></div>'
+      +'<div style="text-align:center;flex-shrink:0;min-width:44px"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">STOCK</div><div style="font-size:0.84rem;font-weight:900;color:var(--navy)">'+it.stockCorte+'</div></div>'
+      +'<button onclick="window._ocBorrador.stockV.splice('+i+',1);_pintarBorradorOC()" style="background:#B86B6B;color:white;border:none;border-radius:8px;width:26px;height:26px;font-size:0.7rem;cursor:pointer;flex-shrink:0">✕</button>'
+      +'</div>';
+  });
+  html+='</div>'
+    +'<button onclick="generarOCApp()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.84rem;font-weight:800;cursor:pointer;margin-bottom:10px">✓ Generar orden de compra</button>';
   box.innerHTML=html;
 }
 function _ocTotal(){
@@ -10499,7 +10516,7 @@ function generarOCApp(){
   var items=B.items.filter(function(it){return (it.cant||0)>0;}).map(function(it){return {sku:it.sku,nombre:it.nombre,cant:it.cant,compra:it.compra};});
   var factF=(B.fact||[]).filter(function(it){return (it.vendido||0)>0;});
   // Stock AL CORTE de la quincena del reporte (viene del backend) — 3ra seccion del PDF
-  var stockL=(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};});
+  var stockL=(B.stockV||(B.items||[]).map(function(it){return {sku:it.sku,nombre:it.nombre,stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};})).slice();
   // Se permite una orden SIN restock (solo facturación de lo vendido) — pero no vacía del todo
   if(!items.length&&!factF.length){toast('La orden está vacía: ni facturación ni restock','#C9A227');return;}
   if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||'0 — solo facturación')+' productos\n\n'+(items.length?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
