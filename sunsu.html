@@ -5159,6 +5159,7 @@ function _rpFila(x,extra){
 }
 function _rpPintar(){
   var out=document.getElementById('rp-out'); var d=window._rpData; if(!out||!d) return;
+  var fmt=function(n){n=parseFloat(n)||0;return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var items=(d.items||[]);
   var conVenta=items.filter(function(x){return x.uds>0;});
   var ventaT=conVenta.reduce(function(s,x){return s+x.venta;},0);
@@ -5199,6 +5200,7 @@ function _rpPintar(){
 }
 function _rpRecomendaciones(){
   var box=document.getElementById('rp-reco'); var d=window._rpData; if(!box||!d) return;
+  var fmt=function(n){n=parseFloat(n)||0;return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var items=(d.items||[]); var meses=Math.max(0.25,(d.dias||30)/30.44);
   var conVenta=items.filter(function(x){return x.uds>0;});
   var recos=[];
