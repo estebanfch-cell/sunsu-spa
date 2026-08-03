@@ -4822,14 +4822,16 @@ function renderInicio(c){
       +'</div>'
       // 3 cuadrados: faciales / paquetes / productos
       +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+      // Si el backend aún no manda los valores (versión vieja), se muestra el
+      // aviso en vez de un $0.00 engañoso — así el deploy pendiente se delata solo.
       +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0,'','historial',
-        '$'+fmt(hoy.valFac||0)+'<br>c/IVA $'+fmt((hoy.valFac||0)*1.15))
+        hoy.valFac===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valFac||0)+'<br>c/IVA $'+fmt((hoy.valFac||0)*1.15))
       +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes,'','buscar-paquetes',
-        '$'+fmt(hoy.valPaq||0)+'<br>c/IVA $'+fmt((hoy.valPaq||0)*1.15))
+        hoy.valPaq===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valPaq||0)+'<br>c/IVA $'+fmt((hoy.valPaq||0)*1.15))
       +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN,'','inventario',
-        '$'+fmt(hoy.valProd||0)+' · c/IVA $'+fmt((hoy.valProd||0)*1.15)+'<br><b style="color:#2E7D52">📈 margen $'+fmt(Math.max(0,(hoy.valProd||0)-(hoy.costoProd||0)))+'</b>')
+        hoy.valProd===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valProd||0)+' · c/IVA $'+fmt((hoy.valProd||0)*1.15)+'<br><b style="color:#2E7D52">📈 margen $'+fmt(Math.max(0,(hoy.valProd||0)-(hoy.costoProd||0)))+'</b>')
       +kpi('🎁','Gift Cards hoy',d.gcHoy||0,'','buscar-gc',
-        '$'+fmt(d.gcVal||0))
+        d.gcVal===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(d.gcVal||0))
       +'</div>'
       // 2 rectangulos: citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
