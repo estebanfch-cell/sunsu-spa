@@ -4836,7 +4836,7 @@ function renderInicio(c){
       // extras / citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
       +kpi('✨','Extras hoy',hoy.extrasN===undefined?'—':hoy.extrasN,'','historial',
-        hoy.valExtras===undefined?'<span style="color:#C9761F">⚠️ backend DV</span>':'$'+fmt(hoy.valExtras||0)+'<br>c/IVA $'+fmt((hoy.valExtras||0)*1.15))
+        hoy.valExtras===undefined?'<span style="color:#C9761F">⚠️ backend DW</span>':'$'+fmt(hoy.valExtras||0)+'<br>c/IVA $'+fmt((hoy.valExtras||0)*1.15)+((hoy.extrasCort||0)>0?'<br><span style="color:#7A5EA6">🎀 '+hoy.extrasCort+' cortesía'+(hoy.extrasCort===1?'':'s')+'</span>':''))
       +kpi('🗓','Citas hoy',d.citasHoy||0,'','citas')
       +kpi('💵','Caja chica','$'+fmt(d.caja||0),(d.caja||0)<0?'#B86B6B':'#2E7D52','caja')
       +'</div>'
