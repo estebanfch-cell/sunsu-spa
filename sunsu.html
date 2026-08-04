@@ -4825,7 +4825,7 @@ function renderInicio(c){
       // Si el backend aún no manda los valores (versión vieja), se muestra el
       // aviso en vez de un $0.00 engañoso — así el deploy pendiente se delata solo.
       +kpi('💆‍♀️','Faciales hoy',hoy.faciales||0,'','historial',
-        hoy.valFac===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valFac||0)+'<br>c/IVA $'+fmt((hoy.valFac||0)*1.15))
+        hoy.valFac===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valFac||0)+'<br>c/IVA $'+fmt((hoy.valFac||0)*1.15)+((hoy.facCanjes||0)>0?'<br><span style="color:#7A5EA6">📋 '+hoy.facCanjes+' canje'+(hoy.facCanjes===1?'':'s')+' en $0</span>':''))
       +kpi('📦','Paquetes hoy',hoy.paquetes===null||hoy.paquetes===undefined?'—':hoy.paquetes,'','buscar-paquetes',
         hoy.valPaq===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(hoy.valPaq||0)+'<br>c/IVA $'+fmt((hoy.valPaq||0)*1.15))
       +kpi('🧴','Productos hoy',hoy.productosN===null||hoy.productosN===undefined?'—':hoy.productosN,'','inventario',
@@ -4833,8 +4833,10 @@ function renderInicio(c){
       +kpi('🎁','Gift Cards hoy',d.gcHoy||0,'','buscar-gc',
         d.gcVal===undefined?'<span style="color:#C9761F">⚠️ backend DS</span>':'$'+fmt(d.gcVal||0))
       +'</div>'
-      // 2 rectangulos: citas / caja
+      // extras / citas / caja
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +kpi('✨','Extras hoy',hoy.extrasN===undefined?'—':hoy.extrasN,'','historial',
+        hoy.valExtras===undefined?'<span style="color:#C9761F">⚠️ backend DV</span>':'$'+fmt(hoy.valExtras||0)+'<br>c/IVA $'+fmt((hoy.valExtras||0)*1.15))
       +kpi('🗓','Citas hoy',d.citasHoy||0,'','citas')
       +kpi('💵','Caja chica','$'+fmt(d.caja||0),(d.caja||0)<0?'#B86B6B':'#2E7D52','caja')
       +'</div>'
