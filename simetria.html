@@ -145,14 +145,16 @@
     <div class="icono-cara"></div>
     <div class="guia">
       Toma la foto de frente, con buena luz natural,<br>
-      expresión neutra y el rostro despejado.
+      expresión neutra y el rostro despejado.<br>
+      También puedes subir una foto ya tomada,<br>
+      por ejemplo del equipo de skin analysis.
     </div>
   </div>
   <canvas id="lienzo" style="display:none;"></canvas>
 
   <div class="botones">
     <button class="btn btn-principal" id="btnFoto">Tomar foto</button>
-    <button class="btn btn-secundario" id="btnGaleria">Elegir de la galería</button>
+    <button class="btn btn-secundario" id="btnGaleria">Subir una foto (galería o archivo)</button>
     <button class="btn btn-oro" id="btnIA" style="display:none;">Reintentar informe K-Lift</button>
   </div>
   <input type="file" id="inputCamara" accept="image/*" capture="user">
@@ -177,12 +179,14 @@
 <div id="camModal">
   <video id="camVideo" autoplay playsinline muted></video>
   <svg id="camOverlay" viewBox="0 0 100 178" preserveAspectRatio="xMidYMid slice">
-    <line x1="50" y1="34" x2="50" y2="128" stroke="rgba(255,255,255,.75)" stroke-width="0.5" stroke-dasharray="2 2"/>
-    <line x1="18" y1="81" x2="82" y2="81" stroke="rgba(255,255,255,.75)" stroke-width="0.5" stroke-dasharray="2 2"/>
-    <line x1="46" y1="81" x2="54" y2="81" stroke="#E8618C" stroke-width="1.1"/>
-    <line x1="50" y1="77" x2="50" y2="85" stroke="#E8618C" stroke-width="1.1"/>
+    <line x1="50" y1="30" x2="50" y2="126" stroke="rgba(255,255,255,.8)" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <line x1="12" y1="70" x2="88" y2="70" stroke="rgba(255,255,255,.8)" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <line x1="46" y1="70" x2="54" y2="70" stroke="#E8618C" stroke-width="1.1"/>
+    <line x1="50" y1="66" x2="50" y2="74" stroke="#E8618C" stroke-width="1.1"/>
+    <text x="14" y="66.5" font-size="4.2" font-weight="bold" fill="#FFFFFF" stroke="rgba(0,0,0,.55)" stroke-width="0.55" paint-order="stroke" font-family="Karla, sans-serif">OJOS</text>
+    <text x="53" y="122" font-size="4.2" font-weight="bold" fill="#FFFFFF" stroke="rgba(0,0,0,.55)" stroke-width="0.55" paint-order="stroke" font-family="Karla, sans-serif">NARIZ</text>
   </svg>
-  <div class="cam-texto">Centra tu rostro en la cruz<br><small style="font-weight:300">Cabeza recta · expresión neutra · buena luz</small></div>
+  <div class="cam-texto">Ojos sobre la línea horizontal · nariz sobre la vertical<br><small style="font-weight:300">Cabeza recta · expresión neutra · buena luz</small></div>
   <button id="btnCerrarCam">✕</button>
   <div class="cam-controles">
     <button id="btnCapturar" aria-label="Capturar"></button>
