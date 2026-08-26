@@ -12772,7 +12772,7 @@ function _pintarCajaV2(c){
     +'<button onclick="_cajaV2Form(\'descarga\')" style="flex:1;padding:11px;background:#B86B6B;color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">💸 Descarga</button>'
     +'<button onclick="_cajaV2Form(\'deposito\')" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">🏦 Depósito</button>'
     +'</div>'
-    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-bottom:10px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer">⚖️ Ajuste de entrada — cuadrar con el conteo físico</button>':'')
+    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-bottom:10px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer">⚖️ Cuadrar caja — escribe el conteo físico</button>':'')
     +'<div id="cv2-form"></div>'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin:6px 0 8px">📒 Movimientos</div>'
     +'<div id="cv2-movs"></div>';
@@ -12793,16 +12793,19 @@ function _cajaV2Form(tipo){
     +'</div>';
 }
 function _cajaAjusteEntrada(){
-  var m=parseFloat(prompt('⚖️ AJUSTE DE ENTRADA\n\nMonto que FALTA en la caja del app vs el conteo físico (ej: efectivo histórico de canjes que nunca se registró):')||'');
-  if(isNaN(m)||m<=0){ if(!isNaN(m)) toast('⚠️ Monto inválido','#C9A227'); return; }
-  var j=(prompt('Justificativo del ajuste (obligatorio):')||'').trim();
-  if(!j){ toast('⚠️ El ajuste necesita justificativo','#C9A227'); return; }
+  // Se escribe el CONTEO FÍSICO TOTAL — el sistema calcula la diferencia solo,
+  // en ambos sentidos (si el app tiene de más, registra la salida del cuadre).
+  var m=parseFloat(prompt('⚖️ CUADRAR CAJA\n\n¿Cuánto hay FÍSICAMENTE en la caja ahora? (conteo total — el sistema calcula la diferencia)')||'');
+  if(isNaN(m)||m<0){ if(!isNaN(m)) toast('⚠️ Monto inválido','#C9A227'); return; }
+  var j=(prompt('Justificativo del cuadre (obligatorio):')||'').trim();
+  if(!j){ toast('⚠️ El cuadre necesita justificativo','#C9A227'); return; }
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'cajaV2Mov', tipo:'ajuste', monto:m, justificativo:j, quien:CU?CU.name:'—', usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'cajaV2Mov', tipo:'cuadre', montoFisico:m, justificativo:j, quien:CU?CU.name:'—', usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
-    toast('⚖️ Ajuste registrado — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
+    if(d.dif===0) toast('✅ La caja ya cuadraba — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
+    else toast('⚖️ Cuadre '+(d.dif>0?'+':'')+'$'+d.dif.toFixed(2)+' — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
     renderCajaChica(document.getElementById('content'),true);
   })
   .catch(function(){ toast('❌ Sin conexión','#B86B6B'); });
