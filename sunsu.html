@@ -11702,7 +11702,9 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
   var ex=document.getElementById('modal-uni-'+fila);
   if(ex&&ex.parentNode) ex.parentNode.removeChild(ex);
   _cobroSelects[fila]={};
-  var tipos=sinFac?['Canje','Corte']:['Trans','Tarje','Efect'];
+  // Un canje puede venir CON pago: productos o extras que la clienta sí paga.
+  // Sin esto, ese efectivo era invisible para caja y para el dashboard.
+  var tipos=sinFac?['Canje','Corte','Efect','Tarje','Trans']:['Trans','Tarje','Efect'];
   var icons={'Trans':'🏦','Tarje':'💳','Efect':'💵','Canje':'🔄','Corte':'🎀'};
   var needs={'Trans':'Comprobante','Tarje':'N° de voucher','Efect':'Valor recibido'};
   var overlay=document.createElement('div');
@@ -11712,7 +11714,7 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
   var inner=document.createElement('div');
   inner.style.cssText='background:white;border-radius:20px 20px 0 0;padding:22px 20px 36px;width:100%;max-width:480px';
   var html='<div style="width:36px;height:4px;background:#eee;border-radius:99px;margin:0 auto 16px"></div>';
-  if(sinFac) html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:6px">🧾 Sin Factura + Cobro</div><div style="font-size:0.7rem;background:#FFF9E6;color:#C4943A;padding:5px 9px;border-radius:7px;margin-bottom:14px;font-weight:600">⚠️ Solo Canje o Cortesía</div>';
+  if(sinFac) html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:6px">🧾 Sin Factura + Cobro</div><div style="font-size:0.7rem;background:#FFF9E6;color:#C4943A;padding:5px 9px;border-radius:7px;margin-bottom:14px;font-weight:600">🔁 Canje/Cortesía — si además pagó productos o extras, marca también Efect/Tarje/Trans con su valor</div>';
   else if(soloCobro) html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:14px">💳 Registrar Cobro</div>';
   else html+='<div style="font-size:0.9rem;font-weight:800;color:#1A2744;margin-bottom:14px">🧾 Factura + Cobro</div>';
   if(!sinFac&&!soloCobro) html+='<label style="font-size:0.68rem;font-weight:700;color:#999;text-transform:uppercase;display:block;margin-bottom:4px">N° de Factura</label><input id="inp-fac-'+fila+'" type="text" placeholder="001-001-000001842" style="width:100%;padding:10px 13px;border:1.5px solid #eee;border-radius:10px;font-size:0.88rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:14px">';
@@ -12789,6 +12791,21 @@ function _cajaV2Form(tipo){
     +'<button onclick="_cajaV2Enviar(\''+tipo+'\',this)" style="width:100%;padding:11px;background:'+(esD?'#B86B6B':'var(--navy)')+';color:white;border:none;border-radius:10px;font-size:0.76rem;font-weight:800;cursor:pointer">✓ Registrar</button>'
     +'</div>';
 }
+function _cajaAjusteEntrada(){
+  var m=parseFloat(prompt('⚖️ AJUSTE DE ENTRADA\n\nMonto que FALTA en la caja del app vs el conteo físico (ej: efectivo histórico de canjes que nunca se registró):')||'');
+  if(isNaN(m)||m<=0){ if(!isNaN(m)) toast('⚠️ Monto inválido','#C9A227'); return; }
+  var j=(prompt('Justificativo del ajuste (obligatorio):')||'').trim();
+  if(!j){ toast('⚠️ El ajuste necesita justificativo','#C9A227'); return; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'cajaV2Mov', tipo:'ajuste', monto:m, justificativo:j, quien:CU?CU.name:'—', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){ toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
+    toast('⚖️ Ajuste registrado — saldo $'+(d.saldo||0).toFixed(2),'var(--green)');
+    renderCajaChica(document.getElementById('content'),true);
+  })
+  .catch(function(){ toast('❌ Sin conexión','#B86B6B'); });
+}
 function _cajaV2Enviar(tipo,btn){
   var m=parseFloat((document.getElementById('cv2-monto')||{}).value);
   var j=((document.getElementById('cv2-just')||{}).value||'').trim();
@@ -12898,7 +12915,7 @@ function _cajaRenderForms(){
     // ── REGISTRAR DEPÓSITO ──
     +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--navy)">🏦 Registrar Depósito</div>'    +'<div class="field"><label>Monto a depositar ($)</label>'    +'<input id="cd-monto" type="number" step="0.01" min="0" placeholder="0.00"></div>'    +'<div class="field"><label>¿Quién deposita? (nombre de quien va al banco)</label>'    +'<input id="cd-deposita" type="text" placeholder="Nombre..."></div>'    +'<div class="field"><label>Banco / Referencia</label>'    +'<input id="cd-banco" type="text" placeholder="Ej: Banco Pichincha, ref #123..."></div>'    +'<button onclick="_cajaEnviarDeposito()" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🏦 Registrar Depósito</button>'    +'</div>'
     // ── SINCRONIZAR EFECTIVO ──
-    +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--green)">🔄 Sincronizar Efectivo</div>'    +'<div style="font-size:0.73rem;color:var(--gray);margin-bottom:12px">Actualiza los ingresos en efectivo del día desde los tickets ya registrados.</div>'    +'<button onclick="_cajaSincronizar()" style="width:100%;padding:12px;background:var(--green);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🔄 Sincronizar efectivo ahora</button>'    +'</div>'
+    +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--green)">🔄 Sincronizar Efectivo</div>'    +'<div style="font-size:0.73rem;color:var(--gray);margin-bottom:12px">Actualiza los ingresos en efectivo del día desde los tickets ya registrados.</div>'    +'<button onclick="_cajaSincronizar()" style="width:100%;padding:12px;background:var(--green);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🔄 Sincronizar efectivo ahora</button>'    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-top:7px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">⚖️ Ajuste de entrada (cuadrar con conteo físico)</button>':'')    +'</div>'
     // ── MOVIMIENTOS HOY ──
     +'<div class="card" style="margin-bottom:12px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'    +'<div class="card-title" style="margin-bottom:0">📋 Movimientos de hoy</div>'    +'<button onclick="_cajaCargarMovimientos()" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:4px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">🔄</button>'    +'</div>'    +'<div id="caja-movs"><div class="loading"><div class="spinner"></div>Cargando...</div></div>'    +'</div>';
 }
