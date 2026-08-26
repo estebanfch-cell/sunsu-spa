@@ -12772,6 +12772,7 @@ function _pintarCajaV2(c){
     +'<button onclick="_cajaV2Form(\'descarga\')" style="flex:1;padding:11px;background:#B86B6B;color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">💸 Descarga</button>'
     +'<button onclick="_cajaV2Form(\'deposito\')" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">🏦 Depósito</button>'
     +'</div>'
+    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-bottom:10px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer">⚖️ Ajuste de entrada — cuadrar con el conteo físico</button>':'')
     +'<div id="cv2-form"></div>'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin:6px 0 8px">📒 Movimientos</div>'
     +'<div id="cv2-movs"></div>';
