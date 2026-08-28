@@ -13360,6 +13360,33 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       });
       y+=altoEx+14;
     }
+    // ── Cuadro de NOTAS manuales (solo si hay nota escrita en el Excel RRHH) ──
+    // Mismo blindaje que multas: lista blanca + split con la MISMA fuente → nunca
+    // se sale del marco; el alto se calcula por líneas reales.
+    if((d.nota||'').toString().trim()){
+      var _limpiaN=function(s){
+        return (s||'').toString()
+          .replace(/[\r\n\t]+/g,' ')
+          .replace(/[`´‘’]/g,'')
+          .replace(/[•●▪◦]/g,'·')
+          .replace(/[^\x20-\x7EÁÉÍÓÚÑÜáéíóúñü¿¡·°]/g,' ')
+          .replace(/\s*·\s*/g,' · ')
+          .replace(/\s{2,}/g,' ').trim();
+      };
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.8);
+      var linN=doc.splitTextToSize(_limpiaN(d.nota), ANCHO-44);
+      var altoN=30+linN.length*10+8;
+      salto(altoN+8);
+      doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
+      doc.setFillColor(244,247,251);
+      doc.roundedRect(xI,y,ANCHO,altoN,6,6,'FD');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(NAVY);
+      doc.text('NOTAS',xI+14,y+16);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
+      var yN=y+30;
+      linN.forEach(function(l){doc.text(l,xI+14,yN);yN+=10;});
+      y+=altoN+14;
+    }
     // ── Aceptación: sello digital o línea de firma ──
     salto(70);
     if(apro&&apro.fecha){
