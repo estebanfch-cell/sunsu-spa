@@ -343,7 +343,7 @@ let EXTRAS=[
   {sku:'SUNSU-12',n:'Ampolla Especial Brillo',t:10.00},
   {sku:'SUNSU-13',n:'Ampolla Especial Elasticidad',t:10.00},
   {sku:'SUNSU-14',n:'Ampolla Especial Hidratación',t:10.00},
-  {sku:'SUNSU-15',n:'Ampolla Especial Purificación',t:10.00},
+  {sku:'SUNSU-15',n:'Ampolla Especial',t:10.00},
   {sku:'SUNSU-16',n:'Peeling Enzimático',t:12.00},
   {sku:'SUNSU-31',n:'PDRN Serum',t:20.00},
   {sku:'SUNSU-32',n:'Exosome Serum',t:20.00},
@@ -619,6 +619,17 @@ function _cargarMsgs(cb){
     .catch(function(){ window._msgs={}; if(cb)cb(); });
 }
 function _entrarComo(u){
+  // Sesión/usuario SIN ROL = copia vieja de la lista de usuarios en este
+  // navegador (guards como "Solo administradores" fallarían aunque seas admin).
+  // Se limpia la copia local y se pide entrar de nuevo: el login trae el rol.
+  if(!u||!u.role){
+    try{ localStorage.removeItem('sunsu_users'); localStorage.removeItem('sunsu_sesion'); }catch(eSR){}
+    toast('🔐 Sesión antigua sin rol — vuelve a entrar con tu PIN','#C9761F');
+    var gateSR=document.getElementById('bio-gate'), pinSR=document.getElementById('pin-login');
+    if(gateSR) gateSR.style.display='none';
+    if(pinSR) pinSR.style.display='block';
+    return;
+  }
   CU=u;
   _sesionSet(u.id);
   _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
@@ -955,6 +966,15 @@ function mkExtraChip(e){
     var cortBorder=cort?'#EDD89A':'#ECEEF4';
     var cortColor=cort?'#C4A45A':'#7A8499';
     var cortLabel=cort?('🎀 '+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]||'Cortesía')):'🎀 Cortesía';
+    // Ampolla Especial: dropdown del TIPO usado (solo registro — todas valen igual)
+    if(e.sku==='SUNSU-15'){
+      var tipoAmp=(T.extrasTipo&&T.extrasTipo[e.sku])||'';
+      chip+='<select id="amp-tipo-'+e.sku+'" onchange="T.extrasTipo=T.extrasTipo||{};T.extrasTipo[\''+e.sku+'\']=this.value;if(typeof updatePreview===\'function\')updatePreview();" '
+        +'style="display:block;margin:0 4px 6px;padding:7px 9px;border:1.5px solid #E8B4C8;border-radius:9px;font-size:0.7rem;font-family:inherit;background:white;color:var(--navy);max-width:230px">'
+        +'<option value="">— tipo de ampolla —</option>'
+        +['Ácido Ascórbico','PDRN','Hidratación','Purificación','Brillo','Elasticidad'].map(function(tA){return '<option value="'+tA+'"'+(tipoAmp===tA?' selected':'')+'>'+tA+'</option>';}).join('')
+        +'</select>';
+    }
     chip+='<span id="cort-btn-'+e.sku+'" onclick="toggleCourtesy(\''+e.sku+'\')" '+
       'style="display:inline-block;margin:0 4px 5px;padding:2px 9px;border-radius:6px;'+
       'font-size:0.62rem;font-weight:700;cursor:pointer;'+
@@ -1348,6 +1368,25 @@ function selEx(sku){
     var reason=document.getElementById('cort-reason-'+sku);
     if(reason&&reason.parentNode) reason.parentNode.removeChild(reason);
   }
+  // Ampolla Especial: el dropdown de TIPO se crea aquí, imperativo, porque
+  // selEx NO re-renderiza los chips (mkExtraChip solo corre al pintar la sección).
+  if(sku==='SUNSU-15'){
+    var ampSel=document.getElementById('amp-tipo-'+sku);
+    if(T.extras[sku]&&!ampSel){
+      var selA=document.createElement('select');
+      selA.id='amp-tipo-'+sku;
+      selA.style.cssText='display:block;margin:2px 4px 6px;padding:7px 9px;border:1.5px solid #E8B4C8;border-radius:9px;font-size:0.7rem;font-family:inherit;background:white;color:var(--navy);max-width:230px';
+      ['— tipo de ampolla —','Ácido Ascórbico','PDRN','Hidratación','Purificación','Brillo','Elasticidad'].forEach(function(tA,iA){
+        var oA=document.createElement('option'); oA.value=iA===0?'':tA; oA.textContent=tA; selA.appendChild(oA);
+      });
+      selA.onchange=function(){T.extrasTipo=T.extrasTipo||{};T.extrasTipo[sku]=this.value;updatePreview();};
+      var refA=document.getElementById('cort-btn-'+sku)||chip;
+      if(refA&&refA.parentNode) refA.parentNode.insertBefore(selA, refA.nextSibling);
+    } else if(!T.extras[sku]&&ampSel){
+      ampSel.parentNode.removeChild(ampSel);
+      if(T.extrasTipo) delete T.extrasTipo[sku];
+    }
+  }
   updatePreview();
 }
 function toggleCourtesy(sku){
@@ -1598,7 +1637,7 @@ function updatePreview(){
   EXTRAS.forEach(e=>{
     if(!T.extras[e.sku]) return;
     const cort=T.extrasCourtesy&&T.extrasCourtesy[e.sku];
-    extrasDetalle.push({n:e.n,p:cort?0:e.t,cort});
+    extrasDetalle.push({n:e.n+(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]?' · '+T.extrasTipo[e.sku]:''),p:cort?0:e.t,cort});
     if(!cort) extrasTotal+=e.t;
   });
   if(T.extras['otros']&&T.otroExtra) extrasDetalle.push({n:'Otro',p:0,cort:false});
@@ -1950,7 +1989,7 @@ function enviarTicket(){
   // Col W: Extras — cortesia marcada con [CORTESIA]
   const extrasTexto=EXTRAS
     .filter(e=>T.extras[e.sku])
-    .map(e=>e.sku+' '+e.n+(T.extrasCourtesy[e.sku]?' [CORTESIA'+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]?': '+T.extrasCourtesyReason[e.sku]:'')+']':''))
+    .map(e=>e.sku+' '+e.n+(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]?' · '+T.extrasTipo[e.sku]:'')+(T.extrasCourtesy[e.sku]?' [CORTESIA'+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]?': '+T.extrasCourtesyReason[e.sku]:'')+']':''))
     .concat(T.extras['otros']&&T.otroExtra?['OTRO: '+T.otroExtra]:[])
     .join(' | ');
 
@@ -6101,7 +6140,7 @@ function cargarCatalogo(){
     'SUNSU-43':'Facial de Geisha','SUNSU-52':'Facial de Ginseng',
     'SUNSU-07':'Dermaplaning','SUNSU-08':'Mascarilla Hidroplástica','SUNSU-12':'Ampolla Especial Brillo',
     'SUNSU-13':'Ampolla Especial Elasticidad','SUNSU-14':'Ampolla Especial Hidratación',
-    'SUNSU-15':'Ampolla Especial Purificación','SUNSU-16':'Peeling Enzimático',
+    'SUNSU-15':'Ampolla Especial','SUNSU-16':'Peeling Enzimático',
     'SUNSU-31':'PDRN Serum','SUNSU-32':'Exosome Serum','SUNSU-33':'Skin Análisis',
     'SUNSU-36':'Yoga Facial Drenante','SUNSU-37':'Depilación Hilo Cejas y Bigote',
     'SUNSU-38':'Depilación Hilo Cejas','SUNSU-39':'Purificación de Espalda',
