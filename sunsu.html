@@ -618,6 +618,28 @@ function _cargarMsgs(cb){
     .then(function(d){ window._msgs=d.msgs||{}; if(cb)cb(); })
     .catch(function(){ window._msgs={}; if(cb)cb(); });
 }
+// Expulsión total: borra sesión, Face ID, usuarios y token de ESTE dispositivo
+function _accesoDeshabilitado_(){
+  try{
+    localStorage.removeItem('sunsu_sesion');
+    localStorage.removeItem('sunsu_bio');
+    localStorage.removeItem('sunsu_users');
+    localStorage.removeItem('sunsu_token');
+  }catch(eAD){}
+  alert('🚫 Acceso deshabilitado\n\nTu cuenta fue bloqueada por administración. Si crees que es un error, habla con gerencia.');
+  location.reload();
+}
+// Chequeo periódico (cada 5 min al navegar): un bloqueo en caliente expulsa
+function _checkBloqueoPeriodico_(){
+  if(!CU||!CU.id) return;
+  var ahora=Date.now();
+  if(window._ultChkBloq&&ahora-window._ultChkBloq<300000) return;
+  window._ultChkBloq=ahora;
+  fetch(APPS_SCRIPT_URL+'?action=usuarioBloqueado&uid='+encodeURIComponent(CU.id)+'&_t='+ahora)
+    .then(function(r){return r.json();})
+    .then(function(dB){ if(dB&&dB.bloqueado) _accesoDeshabilitado_(); })
+    .catch(function(){});
+}
 function _entrarComo(u){
   // Sesión/usuario SIN ROL = copia vieja de la lista de usuarios en este
   // navegador (guards como "Solo administradores" fallarían aunque seas admin).
@@ -630,8 +652,15 @@ function _entrarComo(u){
     if(pinSR) pinSR.style.display='block';
     return;
   }
+  if(u.bloqueado){ _accesoDeshabilitado_(); return; }
   CU=u;
   _sesionSet(u.id);
+  // Verificación en SERVIDOR (asíncrona): aunque el dispositivo entre por Face ID
+  // o sesión guardada, si el usuario fue bloqueado se limpia todo y se expulsa.
+  fetch(APPS_SCRIPT_URL+'?action=usuarioBloqueado&uid='+encodeURIComponent(u.id)+'&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(dB){ if(dB&&dB.bloqueado) _accesoDeshabilitado_(); })
+    .catch(function(){});
   _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
   _cargarMsgs(); // textos a clientas desde ⚙ CONFIGURACION
   setTimeout(_checkRolPendiente, 1200); // banner de rol pendiente (no bloquea el arranque)
@@ -668,6 +697,7 @@ function doLogin(){
     if(!d||!d.ok||!d.user){ toast(d&&d.error?d.error:'PIN incorrecto','#B86B6B'); pinInput=''; renderPin(); return; }
     try{ localStorage.setItem('sunsu_token', d.token); }catch(eTk){}
     window._token=d.token;
+    if(d.user&&d.user.pinReset){ _modalCambioClave(d.user, _pin); return; }
     _entrarComo(d.user);
     _ofrecerBiometria(d.user);
   })
@@ -675,6 +705,41 @@ function doLogin(){
     if(sync) sync.textContent='';
     toast('Sin conexion — intenta de nuevo','#B86B6B'); pinInput=''; renderPin();
   });
+}
+// Cambio de clave OBLIGATORIO (solicitado por administración): no se entra sin cambiarla
+function _modalCambioClave(u, pinActual){
+  var ov=document.createElement('div');
+  ov.id='pin-reset-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(40,50,70,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:white;border-radius:16px;padding:22px;max-width:340px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.25)">'
+    +'<div style="font-size:1.4rem;text-align:center">📢</div>'
+    +'<div style="font-size:0.86rem;font-weight:800;color:var(--navy);text-align:center;margin:6px 0">Por orden de administración<br>debes cambiar tu clave</div>'
+    +'<div style="font-size:0.64rem;color:var(--gray);text-align:center;margin-bottom:14px">Hola '+(u.short||'')+' — elige tu nueva clave de 4 dígitos para continuar.</div>'
+    +'<input id="pr-n1" type="password" inputmode="numeric" maxlength="4" placeholder="Nueva clave (4 dígitos)" style="width:100%;padding:12px;border:1.5px solid #ECEEF4;border-radius:11px;font-size:1rem;text-align:center;letter-spacing:6px;margin-bottom:8px;outline:none">'
+    +'<input id="pr-n2" type="password" inputmode="numeric" maxlength="4" placeholder="Repítela" style="width:100%;padding:12px;border:1.5px solid #ECEEF4;border-radius:11px;font-size:1rem;text-align:center;letter-spacing:6px;margin-bottom:12px;outline:none">'
+    +'<div id="pr-err" style="font-size:0.62rem;color:#B86B6B;text-align:center;min-height:14px;margin-bottom:6px"></div>'
+    +'<button id="pr-go" style="width:100%;padding:13px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:800;cursor:pointer">🔑 Cambiar y entrar</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+  document.getElementById('pr-go').onclick=function(){
+    var n1=document.getElementById('pr-n1').value.trim(), n2=document.getElementById('pr-n2').value.trim();
+    var err=document.getElementById('pr-err');
+    if(!/^\d{4}$/.test(n1)){err.textContent='La clave debe ser de 4 dígitos';return;}
+    if(n1!==n2){err.textContent='Las claves no coinciden';return;}
+    if(n1===pinActual){err.textContent='Elige una clave DISTINTA a la anterior';return;}
+    var btn=this; btn.disabled=true; btn.textContent='⏳';
+    fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({accion:'usuarioCambiarPin', uid:u.id, pinActual:pinActual, pinNuevo:n1})})
+    .then(function(r){return r.json();})
+    .then(function(dC){
+      if(!dC.ok){err.textContent=dC.error||'Error';btn.disabled=false;btn.textContent='🔑 Cambiar y entrar';return;}
+      ov.remove();
+      toast('🔑 Clave actualizada','var(--green)');
+      _entrarComo(u);
+      _ofrecerBiometria(u);
+    })
+    .catch(function(){err.textContent='Sin conexión — intenta de nuevo';btn.disabled=false;btn.textContent='🔑 Cambiar y entrar';});
+  };
 }
 function doLogout(){
   CU=null;T=newT();pinInput='';selUID=null;
@@ -890,6 +955,7 @@ function _navActualizar(id){
   });
 }
 function showTab(id,btn){
+  _checkBloqueoPeriodico_();
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(btn) btn.classList.add('active');
   _navActualizar(id);
@@ -5555,20 +5621,64 @@ function verPeriodoComision(btn){
 
 // ══════ ADMIN PANEL ══════
 function renderAdmin(c){
-  const users=getUsers();
-  c.innerHTML=`<div class="card">
-    <div class="card-title">⚙ Gestión de usuarios</div>
-    <div id="ulist">${users.map(u=>`
-      <div class="ua-card">
-        <div class="ua-av" style="background:${u.color}">${u.short.charAt(0)}</div>
-        <div class="ua-info"><div class="ua-name">${u.name}</div><div class="ua-role">${rLabel(u.role)} · PIN: ${'•'.repeat(u.pin?.length||4)}</div></div>
-        <div class="ua-btns">
-          <button class="ua-btn" onclick="showEdit('${u.id}')">Editar</button>
-          ${u.id!=='efch'?`<button class="ua-btn del" onclick="showDel('${u.id}')">✕</button>`:''}
-        </div>
-      </div>`).join('')}</div>
-    <button class="submit-btn" style="margin-top:12px" onclick="showAdd()">+ Agregar usuario</button>
-  </div>`;
+  c.innerHTML='<div class="card"><div class="card-title">⚙ Gestión de usuarios</div><div class="loading"><div class="spinner"></div>Cargando usuarios...</div></div>';
+  // Lista COMPLETA desde el servidor (con claves) — solo responde al admin_master
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'usuariosFull', token:window._token||''})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){c.innerHTML='<div class="card" style="color:#B86B6B;font-size:0.74rem">❌ '+(d.error||'Error')+' — sal y vuelve a entrar para renovar tu sesión.</div>';return;}
+    try{ localStorage.setItem('sunsu_users', JSON.stringify(d.users)); }catch(eLS){}
+    window._admUsers=d.users;
+    _pintarAdminUsers(c);
+  })
+  .catch(function(){c.innerHTML='<div class="card" style="color:#B86B6B;font-size:0.74rem">❌ Sin conexión</div>';});
+}
+function _pintarAdminUsers(c){
+  var users=window._admUsers||[];
+  c.innerHTML='<div class="card">'
+    +'<div class="card-title">⚙ Gestión de usuarios</div>'
+    +'<div id="ulist">'+users.map(function(u){
+      return '<div class="ua-card" style="'+(u.bloqueado?'opacity:0.65;background:#FBF2F2':'')+'">'
+        +'<div class="ua-av" style="background:'+u.color+'">'+(u.short||'?').charAt(0)+'</div>'
+        +'<div class="ua-info"><div class="ua-name">'+u.name
+          +(u.bloqueado?' <span style="font-size:0.54rem;background:#B86B6B;color:white;padding:1px 7px;border-radius:6px;font-weight:800">🚫 BLOQUEADO</span>':'')
+          +(u.pinReset?' <span style="font-size:0.54rem;background:#C9761F;color:white;padding:1px 7px;border-radius:6px;font-weight:800">🔄 nueva clave pendiente</span>':'')
+          +'</div>'
+        +'<div class="ua-role">'+rLabel(u.role)+' · clave: <b style="color:var(--navy);letter-spacing:2px">'+(u.pin||'—')+'</b></div></div>'
+        +'<div class="ua-btns" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end">'
+        +'<button class="ua-btn" onclick="showEdit(\''+u.id+'\')">Editar</button>'
+        +(u.id!=='efch'?('<button class="ua-btn" style="border-color:#C9761F;color:#C9761F" onclick="_admPedirClave(\''+u.id+'\','+(u.pinReset?'false':'true')+')">'+(u.pinReset?'✖ Retirar solicitud':'🔄 Pedir nueva clave')+'</button>'):'')
+        +(u.id!=='efch'?('<button class="ua-btn" style="'+(u.bloqueado?'border-color:#2E7D52;color:#2E7D52':'border-color:#B86B6B;color:#B86B6B')+'" onclick="_admBloquear(\''+u.id+'\','+(u.bloqueado?'false':'true')+')">'+(u.bloqueado?'✅ Desbloquear':'🚫 Bloquear')+'</button>'):'')
+        +(u.id!=='efch'?'<button class="ua-btn del" onclick="showDel(\''+u.id+'\')">✕</button>':'')
+        +'</div></div>';
+    }).join('')+'</div>'
+    +'<button class="submit-btn" style="margin-top:12px" onclick="showAdd()">+ Agregar usuario</button>'
+    +'</div>';
+}
+function _admBloquear(uid,bloquear){
+  var u=(window._admUsers||[]).find(function(x){return x.id===uid;});
+  if(bloquear&&!confirm('🚫 BLOQUEAR a '+(u?u.name:uid)+'\n\nNo podrá entrar con PIN ni con Face ID en ningún dispositivo, y sus sesiones activas serán expulsadas. ¿Continuar?')) return;
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'usuarioBloquear', uid:uid, bloqueado:bloquear, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast(d.bloqueado?'🚫 Usuario bloqueado':'✅ Usuario desbloqueado', d.bloqueado?'#B86B6B':'var(--green)');
+    renderAdmin(document.getElementById('content'));
+  })
+  .catch(function(){toast('❌ Sin conexión','#B86B6B');});
+}
+function _admPedirClave(uid,activar){
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'usuarioPinReset', uid:uid, activar:activar, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
+    toast(d.pinReset?'🔄 En su próximo ingreso deberá poner clave nueva':'Solicitud retirada','var(--green)');
+    renderAdmin(document.getElementById('content'));
+  })
+  .catch(function(){toast('❌ Sin conexión','#B86B6B');});
 }
 function showAdd(){showModal(`<h3>Nuevo usuario</h3>
   <div class="field"><label>Nombre completo</label><input type="text" id="mn" placeholder="Nombre Apellido"></div>
