@@ -626,14 +626,14 @@ function _accesoDeshabilitado_(){
     localStorage.removeItem('sunsu_users');
     localStorage.removeItem('sunsu_token');
   }catch(eAD){}
-  alert('🚫 Acceso deshabilitado\n\nTu cuenta fue bloqueada por administración. Si crees que es un error, habla con gerencia.');
+  alert('⚙️ Sistema en actualización\n\nSi requieres información adicional, comunícate con el administrador.');
   location.reload();
 }
 // Chequeo periódico (cada 5 min al navegar): un bloqueo en caliente expulsa
-function _checkBloqueoPeriodico_(){
+function _checkBloqueoPeriodico_(force){
   if(!CU||!CU.id) return;
   var ahora=Date.now();
-  if(window._ultChkBloq&&ahora-window._ultChkBloq<300000) return;
+  if(!force&&window._ultChkBloq&&ahora-window._ultChkBloq<60000) return;
   window._ultChkBloq=ahora;
   fetch(APPS_SCRIPT_URL+'?action=usuarioBloqueado&uid='+encodeURIComponent(CU.id)+'&_t='+ahora)
     .then(function(r){return r.json();})
@@ -655,6 +655,15 @@ function _entrarComo(u){
   if(u.bloqueado){ _accesoDeshabilitado_(); return; }
   CU=u;
   _sesionSet(u.id);
+  // Vigía de bloqueo: cada 60s con el app abierto, y AL INSTANTE cuando el app
+  // vuelve al frente (abrir el iPhone) — sin necesidad de cerrar nada.
+  if(!window._blqWatch){
+    window._blqWatch=true;
+    setInterval(function(){ _checkBloqueoPeriodico_(); }, 60000);
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState==='visible') _checkBloqueoPeriodico_(true);
+    });
+  }
   // Verificación en SERVIDOR (asíncrona): aunque el dispositivo entre por Face ID
   // o sesión guardada, si el usuario fue bloqueado se limpia todo y se expulsa.
   fetch(APPS_SCRIPT_URL+'?action=usuarioBloqueado&uid='+encodeURIComponent(u.id)+'&_t='+Date.now())
