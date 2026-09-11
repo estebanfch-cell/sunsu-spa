@@ -3348,7 +3348,11 @@ function tarjetaPaquete(i){
 function _pdfTarjetaPaquete(x, fondo, cbTP){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
-    var W=560, H=330;
+    // Con 4-6 sesiones la rejilla ocupa 2 filas (172pt) y en 330 de alto solo
+    // hay 136 disponibles — los círculos se montaban sobre el encabezado. La
+    // tarjeta crece a 430 cuando hay más de una fila.
+    var filasTP=Math.ceil((x.total||3)/3);
+    var W=560, H=(filasTP>1?430:330);
     var doc=new window.jspdf.jsPDF({unit:'pt',format:[W,H],orientation:'landscape'});
     var NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52';
     if(fondo) doc.addImage(_fondoCardSunsu(fondo),'JPEG',0,0,W,H);
@@ -3401,6 +3405,7 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
           // Respaldo si el slot solo trae la fecha: lo que derive el backend.
           if(!facTxt && uso.fac) facTxt=uso.fac;
           if(!porTxt && uso.por) porTxt=uso.por;
+          porTxt=(porTxt||'').trim().split(/\s+/)[0]; // solo el nombre: Daniela, no Daniela Mora
         }
         facTxt=limpiaFac(facTxt);
         if(facTxt.length>28) facTxt=facTxt.slice(0,26)+'..';
@@ -10434,7 +10439,7 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
     doc.text(((t.nombre||'')+' '+(t.apellido||'')).trim(),W/2,y,{align:'center'}); y+=11;
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
-    doc.text('Atendida por '+(t.cosmetologa||''),W/2,y,{align:'center'}); y+=15;
+    doc.text('Atendida por '+((t.cosmetologa||'').trim().split(/\s+/)[0]),W/2,y,{align:'center'}); y+=15;
     // ── PRÓXIMA CITA RECOMENDADA ── arriba, junto a los datos de la clienta
     if(t.retorno){
       var rM=(t.retorno||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
