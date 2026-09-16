@@ -11559,6 +11559,20 @@ function _actaEntregaHTML(btn){
 }
 
 // ══════ HISTORIAL DE ÓRDENES DE COMPRA (admin) ══════
+function _ocEliminarApp(num){
+  if(!confirm('🗑 ELIMINAR la orden '+num+' COMPLETA\n\nSe borran todas sus líneas pendientes de ENTRADAS y su registro del historial (incluido el PDF re-descargable).\n\nSolo es posible si NO tiene unidades recibidas. Esta acción no se puede deshacer. ¿Continuar?')) return;
+  toast('⏳ Eliminando orden...','var(--blue)');
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'ocEliminar', num:num, token:window._token||'', usuario:CU?CU.name:'—'})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.ok){alert('❌ '+(d.error||'No se pudo eliminar'));return;}
+    toast('🗑 Orden '+num+' eliminada ('+(d.lineas||0)+' líneas)','var(--green)');
+    window._entCache=null;
+    renderHistorialOC();
+  })
+  .catch(function(){toast('❌ Sin conexión','#B86B6B');});
+}
 function renderHistorialOC(){
   var c=document.getElementById('content');
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
@@ -11628,7 +11642,7 @@ function renderHistorialOC(){
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
-          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Editar la orden (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️ Editar</button>':'')
+          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Editar la orden (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️ Editar</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
           +'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>'
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
