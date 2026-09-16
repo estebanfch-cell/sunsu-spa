@@ -3350,6 +3350,14 @@ function _fondoCardSunsu(fondo){
   window._fondoCardCache=cv.toDataURL('image/jpeg',0.85);
   return window._fondoCardCache;
 }
+// Truncado por ANCHO MEDIDO (no por letras): corta solo si de verdad no cabe,
+// y avisa con '…'. Usa la fuente/tamaño activos del doc al momento de medir.
+function _pdfRecorta(doc, txt, maxW){
+  txt=(txt||'').toString();
+  if(doc.getTextWidth(txt)<=maxW) return txt;
+  while(txt.length>1 && doc.getTextWidth(txt+'…')>maxW) txt=txt.slice(0,-1);
+  return txt+'…';
+}
 // ── Tarjeta digital del paquete: PDF pequeño para enviar a la clienta ──
 function tarjetaPaquete(i){
   var x=(window._segPaqItems||[])[i];
@@ -11004,7 +11012,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
         var cant=it[campoCant]||0, sub=cant*(it.compra||0); tot+=sub;
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
         doc.text(it.sku.replace('SUNSU-',''),xI+6,y+10);
-        doc.text((it.nombre||'').slice(0,46),xI+62,y+10);
+        doc.text(_pdfRecorta(doc, it.nombre, (conPrecios? (xI+340-26) : (xI+ANCHO-34)) - (xI+62)),xI+62,y+10);
         doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
         doc.text(String(cant),(conPrecios?xI+340:xD-6),y+10,{align:'right'});
         if(conPrecios){
@@ -11046,7 +11054,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
         sumSub+=sub; sumIva+=iva; sumTot+=tot;
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
         doc.text(it.sku.replace('SUNSU-',''),xI+6,y+9.5);
-        doc.text((it.nombre||'').slice(0,38),xI+52,y+9.5);
+        doc.text(_pdfRecorta(doc, it.nombre, 164),xI+52,y+9.5);
         doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
         doc.text(String(it.vendido),xI+242,y+9.5,{align:'right'});
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
@@ -11108,7 +11116,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
         sumSubD+=subD; sumIvaD+=ivaD; sumTotD+=totD;
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
         doc.text(it.sku.replace('SUNSU-',''),xI+6,y+9.5);
-        doc.text((it.nombre||'').slice(0,38),xI+52,y+9.5);
+        doc.text(_pdfRecorta(doc, it.nombre, 164),xI+52,y+9.5);
         doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
         doc.text(String(it.cant),xI+242,y+9.5,{align:'right'});
         doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
@@ -11166,7 +11174,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
     salto(60);
     barra('ORDEN DE RESTOCK — REPEDIDO');
     var restockTodo=(items||[]).concat((itemsDirecta||[]).map(function(it){
-      return {sku:it.sku, nombre:(it.nombre||'').slice(0,30)+' · compra directa', cant:it.cant};
+      return {sku:it.sku, nombre:(it.nombre||'').slice(0,60)+' · compra directa', cant:it.cant};
     }));
     if(restockTodo.length){
       tabla(restockTodo,'cant','CANT.',false); // restock: solo cantidades, sin precios
@@ -11181,7 +11189,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
       barra('STOCK EN SUNSU');
       var stockTag=(itemsStock||[]).map(function(it){
         var tag=(it.tipo==='SUNSU')?' · propio Sunsu':' · consignación';
-        return {sku:it.sku, nombre:(it.nombre||'').slice(0,30)+tag, stockCorte:it.stockCorte};
+        return {sku:it.sku, nombre:(it.nombre||'').slice(0,60)+tag, stockCorte:it.stockCorte};
       });
       tabla(stockTag,'stockCorte','STOCK',false);
       y+=4;
@@ -11438,7 +11446,7 @@ function _actaEntregaFondo(btn, fondo){
       doc.setFontSize(7.2);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text(it.sku.replace('SUNSU-',''),xI+cols[0].x,y+9.5);
-      doc.text((it.nombre||'').slice(0,38),xI+cols[1].x,y+9.5);
+      doc.text(_pdfRecorta(doc, it.nombre, (cols[2].x+cols[2].w)-cols[1].x-24),xI+cols[1].x,y+9.5);
       doc.text(String(it.pedida),xI+cols[2].x+cols[2].w,y+9.5,{align:'right'});
       doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
       doc.text(v,xI+cols[3].x+cols[3].w,y+9.5,{align:'right'});
