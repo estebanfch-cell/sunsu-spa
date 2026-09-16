@@ -644,9 +644,12 @@ function _entrarComo(u){
   // Sesión/usuario SIN ROL = copia vieja de la lista de usuarios en este
   // navegador (guards como "Solo administradores" fallarían aunque seas admin).
   // Se limpia la copia local y se pide entrar de nuevo: el login trae el rol.
-  if(!u||!u.role){
+  // Rol ausente O con un valor viejo que los candados no reconocen: ambas son
+  // copias antiguas de la lista de usuarios en este navegador.
+  var ROLES_OK=['admin','admin_master','staff','reception'];
+  if(!u||ROLES_OK.indexOf(u.role)<0){
     try{ localStorage.removeItem('sunsu_users'); localStorage.removeItem('sunsu_sesion'); }catch(eSR){}
-    toast('🔐 Sesión antigua sin rol — vuelve a entrar con tu PIN','#C9761F');
+    toast('🔐 Sesión antigua — vuelve a entrar con tu PIN','#C9761F');
     var gateSR=document.getElementById('bio-gate'), pinSR=document.getElementById('pin-login');
     if(gateSR) gateSR.style.display='none';
     if(pinSR) pinSR.style.display='block';
@@ -664,11 +667,23 @@ function _entrarComo(u){
       if(document.visibilityState==='visible') _checkBloqueoPeriodico_(true);
     });
   }
-  // Verificación en SERVIDOR (asíncrona): aunque el dispositivo entre por Face ID
-  // o sesión guardada, si el usuario fue bloqueado se limpia todo y se expulsa.
-  fetch(APPS_SCRIPT_URL+'?action=usuarioBloqueado&uid='+encodeURIComponent(u.id)+'&_t='+Date.now())
+  // Verificación en SERVIDOR (asíncrona): trae la lista fresca de usuarios.
+  // Si fue bloqueado o borrado → expulsión; si su ROL cambió (o la copia local
+  // era vieja) → se corrige en caliente y se repinta, sin pedir re-login.
+  fetch(APPS_SCRIPT_URL+'?action=getUsuarios&_t='+Date.now())
     .then(function(r){return r.json();})
-    .then(function(dB){ if(dB&&dB.bloqueado) _accesoDeshabilitado_(); })
+    .then(function(dU){
+      var lU=(dU&&dU.users)||dU||[];
+      if(!lU.length||!lU.find) return;
+      try{ localStorage.setItem('sunsu_users', JSON.stringify(lU)); }catch(eLU){}
+      var uSrv=lU.find(function(x){return x.id===u.id;});
+      if(!uSrv||uSrv.bloqueado){ _accesoDeshabilitado_(); return; }
+      if(CU&&CU.id===u.id&&uSrv.role!==CU.role){
+        CU.role=uSrv.role; CU.name=uSrv.name||CU.name; CU.short=uSrv.short||CU.short;
+        toast('🔄 Permisos actualizados','var(--green)');
+        if(window._tabActual) showTab(window._tabActual);
+      }
+    })
     .catch(function(){});
   _cargarProdColMap(); // mapa SKU→columna siempre fresco (productos nuevos entran solos)
   _cargarMsgs(); // textos a clientas desde ⚙ CONFIGURACION
@@ -964,6 +979,7 @@ function _navActualizar(id){
   });
 }
 function showTab(id,btn){
+  window._tabActual=id;
   _checkBloqueoPeriodico_();
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(btn) btn.classList.add('active');
