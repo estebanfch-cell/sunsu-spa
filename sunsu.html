@@ -11604,6 +11604,16 @@ function renderHistorialOC(){
         }
         grupos[key].items.push(it);
       });
+      // Órdenes de solo facturación (sin líneas en ENTRADAS): entran al historial
+      // como cards propios — su PDF se re-descarga desde el snapshot.
+      (d.ocSolo||[]).forEach(function(oS){
+        if(!oS.orden) return;
+        var yaS=Object.keys(grupos).some(function(k){return grupos[k].orden===oS.orden;});
+        if(yaS) return;
+        if(oS.prov) provsSet[oS.prov]=1;
+        if(provFiltro&&oS.prov!==provFiltro) return;
+        grupos['OCSOLO||'+oS.orden]={orden:oS.orden,fam:'',prov:oS.prov||'—',creada:oS.creada||'',quincena:oS.quincena||'',items:[],soloFact:true};
+      });
       var keys=Object.keys(grupos);
       keys.sort(function(a,b){
         var oa=grupos[a].orden||'',ob=grupos[b].orden||'';
@@ -11638,15 +11648,16 @@ function renderHistorialOC(){
           +'<div style="background:var(--navy);padding:11px 14px;display:flex;justify-content:space-between;align-items:center">'
           +'<div onclick="toggleGrupoEntrada(\''+gid+'\')" style="flex:1;cursor:pointer;user-select:none">'
           +'<div style="font-size:0.85rem;font-weight:800;color:white;letter-spacing:0.5px">'+(g.orden||'SIN OC')+(g.quincena?' — ('+g.quincena+')':'')+'</div>'
-          +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.6)">'+g.prov+' · '+g.items.length+' productos · '+g.items.reduce(function(s,i){return s+(parseFloat(i.recibida)||0);},0)+'/'+g.items.reduce(function(s,i){return s+(i.pedida||0);},0)+' unid. recibidas'+(g.creada?' · 📅 '+g.creada:'')+'</div>'
+          +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.6)">'+g.prov+' · '+(g.soloFact?'solo facturación · sin restock':(g.items.length+' productos · '+g.items.reduce(function(s,i){return s+(parseFloat(i.recibida)||0);},0)+'/'+g.items.reduce(function(s,i){return s+(i.pedida||0);},0)+' unid. recibidas'))+(g.creada?' · 📅 '+g.creada:'')+'</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
           +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Editar la orden (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️ Editar</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
-          +'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>'
+          +(g.soloFact?'':'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>')
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
           +'<div id="'+gid+'" style="display:none;padding:10px 14px">';
+        if(g.soloFact) html+='<div style="font-size:0.68rem;color:var(--gray);padding:6px 0">Orden de facturación por consignación — sin líneas de restock. El PDF se re-descarga con 📄 Orden.</div>';
         g.items.forEach(function(it){
           var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?parseFloat(it.recibida):null;
           var eLabel=v===null?'⏳ Pendiente':(v===0?'❌ No llegó':v>=it.pedida?'✅ Completo':'⚠️ Parcial '+v+'/'+it.pedida);
