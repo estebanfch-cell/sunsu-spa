@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.2 — fondo negro + UI upload-first + orden PDF + desktop -->
+<!-- K-Lift simetria.html v19.3 — nombre desde archivo + PDF "{clienta} K-Lift" -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -601,9 +601,27 @@ $('btnCapturar').onclick = () => {
   img.src = c.toDataURL('image/jpeg', 0.92);
 };
 
+/* Nombre de clienta = nombre del archivo subido (sin extensión). */
+function nombreDesdeArchivo(file){
+  if(!file || !file.name) return "";
+  let n = file.name.replace(/\.[^.]+$/, "");
+  n = n.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+  return n;
+}
+function nombrePdfKlift(){
+  const nom = (INFO.nombre || ($('inpNombre') && $('inpNombre').value) || "").trim();
+  if(!nom) return "K-Lift.pdf";
+  const safe = nom.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
+  return (safe || "K-Lift") + " K-Lift.pdf";
+}
 function procesarArchivo(file){
   if(!file) return;
   if(!landmarker){ estado.textContent = "El modelo aún está cargando, espera un momento…"; return; }
+  const desdeArchivo = nombreDesdeArchivo(file);
+  if(desdeArchivo){
+    $('inpNombre').value = desdeArchivo;
+    INFO.nombre = desdeArchivo;
+  }
   estado.textContent = "Analizando rostro…";
   $('informe').style.display = 'none';
   $('slidesContenedor').innerHTML = '';
@@ -2022,8 +2040,8 @@ async function generarInforme(datos){
 
 $('btnCompartirInforme').onclick = async () => {
   if(!pdfBlob) return;
-  const slug = INFO.nombre ? "-" + INFO.nombre.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : "";
-  const file = new File([pdfBlob], "informe-klift" + slug + ".pdf", { type:'application/pdf' });
+  INFO.nombre = ($('inpNombre').value || "").trim() || INFO.nombre;
+  const file = new File([pdfBlob], nombrePdfKlift(), { type:'application/pdf' });
   if(navigator.canShare && navigator.canShare({ files:[file] })){
     try{ await navigator.share({ files:[file], title:"Informe K-Lift · Sunsu Spa" }); }
     catch(e){ /* usuario canceló */ }
