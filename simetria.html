@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.13 — tercio inferior nariz→quijada + UI post-informe -->
+<!-- K-Lift simetria.html v19.14 — línea roja tercio inferior por el mentón -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -1375,8 +1375,8 @@ function pagina1(anotacionesZona){
   const paresTercio = [
     [67, 297],       /* frente / hairline */
     parPupilas,      /* pupilas / ojos — límite tercio superior/medio */
-    [64, 294],       /* base nasal (alar) — límite tercio medio/inferior = inicio inferior */
-    [172, 397]       /* quijada / mandíbula — cierre inferior */
+    [64, 294],       /* base nasal (alar) — inicio tercio inferior */
+    null             /* mentón 152 — [172,397] cortaba a altura de labios */
   ];
   const coloresTercio = [
     "rgba(201,106,91,.85)",
@@ -1387,8 +1387,19 @@ function pagina1(anotacionesZona){
   const ysT = [];
   const Lext = 4000;
   for(let ti=0; ti<paresTercio.length; ti++){
-    const [iL, iR] = paresTercio[ti];
-    const a = M(A.lm[iL]), b = M(A.lm[iR]);
+    let a, b;
+    if(paresTercio[ti] == null){
+      /* cierre inferior: línea ROJA por el MENTÓN (152), no por ángulos de mandíbula */
+      const chin = M(A.lm[152]);
+      const jl = M(A.lm[176]);
+      const jr = M(A.lm[400]);
+      const dx = jr.x - jl.x, dy = jr.y - jl.y;
+      a = { x: chin.x - dx, y: chin.y - dy };
+      b = { x: chin.x + dx, y: chin.y + dy };
+    } else {
+      const [iL, iR] = paresTercio[ti];
+      a = M(A.lm[iL]); b = M(A.lm[iR]);
+    }
     if(!a || !b){ ysT.push(M(A.lm[[10,168,2,152][ti]]).y); continue; }
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -1400,8 +1411,13 @@ function pagina1(anotacionesZona){
     g.lineTo(b.x + ux*Lext, b.y + uy*Lext);
     g.stroke();
     g.fillStyle = coloresTercio[ti];
-    for(const p of [a,b]){
-      g.beginPath(); g.arc(p.x, p.y, 5*sCara, 0, Math.PI*2); g.fill();
+    if(paresTercio[ti] == null){
+      const chin = M(A.lm[152]);
+      g.beginPath(); g.arc(chin.x, chin.y, 5*sCara, 0, Math.PI*2); g.fill();
+    } else {
+      for(const p of [a,b]){
+        g.beginPath(); g.arc(p.x, p.y, 5*sCara, 0, Math.PI*2); g.fill();
+      }
     }
     ysT.push((a.y + b.y) / 2);
   }
