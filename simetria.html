@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.10 — cruz eje cuadrada + sin doble línea tercio inferior -->
+<!-- K-Lift simetria.html v19.12 — cruz blanca sutil + marcadores chicos -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -967,13 +967,13 @@ function dibujarLineasFaciales(g, M, s){
   const L = 4000;
   const gr = Math.max(1.6, 2.4*s);
 
-  /* Cruz de referencia 100% cuadrada (horizontal + vertical punteadas blancas) */
+  /* Cruz de referencia 100% cuadrada — blanca sutil (fina + transparente) */
   const yEjeH = (lm.length > 473 && lm[468] && lm[473])
     ? (M(lm[468]).y + M(lm[473]).y) / 2
     : p0.y;
-  g.strokeStyle = "rgba(255,255,255,.95)";
-  g.lineWidth = gr;
-  g.setLineDash([10*s, 8*s]);
+  g.strokeStyle = "rgba(255,255,255,.42)";
+  g.lineWidth = Math.max(0.9, gr * 0.55);
+  g.setLineDash([8*s, 10*s]);
   g.beginPath();
   g.moveTo(p0.x, p0.y - L); g.lineTo(p0.x, p0.y + L); /* vertical recta */
   g.moveTo(p0.x - L, yEjeH); g.lineTo(p0.x + L, yEjeH); /* horizontal recta */
@@ -1459,7 +1459,7 @@ function pagina1(anotacionesZona){
     const pt = M(A.lm[idx]);
     let py = pt.y;
     if(a.zona === 'cuello') py = Math.min(py + A.h*s*0.09, fry+frh-110);
-    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 17);
+    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 7);
   });
 
   ladosFoto(g, fx, fw, fry, false);
