@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.8 — scan anim → dual Real|GIF; PDF 4 págs; tercios inclinados -->
+<!-- K-Lift simetria.html v19.9 — scan clip al contorno facial -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -104,7 +104,7 @@
 
   .foto-wrap{
     position:relative;display:none;border-radius:18px;
-    overflow:visible;text-align:center;
+    overflow:hidden;text-align:center;
     max-width:100%;max-height:calc(100dvh - 240px);
     margin:0 auto;
   }
@@ -429,11 +429,47 @@ function iniciarScan(){
   const t0 = performance.now();
   const rb = Math.max(1.4, fc.width/460);
 
+  /* óvalo facial MediaPipe — clip para que la malla no se salga del contorno */
+  const OVAL_CONN = (FaceLandmarker.FACE_LANDMARKS_FACE_OVAL || []).map(e =>
+    (typeof e.start === 'number') ? [e.start, e.end] : [e[0], e[1]]
+  );
+  const ovalIdx = [];
+  if(OVAL_CONN.length){
+    let cur = OVAL_CONN[0][0];
+    ovalIdx.push(cur);
+    const used = new Set();
+    for(let n=0;n<OVAL_CONN.length;n++){
+      const edge = OVAL_CONN.find(([a,b]) => !used.has(a+','+b) && !used.has(b+','+a) && (a===cur || b===cur));
+      if(!edge) break;
+      used.add(edge[0]+','+edge[1]);
+      cur = edge[0]===cur ? edge[1] : edge[0];
+      ovalIdx.push(cur);
+    }
+  }
+  if(ovalIdx.length < 8){
+    /* fallback: índices clásicos del óvalo si la API no trae conexiones */
+    ovalIdx.length = 0;
+    [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109].forEach(i=>ovalIdx.push(i));
+  }
+
   const paso = () => {
     const t = performance.now() - t0;
     fg.clearRect(0, 0, fc.width, fc.height);
 
-    /* malla que se teje progresivamente */
+    fg.save();
+    fg.beginPath();
+    const o0 = pts[ovalIdx[0]];
+    if(o0){
+      fg.moveTo(o0.x, o0.y);
+      for(let k=1;k<ovalIdx.length;k++){
+        const op = pts[ovalIdx[k]];
+        if(op) fg.lineTo(op.x, op.y);
+      }
+      fg.closePath();
+      fg.clip();
+    }
+
+    /* malla que se teje progresivamente (solo dentro del contorno) */
     const fase = Math.min(1, (t % 4200) / 2600);
     const nE = Math.floor(TESS.length * fase);
     fg.strokeStyle = "rgba(121,198,207,.30)";
@@ -478,6 +514,8 @@ function iniciarScan(){
       fg.moveTo(p.x, p.y-cr); fg.lineTo(p.x, p.y+cr);
       fg.stroke();
     }
+
+    fg.restore(); /* fin clip óvalo */
 
     fxRAF = requestAnimationFrame(paso);
   };
