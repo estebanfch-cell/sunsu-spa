@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.12 — cruz blanca sutil + marcadores chicos -->
+<!-- K-Lift simetria.html v19.13 — tercio inferior nariz→quijada + UI post-informe -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -28,8 +28,17 @@
     -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:520px;margin:0 auto;padding:28px 20px 60px;}
-  .informe-acciones{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 4px;}
-  .informe-acciones .btn{width:auto;flex:1 1 180px;padding:12px 16px;font-size:14px;}
+  .informe-acciones{display:flex;justify-content:flex-end;margin:4px 0 2px;}
+  .btn-link-muted{
+    background:none;border:none;padding:4px 2px;margin:0;
+    font-family:'Open Sauce Sans','Karla',sans-serif;
+    font-size:12px;font-weight:400;letter-spacing:.02em;
+    color:var(--tinta-suave);cursor:pointer;text-decoration:underline;
+    text-underline-offset:3px;opacity:.85;
+  }
+  .btn-link-muted:hover,.btn-link-muted:focus{color:var(--tinta);opacity:1;outline:none;}
+  .informe-compartir{margin:18px 0 8px;}
+  .informe-compartir .btn{width:100%;}
   #informe:fullscreen, #informe:-webkit-full-screen{
     background:var(--porcelana);
     padding:28px 40px 48px;
@@ -58,8 +67,9 @@
     .video-comp{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
     .slide-img{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
     #slidesContenedor{display:flex;flex-direction:column;align-items:center;}
-    .informe-acciones{justify-content:center;max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
-    #informe .btn-oro{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    .informe-acciones{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    .informe-compartir{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    .informe-compartir .btn-oro{max-width:100%;}
   }
   @media (min-width:1200px){
     .wrap{max-width:min(1040px, 96vw);}
@@ -318,11 +328,13 @@
 
   <div id="informe">
     <div class="informe-acciones">
-      <button class="btn btn-secundario" id="btnPantallaCompleta" type="button">Pantalla completa</button>
-      <button class="btn btn-oro" id="btnCompartirInforme" type="button">Compartir informe PDF</button>
+      <button class="btn-link-muted" id="btnPantallaCompleta" type="button">Pantalla completa</button>
     </div>
     <div class="divisor">Informe K-Lift</div>
     <div id="slidesContenedor"></div>
+    <div class="informe-compartir">
+      <button class="btn btn-oro" id="btnCompartirInforme" type="button">Compartir informe PDF</button>
+    </div>
   </div>
 
   <p class="nota" id="notaFinal">
@@ -709,6 +721,11 @@ function procesarArchivo(file){
     $('inpNombre').value = desdeArchivo;
     INFO.nombre = desdeArchivo;
   }
+  /* si se vuelve a cargar una foto, restaurar UI de upload */
+  const bf0 = document.querySelector('.botones-foto');
+  if(bf0) bf0.style.display = '';
+  if($('btnGaleria')) $('btnGaleria').style.display = '';
+  if($('btnFoto')) $('btnFoto').style.display = '';
   estado.textContent = "Analizando rostro…";
   $('informe').style.display = 'none';
   $('slidesContenedor').innerHTML = '';
@@ -1358,8 +1375,8 @@ function pagina1(anotacionesZona){
   const paresTercio = [
     [67, 297],       /* frente / hairline */
     parPupilas,      /* pupilas / ojos — límite tercio superior/medio */
-    [98, 327],       /* base nasal / midface — límite tercio medio/inferior */
-    [172, 397]       /* mandíbula — cierre inferior */
+    [64, 294],       /* base nasal (alar) — límite tercio medio/inferior = inicio inferior */
+    [172, 397]       /* quijada / mandíbula — cierre inferior */
   ];
   const coloresTercio = [
     "rgba(201,106,91,.85)",
@@ -2115,6 +2132,11 @@ async function generarInforme(datos){
   pdfBlob = pdf.output('blob');
 
   $('informe').style.display = 'block';
+  /* post-análisis: ocultar subir/cámara; nuevo cliente = recargar */
+  const bf = document.querySelector('.botones-foto');
+  if(bf) bf.style.display = 'none';
+  if($('btnGaleria')) $('btnGaleria').style.display = 'none';
+  if($('btnFoto')) $('btnFoto').style.display = 'none';
   estado.textContent = "";
   $('informe').scrollIntoView({ behavior:'smooth', block:'start' });
 }
