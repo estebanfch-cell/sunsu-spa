@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.3 — nombre desde archivo + PDF "{clienta} K-Lift" -->
+<!-- K-Lift simetria.html v19.4 — contain viewport cara + slides; etiquetas fuera de cara -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -38,28 +38,34 @@
   }
   #informe:fullscreen .slide-img, #informe:-webkit-full-screen .slide-img{
     width:auto;max-width:min(960px, 92vw);
-    max-height:calc(100vh - 96px);
+    max-height:calc(100dvh - 96px);
     height:auto;margin:0 auto 18px;
     object-fit:contain;
   }
   #informe:fullscreen .video-comp, #informe:-webkit-full-screen .video-comp{
-    max-width:min(720px, 92vw);margin-left:auto;margin-right:auto;
+    max-width:min(720px, 92vw);max-height:calc(100dvh - 140px);
+    margin-left:auto;margin-right:auto;
+  }
+  #informe:fullscreen .video-comp canvas, #informe:-webkit-full-screen .video-comp canvas,
+  #informe:fullscreen #cmpCanvas, #informe:-webkit-full-screen #cmpCanvas{
+    width:auto;max-width:100%;max-height:calc(100dvh - 140px);height:auto;
+    margin:0 auto;display:block;
   }
   @media (min-width:900px){
-    .wrap{max-width:980px;padding:36px 40px 80px;}
+    .wrap{max-width:min(980px, 96vw);padding:36px 40px 80px;}
     h1{font-size:40px;}
     .guia{max-width:360px;font-size:14px;}
-    .foto-zona{min-height:380px;}
-    .video-comp{max-width:820px;margin-left:auto;margin-right:auto;}
-    .slide-img{max-width:900px;margin-left:auto;margin-right:auto;}
+    .foto-zona{min-height:280px;}
+    .video-comp{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    .slide-img{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
     #slidesContenedor{display:flex;flex-direction:column;align-items:center;}
-    .informe-acciones{justify-content:center;max-width:900px;margin-left:auto;margin-right:auto;}
-    #informe .btn-oro{max-width:900px;margin-left:auto;margin-right:auto;}
+    .informe-acciones{justify-content:center;max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    #informe .btn-oro{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
   }
   @media (min-width:1200px){
-    .wrap{max-width:1120px;}
-    .slide-img{max-width:980px;}
-    .video-comp{max-width:900px;}
+    .wrap{max-width:min(1040px, 96vw);}
+    .slide-img{max-width:min(780px, 100%);}
+    .video-comp{max-width:min(780px, 100%);}
   }
 
   header{text-align:center;margin-bottom:26px;}
@@ -80,8 +86,9 @@
     background:var(--arena);
     border:1px solid var(--linea);
     border-radius:18px;
-    overflow:hidden;
-    min-height:300px;
+    overflow:visible;
+    min-height:220px;
+    max-height:calc(100dvh - 240px);
     display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:14px;
   }
@@ -96,8 +103,17 @@
   }
   .guia{color:var(--tinta-suave);font-size:13px;line-height:1.6;font-weight:300;max-width:280px;}
 
-  .foto-wrap{position:relative;display:none;border-radius:18px;overflow:hidden;}
-  canvas#lienzo{display:block;width:100%;height:auto;}
+  .foto-wrap{
+    position:relative;display:none;border-radius:18px;
+    overflow:visible;text-align:center;
+    max-width:100%;max-height:calc(100dvh - 240px);
+    margin:0 auto;
+  }
+  canvas#lienzo{
+    display:block;width:auto;height:auto;
+    max-width:100%;max-height:calc(100dvh - 240px);
+    margin:0 auto;
+  }
 
   /* ---------- animación de escaneo (malla de puntos) ---------- */
   #scanFx{position:absolute;inset:0;display:none;pointer-events:none;}
@@ -174,17 +190,25 @@
   #informe{display:none;margin-top:30px;}
   .video-comp{
     position:relative;border:1px solid var(--linea);border-radius:14px;
-    overflow:hidden;background:#000000;margin-bottom:18px;
+    overflow:visible;background:#000000;margin-bottom:18px;
+    max-width:100%;max-height:calc(100dvh - 140px);
+    margin-left:auto;margin-right:auto;text-align:center;
   }
-  .video-comp canvas{display:block;width:100%;height:auto;}
+  .video-comp canvas, #cmpCanvas{
+    display:block;width:auto;height:auto;
+    max-width:100%;max-height:calc(100dvh - 140px);
+    margin:0 auto;
+  }
   .cmp-tag{
     position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
     background:rgba(0,0,0,.6);color:#fff;padding:7px 16px;border-radius:16px;
     font-size:13px;font-weight:600;letter-spacing:.06em;
   }
   .slide-img{
-    width:100%;border-radius:8px;border:1px solid #E4E0D6;
-    display:block;margin-bottom:14px;
+    width:auto;max-width:100%;max-height:calc(100dvh - 140px);
+    height:auto;object-fit:contain;
+    border-radius:8px;border:1px solid #E4E0D6;
+    display:block;margin:0 auto 14px;
   }
 
   /* ---------- cámara ---------- */
@@ -1071,12 +1095,54 @@ function textoSombra(g, on){
 function marcadorNumero(g, x, y, n, color, r){
   g.fillStyle = "#fff";
   g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fill();
-  g.strokeStyle = color || F.tinta; g.lineWidth = 2.6;
+  g.strokeStyle = color || F.tinta; g.lineWidth = Math.max(1.6, r*0.22);
   g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.stroke();
   g.fillStyle = F.tinta;
   g.textAlign = "center";
   g.font = "700 " + Math.round(r*1.05) + "px " + FB;
   g.fillText(String(n), x, y + r*0.38);
+}
+
+/** Etiqueta fuera del bounding box facial con línea guía corta al ancla.
+ *  ladoImg: 'izq'|'der'|'arriba'|'abajo' en coords de imagen (izq = menor x).
+ *  faceBox: {L,R,T,B}; frame opcional {L,R,T,B} para no salirse del clip. */
+function etiquetaAfuera(g, txt, ax, ay, ladoImg, faceBox, frame){
+  g.font = "700 17px " + FB;
+  const tw = g.measureText(txt).width;
+  const gap = 22;
+  let tx, ty, align;
+  if(ladoImg === 'izq'){
+    tx = faceBox.L - gap; ty = ay; align = 'right';
+  } else if(ladoImg === 'der'){
+    tx = faceBox.R + gap; ty = ay; align = 'left';
+  } else if(ladoImg === 'arriba'){
+    tx = ax; ty = faceBox.T - gap; align = 'center';
+  } else {
+    tx = ax; ty = faceBox.B + gap + 6; align = 'center';
+  }
+  if(frame){
+    const half = (align==='center') ? tw/2 : (align==='right' ? tw : 0);
+    const other = (align==='center') ? tw/2 : (align==='left' ? tw : 0);
+    if(tx - half < frame.L + 8) tx = frame.L + 8 + half;
+    if(tx + other > frame.R - 8) tx = frame.R - 8 - other;
+    ty = Math.max(frame.T + 18, Math.min(frame.B - 14, ty));
+  }
+  /* punto de amarre cerca del borde del óvalo */
+  let hx = ax, hy = ay;
+  if(ladoImg === 'izq'){ hx = faceBox.L; hy = Math.max(faceBox.T+8, Math.min(faceBox.B-8, ay)); }
+  else if(ladoImg === 'der'){ hx = faceBox.R; hy = Math.max(faceBox.T+8, Math.min(faceBox.B-8, ay)); }
+  else if(ladoImg === 'arriba'){ hx = Math.max(faceBox.L+8, Math.min(faceBox.R-8, ax)); hy = faceBox.T; }
+  else { hx = Math.max(faceBox.L+8, Math.min(faceBox.R-8, ax)); hy = faceBox.B; }
+  g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 1.6;
+  g.beginPath(); g.moveTo(ax, ay); g.lineTo(hx, hy); g.lineTo(tx, ty); g.stroke();
+  g.fillStyle = "rgba(255,255,255,.95)";
+  g.beginPath(); g.arc(ax, ay, 3.2, 0, Math.PI*2); g.fill();
+  textoSombra(g, true);
+  g.fillStyle = "#fff";
+  g.textAlign = align;
+  g.font = "700 17px " + FB;
+  g.fillText(txt, tx, ty);
+  textoSombra(g, false);
 }
 
 function tagLado(g, x, y, lado){
@@ -1197,14 +1263,15 @@ function pagina1(anotacionesZona){
   g.beginPath(); g.moveTo(M(A.lm[105]).x-40, yCejaImgIzq); g.lineTo(cxC+8, yCejaImgIzq); g.stroke();
   g.beginPath(); g.moveTo(M(A.lm[334]).x+40, yCejaImgDer); g.lineTo(cxC-8, yCejaImgDer); g.stroke();
   g.setLineDash([]);
+  /* bbox facial en coords de página (para etiquetas fuera de cara) */
+  const faceBox = { L: M({x:bnX,y:bnY}).x, R: M({x:bxX,y:bnY}).x, T: M({x:bnX,y:bnY}).y, B: M({x:bnX,y:bxY}).y };
+  const frameBox = { L: frx+10, R: frx+frw-10, T: fry+10, B: fry+frh-100 };
+
   if(A.cejaMasAlta !== 'equilibrado' && Math.abs(yCejaImgIzq-yCejaImgDer) > 8){
     flecha(g, cxC, Math.max(yCejaImgIzq,yCejaImgDer), cxC, Math.min(yCejaImgIzq,yCejaImgDer), R.ceja, 2.8);
-    textoSombra(g, true);
-    g.fillStyle = "#fff";
-    g.textAlign = "center";
-    g.font = "700 19px " + FB;
-    g.fillText("CEJA " + (A.cejaMasBaja==='izquierda'?'IZQ.':'DER.') + " MÁS BAJA", cxC, Math.min(yCejaImgIzq,yCejaImgDer)-14);
-    textoSombra(g, false);
+    const txtCeja = "CEJA " + (A.cejaMasBaja==='izquierda'?'IZQ.':'DER.') + " MÁS BAJA";
+    const anclaCeja = A.cejaMasBaja === 'izquierda' ? M(A.lm[334]) : M(A.lm[105]);
+    etiquetaAfuera(g, txtCeja, anclaCeja.x, Math.min(yCejaImgIzq,yCejaImgDer), 'arriba', faceBox, frameBox);
   }
 
   const segOjo = (a,b) => {
@@ -1220,23 +1287,15 @@ function pagina1(anotacionesZona){
   if(A.ojoMenosAbierto !== 'equilibrado'){
     const idx = A.ojoMenosAbierto === 'izquierda' ? 386 : 159;
     const p = M(A.lm[idx]);
-    textoSombra(g, true);
-    g.fillStyle = "#fff";
-    g.textAlign = "center";
-    g.font = "700 18px " + FB;
-    g.fillText("MENOS ABIERTO", p.x, p.y-28*sCara);
-    textoSombra(g, false);
+    const ladoOjo = A.ojoMenosAbierto === 'izquierda' ? 'der' : 'izq';
+    etiquetaAfuera(g, "MENOS ABIERTO", p.x, p.y, ladoOjo, faceBox, frameBox);
   }
 
   if(A.comisuraMasBaja !== 'equilibrado'){
     const idx = A.comisuraMasBaja === 'izquierda' ? 291 : 61;
     const p = M(A.lm[idx]);
-    textoSombra(g, true);
-    g.fillStyle = "#fff";
-    g.textAlign = "center";
-    g.font = "700 18px " + FB;
-    g.fillText("COMISURA MÁS BAJA", p.x, p.y+34*sCara);
-    textoSombra(g, false);
+    const ladoCom = A.comisuraMasBaja === 'izquierda' ? 'der' : 'izq';
+    etiquetaAfuera(g, "COMISURA MÁS BAJA", p.x, p.y, ladoCom, faceBox, frameBox);
   }
 
   if(A.mentonHacia !== 'centrado'){
@@ -1263,7 +1322,7 @@ function pagina1(anotacionesZona){
     const pt = M(A.lm[idx]);
     let py = pt.y;
     if(a.zona === 'cuello') py = Math.min(py + A.h*s*0.09, fry+frh-110);
-    marcadorNumero(g, pt.x, py, i+1, F.oro, 17);
+    marcadorNumero(g, pt.x, py, i+1, F.oro, 11);
   });
 
   ladosFoto(g, fx, fw, fry, false);
@@ -1677,7 +1736,7 @@ function paginaComparativo(categorias){
     const pt = Mr(A.lm[idx]);
     const px2 = Math.max(startX+18, Math.min(startX+realW-18, pt.x));
     const py2 = Math.max(py0+18, Math.min(py0+H-18, pt.y));
-    marcadorNumero(g, px2, py2, i+1, F.rojo, 15);
+    marcadorNumero(g, px2, py2, i+1, F.rojo, 11);
   });
 
   /* guía: qué observar al comparar real vs espejo */
