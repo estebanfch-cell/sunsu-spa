@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.9 — scan clip al contorno facial -->
+<!-- K-Lift simetria.html v19.10 — cruz eje cuadrada + sin doble línea tercio inferior -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -967,12 +967,16 @@ function dibujarLineasFaciales(g, M, s){
   const L = 4000;
   const gr = Math.max(1.6, 2.4*s);
 
+  /* Cruz de referencia 100% cuadrada (horizontal + vertical punteadas blancas) */
+  const yEjeH = (lm.length > 473 && lm[468] && lm[473])
+    ? (M(lm[468]).y + M(lm[473]).y) / 2
+    : p0.y;
   g.strokeStyle = "rgba(255,255,255,.95)";
   g.lineWidth = gr;
   g.setLineDash([10*s, 8*s]);
   g.beginPath();
-  g.moveTo(p0.x - d.x*L, p0.y - d.y*L);
-  g.lineTo(p0.x + d.x*L, p0.y + d.y*L);
+  g.moveTo(p0.x, p0.y - L); g.lineTo(p0.x, p0.y + L); /* vertical recta */
+  g.moveTo(p0.x - L, yEjeH); g.lineTo(p0.x + L, yEjeH); /* horizontal recta */
   g.stroke();
   g.setLineDash([]);
 
@@ -1350,11 +1354,12 @@ function pagina1(anotacionesZona){
 
   /* Tercios / guías: líneas por pares L-R (siguen inclinación del rostro) */
   const parPupilas = (A.lm.length > 473 && A.lm[468] && A.lm[473]) ? [468, 473] : [33, 263];
+  /* 4 bordes de tercios (sin boca: la comisura ya va en dibujarLineasFaciales — evitaba doble línea abajo) */
   const paresTercio = [
     [67, 297],       /* frente / hairline */
-    parPupilas,      /* pupilas / ojos */
-    [61, 291],       /* comisuras boca */
-    [172, 397]       /* mandíbula */
+    parPupilas,      /* pupilas / ojos — límite tercio superior/medio */
+    [98, 327],       /* base nasal / midface — límite tercio medio/inferior */
+    [172, 397]       /* mandíbula — cierre inferior */
   ];
   const coloresTercio = [
     "rgba(201,106,91,.85)",
