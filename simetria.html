@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.14 — línea roja tercio inferior por el mentón -->
+<!-- K-Lift simetria.html v19.15 — Observaciones siempre incluyen eje V-Line -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -2107,6 +2107,35 @@ function iniciarVideoComp(){
   cmpRAF = requestAnimationFrame(paso);
 }
 
+/** Safety net: Observaciones del escaneo siempre incluyen eje V-Line (prioridad #1). */
+function asegurarObsVline(datos){
+  if(!datos) return;
+  const arr = Array.isArray(datos.anotacionesZona) ? datos.anotacionesZona.slice() : [];
+  const yaTiene = arr.some(a => {
+    const z = String((a && a.zona) || '').toLowerCase();
+    const t = String((a && a.texto) || '').toLowerCase();
+    if(z.startsWith('mandibula_') || z.startsWith('masetero_')) return true;
+    return /v-?line|vline|contorno|mand[ií]b/.test(t);
+  });
+  if(yaTiene){
+    datos.anotacionesZona = arr;
+    return;
+  }
+  const cats = Array.isArray(datos.categorias) ? datos.categorias : [];
+  const cat = cats.find(c => /definici[oó]n\s*v-?\s*line/i.test(String((c && c.nombre) || '')))
+    || cats.find(c => /[oó]valo\s*facial/i.test(String((c && c.nombre) || '')));
+  let lado = (cat && cat.lado) ? String(cat.lado).toLowerCase() : 'izquierda';
+  if(lado !== 'derecha') lado = 'izquierda'; /* equilibrado → izquierda */
+  const zona = 'mandibula_' + lado;
+  let texto = '';
+  if(cat && cat.observacion){
+    texto = String(cat.observacion).trim().split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+  }
+  if(!texto) texto = 'Contorno V-Line ' + lado + ' a reforzar';
+  arr.unshift({ zona, texto });
+  datos.anotacionesZona = arr.slice(0, 4);
+}
+
 async function generarInforme(datos){
   await document.fonts.ready;
   try{
@@ -2122,6 +2151,7 @@ async function generarInforme(datos){
   INFO.fecha = new Date().toLocaleDateString('es-EC', { day:'numeric', month:'long', year:'numeric' });
 
   const cats8 = (datos.categorias||[]).slice(0,8);
+  asegurarObsVline(datos);
   /* orden: 1 Simetría · 2 Áreas · 3-4 Observaciones */
   const paginas = [
     pagina1(datos.anotacionesZona),
