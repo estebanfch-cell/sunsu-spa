@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.15 — Observaciones siempre incluyen eje V-Line -->
+<!-- K-Lift simetria.html v19.16 — Observaciones: resaltes por color de categoría -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -1267,17 +1267,18 @@ function etiquetaAfuera(g, txt, ax, ay, ladoImg, faceBox, frame){
   textoSombra(g, false);
 }
 
-function tagLado(g, x, y, lado){
+function tagLado(g, x, y, lado, colCat){
   const l = (lado||'equilibrado').toLowerCase();
   const txt = l==='izquierda' ? 'IZQUIERDA' : l==='derecha' ? 'DERECHA' : (l==='centrado' ? 'CENTRADO' : 'EQUILIBRADO');
   const esEq = (l!=='izquierda' && l!=='derecha');
+  const accent = colCat || F.rojo;
   g.font = "700 14px " + FB;
   const w = g.measureText(txt).width + 20;
-  g.fillStyle = esEq ? "#F5F3EE" : F.rojoSuave;
+  g.fillStyle = esEq ? "#F5F3EE" : (accent + "28");
   rrect(g, x, y-17, w, 24, 4); g.fill();
-  g.strokeStyle = esEq ? F.linea : F.rojo; g.lineWidth = 1.4;
+  g.strokeStyle = esEq ? F.linea : accent; g.lineWidth = 1.4;
   rrect(g, x, y-17, w, 24, 4); g.stroke();
-  g.fillStyle = esEq ? F.gris : F.rojo;
+  g.fillStyle = esEq ? F.gris : accent;
   g.textAlign = "left";
   g.fillText(txt, x+10, y);
   return w;
@@ -1698,6 +1699,18 @@ const CAT_REGION = {
   "Óvalo Facial":      () => 'ovalo'
 };
 
+/* color de identidad por categoría (mapa obs + barra + tag lado) */
+const CAT_COLORES = {
+  "Altura de Cejas":      R.ceja,      /* #B57FD6 */
+  "Apertura Ocular":      R.ojo,       /* #E8B33C */
+  "Simetría de Boca":     R.boca,      /* #C96A5B */
+  "Volumen de Mejillas":  R.mejilla,   /* #D4896A */
+  "Tensión Muscular":     "#C45C5C",
+  "Definición V-Line":    "#9A968C",   /* mismo que leyenda Eje y V-Line */
+  "Línea Media y Mentón": R.menton,    /* #E58AAE */
+  "Óvalo Facial":         "#5B9FB0"
+};
+
 /* PÁGINAS 3 y 4 — Observaciones: mapa pequeño de la página + 4 categorías en detalle */
 function paginaObs(cats, desde, numPag, obsGeneral){
   const { c, g } = nuevaPagina();
@@ -1711,7 +1724,7 @@ function paginaObs(cats, desde, numPag, obsGeneral){
     const p100 = Math.round(Number(cat.puntaje)||0);
     const fn = CAT_REGION[cat.nombre];
     if(!fn) continue;
-    const colR = p100 < 82 ? F.rojo : F.oro;
+    const colR = CAT_COLORES[cat.nombre] || F.oro;
     const lado = (cat.lado||'equilibrado').toLowerCase();
     if(lado === 'izquierda' || lado === 'derecha'){
       resaltes.push({ region: fn(lado), valor: p100, nombre: cat.nombre, color: colR });
@@ -1750,12 +1763,13 @@ function paginaObs(cats, desde, numPag, obsGeneral){
     g.font = "700 22px " + FH;
     g.fillText(cat.nombre.toUpperCase(), txtX, y+26);
     const nombreW = g.measureText(cat.nombre.toUpperCase()).width;
-    tagLado(g, txtX + nombreW + 14, y+26, lado);
+    const colCat = CAT_COLORES[cat.nombre] || F.oro;
+    tagLado(g, txtX + nombreW + 14, y+26, lado, colCat);
 
     const barW = 260, barY = y+42;
     g.fillStyle = "#F0EDE6";
     rrect(g, txtX, barY, barW, 9, 4); g.fill();
-    const colorBar = p100 >= 82 ? F.oro : (p100 >= 62 ? F.ambar : F.rojo);
+    const colorBar = colCat;
     g.fillStyle = colorBar;
     rrect(g, txtX, barY, Math.max(9, barW*p100/100), 9, 4); g.fill();
     g.fillStyle = F.tinta;
