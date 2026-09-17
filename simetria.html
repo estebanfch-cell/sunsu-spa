@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.6 — mirror ingest + obs colores + real/espejo pág1 -->
+<!-- K-Lift simetria.html v19.7 — PDF pág1 single-face + app Real|Espejo dual top -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -113,6 +113,30 @@
     display:block;width:auto;height:auto;
     max-width:100%;max-height:calc(100dvh - 240px);
     margin:0 auto;
+  }
+
+  /* ---------- dual Real | Espejo (app UI, post-análisis) ---------- */
+  .dual-preview{
+    display:none;gap:10px;margin:0 0 18px;
+    align-items:stretch;justify-content:center;
+    max-height:calc(100dvh - 280px);
+  }
+  .dual-preview.activo{display:flex;}
+  .dual-panel{
+    flex:1 1 0;min-width:0;
+    background:#000000;border:1px solid var(--linea);
+    border-radius:14px;overflow:hidden;position:relative;
+    text-align:center;
+  }
+  .dual-panel canvas{
+    display:block;width:100%;height:auto;
+    max-height:calc(100dvh - 320px);
+    object-fit:contain;margin:0 auto;background:#000000;
+  }
+  .dual-label{
+    position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,.6);color:#fff;padding:6px 14px;border-radius:14px;
+    font-size:12px;font-weight:600;letter-spacing:.06em;pointer-events:none;
   }
 
   /* ---------- animación de escaneo (malla de puntos) ---------- */
@@ -266,6 +290,17 @@
       <div class="esquina e1"></div><div class="esquina e2"></div>
       <div class="esquina e3"></div><div class="esquina e4"></div>
       <div class="msg" id="scanMsg">Midiendo 478 puntos faciales</div>
+    </div>
+  </div>
+
+  <div class="dual-preview" id="dualPreview" aria-label="Comparativo Real y Espejo">
+    <div class="dual-panel">
+      <canvas id="dualReal"></canvas>
+      <div class="dual-label">REAL</div>
+    </div>
+    <div class="dual-panel">
+      <canvas id="dualEspejo"></canvas>
+      <div class="dual-label">EN ESPEJO</div>
     </div>
   </div>
 
@@ -652,6 +687,8 @@ function procesarArchivo(file){
   $('slidesContenedor').innerHTML = '';
   cancelAnimationFrame(cmpRAF);
   pdfBlob = null;
+  const dual0 = $('dualPreview');
+  if(dual0) dual0.classList.remove('activo');
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => { URL.revokeObjectURL(url); analizar(img); };
@@ -888,8 +925,9 @@ function analizar(img){
 
   dibujarLineasFaciales(ctx, p => p, Math.max(0.7, anchoCara/450));
   $('fotoZona').style.display = 'none';
-  $('fotoWrap').style.display = 'block';
+  $('fotoWrap').style.display = 'none';
   $('notaFinal').style.display = 'block';
+  mostrarDualPreview();
 
   generarConIA();
 }
@@ -1251,33 +1289,29 @@ function icono(g, tipo, cx, cy, r){
   }
 }
 
-/* PÁGINA 1 — Simetría K-Lift · Real | Espejo lado a lado */
+/* PÁGINA 1 — Simetría K-Lift · rostro único a ancho completo */
 function pagina1(anotacionesZona){
   const { c, g } = nuevaPagina();
   tituloPagina(g, "대칭", "Simetría", "Simetría K-Lift", "Análisis izquierda vs derecha · puntos de referencia faciales");
 
-  /* pozo fotográfico: dos columnas ~mitad (márgenes laterales); frh algo menor para caber leyenda+obs */
-  const frx = 44, fry = 208, frw = SW-88, gap = 18;
-  const panelW = (frw - gap) / 2;
-  const frh = 760;
-  const leftX = frx, rightX = frx + panelW + gap;
+  /* pozo fotográfico a ancho completo (frw = SW-88); sin panel Espejo en el PDF */
+  const frx = 44, fry = 208, frw = SW-88, frh = 862;
 
   /* encuadre centrado en el rostro: cabeza completa garantizada, cara protagonista */
   let bnX=1e9,bxX=-1e9,bnY=1e9,bxY=-1e9;
   for(const p of A.lm){ if(p.x<bnX)bnX=p.x; if(p.x>bxX)bxX=p.x; if(p.y<bnY)bnY=p.y; if(p.y>bxY)bxY=p.y; }
   const fWc2 = bxX-bnX, fHc2 = bxY-bnY;
-  const s = Math.min(panelW/(fWc2*2.0), frh/(fHc2*1.95));
-  const ox = leftX + panelW/2 - ((bnX+bxX)/2)*s;
+  const s = Math.min(frw/(fWc2*2.0), frh/(fHc2*1.95));
+  const ox = frx + frw/2 - ((bnX+bxX)/2)*s;
   const oy = fry - (bnY - 0.34*fHc2)*s + 6;
   const M = p => ({ x: ox + p.x*s, y: oy + p.y*s });
-  const fx = leftX, fw = panelW;
+  const fx = frx, fw = frw;
   const sCara = Math.max(0.7, (A.anchoCara*s)/450);
 
-  /* —— izquierda: Real con overlays de análisis —— */
   g.save();
-  rrect(g, leftX, fry, panelW, frh, 8); g.clip();
+  rrect(g, frx, fry, frw, frh, 8); g.clip();
   g.fillStyle = F.fondoFotoCara;
-  g.fillRect(leftX, fry, panelW, frh);
+  g.fillRect(frx, fry, frw, frh);
   g.drawImage(A.limpio, ox, oy, A.w*s, A.h*s);
 
   const ysT = [10,168,2,152].map(i => M(A.lm[i]).y);
@@ -1302,7 +1336,7 @@ function pagina1(anotacionesZona){
   g.setLineDash([]);
   /* bbox facial en coords de página (para etiquetas fuera de cara) */
   const faceBox = { L: M({x:bnX,y:bnY}).x, R: M({x:bxX,y:bnY}).x, T: M({x:bnX,y:bnY}).y, B: M({x:bnX,y:bxY}).y };
-  const frameBox = { L: leftX+8, R: leftX+panelW-8, T: fry+10, B: fry+frh-36 };
+  const frameBox = { L: frx+8, R: frx+frw-8, T: fry+10, B: fry+frh-100 };
 
   if(A.cejaMasAlta !== 'equilibrado' && Math.abs(yCejaIzq-yCejaDer) > 8){
     flecha(g, cxC, Math.max(yCejaIzq,yCejaDer), cxC, Math.min(yCejaIzq,yCejaDer), R.ceja, 2.8);
@@ -1348,8 +1382,8 @@ function pagina1(anotacionesZona){
     const ym = (ysT[k]+ysT[k+1])/2;
     textoSombra(g, true);
     g.fillStyle = "#fff";
-    g.font = "700 16px " + FB;
-    g.fillText(nombres[k], fx+14, ym+6);
+    g.font = "700 21px " + FB;
+    g.fillText(nombres[k], fx+18, ym+7);
     textoSombra(g, false);
   }
 
@@ -1358,103 +1392,70 @@ function pagina1(anotacionesZona){
     if(idx == null) return;
     const pt = M(A.lm[idx]);
     let py = pt.y;
-    if(a.zona === 'cuello') py = Math.min(py + A.h*s*0.09, fry+frh-40);
-    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 11);
+    if(a.zona === 'cuello') py = Math.min(py + A.h*s*0.09, fry+frh-110);
+    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 17);
   });
 
   ladosFoto(g, fx, fw, fry, false);
-  textoSombra(g, true);
-  g.fillStyle = "#fff";
-  g.font = "700 14px " + FB;
-  g.textAlign = "center";
-  g.fillText("REAL", fx + fw/2, fry + frh - 16);
-  textoSombra(g, false);
-  g.restore();
-  g.strokeStyle = F.linea; g.lineWidth = 1.5;
-  rrect(g, leftX, fry, panelW, frh, 8); g.stroke();
 
-  /* —— derecha: espejo limpio (flip horizontal completo, sin overlays) —— */
-  g.save();
-  rrect(g, rightX, fry, panelW, frh, 8); g.clip();
-  g.fillStyle = F.fondoFotoCara;
-  g.fillRect(rightX, fry, panelW, frh);
-  g.save();
-  g.translate(rightX + panelW, 0); g.scale(-1, 1);
-  g.drawImage(A.limpio, ox - leftX, oy, A.w*s, A.h*s);
-  g.restore();
-  ladosFoto(g, rightX, panelW, fry, true);
-  textoSombra(g, true);
-  g.fillStyle = "#fff";
-  g.font = "700 14px " + FB;
-  g.textAlign = "center";
-  g.fillText("EN ESPEJO", rightX + panelW/2, fry + frh - 16);
-  textoSombra(g, false);
-  g.restore();
-  g.strokeStyle = F.linea; g.lineWidth = 1.5;
-  rrect(g, rightX, fry, panelW, frh, 8); g.stroke();
-
-  /* rótulos bajo paneles */
-  g.textAlign = "center";
-  g.fillStyle = F.texto;
-  g.font = "600 17px " + FB;
-  g.fillText("Real", leftX + panelW/2, fry + frh + 24);
-  g.fillText("En espejo", rightX + panelW/2, fry + frh + 24);
-
-  /* leyenda a ancho completo bajo ambos paneles (evita apretar la columna Real) */
-  const leyH = 64, leyY = fry + frh + 38;
+  /* leyenda dentro del marco fotográfico */
+  const leyH = 84, leyY = fry+frh-leyH-12;
   g.fillStyle = "rgba(255,255,255,.93)";
-  rrect(g, frx, leyY, frw, leyH, 6); g.fill();
+  rrect(g, fx+12, leyY, fw-24, leyH, 6); g.fill();
   g.strokeStyle = F.linea; g.lineWidth = 1;
-  rrect(g, frx, leyY, frw, leyH, 6); g.stroke();
+  rrect(g, fx+12, leyY, fw-24, leyH, 6); g.stroke();
   const ley = [
     ["Ceja",R.ceja],["Esq. de ojo",R.ojo],["Pupila",R.pupila],["Punta nasal",R.nariz],
     ["Esq. de boca",R.boca],["Mejilla",R.mejilla],["Mentón",R.menton],["Eje y V-Line","#9A968C"]
   ];
-  g.font = "500 16px " + FB;
-  const anchos = ley.map(([t])=> 18 + g.measureText(t).width + 22);
+  g.font = "500 18px " + FB;
+  const anchos = ley.map(([t])=> 20 + g.measureText(t).width + 26);
   const porFila = 4;
-  let lx = frx + (frw - anchos.slice(0,porFila).reduce((s2,a2)=>s2+a2,0))/2;
-  let ly = leyY+26;
+  let lx = fx+12 + (fw-24 - anchos.slice(0,porFila).reduce((s2,a2)=>s2+a2,0))/2;
+  let ly = leyY+34;
   for(let i=0;i<ley.length;i++){
     if(i===porFila){
-      lx = frx + (frw - anchos.slice(porFila).reduce((s2,a2)=>s2+a2,0))/2;
-      ly = leyY+50;
+      lx = fx+12 + (fw-24 - anchos.slice(porFila).reduce((s2,a2)=>s2+a2,0))/2;
+      ly = leyY+66;
     }
     g.fillStyle = ley[i][1];
-    g.beginPath(); g.arc(lx+7, ly-5, 7, 0, Math.PI*2); g.fill();
+    g.beginPath(); g.arc(lx+8, ly-6, 8, 0, Math.PI*2); g.fill();
     g.fillStyle = F.texto;
     g.textAlign = "left";
-    g.fillText(ley[i][0], lx+18, ly);
+    g.fillText(ley[i][0], lx+22, ly);
     lx += anchos[i];
   }
+  g.restore();
+  g.strokeStyle = F.linea; g.lineWidth = 1.5;
+  rrect(g, frx, fry, frw, frh, 8); g.stroke();
 
-  /* observaciones numeradas */
-  let gy = leyY + leyH + 34;
+  /* observaciones numeradas (colores por zona) */
+  let gy = fry + frh + 46;
   seccion(g, "Observaciones del escaneo", 44, gy, SW-88);
-  gy += 36;
+  gy += 40;
   const items = (anotacionesZona||[]).slice(0,4);
   const colW = (SW-88-24)/2;
-  g.font = "400 19px " + FB;
+  g.font = "400 20px " + FB;
   for(let r2=0; r2<2; r2++){
     let maxH = 0;
     for(let ci=0; ci<2; ci++){
       const i = r2*2+ci; if(i>=items.length) continue;
       const tl = envolver(g, items[i].texto, colW-56);
-      maxH = Math.max(maxH, tl.length*24 + 18);
+      maxH = Math.max(maxH, tl.length*26 + 20);
     }
     for(let ci=0; ci<2; ci++){
       const i = r2*2+ci; if(i>=items.length) continue;
       const bx = 44 + ci*(colW+24);
-      marcadorNumero(g, bx+16, gy+14, i+1, colorZona(items[i].zona), 14);
+      marcadorNumero(g, bx+16, gy+14, i+1, colorZona(items[i].zona), 15);
       g.fillStyle = F.texto;
       g.textAlign = "left";
-      g.font = "400 19px " + FB;
+      g.font = "400 20px " + FB;
       const tl = envolver(g, items[i].texto, colW-56);
-      tl.forEach((ln,k)=> g.fillText(ln, bx+42, gy+18+k*24));
+      tl.forEach((ln,k)=> g.fillText(ln, bx+42, gy+20+k*26));
       g.strokeStyle = F.linea; g.lineWidth = 1;
       g.beginPath(); g.moveTo(bx, gy+maxH+6); g.lineTo(bx+colW, gy+maxH+6); g.stroke();
     }
-    gy += maxH + 18;
+    gy += maxH + 22;
   }
 
   pie(g, 1);
@@ -2074,11 +2075,8 @@ function paginaAreas(focos){
   return c;
 }
 
-/* ---------- video comparativo en espejo (solo en la app) ---------- */
-let cmpRAF = null;
-function iniciarVideoComp(){
-  if(!A) return;
-  cancelAnimationFrame(cmpRAF);
+/* ---------- dual Real | Espejo estático (app UI, arriba de nombre/subir) ---------- */
+function faceCropBounds(){
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
   for(const p of A.lm){
     if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
@@ -2089,7 +2087,48 @@ function iniciarVideoComp(){
   const sx1 = Math.min(A.w, maxX + 0.14*fWc);
   const sy0 = Math.max(0, minY - 0.32*fHc);
   const sy1 = Math.min(A.h, maxY + 0.16*fHc);
-  const cw2 = sx1-sx0, ch2 = sy1-sy0;
+  return { sx0, sy0, cw: sx1-sx0, ch: sy1-sy0 };
+}
+function mostrarDualPreview(){
+  if(!A) return;
+  const dual = $('dualPreview');
+  if(!dual) return;
+  const { sx0, sy0, cw, ch } = faceCropBounds();
+  const esc = Math.min(1, 520 / cw);
+  const W = Math.round(cw * esc), H = Math.round(ch * esc);
+  const M = p => ({ x: (p.x - sx0) * esc, y: (p.y - sy0) * esc });
+  const sCara = Math.max(0.55, (A.anchoCara * esc) / 450);
+
+  const real = $('dualReal');
+  const espejo = $('dualEspejo');
+  real.width = W; real.height = H;
+  espejo.width = W; espejo.height = H;
+
+  const rg = real.getContext('2d');
+  rg.fillStyle = F.fondoFotoCara;
+  rg.fillRect(0, 0, W, H);
+  rg.drawImage(A.limpio, sx0, sy0, cw, ch, 0, 0, W, H);
+  dibujarLineasFaciales(rg, M, sCara);
+
+  const eg = espejo.getContext('2d');
+  eg.fillStyle = F.fondoFotoCara;
+  eg.fillRect(0, 0, W, H);
+  eg.save();
+  eg.translate(W, 0); eg.scale(-1, 1);
+  eg.drawImage(A.limpio, sx0, sy0, cw, ch, 0, 0, W, H);
+  eg.restore();
+
+  dual.classList.add('activo');
+  $('fotoZona').style.display = 'none';
+  $('fotoWrap').style.display = 'none';
+}
+
+/* ---------- video comparativo en espejo (solo en la app) ---------- */
+let cmpRAF = null;
+function iniciarVideoComp(){
+  if(!A) return;
+  cancelAnimationFrame(cmpRAF);
+  const { sx0, sy0, cw: cw2, ch: ch2 } = faceCropBounds();
 
   const cropC = document.createElement('canvas');
   const escC = Math.min(1, 640/cw2);
