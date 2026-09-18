@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.09.18.01 -->
+<!-- v2026.09.18.02 ticket-vk-familias -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260918.01';
+  var v='20260918.02';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -774,6 +774,92 @@ function doLogout(){
   mostrarPinLogin();
 }
 // ══════ APP ══════
+// Productos retail del Ticket: SKU FAM-### o SUNSU-FAM-### (HT, AS, VK, …).
+// El catálogo puede traer o no el prefijo SUNSU-; el Ticket siempre usa SUNSU-FAM-###.
+function _skuRetail(sku){
+  var s=(sku||'').toString().trim().toUpperCase();
+  var m=s.match(/^(?:SUNSU-)?([A-Z]{2,3})-(\d{3})$/);
+  if(!m) return null;
+  return {fam:m[1], code:m[1]+'-'+m[2], sku:'SUNSU-'+m[1]+'-'+m[2]};
+}
+function _esProductoRetail(item){
+  if(!_skuRetail(item&&item.sku)) return false;
+  var t=(item.tipo||'').toString().trim().toUpperCase();
+  return !t || t==='PRODUCTO';
+}
+function _asegurarGrupoProv(fam){
+  var id=String(fam||'').toLowerCase();
+  var pv=PROVS.find(function(g){return g.id===id;});
+  if(pv) return pv;
+  var LABELS={ht:'HT — ANUA',as:'AS — Eyenlip',ml:'ML — Dr.esthe',ph:'PH — APHLORA',jn:'JN — Varios',bv:'BV — Bruno Vassari',su:'SU — SUNSU'};
+  pv={id:id,label:LABELS[id]||(String(fam||'').toUpperCase()+' — Nuevos'),sub:'',color:'var(--navy)',colorL:'var(--blue-l)',badge:'#5B7A9E',prods:[]};
+  PROVS.push(pv);
+  return pv;
+}
+// Aplica getCatalogo al Ticket: precios, activo, y productos de familias NUEVAS (VK, …).
+function _aplicarCatalogoATicket(items){
+  if(!Array.isArray(items)||!items.length) return;
+  items.forEach(function(item){
+    var activo=item.activo===true;
+
+    var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
+    if(fi>=0){
+      if(item.total>0) FACIALES[fi].p=item.total;
+      if(item.subtotal>0) FACIALES[fi].sub=item.subtotal;
+      FACIALES[fi]._activo=activo;
+    }
+    else if(activo && /^FACIAL/i.test((item.tipo||'').trim())){
+      FACIALES.push({sku:item.sku, n:item.nombre, p:item.total, sub:item.subtotal||0, com:item.com||2, _activo:activo});
+    }
+    var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
+    if(ei>=0){
+      if(item.total>0) EXTRAS[ei].t=item.total;
+      EXTRAS[ei]._activo=activo;
+    }
+    var p3=PAQ3.findIndex(function(p){return p.sku===item.sku;});
+    if(p3>=0){
+      if(item.total>0) PAQ3[p3].p=item.total;
+      PAQ3[p3]._activo=activo;
+    }
+    var p6=PAQ6.findIndex(function(p){return p.sku===item.sku;});
+    if(p6>=0){
+      if(item.total>0) PAQ6[p6].p=item.total;
+      PAQ6[p6]._activo=activo;
+    }
+
+    var retail=_skuRetail(item.sku);
+    var skuCanon=retail?retail.sku:String(item.sku||'').trim();
+    var enProvs=false;
+    PROVS.forEach(function(pv){
+      var pi=pv.prods.findIndex(function(p){
+        if(p.sku===item.sku||p.sku===skuCanon) return true;
+        var pr=_skuRetail(p.sku);
+        return !!(pr&&retail&&pr.sku===retail.sku);
+      });
+      if(pi>=0){
+        enProvs=true;
+        if(item.total>0) pv.prods[pi].p=item.total;
+        pv.prods[pi]._activo=activo;
+        pv.prods[pi]._com=item.com||0;
+        pv.prods[pi].sku=skuCanon;
+      }
+    });
+    // Familia nueva (VK, etc.): crear el grupo al vuelo. Antes se exigía que
+    // PROVS ya tuviera la familia y el producto se descartaba en silencio.
+    if(!enProvs && retail && _esProductoRetail(item)){
+      var pvFam=_asegurarGrupoProv(retail.fam);
+      pvFam.prods.push({sku:skuCanon,n:item.nombre||skuCanon,p:item.total||0,_activo:activo,_com:item.com||0});
+    }
+  });
+
+  FACIALES=FACIALES.filter(function(f){return f._activo!==false;});
+  window.FACIALES=FACIALES;
+  EXTRAS=EXTRAS.filter(function(e){return e._activo!==false;});
+  PAQ3=PAQ3.filter(function(p){return p._activo!==false;});
+  PAQ6=PAQ6.filter(function(p){return p._activo!==false;});
+  PROVS.forEach(function(pv){pv.prods=pv.prods.filter(function(p){return p._activo!==false;});});
+  for(var i=PROVS.length-1;i>=0;i--){if(PROVS[i].prods.length===0) PROVS.splice(i,1);}
+}
 function initApp(){
   document.getElementById('t-av').textContent=CU.short.charAt(0);
   document.getElementById('t-av').style.background=CU.color;
@@ -802,74 +888,13 @@ function initApp(){
     var invData=results[1]||{};
     // Cache stock by SKU for product chips
     window._stockMap={};
-    (invData.items||[]).forEach(function(it){window._stockMap[it.sku]=it.stock;});
-    if(!Array.isArray(items)||!items.length) return;
-
-    items.forEach(function(item){
-      var activo=item.activo===true; // true only if col J = checked
-
-      // ── FACIALES ──
-      var fi=FACIALES.findIndex(function(f){return f.sku===item.sku;});
-      if(fi>=0){
-        if(item.total>0) FACIALES[fi].p=item.total;
-        if(item.subtotal>0) FACIALES[fi].sub=item.subtotal; // para utilidades: subtotal vs subtotal (el IVA es del estado)
-        FACIALES[fi]._activo=activo;
-      }
-      // Auto-agregar faciales nuevos del catalogo: la REGLA es la columna TIPO —
-      // 'FACIAL' o 'FACIAL ESPECIAL' = facial vendible. Asi un facial creado en
-      // el catalogo aparece solo en el ticket y en el selector de protocolos de Cabina.
-      else if(activo && /^FACIAL/i.test((item.tipo||'').trim())){
-        FACIALES.push({sku:item.sku, n:item.nombre, p:item.total, sub:item.subtotal||0, com:item.com||2, _activo:activo});
-      }
-      // ── EXTRAS ──
-      var ei=EXTRAS.findIndex(function(e){return e.sku===item.sku;});
-      if(ei>=0){
-        if(item.total>0) EXTRAS[ei].t=item.total;
-        EXTRAS[ei]._activo=activo;
-      }
-      // ── PAQ3 ──
-      var p3=PAQ3.findIndex(function(p){return p.sku===item.sku;});
-      if(p3>=0){
-        if(item.total>0) PAQ3[p3].p=item.total;
-        PAQ3[p3]._activo=activo;
-      }
-      // ── PAQ6 ──
-      var p6=PAQ6.findIndex(function(p){return p.sku===item.sku;});
-      if(p6>=0){
-        if(item.total>0) PAQ6[p6].p=item.total;
-        PAQ6[p6]._activo=activo;
-      }
-      // ── PROVS (products) ──
-      var enProvs=false;
-      PROVS.forEach(function(pv){
-        var pi=pv.prods.findIndex(function(p){return p.sku===item.sku;});
-        if(pi>=0){
-          enProvs=true;
-          if(item.total>0) pv.prods[pi].p=item.total;
-          pv.prods[pi]._activo=activo;
-          pv.prods[pi]._com=item.com||0; // comisión real por unidad (catálogo col I)
-        }
-      });
-      // Auto-agregar productos nuevos del catálogo a su familia (SU-010, ML-012, etc.)
-      // Así, agregar un producto al CATALOGO + TICKET_FICHA no requiere tocar código
-      if(!enProvs && item.tipo==='PRODUCTO'){
-        var famM=item.sku.match(/^SUNSU-([A-Z]{2,3})-\d{3}$/);
-        if(famM){
-          var pvFam=PROVS.find(function(g){return g.id===famM[1].toLowerCase();});
-          if(pvFam) pvFam.prods.push({sku:item.sku,n:item.nombre,p:item.total,_activo:activo,_com:item.com||0});
-        }
-      }
+    (invData.items||[]).forEach(function(it){
+      window._stockMap[it.sku]=it.stock;
+      var rSt=_skuRetail(it.sku);
+      if(rSt) window._stockMap[rSt.sku]=it.stock;
     });
-
-    // Filter: hide items explicitly marked inactive (_activo===false)
-    // Items with no _activo flag (not in catalog) = show by default
-    FACIALES=FACIALES.filter(function(f){return f._activo!==false;});
-    window.FACIALES=FACIALES; // el filter crea un array nuevo: re-exponer
-    EXTRAS=EXTRAS.filter(function(e){return e._activo!==false;});
-    PAQ3=PAQ3.filter(function(p){return p._activo!==false;});
-    PAQ6=PAQ6.filter(function(p){return p._activo!==false;});
-    PROVS.forEach(function(pv){pv.prods=pv.prods.filter(function(p){return p._activo!==false;});});
-    for(var i=PROVS.length-1;i>=0;i--){if(PROVS[i].prods.length===0) PROVS.splice(i,1);}
+    if(!Array.isArray(items)||!items.length) return;
+    _aplicarCatalogoATicket(items);
 
   }).catch(function(){}).finally(function(){
     showTab(allTabs[0][0]);
@@ -9647,13 +9672,17 @@ function guardarNuevoProducto(){
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
     toast('✅ '+d.sku+' creado — Catálogo + TICKET_FICHA + INVENTARIO','var(--green)');
     if(d.avisoInventario) setTimeout(function(){alert('⚠️ '+d.avisoInventario);},600);
-    _cargarProdColMap(); // refrescar el mapa de columnas con el producto nuevo
-    // Abrir la carpeta y la familia del producto nuevo para verlo de inmediato
+    _cargarProdColMap();
+    var skuNuevo=_skuRetail(d.sku||payload.sku);
+    if(skuNuevo){
+      var totNuevo=(parseFloat(payload.subtotal)||0)*1.15;
+      _aplicarCatalogoATicket([{sku:skuNuevo.sku,nombre:payload.nombre,tipo:tipoFinal||'PRODUCTO',total:totNuevo,subtotal:parseFloat(payload.subtotal)||0,com:parseFloat(payload.comision)||0,activo:true}]);
+    }
     window._catAbierta=window._catAbierta||{}; window._catFamAbierta=window._catFamAbierta||{};
     window._catAbierta['🛍️ Productos']=true;
     window._catFamAbierta[(d.sku||'').split('-')[0]]=true;
     renderCatalogoAdmin(document.getElementById('content'));
-    setTimeout(function(){toast('ℹ️ En el TICKET aparece en ~5 min (caché de Google) tras recargar el app','var(--blue)');},2200);
+    setTimeout(function(){toast('ℹ️ Ya está en Ticket — abre la pestaña 🎫 Ticket (familia '+(skuNuevo?skuNuevo.fam:d.sku)+')','var(--blue)');},2200);
   }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 function formEditarProducto(i){
@@ -13300,7 +13329,7 @@ function _cajaCargarMovimientos(){
     });
 }
 
-// cargarCatalogo handled by initApp via getCatalogo endpoint
+// cargarCatalogo (CSV publicado) NO se llama al iniciar: initApp usa getCatalogo + _aplicarCatalogoATicket
 
 // ════════════════════════════════════════════
 // 📄 ROLES — historial de roles de pago
