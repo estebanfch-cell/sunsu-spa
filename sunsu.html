@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.05.26.01 -->
+<!-- v2026.09.18.01 -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260526.01';
+  var v='20260918.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -2008,6 +2008,21 @@ function toggleDescuento(tipo){
 
 const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyLgY0TJOpjafCtRUgAlq2i1xvWifu7vLFD9dkLR2HX92dtAnMGK7FCBvkrFk7yDP6x/exec';
 
+// Compra de paquete + facial el mismo día: el staff elige si se consume 1 sesión.
+// Antes se marcaba sola (cobro==='paquete') y a veces 2–3 veces (auto-marca + reintento + marca manual).
+function _msgMarcarFacialEnPaquete(){
+  return '¿Quieres marcar este facial en el paquete?\n\nAceptar = se usa 1 sesión de hoy.\nCancelar = se vende el paquete sin consumir sesión.';
+}
+function _debePreguntarMarcarFacialEnPaquete(t){
+  return !!(t && (t.pack3 || t.pack6) && t.facial);
+}
+function _decidirMarcarFacialEnPaquete(t, confirmar){
+  if(!_debePreguntarMarcarFacialEnPaquete(t)) return false;
+  var fn = confirmar;
+  if(typeof fn !== 'function') fn = (typeof confirm === 'function') ? confirm : function(){ return false; };
+  return !!fn(_msgMarcarFacialEnPaquete());
+}
+
 function enviarTicket(){
   const cedEl=document.getElementById('inp-ced');
   const nomEl=document.getElementById('inp-nom');
@@ -2036,6 +2051,10 @@ function enviarTicket(){
   }
   window._envArmado=false; clearTimeout(window._envArmT);
   if(_btnE){_btnE.textContent='✓ Enviar Ticket';_btnE.style.background='';}
+
+  // Paquete nuevo + facial el mismo día: preguntar ANTES de enviar.
+  // Cancelar no aborta el ticket — solo deja el paquete sin consumir sesión.
+  var _marcarFacialEnPaq = _decidirMarcarFacialEnPaquete(T);
 
   // Col T: Facial
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
@@ -2257,10 +2276,10 @@ function enviarTicket(){
         +'&slots='+encodeURIComponent(JSON.stringify(_s6.map(function(s){return {codigo:s.codigo,tipo:s.tipo};}))));
     }
   }
-  // Primer uso del paquete NUEVO: si compró paquete y el facial se cobró con él
+  // Primer uso del paquete NUEVO: solo si el staff confirmó poner el facial de hoy en el paquete.
   var _primerUsoUrl = null;
   var _packNuevo = T.pack3||T.pack6;
-  if(_packNuevo && T.cobro==='paquete'){
+  if(_packNuevo && _marcarFacialEnPaq){
     // Nota con el mismo formato del marcado manual: fecha · facial hecho · usuaria
     var _puHoy=new Date();
     var _puPad=function(n){return String(n).padStart(2,'0');};
@@ -2293,15 +2312,20 @@ function enviarTicket(){
       window._paqMarcasPendientes=(_primerUsoUrl?1:0)+_paqGCUrls.length;
       var _fin=function(){window._paqMarcasPendientes=Math.max(0,(window._paqMarcasPendientes||0)-1);};
       // Marca con REINTENTO: si el paquete aún no aparece (sincronización lenta), reintenta a los 4s
+      var _marcaHecha={};
       var _marca=function(u, okMsg, failMsg, luego, intento){
+        if(_marcaHecha[u]==='ok'){ if(luego) luego(); return; }
+        if(_marcaHecha[u]==='inflight' && !intento){ return; }
+        _marcaHecha[u]='inflight';
         fetch(u).then(function(r){return r.json();})
           .then(function(d){
-            if(d.ok){ toast(okMsg(d),'var(--green)'); _fin(); if(luego) luego(); }
+            if(d.ok){ _marcaHecha[u]='ok'; toast(okMsg(d),'var(--green)'); _fin(); if(luego) luego(); }
             else if(!intento && (d.error||'').indexOf('no encontrado')>=0){
+              _marcaHecha[u]='retry';
               setTimeout(function(){_marca(u, okMsg, failMsg, luego, 1);}, 4000);
-            } else { toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego(); }
+            } else { _marcaHecha[u]='fail'; toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego(); }
           })
-          .catch(function(){toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego();});
+          .catch(function(){_marcaHecha[u]='fail'; toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego();});
       };
       var _marcarConv=function(){
         _paqGCUrls.forEach(function(u){
@@ -2356,14 +2380,16 @@ function enviarTicket(){
     (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
-    if(_cobro==='paquete'){
-      // Siempre llevar a Paquetes: si fue compra nueva (marcado automático) es solo
-      // para CONFIRMAR visualmente; si es paquete existente, para marcar la sesión.
+    if(_cobro==='paquete' || _primerUsoUrl){
+      // Compra nueva con facial marcado: solo REVISAR (no volver a marcar).
+      // Canje de paquete existente: sí hay que marcar la sesión a mano.
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
         toastMsg:_primerUsoUrl
-          ?'👀 Confirma que la sesión se haya marcado bien en el paquete de '+(_cliNom||'la clienta')
-          :'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
-        color:_primerUsoUrl?'#6A9E7A':'#7A5FA0'};
+          ?'👀 La sesión de hoy ya quedó marcada en el paquete. No la marques otra vez.'
+          :(_packNuevo
+            ?'📦 Paquete vendido sin usar sesión de hoy'
+            :'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta')),
+        color:_primerUsoUrl?'#6A9E7A':(_packNuevo?'#6A9E7A':'#7A5FA0')};
     } else if(_cobro==='giftcard'&&!_codGC){
       window._gcdPostCola={tab:'buscar-gc', prefill:_cliNom||_cedCli, prefVar:'_bgcPrefill',
         toastMsg:'🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada', color:'#C9A227'};
@@ -12410,11 +12436,16 @@ function togglePaqUso(chk, fila, idx, total){
 
 function guardarPaqUso(fila, idx, total){
   var slotId='paq-uso-'+fila+'-'+idx;
+  var lockKey='paq-uso-'+fila+'-'+idx;
+  window._paqUsoLock=window._paqUsoLock||{};
+  if(window._paqUsoLock[lockKey]) return;
   var chk=document.getElementById('chk-'+slotId);
   var notaEl=document.getElementById('nota-'+slotId);
   var btn=document.getElementById('btn-'+slotId);
   var facialNota=(notaEl?notaEl.value.trim():'');
   if(!facialNota){toast('Escribe el facial hecho','#B86B6B');notaEl&&notaEl.focus();return;}
+  if(!confirm('¿Quieres marcar este facial en el paquete?\n\n'+facialNota)) return;
+  window._paqUsoLock[lockKey]=true;
   // Auto-note: fecha · facial · usuario
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
@@ -12436,11 +12467,13 @@ function guardarPaqUso(fila, idx, total){
           +'<span style="font-size:0.72rem;color:var(--green)">✅</span>'
           +'<span style="font-size:0.7rem;color:var(--text);flex:1">'+notaFinal+'</span>';
       } else {
+        window._paqUsoLock[lockKey]=false;
         if(btn){btn.disabled=false;btn.textContent='✓';}
         toast('❌ '+(d.error||'Error'),'#B86B6B');
       }
     })
     .catch(function(){
+      window._paqUsoLock[lockKey]=false;
       if(btn){btn.disabled=false;btn.textContent='✓';}
       toast('❌ Error de conexión','#B86B6B');
     });
