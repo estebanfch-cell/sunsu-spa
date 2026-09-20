@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.18 — PDF pág.1: números/etiquetas un poco más grandes + cruz H+V más visible -->
+<!-- K-Lift simetria.html v19.18 — PDF pág.1 números/cruz + auto-descarga informe-klift-<slug>.pdf -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -706,11 +706,31 @@ function nombreDesdeArchivo(file){
   n = n.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
   return n;
 }
+function slugNombreKlift(nom){
+  const s = String(nom || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return s || "clienta";
+}
 function nombrePdfKlift(){
   const nom = (INFO.nombre || ($('inpNombre') && $('inpNombre').value) || "").trim();
-  if(!nom) return "K-Lift.pdf";
-  const safe = nom.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
-  return (safe || "K-Lift") + " K-Lift.pdf";
+  return "informe-klift-" + slugNombreKlift(nom) + ".pdf";
+}
+function descargarPdfKlift(){
+  if(!pdfBlob) return;
+  INFO.nombre = (($('inpNombre') && $('inpNombre').value) || "").trim() || INFO.nombre;
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(pdfBlob);
+  a.href = url;
+  a.download = nombrePdfKlift();
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 function procesarArchivo(file){
   if(!file) return;
@@ -2189,6 +2209,7 @@ async function generarInforme(datos){
     pdf.addImage(p.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
   });
   pdfBlob = pdf.output('blob');
+  descargarPdfKlift();
 
   $('informe').style.display = 'block';
   /* post-análisis: ocultar subir/cámara; nuevo cliente = recargar */
@@ -2208,10 +2229,7 @@ $('btnCompartirInforme').onclick = async () => {
     try{ await navigator.share({ files:[file], title:"Informe K-Lift · Sunsu Spa" }); }
     catch(e){ /* usuario canceló */ }
   }else{
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(pdfBlob);
-    a.download = file.name;
-    a.click();
+    descargarPdfKlift();
   }
 };
 
