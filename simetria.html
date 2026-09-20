@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.html v19.17 — sin marca duplicada bajo el logo -->
+<!-- K-Lift simetria.html v19.18 — PDF pág.1: números/etiquetas un poco más grandes + cruz H+V más visible -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -983,12 +983,12 @@ function dibujarLineasFaciales(g, M, s){
   const L = 4000;
   const gr = Math.max(1.6, 2.4*s);
 
-  /* Cruz de referencia 100% cuadrada — blanca sutil (fina + transparente) */
+  /* Cruz de referencia 100% cuadrada — blanca un poco más marcada (v19.18) */
   const yEjeH = (lm.length > 473 && lm[468] && lm[473])
     ? (M(lm[468]).y + M(lm[473]).y) / 2
     : p0.y;
-  g.strokeStyle = "rgba(255,255,255,.42)";
-  g.lineWidth = Math.max(0.9, gr * 0.55);
+  g.strokeStyle = "rgba(255,255,255,.60)";
+  g.lineWidth = Math.max(1.05, gr * 0.68);
   g.setLineDash([8*s, 10*s]);
   g.beginPath();
   g.moveTo(p0.x, p0.y - L); g.lineTo(p0.x, p0.y + L); /* vertical recta */
@@ -1228,9 +1228,9 @@ function marcadorNumero(g, x, y, n, color, r){
  *  ladoImg: 'izq'|'der'|'arriba'|'abajo' en coords de imagen (izq = menor x).
  *  faceBox: {L,R,T,B}; frame opcional {L,R,T,B} para no salirse del clip. */
 function etiquetaAfuera(g, txt, ax, ay, ladoImg, faceBox, frame){
-  g.font = "700 17px " + FB;
+  g.font = "700 21px " + FB;
   const tw = g.measureText(txt).width;
-  const gap = 22;
+  const gap = 24;
   let tx, ty, align;
   if(ladoImg === 'izq'){
     tx = faceBox.L - gap; ty = ay; align = 'right';
@@ -1246,7 +1246,7 @@ function etiquetaAfuera(g, txt, ax, ay, ladoImg, faceBox, frame){
     const other = (align==='center') ? tw/2 : (align==='left' ? tw : 0);
     if(tx - half < frame.L + 8) tx = frame.L + 8 + half;
     if(tx + other > frame.R - 8) tx = frame.R - 8 - other;
-    ty = Math.max(frame.T + 18, Math.min(frame.B - 14, ty));
+    ty = Math.max(frame.T + 22, Math.min(frame.B - 16, ty));
   }
   /* punto de amarre cerca del borde del óvalo */
   let hx = ax, hy = ay;
@@ -1257,11 +1257,11 @@ function etiquetaAfuera(g, txt, ax, ay, ladoImg, faceBox, frame){
   g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 1.6;
   g.beginPath(); g.moveTo(ax, ay); g.lineTo(hx, hy); g.lineTo(tx, ty); g.stroke();
   g.fillStyle = "rgba(255,255,255,.95)";
-  g.beginPath(); g.arc(ax, ay, 3.2, 0, Math.PI*2); g.fill();
+  g.beginPath(); g.arc(ax, ay, 3.6, 0, Math.PI*2); g.fill();
   textoSombra(g, true);
   g.fillStyle = "#fff";
   g.textAlign = align;
-  g.font = "700 17px " + FB;
+  g.font = "700 21px " + FB;
   g.fillText(txt, tx, ty);
   textoSombra(g, false);
 }
@@ -1492,7 +1492,7 @@ function pagina1(anotacionesZona){
     const pt = M(A.lm[idx]);
     let py = pt.y;
     if(a.zona === 'cuello') py = Math.min(py + A.h*s*0.09, fry+frh-110);
-    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 7);
+    marcadorNumero(g, pt.x, py, i+1, colorZona(a.zona), 12);
   });
 
   ladosFoto(g, fx, fw, fry, false);
