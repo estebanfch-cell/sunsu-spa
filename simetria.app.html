@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.25 — artifact (entrada estable: /simetria.html). Al terminar el análisis la vista queda en el nombre, la cara y Real | Espejo -->
+<!-- K-Lift simetria.app.html v19.26 — artifact (entrada estable: /simetria.html). PDF: título en español, más chico, logo Sunsu más grande y nítido -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -576,6 +576,8 @@ const INFO = { nombre:"", fecha:"" };
 
 let logoParaPdf = null;
 let logoPromise = null;
+let logoPdfBox = null;
+let logoPngUrl = null;
 function asegurarLogo(){
   const dom = $('logo');
   if(dom && dom.complete && dom.naturalWidth){
@@ -1365,46 +1367,75 @@ function nuevaPagina(){
   g.fillStyle = F.gris;
   g.textAlign = "left";
   let izq = INFO.nombre ? "Nombre del cliente : " + INFO.nombre : "Sunsu Spa · Facial Coreano";
-  const maxIzq = SW/2 - 44 - 110;
+  const logoBottom = medirLogoPdf();
+  const mitadLogo = logoPdfBox ? logoPdfBox.w / 2 + 18 : 110;
+  const maxIzq = SW/2 - 44 - mitadLogo;
   while(g.measureText(izq).width > maxIzq && izq.length > 4){ izq = izq.slice(0, -2) + "…"; }
-  g.fillText(izq, 44, 42);
-  dibujarLogoPdf(g);
+  const textY = logoPdfBox ? Math.round(logoPdfBox.y + logoPdfBox.h * 0.62) : 42;
+  g.fillText(izq, 44, textY);
   g.textAlign = "right";
   g.font = "400 17px " + FB;
   g.fillStyle = F.gris;
-  g.fillText("Fecha de análisis : " + INFO.fecha, SW-44, 42);
+  g.fillText("Fecha de análisis : " + INFO.fecha, SW-44, textY);
   g.strokeStyle = F.linea; g.lineWidth = 1;
-  /* La regla baja solo lo necesario para que el logo no la cruce. El bloque de título sigue en y=92. */
-  const reglaY = (logoParaPdf && logoParaPdf.naturalWidth) ? 70 : 56;
+  /* La regla queda justo bajo el logo. El título y la regla de y=184 no se mueven. */
+  const reglaY = logoPdfBox ? Math.round(logoBottom + 8) : 56;
+  if(!logoPdfBox){
+    g.textAlign = "center";
+    g.font = "600 17px " + FB;
+    g.fillStyle = F.texto;
+    g.fillText("SUNSU", SW/2, textY);
+  }
   g.beginPath(); g.moveTo(44, reglaY); g.lineTo(SW-44, reglaY); g.stroke();
   return { c, g };
 }
 
-/* Marca gráfica centrada en el encabezado, encima de la regla y sin tocar el kicker (y≈78). */
-function dibujarLogoPdf(g){
+/* Caja del logo en px de página. No se pinta en el JPEG: el PDF lo estampa en PNG. */
+function medirLogoPdf(){
   const img = logoParaPdf;
   if(img && img.naturalWidth){
-    const lh = 60;
+    const lh = 92;
     const lw = lh * (img.naturalWidth / img.naturalHeight);
-    g.drawImage(img, (SW - lw) / 2, 4, lw, lh);
-    return;
+    const y = 6;
+    logoPdfBox = { x: (SW - lw) / 2, y, w: lw, h: lh };
+    return y + lh;
   }
-  g.textAlign = "center";
-  g.font = "600 17px " + FB;
-  g.fillStyle = F.texto;
-  g.fillText("SUNSU", SW/2, 42);
+  logoPdfBox = null;
+  return 48;
 }
 
-function tituloPagina(g, ko, titulo){
-  /* Hangul centrado y más grande; el título en serif queda debajo, también centrado.
-     Sin kicker en español y sin subtítulo. La regla sigue en y=184 para no mover el pozo. */
+function logoParaEstampar(){
+  if(logoPngUrl) return logoPngUrl;
+  const img = logoParaPdf;
+  if(!img || !img.naturalWidth) return null;
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(img, 0, 0);
+  logoPngUrl = c.toDataURL('image/png');
+  return logoPngUrl;
+}
+
+function estamparLogoPdf(pdf){
+  const src = logoParaEstampar();
+  if(!src || !logoPdfBox) return;
+  const b = logoPdfBox;
+  const x = b.x * 210 / SW;
+  const y = b.y * 297 / SH;
+  const w = b.w * 210 / SW;
+  const h = b.h * 297 / SH;
+  pdf.addImage(src, 'PNG', x, y, w, h, 'sunsu-logo', 'FAST');
+}
+
+function tituloPagina(g, titulo){
+  /* Solo el título en español, un poco más chico. La regla sigue en y=184 para no mover el pozo. */
   g.textAlign = "center";
   g.fillStyle = F.tinta;
-  g.font = "600 36px " + FB;
-  g.fillText(ko, SW/2, 108);
-  g.fillStyle = F.tinta;
-  g.font = "600 46px " + FS;
-  g.fillText(titulo, SW/2, 158);
+  g.font = "600 40px " + FS;
+  g.fillText(titulo, SW/2, 162);
   g.strokeStyle = F.tinta; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(44, 184); g.lineTo(SW-44, 184); g.stroke();
 }
@@ -1629,7 +1660,7 @@ function icono(g, tipo, cx, cy, r){
 /* PÁGINA 1 — Simetría K-Lift · rostro único a ancho completo */
 function pagina1(anotacionesZona){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "대칭", "Simetría K-Lift");
+  tituloPagina(g, "Simetría K-Lift");
 
   /* pozo fotográfico a ancho completo (frw = SW-88); sin panel Espejo en el PDF */
   const frx = 44, fry = 208, frw = SW-88, frh = 862;
@@ -1995,7 +2026,7 @@ const CAT_COLORES = {
 /* PÁGINAS 3 y 4 — Observaciones: mapa pequeño de la página + 4 categorías en detalle */
 function paginaObs(cats, desde, numPag, obsGeneral){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "관찰", "Observaciones");
+  tituloPagina(g, "Observaciones");
 
   /* mapa pequeño con SOLO las zonas de esta página */
   seccion(g, "Mapa facial de esta página", 44, 214, SW-88);
@@ -2096,7 +2127,7 @@ function paginaObs(cats, desde, numPag, obsGeneral){
 /* PÁGINA 2 — Áreas de enfoque */
 function paginaAreas(focos){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "집중", "Áreas de Enfoque");
+  tituloPagina(g, "Áreas de Enfoque");
 
   const ls = (focos||[]).slice(0,6);
 
@@ -2644,7 +2675,7 @@ async function generarInforme(datos){
       document.fonts.load('600 44px "Open Sauce One"'),
       document.fonts.load('400 19px "Open Sauce Sans"'),
       document.fonts.load('700 17px "Open Sauce Sans"'),
-      document.fonts.load('600 46px "Cormorant Garamond"'),
+      document.fonts.load('600 40px "Cormorant Garamond"'),
       document.fonts.load('italic 600 36px "Cormorant Garamond"')
     ]);
   }catch(e){ /* fallback Karla */ }
@@ -2677,7 +2708,8 @@ async function generarInforme(datos){
   const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
   paginas.forEach((p,i)=>{
     if(i>0) pdf.addPage();
-    pdf.addImage(p.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
+    pdf.addImage(p.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+    estamparLogoPdf(pdf);
   });
   pdfBlob = pdf.output('blob');
   descargarPdfKlift();
