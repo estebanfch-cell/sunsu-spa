@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.09.18.02 ticket-vk-familias -->
+<!-- v2026.09.23.01 tarjetas-primer-nombre-cosm -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260918.02';
+  var v='20260923.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -3401,6 +3401,27 @@ function _fondoCardSunsu(fondo){
   window._fondoCardCache=cv.toDataURL('image/jpeg',0.85);
   return window._fondoCardCache;
 }
+// Primer nombre para PDFs de clientas: "Daniela Mora" → "Daniela".
+// Normaliza NBSP y espacios raros; el primer token ya descarta apellido,
+// segundo nombre y títulos finales ("Lic.", "Cosmetóloga"). Las comas
+// no se quedan pegadas ("Andrea," / "Andrea, Robles").
+function _primerNombre(s){
+  s=(s==null?'':String(s))
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g,' ')
+    .replace(/[,;]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+  if(!s) return '';
+  var partes=s.split(' ');
+  // Título al inicio no es el nombre: "Lic. Daniela Mora" → Daniela
+  var esTitulo=function(t){
+    return /^(dra?|lic|ing|srta|sra|sr|miss|mrs|ms|cosm|cosmetologa|cosmetóloga)\.?$/i.test(t);
+  };
+  var i=0;
+  while(i<partes.length-1 && esTitulo(partes[i])) i++;
+  var tok=partes[i]||'';
+  return tok.replace(/^[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+|[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ\-]+$/g,'');
+}
 // Truncado por ANCHO MEDIDO (no por letras): corta solo si de verdad no cabe,
 // y avisa con '…'. Usa la fuente/tamaño activos del doc al momento de medir.
 function _pdfRecorta(doc, txt, maxW){
@@ -3466,7 +3487,12 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
         // '14/07/26 7 Pieles (Arroz+H2O) · EFCH'. Leemos facial y cosmetologa de AHI,
         // NO de uso.fac/uso.por: esos los deriva el backend por fecha y se cruzan cuando
         // dos sesiones caen el mismo dia (una pisa a la otra). El slot es correcto siempre.
-        var rawF=(uso.f||'').toString().trim();
+        // NBSP y espacios raros, si no el separador ' · ' no parte y el apellido
+        // se queda pegado al facial en vez de bajar a la línea del nombre.
+        var rawF=(uso.f||'').toString()
+          .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g,' ')
+          .replace(/[ \t]{2,}/g,' ')
+          .trim();
         var mFec=rawF.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
         doc.text(mFec?mFec[0]:'',cx,cy+33,{align:'center'});
         var facTxt='', porTxt='';
@@ -3480,7 +3506,7 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
           // Respaldo si el slot solo trae la fecha: lo que derive el backend.
           if(!facTxt && uso.fac) facTxt=uso.fac;
           if(!porTxt && uso.por) porTxt=uso.por;
-          porTxt=(porTxt||'').trim().split(/\s+/)[0]; // solo el nombre: Daniela, no Daniela Mora
+          porTxt=_primerNombre(porTxt); // solo el nombre: Daniela, no Daniela Mora
         }
         facTxt=limpiaFac(facTxt);
         if(facTxt.length>28) facTxt=facTxt.slice(0,26)+'..';
@@ -10518,7 +10544,7 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
     doc.text(((t.nombre||'')+' '+(t.apellido||'')).trim(),W/2,y,{align:'center'}); y+=11;
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
-    doc.text('Atendida por '+((t.cosmetologa||'').trim().split(/\s+/)[0]),W/2,y,{align:'center'}); y+=15;
+    doc.text('Atendida por '+_primerNombre(t.cosmetologa),W/2,y,{align:'center'}); y+=15;
     // ── PRÓXIMA CITA RECOMENDADA ── arriba, junto a los datos de la clienta
     if(t.retorno){
       var rM=(t.retorno||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
