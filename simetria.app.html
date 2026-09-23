@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.26 — artifact (entrada estable: /simetria.html). PDF: título en español, más chico, logo Sunsu más grande y nítido -->
+<!-- K-Lift simetria.app.html v19.27 — artifact (entrada estable: /simetria.html). PDF sin hangul: wordmark Sunsu y pie en latín -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -540,6 +540,8 @@ import { FaceLandmarker, ImageSegmenter, FilesetResolver } from "https://cdn.jsd
 /* ============ CONFIGURACIÓN ============ */
 const IA_URL = "https://script.google.com/macros/s/AKfycbyF1kBv1sh2bvEnpzocEh9anzR7eI5M-wy-eyPYvYeNtLz0iV19isTyn1vtH06WD6Vk0g/exec";
 const LOGO_URL = "assets/sunsu-logo-celeste.png";
+/* Wordmark del PDF: SUNSU + GLASS SKIN, sin el hangul del logo de pantalla. */
+const LOGO_PDF_URL = "assets/sunsu-logo-pdf.png";
 /* ======================================= */
 
 /* paleta editorial Sunsu (web) */
@@ -579,18 +581,13 @@ let logoPromise = null;
 let logoPdfBox = null;
 let logoPngUrl = null;
 function asegurarLogo(){
-  const dom = $('logo');
-  if(dom && dom.complete && dom.naturalWidth){
-    logoParaPdf = dom;
-    return Promise.resolve(dom);
-  }
   if(logoParaPdf && logoParaPdf.naturalWidth) return Promise.resolve(logoParaPdf);
   if(logoPromise) return logoPromise;
   logoPromise = new Promise(resolve => {
     const im = new Image();
     im.onload = () => { logoParaPdf = im; resolve(im); };
     im.onerror = () => resolve(null);
-    im.src = LOGO_URL;
+    im.src = LOGO_PDF_URL;
   });
   return logoPromise;
 }
@@ -1363,18 +1360,18 @@ function nuevaPagina(){
   const g = c.getContext('2d');
   g.fillStyle = F.papel;
   g.fillRect(0,0,SW,SH);
-  g.font = "400 17px " + FB;
+  g.font = "400 15px " + FB;
   g.fillStyle = F.gris;
   g.textAlign = "left";
   let izq = INFO.nombre ? "Nombre del cliente : " + INFO.nombre : "Sunsu Spa · Facial Coreano";
   const logoBottom = medirLogoPdf();
-  const mitadLogo = logoPdfBox ? logoPdfBox.w / 2 + 18 : 110;
+  const mitadLogo = logoPdfBox ? logoPdfBox.w / 2 + 16 : 110;
   const maxIzq = SW/2 - 44 - mitadLogo;
   while(g.measureText(izq).width > maxIzq && izq.length > 4){ izq = izq.slice(0, -2) + "…"; }
-  const textY = logoPdfBox ? Math.round(logoPdfBox.y + logoPdfBox.h * 0.62) : 42;
+  const textY = logoPdfBox ? Math.round(logoPdfBox.y + logoPdfBox.h * 0.32) : 42;
   g.fillText(izq, 44, textY);
   g.textAlign = "right";
-  g.font = "400 17px " + FB;
+  g.font = "400 15px " + FB;
   g.fillStyle = F.gris;
   g.fillText("Fecha de análisis : " + INFO.fecha, SW-44, textY);
   g.strokeStyle = F.linea; g.lineWidth = 1;
@@ -1394,7 +1391,7 @@ function nuevaPagina(){
 function medirLogoPdf(){
   const img = logoParaPdf;
   if(img && img.naturalWidth){
-    const lh = 92;
+    const lh = 108;
     const lw = lh * (img.naturalWidth / img.naturalHeight);
     const y = 6;
     logoPdfBox = { x: (SW - lw) / 2, y, w: lw, h: lh };
@@ -1453,7 +1450,7 @@ function pie(g, num){
   g.textAlign = "left";
   g.fillStyle = F.gris;
   g.font = "400 16px " + FB;
-  g.fillText("순수 · Protocolo K-Lift · Estimación estética basada en una fotografía · No constituye diagnóstico médico", 44, SH-32);
+  g.fillText("Sunsu · Protocolo K-Lift · Estimación estética basada en una fotografía · No constituye diagnóstico médico", 44, SH-32);
   g.textAlign = "right";
   g.fillText("Página " + num + " de 4", SW-44, SH-32);
 }
