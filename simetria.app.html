@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.24 — artifact (entrada estable: /simetria.html). La malla de escaneo queda recortada al marco negro de la foto -->
+<!-- K-Lift simetria.app.html v19.25 — artifact (entrada estable: /simetria.html). Al terminar el análisis la vista queda en el nombre, la cara y Real | Espejo -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -44,6 +44,8 @@
     color:var(--tinta);
     min-height:100vh;
     -webkit-font-smoothing:antialiased;
+    /* El informe crece debajo; no dejar que el ancla de scroll salte al medio. */
+    overflow-anchor:none;
   }
   .wrap{max-width:520px;margin:0 auto;padding:28px 20px 60px;}
   .informe-acciones{display:flex;justify-content:flex-end;margin:4px 0 2px;}
@@ -176,7 +178,7 @@
 
   /* ---------- dual Real | Espejo (app UI, post-análisis) ---------- */
   .dual-preview{
-    display:none;gap:10px;margin:0 0 18px;
+    display:none;gap:10px;margin:12px 0 18px;
     align-items:stretch;justify-content:center;
     max-height:calc(100dvh - 280px);
   }
@@ -219,7 +221,8 @@
   }
   @keyframes puntos{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 
-  .botones{margin-top:18px;display:flex;flex-direction:column;gap:10px;}
+  #inpNombre{margin-top:18px;}
+  .botones{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
   .campo{
     width:100%;padding:14px 16px;
     border:1px solid var(--linea);border-radius:14px;
@@ -466,6 +469,8 @@
     </div>
   </div>
 
+  <input type="text" id="inpNombre" class="campo" placeholder="Nombre de la clienta (opcional)">
+
   <div class="dual-preview" id="dualPreview" aria-label="Comparativo Real y Espejo">
     <div class="dual-panel">
       <canvas id="dualReal"></canvas>
@@ -478,7 +483,6 @@
   </div>
 
   <div class="botones">
-    <input type="text" id="inpNombre" class="campo" placeholder="Nombre de la clienta (opcional)">
     <div class="botones-foto">
       <button class="btn btn-principal" id="btnGaleria" type="button">Subir una foto</button>
       <button class="btn-camara" id="btnFoto" type="button" aria-label="Tomar foto" title="Tomar foto">
@@ -999,6 +1003,26 @@ function enfocarCara(){
   };
   requestAnimationFrame(colocar);
 }
+/* Tras el informe: arriba del todo el nombre, la foto con puntos y Real | Espejo.
+   Instantáneo y repetido un par de frames: el alto de la foto de escaneo desaparece
+   y las tarjetas crecen debajo; un scrollIntoView al informe caía entre diapositivas. */
+function enfocarPrimeraParte(){
+  document.body.classList.add('analizando');
+  let n = 0;
+  const colocar = () => {
+    const nombre = $('inpNombre');
+    const dual = $('dualPreview');
+    const ancla = (nombre && nombre.offsetParent) ? nombre
+      : (dual && dual.classList.contains('activo') ? dual : null);
+    if(!ancla){ window.scrollTo(0, 0); }
+    else {
+      const y = ancla.getBoundingClientRect().top + window.scrollY - 8;
+      window.scrollTo(0, Math.max(0, y));
+    }
+    if(++n < 4) requestAnimationFrame(colocar);
+  };
+  requestAnimationFrame(colocar);
+}
 function soltarEnfoqueCara(){
   document.body.classList.remove('analizando');
   if($('fotoWrap')) $('fotoWrap').style.display = 'none';
@@ -1316,6 +1340,7 @@ async function generarConIA(){
     await generarInforme(datos);
     detenerScan();
     mostrarDualPreview();
+    enfocarPrimeraParte();
   }catch(e){
     console.error(e);
     detenerScan();
@@ -2664,7 +2689,6 @@ async function generarInforme(datos){
   if($('btnGaleria')) $('btnGaleria').style.display = 'none';
   if($('btnFoto')) $('btnFoto').style.display = 'none';
   estado.textContent = "";
-  $('informe').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 $('btnCompartirInforme').onclick = async () => {
