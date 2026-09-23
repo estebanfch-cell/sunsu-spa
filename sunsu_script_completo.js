@@ -35,7 +35,7 @@ const CONFIG = {
 };
 
 // ══════ SELLO DE VERSIÓN — consultar con ?action=version para verificar despliegues ══════
-var APP_VERSION = '2026-09-18-EH (ticket familias nuevas + columnas TICKET_FICHA)';
+var APP_VERSION = '2026-09-23-CD (compra directa → cabina, no inventario ventas)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -4903,6 +4903,20 @@ function doGet(e) {
       // Col J (10) = registrado por
       // Col K (11) = timestamp recepción
       var pedidaRE = parseFloat(wsRE.getRange(filaRE, 5).getValue())||0;
+      var prevRawRE = wsRE.getRange(filaRE, 6).getValue();
+      var yaRE = !(prevRawRE===''||prevRawRE===null||prevRawRE===undefined);
+      var prevRE = yaRE ? (parseFloat(prevRawRE)||0) : 0;
+      var notasRE = (wsRE.getRange(filaRE, 9).getValue()||'').toString();
+      var skuRE = (wsRE.getRange(filaRE, 2).getValue()||'').toString().trim();
+      var nomRE = (wsRE.getRange(filaRE, 3).getValue()||'').toString().trim();
+      var provRE = (wsRE.getRange(filaRE, 4).getValue()||'').toString().trim();
+      var ordenRE = (wsRE.getRange(filaRE, 8).getValue()||'').toString().trim();
+      var cabRE = null;
+      // Compra directa no alimenta 📊 INVENTARIO: el delta entra a Cabina.
+      if (_esNotaCompraDirecta_(notasRE)) {
+        try { cabRE = _compraDirectaACabina_(ss, {sku:skuRE, nombre:nomRE, proveedor:provRE, delta:cantRE-prevRE, orden:ordenRE, usuario:usuRE}); }
+        catch(eCabRE) { cabRE = {error:eCabRE.message||String(eCabRE), delta:cantRE-prevRE}; }
+      }
       wsRE.getRange(filaRE, 6).setValue(cantRE); // F = cant. recibida
       // Col G estado
       var estadoRE = cantRE===0?'❌ No llegó':cantRE>=pedidaRE?'✅ Completo':'⚠️ Parcial';
@@ -4910,8 +4924,22 @@ function doGet(e) {
       wsRE.getRange(filaRE, 10).setValue(usuRE); // J = registrado por
       var tsRE = Utilities.formatDate(new Date(),'America/Guayaquil','dd/MM/yyyy HH:mm');
       wsRE.getRange(filaRE, 11).setNumberFormat('@').setValue(tsRE); // K = timestamp recepción (TEXTO: Sheets voltea dd/MM con día≤12)
+      if (cabRE && (cabRE.accion==='creado' || cabRE.accion==='sumado')) {
+        var marcaCab = '🧴 cabina '+(cabRE.codigo||'')+' '+((cabRE.delta>0?'+':'')+cabRE.delta);
+        notasRE = notasRE ? (notasRE+' | '+marcaCab) : marcaCab;
+        wsRE.getRange(filaRE, 9).setValue(notasRE);
+      }
+      // La fórmula de ese SKU se reescribe solo si Cabina recibió el delta
+      // (y el historial del mismo SKU). Si Cabina falló, la percha sigue contando.
+      if (_esNotaCompraDirecta_(notasRE) && (!cabRE || !cabRE.error)) {
+        var migRE = null;
+        try { SpreadsheetApp.flush(); migRE = _migrarCompraDirectaACabina_(ss, skuRE); }
+        catch(eMigRE) { migRE = {ok:false, error:eMigRE.message||String(eMigRE)}; }
+        if (migRE && migRE.ok) { try { _parcheFormulaDirecta_(ss, skuRE); } catch(ePfRE) {} }
+        else if (cabRE && migRE && migRE.error) cabRE.aviso = migRE.error;
+      }
       SpreadsheetApp.flush();
-      return respJsonGet({ok:true, pedida:pedidaRE}, callback);
+      return respJsonGet({ok:true, pedida:pedidaRE, cabina:cabRE}, callback);
     }
 
     // ── Historial completo de órdenes de compra (incluye procesadas) ──
@@ -4985,19 +5013,40 @@ function doGet(e) {
       var usuEE  = (e.parameter.usuario||'').toString().trim();
       if (!filaEE||filaEE<3||isNaN(cantEE)||cantEE<0) return respJsonGet({error:'Parámetros inválidos'}, callback);
       var pedidaEE = parseFloat(wsEE.getRange(filaEE, 5).getValue())||0;
+      var prevRawEE = wsEE.getRange(filaEE, 6).getValue();
+      var yaEE = !(prevRawEE===''||prevRawEE===null||prevRawEE===undefined);
+      var prevEE = yaEE ? (parseFloat(prevRawEE)||0) : 0;
+      var notasEE = (wsEE.getRange(filaEE, 9).getValue()||'').toString();
+      var skuEE = (wsEE.getRange(filaEE, 2).getValue()||'').toString().trim();
+      var nomEE = (wsEE.getRange(filaEE, 3).getValue()||'').toString().trim();
+      var provEE = (wsEE.getRange(filaEE, 4).getValue()||'').toString().trim();
+      var ordenEE = (wsEE.getRange(filaEE, 8).getValue()||'').toString().trim();
+      var cabEE = null;
+      // Si sube (o baja) la cantidad de una compra directa, Cabina sigue el delta.
+      if (_esNotaCompraDirecta_(notasEE)) {
+        try { cabEE = _compraDirectaACabina_(ss, {sku:skuEE, nombre:nomEE, proveedor:provEE, delta:cantEE-prevEE, orden:ordenEE, usuario:usuEE}); }
+        catch(eCabEE) { cabEE = {error:eCabEE.message||String(eCabEE), delta:cantEE-prevEE}; }
+      }
       wsEE.getRange(filaEE, 6).setValue(cantEE); // F = cant. recibida
       var estadoEE = cantEE===0?'❌ No llegó':cantEE>=pedidaEE?'✅ Completo':'⚠️ Parcial';
       wsEE.getRange(filaEE, 7).setValue(estadoEE); // G = estado
       var tsEE = Utilities.formatDate(new Date(),'America/Guayaquil','dd/MM/yyyy HH:mm');
       wsEE.getRange(filaEE, 10).setValue(usuEE); // J = editado por
       wsEE.getRange(filaEE, 11).setNumberFormat('@').setValue(tsEE);  // K = nuevo timestamp (TEXTO)
-      // Auditoría en col I (notas)
-      var notasEE = (wsEE.getRange(filaEE, 9).getValue()||'').toString();
+      // Auditoría en col I (notas). Se conserva "COMPRA DIRECTA" para el acta y la fórmula.
       var marcaEE = '✏️ Editado por '+usuEE+' '+tsEE;
+      if (cabEE && (cabEE.accion==='creado' || cabEE.accion==='sumado')) marcaEE += ' | 🧴 cabina '+(cabEE.codigo||'')+' '+((cabEE.delta>0?'+':'')+cabEE.delta);
       wsEE.getRange(filaEE, 9).setValue(notasEE ? (notasEE+' | '+marcaEE) : marcaEE);
-      logAccion_(ss, '✏️ EDITAR ENTREGA', 'fila '+filaEE+' → cantidad recibida '+cantEE, usuEE);
+      if (_esNotaCompraDirecta_(notasEE) && (!cabEE || !cabEE.error)) {
+        var migEE = null;
+        try { SpreadsheetApp.flush(); migEE = _migrarCompraDirectaACabina_(ss, skuEE); }
+        catch(eMigEE) { migEE = {ok:false, error:eMigEE.message||String(eMigEE)}; }
+        if (migEE && migEE.ok) { try { _parcheFormulaDirecta_(ss, skuEE); } catch(ePfEE) {} }
+        else if (cabEE && migEE && migEE.error) cabEE.aviso = migEE.error;
+      }
+      logAccion_(ss, '✏️ EDITAR ENTREGA', 'fila '+filaEE+' → cantidad recibida '+cantEE+(cabEE&&cabEE.codigo?(' · cabina '+cabEE.codigo):''), usuEE);
       SpreadsheetApp.flush();
-      return respJsonGet({ok:true, estado:estadoEE, ts:tsEE}, callback);
+      return respJsonGet({ok:true, estado:estadoEE, ts:tsEE, cabina:cabEE}, callback);
     }
 
     // ── Registrar factura + cobro en un solo paso ──
@@ -6435,7 +6484,7 @@ function doPost(e) {
           wsED.getRange(rIns,6).setValue('');
           wsED.getRange(rIns,7).setFormula('=IF(F'+rIns+'="","⏳ Pendiente",IF(F'+rIns+'=0,"❌ No llegó",IF(F'+rIns+'>=E'+rIns+',"✅ Completo","⚠️ Parcial")))');
           wsED.getRange(rIns,8).setValue(numED);
-          wsED.getRange(rIns,9).setValue(wN.dir ? ('🛍 COMPRA DIRECTA — stock propio · '+(body.qLabel||'')+' (app · editada)') : ('Pedido '+(body.qLabel||'')+' (app · editada)'));
+          wsED.getRange(rIns,9).setValue(wN.dir ? ('🛍 COMPRA DIRECTA — uso cabina · '+(body.qLabel||'')+' (app · editada)') : ('Pedido '+(body.qLabel||'')+' (app · editada)'));
           wsED.getRange(rIns,1,1,10).setBackground(wN.dir?'#F0EAF7':COLOR.GOLD_L).setFontSize(9).setFontFamily('Arial');
           wsED.getRange(rIns,6).setBackground(COLOR.GREEN_L).setFontWeight('bold');
           wsED.getRange(rIns,7).setBackground(wN.dir?'#F0EAF7':COLOR.GOLD_L).setFontWeight('bold').setFontColor(wN.dir?'#7A5EA6':COLOR.GOLD);
@@ -6494,9 +6543,10 @@ function doPost(e) {
         wsE2c.getRange(rOC2,7).setBackground(COLOR.GOLD_L).setFontWeight('bold').setFontColor(COLOR.GOLD);
         rOC2++;
       });
-      // COMPRA DIRECTA (stock propio): también entra al acta de entrega-recepción
-      // — se recibe igual que el restock y el stock entra al recibirla. La NOTA
-      // la distingue: no es consignación, es compra propia de Sunsu.
+      // COMPRA DIRECTA: entra al acta (cuadro aparte) pero NO al inventario de
+      // ventas. Al marcarla recibida, la cantidad suma en 🧴 INVENTARIO CABINA.
+      // La NOTA ("COMPRA DIRECTA") es la marca que leen el acta, la fórmula y
+      // el alta en cabina — no cambiar ese texto.
       directaOC2.forEach(function(it){
         wsE2c.getRange(rOC2,1).setNumberFormat('@').setValue(tsOC2); // TEXTO: evita date-flip US locale
         wsE2c.getRange(rOC2,2).setValue((it.sku||'').toString().trim());
@@ -6506,7 +6556,7 @@ function doPost(e) {
         wsE2c.getRange(rOC2,6).setValue('');
         wsE2c.getRange(rOC2,7).setFormula('=IF(F'+rOC2+'="","⏳ Pendiente",IF(F'+rOC2+'=0,"❌ No llegó",IF(F'+rOC2+'>=E'+rOC2+',"✅ Completo","⚠️ Parcial")))');
         wsE2c.getRange(rOC2,8).setValue(numOC2);
-        wsE2c.getRange(rOC2,9).setValue('🛍 COMPRA DIRECTA — stock propio · ' + (body.qLabel||'') + ' (app)');
+        wsE2c.getRange(rOC2,9).setValue('🛍 COMPRA DIRECTA — uso cabina · ' + (body.qLabel||'') + ' (app)');
         wsE2c.getRange(rOC2,1,1,10).setBackground('#F0EAF7').setFontSize(9).setFontFamily('Arial');
         wsE2c.getRange(rOC2,6).setBackground(COLOR.GREEN_L).setFontWeight('bold');
         wsE2c.getRange(rOC2,7).setBackground('#F0EAF7').setFontWeight('bold').setFontColor('#7A5EA6');
@@ -9200,18 +9250,193 @@ function verAlertasStock() {
   SpreadsheetApp.getUi().alert("ALERTAS DE INVENTARIO", msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+// Marca de las líneas de compra directa en 📥 ENTRADAS (col I).
+function _esNotaCompraDirecta_(notas) {
+  return (notas||'').toString().toUpperCase().indexOf('COMPRA DIRECTA') >= 0;
+}
+// Suma de lo ya pasado a cabina, según las marcas "🧴 cabina INV-012 +3" de la nota.
+function _cabinaYaAplicada_(notas) {
+  var n = 0, m;
+  var re = /🧴 cabina \S+ ([+-]?\d+(?:\.\d+)?)/g;
+  var s = (notas||'').toString();
+  while ((m = re.exec(s))) n += parseFloat(m[1]) || 0;
+  return Math.round(n * 1000) / 1000;
+}
+function _skuCabinaNorm_(s) {
+  return (s||'').toString().trim().toUpperCase().replace(/^SUNSU-/,'');
+}
+// Nombre para empatar con Cabina: minúsculas y sin tildes, pero CON números
+// (30 ml ≠ 50 ml). Si hay más de un candidato, no se adivina: se crea otro.
+function _normProdCabina_(s) {
+  return (s||'').toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ').trim();
+}
+// datos = getDataRange de 🧴 INVENTARIO CABINA (fila 0 = encabezados).
+function _cabinaMatchDirecta_(datos, sku, nombre) {
+  var skuN = _skuCabinaNorm_(sku);
+  var nomN = _normProdCabina_(nombre);
+  var porSku = -1, porCod = -1, porNom = [];
+  for (var i = 1; i < datos.length; i++) {
+    var cod = (datos[i][0]||'').toString().trim();
+    var prod = (datos[i][1]||'').toString().trim();
+    if (!cod && !prod) continue;
+    var skuCat = _skuCabinaNorm_(datos[i][13]);
+    if (skuN && skuCat && skuCat === skuN) { porSku = i; break; }
+    if (skuN && _skuCabinaNorm_(cod) === skuN && porCod < 0) porCod = i;
+    if (nomN && _normProdCabina_(prod) === nomN) porNom.push(i);
+  }
+  if (porSku >= 0) return {idx:porSku, via:'sku'};
+  if (porCod >= 0) return {idx:porCod, via:'codigo'};
+  if (porNom.length === 1) return {idx:porNom[0], via:'nombre'};
+  return {idx:-1, via: porNom.length>1 ? 'ambiguo' : 'nuevo'};
+}
+// Suma (o resta) envases cerrados LOCALES en Cabina. Si no hay match claro, crea INV-###.
+// delta es la diferencia de cantidad recibida (nueva − anterior), no el total.
+function _compraDirectaACabina_(ss, opts) {
+  opts = opts || {};
+  var delta = parseFloat(opts.delta);
+  if (isNaN(delta) || delta === 0) return {accion:'sin_cambio', delta:0};
+  var ssCb = _cabinaSS_();
+  if (!ssCb) return {error:'Estructura de cabina no creada — el stock no entró a cabina', delta:delta};
+  var wInv = ssCb.getSheetByName('🧴 INVENTARIO CABINA');
+  if (!wInv) return {error:'No existe 🧴 INVENTARIO CABINA', delta:delta};
+  _cabInvHeaders_(wInv);
+  var datos = wInv.getDataRange().getValues();
+  var m = _cabinaMatchDirecta_(datos, opts.sku, opts.nombre);
+  var skuFull = (opts.sku||'').toString().trim().toUpperCase();
+  if (m.idx < 0) {
+    if (delta < 0) return {error:'No hay producto de cabina para descontar', delta:delta, via:m.via};
+    var codigo = _cabNext_(wInv, 'INV-');
+    var nomBase = (opts.nombre||'').toString().trim() || skuFull || 'Producto';
+    var prodNom = skuFull ? (nomBase+' ('+skuFull+')') : nomBase;
+    var nota = 'Alta automática por compra directa'+(opts.orden?(' · '+opts.orden):'')
+      +' · no suma al inventario de ventas. 1 envase = 1 und; edita contenido/unidad si el protocolo lo usa en ml.';
+    wInv.appendRow([codigo, prodNom, (opts.proveedor||'').toString().trim(), 1, 'und', 0, 0, delta, 0, delta, 0, nota, 'SI', skuFull, 0, '', '', '', '', '', 1]);
+    var outN = {accion:'creado', codigo:codigo, nombre:prodNom, delta:delta, cerrados:delta, activo:'SI', via:m.via, row:wInv.getLastRow()};
+    try { logAccion_(ss, 'CABINA COMPRA DIRECTA', 'creado '+codigo+' +'+delta+' · '+skuFull+(opts.orden?(' · '+opts.orden):''), opts.usuario||''); } catch(eLN) {}
+    return outN;
+  }
+  var idx = m.idx;
+  var fila = idx + 1;
+  var cont = parseFloat(datos[idx][3])||0;
+  var cerr = parseFloat(datos[idx][7])||0;
+  var ab = parseFloat(datos[idx][8])||0;
+  var bod = parseFloat(datos[idx][14])||0;
+  var nuevoCerr = cerr + delta;
+  if (nuevoCerr < 0) nuevoCerr = 0;
+  var aplicado = nuevoCerr - cerr;
+  wInv.getRange(fila, 8).setValue(nuevoCerr); // ENVASES CERRADOS (local)
+  wInv.getRange(fila, 10).setValue((nuevoCerr + bod + ab) * cont); // STOCK TOTAL, igual que al recibir una OC de cabina
+  if (skuFull && !(datos[idx][13]||'').toString().trim()) wInv.getRange(fila, 14).setValue(skuFull);
+  var activo = ((datos[idx][12]||'SI')+'').toString().trim() || 'SI';
+  if (aplicado === 0) return {accion:'sin_cambio', codigo:(datos[idx][0]||'').toString(), delta:0, pedido:delta, cerrados:nuevoCerr, activo:activo, via:m.via, row:fila};
+  var out = {accion:'sumado', codigo:(datos[idx][0]||'').toString(), nombre:(datos[idx][1]||'').toString(), delta:aplicado, pedido:delta, cerrados:nuevoCerr, activo:activo, via:m.via, row:fila};
+  try { logAccion_(ss, 'CABINA COMPRA DIRECTA', 'sumado '+out.codigo+' '+((aplicado>0?'+':'')+aplicado)+' · '+skuFull+' ('+m.via+')', opts.usuario||''); } catch(eLS) {}
+  return out;
+}
+// Pasa a Cabina lo recibido de compra directa que aún no tiene marca.
+// Idempotente: la nota guarda cuánto ya se sumó. soloSku vacío = todas las filas.
+// Si no hay nada pendiente, no exige que exista la estructura de cabina.
+function _migrarCompraDirectaACabina_(ss, soloSku) {
+  var ws = ss.getSheetByName(INV_CONFIG.SHEET_ENTRADAS);
+  if (!ws) return {ok:false, error:'No existe ENTRADAS', errores:['No existe ENTRADAS'], tocadas:0, unidades:0};
+  var datos = ws.getDataRange().getValues();
+  var skuFiltro = soloSku ? _skuCabinaNorm_(soloSku) : '';
+  var pend = [];
+  for (var i = 2; i < datos.length; i++) {
+    var sku = (datos[i][1]||'').toString().trim();
+    if (!sku || sku.toLowerCase()==='sku') continue;
+    var notas = (datos[i][8]||'').toString();
+    if (!_esNotaCompraDirecta_(notas)) continue;
+    if (skuFiltro && _skuCabinaNorm_(sku) !== skuFiltro) continue;
+    var rawF = datos[i][5];
+    if (rawF==='' || rawF===null || rawF===undefined) continue;
+    var recibida = parseFloat(rawF);
+    if (isNaN(recibida)) continue;
+    var delta = Math.round((recibida - _cabinaYaAplicada_(notas)) * 1000) / 1000;
+    if (!delta) continue;
+    pend.push({
+      fila: i+1, sku: sku, notas: notas, delta: delta,
+      nombre: (datos[i][2]||'').toString().trim(),
+      proveedor: (datos[i][3]||'').toString().trim(),
+      orden: (datos[i][7]||'').toString().trim()
+    });
+  }
+  if (!pend.length) return {ok:true, tocadas:0, unidades:0, errores:[]};
+  if (!_cabinaSS_()) return {ok:false, error:'Estructura de cabina no creada — el stock de compra directa sigue en el inventario de ventas hasta que exista Cabina', errores:['Estructura de cabina no creada'], tocadas:0, unidades:0};
+  var tocadas = 0, unidades = 0, errores = [];
+  pend.forEach(function(p){
+    var res;
+    try {
+      res = _compraDirectaACabina_(ss, {sku:p.sku, nombre:p.nombre, proveedor:p.proveedor, delta:p.delta, orden:p.orden, usuario:'migración'});
+    } catch(eMig) { errores.push(p.sku+': '+(eMig.message||eMig)); return; }
+    if (!res || res.error) { errores.push(p.sku+': '+((res&&res.error)||'sin respuesta')); return; }
+    if (res.accion!=='creado' && res.accion!=='sumado') return;
+    var marca = '🧴 cabina '+(res.codigo||'')+' '+((res.delta>0?'+':'')+res.delta);
+    ws.getRange(p.fila, 9).setValue(p.notas ? (p.notas+' | '+marca) : marca);
+    p.notas = p.notas ? (p.notas+' | '+marca) : marca;
+    tocadas++;
+    unidades += res.delta;
+  });
+  return {ok: errores.length===0, tocadas:tocadas, unidades:Math.round(unidades*1000)/1000, errores:errores, error: errores.length?errores[0]:''};
+}
+// Col D de 📊 INVENTARIO: recibido Completo/Parcial, ignorando compra directa.
+function _formulaEntradasInventario_(entNombre, fila) {
+  return "=IFERROR(SUMPRODUCT("
+    + "('" + entNombre + "'!B4:B500=A" + fila + ")"
+    + "*(ISNUMBER(SEARCH(\"Completo\",'" + entNombre + "'!G4:G500))"
+    + "+ISNUMBER(SEARCH(\"Parcial\",'" + entNombre + "'!G4:G500)))"
+    + "*(1-ISNUMBER(SEARCH(\"COMPRA DIRECTA\",'" + entNombre + "'!I4:I500)))"
+    + ",'" + entNombre + "'!F4:F500),0)";
+}
+// Reescribe la fórmula de UN sku para que la directa deje de contar de inmediato,
+// sin esperar a que alguien corra el menú sobre todo el inventario.
+function _parcheFormulaDirecta_(ss, sku) {
+  if (!sku) return;
+  var wsInv = ss.getSheetByName(INV_CONFIG.SHEET_INVENTARIO);
+  if (!wsInv) return;
+  var wsEnt = ss.getSheetByName(INV_CONFIG.SHEET_ENTRADAS);
+  var entNombre = wsEnt ? wsEnt.getName() : INV_CONFIG.SHEET_ENTRADAS;
+  var skuU = sku.toString().trim().toUpperCase();
+  var skuCorto = skuU.replace(/^SUNSU-/,'');
+  var last = wsInv.getLastRow();
+  if (last < 3) return;
+  var colA = wsInv.getRange(3, 1, last-2, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    var a = (colA[i][0]||'').toString().trim().toUpperCase();
+    if (!a) continue;
+    if (a !== skuU && a.replace(/^SUNSU-/,'') !== skuCorto) continue;
+    var fila = i + 3;
+    var fml = wsInv.getRange(fila, 4).getFormula() || '';
+    if (fml.indexOf('COMPRA DIRECTA') >= 0) return;
+    wsInv.getRange(fila, 4).setFormula(_formulaEntradasInventario_(entNombre, fila));
+    return;
+  }
+}
+
 function corregirFormulasInventario() {
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const wsInv=ss.getSheetByName("📊 INVENTARIO"), wsEnt=ss.getSheetByName("📥 ENTRADAS");
   const wsTk=ss.getSheets().find(s=>s.getName().includes("TICKET_FICHA"));
   if (!wsInv) { SpreadsheetApp.getUi().alert("No se encontró 📊 INVENTARIO"); return; }
+  // Primero el historial de compra directa pasa a Cabina. Si eso falla, NO se
+  // tocan las fórmulas: si no, ese stock saldría de la percha y no entraría a cabina.
+  var migInv = {ok:true, tocadas:0, unidades:0, errores:[]};
+  try { migInv = _migrarCompraDirectaACabina_(ss, ''); }
+  catch(eMigInv) { migInv = {ok:false, error:eMigInv.message||String(eMigInv), errores:[String(eMigInv)]}; }
+  if (!migInv || !migInv.ok) {
+    SpreadsheetApp.getUi().alert("No actualicé las fórmulas.\n\nLa compra directa histórica todavía no pasó a Cabina:\n"+((migInv&&(migInv.error||(migInv.errores||[]).join("\n")))||"error desconocido"));
+    return;
+  }
   const entNombre=wsEnt?wsEnt.getName():"📥 ENTRADAS";
   const tkNombre=wsTk?wsTk.getName():"TICKET_FICHA";
   const tkHeaders=wsTk?wsTk.getRange(1,1,1,wsTk.getLastColumn()).getValues()[0]:[];
   const datos=wsInv.getDataRange().getValues(); let fixed=0;
   for (let i=2;i<datos.length;i++) {
     const r=i+1, sku=(datos[i][0]||"").toString().trim(); if (!sku) continue;
-    const dF="=IFERROR(SUMPRODUCT("+"('"+entNombre+"'!B4:B500=A"+r+")"+"*(ISNUMBER(SEARCH(\"Completo\",'"+entNombre+"'!G4:G500))"+"  +ISNUMBER(SEARCH(\"Parcial\",'"+entNombre+"'!G4:G500))),'"+entNombre+"'!F4:F500),0)";
+    // Excluye notas con COMPRA DIRECTA: ese stock va a Cabina, no a percha.
+    const dF=_formulaEntradasInventario_(entNombre, r);
     wsInv.getRange(r,4).setFormula(dF);
     const prodCode=sku.replace("SUNSU-",""); let tkCol="";
     for (let c=0;c<tkHeaders.length;c++) { if ((tkHeaders[c]||"").toString().trim()===prodCode) { tkCol=invColumnToLetter(c+1); break; } }
@@ -9224,8 +9449,9 @@ function corregirFormulasInventario() {
     wsInv.getRange(r,11).setFormula('=IF(F'+r+'<=0,"SIN STOCK",IF(F'+r+'<=I'+r+',"STOCK BAJO","OK"))');
     fixed++;
   }
+  var txtMig = migInv.tocadas ? (" Compra directa histórica: "+migInv.tocadas+" líneas → Cabina ("+(migInv.unidades>0?"+":"")+migInv.unidades+" und).") : " Sin compra directa pendiente de pasar a Cabina.";
   SpreadsheetApp.getActiveSpreadsheet().toast("✅ "+fixed+" fórmulas corregidas.","SUNSU Inventario",8);
-  SpreadsheetApp.getUi().alert("✅ Listo. "+fixed+" productos actualizados.");
+  SpreadsheetApp.getUi().alert("✅ Listo. "+fixed+" productos actualizados. La columna de entradas ya ignora COMPRA DIRECTA."+txtMig);
 }
 
 function invColumnToLetter(col) {
