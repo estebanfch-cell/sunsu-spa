@@ -1297,17 +1297,19 @@ function nuevaPagina(){
   g.fillStyle = F.gris;
   g.fillText("Fecha de análisis : " + INFO.fecha, SW-44, 42);
   g.strokeStyle = F.linea; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(44, 56); g.lineTo(SW-44, 56); g.stroke();
+  /* La regla baja solo lo necesario para que el logo no la cruce. El bloque de título sigue en y=92. */
+  const reglaY = (logoParaPdf && logoParaPdf.naturalWidth) ? 70 : 56;
+  g.beginPath(); g.moveTo(44, reglaY); g.lineTo(SW-44, reglaY); g.stroke();
   return { c, g };
 }
 
-/* Marca gráfica en el eje del encabezado. Cabe entre el margen superior y la línea (y=56). */
+/* Marca gráfica centrada en el encabezado, encima de la regla y sin tocar el kicker (y≈78). */
 function dibujarLogoPdf(g){
   const img = logoParaPdf;
   if(img && img.naturalWidth){
-    const lh = 48;
+    const lh = 60;
     const lw = lh * (img.naturalWidth / img.naturalHeight);
-    g.drawImage(img, (SW - lw) / 2, 5, lw, lh);
+    g.drawImage(img, (SW - lw) / 2, 4, lw, lh);
     return;
   }
   g.textAlign = "center";
