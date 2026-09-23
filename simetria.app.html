@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.22 — artifact (entrada estable: /simetria.html). PDF: hangul y título centrados, sin kicker ni subtítulo -->
+<!-- K-Lift simetria.app.html v19.23 — artifact (entrada estable: /simetria.html). Vista previa: título a la izquierda, logo Sunsu al centro, sin hangul -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -301,20 +301,21 @@
   }
   .desk-chrome{
     display:grid;
-    grid-template-columns:148px 1fr 148px;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
     align-items:center;
-    gap:10px;
-    margin-bottom:14px;
+    column-gap:20px;
+    margin-bottom:16px;
+    min-height:78px;
   }
-  .desk-logo{width:148px;height:auto;display:block;justify-self:start;}
-  .desk-titles{text-align:center;min-width:0;}
-  .desk-kicker{
-    font-size:28px;font-weight:600;letter-spacing:.06em;
-    color:var(--tinta);line-height:1.1;margin-bottom:4px;
-  }
+  .desk-logo{width:124px;height:auto;display:block;justify-self:center;}
   .desk-title{
+    justify-self:start;
+    text-align:left;
+    margin:0;
     font-family:'Cormorant Garamond',serif;
-    font-weight:500;font-size:34px;line-height:1.05;color:var(--tinta);
+    font-weight:500;font-size:clamp(30px, 3.2vw, 42px);
+    line-height:1.05;color:var(--tinta);
+    max-width:100%;
   }
   .desk-sub{
     margin-top:5px;color:var(--tinta-suave);
@@ -399,11 +400,10 @@
   }
   .desk-vacio{color:var(--tinta-suave);font-size:14px;font-weight:300;}
   @media (max-width:800px){
-    .desk-chrome{grid-template-columns:1fr;justify-items:center;}
-    .desk-logo,.desk-page{justify-self:center;}
+    .desk-chrome{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:10px;min-height:64px;}
+    .desk-logo{width:88px;}
     .desk-grid{grid-template-columns:1fr;}
-    .desk-title{font-size:28px;}
-    .desk-kicker{font-size:22px;}
+    .desk-title{font-size:26px;}
     .desk-meds{grid-template-columns:1fr;}
     .desk-score,.desk-cat-obs,.desk-cat-rec{margin-left:0;}
   }
@@ -2480,12 +2480,8 @@ function slideDesktop(opts){
   logo.className = "desk-logo";
   logo.src = LOGO_URL;
   logo.alt = "Sunsu";
-  const titles = el("div", "desk-titles");
-  titles.append(
-    el("p", "desk-kicker", opts.ko),
-    el("h2", "desk-title", opts.titulo)
-  );
-  chrome.append(logo, titles, el("p", "desk-page", "Página " + opts.pagina + " de " + opts.total));
+  const titulo = el("h2", "desk-title", opts.titulo);
+  chrome.append(titulo, logo, el("p", "desk-page", "Página " + opts.pagina + " de " + opts.total));
   const grid = el("div", "desk-grid");
   const vis = el("div", "desk-visual" + (opts.mapa ? " es-mapa" : ""));
   vis.appendChild(imgDesdeCanvas(opts.visual, opts.titulo));
@@ -2596,19 +2592,19 @@ function pintarPreviewEscritorio(pack){
   cont.innerHTML = "";
   const slides = [
     slideDesktop({
-      ko: "대칭", titulo: "Simetría K-Lift",
+      titulo: "Simetría K-Lift",
       pagina: 1, total: 4, visual: pack.fotos[0], info: infoSimetria(pack.anotaciones)
     }),
     slideDesktop({
-      ko: "집중", titulo: "Áreas de Enfoque",
+      titulo: "Áreas de Enfoque",
       pagina: 2, total: 4, visual: pack.fotos[1], info: infoAreas(pack.focos)
     }),
     slideDesktop({
-      ko: "관찰", titulo: "Observaciones",
+      titulo: "Observaciones",
       pagina: 3, total: 4, visual: pack.fotos[2], mapa: true, info: infoObs(pack.bloqueA, 0, null)
     }),
     slideDesktop({
-      ko: "관찰", titulo: "Observaciones",
+      titulo: "Observaciones",
       pagina: 4, total: 4, visual: pack.fotos[3], mapa: true, info: infoObs(pack.bloqueB, 4, pack.obsGeneral)
     })
   ];
