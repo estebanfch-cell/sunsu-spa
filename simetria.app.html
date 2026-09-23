@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.18 — artifact (entrada estable: /simetria.html). PDF pág.1 números/cruz + auto-descarga informe-klift-<slug>.pdf -->
+<!-- K-Lift simetria.app.html v19.19 — artifact (entrada estable: /simetria.html). Logo celeste, vista previa escritorio, PDF A4 con marca gráfica -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -59,15 +59,28 @@
   .informe-compartir .btn{width:100%;}
   #informe:fullscreen, #informe:-webkit-full-screen{
     background:var(--porcelana);
-    padding:28px 40px 48px;
+    padding:18px 28px 32px;
     overflow-y:auto;
     box-sizing:border-box;
+    scroll-snap-type:y proximity;
   }
-  #informe:fullscreen .slide-img, #informe:-webkit-full-screen .slide-img{
-    width:auto;max-width:min(960px, 92vw);
-    max-height:calc(100dvh - 96px);
-    height:auto;margin:0 auto 18px;
-    object-fit:contain;
+  #informe:fullscreen .desk-slide, #informe:-webkit-full-screen .desk-slide{
+    width:min(1480px, 96vw);
+    max-width:none;
+    min-height:calc(100dvh - 36px);
+    margin:0 auto 20px;
+    scroll-snap-align:start;
+  }
+  #informe:fullscreen .desk-grid, #informe:-webkit-full-screen .desk-grid{
+    grid-template-columns:minmax(0,1.2fr) minmax(280px,.9fr);
+    min-height:calc(100dvh - 200px);
+  }
+  #informe:fullscreen .desk-visual img, #informe:-webkit-full-screen .desk-visual img{
+    max-height:calc(100dvh - 220px);
+  }
+  #informe:fullscreen .desk-info, #informe:-webkit-full-screen .desk-info{
+    max-height:calc(100dvh - 220px);
+    overflow:auto;
   }
   #informe:fullscreen .video-comp, #informe:-webkit-full-screen .video-comp{
     max-width:min(720px, 92vw);max-height:calc(100dvh - 140px);
@@ -78,25 +91,36 @@
     margin:0 auto;display:block;
   }
   @media (min-width:900px){
-    .wrap{max-width:min(980px, 96vw);padding:36px 40px 80px;}
-    h1{font-size:40px;}
-    .guia{max-width:360px;font-size:14px;}
-    .foto-zona{min-height:280px;}
-    .video-comp{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
-    .slide-img{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
-    #slidesContenedor{display:flex;flex-direction:column;align-items:center;}
-    .informe-acciones{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
-    .informe-compartir{max-width:min(720px, 100%);margin-left:auto;margin-right:auto;}
+    .wrap{max-width:min(1180px, 96vw);padding:20px 40px 72px;}
+    .guia{max-width:420px;font-size:15px;}
+    .foto-zona{min-height:240px;}
+    .video-comp{max-width:min(920px, 100%);margin-left:auto;margin-right:auto;}
+    #slidesContenedor{display:flex;flex-direction:column;align-items:stretch;}
     .informe-compartir .btn-oro{max-width:100%;}
   }
   @media (min-width:1200px){
-    .wrap{max-width:min(1040px, 96vw);}
-    .slide-img{max-width:min(780px, 100%);}
-    .video-comp{max-width:min(780px, 100%);}
+    .wrap{max-width:min(1280px, 94vw);}
+    .video-comp{max-width:min(980px, 100%);}
   }
 
-  header{text-align:center;margin-bottom:26px;}
-  .logo{max-width:120px;max-height:80px;margin:0 auto 12px;display:block;}
+  header{text-align:center;margin-bottom:18px;}
+  .logo{
+    width:min(88vw, 340px);
+    height:auto;
+    max-height:none;
+    margin:0 auto 8px;
+    display:block;
+    object-fit:contain;
+  }
+  @media (min-width:900px){
+    header{margin-bottom:14px;padding-top:6px;}
+    .logo{width:min(64vw, 680px);max-height:42vh;margin:0 auto 2px;}
+    h1{font-size:44px;}
+  }
+  @media (min-width:1200px){
+    .logo{width:min(56vw, 760px);max-height:44vh;}
+    h1{font-size:48px;}
+  }
   .marca{
     font-family:'Cormorant Garamond',serif;
     font-size:15px;letter-spacing:.35em;text-transform:uppercase;
@@ -257,6 +281,125 @@
     display:block;margin:0 auto 14px;
   }
 
+  /* Vista previa en escritorio: foto a la izquierda, texto a la derecha.
+     El PDF sigue saliendo de los lienzos A4, no de estas tarjetas. */
+  .desk-slide{
+    width:100%;
+    background:#fff;
+    border:1px solid var(--linea);
+    border-radius:18px;
+    padding:16px 20px 20px;
+    margin:0 auto 22px;
+    box-shadow:0 10px 28px rgba(43,43,39,.045);
+  }
+  .desk-chrome{
+    display:grid;
+    grid-template-columns:148px 1fr 148px;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .desk-logo{width:148px;height:auto;display:block;justify-self:start;}
+  .desk-titles{text-align:center;min-width:0;}
+  .desk-kicker{
+    font-size:12px;font-weight:600;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--oro);margin-bottom:3px;
+  }
+  .desk-title{
+    font-family:'Cormorant Garamond',serif;
+    font-weight:500;font-size:34px;line-height:1.05;color:var(--tinta);
+  }
+  .desk-sub{
+    margin-top:5px;color:var(--tinta-suave);
+    font-size:13.5px;font-weight:300;line-height:1.4;
+  }
+  .desk-page{
+    justify-self:end;text-align:right;color:var(--tinta-suave);
+    font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .desk-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);
+    gap:20px;align-items:stretch;
+  }
+  .desk-visual{
+    background:#000;border-radius:14px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;min-height:260px;
+  }
+  .desk-visual.es-mapa{background:#FFFcf8;border:1px solid var(--linea);}
+  .desk-visual img{width:100%;height:auto;max-height:74vh;object-fit:contain;display:block;}
+  .desk-info{min-width:0;padding:2px 2px 0;}
+  .desk-info h3{
+    font-family:'Open Sauce One','Karla',sans-serif;
+    font-size:18px;font-weight:600;color:var(--tinta);
+    padding-bottom:8px;margin:2px 0 12px;border-bottom:1.5px solid var(--tinta);
+  }
+  .desk-obs + h3, .desk-plan + h3{margin-top:18px;}
+  .desk-obs, .desk-plan{list-style:none;display:flex;flex-direction:column;gap:12px;}
+  .desk-obs li, .desk-plan li{display:flex;gap:10px;align-items:flex-start;}
+  .desk-num{
+    flex:0 0 auto;width:28px;height:28px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:700;background:#fff;border:2px solid currentColor;
+  }
+  .desk-obs p, .desk-plan p{
+    margin:0;padding-top:3px;font-size:15px;line-height:1.45;color:var(--tinta);
+  }
+  .desk-plan p{font-weight:600;}
+  .desk-meds{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+  .desk-med{
+    background:var(--porcelana);border:1px solid var(--linea);
+    border-radius:10px;padding:8px 10px;
+  }
+  .desk-med b{
+    display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--oro);font-weight:700;margin-bottom:3px;
+  }
+  .desk-med span{font-size:13.5px;line-height:1.35;color:var(--tinta);}
+  .desk-objetivo{
+    margin-top:14px;background:#F4EDE0;border-radius:10px;padding:12px 14px;
+  }
+  .desk-objetivo b{
+    display:block;color:var(--oro);font-size:12px;letter-spacing:.1em;margin-bottom:4px;
+  }
+  .desk-objetivo p{margin:0;font-size:14.5px;line-height:1.45;color:var(--tinta);}
+  .desk-cat{padding:0 0 12px;margin:0 0 12px;border-bottom:1px solid var(--linea);}
+  .desk-cat:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+  .desk-cat-top{display:flex;align-items:center;gap:10px;}
+  .desk-cat-ico{width:36px;height:36px;flex:0 0 auto;}
+  .desk-cat-name{
+    font-family:'Open Sauce One','Karla',sans-serif;
+    font-weight:700;font-size:14.5px;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--tinta);
+  }
+  .desk-lado{
+    display:inline-block;margin-left:8px;
+    font-size:10px;font-weight:700;letter-spacing:.06em;
+    padding:2px 7px;border-radius:4px;border:1.4px solid;vertical-align:middle;
+  }
+  .desk-score{display:flex;align-items:center;gap:10px;margin:8px 0 6px 46px;}
+  .desk-bar{flex:1;height:8px;background:#F0EDE6;border-radius:99px;overflow:hidden;max-width:240px;}
+  .desk-bar > i{display:block;height:100%;border-radius:99px;}
+  .desk-score b{font-size:14px;color:var(--tinta);font-weight:700;}
+  .desk-cat-obs, .desk-cat-rec{margin:0 0 0 46px;font-size:14px;line-height:1.45;color:#4A4A44;}
+  .desk-cat-rec{margin-top:6px;}
+  .desk-cat-rec strong{
+    display:block;color:var(--oro);font-size:11px;letter-spacing:.08em;margin-bottom:2px;
+  }
+  .desk-cierre{
+    margin-top:8px;background:#F4EDE0;border-radius:10px;padding:12px 14px;text-align:center;
+    font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;line-height:1.35;color:var(--tinta);
+  }
+  .desk-vacio{color:var(--tinta-suave);font-size:14px;font-weight:300;}
+  @media (max-width:800px){
+    .desk-chrome{grid-template-columns:1fr;justify-items:center;}
+    .desk-logo,.desk-page{justify-self:center;}
+    .desk-grid{grid-template-columns:1fr;}
+    .desk-title{font-size:28px;}
+    .desk-meds{grid-template-columns:1fr;}
+    .desk-score,.desk-cat-obs,.desk-cat-rec{margin-left:0;}
+  }
+
   /* ---------- cámara ---------- */
   #camModal{
     display:none;position:fixed;inset:0;z-index:1000;background:#000;
@@ -291,7 +434,7 @@
 <div class="wrap">
 
   <header>
-    <img class="logo" id="logo" style="display:none;" alt="Sunsu Spa">
+    <img class="logo" id="logo" src="assets/sunsu-logo-celeste.png" alt="Sunsu">
     <h1>Simetría <em>K-Lift</em></h1>
   </header>
 
@@ -383,7 +526,7 @@ import { FaceLandmarker, ImageSegmenter, FilesetResolver } from "https://cdn.jsd
 
 /* ============ CONFIGURACIÓN ============ */
 const IA_URL = "https://script.google.com/macros/s/AKfycbyF1kBv1sh2bvEnpzocEh9anzR7eI5M-wy-eyPYvYeNtLz0iV19isTyn1vtH06WD6Vk0g/exec";
-const LOGO_URL = "https://images.squarespace-cdn.com/content/v1/67cbb56aeedbe513a2a46f1f/f124100a-0db1-486a-9f7a-b42e4f540c0e/Logo+-+Sunsu+Spa.png";  // v19.1 logo Squarespace
+const LOGO_URL = "assets/sunsu-logo-celeste.png";
 /* ======================================= */
 
 /* paleta editorial Sunsu (web) */
@@ -418,10 +561,25 @@ let camStream = null;
 let scanTimer = null;
 const INFO = { nombre:"", fecha:"" };
 
-if(LOGO_URL){
-  $('logo').src = LOGO_URL;
-  $('logo').style.display = 'block';
+let logoParaPdf = null;
+let logoPromise = null;
+function asegurarLogo(){
+  const dom = $('logo');
+  if(dom && dom.complete && dom.naturalWidth){
+    logoParaPdf = dom;
+    return Promise.resolve(dom);
+  }
+  if(logoParaPdf && logoParaPdf.naturalWidth) return Promise.resolve(logoParaPdf);
+  if(logoPromise) return logoPromise;
+  logoPromise = new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => { logoParaPdf = im; resolve(im); };
+    im.onerror = () => resolve(null);
+    im.src = LOGO_URL;
+  });
+  return logoPromise;
 }
+asegurarLogo();
 
 /* ---------- animación de escaneo: malla de puntos ---------- */
 const CELESTE = "#79C6CF";
@@ -1133,10 +1291,7 @@ function nuevaPagina(){
   const maxIzq = SW/2 - 44 - 110;
   while(g.measureText(izq).width > maxIzq && izq.length > 4){ izq = izq.slice(0, -2) + "…"; }
   g.fillText(izq, 44, 42);
-  g.textAlign = "center";
-  g.font = "600 17px " + FB;
-  g.fillStyle = F.texto;
-  g.fillText("순수 · SUNSU SPA", SW/2, 42);
+  dibujarLogoPdf(g);
   g.textAlign = "right";
   g.font = "400 17px " + FB;
   g.fillStyle = F.gris;
@@ -1144,6 +1299,21 @@ function nuevaPagina(){
   g.strokeStyle = F.linea; g.lineWidth = 1;
   g.beginPath(); g.moveTo(44, 56); g.lineTo(SW-44, 56); g.stroke();
   return { c, g };
+}
+
+/* Marca gráfica en el eje del encabezado. Cabe entre el margen superior y la línea (y=56). */
+function dibujarLogoPdf(g){
+  const img = logoParaPdf;
+  if(img && img.naturalWidth){
+    const lh = 48;
+    const lw = lh * (img.naturalWidth / img.naturalHeight);
+    g.drawImage(img, (SW - lw) / 2, 5, lw, lh);
+    return;
+  }
+  g.textAlign = "center";
+  g.font = "600 17px " + FB;
+  g.fillStyle = F.texto;
+  g.fillText("SUNSU", SW/2, 42);
 }
 
 function tituloPagina(g, ko, kickerTxt, titulo, sub){
@@ -1596,7 +1766,7 @@ function pagina1(anotacionesZona){
   }
 
   pie(g, 1);
-  return c;
+  return { pagina: c, visual: recortarCanvas(c, frx, fry, frw, frh) };
 }
 
 /* ---------- ilustración de rostro (mapa facial) ---------- */
@@ -1847,7 +2017,7 @@ function paginaObs(cats, desde, numPag, obsGeneral){
   }
 
   pie(g, numPag);
-  return c;
+  return { pagina: c, visual: lienzoMapaDesktop(resaltes) };
 }
 
 /* PÁGINA 2 — Áreas de enfoque */
@@ -2072,7 +2242,7 @@ function paginaAreas(focos){
   objL.forEach((ln,i)=> g.fillText(ln, 70, gy+52+i*24));
 
   pie(g, 2);
-  return c;
+  return { pagina: c, visual: recortarCanvas(c, frx, fry, frw, frh) };
 }
 
 /* ---------- dual Real | GIF Espejo (app UI, post-análisis, arriba de nombre/subir) ---------- */
@@ -2187,6 +2357,224 @@ function asegurarObsVline(datos){
   datos.anotacionesZona = arr.slice(0, 4);
 }
 
+function recortarCanvas(src, x, y, w, h){
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w));
+  c.height = Math.max(1, Math.round(h));
+  c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* Mapa de observaciones a tamaño de presentación (la página PDF sigue dibujando el suyo, más chico). */
+function lienzoMapaDesktop(resaltes){
+  const W = 1200, H = 1080;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = "#FFFcf8";
+  g.fillRect(0, 0, W, H);
+  dibujarMapaFacial(g, 600, 470, 460, resaltes || []);
+  return c;
+}
+
+function el(tag, cls, text){
+  const n = document.createElement(tag);
+  if(cls) n.className = cls;
+  if(text != null) n.textContent = text;
+  return n;
+}
+
+function badgeNum(n, color){
+  const s = el('span', 'desk-num', String(n));
+  s.style.color = color || F.tinta;
+  return s;
+}
+
+function hexAlpha(hex, a){
+  const h = String(hex || "#B8965F").replace("#", "");
+  if(h.length !== 6) return hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const gch = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return "rgba(" + r + "," + gch + "," + b + "," + a + ")";
+}
+
+function ladoEtiqueta(lado, col){
+  const l = String(lado || "equilibrado").toLowerCase();
+  const txt = l === "izquierda" ? "IZQUIERDA" : l === "derecha" ? "DERECHA" : (l === "centrado" ? "CENTRADO" : "EQUILIBRADO");
+  const esEq = (l !== "izquierda" && l !== "derecha");
+  const s = el("span", "desk-lado", txt);
+  const accent = col || F.rojo;
+  s.style.color = esEq ? F.gris : accent;
+  s.style.borderColor = esEq ? F.linea : accent;
+  s.style.background = esEq ? "#F5F3EE" : hexAlpha(accent, 0.16);
+  return s;
+}
+
+function iconoMini(tipo){
+  const c = document.createElement("canvas");
+  c.width = 72; c.height = 72;
+  c.className = "desk-cat-ico";
+  icono(c.getContext("2d"), tipo, 36, 36, 26);
+  return c;
+}
+
+function imgDesdeCanvas(canvas, alt){
+  const img = document.createElement("img");
+  img.alt = alt || "";
+  img.src = canvas.toDataURL("image/png");
+  return img;
+}
+
+function slideDesktop(opts){
+  const art = el("article", "desk-slide");
+  const chrome = el("div", "desk-chrome");
+  const logo = document.createElement("img");
+  logo.className = "desk-logo";
+  logo.src = LOGO_URL;
+  logo.alt = "Sunsu";
+  const titles = el("div", "desk-titles");
+  titles.append(
+    el("p", "desk-kicker", opts.ko + "   ·   " + opts.kicker),
+    el("h2", "desk-title", opts.titulo),
+    el("p", "desk-sub", opts.sub)
+  );
+  chrome.append(logo, titles, el("p", "desk-page", "Página " + opts.pagina + " de " + opts.total));
+  const grid = el("div", "desk-grid");
+  const vis = el("div", "desk-visual" + (opts.mapa ? " es-mapa" : ""));
+  vis.appendChild(imgDesdeCanvas(opts.visual, opts.titulo));
+  grid.append(vis, opts.info);
+  art.append(chrome, grid);
+  return art;
+}
+
+function infoSimetria(items){
+  const box = el("div", "desk-info");
+  box.appendChild(el("h3", null, "Observaciones del escaneo"));
+  const arr = items || [];
+  if(!arr.length){
+    box.appendChild(el("p", "desk-vacio", "Sin observaciones de zona en este escaneo."));
+  }else{
+    const list = el("ol", "desk-obs");
+    arr.forEach((a, i) => {
+      const li = el("li");
+      li.append(badgeNum(i + 1, colorZona(a.zona)), el("p", null, a.texto || ""));
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+  }
+  const m = metricasActuales;
+  if(m){
+    box.appendChild(el("h3", null, "Mediciones"));
+    const grid = el("div", "desk-meds");
+    const lado = v => {
+      const l = String(v || "").toLowerCase();
+      if(l === "izquierda" || l === "derecha" || l === "centrado" || l === "equilibrado") return l;
+      return l || "—";
+    };
+    const ter = (m.terciosFacialesPct || []).map(n => n + "%").join(" · ");
+    const filas = [
+      ["Cejas", "Diferencia " + m.diferenciaCejasPct + "% · más baja " + lado(m.cejaMasBaja)],
+      ["Ojos", "Izq " + m.aperturaOjoIzqPct + "% · der " + m.aperturaOjoDerPct + "% · menos abierto " + lado(m.ojoMenosAbierto)],
+      ["Boca", "Inclinación " + m.inclinacionBocaGrados + "° · comisura más baja " + lado(m.comisuraMasBaja)],
+      ["Mentón", "Hacia " + lado(m.mentonDesviadoHacia) + " · " + m.desviacionMentonPct + "%"],
+      ["Tercios", ter || "—"]
+    ];
+    filas.forEach(([k, v]) => {
+      const d = el("div", "desk-med");
+      d.append(el("b", null, k), el("span", null, v));
+      grid.appendChild(d);
+    });
+    box.appendChild(grid);
+  }
+  return box;
+}
+
+function infoAreas(focos){
+  const box = el("div", "desk-info");
+  box.appendChild(el("h3", null, "Plan de trabajo"));
+  const ls = focos || [];
+  if(!ls.length){
+    box.appendChild(el("p", "desk-vacio", "Sin zonas de enfoque en este informe."));
+  }else{
+    const list = el("ol", "desk-plan");
+    ls.forEach((fo, i) => {
+      const li = el("li");
+      li.append(badgeNum(i + 1, ZCOLORES[i % ZCOLORES.length]), el("p", null, fo.nombre || ""));
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+  }
+  const obj = el("div", "desk-objetivo");
+  obj.append(
+    el("b", null, "OBJETIVO"),
+    el("p", null, "Restaurar el equilibrio facial, liberar tensión, reducir retención de líquidos y realzar el contorno natural y V-Line.")
+  );
+  box.appendChild(obj);
+  return box;
+}
+
+function infoObs(cats, desde, obsGeneral){
+  const box = el("div", "desk-info");
+  (cats || []).forEach((cat, ci) => {
+    const p100 = Math.round(Math.max(0, Math.min(100, Number(cat.puntaje) || 0)));
+    const lado = (cat.lado || "equilibrado").toLowerCase();
+    const col = CAT_COLORES[cat.nombre] || F.oro;
+    const card = el("section", "desk-cat");
+    const top = el("div", "desk-cat-top");
+    const nameWrap = el("div");
+    nameWrap.append(el("span", "desk-cat-name", cat.nombre || ""), ladoEtiqueta(lado, col));
+    top.append(iconoMini(desde + ci), nameWrap);
+    const score = el("div", "desk-score");
+    const bar = el("div", "desk-bar");
+    const fill = document.createElement("i");
+    fill.style.width = Math.max(4, p100) + "%";
+    fill.style.background = col;
+    bar.appendChild(fill);
+    score.append(bar, el("b", null, p100 + " / 100"));
+    const rec = el("p", "desk-cat-rec");
+    rec.append(el("strong", null, "RECOMENDACIÓN"));
+    rec.append(document.createTextNode(cat.recomendacion || ""));
+    card.append(top, score, el("p", "desk-cat-obs", cat.observacion || ""), rec);
+    box.appendChild(card);
+  });
+  if(obsGeneral !== null && obsGeneral !== undefined){
+    const cierre = obsGeneral || "El cuidado constante y el masaje facial dirigido pueden mejorar visiblemente el equilibrio, el contorno y la vitalidad de la piel.";
+    box.appendChild(el("p", "desk-cierre", "\u201C" + cierre + "\u201D"));
+  }
+  return box;
+}
+
+function pintarPreviewEscritorio(pack){
+  const cont = $("slidesContenedor");
+  cont.innerHTML = "";
+  const nA = (pack.bloqueA || []).length;
+  const nB = (pack.bloqueB || []).length;
+  const slides = [
+    slideDesktop({
+      ko: "대칭", kicker: "Simetría", titulo: "Simetría K-Lift",
+      sub: "Análisis izquierda vs derecha · puntos de referencia faciales",
+      pagina: 1, total: 4, visual: pack.fotos[0], info: infoSimetria(pack.anotaciones)
+    }),
+    slideDesktop({
+      ko: "집중", kicker: "Enfoque", titulo: "Áreas de Enfoque",
+      sub: "Zonas y direcciones de trabajo para el K-Lift de hoy",
+      pagina: 2, total: 4, visual: pack.fotos[1], info: infoAreas(pack.focos)
+    }),
+    slideDesktop({
+      ko: "관찰", kicker: "Observaciones", titulo: "Observaciones",
+      sub: "Categorías 1 a " + nA + " · mapa de esta página y detalle",
+      pagina: 3, total: 4, visual: pack.fotos[2], mapa: true, info: infoObs(pack.bloqueA, 0, null)
+    }),
+    slideDesktop({
+      ko: "관찰", kicker: "Observaciones", titulo: "Observaciones",
+      sub: "Categorías " + (4 + 1) + " a " + (4 + nB) + " · mapa de esta página y detalle",
+      pagina: 4, total: 4, visual: pack.fotos[3], mapa: true, info: infoObs(pack.bloqueB, 4, pack.obsGeneral)
+    })
+  ];
+  slides.forEach(s => cont.appendChild(s));
+}
+
 async function generarInforme(datos){
   await document.fonts.ready;
   try{
@@ -2201,24 +2589,26 @@ async function generarInforme(datos){
   INFO.nombre = ($('inpNombre').value || "").trim();
   INFO.fecha = new Date().toLocaleDateString('es-EC', { day:'numeric', month:'long', year:'numeric' });
 
+  await asegurarLogo();
+
   const cats8 = (datos.categorias||[]).slice(0,8);
   asegurarObsVline(datos);
+  const bloqueA = cats8.slice(0,4);
+  const bloqueB = cats8.slice(4,8);
   /* orden: 1 Simetría · 2 Áreas · 3-4 Observaciones */
-  const paginas = [
-    pagina1(datos.anotacionesZona),
-    paginaAreas(datos.focos),
-    paginaObs(cats8.slice(0,4), 0, 3, null),
-    paginaObs(cats8.slice(4,8), 4, 4, datos.observacionGeneral || "")
-  ];
+  const p1 = pagina1(datos.anotacionesZona);
+  const p2 = paginaAreas(datos.focos);
+  const p3 = paginaObs(bloqueA, 0, 3, null);
+  const p4 = paginaObs(bloqueB, 4, 4, datos.observacionGeneral || "");
+  const paginas = [p1.pagina, p2.pagina, p3.pagina, p4.pagina];
 
-  const cont = $('slidesContenedor');
-  cont.innerHTML = '';
-  for(const p of paginas){
-    const img = document.createElement('img');
-    img.className = 'slide-img';
-    img.src = p.toDataURL('image/jpeg', 0.9);
-    cont.appendChild(img);
-  }
+  pintarPreviewEscritorio({
+    anotaciones: (datos.anotacionesZona||[]).slice(0,4),
+    focos: (datos.focos||[]).slice(0,6),
+    bloqueA, bloqueB,
+    obsGeneral: datos.observacionGeneral || "",
+    fotos: [p1.visual, p2.visual, p3.visual, p4.visual]
+  });
 
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
