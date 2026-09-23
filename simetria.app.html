@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.21 — artifact (entrada estable: /simetria.html). Encabezado: hangul centrado, sin subtítulo ni kicker en español -->
+<!-- K-Lift simetria.app.html v19.22 — artifact (entrada estable: /simetria.html). PDF: hangul y título centrados, sin kicker ni subtítulo -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -1370,19 +1370,15 @@ function dibujarLogoPdf(g){
 }
 
 function tituloPagina(g, ko, titulo){
-  /* Hangul centrado y más grande. El título en español se queda; no hay kicker ni subtítulo. */
+  /* Hangul centrado y más grande; el título en serif queda debajo, también centrado.
+     Sin kicker en español y sin subtítulo. La regla sigue en y=184 para no mover el pozo. */
   g.textAlign = "center";
   g.fillStyle = F.tinta;
-  g.font = "600 32px " + FB;
-  g.fillText(ko, SW/2, 104);
-  g.textAlign = "left";
+  g.font = "600 36px " + FB;
+  g.fillText(ko, SW/2, 108);
   g.fillStyle = F.tinta;
-  g.font = "600 44px " + FH;
-  g.fillText(titulo, 44, 156);
-  g.textAlign = "right";
-  g.fillStyle = F.oro;
-  g.font = "italic 600 36px " + FS;
-  g.fillText("K-Lift", SW-44, 150);
+  g.font = "600 46px " + FS;
+  g.fillText(titulo, SW/2, 158);
   g.strokeStyle = F.tinta; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(44, 184); g.lineTo(SW-44, 184); g.stroke();
 }
@@ -2626,6 +2622,7 @@ async function generarInforme(datos){
       document.fonts.load('600 44px "Open Sauce One"'),
       document.fonts.load('400 19px "Open Sauce Sans"'),
       document.fonts.load('700 17px "Open Sauce Sans"'),
+      document.fonts.load('600 46px "Cormorant Garamond"'),
       document.fonts.load('italic 600 36px "Cormorant Garamond"')
     ]);
   }catch(e){ /* fallback Karla */ }
