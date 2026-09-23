@@ -10829,7 +10829,8 @@ function cargarBorradorOC(){
       stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
       // Catálogo congelado del proveedor (para agregar compra directa)
       catalogo:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,compra:it.compra||0};}),
-      // Compra DIRECTA: stock propio de Sunsu, se paga en la misma factura
+      // Compra DIRECTA: se paga en la misma factura y, al recibir, entra a Cabina
+      // (no al inventario de ventas).
       directa:[]};
     _pintarBorradorOC();
   })
@@ -10868,10 +10869,10 @@ function _pintarBorradorOC(){
       +'</div>';
   });
   html+='<div id="oc-total-fact" style="text-align:right;font-size:0.7rem;font-weight:700;color:#8A6D1A;padding-top:9px">Subtotal: $'+totalF.toFixed(2)+' · IVA 15%: $'+(totalF*0.15).toFixed(2)+' · <b style="font-size:0.8rem">Total a facturar: $'+(totalF*1.15).toFixed(2)+'</b></div></div>';
-  // ── BLOQUE 1B: COMPRA DIRECTA — stock propio, en la MISMA factura ──
+  // ── BLOQUE 1B: COMPRA DIRECTA — al recibir entra a Cabina, no a percha ──
   html+='<div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #7A5EA6">'
-    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🛍 Compra directa — stock propio Sunsu</div>'
-    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Productos que COMPRAS aparte (no van a consignación) y se pagan en la MISMA factura. También salen en el repedido del PDF.</div>'
+    +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin-bottom:2px">🛍 Compra directa — uso cabina</div>'
+    +'<div style="font-size:0.6rem;color:var(--gray);margin-bottom:10px">Productos que COMPRAS aparte (no van a consignación) y se pagan en la MISMA factura. Al marcarlos recibidos NO suben el inventario de ventas: se crean o suman en Inventario Cabina, y en el acta salen en un cuadro aparte.</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'
     +'<select id="oc-dir-sel" style="flex:1;min-width:0;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.7rem;font-family:inherit;background:white">'
     +(B.catalogo||[]).map(function(pC,iC){return '<option value="'+iC+'">'+pC.nombre+' — $'+(pC.compra||0).toFixed(2)+'</option>';}).join('')
@@ -10881,7 +10882,7 @@ function _pintarBorradorOC(){
   (B.directa||[]).forEach(function(it,i){
     html+='<div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
-      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · stock propio</div></div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · va a cabina, no a percha</div></div>'
       +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">CANT.</div>'
       +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.directa['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:52px;padding:7px;border:1.5px solid #7A5EA6;border-radius:9px;font-size:0.8rem;font-weight:800;text-align:center;color:var(--navy);outline:none"></div>'
       +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">PRECIO $</div>'
@@ -10926,7 +10927,7 @@ function _pintarBorradorOC(){
   // ── RESUMEN: consignación + compra directa = TOTAL de la factura ──
   html+='<div class="card" style="padding:12px 14px;margin-bottom:10px;background:#FDF7E6">'
     +'<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray)"><span>💵 Consignación (vendido en la quincena)</span><b id="oc-res-f" style="color:var(--navy)">$'+(totalF*1.15).toFixed(2)+'</b></div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray);margin-top:3px"><span>🛍 Compra directa (stock propio)</span><b id="oc-res-d" style="color:#7A5EA6">$'+(totalD*1.15).toFixed(2)+'</b></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray);margin-top:3px"><span>🛍 Compra directa (uso cabina)</span><b id="oc-res-d" style="color:#7A5EA6">$'+(totalD*1.15).toFixed(2)+'</b></div>'
     +'<div style="display:flex;justify-content:space-between;font-size:0.82rem;font-weight:900;color:#8A6D1A;border-top:1.5px solid #EAD9A8;margin-top:7px;padding-top:7px"><span>TOTAL FACTURA</span><span id="oc-res-t">$'+(parseFloat((totalF*1.15).toFixed(2))+parseFloat((totalD*1.15).toFixed(2))).toFixed(2)+'</span></div>'
     +'</div>'
     +'<button onclick="generarOCApp()" style="width:100%;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.84rem;font-weight:800;cursor:pointer;margin-bottom:10px">✓ Generar orden de compra</button>';
@@ -10970,7 +10971,7 @@ function generarOCApp(){
   if(!items.length&&!factF.length&&!directaF.length){toast('La orden está vacía: ni facturación, ni restock, ni compra directa','#C9A227');return;}
   // ── MODO EDICIÓN: guardar cambios sobre la MISMA orden ──
   if(B.editandoNum){
-    if(!confirm('✏️ GUARDAR CAMBIOS — '+B.editandoNum+'\n\nFacturación: '+factF.length+' · Restock: '+items.length+' · Compra directa: '+directaF.length+'\n\nSe actualizará la MISMA orden en Entregas (cantidades, filas agregadas y quitadas — lo ya recibido no se toca) y se descargará el PDF corregido con el mismo número. ¿Continuar?')) return;
+    if(!confirm('✏️ GUARDAR CAMBIOS — '+B.editandoNum+'\n\nFacturación: '+factF.length+' · Restock: '+items.length+' · Compra directa (cabina): '+directaF.length+'\n\nSe actualizará la MISMA orden en Entregas (cantidades, filas agregadas y quitadas — lo ya recibido no se toca) y se descargará el PDF corregido con el mismo número. ¿Continuar?')) return;
     window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
     toast('⏳ Guardando cambios...','var(--blue)');
     fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
@@ -10984,7 +10985,7 @@ function generarOCApp(){
     .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
     return;
   }
-  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||0)+' productos\nCompra directa: '+(directaF.length||0)+' productos (stock propio)\n\n'+((items.length||directaF.length)?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
+  if(!confirm('✓ GENERAR ORDEN DE COMPRA\n\nProveedor: '+B.prov.nombre+'\nFacturación: '+factF.length+' productos vendidos\nRestock: '+(items.length||0)+' productos\nCompra directa: '+(directaF.length||0)+' productos (uso cabina, no inventario de ventas)\n\n'+((items.length||directaF.length)?'Se registrará en Entregas y se':'Se')+' descargará el PDF. ¿Continuar?')) return;
   // Nota de venta (sin IVA) o factura (con IVA): el PDF respeta al proveedor
   window._ocConIVA = confirm('🧾 ¿Este proveedor factura CON IVA?\n\nOK = CON IVA 15% (factura)\nCancelar = SIN IVA (nota de venta)');
   toast('⏳ Generando orden...','var(--blue)');
@@ -11174,7 +11175,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
     // ── SECCIÓN 1B: COMPRA DIRECTA — stock PROPIO de Sunsu, misma factura ──
     if(itemsDirecta&&itemsDirecta.length){
       salto(60);
-      barra('COMPRA DIRECTA — STOCK PROPIO SUNSU (MISMA FACTURA)');
+      barra('COMPRA DIRECTA — USO CABINA (MISMA FACTURA)');
       var IVA_PD=(window._ocConIVA===false)?0:0.15;
       doc.setFillColor(238,234,222);
       doc.rect(xI,y,ANCHO,15,'F');
@@ -11223,7 +11224,10 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
       doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(NAVY);
       doc.text('TOTAL COMPRA DIRECTA:',xI+365,y+9,{align:'right'});
       doc.text('$'+sumTotD.toFixed(2),xD-6,y+9,{align:'right'});
-      y+=20;
+      y+=16;
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.6); doc.setTextColor('#7A5EA6');
+      doc.text('Uso cabina: al recibir, este stock no entra al inventario de ventas.', xI, y);
+      y+=12;
       totDirectaPDF=sumTotD;
       subDirectaPDF=sumSubD;
       // ── TOTAL GENERAL: consignación + compra directa, una sola factura ──
@@ -11255,7 +11259,7 @@ function _pdfOCFondo(numOrden, fecha, prov, qLabel, items, itemsFact, itemsDirec
     salto(60);
     barra('ORDEN DE RESTOCK — REPEDIDO');
     var restockTodo=(items||[]).concat((itemsDirecta||[]).map(function(it){
-      return {sku:it.sku, nombre:(it.nombre||'').slice(0,60)+' · compra directa', cant:it.cant};
+      return {sku:it.sku, nombre:(it.nombre||'').slice(0,60)+' · uso cabina', cant:it.cant};
     }));
     if(restockTodo.length){
       tabla(restockTodo,'cant','CANT.',false); // restock: solo cantidades, sin precios
@@ -11353,7 +11357,7 @@ function renderEntradas(c){
           var eColor=!marcado?'var(--gray)':(v===0?'var(--red)':v>=it.pedida?'var(--green)':'var(--gold)');
           html+='<div id="erow-'+it.fila+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
-            +'<div style="flex:1"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+            +'<div style="flex:1"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
             +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+'</div></div>'
             +'<div style="font-size:0.7rem;color:var(--gray)">Pedido: <strong style="color:var(--navy);font-size:0.82rem">'+it.pedida+'</strong></div>'
             +'</div>'
@@ -11456,6 +11460,21 @@ function descargarPDFOrdenApp(numOrden){
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
 
+// Compra directa se reconoce por la nota de ENTRADAS (la escribe crear/editar OC).
+function _esCompraDirectaLinea(it){
+  return ((it&&it.notas)||'').toString().toUpperCase().indexOf('COMPRA DIRECTA')>=0;
+}
+function _toastConCabina(base, res, colorOk){
+  var c=colorOk||'var(--green)';
+  var msg=base;
+  var cb=res&&res.cabina;
+  if(cb&&cb.error){ msg+=' · ⚠️ '+cb.error; c='#C4943A'; }
+  else if(cb&&cb.delta){
+    msg+=' · 🧴 '+(cb.codigo||'cabina')+' '+(cb.delta>0?'+':'')+cb.delta+(cb.accion==='creado'?' (nuevo)':'');
+    if((cb.activo||'').toString().toUpperCase()==='NO') msg+=' · inactivo';
+  }
+  toast(msg,c);
+}
 // ── Acta de entrega con el diseño SUNSU (fondo floral + logo, igual que la OC) ──
 function generarActaEntrega(btn){
   var img=new Image();
@@ -11505,45 +11524,98 @@ function _actaEntregaFondo(btn, fondo){
       {t:'SKU',x:5,w:48},{t:'PRODUCTO',x:56,w:158},{t:'PED.',x:218,w:26,al:'right'},
       {t:'REC.',x:250,w:26,al:'right'},{t:'ESTADO',x:284,w:52},{t:'USUARIO',x:340,w:62},{t:'REGISTRO',x:406,w:90}
     ];
-    var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;cab();} };
-    var cab=function(){
-      doc.setFillColor(61,90,122);
-      doc.roundedRect(xI,y,ANCHO,18,4,4,'F');
+    var yMax=H-70;
+    var saltoLibre=function(need){ if(y+need>yMax){doc.addPage();pintar();y=140;} };
+    var cabEn=function(rgb, alto, yTxt){
+      doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+      doc.roundedRect(xI,y,ANCHO,alto,4,4,'F');
       doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(7.2);
-      cols.forEach(function(cc){doc.text(cc.t, xI+cc.x+(cc.al==='right'?cc.w:0), y+12.5, cc.al==='right'?{align:'right'}:undefined);});
-      y+=18;
+      cols.forEach(function(cc){doc.text(cc.t, xI+cc.x+(cc.al==='right'?cc.w:0), y+yTxt, cc.al==='right'?{align:'right'}:undefined);});
+      y+=alto;
     };
-    cab();
-    var comp=0,parc=0,noLl=0,pend=0;
-    items.forEach(function(it,i){
-      salto(15);
-      if(i%2===1){doc.setFillColor(246,243,234);}else{doc.setFillColor(255,255,255);}
-      doc.rect(xI,y,ANCHO,13,'F');
+    var estadoDe=function(it){
       var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?String(it.recibida):'—';
       var pv=parseFloat(v);
       var estado=v==='—'?'Pendiente':pv===0?'No llegó':pv>=it.pedida?'Completo':'Parcial';
-      if(estado==='Completo')comp++;else if(estado==='Parcial')parc++;else if(estado==='No llegó')noLl++;else pend++;
-      var colE=estado==='Pendiente'?'#888888':estado==='No llegó'?'#B84040':estado==='Completo'?'#2E7D52':'#C4943A';
+      return {v:v, estado:estado};
+    };
+    var pintarFila=function(it, fondo){
+      doc.setFillColor(fondo[0],fondo[1],fondo[2]);
+      doc.rect(xI,y,ANCHO,13,'F');
+      var st=estadoDe(it);
+      var colE=st.estado==='Pendiente'?'#888888':st.estado==='No llegó'?'#B84040':st.estado==='Completo'?'#2E7D52':'#C4943A';
       doc.setFontSize(7.2);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text(it.sku.replace('SUNSU-',''),xI+cols[0].x,y+9.5);
+      doc.text((it.sku||'').replace('SUNSU-',''),xI+cols[0].x,y+9.5);
       doc.text(_pdfRecorta(doc, it.nombre, (cols[2].x+cols[2].w)-cols[1].x-24),xI+cols[1].x,y+9.5);
       doc.text(String(it.pedida),xI+cols[2].x+cols[2].w,y+9.5,{align:'right'});
       doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
-      doc.text(v,xI+cols[3].x+cols[3].w,y+9.5,{align:'right'});
+      doc.text(st.v,xI+cols[3].x+cols[3].w,y+9.5,{align:'right'});
       doc.setTextColor(colE);
-      doc.text(estado,xI+cols[4].x,y+9.5);
+      doc.text(st.estado,xI+cols[4].x,y+9.5);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       doc.text((it.usuario||'—').split(' ')[0].slice(0,12),xI+cols[5].x,y+9.5);
       doc.text((it.timestamp||'—').toString().slice(0,16),xI+cols[6].x,y+9.5);
       y+=13;
-    });
-    y+=10;
-    salto(30);
+      return st.estado;
+    };
+    var bag={comp:0,parc:0,noLl:0,pend:0};
+    var sumar=function(estado){
+      if(estado==='Completo')bag.comp++;
+      else if(estado==='Parcial')bag.parc++;
+      else if(estado==='No llegó')bag.noLl++;
+      else bag.pend++;
+    };
+    var resItems=items.filter(function(it){return !_esCompraDirectaLinea(it);});
+    var dirItems=items.filter(function(it){return _esCompraDirectaLinea(it);});
+    // Restock: misma tabla de siempre. El título solo si también hay compra directa.
+    if(resItems.length){
+      if(dirItems.length){
+        saltoLibre(36);
+        doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(NAVY);
+        doc.text('RESTOCK / CONSIGNACIÓN', xI, y+10);
+        y+=16;
+      }
+      cabEn([61,90,122], 18, 12.5);
+      resItems.forEach(function(it,i){
+        if(y+15>yMax){doc.addPage();pintar();y=140;cabEn([61,90,122], 18, 12.5);}
+        sumar(pintarFila(it, i%2===1?[246,243,234]:[255,255,255]));
+      });
+      y+=8;
+    }
+    // Compra directa en un cuadrado violeta, aparte del restock.
+    if(dirItems.length){
+      var iD=0;
+      while(iD<dirItems.length){
+        var headH=36, colH=16;
+        if(y+headH+colH+15>yMax){doc.addPage();pintar();y=140;}
+        var nFit=Math.max(1, Math.floor((yMax-y-headH-colH-8)/13));
+        var lote=dirItems.slice(iD, iD+nFit);
+        var alto=headH+colH+lote.length*13+8;
+        var yBox=y;
+        doc.setDrawColor(122,94,166); doc.setLineWidth(1.7);
+        doc.setFillColor(250,247,253);
+        doc.roundedRect(xI-6, yBox, ANCHO+12, alto, 6, 6, 'FD');
+        doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor('#7A5EA6');
+        doc.text('COMPRA DIRECTA — USO CABINA', xI, yBox+14);
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.4); doc.setTextColor('#6B5B86');
+        doc.text('No suma al inventario de ventas. Al recibir, entra a Inventario Cabina.', xI, yBox+25);
+        y=yBox+headH-2;
+        cabEn([122,94,166], colH, 11);
+        lote.forEach(function(it,i){
+          sumar(pintarFila(it, i%2===1?[240,234,247]:[250,247,253]));
+        });
+        y=yBox+alto+10;
+        iD+=lote.length;
+      }
+    }
+    var comp=bag.comp, parc=bag.parc, noLl=bag.noLl, pend=bag.pend;
+    y+=6;
+    saltoLibre(30);
     doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(NAVY);
     doc.text('Resumen: '+comp+' completos · '+parc+' parciales · '+noLl+' no llegaron · '+pend+' pendientes',W/2,y,{align:'center'});
     // Firmas
-    salto(70);
+    saltoLibre(70);
     var yF=Math.min(y+45,H-55);
     doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
     doc.line(xI+20,yF,xI+195,yF); doc.line(xD-195,yF,xD-20,yF);
@@ -11566,7 +11638,7 @@ function _actaEntregaHTML(btn){
   var fecha=ahora.toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Guayaquil'});
   var hora=ahora.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',timeZone:'America/Guayaquil'});
 
-  var rows=items.map(function(it){
+  var filaHtml=function(it){
     var v=(it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined)?String(it.recibida):'—';
     var pv=parseFloat(v);
     var estado=v==='—'?'Pendiente':pv===0?'No llegó':pv>=it.pedida?'Completo':'Parcial';
@@ -11582,7 +11654,29 @@ function _actaEntregaHTML(btn){
       +'<td>'+usr+'</td>'
       +'<td>'+ts+'</td>'
       +'</tr>';
-  }).join('');
+  };
+  var thead='<thead><tr>'
+    +'<th>SKU</th><th>Producto</th>'
+    +'<th style="text-align:center">Pedido</th>'
+    +'<th style="text-align:center">Recibido</th>'
+    +'<th style="text-align:center">Estado</th>'
+    +'<th>Recibido por</th>'
+    +'<th>Timestamp</th>'
+    +'</tr></thead>';
+  var resItems=items.filter(function(it){return !_esCompraDirectaLinea(it);});
+  var dirItems=items.filter(function(it){return _esCompraDirectaLinea(it);});
+  var bloques='';
+  if(resItems.length){
+    bloques+=(dirItems.length?'<div style="font-size:12px;font-weight:800;color:#1A2744;margin:0 0 8px">RESTOCK / CONSIGNACI&#xD3;N</div>':'')
+      +'<table>'+thead+'<tbody>'+resItems.map(filaHtml).join('')+'</tbody></table>';
+  }
+  if(dirItems.length){
+    bloques+='<div style="border:2.5px solid #7A5EA6;border-radius:10px;padding:12px 12px 2px;margin:0 0 22px;background:#FBF8FF">'
+      +'<div style="font-size:12px;font-weight:800;color:#7A5EA6;letter-spacing:0.3px;margin-bottom:2px">COMPRA DIRECTA — USO CABINA</div>'
+      +'<div style="font-size:10px;color:#6B5B86;margin-bottom:8px">Estas unidades no entran al inventario de ventas. Al recibirlas, el stock suma en Inventario Cabina.</div>'
+      +'<table class="cab" style="margin-bottom:10px">'+thead+'<tbody>'+dirItems.map(filaHtml).join('')+'</tbody></table>'
+      +'</div>';
+  }
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<style>'
@@ -11599,6 +11693,8 @@ function _actaEntregaHTML(btn){
     +'th{color:white;padding:7px 8px;font-size:10px;text-align:left;text-transform:uppercase}'
     +'td{padding:6px 8px;font-size:11px;border-bottom:1px solid #eee}'
     +'tr:nth-child(even){background:#fafafa}'
+    +'.cab thead tr{background:#7A5EA6}'
+    +'.cab tr:nth-child(even){background:#F0EAF7}'
     +'.sigs{display:flex;gap:40px;justify-content:center;margin-top:40px}'
     +'.sig{width:200px;text-align:center}'
     +'.sig-line{border-top:1.5px solid #aaa;padding-top:6px;margin-top:36px;font-size:10px;color:#777}'
@@ -11613,14 +11709,7 @@ function _actaEntregaHTML(btn){
     +'<div><div class="lbl">RUC / Identificaci&#xF3;n</div><div class="val" style="border-bottom:1px solid #aaa;min-width:120px">&nbsp;</div></div>'
     +'<div><div class="lbl">Orden de Compra</div><div class="val">'+orden+'</div></div>'
     +'</div>'
-    +'<table><thead><tr>'
-    +'<th>SKU</th><th>Producto</th>'
-    +'<th style="text-align:center">Pedido</th>'
-    +'<th style="text-align:center">Recibido</th>'
-    +'<th style="text-align:center">Estado</th>'
-    +'<th>Recibido por</th>'
-    +'<th>Timestamp</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +bloques
     +'<div class="sigs">'
     +'<div class="sig"><div class="sig-line">Entregado por<br><strong>'+proveedorReal+'</strong></div></div>'
     +'<div class="sig"><div class="sig-line">Recibido por<br><strong>SUNSU SPA</strong></div></div>'
@@ -11680,7 +11769,10 @@ function renderHistorialOC(){
         if(!grupos[key]) grupos[key]={orden:it.orden||'',fam:fam,prov:it.proveedor||fam,creada:it.creada||'',quincena:'',items:[]};
         if(!grupos[key].creada&&it.creada) grupos[key].creada=it.creada;
         if(!grupos[key].quincena&&it.notas){
-          var mq=(it.notas||'').match(/Pedido (.+?)( \(app\))?$/);
+          var nq=it.notas||'';
+          var mq=nq.match(/Pedido (.+?)(?: \(app\))?$/);
+          if(!mq) mq=nq.match(/uso cabina · (.+?)(?: \(app\))?/);
+          if(!mq) mq=nq.match(/stock propio · (.+?)(?: \(app\))?/);
           if(mq) grupos[key].quincena=mq[1];
         }
         grupos[key].items.push(it);
@@ -11746,7 +11838,7 @@ function renderHistorialOC(){
           var quien=(it.usuario?('por '+it.usuario):'')+(it.timestamp?(' · '+it.timestamp):'');
           html+='<div style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-            +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+            +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
             +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+' · Pedido: '+it.pedida+'</div></div>'
             +'<div style="text-align:right;flex-shrink:0">'
             +'<div id="hst-'+it.fila+'"><span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
@@ -11805,7 +11897,7 @@ function guardarEdicionEntrega(fila,pedida){
             });
           });
         }
-        toast('✏️ Entrega actualizada','var(--green)');
+        _toastConCabina('✏️ Entrega actualizada', res, 'var(--green)');
       } else {
         cancelarEdicionEntrega(fila,pedida);
         toast('❌ '+(res.error||'Error'),'#B86B6B');
@@ -11859,7 +11951,7 @@ function registrarEntrada(fila,pedida,tipo){
         var el=cantidad===0?'❌ No llegó':cantidad>=pedida?'✅ Completo':'⚠️ Parcial '+cantidad+'/'+pedida;
         var ec=cantidad===0?'var(--red)':cantidad>=pedida?'var(--green)':'var(--gold)';
         if(d) d.innerHTML='<span style="font-size:0.72rem;font-weight:700;color:'+ec+'">'+el+'</span>';
-        toast('✅ Registrado','var(--green)');
+        _toastConCabina('✅ Registrado', res, 'var(--green)');
         // Update in-memory data for PDF (no page reload)
         if(window._gruposEntrada){
           Object.keys(window._gruposEntrada).forEach(function(gname){
