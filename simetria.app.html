@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.19 — artifact (entrada estable: /simetria.html). Logo celeste, vista previa escritorio, PDF A4 con marca gráfica -->
+<!-- K-Lift simetria.app.html v19.20 — artifact (entrada estable: /simetria.html). Logo de portada un poco menor; al analizar, la cara ocupa la vista -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -105,21 +105,20 @@
 
   header{text-align:center;margin-bottom:18px;}
   .logo{
-    width:min(88vw, 340px);
+    width:auto;
+    max-width:min(72vw, 250px);
+    max-height:26vh;
     height:auto;
-    max-height:none;
-    margin:0 auto 8px;
+    margin:0 auto 10px;
     display:block;
     object-fit:contain;
   }
   @media (min-width:900px){
-    header{margin-bottom:14px;padding-top:6px;}
-    .logo{width:min(64vw, 680px);max-height:42vh;margin:0 auto 2px;}
-    h1{font-size:44px;}
+    header{margin-bottom:16px;padding-top:8px;}
+    .logo{max-width:min(44vw, 460px);max-height:30vh;}
   }
   @media (min-width:1200px){
-    .logo{width:min(56vw, 760px);max-height:44vh;}
-    h1{font-size:48px;}
+    .logo{max-width:min(38vw, 500px);max-height:32vh;}
   }
   .marca{
     font-family:'Cormorant Garamond',serif;
@@ -165,6 +164,14 @@
     max-width:100%;max-height:calc(100dvh - 240px);
     margin:0 auto;
   }
+  /* Durante el análisis la portada sale de la vista y la cara llena la pantalla. */
+  body.analizando header{display:none;}
+  body.analizando .wrap{padding-top:12px;}
+  body.analizando .foto-wrap,
+  body.analizando canvas#lienzo{
+    max-height:calc(100dvh - 28px);
+  }
+  body.analizando .foto-wrap{margin-top:0;}
 
   /* ---------- dual Real | Espejo (app UI, post-análisis) ---------- */
   .dual-preview{
@@ -870,8 +877,9 @@ $('btnCapturar').onclick = () => {
   c.getContext('2d').drawImage(v, 0, 0);
   cerrarCamara();
   estado.textContent = "Analizando rostro…";
+  enfocarCara();
   const img = new Image();
-  img.onload = () => analizar(img);
+  img.onload = () => analizarCuandoPinte(img);
   img.src = c.toDataURL('image/jpeg', 0.92);
 };
 
@@ -922,6 +930,7 @@ function procesarArchivo(file){
   if($('btnGaleria')) $('btnGaleria').style.display = '';
   if($('btnFoto')) $('btnFoto').style.display = '';
   estado.textContent = "Analizando rostro…";
+  enfocarCara();
   $('informe').style.display = 'none';
   $('slidesContenedor').innerHTML = '';
   cancelAnimationFrame(cmpRAF);
@@ -930,8 +939,8 @@ function procesarArchivo(file){
   if(dual0) dual0.classList.remove('activo');
   const url = URL.createObjectURL(file);
   const img = new Image();
-  img.onload = () => { URL.revokeObjectURL(url); analizar(img); };
-  img.onerror = () => { estado.textContent = "No se pudo leer la imagen."; };
+  img.onload = () => { URL.revokeObjectURL(url); analizarCuandoPinte(img); };
+  img.onerror = () => { soltarEnfoqueCara(); estado.textContent = "No se pudo leer la imagen."; };
   img.src = url;
 }
 
@@ -975,6 +984,44 @@ const SEV = (v, l1, l2, l3) => v < l1 ? 'minima' : v < l2 ? 'leve' : v < l3 ? 'm
 const SEV_RANGO = { minima:0, leve:1, moderada:2, marcada:3 };
 const peorSev = (a,b) => SEV_RANGO[a] >= SEV_RANGO[b] ? a : b;
 
+/* Quita la portada y deja la cara en el viewport. Instantáneo: no animar el scroll
+   para que el ojo no se quede en el logo. */
+function enfocarCara(){
+  document.body.classList.add('analizando');
+  const colocar = () => {
+    const wrap = $('fotoWrap');
+    const cara = (wrap && wrap.style.display === 'block') ? wrap : $('fotoZona');
+    if(!cara){ window.scrollTo(0, 0); return; }
+    const y = cara.getBoundingClientRect().top + window.scrollY - 8;
+    window.scrollTo(0, Math.max(0, y));
+  };
+  requestAnimationFrame(colocar);
+}
+function soltarEnfoqueCara(){
+  document.body.classList.remove('analizando');
+  if($('fotoWrap')) $('fotoWrap').style.display = 'none';
+  if($('fotoZona')) $('fotoZona').style.display = '';
+  window.scrollTo(0, 0);
+}
+function previsualizarCara(img){
+  const esc = Math.min(1, 1200 / Math.max(img.width || 1, 1));
+  lienzo.width = Math.max(1, Math.round(img.width * esc));
+  lienzo.height = Math.max(1, Math.round(img.height * esc));
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+  ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+  $('fotoZona').style.display = 'none';
+  $('fotoWrap').style.display = 'block';
+  const dual = $('dualPreview');
+  if(dual) dual.classList.remove('activo');
+  enfocarCara();
+}
+function analizarCuandoPinte(img){
+  previsualizarCara(img);
+  estado.textContent = "Analizando rostro…";
+  requestAnimationFrame(() => setTimeout(() => analizar(img), 40));
+}
+
 /* ---------- análisis ---------- */
 function analizar(img){
   const maxDet = 1600;
@@ -986,9 +1033,10 @@ function analizar(img){
 
   let res;
   try{ res = landmarker.detect(full); }
-  catch(e){ estado.textContent = "Error durante el análisis. Intenta de nuevo."; return; }
+  catch(e){ soltarEnfoqueCara(); estado.textContent = "Error durante el análisis. Intenta de nuevo."; return; }
 
   if(!res.faceLandmarks || !res.faceLandmarks.length){
+    soltarEnfoqueCara();
     estado.textContent = "No se detectó un rostro. Intenta con la cara de frente y buena luz.";
     return;
   }
@@ -1165,6 +1213,7 @@ function analizar(img){
   dibujarLineasFaciales(ctx, p => p, Math.max(0.7, anchoCara/450));
   $('fotoZona').style.display = 'none';
   $('fotoWrap').style.display = 'block';
+  enfocarCara();
   const dualHide = $('dualPreview');
   if(dualHide) dualHide.classList.remove('activo');
   cancelAnimationFrame(cmpRAF);
@@ -1247,6 +1296,7 @@ async function generarConIA(){
   if(dualHide2) dualHide2.classList.remove('activo');
   cancelAnimationFrame(cmpRAF);
   $('fotoWrap').style.display = 'block';
+  enfocarCara();
   iniciarScan();
   try{
     const res = await fetch(IA_URL, {
