@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- K-Lift simetria.app.html v19.20 — artifact (entrada estable: /simetria.html). Logo de portada un poco menor; al analizar, la cara ocupa la vista -->
+<!-- K-Lift simetria.app.html v19.21 — artifact (entrada estable: /simetria.html). Encabezado: hangul centrado, sin subtítulo ni kicker en español -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -309,8 +309,8 @@
   .desk-logo{width:148px;height:auto;display:block;justify-self:start;}
   .desk-titles{text-align:center;min-width:0;}
   .desk-kicker{
-    font-size:12px;font-weight:600;letter-spacing:.2em;
-    text-transform:uppercase;color:var(--oro);margin-bottom:3px;
+    font-size:28px;font-weight:600;letter-spacing:.06em;
+    color:var(--tinta);line-height:1.1;margin-bottom:4px;
   }
   .desk-title{
     font-family:'Cormorant Garamond',serif;
@@ -403,6 +403,7 @@
     .desk-logo,.desk-page{justify-self:center;}
     .desk-grid{grid-template-columns:1fr;}
     .desk-title{font-size:28px;}
+    .desk-kicker{font-size:22px;}
     .desk-meds{grid-template-columns:1fr;}
     .desk-score,.desk-cat-obs,.desk-cat-rec{margin-left:0;}
   }
@@ -1368,21 +1369,20 @@ function dibujarLogoPdf(g){
   g.fillText("SUNSU", SW/2, 42);
 }
 
-function tituloPagina(g, ko, kickerTxt, titulo, sub){
+function tituloPagina(g, ko, titulo){
+  /* Hangul centrado y más grande. El título en español se queda; no hay kicker ni subtítulo. */
+  g.textAlign = "center";
+  g.fillStyle = F.tinta;
+  g.font = "600 32px " + FB;
+  g.fillText(ko, SW/2, 104);
   g.textAlign = "left";
-  g.fillStyle = F.gris;
-  g.font = "600 16px " + FB;
-  g.fillText(ko + "   " + kickerTxt.toUpperCase(), 44, 92);
   g.fillStyle = F.tinta;
   g.font = "600 44px " + FH;
-  g.fillText(titulo, 44, 140);
-  g.fillStyle = F.gris;
-  g.font = "400 20px " + FB;
-  g.fillText(sub, 44, 168);
+  g.fillText(titulo, 44, 156);
   g.textAlign = "right";
   g.fillStyle = F.oro;
   g.font = "italic 600 36px " + FS;
-  g.fillText("K-Lift", SW-44, 134);
+  g.fillText("K-Lift", SW-44, 150);
   g.strokeStyle = F.tinta; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(44, 184); g.lineTo(SW-44, 184); g.stroke();
 }
@@ -1607,7 +1607,7 @@ function icono(g, tipo, cx, cy, r){
 /* PÁGINA 1 — Simetría K-Lift · rostro único a ancho completo */
 function pagina1(anotacionesZona){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "대칭", "Simetría", "Simetría K-Lift", "Análisis izquierda vs derecha · puntos de referencia faciales");
+  tituloPagina(g, "대칭", "Simetría K-Lift");
 
   /* pozo fotográfico a ancho completo (frw = SW-88); sin panel Espejo en el PDF */
   const frx = 44, fry = 208, frw = SW-88, frh = 862;
@@ -1973,8 +1973,7 @@ const CAT_COLORES = {
 /* PÁGINAS 3 y 4 — Observaciones: mapa pequeño de la página + 4 categorías en detalle */
 function paginaObs(cats, desde, numPag, obsGeneral){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "관찰", "Observaciones", "Observaciones",
-    "Categorías " + (desde+1) + " a " + (desde+cats.length) + " · mapa de esta página y detalle");
+  tituloPagina(g, "관찰", "Observaciones");
 
   /* mapa pequeño con SOLO las zonas de esta página */
   seccion(g, "Mapa facial de esta página", 44, 214, SW-88);
@@ -2075,7 +2074,7 @@ function paginaObs(cats, desde, numPag, obsGeneral){
 /* PÁGINA 2 — Áreas de enfoque */
 function paginaAreas(focos){
   const { c, g } = nuevaPagina();
-  tituloPagina(g, "집중", "Enfoque", "Áreas de Enfoque", "Zonas y direcciones de trabajo para el K-Lift de hoy");
+  tituloPagina(g, "집중", "Áreas de Enfoque");
 
   const ls = (focos||[]).slice(0,6);
 
@@ -2487,9 +2486,8 @@ function slideDesktop(opts){
   logo.alt = "Sunsu";
   const titles = el("div", "desk-titles");
   titles.append(
-    el("p", "desk-kicker", opts.ko + "   ·   " + opts.kicker),
-    el("h2", "desk-title", opts.titulo),
-    el("p", "desk-sub", opts.sub)
+    el("p", "desk-kicker", opts.ko),
+    el("h2", "desk-title", opts.titulo)
   );
   chrome.append(logo, titles, el("p", "desk-page", "Página " + opts.pagina + " de " + opts.total));
   const grid = el("div", "desk-grid");
@@ -2600,27 +2598,21 @@ function infoObs(cats, desde, obsGeneral){
 function pintarPreviewEscritorio(pack){
   const cont = $("slidesContenedor");
   cont.innerHTML = "";
-  const nA = (pack.bloqueA || []).length;
-  const nB = (pack.bloqueB || []).length;
   const slides = [
     slideDesktop({
-      ko: "대칭", kicker: "Simetría", titulo: "Simetría K-Lift",
-      sub: "Análisis izquierda vs derecha · puntos de referencia faciales",
+      ko: "대칭", titulo: "Simetría K-Lift",
       pagina: 1, total: 4, visual: pack.fotos[0], info: infoSimetria(pack.anotaciones)
     }),
     slideDesktop({
-      ko: "집중", kicker: "Enfoque", titulo: "Áreas de Enfoque",
-      sub: "Zonas y direcciones de trabajo para el K-Lift de hoy",
+      ko: "집중", titulo: "Áreas de Enfoque",
       pagina: 2, total: 4, visual: pack.fotos[1], info: infoAreas(pack.focos)
     }),
     slideDesktop({
-      ko: "관찰", kicker: "Observaciones", titulo: "Observaciones",
-      sub: "Categorías 1 a " + nA + " · mapa de esta página y detalle",
+      ko: "관찰", titulo: "Observaciones",
       pagina: 3, total: 4, visual: pack.fotos[2], mapa: true, info: infoObs(pack.bloqueA, 0, null)
     }),
     slideDesktop({
-      ko: "관찰", kicker: "Observaciones", titulo: "Observaciones",
-      sub: "Categorías " + (4 + 1) + " a " + (4 + nB) + " · mapa de esta página y detalle",
+      ko: "관찰", titulo: "Observaciones",
       pagina: 4, total: 4, visual: pack.fotos[3], mapa: true, info: infoObs(pack.bloqueB, 4, pack.obsGeneral)
     })
   ];
