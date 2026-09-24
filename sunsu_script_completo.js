@@ -35,7 +35,7 @@ const CONFIG = {
 };
 
 // ══════ SELLO DE VERSIÓN — consultar con ?action=version para verificar despliegues ══════
-var APP_VERSION = '2026-09-23-CD (compra directa → cabina, no inventario ventas)';
+var APP_VERSION = '2026-09-24-BE (bitácora esterilización)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -617,6 +617,24 @@ function _rolDeToken_(props, token) {
     if (tk && tk.exp && tk.exp > Date.now()) return tk.rol || '';
   } catch(eT) {}
   return '';
+}
+// Sesión viva: rol + nombre del usuario dueño del token. El nombre sale de
+// SUNSU_USERS (el token solo guarda uid), para no fiarse de lo que mande el celular.
+function _sesionDeToken_(token) {
+  if (!token) return null;
+  var props = PropertiesService.getScriptProperties();
+  var mapT = {};
+  try { mapT = JSON.parse(props.getProperty('SUNSU_TOKENS')||'{}'); } catch(eS) { return null; }
+  var tk = mapT[token];
+  if (!tk || !tk.exp || tk.exp < Date.now()) return null;
+  var name = tk.uid || '';
+  try {
+    var usersS = _usuariosSunsu_(props);
+    for (var iS = 0; iS < usersS.length; iS++) {
+      if (usersS[iS].id === tk.uid) { name = usersS[iS].name || name; break; }
+    }
+  } catch(eUS) {}
+  return {uid: tk.uid||'', rol: tk.rol||'', name: name||'—'};
 }
 function _usuariosSunsu_(props) {
   var DEF_U = [
@@ -3325,6 +3343,10 @@ function doGet(e) {
           propsAb.setProperty('CABINA_ABIERTO_ENV','1');
         }
       } catch(eAbM) {}
+      try {
+        var wInvEns = ssGB.getSheetByName('🧴 INVENTARIO CABINA');
+        if (wInvEns) _cabInvHeaders_(wInvEns);
+      } catch(eEns) {}
       var fotosGB = {};
       try { fotosGB = JSON.parse(PropertiesService.getScriptProperties().getProperty('CABINA_FOTOS')||'{}'); } catch(eFG) {}
       var invGB = lee('🧴 INVENTARIO CABINA').map(function(r,i){
@@ -3336,6 +3358,7 @@ function doGet(e) {
           bodega:parseFloat(r[14])||0, barras:(r[15]||'').toString().trim(), base:(r[16]||'').toString().trim(), ubicacion:(r[17]||'').toString().trim(),
           ubicacionLocal:(r[18]||'').toString().trim(), ubicacionAbierto:(r[19]||'').toString().trim(),
           maxAbiertos:Math.max(1, parseInt(r[20])||1),
+          esterilizable:_cabNormEsterilizable_(r[21]),
           foto: fotosGB[(r[0]||'').toString().trim()] ? 'https://lh3.googleusercontent.com/d/'+fotosGB[(r[0]||'').toString().trim()] : ''};
       }).filter(function(x){return x.codigo||x.producto;});
       var actGB = lee('🛠 ACTIVOS').map(function(r,i){
@@ -5846,6 +5869,19 @@ function doGet(e) {
       return respJsonGet({movimientos: movs, saldo: saldoActual}, callback);
     }
 
+    // ── BITÁCORA DE ESTERILIZACIÓN (cualquier sesión viva puede listar) ──
+    if (action === 'getBitacora') {
+      var sesGBE = _sesionDeToken_(e.parameter.token||'');
+      if (!sesGBE) return respJsonGet({error:'Inicia sesión'}, callback);
+      var ssBE = _cabinaSS_();
+      if (!ssBE) return respJsonGet({sinEstructura:true}, callback);
+      try {
+        return respJsonGet(_bitacoraListar_(ssBE, e.parameter||{}, sesGBE), callback);
+      } catch(eBE) {
+        return respJsonGet({error:eBE.message||'No se pudo leer la bitácora'}, callback);
+      }
+    }
+
     var wsDefault = ss.getSheetByName('CITAS_HOY');
     var dataDefault = wsDefault ? (wsDefault.getRange(1,1).getValue() || '[]') : '[]';
     var output = ContentService.createTextOutput(callback ? callback+'('+dataDefault+')' : dataDefault);
@@ -6918,12 +6954,13 @@ function doPost(e) {
         (anchos||[]).forEach(function(a,i){ if(a) w.setColumnWidth(i+1,a); });
         return w;
       };
-      var wInv = mk('🧴 INVENTARIO CABINA', ['CÓDIGO','PRODUCTO','PROVEEDOR','CONTENIDO ENVASE','UNIDAD','COSTO ENVASE','COSTO POR UNIDAD','ENVASES CERRADOS','ABIERTO: RESTANTE','STOCK TOTAL','MÍNIMO (envases)','NOTAS','ACTIVO','SKU CATÁLOGO','BODEGA: CERRADOS','CÓDIGO BARRAS','PRODUCTO BASE','UBICACIÓN','UBICACIÓN LOCAL','UBICACIÓN ABIERTO','MÁX ABIERTOS'], [70,190,130,110,70,100,110,120,120,90,110,160,70,110,130,120,110,90,110,110,100]);
+      var wInv = mk('🧴 INVENTARIO CABINA', ['CÓDIGO','PRODUCTO','PROVEEDOR','CONTENIDO ENVASE','UNIDAD','COSTO ENVASE','COSTO POR UNIDAD','ENVASES CERRADOS','ABIERTO: RESTANTE','STOCK TOTAL','MÍNIMO (envases)','NOTAS','ACTIVO','SKU CATÁLOGO','BODEGA: CERRADOS','CÓDIGO BARRAS','PRODUCTO BASE','UBICACIÓN','UBICACIÓN LOCAL','UBICACIÓN ABIERTO','MÁX ABIERTOS','ESTERILIZABLE'], [70,190,130,110,70,100,110,120,120,90,110,160,70,110,130,120,110,90,110,110,100,120]);
       var wAct = mk('🛠 ACTIVOS', ['CÓDIGO','ACTIVO','CATEGORÍA','CANTIDAD','UBICACIÓN','ESTADO','FECHA COMPRA','COSTO','NOTAS','LUGAR','CÓDIGO BARRAS','PROVEEDOR','CANTIDAD BODEGA','UNIDAD'], [70,190,120,80,120,100,110,90,180,90,120,130,120,80]);
       var wPro = mk('📋 PROTOCOLOS', ['SKU','FACIAL','VERSIÓN','VIGENTE','MANO DE OBRA $','VIDEO','NOTAS','ACTUALIZADO','POR'], [90,190,70,70,110,180,200,130,110]);
       var wPas = mk('📝 PROTOCOLO PASOS', ['SKU','VERSIÓN','PASO','DESCRIPCIÓN','PRODUCTO COD','CANTIDAD','UNIDAD','MINUTOS'], [90,70,50,300,110,80,70,80]);
       mk('📉 CONSUMOS', ['FECHA','TK','SKU FACIAL','VERSIÓN','PRODUCTO COD','PRODUCTO','CANTIDAD','UNIDAD','COSTO'], [130,60,90,70,100,180,80,70,80]);
       mk('🍾 APERTURAS', ['FECHA','PRODUCTO COD','PRODUCTO','CONTENIDO','QUIÉN'], [130,110,190,100,120]);
+      try { _bitacoraSheet_(ssCb); } catch(eBEsh) {}
       try { ssCb.deleteSheet(ssCb.getSheetByName('Sheet1') || ssCb.getSheetByName('Hoja 1')); } catch(eH) {}
       _cabinaSembrar_(ssCb, body.faciales||[], body.usuario||'');
       propsCE.setProperty('CABINA_SS_ID', ssCb.getId());
@@ -6985,11 +7022,55 @@ function doPost(e) {
       // STOCK TOTAL = todo lo que existe: local (cerrados+abierto) + bodega central
       var stockCP = (cerrCP+bodCP+abCP)*contCP;
       _cabInvHeaders_(wCP);
-      var filaCP = [cCP.codigo||'', cCP.producto||'', cCP.proveedor||'', contCP, cCP.unidad||'ml', costoCP, costoUniCP, cerrCP, abCP, stockCP, parseFloat(cCP.minimo)||0, cCP.notas||'', (cCP.activo||'SI'), (cCP.skuCat||'').toString().trim().toUpperCase(), bodCP, (cCP.barras||'').toString().trim(), (cCP.base||'').toString().trim().toUpperCase(), (cCP.ubicacion||'').toString().trim().toUpperCase(), (cCP.ubicacionLocal||'').toString().trim().toUpperCase(), (cCP.ubicacionAbierto||'').toString().trim().toUpperCase(), Math.max(1, parseInt(cCP.maxAbiertos)||1)];
       var rowCP = parseInt(body.row)||0;
-      if (rowCP >= 2 && rowCP <= wCP.getLastRow()) { wCP.getRange(rowCP,1,1,21).setValues([filaCP]); }
+      var estCP = 'No';
+      if (cCP && Object.prototype.hasOwnProperty.call(cCP, 'esterilizable')) estCP = _cabNormEsterilizable_(cCP.esterilizable);
+      else if (rowCP >= 2 && rowCP <= wCP.getLastRow()) {
+        try { estCP = _cabNormEsterilizable_(wCP.getRange(rowCP, 22).getValue()); } catch(eEstCP) {}
+      }
+      var filaCP = [cCP.codigo||'', cCP.producto||'', cCP.proveedor||'', contCP, cCP.unidad||'ml', costoCP, costoUniCP, cerrCP, abCP, stockCP, parseFloat(cCP.minimo)||0, cCP.notas||'', (cCP.activo||'SI'), (cCP.skuCat||'').toString().trim().toUpperCase(), bodCP, (cCP.barras||'').toString().trim(), (cCP.base||'').toString().trim().toUpperCase(), (cCP.ubicacion||'').toString().trim().toUpperCase(), (cCP.ubicacionLocal||'').toString().trim().toUpperCase(), (cCP.ubicacionAbierto||'').toString().trim().toUpperCase(), Math.max(1, parseInt(cCP.maxAbiertos)||1), estCP];
+      if (rowCP >= 2 && rowCP <= wCP.getLastRow()) { wCP.getRange(rowCP,1,1,22).setValues([filaCP]); }
       else { filaCP[0] = filaCP[0] || _cabNext_(wCP,'INV-'); wCP.appendRow(filaCP); rowCP = wCP.getLastRow(); }
       return respJson({ok:true, row:rowCP, codigo:filaCP[0]});
+    }
+
+    // ── BITÁCORA: un ciclo (protocolo fijo de 3 pasos) con una o más líneas ──
+    if (body.accion === 'bitacoraCrear') {
+      var sesBC = _sesionDeToken_(body.token||'');
+      if (!sesBC) return respJson({error:'Inicia sesión'});
+      var ssBC = _cabinaSS_();
+      if (!ssBC) return respJson({error:'La cabina aún no está configurada'});
+      try {
+        var outBC = _bitacoraCrear_(ssBC, body, sesBC);
+        if (outBC.error) return respJson(outBC);
+        try { logAccion_(ss, 'BITÁCORA', outBC.id+' · '+(outBC.nItems||0)+' ítems', sesBC.name); } catch(eLBC) {}
+        return respJson(outBC);
+      } catch(eBC) { return respJson({error:eBC.message||'No se pudo guardar'}); }
+    }
+    if (body.accion === 'bitacoraAnular') {
+      var sesBA = _sesionDeToken_(body.token||'');
+      if (!sesBA) return respJson({error:'Inicia sesión'});
+      if (sesBA.rol!=='admin' && sesBA.rol!=='admin_master') return respJson({error:'Solo administradores pueden anular'});
+      var ssBA = _cabinaSS_();
+      if (!ssBA) return respJson({error:'La cabina aún no está configurada'});
+      try {
+        var outBA = _bitacoraAnular_(ssBA, body, sesBA);
+        if (outBA.error) return respJson(outBA);
+        try { logAccion_(ss, 'BITÁCORA ANULADA', outBA.id+' · '+(outBA.motivo||''), sesBA.name); } catch(eLBA) {}
+        return respJson(outBA);
+      } catch(eBA) { return respJson({error:eBA.message||'No se pudo anular'}); }
+    }
+    if (body.accion === 'bitacoraMarcarEsterilizable') {
+      var sesBM = _sesionDeToken_(body.token||'');
+      if (!sesBM) return respJson({error:'Inicia sesión'});
+      if (sesBM.rol!=='admin' && sesBM.rol!=='admin_master') return respJson({error:'Solo administradores'});
+      var ssBM = _cabinaSS_();
+      if (!ssBM) return respJson({error:'La cabina aún no está configurada'});
+      try {
+        var outBM = _bitacoraMarcar_(ssBM, body);
+        if (!outBM.error) { try { logAccion_(ss, 'ESTERILIZABLE', outBM.codigo+' → '+outBM.esterilizable, sesBM.name); } catch(eLBM) {} }
+        return respJson(outBM);
+      } catch(eBM) { return respJson({error:eBM.message||'No se pudo marcar'}); }
     }
 
     // ── CABINA: nueva orden de compra ──
@@ -9676,6 +9757,304 @@ function recolorTodo() {
 // SUNSU-INV-000###), la Focuskin como activo, y los 6 protocolos historicos
 // (SUNSU-01 a 06) con sus pasos, cantidades y costos reales.
 var CABINA_SEED = {"productos":[{"codigo":"INV-002","producto":"BIODANCE Bio-Collagen Real Deep Mask","proveedor":"AMAZON","contenido":1.0,"unidad":"Unidad","costoEnvase":4.8605,"notas":"Marca: BIODANCE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-003","producto":"SKINFOOD Rice Mask Wash Off","proveedor":"AMAZON","contenido":120.0,"unidad":"g","costoEnvase":13.75,"notas":"Marca: SKINFOOD \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-004","producto":"Medicube Collagen Jelly Cream","proveedor":"AMAZON","contenido":110.0,"unidad":"ml","costoEnvase":46.8338,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-005","producto":"I'm from Rice Serum","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":34.7885,"notas":"Marca: I'M FROM \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-006","producto":"SKINFOOD Carrot Carotene Daily Sheet Mask","proveedor":"AMAZON","contenido":30.0,"unidad":"Unidad","costoEnvase":34.875,"notas":"Marca: SKINFOOD \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-007","producto":"Baebody Advanced Snail Mucin Under Eye Patches","proveedor":"AMAZON","contenido":6.0,"unidad":"Par","costoEnvase":17.375,"notas":"Marca: BEABODY \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-008","producto":"VT COSMETICS PDRN 100 Essence, Intensive Glow Serum","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":30.7956,"notas":"Marca: VT COSMETICS \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-009","producto":"Medicube Zero Pore Pads 2.0","proveedor":"AMAZON","contenido":70.0,"unidad":"Unidad","costoEnvase":38.75,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-010","producto":"Medicube Deep Vitamin C Golden Capsule Face Moisturizer","proveedor":"AMAZON","contenido":55.0,"unidad":"g","costoEnvase":30.6706,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-011","producto":"COSRX Snail Mucin 96% Power Repairing Essence","proveedor":"AMAZON","contenido":100.0,"unidad":"ml","costoEnvase":31.5104,"notas":"Marca: COSRX \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-012","producto":"Medicube Zero Exosome Shot 2,000 PPM Spicule Facial Serum","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":49.2035,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-013","producto":"Medicube Collagen Overnight Wrapping Peel Off Facial Mask Pack","proveedor":"AMAZON","contenido":75.0,"unidad":"ml","costoEnvase":23.625,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-014","producto":"I'm from Rice Toner","proveedor":"AMAZON","contenido":150.0,"unidad":"ml","costoEnvase":27.7972,"notas":"Marca: I'M FROM \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-015","producto":"Bio-Oil Skincare Body Oil Serum","proveedor":"AMAZON","contenido":200.0,"unidad":"ml","costoEnvase":40.8,"notas":"Marca: BIO-OIL \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-016","producto":"Rosiong Red Light Therapy Hair Growth Device Comb","proveedor":"AMAZON","contenido":1.0,"unidad":"Unidad","costoEnvase":42.4875,"notas":"Marca: ROSIONG \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-017","producto":"BAIMEI Stainless Steel Gua Sha","proveedor":"AMAZON","contenido":1.0,"unidad":"Unidad","costoEnvase":12.4875,"notas":"Marca: BAIMEI \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-018","producto":"Ice Globes","proveedor":"AMAZON","contenido":1.0,"unidad":"Par","costoEnvase":12.4875,"notas":"Marca: SMASENER \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-019","producto":"Derma Roller | Microneedle Roller","proveedor":"AMAZON","contenido":1.0,"unidad":"Unidad","costoEnvase":12.4875,"notas":"Marca: LEXI WHITE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-020","producto":"Geiserailie 2 Pieces Jade Combs","proveedor":"AMAZON","contenido":1.0,"unidad":"Par","costoEnvase":11.975,"notas":"Marca: GEISERAILIE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-021","producto":"NEEDS NATURE Derma Tech Ceramide Modeling Pack","proveedor":"AMAZON","contenido":400.0,"unidad":"g","costoEnvase":27.375,"notas":"Marca: NEEDS NATURE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-022","producto":"NEEDS NATURE Derma Tech Niacinamide Modeling Pack","proveedor":"AMAZON","contenido":400.0,"unidad":"g","costoEnvase":27.375,"notas":"Marca: NEEDS NATURE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-023","producto":"Pimple Patches for Face","proveedor":"AMAZON","contenido":255.0,"unidad":"Unidad","costoEnvase":12.4875,"notas":"Marca: DR. ZITACNE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-024","producto":"Medicube Deep Vita C Serum 2.0","proveedor":"AMAZON","contenido":30.0,"unidad":"g","costoEnvase":30.0414,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-025","producto":"SKIN1004 Madagascar Centella Probio-Cica Intensive Ampoule","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":18.6125,"notas":"Marca: SKIN1004 \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-026","producto":"SKIN1004 Madagascar Centella Asiatica Ampoule Facial Serum","proveedor":"AMAZON","contenido":55.0,"unidad":"ml","costoEnvase":34.0,"notas":"Marca: SKIN1004 \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-027","producto":"VT COSMETICS CICA Reedle Shot 100","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":41.1053,"notas":"Marca: VT COSMETICS \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-028","producto":"Daleaf Chlorella Better Root Hair Tonic","proveedor":"DALEAF","contenido":100.0,"unidad":"ml","costoEnvase":30.0,"notas":"Marca: DALEAF \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-029","producto":"Beauty of Joseon Revive Eye Serum","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":20.125,"notas":"Marca: BEAUTY OF JOSEON \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-030","producto":"COSRX Snail Mucin 92% Face Moisturizer","proveedor":"AMAZON","contenido":100.0,"unidad":"g","costoEnvase":36.3175,"notas":"Marca: COSRX \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-031","producto":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":14.5,"notas":"Marca: SKIN1004 \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-032","producto":"Dr.Jart+ Cicapair Intensive Soothing Repair Gel Cream","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":102.0,"notas":"Marca: DR.JART+ CICAPAIR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-033","producto":"Dr.Jart+ Cicapair Intensive Soothing Repair Serum","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":-3.8571,"notas":"Marca: DR.JART+ CICAPAIR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-034","producto":"Beauty of Joseon Glow Serum Propolis and Niacinamide","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":20.725,"notas":"Marca: BEAUTY OF JOSEON \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-035","producto":"SKIN1004 Madagascar Centella Light Cleansing Oil","proveedor":"AMAZON","contenido":200.0,"unidad":"ml","costoEnvase":41.7391,"notas":"Marca: SKIN1004 \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-036","producto":"ANUA Heartleaf Quercetinol Pore Deep Cleansing Foam","proveedor":"AMAZON","contenido":150.0,"unidad":"ml","costoEnvase":16.275,"notas":"Marca: ANUA \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-037","producto":"Anua Heartleaf 77 Soothing Toner","proveedor":"AMAZON","contenido":250.0,"unidad":"ml","costoEnvase":27.8201,"notas":"Marca: ANUA \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-038","producto":"Jojoba Lip Essence","proveedor":"AMAZON","contenido":13.0,"unidad":"ml","costoEnvase":19.6725,"notas":"Marca: SIDMOOL \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-039","producto":"FATION\u00a0-\u00a0Nosca9 Cleansing Water","proveedor":"FATION","contenido":500.0,"unidad":"ml","costoEnvase":35.8875,"notas":"Marca: FATION \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-040","producto":"d'alba Piedmont Italian White Truffle First Spray Serum","proveedor":"AMAZON","contenido":100.0,"unidad":"ml","costoEnvase":30.8966,"notas":"Marca: D'ALBA \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-041","producto":"VT COSMETICS CICA Reedle Shot 300","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":31.25,"notas":"Marca: VT COSMETICS \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-042","producto":"Medicube Age-R Booster Pro","proveedor":"AMAZON","contenido":1.0,"unidad":"Unidad","costoEnvase":285.0,"notas":"Marca: MEDICUBE \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-043","producto":"Azulene Skin Toner 1000ml","proveedor":"GLAMFABRIK CIA LTDA","contenido":1000.0,"unidad":"ml","costoEnvase":53.57,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-044","producto":"Bubble O2 Cleansing Mask","proveedor":"GLAMFABRIK CIA LTDA","contenido":300.0,"unidad":"ml","costoEnvase":41.4,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-045","producto":"Mediclear Makeup Remover","proveedor":"GLAMFABRIK CIA LTDA","contenido":300.0,"unidad":"ml","costoEnvase":25.57,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-046","producto":"Modeling Powder Aqua-Max","proveedor":"GLAMFABRIK CIA LTDA","contenido":1000.0,"unidad":"g","costoEnvase":39.13,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-047","producto":"Modeling Powder Charcoal","proveedor":"GLAMFABRIK CIA LTDA","contenido":1000.0,"unidad":"g","costoEnvase":39.13,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-048","producto":"Modeling Powder Collagen","proveedor":"GLAMFABRIK CIA LTDA","contenido":1000.0,"unidad":"g","costoEnvase":39.13,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-049","producto":"Modeling Powder Vita-C","proveedor":"GLAMFABRIK CIA LTDA","contenido":1000.0,"unidad":"g","costoEnvase":39.13,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-050","producto":"Special Ampoule Bright","proveedor":"GLAMFABRIK CIA LTDA","contenido":100.0,"unidad":"Unidad","costoEnvase":77.9,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-051","producto":"Special Ampoule Elastic","proveedor":"GLAMFABRIK CIA LTDA","contenido":100.0,"unidad":"Unidad","costoEnvase":77.9,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-052","producto":"Special Ampoule Moist","proveedor":"GLAMFABRIK CIA LTDA","contenido":100.0,"unidad":"Unidad","costoEnvase":77.9,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-053","producto":"Special Ampoule Purifying","proveedor":"GLAMFABRIK CIA LTDA","contenido":100.0,"unidad":"Unidad","costoEnvase":77.9,"notas":"Marca: DR CPU \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-054","producto":"PEELING ENZIMATICO PAPAYA Y PINA","proveedor":"BRUNO VASSARI ECUADOR CIA. LTDA","contenido":500.0,"unidad":"g","costoEnvase":42.6087,"notas":"Marca: AROMS NATUR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-055","producto":"PROBIOTIC SKIN BALANCING MASK","proveedor":"BRUNO VASSARI ECUADOR CIA. LTDA","contenido":100.0,"unidad":"g","costoEnvase":42.6087,"notas":"Marca: AROMS NATUR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-056","producto":"A.VEG. PEPITA DE UVA","proveedor":"BRUNO VASSARI ECUADOR CIA. LTDA","contenido":1000.0,"unidad":"ml","costoEnvase":29.4643,"notas":"Marca: AROMS NATUR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-057","producto":"POLVO DE ARROZ","proveedor":"BRUNO VASSARI ECUADOR CIA. LTDA","contenido":400.0,"unidad":"g","costoEnvase":30.3571,"notas":"Marca: AROMS NATUR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-058","producto":"ESSENCEBALM","proveedor":"BRUNO VASSARI ECUADOR CIA. LTDA","contenido":200.0,"unidad":"g","costoEnvase":47.8261,"notas":"Marca: AROMS NATUR \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-059","producto":"Discos Desmaquilladores de Algodon Sort duo","proveedor":"FYBECA","contenido":100.0,"unidad":"Unidad","costoEnvase":4.56,"notas":"Marca: TIPPY'S \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-060","producto":"Cotoneetes Tippy's Frasco","proveedor":"FYBECA","contenido":200.0,"unidad":"Unidad","costoEnvase":2.9,"notas":"Marca: TIPPY'S \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-061","producto":"Winner Soft Face Towels","proveedor":"AMAZON","contenido":600.0,"unidad":"Unidad","costoEnvase":8.4871,"notas":"Marca: WINNER \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-062","producto":"NOSCA9 Trouble Serum S","proveedor":"AMAZON","contenido":30.0,"unidad":"ml","costoEnvase":272.8075,"notas":"Marca: FATION \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-063","producto":"d'alba Piedmont Italian White Truffle Waterfull Essence Sunscreen","proveedor":"AMAZON","contenido":50.0,"unidad":"ml","costoEnvase":22.75,"notas":"Marca: D'ALBA \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-064","producto":"Youthheal Exoprime Mask","proveedor":"GLAMFABRIK CIA LTDA","contenido":1.0,"unidad":"Unidad","costoEnvase":21.67,"notas":"Marca: Youtheal \u00b7 stock por contar (migrado del Excel)"},{"codigo":"INV-065","producto":"HA50X Pro-Hyaluronic Mask Mascarilla con Acido Hialuronico","proveedor":"Bruno Vassari","contenido":1,"unidad":"ml","costoEnvase":0,"notas":"Marca: Bruno Vassari \u00b7 stock por contar (migrado del Excel)"}],"activos":[{"codigo":"AC-001","activo":"PIE Focuskin - Skin Analysis System","categoria":"Equipos","cantidad":"1","ubicacion":"","estado":"Buen estado","costo":"5769.73","notas":"Migrado del Excel"}],"protocolos":{"SUNSU-01":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"toalla(irrita) \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"MASAJE DRENANTE CON PEPITA DE UVA \u2014 **Movimientos lentos sin fricci\u00f3n ni calor**","productoCod":"","cantidad":0,"unidad":"","minutos":10.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Azulene Skin Toner 1000ml","productoCod":"INV-043","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"** no aplicar si se contrata mascarilla hidroplastica**","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR/alta frecuencia O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-047","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-053","cantidad":1.0,"unidad":"Unidad","minutos":2.0},{"desc":"Dr.Jart+ Cicapair Intensive Soothing Repair Serum","productoCod":"INV-033","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Dr.Jart+ Cicapair Intensive Soothing Repair Gel Cream","productoCod":"INV-032","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"NO HAY BOOSTER (IRRITANTE)","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}],"SUNSU-02":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER \u2014 **Movimientos lentos sin fricci\u00f3n ni calor**","productoCod":"","cantidad":0,"unidad":"","minutos":10.0},{"desc":"Azulene Skin Toner 1000ml","productoCod":"INV-043","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"PROBIOTIC SKIN BALANCING MASK","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-047","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-053","cantidad":1.0,"unidad":"Unidad","minutos":2.0},{"desc":"NOSCA9 Trouble Serum S","productoCod":"INV-062","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"**aplicar con booster**","productoCod":"INV-004","cantidad":2.0,"unidad":"ml","minutos":6.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"INSERTAR PRODUCTO CON BOOSTER","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}],"SUNSU-03":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Azulene Skin Toner 1000ml","productoCod":"INV-043","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"PROBIOTIC SKIN BALANCING MASK","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-046","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-052","cantidad":1.0,"unidad":"Unidad","minutos":2.0},{"desc":"d'alba Piedmont Italian White Truffle First Spray Serum","productoCod":"INV-040","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"**aplicar con booster**","productoCod":"INV-004","cantidad":2.0,"unidad":"ml","minutos":6.0},{"desc":"INSERTAR PRODUCTO CON BOOSTER","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}],"SUNSU-04":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"NO APLICA TOALLA CALLENTE ANTES DE EXFOLIANTE \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER \u2014 **Movimientos lentos sin fricci\u00f3n ni calor**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Azulene Skin Toner 1000ml","productoCod":"INV-043","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"PROBIOTIC SKIN BALANCING MASK","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-048","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-051","cantidad":1.0,"unidad":"Unidad","minutos":2.0},{"desc":"Medicube Zero Exosome Shot 2,000 PPM Spicule Facial Serum","productoCod":"INV-012","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"**aplicar con booster**","productoCod":"INV-004","cantidad":2.0,"unidad":"ml","minutos":6.0},{"desc":"INSERTAR PRODUCTO CON BOOSTER","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}],"SUNSU-05":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER \u2014 **Movimientos lentos sin fricci\u00f3n ni calor**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Azulene Skin Toner 1000ml","productoCod":"INV-043","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"PROBIOTIC SKIN BALANCING MASK","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-049","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"Medicube Deep Vita C Serum 2.0","productoCod":"INV-024","cantidad":2.0,"unidad":"g","minutos":2.0},{"desc":"**aplicar con booster**","productoCod":"INV-010","cantidad":2.0,"unidad":"g","minutos":6.0},{"desc":"INSERTAR PRODUCTO CON BOOSTER","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}],"SUNSU-06":[{"desc":"**Limpieza para usar maquina**","productoCod":"INV-037","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)","productoCod":"","cantidad":0,"unidad":"","minutos":30.0},{"desc":"** Aplicar solo de ser necesario**","productoCod":"INV-045","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"Discos Desmaquilladores de Algodon Sort duo","productoCod":"INV-059","cantidad":2.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Light Cleansing Oil","productoCod":"INV-035","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"Winner Soft Face Towels","productoCod":"INV-061","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"Bubble O2 Cleansing Mask","productoCod":"INV-044","cantidad":3.0,"unidad":"ml","minutos":2.0},{"desc":"APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE \u2014 **Toalla caliente para abrir los poros y suavisar la piel**","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"**Se mezcla polvo de arroz con pepita de uva, y se exfolia**","productoCod":"INV-057","cantidad":2.0,"unidad":"g","minutos":0.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":1.0,"unidad":"ml","minutos":0.0},{"desc":"** Solo si es contratado EXTRA** NO EN EMBARAZO","productoCod":"INV-054","cantidad":2.0,"unidad":"g","minutos":10.0},{"desc":"EXTRACCI\u00d3N DE GRANOS","productoCod":"","cantidad":0,"unidad":"","minutos":4.0},{"desc":"APLICAR ALTA FREQUENCIA","productoCod":"","cantidad":0,"unidad":"","minutos":2.0},{"desc":"MASAJE DRENANTE CON PEPITA DE UVA \u2014 **Movimientos lentos sin fricci\u00f3n ni calor**","productoCod":"","cantidad":0,"unidad":"","minutos":15.0},{"desc":"A.VEG. PEPITA DE UVA","productoCod":"INV-056","cantidad":0,"unidad":"","minutos":0.0},{"desc":"I'm from Rice Serum","productoCod":"INV-005","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"PROBIOTIC SKIN BALANCING MASK","productoCod":"INV-055","cantidad":2.0,"unidad":"g","minutos":30.0},{"desc":"DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS \u2014 **se puede aplicar piedra caliente en corazon**","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"** Solo si es contratado EXTRA** NO EN EMBARAZO","productoCod":"INV-049","cantidad":50.0,"unidad":"g","minutos":0.0},{"desc":"** Solo si es contratado EXTRA**","productoCod":"INV-051","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"I'm from Rice Serum","productoCod":"INV-005","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"COSRX Snail Mucin 96% Power Repairing Essence","productoCod":"INV-011","cantidad":2.0,"unidad":"ml","minutos":2.0},{"desc":"COSRX Snail Mucin 92% Face Moisturizer","productoCod":"INV-030","cantidad":2.0,"unidad":"g","minutos":6.0},{"desc":"NO BOOSTER \u2014 NO EN EMBARAZO","productoCod":"","cantidad":0,"unidad":"","minutos":0.0},{"desc":"Beauty of Joseon Revive Eye Serum","productoCod":"INV-029","cantidad":1.0,"unidad":"ml","minutos":2.0},{"desc":"Jojoba Lip Essence","productoCod":"INV-038","cantidad":0.25,"unidad":"ml","minutos":1.0},{"desc":"Cotoneetes Tippy's Frasco","productoCod":"INV-060","cantidad":1.0,"unidad":"Unidad","minutos":0.0},{"desc":"SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum","productoCod":"INV-031","cantidad":2.0,"unidad":"ml","minutos":1.0}]}};
+// ══ BITÁCORA DE ESTERILIZACIÓN ══
+// Un registro = un ciclo del protocolo fijo (3 pasos) aplicado a una o más líneas.
+// Cada línea: {codigo, nombre, cantidad>0}. No hay borrado: anular (solo admin).
+// El dibujo del PDF vive en el cliente (_bePdfLayout) para poder cambiarlo
+// cuando llegue la plantilla oficial.
+var BITACORA_SHEET = '📒 BITÁCORA ESTERILIZACIÓN';
+var BITACORA_HEADERS = ['ID','TIMESTAMP','USUARIO','ÍTEMS','PASO1_OK','PASO2_OPCION','PASO2_OK','PASO3_OK','RESULTADO','OBSERVACION_TEXTO','ESTADO','MOTIVO_ANULACION','ANULADO_POR','ANULADO_TS','REGISTRO_REEMPLAZO_ID'];
+
+function _cabNormEsterilizable_(v) {
+  var s = (v==null?'':String(v)).trim().toUpperCase();
+  if (s==='SI' || s==='SÍ' || s==='YES' || s==='TRUE' || s==='1') return 'Sí';
+  return 'No';
+}
+function _bitacoraSi_(v) {
+  if (v===true || v===1) return true;
+  var s = (v==null?'':String(v)).trim().toUpperCase();
+  return s==='SI' || s==='SÍ' || s==='TRUE' || s==='1' || s==='CUMPLIDO';
+}
+function _bitacoraPaso2_(v) {
+  var s = (v==null?'':String(v)).trim().toLowerCase().replace(/ó/g,'o').replace(/á/g,'a');
+  if (s==='sablon') return 'Sablón';
+  if (s==='alcohol') return 'alcohol';
+  return '';
+}
+function _bitacoraResultado_(v) {
+  var s = (v==null?'':String(v)).trim().toUpperCase();
+  if (s==='OK') return 'OK';
+  if (s==='OBSERVACION' || s==='OBSERVACIÓN' || s.indexOf('OBS')===0) return 'OBSERVACIÓN';
+  return '';
+}
+// Valida el ciclo sin tocar el spreadsheet. Devuelve {error} o el payload limpio.
+function _bitacoraValidarPayload_(body) {
+  var raw = body && body.items;
+  if (!Array.isArray(raw) || !raw.length) return {error:'Agrega al menos un ítem con cantidad'};
+  var map = {}, items = [];
+  for (var i = 0; i < raw.length; i++) {
+    var it = raw[i] || {};
+    var cod = (it.codigo||'').toString().trim();
+    var cantRaw = it.cantidad;
+    var cantVacio = cantRaw==='' || cantRaw===null || cantRaw===undefined;
+    var cant = parseFloat(cantRaw);
+    if (!cod && (cantVacio || !(cant>0))) continue; // línea en blanco
+    if (!cod) return {error:'Elige el ítem en cada línea (o quita la línea vacía)'};
+    if (!isFinite(cant) || cant<=0) return {error:'La cantidad de cada ítem debe ser mayor a 0'};
+    if (cant>9999) return {error:'La cantidad es demasiado alta'};
+    var key = cod.toUpperCase();
+    cant = Math.round(cant*1000)/1000;
+    if (map[key]) map[key].cantidad = Math.round((map[key].cantidad+cant)*1000)/1000;
+    else {
+      var row = {codigo:cod, nombre:(it.nombre||'').toString().trim(), cantidad:cant};
+      map[key] = row;
+      items.push(row);
+    }
+  }
+  if (!items.length) return {error:'Agrega al menos un ítem con cantidad'};
+  if (!_bitacoraSi_(body.paso1)) return {error:'El paso 1 (limpieza con detergente enzimático) tiene que estar cumplido'};
+  var p2 = _bitacoraPaso2_(body.paso2Opcion);
+  if (!p2) return {error:'En el paso 2 elige Sablón o alcohol'};
+  if (!_bitacoraSi_(body.paso2)) return {error:'Marca el paso 2 como cumplido'};
+  if (!_bitacoraSi_(body.paso3)) return {error:'El paso 3 (secado y esterilización) tiene que estar cumplido'};
+  var res = _bitacoraResultado_(body.resultado);
+  if (!res) return {error:'El resultado debe ser OK u observación'};
+  var obs = (body.observacion||'').toString().trim();
+  if (obs.length>500) obs = obs.slice(0,500);
+  if (res==='OK') obs = '';
+  return {items:items, paso2:p2, resultado:res, observacion:obs};
+}
+function _bitacoraSheet_(ssCb) {
+  var ws = ssCb.getSheetByName(BITACORA_SHEET);
+  if (!ws) {
+    ws = ssCb.insertSheet(BITACORA_SHEET);
+    ws.getRange(1,1,1,BITACORA_HEADERS.length).setValues([BITACORA_HEADERS]).setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+    ws.setFrozenRows(1);
+    ws.setColumnWidth(1, 80);
+    ws.setColumnWidth(2, 140);
+    ws.setColumnWidth(3, 150);
+    ws.setColumnWidth(4, 380);
+    ws.setColumnWidth(10, 240);
+    ws.setColumnWidth(12, 240);
+    return ws;
+  }
+  if (!(ws.getRange(1,1).getValue()||'').toString()) {
+    ws.getRange(1,1,1,BITACORA_HEADERS.length).setValues([BITACORA_HEADERS]).setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+function _bitacoraFecha_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) return v;
+  var s = (v==null?'':String(v)).trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10), parseInt(m[4]||'0',10), parseInt(m[5]||'0',10));
+  if (!s) return null;
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function _bitacoraParseItems_(raw) {
+  var arr = raw;
+  if (typeof raw === 'string') {
+    try { arr = JSON.parse(raw||'[]'); } catch(eJ) { arr = []; }
+  }
+  if (!Array.isArray(arr)) return [];
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var it = arr[i] || {};
+    var cod = (it.codigo||'').toString().trim();
+    var nom = (it.nombre||'').toString().trim();
+    if (!cod && !nom) continue;
+    out.push({codigo:cod, nombre:nom||cod, cantidad:parseFloat(it.cantidad)||0});
+  }
+  return out;
+}
+function _cabIndexInv_(ws) {
+  _cabInvHeaders_(ws);
+  var d = ws.getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < d.length; i++) {
+    var cod = (d[i][0]||'').toString().trim();
+    if (!cod) continue;
+    map[cod.toUpperCase()] = {
+      row: i+1,
+      codigo: cod,
+      producto: (d[i][1]||'').toString().trim(),
+      activo: ((d[i][12]||'SI')+'').toString().trim().toUpperCase(),
+      esterilizable: _cabNormEsterilizable_(d[i][21])
+    };
+  }
+  return map;
+}
+function _bitacoraNextId_(ws) {
+  var maxN = 0;
+  if (ws.getLastRow()>=2) {
+    ws.getRange(2,1,ws.getLastRow()-1,1).getValues().forEach(function(r){
+      var m = (r[0]||'').toString().trim().match(/^BE-(\d+)$/i);
+      if (m) maxN = Math.max(maxN, parseInt(m[1],10));
+    });
+  }
+  var s = String(maxN+1);
+  while (s.length<3) s = '0'+s;
+  return 'BE-'+s;
+}
+function _bitacoraFilaPorId_(ws, id) {
+  if (ws.getLastRow()<2) return 0;
+  var ids = ws.getRange(2,1,ws.getLastRow()-1,1).getValues();
+  var want = (id||'').toString().trim().toUpperCase();
+  for (var i = 0; i < ids.length; i++) {
+    if ((ids[i][0]||'').toString().trim().toUpperCase()===want) return i+2;
+  }
+  return 0;
+}
+function _bitacoraFilaCliente_(r) {
+  var f = _bitacoraFecha_(r[1]);
+  var ts = '';
+  var dia = '';
+  if (f) {
+    ts = Utilities.formatDate(f, 'America/Guayaquil', 'dd/MM/yyyy HH:mm');
+    dia = Utilities.formatDate(f, 'America/Guayaquil', 'yyyy-MM-dd');
+  } else {
+    ts = (r[1]||'').toString();
+  }
+  var fAn = _bitacoraFecha_(r[13]);
+  var anTs = fAn ? Utilities.formatDate(fAn, 'America/Guayaquil', 'dd/MM/yyyy HH:mm') : (r[13]||'').toString();
+  return {
+    id:(r[0]||'').toString().trim(),
+    ts:ts,
+    dia:dia,
+    _ms: f ? f.getTime() : 0,
+    usuario:(r[2]||'').toString().trim(),
+    items:_bitacoraParseItems_(r[3]),
+    paso1:_bitacoraSi_(r[4]),
+    paso2Opcion:_bitacoraPaso2_(r[5]) || (r[5]||'').toString().trim(),
+    paso2:_bitacoraSi_(r[6]),
+    paso3:_bitacoraSi_(r[7]),
+    resultado:_bitacoraResultado_(r[8]) || (r[8]||'').toString().trim(),
+    observacion:(r[9]||'').toString(),
+    estado:((r[10]||'VIGENTE')+'').toString().trim().toUpperCase()==='ANULADO' ? 'ANULADO' : 'VIGENTE',
+    motivoAnulacion:(r[11]||'').toString(),
+    anuladoPor:(r[12]||'').toString(),
+    anuladoTs:anTs,
+    reemplazoId:(r[14]||'').toString().trim()
+  };
+}
+function _bitacoraListar_(ssCb, params, ses) {
+  var wInv = ssCb.getSheetByName('🧴 INVENTARIO CABINA');
+  var idx = wInv ? _cabIndexInv_(wInv) : {};
+  var items = [], otros = [];
+  Object.keys(idx).forEach(function(k){
+    var p = idx[k];
+    if (p.activo==='NO') return;
+    if (p.esterilizable==='Sí') items.push({codigo:p.codigo, producto:p.producto||p.codigo});
+    else if (ses && (ses.rol==='admin'||ses.rol==='admin_master')) otros.push({codigo:p.codigo, producto:p.producto||p.codigo});
+  });
+  items.sort(function(a,b){ return (a.producto||'').localeCompare(b.producto||''); });
+  otros.sort(function(a,b){ return (a.producto||'').localeCompare(b.producto||''); });
+  var ws = _bitacoraSheet_(ssCb);
+  var todos = [];
+  if (ws.getLastRow()>=2) {
+    var data = ws.getRange(2,1,ws.getLastRow()-1,BITACORA_HEADERS.length).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (!(data[i][0]||'').toString().trim()) continue;
+      todos.push(_bitacoraFilaCliente_(data[i]));
+    }
+  }
+  var usuariosMap = {};
+  var filtroMap = {};
+  items.forEach(function(it){ filtroMap[it.codigo.toUpperCase()] = {codigo:it.codigo, nombre:it.producto}; });
+  todos.forEach(function(r){
+    if (r.usuario) usuariosMap[r.usuario] = true;
+    (r.items||[]).forEach(function(it){
+      if (!it.codigo) return;
+      if (!filtroMap[it.codigo.toUpperCase()]) filtroMap[it.codigo.toUpperCase()] = {codigo:it.codigo, nombre:it.nombre||it.codigo};
+    });
+  });
+  var desde = (params.desde||'').toString().trim();
+  var hasta = (params.hasta||'').toString().trim();
+  var usuario = (params.usuario||'').toString().trim().toLowerCase();
+  var item = (params.item||'').toString().trim().toUpperCase();
+  var estado = (params.estado||'').toString().trim().toUpperCase();
+  var regs = todos.filter(function(r){
+    if (desde && (!r.dia || r.dia<desde)) return false;
+    if (hasta && (!r.dia || r.dia>hasta)) return false;
+    if (usuario && (r.usuario||'').toLowerCase()!==usuario) return false;
+    if (estado && r.estado!==estado) return false;
+    if (item) {
+      var hit = (r.items||[]).some(function(it){ return (it.codigo||'').toUpperCase()===item; });
+      if (!hit) return false;
+    }
+    return true;
+  });
+  regs.sort(function(a,b){
+    if ((b._ms||0)!==(a._ms||0)) return (b._ms||0)-(a._ms||0);
+    return (b.id||'').localeCompare(a.id||'');
+  });
+  regs.forEach(function(r){ delete r._ms; });
+  var usuarios = Object.keys(usuariosMap).sort(function(a,b){ return a.localeCompare(b); });
+  var itemsFiltro = Object.keys(filtroMap).map(function(k){ return filtroMap[k]; });
+  itemsFiltro.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
+  return {ok:true, items:items, itemsFiltro:itemsFiltro, otros:otros, usuarios:usuarios, registros:regs};
+}
+function _bitacoraCrear_(ssCb, body, ses) {
+  var val = _bitacoraValidarPayload_(body||{});
+  if (val.error) return val;
+  var wInv = ssCb.getSheetByName('🧴 INVENTARIO CABINA');
+  if (!wInv) return {error:'No existe el inventario de cabina'};
+  var idx = _cabIndexInv_(wInv);
+  var items = [];
+  for (var i = 0; i < val.items.length; i++) {
+    var it = val.items[i];
+    var p = idx[it.codigo.toUpperCase()];
+    if (!p) return {error:'No encontré '+it.codigo+' en el inventario de cabina'};
+    if (p.activo==='NO') return {error:p.producto+' está inactivo'};
+    if (p.esterilizable!=='Sí') return {error:p.producto+' no está marcado como esterilizable'};
+    items.push({codigo:p.codigo, nombre:p.producto||it.nombre||p.codigo, cantidad:it.cantidad});
+  }
+  var ws = _bitacoraSheet_(ssCb);
+  var id = _bitacoraNextId_(ws);
+  var ahora = new Date();
+  ws.appendRow([
+    id, ahora, ses.name||'—', JSON.stringify(items),
+    'SI', val.paso2, 'SI', 'SI',
+    val.resultado, val.observacion, 'VIGENTE', '', '', '', ''
+  ]);
+  var fila = ws.getLastRow();
+  try { ws.getRange(fila, 2).setNumberFormat('dd/MM/yyyy HH:mm'); } catch(eFmt) {}
+  return {ok:true, id:id, nItems:items.length, items:items,
+    ts:Utilities.formatDate(ahora,'America/Guayaquil','dd/MM/yyyy HH:mm'),
+    usuario:ses.name||'—'};
+}
+function _bitacoraAnular_(ssCb, body, ses) {
+  var id = (body.id||'').toString().trim();
+  var motivo = (body.motivo||'').toString().trim();
+  if (!id) return {error:'Falta el registro'};
+  if (!motivo) return {error:'El motivo de anulación es obligatorio'};
+  if (motivo.length>500) motivo = motivo.slice(0,500);
+  var reemp = (body.reemplazoId||'').toString().trim().slice(0,40);
+  var ws = _bitacoraSheet_(ssCb);
+  var fila = _bitacoraFilaPorId_(ws, id);
+  if (!fila) return {error:'No encontré ese registro'};
+  var est = (ws.getRange(fila, 11).getValue()||'').toString().trim().toUpperCase();
+  if (est==='ANULADO') return {error:'Ese registro ya está anulado'};
+  var ahora = new Date();
+  ws.getRange(fila, 11, 1, 5).setValues([['ANULADO', motivo, ses.name||'—', ahora, reemp]]);
+  try { ws.getRange(fila, 14).setNumberFormat('dd/MM/yyyy HH:mm'); } catch(eFmtA) {}
+  return {ok:true, id:id, motivo:motivo};
+}
+function _bitacoraMarcar_(ssCb, body) {
+  var cod = (body.codigo||'').toString().trim();
+  if (!cod) return {error:'Falta el código'};
+  var ws = ssCb.getSheetByName('🧴 INVENTARIO CABINA');
+  if (!ws) return {error:'No existe el inventario de cabina'};
+  var idx = _cabIndexInv_(ws);
+  var p = idx[cod.toUpperCase()];
+  if (!p) return {error:'Producto no encontrado'};
+  var val = _cabNormEsterilizable_(body.esterilizable===undefined || body.esterilizable===null || body.esterilizable==='' ? 'Sí' : body.esterilizable);
+  ws.getRange(p.row, 22).setValue(val);
+  return {ok:true, codigo:p.codigo, producto:p.producto, esterilizable:val};
+}
+
 // Siembra la base migrada del Excel (CABINA_SEED) en las 4 pestanas de la cabina.
 // La usan tanto la creacion inicial como el boton 'Reponer base del Excel'.
 function _cabinaSembrar_(ssCb, faciales, usuario) {
@@ -9746,6 +10125,10 @@ function _cabInvHeaders_(ws) {
     if (!(ws.getRange(1,19).getValue()||'').toString()) ws.getRange(1,19).setValue('UBICACIÓN LOCAL').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
     if (!(ws.getRange(1,20).getValue()||'').toString()) ws.getRange(1,20).setValue('UBICACIÓN ABIERTO').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
     if (!(ws.getRange(1,21).getValue()||'').toString()) ws.getRange(1,21).setValue('MÁX ABIERTOS').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+    if (!(ws.getRange(1,22).getValue()||'').toString()) {
+      ws.getRange(1,22).setValue('ESTERILIZABLE').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+      try { ws.setColumnWidth(22, 120); } catch(eW22) {}
+    }
   } catch(eIH) {}
 }
 function _cabActHeaders_(ws) {
