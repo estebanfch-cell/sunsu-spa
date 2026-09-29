@@ -34,7 +34,9 @@ const CONFIG = {
   MIN_CLIENTAS_BONO: 60,
 };
 
-// ══════ SELLO DE VERSIÓN — consultar con ?action=version para verificar despliegues ══════
+// ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
+// doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
+// El login compara el sello 2026-09-24-BE con SUNSU_MOTOR_ESPERADO.
 var APP_VERSION = '2026-09-24-BE (bitácora esterilización)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
@@ -2197,6 +2199,12 @@ function doGet(e) {
   var action   = e && e.parameter && e.parameter.action;
   var page     = e && e.parameter && e.parameter.page;
 
+  // Sello de motor, sin autenticación y sin abrir el Sheet (el login lo consulta
+  // con timeout corto). Misma acción de siempre: ?action=version. getVersion es alias.
+  if (action === 'version' || action === 'getVersion') {
+    return respJsonGet({version: APP_VERSION}, callback);
+  }
+
   // ── Caja Chica Web App (sin autenticación requerida) ──
   if (page === 'caja') {
     return HtmlService.createHtmlOutput(getCajaWebHtml())
@@ -2398,10 +2406,7 @@ function doGet(e) {
       catch(eJ) { return respJsonGet({error:'Datos corruptos — regenera desde el menú'}, callback); }
     }
 
-    // ── Sello de versión: para verificar qué versión está desplegada ──
-    if (action === 'version') {
-      return respJsonGet({version: APP_VERSION, cumples: true, seguimiento: true}, callback);
-    }
+    // El sello de versión se responde al inicio de doGet (sin abrir el Sheet).
 
     if (action === 'buscarCliente') {
       var cedula = (e.parameter.cedula || '').toString().trim().split('.')[0].replace(/[^0-9]/g,'');
