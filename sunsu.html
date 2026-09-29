@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.09.24.01 bitacora-esterilizacion -->
+<!-- v2026.09.28.01 roles-horas-extra -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260924.01';
+  var v='20260928.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -13626,6 +13626,43 @@ async function descargarRol(sheetName, cedula, btnEl) {
   img.src=GCD_PAG3_URL;
 }
 
+// ── Conceptos del rol: UNA sola lista para el PDF del admin y la vista de la empleada ──
+// Cualquier concepto nuevo se agrega aquí y aparece en los dos. Los totales salen
+// de los mismos campos que ya trae getRolIndividual (no se recalculan).
+function _lineasRol(d){
+  d=d||{};
+  var multas=(d.multasDetalle||[]).filter(function(m){return (parseFloat(m.monto)||0)>0;});
+  var egresos=[
+    ['Aporte IESS (9.45%)', d.iess],
+    ['Anticipo de sueldo', d.anticipo],
+    ['Préstamo hipotecario', d.prestHip],
+    ['Préstamo quirografario', d.prestQuir]
+  ];
+  multas.forEach(function(m){
+    egresos.push([((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:'')), m.monto]);
+  });
+  return {
+    dias: d.diasJibble?d.diasJibble+' días (según registro Jibble)':'—',
+    ingresos:[
+      ['Sueldo', d.sueldo],
+      ['Bono', d.bono],
+      ['Com. faciales/extras/recep.', d.comFaciales],
+      ['Comisión paquetes', d.comPaquetes],
+      ['Comisión productos', d.comProductos],
+      ['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)', d.valSupl],
+      ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)', d.valExtr],
+      ['Horas descanso 100% ('+(d.hrsDesc||0)+' hrs)', d.valDesc],
+      ['Décimo tercero', d.dec13],
+      ['Décimo cuarto', d.dec14],
+      ['Fondo de reserva', d.fondoReserva]
+    ],
+    egresos: egresos,
+    multas: multas,
+    totalIngresos: d.totalIngresos,
+    totalEgresos: (parseFloat(d.iess)||0)+(parseFloat(d.egresos)||0),
+    neto: d.totalRecibir
+  };
+}
 // ── Rol de pagos en PDF con la identidad SUNSU (mismo fondo que OC y actas) ──
 // OJO tipografía: jsPDF (helvetica estándar) solo codifica latin-1 — nada de ✔ ni −
 function _pdfRolFondo(d, sheetName, apro, fondo){
@@ -13655,7 +13692,8 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     fila('CÉDULA:',d.cedula);
     fila('CARGO:',d.cargo);
     // Días REALES contados en Jibble (días con marcación) — nunca derivados de horas
-    fila('DÍAS TRABAJADOS:',(d.diasJibble?d.diasJibble+' días (según registro Jibble)':'—'));
+    var rol=_lineasRol(d);
+    fila('DÍAS TRABAJADOS:', rol.dias);
     y+=6;
     var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
     var barra=function(titulo,cRGB){
@@ -13686,34 +13724,23 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       doc.text(lbl+': '+n2(monto),xD-10,y+6,{align:'right'});
       y+=20;
     };
-    // ── INGRESOS ──
+    // ── INGRESOS / EGRESOS: la misma lista que la vista de la empleada (_lineasRol) ──
     barra('INGRESOS',[46,125,82]);
     var iIdx=0;
-    [['Sueldo',d.sueldo],['Bono',d.bono],['Com. faciales/extras/recep.',d.comFaciales],['Comisión paquetes',d.comPaquetes],
-     ['Comisión productos',d.comProductos],['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)',d.valSupl],
-     ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)',d.valExtr],['Horas descanso 100% ('+(d.hrsDesc||0)+' hrs)',d.valDesc],
-     ['Décimo tercero',d.dec13],['Décimo cuarto',d.dec14],
-     ['Fondo de reserva',d.fondoReserva]].forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx,true)) iIdx++; });
-    totalLinea('TOTAL INGRESOS',d.totalIngresos,VERDE);
-    // ── EGRESOS (mismo formato y tipografía que ingresos, montos en rojo) ──
+    rol.ingresos.forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx,true)) iIdx++; });
+    totalLinea('TOTAL INGRESOS',rol.totalIngresos,VERDE);
     barra('EGRESOS',[184,64,64]);
     var eIdx=0;
-    [['Aporte IESS (9.45%)',d.iess],['Anticipo de sueldo',d.anticipo],['Préstamo hipotecario',d.prestHip],
-     ['Préstamo quirografario',d.prestQuir]].forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx,true)) eIdx++; });
-    // Multas y descuentos: SOLO tipo, fecha y valor (el detalle va en el cuadro del pie)
-    var multas=(d.multasDetalle||[]).filter(function(m){return (parseFloat(m.monto)||0)>0;});
-    multas.forEach(function(m){
-      var lbl=((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:''));
-      linea(lbl,m.monto,ROJO,eIdx); eIdx++;
-    });
-    totalLinea('TOTAL EGRESOS',(parseFloat(d.iess)||0)+(parseFloat(d.egresos)||0),ROJO);
+    var multas=rol.multas;
+    rol.egresos.forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx,true)) eIdx++; });
+    totalLinea('TOTAL EGRESOS',rol.totalEgresos,ROJO);
     // ── NETO ──
     salto(40); y+=4;
     doc.setFillColor(253,247,230);
     doc.roundedRect(xI,y,ANCHO,32,6,6,'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(GOLD);
     doc.text('NETO A RECIBIR:',xI+12,y+21);
-    doc.text(n2(d.totalRecibir),xD-12,y+21,{align:'right'});
+    doc.text(n2(rol.neto),xD-12,y+21,{align:'right'});
     y+=46;
     // ── Cuadro de multas y descuentos: el contenido SIEMPRE cabe en el marco ──
     // 1) Limpieza por LISTA BLANCA: solo caracteres imprimibles + acentos —
@@ -13901,6 +13928,11 @@ function verAprobacionesRol(sheetName){
 }
 function generarHtmlRol(d, mes, multas) {
   const fmt = v => '$' + (parseFloat(v)||0).toFixed(2);
+  const esc = s => (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Misma lista, mismas etiquetas y mismos totales que el PDF del admin.
+  const rol = _lineasRol(d);
+  const filas = pares => pares.map(par => '<div class="row"><span>'+esc(par[0])+'</span><span>'+fmt(par[1])+'</span></div>').join('');
+  const det = rol.multas;
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -13932,42 +13964,29 @@ function generarHtmlRol(d, mes, multas) {
   </div>
 
   <div class="info-grid">
-    <div class="info-row"><span class="info-label">Empleado:</span> ${d.nombre}</div>
-    <div class="info-row"><span class="info-label">C.I.:</span> ${d.cedula}</div>
-    <div class="info-row"><span class="info-label">Cargo:</span> ${d.cargo}</div>
-    <div class="info-row"><span class="info-label">Período:</span> ${mes}</div>
+    <div class="info-row"><span class="info-label">Empleado:</span> ${esc(d.nombre)}</div>
+    <div class="info-row"><span class="info-label">C.I.:</span> ${esc(d.cedula)}</div>
+    <div class="info-row"><span class="info-label">Cargo:</span> ${esc(d.cargo)}</div>
+    <div class="info-row"><span class="info-label">Período:</span> ${esc(mes)}</div>
+    <div class="info-row"><span class="info-label">Días trabajados:</span> ${esc(rol.dias)}</div>
   </div>
 
   <div class="cols">
     <div>
       <div class="section-title">INGRESOS</div>
-      <div class="row"><span>Sueldo</span><span>${fmt(d.sueldo)}</span></div>
-      <div class="row"><span>Bono fijo</span><span>${fmt(d.bono)}</span></div>
-      <div class="row"><span>Com. Faciales</span><span>${fmt(d.comFaciales)}</span></div>
-      <div class="row"><span>Com. Paquetes</span><span>${fmt(d.comPaquetes)}</span></div>
-      <div class="row"><span>Com. Productos</span><span>${fmt(d.comProductos)}</span></div>
-      <div class="row"><span>Hrs Supl. 50% (${d.hrsSupl}h)</span><span>${fmt(d.valSupl)}</span></div>
-      <div class="row"><span>Hrs Extr. 100% (${d.hrsExtr}h)</span><span>${fmt(d.valExtr)}</span></div>
-      <div class="row"><span>13° Sueldo</span><span>${fmt(d.dec13)}</span></div>
-      <div class="row"><span>14° Sueldo</span><span>${fmt(d.dec14)}</span></div>
-      ${parseFloat(d.fondoReserva) > 0 ? `<div class="row"><span>Fondo de Reserva</span><span>${fmt(d.fondoReserva)}</span></div>` : ''}
-      <div class="total-row"><span>TOTAL INGRESOS</span><span>${fmt(d.totalIngresos)}</span></div>
+      ${filas(rol.ingresos)}
+      <div class="total-row"><span>TOTAL INGRESOS</span><span>${fmt(rol.totalIngresos)}</span></div>
     </div>
     <div>
-      <div class="section-title">DEDUCCIONES</div>
-      <div class="row"><span>Aporte IESS 9.45%</span><span>${fmt(d.iess)}</span></div>
-      ${parseFloat(d.anticipo||0)>0 ? '<div class="row"><span>Anticipo / Préstamo</span><span>'+fmt(d.anticipo)+'</span></div>' : ''}
-      ${parseFloat(d.prestHip||0)>0 ? '<div class="row"><span>Préstamo IESS Hipotecario</span><span>'+fmt(d.prestHip)+'</span></div>' : ''}
-      ${parseFloat(d.prestQuir||0)>0 ? '<div class="row"><span>Préstamo IESS Quirografario</span><span>'+fmt(d.prestQuir)+'</span></div>' : ''}
-      ${multas && multas.filter(function(m){return m.tipo==='DESCUENTO';}).length>0 ? '<div class="row"><span>Descuentos</span><span>'+fmt(multas.filter(function(m){return m.tipo==='DESCUENTO';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
-      ${multas && multas.filter(function(m){return m.tipo==='MULTA';}).length>0 ? '<div class="row"><span>Multas</span><span>'+fmt(multas.filter(function(m){return m.tipo==='MULTA';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
-      <div class="total-row"><span>TOTAL DEDUCCIONES</span><span>${fmt(parseFloat(d.iess)+parseFloat(d.egresos))}</span></div>
+      <div class="section-title">EGRESOS</div>
+      ${filas(rol.egresos)}
+      <div class="total-row"><span>TOTAL EGRESOS</span><span>${fmt(rol.totalEgresos)}</span></div>
     </div>
   </div>
 
   <div class="gran-total">
-    <div style="font-size:12px;color:#666;margin-bottom:4px">TOTAL A RECIBIR</div>
-    <div class="gran-total-num">${fmt(d.totalRecibir)}</div>
+    <div style="font-size:12px;color:#666;margin-bottom:4px">NETO A RECIBIR</div>
+    <div class="gran-total-num">${fmt(rol.neto)}</div>
   </div>
 
   <div style="margin-top:40px">
@@ -13975,7 +13994,9 @@ function generarHtmlRol(d, mes, multas) {
     <p style="margin-top:4px;font-size:10px;color:#888">Recibí conforme</p>
   </div>
 
-  ${multas && multas.length > 0 ? '<div style="margin-top:24px;border-top:2px solid #3D5A7A;padding-top:12px">' +
+  ${(d.nota||'').toString().trim() ? '<div style="margin-top:16px;border:1px solid #5A6E8C;background:#F4F7FB;border-radius:6px;padding:10px"><div style="font-weight:bold;color:#3D5A7A;margin-bottom:4px">NOTAS</div><div>'+esc(d.nota)+'</div></div>' : ''}
+
+  ${det.length > 0 ? '<div style="margin-top:24px;border-top:2px solid #3D5A7A;padding-top:12px">' +
     '<div style="background:#3D5A7A;color:#fff;padding:6px 10px;font-weight:bold;font-size:11px;border-radius:4px 4px 0 0">DETALLE MULTAS Y DESCUENTOS</div>' +
     '<table style="width:100%;border-collapse:collapse;font-size:10px">' +
       '<tr style="background:#EEF3FA">' +
@@ -13983,9 +14004,9 @@ function generarHtmlRol(d, mes, multas) {
         '<th style="padding:5px 8px;text-align:left;border-bottom:1px solid #ddd">MOTIVO</th>' +
         '<th style="padding:5px 8px;text-align:right;border-bottom:1px solid #ddd">MONTO</th>' +
       '</tr>' +
-      multas.map(function(m,i){ return '<tr style="background:' + (i%2===0?'#fff':'#f9f9f9') + '">' +
-        '<td style="padding:5px 8px;color:' + (m.tipo==='MULTA'?'#B86B6B':'#C4943A') + ';font-weight:600">' + m.tipo + '</td>' +
-        '<td style="padding:5px 8px">' + m.motivo + '</td>' +
+      det.map(function(m,i){ return '<tr style="background:' + (i%2===0?'#fff':'#f9f9f9') + '">' +
+        '<td style="padding:5px 8px;color:' + (m.tipo==='MULTA'?'#B86B6B':'#C4943A') + ';font-weight:600">' + esc(m.tipo) + '</td>' +
+        '<td style="padding:5px 8px">' + esc(m.motivo) + '</td>' +
         '<td style="padding:5px 8px;text-align:right">$' + parseFloat(m.monto).toFixed(2) + '</td>' +
       '</tr>'; }).join('') +
     '</table>' +
