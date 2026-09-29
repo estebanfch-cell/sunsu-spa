@@ -13955,14 +13955,14 @@ function generarHtmlRol(d, mes, multas) {
       <div class="total-row"><span>TOTAL INGRESOS</span><span>${fmt(d.totalIngresos)}</span></div>
     </div>
     <div>
-      <div class="section-title">DEDUCCIONES</div>
-      <div class="row"><span>Aporte IESS 9.45%</span><span>${fmt(d.iess)}</span></div>
-      ${parseFloat(d.anticipo||0)>0 ? '<div class="row"><span>Anticipo / Préstamo</span><span>'+fmt(d.anticipo)+'</span></div>' : ''}
-      ${parseFloat(d.prestHip||0)>0 ? '<div class="row"><span>Préstamo IESS Hipotecario</span><span>'+fmt(d.prestHip)+'</span></div>' : ''}
-      ${parseFloat(d.prestQuir||0)>0 ? '<div class="row"><span>Préstamo IESS Quirografario</span><span>'+fmt(d.prestQuir)+'</span></div>' : ''}
+      <div class="section-title">EGRESOS</div>
+      <div class="row"><span>Aporte IESS (9.45%)</span><span>${fmt(d.iess)}</span></div>
+      <div class="row"><span>Anticipo de sueldo</span><span>${fmt(d.anticipo)}</span></div>
+      <div class="row"><span>Préstamo hipotecario</span><span>${fmt(d.prestHip)}</span></div>
+      <div class="row"><span>Préstamo quirografario</span><span>${fmt(d.prestQuir)}</span></div>
       ${multas && multas.filter(function(m){return m.tipo==='DESCUENTO';}).length>0 ? '<div class="row"><span>Descuentos</span><span>'+fmt(multas.filter(function(m){return m.tipo==='DESCUENTO';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
       ${multas && multas.filter(function(m){return m.tipo==='MULTA';}).length>0 ? '<div class="row"><span>Multas</span><span>'+fmt(multas.filter(function(m){return m.tipo==='MULTA';}).reduce(function(s,m){return s+parseFloat(m.monto);},0))+'</span></div>' : ''}
-      <div class="total-row"><span>TOTAL DEDUCCIONES</span><span>${fmt(parseFloat(d.iess)+parseFloat(d.egresos))}</span></div>
+      <div class="total-row"><span>TOTAL EGRESOS</span><span>${fmt(parseFloat(d.iess)+parseFloat(d.egresos))}</span></div>
     </div>
   </div>
 
