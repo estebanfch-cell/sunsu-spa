@@ -6,13 +6,18 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.09.28.01 roles-horas-extra -->
+<!-- v2026.09.29.01 aviso-version-login -->
 <title>순수 Sunsu Spa</title>
 <script>
+// Versión del frontend (este archivo) y sello de motor que este build espera.
+// APP_VERSION del Apps Script hoy: '2026-09-24-BE (bitácora esterilización)'.
+// Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
+var SUNSU_APP_VERSION='v2026.09.29.01';
+var SUNSU_MOTOR_ESPERADO='2026-09-24-BE';
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260928.01';
+  var v='20260929.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -54,7 +59,7 @@
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-height:100vh;color:var(--text);}
 
 /* LOGIN */
-#screen-login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:linear-gradient(160deg,#EEF3FA,#F5F0E8 60%,#FDF3EC);}
+#screen-login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px 24px 52px;position:relative;background:linear-gradient(160deg,#EEF3FA,#F5F0E8 60%,#FDF3EC);}
 .login-logo{text-align:center;margin-bottom:28px;}
 .logo-k{font-size:2.8rem;color:var(--navy);font-weight:900;letter-spacing:6px;}
 .logo-s{color:var(--gold);font-size:0.75rem;letter-spacing:5px;margin-top:5px;font-weight:600;text-transform:uppercase;}
@@ -76,6 +81,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
 .pkey:active{background:var(--blue-l);}
 .pkey.del{font-size:0.9rem;color:var(--gray);}
 .login-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--navy),var(--navy-d));color:var(--white);border:none;border-radius:13px;font-size:0.88rem;font-weight:700;cursor:pointer;}
+.login-avisos{width:100%;max-width:400px;margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.login-banner-new,.login-banner-motor{border-radius:12px;padding:10px 12px;text-align:center;font-size:0.72rem;line-height:1.35;font-family:inherit;}
+.login-banner-new{background:#EEF3FA;border:1px solid #D5E1F0;color:#3D5A7A;}
+.login-banner-motor{display:block;width:100%;background:#FBF6E8;border:1px solid #E6D7A8;color:#8A6D1A;cursor:pointer;appearance:none;-webkit-appearance:none;}
+.login-banner-new button,.login-banner-motor-btn{display:inline-block;margin-top:8px;padding:8px 14px;border-radius:10px;border:none;font-size:0.72rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.login-banner-new button{background:var(--navy);color:#fff;}
+.login-banner-motor-btn{background:#C4943A;color:#fff;}
+.login-foot{position:absolute;left:12px;right:12px;bottom:12px;text-align:center;font-size:0.68rem;line-height:1.4;color:#3A3530;opacity:0.45;pointer-events:none;}
+.login-foot .v-ok{color:#2E7D52;font-weight:700;}
 
 /* APP SHELL */
 #screen-app{display:none;flex-direction:column;min-height:100vh;}
@@ -270,6 +284,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cream);min-hei
       <div id="login-sync" style="text-align:center;font-size:0.62rem;color:var(--gray);margin-top:8px"></div>
     </div>
   </div>
+  <div id="login-avisos" class="login-avisos"></div>
+  <div id="login-foot" class="login-foot">v2026.09.29.01 · motor 2026-09-24-BE · verificando…</div>
 </div>
 
 <!-- APP -->
@@ -485,8 +501,214 @@ function _bioGet(){try{return JSON.parse(localStorage.getItem('sunsu_bio'));}cat
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
 function _b64inv(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a.buffer;}
 
+// ══════ VERSIÓN EN LOGIN: aviso de frontend nuevo + chequeo del motor ══════
+// No bloquea el PIN. Si el Apps Script viejo no manda `version`, o tarda más
+// de 8 s, el estado queda neutro (no se muestra el ámbar por un falso positivo).
+var _feEstado='pending', _moEstado='pending', _feGen=0, _moGen=0, _verWatch=false, _verUltimo=0, _moCtrl=null;
+function _loginEnPantalla(){
+  var s=document.getElementById('screen-login');
+  return !!(s && s.style.display!=='none');
+}
+function _partesVersion(s){
+  var m=String(s||'').match(/(\d{4})\.(\d{2})\.(\d{2})\.(\d{2})/);
+  return m?[+m[1],+m[2],+m[3],+m[4]]:null;
+}
+function _versionMayor(a,b){
+  var pa=_partesVersion(a), pb=_partesVersion(b);
+  if(!pa||!pb) return false;
+  for(var i=0;i<4;i++){ if(pa[i]!==pb[i]) return pa[i]>pb[i]; }
+  return false;
+}
+function _selloMotor(s){
+  var m=String(s||'').match(/\d{4}-\d{2}-\d{2}-[A-Z0-9]+/i);
+  return m?m[0].toUpperCase():'';
+}
+function _pintarPieVersion(){
+  var el=document.getElementById('login-foot');
+  if(!el) return;
+  var extra='';
+  // Pendiente o sin respuesta (lento, caído o script viejo sin `version`): neutro.
+  if(_moEstado==='pending'||_moEstado==='neutral'||_feEstado==='pending') extra=' · verificando…';
+  else if(_feEstado==='same'&&_moEstado==='ok') extra=' <span class="v-ok">✓</span>';
+  el.innerHTML=SUNSU_APP_VERSION+' · motor '+SUNSU_MOTOR_ESPERADO+extra;
+}
+function _pintarAvisosVersion(){
+  var el=document.getElementById('login-avisos');
+  if(!el) return;
+  var html='';
+  if(_feEstado==='newer'){
+    html+='<div class="login-banner-new"><div>Hay una versión nueva de la app.</div>'
+      +'<button type="button" onclick="sunsuActualizarAhora()">Actualizar ahora</button></div>';
+  }
+  if(_moEstado==='mismatch'){
+    html+='<button type="button" class="login-banner-motor" onclick="sunsuActualizarAhora()">'
+      +'Versión o motor no coinciden, toca para actualizar'
+      +'<span class="login-banner-motor-btn">Actualizar ahora</span></button>';
+  }
+  el.innerHTML=html;
+}
+function _fetchVersionPublicada(){
+  var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+  var url=new URL(window.location.href);
+  url.hash='';
+  url.searchParams.set('_rv', String(Date.now()));
+  var opts={cache:'no-store'};
+  if(ctrl) opts.signal=ctrl.signal;
+  var corta=setTimeout(function(){ try{ if(ctrl) ctrl.abort(); }catch(eT){} }, 8000);
+  return fetch(url.toString(), opts).then(function(r){
+    if(!r.ok) throw new Error('http');
+    if(!r.body||!r.body.getReader) return r.text();
+    var reader=r.body.getReader();
+    var dec=new TextDecoder();
+    var acc='';
+    function leer(){
+      return reader.read().then(function(res){
+        if(res.value) acc+=dec.decode(res.value,{stream:!res.done});
+        if(res.done||acc.length>6000||/SUNSU_APP_VERSION\s*=/.test(acc)){
+          try{ reader.cancel(); }catch(eC){}
+          return acc;
+        }
+        return leer();
+      });
+    }
+    return leer();
+  }).then(function(txt){
+    clearTimeout(corta);
+    var m=String(txt||'').match(/SUNSU_APP_VERSION\s*=\s*['"](v\d{4}\.\d{2}\.\d{2}\.\d{2})['"]/);
+    return m?m[1]:null;
+  }).catch(function(){ clearTimeout(corta); try{ if(ctrl) ctrl.abort(); }catch(eA){} return null; });
+}
+function _revisarFrontend(){
+  if(!_loginEnPantalla()) return;
+  var gen=++_feGen;
+  var timer=setTimeout(function(){
+    if(gen!==_feGen||!_loginEnPantalla()) return;
+    if(_feEstado==='pending'){
+      _feEstado='unknown';
+      _pintarPieVersion();
+      _pintarAvisosVersion();
+    }
+  }, 8000);
+  _fetchVersionPublicada().then(function(remota){
+    clearTimeout(timer);
+    if(gen!==_feGen||!_loginEnPantalla()) return;
+    if(!remota){ if(_feEstado==='pending') _feEstado='unknown'; }
+    else if(_versionMayor(remota, SUNSU_APP_VERSION)) _feEstado='newer';
+    else _feEstado='same';
+    _pintarPieVersion();
+    _pintarAvisosVersion();
+  });
+}
+function _revisarMotor(){
+  if(!_loginEnPantalla()||typeof APPS_SCRIPT_URL==='undefined'||!APPS_SCRIPT_URL) return;
+  var gen=++_moGen;
+  try{ if(_moCtrl) _moCtrl.abort(); }catch(eAb){}
+  _moCtrl=typeof AbortController!=='undefined'?new AbortController():null;
+  var opts={cache:'no-store'};
+  if(_moCtrl) opts.signal=_moCtrl.signal;
+  // A los 8 s, si aún no hay respuesta, quedarse en neutro. Una respuesta tardía
+  // sí puede actualizar (coincidencia o desajuste real); un cuelgue no dispara el ámbar.
+  var timer=setTimeout(function(){
+    if(gen!==_moGen||!_loginEnPantalla()) return;
+    if(_moEstado==='pending'){
+      _moEstado='neutral';
+      _pintarPieVersion();
+      _pintarAvisosVersion();
+    }
+  }, 8000);
+  fetch(APPS_SCRIPT_URL+'?action=version&_t='+Date.now(), opts).then(function(r){
+    return r.json();
+  }).then(function(d){
+    var sello=_selloMotor(d&&d.version);
+    if(!sello) return 'sin-version';
+    return sello===String(SUNSU_MOTOR_ESPERADO||'').toUpperCase()?'ok':'mismatch';
+  }).catch(function(){ return null; }).then(function(res){
+    clearTimeout(timer);
+    if(gen!==_moGen||!_loginEnPantalla()) return;
+    if(res==='ok'||res==='mismatch') _moEstado=res;
+    else if(res==='sin-version') _moEstado='neutral';
+    else if(_moEstado==='pending') _moEstado='neutral';
+    _pintarPieVersion();
+    _pintarAvisosVersion();
+  });
+}
+function _revisarVersiones(forzar){
+  if(!_loginEnPantalla()) return;
+  var ahora=Date.now();
+  if(!forzar&&_verUltimo&&ahora-_verUltimo<5000) return;
+  _verUltimo=ahora;
+  _revisarFrontend();
+  _revisarMotor();
+}
+function _vigilarVersiones(){
+  _pintarPieVersion();
+  _revisarVersiones(true);
+  if(_verWatch) return;
+  _verWatch=true;
+  setInterval(function(){ _revisarVersiones(true); }, 60000);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') _revisarVersiones(false);
+  });
+  window.addEventListener('focus', function(){ _revisarVersiones(false); });
+}
+// Hard reset: suelta service workers y Cache Storage, borra solo caché de la app
+// (sunsu_swr_*) y recarga con ?v=timestamp. Conserva sesión, biometría, token,
+// usuarios, accesos rápidos y credenciales de Acuity.
+function _limpiarCacheApp(){
+  var i, k, borrar=[];
+  try{
+    for(i=0;i<localStorage.length;i++){
+      k=localStorage.key(i);
+      if(k&&k.indexOf('sunsu_swr_')===0) borrar.push(k);
+    }
+    borrar.forEach(function(key){ localStorage.removeItem(key); });
+  }catch(eL){}
+  borrar=[];
+  try{
+    for(i=0;i<sessionStorage.length;i++){
+      k=sessionStorage.key(i);
+      if(k&&(k.indexOf('sunsu_swr_')===0||k.indexOf('sunsu_cache')===0)) borrar.push(k);
+    }
+    borrar.forEach(function(key){ sessionStorage.removeItem(key); });
+  }catch(eS){}
+}
+function sunsuActualizarAhora(){
+  if(window._sunsuActualizando) return;
+  window._sunsuActualizando=true;
+  var avisos=document.getElementById('login-avisos');
+  if(avisos) avisos.innerHTML='<div class="login-banner-new">Actualizando…</div>';
+  var hecho=false;
+  function recargar(){
+    if(hecho) return;
+    hecho=true;
+    try{ _limpiarCacheApp(); }catch(eC){}
+    try{
+      var u=new URL(window.location.href);
+      u.hash='';
+      u.searchParams.set('v', String(Date.now()));
+      window.location.replace(u.toString());
+    }catch(eU){ window.location.reload(); }
+  }
+  var cadena=Promise.resolve();
+  try{
+    if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){
+      cadena=navigator.serviceWorker.getRegistrations().then(function(regs){
+        return Promise.all((regs||[]).map(function(r){ return r.unregister(); }));
+      });
+    }
+  }catch(eSw){}
+  cadena=cadena.then(function(){
+    if(window.caches&&caches.keys){
+      return caches.keys().then(function(keys){
+        return Promise.all(keys.map(function(key){ return caches.delete(key); }));
+      });
+    }
+  }).then(recargar, recargar);
+  setTimeout(recargar, 4000);
+}
 function initLogin(){
   try{ window._token=localStorage.getItem('sunsu_token')||null; }catch(eTk){}
+  _vigilarVersiones();
   var ses=_sesionGet(), bio=_bioGet();
   var gate=document.getElementById('bio-gate'), pinL=document.getElementById('pin-login');
   if(ses){
@@ -509,6 +731,7 @@ function mostrarPinLogin(){
   document.getElementById('bio-gate').style.display='none';
   document.getElementById('pin-login').style.display='block';
   pinInput=''; renderPin();
+  _revisarVersiones(false);
   // Sincronizar PINs desde el servidor en segundo plano (sin bloquear el teclado)
   var syncEl=document.getElementById('login-sync');
   if(syncEl) syncEl.textContent='Sincronizando usuarios...';
