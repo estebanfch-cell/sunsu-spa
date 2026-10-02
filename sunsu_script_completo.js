@@ -26,7 +26,7 @@ const CONFIG = {
   COL_EXCLUIR_EXTRAS:   74,  // BV — checkbox excluir extras de comisión
   SHEET_MULTAS: "📋 MULTAS Y DESCUENTOS",
   FACIALES_2: ["SUNSU-01","SUNSU-02","SUNSU-03","SUNSU-04","SUNSU-05","SUNSU-06"],
-  FACIALES_3: ["SUNSU-40","SUNSU-41","SUNSU-42","SUNSU-43","SUNSU-52"],
+  FACIALES_3: ["SUNSU-40","SUNSU-41","SUNSU-42","SUNSU-43","SUNSU-52","SUNSU-57"],
   NIVELES: [
     [0.05,  5],[0.10, 20],[0.15, 45],[0.20, 80],[0.25, 125],
     [0.30, 180],[0.40, 245],[0.50, 320],[0.60, 405],[0.80, 500],
@@ -36,8 +36,8 @@ const CONFIG = {
 
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
-// El login compara el sello 2026-09-24-BE con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-09-24-BE (bitácora esterilización)';
+// El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
+var APP_VERSION = '2026-10-02-KL (K-Lift)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -4008,8 +4008,8 @@ function doGet(e) {
         }
         // ¿Paquete de 3 o de 6? — por el código (misma regla que el resto del sistema),
         // con respaldos para filas históricas: nombre con X6/6, o slots 4-6 con datos
-        var P3SET = ['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55'];
-        var P6SET = ['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56'];
+        var P3SET = ['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55','SUNSU-58'];
+        var P6SET = ['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56','SUNSU-59'];
         var nomPaqSP = (rSP[8]||'').toString().toUpperCase();
         var skuUpSP = skuSP.toUpperCase();
         var totalSP = 0;
@@ -11818,7 +11818,10 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
       }
     });
   }
-  function getComFacial(sku) { return comConfig[sku] || 2; }
+  function getComFacial(sku) {
+    if (comConfig[sku]) return comConfig[sku];
+    return CONFIG.FACIALES_3.indexOf(sku) >= 0 ? 3 : 2;
+  }
 
   // Leer precios de compra desde CATALOGO para comisión de productos (30% utilidad)
   var wsCat = ss.getSheetByName('📦 CATALOGO');

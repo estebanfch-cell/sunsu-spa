@@ -6,18 +6,18 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.09.29.01 aviso-version-login -->
+<!-- v2026.10.02.01 k-lift -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
-// APP_VERSION del Apps Script hoy: '2026-09-24-BE (bitácora esterilización)'.
+// APP_VERSION del Apps Script hoy: '2026-10-02-KL (K-Lift)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.09.29.01';
-var SUNSU_MOTOR_ESPERADO='2026-09-24-BE';
+var SUNSU_APP_VERSION='v2026.10.02.01';
+var SUNSU_MOTOR_ESPERADO='2026-10-02-KL';
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20260929.01';
+  var v='20261002.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -350,6 +350,7 @@ let FACIALES=[
   {sku:'SUNSU-42',n:'Facial Peeling Marino de Perla',p:145.00,com:3},
   {sku:'SUNSU-43',n:'Facial de Geisha',p:145.00,com:3},
   {sku:'SUNSU-52',n:'Facial de Ginseng',p:95.00,com:3},
+  {sku:'SUNSU-57',n:'Facial K-Lift',p:95.00,com:3},
 ];
 window.FACIALES=FACIALES; // 'let' NO crea window.FACIALES — y Cabina lee de ahi. Sin esto, la lista llegaba vacia.
 
@@ -384,6 +385,7 @@ let PAQ3=[
   {sku:'SUNSU-47',n:'x3 Facial de Geisha',p:370.70},
   {sku:'SUNSU-53',n:'x3 Facial de Ginseng',p:243.22},
   {sku:'SUNSU-55',n:'x3 Glass Skin + Facial Advance',p:320.08},
+  {sku:'SUNSU-58',n:'x3 Facial K-Lift',p:259.09},
 ];
 
 let PAQ6=[
@@ -400,6 +402,7 @@ let PAQ6=[
   {sku:'SUNSU-51',n:'x6 Facial de Geisha',p:739.50},
   {sku:'SUNSU-54',n:'x6 Facial de Ginseng',p:486.45},
   {sku:'SUNSU-56',n:'x6 Glass Skin + Facial Advance',p:673.67},
+  {sku:'SUNSU-59',n:'x6 Facial K-Lift',p:495.65},
 ];
 
 let PROVS=[
@@ -6575,18 +6578,18 @@ function irATicket(btn){
 function parseCsvLine(line){var r=[],c='',q=false;for(var i=0;i<line.length;i++){if(line[i]==='"'){q=!q;}else if(line[i]===','&&!q){r.push(c);c='';}else{c+=line[i];}}r.push(c);return r;}
 
 function cargarCatalogo(){
-  var FACS=['SUNSU-01','SUNSU-02','SUNSU-03','SUNSU-04','SUNSU-05','SUNSU-06','SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
+  var FACS=['SUNSU-01','SUNSU-02','SUNSU-03','SUNSU-04','SUNSU-05','SUNSU-06','SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52','SUNSU-57'];
   var EXTS=['SUNSU-07','SUNSU-08','SUNSU-12','SUNSU-13','SUNSU-14','SUNSU-15','SUNSU-16','SUNSU-31','SUNSU-32','SUNSU-33','SUNSU-36','SUNSU-37','SUNSU-38','SUNSU-39'];
-  var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55'];
-  var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56'];
+  var P3S=['SUNSU-17','SUNSU-18','SUNSU-19','SUNSU-20','SUNSU-21','SUNSU-22','SUNSU-29','SUNSU-44','SUNSU-45','SUNSU-46','SUNSU-47','SUNSU-53','SUNSU-55','SUNSU-58'];
+  var P6S=['SUNSU-23','SUNSU-24','SUNSU-25','SUNSU-26','SUNSU-27','SUNSU-28','SUNSU-30','SUNSU-48','SUNSU-49','SUNSU-50','SUNSU-51','SUNSU-54','SUNSU-56','SUNSU-59'];
   window._P3S=P3S; window._P6S=P6S; // globales para el seguimiento de paquetes
-  var C3=['SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52'];
+  var C3=['SUNSU-40','SUNSU-41','SUNSU-42','SUNSU-43','SUNSU-52','SUNSU-57'];
   // Name map — use clean names, not catalog UPPERCASE
   var NOMBRES={
     'SUNSU-01':'Facial S.O.S','SUNSU-02':'Facial Reparación','SUNSU-03':'7 Pieles (Arroz+H₂O)',
     'SUNSU-04':'Facial Gold-Aging','SUNSU-05':'Facial Porcelana','SUNSU-06':'Facial Rice Flow',
     'SUNSU-40':'Facial Reset 3x1','SUNSU-41':'Facial Domo de Oxígeno','SUNSU-42':'Facial Peeling Marino de Perla',
-    'SUNSU-43':'Facial de Geisha','SUNSU-52':'Facial de Ginseng',
+    'SUNSU-43':'Facial de Geisha','SUNSU-52':'Facial de Ginseng','SUNSU-57':'Facial K-Lift',
     'SUNSU-07':'Dermaplaning','SUNSU-08':'Mascarilla Hidroplástica','SUNSU-12':'Ampolla Especial Brillo',
     'SUNSU-13':'Ampolla Especial Elasticidad','SUNSU-14':'Ampolla Especial Hidratación',
     'SUNSU-15':'Ampolla Especial','SUNSU-16':'Peeling Enzimático',
@@ -6597,12 +6600,12 @@ function cargarCatalogo(){
     'SUNSU-20':'x3 Facial Gold-Aging','SUNSU-21':'x3 Facial Porcelana','SUNSU-22':'x3 Facial Rice Flow',
     'SUNSU-29':'x3 Faciales Mixtos','SUNSU-44':'x3 Facial Reset 3x1','SUNSU-45':'x3 Facial Domo de Oxígeno',
     'SUNSU-46':'x3 Facial Peeling Marino','SUNSU-47':'x3 Facial de Geisha','SUNSU-53':'x3 Facial de Ginseng',
-    'SUNSU-55':'x3 Glass Skin + Facial Advance',
+    'SUNSU-55':'x3 Glass Skin + Facial Advance','SUNSU-58':'x3 Facial K-Lift',
     'SUNSU-23':'x6 Facial S.O.S','SUNSU-24':'x6 Facial Reparación','SUNSU-25':'x6 7 Pieles',
     'SUNSU-26':'x6 Facial Gold-Aging','SUNSU-27':'x6 Facial Porcelana','SUNSU-28':'x6 Facial Rice Flow',
     'SUNSU-30':'x6 Faciales Mixtos','SUNSU-48':'x6 Facial Reset 3x1','SUNSU-49':'x6 Facial Domo de Oxígeno',
     'SUNSU-50':'x6 Facial Peeling Marino','SUNSU-51':'x6 Facial de Geisha','SUNSU-54':'x6 Facial de Ginseng',
-    'SUNSU-56':'x6 Glass Skin + Facial Advance',
+    'SUNSU-56':'x6 Glass Skin + Facial Advance','SUNSU-59':'x6 Facial K-Lift',
   };
   fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT6AYF-2t0aL3Lxdd8A0NZvZzJnHu2CYjHeMUJMn9YI3Ju7_ni-uQ6ez5c47susgfrdePbOpwliwNOc/pub?gid=700879063&single=true&output=csv&_cb='+Date.now())
     .then(function(r){return r.text();})
