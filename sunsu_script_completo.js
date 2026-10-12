@@ -37,7 +37,7 @@ const CONFIG = {
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
 // El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-10-02-KL (K-Lift)';
+var APP_VERSION = '2026-10-12-COT (Cotizaciones)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -2214,6 +2214,11 @@ function doGet(e) {
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   try {
+
+    // ── Cotizaciones (solo admin / Alejandra). No crea ventas ni toca inventario. ──
+    if (action === 'getCotizaciones' || action === 'getCotizacion') {
+      return respJsonGet(_cotResponderGet_(ss, e), callback);
+    }
 
     // ── 1. Buscar cliente por cédula ──
     // ── Historial de Gift Cards digitales generadas ──
@@ -5936,6 +5941,11 @@ function doPost(e) {
         result = JSON.stringify({saldo: saldo});
       }
       return ContentService.createTextOutput(result).setMimeType(ContentService.MimeType.TEXT);
+    }
+
+    // ── Cotizaciones: solo escribe la hoja Cotizaciones. No es un ticket. ──
+    if (body.accion === 'guardarCotizacion') {
+      return respJson(_cotGuardar_(ss, body));
     }
 
     // ── Registrar multa / descuento ──
@@ -12415,5 +12425,288 @@ function verRolIndividual() {
   if (!found) { ui.alert('No se encontró rol individual para: ' + nombre); return; }
   found.showSheet();
   ss.setActiveSheet(found);
+}
+
+// ============================================================
+// COTIZACIONES — presupuesto para la clienta. No es una venta:
+// no escribe TICKET_FICHA, no mueve inventario, paquetes ni saldos.
+// Número COT-0001 atómico con LockService. Hoja 'Cotizaciones'
+// se crea sola (con encabezados) al guardar la primera.
+// Precios como el ticket: el catálogo ya incluye IVA 15%.
+//   subtotal sin IVA = total final / 1.15
+//   IVA = total final − subtotal sin IVA
+// ============================================================
+var COT_SHEET = 'Cotizaciones';
+var COT_HEADS = ['Numero','Fecha','Creado por','Cliente','Telefono','Email','Cedula','Items JSON','Items','Subtotal','Descuento','IVA','Total','Validez','Notas','Estado'];
+var COT_SEQ_KEY = 'COTIZACION_SEQ';
+
+function _cotRedondear_(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+function _cotTxt_(v, max, keepNl) {
+  var s = v == null ? '' : String(v);
+  if (keepNl) s = s.replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000B-\u001F]/g, ' ');
+  else s = s.replace(/[\u0000-\u001F]/g, ' ').replace(/[ \t]+/g, ' ');
+  s = s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!keepNl) s = s.replace(/\s+/g, ' ').trim();
+  if (max && s.length > max) s = s.slice(0, max).trim();
+  return s;
+}
+// Misma puerta en el servidor que en el menú: admins, o la usuaria Alejandra
+// (id fijo 'alejandra' / nombre de recepción). El rol sale del token, no del celular.
+function _cotEsAdminOAlejandra_(ses) {
+  if (!ses) return false;
+  var rol = (ses.rol || ses.role || '').toString();
+  if (rol === 'admin' || rol === 'admin_master') return true;
+  var uid = (ses.uid || ses.id || '').toString().trim().toLowerCase();
+  if (uid === 'alejandra') return true;
+  var corto = (ses.short || '').toString().trim().toLowerCase();
+  if (corto === 'alejandra') return true;
+  var name = (ses.name || '').toString().trim().toLowerCase();
+  if (name === 'alejandra' || name.indexOf('alejandra ') === 0) return true;
+  return false;
+}
+function _cotSesionPermitida_(token) {
+  var ses = _sesionDeToken_(token);
+  if (!ses) return { error: 'Sesión inválida — vuelve a entrar' };
+  if (!_cotEsAdminOAlejandra_(ses)) return { error: 'No tienes acceso a cotizaciones' };
+  return { ses: ses };
+}
+function _cotLimpiarLineas_(raw) {
+  if (!raw || !raw.length) return [];
+  var out = [];
+  for (var i = 0; i < raw.length && out.length < 80; i++) {
+    var it = raw[i];
+    if (!it) continue;
+    var nombre = _cotTxt_(it.nombre || it.n, 120);
+    var sku = _cotTxt_(it.sku, 40);
+    if (!nombre && !sku) continue;
+    var cant = parseInt(it.cant, 10);
+    if (!(cant > 0)) continue;
+    if (cant > 999) cant = 999;
+    var precio = _cotRedondear_(parseFloat(it.precio));
+    if (precio < 0) precio = 0;
+    if (precio > 999999) precio = 999999;
+    var dscVal = parseFloat(it.dscVal);
+    if (!(dscVal > 0)) dscVal = 0;
+    out.push({
+      sku: sku,
+      nombre: nombre || sku,
+      tipo: _cotTxt_(it.tipo, 24),
+      cant: cant,
+      precio: precio,
+      dscMode: it.dscMode === '%' ? '%' : '$',
+      dscVal: dscVal
+    });
+  }
+  return out;
+}
+// Misma aritmética que _cotCalcular en sunsu.html (el resumen de la pantalla).
+function _cotCalcular_(lineas, dscMode, dscVal) {
+  var sub = 0, descLinea = 0;
+  var out = [];
+  for (var i = 0; i < lineas.length; i++) {
+    var ln = lineas[i];
+    var bruto = _cotRedondear_(ln.cant * ln.precio);
+    var desc = 0;
+    if (ln.dscMode === '%') desc = _cotRedondear_(bruto * Math.min(100, ln.dscVal || 0) / 100);
+    else desc = Math.min(bruto, _cotRedondear_(ln.dscVal || 0));
+    var neto = _cotRedondear_(bruto - desc);
+    sub += bruto;
+    descLinea += desc;
+    out.push({
+      sku: ln.sku, nombre: ln.nombre, tipo: ln.tipo, cant: ln.cant, precio: ln.precio,
+      dscMode: ln.dscMode, dscVal: ln.dscVal || 0, bruto: bruto, desc: desc, neto: neto
+    });
+  }
+  sub = _cotRedondear_(sub);
+  descLinea = _cotRedondear_(descLinea);
+  var base = _cotRedondear_(Math.max(0, sub - descLinea));
+  var modo = dscMode === '%' ? '%' : '$';
+  var val = parseFloat(dscVal);
+  if (!(val > 0)) val = 0;
+  var descGlobal = modo === '%'
+    ? _cotRedondear_(base * Math.min(100, val) / 100)
+    : Math.min(base, _cotRedondear_(val));
+  var descuento = _cotRedondear_(descLinea + descGlobal);
+  var total = _cotRedondear_(Math.max(0, sub - descuento));
+  var sinIvaRaw = total / 1.15;
+  var ivaRaw = total - sinIvaRaw;
+  return {
+    lineas: out,
+    dscMode: modo,
+    dscVal: val,
+    descGlobal: descGlobal,
+    subtotal: sub,
+    descuento: descuento,
+    sinIva: _cotRedondear_(sinIvaRaw),
+    iva: _cotRedondear_(ivaRaw),
+    total: total
+  };
+}
+function _cotItemsLegible_(lineas) {
+  return lineas.map(function(ln) {
+    var txt = (ln.nombre || ln.sku || 'Ítem') + ' ×' + ln.cant + ' @ $' + Number(ln.precio).toFixed(2);
+    if (ln.desc > 0) txt += ' (−$' + Number(ln.desc).toFixed(2) + ')';
+    txt += ' = $' + Number(ln.neto).toFixed(2);
+    return txt;
+  }).join(' | ');
+}
+function _cotHoja_(ss, crear) {
+  var ws = ss.getSheetByName(COT_SHEET);
+  if (!ws && !crear) return null;
+  if (!ws) {
+    ws = ss.insertSheet(COT_SHEET);
+    try { ws.setTabColor('#5B7FA6'); } catch (eCol) {}
+  }
+  var a1 = '';
+  try { a1 = (ws.getRange(1, 1).getValue() || '').toString().trim(); } catch (eA1) { a1 = ''; }
+  if (a1 === 'Numero') return ws;
+  if (a1) {
+    throw new Error('La hoja Cotizaciones existe pero el encabezado no es el esperado. No se escribió nada.');
+  }
+  ws.getRange(1, 1, 1, COT_HEADS.length).setValues([COT_HEADS])
+    .setFontWeight('bold').setBackground('#5B7FA6').setFontColor('#FFFFFF');
+  try { ws.setFrozenRows(1); } catch (eFr) {}
+  return ws;
+}
+function _cotMaxSeq_(ws) {
+  var max = 0;
+  var data = [];
+  try { data = ws.getDataRange().getValues(); } catch (eD) { data = []; }
+  for (var i = 1; i < data.length; i++) {
+    var m = String(data[i][0] || '').trim().match(/^COT-(\d+)$/i);
+    if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+  }
+  return max;
+}
+function _cotFecha_(v) {
+  if (v instanceof Date) {
+    try { return Utilities.formatDate(v, 'America/Guayaquil', 'dd/MM/yyyy HH:mm'); } catch (eF) {}
+  }
+  return (v == null ? '' : String(v));
+}
+function _cotFilaObj_(r) {
+  var pack = {};
+  try { pack = JSON.parse(r[7] || '{}'); } catch (eJ) { pack = {}; }
+  var lineas = (pack && pack.lineas) ? pack.lineas : (Array.isArray(pack) ? pack : []);
+  return {
+    numero: (r[0] || '').toString(),
+    fecha: _cotFecha_(r[1]),
+    creadoPor: (r[2] || '').toString(),
+    cliente: (r[3] || '').toString(),
+    telefono: (r[4] || '').toString(),
+    email: (r[5] || '').toString(),
+    cedula: (r[6] || '').toString(),
+    lineas: lineas,
+    items: (r[8] || '').toString(),
+    subtotal: Number(r[9]) || 0,
+    descuento: Number(r[10]) || 0,
+    iva: Number(r[11]) || 0,
+    total: Number(r[12]) || 0,
+    validez: (r[13] || '').toString(),
+    notas: (r[14] || '').toString(),
+    estado: (r[15] || '').toString() || 'Enviada',
+    descuentoGlobal: pack.descuentoGlobal || null,
+    sinIva: pack.totales ? pack.totales.sinIva : _cotRedondear_((Number(r[12]) || 0) - (Number(r[11]) || 0))
+  };
+}
+function _cotListar_(ss, token, q, numero) {
+  var gate = _cotSesionPermitida_(token);
+  if (gate.error) return { ok: false, error: gate.error };
+  var ws = null;
+  try { ws = _cotHoja_(ss, false); } catch (eH) { return { ok: false, error: eH.message }; }
+  if (!ws) return { ok: true, cotizaciones: [] };
+  var data = ws.getDataRange().getValues();
+  var qn = (q || '').toString().trim().toLowerCase();
+  var want = (numero || '').toString().trim().toUpperCase();
+  var list = [];
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    var obj = _cotFilaObj_(data[i]);
+    if (want && obj.numero.toUpperCase() !== want) continue;
+    if (!want && qn) {
+      var blob = (obj.numero + ' ' + obj.cliente + ' ' + obj.telefono + ' ' + obj.email + ' ' + obj.cedula).toLowerCase();
+      if (blob.indexOf(qn) < 0) continue;
+    }
+    list.push(obj);
+  }
+  list.reverse();
+  if (want) {
+    if (!list.length) return { ok: false, error: 'No se encontró la cotización' };
+    return { ok: true, cotizacion: list[0] };
+  }
+  if (list.length > 200) list = list.slice(0, 200);
+  return { ok: true, cotizaciones: list };
+}
+function _cotResponderGet_(ss, e) {
+  var p = (e && e.parameter) || {};
+  var action = p.action || '';
+  if (action === 'getCotizacion') return _cotListar_(ss, p.token || '', '', p.numero || '');
+  return _cotListar_(ss, p.token || '', p.q || '', '');
+}
+function _cotGuardar_(ss, body) {
+  body = body || {};
+  var gate = _cotSesionPermitida_(body.token || '');
+  if (gate.error) return { ok: false, error: gate.error };
+  var cliente = _cotTxt_(body.cliente, 120);
+  if (!cliente) return { ok: false, error: 'El nombre del cliente es obligatorio' };
+  var lineas = _cotLimpiarLineas_(body.lineas || body.items || []);
+  if (!lineas.length) return { ok: false, error: 'Agrega al menos un ítem del catálogo' };
+  var calc = _cotCalcular_(lineas, body.dscMode, body.dscVal);
+  var validez = _cotTxt_(body.validez, 160) || 'Válida por 15 días';
+  var notas = _cotTxt_(body.notas, 1000, true);
+  var telefono = _cotTxt_(body.telefono, 40);
+  var email = _cotTxt_(body.email, 80);
+  var cedula = _cotTxt_(body.cedula, 20);
+  var estado = _cotTxt_(body.estado, 24) || 'Enviada';
+  var lock = null;
+  try {
+    lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+  } catch (eLk) {
+    return { ok: false, error: 'No se pudo reservar el número. Intenta de nuevo.' };
+  }
+  try {
+    var ws = _cotHoja_(ss, true);
+    var props = PropertiesService.getScriptProperties();
+    var fromProp = parseInt(props.getProperty(COT_SEQ_KEY) || '0', 10) || 0;
+    var next = Math.max(fromProp, _cotMaxSeq_(ws)) + 1;
+    var numero = 'COT-' + String(next).padStart(4, '0');
+    props.setProperty(COT_SEQ_KEY, String(next));
+    var fecha = Utilities.formatDate(new Date(), 'America/Guayaquil', 'dd/MM/yyyy HH:mm');
+    var creadoPor = gate.ses.name || gate.ses.uid || '—';
+    var pack = {
+      lineas: calc.lineas,
+      descuentoGlobal: { modo: calc.dscMode, valor: calc.dscVal, monto: calc.descGlobal },
+      totales: { subtotal: calc.subtotal, descuento: calc.descuento, sinIva: calc.sinIva, iva: calc.iva, total: calc.total },
+      validez: validez,
+      notas: notas
+    };
+    var legible = _cotItemsLegible_(calc.lineas);
+    if (calc.descGlobal > 0) {
+      legible += ' || Desc. global ' + (calc.dscMode === '%' ? (calc.dscVal + '%') : ('$' + calc.descGlobal.toFixed(2))) + ' (−$' + calc.descGlobal.toFixed(2) + ')';
+    }
+    ws.appendRow([
+      numero, fecha, creadoPor, cliente, telefono, email, cedula,
+      JSON.stringify(pack), legible,
+      calc.subtotal, calc.descuento, calc.iva, calc.total,
+      validez, notas, estado
+    ]);
+    var cot = {
+      numero: numero, fecha: fecha, creadoPor: creadoPor, cliente: cliente,
+      telefono: telefono, email: email, cedula: cedula,
+      lineas: calc.lineas, items: legible,
+      subtotal: calc.subtotal, descuento: calc.descuento, sinIva: calc.sinIva,
+      iva: calc.iva, total: calc.total, validez: validez, notas: notas, estado: estado,
+      descuentoGlobal: pack.descuentoGlobal
+    };
+    try { logAccion_(ss, 'COTIZACION', numero + ' ' + cliente + ' $' + calc.total.toFixed(2), creadoPor); } catch (eLg) {}
+    return { ok: true, cotizacion: cot };
+  } catch (eG) {
+    return { ok: false, error: eG.message || 'No se pudo guardar la cotización' };
+  } finally {
+    try { if (lock) lock.releaseLock(); } catch (eR) {}
+  }
 }
     
