@@ -6,18 +6,18 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.10.02.01 k-lift -->
+<!-- v2026.10.12.01 cotizaciones -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
-// APP_VERSION del Apps Script hoy: '2026-10-02-KL (K-Lift)'.
+// APP_VERSION del Apps Script hoy: '2026-10-12-COT (Cotizaciones)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.10.02.01';
-var SUNSU_MOTOR_ESPERADO='2026-10-02-KL';
+var SUNSU_APP_VERSION='v2026.10.12.01';
+var SUNSU_MOTOR_ESPERADO='2026-10-12-COT';
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261002.01';
+  var v='20261012.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -1094,6 +1094,10 @@ function initApp(){
   const allTabs=isAdmin
     ?[['inicio','🏠 Dashboard'],['promos','🎉 Promos'],['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['bitacora','📒 Bitácora'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['bitacora','📒 Bitácora'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
+  if(_puedeCotizar()){
+    var ixCot=allTabs.findIndex(function(t){return t[0]==='ticket';});
+    allTabs.splice(ixCot>=0?ixCot+1:allTabs.length, 0, ['cotizaciones','📑 Cotizaciones']);
+  }
   document.getElementById('tabs').innerHTML=allTabs.map(([id,lbl],i)=>
     `<button class="tab ${i===0?'active':''}" onclick="showTab('${id}',this)">${lbl}</button>`).join('');
   // ── Barra compacta para celular: Ticket + pestaña actual + ☰ Menú ──
@@ -1148,7 +1152,7 @@ function _pintarNavMovil(){
   var prevNM=document.getElementById('nav-movil'); if(prevNM)prevNM.remove();
   var prevNP=document.getElementById('nav-panel'); if(prevNP)prevNP.remove();
   var quick=_quickGet();
-  var COLQ={'tarjetas':'#B08968','citas':'#6A9E7A','roles':'#7A8FB5','historial':'#8A6D9E','caja':'#5B8FA8','inventario':'#C4943A','buscar-paquetes':'#B08968','seguimiento':'#6B9080','recepcion':'#D4956A','bitacora':'#5C7A6E','cabina':'#5B7FA6'};
+  var COLQ={'cotizaciones':'#5B7FA6','tarjetas':'#B08968','citas':'#6A9E7A','roles':'#7A8FB5','historial':'#8A6D9E','caja':'#5B8FA8','inventario':'#C4943A','buscar-paquetes':'#B08968','seguimiento':'#6B9080','recepcion':'#D4956A','bitacora':'#5C7A6E','cabina':'#5B7FA6'};
   var qBtns=quick.map(function(id){
     var t=allTabs.find(function(x){return x[0]===id;}); if(!t) return '';
     var ic=(t[1].split(' ')[0])||'⭐';
@@ -1201,7 +1205,7 @@ function _quickStar(el){
 function _quickRefrescarBarra(){
   var nm=document.getElementById('nav-movil'); if(!nm) return;
   var allTabs=window._allTabs||[];
-  var COLQ={'tarjetas':'#B08968','citas':'#6A9E7A','roles':'#7A8FB5','historial':'#8A6D9E','caja':'#5B8FA8','inventario':'#C4943A','buscar-paquetes':'#B08968','seguimiento':'#6B9080','recepcion':'#D4956A','bitacora':'#5C7A6E','cabina':'#5B7FA6'};
+  var COLQ={'cotizaciones':'#5B7FA6','tarjetas':'#B08968','citas':'#6A9E7A','roles':'#7A8FB5','historial':'#8A6D9E','caja':'#5B8FA8','inventario':'#C4943A','buscar-paquetes':'#B08968','seguimiento':'#6B9080','recepcion':'#D4956A','bitacora':'#5C7A6E','cabina':'#5B7FA6'};
   nm.querySelectorAll('.nm-quick').forEach(function(b){ b.remove(); });
   var ancla=document.getElementById('nm-ticket');
   _quickGet().slice().reverse().forEach(function(id){
@@ -1237,6 +1241,7 @@ function showTab(id,btn){
   _navActualizar(id);
   const c=document.getElementById('content');
   if(id==='ticket') renderTicket(c);
+  else if(id==='cotizaciones') renderCotizaciones(c);
   else if(id==='inicio') renderInicio(c);
   else if(id==='promos') renderPromos(c);
   else if(id==='gc-venta') renderGCVenta(c);
@@ -15107,6 +15112,748 @@ function _bePdfLayout(doc, ctx){
   });
 }
 
+// ══════ COTIZACIONES ══════
+// Presupuesto para enviar a la clienta. Usa el mismo catálogo que el Ticket
+// (FACIALES, EXTRAS, PAQ3, PAQ6, PROVS) y el mismo IVA incluido del 15%:
+// subtotal sin IVA = total / 1.15. No llama a enviarTicket: no hay venta,
+// inventario, paquete ni saldo. La aritmética es la de _cotCalcular_ en
+// sunsu_script_completo.js.
+function _puedeCotizar(){
+  if(!CU) return false;
+  var rol=(CU.role||'').toString();
+  if(rol==='admin'||rol==='admin_master') return true;
+  var uid=(CU.id||'').toString().trim().toLowerCase();
+  if(uid==='alejandra') return true;
+  var corto=(CU.short||'').toString().trim().toLowerCase();
+  if(corto==='alejandra') return true;
+  var name=(CU.name||'').toString().trim().toLowerCase();
+  if(name==='alejandra'||name.indexOf('alejandra ')===0) return true;
+  return false;
+}
+function _cotEsc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function _cot$(n){
+  var v=Math.round((Number(n)||0)*100)/100;
+  return '$'+v.toFixed(2);
+}
+function _cotState(){
+  if(!window._cotQ){
+    window._cotQ={
+      cliente:'', telefono:'', email:'', cedula:'',
+      items:[], dscMode:'$', dscVal:0,
+      validez:'Válida por 15 días', notas:'',
+      cat:'todos', q:'', vista:'nueva', _id:1, _guardando:false
+    };
+  }
+  return window._cotQ;
+}
+function _cotRedondear(n){ return Math.round((Number(n)||0)*100)/100; }
+function _cotLimpiarLineas(raw){
+  var out=[];
+  (raw||[]).forEach(function(it){
+    if(!it||out.length>=80) return;
+    var nombre=String(it.nombre||it.n||'').replace(/\s+/g,' ').trim().slice(0,120);
+    var sku=String(it.sku||'').trim().slice(0,40);
+    if(!nombre&&!sku) return;
+    var cant=parseInt(it.cant,10);
+    if(!(cant>0)) return;
+    if(cant>999) cant=999;
+    var precio=_cotRedondear(parseFloat(it.precio));
+    if(precio<0) precio=0;
+    var dscVal=parseFloat(it.dscVal);
+    if(!(dscVal>0)) dscVal=0;
+    out.push({
+      sku:sku, nombre:nombre||sku, tipo:String(it.tipo||'').slice(0,24),
+      cant:cant, precio:precio, dscMode:it.dscMode==='%'?'%':'$', dscVal:dscVal
+    });
+  });
+  return out;
+}
+function _cotCalcular(lineas, dscMode, dscVal){
+  var sub=0, descLinea=0, out=[];
+  (lineas||[]).forEach(function(ln){
+    var bruto=_cotRedondear(ln.cant*ln.precio);
+    var desc=ln.dscMode==='%'
+      ? _cotRedondear(bruto*Math.min(100, ln.dscVal||0)/100)
+      : Math.min(bruto, _cotRedondear(ln.dscVal||0));
+    var neto=_cotRedondear(bruto-desc);
+    sub+=bruto; descLinea+=desc;
+    out.push({sku:ln.sku,nombre:ln.nombre,tipo:ln.tipo,cant:ln.cant,precio:ln.precio,dscMode:ln.dscMode,dscVal:ln.dscVal||0,bruto:bruto,desc:desc,neto:neto});
+  });
+  sub=_cotRedondear(sub);
+  descLinea=_cotRedondear(descLinea);
+  var base=_cotRedondear(Math.max(0, sub-descLinea));
+  var modo=dscMode==='%'?'%':'$';
+  var val=parseFloat(dscVal); if(!(val>0)) val=0;
+  var descGlobal=modo==='%' ? _cotRedondear(base*Math.min(100, val)/100) : Math.min(base, _cotRedondear(val));
+  var descuento=_cotRedondear(descLinea+descGlobal);
+  var total=_cotRedondear(Math.max(0, sub-descuento));
+  var sinIvaRaw=total/1.15;
+  return {
+    lineas:out, dscMode:modo, dscVal:val, descGlobal:descGlobal,
+    subtotal:sub, descuento:descuento,
+    sinIva:_cotRedondear(sinIvaRaw), iva:_cotRedondear(total-sinIvaRaw), total:total
+  };
+}
+function _cotNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function _cotCatalogo(){
+  var out=[];
+  (typeof FACIALES!=='undefined'?FACIALES:[]).forEach(function(f){
+    if(!f||f._activo===false) return;
+    out.push({sku:f.sku, n:f.n, p:Number(f.p)||0, tipo:'Facial'});
+  });
+  (typeof PAQ3!=='undefined'?PAQ3:[]).forEach(function(p){
+    if(!p||p._activo===false) return;
+    out.push({sku:p.sku, n:p.n, p:Number(p.p)||0, tipo:'Paquete'});
+  });
+  (typeof PAQ6!=='undefined'?PAQ6:[]).forEach(function(p){
+    if(!p||p._activo===false) return;
+    out.push({sku:p.sku, n:p.n, p:Number(p.p)||0, tipo:'Paquete'});
+  });
+  (typeof EXTRAS!=='undefined'?EXTRAS:[]).forEach(function(e){
+    if(!e||e._activo===false) return;
+    out.push({sku:e.sku, n:e.n, p:Number(e.t!=null?e.t:e.p)||0, tipo:'Servicio'});
+  });
+  (typeof PROVS!=='undefined'?PROVS:[]).forEach(function(pv){
+    (pv.prods||[]).forEach(function(p){
+      if(!p||p._activo===false) return;
+      out.push({sku:p.sku, n:p.n, p:Number(p.p)||0, tipo:'Producto'});
+    });
+  });
+  return out;
+}
+function _cotFiltrarCat(){
+  var S=_cotState();
+  var q=_cotNorm(S.q);
+  var qc=q.replace(/\s/g,'');
+  return _cotCatalogo().filter(function(it){
+    if(S.cat!=='todos' && it.tipo!==S.cat) return false;
+    if(!q) return true;
+    var blob=_cotNorm(it.n+' '+it.sku+' '+it.tipo);
+    return blob.indexOf(q)>=0 || blob.replace(/\s/g,'').indexOf(qc)>=0;
+  });
+}
+function renderCotizaciones(c){
+  if(!_puedeCotizar()){
+    c.innerHTML='<div class="card" style="text-align:center;padding:28px 16px">'
+      +'<div style="font-size:1.6rem">🔒</div>'
+      +'<div style="font-weight:800;color:var(--navy);margin-top:8px">Sin acceso</div>'
+      +'<div style="font-size:0.78rem;color:var(--gray);margin-top:4px">Cotizaciones está disponible para administración y para Alejandra.</div></div>';
+    return;
+  }
+  var S=_cotState();
+  var cats=[['todos','Todos'],['Facial','Faciales'],['Paquete','Paquetes'],['Servicio','Servicios'],['Producto','Productos']];
+  c.innerHTML=''
+    +'<div id="cot-modulo">'
+    +'<div style="display:flex;gap:6px;margin-bottom:10px">'
+    +'<button type="button" id="cot-tab-nueva" onclick="_cotVista(\'nueva\')" style="flex:1;padding:10px;border-radius:11px;border:none;font-weight:800;font-size:0.78rem;cursor:pointer">Nueva</button>'
+    +'<button type="button" id="cot-tab-lista" onclick="_cotVista(\'lista\')" style="flex:1;padding:10px;border-radius:11px;border:none;font-weight:800;font-size:0.78rem;cursor:pointer">Historial</button>'
+    +'</div>'
+    +'<div id="cot-vista-nueva">'
+    +'<div class="card">'
+    +'<div class="card-title">Cliente</div>'
+    +'<div class="field" style="position:relative"><label>Nombre</label>'
+    +'<input id="cot-cliente" type="text" autocomplete="off" placeholder="Nombre de la clienta" value="'+_cotEsc(S.cliente)+'" oninput="_cotClienteInput(this.value)" onblur="_cotCerrarSug()">'
+    +'<div id="cot-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:30;background:white;border:1.5px solid var(--cream-d);border-radius:10px;box-shadow:var(--shadow);max-height:220px;overflow:auto"></div>'
+    +'</div>'
+    +'<div class="two-col">'
+    +'<div class="field"><label>Teléfono</label><input id="cot-tel" type="tel" inputmode="tel" placeholder="Opcional" value="'+_cotEsc(S.telefono)+'" oninput="_cotState().telefono=this.value"></div>'
+    +'<div class="field"><label>Email</label><input id="cot-email" type="email" placeholder="Opcional" value="'+_cotEsc(S.email)+'" oninput="_cotState().email=this.value"></div>'
+    +'</div>'
+    +'<div class="field" style="margin-bottom:0"><label>Cédula</label><input id="cot-ced" type="text" inputmode="numeric" placeholder="Opcional — puede no estar registrada" value="'+_cotEsc(S.cedula)+'" oninput="_cotState().cedula=this.value"></div>'
+    +'<div style="font-size:0.62rem;color:var(--gray);margin-top:6px">Si ya es clienta, elige el nombre sugerido. Si no está en el registro, escribe el nombre igual.</div>'
+    +'</div>'
+    +'<div class="card">'
+    +'<div class="card-title">Ítems del catálogo</div>'
+    +'<div class="field"><label>Buscar</label><input id="cot-buscar" type="text" placeholder="Facial, K-Lift, producto..." value="'+_cotEsc(S.q)+'" oninput="_cotState().q=this.value;_cotPintarResultados()"></div>'
+    +'<div id="cot-cats" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'
+    +cats.map(function(ct){
+      return '<button type="button" data-cat="'+ct[0]+'" onclick="_cotCat(\''+ct[0]+'\')" style="padding:6px 10px;border-radius:999px;font-size:0.66rem;font-weight:800;cursor:pointer">'+ct[1]+'</button>';
+    }).join('')
+    +'</div>'
+    +'<div id="cot-res" style="max-height:240px;overflow:auto"></div>'
+    +'<div style="font-size:0.62rem;color:var(--gray);margin-top:8px">Precio del catálogo, editable en cada línea. Esto no genera una venta ni mueve inventario.</div>'
+    +'</div>'
+    +'<div class="card" id="cot-lineas-card"><div class="card-title">Líneas</div><div id="cot-lineas"></div></div>'
+    +'<div class="card">'
+    +'<div class="card-title">Descuento, validez y notas</div>'
+    +'<div class="field"><label>Descuento global</label>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<button type="button" id="cot-dsc-usd" onclick="_cotDscModo(\'$\')" style="padding:10px 12px;border-radius:10px;font-weight:800;cursor:pointer">$</button>'
+    +'<button type="button" id="cot-dsc-pct" onclick="_cotDscModo(\'%\')" style="padding:10px 12px;border-radius:10px;font-weight:800;cursor:pointer">%</button>'
+    +'<input id="cot-dsc" type="number" min="0" step="0.01" placeholder="0" value="'+(S.dscVal?S.dscVal:'')+'" oninput="_cotState().dscVal=parseFloat(this.value)||0;_cotPintarResumen()" style="flex:1;padding:10px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.86rem;font-family:inherit">'
+    +'</div></div>'
+    +'<div class="field"><label>Validez</label><input id="cot-validez" type="text" value="'+_cotEsc(S.validez)+'" oninput="_cotState().validez=this.value"></div>'
+    +'<div class="field" style="margin-bottom:0"><label>Notas</label><textarea id="cot-notas" placeholder="Condiciones, lo que incluye, forma de pago..." oninput="_cotState().notas=this.value">'+_cotEsc(S.notas)+'</textarea></div>'
+    +'</div>'
+    +'<div id="cot-resumen"></div>'
+    +'<button type="button" class="submit-btn" id="cot-guardar" onclick="_cotGuardar()">Guardar y descargar PDF</button>'
+    +'<div style="height:18px"></div>'
+    +'</div>'
+    +'<div id="cot-vista-lista" style="display:none">'
+    +'<div class="card"><div class="card-title">Cotizaciones guardadas</div>'
+    +'<div class="field" style="margin-bottom:0"><label>Buscar</label><input id="cot-hist-q" type="text" placeholder="Cliente o número COT-0001" oninput="_cotHistInput(this.value)"></div></div>'
+    +'<div id="cot-hist"><div class="card" style="text-align:center;color:var(--gray)">Cargando...</div></div>'
+    +'</div></div>';
+  _cotVista(S.vista||'nueva');
+  _cotPintarCats();
+  _cotPintarDscBtns();
+  _cotPintarResultados();
+  _cotPintarLineas();
+  _cotPintarResumen();
+  _cotCargarLista('');
+}
+function _cotVista(v){
+  var S=_cotState(); S.vista=v==='lista'?'lista':'nueva';
+  var n=document.getElementById('cot-vista-nueva');
+  var l=document.getElementById('cot-vista-lista');
+  if(n) n.style.display=S.vista==='nueva'?'block':'none';
+  if(l) l.style.display=S.vista==='lista'?'block':'none';
+  var est=function(on){ return 'flex:1;padding:10px;border-radius:11px;font-weight:800;font-size:0.78rem;cursor:pointer;border:none;background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+';box-shadow:'+(on?'none':'inset 0 0 0 1.5px var(--navy)'); };
+  var b1=document.getElementById('cot-tab-nueva'); if(b1) b1.style.cssText=est(S.vista==='nueva');
+  var b2=document.getElementById('cot-tab-lista'); if(b2) b2.style.cssText=est(S.vista==='lista');
+}
+function _cotCerrarSug(){
+  setTimeout(function(){ var b=document.getElementById('cot-sug'); if(b) b.style.display='none'; }, 180);
+}
+function _cotClienteInput(v){
+  _cotState().cliente=v;
+  clearTimeout(window._cotSugTimer);
+  window._cotSugTimer=setTimeout(function(){ _cotBuscarCliente(v); }, 280);
+}
+function _cotBuscarCliente(v){
+  var q=String(v||'').trim();
+  var box=document.getElementById('cot-sug');
+  if(!box) return;
+  if(q.length<2){ box.style.display='none'; box.innerHTML=''; return; }
+  fetch(APPS_SCRIPT_URL+'?action=getRegistro&q='+encodeURIComponent(q)+'&_t='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if((document.getElementById('cot-cliente')||{}).value!==v) return;
+      var rows=(d&&d.ok&&d.data)||[];
+      window._cotSugs=rows;
+      if(!rows.length){ box.style.display='none'; box.innerHTML=''; return; }
+      box.style.display='block';
+      box.innerHTML=rows.map(function(cl,i){
+        var nom=((cl.nombre||'')+' '+(cl.apellido||'')).replace(/\s+/g,' ').trim();
+        return '<button type="button" onmousedown="event.preventDefault();_cotElegirCliente('+i+')" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;border-bottom:1px solid var(--cream-d);background:white;cursor:pointer;font-family:inherit">'
+          +'<div style="font-size:0.78rem;font-weight:800;color:var(--navy)">'+_cotEsc(nom)+'</div>'
+          +(cl.cedula?'<div style="font-size:0.62rem;color:var(--gray)">C.I. '+_cotEsc(cl.cedula)+'</div>':'')
+          +'</button>';
+      }).join('');
+    }).catch(function(){});
+}
+function _cotElegirCliente(i){
+  var cl=(window._cotSugs||[])[i]; if(!cl) return;
+  var S=_cotState();
+  S.cliente=((cl.nombre||'')+' '+(cl.apellido||'')).replace(/\s+/g,' ').trim();
+  if(cl.cedula) S.cedula=String(cl.cedula);
+  var n=document.getElementById('cot-cliente'); if(n) n.value=S.cliente;
+  var c=document.getElementById('cot-ced'); if(c&&cl.cedula) c.value=S.cedula;
+  var box=document.getElementById('cot-sug'); if(box){ box.style.display='none'; box.innerHTML=''; }
+}
+function _cotCat(cat){
+  _cotState().cat=cat;
+  _cotPintarCats();
+  _cotPintarResultados();
+}
+function _cotPintarCats(){
+  var S=_cotState();
+  document.querySelectorAll('#cot-cats button').forEach(function(b){
+    var on=b.getAttribute('data-cat')===S.cat;
+    b.style.background=on?'var(--navy)':'var(--blue-l)';
+    b.style.color=on?'white':'var(--navy)';
+    b.style.border='none';
+  });
+}
+function _cotPintarDscBtns(){
+  var m=_cotState().dscMode==='%'?'%':'$';
+  var est=function(on){ return 'padding:10px 12px;border-radius:10px;font-weight:800;cursor:pointer;border:1.5px solid '+(on?'var(--navy)':'var(--cream-d)')+';background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)'); };
+  var a=document.getElementById('cot-dsc-usd'); if(a) a.style.cssText=est(m==='$');
+  var b=document.getElementById('cot-dsc-pct'); if(b) b.style.cssText=est(m==='%');
+}
+function _cotDscModo(m){
+  _cotState().dscMode=m==='%'?'%':'$';
+  _cotPintarDscBtns();
+  _cotPintarResumen();
+}
+function _cotPintarResultados(){
+  var box=document.getElementById('cot-res'); if(!box) return;
+  var items=_cotFiltrarCat();
+  if(!items.length){
+    box.innerHTML='<div style="font-size:0.74rem;color:var(--gray);padding:8px 2px">Nada en el catálogo con esa búsqueda.</div>';
+    return;
+  }
+  var mas=items.length>40;
+  box.innerHTML=items.slice(0,40).map(function(it){
+    var sku=String(it.sku||'').replace(/[^A-Za-z0-9_-]/g,'');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--cream-d)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--text)">'+_cotEsc(it.n)+'</div>'
+      +'<div style="font-size:0.6rem;color:var(--gray)">'+_cotEsc(it.tipo)+' · '+_cotEsc(it.sku)+'</div></div>'
+      +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);white-space:nowrap">'+_cot$(it.p)+'</div>'
+      +'<button type="button" onclick="_cotAgregar(\''+sku+'\')" style="padding:6px 10px;background:var(--navy);color:white;border:none;border-radius:8px;font-weight:800;cursor:pointer">+</button>'
+      +'</div>';
+  }).join('')+(mas?'<div style="font-size:0.62rem;color:var(--gray);padding:6px 2px">Hay más. Afina la búsqueda.</div>':'');
+}
+function _cotAgregar(sku){
+  var it=_cotCatalogo().filter(function(x){ return x.sku===sku; })[0];
+  if(!it){ toast('Ese ítem ya no está en el catálogo','#C9A227'); return; }
+  var S=_cotState();
+  var ya=S.items.filter(function(x){ return x.sku===sku; })[0];
+  if(ya){ ya.cant=Math.min(999,(ya.cant||1)+1); _cotPintarLineas(); }
+  else {
+    S.items.push({id:S._id++, sku:it.sku, nombre:it.n, tipo:it.tipo, cant:1, precio:it.p, dscMode:'$', dscVal:0});
+    _cotPintarLineas();
+  }
+  _cotPintarResumen();
+}
+function _cotItem(id){
+  return _cotState().items.filter(function(x){ return x.id===id; })[0]||null;
+}
+function _cotPintarLineas(){
+  var box=document.getElementById('cot-lineas'); if(!box) return;
+  var items=_cotState().items;
+  if(!items.length){
+    box.innerHTML='<div style="font-size:0.74rem;color:var(--gray)">Todavía no hay líneas. Suma un facial, un paquete, un servicio o un producto.</div>';
+    return;
+  }
+  box.innerHTML=items.map(function(it){
+    var id=it.id;
+    return '<div style="border:1.5px solid var(--cream-d);border-radius:12px;padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      +'<div style="min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+_cotEsc(it.nombre)+'</div>'
+      +'<div style="font-size:0.6rem;color:var(--gray)">'+_cotEsc(it.tipo)+' · '+_cotEsc(it.sku)+'</div></div>'
+      +'<button type="button" onclick="_cotQuitar('+id+')" style="border:none;background:transparent;color:#B86B6B;font-weight:800;cursor:pointer;font-size:0.9rem">✕</button>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
+      +'<button type="button" onclick="_cotCant('+id+',-1)" style="width:32px;height:32px;border-radius:8px;border:1.5px solid var(--cream-d);background:white;font-weight:800;cursor:pointer">−</button>'
+      +'<span id="cot-cant-'+id+'" style="min-width:18px;text-align:center;font-weight:800">'+it.cant+'</span>'
+      +'<button type="button" onclick="_cotCant('+id+',1)" style="width:32px;height:32px;border-radius:8px;border:1.5px solid var(--cream-d);background:white;font-weight:800;cursor:pointer">+</button>'
+      +'<label style="font-size:0.58rem;color:var(--gray);font-weight:700">P. UNIT</label>'
+      +'<input id="cot-precio-'+id+'" type="number" min="0" step="0.01" value="'+Number(it.precio).toFixed(2)+'" oninput="_cotPrecio('+id+',this.value)" style="width:88px;padding:7px 8px;border:1.5px solid var(--cream-d);border-radius:8px;font-family:inherit">'
+      +'<select onchange="_cotLineDscModo('+id+',this.value)" style="padding:7px 6px;border:1.5px solid var(--cream-d);border-radius:8px;font-family:inherit">'
+      +'<option value="$"'+(it.dscMode==='%'?'':' selected')+'>$ desc.</option>'
+      +'<option value="%"'+(it.dscMode==='%'?' selected':'')+'>% desc.</option></select>'
+      +'<input type="number" min="0" step="0.01" placeholder="0" value="'+(it.dscVal?it.dscVal:'')+'" oninput="_cotLineDsc('+id+',this.value)" style="width:72px;padding:7px 8px;border:1.5px solid var(--cream-d);border-radius:8px;font-family:inherit">'
+      +'<span id="cot-neto-'+id+'" style="margin-left:auto;font-weight:800;color:var(--navy)"></span>'
+      +'</div></div>';
+  }).join('');
+  items.forEach(function(it){ _cotRefrescarNeto(it.id); });
+}
+function _cotRefrescarNeto(id){
+  var it=_cotItem(id); var el=document.getElementById('cot-neto-'+id);
+  if(!it||!el) return;
+  var calc=_cotCalcular([it], '$', 0);
+  el.textContent=_cot$(calc.lineas[0].neto);
+}
+function _cotCant(id, d){
+  var S=_cotState();
+  var it=_cotItem(id); if(!it) return;
+  it.cant=(it.cant||1)+d;
+  if(it.cant<1){ S.items=S.items.filter(function(x){ return x.id!==id; }); _cotPintarLineas(); }
+  else { var el=document.getElementById('cot-cant-'+id); if(el) el.textContent=String(it.cant); _cotRefrescarNeto(id); }
+  _cotPintarResumen();
+}
+function _cotQuitar(id){
+  var S=_cotState();
+  S.items=S.items.filter(function(x){ return x.id!==id; });
+  _cotPintarLineas();
+  _cotPintarResumen();
+}
+function _cotPrecio(id, v){
+  var it=_cotItem(id); if(!it) return;
+  var n=parseFloat(v);
+  it.precio=n>=0?n:0;
+  _cotRefrescarNeto(id);
+  _cotPintarResumen();
+}
+function _cotLineDscModo(id, m){
+  var it=_cotItem(id); if(!it) return;
+  it.dscMode=m==='%'?'%':'$';
+  _cotRefrescarNeto(id);
+  _cotPintarResumen();
+}
+function _cotLineDsc(id, v){
+  var it=_cotItem(id); if(!it) return;
+  var n=parseFloat(v);
+  it.dscVal=n>0?n:0;
+  _cotRefrescarNeto(id);
+  _cotPintarResumen();
+}
+function _cotSyncDesdeDom(){
+  var S=_cotState();
+  var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
+  if(document.getElementById('cot-cliente')) S.cliente=g('cot-cliente');
+  if(document.getElementById('cot-tel')) S.telefono=g('cot-tel');
+  if(document.getElementById('cot-email')) S.email=g('cot-email');
+  if(document.getElementById('cot-ced')) S.cedula=g('cot-ced');
+  if(document.getElementById('cot-validez')) S.validez=g('cot-validez');
+  if(document.getElementById('cot-notas')) S.notas=g('cot-notas');
+  if(document.getElementById('cot-dsc')) S.dscVal=parseFloat(g('cot-dsc'))||0;
+}
+function _cotPintarResumen(){
+  var box=document.getElementById('cot-resumen'); if(!box) return;
+  var S=_cotState();
+  var calc=_cotCalcular(_cotLimpiarLineas(S.items), S.dscMode, S.dscVal);
+  var lineas=calc.lineas.map(function(ln){
+    var extra=ln.desc>0?(' <span style="opacity:0.7">−'+_cot$(ln.desc)+'</span>'):'';
+    return '<div class="prow"><span>'+_cotEsc(ln.nombre)+' ×'+ln.cant+extra+'</span><span>'+_cot$(ln.neto)+'</span></div>';
+  }).join('') || '<div class="prow"><span>Sin líneas</span><span>$0.00</span></div>';
+  var descLbl='Descuentos';
+  if(calc.descGlobal>0) descLbl+=' (global '+(calc.dscMode==='%'? (String(calc.dscVal).replace(/\.0+$/,'')+'%') : _cot$(calc.descGlobal))+')';
+  box.innerHTML='<div class="preview" id="cot-preview" data-cot-total="'+calc.total.toFixed(2)+'" data-cot-sub="'+calc.subtotal.toFixed(2)+'" data-cot-desc="'+calc.descuento.toFixed(2)+'" data-cot-sin="'+calc.sinIva.toFixed(2)+'" data-cot-iva="'+calc.iva.toFixed(2)+'">'
+    +'<div class="plbl">Cotización</div>'
+    +lineas
+    +'<div class="pdiv"></div>'
+    +'<div class="prow"><span>Subtotal</span><span id="cot-sum-sub">'+_cot$(calc.subtotal)+'</span></div>'
+    +'<div class="prow"><span>'+descLbl+'</span><span id="cot-sum-desc">−'+_cot$(calc.descuento)+'</span></div>'
+    +'<div class="prow"><span>Subtotal sin IVA</span><span id="cot-sum-sin">'+_cot$(calc.sinIva)+'</span></div>'
+    +'<div class="prow"><span>IVA 15%</span><span id="cot-sum-iva">'+_cot$(calc.iva)+'</span></div>'
+    +'<div class="pdiv"></div>'
+    +'<div class="ptotal"><span>Total</span><span id="cot-sum-tot">'+_cot$(calc.total)+'</span></div>'
+    +'<div class="pnote">'+calc.lineas.length+' línea'+(calc.lineas.length===1?'':'s')+' · precios con IVA incluido, como en el ticket</div>'
+    +'</div>';
+}
+function _cotGuardar(){
+  if(!_puedeCotizar()){ toast('Sin acceso a cotizaciones','#B86B6B'); return; }
+  _cotSyncDesdeDom();
+  var S=_cotState();
+  var cliente=String(S.cliente||'').trim();
+  var lineas=_cotLimpiarLineas(S.items);
+  if(!cliente){ toast('Escribe el nombre del cliente','#C9A227'); return; }
+  if(!lineas.length){ toast('Agrega al menos un ítem','#C9A227'); return; }
+  if(S._guardando) return;
+  S._guardando=true;
+  var btn=document.getElementById('cot-guardar');
+  if(btn){ btn.disabled=true; btn.textContent='Guardando...'; }
+  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({
+      accion:'guardarCotizacion', token:window._token||'',
+      cliente:cliente, telefono:S.telefono, email:S.email, cedula:S.cedula,
+      lineas:lineas, dscMode:S.dscMode, dscVal:S.dscVal,
+      validez:S.validez, notas:S.notas, estado:'Enviada'
+    })})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    S._guardando=false;
+    if(btn){ btn.disabled=false; btn.textContent='Guardar y descargar PDF'; }
+    if(!d||!d.ok||!d.cotizacion){ toast((d&&d.error)||'No se pudo guardar','#B86B6B'); return; }
+    window._cotLista=window._cotLista||[];
+    window._cotLista=window._cotLista.filter(function(x){ return x.numero!==d.cotizacion.numero; });
+    window._cotLista.unshift(d.cotizacion);
+    _cotPintarHistorial(window._cotLista);
+    toast('Cotización '+d.cotizacion.numero+' guardada','var(--green)');
+    _cotResetForm();
+    _cotVista('lista');
+    _cotDescargar(d.cotizacion, true);
+  })
+  .catch(function(){
+    S._guardando=false;
+    if(btn){ btn.disabled=false; btn.textContent='Guardar y descargar PDF'; }
+    toast('Sin conexión','#B86B6B');
+  });
+}
+function _cotResetForm(){
+  var S=_cotState();
+  S.cliente=''; S.telefono=''; S.email=''; S.cedula='';
+  S.items=[]; S.dscMode='$'; S.dscVal=0; S.notas='';
+  S.validez='Válida por 15 días';
+  var g=function(id, val){ var e=document.getElementById(id); if(e) e.value=val; };
+  g('cot-cliente',''); g('cot-tel',''); g('cot-email',''); g('cot-ced','');
+  g('cot-notas',''); g('cot-validez', S.validez); g('cot-dsc','');
+  _cotPintarDscBtns();
+  _cotPintarLineas();
+  _cotPintarResumen();
+}
+function _cotHistInput(v){
+  clearTimeout(window._cotHistTimer);
+  window._cotHistTimer=setTimeout(function(){ _cotCargarLista(v); }, 280);
+}
+function _cotCargarLista(q){
+  var box=document.getElementById('cot-hist');
+  if(!window._token){
+    if(box) box.innerHTML='<div class="card" style="color:#B86B6B">Vuelve a entrar para ver las cotizaciones.</div>';
+    return;
+  }
+  var url=APPS_SCRIPT_URL+'?action=getCotizaciones&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now();
+  if(q) url+='&q='+encodeURIComponent(q);
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if(!d||d.ok===false){
+      if(box) box.innerHTML='<div class="card" style="color:#B86B6B">'+_cotEsc((d&&d.error)||'No se pudo cargar')+'</div>';
+      return;
+    }
+    window._cotLista=d.cotizaciones||[];
+    _cotPintarHistorial(window._cotLista);
+  }).catch(function(){
+    if(box) box.innerHTML='<div class="card" style="color:#B86B6B">Sin conexión</div>';
+  });
+}
+function _cotPintarHistorial(lista){
+  var box=document.getElementById('cot-hist'); if(!box) return;
+  if(!lista||!lista.length){
+    box.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:18px">No hay cotizaciones con esa búsqueda.</div>';
+    return;
+  }
+  box.innerHTML=lista.map(function(q){
+    var num=String(q.numero||'');
+    var jsNum=/^COT-\d+$/.test(num)?num:'';
+    var contacto=[q.telefono,q.email,q.cedula].filter(Boolean).join(' · ');
+    return '<div class="card" style="padding:12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      +'<div style="min-width:0"><div style="font-size:0.78rem;font-weight:800;color:var(--navy)">'+_cotEsc(num)+'</div>'
+      +'<div style="font-size:0.8rem;font-weight:800">'+_cotEsc(q.cliente||'')+'</div>'
+      +'<div style="font-size:0.62rem;color:var(--gray)">'+_cotEsc(q.fecha||'')+(q.creadoPor?' · '+_cotEsc(q.creadoPor):'')+'</div>'
+      +(contacto?'<div style="font-size:0.62rem;color:var(--gray)">'+_cotEsc(contacto)+'</div>':'')
+      +'</div>'
+      +'<div style="text-align:right"><div style="font-weight:800;color:var(--navy)">'+_cot$(q.total)+'</div>'
+      +'<div style="font-size:0.58rem;font-weight:800;color:#2E7D52">'+_cotEsc(q.estado||'Enviada')+'</div></div></div>'
+      +(q.validez?'<div style="font-size:0.64rem;color:var(--gold);font-weight:700;margin-top:6px">'+_cotEsc(q.validez)+'</div>':'')
+      +(jsNum?'<button type="button" onclick="_cotBajarPDF(\''+jsNum+'\')" style="margin-top:8px;width:100%;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:10px;font-weight:800;cursor:pointer;font-size:0.74rem">Descargar PDF</button>':'')
+      +'</div>';
+  }).join('');
+}
+function _cotBajarPDF(numero){
+  var q=(window._cotLista||[]).filter(function(x){ return x.numero===numero; })[0];
+  if(q&&q.lineas&&q.lineas.length){ _cotDescargar(q); return; }
+  fetch(APPS_SCRIPT_URL+'?action=getCotizacion&numero='+encodeURIComponent(numero)+'&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d||!d.ok||!d.cotizacion){ toast((d&&d.error)||'No se encontró la cotización','#B86B6B'); return; }
+      _cotDescargar(d.cotizacion);
+    }).catch(function(){ toast('Sin conexión','#B86B6B'); });
+}
+function _cotNombreArchivo(q){
+  var nom=String(q.cliente||'Cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim();
+  if(nom.length>80) nom=nom.slice(0,80).trim();
+  return 'Cotizacion '+(q.numero||'COT')+' - '+nom+'.pdf';
+}
+function _cotLogoUrl(){
+  try { return new URL('assets/sunsu-logo-celeste.png', window.location.href).href; }
+  catch(e){ return 'assets/sunsu-logo-celeste.png'; }
+}
+function _cotCargarLogo(cb){
+  if(window._cotLogoData){ cb(window._cotLogoData); return; }
+  var img=new Image();
+  img.onload=function(){
+    var data=null;
+    try{
+      var cv=document.createElement('canvas');
+      cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+      cv.getContext('2d').drawImage(img,0,0);
+      data=cv.toDataURL('image/png');
+    }catch(eCv){ data=null; }
+    window._cotLogoData={data:data, w:img.naturalWidth||1, h:img.naturalHeight||1};
+    cb(window._cotLogoData);
+  };
+  img.onerror=function(){ window._cotLogoData={data:null,w:1,h:1}; cb(window._cotLogoData); };
+  img.src=_cotLogoUrl();
+}
+function _cotPdf$(n){ return '$'+(Math.round((Number(n)||0)*100)/100).toFixed(2); }
+function _cotDescargar(q, silencioso){
+  _cotCargarLogo(function(logo){
+    _gcdCargarJsPDF(function(ok){
+      if(!ok){ toast('No se pudo cargar el generador de PDF','#B86B6B'); return; }
+      var doc=new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:'portrait'});
+      _cotDibujarPDF(doc, q, logo);
+      try { window._cotUltimoNombre=_cotNombreArchivo(q); window._cotUltimoDoc=doc; } catch(eU){}
+      _entregarPDF(doc, _cotNombreArchivo(q));
+      if(!silencioso) toast('PDF listo','var(--green)');
+    });
+  });
+}
+function _cotDibujarPDF(doc, q, logo){
+  var W=doc.internal.pageSize.getWidth();
+  var H=doc.internal.pageSize.getHeight();
+  var m=40;
+  var NAVY=[61,90,122], CEL=[91,127,166], GOLD=[196,148,58], TXT=[58,53,48];
+  var y=0, enTabla=true, page=0;
+  var cols={desc:m+8, cant:m+286, unit:m+348, dsc:m+418, imp:W-m-8};
+  function footer(){
+    doc.setFillColor(CEL[0], CEL[1], CEL[2]);
+    doc.rect(0, H-34, W, 34, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8);
+    doc.text('Sunsu Spa   |   Glass Skin   |   Quito', m, H-20);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7.5);
+    doc.text('WhatsApp 099 066 5112    |    www.sunsuspa.com    |    @sunsuspa', m, H-9);
+    doc.text(String(page), W-m, H-9, {align:'right'});
+  }
+  function tablaHead(){
+    doc.setFillColor(CEL[0], CEL[1], CEL[2]);
+    doc.rect(m, y, W-m*2, 16, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    doc.text('DESCRIPCIÓN', cols.desc, y+11);
+    doc.text('CANT.', cols.cant, y+11, {align:'center'});
+    doc.text('P. UNIT.', cols.unit, y+11, {align:'right'});
+    doc.text('DESC.', cols.dsc, y+11, {align:'right'});
+    doc.text('IMPORTE', cols.imp, y+11, {align:'right'});
+    y+=16;
+  }
+  function miniEncabezado(){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text('COTIZACIÓN   '+(q.numero||''), m, 32);
+    doc.setDrawColor(CEL[0], CEL[1], CEL[2]);
+    doc.setLineWidth(0.8);
+    doc.line(m, 38, W-m, 38);
+    y=50;
+    if(enTabla) tablaHead();
+  }
+  function hojaNueva(primera){
+    if(!primera) doc.addPage();
+    page++;
+    doc.setFillColor(253, 250, 241);
+    doc.rect(0, 0, W, H, 'F');
+    footer();
+    if(!primera){ miniEncabezado(); return; }
+    y=26;
+    if(logo&&logo.data&&logo.w&&logo.h){
+      var lw=210, lh=lw*(logo.h/logo.w);
+      if(lh>56){ lh=56; lw=lh*(logo.w/logo.h); }
+      try { doc.addImage(logo.data, 'PNG', (W-lw)/2, y, lw, lh); y+=lh+8; }
+      catch(eImg){ y+=4; }
+    }
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(18);
+    doc.text('COTIZACIÓN', W/2, y+14, {align:'center'});
+    y+=26;
+    doc.setFontSize(12);
+    doc.setTextColor(CEL[0], CEL[1], CEL[2]);
+    doc.text(String(q.numero||''), W/2, y, {align:'center'});
+    y+=14;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+    doc.text(String(q.fecha||''), W/2, y, {align:'center'});
+    y+=16;
+    var contacto=[];
+    if(q.cedula) contacto.push('C.I. '+q.cedula);
+    if(q.telefono) contacto.push(String(q.telefono));
+    if(q.email) contacto.push(String(q.email));
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    var nomLs=doc.splitTextToSize(String(q.cliente||''), W-m*2-24);
+    var boxH=16+nomLs.length*13+(contacto.length?14:0);
+    doc.setFillColor(238, 243, 250);
+    doc.roundedRect(m, y, W-m*2, boxH, 6, 6, 'F');
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text(nomLs, m+12, y+16);
+    if(contacto.length){
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(8);
+      doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+      var cLs=doc.splitTextToSize(contacto.join('   |   '), W-m*2-24);
+      doc.text(cLs, m+12, y+16+nomLs.length*13);
+    }
+    y+=boxH+14;
+    tablaHead();
+  }
+  function asegurar(h){
+    if(y+h>H-48) hojaNueva(false);
+  }
+  hojaNueva(true);
+  var lineas=q.lineas||[];
+  if(!lineas.length){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(10);
+    doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+    doc.text('Sin items.', m, y+16);
+    y+=24;
+  }
+  lineas.forEach(function(ln, idx){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    var titulo=String(ln.nombre||ln.sku||'Item');
+    if(ln.tipo) titulo+='  ('+ln.tipo+')';
+    var nom=doc.splitTextToSize(titulo, 250);
+    var h=Math.max(18, nom.length*10+8);
+    asegurar(h);
+    if(idx%2===0){
+      doc.setFillColor(255,255,255);
+      doc.rect(m, y, W-m*2, h, 'F');
+    }
+    doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+    doc.setFont('helvetica','normal');
+    doc.text(nom, cols.desc, y+12);
+    doc.text(String(ln.cant||0), cols.cant, y+12, {align:'center'});
+    doc.text(_cotPdf$(ln.precio), cols.unit, y+12, {align:'right'});
+    doc.text(ln.desc>0?('-'+_cotPdf$(ln.desc)):'$0.00', cols.dsc, y+12, {align:'right'});
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text(_cotPdf$(ln.neto!=null?ln.neto:ln.precio), cols.imp, y+12, {align:'right'});
+    y+=h;
+  });
+  enTabla=false;
+  asegurar(108);
+  y+=10;
+  var tx=W-m-210;
+  function filaTot(lbl, val, bold){
+    doc.setFont('helvetica', bold?'bold':'normal');
+    doc.setFontSize(bold?11:8.5);
+    doc.setTextColor(bold?NAVY[0]:TXT[0], bold?NAVY[1]:TXT[1], bold?NAVY[2]:TXT[2]);
+    doc.text(lbl, tx, y);
+    doc.text(val, W-m, y, {align:'right'});
+    y+=bold?16:13;
+  }
+  var sinIva=q.sinIva!=null?q.sinIva:_cotRedondear((Number(q.total)||0)-(Number(q.iva)||0));
+  filaTot('Subtotal', _cotPdf$(q.subtotal));
+  filaTot('Descuentos', '-'+_cotPdf$(q.descuento));
+  filaTot('Subtotal sin IVA', _cotPdf$(sinIva));
+  filaTot('IVA 15%', _cotPdf$(q.iva));
+  doc.setDrawColor(CEL[0], CEL[1], CEL[2]);
+  doc.setLineWidth(0.6);
+  doc.line(tx, y-4, W-m, y-4);
+  y+=6;
+  filaTot('TOTAL', _cotPdf$(q.total), true);
+  var valTxt=String(q.validez||'').trim();
+  if(valTxt){
+    asegurar(36);
+    doc.setFillColor(251, 243, 227);
+    var vLs=doc.splitTextToSize(valTxt, W-m*2-20);
+    var vH=14+vLs.length*11;
+    doc.roundedRect(m, y, W-m*2, vH, 5, 5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.setTextColor(GOLD[0], GOLD[1], GOLD[2]);
+    doc.text(vLs, m+10, y+14);
+    y+=vH+10;
+  }
+  var notas=String(q.notas||'').trim();
+  if(notas){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8);
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    asegurar(28);
+    doc.text('NOTAS', m, y);
+    y+=12;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+    notas.split('\n').forEach(function(par){
+      var ls=doc.splitTextToSize(par||' ', W-m*2);
+      asegurar(ls.length*11+4);
+      doc.text(ls, m, y);
+      y+=ls.length*11+3;
+    });
+  }
+  asegurar(18);
+  y+=6;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(140,140,140);
+  doc.text('Elaborada por '+(q.creadoPor||'Sunsu Spa')+'   |   Documento informativo, no es una factura.', m, y);
+}
 
 </script>
 </body>
