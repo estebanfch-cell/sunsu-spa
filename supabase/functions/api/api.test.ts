@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
-import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, type CosmMark } from "./domain.ts";
+import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
+import { reimportarTickets } from "./lib.ts";
 import { acceso, esPropio, evaluarBloqueo, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
 
@@ -183,7 +185,11 @@ describe("erp", () => {
       lineas: [{ sku: "HT-002", cantidad: 1, precio: 20, clase: "producto" }],
     }, db, "Andrea");
     assert.equal(venta.ok, true);
+    assert.equal(venta.numero, "OV-0001");
     const tk1 = (await db.all("tickets")).find((t) => (t.orig as Row)?.ticket_ref === "TK-1");
+    assert.equal(tk1?.origin, "beta");
+    assert.equal(tk1?.sheet_row ?? null, null);
+    assert.match(String(tk1?.beta_num), /^TK-\d{8}-900001$/);
     assert.equal(tk1?.atendido_por, "Andrea");
     assert.equal(tk1?.ht_002, 1);
     assert.equal(tk1?.estimado, 23);
@@ -251,6 +257,155 @@ describe("erp", () => {
     await runErp("conteo_aplicar", { conteo_id: abierto.id }, db, "Emi");
     assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta)?.cantidad, 1);
     assert.equal(linea && n(linea.sistema) < 0, true);
+  });
+
+  it("la OV sigue al pedido importado y el ticket beta no ocupa sheet_row", async () => {
+    assert.equal(siguienteOv([]), "OV-0001");
+    assert.equal(siguienteOv([{ numero: "TK-ROW-80" }]), "OV-0081");
+    assert.equal(siguienteOv([{ numero: "OV-0003" }, { numero: "TK-ROW-80" }]), "OV-0081");
+    const seed = erpSeed();
+    seed.tickets = [{ sheet_row: 5, origin: "sheet", nombre: "Hoja", orig: {}, atendido_por: "X", timestamp: "2026-10-01T00:00:00Z" }];
+    seed.erp_ordenes_venta = [{ id: "ov-imp", numero: "TK-ROW-80", ticket_ref: "TK-ROW-80", estado: "despachada" }];
+    const db = new MemoryDb(seed);
+    const venta = await runErp("ov_save", {
+      nombre: "María",
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20, clase: "producto" }],
+    }, db, "Andrea");
+    assert.equal(venta.numero, "OV-0081");
+    const tk = (await db.all("tickets")).find((t) => t.origin === "beta");
+    assert.equal(tk?.sheet_row ?? null, null);
+    assert.match(String(tk?.beta_num), /^TK-/);
+    assert.equal((tk?.orig as Row)?.fuente, "ov_save");
+    assert.equal((await db.all("tickets")).find((t) => t.sheet_row === 5)?.nombre, "Hoja");
+    const otra = await runErp("ov_save", {
+      nombre: "Ana", numero: "OV-0001",
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20 }],
+    }, db, "Andrea");
+    assert.equal(otra.numero, "OV-0082");
+  });
+
+  it("erp_tx no escribe otra vez en local y un NEGATIVO no cae al plan partido", async () => {
+    const seed = erpSeed();
+    seed.erp_ordenes_venta = [{ id: "ov-imp", numero: "TK-ROW-80", ticket_ref: "TK-ROW-80", estado: "despachada" }];
+    const db = new MemoryDb(seed);
+    let calls = 0;
+    db.rpcImpl = async (name, args) => {
+      if (name !== "erp_tx") return null;
+      calls++;
+      const steps = args.p_steps as Row[];
+      const tk = steps.find((s) => s.op === "upsert" && s.table === "tickets");
+      assert.equal((tk?.row as Row)?.origin, "beta");
+      assert.equal((tk?.row as Row)?.sheet_row ?? null, null);
+      assert.equal(args.p_op, "ov_save");
+      return { ok: true, numero: "OV-0099" };
+    };
+    const venta = await runErp("ov_save", {
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20 }],
+    }, db, "Andrea");
+    assert.equal(calls, 1);
+    assert.equal(venta.numero, "OV-0099");
+    assert.equal(db.writes.length, 0);
+    assert.equal((await db.all("erp_ordenes_venta")).length, 1);
+
+    db.rpcImpl = async (name) => {
+      if (name === "erp_tx") throw new Error('rpc erp_tx 400 NEGATIVO {"sku":"HT-002","producto":"Crema retail","bodega":"Venta","hay":0,"piden":1,"queda":-1}');
+      return null;
+    };
+    await assert.rejects(() => runErp("ov_save", {
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20 }],
+    }, db, "Andrea"), (e: unknown) => e instanceof ErpError && (e as ErpError).requiere);
+    assert.equal(db.writes.length, 0);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta)?.cantidad, 5);
+  });
+
+  it("sin erp_tx el plan local sigue, y un corte a mitad no deja stock ni ticket", async () => {
+    const db = new MemoryDb(erpSeed());
+    db.rpcImpl = async (name) => {
+      if (name === "erp_tx") throw new Error("rpc erp_tx 404 Could not find the function public.erp_tx in the schema cache");
+      return null;
+    };
+    const venta = await runErp("ov_save", {
+      ticket_ref: "TK-LOCAL",
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20 }],
+    }, db, "Andrea");
+    assert.equal(venta.ok, true);
+    assert.equal((await db.all("tickets")).some((t) => t.origin === "beta" && (t.sheet_row ?? null) === null), true);
+
+    const db2 = new MemoryDb(erpSeed());
+    db2.failAfterWrites = 1;
+    const stock = await db2.all("erp_stock");
+    await assert.rejects(() => runErp("ov_save", {
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20 }],
+    }, db2, "Andrea"));
+    assert.deepEqual(await db2.all("erp_stock"), stock);
+    assert.equal((await db2.all("tickets")).length, 0);
+    assert.equal((await db2.all("erp_ordenes_venta")).length, 0);
+    assert.equal(db2.writes.length, 0);
+  });
+
+  it("recibir y pagar pasan por erp_tx una sola vez", async () => {
+    const db = new MemoryDb(erpSeed());
+    const ops: string[] = [];
+    db.rpcImpl = async (name, args) => {
+      if (name !== "erp_tx") return null;
+      ops.push(String(args.p_op));
+      return { ok: true };
+    };
+    const oc = await runErp("oc_save", {
+      proveedor_id: SEED_IDS.prov,
+      lineas: [{ producto_id: SEED_IDS.cabina, cantidad: 2, precio: 3 }],
+    }, db, "Emi");
+    const lid = (await db.all("erp_oc_lineas"))[0].id;
+    const rec = await runErp("oc_recibir", {
+      oc_id: oc.id, lineas: [{ oc_linea_id: lid, bodega_id: BODEGA_CABINA, cantidad: 2 }],
+    }, db, "Emi");
+    assert.equal(rec.ok, true);
+    const pago = await runErp("pago_save", { oc_id: oc.id, monto: 1 }, db, "Emi");
+    assert.equal(pago.estado_pago, "parcial");
+    assert.deepEqual(ops, ["oc_recibir", "pago_save"]);
+    assert.equal((await db.all("erp_movimientos")).length, 0);
+    assert.equal((await db.all("erp_oc")).find((r) => r.id === oc.id)?.pagado ?? 0, 0);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina)?.cantidad, 10);
+  });
+
+  it("reimportar la hoja no borra el ticket beta", async () => {
+    const db = new MemoryDb({
+      tickets: [
+        { id: 1, sheet_row: 5, origin: "sheet", nombre: "Hoja", orig: {}, timestamp: "2026-10-01T00:00:00Z", atendido_por: "Andrea" },
+        { id: 2, sheet_row: null, origin: "beta", beta_num: "TK-20261021-900001", nombre: "Beta", orig: { beta: true, fuente: "ov_save" }, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea" },
+      ],
+    });
+    const out = await reimportarTickets(db, "import", [
+      { sheet_row: 5, nombre: "Hoja nueva", orig: {}, timestamp: "2026-10-01T00:00:00Z", atendido_por: "Andrea" },
+      { sheet_row: 6, nombre: "Nueva", orig: {}, timestamp: "2026-10-02T00:00:00Z", atendido_por: "Andrea" },
+    ]);
+    assert.equal(out.conservadas, 1);
+    const rows = await db.all("tickets");
+    const beta = rows.find((t) => t.origin === "beta");
+    assert.equal(beta?.nombre, "Beta");
+    assert.equal(beta?.beta_num, "TK-20261021-900001");
+    assert.equal(beta?.sheet_row ?? null, null);
+    assert.equal(rows.find((t) => Number(t.sheet_row) === 5)?.nombre, "Hoja nueva");
+    assert.equal(rows.find((t) => Number(t.sheet_row) === 5)?.origin, "sheet");
+    assert.equal(rows.find((t) => Number(t.sheet_row) === 6)?.origin, "sheet");
+    assert.equal(rows.filter((t) => t.origin === "beta").length, 1);
+  });
+});
+
+describe("sql erp", () => {
+  it("0010b deja escribir el kardex y 0011 guarda la transacción", () => {
+    const kardex = readFileSync(new URL("../../../migrations/0010b_app_write_kardex.sql", import.meta.url), "utf8");
+    const tx = readFileSync(new URL("../../../docs/supabase/pending/0011_erp_tx.sql", import.meta.url), "utf8");
+    assert.match(kardex, /'erp_movimientos'/);
+    assert.match(kardex, /El kardex no se borra/);
+    assert.match(tx, /origin/);
+    assert.match(tx, /beta_num/);
+    assert.match(tx, /tickets_conservar_beta/);
+    assert.match(tx, /tickets_reimportar/);
+    assert.match(tx, /function public\.erp_tx/);
+    assert.match(tx, /pg_advisory_xact_lock/);
+    assert.equal(/select\s+public\.erp_importar_legado/i.test(tx), false);
+    assert.equal(/select\s+public\.audit_attach_all/i.test(tx), false);
   });
 });
 
@@ -367,6 +522,24 @@ describe("api", () => {
     assert.equal(String(out.error || "").includes("Sheet"), false);
     const no = await handle("getRolIndividual", { token: c.token, sheet: "MAYO_2026", cedula: "999" }, c) as Row;
     assert.match(String(no.error), /Empleada o periodo/);
+  });
+
+  it("crearTicket numera en beta y deja libre la fila de la hoja", async () => {
+    const db = new MemoryDb({
+      tickets: [{ sheet_row: 5, origin: "sheet", nombre: "Hoja", orig: {}, timestamp: "2026-10-01T00:00:00Z", atendido_por: "Andrea" }],
+    });
+    const c = ctx(db);
+    const out = await handle("crearTicket", {
+      token: c.token, nombre: "Ana", apellido: "Paz", cedula: "1711", estimado: 10, cosmetologa: "Andrea",
+    }, c) as Row;
+    assert.equal(out.ok, true);
+    assert.equal(out.fila ?? null, null);
+    assert.match(String(out.beta_num), /^TK-20261021-900001$/);
+    const creada = (await db.all("tickets")).find((t) => t.nombre === "Ana");
+    assert.equal(creada?.origin, "beta");
+    assert.equal(creada?.sheet_row ?? null, null);
+    assert.equal((creada?.orig as Row)?.beta, true);
+    assert.equal((await db.all("tickets")).some((t) => t.sheet_row === 5 && t.nombre === "Hoja"), true);
   });
 
   it("pago_save y oc_devolver pasan por el API", async () => {

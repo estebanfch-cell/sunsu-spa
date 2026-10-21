@@ -1,5 +1,5 @@
 import { extend } from "./handlers.ts";
-import { actorOf, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
+import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, CFG_DEF, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
@@ -862,6 +862,11 @@ extend("betaGuardar", ADMIN, async (p, ctx, ses) => {
     await ctx.db.write(actorOf(ses), table, "update", { sheet_row: n(p.sheet_row) }, campos);
     await logAccion(ctx.db, actorOf(ses), "BETA EDITAR", table + " fila " + n(p.sheet_row));
     return { ok: true };
+  }
+  if (table === "tickets") {
+    const ident = await asignarTicketBeta(ctx.db, ctx.now);
+    await ctx.db.write(actorOf(ses), "tickets", "insert", {}, { ...campos, ...ident, orig: { beta: true } });
+    return { ok: true, sheet_row: null, beta_num: ident.beta_num, origin: "beta" };
   }
   const sheet_row = await nextSheet(ctx.db, table);
   await ctx.db.write(actorOf(ses), table, "insert", {}, { ...campos, sheet_row, orig: { beta: true } });

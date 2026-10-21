@@ -48,6 +48,17 @@ supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
 
 `0010_asistencia.sql` crea las tablas del reloj, deja `jibble_historial` vacía y vuelve a publicar `app_write` con esas tablas en la lista blanca. Las reglas del cálculo están en [ASISTENCIA.md](supabase/ASISTENCIA.md).
 
+`migrations/0010b_app_write_kardex.sql` ya está aplicado: `app_write` acepta insertar en `erp_movimientos` y sigue rechazando el delete («El kardex no se borra»). No hace falta volver a ejecutarlo. El archivo no está bajo `supabase/migrations`.
+
+Después de este merge, el SQL nuevo va antes que el edge. Si el edge se publica primero, el ticket beta manda `sheet_row` nulo y el insert falla mientras la columna siga siendo NOT NULL.
+
+```bash
+supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0011_erp_tx.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
+
+`0011_erp_tx.sql` agrega `tickets.origin` (`sheet` o `beta`) y `beta_num`, deja `sheet_row` nulo en lo creado en la beta, y suelta la fila de hoja de las ventas `ov_save` que ya estaban. Un `DELETE` de tickets se salta `origin = 'beta'`. `TRUNCATE` no: la reimportación de la hoja llama `tickets_reimportar(filas)` o borra con `DELETE`. `erp_tx` mete `ov_save`, `ov_anular`, `oc_recibir` y `pago_save` en una sola transacción. La siguiente OV sigue al mayor sufijo importado (`TK-ROW-80` → `OV-0081`); si no hay números, sigue a la cantidad de órdenes. No corre `erp_importar_legado()` ni `audit_attach_all()`. Si `erp_tx` todavía no existe, el edge vuelve a varios `app_write`. Un stock negativo que rechaza la función no se reintenta en local.
+
 `0009_erp_permisos.sql` es idempotente y, al final, corre `erp_importar_legado()` y `audit_attach_all()`. El navegador no manda apikey: `verify_jwt` va en false en `supabase/config.toml` y otra vez en el deploy.
 
 Los secretos `ACUITY_UID`, `ACUITY_KEY`, `JIBBLE_CLIENT_ID` y `JIBBLE_CLIENT_SECRET` ya están en la función. `index.ts` los lee del entorno. No hace falta pegarlos en el cliente.
@@ -89,8 +100,8 @@ Acciones del edge, agrupadas:
 ## Huecos que hay que leer antes de comparar números
 
 - El stock de percha de la hoja INVENTARIO no se migró. Venta = `stock_inicial` (casi siempre 0) + entradas recibidas, sin las notas «COMPRA DIRECTA», menos lo vendido desde el 22 de mayo de 2026. Los conteos físicos históricos quedan como registro, no se re-postean. Cabina abre con el saldo importado, no con el historial de consumo.
-- `ov_save` descuenta inventario, crea la orden de venta e inserta la fila de `tickets` (columnas de producto, `estimado`, `atendido_por`). `ov_anular` deja `atendido_por` vacío para que esa venta salga de `v_tickets`. El stock de percha de la hoja sigue sin migrar.
-- Cada movimiento ERP es un `app_write` aparte. El trigger de uso y el de «no borrar kardex» corren por sentencia. No hay una sola transacción que envuelva la recepción completa. Las pruebas locales sí son un solo proceso (`MemoryDb`).
+- `ov_save` descuenta inventario, crea la orden de venta e inserta el ticket con `origin = 'beta'`, `sheet_row` nulo y `beta_num` (`ticket_seq` o, si no hay secuencia, desde `TK-…-900001`). Así una reimportación de la hoja no pisa ni borra esa fila. `ov_anular` deja `atendido_por` vacío en la misma transacción para que esa venta salga de `v_tickets`. El número de la OV sigue después de lo importado (`TK-ROW-80` → `OV-0081`), no vuelve a `OV-0001`. El stock de percha de la hoja sigue sin migrar.
+- Con `0011` aplicado, `ov_save`, `ov_anular`, `oc_recibir` y `pago_save` corren en `erp_tx` (un candado y una transacción). El resto de movimientos ERP sigue siendo un `app_write` cada uno. El trigger de uso y el de «no borrar kardex» corren dentro de esa transacción. Hasta que `erp_tx` exista, el edge cae a varios `app_write` y `MemoryDb` hace lo mismo, revirtiendo el plan si una escritura falla a mitad.
 - La service role salta el RLS. El candado que ve el personal es `handle()`: niega el módulo, fuerza el nombre propio y quita costos, teléfonos y correos. `app_read` (0009b, security invoker, solo `service_role`) hace `set local role sunsu_rls`. `app_acceso` es security definer para poder leer `app_modulos`. `SupabaseDb.all` no llama a `app_read`, porque filtrar tickets dentro de un total (inventario, comisiones) rompería la cifra. Quien lea PostgREST directo con la service role ve todo. El listado de clientas antiguas deja el teléfono en blanco salvo admin y super_admin.
 - `erp_clientes` no tiene «atendida por». Por eso una cosmetóloga, cuyo módulo es propio, no ve el directorio en la pantalla.
 - `app_settings` existe en 0008 y esta beta no lo escribe.
