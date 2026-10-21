@@ -92,7 +92,7 @@ export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "b
 }
 
 /**
- * Espejo de tickets_reimportar: reemplaza las filas de la hoja y deja las de origin beta.
+ * Espejo de tickets_reimportar: borra solo filas con sheet_row y deja origin beta.
  * La reimportación real corre en SQL; TRUNCATE no pasa por el trigger.
  */
 export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Promise<{ borradas: number; escritas: number; conservadas: number }> {
@@ -102,6 +102,7 @@ export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Pr
   let borradas = 0;
   for (const r of prev) {
     if (esTicketBeta(r)) continue;
+    if (r.sheet_row == null || r.sheet_row === "") continue;
     const match = r.id != null ? { id: r.id } : { sheet_row: r.sheet_row };
     await db.write(actor, "tickets", "delete", match, null);
     borradas++;
