@@ -21,7 +21,7 @@ const MOD: Record<string, string> = {
   ov_list: "tickets", ov_get: "tickets", ov_save: "tickets", ov_anular: "tickets", ticket_aplicar: "tickets",
 };
 
-const ESCRITURA = new Set(["prod_save", "prov_save", "cli_save", "rfq_save", "rfq_respuesta", "rfq_adjudicar", "oc_save", "oc_cancel", "oc_recibir", "oc_recibir_undo", "pago_save", "trf_save", "trf_enviar", "trf_recibir", "conteo_abrir", "conteo_guardar", "conteo_aplicar", "ajuste_save", "ov_save", "ov_anular"]);
+const ESCRITURA = new Set(["prod_save", "prov_save", "cli_save", "rfq_save", "rfq_respuesta", "rfq_adjudicar", "oc_save", "oc_cancel", "oc_recibir", "oc_recibir_undo", "oc_devolver", "pago_save", "trf_save", "trf_enviar", "trf_recibir", "conteo_abrir", "conteo_guardar", "conteo_aplicar", "ajuste_save", "ov_save", "ov_anular"]);
 
 function permitido(op: string, rol: string, matriz: Record<string, Partial<Record<string, Acceso>>>): boolean {
   const mod = MOD[op];

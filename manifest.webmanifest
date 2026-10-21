@@ -2,7 +2,7 @@
   "name": "Sunsu Sistema Central (BETA)",
   "short_name": "Sunsu BETA",
   "start_url": "/beta.html",
-  "scope": "/",
+  "scope": "/beta.html",
   "display": "standalone",
   "background_color": "#f6f1ea",
   "theme_color": "#2a211c",

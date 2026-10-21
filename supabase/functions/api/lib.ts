@@ -31,12 +31,14 @@ export async function loadSes(ctx: Ctx, token: unknown): Promise<Ses | null> {
   const ses = rows.find((r) => r.token === tk);
   if (!ses) return null;
   if (new Date(String(ses.exp)).getTime() < ctx.now.getTime()) return null;
-  const users = await ctx.db.all("usuarios");
-  let u = users.find((x) => x.id === ses.uid);
+  const app = await ctx.db.all("app_usuarios");
+  const a = app.find((x) => String(x.id ?? x.usuario) === String(ses.uid));
+  let u: Row | undefined = a
+    ? { id: a.id ?? a.usuario, nombre: a.nombre ?? a.name ?? a.usuario, short: a.short ?? a.nombre ?? a.name, rol: a.rol ?? a.role, color: a.color, bloqueado: a.bloqueado }
+    : undefined;
   if (!u) {
-    const app = await ctx.db.all("app_usuarios");
-    const a = app.find((x) => String(x.id ?? x.usuario) === String(ses.uid));
-    if (a) u = { id: a.id ?? a.usuario, nombre: a.nombre ?? a.name ?? a.usuario, short: a.short ?? a.nombre ?? a.name, rol: a.rol ?? a.role, color: a.color, bloqueado: a.bloqueado };
+    const users = await ctx.db.all("usuarios");
+    u = users.find((x) => x.id === ses.uid);
   }
   if (!u || u.bloqueado === true) return null;
   let rol = normalizarRol(String(u.rol || ses.rol));

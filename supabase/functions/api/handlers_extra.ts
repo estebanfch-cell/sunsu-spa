@@ -2,8 +2,9 @@ import { extend } from "./handlers.ts";
 import { actorOf, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
-  ADMIN, BETA_TABLES, addDays, b, ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
-  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row,
+  ADMIN, BETA_TABLES, CFG_DEF, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
+  ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
+  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 
@@ -118,9 +119,10 @@ extend("segPaqWaEnviado", "any", async (p, ctx, ses) => {
 });
 
 extend("getClientasAntiguas", "any", async (_p, ctx, ses) => {
-  const tel = conTelefono(ses);
+  const tel = esAdmin(ses.rol);
   const items = (await ctx.db.all("clientas_antiguas")).map((r) => ({
-    cedula: s(r.cedula), nombre: s(r.nombre), telefono: tel ? s(r.telefono) : "", email: s(r.email),
+    cedula: s(r.cedula), nombre: s(r.nombre), telefono: tel ? s(r.telefono) : "",
+    tel_acuity: tel ? s(r.tel_acuity) : "", email: s(r.email),
     ultima: s(r.ultima_visita), visitas: n(r.visitas), estado: s(r.estado), intentos: n(r.intentos),
     contactadaPor: s(r.contactada_por), fechaContacto: s(r.fecha_contacto),
   }));
@@ -212,6 +214,64 @@ async function extendKpi(p: R, ctx: Ctx) {
 }
 extend("getKPIsHistoricos", "any", async () => ({ items: [], parcial: true, nota: "Los KPI históricos salían de los .xls de Mi Negocio. En la beta el mes en curso se calcula en vivo (getKPIsMes)." }));
 
+function ticketIn(r: R): TicketIn {
+  return {
+    fecha: ymdUtc(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3), facial: s(r.facial_hecho),
+    pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6), extras: s(r.servicios_adicionales),
+    exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
+    productos: productQtys(r),
+  };
+}
+function subtotalCatalogo(row: R | undefined): number {
+  if (!row) return 0;
+  const sub = n(row.subtotal);
+  if (sub > 0) return sub;
+  const tot = n(row.total_con_iva);
+  return tot > 0 ? tot / 1.15 : n(row.precio_venta);
+}
+async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes: number) {
+  const ancla = `${anio}-${String(mes).padStart(2, "0")}-25`;
+  const ciclo = cicloInicio(ancla);
+  const fin = cicloFin(ciclo);
+  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map(ticketIn);
+  const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
+  const calc = calcularCiclo(tks, [{
+    id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: true, activa: true, desde: null, hasta: null,
+  }], CFG_DEF, ciclo, null);
+  const persona = calc.personas.find((p) => normNombre(p.cosm).startsWith(key));
+  const cat = await ctx.db.all("catalogo");
+  const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
+  const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= fin && normNombre(t.cosm).startsWith(key) && !esInterno(t.cosm, t.cedula) && !t.exclProducto);
+  const items = propios.flatMap((t) => t.productos.map((pr) => {
+    const row = cmap.get(skuCode(pr.sku));
+    return { venta: subtotalCatalogo(row), compra: n(row?.precio_compra), qty: pr.qty, excluido: false };
+  }));
+  let comRecepcion = 0;
+  if (key.startsWith("alejandra")) {
+    const dias = new Map<string, number>();
+    for (const t of tks) {
+      if (t.fecha < ciclo || t.fecha > fin || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
+      dias.set(t.fecha, (dias.get(t.fecha) || 0) + 1);
+    }
+    for (const [f, c] of dias) comRecepcion += comisionRecepcionDia(f, c);
+  }
+  let multas = 0;
+  for (const r of await ctx.db.all("multas_descuentos")) {
+    const f = ymdUtc(r.fecha);
+    if (!f || f < ciclo || f > fin) continue;
+    const quien = normNombre(s(r.cosmetologa) || s(r.empleada) || s(r.nombre));
+    if (!quien.startsWith(key)) continue;
+    multas += n(r.monto);
+  }
+  return {
+    comFaciales: persona?.comFaciales || 0,
+    comExtras: persona?.comExtras || 0,
+    comPaquetes: persona?.comPaquetes || 0,
+    comProductos: comisionProductos(items, CFG_DEF.pctProd),
+    comRecepcion: round2(comRecepcion),
+    multas: round2(multas),
+  };
+}
 extend("getRoles", "any", async (_p, ctx) => {
   const hist = await ctx.db.all("rrhh_historial");
   const meses = new Map<string, R>();
@@ -238,7 +298,7 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   const emps = await ctx.db.all("rrhh_empleadas");
   const ced = s(p.cedula).replace(".", "");
   const e = emps.find((r) => s(r.cedula).replace(".", "") === ced || normCedula(r.cedula) === normCedula(ced));
-  if (!e || !mes) return { ok: false, error: "Sheet no encontrada" };
+  if (!e || !mes) return { ok: false, error: "Empleada o periodo no encontrado" };
   if (acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos") {
     if (!esPropio(s(e.nombre_app), ses) && !esPropio(s(e.apellidos_y_nombres), ses)) {
       return { ok: false, error: "No tienes permiso para ver el rol de otra persona" };
@@ -256,13 +316,20 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   }
   let rpc: R | null = null;
   try { rpc = await ctx.db.rpc("rol_calcular", rpcArgs) as R; } catch { rpc = null; }
+  const calculado = rpc && !rpc.error ? rpc : null;
+  const com = calculado
+    ? {
+      comFaciales: n(calculado.com_faciales), comExtras: n(calculado.com_extras), comRecepcion: n(calculado.com_recepcion),
+      comProductos: n(calculado.com_productos), comPaquetes: n(calculado.com_paquetes), multas: n(calculado.multas_descuentos),
+    }
+    : await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes);
   const local = rolCalcular({
     sueldo: n(e.sueldo_base), bono: n(e.bono_fijo), fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
     fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
     diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
-    comFaciales: n(rpc?.com_faciales), comExtras: n(rpc?.com_extras), comRecepcion: n(rpc?.com_recepcion),
-    comProductos: n(rpc?.com_productos), comPaquetes: n(rpc?.com_paquetes), multas: n(rpc?.multas_descuentos),
+    comFaciales: com.comFaciales, comExtras: com.comExtras, comRecepcion: com.comRecepcion,
+    comProductos: com.comProductos, comPaquetes: com.comPaquetes, multas: com.multas,
   });
   const costoH = n(e.sueldo_base) / 240;
   const data = {
