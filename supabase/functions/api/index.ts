@@ -1,6 +1,7 @@
 import { handle } from "./handlers.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
+import "./asistencia_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
@@ -43,6 +44,8 @@ Deno.serve(async (req) => {
       ACUITY_KEY: Deno.env.get("ACUITY_KEY"),
       JIBBLE_CLIENT_ID: Deno.env.get("JIBBLE_CLIENT_ID"),
       JIBBLE_CLIENT_SECRET: Deno.env.get("JIBBLE_CLIENT_SECRET"),
+      SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
+      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
     },
     fetchImpl: fetch,
     legacyLogin: async (pin: string) => {

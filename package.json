@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test supabase/functions/api/api.test.ts",
+    "test": "node --experimental-strip-types --test supabase/functions/api/api.test.ts supabase/functions/api/asistencia.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

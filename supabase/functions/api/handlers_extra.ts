@@ -2,10 +2,10 @@ import { extend } from "./handlers.ts";
 import { actorOf, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
-  ADMIN, BETA_TABLES, RECEP, addDays, b, ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
+  ADMIN, BETA_TABLES, addDays, b, ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
   productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row,
 } from "./domain.ts";
-import { acceso, esPropio, matrizDe } from "./permisos.ts";
+import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 
 type R = Record<string, unknown>;
 
@@ -244,23 +244,35 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
       return { ok: false, error: "No tienes permiso para ver el rol de otra persona" };
     }
   }
+  const { horasDeEmpleada } = await import("./asistencia_api.ts");
+  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null };
+  try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }
+  const rpcArgs: R = { p_nombre_app: s(e.nombre_app), p_anio: anio, p_mes: mes };
+  if (horas.hayDatos) {
+    rpcArgs.p_hrs_supl = horas.hrsSupl;
+    rpcArgs.p_hrs_extr = horas.hrsExtr;
+    rpcArgs.p_hrs_desc = horas.hrsDesc;
+    if (horas.diasLaborados != null) rpcArgs.p_dias_laborados = horas.diasLaborados;
+  }
   let rpc: R | null = null;
-  try {
-    rpc = await ctx.db.rpc("rol_calcular", {
-      p_nombre_app: s(e.nombre_app), p_anio: anio, p_mes: mes,
-    }) as R;
-  } catch { rpc = null; }
+  try { rpc = await ctx.db.rpc("rol_calcular", rpcArgs) as R; } catch { rpc = null; }
   const local = rolCalcular({
     sueldo: n(e.sueldo_base), bono: n(e.bono_fijo), fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
     fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
+    diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
+    hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
     comFaciales: n(rpc?.com_faciales), comExtras: n(rpc?.com_extras), comRecepcion: n(rpc?.com_recepcion),
     comProductos: n(rpc?.com_productos), comPaquetes: n(rpc?.com_paquetes), multas: n(rpc?.multas_descuentos),
   });
+  const costoH = n(e.sueldo_base) / 240;
   const data = {
     nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
-    diasNorm: "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
+    diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
     comFaciales: local.comFaciales, comPaquetes: local.comPaquetes, comProductos: local.comProductos,
-    hrsSupl: 0, valSupl: 0, hrsExtr: 0, valExtr: 0, hrsDesc: 0, valDesc: 0,
+    hrsSupl: horas.hrsSupl, valSupl: round2(horas.hrsSupl * costoH * 1.5),
+    hrsExtr: horas.hrsExtr, valExtr: round2(horas.hrsExtr * costoH * 2),
+    hrsDesc: horas.hrsDesc, valDesc: round2(horas.hrsDesc * costoH * 2),
+    atrasoMin: horas.atrasoMin, faltas: horas.faltas, fuenteHoras: horas.hayDatos ? "asistencia" : "sin_marcajes",
     dec13: local.dec13, dec14: local.dec14, fondoReserva: local.fondoReserva, vacaciones: local.vacaciones,
     totalIngresos: rpc && !rpc.error ? n(rpc.total_ingresos) : local.totalIngresos,
     iess: rpc && !rpc.error ? n(rpc.iess_personal) : local.iess,
@@ -288,8 +300,9 @@ extend("aprobarRol", "any", async (p, ctx, ses) => {
   });
   return { ok: true };
 });
-extend("getPermisos", "any", async (_p, ctx) => {
-  const data = (await ctx.db.all("permisos")).filter((r) => s(r.empleada) || s(r.id_1)).map((r) => ({
+extend("getPermisos", "any", async (_p, ctx, ses) => {
+  const propio = acceso(ses.rol, "asistencia", await matrizDe(ctx.db)) !== "todos";
+  const data = (await ctx.db.all("permisos")).filter((r) => (s(r.empleada) || s(r.id_1)) && (!propio || esPropio(s(r.empleada), ses))).map((r) => ({
     id: s(r.id_1) || s(r.sheet_row), empleada: s(r.empleada), tipo: s(r.tipo),
     desde: s(r.fecha_inicio), hasta: s(r.fecha_fin), horas: s(r.horas), motivo: s(r.motivo),
     estado: s(r.estado), solicitado: s(r.solicitado), aprobadoPor: s(r.aprobado_por),
@@ -305,14 +318,14 @@ extend("savePermiso", "any", async (p, ctx, ses) => {
     if (id) url = "archivo:" + id;
   }
   await ctx.db.write(actorOf(ses), "permisos", "insert", {}, {
-    sheet_row: sr, id_1: "P-" + sr, empleada: s(p.empleada) || ses.name, tipo: s(p.tipo),
+    sheet_row: sr, id_1: "P-" + sr, empleada: esAdmin(ses.rol) && s(p.empleada) ? s(p.empleada) : ses.name, tipo: s(p.tipo),
     fecha_inicio: s(p.desde || p.fechaInicio), fecha_fin: s(p.hasta || p.fechaFin), horas: s(p.horas),
     motivo: s(p.motivo), estado: "PENDIENTE", solicitado: ecuadorParts(ctx.now).ymd, url_certificado: url,
     orig: { tipo: s(p.tipo) },
   });
   return { ok: true, id: "P-" + sr };
 });
-extend("updatePermiso", RECEP, async (p, ctx, ses) => {
+extend("updatePermiso", ADMIN, async (p, ctx, ses) => {
   const row = n(p.row) ? await rowBySheet(ctx.db, "permisos", n(p.row)) : (await ctx.db.all("permisos")).find((r) => s(r.id_1) === s(p.id));
   if (!row) return { error: "Permiso no encontrado" };
   await ctx.db.write(actorOf(ses), "permisos", "update", { sheet_row: row.sheet_row }, {

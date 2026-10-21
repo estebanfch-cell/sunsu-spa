@@ -61,7 +61,9 @@ Teléfonos y correos de clientas: solo recepción, gerencia, admin y super_admin
 1. **API.** El edge function usa la service role, y esa role salta el RLS. Por eso `handle()` hace tres cosas en cada request: niega el módulo, fuerza los parámetros personales (`cosmetologa` / `nombre` = la sesión) y borra del JSON los campos de costo (`precio_compra`, `compra`, `costo`, `utilidad`, `margen`, costo empresa, IESS patronal). Un listado de tickets o de roles de pago se filtra a la persona antes de salir.
 2. **Postgres.** El rol `sunsu_rls` no tiene `BYPASSRLS`. `app_read(uid, rol, nombre, tabla)` hace `set_config('app.user' / 'app.rol' / 'app.uid' / 'app.nombre')` y `set local role sunsu_rls`. Las políticas leen `app_acceso()` y `app_es_propio()`. `sunsu_admin` ve todas las filas y todas las columnas. A `sunsu_rls` se le revoca el `SELECT` de las columnas de costo. `service_role` puede asumir esos dos roles (`grant sunsu_rls, sunsu_admin to service_role`).
 
-Tablas con fila personal: `tickets`, `rrhh_empleadas`, `rrhh_historial`, `multas_descuentos` y, si la columna existe, `historial_comisiones`.
+Tablas con fila personal: `tickets`, `rrhh_empleadas`, `rrhh_historial`, `multas_descuentos` y, si la columna existe, `historial_comisiones`. Con `0010_asistencia.sql` también `asistencia_marcajes` (`nombre`), `asistencia_auditoria` (`nombre`), `jibble_historial` (`persona`) y `permisos` (`empleada`). La config y los feriados se leen si el módulo no está en `no`. Una recepción no marca por otra persona: asistencia sigue en **propio** hasta que `super_admin` cambie esa celda.
+
+Cada marca exige el radio del spa y una selfie. La foto queda en el bucket privado `asistencia`; la auditoría no guarda la imagen. El reloj usa la hora del servidor. El detalle del cálculo está en [ASISTENCIA.md](ASISTENCIA.md).
 
 ## Login
 
