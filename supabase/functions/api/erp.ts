@@ -2,9 +2,9 @@
 // recepción que postea stock, ticket = orden de venta. La regla de uso
 // (cabina / venta / ambos) se prueba aquí y la repite el trigger en 0009.
 
-import type { Db } from "./db.ts";
-import { ecuadorParts, facialSku, n, prodCol, round2, s, skuCode, type Row } from "./domain.ts";
-import { nextSheet } from "./lib.ts";
+import { MemoryDb, type Db } from "./db.ts";
+import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, skuCode, type Row } from "./domain.ts";
+import { asignarTicketBeta } from "./lib.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -68,7 +68,73 @@ function keyOf(pid: string, bid: string, sub = "", lote = ""): string {
   return [pid, bid, sub, lote].join("|");
 }
 
-export async function applyPlan(db: Db, actor: string, steps: Step[], now = new Date().toISOString()): Promise<Row> {
+const ATOMIC = new Set(["ov_save", "ticket_aplicar", "ov_anular", "oc_recibir", "pago_save"]);
+
+function negativoDe(msg: string): Negativo | null {
+  const at = msg.indexOf("NEGATIVO");
+  if (at < 0) return null;
+  const candidates = [msg.slice(at), msg.slice(at).replace(/\\"/g, '"')];
+  for (const text of candidates) {
+    const start = text.indexOf("{");
+    if (start < 0) continue;
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            const v = JSON.parse(text.slice(start, i + 1)) as Negativo;
+            if (v && typeof v === "object" && "queda" in v) return v;
+          } catch { /* el otro candidato */ }
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function filaRpc(raw: unknown): Row | null {
+  if (typeof raw === "string") {
+    try { return filaRpc(JSON.parse(raw)); } catch { return null; }
+  }
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Row;
+  return null;
+}
+
+/** Una transacción en Postgres. Si la función todavía no existe, el plan sigue en app_write. Un NEGATIVO no se reintenta en local. */
+async function commitErpTx(db: Db, actor: string, op: string, steps: Step[], now: string): Promise<Row | null> {
+  try {
+    const raw = await db.rpc("erp_tx", { p_actor: actor, p_op: op, p_steps: steps, p_now: now });
+    const row = filaRpc(raw);
+    if (!row) return null;
+    if (row.ok === false) throw new Error(s(row.error) || "erp_tx");
+    return row;
+  } catch (e) {
+    if (e instanceof ErpError) throw e;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("NEGATIVO")) {
+      const neg = negativoDe(msg);
+      if (neg) throw new ErpError(`Tu stock va a quedar en ${neg.queda} (${neg.sku} ${neg.producto}, ${neg.bodega}). ¿Aprobar?`, neg);
+      throw new ErpError(msg);
+    }
+    if (/PGRST202|Could not find the function|schema cache/i.test(msg) || /function .*erp_tx.* does not exist/i.test(msg)) return null;
+    throw e instanceof Error ? e : new Error(msg);
+  }
+}
+
+export async function applyPlan(db: Db, actor: string, steps: Step[], now = new Date().toISOString(), op = ""): Promise<Row> {
   const productos = await db.all("erp_productos");
   const bodegas = await db.all("erp_bodegas");
   const stock0 = await db.all("erp_stock");
@@ -121,6 +187,14 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
     }
   }
 
+  if (op && ATOMIC.has(op)) {
+    const committed = await commitErpTx(db, actor, op, steps, now);
+    if (committed) return committed;
+  }
+
+  const mem = db instanceof MemoryDb ? db : null;
+  const snap = mem?.snapshot();
+  try {
   for (const step of steps) {
     if (step.op === "delete") {
       await db.write(actor, step.table, "delete", step.match, null);
@@ -153,6 +227,10 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
     if (nuevo != null && step.tipo === "recepcion" && step.delta > 0) {
       await db.write(actor, "erp_productos", "update", { id: step.producto_id }, { costo_promedio: nuevo });
     }
+  }
+  } catch (e) {
+    if (mem && snap) mem.restore(snap);
+    throw e;
   }
   return { ok: true };
 }
@@ -435,7 +513,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     }
     const estado = todas && alguna ? "recibida" : alguna ? "parcial" : s(o.estado);
     steps.push({ op: "upsert", table: "erp_oc", match: { id: o.id }, row: { estado } });
-    await applyPlan(db, actor, steps, now.toISOString());
+    await applyPlan(db, actor, steps, now.toISOString(), "oc_recibir");
     await alertarMinimos(db, actor);
     return { ok: true, id: recId, numero, estado };
   }
@@ -608,17 +686,17 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       aprobar_negativo: true, legacy_ref: "anul:" + s(r.id),
     }));
     steps.push({ op: "upsert", table: "erp_ordenes_venta", match: { id: ov.id }, row: { estado: "anulada" } });
-    await applyPlan(db, actor, steps, now.toISOString());
     const refAnula = s(ov.ticket_ref);
     if (refAnula) {
       const tk = (await db.all("tickets")).find((r) => r.orig && typeof r.orig === "object" && s((r.orig as Row).ticket_ref) === refAnula);
-      if (tk) {
-        await db.write(actor, "tickets", "update", { sheet_row: tk.sheet_row }, {
+      if (tk && tk.id != null) {
+        steps.push({ op: "upsert", table: "tickets", match: { id: tk.id }, row: {
           atendido_por: "",
           orig: { ...(tk.orig as Row), anulado: true },
-        });
+        } });
       }
     }
+    await applyPlan(db, actor, steps, now.toISOString(), "ov_anular");
     return { ok: true };
   }
 
@@ -633,7 +711,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (pagado > total + 0.009) return { error: "El pago supera el saldo" };
     const saldo = round2(total - pagado);
     const estado_pago = pagado + 0.009 >= total && total > 0 ? "pagada" : pagado > 0 ? "parcial" : "pendiente";
-    await applyPlan(db, actor, [{ op: "upsert", table: "erp_oc", match: { id: o.id }, row: { pagado, saldo, estado_pago } }]);
+    await applyPlan(db, actor, [{ op: "upsert", table: "erp_oc", match: { id: o.id }, row: { pagado, saldo, estado_pago } }], now.toISOString(), "pago_save");
     return { ok: true, id: o.id, pagado, saldo, estado_pago };
   }
 
@@ -700,7 +778,7 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   if (!venta) return { error: "Falta la bodega Venta. Aplica 0009_erp_permisos.sql." };
   const ovs = await db.all("erp_ordenes_venta");
   const ovId = id();
-  const numero = s(body.numero) || num(ovs, "OV");
+  const numero = elegirNumeroOv(ovs, s(body.numero));
   const ref = ticketRef || numero;
   const steps: Step[] = [];
   let sub = 0;
@@ -751,14 +829,17 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   }
   const iva = round2(sub * 0.15);
   const total = round2(sub + iva);
-  const sheetRow = await nextSheet(db, "tickets");
+  const ident = await asignarTicketBeta(db, now);
   const atendido = nombreDeActor(s(body.cosmetologa) || s(body.atendido_por) || actor);
   const orig = ticketCols.orig as Row;
   orig.ticket_ref = ref;
   orig.ov = numero;
   orig.fuente = "ov_save";
-  steps.push({ op: "upsert", table: "tickets", match: { sheet_row: sheetRow }, row: {
-    sheet_row: sheetRow,
+  orig.beta = true;
+  steps.push({ op: "upsert", table: "tickets", match: { beta_num: ident.beta_num }, row: {
+    sheet_row: null,
+    origin: ident.origin,
+    beta_num: ident.beta_num,
     timestamp: ec.isoWall,
     atendido_por: atendido,
     id_3: s(body.cedula),
@@ -775,9 +856,11 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
     nombre: (s(body.nombre) + " " + s(body.apellido)).trim(), fecha: ec.isoWall, estado: "despachada",
     subtotal: round2(sub), iva, total, bodega_id: venta.id, nota: s(body.notas), creado_por: actor,
   } });
-  await applyPlan(db, actor, steps, now.toISOString());
+  const applied = await applyPlan(db, actor, steps, now.toISOString(), "ov_save");
+  const numeroFinal = s(applied.numero) || numero;
+  const refFinal = ticketRef || numeroFinal;
   await alertarMinimos(db, actor);
-  return { ok: true, id: ovId, numero, ticket_ref: ref, total, subtotal: round2(sub), iva, ticketCols };
+  return { ok: true, id: ovId, numero: numeroFinal, ticket_ref: refFinal, total, subtotal: round2(sub), iva, ticketCols };
 }
 
 async function alertarMinimos(db: Db, actor: string): Promise<void> {

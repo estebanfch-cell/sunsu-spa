@@ -86,6 +86,46 @@ export function b(v: unknown): boolean {
 export function pad(x: number, w = 2): string { return String(x).padStart(w, "0"); }
 export function round2(x: number): number { return Math.round((x + Number.EPSILON) * 100) / 100; }
 
+/** Piso del número de ticket cuando no hay ticket_seq. No ocupa sheet_row. */
+export const BETA_TICKET_BASE = 900000;
+
+/** Mayor sufijo numérico de erp_ordenes_venta.numero. Si ninguno, la cantidad de filas. */
+export function maxSufijoNumero(rows: Row[]): number {
+  let max = 0;
+  for (const r of rows) {
+    const m = String(r.numero ?? "").match(/(\d+)$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  if (max === 0) return rows.length;
+  return max;
+}
+
+/** La siguiente OV sigue al máximo importado: TK-ROW-80 → OV-0081. Vacío → OV-0001. */
+export function siguienteOv(rows: Row[]): string {
+  return "OV-" + String(maxSufijoNumero(rows) + 1).padStart(4, "0");
+}
+
+/** Conserva un OV-#### solo si queda por encima de lo ya importado y no está tomado. */
+export function elegirNumeroOv(rows: Row[], pedido: string): string {
+  const next = siguienteOv(rows);
+  const m = /^OV-(\d+)$/.exec(pedido);
+  if (!m) return next;
+  const suf = Number(m[1]);
+  if (suf <= maxSufijoNumero(rows)) return next;
+  if (rows.some((r) => String(r.numero) === pedido)) return next;
+  return pedido;
+}
+
+export function siguienteBetaNum(rows: Row[], ymd: string): string {
+  let max = BETA_TICKET_BASE;
+  const re = /^TK-\d{8}-(\d+)$/;
+  for (const r of rows) {
+    const m = re.exec(String(r.beta_num || ""));
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `TK-${ymd.replace(/-/g, "")}-${String(max + 1).padStart(4, "0")}`;
+}
+
 export function ecuadorParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Guayaquil",
