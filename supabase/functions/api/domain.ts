@@ -1,7 +1,7 @@
 // Reglas puras del Sistema Central. Los timestamps importados guardan la hora
 // de Ecuador como si fuera UTC: se leen con componentes UTC (igual que ts_local).
 
-export const APP_VERSION = "2026-10-21-BETA";
+export const APP_VERSION = "2026-10-21-ASISTENCIA";
 export const LEGACY_APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbyLgY0TJOpjafCtRUgAlq2i1xvWifu7vLFD9dkLR2HX92dtAnMGK7FCBvkrFk7yDP6x/exec";
 export const CEDULA_INTERNA = "1793219469001";

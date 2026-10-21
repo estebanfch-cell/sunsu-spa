@@ -314,7 +314,10 @@ function parseRoute() {
   return { kind: "mod", mod: parts[1] || "inicio", sub: parts[2] || "" };
 }
 
-function go(hash) { location.hash = hash; }
+function go(hash) {
+  if (location.hash === hash) draw();
+  else location.hash = hash;
+}
 
 function autosize(root) {
   root.querySelectorAll("textarea").forEach((t) => {
@@ -635,8 +638,101 @@ async function renderRol() {
 }
 
 async function renderAsistencia() {
-  return `<p class="note">Jibble responde si la persona existe. Las horas del rol todavía no se arman desde el timesheet.</p>
-    <form id="f-jibble"><button class="btn" type="submit">Probar mi asistencia</button><p id="f-out" class="note"></p><p class="err" id="f-err"></p></form>`;
+  const hoy = await api("asis_hoy");
+  if (hoy.error) return fail(hoy);
+  const cfg = hoy.config || {};
+  const dia = hoy.dia || {};
+  const marcas = (hoy.marcajes || []).filter((m) => !m.anulado).map((m) => {
+    const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
+    return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}</div><div class="meta">${esc(m.id || "")}</div></div>`;
+  }).join("");
+  const cards = [
+    ["Atraso", (dia.atrasoMin || 0) + " min"],
+    ["Jornada", Math.round((dia.ordinaryMin || 0) / 60 * 100) / 100 + " h"],
+    ["Suplementarias", Math.round((dia.suplMin || 0) / 60 * 100) / 100 + " h"],
+    ["Estado", dia.abierto ? "Adentro" : (dia.diaContado ? "Cerrada" : "Sin marca")],
+  ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:22px">${esc(v)}</div></div>`).join("");
+  const permisos = (hoy.permisos || []).map((p) => `<div class="row" data-permiso="${esc(p.id)}" data-row="${esc(p.row || "")}"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)}</div></div><div class="meta">${state.admin && /pend/i.test(p.estado || "") ? `<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>` : esc(p.aprobadoPor || "")}</div></div>`).join("");
+  const audit = (hoy.auditoria || []).map((a) => `<div class="row"><div class="sku">${esc(a.accion)}</div><div><div class="name">${esc(a.actor)}</div><div class="note">${esc(a.motivo || "")}</div></div><div class="meta">${esc(horaEc(a.ts))}</div></div>`).join("");
+  const admin = state.admin ? `
+    <h2>Reglas</h2>
+    <form id="f-asis-cfg">
+      <label>Latitud del spa</label><input name="lat" value="${esc(cfg.lat ?? "")}" inputmode="decimal">
+      <label>Longitud del spa</label><input name="lng" value="${esc(cfg.lng ?? "")}" inputmode="decimal">
+      <label>Radio (metros)</label><input name="radio_m" value="${esc(cfg.radio_m ?? 150)}">
+      <label>Entrada</label><input name="hora_entrada" value="${esc(cfg.hora_entrada || "09:00")}">
+      <label>Salida</label><input name="hora_salida" value="${esc(cfg.hora_salida || "18:00")}">
+      <label>Gracia (minutos)</label><input name="gracia_min" value="${esc(cfg.gracia_min ?? 10)}">
+      <label><input type="checkbox" name="exigir_geo" style="width:auto" ${cfg.exigir_geo ? "checked" : ""}> Exigir ubicación dentro del radio</label>
+      <label><input type="checkbox" name="exigir_selfie" style="width:auto" ${cfg.exigir_selfie ? "checked" : ""}> Exigir selfie</label>
+      <button class="btn" type="submit">Guardar reglas</button><p class="err" id="f-err-cfg"></p>
+    </form>
+    <h2>Marcas de hoy</h2>
+    <div class="list" id="asis-equipo">${(hoy.equipo || []).map((m) => {
+      const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
+      return `<div class="row"><div class="sku">${esc(hora)}</div><div><div class="name">${esc(m.nombre)}</div><div class="note">${esc(etiquetaMarca(m.tipo))}${m.anulado ? " · anulada" : ""} · ${esc(m.id)}</div></div><div class="meta"><button class="btn small" type="button" data-usar="${esc(m.id)}">Corregir</button></div></div>`;
+    }).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
+    <h2>Corregir una marca</h2>
+    <form id="f-asis-corr">
+      <label>Id de la marca</label><input name="id" required>
+      <label>Nueva hora Ecuador</label><input name="hora" type="time" step="60" required>
+      <label>Motivo</label><textarea name="motivo" required></textarea>
+      <button class="btn" type="submit">Corregir hora</button>
+      <button class="btn ghost" type="button" id="asis-anular">Anular marca</button>
+      <p class="err" id="f-err-corr"></p>
+    </form>
+    <h2>Feriados</h2>
+    <form id="f-asis-fer">
+      <label>Fecha</label><input name="fecha" type="date" required>
+      <label>Nombre</label><input name="nombre" placeholder="Navidad">
+      <button class="btn" type="submit">Guardar feriado</button><p class="err" id="f-err-fer"></p>
+    </form>
+    <div class="list">${(hoy.feriados || []).map((f) => `<div class="row"><div class="sku">${esc(f.fecha)}</div><div class="name">${esc(f.nombre || "Feriado")}</div></div>`).join("") || `<p class="note">Sin feriados. Sábado y domingo ya se pagan como descanso.</p>`}</div>
+    <h2>Reporte del mes</h2>
+    <form id="f-asis-mes"><label>Mes</label><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver horas</button></form>
+    <div id="asis-mes"></div>` : `
+    <h2>Mi mes</h2>
+    <form id="f-asis-mes"><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver mis horas</button></form>
+    <div id="asis-mes"></div>`;
+  return `
+    <input type="hidden" id="exige-geo" value="${cfg.exigir_geo ? "1" : "0"}">
+    <input type="hidden" id="exige-selfie" value="${cfg.exigir_selfie ? "1" : "0"}">
+    <p class="note">${cfg.exigir_geo ? "Hay que estar dentro del radio del spa." : "La ubicación todavía no es obligatoria. Un admin la enciende al guardar el punto del spa."} ${cfg.exigir_selfie ? "También pide selfie." : ""} La hora la pone el servidor, no el teléfono.</p>
+    <div class="grid">${cards}</div>
+    ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
+    <div class="tools">
+      <button class="btn" type="button" data-marca="entrada">Entrar</button>
+      <button class="btn ghost" type="button" data-marca="almuerzo_inicio">Iniciar almuerzo</button>
+      <button class="btn ghost" type="button" data-marca="almuerzo_fin">Fin almuerzo</button>
+      <button class="btn" type="button" data-marca="salida">Salir</button>
+    </div>
+    <label><input id="origen-pc" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
+    <label id="selfie-label" ${cfg.exigir_selfie ? "" : "hidden"}>Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>
+    <p class="err" id="f-err-marca"></p>
+    <h2>Hoy</h2>
+    <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
+    <h2>Permiso o vacaciones</h2>
+    <form id="f-asis-perm">
+      <label>Tipo</label><select name="tipo"><option value="PERMISO">Permiso</option><option value="VACACIONES">Vacaciones</option></select>
+      <label>Desde</label><input name="desde" type="date" required>
+      <label>Hasta</label><input name="hasta" type="date" required>
+      <label>Horas (si es un permiso parcial)</label><input name="horas" inputmode="decimal">
+      <label>Motivo</label><textarea name="motivo"></textarea>
+      <button class="btn" type="submit">Solicitar</button><p class="err" id="f-err-perm"></p>
+    </form>
+    <div class="list">${permisos || `<p class="note">Sin solicitudes.</p>`}</div>
+    ${admin}
+    <h2>Auditoría</h2>
+    <div class="list">${audit || `<p class="note">Sin correcciones recientes.</p>`}</div>`;
+}
+
+function horaEc(ts) {
+  const d = new Date(ts || "");
+  if (!ts || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-EC", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" });
+}
+function etiquetaMarca(tipo) {
+  return { entrada: "Entrada", salida: "Salida", almuerzo_inicio: "Almuerzo", almuerzo_fin: "Fin de almuerzo" }[tipo] || tipo;
 }
 
 async function renderPaquetes() {
@@ -854,7 +950,7 @@ function bind(main) {
   form("#f-prov", saveProv);
   form("#f-trf", saveTrf);
   form("#f-caja", saveCaja);
-  form("#f-jibble", saveJibble);
+  wireAsistencia(main);
   form("#f-paq", savePaq);
   form("#f-cnt", saveCnt);
   const adj = main.querySelector("#adjudicar");
@@ -975,12 +1071,117 @@ async function saveCaja(form) {
   const data = await api("cajaV2Mov", Object.fromEntries(new FormData(form).entries()));
   if (setMsg(form, data)) go("#/m/caja");
 }
-async function saveJibble(form) {
-  const data = await api("testDiasJibble", { nombre: state.user.name });
-  const out = form.querySelector("#f-out");
-  if (data.error) { form.querySelector("#f-err").textContent = data.error; out.textContent = ""; return; }
-  form.querySelector("#f-err").textContent = "";
-  out.textContent = data.persona ? "Jibble encontró a " + data.persona : "Sin persona con ese nombre (" + (data.encontrados || []).length + " en la lista).";
+function wireAsistencia(main) {
+  main.querySelectorAll("[data-marca]").forEach((b) => {
+    b.onclick = () => marcarAsistencia(b.getAttribute("data-marca"), main);
+  });
+  const perm = main.querySelector("#f-asis-perm");
+  if (perm) perm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("asis_permiso_solicitar", Object.fromEntries(new FormData(perm).entries()));
+    const err = main.querySelector("#f-err-perm");
+    if (data.error) { err.textContent = data.error; return; }
+    go("#/m/asistencia");
+  });
+  main.querySelectorAll("[data-aprobar]").forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.stopPropagation();
+      const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-aprobar"), estado: "APROBADO" });
+      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
+      go("#/m/asistencia");
+    };
+  });
+  const cfg = main.querySelector("#f-asis-cfg");
+  if (cfg) cfg.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const body = Object.fromEntries(new FormData(cfg).entries());
+    body.exigir_geo = cfg.exigir_geo.checked;
+    body.exigir_selfie = cfg.exigir_selfie.checked;
+    const data = await api("asis_config_guardar", body);
+    const err = main.querySelector("#f-err-cfg");
+    if (data.error) { err.textContent = data.error; return; }
+    go("#/m/asistencia");
+  });
+  main.querySelectorAll("[data-usar]").forEach((b) => {
+    b.onclick = () => {
+      const corr = main.querySelector("#f-asis-corr");
+      const id = corr && corr.elements.namedItem("id");
+      const hora = corr && corr.elements.namedItem("hora");
+      if (id) id.value = b.getAttribute("data-usar");
+      if (hora) hora.focus();
+    };
+  });
+  const corr = main.querySelector("#f-asis-corr");
+  if (corr) {
+    corr.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      await corregirMarca(corr, false);
+    });
+    main.querySelector("#asis-anular").onclick = () => corregirMarca(corr, true);
+  }
+  const fer = main.querySelector("#f-asis-fer");
+  if (fer) fer.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("asis_feriado", Object.fromEntries(new FormData(fer).entries()));
+    const err = main.querySelector("#f-err-fer");
+    if (data.error) { err.textContent = data.error; return; }
+    go("#/m/asistencia");
+  });
+  const mes = main.querySelector("#f-asis-mes");
+  if (mes) mes.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const [anio, m] = (mes.mes.value || "").split("-");
+    const data = await api("asis_periodo", { anio: Number(anio), mes: Number(m) });
+    const box = main.querySelector("#asis-mes");
+    if (data.error) { box.innerHTML = fail(data); return; }
+    box.innerHTML = (data.personas || []).map((p) => `<div class="card"><div class="k">${esc(p.nombre)}</div><div class="note">Supl ${esc(p.hrsSupl)} h · Extr ${esc(p.hrsExtr)} h · Descanso ${esc(p.hrsDesc)} h · Atraso ${esc(p.atrasoMin)} min · Faltas ${esc(p.faltas)}${p.hayDatos ? "" : " · sin marcas, el rol no recorta el sueldo"}</div></div>`).join("") || `<p class="note">Sin personas.</p>`;
+  });
+}
+
+async function corregirMarca(form, anular) {
+  const fecha = new Date().toLocaleDateString("en-CA", { timeZone: "America/Guayaquil" });
+  const id = form.elements.namedItem("id").value.trim();
+  const hora = form.elements.namedItem("hora").value.trim();
+  const motivo = form.elements.namedItem("motivo").value.trim();
+  const err = form.querySelector("#f-err-corr");
+  const body = { id, motivo };
+  if (anular) body.anulado = true;
+  else if (!hora) { err.textContent = "Escribe la hora, por ejemplo 09:05."; return; }
+  else body.ts = fecha + "T" + hora.slice(0, 5) + ":00-05:00";
+  const data = await api("asis_corregir", body);
+  if (data.error) { err.textContent = data.error; return; }
+  go("#/m/asistencia");
+}
+
+async function marcarAsistencia(tipo, main) {
+  const err = main.querySelector("#f-err-marca");
+  err.textContent = "";
+  const body = { tipo, origen: main.querySelector("#origen-pc")?.checked ? "recepcion" : "telefono" };
+  if (main.querySelector("#exige-geo").value === "1") {
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+      });
+      body.lat = pos.coords.latitude;
+      body.lng = pos.coords.longitude;
+      body.precision_m = pos.coords.accuracy;
+    } catch {
+      err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
+      return;
+    }
+  }
+  if (main.querySelector("#exige-selfie").value === "1") {
+    const file = main.querySelector("#selfie").files[0];
+    if (!file) { err.textContent = "Falta la selfie."; return; }
+    body.foto = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
+  const data = await api("asis_marcar", body);
+  if (data.error) { err.textContent = data.error; return; }
+  go("#/m/asistencia");
 }
 async function savePaq(form) {
   const data = await api("buscarPaquetes", { q: form.q.value });

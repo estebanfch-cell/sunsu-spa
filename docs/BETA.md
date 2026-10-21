@@ -2,7 +2,7 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker está en `/sw.js` (caché `2026-10-21-BETA`) porque la página vive en la raíz, no en `/beta/`. El ícono de iOS va embebido en `beta.html`.
+El servicio worker está en `/sw.js` (caché `2026-10-21-ASISTENCIA`) porque la página vive en la raíz, no en `/beta/`. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 
@@ -29,6 +29,15 @@ supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/000
 supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0009_erp_permisos.sql
 supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
 ```
+
+La asistencia propia va en un SQL aparte, después de 0009:
+
+```bash
+supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0010_asistencia.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
+
+`0010_asistencia.sql` crea las tablas del reloj, deja `jibble_historial` vacía y vuelve a publicar `app_write` con esas tablas en la lista blanca. Las reglas del cálculo están en [ASISTENCIA.md](supabase/ASISTENCIA.md).
 
 `0009_erp_permisos.sql` es idempotente y, al final, corre `erp_importar_legado()` y `audit_attach_all()`. El navegador no manda apikey: `verify_jwt` va en false en `supabase/config.toml` y otra vez en el deploy.
 
@@ -58,14 +67,15 @@ El número de ticket usa `next_ticket_num()` (`ticket_seq`) cuando la función e
 | Ticket como orden de venta, stock negativo con confirmación | Implementado |
 | Cotización a clienta | Implementado |
 | Comisiones propias, rol histórico, caja, paquetes, gift cards, bitácora, cabina, conteos, transferencias, permisos | Implementado, más delgado que la app viva |
-| Asistencia Jibble | Parcial: comprueba que la persona existe. No arma las horas del rol |
+| Asistencia | Reloj propio (entrada, salida, almuerzo), radio y selfie, permisos y vacaciones, horas del rol. `jibble_historial` queda vacía para el import |
 | Citas Acuity | Parcial: solo si los secretos responden. Si fallan, la lista sale vacía |
 
 Acciones del edge, agrupadas:
 
 - **Implementadas.** `version`, `login`, `whoami`, `permisos_get`, `permisos_guardar`, catálogo, inventario calculado (entradas − ventas desde 2026-05-22), historial, tickets del día, editar/eliminar/excluir comisión, factura y cobro, gift cards, paquetes y usos, promos, caja v2, propinas, multas, dashboard de cosmetóloga, reporte admin, cotizaciones, mensajes, seguimiento, KPI del mes, roles, cabina (lectura y la mayoría de escrituras), bitácora, CRUD `beta*`, y el motor ERP (`prod_*`, `stk_*`, `oc_*`, `rfq_*`, `trf_*`, `conteo_*`, `ajuste_save`, `ov_save`, `ov_anular`, `reorden_sugerir`).
-- **Parciales.** `getDashboardHoy` (semana y mes repiten el conteo de hoy). `testDiasJibble` (token y nombre, sin timesheet). `getCitas` / etiquetas Acuity. `getKPIsHistoricos` (el .xls de Mi Negocio no está). `guardarGCDigital`, seguimiento, WhatsApp, tarjetas enviadas y fotos de cabina escriben en `app_kv` y, si la columna existe, copian a la tabla de 0008. `getHistorialComisiones` lee `historial_comisiones` cuando la tabla responde. `crearTicket` numera con `ticket_seq` si el RPC existe.
-- **Faltan.** Cron (factura, efectivo, respaldos, KPI histórico). Subida a Drive y correo de Gmail. Menú de la hoja, reparación de fórmulas y `onEdit`. Push y PDF. `pago_save` y `oc_devolver` están en el permiso y la pantalla todavía no los llama: el motor responde «Operación ERP desconocida». Horas de Jibble para el rol. Timesheets y archivos de Drive/Gmail.
+- **Asistencia.** `asis_config`, `asis_config_guardar`, `asis_marcar`, `asis_hoy`, `asis_periodo`, `asis_corregir`, `asis_auditoria`, `asis_permiso_solicitar`, `asis_permiso_resolver`, `asis_feriado`. `getRolIndividual` usa esas horas. `getPermisos`, `savePermiso` y `updatePermiso` quedan en el módulo asistencia y solo un admin aprueba.
+- **Parciales.** `getDashboardHoy` (semana y mes repiten el conteo de hoy). `testDiasJibble` sigue como sonda del token de Jibble; la pantalla ya no lo llama. `getCitas` / etiquetas Acuity. `getKPIsHistoricos` (el .xls de Mi Negocio no está). `guardarGCDigital`, seguimiento, WhatsApp, tarjetas enviadas y fotos de cabina escriben en `app_kv` y, si la columna existe, copian a la tabla de 0008. `getHistorialComisiones` lee `historial_comisiones` cuando la tabla responde. `crearTicket` numera con `ticket_seq` si el RPC existe.
+- **Faltan.** Cron (factura, efectivo, respaldos, KPI histórico). Subida a Drive y correo de Gmail. Menú de la hoja, reparación de fórmulas y `onEdit`. Push y PDF. `pago_save` y `oc_devolver` están en el permiso y la pantalla todavía no los llama: el motor responde «Operación ERP desconocida». El calendario de feriados nace vacío. El import de `jibble_historial` lo hace el coordinador. Timesheets vivos de Jibble y archivos de Drive/Gmail.
 
 ## Huecos que hay que leer antes de comparar números
 
