@@ -1,0 +1,6 @@
+# La beta se llama desde el navegador igual que el Apps Script (sin JWT de Supabase).
+# La función exige su propia sesión (tabla sesiones). No activar verify_jwt.
+project_id = "heuolwxyxoezkewyufrl"
+
+[functions.api]
+verify_jwt = false

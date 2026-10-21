@@ -1,0 +1,13 @@
+{
+  "name": "Sunsu Sistema Central (BETA)",
+  "short_name": "Sunsu BETA",
+  "start_url": "/beta.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f1ea",
+  "theme_color": "#2a211c",
+  "icons": [
+    { "src": "/icon-beta.png", "sizes": "64x64", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-beta.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
