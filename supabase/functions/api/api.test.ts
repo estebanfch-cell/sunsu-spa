@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
-import { BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
+import { applyPlan, BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
@@ -263,6 +263,17 @@ describe("erp", () => {
     assert.equal(siguienteOv([]), "OV-0001");
     assert.equal(siguienteOv([{ numero: "TK-ROW-80" }]), "OV-0081");
     assert.equal(siguienteOv([{ numero: "OV-0003" }, { numero: "TK-ROW-80" }]), "OV-0081");
+    assert.equal(siguienteOv([{ numero: "TK-80" }]), "OV-0081");
+    assert.equal(siguienteOv([
+      { numero: "TK-ROW-1642" },
+      { numero: "TK-20261021-900001" },
+      { numero: "OV-0001" },
+    ]), "OV-1643");
+    assert.equal(siguienteOv([
+      { numero: "OV-1643" },
+      { numero: "TK-ROW-1642", ticket_sheet_row: 1642 },
+    ]), "OV-1644");
+    assert.equal(siguienteOv([{ numero: "legacy", ticket_sheet_row: 1642 }]), "OV-1643");
     const seed = erpSeed();
     seed.tickets = [{ sheet_row: 5, origin: "sheet", nombre: "Hoja", orig: {}, atendido_por: "X", timestamp: "2026-10-01T00:00:00Z" }];
     seed.erp_ordenes_venta = [{ id: "ov-imp", numero: "TK-ROW-80", ticket_ref: "TK-ROW-80", estado: "despachada" }];
@@ -343,12 +354,14 @@ describe("erp", () => {
     assert.equal(db2.writes.length, 0);
   });
 
-  it("recibir y pagar pasan por erp_tx una sola vez", async () => {
+  it("oc_recibir y pago_save se aplican una vez dentro de erp_tx", async () => {
     const db = new MemoryDb(erpSeed());
     const ops: string[] = [];
     db.rpcImpl = async (name, args) => {
       if (name !== "erp_tx") return null;
       ops.push(String(args.p_op));
+      const steps = Array.isArray(args.p_steps) ? args.p_steps as Parameters<typeof applyPlan>[2] : [];
+      await applyPlan(db, "erp_tx", steps, String(args.p_now || new Date().toISOString()), "");
       return { ok: true };
     };
     const oc = await runErp("oc_save", {
@@ -360,12 +373,21 @@ describe("erp", () => {
       oc_id: oc.id, lineas: [{ oc_linea_id: lid, bodega_id: BODEGA_CABINA, cantidad: 2 }],
     }, db, "Emi");
     assert.equal(rec.ok, true);
+    assert.equal(rec.estado, "recibida");
     const pago = await runErp("pago_save", { oc_id: oc.id, monto: 1 }, db, "Emi");
     assert.equal(pago.estado_pago, "parcial");
+    assert.equal(pago.pagado, 1);
     assert.deepEqual(ops, ["oc_recibir", "pago_save"]);
-    assert.equal((await db.all("erp_movimientos")).length, 0);
-    assert.equal((await db.all("erp_oc")).find((r) => r.id === oc.id)?.pagado ?? 0, 0);
-    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina)?.cantidad, 10);
+    const movs = (await db.all("erp_movimientos")).filter((m) => m.tipo === "recepcion");
+    assert.equal(movs.length, 1);
+    assert.equal(movs[0]?.delta, 2);
+    const guardada = (await db.all("erp_oc")).find((r) => r.id === oc.id);
+    assert.equal(guardada?.estado, "recibida");
+    assert.equal(guardada?.pagado, 1);
+    assert.equal(guardada?.saldo, 5.9);
+    assert.equal(guardada?.estado_pago, "parcial");
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina)?.cantidad, 12);
+    assert.equal((await db.all("erp_recepciones")).length, 1);
   });
 
   it("reimportar la hoja no borra el ticket beta", async () => {
@@ -373,22 +395,25 @@ describe("erp", () => {
       tickets: [
         { id: 1, sheet_row: 5, origin: "sheet", nombre: "Hoja", orig: {}, timestamp: "2026-10-01T00:00:00Z", atendido_por: "Andrea" },
         { id: 2, sheet_row: null, origin: "beta", beta_num: "TK-20261021-900001", nombre: "Beta", orig: { beta: true, fuente: "ov_save" }, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea" },
+        { id: 4, sheet_row: null, origin: "sheet", nombre: "Sin fila", orig: {}, timestamp: "2026-10-03T00:00:00Z", atendido_por: "Andrea" },
+        { id: 5, sheet_row: 9, origin: "beta", beta_num: "TK-20261021-900002", nombre: "Beta con fila", orig: { beta: true }, timestamp: "2026-10-04T00:00:00Z", atendido_por: "Andrea" },
       ],
     });
     const out = await reimportarTickets(db, "import", [
       { sheet_row: 5, nombre: "Hoja nueva", orig: {}, timestamp: "2026-10-01T00:00:00Z", atendido_por: "Andrea" },
       { sheet_row: 6, nombre: "Nueva", orig: {}, timestamp: "2026-10-02T00:00:00Z", atendido_por: "Andrea" },
     ]);
-    assert.equal(out.conservadas, 1);
+    assert.equal(out.conservadas, 2);
     const rows = await db.all("tickets");
-    const beta = rows.find((t) => t.origin === "beta");
+    const beta = rows.find((t) => t.beta_num === "TK-20261021-900001");
     assert.equal(beta?.nombre, "Beta");
-    assert.equal(beta?.beta_num, "TK-20261021-900001");
     assert.equal(beta?.sheet_row ?? null, null);
+    assert.equal(rows.find((t) => t.nombre === "Sin fila")?.origin, "sheet");
+    assert.equal(rows.find((t) => t.nombre === "Beta con fila")?.sheet_row, 9);
     assert.equal(rows.find((t) => Number(t.sheet_row) === 5)?.nombre, "Hoja nueva");
     assert.equal(rows.find((t) => Number(t.sheet_row) === 5)?.origin, "sheet");
     assert.equal(rows.find((t) => Number(t.sheet_row) === 6)?.origin, "sheet");
-    assert.equal(rows.filter((t) => t.origin === "beta").length, 1);
+    assert.equal(rows.filter((t) => t.origin === "beta").length, 2);
   });
 });
 
@@ -404,6 +429,11 @@ describe("sql erp", () => {
     assert.match(tx, /tickets_reimportar/);
     assert.match(tx, /function public\.erp_tx/);
     assert.match(tx, /pg_advisory_xact_lock/);
+    assert.match(tx, /v_lote text/);
+    assert.match(tx, /s\.lote = v_lote/);
+    assert.equal(/\blote text\b/.test(tx), false);
+    assert.match(tx, /sheet_row is not null/);
+    assert.match(tx, /\^TK-ROW-/);
     assert.equal(/select\s+public\.erp_importar_legado/i.test(tx), false);
     assert.equal(/select\s+public\.audit_attach_all/i.test(tx), false);
   });

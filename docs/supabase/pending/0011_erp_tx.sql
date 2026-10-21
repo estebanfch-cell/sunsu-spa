@@ -6,8 +6,11 @@
 -- Un DELETE de tickets no borra origin = 'beta' (RETURNING NULL solo salta esa fila).
 -- TRUNCATE sí las borra: la reimportación de la hoja usa tickets_reimportar o DELETE.
 -- erp_tx aplica ov_save, ticket_aplicar, ov_anular, oc_recibir y pago_save
--- en una sola transacción y sigue la numeración OV después de lo importado
--- (TK-ROW-80 → OV-0081).
+-- en una sola transacción y sigue la numeración OV después de lo importado.
+-- Solo cuentan OV-N, TK-N y TK-ROW-N (y ticket_sheet_row). TK-ROW-80 → OV-0081.
+-- El id visible TK-AAAAMMDD-N no cuenta: por eso el piso 900000 no salta la serie.
+-- En vivo el mayor TK-ROW fue 1642, y la primera venta salió OV-1643.
+-- La variable del lote se llama v_lote: un plpgsql `lote` choca con la columna.
 
 alter table public.tickets add column if not exists origin text;
 alter table public.tickets add column if not exists beta_num text;
@@ -64,7 +67,9 @@ declare
   n_skip int := 0;
 begin
   perform set_config('app.user', 'reimport', true);
-  delete from public.tickets where coalesce(origin, 'sheet') <> 'beta';
+  delete from public.tickets
+  where sheet_row is not null
+    and coalesce(origin, 'sheet') <> 'beta';
   get diagnostics n_del = row_count;
 
   for fila in select value from jsonb_array_elements(coalesce(p_filas, '[]'::jsonb)) loop
@@ -151,7 +156,7 @@ declare
   queda numeric;
   stock_id bigint;
   sub text;
-  lote text;
+  v_lote text;
   legacy text;
   tipo text;
   doc uuid;
@@ -174,10 +179,22 @@ begin
   perform pg_advisory_xact_lock(481516234);
 
   if p_op in ('ov_save', 'ticket_aplicar') then
-    select coalesce(max((regexp_match(numero, '([0-9]+)$'))[1]::bigint), 0)
-      into maxn
+    -- Solo OV-N, TK-N y TK-ROW-N, más la fila importada. Un TK-AAAAMMDD-900001 no entra.
+    select coalesce(max(n), 0) into maxn
+    from (
+      select case
+        when numero ~ '^OV-[0-9]+$' then (regexp_match(numero, '^OV-([0-9]+)$'))[1]::bigint
+        when numero ~ '^TK-ROW-[0-9]+$' then (regexp_match(numero, '^TK-ROW-([0-9]+)$'))[1]::bigint
+        when numero ~ '^TK-[0-9]+$' then (regexp_match(numero, '^TK-([0-9]+)$'))[1]::bigint
+        else null
+      end as n
       from public.erp_ordenes_venta
-      where numero ~ '[0-9]+$';
+      union all
+      select ticket_sheet_row::bigint
+      from public.erp_ordenes_venta
+      where ticket_sheet_row is not null and ticket_sheet_row > 0
+    ) nums
+    where n is not null and n > 0;
     if maxn = 0 then
       select count(*) into cnt from public.erp_ordenes_venta;
       maxn := cnt;
@@ -268,12 +285,12 @@ begin
       delta := (step->>'delta')::numeric;
       tipo := step->>'tipo';
       sub := coalesce(step->>'sububicacion', '');
-      lote := coalesce(step->>'lote', '');
+      v_lote := coalesce(step->>'lote', '');
       stock_id := null;
       hay := 0;
       select s.id, s.cantidad into stock_id, hay
         from public.erp_stock s
-        where s.producto_id = pid and s.bodega_id = bid and s.sububicacion = sub and s.lote = lote
+        where s.producto_id = pid and s.bodega_id = bid and s.sububicacion = sub and s.lote = v_lote
         for update;
       if not found then
         stock_id := null;
@@ -293,7 +310,7 @@ begin
       end if;
       if stock_id is null then
         insert into public.erp_stock (producto_id, bodega_id, sububicacion, lote, cantidad)
-        values (pid, bid, sub, lote, queda);
+        values (pid, bid, sub, v_lote, queda);
       else
         update public.erp_stock set cantidad = queda, updated_at = now() where id = stock_id;
       end if;
@@ -302,7 +319,7 @@ begin
         fecha, actor, producto_id, bodega_id, sububicacion, lote, delta, saldo, costo_unit,
         tipo, doc_tipo, doc_id, ticket_ref, aprobado_negativo_por, nota, legacy_ref
       ) values (
-        coalesce(p_now, now()), p_actor, pid, bid, sub, lote, delta, queda,
+        coalesce(p_now, now()), p_actor, pid, bid, sub, v_lote, delta, queda,
         nullif(step->>'costo_unit', '')::numeric,
         tipo, nullif(step->>'doc_tipo', ''), doc, nullif(step->>'ticket_ref', ''),
         case when queda < -0.000001 and aprobado then p_actor else null end,

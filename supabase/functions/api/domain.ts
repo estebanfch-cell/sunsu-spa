@@ -89,18 +89,42 @@ export function round2(x: number): number { return Math.round((x + Number.EPSILO
 /** Piso del número de ticket cuando no hay ticket_seq. No ocupa sheet_row. */
 export const BETA_TICKET_BASE = 900000;
 
-/** Mayor sufijo numérico de erp_ordenes_venta.numero. Si ninguno, la cantidad de filas. */
+/**
+ * Número de secuencia de una orden importada o de una OV ya emitida.
+ * Cuenta OV-1643, TK-80 y TK-ROW-1642. No cuenta TK-20261021-900001:
+ * ese es el id visible del ticket (el piso 900000 no es una orden).
+ */
+export function secuenciaOrden(numero: string): number | null {
+  const row = /^TK-ROW-(\d+)$/.exec(numero);
+  if (row) return Number(row[1]);
+  const plain = /^(?:OV|TK)-(\d+)$/.exec(numero);
+  if (plain) return Number(plain[1]);
+  return null;
+}
+
+/** Mayor OV/TK importado. Si ninguno, la cantidad de filas. */
 export function maxSufijoNumero(rows: Row[]): number {
   let max = 0;
+  let any = false;
   for (const r of rows) {
-    const m = String(r.numero ?? "").match(/(\d+)$/);
-    if (m) max = Math.max(max, Number(m[1]));
+    const candidatos = [secuenciaOrden(String(r.numero ?? ""))];
+    const sheet = Number(r.ticket_sheet_row);
+    if (Number.isFinite(sheet) && sheet > 0) candidatos.push(sheet);
+    for (const n of candidatos) {
+      if (n == null || !(n > 0)) continue;
+      any = true;
+      max = Math.max(max, n);
+    }
   }
-  if (max === 0) return rows.length;
+  if (!any) return rows.length;
   return max;
 }
 
-/** La siguiente OV sigue al máximo importado: TK-ROW-80 → OV-0081. Vacío → OV-0001. */
+/**
+ * La siguiente OV sigue al máximo importado.
+ * TK-ROW-80 → OV-0081. En producción el máximo fue TK-ROW-1642, así que la
+ * primera venta salió OV-1643. Vacío → OV-0001.
+ */
 export function siguienteOv(rows: Row[]): string {
   return "OV-" + String(maxSufijoNumero(rows) + 1).padStart(4, "0");
 }
