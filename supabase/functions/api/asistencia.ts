@@ -12,8 +12,6 @@ export interface AsistenciaConfig {
   lat: number | null;
   lng: number | null;
   radio_m: number;
-  exigir_geo: boolean;
-  exigir_selfie: boolean;
   hora_entrada: string;
   hora_salida: string;
   jornada_horas: number;
@@ -22,7 +20,7 @@ export interface AsistenciaConfig {
 }
 
 export const CONFIG_DEF: AsistenciaConfig = {
-  lat: null, lng: null, radio_m: 150, exigir_geo: false, exigir_selfie: false,
+  lat: null, lng: null, radio_m: 150,
   hora_entrada: "09:00", hora_salida: "18:00", jornada_horas: 8, gracia_min: 10, cuenta_antes: false,
 };
 
@@ -185,7 +183,6 @@ export function validarSecuencia(marcajes: MarcajeIn[], tipo: string): string | 
 }
 
 export function evaluarUbicacion(config: AsistenciaConfig, lat: number | null, lng: number | null, accuracy: number | null): { ok: true; distancia: number | null } | { ok: false; error: string; distancia?: number } {
-  if (!config.exigir_geo) return { ok: true, distancia: null };
   if (config.lat == null || config.lng == null) return { ok: false, error: "Falta la ubicación del spa. Un admin la guarda en Asistencia." };
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return { ok: false, error: "Activa la ubicación del teléfono. Sin eso no se puede marcar." };
   if (accuracy != null && accuracy > config.radio_m * 2) return { ok: false, error: "La ubicación es muy imprecisa. Acércate a una ventana o marca desde el spa." };
@@ -326,8 +323,6 @@ export function configDesde(row: Record<string, unknown> | undefined): Asistenci
     lat: row.lat == null || row.lat === "" ? null : n(row.lat),
     lng: row.lng == null || row.lng === "" ? null : n(row.lng),
     radio_m: n(row.radio_m) || CONFIG_DEF.radio_m,
-    exigir_geo: row.exigir_geo === true,
-    exigir_selfie: row.exigir_selfie === true,
     hora_entrada: String(row.hora_entrada || CONFIG_DEF.hora_entrada),
     hora_salida: String(row.hora_salida || CONFIG_DEF.hora_salida),
     jornada_horas: n(row.jornada_horas) || CONFIG_DEF.jornada_horas,

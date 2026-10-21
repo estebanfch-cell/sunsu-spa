@@ -2,7 +2,7 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker está en `/sw.js` (caché `2026-10-21-ASISTENCIA`) porque la página vive en la raíz, no en `/beta/`. El ícono de iOS va embebido en `beta.html`.
+El servicio worker está en `/sw.js` (caché `2026-10-21-ASISTENCIA-2`) porque la página vive en la raíz, no en `/beta/`. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 

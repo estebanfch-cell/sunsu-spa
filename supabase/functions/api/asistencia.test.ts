@@ -25,7 +25,7 @@ describe("asistencia", () => {
     const lejos = distanciaMetros(spa.lat, spa.lng, spa.lat + 0.002, spa.lng);
     assert.ok(cerca < 150 && cerca > 80);
     assert.ok(lejos > 200);
-    const on = { ...cfg, exigir_geo: true, lat: spa.lat, lng: spa.lng, radio_m: 150 };
+    const on = { ...cfg, lat: spa.lat, lng: spa.lng, radio_m: 150 };
     assert.equal(evaluarUbicacion(on, spa.lat + 0.0009, spa.lng, 20).ok, true);
     const no = evaluarUbicacion(on, spa.lat + 0.002, spa.lng, 20);
     assert.equal(no.ok, false);
@@ -127,28 +127,63 @@ describe("asistencia", () => {
   it("marca, rechaza fuera del radio y deja auditoría de la corrección", async () => {
     const db = new MemoryDb();
     const token = "t-andrea";
+    const selfie = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAg=";
+    const uploads: string[] = [];
     db.tables.set("sesiones", [{ token, uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" }]);
     db.tables.set("usuarios", [{ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false }]);
     const ctx = {
       db, now: new Date(instanteEcuador("2026-10-21", "09:00")),
-      env: {}, fetchImpl: fetch, legacyLogin: async () => ({ ok: false }),
+      env: { SUPABASE_URL: "https://heuolwxyxoezkewyufrl.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "service-test" },
+      fetchImpl: (async (url: string, init?: { body?: unknown }) => {
+        uploads.push(String(url));
+        if (String(url).includes("/object/sign/")) {
+          return new Response(JSON.stringify({ signedURL: "/object/sign/asistencia/andrea/x.jpg?token=corto" }), { status: 200 });
+        }
+        assert.equal(String(url).includes("/storage/v1/object/asistencia/"), true);
+        assert.equal(String(url).includes("/object/public/"), false);
+        assert.ok(init?.body instanceof Uint8Array);
+        return new Response(JSON.stringify({ Key: "ok" }), { status: 200 });
+      }) as typeof fetch,
+      legacyLogin: async () => ({ ok: false }),
     };
-    const ok = await handle("asis_marcar", { token, tipo: "entrada", origen: "telefono" }, ctx);
-    assert.equal((ok as { ok?: boolean }).ok, true);
-    const otra = await handle("asis_marcar", { token, tipo: "entrada" }, ctx);
-    assert.match(String((otra as { error?: string }).error), /abierta/);
+    const sinFoto = await handle("asis_marcar", { token, tipo: "entrada", lat: -0.18, lng: -78.47, precision_m: 10 }, ctx);
+    assert.match(String((sinFoto as { error?: string }).error), /selfie/);
+    assert.equal(uploads.length, 0);
+    const sinPunto = await handle("asis_marcar", { token, tipo: "entrada", lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie }, ctx);
+    assert.match(String((sinPunto as { error?: string }).error), /ubicación del spa/);
+    assert.equal(uploads.length, 0);
     db.tables.set("sesiones", [
       ...(db.tables.get("sesiones") || []),
       { token: "t-emi", uid: "emi", rol: "super_admin", exp: "2099-01-01T00:00:00.000Z" },
+      { token: "t-dani", uid: "dani", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" },
     ]);
-    db.tables.get("usuarios")!.push({ id: "emi", nombre: "Emi", short: "Emi", rol: "super_admin", bloqueado: false });
+    db.tables.get("usuarios")!.push(
+      { id: "emi", nombre: "Emi", short: "Emi", rol: "super_admin", bloqueado: false },
+      { id: "dani", nombre: "Daniela Mora", short: "Daniela", rol: "cosmetologa", bloqueado: false },
+    );
     const conf = await handle("asis_config_guardar", {
-      token: "t-emi", exigir_geo: true, lat: -0.18, lng: -78.47, radio_m: 100, motivo: "activar radio",
+      token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 150, motivo: "punto del spa",
     }, ctx);
     assert.equal((conf as { ok?: boolean }).ok, true);
-    const lejos = await handle("asis_marcar", { token, tipo: "salida", lat: 0, lng: 0, precision_m: 10 }, ctx);
-    assert.match(String((lejos as { error?: string }).error), /spa|m del spa|ubicación/i);
+    const lejos = await handle("asis_marcar", { token, tipo: "entrada", lat: 0, lng: 0, precision_m: 10, foto: selfie }, ctx);
+    assert.match(String((lejos as { error?: string }).error), /m del spa/);
+    assert.equal(uploads.length, 0);
+    const ok = await handle("asis_marcar", { token, tipo: "entrada", origen: "telefono", lat: -0.18, lng: -78.47, precision_m: 20, foto: selfie }, ctx);
+    assert.equal((ok as { ok?: boolean }).ok, true);
+    assert.equal(uploads.length, 1);
+    const guardada = (await db.all("asistencia_marcajes"))[0];
+    assert.equal(String(guardada.foto).startsWith("asistencia/andrea/"), true);
+    assert.equal(String(guardada.dentro_radio), "true");
+    const otra = await handle("asis_marcar", { token, tipo: "entrada", lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie }, ctx);
+    assert.match(String((otra as { error?: string }).error), /abierta/);
+    const audTxt = JSON.stringify(db.tables.get("asistencia_auditoria"));
+    assert.equal(audTxt.includes("base64"), false);
+    assert.equal(audTxt.includes("service-test"), false);
     assert.equal(db.tables.get("asistencia_auditoria")!.some((r) => r.accion === "rechazo"), true);
+    const fotoMia = await handle("asis_foto", { token, id: guardada.id }, ctx) as { url?: string };
+    assert.equal(String(fotoMia.url).includes("/storage/v1/object/sign/asistencia/"), true);
+    const fotoAjena = await handle("asis_foto", { token: "t-dani", id: guardada.id }, ctx);
+    assert.match(String((fotoAjena as { error?: string }).error), /permiso/);
     const hoyAdmin = await handle("asis_hoy", { token: "t-emi" }, ctx) as { equipo?: { nombre?: string }[] };
     assert.equal(hoyAdmin.equipo?.some((m) => m.nombre === "Andrea Robles"), true);
     const hoyAndrea = await handle("asis_hoy", { token }, ctx) as { equipo?: unknown };

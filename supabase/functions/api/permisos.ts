@@ -65,7 +65,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   testDiasJibble: "asistencia",
   asis_config: "asistencia", asis_config_guardar: "asistencia", asis_marcar: "asistencia",
   asis_hoy: "asistencia", asis_periodo: "asistencia", asis_corregir: "asistencia", asis_auditoria: "asistencia",
-  asis_permiso_solicitar: "asistencia", asis_permiso_resolver: "asistencia", asis_feriado: "asistencia",
+  asis_permiso_solicitar: "asistencia", asis_permiso_resolver: "asistencia", asis_feriado: "asistencia", asis_foto: "asistencia",
   getPermisos: "asistencia", savePermiso: "asistencia", updatePermiso: "asistencia",
   getRegistroClientes: "clientes", saveRegistroCliente: "clientes", registrarCliente: "clientes",
   cli_list: "clientes", cli_save: "clientes",

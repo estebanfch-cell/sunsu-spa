@@ -1,7 +1,7 @@
 // Marcajes, permisos/vacaciones sobre la tabla permisos, y horas para el rol.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, guardarArchivo, nextSheet } from "./lib.ts";
+import { actorOf, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, s, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
@@ -81,8 +81,8 @@ extend("asis_config", "any", async (_p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
   return {
     ok: true,
-    config: admin ? cfg : {
-      exigir_geo: cfg.exigir_geo, exigir_selfie: cfg.exigir_selfie, radio_m: cfg.radio_m,
+    config: admin ? { ...cfg, punto_listo: cfg.lat != null && cfg.lng != null } : {
+      radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
       jornada_horas: cfg.jornada_horas,
     },
@@ -97,8 +97,6 @@ extend("asis_config_guardar", "any", async (p, ctx, ses) => {
     lat: p.lat == null || p.lat === "" ? null : n(p.lat),
     lng: p.lng == null || p.lng === "" ? null : n(p.lng),
     radio_m: Math.max(20, n(p.radio_m) || antes.radio_m),
-    exigir_geo: p.exigir_geo === true || s(p.exigir_geo) === "true",
-    exigir_selfie: p.exigir_selfie === true || s(p.exigir_selfie) === "true",
     hora_entrada: /^\d{2}:\d{2}$/.test(s(p.hora_entrada)) ? s(p.hora_entrada) : antes.hora_entrada,
     hora_salida: /^\d{2}:\d{2}$/.test(s(p.hora_salida)) ? s(p.hora_salida) : antes.hora_salida,
     jornada_horas: Math.min(12, Math.max(1, n(p.jornada_horas) || antes.jornada_horas)),
@@ -128,21 +126,24 @@ extend("asis_marcar", "any", async (p, ctx, ses) => {
   const lat = p.lat == null || p.lat === "" ? null : n(p.lat);
   const lng = p.lng == null || p.lng === "" ? null : n(p.lng);
   const accuracy = p.precision_m == null || p.precision_m === "" ? null : n(p.precision_m);
+  const fotoIn = selfieBytes(s(p.foto));
+  if ("error" in fotoIn) {
+    await auditar(ctx, ses, "rechazo", { nombre, motivo: fotoIn.error, despues: { tipo } });
+    return { error: fotoIn.error };
+  }
   const geo = evaluarUbicacion(cfg, lat, lng, accuracy);
   if (!geo.ok) {
     await auditar(ctx, ses, "rechazo", { nombre, motivo: geo.error, despues: { tipo, distancia: geo.distancia ?? null } });
     return { error: geo.error, distancia: geo.distancia };
   }
-  let foto = "";
-  if (cfg.exigir_selfie) {
-    if (!s(p.foto).includes("base64,")) return { error: "La marca pide una selfie." };
-    const id = await guardarArchivo(ctx.db, actorOf(ses), "asistencia", tipo, s(p.foto));
-    if (!id) return { error: "La selfie no cabe (máximo 1.5 MB)." };
-    foto = "archivo:" + id;
+  const subida = await subirSelfie(ctx, ses.uid, fecha, tipo, fotoIn);
+  if ("error" in subida) {
+    await auditar(ctx, ses, "rechazo", { nombre, motivo: subida.error, despues: { tipo } });
+    return { error: subida.error };
   }
   const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
     usuario_id: ses.uid, nombre, tipo, ts, lat, lng, precision_m: accuracy,
-    dentro_radio: cfg.exigir_geo ? true : null, foto, origen: s(p.origen) === "recepcion" ? "recepcion" : "telefono", anulado: false,
+    dentro_radio: true, foto: subida.path, origen: s(p.origen) === "recepcion" ? "recepcion" : "telefono", anulado: false,
   });
   const dia = calcularDia(fecha, marcajesDe(await ctx.db.all("asistencia_marcajes"), nombre), cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   return { ok: true, id: saved?.id, marcaje: { id: saved?.id, nombre, tipo, ts }, dia };
@@ -154,7 +155,8 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   const nombre = esAdmin(ses.rol) && s(p.nombre) ? s(p.nombre) : ses.name;
   const cfg = await configDe(ctx);
   const fecha = ecuadorParts(ctx.now).ymd;
-  const marcajes = marcajesDe(await ctx.db.all("asistencia_marcajes"), nombre).filter((m) => ymdDeTs(m.ts) === fecha);
+  const crudos = (await ctx.db.all("asistencia_marcajes")).filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha);
+  const marcajes = marcajesDe(crudos, nombre);
   const dia = calcularDia(fecha, marcajes, cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   const permisos = (await ctx.db.all("permisos")).filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses)).map(permisoPub);
   let auditoria: Row[] = [];
@@ -169,7 +171,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   if (esAdmin(ses.rol)) {
     equipo = (await ctx.db.all("asistencia_marcajes"))
       .filter((r) => ymdDeTs(s(r.ts)) === fecha)
-      .map((r) => ({ id: s(r.id), nombre: s(r.nombre), tipo: s(r.tipo), ts: s(r.ts), anulado: r.anulado === true }));
+      .map(marcaPub);
     feriados = (await feriadosDe(ctx)).map((fechaFer) => ({ fecha: fechaFer }));
     try {
       const nombres = new Map((await ctx.db.all("asistencia_feriados")).map((r) => [s(r.fecha).slice(0, 10), s(r.nombre)]));
@@ -177,9 +179,9 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     } catch { /* la lista de fechas alcanza */ }
   }
   return {
-    ok: true, fecha, dia, marcajes, permisos, pendientes, equipo, feriados, auditoria: auditoria.map(audPub),
+    ok: true, fecha, dia, marcajes: crudos.map(marcaPub), permisos, pendientes, equipo, feriados, auditoria: auditoria.map(audPub),
     config: {
-      exigir_geo: cfg.exigir_geo, exigir_selfie: cfg.exigir_selfie, radio_m: cfg.radio_m,
+      radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
       lat: esAdmin(ses.rol) ? cfg.lat : undefined, lng: esAdmin(ses.rol) ? cfg.lng : undefined,
     },
@@ -256,6 +258,17 @@ extend("asis_permiso_resolver", "any", async (p, ctx, ses) => {
   return { ok: true, estado };
 });
 
+extend("asis_foto", "any", async (p, ctx, ses) => {
+  const hit = (await ctx.db.all("asistencia_marcajes")).find((r) => s(r.id) === s(p.id));
+  if (!hit) return { error: "Marca no encontrada" };
+  if (!esAdmin(ses.rol) && !esPropio(s(hit.nombre), ses)) return { error: "No tienes permiso" };
+  const guardada = s(hit.foto);
+  if (!guardada.startsWith("asistencia/")) return { error: "Esta marca no tiene selfie." };
+  const firmada = await firmarSelfie(ctx, guardada.slice("asistencia/".length));
+  if ("error" in firmada) return { error: firmada.error };
+  return { ok: true, url: firmada.url };
+});
+
 extend("asis_feriado", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin carga feriados" };
   const fecha = s(p.fecha).slice(0, 10);
@@ -270,6 +283,65 @@ extend("asis_feriado", "any", async (p, ctx, ses) => {
   else await ctx.db.write(actorOf(ses), "asistencia_feriados", "insert", {}, { fecha, nombre: s(p.nombre) });
   return { ok: true };
 });
+
+function marcaPub(r: Row) {
+  return {
+    id: s(r.id), nombre: s(r.nombre), tipo: s(r.tipo), ts: s(r.ts),
+    anulado: r.anulado === true, tieneFoto: s(r.foto).startsWith("asistencia/"),
+  };
+}
+
+function selfieBytes(dataUrl: string): { mime: string; bytes: Uint8Array } | { error: string } {
+  const i = dataUrl.indexOf("base64,");
+  if (i < 0 || !dataUrl.startsWith("data:image/")) return { error: "La marca pide una selfie." };
+  const mime = dataUrl.slice(5, dataUrl.indexOf(";")).toLowerCase();
+  if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(mime)) return { error: "La selfie tiene que ser una foto." };
+  let bytes: Uint8Array;
+  try {
+    const bin = atob(dataUrl.slice(i + 7).replace(/\s/g, ""));
+    bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+  } catch {
+    return { error: "La selfie no se pudo leer." };
+  }
+  if (bytes.byteLength < 8) return { error: "La selfie está vacía." };
+  if (bytes.byteLength > 1_500_000) return { error: "La selfie no cabe (máximo 1.5 MB)." };
+  return { mime: mime === "image/jpg" ? "image/jpeg" : mime, bytes };
+}
+
+async function subirSelfie(ctx: Ctx, uid: string, fecha: string, tipo: string, foto: { mime: string; bytes: Uint8Array }): Promise<{ path: string } | { error: string }> {
+  const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, "");
+  const key = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!base || !key) return { error: "El almacén de selfies no está configurado." };
+  const ext = foto.mime === "image/png" ? "png" : foto.mime === "image/webp" ? "webp" : "jpg";
+  const objectPath = `${uid}/${fecha}/${crypto.randomUUID()}-${tipo}.${ext}`;
+  const encoded = objectPath.split("/").map(encodeURIComponent).join("/");
+  const res = await ctx.fetchImpl(`${base}/storage/v1/object/asistencia/${encoded}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, apikey: key, "content-type": foto.mime, "x-upsert": "false" },
+    body: foto.bytes,
+  });
+  if (!res.ok) return { error: "No se pudo guardar la selfie." };
+  return { path: `asistencia/${objectPath}` };
+}
+
+async function firmarSelfie(ctx: Ctx, objectPath: string): Promise<{ url: string } | { error: string }> {
+  const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, "");
+  const key = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!base || !key) return { error: "El almacén de selfies no está configurado." };
+  const encoded = objectPath.split("/").map(encodeURIComponent).join("/");
+  const res = await ctx.fetchImpl(`${base}/storage/v1/object/sign/asistencia/${encoded}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, apikey: key, "content-type": "application/json" },
+    body: JSON.stringify({ expiresIn: 120 }),
+  });
+  let data: R = {};
+  try { data = await res.json() as R; } catch { data = {}; }
+  const signed = s(data.signedURL || data.signedUrl);
+  if (!res.ok || !signed) return { error: "No se pudo abrir la selfie." };
+  const url = signed.startsWith("http") ? signed : `${base}/storage/v1${signed.startsWith("/") ? "" : "/"}${signed}`;
+  return { url };
+}
 
 function permisoPub(r: Row) {
   return {

@@ -644,7 +644,7 @@ async function renderAsistencia() {
   const dia = hoy.dia || {};
   const marcas = (hoy.marcajes || []).filter((m) => !m.anulado).map((m) => {
     const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
-    return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}</div><div class="meta">${esc(m.id || "")}</div></div>`;
+    return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}</div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button>` : esc(m.id || "")}</div></div>`;
   }).join("");
   const cards = [
     ["Atraso", (dia.atrasoMin || 0) + " min"],
@@ -663,14 +663,13 @@ async function renderAsistencia() {
       <label>Entrada</label><input name="hora_entrada" value="${esc(cfg.hora_entrada || "09:00")}">
       <label>Salida</label><input name="hora_salida" value="${esc(cfg.hora_salida || "18:00")}">
       <label>Gracia (minutos)</label><input name="gracia_min" value="${esc(cfg.gracia_min ?? 10)}">
-      <label><input type="checkbox" name="exigir_geo" style="width:auto" ${cfg.exigir_geo ? "checked" : ""}> Exigir ubicación dentro del radio</label>
-      <label><input type="checkbox" name="exigir_selfie" style="width:auto" ${cfg.exigir_selfie ? "checked" : ""}> Exigir selfie</label>
+      <p class="note">Cada marca exige selfie y estar dentro de este radio. Eso no se apaga.</p>
       <button class="btn" type="submit">Guardar reglas</button><p class="err" id="f-err-cfg"></p>
     </form>
     <h2>Marcas de hoy</h2>
     <div class="list" id="asis-equipo">${(hoy.equipo || []).map((m) => {
       const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
-      return `<div class="row"><div class="sku">${esc(hora)}</div><div><div class="name">${esc(m.nombre)}</div><div class="note">${esc(etiquetaMarca(m.tipo))}${m.anulado ? " · anulada" : ""} · ${esc(m.id)}</div></div><div class="meta"><button class="btn small" type="button" data-usar="${esc(m.id)}">Corregir</button></div></div>`;
+      return `<div class="row"><div class="sku">${esc(hora)}</div><div><div class="name">${esc(m.nombre)}</div><div class="note">${esc(etiquetaMarca(m.tipo))}${m.anulado ? " · anulada" : ""} · ${esc(m.id)}</div></div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button> ` : ""}<button class="btn small" type="button" data-usar="${esc(m.id)}">Corregir</button></div></div>`;
     }).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
     <h2>Corregir una marca</h2>
     <form id="f-asis-corr">
@@ -695,9 +694,7 @@ async function renderAsistencia() {
     <form id="f-asis-mes"><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver mis horas</button></form>
     <div id="asis-mes"></div>`;
   return `
-    <input type="hidden" id="exige-geo" value="${cfg.exigir_geo ? "1" : "0"}">
-    <input type="hidden" id="exige-selfie" value="${cfg.exigir_selfie ? "1" : "0"}">
-    <p class="note">${cfg.exigir_geo ? "Hay que estar dentro del radio del spa." : "La ubicación todavía no es obligatoria. Un admin la enciende al guardar el punto del spa."} ${cfg.exigir_selfie ? "También pide selfie." : ""} La hora la pone el servidor, no el teléfono.</p>
+    <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 150)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
     <div class="grid">${cards}</div>
     ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
     <div class="tools">
@@ -707,7 +704,7 @@ async function renderAsistencia() {
       <button class="btn" type="button" data-marca="salida">Salir</button>
     </div>
     <label><input id="origen-pc" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
-    <label id="selfie-label" ${cfg.exigir_selfie ? "" : "hidden"}>Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>
+    <label id="selfie-label">Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>
     <p class="err" id="f-err-marca"></p>
     <h2>Hoy</h2>
     <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
@@ -1095,12 +1092,18 @@ function wireAsistencia(main) {
   if (cfg) cfg.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const body = Object.fromEntries(new FormData(cfg).entries());
-    body.exigir_geo = cfg.exigir_geo.checked;
-    body.exigir_selfie = cfg.exigir_selfie.checked;
     const data = await api("asis_config_guardar", body);
     const err = main.querySelector("#f-err-cfg");
     if (data.error) { err.textContent = data.error; return; }
     go("#/m/asistencia");
+  });
+  main.querySelectorAll("[data-foto]").forEach((b) => {
+    b.onclick = async () => {
+      const data = await api("asis_foto", { id: b.getAttribute("data-foto") });
+      const err = main.querySelector("#f-err-marca");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      window.open(data.url, "_blank", "noopener");
+    };
   });
   main.querySelectorAll("[data-usar]").forEach((b) => {
     b.onclick = () => {
@@ -1156,29 +1159,25 @@ async function corregirMarca(form, anular) {
 async function marcarAsistencia(tipo, main) {
   const err = main.querySelector("#f-err-marca");
   err.textContent = "";
+  const file = main.querySelector("#selfie").files[0];
+  if (!file) { err.textContent = "Falta la selfie."; return; }
   const body = { tipo, origen: main.querySelector("#origen-pc")?.checked ? "recepcion" : "telefono" };
-  if (main.querySelector("#exige-geo").value === "1") {
-    try {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
-      });
-      body.lat = pos.coords.latitude;
-      body.lng = pos.coords.longitude;
-      body.precision_m = pos.coords.accuracy;
-    } catch {
-      err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
-      return;
-    }
-  }
-  if (main.querySelector("#exige-selfie").value === "1") {
-    const file = main.querySelector("#selfie").files[0];
-    if (!file) { err.textContent = "Falta la selfie."; return; }
-    body.foto = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(file);
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
     });
+    body.lat = pos.coords.latitude;
+    body.lng = pos.coords.longitude;
+    body.precision_m = pos.coords.accuracy;
+  } catch {
+    err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
+    return;
   }
+  body.foto = await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
   const data = await api("asis_marcar", body);
   if (data.error) { err.textContent = data.error; return; }
   go("#/m/asistencia");

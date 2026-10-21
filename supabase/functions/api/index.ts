@@ -44,6 +44,8 @@ Deno.serve(async (req) => {
       ACUITY_KEY: Deno.env.get("ACUITY_KEY"),
       JIBBLE_CLIENT_ID: Deno.env.get("JIBBLE_CLIENT_ID"),
       JIBBLE_CLIENT_SECRET: Deno.env.get("JIBBLE_CLIENT_SECRET"),
+      SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
+      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
     },
     fetchImpl: fetch,
     legacyLogin: async (pin: string) => {

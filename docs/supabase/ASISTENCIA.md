@@ -25,9 +25,9 @@ Los permisos y las vacaciones siguen en `public.permisos` (la pestaña PERMISOS)
 
 La hora es `ctx.now` del servidor. El teléfono no puede atrasar la marca. Una corrección de admin manda la hora de Ecuador con offset, por ejemplo `2026-10-21T09:05:00-05:00`, y un motivo. Queda `antes` y `despues` en la auditoría, con el actor.
 
-`exigir_geo` y `exigir_selfie` nacen en falso, así el reloj sirve antes de guardar el punto del spa. Si se exige ubicación y la config no tiene latitud y longitud, la marca se rechaza con «Falta la ubicación del spa. Un admin la guarda en Asistencia.» Si la precisión del GPS es mayor que el doble del radio, también se rechaza. La distancia es haversine. El radio por defecto es 150 m. Entrada 09:00, salida 18:00, jornada 8 h, gracia 10 min.
+Cada marca pide las dos cosas: estar dentro del radio y una selfie. No hay un interruptor para apagarlas. El admin configura latitud, longitud y radio (150 m si no lo cambia). Si el punto del spa todavía no está guardado, la marca se rechaza con «Falta la ubicación del spa. Un admin la guarda en Asistencia.» Si la precisión del GPS es mayor que el doble del radio, también se rechaza. La distancia es haversine. Entrada 09:00, salida 18:00, jornada 8 h, gracia 10 min.
 
-La selfie pasa por `guardarArchivo` (máximo 1.5 MB) y la marca guarda `archivo:<id>`.
+La selfie (jpeg, png o webp, máximo 1.5 MB) se sube al bucket privado `asistencia` de Storage. La fila guarda la ruta `asistencia/<usuario>/<fecha>/<id>-<tipo>.<ext>`, no los bytes y no una URL pública. `asis_foto` devuelve un enlace firmado de dos minutos a quien es dueña de la marca o a un admin. La auditoría no recibe la imagen.
 
 Recepción marca con la sesión de quien está logueada (`origen` `telefono` o `recepcion`). Con la matriz en **propio** no puede fichar a una compañera. Un admin puede pasar `nombre`.
 
@@ -59,6 +59,7 @@ Un permiso es de día completo si es vacación, si las horas cubren la jornada, 
 |---|---|
 | `asis_marcar`, `asis_hoy`, `asis_periodo` | Quien tenga el módulo. En propio, solo su nombre. |
 | `asis_config_guardar`, `asis_corregir`, `asis_permiso_resolver`, `asis_feriado` | admin y super_admin |
+| `asis_foto` | La dueña de la marca, admin y super_admin. Enlace firmado, dos minutos. |
 | `asis_permiso_solicitar` | La sesión. Un admin puede indicar `empleada`. |
 
 `testDiasJibble` sigue en el edge como sonda del token. La pantalla de asistencia ya no lo llama.

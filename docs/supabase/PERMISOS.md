@@ -63,7 +63,7 @@ Teléfonos y correos de clientas: solo recepción, gerencia, admin y super_admin
 
 Tablas con fila personal: `tickets`, `rrhh_empleadas`, `rrhh_historial`, `multas_descuentos` y, si la columna existe, `historial_comisiones`. Con `0010_asistencia.sql` también `asistencia_marcajes` (`nombre`), `asistencia_auditoria` (`nombre`), `jibble_historial` (`persona`) y `permisos` (`empleada`). La config y los feriados se leen si el módulo no está en `no`. Una recepción no marca por otra persona: asistencia sigue en **propio** hasta que `super_admin` cambie esa celda.
 
-La selfie no entra al JSON de auditoría. El reloj usa la hora del servidor. El detalle del cálculo está en [ASISTENCIA.md](ASISTENCIA.md).
+Cada marca exige el radio del spa y una selfie. La foto queda en el bucket privado `asistencia`; la auditoría no guarda la imagen. El reloj usa la hora del servidor. El detalle del cálculo está en [ASISTENCIA.md](ASISTENCIA.md).
 
 ## Login
 

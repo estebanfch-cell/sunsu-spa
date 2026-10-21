@@ -9,8 +9,6 @@ create table if not exists public.asistencia_config (
   lat double precision,
   lng double precision,
   radio_m numeric not null default 150 check (radio_m > 0),
-  exigir_geo boolean not null default false,
-  exigir_selfie boolean not null default false,
   hora_entrada text not null default '09:00',
   hora_salida text not null default '18:00',
   jornada_horas numeric not null default 8 check (jornada_horas > 0 and jornada_horas <= 12),
@@ -18,7 +16,9 @@ create table if not exists public.asistencia_config (
   cuenta_antes boolean not null default false
 );
 insert into public.asistencia_config (id) values (1) on conflict (id) do nothing;
-comment on table public.asistencia_config is 'Radio del spa y reglas del reloj. exigir_geo/exigir_selfie empiezan apagados hasta que un admin guarde el punto.';
+alter table public.asistencia_config drop column if exists exigir_geo;
+alter table public.asistencia_config drop column if exists exigir_selfie;
+comment on table public.asistencia_config is 'Punto y radio del spa, horario y gracia. Cada marca exige ese radio y una selfie; no hay un interruptor para apagarlos.';
 
 create table if not exists public.asistencia_marcajes (
   id uuid primary key default gen_random_uuid(),
@@ -37,7 +37,8 @@ create table if not exists public.asistencia_marcajes (
   created_at timestamptz not null default now()
 );
 create index if not exists asistencia_marcajes_nombre_ts_idx on public.asistencia_marcajes (nombre, ts desc);
-comment on table public.asistencia_marcajes is 'Reloj propio. La hora la pone el servidor. Una corrección anula o edita y queda en asistencia_auditoria.';
+comment on table public.asistencia_marcajes is 'Reloj propio. La hora la pone el servidor. foto es la ruta en el bucket privado asistencia, no los bytes.';
+comment on column public.asistencia_marcajes.foto is 'Ruta privada asistencia/<usuario>/<fecha>/<id>-<tipo>.<ext>. No es una URL pública.';
 
 create table if not exists public.asistencia_auditoria (
   id bigserial primary key,
@@ -198,3 +199,11 @@ revoke all on function public.app_write(text, text, text, jsonb, jsonb) from pub
 grant execute on function public.app_write(text, text, text, jsonb, jsonb) to service_role;
 
 select public.audit_attach_all();
+
+-- Bucket privado. Sin políticas para anon/authenticated: solo la service role (el edge) lee y escribe.
+insert into storage.buckets (id, name, public)
+values ('asistencia', 'asistencia', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists asistencia_public_read on storage.objects;
+drop policy if exists asistencia_public_write on storage.objects;

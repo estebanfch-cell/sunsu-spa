@@ -1,4 +1,4 @@
-const CACHE = "sunsu-beta-2026-10-21-ASISTENCIA";
+const CACHE = "sunsu-beta-2026-10-21-ASISTENCIA-2";
 const FILES = ["/beta.html", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg"];
 
 self.addEventListener("install", (event) => {
