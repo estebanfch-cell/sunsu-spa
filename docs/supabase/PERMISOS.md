@@ -67,7 +67,7 @@ Cada marca exige el radio del spa y una selfie. La foto queda en el bucket priva
 
 ## Login
 
-`app_usuarios.pin_hash` es bcrypt. El edge no compara el hash: llama a `login_pin(pin, ip)`, que llama a `verificar_pin(pin)` (solo service role).
+`app_usuarios.pin_hash` es bcrypt. El login llama a `login_pin(pin, ip)`, que llama a `verificar_pin(pin)` (solo service role). Cambiar el PIN escribe `app_usuarios.pin_hash` con `hash_pin_bcrypt` después de `pin_coincide` y `pin_en_uso` (0009b). No toca `usuarios`. La sesión y el bloqueo leen `app_usuarios` cuando esa tabla tiene filas; `rol`/`nombre` se usan si existen, y si no, `role`/`name`.
 
 - 8 PIN malos desde la misma IP en 15 minutos → espera.
 - 5 intentos del usuario (`intentos_fallidos`) o `bloqueado_hasta` en el futuro → espera.

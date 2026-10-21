@@ -3,7 +3,8 @@
 // (cabina / venta / ambos) se prueba aquí y la repite el trigger en 0009.
 
 import type { Db } from "./db.ts";
-import { ecuadorParts, n, prodCol, round2, s, skuCode, type Row } from "./domain.ts";
+import { ecuadorParts, facialSku, n, prodCol, round2, s, skuCode, type Row } from "./domain.ts";
+import { nextSheet } from "./lib.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -50,6 +51,18 @@ function num(rows: Row[], prefix: string): string {
   return prefix + "-" + String(m + 1).padStart(4, "0");
 }
 function round4(x: number): number { return Math.round((x + Number.EPSILON) * 10000) / 10000; }
+function nombreDeActor(actor: string): string {
+  const m = actor.match(/^(.*?)\s+\([^)]*\)\s*$/);
+  return (m ? m[1] : actor).trim();
+}
+function colsTicket(ticketCols: Row): Row {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(ticketCols)) {
+    if (k === "orig" || k === "facial_hecho") continue;
+    out[k] = v;
+  }
+  return out;
+}
 
 function keyOf(pid: string, bid: string, sub = "", lote = ""): string {
   return [pid, bid, sub, lote].join("|");
@@ -596,7 +609,72 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     }));
     steps.push({ op: "upsert", table: "erp_ordenes_venta", match: { id: ov.id }, row: { estado: "anulada" } });
     await applyPlan(db, actor, steps, now.toISOString());
+    const refAnula = s(ov.ticket_ref);
+    if (refAnula) {
+      const tk = (await db.all("tickets")).find((r) => r.orig && typeof r.orig === "object" && s((r.orig as Row).ticket_ref) === refAnula);
+      if (tk) {
+        await db.write(actor, "tickets", "update", { sheet_row: tk.sheet_row }, {
+          atendido_por: "",
+          orig: { ...(tk.orig as Row), anulado: true },
+        });
+      }
+    }
     return { ok: true };
+  }
+
+  if (op === "pago_save") {
+    const o = (await db.all("erp_oc")).find((r) => r.id === body.oc_id || r.id === body.id || r.numero === body.numero);
+    if (!o) return { error: "OC no encontrada" };
+    if (s(o.estado) === "cancelada") return { error: "OC cancelada" };
+    const monto = n(body.monto);
+    if (!(monto > 0)) return { error: "Indica el monto del pago" };
+    const pagado = round2(n(o.pagado) + monto);
+    const total = n(o.total);
+    if (pagado > total + 0.009) return { error: "El pago supera el saldo" };
+    const saldo = round2(total - pagado);
+    const estado_pago = pagado + 0.009 >= total && total > 0 ? "pagada" : pagado > 0 ? "parcial" : "pendiente";
+    await applyPlan(db, actor, [{ op: "upsert", table: "erp_oc", match: { id: o.id }, row: { pagado, saldo, estado_pago } }]);
+    return { ok: true, id: o.id, pagado, saldo, estado_pago };
+  }
+
+  if (op === "oc_devolver") {
+    const o = (await db.all("erp_oc")).find((r) => r.id === body.oc_id || r.id === body.id);
+    if (!o) return { error: "OC no encontrada" };
+    if (s(o.estado) === "cancelada") return { error: "OC cancelada" };
+    const pedidas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id);
+    const ins = (body.lineas as Row[]) || [];
+    if (!ins.length) return { error: "Indica qué se devuelve" };
+    const steps: Step[] = [];
+    const restar = new Map<string, number>();
+    for (const ln of ins) {
+      const ol = pedidas.find((r) => r.id === ln.oc_linea_id);
+      if (!ol) return { error: "Línea de OC no existe" };
+      const q = n(ln.cantidad);
+      if (!(q > 0)) continue;
+      if (n(ol.recibido) + 1e-9 < (restar.get(String(ol.id)) || 0) + q) return { error: "Devuelves más de lo recibido" };
+      const p = porId.get(String(ol.producto_id));
+      if (!p) return { error: "Producto no existe" };
+      const bodegaId = s(ln.bodega_id) || s(ol.bodega_id) || s(o.bodega_destino_id);
+      if (!bodegaId || !bod.get(bodegaId)) return { error: "Elige la bodega de la devolución" };
+      steps.push({
+        op: "move", producto_id: String(p.id), bodega_id: bodegaId, delta: -q, tipo: "devolucion",
+        doc_tipo: "oc", doc_id: String(o.id), nota: "devolver " + s(o.numero),
+        aprobar_negativo: !!body.aprobar_negativo, lote: s(ln.lote),
+      });
+      restar.set(String(ol.id), (restar.get(String(ol.id)) || 0) + q);
+    }
+    if (!restar.size) return { error: "Indica qué se devuelve" };
+    for (const ol of pedidas) {
+      const rec = Math.max(0, n(ol.recibido) - (restar.get(String(ol.id)) || 0));
+      steps.push({ op: "upsert", table: "erp_oc_lineas", match: { id: ol.id }, row: { recibido: round4(rec) } });
+    }
+    await applyPlan(db, actor, steps, now.toISOString());
+    const nuevas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id);
+    const alguna = nuevas.some((r) => n(r.recibido) > 0);
+    const todas = nuevas.every((r) => n(r.recibido) + 1e-9 >= n(r.cantidad)) && alguna;
+    const estado = todas ? "recibida" : alguna ? "parcial" : "abierta";
+    await applyPlan(db, actor, [{ op: "upsert", table: "erp_oc", match: { id: o.id }, row: { estado } }]);
+    return { ok: true, estado };
   }
 
   if (op === "refs") {
@@ -642,6 +720,8 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
     } });
     const lineaRef = s(ln.linea_ref) || s(ln.sku || p?.sku) || lid;
     if (clase === "servicio") {
+      const skuTxt = s(ln.sku || p?.sku);
+      if (facialSku(skuTxt)) ticketCols.facial_hecho = skuTxt;
       const serv = (await db.all("erp_servicios")).find((r) => skuCode(s(r.codigo)) === skuCode(s(ln.sku)) || r.id === ln.servicio_id);
       const receta = serv ? (await db.all("erp_receta")).filter((r) => r.servicio_id === serv.id) : [];
       if (cabina && receta.length) {
@@ -671,6 +751,25 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   }
   const iva = round2(sub * 0.15);
   const total = round2(sub + iva);
+  const sheetRow = await nextSheet(db, "tickets");
+  const atendido = nombreDeActor(s(body.cosmetologa) || s(body.atendido_por) || actor);
+  const orig = ticketCols.orig as Row;
+  orig.ticket_ref = ref;
+  orig.ov = numero;
+  orig.fuente = "ov_save";
+  steps.push({ op: "upsert", table: "tickets", match: { sheet_row: sheetRow }, row: {
+    sheet_row: sheetRow,
+    timestamp: ec.isoWall,
+    atendido_por: atendido,
+    id_3: s(body.cedula),
+    nombre: s(body.nombre),
+    apellido: s(body.apellido),
+    estimado: total,
+    notas_generales: s(body.notas),
+    facial_hecho: s(ticketCols.facial_hecho),
+    ...colsTicket(ticketCols),
+    orig,
+  } });
   steps.unshift({ op: "upsert", table: "erp_ordenes_venta", match: { id: ovId }, row: {
     numero, ticket_ref: ref, cliente_id: s(body.cliente_id) || null, cedula: s(body.cedula),
     nombre: (s(body.nombre) + " " + s(body.apellido)).trim(), fecha: ec.isoWall, estado: "despachada",
