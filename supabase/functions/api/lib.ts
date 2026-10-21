@@ -1,5 +1,5 @@
 import type { Db } from "./db.ts";
-import { ecuadorParts, s, type Row } from "./domain.ts";
+import { ecuadorParts, siguienteBetaNum, s, type Row } from "./domain.ts";
 import { normalizarRol } from "./permisos.ts";
 
 export interface Ses {
@@ -64,6 +64,62 @@ export async function kvSet(db: Db, actor: string, key: string, valor: unknown):
   const rows = await db.all("app_kv");
   if (rows.some((x) => x.clave === key)) await db.write(actor, "app_kv", "update", { clave: key }, { valor });
   else await db.write(actor, "app_kv", "insert", {}, { clave: key, valor });
+}
+
+export function esTicketBeta(r: Row): boolean {
+  if (s(r.origin) === "beta") return true;
+  const o = r.orig;
+  if (o && typeof o === "object") {
+    const orig = o as Row;
+    if (s(orig.fuente) === "ov_save" || orig.beta === true) return true;
+  }
+  return false;
+}
+
+/** Número de ticket de la beta. sheet_row queda nulo para no chocar con la hoja. */
+export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "beta"; sheet_row: null; beta_num: string }> {
+  const ec = ecuadorParts(now);
+  const ymd = ec.ymd.replace(/-/g, "");
+  try {
+    const raw = await db.rpc("next_ticket_num", {});
+    const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+    if (Number.isFinite(v) && v > 0) {
+      return { origin: "beta", sheet_row: null, beta_num: `TK-${ymd}-${String(Math.trunc(v)).padStart(4, "0")}` };
+    }
+  } catch { /* sin ticket_seq, el piso 900000 no pisa una fila de la hoja */ }
+  const rows = await db.all("tickets");
+  return { origin: "beta", sheet_row: null, beta_num: siguienteBetaNum(rows, ec.ymd) };
+}
+
+/**
+ * Espejo de tickets_reimportar: reemplaza las filas de la hoja y deja las de origin beta.
+ * La reimportación real corre en SQL; TRUNCATE no pasa por el trigger.
+ */
+export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Promise<{ borradas: number; escritas: number; conservadas: number }> {
+  const prev = await db.all("tickets");
+  const beta = prev.filter(esTicketBeta);
+  const betaSheets = new Set(beta.map((r) => r.sheet_row).filter((x) => x != null).map((x) => Number(x)));
+  let borradas = 0;
+  for (const r of prev) {
+    if (esTicketBeta(r)) continue;
+    const match = r.id != null ? { id: r.id } : { sheet_row: r.sheet_row };
+    await db.write(actor, "tickets", "delete", match, null);
+    borradas++;
+  }
+  let escritas = 0;
+  for (const f of filas) {
+    const sr = Number(f.sheet_row);
+    if (!sr) continue;
+    if (betaSheets.has(sr)) continue;
+    const row: Row = { ...f, origin: "sheet", sheet_row: sr };
+    delete row.id;
+    delete row.beta_num;
+    const hit = (await db.all("tickets")).find((r) => Number(r.sheet_row) === sr && !esTicketBeta(r));
+    if (hit) await db.write(actor, "tickets", "update", hit.id != null ? { id: hit.id } : { sheet_row: sr }, row);
+    else await db.write(actor, "tickets", "insert", {}, row);
+    escritas++;
+  }
+  return { borradas, escritas, conservadas: beta.length };
 }
 
 export async function nextSheet(db: Db, table: string): Promise<number> {

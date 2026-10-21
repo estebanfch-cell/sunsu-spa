@@ -1,6 +1,6 @@
 import type { Ctx, Ses } from "./lib.ts";
 import { acceso, clampPersonal, gateAccion, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
-import { actorOf, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
+import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, comisionProductos, comisionRecepcionDia, contarExtras,
@@ -350,10 +350,12 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const ec = ecuadorParts(ctx.now);
-  const sheet_row = await nextSheet(ctx.db, "tickets");
+  const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const notas = s(p.notas) + (p.descuento ? " · 🏷 Descuento: " + s(p.descuento) : "");
   const base: R = {
-    sheet_row,
+    sheet_row: null,
+    origin: ident.origin,
+    beta_num: ident.beta_num,
     timestamp: ec.isoWall,
     atendido_por: s(p.cosmetologa),
     id_3: s(p.cedula),
@@ -394,21 +396,9 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     if (urls.length) base[col] = urls.join(" | ");
   }
   (base.orig as R).timestamp = ec.stamp;
+  (base.orig as R).beta = true;
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
-  let seq: number | null = null;
-  try {
-    const raw = await ctx.db.rpc("next_ticket_num", {});
-    const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
-    if (Number.isFinite(v) && v > 0) seq = v;
-  } catch { seq = null; }
-  let ticket: string;
-  if (seq) ticket = `TK-${ec.ymd.replace(/-/g, "")}-${String(seq).padStart(4, "0")}`;
-  else {
-    const kv = await kvGet(ctx.db, "ticketCount");
-    const count = n(kv.n) + 1;
-    await kvSet(ctx.db, actor, "ticketCount", { n: count });
-    ticket = `TK-${ec.ymd.replace(/-/g, "")}-${String(count).padStart(4, "0")}`;
-  }
+  const ticket = ident.beta_num;
   if ((s(p.pack3) || s(p.pack6)) && s(p.cedula)) {
     const paqRow = await nextSheet(ctx.db, "paquetes");
     const txt = s(p.pack3) || s(p.pack6);
@@ -421,8 +411,8 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const slots = ([] as R[]).concat((p.paq2gcSlots3 as R[]) || [], (p.paq2gcSlots6 as R[]) || []).filter((x) => x && x.codigo);
     if (slots.length) await marcarSlotsGC(ctx, actor, paqRow, slots);
   }
-  await logAccion(ctx.db, actor, "TICKET", ticket + " fila " + sheet_row);
-  return { ok: true, fila: sheet_row, ticket, id: saved?.id, fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined };
+  await logAccion(ctx.db, actor, "TICKET", ticket);
+  return { ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: "beta", id: saved?.id, fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined };
 }
 
 async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R[]) {

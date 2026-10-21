@@ -10,11 +10,30 @@ export interface WriteLog { actor: string; table: string; op: string; match: Row
 
 function clone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
 
+export interface MemSnap {
+  tables: Map<string, Row[]>;
+  writes: WriteLog[];
+  seq: Map<string, number>;
+}
+
 export class MemoryDb implements Db {
   tables = new Map<string, Row[]>();
   writes: WriteLog[] = [];
   seq = new Map<string, number>();
+  /** Si está puesto, la escritura que lo alcanza lanza y applyPlan revierte el plan. */
+  failAfterWrites: number | null = null;
   rpcImpl: (name: string, args: Row) => Promise<unknown> = async () => null;
+
+  snapshot(): MemSnap {
+    const tables = new Map<string, Row[]>();
+    for (const [k, v] of this.tables) tables.set(k, clone(v));
+    return { tables, writes: clone(this.writes), seq: new Map(this.seq) };
+  }
+  restore(snap: MemSnap): void {
+    this.tables = snap.tables;
+    this.writes = clone(snap.writes);
+    this.seq = new Map(snap.seq);
+  }
 
   constructor(seed: Record<string, Row[]> = {}) {
     for (const [k, rows] of Object.entries(seed)) this.tables.set(k, clone(rows));
@@ -24,6 +43,9 @@ export class MemoryDb implements Db {
   }
   async write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null> {
     if (!actor) throw new Error("actor requerido");
+    if (this.failAfterWrites != null && this.writes.length >= this.failAfterWrites) {
+      throw new Error("fallo a mitad de plan");
+    }
     this.writes.push({ actor, table, op, match: clone(match), row: row ? clone(row) : null });
     const list = this.tables.get(table) || [];
     this.tables.set(table, list);
