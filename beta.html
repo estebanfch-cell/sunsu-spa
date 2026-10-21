@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2a211c">
+<title>Sunsu · Sistema Central BETA</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-beta.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAjUlEQVR42u3boQ2AQBAEwC8Eg6UCeqA2Gn2HeftIGiAk3I5YcXbEZZPLtW1dZnIaAADPcB57RAAAAAAAAAAAAAAAAADgNYBx9c8DAEBxgPgdAAAAAACaIAAANQDKN0EAAAAAAAAAAABNEAAAOwAAAAAA4gDcBgGEA2iCAAAAAAAAAAAAAAD8F8DvMIC83FNeRXlbgRroAAAAAElFTkSuQmCC">
+<style>
+  :root {
+    --ink: #241c18;
+    --muted: #6f625a;
+    --line: #e6dbd0;
+    --paper: #f6f1ea;
+    --card: #fffdfb;
+    --side: #2a211c;
+    --side-dim: #cbbbae;
+    --accent: #8d4b38;
+    --ok: #2c6b4a;
+    --warn: #8a5a12;
+    --danger: #8d3030;
+    --shadow: 0 16px 40px rgba(36, 28, 24, 0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  h1, h2, .brand {
+    font-family: Georgia, "Iowan Old Style", Palatino, serif;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .login {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 20px 64px;
+  }
+  .login-card {
+    width: min(420px, 100%);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 36px 32px 32px;
+  }
+  .pill {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+  .brand { font-size: 40px; margin: 18px 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 28px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input, select, textarea {
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  textarea { min-height: 88px; resize: vertical; }
+  .pin { font-size: 28px; letter-spacing: 0.4em; text-align: center; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--ink);
+    color: #f6f1ea;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 18px;
+    white-space: nowrap;
+  }
+  .btn.wide { width: 100%; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn.small { padding: 8px 12px; font-size: 14px; }
+  .err { color: var(--danger); min-height: 1.2em; margin: 0 0 12px; }
+  .app { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
+  .side {
+    background: var(--side);
+    color: #f6f1ea;
+    padding: 22px 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .side .brand { font-size: 28px; margin: 10px 8px 0; }
+  .side nav { overflow: auto; display: flex; flex-direction: column; gap: 2px; margin-top: 12px; padding-right: 4px; }
+  .side button.nav {
+    text-align: left;
+    background: transparent;
+    color: var(--side-dim);
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+  .side button.nav.on, .side button.nav:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .who { margin-top: auto; padding: 12px; color: var(--side-dim); font-size: 13px; }
+  .who strong { color: #fff; display: block; font-weight: 600; }
+  .main { min-width: 0; }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    background: rgba(246, 241, 234, .92);
+    backdrop-filter: blur(8px);
+    z-index: 5;
+  }
+  .top h1 { font-size: 26px; margin: 0; flex: 1; }
+  .menu-btn { display: none; }
+  .crear { position: relative; }
+  .crear-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    min-width: 240px;
+    padding: 8px;
+    z-index: 6;
+  }
+  .crear-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+  .crear-menu button:hover { background: var(--paper); }
+  .content { padding: 28px; max-width: 1080px; }
+  .banner {
+    background: #f3e6d4;
+    border: 1px solid #e4d0b4;
+    color: #5c4328;
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 22px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .card .k { color: var(--muted); font-size: 13px; }
+  .card .v { font-family: Georgia, serif; font-size: 28px; margin-top: 4px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row {
+    display: grid;
+    grid-template-columns: 92px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .row .sku { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+  }
+  .meta { color: var(--muted); font-size: 13px; white-space: nowrap; text-align: right; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .note { color: var(--muted); }
+  .ok { color: var(--ok); }
+  .linea {
+    display: grid;
+    grid-template-columns: 1.4fr 90px 110px 140px auto;
+    gap: 8px;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+  .linea input, .linea select { margin: 0; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 14px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .matrix select { margin: 0; padding: 8px; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    .side {
+      position: fixed;
+      z-index: 20;
+      width: min(280px, 86vw);
+      transform: translateX(-105%);
+      transition: transform .2s ease;
+    }
+    .app.nav-open .side { transform: none; }
+    .menu-btn { display: inline-flex; }
+    .content, .top { padding-left: 16px; padding-right: 16px; }
+    .linea { grid-template-columns: 1fr 1fr; }
+    .row { grid-template-columns: 72px 1fr; }
+    .meta { grid-column: 2; text-align: left; white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const PROD_API = "https://heuolwxyxoezkewyufrl.supabase.co/functions/v1/api";
+const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+const API = local && new URLSearchParams(location.search).get("api") || PROD_API;
+const VENTA = "11111111-1111-4111-8111-111111111111";
+const CABINA = "22222222-2222-4222-8222-222222222222";
+const MENU = [
+  ["inicio", "Inicio"],
+  ["tickets", "Tickets"],
+  ["productos", "Productos"],
+  ["inventario", "Inventario"],
+  ["compras", "Compras"],
+  ["transferencias", "Transferencias"],
+  ["conteos", "Conteos"],
+  ["kardex", "Kardex"],
+  ["clientes", "Clientes"],
+  ["proveedores", "Proveedores"],
+  ["cotizaciones_cliente", "Cotizaciones"],
+  ["comisiones", "Comisiones"],
+  ["rol_pagos", "Rol de pagos"],
+  ["asistencia", "Asistencia"],
+  ["paquetes", "Paquetes"],
+  ["gift_cards", "Gift cards"],
+  ["caja", "Caja"],
+  ["bitacora", "Bitácora"],
+  ["cabina", "Cabina"],
+  ["usuarios", "Usuarios"],
+  ["permisos", "Permisos"],
+];
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false };
+
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function money(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? "$" + x.toFixed(2) : "";
+}
+function acceso(mod) { return state.acceso[mod] || "no"; }
+function uuid() { return crypto.randomUUID(); }
+
+async function api(accion, body = {}) {
+  const payload = { accion, ...body };
+  if (state.token) payload.token = state.token;
+  let res;
+  try {
+    res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return { error: "No hay conexión con la función api. El PIN entra cuando el coordinador la publique." };
+  }
+  let data;
+  try { data = await res.json(); } catch { return { error: "La función no devolvió JSON." }; }
+  if (data && data.requiere_aprobacion && !body.aprobar_negativo) {
+    const ok = window.confirm(data.error || "El stock quedaría negativo. ¿Aprobar y dejar constancia de quién lo autorizó?");
+    if (!ok) return data;
+    return api(accion, { ...body, aprobar_negativo: true });
+  }
+  return data;
+}
+
+function applySession(data) {
+  state.user = data.user || null;
+  state.verCostos = !!data.ver_costos;
+  state.acceso = {};
+  for (const m of data.modulos || []) state.acceso[m.modulo] = m.acceso;
+  const rol = state.user && state.user.role;
+  state.admin = rol === "admin" || rol === "super_admin";
+  state.mega = rol === "super_admin";
+}
+
+function parseRoute() {
+  const parts = (location.hash.replace(/^#/, "") || "/m/inicio").split("/").filter(Boolean);
+  if (parts[0] === "doc") return { kind: "doc", doc: parts[1] || "", id: decodeURIComponent(parts[2] || "") };
+  return { kind: "mod", mod: parts[1] || "inicio", sub: parts[2] || "" };
+}
+
+function go(hash) { location.hash = hash; }
+
+function autosize(root) {
+  root.querySelectorAll("textarea").forEach((t) => {
+    const fit = () => { t.style.height = "auto"; t.style.height = Math.max(88, t.scrollHeight) + "px"; };
+    t.addEventListener("input", fit);
+    fit();
+  });
+}
+
+function paintLogin(msg) {
+  document.getElementById("app").innerHTML = `
+    <main class="login">
+      <form class="login-card" id="login-form">
+        <span class="pill">BETA</span>
+        <div class="brand">Sunsu</div>
+        <p class="lede">Sistema central en prueba. La app de todos los días no cambia.</p>
+        <label for="pin">PIN</label>
+        <input id="pin" class="pin" name="pin" inputmode="numeric" autocomplete="off" maxlength="8" required>
+        <p class="err" id="login-err">${esc(msg || "")}</p>
+        <button class="btn wide" id="login-btn" type="submit">Entrar</button>
+      </form>
+    </main>`;
+  document.getElementById("login-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const pin = document.getElementById("pin").value.trim();
+    const btn = document.getElementById("login-btn");
+    btn.disabled = true;
+    const data = await api("login", { pin });
+    btn.disabled = false;
+    if (!data.ok || !data.token) {
+      document.getElementById("login-err").textContent = data.error || "PIN incorrecto";
+      return;
+    }
+    state.token = data.token;
+    localStorage.setItem("sunsu.beta.token", data.token);
+    applySession(data);
+    go("#/m/inicio");
+  });
+}
+
+function crearItems() {
+  const items = [];
+  if (acceso("tickets") !== "no") items.push(["Ticket (orden de venta)", "#/doc/ov"]);
+  if (acceso("cotizaciones_cliente") === "todos") items.push(["Cotización a clienta", "#/doc/cot"]);
+  if (state.admin && acceso("compras") !== "no") {
+    items.push(["Cotización de compra", "#/doc/rfq"]);
+    items.push(["Orden de compra", "#/doc/oc"]);
+  }
+  if (state.admin && acceso("productos") !== "no") items.push(["Producto", "#/doc/prod"]);
+  if (acceso("clientes") !== "no") items.push(["Cliente", "#/doc/cli"]);
+  if (state.admin && acceso("proveedores") !== "no") items.push(["Proveedor", "#/doc/prov"]);
+  if (acceso("transferencias") === "todos") items.push(["Transferencia", "#/doc/trf"]);
+  return items;
+}
+
+function paintShell(title) {
+  const nav = MENU.filter(([id]) => acceso(id) !== "no").map(([id, label]) => {
+    const on = parseRoute().mod === id ? " on" : "";
+    return `<button class="nav${on}" type="button" data-go="#/m/${id}">${esc(label)}</button>`;
+  }).join("");
+  const crear = crearItems().map(([label, hash]) => `<button type="button" data-go="${esc(hash)}">${esc(label)}</button>`).join("");
+  const u = state.user || {};
+  document.getElementById("app").innerHTML = `
+    <div class="app" id="shell">
+      <aside class="side">
+        <span class="pill">BETA</span>
+        <div class="brand">Sunsu</div>
+        <nav>${nav}</nav>
+        <div class="who"><strong>${esc(u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><button class="nav" type="button" id="salir">Salir</button></div>
+      </aside>
+      <section class="main">
+        <header class="top">
+          <button class="btn ghost small menu-btn" type="button" id="menu">Menú</button>
+          <h1>${esc(title || "Sistema central")}</h1>
+          <div class="crear">
+            <button class="btn" type="button" id="crear">Crear</button>
+            <div class="crear-menu" id="crear-menu" hidden>${crear}</div>
+          </div>
+        </header>
+        <div class="content" id="main"></div>
+      </section>
+    </div>`;
+  document.getElementById("salir").onclick = () => {
+    state.token = "";
+    localStorage.removeItem("sunsu.beta.token");
+    paintLogin();
+  };
+  document.getElementById("menu").onclick = () => document.getElementById("shell").classList.toggle("nav-open");
+  document.getElementById("crear").onclick = () => {
+    const menu = document.getElementById("crear-menu");
+    menu.hidden = !menu.hidden;
+  };
+  document.getElementById("app").querySelectorAll("[data-go]").forEach((b) => {
+    b.onclick = () => {
+      document.getElementById("crear-menu").hidden = true;
+      document.getElementById("shell").classList.remove("nav-open");
+      go(b.getAttribute("data-go"));
+    };
+  });
+}
+
+function banner() {
+  return `<div class="banner">Esta es la beta. sunsu.html sigue siendo la operación. Lo que guardes aquí vive en Supabase.</div>`;
+}
+function fail(data) {
+  return `<p class="err">${esc((data && data.error) || "No se pudo cargar.")}</p>`;
+}
+function lineHtml(opts) {
+  const precio = opts.precio ? `<input name="precio" inputmode="decimal" placeholder="Precio" aria-label="Precio">` : `<input type="hidden" name="precio" value="0">`;
+  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>` : `<input type="hidden" name="bodega" value="">`;
+  const clase = opts.clase ? `<select name="clase" aria-label="Clase"><option value="producto">Producto</option><option value="servicio">Servicio</option></select>` : `<input type="hidden" name="clase" value="producto">`;
+  return `<div class="linea">
+    <input name="sku" placeholder="SKU" aria-label="SKU" autocomplete="off">
+    <input name="cantidad" inputmode="decimal" placeholder="Cant." aria-label="Cantidad" value="1">
+    ${precio}${bodega}${clase}
+    <button class="btn ghost small" type="button" data-quitar>Quitar</button>
+  </div>`;
+}
+function bindLines(root) {
+  root.querySelectorAll("[data-quitar]").forEach((b) => {
+    b.onclick = () => b.closest(".linea").remove();
+  });
+}
+function readLines(root) {
+  return [...root.querySelectorAll(".linea")].map((row) => ({
+    sku: row.querySelector("[name=sku]").value.trim(),
+    cantidad: Number(row.querySelector("[name=cantidad]").value),
+    precio: Number(row.querySelector("[name=precio]").value || 0),
+    bodega_id: row.querySelector("[name=bodega]").value,
+    clase: row.querySelector("[name=clase]").value || "producto",
+  })).filter((l) => l.sku && l.cantidad > 0);
+}
+
+async function draw() {
+  if (!state.token) { paintLogin(); return; }
+  if (!state.user) {
+    const who = await api("whoami");
+    if (!who.ok) { state.token = ""; localStorage.removeItem("sunsu.beta.token"); paintLogin(who.error); return; }
+    applySession(who);
+  }
+  const route = parseRoute();
+  const title = route.kind === "doc" ? tituloDoc(route.doc) : (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
+  paintShell(title);
+  const main = document.getElementById("main");
+  main.innerHTML = banner() + `<p class="note">Cargando…</p>`;
+  try {
+    const html = route.kind === "doc" ? await renderDoc(route) : await renderMod(route);
+    main.innerHTML = banner() + html;
+    bind(main, route);
+    autosize(main);
+  } catch (e) {
+    main.innerHTML = banner() + `<p class="err">${esc(e.message || e)}</p>`;
+  }
+}
+
+function tituloDoc(doc) {
+  return {
+    ov: "Nuevo ticket", cot: "Cotización a clienta", rfq: "Cotización de compra",
+    oc: "Orden de compra", prod: "Producto", cli: "Cliente", prov: "Proveedor", trf: "Transferencia",
+  }[doc] || "Documento";
+}
+
+async function renderMod(route) {
+  if (acceso(route.mod) === "no" && route.mod !== "inicio") return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod === "inicio") return renderInicio();
+  if (route.mod === "productos") return renderProductos();
+  if (route.mod === "inventario") return renderInventario(route.sub || "venta");
+  if (route.mod === "compras") return renderCompras();
+  if (route.mod === "tickets") return renderTickets();
+  if (route.mod === "kardex") return renderKardex();
+  if (route.mod === "clientes") return renderClientes();
+  if (route.mod === "proveedores") return renderProveedores();
+  if (route.mod === "cotizaciones_cliente") return renderCotizaciones();
+  if (route.mod === "comisiones") return renderComisiones();
+  if (route.mod === "rol_pagos") return renderRol();
+  if (route.mod === "asistencia") return renderAsistencia();
+  if (route.mod === "paquetes") return renderPaquetes();
+  if (route.mod === "gift_cards") return renderGift();
+  if (route.mod === "caja") return renderCaja();
+  if (route.mod === "bitacora") return renderBitacora();
+  if (route.mod === "cabina") return renderCabina();
+  if (route.mod === "transferencias") return renderTrf();
+  if (route.mod === "conteos") return renderConteos();
+  if (route.mod === "permisos") return renderPermisos();
+  if (route.mod === "usuarios") return renderUsuarios();
+  return `<p class="note">Módulo sin pantalla todavía.</p>`;
+}
+
+async function renderInicio() {
+  const data = await api("home");
+  if (data.error && !data.bajos) return fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>`;
+  const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
+  return `
+    <div class="grid">
+      <div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>
+      <div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div>
+      <div class="card"><div class="k">Avisos</div><div class="v">${esc((data.avisos || []).length)}</div></div>
+    </div>
+    <h2>Para reponer</h2>
+    <div class="list">${bajos || `<p class="note">Nada bajo el mínimo, o los mínimos todavía no están cargados.</p>`}</div>`;
+}
+
+async function renderProductos() {
+  const data = await api("prod_list");
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((p) => {
+    const venta = (p.porBodega && (p.porBodega.VENTA ?? p.porBodega.venta)) || 0;
+    const cabina = (p.porBodega && (p.porBodega.CABINA ?? p.porBodega.cabina)) || 0;
+    const costo = state.verCostos && p.costo_promedio != null ? ` · costo ${money(p.costo_promedio)}` : "";
+    return `<button class="row" type="button" data-go="#/doc/prod/${encodeURIComponent(p.id)}">
+      <div class="sku">${esc(p.sku)}</div>
+      <div><div class="name">${esc(p.nombre)}</div><div class="note">${esc(p.uso)} · ${money(p.precio_venta)}${esc(costo)}</div></div>
+      <div class="meta">Venta ${esc(venta)}<br>Cabina ${esc(cabina)}</div>
+    </button>`;
+  }).join("");
+  return `<input id="filtro" placeholder="Buscar SKU o nombre" aria-label="Buscar producto">
+    <div class="list" id="lista">${items || `<p class="note">El catálogo ERP está vacío. Aplica 0009 y la importación, o crea un producto.</p>`}</div>`;
+}
+
+async function renderInventario(sub) {
+  const bodega = sub === "cabina" ? CABINA : VENTA;
+  const data = await api("stk_saldo", { bodega_id: bodega });
+  if (data.error) return fail(data);
+  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0 || sub === "todos").map((r) => `
+    <button class="row" type="button" data-go="#/m/kardex">
+      <div class="sku">${esc(r.sku)}</div>
+      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso)}</div></div>
+      <div class="meta">${esc(r.cantidad)}</div>
+    </button>`).join("");
+  return `<div class="tabs">
+      <button class="btn ${sub !== "cabina" ? "" : "ghost"} small" type="button" data-go="#/m/inventario/venta">Venta</button>
+      <button class="btn ${sub === "cabina" ? "" : "ghost"} small" type="button" data-go="#/m/inventario/cabina">Cabina</button>
+    </div>
+    <p class="note">Venta es lo que se vende en el ticket. Cabina se consume en el servicio y no es una venta.</p>
+    <div class="list">${items || `<p class="note">Sin saldo en esta bodega. El percha de la hoja 📊 INVENTARIO no se migró: el stock de venta arranca en las entradas recibidas.</p>`}</div>`;
+}
+
+async function renderCompras() {
+  const [oc, rfq, re] = await Promise.all([api("oc_list"), api("rfq_list"), api("reorden_sugerir")]);
+  if (oc.error) return fail(oc);
+  const ordenes = (oc.items || []).map((o) => `<button class="row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(o.estado)}</div></div><div class="meta">${money(o.total)}</div></button>`).join("");
+  const cot = (rfq.items || []).map((r) => `<div class="row"><div class="sku">${esc(r.numero)}</div><div class="name">${esc(r.estado)}</div><div class="meta">${esc(r.fecha || "")}</div></div>`).join("");
+  const sug = (re.sugerencias || []).map((s) => `<div class="row"><div class="sku">${esc(s.sku)}</div><div><div class="name">${esc(s.nombre)}</div></div><div class="meta">hay ${esc(s.stock)} · pedir ${esc(s.pedir)}</div></div>`).join("");
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/oc">Nueva OC</button><button class="btn ghost small" type="button" data-go="#/doc/rfq">Nueva cotización de compra</button></div>
+    <h2>Órdenes</h2><div class="list">${ordenes || `<p class="note">No hay órdenes de compra en el ERP.</p>`}</div>
+    <h2>Cotizaciones de compra</h2><div class="list">${cot || `<p class="note">Todavía no hay RFQ.</p>`}</div>
+    <h2>Reordenar</h2><div class="list">${sug || `<p class="note">Sin sugerencias. Hace falta punto de reorden en el producto.</p>`}</div>`;
+}
+
+async function renderTickets() {
+  const data = await api("ov_list");
+  const legacy = await api("getTicketsDia", {});
+  const erp = data.error
+    ? `<p class="err">${esc(data.error)}</p>`
+    : (data.items || []).map((o) => `<div class="row"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(o.nombre || o.ticket_ref)}</div><div class="note">${esc(o.estado)}</div></div><div class="meta">${money(o.total)}</div></div>`).join("");
+  const dia = Array.isArray(legacy) ? legacy : (legacy.items || legacy.tickets || []);
+  const rows = (Array.isArray(dia) ? dia : []).slice(0, 40).map((t) => `<div class="row"><div class="sku">${esc(t.ticket || t.sheet_row || "")}</div><div><div class="name">${esc((t.nombre || "") + " " + (t.apellido || ""))}</div><div class="note">${esc(t.cosmetologa || t.cosm || t.atendido_por || "")}</div></div><div class="meta">${money(t.estimado || t.total || "")}</div></div>`).join("");
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
+    <h2>Órdenes de venta</h2><div class="list">${erp || `<p class="note">Aún no hay tickets del ERP.</p>`}</div>
+    <h2>Tickets del día (hoja)</h2><div class="list">${rows || `<p class="note">${esc(legacy.error || "Sin tickets para hoy, o solo ves los tuyos.")}</p>`}</div>`;
+}
+
+async function renderKardex() {
+  const data = await api("stk_kardex", {});
+  if (data.error) return fail(data);
+  const items = (data.items || []).slice(-80).reverse().map((m) => `<div class="row"><div class="sku">${esc(m.sku)}</div><div><div class="name">${esc(m.tipo)} · ${esc(m.bodega)}</div><div class="note">${esc(m.nota || m.ticket_ref || "")}</div></div><div class="meta">${esc(m.delta)} → ${esc(m.saldo)}</div></div>`).join("");
+  return `<p class="note">El kardex no se borra. Deshacer una recepción escribe el movimiento inverso.</p><div class="list">${items || `<p class="note">Sin movimientos.</p>`}</div>`;
+}
+
+async function renderClientes() {
+  if (acceso("clientes") === "propio") {
+    return `<p class="note">Tu rol ve clientas propias. El directorio ERP todavía no guarda quién atendió a cada persona, así que esta beta no muestra la lista completa.</p>
+      <form id="f-cli"><label>Nombre</label><input name="nombre" required><label>Apellido</label><input name="apellido"><label>Cédula</label><input name="cedula"><button class="btn" type="submit">Guardar clienta</button><p class="err" id="f-err"></p></form>`;
+  }
+  const data = await api("cli_list");
+  if (data.error) return fail(data);
+  const items = (data.items || []).slice(0, 200).map((c) => `<div class="row"><div class="sku">${esc(c.cedula)}</div><div><div class="name">${esc((c.nombre || "") + " " + (c.apellido || ""))}</div></div><div class="meta">${esc(c.telefono || "")}</div></div>`).join("");
+  return `<form id="f-cli"><label>Nombre</label><input name="nombre" required><label>Apellido</label><input name="apellido"><label>Cédula</label><input name="cedula"><label>Teléfono</label><input name="telefono"><button class="btn" type="submit">Guardar clienta</button><p class="err" id="f-err"></p></form>
+    <div class="list">${items || `<p class="note">Sin clientas importadas.</p>`}</div>`;
+}
+
+async function renderProveedores() {
+  const data = await api("prov_list");
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((p) => `<div class="row"><div class="sku">${esc(p.ruc)}</div><div><div class="name">${esc(p.nombre)}</div><div class="note">${esc(p.id)}</div></div><div class="meta">${esc(p.plazo_dias || "")} días</div></div>`).join("");
+  const form = state.admin ? `<form id="f-prov"><label>Nombre</label><input name="nombre" required><label>RUC</label><input name="ruc"><label>Teléfono</label><input name="telefono"><button class="btn" type="submit">Guardar proveedor</button><p class="err" id="f-err"></p></form>` : "";
+  return form + `<div class="list">${items || `<p class="note">Sin proveedores en el ERP.</p>`}</div>`;
+}
+
+async function renderCotizaciones() {
+  const data = await api("getCotizaciones");
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((c) => `<div class="row"><div class="sku">${esc(c.numero)}</div><div><div class="name">${esc(c.cliente)}</div></div><div class="meta">${money(c.total)}</div></div>`).join("");
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/cot">Nueva cotización</button></div><div class="list">${items || `<p class="note">No hay cotizaciones.</p>`}</div>`;
+}
+
+async function renderComisiones() {
+  const data = await api("getDashCosm", { cosmetologa: state.user.name });
+  if (data.error) return fail(data);
+  const cards = [
+    ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
+    ["Paquetes", data.paquetes], ["Comisión paquetes", money(data.comPaquetes)],
+    ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
+    ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
+  ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
+  return `<p class="note">${esc(data.periodoLabel || "")}. Ves solo tu comisión.</p><div class="grid">${cards}</div>`;
+}
+
+async function renderRol() {
+  const data = await api("getRoles");
+  if (data.error) return fail(data);
+  const meses = (((data.data || {}).meses) || []);
+  const blocks = meses.map((m) => {
+    const emps = (m.empleadas || []).map((e) => `<div class="row"><div class="sku">${esc(e.cedula)}</div><div class="name">${esc(e.nombre)}</div><div class="meta">${money(e.totalIngresos || e.sueldo)}</div></div>`).join("");
+    return `<h2>${esc(m.mes)} ${esc(m.anio)}</h2><div class="list">${emps}</div>`;
+  }).join("");
+  return `<p class="note">Rol histórico importado. El cálculo vivo (vacaciones y fondo solo con un año, paquetes dentro de comisiones) está en getRolIndividual y en rol_calcular.</p>${blocks || `<p class="note">No hay roles históricos a tu nombre.</p>`}`;
+}
+
+async function renderAsistencia() {
+  return `<p class="note">Jibble responde si la persona existe. Las horas del rol todavía no se arman desde el timesheet.</p>
+    <form id="f-jibble"><button class="btn" type="submit">Probar mi asistencia</button><p id="f-out" class="note"></p><p class="err" id="f-err"></p></form>`;
+}
+
+async function renderPaquetes() {
+  return `<form id="f-paq"><label>Cédula o nombre</label><input name="q" required><button class="btn" type="submit">Buscar paquetes</button></form><div id="f-out"></div>`;
+}
+
+async function renderGift() {
+  const data = await api("getGCDigitales");
+  const items = (data.items || []).map((g) => `<div class="row"><div class="sku">${esc(g.codigo)}</div><div class="name">${esc(g.mensaje)}</div><div class="meta">${esc(g.por || "")}</div></div>`).join("");
+  return `<div class="list">${items || `<p class="note">${esc(data.error || "No hay gift cards digitales vendidas en esta copia.")}</p>`}</div>`;
+}
+
+async function renderCaja() {
+  const data = await api("getCajaV2");
+  if (data.error) return fail(data);
+  const movs = (data.movs || []).slice(0, 30).map((m) => `<div class="row"><div class="sku">${esc(m.f)}</div><div><div class="name">${esc(m.tipo)}</div><div class="note">${esc(m.detalle)}</div></div><div class="meta">${money(m.saldo)}</div></div>`).join("");
+  return `<div class="card"><div class="k">Saldo</div><div class="v">${data.iniciada ? money(data.saldo) : "Sin iniciar"}</div></div>
+    <form id="f-caja"><label>Tipo</label><select name="tipo"><option value="descarga">Descarga</option><option value="deposito">Depósito</option></select>
+    <label>Monto</label><input name="monto" inputmode="decimal" required><label>Quién</label><input name="quien" value="${esc(state.user.name)}"><label>Justificativo</label><textarea name="justificativo"></textarea>
+    <button class="btn" type="submit">Registrar</button><p class="err" id="f-err"></p></form>
+    <div class="list">${movs}</div>`;
+}
+
+async function renderBitacora() {
+  const data = await api("getBitacora");
+  if (data.error) return fail(data);
+  const items = (data.items || []).slice(0, 40).map((b) => `<div class="row"><div class="sku">${esc(b.id)}</div><div><div class="name">${esc(b.usuario)}</div><div class="note">${esc(b.resultado)} · ${esc(b.estado)}</div></div><div class="meta">${esc(b.ts)}</div></div>`).join("");
+  return `<div class="list">${items || `<p class="note">Sin registros de esterilización.</p>`}</div>`;
+}
+
+async function renderCabina() {
+  const data = await api("getCabina");
+  if (data.error) return fail(data);
+  if (data.sinEstructura) return `<p class="note">La estructura de cabina no está cargada en esta base.</p>`;
+  const inv = (data.inventario || []).slice(0, 40).map((r) => `<div class="row"><div class="sku">${esc(r.codigo)}</div><div class="name">${esc(r.producto)}</div><div class="meta">${esc(r.stock)}</div></div>`).join("");
+  return `<p class="note">${(data.protocolos || []).length} protocolos. El costo de cabina no se muestra si tu rol no ve costos: el servidor lo quita.</p><div class="list">${inv}</div>`;
+}
+
+async function renderTrf() {
+  const data = await api("trf_list");
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((t) => `<div class="row"><div class="sku">${esc(t.numero)}</div><div class="name">${esc(t.estado)}</div><div class="meta">${esc(t.fecha || "")}</div></div>`).join("");
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/trf">Nueva transferencia</button></div><div class="list">${items || `<p class="note">Sin transferencias. Solo un producto de uso ambos puede ir de Venta a Cabina.</p>`}</div>`;
+}
+
+async function renderConteos() {
+  const data = await api("conteo_list");
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((c) => `<div class="row"><div class="sku">${esc(c.numero)}</div><div class="name">${esc(c.estado)}</div><div class="meta">${esc(c.fecha || "")}</div></div>`).join("");
+  return `<form id="f-cnt"><label>Bodega</label><select name="bodega_id"><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select><button class="btn" type="submit">Abrir conteo</button><p class="err" id="f-err"></p></form>
+    <div class="list">${items || `<p class="note">Sin conteos. Aplicar el conteo ajusta el kardex; no borra la historia.</p>`}</div>`;
+}
+
+async function renderPermisos() {
+  const data = await api("permisos_get");
+  if (data.error) return fail(data);
+  const mods = (data.modulos || []).filter((m) => m !== "permisos");
+  const head = `<tr><th>Módulo</th>${(data.roles || []).map((r) => `<th>${esc(r)}</th>`).join("")}</tr>`;
+  const body = mods.map((mod) => `<tr><td>${esc(mod)}</td>${(data.roles || []).map((rol) => {
+    const val = (data.matriz && data.matriz[rol] && data.matriz[rol][mod]) || "no";
+    return `<td class="matrix"><select data-rol="${esc(rol)}" data-mod="${esc(mod)}" aria-label="${esc(rol)} ${esc(mod)}">
+      ${["no", "propio", "todos"].map((a) => `<option ${a === val ? "selected" : ""}>${a}</option>`).join("")}
+    </select></td>`;
+  }).join("")}</tr>`).join("");
+  return `<p class="note">${esc(data.nota || "")} Recepción y gerencia arrancan con tickets en propio. Cambiar la celda a todos no requiere otro deploy. Ver costos no se puede soltar.</p>
+    <p class="err" id="f-err"></p>
+    <table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+async function renderUsuarios() {
+  const data = await api("getUsuarios");
+  const list = Array.isArray(data) ? data : (data.users || []);
+  if (data.error) return fail(data);
+  const items = list.map((u) => `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"}</div></div>`).join("");
+  return `<div class="list">${items || `<p class="note">Sin usuarios.</p>`}</div>`;
+}
+
+async function renderDoc(route) {
+  if (route.doc === "prod") return renderProd(route.id);
+  if (route.doc === "oc") return route.id ? renderOc(route.id) : renderOcNueva();
+  if (route.doc === "ov") return renderOv();
+  if (route.doc === "cot") return renderCot();
+  if (route.doc === "rfq") return renderRfq();
+  if (route.doc === "cli") return renderClientes();
+  if (route.doc === "prov") return renderProveedores();
+  if (route.doc === "trf") return renderTrfNueva();
+  return `<p class="note">Documento desconocido.</p>`;
+}
+
+async function renderProd(id) {
+  if (!id) {
+    return `<form id="f-prod"><label>SKU</label><input name="sku" required><label>Nombre</label><input name="nombre" required>
+      <label>Uso</label><select name="uso" required><option value="">Elige</option><option>venta</option><option>cabina</option><option>ambos</option></select>
+      <label>Precio de venta</label><input name="precio_venta" inputmode="decimal"><label>Marca</label><input name="marca">
+      <button class="btn" type="submit">Guardar producto</button><p class="err" id="f-err"></p></form>`;
+  }
+  const data = await api("prod_get", { id });
+  if (data.error) return fail(data);
+  const p = data.producto || {};
+  const costo = state.verCostos ? `<label>Costo promedio</label><input name="costo_promedio" value="${esc(p.costo_promedio ?? "")}">` : "";
+  return `<form id="f-prod"><label>SKU</label><input name="sku" value="${esc(p.sku)}" required><label>Nombre</label><input name="nombre" value="${esc(p.nombre)}" required>
+    <label>Uso</label><select name="uso">${["venta", "cabina", "ambos"].map((u) => `<option ${p.uso === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+    <label>Precio de venta</label><input name="precio_venta" value="${esc(p.precio_venta ?? "")}">${costo}
+    <button class="btn" type="submit">Guardar</button><p class="note">Un producto de cabina no entra a Venta. Si el uso es ambos, la recepción pide bodega.</p><p class="err" id="f-err"></p></form>`;
+}
+
+async function renderOcNueva() {
+  const prov = await api("prov_list");
+  const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
+  return `<form id="f-oc"><label>Proveedor</label><select name="proveedor_id" required>${opts || `<option value="">Sin proveedores</option>`}</select><p class="note">El número usa oc_seq_2026 cuando 0009 está aplicado.</p>
+    <div id="lineas">${lineHtml({ precio: true, bodega: true })}</div>
+    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
+    <label>Nota</label><textarea name="nota"></textarea>
+    <button class="btn" type="submit">Guardar OC</button><p class="err" id="f-err"></p></form>`;
+}
+
+async function renderOc(id) {
+  const [data, prods] = await Promise.all([api("oc_get", { id }), api("prod_list")]);
+  if (data.error) return fail(data);
+  const nombre = new Map((prods.items || []).map((p) => [p.id, (p.sku || "") + " " + (p.nombre || "")]));
+  const o = data.orden || {};
+  const lineas = (data.lineas || []).map((ln) => `<div class="linea" data-id="${esc(ln.id)}">
+      <div class="name">${esc(nombre.get(ln.producto_id) || ln.producto_id)}</div>
+      <div class="note">pedido ${esc(ln.cantidad)} · recibido ${esc(ln.recibido)}</div>
+      <input name="cantidad" inputmode="decimal" placeholder="Recibir" aria-label="Cantidad a recibir">
+      <select name="bodega" aria-label="Bodega de esta línea"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
+    </div>`).join("");
+  return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. Cada línea elige su bodega. Uso ambos sin bodega se rechaza, no se redirige.</p>
+    <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+
+function renderOv() {
+  return `<form id="f-ov"><label>Nombre</label><input name="nombre" required><label>Apellido</label><input name="apellido"><label>Cédula</label><input name="cedula">
+    <div id="lineas">${lineHtml({ precio: true, clase: true })}</div>
+    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
+    <label>Notas</label><textarea name="notas"></textarea>
+    <button class="btn" type="submit">Guardar ticket</button>
+    <p class="note">Descuenta Venta en productos y Cabina si el servicio tiene receta. Esta orden todavía no entra al cálculo de comisiones del ticket de hoja.</p>
+    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+
+function renderCot() {
+  return `<form id="f-cot"><label>Clienta</label><input name="cliente" required><label>Teléfono</label><input name="telefono"><label>Email</label><input name="email">
+    <div id="lineas">${lineHtml({ precio: true })}</div>
+    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
+    <label>Notas</label><textarea name="notas"></textarea>
+    <button class="btn" type="submit">Guardar cotización</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+
+async function renderRfq() {
+  const prov = await api("prov_list");
+  const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
+  return `<form id="f-rfq"><label>Nota</label><textarea name="nota" placeholder="Qué se está cotizando"></textarea>
+    <button class="btn" type="submit">Crear cotización de compra</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
+    <form id="f-rfq-line" hidden>
+      <input type="hidden" name="rfq_id" id="rfq-id">
+      <label>Proveedor</label><select name="proveedor_id" required>${opts || `<option value="">Sin proveedores</option>`}</select>
+      <label>SKU</label><input name="sku" required>
+      <label>Cantidad</label><input name="cantidad" value="1">
+      <label>Precio</label><input name="precio">
+      <label><input type="checkbox" name="elegida" style="width:auto"> Línea ganadora</label>
+      <button class="btn" type="submit">Agregar respuesta</button>
+      <button class="btn ghost" type="button" id="adjudicar">Adjudicar a OC</button>
+      <p class="err" id="f-err2"></p>
+    </form>`;
+}
+
+function renderTrfNueva() {
+  return `<form id="f-trf"><label>Origen</label><select name="origen_id"><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
+    <label>Destino</label><select name="destino_id"><option value="${CABINA}">Cabina</option><option value="${VENTA}">Venta</option></select>
+    <div id="lineas">${lineHtml({})}</div>
+    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
+    <button class="btn" type="submit">Enviar transferencia</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+
+function bind(main) {
+  main.querySelectorAll("[data-go]").forEach((b) => {
+    b.onclick = () => {
+      const shell = document.getElementById("shell");
+      if (shell) shell.classList.remove("nav-open");
+      const menu = document.getElementById("crear-menu");
+      if (menu) menu.hidden = true;
+      go(b.getAttribute("data-go"));
+    };
+  });
+  const filtro = main.querySelector("#filtro");
+  if (filtro) filtro.addEventListener("input", () => {
+    const q = filtro.value.toLowerCase();
+    main.querySelectorAll("#lista .row").forEach((row) => {
+      row.hidden = q && !row.textContent.toLowerCase().includes(q);
+    });
+  });
+  const add = main.querySelector("#add-line");
+  if (add) add.onclick = () => {
+    const box = main.querySelector("#lineas");
+    const precio = !!box.querySelector("[name=precio]:not([type=hidden])") || !!main.querySelector("#f-oc, #f-ov, #f-cot");
+    const bodega = !!main.querySelector("#f-oc");
+    const clase = !!main.querySelector("#f-ov");
+    box.insertAdjacentHTML("beforeend", lineHtml({ precio, bodega, clase }));
+    bindLines(box);
+  };
+  bindLines(main);
+  const form = (id, fn) => {
+    const f = main.querySelector(id);
+    if (f) f.addEventListener("submit", async (ev) => { ev.preventDefault(); await fn(f); });
+  };
+  form("#f-prod", saveProd);
+  form("#f-oc", saveOc);
+  form("#f-rec", saveRec);
+  form("#f-ov", saveOv);
+  form("#f-cot", saveCot);
+  form("#f-rfq", saveRfq);
+  form("#f-rfq-line", saveRfqLine);
+  form("#f-cli", saveCli);
+  form("#f-prov", saveProv);
+  form("#f-trf", saveTrf);
+  form("#f-caja", saveCaja);
+  form("#f-jibble", saveJibble);
+  form("#f-paq", savePaq);
+  form("#f-cnt", saveCnt);
+  const adj = main.querySelector("#adjudicar");
+  if (adj) adj.onclick = () => adjudicar(main);
+  main.querySelectorAll("select[data-rol]").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const data = await api("permisos_guardar", { rol: sel.dataset.rol, modulo: sel.dataset.mod, acceso: sel.value });
+      const err = main.querySelector("#f-err");
+      if (data.error) { err.textContent = data.error; sel.value = sel.dataset.prev || "no"; }
+      else err.textContent = "";
+      sel.dataset.prev = sel.value;
+    });
+    sel.dataset.prev = sel.value;
+  });
+}
+
+function setMsg(form, data, okText) {
+  const err = form.querySelector("#f-err") || form.parentElement.querySelector("#f-err");
+  const ok = form.querySelector("#f-ok");
+  if (data.error) { if (err) err.textContent = data.error; if (ok) ok.textContent = ""; return false; }
+  if (err) err.textContent = "";
+  if (ok) ok.textContent = okText || "Listo";
+  return true;
+}
+
+async function saveProd(form) {
+  const body = Object.fromEntries(new FormData(form).entries());
+  if (!state.admin) { setMsg(form, { error: "Solo admin edita el catálogo." }); return; }
+  const data = await api("prod_save", body);
+  if (setMsg(form, data, data.sku || "Guardado")) go("#/m/productos");
+}
+async function saveOc(form) {
+  const body = {
+    proveedor_id: form.proveedor_id.value.trim(),
+    nota: form.nota.value,
+    lineas: readLines(form),
+  };
+  const data = await api("oc_save", body);
+  if (setMsg(form, data)) go("#/doc/oc/" + encodeURIComponent(data.id));
+}
+async function saveRec(form) {
+  const lineas = [...form.querySelectorAll(".linea")].map((row) => ({
+    oc_linea_id: row.dataset.id,
+    cantidad: Number(row.querySelector("[name=cantidad]").value),
+    bodega_id: row.querySelector("[name=bodega]").value,
+  })).filter((l) => l.cantidad > 0);
+  const id = parseRoute().id;
+  const data = await api("oc_recibir", { oc_id: id, factura_prov: form.factura_prov.value, lineas });
+  if (setMsg(form, data, "Recepción " + (data.numero || "") + " · " + (data.estado || ""))) go("#/doc/oc/" + encodeURIComponent(id));
+}
+async function saveOv(form) {
+  const data = await api("ov_save", {
+    nombre: form.nombre.value, apellido: form.apellido.value, cedula: form.cedula.value, notas: form.notas.value,
+    lineas: readLines(form),
+  });
+  setMsg(form, data, data.numero ? `${data.numero} · ${money(data.total)}` : "Listo");
+}
+async function saveCot(form) {
+  const data = await api("guardarCotizacion", {
+    cliente: form.cliente.value, telefono: form.telefono.value, email: form.email.value, notas: form.notas.value,
+    lineas: readLines(form).map((l) => ({ sku: l.sku, cant: l.cantidad, precio: l.precio, nombre: l.sku })),
+  });
+  setMsg(form, data, data.numero ? data.numero + " · " + money(data.total) : "Listo");
+}
+async function saveRfq(form) {
+  const data = await api("rfq_save", { nota: form.nota.value });
+  if (!setMsg(form, data, data.numero || "Creada")) return;
+  const box = document.getElementById("f-rfq-line");
+  box.hidden = false;
+  document.getElementById("rfq-id").value = data.id;
+}
+async function idProducto(sku) {
+  const list = await api("prod_list");
+  const want = sku.toUpperCase().replace(/^SUNSU-/, "");
+  const hit = (list.items || []).find((p) => String(p.sku || "").toUpperCase().replace(/^SUNSU-/, "") === want);
+  return hit ? hit.id : "";
+}
+async function saveRfqLine(form) {
+  const producto_id = await idProducto(form.sku.value.trim());
+  if (!producto_id) {
+    document.getElementById("f-err2").textContent = "Ese SKU no está en el catálogo ERP.";
+    return;
+  }
+  const data = await api("rfq_respuesta", {
+    rfq_id: form.rfq_id.value,
+    rfq_prov_id: form.dataset.prov || (form.dataset.prov = uuid()),
+    proveedor_id: form.proveedor_id.value.trim(),
+    producto_id,
+    cantidad: Number(form.cantidad.value),
+    precio: Number(form.precio.value),
+    elegida: form.elegida.checked,
+  });
+  document.getElementById("f-err2").textContent = data.error || "Respuesta guardada.";
+}
+async function adjudicar(main) {
+  const form = main.querySelector("#f-rfq-line");
+  const data = await api("rfq_adjudicar", { rfq_id: form.rfq_id.value, proveedor_id: form.proveedor_id.value.trim() });
+  const err = document.getElementById("f-err2");
+  if (data.error) err.textContent = data.error;
+  else go("#/doc/oc/" + encodeURIComponent(data.id));
+}
+async function saveCli(form) {
+  const data = await api("cli_save", Object.fromEntries(new FormData(form).entries()));
+  if (setMsg(form, data, "Clienta guardada")) go("#/m/clientes");
+}
+async function saveProv(form) {
+  const data = await api("prov_save", Object.fromEntries(new FormData(form).entries()));
+  if (setMsg(form, data, "Proveedor " + (data.id || ""))) go("#/m/proveedores");
+}
+async function saveTrf(form) {
+  const data = await api("trf_enviar", { origen_id: form.origen_id.value, destino_id: form.destino_id.value, lineas: readLines(form) });
+  if (setMsg(form, data, data.numero || "Enviada")) {
+    const rec = await api("trf_recibir", { id: data.id });
+    setMsg(form, rec, "Recibida en destino");
+  }
+}
+async function saveCaja(form) {
+  const data = await api("cajaV2Mov", Object.fromEntries(new FormData(form).entries()));
+  if (setMsg(form, data)) go("#/m/caja");
+}
+async function saveJibble(form) {
+  const data = await api("testDiasJibble", { nombre: state.user.name });
+  const out = form.querySelector("#f-out");
+  if (data.error) { form.querySelector("#f-err").textContent = data.error; out.textContent = ""; return; }
+  form.querySelector("#f-err").textContent = "";
+  out.textContent = data.persona ? "Jibble encontró a " + data.persona : "Sin persona con ese nombre (" + (data.encontrados || []).length + " en la lista).";
+}
+async function savePaq(form) {
+  const data = await api("buscarPaquetes", { q: form.q.value });
+  const out = document.getElementById("f-out");
+  if (data.error) { out.innerHTML = fail(data); return; }
+  const items = data.resultados || data.items || data.paquetes || (Array.isArray(data) ? data : []);
+  out.innerHTML = `<div class="list">${(items || []).map((p) => `<div class="row"><div class="sku">${esc(p.sku || p.cedula)}</div><div><div class="name">${esc(p.paquete || p.nombre || "")}</div><div class="note">${esc((p.nombre || "") + " " + (p.apellido || ""))}</div></div><div class="meta">${esc(p.usados ?? "")}/${esc((p.usos || []).length)}</div></div>`).join("") || `<p class="note">Sin resultados.</p>`}</div>`;
+}
+async function saveCnt(form) {
+  const data = await api("conteo_abrir", { bodega_id: form.bodega_id.value });
+  setMsg(form, data, data.numero ? "Abierto " + data.numero : "Listo");
+}
+
+window.addEventListener("hashchange", draw);
+if ("serviceWorker" in navigator && !local) navigator.serviceWorker.register("/sw.js");
+draw();
+</script>
+</body>
+</html>
