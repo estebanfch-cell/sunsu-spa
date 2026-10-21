@@ -43,15 +43,87 @@ function activoCat(v: unknown): boolean {
   return !(v === false || v === "FALSE" || v === "NO" || v === 0 || v === "0");
 }
 async function tickets(ctx: Ctx) { return ctx.db.all("tickets"); }
+const MESES_ES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const DIAS_ES = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+
 async function dashboard(ctx: Ctx): Promise<R> {
-  const hoy = ecuadorParts(ctx.now).ymd;
-  const rows = (await tickets(ctx)).filter((t) => ymdUtc(t.timestamp) === hoy && !esInterno(t.atendido_por, t.id_3));
+  const ec = ecuadorParts(ctx.now);
+  const rows = (await tickets(ctx)).filter((t) => !esInterno(t.atendido_por, t.id_3));
+  const lunes = addDays(ec.ymd, -((ec.dow + 6) % 7));
+  const dias: { k: string; label: string; total: number; tickets: number }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const k = addDays(lunes, i);
+    const day = Number(k.slice(8, 10));
+    const dow = new Date(Date.UTC(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, day)).getUTCDay();
+    dias.push({ k, label: `${DIAS_ES[dow]} ${day}`, total: 0, tickets: 0 });
+  }
+  const finMes = new Date(Date.UTC(ec.y, ec.m, 0)).getUTCDate();
+  const semanas: { label: string; ini: number; fin: number; total: number }[] = [];
+  let cursor = 1;
+  let nSem = 1;
+  while (cursor <= finMes) {
+    const dow = new Date(Date.UTC(ec.y, ec.m - 1, cursor)).getUTCDay();
+    let fin = dow === 0 ? cursor : cursor + (7 - dow);
+    if (fin > finMes) fin = finMes;
+    semanas.push({ label: `Sem ${nSem} (${cursor}–${fin}) (${fin - cursor + 1})`, ini: cursor, fin, total: 0 });
+    cursor = fin + 1;
+    nSem++;
+  }
+  const hoyT = {
+    tickets: 0, venta: 0, faciales: 0, paquetes: 0, productosN: 0,
+    pagos: { efectivo: 0, transferencia: 0, tarjeta: 0, mixto: 0, otros: 0 },
+  };
+  let semTot = 0;
+  let mesTot = 0;
+  const mesKey = ec.ymd.slice(0, 7);
+  for (const t of rows) {
+    const k = ymdUtc(t.timestamp);
+    if (!k) continue;
+    const tot = n(t.estimado);
+    if (k.slice(0, 7) === mesKey) {
+      mesTot += tot;
+      const dia = Number(k.slice(8, 10));
+      const sem = semanas.find((w) => dia >= w.ini && dia <= w.fin);
+      if (sem) sem.total += tot;
+    }
+    const enSem = dias.find((d) => d.k === k);
+    if (enSem) { enSem.total += tot; enSem.tickets++; semTot += tot; }
+    if (k !== ec.ymd) continue;
+    hoyT.tickets++;
+    hoyT.venta += tot;
+    if (s(t.facial_hecho)) hoyT.faciales++;
+    if (s(t.compra_pack_3) && s(t.compra_pack_3).toLowerCase() !== "false") hoyT.paquetes++;
+    if (s(t.compra_pack_6) && s(t.compra_pack_6).toLowerCase() !== "false") hoyT.paquetes++;
+    hoyT.productosN += productQtys(t).reduce((a, p) => a + p.qty, 0);
+    const pg = repartirPagos(s(t.comp), tot);
+    hoyT.pagos.efectivo += pg.efectivo;
+    hoyT.pagos.transferencia += pg.transferencia;
+    hoyT.pagos.tarjeta += pg.tarjeta;
+    hoyT.pagos.mixto += pg.mixto;
+    hoyT.pagos.otros += pg.otros;
+  }
   const caja = await ctx.db.all("caja_chica");
   const ultimo = caja[caja.length - 1];
   return {
-    hoy: rows.length, semana: rows.length, mes: rows.length,
+    hoy: { ...hoyT, venta: round2(hoyT.venta) },
+    semana: { total: round2(semTot), dias: dias.map((d) => ({ k: d.k, label: d.label, total: round2(d.total), tickets: d.tickets })) },
+    mes: {
+      total: round2(mesTot),
+      nombre: MESES_ES[ec.m] || "",
+      semanas: semanas.map((w) => ({ label: w.label, total: round2(w.total) })),
+    },
     caja: n(ultimo?.saldo), citasHoy: 0, gcHoy: 0, gcVal: 0, gcChips: [], paqChips: [],
-    actualizado: ecuadorParts(ctx.now).isoWall,
+    actualizado: ec.hm,
+  };
+}
+
+function cuenta(u: R): R {
+  return {
+    ...u,
+    id: u.id ?? u.usuario,
+    nombre: s(u.nombre || u.name || u.usuario),
+    short: s(u.short || u.nombre || u.name),
+    rol: s(u.rol || u.role),
   };
 }
 function toIn(r: R): TicketIn {
@@ -378,66 +450,99 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 
   if (action === "usuarioCambiarPin") {
     const uid = s(p.uid);
+    const pinNuevo = s(p.pinNuevo);
+    const pinActual = s(p.pinActual);
+    if (!/^\d{4}$/.test(pinNuevo)) return { error: "La clave nueva debe ser de 4 dígitos" };
+    const app = (await ctx.db.all("app_usuarios")).map(cuenta);
+    if (app.length) {
+      const u = app.find((x) => String(x.id) === uid);
+      if (!u) return { error: "Usuario no encontrado" };
+      if (u.bloqueado) return { error: "⚙️ Sistema en actualización — si requieres información adicional, comunícate con el administrador" };
+      const falta = "No se pudo verificar el PIN. Aplica 0009b_compat_0008.sql.";
+      let coincide: unknown;
+      let enUso: unknown;
+      let hash: unknown;
+      try { coincide = await ctx.db.rpc("pin_coincide", { p_id: uid, p_pin: pinActual }); }
+      catch { return { error: falta }; }
+      if (coincide !== true) return { error: "Clave actual incorrecta" };
+      try { enUso = await ctx.db.rpc("pin_en_uso", { p_pin: pinNuevo, p_excepto: uid }); }
+      catch { return { error: falta }; }
+      if (enUso === true) return { error: "Esa clave ya la usa otro usuario — elige otra" };
+      try { hash = await ctx.db.rpc("hash_pin_bcrypt", { p_pin: pinNuevo }); }
+      catch { return { error: falta }; }
+      if (typeof hash !== "string" || !hash.startsWith("$2")) return { error: falta };
+      await ctx.db.write(s(u.nombre), "app_usuarios", "update", { id: u.id }, { pin_hash: hash, pin_reset: false });
+      return { ok: true };
+    }
+    await ensureUsers(ctx.db, "sistema");
     const users = await ctx.db.all("usuarios");
     const u = users.find((x) => x.id === uid);
     if (!u) return { error: "Usuario no encontrado" };
     if (u.bloqueado) return { error: "⚙️ Sistema en actualización — si requieres información adicional, comunícate con el administrador" };
-    if (!/^\d{4}$/.test(s(p.pinNuevo))) return { error: "La clave nueva debe ser de 4 dígitos" };
-    if (!u.pin_hash || await hashPin(s(p.pinActual), s(u.pin_salt)) !== u.pin_hash) return { error: "Clave actual incorrecta" };
+    if (!u.pin_hash || await hashPin(pinActual, s(u.pin_salt)) !== u.pin_hash) return { error: "Clave actual incorrecta" };
     for (const o of users) {
       if (o.id === uid || !o.pin_hash) continue;
-      if (await hashPin(s(p.pinNuevo), s(o.pin_salt)) === o.pin_hash) return { error: "Esa clave ya la usa otro usuario — elige otra" };
+      if (await hashPin(pinNuevo, s(o.pin_salt)) === o.pin_hash) return { error: "Esa clave ya la usa otro usuario — elige otra" };
     }
     const salt = newSalt();
-    await ctx.db.write(s(u.nombre), "usuarios", "update", { id: uid }, { pin_hash: await hashPin(s(p.pinNuevo), salt), pin_salt: salt, pin_reset: false });
+    await ctx.db.write(s(u.nombre), "usuarios", "update", { id: uid }, { pin_hash: await hashPin(pinNuevo, salt), pin_salt: salt, pin_reset: false });
     return { ok: true };
   }
 
   if (action === "getUsuarios") {
     const app = await ctx.db.all("app_usuarios");
     if (app.length) {
-      return app.map((u) => ({
-        id: u.id ?? u.usuario, name: u.nombre ?? u.name ?? u.usuario, short: u.short ?? u.nombre ?? u.name,
-        role: normalizarRol(s(u.rol || u.role)), color: u.color, bloqueado: !!u.bloqueado, pinReset: !!u.pin_reset,
-      }));
+      return app.map((raw) => {
+        const u = cuenta(raw);
+        return {
+          id: u.id, name: u.nombre, short: u.short, role: normalizarRol(s(u.rol)),
+          color: u.color, bloqueado: !!u.bloqueado, pinReset: !!u.pin_reset,
+        };
+      });
     }
     await ensureUsers(ctx.db, "sistema");
     return (await ctx.db.all("usuarios")).map(publico);
   }
   if (action === "usuarioBloqueado") {
-    const u = (await ctx.db.all("usuarios")).find((x) => x.id === s(p.uid));
+    const app = (await ctx.db.all("app_usuarios")).map(cuenta);
+    const rows = app.length ? app : await ctx.db.all("usuarios");
+    const u = rows.find((x) => String(x.id) === s(p.uid));
     return { bloqueado: !u || !!u.bloqueado };
   }
   if (action === "usuariosFull") {
     const d = need(["admin_master", "super_admin"]); if (d) return d;
-    return { ok: true, users: (await ctx.db.all("usuarios")).map((u) => ({ ...publico(u), pin: u.pin_hash ? "••••" : "" })) };
+    const app = await ctx.db.all("app_usuarios");
+    const rows = app.length ? app.map(cuenta) : await ctx.db.all("usuarios");
+    return { ok: true, users: rows.map((u) => ({ ...publico(u), pin: u.pin_hash ? "••••" : "" })) };
   }
   if (action === "usuarioPinReset" || action === "usuarioBloquear" || action === "saveUsuarios") {
     const d = need(action === "saveUsuarios" ? ["admin_master", "super_admin"] : ADMIN); if (d) return d;
+    const app = await ctx.db.all("app_usuarios");
+    const table = app.length ? "app_usuarios" : "usuarios";
+    const prev = app.length ? app.map(cuenta) : await ctx.db.all("usuarios");
     if (action === "usuarioBloquear") {
       if (s(p.uid) === "efch") return { error: "El admin_master no se puede bloquear" };
-      const u = (await ctx.db.all("usuarios")).find((x) => x.id === s(p.uid));
+      const u = prev.find((x) => String(x.id) === s(p.uid));
       if (!u) return { error: "Usuario no encontrado" };
-      await ctx.db.write(A, "usuarios", "update", { id: u.id }, { bloqueado: !!p.bloqueado });
+      await ctx.db.write(A, table, "update", { id: u.id }, { bloqueado: !!p.bloqueado });
       if (p.bloqueado) {
         for (const tk of await ctx.db.all("sesiones")) {
-          if (tk.uid === u.id) await ctx.db.write(A, "sesiones", "delete", { token: tk.token }, null);
+          if (String(tk.uid) === String(u.id)) await ctx.db.write(A, "sesiones", "delete", { token: tk.token }, null);
         }
       }
       return { ok: true, uid: u.id, bloqueado: !!p.bloqueado };
     }
     if (action === "usuarioPinReset") {
-      const u = (await ctx.db.all("usuarios")).find((x) => x.id === s(p.uid));
+      const u = prev.find((x) => String(x.id) === s(p.uid));
       if (!u) return { error: "Usuario no encontrado" };
-      await ctx.db.write(A, "usuarios", "update", { id: u.id }, { pin_reset: !!p.activar });
+      await ctx.db.write(A, table, "update", { id: u.id }, { pin_reset: !!p.activar });
       return { ok: true, uid: u.id, pinReset: !!p.activar };
     }
-    const prev = await ctx.db.all("usuarios");
     for (const u of (p.users as R[]) || []) {
-      const old = prev.find((x) => x.id === u.id);
+      const old = prev.find((x) => String(x.id) === s(u.id));
       const row = { id: s(u.id), nombre: s(u.name), short: s(u.short), rol: s(u.role) || "staff", color: s(u.color) };
-      if (old) await ctx.db.write(A, "usuarios", "update", { id: row.id }, row);
-      else await ctx.db.write(A, "usuarios", "insert", {}, { ...row, bloqueado: false, pin_reset: false });
+      if (old) await ctx.db.write(A, table, "update", { id: row.id }, row);
+      else await ctx.db.write(A, table, "insert", {}, { ...row, bloqueado: false, pin_reset: false });
     }
     return { ok: true };
   }

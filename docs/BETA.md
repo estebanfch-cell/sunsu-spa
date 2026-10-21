@@ -2,7 +2,7 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker está en `/sw.js` (caché `2026-10-21-ASISTENCIA-2`) porque la página vive en la raíz, no en `/beta/`. El ícono de iOS va embebido en `beta.html`.
+El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-21-SCOPE`) y se registra con `scope: "/beta"`. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 
@@ -29,6 +29,15 @@ supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/000
 supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0009_erp_permisos.sql
 supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
 ```
+
+Después del merge de los arreglos urgentes, con 0007/0009/0010 ya aplicados:
+
+```bash
+supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0009b_compat_0008.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
+
+`0009b_compat_0008.sql` copia `role`→`rol` y `name`→`nombre` cuando esas columnas existen y el destino está vacío, re-apunta `sesiones.uid` a `app_usuarios` (la FK solo si el tipo es `text` y no deja huérfanas), deja `app_acceso` como security definer y `app_read` como security invoker solo para `service_role`. El cambio de PIN usa `pin_coincide`, `pin_en_uso` y `hash_pin_bcrypt`. Publicar también `sw.js`, `beta.html` y `manifest.webmanifest`: el worker de alcance raíz que ya está en los teléfonos se reemplaza al pedir `/sw.js`.
 
 La asistencia propia va en un SQL aparte, después de 0009:
 
@@ -72,16 +81,16 @@ El número de ticket usa `next_ticket_num()` (`ticket_seq`) cuando la función e
 
 Acciones del edge, agrupadas:
 
-- **Implementadas.** `version`, `login`, `whoami`, `permisos_get`, `permisos_guardar`, catálogo, inventario calculado (entradas − ventas desde 2026-05-22), historial, tickets del día, editar/eliminar/excluir comisión, factura y cobro, gift cards, paquetes y usos, promos, caja v2, propinas, multas, dashboard de cosmetóloga, reporte admin, cotizaciones, mensajes, seguimiento, KPI del mes, roles, cabina (lectura y la mayoría de escrituras), bitácora, CRUD `beta*`, y el motor ERP (`prod_*`, `stk_*`, `oc_*`, `rfq_*`, `trf_*`, `conteo_*`, `ajuste_save`, `ov_save`, `ov_anular`, `reorden_sugerir`).
+- **Implementadas.** `version`, `login`, `whoami`, `permisos_get`, `permisos_guardar`, catálogo, inventario calculado (entradas − ventas desde 2026-05-22), historial, tickets del día, editar/eliminar/excluir comisión, factura y cobro, gift cards, paquetes y usos, promos, caja v2, propinas, multas, dashboard de cosmetóloga, reporte admin, cotizaciones, mensajes, seguimiento, KPI del mes, roles, cabina (lectura y la mayoría de escrituras), bitácora, CRUD `beta*`, y el motor ERP (`prod_*`, `stk_*`, `oc_*`, `pago_save`, `oc_devolver`, `rfq_*`, `trf_*`, `conteo_*`, `ajuste_save`, `ov_save`, `ov_anular`, `reorden_sugerir`). La pantalla de la OC registra el pago y la devolución.
 - **Asistencia.** `asis_config`, `asis_config_guardar`, `asis_marcar`, `asis_hoy`, `asis_periodo`, `asis_corregir`, `asis_auditoria`, `asis_permiso_solicitar`, `asis_permiso_resolver`, `asis_feriado`. `getRolIndividual` usa esas horas. `getPermisos`, `savePermiso` y `updatePermiso` quedan en el módulo asistencia y solo un admin aprueba.
-- **Parciales.** `getDashboardHoy` (semana y mes repiten el conteo de hoy). `testDiasJibble` sigue como sonda del token de Jibble; la pantalla ya no lo llama. `getCitas` / etiquetas Acuity. `getKPIsHistoricos` (el .xls de Mi Negocio no está). `guardarGCDigital`, seguimiento, WhatsApp, tarjetas enviadas y fotos de cabina escriben en `app_kv` y, si la columna existe, copian a la tabla de 0008. `getHistorialComisiones` lee `historial_comisiones` cuando la tabla responde. `crearTicket` numera con `ticket_seq` si el RPC existe.
-- **Faltan.** Cron (factura, efectivo, respaldos, KPI histórico). Subida a Drive y correo de Gmail. Menú de la hoja, reparación de fórmulas y `onEdit`. Push y PDF. `pago_save` y `oc_devolver` están en el permiso y la pantalla todavía no los llama: el motor responde «Operación ERP desconocida». El calendario de feriados nace vacío. El import de `jibble_historial` lo hace el coordinador. Timesheets vivos de Jibble y archivos de Drive/Gmail.
+- **Parciales.** `getDashboardHoy` arma hoy, la semana lunes–domingo y las semanas calendario del mes con el `estimado` de `tickets` (sin internos). Citas de Acuity y gift cards del día siguen en cero. `testDiasJibble` sigue como sonda del token de Jibble; la pantalla ya no lo llama. `getCitas` / etiquetas Acuity. `getKPIsHistoricos` (el .xls de Mi Negocio no está). `guardarGCDigital`, seguimiento, WhatsApp, tarjetas enviadas y fotos de cabina escriben en `app_kv` y, si la columna existe, copian a la tabla de 0008. `getHistorialComisiones` lee `historial_comisiones` cuando la tabla responde. `crearTicket` numera con `ticket_seq` si el RPC existe. `getRolIndividual` lee `rrhh_empleadas`, horas de asistencia y, si `rol_calcular` no responde, comisiones de `tickets` / catálogo / multas.
+- **Faltan.** Cron (factura, efectivo, respaldos, KPI histórico). Subida a Drive y correo de Gmail. Menú de la hoja, reparación de fórmulas y `onEdit`. Push y PDF. El calendario de feriados nace vacío. El import de `jibble_historial` lo hace el coordinador. Timesheets vivos de Jibble y archivos de Drive/Gmail.
 
 ## Huecos que hay que leer antes de comparar números
 
 - El stock de percha de la hoja INVENTARIO no se migró. Venta = `stock_inicial` (casi siempre 0) + entradas recibidas, sin las notas «COMPRA DIRECTA», menos lo vendido desde el 22 de mayo de 2026. Los conteos físicos históricos quedan como registro, no se re-postean. Cabina abre con el saldo importado, no con el historial de consumo.
-- `ov_save` descuenta inventario y crea la orden de venta. No inserta la fila de `tickets`, así que esa venta no entra todavía a comisiones ni al ticket del día.
+- `ov_save` descuenta inventario, crea la orden de venta e inserta la fila de `tickets` (columnas de producto, `estimado`, `atendido_por`). `ov_anular` deja `atendido_por` vacío para que esa venta salga de `v_tickets`. El stock de percha de la hoja sigue sin migrar.
 - Cada movimiento ERP es un `app_write` aparte. El trigger de uso y el de «no borrar kardex» corren por sentencia. No hay una sola transacción que envuelva la recepción completa. Las pruebas locales sí son un solo proceso (`MemoryDb`).
-- La service role salta el RLS. El candado que ve el personal es `handle()`: niega el módulo, fuerza el nombre propio y quita costos, teléfonos y correos. `app_read` hace `set local role sunsu_rls` para quien lo llame. `SupabaseDb.all` no lo usa, porque filtrar tickets dentro de un total (inventario, comisiones) rompería la cifra. Quien lea PostgREST directo con la service role ve todo.
+- La service role salta el RLS. El candado que ve el personal es `handle()`: niega el módulo, fuerza el nombre propio y quita costos, teléfonos y correos. `app_read` (0009b, security invoker, solo `service_role`) hace `set local role sunsu_rls`. `app_acceso` es security definer para poder leer `app_modulos`. `SupabaseDb.all` no llama a `app_read`, porque filtrar tickets dentro de un total (inventario, comisiones) rompería la cifra. Quien lea PostgREST directo con la service role ve todo. El listado de clientas antiguas deja el teléfono en blanco salvo admin y super_admin.
 - `erp_clientes` no tiene «atendida por». Por eso una cosmetóloga, cuyo módulo es propio, no ve el directorio en la pantalla.
 - `app_settings` existe en 0008 y esta beta no lo escribe.

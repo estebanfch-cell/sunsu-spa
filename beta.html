@@ -510,7 +510,24 @@ async function renderInicio() {
   const data = await api("home");
   if (data.error && !data.bajos) return fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>`;
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
-  return `
+  let pulso = "";
+  if (state.admin) {
+    const dash = await api("getDashboardHoy", {});
+    if (!dash.error && dash.hoy && dash.semana) {
+      const dias = (dash.semana.dias || []).map((d) => `<div class="card"><div class="k">${esc(d.label)}</div><div class="v">${money(d.total)}</div><div class="note">${esc(d.tickets)} tickets</div></div>`).join("");
+      const semanas = (dash.mes.semanas || []).filter((w) => Number(w.total) > 0).map((w) => `<div class="row"><div class="name">${esc(w.label)}</div><div class="meta">${money(w.total)}</div></div>`).join("");
+      pulso = `<h2>Hoy</h2>
+        <div class="grid">
+          <div class="card"><div class="k">Tickets</div><div class="v">${esc(dash.hoy.tickets ?? 0)}</div></div>
+          <div class="card"><div class="k">Venta</div><div class="v">${money(dash.hoy.venta)}</div></div>
+          <div class="card"><div class="k">Semana</div><div class="v">${money(dash.semana.total)}</div></div>
+          <div class="card"><div class="k">${esc(dash.mes.nombre || "Mes")}</div><div class="v">${money(dash.mes.total)}</div></div>
+        </div>
+        <h2>Semana</h2><div class="grid">${dias}</div>
+        <h2>Mes</h2><div class="list">${semanas || `<p class="note">Sin ventas este mes.</p>`}</div>`;
+    }
+  }
+  return `${pulso}
     <div class="grid">
       <div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>
       <div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div>
@@ -857,8 +874,15 @@ async function renderOc(id) {
       <input name="cantidad" inputmode="decimal" placeholder="Recibir" aria-label="Cantidad a recibir">
       <select name="bodega" aria-label="Bodega de esta línea"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
     </div>`).join("");
+  const pago = state.admin ? `
+    <h2>Pago al proveedor</h2>
+    <p class="note">${esc(o.estado_pago || "pendiente")} · pagado ${money(o.pagado || 0)} · saldo ${money(o.saldo ?? o.total)}</p>
+    <form id="f-pago"><label>Monto</label><input name="monto" inputmode="decimal" required><button class="btn" type="submit">Registrar pago</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
+    <h2>Devolver al proveedor</h2>
+    <form id="f-dev">${lineas.replaceAll('placeholder="Recibir"', 'placeholder="Devolver"').replaceAll("Cantidad a recibir", "Cantidad a devolver")}<button class="btn ghost" type="submit">Devolver</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>` : "";
   return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. Cada línea elige su bodega. Uso ambos sin bodega se rechaza, no se redirige.</p>
-    <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+    <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
+    ${pago}`;
 }
 
 function renderOv() {
@@ -867,7 +891,7 @@ function renderOv() {
     <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
     <label>Notas</label><textarea name="notas"></textarea>
     <button class="btn" type="submit">Guardar ticket</button>
-    <p class="note">Descuenta Venta en productos y Cabina si el servicio tiene receta. Esta orden todavía no entra al cálculo de comisiones del ticket de hoja.</p>
+    <p class="note">Descuenta Venta en productos y Cabina si el servicio tiene receta. La venta queda en tickets y entra a comisiones.</p>
     <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
 }
 
@@ -939,6 +963,8 @@ function bind(main) {
   form("#f-prod", saveProd);
   form("#f-oc", saveOc);
   form("#f-rec", saveRec);
+  form("#f-pago", savePago);
+  form("#f-dev", saveDev);
   form("#f-ov", saveOv);
   form("#f-cot", saveCot);
   form("#f-rfq", saveRfq);
@@ -997,6 +1023,21 @@ async function saveRec(form) {
   const id = parseRoute().id;
   const data = await api("oc_recibir", { oc_id: id, factura_prov: form.factura_prov.value, lineas });
   if (setMsg(form, data, "Recepción " + (data.numero || "") + " · " + (data.estado || ""))) go("#/doc/oc/" + encodeURIComponent(id));
+}
+async function savePago(form) {
+  const id = parseRoute().id;
+  const data = await api("pago_save", { oc_id: id, monto: Number(form.monto.value) });
+  if (setMsg(form, data, data.estado_pago ? `Pago ${data.estado_pago} · saldo ${money(data.saldo)}` : "Listo")) go("#/doc/oc/" + encodeURIComponent(id));
+}
+async function saveDev(form) {
+  const lineas = [...form.querySelectorAll(".linea")].map((row) => ({
+    oc_linea_id: row.dataset.id,
+    cantidad: Number(row.querySelector("[name=cantidad]").value),
+    bodega_id: row.querySelector("[name=bodega]").value,
+  })).filter((l) => l.cantidad > 0);
+  const id = parseRoute().id;
+  const data = await api("oc_devolver", { oc_id: id, lineas });
+  if (setMsg(form, data, "Devolución · " + (data.estado || ""))) go("#/doc/oc/" + encodeURIComponent(id));
 }
 async function saveOv(form) {
   const data = await api("ov_save", {
@@ -1195,7 +1236,17 @@ async function saveCnt(form) {
 }
 
 window.addEventListener("hashchange", draw);
-if ("serviceWorker" in navigator && !local) navigator.serviceWorker.register("/sw.js");
+if ("serviceWorker" in navigator && !local) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const reg of regs) {
+      let path = "/";
+      try { path = new URL(reg.scope).pathname || "/"; } catch { path = "/"; }
+      const script = (reg.active && reg.active.scriptURL) || (reg.waiting && reg.waiting.scriptURL) || (reg.installing && reg.installing.scriptURL) || "";
+      if ((path === "/" || path === "") && script.indexOf("/sw.js") >= 0) reg.unregister();
+    }
+  }).catch(() => {});
+  navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
+}
 draw();
 </script>
 </body>
