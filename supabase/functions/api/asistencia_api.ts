@@ -3,8 +3,9 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, s, type Row } from "./domain.ts";
-import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
+import { acceso, esAdmin, esPropio, matrizDe, normalizarRol } from "./permisos.ts";
 import {
+  diasDeVacacion, saldoVacaciones, validarSolicitudVacacion,
   calcularDia, calcularNomina, configDesde, evaluarUbicacion, instanteEcuador, validarSecuencia,
   type JibbleIn, type MarcajeIn, type NominaHoras, type PermisoIn,
 } from "./asistencia.ts";
@@ -13,6 +14,31 @@ type R = Record<string, unknown>;
 
 function ymdDeTs(ts: string): string {
   return ecuadorParts(new Date(ts)).ymd;
+}
+
+/** gerente aprueba solicitudes de otras; no ve marcas, horas ni dinero ajenos. */
+function puedeAprobar(rol: string): boolean {
+  return esAdmin(rol) || normalizarRol(rol) === "gerente";
+}
+
+async function empleadaDe(ctx: Ctx, nombre: string): Promise<Row | undefined> {
+  return (await ctx.db.all("rrhh_empleadas")).find((r) => s(r.nombre_app) && mismo(s(r.nombre_app), nombre));
+}
+
+export async function saldoDe(ctx: Ctx, nombre: string) {
+  const e = await empleadaDe(ctx, nombre);
+  return saldoVacaciones({
+    fechaIngreso: e ? s(e.fecha_ingreso).slice(0, 10) || null : null,
+    hoy: ecuadorParts(ctx.now).ymd,
+    sueldo: e ? n(e.sueldo_base) : 0,
+    permisos: permisosDe(await ctx.db.all("permisos"), nombre),
+  });
+}
+
+function saldoPub(sal: Awaited<ReturnType<typeof saldoDe>>, conDinero: boolean) {
+  if (conDinero) return sal;
+  const { provisionMensual: _a, valorDia: _b, valorDisponible: _c, ...rest } = sal;
+  return rest;
 }
 
 function propio(ses: Ses, matriz: Awaited<ReturnType<typeof matrizDe>>): boolean {
@@ -158,14 +184,18 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   const crudos = (await ctx.db.all("asistencia_marcajes")).filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha);
   const marcajes = marcajesDe(crudos, nombre);
   const dia = calcularDia(fecha, marcajes, cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
-  const permisos = (await ctx.db.all("permisos")).filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses)).map(permisoPub);
+  const permisos = (await ctx.db.all("permisos"))
+    .filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses) || (puedeAprobar(ses.rol) && /pend/i.test(s(r.estado))))
+    .map(permisoPub);
+  let vacaciones: unknown = null;
+  try { vacaciones = await saldoDe(ctx, nombre); } catch { vacaciones = null; }
   let auditoria: Row[] = [];
   try {
     auditoria = (await ctx.db.all("asistencia_auditoria"))
       .filter((r) => esAdmin(ses.rol) || esPropio(s(r.nombre), ses))
       .slice(-8).reverse();
   } catch { auditoria = []; }
-  const pendientes = esAdmin(ses.rol) ? permisos.filter((r) => /pend/i.test(s(r.estado))).length : 0;
+  const pendientes = puedeAprobar(ses.rol) ? permisos.filter((r) => /pend/i.test(s(r.estado)) && (esAdmin(ses.rol) || !esPropio(s(r.empleada), ses))).length : 0;
   let equipo: R[] | undefined;
   let feriados: R[] | undefined;
   if (esAdmin(ses.rol)) {
@@ -179,7 +209,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     } catch { /* la lista de fechas alcanza */ }
   }
   return {
-    ok: true, fecha, dia, marcajes: crudos.map(marcaPub), permisos, pendientes, equipo, feriados, auditoria: auditoria.map(audPub),
+    ok: true, fecha, dia, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), equipo, feriados, auditoria: auditoria.map(audPub),
     config: {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
@@ -234,28 +264,114 @@ extend("asis_auditoria", "any", async (_p, ctx, ses) => {
 
 extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
   const tipo = /vacac/i.test(s(p.tipo)) ? "VACACIONES" : "PERMISO";
-  if (!s(p.desde)) return { error: "Falta la fecha" };
+  const desde = s(p.desde).slice(0, 10);
+  const hasta = s(p.hasta || p.desde).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return { error: "Falta la fecha" };
+  if (hasta < desde) return { error: "La fecha final es antes de la inicial." };
+  if (tipo === "PERMISO" && !s(p.motivo)) return { error: "Escribe el motivo del permiso." };
   const nombre = esAdmin(ses.rol) && s(p.empleada) ? s(p.empleada) : ses.name;
+  const dias = diasDeVacacion({ desde, hasta });
+  if (tipo === "VACACIONES") {
+    const err = validarSolicitudVacacion(await saldoDe(ctx, nombre), dias);
+    if (err) return { error: err };
+  }
   const sr = await nextSheet(ctx.db, "permisos");
-  await ctx.db.write(actorOf(ses), "permisos", "insert", {}, {
-    sheet_row: sr, id_1: "P-" + sr, empleada: nombre, tipo,
-    fecha_inicio: s(p.desde).slice(0, 10), fecha_fin: s(p.hasta || p.desde).slice(0, 10),
+  const fila = {
+    sheet_row: sr, id_1: ctx.now.getTime() + Math.abs(sr), empleada: nombre, tipo,
+    fecha_inicio: desde, fecha_fin: hasta,
     horas: n(p.horas), motivo: s(p.motivo), estado: "PENDIENTE", solicitado: ecuadorParts(ctx.now).ymd,
-    orig: { tipo, por: ses.name },
+    dias, origin: "beta", orig: { tipo, por: ses.name },
+  };
+  await ctx.db.write(actorOf(ses), "permisos", "insert", {}, fila);
+  await auditar(ctx, ses, "solicitud", { nombre, permiso_sheet_row: sr, despues: { tipo, desde, hasta, dias, horas: n(p.horas) }, motivo: s(p.motivo) || tipo });
+  return { ok: true, id: String(ctx.now.getTime() + Math.abs(sr)), dias };
+});
+
+extend("asis_permiso_cancelar", "any", async (p, ctx, ses) => {
+  const row = (await ctx.db.all("permisos")).find((r) => s(r.id_1) === s(p.id) || String(r.sheet_row) === s(p.row));
+  if (!row) return { error: "Solicitud no encontrada" };
+  const duena = esPropio(s(row.empleada), ses);
+  if (!esAdmin(ses.rol) && !duena) return { error: "No tienes permiso" };
+  if (!esAdmin(ses.rol) && !/pend/i.test(s(row.estado))) return { error: "Solo se cancela una solicitud pendiente." };
+  if (esAdmin(ses.rol) && !/pend/i.test(s(row.estado)) && !s(p.motivo)) return { error: "Cancelar una solicitud ya resuelta necesita motivo." };
+  await ctx.db.write(actorOf(ses), "permisos", "update", { sheet_row: row.sheet_row }, {
+    estado: "CANCELADO", resuelto_por: ses.name, resuelto_ts: ctx.now.toISOString(), motivo_resolucion: s(p.motivo) || "cancelada",
   });
-  return { ok: true, id: "P-" + sr };
+  await auditar(ctx, ses, "permiso_cancelado", { nombre: s(row.empleada), permiso_sheet_row: row.sheet_row, antes: { estado: row.estado }, despues: { estado: "CANCELADO" }, motivo: s(p.motivo) || "cancelada" });
+  return { ok: true };
+});
+
+extend("asis_vacaciones", "any", async (p, ctx, ses) => {
+  const matriz = await matrizDe(ctx.db);
+  if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
+  if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, ...saldoPub(await saldoDe(ctx, ses.name), true) }] };
+  const nombres = s(p.nombre) ? [s(p.nombre)] : (await ctx.db.all("rrhh_empleadas")).map((r) => s(r.nombre_app)).filter(Boolean);
+  const personas = [];
+  for (const nombre of nombres) personas.push({ nombre, ...(await saldoDe(ctx, nombre)) });
+  return { ok: true, personas };
 });
 
 extend("asis_permiso_resolver", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo admin aprueba permisos y vacaciones" };
+  if (!puedeAprobar(ses.rol)) return { error: "Solo gerente o admin aprueba permisos y vacaciones" };
   const estado = /rechaz/i.test(s(p.estado)) ? "RECHAZADO" : "APROBADO";
   const rows = await ctx.db.all("permisos");
   const row = rows.find((r) => s(r.id_1) === s(p.id) || String(r.sheet_row) === s(p.row));
   if (!row) return { error: "Permiso no encontrado" };
+  if (!/pend/i.test(s(row.estado))) return { error: `Esta solicitud ya está ${s(row.estado).toLowerCase()}.` };
+  if (!esAdmin(ses.rol) && esPropio(s(row.empleada), ses)) return { error: "No puedes aprobar tu propia solicitud." };
+  if (estado === "RECHAZADO" && !s(p.motivo)) return { error: "El rechazo necesita un motivo." };
+  if (estado === "APROBADO" && /vacac/i.test(s(row.tipo))) {
+    const sal = await saldoDe(ctx, s(row.empleada));
+    const dias = diasDeVacacion({ desde: s(row.fecha_inicio), hasta: s(row.fecha_fin) });
+    // la propia solicitud cuenta como pendiente en el saldo; se descuenta para validar
+    const err = validarSolicitudVacacion({ ...sal, diasPendientes: Math.max(0, sal.diasPendientes - dias) }, dias);
+    if (err) return { error: err };
+  }
   const antes = { estado: row.estado };
-  await ctx.db.write(actorOf(ses), "permisos", "update", { sheet_row: row.sheet_row }, { estado, aprobado_por: ses.name });
+  await ctx.db.write(actorOf(ses), "permisos", "update", { sheet_row: row.sheet_row }, {
+    estado, aprobado_por: ses.name, resuelto_por: ses.name, resuelto_ts: ctx.now.toISOString(), motivo_resolucion: s(p.motivo),
+  });
   await auditar(ctx, ses, "permiso", { nombre: s(row.empleada), antes, despues: { estado }, motivo: s(p.motivo) || estado, permiso_sheet_row: row.sheet_row });
   return { ok: true, estado };
+});
+
+extend("asis_marca_manual", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin agrega una marca olvidada" };
+  if (!s(p.motivo)) return { error: "La marca manual necesita un motivo" };
+  const tipo = s(p.tipo);
+  if (!["entrada", "salida", "almuerzo_inicio", "almuerzo_fin"].includes(tipo)) return { error: "Tipo de marca desconocido." };
+  const nombre = s(p.nombre);
+  if (!nombre) return { error: "Falta la empleada" };
+  const d = new Date(s(p.ts));
+  if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s(p.ts)) || Number.isNaN(d.getTime())) return { error: "Hora inválida (usa 2026-10-21T09:05:00-05:00)" };
+  if (d.getTime() > ctx.now.getTime()) return { error: "No se agrega una marca en el futuro." };
+  const e = await empleadaDe(ctx, nombre);
+  const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
+    usuario_id: s(e?.nombre_app) || nombre, nombre, tipo, ts: d.toISOString(), origen: "manual",
+    dentro_radio: null, anulado: false, creado_por: ses.name, motivo_manual: s(p.motivo),
+  });
+  await auditar(ctx, ses, "marca_manual", { nombre, marcaje_id: s(saved?.id), despues: { tipo, ts: d.toISOString() }, motivo: s(p.motivo) });
+  return { ok: true, id: saved?.id };
+});
+
+extend("asis_dia", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin ve la asistencia del equipo" };
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(s(p.fecha)) ? s(p.fecha) : ecuadorParts(ctx.now).ymd;
+  const [marc, perms, fer, cfg, emps] = await Promise.all([
+    ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos"), feriadosDe(ctx), configDe(ctx), ctx.db.all("rrhh_empleadas"),
+  ]);
+  const jib = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
+  const nombres = new Set(emps.map((r) => s(r.nombre_app)).filter(Boolean));
+  for (const r of marc) if (ymdDeTs(s(r.ts)) === fecha && s(r.nombre)) nombres.add(s(r.nombre));
+  const filas = [];
+  for (const nombre of nombres) {
+    const mm = marcajesDe(marc, nombre);
+    const j = jibbleDe(jib, nombre).find((x) => x.fecha === fecha) || null;
+    const dia = calcularDia(fecha, mm, cfg, fer, permisosDe(perms, nombre), j);
+    const delDia = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha).sort((a, b) => s(a.ts).localeCompare(s(b.ts)));
+    filas.push({ nombre, dia, marcas: delDia.map(marcaPub) });
+  }
+  return { ok: true, fecha, filas };
 });
 
 extend("asis_foto", "any", async (p, ctx, ses) => {
@@ -276,11 +392,15 @@ extend("asis_feriado", "any", async (p, ctx, ses) => {
   const rows = await ctx.db.all("asistencia_feriados");
   const hit = rows.find((r) => s(r.fecha).slice(0, 10) === fecha);
   if (s(p.borrar) === "1" || p.borrar === true) {
-    if (hit) await ctx.db.write(actorOf(ses), "asistencia_feriados", "delete", { fecha: hit.fecha }, null);
+    if (hit) {
+      await ctx.db.write(actorOf(ses), "asistencia_feriados", "delete", { fecha: hit.fecha }, null);
+      await auditar(ctx, ses, "feriado_borrado", { nombre: "", antes: { fecha, nombre: s(hit.nombre) }, motivo: s(p.motivo) || "feriado borrado" });
+    }
     return { ok: true };
   }
   if (hit) await ctx.db.write(actorOf(ses), "asistencia_feriados", "update", { fecha: hit.fecha }, { nombre: s(p.nombre) });
   else await ctx.db.write(actorOf(ses), "asistencia_feriados", "insert", {}, { fecha, nombre: s(p.nombre) });
+  await auditar(ctx, ses, "feriado", { nombre: "", antes: hit ? { fecha, nombre: s(hit.nombre) } : null, despues: { fecha, nombre: s(p.nombre) }, motivo: s(p.motivo) || "feriado" });
   return { ok: true };
 });
 
@@ -348,6 +468,8 @@ function permisoPub(r: Row) {
     id: s(r.id_1) || s(r.sheet_row), row: r.sheet_row, empleada: s(r.empleada), tipo: s(r.tipo),
     desde: s(r.fecha_inicio).slice(0, 10), hasta: s(r.fecha_fin).slice(0, 10), horas: n(r.horas),
     motivo: s(r.motivo), estado: s(r.estado), aprobadoPor: s(r.aprobado_por),
+    dias: n(r.dias) || diasDeVacacion({ desde: s(r.fecha_inicio), hasta: s(r.fecha_fin) }),
+    resueltoTs: s(r.resuelto_ts), motivoResolucion: s(r.motivo_resolucion),
   };
 }
 

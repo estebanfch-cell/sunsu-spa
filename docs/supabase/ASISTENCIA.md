@@ -63,3 +63,14 @@ Un permiso es de día completo si es vacación, si las horas cubren la jornada, 
 | `asis_permiso_solicitar` | La sesión. Un admin puede indicar `empleada`. |
 
 `testDiasJibble` sigue en el edge como sonda del token. La pantalla de asistencia ya no lo llama.
+
+## v2 (0014) — sin Jibble
+
+SQL: `docs/supabase/pending/0014_asistencia_v2.sql` (idempotente, ya aplicado).
+
+- **Permisos y vacaciones.** La empleada solicita; **gerente, admin o super_admin** aprueba o rechaza. El gerente no aprueba lo suyo. Rechazar pide motivo. Solo se resuelve lo `PENDIENTE`. La solicitante cancela lo suyo pendiente (`CANCELADO`). Queda `resuelto_por`, `resuelto_ts`, `motivo_resolucion` y una fila de auditoría por solicitud, aprobación, rechazo y cancelación.
+- **Saldo de vacaciones** (`asis_vacaciones`, también en `asis_hoy.vacaciones`): 15 días por año completo desde `rrhh_empleadas.fecha_ingreso` (+1 por año desde el 6.º, máx. 15 extra). Antes del primer año completo no se pueden pedir. No se puede pedir más que lo disponible menos lo pendiente. Provisión mensual = sueldo/24, valor día = sueldo/30. El dinero solo lo ve la dueña o admin. `savePermiso` (ruta antigua) aplica la misma regla.
+- **Marca olvidada** (`asis_marca_manual`): solo admin, motivo obligatorio, `origen = 'manual'`, `creado_por`. No se acepta una hora futura.
+- **Asistencia del día** (`asis_dia`): solo admin. Por persona: marcas, estado (falta, permiso, Jibble, adentro, cerrada), horas, almuerzo, atraso.
+- **Resumen del mes** (`asis_periodo`) suma ahora `hrsTrabajadas`, `hrsOrdinarias`, `hrsAlmuerzo`, `diasPropios`, `diasJibble`.
+- **No se borra.** Un trigger impide borrar marcas (se anulan con motivo) y tocar o borrar la auditoría. Los feriados creados o borrados también quedan en la auditoría.
