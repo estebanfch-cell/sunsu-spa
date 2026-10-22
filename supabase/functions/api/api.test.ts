@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
-import { applyPlan, BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
+import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import { numeroTicket, quincenaDe } from "./ventas.ts";
 import "./handlers_extra.ts";
@@ -418,6 +418,77 @@ describe("erp", () => {
     assert.equal(rows.find((t) => Number(t.sheet_row) === 5)?.origin, "sheet");
     assert.equal(rows.find((t) => Number(t.sheet_row) === 6)?.origin, "sheet");
     assert.equal(rows.filter((t) => t.origin === "beta").length, 2);
+  });
+});
+
+describe("lugares, conteo y transferencias", () => {
+  it("el saldo de venta y cabina se queda, y casa arranca vacía", async () => {
+    const db = new MemoryDb(erpSeed());
+    const lista = await runErp("lugares_list", {}, db, "Emi");
+    assert.equal((lista.locales as Row[])[0].nombre, "La Esquina");
+    assert.equal((lista.lugares as Row[]).some((b) => b.nombre === "Cabina 1"), true);
+    assert.equal((lista.lugares as Row[]).some((b) => b.nombre === "Cabina 3"), true);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, 5);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina && r.bodega_id === BODEGA_CABINA)?.cantidad, 10);
+    assert.equal((await db.all("erp_stock")).some((r) => r.bodega_id === BODEGA_CASA), false);
+    assert.equal(usoCompatible("venta", "casa"), true);
+    assert.equal(puedeTransferir("cosmetologa", { id: BODEGA_CASA, tipo: "casa" }, { id: BODEGA_VENTA, tipo: "venta", local_id: LOCAL_ESQUINA }), "Solo un admin mueve stock con Casa");
+    assert.equal(puedeTransferir("cosmetologa", { id: BODEGA_VENTA, tipo: "venta", local_id: LOCAL_ESQUINA }, { id: BODEGA_CABINA, tipo: "cabina", local_id: LOCAL_ESQUINA }), null);
+  });
+
+  it("el conteo mueve solo lo contado y deja el ajuste en el kardex", async () => {
+    const db = new MemoryDb(erpSeed());
+    const abierto = await runErp("conteo_abrir", { bodega_id: BODEGA_VENTA, nota: "inicio" }, db, "Emi");
+    await runErp("conteo_guardar", { conteo_id: abierto.id, lineas: [{ producto_id: SEED_IDS.venta, contado: 3, lote: "" }] }, db, "Emi");
+    const antesAmbos = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.ambos && r.bodega_id === BODEGA_VENTA)?.cantidad;
+    const apl = await runErp("conteo_aplicar", { conteo_id: abierto.id }, db, "Emi");
+    assert.match(String(apl.numero), /^AJU-/);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, 3);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.ambos && r.bodega_id === BODEGA_VENTA)?.cantidad, antesAmbos);
+    assert.equal((await db.all("erp_movimientos")).some((m) => m.tipo === "conteo" && m.bodega_id === BODEGA_VENTA), true);
+    assert.equal((await db.all("erp_ajustes")).length, 1);
+  });
+
+  it("la cosmetóloga pasa venta a cabina y la consignación entra a la quincena", async () => {
+    const db = new MemoryDb(erpSeed());
+    await runErp("prod_save", { sku: "HT-090", nombre: "Sérum consigna", uso: "ambos", costo_promedio: 8, precio_venta: 20 }, db, "Emi");
+    const prod = (await db.all("erp_productos")).find((r) => r.sku === "HT-090");
+    const oc = await runErp("oc_save", { proveedor_id: SEED_IDS.prov, lineas: [{ producto_id: prod?.id, cantidad: 4, precio: 8 }] }, db, "Emi");
+    const lid = (await db.all("erp_oc_lineas"))[0].id;
+    await runErp("oc_recibir", { oc_id: oc.id, lineas: [{ oc_linea_id: lid, bodega_id: BODEGA_VENTA, cantidad: 4 }] }, db, "Emi");
+    const no = await runErp("trf_enviar", {
+      inmediata: true, _rol: "cosmetologa", origen_id: BODEGA_CASA, destino_id: BODEGA_VENTA,
+      lineas: [{ producto_id: prod?.id, cantidad: 1 }],
+    }, db, "Andrea");
+    assert.match(String(no.error), /admin/i);
+    const si = await runErp("trf_enviar", {
+      inmediata: true, _rol: "cosmetologa", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
+      lineas: [{ producto_id: prod?.id, cantidad: 2 }],
+    }, db, "Andrea");
+    assert.equal(si.ok, true);
+    assert.equal(si.consumo, true);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === prod?.id && r.bodega_id === BODEGA_VENTA)?.cantidad, 2);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === prod?.id && r.bodega_id === BODEGA_CABINA)?.cantidad, 2);
+    const cons = (await db.all("erp_consignacion_consumo"))[0];
+    assert.equal(cons.familia, "HT");
+    assert.equal(cons.cantidad, 2);
+    assert.equal(cons.costo_unit, 8);
+    const prov = (await db.all("erp_proveedores"))[0];
+    await db.write("Emi", "erp_proveedores", "update", { id: prov.id }, { nombre: "Hebetronic" });
+    const per = await (await import("./ventas.ts")).borradorConsig(db, new Date("2026-10-21T15:00:00Z"), { proveedor_id: prov.id });
+    const fila = (per.fact as Row[]).find((r) => r.sku === "HT-090");
+    assert.equal(fila?.consumido, 2);
+    assert.equal(fila?.subtotal, 16);
+    const otro = await runErp("lugar_guardar", { _rol: "admin", tipo: "local", nombre: "Norte", direccion: "Otra plaza" }, db, "Emi");
+    assert.equal(otro.ok, true);
+    const cab = await runErp("lugar_guardar", { _rol: "admin", tipo: "cabina", nombre: "Cabina 4", local_id: otro.id }, db, "Emi");
+    assert.equal(cab.ok, true);
+    const cosm = await runErp("lugar_guardar", { _rol: "cosmetologa", tipo: "cabina", nombre: "Cabina 5", local_id: LOCAL_ESQUINA }, db, "Andrea");
+    assert.match(String(cosm.error), /admin/i);
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0017_lugares.sql", import.meta.url), "utf8");
+    assert.match(sql, /La Esquina/);
+    assert.match(sql, /Cabina 1/);
+    assert.equal(sql.includes("update public.erp_stock"), false);
   });
 });
 
@@ -885,6 +956,12 @@ describe("beta shell", () => {
     assert.match(html, /tabButton\("bodega", "Bodega"\)/);
     assert.match(html, /Stock Venta/);
     assert.match(html, /Stock Cabina/);
+    assert.match(html, /La Esquina/);
+    assert.match(html, /Cabina 1/);
+    assert.match(html, /id="local-sel"/);
+    assert.match(html, /Pasar stock/);
+    assert.match(html, /Aplicar ajuste/);
+    assert.match(html, /Locales y cabinas/);
     assert.match(html, /aria-label="Crear ticket"/);
     assert.match(html, /aria-label="Más"/);
     assert.match(html, /safe-area-inset-bottom/);

@@ -5,13 +5,37 @@
 import { enPrueba, MemoryDb, type Db } from "./db.ts";
 import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguienteTestDoc, skuCode, type Row } from "./domain.ts";
 import { asignarTicketBeta } from "./lib.ts";
+import { familiaSku, quincenaActual } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
+export const LOCAL_ESQUINA = "33333333-3333-4333-8333-333333333333";
+export const BODEGA_CASA = "44444444-4444-4444-8444-444444444444";
+export const BODEGA_CABINA_2 = "55555555-5555-4555-8555-555555555552";
+export const BODEGA_CABINA_3 = "55555555-5555-4555-8555-555555555553";
 
 export function usoCompatible(uso: string, tipoBodega: string): boolean {
+  if (tipoBodega === "casa" || tipoBodega === "ubicacion") return true;
   if (uso === "ambos") return tipoBodega === "cabina" || tipoBodega === "venta";
   return uso === tipoBodega;
+}
+
+/** Vacío se trata como admin: los tests llaman runErp directo. */
+export function puedeTransferir(rol: string, origen: Row | undefined, destino: Row | undefined): string | null {
+  if (!origen || !destino) return "Elige bodega origen y destino";
+  if (String(origen.id) === String(destino.id)) return "El origen y el destino son el mismo lugar";
+  const r = s(rol);
+  const admin = r === "" || r === "admin" || r === "super_admin";
+  if (admin) return null;
+  const to = s(origen.tipo);
+  const td = s(destino.tipo);
+  if (to === "casa" || td === "casa") return "Solo un admin mueve stock con Casa";
+  if (s(origen.local_id) && s(destino.local_id) && s(origen.local_id) !== s(destino.local_id)) {
+    return "Solo un admin mueve stock entre locales";
+  }
+  const par = new Set([to, td]);
+  if (par.has("venta") && par.has("cabina")) return null;
+  return "Puedes pasar stock entre Venta y Cabina de tu local";
 }
 
 export interface Negativo {
@@ -241,6 +265,33 @@ function lineNet(cant: number, precio: number, desc = 0): number {
   return round2(cant * precio * (1 - (desc || 0) / 100));
 }
 
+function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: string, actor: string, now: Date): Step[] {
+  if (s(destino.tipo) !== "cabina") return [];
+  const q = quincenaActual(now);
+  const steps: Step[] = [];
+  for (const ln of lineas) {
+    const fam = familiaSku(s(ln.sku));
+    const cant = n(ln.cantidad);
+    if (!fam || !(cant > 0)) continue;
+    steps.push({ op: "upsert", table: "erp_consignacion_consumo", match: { id: id() }, row: {
+      transferencia_id: tid, producto_id: ln.producto_id, sku: skuCode(s(ln.sku)), cantidad: cant,
+      costo_unit: n(ln.costo), quincena_ini: q.ini, quincena_fin: q.fin, familia: fam,
+      bodega_id: destino.id, creado_por: actor, fecha: now.toISOString(), nota: numero,
+    } });
+  }
+  return steps;
+}
+
+function codigoNuevo(rows: Row[], prefix: string): string {
+  let m = 0;
+  const re = new RegExp("^" + prefix + "-(\\d+)$");
+  for (const r of rows) {
+    const mm = String(r.codigo || "").match(re);
+    if (mm) m = Math.max(m, Number(mm[1]));
+  }
+  return prefix + "-" + String(m + 1).padStart(3, "0");
+}
+
 export async function runErp(op: string, body: Row, db: Db, actor: string, now = new Date()): Promise<Row> {
   const bodegas = await db.all("erp_bodegas");
   const productos = await db.all("erp_productos");
@@ -329,6 +380,54 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       telefono: s(body.telefono), email: s(body.email), sector: s(body.sector), activo: body.activo !== false,
     } }]);
     return { ok: true, id: cid };
+  }
+
+  if (op === "lugares_list") {
+    const locales = (await db.all("erp_locales")).filter((r) => r.activo !== false);
+    const lugares = bodegas.filter((b) => b.activo !== false).map((b) => ({
+      id: b.id, codigo: b.codigo, nombre: b.nombre, tipo: b.tipo, local_id: b.local_id || null, orden: n(b.orden), activo: b.activo !== false,
+    }));
+    lugares.sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre)));
+    const localId = s(body.local_id) || (locales[0] ? String(locales[0].id) : "");
+    return { ok: true, locales, lugares, local_id: localId, uno: locales.length < 2 };
+  }
+  if (op === "lugar_guardar") {
+    const rol = s(body._rol);
+    if (rol && rol !== "admin" && rol !== "super_admin") return { error: "Solo un admin edita locales y cabinas" };
+    const tipo = s(body.tipo);
+    const nombre = s(body.nombre).trim();
+    if (!nombre) return { error: "Falta el nombre" };
+    if (tipo === "local") {
+      const locales = await db.all("erp_locales");
+      const prev = locales.find((r) => r.id === body.id);
+      const lid = prev ? String(prev.id) : id();
+      const codigo = prev ? s(prev.codigo) : codigoNuevo(locales, "LOC");
+      await applyPlan(db, actor, [{ op: "upsert", table: "erp_locales", match: { id: lid }, row: {
+        codigo, nombre, direccion: s(body.direccion), activo: body.activo !== false,
+      } }]);
+      return { ok: true, id: lid, codigo, tipo: "local" };
+    }
+    if (!["cabina", "venta", "ubicacion", "casa"].includes(tipo)) return { error: "Elige local, cabina, venta, ubicación o casa" };
+    if (tipo === "casa" && bodegas.some((b) => s(b.tipo) === "casa" && b.id !== body.id)) return { error: "Casa ya está creada. La puedes renombrar." };
+    const localId = tipo === "casa" ? null : s(body.local_id);
+    if (tipo !== "casa" && !localId) return { error: "Elige el local" };
+    const prev = bodegas.find((b) => b.id === body.id);
+    const bid = prev ? String(prev.id) : id();
+    const codigo = prev ? s(prev.codigo) : codigoNuevo(bodegas, tipo === "cabina" ? "CAB" : tipo === "venta" ? "VEN" : "UBI");
+    const orden = prev ? n(prev.orden) : bodegas.filter((b) => String(b.local_id || "") === String(localId || "")).length + 1;
+    await applyPlan(db, actor, [{ op: "upsert", table: "erp_bodegas", match: { id: bid }, row: {
+      codigo, nombre, tipo, local_id: localId, orden, activo: body.activo !== false,
+    } }]);
+    return { ok: true, id: bid, codigo, tipo };
+  }
+  if (op === "lugar_elegir") {
+    const lid = s(body.local_id);
+    const loc = (await db.all("erp_locales")).find((r) => r.id === lid && r.activo !== false);
+    if (!loc) return { error: "Ese local no está activo" };
+    if (s(body.token)) {
+      await db.write(actor, "sesiones", "update", { token: s(body.token) }, { local_id: lid });
+    }
+    return { ok: true, local_id: lid, nombre: s(loc.nombre) };
   }
 
   if (op === "stk_saldo") {
@@ -578,39 +677,55 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!lineasIn.length) return { error: "Sin líneas" };
     const origen = s(body.origen_id);
     const destino = s(body.destino_id);
-    if (!origen || !destino || origen === destino) return { error: "Elige bodega origen y destino" };
+    const bo = bod.get(origen);
+    const bd = bod.get(destino);
+    const permiso = puedeTransferir(s(body._rol), bo, bd);
+    if (permiso) return { error: permiso };
     const trs = await db.all("erp_transferencias");
     const tid = s(body.id) || id();
     const numero = s(trs.find((r) => r.id === tid)?.numero) || num(trs, "TRF", enPrueba(db));
+    const inmediata = op === "trf_enviar" && body.inmediata === true;
     const steps: Step[] = [{ op: "upsert", table: "erp_transferencias", match: { id: tid }, row: {
-      numero, origen_id: origen, destino_id: destino, estado: op === "trf_enviar" ? "enviada" : "borrador",
-      fecha: now.toISOString(), creado_por: actor, nota: s(body.nota),
+      numero, origen_id: origen, destino_id: destino, estado: op === "trf_enviar" ? (inmediata ? "recibida" : "enviada") : "borrador",
+      fecha: now.toISOString(), creado_por: actor, recibido_por: inmediata ? actor : "", nota: s(body.nota),
     } }];
+    const paraConsumo: Row[] = [];
     for (const ln of lineasIn) {
       const p = porId.get(s(ln.producto_id)) || porSku.get(skuCode(s(ln.sku)));
       if (!p) return { error: "Producto no existe" };
+      const cant = n(ln.cantidad);
+      if (!(cant > 0)) return { error: "La cantidad tiene que ser mayor que cero" };
       const lid = id();
-      steps.push({ op: "upsert", table: "erp_transferencia_lineas", match: { id: lid }, row: { transferencia_id: tid, producto_id: p.id, lote: s(ln.lote), cantidad: n(ln.cantidad) } });
+      steps.push({ op: "upsert", table: "erp_transferencia_lineas", match: { id: lid }, row: { transferencia_id: tid, producto_id: p.id, lote: s(ln.lote), cantidad: cant } });
       if (op === "trf_enviar") {
-        const bo = bod.get(origen);
-        const bd = bod.get(destino);
         if (bo && !usoCompatible(s(p.uso), s(bo.tipo))) return { error: `Producto de uso ${s(p.uso)} no puede salir de ${s(bo.tipo)}` };
         if (bd && !usoCompatible(s(p.uso), s(bd.tipo))) return { error: `Producto de uso ${s(p.uso)} no puede ir a bodega ${s(bd.tipo)}` };
-        steps.push({ op: "move", producto_id: String(p.id), bodega_id: origen, delta: -n(ln.cantidad), tipo: "transferencia_out", doc_tipo: "transferencia", doc_id: tid, aprobar_negativo: !!body.aprobar_negativo, nota: numero });
+        steps.push({ op: "move", producto_id: String(p.id), bodega_id: origen, delta: -cant, tipo: "transferencia_out", doc_tipo: "transferencia", doc_id: tid, lote: s(ln.lote), aprobar_negativo: !!body.aprobar_negativo, nota: numero });
+        if (inmediata && bd) {
+          steps.push({ op: "move", producto_id: String(p.id), bodega_id: destino, delta: cant, tipo: "transferencia_in", doc_tipo: "transferencia", doc_id: tid, lote: s(ln.lote), nota: numero });
+          paraConsumo.push({ producto_id: p.id, sku: p.sku, cantidad: cant, costo: p.costo_promedio });
+        }
       }
     }
+    if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now));
     await applyPlan(db, actor, steps, now.toISOString());
-    return { ok: true, id: tid, numero };
+    const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => familiaSku(s(ln.sku)));
+    return { ok: true, id: tid, numero, inmediata, consumo: !!consumo };
   }
   if (op === "trf_recibir") {
     const t = (await db.all("erp_transferencias")).find((r) => r.id === body.id);
     if (!t) return { error: "Transferencia no existe" };
     if (s(t.estado) !== "enviada") return { error: "Solo se recibe una transferencia enviada" };
+    const bd = bod.get(String(t.destino_id));
     const lns = (await db.all("erp_transferencia_lineas")).filter((r) => r.transferencia_id === t.id);
     const steps: Step[] = [{ op: "upsert", table: "erp_transferencias", match: { id: t.id }, row: { estado: "recibida", recibido_por: actor } }];
+    const paraConsumo: Row[] = [];
     for (const ln of lns) {
+      const p = porId.get(String(ln.producto_id));
       steps.push({ op: "move", producto_id: String(ln.producto_id), bodega_id: String(t.destino_id), delta: n(ln.cantidad), tipo: "transferencia_in", doc_tipo: "transferencia", doc_id: String(t.id), lote: s(ln.lote), nota: s(t.numero) });
+      paraConsumo.push({ producto_id: ln.producto_id, sku: s(p?.sku), cantidad: n(ln.cantidad), costo: p?.costo_promedio });
     }
+    if (bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, String(t.id), s(t.numero), actor, now));
     await applyPlan(db, actor, steps, now.toISOString());
     return { ok: true };
   }
@@ -622,7 +737,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const cid = id();
     const numero = num(cts, "CNT", enPrueba(db));
     const stock = await db.all("erp_stock");
-    const steps: Step[] = [{ op: "upsert", table: "erp_conteos", match: { id: cid }, row: { numero, bodega_id: bid, estado: "abierto", fecha: now.toISOString(), creado_por: actor } }];
+    const steps: Step[] = [{ op: "upsert", table: "erp_conteos", match: { id: cid }, row: { numero, bodega_id: bid, estado: "abierto", fecha: now.toISOString(), creado_por: actor, nota: s(body.nota) } }];
     for (const p of productos) {
       if (s(p.clase) && s(p.clase) !== "producto") continue;
       if (!usoCompatible(s(p.uso), s(bod.get(bid)?.tipo))) continue;
@@ -632,12 +747,24 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     await applyPlan(db, actor, steps);
     return { ok: true, id: cid, numero };
   }
+  if (op === "conteo_get") {
+    const c = (await db.all("erp_conteos")).find((r) => r.id === body.conteo_id || r.numero === body.numero);
+    if (!c) return { error: "Conteo no existe" };
+    const lns = (await db.all("erp_conteo_lineas")).filter((r) => r.conteo_id === c.id);
+    const b = bod.get(String(c.bodega_id));
+    return { ok: true, id: c.id, numero: c.numero, estado: c.estado, bodega_id: c.bodega_id, bodega: s(b?.nombre), tipo: s(b?.tipo), nota: s(c.nota), lineas: lns.map((ln) => {
+      const p = porId.get(String(ln.producto_id));
+      return { producto_id: ln.producto_id, sku: s(p?.sku), nombre: s(p?.nombre), sistema: ln.sistema, contado: ln.contado == null || ln.contado === "" ? null : n(ln.contado), lote: s(ln.lote) };
+    }) };
+  }
   if (op === "conteo_guardar") {
     const steps: Step[] = [];
     for (const ln of (body.lineas as Row[]) || []) {
+      if (ln.contado == null || s(ln.contado) === "") continue;
+      if (n(ln.contado) < 0) return { error: "La cantidad contada no puede ser negativa" };
       steps.push({ op: "upsert", table: "erp_conteo_lineas", match: { conteo_id: s(body.conteo_id), producto_id: s(ln.producto_id), lote: s(ln.lote) }, row: { contado: n(ln.contado) } });
     }
-    steps.push({ op: "upsert", table: "erp_conteos", match: { id: s(body.conteo_id) }, row: { estado: "contado" } });
+    if (!steps.length) return { error: "Escribe cuántos hay" };
     await applyPlan(db, actor, steps);
     return { ok: true };
   }
@@ -646,6 +773,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!c) return { error: "Conteo no existe" };
     if (s(c.estado) === "aplicado") return { error: "Ya estaba aplicado" };
     const lns = (await db.all("erp_conteo_lineas")).filter((r) => r.conteo_id === c.id && r.contado != null && r.contado !== "");
+    if (!lns.length) return { error: "Todavía no hay cantidades contadas. Lo que no contaste no se mueve." };
     const stock = await db.all("erp_stock");
     const aj = id();
     const numero = num(await db.all("erp_ajustes"), "AJU", enPrueba(db));
@@ -915,9 +1043,15 @@ export function erpSeed(): Record<string, Row[]> {
   const ambosP = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
   const prov = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
   return {
+    erp_locales: [
+      { id: LOCAL_ESQUINA, codigo: "ESQUINA", nombre: "La Esquina", direccion: "C.C. La Esquina, Cumbayá", activo: true },
+    ],
     erp_bodegas: [
-      { id: BODEGA_VENTA, codigo: "VENTA", nombre: "Venta", tipo: "venta", activo: true },
-      { id: BODEGA_CABINA, codigo: "CABINA", nombre: "Cabina", tipo: "cabina", activo: true },
+      { id: BODEGA_CASA, codigo: "CASA", nombre: "Casa", tipo: "casa", activo: true, local_id: null, orden: 0 },
+      { id: BODEGA_VENTA, codigo: "VENTA", nombre: "Venta", tipo: "venta", activo: true, local_id: LOCAL_ESQUINA, orden: 1 },
+      { id: BODEGA_CABINA, codigo: "CABINA", nombre: "Cabina 1", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 2 },
+      { id: BODEGA_CABINA_2, codigo: "CAB2", nombre: "Cabina 2", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 3 },
+      { id: BODEGA_CABINA_3, codigo: "CAB3", nombre: "Cabina 3", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 4 },
     ],
     erp_productos: [
       { id: ventaP, sku: "HT-002", nombre: "Crema retail", uso: "venta", clase: "producto", precio_venta: 20, costo_promedio: 8, activo: true },
@@ -940,7 +1074,7 @@ export function erpSeed(): Record<string, Row[]> {
     erp_oc: [], erp_oc_lineas: [], erp_recepciones: [], erp_recepcion_lineas: [],
     erp_rfq: [], erp_rfq_prov: [], erp_rfq_lineas: [],
     erp_transferencias: [], erp_transferencia_lineas: [],
-    erp_conteos: [], erp_conteo_lineas: [], erp_ajustes: [],
+    erp_conteos: [], erp_conteo_lineas: [], erp_ajustes: [], erp_consignacion_consumo: [],
     erp_ordenes_venta: [], erp_ov_lineas: [], erp_tickets_procesados: [], erp_avisos: [],
   };
 }
