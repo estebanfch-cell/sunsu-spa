@@ -2,7 +2,7 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-21-SCOPE`) y se registra con `scope: "/beta"`. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
+El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-22-SCREENS`) y se registra con `scope: "/beta"`. Las pantallas salen de `beta-screens.js`, el mismo marcado que `sunsu.html`; el menú lateral es lo único distinto. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 
