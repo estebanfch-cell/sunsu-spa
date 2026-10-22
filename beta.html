@@ -669,7 +669,21 @@ async function renderAsistencia() {
     ["Suplementarias", Math.round((dia.suplMin || 0) / 60 * 100) / 100 + " h"],
     ["Estado", dia.abierto ? "Adentro" : (dia.diaContado ? "Cerrada" : "Sin marca")],
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:22px">${esc(v)}</div></div>`).join("");
-  const permisos = (hoy.permisos || []).map((p) => `<div class="row" data-permiso="${esc(p.id)}" data-row="${esc(p.row || "")}"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)}</div></div><div class="meta">${state.admin && /pend/i.test(p.estado || "") ? `<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>` : esc(p.aprobadoPor || "")}</div></div>`).join("");
+  const yo = (state.user && state.user.name) || "";
+  const permisos = (hoy.permisos || []).map((p) => {
+    const pend = /pend/i.test(p.estado || "");
+    const mia = p.empleada === yo;
+    const acciones = [];
+    if (pend && hoy.puedeAprobar && (hoy.esAdmin || !mia)) {
+      acciones.push(`<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>`);
+      acciones.push(`<button class="btn ghost small" type="button" data-rechazar="${esc(p.id)}">Rechazar</button>`);
+    }
+    if (pend && (mia || hoy.esAdmin)) acciones.push(`<button class="btn ghost small" type="button" data-cancelar="${esc(p.id)}">Cancelar</button>`);
+    const meta = acciones.join(" ") || esc(p.aprobadoPor || "");
+    return `<div class="row" data-permiso="${esc(p.id)}" data-row="${esc(p.row || "")}"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)} · ${esc(p.dias || "")} día(s)${p.horas ? " · " + esc(p.horas) + " h" : ""}${p.motivo ? " · " + esc(p.motivo) : ""}${p.motivoResolucion ? " · " + esc(p.motivoResolucion) : ""}</div></div><div class="meta">${meta}</div></div>`;
+  }).join("");
+  const v = hoy.vacaciones;
+  const vacCard = v ? `<div class="card"><div class="k">Mis vacaciones</div><div class="v" style="font-size:22px">${v.habilitada ? esc(v.diasDisponibles) + " días" : "Aún no"}</div><div class="note">${v.fechaIngreso ? (v.habilitada ? `Ganados ${esc(v.diasGanados)} · tomados ${esc(v.diasTomados)} · pendientes ${esc(v.diasPendientes)}` : `Se habilitan el ${esc(v.proximoAniversario)} (un año completo).`) : "Falta tu fecha de ingreso en RR.HH."}</div></div>` : "";
   const audit = (hoy.auditoria || []).map((a) => `<div class="row"><div class="sku">${esc(a.accion)}</div><div><div class="name">${esc(a.actor)}</div><div class="note">${esc(a.motivo || "")}</div></div><div class="meta">${esc(horaEc(a.ts))}</div></div>`).join("");
   const admin = state.admin ? `
     <h2>Reglas</h2>
@@ -688,6 +702,18 @@ async function renderAsistencia() {
       const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
       return `<div class="row"><div class="sku">${esc(hora)}</div><div><div class="name">${esc(m.nombre)}</div><div class="note">${esc(etiquetaMarca(m.tipo))}${m.anulado ? " · anulada" : ""} · ${esc(m.id)}</div></div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button> ` : ""}<button class="btn small" type="button" data-usar="${esc(m.id)}">Corregir</button></div></div>`;
     }).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
+    <h2>Asistencia del día</h2>
+    <form id="f-asis-dia"><input name="fecha" type="date" value="${esc(hoy.fecha || "")}"><button class="btn" type="submit">Ver día</button></form>
+    <div id="asis-dia"></div>
+    <h2>Agregar marca olvidada</h2>
+    <form id="f-asis-man">
+      <label>Empleada</label><input name="nombre" required>
+      <label>Tipo</label><select name="tipo"><option value="entrada">Entrada</option><option value="almuerzo_inicio">Inicio almuerzo</option><option value="almuerzo_fin">Fin almuerzo</option><option value="salida">Salida</option></select>
+      <label>Fecha</label><input name="fecha" type="date" value="${esc(hoy.fecha || "")}" required>
+      <label>Hora Ecuador</label><input name="hora" type="time" step="60" required>
+      <label>Motivo (obligatorio)</label><textarea name="motivo" required></textarea>
+      <button class="btn" type="submit">Agregar marca</button><p class="err" id="f-err-man"></p>
+    </form>
     <h2>Corregir una marca</h2>
     <form id="f-asis-corr">
       <label>Id de la marca</label><input name="id" required>
@@ -734,6 +760,7 @@ async function renderAsistencia() {
       <label>Motivo</label><textarea name="motivo"></textarea>
       <button class="btn" type="submit">Solicitar</button><p class="err" id="f-err-perm"></p>
     </form>
+    ${vacCard}
     <div class="list">${permisos || `<p class="note">Sin solicitudes.</p>`}</div>
     ${admin}
     <h2>Auditoría</h2>
@@ -1129,6 +1156,48 @@ function wireAsistencia(main) {
       go("#/m/asistencia");
     };
   });
+  main.querySelectorAll("[data-rechazar]").forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.stopPropagation();
+      const motivo = (prompt("Motivo del rechazo") || "").trim();
+      if (!motivo) return;
+      const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-rechazar"), estado: "RECHAZADO", motivo });
+      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
+      go("#/m/asistencia");
+    };
+  });
+  main.querySelectorAll("[data-cancelar]").forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm("¿Cancelar esta solicitud?")) return;
+      const data = await api("asis_permiso_cancelar", { id: b.getAttribute("data-cancelar"), motivo: "cancelada por la solicitante" });
+      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
+      go("#/m/asistencia");
+    };
+  });
+  const man = main.querySelector("#f-asis-man");
+  if (man) man.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = Object.fromEntries(new FormData(man).entries());
+    const data = await api("asis_marca_manual", { nombre: f.nombre, tipo: f.tipo, motivo: f.motivo, ts: f.fecha + "T" + String(f.hora).slice(0, 5) + ":00-05:00" });
+    const err = main.querySelector("#f-err-man");
+    if (data.error) { err.textContent = data.error; return; }
+    go("#/m/asistencia");
+  });
+  const fdia = main.querySelector("#f-asis-dia");
+  if (fdia) fdia.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("asis_dia", { fecha: fdia.fecha.value });
+    const box = main.querySelector("#asis-dia");
+    if (data.error) { box.innerHTML = fail(data); return; }
+    const h = (m) => Math.round((m || 0) / 60 * 100) / 100;
+    box.innerHTML = (data.filas || []).map((f) => {
+      const d = f.dia || {};
+      const estado = d.falta ? "Falta" : d.fuente === "permiso" ? "Permiso/vacación" : d.fuente === "jibble" ? "Jibble" : d.abierto ? "Adentro" : d.diaContado ? "Cerrada" : "—";
+      const marcas = (f.marcas || []).map((m) => `${horaEc(m.ts).slice(-5)} ${etiquetaMarca(m.tipo)}${m.anulado ? " (anulada)" : ""}`).join(" · ");
+      return `<div class="row"><div class="sku">${esc(estado)}</div><div><div class="name">${esc(f.nombre)}</div><div class="note">${esc(marcas || "sin marcas")}</div></div><div class="meta">${h(d.workedMin)} h · alm ${esc(d.almuerzoMin || 0)} min · atraso ${esc(d.atrasoMin || 0)} min</div></div>`;
+    }).join("") || `<p class="note">Sin personas.</p>`;
+  });
   const cfg = main.querySelector("#f-asis-cfg");
   if (cfg) cfg.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -1178,7 +1247,7 @@ function wireAsistencia(main) {
     const data = await api("asis_periodo", { anio: Number(anio), mes: Number(m) });
     const box = main.querySelector("#asis-mes");
     if (data.error) { box.innerHTML = fail(data); return; }
-    box.innerHTML = (data.personas || []).map((p) => `<div class="card"><div class="k">${esc(p.nombre)}</div><div class="note">Supl ${esc(p.hrsSupl)} h · Extr ${esc(p.hrsExtr)} h · Descanso ${esc(p.hrsDesc)} h · Atraso ${esc(p.atrasoMin)} min · Faltas ${esc(p.faltas)}${p.hayDatos ? "" : " · sin marcas, el rol no recorta el sueldo"}</div></div>`).join("") || `<p class="note">Sin personas.</p>`;
+    box.innerHTML = (data.personas || []).map((p) => `<div class="card"><div class="k">${esc(p.nombre)}</div><div class="note">Trabajadas ${esc(p.hrsTrabajadas ?? 0)} h · Ordinarias ${esc(p.hrsOrdinarias ?? 0)} h · Almuerzo ${esc(p.hrsAlmuerzo ?? 0)} h · Supl ${esc(p.hrsSupl)} h · Extr ${esc(p.hrsExtr)} h · Descanso ${esc(p.hrsDesc)} h · Atraso ${esc(p.atrasoMin)} min · Faltas ${esc(p.faltas)} · Días propios ${esc(p.diasPropios ?? 0)} / Jibble ${esc(p.diasJibble ?? 0)}${p.hayDatos ? "" : " · sin marcas, el rol no recorta el sueldo"}</div></div>`).join("") || `<p class="note">Sin personas.</p>`;
   });
 }
 

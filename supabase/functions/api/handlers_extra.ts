@@ -378,6 +378,13 @@ extend("getPermisos", "any", async (_p, ctx, ses) => {
   return { ok: true, data };
 });
 extend("savePermiso", "any", async (p, ctx, ses) => {
+  if (/vacac/i.test(s(p.tipo))) {
+    const { saldoDe } = await import("./asistencia_api.ts");
+    const { diasDeVacacion, validarSolicitudVacacion } = await import("./asistencia.ts");
+    const quien = esAdmin(ses.rol) && s(p.empleada) ? s(p.empleada) : ses.name;
+    const err = validarSolicitudVacacion(await saldoDe(ctx, quien), diasDeVacacion({ desde: s(p.desde || p.fechaInicio), hasta: s(p.hasta || p.fechaFin || p.desde || p.fechaInicio) }));
+    if (err) return { error: err };
+  }
   const sr = await nextSheet(ctx.db, "permisos");
   let url = s(p.url);
   if (s(p.certificado).includes("base64,")) {
@@ -385,12 +392,12 @@ extend("savePermiso", "any", async (p, ctx, ses) => {
     if (id) url = "archivo:" + id;
   }
   await ctx.db.write(actorOf(ses), "permisos", "insert", {}, {
-    sheet_row: sr, id_1: "P-" + sr, empleada: esAdmin(ses.rol) && s(p.empleada) ? s(p.empleada) : ses.name, tipo: s(p.tipo),
+    sheet_row: sr, id_1: ctx.now.getTime() + Math.abs(sr), empleada: esAdmin(ses.rol) && s(p.empleada) ? s(p.empleada) : ses.name, tipo: s(p.tipo),
     fecha_inicio: s(p.desde || p.fechaInicio), fecha_fin: s(p.hasta || p.fechaFin), horas: s(p.horas),
     motivo: s(p.motivo), estado: "PENDIENTE", solicitado: ecuadorParts(ctx.now).ymd, url_certificado: url,
     orig: { tipo: s(p.tipo) },
   });
-  return { ok: true, id: "P-" + sr };
+  return { ok: true, id: String(ctx.now.getTime() + Math.abs(sr)) };
 });
 extend("updatePermiso", ADMIN, async (p, ctx, ses) => {
   const row = n(p.row) ? await rowBySheet(ctx.db, "permisos", n(p.row)) : (await ctx.db.all("permisos")).find((r) => s(r.id_1) === s(p.id));

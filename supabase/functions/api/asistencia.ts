@@ -57,6 +57,7 @@ export interface DiaAsistencia {
   extrMin: number;
   descMin: number;
   atrasoMin: number;
+  almuerzoMin: number;
   abierto: boolean;
   almuerzoPendiente: boolean;
   falta: boolean;
@@ -72,6 +73,11 @@ export interface NominaHoras {
   atrasoMin: number;
   faltas: number;
   suplExcesoMin: number;
+  hrsTrabajadas: number;
+  hrsOrdinarias: number;
+  hrsAlmuerzo: number;
+  diasJibble: number;
+  diasPropios: number;
   dias: DiaAsistencia[];
 }
 
@@ -201,7 +207,7 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
   const delDia = marcasDelDia(marcajes, fecha);
   const vacio: DiaAsistencia = {
     fecha, fuente: "vacio", workedMin: 0, ordinaryMin: 0, suplMin: 0, extrMin: 0, descMin: 0,
-    atrasoMin: 0, abierto: false, almuerzoPendiente: false, falta: false, diaContado: false,
+    atrasoMin: 0, almuerzoMin: 0, abierto: false, almuerzoPendiente: false, falta: false, diaContado: false,
   };
   if (!delDia.length) {
     if (jibble && (jibble.payrollMin || jibble.suplMin || jibble.extrMin || jibble.descMin)) {
@@ -232,9 +238,10 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
   const ordinaryMin = Math.min(clase.dentro, tope);
   const suplMin = clase.supl + Math.max(0, clase.dentro - tope);
   const workedMin = ordinaryMin + suplMin + clase.extr + clase.desc;
+  const almuerzoMin = lunchIn && lunchOut ? Math.max(0, Math.round((new Date(lunchOut.ts).getTime() - new Date(lunchIn.ts).getTime()) / 60000)) : 0;
   return {
     fecha, fuente: "marcaje", workedMin, ordinaryMin, suplMin, extrMin: clase.extr, descMin: clase.desc,
-    atrasoMin: atraso, abierto: false, almuerzoPendiente: !(lunchIn && lunchOut), falta: false, diaContado: true,
+    atrasoMin: atraso, almuerzoMin, abierto: false, almuerzoPendiente: !(lunchIn && lunchOut), falta: false, diaContado: true,
   };
 }
 
@@ -277,7 +284,10 @@ export function calcularNomina(opts: {
   const crudos = dias.map((f) => calcularDia(f, opts.marcajes, opts.config, opts.feriados, opts.permisos, jibblePorFecha.get(f) || null));
   const primera = crudos.find((d) => d.fuente !== "vacio" && (d.diaContado || d.abierto || d.fuente === "permiso"));
   if (!primera) {
-    return { hayDatos: false, diasLaborados: null, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, suplExcesoMin: 0, dias: crudos };
+    return {
+      hayDatos: false, diasLaborados: null, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, suplExcesoMin: 0,
+      hrsTrabajadas: 0, hrsOrdinarias: 0, hrsAlmuerzo: 0, diasJibble: 0, diasPropios: 0, dias: crudos,
+    };
   }
   let suplPag = 0;
   let extr = 0;
@@ -285,6 +295,10 @@ export function calcularNomina(opts: {
   let atraso = 0;
   let faltas = 0;
   let exceso = 0;
+  let ordin = 0;
+  let almuerzo = 0;
+  let dJ = 0;
+  let dP = 0;
   let semana = "";
   let usadoSemana = 0;
   const ajustados: DiaAsistencia[] = [];
@@ -299,6 +313,10 @@ export function calcularNomina(opts: {
     exceso += sobra;
     extr += d.extrMin;
     desc += d.descMin;
+    ordin += d.ordinaryMin;
+    almuerzo += d.almuerzoMin;
+    if (d.fuente === "jibble") dJ++;
+    if (d.fuente === "marcaje" && d.diaContado) dP++;
     atraso += d.atrasoMin;
     const falta = d.falta && (!opts.hoy || d.fecha <= opts.hoy);
     if (falta) faltas++;
@@ -313,6 +331,11 @@ export function calcularNomina(opts: {
     atrasoMin: atraso,
     faltas,
     suplExcesoMin: exceso,
+    hrsTrabajadas: round2((ordin + suplPag + extr + desc) / 60),
+    hrsOrdinarias: round2(ordin / 60),
+    hrsAlmuerzo: round2(almuerzo / 60),
+    diasJibble: dJ,
+    diasPropios: dP,
     dias: ajustados,
   };
 }
@@ -329,4 +352,74 @@ export function configDesde(row: Record<string, unknown> | undefined): Asistenci
     gracia_min: row.gracia_min == null ? CONFIG_DEF.gracia_min : n(row.gracia_min),
     cuenta_antes: row.cuenta_antes === true,
   };
+}
+
+// ---- Vacaciones (Código del Trabajo art. 69 y 71) ----
+// 15 días por año completo; desde el 6.º año, +1 día por año (máximo 15 adicionales).
+// Se pagan con la veinticuatroava parte de lo ganado en el año: sueldo/24 por mes, sueldo/2 por año.
+// Regla Sunsu: no se toman ni se pagan antes del primer año completo.
+
+export interface SaldoVacaciones {
+  fechaIngreso: string | null;
+  aniosCompletos: number;
+  habilitada: boolean;
+  diasGanados: number;
+  diasTomados: number;
+  diasPendientes: number;
+  diasDisponibles: number;
+  provisionMensual: number;
+  valorDia: number;
+  valorDisponible: number;
+  proximoAniversario: string | null;
+}
+
+function diasEntre(desde: string, hasta: string): number {
+  const a = ymdDe(desde); const b = ymdDe(hasta || desde) || a;
+  if (!a) return 0;
+  return Math.max(1, cadaFecha(a, b < a ? a : b).length);
+}
+
+export function aniosCompletos(ingreso: string, hoy: string): number {
+  const [y1, m1, d1] = ingreso.split("-").map(Number);
+  const [y2, m2, d2] = hoy.split("-").map(Number);
+  let a = y2 - y1;
+  if (m2 < m1 || (m2 === m1 && d2 < d1)) a--;
+  return Math.max(0, a);
+}
+
+export function diasDeVacacion(p: { desde: string; hasta: string }): number {
+  return diasEntre(p.desde, p.hasta);
+}
+
+export function saldoVacaciones(opts: { fechaIngreso: string | null; hoy: string; sueldo: number; permisos: PermisoIn[] }): SaldoVacaciones {
+  const ingreso = opts.fechaIngreso ? ymdDe(opts.fechaIngreso) : "";
+  const sueldo = n(opts.sueldo);
+  const anios = ingreso ? aniosCompletos(ingreso, opts.hoy) : 0;
+  let ganados = 0;
+  for (let k = 1; k <= anios; k++) ganados += 15 + Math.min(15, Math.max(0, k - 5));
+  const vac = opts.permisos.filter((p) => esVacacion(p.tipo));
+  const tomados = vac.filter((p) => aprobado(p.estado)).reduce((s2, p) => s2 + diasEntre(p.desde, p.hasta), 0);
+  const pendientes = vac.filter((p) => /pend/i.test(p.estado)).reduce((s2, p) => s2 + diasEntre(p.desde, p.hasta), 0);
+  const disp = Math.max(0, ganados - tomados);
+  let prox: string | null = null;
+  if (ingreso) {
+    const [y, m, d] = ingreso.split("-").map(Number);
+    prox = `${y + anios + 1}-${pad(m)}-${pad(d)}`;
+  }
+  const valorDia = round2(sueldo / 30);
+  return {
+    fechaIngreso: ingreso || null, aniosCompletos: anios, habilitada: anios >= 1,
+    diasGanados: ganados, diasTomados: tomados, diasPendientes: pendientes, diasDisponibles: disp,
+    provisionMensual: round2(sueldo / 24), valorDia, valorDisponible: round2(valorDia * disp),
+    proximoAniversario: prox,
+  };
+}
+
+/** null si se puede pedir; si no, el motivo. */
+export function validarSolicitudVacacion(saldo: SaldoVacaciones, dias: number): string | null {
+  if (!saldo.fechaIngreso) return "Falta tu fecha de ingreso en RR.HH. Pídele a un admin que la cargue.";
+  if (!saldo.habilitada) return `Las vacaciones se toman después del primer año completo (desde ${saldo.proximoAniversario}).`;
+  const libre = saldo.diasDisponibles - saldo.diasPendientes;
+  if (dias > libre) return `Pides ${dias} días y te quedan ${Math.max(0, libre)} disponibles.`;
+  return null;
 }
