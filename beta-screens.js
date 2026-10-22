@@ -5036,7 +5036,7 @@ function renderInicio(c){
         +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+fmt(sub(x.total))+'</span>'
         +'</div>';
     }).join('');
-    c.innerHTML='<div data-reloj-host class="reloj-dash card"></div><div id="citas-dash"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div style="font-size:1rem;font-weight:800;color:var(--navy)">🏠 Hola, '+(CU?CU.short:'')+'</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+(d.actualizado||'')+'</button>'
       +'</div>'
@@ -5062,7 +5062,6 @@ function renderInicio(c){
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
       +kpi('✨','Extras hoy',hoy.extrasN===undefined?'—':hoy.extrasN,'','historial',
         hoy.valExtras===undefined?'<span style="color:#C9761F">⚠️ backend DW</span>':'$'+fmt(hoy.valExtras||0)+'<br>c/IVA $'+fmt((hoy.valExtras||0)*1.15)+((hoy.extrasCort||0)>0?'<br><span style="color:#7A5EA6">🎀 '+hoy.extrasCort+' cortesía'+(hoy.extrasCort===1?'':'s')+'</span>':''))
-      +kpi('🗓','Citas hoy',d.citasHoy||0,'','citas')
       +kpi('💵','Caja chica','$'+fmt(d.caja||0),(d.caja||0)<0?'#B86B6B':'#2E7D52','caja')
       +'</div>'
       // Pagos que CUADRAN
@@ -5105,7 +5104,6 @@ function renderInicio(c){
       +'</div>'
       +'<div style="font-size:0.52rem;color:var(--gray);text-align:center;padding-bottom:8px">Subtotal = sin IVA '+(IVA_DASH*100).toFixed(0)+'% · se actualiza con ↻ o al volver a entrar</div>';
     if (typeof cargarReloj === "function") cargarReloj();
-    if (typeof cargarCitasDash === "function") cargarCitasDash();
   })
   .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
 }

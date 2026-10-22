@@ -265,3 +265,19 @@ export function evaluarBloqueo(opts: { intentosIp: number; intentosUsuario: numb
 export function modulosVisibles(rol: string, matriz: Record<string, Partial<Record<string, Acceso>>>): { modulo: string; acceso: Acceso }[] {
   return MODULOS.filter((m) => acceso(rol, m, matriz) !== "no").map((m) => ({ modulo: m, acceso: acceso(rol, m, matriz) }));
 }
+
+/** Lecturas permitidas mientras un admin mira la app como otra persona. Lo demás se rechaza. */
+const LECTURA_VISTA = new Set([
+  "whoami", "version", "getVersion", "home", "erp_home",
+  "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones",
+  "citas_proximas", "getCitas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle",
+  "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs",
+  "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "getRegistro",
+  "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos",
+]);
+
+export function lecturaEnVista(action: string): boolean {
+  if (!action) return false;
+  if (action.startsWith("get") || action.endsWith("_list") || action.endsWith("_get")) return true;
+  return LECTURA_VISTA.has(action);
+}

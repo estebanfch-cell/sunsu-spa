@@ -151,17 +151,59 @@
     font-size: 0.78rem; font-weight: 800; color: var(--navy);
     padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px;
   }
-  .reloj-side { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin: 2px 6px 8px; }
   .reloj-pill {
-    border: 0; border-radius: 999px; background: var(--navy); color: var(--white);
-    font-weight: 800; font-size: 0.68rem; padding: 8px 10px; min-height: 40px;
-    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-    line-height: 1.15; box-shadow: var(--shadow-sm); width: 100%;
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 0; border-radius: 999px; min-height: 40px; padding: 4px 14px 4px 4px;
+    font-weight: 800; font-size: 0.78rem; line-height: 1.05; cursor: pointer;
+    box-shadow: var(--shadow-sm); max-width: 100%;
   }
-  .reloj-t { font-size: 0.62rem; font-weight: 700; opacity: 0.9; font-variant-numeric: tabular-nums; }
-  .reloj-rec { margin: 0 4px; font-size: 0.62rem; }
-  .reloj-lunch { width: 100%; }
+  .reloj-pill.entrada {
+    background: linear-gradient(160deg, var(--gold-m), var(--gold));
+    color: var(--navy-d);
+    box-shadow: 0 6px 14px rgba(196,148,58,0.32);
+  }
+  .reloj-pill.salida {
+    background: var(--white); color: var(--navy-d);
+    border: 1.5px solid var(--navy); box-shadow: var(--shadow);
+  }
+  .reloj-ico {
+    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,0.55); color: var(--navy-d);
+  }
+  .reloj-pill.salida .reloj-ico { background: var(--blue-l); color: var(--navy); }
+  .reloj-ico svg { width: 16px; height: 16px; display: block; }
+  .reloj-lab { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+  .reloj-lab b { font-size: 0.78rem; letter-spacing: 0.01em; }
+  .reloj-lab span { font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; }
+  .reloj-head { display: inline-flex; align-items: center; flex: 0 0 auto; }
   .reloj-float { display: none; }
+  .btn-vista {
+    background: transparent; color: var(--gold-m); border: 1px solid rgba(232,192,122,0.85);
+    border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 0.72rem; white-space: nowrap;
+  }
+  .vista-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    background: var(--gold-l); color: var(--navy-d); padding: 8px 14px;
+    border-bottom: 1px solid var(--gold-m); font-weight: 800; font-size: 0.84rem;
+  }
+  .vista-bar button {
+    background: var(--navy); color: var(--white); border: 0; border-radius: 999px;
+    padding: 6px 14px; font-weight: 800; font-size: 0.75rem; min-height: 32px;
+  }
+  .vista-sheet {
+    position: fixed; z-index: 80; left: 50%; top: 18vh; transform: translateX(-50%);
+    width: min(420px, calc(100vw - 24px)); max-height: min(70vh, 520px); overflow: auto;
+  }
+  .vista-sheet[hidden] { display: none !important; }
+  .vista-user {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: var(--white); border: 1.5px solid var(--cream-d); border-radius: 14px;
+    padding: 12px 14px; margin: 0 0 8px; font: inherit; min-height: 52px;
+  }
+  .vista-user:hover, .vista-user:focus { border-color: var(--navy); background: var(--blue-l); }
+  .vista-user b { display: block; color: var(--navy); }
+  .vista-user span { color: var(--gray); font-size: 0.72rem; font-weight: 700; }
   .reloj-sheet {
     position: fixed; z-index: 80; left: 50%; top: 18vh; transform: translateX(-50%);
     width: min(420px, calc(100vw - 24px));
@@ -184,7 +226,7 @@
     background: linear-gradient(135deg, var(--navy-d), var(--navy));
     position: sticky; top: 0; z-index: 10; flex-shrink: 0;
   }
-  .top h1 { font-size: 0.95rem; margin: 0; flex: 1; color: var(--white); font-weight: 800; }
+  .top h1 { font-size: 0.95rem; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--white); font-weight: 800; }
   .menu-btn { display: none; background: rgba(255,255,255,0.12); color: var(--white); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 6px 10px; font-weight: 700; font-size: 0.75rem; }
   .top .logo-hit { display: none; }
   .content {
@@ -426,15 +468,18 @@
       padding: 3px 8px 6px; margin-top: -2px;
     }
     .tab-more.on { color: var(--gold); }
+    .reloj-head { display: none; }
     .reloj-float {
-      display: inline-flex; align-items: center; gap: 4px;
-      position: fixed; z-index: 70; max-width: 46vw;
-      right: calc(50% + 46px);
-      bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+      display: flex; align-items: center;
+      position: fixed; z-index: 65;
+      right: calc(50% + 48px);
+      bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+      max-width: calc(50vw - 64px);
     }
-    .reloj-float .reloj-pill { width: auto; min-height: 36px; padding: 6px 10px; font-size: 0.62rem; }
-    .reloj-float .reloj-rec { display: none; }
-    .reloj-float .reloj-lunch { width: auto; min-height: 32px; padding: 4px 8px; font-size: 0.62rem; }
+    .reloj-float .reloj-pill { min-height: 40px; padding: 3px 12px 3px 3px; }
+    .reloj-float .reloj-ico { width: 30px; height: 30px; }
+    .reloj-float .reloj-lab b { font-size: 0.72rem; }
+    .top h1 { min-width: 0; }
     .linea { grid-template-columns: 1fr 1fr; }
     .row { grid-template-columns: max-content minmax(0, 1fr) auto; }
     .row .meta, .meta { grid-column: auto; text-align: right; white-space: nowrap; }
@@ -550,8 +595,10 @@ const MENU = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
 ];
-const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true };
-let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." };
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true, vista: null };
+let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada.", _t0: Date.now() };
+let relojTick = 0;
+try { state.vista = JSON.parse(sessionStorage.getItem("sunsu.beta.vista") || "null"); } catch { state.vista = null; }
 var IVA_DASH = 0.15;
 let grupoAbierto = "";
 const AVISO_DS = '<span class="aviso-ds">⚠️ backend DS</span>';
@@ -674,9 +721,27 @@ function uuid() { return crypto.randomUUID(); }
 
 function previewApi(accion, body) {
   body = body || {};
+  if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
+    return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
+  }
   const modulos = MENU.map(([modulo]) => ({ modulo, acceso: "todos" }));
+  const equipo = [
+    { id: "andrea", name: "Andrea Robles", short: "Andrea", role: "cosmetologa" },
+    { id: "daniela", name: "Daniela Mora", short: "Daniela", role: "cosmetologa" },
+    { id: "dejaneira", name: "Dejaneira Espinoza", short: "Dejaneira", role: "asistente_cosmetologia" },
+    { id: "alejandra", name: "Alejandra Rodriguez", short: "Alejandra", role: "recepcion" },
+  ];
+  if (accion === "getUsuarios") return equipo;
+  if (accion === "ver_como") {
+    const u = equipo.find((x) => x.id === body.uid);
+    return u ? { ok: true, preview: true, user: u } : { error: "Esa persona no está en el equipo" };
+  }
   if (accion === "whoami" || accion === "login") {
-    return { ok: true, token: "preview", ver_costos: true, modo_prueba: !!state.prueba, modulos, user: { name: "Emilia", short: "Emi", role: "admin" } };
+    if (state.vista) {
+      const propios = ["inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "clientes", "inventario", "transferencias", "paquetes", "bitacora", "cabina", "conteos", "gift_cards", "caja"];
+      return { ok: true, token: "preview", ver_costos: false, modo_prueba: false, modulos: propios.map((modulo) => ({ modulo, acceso: "propio" })), user: state.vista };
+    }
+    return { ok: true, token: "preview", ver_costos: true, modo_prueba: !!state.prueba, modulos, user: { id: "emi", name: "Emilia", short: "Emi", role: "admin" } };
   }
   if (accion === "modo_prueba") {
     state.prueba = !!body.on;
@@ -797,6 +862,7 @@ function previewApi(accion, body) {
       config: { radio_m: 150, hora_entrada: "09:00", hora_salida: "18:00", gracia_min: 10, punto_listo: true, lat: -0.18, lng: -78.48 },
       dia: { atrasoMin: 0, ordinaryMin: dentro ? 90 : 0, suplMin: 0, abierto: dentro, diaContado: false, almuerzoPendiente: false },
       marcajes: dentro ? [{ id: "m1", tipo: "entrada", ts: new Date().toISOString(), anulado: false, tieneFoto: false }] : [],
+      empleada: !state.admin,
       reloj: dentro
         ? { accion: "salida", etiqueta: "Marcar salida", almuerzo: "inicio", abierto: true, transcurridoMin: 90, recuerda: "Recuerda marcar tu salida." }
         : { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." },
@@ -831,9 +897,17 @@ function previewApi(accion, body) {
   return { ok: true, items: [] };
 }
 
+function lecturaEnVista(accion) {
+  if (!accion) return false;
+  if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
+  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
+}
 async function api(accion, body = {}) {
+  if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
+    return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
+  }
   if (previewOn()) return previewApi(accion, body);
-  const payload = { accion, ...body };
+  const payload = { accion, ...body, ...(state.vista ? { preview_uid: state.vista.uid, preview: true } : {}) };
   if (state.token) payload.token = state.token;
   let res;
   try {
@@ -979,7 +1053,7 @@ function gruposVisibles() {
   if (acceso("paquetes") !== "no") gift.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
   if (acceso("gift_cards") !== "no") gift.push(["gift_cards", "Venta de gift card", "#/s/gc-venta"]);
   add("Gift cards y paquetes", "🎁", gift);
-  add("Citas", "📅", [["inicio", "Mis citas", "#/m/citas"]]);
+  if (esRolCitas()) add("Citas", "📅", [["inicio", "Mis citas", "#/m/citas"]]);
   const seg = [];
   if (frenteRol()) {
     seg.push(["seguimiento", "Seguimiento", "#/s/seguimiento"]);
@@ -1055,15 +1129,32 @@ function fmtReloj(min) {
   const r = m % 60;
   return h ? h + " h " + String(r).padStart(2, "0") + " min" : r + " min";
 }
-function htmlReloj() {
-  const t = reloj.abierto ? `<span class="reloj-t">${esc(fmtReloj(reloj.transcurridoMin))}</span>` : "";
-  const lunch = reloj.almuerzo === "inicio"
-    ? `<button class="btn ghost small reloj-lunch" type="button" data-reloj-lunch="almuerzo_inicio">Almuerzo</button>`
-    : reloj.almuerzo === "fin"
-    ? `<button class="btn ghost small reloj-lunch" type="button" data-reloj-lunch="almuerzo_fin">Fin almuerzo</button>`
-    : "";
-  return `<button class="reloj-pill" type="button" data-reloj-open="1"><span>${esc(reloj.etiqueta || "Marcar entrada")}</span>${t}</button>${lunch}<p class="note reloj-rec">${esc(reloj.recuerda || "")}</p>`;
+function fmtRelojCorto(min) {
+  const m = Math.max(0, Number(min) || 0);
+  return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0");
 }
+function minutosReloj() {
+  const base = Math.max(0, Number(reloj.transcurridoMin) || 0);
+  if (!reloj.abierto || reloj.almuerzo === "fin") return base;
+  return base + Math.floor((Date.now() - (reloj._t0 || Date.now())) / 60000);
+}
+function iconoReloj(salida) {
+  const d = salida
+    ? '<circle cx="12" cy="12" r="7"/><path d="M12 8.5V12l2.5 1.5"/>'
+    : '<path d="M15 7v10"/><path d="M15 7H9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h6"/><path d="M4 12h7"/><path d="M8 9l3 3-3 3"/>';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+function htmlReloj(modo) {
+  const abierto = !!reloj.abierto;
+  const mins = minutosReloj();
+  const tiempo = abierto ? (modo === "float" ? fmtRelojCorto(mins) : fmtReloj(mins)) : "Marcar";
+  const aria = abierto ? "Marcar salida, " + fmtReloj(mins) : "Marcar entrada";
+  return `<button class="reloj-pill ${abierto ? "salida" : "entrada"}" type="button" data-reloj-open="1" aria-label="${esc(aria)}"><span class="reloj-ico">${iconoReloj(abierto)}</span><span class="reloj-lab"><b>${abierto ? "Salida" : "Entrada"}</b><span class="reloj-elapsed">${esc(tiempo)}</span></span></button>`;
+}
+function rolActual() { return (state.user && state.user.role) || ""; }
+function esAdminRol() { const r = rolActual(); return r === "admin" || r === "super_admin"; }
+function esRolCitas() { const r = rolActual(); return r === "cosmetologa" || r === "asistente_cosmetologia"; }
+function muestraReloj() { return !!state.user && !esAdminRol() && acceso("asistencia") !== "no"; }
 function tabButton(id, label) {
   const cur = location.hash || "#/m/inicio";
   const on = grupoAbierto === id || phoneItems(id).some((row) => row[2] === cur);
@@ -1093,7 +1184,6 @@ function paintShell(title) {
           <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
         </button>
         ${plus}
-        <div data-reloj-host class="reloj-side">${htmlReloj()}</div>
         <span class="beta-tag">BETA</span>
         <nav>${nav}</nav>
         <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><button class="salir" type="button">Salir</button></div>
@@ -1106,9 +1196,16 @@ function paintShell(title) {
         <label>Selfie<input id="reloj-selfie" type="file" accept="image/*" capture="user"></label>
         <div class="tools">
           <button class="btn" type="button" id="reloj-ok">Confirmar</button>
+          <button class="btn ghost" type="button" id="reloj-lunch" hidden>Almuerzo</button>
           <button class="btn ghost" type="button" id="reloj-close">Cerrar</button>
         </div>
         <p class="err" id="reloj-err"></p>
+      </div>
+      <div class="vista-sheet card" id="vista-sheet" hidden>
+        <div class="card-title">Ver como…</div>
+        <p class="note">La app se dibuja como la ve esa persona. No se guarda nada hasta que salgas.</p>
+        <div id="vista-lista"></div>
+        <button class="btn ghost" type="button" id="vista-close">Cerrar</button>
       </div>
       <section class="main">
         <div class="top-stack">
@@ -1118,9 +1215,12 @@ function paintShell(title) {
             </button>
             <h1>${esc(title || "Dashboard")}</h1>
             ${htmlLocalSel()}
-            ${state.admin && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
+            ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj("head")}</div>` : ""}
+            ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
+            ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
+          ${state.vista ? `<div class="vista-bar" id="vista-bar">Viendo como ${esc(state.vista.name || state.vista.short || "…")} — <button type="button" id="vista-salir">Salir</button></div>` : ""}
           <div class="modo-prueba" id="modo-bar" ${state.prueba ? "" : "hidden"}>
             <div>
               <strong>MODO PRUEBA</strong>
@@ -1145,18 +1245,26 @@ function paintShell(title) {
       ${tabButton("bodega", "Bodega")}
       ${tabButton("compras", "Compras")}
     </nav>
-    <div data-reloj-host class="reloj-float">${htmlReloj()}</div>`;
+    ${muestraReloj() ? `<div data-reloj-host class="reloj-float">${htmlReloj("float")}</div>` : ""}`;
   const root = document.getElementById("app");
   const shell = document.getElementById("shell");
   root.querySelectorAll(".salir").forEach((b) => {
     b.onclick = () => {
       state.token = "";
       state.user = null;
+      state.vista = null;
       grupoAbierto = "";
       localStorage.removeItem("sunsu.beta.token");
+      sessionStorage.removeItem("sunsu.beta.vista");
       paintLogin();
     };
   });
+  const btnVista = document.getElementById("btn-ver-como");
+  if (btnVista) btnVista.onclick = () => abrirVerComo();
+  const btnVistaSalir = document.getElementById("vista-salir");
+  if (btnVistaSalir) btnVistaSalir.onclick = () => salirVista();
+  const btnVistaClose = document.getElementById("vista-close");
+  if (btnVistaClose) btnVistaClose.onclick = () => { document.getElementById("vista-sheet").hidden = true; };
   document.getElementById("scrim").onclick = () => {
     grupoAbierto = "";
     pintarFly();
@@ -1171,7 +1279,8 @@ function paintShell(title) {
   if (localSel) localSel.onchange = async () => {
     state.localId = localSel.value;
     localStorage.setItem("sunsu.beta.local", localSel.value);
-    await api("lugar_elegir", { local_id: localSel.value });
+    const elegido = await api("lugar_elegir", { local_id: localSel.value });
+    if (elegido && elegido.error) toast(elegido.error);
     draw();
   };
   const btnPrueba = document.getElementById("btn-prueba");
@@ -1358,7 +1467,12 @@ async function draw() {
   }
   if (!state.token) { paintLogin(); return; }
   if (!state.user) {
-    const who = await api("whoami");
+    let who = await api("whoami");
+    if (!who.ok && state.vista) {
+      state.vista = null;
+      sessionStorage.removeItem("sunsu.beta.vista");
+      who = await api("whoami");
+    }
     if (!who.ok) { state.token = ""; localStorage.removeItem("sunsu.beta.token"); paintLogin(who.error); return; }
     applySession(who);
   }
@@ -1452,9 +1566,9 @@ function chipsDash(lista) {
 }
 function htmlStaffHome() {
   const nombre = (state.user && (state.user.short || state.user.name)) || "";
+  const citas = esRolCitas() ? `<div id="citas-dash"></div>` : "";
   return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div></div>
-    <div data-reloj-host class="reloj-dash card">${htmlReloj()}</div>
-    <div id="citas-dash"></div>
+    ${citas}
     <div class="card"><p class="note">Buen día. Tus módulos están en el menú. El pulso de ventas, los precios, los costos, las comisiones de otras personas y los roles de pago quedan en la cuenta de admin.</p></div>`;
 }
 function htmlDashboard(d) {
@@ -1496,8 +1610,6 @@ function htmlDashboard(d) {
   }).join("");
   const pagos = pagosTot > 0 ? `<div class="card" style="padding:11px 13px"><div class="sec-k">💳 CÓMO PAGARON HOY</div>${pagoFila("💵", "Efectivo", pg.efectivo || 0)}${pagoFila("🏦", "Transferencia", pg.transferencia || 0)}${pagoFila("💳", "Tarjeta", pg.tarjeta || 0)}${pagoFila("🔀", "Mixto (sin desglose)", pg.mixto || 0)}${(pg.otros || 0) > 0.01 ? pagoFila("❓", "Sin método claro", pg.otros || 0) : ""}${hoy.canjes ? `<div class="pago-row"><span style="color:#7A5FA0">📋 Canjes hoy</span><span class="pago-val" style="color:#7A5FA0">${esc(hoy.canjes)}</span></div>` : ""}<div class="pago-row" style="border-top:1.2px solid var(--cream-d);margin-top:4px;padding-top:5px"><span>TOTAL</span><span><span class="pago-val" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">$${fmtDash(subIva(pagosTot))}</span> <span class="pago-iva" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">c/IVA $${fmtDash(pagosTot)} ${cuadra ? "✓ cuadra" : "⚠ no cuadra con $" + fmtDash(hoy.venta || 0)}</span></span></div></div>` : "";
   return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div><button class="btn ghost small" type="button" data-go="#/m/inicio">↻ ${esc(d.actualizado || "")}</button></div>
-    <div data-reloj-host class="reloj-dash card">${htmlReloj()}</div>
-    <div id="citas-dash"></div>
     <div class="card hero-venta"><div class="hv-k">VENTA DE HOY · SUBTOTAL</div><div class="hv-v">$${fmtDash(subIva(hoy.venta))}</div><div class="hv-s">con IVA $${fmtDash(hoy.venta || 0)} · ${esc(hoy.tickets || 0)} tickets · promedio $${fmtDash(hoy.tickets ? subIva(hoy.venta) / hoy.tickets : 0)}</div></div>
     <div class="kpi-row">
       ${kpiDash("💆‍♀️", "Faciales hoy", esc(hoy.faciales || 0), "", facSub)}
@@ -1507,7 +1619,6 @@ function htmlDashboard(d) {
     </div>
     <div class="kpi-row">
       ${kpiDash("✨", "Extras hoy", hoy.extrasN === undefined ? "—" : esc(hoy.extrasN), "", extSub)}
-      ${kpiDash("🗓", "Citas hoy", esc(d.citasHoy || 0), "", "")}
       ${kpiDash("💵", "Caja chica", "$" + fmtDash(d.caja || 0), (d.caja || 0) < 0 ? "#B86B6B" : "#2E7D52", "")}
     </div>
     ${pagos}
@@ -1840,14 +1951,14 @@ async function renderAsistencia() {
     <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 150)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
     <div class="grid">${cards}</div>
     ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
-    <div class="tools">
+    ${!state.admin || hoy.empleada ? `<div class="tools">
       <button class="btn" type="button" data-marca="entrada">Entrar</button>
       <button class="btn ghost" type="button" data-marca="almuerzo_inicio">Iniciar almuerzo</button>
       <button class="btn ghost" type="button" data-marca="almuerzo_fin">Fin almuerzo</button>
       <button class="btn" type="button" data-marca="salida">Salir</button>
     </div>
     <label><input id="origen-pc" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
-    <label id="selfie-label">Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>
+    <label id="selfie-label">Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>` : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`}
     <p class="err" id="f-err-marca"></p>
     <h2>Hoy</h2>
     <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
@@ -1997,6 +2108,7 @@ async function cargarCitasDash() {
   box.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
 }
 async function renderCitasBeta() {
+  if (!esRolCitas()) return `<p class="note">Las citas están en la cuenta de cada cosmetóloga.</p>`;
   const sel = await htmlSelectorPersona({ todas: true });
   const data = await api("citas_proximas", state.admin && state.persona ? { nombre: state.persona } : {});
   if (data.error) return fail(data);
@@ -2069,9 +2181,15 @@ function abrirReloj(tipo) {
   const title = document.getElementById("reloj-sheet-title");
   const note = document.getElementById("reloj-recuerda");
   const err = document.getElementById("reloj-err");
+  const lunch = document.getElementById("reloj-lunch");
   if (title) title.textContent = labels[relojTipo] || "Marcar";
   if (note) note.textContent = reloj.recuerda || "";
   if (err) err.textContent = "";
+  if (lunch) {
+    const modo = reloj.almuerzo;
+    lunch.hidden = !modo;
+    lunch.textContent = modo === "fin" ? "Fin almuerzo" : "Iniciar almuerzo";
+  }
   sheet.hidden = false;
 }
 function wireReloj(root) {
@@ -2079,25 +2197,84 @@ function wireReloj(root) {
   root.querySelectorAll("[data-reloj-open]").forEach((b) => {
     b.onclick = () => abrirReloj(reloj.accion || "entrada");
   });
-  root.querySelectorAll("[data-reloj-lunch]").forEach((b) => {
-    b.onclick = () => abrirReloj(b.getAttribute("data-reloj-lunch"));
-  });
   const ok = document.getElementById("reloj-ok");
   const close = document.getElementById("reloj-close");
+  const lunch = document.getElementById("reloj-lunch");
   if (ok && ok.dataset.wired !== "1") {
     ok.dataset.wired = "1";
     ok.onclick = () => marcarAsistencia(relojTipo, document.getElementById("reloj-sheet"));
+  }
+  if (lunch && lunch.dataset.wired !== "1") {
+    lunch.dataset.wired = "1";
+    lunch.onclick = () => abrirReloj(reloj.almuerzo === "fin" ? "almuerzo_fin" : "almuerzo_inicio");
   }
   if (close && close.dataset.wired !== "1") {
     close.dataset.wired = "1";
     close.onclick = () => { document.getElementById("reloj-sheet").hidden = true; };
   }
 }
-async function cargarReloj() {
-  const data = await api("asis_hoy");
-  if (data && data.reloj) reloj = data.reloj;
-  document.querySelectorAll("[data-reloj-host]").forEach((el) => { el.innerHTML = htmlReloj(); });
+function pintarReloj() {
+  document.querySelectorAll("[data-reloj-host]").forEach((el) => {
+    const modo = el.classList.contains("reloj-float") ? "float" : "head";
+    el.innerHTML = htmlReloj(modo);
+  });
   wireReloj(document.getElementById("app"));
+}
+async function cargarReloj() {
+  if (!muestraReloj()) return;
+  const data = await api("asis_hoy");
+  if (data && data.reloj) reloj = { ...data.reloj, _t0: Date.now() };
+  pintarReloj();
+  if (relojTick) clearInterval(relojTick);
+  relojTick = setInterval(() => {
+    if (!reloj.abierto) return;
+    document.querySelectorAll(".reloj-elapsed").forEach((el) => {
+      const host = el.closest("[data-reloj-host]");
+      const corto = host && host.classList.contains("reloj-float");
+      const mins = minutosReloj();
+      el.textContent = corto ? fmtRelojCorto(mins) : fmtReloj(mins);
+    });
+  }, 30000);
+}
+async function abrirVerComo() {
+  const sheet = document.getElementById("vista-sheet");
+  const lista = document.getElementById("vista-lista");
+  if (!sheet || !lista) return;
+  sheet.hidden = false;
+  lista.innerHTML = `<p class="note">Cargando el equipo…</p>`;
+  const data = await api("getUsuarios");
+  const users = Array.isArray(data) ? data : (data && data.users) || (data && data.items) || [];
+  const yo = state.user && state.user.id;
+  const vivos = users.filter((u) => u && !u.bloqueado && String(u.id) !== String(yo || ""));
+  lista.innerHTML = vivos.map((u) => `<button class="vista-user" type="button" data-vista="${esc(u.id)}" data-nombre="${esc(u.name || u.short || u.id)}" data-short="${esc(u.short || u.name || "")}" data-rol="${esc(u.role || "")}"><span><b>${esc(u.name || u.short || u.id)}</b><span>${esc(u.role || "")}</span></span></button>`).join("") || `<p class="note">No hay otras personas en el equipo.</p>`;
+  lista.querySelectorAll("[data-vista]").forEach((b) => {
+    b.onclick = () => entrarVista({ id: b.getAttribute("data-vista"), name: b.getAttribute("data-nombre"), short: b.getAttribute("data-short"), role: b.getAttribute("data-rol") });
+  });
+}
+async function entrarVista(user) {
+  const data = await api("ver_como", { uid: user.id });
+  const sheet = document.getElementById("vista-sheet");
+  if (!data || data.error || !data.user) {
+    toast((data && data.error) || "No se pudo abrir la vista");
+    return;
+  }
+  if (sheet) sheet.hidden = true;
+  state.vista = { uid: data.user.id, name: data.user.name, short: data.user.short, role: data.user.role };
+  sessionStorage.setItem("sunsu.beta.vista", JSON.stringify(state.vista));
+  state.user = null;
+  state.acceso = {};
+  if (previewOn()) state.previewDentro = true;
+  grupoAbierto = "";
+  draw();
+}
+function salirVista() {
+  state.vista = null;
+  state.user = null;
+  state.acceso = {};
+  state.previewDentro = false;
+  sessionStorage.removeItem("sunsu.beta.vista");
+  grupoAbierto = "";
+  draw();
 }
 function horaEc(ts) {
   const d = new Date(ts || "");
@@ -3118,6 +3295,12 @@ function recargarAsis() {
 async function marcarAsistencia(tipo, main) {
   const err = main.querySelector("#f-err-marca") || main.querySelector("#reloj-err");
   if (err) err.textContent = "";
+  if (state.vista) {
+    const msg = "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar.";
+    if (err) err.textContent = msg;
+    toast(msg);
+    return;
+  }
   const fileInput = main.querySelector("#selfie") || main.querySelector("#reloj-selfie");
   const file = fileInput && fileInput.files ? fileInput.files[0] : null;
   if (!file) { if (err) err.textContent = "Falta la selfie."; return; }
@@ -3254,7 +3437,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022lugares"></script>
+<script src="beta-screens.js?v=20261022vercomo"></script>
 <script>draw();</script>
 </body>
 </html>

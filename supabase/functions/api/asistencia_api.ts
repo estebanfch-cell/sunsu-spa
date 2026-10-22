@@ -209,8 +209,9 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
       feriados = feriados.map((f) => ({ ...f, nombre: nombres.get(s(f.fecha)) || "" }));
     } catch { /* la lista de fechas alcanza */ }
   }
+  const propia = await empleadaDe(ctx, ses.name);
   return {
-    ok: true, fecha, dia, reloj, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), equipo, feriados, auditoria: auditoria.map(audPub),
+    ok: true, fecha, dia, reloj, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), empleada: !!propia, equipo, feriados, auditoria: auditoria.map(audPub),
     config: {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
