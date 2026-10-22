@@ -146,6 +146,29 @@
     padding: 12px; font-weight: 700; color: var(--navy); font-size: 0.86rem; min-height: 44px;
   }
   .fly button.item.on, .fly button.item:hover { background: var(--gold-l); }
+  .fly-sec { margin: 2px 0 12px; }
+  .fly-sec-h {
+    font-size: 0.78rem; font-weight: 800; color: var(--navy);
+    padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px;
+  }
+  .reloj-side { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin: 2px 6px 8px; }
+  .reloj-pill {
+    border: 0; border-radius: 999px; background: var(--navy); color: var(--white);
+    font-weight: 800; font-size: 0.68rem; padding: 8px 10px; min-height: 40px;
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.15; box-shadow: var(--shadow-sm); width: 100%;
+  }
+  .reloj-t { font-size: 0.62rem; font-weight: 700; opacity: 0.9; font-variant-numeric: tabular-nums; }
+  .reloj-rec { margin: 0 4px; font-size: 0.62rem; }
+  .reloj-lunch { width: 100%; }
+  .reloj-float { display: none; }
+  .reloj-sheet {
+    position: fixed; z-index: 80; left: 50%; top: 18vh; transform: translateX(-50%);
+    width: min(420px, calc(100vw - 24px));
+  }
+  .reloj-sheet[hidden] { display: none !important; }
+  .cita-next { border: 2px solid var(--gold-m); }
+  .cita-next .name, .cita-card .name { white-space: normal; }
   .scrim { position: fixed; inset: 0; background: rgba(58,53,48,0.32); z-index: 20; left: var(--side-w); }
   .scrim[hidden] { display: none !important; }
   .main { min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
@@ -396,6 +419,15 @@
       padding: 3px 8px 6px; margin-top: -2px;
     }
     .tab-more.on { color: var(--gold); }
+    .reloj-float {
+      display: inline-flex; align-items: center; gap: 4px;
+      position: fixed; z-index: 70; max-width: 46vw;
+      right: calc(50% + 46px);
+      bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+    }
+    .reloj-float .reloj-pill { width: auto; min-height: 36px; padding: 6px 10px; font-size: 0.62rem; }
+    .reloj-float .reloj-rec { display: none; }
+    .reloj-float .reloj-lunch { width: auto; min-height: 32px; padding: 4px 8px; font-size: 0.62rem; }
     .linea { grid-template-columns: 1fr 1fr; }
     .row { grid-template-columns: max-content minmax(0, 1fr) auto; }
     .row .meta, .meta { grid-column: auto; text-align: right; white-space: nowrap; }
@@ -507,7 +539,8 @@ const MENU = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
 ];
-const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false };
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "" };
+let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." };
 var IVA_DASH = 0.15;
 let grupoAbierto = "";
 const AVISO_DS = '<span class="aviso-ds">⚠️ backend DS</span>';
@@ -534,15 +567,7 @@ const GRUPOS = [
 const SUNSU_MENU = [
   ["promos", "Promos", "#/s/promos", "admin"],
   ["tarjetas", "Tarjetas", "#/s/tarjetas", "todos"],
-  ["facturacion", "Facturación", "#/s/facturacion", "todos"],
-  ["citas", "Citas", "#/s/citas", "todos"],
-  ["recepcion", "Recepción", "#/s/recepcion", "frente"],
-  ["seguimiento", "Seguimiento", "#/s/seguimiento", "frente"],
-  ["multas", "Multas", "#/s/multas", "admin"],
   ["kpis", "KPIs", "#/s/kpis", "admin"],
-  ["gc-venta", "Venta de gift card", "#/s/gc-venta", "todos"],
-  ["vacaciones", "Permisos y vacaciones", "#/s/permisos", "todos"],
-  ["prod", "Ficha de producto", "#/doc/prod", "admin"],
 ];
 
 function previewOn() {
@@ -730,6 +755,44 @@ function previewApi(accion, body) {
       actualizado: "11:40",
     };
   }
+  if (accion === "asis_hoy") {
+    const dentro = !!state.previewDentro;
+    return {
+      ok: true, fecha: ymdEc(), esAdmin: !!state.admin, puedeAprobar: !!state.admin,
+      config: { radio_m: 150, hora_entrada: "09:00", hora_salida: "18:00", gracia_min: 10, punto_listo: true, lat: -0.18, lng: -78.48 },
+      dia: { atrasoMin: 0, ordinaryMin: dentro ? 90 : 0, suplMin: 0, abierto: dentro, diaContado: false, almuerzoPendiente: false },
+      marcajes: dentro ? [{ id: "m1", tipo: "entrada", ts: new Date().toISOString(), anulado: false, tieneFoto: false }] : [],
+      reloj: dentro
+        ? { accion: "salida", etiqueta: "Marcar salida", almuerzo: "inicio", abierto: true, transcurridoMin: 90, recuerda: "Recuerda marcar tu salida." }
+        : { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." },
+      permisos: [{ id: "p1", empleada: "Andrea Robles", tipo: "VACACIONES", desde: "2026-11-02", hasta: "2026-11-04", dias: 3, estado: "PENDIENTE", motivo: "viaje" }],
+      vacaciones: { habilitada: true, diasDisponibles: 11, diasGanados: 15, diasTomados: 4, diasPendientes: 0, fechaIngreso: "2024-01-10", proximoAniversario: "2027-01-10" },
+      equipo: [], feriados: [], auditoria: [],
+    };
+  }
+  if (accion === "asis_marcar") {
+    state.previewDentro = body.tipo !== "salida";
+    return { ok: true };
+  }
+  if (accion === "asis_periodo") return { ok: true, personas: [{ nombre: body.nombre || "Emilia", hrsTrabajadas: 8, hrsOrdinarias: 8, hrsAlmuerzo: 1, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasPropios: 1, diasJibble: 0, hayDatos: true }] };
+  if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4 };
+  if (accion === "getRolIndividual") return { ok: true, data: { nombre: body.cedula || "Emilia", cedula: "1711", cargo: "Cosmetóloga", sueldo: 460, bono: 20, comFaciales: 36, comPaquetes: 20, comProductos: 18, vacaciones: 0, fondoReserva: 0, totalIngresos: 554, iess: 48, totalRecibir: 506, fuenteHoras: "asistencia", hrsSupl: 0, atrasoMin: 0, faltas: 0 } };
+  if (accion === "getMultas") return { ok: true, items: [{ id: 1, fecha: "2026-10-18", nombre: "Andrea Robles", tipo: "MULTA", monto: 5, motivo: "atraso" }] };
+  if (accion === "personal_personas") return { ok: true, personas: [{ nombre: "Emilia", cedula: "1711" }, { nombre: "Andrea Robles", cedula: "1722" }] };
+  if (accion === "gc_list" || accion === "gc_detalle") {
+    const item = { codigo: "26-065", saldo: 65, valor: "65", usado: false, nombre: "María", apellido: "Paz", cedula: "1711", notas: "" };
+    return accion === "gc_detalle" ? { ok: true, item } : { ok: true, items: [item] };
+  }
+  if (accion === "paq_list" || accion === "paq_detalle") {
+    const item = { codigo: "PQ-0004", nombre: "Ana", apellido: "Luz", cedula: "1722", paquete: "Glow x3", sku: "SUNSU-40", vendidoPor: "Andrea", completo: false, usos: [{ slot: 1, usado: true, fecha: "2026-10-01" }, { slot: 2, usado: false, fecha: "" }, { slot: 3, usado: false, fecha: "" }], usados: 1 };
+    return accion === "paq_detalle" ? { ok: true, item } : { ok: true, items: [item] };
+  }
+  if (accion === "citas_proximas") {
+    return { ok: true, citas: [
+      { id: "a1", cuando: "2026-10-22T15:30:00-05:00", cliente: "María Paz", servicio: "Facial S.O.S", notas: "Manchas y textura irregular. Evitar ácidos.", calendario: "Andrea Robles", anterior: { fecha: "2026-09-18", resumen: "SUNSU-01 Facial S.O.S · hidratación", ref: "TK-20260918-1102" } },
+      { id: "a2", cuando: "2026-10-23T11:00:00-05:00", cliente: "Ana Luz", servicio: "Limpieza", notas: "Piel sensible.", calendario: "Andrea Robles", anterior: null },
+    ] };
+  }
   return { ok: true, items: [] };
 }
 
@@ -772,7 +835,27 @@ function parseRoute() {
   const parts = (location.hash.replace(/^#/, "") || "/m/inicio").split("/").filter(Boolean);
   if (parts[0] === "doc") return { kind: "doc", doc: parts[1] || "", id: decodeURIComponent(parts[2] || ""), mod: "", sub: "", tab: "" };
   if (parts[0] === "s") return { kind: "sunsu", tab: parts[1] || "ticket", doc: "", id: "", mod: "", sub: "" };
-  return { kind: "mod", mod: parts[1] || "inicio", sub: parts[2] || "", doc: "", id: "", tab: "" };
+  return { kind: "mod", mod: parts[1] || "inicio", sub: parts[2] || "", doc: "", id: decodeURIComponent(parts[3] || ""), tab: "" };
+}
+function moduloDeRuta(route) {
+  if (!route || route.kind !== "mod") return route && route.mod || "";
+  if (route.mod === "personal") {
+    if (route.sub === "comisiones") return "comisiones";
+    if (route.sub === "rol") return "rol_pagos";
+    return "asistencia";
+  }
+  if (route.mod === "gift") return route.sub === "paquetes" ? "paquetes" : "gift_cards";
+  if (route.mod === "citas" || route.mod === "inicio") return "inicio";
+  return route.mod;
+}
+function tituloRuta(route, tab) {
+  if (route.mod === "reportes") return "Consumos / reportes";
+  if (route.mod === "personal") return { comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas" }[route.sub] || "Personal";
+  if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
+  if (route.mod === "citas") return "Citas";
+  if (tab) return tituloSunsu(tab);
+  if (route.kind === "doc") return tituloDoc(route.doc);
+  return (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
 }
 
 function go(hash) {
@@ -819,30 +902,69 @@ function paintLogin(msg) {
   });
 }
 
-function sunsuMenuVisible() {
+function frenteRol() {
   const rol = (state.user && state.user.role) || "";
-  const frente = state.admin || rol === "recepcion" || rol === "gerente";
-  return SUNSU_MENU.filter((row) => {
-    const quien = row[3];
-    if (quien === "admin") return state.admin;
-    if (quien === "frente") return frente;
-    return true;
-  }).map(([id, label, hash]) => [id, label, hash]);
+  return state.admin || rol === "recepcion" || rol === "gerente";
 }
 function gruposVisibles() {
-  const usados = new Set(["inicio"]);
+  const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
-    const vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
+    let vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
+    if (id === "inventario") {
+      if (state.admin) {
+        vis = vis.concat([
+          ["kardex", "Kardex", "#/m/kardex"],
+          ["productos", "Ficha de producto", "#/doc/prod"],
+        ]);
+      }
+      if (acceso("transferencias") !== "no") vis.push(["transferencias", "Transferencias", "#/m/transferencias"]);
+    }
     for (const [mod] of vis) usados.add(mod);
     if (vis.length) out.push({ id, label, items: vis });
   }
-  const otros = MENU.filter(([id]) => !usados.has(id) && acceso(id) !== "no").map(([id, label]) => [id, label, "#/m/" + id]);
-  const hashes = new Set(otros.map((row) => row[2]));
-  for (const row of sunsuMenuVisible()) {
-    if (!hashes.has(row[2])) otros.push(row);
+  const sections = [];
+  const add = (title, icon, items) => { if (items.length) sections.push({ title, icon, items }); };
+  const personal = [];
+  if (acceso("comisiones") !== "no") personal.push(["comisiones", "Mis comisiones", "#/m/personal/comisiones"]);
+  if (acceso("rol_pagos") !== "no") personal.push(["rol_pagos", "Mi rol de pagos", "#/m/personal/rol"]);
+  if (acceso("asistencia") !== "no") {
+    personal.push(["asistencia", "Mi asistencia", "#/m/personal/asistencia"]);
+    personal.push(["asistencia", "Permisos y vacaciones", "#/m/personal/permisos"]);
+    personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
   }
-  if (otros.length) out.push({ id: "otros", label: "Otros", items: otros });
+  add("Personal", "👤", personal);
+  const gift = [];
+  if (acceso("gift_cards") !== "no") gift.push(["gift_cards", "Gift cards", "#/m/gift/cards"]);
+  if (acceso("paquetes") !== "no") gift.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
+  if (acceso("gift_cards") !== "no") gift.push(["gift_cards", "Venta de gift card", "#/s/gc-venta"]);
+  add("Gift cards y paquetes", "🎁", gift);
+  add("Citas", "📅", [["inicio", "Mis citas", "#/m/citas"]]);
+  const seg = [];
+  if (frenteRol()) {
+    seg.push(["seguimiento", "Seguimiento", "#/s/seguimiento"]);
+    seg.push(["recepcion", "Recepción", "#/s/recepcion"]);
+  }
+  add("Seguimiento / Recepción", "📞", seg);
+  if (acceso("caja") !== "no") add("Caja chica", "💵", [["caja", "Caja chica", "#/m/caja"]]);
+  if (acceso("bitacora") !== "no") add("Bitácora de esterilización", "🧴", [["bitacora", "Bitácora", "#/m/bitacora"]]);
+  const spa = [];
+  for (const row of SUNSU_MENU) {
+    if (row[3] === "admin" && !state.admin) continue;
+    spa.push([row[0], row[1], row[2]]);
+  }
+  if (acceso("cabina") !== "no") spa.push(["cabina", "Cabina", "#/m/cabina"]);
+  add("Spa", "✨", spa);
+  const adminItems = [];
+  if (state.mega) {
+    adminItems.push(["usuarios", "Usuarios", "#/m/usuarios"]);
+    adminItems.push(["permisos", "Permisos", "#/m/permisos"]);
+  }
+  add("Administración", "⚙️", adminItems);
+  const sobra = MENU.filter(([id]) => !usados.has(id) && acceso(id) !== "no").map(([id, label]) => [id, label, "#/m/" + id]);
+  if (sobra.length) add("Más", "⋯", sobra);
+  const items = sections.flatMap((sec) => sec.items);
+  if (items.length) out.push({ id: "otros", label: "Otros", items, sections });
   return out;
 }
 
@@ -874,13 +996,33 @@ function grupoLabel(id) {
   if (id === "otros") return "Más";
   return (gruposVisibles().find((g) => g.id === id) || {}).label || "Menú";
 }
+function flyItem(label, hash) {
+  const on = (location.hash || "#/m/inicio") === hash ? " on" : "";
+  return `<button class="item${on}" type="button" data-go="${esc(hash)}">${esc(label)}</button>`;
+}
 function flyHtml(grupo) {
-  const cur = location.hash || "#/m/inicio";
-  const items = (grupo.items || []).map(([, label, hash]) => {
-    const on = cur === hash ? " on" : "";
-    return `<button class="item${on}" type="button" data-go="${esc(hash)}">${esc(label)}</button>`;
-  }).join("") || `<p class="note fly-empty">Nada en este menú para tu rol.</p>`;
-  return `<div class="sheet-grab" aria-hidden="true"></div><div class="fly-title">${esc(grupo.label)}</div>${items}`;
+  let body = "";
+  if (grupo.sections && grupo.sections.length) {
+    body = grupo.sections.map((sec) => `<div class="fly-sec"><div class="fly-sec-h">${esc(sec.icon)} ${esc(sec.title)}</div>${(sec.items || []).map((row) => flyItem(row[1], row[2])).join("")}</div>`).join("");
+  } else {
+    body = (grupo.items || []).map((row) => flyItem(row[1], row[2])).join("") || `<p class="note fly-empty">Nada en este menú para tu rol.</p>`;
+  }
+  return `<div class="sheet-grab" aria-hidden="true"></div><div class="fly-title">${esc(grupo.label)}</div>${body}`;
+}
+function fmtReloj(min) {
+  const m = Math.max(0, Number(min) || 0);
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h ? h + " h " + String(r).padStart(2, "0") + " min" : r + " min";
+}
+function htmlReloj() {
+  const t = reloj.abierto ? `<span class="reloj-t">${esc(fmtReloj(reloj.transcurridoMin))}</span>` : "";
+  const lunch = reloj.almuerzo === "inicio"
+    ? `<button class="btn ghost small reloj-lunch" type="button" data-reloj-lunch="almuerzo_inicio">Almuerzo</button>`
+    : reloj.almuerzo === "fin"
+    ? `<button class="btn ghost small reloj-lunch" type="button" data-reloj-lunch="almuerzo_fin">Fin almuerzo</button>`
+    : "";
+  return `<button class="reloj-pill" type="button" data-reloj-open="1"><span>${esc(reloj.etiqueta || "Marcar entrada")}</span>${t}</button>${lunch}<p class="note reloj-rec">${esc(reloj.recuerda || "")}</p>`;
 }
 function tabButton(id, label) {
   const cur = location.hash || "#/m/inicio";
@@ -911,11 +1053,23 @@ function paintShell(title) {
           <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
         </button>
         ${plus}
+        <div data-reloj-host class="reloj-side">${htmlReloj()}</div>
         <span class="beta-tag">BETA</span>
         <nav>${nav}</nav>
         <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><button class="salir" type="button">Salir</button></div>
       </aside>
       <div class="fly" id="fly" hidden></div>
+      <div class="reloj-sheet card" id="reloj-sheet" hidden>
+        <div class="card-title" id="reloj-sheet-title">Marcar entrada</div>
+        <p class="note" id="reloj-recuerda">Recuerda marcar tu entrada.</p>
+        <label><input id="reloj-origen" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
+        <label>Selfie<input id="reloj-selfie" type="file" accept="image/*" capture="user"></label>
+        <div class="tools">
+          <button class="btn" type="button" id="reloj-ok">Confirmar</button>
+          <button class="btn ghost" type="button" id="reloj-close">Cerrar</button>
+        </div>
+        <p class="err" id="reloj-err"></p>
+      </div>
       <section class="main">
         <div class="top-stack">
           <header class="top">
@@ -949,7 +1103,8 @@ function paintShell(title) {
       </div>
       ${tabButton("bodega", "Bodega")}
       ${tabButton("compras", "Compras")}
-    </nav>`;
+    </nav>
+    <div data-reloj-host class="reloj-float">${htmlReloj()}</div>`;
   const root = document.getElementById("app");
   const shell = document.getElementById("shell");
   root.querySelectorAll(".salir").forEach((b) => {
@@ -997,6 +1152,7 @@ function paintShell(title) {
     };
   });
   pintarFly();
+  wireReloj(root);
 }
 
 async function alternarPrueba(on) {
@@ -1027,7 +1183,11 @@ function pintarFly() {
     fly.innerHTML = "";
   } else {
     fly.hidden = false;
-    fly.innerHTML = flyHtml({ label: grupoLabel(id), items: phoneItems(id) });
+    const g = gruposVisibles().find((x) => x.id === id);
+    const payload = id === "otros" && g
+      ? { label: "Otros", items: g.items, sections: g.sections }
+      : { label: grupoLabel(id), items: phoneItems(id) };
+    fly.innerHTML = flyHtml(payload);
     fly.querySelectorAll("[data-go]").forEach((b) => {
       b.onclick = () => {
         grupoAbierto = "";
@@ -1157,20 +1317,29 @@ async function draw() {
   }
   const route = parseRoute();
   const tab = pantallaSunsu(route);
-  const title = route.mod === "reportes" ? "Consumos / reportes" : tab ? tituloSunsu(tab) : route.kind === "doc" ? tituloDoc(route.doc) : (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
+  const title = tituloRuta(route, tab);
   paintShell(title);
   const main = document.getElementById("main");
-  if (route.kind === "mod" && route.mod !== "inicio" && acceso(route.mod) === "no" && !(route.mod === "reportes" && (state.admin || state.verCostos))) {
+  const listo = () => {
+    void cargarReloj();
+    if (document.getElementById("citas-dash")) void cargarCitasDash();
+  };
+  const gate = moduloDeRuta(route);
+  const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
+  if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
+    listo();
     return;
   }
   if (route.kind === "doc" && route.doc === "ov" && acceso("tickets") === "no") {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
+    listo();
     return;
   }
   if (tab) {
     try { await montarSunsu(tab); }
     catch (e) { main.innerHTML = `<p class="err">${esc(e.message || e)}</p>`; }
+    listo();
     return;
   }
   main.innerHTML = banner() + `<p class="note">Cargando…</p>`;
@@ -1182,6 +1351,7 @@ async function draw() {
   } catch (e) {
     main.innerHTML = banner() + `<p class="err">${esc(e.message || e)}</p>`;
   }
+  listo();
 }
 
 function tituloDoc(doc) {
@@ -1192,9 +1362,14 @@ function tituloDoc(doc) {
 }
 
 async function renderMod(route) {
-  if (acceso(route.mod) === "no" && route.mod !== "inicio" && !(route.mod === "reportes" && (state.admin || state.verCostos))) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  const gate = moduloDeRuta(route);
+  const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
+  if (route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod === "reportes") return renderReportes();
-  if (route.mod === "inicio") return renderInicio();
+  if (route.mod === "inicio") return renderInicioBeta();
+  if (route.mod === "personal") return renderPersonal(route);
+  if (route.mod === "gift") return renderGiftMod(route);
+  if (route.mod === "citas") return renderCitasBeta();
   if (route.mod === "productos") return renderProductos();
   if (route.mod === "inventario") return renderInventario(route.sub || "venta");
   if (route.mod === "compras") return renderCompras(route.sub);
@@ -1229,6 +1404,8 @@ function chipsDash(lista) {
 function htmlStaffHome() {
   const nombre = (state.user && (state.user.short || state.user.name)) || "";
   return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div></div>
+    <div data-reloj-host class="reloj-dash card">${htmlReloj()}</div>
+    <div id="citas-dash"></div>
     <div class="card"><p class="note">Buen día. Tus módulos están en el menú. El pulso de ventas, los precios, los costos, las comisiones de otras personas y los roles de pago quedan en la cuenta de admin.</p></div>`;
 }
 function htmlDashboard(d) {
@@ -1270,6 +1447,8 @@ function htmlDashboard(d) {
   }).join("");
   const pagos = pagosTot > 0 ? `<div class="card" style="padding:11px 13px"><div class="sec-k">💳 CÓMO PAGARON HOY</div>${pagoFila("💵", "Efectivo", pg.efectivo || 0)}${pagoFila("🏦", "Transferencia", pg.transferencia || 0)}${pagoFila("💳", "Tarjeta", pg.tarjeta || 0)}${pagoFila("🔀", "Mixto (sin desglose)", pg.mixto || 0)}${(pg.otros || 0) > 0.01 ? pagoFila("❓", "Sin método claro", pg.otros || 0) : ""}${hoy.canjes ? `<div class="pago-row"><span style="color:#7A5FA0">📋 Canjes hoy</span><span class="pago-val" style="color:#7A5FA0">${esc(hoy.canjes)}</span></div>` : ""}<div class="pago-row" style="border-top:1.2px solid var(--cream-d);margin-top:4px;padding-top:5px"><span>TOTAL</span><span><span class="pago-val" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">$${fmtDash(subIva(pagosTot))}</span> <span class="pago-iva" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">c/IVA $${fmtDash(pagosTot)} ${cuadra ? "✓ cuadra" : "⚠ no cuadra con $" + fmtDash(hoy.venta || 0)}</span></span></div></div>` : "";
   return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div><button class="btn ghost small" type="button" data-go="#/m/inicio">↻ ${esc(d.actualizado || "")}</button></div>
+    <div data-reloj-host class="reloj-dash card">${htmlReloj()}</div>
+    <div id="citas-dash"></div>
     <div class="card hero-venta"><div class="hv-k">VENTA DE HOY · SUBTOTAL</div><div class="hv-v">$${fmtDash(subIva(hoy.venta))}</div><div class="hv-s">con IVA $${fmtDash(hoy.venta || 0)} · ${esc(hoy.tickets || 0)} tickets · promedio $${fmtDash(hoy.tickets ? subIva(hoy.venta) / hoy.tickets : 0)}</div></div>
     <div class="kpi-row">
       ${kpiDash("💆‍♀️", "Faciales hoy", esc(hoy.faciales || 0), "", facSub)}
@@ -1292,7 +1471,7 @@ function htmlDashboard(d) {
     <div class="dash-foot">Subtotal = sin IVA ${(IVA_DASH * 100).toFixed(0)}% · se actualiza con ↻ o al volver a entrar</div>`;
 }
 
-async function renderInicio() {
+async function renderInicioBeta() {
   const data = await api("home");
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
   let pulso = htmlStaffHome();
@@ -1490,7 +1669,9 @@ async function renderRol() {
 }
 
 async function renderAsistencia() {
-  const hoy = await api("asis_hoy");
+  const ajena = state.admin && location.hash.indexOf("/personal/asistencia") >= 0;
+  const sel = ajena ? await htmlSelectorPersona() : "";
+  const hoy = await api("asis_hoy", ajena && state.persona ? { nombre: state.persona } : {});
   if (hoy.error) return fail(hoy);
   const cfg = hoy.config || {};
   const dia = hoy.dia || {};
@@ -1504,21 +1685,6 @@ async function renderAsistencia() {
     ["Suplementarias", Math.round((dia.suplMin || 0) / 60 * 100) / 100 + " h"],
     ["Estado", dia.abierto ? "Adentro" : (dia.diaContado ? "Cerrada" : "Sin marca")],
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:22px">${esc(v)}</div></div>`).join("");
-  const yo = (state.user && state.user.name) || "";
-  const permisos = (hoy.permisos || []).map((p) => {
-    const pend = /pend/i.test(p.estado || "");
-    const mia = p.empleada === yo;
-    const acciones = [];
-    if (pend && hoy.puedeAprobar && (hoy.esAdmin || !mia)) {
-      acciones.push(`<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>`);
-      acciones.push(`<button class="btn ghost small" type="button" data-rechazar="${esc(p.id)}">Rechazar</button>`);
-    }
-    if (pend && (mia || hoy.esAdmin)) acciones.push(`<button class="btn ghost small" type="button" data-cancelar="${esc(p.id)}">Cancelar</button>`);
-    const meta = acciones.join(" ") || esc(p.aprobadoPor || "");
-    return `<div class="row" data-permiso="${esc(p.id)}" data-row="${esc(p.row || "")}"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)} · ${esc(p.dias || "")} día(s)${p.horas ? " · " + esc(p.horas) + " h" : ""}${p.motivo ? " · " + esc(p.motivo) : ""}${p.motivoResolucion ? " · " + esc(p.motivoResolucion) : ""}</div></div><div class="meta">${meta}</div></div>`;
-  }).join("");
-  const v = hoy.vacaciones;
-  const vacCard = v ? `<div class="card"><div class="k">Mis vacaciones</div><div class="v" style="font-size:22px">${v.habilitada ? esc(v.diasDisponibles) + " días" : "Aún no"}</div><div class="note">${v.fechaIngreso ? (v.habilitada ? `Ganados ${esc(v.diasGanados)} · tomados ${esc(v.diasTomados)} · pendientes ${esc(v.diasPendientes)}` : `Se habilitan el ${esc(v.proximoAniversario)} (un año completo).`) : "Falta tu fecha de ingreso en RR.HH."}</div></div>` : "";
   const audit = (hoy.auditoria || []).map((a) => `<div class="row"><div class="sku">${esc(a.accion)}</div><div><div class="name">${esc(a.actor)}</div><div class="note">${esc(a.motivo || "")}</div></div><div class="meta">${esc(horaEc(a.ts))}</div></div>`).join("");
   const admin = state.admin ? `
     <h2>Reglas</h2>
@@ -1571,7 +1737,7 @@ async function renderAsistencia() {
     <h2>Mi mes</h2>
     <form id="f-asis-mes"><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver mis horas</button></form>
     <div id="asis-mes"></div>`;
-  return `
+  return sel + `
     <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 150)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
     <div class="grid">${cards}</div>
     ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
@@ -1586,22 +1752,254 @@ async function renderAsistencia() {
     <p class="err" id="f-err-marca"></p>
     <h2>Hoy</h2>
     <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
-    <h2>Permiso o vacaciones</h2>
-    <form id="f-asis-perm">
-      <label>Tipo</label><select name="tipo"><option value="PERMISO">Permiso</option><option value="VACACIONES">Vacaciones</option></select>
-      <label>Desde</label><input name="desde" type="date" required>
-      <label>Hasta</label><input name="hasta" type="date" required>
-      <label>Horas (si es un permiso parcial)</label><input name="horas" inputmode="decimal">
-      <label>Motivo</label><textarea name="motivo"></textarea>
-      <button class="btn" type="submit">Solicitar</button><p class="err" id="f-err-perm"></p>
-    </form>
-    ${vacCard}
-    <div class="list">${permisos || `<p class="note">Sin solicitudes.</p>`}</div>
+    <p class="note">Los permisos y las vacaciones se piden en <button class="btn ghost small" type="button" data-go="#/m/personal/permisos">Permisos y vacaciones</button>.</p>
     ${admin}
     <h2>Auditoría</h2>
     <div class="list">${audit || `<p class="note">Sin correcciones recientes.</p>`}</div>`;
 }
 
+function sheetRol(fecha) {
+  const meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Guayaquil", year: "numeric", month: "numeric" }).formatToParts(fecha || new Date());
+  const y = parts.find((p) => p.type === "year").value;
+  const m = Number(parts.find((p) => p.type === "month").value);
+  return meses[m - 1] + "_" + y;
+}
+async function htmlSelectorPersona(opts) {
+  if (!state.admin) return "";
+  const data = await api("personal_personas");
+  const personas = data.personas || [];
+  if (!(opts && opts.todas) && !state.persona && state.user) state.persona = state.user.name || "";
+  const hit = personas.find((p) => p.nombre === state.persona);
+  if (hit) state.personaCedula = hit.cedula || "";
+  const todas = opts && opts.todas ? `<option value=""${!state.persona ? " selected" : ""}>Todas</option>` : "";
+  const items = personas.map((p) => `<option value="${esc(p.nombre)}" data-cedula="${esc(p.cedula || "")}"${p.nombre === state.persona ? " selected" : ""}>${esc(p.nombre)}</option>`).join("");
+  return `<div class="field"><label for="persona-sel">Persona</label><select id="persona-sel">${todas}${items}</select></div>`;
+}
+async function renderPersonal(route) {
+  if (route.sub === "comisiones") return renderPersonalComisiones();
+  if (route.sub === "rol") return renderPersonalRol();
+  if (route.sub === "permisos") return renderPersonalPermisos();
+  if (route.sub === "multas") return renderPersonalMultas();
+  return renderAsistencia();
+}
+async function renderPersonalComisiones() {
+  const sel = await htmlSelectorPersona();
+  const nombre = state.admin ? (state.persona || (state.user && state.user.name) || "") : (state.user && state.user.name) || "";
+  const data = await api("getDashCosm", { cosmetologa: nombre });
+  if (data.error) return sel + fail(data);
+  const cards = [
+    ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
+    ["Paquetes", data.paquetes], ["Comisión paquetes", money(data.comPaquetes)],
+    ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
+    ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
+  ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
+  const nota = state.admin ? "Elige a quién ves. Cada cosmetóloga, en su cuenta, solo ve lo suyo." : "Ves solo tu comisión.";
+  return `${sel}<p class="note">${esc(data.periodoLabel || "")}. ${nota}</p><div class="grid">${cards}</div>`;
+}
+async function renderPersonalRol() {
+  const sel = await htmlSelectorPersona();
+  const cedula = state.admin ? state.personaCedula : "";
+  const data = await api("getRolIndividual", { cedula, sheet: sheetRol() });
+  if (data.error || !data.data) return sel + `<p class="note">${esc((data && data.error) || "Este mes todavía no tiene rol calculado.")}</p>`;
+  const d = data.data;
+  const filas = [
+    ["Sueldo", money(d.sueldo)], ["Bono", money(d.bono)], ["Faciales", money(d.comFaciales)],
+    ["Paquetes", money(d.comPaquetes)], ["Productos", money(d.comProductos)],
+    ["Vacaciones", money(d.vacaciones)], ["Fondo de reserva", money(d.fondoReserva)],
+    ["Total ingresos", money(d.totalIngresos)], ["IESS", money(d.iess)], ["A recibir", money(d.totalRecibir)],
+  ].map(([k, v]) => `<div class="row"><div class="name">${esc(k)}</div><div class="meta">${esc(v)}</div></div>`).join("");
+  return `${sel}<p class="note">${esc(d.nombre || "")} · ${esc(d.cargo || "")} · horas ${esc(d.fuenteHoras || "")}${d.atrasoMin ? " · atraso " + esc(d.atrasoMin) + " min" : ""}</p><div class="list">${filas}</div>`;
+}
+async function renderPersonalPermisos() {
+  const sel = await htmlSelectorPersona();
+  const nombre = state.admin && state.persona ? state.persona : "";
+  const hoy = await api("asis_hoy", nombre ? { nombre } : {});
+  if (hoy.error) return fail(hoy);
+  const yo = nombre || (state.user && state.user.name) || "";
+  const permisos = (hoy.permisos || []).map((p) => {
+    const pend = /pend/i.test(p.estado || "");
+    const mia = p.empleada === yo || !state.admin;
+    const acciones = [];
+    if (pend && hoy.puedeAprobar && (hoy.esAdmin || !mia)) {
+      acciones.push(`<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>`);
+      acciones.push(`<button class="btn ghost small" type="button" data-rechazar="${esc(p.id)}">Rechazar</button>`);
+    }
+    if (pend && (mia || hoy.esAdmin)) acciones.push(`<button class="btn ghost small" type="button" data-cancelar="${esc(p.id)}">Cancelar</button>`);
+    return `<div class="row"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)} · ${esc(p.dias || "")} día(s)${p.horas ? " · " + esc(p.horas) + " h" : ""}${p.motivo ? " · " + esc(p.motivo) : ""}</div></div><div class="meta">${acciones.join(" ") || esc(p.aprobadoPor || "")}</div></div>`;
+  }).join("");
+  const v = hoy.vacaciones;
+  const vacCard = v ? `<div class="card"><div class="k">Vacaciones</div><div class="v" style="font-size:22px">${v.habilitada ? esc(v.diasDisponibles) + " días" : "Aún no"}</div><div class="note">${v.fechaIngreso ? (v.habilitada ? `Ganados ${esc(v.diasGanados)} · tomados ${esc(v.diasTomados)} · pendientes ${esc(v.diasPendientes)}` : `Se habilitan el ${esc(v.proximoAniversario)} (un año completo).`) : "Falta la fecha de ingreso en RR.HH."}</div></div>` : "";
+  return `${sel}
+    ${vacCard}
+    <h2>Pedir permiso o vacaciones</h2>
+    <form id="f-personal-perm" class="card">
+      <div class="field"><label>Tipo</label><select name="tipo"><option value="PERMISO">Permiso</option><option value="VACACIONES">Vacaciones</option></select></div>
+      <div class="two-col">
+        <div class="field"><label>Desde</label><input name="desde" type="date" required></div>
+        <div class="field"><label>Hasta</label><input name="hasta" type="date" required></div>
+      </div>
+      <div class="field"><label>Horas (si es un permiso parcial)</label><input name="horas" inputmode="decimal"></div>
+      <div class="field"><label>Motivo</label><textarea name="motivo"></textarea></div>
+      <button class="btn" type="submit">Solicitar</button>
+      <p class="err" id="f-err-perm"></p>
+    </form>
+    <h2>Estado</h2>
+    <div class="list">${permisos || `<p class="note">Sin solicitudes.</p>`}</div>
+    <p class="note">Un permiso aprobado entra en las horas y en el rol de pagos. Las vacaciones piden un año completo desde el ingreso.</p>`;
+}
+async function renderPersonalMultas() {
+  const sel = await htmlSelectorPersona();
+  const nombre = state.admin ? state.persona : "";
+  const data = await api("getMultas", nombre ? { nombre } : {});
+  if (data.error) return sel + fail(data);
+  const items = (data.items || []).map((m) => `<div class="row"><div class="sku">${esc(m.fecha || "").slice(0, 10)}</div><div><div class="name">${esc(m.nombre)} · ${esc(m.tipo)}</div><div class="note">${esc(m.motivo || "")}</div></div><div class="meta">${money(m.monto)}</div></div>`).join("");
+  const form = state.admin ? `<form id="f-multa" class="card"><div class="card-title">Registrar</div>
+      <div class="field"><label>Cosmetóloga</label><input name="cosmetologa" value="${esc(state.persona || "")}" required></div>
+      <div class="field"><label>Tipo</label><select name="tipo"><option value="MULTA">Multa</option><option value="DESCUENTO">Descuento</option></select></div>
+      <div class="field"><label>Monto</label><input name="monto" inputmode="decimal" required></div>
+      <div class="field"><label>Motivo</label><textarea name="motivo"></textarea></div>
+      <button class="btn" type="submit">Guardar</button><p class="err" id="f-err"></p></form>` : "";
+  const nota = state.admin ? "Ves todas. Elige una persona para filtrar." : "Ves solo las tuyas.";
+  return `${sel}<p class="note">${nota}</p>${form}<div class="list">${items || `<p class="note">Sin multas.</p>`}</div>`;
+}
+function cuandoCita(iso) {
+  const d = new Date(iso || "");
+  if (!iso || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-EC", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" });
+}
+function htmlCita(c, destacada) {
+  const verPrecio = state.admin || state.verCostos;
+  const precio = verPrecio && c.precio != null ? `<div class="meta">${money(c.precio)}</div>` : "";
+  const ant = c.anterior
+    ? `<p class="note">Visita anterior ${esc(c.anterior.fecha)} · ${esc(c.anterior.resumen)}${c.anterior.ref ? " · " + esc(c.anterior.ref) : ""}${verPrecio && c.anterior.precio != null ? " · " + money(c.anterior.precio) : ""}</p><button class="btn ghost small" type="button" data-go="#/m/clientes">Historial de la clienta</button>`
+    : `<p class="note">Sin visita anterior en los tickets.</p>`;
+  return `<article class="card cita-card${destacada ? " cita-next" : ""}">
+      <div class="k">${destacada ? "Próxima cita" : "Cita"} · ${esc(cuandoCita(c.cuando))}</div>
+      <div class="name">${esc(c.cliente || "Sin nombre")}</div>
+      <div class="note">${esc(c.servicio || "")}${c.calendario && state.admin ? " · " + esc(c.calendario) : ""}</div>
+      ${c.notas ? `<p>${esc(c.notas)}</p>` : ""}
+      ${ant}
+      ${precio}
+    </article>`;
+}
+function htmlListaCitas(citas) {
+  if (!citas || !citas.length) return `<div class="card cita-card"><div class="k">Citas</div><p class="note">No hay citas en los próximos días.</p></div>`;
+  const [primera, ...resto] = citas;
+  const mas = resto.length ? `<p class="note">${resto.length} cita${resto.length === 1 ? "" : "s"} más. <button class="btn ghost small" type="button" data-go="#/m/citas">Ver citas</button></p>` : `<p class="note"><button class="btn ghost small" type="button" data-go="#/m/citas">Ver citas</button></p>`;
+  return htmlCita(primera, true) + mas;
+}
+async function cargarCitasDash() {
+  const box = document.getElementById("citas-dash");
+  if (!box) return;
+  const data = await api("citas_proximas", {});
+  const citas = (data && data.citas) || [];
+  box.innerHTML = data && data.error ? fail(data) : htmlListaCitas(citas);
+  box.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
+}
+async function renderCitasBeta() {
+  const sel = await htmlSelectorPersona({ todas: true });
+  const data = await api("citas_proximas", state.admin && state.persona ? { nombre: state.persona } : {});
+  if (data.error) return fail(data);
+  const citas = data.citas || [];
+  const cuerpo = citas.length ? citas.map((c, i) => htmlCita(c, i === 0)).join("") : `<p class="note">No hay citas en los próximos 14 días.</p>`;
+  const nota = state.admin ? "Ves las citas del spa. En la cuenta de cada cosmetóloga solo aparecen las de su calendario, sin precios." : "Tus próximas citas. El precio no se muestra en esta cuenta.";
+  return `${sel}<p class="note">${nota}</p>${cuerpo}`;
+}
+async function renderGiftMod(route) {
+  if (route.sub === "paquetes") return route.id ? renderPaqDetalle(route.id) : renderPaqLista();
+  return route.id ? renderGcDetalle(route.id) : renderGcLista();
+}
+async function renderGcLista() {
+  const data = await api("gc_list", { q: state.giftQ || "*" });
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((g) => `<button class="row" type="button" data-go="#/m/gift/cards/${encodeURIComponent(g.codigo)}"><div class="sku">${esc(g.codigo)}</div><div><div class="name">${esc(((g.nombre || "") + " " + (g.apellido || "")).trim() || "Sin nombre")}</div><div class="note">${g.usado ? "Usada" : "Disponible"}</div></div><div class="meta">${money(g.saldo)}</div></button>`).join("");
+  const emitir = state.admin ? `<form id="f-gc-emitir" class="card"><div class="card-title">Nueva gift card</div><p class="note">El código sigue la serie del año (26-065, 26-066). En modo prueba sale TEST- y no gasta el número real.</p>
+      <div class="field"><label>Valor</label><input name="valor" value="65" inputmode="decimal"></div>
+      <div class="two-col"><div class="field"><label>Nombre</label><input name="nombre"></div><div class="field"><label>Apellido</label><input name="apellido"></div></div>
+      <div class="field"><label>Cédula</label><input name="cedula"></div>
+      <button class="btn" type="submit">Emitir</button><p class="err" id="f-err"></p></form>` : "";
+  return `<form id="f-gc-buscar" class="tools"><input name="q" value="${esc(state.giftQ || "")}" placeholder="Código, nombre o cédula" aria-label="Buscar gift card"><button class="btn small" type="submit">Buscar</button></form>${emitir}<div class="list">${items || `<p class="note">Sin gift cards.</p>`}</div>`;
+}
+async function renderGcDetalle(codigo) {
+  const data = await api("gc_detalle", { codigo });
+  if (data.error) return fail(data);
+  const g = data.item || {};
+  const edit = state.admin ? `<form id="f-gc-editar" class="card" data-codigo="${esc(g.codigo)}">
+      <div class="card-title">Editar</div>
+      <div class="field"><label>Saldo</label><input name="saldo" value="${esc(g.saldo)}" inputmode="decimal"></div>
+      <div class="field"><label>Valor</label><input name="valor" value="${esc(g.valor)}"></div>
+      <div class="field"><label>Notas</label><textarea name="notas">${esc(g.notas || "")}</textarea></div>
+      <div class="tools">
+        <button class="btn" type="submit">Guardar saldo</button>
+        <button class="btn ghost" type="button" data-gc-usado="${g.usado ? "0" : "1"}">${g.usado ? "Desmarcar usada" : "Marcar usada"}</button>
+      </div>
+      <p class="err" id="f-err"></p>
+    </form>` : "";
+  return `<div class="tools"><button class="btn ghost small" type="button" data-go="#/m/gift/cards">Volver</button></div>
+    <div class="card"><div class="k">${esc(g.codigo)}</div><div class="v">${money(g.saldo)}</div><div class="note">${esc(((g.nombre || "") + " " + (g.apellido || "")).trim())} · ${g.usado ? "Usada" : "Disponible"}${g.usadoPor ? " · " + esc(g.usadoPor) : ""}</div></div>
+    ${edit}`;
+}
+async function renderPaqLista() {
+  const data = await api("paq_list", { q: state.giftQ || "*" });
+  if (data.error) return fail(data);
+  const items = (data.items || []).map((p) => `<button class="row" type="button" data-go="#/m/gift/paquetes/${encodeURIComponent(p.codigo || p.fila)}"><div class="sku">${esc(p.codigo || p.cedula)}</div><div><div class="name">${esc(((p.nombre || "") + " " + (p.apellido || "")).trim() || "Sin nombre")}</div><div class="note">${esc(p.paquete || p.sku)}</div></div><div class="meta">${esc(p.usados)}/${esc((p.usos || []).length || "")}</div></button>`).join("");
+  const emitir = state.admin ? `<form id="f-paq-emitir" class="card"><div class="card-title">Nuevo paquete</div><p class="note">La serie propia es PQ-0001, PQ-0002. En modo prueba sale TEST-PQ- y no gasta el número real.</p>
+      <div class="two-col"><div class="field"><label>Nombre</label><input name="nombre" required></div><div class="field"><label>Apellido</label><input name="apellido"></div></div>
+      <div class="field"><label>Cédula</label><input name="cedula"></div>
+      <div class="field"><label>Paquete</label><input name="paquete" placeholder="Glow x3"></div>
+      <button class="btn" type="submit">Emitir</button><p class="err" id="f-err"></p></form>` : "";
+  return `<form id="f-paq-buscar" class="tools"><input name="q" value="${esc(state.giftQ || "")}" placeholder="Código, cédula o nombre" aria-label="Buscar paquete"><button class="btn small" type="submit">Buscar</button></form>${emitir}<div class="list">${items || `<p class="note">Sin paquetes.</p>`}</div>`;
+}
+async function renderPaqDetalle(codigo) {
+  const data = await api("paq_detalle", { codigo });
+  if (data.error) return fail(data);
+  const p = data.item || {};
+  const usos = (p.usos || []).map((u) => `<div class="row"><div class="sku">${esc(u.slot)}</div><div><div class="name">${u.usado ? "Usada" : "Libre"}</div><div class="note">${esc(u.fecha || "")}</div></div><div class="meta">${state.admin ? `<button class="btn ghost small" type="button" data-paq="${u.usado ? "desmarcar" : "marcar"}" data-slot="${esc(u.slot)}" data-codigo="${esc(p.codigo || codigo)}">${u.usado ? "Desmarcar" : "Marcar usada"}</button>` : ""}</div></div>`).join("");
+  const agregar = state.admin ? `<button class="btn small" type="button" data-paq="agregar" data-codigo="${esc(p.codigo || codigo)}">Agregar sesión</button>` : "";
+  return `<div class="tools"><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">Volver</button>${agregar}</div>
+    <div class="card"><div class="k">${esc(p.codigo || "Paquete")}</div><div class="name">${esc(((p.nombre || "") + " " + (p.apellido || "")).trim())}</div><div class="note">${esc(p.paquete || p.sku)} · ${esc(p.cedula || "")} · vendido por ${esc(p.vendidoPor || "")}</div></div>
+    <div class="list">${usos}</div><p class="err" id="f-err"></p>`;
+}
+let relojTipo = "entrada";
+function abrirReloj(tipo) {
+  relojTipo = tipo || reloj.accion || "entrada";
+  const sheet = document.getElementById("reloj-sheet");
+  if (!sheet) return;
+  const labels = { entrada: "Marcar entrada", salida: "Marcar salida", almuerzo_inicio: "Iniciar almuerzo", almuerzo_fin: "Fin almuerzo" };
+  const title = document.getElementById("reloj-sheet-title");
+  const note = document.getElementById("reloj-recuerda");
+  const err = document.getElementById("reloj-err");
+  if (title) title.textContent = labels[relojTipo] || "Marcar";
+  if (note) note.textContent = reloj.recuerda || "";
+  if (err) err.textContent = "";
+  sheet.hidden = false;
+}
+function wireReloj(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-reloj-open]").forEach((b) => {
+    b.onclick = () => abrirReloj(reloj.accion || "entrada");
+  });
+  root.querySelectorAll("[data-reloj-lunch]").forEach((b) => {
+    b.onclick = () => abrirReloj(b.getAttribute("data-reloj-lunch"));
+  });
+  const ok = document.getElementById("reloj-ok");
+  const close = document.getElementById("reloj-close");
+  if (ok && ok.dataset.wired !== "1") {
+    ok.dataset.wired = "1";
+    ok.onclick = () => marcarAsistencia(relojTipo, document.getElementById("reloj-sheet"));
+  }
+  if (close && close.dataset.wired !== "1") {
+    close.dataset.wired = "1";
+    close.onclick = () => { document.getElementById("reloj-sheet").hidden = true; };
+  }
+}
+async function cargarReloj() {
+  const data = await api("asis_hoy");
+  if (data && data.reloj) reloj = data.reloj;
+  document.querySelectorAll("[data-reloj-host]").forEach((el) => { el.innerHTML = htmlReloj(); });
+  wireReloj(document.getElementById("app"));
+}
 function horaEc(ts) {
   const d = new Date(ts || "");
   if (!ts || Number.isNaN(d.getTime())) return "";
@@ -2150,6 +2548,7 @@ function bind(main) {
   form("#f-trf", saveTrf);
   form("#f-caja", saveCaja);
   wireAsistencia(main);
+  wirePersonal(main);
   wireVentas(main);
   form("#f-paq", savePaq);
   form("#f-rep", saveReporte);
@@ -2299,14 +2698,15 @@ function wireAsistencia(main) {
     const data = await api("asis_permiso_solicitar", Object.fromEntries(new FormData(perm).entries()));
     const err = main.querySelector("#f-err-perm");
     if (data.error) { err.textContent = data.error; return; }
-    go("#/m/asistencia");
+    recargarAsis();
   });
   main.querySelectorAll("[data-aprobar]").forEach((b) => {
     b.onclick = async (ev) => {
       ev.stopPropagation();
       const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-aprobar"), estado: "APROBADO" });
-      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
-      go("#/m/asistencia");
+      const err = main.querySelector("#f-err-perm");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      recargarAsis();
     };
   });
   main.querySelectorAll("[data-rechazar]").forEach((b) => {
@@ -2315,8 +2715,9 @@ function wireAsistencia(main) {
       const motivo = (prompt("Motivo del rechazo") || "").trim();
       if (!motivo) return;
       const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-rechazar"), estado: "RECHAZADO", motivo });
-      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
-      go("#/m/asistencia");
+      const err = main.querySelector("#f-err-perm");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      recargarAsis();
     };
   });
   main.querySelectorAll("[data-cancelar]").forEach((b) => {
@@ -2324,8 +2725,9 @@ function wireAsistencia(main) {
       ev.stopPropagation();
       if (!confirm("¿Cancelar esta solicitud?")) return;
       const data = await api("asis_permiso_cancelar", { id: b.getAttribute("data-cancelar"), motivo: "cancelada por la solicitante" });
-      if (data.error) { main.querySelector("#f-err-perm").textContent = data.error; return; }
-      go("#/m/asistencia");
+      const err = main.querySelector("#f-err-perm");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      recargarAsis();
     };
   });
   const man = main.querySelector("#f-asis-man");
@@ -2335,7 +2737,7 @@ function wireAsistencia(main) {
     const data = await api("asis_marca_manual", { nombre: f.nombre, tipo: f.tipo, motivo: f.motivo, ts: f.fecha + "T" + String(f.hora).slice(0, 5) + ":00-05:00" });
     const err = main.querySelector("#f-err-man");
     if (data.error) { err.textContent = data.error; return; }
-    go("#/m/asistencia");
+    recargarAsis();
   });
   const fdia = main.querySelector("#f-asis-dia");
   if (fdia) fdia.addEventListener("submit", async (ev) => {
@@ -2358,7 +2760,7 @@ function wireAsistencia(main) {
     const data = await api("asis_config_guardar", body);
     const err = main.querySelector("#f-err-cfg");
     if (data.error) { err.textContent = data.error; return; }
-    go("#/m/asistencia");
+    recargarAsis();
   });
   main.querySelectorAll("[data-foto]").forEach((b) => {
     b.onclick = async () => {
@@ -2391,7 +2793,7 @@ function wireAsistencia(main) {
     const data = await api("asis_feriado", Object.fromEntries(new FormData(fer).entries()));
     const err = main.querySelector("#f-err-fer");
     if (data.error) { err.textContent = data.error; return; }
-    go("#/m/asistencia");
+    recargarAsis();
   });
   const mes = main.querySelector("#f-asis-mes");
   if (mes) mes.addEventListener("submit", async (ev) => {
@@ -2416,15 +2818,23 @@ async function corregirMarca(form, anular) {
   else body.ts = fecha + "T" + hora.slice(0, 5) + ":00-05:00";
   const data = await api("asis_corregir", body);
   if (data.error) { err.textContent = data.error; return; }
-  go("#/m/asistencia");
+  recargarAsis();
+}
+
+function recargarAsis() {
+  const h = location.hash || "";
+  if (h.indexOf("/personal/") >= 0 || h.indexOf("/m/asistencia") >= 0) go(h);
+  else go("#/m/personal/asistencia");
 }
 
 async function marcarAsistencia(tipo, main) {
-  const err = main.querySelector("#f-err-marca");
-  err.textContent = "";
-  const file = main.querySelector("#selfie").files[0];
-  if (!file) { err.textContent = "Falta la selfie."; return; }
-  const body = { tipo, origen: main.querySelector("#origen-pc")?.checked ? "recepcion" : "telefono" };
+  const err = main.querySelector("#f-err-marca") || main.querySelector("#reloj-err");
+  if (err) err.textContent = "";
+  const fileInput = main.querySelector("#selfie") || main.querySelector("#reloj-selfie");
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+  if (!file) { if (err) err.textContent = "Falta la selfie."; return; }
+  const origenEl = main.querySelector("#origen-pc") || main.querySelector("#reloj-origen");
+  const body = { tipo, origen: origenEl && origenEl.checked ? "recepcion" : "telefono" };
   try {
     const pos = await new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
@@ -2442,8 +2852,93 @@ async function marcarAsistencia(tipo, main) {
     reader.readAsDataURL(file);
   });
   const data = await api("asis_marcar", body);
-  if (data.error) { err.textContent = data.error; return; }
-  go("#/m/asistencia");
+  if (data.error) { if (err) err.textContent = data.error; return; }
+  const sheet = document.getElementById("reloj-sheet");
+  if (sheet) sheet.hidden = true;
+  if (main.id === "reloj-sheet") {
+    toast(tipo === "salida" ? "Salida marcada" : tipo === "entrada" ? "Entrada marcada" : "Marca guardada");
+    await cargarReloj();
+    if ((location.hash || "").indexOf("asistencia") >= 0) recargarAsis();
+    return;
+  }
+  recargarAsis();
+}
+function wirePersonal(main) {
+  const sel = main.querySelector("#persona-sel");
+  if (sel) sel.addEventListener("change", () => {
+    const opt = sel.selectedOptions[0];
+    state.persona = sel.value;
+    state.personaCedula = opt ? (opt.getAttribute("data-cedula") || "") : "";
+    draw();
+  });
+  const perm = main.querySelector("#f-personal-perm");
+  if (perm) perm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const body = Object.fromEntries(new FormData(perm).entries());
+    if (state.admin && state.persona) body.empleada = state.persona;
+    const data = await api("asis_permiso_solicitar", body);
+    const err = main.querySelector("#f-err-perm");
+    if (data.error) { if (err) err.textContent = data.error; return; }
+    go("#/m/personal/permisos");
+  });
+  const multa = main.querySelector("#f-multa");
+  if (multa) multa.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("registrarMulta", Object.fromEntries(new FormData(multa).entries()));
+    if (!setMsg(multa, data, "Guardada")) return;
+    go("#/m/personal/multas");
+  });
+  const buscar = (id, key) => {
+    const f = main.querySelector(id);
+    if (!f) return;
+    f.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      state.giftQ = (f.q.value || "").trim();
+      go(key);
+    });
+  };
+  buscar("#f-gc-buscar", "#/m/gift/cards");
+  buscar("#f-paq-buscar", "#/m/gift/paquetes");
+  const emitirGc = main.querySelector("#f-gc-emitir");
+  if (emitirGc) emitirGc.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("gc_emitir", Object.fromEntries(new FormData(emitirGc).entries()));
+    if (!setMsg(emitirGc, data, data.codigo || "Emitida")) return;
+    if (data.codigo) go("#/m/gift/cards/" + encodeURIComponent(data.codigo));
+  });
+  const editGc = main.querySelector("#f-gc-editar");
+  if (editGc) {
+    editGc.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const body = Object.fromEntries(new FormData(editGc).entries());
+      body.codigo = editGc.getAttribute("data-codigo");
+      const data = await api("gc_editar", body);
+      if (!setMsg(editGc, data, "Guardada")) return;
+      go("#/m/gift/cards/" + encodeURIComponent(body.codigo));
+    });
+    const usado = editGc.querySelector("[data-gc-usado]");
+    if (usado) usado.onclick = async () => {
+      const codigo = editGc.getAttribute("data-codigo");
+      const data = await api("gc_editar", { codigo, usado: usado.getAttribute("data-gc-usado") === "1" });
+      if (data.error) { const err = editGc.querySelector("#f-err"); if (err) err.textContent = data.error; return; }
+      go("#/m/gift/cards/" + encodeURIComponent(codigo));
+    };
+  }
+  const emitirPaq = main.querySelector("#f-paq-emitir");
+  if (emitirPaq) emitirPaq.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = await api("paq_emitir", Object.fromEntries(new FormData(emitirPaq).entries()));
+    if (!setMsg(emitirPaq, data, data.codigo || "Emitido")) return;
+    if (data.codigo) go("#/m/gift/paquetes/" + encodeURIComponent(data.codigo));
+  });
+  main.querySelectorAll("[data-paq]").forEach((b) => {
+    b.onclick = async () => {
+      const data = await api("paq_editar", { codigo: b.getAttribute("data-codigo"), accion: b.getAttribute("data-paq"), slot: b.getAttribute("data-slot") });
+      const err = main.querySelector("#f-err");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      go("#/m/gift/paquetes/" + encodeURIComponent(b.getAttribute("data-codigo")));
+    };
+  });
 }
 async function savePaq(form) {
   const data = await api("buscarPaquetes", { q: form.q.value });
@@ -2470,7 +2965,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022prueba"></script>
+<script src="beta-screens.js?v=20261022personal"></script>
 <script>draw();</script>
 </body>
 </html>

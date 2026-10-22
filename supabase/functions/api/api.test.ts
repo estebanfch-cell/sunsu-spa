@@ -10,6 +10,7 @@ import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
 import "./asistencia_api.ts";
+import "./personal_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { acceso, esPropio, evaluarBloqueo, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
@@ -915,6 +916,100 @@ describe("beta shell", () => {
     assert.match(html, /id="btn-prueba"/);
     assert.match(html, /Borrar datos de prueba/);
     assert.match(html, /modo-prueba/);
+    assert.match(html, /fly-sec/);
+    assert.match(html, /Personal/);
+    assert.match(html, /Gift cards y paquetes/);
+    assert.match(html, /Marcar entrada/);
+    assert.match(html, /Seguimiento/);
+    assert.match(html, /Caja chica/);
+    assert.match(html, /Bitácora/);
+    assert.match(html, /Kardex/);
+    assert.match(html, /Ficha de producto/);
+    assert.equal(html.includes('["facturacion"'), false);
+    assert.equal(html.includes('id="f-asis-perm"'), false);
+    assert.match(html, /id="f-personal-perm"/);
+    assert.match(html, /reloj-pill/);
+  });
+});
+
+describe("personal, gift y citas", () => {
+  it("la cosmetóloga ve solo su multa y el admin ve las dos", async () => {
+    const db = new MemoryDb();
+    const adminC = ctx(db);
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    db.tables.set("multas_descuentos", [
+      { sheet_row: 1, fecha: "2026-10-18", cosmetologa: "Andrea Robles", tipo: "MULTA", monto: 5, motivo: "atraso" },
+      { sheet_row: 2, fecha: "2026-10-19", cosmetologa: "Daniela", tipo: "MULTA", monto: 8, motivo: "falta" },
+    ]);
+    const propia = await handle("getMultas", { token: "t-andrea" }, adminC) as Row;
+    assert.equal(propia.ok, true);
+    assert.deepEqual((propia.items as Row[]).map((m) => m.nombre), ["Andrea Robles"]);
+    const todas = await handle("getMultas", { token: adminC.token }, adminC) as Row;
+    assert.equal((todas.items as Row[]).length, 2);
+  });
+
+  it("gift card y paquete siguen su serie y la prueba no gasta el número real", async () => {
+    const db = new MemoryDb();
+    const real = ctx(db);
+    db.tables.set("gift_cards", [{ sheet_row: 4, codigo_gc: "26-065", valor: "65", usado: false, notas: "", orig: {} }]);
+    const uno = await handle("gc_emitir", { token: real.token, valor: "65", nombre: "María" }, real) as Row;
+    assert.equal(uno.codigo, "26-066");
+    db.tables.get("sesiones")!.push({ token: "t-prueba", uid: "emi", rol: "admin", exp: "2099-01-01T00:00:00.000Z", modo_prueba: true });
+    const test = await handle("gc_emitir", { token: "t-prueba", valor: "65" }, real) as Row;
+    assert.equal(test.codigo, "TEST-26-001");
+    const sigue = await handle("gc_emitir", { token: real.token, valor: "80" }, real) as Row;
+    assert.equal(sigue.codigo, "26-067");
+    const paq = await handle("paq_emitir", { token: real.token, nombre: "Ana", apellido: "Luz", cedula: "1722", paquete: "Glow x3" }, real) as Row;
+    assert.equal(paq.codigo, "PQ-0001");
+    const paq2 = await handle("paq_emitir", { token: real.token, nombre: "Luz", paquete: "x6" }, real) as Row;
+    assert.equal(paq2.codigo, "PQ-0002");
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    const no2 = await handle("paq_editar", { token: "t-andrea", codigo: "PQ-0001", accion: "marcar", slot: 1 }, real) as Row;
+    assert.match(String(no2.error), /admin/i);
+    const si = await handle("paq_editar", { token: real.token, codigo: "PQ-0001", accion: "marcar", slot: 1 }, real) as Row;
+    assert.equal(si.ok, true);
+    const log = (await db.all("log_acciones")).filter((r) => r.accion === "PAQ EDITAR");
+    assert.equal(log.length >= 1, true);
+    const des = await handle("paq_editar", { token: real.token, codigo: "PQ-0001", accion: "desmarcar", slot: 1 }, real) as Row;
+    assert.equal(des.ok, true);
+  });
+
+  it("citas de otra cosmetóloga no salen y el precio solo lo ve admin", async () => {
+    const db = new MemoryDb();
+    const adminC = ctx(db);
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    db.tables.set("tickets", [{
+      id: 9, sheet_row: -1, nombre: "María", apellido: "Paz", timestamp: "2026-09-18T15:00:00Z",
+      facial_hecho: "SUNSU-01", notas_generales: "hidratación", beta_num: "TK-20260918-1102", estimado: 80,
+    }]);
+    const citas = [
+      { id: 1, datetime: "2026-10-22T15:30:00-05:00", firstName: "María", lastName: "Paz", type: "Facial S.O.S", notes: "Manchas", calendar: "Andrea Robles", price: 40 },
+      { id: 2, datetime: "2026-10-23T11:00:00-05:00", firstName: "Luz", lastName: "Vera", type: "Limpieza", notes: "", calendar: "Daniela", price: 30 },
+    ];
+    adminC.env = { ACUITY_UID: "u", ACUITY_KEY: "k" };
+    adminC.fetchImpl = async () => new Response(JSON.stringify(citas));
+    const andrea = await handle("citas_proximas", { token: "t-andrea" }, adminC) as Row;
+    const lista = andrea.citas as Row[];
+    assert.equal(lista.length, 1);
+    assert.equal(lista[0].cliente, "María Paz");
+    assert.equal("precio" in lista[0], false);
+    const ant = lista[0].anterior as Row;
+    assert.match(String(ant.resumen), /SUNSU-01/);
+    assert.equal("precio" in ant, false);
+    const emi = await handle("citas_proximas", { token: adminC.token }, adminC) as Row;
+    const todas = emi.citas as Row[];
+    assert.equal(todas.length, 2);
+    assert.equal(todas.some((c) => c.precio === 40), true);
+  });
+
+  it("asis_hoy trae el reloj en marcar entrada", async () => {
+    const db = new MemoryDb();
+    const c = ctx(db);
+    const hoy = await handle("asis_hoy", { token: c.token }, c) as Row;
+    assert.equal((hoy.reloj as Row).etiqueta, "Marcar entrada");
   });
 });
 

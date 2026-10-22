@@ -8,7 +8,7 @@ import "./erp_api.ts";
 import "./asistencia_api.ts";
 import {
   saldoVacaciones, validarSolicitudVacacion,
-  CONFIG_DEF, calcularDia, calcularNomina, distanciaMetros, evaluarUbicacion, instanteEcuador, validarSecuencia,
+  CONFIG_DEF, calcularDia, calcularNomina, distanciaMetros, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia,
   type MarcajeIn,
 } from "./asistencia.ts";
 
@@ -20,6 +20,38 @@ function marca(tipo: MarcajeIn["tipo"], ymd: string, hm: string): MarcajeIn {
 }
 
 describe("asistencia", () => {
+  it("el reloj pide entrada, luego salida, y el almuerzo no cuenta en el tiempo", () => {
+    const vacio = estadoReloj([], "2026-10-21T15:00:00Z");
+    assert.equal(vacio.accion, "entrada");
+    assert.equal(vacio.almuerzo, null);
+    assert.match(vacio.recuerda, /entrada/);
+    const abierto = estadoReloj([marca("entrada", "2026-10-21", "09:00")], "2026-10-21T15:30:00Z");
+    assert.equal(abierto.accion, "salida");
+    assert.equal(abierto.almuerzo, "inicio");
+    assert.equal(abierto.transcurridoMin, 90);
+    const lunch = estadoReloj([
+      marca("entrada", "2026-10-21", "09:00"),
+      marca("almuerzo_inicio", "2026-10-21", "13:00"),
+    ], "2026-10-21T18:00:00Z");
+    assert.equal(lunch.almuerzo, "fin");
+    assert.equal(lunch.transcurridoMin, 240);
+    const cerrado = estadoReloj([
+      marca("entrada", "2026-10-21", "09:00"),
+      marca("almuerzo_inicio", "2026-10-21", "13:00"),
+      marca("almuerzo_fin", "2026-10-21", "14:00"),
+    ], "2026-10-21T19:00:00Z");
+    assert.equal(cerrado.almuerzo, null);
+    assert.equal(validarSecuencia([
+      marca("entrada", "2026-10-21", "09:00"),
+      marca("almuerzo_inicio", "2026-10-21", "13:00"),
+      marca("almuerzo_fin", "2026-10-21", "14:00"),
+    ], "salida"), null);
+    assert.match(String(validarSecuencia([
+      marca("entrada", "2026-10-21", "09:00"),
+      marca("almuerzo_inicio", "2026-10-21", "13:00"),
+    ], "salida")), /almuerzo/);
+  });
+
   it("mide el radio del spa", () => {
     const spa = { lat: -0.18, lng: -78.47 };
     const cerca = distanciaMetros(spa.lat, spa.lng, spa.lat + 0.0009, spa.lng);

@@ -188,6 +188,41 @@ export function validarSecuencia(marcajes: MarcajeIn[], tipo: string): string | 
   return "Tipo de marca desconocido.";
 }
 
+export interface RelojHoy {
+  accion: "entrada" | "salida";
+  etiqueta: string;
+  almuerzo: "inicio" | "fin" | null;
+  abierto: boolean;
+  transcurridoMin: number;
+  recuerda: string;
+}
+
+/** Botón grande: entrada si no hay jornada abierta; si no, salida, con almuerzo al lado. */
+export function estadoReloj(marcajes: MarcajeIn[], ahoraIso: string): RelojHoy {
+  const vivos = marcajes.filter((m) => !m.anulado).slice().sort((a, b) => a.ts.localeCompare(b.ts));
+  const lastEntrada = vivos.map((m) => m.tipo).lastIndexOf("entrada");
+  const lastSalida = vivos.map((m) => m.tipo).lastIndexOf("salida");
+  const abierto = lastEntrada > lastSalida;
+  if (!abierto) {
+    return { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." };
+  }
+  const entrada = vivos[lastEntrada];
+  const despues = vivos.slice(lastEntrada + 1);
+  const lunchIn = despues.find((m) => m.tipo === "almuerzo_inicio");
+  const lunchOut = despues.find((m) => m.tipo === "almuerzo_fin");
+  const almuerzo = !lunchIn ? "inicio" : !lunchOut ? "fin" : null;
+  let ms = new Date(ahoraIso).getTime() - new Date(entrada.ts).getTime();
+  if (lunchIn) {
+    const fin = lunchOut ? new Date(lunchOut.ts).getTime() : new Date(ahoraIso).getTime();
+    ms -= Math.max(0, fin - new Date(lunchIn.ts).getTime());
+  }
+  return {
+    accion: "salida", etiqueta: "Marcar salida", almuerzo, abierto: true,
+    transcurridoMin: Math.max(0, Math.round(ms / 60000)),
+    recuerda: "Recuerda marcar tu salida.",
+  };
+}
+
 export function evaluarUbicacion(config: AsistenciaConfig, lat: number | null, lng: number | null, accuracy: number | null): { ok: true; distancia: number | null } | { ok: false; error: string; distancia?: number } {
   if (config.lat == null || config.lng == null) return { ok: false, error: "Falta la ubicación del spa. Un admin la guarda en Asistencia." };
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return { ok: false, error: "Activa la ubicación del teléfono. Sin eso no se puede marcar." };
