@@ -5036,7 +5036,7 @@ function renderInicio(c){
         +'<span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$'+fmt(sub(x.total))+'</span>'
         +'</div>';
     }).join('');
-    c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    c.innerHTML='<div data-reloj-host class="reloj-dash card"></div><div id="citas-dash"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div style="font-size:1rem;font-weight:800;color:var(--navy)">🏠 Hola, '+(CU?CU.short:'')+'</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+(d.actualizado||'')+'</button>'
       +'</div>'
@@ -5104,6 +5104,8 @@ function renderInicio(c){
       +filasMes
       +'</div>'
       +'<div style="font-size:0.52rem;color:var(--gray);text-align:center;padding-bottom:8px">Subtotal = sin IVA '+(IVA_DASH*100).toFixed(0)+'% · se actualiza con ↻ o al volver a entrar</div>';
+    if (typeof cargarReloj === "function") cargarReloj();
+    if (typeof cargarCitasDash === "function") cargarCitasDash();
   })
   .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
 }

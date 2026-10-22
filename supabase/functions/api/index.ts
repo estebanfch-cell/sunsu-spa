@@ -3,6 +3,7 @@ import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
 import "./asistencia_api.ts";
+import "./personal_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
