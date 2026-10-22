@@ -9,6 +9,7 @@ import { numeroTicket, quincenaDe } from "./ventas.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
+import "./asistencia_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { acceso, esPropio, evaluarBloqueo, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
@@ -910,5 +911,238 @@ describe("beta shell", () => {
     assert.match(html, /OC-0080/);
     assert.match(screens, /gc-line/);
     assert.match(screens, /diferencia a cobrar/);
+    assert.match(html, /MODO PRUEBA/);
+    assert.match(html, /id="btn-prueba"/);
+    assert.match(html, /Borrar datos de prueba/);
+    assert.match(html, /modo-prueba/);
+  });
+});
+
+describe("modo prueba", () => {
+  function conPrueba(db: MemoryDb) {
+    const real = ctx(db);
+    const prueba = "t-prueba";
+    db.tables.get("sesiones")!.push({ token: prueba, uid: "emi", rol: "admin", exp: "2099-01-01T00:00:00.000Z", modo_prueba: true });
+    return { real, prueba };
+  }
+
+  it("solo un admin enciende el modo, y la otra sesión sigue real", async () => {
+    const db = new MemoryDb();
+    const cosm = ctx(db, "cosmetologa", "andrea", "Andrea");
+    const no = await handle("modo_prueba", { token: cosm.token, on: true }, cosm) as Row;
+    assert.match(String(no.error), /admin/i);
+    const admin = ctx(db);
+    const on = await handle("modo_prueba", { token: admin.token, on: true }, admin) as Row;
+    assert.equal(on.modo_prueba, true);
+    const ses = (await db.all("sesiones")).find((r) => r.token === admin.token);
+    assert.equal(ses?.modo_prueba, true);
+    const who = await handle("whoami", { token: admin.token }, admin) as Row;
+    assert.equal(who.modo_prueba, true);
+    const off = await handle("modo_prueba", { token: admin.token, on: false }, admin) as Row;
+    assert.equal(off.modo_prueba, false);
+    assert.equal((await db.all("sesiones")).find((r) => r.token === admin.token)?.modo_prueba, false);
+  });
+
+  it("la actividad de prueba no mueve totales reales, y la purga los deja igual", async () => {
+    const db = new MemoryDb(erpSeed());
+    db.tables.set("tickets", [{
+      id: 50, sheet_row: 5, origin: "sheet", nombre: "María", apellido: "Paz", id_3: "1711",
+      estimado: 80, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea",
+      ht_002: 1, facial_hecho: "SUNSU-01 Limpieza", orig: {},
+    }]);
+    db.tables.set("gift_cards", [{ sheet_row: 4, codigo_gc: "26-065", valor: "100", usado: false, notas: "", orig: {} }]);
+    let nextCalls = 0;
+    db.rpcImpl = async (name) => {
+      if (String(name).startsWith("next_")) {
+        nextCalls++;
+        throw new Error("secuencia real");
+      }
+      return null;
+    };
+    const { real, prueba } = conPrueba(db);
+    const costoAntes = (await db.all("erp_productos")).find((r) => r.id === SEED_IDS.venta)?.costo_promedio;
+    const stockAntes = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad;
+
+    const tk = await handle("crearTicket", {
+      token: prueba, nombre: "María", apellido: "Paz", cedula: "1711", cosmetologa: "Emi",
+      facial: "SUNSU-40 Glow", estimado: 40, facialPrecio: 80, colR: "SI, 26-065, aplica 65",
+      productos: { "HT-002": 2 },
+    }, real) as Row;
+    assert.equal(tk.ok, true);
+    assert.equal(tk.origin, "test");
+    assert.match(String(tk.beta_num), /^TEST-TK-20261021-0001$/);
+    assert.equal(numeroTicket({ beta_num: tk.beta_num }), "TEST-TK-20261021-0001");
+    assert.equal(nextCalls, 0);
+
+    const otraGc = await handle("crearTicket", {
+      token: prueba, nombre: "Ana", cedula: "9", cosmetologa: "Emi", estimado: 10, facialPrecio: 80,
+      colR: "SI, 26-065, aplica 40",
+    }, real) as Row;
+    assert.match(String(otraGc.error), /saldo|alcanza/i);
+    const card = (await db.all("gift_cards"))[0];
+    assert.equal(card.saldo, undefined);
+    assert.equal(String(card.notas || ""), "");
+    assert.equal(card.usado, false);
+    const movGc = (await db.all("gift_card_movimientos")).find((r) => r.codigo === "26-065");
+    assert.equal(movGc?.origin, "test");
+    assert.equal(movGc?.monto, 65);
+    const buscaReal = await handle("buscarGiftCards", { token: real.token, q: "26-065" }, real) as Row;
+    assert.equal((buscaReal.resultados as Row[])[0].saldo, 100);
+    const buscaTest = await handle("buscarGiftCards", { token: prueba, q: "26-065" }, real) as Row;
+    assert.equal((buscaTest.resultados as Row[])[0].saldo, 35);
+
+    const oc = await handle("oc_save", {
+      token: prueba, proveedor_id: SEED_IDS.prov,
+      lineas: [{ producto_id: SEED_IDS.venta, cantidad: 2, precio: 9 }],
+    }, real) as Row;
+    assert.equal(oc.ok, true);
+    assert.match(String(oc.numero), /^TEST-OC-\d+$/);
+    assert.equal(nextCalls, 0);
+    const linea = (await db.all("erp_oc_lineas")).find((r) => r.origin === "test");
+    const rec = await handle("oc_recibir", {
+      token: prueba, oc_id: oc.id, lineas: [{ oc_linea_id: linea?.id, bodega_id: BODEGA_VENTA, cantidad: 2 }],
+    }, real) as Row;
+    assert.equal(rec.ok, true);
+    assert.match(String(rec.numero), /^TEST-REC-/);
+    const stockReal = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
+    assert.equal(stockReal?.cantidad, stockAntes);
+    assert.equal((await db.all("erp_productos")).find((r) => r.id === SEED_IDS.venta)?.costo_promedio, costoAntes);
+    const mov = (await db.all("erp_movimientos")).find((r) => r.tipo === "recepcion");
+    assert.equal(mov?.origin, "test");
+    assert.equal(mov?.delta, 2);
+
+    const saldoTest = await handle("stk_saldo", { token: prueba, sku: "HT-002" }, real) as Row;
+    const casaTest = (saldoTest.items as Row[]).find((r) => r.bodega_id === BODEGA_VENTA);
+    assert.equal(casaTest?.cantidad, Number(stockAntes) + 2);
+    const saldoReal = await handle("stk_saldo", { token: real.token, sku: "HT-002" }, real) as Row;
+    const casaReal = (saldoReal.items as Row[]).find((r) => r.bodega_id === BODEGA_VENTA);
+    assert.equal(casaReal?.cantidad, stockAntes);
+    const kardexReal = await handle("stk_kardex", { token: real.token, sku: "HT-002" }, real) as Row;
+    assert.equal((kardexReal.items as Row[]).some((r) => r.origin === "test"), false);
+    const kardexTest = await handle("stk_kardex", { token: prueba, sku: "HT-002" }, real) as Row;
+    assert.equal((kardexTest.items as Row[]).some((r) => r.origin === "test"), true);
+
+    const cliReal = await handle("clientes_resumen", { token: real.token }, real) as Row;
+    assert.equal((cliReal.clientes as Row[])[0].total, 80);
+    const cliTest = await handle("clientes_resumen", { token: prueba }, real) as Row;
+    assert.equal((cliTest.clientes as Row[])[0].total, 120);
+    const repReal = await handle("reporte_consumos", { token: real.token, desde: "2026-10-01", hasta: "2026-10-31" }, real) as Row;
+    assert.equal((repReal.totales as Row).unidadesVenta, 1);
+    const repTest = await handle("reporte_consumos", { token: prueba, desde: "2026-10-01", hasta: "2026-10-31" }, real) as Row;
+    assert.equal((repTest.totales as Row).unidadesVenta, 3);
+    const dashReal = await handle("getDashboardHoy", { token: real.token }, real) as Row;
+    assert.equal((dashReal.hoy as Row).venta, 80);
+    const dashTest = await handle("getDashboardHoy", { token: prueba }, real) as Row;
+    assert.equal((dashTest.hoy as Row).venta, 120);
+    const comReal = await handle("getDashCosm", { token: real.token, cosmetologa: "Emi" }, real) as Row;
+    assert.equal(comReal.comFaciales, 0);
+    const comTest = await handle("getDashCosm", { token: prueba, cosmetologa: "Emi" }, real) as Row;
+    assert.equal(comTest.comFaciales, 3);
+
+    const marca = await handle("asis_marca_manual", {
+      token: prueba, nombre: "Andrea", tipo: "entrada", motivo: "olvido", ts: "2026-10-21T09:05:00-05:00",
+    }, real) as Row;
+    assert.equal(marca.ok, true);
+    const marcaRow = (await db.all("asistencia_marcajes"))[0];
+    assert.equal(marcaRow.origin, "test");
+    assert.equal(marcaRow.origen, "manual");
+    const diaReal = await handle("asis_dia", { token: real.token, fecha: "2026-10-21" }, real) as Row;
+    const equipo = JSON.stringify(diaReal);
+    assert.equal(equipo.includes("09:05") || equipo.includes("14:05"), false);
+
+    const permiso = await handle("asis_permiso_solicitar", {
+      token: prueba, tipo: "PERMISO", desde: "2026-10-22", motivo: "prueba",
+    }, real) as Row;
+    assert.equal(permiso.ok, true);
+    const per = (await db.all("permisos"))[0];
+    assert.equal(per.origin, "test");
+    assert.equal(Number(per.sheet_row) < 0, true);
+    const perReal = await handle("getPermisos", { token: real.token }, real) as Row;
+    assert.equal((perReal.data as Row[]).length, 0);
+
+    const cli = await handle("registrarCliente", { token: prueba, cedula: "1711999888", nombre: "Prueba", apellido: "Test" }, real) as Row;
+    assert.equal(cli.ok, true);
+    assert.equal(Number(cli.fila) < 0, true);
+    const ficha = (await db.all("clientas_registro"))[0];
+    assert.equal(ficha.origin, "test");
+
+    const cot = await handle("guardarCotizacion", {
+      token: prueba, cliente: "María", lineas: [{ nombre: "Facial", cant: 1, precio: 57 }],
+    }, real) as Row;
+    assert.equal(cot.ok, true);
+    assert.match(String(cot.numero), /^TEST-COT-/);
+
+    const editReal = await handle("ticket_editar", {
+      token: prueba, ref: "5", lineas: [{ clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 4, precio: 20, costo: 8 }],
+    }, real) as Row;
+    assert.equal(editReal.ok, true);
+    const hoja = (await db.all("tickets")).find((r) => r.sheet_row === 5);
+    assert.equal(hoja?.estimado, 80);
+    assert.equal(hoja?.ht_002, 1);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, stockAntes);
+
+    const realTk = await handle("crearTicket", {
+      token: real.token, nombre: "Luz", cedula: "1722", cosmetologa: "Emi", estimado: 10,
+    }, real) as Row;
+    assert.match(String(realTk.beta_num), /^TK-20261021-900001$/);
+    assert.equal(realTk.origin, "beta");
+    assert.ok(nextCalls >= 1);
+    const realOc = await handle("oc_save", {
+      token: real.token, proveedor_id: SEED_IDS.prov,
+      lineas: [{ producto_id: SEED_IDS.venta, cantidad: 1, precio: 8 }],
+    }, real) as Row;
+    assert.equal(realOc.numero, "OC-0001");
+
+    const antesReimport = (await db.all("tickets")).filter((r) => r.origin === "test").length;
+    await reimportarTickets(db, "import", [
+      { sheet_row: 5, nombre: "María", apellido: "Reimport", id_3: "1711", estimado: 80, ht_002: 1, orig: {}, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea" },
+      { sheet_row: 7, nombre: "Otra hoja", orig: {}, timestamp: "2026-10-02T00:00:00Z", atendido_por: "Andrea" },
+    ]);
+    const testTk = (await db.all("tickets")).find((r) => r.origin === "test" && String(r.beta_num).startsWith("TEST-TK-"));
+    assert.equal(testTk?.nombre, "María");
+    assert.equal((await db.all("tickets")).filter((r) => r.origin === "test").length, antesReimport);
+    assert.equal((await db.all("tickets")).find((r) => Number(r.sheet_row) === 5)?.apellido, "Reimport");
+
+    const purga = await handle("prueba_borrar", { token: real.token }, real) as Row;
+    assert.equal(purga.ok, true);
+    assert.ok(Number(purga.borradas) > 0);
+    assert.equal((await db.all("tickets")).some((r) => r.origin === "test"), false);
+    assert.equal((await db.all("erp_movimientos")).some((r) => r.origin === "test"), false);
+    assert.equal((await db.all("asistencia_marcajes")).length, 0);
+    assert.equal((await db.all("permisos")).some((r) => r.origin === "test"), false);
+    assert.equal((await db.all("gift_cards"))[0].usado, false);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, stockAntes);
+    assert.equal((await db.all("erp_productos")).find((r) => r.id === SEED_IDS.venta)?.costo_promedio, costoAntes);
+    const hojaFin = (await db.all("tickets")).find((r) => Number(r.sheet_row) === 5);
+    assert.equal(hojaFin?.apellido, "Reimport");
+    assert.equal(hojaFin?.estimado, 80);
+    const betaFin = (await db.all("tickets")).find((r) => r.origin === "beta");
+    assert.match(String(betaFin?.beta_num), /^TK-20261021-900001$/);
+    const ocRealFin = (await db.all("erp_oc")).find((r) => r.numero === "OC-0001");
+    assert.ok(ocRealFin);
+    assert.notEqual(ocRealFin?.origin, "test");
+    const log = (await db.all("log_acciones")).find((r) => r.accion === "PURGA PRUEBA");
+    assert.ok(log);
+    assert.notEqual(log?.origin, "test");
+    const cliDespues = await handle("clientes_resumen", { token: real.token }, real) as Row;
+    const maria = (cliDespues.clientes as Row[]).find((r) => String(r.cedula) === "1711");
+    assert.equal(maria?.visitas, 1);
+    assert.equal(maria?.total, 80);
+    const repDespues = await handle("reporte_consumos", { token: real.token, desde: "2026-10-01", hasta: "2026-10-31" }, real) as Row;
+    assert.equal((repDespues.totales as Row).unidadesVenta, 1);
+    const saldoDespues = await handle("stk_saldo", { token: prueba, sku: "HT-002" }, real) as Row;
+    assert.equal((saldoDespues.items as Row[]).find((r) => r.bodega_id === BODEGA_VENTA)?.cantidad, stockAntes);
+  });
+
+  it("0016 deja borrar solo origin test y la reimportación no lo pisa", () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0016_modo_prueba.sql", import.meta.url), "utf8");
+    assert.match(sql, /modo_prueba boolean/);
+    assert.match(sql, /origin in \('sheet', 'beta', 'test'\)/);
+    assert.match(sql, /old\.origin, ''\) = 'test'/);
+    assert.match(sql, /not in \('beta', 'test'\)/);
+    assert.match(sql, /prueba_purgar/);
+    assert.match(sql, /PURGA PRUEBA/);
+    assert.match(sql, /El kardex no se borra/);
+    assert.match(sql, /No hay import\.py/);
   });
 });

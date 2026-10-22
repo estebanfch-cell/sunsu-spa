@@ -150,6 +150,31 @@ export function siguienteBetaNum(rows: Row[], ymd: string): string {
   return `TK-${ymd.replace(/-/g, "")}-${String(max + 1).padStart(4, "0")}`;
 }
 
+/** Serie aparte. TEST-OC-0001 no entra en OC-#### ni en next_oc_num. */
+export function siguienteTestDoc(rows: Row[], prefix: string): string {
+  let max = 0;
+  const re = new RegExp("^TEST-" + prefix + "-(\\d+)$");
+  for (const r of rows) {
+    for (const campo of [r.numero, r.beta_num]) {
+      const m = re.exec(String(campo || ""));
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  }
+  return `TEST-${prefix}-${String(max + 1).padStart(4, "0")}`;
+}
+
+/** TEST-TK-AAAAMMDD-####. No usa el piso 900000 ni next_ticket_num. */
+export function siguienteTestTicket(rows: Row[], ymd: string): string {
+  const day = ymd.replace(/-/g, "");
+  let max = 0;
+  const re = /^TEST-TK-(\d{8})-(\d+)$/;
+  for (const r of rows) {
+    const m = re.exec(String(r.beta_num || ""));
+    if (m && m[1] === day) max = Math.max(max, Number(m[2]));
+  }
+  return `TEST-TK-${day}-${String(max + 1).padStart(4, "0")}`;
+}
+
 export function ecuadorParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Guayaquil",

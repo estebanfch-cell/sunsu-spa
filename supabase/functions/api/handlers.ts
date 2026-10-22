@@ -1,5 +1,5 @@
 import type { Ctx, Ses } from "./lib.ts";
-import { acceso, clampPersonal, gateAccion, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
+import { acceso, clampPersonal, esAdmin, gateAccion, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
@@ -9,6 +9,7 @@ import {
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
+import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 
 type R = Record<string, unknown>;
 
@@ -561,7 +562,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
   return {
-    ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: "beta", id: saved?.id,
+    ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: ident.origin, id: saved?.id,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
   };
@@ -715,7 +716,20 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   const matriz = await matrizDe(ctx.db);
   const gate = gateAccion(action, ses0, matriz);
   if (gate) return gate;
-  const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), ctx);
+  if (action === "modo_prueba" || action === "prueba_borrar") {
+    if (!ses0) return { error: "Inicia sesión" };
+    if (!esAdmin(ses0.rol)) return { error: "Solo un admin puede usar el modo prueba" };
+    const actor = actorOf(ses0);
+    if (action === "prueba_borrar") return purgarPrueba(ctx.db, actor);
+    const on = p.on === true || p.on === "true" || p.on === 1;
+    const saved = await ctx.db.write(actor, "sesiones", "update", { token: ses0.token }, { modo_prueba: on });
+    if (!saved) return { error: "Sesión no encontrada" };
+    if (on && saved.modo_prueba !== true) return { error: "Aplica 0016_modo_prueba.sql antes de usar el modo prueba" };
+    await logAccion(ctx.db, actor, on ? "MODO PRUEBA ON" : "MODO PRUEBA OFF", ses0.name);
+    return { ok: true, modo_prueba: on };
+  }
+  const db = ses0?.prueba ? activarPrueba(ctx.db) : ocultarPrueba(ctx.db);
+  const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db });
   return redactar(action, out, ses0, matriz);
 }
 
@@ -766,12 +780,12 @@ async function registrarCliente(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   }
   const sheet_row = await nextSheet(ctx.db, "clientas_registro");
   const ec = ecuadorParts(ctx.now);
-  await ctx.db.write(actor, "clientas_registro", "insert", {}, {
+  const savedCli = await ctx.db.write(actor, "clientas_registro", "insert", {}, {
     sheet_row, timestamp: ec.isoWall, cedula: ced, ...campos,
     apruebo_consentimiento_individual: "SI — " + `${pad(ec.d)}/${pad(ec.m)}/${ec.y} ${ec.hm}`,
     orig: { cedula: ced, nombre },
   });
-  return { ok: true, fila: sheet_row };
+  return { ok: true, fila: savedCli?.sheet_row ?? sheet_row };
 }
 function pad(x: number) { return String(x).padStart(2, "0"); }
 function camposRegistro(p: R): R {
