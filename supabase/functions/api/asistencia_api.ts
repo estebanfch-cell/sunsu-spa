@@ -6,7 +6,7 @@ import { ecuadorParts, n, s, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
   diasDeVacacion, saldoVacaciones, validarSolicitudVacacion,
-  calcularDia, calcularNomina, configDesde, evaluarUbicacion, instanteEcuador, validarSecuencia,
+  calcularDia, calcularNomina, configDesde, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia,
   type JibbleIn, type MarcajeIn, type NominaHoras, type PermisoIn,
 } from "./asistencia.ts";
 
@@ -184,6 +184,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   const crudos = (await ctx.db.all("asistencia_marcajes")).filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha);
   const marcajes = marcajesDe(crudos, nombre);
   const dia = calcularDia(fecha, marcajes, cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
+  const reloj = estadoReloj(marcajes, ctx.now.toISOString());
   const permisos = (await ctx.db.all("permisos"))
     .filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses))
     .map(permisoPub);
@@ -209,7 +210,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     } catch { /* la lista de fechas alcanza */ }
   }
   return {
-    ok: true, fecha, dia, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), equipo, feriados, auditoria: auditoria.map(audPub),
+    ok: true, fecha, dia, reloj, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), equipo, feriados, auditoria: auditoria.map(audPub),
     config: {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,

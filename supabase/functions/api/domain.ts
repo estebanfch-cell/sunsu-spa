@@ -175,6 +175,33 @@ export function siguienteTestTicket(rows: Row[], ymd: string): string {
   return `TEST-TK-${day}-${String(max + 1).padStart(4, "0")}`;
 }
 
+/** Sigue 26-065 → 26-066. En prueba solo mira TEST-26-###, así el número real no se gasta. */
+export function siguienteCodigoGc(rows: Row[], yy: string, prueba = false): string {
+  const re = prueba ? new RegExp("^TEST-" + yy + "-(\\d+)$") : new RegExp("^" + yy + "-(\\d+)$");
+  let max = 0;
+  for (const r of rows) {
+    const m = re.exec(String(r.codigo_gc || ""));
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  const n = String(max + 1).padStart(3, "0");
+  return prueba ? `TEST-${yy}-${n}` : `${yy}-${n}`;
+}
+
+/** PQ-0001 si la hoja no traía código. Sigue el mayor PQ- que ya exista. */
+export function siguienteCodigoPaq(rows: Row[], prueba = false): string {
+  const re = prueba ? /^TEST-PQ-(\d+)$/ : /^PQ-(\d+)$/;
+  let max = 0;
+  for (const r of rows) {
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    for (const campo of [orig.codigo, r.notas]) {
+      const m = re.exec(String(campo || ""));
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  }
+  const n = String(max + 1).padStart(4, "0");
+  return prueba ? `TEST-PQ-${n}` : `PQ-${n}`;
+}
+
 export function ecuadorParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Guayaquil",
