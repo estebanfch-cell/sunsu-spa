@@ -167,6 +167,13 @@
     width: min(420px, calc(100vw - 24px));
   }
   .reloj-sheet[hidden] { display: none !important; }
+  .local-sel { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+  .local-sel[hidden] { display: none !important; }
+  .local-sel select { color: var(--navy-d); background: #fff; border: 0; border-radius: 8px; padding: 6px 8px; font-weight: 800; }
+  .lugar-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+  .lugar-chips .btn { min-height: 44px; }
+  .cnt-num { font-size: 2rem; text-align: center; height: 72px; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .btn.block { width: 100%; min-height: 52px; font-size: 1rem; }
   .cita-next { border: 2px solid var(--gold-m); }
   .cita-next .name, .cita-card .name { white-space: normal; }
   .scrim { position: fixed; inset: 0; background: rgba(58,53,48,0.32); z-index: 20; left: var(--side-w); }
@@ -516,6 +523,10 @@ const local = location.hostname === "localhost" || location.hostname === "127.0.
 const API = local && new URLSearchParams(location.search).get("api") || PROD_API;
 const VENTA = "11111111-1111-4111-8111-111111111111";
 const CABINA = "22222222-2222-4222-8222-222222222222";
+const CASA = "44444444-4444-4444-8444-444444444444";
+const CAB2 = "55555555-5555-4555-8555-555555555552";
+const CAB3 = "55555555-5555-4555-8555-555555555553";
+const LOCAL_ESQUINA = "33333333-3333-4333-8333-333333333333";
 const MENU = [
   ["inicio", "Dashboard"],
   ["tickets", "Tickets"],
@@ -539,7 +550,7 @@ const MENU = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
 ];
-const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "" };
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true };
 let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." };
 var IVA_DASH = 0.15;
 let grupoAbierto = "";
@@ -705,7 +716,31 @@ function previewApi(accion, body) {
   }
   if (accion === "prov_list") return { ok: true, items: [{ id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" }] };
   if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-0080", estado: "abierta", total: 92, tipo: "consignacion", q_label: "16-fin Oct 2026" }] };
-  if (accion === "prod_list") return { ok: true, items: [{ id: "p1", sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "venta", precio_venta: 43.99, porBodega: { VENTA: 4, CABINA: 0 } }] };
+  if (accion === "prod_list") return { ok: true, items: [
+    { id: "p1", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "ambos", precio_venta: 43.99, porBodega: { VENTA: 4, CABINA: 2, CASA: 0 } },
+    { id: "p2", sku: "HT-014", nombre: "Heartleaf 77% Soothing Toner 250ml", uso: "venta", precio_venta: 28, porBodega: { VENTA: 6, CABINA: 0, CASA: 0 } },
+  ] };
+  if (accion === "lugares_list" || accion === "lugar_guardar" || accion === "lugar_elegir") {
+    return { ok: true, uno: true, local_id: LOCAL_ESQUINA, nombre: "La Esquina", locales: [{ id: LOCAL_ESQUINA, codigo: "ESQUINA", nombre: "La Esquina", direccion: "C.C. La Esquina, Cumbayá", activo: true }], lugares: [
+      { id: CASA, codigo: "CASA", nombre: "Casa", tipo: "casa", activo: true, orden: 0 },
+      { id: VENTA, codigo: "VENTA", nombre: "Venta", tipo: "venta", local_id: LOCAL_ESQUINA, activo: true, orden: 1 },
+      { id: CABINA, codigo: "CABINA", nombre: "Cabina 1", tipo: "cabina", local_id: LOCAL_ESQUINA, activo: true, orden: 2 },
+      { id: CAB2, codigo: "CAB2", nombre: "Cabina 2", tipo: "cabina", local_id: LOCAL_ESQUINA, activo: true, orden: 3 },
+      { id: CAB3, codigo: "CAB3", nombre: "Cabina 3", tipo: "cabina", local_id: LOCAL_ESQUINA, activo: true, orden: 4 },
+    ] };
+  }
+  if (accion === "stk_saldo") return { ok: true, items: [
+    { sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "ambos", cantidad: body.bodega_id === CASA ? 0 : 4, bodega_id: body.bodega_id || VENTA },
+  ] };
+  if (accion === "conteo_list") return { ok: true, items: [{ id: "cnt-demo", numero: "CNT-0007", estado: "abierto", bodega_id: VENTA, fecha: "2026-10-22" }] };
+  if (accion === "conteo_get" || accion === "conteo_abrir") return { ok: true, id: body.conteo_id || "cnt-demo", numero: "CNT-0007", estado: "abierto", bodega_id: VENTA, bodega: "Venta", lineas: [
+    { producto_id: "p1", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", sistema: 4, contado: null },
+    { producto_id: "p2", sku: "HT-014", nombre: "Heartleaf 77% Soothing Toner 250ml", sistema: 6, contado: null },
+  ] };
+  if (accion === "conteo_guardar") return { ok: true };
+  if (accion === "conteo_aplicar") return { ok: true, numero: "AJU-0004" };
+  if (accion === "trf_list") return { ok: true, items: [] };
+  if (accion === "trf_enviar") return { ok: true, id: "trf-demo", numero: "TRF-0008", inmediata: true, consumo: true };
   if (accion === "periodo_consignacion") {
     return { ok: true, qLabel: "16-fin Oct 2026", familia: "HT", ini: "2026-10-16", fin: "2026-10-31",
       proveedor: { id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" },
@@ -846,9 +881,13 @@ function moduloDeRuta(route) {
   }
   if (route.mod === "gift") return route.sub === "paquetes" ? "paquetes" : "gift_cards";
   if (route.mod === "citas" || route.mod === "inicio") return "inicio";
+  if (route.mod === "lugares") return "inventario";
   return route.mod;
 }
 function tituloRuta(route, tab) {
+  if (route.mod === "lugares") return "Locales y cabinas";
+  if (route.mod === "conteos") return route.sub ? "Conteo físico" : "Conteos físicos";
+  if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
   if (route.mod === "personal") return { comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas" }[route.sub] || "Personal";
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
@@ -919,6 +958,7 @@ function gruposVisibles() {
         ]);
       }
       if (acceso("transferencias") !== "no") vis.push(["transferencias", "Transferencias", "#/m/transferencias"]);
+      if (state.admin) vis.push(["inventario", "Locales y cabinas", "#/m/lugares"]);
     }
     for (const [mod] of vis) usados.add(mod);
     if (vis.length) out.push({ id, label, items: vis });
@@ -1077,6 +1117,7 @@ function paintShell(title) {
               <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
             </button>
             <h1>${esc(title || "Dashboard")}</h1>
+            ${htmlLocalSel()}
             ${state.admin && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
@@ -1126,6 +1167,13 @@ function paintShell(title) {
       go("#/doc/ov");
     };
   });
+  const localSel = document.getElementById("local-sel");
+  if (localSel) localSel.onchange = async () => {
+    state.localId = localSel.value;
+    localStorage.setItem("sunsu.beta.local", localSel.value);
+    await api("lugar_elegir", { local_id: localSel.value });
+    draw();
+  };
   const btnPrueba = document.getElementById("btn-prueba");
   if (btnPrueba) btnPrueba.onclick = () => alternarPrueba(true);
   const btnOff = document.getElementById("btn-prueba-off");
@@ -1206,7 +1254,7 @@ function fail(data) {
 }
 function lineHtml(opts) {
   const precio = opts.precio ? `<input name="precio" inputmode="decimal" placeholder="Precio" aria-label="Precio">` : `<input type="hidden" name="precio" value="0">`;
-  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option><option value="${VENTA}">Casa (venta)</option><option value="${CABINA}">Local (cabina y consumo)</option></select>` : `<input type="hidden" name="bodega" value="">`;
+  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option>${opcionesLugares()}</select>` : `<input type="hidden" name="bodega" value="">`;
   const clase = opts.clase ? `<select name="clase" aria-label="Clase"><option value="producto">Producto</option><option value="servicio">Servicio</option></select>` : `<input type="hidden" name="clase" value="producto">`;
   return `<div class="linea">
     <input name="sku" placeholder="SKU" aria-label="SKU" autocomplete="off">
@@ -1259,8 +1307,7 @@ function pantallaSunsu(route) {
   if (m === "tickets" || m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "cotizaciones";
   if (m === "productos") return "catalogo";
-  if (m === "inventario") return "inventario";
-  if (m === "conteos") return "inv-fisico";
+  if (m === "inventario" || m === "conteos" || m === "lugares") return "";
   if (m === "compras" && route.sub !== "rfq") return "";
   if (m === "proveedores") return "proveedores";
   if (m === "paquetes") return "buscar-paquetes";
@@ -1315,6 +1362,7 @@ async function draw() {
     if (!who.ok) { state.token = ""; localStorage.removeItem("sunsu.beta.token"); paintLogin(who.error); return; }
     applySession(who);
   }
+  await asegurarLugares();
   const route = parseRoute();
   const tab = pantallaSunsu(route);
   const title = tituloRuta(route, tab);
@@ -1371,7 +1419,8 @@ async function renderMod(route) {
   if (route.mod === "gift") return renderGiftMod(route);
   if (route.mod === "citas") return renderCitasBeta();
   if (route.mod === "productos") return renderProductos();
-  if (route.mod === "inventario") return renderInventario(route.sub || "venta");
+  if (route.mod === "inventario") return renderInventarioBeta(route.sub || "venta");
+  if (route.mod === "lugares") return renderLugares();
   if (route.mod === "compras") return renderCompras(route.sub);
   if (route.mod === "tickets") return renderClientes();
   if (route.mod === "kardex") return renderKardex();
@@ -1387,7 +1436,7 @@ async function renderMod(route) {
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
   if (route.mod === "transferencias") return renderTrf();
-  if (route.mod === "conteos") return renderConteos();
+  if (route.mod === "conteos") return renderConteos(route.sub || "");
   if (route.mod === "permisos") return renderPermisosBeta();
   if (route.mod === "usuarios") return renderUsuarios();
   return `<p class="note">Módulo sin pantalla todavía.</p>`;
@@ -1503,22 +1552,72 @@ async function renderProductos() {
     <div class="list" id="lista">${items || `<p class="note">El catálogo ERP está vacío. Aplica 0009 y la importación, o crea un producto.</p>`}</div>`;
 }
 
-async function renderInventario(sub) {
-  const bodega = sub === "cabina" ? CABINA : VENTA;
-  const data = await api("stk_saldo", { bodega_id: bodega });
+function htmlLocalSel() {
+  const locales = (state.lugares && state.lugares.locales) || [{ id: LOCAL_ESQUINA, nombre: "La Esquina" }];
+  const opts = locales.map((l) => `<option value="${esc(l.id)}" ${l.id === state.localId ? "selected" : ""}>${esc(l.nombre)}</option>`).join("");
+  return `<label class="local-sel" id="local-wrap" ${state.unLocal ? "hidden" : ""}><span>Local</span><select id="local-sel" aria-label="Local en el que trabajas">${opts}</select></label>`;
+}
+async function asegurarLugares() {
+  const data = await api("lugares_list", { local_id: state.localId || "" });
+  if (!data || data.error || !data.locales) return;
+  state.lugares = data;
+  const activos = (data.locales || []).filter((l) => l.activo !== false);
+  state.unLocal = activos.length < 2;
+  if (!state.localId || !activos.some((l) => l.id === state.localId)) {
+    state.localId = data.local_id || (activos[0] && activos[0].id) || LOCAL_ESQUINA;
+  }
+}
+function lugaresVisibles() {
+  const all = ((state.lugares && state.lugares.lugares) || []).filter((b) => b.activo !== false);
+  const base = all.length ? all : [
+    { id: CASA, nombre: "Casa", tipo: "casa", orden: 0 },
+    { id: VENTA, nombre: "Venta", tipo: "venta", local_id: LOCAL_ESQUINA, orden: 1 },
+    { id: CABINA, nombre: "Cabina 1", tipo: "cabina", local_id: LOCAL_ESQUINA, orden: 2 },
+    { id: CAB2, nombre: "Cabina 2", tipo: "cabina", local_id: LOCAL_ESQUINA, orden: 3 },
+    { id: CAB3, nombre: "Cabina 3", tipo: "cabina", local_id: LOCAL_ESQUINA, orden: 4 },
+  ];
+  return base.slice().sort((a, b) => (a.orden || 0) - (b.orden || 0));
+}
+function lugaresDelLocal() {
+  return lugaresVisibles().filter((b) => b.tipo === "casa" || !state.localId || b.local_id === state.localId);
+}
+function etiquetaLugar(b) {
+  if (!b) return "";
+  if (b.tipo === "casa") return b.nombre || "Casa";
+  const loc = ((state.lugares && state.lugares.locales) || []).find((l) => l.id === b.local_id);
+  return (!state.unLocal && loc ? loc.nombre + " · " : "") + (b.nombre || "");
+}
+function lugarPorSub(sub) {
+  const rows = lugaresDelLocal();
+  if (sub === "casa") return rows.find((b) => b.tipo === "casa") || { id: CASA, nombre: "Casa", tipo: "casa" };
+  if (sub === "cabina") return rows.find((b) => b.tipo === "cabina") || { id: CABINA, nombre: "Cabina 1", tipo: "cabina" };
+  if (!sub || sub === "venta") return rows.find((b) => b.tipo === "venta") || { id: VENTA, nombre: "Venta", tipo: "venta" };
+  return rows.find((b) => b.id === sub) || rows.find((b) => b.tipo === "venta") || rows[0];
+}
+function opcionesLugares(rows) {
+  return (rows || lugaresDelLocal()).map((b) => `<option value="${esc(b.id)}">${esc(etiquetaLugar(b))}</option>`).join("");
+}
+function familiaSkuUi(sku) {
+  const m = String(sku || "").toUpperCase().replace(/^SUNSU-/, "").match(/^(HT|AS|ML|PH|JN)-/);
+  return m ? m[1] : "";
+}
+async function renderInventarioBeta(sub) {
+  const lugar = lugarPorSub(sub);
+  const data = await api("stk_saldo", { bodega_id: lugar.id });
   if (data.error) return fail(data);
-  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0 || sub === "todos").map((r) => `
+  const chips = lugaresDelLocal().map((b) => `<button class="btn ${b.id === lugar.id ? "" : "ghost"} small" type="button" data-go="#/m/inventario/${encodeURIComponent(b.id)}">${esc(b.nombre)}</button>`).join("");
+  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0).map((r) => `
     <button class="row" type="button" data-go="#/m/kardex">
       <div class="sku">${esc(r.sku)}</div>
-      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso)}</div></div>
+      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso || "")}</div></div>
       <div class="meta">${esc(r.cantidad)}</div>
     </button>`).join("");
-  return `<div class="tabs">
-      <button class="btn ${sub !== "cabina" ? "" : "ghost"} small" type="button" data-go="#/m/inventario/venta">Venta</button>
-      <button class="btn ${sub === "cabina" ? "" : "ghost"} small" type="button" data-go="#/m/inventario/cabina">Cabina</button>
-    </div>
-    <p class="note">Venta es lo que se vende en el ticket. Cabina se consume en el servicio y no es una venta.</p>
-    <div class="list">${items || `<p class="note">Sin saldo en esta bodega. El percha de la hoja 📊 INVENTARIO no se migró: el stock de venta arranca en las entradas recibidas.</p>`}</div>`;
+  const loc = ((state.lugares && state.lugares.locales) || []).find((l) => l.id === state.localId);
+  const donde = loc ? `${loc.nombre}${loc.direccion ? " · " + loc.direccion : ""}` : "La Esquina";
+  return `<div class="lugar-chips">${chips}</div>
+    <p class="note">${esc(donde)}. Casa es la bodega principal. Venta es el mostrador. Cabina 1, Cabina 2 y Cabina 3 son las salas. El número que ves es el saldo actual: el conteo físico lo corrige.</p>
+    <div class="list" id="lista">${items || `<p class="note">Sin saldo en ${esc(lugar.nombre)}. Lo que no se ha contado sigue en el lugar donde ya estaba.</p>`}</div>
+    <div class="tools"><button class="btn block" type="button" data-go="#/m/conteos">Contar este lugar</button></div>`;
 }
 
 async function renderCompras(sub) {
@@ -1624,8 +1723,8 @@ function htmlReporte(d) {
         <div class="card kpi-tile"><div class="kpi-ico">🏠</div><div class="kpi-val">${esc(t.unidadesCabina || 0)}</div><div class="kpi-lbl">Local · cabina</div></div>
         <div class="card kpi-tile"><div class="kpi-ico">💆</div><div class="kpi-val">${esc(t.faciales || 0)}</div><div class="kpi-lbl">Faciales</div></div>
       </div>
-      <div class="card-title">🧴 Casa (venta)</div>${tabla(d.venta || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
-      <div class="card-title">🏠 Local (cabina, receta)</div>${tabla(d.cabina || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
+      <div class="card-title">🧴 Venta</div>${tabla(d.venta || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
+      <div class="card-title">🏠 Cabina</div>${tabla(d.cabina || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
       <div class="card-title">💆 Faciales</div>${tabla(d.faciales || [], [["Tipo", "nombre", "prod", "servicio"], ["Cantidad", "n", "num"]])}
     </div>`;
 }
@@ -2045,19 +2144,116 @@ async function renderCabina() {
   return `<p class="note">${(data.protocolos || []).length} protocolos. El costo de cabina no se muestra si tu rol no ve costos: el servidor lo quita.</p><div class="list">${inv}</div>`;
 }
 
+function lugaresMovibles() {
+  const rows = lugaresVisibles();
+  if (state.admin) return rows;
+  return rows.filter((b) => (b.tipo === "venta" || b.tipo === "cabina") && (!state.localId || b.local_id === state.localId || b.tipo === "casa" && false));
+}
 async function renderTrf() {
-  const data = await api("trf_list");
-  if (data.error) return fail(data);
-  const items = (data.items || []).map((t) => `<div class="row"><div class="sku">${esc(t.numero)}</div><div class="name">${esc(t.estado)}</div><div class="meta">${esc(t.fecha || "")}</div></div>`).join("");
-  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/trf">Nueva transferencia</button></div><div class="list">${items || `<p class="note">Sin transferencias. Solo un producto de uso ambos puede ir de Venta a Cabina.</p>`}</div>`;
+  const [data, prods] = await Promise.all([api("trf_list"), api("prod_list")]);
+  if (data && data.error) return fail(data);
+  const mov = lugaresMovibles();
+  const origen = opcionesLugares(mov);
+  const destinos = mov.filter((b) => b.tipo === "cabina");
+  const destino = opcionesLugares(destinos.length ? destinos : mov);
+  const productos = (prods.items || []).map((p) => `<button class="row" type="button" data-trf-prod="${esc(p.id)}" data-sku="${esc(p.sku)}" data-uso="${esc(p.uso || "")}"><div class="sku">${esc(p.sku)}</div><div class="name">${esc(p.nombre)}</div></button>`).join("");
+  const items = ((data && data.items) || []).slice(0, 12).map((t) => {
+    const o = lugaresVisibles().find((b) => b.id === t.origen_id);
+    const d = lugaresVisibles().find((b) => b.id === t.destino_id);
+    return `<div class="row"><div class="sku">${esc(t.numero)}</div><div><div class="name">${esc(t.estado)}</div><div class="note">${esc(etiquetaLugar(o))} → ${esc(etiquetaLugar(d))}</div></div></div>`;
+  }).join("");
+  const quien = state.admin ? "Como admin puedes mover también Casa y, cuando haya otro local, de un local a otro." : "Puedes pasar entre Venta y Cabina de tu local. Casa y otro local los mueve un admin.";
+  return `<form id="f-trf">
+    <label>Desde</label><select name="origen_id" aria-label="Origen">${origen}</select>
+    <label>Hacia</label><select name="destino_id" aria-label="Destino">${destino}</select>
+    <label>Producto</label><input id="trf-q" placeholder="Buscar por nombre o código" aria-label="Buscar producto">
+    <div class="list" id="lista">${productos || `<p class="note">No hay productos en el catálogo.</p>`}</div>
+    <input type="hidden" name="producto_id" id="trf-prod">
+    <p class="note" id="trf-elegido">Toca un producto.</p>
+    <label>Cantidad</label><input class="cnt-num" name="cantidad" inputmode="decimal" value="1" aria-label="Cantidad a pasar">
+    <p class="note" id="trf-consig" hidden>Este producto es de consignación. Al pasarlo a cabina se anota para la liquidación de la quincena, a precio de compra + IVA.</p>
+    <button class="btn block" type="submit">Pasar stock</button>
+    <p class="note">${quien} El movimiento queda en el kardex de los dos lugares.</p>
+    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p>
+  </form>
+  <div class="list">${items || `<p class="note">Todavía no hay transferencias.</p>`}</div>`;
 }
 
-async function renderConteos() {
+async function renderConteos(id) {
+  if (id) return renderConteoUno(id);
   const data = await api("conteo_list");
   if (data.error) return fail(data);
-  const items = (data.items || []).map((c) => `<div class="row"><div class="sku">${esc(c.numero)}</div><div class="name">${esc(c.estado)}</div><div class="meta">${esc(c.fecha || "")}</div></div>`).join("");
-  return `<form id="f-cnt"><label>Bodega</label><select name="bodega_id"><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select><button class="btn" type="submit">Abrir conteo</button><p class="err" id="f-err"></p></form>
-    <div class="list">${items || `<p class="note">Sin conteos. Aplicar el conteo ajusta el kardex; no borra la historia.</p>`}</div>`;
+  const lugares = state.admin ? lugaresVisibles() : lugaresDelLocal().filter((b) => b.tipo !== "casa");
+  const opts = opcionesLugares(lugares.length ? lugares : lugaresDelLocal());
+  const nombre = new Map(lugaresVisibles().map((b) => [b.id, etiquetaLugar(b)]));
+  const items = (data.items || []).map((c) => `<button class="row" type="button" data-go="#/m/conteos/${encodeURIComponent(c.id)}"><div class="sku">${esc(c.numero)}</div><div><div class="name">${esc(c.estado)}</div><div class="note">${esc(nombre.get(c.bodega_id) || "")}</div></div></button>`).join("");
+  return `<form id="f-cnt">
+    <label>Qué lugar vas a contar</label><select name="bodega_id" aria-label="Lugar del conteo">${opts}</select>
+    <label><input name="inicio" type="checkbox" style="width:auto"> Este es el conteo de inicio</label>
+    <button class="btn block" type="submit">Empezar conteo</button>
+    <p class="note">Se abre con el saldo que ya tiene el sistema. Escribes lo que contaste. Lo que dejes en blanco no se mueve. Al aplicar, la diferencia queda en el kardex.</p>
+    <p class="err" id="f-err"></p>
+  </form>
+  <div class="list">${items || `<p class="note">Sin conteos todavía.</p>`}</div>`;
+}
+async function renderConteoUno(id) {
+  const data = await api("conteo_get", { conteo_id: id });
+  if (data.error) return fail(data);
+  const lineas = data.lineas || [];
+  const pendiente = (ln) => ln.contado == null || ln.contado === "";
+  const listas = lineas.filter((ln) => !pendiente(ln));
+  const falta = lineas.filter(pendiente);
+  const actual = falta[0] || lineas[0];
+  const cerrado = data.estado === "aplicado";
+  const fila = (ln) => `<button class="row" type="button" data-cnt-prod="${esc(ln.producto_id)}"><div class="sku">${esc(ln.sku)}</div><div><div class="name">${esc(ln.nombre)}</div><div class="note">en sistema ${esc(ln.sistema)}${pendiente(ln) ? "" : " · contado " + esc(ln.contado)}</div></div></button>`;
+  const diffs = listas.map((ln) => {
+    const d = Number(ln.contado) - Number(ln.sistema);
+    return `<div class="row"><div class="sku">${esc(ln.sku)}</div><div class="name">${esc(ln.nombre)}</div><div class="meta">${d > 0 ? "+" : ""}${d}</div></div>`;
+  }).join("");
+  return `<p class="note">${esc(data.numero)} · ${esc(data.bodega || "Lugar")} · ${esc(data.estado)}. ${falta.length} sin contar.</p>
+    <form id="f-cnt-linea">
+      <input type="hidden" name="conteo_id" value="${esc(data.id)}">
+      <input type="hidden" name="producto_id" id="cnt-prod" value="${esc(actual ? actual.producto_id : "")}">
+      <div class="card" id="cnt-card"><div class="sku" id="cnt-sku">${esc(actual ? actual.sku : "")}</div><div class="name" id="cnt-nombre">${esc(actual ? actual.nombre : "Sin productos en este lugar")}</div>
+        <p class="note" id="cnt-sistema">${actual ? "El sistema dice " + actual.sistema + ". Escribe lo que hay en la mano." : ""}</p>
+      </div>
+      <label>Cantidad contada</label><input class="cnt-num" name="contado" id="cnt-num" inputmode="decimal" aria-label="Cantidad contada" ${cerrado ? "disabled" : ""}>
+      ${cerrado ? "" : `<button class="btn block" type="submit">Guardar esta cantidad</button>`}
+      <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p>
+    </form>
+    <input id="filtro" placeholder="Buscar producto" aria-label="Buscar producto del conteo">
+    <div class="list" id="lista">${lineas.map(fila).join("") || `<p class="note">Este lugar no tiene productos compatibles.</p>`}</div>
+    ${listas.length ? `<div class="card-title">Diferencias</div><div class="list">${diffs}</div>` : `<p class="note">Cuando guardes una cantidad, aquí ves la diferencia contra el sistema.</p>`}
+    ${cerrado ? `<p class="note">Este conteo ya ajustó el kardex.</p>` : `<button class="btn block" type="button" id="cnt-aplicar">Aplicar ajuste</button>`}
+    <p class="note">Aplicar ajuste escribe la diferencia en el kardex. Lo que no contaste se queda igual.</p>`;
+}
+async function renderLugares() {
+  if (!state.admin) return `<p class="err">Solo un admin edita locales y cabinas.</p>`;
+  const locales = (state.lugares && state.lugares.locales) || [];
+  const lugares = lugaresVisibles();
+  const locOpts = locales.map((l) => `<option value="${esc(l.id)}">${esc(l.nombre)}</option>`).join("");
+  const filas = lugares.map((b) => `<form class="card f-ren" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" data-local="${esc(b.local_id || "")}">
+    <div class="note">${esc(b.tipo === "casa" ? "Bodega principal" : b.tipo)}</div>
+    <label>Nombre</label><input name="nombre" value="${esc(b.nombre)}" aria-label="Nombre de ${esc(b.nombre)}">
+    <button class="btn" type="submit">Guardar nombre</button>
+  </form>`).join("");
+  const localesHtml = locales.map((l) => `<form class="card f-loc" data-id="${esc(l.id)}">
+    <label>Local</label><input name="nombre" value="${esc(l.nombre)}" aria-label="Nombre del local">
+    <label>Dirección</label><input name="direccion" value="${esc(l.direccion || "")}">
+    <button class="btn" type="submit">Guardar local</button>
+  </form>`).join("");
+  return `<p class="note">Hoy el local es La Esquina, con Venta y Cabina 1, Cabina 2 y Cabina 3, más Casa. Desde aquí agregas otro local o otra cabina. El saldo no se borra al renombrar.</p>
+    ${localesHtml}
+    ${filas}
+    <form id="f-lugar-nuevo" class="card">
+      <div class="card-title">Agregar</div>
+      <label>Tipo</label><select name="tipo" aria-label="Tipo de lugar"><option value="cabina">Cabina</option><option value="ubicacion">Ubicación</option><option value="venta">Venta</option><option value="local">Local</option></select>
+      <label>Nombre</label><input name="nombre" required placeholder="Cabina 4" aria-label="Nombre nuevo">
+      <label>Local</label><select name="local_id" aria-label="Local del lugar nuevo">${locOpts}</select>
+      <label>Dirección</label><input name="direccion" placeholder="Solo si es un local nuevo">
+      <button class="btn block" type="submit">Agregar lugar</button>
+      <p class="err" id="f-err"></p>
+    </form>`;
 }
 
 async function renderPermisosBeta() {
@@ -2118,9 +2314,9 @@ async function renderOcNueva() {
   const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
   return `<form id="f-oc"><h2>Nueva orden de compra</h2>
     <label>Proveedor</label><select name="proveedor_id" required>${opts || `<option value="">Sin proveedores</option>`}</select>
-    <label>Bodega destino</label><select name="bodega_destino_id"><option value="${VENTA}">Casa (venta)</option><option value="${CABINA}">Local (cabina y consumo)</option></select>
+    <label>Bodega destino</label><select name="bodega_destino_id">${opcionesLugares()}</select>
     <label>Fecha de entrega</label><input name="fecha_esperada" type="date">
-    <p class="note">Casa recibe lo que se vende. Local recibe cabina y consumo. La consignación se arma con Pagar/Ver periodo actual.</p>
+    <p class="note">Casa es el destino habitual. Venta es el mostrador y Cabina es el consumo. La consignación se arma con Pagar/Ver periodo actual.</p>
     <div id="lineas">${lineHtml({ precio: true, bodega: true })}</div>
     <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
     <label>Nota</label><textarea name="nota"></textarea>
@@ -2136,7 +2332,7 @@ async function renderOc(id) {
       <div class="name">${celdaProd(ln.producto_id, nombre.get(ln.producto_id) || ln.producto_id)}</div>
       <div class="note">pedido ${esc(ln.cantidad)} · recibido ${esc(ln.recibido)}</div>
       <input name="cantidad" inputmode="decimal" placeholder="Recibir" aria-label="Cantidad a recibir">
-      <select name="bodega" aria-label="Bodega de esta línea"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
+      <select name="bodega" aria-label="Bodega de esta línea"><option value="">Bodega</option>${opcionesLugares()}</select>
     </div>`).join("");
   const pago = state.admin ? `
     <h2>Pago al proveedor</h2>
@@ -2146,7 +2342,7 @@ async function renderOc(id) {
     <form id="f-dev">${lineas.replaceAll('placeholder="Recibir"', 'placeholder="Devolver"').replaceAll("Cantidad a recibir", "Cantidad a devolver")}<button class="btn ghost" type="submit">Devolver</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>` : "";
   const snap = parseSnap(o);
   const docs = snap ? `<div class="tools"><button class="btn ghost small" type="button" id="btn-pedido">Pre-factura y pedido</button><button class="btn ghost small" type="button" id="btn-acta">Acta de entrega</button></div><div id="doc-out"></div>` : "";
-  return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. ${snap ? "Consignación " + esc(snap.qLabel || "") + ". " : ""}Al recibir se actualiza el stock y el kardex. Casa = venta, Local = cabina.</p>
+  return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. ${snap ? "Consignación " + esc(snap.qLabel || "") + ". " : ""}Al recibir se actualiza el stock y el kardex. Elige el lugar de cada línea.</p>
     ${docs}
     <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
     ${pago}`;
@@ -2196,11 +2392,7 @@ async function renderRfq() {
 }
 
 function renderTrfNueva() {
-  return `<form id="f-trf"><label>Origen</label><select name="origen_id"><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
-    <label>Destino</label><select name="destino_id"><option value="${CABINA}">Cabina</option><option value="${VENTA}">Venta</option></select>
-    <div id="lineas">${lineHtml({})}</div>
-    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
-    <button class="btn" type="submit">Enviar transferencia</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+  return `<p class="note">El paso de stock es una sola pantalla: origen, destino, producto y cantidad.</p><button class="btn block" type="button" data-go="#/m/transferencias">Pasar stock</button>`;
 }
 
 function wireVentas(main) {
@@ -2347,14 +2539,14 @@ async function verConsig() {
   const data = await api("periodo_consignacion", { proveedor_id: sel ? sel.value : "" });
   if (data.error) { out.innerHTML = fail(data); return; }
   window._consig = data;
-  const filas = (data.fact || []).map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.stock)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td><td class="num"><input class="qty" data-pedir="${esc(it.sku)}" type="number" min="0" step="1" value="${esc(it.sugerido)}" aria-label="Reponer ${esc(it.sku)}"></td></tr>`).join("");
+  const filas = (data.fact || []).map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.stock)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${esc(it.consumido || 0)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td><td class="num"><input class="qty" data-pedir="${esc(it.sku)}" type="number" min="0" step="1" value="${esc(it.sugerido)}" aria-label="Reponer ${esc(it.sku)}"></td></tr>`).join("");
   const tot = data.totales || {};
   out.innerHTML = `<div class="doc-sheet"><div class="card-title">📋 CONSIGNACIÓN · ${esc(data.qLabel || "")}</div>
-    <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.familia || "")}. La pre-factura es lo vendido. El pedido es lo que se pide reponer.</p>
+    <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.familia || "")}. La pre-factura suma lo vendido y lo pasado a cabina. El pedido es lo que se pide reponer.</p>
     <label for="consig-buffer">Reposición</label>
     <input class="buffer" id="consig-buffer" type="number" min="0" step="1" value="${esc(pctBuffer(data))}" aria-label="Porcentaje de reposición">
     <span class="note">% sobre lo vendido. 20 es el default. Cambiarlo recalcula las cantidades; después puedes editar cada línea.</span>
-    <table><thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Vendido</th><th class="num">Compra</th><th class="num">A facturar</th><th class="num">Reponer</th></tr></thead><tbody>${filas || `<tr><td colspan="6">Sin ventas</td></tr>`}</tbody></table>
+    <table><thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Vendido</th><th class="num">A cabina</th><th class="num">Compra</th><th class="num">A facturar</th><th class="num">Reponer</th></tr></thead><tbody>${filas || `<tr><td colspan="7">Sin ventas</td></tr>`}</tbody></table>
     ${bloqueTotales(tot.subtotal, tot.iva, tot.total)}
     <p class="note">${esc(data.nota || "")}</p>
     <button class="btn" type="button" id="btn-gen-consig">Generar pedido</button>
@@ -2400,14 +2592,14 @@ async function mostrarDoc(cual) {
 function htmlPedido(snap, orden) {
   const fact = snap.fact || [];
   const restock = snap.restock || snap.items || [];
-  const filas = fact.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td></tr>`).join("");
+  const filas = fact.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${esc(it.consumido || 0)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td></tr>`).join("");
   const ped = restock.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.sugerido ?? it.pedir)}</td></tr>`).join("");
   const tot = snap.totales || {};
   const prov = snap.prov || snap.proveedor || {};
   const pct = pctBuffer(snap);
   return `<div class="doc-sheet"><div class="card-title">🧾 PÁGINA 1 — PRE-FACTURA</div>
-    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br>${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}<br>Lo que el proveedor debe facturar: unidades vendidas al precio de compra.</p>
-    <table><thead><tr><th>Producto</th><th class="num">Vendido</th><th class="num">P. unit.</th><th class="num">Subtotal</th></tr></thead><tbody>${filas || `<tr><td colspan="4">Sin ventas</td></tr>`}</tbody></table>
+    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br>${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}<br>Lo que el proveedor debe facturar: vendido y pasado a cabina, al precio de compra.</p>
+    <table><thead><tr><th>Producto</th><th class="num">Vendido</th><th class="num">A cabina</th><th class="num">P. unit.</th><th class="num">Subtotal</th></tr></thead><tbody>${filas || `<tr><td colspan="5">Sin ventas</td></tr>`}</tbody></table>
     ${bloqueTotales(tot.subtotal, tot.iva, tot.total)}
     <p class="note">${esc(snap.nota || "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.")}</p>
     <div class="card-title">📦 PÁGINA 2 — PEDIDO DE RESTOCK</div>
@@ -2422,7 +2614,7 @@ function htmlActa(orden, snap, filas) {
   const prov = (snap.prov || snap.proveedor || {}).nombre || "";
   return `<div class="doc-sheet"><div class="card-title">📦 ACTA DE ENTREGA</div>
     <p class="note">Recepción de mercadería · Sunsu Spa · Quito<br>${esc(orden.numero || "")} · ${esc(prov)} · ${esc(snap.qLabel || "")}</p>
-    ${rest.length ? `<p class="note">RESTOCK / CONSIGNACIÓN · Casa (venta)</p><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th>Estado</th></tr></thead><tbody>${tr(rest)}</tbody></table>` : ""}
+    ${rest.length ? `<p class="note">RESTOCK / CONSIGNACIÓN · Venta</p><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th>Estado</th></tr></thead><tbody>${tr(rest)}</tbody></table>` : ""}
     ${dir.length ? `<p class="note">COMPRA DIRECTA — USO CABINA. No suma al inventario de ventas. Al recibir, entra a Local.</p><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th>Estado</th></tr></thead><tbody>${tr(dir)}</tbody></table>` : ""}
     <p class="note">Recibido por — Sunsu Spa &nbsp;&nbsp;&nbsp; Entregado por — ${esc(prov)}</p>
     <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF</button></div>`;
@@ -2439,9 +2631,9 @@ function pdfConsig(data, cual) {
   const tot = (data && data.totales) || {};
   const pref = ["SUNSU SPA — PRE-FACTURA DE CONSIGNACION", "Lo que el proveedor debe facturar",
     (prov.nombre || "") + "  RUC " + (prov.ruc || ""), (data && data.qLabel) || "", ""];
-  ((data && data.fact) || []).forEach((it) => pref.push(it.sku + "  " + (it.nombre || "") + "  vendido " + it.vendido + "  $" + Number(it.subtotal || 0).toFixed(2)));
+  ((data && data.fact) || []).forEach((it) => pref.push(it.sku + "  " + (it.nombre || "") + "  vendido " + it.vendido + "  cabina " + (it.consumido || 0) + "  $" + Number(it.subtotal || 0).toFixed(2)));
   pref.push("", "SUBTOTAL $" + Number(tot.subtotal || 0).toFixed(2), "IVA 15% $" + Number(tot.iva || 0).toFixed(2), "TOTAL A FACTURAR $" + Number(tot.total || 0).toFixed(2));
-  pref.push("", "Sunsu paga solo lo vendido en la quincena.");
+  pref.push("", "Sunsu paga lo vendido y lo pasado a cabina en la quincena.");
   const ped = ["SUNSU SPA — PEDIDO DE RESTOCK", "Unidades a reponer (" + pctBuffer(data) + "%)",
     (prov.nombre || "") + "  " + ((data && data.qLabel) || ""), ""];
   ((data && (data.restock || data.items)) || []).forEach((it) => ped.push(it.sku + "  " + (it.nombre || "") + "  pedir " + (it.sugerido ?? it.pedir ?? "")));
@@ -2546,6 +2738,9 @@ function bind(main) {
   form("#f-cli", saveCli);
   form("#f-prov", saveProv);
   form("#f-trf", saveTrf);
+  wireTrf(main);
+  wireConteo(main);
+  wireLugares(main);
   form("#f-caja", saveCaja);
   wireAsistencia(main);
   wirePersonal(main);
@@ -2677,12 +2872,105 @@ async function saveProv(form) {
   const data = await api("prov_save", Object.fromEntries(new FormData(form).entries()));
   if (setMsg(form, data, "Proveedor " + (data.id || ""))) go("#/m/proveedores");
 }
+function wireTrf(main) {
+  const form = main.querySelector("#f-trf");
+  if (!form || !form.origen_id) return;
+  const elegido = main.querySelector("#trf-elegido");
+  const consig = main.querySelector("#trf-consig");
+  const oculto = main.querySelector("#trf-prod");
+  const pintar = (btn) => {
+    main.querySelectorAll("[data-trf-prod]").forEach((b) => { b.classList.toggle("on", b === btn); });
+    oculto.value = btn.getAttribute("data-trf-prod");
+    const sku = btn.getAttribute("data-sku") || "";
+    const uso = btn.getAttribute("data-uso") || "";
+    elegido.textContent = sku + " · " + (btn.querySelector(".name") ? btn.querySelector(".name").textContent : "");
+    const fam = familiaSkuUi(sku);
+    const dest = lugaresVisibles().find((b) => b.id === form.destino_id.value);
+    const aCabina = dest && dest.tipo === "cabina";
+    consig.hidden = !(fam && aCabina);
+    if (aCabina && uso === "venta") elegido.textContent += " · este producto es de venta y no entra a cabina";
+  };
+  main.querySelectorAll("[data-trf-prod]").forEach((b) => { b.onclick = () => pintar(b); });
+  form.destino_id.addEventListener("change", () => {
+    const on = main.querySelector("[data-trf-prod].on");
+    if (on) pintar(on);
+  });
+}
 async function saveTrf(form) {
-  const data = await api("trf_enviar", { origen_id: form.origen_id.value, destino_id: form.destino_id.value, lineas: readLines(form) });
-  if (setMsg(form, data, data.numero || "Enviada")) {
-    const rec = await api("trf_recibir", { id: data.id });
-    setMsg(form, rec, "Recibida en destino");
-  }
+  const producto = form.producto_id.value;
+  if (!producto) { setMsg(form, { error: "Toca el producto que vas a pasar." }); return; }
+  const data = await api("trf_enviar", {
+    inmediata: true,
+    origen_id: form.origen_id.value,
+    destino_id: form.destino_id.value,
+    lineas: [{ producto_id: producto, cantidad: Number(form.cantidad.value) }],
+  });
+  if (setMsg(form, data, (data.numero || "Listo") + (data.consumo ? " · anotado en la quincena" : ""))) draw();
+}
+function wireConteo(main) {
+  main.querySelectorAll("[data-cnt-prod]").forEach((b) => {
+    b.onclick = () => {
+      const id = b.getAttribute("data-cnt-prod");
+      const prod = document.getElementById("cnt-prod");
+      if (prod) prod.value = id;
+      const sku = document.getElementById("cnt-sku");
+      const nom = document.getElementById("cnt-nombre");
+      const sis = document.getElementById("cnt-sistema");
+      if (sku) sku.textContent = b.querySelector(".sku") ? b.querySelector(".sku").textContent : "";
+      if (nom) nom.textContent = b.querySelector(".name") ? b.querySelector(".name").textContent : "";
+      const note = b.querySelector(".note") ? b.querySelector(".note").textContent : "";
+      if (sis) sis.textContent = note + ". Escribe lo que hay en la mano.";
+      const num = document.getElementById("cnt-num");
+      if (num) { num.value = ""; num.focus(); }
+    };
+  });
+  const linea = main.querySelector("#f-cnt-linea");
+  if (linea) linea.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const contado = linea.contado.value;
+    if (contado === "") { setMsg(linea, { error: "Escribe cuántos hay." }); return; }
+    const data = await api("conteo_guardar", { conteo_id: linea.conteo_id.value, lineas: [{ producto_id: linea.producto_id.value, contado, lote: "" }] });
+    if (setMsg(linea, data, "Guardado. Sigue con el siguiente.")) draw();
+  });
+  const aplicar = main.querySelector("#cnt-aplicar");
+  if (aplicar) aplicar.onclick = async () => {
+    const id = linea && linea.conteo_id ? linea.conteo_id.value : "";
+    const data = await api("conteo_aplicar", { conteo_id: id });
+    if (data.error) { if (linea) setMsg(linea, data); return; }
+    toast("Ajuste " + (data.numero || "") + " en el kardex");
+    draw();
+  };
+}
+function wireLugares(main) {
+  main.querySelectorAll(".f-ren").forEach((f) => {
+    f.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const data = await api("lugar_guardar", { id: f.dataset.id, tipo: f.dataset.tipo, local_id: f.dataset.local, nombre: f.nombre.value });
+      if (data.error) { toast(data.error); return; }
+      toast("Nombre guardado");
+      state.lugares = null;
+      draw();
+    });
+  });
+  main.querySelectorAll(".f-loc").forEach((f) => {
+    f.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const data = await api("lugar_guardar", { id: f.dataset.id, tipo: "local", nombre: f.nombre.value, direccion: f.direccion.value });
+      if (data.error) { toast(data.error); return; }
+      toast("Local guardado");
+      state.lugares = null;
+      draw();
+    });
+  });
+  const nuevo = main.querySelector("#f-lugar-nuevo");
+  if (nuevo) nuevo.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const body = Object.fromEntries(new FormData(nuevo).entries());
+    const data = await api("lugar_guardar", body);
+    if (!setMsg(nuevo, data, "Listo")) return;
+    state.lugares = null;
+    draw();
+  });
 }
 async function saveCaja(form) {
   const data = await api("cajaV2Mov", Object.fromEntries(new FormData(form).entries()));
@@ -2948,8 +3236,9 @@ async function savePaq(form) {
   out.innerHTML = `<div class="list">${(items || []).map((p) => `<div class="row"><div class="sku">${esc(p.sku || p.cedula)}</div><div><div class="name">${esc(p.paquete || p.nombre || "")}</div><div class="note">${esc((p.nombre || "") + " " + (p.apellido || ""))}</div></div><div class="meta">${esc(p.usados ?? "")}/${esc((p.usos || []).length)}</div></div>`).join("") || `<p class="note">Sin resultados.</p>`}</div>`;
 }
 async function saveCnt(form) {
-  const data = await api("conteo_abrir", { bodega_id: form.bodega_id.value });
-  setMsg(form, data, data.numero ? "Abierto " + data.numero : "Listo");
+  const data = await api("conteo_abrir", { bodega_id: form.bodega_id.value, nota: form.inicio && form.inicio.checked ? "inicio" : "" });
+  if (data && data.id) go("#/m/conteos/" + encodeURIComponent(data.id));
+  else setMsg(form, data, data.numero ? "Abierto " + data.numero : "Listo");
 }
 
 window.addEventListener("hashchange", draw);
@@ -2965,7 +3254,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022personal"></script>
+<script src="beta-screens.js?v=20261022lugares"></script>
 <script>draw();</script>
 </body>
 </html>
