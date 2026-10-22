@@ -5,8 +5,10 @@ import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
+import { quincenaDe } from "./ventas.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
+import "./ventas_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { acceso, esPropio, evaluarBloqueo, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
@@ -699,6 +701,150 @@ describe("api", () => {
   });
 });
 
+describe("clientes, reportes, consignación y gift card", () => {
+  it("la quincena de proveedores corta el 15 y el fin de mes", () => {
+    assert.equal(quincenaDe(2026, 10, 21).qLabel, "16-fin Oct 2026");
+    assert.equal(quincenaDe(2026, 10, 21).ini, "2026-10-16");
+    assert.equal(quincenaDe(2026, 10, 10).q, 1);
+    assert.equal(quincenaDe(2026, 2, 20).fin, "2026-02-28");
+  });
+
+  it("agrupa clientas y una cosmetóloga no ve montos ni tickets ajenos", async () => {
+    const db = new MemoryDb();
+    db.tables.set("tickets", [
+      { id: 1, sheet_row: 1, nombre: "María", apellido: "Paz", id_3: "1711", estimado: 80, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles", ht_002: 1, facial_hecho: "SUNSU-01" },
+      { id: 2, sheet_row: 2, nombre: "María", apellido: "Paz", id_3: "1711", estimado: 40, timestamp: "2026-10-18T15:00:00Z", atendido_por: "Andrea Robles" },
+      { id: 3, sheet_row: 3, nombre: "Luz", apellido: "Vera", id_3: "1722", estimado: 99, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Daniela Mora" },
+    ]);
+    const adm = ctx(db);
+    const res = await handle("clientes_resumen", { token: adm.token }, adm) as Row;
+    const clientes = res.clientes as Row[];
+    assert.equal(clientes.length, 2);
+    const maria = clientes.find((c) => c.cedula === "1711") as Row;
+    assert.equal(maria.visitas, 2);
+    assert.equal(maria.total, 120);
+    assert.equal(maria.ultima, "2026-10-21");
+    const and = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    db.tables.set("sesiones", [
+      { token: adm.token, uid: "emi", rol: "admin", exp: "2099-01-01T00:00:00.000Z" },
+      { token: and.token, uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" },
+    ]);
+    const own = await handle("clientes_resumen", { token: and.token }, and) as Row;
+    assert.equal((own.clientes as Row[]).length, 1);
+    assert.equal((own.clientes as Row[])[0].total, undefined);
+    const det = await handle("cliente_detalle", { token: adm.token, key: "c:1711" }, adm) as Row;
+    assert.equal((det.tickets as Row[]).length, 2);
+    const den = await handle("ticket_editar", { token: and.token, ref: "1", lineas: [{ clase: "producto", sku: "HT-002", cantidad: 1, precio: 10 }] }, and) as Row;
+    assert.match(String(den.error), /admin/i);
+  });
+
+  it("editar un ticket recalcula IVA, comisión y el kardex", async () => {
+    const db = new MemoryDb(erpSeed());
+    db.tables.set("tickets", [{
+      id: 9, sheet_row: null, origin: "beta", beta_num: "TK-9", nombre: "María", apellido: "Paz", id_3: "1711",
+      estimado: 20, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles",
+      ht_002: 1, facial_hecho: "SUNSU-01 Limpieza", orig: {},
+    }]);
+    const c = ctx(db);
+    const antes = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta)?.cantidad;
+    const out = await handle("ticket_editar", { token: c.token, ref: "TK-9", lineas: [
+      { clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 2, precio: 20, costo: 8 },
+    ] }, c) as Row;
+    assert.equal(out.ok, true);
+    assert.equal(out.subtotal, 40);
+    assert.equal(out.iva, 6);
+    assert.equal(out.total, 46);
+    assert.equal(out.comProductos, 7.2);
+    const tk = (await db.all("tickets")).find((r) => r.beta_num === "TK-9");
+    assert.equal(tk?.ht_002, 2);
+    assert.equal(tk?.estimado, 46);
+    assert.equal(tk?.facial_hecho, "");
+    const stock = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta)?.cantidad;
+    assert.equal(stock, Number(antes) - 2);
+    const log = (await db.all("log_acciones")).find((r) => r.accion === "TICKET EDIT");
+    assert.match(String(log?.detalle), /TK-9/);
+    assert.match(String(log?.usuario), /Emi/);
+    const otra = await handle("ticket_editar", { token: c.token, ref: "TK-9", lineas: [
+      { clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 1, precio: 20, costo: 8 },
+    ] }, c) as Row;
+    assert.equal(otra.ok, true);
+    const stock2 = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta)?.cantidad;
+    assert.equal(stock2, Number(stock) + 1);
+  });
+
+  it("una gift card de 65 sobre un facial de 80 cobra la diferencia", async () => {
+    const db = new MemoryDb();
+    db.tables.set("gift_cards", [{ sheet_row: 4, codigo_gc: "26-065", valor: "100", usado: false, notas: "", orig: {} }]);
+    const c = ctx(db);
+    const out = await handle("crearTicket", {
+      token: c.token, nombre: "María", apellido: "Paz", cedula: "1711", cosmetologa: "Emi",
+      facial: "SUNSU-40 Glow", estimado: 15, facialPrecio: 80, colR: "SI, 26-065, aplica 65",
+    }, c) as Row;
+    assert.equal(out.ok, true);
+    const gc = out.gc as Row;
+    assert.equal(gc.aplicado, 65);
+    assert.equal(gc.saldo, 35);
+    assert.equal(gc.facialCobro, 15);
+    const row = (await db.all("gift_cards"))[0];
+    assert.equal(row.usado, false);
+    assert.match(String(row.notas), /SALDO:35\.00/);
+    assert.equal(((row.orig as Row).usos as Row[])[0].ticket, out.ticket);
+    const otra = await handle("crearTicket", {
+      token: c.token, nombre: "Ana", cedula: "9", cosmetologa: "Emi", estimado: 10, facialPrecio: 80,
+      colR: "SI, 26-065, aplica 40",
+    }, c) as Row;
+    assert.match(String(otra.error), /saldo|alcanza/i);
+    assert.equal((await db.all("gift_cards"))[0].saldo, 35);
+  });
+
+  it("el reporte suma venta, receta de cabina y faciales, y no es de staff", async () => {
+    const db = new MemoryDb(erpSeed());
+    db.tables.set("tickets", [
+      { id: 1, timestamp: "2026-10-21T15:00:00Z", ht_002: 2, facial_hecho: "SUNSU-01 Limpieza", atendido_por: "Andrea" },
+      { id: 2, timestamp: "2026-09-01T15:00:00Z", ht_002: 9, facial_hecho: "SUNSU-02", atendido_por: "Andrea" },
+    ]);
+    const c = ctx(db);
+    const rep = await handle("reporte_consumos", { token: c.token, desde: "2026-10-01", hasta: "2026-10-31" }, c) as Row;
+    const venta = (rep.venta as Row[]).find((r) => r.sku === "HT-002");
+    const cabina = (rep.cabina as Row[]).find((r) => r.sku === "CB-001");
+    assert.equal(venta?.unidades, 2);
+    assert.equal(cabina?.unidades, 2);
+    assert.equal((rep.totales as Row).faciales, 1);
+    const and = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    const no = await handle("reporte_consumos", { token: and.token, desde: "2026-10-01", hasta: "2026-10-31" }, and) as Row;
+    assert.match(String(no.error), /permiso/i);
+  });
+
+  it("la consignación arma la quincena y al recibir mueve Casa", async () => {
+    const seed = erpSeed();
+    seed.erp_proveedores[0].nombre = "Hebetronic S.A.";
+    seed.erp_proveedores[0].ruc = "1793161898001";
+    const db = new MemoryDb(seed);
+    db.tables.set("tickets", [{ id: 1, timestamp: "2026-10-21T15:00:00Z", ht_002: 1, atendido_por: "Andrea" }]);
+    const c = ctx(db);
+    const per = await handle("periodo_consignacion", { token: c.token, proveedor_id: SEED_IDS.prov }, c) as Row;
+    assert.equal(per.qLabel, "16-fin Oct 2026");
+    assert.equal(per.familia, "HT");
+    const ht = (per.fact as Row[]).find((r) => r.sku === "HT-002");
+    assert.equal(ht?.vendido, 1);
+    assert.equal(ht?.sugerido, 2);
+    const oc = await handle("oc_consignacion", { token: c.token, proveedor_id: SEED_IDS.prov, fecha_entrega: "2026-10-28" }, c) as Row;
+    assert.equal(oc.ok, true);
+    assert.match(String(oc.numero), /^OC-/);
+    const linea = (await db.all("erp_oc_lineas"))[0];
+    assert.equal(linea.cantidad, 2);
+    assert.equal(linea.bodega_id, BODEGA_VENTA);
+    assert.equal(linea.plazo, "RESTOCK");
+    const rec = await handle("oc_recibir", {
+      token: c.token, oc_id: oc.id, lineas: [{ oc_linea_id: linea.id, bodega_id: BODEGA_VENTA, cantidad: 2 }],
+    }, c) as Row;
+    assert.equal(rec.ok, true);
+    const stock = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
+    assert.equal(stock?.cantidad, 7);
+    assert.equal((await db.all("erp_movimientos")).some((m) => m.tipo === "recepcion"), true);
+  });
+});
+
 describe("beta shell", () => {
   const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
   it("el escritorio usa el ancho de la ventana y el teléfono trae la barra de abajo", () => {
@@ -712,5 +858,12 @@ describe("beta shell", () => {
     assert.match(html, /aria-label="Más"/);
     assert.match(html, /safe-area-inset-bottom/);
     assert.match(html, /height:\s*40px/);
+    assert.match(html, /Nueva orden de compra/);
+    assert.match(html, /Pagar\/Ver periodo actual/);
+    assert.match(html, /Consumos \/ reportes/);
+    assert.match(html, /data-cli/);
+    const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(screens, /id="gc-aplica"/);
+    assert.match(screens, /diferencia a cobrar/);
   });
 });

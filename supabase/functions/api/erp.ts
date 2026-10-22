@@ -416,6 +416,27 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     return { ok: true, id: ocId, numero };
   }
 
+  if (op === "stock_delta") {
+    const moves = (body.moves as Row[]) || [];
+    const steps: Step[] = [];
+    for (const m of moves) {
+      const delta = n(m.delta);
+      if (!delta) continue;
+      const p = porId.get(s(m.producto_id)) || porSku.get(skuCode(s(m.sku)));
+      if (!p) continue;
+      const bodegaId = s(m.bodega_id);
+      if (!bodegaId) continue;
+      steps.push({
+        op: "move", producto_id: String(p.id), bodega_id: bodegaId, delta,
+        tipo: s(m.tipo) || "ajuste", doc_tipo: "ticket", doc_id: s(m.doc_id) || undefined,
+        ticket_ref: s(m.ticket_ref), nota: s(m.nota), aprobar_negativo: body.aprobar_negativo !== false,
+        legacy_ref: s(m.legacy_ref) || undefined,
+      });
+    }
+    if (steps.length) await applyPlan(db, actor, steps, now.toISOString(), "stock_delta");
+    return { ok: true, n: steps.length };
+  }
+
   if (op === "oc_save") {
     const lineasIn = (body.lineas as Row[]) || [];
     if (!lineasIn.length) return { error: "La OC no tiene líneas" };
@@ -450,6 +471,9 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       estado: s(body.estado) || "abierta", subtotal: round2(sub), iva, flete: n(body.flete), total,
       pagado: n(prev?.pagado), saldo: round2(total - n(prev?.pagado)), estado_pago: n(prev?.pagado) <= 0 ? "pendiente" : s(prev?.estado_pago),
       nota: s(body.nota), creado_por: actor,
+      tipo: s(body.tipo) || s(prev?.tipo) || "compra",
+      q_label: s(body.q_label || prev?.q_label),
+      snap: body.snap ?? prev?.snap ?? null,
     } });
     await applyPlan(db, actor, steps);
     return { ok: true, id: ocId, numero, total };

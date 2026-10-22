@@ -8,6 +8,7 @@ import {
   normCedula, normNombre, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
+import { montoGcAplicado, saldoGift } from "./ventas.ts";
 
 type R = Record<string, unknown>;
 
@@ -163,12 +164,17 @@ async function dashboard(ctx: Ctx): Promise<R> {
       }
     }
     const fac = s(t.facial_hecho);
-    const canje = esCanje(t.paquete, t.gift_card);
+    const aplicaGc = montoGcAplicado(t.gift_card);
+    const gcParcial = aplicaGc > 0 && tot > 0 && !s(t.paquete).toUpperCase().startsWith("SI");
+    const canje = esCanje(t.paquete, t.gift_card) && !gcParcial;
     if (fac && fac !== "-" && fac !== "—") {
       hoyT.faciales++;
       topFac.set(fac, (topFac.get(fac) || 0) + 1);
       if (canje) hoyT.facCanjes++;
-      else if (tot > 0) hoyT.valFac += subtotalDe(cats, codAlInicio(fac) || "");
+      else if (gcParcial) {
+        const cobro = n((t.orig && typeof t.orig === "object" ? (t.orig as R).gc_facial_cobro : 0)) || Math.max(0, tot - aplicaGc);
+        hoyT.valFac += round2(cobro / IVA);
+      } else if (tot > 0) hoyT.valFac += subtotalDe(cats, codAlInicio(fac) || "");
       else hoyT.facCanjes++;
     }
     const clienta = s(t.nombre);
@@ -261,7 +267,15 @@ function toIn(r: R): TicketIn {
     pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6), extras: s(r.servicios_adicionales),
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
+    gcRatio: ratioGift(r),
   };
+}
+function ratioGift(r: R): number | undefined {
+  const aplica = montoGcAplicado(r.gift_card);
+  if (!(aplica > 0)) return undefined;
+  const cobro = n(r.orig && typeof r.orig === "object" ? (r.orig as R).gc_facial_cobro : 0);
+  const base = cobro + aplica;
+  return base > 0 ? cobro / base : 0;
 }
 async function marks(ctx: Ctx) {
   const rows = await ctx.db.all("cosmetologas");
@@ -511,6 +525,17 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   Object.assign(base, prod);
   base.estado = estadoTicket({ seguimiento: "", agendado: false, retorno: s(p.fechaRetorno) }, ec.ymd);
   const actor = actorOf(ses);
+  const identRef = ident.beta_num;
+  let gcAplicada: R | null = null;
+  if (s(p.colR)) {
+    const { consumirGiftAlCrear } = await import("./ventas_api.ts");
+    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), n(p.facialPrecio));
+    if (gcAplicada && gcAplicada.error && /alcanza|saldo|aplica/i.test(s(gcAplicada.error))) return gcAplicada;
+    if (gcAplicada && gcAplicada.ok) {
+      (base.orig as R).gc_aplica = gcAplicada.aplicado;
+      (base.orig as R).gc_facial_cobro = gcAplicada.facialCobro;
+    }
+  }
   const fotosWarn: string[] = [];
   for (const [campo, col] of [["fotosAntes", "fotos_antes"], ["fotosDespues", "fotos_despues"]] as const) {
     const arr = Array.isArray(p[campo]) ? p[campo] as unknown[] : [];
@@ -543,7 +568,11 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     if (slots.length) await marcarSlotsGC(ctx, actor, paqRow, slots);
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
-  return { ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: "beta", id: saved?.id, fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined };
+  return {
+    ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: "beta", id: saved?.id,
+    gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
+    fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
+  };
 }
 
 async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R[]) {
@@ -1077,6 +1106,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
+      saldo: saldoGift(r),
     });
   }
   return { resultados };

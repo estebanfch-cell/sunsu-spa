@@ -57,6 +57,8 @@ const ACCION_MODULO: Record<string, Modulo> = {
   conteo_abrir: "conteos", conteo_guardar: "conteos", conteo_aplicar: "conteos", conteo_list: "conteos",
   ajuste_save: "inventario",
   getHistorial: "tickets", getTicketsDia: "tickets", editarTicket: "tickets", eliminarTicket: "tickets",
+  clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
+  reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
   getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones",
   getPeriodoComision: "comisiones", getReporteAdmin: "comisiones", getReporte: "comisiones",
