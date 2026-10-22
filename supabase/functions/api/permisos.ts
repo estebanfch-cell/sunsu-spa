@@ -70,6 +70,8 @@ const ACCION_MODULO: Record<string, Modulo> = {
   asis_hoy: "asistencia", asis_periodo: "asistencia", asis_corregir: "asistencia", asis_auditoria: "asistencia",
   asis_permiso_cancelar: "asistencia", asis_vacaciones: "asistencia", asis_marca_manual: "asistencia", asis_dia: "asistencia",
   asis_permiso_solicitar: "asistencia", asis_permiso_resolver: "asistencia", asis_feriado: "asistencia", asis_foto: "asistencia",
+  asis_aviso: "asistencia", horarios_list: "asistencia", horarios_guardar: "asistencia", horarios_asignar: "asistencia",
+  horarios_importar: "asistencia", push_clave: "asistencia", push_suscribir: "asistencia",
   getPermisos: "asistencia", savePermiso: "asistencia", updatePermiso: "asistencia",
   getRegistroClientes: "clientes", saveRegistroCliente: "clientes", registrarCliente: "clientes",
   cli_list: "clientes", cli_save: "clientes",
@@ -269,7 +271,8 @@ export function modulosVisibles(rol: string, matriz: Record<string, Partial<Reco
 /** Lecturas permitidas mientras un admin mira la app como otra persona. Lo demás se rechaza. */
 const LECTURA_VISTA = new Set([
   "whoami", "version", "getVersion", "home", "erp_home",
-  "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones",
+  "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso",
+  "horarios_list", "push_clave",
   "citas_proximas", "getCitas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle",
   "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs",
   "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "getRegistro",

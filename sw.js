@@ -1,4 +1,4 @@
-const CACHE = "sunsu-beta-2026-10-22-VERCOMO";
+const CACHE = "sunsu-beta-2026-10-22-RELOJCAM";
 const FILES = ["/beta.html", "/beta-screens.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
 
 function scopePath() {
@@ -29,6 +29,28 @@ self.addEventListener("activate", (event) => {
     await Promise.all(keys.filter((key) => key.startsWith("sunsu-beta") && key !== CACHE).map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
+});
+
+self.addEventListener("push", (event) => {
+  let payload = { title: "Sunsu", body: "Recuerda marcar entrada" };
+  try { payload = event.data ? event.data.json() : payload; } catch { /* el texto por defecto alcanza */ }
+  event.waitUntil(self.registration.showNotification(payload.title || "Sunsu", {
+    body: payload.body || "Recuerda marcar entrada",
+    icon: "/icon-beta.png",
+    tag: payload.tag || "sunsu-reloj",
+    data: { url: "/beta.html#/m/inicio" },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/beta.html#/m/inicio";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      if (client.url.indexOf("/beta.html") >= 0 && "focus" in client) return client.focus();
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(url);
+  }));
 });
 
 self.addEventListener("fetch", (event) => {

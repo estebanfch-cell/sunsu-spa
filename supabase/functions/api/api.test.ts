@@ -10,8 +10,10 @@ import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
 import "./asistencia_api.ts";
+import "./horarios_api.ts";
 import "./personal_api.ts";
 import { reimportarTickets } from "./lib.ts";
+import { jornadaDe, normalizarJibble, slotRotativo, type Horario } from "./horarios.ts";
 import { acceso, esPropio, evaluarBloqueo, lecturaEnVista, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
 
@@ -949,6 +951,7 @@ describe("clientes, reportes, consignación y gift card", () => {
 
 describe("beta shell", () => {
   const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+  const sqlHorarios = readFileSync(new URL("../../../docs/supabase/pending/0018_horarios.sql", import.meta.url), "utf8");
   it("el escritorio usa el ancho de la ventana y el teléfono trae la barra de abajo", () => {
     assert.equal(html.includes("max-width: 580px"), false);
     assert.match(html, /max-width:\s*none/);
@@ -1005,7 +1008,14 @@ describe("beta shell", () => {
     assert.equal(html.includes('["facturacion"'), false);
     assert.equal(html.includes('id="f-asis-perm"'), false);
     assert.match(html, /id="f-personal-perm"/);
-    assert.match(html, /reloj-pill/);
+    assert.match(html, /reloj-btn/);
+    assert.match(html, /Marcar salida/);
+    assert.match(html, /facingMode:\s*"user"/);
+    assert.match(html, /id="reloj-selfie" type="file" accept="image\/\*" capture="user" hidden/);
+    assert.equal(/<label[^>]*>\s*Selfie\s*<input/.test(html), false);
+    assert.match(html, /Horarios/);
+    assert.match(sqlHorarios, /create table if not exists public\.horarios/);
+    assert.equal(sqlHorarios.includes("insert into public.horarios"), false);
     assert.match(html, /Ver como…/);
     assert.match(html, /Viendo como/);
     assert.match(html, /id="btn-ver-como"/);
@@ -1370,5 +1380,96 @@ describe("modo prueba", () => {
     assert.match(sql, /new\.origin := 'beta'/);
     const py = readFileSync(new URL("../../../docs/supabase/tools/import.py", import.meta.url), "utf8");
     assert.match(py, /origin=not\.in\.\(beta,test\)/);
+  });
+});
+
+describe("horarios", () => {
+  const jibble = {
+    schedules: { value: [
+      {
+        id: "sch-1", name: "Cabina Mar-Sáb", default: true, workArrangement: "Fixed", breaksType: "Unpaid",
+        daySchedules: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => ({ day, from: "09:00:00", to: "18:00:00", duration: "PT8H" })),
+        breaks: [{ name: "Almuerzo", duration: "PT1H", from: "13:00:00", to: "14:00:00", allowToBeTakenFromTo: true }],
+        autoDeductions: [{ name: "Almuerzo", duration: "PT1H", threshold: "PT6H" }],
+      },
+      {
+        id: "sch-2", name: "Día por medio", workArrangement: "Rotating", cycleAnchor: "2026-10-21",
+        daySchedules: [{ day: "Day 1", from: "10:00:00", to: "19:00:00" }, { day: "Day 2", isRest: true }],
+      },
+    ] },
+    people: { value: [
+      { id: "p1", fullName: "Andrea Robles", scheduleId: "sch-1" },
+      { id: "p2", fullName: "Daniela Mora", groupId: "g1" },
+    ] },
+    groups: { value: [{ id: "g1", scheduleId: "sch-2" }] },
+  };
+
+  it("el lunes no se trabaja en un mar-sáb y el día por medio cae en el otro slot", () => {
+    const parsed = normalizarJibble(jibble);
+    assert.equal(parsed.horarios[0].arreglo, "fijo");
+    assert.equal(parsed.horarios[0].descansosTipo, "impago");
+    assert.equal(parsed.horarios[0].descansos[0].duracionMin, 60);
+    assert.equal(parsed.horarios[0].deducciones[0].umbralMin, 360);
+    assert.equal(parsed.horarios[1].arreglo, "rotativo");
+    assert.equal(parsed.horarios[1].dias[0].dia, "1");
+    assert.equal(parsed.horarios[1].dias[1].trabaja, false);
+    assert.equal(parsed.asignaciones[0].origen, "persona");
+    assert.equal(parsed.asignaciones[1].origen, "grupo");
+    const fijo = { ...parsed.horarios[0], id: "h1" } as Horario;
+    assert.equal(jornadaDe(fijo, "2026-10-19").trabaja, false);
+    assert.deepEqual(jornadaDe(fijo, "2026-10-21"), { trabaja: true, desde: "09:00", hasta: "18:00" });
+    assert.equal(slotRotativo("2026-10-21", "2026-10-21", 2), 1);
+    assert.equal(slotRotativo("2026-10-22", "2026-10-21", 2), 2);
+    assert.equal(slotRotativo("2026-10-23", "2026-10-21", 2), 1);
+  });
+
+  it("importa Jibble, deja la tabla vacía si no hay credenciales y avisa a la cosmetóloga", async () => {
+    const db = new MemoryDb();
+    const adminC = ctx(db);
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    const sin = await handle("horarios_importar", { token: adminC.token }, adminC) as Row;
+    assert.equal(sin.ok, false);
+    assert.equal(sin.vacio, true);
+    assert.equal(sin.importados, 0);
+    assert.equal((await db.all("horarios")).length, 0);
+    const negado = await handle("horarios_guardar", { token: "t-andrea", nombre: "X", arreglo: "fijo", dias: [] }, adminC) as Row;
+    assert.match(String(negado.error), /admin/);
+    function json(body: unknown, status = 200) {
+      return { ok: status < 300, status, json: async () => body };
+    }
+    adminC.env = { JIBBLE_CLIENT_ID: "id", JIBBLE_CLIENT_SECRET: "secret" };
+    adminC.fetchImpl = (async (url: string) => {
+      if (url.includes("connect/token")) return json({ access_token: "tok" });
+      if (url.includes("/Schedules")) return json(jibble.schedules);
+      if (url.includes("/People")) return json(jibble.people);
+      if (url.includes("/Groups")) return json(jibble.groups);
+      return json({}, 404);
+    }) as typeof fetch;
+    const imp = await handle("horarios_importar", { token: adminC.token }, adminC) as Row;
+    assert.equal(imp.ok, true);
+    assert.equal(imp.importados, 2);
+    assert.equal(imp.asignados, 2);
+    assert.equal(lecturaEnVista("horarios_list"), true);
+    assert.equal(lecturaEnVista("horarios_importar"), false);
+    adminC.now = new Date("2026-10-21T13:50:00Z");
+    const aviso = await handle("asis_aviso", { token: "t-andrea" }, adminC) as Row;
+    assert.equal((aviso.aviso as Row).texto, "Recuerda marcar entrada");
+    await handle("asis_aviso", { token: "t-andrea" }, adminC);
+    assert.equal((await db.all("horario_avisos")).length, 1);
+    db.tables.set("asistencia_marcajes", [{ id: "m", nombre: "Andrea Robles", tipo: "entrada", ts: "2026-10-21T14:05:00Z", anulado: false }]);
+    adminC.now = new Date("2026-10-21T23:05:00Z");
+    const salida = await handle("asis_aviso", { token: "t-andrea" }, adminC) as Row;
+    assert.equal((salida.aviso as Row).texto, "Recuerda marcar salida");
+    assert.equal((await db.all("horario_avisos")).length, 2);
+    const guardado = await handle("horarios_guardar", {
+      token: adminC.token, nombre: "Día por medio", arreglo: "rotativo", ancla: "2026-10-21", ciclo_dias: 2,
+      dias: [{ dia: "1", trabaja: true, desde: "09:00", hasta: "18:00" }, { dia: "2", trabaja: false }],
+    }, adminC) as Row;
+    assert.equal(guardado.ok, true);
+    assert.equal((await handle("horarios_asignar", { token: adminC.token, persona: "Andrea Robles", horario_id: guardado.id }, adminC) as Row).ok, true);
+    adminC.now = new Date("2026-10-22T13:50:00Z");
+    const descanso = await handle("asis_aviso", { token: "t-andrea" }, adminC) as Row;
+    assert.equal(descanso.aviso, null);
   });
 });

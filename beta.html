@@ -151,33 +151,28 @@
     font-size: 0.78rem; font-weight: 800; color: var(--navy);
     padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px;
   }
-  .reloj-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    border: 0; border-radius: 999px; min-height: 40px; padding: 4px 14px 4px 4px;
-    font-weight: 800; font-size: 0.78rem; line-height: 1.05; cursor: pointer;
-    box-shadow: var(--shadow-sm); max-width: 100%;
-  }
-  .reloj-pill.entrada {
-    background: linear-gradient(160deg, var(--gold-m), var(--gold));
-    color: var(--navy-d);
-    box-shadow: 0 6px 14px rgba(196,148,58,0.32);
-  }
-  .reloj-pill.salida {
-    background: var(--white); color: var(--navy-d);
-    border: 1.5px solid var(--navy); box-shadow: var(--shadow);
-  }
-  .reloj-ico {
-    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
-    display: grid; place-items: center;
-    background: rgba(255,255,255,0.55); color: var(--navy-d);
-  }
-  .reloj-pill.salida .reloj-ico { background: var(--blue-l); color: var(--navy); }
-  .reloj-ico svg { width: 16px; height: 16px; display: block; }
-  .reloj-lab { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-  .reloj-lab b { font-size: 0.78rem; letter-spacing: 0.01em; }
-  .reloj-lab span { font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; }
   .reloj-head { display: inline-flex; align-items: center; flex: 0 0 auto; }
-  .reloj-float { display: none; }
+  .reloj-btn {
+    border: 0; border-radius: 999px; min-height: 32px; padding: 5px 12px;
+    font-weight: 800; font-size: 0.72rem; line-height: 1.1; color: #fff; cursor: pointer;
+    white-space: nowrap;
+  }
+  .reloj-btn.entrada { background: #1F8A4C; }
+  .reloj-btn.salida { background: #C62828; }
+  .cam-stage {
+    background: #1c1916; border-radius: 16px; overflow: hidden; aspect-ratio: 3/4;
+    max-height: 52vh; display: grid; place-items: center; margin: 0 0 10px;
+  }
+  .cam-stage video, .cam-stage img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .aviso-reloj {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    padding: 8px 14px; font-weight: 800; font-size: 0.84rem; color: var(--navy-d);
+  }
+  .aviso-reloj[hidden] { display: none !important; }
+  .aviso-reloj.entrada { background: #E7F6EE; }
+  .aviso-reloj.salida { background: #FDECEC; }
+  .hor-dia { display: grid; grid-template-columns: 92px 28px 1fr 1fr; gap: 6px; align-items: center; margin: 0 0 6px; }
+  .hor-dia input[type="checkbox"] { width: auto; }
   .btn-vista {
     background: transparent; color: var(--gold-m); border: 1px solid rgba(232,192,122,0.85);
     border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 0.72rem; white-space: nowrap;
@@ -468,17 +463,9 @@
       padding: 3px 8px 6px; margin-top: -2px;
     }
     .tab-more.on { color: var(--gold); }
-    .reloj-head { display: none; }
-    .reloj-float {
-      display: flex; align-items: center;
-      position: fixed; z-index: 65;
-      right: calc(50% + 48px);
-      bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-      max-width: calc(50vw - 64px);
-    }
-    .reloj-float .reloj-pill { min-height: 40px; padding: 3px 12px 3px 3px; }
-    .reloj-float .reloj-ico { width: 30px; height: 30px; }
-    .reloj-float .reloj-lab b { font-size: 0.72rem; }
+    .reloj-head { display: inline-flex; }
+    .reloj-btn { font-size: 0.68rem; min-height: 30px; padding: 4px 10px; }
+    .top { flex-wrap: wrap; row-gap: 6px; }
     .top h1 { min-width: 0; }
     .linea { grid-template-columns: 1fr 1fr; }
     .row { grid-template-columns: max-content minmax(0, 1fr) auto; }
@@ -595,7 +582,7 @@ const MENU = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
 ];
-const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true, vista: null };
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true, vista: null, previewHorarios: null, previewAsignaciones: null };
 let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada.", _t0: Date.now() };
 let relojTick = 0;
 try { state.vista = JSON.parse(sessionStorage.getItem("sunsu.beta.vista") || "null"); } catch { state.vista = null; }
@@ -875,6 +862,24 @@ function previewApi(accion, body) {
     state.previewDentro = body.tipo !== "salida";
     return { ok: true };
   }
+  if (accion === "asis_aviso") {
+    if (!esRolCitas()) return { ok: true, aviso: null };
+    const tipo = state.previewDentro ? "salida" : "entrada";
+    return { ok: true, aviso: { tipo, texto: tipo === "salida" ? "Recuerda marcar salida" : "Recuerda marcar entrada" } };
+  }
+  if (accion === "horarios_list") return { ok: true, horarios: state.previewHorarios || [], asignaciones: state.previewAsignaciones || [], personas: [{ nombre: "Andrea Robles", rol: "cosmetologa" }, { nombre: "Daniela Mora", rol: "cosmetologa" }], importados: 0 };
+  if (accion === "horarios_guardar") {
+    const item = { id: body.id || "h-nuevo", nombre: body.nombre, arreglo: body.arreglo, esDefault: !!body.es_default, dias: body.dias || [], descansos: body.descansos || [], deducciones: body.deducciones || [], cicloDias: body.ciclo_dias || null, ancla: body.ancla || null, horasSemana: body.horas_semana || null, descansosTipo: body.descansos_tipo || "impago" };
+    state.previewHorarios = (state.previewHorarios || []).filter((h) => h.id !== item.id).concat([item]);
+    return { ok: true, id: item.id };
+  }
+  if (accion === "horarios_asignar") {
+    state.previewAsignaciones = (state.previewAsignaciones || []).filter((a) => a.persona !== body.persona).concat([{ persona: body.persona, horarioId: body.horario_id || null }]);
+    return { ok: true };
+  }
+  if (accion === "horarios_importar") return { ok: false, vacio: true, importados: 0, asignados: 0, error: "Jibble no está configurado en esta vista." };
+  if (accion === "push_clave") return { ok: false };
+  if (accion === "push_suscribir") return { ok: true };
   if (accion === "asis_periodo") return { ok: true, personas: [{ nombre: body.nombre || "Emilia", hrsTrabajadas: 8, hrsOrdinarias: 8, hrsAlmuerzo: 1, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasPropios: 1, diasJibble: 0, hayDatos: true }] };
   if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4 };
   if (accion === "getRolIndividual") return { ok: true, data: { nombre: body.cedula || "Emilia", cedula: "1711", cargo: "Cosmetóloga", sueldo: 460, bono: 20, comFaciales: 36, comPaquetes: 20, comProductos: 18, vacaciones: 0, fondoReserva: 0, totalIngresos: 554, iess: 48, totalRecibir: 506, fuenteHoras: "asistencia", hrsSupl: 0, atrasoMin: 0, faltas: 0 } };
@@ -900,7 +905,7 @@ function previewApi(accion, body) {
 function lecturaEnVista(accion) {
   if (!accion) return false;
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
-  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
+  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
 }
 async function api(accion, body = {}) {
   if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
@@ -963,7 +968,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "conteos") return route.sub ? "Conteo físico" : "Conteos físicos";
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
-  if (route.mod === "personal") return { comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas" }[route.sub] || "Personal";
+  if (route.mod === "personal") return { comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal";
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
   if (tab) return tituloSunsu(tab);
@@ -1046,6 +1051,7 @@ function gruposVisibles() {
     personal.push(["asistencia", "Mi asistencia", "#/m/personal/asistencia"]);
     personal.push(["asistencia", "Permisos y vacaciones", "#/m/personal/permisos"]);
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
+    if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
   }
   add("Personal", "👤", personal);
   const gift = [];
@@ -1144,12 +1150,10 @@ function iconoReloj(salida) {
     : '<path d="M15 7v10"/><path d="M15 7H9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h6"/><path d="M4 12h7"/><path d="M8 9l3 3-3 3"/>';
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 }
-function htmlReloj(modo) {
+function htmlReloj() {
   const abierto = !!reloj.abierto;
-  const mins = minutosReloj();
-  const tiempo = abierto ? (modo === "float" ? fmtRelojCorto(mins) : fmtReloj(mins)) : "Marcar";
-  const aria = abierto ? "Marcar salida, " + fmtReloj(mins) : "Marcar entrada";
-  return `<button class="reloj-pill ${abierto ? "salida" : "entrada"}" type="button" data-reloj-open="1" aria-label="${esc(aria)}"><span class="reloj-ico">${iconoReloj(abierto)}</span><span class="reloj-lab"><b>${abierto ? "Salida" : "Entrada"}</b><span class="reloj-elapsed">${esc(tiempo)}</span></span></button>`;
+  const texto = abierto ? "Marcar salida" : "Marcar entrada";
+  return `<button class="reloj-btn ${abierto ? "salida" : "entrada"}" type="button" data-reloj-open="1">${esc(texto)}</button>`;
 }
 function rolActual() { return (state.user && state.user.role) || ""; }
 function esAdminRol() { const r = rolActual(); return r === "admin" || r === "super_admin"; }
@@ -1191,15 +1195,19 @@ function paintShell(title) {
       <div class="fly" id="fly" hidden></div>
       <div class="reloj-sheet card" id="reloj-sheet" hidden>
         <div class="card-title" id="reloj-sheet-title">Marcar entrada</div>
-        <p class="note" id="reloj-recuerda">Recuerda marcar tu entrada.</p>
-        <label><input id="reloj-origen" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
-        <label>Selfie<input id="reloj-selfie" type="file" accept="image/*" capture="user"></label>
+        <div class="cam-stage">
+          <video id="reloj-video" autoplay playsinline muted hidden></video>
+          <img id="reloj-foto" alt="Selfie" hidden>
+        </div>
+        <canvas id="reloj-canvas" hidden></canvas>
+        <p class="err" id="reloj-err"></p>
         <div class="tools">
-          <button class="btn" type="button" id="reloj-ok">Confirmar</button>
-          <button class="btn ghost" type="button" id="reloj-lunch" hidden>Almuerzo</button>
+          <button class="btn" type="button" id="reloj-tomar">Tomar foto</button>
+          <button class="btn" type="button" id="reloj-registrar" hidden>Registrar</button>
+          <button class="btn ghost" type="button" id="reloj-repetir" hidden>Otra foto</button>
           <button class="btn ghost" type="button" id="reloj-close">Cerrar</button>
         </div>
-        <p class="err" id="reloj-err"></p>
+        <input id="reloj-selfie" type="file" accept="image/*" capture="user" hidden tabindex="-1" aria-hidden="true">
       </div>
       <div class="vista-sheet card" id="vista-sheet" hidden>
         <div class="card-title">Ver como…</div>
@@ -1215,12 +1223,13 @@ function paintShell(title) {
             </button>
             <h1>${esc(title || "Dashboard")}</h1>
             ${htmlLocalSel()}
-            ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj("head")}</div>` : ""}
+            ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj()}</div>` : ""}
             ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
           ${state.vista ? `<div class="vista-bar" id="vista-bar">Viendo como ${esc(state.vista.name || state.vista.short || "…")} — <button type="button" id="vista-salir">Salir</button></div>` : ""}
+          <div class="aviso-reloj" id="aviso-reloj" hidden></div>
           <div class="modo-prueba" id="modo-bar" ${state.prueba ? "" : "hidden"}>
             <div>
               <strong>MODO PRUEBA</strong>
@@ -1245,7 +1254,7 @@ function paintShell(title) {
       ${tabButton("bodega", "Bodega")}
       ${tabButton("compras", "Compras")}
     </nav>
-    ${muestraReloj() ? `<div data-reloj-host class="reloj-float">${htmlReloj("float")}</div>` : ""}`;
+    `;
   const root = document.getElementById("app");
   const shell = document.getElementById("shell");
   root.querySelectorAll(".salir").forEach((b) => {
@@ -1484,6 +1493,8 @@ async function draw() {
   const main = document.getElementById("main");
   const listo = () => {
     void cargarReloj();
+    void pintarAviso();
+    if (!window._avisoT) window._avisoT = setInterval(() => { if (state.user) void pintarAviso(); }, 60000);
     if (document.getElementById("citas-dash")) void cargarCitasDash();
   };
   const gate = moduloDeRuta(route);
@@ -1957,9 +1968,7 @@ async function renderAsistencia() {
       <button class="btn ghost" type="button" data-marca="almuerzo_fin">Fin almuerzo</button>
       <button class="btn" type="button" data-marca="salida">Salir</button>
     </div>
-    <label><input id="origen-pc" type="checkbox" style="width:auto"> Estoy en el computador de recepción</label>
-    <label id="selfie-label">Selfie<input id="selfie" type="file" accept="image/*" capture="user"></label>` : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`}
-    <p class="err" id="f-err-marca"></p>
+    <p class="note">Entrar abre la cámara frontal, tomas la foto y pulsas Registrar.</p>` : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`}
     <h2>Hoy</h2>
     <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
     <p class="note">Los permisos y las vacaciones se piden en <button class="btn ghost small" type="button" data-go="#/m/personal/permisos">Permisos y vacaciones</button>.</p>
@@ -1986,11 +1995,185 @@ async function htmlSelectorPersona(opts) {
   const items = personas.map((p) => `<option value="${esc(p.nombre)}" data-cedula="${esc(p.cedula || "")}"${p.nombre === state.persona ? " selected" : ""}>${esc(p.nombre)}</option>`).join("");
   return `<div class="field"><label for="persona-sel">Persona</label><select id="persona-sel">${todas}${items}</select></div>`;
 }
+const DIAS_HOR = [["Monday", "Lunes"], ["Tuesday", "Martes"], ["Wednesday", "Miércoles"], ["Thursday", "Jueves"], ["Friday", "Viernes"], ["Saturday", "Sábado"], ["Sunday", "Domingo"]];
+function etiquetaArreglo(a) {
+  return { fijo: "Fijo", flexible: "Flexible", semanal: "Semanal", rotativo: "Rotativo" }[a] || a || "";
+}
+function htmlEditorHorario(h) {
+  h = h || { nombre: "", arreglo: "fijo", esDefault: false, descansosTipo: "impago", horasSemana: "", cicloDias: 2, ancla: "", dias: [], descansos: [] };
+  const arreglo = h.arreglo || "fijo";
+  const base = arreglo === "rotativo"
+    ? (h.dias && h.dias.length ? h.dias : [{ dia: "1", trabaja: true, desde: "09:00", hasta: "18:00" }, { dia: "2", trabaja: false, desde: "", hasta: "" }])
+    : DIAS_HOR.map(([dia]) => (h.dias || []).find((d) => d.dia === dia) || { dia, trabaja: false, desde: "09:00", hasta: "18:00" });
+  const filas = base.map((d) => {
+    const label = arreglo === "rotativo" ? "Día " + d.dia : (DIAS_HOR.find((x) => x[0] === d.dia) || ["", d.dia])[1];
+    return `<div class="hor-dia" data-dia="${esc(d.dia)}"><span>${esc(label)}</span><input type="checkbox" data-trabaja ${d.trabaja ? "checked" : ""}><input data-desde type="time" value="${esc(d.desde || "")}"><input data-hasta type="time" value="${esc(d.hasta || "")}"></div>`;
+  }).join("");
+  const descanso = (h.descansos || [])[0] || {};
+  return `<form id="f-horario" data-id="${esc(h.id || "")}">
+    <label>Nombre</label><input name="nombre" value="${esc(h.nombre || "")}" required>
+    <label>Arreglo</label>
+    <select name="arreglo" id="hor-arreglo">
+      <option value="fijo"${arreglo === "fijo" ? " selected" : ""}>Fijo · días y horas</option>
+      <option value="flexible"${arreglo === "flexible" ? " selected" : ""}>Flexible · días y duración</option>
+      <option value="semanal"${arreglo === "semanal" ? " selected" : ""}>Semanal · horas de la semana</option>
+      <option value="rotativo"${arreglo === "rotativo" ? " selected" : ""}>Rotativo · ciclo</option>
+    </select>
+    <label><input name="es_default" type="checkbox" style="width:auto"${h.esDefault ? " checked" : ""}> Horario por defecto</label>
+    <label>Descansos</label>
+    <select name="descansos_tipo"><option value="impago"${h.descansosTipo === "pago" ? "" : " selected"}>Impagos</option><option value="pago"${h.descansosTipo === "pago" ? " selected" : ""}>Pagos</option></select>
+    <label>Horas de la semana</label><input name="horas_semana" inputmode="decimal" value="${esc(h.horasSemana ?? "")}">
+    <label>Inicio del ciclo</label><input name="ancla" type="date" value="${esc((h.ancla || "").slice(0, 10))}">
+    <label>Días del ciclo</label><input name="ciclo_dias" inputmode="numeric" value="${esc(h.cicloDias || 2)}">
+    <button class="btn ghost small" type="button" id="hor-medio">Día por medio</button>
+    <p class="note">Cada fila es un día. En rotativo el ciclo se repite desde la fecha de inicio. Día por medio es un ciclo de 2.</p>
+    <div id="hor-dias">${filas}</div>
+    <h2>Descanso</h2>
+    <div class="hor-dia"><span>Almuerzo</span><span></span><input name="desc_desde" type="time" value="${esc(descanso.desde || "13:00")}"><input name="desc_hasta" type="time" value="${esc(descanso.hasta || "14:00")}"></div>
+    <button class="btn" type="submit">Guardar horario</button>
+    <p class="err" id="f-err-hor"></p>
+  </form>`;
+}
+async function renderHorarios() {
+  if (!state.admin) return `<p class="note">Los horarios los arma un admin.</p>`;
+  const data = await api("horarios_list");
+  if (data.error) return fail(data);
+  const horarios = data.horarios || [];
+  state.horariosCache = horarios;
+  const personas = data.personas || [];
+  const asignaciones = data.asignaciones || [];
+  const lista = horarios.map((h) => `<button class="cli-row" type="button" data-hor="${esc(h.id)}"><span class="cli-main"><b>${esc(h.nombre)}</b><span class="note">${esc(etiquetaArreglo(h.arreglo))}${h.esDefault ? " · por defecto" : ""}</span></span></button>`).join("")
+    || `<p class="note">Todavía no hay horarios. Jibble no se pudo leer desde este entorno, así que la lista nace vacía. Traer de Jibble los copia cuando la función tiene las credenciales. También puedes crear uno.</p>`;
+  const asign = personas.map((p) => {
+    const a = asignaciones.find((x) => x.persona === p.nombre);
+    const opts = `<option value="">Por defecto</option>` + horarios.map((h) => `<option value="${esc(h.id)}"${a && a.horarioId === h.id ? " selected" : ""}>${esc(h.nombre)}</option>`).join("");
+    return `<div class="row"><div class="name">${esc(p.nombre)}</div><div class="meta"><select data-asig="${esc(p.nombre)}">${opts}</select></div></div>`;
+  }).join("") || `<p class="note">No hay personas en el equipo.</p>`;
+  return `<div class="tools"><button class="btn" type="button" id="hor-nuevo">Nuevo horario</button><button class="btn ghost" type="button" id="hor-jibble">Traer de Jibble</button></div>
+    <p class="err" id="hor-err"></p>
+    <div class="list" id="hor-lista">${lista}</div>
+    <div id="hor-editor"></div>
+    <h2>Asignación</h2>
+    <p class="note">Cada persona tiene un solo horario. Por defecto usa el horario marcado así. Si alguien tiene el suyo, ese gana.</p>
+    <div class="list">${asign}</div>`;
+}
+function leerDiasHorario(form) {
+  return [...form.querySelectorAll(".hor-dia[data-dia]")].map((row, i) => {
+    const desde = row.querySelector("[data-desde]").value || null;
+    const hasta = row.querySelector("[data-hasta]").value || null;
+    let duracion = null;
+    if (desde && hasta) {
+      const [ah, am] = desde.split(":").map(Number);
+      const [bh, bm] = hasta.split(":").map(Number);
+      duracion = Math.max(0, (bh * 60 + bm) - (ah * 60 + am));
+    }
+    return { orden: i + 1, dia: row.getAttribute("data-dia"), trabaja: row.querySelector("[data-trabaja]").checked, desde, hasta, duracion_min: duracion };
+  });
+}
+function wireHorarios(main) {
+  const editor = main.querySelector("#hor-editor");
+  if (!editor) return;
+  const abrir = (h) => {
+    editor.innerHTML = htmlEditorHorario(h);
+    const form = editor.querySelector("#f-horario");
+    const arreglo = editor.querySelector("#hor-arreglo");
+    if (arreglo) arreglo.onchange = () => {
+      const nombre = form.nombre.value;
+      const prev = (state.horariosCache || []).find((x) => x.id === form.dataset.id) || {};
+      abrir({ ...prev, id: form.dataset.id, nombre, arreglo: arreglo.value, esDefault: form.es_default.checked, descansosTipo: form.descansos_tipo.value, horasSemana: form.horas_semana.value, cicloDias: form.ciclo_dias.value, ancla: form.ancla.value });
+    };
+    const medio = editor.querySelector("#hor-medio");
+    if (medio) medio.onclick = () => abrir({
+      id: form.dataset.id, nombre: form.nombre.value || "Día por medio", arreglo: "rotativo", cicloDias: 2,
+      ancla: form.ancla.value || new Date().toISOString().slice(0, 10), esDefault: form.es_default.checked, descansosTipo: form.descansos_tipo.value,
+      dias: [{ dia: "1", trabaja: true, desde: "09:00", hasta: "18:00" }, { dia: "2", trabaja: false, desde: "", hasta: "" }],
+    });
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const prev = (state.horariosCache || []).find((x) => x.id === form.dataset.id);
+      const desde = form.desc_desde.value;
+      const hasta = form.desc_hasta.value;
+      let duracion = 60;
+      if (desde && hasta) {
+        const [ah, am] = desde.split(":").map(Number);
+        const [bh, bm] = hasta.split(":").map(Number);
+        duracion = Math.max(0, (bh * 60 + bm) - (ah * 60 + am));
+      }
+      const data = await api("horarios_guardar", {
+        id: form.dataset.id, nombre: form.nombre.value, arreglo: form.arreglo.value,
+        es_default: form.es_default.checked, descansos_tipo: form.descansos_tipo.value,
+        horas_semana: form.horas_semana.value, ciclo_dias: Number(form.ciclo_dias.value || 0), ancla: form.ancla.value,
+        dias: leerDiasHorario(form),
+        descansos: [{ nombre: "Almuerzo", desde, hasta, duracion_min: duracion, franja: true }],
+        deducciones: prev && prev.deducciones ? prev.deducciones : [],
+      });
+      const err = form.querySelector("#f-err-hor");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      toast("Horario guardado");
+      draw();
+    };
+  };
+  const nuevo = main.querySelector("#hor-nuevo");
+  if (nuevo) nuevo.onclick = () => abrir(null);
+  const jibble = main.querySelector("#hor-jibble");
+  if (jibble) jibble.onclick = async () => {
+    const data = await api("horarios_importar");
+    const err = main.querySelector("#hor-err");
+    if (!data.ok) { if (err) err.textContent = data.error || "Jibble no devolvió horarios."; toast(data.error || "Sin horarios de Jibble"); return; }
+    toast("Horarios copiados: " + (data.importados || 0));
+    draw();
+  };
+  main.querySelectorAll("[data-hor]").forEach((b) => {
+    b.onclick = () => abrir((state.horariosCache || []).find((h) => h.id === b.getAttribute("data-hor")) || null);
+  });
+  main.querySelectorAll("[data-asig]").forEach((sel) => {
+    sel.onchange = async () => {
+      const data = await api("horarios_asignar", { persona: sel.getAttribute("data-asig"), horario_id: sel.value });
+      if (data.error) toast(data.error);
+      else toast("Horario asignado");
+    };
+  });
+}
+let pushListo = false;
+function urlBase64ToUint8Array(base64) {
+  const pad = "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+async function activarPush() {
+  if (state.vista || !("Notification" in window) || !("serviceWorker" in navigator)) return;
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") return;
+  const clave = await api("push_clave");
+  if (!clave || !clave.publicKey) return;
+  const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => null);
+  if (!reg || !reg.pushManager) return;
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(clave.publicKey) });
+  const json = sub.toJSON();
+  await api("push_suscribir", { endpoint: json.endpoint, p256dh: json.keys && json.keys.p256dh, auth: json.keys && json.keys.auth });
+  pushListo = true;
+}
+async function pintarAviso() {
+  const bar = document.getElementById("aviso-reloj");
+  if (!bar) return;
+  if (!state.user || !esRolCitas()) { bar.hidden = true; return; }
+  const data = await api("asis_aviso");
+  const aviso = data && data.aviso;
+  if (!aviso) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.className = "aviso-reloj " + (aviso.tipo || "entrada");
+  const puede = !state.vista && (typeof Notification === "undefined" || Notification.permission !== "granted");
+  bar.innerHTML = `<span>${esc(aviso.texto || "")}</span>${puede ? `<button class="btn small" type="button" id="aviso-push">Activar avisos</button>` : ""}`;
+  const b = document.getElementById("aviso-push");
+  if (b) b.onclick = () => { void activarPush(); };
+  if (!state.vista && !pushListo && typeof Notification !== "undefined" && Notification.permission === "granted") void activarPush();
+}
 async function renderPersonal(route) {
   if (route.sub === "comisiones") return renderPersonalComisiones();
   if (route.sub === "rol") return renderPersonalRol();
   if (route.sub === "permisos") return renderPersonalPermisos();
   if (route.sub === "multas") return renderPersonalMultas();
+  if (route.sub === "horarios") return renderHorarios();
   return renderAsistencia();
 }
 async function renderPersonalComisiones() {
@@ -2173,51 +2356,128 @@ async function renderPaqDetalle(codigo) {
     <div class="list">${usos}</div><p class="err" id="f-err"></p>`;
 }
 let relojTipo = "entrada";
-function abrirReloj(tipo) {
+let camStream = null;
+let fotoReloj = "";
+function pararCamara() {
+  if (camStream) {
+    camStream.getTracks().forEach((t) => t.stop());
+    camStream = null;
+  }
+  const video = document.getElementById("reloj-video");
+  if (video) video.srcObject = null;
+}
+function mostrarFoto(dataUrl) {
+  fotoReloj = dataUrl || "";
+  const video = document.getElementById("reloj-video");
+  const img = document.getElementById("reloj-foto");
+  const tomar = document.getElementById("reloj-tomar");
+  const reg = document.getElementById("reloj-registrar");
+  const repetir = document.getElementById("reloj-repetir");
+  if (fotoReloj) {
+    if (img) { img.src = fotoReloj; img.hidden = false; }
+    if (video) video.hidden = true;
+    pararCamara();
+    if (tomar) tomar.hidden = true;
+    if (reg) reg.hidden = false;
+    if (repetir) repetir.hidden = false;
+  } else {
+    if (img) img.hidden = true;
+    if (tomar) tomar.hidden = false;
+    if (reg) reg.hidden = true;
+    if (repetir) repetir.hidden = true;
+  }
+}
+async function iniciarCamara() {
+  const video = document.getElementById("reloj-video");
+  const err = document.getElementById("reloj-err");
+  mostrarFoto("");
+  pararCamara();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fallbackCamara(); return; }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user" } });
+    if (video) {
+      video.srcObject = camStream;
+      video.hidden = false;
+      await video.play();
+    }
+    if (err) err.textContent = "";
+  } catch {
+    fallbackCamara();
+  }
+}
+function fallbackCamara() {
+  const input = document.getElementById("reloj-selfie");
+  if (!input) return;
+  input.value = "";
+  input.click();
+}
+function tomarFoto() {
+  const video = document.getElementById("reloj-video");
+  const canvas = document.getElementById("reloj-canvas");
+  const err = document.getElementById("reloj-err");
+  const w = video && video.videoWidth ? video.videoWidth : 0;
+  const h = video && video.videoHeight ? video.videoHeight : 0;
+  if (!canvas || !w || !h) { if (err) err.textContent = "La cámara todavía no muestra imagen."; return; }
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d");
+  g.translate(w, 0);
+  g.scale(-1, 1);
+  g.drawImage(video, 0, 0, w, h);
+  let data = canvas.toDataURL("image/jpeg", 0.82);
+  if (data.length > 1800000) data = canvas.toDataURL("image/jpeg", 0.6);
+  mostrarFoto(data);
+}
+function cerrarCamara() {
+  pararCamara();
+  fotoReloj = "";
+  const sheet = document.getElementById("reloj-sheet");
+  if (sheet) sheet.hidden = true;
+}
+function abrirCamara(tipo) {
+  if (state.vista) {
+    const msg = "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar.";
+    toast(msg);
+    return;
+  }
   relojTipo = tipo || reloj.accion || "entrada";
   const sheet = document.getElementById("reloj-sheet");
   if (!sheet) return;
   const labels = { entrada: "Marcar entrada", salida: "Marcar salida", almuerzo_inicio: "Iniciar almuerzo", almuerzo_fin: "Fin almuerzo" };
   const title = document.getElementById("reloj-sheet-title");
-  const note = document.getElementById("reloj-recuerda");
-  const err = document.getElementById("reloj-err");
-  const lunch = document.getElementById("reloj-lunch");
   if (title) title.textContent = labels[relojTipo] || "Marcar";
-  if (note) note.textContent = reloj.recuerda || "";
+  const err = document.getElementById("reloj-err");
   if (err) err.textContent = "";
-  if (lunch) {
-    const modo = reloj.almuerzo;
-    lunch.hidden = !modo;
-    lunch.textContent = modo === "fin" ? "Fin almuerzo" : "Iniciar almuerzo";
-  }
   sheet.hidden = false;
+  void iniciarCamara();
 }
 function wireReloj(root) {
   if (!root) return;
   root.querySelectorAll("[data-reloj-open]").forEach((b) => {
-    b.onclick = () => abrirReloj(reloj.accion || "entrada");
+    b.onclick = () => abrirCamara(reloj.accion || "entrada");
   });
-  const ok = document.getElementById("reloj-ok");
+  const tomar = document.getElementById("reloj-tomar");
+  const reg = document.getElementById("reloj-registrar");
+  const repetir = document.getElementById("reloj-repetir");
   const close = document.getElementById("reloj-close");
-  const lunch = document.getElementById("reloj-lunch");
-  if (ok && ok.dataset.wired !== "1") {
-    ok.dataset.wired = "1";
-    ok.onclick = () => marcarAsistencia(relojTipo, document.getElementById("reloj-sheet"));
-  }
-  if (lunch && lunch.dataset.wired !== "1") {
-    lunch.dataset.wired = "1";
-    lunch.onclick = () => abrirReloj(reloj.almuerzo === "fin" ? "almuerzo_fin" : "almuerzo_inicio");
-  }
-  if (close && close.dataset.wired !== "1") {
-    close.dataset.wired = "1";
-    close.onclick = () => { document.getElementById("reloj-sheet").hidden = true; };
+  const input = document.getElementById("reloj-selfie");
+  if (tomar && tomar.dataset.wired !== "1") { tomar.dataset.wired = "1"; tomar.onclick = () => tomarFoto(); }
+  if (reg && reg.dataset.wired !== "1") { reg.dataset.wired = "1"; reg.onclick = () => marcarAsistencia(relojTipo, fotoReloj); }
+  if (repetir && repetir.dataset.wired !== "1") { repetir.dataset.wired = "1"; repetir.onclick = () => { void iniciarCamara(); }; }
+  if (close && close.dataset.wired !== "1") { close.dataset.wired = "1"; close.onclick = () => cerrarCamara(); }
+  if (input && input.dataset.wired !== "1") {
+    input.dataset.wired = "1";
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => mostrarFoto(String(reader.result || ""));
+      reader.readAsDataURL(file);
+    };
   }
 }
 function pintarReloj() {
-  document.querySelectorAll("[data-reloj-host]").forEach((el) => {
-    const modo = el.classList.contains("reloj-float") ? "float" : "head";
-    el.innerHTML = htmlReloj(modo);
-  });
+  document.querySelectorAll("[data-reloj-host]").forEach((el) => { el.innerHTML = htmlReloj(); });
   wireReloj(document.getElementById("app"));
 }
 async function cargarReloj() {
@@ -2226,15 +2486,7 @@ async function cargarReloj() {
   if (data && data.reloj) reloj = { ...data.reloj, _t0: Date.now() };
   pintarReloj();
   if (relojTick) clearInterval(relojTick);
-  relojTick = setInterval(() => {
-    if (!reloj.abierto) return;
-    document.querySelectorAll(".reloj-elapsed").forEach((el) => {
-      const host = el.closest("[data-reloj-host]");
-      const corto = host && host.classList.contains("reloj-float");
-      const mins = minutosReloj();
-      el.textContent = corto ? fmtRelojCorto(mins) : fmtReloj(mins);
-    });
-  }, 30000);
+  relojTick = null;
 }
 async function abrirVerComo() {
   const sheet = document.getElementById("vista-sheet");
@@ -2921,6 +3173,7 @@ function bind(main) {
   form("#f-caja", saveCaja);
   wireAsistencia(main);
   wirePersonal(main);
+  wireHorarios(main);
   wireVentas(main);
   form("#f-paq", savePaq);
   form("#f-rep", saveReporte);
@@ -3155,7 +3408,7 @@ async function saveCaja(form) {
 }
 function wireAsistencia(main) {
   main.querySelectorAll("[data-marca]").forEach((b) => {
-    b.onclick = () => marcarAsistencia(b.getAttribute("data-marca"), main);
+    b.onclick = () => abrirCamara(b.getAttribute("data-marca"));
   });
   const perm = main.querySelector("#f-asis-perm");
   if (perm) perm.addEventListener("submit", async (ev) => {
@@ -3292,8 +3545,8 @@ function recargarAsis() {
   else go("#/m/personal/asistencia");
 }
 
-async function marcarAsistencia(tipo, main) {
-  const err = main.querySelector("#f-err-marca") || main.querySelector("#reloj-err");
+async function marcarAsistencia(tipo, foto) {
+  const err = document.getElementById("reloj-err");
   if (err) err.textContent = "";
   if (state.vista) {
     const msg = "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar.";
@@ -3301,11 +3554,8 @@ async function marcarAsistencia(tipo, main) {
     toast(msg);
     return;
   }
-  const fileInput = main.querySelector("#selfie") || main.querySelector("#reloj-selfie");
-  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
-  if (!file) { if (err) err.textContent = "Falta la selfie."; return; }
-  const origenEl = main.querySelector("#origen-pc") || main.querySelector("#reloj-origen");
-  const body = { tipo, origen: origenEl && origenEl.checked ? "recepcion" : "telefono" };
+  if (!foto) { if (err) err.textContent = "Falta la selfie."; return; }
+  const body = { tipo, origen: window.innerWidth > 860 ? "recepcion" : "telefono", foto };
   try {
     const pos = await new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
@@ -3314,25 +3564,15 @@ async function marcarAsistencia(tipo, main) {
     body.lng = pos.coords.longitude;
     body.precision_m = pos.coords.accuracy;
   } catch {
-    err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
+    if (err) err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
     return;
   }
-  body.foto = await new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(file);
-  });
   const data = await api("asis_marcar", body);
   if (data.error) { if (err) err.textContent = data.error; return; }
-  const sheet = document.getElementById("reloj-sheet");
-  if (sheet) sheet.hidden = true;
-  if (main.id === "reloj-sheet") {
-    toast(tipo === "salida" ? "Salida marcada" : tipo === "entrada" ? "Entrada marcada" : "Marca guardada");
-    await cargarReloj();
-    if ((location.hash || "").indexOf("asistencia") >= 0) recargarAsis();
-    return;
-  }
-  recargarAsis();
+  cerrarCamara();
+  toast(tipo === "salida" ? "Salida marcada" : tipo === "entrada" ? "Entrada marcada" : "Marca guardada");
+  await cargarReloj();
+  if ((location.hash || "").indexOf("asistencia") >= 0) recargarAsis();
 }
 function wirePersonal(main) {
   const sel = main.querySelector("#persona-sel");
@@ -3437,7 +3677,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022vercomo"></script>
+<script src="beta-screens.js?v=20261022relojcam"></script>
 <script>draw();</script>
 </body>
 </html>
