@@ -2,11 +2,11 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-22-CONSIG`) y se registra con `scope: "/beta"`. Las pantallas salen de `beta-screens.js`, el mismo marcado que `sunsu.html`. En escritorio el menú es la barra lateral (logo chico, contenido a todo el ancho). En el teléfono no hay barra lateral: Ventas, Inventario, el + de Crear, Bodega (stock Venta y Cabina) y Compras viven en una barra fija abajo, y ••• abre el resto. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
+El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-22-LOOK`) y se registra con `scope: "/beta"`. Las pantallas salen de `beta-screens.js`, el mismo marcado que `sunsu.html`. En escritorio el menú es la barra lateral (logo chico, contenido a todo el ancho). En el teléfono no hay barra lateral: Ventas, Inventario, el + de Crear, Bodega (stock Venta y Cabina) y Compras viven en una barra fija abajo, y ••• abre el resto. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 
-El caché del worker es `sunsu-beta-2026-10-22-CONSIG`. `beta-screens.js?v=20261022consig`.
+El caché del worker es `sunsu-beta-2026-10-22-LOOK`. `beta-screens.js?v=20261022look`.
 
 La estructura nueva sigue el esquema de Minecore, con las reglas de Sunsu encima:
 

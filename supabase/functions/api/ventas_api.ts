@@ -5,8 +5,8 @@ import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
 import { esAdmin } from "./permisos.ts";
 import { ecuadorParts, n, s, skuCode, type Row } from "./domain.ts";
 import {
-  aplicarGiftCard, borradorConsig, clienteDetalle, clientesResumen, kardexPrevio, lineasTicket,
-  patchProductos, recalcular, recetaDe, reporteConsumos, textoExtras, textoFacial, textoPack,
+  aplicarGiftCard, borradorConsig, claveTicket, clienteDetalle, clientesResumen, kardexPrevio, lineasTicket,
+  numeroTicket, patchProductos, recalcular, recetaDe, reporteConsumos, textoExtras, textoFacial, textoPack,
   type LineaVenta,
 } from "./ventas.ts";
 
@@ -17,7 +17,7 @@ function soloAdmin(ses: Ses): Row | null {
 
 async function ticketDe(ctx: Ctx, ref: string): Promise<Row | null> {
   const rows = await ctx.db.all("tickets");
-  return rows.find((r) => s(r.beta_num) === ref || String(r.sheet_row ?? "") === ref || String(r.id ?? "") === ref) || null;
+  return rows.find((r) => s(r.beta_num) === ref || String(r.sheet_row ?? "") === ref || String(r.id ?? "") === ref || numeroTicket(r) === ref) || null;
 }
 
 extend("clientes_resumen", "any", async (_p, ctx, ses) => {
@@ -111,7 +111,7 @@ extend("ticket_editar", "any", async (p, ctx, ses) => {
   const match = row.sheet_row != null ? { sheet_row: row.sheet_row } : { id: row.id };
   await ctx.db.write(actor, "tickets", "update", match, patch);
   await logAccion(ctx.db, actor, "TICKET EDIT", ref + " sub=" + calc.subtotal + " iva=" + calc.iva + " total=" + calc.total + " comP=" + calc.comProductos + " comF=" + calc.comFacial);
-  return { ok: true, ref, ...calc, kardex: moves.length };
+  return { ok: true, ref: numeroTicket(row), clave: claveTicket(row), ...calc, kardex: moves.length };
 });
 
 extend("reporte_consumos", "any", async (p, ctx, ses) => {
