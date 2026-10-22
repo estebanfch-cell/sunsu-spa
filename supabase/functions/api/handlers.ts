@@ -39,6 +39,33 @@ function subtotalDe(map: Map<string, R>, sku: string): number {
   const tot = n(r.total_con_iva);
   return tot > 0 ? tot / IVA : 0;
 }
+/** 'SUNSU-01 …' o 'SUNSU-HT-002 …' al inicio del texto, como codDeDH del Apps Script. */
+function codAlInicio(txt: string): string | null {
+  const m = txt.toUpperCase().match(/^SUNSU-([A-Z]{2,3}-\d+|\d+)/);
+  return m ? m[1] : null;
+}
+function codEnTexto(txt: string): string | null {
+  const m = txt.toUpperCase().match(/SUNSU-([A-Z]{2,3}-\d+|\d+)/);
+  return m ? m[1] : null;
+}
+function textoCelda(v: unknown): string {
+  const t = s(v);
+  if (!t || t.toLowerCase() === "false") return "";
+  return t;
+}
+function enteroHoja(v: unknown): number {
+  const x = parseInt(String(v ?? ""), 10);
+  return Number.isFinite(x) ? x : 0;
+}
+/** Columna G de la hoja (apellido) si es número; si no, `valor` cuando es un monto y no el texto "Gift Card". */
+function montoGift(r: R): number {
+  const colG = parseFloat(s(r.apellido_comprador));
+  if (colG > 0) return colG;
+  const texto = s(r.valor);
+  if (/[a-z]/i.test(texto)) return 0;
+  const valor = parseFloat(texto);
+  return valor > 0 ? valor : 0;
+}
 function activoCat(v: unknown): boolean {
   return !(v === false || v === "FALSE" || v === "NO" || v === 0 || v === "0");
 }
@@ -46,9 +73,37 @@ async function tickets(ctx: Ctx) { return ctx.db.all("tickets"); }
 const MESES_ES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const DIAS_ES = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 
+async function compraMap(ctx: Ctx, cats: Map<string, R>): Promise<Map<string, number>> {
+  const compra = new Map<string, number>();
+  for (const [code, r] of cats) compra.set(code, n(r.precio_compra));
+  for (const b0 of await ctx.db.all("inventario_base")) {
+    const code = skuCode(s(b0.sku));
+    const real = n(b0.compra);
+    if (code && real > 0) compra.set(code, real);
+  }
+  return compra;
+}
+async function citasAcuity(ctx: Ctx, ymd: string): Promise<number> {
+  const uid = ctx.env.ACUITY_UID;
+  const key = ctx.env.ACUITY_KEY;
+  if (!uid || !key) return 0;
+  try {
+    const res = await ctx.fetchImpl(
+      "https://acuityscheduling.com/api/v1/appointments?minDate=" + ymd + "T00:00:00&maxDate=" + ymd + "T23:59:59&max=100",
+      { headers: { Authorization: "Basic " + btoa(uid + ":" + key) } },
+    );
+    const parsed = JSON.parse(await res.text());
+    if (!Array.isArray(parsed)) return 0;
+    return parsed.filter((a) => a && typeof a === "object" && !(a as R).canceled).length;
+  } catch {
+    return 0;
+  }
+}
 async function dashboard(ctx: Ctx): Promise<R> {
   const ec = ecuadorParts(ctx.now);
-  const rows = (await tickets(ctx)).filter((t) => !esInterno(t.atendido_por, t.id_3));
+  const rows = [...await tickets(ctx)].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
+  const cats = await catMap(ctx);
+  const compra = await compraMap(ctx, cats);
   const lunes = addDays(ec.ymd, -((ec.dow + 6) % 7));
   const dias: { k: string; label: string; total: number; tickets: number }[] = [];
   for (let i = 0; i < 7; i++) {
@@ -71,8 +126,13 @@ async function dashboard(ctx: Ctx): Promise<R> {
   }
   const hoyT = {
     tickets: 0, venta: 0, faciales: 0, paquetes: 0, productosN: 0,
+    valFac: 0, valPaq: 0, valProd: 0, costoProd: 0, facCanjes: 0,
+    extrasN: 0, valExtras: 0, extrasCort: 0, canjes: 0,
     pagos: { efectivo: 0, transferencia: 0, tarjeta: 0, mixto: 0, otros: 0 },
   };
+  const topFac = new Map<string, number>();
+  const topProd = new Map<string, number>();
+  const paqChips: { nombre: string; n: number }[] = [];
   let semTot = 0;
   let mesTot = 0;
   const mesKey = ec.ymd.slice(0, 7);
@@ -91,10 +151,44 @@ async function dashboard(ctx: Ctx): Promise<R> {
     if (k !== ec.ymd) continue;
     hoyT.tickets++;
     hoyT.venta += tot;
-    if (s(t.facial_hecho)) hoyT.faciales++;
-    if (s(t.compra_pack_3) && s(t.compra_pack_3).toLowerCase() !== "false") hoyT.paquetes++;
-    if (s(t.compra_pack_6) && s(t.compra_pack_6).toLowerCase() !== "false") hoyT.paquetes++;
-    hoyT.productosN += productQtys(t).reduce((a, p) => a + p.qty, 0);
+    const extras = textoCelda(t.servicios_adicionales);
+    if (extras) {
+      for (const pieza of extras.split("|")) {
+        const p = pieza.trim();
+        if (!p) continue;
+        hoyT.extrasN++;
+        if (p.toUpperCase().includes("CORTES")) { hoyT.extrasCort++; continue; }
+        const skuEx = codEnTexto(p);
+        if (skuEx) hoyT.valExtras += subtotalDe(cats, skuEx);
+      }
+    }
+    const fac = s(t.facial_hecho);
+    const canje = esCanje(t.paquete, t.gift_card);
+    if (fac && fac !== "-" && fac !== "—") {
+      hoyT.faciales++;
+      topFac.set(fac, (topFac.get(fac) || 0) + 1);
+      if (canje) hoyT.facCanjes++;
+      else if (tot > 0) hoyT.valFac += subtotalDe(cats, codAlInicio(fac) || "");
+      else hoyT.facCanjes++;
+    }
+    const clienta = s(t.nombre);
+    for (const pack of [textoCelda(t.compra_pack_3), textoCelda(t.compra_pack_6)]) {
+      if (!pack) continue;
+      hoyT.paquetes++;
+      hoyT.valPaq += subtotalDe(cats, codAlInicio(pack) || "");
+      const nom = pack.replace(/^SUNSU-\d+\s*/, "");
+      paqChips.push({ nombre: clienta ? nom + " · " + clienta : nom, n: 1 });
+    }
+    for (const pc of PROD_COLS) {
+      const q = parseInt(String(t[pc.col] ?? ""), 10) || 0;
+      if (!(q > 0)) continue;
+      hoyT.productosN += q;
+      hoyT.valProd += q * subtotalDe(cats, pc.sku);
+      hoyT.costoProd += q * (compra.get(pc.sku) || 0);
+      const nm = catNombre(cats, pc.sku) || pc.sku;
+      topProd.set(nm, (topProd.get(nm) || 0) + q);
+    }
+    if (canje) hoyT.canjes++;
     const pg = repartirPagos(s(t.comp), tot);
     hoyT.pagos.efectivo += pg.efectivo;
     hoyT.pagos.transferencia += pg.transferencia;
@@ -102,17 +196,52 @@ async function dashboard(ctx: Ctx): Promise<R> {
     hoyT.pagos.mixto += pg.mixto;
     hoyT.pagos.otros += pg.otros;
   }
-  const caja = await ctx.db.all("caja_chica");
-  const ultimo = caja[caja.length - 1];
+  const topFacArr = [...topFac.entries()].map(([nombre, nFac]) => ({ nombre, n: nFac })).sort((a, b) => b.n - a.n).slice(0, 6);
+  const topProdArr = [...topProd.entries()].map(([nombre, nPr]) => ({ nombre, n: nPr })).sort((a, b) => b.n - a.n).slice(0, 8);
+  let gcHoy = 0;
+  let gcVal = 0;
+  const gcChips: { nombre: string; n: number }[] = [];
+  const gcs = [...await ctx.db.all("gift_cards")].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
+  for (const g of gcs) {
+    if (!s(g.codigo_gc)) continue;
+    if (enteroHoja(g.dia) !== ec.d || enteroHoja(g.mes) !== ec.m) continue;
+    const an = enteroHoja(g.ano);
+    if (an && an !== ec.y && an !== ec.y % 100) continue;
+    gcHoy++;
+    const nom = s(g.nombre_comprador) || s(g.cedula_comprador) || "GC " + s(g.codigo_gc);
+    const mon = montoGift(g);
+    if (mon > 0) gcVal += mon;
+    gcChips.push({ nombre: nom + (mon > 0 ? " · $" + mon.toFixed(0) : ""), n: 1 });
+  }
   return {
-    hoy: { ...hoyT, venta: round2(hoyT.venta) },
+    hoy: {
+      tickets: hoyT.tickets,
+      venta: round2(hoyT.venta),
+      faciales: hoyT.faciales,
+      valFac: round2(hoyT.valFac),
+      valPaq: round2(hoyT.valPaq),
+      valProd: round2(hoyT.valProd),
+      costoProd: round2(hoyT.costoProd),
+      facCanjes: hoyT.facCanjes,
+      extrasN: hoyT.extrasN,
+      valExtras: round2(hoyT.valExtras),
+      extrasCort: hoyT.extrasCort,
+      paquetes: hoyT.paquetes,
+      productosN: hoyT.productosN,
+      canjes: hoyT.canjes,
+      pagos: hoyT.pagos,
+      topFac: topFacArr,
+      topProd: topProdArr,
+    },
     semana: { total: round2(semTot), dias: dias.map((d) => ({ k: d.k, label: d.label, total: round2(d.total), tickets: d.tickets })) },
     mes: {
       total: round2(mesTot),
       nombre: MESES_ES[ec.m] || "",
       semanas: semanas.map((w) => ({ label: w.label, total: round2(w.total) })),
     },
-    caja: n(ultimo?.saldo), citasHoy: 0, gcHoy: 0, gcVal: 0, gcChips: [], paqChips: [],
+    caja: await saldoCaja(ctx),
+    citasHoy: await citasAcuity(ctx, ec.ymd),
+    gcHoy, gcVal: round2(gcVal), gcChips, paqChips,
     actualizado: ec.hm,
   };
 }
@@ -244,17 +373,19 @@ function productosPatch(productos: R | undefined, replace: boolean, prev: R): R 
 }
 
 async function saldoCaja(ctx: Ctx): Promise<number> {
-  const rows = await ctx.db.all("caja_chica");
+  const rows = [...await ctx.db.all("caja_chica")].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
   if (!rows.length) return 0;
-  const sorted = [...rows].sort((a, b) => Number(a.sheet_row) - Number(b.sheet_row));
-  let saldo = 0;
-  let vioInicial = false;
-  for (const r of sorted) {
-    const tipo = s(r.tipo).toUpperCase();
-    if (!vioInicial && tipo.includes("SALDO INICIAL")) { saldo = n(r.entrada) || n(r.saldo); vioInicial = true; continue; }
-    saldo = round2(saldo + n(r.entrada) - n(r.salida));
+  let idxIni = -1;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (s(rows[i].tipo).toUpperCase().includes("SALDO INICIAL")) { idxIni = i; break; }
   }
-  return saldo;
+  let saldo = 0;
+  const start = idxIni < 0 ? 0 : idxIni;
+  for (let i = start; i < rows.length; i++) {
+    if (i === idxIni) saldo = n(rows[i].entrada);
+    else saldo = round2(saldo + n(rows[i].entrada) - n(rows[i].salida));
+  }
+  return round2(saldo);
 }
 async function appendCaja(ctx: Ctx, ses: Ses, tipo: string, detalle: string, quien: string, entrada: number, salida: number, ref = ""): Promise<number> {
   const saldo = round2(await saldoCaja(ctx) + entrada - salida);
