@@ -1240,4 +1240,12 @@ describe("modo prueba", () => {
     assert.match(sql, /El kardex no se borra/);
     assert.match(sql, /No hay import\.py/);
   });
+
+  it("0016b respeta origin test y el importador no lo borra", () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0016b_espejo_test.sql", import.meta.url), "utf8");
+    assert.match(sql, /new\.origin is distinct from 'test'/);
+    assert.match(sql, /new\.origin := 'beta'/);
+    const py = readFileSync(new URL("../../../docs/supabase/tools/import.py", import.meta.url), "utf8");
+    assert.match(py, /origin=not\.in\.\(beta,test\)/);
+  });
 });

@@ -99,8 +99,8 @@ export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "b
 
 /**
  * Espejo de tickets_reimportar: borra solo filas con sheet_row de la hoja.
- * origin beta y origin test se conservan. No hay import.py en este repo;
- * la reimportación real corre en SQL. TRUNCATE no pasa por el trigger.
+ * origin beta y origin test se conservan. docs/supabase/tools/import.py
+ * usa el mismo filtro. TRUNCATE no pasa por el trigger.
  */
 export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Promise<{ borradas: number; escritas: number; conservadas: number }> {
   const prev = await db.all("tickets");
