@@ -698,3 +698,19 @@ describe("api", () => {
     assert.equal(String(pago.error || "").includes("desconocida"), false);
   });
 });
+
+describe("beta shell", () => {
+  const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+  it("el escritorio usa el ancho de la ventana y el teléfono trae la barra de abajo", () => {
+    assert.equal(html.includes("max-width: 580px"), false);
+    assert.match(html, /max-width:\s*none/);
+    assert.match(html, /class="tabbar"/);
+    assert.match(html, /tabButton\("bodega", "Bodega"\)/);
+    assert.match(html, /Stock Venta/);
+    assert.match(html, /Stock Cabina/);
+    assert.match(html, /aria-label="Crear ticket"/);
+    assert.match(html, /aria-label="Más"/);
+    assert.match(html, /safe-area-inset-bottom/);
+    assert.match(html, /height:\s*40px/);
+  });
+});
