@@ -431,6 +431,8 @@ export interface TicketIn {
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number }[];
+  /** 1 = comisión completa. Una gift card parcial la escala a lo cobrado del facial. */
+  gcRatio?: number;
 }
 export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
 
@@ -486,7 +488,8 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
     const sku = facialSku(t.facial);
     if (sku && !t.exclFacial && (FACIALES_2.includes(sku) || FACIALES_3.includes(sku))) {
       r.faciales++;
-      r.comFaciales += FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3;
+      const ratio = t.gcRatio == null ? 1 : t.gcRatio;
+      r.comFaciales += (FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3) * ratio;
     }
     if (!t.exclPaquete) {
       if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") r.paquetes += 1;

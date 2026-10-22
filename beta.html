@@ -388,6 +388,34 @@
   @media (min-width: 861px) {
     .top-salir { display: none; }
   }
+  .cli-layout { display: grid; gap: 14px; }
+  @media (min-width: 861px) {
+    .cli-layout { grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); align-items: start; }
+  }
+  .cli-row { width: 100%; text-align: left; }
+  .cli-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; background: transparent; position: static; padding: 0; }
+  .cli-top b { color: var(--navy-d); }
+  .cli-row .sub { color: var(--gray); font-size: 0.78rem; margin-top: 2px; }
+  .cli-panel {
+    background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 14px 16px 18px; min-height: 240px;
+  }
+  .cli-panel[hidden] { display: none; }
+  .tk { border-top: 1px solid var(--cream-d); padding: 10px 0; }
+  .tk summary { cursor: pointer; font-weight: 700; color: var(--navy-d); }
+  .tk .ln { display: grid; grid-template-columns: 1.4fr 0.6fr 0.7fr 0.6fr auto; gap: 6px; margin: 6px 0; align-items: center; }
+  .doc-sheet { background: var(--white); border: 1px solid var(--cream-d); border-radius: 12px; padding: 14px; }
+  .doc-sheet h3 { margin: 0 0 8px; color: var(--navy-d); letter-spacing: 0.04em; }
+  .doc-sheet table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .doc-sheet th { background: var(--navy); color: white; text-align: left; padding: 6px; }
+  .doc-sheet td { padding: 5px 6px; border-bottom: 1px solid var(--cream-d); }
+  @media (max-width: 860px) {
+    .cli-panel {
+      position: fixed; z-index: 70; inset: 0 0 var(--tab-h) 0;
+      border-radius: 18px 18px 0 0; overflow: auto; margin: 0;
+    }
+    .tk .ln { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -439,6 +467,7 @@ const GRUPOS = [
     ["productos", "Productos", "#/m/productos"],
     ["conteos", "Conteos físicos", "#/m/conteos"],
     ["inventario", "Stock actual", "#/m/inventario"],
+    ["ver_costos", "Consumos / reportes", "#/m/reportes"],
   ]],
   ["compras", "Compras", [
     ["compras", "Órdenes de compra", "#/m/compras"],
@@ -484,7 +513,8 @@ function money(n) {
 function acceso(mod) { return state.acceso[mod] || "no"; }
 function uuid() { return crypto.randomUUID(); }
 
-function previewApi(accion) {
+function previewApi(accion, body) {
+  body = body || {};
   const modulos = MENU.map(([modulo]) => ({ modulo, acceso: "todos" }));
   if (accion === "whoami" || accion === "login") {
     return { ok: true, token: "preview", ver_costos: true, modulos, user: { name: "Emilia", short: "Emi", role: "admin" } };
@@ -500,6 +530,39 @@ function previewApi(accion) {
   }
   if (accion === "getCatalogo" || accion === "getHistorial" || accion === "getEntradas" || accion === "getProveedoresApp") return [];
   if (accion === "getInventario") return { items: [], allSkus: [], ultimoFisico: "" };
+  if (accion === "clientes_resumen") {
+    return { ok: true, admin: true, clientes: [
+      { key: "c:1711", nombre: "María Paz", cedula: "1711", visitas: 4, ultima: "2026-10-21", total: 320, cosmetologa: "Andrea" },
+      { key: "c:1722", nombre: "Ana Luz", cedula: "1722", visitas: 1, ultima: "2026-10-18", total: 86, cosmetologa: "Emi" },
+    ] };
+  }
+  if (accion === "cliente_detalle") {
+    return { ok: true, admin: true, cliente: { key: body.key || "c:1711", nombre: "María Paz", cedula: "1711", telefono: "0991112233", visitas: 4, ultima: "2026-10-21", total: 320 },
+      tickets: [{ ref: "TK-1643", fecha: "2026-10-21", cosmetologa: "Andrea", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
+        { clase: "servicio", sku: "SUNSU-01", nombre: "Facial S.O.S", cantidad: 1, precio: 65.22, descuento_pct: 0 },
+        { clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 1, precio: 20, descuento_pct: 0 },
+      ] }] };
+  }
+  if (accion === "reporte_consumos") {
+    return { ok: true, desde: body.desde || "2026-10-01", hasta: body.hasta || "2026-10-22",
+      venta: [{ sku: "HT-002", nombre: "Crema", unidades: 6 }],
+      cabina: [{ sku: "CB-001", nombre: "Ampolla", unidades: 14 }],
+      faciales: [{ nombre: "SUNSU-01 Facial S.O.S", n: 7 }, { nombre: "SUNSU-40 Glow", n: 3 }],
+      totales: { unidadesVenta: 6, unidadesCabina: 14, faciales: 10 } };
+  }
+  if (accion === "prov_list") return { ok: true, items: [{ id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" }] };
+  if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 92, tipo: "consignacion" }] };
+  if (accion === "prod_list") return { ok: true, items: [{ id: "p1", sku: "HT-002", nombre: "Crema", uso: "venta", precio_venta: 23, porBodega: { VENTA: 4, CABINA: 0 } }] };
+  if (accion === "periodo_consignacion") {
+    return { ok: true, qLabel: "16-fin Oct 2026", familia: "HT", ini: "2026-10-16", fin: "2026-10-31",
+      proveedor: { id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" },
+      fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24, stock: 4, sugerido: 4 }],
+      restock: [{ sku: "HT-002", nombre: "Crema", sugerido: 4, compra: 8 }],
+      totales: { subtotal: 24, iva: 3.6, total: 27.6 },
+      nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." };
+  }
+  if (accion === "buscarGiftCards") return { resultados: [{ codigo: body.q || "26-065", valor: "65", saldo: 65, usado: false }] };
+  if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
   if (accion === "getDashboardHoy") {
     const dias = [
       ["Lun 19", 320, 8], ["Mar 20", 410, 11], ["Mié 21", 280, 7], ["Jue 22", 486.5, 12],
@@ -542,7 +605,7 @@ function previewApi(accion) {
 }
 
 async function api(accion, body = {}) {
-  if (previewOn()) return previewApi(accion);
+  if (previewOn()) return previewApi(accion, body);
   const payload = { accion, ...body };
   if (state.token) payload.token = state.token;
   let res;
@@ -640,7 +703,7 @@ function gruposVisibles() {
   const usados = new Set(["inicio"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
-    const vis = items.filter(([mod]) => acceso(mod) !== "no");
+    const vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
     for (const [mod] of vis) usados.add(mod);
     if (vis.length) out.push({ id, label, items: vis });
   }
@@ -822,7 +885,7 @@ function fail(data) {
 }
 function lineHtml(opts) {
   const precio = opts.precio ? `<input name="precio" inputmode="decimal" placeholder="Precio" aria-label="Precio">` : `<input type="hidden" name="precio" value="0">`;
-  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>` : `<input type="hidden" name="bodega" value="">`;
+  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option><option value="${VENTA}">Casa (venta)</option><option value="${CABINA}">Local (cabina y consumo)</option></select>` : `<input type="hidden" name="bodega" value="">`;
   const clase = opts.clase ? `<select name="clase" aria-label="Clase"><option value="producto">Producto</option><option value="servicio">Servicio</option></select>` : `<input type="hidden" name="clase" value="producto">`;
   return `<div class="linea">
     <input name="sku" placeholder="SKU" aria-label="SKU" autocomplete="off">
@@ -872,13 +935,12 @@ function pantallaSunsu(route) {
   }
   const m = route.mod;
   if (m === "inicio") return state.admin ? "inicio" : "staff-home";
-  if (m === "tickets") return "historial";
+  if (m === "tickets" || m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "cotizaciones";
-  if (m === "clientes") return "registro-cliente";
   if (m === "productos") return "catalogo";
   if (m === "inventario") return "inventario";
   if (m === "conteos") return "inv-fisico";
-  if (m === "compras" && route.sub !== "rfq") return "entradas";
+  if (m === "compras" && route.sub !== "rfq") return "";
   if (m === "proveedores") return "proveedores";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
@@ -934,10 +996,10 @@ async function draw() {
   }
   const route = parseRoute();
   const tab = pantallaSunsu(route);
-  const title = tab ? tituloSunsu(tab) : route.kind === "doc" ? tituloDoc(route.doc) : (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
+  const title = route.mod === "reportes" ? "Consumos / reportes" : tab ? tituloSunsu(tab) : route.kind === "doc" ? tituloDoc(route.doc) : (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
   paintShell(title);
   const main = document.getElementById("main");
-  if (route.kind === "mod" && route.mod !== "inicio" && acceso(route.mod) === "no") {
+  if (route.kind === "mod" && route.mod !== "inicio" && acceso(route.mod) === "no" && !(route.mod === "reportes" && (state.admin || state.verCostos))) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     return;
   }
@@ -969,12 +1031,13 @@ function tituloDoc(doc) {
 }
 
 async function renderMod(route) {
-  if (acceso(route.mod) === "no" && route.mod !== "inicio") return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (acceso(route.mod) === "no" && route.mod !== "inicio" && !(route.mod === "reportes" && (state.admin || state.verCostos))) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod === "reportes") return renderReportes();
   if (route.mod === "inicio") return renderInicio();
   if (route.mod === "productos") return renderProductos();
   if (route.mod === "inventario") return renderInventario(route.sub || "venta");
   if (route.mod === "compras") return renderCompras(route.sub);
-  if (route.mod === "tickets") return renderTickets();
+  if (route.mod === "tickets") return renderClientes();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
   if (route.mod === "proveedores") return renderProveedores();
@@ -1119,14 +1182,26 @@ async function renderInventario(sub) {
 }
 
 async function renderCompras(sub) {
-  const [oc, rfq, re] = await Promise.all([api("oc_list"), api("rfq_list"), api("reorden_sugerir")]);
+  const [oc, rfq, re, prov] = await Promise.all([api("oc_list"), api("rfq_list"), api("reorden_sugerir"), api("prov_list")]);
   if (oc.error) return fail(oc);
-  const ordenes = (oc.items || []).map((o) => `<button class="row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(o.estado)}</div></div><div class="meta">${state.verCostos || state.admin ? money(o.total) : ""}</div></button>`).join("");
+  const ordenes = (oc.items || []).map((o) => {
+    const tipo = o.tipo === "consignacion" || (String(o.nota || "").includes('"consignacion"')) ? "Consignación" : "Compra";
+    return `<button class="row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(tipo)} · ${esc(o.estado)}</div><div class="note">${esc(o.q_label || "")}</div></div><div class="meta">${state.verCostos || state.admin ? money(o.total) : ""}</div></button>`;
+  }).join("");
   const cot = (rfq.items || []).map((r) => `<div class="row"><div class="sku">${esc(r.numero)}</div><div class="name">${esc(r.estado)}</div><div class="meta">${esc(r.fecha || "")}</div></div>`).join("");
   const sug = (re.sugerencias || []).map((s) => `<div class="row"><div class="sku">${esc(s.sku)}</div><div><div class="name">${esc(s.nombre)}</div></div><div class="meta">hay ${esc(s.stock)} · pedir ${esc(s.pedir)}</div></div>`).join("");
+  const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
   const bloqueOc = `<h2>Órdenes de compra</h2><div class="list">${ordenes || `<p class="note">No hay órdenes de compra en el ERP.</p>`}</div>`;
   const bloqueRfq = `<h2>Cotizaciones de compra</h2><div class="list">${cot || `<p class="note">Todavía no hay RFQ.</p>`}</div>`;
-  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/oc">Nueva OC</button><button class="btn ghost small" type="button" data-go="#/doc/rfq">Nueva cotización de compra</button></div>
+  const consig = state.admin ? `<div class="card doc-sheet" id="consig-box">
+      <h3>Consignación</h3>
+      <p class="note">Quincena 1–15 o 16–fin. Hebetronic y las otras familias (HT, AS, ML, PH, JN). Casa es la bodega de venta; Local es cabina y consumo.</p>
+      <label>Proveedor</label><select id="consig-prov">${opts || `<option value="">Sin proveedores</option>`}</select>
+      <button class="btn" type="button" id="btn-consig">Pagar/Ver periodo actual</button>
+      <div id="consig-out"></div>
+    </div>` : "";
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/oc">Nueva orden de compra</button><button class="btn ghost small" type="button" data-go="#/doc/rfq">Nueva cotización de compra</button></div>
+    ${consig}
     ${sub === "rfq" ? bloqueRfq + bloqueOc : bloqueOc + bloqueRfq}
     <h2>Reordenar</h2><div class="list">${sug || `<p class="note">Sin sugerencias. Hace falta punto de reorden en el producto.</p>`}</div>`;
 }
@@ -1152,15 +1227,54 @@ async function renderKardex() {
 }
 
 async function renderClientes() {
-  if (acceso("clientes") === "propio") {
-    return `<p class="note">Tu rol ve clientas propias. El directorio ERP todavía no guarda quién atendió a cada persona, así que esta beta no muestra la lista completa.</p>
-      <form id="f-cli"><label>Nombre</label><input name="nombre" required><label>Apellido</label><input name="apellido"><label>Cédula</label><input name="cedula"><button class="btn" type="submit">Guardar clienta</button><p class="err" id="f-err"></p></form>`;
-  }
-  const data = await api("cli_list");
+  const data = await api("clientes_resumen");
   if (data.error) return fail(data);
-  const items = (data.items || []).slice(0, 200).map((c) => `<div class="row"><div class="sku">${esc(c.cedula)}</div><div><div class="name">${esc((c.nombre || "") + " " + (c.apellido || ""))}</div></div><div class="meta">${esc(c.telefono || "")}</div></div>`).join("");
-  return `<form id="f-cli"><label>Nombre</label><input name="nombre" required><label>Apellido</label><input name="apellido"><label>Cédula</label><input name="cedula"><label>Teléfono</label><input name="telefono"><button class="btn" type="submit">Guardar clienta</button><p class="err" id="f-err"></p></form>
-    <div class="list">${items || `<p class="note">Sin clientas importadas.</p>`}</div>`;
+  const moneyOk = !!(data.admin || state.admin);
+  const items = (data.clientes || []).map((c) => `<button class="row cli-row" type="button" data-cli="${esc(c.key)}">
+      <div><div class="cli-top"><b>${esc(c.nombre || "Sin nombre")}</b><span>${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</span></div>
+      <div class="sub">${esc(c.visitas)} visitas · última ${esc(c.ultima || "—")}${c.cedula ? " · " + esc(c.cedula) : ""}</div></div>
+    </button>`).join("");
+  return `<div class="cli-layout"><div>
+      <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
+      <input id="filtro" placeholder="Buscar clienta" aria-label="Buscar clienta">
+      <div class="list" id="lista">${items || `<p class="note">No hay visitas en tus tickets.</p>`}</div>
+    </div>
+    <aside class="cli-panel" id="cli-panel" hidden>
+      <div class="tools"><button class="btn ghost small" type="button" data-cli-cerrar>Cerrar</button></div>
+      <div id="cli-body"></div>
+    </aside></div>`;
+}
+
+async function renderReportes() {
+  const hoy = ymdEc();
+  const desde = hoy.slice(0, 8) + "01";
+  const data = await api("reporte_consumos", { desde, hasta: hoy });
+  return `<form id="f-rep" class="doc-sheet">
+      <h3>Consumos / reportes</h3>
+      <p class="note">Unidades vendidas en Casa y consumo de cabina (recetas). Faciales por tipo. Solo administración.</p>
+      <label>Desde</label><input name="desde" type="date" value="${esc(desde)}" required>
+      <label>Hasta</label><input name="hasta" type="date" value="${esc(hoy)}" required>
+      <label>Producto (SKU)</label><input name="sku" placeholder="HT-002">
+      <label>Tipo de facial</label><input name="facial" placeholder="S.O.S">
+      <button class="btn" type="submit">Ver</button>
+      <p class="err" id="f-err"></p>
+    </form>
+    <div class="tools"><button class="btn ghost small" type="button" id="rep-csv">CSV</button><button class="btn ghost small" type="button" id="rep-pdf">PDF</button></div>
+    <div id="rep-out">${data.error ? fail(data) : htmlReporte(data)}</div>`;
+}
+
+function htmlReporte(d) {
+  const tabla = (rows, cols) => `<table><thead><tr>${cols.map((c) => `<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c[1]])}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length}">Sin movimientos</td></tr>`
+  }</tbody></table>`;
+  const t = d.totales || {};
+  return `<div class="doc-sheet" id="rep-sheet">
+      <h3>${esc(d.desde)} → ${esc(d.hasta)}</h3>
+      <p class="note">Venta ${esc(t.unidadesVenta || 0)} u · Cabina ${esc(t.unidadesCabina || 0)} u · Faciales ${esc(t.faciales || 0)}</p>
+      <h3>Casa (venta)</h3>${tabla(d.venta || [], [["SKU", "sku"], ["Producto", "nombre"], ["Unidades", "unidades"]])}
+      <h3>Local (cabina, receta)</h3>${tabla(d.cabina || [], [["SKU", "sku"], ["Producto", "nombre"], ["Unidades", "unidades"]])}
+      <h3>Faciales</h3>${tabla(d.faciales || [], [["Tipo", "nombre"], ["Cantidad", "n"]])}
+    </div>`;
 }
 
 async function renderProveedores() {
@@ -1430,7 +1544,11 @@ async function renderProd(id) {
 async function renderOcNueva() {
   const prov = await api("prov_list");
   const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
-  return `<form id="f-oc"><label>Proveedor</label><select name="proveedor_id" required>${opts || `<option value="">Sin proveedores</option>`}</select><p class="note">El número usa oc_seq_2026 cuando 0009 está aplicado.</p>
+  return `<form id="f-oc"><h2>Nueva orden de compra</h2>
+    <label>Proveedor</label><select name="proveedor_id" required>${opts || `<option value="">Sin proveedores</option>`}</select>
+    <label>Bodega destino</label><select name="bodega_destino_id"><option value="${VENTA}">Casa (venta)</option><option value="${CABINA}">Local (cabina y consumo)</option></select>
+    <label>Fecha de entrega</label><input name="fecha_esperada" type="date">
+    <p class="note">Casa recibe lo que se vende. Local recibe cabina y consumo. La consignación se arma con Pagar/Ver periodo actual.</p>
     <div id="lineas">${lineHtml({ precio: true, bodega: true })}</div>
     <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
     <label>Nota</label><textarea name="nota"></textarea>
@@ -1454,9 +1572,19 @@ async function renderOc(id) {
     <form id="f-pago"><label>Monto</label><input name="monto" inputmode="decimal" required><button class="btn" type="submit">Registrar pago</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
     <h2>Devolver al proveedor</h2>
     <form id="f-dev">${lineas.replaceAll('placeholder="Recibir"', 'placeholder="Devolver"').replaceAll("Cantidad a recibir", "Cantidad a devolver")}<button class="btn ghost" type="submit">Devolver</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>` : "";
-  return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. Cada línea elige su bodega. Uso ambos sin bodega se rechaza, no se redirige.</p>
+  const snap = parseSnap(o);
+  const docs = snap ? `<div class="tools"><button class="btn ghost small" type="button" id="btn-pedido">Pedido / pre-factura</button><button class="btn ghost small" type="button" id="btn-acta">Acta de entrega</button></div><div id="doc-out"></div>` : "";
+  return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. ${snap ? "Consignación " + esc(snap.qLabel || "") + ". " : ""}Al recibir se actualiza el stock y el kardex. Casa = venta, Local = cabina.</p>
+    ${docs}
     <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
     ${pago}`;
+}
+
+function parseSnap(o) {
+  if (o && o.snap && typeof o.snap === "object") return o.snap;
+  const nota = String((o && o.nota) || "");
+  if (!nota.startsWith("{")) return null;
+  try { const j = JSON.parse(nota); return j && j.tipo === "consignacion" ? j : null; } catch { return null; }
 }
 
 function renderOv() {
@@ -1503,6 +1631,228 @@ function renderTrfNueva() {
     <button class="btn" type="submit">Enviar transferencia</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
 }
 
+function wireVentas(main) {
+  main.querySelectorAll("[data-cli]").forEach((b) => { b.onclick = () => abrirCliente(b.getAttribute("data-cli")); });
+  const cerrar = main.querySelector("[data-cli-cerrar]");
+  if (cerrar) cerrar.onclick = () => { const p = document.getElementById("cli-panel"); if (p) p.hidden = true; };
+  const cons = main.querySelector("#btn-consig");
+  if (cons) cons.onclick = () => verConsig();
+  const csv = main.querySelector("#rep-csv");
+  if (csv) csv.onclick = () => bajarReporte("csv");
+  const pdf = main.querySelector("#rep-pdf");
+  if (pdf) pdf.onclick = () => bajarReporte("pdf");
+  const ped = main.querySelector("#btn-pedido");
+  if (ped) ped.onclick = () => mostrarDoc("pedido");
+  const acta = main.querySelector("#btn-acta");
+  if (acta) acta.onclick = () => mostrarDoc("acta");
+}
+async function abrirCliente(key) {
+  const panel = document.getElementById("cli-panel");
+  const body = document.getElementById("cli-body");
+  if (!panel || !body) return;
+  window._cliKey = key;
+  panel.hidden = false;
+  body.innerHTML = `<p class="note">Cargando…</p>`;
+  const data = await api("cliente_detalle", { key });
+  if (data.error) { body.innerHTML = fail(data); return; }
+  const c = data.cliente || {};
+  const admin = !!(data.admin || state.admin);
+  const tickets = (data.tickets || []).map((t) => {
+    const lns = (t.lineas || []).map((ln) => admin
+      ? `<div class="ln"><span>${esc(ln.nombre)}</span><input data-k="cantidad" value="${esc(ln.cantidad)}" aria-label="Cantidad"><input data-k="precio" value="${esc(ln.precio)}" aria-label="Precio"><input data-k="descuento_pct" value="${esc(ln.descuento_pct || 0)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(ln.sku)}"><input type="hidden" data-k="clase" value="${esc(ln.clase)}"><input type="hidden" data-k="nombre" value="${esc(ln.nombre)}"></div>`
+      : `<div class="note">${esc(ln.cantidad)} × ${esc(ln.nombre)}</div>`).join("");
+    const edit = admin ? `<div class="ln nueva"><input data-k="sku" placeholder="SKU" aria-label="SKU"><input data-k="cantidad" value="1" aria-label="Cantidad"><input data-k="precio" placeholder="Precio" aria-label="Precio"><input data-k="descuento_pct" value="0" aria-label="Descuento %"><button class="btn ghost small" type="button" data-add-ln>Agregar</button><input type="hidden" data-k="clase" value="producto"></div>
+      <label>Descuento $</label><input data-desc value="0"><button class="btn small" type="button" data-save-tk="${esc(t.ref)}">Guardar ticket</button><p class="err" data-err></p>` : "";
+    const tot = admin ? `<div class="note">Subtotal ${money(t.subtotal)} · IVA ${money(t.iva)} · total ${money(t.total)}</div>` : "";
+    return `<details class="tk" data-ref="${esc(t.ref)}"><summary>${esc(t.fecha)} · ${esc(t.ref)} · ${esc(t.cosmetologa || "")}${admin ? " · " + money(t.total) : ""}</summary>
+      <div class="note">${esc(t.facial || "")} ${esc(t.notas || "")}</div>${tot}<div class="lns">${lns}</div>${edit}</details>`;
+  }).join("");
+  body.innerHTML = `<h2>${esc(c.nombre || "")}</h2>
+    <p class="note">${esc(c.cedula || "")}${c.telefono ? " · " + esc(c.telefono) : ""}${c.email ? " · " + esc(c.email) : ""}</p>
+    <p class="note">${esc(c.visitas)} visitas · última ${esc(c.ultima || "—")}${admin && c.total != null ? " · " + money(c.total) : ""}</p>
+    ${c.notas ? `<p class="note">${esc(c.notas)}</p>` : ""}
+    ${tickets || `<p class="note">Sin tickets.</p>`}`;
+  body.querySelectorAll("[data-quitar-ln]").forEach((b) => { b.onclick = () => b.closest(".ln").remove(); });
+  body.querySelectorAll("[data-add-ln]").forEach((b) => {
+    b.onclick = () => {
+      const row = b.closest(".ln");
+      const box = row.parentElement.querySelector(".lns") || row.previousElementSibling;
+      const sku = row.querySelector("[data-k=sku]").value.trim();
+      if (!sku) return;
+      const html = `<div class="ln"><span>${esc(sku)}</span><input data-k="cantidad" value="${esc(row.querySelector("[data-k=cantidad]").value)}" aria-label="Cantidad"><input data-k="precio" value="${esc(row.querySelector("[data-k=precio]").value)}" aria-label="Precio"><input data-k="descuento_pct" value="${esc(row.querySelector("[data-k=descuento_pct]").value)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(sku)}"><input type="hidden" data-k="clase" value="producto"><input type="hidden" data-k="nombre" value="${esc(sku)}"></div>`;
+      box.insertAdjacentHTML("beforeend", html);
+      box.querySelectorAll("[data-quitar-ln]").forEach((q) => { q.onclick = () => q.closest(".ln").remove(); });
+    };
+  });
+  body.querySelectorAll("[data-save-tk]").forEach((b) => { b.onclick = () => guardarTicket(b); });
+}
+async function guardarTicket(btn) {
+  const det = btn.closest(".tk");
+  const lineas = [...det.querySelectorAll(".lns .ln")].map((row) => ({
+    clase: (row.querySelector("[data-k=clase]") || {}).value || "producto",
+    sku: (row.querySelector("[data-k=sku]") || {}).value || "",
+    nombre: (row.querySelector("[data-k=nombre]") || {}).value || "",
+    cantidad: Number((row.querySelector("[data-k=cantidad]") || {}).value || 0),
+    precio: Number((row.querySelector("[data-k=precio]") || {}).value || 0),
+    descuento_pct: Number((row.querySelector("[data-k=descuento_pct]") || {}).value || 0),
+  })).filter((ln) => ln.sku && ln.cantidad > 0);
+  const data = await api("ticket_editar", { ref: btn.getAttribute("data-save-tk"), lineas, descuento: Number((det.querySelector("[data-desc]") || {}).value || 0) });
+  const err = det.querySelector("[data-err]");
+  if (data.error) { if (err) err.textContent = data.error; return; }
+  if (err) err.textContent = "";
+  toast("Ticket " + (data.ref || "") + " · total " + money(data.total));
+  if (window._cliKey) abrirCliente(window._cliKey);
+}
+async function saveReporte(form) {
+  const data = await api("reporte_consumos", { desde: form.desde.value, hasta: form.hasta.value, sku: form.sku.value, facial: form.facial.value });
+  const out = document.getElementById("rep-out");
+  if (data.error) { setMsg(form, data); if (out) out.innerHTML = fail(data); return; }
+  setMsg(form, data, "Listo");
+  if (out) out.innerHTML = htmlReporte(data);
+  window._rep = data;
+}
+function bajarReporte(tipo) {
+  const d = window._rep || {};
+  const lineas = ["tipo,sku,nombre,unidades"];
+  (d.venta || []).forEach((r) => lineas.push(["venta", r.sku, r.nombre, r.unidades].join(",")));
+  (d.cabina || []).forEach((r) => lineas.push(["cabina", r.sku, r.nombre, r.unidades].join(",")));
+  (d.faciales || []).forEach((r) => lineas.push(["facial", "", r.nombre, r.n].join(",")));
+  if (tipo === "csv") return bajarArchivo("consumos.csv", lineas.join("\n"), "text/csv");
+  const texto = ["SUNSU SPA — CONSUMOS", (d.desde || "") + " a " + (d.hasta || ""), ""].concat(lineas);
+  bajarArchivo("consumos.pdf", pdfTexto(texto), "application/pdf");
+}
+async function verConsig() {
+  const sel = document.getElementById("consig-prov");
+  const out = document.getElementById("consig-out");
+  if (!out) return;
+  out.innerHTML = `<p class="note">Calculando la quincena…</p>`;
+  const data = await api("periodo_consignacion", { proveedor_id: sel ? sel.value : "" });
+  if (data.error) { out.innerHTML = fail(data); return; }
+  window._consig = data;
+  const filas = (data.fact || []).map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.stock)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td><td>${esc(it.sugerido)}</td></tr>`).join("");
+  const tot = data.totales || {};
+  out.innerHTML = `<div class="doc-sheet"><h3>ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACIÓN</h3>
+    <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.qLabel || "")} · ${esc(data.familia || "")}</p>
+    <table><thead><tr><th>SKU</th><th>Producto</th><th>Stock</th><th>Consumido</th><th>Compra</th><th>Total</th><th>Restock</th></tr></thead><tbody>${filas || `<tr><td colspan="7">Sin ventas</td></tr>`}</tbody></table>
+    <p class="note">Sin IVA ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · con IVA ${money(tot.total)}</p>
+    <p class="note">${esc(data.nota || "")}</p>
+    <button class="btn" type="button" id="btn-gen-consig">Generar pedido y solicitud</button>
+    <button class="btn ghost small" type="button" id="btn-pdf-consig">PDF</button></div>`;
+  document.getElementById("btn-gen-consig").onclick = generarConsig;
+  document.getElementById("btn-pdf-consig").onclick = () => pdfConsig(data, "pedido");
+}
+async function generarConsig() {
+  const sel = document.getElementById("consig-prov");
+  const data = await api("oc_consignacion", { proveedor_id: sel ? sel.value : "", fecha_entrega: (window._consig || {}).fin || "" });
+  if (data.error) { toast(data.error); return; }
+  toast("Pedido " + (data.numero || "") + " · " + (data.qLabel || ""));
+  go("#/doc/oc/" + encodeURIComponent(data.id));
+}
+async function mostrarDoc(cual) {
+  const route = parseRoute();
+  const data = await api("oc_get", { id: route.id });
+  if (data.error) { toast(data.error); return; }
+  const snap = parseSnap(data.orden || {}) || {};
+  const box = document.getElementById("doc-out");
+  if (cual === "acta") {
+    const filas = (data.lineas || []).map((ln) => {
+      const ped = Number(ln.cantidad) || 0;
+      const rec = Number(ln.recibido) || 0;
+      const estado = rec <= 0 ? "Pendiente" : rec >= ped ? "Completo" : "Parcial";
+      const directa = String(ln.plazo || "").includes("DIRECTA");
+      return { sku: ln.producto_id, ped, rec, estado, directa, plazo: ln.plazo || "" };
+    });
+    if (box) box.innerHTML = htmlActa(data.orden || {}, snap, filas);
+  } else if (box) {
+    box.innerHTML = htmlPedido(snap, data.orden || {});
+  }
+  const b = document.getElementById("btn-bajar-doc");
+  if (b) b.onclick = () => pdfConsig(snap.fact ? snap : window._consig || snap, cual);
+}
+function htmlPedido(snap, orden) {
+  const fact = snap.fact || [];
+  const filas = fact.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td></tr>`).join("");
+  const tot = snap.totales || {};
+  const prov = snap.prov || snap.proveedor || {};
+  return `<div class="doc-sheet"><h3>SUNSU SPA — ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACIÓN</h3>
+    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br># ${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}</p>
+    <table><thead><tr><th>SKU</th><th>Producto</th><th>Vendido</th><th>P. unit.</th><th>Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
+    <p class="note">SUBTOTAL ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · TOTAL A FACTURAR ${money(tot.total)}</p>
+    <p class="note">${esc(snap.nota || "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.")}</p>
+    <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF</button></div>`;
+}
+function htmlActa(orden, snap, filas) {
+  const tr = (rows) => rows.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.ped)}</td><td>${esc(it.rec)}</td><td>${esc(it.estado)}</td></tr>`).join("");
+  const rest = filas.filter((it) => !it.directa);
+  const dir = filas.filter((it) => it.directa);
+  const prov = (snap.prov || snap.proveedor || {}).nombre || "";
+  return `<div class="doc-sheet"><h3>ACTA DE ENTREGA</h3>
+    <p class="note">Recepción de mercadería · Sunsu Spa · Quito<br># ${esc(orden.numero || "")} · ${esc(prov)} · ${esc(snap.qLabel || "")}</p>
+    ${rest.length ? `<p class="note">RESTOCK / CONSIGNACIÓN · Casa (venta)</p><table><thead><tr><th>SKU</th><th>Pedido</th><th>Recibido</th><th>Estado</th></tr></thead><tbody>${tr(rest)}</tbody></table>` : ""}
+    ${dir.length ? `<p class="note">COMPRA DIRECTA — USO CABINA. No suma al inventario de ventas. Al recibir, entra a Local.</p><table><thead><tr><th>SKU</th><th>Pedido</th><th>Recibido</th><th>Estado</th></tr></thead><tbody>${tr(dir)}</tbody></table>` : ""}
+    <p class="note">Recibido por — Sunsu Spa &nbsp;&nbsp;&nbsp; Entregado por — ${esc(prov)}</p>
+    <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF</button></div>`;
+}
+function pdfConsig(data, cual) {
+  const prov = (data && (data.prov || data.proveedor)) || {};
+  const tot = (data && data.totales) || {};
+  const lineas = ["SUNSU SPA — " + (cual === "acta" ? "ACTA DE ENTREGA" : "ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACION"),
+    (prov.nombre || "") + "  RUC " + (prov.ruc || ""), (data && data.qLabel) || "", ""];
+  ((data && data.fact) || []).forEach((it) => lineas.push(it.sku + "  " + it.nombre + "  vendido " + it.vendido + "  $" + Number(it.subtotal || 0).toFixed(2)));
+  lineas.push("", "SUBTOTAL $" + Number(tot.subtotal || 0).toFixed(2), "IVA 15% $" + Number(tot.iva || 0).toFixed(2), "TOTAL $" + Number(tot.total || 0).toFixed(2));
+  lineas.push("", "CONSIGNACION: Sunsu paga solo lo vendido en la quincena.");
+  bajarArchivo((cual === "acta" ? "ACTA " : "PEDIDO ") + (prov.nombre || "oc") + ".pdf", pdfTexto(lineas), "application/pdf");
+}
+function pdfTexto(lineas) {
+  const escPdf = (t) => String(t).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const chunks = [];
+  let y = 800;
+  let cmds = ["BT", "/F1 10 Tf"];
+  for (const ln of lineas) {
+    if (y < 48) { cmds.push("ET"); chunks.push(cmds.join("\n")); cmds = ["BT", "/F1 10 Tf"]; y = 800; }
+    cmds.push(`1 0 0 1 48 ${y} Tm (${escPdf(ln).slice(0, 110)}) Tj`);
+    y -= 14;
+  }
+  cmds.push("ET");
+  chunks.push(cmds.join("\n"));
+  const objs = [];
+  objs.push("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj");
+  const kids = chunks.map((_, i) => (3 + i * 2) + " 0 R").join(" ");
+  objs.push(`2 0 obj<< /Type /Pages /Count ${chunks.length} /Kids [${kids}] >>endobj`);
+  chunks.forEach((stream, i) => {
+    const page = 3 + i * 2;
+    const content = page + 1;
+    objs.push(`${page} 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${content} 0 R /Resources<< /Font<< /F1 ${3 + chunks.length * 2} 0 R >> >> >>endobj`);
+    objs.push(`${content} 0 obj<< /Length ${stream.length} >>stream\n${stream}\nendstream endobj`);
+  });
+  const font = 3 + chunks.length * 2;
+  objs.push(`${font} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj`);
+  let pdf = "%PDF-1.3\n";
+  const xref = [0];
+  for (const o of objs) { xref.push(pdf.length); pdf += o + "\n"; }
+  const start = pdf.length;
+  pdf += `xref\n0 ${xref.length}\n`;
+  pdf += "0000000000 65535 f \n";
+  for (let i = 1; i < xref.length; i++) pdf += String(xref[i]).padStart(10, "0") + " 00000 n \n";
+  pdf += `trailer<< /Size ${xref.length} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+  return pdf;
+}
+function bajarArchivo(nombre, texto, mime) {
+  const blob = new Blob([texto], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => { t.hidden = true; }, 2400);
+}
 function bind(main) {
   main.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => {
@@ -1548,7 +1898,9 @@ function bind(main) {
   form("#f-trf", saveTrf);
   form("#f-caja", saveCaja);
   wireAsistencia(main);
+  wireVentas(main);
   form("#f-paq", savePaq);
+  form("#f-rep", saveReporte);
   form("#f-cnt", saveCnt);
   const adj = main.querySelector("#adjudicar");
   if (adj) adj.onclick = () => adjudicar(main);
@@ -1582,6 +1934,8 @@ async function saveProd(form) {
 async function saveOc(form) {
   const body = {
     proveedor_id: form.proveedor_id.value.trim(),
+    bodega_destino_id: form.bodega_destino_id ? form.bodega_destino_id.value : "",
+    fecha_esperada: form.fecha_esperada ? form.fecha_esperada.value : "",
     nota: form.nota.value,
     lineas: readLines(form),
   };
@@ -1864,7 +2218,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022nav"></script>
+<script src="beta-screens.js?v=20261022ventas"></script>
 <script>draw();</script>
 </body>
 </html>

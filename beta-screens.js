@@ -209,7 +209,7 @@ let PROVS=[
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -1072,7 +1072,9 @@ function renderTicket(c){
       '</div>'+
       '<div class="gc-box" id="gc-box" style="display:'+(T.cobro==='giftcard'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--pink-d)">Detalle del canje de gift card</span>'+
-        '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Código GC: 26-050..." oninput="T.codigoGC=this.value">'+
+        '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Código GC: 26-050..." oninput="onGcCodigo(this.value)">'+
+        '<input id="gc-aplica" type="number" min="0" step="0.01" inputmode="decimal" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Monto a aplicar, ej. 65" oninput="T.gcAplica=parseFloat(this.value)||0;updatePreview()">'+
+        '<div id="gc-dif" class="box-lbl" style="color:var(--navy)">Si el facial cuesta más que la gift card, se cobra y se factura solo la diferencia.</div>'+
         '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--pink-d);cursor:pointer">'+
           '<input type="checkbox" onchange="toggleGCOtro(this.checked)" style="width:14px;height:14px">Es gift card de otro cliente'+
         '</label>'+
@@ -1359,6 +1361,28 @@ function selCobro(tipo){
 }
 function toggleOtro(v){T.canjeOtro=v;const b=document.getElementById('otro-box');if(b)b.style.display=v?'block':'none';}
 function toggleGCOtro(v){const b=document.getElementById('gc-otro-box');if(b)b.style.display=v?'block':'none';}
+function onGcCodigo(v){
+  T.codigoGC=v;
+  clearTimeout(window._gcBusca);
+  window._gcBusca=setTimeout(function(){
+    var q=(v||'').trim();
+    if(q.length<3){ updatePreview(); return; }
+    fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent(q))
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var lista=(d&&d.resultados)||[];
+        var hit=lista.find(function(x){return String(x.codigo).toLowerCase()===q.toLowerCase();})||lista[0];
+        if(!hit){ updatePreview(); return; }
+        var saldo=hit.usado?0:(hit.saldo!=null?Number(hit.saldo):(parseFloat(hit.valor)||0));
+        T.gcSaldo=saldo;
+        var f=FACIALES.find(function(x){return x.sku===T.facial;});
+        if(!(Number(T.gcAplica)>0)) T.gcAplica=Math.min(saldo, f?f.p:saldo);
+        var inp=document.getElementById('gc-aplica');
+        if(inp && document.activeElement!==inp) inp.value=T.gcAplica||'';
+        updatePreview();
+      }).catch(function(){ updatePreview(); });
+  }, 280);
+}
 function selP3(sku){
   T.pack3=T.pack3===sku?null:sku;T.pack6=null;
   // Reset GC conversion when pack changes
@@ -1692,9 +1716,26 @@ function updatePreview(){
   let comF=0,comP=0;
   const esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
 
-  // Facial
+  // Facial. Gift card parcial: el facial se cobra por la diferencia y la comisión va en esa proporción.
   let facialP=0, facialNombre='';
-  if(T.facial){const f=FACIALES.find(f=>f.sku===T.facial);if(f){comF=f.com;facialNombre=f.n;if(!esCanje)facialP=f.p;}}
+  if(T.facial){
+    const f=FACIALES.find(f=>f.sku===T.facial);
+    if(f){
+      facialNombre=f.n;
+      if(T.cobro==='giftcard'){
+        const pedido=Number(T.gcAplica)||0;
+        const tope=Math.min(pedido>0?pedido:(Number(T.gcSaldo)||0), f.p);
+        facialP=Math.max(0, Math.round((f.p-tope)*100)/100);
+        comF=f.p>0?Math.round(f.com*(facialP/f.p)*100)/100:0;
+        T._gcUsado=tope; T._gcDif=facialP;
+      } else if(!esCanje){ comF=f.com; facialP=f.p; }
+    }
+  }
+  var _gcDifEl=document.getElementById('gc-dif');
+  if(_gcDifEl && T.cobro==='giftcard' && T.facial){
+    var _fGc=FACIALES.find(f=>f.sku===T.facial);
+    _gcDifEl.textContent='Facial $'+(_fGc?_fGc.p.toFixed(2):'0')+' · gift card $'+(Number(T._gcUsado)||0).toFixed(2)+' · diferencia a cobrar $'+(Number(T._gcDif)||0).toFixed(2);
+  }
 
   // Extras — separados: cobrados vs cortesía
   let extrasTotal=0;
@@ -2049,7 +2090,8 @@ function enviarTicket(){
   // Col R: Gift Card canje (cobran facial con GC) O conversión de sesiones a GC
   let colR='';
   if(T.cobro==='giftcard'){
-    colR='SI'+(T.codigoGC?', '+T.codigoGC:'');
+    var _usaGc=Number(T._gcUsado)||Number(T.gcAplica)||0;
+    colR='SI'+(T.codigoGC?', '+T.codigoGC:'')+(_usaGc>0?', aplica '+_usaGc.toFixed(2):'');
   } else if(T.paq2gc && (T.paq2gcSlots3&&T.paq2gcSlots3.length || T.paq2gcSlots6&&T.paq2gcSlots6.length)){
     var _allSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
     var _gcCodes=_allSlots.filter(function(s){return s&&s.codigo;}).map(function(s){return s.codigo+(s.tipo==='fisica'?'[F]':'');});
@@ -2087,7 +2129,11 @@ function enviarTicket(){
   // Col J: Total a cobrar al cliente — con descuento aplicado
   const _esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
   let _estF=0,_estPack=0,_estProd=0;
-  if(T.facial&&!_esCanje){const _f=FACIALES.find(f=>f.sku===T.facial);if(_f)_estF=_f.p;}
+  if(T.facial){
+    const _f=FACIALES.find(f=>f.sku===T.facial);
+    if(_f && T.cobro==='giftcard') _estF=Number(T._gcDif)||0;
+    else if(_f && !_esCanje) _estF=_f.p;
+  }
   EXTRAS.forEach(e=>{if(T.extras[e.sku]&&!T.extrasCourtesy[e.sku])_estF+=e.t;});
   if(T.pack3){const _p=PAQ3.find(p=>p.sku===T.pack3);if(_p)_estPack=_p.p;}
   if(T.pack6){const _p=PAQ6.find(p=>p.sku===T.pack6);if(_p)_estPack=_p.p;}
@@ -2186,6 +2232,8 @@ function enviarTicket(){
     notas:          ((notasEl?.value||'').trim()+(T.descuento&&T.descuento.tipo==='directo'?'\nPago Directo EGB':'')).trim(),
     tienePaquete:   !!(T.pack3||T.pack6),
     facial:         facialTxt,
+    facialPrecio:   (FACIALES.find(f=>f.sku===T.facial)||{p:0}).p,
+    gcAplica:       T.cobro==='giftcard'?(Number(T._gcUsado)||Number(T.gcAplica)||0):0,
     pack3:          pack3Txt,
     pack6:          pack6Txt,
     extras:         extrasTexto,
@@ -2327,7 +2375,9 @@ function enviarTicket(){
     var _cedCli=payload.cedula||'', _cliNom=((payload.nombre||'')+' '+(payload.apellido||'')).trim();
     T=newT();
     // ── Canje con GIFT CARD: marcarla usada automáticamente por su código ──
-    if(_cobro==='giftcard'&&_codGC){
+    if(_cobro==='giftcard'&&_codGC&&d&&d.gc&&d.gc.ok){
+      toast('🎁 GC '+_codGC+' · aplicado $'+Number(d.gc.aplicado||0).toFixed(2)+' · saldo $'+Number(d.gc.saldo||0).toFixed(2),'var(--green)');
+    } else if(_cobro==='giftcard'&&_codGC){
       var _pd=function(n){return String(n).padStart(2,'0');};
       var _hd=new Date();
       var _fUso=_pd(_hd.getDate())+'/'+_pd(_hd.getMonth()+1)+'/'+String(_hd.getFullYear()).slice(2)+' '+(facialTxt||'facial')+' · '+(CU?CU.name:'—');
