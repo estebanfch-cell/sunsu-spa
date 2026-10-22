@@ -177,12 +177,12 @@ export function lineasTicket(t: Row, cats: Row[], prods: Row[]): LineaVenta[] {
   const fac = s(t.facial_hecho);
   if (fac && fac !== "-" && fac !== "—") {
     const sku = facialSku(fac) || "";
-    out.push({ clase: "servicio", sku, nombre: fac, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+    out.push({ clase: "servicio", sku, nombre: rotulo(cats, prods, sku, fac), cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
   }
   for (const pack of [s(t.compra_pack_3), s(t.compra_pack_6)]) {
     if (!pack || pack.toLowerCase() === "false") continue;
     const sku = facialSku(pack) || skuCode(pack);
-    out.push({ clase: "paquete", sku, nombre: pack, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+    out.push({ clase: "paquete", sku, nombre: rotulo(cats, prods, sku, pack), cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
   }
   const ex = s(t.servicios_adicionales);
   if (ex) {
@@ -190,7 +190,7 @@ export function lineasTicket(t: Row, cats: Row[], prods: Row[]): LineaVenta[] {
       const p = pieza.trim();
       if (!p) continue;
       const sku = facialSku(p) || "";
-      out.push({ clase: "extra", sku, nombre: p, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+      out.push({ clase: "extra", sku, nombre: rotulo(cats, prods, sku, p), cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
     }
   }
   for (const pr of productQtys(t)) {
@@ -222,6 +222,40 @@ function nombreDe(cats: Row[], prods: Row[], sku: string): string {
   if (cat && s(cat.producto_servicio || cat.nombre)) return s(cat.producto_servicio || cat.nombre);
   const p = prods.find((r) => skuCode(r.sku) === c);
   return s(p?.nombre) || sku;
+}
+
+/** Nombre de catálogo. Si la ficha solo trae el código, se queda el texto de la línea. */
+function rotulo(cats: Row[], prods: Row[], sku: string, fallback: string): string {
+  const cat = nombreDe(cats, prods, sku);
+  if (cat && cat !== sku && skuCode(cat) !== skuCode(sku)) return cat;
+  const limpio = s(fallback).replace(new RegExp("^" + s(sku).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), "").trim();
+  return limpio || s(fallback) || cat || sku;
+}
+
+/** TK-YYYYMMDD-####. Un TK-ROW-n o la fila de la hoja no se muestran. */
+export function numeroTicket(r: Row): string {
+  const beta = s(r.beta_num);
+  if (/^TK-\d{8}-\d+$/.test(beta)) return beta;
+  const ymd = ymdUtc(r.timestamp).replace(/-/g, "");
+  const toma = (raw: string) => {
+    const nro = raw.replace(/\D/g, "").replace(/^0+/, "") || "0";
+    const cuerpo = nro.padStart(4, "0");
+    return ymd ? `TK-${ymd}-${cuerpo}` : `TK-${cuerpo}`;
+  };
+  const rowM = /^TK-ROW-(\d+)$/i.exec(beta);
+  if (rowM) return toma(rowM[1]);
+  const plain = /^TK-(\d+)$/.exec(beta);
+  if (plain) return toma(plain[1]);
+  if (r.sheet_row != null && s(r.sheet_row) !== "") return toma(s(r.sheet_row));
+  if (beta && !/row/i.test(beta)) return beta;
+  return ymd ? `TK-${ymd}-0000` : "TK";
+}
+
+/** Clave con la que se guarda. El número que se lee es numeroTicket. */
+export function claveTicket(r: Row): string {
+  if (s(r.beta_num)) return s(r.beta_num);
+  if (r.sheet_row != null && s(r.sheet_row) !== "") return String(r.sheet_row);
+  return String(r.id ?? "");
 }
 
 export function recalcular(lineas: LineaVenta[], descuento: number): {
@@ -374,8 +408,9 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
     total += n(r.estimado);
     const lineas = lineasTicket(r, cats, prods);
     const item: Row = {
-      ref: s(r.beta_num) || String(r.sheet_row || r.id),
-      id: r.id, sheet_row: r.sheet_row, beta_num: s(r.beta_num),
+      ref: numeroTicket(r),
+      clave: claveTicket(r),
+      id: r.id,
       fecha: ymdUtc(r.timestamp), hora: s(r.timestamp).slice(11, 16),
       cosmetologa: s(r.atendido_por), nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3),
       facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),

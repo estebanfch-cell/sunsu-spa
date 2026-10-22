@@ -5,7 +5,7 @@ import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
-import { quincenaDe } from "./ventas.ts";
+import { numeroTicket, quincenaDe } from "./ventas.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
@@ -702,6 +702,13 @@ describe("api", () => {
 });
 
 describe("clientes, reportes, consignación y gift card", () => {
+  it("el número visible del ticket es TK-YYYYMMDD-####", () => {
+    assert.equal(numeroTicket({ beta_num: "TK-20261021-900001", timestamp: "2026-10-21T15:00:00Z" }), "TK-20261021-900001");
+    assert.equal(numeroTicket({ beta_num: "TK-ROW-1642", timestamp: "2026-10-21T15:00:00Z" }), "TK-20261021-1642");
+    assert.equal(numeroTicket({ sheet_row: 1, timestamp: "2026-10-21T15:00:00Z" }), "TK-20261021-0001");
+    assert.equal(/row/i.test(numeroTicket({ beta_num: "TK-ROW-5", sheet_row: 5, timestamp: "2026-10-21T15:00:00Z" })), false);
+  });
+
   it("la quincena de proveedores corta el 15 y el fin de mes", () => {
     assert.equal(quincenaDe(2026, 10, 21).qLabel, "16-fin Oct 2026");
     assert.equal(quincenaDe(2026, 10, 21).ini, "2026-10-16");
@@ -711,6 +718,10 @@ describe("clientes, reportes, consignación y gift card", () => {
 
   it("agrupa clientas y una cosmetóloga no ve montos ni tickets ajenos", async () => {
     const db = new MemoryDb();
+    db.tables.set("catalogo", [
+      { sku: "HT-002", producto_servicio: "Niacinamide 10%+TXA 4% Serum 30ml", subtotal: 38.25 },
+      { sku: "SUNSU-01", producto_servicio: "Facial S.O.S", subtotal: 65.22 },
+    ]);
     db.tables.set("tickets", [
       { id: 1, sheet_row: 1, nombre: "María", apellido: "Paz", id_3: "1711", estimado: 80, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles", ht_002: 1, facial_hecho: "SUNSU-01" },
       { id: 2, sheet_row: 2, nombre: "María", apellido: "Paz", id_3: "1711", estimado: 40, timestamp: "2026-10-18T15:00:00Z", atendido_por: "Andrea Robles" },
@@ -734,6 +745,15 @@ describe("clientes, reportes, consignación y gift card", () => {
     assert.equal((own.clientes as Row[])[0].total, undefined);
     const det = await handle("cliente_detalle", { token: adm.token, key: "c:1711" }, adm) as Row;
     assert.equal((det.tickets as Row[]).length, 2);
+    const visita = (det.tickets as Row[])[0];
+    assert.match(String(visita.ref), /^TK-\d{8}-\d{4}$/);
+    assert.equal(/row/i.test(JSON.stringify(visita)), false);
+    assert.equal(visita.sheet_row, undefined);
+    const prod = (visita.lineas as Row[]).find((ln) => ln.clase === "producto");
+    assert.match(String(prod?.nombre), /Niacinamide 10%\+TXA 4% Serum 30ml/);
+    assert.equal(prod?.sku, "HT-002");
+    const facial = (visita.lineas as Row[]).find((ln) => ln.clase === "servicio");
+    assert.equal(facial?.nombre, "Facial S.O.S");
     const den = await handle("ticket_editar", { token: and.token, ref: "1", lineas: [{ clase: "producto", sku: "HT-002", cantidad: 1, precio: 10 }] }, and) as Row;
     assert.match(String(den.error), /admin/i);
   });
@@ -879,5 +899,16 @@ describe("beta shell", () => {
     assert.match(html, /function pdfPaginas/);
     assert.match(html, /PRE-FACTURA DE CONSIGNACION/);
     assert.match(html, /PEDIDO DE RESTOCK/);
+    assert.match(html, /\.cli-name/);
+    assert.match(html, /white-space:\s*nowrap/);
+    assert.match(html, /sku-badge/);
+    assert.match(html, /money-col/);
+    assert.match(html, /tot-block/);
+    assert.match(html, /TK-20261021-1643/);
+    assert.match(html, /Niacinamide 10%\+TXA 4% Serum 30ml/);
+    assert.equal(html.includes("OC-2026-0080"), false);
+    assert.match(html, /OC-0080/);
+    assert.match(screens, /gc-line/);
+    assert.match(screens, /diferencia a cobrar/);
   });
 });

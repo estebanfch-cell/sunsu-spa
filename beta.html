@@ -172,13 +172,13 @@
   .card .v { font-size: 1.7rem; font-weight: 800; color: var(--navy); margin-top: 2px; font-family: inherit; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .row {
-    display: grid; grid-template-columns: 92px 1fr auto; gap: 14px; align-items: center;
+    display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: 14px; align-items: center;
     width: 100%; text-align: left; background: var(--white); border: none; border-radius: 14px;
-    box-shadow: var(--shadow-sm); padding: 12px 14px; font: inherit;
+    box-shadow: var(--shadow-sm); padding: 12px 16px; font: inherit; min-width: 0;
   }
-  .row .sku { font-variant-numeric: tabular-nums; color: var(--gray); font-size: 0.72rem; font-weight: 700; }
-  .row .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; font-weight: 700; color: var(--navy); font-size: 0.82rem; }
-  .row .meta { color: var(--gray); font-size: 0.75rem; white-space: nowrap; text-align: right; font-weight: 700; }
+  .row .sku { font-variant-numeric: tabular-nums; color: var(--gray); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+  .row .name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.35; font-weight: 700; color: var(--navy); font-size: 0.9rem; }
+  .row .meta { color: var(--gray); font-size: 0.78rem; white-space: nowrap; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
   .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .note { color: var(--gray); font-size: 0.75rem; }
@@ -382,40 +382,80 @@
     }
     .tab-more.on { color: var(--gold); }
     .linea { grid-template-columns: 1fr 1fr; }
-    .row { grid-template-columns: 72px 1fr; }
-    .meta { grid-column: 2; text-align: left; white-space: normal; }
+    .row { grid-template-columns: max-content minmax(0, 1fr) auto; }
+    .row .meta, .meta { grid-column: auto; text-align: right; white-space: nowrap; }
   }
   @media (min-width: 861px) {
     .top-salir { display: none; }
   }
-  .cli-layout { display: grid; gap: 14px; }
+  .cli-layout { display: grid; gap: 16px; }
   @media (min-width: 861px) {
-    .cli-layout { grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); align-items: start; }
+    .cli-layout { grid-template-columns: minmax(340px, 0.85fr) minmax(480px, 1.5fr); align-items: start; }
   }
-  .cli-row { width: 100%; text-align: left; }
-  .cli-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; background: transparent; position: static; padding: 0; }
-  .cli-top b { color: var(--navy-d); }
-  .cli-row .sub { color: var(--gray); font-size: 0.78rem; margin-top: 2px; }
+  .cli-row, .doc-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--white); border: none; border-radius: 14px; box-shadow: var(--shadow-sm);
+    padding: 14px 16px; font: inherit; min-width: 0;
+  }
+  .cli-main { min-width: 0; flex: 1 1 auto; }
+  .cli-name, .doc-row .pname, .pname {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    font-weight: 800; color: var(--navy); font-size: 0.95rem;
+  }
+  .cli-row .sub { color: var(--gray); font-size: 0.78rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .money-col, .cli-money {
+    margin-left: auto; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums;
+    font-weight: 800; color: var(--green); flex: 0 0 auto;
+  }
   .cli-panel {
     background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px;
-    box-shadow: var(--shadow); padding: 14px 16px 18px; min-height: 240px;
+    box-shadow: var(--shadow); padding: 16px 18px 20px; min-height: 240px;
   }
   .cli-panel[hidden] { display: none; }
-  .tk { border-top: 1px solid var(--cream-d); padding: 10px 0; }
+  .sku-badge {
+    font-size: 0.62rem; font-family: ui-monospace, monospace; background: var(--blue-l); color: var(--blue);
+    padding: 2px 6px; border-radius: 4px; margin-right: 6px; flex-shrink: 0; white-space: nowrap; font-weight: 700;
+  }
+  .sku-badge.prod { background: #8A90A0; color: white; }
+  .tk-card {
+    background: white; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    border-left: 4px solid var(--navy); box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .tk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; }
+  .tk-cosm { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; white-space: nowrap; }
+  .tk-who { font-size: 0.95rem; font-weight: 800; color: var(--navy); white-space: nowrap; }
+  .tk-meta { font-size: 0.72rem; color: var(--gray); white-space: nowrap; }
+  .tk-total { font-size: 1.15rem; font-weight: 900; color: var(--green); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tk-sin, .tk-lbl { font-size: 0.62rem; color: var(--gray); text-align: right; white-space: nowrap; }
+  .row-item, .row-sub {
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 16px; padding: 3px 0; font-size: 0.8rem;
+  }
+  .row-lab { display: flex; align-items: center; min-width: 0; flex: 1 1 240px; }
+  .row-lab .pname { font-weight: 600; font-size: 0.8rem; }
+  .row-sub { font-size: 0.72rem; color: var(--gray); }
+  .row-sub.strong { font-weight: 800; color: var(--navy); font-size: 0.84rem; }
+  .col3 { font-size: 0.72rem; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); }
+  .col3-iva { opacity: 0.6; font-weight: 700; }
+  .tot-block { border-top: 1px solid #eee; margin-top: 6px; padding-top: 6px; }
+  .prod-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .tk .ln { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .tk .ln input { width: auto; min-width: 72px; flex: 1 1 88px; margin: 0; }
   .tk summary { cursor: pointer; font-weight: 700; color: var(--navy-d); }
-  .tk .ln { display: grid; grid-template-columns: 1.4fr 0.6fr 0.7fr 0.6fr auto; gap: 6px; margin: 6px 0; align-items: center; }
-  .doc-sheet { background: var(--white); border: 1px solid var(--cream-d); border-radius: 12px; padding: 14px; }
+  .gc-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 3px 0; font-size: 0.8rem; font-weight: 700; color: var(--navy); text-transform: none; letter-spacing: 0; }
+  .gc-line span, .gc-line b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rep-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; }
+  .doc-sheet { background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px; padding: 16px; box-shadow: var(--shadow-sm); }
   .doc-sheet h3 { margin: 0 0 8px; color: var(--navy-d); letter-spacing: 0.04em; }
-  .doc-sheet table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-  .doc-sheet th { background: var(--navy); color: white; text-align: left; padding: 6px; }
-  .doc-sheet td { padding: 5px 6px; border-bottom: 1px solid var(--cream-d); }
+  .doc-sheet table { width: 100%; border-collapse: collapse; font-size: 0.84rem; box-shadow: none; }
+  .doc-sheet th { background: var(--navy); color: white; text-align: left; padding: 8px 10px; }
+  .doc-sheet td { padding: 8px 10px; border-bottom: 1px solid var(--cream-d); }
+  .doc-sheet td.num, .doc-sheet th.num, table td.num, table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .doc-sheet input.qty, .doc-sheet input.buffer { width: 88px; padding: 6px 8px; margin: 0; }
   @media (max-width: 860px) {
     .cli-panel {
       position: fixed; z-index: 70; inset: 0 0 var(--tab-h) 0;
       border-radius: 18px 18px 0 0; overflow: auto; margin: 0;
     }
-    .tk .ln { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
@@ -511,6 +551,73 @@ function money(n) {
   const x = Number(n);
   return Number.isFinite(x) ? "$" + x.toFixed(2) : "";
 }
+function leerLista(pick) {
+  try { const v = pick(); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
+function codigoDe(sku) {
+  return String(sku || "").toUpperCase().replace(/^SUNSU-/, "");
+}
+function catalogoPantalla() {
+  const out = [];
+  const add = (sku, nombre) => {
+    const code = codigoDe(sku);
+    const name = String(nombre || "").trim();
+    if (!code || !name) return;
+    out.push({ code, sku: String(sku), nombre: name });
+  };
+  leerLista(() => (typeof FACIALES !== "undefined" ? FACIALES : window.FACIALES)).forEach((f) => add(f.sku, f.n));
+  leerLista(() => (typeof EXTRAS !== "undefined" ? EXTRAS : window.EXTRAS)).forEach((e) => add(e.sku, e.n));
+  leerLista(() => (typeof PAQ3 !== "undefined" ? PAQ3 : window.PAQ3)).forEach((p) => add(p.sku, p.n));
+  leerLista(() => (typeof PAQ6 !== "undefined" ? PAQ6 : window.PAQ6)).forEach((p) => add(p.sku, p.n));
+  leerLista(() => (typeof PROVS !== "undefined" ? PROVS : window.PROVS)).forEach((pv) => (pv.prods || []).forEach((p) => add(p.sku, p.n)));
+  return out;
+}
+function fichaLinea(ln) {
+  const sku = String((ln && (ln.sku || ln.producto_id)) || "");
+  const crudo = String((ln && ln.nombre) || "");
+  const embedded = (crudo.match(/SUNSU-[A-Z]*-?\d+/i) || sku.match(/SUNSU-[A-Z]*-?\d+/i) || [])[0] || sku;
+  const code = codigoDe(embedded);
+  const hit = catalogoPantalla().find((c) => c.code === code || c.sku.toUpperCase() === String(embedded).toUpperCase());
+  let nombre = crudo.replace(new RegExp("^" + String(embedded).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), "").trim();
+  if (hit) nombre = hit.nombre;
+  if (!nombre) nombre = code || sku;
+  const clase = (ln && ln.clase) || "producto";
+  const icon = clase === "servicio" ? "💆" : clase === "paquete" ? "📋" : clase === "extra" ? "✨" : clase === "gift" ? "🎁" : "🧴";
+  const fuente = hit ? hit.sku : (embedded || sku);
+  const badge = /^SUNSU-\d+$/i.test(fuente) ? fuente.toUpperCase() : (codigoDe(fuente) || fuente);
+  return { code: codigoDe(fuente) || fuente, badge, nombre, icon, clase };
+}
+function celdaProd(sku, nombre, clase) {
+  const f = fichaLinea({ sku, nombre, clase: clase || "producto" });
+  const tono = f.clase === "producto" ? "sku-badge prod" : "sku-badge";
+  return `<span class="prod-cell"><span class="${tono}">${esc(f.badge)}</span><span class="pname">${f.icon} ${esc(f.nombre)}</span></span>`;
+}
+function col3(precioSin, cant, desc) {
+  const subExact = (Number(precioSin) || 0) * (Number(cant) || 0) * (1 - (Number(desc) || 0) / 100);
+  const tot = Math.round(subExact * 1.15 * 100) / 100;
+  const sub = Math.round((tot / 1.15) * 100) / 100;
+  const iva = Math.round((tot - sub) * 100) / 100;
+  return `<span class="col3">$${sub.toFixed(2)} <span class="col3-iva">+${iva.toFixed(2)}</span> = <b>$${tot.toFixed(2)}</b></span>`;
+}
+function bloqueTotales(sub, iva, total) {
+  return `<div class="tot-block">
+    <div class="row-sub"><span>Subtotal sin IVA</span><span class="money-col">${money(sub)}</span></div>
+    <div class="row-sub"><span>IVA 15%</span><span class="money-col">${money(iva)}</span></div>
+    <div class="row-sub strong"><span>Total con IVA</span><span class="money-col">${money(total)}</span></div>
+  </div>`;
+}
+function fechaCorta(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso || "");
+}
+function colorCosm(nombre) {
+  const n = String(nombre || "");
+  if (n.includes("Andrea")) return "#7A8FAF";
+  if (n.includes("Daniela")) return "#9B8EC4";
+  if (n.includes("Dejaneira")) return "#6A9E7A";
+  if (n.includes("Alejandra")) return "#C4956A";
+  return "#1A237E";
+}
 function acceso(mod) { return state.acceso[mod] || "no"; }
 function uuid() { return crypto.randomUUID(); }
 
@@ -539,32 +646,32 @@ function previewApi(accion, body) {
   }
   if (accion === "cliente_detalle") {
     return { ok: true, admin: true, cliente: { key: body.key || "c:1711", nombre: "María Paz", cedula: "1711", telefono: "0991112233", visitas: 4, ultima: "2026-10-21", total: 320 },
-      tickets: [{ ref: "TK-1643", fecha: "2026-10-21", cosmetologa: "Andrea", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
-        { clase: "servicio", sku: "SUNSU-01", nombre: "Facial S.O.S", cantidad: 1, precio: 65.22, descuento_pct: 0 },
-        { clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 1, precio: 20, descuento_pct: 0 },
+      tickets: [{ ref: "TK-20261021-1643", clave: "TK-20261021-1643", fecha: "2026-10-21", hora: "10:00", cosmetologa: "Andrea Robles", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
+        { clase: "servicio", sku: "SUNSU-01", nombre: "Facial S.O.S", cantidad: 1, precio: 49.56521739130435, descuento_pct: 0 },
+        { clase: "producto", sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", cantidad: 1, precio: 20, descuento_pct: 0 },
       ] }] };
   }
   if (accion === "reporte_consumos") {
     return { ok: true, desde: body.desde || "2026-10-01", hasta: body.hasta || "2026-10-22",
-      venta: [{ sku: "HT-002", nombre: "Crema", unidades: 6 }],
-      cabina: [{ sku: "CB-001", nombre: "Ampolla", unidades: 14 }],
-      faciales: [{ nombre: "SUNSU-01 Facial S.O.S", n: 7 }, { nombre: "SUNSU-40 Glow", n: 3 }],
+      venta: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", unidades: 6 }],
+      cabina: [{ sku: "SUNSU-HT-008", nombre: "Heartleaf 80% Moisture Soothing Ampoule", unidades: 14 }],
+      faciales: [{ nombre: "SUNSU-01 Facial S.O.S", n: 7 }, { nombre: "SUNSU-40 Facial Reset 3x1", n: 3 }],
       totales: { unidadesVenta: 6, unidadesCabina: 14, faciales: 10 } };
   }
   if (accion === "prov_list") return { ok: true, items: [{ id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" }] };
-  if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 92, tipo: "consignacion" }] };
-  if (accion === "prod_list") return { ok: true, items: [{ id: "p1", sku: "HT-002", nombre: "Crema", uso: "venta", precio_venta: 23, porBodega: { VENTA: 4, CABINA: 0 } }] };
+  if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-0080", estado: "abierta", total: 92, tipo: "consignacion", q_label: "16-fin Oct 2026" }] };
+  if (accion === "prod_list") return { ok: true, items: [{ id: "p1", sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "venta", precio_venta: 43.99, porBodega: { VENTA: 4, CABINA: 0 } }] };
   if (accion === "periodo_consignacion") {
     return { ok: true, qLabel: "16-fin Oct 2026", familia: "HT", ini: "2026-10-16", fin: "2026-10-31",
       proveedor: { id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" },
       buffer: 0.2,
-      fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24, stock: 4, sugerido: 4 }],
-      restock: [{ sku: "HT-002", nombre: "Crema", sugerido: 4, compra: 8 }],
+      fact: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", vendido: 3, compra: 8, subtotal: 24, stock: 4, sugerido: 4 }],
+      restock: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", sugerido: 4, compra: 8 }],
       totales: { subtotal: 24, iva: 3.6, total: 27.6 },
       nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." };
   }
   if (accion === "buscarGiftCards") return { resultados: [{ codigo: body.q || "26-065", valor: "65", saldo: 65, usado: false }] };
-  if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", buffer: 0.2, prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24 }], items: [{ sku: "HT-002", nombre: "Crema", sugerido: 4 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
+  if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", buffer: 0.2, prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", vendido: 3, compra: 8, subtotal: 24 }], items: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", sugerido: 4 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "SUNSU-HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
   if (accion === "getDashboardHoy") {
     const dias = [
       ["Lun 19", 320, 8], ["Mar 20", 410, 11], ["Mié 21", 280, 7], ["Jue 22", 486.5, 12],
@@ -1188,15 +1295,17 @@ async function renderCompras(sub) {
   if (oc.error) return fail(oc);
   const ordenes = (oc.items || []).map((o) => {
     const tipo = o.tipo === "consignacion" || (String(o.nota || "").includes('"consignacion"')) ? "Consignación" : "Compra";
-    return `<button class="row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(tipo)} · ${esc(o.estado)}</div><div class="note">${esc(o.q_label || "")}</div></div><div class="meta">${state.verCostos || state.admin ? money(o.total) : ""}</div></button>`;
+    const ico = tipo === "Consignación" ? "📋" : "🛒";
+    const dinero = state.verCostos || state.admin ? money(o.total) : "";
+    return `<button class="doc-row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><span class="sku-badge">${esc(o.numero)}</span><span class="pname">${ico} ${esc(tipo)} · ${esc(o.estado)}${o.q_label ? " · " + esc(o.q_label) : ""}</span><span class="money-col">${dinero}</span></button>`;
   }).join("");
-  const cot = (rfq.items || []).map((r) => `<div class="row"><div class="sku">${esc(r.numero)}</div><div class="name">${esc(r.estado)}</div><div class="meta">${esc(r.fecha || "")}</div></div>`).join("");
-  const sug = (re.sugerencias || []).map((s) => `<div class="row"><div class="sku">${esc(s.sku)}</div><div><div class="name">${esc(s.nombre)}</div></div><div class="meta">hay ${esc(s.stock)} · pedir ${esc(s.pedir)}</div></div>`).join("");
+  const cot = (rfq.items || []).map((r) => `<div class="doc-row"><span class="sku-badge">${esc(r.numero)}</span><span class="pname">📄 ${esc(r.estado)}</span><span class="money-col">${esc(r.fecha || "")}</span></div>`).join("");
+  const sug = (re.sugerencias || []).map((s) => `<div class="doc-row">${celdaProd(s.sku, s.nombre)}<span class="money-col">hay ${esc(s.stock)} · pedir ${esc(s.pedir)}</span></div>`).join("");
   const opts = (prov.items || []).map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("");
-  const bloqueOc = `<h2>Órdenes de compra</h2><div class="list">${ordenes || `<p class="note">No hay órdenes de compra en el ERP.</p>`}</div>`;
-  const bloqueRfq = `<h2>Cotizaciones de compra</h2><div class="list">${cot || `<p class="note">Todavía no hay RFQ.</p>`}</div>`;
+  const bloqueOc = `<div class="card-title">🛒 Órdenes de compra</div><div class="list">${ordenes || `<p class="note">No hay órdenes de compra en el ERP.</p>`}</div>`;
+  const bloqueRfq = `<div class="card-title">📄 Cotizaciones de compra</div><div class="list">${cot || `<p class="note">Todavía no hay RFQ.</p>`}</div>`;
   const consig = state.admin ? `<div class="card doc-sheet" id="consig-box">
-      <h3>Consignación</h3>
+      <div class="card-title">📋 Consignación</div>
       <p class="note">Quincena 1–15 o 16–fin. Hebetronic y las otras familias (HT, AS, ML, PH, JN). Casa es la bodega de venta; Local es cabina y consumo.</p>
       <label>Proveedor</label><select id="consig-prov">${opts || `<option value="">Sin proveedores</option>`}</select>
       <button class="btn" type="button" id="btn-consig">Pagar/Ver periodo actual</button>
@@ -1205,7 +1314,7 @@ async function renderCompras(sub) {
   return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/oc">Nueva orden de compra</button><button class="btn ghost small" type="button" data-go="#/doc/rfq">Nueva cotización de compra</button></div>
     ${consig}
     ${sub === "rfq" ? bloqueRfq + bloqueOc : bloqueOc + bloqueRfq}
-    <h2>Reordenar</h2><div class="list">${sug || `<p class="note">Sin sugerencias. Hace falta punto de reorden en el producto.</p>`}</div>`;
+    <div class="card-title">🧴 Reordenar</div><div class="list">${sug || `<p class="note">Sin sugerencias. Hace falta punto de reorden en el producto.</p>`}</div>`;
 }
 
 async function renderTickets() {
@@ -1215,7 +1324,7 @@ async function renderTickets() {
     ? `<p class="err">${esc(data.error)}</p>`
     : (data.items || []).map((o) => `<div class="row"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(o.nombre || o.ticket_ref)}</div><div class="note">${esc(o.estado)}</div></div><div class="meta">${money(o.total)}</div></div>`).join("");
   const dia = Array.isArray(legacy) ? legacy : (legacy.items || legacy.tickets || []);
-  const rows = (Array.isArray(dia) ? dia : []).slice(0, 40).map((t) => `<div class="row"><div class="sku">${esc(t.ticket || t.sheet_row || "")}</div><div><div class="name">${esc((t.nombre || "") + " " + (t.apellido || ""))}</div><div class="note">${esc(t.cosmetologa || t.cosm || t.atendido_por || "")}</div></div><div class="meta">${money(t.estimado || t.total || "")}</div></div>`).join("");
+  const rows = (Array.isArray(dia) ? dia : []).slice(0, 40).map((t) => `<div class="doc-row"><span class="sku-badge">${esc(t.ticket || t.beta_num || t.ref || "")}</span><span class="pname">${esc(((t.nombre || "") + " " + (t.apellido || "")).trim())}</span><span class="money-col">${money(t.estimado || t.total || "")}</span></div>`).join("");
   return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
     <h2>Órdenes de venta</h2><div class="list">${erp || `<p class="note">Aún no hay tickets del ERP.</p>`}</div>
     <h2>Tickets del día (hoja)</h2><div class="list">${rows || `<p class="note">${esc(legacy.error || "Sin tickets para hoy, o solo ves los tuyos.")}</p>`}</div>`;
@@ -1232,9 +1341,10 @@ async function renderClientes() {
   const data = await api("clientes_resumen");
   if (data.error) return fail(data);
   const moneyOk = !!(data.admin || state.admin);
-  const items = (data.clientes || []).map((c) => `<button class="row cli-row" type="button" data-cli="${esc(c.key)}">
-      <div><div class="cli-top"><b>${esc(c.nombre || "Sin nombre")}</b><span>${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</span></div>
-      <div class="sub">${esc(c.visitas)} visitas · última ${esc(c.ultima || "—")}${c.cedula ? " · " + esc(c.cedula) : ""}</div></div>
+  const items = (data.clientes || []).map((c) => `<button class="cli-row" type="button" data-cli="${esc(c.key)}">
+      <div class="cli-main"><div class="cli-name">${esc(c.nombre || "Sin nombre")}</div>
+      <div class="sub">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${c.cedula ? " · " + esc(c.cedula) : ""}</div></div>
+      <div class="cli-money">${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</div>
     </button>`).join("");
   return `<div class="cli-layout"><div>
       <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
@@ -1251,13 +1361,15 @@ async function renderReportes() {
   const hoy = ymdEc();
   const desde = hoy.slice(0, 8) + "01";
   const data = await api("reporte_consumos", { desde, hasta: hoy });
-  return `<form id="f-rep" class="doc-sheet">
-      <h3>Consumos / reportes</h3>
+  return `<form id="f-rep" class="card doc-sheet">
+      <div class="card-title">📊 Consumos / reportes</div>
       <p class="note">Unidades vendidas en Casa y consumo de cabina (recetas). Faciales por tipo. Solo administración.</p>
-      <label>Desde</label><input name="desde" type="date" value="${esc(desde)}" required>
-      <label>Hasta</label><input name="hasta" type="date" value="${esc(hoy)}" required>
-      <label>Producto (SKU)</label><input name="sku" placeholder="HT-002">
-      <label>Tipo de facial</label><input name="facial" placeholder="S.O.S">
+      <div class="rep-filters">
+        <div class="field"><label>Desde</label><input name="desde" type="date" value="${esc(desde)}" required></div>
+        <div class="field"><label>Hasta</label><input name="hasta" type="date" value="${esc(hoy)}" required></div>
+        <div class="field"><label>Producto (SKU)</label><input name="sku" placeholder="HT-002"></div>
+        <div class="field"><label>Tipo de facial</label><input name="facial" placeholder="S.O.S"></div>
+      </div>
       <button class="btn" type="submit">Ver</button>
       <p class="err" id="f-err"></p>
     </form>
@@ -1266,16 +1378,24 @@ async function renderReportes() {
 }
 
 function htmlReporte(d) {
-  const tabla = (rows, cols) => `<table><thead><tr>${cols.map((c) => `<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>${
-    rows.map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c[1]])}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length}">Sin movimientos</td></tr>`
+  const tabla = (rows, cols) => `<table><thead><tr>${cols.map((c) => `<th class="${c[2] === "num" ? "num" : ""}">${esc(c[0])}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr>${cols.map((c) => {
+      const kind = c[2];
+      if (kind === "prod") return `<td>${celdaProd(r.sku || r.nombre, r.nombre, c[3] || "producto")}</td>`;
+      return `<td class="${kind === "num" ? "num" : ""}">${esc(r[c[1]])}</td>`;
+    }).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length}">Sin movimientos</td></tr>`
   }</tbody></table>`;
   const t = d.totales || {};
   return `<div class="doc-sheet" id="rep-sheet">
-      <h3>${esc(d.desde)} → ${esc(d.hasta)}</h3>
-      <p class="note">Venta ${esc(t.unidadesVenta || 0)} u · Cabina ${esc(t.unidadesCabina || 0)} u · Faciales ${esc(t.faciales || 0)}</p>
-      <h3>Casa (venta)</h3>${tabla(d.venta || [], [["SKU", "sku"], ["Producto", "nombre"], ["Unidades", "unidades"]])}
-      <h3>Local (cabina, receta)</h3>${tabla(d.cabina || [], [["SKU", "sku"], ["Producto", "nombre"], ["Unidades", "unidades"]])}
-      <h3>Faciales</h3>${tabla(d.faciales || [], [["Tipo", "nombre"], ["Cantidad", "n"]])}
+      <div class="card-title">📊 ${esc(fechaCorta(d.desde))} → ${esc(fechaCorta(d.hasta))}</div>
+      <div class="kpi-row">
+        <div class="card kpi-tile"><div class="kpi-ico">🧴</div><div class="kpi-val">${esc(t.unidadesVenta || 0)}</div><div class="kpi-lbl">Casa · venta</div></div>
+        <div class="card kpi-tile"><div class="kpi-ico">🏠</div><div class="kpi-val">${esc(t.unidadesCabina || 0)}</div><div class="kpi-lbl">Local · cabina</div></div>
+        <div class="card kpi-tile"><div class="kpi-ico">💆</div><div class="kpi-val">${esc(t.faciales || 0)}</div><div class="kpi-lbl">Faciales</div></div>
+      </div>
+      <div class="card-title">🧴 Casa (venta)</div>${tabla(d.venta || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
+      <div class="card-title">🏠 Local (cabina, receta)</div>${tabla(d.cabina || [], [["Producto", "nombre", "prod"], ["Unidades", "unidades", "num"]])}
+      <div class="card-title">💆 Faciales</div>${tabla(d.faciales || [], [["Tipo", "nombre", "prod", "servicio"], ["Cantidad", "n", "num"]])}
     </div>`;
 }
 
@@ -1563,7 +1683,7 @@ async function renderOc(id) {
   const nombre = new Map((prods.items || []).map((p) => [p.id, (p.sku || "") + " " + (p.nombre || "")]));
   const o = data.orden || {};
   const lineas = (data.lineas || []).map((ln) => `<div class="linea" data-id="${esc(ln.id)}">
-      <div class="name">${esc(nombre.get(ln.producto_id) || ln.producto_id)}</div>
+      <div class="name">${celdaProd(ln.producto_id, nombre.get(ln.producto_id) || ln.producto_id)}</div>
       <div class="note">pedido ${esc(ln.cantidad)} · recibido ${esc(ln.recibido)}</div>
       <input name="cantidad" inputmode="decimal" placeholder="Recibir" aria-label="Cantidad a recibir">
       <select name="bodega" aria-label="Bodega de esta línea"><option value="">Bodega</option><option value="${VENTA}">Venta</option><option value="${CABINA}">Cabina</option></select>
@@ -1660,18 +1780,32 @@ async function abrirCliente(key) {
   const c = data.cliente || {};
   const admin = !!(data.admin || state.admin);
   const tickets = (data.tickets || []).map((t) => {
-    const lns = (t.lineas || []).map((ln) => admin
-      ? `<div class="ln"><span>${esc(ln.nombre)}</span><input data-k="cantidad" value="${esc(ln.cantidad)}" aria-label="Cantidad"><input data-k="precio" value="${esc(ln.precio)}" aria-label="Precio"><input data-k="descuento_pct" value="${esc(ln.descuento_pct || 0)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(ln.sku)}"><input type="hidden" data-k="clase" value="${esc(ln.clase)}"><input type="hidden" data-k="nombre" value="${esc(ln.nombre)}"></div>`
-      : `<div class="note">${esc(ln.cantidad)} × ${esc(ln.nombre)}</div>`).join("");
-    const edit = admin ? `<div class="ln nueva"><input data-k="sku" placeholder="SKU" aria-label="SKU"><input data-k="cantidad" value="1" aria-label="Cantidad"><input data-k="precio" placeholder="Precio" aria-label="Precio"><input data-k="descuento_pct" value="0" aria-label="Descuento %"><button class="btn ghost small" type="button" data-add-ln>Agregar</button><input type="hidden" data-k="clase" value="producto"></div>
-      <label>Descuento $</label><input data-desc value="0"><button class="btn small" type="button" data-save-tk="${esc(t.ref)}">Guardar ticket</button><p class="err" data-err></p>` : "";
-    const tot = admin ? `<div class="note">Subtotal ${money(t.subtotal)} · IVA ${money(t.iva)} · total ${money(t.total)}</div>` : "";
-    return `<details class="tk" data-ref="${esc(t.ref)}"><summary>${esc(t.fecha)} · ${esc(t.ref)} · ${esc(t.cosmetologa || "")}${admin ? " · " + money(t.total) : ""}</summary>
-      <div class="note">${esc(t.facial || "")} ${esc(t.notas || "")}</div>${tot}<div class="lns">${lns}</div>${edit}</details>`;
+    const clave = t.clave || t.ref;
+    const visto = (t.lineas || []).map((ln) => {
+      const f = fichaLinea(ln);
+      const cant = Number(ln.cantidad) > 1 ? " ×" + esc(ln.cantidad) : "";
+      const precio = admin ? col3(ln.precio, ln.cantidad, ln.descuento_pct) : "";
+      return `<div class="row-item"><span class="row-lab"><span class="sku-badge ${f.clase === "producto" ? "prod" : ""}">${esc(f.badge)}</span><span class="pname">${f.icon} ${esc(f.nombre)}${cant}</span></span>${precio ? `<span class="money-col">${precio}</span>` : ""}</div>`;
+    }).join("");
+    const lns = admin ? (t.lineas || []).map((ln) => {
+      const f = fichaLinea(ln);
+      return `<div class="ln">${celdaProd(ln.sku, f.nombre, ln.clase)}<input data-k="cantidad" value="${esc(ln.cantidad)}" aria-label="Cantidad"><input data-k="precio" value="${esc(ln.precio)}" aria-label="Precio sin IVA"><input data-k="descuento_pct" value="${esc(ln.descuento_pct || 0)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(ln.sku)}"><input type="hidden" data-k="clase" value="${esc(ln.clase)}"><input type="hidden" data-k="nombre" value="${esc(f.nombre)}"></div>`;
+    }).join("") : "";
+    const edit = admin ? `<details class="tk-edit"><summary>✏️ Editar líneas</summary><div class="lns">${lns}</div>
+      <div class="ln nueva"><input data-k="sku" placeholder="SKU" aria-label="SKU"><input data-k="cantidad" value="1" aria-label="Cantidad"><input data-k="precio" placeholder="Precio sin IVA" aria-label="Precio sin IVA"><input data-k="descuento_pct" value="0" aria-label="Descuento %"><button class="btn ghost small" type="button" data-add-ln>Agregar</button><input type="hidden" data-k="clase" value="producto"></div>
+      <label>Descuento $</label><input data-desc value="0"><button class="btn small" type="button" data-save-tk="${esc(clave)}">Guardar ticket</button><p class="err" data-err></p></details>` : "";
+    const tot = admin ? bloqueTotales(t.subtotal, t.iva, t.total) : "";
+    const col = colorCosm(t.cosmetologa);
+    const cobrado = admin ? `<div class="tk-sum"><div class="tk-total">${money(t.total)}</div><div class="tk-sin">sin IVA ${money(t.subtotal)}</div><div class="tk-lbl">Total cobrado</div></div>` : "";
+    return `<article class="tk-card tk" data-ref="${esc(t.ref)}" style="border-left-color:${col}">
+      <div class="tk-head"><div><div class="tk-cosm" style="color:${col}">${esc(t.cosmetologa || "")}</div><div class="tk-who">${esc(((t.nombre || "") + " " + (t.apellido || "")).trim() || c.nombre || "")}</div><div class="tk-meta">${esc(t.cedula || c.cedula || "")} · ${esc(fechaCorta(t.fecha))} ${esc(t.hora || "")} · ${esc(t.ref)}</div></div>${cobrado}</div>
+      <div class="tk-lines">${visto}${tot}</div>
+      ${t.notas ? `<div class="note">🗒 ${esc(t.notas)}</div>` : ""}
+      ${edit}</article>`;
   }).join("");
-  body.innerHTML = `<h2>${esc(c.nombre || "")}</h2>
+  body.innerHTML = `<div class="cli-name">${esc(c.nombre || "")}</div>
     <p class="note">${esc(c.cedula || "")}${c.telefono ? " · " + esc(c.telefono) : ""}${c.email ? " · " + esc(c.email) : ""}</p>
-    <p class="note">${esc(c.visitas)} visitas · última ${esc(c.ultima || "—")}${admin && c.total != null ? " · " + money(c.total) : ""}</p>
+    <p class="note">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${admin && c.total != null ? " · " + money(c.total) : ""}</p>
     ${c.notas ? `<p class="note">${esc(c.notas)}</p>` : ""}
     ${tickets || `<p class="note">Sin tickets.</p>`}`;
   body.querySelectorAll("[data-quitar-ln]").forEach((b) => { b.onclick = () => b.closest(".ln").remove(); });
@@ -1681,7 +1815,8 @@ async function abrirCliente(key) {
       const box = row.parentElement.querySelector(".lns") || row.previousElementSibling;
       const sku = row.querySelector("[data-k=sku]").value.trim();
       if (!sku) return;
-      const html = `<div class="ln"><span>${esc(sku)}</span><input data-k="cantidad" value="${esc(row.querySelector("[data-k=cantidad]").value)}" aria-label="Cantidad"><input data-k="precio" value="${esc(row.querySelector("[data-k=precio]").value)}" aria-label="Precio"><input data-k="descuento_pct" value="${esc(row.querySelector("[data-k=descuento_pct]").value)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(sku)}"><input type="hidden" data-k="clase" value="producto"><input type="hidden" data-k="nombre" value="${esc(sku)}"></div>`;
+      const f = fichaLinea({ sku, clase: "producto" });
+      const html = `<div class="ln">${celdaProd(sku, f.nombre, "producto")}<input data-k="cantidad" value="${esc(row.querySelector("[data-k=cantidad]").value)}" aria-label="Cantidad"><input data-k="precio" value="${esc(row.querySelector("[data-k=precio]").value)}" aria-label="Precio sin IVA"><input data-k="descuento_pct" value="${esc(row.querySelector("[data-k=descuento_pct]").value)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(sku)}"><input type="hidden" data-k="clase" value="producto"><input type="hidden" data-k="nombre" value="${esc(f.nombre)}"></div>`;
       box.insertAdjacentHTML("beforeend", html);
       box.querySelectorAll("[data-quitar-ln]").forEach((q) => { q.onclick = () => q.closest(".ln").remove(); });
     };
@@ -1762,15 +1897,15 @@ async function verConsig() {
   const data = await api("periodo_consignacion", { proveedor_id: sel ? sel.value : "" });
   if (data.error) { out.innerHTML = fail(data); return; }
   window._consig = data;
-  const filas = (data.fact || []).map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.stock)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td><td><input class="qty" data-pedir="${esc(it.sku)}" type="number" min="0" step="1" value="${esc(it.sugerido)}" aria-label="Reponer ${esc(it.sku)}"></td></tr>`).join("");
+  const filas = (data.fact || []).map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.stock)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td><td class="num"><input class="qty" data-pedir="${esc(it.sku)}" type="number" min="0" step="1" value="${esc(it.sugerido)}" aria-label="Reponer ${esc(it.sku)}"></td></tr>`).join("");
   const tot = data.totales || {};
-  out.innerHTML = `<div class="doc-sheet"><h3>CONSIGNACIÓN · ${esc(data.qLabel || "")}</h3>
+  out.innerHTML = `<div class="doc-sheet"><div class="card-title">📋 CONSIGNACIÓN · ${esc(data.qLabel || "")}</div>
     <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.familia || "")}. La pre-factura es lo vendido. El pedido es lo que se pide reponer.</p>
     <label for="consig-buffer">Reposición</label>
     <input class="buffer" id="consig-buffer" type="number" min="0" step="1" value="${esc(pctBuffer(data))}" aria-label="Porcentaje de reposición">
     <span class="note">% sobre lo vendido. 20 es el default. Cambiarlo recalcula las cantidades; después puedes editar cada línea.</span>
-    <table><thead><tr><th>SKU</th><th>Producto</th><th>Stock</th><th>Vendido</th><th>Compra</th><th>A facturar</th><th>Reponer</th></tr></thead><tbody>${filas || `<tr><td colspan="7">Sin ventas</td></tr>`}</tbody></table>
-    <p class="note">Sin IVA ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · con IVA ${money(tot.total)}</p>
+    <table><thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Vendido</th><th class="num">Compra</th><th class="num">A facturar</th><th class="num">Reponer</th></tr></thead><tbody>${filas || `<tr><td colspan="6">Sin ventas</td></tr>`}</tbody></table>
+    ${bloqueTotales(tot.subtotal, tot.iva, tot.total)}
     <p class="note">${esc(data.nota || "")}</p>
     <button class="btn" type="button" id="btn-gen-consig">Generar pedido</button>
     <button class="btn ghost small" type="button" id="btn-pdf-consig">PDF</button></div>`;
@@ -1815,30 +1950,30 @@ async function mostrarDoc(cual) {
 function htmlPedido(snap, orden) {
   const fact = snap.fact || [];
   const restock = snap.restock || snap.items || [];
-  const filas = fact.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td></tr>`).join("");
-  const ped = restock.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.sugerido ?? it.pedir)}</td></tr>`).join("");
+  const filas = fact.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.vendido)}</td><td class="num">${money(it.compra)}</td><td class="num">${money(it.subtotal)}</td></tr>`).join("");
+  const ped = restock.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre)}</td><td class="num">${esc(it.sugerido ?? it.pedir)}</td></tr>`).join("");
   const tot = snap.totales || {};
   const prov = snap.prov || snap.proveedor || {};
   const pct = pctBuffer(snap);
-  return `<div class="doc-sheet"><h3>PÁGINA 1 — PRE-FACTURA</h3>
-    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br># ${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}<br>Lo que el proveedor debe facturar: unidades vendidas al precio de compra.</p>
-    <table><thead><tr><th>SKU</th><th>Producto</th><th>Vendido</th><th>P. unit.</th><th>Subtotal</th></tr></thead><tbody>${filas || `<tr><td colspan="5">Sin ventas</td></tr>`}</tbody></table>
-    <p class="note">SUBTOTAL ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · TOTAL A FACTURAR ${money(tot.total)}</p>
+  return `<div class="doc-sheet"><div class="card-title">🧾 PÁGINA 1 — PRE-FACTURA</div>
+    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br>${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}<br>Lo que el proveedor debe facturar: unidades vendidas al precio de compra.</p>
+    <table><thead><tr><th>Producto</th><th class="num">Vendido</th><th class="num">P. unit.</th><th class="num">Subtotal</th></tr></thead><tbody>${filas || `<tr><td colspan="4">Sin ventas</td></tr>`}</tbody></table>
+    ${bloqueTotales(tot.subtotal, tot.iva, tot.total)}
     <p class="note">${esc(snap.nota || "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.")}</p>
-    <h3>PÁGINA 2 — PEDIDO DE RESTOCK</h3>
+    <div class="card-title">📦 PÁGINA 2 — PEDIDO DE RESTOCK</div>
     <p class="note">Unidades a reponer. Reposición ${esc(pct)}%.</p>
-    <table><thead><tr><th>SKU</th><th>Producto</th><th>Pedir</th></tr></thead><tbody>${ped || `<tr><td colspan="3">Sin reposición</td></tr>`}</tbody></table>
+    <table><thead><tr><th>Producto</th><th class="num">Pedir</th></tr></thead><tbody>${ped || `<tr><td colspan="2">Sin reposición</td></tr>`}</tbody></table>
     <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF (2 páginas)</button></div>`;
 }
 function htmlActa(orden, snap, filas) {
-  const tr = (rows) => rows.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.ped)}</td><td>${esc(it.rec)}</td><td>${esc(it.estado)}</td></tr>`).join("");
+  const tr = (rows) => rows.map((it) => `<tr><td>${celdaProd(it.sku, it.nombre || "")}</td><td class="num">${esc(it.ped)}</td><td class="num">${esc(it.rec)}</td><td>${esc(it.estado)}</td></tr>`).join("");
   const rest = filas.filter((it) => !it.directa);
   const dir = filas.filter((it) => it.directa);
   const prov = (snap.prov || snap.proveedor || {}).nombre || "";
-  return `<div class="doc-sheet"><h3>ACTA DE ENTREGA</h3>
-    <p class="note">Recepción de mercadería · Sunsu Spa · Quito<br># ${esc(orden.numero || "")} · ${esc(prov)} · ${esc(snap.qLabel || "")}</p>
-    ${rest.length ? `<p class="note">RESTOCK / CONSIGNACIÓN · Casa (venta)</p><table><thead><tr><th>SKU</th><th>Pedido</th><th>Recibido</th><th>Estado</th></tr></thead><tbody>${tr(rest)}</tbody></table>` : ""}
-    ${dir.length ? `<p class="note">COMPRA DIRECTA — USO CABINA. No suma al inventario de ventas. Al recibir, entra a Local.</p><table><thead><tr><th>SKU</th><th>Pedido</th><th>Recibido</th><th>Estado</th></tr></thead><tbody>${tr(dir)}</tbody></table>` : ""}
+  return `<div class="doc-sheet"><div class="card-title">📦 ACTA DE ENTREGA</div>
+    <p class="note">Recepción de mercadería · Sunsu Spa · Quito<br>${esc(orden.numero || "")} · ${esc(prov)} · ${esc(snap.qLabel || "")}</p>
+    ${rest.length ? `<p class="note">RESTOCK / CONSIGNACIÓN · Casa (venta)</p><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th>Estado</th></tr></thead><tbody>${tr(rest)}</tbody></table>` : ""}
+    ${dir.length ? `<p class="note">COMPRA DIRECTA — USO CABINA. No suma al inventario de ventas. Al recibir, entra a Local.</p><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th>Estado</th></tr></thead><tbody>${tr(dir)}</tbody></table>` : ""}
     <p class="note">Recibido por — Sunsu Spa &nbsp;&nbsp;&nbsp; Entregado por — ${esc(prov)}</p>
     <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF</button></div>`;
 }
@@ -2283,7 +2418,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022consig"></script>
+<script src="beta-screens.js?v=20261022look"></script>
 <script>draw();</script>
 </body>
 </html>
