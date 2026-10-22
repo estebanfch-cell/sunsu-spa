@@ -61,6 +61,7 @@ extend("whoami", "any", async (_p, ctx, ses) => {
     user: { id: ses.uid, name: ses.name, short: ses.short, role: ses.rol, es_cosmetologa: esCosm },
     modulos: modulosVisibles(ses.rol, matriz),
     ver_costos: acceso(ses.rol, "ver_costos", matriz) === "todos",
+    modo_prueba: !!ses.prueba,
   };
 });
 

@@ -232,9 +232,10 @@ function rotulo(cats: Row[], prods: Row[], sku: string, fallback: string): strin
   return limpio || s(fallback) || cat || sku;
 }
 
-/** TK-YYYYMMDD-####. Un TK-ROW-n o la fila de la hoja no se muestran. */
+/** TK-YYYYMMDD-####. Un TK-ROW-n o la fila de la hoja no se muestran. TEST-TK- se deja igual. */
 export function numeroTicket(r: Row): string {
   const beta = s(r.beta_num);
+  if (/^TEST-TK-\d{8}-\d+$/.test(beta)) return beta;
   if (/^TK-\d{8}-\d+$/.test(beta)) return beta;
   const ymd = ymdUtc(r.timestamp).replace(/-/g, "");
   const toma = (raw: string) => {

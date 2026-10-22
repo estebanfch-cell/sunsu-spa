@@ -2,11 +2,11 @@
 
 La operación diaria sigue en [sunsu.html](../sunsu.html). Esta beta es una app aparte, con menú lateral y un botón **Crear**, sobre Supabase (`heuolwxyxoezkewyufrl`). Después del merge se abre en `https://app.sunsuspa.com/beta.html`.
 
-El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-22-LOOK`) y se registra con `scope: "/beta"`. Las pantallas salen de `beta-screens.js`, el mismo marcado que `sunsu.html`. En escritorio el menú es la barra lateral (logo chico, contenido a todo el ancho). En el teléfono no hay barra lateral: Ventas, Inventario, el + de Crear, Bodega (stock Venta y Cabina) y Compras viven en una barra fija abajo, y ••• abre el resto. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
+El servicio worker sigue en `/sw.js` (caché `sunsu-beta-2026-10-22-PRUEBA`) y se registra con `scope: "/beta"`. Las pantallas salen de `beta-screens.js`, el mismo marcado que `sunsu.html`. En escritorio el menú es la barra lateral (logo chico, contenido a todo el ancho). En el teléfono no hay barra lateral: Ventas, Inventario, el + de Crear, Bodega (stock Venta y Cabina) y Compras viven en una barra fija abajo, y ••• abre el resto. Un script en la raíz puede estrechar el alcance; moverlo a `/beta/sw.js` dejaría `/beta.html` fuera de ese alcance. Si el navegador todavía tiene el worker viejo con alcance `/`, ese script se desregistra y solo borra cachés `sunsu-beta*`. No sirve `beta.html` para otra ruta. `beta.html` hace lo mismo una vez al abrir: desregistra cualquier worker de `sw.js` cuyo scope sea la raíz. El manifest queda en `/beta.html` para que un acceso directo no tome el origen entero. El ícono de iOS va embebido en `beta.html`.
 
 ## Plan
 
-El caché del worker es `sunsu-beta-2026-10-22-LOOK`. `beta-screens.js?v=20261022look`.
+El caché del worker es `sunsu-beta-2026-10-22-PRUEBA`. `beta-screens.js?v=20261022prueba`.
 
 La estructura nueva sigue el esquema de Minecore, con las reglas de Sunsu encima:
 
@@ -60,6 +60,13 @@ supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
 ```
 
 `0011_erp_tx.sql` agrega `tickets.origin` (`sheet` o `beta`) y `beta_num`, deja `sheet_row` nulo en lo creado en la beta, y suelta la fila de hoja de las ventas `ov_save` que ya estaban. `tickets_reimportar` borra solo filas con `sheet_row` no nulo y `origin` distinto de `beta`. `TRUNCATE` no respeta el trigger: no truncar. No hay `import.py` en este repo; el importador externo tiene que usar el mismo filtro. `erp_tx` mete `ov_save`, `ov_anular`, `oc_recibir` y `pago_save` en una sola transacción. La variable del lote es `v_lote` (un plpgsql `lote` es ambiguo con la columna). La siguiente OV sigue al mayor `OV-N`, `TK-N`, `TK-ROW-N` o `ticket_sheet_row`. `TK-ROW-80` da `OV-0081`; en vivo el mayor fue `TK-ROW-1642`, y por eso la primera venta salió `OV-1643`. El id `TK-AAAAMMDD-N` no entra en esa cuenta. No corre `erp_importar_legado()` ni `audit_attach_all()`. Si `erp_tx` todavía no existe, el edge vuelve a varios `app_write`. Un stock negativo que rechaza la función no se reintenta en local. Volver a correr el archivo es idempotente y deja la función ya corregida en la base.
+
+`0016_modo_prueba.sql` hay que aplicarlo antes de encender Modo prueba. Sin la columna `origin`, `app_write` se salta el campo y un alta de prueba quedaría como dato real. El admin lo enciende por sesión, con el botón **Modo prueba** de la barra de arriba (también en el teléfono, donde no está el menú lateral). La barra naranja **MODO PRUEBA** queda en todas las pantallas. Lo que se guarda en ese modo lleva `origin = 'test'` y número `TEST-` (`TEST-TK-`, `TEST-OC-`, `TEST-OV-`), así que no corre `next_ticket_num` ni `next_oc_num`. Fuera del modo esas filas no entran en stock, kardex, dashboard, consumos, comisiones ni rol de pago. Dentro, la pantalla suma el stock real y los deltas de prueba sin escribir `erp_stock`. **Borrar datos de prueba** llama a `prueba_purgar`, que borra solo `origin = 'test'` y deja un log real. `tickets_reimportar` (y `reimportarTickets`) no borra ni pisa `origin` `beta` ni `test`. No hay `import.py` en este repo; un importador externo tiene que usar el mismo filtro.
+
+```bash
+supabase db query --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0016_modo_prueba.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
 
 `0009_erp_permisos.sql` es idempotente y, al final, corre `erp_importar_legado()` y `audit_attach_all()`. El navegador no manda apikey: `verify_jwt` va en false en `supabase/config.toml` y otra vez en el deploy.
 

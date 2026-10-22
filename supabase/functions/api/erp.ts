@@ -2,8 +2,8 @@
 // recepción que postea stock, ticket = orden de venta. La regla de uso
 // (cabina / venta / ambos) se prueba aquí y la repite el trigger en 0009.
 
-import { MemoryDb, type Db } from "./db.ts";
-import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, skuCode, type Row } from "./domain.ts";
+import { enPrueba, MemoryDb, type Db } from "./db.ts";
+import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguienteTestDoc, skuCode, type Row } from "./domain.ts";
 import { asignarTicketBeta } from "./lib.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
@@ -34,6 +34,7 @@ type Step =
 
 function id(): string { return crypto.randomUUID(); }
 async function numeroDoc(db: Db, rpcName: string, rows: Row[], prefix: string): Promise<string> {
+  if (enPrueba(db)) return siguienteTestDoc(rows, prefix);
   try {
     const v = await db.rpc(rpcName, {});
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -41,7 +42,8 @@ async function numeroDoc(db: Db, rpcName: string, rows: Row[], prefix: string): 
   return num(rows, prefix);
 }
 
-function num(rows: Row[], prefix: string): string {
+function num(rows: Row[], prefix: string, prueba = false): string {
+  if (prueba) return siguienteTestDoc(rows, prefix);
   let m = 0;
   const re = new RegExp("^" + prefix + "-(\\d+)$");
   for (const r of rows) {
@@ -370,7 +372,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
   if (op === "rfq_save") {
     const rid = s(body.id) || id();
     const rfqs = await db.all("erp_rfq");
-    const numero = s(body.numero) || (rfqs.find((r) => r.id === rid)?.numero as string) || num(rfqs, "RFQ");
+    const numero = s(body.numero) || (rfqs.find((r) => r.id === rid)?.numero as string) || num(rfqs, "RFQ", enPrueba(db));
     await applyPlan(db, actor, [{ op: "upsert", table: "erp_rfq", match: { id: rid }, row: { numero, fecha: ecuadorParts(now).ymd, estado: s(body.estado) || "borrador", nota: s(body.nota), creado_por: actor } }]);
     return { ok: true, id: rid, numero };
   }
@@ -497,7 +499,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!ins.length) return { error: "Indica qué se recibe" };
     const recId = id();
     const receps = await db.all("erp_recepciones");
-    const numero = num(receps, "REC");
+    const numero = num(receps, "REC", enPrueba(db));
     const steps: Step[] = [{ op: "upsert", table: "erp_recepciones", match: { id: recId }, row: {
       oc_id: o.id, numero, fecha: now.toISOString(), recibido_por: actor, factura_prov: s(body.factura_prov), nota: s(body.nota), anulada: false,
     } }];
@@ -579,7 +581,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!origen || !destino || origen === destino) return { error: "Elige bodega origen y destino" };
     const trs = await db.all("erp_transferencias");
     const tid = s(body.id) || id();
-    const numero = s(trs.find((r) => r.id === tid)?.numero) || num(trs, "TRF");
+    const numero = s(trs.find((r) => r.id === tid)?.numero) || num(trs, "TRF", enPrueba(db));
     const steps: Step[] = [{ op: "upsert", table: "erp_transferencias", match: { id: tid }, row: {
       numero, origen_id: origen, destino_id: destino, estado: op === "trf_enviar" ? "enviada" : "borrador",
       fecha: now.toISOString(), creado_por: actor, nota: s(body.nota),
@@ -618,7 +620,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!bod.get(bid)) return { error: "Bodega no existe" };
     const cts = await db.all("erp_conteos");
     const cid = id();
-    const numero = num(cts, "CNT");
+    const numero = num(cts, "CNT", enPrueba(db));
     const stock = await db.all("erp_stock");
     const steps: Step[] = [{ op: "upsert", table: "erp_conteos", match: { id: cid }, row: { numero, bodega_id: bid, estado: "abierto", fecha: now.toISOString(), creado_por: actor } }];
     for (const p of productos) {
@@ -646,7 +648,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const lns = (await db.all("erp_conteo_lineas")).filter((r) => r.conteo_id === c.id && r.contado != null && r.contado !== "");
     const stock = await db.all("erp_stock");
     const aj = id();
-    const numero = num(await db.all("erp_ajustes"), "AJU");
+    const numero = num(await db.all("erp_ajustes"), "AJU", enPrueba(db));
     const steps: Step[] = [{ op: "upsert", table: "erp_ajustes", match: { id: aj }, row: { numero, bodega_id: c.bodega_id, motivo: "conteo", nota: s(c.numero), creado_por: actor, fecha: now.toISOString() } }];
     for (const ln of lns) {
       const hay = stock.filter((r) => r.producto_id === ln.producto_id && r.bodega_id === c.bodega_id && s(r.lote) === s(ln.lote)).reduce((a, r) => a + n(r.cantidad), 0);
@@ -666,7 +668,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (!motivos.includes(s(body.motivo))) return { error: "Motivo inválido" };
     if (!s(body.nota) && s(body.motivo) === "otro") return { error: "La nota es obligatoria" };
     const aj = id();
-    const numero = num(await db.all("erp_ajustes"), "AJU");
+    const numero = num(await db.all("erp_ajustes"), "AJU", enPrueba(db));
     const delta = n(body.delta);
     await applyPlan(db, actor, [
       { op: "upsert", table: "erp_ajustes", match: { id: aj }, row: { numero, bodega_id: s(body.bodega_id), motivo: s(body.motivo), nota: s(body.nota), creado_por: actor, fecha: now.toISOString() } },
@@ -802,7 +804,7 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   if (!venta) return { error: "Falta la bodega Venta. Aplica 0009_erp_permisos.sql." };
   const ovs = await db.all("erp_ordenes_venta");
   const ovId = id();
-  const numero = elegirNumeroOv(ovs, s(body.numero));
+  const numero = enPrueba(db) ? siguienteTestDoc(ovs, "OV") : elegirNumeroOv(ovs, s(body.numero));
   const ref = ticketRef || numero;
   const steps: Step[] = [];
   let sub = 0;

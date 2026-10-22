@@ -1,5 +1,5 @@
-import type { Db } from "./db.ts";
-import { ecuadorParts, siguienteBetaNum, s, type Row } from "./domain.ts";
+import { enPrueba, type Db } from "./db.ts";
+import { ecuadorParts, siguienteBetaNum, siguienteTestTicket, s, type Row } from "./domain.ts";
 import { normalizarRol } from "./permisos.ts";
 
 export interface Ses {
@@ -9,6 +9,7 @@ export interface Ses {
   short: string;
   color: string;
   token: string;
+  prueba?: boolean;
 }
 
 export interface Ctx {
@@ -50,6 +51,7 @@ export async function loadSes(ctx: Ctx, token: unknown): Promise<Ses | null> {
   return {
     uid: String(u.id), rol, name: String(u.nombre),
     short: s(u.short) || String(u.nombre), color: s(u.color), token: tk,
+    prueba: ses.modo_prueba === true,
   };
 }
 
@@ -67,7 +69,7 @@ export async function kvSet(db: Db, actor: string, key: string, valor: unknown):
 }
 
 export function esTicketBeta(r: Row): boolean {
-  if (s(r.origin) === "beta") return true;
+  if (s(r.origin) === "beta" || s(r.origin) === "test") return true;
   const o = r.orig;
   if (o && typeof o === "object") {
     const orig = o as Row;
@@ -76,10 +78,14 @@ export function esTicketBeta(r: Row): boolean {
   return false;
 }
 
-/** Número de ticket de la beta. sheet_row queda nulo para no chocar con la hoja. */
-export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "beta"; sheet_row: null; beta_num: string }> {
+/** Número de ticket de la beta. sheet_row queda nulo para no chocar con la hoja. En modo prueba la serie es TEST-TK- y no llama next_ticket_num. */
+export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "beta" | "test"; sheet_row: null; beta_num: string }> {
   const ec = ecuadorParts(now);
   const ymd = ec.ymd.replace(/-/g, "");
+  if (enPrueba(db)) {
+    const rows = await db.all("tickets");
+    return { origin: "test", sheet_row: null, beta_num: siguienteTestTicket(rows, ec.ymd) };
+  }
   try {
     const raw = await db.rpc("next_ticket_num", {});
     const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
@@ -92,8 +98,9 @@ export async function asignarTicketBeta(db: Db, now: Date): Promise<{ origin: "b
 }
 
 /**
- * Espejo de tickets_reimportar: borra solo filas con sheet_row y deja origin beta.
- * La reimportación real corre en SQL; TRUNCATE no pasa por el trigger.
+ * Espejo de tickets_reimportar: borra solo filas con sheet_row de la hoja.
+ * origin beta y origin test se conservan. No hay import.py en este repo;
+ * la reimportación real corre en SQL. TRUNCATE no pasa por el trigger.
  */
 export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Promise<{ borradas: number; escritas: number; conservadas: number }> {
   const prev = await db.all("tickets");

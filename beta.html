@@ -166,6 +166,21 @@
     background: var(--gold-l); border: 1px solid var(--gold-m); color: var(--navy-d);
     border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.75rem; font-weight: 600;
   }
+  .top-stack { position: sticky; top: 0; z-index: 12; }
+  .top-stack .top { position: relative; top: auto; }
+  .modo-prueba {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    background: #C2410C; color: #fff; padding: 8px 12px;
+  }
+  .modo-prueba[hidden] { display: none !important; }
+  .modo-prueba strong { font-size: 0.82rem; letter-spacing: 0.12em; font-weight: 900; }
+  .modo-prueba .modo-note { color: #fff; font-weight: 600; font-size: 0.72rem; letter-spacing: 0; display: block; }
+  .modo-prueba .modo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .modo-prueba .btn { background: #fff; color: #C2410C; border-radius: 10px; padding: 8px 12px; font-size: 0.75rem; min-height: 36px; }
+  .btn-prueba {
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.55);
+    border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.72rem; white-space: nowrap;
+  }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; margin-bottom: 11px; }
   .card { background: var(--white); border-radius: 16px; box-shadow: var(--shadow-sm); padding: 16px; margin-bottom: 11px; border: none; }
   .card .k { color: var(--gray); font-size: 0.63rem; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -492,7 +507,7 @@ const MENU = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
 ];
-const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false };
+const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false };
 var IVA_DASH = 0.15;
 let grupoAbierto = "";
 const AVISO_DS = '<span class="aviso-ds">⚠️ backend DS</span>';
@@ -625,8 +640,13 @@ function previewApi(accion, body) {
   body = body || {};
   const modulos = MENU.map(([modulo]) => ({ modulo, acceso: "todos" }));
   if (accion === "whoami" || accion === "login") {
-    return { ok: true, token: "preview", ver_costos: true, modulos, user: { name: "Emilia", short: "Emi", role: "admin" } };
+    return { ok: true, token: "preview", ver_costos: true, modo_prueba: !!state.prueba, modulos, user: { name: "Emilia", short: "Emi", role: "admin" } };
   }
+  if (accion === "modo_prueba") {
+    state.prueba = !!body.on;
+    return { ok: true, modo_prueba: !!body.on };
+  }
+  if (accion === "prueba_borrar") return { ok: true, borradas: 0 };
   if (accion === "home") {
     return {
       ok: true, ocAbiertas: 2, avisos: [{}],
@@ -745,6 +765,7 @@ function applySession(data) {
   const rol = state.user && state.user.role;
   state.admin = rol === "admin" || rol === "super_admin";
   state.mega = rol === "super_admin";
+  state.prueba = !!data.modo_prueba;
 }
 
 function parseRoute() {
@@ -896,13 +917,26 @@ function paintShell(title) {
       </aside>
       <div class="fly" id="fly" hidden></div>
       <section class="main">
-        <header class="top">
-          <button class="logo-hit" type="button" data-go="#/m/inicio" aria-label="Dashboard">
-            <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
-          </button>
-          <h1>${esc(title || "Dashboard")}</h1>
-          <button class="btn ghost small salir top-salir" type="button">Salir</button>
-        </header>
+        <div class="top-stack">
+          <header class="top">
+            <button class="logo-hit" type="button" data-go="#/m/inicio" aria-label="Dashboard">
+              <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
+            </button>
+            <h1>${esc(title || "Dashboard")}</h1>
+            ${state.admin && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
+            <button class="btn ghost small salir top-salir" type="button">Salir</button>
+          </header>
+          <div class="modo-prueba" id="modo-bar" ${state.prueba ? "" : "hidden"}>
+            <div>
+              <strong>MODO PRUEBA</strong>
+              <span class="modo-note">Los cambios quedan en el juego de prueba. El stock y los números reales no se mueven.</span>
+            </div>
+            <div class="modo-actions">
+              ${state.admin ? `<button class="btn small" type="button" id="btn-purga">Borrar datos de prueba</button>` : ""}
+              <button class="btn small" type="button" id="btn-prueba-off">Salir de prueba</button>
+            </div>
+          </div>
+        </div>
         <div class="content" id="main"></div>
       </section>
     </div>
@@ -937,6 +971,18 @@ function paintShell(title) {
       go("#/doc/ov");
     };
   });
+  const btnPrueba = document.getElementById("btn-prueba");
+  if (btnPrueba) btnPrueba.onclick = () => alternarPrueba(true);
+  const btnOff = document.getElementById("btn-prueba-off");
+  if (btnOff) btnOff.onclick = () => alternarPrueba(false);
+  const btnPurga = document.getElementById("btn-purga");
+  if (btnPurga) btnPurga.onclick = async () => {
+    if (!window.confirm("¿Borrar todos los datos de prueba? Los datos reales se quedan.")) return;
+    const data = await api("prueba_borrar");
+    if (!data || data.error) { toast((data && data.error) || "No se pudo borrar"); return; }
+    toast("Datos de prueba borrados (" + (data.borradas || 0) + ")");
+    draw();
+  };
   root.querySelectorAll(".logo-hit").forEach((b) => {
     b.onclick = () => {
       grupoAbierto = "";
@@ -953,6 +999,12 @@ function paintShell(title) {
   pintarFly();
 }
 
+async function alternarPrueba(on) {
+  const data = await api("modo_prueba", { on: !!on });
+  if (!data || data.error) { toast((data && data.error) || "No se pudo cambiar el modo prueba"); return; }
+  state.prueba = !!data.modo_prueba;
+  draw();
+}
 function pintarFly() {
   const shell = document.getElementById("shell");
   const fly = document.getElementById("fly");
@@ -2418,7 +2470,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022look"></script>
+<script src="beta-screens.js?v=20261022prueba"></script>
 <script>draw();</script>
 </body>
 </html>
