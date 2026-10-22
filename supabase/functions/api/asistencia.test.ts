@@ -230,7 +230,7 @@ describe("asistencia", () => {
     assert.equal(seis.diasGanados, 15 * 6 + 1);
   });
 
-  it("gerente aprueba ajenas, no las suyas; rechazo pide motivo; marca manual y cancelación quedan en auditoría", async () => {
+  it("solo admin aprueba; gerente no ve ni aprueba ajenas; rechazo pide motivo; marca manual y cancelación quedan en auditoría", async () => {
     const db = new MemoryDb();
     db.tables.set("sesiones", [
       { token: "t-ger", uid: "ger", rol: "gerente", exp: "2099-01-01T00:00:00.000Z" },
@@ -256,10 +256,17 @@ describe("asistencia", () => {
     const pa = await h("asis_permiso_solicitar", { token: "t-and", tipo: "VACACIONES", desde: "2026-11-02", hasta: "2026-11-04" });
     assert.equal(pa.ok, true);
     const pg = await h("asis_permiso_solicitar", { token: "t-ger", tipo: "PERMISO", desde: "2026-10-22", horas: 2, motivo: "médico" });
-    assert.match(String((await h("asis_permiso_resolver", { token: "t-ger", id: pg.id, estado: "APROBADO" })).error), /propia/);
-    assert.match(String((await h("asis_permiso_resolver", { token: "t-and", id: pg.id, estado: "APROBADO" })).error), /gerente o admin/);
-    assert.match(String((await h("asis_permiso_resolver", { token: "t-ger", id: pa.id, estado: "RECHAZADO" })).error), /motivo/);
-    assert.equal((await h("asis_permiso_resolver", { token: "t-ger", id: pa.id, estado: "APROBADO" })).estado, "APROBADO");
+    assert.match(String((await h("asis_permiso_resolver", { token: "t-ger", id: pg.id, estado: "APROBADO" })).error), /Solo admin/);
+    assert.match(String((await h("asis_permiso_resolver", { token: "t-ger", id: pa.id, estado: "APROBADO" })).error), /Solo admin/);
+    assert.match(String((await h("asis_permiso_resolver", { token: "t-and", id: pg.id, estado: "APROBADO" })).error), /Solo admin/);
+    const hoyGer = await handle("asis_hoy", { token: "t-ger" }, ctx) as { permisos: { empleada: string }[]; pendientes: number; puedeAprobar: boolean };
+    assert.equal(hoyGer.permisos.every((r) => r.empleada === "Gina"), true);
+    assert.equal(hoyGer.pendientes, 0);
+    assert.equal(hoyGer.puedeAprobar, false);
+    const vacGer = await handle("asis_vacaciones", { token: "t-ger", nombre: "Andrea" }, ctx) as { personas: { nombre: string }[] };
+    assert.deepEqual(vacGer.personas.map((x) => x.nombre), ["Gina"]);
+    assert.match(String((await h("asis_permiso_resolver", { token: "t-adm", id: pa.id, estado: "RECHAZADO" })).error), /motivo/);
+    assert.equal((await h("asis_permiso_resolver", { token: "t-adm", id: pa.id, estado: "APROBADO" })).estado, "APROBADO");
     assert.match(String((await h("asis_permiso_resolver", { token: "t-adm", id: pa.id, estado: "RECHAZADO", motivo: "x" })).error), /ya está/);
     const hoyAnd = await handle("asis_hoy", { token: "t-and" }, ctx) as { permisos: { empleada: string }[]; vacaciones: { diasTomados: number } };
     assert.equal(hoyAnd.permisos.every((r) => r.empleada === "Andrea"), true);
@@ -267,7 +274,7 @@ describe("asistencia", () => {
     const vacAnd = await handle("asis_vacaciones", { token: "t-and", nombre: "Gina" }, ctx) as { personas: { nombre: string }[] };
     assert.deepEqual(vacAnd.personas.map((x) => x.nombre), ["Andrea"]);
     assert.match(String((await h("asis_permiso_cancelar", { token: "t-and", id: pg.id })).error), /permiso/);
-    assert.equal((await h("asis_permiso_cancelar", { token: "t-ger", id: pg.id })).ok, true);
+    assert.equal((await h("asis_permiso_cancelar", { token: "t-ger", id: pg.id })).ok, true); // la suya
     assert.match(String((await h("asis_marca_manual", { token: "t-ger", nombre: "Andrea", tipo: "entrada", ts: "2026-10-21T09:00:00-05:00", motivo: "olvidó" })).error), /admin/);
     assert.match(String((await h("asis_marca_manual", { token: "t-adm", nombre: "Andrea", tipo: "entrada", ts: "2026-10-21T09:00:00-05:00" })).error), /motivo/);
     assert.equal((await h("asis_marca_manual", { token: "t-adm", nombre: "Andrea", tipo: "entrada", ts: "2026-10-21T09:00:00-05:00", motivo: "olvidó marcar" })).ok, true);

@@ -3,7 +3,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, s, type Row } from "./domain.ts";
-import { acceso, esAdmin, esPropio, matrizDe, normalizarRol } from "./permisos.ts";
+import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
   diasDeVacacion, saldoVacaciones, validarSolicitudVacacion,
   calcularDia, calcularNomina, configDesde, evaluarUbicacion, instanteEcuador, validarSecuencia,
@@ -16,9 +16,9 @@ function ymdDeTs(ts: string): string {
   return ecuadorParts(new Date(ts)).ymd;
 }
 
-/** gerente aprueba solicitudes de otras; no ve marcas, horas ni dinero ajenos. */
+/** Solo admin y super_admin aprueban. gerente ve solo lo suyo, como el resto. */
 function puedeAprobar(rol: string): boolean {
-  return esAdmin(rol) || normalizarRol(rol) === "gerente";
+  return esAdmin(rol);
 }
 
 async function empleadaDe(ctx: Ctx, nombre: string): Promise<Row | undefined> {
@@ -185,7 +185,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   const marcajes = marcajesDe(crudos, nombre);
   const dia = calcularDia(fecha, marcajes, cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   const permisos = (await ctx.db.all("permisos"))
-    .filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses) || (puedeAprobar(ses.rol) && /pend/i.test(s(r.estado))))
+    .filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses))
     .map(permisoPub);
   let vacaciones: unknown = null;
   try { vacaciones = await saldoDe(ctx, nombre); } catch { vacaciones = null; }
@@ -195,7 +195,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
       .filter((r) => esAdmin(ses.rol) || esPropio(s(r.nombre), ses))
       .slice(-8).reverse();
   } catch { auditoria = []; }
-  const pendientes = puedeAprobar(ses.rol) ? permisos.filter((r) => /pend/i.test(s(r.estado)) && (esAdmin(ses.rol) || !esPropio(s(r.empleada), ses))).length : 0;
+  const pendientes = puedeAprobar(ses.rol) ? permisos.filter((r) => /pend/i.test(s(r.estado))).length : 0;
   let equipo: R[] | undefined;
   let feriados: R[] | undefined;
   if (esAdmin(ses.rol)) {
@@ -312,13 +312,12 @@ extend("asis_vacaciones", "any", async (p, ctx, ses) => {
 });
 
 extend("asis_permiso_resolver", "any", async (p, ctx, ses) => {
-  if (!puedeAprobar(ses.rol)) return { error: "Solo gerente o admin aprueba permisos y vacaciones" };
+  if (!puedeAprobar(ses.rol)) return { error: "Solo admin aprueba permisos y vacaciones" };
   const estado = /rechaz/i.test(s(p.estado)) ? "RECHAZADO" : "APROBADO";
   const rows = await ctx.db.all("permisos");
   const row = rows.find((r) => s(r.id_1) === s(p.id) || String(r.sheet_row) === s(p.row));
   if (!row) return { error: "Permiso no encontrado" };
   if (!/pend/i.test(s(row.estado))) return { error: `Esta solicitud ya está ${s(row.estado).toLowerCase()}.` };
-  if (!esAdmin(ses.rol) && esPropio(s(row.empleada), ses)) return { error: "No puedes aprobar tu propia solicitud." };
   if (estado === "RECHAZADO" && !s(p.motivo)) return { error: "El rechazo necesita un motivo." };
   if (estado === "APROBADO" && /vacac/i.test(s(row.tipo))) {
     const sal = await saldoDe(ctx, s(row.empleada));

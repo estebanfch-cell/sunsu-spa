@@ -68,7 +68,7 @@ Un permiso es de día completo si es vacación, si las horas cubren la jornada, 
 
 SQL: `docs/supabase/pending/0014_asistencia_v2.sql` (idempotente, ya aplicado).
 
-- **Permisos y vacaciones.** La empleada solicita; **gerente, admin o super_admin** aprueba o rechaza. El gerente no aprueba lo suyo. Rechazar pide motivo. Solo se resuelve lo `PENDIENTE`. La solicitante cancela lo suyo pendiente (`CANCELADO`). Queda `resuelto_por`, `resuelto_ts`, `motivo_resolucion` y una fila de auditoría por solicitud, aprobación, rechazo y cancelación.
+- **Permisos y vacaciones.** La empleada solicita; solo **admin o super_admin** aprueba o rechaza. gerente ve y maneja solo lo suyo, como el resto. Los días de vacación son calendario. Rechazar pide motivo. Solo se resuelve lo `PENDIENTE`. La solicitante cancela lo suyo pendiente (`CANCELADO`). Queda `resuelto_por`, `resuelto_ts`, `motivo_resolucion` y una fila de auditoría por solicitud, aprobación, rechazo y cancelación.
 - **Saldo de vacaciones** (`asis_vacaciones`, también en `asis_hoy.vacaciones`): 15 días por año completo desde `rrhh_empleadas.fecha_ingreso` (+1 por año desde el 6.º, máx. 15 extra). Antes del primer año completo no se pueden pedir. No se puede pedir más que lo disponible menos lo pendiente. Provisión mensual = sueldo/24, valor día = sueldo/30. El dinero solo lo ve la dueña o admin. `savePermiso` (ruta antigua) aplica la misma regla.
 - **Marca olvidada** (`asis_marca_manual`): solo admin, motivo obligatorio, `origen = 'manual'`, `creado_por`. No se acepta una hora futura.
 - **Asistencia del día** (`asis_dia`): solo admin. Por persona: marcas, estado (falta, permiso, Jibble, adentro, cerrada), horas, almuerzo, atraso.
