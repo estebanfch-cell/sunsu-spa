@@ -1,0 +1,499 @@
+// Clientes, edición de tickets, consumos, quincena de consignación y saldo de gift card.
+// El saldo vive en gift_cards.notas (SALDO:n), en orig.usos y, si 0015 ya corrió, en saldo.
+// La quincena de proveedores es 1–15 y 16–fin. No es el ciclo de comisiones 26–25.
+
+import type { Db } from "./db.ts";
+import {
+  FACIALES_2, FACIALES_3, IVA, PROD_COLS, ecuadorParts, facialSku, n, normCedula, normNombre,
+  prodCol, productQtys, round2, s, skuCode, ymdUtc, type Row,
+} from "./domain.ts";
+import { logAccion } from "./lib.ts";
+import { esPropio, type SesLite } from "./permisos.ts";
+
+export const BUFFER_RESTOCK = 0.2;
+export const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+export interface Quincena {
+  q: 1 | 2;
+  y: number;
+  m: number;
+  ini: string;
+  fin: string;
+  qLabel: string;
+}
+
+export function quincenaDe(y: number, m: number, d: number, forzar?: number): Quincena {
+  const q: 1 | 2 = forzar === 1 || forzar === 2 ? forzar : (d <= 15 ? 1 : 2);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, "0");
+  const ini = q === 1 ? `${y}-${mm}-01` : `${y}-${mm}-16`;
+  const fin = q === 1 ? `${y}-${mm}-15` : `${y}-${mm}-${String(last).padStart(2, "0")}`;
+  const mes = MESES[m - 1] || "";
+  const qLabel = (q === 1 ? "1-15 " : "16-fin ") + mes + " " + y;
+  return { q, y, m, ini, fin, qLabel };
+}
+
+export function quincenaActual(now: Date, forzar?: number): Quincena {
+  const ec = ecuadorParts(now);
+  return quincenaDe(ec.y, ec.m, ec.d, forzar);
+}
+
+export function familiaDe(nombre: string, familia?: string): string {
+  const f = s(familia).toUpperCase();
+  if (f) return f.replace(/[^A-Z]/g, "");
+  const n = nombre.toLowerCase();
+  if (n.includes("hebetronic") || n.includes("anua") || n.includes("common")) return "HT";
+  if (n.includes("eyenlip")) return "AS";
+  if (n.includes("esthe")) return "ML";
+  if (n.includes("aphlora")) return "PH";
+  if (n.includes("rire") || n.includes("holika")) return "JN";
+  return "";
+}
+
+export function parseGcCanje(colR: unknown): { codigo: string; aplica: number | null } | null {
+  const t = s(colR).trim();
+  if (!/^SI\b/i.test(t)) return null;
+  const aplicaM = t.match(/aplica\s*\$?\s*([\d.]+)/i);
+  const codigoM = t.match(/SI\s*,\s*([^,]+)/i);
+  return { codigo: codigoM ? codigoM[1].trim() : "", aplica: aplicaM ? round2(Number(aplicaM[1])) : null };
+}
+
+export function montoGcAplicado(colR: unknown): number {
+  return parseGcCanje(colR)?.aplica || 0;
+}
+
+export function saldoGift(row: Row): number {
+  if (row.usado === true || row.usado === "true" || row.usado === "SI") return 0;
+  if (row.saldo != null && s(row.saldo) !== "" && Number.isFinite(Number(row.saldo))) return round2(n(row.saldo));
+  const notas = s(row.notas);
+  const m = notas.match(/SALDO:([\d.]+)/);
+  if (m) return round2(Number(m[1]));
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : null;
+  if (orig && orig.saldo != null && s(orig.saldo) !== "") return round2(n(orig.saldo));
+  const valor = s(row.valor);
+  const v = parseFloat(valor.replace(",", "."));
+  if (Number.isFinite(v) && v > 0 && !/[a-z]/i.test(valor)) return round2(v);
+  const ape = parseFloat(s(row.apellido_comprador));
+  if (Number.isFinite(ape) && ape > 0) return round2(ape);
+  return 0;
+}
+
+function notasConSaldo(prev: string, saldo: number): string {
+  const limpio = prev.replace(/(?:^|\s*\|\s*)SALDO:[\d.]+/g, "").replace(/^\s*\|\s*/, "").trim();
+  const tag = "SALDO:" + saldo.toFixed(2);
+  return limpio ? tag + " | " + limpio : tag;
+}
+
+export async function aplicarGiftCard(db: Db, actor: string, p: {
+  codigo: string; aplica: number | null; ticket: string; usadoPor: string; facialPrecio: number; now?: Date;
+}): Promise<Row> {
+  const codigo = s(p.codigo).trim();
+  if (!codigo) return { error: "Falta el código de la gift card" };
+  const rows = await db.all("gift_cards");
+  const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r) > 0)
+    || rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase());
+  if (!row) return { error: "Gift card no encontrada" };
+  const logs = await db.all("log_acciones");
+  const ya = logs.find((r) => s(r.accion) === "GIFT CARD" && s(r.detalle).includes("ticket=" + p.ticket) && s(r.detalle).includes("codigo=" + codigo));
+  if (ya) {
+    const saldo = saldoGift(row);
+    const aplicado = n((s(ya.detalle).match(/monto=([\d.]+)/) || [])[1]);
+    const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
+    return { ok: true, codigo, aplicado, saldo, facialCobro, ya: true };
+  }
+  const saldo = saldoGift(row);
+  if (!(saldo > 0)) return { error: "Esa gift card no tiene saldo" };
+  let aplicado = p.aplica == null ? saldo : round2(p.aplica);
+  if (p.facialPrecio > 0) aplicado = Math.min(aplicado, round2(p.facialPrecio));
+  aplicado = Math.min(aplicado, saldo);
+  if (!(aplicado > 0)) return { error: "Indica cuánto de la gift card se aplica" };
+  if (p.aplica != null && p.aplica - saldo > 0.009 && !(p.facialPrecio > 0 && p.aplica > p.facialPrecio)) {
+    return { error: "La gift card no alcanza. Saldo $" + saldo.toFixed(2) };
+  }
+  const nuevo = round2(saldo - aplicado);
+  const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
+  const orig0 = row.orig && typeof row.orig === "object" ? { ...(row.orig as Row) } : {};
+  const usos = Array.isArray(orig0.usos) ? [...(orig0.usos as Row[])] : [];
+  const ec = ecuadorParts(p.now || new Date());
+  usos.push({ ticket: p.ticket, monto: aplicado, saldo: nuevo, actor, fecha: ec.isoWall });
+  orig0.usos = usos;
+  orig0.saldo = nuevo;
+  const patch: Row = {
+    notas: notasConSaldo(s(row.notas), nuevo),
+    saldo: nuevo,
+    orig: orig0,
+  };
+  if (nuevo <= 0.009) {
+    patch.usado = true;
+    patch.fecha_uso = ec.ymd;
+    patch.usado_por = s(p.usadoPor);
+    patch.saldo = 0;
+  } else {
+    patch.usado = false;
+  }
+  await db.write(actor, "gift_cards", "update", { sheet_row: row.sheet_row }, patch);
+  const det = `ticket=${p.ticket} codigo=${codigo} monto=${aplicado.toFixed(2)} saldo=${nuevo.toFixed(2)} facial=${facialCobro.toFixed(2)}`;
+  await logAccion(db, actor, "GIFT CARD", det);
+  try {
+    await db.write(actor, "gift_card_movimientos", "insert", {}, {
+      codigo, ticket_ref: p.ticket, monto: aplicado, saldo: nuevo, actor, nota: det, fecha: ec.isoWall,
+    });
+  } catch { /* 0015 todavía no aplicado: el saldo quedó en orig.usos y en notas */ }
+  return { ok: true, codigo, aplicado, saldo: nuevo <= 0.009 ? 0 : nuevo, facialCobro };
+}
+
+function bUsado(r: Row): boolean {
+  return r.usado === true || r.usado === "true" || r.usado === "SI";
+}
+
+export function claveCliente(r: Row): string {
+  const ced = normCedula(r.id_3);
+  if (ced) return "c:" + ced;
+  const nom = normNombre(s(r.nombre) + " " + s(r.apellido));
+  return nom ? "n:" + nom : "t:" + s(r.beta_num || r.sheet_row || r.id);
+}
+
+export interface LineaVenta {
+  clase: string;
+  sku: string;
+  nombre: string;
+  cantidad: number;
+  precio: number;
+  descuento_pct: number;
+  costo?: number;
+}
+
+export function lineasTicket(t: Row, cats: Row[], prods: Row[]): LineaVenta[] {
+  const out: LineaVenta[] = [];
+  const fac = s(t.facial_hecho);
+  if (fac && fac !== "-" && fac !== "—") {
+    const sku = facialSku(fac) || "";
+    out.push({ clase: "servicio", sku, nombre: fac, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+  }
+  for (const pack of [s(t.compra_pack_3), s(t.compra_pack_6)]) {
+    if (!pack || pack.toLowerCase() === "false") continue;
+    const sku = facialSku(pack) || skuCode(pack);
+    out.push({ clase: "paquete", sku, nombre: pack, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+  }
+  const ex = s(t.servicios_adicionales);
+  if (ex) {
+    for (const pieza of ex.split("|")) {
+      const p = pieza.trim();
+      if (!p) continue;
+      const sku = facialSku(p) || "";
+      out.push({ clase: "extra", sku, nombre: p, cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+    }
+  }
+  for (const pr of productQtys(t)) {
+    out.push({
+      clase: "producto", sku: pr.sku, nombre: nombreDe(cats, prods, pr.sku), cantidad: pr.qty,
+      precio: precioDe(cats, prods, pr.sku), descuento_pct: 0, costo: costoDe(prods, pr.sku),
+    });
+  }
+  return out;
+}
+
+function precioDe(cats: Row[], prods: Row[], sku: string): number {
+  const c = skuCode(sku);
+  if (!c) return 0;
+  const cat = cats.find((r) => skuCode(r.sku) === c);
+  if (cat && n(cat.subtotal) > 0) return round2(n(cat.subtotal));
+  if (cat && n(cat.total_con_iva) > 0) return round2(n(cat.total_con_iva) / IVA);
+  const p = prods.find((r) => skuCode(r.sku) === c);
+  if (p && n(p.precio_venta) > 0) return round2(n(p.precio_venta) / IVA);
+  return 0;
+}
+function costoDe(prods: Row[], sku: string): number {
+  const p = prods.find((r) => skuCode(r.sku) === skuCode(sku));
+  return p ? n(p.costo_promedio) : 0;
+}
+function nombreDe(cats: Row[], prods: Row[], sku: string): string {
+  const c = skuCode(sku);
+  const cat = cats.find((r) => skuCode(r.sku) === c);
+  if (cat && s(cat.producto_servicio || cat.nombre)) return s(cat.producto_servicio || cat.nombre);
+  const p = prods.find((r) => skuCode(r.sku) === c);
+  return s(p?.nombre) || sku;
+}
+
+export function recalcular(lineas: LineaVenta[], descuento: number): {
+  lineas: LineaVenta[]; subtotal: number; iva: number; total: number;
+  comProductos: number; comFacial: number;
+} {
+  const out = lineas.filter((ln) => n(ln.cantidad) > 0 || ln.clase === "servicio").map((ln) => ({
+    clase: s(ln.clase) || "producto",
+    sku: s(ln.sku),
+    nombre: s(ln.nombre) || s(ln.sku),
+    cantidad: n(ln.cantidad) || (ln.clase === "servicio" ? 1 : 0),
+    precio: round2(n(ln.precio)),
+    descuento_pct: n(ln.descuento_pct),
+    costo: n(ln.costo),
+  })).filter((ln) => ln.cantidad > 0);
+  let sub = 0;
+  let comP = 0;
+  let comF = 0;
+  for (const ln of out) {
+    const neto = round2(ln.cantidad * ln.precio * (1 - (ln.descuento_pct || 0) / 100));
+    sub += neto;
+    if (ln.clase === "producto") comP += Math.max(0, neto - ln.costo * ln.cantidad) * 0.3;
+    if (ln.clase === "servicio") {
+      const sku = facialSku(ln.sku) || facialSku(ln.nombre) || "";
+      const tarifa = FACIALES_2.includes(sku) ? 2 : FACIALES_3.includes(sku) ? 3 : 0;
+      const base = ln.precio > 0 ? ln.precio * ln.cantidad : 0;
+      const ratio = base > 0 ? Math.min(1, neto / base) : (neto > 0 ? 1 : 0);
+      comF += tarifa * ratio * ln.cantidad;
+    }
+  }
+  sub = round2(Math.max(0, sub - (n(descuento) || 0)));
+  const iva = round2(sub * 0.15);
+  return { lineas: out, subtotal: sub, iva, total: round2(sub + iva), comProductos: round2(comP), comFacial: round2(comF) };
+}
+
+export function mapaQty(lineas: LineaVenta[], clase: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const ln of lineas) {
+    if (ln.clase !== clase) continue;
+    const k = skuCode(ln.sku) || s(ln.nombre);
+    if (!k) continue;
+    m.set(k, (m.get(k) || 0) + n(ln.cantidad));
+  }
+  return m;
+}
+
+export async function recetaDe(db: Db, sku: string, cant: number): Promise<{ sku: string; producto_id: string; qty: number }[]> {
+  if (!(cant > 0)) return [];
+  const servicios = await db.all("erp_servicios");
+  const want = skuCode(facialSku(sku) || sku);
+  const serv = servicios.find((r) => skuCode(s(r.codigo)) === want || skuCode(facialSku(s(r.codigo)) || "") === want);
+  if (!serv) return [];
+  const receta = (await db.all("erp_receta")).filter((r) => r.servicio_id === serv.id);
+  const prods = await db.all("erp_productos");
+  return receta.map((rc) => {
+    const p = prods.find((r) => r.id === rc.producto_id);
+    return { sku: s(p?.sku), producto_id: String(rc.producto_id), qty: n(rc.cantidad) * cant };
+  }).filter((r) => r.qty > 0);
+}
+
+export function patchProductos(lineas: LineaVenta[]): Row {
+  const patch: Row = {};
+  for (const c of PROD_COLS) patch[c.col] = c.typ === "numeric" ? 0 : "";
+  for (const ln of lineas) {
+    if (ln.clase !== "producto") continue;
+    const col = prodCol(ln.sku);
+    if (!col) continue;
+    patch[col.col] = col.typ === "numeric" ? ln.cantidad : String(ln.cantidad);
+  }
+  return patch;
+}
+
+export function textoFacial(lineas: LineaVenta[]): string {
+  return lineas.filter((ln) => ln.clase === "servicio").map((ln) => (s(ln.sku) && s(ln.nombre).includes(s(ln.sku)) ? s(ln.nombre) : (s(ln.sku) + " " + s(ln.nombre)).trim())).filter(Boolean).join(" | ");
+}
+export function textoPack(lineas: LineaVenta[], cual: "3" | "6"): string {
+  const packs = lineas.filter((ln) => ln.clase === "paquete");
+  const hit = cual === "6"
+    ? packs.find((ln) => /x\s*6|pack\s*6|6 ses/i.test(ln.nombre)) || packs[1]
+    : packs.find((ln) => !/x\s*6|pack\s*6|6 ses/i.test(ln.nombre)) || packs[0];
+  if (!hit) return "";
+  return (s(hit.sku) + " " + s(hit.nombre)).trim();
+}
+export function textoExtras(lineas: LineaVenta[]): string {
+  return lineas.filter((ln) => ln.clase === "extra").map((ln) => (s(ln.sku) + " " + s(ln.nombre)).trim()).join(" | ");
+}
+
+export function kardexPrevio(row: Row, lineasViejas: LineaVenta[]): Record<string, number> {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  const posted = orig.kardex && typeof orig.kardex === "object" ? orig.kardex as Row : null;
+  if (posted) {
+    const m: Record<string, number> = {};
+    for (const [k, v] of Object.entries(posted)) m[k] = n(v);
+    return m;
+  }
+  const deHoja = s(row.origin) !== "beta" || s(orig.fuente) === "ov_save";
+  if (!deHoja) return {};
+  const m: Record<string, number> = {};
+  for (const ln of lineasViejas) {
+    if (ln.clase !== "producto") continue;
+    const k = skuCode(ln.sku);
+    if (k) m["venta:" + k] = (m["venta:" + k] || 0) + ln.cantidad;
+  }
+  return m;
+}
+
+export async function clientesResumen(db: Db, ses: SesLite, admin: boolean): Promise<Row> {
+  let rows = await db.all("tickets");
+  if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
+  const map = new Map<string, Row>();
+  for (const r of rows) {
+    if (!s(r.nombre) && !s(r.id_3)) continue;
+    const key = claveCliente(r);
+    const fecha = ymdUtc(r.timestamp);
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key, cedula: s(r.id_3), nombre: (s(r.nombre) + " " + s(r.apellido)).trim(),
+        visitas: 0, ultima: fecha, total: 0, cosmetologa: s(r.atendido_por),
+      };
+      map.set(key, g);
+    }
+    g.visitas = n(g.visitas) + 1;
+    if (fecha >= s(g.ultima)) {
+      g.ultima = fecha;
+      g.cosmetologa = s(r.atendido_por);
+      if (s(r.nombre)) g.nombre = (s(r.nombre) + " " + s(r.apellido)).trim();
+    }
+    g.total = round2(n(g.total) + n(r.estimado));
+  }
+  const clientes = [...map.values()].sort((a, b) => s(b.ultima).localeCompare(s(a.ultima)) || s(a.nombre).localeCompare(s(b.nombre)));
+  if (!admin) {
+    for (const c of clientes) delete c.total;
+  }
+  return { ok: true, admin, clientes };
+}
+
+export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string): Promise<Row> {
+  let rows = (await db.all("tickets")).filter((r) => claveCliente(r) === key);
+  if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
+  if (!rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
+  const cats = await db.all("catalogo").catch(() => [] as Row[]);
+  const prods = await db.all("erp_productos").catch(() => [] as Row[]);
+  const regs = await db.all("clientas_registro").catch(() => [] as Row[]);
+  const primero = [...rows].sort((a, b) => ymdUtc(b.timestamp).localeCompare(ymdUtc(a.timestamp)))[0];
+  const ced = normCedula(primero.id_3);
+  const ficha = regs.find((r) => normCedula(r.cedula) === ced) || {};
+  let total = 0;
+  const tickets = rows.map((r) => {
+    total += n(r.estimado);
+    const lineas = lineasTicket(r, cats, prods);
+    const item: Row = {
+      ref: s(r.beta_num) || String(r.sheet_row || r.id),
+      id: r.id, sheet_row: r.sheet_row, beta_num: s(r.beta_num),
+      fecha: ymdUtc(r.timestamp), hora: s(r.timestamp).slice(11, 16),
+      cosmetologa: s(r.atendido_por), nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3),
+      facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),
+      extras: s(r.servicios_adicionales), notas: s(r.notas_generales),
+      gift_card: s(r.gift_card), paquete: s(r.paquete),
+      lineas: admin ? lineas : lineas.map((ln) => ({ clase: ln.clase, sku: ln.sku, nombre: ln.nombre, cantidad: ln.cantidad })),
+    };
+    if (admin) {
+      item.estimado = n(r.estimado);
+      item.subtotal = round2(n(r.estimado) / IVA);
+      item.iva = round2(n(r.estimado) - n(item.subtotal));
+      item.total = n(r.estimado);
+    }
+    return item;
+  }).sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
+  const cliente: Row = {
+    key, cedula: s(primero.id_3), nombre: (s(primero.nombre) + " " + s(primero.apellido)).trim(),
+    telefono: s(ficha.telefono), email: s(ficha.email), notas: s(ficha.notas || ficha.observaciones),
+    visitas: tickets.length, ultima: s(tickets[0]?.fecha),
+  };
+  if (admin) cliente.total = round2(total);
+  return { ok: true, admin, cliente, tickets };
+}
+
+export async function reporteConsumos(db: Db, p: Row): Promise<Row> {
+  const desde = s(p.desde);
+  const hasta = s(p.hasta);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return { error: "Indica desde y hasta (AAAA-MM-DD)" };
+  const filtroSku = skuCode(p.sku);
+  const filtroFac = s(p.facial).toLowerCase();
+  const cats = await db.all("catalogo").catch(() => [] as Row[]);
+  const prods = await db.all("erp_productos").catch(() => [] as Row[]);
+  const venta = new Map<string, { sku: string; nombre: string; unidades: number }>();
+  const cabina = new Map<string, { sku: string; nombre: string; unidades: number }>();
+  const faciales = new Map<string, number>();
+  for (const t of await db.all("tickets")) {
+    const fecha = ymdUtc(t.timestamp);
+    if (!fecha || fecha < desde || fecha > hasta) continue;
+    const fac = s(t.facial_hecho);
+    if (fac && fac !== "-" && fac !== "—") {
+      if (!filtroFac || fac.toLowerCase().includes(filtroFac)) faciales.set(fac, (faciales.get(fac) || 0) + 1);
+      if (!filtroSku) {
+        for (const rc of await recetaDe(db, fac, 1)) {
+          const k = skuCode(rc.sku);
+          const cur = cabina.get(k) || { sku: k, nombre: nombreDe(cats, prods, k), unidades: 0 };
+          cur.unidades = round2(cur.unidades + rc.qty);
+          cabina.set(k, cur);
+        }
+      }
+    }
+    for (const pr of productQtys(t)) {
+      const k = skuCode(pr.sku);
+      if (filtroSku && k !== filtroSku) continue;
+      const cur = venta.get(k) || { sku: k, nombre: nombreDe(cats, prods, k), unidades: 0 };
+      cur.unidades += pr.qty;
+      venta.set(k, cur);
+    }
+    if (filtroSku && fac && (!filtroFac || fac.toLowerCase().includes(filtroFac))) {
+      for (const rc of await recetaDe(db, fac, 1)) {
+        if (skuCode(rc.sku) !== filtroSku) continue;
+        const cur = cabina.get(filtroSku) || { sku: filtroSku, nombre: nombreDe(cats, prods, filtroSku), unidades: 0 };
+        cur.unidades = round2(cur.unidades + rc.qty);
+        cabina.set(filtroSku, cur);
+      }
+    }
+  }
+  const vArr = [...venta.values()].sort((a, b) => b.unidades - a.unidades);
+  const cArr = [...cabina.values()].sort((a, b) => b.unidades - a.unidades);
+  const fArr = [...faciales.entries()].map(([nombre, nFac]) => ({ nombre, n: nFac })).sort((a, b) => b.n - a.n);
+  const totales = {
+    unidadesVenta: vArr.reduce((a, r) => a + r.unidades, 0),
+    unidadesCabina: round2(cArr.reduce((a, r) => a + r.unidades, 0)),
+    faciales: fArr.reduce((a, r) => a + r.n, 0),
+  };
+  return { ok: true, desde, hasta, venta: vArr, cabina: cArr, faciales: fArr, totales };
+}
+
+export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
+  const provs = await db.all("erp_proveedores");
+  const prov = provs.find((r) => r.id === p.proveedor_id || s(r.nombre).toLowerCase() === s(p.proveedor).toLowerCase());
+  const nombre = s(prov?.nombre || p.proveedor);
+  if (!nombre && !s(p.familia)) return { error: "Elige el proveedor" };
+  const familia = familiaDe(nombre, s(p.familia));
+  if (!familia) return { error: "Ese proveedor no tiene familia de consignación (HT, AS, ML, PH, JN)" };
+  const q = quincenaActual(now, n(p.quincena) || undefined);
+  const prods = await db.all("erp_productos");
+  const stock = await db.all("erp_stock");
+  const ventaId = "11111111-1111-4111-8111-111111111111";
+  const items: Row[] = [];
+  const vendido = new Map<string, number>();
+  for (const t of await db.all("tickets")) {
+    const fecha = ymdUtc(t.timestamp);
+    if (!fecha || fecha < q.ini || fecha > q.fin) continue;
+    for (const pr of productQtys(t)) {
+      if (!skuCode(pr.sku).startsWith(familia + "-")) continue;
+      vendido.set(skuCode(pr.sku), (vendido.get(skuCode(pr.sku)) || 0) + pr.qty);
+    }
+  }
+  const vistos = new Set<string>();
+  for (const pr of prods) {
+    const sku = skuCode(pr.sku);
+    if (!sku.startsWith(familia + "-") || pr.activo === false) continue;
+    vistos.add(sku);
+    const hay = stock.filter((r) => r.producto_id === pr.id && String(r.bodega_id) === ventaId).reduce((a, r) => a + n(r.cantidad), 0);
+    const v = vendido.get(sku) || 0;
+    const compra = n(pr.costo_promedio);
+    items.push({
+      sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, compra,
+      sugerido: v > 0 ? Math.ceil(v * (1 + BUFFER_RESTOCK)) : 0,
+      subtotal: round2(v * compra),
+    });
+  }
+  for (const [sku, v] of vendido) {
+    if (vistos.has(sku)) continue;
+    items.push({ sku, nombre: sku, stock: 0, vendido: v, compra: 0, sugerido: Math.ceil(v * (1 + BUFFER_RESTOCK)), subtotal: 0 });
+  }
+  items.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
+  const fact = items.filter((it) => n(it.vendido) > 0);
+  const restock = items.filter((it) => n(it.sugerido) > 0);
+  const sub = round2(fact.reduce((a, it) => a + n(it.subtotal), 0));
+  const iva = round2(sub * 0.15);
+  return {
+    ok: true,
+    proveedor: { id: prov?.id || null, nombre, ruc: s(prov?.ruc) },
+    familia, ...q,
+    items, fact, restock,
+    totales: { subtotal: sub, iva, total: round2(sub + iva) },
+    nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.",
+  };
+}
