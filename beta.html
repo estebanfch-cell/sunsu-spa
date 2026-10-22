@@ -409,6 +409,7 @@
   .doc-sheet table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
   .doc-sheet th { background: var(--navy); color: white; text-align: left; padding: 6px; }
   .doc-sheet td { padding: 5px 6px; border-bottom: 1px solid var(--cream-d); }
+  .doc-sheet input.qty, .doc-sheet input.buffer { width: 88px; padding: 6px 8px; margin: 0; }
   @media (max-width: 860px) {
     .cli-panel {
       position: fixed; z-index: 70; inset: 0 0 var(--tab-h) 0;
@@ -556,13 +557,14 @@ function previewApi(accion, body) {
   if (accion === "periodo_consignacion") {
     return { ok: true, qLabel: "16-fin Oct 2026", familia: "HT", ini: "2026-10-16", fin: "2026-10-31",
       proveedor: { id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" },
+      buffer: 0.2,
       fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24, stock: 4, sugerido: 4 }],
       restock: [{ sku: "HT-002", nombre: "Crema", sugerido: 4, compra: 8 }],
       totales: { subtotal: 24, iva: 3.6, total: 27.6 },
       nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." };
   }
   if (accion === "buscarGiftCards") return { resultados: [{ codigo: body.q || "26-065", valor: "65", saldo: 65, usado: false }] };
-  if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
+  if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-2026-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", buffer: 0.2, prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "HT-002", nombre: "Crema", vendido: 3, compra: 8, subtotal: 24 }], items: [{ sku: "HT-002", nombre: "Crema", sugerido: 4 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
   if (accion === "getDashboardHoy") {
     const dias = [
       ["Lun 19", 320, 8], ["Mar 20", 410, 11], ["Mié 21", 280, 7], ["Jue 22", 486.5, 12],
@@ -1573,7 +1575,7 @@ async function renderOc(id) {
     <h2>Devolver al proveedor</h2>
     <form id="f-dev">${lineas.replaceAll('placeholder="Recibir"', 'placeholder="Devolver"').replaceAll("Cantidad a recibir", "Cantidad a devolver")}<button class="btn ghost" type="submit">Devolver</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>` : "";
   const snap = parseSnap(o);
-  const docs = snap ? `<div class="tools"><button class="btn ghost small" type="button" id="btn-pedido">Pedido / pre-factura</button><button class="btn ghost small" type="button" id="btn-acta">Acta de entrega</button></div><div id="doc-out"></div>` : "";
+  const docs = snap ? `<div class="tools"><button class="btn ghost small" type="button" id="btn-pedido">Pre-factura y pedido</button><button class="btn ghost small" type="button" id="btn-acta">Acta de entrega</button></div><div id="doc-out"></div>` : "";
   return `<h2>${esc(o.numero)} · ${esc(o.estado)}</h2><p class="note">Total ${money(o.total)}. ${snap ? "Consignación " + esc(snap.qLabel || "") + ". " : ""}Al recibir se actualiza el stock y el kardex. Casa = venta, Local = cabina.</p>
     ${docs}
     <form id="f-rec">${lineas}<label>Factura del proveedor</label><input name="factura_prov"><button class="btn" type="submit">Recibir</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
@@ -1721,6 +1723,37 @@ function bajarReporte(tipo) {
   const texto = ["SUNSU SPA — CONSUMOS", (d.desde || "") + " a " + (d.hasta || ""), ""].concat(lineas);
   bajarArchivo("consumos.pdf", pdfTexto(texto), "application/pdf");
 }
+function pctBuffer(data) {
+  const b = Number(data && data.buffer);
+  const ratio = Number.isFinite(b) && b >= 0 ? (b > 1 ? b / 100 : b) : 0.2;
+  return Math.round(ratio * 1000) / 10;
+}
+function consigActual() {
+  const data = window._consig || {};
+  const inp = document.getElementById("consig-buffer");
+  const pct = inp ? Number(inp.value) : pctBuffer(data);
+  const buffer = Number.isFinite(pct) && pct >= 0 ? pct / 100 : 0.2;
+  const pedir = {};
+  document.querySelectorAll("[data-pedir]").forEach((el) => { pedir[el.getAttribute("data-pedir")] = Number(el.value); });
+  const fact = data.fact || [];
+  const restock = fact.map((it) => {
+    const cant = pedir[it.sku] != null && Number.isFinite(pedir[it.sku]) ? pedir[it.sku] : Number(it.sugerido) || 0;
+    return { sku: it.sku, nombre: it.nombre, compra: it.compra, vendido: it.vendido, sugerido: cant, pedir: cant };
+  }).filter((it) => it.pedir > 0);
+  return { ...data, buffer, fact, restock };
+}
+function aplicarBufferConsig() {
+  const data = window._consig;
+  if (!data) return;
+  const pct = Number((document.getElementById("consig-buffer") || {}).value);
+  const buffer = Number.isFinite(pct) && pct >= 0 ? pct / 100 : 0.2;
+  data.buffer = buffer;
+  (data.fact || []).forEach((it) => {
+    it.sugerido = it.vendido > 0 ? Math.ceil(it.vendido * (1 + buffer)) : 0;
+    const el = document.querySelector('[data-pedir="' + it.sku + '"]');
+    if (el) el.value = it.sugerido;
+  });
+}
 async function verConsig() {
   const sel = document.getElementById("consig-prov");
   const out = document.getElementById("consig-out");
@@ -1729,21 +1762,31 @@ async function verConsig() {
   const data = await api("periodo_consignacion", { proveedor_id: sel ? sel.value : "" });
   if (data.error) { out.innerHTML = fail(data); return; }
   window._consig = data;
-  const filas = (data.fact || []).map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.stock)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td><td>${esc(it.sugerido)}</td></tr>`).join("");
+  const filas = (data.fact || []).map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.stock)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td><td><input class="qty" data-pedir="${esc(it.sku)}" type="number" min="0" step="1" value="${esc(it.sugerido)}" aria-label="Reponer ${esc(it.sku)}"></td></tr>`).join("");
   const tot = data.totales || {};
-  out.innerHTML = `<div class="doc-sheet"><h3>ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACIÓN</h3>
-    <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.qLabel || "")} · ${esc(data.familia || "")}</p>
-    <table><thead><tr><th>SKU</th><th>Producto</th><th>Stock</th><th>Consumido</th><th>Compra</th><th>Total</th><th>Restock</th></tr></thead><tbody>${filas || `<tr><td colspan="7">Sin ventas</td></tr>`}</tbody></table>
+  out.innerHTML = `<div class="doc-sheet"><h3>CONSIGNACIÓN · ${esc(data.qLabel || "")}</h3>
+    <p class="note">${esc((data.proveedor || {}).nombre || "")} · ${esc(data.familia || "")}. La pre-factura es lo vendido. El pedido es lo que se pide reponer.</p>
+    <label for="consig-buffer">Reposición</label>
+    <input class="buffer" id="consig-buffer" type="number" min="0" step="1" value="${esc(pctBuffer(data))}" aria-label="Porcentaje de reposición">
+    <span class="note">% sobre lo vendido. 20 es el default. Cambiarlo recalcula las cantidades; después puedes editar cada línea.</span>
+    <table><thead><tr><th>SKU</th><th>Producto</th><th>Stock</th><th>Vendido</th><th>Compra</th><th>A facturar</th><th>Reponer</th></tr></thead><tbody>${filas || `<tr><td colspan="7">Sin ventas</td></tr>`}</tbody></table>
     <p class="note">Sin IVA ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · con IVA ${money(tot.total)}</p>
     <p class="note">${esc(data.nota || "")}</p>
-    <button class="btn" type="button" id="btn-gen-consig">Generar pedido y solicitud</button>
+    <button class="btn" type="button" id="btn-gen-consig">Generar pedido</button>
     <button class="btn ghost small" type="button" id="btn-pdf-consig">PDF</button></div>`;
+  document.getElementById("consig-buffer").oninput = aplicarBufferConsig;
   document.getElementById("btn-gen-consig").onclick = generarConsig;
-  document.getElementById("btn-pdf-consig").onclick = () => pdfConsig(data, "pedido");
+  document.getElementById("btn-pdf-consig").onclick = () => pdfConsig(consigActual(), "pedido");
 }
 async function generarConsig() {
   const sel = document.getElementById("consig-prov");
-  const data = await api("oc_consignacion", { proveedor_id: sel ? sel.value : "", fecha_entrega: (window._consig || {}).fin || "" });
+  const cur = consigActual();
+  const data = await api("oc_consignacion", {
+    proveedor_id: sel ? sel.value : "",
+    fecha_entrega: cur.fin || "",
+    buffer: cur.buffer,
+    lineas: (cur.restock || []).map((it) => ({ sku: it.sku, cantidad: it.pedir, precio: it.compra, nombre: it.nombre })),
+  });
   if (data.error) { toast(data.error); return; }
   toast("Pedido " + (data.numero || "") + " · " + (data.qLabel || ""));
   go("#/doc/oc/" + encodeURIComponent(data.id));
@@ -1771,15 +1814,21 @@ async function mostrarDoc(cual) {
 }
 function htmlPedido(snap, orden) {
   const fact = snap.fact || [];
+  const restock = snap.restock || snap.items || [];
   const filas = fact.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.vendido)}</td><td>${money(it.compra)}</td><td>${money(it.subtotal)}</td></tr>`).join("");
+  const ped = restock.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.nombre)}</td><td>${esc(it.sugerido ?? it.pedir)}</td></tr>`).join("");
   const tot = snap.totales || {};
   const prov = snap.prov || snap.proveedor || {};
-  return `<div class="doc-sheet"><h3>SUNSU SPA — ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACIÓN</h3>
-    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br># ${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}</p>
-    <table><thead><tr><th>SKU</th><th>Producto</th><th>Vendido</th><th>P. unit.</th><th>Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
+  const pct = pctBuffer(snap);
+  return `<div class="doc-sheet"><h3>PÁGINA 1 — PRE-FACTURA</h3>
+    <p class="note">${esc(prov.nombre || "")} · RUC ${esc(prov.ruc || "")}<br># ${esc(orden.numero || "")} · ${esc(snap.qLabel || "")}<br>Lo que el proveedor debe facturar: unidades vendidas al precio de compra.</p>
+    <table><thead><tr><th>SKU</th><th>Producto</th><th>Vendido</th><th>P. unit.</th><th>Subtotal</th></tr></thead><tbody>${filas || `<tr><td colspan="5">Sin ventas</td></tr>`}</tbody></table>
     <p class="note">SUBTOTAL ${money(tot.subtotal)} · IVA 15% ${money(tot.iva)} · TOTAL A FACTURAR ${money(tot.total)}</p>
     <p class="note">${esc(snap.nota || "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.")}</p>
-    <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF</button></div>`;
+    <h3>PÁGINA 2 — PEDIDO DE RESTOCK</h3>
+    <p class="note">Unidades a reponer. Reposición ${esc(pct)}%.</p>
+    <table><thead><tr><th>SKU</th><th>Producto</th><th>Pedir</th></tr></thead><tbody>${ped || `<tr><td colspan="3">Sin reposición</td></tr>`}</tbody></table>
+    <button class="btn ghost small" type="button" id="btn-bajar-doc">PDF (2 páginas)</button></div>`;
 }
 function htmlActa(orden, snap, filas) {
   const tr = (rows) => rows.map((it) => `<tr><td>${esc(it.sku)}</td><td>${esc(it.ped)}</td><td>${esc(it.rec)}</td><td>${esc(it.estado)}</td></tr>`).join("");
@@ -1795,26 +1844,42 @@ function htmlActa(orden, snap, filas) {
 }
 function pdfConsig(data, cual) {
   const prov = (data && (data.prov || data.proveedor)) || {};
+  const nombre = prov.nombre || "oc";
+  if (cual === "acta") {
+    const lineas = ["SUNSU SPA — ACTA DE ENTREGA", (prov.nombre || "") + "  RUC " + (prov.ruc || ""), (data && data.qLabel) || "", ""];
+    ((data && (data.restock || data.items)) || []).forEach((it) => lineas.push(it.sku + "  pedir " + (it.sugerido ?? it.pedir ?? "")));
+    bajarArchivo("ACTA " + nombre + ".pdf", pdfTexto(lineas), "application/pdf");
+    return;
+  }
   const tot = (data && data.totales) || {};
-  const lineas = ["SUNSU SPA — " + (cual === "acta" ? "ACTA DE ENTREGA" : "ORDEN DE PEDIDO / PRE-FACTURA DE CONSIGNACION"),
+  const pref = ["SUNSU SPA — PRE-FACTURA DE CONSIGNACION", "Lo que el proveedor debe facturar",
     (prov.nombre || "") + "  RUC " + (prov.ruc || ""), (data && data.qLabel) || "", ""];
-  ((data && data.fact) || []).forEach((it) => lineas.push(it.sku + "  " + it.nombre + "  vendido " + it.vendido + "  $" + Number(it.subtotal || 0).toFixed(2)));
-  lineas.push("", "SUBTOTAL $" + Number(tot.subtotal || 0).toFixed(2), "IVA 15% $" + Number(tot.iva || 0).toFixed(2), "TOTAL $" + Number(tot.total || 0).toFixed(2));
-  lineas.push("", "CONSIGNACION: Sunsu paga solo lo vendido en la quincena.");
-  bajarArchivo((cual === "acta" ? "ACTA " : "PEDIDO ") + (prov.nombre || "oc") + ".pdf", pdfTexto(lineas), "application/pdf");
+  ((data && data.fact) || []).forEach((it) => pref.push(it.sku + "  " + (it.nombre || "") + "  vendido " + it.vendido + "  $" + Number(it.subtotal || 0).toFixed(2)));
+  pref.push("", "SUBTOTAL $" + Number(tot.subtotal || 0).toFixed(2), "IVA 15% $" + Number(tot.iva || 0).toFixed(2), "TOTAL A FACTURAR $" + Number(tot.total || 0).toFixed(2));
+  pref.push("", "Sunsu paga solo lo vendido en la quincena.");
+  const ped = ["SUNSU SPA — PEDIDO DE RESTOCK", "Unidades a reponer (" + pctBuffer(data) + "%)",
+    (prov.nombre || "") + "  " + ((data && data.qLabel) || ""), ""];
+  ((data && (data.restock || data.items)) || []).forEach((it) => ped.push(it.sku + "  " + (it.nombre || "") + "  pedir " + (it.sugerido ?? it.pedir ?? "")));
+  if (ped.length === 4) ped.push("Sin unidades para reponer.");
+  bajarArchivo("CONSIGNACION " + nombre + ".pdf", pdfPaginas([pref, ped]), "application/pdf");
 }
 function pdfTexto(lineas) {
+  return pdfPaginas([lineas]);
+}
+function pdfPaginas(paginas) {
   const escPdf = (t) => String(t).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
   const chunks = [];
-  let y = 800;
-  let cmds = ["BT", "/F1 10 Tf"];
-  for (const ln of lineas) {
-    if (y < 48) { cmds.push("ET"); chunks.push(cmds.join("\n")); cmds = ["BT", "/F1 10 Tf"]; y = 800; }
-    cmds.push(`1 0 0 1 48 ${y} Tm (${escPdf(ln).slice(0, 110)}) Tj`);
-    y -= 14;
+  for (const lineas of paginas) {
+    let y = 800;
+    let cmds = ["BT", "/F1 10 Tf"];
+    const cerrar = () => { cmds.push("ET"); chunks.push(cmds.join("\n")); };
+    for (const ln of lineas) {
+      if (y < 48) { cerrar(); cmds = ["BT", "/F1 10 Tf"]; y = 800; }
+      cmds.push(`1 0 0 1 48 ${y} Tm (${escPdf(ln).slice(0, 110)}) Tj`);
+      y -= 14;
+    }
+    cerrar();
   }
-  cmds.push("ET");
-  chunks.push(cmds.join("\n"));
   const objs = [];
   objs.push("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj");
   const kids = chunks.map((_, i) => (3 + i * 2) + " 0 R").join(" ");
@@ -2218,7 +2283,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022ventas"></script>
+<script src="beta-screens.js?v=20261022consig"></script>
 <script>draw();</script>
 </body>
 </html>
