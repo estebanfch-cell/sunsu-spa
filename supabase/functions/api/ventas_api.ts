@@ -132,7 +132,20 @@ extend("oc_consignacion", "any", async (p, ctx, ses) => {
   const draft = await borradorConsig(ctx.db, ctx.now, p as Row);
   if (draft.error) return draft;
   const directa = (Array.isArray(p.directa) ? p.directa : []) as Row[];
-  const lineas: Row[] = ((draft.restock as Row[]) || []).map((it) => ({
+  const pedidas = (Array.isArray(p.lineas) ? p.lineas : []) as Row[];
+  const base = new Map(((draft.items as Row[]) || []).map((it) => [skuCode(it.sku), it]));
+  const origen = pedidas.length ? pedidas : ((draft.restock as Row[]) || []);
+  const restock: Row[] = origen.map((it) => {
+    const sku = skuCode(it.sku);
+    const known = base.get(sku);
+    const cant = pedidas.length ? n(it.cantidad ?? it.sugerido ?? it.pedir) : n(it.sugerido);
+    return {
+      sku, nombre: s(it.nombre) || s(known?.nombre) || sku,
+      compra: it.precio != null || it.compra != null ? n(it.precio ?? it.compra) : n(known?.compra),
+      vendido: n(known?.vendido), sugerido: cant,
+    };
+  }).filter((it) => n(it.sugerido) > 0);
+  const lineas: Row[] = restock.map((it) => ({
     sku: it.sku, cantidad: it.sugerido, precio: it.compra, bodega_id: BODEGA_VENTA, plazo: "RESTOCK",
   }));
   for (const d of directa) {
@@ -147,7 +160,7 @@ extend("oc_consignacion", "any", async (p, ctx, ses) => {
   const snap = {
     tipo: "consignacion",
     prov: draft.proveedor, qLabel: draft.qLabel, familia: draft.familia,
-    fact: draft.fact, items: draft.restock, directa, stock: draft.items,
+    fact: draft.fact, items: restock, restock, buffer: draft.buffer, directa, stock: draft.items,
     totales: draft.totales, nota: draft.nota,
   };
   const saved = await runErp("oc_save", {

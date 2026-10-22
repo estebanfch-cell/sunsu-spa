@@ -11,6 +11,15 @@ import { logAccion } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 
 export const BUFFER_RESTOCK = 0.2;
+
+/** 0.2 o 20 significan +20%. Vacío usa el default. */
+export function bufferDe(v: unknown): number {
+  if (v == null || s(v) === "") return BUFFER_RESTOCK;
+  let x = Number(v);
+  if (!Number.isFinite(x) || x < 0) return BUFFER_RESTOCK;
+  if (x > 1) x = x / 100;
+  return x;
+}
 export const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export interface Quincena {
@@ -452,6 +461,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   const familia = familiaDe(nombre, s(p.familia));
   if (!familia) return { error: "Ese proveedor no tiene familia de consignación (HT, AS, ML, PH, JN)" };
   const q = quincenaActual(now, n(p.quincena) || undefined);
+  const buffer = bufferDe(p.buffer);
   const prods = await db.all("erp_productos");
   const stock = await db.all("erp_stock");
   const ventaId = "11111111-1111-4111-8111-111111111111";
@@ -475,13 +485,13 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     const compra = n(pr.costo_promedio);
     items.push({
       sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, compra,
-      sugerido: v > 0 ? Math.ceil(v * (1 + BUFFER_RESTOCK)) : 0,
+      sugerido: v > 0 ? Math.ceil(v * (1 + buffer)) : 0,
       subtotal: round2(v * compra),
     });
   }
   for (const [sku, v] of vendido) {
     if (vistos.has(sku)) continue;
-    items.push({ sku, nombre: sku, stock: 0, vendido: v, compra: 0, sugerido: Math.ceil(v * (1 + BUFFER_RESTOCK)), subtotal: 0 });
+    items.push({ sku, nombre: sku, stock: 0, vendido: v, compra: 0, sugerido: Math.ceil(v * (1 + buffer)), subtotal: 0 });
   }
   items.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
   const fact = items.filter((it) => n(it.vendido) > 0);
@@ -491,7 +501,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   return {
     ok: true,
     proveedor: { id: prov?.id || null, nombre, ruc: s(prov?.ruc) },
-    familia, ...q,
+    familia, buffer, ...q,
     items, fact, restock,
     totales: { subtotal: sub, iva, total: round2(sub + iva) },
     nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.",

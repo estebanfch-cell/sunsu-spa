@@ -267,15 +267,7 @@ function toIn(r: R): TicketIn {
     pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6), extras: s(r.servicios_adicionales),
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
-    gcRatio: ratioGift(r),
   };
-}
-function ratioGift(r: R): number | undefined {
-  const aplica = montoGcAplicado(r.gift_card);
-  if (!(aplica > 0)) return undefined;
-  const cobro = n(r.orig && typeof r.orig === "object" ? (r.orig as R).gc_facial_cobro : 0);
-  const base = cobro + aplica;
-  return base > 0 ? cobro / base : 0;
 }
 async function marks(ctx: Ctx) {
   const rows = await ctx.db.all("cosmetologas");
