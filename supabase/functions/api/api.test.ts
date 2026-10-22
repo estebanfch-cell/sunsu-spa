@@ -12,7 +12,7 @@ import "./ventas_api.ts";
 import "./asistencia_api.ts";
 import "./personal_api.ts";
 import { reimportarTickets } from "./lib.ts";
-import { acceso, esPropio, evaluarBloqueo, redactar, type SesLite } from "./permisos.ts";
+import { acceso, esPropio, evaluarBloqueo, lecturaEnVista, redactar, type SesLite } from "./permisos.ts";
 import type { Row } from "./domain.ts";
 
 const andrea: SesLite = { rol: "cosmetologa", name: "Andrea Robles", short: "Andrea", uid: "andrea" };
@@ -1006,6 +1006,11 @@ describe("beta shell", () => {
     assert.equal(html.includes('id="f-asis-perm"'), false);
     assert.match(html, /id="f-personal-perm"/);
     assert.match(html, /reloj-pill/);
+    assert.match(html, /Ver como…/);
+    assert.match(html, /Viendo como/);
+    assert.match(html, /id="btn-ver-como"/);
+    assert.equal(html.includes("Citas hoy"), false);
+    assert.match(html, /esRolCitas/);
   });
 });
 
@@ -1316,6 +1321,47 @@ describe("modo prueba", () => {
     assert.match(sql, /PURGA PRUEBA/);
     assert.match(sql, /El kardex no se borra/);
     assert.match(sql, /No hay import\.py/);
+  });
+
+  it("ver como deja la app en solo lectura y anota quién entró", async () => {
+    const db = new MemoryDb();
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("multas_descuentos", [
+      { sheet_row: 1, fecha: "2026-10-18", cosmetologa: "Andrea Robles", tipo: "MULTA", monto: 5, motivo: "atraso" },
+      { sheet_row: 2, fecha: "2026-10-19", cosmetologa: "Daniela", tipo: "MULTA", monto: 8, motivo: "falta" },
+    ]);
+    db.tables.set("rrhh_empleadas", [{ sheet_row: 2, nombre_app: "Andrea Robles", fecha_ingreso: "2024-01-10", sueldo_base: 460 }]);
+    const no = await handle("ver_como", { token: "t-andrea", uid: "emi" }, adminC) as Row;
+    assert.match(String(no.error), /admin/);
+    assert.equal((await db.all("log_acciones")).length, 0);
+    const entra = await handle("ver_como", { token: adminC.token, uid: "andrea" }, adminC) as Row;
+    assert.equal(entra.ok, true);
+    assert.equal((entra.user as Row).role, "cosmetologa");
+    const logs = await db.all("log_acciones");
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].accion, "VER COMO");
+    assert.match(String(logs[0].detalle), /Andrea Robles/);
+    const who = await handle("whoami", { token: adminC.token, preview_uid: "andrea", preview: true }, adminC) as Row;
+    assert.equal((who.user as Row).role, "cosmetologa");
+    assert.equal(who.ver_costos, false);
+    assert.equal((await db.all("log_acciones")).length, 1);
+    const dash = await handle("getDashboardHoy", { token: adminC.token, preview_uid: "andrea" }, adminC) as Row;
+    assert.match(String(dash.error), /permiso|vista/i);
+    const multas = await handle("getMultas", { token: adminC.token, preview_uid: "andrea" }, adminC) as Row;
+    assert.deepEqual((multas.items as Row[]).map((m) => m.nombre), ["Andrea Robles"]);
+    const marca = await handle("asis_marcar", { token: adminC.token, preview_uid: "andrea", preview: true, tipo: "entrada" }, adminC) as Row;
+    assert.match(String(marca.error), /Sal de la vista para guardar/);
+    assert.equal((await db.all("asistencia_marcajes")).length, 0);
+    const propia = await handle("asis_hoy", { token: "t-andrea" }, adminC) as Row;
+    assert.equal(propia.empleada, true);
+    const adminHoy = await handle("asis_hoy", { token: adminC.token }, adminC) as Row;
+    assert.equal(adminHoy.empleada, false);
+    assert.equal(lecturaEnVista("asis_hoy"), true);
+    assert.equal(lecturaEnVista("asis_marcar"), false);
+    const ajena = await handle("whoami", { token: "t-andrea", preview_uid: "emi" }, adminC) as Row;
+    assert.match(String(ajena.error), /admin/);
   });
 
   it("0016b respeta origin test y el importador no lo borra", () => {

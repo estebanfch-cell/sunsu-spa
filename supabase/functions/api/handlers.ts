@@ -1,6 +1,6 @@
 import type { Ctx, Ses } from "./lib.ts";
-import { acceso, clampPersonal, esAdmin, gateAccion, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
-import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
+import { acceso, clampPersonal, esAdmin, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
+import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, comisionProductos, comisionRecepcionDia, contarExtras,
@@ -10,6 +10,25 @@ import {
 } from "./domain.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
+import type { Db } from "./db.ts";
+
+const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
+
+function dbSoloLectura(db: Db): Db {
+  return {
+    all: (t) => db.all(t),
+    prueba: db.prueba,
+    write: async () => { throw new Error(VISTA_MSG); },
+    rpc: async (name, args) => {
+      if (/^next_|erp_tx|purgar|login_pin|hash_pin|pin_/.test(name)) throw new Error(VISTA_MSG);
+      return db.rpc(name, args);
+    },
+  };
+}
+
+function previewPedido(p: R): boolean {
+  return p.preview === true || p.preview === "true" || p.preview === 1 || !!s(p.preview_uid);
+}
 
 type R = Record<string, unknown>;
 
@@ -587,7 +606,7 @@ async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R
 async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (action === "version" || action === "getVersion") return { version: APP_VERSION };
   if (action === "login") return doLogin(p, ctx);
-  const ses = await loadSes(ctx, p.token);
+  const ses = ctx.ses !== undefined ? ctx.ses : await loadSes(ctx, p.token);
   const need = (roles: string[]) => deny(ses, roles);
   const A = actorOf(ses, s(p.usuario) || "beta");
 
@@ -712,8 +731,31 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 }
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
-  const ses0 = action === "login" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
-  const matriz = await matrizDe(ctx.db);
+  const real = action === "login" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  if (action === "ver_como") {
+    if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
+    const view = await loadUsuario(ctx, s(p.uid) || s(p.preview_uid));
+    if (!view) return { error: "Esa persona no está en el equipo" };
+    if (view.bloqueado) return { error: "Esa cuenta está bloqueada" };
+    if (view.uid === real.uid) return { error: "Esa eres tú" };
+    await logAccion(ctx.db, actorOf(real), "VER COMO", view.name + " (" + view.uid + ")");
+    return { ok: true, preview: true, user: { id: view.uid, name: view.name, short: view.short, role: view.rol } };
+  }
+  let ses0 = real;
+  let db = real?.prueba ? activarPrueba(ctx.db) : ocultarPrueba(ctx.db);
+  if (previewPedido(p)) {
+    if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
+    if (!lecturaEnVista(action)) return { error: VISTA_MSG };
+    const uid = s(p.preview_uid);
+    if (!uid) return { error: "Falta la persona de la vista" };
+    const view = await loadUsuario(ctx, uid);
+    if (!view) return { error: "Esa persona no está en el equipo" };
+    if (view.bloqueado) return { error: "Esa cuenta está bloqueada" };
+    ses0 = { ...view, token: real.token, prueba: false };
+    db = dbSoloLectura(ocultarPrueba(ctx.db));
+    ctx = { ...ctx, db, ses: ses0 };
+  }
+  const matriz = await matrizDe(db);
   const gate = gateAccion(action, ses0, matriz);
   if (gate) return gate;
   if (action === "modo_prueba" || action === "prueba_borrar") {
@@ -728,9 +770,14 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
     await logAccion(ctx.db, actor, on ? "MODO PRUEBA ON" : "MODO PRUEBA OFF", ses0.name);
     return { ok: true, modo_prueba: on };
   }
-  const db = ses0?.prueba ? activarPrueba(ctx.db) : ocultarPrueba(ctx.db);
-  const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db });
-  return redactar(action, out, ses0, matriz);
+  try {
+    const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db });
+    return redactar(action, out, ses0, matriz);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === VISTA_MSG) return { error: VISTA_MSG };
+    throw e;
+  }
 }
 
 async function existeCedula(p: R, ctx: Ctx): Promise<R> {

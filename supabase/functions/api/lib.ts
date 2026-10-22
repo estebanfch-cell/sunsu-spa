@@ -10,6 +10,7 @@ export interface Ses {
   color: string;
   token: string;
   prueba?: boolean;
+  bloqueado?: boolean;
 }
 
 export interface Ctx {
@@ -18,6 +19,8 @@ export interface Ctx {
   env: Record<string, string | undefined>;
   fetchImpl: typeof fetch;
   legacyLogin: (pin: string) => Promise<Row>;
+  /** Si está puesta, la acción corre con esta persona y no con la dueña del token. */
+  ses?: Ses | null;
 }
 
 export function actorOf(ses: Ses | null, fallback = ""): string {
@@ -52,6 +55,33 @@ export async function loadSes(ctx: Ctx, token: unknown): Promise<Ses | null> {
     uid: String(u.id), rol, name: String(u.nombre),
     short: s(u.short) || String(u.nombre), color: s(u.color), token: tk,
     prueba: ses.modo_prueba === true,
+  };
+}
+
+/** La persona a mirar, sin su sesión. La vista no hereda el modo prueba del admin. */
+export async function loadUsuario(ctx: Ctx, uid: unknown): Promise<Ses | null> {
+  const id = s(uid);
+  if (!id) return null;
+  const app = await ctx.db.all("app_usuarios");
+  const a = app.find((x) => String(x.id ?? x.usuario) === id);
+  let u: Row | undefined = a
+    ? { id: a.id ?? a.usuario, nombre: a.nombre ?? a.name ?? a.usuario, short: a.short ?? a.nombre ?? a.name, rol: a.rol ?? a.role, color: a.color, bloqueado: a.bloqueado }
+    : undefined;
+  if (!u) {
+    const users = await ctx.db.all("usuarios");
+    u = users.find((x) => String(x.id) === id);
+  }
+  if (!u) return null;
+  if (u.bloqueado === true) return { uid: String(u.id), rol: "", name: "", short: "", color: "", token: "", bloqueado: true };
+  let rol = normalizarRol(String(u.rol || ""));
+  if (String(u.rol) === "staff") {
+    const marks = await ctx.db.all("cosmetologas");
+    const m = marks.find((x) => x.id === u!.id);
+    rol = m && m.es_cosmetologa === true ? "cosmetologa" : "asistente_cosmetologia";
+  }
+  return {
+    uid: String(u.id), rol, name: String(u.nombre || u.name || id),
+    short: s(u.short) || String(u.nombre || u.name || id), color: s(u.color), token: "",
   };
 }
 
