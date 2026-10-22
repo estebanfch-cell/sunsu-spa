@@ -444,7 +444,19 @@ function previewApi(accion) {
     return {
       hoy: {
         tickets: 12, venta: 486.5, faciales: 7, paquetes: 2, productosN: 5,
+        valFac: 210, valPaq: 160, valProd: 86.96, costoProd: 31.2, facCanjes: 2,
+        extrasN: 4, valExtras: 28, extrasCort: 1, canjes: 2,
         pagos: { efectivo: 200, transferencia: 180.5, tarjeta: 106, mixto: 0, otros: 0 },
+        topFac: [
+          { nombre: "SUNSU-01 Facial S.O.S", n: 3 },
+          { nombre: "SUNSU-02 Hidratación", n: 2 },
+          { nombre: "SUNSU-40 Glow", n: 2 },
+        ],
+        topProd: [
+          { nombre: "Niacinamida", n: 2 },
+          { nombre: "Tónico hidratante", n: 2 },
+          { nombre: "Sérum vitamina C", n: 1 },
+        ],
       },
       semana: { total: 1496.5, dias },
       mes: {
@@ -456,7 +468,10 @@ function previewApi(accion) {
           { label: "Sem 4 (20–26) (7)", total: 1496.5 },
         ],
       },
-      caja: 186.4, citasHoy: 0, gcHoy: 0, gcVal: 0, gcChips: [], paqChips: [], actualizado: "11:40",
+      caja: 186.4, citasHoy: 6, gcHoy: 1, gcVal: 50,
+      gcChips: [{ nombre: "María · $50", n: 1 }],
+      paqChips: [{ nombre: "Paquete Glow · Ana", n: 1 }, { nombre: "Paquete x6 · Luz", n: 1 }],
+      actualizado: "11:40",
     };
   }
   return { ok: true, items: [] };

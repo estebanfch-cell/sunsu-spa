@@ -81,10 +81,11 @@ const ACCION_MODULO: Record<string, Modulo> = {
   betaTablas: "usuarios", betaFilas: "usuarios", betaGuardar: "usuarios", betaEliminar: "usuarios", betaMover: "usuarios",
   permisos_get: "permisos", permisos_guardar: "permisos",
   home: "inicio",
+  getDashboardHoy: "ver_costos",
 };
 
 const COSTO = new Set([
-  "precio_compra", "compra", "comprareal", "costo", "costo_promedio", "costo_unit", "costo_unitario",
+  "precio_compra", "compra", "comprareal", "costo", "costoprod", "costo_promedio", "costo_unit", "costo_unitario",
   "costo_envase", "costo_por_unidad", "utilidad", "margen", "comi_producto_30", "com",
   "iesspatronal", "iess_patronal_11_15", "costoempresa", "costo_empresa",
 ]);

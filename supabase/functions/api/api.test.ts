@@ -457,27 +457,137 @@ describe("api", () => {
     assert.equal(db.writes.some((w) => w.actor.includes("Emi") && w.table === "erp_productos"), true);
   });
 
-  it("el dashboard separa hoy, semana y mes", async () => {
+  it("el dashboard separa hoy, semana y mes con las cifras del Apps Script", async () => {
     const db = new MemoryDb({
+      catalogo: [
+        { sheet_row: 3, sku: "SUNSU-01", producto_servicio: "Facial S.O.S", subtotal: 0, total_con_iva: 46, precio_compra: "1" },
+        { sheet_row: 4, sku: "SUNSU-17", producto_servicio: "Paquete Glow", subtotal: 80, total_con_iva: 92 },
+        { sheet_row: 5, sku: "SUNSU-15", producto_servicio: "Ampolla PDRN", subtotal: 12, total_con_iva: 13.8 },
+        { sheet_row: 6, sku: "HT-002", producto_servicio: "Niacinamida", subtotal: 0, total_con_iva: 11.5, precio_compra: "4" },
+        { sheet_row: 7, sku: "HT-003", producto_servicio: "Tónico", subtotal: 5, total_con_iva: 5.75, precio_compra: "2" },
+      ],
+      inventario_base: [{ sku: "HT-002", compra: 6, stock_inicial: 0, minimo: 0 }],
       tickets: [
-        { sheet_row: 2, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea", id_3: "1", estimado: 10, facial_hecho: "SUNSU-01", orig: {} },
-        { sheet_row: 3, timestamp: "2026-10-01T15:00:00Z", atendido_por: "Andrea", id_3: "2", estimado: 40, orig: {} },
-        { sheet_row: 4, timestamp: "2026-10-21T15:00:00Z", atendido_por: "SUNSU", id_3: "3", estimado: 99, orig: {} },
+        {
+          sheet_row: 2, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea", id_3: "1", nombre: "Ana",
+          estimado: 115, facial_hecho: "SUNSU-01 Facial S.O.S", compra_pack_3: "SUNSU-17 Paquete Glow",
+          servicios_adicionales: "SUNSU-15 Ampolla PDRN | SUNSU-12 X [CORTESIA: cumple]",
+          ht_002: 2, ht_003: "1", comp: "Efectivo", orig: {},
+        },
+        {
+          sheet_row: 3, timestamp: "2026-10-21T16:00:00Z", atendido_por: "Andrea", id_3: "2", nombre: "Luz",
+          estimado: 25, facial_hecho: "SUNSU-02 Hidra", paquete: "SI · pack", comp: "Transferencia", orig: {},
+        },
+        {
+          sheet_row: 4, timestamp: "2026-10-21T17:00:00Z", atendido_por: "Andrea", id_3: "4", nombre: "Paz",
+          estimado: 0, facial_hecho: "SUNSU-03", orig: {},
+        },
+        { sheet_row: 5, timestamp: "2026-10-21T18:00:00Z", atendido_por: "Andrea", id_3: "5", estimado: 5, facial_hecho: "-", comp: "", orig: {} },
+        { sheet_row: 6, timestamp: "2026-10-21T19:00:00Z", atendido_por: "Andrea", id_3: "6", estimado: 8, facial_hecho: "—", comp: "Tarjeta", orig: {} },
+        { sheet_row: 7, timestamp: "2026-10-21T20:00:00Z", atendido_por: "SUNSU", id_3: "3", estimado: 99, orig: {} },
+        { sheet_row: 8, timestamp: "2026-10-01T15:00:00Z", atendido_por: "Andrea", id_3: "8", estimado: 40, orig: {} },
+      ],
+      gift_cards: [
+        { sheet_row: 3, codigo_gc: "GC1", dia: 21, mes: 10, ano: 2026, nombre_comprador: "Maria", apellido_comprador: "Perez", valor: "50" },
+        { sheet_row: 4, codigo_gc: "GC2", dia: 21, mes: 10, ano: 26, nombre_comprador: "", cedula_comprador: "010", apellido_comprador: "30", valor: "Gift Card" },
+        { sheet_row: 5, codigo_gc: "GC3", dia: 21, mes: 10, ano: "", nombre_comprador: "Ana", apellido_comprador: "", valor: "Gift Card" },
+        { sheet_row: 6, codigo_gc: "GC4", dia: 20, mes: 10, ano: 2026, nombre_comprador: "Ayer", valor: "80" },
+        { sheet_row: 7, codigo_gc: "", dia: 21, mes: 10, ano: 2026, nombre_comprador: "Vacio", valor: "10" },
+        { sheet_row: 8, codigo_gc: "GC6", dia: 21, mes: 10, ano: 2025, nombre_comprador: "Vieja", valor: "40" },
+      ],
+      caja_chica: [
+        { sheet_row: 2, tipo: "⚖️ SALDO INICIAL", entrada: 100, salida: 0, saldo: 100 },
+        { sheet_row: 3, tipo: "GASTO", entrada: 0, salida: 20, saldo: 999 },
+        { sheet_row: 4, tipo: "⚖️ SALDO INICIAL", entrada: 50, salida: 0, saldo: 50 },
+        { sheet_row: 5, tipo: "GASTO", entrada: 0, salida: 5, saldo: 1 },
       ],
     });
     const c = ctx(db, "admin", "emi", "Emi");
+    let red = false;
+    c.fetchImpl = async () => { red = true; throw new Error("no red"); };
     const dash = await handle("getDashboardHoy", { token: c.token }, c) as Row;
     const hoy = dash.hoy as Row;
     const semana = dash.semana as Row;
     const mes = dash.mes as Row;
-    assert.equal(hoy.tickets, 1);
-    assert.equal(hoy.venta, 10);
-    assert.equal(hoy.faciales, 1);
-    assert.equal(semana.total, 10);
+    const pagos = hoy.pagos as Row;
+    assert.equal(red, false);
+    assert.equal(hoy.tickets, 6);
+    assert.equal(hoy.venta, 252);
+    assert.equal(hoy.faciales, 3);
+    assert.equal(hoy.valFac, 40);
+    assert.equal(hoy.facCanjes, 2);
+    assert.equal(hoy.paquetes, 1);
+    assert.equal(hoy.valPaq, 80);
+    assert.equal(hoy.productosN, 3);
+    assert.equal(hoy.valProd, 25);
+    assert.equal(hoy.costoProd, 14);
+    assert.equal(hoy.extrasN, 2);
+    assert.equal(hoy.valExtras, 12);
+    assert.equal(hoy.extrasCort, 1);
+    assert.equal(hoy.canjes, 1);
+    assert.equal(pagos.efectivo, 115);
+    assert.equal(pagos.transferencia, 25);
+    assert.equal(pagos.tarjeta, 8);
+    assert.equal(pagos.otros, 104);
+    assert.deepEqual(hoy.topFac, [
+      { nombre: "SUNSU-01 Facial S.O.S", n: 1 },
+      { nombre: "SUNSU-02 Hidra", n: 1 },
+      { nombre: "SUNSU-03", n: 1 },
+    ]);
+    assert.deepEqual(hoy.topProd, [
+      { nombre: "Niacinamida", n: 2 },
+      { nombre: "Tónico", n: 1 },
+    ]);
+    assert.deepEqual(dash.paqChips, [{ nombre: "Paquete Glow · Ana", n: 1 }]);
+    assert.equal(dash.gcHoy, 3);
+    assert.equal(dash.gcVal, 80);
+    assert.deepEqual(dash.gcChips, [
+      { nombre: "Maria · $50", n: 1 },
+      { nombre: "010 · $30", n: 1 },
+      { nombre: "Ana", n: 1 },
+    ]);
+    assert.equal(dash.citasHoy, 0);
+    assert.equal(dash.caja, 45);
+    assert.equal(semana.total, 252);
     assert.equal((semana.dias as Row[]).length, 7);
-    assert.equal(mes.total, 50);
+    assert.equal((semana.dias as Row[])[2].k, "2026-10-21");
+    assert.equal(mes.total, 292);
     assert.equal(mes.nombre, "octubre");
-    assert.notEqual(semana.total, hoy.tickets);
+  });
+
+  it("una cosmetóloga no recibe el dashboard ni los costos", async () => {
+    const db = new MemoryDb({
+      tickets: [{ sheet_row: 2, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea", estimado: 10, facial_hecho: "SUNSU-01", orig: {} }],
+      catalogo: [{ sheet_row: 3, sku: "HT-002", precio_compra: "9", subtotal: 20 }],
+    });
+    const c = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    const dash = await handle("getDashboardHoy", { token: c.token }, c) as Row;
+    assert.match(String(dash.error), /permiso/i);
+    assert.equal(dash.hoy, undefined);
+    assert.equal(JSON.stringify(dash).includes("costoProd"), false);
+  });
+
+  it("las citas de hoy cuentan Acuity y dejan fuera las canceladas", async () => {
+    const db = new MemoryDb({ tickets: [] });
+    const c = ctx(db, "admin", "emi", "Emi");
+    c.env = { ACUITY_UID: "uid", ACUITY_KEY: "key" };
+    let url = "";
+    c.fetchImpl = async (input) => {
+      url = String(input);
+      return new Response(JSON.stringify([
+        { id: 1, canceled: false },
+        { id: 2, canceled: true },
+        { id: 3 },
+      ]), { status: 200 });
+    };
+    const dash = await handle("getDashboardHoy", { token: c.token }, c) as Row;
+    assert.equal(dash.citasHoy, 2);
+    assert.match(url, /minDate=2026-10-21T00:00:00/);
+    assert.match(url, /maxDate=2026-10-21T23:59:59/);
+    assert.match(url, /acuityscheduling\.com\/api\/v1\/appointments/);
+    c.fetchImpl = async () => { throw new Error("acuity caído"); };
+    const caido = await handle("getDashboardHoy", { token: c.token }, c) as Row;
+    assert.equal(caido.citasHoy, 0);
   });
 
   it("clientas antiguas ocultan el teléfono a gerencia y recepción", async () => {
