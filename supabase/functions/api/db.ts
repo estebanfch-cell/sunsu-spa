@@ -4,6 +4,12 @@ export interface Db {
   all(table: string): Promise<Row[]>;
   write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null>;
   rpc(name: string, args: Row): Promise<unknown>;
+  /** La vista de modo prueba. La base real no lo trae. */
+  prueba?: boolean;
+}
+
+export function enPrueba(db: Db): boolean {
+  return db.prueba === true;
 }
 
 export interface WriteLog { actor: string; table: string; op: string; match: Row; row: Row | null }

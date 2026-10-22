@@ -872,7 +872,7 @@ extend("betaGuardar", ADMIN, async (p, ctx, ses) => {
   if (table === "tickets") {
     const ident = await asignarTicketBeta(ctx.db, ctx.now);
     await ctx.db.write(actorOf(ses), "tickets", "insert", {}, { ...campos, ...ident, orig: { beta: true } });
-    return { ok: true, sheet_row: null, beta_num: ident.beta_num, origin: "beta" };
+    return { ok: true, sheet_row: null, beta_num: ident.beta_num, origin: ident.origin };
   }
   const sheet_row = await nextSheet(ctx.db, table);
   await ctx.db.write(actorOf(ses), table, "insert", {}, { ...campos, sheet_row, orig: { beta: true } });
