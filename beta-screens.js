@@ -204,6 +204,7 @@ let PROVS=[
     {sku:'SUNSU-SU-009',n:'Olive lip Mask 13 ml - SIDMOOL',p:15.00},
   ]},
 ];
+window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 
 
@@ -1074,7 +1075,7 @@ function renderTicket(c){
         '<span class="box-lbl" style="color:var(--pink-d)">Detalle del canje de gift card</span>'+
         '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Código GC: 26-050..." oninput="onGcCodigo(this.value)">'+
         '<input id="gc-aplica" type="number" min="0" step="0.01" inputmode="decimal" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Monto a aplicar, ej. 65" oninput="T.gcAplica=parseFloat(this.value)||0;updatePreview()">'+
-        '<div id="gc-dif" class="box-lbl" style="color:var(--navy)">Si el facial cuesta más que la gift card, se cobra y se factura solo la diferencia.</div>'+
+        '<div id="gc-dif" class="gc-lines" style="color:var(--navy)">Si el facial cuesta más que la gift card, se cobra y se factura solo la diferencia.</div>'+
         '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--pink-d);cursor:pointer">'+
           '<input type="checkbox" onchange="toggleGCOtro(this.checked)" style="width:14px;height:14px">Es gift card de otro cliente'+
         '</label>'+
@@ -1734,7 +1735,11 @@ function updatePreview(){
   var _gcDifEl=document.getElementById('gc-dif');
   if(_gcDifEl && T.cobro==='giftcard' && T.facial){
     var _fGc=FACIALES.find(f=>f.sku===T.facial);
-    _gcDifEl.textContent='Facial $'+(_fGc?_fGc.p.toFixed(2):'0')+' · gift card $'+(Number(T._gcUsado)||0).toFixed(2)+' · diferencia a cobrar $'+(Number(T._gcDif)||0).toFixed(2);
+    var _gcM=function(n){return '$'+(Number(n)||0).toFixed(2);};
+    _gcDifEl.innerHTML='<div class="gc-line"><span>💆 Facial</span><span>'+_gcM(_fGc&&_fGc.p)+'</span></div>'
+      +'<div class="gc-line"><span>🎁 Gift card</span><span>'+_gcM(T._gcUsado)+'</span></div>'
+      +'<div class="gc-line"><span>diferencia a cobrar</span><b>'+_gcM(T._gcDif)+'</b></div>'
+      +'<div class="gc-line"><span>Comisión del facial</span><span>'+_gcM(_fGc&&_fGc.com)+'</span></div>';
   }
 
   // Extras — separados: cobrados vs cortesía
