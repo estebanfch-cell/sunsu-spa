@@ -785,6 +785,8 @@ describe("clientes, reportes, consignación y gift card", () => {
     assert.equal(gc.aplicado, 65);
     assert.equal(gc.saldo, 35);
     assert.equal(gc.facialCobro, 15);
+    const dash = await handle("getDashCosm", { token: c.token, cosmetologa: "Emi" }, c) as Row;
+    assert.equal(dash.comFaciales, 3);
     const row = (await db.all("gift_cards"))[0];
     assert.equal(row.usado, false);
     assert.match(String(row.notas), /SALDO:35\.00/);
@@ -828,19 +830,26 @@ describe("clientes, reportes, consignación y gift card", () => {
     const ht = (per.fact as Row[]).find((r) => r.sku === "HT-002");
     assert.equal(ht?.vendido, 1);
     assert.equal(ht?.sugerido, 2);
-    const oc = await handle("oc_consignacion", { token: c.token, proveedor_id: SEED_IDS.prov, fecha_entrega: "2026-10-28" }, c) as Row;
+    assert.equal(per.buffer, 0.2);
+    const cero = await handle("periodo_consignacion", { token: c.token, proveedor_id: SEED_IDS.prov, buffer: 0 }, c) as Row;
+    assert.equal((cero.fact as Row[]).find((r) => r.sku === "HT-002")?.sugerido, 1);
+    const oc = await handle("oc_consignacion", {
+      token: c.token, proveedor_id: SEED_IDS.prov, fecha_entrega: "2026-10-28", buffer: 20,
+      lineas: [{ sku: "HT-002", cantidad: 5 }],
+    }, c) as Row;
     assert.equal(oc.ok, true);
     assert.match(String(oc.numero), /^OC-/);
     const linea = (await db.all("erp_oc_lineas"))[0];
-    assert.equal(linea.cantidad, 2);
+    assert.equal(linea.cantidad, 5);
+    assert.equal((oc.snap as Row).buffer, 0.2);
     assert.equal(linea.bodega_id, BODEGA_VENTA);
     assert.equal(linea.plazo, "RESTOCK");
     const rec = await handle("oc_recibir", {
-      token: c.token, oc_id: oc.id, lineas: [{ oc_linea_id: linea.id, bodega_id: BODEGA_VENTA, cantidad: 2 }],
+      token: c.token, oc_id: oc.id, lineas: [{ oc_linea_id: linea.id, bodega_id: BODEGA_VENTA, cantidad: 5 }],
     }, c) as Row;
     assert.equal(rec.ok, true);
     const stock = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
-    assert.equal(stock?.cantidad, 7);
+    assert.equal(stock?.cantidad, 10);
     assert.equal((await db.all("erp_movimientos")).some((m) => m.tipo === "recepcion"), true);
   });
 });
@@ -865,5 +874,10 @@ describe("beta shell", () => {
     const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     assert.match(screens, /id="gc-aplica"/);
     assert.match(screens, /diferencia a cobrar/);
+    assert.equal(screens.includes("facialP/f.p"), false);
+    assert.match(html, /id="consig-buffer"/);
+    assert.match(html, /function pdfPaginas/);
+    assert.match(html, /PRE-FACTURA DE CONSIGNACION/);
+    assert.match(html, /PEDIDO DE RESTOCK/);
   });
 });

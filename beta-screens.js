@@ -1716,7 +1716,7 @@ function updatePreview(){
   let comF=0,comP=0;
   const esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
 
-  // Facial. Gift card parcial: el facial se cobra por la diferencia y la comisión va en esa proporción.
+  // Facial. Gift card parcial: se cobra la diferencia. La comisión es la tarifa fija del facial hecho.
   let facialP=0, facialNombre='';
   if(T.facial){
     const f=FACIALES.find(f=>f.sku===T.facial);
@@ -1726,7 +1726,7 @@ function updatePreview(){
         const pedido=Number(T.gcAplica)||0;
         const tope=Math.min(pedido>0?pedido:(Number(T.gcSaldo)||0), f.p);
         facialP=Math.max(0, Math.round((f.p-tope)*100)/100);
-        comF=f.p>0?Math.round(f.com*(facialP/f.p)*100)/100:0;
+        comF=f.com;
         T._gcUsado=tope; T._gcDif=facialP;
       } else if(!esCanje){ comF=f.com; facialP=f.p; }
     }
