@@ -47,6 +47,11 @@ export function quincenaActual(now: Date, forzar?: number): Quincena {
   return quincenaDe(ec.y, ec.m, ec.d, forzar);
 }
 
+export function familiaSku(sku: string): string {
+  const m = skuCode(sku).match(/^(HT|AS|ML|PH|JN)-/);
+  return m ? m[1] : "";
+}
+
 export function familiaDe(nombre: string, familia?: string): string {
   const f = s(familia).toUpperCase();
   if (f) return f.replace(/[^A-Z]/g, "");
@@ -511,6 +516,15 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
       vendido.set(skuCode(pr.sku), (vendido.get(skuCode(pr.sku)) || 0) + pr.qty);
     }
   }
+  const consumido = new Map<string, number>();
+  let consumos: Row[] = [];
+  try { consumos = await db.all("erp_consignacion_consumo"); } catch { consumos = []; }
+  for (const c of consumos) {
+    if (s(c.familia) !== familia) continue;
+    if (s(c.quincena_ini) !== q.ini || s(c.quincena_fin) !== q.fin) continue;
+    const sku = skuCode(c.sku);
+    consumido.set(sku, (consumido.get(sku) || 0) + n(c.cantidad));
+  }
   const vistos = new Set<string>();
   for (const pr of prods) {
     const sku = skuCode(pr.sku);
@@ -518,19 +532,28 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     vistos.add(sku);
     const hay = stock.filter((r) => r.producto_id === pr.id && String(r.bodega_id) === ventaId).reduce((a, r) => a + n(r.cantidad), 0);
     const v = vendido.get(sku) || 0;
+    const cns = consumido.get(sku) || 0;
+    const paga = v + cns;
     const compra = n(pr.costo_promedio);
     items.push({
-      sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, compra,
-      sugerido: v > 0 ? Math.ceil(v * (1 + buffer)) : 0,
-      subtotal: round2(v * compra),
+      sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, consumido: cns, compra,
+      sugerido: paga > 0 ? Math.ceil(paga * (1 + buffer)) : 0,
+      subtotal: round2(paga * compra),
     });
   }
   for (const [sku, v] of vendido) {
     if (vistos.has(sku)) continue;
-    items.push({ sku, nombre: sku, stock: 0, vendido: v, compra: 0, sugerido: Math.ceil(v * (1 + buffer)), subtotal: 0 });
+    const cns = consumido.get(sku) || 0;
+    const paga = v + cns;
+    items.push({ sku, nombre: sku, stock: 0, vendido: v, consumido: cns, compra: 0, sugerido: Math.ceil(paga * (1 + buffer)), subtotal: 0 });
+    vistos.add(sku);
+  }
+  for (const [sku, cns] of consumido) {
+    if (vistos.has(sku)) continue;
+    items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, compra: 0, sugerido: Math.ceil(cns * (1 + buffer)), subtotal: 0 });
   }
   items.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
-  const fact = items.filter((it) => n(it.vendido) > 0);
+  const fact = items.filter((it) => n(it.vendido) + n(it.consumido) > 0);
   const restock = items.filter((it) => n(it.sugerido) > 0);
   const sub = round2(fact.reduce((a, it) => a + n(it.subtotal), 0));
   const iva = round2(sub * 0.15);
@@ -540,6 +563,6 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     familia, buffer, ...q,
     items, fact, restock,
     totales: { subtotal: sub, iva, total: round2(sub + iva) },
-    nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada.",
+    nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará lo vendido y lo pasado a cabina en la quincena, a precio de compra + IVA.",
   };
 }

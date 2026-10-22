@@ -26,7 +26,7 @@ begin
     'erp_tickets_procesados','erp_clientes','erp_proveedores','erp_productos',
     'log_acciones','ordenes_compra','caja_chica','propinas','multas_descuentos',
     'app_archivos','cabina_ordenes','roles_aprobados','historial_comisiones',
-    'erp_stock'
+    'erp_stock','erp_locales','erp_consignacion_consumo'
   ]
   loop
     if to_regclass('public.' || t) is not null then
@@ -156,7 +156,7 @@ declare
     'erp_tickets_procesados','erp_clientes','erp_proveedores','erp_productos',
     'log_acciones','ordenes_compra','caja_chica','propinas','multas_descuentos',
     'app_archivos','cabina_ordenes','roles_aprobados','historial_comisiones',
-    'erp_stock'
+    'erp_stock','erp_locales','erp_consignacion_consumo'
   ];
   t text;
   n int;

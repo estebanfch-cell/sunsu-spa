@@ -25,7 +25,7 @@ const T = "todos" as const;
 export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   cosmetologa: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
-    clientes: P, inventario: T, paquetes: P, bitacora: T, cabina: T,
+    clientes: P, inventario: T, transferencias: T, paquetes: P, bitacora: T, cabina: T,
   },
   asistente_cosmetologia: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
@@ -54,7 +54,8 @@ const ACCION_MODULO: Record<string, Modulo> = {
   oc_save: "compras", oc_list: "compras", oc_get: "compras", oc_cancel: "compras", oc_recibir: "compras",
   oc_recibir_undo: "compras", oc_devolver: "compras", pago_save: "compras", reorden_sugerir: "compras",
   trf_save: "transferencias", trf_enviar: "transferencias", trf_recibir: "transferencias", trf_list: "transferencias",
-  conteo_abrir: "conteos", conteo_guardar: "conteos", conteo_aplicar: "conteos", conteo_list: "conteos",
+  conteo_abrir: "conteos", conteo_guardar: "conteos", conteo_aplicar: "conteos", conteo_list: "conteos", conteo_get: "conteos",
+  lugares_list: "inventario", lugar_guardar: "inventario", lugar_elegir: "inicio",
   ajuste_save: "inventario",
   getHistorial: "tickets", getTicketsDia: "tickets", editarTicket: "tickets", eliminarTicket: "tickets",
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",

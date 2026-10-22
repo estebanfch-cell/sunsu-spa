@@ -16,12 +16,13 @@ const MOD: Record<string, string> = {
   oc_recibir: "compras", oc_recibir_undo: "compras", oc_devolver: "compras", pago_save: "compras",
   reorden_sugerir: "compras", refs: "compras",
   trf_list: "transferencias", trf_save: "transferencias", trf_enviar: "transferencias", trf_recibir: "transferencias",
-  conteo_list: "conteos", conteo_abrir: "conteos", conteo_guardar: "conteos", conteo_aplicar: "conteos",
+  conteo_list: "conteos", conteo_abrir: "conteos", conteo_guardar: "conteos", conteo_aplicar: "conteos", conteo_get: "conteos",
+  lugares_list: "inventario", lugar_guardar: "inventario", lugar_elegir: "inicio",
   ajuste_save: "inventario",
   ov_list: "tickets", ov_get: "tickets", ov_save: "tickets", ov_anular: "tickets", ticket_aplicar: "tickets",
 };
 
-const ESCRITURA = new Set(["prod_save", "prov_save", "cli_save", "rfq_save", "rfq_respuesta", "rfq_adjudicar", "oc_save", "oc_cancel", "oc_recibir", "oc_recibir_undo", "oc_devolver", "pago_save", "trf_save", "trf_enviar", "trf_recibir", "conteo_abrir", "conteo_guardar", "conteo_aplicar", "ajuste_save", "ov_save", "ov_anular"]);
+const ESCRITURA = new Set(["prod_save", "prov_save", "cli_save", "rfq_save", "rfq_respuesta", "rfq_adjudicar", "oc_save", "oc_cancel", "oc_recibir", "oc_recibir_undo", "oc_devolver", "pago_save", "trf_save", "trf_enviar", "trf_recibir", "conteo_abrir", "conteo_guardar", "conteo_aplicar", "ajuste_save", "ov_save", "ov_anular", "lugar_guardar", "lugar_elegir"]);
 
 function permitido(op: string, rol: string, matriz: Record<string, Partial<Record<string, Acceso>>>): boolean {
   const mod = MOD[op];
@@ -30,6 +31,7 @@ function permitido(op: string, rol: string, matriz: Record<string, Partial<Recor
   if (ESCRITURA.has(op) && (mod === "compras" || mod === "proveedores") && !esAdmin(rol)) return false;
   if (op === "prod_save" && !esAdmin(rol)) return false;
   if ((op === "conteo_aplicar" || op === "ajuste_save") && !esAdmin(rol) && acceso(rol, "inventario", matriz) !== "todos" && acceso(rol, "conteos", matriz) !== "todos") return false;
+  if (op === "lugar_guardar" && !esAdmin(rol)) return false;
   return true;
 }
 
@@ -38,7 +40,7 @@ for (const op of Object.keys(MOD)) {
     const matriz = await matrizDe(ctx.db);
     if (!permitido(op, ses.rol, matriz)) return { error: "No tienes permiso" };
     try {
-      const out = await runErp(op, p as Row, ctx.db, actorOf(ses), ctx.now);
+      const out = await runErp(op, { ...(p as Row), _rol: ses.rol, token: ses.token }, ctx.db, actorOf(ses), ctx.now);
       return out;
     } catch (e) {
       if (e instanceof ErpError && e.requiere) {
