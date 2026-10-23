@@ -1441,7 +1441,10 @@ describe("horarios", () => {
     adminC.env = { JIBBLE_CLIENT_ID: "id", JIBBLE_CLIENT_SECRET: "secret" };
     adminC.fetchImpl = (async (url: string) => {
       if (url.includes("connect/token")) return json({ access_token: "tok" });
-      if (url.includes("/Schedules")) return json(jibble.schedules);
+      if (url.includes("/Schedules")) {
+        assert.equal(url, "https://workspace.prod.jibble.io/v1/Schedules");
+        return json(jibble.schedules);
+      }
       if (url.includes("/People")) return json(jibble.people);
       if (url.includes("/Groups")) return json(jibble.groups);
       return json({}, 404);
