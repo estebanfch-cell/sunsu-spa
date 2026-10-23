@@ -210,7 +210,8 @@ export async function leerJibble(fetchImpl: typeof fetch, env: Record<string, st
   const tok = await tokRes.json() as Row;
   if (!tokRes.ok || !s(tok.access_token)) return { ok: false, error: "Jibble rechazó las credenciales." };
   const headers = { Authorization: "Bearer " + s(tok.access_token) };
-  const schRes = await fetchImpl("https://workspace.prod.jibble.io/v1/Schedules?$expand=daySchedules,breaks,autoDeductions", { headers });
+  // Jibble responde 400 si se manda $expand; daySchedules, breaks y autoDeductions ya vienen en el GET.
+  const schRes = await fetchImpl("https://workspace.prod.jibble.io/v1/Schedules", { headers });
   if (!schRes.ok) return { ok: false, error: "Jibble no devolvió los horarios (" + schRes.status + ")." };
   const schedules = await schRes.json();
   const peopleRes = await fetchImpl("https://time-tracking.prod.jibble.io/v1/People?$top=500&$select=id,fullName,scheduleId,groupId", { headers });
