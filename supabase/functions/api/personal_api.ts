@@ -1,5 +1,5 @@
 // Personal, gift cards, paquetes y citas de la beta. Las secuencias siguen el número que ya existe.
-import { extend } from "./handlers.ts";
+import { extend, origConMarca, rechazoSegundaMarca } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, bajasDe, logAccion, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, normNombre, s, siguienteCodigoGc, siguienteCodigoPaq, USO_FIELDS, type Row } from "./domain.ts";
@@ -187,9 +187,14 @@ extend("paq_editar", "any", async (p, ctx, ses) => {
     patch[u] = false;
     patch[f] = "";
     patch.completo = false;
+    patch.orig = origConMarca(row, idx, "", ctx.now.getTime(), true);
   } else {
+    if (row[u] === true || s(row[f])) return { error: "Esta sesión ya fue marcada" };
+    const rechazo = rechazoSegundaMarca(row, idx, s(p.ticket), ctx.now.getTime());
+    if (rechazo) return { error: rechazo };
     patch[u] = true;
     patch[f] = s(p.fecha) || ecuadorParts(ctx.now).ymd;
+    patch.orig = origConMarca(row, idx, s(p.ticket), ctx.now.getTime(), false);
   }
   if (p.notas != null) patch.notas = s(p.notas);
   await ctx.db.write(actorOf(ses), "paquetes", "update", { sheet_row: row.sheet_row }, patch);

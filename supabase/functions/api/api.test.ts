@@ -1189,6 +1189,42 @@ describe("personal, gift y citas", () => {
     assert.equal(des.ok, true);
   });
 
+  it("comprar un paquete no marca la primera sesión y una segunda marca seguida se rechaza", async () => {
+    const db = new MemoryDb();
+    const c = ctx(db);
+    const out = await handle("crearTicket", {
+      token: c.token, nombre: "Ana", apellido: "Paz", cedula: "1711", estimado: 80,
+      cosmetologa: "Andrea", facial: "SUNSU-01 Facial", pack3: "SUNSU-17 x3 Facial S.O.S",
+    }, c) as Row;
+    assert.equal(out.ok, true);
+    assert.ok(out.paqueteFila);
+    const paq = (await db.all("paquetes")).find((r) => r.sheet_row === out.paqueteFila);
+    assert.notEqual(paq?.uso_1, true);
+    const auto = await handle("marcarPrimerUsoPaquete", { token: c.token, cedula: "1711", sku: "SUNSU-17" }, c) as Row;
+    assert.match(String(auto.error), /no se marca sola/i);
+    assert.notEqual((await db.all("paquetes")).find((r) => r.sheet_row === out.paqueteFila)?.uso_1, true);
+    const uno = await handle("marcarUsoManual", {
+      token: c.token, fila: out.paqueteFila, idx: 0, nota: "24/10/26 Facial", total: 3, ticket: "TK-1",
+    }, c) as Row;
+    assert.equal(uno.ok, true);
+    assert.equal(uno.slot, 1);
+    const otraVez = await handle("marcarUsoManual", {
+      token: c.token, fila: out.paqueteFila, idx: 0, nota: "24/10/26 Facial", total: 3, ticket: "TK-1",
+    }, c) as Row;
+    assert.match(String(otraVez.error), /ya fue marcada/i);
+    const dos = await handle("marcarUsoManual", {
+      token: c.token, fila: out.paqueteFila, idx: 1, nota: "24/10/26 Facial", total: 3, ticket: "TK-1",
+    }, c) as Row;
+    assert.match(String(dos.error), /ticket/i);
+    assert.notEqual((await db.all("paquetes")).find((r) => r.sheet_row === out.paqueteFila)?.uso_2, true);
+    c.now = new Date(c.now.getTime() + 3 * 60 * 1000);
+    const tres = await handle("marcarUsoManual", {
+      token: c.token, fila: out.paqueteFila, idx: 1, nota: "otra visita", total: 3, ticket: "TK-2",
+    }, c) as Row;
+    assert.equal(tres.ok, true);
+    assert.equal((await db.all("paquetes")).find((r) => r.sheet_row === out.paqueteFila)?.uso_2, true);
+  });
+
   it("citas de otra cosmetóloga no salen y el precio solo lo ve admin", async () => {
     const db = new MemoryDb();
     const adminC = ctx(db);

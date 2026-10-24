@@ -4364,11 +4364,18 @@ function wirePersonal(main) {
     if (!setMsg(emitirPaq, data, data.codigo || "Emitido")) return;
     if (data.codigo) go("#/m/gift/paquetes/" + encodeURIComponent(data.codigo));
   });
-  main.querySelectorAll("[data-paq]").forEach((b) => {
+  const botonesPaq = [...main.querySelectorAll("[data-paq]")];
+  botonesPaq.forEach((b) => {
     b.onclick = async () => {
+      if (botonesPaq.some((x) => x.disabled)) return;
+      botonesPaq.forEach((x) => { x.disabled = true; });
       const data = await api("paq_editar", { codigo: b.getAttribute("data-codigo"), accion: b.getAttribute("data-paq"), slot: b.getAttribute("data-slot") });
       const err = main.querySelector("#f-err");
-      if (data.error) { if (err) err.textContent = data.error; return; }
+      if (data.error) {
+        botonesPaq.forEach((x) => { x.disabled = false; });
+        if (err) err.textContent = data.error;
+        return;
+      }
       go("#/m/gift/paquetes/" + encodeURIComponent(b.getAttribute("data-codigo")));
     };
   });
@@ -4399,7 +4406,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261024gc"></script>
+<script src="beta-screens.js?v=20261024gd"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
