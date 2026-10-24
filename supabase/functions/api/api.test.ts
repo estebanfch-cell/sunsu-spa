@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
-import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
+import { comisionPaquetesTramo, comisionProductos, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
 import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
@@ -984,7 +984,8 @@ describe("clientes, reportes, consignación y gift card", () => {
     assert.equal(gc.saldo, 35);
     assert.equal(gc.facialCobro, 15);
     const dash = await handle("getDashCosm", { token: c.token, cosmetologa: "Emi" }, c) as Row;
-    assert.equal(dash.comFaciales, 3);
+    assert.equal(dash.comFaciales, 0);
+    assert.equal(dash.adminExcluido, true);
     const row = (await db.all("gift_cards"))[0];
     assert.equal(row.usado, false);
     assert.match(String(row.notas), /SALDO:35\.00/);
@@ -1332,7 +1333,8 @@ describe("modo prueba", () => {
     const comReal = await handle("getDashCosm", { token: real.token, cosmetologa: "Emi" }, real) as Row;
     assert.equal(comReal.comFaciales, 0);
     const comTest = await handle("getDashCosm", { token: prueba, cosmetologa: "Emi" }, real) as Row;
-    assert.equal(comTest.comFaciales, 3);
+    assert.equal(comTest.comFaciales, 0);
+    assert.equal(comTest.adminExcluido, true);
 
     const marca = await handle("asis_marca_manual", {
       token: prueba, nombre: "Andrea", tipo: "entrada", motivo: "olvido", ts: "2026-10-21T09:05:00-05:00",
@@ -1365,7 +1367,7 @@ describe("modo prueba", () => {
       token: prueba, cliente: "María", lineas: [{ nombre: "Facial", cant: 1, precio: 57 }],
     }, real) as Row;
     assert.equal(cot.ok, true);
-    assert.match(String(cot.numero), /^TEST-COT-/);
+    assert.match(String(cot.numero), /^TEST-TK-SQ-/);
 
     const editReal = await handle("ticket_editar", {
       token: prueba, ref: "5", lineas: [{ clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 4, precio: 20, costo: 8 }],
@@ -1668,5 +1670,116 @@ describe("personal bajas", () => {
     assert.equal(asigs.some((r) => r.persona === "Andrea Robles"), true);
     assert.equal(asigs.some((r) => r.persona === "Carla Salio" && r.horario_id === "viejo"), true);
     assert.equal((await db.all("tickets"))[0].cosm1, "Carla Salio");
+  });
+});
+
+describe("series, comisiones y rol", () => {
+  it("los tramos por defecto siguen en dólares y el porcentaje usa el neto", () => {
+    assert.equal(comisionPaquetesTramo(12).monto, 10 * 10 + 2 * 15);
+    assert.equal(comisionPaquetesTramo(12).etiqueta, "11–20 · $15");
+    const pct = normalizarTramos([
+      { desde: 1, hasta: 10, modo: "pct", valor: 5 },
+      { desde: 11, hasta: 20, modo: "pct", valor: 8 },
+      { desde: 21, hasta: 30, modo: "fijo", valor: 11 },
+      { desde: 31, hasta: 100000, modo: "pct", valor: 14 },
+    ]);
+    assert.equal(pct[0].valor, 0.05);
+    assert.equal(comisionPaquetesTramo(2, pct, [100, 80]).monto, 9);
+    assert.equal(comisionPaquetesTramo(2, pct).monto, 0);
+  });
+
+  it("backfill TK-SO respeta el orden y la prueba no gasta la serie", async () => {
+    const db = new MemoryDb({
+      tickets: [
+        { id: 2, sheet_row: 8, origin: "sheet", timestamp: "2026-10-02T10:00:00Z", nombre: "Tarde", orig: {} },
+        { id: 1, sheet_row: 3, origin: "sheet", timestamp: "2026-10-01T10:00:00Z", nombre: "Temprano", orig: {} },
+        { id: 4, origin: "test", beta_num: "TEST-TK-20261001-0001", timestamp: "2026-09-01T10:00:00Z", nombre: "Prueba", orig: {} },
+      ],
+    });
+    const c = ctx(db);
+    const lista = await handle("getTicketsLista", { token: c.token }, c) as Row;
+    const items = lista.items as Row[];
+    const temprano = (await db.all("tickets")).find((r) => r.nombre === "Temprano");
+    const tarde = (await db.all("tickets")).find((r) => r.nombre === "Tarde");
+    const prueba = (await db.all("tickets")).find((r) => r.nombre === "Prueba");
+    assert.equal(temprano?.so_num, "TK-SO-0001");
+    assert.equal(tarde?.so_num, "TK-SO-0002");
+    assert.equal(prueba?.so_num, undefined);
+    assert.equal(items[0].so_num, "TK-SO-0002");
+    const nuevo = await handle("crearTicket", { token: c.token, nombre: "Nueva", cedula: "1", cosmetologa: "Andrea", estimado: 10 }, c) as Row;
+    assert.equal(nuevo.so_num, "TK-SO-0003");
+    assert.match(String(nuevo.beta_num), /^TK-20261021-900001$/);
+    const edit = await handle("editarTicket", { token: c.token, clave: "TK-SO-0003", nombre: "Nueva", apellido: "Paz", cedula: "1", subtotal: 100 }, c) as Row;
+    assert.equal(edit.ok, true);
+    assert.equal(edit.estimado, 115);
+    assert.equal(edit.iva, 15);
+    const cotVieja = await ctx(db);
+    db.tables.set("cotizaciones", [
+      { id: 1, numero: "COT-0002", fecha: "2026-10-02T00:00:00Z", cliente: "B", items: [], orig: {} },
+      { id: 2, numero: "COT-0001", fecha: "2026-10-01T00:00:00Z", cliente: "A", items: [], orig: {} },
+    ]);
+    const cot = await handle("guardarCotizacion", {
+      token: cotVieja.token, cliente: "C", lineas: [{ nombre: "Facial", cant: 1, precio: 20 }],
+    }, cotVieja) as Row;
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "A")?.numero, "TK-SQ-0001");
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "B")?.numero, "TK-SQ-0002");
+    assert.equal(cot.numero, "TK-SQ-0003");
+    const otra = await handle("guardarCotizacion", {
+      token: cotVieja.token, numero: "TK-SQ-0003", cliente: "C editada", lineas: [{ nombre: "Facial", cant: 2, precio: 20 }],
+    }, cotVieja) as Row;
+    assert.equal(otra.ok, true);
+    assert.equal(otra.numero, "TK-SQ-0003");
+    assert.equal((await db.all("cotizaciones")).filter((r) => r.numero === "TK-SQ-0003").length, 1);
+  });
+
+  it("un admin no entra en la tabla ni en N, y el rol usa sueldo, ciclo y jibble", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      cosmetologas: [
+        { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true },
+        { id: "emi", nombre: "Emi", patron: "emi%", es_cosmetologa: true, activa: true },
+      ],
+      tickets: [
+        { id: 1, sheet_row: 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101", facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-60", orig: {} },
+        { id: 2, sheet_row: 2, timestamp: "2026-10-27T16:00:00Z", atendido_por: "Emi", id_3: "0202", facial_hecho: "SUNSU-40", compra_pack_6: "SUNSU-61", orig: {} },
+      ],
+      rrhh_empleadas: [{ cedula: "1711", nombre_app: "Andrea", apellidos_y_nombres: "Andrea Robles", sueldo: 460, bono: 40, fondo_reserva: "NO", fecha_ingreso: "2024-01-01", cargo: "Cosmetologa" }],
+      jibble_historial: [{ nombre: "Andrea Robles", fecha: "2026-10-27", payroll_minutes: 480, supplementary_minutes: 60 }],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Emi" }, c) as Row;
+    assert.equal(tabla.persona, "Andrea Robles");
+    assert.equal((tabla.personas as string[]).includes("Emi"), false);
+    assert.equal((tabla.ciclos as Row[])[0].regimen, "tramo");
+    assert.equal((tabla.ciclos as Row[])[0].n, 1);
+    const filas = tabla.filas as Row[];
+    assert.deepEqual(filas.map((f) => f.concepto), ["Faciales", "Paquetes", "Productos", "Recepción", "Extras", "Total"]);
+    assert.equal((filas.find((f) => f.concepto === "Faciales")?.porCiclo as number[])[0], 2);
+    assert.equal((filas.find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0], 10);
+    const rol0 = await handle("getRolCiclo", { token: c.token, desde: "2026-10-26", persona: "Andrea" }, c) as Row;
+    assert.equal(rol0.fuenteHoras, "jibble");
+    assert.equal((rol0.ingresos as Row[]).find((r) => r.concepto === "Sueldo")?.monto, 460);
+    assert.equal((rol0.ingresos as Row[]).find((r) => r.concepto === "Bono")?.monto, 40);
+    assert.equal((rol0.ingresos as Row[]).find((r) => r.concepto === "Faciales")?.monto, 2);
+    const cfg = await handle("pago_config_guardar", {
+      token: c.token, nombre: "Andrea", vigente_desde: "2026-10-01", sueldo: 500, bono: 20, iess_pct: 9.45, fondo: false,
+    }, c) as Row;
+    assert.equal(cfg.ok, true);
+    const rol1 = await handle("getRolCiclo", { token: c.token, desde: "2026-10-26", persona: "Andrea" }, c) as Row;
+    assert.equal((rol1.ingresos as Row[]).find((r) => r.concepto === "Sueldo")?.monto, 500);
+    const cat = await handle("getCatalogoTabla", { token: c.token }, c) as Row;
+    db.tables.set("catalogo", [{ sheet_row: 1, sku: "SUNSU-HT-002", producto_servicio: "Serum", tipo: "PRODUCTO", subtotal: 20, total_con_iva: 23, activo: true, orig: {} }]);
+    db.tables.set("erp_productos", [{ id: "p1", sku: "HT-002", nombre: "Serum" }]);
+    db.tables.set("erp_oc", [{ id: "oc1", fecha: "2026-10-01" }]);
+    db.tables.set("erp_oc_lineas", [{ id: "l1", oc_id: "oc1", producto_id: "p1", precio: 8 }]);
+    db.tables.set("inventario_base", [{ id: 3, sku: "SUNSU-HT-002", compra: 0, stock_inicial: 0 }]);
+    const tablaCat = await handle("getCatalogoTabla", { token: c.token }, c) as Row;
+    const serum = (tablaCat.items as Row[]).find((r) => String(r.sku).includes("HT-002"));
+    assert.equal(serum?.compraReal, 8);
+    assert.equal((await db.all("inventario_base"))[0].compra, 8);
+    assert.equal(cat.ok, true);
   });
 });

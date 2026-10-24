@@ -6,6 +6,7 @@ import { enPrueba, MemoryDb, type Db } from "./db.ts";
 import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguienteTestDoc, skuCode, type Row } from "./domain.ts";
 import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
+import { backfillSO, tomarNumero } from "./series.ts";
 import { familiaSku, quincenaActual } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
@@ -1051,16 +1052,20 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   const iva = round2(sub * 0.15);
   const total = round2(sub + iva);
   const ident = await asignarTicketBeta(db, now);
+  try { await backfillSO(db, actor); } catch { /* la serie local sigue si la tabla no acepta el update */ }
+  const soNum = await tomarNumero(db, "TK-SO", await db.all("tickets"), "so_num");
   const atendido = nombreDeActor(s(body.cosmetologa) || s(body.atendido_por) || actor);
   const orig = ticketCols.orig as Row;
   orig.ticket_ref = ref;
   orig.ov = numero;
   orig.fuente = "ov_save";
   orig.beta = true;
+  orig.so_num = soNum;
   steps.push({ op: "upsert", table: "tickets", match: { beta_num: ident.beta_num }, row: {
     sheet_row: null,
     origin: ident.origin,
     beta_num: ident.beta_num,
+    so_num: soNum,
     timestamp: ec.isoWall,
     atendido_por: atendido,
     id_3: s(body.cedula),
