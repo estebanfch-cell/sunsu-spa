@@ -378,6 +378,35 @@ export function calcularNomina(opts: {
   };
 }
 
+/** Faltas del rol: solo días de trabajo del horario de esa persona, hasta el último día con datos. */
+export function faltasDeRol(dias: DiaAsistencia[], opts: {
+  trabaja: (fecha: string) => boolean;
+  feriados: string[];
+  permisos: PermisoIn[];
+  corte: string;
+}): number {
+  const fer = new Set(opts.feriados);
+  const primera = dias.find((d) => d.fuente !== "vacio" && (d.diaContado || d.abierto || d.fuente === "permiso" || d.fuente === "jibble"));
+  if (!primera || !opts.corte) return 0;
+  let nF = 0;
+  for (const d of dias) {
+    if (d.fecha < primera.fecha || d.fecha > opts.corte) continue;
+    if (d.fuente === "jibble" || d.fuente === "marcaje" || d.fuente === "permiso" || d.diaContado || d.abierto) continue;
+    if (fer.has(d.fecha) || permisoCubre(opts.permisos, d.fecha)) continue;
+    if (opts.trabaja(d.fecha)) nF++;
+  }
+  return nF;
+}
+
+function permisoCubre(permisos: PermisoIn[], fecha: string): boolean {
+  return permisos.some((p) => {
+    if (!aprobado(p.estado)) return false;
+    const a = ymdDe(p.desde);
+    const b = ymdDe(p.hasta || p.desde);
+    return !!a && fecha >= a && fecha <= (b || a);
+  });
+}
+
 export function configDesde(row: Record<string, unknown> | undefined): AsistenciaConfig {
   if (!row) return { ...CONFIG_DEF };
   return {

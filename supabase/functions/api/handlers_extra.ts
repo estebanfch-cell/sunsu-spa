@@ -431,6 +431,17 @@ extend("pago_config_guardar", "any", async (p, ctx, ses) => {
   await logAccion(ctx.db, actorOf(ses), "PAGO CONFIG", s(row.nombre) + " desde " + s(row.vigente_desde));
   return { ok: true, config: row };
 });
+async function corteAsistencia(ctx: Ctx): Promise<string> {
+  let max = "";
+  const tomar = (f: string) => { const y = f.slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(y) && y > max) max = y; };
+  for (const r of await ctx.db.all("jibble_historial").catch(() => [])) tomar(s(r.fecha));
+  for (const r of await ctx.db.all("asistencia_marcajes").catch(() => [])) {
+    if (r.anulado === true) continue;
+    const cruda = s(r.ts);
+    tomar(/^\d{4}-\d{2}-\d{2}/.test(cruda) ? cruda : ecuadorParts(new Date(cruda)).ymd);
+  }
+  return max;
+}
 extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const inicio = s(p.desde) || s(p.ciclo) || cicloInicio(ecuadorParts(ctx.now).ymd);
   const pack = await cicloDe(ctx, inicio);
@@ -451,7 +462,13 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const bono = cfg ? n(cfg.bono) : dineroDe(e, ["bono_fijo", "bono"]);
   const fondo = cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(e?.fondo_reserva).toUpperCase() === "SI";
   const { horasEnRango } = await import("./asistencia_api.ts");
-  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0, diasPeriodo: 0 };
+  const { faltasDeRol } = await import("./asistencia.ts");
+  const { cargarHorarios } = await import("./horarios_api.ts");
+  const { horarioAsignado, jornadaDe } = await import("./horarios.ts");
+  let horas: import("./asistencia.ts").NominaHoras = {
+    hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null,
+    diasJibble: 0, diasPropios: 0, diasPeriodo: 0, suplExcesoMin: 0, hrsTrabajadas: 0, hrsOrdinarias: 0, hrsAlmuerzo: 0, dias: [],
+  };
   try { horas = await horasEnRango(ctx, s(e?.nombre_app) || persona, pack.ciclo, fin); } catch { /* sin tablas de asistencia */ }
   const montos = pack.calc.personas.find((c) => {
     const a = normNombre(c.cosm);
@@ -477,10 +494,23 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const [y, m, d0] = pack.ciclo.split("-").map(Number);
   const [y2, m2, d2] = fin.split("-").map(Number);
   const diasPeriodo = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d0)) / 86400000) + 1;
+  let diasLaborados = horas.hayDatos ? horas.diasLaborados : null;
+  if (horas.hayDatos) {
+    const hpack = await cargarHorarios(ctx);
+    const horario = horarioAsignado(hpack.horarios, hpack.asignaciones, [persona, s(e?.nombre_app), s(e?.apellidos_y_nombres)]);
+    const corte = await corteAsistencia(ctx);
+    const feriados = (await ctx.db.all("asistencia_feriados").catch(() => [])).map((r) => s(r.fecha).slice(0, 10)).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f));
+    const quien = { rol: "", name: persona, short: s(e?.nombre_app) || persona, uid: "" };
+    const permisos = (await ctx.db.all("permisos").catch(() => [])).filter((r) => esPropio(s(r.empleada), quien)).map((r) => ({
+      tipo: s(r.tipo), estado: s(r.estado), desde: s(r.fecha_inicio).slice(0, 10), hasta: s(r.fecha_fin).slice(0, 10), horas: n(r.horas),
+    }));
+    const faltas = horario ? faltasDeRol(horas.dias, { trabaja: (f) => jornadaDe(horario, f).trabaja, feriados, permisos, corte }) : 0;
+    diasLaborados = Math.max(0, diasPeriodo - faltas);
+  }
   const local = rolCalcular({
     sueldo, bono, fondoReserva: fondo,
     fechaIngreso: s(e?.fecha_ingreso) || "2020-01-01",
-    anio: y2, mes: m2, diasPeriodo, diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
+    anio: y2, mes: m2, diasPeriodo, diasLaborados,
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
     ...com, multas: round2(multas),
     iessPct: cfg ? n(cfg.iess_pct) : undefined,

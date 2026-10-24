@@ -1793,4 +1793,64 @@ describe("series, comisiones y rol", () => {
     assert.equal((await db.all("inventario_base"))[0].compra, 8);
     assert.equal(cat.ok, true);
   });
+
+  it("getRolCiclo cuenta faltas en el horario propio y solo hasta el último dato", async () => {
+    const dias = (id: string, nombres: string[]) => nombres.map((dia, orden) => ({ horario_id: id, orden, dia, trabaja: true, desde: "09:00", hasta: "18:00" }));
+    const ymds = (desde: string, hasta: string) => {
+      const out: string[] = [];
+      let t = Date.parse(desde + "T00:00:00Z");
+      const end = Date.parse(hasta + "T00:00:00Z");
+      while (t <= end) { out.push(new Date(t).toISOString().slice(0, 10)); t += 86400000; }
+      return out;
+    };
+    const dow = (ymd: string) => new Date(ymd + "T00:00:00Z").getUTCDay();
+    const jibble: Row[] = [];
+    const marca = (nombre: string, ymd: string) => jibble.push({ nombre, fecha: ymd, payroll_minutes: 480 });
+    for (const f of ymds("2026-06-26", "2026-07-25")) {
+      const d = dow(f);
+      if (d === 0 || d === 1) continue;
+      if (f === "2026-06-30" || f === "2026-07-07" || f === "2026-07-14") continue;
+      marca("Daniela Mora", f);
+    }
+    for (const f of ymds("2026-09-26", "2026-10-21")) {
+      const d = dow(f);
+      if (d >= 1 && d <= 5) marca("Andrea Robles", f);
+      if (d >= 2 && d <= 6) marca("Daniela Mora", f);
+    }
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+        { id: "daniela", nombre: "Daniela Mora", short: "Daniela", rol: "cosmetologa", bloqueado: false },
+      ],
+      rrhh_empleadas: [
+        { cedula: "1726", nombre_app: "Andrea", apellidos_y_nombres: "Andrea Robles", sueldo: 482, bono: 0, fondo_reserva: "NO", fecha_ingreso: "2026-05-01", cargo: "Cosmetologa" },
+        { cedula: "1004", nombre_app: "Daniela", apellidos_y_nombres: "Daniela Mora", sueldo: 482, bono: 0, fondo_reserva: "NO", fecha_ingreso: "2026-05-01", cargo: "Cosmetologa" },
+      ],
+      horarios: [
+        { id: "h-and", nombre: "Andrea", arreglo: "fijo", es_default: false },
+        { id: "h-dan", nombre: "Daniela", arreglo: "fijo", es_default: false },
+      ],
+      horario_dias: [
+        ...dias("h-and", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]),
+        ...dias("h-dan", ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]),
+      ],
+      horario_asignaciones: [
+        { persona: "Andrea Robles", horario_id: "h-and" },
+        { persona: "Daniela Mora", horario_id: "h-dan" },
+      ],
+      jibble_historial: jibble,
+      asistencia_feriados: [{ fecha: "2026-07-07", nombre: "Feriado" }],
+      permisos: [{ empleada: "Daniela Mora", tipo: "VACACIONES", estado: "APROBADO", fecha_inicio: "2026-07-14", fecha_fin: "2026-07-14" }],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    c.now = new Date("2026-10-24T18:00:00Z");
+    const sueldoDe = (rol: Row) => (rol.ingresos as Row[]).find((r) => r.concepto === "Sueldo")?.monto;
+    const julio = await handle("getRolCiclo", { token: c.token, desde: "2026-06-26", persona: "Daniela" }, c) as Row;
+    assert.equal(sueldoDe(julio), 465.93);
+    const sepA = await handle("getRolCiclo", { token: c.token, desde: "2026-09-26", persona: "Andrea" }, c) as Row;
+    const sepD = await handle("getRolCiclo", { token: c.token, desde: "2026-09-26", persona: "Daniela" }, c) as Row;
+    assert.equal(sueldoDe(sepA), 482);
+    assert.equal(sueldoDe(sepD), 482);
+  });
 });
