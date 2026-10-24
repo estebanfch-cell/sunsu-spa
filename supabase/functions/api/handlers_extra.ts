@@ -1,9 +1,9 @@
-import { extend } from "./handlers.ts";
+import { cicloDe, extend } from "./handlers.ts";
 import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, CFG_DEF, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
-  ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
+  ecuadorParts, esInterno, estadoTicket, facialSku, n, nombreEsAdmin, normCedula, normNombre,
   productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
@@ -234,9 +234,11 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const fin = cicloFin(ciclo);
   const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map(ticketIn);
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
+  const users = await ctx.db.all("usuarios");
+  const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
   const calc = calcularCiclo(tks, [{
-    id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: true, activa: true, desde: null, hasta: null,
-  }], CFG_DEF, ciclo, null);
+    id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: !nombreEsAdmin(nombreApp, admins), activa: true, desde: null, hasta: null,
+  }], CFG_DEF, ciclo, null, admins);
   const persona = calc.personas.find((p) => normNombre(p.cosm).startsWith(key));
   const cat = await ctx.db.all("catalogo");
   const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
@@ -322,15 +324,21 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
       comProductos: n(calculado.com_productos), comPaquetes: n(calculado.com_paquetes), multas: n(calculado.multas_descuentos),
     }
     : await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes);
+  const dinero = (...keys: string[]) => {
+    for (const k of keys) if (n(e[k]) > 0) return n(e[k]);
+    return 0;
+  };
+  const sueldoBase = dinero("sueldo_base", "sueldo", "sueldo_mensual");
+  const bonoFijo = dinero("bono_fijo", "bono");
   const local = rolCalcular({
-    sueldo: n(e.sueldo_base), bono: n(e.bono_fijo), fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
+    sueldo: sueldoBase, bono: bonoFijo, fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
     fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
     diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
     comFaciales: com.comFaciales, comExtras: com.comExtras, comRecepcion: com.comRecepcion,
     comProductos: com.comProductos, comPaquetes: com.comPaquetes, multas: com.multas,
   });
-  const costoH = n(e.sueldo_base) / 240;
+  const costoH = sueldoBase / 240;
   const data = {
     nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
     diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
@@ -338,7 +346,8 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     hrsSupl: horas.hrsSupl, valSupl: round2(horas.hrsSupl * costoH * 1.5),
     hrsExtr: horas.hrsExtr, valExtr: round2(horas.hrsExtr * costoH * 2),
     hrsDesc: horas.hrsDesc, valDesc: round2(horas.hrsDesc * costoH * 2),
-    atrasoMin: horas.atrasoMin, faltas: horas.faltas, fuenteHoras: horas.hayDatos ? "asistencia" : "sin_marcajes",
+    atrasoMin: horas.atrasoMin, faltas: horas.faltas,
+    fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
     dec13: local.dec13, dec14: local.dec14, fondoReserva: local.fondoReserva, vacaciones: local.vacaciones,
     totalIngresos: rpc && !rpc.error ? n(rpc.total_ingresos) : local.totalIngresos,
     iess: rpc && !rpc.error ? n(rpc.iess_personal) : local.iess,
@@ -348,6 +357,146 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     fuente: rpc && !rpc.error ? "rol_calcular" : "beta-local",
   };
   return { ok: true, data };
+});
+
+function dineroDe(row: R | undefined, keys: string[]): number {
+  if (!row) return 0;
+  for (const k of keys) if (n(row[k]) > 0) return n(row[k]);
+  return 0;
+}
+async function pagoFilas(ctx: Ctx): Promise<R[]> {
+  const kv = await kvGet(ctx.db, "pago_config");
+  const deKv = Array.isArray(kv) ? kv as R[] : (Array.isArray((kv as R).filas) ? (kv as R).filas as R[] : []);
+  try {
+    const rows = await ctx.db.all("pago_config");
+    if (rows.length) return rows;
+  } catch { /* la tabla entra con 0020; mientras vive en app_kv */ }
+  return deKv;
+}
+function pagoVigente(rows: R[], nombre: string, fin: string): R | null {
+  const key = normNombre(nombre).split(" ")[0] || normNombre(nombre);
+  const hits = rows.filter((r) => {
+    const quien = normNombre(s(r.nombre));
+    return quien === normNombre(nombre) || quien.startsWith(key) || key.startsWith(quien.split(" ")[0] || "—");
+  }).filter((r) => s(r.vigente_desde).slice(0, 10) <= fin);
+  hits.sort((a, b) => s(a.vigente_desde).localeCompare(s(b.vigente_desde)));
+  return hits.length ? hits[hits.length - 1] : null;
+}
+extend("getPagoConfig", "any", async (_p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin configura los pagos" };
+  const emps = await ctx.db.all("rrhh_empleadas");
+  const configs = await pagoFilas(ctx);
+  const personas = emps.filter((e) => s(e.nombre_app) || s(e.apellidos_y_nombres)).map((e) => ({
+    nombre: s(e.nombre_app) || s(e.apellidos_y_nombres),
+    cedula: s(e.cedula),
+    sueldo: dineroDe(e, ["sueldo_base", "sueldo", "sueldo_mensual"]),
+    bono: dineroDe(e, ["bono_fijo", "bono"]),
+    fondo: s(e.fondo_reserva).toUpperCase() === "SI",
+    fechaIngreso: s(e.fecha_ingreso).slice(0, 10),
+  }));
+  return { ok: true, personas, configs };
+});
+extend("pago_config_guardar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin configura los pagos" };
+  if (!s(p.nombre) || !/^\d{4}-\d{2}-\d{2}$/.test(s(p.vigente_desde))) return { error: "Falta la persona o la fecha de vigencia" };
+  const row: R = {
+    nombre: s(p.nombre),
+    vigente_desde: s(p.vigente_desde),
+    sueldo: n(p.sueldo),
+    bono: n(p.bono),
+    iess_pct: p.iess_pct == null || p.iess_pct === "" ? 0.0945 : (n(p.iess_pct) > 1 ? n(p.iess_pct) / 100 : n(p.iess_pct)),
+    fondo: p.fondo === true || s(p.fondo).toUpperCase() === "SI" || s(p.fondo) === "true",
+    fondo_desde: s(p.fondo_desde).slice(0, 10),
+    vacaciones_desde_anio: p.vacaciones_desde_anio == null || p.vacaciones_desde_anio === "" ? 1 : n(p.vacaciones_desde_anio),
+  };
+  const prev = await pagoFilas(ctx);
+  const sin = prev.filter((r) => !(s(r.nombre) === row.nombre && s(r.vigente_desde).slice(0, 10) === row.vigente_desde));
+  await kvSet(ctx.db, actorOf(ses), "pago_config", { filas: [...sin, row] });
+  try {
+    const tabla = await ctx.db.all("pago_config");
+    const hit = tabla.find((r) => s(r.nombre) === row.nombre && s(r.vigente_desde).slice(0, 10) === row.vigente_desde);
+    if (hit) await ctx.db.write(actorOf(ses), "pago_config", "update", hit.id != null ? { id: hit.id } : { nombre: row.nombre, vigente_desde: row.vigente_desde }, row);
+    else await ctx.db.write(actorOf(ses), "pago_config", "insert", {}, row);
+  } catch { /* app_kv ya guardó la versión */ }
+  await logAccion(ctx.db, actorOf(ses), "PAGO CONFIG", s(row.nombre) + " desde " + s(row.vigente_desde));
+  return { ok: true, config: row };
+});
+extend("getRolCiclo", "any", async (p, ctx, ses) => {
+  const inicio = s(p.desde) || s(p.ciclo) || cicloInicio(ecuadorParts(ctx.now).ymd);
+  const pack = await cicloDe(ctx, inicio);
+  const fin = pack.fin || cicloFin(inicio);
+  const emps = await ctx.db.all("rrhh_empleadas");
+  const users = await ctx.db.all("usuarios");
+  const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
+  const personas = emps.map((e) => s(e.nombre_app) || s(e.apellidos_y_nombres)).filter((nombre) => nombre && !nombreEsAdmin(nombre, admins));
+  let persona = s(p.persona || p.nombre);
+  if (!esAdmin(ses.rol)) persona = ses.name;
+  if (!persona || nombreEsAdmin(persona, admins)) persona = personas[0] || ses.name;
+  const e = emps.find((r) => normNombre(s(r.nombre_app)) === normNombre(persona) || normNombre(s(r.apellidos_y_nombres)).startsWith(normNombre(persona).split(" ")[0] || "—") || normNombre(persona).startsWith(normNombre(s(r.nombre_app)).split(" ")[0] || "—"));
+  if (acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos" && e) {
+    if (!esPropio(s(e.nombre_app), ses) && !esPropio(s(e.apellidos_y_nombres), ses)) return { error: "No tienes permiso para ver el rol de otra persona" };
+  }
+  const cfg = pagoVigente(await pagoFilas(ctx), persona, fin);
+  const sueldo = cfg ? n(cfg.sueldo) : dineroDe(e, ["sueldo_base", "sueldo", "sueldo_mensual"]);
+  const bono = cfg ? n(cfg.bono) : dineroDe(e, ["bono_fijo", "bono"]);
+  const fondo = cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(e?.fondo_reserva).toUpperCase() === "SI";
+  const { horasEnRango } = await import("./asistencia_api.ts");
+  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0, diasPeriodo: 0 };
+  try { horas = await horasEnRango(ctx, s(e?.nombre_app) || persona, pack.ciclo, fin); } catch { /* sin tablas de asistencia */ }
+  const montos = pack.calc.personas.find((c) => {
+    const a = normNombre(c.cosm);
+    const b = normNombre(persona);
+    return a === b || a.startsWith(b.split(" ")[0] || "—") || b.startsWith(a.split(" ")[0] || "—");
+  });
+  const recep = normNombre(persona).startsWith("alejandra") ? pack.comRecep : 0;
+  const com = {
+    comFaciales: montos?.comFaciales || 0,
+    comPaquetes: montos?.comPaquetes || 0,
+    comProductos: montos?.comProductos || 0,
+    comExtras: montos?.comExtras || 0,
+    comRecepcion: recep,
+  };
+  let multas = 0;
+  const key = normNombre(persona).split(" ")[0] || "";
+  for (const r of pack.multas) {
+    const f = ymdUtc(r.fecha);
+    if (!f || f < pack.ciclo || f > fin) continue;
+    if (!normNombre(s(r.cosmetologa)).includes(key)) continue;
+    if (s(r.tipo).toLowerCase() === "multa" || !s(r.tipo)) multas += n(r.monto);
+  }
+  const [y, m, d0] = pack.ciclo.split("-").map(Number);
+  const [y2, m2, d2] = fin.split("-").map(Number);
+  const diasPeriodo = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d0)) / 86400000) + 1;
+  const local = rolCalcular({
+    sueldo, bono, fondoReserva: fondo,
+    fechaIngreso: s(e?.fecha_ingreso) || "2020-01-01",
+    anio: y2, mes: m2, diasPeriodo, diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
+    hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
+    ...com, multas: round2(multas),
+    iessPct: cfg ? n(cfg.iess_pct) : undefined,
+    fondoDesde: cfg ? s(cfg.fondo_desde) || null : null,
+    vacacionesDesdeAnio: cfg && cfg.vacaciones_desde_anio != null && cfg.vacaciones_desde_anio !== "" ? n(cfg.vacaciones_desde_anio) : undefined,
+  });
+  const ingresos = [
+    ["Sueldo", local.sueldo], ["Bono", local.bono], ["Horas extra", local.horasExtra],
+    ["Faciales", local.comFaciales], ["Paquetes", local.comPaquetes], ["Productos", local.comProductos],
+    ["Recepción", com.comRecepcion], ["Extras", com.comExtras],
+    ["Décimo tercero", local.dec13], ["Décimo cuarto", local.dec14],
+    ["Fondo de reserva", local.fondoReserva], ["Vacaciones", local.vacaciones],
+  ].map(([concepto, monto]) => ({ concepto, monto }));
+  const descuentos = [
+    ["IESS", local.iess], ["Multas", round2(multas)],
+  ].map(([concepto, monto]) => ({ concepto, monto }));
+  return {
+    ok: true,
+    persona, ciclo: pack.ciclo, fin, diasPeriodo,
+    cargo: s(e?.cargo), cedula: s(e?.cedula),
+    fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
+    ingresos, descuentos,
+    totalIngresos: local.totalIngresos, totalDescuentos: local.egresos, neto: local.totalRecibir,
+    personas, admin: esAdmin(ses.rol), config: cfg,
+    comisiones: com,
+  };
 });
 extend("getAprobacionesRol", "any", async (p, ctx) => {
   const sh = s(p.sheet);

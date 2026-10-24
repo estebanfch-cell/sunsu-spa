@@ -4,7 +4,9 @@
 
 import { enPrueba, MemoryDb, type Db } from "./db.ts";
 import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguienteTestDoc, skuCode, type Row } from "./domain.ts";
+import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
+import { backfillSO, tomarNumero } from "./series.ts";
 import { familiaSku, quincenaActual } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
@@ -94,6 +96,28 @@ function keyOf(pid: string, bid: string, sub = "", lote = ""): string {
   return [pid, bid, sub, lote].join("|");
 }
 
+function bodegaVentaDe(bodegas: Row[]): Row | undefined {
+  return bodegas.find((b) => s(b.codigo) === "VENTA") || bodegas.find((b) => s(b.tipo) === "venta");
+}
+
+async function cortesVenta(db: Db): Promise<Map<string, number> | null> {
+  let rows: Row[] = [];
+  try { rows = await db.all("inventario_corte"); } catch { return null; }
+  const deHoja = rows.filter((r) => s(r.lugar).toUpperCase() === "VENTA" && s(r.fecha).slice(0, 10) === "2026-10-24");
+  if (!deHoja.length) return null;
+  return new Map(deHoja.map((r) => [skuCode(s(r.sku)), n(r.cantidad)]));
+}
+
+function saldoTrasCorte(code: string, pid: string, ventaId: string, movs: Row[], dbMap: Map<string, number> | null) {
+  const ap = dbMap ? (dbMap.get(code) ?? 0) : aperturaVenta(code);
+  const posteriores = movs
+    .filter((m) => String(m.producto_id) === pid && String(m.bodega_id) === ventaId && despuesDeErp(m.fecha))
+    .sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
+  return aplicarTrasCorte(ap, posteriores.map((m) => ({
+    delta: n(m.delta), tipo: s(m.tipo), aprobado: !!s(m.aprobado_negativo_por),
+  })));
+}
+
 const ATOMIC = new Set(["ov_save", "ticket_aplicar", "ov_anular", "oc_recibir", "pago_save"]);
 
 function negativoDe(msg: string): Negativo | null {
@@ -172,6 +196,23 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
   for (const r of stock0) {
     const k = keyOf(String(r.producto_id), String(r.bodega_id), s(r.sububicacion), s(r.lote));
     saldo.set(k, (saldo.get(k) || 0) + n(r.cantidad));
+  }
+  if (Date.parse(now) >= Date.parse(CORTE_ERP)) {
+    const ventaB = bodegaVentaDe(bodegas);
+    const dbMap = await cortesVenta(db);
+    if (ventaB) {
+      const vid = String(ventaB.id);
+      for (const p of productos) {
+        const pid = String(p.id);
+        const applied = saldoTrasCorte(skuCode(s(p.sku)), pid, vid, movs, dbMap);
+        let cur = 0;
+        for (const [k, q] of saldo) if (k.startsWith(pid + "|" + vid + "|")) cur += q;
+        if (dbMap || cur < applied.saldo - 1e-9) {
+          for (const k of [...saldo.keys()]) if (k.startsWith(pid + "|" + vid + "|")) saldo.delete(k);
+          saldo.set(keyOf(pid, vid), applied.saldo);
+        }
+      }
+    }
   }
   const onHand = (pid: string) => {
     let t = 0;
@@ -303,11 +344,18 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
 
   if (op === "home" || op === "erp_home") {
     const stock = await db.all("erp_stock");
+    const movs = await db.all("erp_movimientos");
+    const dbMap = now.toISOString() >= CORTE_ERP ? await cortesVenta(db) : null;
+    const ventaB = bodegaVentaDe(bodegas);
     const mins = await db.all("erp_producto_bodega");
     const avisos = (await db.all("erp_avisos")).filter((a) => s(a.estado) !== "cerrado");
     const bajos = [];
     for (const m of mins) {
-      const q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
+      let q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
+      if (ventaB && String(m.bodega_id) === String(ventaB.id) && now.toISOString() >= CORTE_ERP) {
+        const p = porId.get(String(m.producto_id));
+        q = saldoTrasCorte(skuCode(s(p?.sku)), String(m.producto_id), String(ventaB.id), movs, dbMap).saldo;
+      } else if (q < 0 && now.toISOString() >= CORTE_ERP) q = 0;
       if (q <= n(m.stock_min)) {
         const p = porId.get(String(m.producto_id));
         const b = bod.get(String(m.bodega_id));
@@ -432,17 +480,30 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
 
   if (op === "stk_saldo") {
     const stock = await db.all("erp_stock");
+    const movs = await db.all("erp_movimientos");
+    const corteOn = now.toISOString() >= CORTE_ERP;
+    const dbMap = corteOn ? await cortesVenta(db) : null;
+    const ventaB = bodegaVentaDe(bodegas);
     const bid = s(body.bodega_id);
     const items = [];
     for (const p of productos) {
       if (s(body.sku) && skuCode(s(p.sku)) !== skuCode(s(body.sku))) continue;
       for (const b of bodegas) {
         if (bid && String(b.id) !== bid) continue;
-        const q = stock.filter((r) => r.producto_id === p.id && r.bodega_id === b.id).reduce((a, r) => a + n(r.cantidad), 0);
-        items.push({ producto_id: p.id, sku: p.sku, nombre: p.nombre, uso: p.uso, bodega_id: b.id, bodega: b.nombre, tipo: b.tipo, cantidad: round4(q) });
+        let q = stock.filter((r) => r.producto_id === p.id && r.bodega_id === b.id).reduce((a, r) => a + n(r.cantidad), 0);
+        let frenado = false;
+        if (corteOn && ventaB && String(b.id) === String(ventaB.id)) {
+          const applied = saldoTrasCorte(skuCode(s(p.sku)), String(p.id), String(b.id), movs, dbMap);
+          q = applied.saldo;
+          frenado = applied.frenado;
+        } else if (corteOn && q < 0) {
+          const aprobado = movs.some((m) => String(m.producto_id) === String(p.id) && String(m.bodega_id) === String(b.id) && s(m.aprobado_negativo_por));
+          if (!aprobado) { frenado = true; q = 0; }
+        }
+        items.push({ producto_id: p.id, sku: p.sku, nombre: p.nombre, uso: p.uso, bodega_id: b.id, bodega: b.nombre, tipo: b.tipo, cantidad: round4(q), frenado });
       }
     }
-    return { ok: true, items };
+    return { ok: true, items, corte: corteOn ? "2026-10-24" : "" };
   }
   if (op === "stk_kardex") {
     const pid = s(body.producto_id) || String(porSku.get(skuCode(s(body.sku)))?.id || "");
@@ -808,11 +869,18 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
 
   if (op === "reorden_sugerir") {
     const stock = await db.all("erp_stock");
+    const movs = await db.all("erp_movimientos");
+    const dbMap = now.toISOString() >= CORTE_ERP ? await cortesVenta(db) : null;
+    const ventaB = bodegaVentaDe(bodegas);
     const mins = await db.all("erp_producto_bodega");
     const ocs = await db.all("erp_oc");
     const sugerencias = [];
     for (const m of mins) {
-      const q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
+      let q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
+      if (ventaB && String(m.bodega_id) === String(ventaB.id) && now.toISOString() >= CORTE_ERP) {
+        const p = porId.get(String(m.producto_id));
+        q = saldoTrasCorte(skuCode(s(p?.sku)), String(m.producto_id), String(ventaB.id), movs, dbMap).saldo;
+      } else if (q < 0 && now.toISOString() >= CORTE_ERP) q = 0;
       const punto = n(m.punto_reorden) || n(m.stock_min);
       if (q <= punto) {
         const p = porId.get(String(m.producto_id));
@@ -984,16 +1052,20 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   const iva = round2(sub * 0.15);
   const total = round2(sub + iva);
   const ident = await asignarTicketBeta(db, now);
+  try { await backfillSO(db, actor); } catch { /* la serie local sigue si la tabla no acepta el update */ }
+  const soNum = await tomarNumero(db, "TK-SO", await db.all("tickets"), "so_num");
   const atendido = nombreDeActor(s(body.cosmetologa) || s(body.atendido_por) || actor);
   const orig = ticketCols.orig as Row;
   orig.ticket_ref = ref;
   orig.ov = numero;
   orig.fuente = "ov_save";
   orig.beta = true;
+  orig.so_num = soNum;
   steps.push({ op: "upsert", table: "tickets", match: { beta_num: ident.beta_num }, row: {
     sheet_row: null,
     origin: ident.origin,
     beta_num: ident.beta_num,
+    so_num: soNum,
     timestamp: ec.isoWall,
     atendido_por: atendido,
     id_3: s(body.cedula),

@@ -489,24 +489,65 @@ export interface TicketIn {
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number }[];
+  /** Precio neto de una unidad de paquete. Solo lo usa un tramo en modo pct. */
+  netoPack?: number;
 }
+export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
+/** Montos fijos. El modo pct guarda la fracción (0.05 = 5% del neto) por si se cambia después. */
+export const TRAMOS_PAQUETE: TramoPaquete[] = [
+  { desde: 1, hasta: 10, modo: "fijo", valor: 10 },
+  { desde: 11, hasta: 20, modo: "fijo", valor: 15 },
+  { desde: 21, hasta: 30, modo: "fijo", valor: 20 },
+  { desde: 31, hasta: 100000, modo: "fijo", valor: 25 },
+];
 export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
 
 export function usaNivelesPaquete(ciclo: string): boolean {
   return ciclo <= CICLO_NIVEL_HASTA;
 }
 
-/** Tramos desde el ciclo que abre el 2026-10-26. Cada unidad se paga en el tramo donde cae. x3 = 1, x6 = 2. */
-export function comisionPaquetesTramo(unidades: number): { monto: number; etiqueta: string } {
-  const u = Math.max(0, Math.floor(Number(unidades) || 0));
-  const tarifas: [number, number, number][] = [[1, 10, 10], [11, 20, 15], [21, 30, 20], [31, 100000, 25]];
-  let monto = 0;
-  for (const [a, b, tarifa] of tarifas) {
-    if (u < a) break;
-    monto += (Math.min(u, b) - a + 1) * tarifa;
+export function normalizarTramos(raw: unknown): TramoPaquete[] {
+  const arr = Array.isArray(raw) ? raw : (raw && typeof raw === "object" && Array.isArray((raw as Row).tramos) ? (raw as Row).tramos as unknown[] : []);
+  const out: TramoPaquete[] = [];
+  for (const item of arr) {
+    if (Array.isArray(item) && item.length >= 3) {
+      out.push({ desde: Math.max(1, Math.floor(n(item[0]))), hasta: Math.max(1, Math.floor(n(item[1]))), modo: "fijo", valor: n(item[2]) });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const o = item as Row;
+    const modo = s(o.modo) === "pct" ? "pct" as const : "fijo" as const;
+    const desde = Math.max(1, Math.floor(n(o.desde)));
+    const hasta = Math.max(desde, Math.floor(n(o.hasta) || 100000));
+    let valor = n(o.valor);
+    if (modo === "pct" && valor > 1) valor = valor / 100;
+    if (desde > 0 && valor >= 0) out.push({ desde, hasta, modo, valor });
   }
-  const etiqueta = u <= 0 ? "—" : u <= 10 ? "1–10 · $10" : u <= 20 ? "11–20 · $15" : u <= 30 ? "21–30 · $20" : "31+ · $25";
-  return { monto: round2(monto), etiqueta };
+  return out.length ? out.sort((a, b) => a.desde - b.desde) : TRAMOS_PAQUETE.map((t) => ({ ...t }));
+}
+
+function etiquetaTramo(u: number, tier: TramoPaquete | undefined): string {
+  if (!tier || u <= 0) return "—";
+  const rango = tier.hasta >= 100000 ? `${tier.desde}+` : `${tier.desde}–${tier.hasta}`;
+  return tier.modo === "pct" ? `${rango} · ${Math.round(tier.valor * 1000) / 10}%` : `${rango} · $${tier.valor}`;
+}
+
+/** Tramos desde el ciclo que abre el 2026-10-26. Cada unidad se paga en el tramo donde cae. x3 = 1, x6 = 2. */
+export function comisionPaquetesTramo(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE, netos: number[] = []): { monto: number; etiqueta: string } {
+  const u = Math.max(0, Math.floor(Number(unidades) || 0));
+  const tarifas = normalizarTramos(tramos);
+  let monto = 0;
+  let ultimo: TramoPaquete | undefined;
+  for (let i = 1; i <= u; i++) {
+    const tier = tarifas.find((t) => i >= t.desde && i <= t.hasta) || tarifas[tarifas.length - 1];
+    if (!tier) continue;
+    ultimo = tier;
+    if (tier.modo === "pct") {
+      const neto = netos[i - 1] != null ? netos[i - 1] : (netos.length ? netos[netos.length - 1] : 0);
+      monto += tier.valor * (neto || 0);
+    } else monto += tier.valor;
+  }
+  return { monto: round2(monto), etiqueta: etiquetaTramo(u, ultimo) };
 }
 
 export function nombreEsAdmin(nombre: string, admins: { nombre?: string; short?: string; id?: string }[]): boolean {
@@ -555,6 +596,7 @@ export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cf
 export function calcularCiclo(
   tickets: TicketIn[], marks: CosmMark[], cfg: ComCfg, ciclo: string, overrideN?: number | null,
   admins: { nombre?: string; short?: string; id?: string }[] = [],
+  tramos: TramoPaquete[] = TRAMOS_PAQUETE,
 ) {
   const fin = cicloFin(ciclo);
   const admin = (nombre: string) => nombreEsAdmin(nombre, admins);
@@ -568,14 +610,15 @@ export function calcularCiclo(
     ...nv,
     meta: Math.ceil(totalClientas * nv.pct / n),
   }));
+  const tarifas = normalizarTramos(tramos);
   const by = new Map<string, {
     cosm: string; faciales: number; faciales2: number; faciales3: number; comFaciales: number; paquetes: number; extras: number; comExtras: number;
-    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string;
+    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string; netos: number[];
   }>();
   const ensure = (cosm: string) => {
     let r = by.get(cosm);
     if (!r) {
-      r = { cosm, faciales: 0, faciales2: 0, faciales3: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—" };
+      r = { cosm, faciales: 0, faciales2: 0, faciales3: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—", netos: [] };
       by.set(cosm, r);
     }
     return r;
@@ -589,8 +632,9 @@ export function calcularCiclo(
       else { r.faciales3++; r.comFaciales += cfg.facial3; }
     }
     if (!t.exclPaquete) {
-      if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") r.paquetes += 1;
-      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") r.paquetes += 2;
+      const neto = Number(t.netoPack) || 0;
+      if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") { r.paquetes += 1; r.netos.push(neto); }
+      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") { r.paquetes += 2; r.netos.push(neto, neto); }
     }
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);
@@ -609,7 +653,7 @@ export function calcularCiclo(
       nivel = "N8";
       premio = BONO_N8;
     } else if (regimen === "tramo") {
-      const tramo = comisionPaquetesTramo(es ? r.paquetes : 0);
+      const tramo = comisionPaquetesTramo(es ? r.paquetes : 0, tarifas, es ? r.netos : []);
       nivel = es ? tramo.etiqueta : "—";
       premio = es ? tramo.monto : 0;
     } else if (bono && es) {
@@ -626,7 +670,21 @@ export function calcularCiclo(
     r.nivel = nivel;
     return { ...r, es, congelado, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras), comPaquetes: round2(premio) };
   });
-  return { ciclo, fin, totalClientas, n, bono, metas, regimen, personas };
+  return { ciclo, fin, totalClientas, n, bono, metas, regimen, personas, tramos: tarifas };
+}
+
+export function ciclosEntre(desde: string, hasta: string): string[] {
+  let c = cicloInicio(desde);
+  const fin = cicloInicio(hasta);
+  const out: string[] = [];
+  let guard = 0;
+  while (c <= fin && guard < 36) {
+    out.push(c);
+    const [y, m] = c.split("-").map(Number);
+    c = ymdUtc(new Date(Date.UTC(y, m, 26)));
+    guard++;
+  }
+  return out.length ? out : [cicloInicio(desde)];
 }
 
 export function rolCalcular(input: {
