@@ -1325,6 +1325,7 @@ async function libresGC(ctx: Ctx, exclude: R) {
   const out = [];
   for (const r of rows) {
     if (exclude[String(r.sheet_row)]) continue;
+    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
     if (s(r.codigo_gc) && blankDia(r.dia)) out.push({ codigo: s(r.codigo_gc), fila: r.sheet_row });
   }
   return out;
@@ -1356,6 +1357,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
   for (const r of await ctx.db.all("gift_cards")) {
     const codigo = s(r.codigo_gc);
     if (!codigo) continue;
+    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
     const nom = s(r.nombre_comprador), ape = s(r.apellido_comprador);
     const blob = [codigo, s(r.cedula_comprador), nom, ape, nom + " " + ape, s(r.usado_por), s(r.notas)].join(" ").toLowerCase();
     if (!todas && !blob.includes(q)) continue;
@@ -1390,13 +1392,14 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
   for (const r of await ctx.db.all("paquetes")) {
     const ced = s(r.cedula), nom = s(r.nombres), ape = s(r.apellidos);
     if (!ced && !nom) continue;
+    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
     const blob = [ced, nom, ape, nom + " " + ape, s(r.notas)].join(" ").toLowerCase();
     if (!blob.includes(q)) continue;
     const usos = usosDe(r);
     const total = packSesiones(s(r.sku), s(r.paquete), usos.map((u) => ({ usado: u.usado, fecha: u.fecha })));
     resultados.push({
       fila: r.sheet_row, dia: r.dia, mes: r.mes, ano: r.ano, cedula: ced, nombre: nom, apellido: ape,
-      factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por),
+      factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
       usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
       total, completo: b(r.completo),
     });
@@ -1411,13 +1414,14 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
   const items = [];
   for (const r of await ctx.db.all("paquetes")) {
     if (!s(r.sku)) continue;
+    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
     const usos = usosDe(r);
     const total = packSesiones(s(r.sku), s(r.paquete), usos);
     const clave = [s(r.cedula), s(r.sku), s(r.dia) + "/" + s(r.mes) + "/" + s(r.ano)].join("|");
     items.push({
       fila: r.sheet_row, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula),
       nombre: s(r.nombres), apellido: s(r.apellidos), sku: s(r.sku), paquete: s(r.paquete),
-      vendidoPor: s(r.vendido_por), usos: usos.slice(0, total), total,
+      vendidoPor: s(r.vendido_por), notas: s(r.notas), usos: usos.slice(0, total), total,
       telefono: tel ? (porCed.get(normCedula(r.cedula)) || "") : "",
       claveWa: clave, wa: wa[clave] || null,
     });

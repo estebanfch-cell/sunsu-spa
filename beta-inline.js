@@ -27,6 +27,14 @@
     compras: [
       ["sku", "SKU"], ["nombre", "Nombre"], ["pedida", "Pedido"], ["proveedor", "Proveedor"], ["orden", "Orden"],
     ],
+    gift_cards: [
+      ["codigo", "Código"], ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
+      ["valor", "Valor"], ["sku", "SKU"], ["notas", "Notas"],
+    ],
+    paquetes: [
+      ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
+      ["sku", "SKU"], ["paquete", "Paquete"], ["vendidoPor", "Vendido por"], ["notas", "Notas"],
+    ],
   };
   function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
@@ -133,6 +141,8 @@
     if (tablas.inventario) return "inventario";
     if (tablas.proveedores) return "proveedores";
     if (tablas.compras) return "compras";
+    if (tablas.gift_cards) return "gift_cards";
+    if (tablas.paquetes) return "paquetes";
     if (document.getElementById("cat-res")) return "catalogo";
     if (document.querySelector("[id^=inv-grp-]")) return "inventario";
     if (document.getElementById("prov-form")) return "proveedores";
@@ -148,6 +158,13 @@
     if (tabla === "inventario" && c && typeof renderInventario === "function") { renderInventario(c); return; }
     if (tabla === "proveedores" && c && typeof renderProveedores === "function") { renderProveedores(c); return; }
     if (tabla === "compras" && c && typeof renderEntradas === "function") { renderEntradas(c); return; }
+    if (tabla === "gift_cards" && document.getElementById("bgc-results")) {
+      var qGc = (document.getElementById("bgc-inp") || {}).value || "";
+      if (qGc.trim() && typeof ejecutarBuscarGC === "function") ejecutarBuscarGC();
+      else if (typeof verTodasGC === "function") verTodasGC();
+      return;
+    }
+    if (tabla === "paquetes" && document.getElementById("bpq-todos") && typeof _cargarTodosPaquetes === "function") { _cargarTodosPaquetes(); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -186,12 +203,14 @@
       || (tabla === "catalogo" && document.getElementById("cat-form"))
       || (tabla === "proveedores" && document.getElementById("prov-form"))
       || (tabla === "compras" && document.getElementById("oc-nuevo"))
+      || (tabla === "gift_cards" && document.getElementById("gc-nuevo"))
+      || (tabla === "paquetes" && document.getElementById("paq-nuevo"))
       || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }
