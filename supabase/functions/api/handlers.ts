@@ -807,6 +807,7 @@ async function existeCedula(p: R, ctx: Ctx): Promise<R> {
   if (!ced) return { existe: false };
   const rows = await ctx.db.all("clientas_registro");
   for (const r of rows) {
+    if (r.borrado_at) continue;
     if (normCedula(r.cedula) !== ced) continue;
     if (r.timestamp) return { existe: true, fila: r.sheet_row, nombre: s(r.nombre) };
     return { existe: false, completar: true, fila: r.sheet_row, nombre: s(r.nombre), apellido: s(r.apellido) };
@@ -819,6 +820,7 @@ async function getRegistro(p: R, ctx: Ctx): Promise<R> {
   const rows = await ctx.db.all("clientas_registro");
   const data = [];
   for (const r of rows) {
+    if (r.borrado_at) continue;
     const c = s(r.cedula).split(".")[0];
     const nom = s(r.nombre), ape = s(r.apellido);
     if (!c && !nom) continue;
@@ -894,7 +896,7 @@ function fichaDe(r: R, tel: boolean): R {
   return o;
 }
 async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise<R> {
-  const rows = await ctx.db.all("clientas_registro");
+  const rows = (await ctx.db.all("clientas_registro")).filter((r) => !r.borrado_at);
   const tel = conTelefono(ses);
   if (action === "getAutorizaFotos") {
     const noAutoriza: R = {}, noAutorizaNom: R = {};

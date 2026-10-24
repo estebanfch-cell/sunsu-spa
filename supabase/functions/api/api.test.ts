@@ -1900,4 +1900,55 @@ describe("series, comisiones y rol", () => {
     const vista = await handle("inline_guardar", { token: adminC.token, preview: true, preview_uid: "andrea", tabla: "tickets", fila: "9", campos: { nombre: "X" } }, adminC) as Row;
     assert.match(String(vista.error), /vista/i);
   });
+
+  it("el admin edita la clienta en línea y el personal pide el cambio", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      clientas_registro: [
+        { sheet_row: 4, cedula: "1711", nombre: "María", apellido: "Paz", sector_donde_vive: "Norte", telefono: "099" },
+      ],
+      tickets: [{ id: 1, sheet_row: 1, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles", nombre: "María", apellido: "Paz", id_3: "1711", estimado: 40 }],
+      push_suscripciones: [{ endpoint: "https://push.example/emi", persona: "Emi", p256dh: "k", auth: "a" }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const no = await handle("inline_guardar", { token: "t-andrea", tabla: "clientes", fila: "4", campos: { apellido: "Pazos" } }, adminC) as Row;
+    assert.match(String(no.error), /admin/i);
+    const ped = await handle("solicitud_crear", { token: "t-andrea", tabla: "clientes", fila: "4", tipo: "cambio", motivo: "El apellido cambió", propuestos: { apellido: "Pazos" } }, adminC) as Row;
+    assert.equal(ped.ok, true);
+    const rechazo = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: false }, adminC) as Row;
+    assert.equal(rechazo.estado, "rechazado");
+    assert.equal((await db.all("clientas_registro"))[0].apellido, "Paz");
+    const ped2 = await handle("solicitud_crear", { token: "t-andrea", tabla: "clientes", fila: "4", tipo: "cambio", motivo: "Otra vez", propuestos: { apellido: "Pazos" } }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped2.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((await db.all("clientas_registro"))[0].apellido, "Pazos");
+    assert.equal((await db.all("clientas_registro"))[0].sector_donde_vive, "Norte");
+    const aud = (await db.all("audit_log")).find((r) => r.tabla === "clientas_registro" && r.accion === "UPDATE");
+    assert.equal((aud?.antes as Row)?.apellido, "Paz");
+    assert.equal((aud?.despues as Row)?.apellido, "Pazos");
+    const nuevo = await handle("inline_guardar", { token: adminC.token, tabla: "clientes", fila: "nuevo", campos: { nombre: "Rosa", apellido: "Díaz", cedula: "1733" } }, adminC) as Row;
+    assert.equal(nuevo.ok, true);
+    const lista = await handle("clientes_resumen", { token: adminC.token }, adminC) as Row;
+    assert.equal((lista.clientes as Row[]).some((c) => c.cedula === "1733" && c.fila), true);
+    const ajena = await handle("solicitud_crear", { token: "t-andrea", tabla: "clientes", fila: String(nuevo.fila), tipo: "cambio", motivo: "no es mía", propuestos: { nombre: "Rosa" } }, adminC) as Row;
+    assert.match(String(ajena.error), /permiso/i);
+    const borrado = await handle("inline_borrar", { token: adminC.token, tabla: "clientes", fila: "4" }, adminC) as Row;
+    assert.equal(borrado.ok, true);
+    const despues = await handle("clientes_resumen", { token: adminC.token }, adminC) as Row;
+    assert.equal((despues.clientes as Row[]).some((c) => c.cedula === "1711"), false);
+    assert.equal(Boolean((await db.all("clientas_registro")).find((r) => r.sheet_row === 4)?.borrado_at), true);
+    const det = await handle("cliente_detalle", { token: adminC.token, key: "c:1711" }, adminC) as Row;
+    assert.match(String(det.error), /eliminada/i);
+    db.tables.get("sesiones")!.find((r) => r.token === adminC.token)!.modo_prueba = true;
+    const prueba = await handle("inline_guardar", { token: adminC.token, tabla: "clientes", fila: String(nuevo.fila), campos: { nombre: "Rosita" } }, adminC) as Row;
+    assert.match(String(prueba.error), /prueba/i);
+    const vista = await handle("inline_guardar", { token: adminC.token, preview: true, preview_uid: "andrea", tabla: "clientes", fila: String(nuevo.fila), campos: { nombre: "X" } }, adminC) as Row;
+    assert.match(String(vista.error), /vista/i);
+  });
 });
