@@ -1513,6 +1513,8 @@ function pantallaSunsu(route) {
   if (m === "cabina") return "cabina";
   if (m === "comisiones" || (m === "personal" && route.sub === "comisiones")) return "";
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
+  if (m === "personal" && route.sub === "permisos") return "permisos";
+  if (m === "personal" && route.sub === "multas") return "multas";
   if (m === "usuarios" && state.mega) return "admin";
   return "";
 }
