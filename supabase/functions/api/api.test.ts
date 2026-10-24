@@ -12,6 +12,7 @@ import "./erp_api.ts";
 import "./ventas_api.ts";
 import "./asistencia_api.ts";
 import "./horarios_api.ts";
+import "./inline_api.ts";
 import "./personal_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { jornadaDe, normalizarJibble, slotRotativo, type Horario } from "./horarios.ts";
@@ -1809,7 +1810,7 @@ describe("series, comisiones y rol", () => {
     for (const f of ymds("2026-06-26", "2026-07-25")) {
       const d = dow(f);
       if (d === 0 || d === 1) continue;
-      if (f === "2026-06-30" || f === "2026-07-07" || f === "2026-07-14") continue;
+      if (f === "2026-06-30" || f === "2026-07-07" || f === "2026-07-14" || f === "2026-07-25") continue;
       marca("Daniela Mora", f);
     }
     for (const f of ymds("2026-09-26", "2026-10-21")) {
@@ -1840,6 +1841,7 @@ describe("series, comisiones y rol", () => {
         { persona: "Daniela Mora", horario_id: "h-dan" },
       ],
       jibble_historial: jibble,
+      tickets: [{ sheet_row: 30, atendido_por: "Daniela Mora", timestamp: "2026-06-30T15:00:00Z", nombre: "Ana", apellido: "Paz" }],
       asistencia_feriados: [{ fecha: "2026-07-07", nombre: "Feriado" }],
       permisos: [{ empleada: "Daniela Mora", tipo: "VACACIONES", estado: "APROBADO", fecha_inicio: "2026-07-14", fecha_fin: "2026-07-14" }],
     });
@@ -1848,9 +1850,54 @@ describe("series, comisiones y rol", () => {
     const sueldoDe = (rol: Row) => (rol.ingresos as Row[]).find((r) => r.concepto === "Sueldo")?.monto;
     const julio = await handle("getRolCiclo", { token: c.token, desde: "2026-06-26", persona: "Daniela" }, c) as Row;
     assert.equal(sueldoDe(julio), 465.93);
+    assert.deepEqual(julio.marcajesFaltantes, ["2026-06-30"]);
     const sepA = await handle("getRolCiclo", { token: c.token, desde: "2026-09-26", persona: "Andrea" }, c) as Row;
     const sepD = await handle("getRolCiclo", { token: c.token, desde: "2026-09-26", persona: "Daniela" }, c) as Row;
     assert.equal(sueldoDe(sepA), 482);
     assert.equal(sueldoDe(sepD), 482);
+  });
+
+  it("el admin edita el ticket en línea y el personal pide el cambio", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      tickets: [{ id: 9, sheet_row: 9, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles", nombre: "Ana", apellido: "Paz", id_3: "1711", estimado: 40, origin: "beta" }],
+      push_suscripciones: [{ endpoint: "https://push.example/andrea", persona: "Emi", p256dh: "k", auth: "a" }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const no = await handle("inline_guardar", { token: "t-andrea", tabla: "tickets", fila: "9", campos: { nombre: "Anita" } }, adminC) as Row;
+    assert.match(String(no.error), /admin/i);
+    const sinMotivo = await handle("solicitud_crear", { token: "t-andrea", tabla: "tickets", fila: "9", tipo: "cambio", motivo: "  ", propuestos: { nombre: "Anita" } }, adminC) as Row;
+    assert.match(String(sinMotivo.error), /motivo/i);
+    const ped = await handle("solicitud_crear", { token: "t-andrea", tabla: "tickets", fila: "9", tipo: "cambio", motivo: "El nombre va con i", propuestos: { nombre: "Anita" } }, adminC) as Row;
+    assert.equal(ped.ok, true);
+    const lista = await handle("getSolicitudes", { token: adminC.token }, adminC) as Row;
+    assert.equal(lista.pendientes, 1);
+    const mia = await handle("getSolicitudes", { token: "t-andrea" }, adminC) as Row;
+    assert.equal((mia.items as Row[]).length, 1);
+    const rechazo = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: false, comentario: "no" }, adminC) as Row;
+    assert.equal(rechazo.estado, "rechazado");
+    assert.equal((await db.all("tickets"))[0].nombre, "Ana");
+    const ped2 = await handle("solicitud_crear", { token: "t-andrea", tabla: "tickets", fila: "9", tipo: "cambio", motivo: "Otra vez", propuestos: { nombre: "Anita" } }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped2.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((await db.all("tickets"))[0].nombre, "Anita");
+    const aud = (await db.all("audit_log")).find((r) => r.tabla === "tickets" && r.accion === "UPDATE");
+    assert.equal((aud?.antes as Row)?.nombre, "Ana");
+    assert.equal((aud?.despues as Row)?.nombre, "Anita");
+    const directo = await handle("inline_guardar", { token: adminC.token, tabla: "tickets", fila: "9", campos: { notas: "piel seca" } }, adminC) as Row;
+    assert.equal(directo.ok, true);
+    const borrado = await handle("inline_borrar", { token: adminC.token, tabla: "tickets", fila: "9" }, adminC) as Row;
+    assert.equal(borrado.ok, true);
+    const hist = await handle("getHistorial", { token: adminC.token }, adminC) as Row[];
+    assert.equal(hist.length, 0);
+    assert.equal(Boolean((await db.all("tickets"))[0].borrado_at), true);
+    const vista = await handle("inline_guardar", { token: adminC.token, preview: true, preview_uid: "andrea", tabla: "tickets", fila: "9", campos: { nombre: "X" } }, adminC) as Row;
+    assert.match(String(vista.error), /vista/i);
   });
 });

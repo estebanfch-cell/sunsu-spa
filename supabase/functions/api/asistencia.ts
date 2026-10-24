@@ -378,24 +378,29 @@ export function calcularNomina(opts: {
   };
 }
 
-/** Faltas del rol: solo días de trabajo del horario de esa persona, hasta el último día con datos. */
+/** Faltas del rol: solo días de trabajo del horario de esa persona, hasta el último día con datos.
+ *  Un día con ticket y sin marca es marcaje faltante, no una falta. */
 export function faltasDeRol(dias: DiaAsistencia[], opts: {
   trabaja: (fecha: string) => boolean;
   feriados: string[];
   permisos: PermisoIn[];
   corte: string;
-}): number {
+  conTicket?: (fecha: string) => boolean;
+}): { faltas: number; marcajesFaltantes: string[] } {
   const fer = new Set(opts.feriados);
   const primera = dias.find((d) => d.fuente !== "vacio" && (d.diaContado || d.abierto || d.fuente === "permiso" || d.fuente === "jibble"));
-  if (!primera || !opts.corte) return 0;
+  if (!primera || !opts.corte) return { faltas: 0, marcajesFaltantes: [] };
   let nF = 0;
+  const marcajesFaltantes: string[] = [];
   for (const d of dias) {
     if (d.fecha < primera.fecha || d.fecha > opts.corte) continue;
     if (d.fuente === "jibble" || d.fuente === "marcaje" || d.fuente === "permiso" || d.diaContado || d.abierto) continue;
     if (fer.has(d.fecha) || permisoCubre(opts.permisos, d.fecha)) continue;
-    if (opts.trabaja(d.fecha)) nF++;
+    if (!opts.trabaja(d.fecha)) continue;
+    if (opts.conTicket && opts.conTicket(d.fecha)) marcajesFaltantes.push(d.fecha);
+    else nF++;
   }
-  return nF;
+  return { faltas: nF, marcajesFaltantes };
 }
 
 function permisoCubre(permisos: PermisoIn[], fecha: string): boolean {

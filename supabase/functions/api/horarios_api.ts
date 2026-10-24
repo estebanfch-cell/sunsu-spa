@@ -289,6 +289,13 @@ async function enviarPush(ctx: Ctx, ses: Ses, subs: Row[], texto: string, tipo: 
   } catch { /* sin librería de push el banner sigue */ }
 }
 
+export async function pushAPersonas(ctx: Ctx, ses: Ses, nombres: string[], texto: string, tipo: string): Promise<void> {
+  const keys = new Set(nombres.map((n) => s(n).trim()).filter(Boolean));
+  if (!keys.size) return;
+  const subs = (await todas(ctx, "push_suscripciones")).filter((r) => keys.has(s(r.persona)) || keys.has(s(r.uid)));
+  await enviarPush(ctx, ses, subs, texto, tipo);
+}
+
 export async function despacharAvisos(ctx: Ctx, ses: Ses): Promise<void> {
   const { horarios, asignaciones } = await cargarHorarios(ctx);
   if (!horarios.length) return;

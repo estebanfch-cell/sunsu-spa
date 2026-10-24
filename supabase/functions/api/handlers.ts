@@ -93,7 +93,9 @@ function montoGift(r: R): number {
 function activoCat(v: unknown): boolean {
   return !(v === false || v === "FALSE" || v === "NO" || v === 0 || v === "0");
 }
-async function tickets(ctx: Ctx) { return ctx.db.all("tickets"); }
+async function tickets(ctx: Ctx) {
+  return (await ctx.db.all("tickets")).filter((r) => !r.borrado_at);
+}
 const MESES_ES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const DIAS_ES = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 
@@ -1243,9 +1245,8 @@ reg("eliminarTicket", "any", async (p, ctx, ses) => {
   if (!row) return { error: "Fila inválida" };
   if (s(p.nombre) && normNombre(row.nombre) !== normNombre(p.nombre)) return { error: "El nombre no coincide. Refresca." };
   if (s(p.apellido) && normNombre(row.apellido) !== normNombre(p.apellido)) return { error: "El apellido no coincide. Refresca." };
-  await ctx.db.write(actorOf(ses), "tickets", "delete", { sheet_row: row.sheet_row }, null);
-  await logAccion(ctx.db, actorOf(ses), "ELIMINAR TICKET", "fila " + row.sheet_row);
-  return { ok: true };
+  const { borrarTicketSuave } = await import("./inline_api.ts");
+  return borrarTicketSuave(ctx, ses, row);
 });
 
 reg("excluirComision", "any", async (p, ctx, ses) => {

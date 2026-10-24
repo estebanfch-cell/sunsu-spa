@@ -186,6 +186,29 @@
     background: var(--navy); color: var(--white); border: 0; border-radius: 999px;
     padding: 6px 14px; font-weight: 800; font-size: 0.75rem; min-height: 32px;
   }
+  .ix-cell { border-bottom: 1px dashed var(--navy); cursor: text; }
+  .ix-cell.ix-dirty { background: var(--gold-l); }
+  .ix-lines, .ix-nuevo { margin-top: 8px; }
+  .ix-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 0.72rem; padding: 3px 0; }
+  .ix-trash, .ix-pedir, .ix-mas { padding: 4px 10px; border-radius: 8px; font-size: 0.65rem; font-weight: 700; cursor: pointer; }
+  .ix-trash { background: white; color: var(--red); border: 1.5px solid var(--red); }
+  .ix-pedir, .ix-mas { display: block; width: 100%; margin-top: 8px; background: white; color: var(--navy); border: 1.5px dashed var(--navy); }
+  #ix-bar {
+    position: fixed; z-index: 90; left: 12px; right: 12px; bottom: 76px;
+    background: var(--navy); color: white; border-radius: 14px; padding: 10px 14px;
+    display: flex; gap: 8px; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem;
+  }
+  #ix-bar[hidden] { display: none; }
+  #ix-bar button { background: white; color: var(--navy); border: 0; border-radius: 999px; padding: 6px 12px; font-weight: 800; }
+  .ix-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(58,53,48,.45); display: flex; justify-content: center; align-items: flex-start; padding: 16px; overflow: auto; }
+  .ix-sheet { background: white; border-radius: 18px; padding: 16px; width: min(480px, 100%); margin-top: 8px; }
+  .ix-sheet label { display: block; font-size: 0.68rem; font-weight: 700; color: var(--gray); margin: 8px 0; }
+  .ix-sheet input, .ix-sheet select, .ix-sheet textarea { width: 100%; margin-top: 4px; padding: 8px; border: 1.5px solid var(--cream-d); border-radius: 9px; font: inherit; }
+  .ix-sol { border-top: 1px solid var(--cream-d); padding: 10px 0; font-size: 0.78rem; }
+  .ix-diff { font-size: 0.72rem; color: var(--navy); }
+  .ix-acc { display: flex; gap: 8px; margin-top: 6px; }
+  .ix-acc button, .ix-send { padding: 8px 12px; border-radius: 10px; border: 0; background: var(--navy); color: white; font-weight: 800; cursor: pointer; }
+  .ix-err { color: var(--red); font-size: 0.75rem; }
   .vista-sheet {
     position: fixed; z-index: 80; left: 50%; top: 18vh; transform: translateX(-50%);
     width: min(420px, calc(100vw - 24px)); max-height: min(70vh, 520px); overflow: auto;
@@ -1289,6 +1312,7 @@ function paintShell(title) {
             ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj()}</div>` : ""}
             ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
+            ${!state.vista ? `<button class="btn ghost small" type="button" id="btn-solicitudes">Solicitudes</button>` : ""}
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
           ${state.vista ? `<div class="vista-bar" id="vista-bar">Viendo como ${esc(state.vista.name || state.vista.short || "…")} — <button type="button" id="vista-salir">Salir</button></div>` : ""}
@@ -1333,6 +1357,7 @@ function paintShell(title) {
   });
   const btnVista = document.getElementById("btn-ver-como");
   if (btnVista) btnVista.onclick = () => abrirVerComo();
+  if (window.SunsuInline) SunsuInline.contar();
   const btnVistaSalir = document.getElementById("vista-salir");
   if (btnVistaSalir) btnVistaSalir.onclick = () => salirVista();
   const btnVistaClose = document.getElementById("vista-close");
@@ -1539,6 +1564,25 @@ async function prepararTicket() {
     if (typeof _cargarProdColMap === "function") _cargarProdColMap();
   } catch (e) { catalogoTicketListo = false; }
 }
+async function avisoMarcajes() {
+  const desde = cicloInicioUi(ymdEc());
+  const primero = await api("getRolCiclo", { desde });
+  const main = document.getElementById("main");
+  if (!primero || primero.error || !main || pantallaSunsu(parseRoute()) !== "roles") return;
+  const nombres = primero.personas || [];
+  const lineas = [];
+  for (const nombre of nombres) {
+    const data = nombre === primero.persona ? primero : await api("getRolCiclo", { desde, persona: nombre });
+    const dias = (data && data.marcajesFaltantes) || [];
+    if (dias.length) lineas.push(`<div><b>${esc(nombre)}</b> · marcaje faltante: ${dias.map((d) => esc(d)).join(", ")}</div>`);
+  }
+  if (!lineas.length || pantallaSunsu(parseRoute()) !== "roles") return;
+  const box = document.createElement("div");
+  box.className = "card";
+  box.style.margin = "12px 16px";
+  box.innerHTML = `<div class="card-title">Marcaje faltante</div><p class="note">Asistió a un ticket y no marcó entrada. No descuenta el sueldo.</p>${lineas.join("")}`;
+  main.appendChild(box);
+}
 async function montarSunsu(tab) {
   CU = cuSunsu();
   window._token = state.token;
@@ -1550,6 +1594,7 @@ async function montarSunsu(tab) {
   if (tab === "proveedores") renderProveedores(c);
   else if (tab === "inv-fisico") renderInvFisico(c);
   else showTab(tab);
+  if (tab === "roles" && state.admin && !state.vista) avisoMarcajes();
   if (tab === "roles" && state.admin) {
     const extra = document.createElement("div");
     extra.style.padding = "0 16px 16px";
@@ -3524,6 +3569,7 @@ function htmlRol(data) {
   return `<div class="doc-sheet" id="rol-print">
     <div class="card-title">Rol de pagos</div>
     <p class="note">${esc(data.persona || "")}${data.cargo ? " · " + esc(data.cargo) : ""}${data.cedula ? " · " + esc(data.cedula) : ""}<br>Ciclo ${esc(data.ciclo)} → ${esc(data.fin)} · horas ${esc(data.fuenteHoras || "")}</p>
+    ${(data.marcajesFaltantes || []).length ? `<p class="note">Marcaje faltante: ${(data.marcajesFaltantes || []).map((d) => esc(d)).join(", ")}. Asistió a un ticket y no marcó entrada. No descuenta el sueldo.</p>` : ""}
     <h3>Ingresos</h3><table><tbody>${ing}<tr><td>Total ingresos</td><td class="num">${money(data.totalIngresos)}</td></tr></tbody></table>
     <h3>Descuentos</h3><table><tbody>${egr}<tr><td>Total descuentos</td><td class="num">${money(data.totalDescuentos)}</td></tr></tbody></table>
     <h3>Neto a recibir</h3><p class="tk-total">${money(data.neto)}</p>
@@ -4200,6 +4246,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024resto"></script>
+<script src="beta-inline.js?v=20261024inline"></script>
 <script>draw();</script>
 </body>
 </html>
