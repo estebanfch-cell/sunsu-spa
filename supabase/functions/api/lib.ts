@@ -208,6 +208,16 @@ export async function espejo(db: Db, actor: string, table: string, row: Row): Pr
   try { await db.write(actor, table, "insert", {}, row); } catch { /* la copia en app_kv sigue vigente */ }
 }
 
+// Personas dadas de baja (tabla personal_bajas). Se esconden de listas y selectores; el historial queda.
+export async function bajasDe(db: { all: (t: string) => Promise<Record<string, unknown>[]> }): Promise<(nombre: string) => boolean> {
+  let rows: Record<string, unknown>[] = [];
+  try { rows = await db.all("personal_bajas"); } catch { rows = []; }
+  const norm = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const set = new Set<string>();
+  for (const r of rows) for (const k of [r.nombre, r.nombre_app, r.cedula]) if (norm(k)) set.add(norm(k));
+  return (nombre: string) => set.has(norm(nombre));
+}
+
 export async function guardarArchivo(db: Db, actor: string, kind: string, nombre: string, dataUrl: string): Promise<string | null> {
   const i = dataUrl.indexOf("base64,");
   if (i < 0) return null;

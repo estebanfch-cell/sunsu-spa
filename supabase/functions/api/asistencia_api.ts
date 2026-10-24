@@ -1,7 +1,7 @@
 // Marcajes, permisos/vacaciones sobre la tabla permisos, y horas para el rol.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, nextSheet } from "./lib.ts";
+import { actorOf, bajasDe, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, s, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
@@ -229,8 +229,12 @@ extend("asis_periodo", "any", async (p, ctx, ses) => {
   if (propio(ses, matriz)) nombres = [ses.name];
   else if (s(p.nombre)) nombres = [s(p.nombre)];
   else {
+    const baja = await bajasDe(ctx.db);
     const set = new Set<string>();
-    for (const r of await ctx.db.all("rrhh_empleadas")) if (s(r.nombre_app)) set.add(s(r.nombre_app));
+    for (const r of await ctx.db.all("rrhh_empleadas")) {
+      if (baja(s(r.nombre_app)) || baja(s(r.nombre_jibble))) continue;
+      if (s(r.nombre_app)) set.add(s(r.nombre_app));
+    }
     for (const r of await ctx.db.all("asistencia_marcajes")) if (s(r.nombre)) set.add(s(r.nombre));
     nombres = [...set];
     if (!nombres.length) nombres = [ses.name];
@@ -307,7 +311,8 @@ extend("asis_vacaciones", "any", async (p, ctx, ses) => {
   const matriz = await matrizDe(ctx.db);
   if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
   if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, ...saldoPub(await saldoDe(ctx, ses.name), true) }] };
-  const nombres = s(p.nombre) ? [s(p.nombre)] : (await ctx.db.all("rrhh_empleadas")).map((r) => s(r.nombre_app)).filter(Boolean);
+  const baja = await bajasDe(ctx.db);
+  const nombres = s(p.nombre) ? [s(p.nombre)] : (await ctx.db.all("rrhh_empleadas")).filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter(Boolean);
   const personas = [];
   for (const nombre of nombres) personas.push({ nombre, ...(await saldoDe(ctx, nombre)) });
   return { ok: true, personas };
@@ -362,7 +367,8 @@ extend("asis_dia", "any", async (p, ctx, ses) => {
     ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos"), feriadosDe(ctx), configDe(ctx), ctx.db.all("rrhh_empleadas"),
   ]);
   const jib = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
-  const nombres = new Set(emps.map((r) => s(r.nombre_app)).filter(Boolean));
+  const baja = await bajasDe(ctx.db);
+  const nombres = new Set(emps.filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter(Boolean));
   for (const r of marc) if (ymdDeTs(s(r.ts)) === fecha && s(r.nombre)) nombres.add(s(r.nombre));
   const filas = [];
   for (const nombre of nombres) {
