@@ -1,13 +1,16 @@
 import type { Ctx, Ses } from "./lib.ts";
-import { acceso, clampPersonal, esAdmin, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
+import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
-  PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, comisionProductos, comisionRecepcionDia, contarExtras,
+  PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
-  normCedula, normNombre, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
+  nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
+import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
+import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
+import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
@@ -305,14 +308,24 @@ async function marks(ctx: Ctx) {
     desde: r.desde ? s(r.desde) : null, hasta: r.hasta ? s(r.hasta) : null,
   }));
 }
-async function cicloDe(ctx: Ctx, fecha?: string) {
+async function adminsDe(ctx: Ctx) {
+  const users = await ctx.db.all("usuarios");
+  return users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({
+    nombre: s(u.nombre), short: s(u.short), id: s(u.id),
+  }));
+}
+async function tramosDe(ctx: Ctx) {
+  return normalizarTramos(await kvGet(ctx.db, "paquete_tramos"));
+}
+export async function cicloDe(ctx: Ctx, fecha?: string) {
   const ec = fecha || hoy(ctx);
-  const { cicloInicio, cicloFin } = await import("./domain.ts");
   const ciclo = cicloInicio(ec);
   const tks = (await tickets(ctx)).filter((r) => r.timestamp).map(toIn);
+  const admins = await adminsDe(ctx);
+  const tramos = await tramosDe(ctx);
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
-  const calc = calcularCiclo(tks, await marks(ctx), CFG_DEF, ciclo, hit ? n(hit.n_cosmetologas) : null);
+  const calc = calcularCiclo(tks, await marks(ctx), CFG_DEF, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
   const cmap = await catMap(ctx);
   const bases = await ctx.db.all("inventario_base");
   const compraReal = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
@@ -337,7 +350,7 @@ async function cicloDe(ctx: Ctx, fecha?: string) {
     if (v > 0) { comRecep += v; diasRecep++; }
   }
   const multas = await ctx.db.all("multas_descuentos");
-  return { calc, comRecep: round2(comRecep), diasRecep, multas, ciclo, fin: cicloFin(ciclo) };
+  return { calc, comRecep: round2(comRecep), diasRecep, multas, ciclo, fin: cicloFin(ciclo), admins, tramos };
 }
 function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   let mlt = 0, desc = 0;
@@ -508,6 +521,11 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
+  const actorPrev = actorOf(ses);
+  if (!previewPedido(p)) {
+    try { await backfillSO(ctx.db, actorPrev); } catch { /* vista o sin columna */ }
+  }
+  const soNum = await tomarNumero(ctx.db, "TK-SO", await ctx.db.all("tickets"), "so_num");
   const notas = s(p.notas) + (p.descuento ? " · 🏷 Descuento: " + s(p.descuento) : "");
   const base: R = {
     sheet_row: null,
@@ -565,6 +583,8 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   }
   (base.orig as R).timestamp = ec.stamp;
   (base.orig as R).beta = true;
+  (base.orig as R).so_num = soNum;
+  base.so_num = soNum;
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;
   if ((s(p.pack3) || s(p.pack6)) && s(p.cedula)) {
@@ -581,7 +601,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
   return {
-    ok: true, fila: null, ticket, beta_num: ident.beta_num, origin: ident.origin, id: saved?.id,
+    ok: true, fila: null, ticket, beta_num: ident.beta_num, so_num: soNum, origin: ident.origin, id: saved?.id,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
   };
@@ -932,6 +952,100 @@ reg("getCatalogo", "any", async (_p, ctx) => {
   }
   return items;
 });
+async function preciosOc(ctx: Ctx): Promise<Map<string, { precio: number; fecha: string }>> {
+  const precios = new Map<string, { precio: number; fecha: string }>();
+  const poner = (sku: string, precio: number, fecha: string) => {
+    const code = skuCode(sku);
+    if (!code || !(precio > 0)) return;
+    const prev = precios.get(code);
+    if (!prev || fecha >= prev.fecha) precios.set(code, { precio, fecha });
+  };
+  try {
+    const prods = await ctx.db.all("erp_productos");
+    const porId = new Map(prods.map((p) => [String(p.id), skuCode(s(p.sku))]));
+    const ocs = await ctx.db.all("erp_oc");
+    const fechaOc = new Map(ocs.map((o) => [String(o.id), s(o.fecha)]));
+    for (const ln of await ctx.db.all("erp_oc_lineas")) {
+      poner(porId.get(String(ln.producto_id)) || "", n(ln.precio), fechaOc.get(String(ln.oc_id)) || "");
+    }
+  } catch { /* sin tablas ERP */ }
+  try {
+    for (const oc of await ctx.db.all("ordenes_compra")) {
+      const json = oc.json && typeof oc.json === "object" ? oc.json as R : {};
+      const fact = Array.isArray(json.fact) ? json.fact as R[] : [];
+      for (const ln of fact) poner(s(ln.sku), n(ln.compra || ln.precio), s(oc.fecha));
+    }
+  } catch { /* sin órdenes de hoja */ }
+  return precios;
+}
+async function asegurarCompra(ctx: Ctx, ses: Ses, preview: boolean) {
+  const precios = await preciosOc(ctx);
+  if (preview) return precios;
+  let bases: R[] = [];
+  try { bases = await ctx.db.all("inventario_base"); } catch { return precios; }
+  const porSku = new Map(bases.map((b0) => [skuCode(s(b0.sku)), b0]));
+  for (const [sku, info] of precios) {
+    const base = porSku.get(sku);
+    if (base && n(base.compra) > 0) continue;
+    try {
+      if (!base) {
+        await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: "SUNSU-" + sku, compra: info.precio, stock_inicial: 0 });
+      } else {
+        const match = base.id != null && base.id !== "" ? { id: base.id } : base.sheet_row != null && base.sheet_row !== "" ? { sheet_row: base.sheet_row } : { sku: base.sku };
+        await ctx.db.write(actorOf(ses), "inventario_base", "update", match, { compra: info.precio });
+      }
+    } catch { /* vista o columna ausente: el precio igual se muestra */ }
+  }
+  return precios;
+}
+reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
+  const precios = await asegurarCompra(ctx, ses, previewPedido(p));
+  const map = await catMap(ctx);
+  const bases = await ctx.db.all("inventario_base");
+  const compra = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
+  const inv = await FNS.getInventario(p, ctx, ses) as R;
+  const ventaDe = new Map(((inv.items as R[]) || []).map((it) => [skuCode(s(it.sku)), it]));
+  const stockErp = new Map<string, R>();
+  try {
+    const prods = await ctx.db.all("erp_productos");
+    const porId = new Map(prods.map((pr) => [String(pr.id), skuCode(s(pr.sku))]));
+    for (const st of await ctx.db.all("erp_stock")) {
+      const code = porId.get(String(st.producto_id));
+      if (!code) continue;
+      const bag = stockErp.get(code) || {};
+      const bodega = String(st.bodega_id);
+      const lugar = bodega === BODEGA_VENTA ? "venta" : bodega === BODEGA_CABINA ? "cabina1" : bodega === BODEGA_CABINA_2 ? "cab2" : bodega === BODEGA_CABINA_3 ? "cab3" : bodega === BODEGA_CASA ? "bodega" : "";
+      if (lugar) bag[lugar] = round2(n(bag[lugar]) + n(st.cantidad));
+      stockErp.set(code, bag);
+    }
+  } catch { /* sin ERP el stock de venta sale del corte */ }
+  const items = [];
+  for (const r of map.values()) {
+    const sku = s(r.sku);
+    const code = skuCode(sku);
+    if (!code) continue;
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as R : {};
+    const sub = n(r.subtotal);
+    const tot = n(r.total_con_iva);
+    const deHoja = ventaDe.get(code);
+    const erp = stockErp.get(code) || {};
+    const real = n(compra.get(code)) || precios.get(code)?.precio || 0;
+    items.push({
+      sku, nombre: s(r.producto_servicio), tipo: s(r.tipo),
+      marca: s(r.marca) || s(r.proveedor) || s(orig.marca) || s(orig.proveedor),
+      proveedor: s(r.proveedor) || s(orig.proveedor),
+      activo: activoCat(r.activo), pvp: tot > 0 ? tot : sub, subtotal: sub,
+      compra: n(r.precio_compra), compraReal: real,
+      stock: deHoja ? n(deHoja.stock) : n(erp.venta),
+      lugares: {
+        venta: deHoja ? n(deHoja.stock) : n(erp.venta),
+        cabina1: n(erp.cabina1), cab2: n(erp.cab2), cab3: n(erp.cab3), bodega: n(erp.bodega),
+      },
+    });
+  }
+  items.sort((a, b) => String(a.sku).localeCompare(String(b.sku)));
+  return { ok: true, items };
+});
 
 reg("getProdColMap", "any", async () => {
   const mapa: R = {};
@@ -942,39 +1056,62 @@ reg("repararColumnasTicket", "any", async () => ({ ok: true, beta: "Las columnas
 
 reg("getInventario", "any", async (_p, ctx) => {
   const cmap = await catMap(ctx);
-  const bases = await ctx.db.all("inventario_base");
-  const base = new Map(bases.map((b0) => [skuCode(s(b0.sku)), b0]));
   const entradas = await ctx.db.all("inventario_entradas");
   const tks = await tickets(ctx);
+  let cortes: R[] = [];
+  try { cortes = await ctx.db.all("inventario_corte"); } catch { cortes = []; }
+  const deHoja = cortes.filter((r) => s(r.lugar).toUpperCase() === "VENTA" && s(r.fecha).slice(0, 10) === "2026-10-24");
+  const dbMap = new Map(deHoja.map((r) => [skuCode(s(r.sku)), n(r.cantidad)]));
+  const usarDb = deHoja.length > 0;
   const ventas = new Map<string, number>();
   for (const t of tks) {
-    if (ymdUtc(t.timestamp) < "2026-05-22") continue;
-    for (const pr of productQtys(t)) ventas.set(pr.sku, (ventas.get(pr.sku) || 0) + pr.qty);
+    if (!despuesDeTicket(t.timestamp)) continue;
+    for (const pr of productQtys(t)) {
+      const code = skuCode(pr.sku);
+      ventas.set(code, (ventas.get(code) || 0) + pr.qty);
+    }
   }
   const ent = new Map<string, number>();
   for (const e of entradas) {
     if (s(e.notas).toUpperCase().includes("COMPRA DIRECTA")) continue;
+    const cuando = e.fecha || e.created_at || e.timestamp;
+    if (!despuesDeTicket(cuando)) continue;
     const rec = e.cant_recibida_llenar_aqui;
     if (rec == null || rec === "") continue;
     const code = skuCode(s(e.sku));
     ent.set(code, (ent.get(code) || 0) + n(rec));
   }
+  const codes = new Set<string>(usarDb ? [...dbMap.keys()] : Object.keys(CORTE_VENTA));
+  for (const code of cmap.keys()) if (/^[A-Z]{2,3}-\d+/.test(code)) codes.add(code);
   const items = [];
   const allSkus: string[] = [];
-  for (const [code, r] of cmap) {
-    if (!/^[A-Z]{2,3}-\d+/.test(code)) continue;
-    const sku = s(r.sku).startsWith("SUNSU-") ? s(r.sku) : "SUNSU-" + code;
-    const b0 = base.get(code);
-    const stock = round2(n(b0?.stock_inicial) + (ent.get(code) || 0) - (ventas.get(code) || 0));
-    const minimo = n(b0?.minimo);
-    const alerta = stock <= 0 ? "SIN STOCK" : stock <= minimo ? "STOCK BAJO" : "OK";
+  const frenados: string[] = [];
+  for (const code of codes) {
+    const r = cmap.get(code);
+    const sku = r && s(r.sku).startsWith("SUNSU-") ? s(r.sku) : "SUNSU-" + code;
+    const apertura = usarDb ? (dbMap.get(code) ?? 0) : aperturaVenta(code);
+    const movs: MovCorte[] = [];
+    if (ent.get(code)) movs.push({ delta: ent.get(code) || 0, tipo: "recepcion" });
+    if (ventas.get(code)) movs.push({ delta: -(ventas.get(code) || 0), tipo: "venta" });
+    const applied = aplicarTrasCorte(apertura, movs);
+    const minimo = n(r?.minimo) || CORTE_MIN[code] || 0;
+    const alerta = applied.frenado ? "BAJO CERO" : applied.saldo < 0 ? "LA HOJA" : applied.saldo <= 0 ? "SIN STOCK" : applied.saldo <= minimo ? "STOCK BAJO" : "OK";
+    if (applied.frenado) frenados.push(sku);
     allSkus.push(sku);
-    items.push({ sku, nombre: s(r.producto_servicio), stock, minimo, alerta, sinSaldoInicial: !b0 });
+    items.push({
+      sku, nombre: r ? s(r.producto_servicio) : code, stock: applied.saldo, crudo: applied.crudo,
+      apertura, minimo, alerta, frenado: applied.frenado, hojaNegativa: apertura < 0,
+      lugares: { venta: applied.saldo, cabina1: 0, cab2: 0, cab3: 0, casa: 0 },
+    });
   }
+  items.sort((a, b) => String(a.sku).localeCompare(String(b.sku)));
   const fis = await ctx.db.all("inventario_fisico");
   let ultimoFisico = "";
   for (const f of fis) if (s(f.fecha) > ultimoFisico) ultimoFisico = s(f.fecha);
-  return { items, allSkus, ultimoFisico, nota: "Sin filas en inventario_base el stock no incluye el saldo inicial de la hoja 📊 INVENTARIO." };
+  return {
+    items, allSkus, ultimoFisico, frenados, corte: "2026-10-24",
+    nota: "Venta es la columna F de la hoja al 2026-10-24 08:40. Lo vendido antes ya está dentro de ese corte. Cabina 1, Cabina 2, Cabina 3 y Casa no traen saldo retail en esa hoja.",
+  };
 });
 
 reg("getHistorial", "any", async (_p, ctx, ses) => {
@@ -1024,21 +1161,81 @@ reg("getTicketsDia", "any", async (p, ctx) => {
   return { tickets: ticketsOut, dia: d, mes: m, ano: y };
 });
 
+function matchTicket(row: R): R {
+  if (row.id != null && row.id !== "") return { id: row.id };
+  if (row.sheet_row != null && row.sheet_row !== "") return { sheet_row: row.sheet_row };
+  if (s(row.beta_num)) return { beta_num: s(row.beta_num) };
+  return { so_num: leerSerie(row, "so_num") };
+}
+async function ticketPorClave(ctx: Ctx, clave: string): Promise<R | null> {
+  const k = s(clave);
+  if (!k) return null;
+  const rows = await tickets(ctx);
+  return rows.find((r) => leerSerie(r, "so_num") === k || s(r.beta_num) === k || s(r.so_num) === k || (n(k) > 0 && n(r.sheet_row) === n(k))) || null;
+}
+function filaTicket(r: R) {
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as R : {};
+  const estimado = n(r.estimado);
+  const sub = n(orig.subtotal) > 0 ? n(orig.subtotal) : round2(estimado / IVA);
+  return {
+    clave: leerSerie(r, "so_num") || s(r.beta_num) || s(r.sheet_row),
+    so_num: leerSerie(r, "so_num"), beta_num: s(r.beta_num), sheet_row: r.sheet_row ?? null,
+    fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), cosmetologa: s(r.atendido_por),
+    cedula: s(r.id_3), nombre: s(r.nombre), apellido: s(r.apellido),
+    facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),
+    extras: s(r.servicios_adicionales), notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones),
+    subtotal: sub, iva: round2(sub * 0.15), estimado, total: estimado,
+  };
+}
+reg("getTicketsLista", "any", async (p, ctx, ses) => {
+  if (!previewPedido(p)) {
+    try { await backfillSO(ctx.db, actorOf(ses)); } catch { /* la lista igual muestra beta_num */ }
+  }
+  const matriz = await matrizDe(ctx.db);
+  const propio = acceso(ses.rol, "tickets", matriz) === "propio";
+  const items = (await tickets(ctx))
+    .filter((r) => r.timestamp || leerSerie(r, "so_num") || s(r.beta_num))
+    .filter((r) => !propio || esPropio(s(r.atendido_por), ses))
+    .map(filaTicket)
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (a.hora < b.hora ? 1 : -1)));
+  return { ok: true, items };
+});
+reg("getTicket", "any", async (p, ctx, ses) => {
+  const row = await ticketPorClave(ctx, s(p.clave || p.so_num || p.beta_num || p.tkRow));
+  if (!row) return { error: "Ticket no encontrado" };
+  const matriz = await matrizDe(ctx.db);
+  if (acceso(ses.rol, "tickets", matriz) === "propio" && !esPropio(s(row.atendido_por), ses)) return { error: "No tienes permiso" };
+  return { ok: true, item: filaTicket(row) };
+});
 reg("editarTicket", "any", async (p, ctx, ses) => {
-  const row = await rowBySheet(ctx.db, "tickets", n(p.tkRow));
+  const row = await ticketPorClave(ctx, s(p.clave || p.so_num || p.beta_num || p.tkRow)) || await rowBySheet(ctx.db, "tickets", n(p.tkRow));
   if (!row) return { error: "Fila inválida" };
+  const orig = { ...(row.orig && typeof row.orig === "object" ? row.orig as R : {}) };
   const patch: R = {
     id_3: s(p.cedula), nombre: s(p.nombre), apellido: s(p.apellido), facial_hecho: s(p.facial),
     compra_pack_3: s(p.pack3), compra_pack_6: s(p.pack6), servicios_adicionales: s(p.extras),
     estimado: n(p.estimado), fecha_retorno: s(p.fechaRetorno), gift_card: s(p.colR), venta_gift: s(p.colS),
     recomendaciones: s(p.recomendaciones), notas_generales: s(p.notas),
   };
+  if (p.subtotal != null && p.subtotal !== "") {
+    const sub = round2(n(p.subtotal));
+    patch.estimado = round2(sub * IVA);
+    orig.subtotal = sub;
+    orig.iva = round2(sub * 0.15);
+  }
   if (p.colQ != null) patch.paquete = s(p.colQ);
   if (p.cobro != null) patch.comp = s(p.cobro);
-  Object.assign(patch, productosPatch((p.productos || {}) as R, true, row));
+  if (p.productos && typeof p.productos === "object") {
+    const prod = productosPatch(p.productos as R, true, row);
+    Object.assign(patch, prod);
+    Object.assign(orig, prod.orig as R, { subtotal: orig.subtotal, iva: orig.iva });
+  }
+  patch.orig = orig;
   patch.estado = estadoTicket({ seguimiento: s(row.seguimiento), agendado: b(row.agendado), retorno: s(patch.fecha_retorno) }, hoy(ctx));
-  await ctx.db.write(actorOf(ses), "tickets", "update", { sheet_row: row.sheet_row }, patch);
-  return { ok: true };
+  const saved = await ctx.db.write(actorOf(ses), "tickets", "update", matchTicket(row), patch);
+  if (!saved) return { error: "No se pudo guardar el ticket" };
+  await logAccion(ctx.db, actorOf(ses), "EDITAR TICKET", leerSerie(row, "so_num") || s(row.beta_num) || ("fila " + row.sheet_row));
+  return { ok: true, estimado: patch.estimado, iva: orig.iva, so_num: leerSerie(row, "so_num") };
 });
 
 reg("eliminarTicket", "any", async (p, ctx, ses) => {
@@ -1437,7 +1634,20 @@ reg("registrarMulta", ADMIN, async (p, ctx, ses) => {
 reg("getDashboardHoy", ADMIN, async (_p, ctx) => dashboard(ctx));
 reg("getDashCosm", "any", async (p, ctx, ses) => {
   const nombre = s(p.cosmetologa) || ses.name;
-  const { calc, comRecep, diasRecep, multas, ciclo, fin } = await cicloDe(ctx, hoy(ctx));
+  const { calc, comRecep, diasRecep, multas, ciclo, fin, admins } = await cicloDe(ctx, hoy(ctx));
+  if (nombreEsAdmin(nombre, admins)) {
+    const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const [, m1] = ciclo.split("-").map(Number);
+    const [, m2] = fin.split("-").map(Number);
+    return {
+      faciales: 0, comFaciales: 0, paquetes: 0, comPaquetes: 0, nivelAlcanzado: "—",
+      comProductos: 0, totalProductos: 0, extras: 0, comExtras: 0, comRecepcion: 0, diasRecepcion: 0,
+      multas: 0, descuentos: 0, totalClientas: calc.totalClientas, bonoActivo: calc.bono,
+      siguienteNivel: null, paqParaSiguiente: 0, premioSiguiente: 0,
+      periodoLabel: meses[m1 - 1] + " — " + meses[m2 - 1] + " " + fin.slice(0, 4), nCosmetologas: calc.n,
+      adminExcluido: true,
+    };
+  }
   const cosm = calc.personas.find((c) => normNombre(c.cosm) === normNombre(nombre) || normNombre(c.cosm).startsWith(normNombre(nombre).split(" ")[0])) ;
   const c = cosm || { faciales: 0, comFaciales: 0, paquetes: 0, comPaquetes: 0, nivel: "—", comProductos: 0, totalProductos: 0, extras: 0, comExtras: 0, next: null as null | { nivel: string; faltan: number; premio: number } };
   const md = multasDe(nombre, ciclo, fin, multas);
@@ -1482,6 +1692,56 @@ reg("getComisionRecepcion", "any", async (_p, ctx) => {
   const { comRecep, diasRecep, ciclo, fin } = await cicloDe(ctx, hoy(ctx));
   return { comision: comRecep, dias: diasRecep, ciclo, fin };
 });
+function montosPersona(nombre: string, pack: { calc: { personas: { cosm: string; comFaciales: number; comPaquetes: number; comProductos: number; comExtras: number }[] }; comRecep: number }) {
+  const key = normNombre(nombre);
+  const primero = key.split(" ")[0] || key;
+  const p = pack.calc.personas.find((c) => normNombre(c.cosm) === key || normNombre(c.cosm).startsWith(primero));
+  const faciales = p?.comFaciales || 0;
+  const paquetes = p?.comPaquetes || 0;
+  const productos = p?.comProductos || 0;
+  const recepcion = primero.startsWith("alejandra") ? pack.comRecep : 0;
+  const extras = p?.comExtras || 0;
+  return {
+    Faciales: faciales, Paquetes: paquetes, Productos: productos, "Recepción": recepcion, Extras: extras,
+    Total: round2(faciales + paquetes + productos + recepcion + extras),
+  };
+}
+reg("getComisionesTabla", "any", async (p, ctx, ses) => {
+  const desde = s(p.desde) || cicloInicio(hoy(ctx));
+  const hasta = s(p.hasta) || desde;
+  const packs = [];
+  for (const c of ciclosEntre(desde, hasta)) packs.push(await cicloDe(ctx, c));
+  const admins = packs[0]?.admins || [];
+  const personas = new Map<string, string>();
+  for (const pack of packs) {
+    for (const per of pack.calc.personas) {
+      if (!nombreEsAdmin(per.cosm, admins)) personas.set(normNombre(per.cosm), per.cosm);
+    }
+  }
+  for (const m of await marks(ctx)) {
+    if (m.es && !nombreEsAdmin(m.nombre, admins) && !nombreEsAdmin(m.id, admins)) personas.set(normNombre(m.nombre), m.nombre);
+  }
+  let persona = s(p.persona || p.cosmetologa || p.nombre);
+  if (!esAdmin(ses.rol)) persona = ses.name;
+  if (!persona || nombreEsAdmin(persona, admins)) persona = [...personas.values()][0] || "";
+  const conceptos = ["Faciales", "Paquetes", "Productos", "Recepción", "Extras", "Total"] as const;
+  const filas = conceptos.map((concepto) => {
+    const porCiclo = packs.map((pack) => montosPersona(persona, pack)[concepto]);
+    return { concepto, porCiclo, total: round2(porCiclo.reduce((a, b) => a + b, 0)) };
+  });
+  return {
+    ok: true, persona, personas: [...personas.values()], adminExcluido: nombreEsAdmin(s(p.persona), admins),
+    ciclos: packs.map((pack) => ({ inicio: pack.ciclo, fin: pack.fin, regimen: pack.calc.regimen, n: pack.calc.n })),
+    filas, tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
+  };
+});
+reg("getTramos", "any", async (_p, ctx) => ({ ok: true, tramos: await tramosDe(ctx) }));
+reg("tramos_guardar", ADMIN, async (p, ctx, ses) => {
+  const tramos = normalizarTramos(p.tramos);
+  await kvSet(ctx.db, actorOf(ses), "paquete_tramos", { tramos });
+  await logAccion(ctx.db, actorOf(ses), "TRAMOS PAQUETE", tramos.map((t) => `${t.desde}-${t.hasta} ${t.modo} ${t.valor}`).join(", "));
+  return { ok: true, tramos };
+});
 reg("getHistorialComisiones", "any", async (_p, ctx) => {
   const store = await kvGet(ctx.db, "SUNSU_HISTORIAL_COMISIONES");
   let filas: R[] = [];
@@ -1500,23 +1760,45 @@ reg("guardarCotizacion", RECEP, async (p, ctx, ses) => {
   const calc = cotCalcular((p.lineas || p.items || []) as never[], s(p.dscMode), n(p.dscVal));
   if (!calc.lineas.length) return { error: "La cotización no tiene líneas" };
   if (!s(p.cliente)) return { error: "Falta el cliente" };
-  const saved = await ctx.db.write(actorOf(ses), "cotizaciones", "insert", {}, {
-    fecha: ecuadorParts(ctx.now).isoWall, creado_por: ses.name, cliente: s(p.cliente),
+  const actor = actorOf(ses);
+  if (s(p.numero)) {
+    const prev = (await ctx.db.all("cotizaciones")).find((r) => s(r.numero) === s(p.numero) || leerSerie(r, "sq_num") === s(p.numero));
+    if (!prev) return { error: "Cotización no encontrada" };
+    const orig = { ...(prev.orig && typeof prev.orig === "object" ? prev.orig as R : {}), sq_num: s(prev.numero), dscMode: calc.dscMode, dscVal: calc.dscVal };
+    const saved = await ctx.db.write(actor, "cotizaciones", "update", matchTicket(prev), {
+      cliente: s(p.cliente), telefono: s(p.telefono), email: s(p.email), cedula: s(p.cedula),
+      items: calc.lineas, subtotal: calc.subtotal, descuento: calc.descuento, iva: calc.iva, total: calc.total,
+      validez: s(p.validez) || s(prev.validez) || "Válida por 15 días", notas: s(p.notas), estado: s(p.estado) || s(prev.estado) || "Enviada",
+      orig,
+    });
+    await logAccion(ctx.db, actor, "EDITAR COTIZACION", s(prev.numero));
+    return { ok: true, numero: s(prev.numero), ...calc, id: saved?.id };
+  }
+  if (!previewPedido(p)) {
+    try { await backfillSQ(ctx.db, actor); } catch { /* sigue con el máximo local */ }
+  }
+  const numero = await tomarNumero(ctx.db, "TK-SQ", await ctx.db.all("cotizaciones"), "numero");
+  const saved = await ctx.db.write(actor, "cotizaciones", "insert", {}, {
+    numero, fecha: ecuadorParts(ctx.now).isoWall, creado_por: ses.name, cliente: s(p.cliente),
     telefono: s(p.telefono), email: s(p.email), cedula: s(p.cedula), items: calc.lineas,
     subtotal: calc.subtotal, descuento: calc.descuento, iva: calc.iva, total: calc.total,
     validez: s(p.validez) || "Válida por 15 días", notas: s(p.notas), estado: s(p.estado) || "Enviada",
-    orig: { dscMode: calc.dscMode, dscVal: calc.dscVal },
+    orig: { dscMode: calc.dscMode, dscVal: calc.dscVal, sq_num: numero },
   });
-  return { ok: true, numero: saved?.numero, ...calc };
+  return { ok: true, numero: saved?.numero || numero, ...calc };
 });
-reg("getCotizaciones", RECEP, async (_p, ctx, ses) => {
+reg("getCotizaciones", RECEP, async (p, ctx, ses) => {
   if (!puedeCotizar(ses.rol)) return { error: "No tienes acceso a cotizaciones" };
-  const items = (await ctx.db.all("cotizaciones")).sort((a, b) => s(b.numero).localeCompare(s(a.numero)));
+  if (!previewPedido(p)) {
+    try { await backfillSQ(ctx.db, actorOf(ses)); } catch { /* la lista usa el número que ya tenga */ }
+  }
+  const items = (await ctx.db.all("cotizaciones")).sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)) || s(b.numero).localeCompare(s(a.numero)));
   return { ok: true, items };
 });
 reg("getCotizacion", RECEP, async (p, ctx, ses) => {
   if (!puedeCotizar(ses.rol)) return { error: "No tienes acceso a cotizaciones" };
-  const row = (await ctx.db.all("cotizaciones")).find((r) => s(r.numero) === s(p.numero));
+  const clave = s(p.numero);
+  const row = (await ctx.db.all("cotizaciones")).find((r) => s(r.numero) === clave || leerSerie(r, "sq_num") === clave);
   if (!row) return { error: "No encontrada" };
   return { ok: true, item: row };
 });
@@ -1741,12 +2023,32 @@ reg("editarProductoCatalogo", ADMIN, async (p, ctx, ses) => {
   const rows = await ctx.db.all("catalogo");
   const row = rows.find((r) => skuCode(r.sku) === skuCode(s(p.sku)));
   if (!row) return { error: "SKU no encontrado" };
-  const sub = n(p.subtotal);
-  await ctx.db.write(actorOf(ses), "catalogo", "update", { sheet_row: row.sheet_row }, {
+  const sub = p.subtotal == null || p.subtotal === "" ? n(row.subtotal) : n(p.subtotal);
+  const orig = { ...(row.orig && typeof row.orig === "object" ? row.orig as R : {}) };
+  if (p.marca != null) orig.marca = s(p.marca);
+  if (p.proveedor != null) orig.proveedor = s(p.proveedor);
+  const patch: R = {
     producto_servicio: s(p.nombre) || s(row.producto_servicio), tipo: s(p.tipo) || s(row.tipo),
-    subtotal: sub || n(row.subtotal), iva: round2((sub || n(row.subtotal)) * 0.15),
-    total_con_iva: round2((sub || n(row.subtotal)) * IVA), precio_compra: n(p.compra ?? row.precio_compra),
-  });
+    subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA),
+    precio_compra: p.compra == null || p.compra === "" ? n(row.precio_compra) : n(p.compra),
+    orig,
+  };
+  if (p.marca != null) patch.marca = s(p.marca);
+  if (p.proveedor != null) patch.proveedor = s(p.proveedor);
+  if (p.activo != null) patch.activo = p.activo === false || p.activo === "NO" || p.activo === "false" ? false : true;
+  await ctx.db.write(actorOf(ses), "catalogo", "update", { sheet_row: row.sheet_row }, patch);
+  if (p.compraReal != null && p.compraReal !== "") {
+    const bases = await ctx.db.all("inventario_base");
+    const base = bases.find((b0) => skuCode(s(b0.sku)) === skuCode(s(row.sku)));
+    const compraReal = n(p.compraReal);
+    if (base) {
+      const match = base.id != null && base.id !== "" ? { id: base.id } : base.sheet_row != null ? { sheet_row: base.sheet_row } : { sku: base.sku };
+      await ctx.db.write(actorOf(ses), "inventario_base", "update", match, { compra: compraReal });
+    } else {
+      await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: s(row.sku), compra: compraReal, stock_inicial: 0 });
+    }
+  }
+  await logAccion(ctx.db, actorOf(ses), "EDITAR CATALOGO", skuCode(s(row.sku)));
   return { ok: true };
 });
 reg("crearProductoApp", ADMIN, async (p, ctx, ses) => {

@@ -576,6 +576,15 @@
   @media (min-width: 861px) {
     .cli-panel[hidden] { display: block; }
   }
+  .dirty-bar {
+    position: sticky; bottom: 8px; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-top: 12px; padding: 10px 12px; background: var(--navy); color: white; border-radius: 12px;
+  }
+  .dirty-bar[hidden] { display: none; }
+  .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
+  .sheet-scroll table { min-width: 640px; }
+  .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
+  .chooser-actions { display: flex; flex-direction: column; gap: 8px; }
 </style>
 </head>
 <body>
@@ -1009,7 +1018,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "conteos") return route.sub ? "Conteo físico" : "Conteos físicos";
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
-  if (route.mod === "personal") return { comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal";
+  if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
   if (tab) return tituloSunsu(tab);
@@ -1086,10 +1095,10 @@ function gruposVisibles() {
   const sections = [];
   const add = (title, icon, items) => { if (items.length) sections.push({ title, icon, items }); };
   const personal = [];
-  if (acceso("comisiones") !== "no") personal.push(["comisiones", "Mis comisiones", "#/m/personal/comisiones"]);
-  if (acceso("rol_pagos") !== "no") personal.push(["rol_pagos", "Mi rol de pagos", "#/m/personal/rol"]);
+  if (acceso("comisiones") !== "no") personal.push(["comisiones", etiquetaMia("Mis comisiones"), "#/m/personal/comisiones"]);
+  if (acceso("rol_pagos") !== "no") personal.push(["rol_pagos", etiquetaMia("Mi rol de pagos"), "#/m/personal/rol"]);
   if (acceso("asistencia") !== "no") {
-    personal.push(["asistencia", "Mi asistencia", "#/m/personal/asistencia"]);
+    personal.push(["asistencia", etiquetaMia("Mi asistencia"), "#/m/personal/asistencia"]);
     personal.push(["asistencia", "Permisos y vacaciones", "#/m/personal/permisos"]);
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
     if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
@@ -1198,6 +1207,11 @@ function htmlReloj() {
 }
 function rolActual() { return (state.user && state.user.role) || ""; }
 function esAdminRol() { const r = rolActual(); return r === "admin" || r === "super_admin"; }
+function etiquetaMia(label) {
+  if (!esAdminRol()) return label;
+  const limpio = String(label || "").replace(/^Mis\s+/i, "").replace(/^Mi\s+/i, "");
+  return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : label;
+}
 function esRolCitas() { const r = rolActual(); return r === "cosmetologa" || r === "asistente_cosmetologia"; }
 function muestraReloj() { return !!state.user && !esAdminRol() && acceso("asistencia") !== "no"; }
 function tabButton(id, label) {
@@ -1249,6 +1263,14 @@ function paintShell(title) {
           <button class="btn ghost" type="button" id="reloj-close">Cerrar</button>
         </div>
         <input id="reloj-selfie" type="file" accept="image/*" capture="user" hidden tabindex="-1" aria-hidden="true">
+      </div>
+      <div class="vista-sheet card" id="crear-menu" hidden>
+        <div class="card-title">Crear</div>
+        <div class="chooser-actions">
+          <button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>
+          <button class="btn ghost block" type="button" data-go="#/doc/cot">Nueva cotización</button>
+          <button class="btn ghost" type="button" id="crear-close">Cerrar</button>
+        </div>
       </div>
       <div class="vista-sheet card" id="vista-sheet" hidden>
         <div class="card-title">Ver como…</div>
@@ -1322,7 +1344,17 @@ function paintShell(title) {
   root.querySelectorAll("#nuevo-ticket, #nuevo-ticket-tab").forEach((plusBtn) => {
     plusBtn.onclick = () => {
       grupoAbierto = "";
-      go("#/doc/ov");
+      pintarFly();
+      const menu = document.getElementById("crear-menu");
+      if (menu) menu.hidden = false;
+    };
+  });
+  const crearClose = document.getElementById("crear-close");
+  if (crearClose) crearClose.onclick = () => { document.getElementById("crear-menu").hidden = true; };
+  root.querySelectorAll("#crear-menu [data-go]").forEach((b) => {
+    b.onclick = () => {
+      document.getElementById("crear-menu").hidden = true;
+      go(b.getAttribute("data-go"));
     };
   });
   const localSel = document.getElementById("local-sel");
@@ -1412,12 +1444,14 @@ function fail(data) {
   return `<p class="err">${esc((data && data.error) || "No se pudo cargar.")}</p>`;
 }
 function lineHtml(opts) {
-  const precio = opts.precio ? `<input name="precio" inputmode="decimal" placeholder="Precio" aria-label="Precio">` : `<input type="hidden" name="precio" value="0">`;
-  const bodega = opts.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option>${opcionesLugares()}</select>` : `<input type="hidden" name="bodega" value="">`;
-  const clase = opts.clase ? `<select name="clase" aria-label="Clase"><option value="producto">Producto</option><option value="servicio">Servicio</option></select>` : `<input type="hidden" name="clase" value="producto">`;
+  const o = opts || {};
+  const v = o.val || {};
+  const precio = o.precio ? `<input name="precio" inputmode="decimal" placeholder="Precio" aria-label="Precio" value="${esc(v.precio ?? "")}">` : `<input type="hidden" name="precio" value="0">`;
+  const bodega = o.bodega ? `<select name="bodega" aria-label="Bodega"><option value="">Bodega</option>${opcionesLugares()}</select>` : `<input type="hidden" name="bodega" value="">`;
+  const clase = o.clase ? `<select name="clase" aria-label="Clase"><option value="producto">Producto</option><option value="servicio">Servicio</option></select>` : `<input type="hidden" name="clase" value="producto">`;
   return `<div class="linea">
-    <input name="sku" placeholder="SKU" aria-label="SKU" autocomplete="off">
-    <input name="cantidad" inputmode="decimal" placeholder="Cant." aria-label="Cantidad" value="1">
+    <input name="sku" placeholder="SKU" aria-label="SKU" autocomplete="off" value="${esc(v.sku || v.nombre || "")}">
+    <input name="cantidad" inputmode="decimal" placeholder="Cant." aria-label="Cantidad" value="${esc(v.cantidad || v.cant || 1)}">
     ${precio}${bodega}${clase}
     <button class="btn ghost small" type="button" data-quitar>Quitar</button>
   </div>`;
@@ -1570,8 +1604,8 @@ async function draw() {
 
 function tituloDoc(doc) {
   return {
-    ov: "Nuevo ticket", cot: "Cotización a clienta", rfq: "Cotización de compra",
-    oc: "Orden de compra", prod: "Producto", cli: "Cliente", prov: "Proveedor", trf: "Transferencia",
+    ov: "Nuevo ticket", tk: "Ticket", cot: "Cotización", rfq: "Cotización de compra",
+    oc: "Orden de compra", prod: "Producto", cat: "Catálogo", cli: "Cliente", prov: "Proveedor", trf: "Transferencia",
   }[doc] || "Documento";
 }
 
@@ -1588,7 +1622,7 @@ async function renderMod(route) {
   if (route.mod === "inventario") return renderInventarioBeta(route.sub || "venta");
   if (route.mod === "lugares") return renderLugares();
   if (route.mod === "compras") return renderCompras(route.sub);
-  if (route.mod === "tickets") return renderClientes();
+  if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
   if (route.mod === "proveedores") return renderProveedores();
@@ -1698,21 +1732,25 @@ async function renderInicioBeta() {
 }
 
 async function renderProductos() {
-  const data = await api("prod_list");
+  const data = await api("getCatalogoTabla");
   if (data.error) return fail(data);
-  const items = (data.items || []).map((p) => {
-    const venta = (p.porBodega && (p.porBodega.VENTA ?? p.porBodega.venta)) || 0;
-    const cabina = (p.porBodega && (p.porBodega.CABINA ?? p.porBodega.cabina)) || 0;
-    const costo = state.verCostos && p.costo_promedio != null ? ` · costo ${money(p.costo_promedio)}` : "";
-    const precio = state.admin || state.verCostos ? ` · ${money(p.precio_venta)}` : "";
-    return `<button class="row" type="button" data-go="#/doc/prod/${encodeURIComponent(p.id)}">
-      <div class="sku">${esc(p.sku)}</div>
-      <div><div class="name">${esc(p.nombre)}</div><div class="note">${esc(p.uso)}${precio}${esc(costo)}</div></div>
-      <div class="meta">Venta ${esc(venta)}<br>Cabina ${esc(cabina)}</div>
-    </button>`;
-  }).join("");
-  return `<input id="filtro" placeholder="Buscar SKU o nombre" aria-label="Buscar producto">
-    <div class="list" id="lista">${items || `<p class="note">El catálogo ERP está vacío. Aplica 0009 y la importación, o crea un producto.</p>`}</div>`;
+  window._catRows = data.items || [];
+  const filas = window._catRows.map((p) => `<tr data-cat="${esc(p.sku)}">
+      <td><button class="link" type="button" data-go="#/doc/cat/${encodeURIComponent(p.sku)}">${esc(p.sku)}</button></td>
+      <td>${esc(p.tipo || "")}</td>
+      <td>${esc(p.nombre)}</td>
+      <td>${esc(p.marca || p.proveedor || "")}</td>
+      <td>${p.activo ? "Sí" : "No"}</td>
+      <td class="num">${money(p.pvp || 0)}</td>
+      <td class="num">${state.admin || state.verCostos ? money(p.compraReal || 0) : ""}</td>
+      <td class="num">${esc(p.stock ?? 0)}</td>
+    </tr>`).join("");
+  return `<input id="filtro-cat" placeholder="Buscar SKU, nombre o marca" aria-label="Buscar en el catálogo">
+    <div class="sheet-scroll"><table>
+      <thead><tr><th>SKU</th><th>Tipo</th><th>Nombre</th><th>Marca / proveedor</th><th>Activo</th><th class="num">PVP</th><th class="num">Compra real</th><th class="num">Stock</th></tr></thead>
+      <tbody id="lista">${filas || `<tr><td colspan="8">El catálogo está vacío.</td></tr>`}</tbody>
+    </table></div>
+    <p class="note">La compra real sale de la última orden en Supabase cuando el costo guardado estaba vacío. No se escribe la hoja.</p>`;
 }
 
 function htmlLocalSel() {
@@ -1811,16 +1849,25 @@ async function renderCompras(sub) {
 }
 
 async function renderTickets() {
-  const data = await api("ov_list");
-  const legacy = await api("getTicketsDia", {});
-  const erp = data.error
-    ? `<p class="err">${esc(data.error)}</p>`
-    : (data.items || []).map((o) => `<div class="row"><div class="sku">${esc(o.numero)}</div><div><div class="name">${esc(o.nombre || o.ticket_ref)}</div><div class="note">${esc(o.estado)}</div></div><div class="meta">${money(o.total)}</div></div>`).join("");
-  const dia = Array.isArray(legacy) ? legacy : (legacy.items || legacy.tickets || []);
-  const rows = (Array.isArray(dia) ? dia : []).slice(0, 40).map((t) => `<div class="doc-row"><span class="sku-badge">${esc(t.ticket || t.beta_num || t.ref || "")}</span><span class="pname">${esc(((t.nombre || "") + " " + (t.apellido || "")).trim())}</span><span class="money-col">${money(t.estimado || t.total || "")}</span></div>`).join("");
-  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
-    <h2>Órdenes de venta</h2><div class="list">${erp || `<p class="note">Aún no hay tickets del ERP.</p>`}</div>
-    <h2>Tickets del día (hoja)</h2><div class="list">${rows || `<p class="note">${esc(legacy.error || "Sin tickets para hoy, o solo ves los tuyos.")}</p>`}</div>`;
+  const data = await api("getTicketsLista");
+  if (data.error) return fail(data);
+  window._tkRows = data.items || [];
+  window._tkSort = "fecha";
+  window._tkDir = -1;
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>
+      <input id="filtro-tk" placeholder="Filtrar número, clienta o cosm." aria-label="Filtrar tickets"></div>
+    <div class="sheet-scroll"><table>
+      <thead><tr>
+        <th><button class="link" type="button" data-sort="so_num">TK-SO</button></th>
+        <th><button class="link" type="button" data-sort="fecha">Fecha</button></th>
+        <th><button class="link" type="button" data-sort="cliente">Clienta</button></th>
+        <th>Cosm.</th>
+        <th><button class="link" type="button" data-sort="total">Total</button></th>
+        <th>beta_num</th>
+      </tr></thead>
+      <tbody id="lista-tk"></tbody>
+    </table></div>
+    <p class="note">Lo más nuevo va primero. beta_num queda como número secundario. Abrir una fila la edita en la misma pantalla.</p>`;
 }
 
 async function renderKardex() {
@@ -2010,31 +2057,99 @@ async function renderProveedores() {
 async function renderCotizaciones() {
   const data = await api("getCotizaciones");
   if (data.error) return fail(data);
-  const items = (data.items || []).map((c) => `<div class="row"><div class="sku">${esc(c.numero)}</div><div><div class="name">${esc(c.cliente)}</div></div><div class="meta">${money(c.total)}</div></div>`).join("");
-  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/cot">Nueva cotización</button></div><div class="list">${items || `<p class="note">No hay cotizaciones.</p>`}</div>`;
+  window._cotRows = data.items || [];
+  const items = window._cotRows.map((c) => `<tr>
+      <td><button class="link" type="button" data-go="#/doc/cot/${encodeURIComponent(c.numero)}">${esc(c.numero)}</button></td>
+      <td>${esc(String(c.fecha || "").slice(0, 10))}</td>
+      <td>${esc(c.cliente)}</td>
+      <td class="num">${money(c.total)}</td>
+      <td>${esc(c.estado || "")}</td>
+    </tr>`).join("");
+  return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/cot">Nueva cotización</button>
+      <input id="filtro-cot" placeholder="Filtrar número o clienta" aria-label="Filtrar cotizaciones"></div>
+    <div class="sheet-scroll"><table>
+      <thead><tr><th>TK-SQ</th><th>Fecha</th><th>Clienta</th><th class="num">Total</th><th>Estado</th></tr></thead>
+      <tbody id="lista">${items || `<tr><td colspan="5">No hay cotizaciones.</td></tr>`}</tbody>
+    </table></div>`;
 }
 
+function cicloInicioUi(ymd) {
+  const [y, m, d] = String(ymd || ymdEc()).split("-").map(Number);
+  if (d >= 26) return y + "-" + String(m).padStart(2, "0") + "-26";
+  const dt = new Date(Date.UTC(y, m - 2, 26));
+  return dt.toISOString().slice(0, 10);
+}
+function cicloFinUi(ini) {
+  const [y, m] = String(ini).split("-").map(Number);
+  return new Date(Date.UTC(y, m, 25)).toISOString().slice(0, 10);
+}
+function opcionesCiclo() {
+  let c = cicloInicioUi(ymdEc());
+  const out = [];
+  for (let i = 0; i < 8; i++) {
+    out.push(c);
+    const [y, m] = c.split("-").map(Number);
+    c = new Date(Date.UTC(y, m - 2, 26)).toISOString().slice(0, 10);
+  }
+  return out;
+}
 async function renderComisiones() {
-  const data = await api("getDashCosm", { cosmetologa: state.user.name });
+  const ciclos = opcionesCiclo();
+  const desde = ciclos[0];
+  const data = await api("getComisionesTabla", { desde, hasta: desde });
   if (data.error) return fail(data);
-  const cards = [
-    ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
-    ["Paquetes", data.paquetes], ["Comisión paquetes", money(data.comPaquetes)],
-    ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
-    ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
-  ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
-  return `<p class="note">${esc(data.periodoLabel || "")}. Ves solo tu comisión.</p><div class="grid">${cards}</div>`;
+  window._com = data;
+  const opts = (data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("");
+  const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
+  const tramos = (data.tramos || []).map((t, i) => `<div class="linea" data-tramo>
+      <input data-k="desde" value="${esc(t.desde)}" aria-label="Desde unidad ${i + 1}" inputmode="numeric">
+      <input data-k="hasta" value="${esc(t.hasta >= 100000 ? "" : t.hasta)}" placeholder="∞" aria-label="Hasta unidad ${i + 1}">
+      <select data-k="modo" aria-label="Modo del tramo ${i + 1}"><option value="fijo" ${t.modo !== "pct" ? "selected" : ""}>Monto fijo $</option><option value="pct" ${t.modo === "pct" ? "selected" : ""}>% del neto</option></select>
+      <input data-k="valor" value="${esc(t.modo === "pct" ? Math.round(t.valor * 1000) / 10 : t.valor)}" aria-label="Valor del tramo ${i + 1}">
+    </div>`).join("");
+  return `<div class="tools">
+      ${state.admin ? `<label>Persona <select id="com-persona">${opts}</select></label>` : `<strong>${esc(data.persona || "")}</strong>`}
+      <label>Del ciclo <select id="com-desde">${cicloOpts}</select></label>
+      <label>al ciclo <select id="com-hasta">${cicloOpts}</select></label>
+      <button class="btn small" type="button" id="com-ver">Ver</button>
+    </div>
+    <div id="com-tabla"></div>
+    ${state.admin ? `<form id="f-tramos" class="card"><div class="card-title">Tramos de paquete</div>
+      <p class="note">Hoy cada tramo es un monto fijo: 1–10 $10, 11–20 $15, 21–30 $20, 31+ $25. Si más adelante pasa a 5/8/11/14% del precio neto, cambia el modo de ese tramo a %.</p>
+      ${tramos}
+      <button class="btn" type="submit">Guardar tramos</button><p class="err" id="f-err"></p></form>` : ""}
+    <p class="note">Hasta el ciclo que cierra el 2026-10-25 sigue el nivel, con N = 3 cabinas. Andrea y Daniela quedan en N8 ($320) en ese ciclo. Desde el 2026-10-26 manda el tramo. Un admin no entra en la cuenta ni en N.</p>`;
 }
 
 async function renderRol() {
-  const data = await api("getRoles");
+  const ciclos = opcionesCiclo();
+  const data = await api("getRolCiclo", { desde: ciclos[0] });
   if (data.error) return fail(data);
-  const meses = (((data.data || {}).meses) || []);
-  const blocks = meses.map((m) => {
-    const emps = (m.empleadas || []).map((e) => `<div class="row"><div class="sku">${esc(e.cedula)}</div><div class="name">${esc(e.nombre)}</div><div class="meta">${money(e.totalIngresos || e.sueldo)}</div></div>`).join("");
-    return `<h2>${esc(m.mes)} ${esc(m.anio)}</h2><div class="list">${emps}</div>`;
-  }).join("");
-  return `<p class="note">Rol histórico importado. El cálculo vivo (vacaciones y fondo solo con un año, paquetes dentro de comisiones) está en getRolIndividual y en rol_calcular.</p>${blocks || `<p class="note">No hay roles históricos a tu nombre.</p>`}`;
+  window._rol = data;
+  const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
+  const personas = state.admin ? `<label>Persona <select id="rol-persona">${(data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : "";
+  const cfg = state.admin ? await htmlPagoConfig() : "";
+  return `<div class="tools">${personas}<label>Ciclo <select id="rol-ciclo">${cicloOpts}</select></label><button class="btn small" type="button" id="rol-ver">Ver</button>
+      <button class="btn ghost small" type="button" id="rol-pdf">Descargar PDF</button></div>
+    <div id="rol-sheet"></div>
+    ${cfg}
+    <p class="note">El sueldo y el bono salen de la ficha o del configurador, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones.</p>`;
+}
+async function htmlPagoConfig() {
+  const data = await api("getPagoConfig");
+  if (data.error) return fail(data);
+  const opts = (data.personas || []).map((p) => `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join("");
+  return `<form id="f-pago-cfg" class="card"><div class="card-title">Configurador de pagos</div>
+    <p class="note">Cada guardado vale desde una fecha. No escribe Google Sheets.</p>
+    <label>Persona</label><select name="nombre">${opts}</select>
+    <label>Vigente desde</label><input name="vigente_desde" type="date" value="${esc(ymdEc())}" required>
+    <label>Sueldo base</label><input name="sueldo" inputmode="decimal" required>
+    <label>Bono fijo</label><input name="bono" inputmode="decimal" value="0">
+    <label>IESS %</label><input name="iess_pct" inputmode="decimal" value="9.45">
+    <label><input type="checkbox" name="fondo" style="width:auto"> Fondo de reserva</label>
+    <label>Fondo desde</label><input name="fondo_desde" type="date">
+    <label>Vacaciones desde el año</label><input name="vacaciones_desde_anio" inputmode="numeric" value="1">
+    <button class="btn" type="submit">Guardar configuración</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
 }
 
 async function renderAsistencia() {
@@ -2859,9 +2974,11 @@ async function renderUsuarios() {
 
 async function renderDoc(route) {
   if (route.doc === "prod") return renderProd(route.id);
+  if (route.doc === "cat") return renderCatalogoFicha(route.id);
   if (route.doc === "oc") return route.id ? renderOc(route.id) : renderOcNueva();
-  if (route.doc === "ov") return `<p class="note">El ticket se abre en la pantalla de Sunsu.</p>`;
-  if (route.doc === "cot") return renderCot();
+  if (route.doc === "ov") return renderOv();
+  if (route.doc === "tk") return renderTicketEditor(route.id);
+  if (route.doc === "cot") return renderCot(route.id);
   if (route.doc === "rfq") return renderRfq();
   if (route.doc === "cli") return renderClientes();
   if (route.doc === "prov") return renderProveedores();
@@ -2942,12 +3059,67 @@ function renderOv() {
     <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
 }
 
-function renderCot() {
-  return `<form id="f-cot"><label>Clienta</label><input name="cliente" required><label>Teléfono</label><input name="telefono"><label>Email</label><input name="email">
-    <div id="lineas">${lineHtml({ precio: true })}</div>
+async function renderCot(numero) {
+  let item = null;
+  if (numero) {
+    const data = await api("getCotizacion", { numero });
+    if (data.error) return fail(data);
+    item = data.item || {};
+  }
+  const lineas = ((item && item.items) || []).map((ln) => lineHtml({ precio: true, val: ln })).join("") || lineHtml({ precio: true });
+  return `<form id="f-cot">${numero ? `<input type="hidden" name="numero" value="${esc(numero)}">` : ""}
+    <label>Clienta</label><input name="cliente" required value="${esc((item && item.cliente) || "")}">
+    <label>Teléfono</label><input name="telefono" value="${esc((item && item.telefono) || "")}">
+    <label>Email</label><input name="email" value="${esc((item && item.email) || "")}">
+    <div id="lineas">${lineas}</div>
     <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
-    <label>Notas</label><textarea name="notas"></textarea>
-    <button class="btn" type="submit">Guardar cotización</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+    <label>Notas</label><textarea name="notas">${esc((item && item.notas) || "")}</textarea>
+    <button class="btn" type="submit">Guardar cotización</button>
+    <div class="dirty-bar" hidden><span>Hay cambios sin guardar</span><button class="btn small" type="button" data-dirty-save>Guardar</button></div>
+    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+async function renderTicketEditor(clave) {
+  if (!clave) return `<p class="note">Elige un ticket de la lista.</p>`;
+  const data = await api("getTicket", { clave });
+  if (data.error) return fail(data);
+  const t = data.item || {};
+  return `<form id="f-tk">
+    <p class="note">${esc(t.so_num || clave)}${t.beta_num ? " · " + esc(t.beta_num) : ""} · ${esc(t.fecha || "")} ${esc(t.hora || "")}</p>
+    <label>Nombre</label><input name="nombre" value="${esc(t.nombre || "")}" required>
+    <label>Apellido</label><input name="apellido" value="${esc(t.apellido || "")}">
+    <label>Cédula</label><input name="cedula" value="${esc(t.cedula || "")}">
+    <label>Facial</label><input name="facial" value="${esc(t.facial || "")}">
+    <label>Paquete x3</label><input name="pack3" value="${esc(t.pack3 || "")}">
+    <label>Paquete x6</label><input name="pack6" value="${esc(t.pack6 || "")}">
+    <label>Extras</label><input name="extras" value="${esc(t.extras || "")}">
+    <label>Subtotal (sin IVA)</label><input name="subtotal" inputmode="decimal" value="${esc(t.subtotal ?? "")}">
+    <p class="note">IVA 15% <strong data-iva>${money(t.iva || 0)}</strong> · total <strong data-total>${money(t.estimado || 0)}</strong></p>
+    <label>Notas</label><textarea name="notas">${esc(t.notas || "")}</textarea>
+    <button class="btn" type="submit">Guardar ticket</button>
+    <div class="dirty-bar" hidden><span>Hay cambios sin guardar</span><button class="btn small" type="button" data-dirty-save>Guardar</button></div>
+    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+}
+async function renderCatalogoFicha(sku) {
+  if (!sku) return `<p class="note">Elige un SKU del catálogo.</p>`;
+  const data = await api("getCatalogoTabla");
+  if (data.error) return fail(data);
+  const p = (data.items || []).find((r) => String(r.sku).toUpperCase() === String(sku).toUpperCase() || String(r.sku).toUpperCase().endsWith(String(sku).toUpperCase()));
+  if (!p) return `<p class="err">SKU no encontrado.</p>`;
+  const lug = p.lugares || {};
+  const costo = state.admin || state.verCostos ? `<label>Compra real</label><input name="compraReal" inputmode="decimal" value="${esc(p.compraReal ?? "")}">` : "";
+  return `<form id="f-cat">
+    <input type="hidden" name="sku" value="${esc(p.sku)}">
+    <label>SKU</label><input value="${esc(p.sku)}" disabled>
+    <label>Nombre</label><input name="nombre" value="${esc(p.nombre || "")}" required>
+    <label>Tipo</label><input name="tipo" value="${esc(p.tipo || "")}">
+    <label>Marca / proveedor</label><input name="marca" value="${esc(p.marca || p.proveedor || "")}">
+    <label>Activo</label><select name="activo"><option value="SI" ${p.activo ? "selected" : ""}>Sí</option><option value="NO" ${p.activo ? "" : "selected"}>No</option></select>
+    <label>PVP sin IVA</label><input name="subtotal" inputmode="decimal" value="${esc(p.subtotal ?? "")}">
+    ${costo}
+    <p class="note">Stock: Venta ${esc(lug.venta || 0)} · Cabina 1 ${esc(lug.cabina1 || 0)} · Cabina 2 ${esc(lug.cab2 || 0)} · Cabina 3 ${esc(lug.cab3 || 0)} · Bodega ${esc(lug.bodega || 0)}. Esos saldos no se editan aquí.</p>
+    <button class="btn" type="submit">Guardar ficha</button>
+    <div class="dirty-bar" hidden><span>Hay cambios sin guardar</span><button class="btn small" type="button" data-dirty-save>Guardar</button></div>
+    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
 }
 
 async function renderRfq() {
@@ -3286,6 +3458,68 @@ function toast(msg) {
   clearTimeout(window._toastT);
   window._toastT = setTimeout(() => { t.hidden = true; }, 2400);
 }
+function montarDirty(root) {
+  const bar = root.querySelector(".dirty-bar");
+  if (!bar) return;
+  const campos = () => [...root.querySelectorAll("input, textarea, select")].map((el) => (el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value)).join("\u0001");
+  let base = campos();
+  const ver = () => { bar.hidden = campos() === base; };
+  root.addEventListener("input", ver);
+  root.addEventListener("change", ver);
+  const btn = bar.querySelector("[data-dirty-save]");
+  if (btn) btn.onclick = () => { const f = root.querySelector("form"); if (f) f.requestSubmit(); };
+}
+function pintarTickets() {
+  const body = document.getElementById("lista-tk");
+  if (!body) return;
+  const q = normBusca((document.getElementById("filtro-tk") || {}).value || "");
+  const sort = window._tkSort || "fecha";
+  const dir = window._tkDir || -1;
+  const rows = (window._tkRows || []).filter((t) => {
+    if (!q) return true;
+    return normBusca([t.so_num, t.beta_num, t.nombre, t.apellido, t.cosmetologa, t.fecha].join(" ")).includes(q);
+  }).slice().sort((a, b) => {
+    const av = sort === "cliente" ? ((a.nombre || "") + " " + (a.apellido || "")) : sort === "total" ? Number(a.total) || 0 : (a[sort] || "");
+    const bv = sort === "cliente" ? ((b.nombre || "") + " " + (b.apellido || "")) : sort === "total" ? Number(b.total) || 0 : (b[sort] || "");
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  body.innerHTML = rows.map((t) => `<tr>
+      <td><button class="link" type="button" data-go="#/doc/tk/${encodeURIComponent(t.clave || t.so_num || t.beta_num)}">${esc(t.so_num || "—")}</button></td>
+      <td>${esc(t.fecha || "")} ${esc(t.hora || "")}</td>
+      <td>${esc(((t.nombre || "") + " " + (t.apellido || "")).trim())}</td>
+      <td>${esc(t.cosmetologa || "")}</td>
+      <td class="num">${money(t.total || 0)}</td>
+      <td>${esc(t.beta_num || "")}</td>
+    </tr>`).join("") || `<tr><td colspan="6">Sin tickets.</td></tr>`;
+  body.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
+}
+function htmlComTabla(data) {
+  const ciclos = data.ciclos || [];
+  const head = ciclos.map((c) => `<th class="num">${esc(c.inicio)}<br>${esc(c.fin)}</th>`).join("");
+  const filas = (data.filas || []).map((f) => `<tr><td>${esc(f.concepto)}</td>${(f.porCiclo || []).map((v) => `<td class="num">${money(v)}</td>`).join("")}<td class="num">${money(f.total)}</td></tr>`).join("");
+  return `<div class="sheet-scroll"><table><thead><tr><th>Concepto</th>${head}<th class="num">Total</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+}
+function pintarCom() {
+  const box = document.getElementById("com-tabla");
+  if (box && window._com) box.innerHTML = htmlComTabla(window._com);
+}
+function htmlRol(data) {
+  const ing = (data.ingresos || []).map((r) => `<tr><td>${esc(r.concepto)}</td><td class="num">${money(r.monto)}</td></tr>`).join("");
+  const egr = (data.descuentos || []).map((r) => `<tr><td>${esc(r.concepto)}</td><td class="num">${money(r.monto)}</td></tr>`).join("");
+  return `<div class="doc-sheet" id="rol-print">
+    <div class="card-title">Rol de pagos</div>
+    <p class="note">${esc(data.persona || "")}${data.cargo ? " · " + esc(data.cargo) : ""}${data.cedula ? " · " + esc(data.cedula) : ""}<br>Ciclo ${esc(data.ciclo)} → ${esc(data.fin)} · horas ${esc(data.fuenteHoras || "")}</p>
+    <h3>Ingresos</h3><table><tbody>${ing}<tr><td>Total ingresos</td><td class="num">${money(data.totalIngresos)}</td></tr></tbody></table>
+    <h3>Descuentos</h3><table><tbody>${egr}<tr><td>Total descuentos</td><td class="num">${money(data.totalDescuentos)}</td></tr></tbody></table>
+    <h3>Neto a recibir</h3><p class="tk-total">${money(data.neto)}</p>
+  </div>`;
+}
+function pintarRol() {
+  const box = document.getElementById("rol-sheet");
+  if (box && window._rol) box.innerHTML = htmlRol(window._rol);
+}
 function bind(main) {
   main.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => {
@@ -3324,6 +3558,10 @@ function bind(main) {
   form("#f-dev", saveDev);
   form("#f-ov", saveOv);
   form("#f-cot", saveCot);
+  form("#f-tk", saveTicket);
+  form("#f-cat", saveCatalogo);
+  form("#f-tramos", saveTramos);
+  form("#f-pago-cfg", savePagoCfg);
   form("#f-rfq", saveRfq);
   form("#f-rfq-line", saveRfqLine);
   form("#f-cli", saveCli);
@@ -3337,6 +3575,8 @@ function bind(main) {
   wirePersonal(main);
   wireHorarios(main);
   wireVentas(main);
+  wireBatch(main);
+  montarDirty(main);
   form("#f-paq", savePaq);
   form("#f-rep", saveReporte);
   form("#f-cnt", saveCnt);
@@ -3414,10 +3654,117 @@ async function saveOv(form) {
 }
 async function saveCot(form) {
   const data = await api("guardarCotizacion", {
+    numero: form.numero ? form.numero.value : "",
     cliente: form.cliente.value, telefono: form.telefono.value, email: form.email.value, notas: form.notas.value,
     lineas: readLines(form).map((l) => ({ sku: l.sku, cant: l.cantidad, precio: l.precio, nombre: l.sku })),
   });
-  setMsg(form, data, data.numero ? data.numero + " · " + money(data.total) : "Listo");
+  if (setMsg(form, data, data.numero ? data.numero + " · " + money(data.total) : "Listo") && data.numero && !(form.numero && form.numero.value)) {
+    go("#/doc/cot/" + encodeURIComponent(data.numero));
+  }
+}
+async function saveTicket(form) {
+  const data = await api("editarTicket", {
+    clave: parseRoute().id, nombre: form.nombre.value, apellido: form.apellido.value, cedula: form.cedula.value,
+    facial: form.facial.value, pack3: form.pack3.value, pack6: form.pack6.value, extras: form.extras.value,
+    notas: form.notas.value, subtotal: form.subtotal.value,
+  });
+  setMsg(form, data, data.ok ? "Guardado · IVA " + money(data.iva) + " · total " + money(data.estimado) : "Listo");
+  if (data.ok) {
+    const iva = form.querySelector("[data-iva]");
+    const total = form.querySelector("[data-total]");
+    if (iva) iva.textContent = money(data.iva);
+    if (total) total.textContent = money(data.estimado);
+  }
+}
+async function saveCatalogo(form) {
+  const body = Object.fromEntries(new FormData(form).entries());
+  body.activo = body.activo !== "NO";
+  const data = await api("editarProductoCatalogo", body);
+  setMsg(form, data, data.ok ? "Ficha guardada" : "Listo");
+}
+async function saveTramos(form) {
+  const tramos = [...form.querySelectorAll("[data-tramo]")].map((row) => ({
+    desde: row.querySelector("[data-k=desde]").value,
+    hasta: row.querySelector("[data-k=hasta]").value || 100000,
+    modo: row.querySelector("[data-k=modo]").value,
+    valor: row.querySelector("[data-k=valor]").value,
+  }));
+  const data = await api("tramos_guardar", { tramos });
+  if (setMsg(form, data, "Tramos guardados")) {
+    const ver = document.getElementById("com-ver");
+    if (ver) ver.click();
+  }
+}
+async function savePagoCfg(form) {
+  const body = Object.fromEntries(new FormData(form).entries());
+  body.fondo = !!form.fondo.checked;
+  const data = await api("pago_config_guardar", body);
+  setMsg(form, data, data.ok ? "Configuración guardada" : "Listo");
+}
+function wireBatch(main) {
+  const tk = main.querySelector("#filtro-tk");
+  if (tk) {
+    tk.addEventListener("input", pintarTickets);
+    main.querySelectorAll("[data-sort]").forEach((b) => {
+      b.onclick = () => {
+        const key = b.getAttribute("data-sort");
+        window._tkDir = window._tkSort === key ? -(window._tkDir || -1) : (key === "fecha" ? -1 : 1);
+        window._tkSort = key;
+        pintarTickets();
+      };
+    });
+    pintarTickets();
+  }
+  const cat = main.querySelector("#filtro-cat");
+  if (cat) cat.addEventListener("input", () => {
+    const q = normBusca(cat.value);
+    main.querySelectorAll("#lista tr").forEach((row) => { row.hidden = q && !normBusca(row.textContent).includes(q); });
+  });
+  const cot = main.querySelector("#filtro-cot");
+  if (cot) cot.addEventListener("input", () => {
+    const q = normBusca(cot.value);
+    main.querySelectorAll("#lista tr").forEach((row) => { row.hidden = q && !normBusca(row.textContent).includes(q); });
+  });
+  const sub = main.querySelector("#f-tk [name=subtotal]");
+  if (sub) sub.addEventListener("input", () => {
+    const neto = Number(sub.value) || 0;
+    const iva = Math.round(neto * 0.15 * 100) / 100;
+    const total = Math.round(neto * 1.15 * 100) / 100;
+    const a = main.querySelector("[data-iva]");
+    const b = main.querySelector("[data-total]");
+    if (a) a.textContent = money(iva);
+    if (b) b.textContent = money(total);
+  });
+  pintarCom();
+  const comVer = main.querySelector("#com-ver");
+  if (comVer) comVer.onclick = async () => {
+    const persona = (main.querySelector("#com-persona") || {}).value || "";
+    const data = await api("getComisionesTabla", {
+      persona, desde: main.querySelector("#com-desde").value, hasta: main.querySelector("#com-hasta").value,
+    });
+    if (data.error) { toast(data.error); return; }
+    window._com = data;
+    pintarCom();
+  };
+  pintarRol();
+  const rolVer = main.querySelector("#rol-ver");
+  if (rolVer) rolVer.onclick = async () => {
+    const persona = (main.querySelector("#rol-persona") || {}).value || "";
+    const data = await api("getRolCiclo", { persona, desde: main.querySelector("#rol-ciclo").value });
+    if (data.error) { toast(data.error); return; }
+    window._rol = data;
+    pintarRol();
+  };
+  const pdf = main.querySelector("#rol-pdf");
+  if (pdf) pdf.onclick = () => {
+    const d = window._rol || {};
+    const lineas = ["SUNSU SPA — ROL DE PAGOS", (d.persona || "") + " · " + (d.ciclo || "") + " a " + (d.fin || ""), ""];
+    (d.ingresos || []).forEach((r) => lineas.push(r.concepto + "  " + money(r.monto)));
+    lineas.push("Total ingresos  " + money(d.totalIngresos), "");
+    (d.descuentos || []).forEach((r) => lineas.push(r.concepto + "  " + money(r.monto)));
+    lineas.push("Total descuentos  " + money(d.totalDescuentos), "", "Neto a recibir  " + money(d.neto));
+    bajarArchivo("rol-" + (d.persona || "pago") + ".pdf", pdfTexto(lineas), "application/pdf");
+  };
 }
 async function saveRfq(form) {
   const data = await api("rfq_save", { nota: form.nota.value });
@@ -3839,7 +4186,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261024clientes"></script>
+<script src="beta-screens.js?v=20261024resto"></script>
 <script>draw();</script>
 </body>
 </html>

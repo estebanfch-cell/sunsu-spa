@@ -43,7 +43,7 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
 };
 
 const ACCION_MODULO: Record<string, Modulo> = {
-  getCatalogo: "productos", crearProductoApp: "productos", editarProductoCatalogo: "productos",
+  getCatalogo: "productos", getCatalogoTabla: "productos", crearProductoApp: "productos", editarProductoCatalogo: "productos",
   toggleActivoCatalogo: "productos", eliminarProductoApp: "productos", prod_list: "productos",
   prod_get: "productos", prod_save: "productos",
   getInventario: "inventario", stk_saldo: "inventario", stk_kardex: "kardex",
@@ -63,8 +63,10 @@ const ACCION_MODULO: Record<string, Modulo> = {
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
   getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones",
   getPeriodoComision: "comisiones", getReporteAdmin: "comisiones", getReporte: "comisiones",
+  getComisionesTabla: "comisiones", getTramos: "comisiones", tramos_guardar: "comisiones",
   getRendimientoProductos: "ver_costos",
   getRoles: "rol_pagos", getRolIndividual: "rol_pagos", getAprobacionesRol: "rol_pagos", aprobarRol: "rol_pagos",
+  getRolCiclo: "rol_pagos", getPagoConfig: "rol_pagos", pago_config_guardar: "rol_pagos",
   testDiasJibble: "asistencia",
   asis_config: "asistencia", asis_config_guardar: "asistencia", asis_marcar: "asistencia",
   asis_hoy: "asistencia", asis_periodo: "asistencia", asis_corregir: "asistencia", asis_auditoria: "asistencia",
@@ -77,6 +79,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   cli_list: "clientes", cli_save: "clientes",
   prov_list: "proveedores", prov_save: "proveedores",
   guardarCotizacion: "cotizaciones_cliente", getCotizaciones: "cotizaciones_cliente", getCotizacion: "cotizaciones_cliente",
+  getTicketsLista: "tickets", getTicket: "tickets", editarTicket: "tickets",
   buscarPaquetes: "paquetes", getSeguimientoPaquetes: "paquetes",
   getCodigoGC: "gift_cards", getCodigosGC: "gift_cards", buscarGiftCards: "gift_cards", getGCDigitales: "gift_cards",
   gc_list: "gift_cards", gc_detalle: "gift_cards", gc_emitir: "gift_cards", gc_editar: "gift_cards",
@@ -177,12 +180,14 @@ export function clampPersonal(action: string, p: Row, ses: SesLite | null, matri
   if (!ses || esAdmin(ses.rol)) return p;
   const out = { ...p };
   const propio = (mod: string) => acceso(ses.rol, mod, matriz) === "propio";
-  if (propio("comisiones") && ["getDashCosm", "getComisionesRol", "getPeriodoComision", "getComisionRecepcion"].includes(action)) {
+  if (propio("comisiones") && ["getDashCosm", "getComisionesRol", "getPeriodoComision", "getComisionRecepcion", "getComisionesTabla"].includes(action)) {
     out.cosmetologa = ses.name;
     out.nombre = ses.name;
+    out.persona = ses.name;
   }
-  if (acceso(ses.rol, "rol_pagos", matriz) !== "todos" && ["getRolIndividual", "getRoles", "aprobarRol"].includes(action)) {
+  if (acceso(ses.rol, "rol_pagos", matriz) !== "todos" && ["getRolIndividual", "getRoles", "aprobarRol", "getRolCiclo"].includes(action)) {
     out.nombre = ses.name;
+    out.persona = ses.name;
   }
   if (propio("asistencia") && action === "testDiasJibble") out.nombre = ses.name;
   if (propio("tickets") && (action === "crearTicket" || action === "ov_save" || action === "")) {

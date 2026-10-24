@@ -72,15 +72,20 @@ function marcajesDe(rows: Row[], nombre: string): MarcajeIn[] {
   }));
 }
 
+function personaJibble(r: Row): string {
+  return s(r.persona) || s(r.nombre) || s(r.member) || s(r.empleada) || s(r.nombre_app);
+}
 function jibbleDe(rows: Row[], nombre: string): JibbleIn[] {
-  return rows.filter((r) => mismo(s(r.persona), nombre)).map((r) => ({
+  return rows.filter((r) => mismo(personaJibble(r), nombre)).map((r) => ({
     fecha: s(r.fecha).slice(0, 10),
-    payrollMin: n(r.payroll_minutes), suplMin: n(r.supplementary_minutes),
-    extrMin: n(r.extraordinary_minutes), descMin: n(r.rest_day_minutes),
+    payrollMin: n(r.payroll_minutes || r.payroll_min || r.minutos),
+    suplMin: n(r.supplementary_minutes || r.supl_min),
+    extrMin: n(r.extraordinary_minutes || r.extr_min),
+    descMin: n(r.rest_day_minutes || r.desc_min),
   }));
 }
 
-export async function horasDeEmpleada(ctx: Ctx, nombre: string, anio: number, mes: number): Promise<NominaHoras> {
+async function nominaDe(ctx: Ctx, nombre: string, anio: number, mes: number, desde?: string, hasta?: string): Promise<NominaHoras> {
   const [marcajes, jibble, permisos, feriados, config] = await Promise.all([
     ctx.db.all("asistencia_marcajes").catch(() => []),
     ctx.db.all("jibble_historial").catch(() => []),
@@ -89,11 +94,18 @@ export async function horasDeEmpleada(ctx: Ctx, nombre: string, anio: number, me
     configDe(ctx).catch(() => configDesde(undefined)),
   ]);
   return calcularNomina({
-    anio, mes, config, feriados, hoy: ecuadorParts(ctx.now).ymd,
+    anio, mes, desde, hasta, config, feriados, hoy: ecuadorParts(ctx.now).ymd,
     marcajes: marcajesDe(marcajes, nombre),
     jibble: jibbleDe(jibble, nombre),
     permisos: permisosDe(permisos, nombre),
   });
+}
+export async function horasDeEmpleada(ctx: Ctx, nombre: string, anio: number, mes: number): Promise<NominaHoras> {
+  return nominaDe(ctx, nombre, anio, mes);
+}
+export async function horasEnRango(ctx: Ctx, nombre: string, desde: string, hasta: string): Promise<NominaHoras> {
+  const [y, m] = desde.split("-").map(Number);
+  return nominaDe(ctx, nombre, y, m, desde, hasta);
 }
 
 async function auditar(ctx: Ctx, ses: Ses, accion: string, extra: R) {
