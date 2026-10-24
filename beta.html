@@ -1510,7 +1510,7 @@ function pantallaSunsu(route) {
   if (m === "caja") return "caja";
   if (m === "bitacora") return "bitacora";
   if (m === "cabina") return "cabina";
-  if (m === "comisiones") return state.admin ? "dash-admin" : "dash-cosm";
+  if (m === "comisiones" || (m === "personal" && route.sub === "comisiones")) return "";
   if (m === "rol_pagos") return "roles";
   if (m === "usuarios" && state.mega) return "admin";
   return "";
@@ -2434,7 +2434,7 @@ async function pintarAviso() {
   if (!state.vista && !pushListo && typeof Notification !== "undefined" && Notification.permission === "granted") void activarPush();
 }
 async function renderPersonal(route) {
-  if (route.sub === "comisiones") return renderPersonalComisiones();
+  if (route.sub === "comisiones") return renderComisiones();
   if (route.sub === "rol") return renderPersonalRol();
   if (route.sub === "permisos") return renderPersonalPermisos();
   if (route.sub === "multas") return renderPersonalMultas();
@@ -3491,9 +3491,15 @@ function pintarTickets() {
 }
 function htmlComTabla(data) {
   const ciclos = data.ciclos || [];
-  const head = ciclos.map((c) => `<th class="num">${esc(c.inicio)}<br>${esc(c.fin)}</th>`).join("");
-  const filas = (data.filas || []).map((f) => `<tr><td>${esc(f.concepto)}</td>${(f.porCiclo || []).map((v) => `<td class="num">${money(v)}</td>`).join("")}<td class="num">${money(f.total)}</td></tr>`).join("");
-  return `<div class="sheet-scroll"><table><thead><tr><th>Concepto</th>${head}<th class="num">Total</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+  const ini = ciclos.length ? ciclos[0].inicio : "";
+  const fin = ciclos.length ? ciclos[ciclos.length - 1].fin : "";
+  const filas = (data.filas || []).map((f) => {
+    const cls = f.concepto === "Total" ? "ctotal" : "crow";
+    const extra = ciclos.length > 1 ? ` <span style="font-weight:500;color:var(--gray)">${(f.porCiclo || []).map((v) => money(v)).join(" · ")}</span>` : "";
+    return `<div class="${cls}"><span>${esc(f.concepto)}</span><span class="v">${money(f.total)}${extra}</span></div>`;
+  }).join("");
+  return `<div style="font-size:0.65rem;color:var(--gray);margin-bottom:8px">Del ciclo ${esc(ini)} al ciclo ${esc(fin)}</div>
+    <div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>${esc(data.persona || "")}</span></div><div class="cosm-body">${filas}</div></div>`;
 }
 function pintarCom() {
   const box = document.getElementById("com-tabla");
