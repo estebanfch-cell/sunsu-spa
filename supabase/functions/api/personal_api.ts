@@ -91,7 +91,7 @@ extend("gc_emitir", "any", async (p, ctx, ses) => {
   await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, {
     sheet_row: sr, codigo_gc: codigo, valor, saldo: n(valor), notas: s(p.notas),
     nombre_comprador: s(p.nombre), apellido_comprador: s(p.apellido), cedula_comprador: s(p.cedula),
-    usado: false, orig: { codigo, beta: true },
+    usado: false, origin: enPrueba(ctx.db) ? "test" : "beta", orig: { codigo, beta: true },
   });
   await logAccion(ctx.db, actorOf(ses), "GC EMITIR", codigo + " " + valor);
   return { ok: true, codigo };
