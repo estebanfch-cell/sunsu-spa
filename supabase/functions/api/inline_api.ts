@@ -443,6 +443,148 @@ export async function borrarCompra(ctx: Ctx, ses: Ses, fila: string): Promise<Ro
   return { ok: true };
 }
 
+function marcadoBorrado(row: Row): boolean {
+  let orig = row.orig;
+  if (typeof orig === "string") {
+    try { orig = JSON.parse(orig) as Row; } catch { return false; }
+  }
+  return !!(orig && typeof orig === "object" && (orig as Row).borrado === true);
+}
+
+function origConBorrado(row: Row): Row {
+  const base = row.orig && typeof row.orig === "object" ? { ...(row.orig as Row) } : {};
+  base.borrado = true;
+  return base;
+}
+
+async function giftDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const rows = await ctx.db.all("gift_cards");
+  return rows.find((r) => !marcadoBorrado(r) && (s(r.sheet_row) === fila || s(r.id) === fila || s(r.codigo_gc) === fila)) || null;
+}
+
+function vistaGift(row: Row): Row {
+  return {
+    codigo: s(row.codigo_gc), nombre: s(row.nombre_comprador), apellido: s(row.apellido_comprador),
+    cedula: s(row.cedula_comprador), valor: s(row.valor), sku: s(row.sku), notas: s(row.notas),
+  };
+}
+
+export async function guardarGiftCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (!fila || fila === "nuevo") {
+    if (!s(campos.codigo)) return { error: "El código es obligatorio" };
+    const rows = await ctx.db.all("gift_cards");
+    if (rows.some((r) => !marcadoBorrado(r) && s(r.codigo_gc).toLowerCase() === s(campos.codigo).toLowerCase())) return { error: "Ese código ya existe" };
+    const ec = ecuadorParts(ctx.now);
+    const sheet_row = await nextSheet(ctx.db, "gift_cards");
+    const vendida = !!(s(campos.nombre) || s(campos.cedula) || s(campos.valor));
+    const rec: Row = {
+      sheet_row, codigo_gc: s(campos.codigo), nombre_comprador: s(campos.nombre), apellido_comprador: s(campos.apellido),
+      cedula_comprador: s(campos.cedula), valor: s(campos.valor), sku: s(campos.sku), notas: s(campos.notas),
+      dia: vendida ? ec.d : null, mes: vendida ? ec.m : null, ano: vendida ? ec.y : null,
+      orig: { codigo: s(campos.codigo) },
+    };
+    const saved = await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, rec);
+    if (saved) await anotar(ctx, ses, "gift_cards", String(sheet_row), "INSERT", null, vistaGift(saved));
+    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+  }
+  const row = await giftDe(ctx, fila);
+  if (!row) return { error: "Gift card no encontrada" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const patch: Row = {};
+  if (campos.codigo != null) {
+    if (!s(campos.codigo)) return { error: "El código es obligatorio" };
+    patch.codigo_gc = s(campos.codigo);
+  }
+  if (campos.nombre != null) patch.nombre_comprador = s(campos.nombre);
+  if (campos.apellido != null) patch.apellido_comprador = s(campos.apellido);
+  if (campos.cedula != null) patch.cedula_comprador = s(campos.cedula);
+  if (campos.valor != null) patch.valor = s(campos.valor);
+  if (campos.sku != null) patch.sku = s(campos.sku);
+  if (campos.notas != null) patch.notas = s(campos.notas);
+  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const antes = vistaGift(row);
+  const saved = await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  if (!saved) return { error: "No se pudo guardar la gift card" };
+  await anotar(ctx, ses, "gift_cards", s(row.sheet_row), "UPDATE", antes, vistaGift(saved));
+  return { ok: true, fila: s(row.sheet_row) };
+}
+
+export async function borrarGiftSuave(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const row = await giftDe(ctx, fila);
+  if (!row) return { error: "Gift card no encontrada" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = vistaGift(row);
+  const saved = await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { orig: origConBorrado(row) });
+  if (!saved) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, "gift_cards", s(row.sheet_row), "UPDATE", antes, { ...antes, borrado: true });
+  return { ok: true };
+}
+
+async function paqueteDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const rows = await ctx.db.all("paquetes");
+  return rows.find((r) => !marcadoBorrado(r) && (s(r.sheet_row) === fila || s(r.id) === fila)) || null;
+}
+
+function vistaPaquete(row: Row): Row {
+  return {
+    nombre: s(row.nombres), apellido: s(row.apellidos), cedula: s(row.cedula),
+    sku: s(row.sku), paquete: s(row.paquete), vendidoPor: s(row.vendido_por), notas: s(row.notas),
+  };
+}
+
+export async function guardarPaqueteCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (!fila || fila === "nuevo") {
+    if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
+    if (!s(campos.sku)) return { error: "El SKU es obligatorio" };
+    const ec = ecuadorParts(ctx.now);
+    const sheet_row = await nextSheet(ctx.db, "paquetes");
+    const rec: Row = {
+      sheet_row, dia: ec.d, mes: ec.m, ano: ec.y, nombres: s(campos.nombre), apellidos: s(campos.apellido),
+      cedula: s(campos.cedula), sku: s(campos.sku), paquete: s(campos.paquete), vendido_por: s(campos.vendidoPor),
+      notas: s(campos.notas), orig: { sku: s(campos.sku) },
+    };
+    const saved = await ctx.db.write(actorOf(ses), "paquetes", "insert", {}, rec);
+    if (saved) await anotar(ctx, ses, "paquetes", String(sheet_row), "INSERT", null, vistaPaquete(saved));
+    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+  }
+  const row = await paqueteDe(ctx, fila);
+  if (!row) return { error: "Paquete no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const patch: Row = {};
+  if (campos.nombre != null) patch.nombres = s(campos.nombre);
+  if (campos.apellido != null) patch.apellidos = s(campos.apellido);
+  if (campos.cedula != null) patch.cedula = s(campos.cedula);
+  if (campos.sku != null) patch.sku = s(campos.sku);
+  if (campos.paquete != null) patch.paquete = s(campos.paquete);
+  if (campos.vendidoPor != null) patch.vendido_por = s(campos.vendidoPor);
+  if (campos.notas != null) patch.notas = s(campos.notas);
+  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const antes = vistaPaquete(row);
+  const saved = await ctx.db.write(actorOf(ses), "paquetes", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  if (!saved) return { error: "No se pudo guardar el paquete" };
+  await anotar(ctx, ses, "paquetes", s(row.sheet_row), "UPDATE", antes, vistaPaquete(saved));
+  return { ok: true, fila: s(row.sheet_row) };
+}
+
+export async function borrarPaqueteSuave(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const row = await paqueteDe(ctx, fila);
+  if (!row) return { error: "Paquete no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = vistaPaquete(row);
+  const saved = await ctx.db.write(actorOf(ses), "paquetes", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { orig: origConBorrado(row) });
+  if (!saved) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, "paquetes", s(row.sheet_row), "UPDATE", antes, { ...antes, borrado: true });
+  return { ok: true };
+}
+
 export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
   if (!fila || fila === "nuevo") {
@@ -514,6 +656,8 @@ extend("inline_guardar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "inventario") return guardarInventarioCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "proveedores") return guardarProveedorCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "compras") return guardarCompraCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "gift_cards") return guardarGiftCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "paquetes") return guardarPaqueteCampos(ctx, ses, s(p.fila), campos);
   return { error: "Esa tabla todavía no se edita en línea" };
 });
 
@@ -522,6 +666,8 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "catalogo" || s(p.tabla) === "inventario") return borrarCatalogoSuave(ctx, ses, s(p.fila));
   if (s(p.tabla) === "proveedores") return borrarProveedor(ctx, ses, s(p.fila));
   if (s(p.tabla) === "compras") return borrarCompra(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "gift_cards") return borrarGiftSuave(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "paquetes") return borrarPaqueteSuave(ctx, ses, s(p.fila));
   if (s(p.tabla) !== "tickets") return { error: "Esa tabla todavía no se edita en línea" };
   const row = await ticketDe(ctx, s(p.fila));
   if (!row) return { error: "Ticket no encontrado" };
@@ -567,6 +713,18 @@ async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): P
     if (!(await veModulo(ctx, ses, "compras"))) return { error: "No tienes permiso para pedir un cambio de esa línea" };
     return { row, antes: vistaEntrada(row) };
   }
+  if (tabla === "gift_cards") {
+    const row = await giftDe(ctx, fila);
+    if (!row) return { error: "Gift card no encontrada" };
+    if (!(await veModulo(ctx, ses, "gift_cards"))) return { error: "No tienes permiso para pedir un cambio de esa gift card" };
+    return { row, antes: vistaGift(row) };
+  }
+  if (tabla === "paquetes") {
+    const row = await paqueteDe(ctx, fila);
+    if (!row) return { error: "Paquete no encontrado" };
+    if (!(await veModulo(ctx, ses, "paquetes"))) return { error: "No tienes permiso para pedir un cambio de ese paquete" };
+    return { row, antes: vistaPaquete(row) };
+  }
   return { error: "Esa tabla todavía no recibe solicitudes" };
 }
 
@@ -580,6 +738,8 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);
   if (tabla === "proveedores") return borrar ? borrarProveedor(ctx, ses, fila) : guardarProveedorCampos(ctx, ses, fila, propuestos);
   if (tabla === "compras") return borrar ? borrarCompra(ctx, ses, fila) : guardarCompraCampos(ctx, ses, fila, propuestos);
+  if (tabla === "gift_cards") return borrar ? borrarGiftSuave(ctx, ses, fila) : guardarGiftCampos(ctx, ses, fila, propuestos);
+  if (tabla === "paquetes") return borrar ? borrarPaqueteSuave(ctx, ses, fila) : guardarPaqueteCampos(ctx, ses, fila, propuestos);
   if (borrar) {
     const ticket = await ticketDe(ctx, fila);
     if (!ticket) return { error: "Ticket no encontrado" };
@@ -606,7 +766,7 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
-  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : "un ticket";
+  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
 });

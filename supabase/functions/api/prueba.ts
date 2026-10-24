@@ -18,6 +18,7 @@ const TABLAS = [
   "erp_tickets_procesados", "erp_clientes", "erp_proveedores", "erp_productos",
   "log_acciones", "ordenes_compra", "caja_chica", "propinas", "multas_descuentos",
   "solicitudes_cambio", "audit_log", "catalogo",
+  "proveedores", "inventario_entradas", "erp_locales", "erp_consignacion_consumo",
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock",
 ];

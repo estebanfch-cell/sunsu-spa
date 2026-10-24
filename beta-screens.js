@@ -12470,6 +12470,7 @@ function verTodasGC(filtro){
       lista.sort(function(a,b){return (b.cad?2:(b.vig?1:0))-(a.cad?2:(a.vig?1:0));});
       res.innerHTML='<div style="font-size:0.66rem;color:var(--gray);margin-bottom:8px">'+arr.length+' gift cards · <b style="color:#2E7D52">'+nVig+' vigentes</b> · <b style="color:#E8543F">'+nCad+' caducadas</b> · '+nUso+' consumidas</div>'
         +(lista.length?lista.map(function(x){return _buildGCCard(x.g);}).join(''):'<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin gift cards en este filtro</div>');
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
 }
@@ -12483,7 +12484,8 @@ function renderBuscarGC(c){
     +'<input id="bgc-inp" type="text" placeholder="Código GC, nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
     +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
     +'</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"><button onclick="verTodasGC()" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button><button onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button><button onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div><div id="bgc-results"></div>';
+    +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"><button onclick="verTodasGC()" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button><button onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button><button onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div>'
+    +'<div id="gc-nuevo">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.mas("gift_cards"):'')+'</div><div id="bgc-results"></div>';
   var inp=document.getElementById('bgc-inp');
   if(inp){
     if(window._bgcPrefill){inp.value=window._bgcPrefill;window._bgcPrefill='';setTimeout(ejecutarBuscarGC,50);}
@@ -12510,6 +12512,7 @@ function ejecutarBuscarGC(){
       var arr=d.resultados||[];
       if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+q+'"</div>';return;}
       res.innerHTML=arr.map(function(g){return _buildGCCard(g);}).join('');
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
 }
@@ -12542,6 +12545,16 @@ function _buildGCCard(g){
     return '<option value="'+f.n+'">'+f.n+'</option>';
   }).join('');
 
+  var ixGc=window.SunsuInline;
+  var inlineGc='';
+  if(ixGc&&g.fila&&ixGc.edita()){
+    inlineGc='<div style="margin-top:8px">'+ixGc.lineas("gift_cards", g.fila, [
+      ["codigo","Código",g.codigo||""],["nombre","Nombre",g.nombre||""],["apellido","Apellido",g.apellido||""],
+      ["cedula","Cédula",g.cedula||""],["valor","Valor",g.valor||""],["sku","SKU",g.sku||""],["notas","Notas",g.notas||""]
+    ])+ixGc.borrar("gift_cards", g.fila)+'</div>';
+  } else if(ixGc&&g.fila&&ixGc.pide()){
+    inlineGc=ixGc.pedir("gift_cards", g.fila, {codigo:g.codigo||"",nombre:g.nombre||"",apellido:g.apellido||"",cedula:g.cedula||"",valor:g.valor||"",sku:g.sku||"",notas:g.notas||""});
+  }
   var interactivo=!usado?
     '<div id="row-'+slotId+'" style="margin-top:10px;border-top:1px solid var(--gray-ll);padding-top:10px">'
     +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:7px">✅ Marcar como usada</div>'
@@ -12601,6 +12614,7 @@ function _buildGCCard(g){
         +'</div>'
       :'')
     )
+    +inlineGc
     +interactivo
     +'</div></div>';
 }
@@ -12791,9 +12805,18 @@ function _pintarPaqLista(){
         return telQ?'<a href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
       })()
       +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
-      +'</div><div id="paq-exp-'+p.fila+'"></div></div>';
+      +'</div>'
+      +(function(){
+        var ix=window.SunsuInline;
+        if(!ix||!p.fila) return '';
+        if(ix.edita()) return '<div style="margin-top:8px">'+ix.lineas("paquetes", p.fila, [["nombre","Nombre",p.nombre||""],["apellido","Apellido",p.apellido||""],["cedula","Cédula",p.cedula||""],["sku","SKU",p.sku||""],["paquete","Paquete",p.paquete||""],["vendidoPor","Vendido por",p.vendidoPor||""],["notas","Notas",p.notas||""]])+ix.borrar("paquetes", p.fila)+'</div>';
+        if(ix.pide()) return ix.pedir("paquetes", p.fila, {nombre:p.nombre||"",apellido:p.apellido||"",cedula:p.cedula||"",sku:p.sku||"",paquete:p.paquete||"",vendidoPor:p.vendidoPor||"",notas:p.notas||""});
+        return '';
+      })()
+      +'<div id="paq-exp-'+p.fila+'"></div></div>';
   });
   cont.innerHTML=html;
+  if(window.SunsuInline) SunsuInline.aplicar();
 }
 // La tarjeta digital desde el listado (contexto _todosPaq, con diasSin calculado al vuelo)
 // Desplegable de una fila: trae la tarjeta de marcado completa (la misma de siempre)
@@ -12809,6 +12832,7 @@ function paqDesplegar(fila, cedula){
     if(!arr.length) arr=d.resultados||[];
     box.innerHTML=arr.length?('<div style="margin-top:8px">'+arr.map(function(p){return _buildPaqueteCard(p);}).join('')+'</div>')
       :'<div style="padding:8px;color:var(--gray);font-size:0.66rem">No pude cargar el detalle</div>';
+    if(window.SunsuInline) SunsuInline.aplicar();
   })
   .catch(function(e){box.innerHTML='<div style="padding:8px;color:#B86B6B;font-size:0.66rem">❌ '+e.message+'</div>';});
 }
@@ -12826,6 +12850,7 @@ function renderBuscarPaquetes(c){
   c.innerHTML=
     '<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📦 Buscar Paquetes</div>'
     +'<input id="bpq-inp" type="text" style="display:none">'
+    +'<div id="paq-nuevo">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.mas("paquetes"):'')+'</div>'
     +'<div id="bpq-results"></div>'
     +'<div id="bpq-todos"></div>';
   _cargarTodosPaquetes();
@@ -12867,6 +12892,7 @@ function ejecutarBuscarPaquetes(){
       var arr=d.resultados||[];
       if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+q+'"</div>';return;}
       res.innerHTML=arr.map(function(p){return _buildPaqueteCard(p);}).join('');
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
 }
@@ -12942,6 +12968,13 @@ function _buildPaqueteCard(p){
     // Usos detail
     +usosHtml
     +(p.notas?'<div style="margin-top:8px;font-size:0.68rem;color:var(--gray);background:var(--cream);padding:6px 9px;border-radius:8px">📝 '+p.notas+'</div>':'')
+    +(function(){
+      var ix=window.SunsuInline;
+      if(!ix||!p.fila) return '';
+      if(ix.edita()) return '<div style="margin-top:8px">'+ix.lineas("paquetes", p.fila, [["nombre","Nombre",p.nombre||""],["apellido","Apellido",p.apellido||""],["cedula","Cédula",p.cedula||""],["sku","SKU",p.sku||""],["paquete","Paquete",p.paquete||""],["vendidoPor","Vendido por",p.vendidoPor||""],["notas","Notas",p.notas||""]])+ix.borrar("paquetes", p.fila)+'</div>';
+      if(ix.pide()) return ix.pedir("paquetes", p.fila, {nombre:p.nombre||"",apellido:p.apellido||"",cedula:p.cedula||"",sku:p.sku||"",paquete:p.paquete||"",vendidoPor:p.vendidoPor||"",notas:p.notas||""});
+      return '';
+    })()
     +'</div></div>';
 }
 
