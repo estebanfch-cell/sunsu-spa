@@ -191,6 +191,7 @@ extend("getKPIsMes", "any", async (p, ctx) => {
   let paqTotal = 0;
   const paqPorVend: R = {};
   for (const r of await ctx.db.all("paquetes")) {
+    if (r.borrado_at) continue;
     const y = n(r.ano), m = n(r.mes), d = n(r.dia) || 1;
     if (!m || !y) continue;
     const f = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;

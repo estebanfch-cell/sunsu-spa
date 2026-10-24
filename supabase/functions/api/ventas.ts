@@ -103,7 +103,7 @@ export async function aplicarGiftCard(db: Db, actor: string, p: {
 }): Promise<Row> {
   const codigo = s(p.codigo).trim();
   if (!codigo) return { error: "Falta el código de la gift card" };
-  const rows = await db.all("gift_cards");
+  const rows = (await db.all("gift_cards")).filter((r) => !r.borrado_at);
   const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r) > 0)
     || rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase());
   if (!row) return { error: "Gift card no encontrada" };
@@ -543,6 +543,7 @@ async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[]> {
   try { rows = await db.all("paquetes"); } catch { return []; }
   const out: Row[] = [];
   for (const r of rows) {
+    if (r.borrado_at) continue;
     const pc = normCedula(r.cedula);
     const pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
     if (!(ced && pc === ced) && !(nom && pn === nom && (!ced || !pc))) continue;
