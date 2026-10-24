@@ -1511,7 +1511,7 @@ function pantallaSunsu(route) {
   if (m === "bitacora") return "bitacora";
   if (m === "cabina") return "cabina";
   if (m === "comisiones" || (m === "personal" && route.sub === "comisiones")) return "";
-  if (m === "rol_pagos") return "roles";
+  if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "usuarios" && state.mega) return "admin";
   return "";
 }
@@ -1545,6 +1545,14 @@ async function montarSunsu(tab) {
   if (tab === "proveedores") renderProveedores(c);
   else if (tab === "inv-fisico") renderInvFisico(c);
   else showTab(tab);
+  if (tab === "roles" && state.admin) {
+    const extra = document.createElement("div");
+    extra.style.padding = "0 16px 16px";
+    extra.innerHTML = await htmlPagoConfig();
+    c.appendChild(extra);
+    const form = extra.querySelector("#f-pago-cfg");
+    if (form) form.onsubmit = (ev) => { ev.preventDefault(); savePagoCfg(form); };
+  }
 }
 async function draw() {
   if (previewOn() && !state.user) {
