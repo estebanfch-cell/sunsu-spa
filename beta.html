@@ -3177,43 +3177,35 @@ async function abrirCliente(key) {
   if (data.error) { body.innerHTML = fail(data); return; }
   const c = data.cliente || {};
   const admin = !!(data.admin || state.admin);
-  const tickets = (data.tickets || []).map((t) => {
-    const clave = t.clave || t.ref;
-    const visto = (t.lineas || []).map((ln) => {
-      const f = fichaLinea(ln);
-      const cant = Number(ln.cantidad) > 1 ? " ×" + esc(ln.cantidad) : "";
-      const precio = admin ? col3(ln.precio, ln.cantidad, ln.descuento_pct) : "";
-      return `<div class="row-item"><span class="row-lab"><span class="sku-badge ${f.clase === "producto" ? "prod" : ""}">${esc(f.badge)}</span><span class="pname">${f.icon} ${esc(f.nombre)}${cant}</span></span>${precio ? `<span class="money-col">${precio}</span>` : ""}</div>`;
-    }).join("");
-    const lns = admin ? (t.lineas || []).map((ln) => {
-      const f = fichaLinea(ln);
-      return `<div class="ln">${celdaProd(ln.sku, f.nombre, ln.clase)}<input data-k="cantidad" value="${esc(ln.cantidad)}" aria-label="Cantidad"><input data-k="precio" value="${esc(ln.precio)}" aria-label="Precio sin IVA"><input data-k="descuento_pct" value="${esc(ln.descuento_pct || 0)}" aria-label="Descuento %"><button class="btn ghost small" type="button" data-quitar-ln>Quitar</button><input type="hidden" data-k="sku" value="${esc(ln.sku)}"><input type="hidden" data-k="clase" value="${esc(ln.clase)}"><input type="hidden" data-k="nombre" value="${esc(f.nombre)}"></div>`;
-    }).join("") : "";
-    const edit = admin ? `<details class="tk-edit"><summary>✏️ Editar líneas</summary><div class="lns">${lns}</div>
-      <div class="ln nueva"><input data-k="sku" placeholder="SKU" aria-label="SKU"><input data-k="cantidad" value="1" aria-label="Cantidad"><input data-k="precio" placeholder="Precio sin IVA" aria-label="Precio sin IVA"><input data-k="descuento_pct" value="0" aria-label="Descuento %"><button class="btn ghost small" type="button" data-add-ln>Agregar</button><input type="hidden" data-k="clase" value="producto"></div>
-      <label>Descuento $</label><input data-desc value="0"><button class="btn small" type="button" data-save-tk="${esc(clave)}">Guardar ticket</button><p class="err" data-err></p></details>` : "";
-    const tot = admin ? bloqueTotales(t.subtotal, t.iva, t.total) : "";
-    const col = colorCosm(t.cosmetologa);
-    const cobrado = admin ? `<div class="tk-sum"><div class="tk-total">${money(t.total)}</div><div class="tk-sin">sin IVA ${money(t.subtotal)}</div><div class="tk-lbl">Total cobrado</div></div>` : "";
-    return `<article class="tk-card tk" data-ref="${esc(t.ref)}" style="border-left-color:${col}">
-      <div class="tk-head"><div><div class="tk-cosm" style="color:${col}">${esc(t.cosmetologa || "")}</div><div class="tk-who">${esc(((t.nombre || "") + " " + (t.apellido || "")).trim() || c.nombre || "")}</div><div class="tk-meta">${esc(t.cedula || c.cedula || "")} · ${esc(fechaCorta(t.fecha))} ${esc(t.hora || "")} · ${esc(t.ref)}</div></div>${cobrado}</div>
-      <div class="tk-lines">${visto}${tot}</div>
-      ${t.notas ? `<div class="note">🗒 ${esc(t.notas)}</div>` : ""}
-      ${edit}</article>`;
-  }).join("");
+  const visitas = (data.tickets || []).map((t) => ({
+    ...t,
+    productos: (t.lineas || []).filter((ln) => ln.clase === "producto").map((ln) => (ln.nombre || ln.sku) + " ×" + (ln.cantidad || 1)),
+    colQ: t.colQ || t.paquete || "",
+    colR: t.colR || t.gift_card || "",
+    estimado: t.estimado != null ? t.estimado : (t.total || 0),
+  }));
+  let totFac = 0, totPaq = 0, totProd = 0;
+  visitas.forEach((t) => {
+    if (t.facial) totFac += 1;
+    if (t.pack3 || t.pack6) totPaq += 1;
+    totProd += (t.productos || []).length;
+  });
+  const cards = typeof _buildTicketCard === "function"
+    ? visitas.map((t) => _buildTicketCard(t, admin)).join("")
+    : "";
   document.querySelectorAll("[data-cli]").forEach((b) => b.classList.toggle("on", b.getAttribute("data-cli") === key));
-  const packs = (data.paquetes || []).map((p) => {
-    const slots = (p.usos || []).map((u) => `<span class="paq-slot${u.usado ? " on" : ""}">${esc(u.slot)}</span>`).join("");
-    return `<div class="paq-card"><div class="cli-name">${esc(p.nombre || "Paquete")}</div><div class="note">${esc(p.usados)} usadas · ${esc(p.pendientes)} pendientes${p.sku ? " · " + esc(p.sku) : ""}</div><div class="paq-slots">${slots}</div></div>`;
-  }).join("");
-  body.innerHTML = `<div class="cli-name">${esc(c.nombre || "")}</div>
-    <p class="note">${esc(c.cedula || "")}${c.telefono ? " · " + esc(c.telefono) : ""}${c.email ? " · " + esc(c.email) : ""}</p>
-    <p class="note">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${admin && c.total != null ? " · gastado " + money(c.total) : ""}</p>
-    ${c.notas ? `<p class="note">${esc(c.notas)}</p>` : ""}
-    <div class="card-title">Paquetes</div>
-    ${packs || `<p class="note">Sin paquetes.</p>`}
-    <div class="card-title">Visitas</div>
-    ${tickets || `<p class="note">Sin tickets.</p>`}`;
+  const gasto = admin && c.total != null
+    ? `<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">${money(c.total)}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>`
+    : "";
+  body.innerHTML = `<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:14px">
+      <div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">Resumen — ${esc(c.nombre || "")} · ${esc(visitas.length)} ticket(s)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr${gasto ? " 1fr" : ""};gap:7px">
+        <div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">${totFac}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>
+        <div style="background:var(--green-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--green)">${totPaq}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>
+        <div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">${totProd}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>
+        ${gasto}
+      </div></div>
+    ${cards || `<p class="note">Sin tickets.</p>`}`;
   body.querySelectorAll("[data-quitar-ln]").forEach((b) => { b.onclick = () => b.closest(".ln").remove(); });
   body.querySelectorAll("[data-add-ln]").forEach((b) => {
     b.onclick = () => {
