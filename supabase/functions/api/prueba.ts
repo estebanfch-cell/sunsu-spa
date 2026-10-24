@@ -172,6 +172,7 @@ export async function purgarPrueba(db: Db, actor: string): Promise<Row> {
     let rows: Row[] = [];
     try { rows = await base.all(table); } catch { continue; }
     let nDel = 0;
+    if (table === "audit_log") continue;
     for (const r of rows) {
       if (s(r.origin) !== "test") continue;
       const match = r.id != null ? { id: r.id } : r.sheet_row != null && r.sheet_row !== "" ? { sheet_row: r.sheet_row } : null;

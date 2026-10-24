@@ -1060,6 +1060,9 @@ reg("repararColumnasTicket", "any", async () => ({ ok: true, beta: "Las columnas
 
 reg("getInventario", "any", async (_p, ctx) => {
   const cmap = await catMap(ctx);
+  let basesMin: R[] = [];
+  try { basesMin = await ctx.db.all("inventario_base"); } catch { basesMin = []; }
+  const minBase = new Map(basesMin.map((b0) => [skuCode(s(b0.sku)), n(b0.minimo)]));
   const entradas = await ctx.db.all("inventario_entradas");
   const tks = await tickets(ctx);
   let cortes: R[] = [];
@@ -1098,7 +1101,8 @@ reg("getInventario", "any", async (_p, ctx) => {
     if (ent.get(code)) movs.push({ delta: ent.get(code) || 0, tipo: "recepcion" });
     if (ventas.get(code)) movs.push({ delta: -(ventas.get(code) || 0), tipo: "venta" });
     const applied = aplicarTrasCorte(apertura, movs);
-    const minimo = n(r?.minimo) || CORTE_MIN[code] || 0;
+    const deBase = minBase.get(code) || 0;
+    const minimo = deBase > 0 ? deBase : (n(r?.minimo) || CORTE_MIN[code] || 0);
     const alerta = applied.frenado ? "BAJO CERO" : applied.saldo < 0 ? "LA HOJA" : applied.saldo <= 0 ? "SIN STOCK" : applied.saldo <= minimo ? "STOCK BAJO" : "OK";
     if (applied.frenado) frenados.push(sku);
     allSkus.push(sku);

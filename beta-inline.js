@@ -14,6 +14,12 @@
       ["estado", "Estado"], ["alergias", "Alergias"], ["medicacion", "Medicación"],
       ["condiciones", "Condiciones"], ["nacimiento", "Nacimiento"], ["autorizaFotos", "Autoriza fotos"],
     ],
+    catalogo: [
+      ["sku", "SKU"], ["nombre", "Nombre"], ["tipo", "Tipo"], ["subtotal", "Venta s/IVA"], ["compra", "Compra"],
+    ],
+    inventario: [
+      ["nombre", "Nombre"], ["minimo", "Mínimo"], ["compra", "Compra real"],
+    ],
   };
   function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
@@ -109,11 +115,26 @@
     dirty = {};
     barra();
     if (window.toast) toast("Cambios guardados");
-    refrescar(lista.some(function (g) { return g.tabla === "clientes"; }) ? "clientes" : "tickets");
+    refrescar(tablaDe(lista));
+  }
+
+  function tablaDe(lista) {
+    var tablas = {};
+    (lista || []).forEach(function (g) { tablas[g.tabla] = 1; });
+    if (tablas.clientes) return "clientes";
+    if (tablas.catalogo) return "catalogo";
+    if (tablas.inventario) return "inventario";
+    if (document.getElementById("cat-res")) return "catalogo";
+    if (document.querySelector("[id^=inv-grp-]")) return "inventario";
+    if (document.getElementById("cli-q")) return "clientes";
+    return "tickets";
   }
 
   function refrescar(tabla) {
+    var c = document.getElementById("content");
     if (tabla === "clientes" && typeof draw === "function") { draw(); return; }
+    if (tabla === "catalogo" && c && typeof renderCatalogoAdmin === "function") { renderCatalogoAdmin(c); return; }
+    if (tabla === "inventario" && c && typeof renderInventario === "function") { renderInventario(c); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -148,12 +169,14 @@
   function agregar(tabla) {
     if (document.getElementById("ix-nuevo")) return;
     tabla = tabla || "tickets";
-    var host = (tabla === "clientes" && document.getElementById("cli-list-host")) || document.getElementById("hist-res") || document.getElementById("content");
+    var host = (tabla === "clientes" && document.getElementById("cli-list-host"))
+      || (tabla === "catalogo" && document.getElementById("cat-form"))
+      || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }
@@ -226,7 +249,7 @@
         if (res.error) { if (window.toast) toast(res.error); return; }
         overlay.remove();
         contar();
-        refrescar(document.getElementById("cli-q") ? "clientes" : "tickets");
+        refrescar(tablaDe([]));
       };
     });
   }
