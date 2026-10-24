@@ -1728,10 +1728,10 @@ async function renderInventarioBeta(sub) {
   const data = await api("stk_saldo", { bodega_id: lugar.id });
   if (data.error) return fail(data);
   const chips = lugaresDelLocal().map((b) => `<button class="btn ${b.id === lugar.id ? "" : "ghost"} small" type="button" data-go="#/m/inventario/${encodeURIComponent(b.id)}">${esc(b.nombre)}</button>`).join("");
-  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0).map((r) => `
+  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0 || r.frenado).map((r) => `
     <button class="row" type="button" data-go="#/m/kardex">
       <div class="sku">${esc(r.sku)}</div>
-      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso || "")}</div></div>
+      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso || "")}${r.frenado ? " · este movimiento habría quedado bajo cero y se frenó en 0" : ""}</div></div>
       <div class="meta">${esc(r.cantidad)}</div>
     </button>`).join("");
   const loc = ((state.lugares && state.lugares.locales) || []).find((l) => l.id === state.localId);
