@@ -1130,6 +1130,7 @@ async function guardarPagoFila(ctx: Ctx, ses: Ses, row: Row, prev: Row | null) {
 
 export async function guardarPagoCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
   const rows = await pagosDe(ctx);
   if (!fila || fila === "nuevo") {
     const row = pagoRow(campos, null);
@@ -1150,6 +1151,7 @@ export async function guardarPagoCampos(ctx: Ctx, ses: Ses, fila: string, campos
 
 export async function borrarPago(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
   const rows = await pagosDe(ctx);
   const prev = rows.find((r) => pagoClave(r) === fila || s(r.id) === fila);
   if (!prev) return { error: "Configuración no encontrada" };

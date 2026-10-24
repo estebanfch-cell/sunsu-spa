@@ -1763,7 +1763,8 @@ reg("getTramos", "any", async (_p, ctx) => {
 reg("tramos_guardar", ADMIN, async (p, ctx, ses) => {
   const tramos = normalizarTramos(p.tramos);
   const ciclo = cicloInicio(hoy(ctx));
-  await reemplazarTramos(ctx, ses, tramos, ciclo < "2026-10-26" ? "2026-10-26" : ciclo);
+  const bloqueo = await reemplazarTramos(ctx, ses, tramos, ciclo < "2026-10-26" ? "2026-10-26" : ciclo);
+  if (bloqueo) return bloqueo;
   await logAccion(ctx.db, actorOf(ses), "TRAMOS PAQUETE", tramos.map((t) => `${t.desde}-${t.hasta} ${t.modo} ${t.valor}`).join(", "));
   return { ok: true, tramos };
 });

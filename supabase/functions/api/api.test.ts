@@ -2152,6 +2152,12 @@ describe("series, comisiones y rol", () => {
     assert.match(sql, /gift_cards_codigo_unico\(\)/);
     assert.match(sql, /origin in \('beta', 'test'\)/);
     assert.match(sql, /lower\(btrim\(codigo_gc\)\)/);
+    const desde = sql.indexOf("if exists (");
+    const existe = sql.slice(desde, sql.indexOf(") then", desde));
+    assert.match(existe, /lower\(btrim\(g\.codigo_gc\)\) = lower\(btrim\(new\.codigo_gc\)\)/);
+    assert.match(existe, /g\.id is distinct from new\.id/);
+    assert.doesNotMatch(existe, /g\.origin/);
+    assert.doesNotMatch(existe, /borrado_at/);
     assert.doesNotMatch(sql, /alter table public\.tickets/i);
     assert.doesNotMatch(sql, /alter table public\.clientas_registro/i);
     assert.match(tickets, /alter table public\.tickets add column if not exists borrado_at timestamptz/);
@@ -2531,5 +2537,49 @@ describe("series, comisiones y rol", () => {
     }, c) as Row;
     assert.match(String(no.error), /admin/i);
     assert.ok((await db.all("audit_log")).some((r) => r.tabla === "comision_reglas" && r.accion === "INSERT"));
+  });
+
+  it("modo prueba no escribe la configuración real de comisiones ni de roles", async () => {
+    const db = new MemoryDb({
+      usuarios: [{ id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false }],
+      app_kv: [
+        { clave: "comision_reglas", valor: { filas: [{ tipo: "facial", clave: "SUNSU-01", vigente_desde: "2026-10-26", monto: 2 }] } },
+        { clave: "pago_config", valor: { filas: [{ nombre: "Andrea Robles", vigente_desde: "2026-10-26", sueldo: 460, bono: 0 }] } },
+      ],
+      pago_config: [{ id: 1, nombre: "Andrea Robles", vigente_desde: "2026-10-26", sueldo: 460, bono: 0, origin: "sheet" }],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    db.tables.get("sesiones")!.find((r) => r.token === c.token)!.modo_prueba = true;
+    const facial = await handle("inline_guardar", {
+      token: c.token, tabla: "com_facial", fila: "def|facial|SUNSU-01", campos: { monto: "9", vigente: "2026-10-26" },
+    }, c) as Row;
+    assert.match(String(facial.error), /prueba/i);
+    const borrar = await handle("inline_borrar", {
+      token: c.token, tabla: "com_facial", fila: "facial|SUNSU-01|2026-10-26",
+    }, c) as Row;
+    assert.match(String(borrar.error), /prueba/i);
+    const pago = await handle("inline_guardar", {
+      token: c.token, tabla: "pago_config", fila: "nuevo",
+      campos: { nombre: "Andrea Robles", vigente: "2026-10-26", sueldo: "999", bono: "1" },
+    }, c) as Row;
+    assert.match(String(pago.error), /prueba/i);
+    const quitar = await handle("inline_borrar", {
+      token: c.token, tabla: "pago_config", fila: "1",
+    }, c) as Row;
+    assert.match(String(quitar.error), /prueba/i);
+    const viejo = await handle("pago_config_guardar", {
+      token: c.token, nombre: "Andrea Robles", vigente_desde: "2026-10-26", sueldo: 999, bono: 1,
+    }, c) as Row;
+    assert.match(String(viejo.error), /prueba/i);
+    const tramos = await handle("tramos_guardar", {
+      token: c.token, tramos: [{ desde: 1, hasta: 10, modo: "pct", valor: 50 }],
+    }, c) as Row;
+    assert.match(String(tramos.error), /prueba/i);
+    const kv = await db.all("app_kv");
+    const reglas = kv.find((r) => r.clave === "comision_reglas")!.valor as Row;
+    assert.equal((reglas.filas as Row[])[0].monto, 2);
+    const pagos = kv.find((r) => r.clave === "pago_config")!.valor as Row;
+    assert.equal((pagos.filas as Row[])[0].sueldo, 460);
+    assert.equal((await db.all("pago_config"))[0].sueldo, 460);
   });
 });
