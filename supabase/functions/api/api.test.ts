@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
+import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import { numeroTicket, ordenarClientes, quincenaDe } from "./ventas.ts";
@@ -34,6 +35,49 @@ function ctx(db: MemoryDb, rol = "admin", uid = "emi", name = "Emi") {
     token,
   };
 }
+
+describe("inventario corte", () => {
+  it("la percha usa la columna F de la hoja y no resta las ventas viejas", async () => {
+    const db = new MemoryDb({
+      tickets: [{
+        timestamp: "2026-10-01T15:00:00.000Z", atendido_por: "Andrea", id_3: "0101",
+        ht_004: 20, ht_006: 30, ht_013: 11, as_001: 9, orig: {},
+      }],
+      inventario_base: [{ sku: "HT-004", stock_inicial: 0, minimo: 3 }],
+      inventario_entradas: [{ sku: "SUNSU-HT-004", cant_recibida_llenar_aqui: 1, notas: "" }],
+    });
+    const c = ctx(db);
+    const inv = await handle("getInventario", { token: c.token }, c) as Row;
+    const por = (sku: string) => (inv.items as Row[]).find((r) => String(r.sku).endsWith(sku));
+    assert.equal(por("HT-004")?.stock, 2);
+    assert.equal(por("HT-006")?.stock, 0);
+    assert.equal(por("HT-013")?.stock, 0);
+    assert.equal(por("AS-001")?.stock, 4);
+    const neg = (inv.items as Row[]).filter((r) => Number(r.stock) < 0);
+    assert.equal(neg.length, 0);
+    const ml = por("ML-013");
+    assert.equal(ml?.stock, 0);
+    assert.equal(ml?.hojaNegativa, true);
+    assert.equal(ml?.apertura, -1);
+    for (const [code, qty] of Object.entries(CORTE_VENTA)) {
+      assert.equal(por(code)?.stock, qty < 0 ? 0 : qty, code);
+    }
+    (db.tables.get("tickets") as Row[]).push({
+      timestamp: "2026-10-24T10:00:00.000Z", atendido_por: "Andrea", ht_004: 1, orig: {},
+    });
+    const luego = await handle("getInventario", { token: c.token }, c) as Row;
+    assert.equal((luego.items as Row[]).find((r) => String(r.sku).endsWith("HT-004"))?.stock, 1);
+    (db.tables.get("tickets") as Row[]).push({
+      timestamp: "2026-10-24T11:00:00.000Z", atendido_por: "Andrea", ht_004: 50, orig: {},
+    });
+    const frenado = await handle("getInventario", { token: c.token }, c) as Row;
+    const ht = (frenado.items as Row[]).find((r) => String(r.sku).endsWith("HT-004"));
+    assert.equal(ht?.stock, 0);
+    assert.equal(ht?.frenado, true);
+    assert.equal(aplicarTrasCorte(2, [{ delta: -1, tipo: "ajuste" }]).saldo, 1);
+    assert.equal(aplicarTrasCorte(2, [{ delta: -5, tipo: "ajuste" }]).saldo, -3);
+  });
+});
 
 describe("permisos", () => {
   it("admin ve costos y la cosmetóloga no", () => {

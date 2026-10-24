@@ -8,6 +8,7 @@ import {
   normCedula, normNombre, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
+import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
@@ -942,39 +943,62 @@ reg("repararColumnasTicket", "any", async () => ({ ok: true, beta: "Las columnas
 
 reg("getInventario", "any", async (_p, ctx) => {
   const cmap = await catMap(ctx);
-  const bases = await ctx.db.all("inventario_base");
-  const base = new Map(bases.map((b0) => [skuCode(s(b0.sku)), b0]));
   const entradas = await ctx.db.all("inventario_entradas");
   const tks = await tickets(ctx);
+  let cortes: R[] = [];
+  try { cortes = await ctx.db.all("inventario_corte"); } catch { cortes = []; }
+  const deHoja = cortes.filter((r) => s(r.lugar).toUpperCase() === "VENTA" && s(r.fecha).slice(0, 10) === "2026-10-24");
+  const dbMap = new Map(deHoja.map((r) => [skuCode(s(r.sku)), n(r.cantidad)]));
+  const usarDb = deHoja.length > 0;
   const ventas = new Map<string, number>();
   for (const t of tks) {
-    if (ymdUtc(t.timestamp) < "2026-05-22") continue;
-    for (const pr of productQtys(t)) ventas.set(pr.sku, (ventas.get(pr.sku) || 0) + pr.qty);
+    if (!despuesDeTicket(t.timestamp)) continue;
+    for (const pr of productQtys(t)) {
+      const code = skuCode(pr.sku);
+      ventas.set(code, (ventas.get(code) || 0) + pr.qty);
+    }
   }
   const ent = new Map<string, number>();
   for (const e of entradas) {
     if (s(e.notas).toUpperCase().includes("COMPRA DIRECTA")) continue;
+    const cuando = e.fecha || e.created_at || e.timestamp;
+    if (!despuesDeTicket(cuando)) continue;
     const rec = e.cant_recibida_llenar_aqui;
     if (rec == null || rec === "") continue;
     const code = skuCode(s(e.sku));
     ent.set(code, (ent.get(code) || 0) + n(rec));
   }
+  const codes = new Set<string>(usarDb ? [...dbMap.keys()] : Object.keys(CORTE_VENTA));
+  for (const code of cmap.keys()) if (/^[A-Z]{2,3}-\d+/.test(code)) codes.add(code);
   const items = [];
   const allSkus: string[] = [];
-  for (const [code, r] of cmap) {
-    if (!/^[A-Z]{2,3}-\d+/.test(code)) continue;
-    const sku = s(r.sku).startsWith("SUNSU-") ? s(r.sku) : "SUNSU-" + code;
-    const b0 = base.get(code);
-    const stock = round2(n(b0?.stock_inicial) + (ent.get(code) || 0) - (ventas.get(code) || 0));
-    const minimo = n(b0?.minimo);
-    const alerta = stock <= 0 ? "SIN STOCK" : stock <= minimo ? "STOCK BAJO" : "OK";
+  const frenados: string[] = [];
+  for (const code of codes) {
+    const r = cmap.get(code);
+    const sku = r && s(r.sku).startsWith("SUNSU-") ? s(r.sku) : "SUNSU-" + code;
+    const apertura = usarDb ? (dbMap.get(code) ?? 0) : aperturaVenta(code);
+    const movs: MovCorte[] = [];
+    if (ent.get(code)) movs.push({ delta: ent.get(code) || 0, tipo: "recepcion" });
+    if (ventas.get(code)) movs.push({ delta: -(ventas.get(code) || 0), tipo: "venta" });
+    const applied = aplicarTrasCorte(apertura, movs);
+    const minimo = n(r?.minimo) || CORTE_MIN[code] || 0;
+    const alerta = applied.frenado ? "BAJO CERO" : applied.saldo < 0 ? "LA HOJA" : applied.saldo <= 0 ? "SIN STOCK" : applied.saldo <= minimo ? "STOCK BAJO" : "OK";
+    if (applied.frenado) frenados.push(sku);
     allSkus.push(sku);
-    items.push({ sku, nombre: s(r.producto_servicio), stock, minimo, alerta, sinSaldoInicial: !b0 });
+    items.push({
+      sku, nombre: r ? s(r.producto_servicio) : code, stock: applied.saldo, crudo: applied.crudo,
+      apertura, minimo, alerta, frenado: applied.frenado, hojaNegativa: apertura < 0,
+      lugares: { venta: applied.saldo, cabina1: 0, cab2: 0, cab3: 0, casa: 0 },
+    });
   }
+  items.sort((a, b) => String(a.sku).localeCompare(String(b.sku)));
   const fis = await ctx.db.all("inventario_fisico");
   let ultimoFisico = "";
   for (const f of fis) if (s(f.fecha) > ultimoFisico) ultimoFisico = s(f.fecha);
-  return { items, allSkus, ultimoFisico, nota: "Sin filas en inventario_base el stock no incluye el saldo inicial de la hoja 📊 INVENTARIO." };
+  return {
+    items, allSkus, ultimoFisico, frenados, corte: "2026-10-24",
+    nota: "Venta es la columna F de la hoja al 2026-10-24 08:40. Lo vendido antes ya está dentro de ese corte. Cabina 1, Cabina 2, Cabina 3 y Casa no traen saldo retail en esa hoja.",
+  };
 });
 
 reg("getHistorial", "any", async (_p, ctx, ses) => {
