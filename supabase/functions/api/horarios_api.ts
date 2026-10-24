@@ -1,7 +1,7 @@
 // Horarios por persona, import de Jibble y avisos de entrada/salida.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, kvGet, kvSet } from "./lib.ts";
+import { actorOf, bajasDe, kvGet, kvSet } from "./lib.ts";
 import { ecuadorParts, n, s, type Row } from "./domain.ts";
 import { esAdmin, normalizarRol } from "./permisos.ts";
 import type { MarcajeIn } from "./asistencia.ts";
@@ -180,9 +180,10 @@ async function guardarHorario(ctx: Ctx, ses: Ses, h: Horario): Promise<void> {
 async function personasDe(ctx: Ctx): Promise<{ nombre: string; rol: string }[]> {
   const out: { nombre: string; rol: string }[] = [];
   const vistos = new Set<string>();
+  const baja = await bajasDe(ctx.db);
   const sumar = (nombre: string, rol: string) => {
     const nomb = s(nombre);
-    if (!nomb || vistos.has(nomb)) return;
+    if (!nomb || vistos.has(nomb) || baja(nomb)) return;
     vistos.add(nomb);
     out.push({ nombre: nomb, rol: normalizarRol(rol || "") });
   };
@@ -234,7 +235,9 @@ async function aplicarImport(ctx: Ctx, ses: Ses, schedules: unknown, people: unk
     importados++;
   }
   let asignados = 0;
+  const baja = await bajasDe(ctx.db);
   for (const a of parsed.asignaciones) {
+    if (baja(a.persona)) continue;
     const horarioId = a.horarioId ? porJibble.get(a.horarioId) || null : null;
     if (!horarioId) continue;
     const ya = (await todas(ctx, "horario_asignaciones")).find((r) => s(r.persona) === a.persona);
