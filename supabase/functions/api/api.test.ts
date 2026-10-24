@@ -1476,3 +1476,89 @@ describe("horarios", () => {
     assert.equal(descanso.aviso, null);
   });
 });
+
+describe("personal bajas", () => {
+  it("esconde a quien ya no trabaja y deja el historial", async () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0019_personal_bajas.sql", import.meta.url), "utf8");
+    assert.match(sql, /create table if not exists public\.personal_bajas/);
+    assert.match(sql, /enable row level security/);
+    assert.match(sql, /grant select, insert, update, delete on public\.personal_bajas to sunsu_admin, sunsu_rls/);
+    const db = new MemoryDb();
+    const adminC = ctx(db);
+    db.tables.get("usuarios")!.push(
+      { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      { id: "carla", nombre: "Carla Salio", short: "Carla", rol: "cosmetologa", bloqueado: false },
+    );
+    db.tables.set("rrhh_empleadas", [
+      { nombre_app: "Andrea Robles", nombre_jibble: "Andrea", cedula: "111", fecha_ingreso: "2024-01-10", sueldo_base: 460 },
+      { nombre_app: "María López", nombre_jibble: "Maria J", cedula: "222", fecha_ingreso: "2020-01-01", sueldo_base: 460 },
+      { nombre_app: "Luisa Cedula", cedula: "17123", fecha_ingreso: "2020-01-01", sueldo_base: 460 },
+      { nombre_app: "Ana Actual", nombre_jibble: "Ana Vieja", cedula: "333", fecha_ingreso: "2020-01-01", sueldo_base: 460 },
+    ]);
+    db.tables.set("personal_bajas", [
+      { nombre: "Maria Lopez", nombre_app: "María López" },
+      { nombre: "Luisa Cedula", cedula: "17123" },
+      { nombre: "Ana Vieja" },
+      { nombre: "Carla Salio" },
+    ]);
+    db.tables.set("tickets", [{ sheet_row: 9, cosm1: "Carla Salio", total: 40 }]);
+    db.tables.set("horario_asignaciones", [{ persona: "Carla Salio", horario_id: "viejo" }]);
+
+    const personas = (await handle("personal_personas", { token: adminC.token }, adminC) as Row).personas as Row[];
+    const nombres = personas.map((p) => p.nombre);
+    assert.ok(nombres.includes("Andrea Robles"));
+    assert.ok(nombres.includes("Emi"));
+    for (const fuera of ["María López", "Luisa Cedula", "Ana Actual", "Carla Salio"]) assert.equal(nombres.includes(fuera), false, fuera);
+
+    const periodo = (await handle("asis_periodo", { token: adminC.token, anio: 2026, mes: 10 }, adminC) as Row).personas as Row[];
+    assert.ok(periodo.some((p) => p.nombre === "Andrea Robles"));
+    assert.equal(periodo.some((p) => p.nombre === "María López"), false);
+    assert.equal(periodo.some((p) => p.nombre === "Ana Actual"), false);
+
+    db.tables.set("asistencia_marcajes", [{ id: "m1", nombre: "María López", tipo: "entrada", ts: "2026-10-21T14:00:00Z", anulado: false }]);
+    const conHistoria = (await handle("asis_periodo", { token: adminC.token, anio: 2026, mes: 10 }, adminC) as Row).personas as Row[];
+    assert.ok(conHistoria.some((p) => p.nombre === "María López"));
+
+    const vac = (await handle("asis_vacaciones", { token: adminC.token }, adminC) as Row).personas as Row[];
+    assert.deepEqual(vac.map((p) => p.nombre), ["Andrea Robles"]);
+    const una = (await handle("asis_vacaciones", { token: adminC.token, nombre: "María López" }, adminC) as Row).personas as Row[];
+    assert.deepEqual(una.map((p) => p.nombre), ["María López"]);
+
+    const dia = (await handle("asis_dia", { token: adminC.token, fecha: "2026-10-21" }, adminC) as Row).filas as Row[];
+    const diaNom = dia.map((f) => f.nombre);
+    assert.ok(diaNom.includes("Andrea Robles"));
+    assert.ok(diaNom.includes("María López"));
+    assert.equal(diaNom.includes("Ana Actual"), false);
+
+    const lista = (await handle("horarios_list", { token: adminC.token }, adminC) as Row).personas as Row[];
+    const horNom = lista.map((p) => p.nombre);
+    assert.ok(horNom.includes("Andrea Robles"));
+    assert.equal(horNom.includes("Carla Salio"), false);
+    assert.equal(horNom.includes("María López"), false);
+
+    function json(body: unknown, status = 200) {
+      return { ok: status < 300, status, json: async () => body };
+    }
+    adminC.env = { JIBBLE_CLIENT_ID: "id", JIBBLE_CLIENT_SECRET: "secret" };
+    adminC.fetchImpl = (async (url: string) => {
+      if (url.includes("connect/token")) return json({ access_token: "tok" });
+      if (url.includes("/Schedules")) {
+        assert.equal(url, "https://workspace.prod.jibble.io/v1/Schedules");
+        return json({ value: [{ id: "sch-1", name: "Cabina", workArrangement: "Fixed", daySchedules: [{ day: "Wednesday", from: "09:00:00", to: "18:00:00" }] }] });
+      }
+      if (url.includes("/People")) return json({ value: [
+        { id: "p1", fullName: "Andrea Robles", scheduleId: "sch-1" },
+        { id: "p2", fullName: "Carla Salio", scheduleId: "sch-1" },
+      ] });
+      if (url.includes("/Groups")) return json({ value: [] });
+      return json({}, 404);
+    }) as typeof fetch;
+    const imp = await handle("horarios_importar", { token: adminC.token }, adminC) as Row;
+    assert.equal(imp.ok, true);
+    assert.equal(imp.asignados, 1);
+    const asigs = await db.all("horario_asignaciones");
+    assert.equal(asigs.some((r) => r.persona === "Andrea Robles"), true);
+    assert.equal(asigs.some((r) => r.persona === "Carla Salio" && r.horario_id === "viejo"), true);
+    assert.equal((await db.all("tickets"))[0].cosm1, "Carla Salio");
+  });
+});

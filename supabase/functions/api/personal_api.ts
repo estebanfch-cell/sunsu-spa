@@ -1,7 +1,7 @@
 // Personal, gift cards, paquetes y citas de la beta. Las secuencias siguen el número que ya existe.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, logAccion, nextSheet } from "./lib.ts";
+import { actorOf, bajasDe, logAccion, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, normNombre, s, siguienteCodigoGc, siguienteCodigoPaq, USO_FIELDS, type Row } from "./domain.ts";
 import { enPrueba } from "./db.ts";
 import { esAdmin, esPropio, acceso, matrizDe } from "./permisos.ts";
@@ -38,12 +38,15 @@ extend("getMultas", "any", async (p, ctx, ses) => {
 extend("personal_personas", "any", async (_p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, cedula: "" }] };
   const nombres = new Map<string, { nombre: string; cedula: string }>();
+  const baja = await bajasDe(ctx.db);
   for (const r of await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[])) {
     const nombre = s(r.nombre_app) || s(r.apellidos_y_nombres);
+    if (baja(nombre) || baja(s(r.cedula)) || baja(s(r.nombre_jibble))) continue;
     if (nombre && !nombres.has(normNombre(nombre))) nombres.set(normNombre(nombre), { nombre, cedula: s(r.cedula) });
   }
   for (const r of await ctx.db.all("usuarios")) {
     const nombre = s(r.nombre);
+    if (baja(nombre)) continue;
     if (nombre && !nombres.has(normNombre(nombre))) nombres.set(normNombre(nombre), { nombre, cedula: "" });
   }
   if (!nombres.size) nombres.set(normNombre(ses.name), { nombre: ses.name, cedula: "" });
