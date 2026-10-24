@@ -259,6 +259,7 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   }
   let multas = 0;
   for (const r of await ctx.db.all("multas_descuentos")) {
+    if (r.borrado_at) continue;
     const f = ymdUtc(r.fecha);
     if (!f || f < ciclo || f > fin) continue;
     const quien = normNombre(s(r.cosmetologa) || s(r.empleada) || s(r.nombre));
@@ -511,6 +512,7 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   for (const r of pack.multas) {
     const f = ymdUtc(r.fecha);
     if (!f || f < pack.ciclo || f > fin) continue;
+    if (r.borrado_at) continue;
     if (!normNombre(s(r.cosmetologa)).includes(key)) continue;
     if (s(r.tipo).toLowerCase() === "multa" || !s(r.tipo)) multas += n(r.monto);
   }
@@ -525,7 +527,7 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     const corte = await corteAsistencia(ctx);
     const feriados = (await ctx.db.all("asistencia_feriados").catch(() => [])).map((r) => s(r.fecha).slice(0, 10)).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f));
     const quien = { rol: "", name: persona, short: s(e?.nombre_app) || persona, uid: "" };
-    const permisos = (await ctx.db.all("permisos").catch(() => [])).filter((r) => esPropio(s(r.empleada), quien)).map((r) => ({
+    const permisos = (await ctx.db.all("permisos").catch(() => [])).filter((r) => !r.borrado_at && esPropio(s(r.empleada), quien)).map((r) => ({
       tipo: s(r.tipo), estado: s(r.estado), desde: s(r.fecha_inicio).slice(0, 10), hasta: s(r.fecha_fin).slice(0, 10), horas: n(r.horas),
     }));
     const diasTicket = await diasConTicket(ctx, [persona, s(e?.nombre_app), s(e?.apellidos_y_nombres)], pack.ciclo, fin);
@@ -586,7 +588,7 @@ extend("aprobarRol", "any", async (p, ctx, ses) => {
 });
 extend("getPermisos", "any", async (_p, ctx, ses) => {
   const propio = acceso(ses.rol, "asistencia", await matrizDe(ctx.db)) !== "todos";
-  const data = (await ctx.db.all("permisos")).filter((r) => (s(r.empleada) || s(r.id_1)) && (!propio || esPropio(s(r.empleada), ses))).map((r) => ({
+  const data = (await ctx.db.all("permisos")).filter((r) => !r.borrado_at && (s(r.empleada) || s(r.id_1)) && (!propio || esPropio(s(r.empleada), ses))).map((r) => ({
     id: s(r.id_1) || s(r.sheet_row), empleada: s(r.empleada), tipo: s(r.tipo),
     desde: s(r.fecha_inicio), hasta: s(r.fecha_fin), horas: s(r.horas), motivo: s(r.motivo),
     estado: s(r.estado), solicitado: s(r.solicitado), aprobadoPor: s(r.aprobado_por),

@@ -2254,9 +2254,13 @@ async function renderRol() {
   const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
   const personas = state.admin ? `<label>Persona <select id="rol-persona">${(data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : "";
   const cfg = state.admin ? await htmlPagoConfig() : "";
+  const pago = data.config || {};
+  const filaPago = pago.id || (pago.nombre && pago.vigente_desde ? pago.nombre + "|" + String(pago.vigente_desde).slice(0, 10) : "");
+  const pedirPago = window.SunsuInline && SunsuInline.pide() && filaPago ? SunsuInline.pedir("pago_config", filaPago, { nombre: pago.nombre || "", vigente: String(pago.vigente_desde || "").slice(0, 10), sueldo: pago.sueldo || "", bono: pago.bono || "", iess: pago.iess_pct || "", fondo: pago.fondo ? "SI" : "" }) : "";
   return `<div class="tools">${personas}<label>Ciclo <select id="rol-ciclo">${cicloOpts}</select></label><button class="btn small" type="button" id="rol-ver">Ver</button>
       <button class="btn ghost small" type="button" id="rol-pdf">Descargar PDF</button></div>
     <div id="rol-sheet"></div>
+    ${pedirPago}
     ${cfg}
     <p class="note">El sueldo y el bono salen de la ficha o del configurador, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones.</p>`;
 }
@@ -2264,6 +2268,17 @@ async function htmlPagoConfig() {
   const data = await api("getPagoConfig");
   if (data.error) return fail(data);
   const opts = (data.personas || []).map((p) => `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join("");
+  const ixP = window.SunsuInline;
+  const filas = (data.configs || []).map((c) => {
+    const vigente = String(c.vigente_desde || "").slice(0, 10);
+    const fila = c.id || (c.nombre + "|" + vigente);
+    const pct = Number(c.iess_pct);
+    const iess = Number.isFinite(pct) ? (pct > 1 ? pct : Math.round(pct * 10000) / 100) : "";
+    if (ixP && ixP.edita()) {
+      return `<div class="row">${ixP.lineas("pago_config", fila, [["nombre", "Persona", c.nombre], ["vigente", "Vigente desde", vigente], ["sueldo", "Sueldo", c.sueldo], ["bono", "Bono", c.bono], ["iess", "IESS %", iess], ["fondo", "Fondo", c.fondo ? "SI" : ""]])} ${ixP.borrar("pago_config", fila)}</div>`;
+    }
+    return `<div class="row"><div class="name">${esc(c.nombre)}</div><div class="note">desde ${esc(vigente)} · sueldo ${money(c.sueldo)} · bono ${money(c.bono)}</div></div>`;
+  }).join("");
   return `<form id="f-pago-cfg" class="card"><div class="card-title">Configurador de pagos</div>
     <p class="note">Cada guardado vale desde una fecha. No escribe Google Sheets.</p>
     <label>Persona</label><select name="nombre">${opts}</select>
@@ -2274,7 +2289,9 @@ async function htmlPagoConfig() {
     <label><input type="checkbox" name="fondo" style="width:auto"> Fondo de reserva</label>
     <label>Fondo desde</label><input name="fondo_desde" type="date">
     <label>Vacaciones desde el año</label><input name="vacaciones_desde_anio" inputmode="numeric" value="1">
-    <button class="btn" type="submit">Guardar configuración</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+    <button class="btn" type="submit">Guardar configuración</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
+    <div id="pago-nuevo">${ixP && ixP.edita() ? ixP.mas("pago_config") : ""}</div>
+    <div class="list">${filas || `<p class="note">Todavía no hay vigencias guardadas.</p>`}</div>`;
 }
 
 async function renderAsistencia() {
@@ -2284,10 +2301,17 @@ async function renderAsistencia() {
   if (hoy.error) return fail(hoy);
   const cfg = hoy.config || {};
   const dia = hoy.dia || {};
-  const marcas = (hoy.marcajes || []).filter((m) => !m.anulado).map((m) => {
-    const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
-    return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}</div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button>` : esc(m.id || "")}</div></div>`;
-  }).join("");
+  const ixAs = window.SunsuInline;
+  const marcaFila = (m, propia) => {
+    const hora = hmEc(m.ts);
+    if (m.anulado) return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(m.nombre || etiquetaMarca(m.tipo))} · anulada</div></div>`;
+    if (ixAs && ixAs.edita()) {
+      return `<div class="row"><div class="sku">${ixAs.campo("asistencia", m.id, "hora", hora)}</div><div><div class="name">${ixAs.campo("asistencia", m.id, "tipo", m.tipo)}${m.nombre ? " · " + esc(m.nombre) : ""}</div></div><div class="meta">${ixAs.borrar("asistencia", m.id)}</div></div>`;
+    }
+    const pedir = ixAs && ixAs.pide() && propia ? ixAs.pedir("asistencia", m.id, { nombre: m.nombre || "", tipo: m.tipo || "", fecha: hoy.fecha || "", hora }) : "";
+    return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}</div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button>` : ""} ${pedir}</div></div>`;
+  };
+  const marcas = (hoy.marcajes || []).filter((m) => !m.anulado).map((m) => marcaFila(m, true)).join("");
   const cards = [
     ["Atraso", (dia.atrasoMin || 0) + " min"],
     ["Jornada", Math.round((dia.ordinaryMin || 0) / 60 * 100) / 100 + " h"],
@@ -2308,10 +2332,8 @@ async function renderAsistencia() {
       <button class="btn" type="submit">Guardar reglas</button><p class="err" id="f-err-cfg"></p>
     </form>
     <h2>Marcas de hoy</h2>
-    <div class="list" id="asis-equipo">${(hoy.equipo || []).map((m) => {
-      const hora = m.ts ? new Date(m.ts).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }) : "";
-      return `<div class="row"><div class="sku">${esc(hora)}</div><div><div class="name">${esc(m.nombre)}</div><div class="note">${esc(etiquetaMarca(m.tipo))}${m.anulado ? " · anulada" : ""} · ${esc(m.id)}</div></div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button> ` : ""}<button class="btn small" type="button" data-usar="${esc(m.id)}">Corregir</button></div></div>`;
-    }).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
+    <div class="list" id="asis-equipo">${(hoy.equipo || []).map((m) => marcaFila(m, false)).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
+    <div id="asis-nuevo">${ixAs && ixAs.edita() ? ixAs.mas("asistencia") : ""}</div>
     <h2>Asistencia del día</h2>
     <form id="f-asis-dia"><input name="fecha" type="date" value="${esc(hoy.fecha || "")}"><button class="btn" type="submit">Ver día</button></form>
     <div id="asis-dia"></div>
@@ -2339,7 +2361,11 @@ async function renderAsistencia() {
       <label>Nombre</label><input name="nombre" placeholder="Navidad">
       <button class="btn" type="submit">Guardar feriado</button><p class="err" id="f-err-fer"></p>
     </form>
-    <div class="list">${(hoy.feriados || []).map((f) => `<div class="row"><div class="sku">${esc(f.fecha)}</div><div class="name">${esc(f.nombre || "Feriado")}</div></div>`).join("") || `<p class="note">Sin feriados. Sábado y domingo ya se pagan como descanso.</p>`}</div>
+    <div id="fer-nuevo">${ixAs && ixAs.edita() ? ixAs.mas("feriados") : ""}</div>
+    <div class="list">${(hoy.feriados || []).map((f) => {
+      if (ixAs && ixAs.edita()) return `<div class="row">${ixAs.lineas("feriados", f.fecha, [["fecha", "Fecha", f.fecha], ["nombre", "Nombre", f.nombre || ""]])} ${ixAs.borrar("feriados", f.fecha)}</div>`;
+      return `<div class="row"><div class="sku">${esc(f.fecha)}</div><div class="name">${esc(f.nombre || "Feriado")}</div></div>`;
+    }).join("") || `<p class="note">Sin feriados. Sábado y domingo ya se pagan como descanso.</p>`}</div>
     <h2>Reporte del mes</h2>
     <form id="f-asis-mes"><label>Mes</label><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver horas</button></form>
     <div id="asis-mes"></div>` : `
@@ -2423,21 +2449,33 @@ function htmlEditorHorario(h) {
   </form>`;
 }
 async function renderHorarios() {
-  if (!state.admin) return `<p class="note">Los horarios los arma un admin.</p>`;
+  if (!state.admin) {
+    const data = await api("horarios_list");
+    const h = (data.horarios || [])[0];
+    if (!h) return `<p class="note">Todavía no tienes un horario asignado.</p>`;
+    const ix = window.SunsuInline;
+    const pedir = ix && ix.pide() ? ix.pedir("horarios", h.id, { nombre: h.nombre || "", arreglo: h.arreglo || "", horasSemana: h.horasSemana || "" }) : "";
+    return `<div class="card"><div class="k">${esc(h.nombre)}</div><div class="note">${esc(etiquetaArreglo(h.arreglo))}</div></div>${pedir}`;
+  }
   const data = await api("horarios_list");
   if (data.error) return fail(data);
   const horarios = data.horarios || [];
   state.horariosCache = horarios;
   const personas = data.personas || [];
   const asignaciones = data.asignaciones || [];
-  const lista = horarios.map((h) => `<button class="cli-row" type="button" data-hor="${esc(h.id)}"><span class="cli-main"><b>${esc(h.nombre)}</b><span class="note">${esc(etiquetaArreglo(h.arreglo))}${h.esDefault ? " · por defecto" : ""}</span></span></button>`).join("")
+  const ixH = window.SunsuInline;
+  const lista = horarios.map((h) => {
+    const nombre = ixH && ixH.edita() ? ixH.campo("horarios", h.id, "nombre", h.nombre) : `<b>${esc(h.nombre)}</b>`;
+    const trash = ixH && ixH.edita() ? ixH.borrar("horarios", h.id) : "";
+    return `<div class="row"><button class="cli-row" type="button" data-hor="${esc(h.id)}"><span class="cli-main">${nombre}<span class="note">${esc(etiquetaArreglo(h.arreglo))}${h.esDefault ? " · por defecto" : ""}</span></span></button>${trash}</div>`;
+  }).join("")
     || `<p class="note">Todavía no hay horarios. Jibble no se pudo leer desde este entorno, así que la lista nace vacía. Traer de Jibble los copia cuando la función tiene las credenciales. También puedes crear uno.</p>`;
   const asign = personas.map((p) => {
     const a = asignaciones.find((x) => x.persona === p.nombre);
     const opts = `<option value="">Por defecto</option>` + horarios.map((h) => `<option value="${esc(h.id)}"${a && a.horarioId === h.id ? " selected" : ""}>${esc(h.nombre)}</option>`).join("");
     return `<div class="row"><div class="name">${esc(p.nombre)}</div><div class="meta"><select data-asig="${esc(p.nombre)}">${opts}</select></div></div>`;
   }).join("") || `<p class="note">No hay personas en el equipo.</p>`;
-  return `<div class="tools"><button class="btn" type="button" id="hor-nuevo">Nuevo horario</button><button class="btn ghost" type="button" id="hor-jibble">Traer de Jibble</button></div>
+  return `<div class="tools"><button class="btn" type="button" id="hor-nuevo">Nuevo horario</button><button class="btn ghost" type="button" id="hor-jibble">Traer de Jibble</button>${ixH && ixH.edita() ? ixH.mas("horarios") : ""}</div>
     <p class="err" id="hor-err"></p>
     <div class="list" id="hor-lista">${lista}</div>
     <div id="hor-editor"></div>
@@ -2598,16 +2636,23 @@ async function renderPersonalPermisos() {
   const hoy = await api("asis_hoy", nombre ? { nombre } : {});
   if (hoy.error) return fail(hoy);
   const yo = nombre || (state.user && state.user.name) || "";
+  const ix = window.SunsuInline;
   const permisos = (hoy.permisos || []).map((p) => {
     const pend = /pend/i.test(p.estado || "");
     const mia = p.empleada === yo || !state.admin;
+    const fila = String(p.row || p.id);
     const acciones = [];
     if (pend && hoy.puedeAprobar && (hoy.esAdmin || !mia)) {
       acciones.push(`<button class="btn small" type="button" data-aprobar="${esc(p.id)}">Aprobar</button>`);
       acciones.push(`<button class="btn ghost small" type="button" data-rechazar="${esc(p.id)}">Rechazar</button>`);
     }
     if (pend && (mia || hoy.esAdmin)) acciones.push(`<button class="btn ghost small" type="button" data-cancelar="${esc(p.id)}">Cancelar</button>`);
-    return `<div class="row"><div class="sku">${esc(p.estado)}</div><div><div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)} · ${esc(p.dias || "")} día(s)${p.horas ? " · " + esc(p.horas) + " h" : ""}${p.motivo ? " · " + esc(p.motivo) : ""}</div></div><div class="meta">${acciones.join(" ") || esc(p.aprobadoPor || "")}</div></div>`;
+    const vals = { empleada: p.empleada || "", tipo: p.tipo || "", desde: p.desde || "", hasta: p.hasta || "", horas: p.horas || "", motivo: p.motivo || "", estado: p.estado || "" };
+    const cuerpo = ix && ix.edita()
+      ? ix.lineas("permisos", fila, [["empleada", "Empleada", p.empleada], ["tipo", "Tipo", p.tipo], ["desde", "Desde", p.desde], ["hasta", "Hasta", p.hasta], ["horas", "Horas", p.horas || ""], ["motivo", "Motivo", p.motivo], ["estado", "Estado", p.estado]]) + " " + ix.borrar("permisos", fila)
+      : `<div class="name">${esc(p.tipo)} · ${esc(p.empleada)}</div><div class="note">${esc(p.desde)} → ${esc(p.hasta)} · ${esc(p.dias || "")} día(s)${p.horas ? " · " + esc(p.horas) + " h" : ""}${p.motivo ? " · " + esc(p.motivo) : ""}</div>`;
+    const pedir = ix && ix.pide() ? ix.pedir("permisos", fila, vals) : "";
+    return `<div class="row"><div class="sku">${esc(p.estado)}</div><div>${cuerpo}</div><div class="meta">${acciones.join(" ") || esc(p.aprobadoPor || "")} ${pedir}</div></div>`;
   }).join("");
   const v = hoy.vacaciones;
   const vacCard = v ? `<div class="card"><div class="k">Vacaciones</div><div class="v" style="font-size:22px">${v.habilitada ? esc(v.diasDisponibles) + " días" : "Aún no"}</div><div class="note">${v.fechaIngreso ? (v.habilitada ? `Ganados ${esc(v.diasGanados)} · tomados ${esc(v.diasTomados)} · pendientes ${esc(v.diasPendientes)}` : `Se habilitan el ${esc(v.proximoAniversario)} (un año completo).`) : "Falta la fecha de ingreso en RR.HH."}</div></div>` : "";
@@ -2626,6 +2671,7 @@ async function renderPersonalPermisos() {
       <p class="err" id="f-err-perm"></p>
     </form>
     <h2>Estado</h2>
+    <div id="perm-nuevo">${ix && ix.edita() ? ix.mas("permisos") : ""}</div>
     <div class="list">${permisos || `<p class="note">Sin solicitudes.</p>`}</div>
     <p class="note">Un permiso aprobado entra en las horas y en el rol de pagos. Las vacaciones piden un año completo desde el ingreso.</p>`;
 }
@@ -2634,7 +2680,15 @@ async function renderPersonalMultas() {
   const nombre = state.admin ? state.persona : "";
   const data = await api("getMultas", nombre ? { nombre } : {});
   if (data.error) return sel + fail(data);
-  const items = (data.items || []).map((m) => `<div class="row"><div class="sku">${esc(m.fecha || "").slice(0, 10)}</div><div><div class="name">${esc(m.nombre)} · ${esc(m.tipo)}</div><div class="note">${esc(m.motivo || "")}</div></div><div class="meta">${money(m.monto)}</div></div>`).join("");
+  const ix = window.SunsuInline;
+  const items = (data.items || []).map((m) => {
+    const fila = String(m.id);
+    if (ix && ix.edita()) {
+      return `<div class="row">${ix.lineas("multas", fila, [["cosmetologa", "Cosmetóloga", m.nombre], ["tipo", "Tipo", m.tipo], ["monto", "Monto", m.monto], ["motivo", "Motivo", m.motivo], ["fecha", "Fecha", (m.fecha || "").slice(0, 10)]])} ${ix.borrar("multas", fila)}</div>`;
+    }
+    const pedir = ix && ix.pide() ? ix.pedir("multas", fila, { cosmetologa: m.nombre || "", tipo: m.tipo || "", monto: m.monto || "", motivo: m.motivo || "", fecha: (m.fecha || "").slice(0, 10) }) : "";
+    return `<div class="row"><div class="sku">${esc(m.fecha || "").slice(0, 10)}</div><div><div class="name">${esc(m.nombre)} · ${esc(m.tipo)}</div><div class="note">${esc(m.motivo || "")}</div></div><div class="meta">${money(m.monto)} ${pedir}</div></div>`;
+  }).join("");
   const form = state.admin ? `<form id="f-multa" class="card"><div class="card-title">Registrar</div>
       <div class="field"><label>Cosmetóloga</label><input name="cosmetologa" value="${esc(state.persona || "")}" required></div>
       <div class="field"><label>Tipo</label><select name="tipo"><option value="MULTA">Multa</option><option value="DESCUENTO">Descuento</option></select></div>
@@ -2642,7 +2696,7 @@ async function renderPersonalMultas() {
       <div class="field"><label>Motivo</label><textarea name="motivo"></textarea></div>
       <button class="btn" type="submit">Guardar</button><p class="err" id="f-err"></p></form>` : "";
   const nota = state.admin ? "Ves todas. Elige una persona para filtrar." : "Ves solo las tuyas.";
-  return `${sel}<p class="note">${nota}</p>${form}<div class="list">${items || `<p class="note">Sin multas.</p>`}</div>`;
+  return `${sel}<p class="note">${nota}</p>${form}<div id="multa-nuevo">${ix && ix.edita() ? ix.mas("multas") : ""}</div><div class="list">${items || `<p class="note">Sin multas.</p>`}</div>`;
 }
 function cuandoCita(iso) {
   const d = new Date(iso || "");
@@ -2915,6 +2969,12 @@ function salirVista() {
   sessionStorage.removeItem("sunsu.beta.vista");
   grupoAbierto = "";
   draw();
+}
+function hmEc(ts) {
+  const d = new Date(ts || "");
+  if (!ts || Number.isNaN(d.getTime())) return "";
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Guayaquil", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
+  return (p.find((x) => x.type === "hour") || {}).value + ":" + (p.find((x) => x.type === "minute") || {}).value;
 }
 function horaEc(ts) {
   const d = new Date(ts || "");
@@ -4215,6 +4275,7 @@ async function marcarAsistencia(tipo, foto) {
   if ((location.hash || "").indexOf("asistencia") >= 0) recargarAsis();
 }
 function wirePersonal(main) {
+  if (window.SunsuInline) SunsuInline.aplicar();
   const sel = main.querySelector("#persona-sel");
   if (sel) sel.addEventListener("change", () => {
     const opt = sel.selectedOptions[0];
@@ -4318,7 +4379,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024gc"></script>
-<script src="beta-inline.js?v=20261024gc"></script>
+<script src="beta-inline.js?v=20261024pe"></script>
 <script>draw();</script>
 </body>
 </html>

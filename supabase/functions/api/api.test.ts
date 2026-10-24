@@ -2243,4 +2243,100 @@ describe("series, comisiones y rol", () => {
     assert.equal((await db.all("inventario_entradas")).some((r) => r.origin === "test"), false);
     assert.equal((await db.all("inventario_entradas")).some((r) => r.producto === "Real"), true);
   });
+
+  it("el admin edita personal en línea y el borrado queda fuera de orig", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      rrhh_empleadas: [{ nombre_app: "Andrea Robles", fecha_ingreso: "2020-01-01", sueldo_base: 482 }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0028_borrado_personal.sql", import.meta.url), "utf8");
+    assert.match(sql, /alter table public\.permisos add column if not exists borrado_at/);
+    assert.match(sql, /alter table public\.multas_descuentos add column if not exists borrado_at/);
+    assert.match(sql, /alter table public\.horarios add column if not exists borrado_at/);
+
+    const multa = await handle("inline_guardar", {
+      token: adminC.token, tabla: "multas", fila: "nuevo", campos: { cosmetologa: "Andrea Robles", tipo: "MULTA", monto: "10", motivo: "tarde", fecha: "2026-10-21" },
+    }, adminC) as Row;
+    assert.equal(multa.ok, true);
+    const noMulta = await handle("inline_guardar", { token: "t-andrea", tabla: "multas", fila: String(multa.fila), campos: { monto: "5" } }, adminC) as Row;
+    assert.match(String(noMulta.error), /admin/i);
+    const ped = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "multas", fila: String(multa.fila), tipo: "cambio", motivo: "fue 5", propuestos: { monto: "5" },
+    }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal(Number((await db.all("multas_descuentos"))[0].monto), 5);
+    const bajaM = await handle("inline_borrar", { token: adminC.token, tabla: "multas", fila: String(multa.fila) }, adminC) as Row;
+    assert.equal(bajaM.ok, true);
+    const listaM = await handle("getMultas", { token: adminC.token }, adminC) as Row;
+    assert.equal((listaM.items as Row[]).length, 0);
+    assert.ok((await db.all("multas_descuentos"))[0].borrado_at);
+
+    const perm = await handle("inline_guardar", {
+      token: adminC.token, tabla: "permisos", fila: "nuevo",
+      campos: { empleada: "Andrea Robles", tipo: "PERMISO", desde: "2026-10-22", hasta: "2026-10-22", motivo: "médico", estado: "APROBADO" },
+    }, adminC) as Row;
+    assert.equal(perm.ok, true);
+    const hoy = await handle("asis_hoy", { token: adminC.token }, adminC) as Row;
+    assert.equal((hoy.permisos as Row[]).some((p) => p.empleada === "Andrea Robles"), true);
+    const bajaP = await handle("inline_borrar", { token: adminC.token, tabla: "permisos", fila: String(perm.fila) }, adminC) as Row;
+    assert.equal(bajaP.ok, true);
+    const hoy2 = await handle("asis_hoy", { token: adminC.token }, adminC) as Row;
+    assert.equal((hoy2.permisos as Row[]).length, 0);
+    assert.ok((await db.all("permisos"))[0].borrado_at);
+
+    const hor = await handle("inline_guardar", {
+      token: adminC.token, tabla: "horarios", fila: "nuevo", campos: { nombre: "Mar-Sáb", arreglo: "fijo" },
+    }, adminC) as Row;
+    assert.equal(hor.ok, true);
+    const listaH = await handle("horarios_list", { token: adminC.token }, adminC) as Row;
+    assert.equal((listaH.horarios as Row[]).some((h) => h.nombre === "Mar-Sáb"), true);
+    const bajaH = await handle("inline_borrar", { token: adminC.token, tabla: "horarios", fila: String(hor.fila) }, adminC) as Row;
+    assert.equal(bajaH.ok, true);
+    const listaH2 = await handle("horarios_list", { token: adminC.token }, adminC) as Row;
+    assert.equal((listaH2.horarios as Row[]).length, 0);
+    assert.ok((await db.all("horarios"))[0].borrado_at);
+
+    const marca = await handle("inline_guardar", {
+      token: adminC.token, tabla: "asistencia", fila: "nuevo",
+      campos: { nombre: "Andrea Robles", tipo: "entrada", fecha: "2026-10-21", hora: "09:05", motivo: "olvidó el reloj" },
+    }, adminC) as Row;
+    assert.equal(marca.ok, true);
+    const corr = await handle("inline_guardar", {
+      token: adminC.token, tabla: "asistencia", fila: String(marca.fila), campos: { hora: "09:10", motivo: "la hora real" },
+    }, adminC) as Row;
+    assert.equal(corr.ok, true);
+    const anula = await handle("inline_borrar", { token: adminC.token, tabla: "asistencia", fila: String(marca.fila), motivo: "duplicada" }, adminC) as Row;
+    assert.equal(anula.ok, true);
+    assert.equal((await db.all("asistencia_marcajes"))[0].anulado, true);
+
+    const fer = await handle("inline_guardar", {
+      token: adminC.token, tabla: "feriados", fila: "nuevo", campos: { fecha: "2026-12-25", nombre: "Navidad" },
+    }, adminC) as Row;
+    assert.equal(fer.ok, true);
+    const bajaF = await handle("inline_borrar", { token: adminC.token, tabla: "feriados", fila: "2026-12-25" }, adminC) as Row;
+    assert.equal(bajaF.ok, true);
+    assert.equal((await db.all("asistencia_feriados")).length, 0);
+
+    const pago = await handle("inline_guardar", {
+      token: adminC.token, tabla: "pago_config", fila: "nuevo",
+      campos: { nombre: "Andrea Robles", vigente: "2026-10-01", sueldo: "482", bono: "20", iess: "9.45", fondo: "SI" },
+    }, adminC) as Row;
+    assert.equal(pago.ok, true);
+    const pago2 = await handle("inline_guardar", {
+      token: adminC.token, tabla: "pago_config", fila: String(pago.fila), campos: { sueldo: "500" },
+    }, adminC) as Row;
+    assert.equal(pago2.ok, true);
+    assert.equal(Number((await db.all("pago_config"))[0].sueldo), 500);
+    const bajaC = await handle("inline_borrar", { token: adminC.token, tabla: "pago_config", fila: String(pago.fila) }, adminC) as Row;
+    assert.equal(bajaC.ok, true);
+    assert.equal((await db.all("pago_config")).length, 0);
+  });
 });
