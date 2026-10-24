@@ -1497,7 +1497,8 @@ function pantallaSunsu(route) {
   }
   const m = route.mod;
   if (m === "inicio") return state.admin ? "inicio" : "staff-home";
-  if (m === "tickets" || m === "clientes" || m === "reportes") return "";
+  if (m === "tickets") return "historial";
+  if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "cotizaciones";
   if (m === "productos") return "catalogo";
   if (m === "inventario" || m === "conteos" || m === "lugares") return "";
