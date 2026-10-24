@@ -359,6 +359,7 @@ function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   let mlt = 0, desc = 0;
   const key = normNombre(nombre).split(" ")[0];
   for (const r of rows) {
+    if (r.borrado_at) continue;
     const f = ymdUtc(r.fecha);
     if (!f || f < ciclo || f > fin) continue;
     if (!normNombre(r.cosmetologa).includes(key)) continue;

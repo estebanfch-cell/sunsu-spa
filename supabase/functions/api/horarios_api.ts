@@ -37,7 +37,7 @@ function diaFila(r: Row): Horario["dias"][number] {
 }
 
 export async function cargarHorarios(ctx: Ctx): Promise<{ horarios: Horario[]; asignaciones: AsignacionHorario[] }> {
-  const filas = await todas(ctx, "horarios");
+  const filas = (await todas(ctx, "horarios")).filter((r) => !r.borrado_at);
   const dias = await todas(ctx, "horario_dias");
   const descansos = await todas(ctx, "horario_descansos");
   const deducciones = await todas(ctx, "horario_deducciones");
@@ -83,7 +83,7 @@ export async function cargarHorarios(ctx: Ctx): Promise<{ horarios: Horario[]; a
   };
 }
 
-function validar(h: Horario): string | null {
+export function validar(h: Horario): string | null {
   if (!h.nombre.trim()) return "El horario necesita un nombre.";
   if (!ARREGLOS.has(h.arreglo)) return "Ese arreglo no existe.";
   const trabaja = h.dias.filter((d) => d.trabaja);
@@ -98,7 +98,7 @@ function validar(h: Horario): string | null {
   return null;
 }
 
-function horarioDesde(p: Row, prev: Horario | null): Horario {
+export function horarioDesde(p: Row, prev: Horario | null): Horario {
   const dias = Array.isArray(p.dias) ? p.dias as Row[] : [];
   const descansos = Array.isArray(p.descansos) ? p.descansos as Row[] : [];
   const deducciones = Array.isArray(p.deducciones) ? p.deducciones as Row[] : [];
@@ -137,7 +137,7 @@ function horarioDesde(p: Row, prev: Horario | null): Horario {
   };
 }
 
-async function guardarHorario(ctx: Ctx, ses: Ses, h: Horario): Promise<void> {
+export async function guardarHorario(ctx: Ctx, ses: Ses, h: Horario): Promise<void> {
   const actor = actorOf(ses);
   const row = {
     id: h.id, nombre: h.nombre, arreglo: h.arreglo, es_default: h.esDefault,

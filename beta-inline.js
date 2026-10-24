@@ -35,6 +35,25 @@
       ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
       ["sku", "SKU"], ["paquete", "Paquete"], ["vendidoPor", "Vendido por"], ["notas", "Notas"],
     ],
+    permisos: [
+      ["empleada", "Empleada"], ["tipo", "Tipo"], ["desde", "Desde"], ["hasta", "Hasta"],
+      ["horas", "Horas"], ["motivo", "Motivo"], ["estado", "Estado"],
+    ],
+    multas: [
+      ["cosmetologa", "Cosmetóloga"], ["tipo", "Tipo"], ["monto", "Monto"], ["motivo", "Motivo"], ["fecha", "Fecha"],
+    ],
+    horarios: [
+      ["nombre", "Nombre"], ["arreglo", "Arreglo"], ["horasSemana", "Horas de la semana"],
+    ],
+    asistencia: [
+      ["nombre", "Empleada"], ["tipo", "Tipo"], ["fecha", "Fecha"], ["hora", "Hora"], ["motivo", "Motivo"],
+    ],
+    feriados: [
+      ["fecha", "Fecha"], ["nombre", "Nombre"],
+    ],
+    pago_config: [
+      ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo"], ["bono", "Bono"], ["iess", "IESS %"], ["fondo", "Fondo"],
+    ],
   };
   function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
@@ -123,6 +142,11 @@
   async function guardar() {
     var lista = grupos();
     if (!lista.length) { barra(); return; }
+    if (lista.some(function (g) { return g.tabla === "asistencia" && !String(g.campos.motivo || "").trim(); })) {
+      var mot = window.prompt("Motivo de la corrección");
+      if (!mot || !mot.trim()) { if (window.toast) toast("La corrección necesita un motivo"); return; }
+      lista.forEach(function (g) { if (g.tabla === "asistencia") g.campos.motivo = mot.trim(); });
+    }
     for (var i = 0; i < lista.length; i++) {
       var data = await api("inline_guardar", lista[i]);
       if (data.error) { if (window.toast) toast(data.error); return; }
@@ -143,6 +167,12 @@
     if (tablas.compras) return "compras";
     if (tablas.gift_cards) return "gift_cards";
     if (tablas.paquetes) return "paquetes";
+    if (tablas.permisos) return "permisos";
+    if (tablas.multas) return "multas";
+    if (tablas.horarios) return "horarios";
+    if (tablas.asistencia) return "asistencia";
+    if (tablas.feriados) return "feriados";
+    if (tablas.pago_config) return "pago_config";
     if (document.getElementById("cat-res")) return "catalogo";
     if (document.querySelector("[id^=inv-grp-]")) return "inventario";
     if (document.getElementById("prov-form")) return "proveedores";
@@ -165,6 +195,7 @@
       return;
     }
     if (tabla === "paquetes" && document.getElementById("bpq-todos") && typeof _cargarTodosPaquetes === "function") { _cargarTodosPaquetes(); return; }
+    if ((tabla === "permisos" || tabla === "multas" || tabla === "horarios" || tabla === "asistencia" || tabla === "feriados" || tabla === "pago_config") && typeof draw === "function") { draw(); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -189,8 +220,13 @@
   }
 
   async function eliminar(tabla, fila) {
-    if (!confirm("¿Eliminar esta fila? Queda en el historial.")) return;
-    var data = await api("inline_borrar", { tabla: tabla, fila: fila });
+    var body = { tabla: tabla, fila: fila };
+    if (tabla === "asistencia") {
+      var motivo = window.prompt("Motivo para anular la marca");
+      if (!motivo || !String(motivo).trim()) return;
+      body.motivo = String(motivo).trim();
+    } else if (!confirm("¿Eliminar esta fila? Queda en el historial.")) return;
+    var data = await api("inline_borrar", body);
     if (data.error) { if (window.toast) toast(data.error); return; }
     if (window.toast) toast("Eliminado");
     refrescar(tabla);
@@ -205,12 +241,18 @@
       || (tabla === "compras" && document.getElementById("oc-nuevo"))
       || (tabla === "gift_cards" && document.getElementById("gc-nuevo"))
       || (tabla === "paquetes" && document.getElementById("paq-nuevo"))
+      || (tabla === "permisos" && document.getElementById("perm-nuevo"))
+      || (tabla === "multas" && document.getElementById("multa-nuevo"))
+      || (tabla === "horarios" && document.getElementById("hor-lista"))
+      || (tabla === "asistencia" && document.getElementById("asis-nuevo"))
+      || (tabla === "feriados" && document.getElementById("fer-nuevo"))
+      || (tabla === "pago_config" && document.getElementById("pago-nuevo"))
       || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : tabla === "permisos" ? "Nuevo permiso" : tabla === "multas" ? "Nueva multa" : tabla === "horarios" ? "Nuevo horario" : tabla === "asistencia" ? "Marca olvidada" : tabla === "feriados" ? "Nuevo feriado" : tabla === "pago_config" ? "Nueva configuración" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }

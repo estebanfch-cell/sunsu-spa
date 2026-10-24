@@ -61,7 +61,7 @@ async function feriadosDe(ctx: Ctx): Promise<string[]> {
 }
 
 function permisosDe(rows: Row[], nombre: string): PermisoIn[] {
-  return rows.filter((r) => mismo(s(r.empleada), nombre)).map((r) => ({
+  return rows.filter((r) => !r.borrado_at && mismo(s(r.empleada), nombre)).map((r) => ({
     tipo: s(r.tipo), estado: s(r.estado), desde: s(r.fecha_inicio), hasta: s(r.fecha_fin), horas: n(r.horas),
   }));
 }
@@ -198,7 +198,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   const dia = calcularDia(fecha, marcajes, cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   const reloj = estadoReloj(marcajes, ctx.now.toISOString());
   const permisos = (await ctx.db.all("permisos"))
-    .filter((r) => !propio(ses, matriz) || esPropio(s(r.empleada), ses))
+    .filter((r) => !r.borrado_at && (!propio(ses, matriz) || esPropio(s(r.empleada), ses)))
     .map(permisoPub);
   let vacaciones: unknown = null;
   try { vacaciones = await saldoDe(ctx, nombre); } catch { vacaciones = null; }

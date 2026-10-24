@@ -23,6 +23,7 @@ extend("getMultas", "any", async (p, ctx, ses) => {
   const quien = admin && s(p.nombre) ? s(p.nombre) : "";
   const rows = await ctx.db.all("multas_descuentos");
   const items = rows.filter((r) => {
+    if (r.borrado_at) return false;
     if (!s(r.cosmetologa) && !s(r.empleada) && !s(r.nombre)) return false;
     const nombre = s(r.cosmetologa) || s(r.empleada) || s(r.nombre);
     if (!admin) return esPropio(nombre, ses);
