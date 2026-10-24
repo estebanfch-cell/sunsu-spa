@@ -91,7 +91,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getCabina: "cabina", cabinaAbrirRapido: "cabina",
   usuariosFull: "usuarios", saveUsuarios: "usuarios", usuarioBloquear: "usuarios", usuarioPinReset: "usuarios",
   betaTablas: "usuarios", betaFilas: "usuarios", betaGuardar: "usuarios", betaEliminar: "usuarios", betaMover: "usuarios",
-  permisos_get: "permisos", permisos_guardar: "permisos",
+  permisos_get: "inicio", permisos_guardar: "permisos",
   home: "inicio",
   getDashboardHoy: "ver_costos",
 };

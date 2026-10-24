@@ -68,7 +68,7 @@ extend("whoami", "any", async (_p, ctx, ses) => {
 });
 
 extend("permisos_get", "any", async (_p, ctx, ses) => {
-  if (ses.rol !== "super_admin" && ses.rol !== "admin_master") return { error: "No tienes permiso" };
+  if (!ses) return { error: "Inicia sesión" };
   const matriz = await matrizDe(ctx.db);
   return { ok: true, roles: ["cosmetologa", "asistente_cosmetologia", "recepcion", "gerente"], modulos: (await import("./permisos.ts")).MODULOS, matriz, nota: "admin y super_admin siempre ven todo. La bandera es_cosmetologa no se edita aquí: vive en cosmetologas y es la que usa el cálculo de paquetes." };
 });

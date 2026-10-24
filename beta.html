@@ -1113,7 +1113,7 @@ function gruposVisibles() {
         ]);
       }
       if (acceso("transferencias") !== "no") vis.push(["transferencias", "Transferencias", "#/m/transferencias"]);
-      if (state.admin) vis.push(["inventario", "Locales y cabinas", "#/m/lugares"]);
+      if (acceso("inventario") !== "no" || state.admin) vis.push(["inventario", "Locales y cabinas", "#/m/lugares"]);
     }
     for (const [mod] of vis) usados.add(mod);
     if (vis.length) out.push({ id, label, items: vis });
@@ -1151,11 +1151,10 @@ function gruposVisibles() {
   }
   if (acceso("cabina") !== "no") spa.push(["cabina", "Cabina", "#/m/cabina"]);
   add("Spa", "✨", spa);
-  const adminItems = [];
-  if (state.mega) {
-    adminItems.push(["usuarios", "Usuarios", "#/m/usuarios"]);
-    adminItems.push(["permisos", "Permisos", "#/m/permisos"]);
-  }
+  const adminItems = [
+    ["usuarios", "Usuarios", "#/m/usuarios"],
+    ["permisos", "Accesos", "#/m/permisos"],
+  ];
   add("Administración", "⚙️", adminItems);
   const sobra = MENU.filter(([id]) => !usados.has(id) && acceso(id) !== "no").map(([id, label]) => [id, label, "#/m/" + id]);
   if (sobra.length) add("Más", "⋯", sobra);
@@ -1547,7 +1546,7 @@ function pantallaSunsu(route) {
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "personal" && route.sub === "permisos") return "permisos";
   if (m === "personal" && route.sub === "multas") return "multas";
-  if (m === "usuarios" && state.mega) return "admin";
+  if (m === "usuarios" || m === "permisos") return "";
   return "";
 }
 let catalogoTicketListo = false;
@@ -1639,7 +1638,8 @@ async function draw() {
   };
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk) {
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos";
+  if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
     return;
@@ -1677,7 +1677,7 @@ function tituloDoc(doc) {
 async function renderMod(route) {
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  if (route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod === "reportes") return renderReportes();
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
@@ -3105,47 +3105,42 @@ async function renderConteoUno(id) {
     <p class="note">Aplicar ajuste escribe la diferencia en el kardex. Lo que no contaste se queda igual.</p>`;
 }
 async function renderLugares() {
-  if (!state.admin) return `<p class="err">Solo un admin edita locales y cabinas.</p>`;
   const locales = (state.lugares && state.lugares.locales) || [];
   const lugares = lugaresVisibles();
-  const locOpts = locales.map((l) => `<option value="${esc(l.id)}">${esc(l.nombre)}</option>`).join("");
-  const filas = lugares.map((b) => `<form class="card f-ren" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" data-local="${esc(b.local_id || "")}">
-    <div class="note">${esc(b.tipo === "casa" ? "Bodega principal" : b.tipo)}</div>
-    <label>Nombre</label><input name="nombre" value="${esc(b.nombre)}" aria-label="Nombre de ${esc(b.nombre)}">
-    <button class="btn" type="submit">Guardar nombre</button>
-  </form>`).join("");
-  const localesHtml = locales.map((l) => `<form class="card f-loc" data-id="${esc(l.id)}">
-    <label>Local</label><input name="nombre" value="${esc(l.nombre)}" aria-label="Nombre del local">
-    <label>Dirección</label><input name="direccion" value="${esc(l.direccion || "")}">
-    <button class="btn" type="submit">Guardar local</button>
-  </form>`).join("");
-  return `<p class="note">Hoy el local es La Esquina, con Venta y Cabina 1, Cabina 2 y Cabina 3, más Casa. Desde aquí agregas otro local o otra cabina. El saldo no se borra al renombrar.</p>
-    ${localesHtml}
-    ${filas}
-    <form id="f-lugar-nuevo" class="card">
-      <div class="card-title">Agregar</div>
-      <label>Tipo</label><select name="tipo" aria-label="Tipo de lugar"><option value="cabina">Cabina</option><option value="ubicacion">Ubicación</option><option value="venta">Venta</option><option value="local">Local</option></select>
-      <label>Nombre</label><input name="nombre" required placeholder="Cabina 4" aria-label="Nombre nuevo">
-      <label>Local</label><select name="local_id" aria-label="Local del lugar nuevo">${locOpts}</select>
-      <label>Dirección</label><input name="direccion" placeholder="Solo si es un local nuevo">
-      <button class="btn block" type="submit">Agregar lugar</button>
-      <p class="err" id="f-err"></p>
-    </form>`;
+  const ix = window.SunsuInline;
+  const localHtml = locales.map((l) => {
+    const fila = "L:" + l.id;
+    if (ix && ix.edita()) return `<div class="card">${ix.lineas("lugares", fila, [["nombre", "Local", l.nombre], ["direccion", "Dirección", l.direccion || ""]])} ${ix.borrar("lugares", fila)}</div>`;
+    const pedir = ix && ix.pide() ? ix.pedir("lugares", fila, { nombre: l.nombre || "", direccion: l.direccion || "", tipo: "local" }) : "";
+    return `<div class="card"><div class="name">${esc(l.nombre)}</div><div class="note">${esc(l.direccion || "")}</div>${pedir}</div>`;
+  }).join("");
+  const filas = lugares.map((b) => {
+    const fila = "B:" + b.id;
+    if (ix && ix.edita()) return `<div class="row">${ix.lineas("lugares", fila, [["nombre", "Nombre", b.nombre]])} <div class="meta">${esc(b.tipo === "casa" ? "Bodega principal" : b.tipo)} ${ix.borrar("lugares", fila)}</div></div>`;
+    const pedir = ix && ix.pide() ? ix.pedir("lugares", fila, { nombre: b.nombre || "", tipo: b.tipo || "" }) : "";
+    return `<div class="row"><div class="sku">${esc(b.tipo === "casa" ? "Casa" : b.tipo)}</div><div class="name">${esc(b.nombre)}</div><div class="meta">${pedir}</div></div>`;
+  }).join("");
+  const mas = ix && ix.edita() ? ix.mas("lugares") : "";
+  return `<p class="note">La Esquina, Venta, las cabinas y Casa. El saldo no se borra al renombrar ni al quitar un lugar de la lista.</p>
+    ${localHtml}
+    <div class="list">${filas}</div>
+    <div id="lug-nuevo">${mas}</div>`;
 }
 
 async function renderPermisosBeta() {
   const data = await api("permisos_get");
   if (data.error) return fail(data);
+  const ix = window.SunsuInline;
   const mods = (data.modulos || []).filter((m) => m !== "permisos");
   const head = `<tr><th>Módulo</th>${(data.roles || []).map((r) => `<th>${esc(r)}</th>`).join("")}</tr>`;
   const body = mods.map((mod) => `<tr><td>${esc(mod)}</td>${(data.roles || []).map((rol) => {
     const val = (data.matriz && data.matriz[rol] && data.matriz[rol][mod]) || "no";
-    return `<td class="matrix"><select data-rol="${esc(rol)}" data-mod="${esc(mod)}" aria-label="${esc(rol)} ${esc(mod)}">
-      ${["no", "propio", "todos"].map((a) => `<option ${a === val ? "selected" : ""}>${a}</option>`).join("")}
-    </select></td>`;
+    const fila = rol + "|" + mod;
+    if (ix && ix.edita()) return `<td class="matrix">${ix.campo("acceso", fila, "acceso", val)} ${ix.borrar("acceso", fila)}</td>`;
+    const pedir = ix && ix.pide() ? ix.pedir("acceso", fila, { acceso: val }) : "";
+    return `<td class="matrix">${esc(val)} ${pedir}</td>`;
   }).join("")}</tr>`).join("");
-  return `<p class="note">${esc(data.nota || "")} Recepción y gerencia arrancan con tickets en propio. Cambiar la celda a todos no requiere otro deploy. Ver costos no se puede soltar.</p>
-    <p class="err" id="f-err"></p>
+  return `<p class="note">${esc(data.nota || "")} Recepción y gerencia arrancan con tickets en propio. Ver costos no se puede soltar. Quitar la celda vuelve al acceso de fábrica.</p>
     <table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
@@ -3153,8 +3148,16 @@ async function renderUsuarios() {
   const data = await api("getUsuarios");
   const list = Array.isArray(data) ? data : (data.users || []);
   if (data.error) return fail(data);
-  const items = list.map((u) => `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"}</div></div>`).join("");
-  return `<div class="list">${items || `<p class="note">Sin usuarios.</p>`}</div>`;
+  const ix = window.SunsuInline;
+  const items = list.map((u) => {
+    const fila = String(u.id || "");
+    const vals = { nombre: u.name || "", short: u.short || "", rol: u.role || "", bloqueado: u.bloqueado ? "sí" : "no" };
+    if (ix && ix.edita() && fila) return `<div class="card">${ix.lineas("usuarios", fila, [["nombre", "Nombre", vals.nombre], ["short", "Nombre corto", vals.short], ["rol", "Rol", vals.rol], ["bloqueado", "Bloqueado", vals.bloqueado]])} ${ix.borrar("usuarios", fila)}</div>`;
+    const pedir = ix && ix.pide() && fila ? ix.pedir("usuarios", fila, vals) : "";
+    return `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"} ${pedir}</div></div>`;
+  }).join("");
+  const mas = ix && ix.edita() ? ix.mas("usuarios") : "";
+  return `<p class="note">El PIN no se edita aquí. Una cuenta nueva entra con la clave por restablecer.</p><div id="usr-nuevo">${mas}</div><div class="list">${items || `<p class="note">Sin usuarios.</p>`}</div>`;
 }
 
 async function renderDoc(route) {
@@ -3773,16 +3776,6 @@ function bind(main) {
   form("#f-cnt", saveCnt);
   const adj = main.querySelector("#adjudicar");
   if (adj) adj.onclick = () => adjudicar(main);
-  main.querySelectorAll("select[data-rol]").forEach((sel) => {
-    sel.addEventListener("change", async () => {
-      const data = await api("permisos_guardar", { rol: sel.dataset.rol, modulo: sel.dataset.mod, acceso: sel.value });
-      const err = main.querySelector("#f-err");
-      if (data.error) { err.textContent = data.error; sel.value = sel.dataset.prev || "no"; }
-      else err.textContent = "";
-      sel.dataset.prev = sel.value;
-    });
-    sel.dataset.prev = sel.value;
-  });
 }
 
 function setMsg(form, data, okText) {
@@ -4379,7 +4372,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024gc"></script>
-<script src="beta-inline.js?v=20261024pe"></script>
+<script src="beta-inline.js?v=20261024ad"></script>
 <script>draw();</script>
 </body>
 </html>

@@ -2142,7 +2142,12 @@ describe("series, comisiones y rol", () => {
     assert.match(sql, /alter table public\.paquetes add column if not exists borrado_at timestamptz/);
     assert.match(sql, /alter table public\.paquetes add column if not exists borrado_por text/);
     assert.match(sql, /orig, '\{\}'::jsonb\)->>'borrado' = 'true'/);
-    assert.match(sql, /create unique index if not exists gift_cards_codigo_uidx/);
+    assert.match(sql, /drop index if exists public\.gift_cards_codigo_uidx/);
+    assert.doesNotMatch(sql, /create unique index/i);
+    assert.match(sql, /create index if not exists gift_cards_codigo_lower_idx/);
+    assert.match(sql, /create trigger trg_gift_cards_zz_codigo_unico/);
+    assert.match(sql, /gift_cards_codigo_unico\(\)/);
+    assert.match(sql, /origin in \('beta', 'test'\)/);
     assert.match(sql, /lower\(btrim\(codigo_gc\)\)/);
     assert.doesNotMatch(sql, /alter table public\.tickets/i);
     assert.doesNotMatch(sql, /alter table public\.clientas_registro/i);
@@ -2338,5 +2343,126 @@ describe("series, comisiones y rol", () => {
     const bajaC = await handle("inline_borrar", { token: adminC.token, tabla: "pago_config", fila: String(pago.fila) }, adminC) as Row;
     assert.equal(bajaC.ok, true);
     assert.equal((await db.all("pago_config")).length, 0);
+  });
+
+  it("en modo prueba el alta devuelve la fila real y un horario de prueba se borra", async () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0029_horarios_origin.sql", import.meta.url), "utf8");
+    assert.match(sql, /alter table public\.horarios add column if not exists origin text/);
+    assert.match(sql, /'horarios','horario_dias','horario_descansos','horario_deducciones','horario_asignaciones'/);
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+      ],
+      gift_cards: [
+        { sheet_row: 554, codigo_gc: "26-008", origin: "sheet", orig: {} },
+        { sheet_row: 555, codigo_gc: "26-008", origin: "sheet", orig: {} },
+      ],
+      horarios: [{ id: "real-h", nombre: "Lun-Vie", arreglo: "fijo", es_default: true }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    db.tables.get("sesiones")!.find((r) => r.token === adminC.token)!.modo_prueba = true;
+    const nueva = await handle("inline_guardar", {
+      token: adminC.token, tabla: "gift_cards", fila: "nuevo", campos: { codigo: "26-200", nombre: "Ana" },
+    }, adminC) as Row;
+    assert.equal(nueva.ok, true);
+    const card = (await db.all("gift_cards")).find((r) => r.codigo_gc === "26-200");
+    assert.equal(String(nueva.fila), String(card?.sheet_row));
+    assert.equal(Number(card?.sheet_row) < 0, true);
+    assert.equal(card?.origin, "test");
+    const baja = await handle("inline_borrar", { token: adminC.token, tabla: "gift_cards", fila: String(nueva.fila) }, adminC) as Row;
+    assert.equal(baja.ok, true);
+    const dupHoja = (await db.all("gift_cards")).filter((r) => r.codigo_gc === "26-008");
+    assert.equal(dupHoja.length, 2);
+
+    const paq = await handle("inline_guardar", {
+      token: adminC.token, tabla: "paquetes", fila: "nuevo", campos: { nombre: "Luz", sku: "SUNSU-P3" },
+    }, adminC) as Row;
+    assert.equal(String(paq.fila), String((await db.all("paquetes")).find((r) => r.nombres === "Luz")?.sheet_row));
+    const multa = await handle("inline_guardar", {
+      token: adminC.token, tabla: "multas", fila: "nuevo", campos: { cosmetologa: "Emi", tipo: "MULTA", monto: "4", motivo: "tarde" },
+    }, adminC) as Row;
+    assert.equal(String(multa.fila), String((await db.all("multas_descuentos"))[0]?.sheet_row));
+    const perm = await handle("inline_guardar", {
+      token: adminC.token, tabla: "permisos", fila: "nuevo",
+      campos: { empleada: "Emi", tipo: "PERMISO", desde: "2026-10-22", hasta: "2026-10-22", motivo: "médico" },
+    }, adminC) as Row;
+    assert.equal(String(perm.fila), String((await db.all("permisos"))[0]?.sheet_row));
+
+    const hor = await handle("inline_guardar", {
+      token: adminC.token, tabla: "horarios", fila: "nuevo", campos: { nombre: "Mar-Sáb", arreglo: "fijo" },
+    }, adminC) as Row;
+    assert.equal(hor.ok, true);
+    assert.equal((await db.all("horarios")).find((r) => r.id === hor.fila)?.origin, "test");
+    const bajaH = await handle("inline_borrar", { token: adminC.token, tabla: "horarios", fila: String(hor.fila) }, adminC) as Row;
+    assert.equal(bajaH.ok, true);
+    assert.ok((await db.all("horarios")).find((r) => r.id === hor.fila)?.borrado_at);
+    const real = await handle("inline_borrar", { token: adminC.token, tabla: "horarios", fila: "real-h" }, adminC) as Row;
+    assert.match(String(real.error), /prueba/i);
+    assert.equal((await db.all("horarios")).find((r) => r.id === "real-h")?.borrado_at, undefined);
+  });
+
+  it("el admin edita usuarios, accesos y lugares en línea", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      erp_locales: [{ id: LOCAL_ESQUINA, codigo: "ESQUINA", nombre: "La Esquina", direccion: "Cumbayá", activo: true }],
+      erp_bodegas: [{ id: "44444444-4444-4444-8444-444444444444", codigo: "CASA", nombre: "Casa", tipo: "casa", activo: true }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const nuevo = await handle("inline_guardar", {
+      token: adminC.token, tabla: "usuarios", fila: "nuevo", campos: { nombre: "Rosa Díaz", short: "Rosa", rol: "recepcion" },
+    }, adminC) as Row;
+    assert.equal(nuevo.ok, true);
+    const rosa = (await db.all("usuarios")).find((r) => r.id === nuevo.fila);
+    assert.equal(rosa?.rol, "recepcion");
+    const no = await handle("inline_guardar", { token: "t-andrea", tabla: "usuarios", fila: String(nuevo.fila), campos: { short: "R" } }, adminC) as Row;
+    assert.match(String(no.error), /admin/i);
+    const ped = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "usuarios", fila: String(nuevo.fila), tipo: "cambio", motivo: "el corto", propuestos: { short: "Ros" },
+    }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((await db.all("usuarios")).find((r) => r.id === nuevo.fila)?.short, "Ros");
+    const baja = await handle("inline_borrar", { token: adminC.token, tabla: "usuarios", fila: String(nuevo.fila) }, adminC) as Row;
+    assert.equal(baja.ok, true);
+    assert.equal((await db.all("usuarios")).some((r) => r.id === nuevo.fila), false);
+    assert.ok((await db.all("audit_log")).some((r) => r.tabla === "usuarios" && r.accion === "DELETE"));
+
+    const celda = await handle("inline_guardar", {
+      token: adminC.token, tabla: "acceso", fila: "recepcion|tickets", campos: { acceso: "todos" },
+    }, adminC) as Row;
+    assert.equal(celda.ok, true);
+    assert.equal((await db.all("app_modulos")).find((r) => r.rol === "recepcion" && r.modulo === "tickets")?.acceso, "todos");
+    const costos = await handle("inline_guardar", {
+      token: adminC.token, tabla: "acceso", fila: "recepcion|ver_costos", campos: { acceso: "todos" },
+    }, adminC) as Row;
+    assert.match(String(costos.error), /costos/i);
+    const quita = await handle("inline_borrar", { token: adminC.token, tabla: "acceso", fila: "recepcion|tickets" }, adminC) as Row;
+    assert.equal(quita.ok, true);
+    assert.equal((await db.all("app_modulos")).length, 0);
+
+    const cab = await handle("inline_guardar", {
+      token: adminC.token, tabla: "lugares", fila: "nuevo", campos: { tipo: "cabina", nombre: "Cabina 4", local: LOCAL_ESQUINA },
+    }, adminC) as Row;
+    assert.equal(cab.ok, true);
+    assert.match(String(cab.fila), /^B:/);
+    const ren = await handle("inline_guardar", {
+      token: adminC.token, tabla: "lugares", fila: String(cab.fila), campos: { nombre: "Cabina norte" },
+    }, adminC) as Row;
+    assert.equal(ren.ok, true);
+    const casa = await handle("inline_borrar", { token: adminC.token, tabla: "lugares", fila: "B:44444444-4444-4444-8444-444444444444" }, adminC) as Row;
+    assert.match(String(casa.error), /Casa/);
+    const fuera = await handle("inline_borrar", { token: adminC.token, tabla: "lugares", fila: String(cab.fila) }, adminC) as Row;
+    assert.equal(fuera.ok, true);
+    assert.equal((await db.all("erp_bodegas")).find((r) => r.nombre === "Cabina norte")?.activo, false);
+    const pide = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "lugares", fila: "L:" + LOCAL_ESQUINA, tipo: "cambio", motivo: "el nombre", propuestos: { nombre: "Esquina" },
+    }, adminC) as Row;
+    assert.equal(pide.ok, true);
   });
 });

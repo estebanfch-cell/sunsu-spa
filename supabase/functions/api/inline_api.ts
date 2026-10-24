@@ -4,7 +4,8 @@
 import { extend, crearTicket } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, kvGet, kvSet, logAccion, nextSheet } from "./lib.ts";
-import { acceso, esAdmin, esPropio, matrizDe, puedeVerContacto } from "./permisos.ts";
+import { acceso, esAdmin, esPropio, matrizDe, MODULOS, normalizarRol, puedeVerContacto, ROLES } from "./permisos.ts";
+import { runErp } from "./erp.ts";
 import { ecuadorParts, IVA, n, normCedula, normNombre, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } from "./horarios_api.ts";
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
@@ -42,6 +43,13 @@ async function anotar(ctx: Ctx, ses: Ses, tabla: string, fila: string, accion: "
 function bloqueoPrueba(ses: Ses, row: Row): string | null {
   if (ses.prueba && s(row.origin) !== "test") return "Modo prueba no cambia datos reales";
   return null;
+}
+
+/** La fila que quedó escrita. En modo prueba un sheet_row positivo pasa a negativo. */
+function filaGuardada(saved: Row, propuesta: number | string): string {
+  if (saved.sheet_row != null && String(saved.sheet_row) !== "") return String(saved.sheet_row);
+  if (saved.id != null && String(saved.id) !== "") return String(saved.id);
+  return String(propuesta);
 }
 
 async function ticketDe(ctx: Ctx, fila: string): Promise<Row | null> {
@@ -346,8 +354,10 @@ export async function guardarProveedorCampos(ctx: Ctx, ses: Ses, fila: string, c
       notas: s(campos.notas), orig: { nombre: s(campos.nombre) },
     };
     const saved = await ctx.db.write(actorOf(ses), "proveedores", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "proveedores", String(sheet_row), "INSERT", null, vistaProveedor(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "proveedores", fila, "INSERT", null, vistaProveedor(saved));
+    return { ok: true, fila };
   }
   const row = await proveedorDe(ctx, fila);
   if (!row) return { error: "Proveedor no encontrado" };
@@ -409,8 +419,10 @@ export async function guardarCompraCampos(ctx: Ctx, ses: Ses, fila: string, camp
       cant_pedida: n(campos.pedida), orden: s(campos.orden), orig: { sku: s(campos.sku) },
     };
     const saved = await ctx.db.write(actorOf(ses), "inventario_entradas", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "inventario_entradas", String(sheet_row), "INSERT", null, vistaEntrada(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "inventario_entradas", fila, "INSERT", null, vistaEntrada(saved));
+    return { ok: true, fila };
   }
   const row = await entradaDe(ctx, fila);
   if (!row) return { error: "Línea no encontrada" };
@@ -483,11 +495,13 @@ export async function guardarGiftCampos(ctx: Ctx, ses: Ses, fila: string, campos
       sheet_row, codigo_gc: s(campos.codigo), nombre_comprador: s(campos.nombre), apellido_comprador: s(campos.apellido),
       cedula_comprador: s(campos.cedula), valor: s(campos.valor), sku: s(campos.sku), notas: s(campos.notas),
       dia: vendida ? ec.d : null, mes: vendida ? ec.m : null, ano: vendida ? ec.y : null,
-      orig: { codigo: s(campos.codigo) },
+      orig: { codigo: s(campos.codigo), beta: true }, origin: "beta",
     };
     const saved = await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "gift_cards", String(sheet_row), "INSERT", null, vistaGift(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "gift_cards", fila, "INSERT", null, vistaGift(saved));
+    return { ok: true, fila };
   }
   const row = await giftDe(ctx, fila);
   if (!row) return { error: "Gift card no encontrada" };
@@ -556,11 +570,13 @@ export async function guardarPaqueteCampos(ctx: Ctx, ses: Ses, fila: string, cam
     const rec: Row = {
       sheet_row, dia: ec.d, mes: ec.m, ano: ec.y, nombres: s(campos.nombre), apellidos: s(campos.apellido),
       cedula: s(campos.cedula), sku: s(campos.sku), paquete: s(campos.paquete), vendido_por: s(campos.vendidoPor),
-      notas: s(campos.notas), orig: { sku: s(campos.sku) },
+      notas: s(campos.notas), orig: { sku: s(campos.sku) }, origin: "beta",
     };
     const saved = await ctx.db.write(actorOf(ses), "paquetes", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "paquetes", String(sheet_row), "INSERT", null, vistaPaquete(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "paquetes", fila, "INSERT", null, vistaPaquete(saved));
+    return { ok: true, fila };
   }
   const row = await paqueteDe(ctx, fila);
   if (!row) return { error: "Paquete no encontrado" };
@@ -716,8 +732,10 @@ export async function guardarPermisoCampos(ctx: Ctx, ses: Ses, fila: string, cam
       estado, solicitado: ecuadorParts(ctx.now).ymd, dias, origin: "beta", orig: { tipo, por: ses.name },
     };
     const saved = await ctx.db.write(actorOf(ses), "permisos", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "permisos", String(sheet_row), "INSERT", null, vistaPermiso(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "permisos", fila, "INSERT", null, vistaPermiso(saved));
+    return { ok: true, fila };
   }
   const row = await permisoDe(ctx, fila);
   if (!row) return { error: "Permiso no encontrado" };
@@ -811,8 +829,10 @@ export async function guardarMultaCampos(ctx: Ctx, ses: Ses, fila: string, campo
       motivo: s(campos.motivo), orig: { tipo, monto: n(campos.monto) }, origin: "beta",
     };
     const saved = await ctx.db.write(actorOf(ses), "multas_descuentos", "insert", {}, rec);
-    if (saved) await anotar(ctx, ses, "multas_descuentos", String(sheet_row), "INSERT", null, vistaMulta(saved));
-    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+    if (!saved) return { error: "No se pudo guardar" };
+    const fila = filaGuardada(saved, sheet_row);
+    await anotar(ctx, ses, "multas_descuentos", fila, "INSERT", null, vistaMulta(saved));
+    return { ok: true, fila };
   }
   const row = await multaDe(ctx, fila);
   if (!row) return { error: "Multa no encontrada" };
@@ -900,6 +920,8 @@ export async function borrarHorarioSuave(ctx: Ctx, ses: Ses, fila: string): Prom
   const rows = await ctx.db.all("horarios").catch(() => [] as Row[]);
   const row = rows.find((r) => !r.borrado_at && s(r.id) === fila);
   if (!row) return { error: "Horario no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
   const patch = { borrado_at: ctx.now.toISOString(), borrado_por: actorOf(ses), es_default: false };
   let saved: Row | null = null;
   try {
@@ -911,7 +933,15 @@ export async function borrarHorarioSuave(ctx: Ctx, ses: Ses, fila: string): Prom
   }
   if (!saved || !saved.borrado_at) return { error: "Aplica 0028_borrado_personal.sql para el borrado con historial" };
   for (const a of await ctx.db.all("horario_asignaciones").catch(() => [] as Row[])) {
-    if (s(a.horario_id) === fila) await ctx.db.write(actorOf(ses), "horario_asignaciones", "delete", { persona: a.persona }, null);
+    if (s(a.horario_id) !== fila) continue;
+    if (ses.prueba && s(a.origin) !== "test") continue;
+    try {
+      await ctx.db.write(actorOf(ses), "horario_asignaciones", "delete", { persona: a.persona }, null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (/no borra datos reales/i.test(msg)) continue;
+      return { error: msg || "No se pudo soltar la asignación" };
+    }
   }
   await anotar(ctx, ses, "horarios", fila, "UPDATE", { nombre: s(row.nombre) }, { nombre: s(row.nombre), borrado: true });
   return { ok: true };
@@ -1130,6 +1160,222 @@ export async function borrarPago(ctx: Ctx, ses: Ses, fila: string): Promise<Row>
   return { ok: true };
 }
 
+const ROLES_ACCESO = ["cosmetologa", "asistente_cosmetologia", "recepcion", "gerente"];
+
+function siBloqueado(v: unknown): boolean {
+  const t = s(v).toLowerCase();
+  return v === true || t === "si" || t === "sí" || t === "true" || t === "1";
+}
+
+function idUsuario(nombre: string, rows: Row[]): string {
+  const base = s(nombre).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "").slice(0, 24) || "user";
+  let id = base;
+  let i = 2;
+  while (rows.some((r) => String(r.id) === id)) { id = base + String(i); i++; }
+  return id;
+}
+
+function vistaUsuario(row: Row): Row {
+  return {
+    nombre: s(row.nombre || row.name), short: s(row.short),
+    rol: normalizarRol(s(row.rol || row.role)), bloqueado: row.bloqueado ? "sí" : "no",
+  };
+}
+
+function cuentaProtegida(row: Row): boolean {
+  return s(row.id) === "efch" || normalizarRol(s(row.rol || row.role)) === "super_admin";
+}
+
+async function usuariosDe(ctx: Ctx): Promise<{ tabla: string; rows: Row[] }> {
+  const app = await ctx.db.all("app_usuarios").catch(() => [] as Row[]);
+  if (app.length) return { tabla: "app_usuarios", rows: app };
+  const legacy = await ctx.db.all("usuarios").catch(() => [] as Row[]);
+  return { tabla: legacy.length ? "usuarios" : "app_usuarios", rows: legacy };
+}
+
+function rolPermitido(ses: Ses, rol: string): string | null {
+  const r = normalizarRol(rol);
+  if (!ROLES.includes(r as typeof ROLES[number])) return "Rol inválido";
+  if ((r === "admin" || r === "super_admin") && normalizarRol(ses.rol) !== "super_admin") return "Solo la mega admin asigna admin";
+  return null;
+}
+
+export async function guardarUsuarioCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  const { tabla, rows } = await usuariosDe(ctx);
+  if (!fila || fila === "nuevo") {
+    const nombre = s(campos.nombre);
+    if (!nombre) return { error: "El nombre es obligatorio" };
+    const rol = normalizarRol(s(campos.rol) || "recepcion");
+    const malo = rolPermitido(ses, rol);
+    if (malo) return { error: malo };
+    const id = idUsuario(s(campos.short) || nombre, rows);
+    const rec: Row = {
+      id, nombre, short: s(campos.short) || nombre.split(" ")[0], rol, color: "#5B7FA6",
+      bloqueado: siBloqueado(campos.bloqueado), pin_reset: true,
+    };
+    const saved = await ctx.db.write(actorOf(ses), tabla, "insert", {}, rec);
+    if (!saved) return { error: "No se pudo guardar" };
+    await anotar(ctx, ses, tabla, id, "INSERT", null, vistaUsuario(saved));
+    return { ok: true, fila: id };
+  }
+  const row = rows.find((r) => s(r.id) === fila);
+  if (!row) return { error: "Usuario no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  if (cuentaProtegida(row) && normalizarRol(ses.rol) !== "super_admin") return { error: "Esa cuenta no se edita desde aquí" };
+  const patch: Row = {};
+  if (campos.nombre != null) {
+    if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
+    patch.nombre = s(campos.nombre);
+  }
+  if (campos.short != null) patch.short = s(campos.short);
+  if (campos.rol != null) {
+    const rol = normalizarRol(s(campos.rol));
+    const malo = rolPermitido(ses, rol);
+    if (malo) return { error: malo };
+    if (s(row.id) === "efch" && rol !== "super_admin") return { error: "El admin_master no cambia de rol" };
+    patch.rol = rol;
+  }
+  if (campos.bloqueado != null) {
+    if (s(row.id) === "efch" && siBloqueado(campos.bloqueado)) return { error: "El admin_master no se puede bloquear" };
+    patch.bloqueado = siBloqueado(campos.bloqueado);
+  }
+  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const antes = vistaUsuario(row);
+  const saved = await ctx.db.write(actorOf(ses), tabla, "update", { id: row.id }, patch);
+  if (!saved) return { error: "No se pudo guardar el usuario" };
+  if (patch.bloqueado === true) {
+    for (const tk of await ctx.db.all("sesiones").catch(() => [] as Row[])) {
+      if (String(tk.uid) === String(row.id)) await ctx.db.write(actorOf(ses), "sesiones", "delete", { token: tk.token }, null);
+    }
+  }
+  await anotar(ctx, ses, tabla, s(row.id), "UPDATE", antes, vistaUsuario(saved));
+  return { ok: true, fila: s(row.id) };
+}
+
+export async function borrarUsuario(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const { tabla, rows } = await usuariosDe(ctx);
+  const row = rows.find((r) => s(r.id) === fila);
+  if (!row) return { error: "Usuario no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  if (s(row.id) === ses.uid) return { error: "No puedes eliminar tu propia cuenta" };
+  if (cuentaProtegida(row)) return { error: "Esa cuenta no se elimina" };
+  const antes = vistaUsuario(row);
+  const saved = await ctx.db.write(actorOf(ses), tabla, "delete", { id: row.id }, null);
+  if (!saved) return { error: "No se pudo eliminar" };
+  for (const tk of await ctx.db.all("sesiones").catch(() => [] as Row[])) {
+    if (String(tk.uid) === String(row.id)) await ctx.db.write(actorOf(ses), "sesiones", "delete", { token: tk.token }, null);
+  }
+  await anotar(ctx, ses, tabla, s(row.id), "DELETE", antes, null);
+  return { ok: true };
+}
+
+function partirAcceso(fila: string): { rol: string; modulo: string } | null {
+  const i = fila.indexOf("|");
+  if (i <= 0) return null;
+  return { rol: fila.slice(0, i), modulo: fila.slice(i + 1) };
+}
+
+export async function guardarAccesoCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  const partes = partirAcceso(fila);
+  const rol = normalizarRol(partes ? partes.rol : s(campos.rol));
+  const modulo = partes ? partes.modulo : s(campos.modulo);
+  const acc = s(campos.acceso);
+  if (!ROLES_ACCESO.includes(rol)) return { error: "Rol no editable" };
+  if (!MODULOS.includes(modulo as typeof MODULOS[number]) || modulo === "permisos") return { error: "Ese permiso no se puede delegar" };
+  if (!["no", "propio", "todos"].includes(acc)) return { error: "Acceso inválido" };
+  if (modulo === "ver_costos" && acc !== "no") return { error: "Los costos solo los ven admin y super_admin" };
+  const clave = rol + "|" + modulo;
+  const rows = await ctx.db.all("app_modulos").catch(() => [] as Row[]);
+  const hit = rows.find((r) => normalizarRol(s(r.rol)) === rol && s(r.modulo) === modulo);
+  const antes = hit ? { rol, modulo, acceso: s(hit.acceso) } : null;
+  if (hit) await ctx.db.write(actorOf(ses), "app_modulos", "update", { rol: hit.rol, modulo: hit.modulo }, { acceso: acc });
+  else await ctx.db.write(actorOf(ses), "app_modulos", "insert", {}, { rol, modulo, acceso: acc });
+  await anotar(ctx, ses, "app_modulos", clave, hit ? "UPDATE" : "INSERT", antes, { rol, modulo, acceso: acc });
+  return { ok: true, fila: clave };
+}
+
+export async function borrarAcceso(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const partes = partirAcceso(fila);
+  if (!partes) return { error: "Celda no encontrada" };
+  const rol = normalizarRol(partes.rol);
+  const rows = await ctx.db.all("app_modulos").catch(() => [] as Row[]);
+  const hit = rows.find((r) => normalizarRol(s(r.rol)) === rol && s(r.modulo) === partes.modulo);
+  if (!hit) return { error: "Esa celda ya usa el acceso de fábrica" };
+  const saved = await ctx.db.write(actorOf(ses), "app_modulos", "delete", { rol: hit.rol, modulo: hit.modulo }, null);
+  if (!saved) return { error: "No se pudo quitar" };
+  await anotar(ctx, ses, "app_modulos", rol + "|" + partes.modulo, "DELETE", { rol, modulo: partes.modulo, acceso: s(hit.acceso) }, null);
+  return { ok: true };
+}
+
+export async function guardarLugarCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  const actor = actorOf(ses);
+  if (!fila || fila === "nuevo") {
+    const tipo = s(campos.tipo) || "cabina";
+    const out = await runErp("lugar_guardar", {
+      tipo, nombre: s(campos.nombre), direccion: s(campos.direccion), local_id: s(campos.local), _rol: ses.rol,
+    }, ctx.db, actor, ctx.now);
+    if (out.error) return out;
+    const id = s(out.id);
+    const clave = (tipo === "local" ? "L:" : "B:") + id;
+    await anotar(ctx, ses, tipo === "local" ? "erp_locales" : "erp_bodegas", id, "INSERT", null, { nombre: s(campos.nombre), tipo, direccion: s(campos.direccion) });
+    return { ok: true, fila: clave };
+  }
+  const local = fila.startsWith("L:");
+  const id = fila.slice(2);
+  const tabla = local ? "erp_locales" : "erp_bodegas";
+  const rows = await ctx.db.all(tabla);
+  const row = rows.find((r) => s(r.id) === id);
+  if (!row) return { error: "Lugar no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = { nombre: s(row.nombre), direccion: s(row.direccion), tipo: s(row.tipo) };
+  if (local) {
+    const out = await runErp("lugar_guardar", {
+      id, tipo: "local", nombre: campos.nombre != null ? s(campos.nombre) : s(row.nombre),
+      direccion: campos.direccion != null ? s(campos.direccion) : s(row.direccion), _rol: ses.rol,
+    }, ctx.db, actor, ctx.now);
+    if (out.error) return out;
+  } else {
+    if (!s(campos.nombre) && campos.nombre != null) return { error: "Falta el nombre" };
+    const out = await runErp("lugar_guardar", {
+      id, tipo: s(row.tipo), local_id: s(row.local_id), nombre: campos.nombre != null ? s(campos.nombre) : s(row.nombre), _rol: ses.rol,
+    }, ctx.db, actor, ctx.now);
+    if (out.error) return out;
+  }
+  const saved = (await ctx.db.all(tabla)).find((r) => s(r.id) === id) || row;
+  await anotar(ctx, ses, tabla, id, "UPDATE", antes, { nombre: s(saved.nombre), direccion: s(saved.direccion), tipo: s(saved.tipo) });
+  return { ok: true, fila };
+}
+
+export async function borrarLugar(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const local = fila.startsWith("L:");
+  const id = fila.startsWith("L:") || fila.startsWith("B:") ? fila.slice(2) : fila;
+  const tabla = local ? "erp_locales" : "erp_bodegas";
+  const rows = await ctx.db.all(tabla);
+  const row = rows.find((r) => s(r.id) === id && r.activo !== false);
+  if (!row) return { error: "Lugar no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  if (!local && (s(row.tipo) === "casa" || s(row.codigo) === "CASA")) return { error: "Casa se renombra, no se elimina" };
+  if (local) {
+    const bodegas = await ctx.db.all("erp_bodegas");
+    if (bodegas.some((b) => s(b.local_id) === id && b.activo !== false)) return { error: "Ese local todavía tiene cabinas. Quítalas primero." };
+  }
+  const antes = { nombre: s(row.nombre), tipo: s(row.tipo), activo: true };
+  const saved = await ctx.db.write(actorOf(ses), tabla, "update", { id: row.id }, { activo: false });
+  if (!saved || saved.activo !== false) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, tabla, id, "DELETE", antes, { nombre: s(row.nombre), activo: false });
+  return { ok: true };
+}
+
 extend("inline_guardar", "any", async (p, ctx, ses) => {
   const campos = (p.campos && typeof p.campos === "object" ? p.campos : {}) as Row;
   if (s(p.tabla) === "tickets") return guardarTicketCampos(ctx, ses, s(p.fila), campos);
@@ -1146,6 +1392,9 @@ extend("inline_guardar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "asistencia") return guardarAsistenciaCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "feriados") return guardarFeriadoCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "pago_config") return guardarPagoCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "usuarios") return guardarUsuarioCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "acceso") return guardarAccesoCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "lugares") return guardarLugarCampos(ctx, ses, s(p.fila), campos);
   return { error: "Esa tabla todavía no se edita en línea" };
 });
 
@@ -1162,6 +1411,9 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "asistencia") return anularMarca(ctx, ses, s(p.fila), s(p.motivo));
   if (s(p.tabla) === "feriados") return borrarFeriado(ctx, ses, s(p.fila));
   if (s(p.tabla) === "pago_config") return borrarPago(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "usuarios") return borrarUsuario(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "acceso") return borrarAcceso(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "lugares") return borrarLugar(ctx, ses, s(p.fila));
   if (s(p.tabla) !== "tickets") return { error: "Esa tabla todavía no se edita en línea" };
   const row = await ticketDe(ctx, s(p.fila));
   if (!row) return { error: "Ticket no encontrado" };
@@ -1255,6 +1507,30 @@ async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): P
     if (!(await veModulo(ctx, ses, "rol_pagos")) || !esPropio(s(row.nombre), ses)) return { error: "No tienes permiso para pedir un cambio de esa configuración" };
     return { row, antes: vistaPago(row) };
   }
+  if (tabla === "usuarios") {
+    const { rows } = await usuariosDe(ctx);
+    const row = rows.find((r) => s(r.id) === fila);
+    if (!row) return { error: "Usuario no encontrado" };
+    if (cuentaProtegida(row)) return { error: "Esa cuenta no se toca con una solicitud" };
+    return { row, antes: vistaUsuario(row) };
+  }
+  if (tabla === "acceso") {
+    const partes = partirAcceso(fila);
+    if (!partes) return { error: "Celda no encontrada" };
+    const rol = normalizarRol(partes.rol);
+    const rows = await ctx.db.all("app_modulos").catch(() => [] as Row[]);
+    const hit = rows.find((r) => normalizarRol(s(r.rol)) === rol && s(r.modulo) === partes.modulo);
+    const efectivo = hit ? s(hit.acceso) : acceso(rol, partes.modulo, await matrizDe(ctx.db));
+    return { row: { rol, modulo: partes.modulo, acceso: efectivo }, antes: { rol, modulo: partes.modulo, acceso: efectivo } };
+  }
+  if (tabla === "lugares") {
+    if (!(await veModulo(ctx, ses, "inventario"))) return { error: "No tienes permiso para pedir un cambio de ese lugar" };
+    const local = fila.startsWith("L:");
+    const id = fila.startsWith("L:") || fila.startsWith("B:") ? fila.slice(2) : fila;
+    const row = (await ctx.db.all(local ? "erp_locales" : "erp_bodegas")).find((r) => s(r.id) === id && r.activo !== false);
+    if (!row) return { error: "Lugar no encontrado" };
+    return { row, antes: { nombre: s(row.nombre), direccion: s(row.direccion), tipo: s(row.tipo) } };
+  }
   return { error: "Esa tabla todavía no recibe solicitudes" };
 }
 
@@ -1279,6 +1555,9 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   }
   if (tabla === "feriados") return borrar ? borrarFeriado(ctx, ses, fila) : guardarFeriadoCampos(ctx, ses, fila, propuestos);
   if (tabla === "pago_config") return borrar ? borrarPago(ctx, ses, fila) : guardarPagoCampos(ctx, ses, fila, propuestos);
+  if (tabla === "usuarios") return borrar ? borrarUsuario(ctx, ses, fila) : guardarUsuarioCampos(ctx, ses, fila, propuestos);
+  if (tabla === "acceso") return borrar ? borrarAcceso(ctx, ses, fila) : guardarAccesoCampos(ctx, ses, fila, propuestos);
+  if (tabla === "lugares") return borrar ? borrarLugar(ctx, ses, fila) : guardarLugarCampos(ctx, ses, fila, propuestos);
   if (borrar) {
     const ticket = await ticketDe(ctx, fila);
     if (!ticket) return { error: "Ticket no encontrado" };
@@ -1305,7 +1584,7 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
-  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : "un ticket";
+  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : tabla === "usuarios" ? "un usuario" : tabla === "acceso" ? "un acceso" : tabla === "lugares" ? "un lugar" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
 });

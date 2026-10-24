@@ -54,6 +54,15 @@
     pago_config: [
       ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo"], ["bono", "Bono"], ["iess", "IESS %"], ["fondo", "Fondo"],
     ],
+    usuarios: [
+      ["nombre", "Nombre"], ["short", "Nombre corto"], ["rol", "Rol"], ["bloqueado", "Bloqueado"],
+    ],
+    acceso: [
+      ["acceso", "Acceso"],
+    ],
+    lugares: [
+      ["nombre", "Nombre"], ["tipo", "Tipo"], ["direccion", "Dirección"], ["local", "Local"],
+    ],
   };
   function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
@@ -150,11 +159,26 @@
     for (var i = 0; i < lista.length; i++) {
       var data = await api("inline_guardar", lista[i]);
       if (data.error) { if (window.toast) toast(data.error); return; }
+      if (data.fila != null && String(data.fila) !== "" && String(data.fila) !== String(lista[i].fila)) {
+        fijarFila(lista[i].tabla, lista[i].fila, String(data.fila));
+        lista[i].fila = String(data.fila);
+      }
     }
     dirty = {};
     barra();
     if (window.toast) toast("Cambios guardados");
     refrescar(tablaDe(lista));
+  }
+
+  function fijarFila(tabla, antes, ahora) {
+    document.querySelectorAll("[data-ix-tabla][data-ix-fila]").forEach(function (el) {
+      if (el.getAttribute("data-ix-tabla") === tabla && el.getAttribute("data-ix-fila") === String(antes)) el.setAttribute("data-ix-fila", ahora);
+    });
+    ["data-ix-borrar", "data-ix-pedir"].forEach(function (attr) {
+      document.querySelectorAll("[" + attr + "]").forEach(function (el) {
+        if (el.getAttribute(attr) === tabla + ":" + antes) el.setAttribute(attr, tabla + ":" + ahora);
+      });
+    });
   }
 
   function tablaDe(lista) {
@@ -173,6 +197,9 @@
     if (tablas.asistencia) return "asistencia";
     if (tablas.feriados) return "feriados";
     if (tablas.pago_config) return "pago_config";
+    if (tablas.usuarios) return "usuarios";
+    if (tablas.acceso) return "acceso";
+    if (tablas.lugares) return "lugares";
     if (document.getElementById("cat-res")) return "catalogo";
     if (document.querySelector("[id^=inv-grp-]")) return "inventario";
     if (document.getElementById("prov-form")) return "proveedores";
@@ -195,7 +222,7 @@
       return;
     }
     if (tabla === "paquetes" && document.getElementById("bpq-todos") && typeof _cargarTodosPaquetes === "function") { _cargarTodosPaquetes(); return; }
-    if ((tabla === "permisos" || tabla === "multas" || tabla === "horarios" || tabla === "asistencia" || tabla === "feriados" || tabla === "pago_config") && typeof draw === "function") { draw(); return; }
+    if ((tabla === "permisos" || tabla === "multas" || tabla === "horarios" || tabla === "asistencia" || tabla === "feriados" || tabla === "pago_config" || tabla === "usuarios" || tabla === "acceso" || tabla === "lugares") && typeof draw === "function") { draw(); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -247,12 +274,14 @@
       || (tabla === "asistencia" && document.getElementById("asis-nuevo"))
       || (tabla === "feriados" && document.getElementById("fer-nuevo"))
       || (tabla === "pago_config" && document.getElementById("pago-nuevo"))
+      || (tabla === "usuarios" && document.getElementById("usr-nuevo"))
+      || (tabla === "lugares" && document.getElementById("lug-nuevo"))
       || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : tabla === "permisos" ? "Nuevo permiso" : tabla === "multas" ? "Nueva multa" : tabla === "horarios" ? "Nuevo horario" : tabla === "asistencia" ? "Marca olvidada" : tabla === "feriados" ? "Nuevo feriado" : tabla === "pago_config" ? "Nueva configuración" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : tabla === "permisos" ? "Nuevo permiso" : tabla === "multas" ? "Nueva multa" : tabla === "horarios" ? "Nuevo horario" : tabla === "asistencia" ? "Marca olvidada" : tabla === "feriados" ? "Nuevo feriado" : tabla === "pago_config" ? "Nueva configuración" : tabla === "usuarios" ? "Nuevo usuario" : tabla === "lugares" ? "Nuevo lugar" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }

@@ -19,6 +19,7 @@ const TABLAS = [
   "log_acciones", "ordenes_compra", "caja_chica", "propinas", "multas_descuentos",
   "solicitudes_cambio", "audit_log", "catalogo",
   "proveedores", "inventario_entradas", "erp_locales", "erp_consignacion_consumo",
+  "horarios", "horario_dias", "horario_descansos", "horario_deducciones", "horario_asignaciones",
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock",
 ];
