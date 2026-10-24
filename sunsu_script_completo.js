@@ -37,7 +37,7 @@ const CONFIG = {
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
 // El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-10-12-COT (Cotizaciones)';
+var APP_VERSION = '2026-10-24-PAQ (sin marca automática)';
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -2898,44 +2898,9 @@ function doGet(e) {
       return respJsonGet({cosmetologas: cosmetologas}, callback);
     }
 
-    // ── Marcar el PRIMER uso de un paquete (compra + primera sesión el mismo día) ──
+    // La compra ya no marca la primera sesión. El cliente pregunta después y usa marcarUsoManual.
     if (action === 'marcarPrimerUsoPaquete') {
-      var wsPU = ss.getSheetByName('📋 PAQUETES');
-      if (!wsPU) return respJsonGet({error:'No PAQUETES'}, callback);
-      var cedPU = (e.parameter.cedula||'').toString().trim();
-      var skuPU = (e.parameter.sku||'').toString().trim();
-      var notaPU = (e.parameter.nota||'').toString().trim() ||
-        Utilities.formatDate(new Date(),'America/Guayaquil','dd/MM/yy');
-      if (!cedPU || !skuPU) return respJsonGet({error:'Faltan parámetros'}, callback);
-      var puData = wsPU.getDataRange().getValues();
-      var USO_PU   = [11,13,15,17,19,21];
-      var FECHA_PU = [12,14,16,18,20,22];
-      // El paquete objetivo es el comprado HOY (cols A,B,C = día,mes,año) — si el cliente
-      // tiene paquetes viejos con el mismo SKU, la fecha de hoy es la que desambigua.
-      var hoyPU_d = parseInt(Utilities.formatDate(new Date(),'America/Guayaquil','d'));
-      var hoyPU_m = parseInt(Utilities.formatDate(new Date(),'America/Guayaquil','M'));
-      var hoyPU_a = parseInt(Utilities.formatDate(new Date(),'America/Guayaquil','yyyy'));
-      var filaPU = -1, filaPUHoy = -1;
-      for (var pu = 2; pu < puData.length; pu++) {
-        var cPU = (puData[pu][3]||'').toString().trim();
-        var sPU = (puData[pu][7]||'').toString().trim();
-        if (cPU !== cedPU || sPU.indexOf(skuPU) < 0) continue;
-        filaPU = pu + 1; // última coincidencia (respaldo)
-        if (parseInt(puData[pu][0])===hoyPU_d && parseInt(puData[pu][1])===hoyPU_m && parseInt(puData[pu][2])===hoyPU_a) filaPUHoy = pu + 1;
-      }
-      if (filaPUHoy > 0) filaPU = filaPUHoy;
-      if (filaPU < 0) return respJsonGet({error:'Paquete no encontrado (ced:'+cedPU+' sku:'+skuPU+')'}, callback);
-      for (var uu = 0; uu < USO_PU.length; uu++) {
-        var uVal = wsPU.getRange(filaPU, USO_PU[uu]).getValue();
-        var fVal = wsPU.getRange(filaPU, FECHA_PU[uu]).getValue();
-        if (!uVal && !fVal) {
-          wsPU.getRange(filaPU, USO_PU[uu]).setValue(true);
-          wsPU.getRange(filaPU, FECHA_PU[uu]).setValue(notaPU);
-          SpreadsheetApp.flush();
-          return respJsonGet({ok:true, slot:uu+1, row:filaPU}, callback);
-        }
-      }
-      return respJsonGet({error:'Sin sesiones libres'}, callback);
+      return respJsonGet({error:'La primera sesión no se marca sola. Márcala en el paquete.'}, callback);
     }
 
     // ── Marcar usos como Gift Card en PAQUETES ──
@@ -5153,31 +5118,57 @@ function doGet(e) {
 
     // ── Marcar uso manual de paquete ──
     if (action === 'marcarUsoManual') {
-      var wsMU = ss.getSheetByName('📋 PAQUETES');
-      if (!wsMU) return respJsonGet({error:'No PAQUETES'}, callback);
-      var filaM  = parseInt(e.parameter.fila);
-      var idxM   = parseInt(e.parameter.idx);   // 0-based uso index
-      var notaM  = (e.parameter.nota||'').toString().trim();
-      var totalM = parseInt(e.parameter.total)||3;
-      if (!filaM || filaM < 2 || idxM < 0 || idxM >= 6) return respJsonGet({error:'Parámetros inválidos'}, callback);
-      // USO cols: K=11,M=13,O=15,Q=17,S=19,U=21 (1-based)
-      // FECHA cols: L=12,N=14,P=16,R=18,T=20,V=22 (1-based)
-      var USO_COLS_M   = [11,13,15,17,19,21];
-      var FECHA_COLS_M = [12,14,16,18,20,22];
-      // Verify slot is still empty
-      var currentUso = wsMU.getRange(filaM, USO_COLS_M[idxM]).getValue();
-      if (currentUso === true || currentUso === 'TRUE') return respJsonGet({error:'Esta sesión ya fue marcada'}, callback);
-      wsMU.getRange(filaM, USO_COLS_M[idxM]).setValue(true);
-      wsMU.getRange(filaM, FECHA_COLS_M[idxM]).setValue(notaM);
-      // Check if all sessions used — update col X (COMPLETO)
-      var allUsed = true;
-      for (var mu = 0; mu < totalM; mu++) {
-        var v = wsMU.getRange(filaM, USO_COLS_M[mu]).getValue();
-        if (v !== true && v !== 'TRUE') { allUsed=false; break; }
+      var lockMU = null;
+      try {
+        lockMU = LockService.getScriptLock();
+        if (!lockMU.tryLock(12000)) return respJsonGet({error:'Hay otra marca en curso. Espera un momento y no vuelvas a marcar.'}, callback);
+      } catch (eLockMU) {}
+      try {
+        var wsMU = ss.getSheetByName('📋 PAQUETES');
+        if (!wsMU) return respJsonGet({error:'No PAQUETES'}, callback);
+        var filaM  = parseInt(e.parameter.fila);
+        var idxM   = parseInt(e.parameter.idx);   // 0-based uso index
+        var notaM  = (e.parameter.nota||'').toString().trim();
+        var totalM = parseInt(e.parameter.total)||3;
+        var ticketM = (e.parameter.ticket||'').toString().trim();
+        if (!filaM || filaM < 2 || isNaN(idxM) || idxM < 0 || idxM >= 6) return respJsonGet({error:'Parámetros inválidos'}, callback);
+        // USO cols: K=11,M=13,O=15,Q=17,S=19,U=21 (1-based)
+        // FECHA cols: L=12,N=14,P=16,R=18,T=20,V=22 (1-based)
+        var USO_COLS_M   = [11,13,15,17,19,21];
+        var FECHA_COLS_M = [12,14,16,18,20,22];
+        var currentUso = wsMU.getRange(filaM, USO_COLS_M[idxM]).getValue();
+        var currentFecha = wsMU.getRange(filaM, FECHA_COLS_M[idxM]).getValue();
+        if (currentUso === true || currentUso === 'TRUE' || (currentFecha && currentFecha.toString().trim() !== '')) {
+          return respJsonGet({error:'Esta sesión ya fue marcada'}, callback);
+        }
+        var propsMU = PropertiesService.getScriptProperties();
+        var claveMU = 'paq_mark_' + filaM;
+        var prevMU = {};
+        try { prevMU = JSON.parse(propsMU.getProperty(claveMU) || '{}'); } catch (ePrevMU) { prevMU = {}; }
+        var ahoraMU = Date.now();
+        var ticketsMU = Array.isArray(prevMU.tickets) ? prevMU.tickets : [];
+        if (ticketM && ticketsMU.indexOf(ticketM) >= 0) {
+          return respJsonGet({error:'Este paquete ya tiene una sesión marcada para este ticket'}, callback);
+        }
+        if (prevMU.ts && (ahoraMU - Number(prevMU.ts)) < 120000) {
+          return respJsonGet({error:'Este paquete ya se marcó hace un momento. Espera 2 minutos antes de marcar otra sesión.'}, callback);
+        }
+        wsMU.getRange(filaM, USO_COLS_M[idxM]).setValue(true);
+        wsMU.getRange(filaM, FECHA_COLS_M[idxM]).setValue(notaM);
+        var allUsed = true;
+        for (var mu = 0; mu < totalM; mu++) {
+          var v = wsMU.getRange(filaM, USO_COLS_M[mu]).getValue();
+          if (v !== true && v !== 'TRUE') { allUsed=false; break; }
+        }
+        if (allUsed) wsMU.getRange(filaM, 24).setValue(true); // col X = COMPLETO
+        var sigTickets = ticketsMU.slice(-7);
+        if (ticketM) sigTickets.push(ticketM);
+        propsMU.setProperty(claveMU, JSON.stringify({ ts: ahoraMU, tickets: sigTickets, slot: idxM }));
+        SpreadsheetApp.flush();
+        return respJsonGet({ok:true, slot: idxM + 1}, callback);
+      } finally {
+        try { if (lockMU) lockMU.releaseLock(); } catch (eRelMU) {}
       }
-      if (allUsed) wsMU.getRange(filaM, 24).setValue(true); // col X = COMPLETO
-      SpreadsheetApp.flush();
-      return respJsonGet({ok:true}, callback);
     }
 
     // ── Buscar Gift Cards ──

@@ -10,10 +10,10 @@
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
-// APP_VERSION del Apps Script hoy: '2026-10-12-COT (Cotizaciones)'.
+// APP_VERSION del Apps Script hoy: '2026-10-24-PAQ (sin marca automática)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.10.12.01';
-var SUNSU_MOTOR_ESPERADO='2026-10-12-COT';
+var SUNSU_APP_VERSION='v2026.10.24.01';
+var SUNSU_MOTOR_ESPERADO='2026-10-24-PAQ';
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
@@ -2265,19 +2265,96 @@ function toggleDescuento(tipo){
 
 const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyLgY0TJOpjafCtRUgAlq2i1xvWifu7vLFD9dkLR2HX92dtAnMGK7FCBvkrFk7yDP6x/exec';
 
-// Compra de paquete + facial el mismo día: el staff elige si se consume 1 sesión.
-// Antes se marcaba sola (cobro==='paquete') y a veces 2–3 veces (auto-marca + reintento + marca manual).
-function _msgMarcarFacialEnPaquete(){
-  return '¿Quieres marcar este facial en el paquete?\n\nAceptar = se usa 1 sesión de hoy.\nCancelar = se vende el paquete sin consumir sesión.';
+// La compra no marca la primera sesión. Después de guardar se pregunta una sola vez.
+function _confirmarSiNo(mensaje){
+  return new Promise(function(resolve){
+    var prev=document.getElementById('aviso-sino'); if(prev) prev.remove();
+    var ov=document.createElement('div');
+    ov.id='aviso-sino';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(26,39,68,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px';
+    var hecho=false;
+    var cerrar=function(si){ if(hecho) return; hecho=true; ov.remove(); resolve(!!si); };
+    ov.innerHTML='<div style="background:white;border-radius:18px;padding:26px 22px;max-width:380px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,0.3);border-top:6px solid #5B7FA6">'
+      +'<div id="aviso-sino-txt" style="font-size:1rem;font-weight:800;color:var(--navy);line-height:1.5;margin:6px 4px 18px"></div>'
+      +'<div style="display:flex;gap:8px;justify-content:center">'
+      +'<button id="aviso-sino-no" type="button" style="padding:11px 22px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">No</button>'
+      +'<button id="aviso-sino-si" type="button" style="padding:11px 22px;background:#5B7FA6;color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">Sí</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('aviso-sino-txt').textContent=mensaje||'';
+    var siBtn=document.getElementById('aviso-sino-si');
+    siBtn.onclick=function(){ siBtn.disabled=true; siBtn.textContent='…'; cerrar(true); };
+    document.getElementById('aviso-sino-no').onclick=function(){ cerrar(false); };
+  });
 }
-function _debePreguntarMarcarFacialEnPaquete(t){
-  return !!(t && (t.pack3 || t.pack6) && t.facial);
+function _notaSesionPaquete(facialNombre){
+  var hoy=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  return pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2)
+    +' '+(facialNombre||'Facial')+' · '+(typeof CU!=='undefined'&&CU?CU.name:'—');
 }
-function _decidirMarcarFacialEnPaquete(t, confirmar){
-  if(!_debePreguntarMarcarFacialEnPaquete(t)) return false;
-  var fn = confirmar;
-  if(typeof fn !== 'function') fn = (typeof confirm === 'function') ? confirm : function(){ return false; };
-  return !!fn(_msgMarcarFacialEnPaquete());
+function _marcarSesionPaqueteUnaVez(opts){
+  var key='fila:'+opts.fila+':'+opts.idx;
+  window._paqMarcaVuelo=window._paqMarcaVuelo||{};
+  if(window._paqMarcaVuelo[key]) return Promise.resolve({error:'Ya hay una marca en curso'});
+  window._paqMarcaVuelo[key]=true;
+  return fetch(APPS_SCRIPT_URL+'?action=marcarUsoManual'
+    +'&fila='+encodeURIComponent(opts.fila)
+    +'&idx='+encodeURIComponent(opts.idx)
+    +'&nota='+encodeURIComponent(opts.nota||'')
+    +'&total='+encodeURIComponent(opts.total||3)
+    +'&ticket='+encodeURIComponent(opts.ticket||''))
+    .then(function(r){return r.json();})
+    .then(function(d){ window._paqMarcaVuelo[key]=false; return d||{}; })
+    .catch(function(){ window._paqMarcaVuelo[key]=false; return {error:'Error de conexión'}; });
+}
+function _buscarFilaPaqueteNuevo(cedula, sku){
+  var hoy=new Date();
+  return fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(cedula||''))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var skuU=String(sku||'').toUpperCase();
+      var hits=((d&&d.resultados)||[]).filter(function(p){
+        var blob=(String(p.sku||'')+' '+String(p.paquete||'')).toUpperCase();
+        if(skuU && blob.indexOf(skuU)<0) return false;
+        return Number(p.dia)===hoy.getDate() && Number(p.mes)===(hoy.getMonth()+1) && Number(p.ano)===hoy.getFullYear();
+      });
+      return hits.length?hits[hits.length-1]:null;
+    }).catch(function(){ return null; });
+}
+function _ofrecerPrimeraSesion(packs, cedula, facialNombre, ticket){
+  var i=0;
+  function siguiente(){
+    if(i>=packs.length) return;
+    var p=packs[i++];
+    _confirmarSiNo('¿Deseas marcar la primera sesión del paquete '+p.nombre+' ahora?').then(function(si){
+      if(!si){ siguiente(); return; }
+      var nota=_notaSesionPaquete(facialNombre);
+      var intentar=function(vez){
+        var listo=p.fila?Promise.resolve({fila:p.fila, total:p.total||3, usos:[]}):_buscarFilaPaqueteNuevo(cedula, p.sku);
+        listo.then(function(row){
+          if(!row||!row.fila){
+            if(vez<1){ setTimeout(function(){ intentar(vez+1); }, 2500); return; }
+            toast('⚠️ No encontré el paquete para marcar la sesión. Márcala en Paquetes.','#C9A227');
+            siguiente();
+            return;
+          }
+          var usos=row.usos||[];
+          var idx=0;
+          for(var u=0;u<usos.length;u++){
+            if(!(usos[u]&&(usos[u].usado||usos[u].fecha))){ idx=u; break; }
+          }
+          _marcarSesionPaqueteUnaVez({fila:row.fila, idx:idx, total:row.total||usos.length||3, nota:nota, ticket:ticket||''}).then(function(res){
+            if(res&&res.ok) toast('📦 Primera sesión marcada','var(--green)');
+            else toast('❌ '+((res&&res.error)||'No se marcó la sesión'),'#B86B6B');
+            siguiente();
+          });
+        });
+      };
+      intentar(0);
+    });
+  }
+  siguiente();
 }
 
 function enviarTicket(){
@@ -2308,10 +2385,6 @@ function enviarTicket(){
   }
   window._envArmado=false; clearTimeout(window._envArmT);
   if(_btnE){_btnE.textContent='✓ Enviar Ticket';_btnE.style.background='';}
-
-  // Paquete nuevo + facial el mismo día: preguntar ANTES de enviar.
-  // Cancelar no aborta el ticket — solo deja el paquete sin consumir sesión.
-  var _marcarFacialEnPaq = _decidirMarcarFacialEnPaquete(T);
 
   // Col T: Facial
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
@@ -2533,22 +2606,10 @@ function enviarTicket(){
         +'&slots='+encodeURIComponent(JSON.stringify(_s6.map(function(s){return {codigo:s.codigo,tipo:s.tipo};}))));
     }
   }
-  // Primer uso del paquete NUEVO: solo si el staff confirmó poner el facial de hoy en el paquete.
-  var _primerUsoUrl = null;
-  var _packNuevo = T.pack3||T.pack6;
-  if(_packNuevo && _marcarFacialEnPaq){
-    // Nota con el mismo formato del marcado manual: fecha · facial hecho · usuaria
-    var _puHoy=new Date();
-    var _puPad=function(n){return String(n).padStart(2,'0');};
-    // Solo el NOMBRE del facial, sin el SKU
-    var _puFacialNombre=(T.facial&&_fac&&_fac.n)?_fac.n:'Facial';
-    var _puNota=_puPad(_puHoy.getDate())+'/'+_puPad(_puHoy.getMonth()+1)+'/'+String(_puHoy.getFullYear()).slice(2)
-      +' '+_puFacialNombre+' · '+(CU?CU.name:'—');
-    _primerUsoUrl = APPS_SCRIPT_URL+'?action=marcarPrimerUsoPaquete'
-      +'&cedula='+encodeURIComponent(payload.cedula||'')
-      +'&sku='+encodeURIComponent(_packNuevo)
-      +'&nota='+encodeURIComponent(_puNota);
-  }
+  var _packsNuevos=[];
+  if(T.pack3) _packsNuevos.push({sku:T.pack3, nombre:(_p3&&_p3.n)||pack3Txt||T.pack3});
+  if(T.pack6) _packsNuevos.push({sku:T.pack6, nombre:(_p6&&_p6.n)||pack6Txt||T.pack6});
+  var _facialNombre=(_fac&&_fac.n)||'';
 
   Promise.all([_gcPromise].concat(_slotPromises)).then(function(){
     return fetch(APPS_SCRIPT_URL,{
@@ -2563,41 +2624,27 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+_tkNum+' registrado'+_gcMsg,'#6A9E7A');
-    // ── Marcaciones en PAQUETES (el POST ya creó el paquete): 1º la sesión usada, luego las conversiones ──
+    // Conversiones a gift card. La primera sesión del paquete NO se marca sola.
     (function(){
-      // Contador de marcaciones en curso: la búsqueda de paquetes espera a que llegue a 0
-      window._paqMarcasPendientes=(_primerUsoUrl?1:0)+_paqGCUrls.length;
+      window._paqMarcasPendientes=_paqGCUrls.length;
       var _fin=function(){window._paqMarcasPendientes=Math.max(0,(window._paqMarcasPendientes||0)-1);};
-      // Marca con REINTENTO: si el paquete aún no aparece (sincronización lenta), reintenta a los 4s
       var _marcaHecha={};
-      var _marca=function(u, okMsg, failMsg, luego, intento){
-        if(_marcaHecha[u]==='ok'){ if(luego) luego(); return; }
-        if(_marcaHecha[u]==='inflight' && !intento){ return; }
+      var _marca=function(u, okMsg, failMsg, intento){
+        if(_marcaHecha[u]==='ok'||_marcaHecha[u]==='inflight') return;
         _marcaHecha[u]='inflight';
         fetch(u).then(function(r){return r.json();})
           .then(function(d){
-            if(d.ok){ _marcaHecha[u]='ok'; toast(okMsg(d),'var(--green)'); _fin(); if(luego) luego(); }
+            if(d.ok){ _marcaHecha[u]='ok'; toast(okMsg(d),'var(--green)'); _fin(); }
             else if(!intento && (d.error||'').indexOf('no encontrado')>=0){
               _marcaHecha[u]='retry';
-              setTimeout(function(){_marca(u, okMsg, failMsg, luego, 1);}, 4000);
-            } else { _marcaHecha[u]='fail'; toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego(); }
+              setTimeout(function(){_marca(u, okMsg, failMsg, 1);}, 4000);
+            } else { _marcaHecha[u]='fail'; toast('⚠️ '+failMsg+': '+(d.error||'')+' — revisa en Paquetes','#C9A227'); _fin(); }
           })
-          .catch(function(){_marcaHecha[u]='fail'; toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); _fin(); if(luego) luego();});
+          .catch(function(){_marcaHecha[u]='fail'; toast('⚠️ '+failMsg+' — revisa en Paquetes','#C9A227'); _fin();});
       };
-      var _marcarConv=function(){
-        _paqGCUrls.forEach(function(u){
-          _marca(u,
-            function(d){return '📦 Paquete: '+d.filled+' sesión(es) marcadas como Gift Card';},
-            'No se marcó la conversión', null, 0);
-        });
-      };
-      if(_primerUsoUrl){
-        _marca(_primerUsoUrl,
-          function(d){return '📦 Paquete: sesión '+d.slot+' marcada (uso de hoy)';},
-          'No se marcó el uso de hoy', _marcarConv, 0);
-      } else {
-        _marcarConv();
-      }
+      _paqGCUrls.forEach(function(u){
+        _marca(u, function(d){return '📦 Paquete: '+d.filled+' sesión(es) marcadas como Gift Card';}, 'No se marcó la conversión', 0);
+      });
     })();
     // Si el ticket incluyó venta de Gift Card DIGITAL → abrir el generador de la tarjeta
     // con el código y la compradora prellenados (todo editable)
@@ -2637,16 +2684,11 @@ function enviarTicket(){
     (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
-    if(_cobro==='paquete' || _primerUsoUrl){
-      // Compra nueva con facial marcado: solo REVISAR (no volver a marcar).
-      // Canje de paquete existente: sí hay que marcar la sesión a mano.
+    if(_packsNuevos.length) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, _tkNum);
+    if(_cobro==='paquete'){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
-        toastMsg:_primerUsoUrl
-          ?'👀 La sesión de hoy ya quedó marcada en el paquete. No la marques otra vez.'
-          :(_packNuevo
-            ?'📦 Paquete vendido sin usar sesión de hoy'
-            :'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta')),
-        color:_primerUsoUrl?'#6A9E7A':(_packNuevo?'#6A9E7A':'#7A5FA0')};
+        toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
+        color:'#7A5FA0'};
     } else if(_cobro==='giftcard'&&!_codGC){
       window._gcdPostCola={tab:'buscar-gc', prefill:_cliNom||_cedCli, prefVar:'_bgcPrefill',
         toastMsg:'🎁 Busca la GC de '+(_cliNom||'la clienta')+' y márcala como usada', color:'#C9A227'};
@@ -12820,45 +12862,50 @@ function togglePaqUso(chk, fila, idx, total){
 
 function guardarPaqUso(fila, idx, total){
   var slotId='paq-uso-'+fila+'-'+idx;
-  var lockKey='paq-uso-'+fila+'-'+idx;
+  var filaLock='paq-fila-'+fila;
   window._paqUsoLock=window._paqUsoLock||{};
-  if(window._paqUsoLock[lockKey]) return;
-  var chk=document.getElementById('chk-'+slotId);
+  if(window._paqUsoLock[slotId]||window._paqUsoLock[filaLock]) return;
   var notaEl=document.getElementById('nota-'+slotId);
   var btn=document.getElementById('btn-'+slotId);
+  if(btn){btn.disabled=true;btn.textContent='⏳';}
+  var soltar=function(){
+    window._paqUsoLock[slotId]=false;
+    window._paqUsoLock[filaLock]=false;
+    if(btn){btn.disabled=false;btn.textContent='✓';}
+  };
   var facialNota=(notaEl?notaEl.value.trim():'');
-  if(!facialNota){toast('Escribe el facial hecho','#B86B6B');notaEl&&notaEl.focus();return;}
-  if(!confirm('¿Quieres marcar este facial en el paquete?\n\n'+facialNota)) return;
-  window._paqUsoLock[lockKey]=true;
+  if(!facialNota){soltar();toast('Escribe el facial hecho','#B86B6B');notaEl&&notaEl.focus();return;}
+  if(!confirm('¿Quieres marcar este facial en el paquete?\n\n'+facialNota)){ soltar(); return; }
+  window._paqUsoLock[slotId]=true;
+  window._paqUsoLock[filaLock]=true;
   // Auto-note: fecha · facial · usuario
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaStr=pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2);
   var usuario=CU?CU.name:'—';
   var notaFinal=fechaStr+' '+facialNota+' · '+usuario;
-  if(btn){btn.disabled=true;btn.textContent='⏳';}
   fetch(APPS_SCRIPT_URL+'?action=marcarUsoManual'
     +'&fila='+encodeURIComponent(fila)
     +'&idx='+encodeURIComponent(idx)
     +'&nota='+encodeURIComponent(notaFinal)
-    +'&total='+encodeURIComponent(total))
+    +'&total='+encodeURIComponent(total)
+    +'&ticket=')
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.ok){
+        window._paqUsoLock[filaLock]=false;
         toast('✅ Sesión '+(idx+1)+'/'+total+' marcada','var(--green)');
         var row=document.getElementById('row-'+slotId);
         if(row) row.innerHTML='<span style="font-size:0.68rem;font-weight:700;color:var(--green);min-width:28px">'+(idx+1)+'/'+total+'</span>'
           +'<span style="font-size:0.72rem;color:var(--green)">✅</span>'
           +'<span style="font-size:0.7rem;color:var(--text);flex:1">'+notaFinal+'</span>';
       } else {
-        window._paqUsoLock[lockKey]=false;
-        if(btn){btn.disabled=false;btn.textContent='✓';}
+        soltar();
         toast('❌ '+(d.error||'Error'),'#B86B6B');
       }
     })
     .catch(function(){
-      window._paqUsoLock[lockKey]=false;
-      if(btn){btn.disabled=false;btn.textContent='✓';}
+      soltar();
       toast('❌ Error de conexión','#B86B6B');
     });
 }

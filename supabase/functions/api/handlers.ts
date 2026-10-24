@@ -595,6 +595,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   base.so_num = soNum;
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;
+  let paqueteFila: number | null = null;
   if ((s(p.pack3) || s(p.pack6)) && s(p.cedula)) {
     const paqRow = await nextSheet(ctx.db, "paquetes");
     const txt = s(p.pack3) || s(p.pack6);
@@ -604,12 +605,14 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       nombres: s(p.nombre), apellidos: s(p.apellido), sku: skuM ? skuM[0] : txt, paquete: txt,
       vendido_por: s(p.cosmetologa), notas: ec.isoWall, orig: { ticket, ts: ec.isoWall },
     });
+    paqueteFila = paqRow;
     const slots = ([] as R[]).concat((p.paq2gcSlots3 as R[]) || [], (p.paq2gcSlots6 as R[]) || []).filter((x) => x && x.codigo);
     if (slots.length) await marcarSlotsGC(ctx, actor, paqRow, slots);
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
   return {
     ok: true, fila: null, ticket, beta_num: ident.beta_num, so_num: soNum, origin: ident.origin, id: saved?.id,
+    paqueteFila,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
   };
@@ -1438,7 +1441,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
   return { items };
 });
 reg("marcarUsoManual", "any", async (p, ctx, ses) => marcarUso(p, ctx, ses, false));
-reg("marcarPrimerUsoPaquete", "any", async (p, ctx, ses) => marcarUso(p, ctx, ses, true));
+reg("marcarPrimerUsoPaquete", "any", async () => ({ error: "La primera sesión no se marca sola. Márcala en el paquete." }));
 reg("marcarUsoGC", "any", async (p, ctx, ses) => {
   const row = await rowBySheet(ctx.db, "paquetes", n(p.fila));
   if (!row || row.borrado_at) return { error: "Paquete no encontrado" };
@@ -1448,6 +1451,36 @@ reg("marcarUsoGC", "any", async (p, ctx, ses) => {
   await ctx.db.write(actorOf(ses), "paquetes", "update", { sheet_row: row.sheet_row }, { [u]: true, [f]: "Gift Card, " + s(p.codigo) });
   return { ok: true };
 });
+const MARCA_VENTANA_MS = 2 * 60 * 1000;
+
+export function rechazoSegundaMarca(row: R, idx: number, ticket: string, nowMs: number): string | null {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as R : {};
+  const tickets = Array.isArray(orig.marcas_ticket) ? (orig.marcas_ticket as unknown[]).map((x) => s(x)) : [];
+  if (ticket && tickets.includes(ticket)) return "Este paquete ya tiene una sesión marcada para este ticket";
+  const ts = n(orig.ultima_marca_ms);
+  if (ts && nowMs - ts < MARCA_VENTANA_MS && n(orig.ultima_marca_slot) !== idx + 1) {
+    return "Este paquete ya se marcó hace un momento. Espera 2 minutos antes de marcar otra sesión.";
+  }
+  return null;
+}
+
+export function origConMarca(row: R, idx: number, ticket: string, nowMs: number, limpiar: boolean): R {
+  const orig = row.orig && typeof row.orig === "object" ? { ...(row.orig as R) } : {};
+  if (limpiar) {
+    orig.ultima_marca_ms = 0;
+    orig.ultima_marca_ticket = "";
+    orig.ultima_marca_slot = 0;
+    return orig;
+  }
+  const tickets = Array.isArray(orig.marcas_ticket) ? (orig.marcas_ticket as unknown[]).map((x) => s(x)).filter(Boolean) : [];
+  if (ticket && !tickets.includes(ticket)) tickets.push(ticket);
+  orig.marcas_ticket = tickets.slice(-8);
+  orig.ultima_marca_ms = nowMs;
+  orig.ultima_marca_ticket = ticket;
+  orig.ultima_marca_slot = idx + 1;
+  return orig;
+}
+
 async function marcarUso(p: R, ctx: Ctx, ses: Ses, primero: boolean): Promise<R> {
   let row: R | null = null;
   if (!primero) row = await rowBySheet(ctx.db, "paquetes", n(p.fila));
@@ -1463,12 +1496,16 @@ async function marcarUso(p: R, ctx: Ctx, ses: Ses, primero: boolean): Promise<R>
   if (!row || row.borrado_at) return { error: primero ? "No hay paquete de hoy para esa cédula" : "Paquete no encontrado" };
   const usos = usosDe(row);
   const total = packSesiones(s(row.sku), s(row.paquete), usos);
-  const idx = primero ? usos.findIndex((u) => !u.usado && !u.fecha) : (n(p.slot) ? n(p.slot) - 1 : usos.findIndex((u) => !u.usado && !u.fecha));
+  const pedido = s(p.idx) !== "" ? n(p.idx) : (s(p.slot) !== "" ? n(p.slot) - 1 : -1);
+  const idx = primero ? usos.findIndex((u) => !u.usado && !u.fecha) : (pedido >= 0 ? pedido : usos.findIndex((u) => !u.usado && !u.fecha));
   if (idx < 0 || idx >= total) return { error: "No queda un uso libre" };
   const [u, f] = USO_FIELDS[idx];
-  if (b(row[u]) || s(row[f])) return { error: "Ese uso ya está marcado" };
+  if (b(row[u]) || s(row[f])) return { error: "Esta sesión ya fue marcada" };
+  const ticket = s(p.ticket);
+  const rechazo = rechazoSegundaMarca(row, idx, ticket, ctx.now.getTime());
+  if (rechazo) return { error: rechazo };
   const ec = ecuadorParts(ctx.now);
-  const patch: R = { [u]: true, [f]: s(p.fecha) || ec.ymd };
+  const patch: R = { [u]: true, [f]: s(p.fecha || p.nota) || ec.ymd, orig: origConMarca(row, idx, ticket, ctx.now.getTime(), false) };
   const usados = usos.filter((x, i) => x.usado || i === idx).length;
   if (usados >= total) patch.completo = true;
   await ctx.db.write(actorOf(ses), "paquetes", "update", { sheet_row: row.sheet_row }, patch);
