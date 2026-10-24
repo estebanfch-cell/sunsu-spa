@@ -18,9 +18,21 @@
       if (!accion) accion = "crearTicket";
     }
     if (typeof body.slots === "string") { try { body.slots = JSON.parse(body.slots); } catch (e) {} }
+    if (accion === "savePermiso" && body.permiso && typeof body.permiso === "object") {
+      Object.keys(body.permiso).forEach(function(k){ if (body[k] == null || body[k] === "") body[k] = body.permiso[k]; });
+      if (!body.certificado && body.foto) body.certificado = body.foto;
+    }
     const run = window.api(accion, body);
     return Promise.resolve(run).then(function(data){
       if (accion === "getProveedoresApp" && data && !data.proveedores && Array.isArray(data.items)) data.proveedores = data.items;
+      if (accion === "getPermisos" && data && Array.isArray(data.data)) {
+        data.data.forEach(function(p){
+          if (!p.fechaInicio) p.fechaInicio = p.desde || "";
+          if (!p.fechaFin) p.fechaFin = p.hasta || "";
+          if (!p.urlFoto) p.urlFoto = p.url || "";
+          if (p.estado && String(p.estado).toUpperCase() === "PENDIENTE") p.estado = "PENDIENTE";
+        });
+      }
       return new Response(JSON.stringify(data == null ? {} : data), { status: 200, headers: { "Content-Type": "application/json" } });
     });
   };
