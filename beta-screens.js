@@ -20,6 +20,7 @@
     if (typeof body.slots === "string") { try { body.slots = JSON.parse(body.slots); } catch (e) {} }
     const run = window.api(accion, body);
     return Promise.resolve(run).then(function(data){
+      if (accion === "getProveedoresApp" && data && !data.proveedores && Array.isArray(data.items)) data.proveedores = data.items;
       return new Response(JSON.stringify(data == null ? {} : data), { status: 200, headers: { "Content-Type": "application/json" } });
     });
   };

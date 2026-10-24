@@ -1501,9 +1501,10 @@ function pantallaSunsu(route) {
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "cotizaciones";
   if (m === "productos") return "catalogo";
+  if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
   if (m === "conteos" || m === "lugares") return "";
-  if (m === "compras" && route.sub !== "rfq") return "";
+  if (m === "compras" && route.sub !== "rfq") return "entradas";
   if (m === "proveedores") return "proveedores";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
