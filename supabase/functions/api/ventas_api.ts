@@ -2,11 +2,11 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
-import { esAdmin } from "./permisos.ts";
+import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { ecuadorParts, n, s, skuCode, type Row } from "./domain.ts";
 import {
   aplicarGiftCard, borradorConsig, claveTicket, clienteDetalle, clientesResumen, kardexPrevio, lineasTicket,
-  numeroTicket, patchProductos, recalcular, recetaDe, reporteConsumos, textoExtras, textoFacial, textoPack,
+  numeroTicket, ordenarClientes, patchProductos, recalcular, recetaDe, reporteConsumos, textoExtras, textoFacial, textoPack,
   type LineaVenta,
 } from "./ventas.ts";
 
@@ -20,8 +20,14 @@ async function ticketDe(ctx: Ctx, ref: string): Promise<Row | null> {
   return rows.find((r) => s(r.beta_num) === ref || String(r.sheet_row ?? "") === ref || String(r.id ?? "") === ref || numeroTicket(r) === ref) || null;
 }
 
-extend("clientes_resumen", "any", async (_p, ctx, ses) => {
-  return clientesResumen(ctx.db, { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid }, esAdmin(ses.rol));
+extend("clientes_resumen", "any", async (p, ctx, ses) => {
+  const matriz = await matrizDe(ctx.db);
+  const lite = { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid };
+  const verTodos = esAdmin(ses.rol) || acceso(ses.rol, "clientes", matriz) === "todos";
+  const res = await clientesResumen(ctx.db, lite, esAdmin(ses.rol), verTodos);
+  const q = s(p.q);
+  if (q && Array.isArray(res.clientes)) res.clientes = ordenarClientes(res.clientes as Row[], q);
+  return res;
 });
 
 extend("cliente_detalle", "any", async (p, ctx, ses) => {
