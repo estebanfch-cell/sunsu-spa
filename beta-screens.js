@@ -25,6 +25,12 @@
     const run = window.api(accion, body);
     return Promise.resolve(run).then(function(data){
       if (accion === "getProveedoresApp" && data && !data.proveedores && Array.isArray(data.items)) data.proveedores = data.items;
+      if (accion === "getSeguimientoPaquetes" && data && Array.isArray(data.items)) {
+        data.items.forEach(function(p){
+          if (!Array.isArray(p.usos)) return;
+          p.usos = p.usos.map(function(u){ return Object.assign({ u: !!(u.usado || u.u || u.fecha || u.f), f: u.fecha || u.f || "" }, u); });
+        });
+      }
       if (accion === "getPermisos" && data && Array.isArray(data.data)) {
         data.data.forEach(function(p){
           if (!p.fechaInicio) p.fechaInicio = p.desde || "";

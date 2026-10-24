@@ -1508,6 +1508,8 @@ function pantallaSunsu(route) {
   if (m === "proveedores") return "proveedores";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
+  if (m === "gift" && route.sub === "paquetes" && !route.id) return "buscar-paquetes";
+  if (m === "gift" && !route.id) return "buscar-gc";
   if (m === "caja") return "caja";
   if (m === "bitacora") return "bitacora";
   if (m === "cabina") return "cabina";

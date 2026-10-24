@@ -157,6 +157,21 @@ export function horarioDePersona(horarios: Horario[], asignaciones: AsignacionHo
   return horarios.find((h) => h.esDefault) || null;
 }
 
+/** Horario asignado a la persona, sin caer en el default de lunes a viernes. */
+export function horarioAsignado(horarios: Horario[], asignaciones: AsignacionHorario[], nombres: string[]): Horario | null {
+  const keys = nombres.map((x) => normNombre(x)).filter(Boolean);
+  const hit = asignaciones.find((a) => {
+    if (!a.horarioId) return false;
+    const p = normNombre(a.persona);
+    const pf = p.split(" ")[0] || "";
+    return keys.some((k) => {
+      const kf = k.split(" ")[0] || "";
+      return p === k || (pf.length >= 3 && (k === pf || k.startsWith(pf + " "))) || (kf.length >= 3 && (p === kf || p.startsWith(kf + " ")));
+    });
+  });
+  return hit ? horarios.find((h) => h.id === hit.horarioId) || null : null;
+}
+
 export function jornadaDe(h: Horario, ymd: string): { trabaja: boolean; desde: string | null; hasta: string | null } {
   let dia: DiaHorario | undefined;
   if (h.arreglo === "rotativo") {
