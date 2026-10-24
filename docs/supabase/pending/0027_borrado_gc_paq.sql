@@ -3,10 +3,11 @@
 -- El import horario pisa orig (y las columnas de la hoja) y no manda estas dos,
 -- así que un borrado sobrevive al sync. Tickets (0022) y clientas_registro (0023)
 -- ya tienen las columnas; este archivo no las toca.
--- Emilia: los códigos viejos de la hoja pueden repetirse (por ejemplo 26-008).
--- No hay índice único sobre todo codigo_gc. Solo las filas emitidas en la beta
--- o en modo prueba (origin beta/test) tienen que ser únicas. El import no entra.
--- gift_cards_codigo_uidx no se crea. Si una corrida anterior lo dejó, se baja.
+-- Emilia: los códigos viejos de la hoja pueden repetirse entre sí (por ejemplo 26-008).
+-- No hay índice único sobre todo codigo_gc. Una fila nueva con origin beta o test
+-- se compara contra TODAS las filas (hoja y borradas incluidas). El import no se
+-- valida porque su origin no es beta ni test. gift_cards_codigo_uidx no se crea.
+-- Si una corrida anterior lo dejó, se baja.
 
 alter table public.gift_cards add column if not exists borrado_at timestamptz;
 alter table public.gift_cards add column if not exists borrado_por text;
@@ -45,7 +46,6 @@ begin
     select 1
     from public.gift_cards g
     where lower(btrim(g.codigo_gc)) = lower(btrim(new.codigo_gc))
-      and g.origin in ('beta', 'test')
       and g.id is distinct from new.id
   ) then
     raise exception 'El código % ya fue emitido en la beta', btrim(new.codigo_gc);

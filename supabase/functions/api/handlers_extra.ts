@@ -421,6 +421,7 @@ extend("getPagoConfig", "any", async (_p, ctx, ses) => {
 });
 extend("pago_config_guardar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin configura los pagos" };
+  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
   if (!s(p.nombre) || !/^\d{4}-\d{2}-\d{2}$/.test(s(p.vigente_desde))) return { error: "Falta la persona o la fecha de vigencia" };
   const row: R = {
     nombre: s(p.nombre),

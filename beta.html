@@ -2239,8 +2239,12 @@ async function renderConfiguracion() {
   const tramos = (data.tramos || []).map((r) => cfgLinea("com_tramo", r.fila, [["desde", "Desde", r.desde], ["hasta", "Hasta", r.hasta], ["modo", "Modo", r.modo], ["valor", "Valor", r.valor], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
   const productos = (data.productos || []).map((r) => cfgLinea("com_producto", r.fila, [["sku", "SKU", r.sku], ["pct", "% del margen", r.pct], ["fijo", "Fijo por unidad", r.fijo], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
   const pago = await htmlPagoConfig();
-  return `<p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso. El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. x6 cuenta como 2 y el % se redondea hacia abajo.</p>
-    <h2>Comisiones</h2>
+  return `<p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso.</p>
+    <p class="note"><a href="#cfg-roles">Roles</a> · <a href="#cfg-comisiones">Comisiones</a></p>
+    <h2 id="cfg-roles">Roles</h2>
+    <div class="card"><div class="card-title">Sueldo fijo, bono fijo y otros valores del rol</div>${pago}</div>
+    <h2 id="cfg-comisiones">Comisiones</h2>
+    <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. x6 cuenta como 2 y el % se redondea hacia abajo.</p>
     <div class="card"><div class="card-title">Faciales</div><div class="list" id="cfg-facial">${faciales}</div>${ix && ix.edita() ? ix.mas("com_facial") : ""}</div>
     <div class="card" id="cfg-general"><div class="card-title">Resto de productos, extras y recepción</div>
       <p class="note">El % de productos aplica a los que no tienen fila propia. La recepción suma dólares por facial del día cuando se llega al mínimo. El lunes usa el otro mínimo.</p>
@@ -2251,9 +2255,7 @@ async function renderConfiguracion() {
       ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
     <div class="card"><div class="card-title">Tramos de paquete</div>
       <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto. Guardar un tramo copia el resto de esa vigencia.</p>
-      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>
-    <h2>Roles</h2>
-    <div class="card"><div class="card-title">Sueldo, bono y valores fijos</div>${pago}</div>`;
+      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>`;
 }
 async function renderComisiones() {
   const ciclos = opcionesCiclo();
@@ -2287,23 +2289,37 @@ async function renderRol() {
     ${state.admin ? `<p class="note"><a href="#/m/configuracion">Sueldo, bono e IESS se editan en Configuración general</a></p>` : ""}
     <p class="note">El sueldo y el bono salen de Configuración general, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones.</p>`;
 }
+function mismaPersonaCfg(a, b) {
+  const na = String(a || "").trim().toLowerCase();
+  const nb = String(b || "").trim().toLowerCase();
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const af = na.split(" ")[0];
+  const bf = nb.split(" ")[0];
+  return (af.length >= 3 && (nb === af || nb.startsWith(af + " "))) || (bf.length >= 3 && (na === bf || na.startsWith(bf + " ")));
+}
 async function htmlPagoConfig() {
   const data = await api("getPagoConfig");
   if (data.error) return fail(data);
   const ixP = window.SunsuInline;
-  const filas = (data.configs || []).map((c) => {
+  const configs = data.configs || [];
+  const filas = configs.map((c) => {
     const vigente = String(c.vigente_desde || "").slice(0, 10);
     const fila = c.id || (c.nombre + "|" + vigente);
     const pct = Number(c.iess_pct);
     const iess = Number.isFinite(pct) ? (pct > 1 ? pct : Math.round(pct * 10000) / 100) : "";
     if (ixP && ixP.edita()) {
-      return `<div class="row">${ixP.lineas("pago_config", fila, [["nombre", "Persona", c.nombre], ["vigente", "Vigente desde", vigente], ["sueldo", "Sueldo", c.sueldo], ["bono", "Bono", c.bono], ["iess", "IESS %", iess], ["fondo", "Fondo", c.fondo ? "SI" : ""], ["fondoDesde", "Fondo desde", String(c.fondo_desde || "").slice(0, 10)], ["vacaciones", "Vacaciones desde el año", c.vacaciones_desde_anio == null ? "1" : c.vacaciones_desde_anio]])} ${ixP.borrar("pago_config", fila)}</div>`;
+      return `<div class="row">${ixP.lineas("pago_config", fila, [["nombre", "Persona", c.nombre], ["vigente", "Vigente desde", vigente], ["sueldo", "Sueldo fijo", c.sueldo], ["bono", "Bono fijo", c.bono], ["iess", "IESS %", iess], ["fondo", "Fondo de reserva", c.fondo ? "SI" : ""], ["fondoDesde", "Fondo desde", String(c.fondo_desde || "").slice(0, 10)], ["vacaciones", "Vacaciones desde el año", c.vacaciones_desde_anio == null ? "1" : c.vacaciones_desde_anio]])} ${ixP.borrar("pago_config", fila)}</div>`;
     }
-    return `<div class="row"><div class="name">${esc(c.nombre)}</div><div class="note">desde ${esc(vigente)} · sueldo ${money(c.sueldo)} · bono ${money(c.bono)}</div></div>`;
+    return `<div class="row"><div class="name">${esc(c.nombre)}</div><div class="note">desde ${esc(vigente)} · sueldo fijo ${money(c.sueldo)} · bono fijo ${money(c.bono)}</div></div>`;
   }).join("");
-  return `<p class="note">Cada vigencia vale desde su fecha y no toca los ciclos ya cerrados. No escribe Google Sheets.</p>
+  const ficha = (data.personas || []).filter((p) => !configs.some((c) => mismaPersonaCfg(c.nombre, p.nombre))).map((p) =>
+    `<div class="row"><div class="name">${esc(p.nombre)}</div><div class="note">sueldo fijo ${money(p.sueldo)} · bono fijo ${money(p.bono)} · de la ficha, hasta que guardes una vigencia</div></div>`
+  ).join("");
+  const vacio = !filas && !ficha ? `<p class="note">Todavía no hay vigencias guardadas. El rol usa la ficha hasta que guardes una.</p>` : "";
+  return `<p class="note">Sueldo fijo, bono fijo, IESS, fondo de reserva y vacaciones, por persona. Cada vigencia vale desde su fecha y no toca los ciclos ya cerrados. No escribe Google Sheets.</p>
     <div id="pago-nuevo">${ixP && ixP.edita() ? ixP.mas("pago_config") : ""}</div>
-    <div class="list">${filas || `<p class="note">Todavía no hay vigencias guardadas. El rol usa la ficha hasta que guardes una.</p>`}</div>`;
+    <div class="list">${filas}${ficha}${vacio}</div>`;
 }
 
 async function renderAsistencia() {
@@ -4384,7 +4400,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024gc"></script>
-<script src="beta-inline.js?v=20261024ae"></script>
+<script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
 </html>

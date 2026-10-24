@@ -76,8 +76,15 @@ function clonarTramos(vigente: string, reglas: ReglaCom[]): ReglaCom[] {
   return base.map((r) => ({ ...r, tipo: "tramo" as const, vigente_desde: vigente, clave: String(r.desde ?? r.clave) }));
 }
 
+function bloqueoConfig(ses: Ses): Row | null {
+  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
+  return null;
+}
+
 export async function guardarComisionCampos(ctx: Ctx, ses: Ses, tabla: string, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  const bloqueo = bloqueoConfig(ses);
+  if (bloqueo) return bloqueo;
   const tipo = TIPOS[tabla];
   if (!tipo) return { error: "Esa tabla todavía no se edita en línea" };
   const hoy = ecuadorParts(ctx.now).ymd;
@@ -137,6 +144,8 @@ export async function guardarComisionCampos(ctx: Ctx, ses: Ses, tabla: string, f
 
 export async function borrarComision(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const bloqueo = bloqueoConfig(ses);
+  if (bloqueo) return bloqueo;
   if (!TIPOS[tabla]) return { error: "Esa tabla todavía no se edita en línea" };
   if (fila.startsWith("def|")) return { error: "El valor de fábrica sigue vigente hasta que guardes otra fecha" };
   const reglas = await leerReglas(ctx.db);
@@ -147,7 +156,9 @@ export async function borrarComision(ctx: Ctx, ses: Ses, tabla: string, fila: st
   return { ok: true };
 }
 
-export async function reemplazarTramos(ctx: Ctx, ses: Ses, tramos: TramoPaquete[], vigente: string) {
+export async function reemplazarTramos(ctx: Ctx, ses: Ses, tramos: TramoPaquete[], vigente: string): Promise<Row | null> {
+  const bloqueo = bloqueoConfig(ses);
+  if (bloqueo) return bloqueo;
   const reglas = await leerReglas(ctx.db);
   const otras = reglas.filter((r) => !(r.tipo === "tramo" && s(r.vigente_desde).slice(0, 10) === vigente));
   const nuevas: ReglaCom[] = tramos.map((t) => ({
@@ -156,6 +167,7 @@ export async function reemplazarTramos(ctx: Ctx, ses: Ses, tramos: TramoPaquete[
   }));
   await escribirReglas(ctx.db, actorOf(ses), otras.concat(nuevas));
   await kvSet(ctx.db, actorOf(ses), "paquete_tramos", { tramos });
+  return null;
 }
 
 function nombreCat(rows: Row[], sku: string): string {

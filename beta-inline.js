@@ -52,8 +52,8 @@
       ["fecha", "Fecha"], ["nombre", "Nombre"],
     ],
     pago_config: [
-      ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo"], ["bono", "Bono"],
-      ["iess", "IESS %"], ["fondo", "Fondo"], ["fondoDesde", "Fondo desde"], ["vacaciones", "Vacaciones desde el año"],
+      ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo fijo"], ["bono", "Bono fijo"],
+      ["iess", "IESS %"], ["fondo", "Fondo de reserva"], ["fondoDesde", "Fondo desde"], ["vacaciones", "Vacaciones desde el año"],
     ],
     com_facial: [
       ["sku", "Facial"], ["monto", "Comisión"], ["vigente", "Vigente desde"],
