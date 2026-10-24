@@ -2,7 +2,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
-  ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
+  ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
@@ -12,6 +12,7 @@ import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
+import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
 
@@ -287,12 +288,16 @@ function cuenta(u: R): R {
     rol: s(u.rol || u.role),
   };
 }
-function toIn(r: R): TicketIn {
+function toIn(r: R, cats?: Map<string, R>): TicketIn {
+  const pack3 = s(r.compra_pack_3);
+  const pack6 = s(r.compra_pack_6);
   return {
     fecha: ymdUtc(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3), facial: s(r.facial_hecho),
-    pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6), extras: s(r.servicios_adicionales),
+    pack3, pack6, extras: s(r.servicios_adicionales),
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
+    netoPack: cats ? subtotalDe(cats, pack3) : undefined,
+    netoPack6: cats ? subtotalDe(cats, pack6) : undefined,
   };
 }
 async function marks(ctx: Ctx) {
@@ -317,19 +322,18 @@ async function adminsDe(ctx: Ctx) {
     nombre: s(u.nombre), short: s(u.short), id: s(u.id),
   }));
 }
-async function tramosDe(ctx: Ctx) {
-  return normalizarTramos(await kvGet(ctx.db, "paquete_tramos"));
-}
 export async function cicloDe(ctx: Ctx, fecha?: string) {
   const ec = fecha || hoy(ctx);
   const ciclo = cicloInicio(ec);
-  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map(toIn);
   const admins = await adminsDe(ctx);
-  const tramos = await tramosDe(ctx);
+  const aplicado = await cfgAplicada(ctx.db, ciclo);
+  const tramos = aplicado.tramos;
+  const cfg = aplicado.cfg;
+  const cmap = await catMap(ctx);
+  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map((r) => toIn(r, cmap));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
-  const calc = calcularCiclo(tks, await marks(ctx), CFG_DEF, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
-  const cmap = await catMap(ctx);
+  const calc = calcularCiclo(tks, await marks(ctx), cfg, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
   const bases = await ctx.db.all("inventario_base");
   const compraReal = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
   for (const p of calc.personas) {
@@ -337,9 +341,9 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
     const items = propios.flatMap((t) => t.productos.map((pr) => ({
       venta: subtotalDe(cmap, pr.sku),
       compra: compraReal.get(skuCode(pr.sku)) || n(cmap.get(skuCode(pr.sku))?.precio_compra),
-      qty: pr.qty, excluido: false,
+      qty: pr.qty, excluido: false, sku: pr.sku,
     })));
-    p.comProductos = comisionProductos(items, CFG_DEF.pctProd);
+    p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
     p.totalProductos = items.reduce((a, it) => a + it.qty, 0);
   }
   const recepDias = new Map<string, number>();
@@ -349,7 +353,7 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   }
   let comRecep = 0, diasRecep = 0;
   for (const [f, c] of recepDias) {
-    const v = comisionRecepcionDia(f, c);
+    const v = comisionRecepcionDia(f, c, cfg);
     if (v > 0) { comRecep += v; diasRecep++; }
   }
   const multas = await ctx.db.all("multas_descuentos");
@@ -1751,10 +1755,15 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
     filas, tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
   };
 });
-reg("getTramos", "any", async (_p, ctx) => ({ ok: true, tramos: await tramosDe(ctx) }));
+reg("getTramos", "any", async (_p, ctx) => {
+  const ciclo = cicloInicio(hoy(ctx));
+  const cuando = ciclo < "2026-10-26" ? "2026-10-26" : ciclo;
+  return { ok: true, tramos: (await cfgAplicada(ctx.db, cuando)).tramos };
+});
 reg("tramos_guardar", ADMIN, async (p, ctx, ses) => {
   const tramos = normalizarTramos(p.tramos);
-  await kvSet(ctx.db, actorOf(ses), "paquete_tramos", { tramos });
+  const ciclo = cicloInicio(hoy(ctx));
+  await reemplazarTramos(ctx, ses, tramos, ciclo < "2026-10-26" ? "2026-10-26" : ciclo);
   await logAccion(ctx.db, actorOf(ses), "TRAMOS PAQUETE", tramos.map((t) => `${t.desde}-${t.hasta} ${t.modo} ${t.valor}`).join(", "));
   return { ok: true, tramos };
 });

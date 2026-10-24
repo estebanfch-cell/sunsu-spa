@@ -1040,6 +1040,7 @@ function moduloDeRuta(route) {
   return route.mod;
 }
 function tituloRuta(route, tab) {
+  if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "conteos") return route.sub ? "Conteo físico" : "Conteos físicos";
   if (route.mod === "inventario") return "Stock";
@@ -1101,7 +1102,7 @@ function frenteRol() {
   return state.admin || rol === "recepcion" || rol === "gerente";
 }
 function gruposVisibles() {
-  const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias"]);
+  const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias", "configuracion"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
     let vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
@@ -1151,6 +1152,7 @@ function gruposVisibles() {
   }
   if (acceso("cabina") !== "no") spa.push(["cabina", "Cabina", "#/m/cabina"]);
   add("Spa", "✨", spa);
+  if (state.admin) add("Configuración general", "⚙️", [["configuracion", "Configuración general", "#/m/configuracion"]]);
   const adminItems = [
     ["usuarios", "Usuarios", "#/m/usuarios"],
     ["permisos", "Accesos", "#/m/permisos"],
@@ -1159,6 +1161,7 @@ function gruposVisibles() {
   const sobra = MENU.filter(([id]) => !usados.has(id) && acceso(id) !== "no").map(([id, label]) => [id, label, "#/m/" + id]);
   if (sobra.length) add("Más", "⋯", sobra);
   const items = sections.flatMap((sec) => sec.items);
+  if (state.admin) out.push({ id: "configuracion", label: "Configuración", items: [["configuracion", "Configuración general", "#/m/configuracion"]] });
   if (items.length) out.push({ id: "otros", label: "Otros", items, sections });
   return out;
 }
@@ -1169,6 +1172,7 @@ function tabIcon(id) {
     inventario: '<path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/>',
     bodega: '<path d="M3 10.5 12 5l9 5.5"/><path d="M5 10.5V19h14v-8.5"/><path d="M10 19v-5h4v5"/>',
     compras: '<path d="M4 7h16"/><path d="M7 7l1 12h8l1-12"/><path d="M9 11h6"/>',
+    configuracion: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] || ""}</svg>`;
 }
@@ -1546,7 +1550,7 @@ function pantallaSunsu(route) {
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "personal" && route.sub === "permisos") return "permisos";
   if (m === "personal" && route.sub === "multas") return "multas";
-  if (m === "usuarios" || m === "permisos") return "";
+  if (m === "usuarios" || m === "permisos" || m === "configuracion") return "";
   return "";
 }
 let catalogoTicketListo = false;
@@ -1602,10 +1606,8 @@ async function montarSunsu(tab) {
   if (tab === "roles" && state.admin) {
     const extra = document.createElement("div");
     extra.style.padding = "0 16px 16px";
-    extra.innerHTML = await htmlPagoConfig();
+    extra.innerHTML = `<p class="note"><a href="#/m/configuracion">Sueldo, bono e IESS se editan en Configuración general</a></p>`;
     c.appendChild(extra);
-    const form = extra.querySelector("#f-pago-cfg");
-    if (form) form.onsubmit = (ev) => { ev.preventDefault(); savePagoCfg(form); };
   }
 }
 async function draw() {
@@ -1704,6 +1706,7 @@ async function renderMod(route) {
   if (route.mod === "conteos") return renderConteos(route.sub || "");
   if (route.mod === "permisos") return renderPermisosBeta();
   if (route.mod === "usuarios") return renderUsuarios();
+  if (route.mod === "configuracion") return renderConfiguracion();
   return `<p class="note">Módulo sin pantalla todavía.</p>`;
 }
 
@@ -2218,6 +2221,40 @@ function opcionesCiclo() {
   }
   return out;
 }
+function cfgLinea(tabla, fila, pares, fabrica, titulo) {
+  const ix = window.SunsuInline;
+  const head = titulo ? `<div class="name">${esc(titulo)}</div>` : "";
+  if (ix && ix.edita()) return `<div class="row">${head}${ix.lineas(tabla, fila, pares)} ${fabrica ? "" : ix.borrar(tabla, fila)}</div>`;
+  return `<div class="row">${head}<div class="note">${pares.map((p) => esc(p[1] + ": " + (p[2] ?? ""))).join(" · ")}</div></div>`;
+}
+async function renderConfiguracion() {
+  if (!state.admin) return `<p class="err">Solo administración entra a Configuración general.</p>`;
+  const data = await api("config_general");
+  if (data.error) return fail(data);
+  const ix = window.SunsuInline;
+  const faciales = (data.faciales || []).map((r) => cfgLinea("com_facial", r.fila, [["sku", "Facial", r.sku], ["monto", "Comisión", r.monto], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
+  const base = (data.base || []).map((r) => cfgLinea("com_base", r.fila, [["pct", "% del margen", r.pct], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
+  const extra = (data.extra || []).map((r) => cfgLinea("com_extra", r.fila, [["monto", "Comisión", r.monto], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
+  const recep = (data.recepcion || []).map((r) => cfgLinea("com_recep", r.fila, [["por", "Por facial", r.por], ["min", "Mínimo del día", r.min], ["lunes", "Mínimo del lunes", r.lunes], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
+  const tramos = (data.tramos || []).map((r) => cfgLinea("com_tramo", r.fila, [["desde", "Desde", r.desde], ["hasta", "Hasta", r.hasta], ["modo", "Modo", r.modo], ["valor", "Valor", r.valor], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
+  const productos = (data.productos || []).map((r) => cfgLinea("com_producto", r.fila, [["sku", "SKU", r.sku], ["pct", "% del margen", r.pct], ["fijo", "Fijo por unidad", r.fijo], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
+  const pago = await htmlPagoConfig();
+  return `<p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso. El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. x6 cuenta como 2 y el % se redondea hacia abajo.</p>
+    <h2>Comisiones</h2>
+    <div class="card"><div class="card-title">Faciales</div><div class="list" id="cfg-facial">${faciales}</div>${ix && ix.edita() ? ix.mas("com_facial") : ""}</div>
+    <div class="card" id="cfg-general"><div class="card-title">Resto de productos, extras y recepción</div>
+      <p class="note">El % de productos aplica a los que no tienen fila propia. La recepción suma dólares por facial del día cuando se llega al mínimo. El lunes usa el otro mínimo.</p>
+      <div class="list">${base}${extra}${recep}</div></div>
+    <div class="card"><div class="card-title">Por producto</div>
+      <p class="note">% del margen, un fijo por unidad, o los dos. Vacío usa el % general.</p>
+      <div class="list" id="cfg-prod">${productos || `<p class="note">Sin productos en el catálogo. Agrega el SKU.</p>`}</div>
+      ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
+    <div class="card"><div class="card-title">Tramos de paquete</div>
+      <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto. Guardar un tramo copia el resto de esa vigencia.</p>
+      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>
+    <h2>Roles</h2>
+    <div class="card"><div class="card-title">Sueldo, bono y valores fijos</div>${pago}</div>`;
+}
 async function renderComisiones() {
   const ciclos = opcionesCiclo();
   const desde = ciclos[0];
@@ -2226,12 +2263,6 @@ async function renderComisiones() {
   window._com = data;
   const opts = (data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("");
   const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
-  const tramos = (data.tramos || []).map((t, i) => `<div class="linea" data-tramo>
-      <input data-k="desde" value="${esc(t.desde)}" aria-label="Desde unidad ${i + 1}" inputmode="numeric">
-      <input data-k="hasta" value="${esc(t.hasta >= 100000 ? "" : t.hasta)}" placeholder="∞" aria-label="Hasta unidad ${i + 1}">
-      <select data-k="modo" aria-label="Modo del tramo ${i + 1}"><option value="fijo" ${t.modo !== "pct" ? "selected" : ""}>Monto fijo $</option><option value="pct" ${t.modo === "pct" ? "selected" : ""}>% del neto</option></select>
-      <input data-k="valor" value="${esc(t.modo === "pct" ? Math.round(t.valor * 1000) / 10 : t.valor)}" aria-label="Valor del tramo ${i + 1}">
-    </div>`).join("");
   return `<div class="tools">
       ${state.admin ? `<label>Persona <select id="com-persona">${opts}</select></label>` : `<strong>${esc(data.persona || "")}</strong>`}
       <label>Del ciclo <select id="com-desde">${cicloOpts}</select></label>
@@ -2239,11 +2270,8 @@ async function renderComisiones() {
       <button class="btn small" type="button" id="com-ver">Ver</button>
     </div>
     <div id="com-tabla"></div>
-    ${state.admin ? `<form id="f-tramos" class="card"><div class="card-title">Tramos de paquete</div>
-      <p class="note">Hoy cada tramo es un monto fijo: 1–10 $10, 11–20 $15, 21–30 $20, 31+ $25. Si más adelante pasa a 5/8/11/14% del precio neto, cambia el modo de ese tramo a %.</p>
-      ${tramos}
-      <button class="btn" type="submit">Guardar tramos</button><p class="err" id="f-err"></p></form>` : ""}
-    <p class="note">Hasta el ciclo que cierra el 2026-10-25 sigue el nivel, con N = 3 cabinas. Andrea y Daniela quedan en N8 ($320) en ese ciclo. Desde el 2026-10-26 manda el tramo. Un admin no entra en la cuenta ni en N.</p>`;
+    ${state.admin ? `<p class="note"><a href="#/m/configuracion">Editar tarifas en Configuración general</a></p>` : ""}
+    <p class="note">Hasta el ciclo que cierra el 2026-10-25 sigue el nivel, con N = 3 cabinas. Andrea y Daniela quedan en N8 ($320) en ese ciclo. Desde el 2026-10-26 cada unidad se paga 5/8/11/14% del neto de catálogo, redondeado hacia abajo. x6 cuenta como 2. Un admin no entra en la cuenta ni en N.</p>`;
 }
 
 async function renderRol() {
@@ -2253,21 +2281,15 @@ async function renderRol() {
   window._rol = data;
   const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
   const personas = state.admin ? `<label>Persona <select id="rol-persona">${(data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : "";
-  const cfg = state.admin ? await htmlPagoConfig() : "";
-  const pago = data.config || {};
-  const filaPago = pago.id || (pago.nombre && pago.vigente_desde ? pago.nombre + "|" + String(pago.vigente_desde).slice(0, 10) : "");
-  const pedirPago = window.SunsuInline && SunsuInline.pide() && filaPago ? SunsuInline.pedir("pago_config", filaPago, { nombre: pago.nombre || "", vigente: String(pago.vigente_desde || "").slice(0, 10), sueldo: pago.sueldo || "", bono: pago.bono || "", iess: pago.iess_pct || "", fondo: pago.fondo ? "SI" : "" }) : "";
   return `<div class="tools">${personas}<label>Ciclo <select id="rol-ciclo">${cicloOpts}</select></label><button class="btn small" type="button" id="rol-ver">Ver</button>
       <button class="btn ghost small" type="button" id="rol-pdf">Descargar PDF</button></div>
     <div id="rol-sheet"></div>
-    ${pedirPago}
-    ${cfg}
-    <p class="note">El sueldo y el bono salen de la ficha o del configurador, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones.</p>`;
+    ${state.admin ? `<p class="note"><a href="#/m/configuracion">Sueldo, bono e IESS se editan en Configuración general</a></p>` : ""}
+    <p class="note">El sueldo y el bono salen de Configuración general, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones.</p>`;
 }
 async function htmlPagoConfig() {
   const data = await api("getPagoConfig");
   if (data.error) return fail(data);
-  const opts = (data.personas || []).map((p) => `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join("");
   const ixP = window.SunsuInline;
   const filas = (data.configs || []).map((c) => {
     const vigente = String(c.vigente_desde || "").slice(0, 10);
@@ -2275,23 +2297,13 @@ async function htmlPagoConfig() {
     const pct = Number(c.iess_pct);
     const iess = Number.isFinite(pct) ? (pct > 1 ? pct : Math.round(pct * 10000) / 100) : "";
     if (ixP && ixP.edita()) {
-      return `<div class="row">${ixP.lineas("pago_config", fila, [["nombre", "Persona", c.nombre], ["vigente", "Vigente desde", vigente], ["sueldo", "Sueldo", c.sueldo], ["bono", "Bono", c.bono], ["iess", "IESS %", iess], ["fondo", "Fondo", c.fondo ? "SI" : ""]])} ${ixP.borrar("pago_config", fila)}</div>`;
+      return `<div class="row">${ixP.lineas("pago_config", fila, [["nombre", "Persona", c.nombre], ["vigente", "Vigente desde", vigente], ["sueldo", "Sueldo", c.sueldo], ["bono", "Bono", c.bono], ["iess", "IESS %", iess], ["fondo", "Fondo", c.fondo ? "SI" : ""], ["fondoDesde", "Fondo desde", String(c.fondo_desde || "").slice(0, 10)], ["vacaciones", "Vacaciones desde el año", c.vacaciones_desde_anio == null ? "1" : c.vacaciones_desde_anio]])} ${ixP.borrar("pago_config", fila)}</div>`;
     }
     return `<div class="row"><div class="name">${esc(c.nombre)}</div><div class="note">desde ${esc(vigente)} · sueldo ${money(c.sueldo)} · bono ${money(c.bono)}</div></div>`;
   }).join("");
-  return `<form id="f-pago-cfg" class="card"><div class="card-title">Configurador de pagos</div>
-    <p class="note">Cada guardado vale desde una fecha. No escribe Google Sheets.</p>
-    <label>Persona</label><select name="nombre">${opts}</select>
-    <label>Vigente desde</label><input name="vigente_desde" type="date" value="${esc(ymdEc())}" required>
-    <label>Sueldo base</label><input name="sueldo" inputmode="decimal" required>
-    <label>Bono fijo</label><input name="bono" inputmode="decimal" value="0">
-    <label>IESS %</label><input name="iess_pct" inputmode="decimal" value="9.45">
-    <label><input type="checkbox" name="fondo" style="width:auto"> Fondo de reserva</label>
-    <label>Fondo desde</label><input name="fondo_desde" type="date">
-    <label>Vacaciones desde el año</label><input name="vacaciones_desde_anio" inputmode="numeric" value="1">
-    <button class="btn" type="submit">Guardar configuración</button><p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>
+  return `<p class="note">Cada vigencia vale desde su fecha y no toca los ciclos ya cerrados. No escribe Google Sheets.</p>
     <div id="pago-nuevo">${ixP && ixP.edita() ? ixP.mas("pago_config") : ""}</div>
-    <div class="list">${filas || `<p class="note">Todavía no hay vigencias guardadas.</p>`}</div>`;
+    <div class="list">${filas || `<p class="note">Todavía no hay vigencias guardadas. El rol usa la ficha hasta que guardes una.</p>`}</div>`;
 }
 
 async function renderAsistencia() {
@@ -4372,7 +4384,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024gc"></script>
-<script src="beta-inline.js?v=20261024ad"></script>
+<script src="beta-inline.js?v=20261024ae"></script>
 <script>draw();</script>
 </body>
 </html>
