@@ -17,7 +17,7 @@ const TABLAS = [
   "erp_conteos", "erp_conteo_lineas", "erp_ajustes", "erp_avisos",
   "erp_tickets_procesados", "erp_clientes", "erp_proveedores", "erp_productos",
   "log_acciones", "ordenes_compra", "caja_chica", "propinas", "multas_descuentos",
-  "solicitudes_cambio", "audit_log",
+  "solicitudes_cambio", "audit_log", "catalogo",
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock",
 ];
