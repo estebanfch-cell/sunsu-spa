@@ -779,8 +779,19 @@ describe("api", () => {
     assert.equal(out.ok, true);
     const data = out.data as Row;
     assert.equal(data.comFaciales, 2);
+    assert.equal(data.sueldo, 480);
     assert.equal(data.fuente, "beta-local");
+    assert.equal(Math.round(((data.iess as number) + (data.egresos as number)) * 100), Math.round(((data.totalIngresos as number) - (data.totalRecibir as number)) * 100));
     assert.equal(String(out.error || "").includes("Sheet"), false);
+    const cfg = await handle("pago_config_guardar", {
+      token: c.token, nombre: "Andrea", vigente_desde: "2026-10-01", sueldo: 500, bono: 25, iess_pct: 9.45, fondo: false,
+    }, c) as Row;
+    assert.equal(cfg.ok, true);
+    const con = await handle("getRolIndividual", { token: c.token, sheet: "OCTUBRE_2026", cedula: "1711" }, c) as Row;
+    const d2 = con.data as Row;
+    assert.equal(d2.sueldo, 500);
+    assert.equal(d2.bono, 25);
+    assert.equal(Math.round(((d2.iess as number) + (d2.egresos as number)) * 100), Math.round(((d2.totalIngresos as number) - (d2.totalRecibir as number)) * 100));
     const no = await handle("getRolIndividual", { token: c.token, sheet: "MAYO_2026", cedula: "999" }, c) as Row;
     assert.match(String(no.error), /Empleada o periodo/);
   });

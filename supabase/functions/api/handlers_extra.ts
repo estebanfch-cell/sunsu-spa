@@ -306,7 +306,7 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     }
   }
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
-  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null };
+  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
   try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }
   const rpcArgs: R = { p_nombre_app: s(e.nombre_app), p_anio: anio, p_mes: mes };
   if (horas.hayDatos) {
@@ -328,10 +328,15 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     for (const k of keys) if (n(e[k]) > 0) return n(e[k]);
     return 0;
   };
-  const sueldoBase = dinero("sueldo_base", "sueldo", "sueldo_mensual");
-  const bonoFijo = dinero("bono_fijo", "bono");
+  const finMes = anio && mes ? new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10) : "";
+  const cfg = finMes ? pagoVigente(await pagoFilas(ctx), s(e.nombre_app) || s(e.apellidos_y_nombres), finMes) : null;
+  const sueldoBase = cfg ? n(cfg.sueldo) : dinero("sueldo_base", "sueldo", "sueldo_mensual");
+  const bonoFijo = cfg ? n(cfg.bono) : dinero("bono_fijo", "bono");
   const local = rolCalcular({
-    sueldo: sueldoBase, bono: bonoFijo, fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
+    sueldo: sueldoBase, bono: bonoFijo, fondoReserva: cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(e.fondo_reserva).toUpperCase() === "SI",
+    iessPct: cfg && cfg.iess_pct != null && cfg.iess_pct !== "" ? n(cfg.iess_pct) : undefined,
+    fondoDesde: cfg ? s(cfg.fondo_desde) || null : null,
+    vacacionesDesdeAnio: cfg && cfg.vacaciones_desde_anio != null && cfg.vacaciones_desde_anio !== "" ? n(cfg.vacaciones_desde_anio) : undefined,
     fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
     diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
@@ -339,9 +344,14 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     comProductos: com.comProductos, comPaquetes: com.comPaquetes, multas: com.multas,
   });
   const costoH = sueldoBase / 240;
+  // Con configurador manda el cálculo local: rol_calcular SQL sigue leyendo la ficha, no pago_config.
+  // egresos del PDF es lo que va además del IESS (el PDF suma iess + egresos).
+  const deHoja = rpc && !rpc.error && !cfg ? rpc : null;
+  const iess = deHoja ? n(deHoja.iess_personal) : local.iess;
+  const egresosConIess = deHoja ? n(deHoja.total_egresos) : local.egresos;
   const data = {
     nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
-    diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
+    diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasJibble: horas.hayDatos ? horas.diasJibble : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
     comFaciales: local.comFaciales, comPaquetes: local.comPaquetes, comProductos: local.comProductos,
     hrsSupl: horas.hrsSupl, valSupl: round2(horas.hrsSupl * costoH * 1.5),
     hrsExtr: horas.hrsExtr, valExtr: round2(horas.hrsExtr * costoH * 2),
@@ -349,12 +359,12 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     atrasoMin: horas.atrasoMin, faltas: horas.faltas,
     fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
     dec13: local.dec13, dec14: local.dec14, fondoReserva: local.fondoReserva, vacaciones: local.vacaciones,
-    totalIngresos: rpc && !rpc.error ? n(rpc.total_ingresos) : local.totalIngresos,
-    iess: rpc && !rpc.error ? n(rpc.iess_personal) : local.iess,
-    egresos: rpc && !rpc.error ? n(rpc.total_egresos) : local.egresos,
-    totalRecibir: rpc && !rpc.error ? n(rpc.total_recibir) : local.totalRecibir,
+    totalIngresos: deHoja ? n(deHoja.total_ingresos) : local.totalIngresos,
+    iess,
+    egresos: round2(Math.max(0, egresosConIess - iess)),
+    totalRecibir: deHoja ? n(deHoja.total_recibir) : local.totalRecibir,
     anticipo: 0, prestHip: 0, prestQuir: 0, sheet, multasDetalle: [],
-    fuente: rpc && !rpc.error ? "rol_calcular" : "beta-local",
+    fuente: deHoja ? "rol_calcular" : "beta-local",
   };
   return { ok: true, data };
 });
