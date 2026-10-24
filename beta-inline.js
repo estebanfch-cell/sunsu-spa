@@ -2,11 +2,20 @@
 // Quien no es admin pide el cambio o la eliminación. Ver como no escribe.
 (function () {
   var dirty = {};
-  var CAMPOS = [
-    ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
-    ["facial", "Facial"], ["extras", "Extras"], ["pack3", "Pack x3"], ["pack6", "Pack x6"],
-    ["recomendaciones", "Recomendaciones"], ["notas", "Notas"], ["estimado", "Total"],
-  ];
+  var CAMPOS = {
+    tickets: [
+      ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
+      ["facial", "Facial"], ["extras", "Extras"], ["pack3", "Pack x3"], ["pack6", "Pack x6"],
+      ["recomendaciones", "Recomendaciones"], ["notas", "Notas"], ["estimado", "Total"],
+    ],
+    clientes: [
+      ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"],
+      ["telefono", "Teléfono"], ["sector", "Sector"], ["tipoPiel", "Tipo de piel"],
+      ["estado", "Estado"], ["alergias", "Alergias"], ["medicacion", "Medicación"],
+      ["condiciones", "Condiciones"], ["nacimiento", "Nacimiento"], ["autorizaFotos", "Autoriza fotos"],
+    ],
+  };
+  function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
   function esc(v) {
     return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
@@ -100,7 +109,21 @@
     dirty = {};
     barra();
     if (window.toast) toast("Cambios guardados");
-    if (typeof renderHistorial === "function") renderHistorial(document.getElementById("content"));
+    refrescar(lista.some(function (g) { return g.tabla === "clientes"; }) ? "clientes" : "tickets");
+  }
+
+  function refrescar(tabla) {
+    if (tabla === "clientes" && typeof draw === "function") { draw(); return; }
+    if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
+  }
+
+  function aplicar() {
+    document.querySelectorAll(".ix-cell").forEach(function (celda) {
+      var k = clave(celda.getAttribute("data-ix-tabla"), celda.getAttribute("data-ix-fila"), celda.getAttribute("data-ix-campo"));
+      if (!dirty[k]) return;
+      celda.textContent = dirty[k].ahora;
+      celda.classList.add("ix-dirty");
+    });
   }
 
   function descartar() {
@@ -119,17 +142,19 @@
     var data = await api("inline_borrar", { tabla: tabla, fila: fila });
     if (data.error) { if (window.toast) toast(data.error); return; }
     if (window.toast) toast("Eliminado");
-    if (typeof renderHistorial === "function") renderHistorial(document.getElementById("content"));
+    refrescar(tabla);
   }
 
-  function agregar() {
+  function agregar(tabla) {
     if (document.getElementById("ix-nuevo")) return;
-    var host = document.getElementById("hist-res") || document.getElementById("content");
+    tabla = tabla || "tickets";
+    var host = (tabla === "clientes" && document.getElementById("cli-list-host")) || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    box.innerHTML = '<div class="ix-line"><b>Nuevo ticket</b></div>' + lineas("tickets", "nuevo", CAMPOS).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
+    var titulo = tabla === "clientes" ? "Nueva clienta" : "Nuevo ticket";
+    box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }
 
@@ -137,7 +162,9 @@
     var vals = (window._ixVals && window._ixVals[tabla + ":" + fila]) || {};
     var overlay = document.createElement("div");
     overlay.className = "ix-overlay";
-    var campos = CAMPOS.map(function (p) {
+    var campos = camposDe(tabla).filter(function (p) {
+      return tabla === "tickets" || Object.prototype.hasOwnProperty.call(vals, p[0]);
+    }).map(function (p) {
       return '<label>' + esc(p[1]) + '<input data-k="' + esc(p[0]) + '" value="' + esc(vals[p[0]] || "") + '"></label>';
     }).join("");
     overlay.innerHTML = '<div class="ix-sheet"><div class="ix-line"><b>Solicitar cambio / eliminación</b><button type="button" id="ix-x">×</button></div>'
@@ -199,7 +226,7 @@
         if (res.error) { if (window.toast) toast(res.error); return; }
         overlay.remove();
         contar();
-        if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
+        refrescar(document.getElementById("cli-q") ? "clientes" : "tickets");
       };
     });
   }
@@ -228,7 +255,7 @@
       return;
     }
     var add = ev.target.closest && ev.target.closest("[data-ix-mas]");
-    if (add && edita()) agregar();
+    if (add && edita()) agregar(add.getAttribute("data-ix-mas"));
   });
 
   window.addEventListener("beforeunload", function (ev) {
@@ -245,7 +272,7 @@
     };
   }
 
-  window.SunsuInline = { edita: edita, pide: pide, campo: campo, lineas: lineas, borrar: borrar, pedir: pedir, mas: mas, contar: contar, panel: panel };
+  window.SunsuInline = { edita: edita, pide: pide, campo: campo, lineas: lineas, borrar: borrar, pedir: pedir, mas: mas, contar: contar, panel: panel, aplicar: aplicar };
   document.addEventListener("click", function (ev) {
     if (ev.target && ev.target.id === "btn-solicitudes") panel();
   });

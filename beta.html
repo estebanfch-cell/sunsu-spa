@@ -517,6 +517,9 @@
   .cli-line .num, .cli-head .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.78rem; }
   .cli-line .ced { font-size: 0.76rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cli-line.on, .cli-row.on { border-color: var(--navy); background: var(--blue-l); }
+  .cli-line .ix-pedir, .cli-row .ix-pedir { display: inline; width: auto; margin: 0 0 0 6px; }
+  .cli-line .ix-trash, .cli-row .ix-trash { margin-left: 6px; }
+  .tools .ix-mas { display: inline-block; width: auto; margin: 0; }
   .paq-card { padding: 10px 0; border-bottom: 1px solid var(--cream-d); }
   .paq-slots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .paq-slot {
@@ -2011,21 +2014,76 @@ function ordenarClientes(rows, q) {
 function nombreCli(c) {
   return String(c.nombre || ((c.nombres || "") + " " + (c.apellido || "")).trim() || "Sin nombre");
 }
+function filaCliente(c) {
+  if (c && c.fila) return String(c.fila);
+  if (c && c.key) return "k:" + c.key;
+  return "";
+}
+function nombreEditable(c) {
+  if (!(window.SunsuInline && SunsuInline.edita())) return esc(nombreCli(c));
+  const fila = filaCliente(c);
+  if (!fila) return esc(nombreCli(c));
+  return SunsuInline.campo("clientes", fila, "nombre", c.nombres || "") + " " + SunsuInline.campo("clientes", fila, "apellido", c.apellido || "");
+}
+function cedulaEditable(c) {
+  if (!(window.SunsuInline && SunsuInline.edita())) return esc(c.cedula || "—");
+  const fila = filaCliente(c);
+  if (!fila) return esc(c.cedula || "—");
+  return SunsuInline.campo("clientes", fila, "cedula", c.cedula || "");
+}
+function accionesCliente(c) {
+  if (!window.SunsuInline) return "";
+  const fila = filaCliente(c);
+  if (!fila) return "";
+  if (SunsuInline.edita()) return SunsuInline.borrar("clientes", fila);
+  if (SunsuInline.pide()) return SunsuInline.pedir("clientes", fila, { nombre: c.nombres || "", apellido: c.apellido || "", cedula: c.cedula || "" });
+  return "";
+}
+function valsFicha(c) {
+  const v = {
+    nombre: c.nombres || "", apellido: c.apellido || "", cedula: c.cedula || "",
+    sector: c.sector || "", tipoPiel: c.tipoPiel || "", estado: c.estado || "",
+    alergias: c.alergias || "", medicacion: c.medicacion || "", condiciones: c.condiciones || "",
+    nacimiento: c.nacimiento || "", autorizaFotos: c.autorizaFotos || "",
+  };
+  if ("telefono" in c) v.telefono = c.telefono || "";
+  return v;
+}
+function htmlFichaCliente(c) {
+  if (!window.SunsuInline) return "";
+  const fila = filaCliente(c);
+  if (!fila) return "";
+  if (SunsuInline.edita()) {
+    const pares = [
+      ["nombre", "Nombre", c.nombres || ""], ["apellido", "Apellido", c.apellido || ""], ["cedula", "Cédula", c.cedula || ""],
+    ];
+    if ("telefono" in c) pares.push(["telefono", "Teléfono", c.telefono || ""]);
+    pares.push(
+      ["sector", "Sector", c.sector || ""], ["tipoPiel", "Tipo de piel", c.tipoPiel || ""], ["estado", "Estado", c.estado || ""],
+      ["alergias", "Alergias", c.alergias || ""], ["medicacion", "Medicación", c.medicacion || ""],
+      ["condiciones", "Condiciones", c.condiciones || ""], ["nacimiento", "Nacimiento", c.nacimiento || ""],
+      ["autorizaFotos", "Autoriza fotos", c.autorizaFotos || ""],
+    );
+    return SunsuInline.lineas("clientes", fila, pares);
+  }
+  if (SunsuInline.pide()) return SunsuInline.pedir("clientes", fila, valsFicha(c));
+  return "";
+}
 function htmlClientes(rows, moneyOk) {
   const vacio = `<p class="note">No hay clientas en el registro.</p>`;
   const nada = `<p class="note">Nada coincide con la búsqueda.</p>`;
-  const phone = rows.map((c) => `<button class="cli-row${window._cliKey === c.key ? " on" : ""}" type="button" data-cli="${esc(c.key)}">
-      <div class="cli-main"><div class="cli-name">${esc(nombreCli(c))}</div>
-      <div class="sub">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${c.cedula ? " · " + esc(c.cedula) : ""}</div></div>
+  const phone = rows.map((c) => `<div class="cli-row${window._cliKey === c.key ? " on" : ""}" data-cli="${esc(c.key)}" role="button" tabindex="0">
+      <div class="cli-main"><div class="cli-name">${nombreEditable(c)} ${accionesCliente(c)}</div>
+      <div class="sub">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${window.SunsuInline && SunsuInline.edita() ? " · " + cedulaEditable(c) : (c.cedula ? " · " + esc(c.cedula) : "")}</div></div>
       <div class="cli-money">${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</div>
-    </button>`).join("");
-  const desk = rows.map((c) => `<button class="cli-line${window._cliKey === c.key ? " on" : ""}" type="button" data-cli="${esc(c.key)}">
-      <span class="cli-name">${esc(nombreCli(c))}</span>
+    </div>`).join("");
+  const desk = rows.map((c) => `<div class="cli-line${window._cliKey === c.key ? " on" : ""}" data-cli="${esc(c.key)}" role="button" tabindex="0">
+      <span class="cli-name">${nombreEditable(c)} ${accionesCliente(c)}</span>
       <span class="num">${esc(c.visitas)}</span>
       <span class="num">${esc(fechaCorta(c.ultima) || "—")}</span>
-      <span class="ced">${esc(c.cedula || "—")}</span>
+      <span class="ced">${cedulaEditable(c)}</span>
       <span class="num cli-money">${moneyOk && c.total != null ? money(c.total) : ""}</span>
-    </button>`).join("");
+    </div>`).join("");
   return {
     phone: phone || (window._cliQ ? nada : vacio),
     desk: desk || (window._cliQ ? nada : vacio),
@@ -2041,8 +2099,12 @@ function pintarClientes(q) {
   if (phone) phone.innerHTML = html.phone;
   if (desk) desk.innerHTML = html.desk;
   document.querySelectorAll("#lista [data-cli], #lista-desk [data-cli]").forEach((b) => {
-    b.onclick = () => abrirCliente(b.getAttribute("data-cli"));
+    b.onclick = (ev) => {
+      if (ev.target.closest(".ix-cell, .ix-trash, .ix-pedir, input, button")) return;
+      abrirCliente(b.getAttribute("data-cli"));
+    };
   });
+  if (window.SunsuInline) SunsuInline.aplicar();
 }
 async function renderClientes() {
   const data = await api("clientes_resumen");
@@ -2052,8 +2114,9 @@ async function renderClientes() {
   window._cliQ = "";
   const html = htmlClientes(window._cliLista, window._cliMoney);
   const head = `<div class="cli-head"><span>Clienta</span><span class="num">Visitas</span><span class="num">Última</span><span>Cédula</span><span class="num">Total</span></div>`;
-  return `<div class="cli-layout"><div class="cli-list">
-      <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
+  const mas = window.SunsuInline && SunsuInline.edita() ? SunsuInline.mas("clientes") : "";
+  return `<div class="cli-layout"><div class="cli-list" id="cli-list-host">
+      <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>${mas}</div>
       <input id="cli-q" placeholder="Buscar por nombre, apellido o cédula" aria-label="Buscar clienta" autocomplete="off">
       <div class="cli-desk">${head}<div id="lista-desk">${html.desk}</div></div>
       <div class="list cli-phone" id="lista">${html.phone}</div>
@@ -3205,7 +3268,12 @@ function renderTrfNueva() {
 }
 
 function wireVentas(main) {
-  main.querySelectorAll("[data-cli]").forEach((b) => { b.onclick = () => abrirCliente(b.getAttribute("data-cli")); });
+  main.querySelectorAll("[data-cli]").forEach((b) => {
+    b.onclick = (ev) => {
+      if (ev.target.closest(".ix-cell, .ix-trash, .ix-pedir, input, button")) return;
+      abrirCliente(b.getAttribute("data-cli"));
+    };
+  });
   const busca = main.querySelector("#cli-q");
   if (busca) busca.addEventListener("input", () => pintarClientes(busca.value));
   const cerrar = main.querySelector("[data-cli-cerrar]");
@@ -3253,11 +3321,13 @@ async function abrirCliente(key) {
     ? visitas.map((t) => _buildTicketCard(t, admin)).join("")
     : "";
   document.querySelectorAll("[data-cli]").forEach((b) => b.classList.toggle("on", b.getAttribute("data-cli") === key));
+  const ficha = htmlFichaCliente(c);
   const gasto = admin && c.total != null
     ? `<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">${money(c.total)}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>`
     : "";
   body.innerHTML = `<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:14px">
       <div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">Resumen — ${esc(c.nombre || "")} · ${esc(visitas.length)} ticket(s)</div>
+      ${ficha}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr${gasto ? " 1fr" : ""};gap:7px">
         <div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">${totFac}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>
         <div style="background:var(--green-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--green)">${totPaq}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>
@@ -4246,7 +4316,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261024resto"></script>
-<script src="beta-inline.js?v=20261024inline"></script>
+<script src="beta-inline.js?v=20261024cli"></script>
 <script>draw();</script>
 </body>
 </html>

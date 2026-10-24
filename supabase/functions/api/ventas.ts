@@ -377,9 +377,10 @@ interface GrupoCliente {
   ultima: string;
   total: number;
   cosmetologa: string;
+  fila: string;
 }
 
-function claveRegistro(r: Row): string {
+export function claveRegistro(r: Row): string {
   const ced = normCedula(r.cedula);
   if (ced) return "c:" + ced;
   const nom = normNombre((s(r.nombre) + " " + s(r.apellido)).trim());
@@ -487,22 +488,25 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
   let rows = await db.all("tickets");
   if (!verTodos) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
   const map = new Map<string, GrupoCliente>();
+  let regs: Row[] = [];
+  try { regs = await db.all("clientas_registro"); } catch { regs = []; }
+  const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)));
   if (verTodos) {
-    let regs: Row[] = [];
-    try { regs = await db.all("clientas_registro"); } catch { regs = []; }
     for (const r of regs) {
+      if (r.borrado_at) continue;
       const nombres = s(r.nombre);
       const apellido = s(r.apellido);
       const cedula = s(r.cedula).split(".")[0];
       if (!nombres && !apellido && !normCedula(cedula)) continue;
       const key = claveRegistro(r);
       if (map.has(key)) continue;
-      map.set(key, { key, cedula, nombres, apellido, visitas: 0, ultima: "", total: 0, cosmetologa: "" });
+      map.set(key, { key, cedula, nombres, apellido, visitas: 0, ultima: "", total: 0, cosmetologa: "", fila: s(r.sheet_row) });
     }
   }
   for (const r of rows) {
     if (!s(r.nombre) && !s(r.apellido) && !normCedula(r.id_3)) continue;
     const key = claveCliente(r);
+    if (ocultas.has(key)) continue;
     let g = map.get(key);
     if (!g) {
       const nom = normNombre((s(r.nombre) + " " + s(r.apellido)).trim());
@@ -513,14 +517,14 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
       }
     }
     if (!g) {
-      g = { key, cedula: s(r.id_3).split(".")[0], nombres: s(r.nombre), apellido: s(r.apellido), visitas: 0, ultima: "", total: 0, cosmetologa: "" };
+      g = { key, cedula: s(r.id_3).split(".")[0], nombres: s(r.nombre), apellido: s(r.apellido), visitas: 0, ultima: "", total: 0, cosmetologa: "", fila: "" };
       map.set(key, g);
     }
     aplicarTicket(g, r);
   }
   const clientes = [...map.values()].map((g) => {
     const item: Row = {
-      key: g.key, cedula: g.cedula, nombres: g.nombres, apellido: g.apellido,
+      key: g.key, fila: g.fila, cedula: g.cedula, nombres: g.nombres, apellido: g.apellido,
       nombre: (g.nombres + " " + g.apellido).trim(),
       visitas: g.visitas, ultima: g.ultima, cosmetologa: g.cosmetologa,
     };
@@ -562,7 +566,10 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   const cats = await db.all("catalogo").catch(() => [] as Row[]);
   const prods = await db.all("erp_productos").catch(() => [] as Row[]);
   const regs = await db.all("clientas_registro").catch(() => [] as Row[]);
-  const ficha = regs.find((r) => claveRegistro(r) === key) || {};
+  const ficha = regs.find((r) => !r.borrado_at && claveRegistro(r) === key) || {};
+  if (!s(ficha.cedula) && !s(ficha.nombre) && regs.some((r) => r.borrado_at && claveRegistro(r) === key)) {
+    return { error: "Esa clienta está eliminada" };
+  }
   if (!rows.length && !s(ficha.nombre) && !s(ficha.apellido) && !normCedula(ficha.cedula)) {
     return { error: "No hay visitas de esa clienta en tus tickets" };
   }
@@ -599,7 +606,12 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   const cliente: Row = {
     key, cedula: s(primero?.id_3) || s(ficha.cedula).split(".")[0],
     nombres, apellido, nombre: (nombres + " " + apellido).trim(),
+    fila: s(ficha.sheet_row),
     telefono: s(ficha.telefono), email: s(ficha.email), notas: s(ficha.notas || ficha.observaciones),
+    sector: s(ficha.sector_donde_vive), tipoPiel: s(ficha.tipo_de_piel), estado: s(ficha.estado_actual),
+    alergias: s(ficha.alergias), medicacion: s(ficha.medicacion),
+    condiciones: s(ficha.condiciones_medicas_o_dermatologicas_que_debamos_saber),
+    nacimiento: ymdUtc(ficha.fecha_de_nacimiento), autorizaFotos: s(ficha.autoriza_fotos),
     visitas: tickets.length, ultima: s(tickets[0]?.fecha),
   };
   if (admin) cliente.total = round2(total);
