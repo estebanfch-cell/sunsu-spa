@@ -443,23 +443,22 @@ export async function borrarCompra(ctx: Ctx, ses: Ses, fila: string): Promise<Ro
   return { ok: true };
 }
 
-function marcadoBorrado(row: Row): boolean {
-  let orig = row.orig;
-  if (typeof orig === "string") {
-    try { orig = JSON.parse(orig) as Row; } catch { return false; }
-  }
-  return !!(orig && typeof orig === "object" && (orig as Row).borrado === true);
+function filaBorrada(row: Row): boolean {
+  return !!row.borrado_at;
 }
 
-function origConBorrado(row: Row): Row {
-  const base = row.orig && typeof row.orig === "object" ? { ...(row.orig as Row) } : {};
-  base.borrado = true;
-  return base;
+function codigoOcupado(rows: Row[], codigo: string, propio?: Row): boolean {
+  const code = s(codigo).toLowerCase();
+  if (!code) return false;
+  return rows.some((r) => {
+    if (propio && (propio.id != null ? r.id === propio.id : String(r.sheet_row) === String(propio.sheet_row))) return false;
+    return s(r.codigo_gc).toLowerCase() === code;
+  });
 }
 
 async function giftDe(ctx: Ctx, fila: string): Promise<Row | null> {
   const rows = await ctx.db.all("gift_cards");
-  return rows.find((r) => !marcadoBorrado(r) && (s(r.sheet_row) === fila || s(r.id) === fila || s(r.codigo_gc) === fila)) || null;
+  return rows.find((r) => !filaBorrada(r) && (s(r.sheet_row) === fila || s(r.id) === fila || s(r.codigo_gc) === fila)) || null;
 }
 
 function vistaGift(row: Row): Row {
@@ -474,7 +473,7 @@ export async function guardarGiftCampos(ctx: Ctx, ses: Ses, fila: string, campos
   if (!fila || fila === "nuevo") {
     if (!s(campos.codigo)) return { error: "El código es obligatorio" };
     const rows = await ctx.db.all("gift_cards");
-    if (rows.some((r) => !marcadoBorrado(r) && s(r.codigo_gc).toLowerCase() === s(campos.codigo).toLowerCase())) return { error: "Ese código ya existe" };
+    if (codigoOcupado(rows, s(campos.codigo))) return { error: "Ese código ya existe" };
     const ec = ecuadorParts(ctx.now);
     const sheet_row = await nextSheet(ctx.db, "gift_cards");
     const vendida = !!(s(campos.nombre) || s(campos.cedula) || s(campos.valor));
@@ -495,6 +494,7 @@ export async function guardarGiftCampos(ctx: Ctx, ses: Ses, fila: string, campos
   const patch: Row = {};
   if (campos.codigo != null) {
     if (!s(campos.codigo)) return { error: "El código es obligatorio" };
+    if (codigoOcupado(await ctx.db.all("gift_cards"), s(campos.codigo), row)) return { error: "Ese código ya existe" };
     patch.codigo_gc = s(campos.codigo);
   }
   if (campos.nombre != null) patch.nombre_comprador = s(campos.nombre);
@@ -518,15 +518,23 @@ export async function borrarGiftSuave(ctx: Ctx, ses: Ses, fila: string): Promise
   const bloqueo = bloqueoPrueba(ses, row);
   if (bloqueo) return { error: bloqueo };
   const antes = vistaGift(row);
-  const saved = await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { orig: origConBorrado(row) });
-  if (!saved) return { error: "No se pudo eliminar" };
+  const patch = { borrado_at: ctx.now.toISOString(), borrado_por: actorOf(ses) };
+  let saved: Row | null = null;
+  try {
+    saved = await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (/update vacio|column/i.test(msg)) return { error: "Aplica 0027_borrado_gc_paq.sql para el borrado con historial" };
+    return { error: msg || "No se pudo eliminar" };
+  }
+  if (!saved || !saved.borrado_at) return { error: "Aplica 0027_borrado_gc_paq.sql para el borrado con historial" };
   await anotar(ctx, ses, "gift_cards", s(row.sheet_row), "UPDATE", antes, { ...antes, borrado: true });
   return { ok: true };
 }
 
 async function paqueteDe(ctx: Ctx, fila: string): Promise<Row | null> {
   const rows = await ctx.db.all("paquetes");
-  return rows.find((r) => !marcadoBorrado(r) && (s(r.sheet_row) === fila || s(r.id) === fila)) || null;
+  return rows.find((r) => !filaBorrada(r) && (s(r.sheet_row) === fila || s(r.id) === fila)) || null;
 }
 
 function vistaPaquete(row: Row): Row {
@@ -579,8 +587,16 @@ export async function borrarPaqueteSuave(ctx: Ctx, ses: Ses, fila: string): Prom
   const bloqueo = bloqueoPrueba(ses, row);
   if (bloqueo) return { error: bloqueo };
   const antes = vistaPaquete(row);
-  const saved = await ctx.db.write(actorOf(ses), "paquetes", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { orig: origConBorrado(row) });
-  if (!saved) return { error: "No se pudo eliminar" };
+  const patch = { borrado_at: ctx.now.toISOString(), borrado_por: actorOf(ses) };
+  let saved: Row | null = null;
+  try {
+    saved = await ctx.db.write(actorOf(ses), "paquetes", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (/update vacio|column/i.test(msg)) return { error: "Aplica 0027_borrado_gc_paq.sql para el borrado con historial" };
+    return { error: msg || "No se pudo eliminar" };
+  }
+  if (!saved || !saved.borrado_at) return { error: "Aplica 0027_borrado_gc_paq.sql para el borrado con historial" };
   await anotar(ctx, ses, "paquetes", s(row.sheet_row), "UPDATE", antes, { ...antes, borrado: true });
   return { ok: true };
 }

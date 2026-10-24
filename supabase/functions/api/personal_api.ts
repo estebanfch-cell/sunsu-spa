@@ -67,7 +67,7 @@ extend("gc_list", "any", async (p, ctx) => {
   const q = s(p.q).toLowerCase();
   const items = [];
   for (const r of await ctx.db.all("gift_cards")) {
-    if (!s(r.codigo_gc)) continue;
+    if (r.borrado_at || !s(r.codigo_gc)) continue;
     const pub = gcPub(r);
     const blob = [pub.codigo, pub.nombre, pub.apellido, pub.cedula, pub.notas, pub.usadoPor].join(" ").toLowerCase();
     if (q && q !== "*" && !blob.includes(q)) continue;
@@ -78,7 +78,7 @@ extend("gc_list", "any", async (p, ctx) => {
 });
 
 extend("gc_detalle", "any", async (p, ctx) => {
-  const row = (await ctx.db.all("gift_cards")).find((r) => s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase());
+  const row = (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase());
   if (!row) return { error: "Gift card no encontrada" };
   return { ok: true, item: gcPub(row) };
 });
@@ -98,7 +98,7 @@ extend("gc_emitir", "any", async (p, ctx, ses) => {
 
 extend("gc_editar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin edita una gift card" };
-  const row = (await ctx.db.all("gift_cards")).find((r) => s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila));
+  const row = (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && (s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila)));
   if (!row) return { error: "Gift card no encontrada" };
   const antes = { saldo: saldoGift(row), usado: row.usado === true, valor: s(row.valor), notas: s(row.notas) };
   const patch: R = {};
@@ -136,6 +136,7 @@ extend("paq_list", "any", async (p, ctx, ses) => {
   const propio = !esAdmin(ses.rol) && acceso(ses.rol, "paquetes", matriz) !== "todos";
   const items = [];
   for (const r of await ctx.db.all("paquetes")) {
+    if (r.borrado_at) continue;
     if (!s(r.cedula) && !s(r.nombres) && !codigoPaq(r)) continue;
     if (propio && !esPropio(s(r.vendido_por), ses) && !esPropio(s(r.nombres), ses)) continue;
     const pub = paqPub(r);
@@ -147,7 +148,7 @@ extend("paq_list", "any", async (p, ctx, ses) => {
 });
 
 extend("paq_detalle", "any", async (p, ctx, ses) => {
-  const row = (await ctx.db.all("paquetes")).find((r) => codigoPaq(r).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila));
+  const row = (await ctx.db.all("paquetes")).find((r) => !r.borrado_at && (codigoPaq(r).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila)));
   if (!row) return { error: "Paquete no encontrado" };
   const matriz = await matrizDe(ctx.db);
   if (!esAdmin(ses.rol) && acceso(ses.rol, "paquetes", matriz) !== "todos" && !esPropio(s(row.vendido_por), ses)) {
@@ -172,7 +173,7 @@ extend("paq_emitir", "any", async (p, ctx, ses) => {
 
 extend("paq_editar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin edita un paquete" };
-  const row = (await ctx.db.all("paquetes")).find((r) => codigoPaq(r).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila));
+  const row = (await ctx.db.all("paquetes")).find((r) => !r.borrado_at && (codigoPaq(r).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila)));
   if (!row) return { error: "Paquete no encontrado" };
   const accion = s(p.accion || "marcar");
   let idx = n(p.slot) - 1;

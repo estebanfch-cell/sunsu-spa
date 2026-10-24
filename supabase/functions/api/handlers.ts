@@ -234,6 +234,7 @@ async function dashboard(ctx: Ctx): Promise<R> {
   const gcChips: { nombre: string; n: number }[] = [];
   const gcs = [...await ctx.db.all("gift_cards")].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
   for (const g of gcs) {
+    if (g.borrado_at) continue;
     if (!s(g.codigo_gc)) continue;
     if (enteroHoja(g.dia) !== ec.d || enteroHoja(g.mes) !== ec.m) continue;
     const an = enteroHoja(g.ano);
@@ -1281,11 +1282,13 @@ async function facturaCobro(p: R, ctx: Ctx, ses: Ses, modo: "fac" | "cobro" | "a
   if (patch.fac_7) {
     const ced = normCedula(row.id_3);
     for (const paq of await ctx.db.all("paquetes")) {
+      if (paq.borrado_at) continue;
       if (normCedula(paq.cedula) === ced && !s(paq.factura)) {
         await ctx.db.write(actorOf(ses), "paquetes", "update", { sheet_row: paq.sheet_row }, { factura: patch.fac_7 });
       }
     }
     for (const g of await ctx.db.all("gift_cards")) {
+      if (g.borrado_at) continue;
       if (normCedula(g.cedula_comprador) === ced && !s(g.factura) && !blankDia(g.dia)) {
         await ctx.db.write(actorOf(ses), "gift_cards", "update", { sheet_row: g.sheet_row }, { factura: patch.fac_7 });
       }
@@ -1325,7 +1328,7 @@ async function libresGC(ctx: Ctx, exclude: R) {
   const out = [];
   for (const r of rows) {
     if (exclude[String(r.sheet_row)]) continue;
-    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
+    if (r.borrado_at) continue;
     if (s(r.codigo_gc) && blankDia(r.dia)) out.push({ codigo: s(r.codigo_gc), fila: r.sheet_row });
   }
   return out;
@@ -1339,8 +1342,8 @@ async function unoGC(p: R, ctx: Ctx) {
 }
 reg("registrarGC", "any", async (p, ctx, ses) => {
   const fila = n(p.fila);
-  const row = fila ? await rowBySheet(ctx.db, "gift_cards", fila) : (await ctx.db.all("gift_cards")).find((r) => s(r.codigo_gc) === s(p.codigo));
-  if (!row) return { error: "Código no encontrado" };
+  const row = fila ? await rowBySheet(ctx.db, "gift_cards", fila) : (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc) === s(p.codigo));
+  if (!row || row.borrado_at) return { error: "Código no encontrado" };
   if (!blankDia(row.dia)) return { error: "Ese código ya está vendido" };
   const ec = ecuadorParts(ctx.now);
   await ctx.db.write(actorOf(ses), "gift_cards", "update", { sheet_row: row.sheet_row }, {
@@ -1357,7 +1360,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
   for (const r of await ctx.db.all("gift_cards")) {
     const codigo = s(r.codigo_gc);
     if (!codigo) continue;
-    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
+    if (r.borrado_at) continue;
     const nom = s(r.nombre_comprador), ape = s(r.apellido_comprador);
     const blob = [codigo, s(r.cedula_comprador), nom, ape, nom + " " + ape, s(r.usado_por), s(r.notas)].join(" ").toLowerCase();
     if (!todas && !blob.includes(q)) continue;
@@ -1372,8 +1375,9 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
 });
 reg("marcarGCUsada", "any", async (p, ctx, ses) => {
   let row = n(p.fila) ? await rowBySheet(ctx.db, "gift_cards", n(p.fila)) : null;
+  if (row?.borrado_at) row = null;
   if (!row && s(p.codigo)) {
-    const hits = (await ctx.db.all("gift_cards")).filter((r) => s(r.codigo_gc) === s(p.codigo));
+    const hits = (await ctx.db.all("gift_cards")).filter((r) => !r.borrado_at && s(r.codigo_gc) === s(p.codigo));
     row = hits.find((r) => !b(r.usado)) || hits[0] || null;
   }
   if (!row) return { error: "Gift card no encontrada" };
@@ -1392,7 +1396,7 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
   for (const r of await ctx.db.all("paquetes")) {
     const ced = s(r.cedula), nom = s(r.nombres), ape = s(r.apellidos);
     if (!ced && !nom) continue;
-    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
+    if (r.borrado_at) continue;
     const blob = [ced, nom, ape, nom + " " + ape, s(r.notas)].join(" ").toLowerCase();
     if (!blob.includes(q)) continue;
     const usos = usosDe(r);
@@ -1414,7 +1418,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
   const items = [];
   for (const r of await ctx.db.all("paquetes")) {
     if (!s(r.sku)) continue;
-    if (r.orig && typeof r.orig === "object" && (r.orig as R).borrado === true) continue;
+    if (r.borrado_at) continue;
     const usos = usosDe(r);
     const total = packSesiones(s(r.sku), s(r.paquete), usos);
     const clave = [s(r.cedula), s(r.sku), s(r.dia) + "/" + s(r.mes) + "/" + s(r.ano)].join("|");
@@ -1432,7 +1436,7 @@ reg("marcarUsoManual", "any", async (p, ctx, ses) => marcarUso(p, ctx, ses, fals
 reg("marcarPrimerUsoPaquete", "any", async (p, ctx, ses) => marcarUso(p, ctx, ses, true));
 reg("marcarUsoGC", "any", async (p, ctx, ses) => {
   const row = await rowBySheet(ctx.db, "paquetes", n(p.fila));
-  if (!row) return { error: "Paquete no encontrado" };
+  if (!row || row.borrado_at) return { error: "Paquete no encontrado" };
   const slot = Math.max(1, n(p.slot) || 1) - 1;
   const [u, f] = USO_FIELDS[slot] || USO_FIELDS[0];
   if (b(row[u]) || s(row[f])) return { error: "Ese uso ya está marcado" };
@@ -1444,14 +1448,14 @@ async function marcarUso(p: R, ctx: Ctx, ses: Ses, primero: boolean): Promise<R>
   if (!primero) row = await rowBySheet(ctx.db, "paquetes", n(p.fila));
   else {
     const ec = ecuadorParts(ctx.now);
-    const hits = (await ctx.db.all("paquetes")).filter((r) => normCedula(r.cedula) === normCedula(p.cedula) && s(r.sku).includes(skuCode(s(p.sku)).replace(/^[A-Z]+-/, "SUNSU-") || s(p.sku)) && n(r.dia) === ec.d && n(r.mes) === ec.m && n(r.ano) === ec.y);
+    const hits = (await ctx.db.all("paquetes")).filter((r) => !r.borrado_at && normCedula(r.cedula) === normCedula(p.cedula) && s(r.sku).includes(skuCode(s(p.sku)).replace(/^[A-Z]+-/, "SUNSU-") || s(p.sku)) && n(r.dia) === ec.d && n(r.mes) === ec.m && n(r.ano) === ec.y);
     row = hits.find((r) => usosDe(r).some((u) => !u.usado && !u.fecha)) || null;
     if (!row) {
       const sku = s(p.sku);
-      row = (await ctx.db.all("paquetes")).find((r) => normCedula(r.cedula) === normCedula(p.cedula) && (s(r.sku) === sku || s(r.sku).includes(sku)) && n(r.dia) === ec.d && n(r.mes) === ec.m) || null;
+      row = (await ctx.db.all("paquetes")).find((r) => !r.borrado_at && normCedula(r.cedula) === normCedula(p.cedula) && (s(r.sku) === sku || s(r.sku).includes(sku)) && n(r.dia) === ec.d && n(r.mes) === ec.m) || null;
     }
   }
-  if (!row) return { error: primero ? "No hay paquete de hoy para esa cédula" : "Paquete no encontrado" };
+  if (!row || row.borrado_at) return { error: primero ? "No hay paquete de hoy para esa cédula" : "Paquete no encontrado" };
   const usos = usosDe(row);
   const total = packSesiones(s(row.sku), s(row.paquete), usos);
   const idx = primero ? usos.findIndex((u) => !u.usado && !u.fecha) : (n(p.slot) ? n(p.slot) - 1 : usos.findIndex((u) => !u.usado && !u.fecha));
@@ -1835,7 +1839,7 @@ reg("getPlantillaGC", "any", async (_p, ctx) => {
 
 reg("getGCDigitales", "any", async (_p, ctx) => {
   const store = await kvGet(ctx.db, "SUNSU_GC_DIGITALES");
-  const vendidas = new Set((await ctx.db.all("gift_cards")).filter((r) => s(r.cedula_comprador) || s(r.nombre_comprador)).map((r) => s(r.codigo_gc)));
+  const vendidas = new Set((await ctx.db.all("gift_cards")).filter((r) => !r.borrado_at && (s(r.cedula_comprador) || s(r.nombre_comprador))).map((r) => s(r.codigo_gc)));
   const items: R[] = [];
   for (const [codigo, o] of Object.entries(store)) {
     if (!vendidas.has(codigo)) continue;

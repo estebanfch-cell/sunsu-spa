@@ -2133,6 +2133,25 @@ describe("series, comisiones y rol", () => {
     }
   });
 
+  it("0027 guarda el borrado fuera de orig y el código de gift card es único", () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0027_borrado_gc_paq.sql", import.meta.url), "utf8");
+    const tickets = readFileSync(new URL("../../../docs/supabase/pending/0022_inline_solicitudes.sql", import.meta.url), "utf8");
+    const clientes = readFileSync(new URL("../../../docs/supabase/pending/0023_clientes_inline.sql", import.meta.url), "utf8");
+    assert.match(sql, /alter table public\.gift_cards add column if not exists borrado_at timestamptz/);
+    assert.match(sql, /alter table public\.gift_cards add column if not exists borrado_por text/);
+    assert.match(sql, /alter table public\.paquetes add column if not exists borrado_at timestamptz/);
+    assert.match(sql, /alter table public\.paquetes add column if not exists borrado_por text/);
+    assert.match(sql, /orig, '\{\}'::jsonb\)->>'borrado' = 'true'/);
+    assert.match(sql, /create unique index if not exists gift_cards_codigo_uidx/);
+    assert.match(sql, /lower\(btrim\(codigo_gc\)\)/);
+    assert.doesNotMatch(sql, /alter table public\.tickets/i);
+    assert.doesNotMatch(sql, /alter table public\.clientas_registro/i);
+    assert.match(tickets, /alter table public\.tickets add column if not exists borrado_at timestamptz/);
+    assert.match(tickets, /alter table public\.tickets add column if not exists borrado_por text/);
+    assert.match(clientes, /alter table public\.clientas_registro add column if not exists borrado_at timestamptz/);
+    assert.match(clientes, /alter table public\.clientas_registro add column if not exists borrado_por text/);
+  });
+
   it("el admin edita gift cards y paquetes en línea y el borrado suave los esconde", async () => {
     const db = new MemoryDb({
       usuarios: [
@@ -2172,8 +2191,20 @@ describe("series, comisiones y rol", () => {
     const oculta = await handle("buscarGiftCards", { token: adminC.token, q: "26-099" }, adminC) as Row;
     assert.equal((oculta.resultados as Row[]).length, 0);
     const queda = (await db.all("gift_cards")).find((r) => r.codigo_gc === "26-099");
-    assert.equal((queda?.orig as Row).borrado, true);
+    assert.ok(queda?.borrado_at);
+    assert.equal(queda?.borrado_por, "Emi (emi)");
+    assert.equal((queda?.orig as Row).borrado, undefined);
     assert.ok(queda?.dia);
+    const re = await handle("inline_guardar", {
+      token: adminC.token, tabla: "gift_cards", fila: "nuevo", campos: { codigo: "26-099" },
+    }, adminC) as Row;
+    assert.match(String(re.error), /ya existe/i);
+    const reFila = await handle("inline_guardar", {
+      token: adminC.token, tabla: "gift_cards", fila: "2", campos: { codigo: "26-099" },
+    }, adminC) as Row;
+    assert.match(String(reFila.error), /ya existe/i);
+    const lista = await handle("gc_list", { token: adminC.token, q: "26-099" }, adminC) as Row;
+    assert.equal((lista.items as Row[]).length, 0);
     const libre = await handle("getCodigoGC", { token: adminC.token }, adminC) as Row;
     assert.equal(libre.codigo, "26-001");
     const bajaBlanca = await handle("inline_borrar", { token: adminC.token, tabla: "gift_cards", fila: "2" }, adminC) as Row;
@@ -2190,7 +2221,10 @@ describe("series, comisiones y rol", () => {
     assert.equal(bajaPaq.ok, true);
     const seg2 = await handle("getSeguimientoPaquetes", { token: adminC.token }, adminC) as Row;
     assert.equal((seg2.items as Row[]).length, 0);
-    assert.equal(((await db.all("paquetes"))[0].orig as Row).borrado, true);
+    const paqRow = (await db.all("paquetes"))[0];
+    assert.ok(paqRow.borrado_at);
+    assert.equal(paqRow.borrado_por, "Emi (emi)");
+    assert.equal((paqRow.orig as Row).borrado, undefined);
     ses.find((r) => r.token === adminC.token)!.modo_prueba = true;
     const prov = await handle("inline_guardar", {
       token: adminC.token, tabla: "proveedores", fila: "nuevo", campos: { nombre: "Prueba", familia: "ht" },
