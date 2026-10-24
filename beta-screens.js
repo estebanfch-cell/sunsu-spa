@@ -4310,15 +4310,15 @@ function _buildTicketCard(t, showPrices){
   card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
     +'<div style="flex:1">'
     +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
-    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+t.cedula+' · '+fechaFmt+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">#'+t.tkRow+'</span>':'')+'</div>'
+    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "nombre", t.nombre)+' '+SunsuInline.campo("tickets", t.tkRow, "apellido", t.apellido):(t.nombre+' '+t.apellido))+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "cedula", t.cedula):(t.cedula||''))+' · '+fechaFmt+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">#'+t.tkRow+'</span>':'')+'</div>'
     +(isAdminView&&t.tkRow
       ?'<div style="display:flex;gap:5px;margin-top:6px">'
-        +'<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>'
+        +(window.SunsuInline&&SunsuInline.edita()?'': '<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>')
         +'<button onclick="abrirModalMulta('+t.tkRow+')" style="padding:4px 10px;background:var(--red-l);color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">⚠️ Multa</button>'
-        +'<button onclick="eliminarTicket('+t.tkRow+')" style="padding:4px 10px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">🗑️ Eliminar</button>'
+        +(window.SunsuInline&&SunsuInline.edita()?SunsuInline.borrar("tickets", t.tkRow):'<button onclick="eliminarTicket('+t.tkRow+')" style="padding:4px 10px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">🗑️ Eliminar</button>')
         +'</div>'
-      :'')
+      :(window.SunsuInline&&SunsuInline.pide()&&t.tkRow?SunsuInline.pedir("tickets", t.tkRow, {nombre:t.nombre,apellido:t.apellido,cedula:t.cedula,facial:t.facial,pack3:t.pack3,pack6:t.pack6,extras:t.extras,notas:t.notas,recomendaciones:t.recomendaciones,estimado:t.estimado}):''))
     +'</div>'
     +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
     +(showPrices
@@ -4393,6 +4393,12 @@ function _buildTicketCard(t, showPrices){
       +'<button onclick="toggleExclusion('+t.tkRow+',\'producto\')" style="padding:4px 10px;border-radius:7px;border:1.5px solid '+(exclProd?'var(--red)':'var(--gray-l)')+';background:'+(exclProd?'var(--red-l)':'white')+';color:'+(exclProd?'var(--red)':'var(--gray)')+';font-size:0.65rem;font-weight:700;cursor:pointer" id="excl-prod-'+t.tkRow+'">'+(exclProd?'✓ ':'')+'🧴 Producto</button>'
       +'<button onclick="toggleExclusion('+t.tkRow+',\'extras\')" style="padding:4px 10px;border-radius:7px;border:1.5px solid '+(exclExt?'var(--red)':'var(--gray-l)')+';background:'+(exclExt?'var(--red-l)':'white')+';color:'+(exclExt?'var(--red)':'var(--gray)')+';font-size:0.65rem;font-weight:700;cursor:pointer" id="excl-ext-'+t.tkRow+'">'+(exclExt?'✓ ':'')+'✨ Extras</button>'
       +'</div></div>';
+  }
+  if(window.SunsuInline&&SunsuInline.edita()&&t.tkRow){
+    card+=SunsuInline.lineas("tickets", t.tkRow, [
+      ["facial","Facial",t.facial],["extras","Extras",t.extras],["pack3","Pack x3",t.pack3],["pack6","Pack x6",t.pack6],
+      ["recomendaciones","Recomendaciones",t.recomendaciones],["notas","Notas",t.notas],["estimado","Total",t.estimado],
+    ]);
   }
   card+='</div>';
   return card;
@@ -4520,6 +4526,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
     html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
     tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
   }
+  if(window.SunsuInline&&SunsuInline.edita()) html+=SunsuInline.mas("tickets");
   return html;
 }
 function _histResStaffHTML(tickets, busq){

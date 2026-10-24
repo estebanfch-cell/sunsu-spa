@@ -442,6 +442,28 @@ async function corteAsistencia(ctx: Ctx): Promise<string> {
   }
   return max;
 }
+function mismaPersona(a: string, b: string): boolean {
+  const na = normNombre(a);
+  const nb = normNombre(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const af = na.split(" ")[0] || "";
+  const bf = nb.split(" ")[0] || "";
+  return (af.length >= 3 && (nb === af || nb.startsWith(af + " "))) || (bf.length >= 3 && (na === bf || na.startsWith(bf + " ")));
+}
+async function diasConTicket(ctx: Ctx, nombres: string[], desde: string, hasta: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  let rows: R[] = [];
+  try { rows = await ctx.db.all("tickets"); } catch { rows = []; }
+  for (const r of rows) {
+    if (r.borrado_at) continue;
+    const f = ymdUtc(r.timestamp);
+    if (!f || f < desde || f > hasta) continue;
+    if (!nombres.some((nombre) => mismaPersona(nombre, s(r.atendido_por)))) continue;
+    set.add(f);
+  }
+  return set;
+}
 extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const inicio = s(p.desde) || s(p.ciclo) || cicloInicio(ecuadorParts(ctx.now).ymd);
   const pack = await cicloDe(ctx, inicio);
@@ -495,6 +517,7 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const [y2, m2, d2] = fin.split("-").map(Number);
   const diasPeriodo = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d0)) / 86400000) + 1;
   let diasLaborados = horas.hayDatos ? horas.diasLaborados : null;
+  let marcajesFaltantes: string[] = [];
   if (horas.hayDatos) {
     const hpack = await cargarHorarios(ctx);
     const horario = horarioAsignado(hpack.horarios, hpack.asignaciones, [persona, s(e?.nombre_app), s(e?.apellidos_y_nombres)]);
@@ -504,8 +527,12 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     const permisos = (await ctx.db.all("permisos").catch(() => [])).filter((r) => esPropio(s(r.empleada), quien)).map((r) => ({
       tipo: s(r.tipo), estado: s(r.estado), desde: s(r.fecha_inicio).slice(0, 10), hasta: s(r.fecha_fin).slice(0, 10), horas: n(r.horas),
     }));
-    const faltas = horario ? faltasDeRol(horas.dias, { trabaja: (f) => jornadaDe(horario, f).trabaja, feriados, permisos, corte }) : 0;
-    diasLaborados = Math.max(0, diasPeriodo - faltas);
+    const diasTicket = await diasConTicket(ctx, [persona, s(e?.nombre_app), s(e?.apellidos_y_nombres)], pack.ciclo, fin);
+    const cuenta = horario
+      ? faltasDeRol(horas.dias, { trabaja: (f) => jornadaDe(horario, f).trabaja, feriados, permisos, corte, conTicket: (f) => diasTicket.has(f) })
+      : { faltas: 0, marcajesFaltantes: [] as string[] };
+    marcajesFaltantes = esAdmin(ses.rol) ? cuenta.marcajesFaltantes : [];
+    diasLaborados = Math.max(0, diasPeriodo - cuenta.faltas);
   }
   const local = rolCalcular({
     sueldo, bono, fondoReserva: fondo,
@@ -532,6 +559,7 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     persona, ciclo: pack.ciclo, fin, diasPeriodo,
     cargo: s(e?.cargo), cedula: s(e?.cedula),
     fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
+    marcajesFaltantes,
     ingresos, descuentos,
     totalIngresos: local.totalIngresos, totalDescuentos: local.egresos, neto: local.totalRecibir,
     personas, admin: esAdmin(ses.rol), config: cfg,

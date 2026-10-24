@@ -58,6 +58,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   lugares_list: "inventario", lugar_guardar: "inventario", lugar_elegir: "inicio",
   ajuste_save: "inventario",
   getHistorial: "tickets", getTicketsDia: "tickets", editarTicket: "tickets", eliminarTicket: "tickets",
+  inline_guardar: "tickets", inline_borrar: "tickets", solicitud_crear: "tickets", getSolicitudes: "tickets", solicitud_resolver: "tickets",
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
   reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
