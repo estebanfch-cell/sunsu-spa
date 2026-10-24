@@ -1960,10 +1960,15 @@ describe("series, comisiones y rol", () => {
     assert.match(purga, /'solicitudes_cambio'/);
     assert.equal(purga.includes("audit_log"), false);
     const espejo = readFileSync(new URL("../../../docs/supabase/pending/0021_tk_so_vacias.sql", import.meta.url), "utf8");
-    assert.match(espejo, /tickets_so_vacio/);
-    assert.match(espejo, /1678/);
-    assert.match(espejo, /old\.sheet_row is not null/);
-    assert.doesNotMatch(espejo, /update\s+public\.tickets/i);
+    assert.match(espejo, /ticket_es_real/);
+    assert.match(espejo, /tickets_so_num/);
+    assert.match(espejo, /CREATE TRIGGER tickets_zz_so_num/);
+    assert.doesNotMatch(espejo, /create trigger trg_tickets_so_vacio/i);
+    const purgaCat = readFileSync(new URL("../../../docs/supabase/pending/0025_purga_catalogo.sql", import.meta.url), "utf8");
+    assert.match(purgaCat, /alter table public\.catalogo add column if not exists origin text/);
+    const cuerpo = purgaCat.slice(purgaCat.indexOf("function public.prueba_purgar"));
+    assert.match(cuerpo, /'catalogo'/);
+    assert.equal(cuerpo.includes("audit_log"), false);
   });
 
   it("una solicitud de modo prueba queda origin test y la purga no toca audit_log", async () => {
@@ -2050,5 +2055,53 @@ describe("series, comisiones y rol", () => {
     assert.equal((await db.all("inventario_base")).find((r) => String(r.sku).includes("HT-090"))?.minimo, 4);
     const inv = await handle("getInventario", { token: adminC.token }, adminC) as Row;
     assert.equal((inv.items as Row[]).find((r) => String(r.sku).endsWith("HT-090"))?.minimo, 4);
+  });
+
+  it("el admin edita proveedores y líneas de compra en línea", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      app_modulos: [
+        { rol: "cosmetologa", modulo: "proveedores", acceso: "todos" },
+        { rol: "cosmetologa", modulo: "compras", acceso: "todos" },
+      ],
+      inventario_entradas: [
+        { sheet_row: 3, sku: "SUNSU-HT-002", producto: "Serum", proveedor: "Hebetronic", cant_pedida: 2, orden: "OC-0001", cant_recibida_llenar_aqui: "", orig: {} },
+        { sheet_row: 4, sku: "SUNSU-HT-004", producto: "Crema", proveedor: "Hebetronic", cant_pedida: 1, orden: "OC-0001", cant_recibida_llenar_aqui: 1, orig: {} },
+      ],
+      push_suscripciones: [{ endpoint: "https://push.example/emi", persona: "Emi", p256dh: "k", auth: "a" }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const nuevo = await handle("inline_guardar", {
+      token: adminC.token, tabla: "proveedores", fila: "nuevo", campos: { nombre: "Hebetronic", familia: "ht", ruc: "179" },
+    }, adminC) as Row;
+    assert.equal(nuevo.ok, true);
+    const prov = (await db.all("proveedores")).find((r) => r.nombre === "Hebetronic");
+    assert.equal(prov?.familia, "HT");
+    const no = await handle("inline_guardar", { token: "t-andrea", tabla: "proveedores", fila: String(prov?.sheet_row), campos: { nombre: "Heb" } }, adminC) as Row;
+    assert.match(String(no.error), /admin/i);
+    const ped = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "proveedores", fila: String(prov?.sheet_row), tipo: "cambio", motivo: "razón social", propuestos: { nombre: "Hebetronic S.A." },
+    }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((await db.all("proveedores"))[0].nombre, "Hebetronic S.A.");
+    const linea = await handle("inline_guardar", { token: adminC.token, tabla: "compras", fila: "3", campos: { pedida: 6 } }, adminC) as Row;
+    assert.equal(linea.ok, true);
+    const ent = await handle("getEntradas", { token: adminC.token }, adminC) as Row;
+    assert.equal((ent.items as Row[]).find((r) => r.fila === 3)?.pedida, 6);
+    const marcada = await handle("inline_borrar", { token: adminC.token, tabla: "compras", fila: "4" }, adminC) as Row;
+    assert.match(String(marcada.error), /marcada/i);
+    const borrada = await handle("inline_borrar", { token: adminC.token, tabla: "compras", fila: "3" }, adminC) as Row;
+    assert.equal(borrada.ok, true);
+    assert.equal((await db.all("inventario_entradas")).some((r) => r.sheet_row === 3), false);
+    const baja = await handle("inline_borrar", { token: adminC.token, tabla: "proveedores", fila: String(prov?.sheet_row) }, adminC) as Row;
+    assert.equal(baja.ok, true);
+    assert.equal((await db.all("proveedores")).length, 0);
   });
 });

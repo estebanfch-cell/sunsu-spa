@@ -320,6 +320,129 @@ export async function guardarInventarioCampos(ctx: Ctx, ses: Ses, fila: string, 
   return { ok: true, fila: s(base.sku) };
 }
 
+async function proveedorDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const rows = await ctx.db.all("proveedores");
+  return rows.find((r) => s(r.sheet_row) === fila || s(r.id) === fila) || null;
+}
+
+function vistaProveedor(row: Row): Row {
+  return {
+    nombre: s(row.nombre), ruc: s(row.ruc), telefono: s(row.telefono), direccion: s(row.direccion),
+    email: s(row.email), familia: s(row.familia), notas: s(row.notas),
+  };
+}
+
+export async function guardarProveedorCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (!fila || fila === "nuevo") {
+    if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
+    if (!s(campos.familia)) return { error: "La familia es obligatoria" };
+    const sheet_row = await nextSheet(ctx.db, "proveedores");
+    const rec: Row = {
+      sheet_row, nombre: s(campos.nombre), ruc: s(campos.ruc), telefono: s(campos.telefono),
+      direccion: s(campos.direccion), email: s(campos.email), familia: s(campos.familia).toUpperCase(),
+      notas: s(campos.notas), orig: { nombre: s(campos.nombre) },
+    };
+    const saved = await ctx.db.write(actorOf(ses), "proveedores", "insert", {}, rec);
+    if (saved) await anotar(ctx, ses, "proveedores", String(sheet_row), "INSERT", null, vistaProveedor(saved));
+    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+  }
+  const row = await proveedorDe(ctx, fila);
+  if (!row) return { error: "Proveedor no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const patch: Row = {};
+  if (campos.nombre != null) {
+    if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
+    patch.nombre = s(campos.nombre);
+  }
+  if (campos.familia != null) {
+    if (!s(campos.familia)) return { error: "La familia es obligatoria" };
+    patch.familia = s(campos.familia).toUpperCase();
+  }
+  for (const k of ["ruc", "telefono", "direccion", "email", "notas"]) {
+    if (campos[k] != null) patch[k] = s(campos[k]);
+  }
+  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const antes = vistaProveedor(row);
+  const saved = await ctx.db.write(actorOf(ses), "proveedores", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  if (!saved) return { error: "No se pudo guardar el proveedor" };
+  await anotar(ctx, ses, "proveedores", s(row.sheet_row), "UPDATE", antes, vistaProveedor(saved));
+  return { ok: true, fila: s(row.sheet_row) };
+}
+
+export async function borrarProveedor(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const row = await proveedorDe(ctx, fila);
+  if (!row) return { error: "Proveedor no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = vistaProveedor(row);
+  const match = row.id != null ? { id: row.id } : { sheet_row: row.sheet_row };
+  const saved = await ctx.db.write(actorOf(ses), "proveedores", "delete", match, null);
+  if (!saved) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, "proveedores", s(row.sheet_row), "DELETE", antes, null);
+  return { ok: true };
+}
+
+async function entradaDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const rows = await ctx.db.all("inventario_entradas");
+  return rows.find((r) => s(r.sheet_row) === fila || s(r.id) === fila) || null;
+}
+
+function vistaEntrada(row: Row): Row {
+  return {
+    sku: s(row.sku), nombre: s(row.producto), pedida: n(row.cant_pedida),
+    proveedor: s(row.proveedor), orden: s(row.orden),
+  };
+}
+
+export async function guardarCompraCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (!fila || fila === "nuevo") {
+    if (!s(campos.sku) || !s(campos.nombre)) return { error: "SKU y nombre son obligatorios" };
+    const sheet_row = await nextSheet(ctx.db, "inventario_entradas");
+    const rec: Row = {
+      sheet_row, sku: s(campos.sku), producto: s(campos.nombre), proveedor: s(campos.proveedor),
+      cant_pedida: n(campos.pedida), orden: s(campos.orden), orig: { sku: s(campos.sku) },
+    };
+    const saved = await ctx.db.write(actorOf(ses), "inventario_entradas", "insert", {}, rec);
+    if (saved) await anotar(ctx, ses, "inventario_entradas", String(sheet_row), "INSERT", null, vistaEntrada(saved));
+    return saved ? { ok: true, fila: String(sheet_row) } : { error: "No se pudo guardar" };
+  }
+  const row = await entradaDe(ctx, fila);
+  if (!row) return { error: "Línea no encontrada" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const patch: Row = {};
+  if (campos.nombre != null) patch.producto = s(campos.nombre);
+  if (campos.pedida != null) patch.cant_pedida = n(campos.pedida);
+  if (campos.proveedor != null) patch.proveedor = s(campos.proveedor);
+  if (campos.sku != null && s(campos.sku)) patch.sku = s(campos.sku);
+  if (campos.orden != null) patch.orden = s(campos.orden);
+  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const antes = vistaEntrada(row);
+  const saved = await ctx.db.write(actorOf(ses), "inventario_entradas", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  if (!saved) return { error: "No se pudo guardar la línea" };
+  await anotar(ctx, ses, "inventario_entradas", s(row.sheet_row), "UPDATE", antes, vistaEntrada(saved));
+  return { ok: true, fila: s(row.sheet_row) };
+}
+
+export async function borrarCompra(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const row = await entradaDe(ctx, fila);
+  if (!row) return { error: "Línea no encontrada" };
+  if (s(row.cant_recibida_llenar_aqui) !== "") return { error: "Esa línea ya está marcada" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = vistaEntrada(row);
+  const match = row.id != null ? { id: row.id } : { sheet_row: row.sheet_row };
+  const saved = await ctx.db.write(actorOf(ses), "inventario_entradas", "delete", match, null);
+  if (!saved) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, "inventario_entradas", s(row.sheet_row), "DELETE", antes, null);
+  return { ok: true };
+}
+
 export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
   if (!fila || fila === "nuevo") {
@@ -389,12 +512,16 @@ extend("inline_guardar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "clientes") return guardarClienteCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "catalogo") return guardarCatalogoCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "inventario") return guardarInventarioCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "proveedores") return guardarProveedorCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "compras") return guardarCompraCampos(ctx, ses, s(p.fila), campos);
   return { error: "Esa tabla todavía no se edita en línea" };
 });
 
 extend("inline_borrar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "clientes") return borrarClienteSuave(ctx, ses, s(p.fila));
   if (s(p.tabla) === "catalogo" || s(p.tabla) === "inventario") return borrarCatalogoSuave(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "proveedores") return borrarProveedor(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "compras") return borrarCompra(ctx, ses, s(p.fila));
   if (s(p.tabla) !== "tickets") return { error: "Esa tabla todavía no se edita en línea" };
   const row = await ticketDe(ctx, s(p.fila));
   if (!row) return { error: "Ticket no encontrado" };
@@ -428,6 +555,18 @@ async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): P
       : vistaCatalogo(row);
     return { row, antes };
   }
+  if (tabla === "proveedores") {
+    const row = await proveedorDe(ctx, fila);
+    if (!row) return { error: "Proveedor no encontrado" };
+    if (!(await veModulo(ctx, ses, "proveedores"))) return { error: "No tienes permiso para pedir un cambio de ese proveedor" };
+    return { row, antes: vistaProveedor(row) };
+  }
+  if (tabla === "compras") {
+    const row = await entradaDe(ctx, fila);
+    if (!row) return { error: "Línea no encontrada" };
+    if (!(await veModulo(ctx, ses, "compras"))) return { error: "No tienes permiso para pedir un cambio de esa línea" };
+    return { row, antes: vistaEntrada(row) };
+  }
   return { error: "Esa tabla todavía no recibe solicitudes" };
 }
 
@@ -439,6 +578,8 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   if (tabla === "clientes") return borrar ? borrarClienteSuave(ctx, ses, fila) : guardarClienteCampos(ctx, ses, fila, propuestos);
   if (tabla === "catalogo") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarCatalogoCampos(ctx, ses, fila, propuestos);
   if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);
+  if (tabla === "proveedores") return borrar ? borrarProveedor(ctx, ses, fila) : guardarProveedorCampos(ctx, ses, fila, propuestos);
+  if (tabla === "compras") return borrar ? borrarCompra(ctx, ses, fila) : guardarCompraCampos(ctx, ses, fila, propuestos);
   if (borrar) {
     const ticket = await ticketDe(ctx, fila);
     if (!ticket) return { error: "Ticket no encontrado" };
@@ -465,7 +606,7 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
-  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : "un ticket";
+  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
 });

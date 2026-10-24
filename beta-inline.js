@@ -20,6 +20,13 @@
     inventario: [
       ["nombre", "Nombre"], ["minimo", "Mínimo"], ["compra", "Compra real"],
     ],
+    proveedores: [
+      ["nombre", "Nombre"], ["familia", "Familia"], ["ruc", "RUC"], ["telefono", "Teléfono"],
+      ["direccion", "Dirección"], ["email", "Email"], ["notas", "Notas"],
+    ],
+    compras: [
+      ["sku", "SKU"], ["nombre", "Nombre"], ["pedida", "Pedido"], ["proveedor", "Proveedor"], ["orden", "Orden"],
+    ],
   };
   function camposDe(tabla) { return CAMPOS[tabla] || CAMPOS.tickets; }
 
@@ -124,8 +131,12 @@
     if (tablas.clientes) return "clientes";
     if (tablas.catalogo) return "catalogo";
     if (tablas.inventario) return "inventario";
+    if (tablas.proveedores) return "proveedores";
+    if (tablas.compras) return "compras";
     if (document.getElementById("cat-res")) return "catalogo";
     if (document.querySelector("[id^=inv-grp-]")) return "inventario";
+    if (document.getElementById("prov-form")) return "proveedores";
+    if (document.getElementById("oc-nuevo")) return "compras";
     if (document.getElementById("cli-q")) return "clientes";
     return "tickets";
   }
@@ -135,6 +146,8 @@
     if (tabla === "clientes" && typeof draw === "function") { draw(); return; }
     if (tabla === "catalogo" && c && typeof renderCatalogoAdmin === "function") { renderCatalogoAdmin(c); return; }
     if (tabla === "inventario" && c && typeof renderInventario === "function") { renderInventario(c); return; }
+    if (tabla === "proveedores" && c && typeof renderProveedores === "function") { renderProveedores(c); return; }
+    if (tabla === "compras" && c && typeof renderEntradas === "function") { renderEntradas(c); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -171,12 +184,14 @@
     tabla = tabla || "tickets";
     var host = (tabla === "clientes" && document.getElementById("cli-list-host"))
       || (tabla === "catalogo" && document.getElementById("cat-form"))
+      || (tabla === "proveedores" && document.getElementById("prov-form"))
+      || (tabla === "compras" && document.getElementById("oc-nuevo"))
       || document.getElementById("hist-res") || document.getElementById("content");
     if (!host) return;
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }

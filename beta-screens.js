@@ -10777,22 +10777,32 @@ function renderProveedores(c){
   .then(function(d){
     window._provsApp=d.proveedores||[];
     var html='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>';
+    var ixPv=window.SunsuInline;
+    var editaPv=ixPv&&ixPv.edita();
+    var pidePv=ixPv&&ixPv.pide();
+    var vistaPv=window.state&&state.vista;
     window._provsApp.forEach(function(p,i){
+      var nomPv=editaPv?ixPv.campo("proveedores", p.fila, "nombre", p.nombre||""):p.nombre;
+      var famPv=editaPv?ixPv.campo("proveedores", p.fila, "familia", p.familia||""):p.familia;
+      var rucPv=editaPv?ixPv.campo("proveedores", p.fila, "ruc", p.ruc||""):(p.ruc||'—');
+      var telPv=editaPv?ixPv.campo("proveedores", p.fila, "telefono", p.telefono||""):(p.telefono?' · 📞 '+p.telefono:'');
+      var mailPv=editaPv?ixPv.campo("proveedores", p.fila, "email", p.email||""):(p.email?' · ✉️ '+p.email:'');
+      var dirPv=editaPv?('<div style="font-size:0.62rem;color:var(--gray)">📍 '+ixPv.campo("proveedores", p.fila, "direccion", p.direccion||"")+'</div>'):(p.direccion?'<div style="font-size:0.62rem;color:var(--gray)">📍 '+p.direccion+'</div>':'');
+      var notasPv=editaPv?('<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+ixPv.campo("proveedores", p.fila, "notas", p.notas||"")+'</div>'):(p.notas?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+p.notas+'</div>':'');
+      var extraPv=editaPv?ixPv.borrar("proveedores", p.fila):(pidePv?ixPv.pedir("proveedores", p.fila, {nombre:p.nombre||"", familia:p.familia||"", ruc:p.ruc||"", telefono:p.telefono||"", direccion:p.direccion||"", email:p.email||"", notas:p.notas||""}):'');
+      var lapizPv=(!editaPv&&!pidePv&&!vistaPv)?'<button onclick="formProveedor('+i+')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️</button><button onclick="eliminarProveedor('+i+')" style="padding:7px 10px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🗑️</button>':'';
       html+='<div class="card" style="padding:12px;margin-bottom:9px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+p.nombre+' <span style="font-size:0.6rem;background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px">'+p.familia+'</span></div>'
-        +'<div style="font-size:0.62rem;color:var(--gray);margin-top:3px">RUC: '+(p.ruc||'—')+(p.telefono?' · 📞 '+p.telefono:'')+(p.email?' · ✉️ '+p.email:'')+'</div>'
-        +(p.direccion?'<div style="font-size:0.62rem;color:var(--gray)">📍 '+p.direccion+'</div>':'')
-        +(p.notas?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+p.notas+'</div>':'')+'</div>'
-        +'<div style="display:flex;gap:5px">'
-        +'<button onclick="formProveedor('+i+')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️</button>'
-        +'<button onclick="eliminarProveedor('+i+')" style="padding:7px 10px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🗑️</button>'
-        +'</div></div></div>';
+        +'<div style="flex:1;min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+nomPv+' <span style="font-size:0.6rem;background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px">'+famPv+'</span></div>'
+        +'<div style="font-size:0.62rem;color:var(--gray);margin-top:3px">RUC: '+rucPv+telPv+mailPv+'</div>'
+        +dirPv+notasPv+'</div>'
+        +'<div style="display:flex;gap:5px">'+extraPv+lapizPv+'</div></div></div>';
     });
-    html+='<button onclick="formProveedor(-1)" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar proveedor</button>'
+    html+=(editaPv?ixPv.mas("proveedores"):((!pidePv&&!vistaPv)?'<button onclick="formProveedor(-1)" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Agregar proveedor</button>':''))
       +'<div id="prov-form"></div>'
       +'<button onclick="showTab(\'entradas\')" style="width:100%;padding:10px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.76rem;font-weight:700;cursor:pointer;margin:6px 0 24px">← Volver a Entradas</button>';
     c.innerHTML=html;
+    if(window.SunsuInline) SunsuInline.aplicar();
   })
   .catch(function(e){c.innerHTML+='<div class="card" style="color:#B86B6B">❌ '+e.message+'</div>';});
 }
@@ -11384,13 +11394,17 @@ function renderEntradas(c){
         if(!allDone) gruposActivos[g]=grupos[g];
       });
       var isAdminEnt=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      var ixEnt=window.SunsuInline;
+      var editaEnt=ixEnt&&ixEnt.edita();
+      var pideEnt=ixEnt&&ixEnt.pide();
       var btnHistOC=isAdminEnt?'<button onclick="renderHistorialOC()" style="padding:5px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.65rem;font-weight:700;cursor:pointer">📜 Historial OC</button>':'';
       var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
         +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📥 Entradas de Productos</div>'+btnHistOC+'</div>'
         +(isAdminEnt?'<div style="display:flex;gap:8px;margin-bottom:12px">'
           +'<button onclick="renderNuevaOC(document.getElementById(\'content\'))" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">🛒 Nueva orden de compra</button>'
           +'<button onclick="renderProveedores(document.getElementById(\'content\'))" style="padding:11px 14px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">🏭</button>'
-          +'</div>':'');
+          +'</div>':'')
+        +'<div id="oc-nuevo" style="margin-bottom:8px">'+(editaEnt?ixEnt.mas("compras"):'')+'</div>';
       if(!Object.keys(gruposActivos).length){
         html+='<div class="card" style="text-align:center;padding:24px;color:var(--gray)"><div style="font-size:1.5rem;margin-bottom:8px">✅</div><div style="font-weight:700">Todas las órdenes procesadas</div></div>';
         c.innerHTML=html; return;
@@ -11420,11 +11434,15 @@ function renderEntradas(c){
           var v=parseFloat(it.recibida);
           var eLabel=!marcado?'':(v===0?'❌ No llegó':v>=it.pedida?'✅ Completo':'⚠️ Parcial '+v+'/'+it.pedida);
           var eColor=!marcado?'var(--gray)':(v===0?'var(--red)':v>=it.pedida?'var(--green)':'var(--gold)');
+          var nomEnt=editaEnt?ixEnt.campo("compras", it.fila, "nombre", it.nombre||""):it.nombre;
+          var pedEnt=editaEnt?ixEnt.campo("compras", it.fila, "pedida", it.pedida):it.pedida;
+          var provEnt=editaEnt?ixEnt.campo("compras", it.fila, "proveedor", it.proveedor||""):'';
+          var extraEnt=editaEnt?ixEnt.borrar("compras", it.fila):(pideEnt?ixEnt.pedir("compras", it.fila, {nombre:it.nombre||"", pedida:it.pedida, proveedor:it.proveedor||""}):"");
           html+='<div id="erow-'+it.fila+'" style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
-            +'<div style="flex:1"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
-            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+'</div></div>'
-            +'<div style="font-size:0.7rem;color:var(--gray)">Pedido: <strong style="color:var(--navy);font-size:0.82rem">'+it.pedida+'</strong></div>'
+            +'<div style="flex:1"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+nomEnt+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
+            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+(provEnt?' · '+provEnt:'')+'</div></div>'
+            +'<div style="font-size:0.7rem;color:var(--gray)">Pedido: <strong style="color:var(--navy);font-size:0.82rem">'+pedEnt+'</strong> '+extraEnt+'</div>'
             +'</div>'
             +'<div id="ebtn-'+it.fila+'">'
             +(marcado
@@ -11441,6 +11459,7 @@ function renderEntradas(c){
       });
       window._gruposEntrada=gruposActivos; // save for PDF
       c.innerHTML=html;
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
 }
@@ -11901,10 +11920,14 @@ function renderHistorialOC(){
           var eLabel=v===null?'⏳ Pendiente':(v===0?'❌ No llegó':v>=it.pedida?'✅ Completo':'⚠️ Parcial '+v+'/'+it.pedida);
           var eColor=v===null?'var(--gray)':(v===0?'var(--red)':v>=it.pedida?'var(--green)':'var(--gold)');
           var quien=(it.usuario?('por '+it.usuario):'')+(it.timestamp?(' · '+it.timestamp):'');
+          var ixH=window.SunsuInline;
+          var editaH=ixH&&ixH.edita();
+          var nomH=editaH?ixH.campo("compras", it.fila, "nombre", it.nombre||""):it.nombre;
+          var pedH=editaH?ixH.campo("compras", it.fila, "pedida", it.pedida):it.pedida;
           html+='<div style="padding:9px 0;border-bottom:1px solid var(--cream-d)">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-            +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+it.nombre+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
-            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+' · Pedido: '+it.pedida+'</div></div>'
+            +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+nomH+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
+            +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+' · Pedido: '+pedH+'</div></div>'
             +'<div style="text-align:right;flex-shrink:0">'
             +'<div id="hst-'+it.fila+'"><span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
             +'<div style="font-size:0.55rem;color:var(--gray)">'+quien+'</div></div>'
@@ -11916,6 +11939,7 @@ function renderHistorialOC(){
       });
       window._gruposHistOC=grupos; // para regenerar actas
       c.innerHTML=html;
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
 }
