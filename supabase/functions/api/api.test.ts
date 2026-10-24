@@ -1951,4 +1951,104 @@ describe("series, comisiones y rol", () => {
     const vista = await handle("inline_guardar", { token: adminC.token, preview: true, preview_uid: "andrea", tabla: "clientes", fila: String(nuevo.fila), campos: { nombre: "X" } }, adminC) as Row;
     assert.match(String(vista.error), /vista/i);
   });
+
+  it("0024 marca las solicitudes de prueba y 0021 no reescribe importaciones", () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0024_prueba_audit.sql", import.meta.url), "utf8");
+    assert.match(sql, /alter table public\.solicitudes_cambio add column if not exists origin text/);
+    assert.match(sql, /audit_log solo acepta insert/);
+    const purga = sql.slice(sql.indexOf("function public.prueba_purgar"));
+    assert.match(purga, /'solicitudes_cambio'/);
+    assert.equal(purga.includes("audit_log"), false);
+    const espejo = readFileSync(new URL("../../../docs/supabase/pending/0021_tk_so_vacias.sql", import.meta.url), "utf8");
+    assert.match(espejo, /tickets_so_vacio/);
+    assert.match(espejo, /1678/);
+    assert.match(espejo, /old\.sheet_row is not null/);
+    assert.doesNotMatch(espejo, /update\s+public\.tickets/i);
+  });
+
+  it("una solicitud de modo prueba queda origin test y la purga no toca audit_log", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      catalogo: [{ sheet_row: 1, sku: "SUNSU-HT-002", producto_servicio: "Serum", tipo: "PRODUCTO", subtotal: 20, precio_compra: 8, activo: true, orig: {}, origin: "sheet" }],
+      tickets: [{ id: 1, sheet_row: 1, nombre: "Real", origin: "beta" }],
+      audit_log: [{ id: 1, tabla: "tickets", accion: "INSERT", origin: "sheet" }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z", modo_prueba: true });
+    ses.find((r) => r.token === adminC.token)!.modo_prueba = true;
+    db.tables.set("sesiones", ses);
+    const ped = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "catalogo", fila: "SUNSU-HT-002", tipo: "cambio", motivo: "nombre", propuestos: { nombre: "Sérum" },
+    }, adminC) as Row;
+    assert.equal(ped.ok, true);
+    assert.equal((await db.all("solicitudes_cambio"))[0].origin, "test");
+    const no = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: false, comentario: "luego" }, adminC) as Row;
+    assert.equal(no.estado, "rechazado");
+    const sol = (await db.all("solicitudes_cambio"))[0];
+    assert.equal(sol.estado, "rechazado");
+    assert.equal(sol.comentario, "luego");
+    assert.equal(sol.origin, "test");
+    const creado = await handle("inline_guardar", {
+      token: adminC.token, tabla: "catalogo", fila: "nuevo", campos: { sku: "HT-091", nombre: "Test", subtotal: 10, compra: 2 },
+    }, adminC) as Row;
+    assert.equal(creado.ok, true);
+    assert.equal((await db.all("catalogo")).find((r) => String(r.sku).includes("HT-091"))?.origin, "test");
+    const ped2 = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "catalogo", fila: "SUNSU-HT-091", tipo: "cambio", motivo: "nombre", propuestos: { nombre: "Test 2" },
+    }, adminC) as Row;
+    const ap = await handle("solicitud_resolver", { token: adminC.token, id: ped2.id, aprobar: true }, adminC) as Row;
+    assert.equal(ap.estado, "aprobado");
+    assert.equal((await db.all("catalogo")).find((r) => String(r.sku).includes("HT-091"))?.producto_servicio, "Test 2");
+    const audAntes = (await db.all("audit_log")).length;
+    assert.ok(audAntes > 1);
+    const purga = await handle("prueba_borrar", { token: adminC.token }, adminC) as Row;
+    assert.equal(purga.ok, true);
+    assert.equal((await db.all("solicitudes_cambio")).length, 0);
+    assert.equal((await db.all("catalogo")).some((r) => r.origin === "test"), false);
+    assert.equal((await db.all("catalogo")).some((r) => String(r.sku).includes("HT-002")), true);
+    assert.equal((await db.all("tickets"))[0].nombre, "Real");
+    assert.ok((await db.all("audit_log")).length >= audAntes);
+  });
+
+  it("el admin edita el catálogo y el inventario en línea y el personal pide el cambio", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      push_suscripciones: [{ endpoint: "https://push.example/emi", persona: "Emi", p256dh: "k", auth: "a" }],
+    });
+    const adminC = ctx(db, "admin", "emi", "Emi");
+    const ses = await db.all("sesiones");
+    ses.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    db.tables.set("sesiones", ses);
+    const nuevo = await handle("inline_guardar", {
+      token: adminC.token, tabla: "catalogo", fila: "nuevo", campos: { sku: "HT-090", nombre: "Serum", subtotal: 20, compra: 8 },
+    }, adminC) as Row;
+    assert.equal(nuevo.ok, true);
+    assert.equal(nuevo.fila, "SUNSU-HT-090");
+    const row = (await db.all("catalogo")).find((r) => r.sku === "SUNSU-HT-090");
+    assert.equal(row?.total_con_iva, 23);
+    const no = await handle("inline_guardar", { token: "t-andrea", tabla: "catalogo", fila: "SUNSU-HT-090", campos: { nombre: "X" } }, adminC) as Row;
+    assert.match(String(no.error), /admin/i);
+    const ped = await handle("solicitud_crear", {
+      token: "t-andrea", tabla: "catalogo", fila: "SUNSU-HT-090", tipo: "cambio", motivo: "el nombre", propuestos: { nombre: "Sérum" },
+    }, adminC) as Row;
+    const ok = await handle("solicitud_resolver", { token: adminC.token, id: ped.id, aprobar: true }, adminC) as Row;
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((await db.all("catalogo")).find((r) => r.sku === "SUNSU-HT-090")?.producto_servicio, "Sérum");
+    const borrado = await handle("inline_borrar", { token: adminC.token, tabla: "catalogo", fila: "SUNSU-HT-090" }, adminC) as Row;
+    assert.equal(borrado.ok, true);
+    const cat = await handle("getCatalogo", { token: adminC.token }, adminC) as Row[];
+    assert.equal(cat.find((r) => r.sku === "SUNSU-HT-090")?.activo, false);
+    const min = await handle("inline_guardar", { token: adminC.token, tabla: "inventario", fila: "SUNSU-HT-090", campos: { minimo: 4 } }, adminC) as Row;
+    assert.equal(min.ok, true);
+    assert.equal((await db.all("inventario_base")).find((r) => String(r.sku).includes("HT-090"))?.minimo, 4);
+    const inv = await handle("getInventario", { token: adminC.token }, adminC) as Row;
+    assert.equal((inv.items as Row[]).find((r) => String(r.sku).endsWith("HT-090"))?.minimo, 4);
+  });
 });

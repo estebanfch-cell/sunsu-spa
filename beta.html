@@ -1521,6 +1521,7 @@ function pantallaSunsu(route) {
   if (route.kind === "doc") {
     if (route.doc === "ov" && !route.id) return "ticket";
     if (route.doc === "cot") return "cotizaciones";
+    if (route.doc === "prod" && !route.id) return "catalogo";
     return "";
   }
   const m = route.mod;
@@ -1531,6 +1532,7 @@ function pantallaSunsu(route) {
   if (m === "productos") return "catalogo";
   if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
+  if (m === "conteos" && !route.sub) return "inv-fisico";
   if (m === "conteos" || m === "lugares") return "";
   if (m === "compras" && route.sub !== "rfq") return "entradas";
   if (m === "proveedores") return "proveedores";
@@ -4315,8 +4317,8 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261024resto"></script>
-<script src="beta-inline.js?v=20261024cli"></script>
+<script src="beta-screens.js?v=20261024cat"></script>
+<script src="beta-inline.js?v=20261024cat"></script>
 <script>draw();</script>
 </body>
 </html>

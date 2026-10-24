@@ -9481,18 +9481,25 @@ function renderInventario(c){
           var ac=it.alerta==='SIN STOCK'?'#C00':it.alerta==='STOCK BAJO'?'#C4943A':it.alerta==='OK'?'#2E7D52':'#aaa';
           var ab=it.alerta==='SIN STOCK'?'#FEE2E2':it.alerta==='STOCK BAJO'?'#FFF9E6':it.alerta==='OK'?'#E8F8EE':'transparent';
           var ai=it.alerta==='SIN STOCK'?'🔴':it.alerta==='STOCK BAJO'?'🟡':it.alerta==='OK'?'🟢':'⚪';
+          var ixInv=window.SunsuInline;
+          var editaInv=ixInv&&ixInv.edita();
+          var pideInv=ixInv&&ixInv.pide();
+          var nomInv=editaInv?ixInv.campo("inventario", it.sku, "nombre", it.nombre||""):it.nombre;
+          var minInv=editaInv?ixInv.campo("inventario", it.sku, "minimo", it.minimo):it.minimo;
+          var pedirInv=pideInv?ixInv.pedir("inventario", it.sku, {nombre:it.nombre||"", minimo:it.minimo}):"";
           html+='<tr style="background:'+(i%2===0?'white':'var(--cream)')+';border-bottom:1px solid var(--cream-d)">'
             +'<td style="padding:7px 10px;font-size:0.6rem;font-family:monospace;color:#666">'+it.sku+'</td>'
-            +'<td style="padding:7px 10px;font-size:0.7rem;color:var(--navy)">'+it.nombre+'</td>'
+            +'<td style="padding:7px 10px;font-size:0.7rem;color:var(--navy)">'+nomInv+(pedirInv?'<div>'+pedirInv+'</div>':'')+'</td>'
             +'<td style="padding:7px 10px;text-align:center;font-size:0.88rem;font-weight:900;color:'+(it.stock===0?'#C00':it.stock<=it.minimo?'#C4943A':'var(--navy)')+'">'+it.stock+'</td>'
-            +'<td style="padding:7px 10px;text-align:center;font-size:0.72rem;color:var(--gray)">'+it.minimo+'</td>'
-            +(esAdmInv?(function(){var crI=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;return '<td style="padding:7px 10px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--navy)">'+(crI>0?'$'+crI.toFixed(2):'—')+'</td>';})():'')
-            +'<td style="padding:7px 6px;text-align:center"><span style="font-size:0.58rem;font-weight:700;color:'+ac+';background:'+ab+';padding:2px 6px;border-radius:5px">'+ai+' '+it.alerta+'</span></td>'
+            +'<td style="padding:7px 10px;text-align:center;font-size:0.72rem;color:var(--gray)">'+minInv+'</td>'
+            +(esAdmInv?(function(){var crI=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;var crHtml=editaInv?ixInv.campo("inventario", it.sku, "compra", crI>0?crI:""):(crI>0?'$'+crI.toFixed(2):'—');return '<td style="padding:7px 10px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--navy)">'+crHtml+'</td>';})():'')
+            +'<td style="padding:7px 6px;text-align:center"><span style="font-size:0.58rem;font-weight:700;color:'+ac+';background:'+ab+';padding:2px 6px;border-radius:5px">'+ai+' '+it.alerta+'</span>'+(editaInv?ixInv.borrar("inventario", it.sku):"")+'</td>'
             +'</tr>';
         });
         html+='</tbody></table></div></div>';
       });
       c.innerHTML=html;
+      if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
 }
@@ -9509,7 +9516,9 @@ function toggleInvGrupo(gid){
 // ══════ ENTRADAS DE PRODUCTOS ══════
 // ══════ CATÁLOGO (administración completa desde el app — solo admin) ══════
 function renderCatalogoAdmin(c){
-  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){c.innerHTML='<div class="card">Solo administradores</div>';return;}
+  var ixCat=window.SunsuInline;
+  var adminCat=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  if(!(adminCat||(ixCat&&ixCat.pide()))){c.innerHTML='<div class="card">Solo administradores</div>';return;}
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏷️ Catálogo</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando catálogo...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getCatalogo&_t='+Date.now())
@@ -9531,8 +9540,13 @@ function _skuVista(sku){ // productos con el prefijo SUNSU-; otros códigos tal 
 function _catShell(c){
   var items=window._catAdmin||[];
   var nInact=items.filter(function(it){return !it.activo;}).length;
+  var ixCat=window.SunsuInline;
+  var vistaCat=window.state&&state.vista;
+  var botonNuevo=ixCat&&ixCat.edita()
+    ?'<div style="margin-bottom:8px">'+ixCat.mas("catalogo")+'</div>'
+    :(!vistaCat&&!(ixCat&&ixCat.pide())?'<button onclick="formNuevoProducto()" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Nuevo producto</button>':'');
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏷️ Catálogo <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">· '+items.length+' productos · '+nInact+' inactivos</span></div>'
-    +'<button onclick="formNuevoProducto()" style="width:100%;padding:12px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.8rem;font-weight:800;cursor:pointer;margin-bottom:8px">＋ Nuevo producto</button>'
+    +botonNuevo
     +'<div id="cat-form"></div>'
     +'<input type="text" id="cat-buscar" autocomplete="off" value="'+(window._catQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Buscar por nombre o SKU..." oninput="window._catQ=this.value;clearTimeout(window._catQT);window._catQT=setTimeout(_pintarCatalogoAdmin,250)" style="width:100%;padding:10px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px">'
     +'<div id="cat-res"></div>';
@@ -9570,17 +9584,30 @@ function _pintarCatalogoAdmin(){
   var filaProd=function(par){
     var it=par.it, i=par.i;
     var util=(it.subtotal||0)-(it.compra||0);
+    var ix=window.SunsuInline;
+    var edita=ix&&ix.edita();
+    var pide=ix&&ix.pide();
+    var vista=window.state&&state.vista;
+    var nombre=edita?ix.campo("catalogo", it.sku, "nombre", it.nombre||""):(it.nombre||"");
+    var tipo=edita?'<div style="font-size:0.56rem;color:var(--gray)">Tipo '+ix.campo("catalogo", it.sku, "tipo", it.tipo||"")+'</div>':'';
+    var venta=edita?ix.campo("catalogo", it.sku, "subtotal", it.subtotal||0):('$'+(it.subtotal||0).toFixed(2)+' s/IVA');
+    var compra=edita?ix.campo("catalogo", it.sku, "compra", it.compra||0):('$'+(it.compra||0).toFixed(2));
+    var toggle=(pide||vista)?'':'<button onclick="toggleActivoCat('+i+')" style="padding:6px 10px;border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1.5px solid '+(it.activo?'#6A9E7A;background:#E8F8EE;color:#2E7D52':'#B86B6B;background:white;color:#B86B6B')+'">'+(it.activo?'✓ Activo':'✕ Inactivo')+'</button>';
+    var extra=edita?ix.borrar("catalogo", it.sku):(pide?ix.pedir("catalogo", it.sku, {nombre:it.nombre||"", tipo:it.tipo||"", subtotal:it.subtotal||"", compra:it.compra||""}):'');
+    var lapiz=(!edita&&!pide&&!vista)?'<button onclick="formEditarProducto('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️</button>':'';
     return '<div style="padding:8px 0;border-bottom:1px solid var(--cream-d);'+(it.activo?'':'opacity:0.45')+'">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+nombre+'</div>'
+      +tipo
       +'<div style="font-size:0.56rem;color:var(--gray);font-family:monospace">'+_skuVista(it.sku)+(it.activo?'':' · DESACTIVADO')+'</div></div>'
-      +'<button onclick="toggleActivoCat('+i+')" style="padding:6px 10px;border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1.5px solid '+(it.activo?'#6A9E7A;background:#E8F8EE;color:#2E7D52':'#B86B6B;background:white;color:#B86B6B')+'">'+(it.activo?'✓ Activo':'✕ Inactivo')+'</button>'
-      +'<button onclick="formEditarProducto('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️</button>'
+      +toggle
+      +extra
+      +lapiz
       +'</div>'
       +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;font-size:0.56rem">'
-      +'<span style="background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px;font-weight:700">Venta $'+(it.subtotal||0).toFixed(2)+' s/IVA</span>'
+      +'<span style="background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px;font-weight:700">Venta '+venta+'</span>'
       +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">c/IVA $'+((it.subtotal||0)*1.15).toFixed(2)+'</span>'
-      +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">Compra $'+(it.compra||0).toFixed(2)+'</span>'
+      +'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">Compra '+compra+'</span>'
       +((it.compraReal&&Math.abs(it.compraReal-(it.compra||0))>0.01)?'<span style="background:var(--gray-ll,#F0F1F5);color:var(--gray);padding:2px 7px;border-radius:6px">C.real $'+it.compraReal.toFixed(2)+'</span>':'')
       +'<span style="background:'+(util>0?'#E8F8EE;color:#2E7D52':'#FEE2E2;color:#C00')+';padding:2px 7px;border-radius:6px;font-weight:700">Util. H $'+util.toFixed(2)+'</span>'
       +'<span style="background:#FFF9E6;color:#8A6D1A;padding:2px 7px;border-radius:6px;font-weight:700">Com. $'+(it.com||0).toFixed(2)+'</span>'
@@ -9639,6 +9666,7 @@ function _pintarCatalogoAdmin(){
     html+='</div>';
   });
   c.innerHTML=html;
+  if(window.SunsuInline) SunsuInline.aplicar();
 }
 function toggleActivoCat(i){
   var it=window._catAdmin[i];

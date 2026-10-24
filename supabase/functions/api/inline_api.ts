@@ -5,7 +5,7 @@ import { extend, crearTicket } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion, nextSheet } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe, puedeVerContacto } from "./permisos.ts";
-import { ecuadorParts, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
+import { ecuadorParts, IVA, n, normCedula, normNombre, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { pushAPersonas } from "./horarios_api.ts";
 import { claveCliente, claveRegistro } from "./ventas.ts";
 
@@ -210,6 +210,116 @@ async function veCliente(ctx: Ctx, ses: Ses, row: Row): Promise<boolean> {
   return tickets.some((t) => !t.borrado_at && claveCliente(t) === key && esPropio(s(t.atendido_por), ses));
 }
 
+async function veModulo(ctx: Ctx, ses: Ses, modulo: string): Promise<boolean> {
+  return acceso(ses.rol, modulo, await matrizDe(ctx.db)) !== "no";
+}
+
+async function catalogoDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const rows = await ctx.db.all("catalogo");
+  const code = skuCode(fila);
+  return rows.find((r) => (code && skuCode(r.sku) === code) || s(r.sheet_row) === fila || s(r.id) === fila) || null;
+}
+
+function vistaCatalogo(row: Row): Row {
+  return {
+    sku: s(row.sku), nombre: s(row.producto_servicio), tipo: s(row.tipo),
+    subtotal: n(row.subtotal), compra: n(row.precio_compra), com: n(row.comi_producto_30),
+    activo: row.activo !== false,
+  };
+}
+
+export async function guardarCatalogoCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (!fila || fila === "nuevo") {
+    const code = skuCode(s(campos.sku));
+    if (!/^[A-Z]{2,3}-\d{3}$/.test(code)) return { error: "SKU con formato FAM-###" };
+    if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
+    const rows = await ctx.db.all("catalogo");
+    if (rows.some((r) => skuCode(r.sku) === code && r.activo !== false)) return { error: "Ese SKU ya existe" };
+    const sub = n(campos.subtotal);
+    const compra = n(campos.compra);
+    const sheet_row = await nextSheet(ctx.db, "catalogo");
+    const rec: Row = {
+      sheet_row, sku: "SUNSU-" + code, producto_servicio: s(campos.nombre), tipo: s(campos.tipo) || "PRODUCTO",
+      subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA), precio_compra: compra,
+      utilidad: round2(sub - compra), comi_producto_30: round2(Math.max(0, sub - compra) * 0.3), activo: true,
+      orig: { sku: code },
+    };
+    const saved = await ctx.db.write(actorOf(ses), "catalogo", "insert", {}, rec);
+    await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: "SUNSU-" + code, stock_inicial: 0, minimo: n(campos.minimo) });
+    if (saved) await anotar(ctx, ses, "catalogo", "SUNSU-" + code, "INSERT", null, vistaCatalogo(saved));
+    return { ok: true, fila: "SUNSU-" + code };
+  }
+  const row = await catalogoDe(ctx, fila);
+  if (!row) return { error: "Producto no encontrado" };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const sub = campos.subtotal == null || campos.subtotal === "" ? n(row.subtotal) : n(campos.subtotal);
+  const compra = campos.compra == null || campos.compra === "" ? n(row.precio_compra) : n(campos.compra);
+  const patch: Row = {
+    producto_servicio: campos.nombre == null ? s(row.producto_servicio) : s(campos.nombre),
+    tipo: campos.tipo == null || campos.tipo === "" ? s(row.tipo) : s(campos.tipo),
+    subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA), precio_compra: compra,
+  };
+  if (campos.com != null && campos.com !== "") patch.comi_producto_30 = n(campos.com);
+  const antes = vistaCatalogo(row);
+  const saved = await ctx.db.write(actorOf(ses), "catalogo", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
+  if (!saved) return { error: "No se pudo guardar el producto" };
+  await anotar(ctx, ses, "catalogo", s(row.sku), "UPDATE", antes, vistaCatalogo(saved));
+  return { ok: true, fila: s(row.sku) };
+}
+
+export async function borrarCatalogoSuave(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
+  const row = await catalogoDe(ctx, fila);
+  if (!row) return { error: "Producto no encontrado" };
+  if (row.activo === false) return { ok: true };
+  const bloqueo = bloqueoPrueba(ses, row);
+  if (bloqueo) return { error: bloqueo };
+  const antes = vistaCatalogo(row);
+  const saved = await ctx.db.write(actorOf(ses), "catalogo", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { activo: false });
+  if (!saved) return { error: "No se pudo eliminar" };
+  await anotar(ctx, ses, "catalogo", s(row.sku), "UPDATE", antes, { ...antes, activo: false });
+  return { ok: true };
+}
+
+async function baseDe(ctx: Ctx, fila: string): Promise<Row | null> {
+  const code = skuCode(fila);
+  const rows = await ctx.db.all("inventario_base").catch(() => [] as Row[]);
+  return rows.find((r) => skuCode(r.sku) === code) || null;
+}
+
+export async function guardarInventarioCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
+  if (campos.nombre != null) {
+    const hecho = await guardarCatalogoCampos(ctx, ses, fila, { nombre: campos.nombre });
+    if (hecho.error) return hecho;
+  }
+  if (campos.minimo == null && campos.compra == null) {
+    return campos.nombre != null ? { ok: true, fila } : { error: "Nada que guardar" };
+  }
+  const code = skuCode(fila);
+  if (!code) return { error: "Producto no encontrado" };
+  const base = await baseDe(ctx, fila);
+  const patch: Row = {};
+  if (campos.minimo != null) patch.minimo = n(campos.minimo);
+  if (campos.compra != null) patch.compra = n(campos.compra);
+  if (!base) {
+    const rec = { sku: fila.startsWith("SUNSU-") ? fila : "SUNSU-" + code, stock_inicial: 0, ...patch };
+    const saved = await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, rec);
+    await anotar(ctx, ses, "inventario_base", s(rec.sku), "INSERT", null, patch);
+    return saved ? { ok: true, fila: s(rec.sku) } : { error: "No se pudo guardar" };
+  }
+  const bloqueo = bloqueoPrueba(ses, base);
+  if (bloqueo) return { error: bloqueo };
+  const antes = { minimo: n(base.minimo), compra: n(base.compra) };
+  const match = base.sku != null ? { sku: base.sku } : { id: base.id };
+  const saved = await ctx.db.write(actorOf(ses), "inventario_base", "update", match, patch);
+  if (!saved) return { error: "No se pudo guardar el inventario" };
+  await anotar(ctx, ses, "inventario_base", s(base.sku), "UPDATE", antes, { minimo: n(saved.minimo), compra: n(saved.compra) });
+  return { ok: true, fila: s(base.sku) };
+}
+
 export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
   if (!fila || fila === "nuevo") {
@@ -277,11 +387,14 @@ extend("inline_guardar", "any", async (p, ctx, ses) => {
   const campos = (p.campos && typeof p.campos === "object" ? p.campos : {}) as Row;
   if (s(p.tabla) === "tickets") return guardarTicketCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "clientes") return guardarClienteCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "catalogo") return guardarCatalogoCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla) === "inventario") return guardarInventarioCampos(ctx, ses, s(p.fila), campos);
   return { error: "Esa tabla todavía no se edita en línea" };
 });
 
 extend("inline_borrar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "clientes") return borrarClienteSuave(ctx, ses, s(p.fila));
+  if (s(p.tabla) === "catalogo" || s(p.tabla) === "inventario") return borrarCatalogoSuave(ctx, ses, s(p.fila));
   if (s(p.tabla) !== "tickets") return { error: "Esa tabla todavía no se edita en línea" };
   const row = await ticketDe(ctx, s(p.fila));
   if (!row) return { error: "Ticket no encontrado" };
@@ -303,7 +416,35 @@ async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): P
     if (!(await veCliente(ctx, ses, row))) return { error: "No tienes permiso para pedir un cambio de esa clienta" };
     return { row, antes: vistaCliente(row) };
   }
+  if (tabla === "catalogo" || tabla === "inventario") {
+    const row = await catalogoDe(ctx, fila);
+    if (!row) return { error: "Producto no encontrado" };
+    if (!(await veModulo(ctx, ses, tabla === "inventario" ? "inventario" : "productos"))) {
+      return { error: "No tienes permiso para pedir un cambio de ese producto" };
+    }
+    const base = tabla === "inventario" ? await baseDe(ctx, s(row.sku)) : null;
+    const antes = tabla === "inventario"
+      ? { nombre: s(row.producto_servicio), minimo: base ? n(base.minimo) : 0, compra: base ? n(base.compra) : 0 }
+      : vistaCatalogo(row);
+    return { row, antes };
+  }
   return { error: "Esa tabla todavía no recibe solicitudes" };
+}
+
+async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
+  const tabla = s(row.tabla);
+  const fila = s(row.fila);
+  const propuestos = (row.propuestos && typeof row.propuestos === "object" ? row.propuestos : {}) as Row;
+  const borrar = s(row.tipo) === "eliminacion";
+  if (tabla === "clientes") return borrar ? borrarClienteSuave(ctx, ses, fila) : guardarClienteCampos(ctx, ses, fila, propuestos);
+  if (tabla === "catalogo") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarCatalogoCampos(ctx, ses, fila, propuestos);
+  if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);
+  if (borrar) {
+    const ticket = await ticketDe(ctx, fila);
+    if (!ticket) return { error: "Ticket no encontrado" };
+    return borrarTicketSuave(ctx, ses, ticket);
+  }
+  return guardarTicketCampos(ctx, ses, fila, propuestos);
 }
 
 extend("solicitud_crear", "any", async (p, ctx, ses) => {
@@ -324,7 +465,7 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
-  const cosa = tabla === "clientes" ? "una clienta" : "un ticket";
+  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
 });
@@ -347,16 +488,7 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
   if (s(row.estado) !== "pendiente") return { error: "Esa solicitud ya está cerrada" };
   const aprobar = p.aprobar === true || s(p.aprobar) === "true" || s(p.aprobar) === "aprobar";
   if (aprobar) {
-    const propuestos = (row.propuestos && typeof row.propuestos === "object" ? row.propuestos : {}) as Row;
-    const hecho = s(row.tabla) === "clientes"
-      ? (s(row.tipo) === "eliminacion" ? await borrarClienteSuave(ctx, ses, s(row.fila)) : await guardarClienteCampos(ctx, ses, s(row.fila), propuestos))
-      : (s(row.tipo) === "eliminacion"
-        ? await (async () => {
-          const ticket = await ticketDe(ctx, s(row.fila));
-          if (!ticket) return { error: "Ticket no encontrado" };
-          return borrarTicketSuave(ctx, ses, ticket);
-        })()
-        : await guardarTicketCampos(ctx, ses, s(row.fila), propuestos));
+    const hecho = await aplicarAprobado(ctx, ses, row);
     if (hecho.error) return hecho;
   }
   const patch = {
