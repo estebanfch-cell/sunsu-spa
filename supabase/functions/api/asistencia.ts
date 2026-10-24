@@ -304,6 +304,7 @@ function lunesDe(ymd: string): string {
 
 export function calcularNomina(opts: {
   anio: number; mes: number;
+  desde?: string; hasta?: string;
   marcajes: MarcajeIn[];
   jibble: JibbleIn[];
   permisos: PermisoIn[];
@@ -312,8 +313,8 @@ export function calcularNomina(opts: {
   hoy?: string;
 }): NominaHoras {
   const last = new Date(Date.UTC(opts.anio, opts.mes, 0)).getUTCDate();
-  const desde = `${opts.anio}-${pad(opts.mes)}-01`;
-  const hasta = `${opts.anio}-${pad(opts.mes)}-${pad(last)}`;
+  const desde = opts.desde || `${opts.anio}-${pad(opts.mes)}-01`;
+  const hasta = opts.hasta || `${opts.anio}-${pad(opts.mes)}-${pad(last)}`;
   const dias = cadaFecha(desde, hasta);
   const jibblePorFecha = new Map(opts.jibble.map((j) => [j.fecha, j]));
   const crudos = dias.map((f) => calcularDia(f, opts.marcajes, opts.config, opts.feriados, opts.permisos, jibblePorFecha.get(f) || null));
@@ -357,9 +358,11 @@ export function calcularNomina(opts: {
     if (falta) faltas++;
     ajustados.push({ ...d, suplMin: cupo, falta });
   }
+  const diasPeriodo = dias.length;
   return {
     hayDatos: true,
-    diasLaborados: last - faltas,
+    diasLaborados: diasPeriodo - faltas,
+    diasPeriodo,
     hrsSupl: round2(suplPag / 60),
     hrsExtr: round2(extr / 60),
     hrsDesc: round2(desc / 60),

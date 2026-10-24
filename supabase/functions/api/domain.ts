@@ -15,6 +15,12 @@ export const NIVELES: { nivel: number; pct: number; premio: number }[] = [
   { nivel: 7, pct: 0.40, premio: 245 }, { nivel: 8, pct: 0.50, premio: 320 },
   { nivel: 9, pct: 0.60, premio: 405 }, { nivel: 10, pct: 0.80, premio: 500 },
 ];
+/** Último ciclo (abre el 26) que usa niveles. Cierra el 2026-10-25. El divisor de esos ciclos es 3 cabinas. */
+export const CICLO_NIVEL_HASTA = "2026-09-26";
+export const N_CABINAS = 3;
+/** El ciclo que cierra el 2026-10-25 queda congelado en N8 para Andrea y Daniela. */
+export const BONO_N8_CICLO = "2026-09-26";
+export const BONO_N8 = 320;
 export const PACK_X3 = ["SUNSU-17","SUNSU-18","SUNSU-19","SUNSU-20","SUNSU-21","SUNSU-22","SUNSU-29","SUNSU-44","SUNSU-45","SUNSU-46","SUNSU-47","SUNSU-53","SUNSU-55","SUNSU-58"];
 export const PACK_X6 = ["SUNSU-23","SUNSU-24","SUNSU-25","SUNSU-26","SUNSU-27","SUNSU-28","SUNSU-30","SUNSU-48","SUNSU-49","SUNSU-50","SUNSU-51","SUNSU-54","SUNSU-56","SUNSU-59"];
 export const VENTAS_DESDE = "2026-05-22";
@@ -486,8 +492,43 @@ export interface TicketIn {
 }
 export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
 
+export function usaNivelesPaquete(ciclo: string): boolean {
+  return ciclo <= CICLO_NIVEL_HASTA;
+}
+
+/** Tramos desde el ciclo que abre el 2026-10-26. Cada unidad se paga en el tramo donde cae. x3 = 1, x6 = 2. */
+export function comisionPaquetesTramo(unidades: number): { monto: number; etiqueta: string } {
+  const u = Math.max(0, Math.floor(Number(unidades) || 0));
+  const tarifas: [number, number, number][] = [[1, 10, 10], [11, 20, 15], [21, 30, 20], [31, 100000, 25]];
+  let monto = 0;
+  for (const [a, b, tarifa] of tarifas) {
+    if (u < a) break;
+    monto += (Math.min(u, b) - a + 1) * tarifa;
+  }
+  const etiqueta = u <= 0 ? "—" : u <= 10 ? "1–10 · $10" : u <= 20 ? "11–20 · $15" : u <= 30 ? "21–30 · $20" : "31+ · $25";
+  return { monto: round2(monto), etiqueta };
+}
+
+export function nombreEsAdmin(nombre: string, admins: { nombre?: string; short?: string; id?: string }[]): boolean {
+  const a = normNombre(nombre);
+  if (!a) return false;
+  const firstA = a.split(" ")[0] || "";
+  for (const ad of admins) {
+    for (const raw of [ad.nombre, ad.short, ad.id]) {
+      const b = normNombre(raw);
+      if (!b || b.length < 3) continue;
+      const firstB = b.split(" ")[0] || "";
+      if (a === b || a === firstB || b === firstA) return true;
+      if (a.startsWith(firstB + " ") || b.startsWith(firstA + " ")) return true;
+      if (firstA.length >= 3 && firstB.length >= 3 && (firstA.startsWith(firstB) || firstB.startsWith(firstA))) return true;
+    }
+  }
+  return false;
+}
+
 export function nCosmetologas(marks: CosmMark[], ciclo: string, fin: string, override?: number | null): number {
   if (override && override > 0) return override;
+  if (usaNivelesPaquete(ciclo)) return N_CABINAS;
   return marks.filter((k) => k.es
     && (!k.desde || k.desde <= fin)
     && (!k.hasta || k.hasta >= ciclo)
@@ -510,25 +551,31 @@ export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cf
   return ticketsConFacial >= umbral ? round2(ticketsConFacial * cfg.recepPor) : 0;
 }
 
-/** Espejo de v_comisiones_total + metas. N = cosmetólogas marcadas (no quien tenga tickets). */
-export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCfg, ciclo: string, overrideN?: number | null) {
+/** Espejo de v_comisiones_total + metas. Hasta el ciclo que cierra el 2026-10-25, N = 3 cabinas. Un admin no entra. */
+export function calcularCiclo(
+  tickets: TicketIn[], marks: CosmMark[], cfg: ComCfg, ciclo: string, overrideN?: number | null,
+  admins: { nombre?: string; short?: string; id?: string }[] = [],
+) {
   const fin = cicloFin(ciclo);
-  const propios = tickets.filter((t) => t.fecha >= ciclo && t.fecha <= fin && !esInterno(t.cosm, t.cedula));
+  const admin = (nombre: string) => nombreEsAdmin(nombre, admins);
+  const marksLimpios = marks.map((k) => (admin(k.nombre) || admin(k.id) || admin(k.patron) ? { ...k, es: false } : k));
+  const propios = tickets.filter((t) => t.fecha >= ciclo && t.fecha <= fin && !esInterno(t.cosm, t.cedula) && !admin(t.cosm));
   const totalClientas = propios.filter((t) => facialSku(t.facial)).length;
-  const n = Math.max(1, nCosmetologas(marks, ciclo, fin, overrideN));
+  const n = Math.max(1, nCosmetologas(marksLimpios, ciclo, fin, overrideN));
   const bono = totalClientas >= cfg.minClientas;
+  const regimen = usaNivelesPaquete(ciclo) ? "nivel" as const : "tramo" as const;
   const metas = cfg.niveles.map((nv) => ({
     ...nv,
     meta: Math.ceil(totalClientas * nv.pct / n),
   }));
   const by = new Map<string, {
-    cosm: string; faciales: number; comFaciales: number; paquetes: number; extras: number; comExtras: number;
+    cosm: string; faciales: number; faciales2: number; faciales3: number; comFaciales: number; paquetes: number; extras: number; comExtras: number;
     comProductos: number; totalProductos: number; comPaquetes: number; nivel: string;
   }>();
   const ensure = (cosm: string) => {
     let r = by.get(cosm);
     if (!r) {
-      r = { cosm, faciales: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—" };
+      r = { cosm, faciales: 0, faciales2: 0, faciales3: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—" };
       by.set(cosm, r);
     }
     return r;
@@ -538,7 +585,8 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
     const sku = facialSku(t.facial);
     if (sku && !t.exclFacial && (FACIALES_2.includes(sku) || FACIALES_3.includes(sku))) {
       r.faciales++;
-      r.comFaciales += FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3;
+      if (FACIALES_2.includes(sku)) { r.faciales2++; r.comFaciales += cfg.facial2; }
+      else { r.faciales3++; r.comFaciales += cfg.facial3; }
     }
     if (!t.exclPaquete) {
       if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") r.paquetes += 1;
@@ -552,10 +600,19 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
     }
   }
   const personas = [...by.values()].map((r) => {
-    const mark = marks.find((k) => normNombre(r.cosm).includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || normNombre(r.cosm).startsWith(normNombre(k.id)));
+    const mark = marksLimpios.find((k) => normNombre(r.cosm).includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || normNombre(r.cosm).startsWith(normNombre(k.id)));
     const es = !!(mark && mark.es);
+    const first = normNombre(r.cosm).split(" ")[0];
+    const congelado = ciclo === BONO_N8_CICLO && (first === "andrea" || first === "daniela");
     let nivel = "—", premio = 0, next: { nivel: string; faltan: number; premio: number } | null = null;
-    if (bono && es) {
+    if (congelado) {
+      nivel = "N8";
+      premio = BONO_N8;
+    } else if (regimen === "tramo") {
+      const tramo = comisionPaquetesTramo(es ? r.paquetes : 0);
+      nivel = es ? tramo.etiqueta : "—";
+      premio = es ? tramo.monto : 0;
+    } else if (bono && es) {
       for (const m of metas) {
         if (r.paquetes >= m.meta) { nivel = "N" + m.nivel; premio = m.premio; }
         else if (!next) next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio };
@@ -565,23 +622,23 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
         if (r.paquetes < m.meta) { next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio }; break; }
       }
     }
-    r.comPaquetes = bono && es ? premio : 0;
+    r.comPaquetes = premio;
     r.nivel = nivel;
-    return { ...r, es, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras) };
+    return { ...r, es, congelado, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras), comPaquetes: round2(premio) };
   });
-  return { ciclo, fin, totalClientas, n, bono, metas, personas };
+  return { ciclo, fin, totalClientas, n, bono, metas, regimen, personas };
 }
 
 export function rolCalcular(input: {
   sueldo: number; bono: number; fondoReserva: boolean; fechaIngreso: string;
-  anio: number; mes: number; diasLaborados?: number | null;
+  anio: number; mes: number; diasLaborados?: number | null; diasPeriodo?: number | null;
   hrsSupl?: number; hrsExtr?: number; hrsDesc?: number;
   anticipo?: number; hip?: number; quir?: number; sandalo?: number;
   comFaciales: number; comExtras: number; comRecepcion: number; comProductos: number; comPaquetes: number;
-  multas: number;
+  multas: number; iessPct?: number; fondoDesde?: string | null; vacacionesDesdeAnio?: number;
 }) {
   const fin = new Date(Date.UTC(input.anio, input.mes, 0));
-  const diasMes = fin.getUTCDate();
+  const diasMes = input.diasPeriodo && input.diasPeriodo > 0 ? input.diasPeriodo : fin.getUTCDate();
   const finYmd = ymdUtc(fin);
   const sueldo = input.sueldo;
   const costoH = sueldo / 240;
@@ -595,10 +652,11 @@ export function rolCalcular(input: {
   const anios = (finTs - ingTs) / (365.25 * 86400 * 1000);
   const t13 = round2(aport / 12);
   const t14 = round2(482 / 12);
-  const vac = anios >= 1 ? round2(sueldo / 24) : 0;
-  const fr = input.fondoReserva && anios >= 1 ? round2(sueldo / 12) : 0;
+  const vac = anios >= (input.vacacionesDesdeAnio == null ? 1 : input.vacacionesDesdeAnio) ? round2(sueldo / 24) : 0;
+  const fondoListo = input.fondoDesde ? finYmd >= input.fondoDesde : anios >= 1;
+  const fr = input.fondoReserva && fondoListo ? round2(sueldo / 12) : 0;
   const ing = round2(sp + input.bono + com + ext + t13 + t14 + fr + vac);
-  const iess = round2(aport * 0.0945);
+  const iess = round2(aport * (input.iessPct == null ? 0.0945 : input.iessPct));
   const egr = round2(iess + (input.anticipo || 0) + (input.hip || 0) + (input.quir || 0) + (input.sandalo || 0) + input.multas);
   return {
     periodo: finYmd.slice(0, 7), anios: round2(anios), sueldo: sp, bono: input.bono, horasExtra: ext,

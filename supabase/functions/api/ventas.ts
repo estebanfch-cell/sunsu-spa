@@ -4,8 +4,8 @@
 
 import type { Db } from "./db.ts";
 import {
-  FACIALES_2, FACIALES_3, IVA, PROD_COLS, ecuadorParts, facialSku, n, normCedula, normNombre,
-  prodCol, productQtys, round2, s, skuCode, ymdUtc, type Row,
+  FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, ecuadorParts, facialSku, n, normCedula, normNombre,
+  packSesiones, prodCol, productQtys, round2, s, skuCode, ymdUtc, type Row,
 } from "./domain.ts";
 import { logAccion } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
@@ -368,47 +368,209 @@ export function kardexPrevio(row: Row, lineasViejas: LineaVenta[]): Record<strin
   return m;
 }
 
-export async function clientesResumen(db: Db, ses: SesLite, admin: boolean): Promise<Row> {
+interface GrupoCliente {
+  key: string;
+  cedula: string;
+  nombres: string;
+  apellido: string;
+  visitas: number;
+  ultima: string;
+  total: number;
+  cosmetologa: string;
+}
+
+function claveRegistro(r: Row): string {
+  const ced = normCedula(r.cedula);
+  if (ced) return "c:" + ced;
+  const nom = normNombre((s(r.nombre) + " " + s(r.apellido)).trim());
+  if (nom) return "n:" + nom;
+  return "r:" + s(r.sheet_row || r.id);
+}
+
+function aplicarTicket(g: GrupoCliente, r: Row): void {
+  g.visitas += 1;
+  const fecha = ymdUtc(r.timestamp);
+  if (fecha >= g.ultima) {
+    g.ultima = fecha;
+    g.cosmetologa = s(r.atendido_por);
+    if (s(r.nombre)) g.nombres = s(r.nombre);
+    if (s(r.apellido)) g.apellido = s(r.apellido);
+    if (!g.cedula && s(r.id_3)) g.cedula = s(r.id_3).split(".")[0];
+  }
+  // estimado es el total con IVA guardado en el ticket (hoja y beta).
+  g.total = round2(g.total + n(r.estimado));
+}
+
+export function normBusca(v: unknown): string {
+  return s(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function distancia(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (!m || !n || Math.abs(m - n) > 2) return 3;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    let min = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      cur.push(v);
+      if (v < min) min = v;
+    }
+    if (min > 2) return 3;
+    prev = cur;
+  }
+  return prev[n];
+}
+
+/** 0 = no coincide. Desde 3 caracteres tolera palabras parciales, otro orden y un typo corto. */
+export function puntajeCliente(c: Row, qRaw: string): number {
+  const q = normBusca(qRaw);
+  if (!q) return 1;
+  const completo = normBusca([c.nombres, c.nombre, c.apellido].filter(Boolean).join(" "));
+  const ced = normCedula(c.cedula);
+  const qCed = q.replace(/\D/g, "").replace(/^0+/, "");
+  const words = completo.split(" ").filter(Boolean);
+  const qWords = q.split(" ").filter(Boolean);
+  let score = 0;
+  if (qCed && ced) {
+    if (ced === qCed) score = 1000;
+    else if (q.length >= 3 && ced.startsWith(qCed)) score = 820;
+    else if (q.length >= 3 && ced.includes(qCed)) score = 640;
+  }
+  if (completo === q) score = Math.max(score, 960);
+  if (q.length < 3) {
+    if (completo.includes(q) || (qCed && ced.includes(qCed))) score = Math.max(score, 200 + q.length);
+    return score;
+  }
+  if (!qWords.length) return score;
+  const used = new Set<number>();
+  let wordScore = 0;
+  for (const qw of qWords) {
+    let best = 0;
+    let idx = -1;
+    words.forEach((w, i) => {
+      if (used.has(i)) return;
+      let p = 0;
+      if (w === qw) p = 140;
+      else if (w.startsWith(qw) || (qw.startsWith(w) && w.length >= 3)) p = 100;
+      else if (w.includes(qw) || (qw.length >= 4 && w.length >= 3 && qw.includes(w))) p = 80;
+      else {
+        const allow = qw.length >= 7 ? 2 : 1;
+        const d = distancia(w, qw);
+        if (d > 0 && d <= allow) p = 60 - d * 15;
+      }
+      if (p > best) { best = p; idx = i; }
+    });
+    const dig = qw.replace(/\D/g, "");
+    if (dig.length >= 3 && ced.includes(dig)) best = Math.max(best, 90);
+    if (!best) return score;
+    if (idx >= 0) used.add(idx);
+    wordScore += best;
+  }
+  return Math.max(score, 400 + wordScore);
+}
+
+export function ordenarClientes(rows: Row[], q: string): Row[] {
+  if (!normBusca(q)) return rows;
+  return rows
+    .map((r, i) => ({ r, i, p: puntajeCliente(r, q) }))
+    .filter((x) => x.p > 0)
+    .sort((a, b) => b.p - a.p || a.i - b.i)
+    .map((x) => x.r);
+}
+
+export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verTodos = admin): Promise<Row> {
   let rows = await db.all("tickets");
-  if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
-  const map = new Map<string, Row>();
+  if (!verTodos) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
+  const map = new Map<string, GrupoCliente>();
+  if (verTodos) {
+    let regs: Row[] = [];
+    try { regs = await db.all("clientas_registro"); } catch { regs = []; }
+    for (const r of regs) {
+      const nombres = s(r.nombre);
+      const apellido = s(r.apellido);
+      const cedula = s(r.cedula).split(".")[0];
+      if (!nombres && !apellido && !normCedula(cedula)) continue;
+      const key = claveRegistro(r);
+      if (map.has(key)) continue;
+      map.set(key, { key, cedula, nombres, apellido, visitas: 0, ultima: "", total: 0, cosmetologa: "" });
+    }
+  }
   for (const r of rows) {
-    if (!s(r.nombre) && !s(r.id_3)) continue;
+    if (!s(r.nombre) && !s(r.apellido) && !normCedula(r.id_3)) continue;
     const key = claveCliente(r);
-    const fecha = ymdUtc(r.timestamp);
     let g = map.get(key);
     if (!g) {
-      g = {
-        key, cedula: s(r.id_3), nombre: (s(r.nombre) + " " + s(r.apellido)).trim(),
-        visitas: 0, ultima: fecha, total: 0, cosmetologa: s(r.atendido_por),
-      };
+      const nom = normNombre((s(r.nombre) + " " + s(r.apellido)).trim());
+      if (nom) {
+        for (const cur of map.values()) {
+          if (normNombre((cur.nombres + " " + cur.apellido).trim()) === nom) { g = cur; break; }
+        }
+      }
+    }
+    if (!g) {
+      g = { key, cedula: s(r.id_3).split(".")[0], nombres: s(r.nombre), apellido: s(r.apellido), visitas: 0, ultima: "", total: 0, cosmetologa: "" };
       map.set(key, g);
     }
-    g.visitas = n(g.visitas) + 1;
-    if (fecha >= s(g.ultima)) {
-      g.ultima = fecha;
-      g.cosmetologa = s(r.atendido_por);
-      if (s(r.nombre)) g.nombre = (s(r.nombre) + " " + s(r.apellido)).trim();
-    }
-    g.total = round2(n(g.total) + n(r.estimado));
+    aplicarTicket(g, r);
   }
-  const clientes = [...map.values()].sort((a, b) => s(b.ultima).localeCompare(s(a.ultima)) || s(a.nombre).localeCompare(s(b.nombre)));
-  if (!admin) {
-    for (const c of clientes) delete c.total;
-  }
+  const clientes = [...map.values()].map((g) => {
+    const item: Row = {
+      key: g.key, cedula: g.cedula, nombres: g.nombres, apellido: g.apellido,
+      nombre: (g.nombres + " " + g.apellido).trim(),
+      visitas: g.visitas, ultima: g.ultima, cosmetologa: g.cosmetologa,
+    };
+    if (admin) item.total = round2(g.total);
+    return item;
+  }).sort((a, b) => s(b.ultima).localeCompare(s(a.ultima)) || s(a.nombre).localeCompare(s(b.nombre)));
   return { ok: true, admin, clientes };
+}
+
+function usosPaquete(r: Row): { usado: boolean; fecha: string }[] {
+  return USO_FIELDS.map(([u, f]) => ({ usado: r[u] === true || r[u] === "true" || !!s(r[f]), fecha: s(r[f]) }));
+}
+
+async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[]> {
+  let rows: Row[] = [];
+  try { rows = await db.all("paquetes"); } catch { return []; }
+  const out: Row[] = [];
+  for (const r of rows) {
+    const pc = normCedula(r.cedula);
+    const pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
+    if (!(ced && pc === ced) && !(nom && pn === nom && (!ced || !pc))) continue;
+    const usos = usosPaquete(r);
+    const total = packSesiones(s(r.sku), s(r.paquete), usos);
+    const corte = usos.slice(0, total);
+    const usados = corte.filter((u) => u.usado).length;
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    out.push({
+      codigo: s(orig.codigo), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
+      usados, pendientes: Math.max(0, total - usados), total,
+      usos: corte.map((u, i) => ({ slot: i + 1, usado: u.usado, fecha: u.fecha })),
+    });
+  }
+  return out;
 }
 
 export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string): Promise<Row> {
   let rows = (await db.all("tickets")).filter((r) => claveCliente(r) === key);
   if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
-  if (!rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
   const cats = await db.all("catalogo").catch(() => [] as Row[]);
   const prods = await db.all("erp_productos").catch(() => [] as Row[]);
   const regs = await db.all("clientas_registro").catch(() => [] as Row[]);
-  const primero = [...rows].sort((a, b) => ymdUtc(b.timestamp).localeCompare(ymdUtc(a.timestamp)))[0];
-  const ced = normCedula(primero.id_3);
-  const ficha = regs.find((r) => normCedula(r.cedula) === ced) || {};
+  const ficha = regs.find((r) => claveRegistro(r) === key) || {};
+  if (!rows.length && !s(ficha.nombre) && !s(ficha.apellido) && !normCedula(ficha.cedula)) {
+    return { error: "No hay visitas de esa clienta en tus tickets" };
+  }
+  if (!admin && !rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
+  const primero = rows.length ? [...rows].sort((a, b) => ymdUtc(b.timestamp).localeCompare(ymdUtc(a.timestamp)))[0] : null;
+  const ced = normCedula(primero?.id_3 || ficha.cedula);
+  const nom = normNombre(((primero ? s(primero.nombre) : s(ficha.nombre)) + " " + (primero ? s(primero.apellido) : s(ficha.apellido))).trim());
+  const paquetes = await paquetesDe(db, ced, nom);
   let total = 0;
   const tickets = rows.map((r) => {
     total += n(r.estimado);
@@ -432,13 +594,16 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
     }
     return item;
   }).sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
+  const nombres = s(primero?.nombre) || s(ficha.nombre);
+  const apellido = s(primero?.apellido) || s(ficha.apellido);
   const cliente: Row = {
-    key, cedula: s(primero.id_3), nombre: (s(primero.nombre) + " " + s(primero.apellido)).trim(),
+    key, cedula: s(primero?.id_3) || s(ficha.cedula).split(".")[0],
+    nombres, apellido, nombre: (nombres + " " + apellido).trim(),
     telefono: s(ficha.telefono), email: s(ficha.email), notas: s(ficha.notas || ficha.observaciones),
     visitas: tickets.length, ultima: s(tickets[0]?.fecha),
   };
   if (admin) cliente.total = round2(total);
-  return { ok: true, admin, cliente, tickets };
+  return { ok: true, admin, cliente, tickets, paquetes };
 }
 
 export async function reporteConsumos(db: Db, p: Row): Promise<Row> {

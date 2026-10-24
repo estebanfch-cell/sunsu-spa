@@ -5,7 +5,7 @@ import { MemoryDb } from "./db.ts";
 import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
-import { numeroTicket, quincenaDe } from "./ventas.ts";
+import { numeroTicket, ordenarClientes, quincenaDe } from "./ventas.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
@@ -96,7 +96,7 @@ describe("permisos", () => {
       { id: "dejaneira", nombre: "Dejaneira", patron: "dejaneira%", es: false, activa: true },
       { id: "alejandra", nombre: "Alejandra", patron: "alejandra%", es: true, activa: true },
     ];
-    assert.equal(nCosmetologas(marks, "2026-09-26", "2026-10-25"), 2);
+    assert.equal(nCosmetologas(marks, "2026-09-26", "2026-10-25"), 3);
   });
 
   it("comisión de producto 30% del margen y rol con año cumplido", () => {
@@ -833,6 +833,65 @@ describe("clientes, reportes, consignación y gift card", () => {
     assert.match(String(den.error), /admin/i);
   });
 
+  it("el registro completo entra a la lista, el total suma todos los tickets y la búsqueda ordena", async () => {
+    const db = new MemoryDb();
+    db.tables.set("clientas_registro", [
+      { sheet_row: 1, cedula: "1711", nombre: "María", apellido: "Paz", telefono: "099" },
+      { sheet_row: 2, cedula: "1733", nombre: "Rosa", apellido: "Díaz" },
+      { sheet_row: 3, cedula: "", nombre: "Ana", apellido: "Sol" },
+    ]);
+    db.tables.set("tickets", [
+      { id: 1, sheet_row: 1, origin: "sheet", nombre: "María", apellido: "Paz", id_3: "1711", estimado: 80, timestamp: "2026-10-18T15:00:00Z", atendido_por: "Andrea Robles" },
+      { id: 2, sheet_row: 2, origin: "beta", nombre: "María", apellido: "Paz", id_3: "01711", estimado: 10.1, timestamp: "2026-10-21T15:00:00Z", atendido_por: "Andrea Robles" },
+      { id: 3, sheet_row: 3, origin: "beta", nombre: "María", apellido: "Paz", id_3: "1711", estimado: 10.2, timestamp: "2026-10-20T15:00:00Z", atendido_por: "Daniela Mora" },
+      { id: 4, sheet_row: 4, origin: "sheet", nombre: "Luz", apellido: "Vera", id_3: "1722", estimado: 15, timestamp: "2026-09-01T15:00:00Z", atendido_por: "Andrea Robles" },
+    ]);
+    db.tables.set("paquetes", [{
+      sheet_row: 8, cedula: "1711", nombres: "María", apellidos: "Paz", sku: "SUNSU-17", paquete: "x3 Facial S.O.S",
+      uso_1: true, fecha_1: "2026-10-01", uso_2: false, fecha_2: "", uso_3: false, fecha_3: "",
+      orig: { codigo: "PQ-0008" },
+    }]);
+    const adm = ctx(db);
+    const res = await handle("clientes_resumen", { token: adm.token }, adm) as Row;
+    const clientes = res.clientes as Row[];
+    const cedulas = clientes.map((c) => c.cedula);
+    assert.ok(cedulas.includes("1733"));
+    assert.ok(cedulas.includes("1722"));
+    const rosa = clientes.find((c) => c.cedula === "1733") as Row;
+    assert.equal(rosa.visitas, 0);
+    assert.equal(rosa.total, 0);
+    const maria = clientes.find((c) => c.cedula === "1711") as Row;
+    assert.equal(maria.visitas, 3);
+    assert.equal(maria.total, 100.3);
+    assert.equal(maria.ultima, "2026-10-21");
+    const porNombre = await handle("clientes_resumen", { token: adm.token, q: "paz maría" }, adm) as Row;
+    assert.equal((porNombre.clientes as Row[])[0].cedula, "1711");
+    const porTypo = ordenarClientes(clientes, "mria");
+    assert.equal(porTypo[0].cedula, "1711");
+    const corto = ordenarClientes(clientes, "pz");
+    assert.equal(corto.some((c) => c.cedula === "1711"), false);
+    const acento = ordenarClientes(clientes, "diaz");
+    assert.equal(acento[0].cedula, "1733");
+    const det = await handle("cliente_detalle", { token: adm.token, key: "c:1711" }, adm) as Row;
+    assert.equal((det.cliente as Row).total, 100.3);
+    const paq = (det.paquetes as Row[])[0];
+    assert.equal(paq.usados, 1);
+    assert.equal(paq.pendientes, 2);
+    assert.equal(paq.total, 3);
+    const sola = await handle("cliente_detalle", { token: adm.token, key: "c:1733" }, adm) as Row;
+    assert.equal(sola.ok, true);
+    assert.equal((sola.tickets as Row[]).length, 0);
+    assert.equal((sola.cliente as Row).total, 0);
+    const and = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    db.tables.set("sesiones", [
+      { token: adm.token, uid: "emi", rol: "admin", exp: "2099-01-01T00:00:00.000Z" },
+      { token: and.token, uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" },
+    ]);
+    const own = await handle("clientes_resumen", { token: and.token }, and) as Row;
+    assert.equal((own.clientes as Row[]).every((c) => c.total == null), true);
+    assert.equal((own.clientes as Row[]).some((c) => c.cedula === "1733"), false);
+  });
+
   it("editar un ticket recalcula IVA, comisión y el kardex", async () => {
     const db = new MemoryDb(erpSeed());
     db.tables.set("tickets", [{
@@ -973,6 +1032,11 @@ describe("beta shell", () => {
     assert.match(html, /Pagar\/Ver periodo actual/);
     assert.match(html, /Consumos \/ reportes/);
     assert.match(html, /data-cli/);
+    assert.match(html, /class="cli-line/);
+    assert.match(html, /cli-desk/);
+    assert.match(html, /function puntajeCliente/);
+    assert.match(html, /pendientes/);
+    assert.match(html, /id="cli-q"/);
     const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     assert.match(screens, /id="gc-aplica"/);
     assert.match(screens, /diferencia a cobrar/);

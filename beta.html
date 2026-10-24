@@ -475,8 +475,38 @@
     .top-salir { display: none; }
   }
   .cli-layout { display: grid; gap: 16px; }
+  .cli-desk { display: none; }
+  .cli-head, .cli-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) 4.4rem 6.4rem minmax(4.5rem, 6.5rem) 5.4rem;
+    gap: 8px; align-items: center;
+  }
+  .cli-head {
+    font-size: 0.66rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--gray); padding: 0 10px 4px;
+  }
+  .cli-line {
+    width: 100%; text-align: left; font: inherit; color: var(--navy);
+    background: var(--white); border: 1.5px solid transparent; border-radius: 10px;
+    box-shadow: var(--shadow-sm); padding: 7px 10px; margin: 0 0 4px; cursor: pointer;
+  }
+  .cli-line .cli-name { font-size: 0.86rem; font-weight: 800; }
+  .cli-line .num, .cli-head .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.78rem; }
+  .cli-line .ced { font-size: 0.76rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cli-line.on, .cli-row.on { border-color: var(--navy); background: var(--blue-l); }
+  .paq-card { padding: 10px 0; border-bottom: 1px solid var(--cream-d); }
+  .paq-slots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .paq-slot {
+    width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    border: 1.5px solid var(--cream-d); color: var(--gray); font-size: 0.72rem; font-weight: 800; background: var(--white);
+  }
+  .paq-slot.on { background: var(--navy); color: var(--white); border-color: var(--navy); }
   @media (min-width: 861px) {
-    .cli-layout { grid-template-columns: minmax(340px, 0.85fr) minmax(480px, 1.5fr); align-items: start; }
+    .cli-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); align-items: start; }
+    .cli-desk { display: block; min-width: 0; }
+    .cli-phone { display: none !important; }
+    .cli-panel { position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+    .cli-panel[hidden] { display: block; }
   }
   .cli-row, .doc-row {
     display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -542,6 +572,9 @@
       position: fixed; z-index: 70; inset: 0 0 var(--tab-h) 0;
       border-radius: 18px 18px 0 0; overflow: auto; margin: 0;
     }
+  }
+  @media (min-width: 861px) {
+    .cli-panel[hidden] { display: block; }
   }
 </style>
 </head>
@@ -747,14 +780,22 @@ function previewApi(accion, body) {
   if (accion === "getCatalogo" || accion === "getHistorial" || accion === "getEntradas" || accion === "getProveedoresApp") return [];
   if (accion === "getInventario") return { items: [], allSkus: [], ultimoFisico: "" };
   if (accion === "clientes_resumen") {
-    return { ok: true, admin: true, clientes: [
-      { key: "c:1711", nombre: "María Paz", cedula: "1711", visitas: 4, ultima: "2026-10-21", total: 320, cosmetologa: "Andrea" },
-      { key: "c:1722", nombre: "Ana Luz", cedula: "1722", visitas: 1, ultima: "2026-10-18", total: 86, cosmetologa: "Emi" },
-    ] };
+    const clientes = [
+      { key: "c:1711", nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", visitas: 4, ultima: "2026-10-21", total: 320, cosmetologa: "Andrea" },
+      { key: "c:1722", nombres: "Ana", apellido: "Luz", nombre: "Ana Luz", cedula: "1722", visitas: 1, ultima: "2026-10-18", total: 86, cosmetologa: "Emi" },
+      { key: "c:0999", nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", visitas: 0, ultima: "", total: 0, cosmetologa: "" },
+    ];
+    const q = String(body.q || "");
+    return { ok: true, admin: true, clientes: q ? ordenarClientes(clientes, q) : clientes };
   }
   if (accion === "cliente_detalle") {
-    return { ok: true, admin: true, cliente: { key: body.key || "c:1711", nombre: "María Paz", cedula: "1711", telefono: "0991112233", visitas: 4, ultima: "2026-10-21", total: 320 },
-      tickets: [{ ref: "TK-20261021-1643", clave: "TK-20261021-1643", fecha: "2026-10-21", hora: "10:00", cosmetologa: "Andrea Robles", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
+    const key = body.key || "c:1711";
+    const rosa = key === "c:0999";
+    return { ok: true, admin: true, cliente: rosa
+      ? { key, nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", telefono: "", visitas: 0, ultima: "", total: 0 }
+      : { key, nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", telefono: "0991112233", visitas: 4, ultima: "2026-10-21", total: 320 },
+      paquetes: rosa ? [] : [{ nombre: "x3 Facial S.O.S", sku: "SUNSU-17", usados: 1, pendientes: 2, total: 3, usos: [{ slot: 1, usado: true, fecha: "2026-10-01" }, { slot: 2, usado: false, fecha: "" }, { slot: 3, usado: false, fecha: "" }] }],
+      tickets: rosa ? [] : [{ ref: "TK-20261021-1643", clave: "TK-20261021-1643", fecha: "2026-10-21", hora: "10:00", cosmetologa: "Andrea Robles", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
         { clase: "servicio", sku: "SUNSU-01", nombre: "Facial S.O.S", cantidad: 1, precio: 49.56521739130435, descuento_pct: 0 },
         { clase: "producto", sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", cantidad: 1, precio: 20, descuento_pct: 0 },
       ] }] };
@@ -1728,10 +1769,10 @@ async function renderInventarioBeta(sub) {
   const data = await api("stk_saldo", { bodega_id: lugar.id });
   if (data.error) return fail(data);
   const chips = lugaresDelLocal().map((b) => `<button class="btn ${b.id === lugar.id ? "" : "ghost"} small" type="button" data-go="#/m/inventario/${encodeURIComponent(b.id)}">${esc(b.nombre)}</button>`).join("");
-  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0).map((r) => `
+  const items = (data.items || []).filter((r) => Number(r.cantidad) !== 0 || r.frenado).map((r) => `
     <button class="row" type="button" data-go="#/m/kardex">
       <div class="sku">${esc(r.sku)}</div>
-      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso || "")}</div></div>
+      <div><div class="name">${esc(r.nombre)}</div><div class="note">${esc(r.uso || "")}${r.frenado ? " · este movimiento habría quedado bajo cero y se frenó en 0" : ""}</div></div>
       <div class="meta">${esc(r.cantidad)}</div>
     </button>`).join("");
   const loc = ((state.lugares && state.lugares.locales) || []).find((l) => l.id === state.localId);
@@ -1789,23 +1830,130 @@ async function renderKardex() {
   return `<p class="note">El kardex no se borra. Deshacer una recepción escribe el movimiento inverso.</p><div class="list">${items || `<p class="note">Sin movimientos.</p>`}</div>`;
 }
 
-async function renderClientes() {
-  const data = await api("clientes_resumen");
-  if (data.error) return fail(data);
-  const moneyOk = !!(data.admin || state.admin);
-  const items = (data.clientes || []).map((c) => `<button class="cli-row" type="button" data-cli="${esc(c.key)}">
-      <div class="cli-main"><div class="cli-name">${esc(c.nombre || "Sin nombre")}</div>
+function normBusca(v) {
+  return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function distanciaBusca(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n || Math.abs(m - n) > 2) return 3;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    let min = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      cur.push(v);
+      if (v < min) min = v;
+    }
+    if (min > 2) return 3;
+    prev = cur;
+  }
+  return prev[n];
+}
+function puntajeCliente(c, qRaw) {
+  const q = normBusca(qRaw);
+  if (!q) return 1;
+  const completo = normBusca([c.nombres, c.nombre, c.apellido].filter(Boolean).join(" "));
+  const ced = String(c.cedula || "").replace(/\D/g, "").replace(/^0+/, "");
+  const qCed = q.replace(/\D/g, "").replace(/^0+/, "");
+  const words = completo.split(" ").filter(Boolean);
+  const qWords = q.split(" ").filter(Boolean);
+  let score = 0;
+  if (qCed && ced) {
+    if (ced === qCed) score = 1000;
+    else if (q.length >= 3 && ced.startsWith(qCed)) score = 820;
+    else if (q.length >= 3 && ced.includes(qCed)) score = 640;
+  }
+  if (completo === q) score = Math.max(score, 960);
+  if (q.length < 3) {
+    if (completo.includes(q) || (qCed && ced.includes(qCed))) score = Math.max(score, 200 + q.length);
+    return score;
+  }
+  if (!qWords.length) return score;
+  const used = new Set();
+  let wordScore = 0;
+  for (const qw of qWords) {
+    let best = 0, idx = -1;
+    words.forEach((w, i) => {
+      if (used.has(i)) return;
+      let p = 0;
+      if (w === qw) p = 140;
+      else if (w.startsWith(qw) || (qw.startsWith(w) && w.length >= 3)) p = 100;
+      else if (w.includes(qw) || (qw.length >= 4 && w.length >= 3 && qw.includes(w))) p = 80;
+      else {
+        const allow = qw.length >= 7 ? 2 : 1;
+        const d = distanciaBusca(w, qw);
+        if (d > 0 && d <= allow) p = 60 - d * 15;
+      }
+      if (p > best) { best = p; idx = i; }
+    });
+    const dig = qw.replace(/\D/g, "");
+    if (dig.length >= 3 && ced.includes(dig)) best = Math.max(best, 90);
+    if (!best) return score;
+    if (idx >= 0) used.add(idx);
+    wordScore += best;
+  }
+  return Math.max(score, 400 + wordScore);
+}
+function ordenarClientes(rows, q) {
+  if (!normBusca(q)) return rows;
+  return rows.map((r, i) => ({ r, i, p: puntajeCliente(r, q) })).filter((x) => x.p > 0).sort((a, b) => b.p - a.p || a.i - b.i).map((x) => x.r);
+}
+function nombreCli(c) {
+  return String(c.nombre || ((c.nombres || "") + " " + (c.apellido || "")).trim() || "Sin nombre");
+}
+function htmlClientes(rows, moneyOk) {
+  const vacio = `<p class="note">No hay clientas en el registro.</p>`;
+  const nada = `<p class="note">Nada coincide con la búsqueda.</p>`;
+  const phone = rows.map((c) => `<button class="cli-row${window._cliKey === c.key ? " on" : ""}" type="button" data-cli="${esc(c.key)}">
+      <div class="cli-main"><div class="cli-name">${esc(nombreCli(c))}</div>
       <div class="sub">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${c.cedula ? " · " + esc(c.cedula) : ""}</div></div>
       <div class="cli-money">${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</div>
     </button>`).join("");
-  return `<div class="cli-layout"><div>
+  const desk = rows.map((c) => `<button class="cli-line${window._cliKey === c.key ? " on" : ""}" type="button" data-cli="${esc(c.key)}">
+      <span class="cli-name">${esc(nombreCli(c))}</span>
+      <span class="num">${esc(c.visitas)}</span>
+      <span class="num">${esc(fechaCorta(c.ultima) || "—")}</span>
+      <span class="ced">${esc(c.cedula || "—")}</span>
+      <span class="num cli-money">${moneyOk && c.total != null ? money(c.total) : ""}</span>
+    </button>`).join("");
+  return {
+    phone: phone || (window._cliQ ? nada : vacio),
+    desk: desk || (window._cliQ ? nada : vacio),
+  };
+}
+function pintarClientes(q) {
+  window._cliQ = q || "";
+  const moneyOk = !!window._cliMoney;
+  const rows = ordenarClientes(window._cliLista || [], q || "");
+  const html = htmlClientes(rows, moneyOk);
+  const phone = document.getElementById("lista");
+  const desk = document.getElementById("lista-desk");
+  if (phone) phone.innerHTML = html.phone;
+  if (desk) desk.innerHTML = html.desk;
+  document.querySelectorAll("#lista [data-cli], #lista-desk [data-cli]").forEach((b) => {
+    b.onclick = () => abrirCliente(b.getAttribute("data-cli"));
+  });
+}
+async function renderClientes() {
+  const data = await api("clientes_resumen");
+  if (data.error) return fail(data);
+  window._cliLista = data.clientes || [];
+  window._cliMoney = !!(data.admin || state.admin);
+  window._cliQ = "";
+  const html = htmlClientes(window._cliLista, window._cliMoney);
+  const head = `<div class="cli-head"><span>Clienta</span><span class="num">Visitas</span><span class="num">Última</span><span>Cédula</span><span class="num">Total</span></div>`;
+  return `<div class="cli-layout"><div class="cli-list">
       <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>
-      <input id="filtro" placeholder="Buscar clienta" aria-label="Buscar clienta">
-      <div class="list" id="lista">${items || `<p class="note">No hay visitas en tus tickets.</p>`}</div>
+      <input id="cli-q" placeholder="Buscar por nombre, apellido o cédula" aria-label="Buscar clienta" autocomplete="off">
+      <div class="cli-desk">${head}<div id="lista-desk">${html.desk}</div></div>
+      <div class="list cli-phone" id="lista">${html.phone}</div>
     </div>
     <aside class="cli-panel" id="cli-panel" hidden>
       <div class="tools"><button class="btn ghost small" type="button" data-cli-cerrar>Cerrar</button></div>
-      <div id="cli-body"></div>
+      <div id="cli-body"><p class="note">Elige una clienta para ver sus paquetes.</p></div>
     </aside></div>`;
 }
 
@@ -2826,8 +2974,14 @@ function renderTrfNueva() {
 
 function wireVentas(main) {
   main.querySelectorAll("[data-cli]").forEach((b) => { b.onclick = () => abrirCliente(b.getAttribute("data-cli")); });
+  const busca = main.querySelector("#cli-q");
+  if (busca) busca.addEventListener("input", () => pintarClientes(busca.value));
   const cerrar = main.querySelector("[data-cli-cerrar]");
   if (cerrar) cerrar.onclick = () => { const p = document.getElementById("cli-panel"); if (p) p.hidden = true; };
+  if (busca && window.matchMedia("(min-width: 861px)").matches) {
+    const first = (window._cliLista || [])[0];
+    if (first) abrirCliente(first.key);
+  }
   const cons = main.querySelector("#btn-consig");
   if (cons) cons.onclick = () => verConsig();
   const csv = main.querySelector("#rep-csv");
@@ -2874,10 +3028,18 @@ async function abrirCliente(key) {
       ${t.notas ? `<div class="note">🗒 ${esc(t.notas)}</div>` : ""}
       ${edit}</article>`;
   }).join("");
+  document.querySelectorAll("[data-cli]").forEach((b) => b.classList.toggle("on", b.getAttribute("data-cli") === key));
+  const packs = (data.paquetes || []).map((p) => {
+    const slots = (p.usos || []).map((u) => `<span class="paq-slot${u.usado ? " on" : ""}">${esc(u.slot)}</span>`).join("");
+    return `<div class="paq-card"><div class="cli-name">${esc(p.nombre || "Paquete")}</div><div class="note">${esc(p.usados)} usadas · ${esc(p.pendientes)} pendientes${p.sku ? " · " + esc(p.sku) : ""}</div><div class="paq-slots">${slots}</div></div>`;
+  }).join("");
   body.innerHTML = `<div class="cli-name">${esc(c.nombre || "")}</div>
     <p class="note">${esc(c.cedula || "")}${c.telefono ? " · " + esc(c.telefono) : ""}${c.email ? " · " + esc(c.email) : ""}</p>
-    <p class="note">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${admin && c.total != null ? " · " + money(c.total) : ""}</p>
+    <p class="note">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${admin && c.total != null ? " · gastado " + money(c.total) : ""}</p>
     ${c.notas ? `<p class="note">${esc(c.notas)}</p>` : ""}
+    <div class="card-title">Paquetes</div>
+    ${packs || `<p class="note">Sin paquetes.</p>`}
+    <div class="card-title">Visitas</div>
     ${tickets || `<p class="note">Sin tickets.</p>`}`;
   body.querySelectorAll("[data-quitar-ln]").forEach((b) => { b.onclick = () => b.closest(".ln").remove(); });
   body.querySelectorAll("[data-add-ln]").forEach((b) => {
@@ -3677,7 +3839,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022relojcam"></script>
+<script src="beta-screens.js?v=20261024clientes"></script>
 <script>draw();</script>
 </body>
 </html>
