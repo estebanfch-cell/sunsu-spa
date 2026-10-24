@@ -52,7 +52,26 @@
       ["fecha", "Fecha"], ["nombre", "Nombre"],
     ],
     pago_config: [
-      ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo"], ["bono", "Bono"], ["iess", "IESS %"], ["fondo", "Fondo"],
+      ["nombre", "Persona"], ["vigente", "Vigente desde"], ["sueldo", "Sueldo"], ["bono", "Bono"],
+      ["iess", "IESS %"], ["fondo", "Fondo"], ["fondoDesde", "Fondo desde"], ["vacaciones", "Vacaciones desde el año"],
+    ],
+    com_facial: [
+      ["sku", "Facial"], ["monto", "Comisión"], ["vigente", "Vigente desde"],
+    ],
+    com_producto: [
+      ["sku", "SKU"], ["pct", "% del margen"], ["fijo", "Fijo por unidad"], ["vigente", "Vigente desde"],
+    ],
+    com_base: [
+      ["pct", "% del margen"], ["vigente", "Vigente desde"],
+    ],
+    com_extra: [
+      ["monto", "Comisión"], ["vigente", "Vigente desde"],
+    ],
+    com_recep: [
+      ["por", "Por facial"], ["min", "Mínimo del día"], ["lunes", "Mínimo del lunes"], ["vigente", "Vigente desde"],
+    ],
+    com_tramo: [
+      ["desde", "Desde"], ["hasta", "Hasta"], ["modo", "Modo"], ["valor", "Valor"], ["vigente", "Vigente desde"],
     ],
     usuarios: [
       ["nombre", "Nombre"], ["short", "Nombre corto"], ["rol", "Rol"], ["bloqueado", "Bloqueado"],
@@ -197,6 +216,12 @@
     if (tablas.asistencia) return "asistencia";
     if (tablas.feriados) return "feriados";
     if (tablas.pago_config) return "pago_config";
+    if (tablas.com_facial) return "com_facial";
+    if (tablas.com_producto) return "com_producto";
+    if (tablas.com_tramo) return "com_tramo";
+    if (tablas.com_base) return "com_base";
+    if (tablas.com_extra) return "com_extra";
+    if (tablas.com_recep) return "com_recep";
     if (tablas.usuarios) return "usuarios";
     if (tablas.acceso) return "acceso";
     if (tablas.lugares) return "lugares";
@@ -222,7 +247,7 @@
       return;
     }
     if (tabla === "paquetes" && document.getElementById("bpq-todos") && typeof _cargarTodosPaquetes === "function") { _cargarTodosPaquetes(); return; }
-    if ((tabla === "permisos" || tabla === "multas" || tabla === "horarios" || tabla === "asistencia" || tabla === "feriados" || tabla === "pago_config" || tabla === "usuarios" || tabla === "acceso" || tabla === "lugares") && typeof draw === "function") { draw(); return; }
+    if ((tabla === "permisos" || tabla === "multas" || tabla === "horarios" || tabla === "asistencia" || tabla === "feriados" || tabla === "pago_config" || tabla === "usuarios" || tabla === "acceso" || tabla === "lugares" || String(tabla).indexOf("com_") === 0) && typeof draw === "function") { draw(); return; }
     if (typeof renderHistorial === "function" && document.getElementById("hist-res")) renderHistorial(document.getElementById("content"));
   }
 
@@ -274,6 +299,12 @@
       || (tabla === "asistencia" && document.getElementById("asis-nuevo"))
       || (tabla === "feriados" && document.getElementById("fer-nuevo"))
       || (tabla === "pago_config" && document.getElementById("pago-nuevo"))
+      || (tabla === "com_facial" && document.getElementById("cfg-facial"))
+      || (tabla === "com_producto" && document.getElementById("cfg-prod"))
+      || (tabla === "com_tramo" && document.getElementById("cfg-tramo"))
+      || (tabla === "com_base" && document.getElementById("cfg-general"))
+      || (tabla === "com_extra" && document.getElementById("cfg-general"))
+      || (tabla === "com_recep" && document.getElementById("cfg-general"))
       || (tabla === "usuarios" && document.getElementById("usr-nuevo"))
       || (tabla === "lugares" && document.getElementById("lug-nuevo"))
       || document.getElementById("hist-res") || document.getElementById("content");
@@ -281,7 +312,7 @@
     var box = document.createElement("div");
     box.id = "ix-nuevo";
     box.className = "ix-nuevo";
-    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : tabla === "permisos" ? "Nuevo permiso" : tabla === "multas" ? "Nueva multa" : tabla === "horarios" ? "Nuevo horario" : tabla === "asistencia" ? "Marca olvidada" : tabla === "feriados" ? "Nuevo feriado" : tabla === "pago_config" ? "Nueva configuración" : tabla === "usuarios" ? "Nuevo usuario" : tabla === "lugares" ? "Nuevo lugar" : "Nuevo ticket";
+    var titulo = tabla === "clientes" ? "Nueva clienta" : tabla === "catalogo" ? "Nuevo producto" : tabla === "proveedores" ? "Nuevo proveedor" : tabla === "compras" ? "Nueva línea" : tabla === "gift_cards" ? "Nueva gift card" : tabla === "paquetes" ? "Nuevo paquete" : tabla === "permisos" ? "Nuevo permiso" : tabla === "multas" ? "Nueva multa" : tabla === "horarios" ? "Nuevo horario" : tabla === "asistencia" ? "Marca olvidada" : tabla === "feriados" ? "Nuevo feriado" : tabla === "pago_config" ? "Nueva configuración" : tabla === "usuarios" ? "Nuevo usuario" : tabla === "lugares" ? "Nuevo lugar" : tabla === "com_facial" ? "Nuevo facial" : tabla === "com_producto" ? "Nuevo producto" : tabla === "com_tramo" ? "Nuevo tramo" : "Nuevo ticket";
     box.innerHTML = '<div class="ix-line"><b>' + titulo + "</b></div>" + lineas(tabla, "nuevo", camposDe(tabla)).replace('class="ix-lines"', 'class="ix-lines" id="ix-nuevo-lines"');
     host.appendChild(box);
   }

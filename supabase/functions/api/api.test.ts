@@ -1686,9 +1686,11 @@ describe("personal bajas", () => {
 });
 
 describe("series, comisiones y rol", () => {
-  it("los tramos por defecto siguen en dólares y el porcentaje usa el neto", () => {
-    assert.equal(comisionPaquetesTramo(12).monto, 10 * 10 + 2 * 15);
-    assert.equal(comisionPaquetesTramo(12).etiqueta, "11–20 · $15");
+  it("los tramos de paquete son 5/8/11/14% del neto, redondeados hacia abajo", () => {
+    const netos = Array.from({ length: 12 }, () => 100);
+    assert.equal(comisionPaquetesTramo(12, undefined, netos).monto, 10 * 5 + 2 * 8);
+    assert.equal(comisionPaquetesTramo(12, undefined, netos).etiqueta, "11–20 · 8%");
+    assert.equal(comisionPaquetesTramo(1, undefined, [33]).monto, 1);
     const pct = normalizarTramos([
       { desde: 1, hasta: 10, modo: "pct", valor: 5 },
       { desde: 11, hasta: 20, modo: "pct", valor: 8 },
@@ -1758,6 +1760,7 @@ describe("series, comisiones y rol", () => {
         { id: 1, sheet_row: 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101", facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-60", orig: {} },
         { id: 2, sheet_row: 2, timestamp: "2026-10-27T16:00:00Z", atendido_por: "Emi", id_3: "0202", facial_hecho: "SUNSU-40", compra_pack_6: "SUNSU-61", orig: {} },
       ],
+      catalogo: [{ sku: "SUNSU-60", producto_servicio: "Pack", subtotal: 200, tipo: "PAQUETE", orig: {} }],
       rrhh_empleadas: [{ cedula: "1711", nombre_app: "Andrea", apellidos_y_nombres: "Andrea Robles", sueldo: 460, bono: 40, fondo_reserva: "NO", fecha_ingreso: "2024-01-01", cargo: "Cosmetologa" }],
       jibble_historial: [{ nombre: "Andrea Robles", fecha: "2026-10-27", payroll_minutes: 480, supplementary_minutes: 60 }],
     });
@@ -2464,5 +2467,69 @@ describe("series, comisiones y rol", () => {
       token: "t-andrea", tabla: "lugares", fila: "L:" + LOCAL_ESQUINA, tipo: "cambio", motivo: "el nombre", propuestos: { nombre: "Esquina" },
     }, adminC) as Row;
     assert.equal(pide.ok, true);
+  });
+
+  it("la configuración general cambia la comisión desde su vigencia y el rol lee el sueldo", async () => {
+    const db = new MemoryDb({
+      usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false },
+        { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+      ],
+      cosmetologas: [{ id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true }],
+      tickets: [
+        { id: 1, sheet_row: 1, timestamp: "2026-10-01T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101", facial_hecho: "SUNSU-01", orig: {} },
+        { id: 2, sheet_row: 2, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101", facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-60", ht_002: 2, orig: {} },
+      ],
+      catalogo: [
+        { sku: "SUNSU-60", producto_servicio: "Pack", subtotal: 33, tipo: "PAQUETE", orig: {} },
+        { sku: "HT-002", producto_servicio: "Serum", tipo: "PRODUCTO", subtotal: 20, precio_compra: 8, orig: {} },
+      ],
+      rrhh_empleadas: [{ nombre_app: "Andrea Robles", sueldo_base: 460, bono_fijo: 0, fondo_reserva: "NO", fecha_ingreso: "2024-01-01" }],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    const monto = async (desde: string, concepto: string) => {
+      const tabla = await handle("getComisionesTabla", { token: c.token, desde, hasta: desde, persona: "Andrea" }, c) as Row;
+      return ((tabla.filas as Row[]).find((f) => f.concepto === concepto)?.porCiclo as number[])[0];
+    };
+    assert.equal(await monto("2026-09-26", "Faciales"), 2);
+    assert.equal(await monto("2026-10-26", "Faciales"), 2);
+    assert.equal(await monto("2026-10-26", "Paquetes"), 1);
+    assert.equal(await monto("2026-10-26", "Productos"), 7.2);
+    const vista = await handle("config_general", { token: c.token }, c) as Row;
+    assert.equal((vista.tramos as Row[])[0].valor, 5);
+    assert.equal((vista.tramos as Row[])[0].modo, "pct");
+    const facial = await handle("inline_guardar", {
+      token: c.token, tabla: "com_facial", fila: "def|facial|SUNSU-01", campos: { monto: "9", vigente: "2026-10-26" },
+    }, c) as Row;
+    assert.equal(facial.ok, true);
+    const despues = await handle("inline_guardar", {
+      token: c.token, tabla: "com_facial", fila: String(facial.fila), campos: { monto: "4", vigente: "2026-11-26" },
+    }, c) as Row;
+    assert.equal(despues.ok, true);
+    assert.equal(await monto("2026-09-26", "Faciales"), 2);
+    assert.equal(await monto("2026-10-26", "Faciales"), 9);
+    const prod = await handle("inline_guardar", {
+      token: c.token, tabla: "com_producto", fila: "def|producto|HT-002", campos: { fijo: "4", pct: "", vigente: "2026-10-26" },
+    }, c) as Row;
+    assert.equal(prod.ok, true);
+    assert.equal(await monto("2026-10-26", "Productos"), 8);
+    assert.equal(await monto("2026-09-26", "Productos"), 0);
+    const pago = await handle("inline_guardar", {
+      token: c.token, tabla: "pago_config", fila: "nuevo",
+      campos: { nombre: "Andrea Robles", vigente: "2026-10-26", sueldo: "500", bono: "15", iess: "9.45", fondo: "" },
+    }, c) as Row;
+    assert.equal(pago.ok, true);
+    const rol = await handle("getRolCiclo", { token: c.token, desde: "2026-10-26", persona: "Andrea" }, c) as Row;
+    assert.equal((rol.ingresos as Row[]).find((r) => r.concepto === "Sueldo")?.monto, 500);
+    assert.equal((rol.ingresos as Row[]).find((r) => r.concepto === "Bono")?.monto, 15);
+    assert.equal((rol.ingresos as Row[]).find((r) => r.concepto === "Faciales")?.monto, 9);
+    const ajena = await handle("config_general", { token: "t-andrea" }, c) as Row;
+    assert.match(String(ajena.error), /admin/i);
+    const no = await handle("inline_guardar", {
+      token: "t-andrea", tabla: "com_facial", fila: "def|facial|SUNSU-01", campos: { monto: "1", vigente: "2026-10-26" },
+    }, c) as Row;
+    assert.match(String(no.error), /admin/i);
+    assert.ok((await db.all("audit_log")).some((r) => r.tabla === "comision_reglas" && r.accion === "INSERT"));
   });
 });

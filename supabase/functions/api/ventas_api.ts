@@ -3,7 +3,8 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
-import { ecuadorParts, n, s, skuCode, type Row } from "./domain.ts";
+import { cicloInicio, ecuadorParts, n, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { cfgAplicada } from "./comision_cfg.ts";
 import {
   aplicarGiftCard, borradorConsig, claveTicket, clienteDetalle, clientesResumen, kardexPrevio, lineasTicket,
   numeroTicket, ordenarClientes, patchProductos, recalcular, recetaDe, reporteConsumos, textoExtras, textoFacial, textoPack,
@@ -57,7 +58,8 @@ extend("ticket_editar", "any", async (p, ctx, ses) => {
       costo: ln.costo != null ? n(ln.costo) : n(prod?.costo_promedio),
     };
   });
-  const calc = recalcular(lineas, n(p.descuento));
+  const cuando = cicloInicio(ymdUtc(row.timestamp) || ecuadorParts(ctx.now).ymd);
+  const calc = recalcular(lineas, n(p.descuento), (await cfgAplicada(ctx.db, cuando)).cfg);
   const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
   const viejas = lineasTicket(row, cats, prods);
   const previo = kardexPrevio(row, viejas);

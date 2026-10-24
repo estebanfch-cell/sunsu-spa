@@ -5,7 +5,7 @@
 import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, ecuadorParts, facialSku, n, normCedula, normNombre,
-  packSesiones, prodCol, productQtys, round2, s, skuCode, ymdUtc, type Row,
+  packSesiones, prodCol, productQtys, round2, s, skuCode, ymdUtc, type ComCfg, type Row,
 } from "./domain.ts";
 import { logAccion } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
@@ -264,7 +264,7 @@ export function claveTicket(r: Row): string {
   return String(r.id ?? "");
 }
 
-export function recalcular(lineas: LineaVenta[], descuento: number): {
+export function recalcular(lineas: LineaVenta[], descuento: number, cfg?: ComCfg): {
   lineas: LineaVenta[]; subtotal: number; iva: number; total: number;
   comProductos: number; comFacial: number;
 } {
@@ -283,10 +283,18 @@ export function recalcular(lineas: LineaVenta[], descuento: number): {
   for (const ln of out) {
     const neto = round2(ln.cantidad * ln.precio * (1 - (ln.descuento_pct || 0) / 100));
     sub += neto;
-    if (ln.clase === "producto") comP += Math.max(0, neto - ln.costo * ln.cantidad) * 0.3;
+    if (ln.clase === "producto") {
+      const over = cfg?.productoSku?.[skuCode(ln.sku)];
+      const margen = Math.max(0, neto - ln.costo * ln.cantidad);
+      if (over && (over.pct != null || over.fijo != null)) {
+        if (over.pct != null) comP += margen * over.pct;
+        if (over.fijo != null) comP += over.fijo * ln.cantidad;
+      } else comP += margen * (cfg?.pctProd ?? 0.3);
+    }
     if (ln.clase === "servicio") {
       const sku = facialSku(ln.sku) || facialSku(ln.nombre) || "";
-      const tarifa = FACIALES_2.includes(sku) ? 2 : FACIALES_3.includes(sku) ? 3 : 0;
+      const overF = sku && cfg?.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
+      const tarifa = overF != null ? overF : (FACIALES_2.includes(sku) ? (cfg?.facial2 ?? 2) : FACIALES_3.includes(sku) ? (cfg?.facial3 ?? 3) : 0);
       const base = ln.precio > 0 ? ln.precio * ln.cantidad : 0;
       const ratio = base > 0 ? Math.min(1, neto / base) : (neto > 0 ? 1 : 0);
       comF += tarifa * ratio * ln.cantidad;

@@ -468,6 +468,7 @@ export function validarBitacora(body: Row): { error: string } | { items: { codig
   return { items, paso2, resultado, observacion: obs };
 }
 
+export interface TarifaProducto { pct: number | null; fijo: number | null }
 export interface ComCfg {
   minClientas: number;
   facial2: number;
@@ -478,6 +479,10 @@ export interface ComCfg {
   recepMin: number;
   recepMinLunes: number;
   niveles: { nivel: number; pct: number; premio: number }[];
+  /** Monto por facial cuando esa vigencia pisa el grupo de $2 o $3. */
+  facialSku?: Record<string, number>;
+  /** % del margen y/o monto fijo por unidad. La clave es el SKU sin SUNSU-. */
+  productoSku?: Record<string, TarifaProducto>;
 }
 export const CFG_DEF: ComCfg = {
   minClientas: 60, facial2: 2, facial3: 3, extra: 1, pctProd: 0.30,
@@ -489,17 +494,35 @@ export interface TicketIn {
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number }[];
-  /** Precio neto de una unidad de paquete. Solo lo usa un tramo en modo pct. */
+  /** Precio neto de catálogo de la unidad x3. Solo lo usa un tramo en modo pct. */
   netoPack?: number;
+  /** Precio neto de catálogo de la unidad x6. Si falta, se usa netoPack. */
+  netoPack6?: number;
 }
 export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
-/** Montos fijos. El modo pct guarda la fracción (0.05 = 5% del neto) por si se cambia después. */
+/** Desde el ciclo que abre el 2026-10-26. pct guarda la fracción (0.05 = 5% del neto), redondeada hacia abajo. */
 export const TRAMOS_PAQUETE: TramoPaquete[] = [
-  { desde: 1, hasta: 10, modo: "fijo", valor: 10 },
-  { desde: 11, hasta: 20, modo: "fijo", valor: 15 },
-  { desde: 21, hasta: 30, modo: "fijo", valor: 20 },
-  { desde: 31, hasta: 100000, modo: "fijo", valor: 25 },
+  { desde: 1, hasta: 10, modo: "pct", valor: 0.05 },
+  { desde: 11, hasta: 20, modo: "pct", valor: 0.08 },
+  { desde: 21, hasta: 30, modo: "pct", valor: 0.11 },
+  { desde: 31, hasta: 100000, modo: "pct", valor: 0.14 },
 ];
+export type TipoReglaCom = "facial" | "producto" | "base" | "extra" | "recepcion" | "tramo";
+export interface ReglaCom {
+  tipo: TipoReglaCom;
+  clave: string;
+  vigente_desde: string;
+  monto?: number | null;
+  pct?: number | null;
+  fijo?: number | null;
+  por?: number | null;
+  min?: number | null;
+  lunes?: number | null;
+  desde?: number;
+  hasta?: number;
+  modo?: "fijo" | "pct";
+  valor?: number;
+}
 export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
 
 export function usaNivelesPaquete(ciclo: string): boolean {
@@ -544,7 +567,7 @@ export function comisionPaquetesTramo(unidades: number, tramos: TramoPaquete[] =
     ultimo = tier;
     if (tier.modo === "pct") {
       const neto = netos[i - 1] != null ? netos[i - 1] : (netos.length ? netos[netos.length - 1] : 0);
-      monto += tier.valor * (neto || 0);
+      monto += Math.floor(round2(tier.valor * (neto || 0)) + 1e-9);
     } else monto += tier.valor;
   }
   return { monto: round2(monto), etiqueta: etiquetaTramo(u, ultimo) };
@@ -576,13 +599,61 @@ export function nCosmetologas(marks: CosmMark[], ciclo: string, fin: string, ove
     && (k.activa || !!k.hasta)).length;
 }
 
-export function comisionProductos(items: { venta: number; compra: number; qty: number; excluido: boolean }[], pct = 0.3): number {
+export function comisionProductos(
+  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string }[],
+  pct = 0.3,
+  porSku?: ComCfg["productoSku"],
+): number {
   let t = 0;
   for (const it of items) {
     if (it.excluido || !(it.venta > 0)) continue;
-    t += (it.venta - (it.compra || 0)) * it.qty * pct;
+    const over = it.sku && porSku ? porSku[skuCode(it.sku)] : undefined;
+    const margen = (it.venta - (it.compra || 0)) * it.qty;
+    if (over && (over.pct != null || over.fijo != null)) {
+      if (over.pct != null) t += margen * over.pct;
+      if (over.fijo != null) t += over.fijo * it.qty;
+    } else t += margen * pct;
   }
   return round2(t);
+}
+
+/** La vigencia que manda en un ciclo es la última con fecha <= al inicio del ciclo. Sin filas, siguen los valores de fábrica. */
+export function cfgDesdeReglas(reglas: ReglaCom[], ciclo: string, tramosKv: unknown): { cfg: ComCfg; tramos: TramoPaquete[] } {
+  const sirve = (r: ReglaCom) => s(r.vigente_desde).slice(0, 10) <= ciclo;
+  const ultimas = (tipo: TipoReglaCom) => {
+    const map = new Map<string, ReglaCom>();
+    const rows = reglas.filter((r) => r.tipo === tipo && sirve(r)).sort((a, b) => s(a.vigente_desde).localeCompare(s(b.vigente_desde)));
+    for (const r of rows) map.set(r.clave, r);
+    return map;
+  };
+  const porFacial: Record<string, number> = {};
+  for (const [k, r] of ultimas("facial")) porFacial[facialSku(k) || k] = n(r.monto);
+  const porProducto: Record<string, TarifaProducto> = {};
+  for (const [k, r] of ultimas("producto")) {
+    porProducto[skuCode(k)] = {
+      pct: r.pct == null ? null : n(r.pct),
+      fijo: r.fijo == null ? null : n(r.fijo),
+    };
+  }
+  const base = ultimas("base").get("base");
+  const extra = ultimas("extra").get("extra");
+  const recep = ultimas("recepcion").get("recepcion");
+  const cfg: ComCfg = {
+    ...CFG_DEF,
+    extra: extra ? n(extra.monto) : CFG_DEF.extra,
+    pctProd: base ? (n(base.pct) > 1 ? n(base.pct) / 100 : n(base.pct)) : CFG_DEF.pctProd,
+    recepPor: recep ? n(recep.por) : CFG_DEF.recepPor,
+    recepMin: recep ? n(recep.min) : CFG_DEF.recepMin,
+    recepMinLunes: recep ? n(recep.lunes) : CFG_DEF.recepMinLunes,
+    facialSku: porFacial, productoSku: porProducto,
+  };
+  const tramoRows = reglas.filter((r) => r.tipo === "tramo" && sirve(r));
+  let tramos: TramoPaquete[];
+  if (tramoRows.length) {
+    const fecha = tramoRows.map((r) => s(r.vigente_desde).slice(0, 10)).sort().pop() || ciclo;
+    tramos = normalizarTramos(tramoRows.filter((r) => s(r.vigente_desde).slice(0, 10) === fecha));
+  } else tramos = normalizarTramos(tramosKv);
+  return { cfg, tramos };
 }
 
 export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cfg: ComCfg = CFG_DEF): number {
@@ -626,15 +697,18 @@ export function calcularCiclo(
   for (const t of propios) {
     const r = ensure(t.cosm);
     const sku = facialSku(t.facial);
-    if (sku && !t.exclFacial && (FACIALES_2.includes(sku) || FACIALES_3.includes(sku))) {
+    const overFacial = sku && cfg.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
+    if (sku && !t.exclFacial && (FACIALES_2.includes(sku) || FACIALES_3.includes(sku) || overFacial != null)) {
       r.faciales++;
-      if (FACIALES_2.includes(sku)) { r.faciales2++; r.comFaciales += cfg.facial2; }
-      else { r.faciales3++; r.comFaciales += cfg.facial3; }
+      if (FACIALES_2.includes(sku)) r.faciales2++;
+      else if (FACIALES_3.includes(sku)) r.faciales3++;
+      r.comFaciales += overFacial != null ? overFacial : (FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3);
     }
     if (!t.exclPaquete) {
       const neto = Number(t.netoPack) || 0;
+      const neto6 = t.netoPack6 != null ? Number(t.netoPack6) || 0 : neto;
       if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") { r.paquetes += 1; r.netos.push(neto); }
-      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") { r.paquetes += 2; r.netos.push(neto, neto); }
+      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") { r.paquetes += 2; r.netos.push(neto6, neto6); }
     }
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);

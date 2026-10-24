@@ -11,6 +11,7 @@ import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } 
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
 import { saldoDe } from "./asistencia_api.ts";
 import { claveCliente, claveRegistro } from "./ventas.ts";
+import { borrarComision, guardarComisionCampos, vistaConfig } from "./comision_cfg.ts";
 
 const CAMPOS: Record<string, string> = {
   nombre: "nombre",
@@ -1091,6 +1092,8 @@ function vistaPago(row: Row): Row {
     nombre: s(row.nombre), vigente: s(row.vigente_desde).slice(0, 10), sueldo: s(row.sueldo), bono: s(row.bono),
     iess: pct > 1 ? s(pct) : String(Math.round(pct * 10000) / 100),
     fondo: row.fondo === true || s(row.fondo).toUpperCase() === "SI" ? "SI" : "",
+    fondoDesde: s(row.fondo_desde).slice(0, 10),
+    vacaciones: row.vacaciones_desde_anio == null || row.vacaciones_desde_anio === "" ? "1" : s(row.vacaciones_desde_anio),
   };
 }
 
@@ -1108,8 +1111,10 @@ function pagoRow(campos: Row, base: Row | null): Row | { error: string } {
     bono: campos.bono != null ? n(campos.bono) : n(base?.bono),
     iess_pct: iessRaw > 1 ? iessRaw / 100 : iessRaw,
     fondo,
-    fondo_desde: s(base?.fondo_desde).slice(0, 10),
-    vacaciones_desde_anio: base && base.vacaciones_desde_anio != null && base.vacaciones_desde_anio !== "" ? n(base.vacaciones_desde_anio) : 1,
+    fondo_desde: campos.fondoDesde != null ? (ymdCampo(campos.fondoDesde) || "") : s(base?.fondo_desde).slice(0, 10),
+    vacaciones_desde_anio: campos.vacaciones != null && s(campos.vacaciones) !== ""
+      ? n(campos.vacaciones)
+      : (base && base.vacaciones_desde_anio != null && base.vacaciones_desde_anio !== "" ? n(base.vacaciones_desde_anio) : 1),
   };
 }
 
@@ -1376,6 +1381,11 @@ export async function borrarLugar(ctx: Ctx, ses: Ses, fila: string): Promise<Row
   return { ok: true };
 }
 
+extend("config_general", "any", async (_p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administración configura esto" };
+  return { ok: true, ...(await vistaConfig(ctx)) };
+});
+
 extend("inline_guardar", "any", async (p, ctx, ses) => {
   const campos = (p.campos && typeof p.campos === "object" ? p.campos : {}) as Row;
   if (s(p.tabla) === "tickets") return guardarTicketCampos(ctx, ses, s(p.fila), campos);
@@ -1392,6 +1402,7 @@ extend("inline_guardar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "asistencia") return guardarAsistenciaCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "feriados") return guardarFeriadoCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "pago_config") return guardarPagoCampos(ctx, ses, s(p.fila), campos);
+  if (s(p.tabla).startsWith("com_")) return guardarComisionCampos(ctx, ses, s(p.tabla), s(p.fila), campos);
   if (s(p.tabla) === "usuarios") return guardarUsuarioCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "acceso") return guardarAccesoCampos(ctx, ses, s(p.fila), campos);
   if (s(p.tabla) === "lugares") return guardarLugarCampos(ctx, ses, s(p.fila), campos);
@@ -1411,6 +1422,7 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
   if (s(p.tabla) === "asistencia") return anularMarca(ctx, ses, s(p.fila), s(p.motivo));
   if (s(p.tabla) === "feriados") return borrarFeriado(ctx, ses, s(p.fila));
   if (s(p.tabla) === "pago_config") return borrarPago(ctx, ses, s(p.fila));
+  if (s(p.tabla).startsWith("com_")) return borrarComision(ctx, ses, s(p.tabla), s(p.fila));
   if (s(p.tabla) === "usuarios") return borrarUsuario(ctx, ses, s(p.fila));
   if (s(p.tabla) === "acceso") return borrarAcceso(ctx, ses, s(p.fila));
   if (s(p.tabla) === "lugares") return borrarLugar(ctx, ses, s(p.fila));

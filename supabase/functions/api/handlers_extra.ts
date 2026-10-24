@@ -1,8 +1,9 @@
 import { cicloDe, extend } from "./handlers.ts";
 import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
+import { cfgAplicada } from "./comision_cfg.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
-  ADMIN, BETA_TABLES, CFG_DEF, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
+  ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
   ecuadorParts, esInterno, estadoTicket, facialSku, n, nombreEsAdmin, normCedula, normNombre,
   productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
@@ -214,12 +215,19 @@ async function extendKpi(p: R, ctx: Ctx) {
 }
 extend("getKPIsHistoricos", "any", async () => ({ items: [], parcial: true, nota: "Los KPI históricos salían de los .xls de Mi Negocio. En la beta el mes en curso se calcula en vivo (getKPIsMes)." }));
 
-function ticketIn(r: R): TicketIn {
+function ticketIn(r: R, cats?: Map<string, R>): TicketIn {
+  const pack3 = s(r.compra_pack_3);
+  const pack6 = s(r.compra_pack_6);
+  const neto = (sku: string) => {
+    if (!cats || !sku || sku.toLowerCase() === "false") return 0;
+    return subtotalCatalogo(cats.get(skuCode(sku)));
+  };
   return {
     fecha: ymdUtc(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3), facial: s(r.facial_hecho),
-    pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6), extras: s(r.servicios_adicionales),
+    pack3, pack6, extras: s(r.servicios_adicionales),
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
+    netoPack: neto(pack3), netoPack6: neto(pack6),
   };
 }
 function subtotalCatalogo(row: R | undefined): number {
@@ -233,20 +241,23 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const ancla = `${anio}-${String(mes).padStart(2, "0")}-25`;
   const ciclo = cicloInicio(ancla);
   const fin = cicloFin(ciclo);
-  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map(ticketIn);
+  const cat0 = await ctx.db.all("catalogo").catch(() => [] as R[]);
+  const cmap0 = new Map(cat0.map((r) => [skuCode(s(r.sku)), r]));
+  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map((r) => ticketIn(r, cmap0));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
+  const aplicado = await cfgAplicada(ctx.db, ciclo);
   const calc = calcularCiclo(tks, [{
     id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: !nombreEsAdmin(nombreApp, admins), activa: true, desde: null, hasta: null,
-  }], CFG_DEF, ciclo, null, admins);
+  }], aplicado.cfg, ciclo, null, admins, aplicado.tramos);
   const persona = calc.personas.find((p) => normNombre(p.cosm).startsWith(key));
   const cat = await ctx.db.all("catalogo");
   const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
   const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= fin && normNombre(t.cosm).startsWith(key) && !esInterno(t.cosm, t.cedula) && !t.exclProducto);
   const items = propios.flatMap((t) => t.productos.map((pr) => {
     const row = cmap.get(skuCode(pr.sku));
-    return { venta: subtotalCatalogo(row), compra: n(row?.precio_compra), qty: pr.qty, excluido: false };
+    return { venta: subtotalCatalogo(row), compra: n(row?.precio_compra), qty: pr.qty, excluido: false, sku: pr.sku };
   }));
   let comRecepcion = 0;
   if (key.startsWith("alejandra")) {
@@ -255,7 +266,7 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
       if (t.fecha < ciclo || t.fecha > fin || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
       dias.set(t.fecha, (dias.get(t.fecha) || 0) + 1);
     }
-    for (const [f, c] of dias) comRecepcion += comisionRecepcionDia(f, c);
+    for (const [f, c] of dias) comRecepcion += comisionRecepcionDia(f, c, aplicado.cfg);
   }
   let multas = 0;
   for (const r of await ctx.db.all("multas_descuentos")) {
@@ -270,7 +281,7 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
     comFaciales: persona?.comFaciales || 0,
     comExtras: persona?.comExtras || 0,
     comPaquetes: persona?.comPaquetes || 0,
-    comProductos: comisionProductos(items, CFG_DEF.pctProd),
+    comProductos: comisionProductos(items, aplicado.cfg.pctProd, aplicado.cfg.productoSku),
     comRecepcion: round2(comRecepcion),
     multas: round2(multas),
   };
