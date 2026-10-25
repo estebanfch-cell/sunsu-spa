@@ -494,9 +494,9 @@ export interface TicketIn {
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number }[];
-  /** Precio neto de catálogo de la unidad x3. Solo lo usa un tramo en modo pct. */
+  /** Precio neto de catálogo del paquete x3. */
   netoPack?: number;
-  /** Precio neto de catálogo de la unidad x6. Si falta, se usa netoPack. */
+  /** Precio neto de catálogo del paquete x6. Si falta, se usa netoPack. */
   netoPack6?: number;
 }
 export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
@@ -555,7 +555,7 @@ function etiquetaTramo(u: number, tier: TramoPaquete | undefined): string {
   return tier.modo === "pct" ? `${rango} · ${Math.round(tier.valor * 1000) / 10}%` : `${rango} · $${tier.valor}`;
 }
 
-/** Tramos desde el ciclo que abre el 2026-10-26. Cada unidad se paga en el tramo donde cae. x3 = 1, x6 = 2. */
+/** Tramos desde el ciclo que abre el 2026-10-26. Cada paquete, x3 o x6, es 1 unidad y paga el % de su neto, redondeado hacia abajo. */
 export function comisionPaquetesTramo(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE, netos: number[] = []): { monto: number; etiqueta: string } {
   const u = Math.max(0, Math.floor(Number(unidades) || 0));
   const tarifas = normalizarTramos(tramos);
@@ -708,7 +708,10 @@ export function calcularCiclo(
       const neto = Number(t.netoPack) || 0;
       const neto6 = t.netoPack6 != null ? Number(t.netoPack6) || 0 : neto;
       if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") { r.paquetes += 1; r.netos.push(neto); }
-      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") { r.paquetes += 2; r.netos.push(neto6, neto6); }
+      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") {
+        if (regimen === "tramo") { r.paquetes += 1; r.netos.push(neto6); }
+        else { r.paquetes += 2; r.netos.push(neto6, neto6); }
+      }
     }
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);
