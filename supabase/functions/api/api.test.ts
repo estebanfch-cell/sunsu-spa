@@ -1753,6 +1753,38 @@ describe("series, comisiones y rol", () => {
     assert.equal((filas.find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0], 5);
   });
 
+  it("un x6 cuenta como 1 y paga el % de su neto completo; el ciclo anterior sigue en 2", async () => {
+    const db = new MemoryDb({
+      cosmetologas: [{ id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true }],
+      tickets: [
+        ...Array.from({ length: 10 }, (_, i) => ({
+          id: i + 1, sheet_row: i + 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101",
+          facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18 x3 Facial Reparación", orig: {},
+        })),
+        {
+          id: 11, sheet_row: 11, timestamp: "2026-10-28T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0102",
+          facial_hecho: "SUNSU-01", compra_pack_6: "SUNSU-23 x6 Facial S.O.S", orig: {},
+        },
+        {
+          id: 12, sheet_row: 12, timestamp: "2026-10-10T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0103",
+          facial_hecho: "SUNSU-01", compra_pack_6: "SUNSU-23 x6 Facial S.O.S", orig: {},
+        },
+      ],
+      catalogo: [
+        { sku: "SUNSU-18", producto_servicio: "Facial Reparación x3", subtotal: 100, tipo: "PAQUETE", orig: {} },
+        { sku: "SUNSU-23", producto_servicio: "Facial S.O.S x6", subtotal: 332.35, tipo: "PAQUETE", orig: {} },
+      ],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Andrea" }, c) as Row;
+    const filas = tabla.filas as Row[];
+    assert.equal((filas.find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0], 10 * 5 + 26);
+    const viejo = await handle("getReporteAdmin", { token: c.token }, c) as Row;
+    const andrea = (viejo.cosmetologas as Row[]).find((r) => String(r.name).startsWith("Andrea"));
+    assert.equal(andrea?.paq, 2);
+    assert.equal(andrea?.cp, 320);
+  });
+
   it("backfill TK-SO respeta el orden y la prueba no gasta la serie", async () => {
     const db = new MemoryDb({
       tickets: [

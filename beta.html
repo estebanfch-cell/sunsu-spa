@@ -2244,7 +2244,7 @@ async function renderConfiguracion() {
     <h2 id="cfg-roles">Roles</h2>
     <div class="card"><div class="card-title">Sueldo fijo, bono fijo y otros valores del rol</div>${pago}</div>
     <h2 id="cfg-comisiones">Comisiones</h2>
-    <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. x6 cuenta como 2 y el % se redondea hacia abajo.</p>
+    <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. Desde el 2026-10-26 cada paquete, x3 o x6, cuenta como 1 y el % se redondea hacia abajo.</p>
     <div class="card"><div class="card-title">Faciales</div><div class="list" id="cfg-facial">${faciales}</div>${ix && ix.edita() ? ix.mas("com_facial") : ""}</div>
     <div class="card" id="cfg-general"><div class="card-title">Resto de productos, extras y recepción</div>
       <p class="note">El % de productos aplica a los que no tienen fila propia. La recepción suma dólares por facial del día cuando se llega al mínimo. El lunes usa el otro mínimo.</p>
@@ -2254,7 +2254,7 @@ async function renderConfiguracion() {
       <div class="list" id="cfg-prod">${productos || `<p class="note">Sin productos en el catálogo. Agrega el SKU.</p>`}</div>
       ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
     <div class="card"><div class="card-title">Tramos de paquete</div>
-      <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto. Guardar un tramo copia el resto de esa vigencia.</p>
+      <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto de ese paquete. x3 y x6 cuentan como 1. El ciclo que cierra el 2026-10-25 no cambia. Guardar un tramo copia el resto de esa vigencia.</p>
       <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>`;
 }
 async function renderComisiones() {
@@ -2273,7 +2273,7 @@ async function renderComisiones() {
     </div>
     <div id="com-tabla"></div>
     ${state.admin ? `<p class="note"><a href="#/m/configuracion">Editar tarifas en Configuración general</a></p>` : ""}
-    <p class="note">Hasta el ciclo que cierra el 2026-10-25 sigue el nivel, con N = 3 cabinas. Andrea y Daniela quedan en N8 ($320) en ese ciclo. Desde el 2026-10-26 cada unidad se paga 5/8/11/14% del neto de catálogo, redondeado hacia abajo. x6 cuenta como 2. Un admin no entra en la cuenta ni en N.</p>`;
+    <p class="note">Hasta el ciclo que cierra el 2026-10-25 sigue el nivel, con N = 3 cabinas. Andrea y Daniela quedan en N8 ($320) en ese ciclo. Desde el 2026-10-26 cada paquete, x3 o x6, cuenta como 1 y paga 5/8/11/14% de su neto de catálogo, redondeado hacia abajo. Un admin no entra en la cuenta ni en N.</p>`;
 }
 
 async function renderRol() {
