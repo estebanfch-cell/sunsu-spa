@@ -57,7 +57,8 @@ function catNombre(map: Map<string, R>, sku: string): string {
   return r ? s(r.producto_servicio) : sku;
 }
 function subtotalDe(map: Map<string, R>, sku: string): number {
-  const r = map.get(skuCode(sku));
+  const code = facialSku(sku) || sku;
+  const r = map.get(skuCode(code));
   if (!r) return 0;
   const sub = n(r.subtotal);
   if (sub > 0) return sub;

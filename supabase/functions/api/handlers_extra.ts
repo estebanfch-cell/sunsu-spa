@@ -220,7 +220,8 @@ function ticketIn(r: R, cats?: Map<string, R>): TicketIn {
   const pack6 = s(r.compra_pack_6);
   const neto = (sku: string) => {
     if (!cats || !sku || sku.toLowerCase() === "false") return 0;
-    return subtotalCatalogo(cats.get(skuCode(sku)));
+    const code = facialSku(sku) || sku;
+    return subtotalCatalogo(cats.get(skuCode(code)));
   };
   return {
     fecha: ymdUtc(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3), facial: s(r.facial_hecho),
