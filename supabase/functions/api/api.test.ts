@@ -1738,6 +1738,21 @@ describe("series, comisiones y rol", () => {
     assert.equal(comisionPaquetesTramo(2, pct).monto, 0);
   });
 
+  it("la comisión % del paquete toma el SUNSU-NN del texto del ticket", async () => {
+    const db = new MemoryDb({
+      cosmetologas: [{ id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true }],
+      tickets: [{
+        id: 1, sheet_row: 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101",
+        facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18 x3 Facial Reparación", orig: {},
+      }],
+      catalogo: [{ sku: "SUNSU-18", producto_servicio: "Facial Reparación x3", subtotal: 100, tipo: "PAQUETE", orig: {} }],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Andrea" }, c) as Row;
+    const filas = tabla.filas as Row[];
+    assert.equal((filas.find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0], 5);
+  });
+
   it("backfill TK-SO respeta el orden y la prueba no gasta la serie", async () => {
     const db = new MemoryDb({
       tickets: [
