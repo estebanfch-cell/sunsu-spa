@@ -2822,8 +2822,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026esc/);
-    assert.match(sw, /sunsu-beta-2026-10-26-ESC/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tk/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TK/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2899,5 +2899,70 @@ describe("escalón en el app en vivo", () => {
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.cp, 320);
     assert.equal(filas.find((r) => String(r.name).startsWith("Andrea"))?.n, "N8");
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.n, "N8");
+  });
+});
+
+describe("tickets de venta", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+  const beta = readFileSync(join(root, "beta.html"), "utf8");
+  const sw = readFileSync(join(root, "sw.js"), "utf8");
+  const fns = new Function(
+    src.slice(src.indexOf("function _histEsc("), src.indexOf("function _histResAdminHTML("))
+    + "\nreturn { _histSkus, _histFechaFmt, _histClave, _histMasterHTML };",
+  )() as {
+    _histSkus: (t: Record<string, unknown>) => string[];
+    _histFechaFmt: (f: string) => string;
+    _histClave: (t: Record<string, unknown>) => string;
+    _histMasterHTML: (tickets: Record<string, unknown>[], showPrices: boolean) => string;
+  };
+
+  it("la lista es tabla maestra y el detalle conserva multa y exclusión", () => {
+    assert.match(src, /id="hist-cosm"/);
+    assert.match(src, /class="tk-split"/);
+    assert.match(src, /<th>Clienta<\/th><th>Cédula<\/th><th>Fecha<\/th><th>SKU<\/th><th>Cosmetóloga<\/th><th class="num">Total<\/th>/);
+    assert.doesNotMatch(src, /onclick="editarTicket\(/);
+    assert.doesNotMatch(src, /onclick="eliminarTicket\(/);
+    assert.match(src, /abrirModalMulta/);
+    assert.match(src, /Excluir de comisión/);
+    assert.match(src, /Descargar PDF/);
+    assert.match(src, /id="af-hoy"/);
+    assert.match(src, /id="sf-semana"/);
+    assert.match(beta, /\.tk-split/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tk/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TK/);
+    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
+    assert.doesNotThrow(() => new Function(src));
+  });
+
+  it("arma los SKU del ticket y la fila de la tabla", () => {
+    const g = globalThis as { window?: Record<string, unknown>; _buildTicketCard?: (t: { tkRow?: number }) => string };
+    g.window = g.window || {};
+    g._buildTicketCard = (t) => `<div class="ticket-card" data-row="${t.tkRow}"></div>`;
+    assert.deepEqual(fns._histSkus({
+      facial: "SUNSU-02 Limpieza",
+      extras: "SUNSU-HT-002 crema",
+      productos: ["SUNSU-AS-005 crema ×1", { sku: "SUNSU-02", nombre: "repetido" }],
+    }), ["SUNSU-02", "SUNSU-HT-002", "SUNSU-AS-005"]);
+    assert.equal(fns._histFechaFmt("2026-10-26"), "26/10/2026");
+    assert.equal(fns._histClave({ tkRow: 12 }), "r12");
+    g.window._histTkSel = "r12";
+    const html = fns._histMasterHTML([{
+      tkRow: 12, nombre: "Ana", apellido: "Paz", cedula: "0101", fecha: "2026-10-26",
+      facial: "SUNSU-02 Limpieza", productos: ["SUNSU-AS-005 crema ×1"],
+      cosmetologa: "Andrea Robles", estimado: "40.25",
+    }], true);
+    assert.match(html, /class="tk-split"/);
+    assert.match(html, /Ana Paz/);
+    assert.match(html, /0101/);
+    assert.match(html, /26\/10\/2026/);
+    assert.match(html, /SUNSU-02, SUNSU-AS-005/);
+    assert.match(html, /Andrea Robles/);
+    assert.match(html, /\$40\.25/);
+    assert.match(html, /class="tk-row on"/);
+    assert.match(html, /tk-open/);
+    assert.match(html, /class="ticket-card" data-row="12"/);
+    assert.doesNotMatch(html, /editarTicket/);
+    assert.doesNotMatch(html, /eliminarTicket/);
   });
 });
