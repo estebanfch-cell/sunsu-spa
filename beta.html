@@ -1016,6 +1016,7 @@ function previewApi(accion, body) {
   if (accion === "horarios_importar") return { ok: false, vacio: true, importados: 0, asignados: 0, error: "Jibble no está configurado en esta vista." };
   if (accion === "push_clave") return { ok: false };
   if (accion === "push_suscribir") return { ok: true };
+  if (accion === "getCotizaciones" || accion === "getCotizacion" || accion === "guardarCotizacion") return previewCotizacion(accion, body);
   if (accion === "asis_periodo") return { ok: true, personas: [{ nombre: body.nombre || "Emilia", hrsTrabajadas: 8, hrsOrdinarias: 8, hrsAlmuerzo: 1, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasPropios: 1, diasJibble: 0, hayDatos: true }] };
   if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4 };
   if (accion === "getRolIndividual") return { ok: true, data: { nombre: body.cedula || "Emilia", cedula: "1711", cargo: "Cosmetóloga", sueldo: 460, bono: 20, comFaciales: 36, comPaquetes: 20, comProductos: 18, vacaciones: 0, fondoReserva: 0, totalIngresos: 554, iess: 48, totalRecibir: 506, fuenteHoras: "asistencia", hrsSupl: 0, atrasoMin: 0, faltas: 0 } };
@@ -1108,6 +1109,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
+  if (route.kind === "doc" && route.doc === "cot") return "Cotización";
   if (tab) return tituloSunsu(tab);
   if (route.kind === "doc") return tituloDoc(route.doc);
   return (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
@@ -1357,7 +1359,7 @@ function paintShell(title) {
         <div class="card-title">Crear</div>
         <div class="chooser-actions">
           <button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>
-          <button class="btn ghost block" type="button" data-go="#/doc/cot">Nueva cotización</button>
+          ${acceso("cotizaciones_cliente") !== "no" ? `<button class="btn ghost block" type="button" data-go="#/doc/cot">Nueva cotización</button>` : ""}
           <button class="btn ghost" type="button" id="crear-close">Cerrar</button>
         </div>
       </div>
@@ -1583,7 +1585,8 @@ function pantallaSunsu(route) {
   if (route.kind === "sunsu") return route.tab || "ticket";
   if (route.kind === "doc") {
     if (route.doc === "ov" && !route.id) return "ticket";
-    if (route.doc === "cot") return "cotizaciones";
+    if (route.doc === "cot" && !route.id) return "ticket";
+    if (route.doc === "cot") return "";
     if (route.doc === "prod" && !route.id) return "catalogo";
     return "";
   }
@@ -1591,7 +1594,7 @@ function pantallaSunsu(route) {
   if (m === "inicio") return state.admin ? "inicio" : "staff-home";
   if (m === "tickets") return "historial";
   if (m === "clientes" || m === "reportes") return "";
-  if (m === "cotizaciones_cliente") return "cotizaciones";
+  if (m === "cotizaciones_cliente") return "";
   if (m === "productos") return "catalogo";
   if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
@@ -1688,6 +1691,7 @@ async function draw() {
   }
   await asegurarLugares();
   const route = parseRoute();
+  window._esCotizacion = route.kind === "doc" && route.doc === "cot" && !route.id;
   const tab = pantallaSunsu(route);
   const title = tituloRuta(route, tab);
   paintShell(title);
@@ -1707,6 +1711,12 @@ async function draw() {
     return;
   }
   if (route.kind === "doc" && route.doc === "ov" && acceso("tickets") === "no") {
+    main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
+    listo();
+    return;
+  }
+  if (route.kind === "doc" && route.doc === "cot" && acceso("cotizaciones_cliente") === "no") {
+    window._esCotizacion = false;
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
     return;
@@ -1753,7 +1763,7 @@ async function renderMod(route) {
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
   if (route.mod === "proveedores") return renderProveedores();
-  if (route.mod === "cotizaciones_cliente") return renderCotizaciones();
+  if (route.mod === "cotizaciones_cliente") return renderListaCotizaciones();
   if (route.mod === "comisiones") return renderComisiones();
   if (route.mod === "rol_pagos") return renderRol();
   if (route.mod === "asistencia") return renderAsistencia();
@@ -2242,22 +2252,89 @@ async function renderProveedores() {
   return form + `<div class="list">${items || `<p class="note">Sin proveedores en el ERP.</p>`}</div>`;
 }
 
-async function renderCotizaciones() {
-  const data = await api("getCotizaciones");
-  if (data.error) return fail(data);
-  window._cotRows = data.items || [];
-  const items = window._cotRows.map((c) => `<tr>
+function previewCotizacion(accion, body) {
+  if (!state.previewCots) {
+    state.previewCots = [
+      { numero: "COT-0042", fecha: "2026-10-24", cliente: "María Paz", cedula: "1711", total: 75, subtotal: 75, descuento: 0, iva: 9.78, sinIva: 65.22, estado: "Enviada", validez: "Válida por 15 días", creado_por: "Emilia", items: [
+        { sku: "SUNSU-01", nombre: "Facial S.O.S", tipo: "facial", cant: 1, precio: 75, desc: 0, neto: 75 },
+      ] },
+      { numero: "TK-SQ-0009", fecha: "2026-10-02", cliente: "Ana Luz", cedula: "1722", total: 166.2, subtotal: 166.2, descuento: 0, iva: 21.68, sinIva: 144.52, estado: "Enviada", validez: "Válida por 15 días", creado_por: "Emilia", items: [
+        { sku: "SUNSU-18", nombre: "x3 Facial Reparación", tipo: "paquete", cant: 1, precio: 166.2, desc: 0, neto: 166.2 },
+      ] },
+    ];
+  }
+  if (accion === "getCotizaciones") return { ok: true, items: state.previewCots };
+  if (accion === "getCotizacion") {
+    const item = state.previewCots.find((c) => c.numero === body.numero);
+    return item ? { ok: true, item } : { error: "No encontrada" };
+  }
+  const lineas = Array.isArray(body.lineas) ? body.lineas : [];
+  const subtotal = lineas.reduce((a, ln) => a + (Number(ln.cant) || 0) * (Number(ln.precio) || 0), 0);
+  const descuento = Math.min(subtotal, Number(body.dscVal) || 0);
+  const total = Math.max(0, Math.round((subtotal - descuento) * 100) / 100);
+  const sinIva = Math.round(total / 1.15 * 100) / 100;
+  const iva = Math.round((total - sinIva) * 100) / 100;
+  const maxCot = state.previewCots.reduce((m, c) => {
+    const hit = /^COT-(\d+)$/.exec(String(c.numero || ""));
+    return hit ? Math.max(m, Number(hit[1])) : m;
+  }, 0);
+  const numero = body.numero || ("COT-" + String(maxCot + 1).padStart(4, "0"));
+  const row = {
+    numero, fecha: ymdEc(), cliente: body.cliente || "", cedula: body.cedula || "",
+    total, subtotal, descuento, iva, sinIva, estado: "Enviada",
+    validez: body.validez || "Válida por 15 días", creado_por: "Emilia", items: lineas, lineas,
+  };
+  if (!body.numero) state.previewCots = state.previewCots.concat([row]);
+  return { ok: true, numero, lineas, subtotal, descuento, iva, sinIva, total };
+}
+function cotParaPdf(item) {
+  const src = (item && (item.lineas || item.items)) || [];
+  return {
+    numero: item.numero, cliente: item.cliente, cedula: item.cedula, telefono: item.telefono, email: item.email,
+    fecha: item.fecha, validez: item.validez, notas: "", subtotal: item.subtotal, descuento: item.descuento,
+    iva: item.iva, total: item.total, sinIva: item.sinIva, creadoPor: item.creado_por || item.creadoPor || "",
+    lineas: src.map((ln) => ({
+      sku: ln.sku, nombre: ln.nombre || ln.sku, tipo: ln.tipo, cant: ln.cant, precio: ln.precio, desc: ln.desc, neto: ln.neto,
+    })),
+  };
+}
+function filaCotizacion(c) {
+  return `<tr>
       <td><button class="link" type="button" data-go="#/doc/cot/${encodeURIComponent(c.numero)}">${esc(c.numero)}</button></td>
       <td>${esc(String(c.fecha || "").slice(0, 10))}</td>
       <td>${esc(c.cliente)}</td>
+      <td>${esc(c.cedula || "")}</td>
       <td class="num">${money(c.total)}</td>
       <td>${esc(c.estado || "")}</td>
-    </tr>`).join("");
+    </tr>`;
+}
+function pintarCotizaciones() {
+  const q = normBusca((document.getElementById("filtro-cot") || {}).value || "");
+  const key = window._cotSort || "fecha";
+  const dir = window._cotDir || -1;
+  const rows = (window._cotRows || []).filter((c) => !q || normBusca([c.numero, c.cliente, c.cedula, c.estado].join(" ")).includes(q));
+  rows.sort((a, b) => {
+    const va = key === "total" ? Number(a.total) || 0 : String(a[key] || "").toLowerCase();
+    const vb = key === "total" ? Number(b.total) || 0 : String(b[key] || "").toLowerCase();
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return String(a.numero || "").localeCompare(String(b.numero || ""));
+  });
+  const body = document.getElementById("lista");
+  if (!body) return;
+  body.innerHTML = rows.map(filaCotizacion).join("") || `<tr><td colspan="6">No hay cotizaciones.</td></tr>`;
+  body.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
+}
+async function renderListaCotizaciones() {
+  const data = await api("getCotizaciones");
+  if (data.error) return fail(data);
+  window._cotRows = data.items || [];
+  const th = (key, label, num) => `<th${num ? ` class="num"` : ""}><button class="link" type="button" data-cot-sort="${esc(key)}">${label}</button></th>`;
   return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/cot">Nueva cotización</button>
-      <input id="filtro-cot" placeholder="Filtrar número o clienta" aria-label="Filtrar cotizaciones"></div>
+      <input id="filtro-cot" placeholder="Filtrar número, clienta o cédula" aria-label="Filtrar cotizaciones"></div>
     <div class="sheet-scroll"><table>
-      <thead><tr><th>TK-SQ</th><th>Fecha</th><th>Clienta</th><th class="num">Total</th><th>Estado</th></tr></thead>
-      <tbody id="lista">${items || `<tr><td colspan="5">No hay cotizaciones.</td></tr>`}</tbody>
+      <thead><tr>${th("numero", "Número")}${th("fecha", "Fecha")}${th("cliente", "Clienta")}${th("cedula", "Cédula")}${th("total", "Total", true)}${th("estado", "Estado")}</tr></thead>
+      <tbody id="lista"></tbody>
     </table></div>`;
 }
 
@@ -3337,23 +3414,33 @@ function renderOv() {
 }
 
 async function renderCot(numero) {
-  let item = null;
-  if (numero) {
-    const data = await api("getCotizacion", { numero });
-    if (data.error) return fail(data);
-    item = data.item || {};
-  }
-  const lineas = ((item && item.items) || []).map((ln) => lineHtml({ precio: true, val: ln })).join("") || lineHtml({ precio: true });
-  return `<form id="f-cot">${numero ? `<input type="hidden" name="numero" value="${esc(numero)}">` : ""}
-    <label>Clienta</label><input name="cliente" required value="${esc((item && item.cliente) || "")}">
-    <label>Teléfono</label><input name="telefono" value="${esc((item && item.telefono) || "")}">
-    <label>Email</label><input name="email" value="${esc((item && item.email) || "")}">
-    <div id="lineas">${lineas}</div>
-    <button class="btn ghost small" type="button" id="add-line">Agregar línea</button>
-    <label>Notas</label><textarea name="notas">${esc((item && item.notas) || "")}</textarea>
-    <button class="btn" type="submit">Guardar cotización</button>
-    <div class="dirty-bar" hidden><span>Hay cambios sin guardar</span><button class="btn small" type="button" data-dirty-save>Guardar</button></div>
-    <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p></form>`;
+  if (!numero) return `<p class="note">Elige una cotización de la lista.</p><button class="btn" type="button" data-go="#/doc/cot">Nueva cotización</button>`;
+  const data = await api("getCotizacion", { numero });
+  if (data.error) return fail(data);
+  const item = data.item || {};
+  window._cotAbierta = cotParaPdf(item);
+  const lineas = ((item.items || item.lineas) || []).map((ln) => `<tr>
+      <td>${esc(ln.nombre || ln.sku || "")}</td>
+      <td class="num">${esc(ln.cant || "")}</td>
+      <td class="num">${money(ln.precio)}</td>
+      <td class="num">${money(ln.neto != null ? ln.neto : ln.precio)}</td>
+    </tr>`).join("");
+  const contacto = [item.cedula ? "C.I. " + item.cedula : "", item.telefono || "", item.email || ""].filter(Boolean).join(" · ");
+  return `<div class="tools">
+      <button class="btn ghost small" type="button" data-go="#/m/cotizaciones_cliente">Volver a la lista</button>
+      <button class="btn small" type="button" id="cot-pdf">Descargar PDF</button>
+    </div>
+    <div class="card">
+      <div class="card-title">${esc(item.numero || numero)}</div>
+      <p>${esc(item.cliente || "")}</p>
+      <p class="note">${esc(String(item.fecha || "").slice(0, 10))}${contacto ? " · " + esc(contacto) : ""} · ${esc(item.estado || "Enviada")}</p>
+      <p class="note">${esc(item.validez || "Válida por 15 días")}</p>
+    </div>
+    <div class="sheet-scroll"><table>
+      <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>
+      <tbody>${lineas || `<tr><td colspan="4">Sin líneas.</td></tr>`}</tbody>
+    </table></div>
+    <p class="note">Subtotal ${money(item.subtotal)} · descuento ${money(item.descuento)} · IVA ${money(item.iva)} · total ${money(item.total)}</p>`;
 }
 async function renderTicketEditor(clave) {
   if (!clave) return `<p class="note">Elige un ticket de la lista.</p>`;
@@ -3994,10 +4081,22 @@ function wireBatch(main) {
     main.querySelectorAll("#lista tr").forEach((row) => { row.hidden = q && !normBusca(row.textContent).includes(q); });
   });
   const cot = main.querySelector("#filtro-cot");
-  if (cot) cot.addEventListener("input", () => {
-    const q = normBusca(cot.value);
-    main.querySelectorAll("#lista tr").forEach((row) => { row.hidden = q && !normBusca(row.textContent).includes(q); });
-  });
+  if (cot) {
+    cot.addEventListener("input", pintarCotizaciones);
+    main.querySelectorAll("[data-cot-sort]").forEach((b) => {
+      b.onclick = () => {
+        const key = b.getAttribute("data-cot-sort");
+        window._cotDir = window._cotSort === key ? -(window._cotDir || -1) : (key === "fecha" || key === "numero" ? -1 : 1);
+        window._cotSort = key;
+        pintarCotizaciones();
+      };
+    });
+    pintarCotizaciones();
+  }
+  const cotPdf = main.querySelector("#cot-pdf");
+  if (cotPdf) cotPdf.onclick = () => {
+    if (window._cotAbierta && typeof _cotDescargar === "function") _cotDescargar(window._cotAbierta);
+  };
   const sub = main.querySelector("#f-tk [name=subtotal]");
   if (sub) sub.addEventListener("input", () => {
     const neto = Number(sub.value) || 0;
@@ -4467,7 +4566,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026tkgcpq"></script>
+<script src="beta-screens.js?v=20261026cot"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
