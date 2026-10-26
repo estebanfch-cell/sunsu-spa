@@ -3171,6 +3171,23 @@ describe("tickets v2 y código de clienta", () => {
   });
 });
 
+class OcFkDb extends MemoryDb {
+  override async write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null> {
+    if (table === "erp_oc_lineas" && (op === "insert" || op === "update")) {
+      let ocId = row && row.oc_id != null ? String(row.oc_id) : "";
+      if (!ocId && op === "update") {
+        const hit = (this.tables.get("erp_oc_lineas") || []).find((r) =>
+          Object.entries(match).every(([k, v]) => r[k] === v || String(r[k]) === String(v)));
+        if (hit?.oc_id != null) ocId = String(hit.oc_id);
+      }
+      if (ocId && !(this.tables.get("erp_oc") || []).some((r) => String(r.id) === ocId)) {
+        throw new Error('violates foreign key constraint "erp_oc_lineas_oc_id_fkey"');
+      }
+    }
+    return super.write(actor, table, op, match, row);
+  }
+}
+
 describe("compras flujo", () => {
   it("la pre-orden se llena con lo vendido, se aprueba con número y la cosmetóloga recibe sin precios", async () => {
     const seed = erpSeed();
@@ -3265,6 +3282,47 @@ describe("compras flujo", () => {
     const ok = await handle("compras_aprobar", { token: c.token, id: draft.id }, c) as Row;
     assert.equal(ok.numero, "TEST-OC-0001");
     assert.equal((await db.all("erp_oc")).find((r) => r.numero === "OC-0001")?.origin, "beta");
+  });
+
+  it("guardar escribe la cabecera antes que las líneas y la base falsa exige esa FK", async () => {
+    const db = new OcFkDb(erpSeed());
+    const c = ctx(db);
+    await assert.rejects(
+      () => db.write("emi", "erp_oc_lineas", "insert", {}, { id: "huerfana", oc_id: "oc-ausente", cantidad: 1, precio: 8 }),
+      /erp_oc_lineas_oc_id_fkey/,
+    );
+    assert.equal(db.writes.length, 0);
+    const malo = await handle("compras_guardar", {
+      token: c.token, proveedor_id: SEED_IDS.prov, lineas: [{ sku: "NO-EXISTE", cantidad: 1 }],
+    }, c) as Row;
+    assert.match(String(malo.error), /catálogo/);
+    const vacio = await handle("compras_guardar", {
+      token: c.token, proveedor_id: SEED_IDS.prov, lineas: [{ sku: "HT-002", cantidad: 0 }],
+    }, c) as Row;
+    assert.match(String(vacio.error), /cantidades/);
+    assert.equal((await db.all("erp_oc")).length, 0);
+    const draft = await handle("compras_guardar", {
+      token: c.token, proveedor_id: SEED_IDS.prov, lineas: [{ sku: "HT-002", cantidad: 2, precio: 8 }],
+    }, c) as Row;
+    assert.equal(draft.ok, true);
+    assert.equal(draft.flujo, "Borrador");
+    assert.equal(draft.total, 18.4);
+    const ocAt = db.writes.findIndex((w) => w.table === "erp_oc" && w.op === "insert");
+    const lnAt = db.writes.findIndex((w) => w.table === "erp_oc_lineas" && w.op === "insert");
+    assert.ok(ocAt >= 0 && lnAt > ocAt);
+    const antes = db.writes.length;
+    const otra = await handle("compras_guardar", {
+      token: c.token, id: draft.id, proveedor_id: SEED_IDS.prov, lineas: [{ sku: "HT-002", cantidad: 3, precio: 8 }],
+    }, c) as Row;
+    assert.equal(otra.ok, true);
+    assert.equal(otra.total, 27.6);
+    const tail = db.writes.slice(antes);
+    const up = tail.findIndex((w) => w.table === "erp_oc" && w.op === "update");
+    const reescrita = tail.findIndex((w) => w.table === "erp_oc_lineas");
+    assert.ok(up >= 0 && reescrita > up);
+    const lineas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === draft.id);
+    assert.equal(lineas.length, 1);
+    assert.equal(lineas[0].cantidad, 3);
   });
 
   it("0030 suma el flujo, las tablas nuevas y la purga", () => {
