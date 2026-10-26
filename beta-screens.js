@@ -16352,13 +16352,13 @@ function _cmpOc(){
   return (window._cmpLista||[]).filter(function(o){ return o.id===id; })[0] || null;
 }
 function _cmpDraft(){
-  if (!window._cmpDraft) {
+  if (!window._cmpBorrador) {
     var hoy = new Date();
     var iso = function(d){ return d.toISOString().slice(0,10); };
     var ini = iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()<=15?1:16));
-    window._cmpDraft = { lineas: [], conIva: true, consig: true, provId: "", provNom: "", nuevo: false, desde: ini, hasta: iso(hoy), numero_prov: "", ruc: "", tel: "", mail: "" };
+    window._cmpBorrador = { lineas: [], conIva: true, consig: true, provId: "", provNom: "", nuevo: false, desde: ini, hasta: iso(hoy), numero_prov: "", ruc: "", tel: "", mail: "" };
   }
-  return window._cmpDraft;
+  return window._cmpBorrador;
 }
 function _cmpLinesHTML(lineas, editable){
   if (!lineas || !lineas.length) return '<p class="note">Todavía no hay líneas.</p>';
@@ -16557,7 +16557,7 @@ function _cmpBind(){
   var q = document.getElementById("cmp-q");
   if (q) q.oninput = function(){ _cmp.q = q.value; _cmpPintarFilas(); };
   var nueva = document.getElementById("cmp-nueva");
-  if (nueva) nueva.onclick = function(){ window._cmpDraft = null; _cmpRecargar("#/m/compras/nueva"); };
+  if (nueva) nueva.onclick = function(){ window._cmpBorrador = null; _cmpRecargar("#/m/compras/nueva"); };
   var canc = document.getElementById("cmp-canceladas");
   if (canc) canc.onclick = function(){ _cmp.canceladas = !_cmp.canceladas; _cmpPintar(); };
   var agr = document.getElementById("cmp-agrupar");
@@ -16762,7 +16762,7 @@ function _cmpBind(){
     else body.nuevo = { nombre: d.provNom, ruc: d.ruc||"", telefono: d.tel||"", email: d.mail||"" };
     var data = await api("compras_guardar", body);
     if (data.error) { _cmpMsg(data.error); return; }
-    window._cmpDraft = null;
+    window._cmpBorrador = null;
     _cmpMsg("Borrador guardado", true);
     _cmpRecargar("#/m/compras/"+encodeURIComponent(data.id));
   };
