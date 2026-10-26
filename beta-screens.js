@@ -16466,4 +16466,144 @@ function wireComprasFlujo(main){
   _cmpBody();
 }
 
+// ══════ CONTEO — secciones por familia de código ══════
+function _cntEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
+function _cntMsg(t, ok){
+  var el = document.getElementById("cnt-msg");
+  if (!el) return;
+  el.className = ok ? "ok" : "err";
+  el.textContent = t || "";
+}
+async function renderConteoTareas(){
+  var data = await api("conteo_mios");
+  var items = (data && data.items) || [];
+  if (!items.length) return "";
+  return '<div class="card"><div class="card-title">Hacer conteo</div>'
+    + items.map(function(t){
+      return '<button type="button" class="row cnt-task" data-go="#/m/conteos/hacer/'+_cntEsc(encodeURIComponent(t.id))+'">'
+        + '<div class="sku">'+_cntEsc(t.familia)+'</div>'
+        + '<div><div class="name">'+_cntEsc(t.etiqueta || "Conteo")+'</div>'
+        + '<div class="note">'+_cntEsc(t.numero)+(t.bodega ? " · "+_cntEsc(t.bodega) : "")+" · "+_cntEsc(t.contadas)+"/"+_cntEsc(t.productos)+" · "+_cntEsc(t.estado)+'</div></div></button>';
+    }).join("")
+    + '</div>';
+}
+function _cntHtmlPlan(secs){
+  var users = window._cntUsers || [];
+  var opts = '<option value="">Sin asignar</option>' + users.map(function(u){
+    return '<option value="'+_cntEsc(u.id)+'">'+_cntEsc(u.nombre)+'</option>';
+  }).join("");
+  var rows = (secs || []).map(function(sec, i){
+    return '<div class="cnt-line"><div><b>'+_cntEsc(sec.etiqueta)+'</b><div class="note">'+_cntEsc(sec.bodega)+" · "+_cntEsc(sec.productos)+' códigos</div></div>'
+      + '<select data-cnt-asig="'+i+'" data-bod="'+_cntEsc(sec.bodega_id)+'" data-fam="'+_cntEsc(sec.familia)+'" aria-label="Asignar '+_cntEsc(sec.etiqueta)+'">'+opts+'</select></div>';
+  }).join("");
+  return rows + '<button class="btn block" type="button" id="cnt-crear">Crear conteo</button>';
+}
+function _cntHtmlUno(c){
+  var secs = (c.secciones || []).map(function(s){
+    var diffs = (s.diferencias || []).map(function(d){
+      return '<div class="note">'+_cntEsc(d.sku)+" "+_cntEsc(d.nombre)+" · sistema "+_cntEsc(d.ahora)+" · contado "+_cntEsc(d.contado)+" · "+(d.diferencia>0?"+":"")+_cntEsc(d.diferencia)+'</div>';
+    }).join("");
+    return '<div class="cnt-line"><div><b>'+_cntEsc(s.etiqueta)+'</b><div class="note">'+_cntEsc(s.bodega)+" · "+_cntEsc(s.estado)+(s.asignado_nombre?" · "+_cntEsc(s.asignado_nombre):"")+" · "+_cntEsc(s.contadas)+"/"+_cntEsc(s.productos)+'</div>'+diffs+'</div></div>';
+  }).join("");
+  var aprobar = c.flujo === "Por aprobar" ? '<button class="btn block" type="button" data-cnt-ok="'+_cntEsc(c.id)+'">Aplicar ajuste</button>' : "";
+  return '<div class="card"><div class="card-title">'+_cntEsc(c.numero)+' · '+_cntEsc(c.flujo)+'</div>'+secs+aprobar+'</div>';
+}
+function _cntHtmlAdmin(){
+  var bods = window._cntBodegas || [];
+  var checks = bods.map(function(b){
+    return '<label style="display:inline-flex;gap:6px;margin:4px 10px 4px 0"><input type="checkbox" data-cnt-bod="'+_cntEsc(b.id)+'"'+(b.tipo==="venta"?" checked":"")+'> '+_cntEsc(b.nombre)+'</label>';
+  }).join("");
+  var lista = (window._cntPanel || []).map(_cntHtmlUno).join("");
+  return '<div id="cnt-root"><div class="card"><div class="card-title">Nuevo conteo</div>'
+    + '<p class="note">Elige una o más bodegas. Cada familia de código es una sección: HT — ANUA, AS — Eyenlip, ML — Dr.esthe, PH — APHLORA, JN — Varios, BV — Bruno Vassari, SU — SUNSU, y cualquier otro prefijo.</p>'
+    + '<div>'+checks+'</div>'
+    + '<button class="btn ghost block" type="button" id="cnt-plan">Armar secciones</button>'
+    + '<div id="cnt-plan-box"></div>'
+    + '<p class="err" id="cnt-msg"></p></div>'
+    + '<div id="cnt-lista">'+(lista || '<p class="note">Todavía no hay conteos por sección.</p>')+'</div></div>';
+}
+async function renderConteoHacer(id){
+  var data = await api("conteo_seccion", { seccion_id: id });
+  if (!data || data.error) return '<p class="err">'+_cntEsc((data && data.error) || "No se pudo abrir el conteo")+'</p>';
+  var rows = (data.productos || []).map(function(p){
+    var val = p.contado == null ? "" : p.contado;
+    var extra = (window._cntAdmin && p.sistema != null) ? '<div class="note">sistema '+_cntEsc(p.sistema)+' · ahora '+_cntEsc(p.ahora)+'</div>' : "";
+    return '<div class="cnt-line"><div><b>'+_cntEsc(p.sku)+'</b><div>'+_cntEsc(p.nombre)+'</div>'+extra+'</div>'
+      + '<input data-cnt-item="'+_cntEsc(p.id)+'" inputmode="numeric" min="0" value="'+_cntEsc(val)+'" aria-label="Cantidad '+_cntEsc(p.sku)+'"></div>';
+  }).join("");
+  return '<div id="cnt-root"><p class="note">'+_cntEsc(data.numero)+" · "+_cntEsc(data.etiqueta)+" · "+_cntEsc(data.estado)+'</p>'
+    + '<p class="note">Anota la cantidad en mano. Puedes guardar el avance y terminar la sección cuando acabes. Aquí ves el código y el nombre.</p>'
+    + (rows || '<p class="note">Esta sección no tiene códigos.</p>')
+    + '<div class="cnt-actions"><button class="btn ghost block" type="button" id="cnt-save">Guardar avance</button>'
+    + '<button class="btn block" type="button" id="cnt-fin">Terminar sección</button></div>'
+    + '<p class="err" id="cnt-msg"></p></div>';
+}
+async function renderConteoFlujo(sub, id){
+  if (sub === "hacer" && id) return renderConteoHacer(id);
+  if (!window._cntAdmin) {
+    var tareas = await renderConteoTareas();
+    return '<div id="cnt-root">'+(tareas || '<p class="note">No tienes un conteo asignado.</p>')+'</div>';
+  }
+  var panel = await api("conteo_panel");
+  var users = await api("conteo_usuarios");
+  window._cntUsers = (users && users.items) || [];
+  window._cntPanel = (panel && panel.items) || [];
+  return _cntHtmlAdmin();
+}
+function _cntLineas(){
+  var lineas = [];
+  document.querySelectorAll("[data-cnt-item]").forEach(function(inp){
+    if (inp.value === "") return;
+    lineas.push({ id: inp.getAttribute("data-cnt-item"), contado: Number(inp.value) });
+  });
+  return lineas;
+}
+function wireConteoFlujo(main){
+  if (!main || !main.querySelector("#cnt-root")) return;
+  var plan = document.getElementById("cnt-plan");
+  if (plan) plan.onclick = async function(){
+    var ids = [];
+    main.querySelectorAll("[data-cnt-bod]").forEach(function(c){ if (c.checked) ids.push(c.getAttribute("data-cnt-bod")); });
+    var data = await api("conteo_plan", { bodega_ids: ids });
+    var box = document.getElementById("cnt-plan-box");
+    if (data.error) { _cntMsg(data.error); if (box) box.innerHTML = ""; return; }
+    if (box) box.innerHTML = _cntHtmlPlan(data.secciones || []);
+    _cntMsg("");
+    var crear = document.getElementById("cnt-crear");
+    if (crear) crear.onclick = async function(){
+      var asignaciones = [];
+      main.querySelectorAll("[data-cnt-asig]").forEach(function(sel){
+        if (!sel.value) return;
+        asignaciones.push({ bodega_id: sel.getAttribute("data-bod"), familia: sel.getAttribute("data-fam"), uid: sel.value });
+      });
+      var out = await api("conteo_crear", { bodega_ids: ids, asignaciones: asignaciones });
+      if (out.error) { _cntMsg(out.error); return; }
+      if (typeof go === "function") go("#/m/conteos");
+    };
+  };
+  main.querySelectorAll("[data-cnt-ok]").forEach(function(btn){
+    btn.onclick = async function(){
+      var data = await api("conteo_aprobar", { id: btn.getAttribute("data-cnt-ok") });
+      if (data.error) { _cntMsg(data.error); return; }
+      if (typeof go === "function") go("#/m/conteos");
+    };
+  });
+  var save = document.getElementById("cnt-save");
+  var fin = document.getElementById("cnt-fin");
+  var secId = (location.hash.split("/").pop() || "");
+  try { secId = decodeURIComponent(secId); } catch (e) {}
+  if (save) save.onclick = async function(){
+    var data = await api("conteo_guardar_sec", { seccion_id: secId, lineas: _cntLineas() });
+    if (data.error) { _cntMsg(data.error); return; }
+    _cntMsg("Avance guardado · "+(data.flujo || ""), true);
+  };
+  if (fin) fin.onclick = async function(){
+    var data = await api("conteo_cerrar_sec", { seccion_id: secId, lineas: _cntLineas() });
+    if (data.error) { _cntMsg(data.error); return; }
+    _cntMsg("Sección completa"+(data.sin_contar ? " · "+data.sin_contar+" sin contar" : ""), true);
+    if (typeof go === "function") go("#/m/inicio");
+  };
+}
+
+
 
