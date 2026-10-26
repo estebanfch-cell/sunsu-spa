@@ -16541,7 +16541,7 @@ function _cmpLeerArchivo(input){
     r.readAsDataURL(f);
   });
 }
-function _cmpAc(input, items, onPick){
+function _cmpAc(input, items, onPick, vacio){
   if (!input || !input.parentElement) return;
   var box = input.parentElement.querySelector(".ac-list");
   if (!box) return;
@@ -16552,9 +16552,10 @@ function _cmpAc(input, items, onPick){
       var blob = (String(it.label||"")+" "+String(it.extra||"")).toLowerCase();
       return !q || blob.indexOf(q)>=0;
     }).slice(0, 12);
+    var aviso = (typeof vacio==="function" ? vacio() : vacio) || "Sin coincidencias.";
     box.innerHTML = rows.map(function(it,i){
       return '<button type="button" data-i="'+i+'">'+_cmpEsc(it.label)+(it.extra?" · "+_cmpEsc(it.extra):"")+'</button>';
-    }).join("") || '<div class="note" style="padding:8px">Sin coincidencias.</div>';
+    }).join("") || '<div class="note" style="padding:8px">'+_cmpEsc(aviso)+'</div>';
     box.hidden = false;
     box.querySelectorAll("button").forEach(function(b){
       b.onmousedown = function(ev){
@@ -16789,7 +16790,7 @@ function _cmpBind(){
   _cmpAc(document.getElementById("cmp-prov-q"), function(){
     return (window._cmpProv||[]).filter(function(p){ return p.activo!==false; }).map(function(p){
       var fam = _cmpFamDe(p);
-      return { id: p.id, label: p.nombre+(fam?" · "+fam:""), extra: fam||p.ruc||"", nombre: p.nombre, familia: fam };
+      return { id: p.id, label: p.nombre, extra: fam || "", nombre: p.nombre, familia: fam };
     });
   }, function(it){
     var d = _cmpDraft();
@@ -16807,8 +16808,8 @@ function _cmpBind(){
     if (extra) extra.hidden = true;
   });
   _cmpAc(document.getElementById("cmp-sku-q"), function(){
-    var d = _cmpDraft();
-    var base = (d.provId || d.familia) ? _cmpProdsDe(d.provId, d.familia) : (window._cmpCat||[]);
+    var d = _cmpSyncDraft();
+    var base = (d.provId || d.familia) ? _cmpProdsDe(d.provId, d.familia) : [];
     return base.map(function(p){ return { id: p.sku, label: String(p.sku||"").toUpperCase().replace(/^SUNSU-/,""), extra: p.nombre, precio: p.costo_promedio, nombre: p.nombre }; });
   }, function(it){
     var d = _cmpSyncDraft();
@@ -16817,6 +16818,10 @@ function _cmpBind(){
     if (box) box.innerHTML = _cmpLinesHTML(d.lineas, true);
     var inp = document.getElementById("cmp-sku-q");
     if (inp) inp.value = "";
+  }, function(){
+    var d = _cmpDraft();
+    if (!d.provId && !d.familia) return "Elige el proveedor. La búsqueda muestra los códigos de su familia.";
+    return "Sin coincidencias en "+(d.familia||"ese proveedor")+".";
   });
   var llenar = document.getElementById("cmp-llenar");
   if (llenar) llenar.onclick = async function(){

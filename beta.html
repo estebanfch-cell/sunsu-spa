@@ -679,6 +679,26 @@
   .prod-hero img, .prod-ph { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; background: var(--cream); display: inline-block; }
   .prod-mini img, .prod-mini .prod-ph { width: 36px; height: 36px; border-radius: 8px; }
   .desk-split.desk-open .desk-table th, .desk-split.desk-open .desk-table td { max-width: 140px; }
+  .desk-bar-mini { flex-wrap: nowrap; }
+  .desk-bar-mini .desk-q { flex: 1 1 auto; min-width: 0; }
+  .desk-split.desk-open .desk-list .sheet-scroll,
+  .tk-split.tk-side .tk-list { overflow-x: hidden; }
+  .desk-split.desk-open .desk-list .sheet-scroll table,
+  .tk-split.tk-side .tk-table {
+    min-width: 0; width: 100%; table-layout: fixed;
+  }
+  .desk-split.desk-open .desk-list .desk-table th,
+  .desk-split.desk-open .desk-list .desk-table td,
+  .tk-split.tk-side .tk-table th,
+  .tk-split.tk-side .tk-table td { max-width: none; }
+  .desk-split.desk-open .desk-list .desk-table th:nth-child(1),
+  .desk-split.desk-open .desk-list .desk-table td:nth-child(1),
+  .tk-split.tk-side .tk-table th:nth-child(1),
+  .tk-split.tk-side .tk-table td:nth-child(1) { width: 34%; }
+  .desk-split.desk-open .desk-list .desk-table th:nth-child(3),
+  .desk-split.desk-open .desk-list .desk-table td:nth-child(3),
+  .tk-split.tk-side .tk-table th:nth-child(3),
+  .tk-split.tk-side .tk-table td:nth-child(3) { width: 28%; }
   @media (min-width: 861px) {
     .desk-split { grid-template-columns: minmax(0, 1fr); }
     .desk-split .desk-detail { display: none; }
@@ -956,7 +976,10 @@ function previewApi(accion, body) {
       ],
     };
   }
-  if (accion === "getCatalogo" || accion === "getHistorial" || accion === "getEntradas" || accion === "getProveedoresApp") return [];
+  if (accion === "getCatalogo" || accion === "getEntradas" || accion === "getProveedoresApp") return [];
+  if (accion === "getHistorial") return [
+    { so_num: "TK-1043", nombre: "María", apellido: "Paz", cedula: "1711", fecha: "2026-10-21", hora: "10:00", cosmetologa: "Andrea Robles", estimado: 118.99, facial: "SUNSU-01 Facial S.O.S", estado_doc: "abierto", saldo: 118.99 },
+  ];
   if (accion === "getInventario") return { items: [], allSkus: [], ultimoFisico: "" };
   if (accion === "clientes_resumen") {
     const clientes = [
@@ -4987,7 +5010,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026desk3"></script>
+<script src="beta-screens.js?v=20261026desk4"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>

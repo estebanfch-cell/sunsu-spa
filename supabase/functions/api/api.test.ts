@@ -2846,8 +2846,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2955,8 +2955,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3033,8 +3033,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3084,8 +3084,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3118,8 +3118,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3165,8 +3165,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk3/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK3/);
+    assert.match(beta, /beta-screens\.js\?v=20261026desk4/);
+    assert.match(sw, /sunsu-beta-2026-10-26-DESK4/);
   });
 });
 
