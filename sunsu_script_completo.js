@@ -37,7 +37,174 @@ const CONFIG = {
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
 // El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-10-24-PAQ (sin marca automática)';
+var APP_VERSION = '2026-10-26-ESC (escalones por paquete)';
+
+// --- PAQ-ESCALON-START ---
+// Desde el ciclo que abre el 2026-10-26 cada paquete (x3 o x6 = 1) paga el % de
+// SU escalón sobre su neto de catálogo, piso por paquete y luego suma.
+// 1–10 al 5%, 11–20 al 8%, 21–30 al 11%, 31+ al 14%. El ciclo que abre el
+// 2026-09-26 sigue en N y queda congelado en N8 $320 para Andrea y Daniela.
+var TRAMOS_PAQUETE = [
+  { desde: 1, hasta: 10, pct: 0.05 },
+  { desde: 11, hasta: 20, pct: 0.08 },
+  { desde: 21, hasta: 30, pct: 0.11 },
+  { desde: 31, hasta: 100000, pct: 0.14 },
+];
+function _ymdNum_(d) {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+function usaTramoPaquetes_(fechaInicio) {
+  if (!(fechaInicio instanceof Date) || isNaN(fechaInicio.getTime())) return false;
+  return _ymdNum_(fechaInicio) > 20260926;
+}
+function esCicloCongeladoN8_(fechaInicio) {
+  if (!(fechaInicio instanceof Date) || isNaN(fechaInicio.getTime())) return false;
+  return _ymdNum_(fechaInicio) === 20260926;
+}
+function _normNombrePaq_(nombre) {
+  var s = (nombre || '').toString().toLowerCase();
+  s = s.replace(/[áàäâ]/g, 'a').replace(/[éèëê]/g, 'e').replace(/[íìïî]/g, 'i').replace(/[óòöô]/g, 'o').replace(/[úùüû]/g, 'u').replace(/ñ/g, 'n');
+  return s.replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function esAndreaODaniela_(nombre) {
+  var first = (_normNombrePaq_(nombre).split(' ')[0]) || '';
+  return first === 'andrea' || first === 'daniela';
+}
+function round2_(x) { return Math.round((x + Number.EPSILON) * 100) / 100; }
+function etiquetaTramo_(u, tier) {
+  if (!tier || !(u > 0)) return '—';
+  var rango = tier.hasta >= 100000 ? (tier.desde + '+') : (tier.desde + '\u2013' + tier.hasta);
+  return rango + ' · ' + (Math.round(tier.pct * 1000) / 10) + '%';
+}
+function comisionPaquetesEscalon_(unidades, netos) {
+  var u = Math.max(0, Math.floor(Number(unidades) || 0));
+  var nets = netos || [];
+  var monto = 0;
+  var ultimo = null;
+  for (var i = 1; i <= u; i++) {
+    var tier = null;
+    for (var t = 0; t < TRAMOS_PAQUETE.length; t++) {
+      if (i >= TRAMOS_PAQUETE[t].desde && i <= TRAMOS_PAQUETE[t].hasta) { tier = TRAMOS_PAQUETE[t]; break; }
+    }
+    if (!tier) tier = TRAMOS_PAQUETE[TRAMOS_PAQUETE.length - 1];
+    ultimo = tier;
+    var neto = nets[i - 1] != null ? nets[i - 1] : (nets.length ? nets[nets.length - 1] : 0);
+    monto += Math.floor(round2_(tier.pct * (neto || 0)) + 1e-9);
+  }
+  var nextLabel = null, faltan = 0;
+  if (u <= 0) {
+    nextLabel = etiquetaTramo_(1, TRAMOS_PAQUETE[0]);
+    faltan = 1;
+  } else if (ultimo && ultimo.hasta < 100000) {
+    var sig = null;
+    for (var k = 0; k < TRAMOS_PAQUETE.length; k++) {
+      if (TRAMOS_PAQUETE[k].desde > ultimo.hasta) { sig = TRAMOS_PAQUETE[k]; break; }
+    }
+    if (sig) { nextLabel = etiquetaTramo_(sig.desde, sig); faltan = sig.desde - u; }
+  }
+  return { monto: round2_(monto), etiqueta: etiquetaTramo_(u, ultimo), nextLabel: nextLabel, faltan: faltan };
+}
+function netoCatalogoTexto_(texto, precios) {
+  var m = (texto || '').toString().match(/SUNSU-(\d+)/i);
+  if (!m || !precios) return 0;
+  var full = 'SUNSU-' + m[1];
+  var corto = m[1];
+  var hit = precios[full] || precios[corto] || precios['SUNSU-' + corto];
+  if (!hit) {
+    var want = full.toUpperCase();
+    var keys = Object.keys(precios);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toUpperCase() === want) { hit = precios[keys[i]]; break; }
+    }
+  }
+  if (!hit) return 0;
+  var venta = typeof hit === 'number' ? hit : (hit.venta || 0);
+  return Number(venta) || 0;
+}
+function sumarUnidadPaquete_(c, texto, precios) {
+  c.paquetes += 1;
+  if (!c._nets) c._nets = [];
+  c._nets.push(netoCatalogoTexto_(texto, precios));
+}
+function premioNivelesPaquete_(paquetes, totalClientas, nCosm, bonoActivo) {
+  var comPaquetes = 0, nivelAlcanzado = '—';
+  if (bonoActivo) {
+    var premioMax = 0, nivelMax = -1;
+    CONFIG.NIVELES.forEach(function(nv, idx) {
+      if (paquetes >= Math.ceil((totalClientas * nv[0]) / nCosm)) { nivelMax = idx + 1; premioMax = nv[1]; }
+    });
+    if (nivelMax > 0) { comPaquetes = premioMax; nivelAlcanzado = 'N' + nivelMax; }
+  }
+  return { comPaquetes: comPaquetes, nivelAlcanzado: nivelAlcanzado };
+}
+function aplicarPremioPaquetes_(nombre, c, totalClientas, nCosm, bonoActivo, fechaInicio) {
+  if (usaTramoPaquetes_(fechaInicio)) {
+    var esc = comisionPaquetesEscalon_(c.paquetes, c._nets || []);
+    c.comPaquetes = esc.monto;
+    c.nivelAlcanzado = esc.etiqueta;
+    c.nextLabel = esc.nextLabel;
+    c.paqParaSiguiente = esc.faltan;
+    c.congeladoN8 = false;
+  } else {
+    var nv = premioNivelesPaquete_(c.paquetes, totalClientas, nCosm, bonoActivo);
+    c.comPaquetes = nv.comPaquetes;
+    c.nivelAlcanzado = nv.nivelAlcanzado;
+    c.nextLabel = null;
+    c.paqParaSiguiente = 0;
+    c.congeladoN8 = false;
+  }
+  if (esCicloCongeladoN8_(fechaInicio) && esAndreaODaniela_(nombre)) {
+    c.comPaquetes = 320;
+    c.nivelAlcanzado = 'N8';
+    c.nextLabel = null;
+    c.paqParaSiguiente = 0;
+    c.congeladoN8 = true;
+  }
+  if (c._nets) delete c._nets;
+}
+function rolUsaTramo_(sheetName) {
+  var partes = String(sheetName || '').split('_');
+  var anio = parseInt(partes[partes.length - 1], 10);
+  var meses = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  var mes = meses[(partes[0] || '').toUpperCase()] || 0;
+  if (!mes || !anio) return false;
+  var mesAnt = mes === 1 ? 12 : mes - 1;
+  var anioAnt = mes === 1 ? anio - 1 : anio;
+  return usaTramoPaquetes_(new Date(anioAnt, mesAnt - 1, 26, 0, 0, 0));
+}
+function aplicarDeltaPaquetesRol_(rolData, nuevo, paquetes, nivel) {
+  var viejo = parseFloat(rolData.comPaquetes) || 0;
+  var delta = Math.round(((Number(nuevo) || 0) - viejo) * 100) / 100;
+  rolData.comPaquetes = Number(nuevo) || 0;
+  rolData.paquetes = paquetes || 0;
+  rolData.nivelPaquete = nivel || '—';
+  rolData.totalIngresos = Math.round(((parseFloat(rolData.totalIngresos) || 0) + delta) * 100) / 100;
+  rolData.totalRecibir = Math.round(((parseFloat(rolData.totalRecibir) || 0) + delta) * 100) / 100;
+}
+// --- PAQ-ESCALON-END ---
+
+function aplicarTramoEnRol_(rolData, sheetName) {
+  if (!rolData || !rolUsaTramo_(sheetName)) return;
+  var partes = String(sheetName).split('_');
+  var anioRol = parseInt(partes[partes.length - 1], 10);
+  var mesesMap = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  var mesRol = mesesMap[(partes[0] || '').toUpperCase()] || 0;
+  var mesAnt = mesRol === 1 ? 12 : mesRol - 1;
+  var anioAnt = mesRol === 1 ? anioRol - 1 : anioRol;
+  var fDesde = new Date(anioAnt, mesAnt - 1, 26, 0, 0, 0);
+  var fHasta = new Date(anioRol, mesRol - 1, 25, 23, 59, 59);
+  var datos = calcularComisiones(fDesde, fHasta);
+  var nombre = (rolData.nombre || '').toString();
+  var first = (_normNombrePaq_(nombre).split(' ')[0]) || '';
+  var key = Object.keys(datos.cosmetologas || {}).find(function(k) {
+    var nk = _normNombrePaq_(k);
+    var nf = (nk.split(' ')[0]) || '';
+    return nk === _normNombrePaq_(nombre) || nf === first || (first.length >= 3 && nk.indexOf(first) === 0);
+  });
+  if (!key) return;
+  var c = datos.cosmetologas[key];
+  aplicarDeltaPaquetesRol_(rolData, Math.round((c.comPaquetes || 0) * 100) / 100, c.paquetes || 0, c.nivelAlcanzado || '—');
+}
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -1583,7 +1750,7 @@ function actualizarDashboard() {
     fechaFin    = new Date(anio, mes, 25, 23, 59, 59);
   }
   const datos = calcularComisiones(fechaInicio, fechaFin);
-  const { cosmetologas, totalClientas, bonoActivo } = datos;
+  const { cosmetologas, totalClientas, bonoActivo, regimenTramo } = datos;
   const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const fmtD  = d => `${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
   wsDash.clearContents();
@@ -1607,11 +1774,13 @@ function actualizarDashboard() {
     .setHorizontalAlignment("right").setVerticalAlignment("middle");
   wsDash.setRowHeight(fila, 30); fila++;
   wsDash.getRange(fila,1,1,10).merge()
-    .setValue(bonoActivo
-      ? `✅ BONO DE PAQUETES ACTIVO — ${totalClientas} clientas este período`
-      : `❌ BONO INACTIVO — ${totalClientas} clientas (se activa con 60+)`)
-    .setBackground(bonoActivo ? COLOR.GREEN_L : COLOR.GOLD_L)
-    .setFontColor(bonoActivo ? COLOR.GREEN : COLOR.GOLD)
+    .setValue(regimenTramo
+      ? `📦 ESCALONES — ${totalClientas} clientas · 1–10 al 5%, 11–20 al 8%, 21–30 al 11%, 31+ al 14%`
+      : (bonoActivo
+        ? `✅ BONO DE PAQUETES ACTIVO — ${totalClientas} clientas este período`
+        : `❌ BONO INACTIVO — ${totalClientas} clientas (se activa con 60+)`))
+    .setBackground((regimenTramo || bonoActivo) ? COLOR.GREEN_L : COLOR.GOLD_L)
+    .setFontColor((regimenTramo || bonoActivo) ? COLOR.GREEN : COLOR.GOLD)
     .setFontWeight("bold").setFontSize(10).setFontFamily("Arial")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   wsDash.setRowHeight(fila, 28); fila += 2;
@@ -1626,13 +1795,22 @@ function actualizarDashboard() {
     const totalProds = Object.values(c.detalle_productos).reduce((s,p) => s + p.qty, 0);
     const tieneDeducciones = multas > 0 || descuentos > 0;
     let siguienteNivel = null, paqParaSiguiente = 0;
-    if (bonoActivo) {
+    if (!regimenTramo && bonoActivo && !c.congeladoN8) {
       for (let n = 0; n < CONFIG.NIVELES.length; n++) {
         const [pct, premio] = CONFIG.NIVELES[n];
         const requerido = Math.ceil((totalClientas * pct) / nCosm);
         if (c.paquetes < requerido) { siguienteNivel = { nivel: n+1, premio }; paqParaSiguiente = requerido - c.paquetes; break; }
       }
     }
+    const hintPaq = regimenTramo
+      ? ((c.nextLabel && c.paqParaSiguiente)
+        ? `🎯 Faltan ${c.paqParaSiguiente} paquete(s) para ${c.nextLabel}`
+        : (c.paquetes > 0 ? `📦 ${c.nivelAlcanzado} · cada paquete paga el % de su escalón` : '📦 Cada paquete paga el % de su escalón'))
+      : (c.congeladoN8
+        ? '📌 Ciclo congelado en N8 · $320'
+        : (bonoActivo && siguienteNivel
+          ? `🎯 Faltan ${paqParaSiguiente} paquete(s) para N${siguienteNivel.nivel} (+$${siguienteNivel.premio} acumulado)`
+          : (bonoActivo ? '🏆 ¡Nivel máximo alcanzado!' : '⏳ Bono se activa cuando el spa llegue a 60 clientas')));
     const numCols = tieneDeducciones ? 13 : 11;
     wsDash.getRange(fila,1,1,numCols).merge()
       .setValue("💆 " + cosm.toUpperCase())
@@ -1671,9 +1849,7 @@ function actualizarDashboard() {
     });
     wsDash.setRowHeight(fila, 45); fila++;
     wsDash.getRange(fila,1,1,numCols).merge()
-      .setValue(bonoActivo && siguienteNivel
-        ? `🎯 Faltan ${paqParaSiguiente} paquete(s) para N${siguienteNivel.nivel} (+$${siguienteNivel.premio} acumulado)`
-        : bonoActivo ? "🏆 ¡Nivel máximo alcanzado!" : "⏳ Bono se activa cuando el spa llegue a 60 clientas")
+      .setValue(hintPaq)
       .setBackground(col.bg).setFontColor(col.accent)
       .setFontWeight("bold").setFontSize(9).setFontFamily("Arial")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
@@ -1694,6 +1870,7 @@ function actualizarDashboard() {
   });
   for (let c = 1; c <= 10; c++) wsDash.setColumnWidth(c, 110);
   wsDash.setColumnWidth(1, 160);
+  if (regimenTramo) wsDash.setColumnWidth(4, 160);
 }
 
 // ============================================================
@@ -1743,6 +1920,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
   const datos       = wsTicket.getDataRange().getValues();
   const headers     = datos[0];
   const precios     = leerPrecios(ss);
+  const tramoCiclo  = usaTramoPaquetes_(fechaInicio);
   const prodHeaders = headers.slice(CONFIG.COL_PRODUCTOS_START - 1);
   const EXCL = exclColsFromHeaders_(headers);
   const cosmetologas = {};
@@ -1773,8 +1951,13 @@ function calcularComisiones(fechaInicio, fechaFin) {
     const pack6 = (fila[CONFIG.COL_PACK6 - 1] || "").toString().trim();
     const exclPaquete = fila[EXCL.paquete - 1] === true;
     if (!exclPaquete) {
-      if (pack3 && pack3 !== "" && pack3.toLowerCase() !== "false") c.paquetes += 1;
-      if (pack6 && pack6 !== "" && pack6.toLowerCase() !== "false") c.paquetes += 2;
+      if (tramoCiclo) {
+        if (pack3 && pack3 !== "" && pack3.toLowerCase() !== "false") sumarUnidadPaquete_(c, pack3, precios);
+        if (pack6 && pack6 !== "" && pack6.toLowerCase() !== "false") sumarUnidadPaquete_(c, pack6, precios);
+      } else {
+        if (pack3 && pack3 !== "" && pack3.toLowerCase() !== "false") c.paquetes += 1;
+        if (pack6 && pack6 !== "" && pack6.toLowerCase() !== "false") c.paquetes += 2;
+      }
     }
     // ── EXTRAS: $1 de comisión por extra vendido (col W; cortesías no cuentan) ──
     // Exclusión propia: checkbox '❌ EXCLUIR EXTRAS' (col BV)
@@ -1803,14 +1986,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
   const nCosm         = Object.keys(cosmetologas).length || 1;
   const bonoActivo    = totalClientas >= CONFIG.MIN_CLIENTAS_BONO;
   Object.keys(cosmetologas).forEach(cosm => {
-    const c = cosmetologas[cosm];
-    c.comPaquetes = 0; c.nivelAlcanzado = "—";
-    if (!bonoActivo) return;
-    let premioMax = 0, nivelMax = -1;
-    CONFIG.NIVELES.forEach(([pct, premio], idx) => {
-      if (c.paquetes >= Math.ceil((totalClientas * pct) / nCosm)) { nivelMax = idx + 1; premioMax = premio; }
-    });
-    if (nivelMax > 0) { c.comPaquetes = premioMax; c.nivelAlcanzado = "N" + nivelMax; }
+    aplicarPremioPaquetes_(cosm, cosmetologas[cosm], totalClientas, nCosm, bonoActivo, fechaInicio);
   });
   // ── Comisión de recepción: inyectar DESPUÉS del cálculo de niveles (para no
   //    alterar nCosm/umbrales de paquetes) y ANTES de multas (para que se le apliquen) ──
@@ -1832,7 +2008,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
       cosmetologas[cosm].notas_multas = multasData[multaKey].detalle;
     }
   });
-  return { cosmetologas, totalClientas, bonoActivo };
+  return { cosmetologas, totalClientas, bonoActivo, regimenTramo: tramoCiclo };
 }
 
 function leerPrecios(ss) {
@@ -2749,6 +2925,8 @@ function doGet(e) {
             }
           } catch(em) { Logger.log('Error multas detail: '+em.message); }
         }
+
+        try { aplicarTramoEnRol_(rolData, sheetName); } catch (eEsc) {}
 
         return ContentService.createTextOutput(JSON.stringify({ok:true, data:rolData}))
           .setMimeType(ContentService.MimeType.JSON);
@@ -4520,6 +4698,8 @@ function doGet(e) {
           var c = datosRL.cosmetologas[k];
           return {
             name:  k,
+            paq:   c.paquetes||0,
+            nivel: c.nivelAlcanzado||'—',
             cf:    Math.round((c.comFaciales||0)*100)/100,
             cpaq:  Math.round((c.comPaquetes||0)*100)/100,
             cprod: Math.round((c.comProductos||0)*100)/100,
@@ -4554,7 +4734,11 @@ function doGet(e) {
           var neto=Math.max(0,bruto-(c.multas||0)-(c.descuentos||0));
           var totalProdA=Object.values(c.detalle_productos||{}).reduce(function(s,p){return s+p.qty;},0);
           var nextN=null, faltanPaq=0, nextCp=0;
-          if (datosA.bonoActivo) {
+          if (datosA.regimenTramo) {
+            nextN = c.nextLabel || null;
+            faltanPaq = c.paqParaSiguiente || 0;
+            nextCp = 0;
+          } else if (datosA.bonoActivo && !c.congeladoN8) {
             for (var ni=0; ni<CONFIG.NIVELES.length; ni++) {
               var req=Math.ceil((datosA.totalClientas*CONFIG.NIVELES[ni][0])/nCosm3);
               if ((c.paquetes||0)<req){nextN='N'+(ni+1);faltanPaq=req-(c.paquetes||0);nextCp=CONFIG.NIVELES[ni][1];break;}
@@ -5458,8 +5642,11 @@ function doGet(e) {
         var cosm    = cosmKey ? datosC.cosmetologas[cosmKey] : {};
         var totalProds = Object.values(cosm.detalle_productos||{}).reduce(function(s,p){return s+p.qty;},0);
         var nCosm2 = Object.keys(datosC.cosmetologas).length || 1;
-        var siguienteNivel=null, paqParaSiguiente=0, premioSiguiente=0;
-        if (datosC.bonoActivo) {
+        var siguienteNivel=null, paqParaSiguiente=0, premioSiguiente=0, nextLabel=null;
+        if (datosC.regimenTramo) {
+          nextLabel = cosm.nextLabel || null;
+          paqParaSiguiente = cosm.paqParaSiguiente || 0;
+        } else if (datosC.bonoActivo && !cosm.congeladoN8) {
           for (var n=0; n<CONFIG.NIVELES.length; n++) {
             var req=Math.ceil((datosC.totalClientas*CONFIG.NIVELES[n][0])/nCosm2);
             if ((cosm.paquetes||0) < req) { siguienteNivel=n+1; paqParaSiguiente=req-(cosm.paquetes||0); premioSiguiente=CONFIG.NIVELES[n][1]; break; }
@@ -5481,6 +5668,9 @@ function doGet(e) {
           descuentos:      cosm.descuentos||0,
           totalClientas:   datosC.totalClientas,
           bonoActivo:      datosC.bonoActivo,
+          regimenTramo:    !!datosC.regimenTramo,
+          congeladoN8:     !!cosm.congeladoN8,
+          nextLabel:       nextLabel,
           siguienteNivel:  siguienteNivel,
           paqParaSiguiente:paqParaSiguiente,
           premioSiguiente: premioSiguiente,
