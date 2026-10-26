@@ -1,4 +1,4 @@
-// Series visibles TK-SO (tickets) y TK-SQ (cotizaciones). beta_num sigue siendo el id secundario.
+// Series visibles TK-SO (tickets) y COT (cotizaciones nuevas). TK-SQ ya emitido se queda. beta_num sigue siendo el id secundario.
 import type { Db } from "./db.ts";
 import { enPrueba } from "./db.ts";
 import { n, s, siguienteTestDoc, type Row } from "./domain.ts";
@@ -69,20 +69,21 @@ export async function backfillSO(db: Db, actor: string, opts: { preview?: boolea
   return nAsig;
 }
 
-/** Pasa COT-#### y las cotizaciones sin número a TK-SQ-####, en orden de fecha. */
+/** Asigna COT-#### a las cotizaciones reales que todavía no tienen número. COT- y TK-SQ- se quedan. */
 export async function backfillSQ(db: Db, actor: string, opts: { preview?: boolean } = {}): Promise<number> {
   if (opts.preview || enPrueba(db)) return 0;
   const rows = await db.all("cotizaciones");
-  const tiene = (r: Row) => /^TK-SQ-\d+$/.test(s(r.numero)) || /^TK-SQ-\d+$/.test(leerSerie(r, "sq_num"));
+  const ya = (raw: string) => /^(TK-SQ|COT)-\d+$/.test(raw);
+  const tiene = (r: Row) => ya(s(r.numero)) || ya(leerSerie(r, "numero")) || ya(leerSerie(r, "sq_num"));
   const faltan = rows.filter((r) => !esFilaPrueba(r) && !tiene(r));
   faltan.sort(porFecha);
-  let seq = maxSerie(rows, "TK-SQ", "numero");
+  let seq = Math.max(maxSerie(rows, "COT", "numero"), maxSerie(rows, "COT", "sq_num"));
   let nAsig = 0;
   for (const r of faltan) {
     const match = matchDe(r);
     if (!Object.keys(match).length) continue;
     seq++;
-    const num = formatoSerie("TK-SQ", seq);
+    const num = formatoSerie("COT", seq);
     const orig = { ...(r.orig && typeof r.orig === "object" ? r.orig as Row : {}), sq_num: num };
     await db.write(actor, "cotizaciones", "update", match, { numero: num, orig });
     nAsig++;
