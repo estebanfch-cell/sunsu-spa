@@ -1160,6 +1160,9 @@ reg("getHistorial", "any", async (p, ctx, ses) => {
       exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
       comprobante: s(r.comprobante), fotos: s(r.fotos), fotosAntes: s(r.fotos_antes), fotosDespues: s(r.fotos_despues),
       estado: estadoTicket({ seguimiento: s(r.seguimiento), agendado: b(r.agendado), retorno: s(r.fecha_retorno) }, ec),
+      estado_doc: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? "cerrado" : "abierto",
+      factura: s(r.fac_7),
+      saldo: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? 0 : n(r.estimado),
     };
     if (telOk) item.telefono = porCed.get(normCedula(r.id_3)) || "";
     else item.telefono = "";
@@ -1203,6 +1206,7 @@ function filaTicket(r: R) {
   const orig = r.orig && typeof r.orig === "object" ? r.orig as R : {};
   const estimado = n(r.estimado);
   const sub = n(orig.subtotal) > 0 ? n(orig.subtotal) : round2(estimado / IVA);
+  const cerrado = orig.anulado === true || (b(r.fac) && b(r.cob));
   return {
     clave: leerSerie(r, "so_num") || s(r.beta_num) || s(r.sheet_row),
     so_num: leerSerie(r, "so_num"), beta_num: s(r.beta_num), sheet_row: r.sheet_row ?? null,
@@ -1211,6 +1215,7 @@ function filaTicket(r: R) {
     facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),
     extras: s(r.servicios_adicionales), notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones),
     subtotal: sub, iva: round2(sub * 0.15), estimado, total: estimado,
+    estado: cerrado ? "cerrado" : "abierto", factura: s(r.fac_7), saldo: cerrado ? 0 : estimado,
   };
 }
 reg("getTicketsLista", "any", async (p, ctx, ses) => {

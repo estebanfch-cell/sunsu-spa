@@ -645,6 +645,45 @@
       overflow: auto; border-radius: 18px 18px 0 0; box-shadow: var(--shadow); margin: 0;
     }
   }
+  .desk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .desk-bar .desk-q { flex: 1 1 220px; margin: 0; min-width: 180px; }
+  .desk-split { display: grid; gap: 12px; align-items: start; }
+  .desk-list, .desk-detail { min-width: 0; }
+  .desk-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .desk-table th, .desk-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; padding: 8px; border-bottom: 1px solid var(--cream-d); color: var(--navy); text-align: left; }
+  .desk-table th { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); position: sticky; top: 0; background: white; cursor: pointer; user-select: none; }
+  .desk-table td.num, .desk-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .desk-table tr.desk-row { cursor: pointer; }
+  .desk-table tr.desk-row.on, .desk-table tr.desk-row:hover { background: var(--blue-l); }
+  .desk-table tr.desk-grp td { background: var(--cream); font-weight: 800; cursor: default; }
+  .desk-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .desk-actions .btn { white-space: nowrap; }
+  .desk-tabs { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+  .desk-tabs button { border: 1.5px solid var(--cream-d); background: white; color: var(--navy); border-radius: 9px; padding: 6px 10px; font-weight: 800; font-size: 0.72rem; cursor: pointer; }
+  .desk-tabs button.on { background: var(--navy); color: white; border-color: var(--navy); }
+  .desk-panel { margin: 0 0 10px; padding: 8px; border: 1px solid var(--cream-d); border-radius: 12px; background: white; }
+  .desk-panel[hidden] { display: none; }
+  .desk-check { display: inline-flex; align-items: center; gap: 6px; margin: 4px 10px 4px 0; font-size: 0.78rem; font-weight: 700; color: var(--navy); }
+  .desk-check input { width: auto; margin: 0; }
+  .ac-wrap { position: relative; }
+  .ac-list { position: absolute; z-index: 8; left: 0; right: 0; background: white; border: 1px solid var(--cream-d); border-radius: 10px; max-height: 220px; overflow: auto; box-shadow: var(--shadow-sm); }
+  .ac-list[hidden] { display: none; }
+  .ac-list button { display: block; width: 100%; text-align: left; background: white; border: 0; border-bottom: 1px solid var(--cream); padding: 8px 10px; cursor: pointer; color: var(--navy); font-weight: 700; }
+  .ac-list button:hover { background: var(--blue-l); }
+  .cmp-line, .cmp-rec { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--cream); }
+  .cmp-line input, .cmp-rec input { width: 88px; margin: 0; }
+  .prod-hero { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .prod-hero img, .prod-ph { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; background: var(--cream); display: inline-block; }
+  .prod-mini img, .prod-mini .prod-ph { width: 36px; height: 36px; border-radius: 8px; }
+  @media (min-width: 861px) {
+    .desk-split { grid-template-columns: minmax(0, 1.15fr) minmax(320px, 480px); }
+    .desk-detail { position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; }
+  }
+  @media (max-width: 860px) {
+    .desk-detail { display: none; }
+    .desk-split.desk-open .desk-list { display: none; }
+    .desk-split.desk-open .desk-detail { display: block; background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; }
+  }
   .gc-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 720px; }
   .gc-table th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 6px 8px; border-bottom: 1px solid var(--cream-d); position: sticky; top: 0; background: white; }
   .gc-table td { padding: 8px; border-bottom: 1px solid var(--cream-d); vertical-align: middle; color: var(--navy); }
@@ -759,7 +798,7 @@ const GRUPOS = [
     ["productos", "Catálogo", "#/m/productos"],
     ["productos", "Productos", "#/m/productos"],
     ["conteos", "Conteos físicos", "#/m/conteos"],
-    ["inventario", "Stock actual", "#/m/inventario"],
+    ["inventario", "Inventario", "#/m/inventario"],
     ["ver_costos", "Consumos / reportes", "#/m/reportes"],
   ]],
   ["compras", "Compras", [
@@ -1136,6 +1175,9 @@ function tituloRuta(route, tab) {
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
+  if (route.mod === "inventario" && route.sub === "nuevo") return "Nuevo producto";
+  if (route.mod === "inventario" && route.sub === "prod") return "Producto";
+  if (route.mod === "inventario" && !route.sub) return "Inventario";
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
   if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
@@ -1281,7 +1323,7 @@ function phoneItems(id) {
   const g = gruposVisibles().find((x) => x.id === id);
   if (!g) return [];
   const phone = window.matchMedia("(max-width: 860px)").matches;
-  if (phone && id === "inventario") return g.items.filter((row) => !String(row[2]).startsWith("#/m/inventario"));
+  if (phone && id === "inventario") return g.items.filter((row) => !String(row[2]).startsWith("#/m/inventario/"));
   return g.items;
 }
 function grupoLabel(id) {
@@ -1349,10 +1391,12 @@ function paintShell(title) {
   }
   const u = state.user || {};
   const puedeTicket = acceso("tickets") !== "no";
-  const plus = puedeTicket
-    ? `<button class="plus" type="button" id="nuevo-ticket" aria-label="Nuevo ticket">+</button>`
+  const puedeOc = !!(state.admin && acceso("compras") !== "no");
+  const muestraPlus = puedeTicket || puedeOc;
+  const plus = muestraPlus
+    ? `<button class="plus" type="button" id="nuevo-ticket" aria-label="Crear ticket">+</button>`
     : "";
-  const tabPlus = puedeTicket
+  const tabPlus = muestraPlus
     ? `<button class="plus tab-plus" type="button" id="nuevo-ticket-tab" aria-label="Crear ticket">+</button>`
     : "";
   const grupos = gruposVisibles();
@@ -1390,8 +1434,9 @@ function paintShell(title) {
       <div class="vista-sheet card" id="crear-menu" hidden>
         <div class="card-title">Crear</div>
         <div class="chooser-actions">
-          <button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>
+          ${puedeTicket ? `<button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>` : ""}
           ${acceso("cotizaciones_cliente") !== "no" ? `<button class="btn ghost block" type="button" data-go="#/doc/cot">Nueva cotización</button>` : ""}
+          ${puedeOc ? `<button class="btn ghost block" type="button" data-go="#/m/compras/nueva">Nueva orden de compra</button>` : ""}
           <button class="btn ghost" type="button" id="crear-close">Cerrar</button>
         </div>
       </div>
@@ -1628,6 +1673,7 @@ function pantallaSunsu(route) {
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "";
   if (m === "productos") return "catalogo";
+  if (m === "inventario" && (!route.sub || route.sub === "nuevo" || route.sub === "prod")) return "";
   if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
   if (m === "conteos" && !route.sub) return "inv-fisico";
@@ -1788,7 +1834,11 @@ async function renderMod(route) {
   if (route.mod === "gift") return renderGiftMod(route);
   if (route.mod === "citas") return renderCitasBeta();
   if (route.mod === "productos") return renderProductos();
-  if (route.mod === "inventario") return renderInventarioBeta(route.sub || "venta");
+  if (route.mod === "inventario") {
+    if (!route.sub || route.sub === "lista") return renderInventarioLista();
+    if (route.sub === "nuevo" || route.sub === "prod") return renderInventarioFicha(route);
+    return renderInventarioBeta(route.sub);
+  }
   if (route.mod === "lugares") return renderLugares();
   if (route.mod === "compras") return renderCompras(route.sub);
   if (route.mod === "tickets") return renderTickets();
@@ -1976,6 +2026,166 @@ function familiaSkuUi(sku) {
   const m = String(sku || "").toUpperCase().replace(/^SUNSU-/, "").match(/^(HT|AS|ML|PH|JN)-/);
   return m ? m[1] : "";
 }
+function stockTotal(p) {
+  const b = (p && p.porBodega) || {};
+  return Object.keys(b).reduce((a, k) => a + (Number(b[k]) || 0), 0);
+}
+async function renderInventarioLista() {
+  const data = await api("prod_list");
+  if (data.error) return fail(data);
+  window._invRows = data.items || [];
+  window._invSort = window._invSort || "nombre";
+  window._invDir = window._invDir == null ? 1 : window._invDir;
+  const nuevo = state.admin ? `<button class="btn small" type="button" data-go="#/m/inventario/nuevo">+ Nuevo producto</button>` : "";
+  return `<div id="inv-root"><div class="desk-bar">
+      <input class="desk-q" id="inv-q" type="search" placeholder="Buscar nombre, SKU, marca o categoría" aria-label="Buscar productos" value="${esc(window._invQ || "")}">
+      ${nuevo}
+      <button class="btn ghost small" type="button" data-go="#/m/inventario/venta">Stock venta</button>
+      <button class="btn ghost small" type="button" data-go="#/m/inventario/cabina">Stock cabina</button>
+    </div>
+    <div class="sheet-scroll"><table class="desk-table nowrap-table">
+      <thead><tr>
+        <th></th>
+        <th class="sortable" data-inv-sort="nombre">Nombre</th>
+        <th class="sortable" data-inv-sort="sku">SKU</th>
+        <th class="sortable" data-inv-sort="uso">Tipo</th>
+        <th class="sortable" data-inv-sort="categoria">Categoría</th>
+        <th class="sortable" data-inv-sort="marca">Marca</th>
+        <th class="sortable num" data-inv-sort="stock">Stock</th>
+      </tr></thead>
+      <tbody id="inv-body"></tbody>
+    </table></div></div>`;
+}
+function pintarInventario() {
+  const body = document.getElementById("inv-body");
+  if (!body) return;
+  const qEl = document.getElementById("inv-q");
+  const raw = qEl ? qEl.value : (window._invQ || "");
+  window._invQ = raw;
+  const q = normBusca(raw);
+  const sort = window._invSort || "nombre";
+  const dir = window._invDir || 1;
+  const rows = (window._invRows || []).filter((p) => {
+    if (!q) return true;
+    return normBusca([p.sku, p.nombre, p.marca, p.categoria, p.uso, p.clase, p.sku_proveedor, p.linea].join(" ")).includes(q);
+  }).slice().sort((a, b) => {
+    const av = sort === "stock" ? stockTotal(a) : String(a[sort] || "").toLowerCase();
+    const bv = sort === "stock" ? stockTotal(b) : String(b[sort] || "").toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  body.innerHTML = rows.map((p) => {
+    const foto = String(p.foto_url || "");
+    const img = /^https?:|^data:/.test(foto) ? `<img src="${esc(foto)}" alt="">` : `<span class="prod-ph" aria-hidden="true"></span>`;
+    return `<tr class="desk-row" data-inv="${esc(p.id)}"><td class="prod-mini">${img}</td><td>${esc(p.nombre || "")}</td><td class="tk-sku">${esc(p.sku || "")}</td><td>${esc(p.uso || p.clase || "")}</td><td>${esc(p.categoria || "")}</td><td>${esc(p.marca || "")}</td><td class="num">${esc(stockTotal(p))}</td></tr>`;
+  }).join("") || `<tr><td colspan="7">Sin productos.</td></tr>`;
+  body.querySelectorAll("[data-inv]").forEach((tr) => {
+    tr.onclick = () => go("#/m/inventario/prod/" + encodeURIComponent(tr.getAttribute("data-inv")));
+  });
+}
+async function renderInventarioFicha(route) {
+  const nuevo = route.sub === "nuevo" || !route.id;
+  if (nuevo && !state.admin) return `<p class="err">Solo admin crea productos.</p>`;
+  let p = { uso: "venta", unidad: "u", activo: true };
+  let stock = [];
+  let kardex = [];
+  if (!nuevo) {
+    const data = await api("prod_get", { id: route.id });
+    if (data.error) return fail(data);
+    p = data.producto || {};
+    stock = data.stock || [];
+    kardex = (data.kardex || []).slice().reverse().slice(0, 80);
+  }
+  const sku = String(p.sku || "").toUpperCase().replace(/^SUNSU-/, "");
+  let ocs = [];
+  if (!nuevo) {
+    const lista = await api("compras_lista");
+    if (lista && !lista.error) {
+      ocs = (lista.items || []).map((o) => {
+        const ln = (o.lineas || []).find((x) => String(x.sku || "").toUpperCase().replace(/^SUNSU-/, "") === sku);
+        return ln ? { o, ln } : null;
+      }).filter(Boolean);
+    }
+  }
+  const foto = p.foto_data || (/^https?:|^data:/.test(String(p.foto_url || "")) ? p.foto_url : "");
+  const img = foto ? `<img src="${esc(foto)}" alt="">` : `<span class="prod-ph" aria-hidden="true"></span>`;
+  const off = state.admin ? "" : "disabled";
+  const uso = (v, label) => `<label class="desk-check"><input type="radio" name="uso" value="${v}" ${(p.uso || "venta") === v ? "checked" : ""} ${off}> ${label}</label>`;
+  const costo = state.admin || state.verCostos
+    ? `<label>Costo</label><input name="costo_promedio" inputmode="decimal" value="${esc(p.costo_promedio ?? "")}" ${state.admin ? "" : "disabled"}>`
+    : "";
+  const porBod = {};
+  stock.forEach((s) => { porBod[s.bodega_id] = (porBod[s.bodega_id] || 0) + (Number(s.cantidad) || 0); });
+  const lugares = lugaresVisibles();
+  const stockRows = Object.keys(porBod).map((id) => {
+    const lug = lugares.find((b) => b.id === id);
+    return `<tr><td>${esc(lug ? etiquetaLugar(lug) : id)}</td><td class="num">${esc(porBod[id])}</td></tr>`;
+  }).join("");
+  const dinero = state.admin || state.verCostos;
+  const ocRows = ocs.map(({ o, ln }) => `<tr><td>${esc(o.numero || "Borrador")}</td><td>${esc(o.flujo || "")}</td><td class="num">${esc(ln.pedido)}</td><td class="num">${esc(ln.recibido)}</td>${dinero ? `<td class="num">${money(ln.subtotal || 0)}</td>` : ""}</tr>`).join("");
+  const movs = kardex.map((m) => `<tr><td>${esc(m.tipo || "")}</td><td class="num">${esc(m.delta)}</td><td class="num">${esc(m.saldo ?? "")}</td><td>${esc(m.nota || m.ticket_ref || "")}</td></tr>`).join("");
+  return `<div id="inv-ficha"><div class="desk-actions"><button class="btn ghost small" type="button" data-go="#/m/inventario">← Inventario</button></div>
+    <div class="prod-hero">${img}<div><div class="card-title">${esc(p.nombre || "Nuevo producto")}</div><div class="tk-sku">${esc(p.sku || "Sin código")}</div></div></div>
+    <div class="desk-tabs">
+      <button type="button" data-inv-tab="resumen" class="on">Resumen</button>
+      <button type="button" data-inv-tab="prov">Proveedores</button>
+      <button type="button" data-inv-tab="ordenes">Historial de órdenes</button>
+      <button type="button" data-inv-tab="mov">Movimientos</button>
+    </div>
+    <form id="f-inv">
+      <input type="hidden" name="id" value="${esc(p.id || "")}">
+      <div data-inv-pane="resumen">
+        ${state.admin ? `<label>Foto</label><input id="inv-foto" type="file" accept="image/*">` : ""}
+        <label>SKU</label><input name="sku" value="${esc(p.sku || "")}" required ${off}>
+        <label>Nombre</label><input name="nombre" value="${esc(p.nombre || "")}" required ${off}>
+        <label>Tipo</label><div>${uso("venta", "Venta")}${uso("cabina", "Cabina")}${uso("ambos", "Ambos")}</div>
+        <label>Unidad</label><input name="unidad" value="${esc(p.unidad || "u")}" ${off}>
+        <label>Categoría</label><input name="categoria" value="${esc(p.categoria || "")}" ${off}>
+        <label>Línea</label><input name="linea" value="${esc(p.linea || "")}" ${off}>
+        <label>PVP</label><input name="precio_venta" inputmode="decimal" value="${esc(p.precio_venta ?? "")}" ${off}>
+        ${costo}
+        <label>Observaciones</label><textarea name="observaciones" ${off}>${esc(p.observaciones || "")}</textarea>
+        <div class="card-title">Stock por bodega</div>
+        <table class="desk-table nowrap-table"><thead><tr><th>Bodega</th><th class="num">Stock</th></tr></thead><tbody>${stockRows || `<tr><td colspan="2">Sin saldo.</td></tr>`}</tbody></table>
+        ${state.admin ? `<button class="btn" type="submit">Guardar producto</button>` : ""}
+        <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p>
+      </div>
+      <div data-inv-pane="prov" hidden>
+        <label>Marca</label><input name="marca" value="${esc(p.marca || "")}" ${off}>
+        <label>SKU proveedor</label><input name="sku_proveedor" value="${esc(p.sku_proveedor || "")}" ${off}>
+        <p class="note">La marca y el código del proveedor no reemplazan el SKU Sunsu.</p>
+      </div>
+      <div data-inv-pane="ordenes" hidden>
+        <table class="desk-table nowrap-table"><thead><tr><th>Nº</th><th>Estado</th><th class="num">Pedido</th><th class="num">Recibido</th>${dinero ? `<th class="num">Subtotal</th>` : ""}</tr></thead><tbody>${ocRows || `<tr><td colspan="${dinero ? 5 : 4}">Sin órdenes con este código.</td></tr>`}</tbody></table>
+      </div>
+      <div data-inv-pane="mov" hidden>
+        <table class="desk-table nowrap-table"><thead><tr><th>Tipo</th><th class="num">Delta</th><th class="num">Saldo</th><th>Nota</th></tr></thead><tbody>${movs || `<tr><td colspan="4">Sin movimientos.</td></tr>`}</tbody></table>
+      </div>
+    </form></div>`;
+}
+function wireInventario(main) {
+  const q = main.querySelector("#inv-q");
+  if (q) {
+    q.addEventListener("input", pintarInventario);
+    main.querySelectorAll("[data-inv-sort]").forEach((th) => {
+      th.onclick = () => {
+        const k = th.getAttribute("data-inv-sort");
+        window._invDir = window._invSort === k ? -(window._invDir || 1) : (k === "stock" ? -1 : 1);
+        window._invSort = k;
+        pintarInventario();
+      };
+    });
+    pintarInventario();
+  }
+  main.querySelectorAll("[data-inv-tab]").forEach((b) => {
+    b.onclick = () => {
+      const tab = b.getAttribute("data-inv-tab");
+      main.querySelectorAll("[data-inv-tab]").forEach((x) => x.classList.toggle("on", x === b));
+      main.querySelectorAll("[data-inv-pane]").forEach((pane) => { pane.hidden = pane.getAttribute("data-inv-pane") !== tab; });
+    };
+  });
+}
 async function renderInventarioBeta(sub) {
   const lugar = lugarPorSub(sub);
   const data = await api("stk_saldo", { bodega_id: lugar.id });
@@ -1998,6 +2208,7 @@ async function renderInventarioBeta(sub) {
 async function renderCompras(sub) {
   if (sub !== "rfq" && typeof renderComprasFlujo === "function") {
     window._cmpEsAdmin = !!state.admin;
+    window._cmpSub = sub || "";
     return renderComprasFlujo();
   }
   return renderComprasLista(sub);
@@ -4029,6 +4240,7 @@ function bind(main) {
     if (f) f.addEventListener("submit", async (ev) => { ev.preventDefault(); await fn(f); });
   };
   form("#f-prod", saveProd);
+  form("#f-inv", saveInv);
   form("#f-oc", saveOc);
   form("#f-rec", saveRec);
   form("#f-pago", savePago);
@@ -4053,6 +4265,7 @@ function bind(main) {
   wireHorarios(main);
   wireVentas(main);
   if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
+  wireInventario(main);
   if (typeof wireConteoFlujo === "function") wireConteoFlujo(main);
   wireBatch(main);
   montarDirty(main);
@@ -4077,6 +4290,30 @@ async function saveProd(form) {
   if (!state.admin) { setMsg(form, { error: "Solo admin edita el catálogo." }); return; }
   const data = await api("prod_save", body);
   if (setMsg(form, data, data.sku || "Guardado")) go("#/m/productos");
+}
+async function saveInv(form) {
+  if (!state.admin) { setMsg(form, { error: "Solo admin edita el catálogo." }); return; }
+  const body = Object.fromEntries(new FormData(form).entries());
+  const uso = form.querySelector('input[name="uso"]:checked');
+  body.uso = uso ? uso.value : body.uso || "";
+  if (body.costo_promedio === "") delete body.costo_promedio;
+  if (!body.id) delete body.id;
+  const data = await api("prod_save", body);
+  if (!setMsg(form, data, data.sku || "Guardado")) return;
+  const file = document.getElementById("inv-foto");
+  if (file && file.files && file.files[0] && data.id) {
+    const b64 = await new Promise((res) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result || ""));
+      r.onerror = () => res("");
+      r.readAsDataURL(file.files[0]);
+    });
+    if (b64) {
+      const foto = await api("prod_foto", { id: data.id, foto_b64: b64, nombre: file.files[0].name });
+      if (foto.error) { setMsg(form, foto); return; }
+    }
+  }
+  go("#/m/inventario/prod/" + encodeURIComponent(data.id));
 }
 async function saveOc(form) {
   const body = {
@@ -4675,7 +4912,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026cmpfix"></script>
+<script src="beta-screens.js?v=20261026desk"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
