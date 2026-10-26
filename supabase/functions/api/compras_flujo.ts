@@ -117,6 +117,23 @@ export async function comprasPeriodo(db: Db, p: Row): Promise<Row> {
   };
 }
 
+function cotizarLineas(lineas: Row[], prods: Row[]): { error: string } | { sub: number; n: number } {
+  const map = porSku(prods);
+  let sub = 0;
+  let escritas = 0;
+  for (const ln of lineas) {
+    const cant = n(ln.cantidad ?? ln.vendido);
+    if (!(cant > 0)) continue;
+    const prod = map.get(skuCode(ln.sku)) || map.get(skuCode(ln.producto_id));
+    if (!prod) return { error: "Producto no está en el catálogo: " + s(ln.sku || ln.producto_id) };
+    const precio = ln.precio != null ? n(ln.precio) : precioDe(prod);
+    sub += round2(cant * precio);
+    escritas++;
+  }
+  if (!escritas) return { error: "La pre-orden no tiene cantidades" };
+  return { sub, n: escritas };
+}
+
 async function escribirLineas(db: Db, actor: string, ocId: string, lineas: Row[], prods: Row[]): Promise<Row | null> {
   const map = porSku(prods);
   for (const ln of lineas) {
@@ -166,10 +183,9 @@ export async function comprasGuardar(db: Db, actor: string, p: Row, now: Date): 
   const prev = (await db.all("erp_oc")).find((r) => r.id === ocId);
   if (prev && s(prev.flujo) && s(prev.flujo) !== "Borrador") return { error: "Esa orden ya no es borrador" };
   const prods = await productos(db);
-  const hecho = await escribirLineas(db, actor, ocId, crudas, prods);
-  if (hecho?.error) return hecho;
-  if (!n(hecho?.n)) return { error: "La pre-orden no tiene cantidades" };
-  const sub = n(hecho?.sub);
+  const cotizado = cotizarLineas(crudas, prods);
+  if ("error" in cotizado) return cotizado;
+  const sub = cotizado.sub;
   const conIva = p.con_iva !== false && p.conIva !== false;
   const iva = conIva ? round2(sub * 0.15) : 0;
   const total = round2(sub + iva);
@@ -188,6 +204,8 @@ export async function comprasGuardar(db: Db, actor: string, p: Row, now: Date): 
   };
   if (prev) await db.write(actor, "erp_oc", "update", { id: ocId }, row);
   else await db.write(actor, "erp_oc", "insert", {}, { id: ocId, numero: null, ...row });
+  const hecho = await escribirLineas(db, actor, ocId, crudas, prods);
+  if (hecho?.error) return hecho;
   return { ok: true, id: ocId, flujo: "Borrador", proveedor_id: prov.id, total, snap };
 }
 
