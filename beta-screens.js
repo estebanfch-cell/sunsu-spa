@@ -5057,23 +5057,6 @@ function descargarPDFHistorial(){
   win.document.close();
 }
 
-function _histPrecioFacial(txt){
-  if(!txt) return {n:'',p:0};
-  var canje=false;
-  // Check colQ — if there's a colQ it means it was paid with paquete
-  var f=FACIALES.find(function(x){return txt.indexOf(x.sku)>=0;});
-  return f?{n:f.n,p:f.p,sku:f.sku}:{n:txt,p:0,sku:''};
-}
-function _histPrecioPaq(txt){
-  if(!txt) return null;
-  var p=PAQ3.find(function(x){return txt.indexOf(x.sku)>=0;})||PAQ6.find(function(x){return txt.indexOf(x.sku)>=0;});
-  return p?{n:p.n,p:p.p,sku:p.sku}:null;
-}
-function _histPrecioExtra(sku){
-  var e=EXTRAS.find(function(x){return x.sku===sku;});
-  return e?e.t:0;
-}
-
 // ══════ DASH ADMIN ══════
 // ── DASHBOARD DE INICIO (admins): el pulso del negocio al abrir la app ──
 // Venta en SUBTOTAL (sin IVA 15%) grande, con IVA en chiquito. Pagos que
