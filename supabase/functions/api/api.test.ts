@@ -2294,6 +2294,50 @@ describe("series, comisiones y rol", () => {
     assert.equal((await db.all("proveedores")).length, 0);
   });
 
+  it("la tabla de proveedores suma órdenes sin duplicar la misma OC y abre el detalle", async () => {
+    const db = new MemoryDb({
+      usuarios: [{ id: "emi", nombre: "Emi", short: "Emi", rol: "admin", bloqueado: false }],
+      proveedores: [
+        { sheet_row: 3, nombre: "Hebetronic S.A.", familia: "ht", ruc: "179", telefono: "099", email: "a@b.c", direccion: "Quito", notas: "", orig: {} },
+        { sheet_row: 4, nombre: "Allskin", familia: "AS", ruc: "", telefono: "", email: "", direccion: "", notas: "", orig: {} },
+      ],
+      erp_proveedores: [{ id: "p-ht", nombre: "Hebetronic", ruc: "179", legacy_sheet_row: 3 }],
+      erp_oc: [
+        { id: "oc-1", numero: "OC-0001", proveedor_id: "p-ht", fecha: "2026-10-15", flujo: "Enviada", estado: "abierta", total: 100, saldo: 40 },
+      ],
+      ordenes_compra: [
+        { sheet_row: 1, numorden: "OC-0001", fecha: "2026-10-15", proveedor: "Hebetronic S.A.", json: { fact: [{ vendido: 9, compra: 9 }] }, orig: {} },
+        { sheet_row: 2, numorden: "OC-0002", fecha: "2026-09-01", proveedor: "Hebetronic", json: { fact: [{ vendido: 2, compra: 10 }] }, orig: {} },
+      ],
+    });
+    const c = ctx(db, "admin", "emi", "Emi");
+    const tabla = await handle("getProveedoresTabla", { token: c.token }, c) as Row;
+    const heb = (tabla.items as Row[]).find((r) => r.fila === "3");
+    assert.equal(heb?.codigo, "HT");
+    assert.equal(heb?.ordenes, 2);
+    assert.equal(heb?.total, 120);
+    assert.equal(heb?.saldo, 60);
+    const ocs = heb?.ocs as Row[];
+    assert.equal(ocs[0].numero, "OC-0001");
+    assert.equal(ocs[0].id, "oc-1");
+    assert.equal(ocs[1].numero, "OC-0002");
+    assert.equal(ocs[1].id, "");
+    const all = (tabla.items as Row[]).find((r) => r.codigo === "AS");
+    assert.equal(all?.ordenes, 0);
+    const cosm = ctx(new MemoryDb(), "cosmetologa", "andrea", "Andrea");
+    const no = await handle("getProveedoresTabla", { token: cosm.token }, cosm) as Row;
+    assert.match(String(no.error), /permiso/i);
+    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(beta, /id="prov-q"/);
+    assert.match(beta, /\+ Agregar proveedor/);
+    assert.match(beta, /data-prov-sort/);
+    assert.match(beta, /Saldo pendiente/);
+    assert.match(beta, /if \(m === "proveedores"\) return "";/);
+    assert.match(screens, /go\("#\/m\/proveedores"/);
+    assert.match(screens, /function renderProveedores\(c\)\{\s*var fila = window\._provFila/);
+  });
+
   it("0026 purga proveedores e inventario_entradas y el resto de tablas con origin", () => {
     const nombres = (sql: string, marker: string) => {
       const i = sql.indexOf(marker);
@@ -2923,8 +2967,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3032,8 +3076,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3100,8 +3144,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3151,8 +3195,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3185,8 +3229,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3232,8 +3276,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
-    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
+    assert.match(beta, /beta-screens\.js\?v=20261026prov1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PROV1/);
   });
 });
 

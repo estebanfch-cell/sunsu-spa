@@ -11036,6 +11036,10 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
 
 // ══════ PROVEEDORES (gestión desde el app) ══════
 function renderProveedores(c){
+  var fila = window._provFila ? "/" + encodeURIComponent(window._provFila) : "";
+  if (typeof go === "function") { go("#/m/proveedores" + fila); return; }
+  if (c) c.innerHTML = '<p class="note">Abre Proveedores desde el menú.</p>';
+  return;
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏭 Proveedores</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando...</div>';
   fetch(APPS_SCRIPT_URL+'?action=getProveedoresApp')

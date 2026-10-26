@@ -50,7 +50,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   toggleActivoCatalogo: "productos", eliminarProductoApp: "productos", prod_list: "productos",
   prod_get: "productos", prod_save: "productos", prod_foto: "productos",
   getInventario: "inventario", stk_saldo: "inventario", stk_kardex: "kardex",
-  getEntradas: "compras", registrarEntrada: "compras", getProveedoresApp: "proveedores",
+  getEntradas: "compras", registrarEntrada: "compras", getProveedoresApp: "proveedores", getProveedoresTabla: "proveedores",
   guardarProveedorApp: "proveedores", eliminarProveedorApp: "proveedores",
   getOCDataApp: "compras", crearOCApp: "compras", editarOCApp: "compras", ocEliminar: "compras",
   rfq_save: "compras", rfq_list: "compras", rfq_get: "compras", rfq_respuesta: "compras", rfq_adjudicar: "compras",

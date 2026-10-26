@@ -13,7 +13,7 @@ import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
-import { montoGcAplicado, saldoGift } from "./ventas.ts";
+import { familiaDe, montoGcAplicado, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
@@ -2104,6 +2104,83 @@ reg("getProveedoresApp", "any", async (_p, ctx) => ({
     email: s(r.email), familia: s(r.familia), notas: s(r.notas),
   })),
 }));
+function mismoProv(a: string, b: string): boolean {
+  const x = normNombre(a);
+  const y = normNombre(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const fx = x.split(" ")[0] || "";
+  const fy = y.split(" ")[0] || "";
+  return (fx.length >= 4 && (y === fx || y.startsWith(fx + " "))) || (fy.length >= 4 && (x === fy || x.startsWith(fy + " ")));
+}
+function totalOrdenHoja(raw: unknown): number {
+  const json = raw && typeof raw === "object" ? raw as R : {};
+  const sum = (rows: unknown, qty: string) => {
+    if (!Array.isArray(rows)) return 0;
+    return (rows as R[]).reduce((a, ln) => a + n(ln[qty] ?? ln.cant ?? ln.qty) * n(ln.compra ?? ln.precio), 0);
+  };
+  const fact = sum(json.fact, "vendido");
+  const directa = sum(json.directa, "cant");
+  const items = sum(json.items, "cant");
+  return round2(fact + directa > 0 ? fact + directa : items);
+}
+async function tablaProveedores(ctx: Ctx): Promise<R[]> {
+  const hojas = await ctx.db.all("proveedores");
+  let erps: R[] = [];
+  let ocs: R[] = [];
+  let ordenes: R[] = [];
+  try { erps = await ctx.db.all("erp_proveedores"); } catch { erps = []; }
+  try { ocs = await ctx.db.all("erp_oc"); } catch { ocs = []; }
+  try { ordenes = await ctx.db.all("ordenes_compra"); } catch { ordenes = []; }
+  const fuentes = hojas.map((r) => ({
+    fila: s(r.sheet_row), nombre: s(r.nombre), ruc: s(r.ruc), telefono: s(r.telefono),
+    direccion: s(r.direccion), email: s(r.email), familia: s(r.familia), notas: s(r.notas),
+    erpId: "",
+  }));
+  for (const e of erps) {
+    const ya = fuentes.find((r) => (e.legacy_sheet_row != null && s(r.fila) === s(e.legacy_sheet_row)) || mismoProv(r.nombre, s(e.nombre)));
+    if (ya) { ya.erpId = s(e.id); if (!ya.ruc) ya.ruc = s(e.ruc); if (!ya.telefono) ya.telefono = s(e.telefono); if (!ya.email) ya.email = s(e.email); continue; }
+    fuentes.push({
+      fila: s(e.id), nombre: s(e.nombre), ruc: s(e.ruc), telefono: s(e.telefono),
+      direccion: "", email: s(e.email), familia: "", notas: "", erpId: s(e.id),
+    });
+  }
+  return fuentes.filter((r) => r.nombre).map((r) => {
+    const codigo = (s(r.familia) || familiaDe(r.nombre)).toUpperCase();
+    const vistas: R[] = [];
+    const nums = new Set<string>();
+    for (const o of ocs) {
+      if (!r.erpId || s(o.proveedor_id) !== r.erpId) continue;
+      const numero = s(o.numero) || "Borrador";
+      nums.add(numero.toUpperCase());
+      vistas.push({
+        id: s(o.id), numero, fecha: s(o.fecha).slice(0, 10),
+        estado: s(o.flujo) || s(o.estado) || "abierta",
+        total: round2(n(o.total)), saldo: round2(n(o.saldo)),
+      });
+    }
+    for (const o of ordenes) {
+      if (!mismoProv(s(o.proveedor), r.nombre)) continue;
+      const numero = s(o.numorden) || "Borrador";
+      if (nums.has(numero.toUpperCase())) continue;
+      const json = o.json && typeof o.json === "object" ? o.json as R : {};
+      const total = totalOrdenHoja(o.json);
+      vistas.push({
+        id: "", numero, fecha: s(o.fecha).slice(0, 10),
+        estado: s(json.estado) || "Registrada", total, saldo: total,
+      });
+    }
+    vistas.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)) || s(b.numero).localeCompare(s(a.numero)));
+    return {
+      fila: r.fila, codigo, nombre: r.nombre, ruc: r.ruc, telefono: r.telefono, email: r.email,
+      direccion: r.direccion, notas: r.notas, ordenes: vistas.length,
+      total: round2(vistas.reduce((a, o) => a + n(o.total), 0)),
+      saldo: round2(vistas.reduce((a, o) => a + n(o.saldo), 0)),
+      ocs: vistas,
+    };
+  });
+}
+reg("getProveedoresTabla", "any", async (_p, ctx) => ({ ok: true, items: await tablaProveedores(ctx) }));
 reg("guardarProveedorApp", ADMIN, async (p, ctx, ses) => {
   const row = { nombre: s(p.nombre), ruc: s(p.ruc), telefono: s(p.telefono), direccion: s(p.direccion), email: s(p.email), familia: s(p.familia), notas: s(p.notas), orig: { nombre: s(p.nombre) } };
   if (n(p.fila)) await ctx.db.write(actorOf(ses), "proveedores", "update", { sheet_row: n(p.fila) }, row);

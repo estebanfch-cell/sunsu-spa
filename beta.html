@@ -633,6 +633,25 @@
   .nowrap-table .ix-cell, .nowrap-table td > * { white-space: nowrap; }
   .cli-sheet { overflow-x: auto; }
   .cli-cod { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
+  .prov-layout { display: grid; gap: 16px; align-items: start; }
+  .prov-list { min-width: 0; }
+  .prov-sheet tbody tr { cursor: pointer; }
+  .prov-sheet tbody tr.on td { background: var(--blue-l); }
+  .prov-sheet th .link { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gray); }
+  .prov-panel { background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px; box-shadow: var(--shadow); padding: 16px 18px 20px; min-height: 240px; }
+  .prov-panel[hidden] { display: none; }
+  .prov-cod { font-family: ui-monospace, monospace; font-weight: 800; }
+  .prov-layout.prov-open .prov-sheet table { min-width: 0; }
+  .prov-layout.prov-open .nowrap-table th,
+  .prov-layout.prov-open .nowrap-table td { max-width: 148px; }
+  @media (min-width: 861px) {
+    .prov-layout.prov-open { grid-template-columns: minmax(168px, 240px) minmax(280px, 1fr); }
+    .prov-panel { position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+  }
+  @media (max-width: 860px) {
+    .prov-layout.prov-open .prov-list { display: none; }
+    .prov-panel { position: fixed; z-index: 70; inset: 0 0 var(--tab-h) 0; overflow: auto; border-radius: 18px 18px 0 0; margin: 0; }
+  }
   .tk-num { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
   .hist-filtrar { margin-top: 2px; }
   .hist-filtrar > summary { cursor: pointer; list-style: none; display: inline-block; padding: 7px 12px; border: 1.5px solid var(--cream-d); border-radius: 9px; font-size: 0.74rem; font-weight: 800; color: var(--navy); background: white; }
@@ -981,6 +1000,59 @@ function previewApi(accion, body) {
       totales: { unidadesVenta: 6, unidadesCabina: 14, faciales: 10 } };
   }
   if (accion === "prov_list") return { ok: true, items: [{ id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" }] };
+  if (accion === "getProveedoresTabla") {
+    if (!state.previewProvs) {
+      const card = (fila, codigo, nombre, extra) => Object.assign({
+        fila, codigo, nombre, ruc: "", telefono: "", email: "", direccion: "", notas: "",
+        ordenes: 0, total: 0, saldo: 0, ocs: [],
+      }, extra || {});
+      state.previewProvs = [
+        card("1", "HT", "Hebetronic", { ruc: "1793161898001", telefono: "0991112233", email: "pedidos@hebetronic.com", direccion: "Quito", ordenes: 2, total: 120, saldo: 40, ocs: [
+          { id: "oc-demo", numero: "OC-0080", fecha: "2026-10-15", estado: "Enviada", total: 92, saldo: 40 },
+          { id: "oc-71", numero: "OC-0071", fecha: "2026-09-30", estado: "Pagada/Cerrada", total: 28, saldo: 0 },
+        ] }),
+        card("2", "AS", "Allskin", { ruc: "1790000002", telefono: "0992223344", email: "allskin@ejemplo.com", direccion: "Cumbayá", ordenes: 1, total: 50, saldo: 50, ocs: [
+          { id: "oc-as", numero: "OC-0066", fecha: "2026-10-02", estado: "Recibida", total: 50, saldo: 50 },
+        ] }),
+        card("3", "ML", "Atencio"),
+        card("4", "PH", "APHLORA"),
+        card("5", "JN", "Holika"),
+        card("6", "BV", "Baviphat"),
+        card("7", "SU", "Sunsu"),
+        card("8", "VK", "Vika"),
+      ];
+    }
+    return { ok: true, items: state.previewProvs };
+  }
+  if (accion === "eliminarProveedorApp") {
+    state.previewProvs = (state.previewProvs || []).filter((p) => String(p.fila) !== String(body.fila));
+    return { ok: true };
+  }
+  if (accion === "inline_guardar" && body.tabla === "proveedores") {
+    const campos = body.campos || {};
+    if (!state.previewProvs) state.previewProvs = [];
+    if (String(body.fila) === "nuevo") {
+      const fila = String(state.previewProvs.length + 1);
+      state.previewProvs.push({
+        fila, codigo: String(campos.familia || "").toUpperCase(), nombre: campos.nombre || "",
+        ruc: campos.ruc || "", telefono: campos.telefono || "", email: campos.email || "",
+        direccion: campos.direccion || "", notas: campos.notas || "", ordenes: 0, total: 0, saldo: 0, ocs: [],
+      });
+      return { ok: true, fila };
+    }
+    const row = state.previewProvs.find((p) => String(p.fila) === String(body.fila));
+    if (row) {
+      if (campos.nombre != null) row.nombre = campos.nombre;
+      if (campos.familia != null) row.codigo = String(campos.familia).toUpperCase();
+      ["ruc", "telefono", "email", "direccion", "notas"].forEach((k) => { if (campos[k] != null) row[k] = campos[k]; });
+    }
+    return { ok: true, fila: body.fila };
+  }
+  if (accion === "compras_lista") return { ok: true, items: [
+    { id: "oc-demo", numero: "OC-0080", proveedor: "Hebetronic", fecha: "2026-10-15", flujo: "Enviada", estado: "abierta", total: 92, saldo: 40, subtotal: 80, iva: 12, con_iva: true, lineas: [{ id: "l1", sku: "HT-002", nombre: "Serum", pedido: 2, recibido: 0, pendiente: 2, precio: 40, subtotal: 80 }] },
+    { id: "oc-71", numero: "OC-0071", proveedor: "Hebetronic", fecha: "2026-09-30", flujo: "Pagada/Cerrada", estado: "recibida", total: 28, saldo: 0, subtotal: 28, iva: 0, lineas: [] },
+    { id: "oc-as", numero: "OC-0066", proveedor: "Allskin", fecha: "2026-10-02", flujo: "Recibida", estado: "recibida", total: 50, saldo: 50, subtotal: 50, iva: 0, lineas: [{ id: "l2", sku: "AS-001", nombre: "Tónico", pedido: 1, recibido: 1, pendiente: 0, precio: 50, subtotal: 50 }] },
+  ] };
   if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-0080", estado: "abierta", total: 92, tipo: "consignacion", q_label: "16-fin Oct 2026" }] };
   if (accion === "prod_list") return { ok: true, items: [
     { id: "p1", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "ambos", precio_venta: 43.99, porBodega: { VENTA: 4, CABINA: 2, CASA: 0 } },
@@ -1722,7 +1794,7 @@ function pantallaSunsu(route) {
   if (m === "conteos" && !route.sub) return "inv-fisico";
   if (m === "conteos" || m === "lugares") return "";
   if (m === "compras") return "";
-  if (m === "proveedores") return "proveedores";
+  if (m === "proveedores") return "";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
   if (m === "gift" && route.sub === "paquetes" && !route.id) return "buscar-paquetes";
@@ -1887,7 +1959,7 @@ async function renderMod(route) {
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
-  if (route.mod === "proveedores") return renderProveedores();
+  if (route.mod === "proveedores") return renderProveedoresDesk(route);
   if (route.mod === "cotizaciones_cliente") return renderListaCotizaciones();
   if (route.mod === "comisiones") return renderComisiones();
   if (route.mod === "rol_pagos") return renderRol();
@@ -2598,12 +2670,147 @@ function htmlReporte(d) {
     </div>`;
 }
 
-async function renderProveedores() {
-  const data = await api("prov_list");
+const PROV_COLS = [
+  ["codigo", "Código"],
+  ["nombre", "Nombre"],
+  ["ruc", "RUC"],
+  ["telefono", "Teléfono"],
+  ["email", "Email"],
+  ["direccion", "Dirección"],
+  ["ordenes", "# Órdenes", "num"],
+  ["total", "Total comprado", "num"],
+  ["saldo", "Saldo pendiente", "num"],
+];
+function valorProveedor(p, key) {
+  if (key === "ordenes" || key === "total" || key === "saldo") return Number(p[key]) || 0;
+  return String(p[key] || "").toLowerCase();
+}
+function filasProveedorVisibles() {
+  const q = normBusca(window._provQ || "");
+  let rows = (window._provRows || []).filter((p) => {
+    if (!q) return true;
+    return normBusca([p.codigo, p.nombre, p.ruc, p.telefono, p.email, p.direccion].join(" ")).includes(q);
+  });
+  const key = window._provSort || "codigo";
+  const dir = window._provDir || 1;
+  rows = rows.slice().sort((a, b) => {
+    const va = valorProveedor(a, key);
+    const vb = valorProveedor(b, key);
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return String(a.nombre || "").localeCompare(String(b.nombre || ""));
+  });
+  return rows;
+}
+function pintarProveedores() {
+  const abierto = !!window._provFila;
+  const cols = abierto ? [["codigo", "Código"], ["nombre", "Nombre"]] : PROV_COLS;
+  const key = window._provSort || "codigo";
+  const dir = window._provDir || 1;
+  const head = document.getElementById("prov-head");
+  if (head) {
+    head.innerHTML = `<tr>${cols.map((col) => `<th class="sortable${col[2] === "num" ? " num" : ""}"><button class="link" type="button" data-prov-sort="${esc(col[0])}">${col[1]}${key === col[0] ? (dir > 0 ? " ▲" : " ▼") : ""}</button></th>`).join("")}</tr>`;
+    head.querySelectorAll("[data-prov-sort]").forEach((b) => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        const k = b.getAttribute("data-prov-sort");
+        window._provDir = window._provSort === k ? -(window._provDir || 1) : (k === "ordenes" || k === "total" || k === "saldo" ? -1 : 1);
+        window._provSort = k;
+        pintarProveedores();
+      };
+    });
+  }
+  const body = document.getElementById("prov-body-rows");
+  if (!body) return;
+  const rows = filasProveedorVisibles();
+  body.innerHTML = rows.length ? rows.map((p) => {
+    const celdas = cols.map((col) => {
+      const k = col[0];
+      if (k === "codigo") return `<td class="prov-cod" title="${esc(p.codigo || "")}">${esc(p.codigo || "—")}</td>`;
+      if (k === "ordenes") return `<td class="num">${esc(p.ordenes || 0)}</td>`;
+      if (k === "total" || k === "saldo") return `<td class="num">${money(p[k] || 0)}</td>`;
+      return `<td title="${esc(p[k] || "")}">${esc(p[k] || "")}</td>`;
+    }).join("");
+    const on = String(window._provFila || "") === String(p.fila) ? " on" : "";
+    return `<tr class="desk-row${on}" data-prov="${esc(p.fila)}" tabindex="0">${celdas}</tr>`;
+  }).join("") : `<tr><td colspan="${cols.length}">${window._provQ ? "Nada coincide con la búsqueda." : "Sin proveedores."}</td></tr>`;
+  body.querySelectorAll("[data-prov]").forEach((tr) => {
+    tr.onclick = () => {
+      const fila = tr.getAttribute("data-prov") || "";
+      window._provFila = fila;
+      go("#/m/proveedores/" + encodeURIComponent(fila));
+    };
+  });
+}
+function htmlProvDetalle(p) {
+  const ix = window.SunsuInline;
+  const pares = [
+    ["nombre", "Nombre", p.nombre || ""],
+    ["familia", "Código", p.codigo || ""],
+    ["ruc", "RUC", p.ruc || ""],
+    ["telefono", "Teléfono", p.telefono || ""],
+    ["email", "Email", p.email || ""],
+    ["direccion", "Dirección", p.direccion || ""],
+    ["notas", "Notas", p.notas || ""],
+  ];
+  const ficha = ix && ix.edita() && /^\d+$/.test(String(p.fila))
+    ? ix.lineas("proveedores", String(p.fila), pares)
+    : pares.filter((x) => String(x[2] || "").trim()).map((x) => `<div class="note"><b>${esc(x[1])}:</b> ${esc(x[2])}</div>`).join("");
+  const ocs = (p.ocs || []).map((o) => {
+    const num = o.id
+      ? `<button class="link" type="button" data-go="#/m/compras/${encodeURIComponent(o.id)}">${esc(o.numero || "Borrador")}</button>`
+      : esc(o.numero || "Borrador");
+    return `<tr><td>${num}</td><td>${esc(fechaCorta(o.fecha) || o.fecha || "")}</td><td>${esc(o.estado || "")}</td><td class="num">${money(o.total || 0)}</td><td class="num">${money(o.saldo || 0)}</td></tr>`;
+  }).join("");
+  const borrar = state.admin && !state.vista && /^\d+$/.test(String(p.fila)) ? `<button class="btn ghost small" type="button" id="prov-borrar">Eliminar</button>` : "";
+  return `<div class="tools"><button class="btn ghost small" type="button" id="prov-cerrar">Cerrar</button>${borrar}</div>
+    <div class="card-title">${esc(p.codigo || "—")} · ${esc(p.nombre || "")}</div>
+    <div class="card">${ficha || `<p class="note">Sin ficha.</p>`}</div>
+    <div class="card-title">Órdenes de compra</div>
+    <div class="sheet-scroll"><table class="desk-table nowrap-table"><thead><tr><th>Nº</th><th>Fecha</th><th>Estado</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead><tbody>${ocs || `<tr><td colspan="5">Sin órdenes.</td></tr>`}</tbody></table></div>`;
+}
+async function renderProveedoresDesk(route) {
+  const data = await api("getProveedoresTabla");
   if (data.error) return fail(data);
-  const items = (data.items || []).map((p) => `<div class="row"><div class="sku">${esc(p.ruc)}</div><div><div class="name">${esc(p.nombre)}</div><div class="note">${esc(p.id)}</div></div><div class="meta">${esc(p.plazo_dias || "")} días</div></div>`).join("");
-  const form = state.admin ? `<form id="f-prov"><label>Nombre</label><input name="nombre" required><label>RUC</label><input name="ruc"><label>Teléfono</label><input name="telefono"><button class="btn" type="submit">Guardar proveedor</button><p class="err" id="f-err"></p></form>` : "";
-  return form + `<div class="list">${items || `<p class="note">Sin proveedores en el ERP.</p>`}</div>`;
+  window._provRows = data.items || [];
+  window._provSort = window._provSort || "codigo";
+  window._provDir = window._provDir || 1;
+  const pedido = route && route.sub ? String(route.sub) : "";
+  window._provFila = pedido && (window._provRows || []).some((p) => String(p.fila) === pedido) ? pedido : "";
+  const sel = (window._provRows || []).find((p) => String(p.fila) === String(window._provFila || ""));
+  const agregar = state.admin && !state.vista ? `<button class="btn small" type="button" data-ix-mas="proveedores">+ Agregar proveedor</button>` : "";
+  return `<div class="prov-layout${sel ? " prov-open" : ""}" id="prov-layout">
+    <div class="prov-list">
+      <div class="tools">${agregar}</div>
+      <div id="prov-form"></div>
+      <input id="prov-q" type="search" placeholder="Buscar código, nombre, RUC o teléfono" aria-label="Buscar proveedor" autocomplete="off" value="${esc(window._provQ || "")}">
+      <div class="sheet-scroll prov-sheet"><table class="nowrap-table desk-table">
+        <thead id="prov-head"></thead>
+        <tbody id="prov-body-rows"></tbody>
+      </table></div>
+    </div>
+    <aside class="prov-panel" id="prov-panel"${sel ? "" : " hidden"}>${sel ? htmlProvDetalle(sel) : ""}</aside>
+  </div>`;
+}
+function wireProveedores(main) {
+  const q = main.querySelector("#prov-q");
+  if (!q) return;
+  q.addEventListener("input", () => { window._provQ = q.value; pintarProveedores(); });
+  pintarProveedores();
+  const cerrar = main.querySelector("#prov-cerrar");
+  if (cerrar) cerrar.onclick = () => { window._provFila = ""; go("#/m/proveedores"); };
+  const borrar = main.querySelector("#prov-borrar");
+  if (borrar) borrar.onclick = async () => {
+    const p = (window._provRows || []).find((r) => String(r.fila) === String(window._provFila || ""));
+    if (!p || !state.admin || state.vista) return;
+    if (!confirm('¿Eliminar el proveedor "' + (p.nombre || "") + '"?\nSus órdenes pasadas no se afectan.')) return;
+    const data = await api("eliminarProveedorApp", { fila: p.fila });
+    if (data.error) { toast(data.error); return; }
+    window._provFila = "";
+    toast("Proveedor eliminado");
+    go("#/m/proveedores");
+  };
+  if (window.SunsuInline) SunsuInline.aplicar();
 }
 
 function previewCotizacion(accion, body) {
@@ -3697,7 +3904,7 @@ async function renderDoc(route) {
   if (route.doc === "cot") return renderCot(route.id);
   if (route.doc === "rfq") return renderRfq();
   if (route.doc === "cli") return renderClientes();
-  if (route.doc === "prov") return renderProveedores();
+  if (route.doc === "prov") return renderProveedoresDesk({ sub: route.id || "" });
   if (route.doc === "trf") return renderTrfNueva();
   return `<p class="note">Documento desconocido.</p>`;
 }
@@ -4336,6 +4543,7 @@ function bind(main) {
   wirePersonal(main);
   wireHorarios(main);
   wireVentas(main);
+  wireProveedores(main);
   if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
   wireInventario(main);
   if (typeof wireConteoFlujo === "function") wireConteoFlujo(main);
@@ -4983,7 +5191,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026com1"></script>
+<script src="beta-screens.js?v=20261026prov1"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>

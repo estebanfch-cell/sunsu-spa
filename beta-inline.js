@@ -21,7 +21,7 @@
       ["nombre", "Nombre"], ["minimo", "Mínimo"], ["compra", "Compra real"],
     ],
     proveedores: [
-      ["nombre", "Nombre"], ["familia", "Familia"], ["ruc", "RUC"], ["telefono", "Teléfono"],
+      ["nombre", "Nombre"], ["familia", "Código"], ["ruc", "RUC"], ["telefono", "Teléfono"],
       ["direccion", "Dirección"], ["email", "Email"], ["notas", "Notas"],
     ],
     compras: [
