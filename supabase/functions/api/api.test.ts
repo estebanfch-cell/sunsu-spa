@@ -565,6 +565,69 @@ describe("lugares, conteo y transferencias", () => {
     assert.match(sql, /Cabina 1/);
     assert.equal(sql.includes("update public.erp_stock"), false);
   });
+
+  it("SU, VK y BV no entran a la consignación de cabina y Compras sigue buscándolos", async () => {
+    const { familiaConsignacion, familiaSku, codigoFamilia } = await import("./ventas.ts");
+    const { skusProveedor } = await import("./compras_flujo.ts");
+    assert.equal(familiaSku("SU-001"), "SU");
+    assert.equal(familiaSku("VK-010"), "VK");
+    assert.equal(familiaSku("BV-002"), "BV");
+    assert.equal(familiaConsignacion("SU-001"), "");
+    assert.equal(familiaConsignacion("VK-010"), "");
+    assert.equal(familiaConsignacion("BV-002"), "");
+    assert.equal(familiaConsignacion("HT-091"), "HT");
+    assert.equal(familiaConsignacion("AS-003"), "AS");
+    assert.equal(familiaConsignacion("ML-004"), "ML");
+    assert.equal(familiaConsignacion("PH-005"), "PH");
+    assert.equal(familiaConsignacion("JN-006"), "JN");
+    assert.equal(codigoFamilia("SU"), "SU");
+    assert.equal(codigoFamilia("VK"), "VK");
+
+    const db = new MemoryDb(erpSeed());
+    const skus = ["HT-091", "AS-003", "ML-004", "PH-005", "JN-006", "BV-002", "SU-001", "VK-010"];
+    for (const sku of skus) {
+      const saved = await runErp("prod_save", { sku, nombre: sku, uso: "ambos", costo_promedio: 4, precio_venta: 10 }, db, "Emi");
+      assert.equal(saved.ok, true, String(saved.error));
+    }
+    const prods = await db.all("erp_productos");
+    const idDe = (sku: string) => prods.find((r) => r.sku === sku)?.id;
+    for (const sku of skus) {
+      const oc = await runErp("oc_save", { proveedor_id: SEED_IDS.prov, lineas: [{ producto_id: idDe(sku), cantidad: 2, precio: 4 }] }, db, "Emi");
+      const lid = (await db.all("erp_oc_lineas")).find((r) => r.oc_id === oc.id)?.id;
+      const rec = await runErp("oc_recibir", { oc_id: oc.id, lineas: [{ oc_linea_id: lid, bodega_id: BODEGA_VENTA, cantidad: 2 }] }, db, "Emi");
+      assert.equal(rec.ok, true, String(rec.error));
+    }
+    const fuera = await runErp("trf_enviar", {
+      inmediata: true, _rol: "admin", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
+      lineas: ["BV-002", "SU-001", "VK-010"].map((sku) => ({ producto_id: idDe(sku), cantidad: 1 })),
+    }, db, "Emi");
+    assert.equal(fuera.ok, true, String(fuera.error));
+    assert.equal(fuera.consumo, false);
+    assert.equal((await db.all("erp_consignacion_consumo")).length, 0);
+    const envio = await runErp("trf_enviar", {
+      _rol: "admin", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
+      lineas: [{ producto_id: idDe("SU-001"), cantidad: 1 }],
+    }, db, "Emi");
+    assert.equal(envio.ok, true, String(envio.error));
+    const recibido = await runErp("trf_recibir", { id: envio.id }, db, "Emi");
+    assert.equal(recibido.ok, true, String(recibido.error));
+    assert.equal((await db.all("erp_consignacion_consumo")).length, 0);
+    for (const sku of ["HT-091", "AS-003", "ML-004", "PH-005", "JN-006"]) {
+      const si = await runErp("trf_enviar", {
+        inmediata: true, _rol: "admin", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
+        lineas: [{ producto_id: idDe(sku), cantidad: 1 }],
+      }, db, "Emi");
+      assert.equal(si.ok, true, String(si.error));
+      assert.equal(si.consumo, true);
+    }
+    const familias = (await db.all("erp_consignacion_consumo")).map((r) => r.familia).sort();
+    assert.deepEqual(familias, ["AS", "HT", "JN", "ML", "PH"]);
+    const catalogo = await db.all("erp_productos");
+    assert.equal(skusProveedor({ nombre: "Sunsu", familia: "SU" }, catalogo).some((p) => p.sku === "SU-001"), true);
+    assert.equal(skusProveedor({ nombre: "Vika", familia: "VK" }, catalogo).some((p) => p.sku === "VK-010"), true);
+    assert.equal(skusProveedor({ nombre: "Vassari", familia: "BV" }, catalogo).some((p) => p.sku === "BV-002"), true);
+    assert.equal(skusProveedor({ nombre: "Sunsu", familia: "SU" }, catalogo).some((p) => p.sku === "HT-091"), false);
+  });
 });
 
 describe("sql erp", () => {
