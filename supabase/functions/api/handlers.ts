@@ -10,6 +10,7 @@ import {
 } from "./domain.ts";
 import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
+import { descontarVentaTicket } from "./compras_flujo.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
@@ -611,8 +612,12 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     if (slots.length) await marcarSlotsGC(ctx, actor, paqRow, slots);
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
+  let inventario = 0;
+  try { inventario = await descontarVentaTicket(ctx.db, actor, ticket, base, ctx.now); }
+  catch { inventario = 0; }
   return {
     ok: true, fila: null, ticket, beta_num: ident.beta_num, so_num: soNum, origin: ident.origin, id: saved?.id,
+    inventario: inventario || undefined,
     paqueteFila,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,

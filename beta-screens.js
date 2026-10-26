@@ -16079,3 +16079,391 @@ function _cotDibujarPDF(doc, q, logo){
   doc.text('Elaborada por '+(q.creadoPor||'Sunsu Spa')+'   |   Documento informativo, no es una factura.', m, y);
 }
 
+// ══════ COMPRAS — un solo flujo, sin saltar de módulo ══════
+var _cmp = { step: 0, provId: "", lineas: [], ocId: "", desde: "", hasta: "", conIva: true, nuevo: false };
+function _cmpAdmin(){ return !!window._cmpAdmin; }
+function _cmpEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
+function _cmpMoney(n){ return (typeof money === "function") ? money(n) : ("$"+Number(n||0).toFixed(2)); }
+function _cmpFam(nombre){
+  var n = String(nombre||"").toLowerCase();
+  if (n.indexOf("hebetronic")>=0 || n.indexOf("anua")>=0 || n.indexOf("common")>=0) return "HT";
+  if (n.indexOf("eyenlip")>=0) return "AS";
+  if (n.indexOf("esthe")>=0) return "ML";
+  if (n.indexOf("aphlora")>=0) return "PH";
+  if (n.indexOf("rire")>=0 || n.indexOf("holika")>=0) return "JN";
+  return "";
+}
+function _cmpProdsDe(provId){
+  var prov = (window._cmpProv||[]).filter(function(p){ return p.id===provId; })[0];
+  var fam = prov ? _cmpFam(prov.nombre) : "";
+  var nom = prov ? String(prov.nombre||"").toLowerCase() : "";
+  return (window._cmpCat||[]).filter(function(p){
+    var sku = String(p.sku||"").toUpperCase().replace(/^SUNSU-/,"");
+    if (fam && sku.indexOf(fam+"-")===0) return true;
+    var marca = String(p.marca||p.proveedor||"").toLowerCase();
+    return nom && marca && (marca===nom || marca.indexOf(nom)>=0 || nom.indexOf(marca)>=0);
+  });
+}
+async function renderComprasFlujo(){
+  var admin = _cmpAdmin();
+  if (!admin) _cmp.step = 4;
+  var lista = await api("compras_lista");
+  window._cmpLista = (lista && lista.items) || [];
+  window._cmpProv = [];
+  window._cmpCat = [];
+  if (admin) {
+    var prov = await api("prov_list");
+    var cat = await api("prod_list");
+    window._cmpProv = (prov && prov.items) || [];
+    window._cmpCat = (cat && cat.items) || [];
+  }
+  var pasos = admin
+    ? ["Proveedor","Pre-orden","Periodo","Aprobar","Recibir","Pagos"]
+    : ["Recibir"];
+  var bar = pasos.map(function(t,i){
+    var n = admin ? i : 4;
+    return '<button type="button" data-cmp-step="'+n+'" class="'+( _cmp.step===n?"on":"")+'">'+_cmpEsc(t)+'</button>';
+  }).join("");
+  return '<div id="cmp-root"><div class="cmp-bar" id="cmp-bar">'+bar+'</div><div id="cmp-body"></div><p class="err" id="cmp-msg"></p></div>';
+}
+function _cmpMsg(t, ok){
+  var el = document.getElementById("cmp-msg");
+  if (!el) return;
+  el.className = ok ? "ok" : "err";
+  el.textContent = t || "";
+}
+function _cmpPasos(){
+  document.querySelectorAll("#cmp-bar [data-cmp-step]").forEach(function(b){
+    b.classList.toggle("on", Number(b.getAttribute("data-cmp-step"))===_cmp.step);
+  });
+}
+function _cmpPdfPlano(nombre, titulo, lineas, pie){
+  if (typeof pdfPaginas !== "function" || typeof bajarArchivo !== "function") return;
+  var rows = [titulo, ""].concat(lineas||[]);
+  (pie||[]).forEach(function(x){ rows.push(x); });
+  rows.push("", "Sunsu Spa · Quito");
+  bajarArchivo(nombre+".pdf", pdfPaginas([rows]), "application/pdf");
+}
+function _cmpDibujarPDF(doc, titulo, lineas, pie, logo){
+  var W = doc.internal.pageSize.getWidth();
+  var H = doc.internal.pageSize.getHeight();
+  var m = 40;
+  var NAVY = [61, 90, 122], CEL = [91, 127, 166], TXT = [58, 53, 48];
+  function fondo(){
+    doc.setFillColor(253, 250, 241);
+    doc.rect(0, 0, W, H, "F");
+    doc.setFillColor(CEL[0], CEL[1], CEL[2]);
+    doc.rect(0, H - 34, W, 34, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("Sunsu Spa   |   Glass Skin   |   Quito", m, H - 14);
+  }
+  fondo();
+  var y = 28;
+  if (logo && logo.data && logo.w && logo.h) {
+    var lw = 180, lh = lw * (logo.h / logo.w);
+    if (lh > 48) { lh = 48; lw = lh * (logo.w / logo.h); }
+    try { doc.addImage(logo.data, logo.fmt || "PNG", (W - lw) / 2, y, lw, lh); y += lh + 10; } catch (eImg) {}
+  }
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  var titleLines = doc.splitTextToSize(String(titulo || "SUNSU SPA"), W - m * 2);
+  doc.text(titleLines, W / 2, y + 12, { align: "center" });
+  y += 18 + titleLines.length * 16;
+  doc.setDrawColor(CEL[0], CEL[1], CEL[2]);
+  doc.setLineWidth(1);
+  doc.line(m, y, W - m, y);
+  y += 18;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+  (lineas || []).forEach(function(ln){
+    var ls = doc.splitTextToSize(String(ln), W - m * 2);
+    if (y + ls.length * 13 > H - 56) {
+      doc.addPage();
+      fondo();
+      y = 48;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+    }
+    doc.text(ls, m, y);
+    y += ls.length * 13 + 4;
+  });
+  y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  (pie || []).forEach(function(p){
+    if (y > H - 56) { doc.addPage(); fondo(); y = 48; doc.setFont("helvetica", "bold"); doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]); }
+    doc.text(String(p), m, y);
+    y += 14;
+  });
+}
+function _cmpPdf(nombre, titulo, lineas, pie){
+  if (typeof _gcdCargarJsPDF !== "function") { _cmpPdfPlano(nombre, titulo, lineas, pie); return; }
+  var cargarLogo = typeof _cotCargarLogo === "function" ? _cotCargarLogo : function(cb){ cb(null); };
+  cargarLogo(function(logo){
+    _gcdCargarJsPDF(function(ok){
+      if (!ok || !window.jspdf) { _cmpPdfPlano(nombre, titulo, lineas, pie); return; }
+      try {
+        var doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+        _cmpDibujarPDF(doc, titulo, lineas || [], pie || [], logo);
+        if (typeof _entregarPDF === "function") _entregarPDF(doc, nombre + ".pdf");
+        else doc.save(nombre + ".pdf");
+      } catch (ePdf) { _cmpPdfPlano(nombre, titulo, lineas, pie); }
+    });
+  });
+}
+function _cmpBody(){
+  var box = document.getElementById("cmp-body");
+  if (!box) return;
+  var admin = _cmpAdmin();
+  if (!admin) _cmp.step = 4;
+  if (_cmp.step===0) box.innerHTML = _cmpHtmlProv();
+  else if (_cmp.step===1) box.innerHTML = _cmpHtmlLineas();
+  else if (_cmp.step===2) box.innerHTML = _cmpHtmlPeriodo();
+  else if (_cmp.step===3) box.innerHTML = _cmpHtmlAprobar();
+  else if (_cmp.step===4) box.innerHTML = _cmpHtmlRecibir();
+  else box.innerHTML = _cmpHtmlPagos();
+  _cmpPasos();
+  _cmpBindBody();
+}
+function _cmpHtmlProv(){
+  var opts = (window._cmpProv||[]).map(function(p){
+    return '<option value="'+_cmpEsc(p.id)+'"'+(p.id===_cmp.provId?" selected":"")+'>'+_cmpEsc(p.nombre)+'</option>';
+  }).join("");
+  return '<div class="card"><div class="card-title">Proveedor</div>'
+    +'<label>Proveedor</label><select id="cmp-prov"><option value="">Elegir…</option>'+opts+'<option value="__nuevo">Nuevo proveedor</option></select>'
+    +'<div id="cmp-nuevo" '+(_cmp.nuevo?"":"hidden")+'>'
+    +'<label>Nombre</label><input id="cmp-nom" placeholder="Nombre del proveedor">'
+    +'<label>RUC</label><input id="cmp-ruc"><label>Teléfono</label><input id="cmp-tel"><label>Email</label><input id="cmp-mail">'
+    +'</div>'
+    +'<button class="btn block" type="button" id="cmp-sig">Siguiente</button></div>';
+}
+function _cmpHtmlLineas(){
+  var prods = _cmpProdsDe(_cmp.provId);
+  var opts = prods.map(function(p){ return '<option value="'+_cmpEsc(p.sku)+'">'+_cmpEsc(p.sku)+" · "+_cmpEsc(p.nombre)+'</option>'; }).join("");
+  var rows = (_cmp.lineas||[]).map(function(ln,i){
+    return '<div class="cmp-line"><div><b>'+_cmpEsc(ln.sku)+'</b><div class="note">'+_cmpEsc(ln.nombre||"")+' · '+_cmpMoney(ln.precio)+'</div></div>'
+      +'<input data-cmp-qty="'+i+'" type="number" min="0" step="1" value="'+_cmpEsc(ln.cantidad)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'"></div>';
+  }).join("");
+  return '<div class="card"><div class="card-title">Pre-orden de compra</div>'
+    +(opts?'<label>Producto de este proveedor</label><select id="cmp-sku">'+opts+'</select>':'<label>Código</label><input id="cmp-sku-libre" placeholder="HT-002">')
+    +'<button class="btn ghost small" type="button" id="cmp-add">Agregar</button>'
+    +'<div id="cmp-lines">'+ (rows||'<p class="note">Todavía no hay líneas. Agrega productos o usa Consignación + periodo.</p>')+'</div>'
+    +'<button class="btn block" type="button" id="cmp-save">Guardar borrador</button>'
+    +'<button class="btn ghost block" type="button" id="cmp-go-per">Consignación + periodo</button></div>';
+}
+function _cmpHtmlPeriodo(){
+  var hoy = new Date();
+  var iso = function(d){ return d.toISOString().slice(0,10); };
+  var ini = _cmp.desde || iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()<=15?1:16));
+  return '<div class="card"><div class="card-title">Consignación + periodo</div>'
+    +'<p class="note">Suma las unidades y los montos vendidos en tickets, de los códigos de este proveedor, y llena la pre-orden.</p>'
+    +'<label>Desde</label><input id="cmp-desde" type="date" value="'+_cmpEsc(ini)+'">'
+    +'<label>Hasta</label><input id="cmp-hasta" type="date" value="'+_cmpEsc(_cmp.hasta||iso(hoy))+'">'
+    +'<label><input id="cmp-iva" type="checkbox"'+(_cmp.conIva?" checked":"")+'> Con IVA 15%</label>'
+    +'<button class="btn block" type="button" id="cmp-llenar">Llenar pre-orden</button></div>';
+}
+function _cmpHtmlAprobar(){
+  var rows = (_cmp.lineas||[]).map(function(ln){
+    return '<div class="doc-row"><span class="sku-badge">'+_cmpEsc(ln.sku)+'</span><span class="pname">'+_cmpEsc(ln.cantidad)+'</span><span class="money-col">'+_cmpMoney((ln.precio||0)*(ln.cantidad||0))+'</span></div>';
+  }).join("");
+  return '<div class="card"><div class="card-title">Revisar y aprobar</div>'
+    +'<p class="note">Al aprobar se numeran la orden y salen dos PDF: la liquidación para pagarle al proveedor y el pedido que se le envía.</p>'
+    +'<div class="list">'+rows+'</div>'
+    +'<button class="btn block" type="button" id="cmp-aprobar">Aprobar</button>'
+    +'<button class="btn ghost block" type="button" id="cmp-enviar">Marcar enviada</button></div>';
+}
+function _cmpHtmlRecibir(){
+  var vivas = { Aprobada:1, Enviada:1, "Recibida parcial":1, Recibida:1, "Pagada parcial":1 };
+  var items = (window._cmpLista||[]).filter(function(o){ return vivas[o.flujo]; });
+  var oc = items.filter(function(o){ return !_cmp.ocId || o.id===_cmp.ocId; })[0] || items[0];
+  var opts = items.map(function(o){
+    return '<option value="'+_cmpEsc(o.id)+'"'+((oc&&o.id===oc.id)?" selected":"")+'>'+_cmpEsc(o.numero)+(_cmpAdmin()&&o.proveedor?" · "+_cmpEsc(o.proveedor):"")+' · '+_cmpEsc(o.flujo)+'</option>';
+  }).join("");
+  var lineas = (oc&&oc.lineas||[]).map(function(ln){
+    return '<div class="cmp-rec"><b>'+_cmpEsc(ln.sku)+'</b><span class="note">pedido '+_cmpEsc(ln.pedido)+' · pendiente '+_cmpEsc(ln.pendiente)+'</span>'
+      +'<input data-rec="'+_cmpEsc(ln.id)+'" type="number" min="0" step="1" value="'+_cmpEsc(ln.pendiente||0)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
+      +'<button class="btn small" type="button" data-ok="'+_cmpEsc(ln.id)+'">Recibido</button>'
+      +'<button class="btn ghost small" type="button" data-no="'+_cmpEsc(ln.id)+'">No recibido</button></div>';
+  }).join("");
+  return '<div class="card"><div class="card-title">Recibir</div>'
+    +(opts?'<label>Orden</label><select id="cmp-oc">'+opts+'</select>':'<p class="note">No hay órdenes por recibir.</p>')
+    +lineas+'</div>';
+}
+function _cmpHtmlPagos(){
+  var items = (window._cmpLista||[]).filter(function(o){ return o.flujo && o.flujo!=="Borrador"; });
+  var opts = items.map(function(o){
+    return '<option value="'+_cmpEsc(o.id)+'"'+(o.id===_cmp.ocId?" selected":"")+'>'+_cmpEsc(o.numero)+' · '+_cmpEsc(o.proveedor||"")+' · saldo '+_cmpMoney(o.saldo)+'</option>';
+  }).join("");
+  var saldos = (window._cmpSaldos||[]).map(function(p){
+    return '<div class="doc-row"><span class="pname">'+_cmpEsc(p.nombre)+'</span><span class="money-col">pagado '+_cmpMoney(p.pagado)+' · pendiente '+_cmpMoney(p.pendiente)+'</span></div>';
+  }).join("");
+  var provOpts = (window._cmpProv||[]).map(function(p){ return '<option value="'+_cmpEsc(p.id)+'">'+_cmpEsc(p.nombre)+'</option>'; }).join("");
+  return '<div class="card"><div class="card-title">Pagos</div>'
+    +'<p class="note">La orden sigue abierta hasta que se paga. La consignación cierra lo vendido del más viejo al más nuevo.</p>'
+    +(opts?'<label>Orden</label><select id="cmp-pago-oc">'+opts+'</select>':'')
+    +'<label>Monto</label><input id="cmp-monto" type="number" min="0" step="0.01">'
+    +'<label>Factura del proveedor</label><input id="cmp-file" type="file" accept="image/*,.pdf">'
+    +'<button class="btn block" type="button" id="cmp-pagar">Registrar pago</button>'
+    +'<div class="card-title">Saldo por proveedor</div><div class="list">'+saldos+'</div>'
+    +'<div class="card-title">Consignación a la fecha</div>'
+    +'<select id="cmp-rep">'+provOpts+'</select>'
+    +'<button class="btn ghost block" type="button" id="cmp-rep-btn">PDF de stock en consignación</button></div>';
+}
+function _cmpBindBody(){
+  var sig = document.getElementById("cmp-sig");
+  if (sig) sig.onclick = function(){
+    var sel = document.getElementById("cmp-prov");
+    if (sel && sel.value==="__nuevo") {
+      _cmp.nuevo = true;
+      _cmp.provId = "";
+      _cmp.nuevoNombre = (document.getElementById("cmp-nom")||{}).value||"";
+    } else {
+      _cmp.nuevo = false;
+      _cmp.provId = sel ? sel.value : "";
+    }
+    if (!_cmp.provId && !_cmp.nuevoNombre) { _cmpMsg("Elige un proveedor"); return; }
+    _cmp.step = 1; _cmpMsg(""); _cmpBody();
+  };
+  var prov = document.getElementById("cmp-prov");
+  if (prov) prov.onchange = function(){
+    _cmp.nuevo = prov.value==="__nuevo";
+    var box = document.getElementById("cmp-nuevo");
+    if (box) box.hidden = !_cmp.nuevo;
+  };
+  var add = document.getElementById("cmp-add");
+  if (add) add.onclick = function(){
+    var sel = document.getElementById("cmp-sku");
+    var libre = document.getElementById("cmp-sku-libre");
+    var sku = sel ? sel.value : (libre?libre.value:"");
+    sku = String(sku||"").toUpperCase().replace(/^SUNSU-/,"");
+    if (!sku) return;
+    var prod = (window._cmpCat||[]).filter(function(p){ return String(p.sku||"").toUpperCase().replace(/^SUNSU-/,"")===sku; })[0];
+    _cmp.lineas.push({ sku: sku, nombre: prod?prod.nombre:"", precio: prod?Number(prod.costo_promedio)||0:0, cantidad: 1 });
+    _cmpBody();
+  };
+  document.querySelectorAll("[data-cmp-qty]").forEach(function(inp){
+    inp.onchange = function(){ var i = Number(inp.getAttribute("data-cmp-qty")); if (_cmp.lineas[i]) _cmp.lineas[i].cantidad = Number(inp.value)||0; };
+  });
+  var save = document.getElementById("cmp-save");
+  if (save) save.onclick = async function(){
+    document.querySelectorAll("[data-cmp-qty]").forEach(function(inp){ var i = Number(inp.getAttribute("data-cmp-qty")); if (_cmp.lineas[i]) _cmp.lineas[i].cantidad = Number(inp.value)||0; });
+    var body = { id: _cmp.ocId||undefined, proveedor_id: _cmp.provId, lineas: _cmp.lineas.filter(function(l){ return l.cantidad>0; }), con_iva: _cmp.conIva, desde: _cmp.desde, hasta: _cmp.hasta, tipo: "consignacion", fact: _cmp.fact||_cmp.lineas };
+    if (_cmp.nuevoNombre) body.nuevo = { nombre: _cmp.nuevoNombre, ruc: (document.getElementById("cmp-ruc")||{}).value||"", telefono: (document.getElementById("cmp-tel")||{}).value||"", email: (document.getElementById("cmp-mail")||{}).value||"" };
+    var data = await api("compras_guardar", body);
+    if (data.error) { _cmpMsg(data.error); return; }
+    _cmp.ocId = data.id; _cmp.provId = data.proveedor_id || _cmp.provId;
+    _cmpMsg("Borrador guardado", true);
+    _cmp.step = 3; _cmpBody();
+  };
+  var goPer = document.getElementById("cmp-go-per");
+  if (goPer) goPer.onclick = function(){ _cmp.step = 2; _cmpBody(); };
+  var llenar = document.getElementById("cmp-llenar");
+  if (llenar) llenar.onclick = async function(){
+    _cmp.desde = (document.getElementById("cmp-desde")||{}).value||"";
+    _cmp.hasta = (document.getElementById("cmp-hasta")||{}).value||"";
+    _cmp.conIva = !!(document.getElementById("cmp-iva")||{}).checked;
+    var data = await api("compras_periodo", { proveedor_id: _cmp.provId, desde: _cmp.desde, hasta: _cmp.hasta, con_iva: _cmp.conIva });
+    if (data.error) { _cmpMsg(data.error); return; }
+    _cmp.lineas = data.lineas||[];
+    _cmp.fact = data.lineas||[];
+    _cmp.step = 1; _cmpMsg("Pre-orden llena con lo vendido", true); _cmpBody();
+  };
+  var apr = document.getElementById("cmp-aprobar");
+  if (apr) apr.onclick = async function(){
+    if (!_cmp.ocId) { _cmpMsg("Guarda el borrador primero"); return; }
+    var data = await api("compras_aprobar", { id: _cmp.ocId });
+    if (data.error) { _cmpMsg(data.error); return; }
+    var liq = data.liquidacion||{};
+    var ped = data.pedido||{};
+    _cmpPdf("LIQUIDACION "+data.numero, "SUNSU SPA — LIQUIDACION DE CONSIGNACION", (liq.lineas||[]).map(function(it){
+      return (it.sku||"")+"  "+(it.nombre||"")+"  "+(it.vendido||it.cantidad||"")+"  $"+Number(it.subtotal||0).toFixed(2);
+    }), [liq.proveedor||"", liq.periodo||"", "SUBTOTAL $"+Number(liq.subtotal||0).toFixed(2), "IVA $"+Number(liq.iva||0).toFixed(2), "TOTAL $"+Number(liq.total||0).toFixed(2)]);
+    _cmpPdf("OC "+data.numero, "SUNSU SPA — ORDEN DE COMPRA", (ped.lineas||[]).map(function(it){
+      return (it.sku||"")+"  "+(it.nombre||"")+"  pedir "+it.cantidad;
+    }), [data.numero||"", ped.proveedor||"", ped.periodo||""]);
+    _cmpMsg("Aprobada "+data.numero, true);
+    _cmp.step = 4;
+    var lista = await api("compras_lista");
+    window._cmpLista = (lista&&lista.items)||[];
+    _cmpBody();
+  };
+  var env = document.getElementById("cmp-enviar");
+  if (env) env.onclick = async function(){
+    var data = await api("compras_enviar", { id: _cmp.ocId });
+    if (data.error) { _cmpMsg(data.error); return; }
+    _cmpMsg("Enviada", true);
+  };
+  var ocSel = document.getElementById("cmp-oc");
+  if (ocSel) ocSel.onchange = function(){ _cmp.ocId = ocSel.value; _cmpBody(); };
+  document.querySelectorAll("[data-ok],[data-no]").forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute("data-ok") || btn.getAttribute("data-no");
+      var inp = document.querySelector('[data-rec="'+id+'"]');
+      var qty = Number(inp&&inp.value)||0;
+      if (!(qty>0)) { _cmpMsg("Indica la cantidad"); return; }
+      var linea = { oc_linea_id: id };
+      if (btn.hasAttribute("data-ok")) linea.recibido = qty; else linea.no_recibido = qty;
+      var oc = (document.getElementById("cmp-oc")||{}).value || _cmp.ocId;
+      var data = await api("compras_recibir", { oc_id: oc, lineas: [linea] });
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg(data.flujo||"Recibido", true);
+      var lista = await api("compras_lista");
+      window._cmpLista = (lista&&lista.items)||[];
+      _cmp.ocId = oc;
+      _cmpBody();
+    };
+  });
+  var pagar = document.getElementById("cmp-pagar");
+  if (pagar) pagar.onclick = async function(){
+    var oc = (document.getElementById("cmp-pago-oc")||{}).value;
+    var monto = Number((document.getElementById("cmp-monto")||{}).value)||0;
+    var file = document.getElementById("cmp-file");
+    var body = { oc_id: oc, monto: monto };
+    if (file && file.files && file.files[0]) {
+      body.factura_nombre = file.files[0].name;
+      body.factura_b64 = await new Promise(function(res){
+        var r = new FileReader();
+        r.onload = function(){ res(String(r.result||"").split(",")[1]||""); };
+        r.readAsDataURL(file.files[0]);
+      });
+    }
+    var data = await api("compras_pago", body);
+    if (data.error) { _cmpMsg(data.error); return; }
+    _cmpMsg(data.flujo||"Pago registrado", true);
+    window._cmpSaldos = ((await api("compras_saldo")).items)||[];
+    var lista = await api("compras_lista");
+    window._cmpLista = (lista&&lista.items)||[];
+    _cmpBody();
+  };
+  var rep = document.getElementById("cmp-rep-btn");
+  if (rep) rep.onclick = async function(){
+    var id = (document.getElementById("cmp-rep")||{}).value;
+    var data = await api("compras_reporte", { proveedor_id: id });
+    if (data.error) { _cmpMsg(data.error); return; }
+    _cmpPdf("CONSIGNACION "+(data.proveedor||"stock"), "SUNSU SPA — CONSIGNACION A LA FECHA", (data.items||[]).map(function(it){
+      return it.sku+"  "+(it.nombre||"")+"  stock "+it.stock;
+    }), [data.proveedor||"", "Unidades "+(data.unidades||0)]);
+  };
+}
+function wireComprasFlujo(main){
+  if (!main || !main.querySelector("#cmp-root")) return;
+  main.querySelectorAll("[data-cmp-step]").forEach(function(b){
+    b.onclick = function(){
+      var n = Number(b.getAttribute("data-cmp-step"));
+      if (!_cmpAdmin() && n!==4) return;
+      _cmp.step = n;
+      if (n===5) {
+        api("compras_saldo").then(function(d){ window._cmpSaldos = (d&&d.items)||[]; _cmpBody(); });
+      }
+      _cmpBody();
+    };
+  });
+  _cmpBody();
+}
+
+

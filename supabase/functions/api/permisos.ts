@@ -26,10 +26,12 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   cosmetologa: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: P, inventario: T, transferencias: T, paquetes: P, bitacora: T, cabina: T,
+    compras: P,
   },
   asistente_cosmetologia: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     inventario: T, transferencias: T, conteos: T, bitacora: T, cabina: T,
+    compras: P,
   },
   recepcion: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
@@ -61,6 +63,9 @@ const ACCION_MODULO: Record<string, Modulo> = {
   inline_guardar: "tickets", inline_borrar: "tickets", solicitud_crear: "tickets", getSolicitudes: "tickets", solicitud_resolver: "tickets",
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
   reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
+  compras_periodo: "compras", compras_guardar: "compras", compras_aprobar: "compras", compras_enviar: "compras",
+  compras_pago: "compras", compras_saldo: "compras", compras_reporte: "compras",
+  compras_lista: "inventario", compras_recibir: "inventario",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
   getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones",
   getPeriodoComision: "comisiones", getReporteAdmin: "comisiones", getReporte: "comisiones",
