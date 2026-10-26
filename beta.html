@@ -619,6 +619,18 @@
   .tk-row { cursor: pointer; }
   .tk-row.on { background: var(--blue-l); }
   .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
+  .nowrap-table th, .nowrap-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--navy); }
+  .nowrap-table .ix-cell, .nowrap-table td > * { white-space: nowrap; }
+  .cli-sheet { overflow-x: auto; }
+  .cli-cod { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
+  .tk-num { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
+  .hist-filtrar { margin-top: 2px; }
+  .hist-filtrar > summary { cursor: pointer; list-style: none; display: inline-block; padding: 7px 12px; border: 1.5px solid var(--cream-d); border-radius: 9px; font-size: 0.74rem; font-weight: 800; color: var(--navy); background: white; }
+  .hist-filtrar > summary::-webkit-details-marker { display: none; }
+  .hist-filtrar[open] > summary { background: var(--blue-l); }
+  .hist-filtrar-body { margin-top: 10px; }
   .tk-detail { background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; min-height: 120px; }
   .tk-detail-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
   .tk-detail .note { color: var(--gray); font-size: 0.82rem; margin: 24px 8px; }
@@ -2166,7 +2178,8 @@ function htmlFichaCliente(c) {
 }
 function columnasCliente(rows, moneyOk) {
   const cols = [
-    ["nombre", "Nombre"],
+    ["codigo", "Código"],
+    ["nombre", "Clienta"],
     ["cedula", "Cédula"],
     ["visitas", "Visitas", "num"],
     ["ultima", "Última visita"],
@@ -2177,15 +2190,18 @@ function columnasCliente(rows, moneyOk) {
   return cols;
 }
 function valorCliente(c, key) {
-  if (key === "nombre") return nombreCli(c);
   if (key === "visitas" || key === "total") return Number(c[key]) || 0;
   if (key === "ultima") return String(c.ultima || "");
-  return String(c[key] || "");
+  if (key === "cedula") { const d = String(c.cedula || "").replace(/\D/g, ""); return d ? Number(d) : -1; }
+  if (key === "codigo") { const m = /(\d+)$/.exec(String(c.codigo || "")); return m ? (String(c.codigo).indexOf("C-B") === 0 ? 1e6 : 0) + Number(m[1]) : 1e9; }
+  if (key === "nombre") return nombreCli(c).toLowerCase();
+  return String(c[key] || "").toLowerCase();
 }
 function trCliente(c, cols) {
   const celdas = cols.map((col) => {
     const key = col[0];
-    if (key === "nombre") return `<td>${nombreEditable(c)} ${accionesCliente(c)}</td>`;
+    if (key === "codigo") return `<td class="cli-cod">${esc(c.codigo || "—")}</td>`;
+    if (key === "nombre") return `<td title="${esc(nombreCli(c))}">${nombreEditable(c)} ${accionesCliente(c)}</td>`;
     if (key === "cedula") return `<td>${cedulaEditable(c)}</td>`;
     if (key === "visitas") return `<td class="num">${esc(c.visitas)}</td>`;
     if (key === "ultima") return `<td>${esc(fechaCorta(c.ultima) || "—")}</td>`;
@@ -2212,7 +2228,7 @@ function pintarClientes(q) {
   const cols = columnasCliente(window._cliLista || [], moneyOk);
   const head = document.getElementById("cli-head");
   if (head) {
-    head.innerHTML = `<tr>${cols.map((col) => `<th${col[2] === "num" ? ` class="num"` : ""}><button class="link" type="button" data-cli-sort="${esc(col[0])}">${col[1]}</button></th>`).join("")}</tr>`;
+    head.innerHTML = `<tr>${cols.map((col) => `<th class="sortable${col[2] === "num" ? " num" : ""}"><button class="link" type="button" data-cli-sort="${esc(col[0])}">${col[1]}${key === col[0] ? (dir > 0 ? " ▲" : " ▼") : ""}</button></th>`).join("")}</tr>`;
     head.querySelectorAll("[data-cli-sort]").forEach((b) => {
       b.onclick = (ev) => {
         ev.stopPropagation();
@@ -2247,7 +2263,7 @@ async function renderClientes() {
   return `<div class="cli-layout"><div class="cli-list" id="cli-list-host">
       <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>${mas}</div>
       <input id="cli-q" placeholder="Buscar por nombre, apellido o cédula" aria-label="Buscar clienta" autocomplete="off">
-      <div class="sheet-scroll cli-sheet"><table>
+      <div class="sheet-scroll cli-sheet"><table class="nowrap-table">
         <thead id="cli-head"></thead>
         <tbody id="lista"></tbody>
       </table></div>
@@ -4620,7 +4636,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026cli"></script>
+<script src="beta-screens.js?v=20261026tkv2"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>

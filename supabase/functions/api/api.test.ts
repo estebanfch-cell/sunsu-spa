@@ -2840,8 +2840,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2938,17 +2938,19 @@ describe("tickets de venta", () => {
   it("la lista es tabla maestra y el detalle conserva multa y exclusión", () => {
     assert.match(src, /id="hist-cosm"/);
     assert.match(src, /class="tk-split"/);
-    assert.match(src, /<th>Clienta<\/th><th>Cédula<\/th><th>Fecha<\/th><th>SKU<\/th><th>Cosmetóloga<\/th><th class="num">Total<\/th>/);
+    assert.match(src, /t:'Nº ticket'[\s\S]*t:'Clienta'[\s\S]*t:'Cédula'[\s\S]*t:'Fecha'[\s\S]*t:'Cosmetóloga'[\s\S]*t:'Subtotal'[\s\S]*t:'IVA'[\s\S]*t:'Total'/);
+    assert.doesNotMatch(src, /<th>SKU<\/th><th>Cosmetóloga/);
     assert.doesNotMatch(src, /onclick="editarTicket\(/);
     assert.doesNotMatch(src, /onclick="eliminarTicket\(/);
     assert.match(src, /abrirModalMulta/);
     assert.match(src, /Excluir de comisión/);
     assert.match(src, /Descargar PDF/);
-    assert.match(src, /id="af-hoy"/);
-    assert.match(src, /id="sf-semana"/);
+    assert.match(src, /class="hist-filtrar"/);
+    assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
+    assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -2966,7 +2968,7 @@ describe("tickets de venta", () => {
     assert.equal(fns._histClave({ tkRow: 12 }), "r12");
     g.window._histTkSel = "r12";
     const html = fns._histMasterHTML([{
-      tkRow: 12, nombre: "Ana", apellido: "Paz", cedula: "0101", fecha: "2026-10-26",
+      tkRow: 12, so_num: "TK-SO-0123", nombre: "Ana", apellido: "Paz", cedula: "0101", fecha: "2026-10-26",
       facial: "SUNSU-02 Limpieza", productos: ["SUNSU-AS-005 crema ×1"],
       cosmetologa: "Andrea Robles", estimado: "40.25",
     }], true);
@@ -2974,7 +2976,10 @@ describe("tickets de venta", () => {
     assert.match(html, /Ana Paz/);
     assert.match(html, /0101/);
     assert.match(html, /26\/10\/2026/);
-    assert.match(html, /SUNSU-02, SUNSU-AS-005/);
+    assert.doesNotMatch(html, /SUNSU-02, SUNSU-AS-005/);
+    assert.match(html, /TK-SO-0123/);
+    assert.match(html, /\$35\.00/);
+    assert.match(html, /\$5\.25/);
     assert.match(html, /Andrea Robles/);
     assert.match(html, /\$40\.25/);
     assert.match(html, /class="tk-row on"/);
@@ -3008,8 +3013,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3059,8 +3064,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3093,8 +3098,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3128,7 +3133,8 @@ describe("clientes en columnas", () => {
   const sw = readFileSync(join(root, "sw.js"), "utf8");
 
   it("lista nombre, cédula, visitas, última visita y total, y abre el registro inicial", () => {
-    assert.match(beta, /\["nombre", "Nombre"\]/);
+    assert.match(beta, /\["codigo", "Código"\]/);
+    assert.match(beta, /\["nombre", "Clienta"\]/);
     assert.match(beta, /\["cedula", "Cédula"\]/);
     assert.match(beta, /\["visitas", "Visitas", "num"\]/);
     assert.match(beta, /\["ultima", "Última visita"\]/);
@@ -3139,7 +3145,25 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cli/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CLI/);
+    assert.match(beta, /beta-screens\.js\?v=20261026tkv2/);
+    assert.match(sw, /sunsu-beta-2026-10-26-TKV2/);
+  });
+});
+
+describe("tickets v2 y código de clienta", () => {
+  it("C-00001 sale de la fila del registro y es estable", async () => {
+    const { codigoCliente } = await import("./ventas.ts");
+    assert.equal(codigoCliente({ sheet_row: 2 }), "C-00001");
+    assert.equal(codigoCliente({ sheet_row: 1796 }), "C-01795");
+    assert.equal(codigoCliente({ sheet_row: -7 }), "C-B00007");
+    assert.equal(codigoCliente({}), "");
+  });
+  it("tickets: buscador arriba, Filtrar en desplegable, columnas ordenables y todos por defecto", () => {
+    const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(src, /mostrarHistorialAdmin\(c,'','',''\)/);
+    assert.match(src, /function _histSortBy\(k\)/);
+    assert.match(src, /so_num/);
+    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    assert.match(beta, /\.nowrap-table th, \.nowrap-table td \{ white-space: nowrap;/);
   });
 });

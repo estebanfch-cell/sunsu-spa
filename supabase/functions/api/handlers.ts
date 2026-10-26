@@ -1132,7 +1132,10 @@ reg("getInventario", "any", async (_p, ctx) => {
   };
 });
 
-reg("getHistorial", "any", async (_p, ctx, ses) => {
+reg("getHistorial", "any", async (p, ctx, ses) => {
+  if (!previewPedido(p)) {
+    try { await backfillSO(ctx.db, actorOf(ses)); } catch { /* la lista igual sale sin número */ }
+  }
   const map = await catMap(ctx);
   const telOk = conTelefono(ses);
   const regs = await ctx.db.all("clientas_registro");
@@ -1143,7 +1146,7 @@ reg("getHistorial", "any", async (_p, ctx, ses) => {
   const out = rows.map((r) => {
     const prods = productQtys(r).map((pr) => (catNombre(map, pr.sku) || pr.sku) + " ×" + pr.qty);
     const item: R = {
-      fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), tkRow: r.sheet_row,
+      fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), tkRow: r.sheet_row, so_num: leerSerie(r, "so_num"),
       cosmetologa: s(r.atendido_por), cedula: s(r.id_3), nombre: s(r.nombre), apellido: s(r.apellido),
       estimado: s(r.estimado), facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),
       extras: s(r.servicios_adicionales), colQ: s(r.paquete), colR: s(r.gift_card), colS: s(r.venta_gift),
