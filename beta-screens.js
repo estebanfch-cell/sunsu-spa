@@ -16081,7 +16081,7 @@ function _cotDibujarPDF(doc, q, logo){
 
 // ══════ COMPRAS — un solo flujo, sin saltar de módulo ══════
 var _cmp = { step: 0, provId: "", lineas: [], ocId: "", desde: "", hasta: "", conIva: true, nuevo: false };
-function _cmpAdmin(){ return !!window._cmpAdmin; }
+function _cmpAdmin(){ return !!window._cmpEsAdmin; }
 function _cmpEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
 function _cmpMoney(n){ return (typeof money === "function") ? money(n) : ("$"+Number(n||0).toFixed(2)); }
 function _cmpFam(nombre){
