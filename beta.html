@@ -498,6 +498,9 @@
     .top-salir { display: none; }
   }
   .cli-layout { display: grid; gap: 16px; }
+  .cli-sheet tbody tr { cursor: pointer; }
+  .cli-sheet tbody tr.on td { background: var(--blue-l); }
+  .cli-sheet th .link { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gray); }
   .cli-desk { display: none; }
   .cli-head, .cli-line {
     display: grid;
@@ -876,9 +879,9 @@ function previewApi(accion, body) {
   if (accion === "getInventario") return { items: [], allSkus: [], ultimoFisico: "" };
   if (accion === "clientes_resumen") {
     const clientes = [
-      { key: "c:1711", nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", visitas: 4, ultima: "2026-10-21", total: 320, cosmetologa: "Andrea" },
-      { key: "c:1722", nombres: "Ana", apellido: "Luz", nombre: "Ana Luz", cedula: "1722", visitas: 1, ultima: "2026-10-18", total: 86, cosmetologa: "Emi" },
-      { key: "c:0999", nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", visitas: 0, ultima: "", total: 0, cosmetologa: "" },
+      { key: "c:1711", nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", visitas: 4, ultima: "2026-10-21", total: 320, cosmetologa: "Andrea Robles", sector: "Cumbayá", telefono: "0991112233" },
+      { key: "c:1722", nombres: "Ana", apellido: "Luz", nombre: "Ana Luz", cedula: "1722", visitas: 1, ultima: "2026-10-18", total: 86, cosmetologa: "Emi", sector: "Tumbaco", telefono: "0987654321" },
+      { key: "c:0999", nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", visitas: 0, ultima: "", total: 0, cosmetologa: "", sector: "Norte", telefono: "" },
     ];
     const q = String(body.q || "");
     return { ok: true, admin: true, clientes: q ? ordenarClientes(clientes, q) : clientes };
@@ -887,10 +890,10 @@ function previewApi(accion, body) {
     const key = body.key || "c:1711";
     const rosa = key === "c:0999";
     return { ok: true, admin: true, cliente: rosa
-      ? { key, nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", telefono: "", visitas: 0, ultima: "", total: 0 }
-      : { key, nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", telefono: "0991112233", visitas: 4, ultima: "2026-10-21", total: 320 },
+      ? { key, nombres: "Rosa", apellido: "Díaz", nombre: "Rosa Díaz", cedula: "0999", telefono: "", sector: "Norte", tipoPiel: "Mixta", alergias: "Ninguna", nacimiento: "1992-04-03", autorizaFotos: "SI", visitas: 0, ultima: "", total: 0 }
+      : { key, nombres: "María", apellido: "Paz", nombre: "María Paz", cedula: "1711", telefono: "0991112233", sector: "Cumbayá", tipoPiel: "Mixta", estado: "Estable", alergias: "Ninguna", medicacion: "", condiciones: "", nacimiento: "1990-03-12", autorizaFotos: "SI", visitas: 4, ultima: "2026-10-21", total: 320 },
       paquetes: rosa ? [] : [{ nombre: "x3 Facial S.O.S", sku: "SUNSU-17", usados: 1, pendientes: 2, total: 3, usos: [{ slot: 1, usado: true, fecha: "2026-10-01" }, { slot: 2, usado: false, fecha: "" }, { slot: 3, usado: false, fecha: "" }] }],
-      tickets: rosa ? [] : [{ ref: "TK-20261021-1643", clave: "TK-20261021-1643", fecha: "2026-10-21", hora: "10:00", cosmetologa: "Andrea Robles", facial: "SUNSU-01 Facial S.O.S", estimado: 80, subtotal: 69.57, iva: 10.43, total: 80, notas: "", lineas: [
+      tickets: rosa ? [] : [{ ref: "TK-20261021-1643", clave: "TK-20261021-1643", fecha: "2026-10-21", hora: "10:00", nombre: "María", apellido: "Paz", cedula: "1711", cosmetologa: "Andrea Robles", facial: "SUNSU-01 Facial S.O.S", estimado: 118.99, subtotal: 103.47, iva: 15.52, total: 118.99, notas: "", lineas: [
         { clase: "servicio", sku: "SUNSU-01", nombre: "Facial S.O.S", cantidad: 1, precio: 49.56521739130435, descuento_pct: 0 },
         { clase: "producto", sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", cantidad: 1, precio: 20, descuento_pct: 0 },
       ] }] };
@@ -2124,6 +2127,23 @@ function valsFicha(c) {
   if ("telefono" in c) v.telefono = c.telefono || "";
   return v;
 }
+function htmlRegistroInicial(c) {
+  const pares = [
+    ["Nombre", c.nombre || ((c.nombres || "") + " " + (c.apellido || "")).trim()],
+    ["Cédula", c.cedula],
+    ["Sector", c.sector],
+    ["Nacimiento", c.nacimiento],
+    ["Tipo de piel", c.tipoPiel],
+    ["Estado", c.estado],
+    ["Alergias", c.alergias],
+    ["Medicación", c.medicacion],
+    ["Condiciones", c.condiciones],
+    ["Autoriza fotos", c.autorizaFotos],
+  ];
+  if (Object.prototype.hasOwnProperty.call(c, "telefono")) pares.splice(3, 0, ["Teléfono", c.telefono]);
+  const filas = pares.filter((p) => p[1] != null && String(p[1]).trim() !== "").map((p) => `<div class="note"><b>${esc(p[0])}:</b> ${esc(p[1])}</div>`).join("");
+  return `<div class="card" id="cli-registro"><div class="card-title">Registro inicial</div>${filas || `<p class="note">Sin datos de registro inicial.</p>`}</div>`;
+}
 function htmlFichaCliente(c) {
   if (!window.SunsuInline) return "";
   const fila = filaCliente(c);
@@ -2144,36 +2164,72 @@ function htmlFichaCliente(c) {
   if (SunsuInline.pide()) return SunsuInline.pedir("clientes", fila, valsFicha(c));
   return "";
 }
-function htmlClientes(rows, moneyOk) {
-  const vacio = `<p class="note">No hay clientas en el registro.</p>`;
-  const nada = `<p class="note">Nada coincide con la búsqueda.</p>`;
-  const phone = rows.map((c) => `<div class="cli-row${window._cliKey === c.key ? " on" : ""}" data-cli="${esc(c.key)}" role="button" tabindex="0">
-      <div class="cli-main"><div class="cli-name">${nombreEditable(c)} ${accionesCliente(c)}</div>
-      <div class="sub">${esc(c.visitas)} visitas · última ${esc(fechaCorta(c.ultima) || "—")}${window.SunsuInline && SunsuInline.edita() ? " · " + cedulaEditable(c) : (c.cedula ? " · " + esc(c.cedula) : "")}</div></div>
-      <div class="cli-money">${moneyOk && c.total != null ? money(c.total) : esc(c.visitas) + " visitas"}</div>
-    </div>`).join("");
-  const desk = rows.map((c) => `<div class="cli-line${window._cliKey === c.key ? " on" : ""}" data-cli="${esc(c.key)}" role="button" tabindex="0">
-      <span class="cli-name">${nombreEditable(c)} ${accionesCliente(c)}</span>
-      <span class="num">${esc(c.visitas)}</span>
-      <span class="num">${esc(fechaCorta(c.ultima) || "—")}</span>
-      <span class="ced">${cedulaEditable(c)}</span>
-      <span class="num cli-money">${moneyOk && c.total != null ? money(c.total) : ""}</span>
-    </div>`).join("");
-  return {
-    phone: phone || (window._cliQ ? nada : vacio),
-    desk: desk || (window._cliQ ? nada : vacio),
-  };
+function columnasCliente(rows, moneyOk) {
+  const cols = [
+    ["nombre", "Nombre"],
+    ["cedula", "Cédula"],
+    ["visitas", "Visitas", "num"],
+    ["ultima", "Última visita"],
+  ];
+  if (moneyOk) cols.push(["total", "Total gastado", "num"]);
+  if ((rows || []).some((c) => Object.prototype.hasOwnProperty.call(c, "telefono"))) cols.push(["telefono", "Teléfono"]);
+  cols.push(["sector", "Sector"], ["cosmetologa", "Cosmetóloga"]);
+  return cols;
+}
+function valorCliente(c, key) {
+  if (key === "nombre") return nombreCli(c);
+  if (key === "visitas" || key === "total") return Number(c[key]) || 0;
+  if (key === "ultima") return String(c.ultima || "");
+  return String(c[key] || "");
+}
+function trCliente(c, cols) {
+  const celdas = cols.map((col) => {
+    const key = col[0];
+    if (key === "nombre") return `<td>${nombreEditable(c)} ${accionesCliente(c)}</td>`;
+    if (key === "cedula") return `<td>${cedulaEditable(c)}</td>`;
+    if (key === "visitas") return `<td class="num">${esc(c.visitas)}</td>`;
+    if (key === "ultima") return `<td>${esc(fechaCorta(c.ultima) || "—")}</td>`;
+    if (key === "total") return `<td class="num">${c.total != null ? money(c.total) : ""}</td>`;
+    return `<td>${esc(c[key] || "")}</td>`;
+  }).join("");
+  return `<tr class="${window._cliKey === c.key ? "on" : ""}" data-cli="${esc(c.key)}" tabindex="0">${celdas}</tr>`;
 }
 function pintarClientes(q) {
   window._cliQ = q || "";
   const moneyOk = !!window._cliMoney;
-  const rows = ordenarClientes(window._cliLista || [], q || "");
-  const html = htmlClientes(rows, moneyOk);
-  const phone = document.getElementById("lista");
-  const desk = document.getElementById("lista-desk");
-  if (phone) phone.innerHTML = html.phone;
-  if (desk) desk.innerHTML = html.desk;
-  document.querySelectorAll("#lista [data-cli], #lista-desk [data-cli]").forEach((b) => {
+  let rows = ordenarClientes(window._cliLista || [], q || "");
+  const key = window._cliSort || "";
+  const dir = window._cliDir || 1;
+  if (key) {
+    rows = rows.slice().sort((a, b) => {
+      const va = valorCliente(a, key);
+      const vb = valorCliente(b, key);
+      if (va < vb) return -dir;
+      if (va > vb) return dir;
+      return nombreCli(a).localeCompare(nombreCli(b));
+    });
+  }
+  const cols = columnasCliente(window._cliLista || [], moneyOk);
+  const head = document.getElementById("cli-head");
+  if (head) {
+    head.innerHTML = `<tr>${cols.map((col) => `<th${col[2] === "num" ? ` class="num"` : ""}><button class="link" type="button" data-cli-sort="${esc(col[0])}">${col[1]}</button></th>`).join("")}</tr>`;
+    head.querySelectorAll("[data-cli-sort]").forEach((b) => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        const k = b.getAttribute("data-cli-sort");
+        window._cliDir = window._cliSort === k ? -(window._cliDir || 1) : (k === "ultima" || k === "total" || k === "visitas" ? -1 : 1);
+        window._cliSort = k;
+        pintarClientes(window._cliQ || "");
+      };
+    });
+  }
+  const body = document.getElementById("lista");
+  if (body) {
+    body.innerHTML = rows.length
+      ? rows.map((c) => trCliente(c, cols)).join("")
+      : `<tr><td colspan="${cols.length}">${window._cliQ ? "Nada coincide con la búsqueda." : "No hay clientas en el registro."}</td></tr>`;
+  }
+  document.querySelectorAll("#lista [data-cli]").forEach((b) => {
     b.onclick = (ev) => {
       if (ev.target.closest(".ix-cell, .ix-trash, .ix-pedir, input, button")) return;
       abrirCliente(b.getAttribute("data-cli"));
@@ -2187,18 +2243,18 @@ async function renderClientes() {
   window._cliLista = data.clientes || [];
   window._cliMoney = !!(data.admin || state.admin);
   window._cliQ = "";
-  const html = htmlClientes(window._cliLista, window._cliMoney);
-  const head = `<div class="cli-head"><span>Clienta</span><span class="num">Visitas</span><span class="num">Última</span><span>Cédula</span><span class="num">Total</span></div>`;
   const mas = window.SunsuInline && SunsuInline.edita() ? SunsuInline.mas("clientes") : "";
   return `<div class="cli-layout"><div class="cli-list" id="cli-list-host">
       <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>${mas}</div>
       <input id="cli-q" placeholder="Buscar por nombre, apellido o cédula" aria-label="Buscar clienta" autocomplete="off">
-      <div class="cli-desk">${head}<div id="lista-desk">${html.desk}</div></div>
-      <div class="list cli-phone" id="lista">${html.phone}</div>
+      <div class="sheet-scroll cli-sheet"><table>
+        <thead id="cli-head"></thead>
+        <tbody id="lista"></tbody>
+      </table></div>
     </div>
     <aside class="cli-panel" id="cli-panel" hidden>
       <div class="tools"><button class="btn ghost small" type="button" data-cli-cerrar>Cerrar</button></div>
-      <div id="cli-body"><p class="note">Elige una clienta para ver sus paquetes.</p></div>
+      <div id="cli-body"><p class="note">Elige una clienta para ver su registro y sus tickets.</p></div>
     </aside></div>`;
 }
 
@@ -3509,14 +3565,11 @@ function renderTrfNueva() {
 }
 
 function wireVentas(main) {
-  main.querySelectorAll("[data-cli]").forEach((b) => {
-    b.onclick = (ev) => {
-      if (ev.target.closest(".ix-cell, .ix-trash, .ix-pedir, input, button")) return;
-      abrirCliente(b.getAttribute("data-cli"));
-    };
-  });
   const busca = main.querySelector("#cli-q");
-  if (busca) busca.addEventListener("input", () => pintarClientes(busca.value));
+  if (busca) {
+    busca.addEventListener("input", () => pintarClientes(busca.value));
+    pintarClientes("");
+  }
   const cerrar = main.querySelector("[data-cli-cerrar]");
   if (cerrar) cerrar.onclick = () => { const p = document.getElementById("cli-panel"); if (p) p.hidden = true; };
   if (busca && window.matchMedia("(min-width: 861px)").matches) {
@@ -3563,10 +3616,11 @@ async function abrirCliente(key) {
     : "";
   document.querySelectorAll("[data-cli]").forEach((b) => b.classList.toggle("on", b.getAttribute("data-cli") === key));
   const ficha = htmlFichaCliente(c);
+  const registro = htmlRegistroInicial(c);
   const gasto = admin && c.total != null
     ? `<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">${money(c.total)}</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Total</div></div>`
     : "";
-  body.innerHTML = `<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:14px">
+  body.innerHTML = `${registro}${ficha ? `<div class="card" style="margin-bottom:14px">${ficha}</div>` : ""}<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:14px">
       <div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">Resumen — ${esc(c.nombre || "")} · ${esc(visitas.length)} ticket(s)</div>
       ${ficha}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr${gasto ? " 1fr" : ""};gap:7px">
@@ -4566,7 +4620,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026cot"></script>
+<script src="beta-screens.js?v=20261026cli"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
