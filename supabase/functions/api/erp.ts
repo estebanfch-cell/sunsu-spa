@@ -382,7 +382,13 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const stock = (await db.all("erp_stock")).filter((r) => r.producto_id === p.id);
     const kardex = (await db.all("erp_movimientos")).filter((r) => r.producto_id === p.id);
     const mins = (await db.all("erp_producto_bodega")).filter((r) => r.producto_id === p.id);
-    return { ok: true, producto: p, stock, kardex, mins };
+    let foto_data = "";
+    const foto = s(p.foto_url);
+    if (foto.startsWith("archivo:")) {
+      const arch = (await db.all("app_archivos")).find((r) => r.id === foto.slice("archivo:".length));
+      if (arch && s(arch.data_b64)) foto_data = "data:" + (s(arch.mime) || "image/jpeg") + ";base64," + s(arch.data_b64);
+    } else if (foto.startsWith("data:") || foto.startsWith("http")) foto_data = foto;
+    return { ok: true, producto: { ...p, foto_data }, stock, kardex, mins };
   }
   if (op === "prod_save") {
     const uso = s(body.uso);
@@ -396,8 +402,12 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       clase: s(body.clase) || "producto", unidad: s(body.unidad) || "u",
       unidad_consumo: s(body.unidad_consumo), factor_consumo: n(body.factor_consumo) || 1,
       uso, precio_venta: body.precio_venta == null ? null : n(body.precio_venta),
-      iva: body.iva !== false, activo: body.activo !== false, foto_url: s(body.foto_url),
+      iva: body.iva !== false, activo: body.activo !== false,
     };
+    if (s(body.foto_url)) row.foto_url = s(body.foto_url);
+    if (body.sku_proveedor != null) row.sku_proveedor = s(body.sku_proveedor);
+    if (body.linea != null) row.linea = s(body.linea);
+    if (body.observaciones != null) row.observaciones = s(body.observaciones);
     if (body.costo_promedio != null) row.costo_promedio = n(body.costo_promedio);
     await applyPlan(db, actor, [{ op: "upsert", table: "erp_productos", match: { id: pid }, row }]);
     if (Array.isArray(body.mins)) {
