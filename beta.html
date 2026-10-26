@@ -635,8 +635,11 @@
   .tk-detail-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
   .tk-detail .note { color: var(--gray); font-size: 0.82rem; margin: 24px 8px; }
   @media (min-width: 861px) {
-    .tk-split { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 440px); }
-    .tk-detail { display: block; position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+    .tk-split { grid-template-columns: minmax(0, 1fr); }
+    .tk-split .tk-detail { display: none; }
+    .tk-split.tk-side { grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); }
+    .tk-split.tk-side .tk-detail { display: block; position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+    .tk-split.tk-side .tk-table th, .tk-split.tk-side .tk-table td { max-width: 140px; }
   }
   @media (max-width: 860px) {
     .tk-detail { display: none; }
@@ -675,14 +678,25 @@
   .prod-hero { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
   .prod-hero img, .prod-ph { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; background: var(--cream); display: inline-block; }
   .prod-mini img, .prod-mini .prod-ph { width: 36px; height: 36px; border-radius: 8px; }
+  .desk-split.desk-open .desk-table th, .desk-split.desk-open .desk-table td { max-width: 140px; }
   @media (min-width: 861px) {
-    .desk-split { grid-template-columns: minmax(0, 1.15fr) minmax(320px, 480px); }
-    .desk-detail { position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; }
+    .desk-split { grid-template-columns: minmax(0, 1fr); }
+    .desk-split .desk-detail { display: none; }
+    .desk-split.desk-open { grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); }
+    .desk-split.desk-full { grid-template-columns: minmax(0, 1fr); }
+    .desk-split.desk-full .desk-list { display: none; }
+    .desk-split.desk-open .desk-detail,
+    .desk-split.desk-full .desk-detail {
+      display: block; position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto;
+      background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px;
+    }
   }
   @media (max-width: 860px) {
     .desk-detail { display: none; }
-    .desk-split.desk-open .desk-list { display: none; }
-    .desk-split.desk-open .desk-detail { display: block; background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; }
+    .desk-split.desk-open .desk-list,
+    .desk-split.desk-full .desk-list { display: none; }
+    .desk-split.desk-open .desk-detail,
+    .desk-split.desk-full .desk-detail { display: block; background: white; border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; }
   }
   .gc-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 720px; }
   .gc-table th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 6px 8px; border-bottom: 1px solid var(--cream-d); position: sticky; top: 0; background: white; }
@@ -972,12 +986,35 @@ function previewApi(accion, body) {
       faciales: [{ nombre: "SUNSU-01 Facial S.O.S", n: 7 }, { nombre: "SUNSU-40 Facial Reset 3x1", n: 3 }],
       totales: { unidadesVenta: 6, unidadesCabina: 14, faciales: 10 } };
   }
-  if (accion === "prov_list") return { ok: true, items: [{ id: "prov-ht", nombre: "Hebetronic S.A.", ruc: "1793161898001" }] };
+  if (accion === "prov_list") return { ok: true, items: [
+    { id: "prov-ht", nombre: "Hebetronic S.A", familia: "HT", ruc: "1793161898001" },
+    { id: "prov-as", nombre: "Allskin Company S.A.S", familia: "AS", ruc: "1790000000001" },
+    { id: "prov-ml", nombre: "Atencio Aguas Francisco Javier", familia: "ML", ruc: "1790000000002" },
+    { id: "prov-ph", nombre: "APHLORA", familia: "PH", ruc: "1790000000003" },
+  ] };
   if (accion === "oc_list") return { ok: true, items: [{ id: "oc-demo", numero: "OC-0080", estado: "abierta", total: 92, tipo: "consignacion", q_label: "16-fin Oct 2026" }] };
   if (accion === "prod_list") return { ok: true, items: [
-    { id: "p1", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "ambos", precio_venta: 43.99, porBodega: { VENTA: 4, CABINA: 2, CASA: 0 } },
-    { id: "p2", sku: "HT-014", nombre: "Heartleaf 77% Soothing Toner 250ml", uso: "venta", precio_venta: 28, porBodega: { VENTA: 6, CABINA: 0, CASA: 0 } },
+    { id: "p1", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", uso: "ambos", precio_venta: 43.99, costo_promedio: 8, porBodega: { VENTA: 4, CABINA: 2, CASA: 0 } },
+    { id: "p2", sku: "HT-014", nombre: "Heartleaf 77% Soothing Toner 250ml", uso: "venta", precio_venta: 28, costo_promedio: 6, porBodega: { VENTA: 6, CABINA: 0, CASA: 0 } },
+    { id: "p3", sku: "AS-001", nombre: "Aceite Limpiador", uso: "venta", precio_venta: 28.99, costo_promedio: 10, porBodega: { VENTA: 3, CABINA: 0, CASA: 0 } },
+    { id: "p4", sku: "ML-001", nombre: "Rejuvenating Ampoule PDRN Salmon", uso: "cabina", precio_venta: 110, costo_promedio: 40, porBodega: { VENTA: 0, CABINA: 2, CASA: 1 } },
   ] };
+  if (accion === "prod_get") {
+    const todos = previewApi("prod_list").items;
+    const p = todos.find((x) => x.id === body.id) || todos[0];
+    return { ok: true, producto: p, stock: [{ bodega_id: VENTA, cantidad: 4 }], kardex: [], mins: [] };
+  }
+  if (accion === "compras_lista") return { ok: true, items: [
+    { id: "oc-79", numero: "OC-2026-079", proveedor: "Allskin Company S.A.S", proveedor_id: "prov-as", familia: "AS", fecha: "2026-10-21", estado: "abierta", flujo: "", total: 23, saldo: 23, subtotal: 20, iva: 3, con_iva: true, lineas: [{ id: "l-as", sku: "AS-001", nombre: "Aceite Limpiador", pedido: 2, recibido: 0, pendiente: 2, precio: 10, subtotal: 20 }] },
+    { id: "oc-78", numero: "OC-2026-078", proveedor: "Hebetronic S.A", proveedor_id: "prov-ht", familia: "HT", fecha: "2026-10-21", estado: "abierta", flujo: "", total: 18.4, saldo: 18.4, subtotal: 16, iva: 2.4, con_iva: true, lineas: [{ id: "l-ht", sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", pedido: 2, recibido: 0, pendiente: 2, precio: 8, subtotal: 16 }] },
+  ] };
+  if (accion === "compras_periodo") {
+    const fam = String(body.familia || (body.proveedor_id === "prov-as" ? "AS" : body.proveedor_id === "prov-ml" ? "ML" : body.proveedor_id === "prov-ph" ? "PH" : body.proveedor_id === "prov-ht" ? "HT" : ""));
+    if (fam === "AS") return { ok: true, familia: "AS", vacio: false, lineas: [{ sku: "AS-001", nombre: "Aceite Limpiador", vendido: 3, cantidad: 3, precio: 10, subtotal: 30 }], totales: { subtotal: 30, iva: 4.5, total: 34.5 } };
+    if (fam === "HT") return { ok: true, familia: "HT", vacio: false, lineas: [{ sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", vendido: 2, cantidad: 2, precio: 8, subtotal: 16 }], totales: { subtotal: 16, iva: 2.4, total: 18.4 } };
+    return { ok: true, vacio: true, familia: fam, aviso: "No hubo ventas de " + (fam || "ese proveedor") + " entre " + (body.desde || "") + " y " + (body.hasta || "") + ".", lineas: [] };
+  }
+  if (accion === "compras_guardar") return { ok: true, id: "oc-nueva", flujo: "Borrador" };
   if (accion === "lugares_list" || accion === "lugar_guardar" || accion === "lugar_elegir") {
     return { ok: true, uno: true, local_id: LOCAL_ESQUINA, nombre: "La Esquina", locales: [{ id: LOCAL_ESQUINA, codigo: "ESQUINA", nombre: "La Esquina", direccion: "C.C. La Esquina, Cumbayá", activo: true }], lugares: [
       { id: CASA, codigo: "CASA", nombre: "Casa", tipo: "casa", activo: true, orden: 0 },
@@ -1175,6 +1212,8 @@ function tituloRuta(route, tab) {
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
+  if (route.mod === "compras" && route.sub === "nueva") return "Nueva OC";
+  if (route.mod === "compras" && route.sub && route.sub !== "rfq") return "Orden de compra";
   if (route.mod === "inventario" && route.sub === "nuevo") return "Nuevo producto";
   if (route.mod === "inventario" && route.sub === "prod") return "Producto";
   if (route.mod === "inventario" && !route.sub) return "Inventario";
@@ -2084,6 +2123,33 @@ function pintarInventario() {
     tr.onclick = () => go("#/m/inventario/prod/" + encodeURIComponent(tr.getAttribute("data-inv")));
   });
 }
+function inventarioMiniFilas(selId, qRaw) {
+  const q = normBusca(qRaw == null ? (window._invQ || "") : qRaw);
+  const rows = (window._invRows || []).filter((p) => {
+    if (!q) return true;
+    return normBusca([p.sku, p.nombre, p.marca].join(" ")).includes(q);
+  });
+  return rows.map((p) => `<tr class="desk-row${p.id === selId ? " on" : ""}" data-inv="${esc(p.id)}"><td class="tk-sku">${esc(p.sku || "")}</td><td>${esc(p.nombre || "")}</td><td class="num">${esc(stockTotal(p))}</td></tr>`).join("") || `<tr><td colspan="3">Sin productos.</td></tr>`;
+}
+function inventarioMiniHTML(selId) {
+  return `<div class="desk-bar desk-bar-mini"><input class="desk-q" id="inv-mini-q" type="search" placeholder="Buscar" aria-label="Buscar productos" value="${esc(window._invQ || "")}"></div>
+    <div class="sheet-scroll"><table class="desk-table nowrap-table"><thead><tr><th>SKU</th><th>Nombre</th><th class="num">Stock</th></tr></thead><tbody id="inv-mini-body">${inventarioMiniFilas(selId)}</tbody></table></div>`;
+}
+function bindInvMini(main, selId) {
+  const paint = () => {
+    const body = document.getElementById("inv-mini-body");
+    const q = document.getElementById("inv-mini-q");
+    if (!body) return;
+    if (q) window._invQ = q.value;
+    body.innerHTML = inventarioMiniFilas(selId, q ? q.value : "");
+    body.querySelectorAll("[data-inv]").forEach((tr) => {
+      tr.onclick = () => go("#/m/inventario/prod/" + encodeURIComponent(tr.getAttribute("data-inv")));
+    });
+  };
+  const q = main.querySelector("#inv-mini-q");
+  if (q) q.addEventListener("input", paint);
+  paint();
+}
 async function renderInventarioFicha(route) {
   const nuevo = route.sub === "nuevo" || !route.id;
   if (nuevo && !state.admin) return `<p class="err">Solo admin crea productos.</p>`;
@@ -2125,7 +2191,7 @@ async function renderInventarioFicha(route) {
   const dinero = state.admin || state.verCostos;
   const ocRows = ocs.map(({ o, ln }) => `<tr><td>${esc(o.numero || "Borrador")}</td><td>${esc(o.flujo || "")}</td><td class="num">${esc(ln.pedido)}</td><td class="num">${esc(ln.recibido)}</td>${dinero ? `<td class="num">${money(ln.subtotal || 0)}</td>` : ""}</tr>`).join("");
   const movs = kardex.map((m) => `<tr><td>${esc(m.tipo || "")}</td><td class="num">${esc(m.delta)}</td><td class="num">${esc(m.saldo ?? "")}</td><td>${esc(m.nota || m.ticket_ref || "")}</td></tr>`).join("");
-  return `<div id="inv-ficha"><div class="desk-actions"><button class="btn ghost small" type="button" data-go="#/m/inventario">← Inventario</button></div>
+  const ficha = `<div id="inv-ficha"><div class="desk-actions"><button class="btn ghost small" type="button" data-go="#/m/inventario">← Inventario</button></div>
     <div class="prod-hero">${img}<div><div class="card-title">${esc(p.nombre || "Nuevo producto")}</div><div class="tk-sku">${esc(p.sku || "Sin código")}</div></div></div>
     <div class="desk-tabs">
       <button type="button" data-inv-tab="resumen" class="on">Resumen</button>
@@ -2163,6 +2229,13 @@ async function renderInventarioFicha(route) {
         <table class="desk-table nowrap-table"><thead><tr><th>Tipo</th><th class="num">Delta</th><th class="num">Saldo</th><th>Nota</th></tr></thead><tbody>${movs || `<tr><td colspan="4">Sin movimientos.</td></tr>`}</tbody></table>
       </div>
     </form></div>`;
+  if (nuevo || !route.id) return ficha;
+  if (!window._invRows || !window._invRows.length) {
+    const lista = await api("prod_list");
+    if (lista && !lista.error) window._invRows = lista.items || [];
+  }
+  window._invSel = route.id;
+  return `<div class="desk-split desk-open" id="inv-split" data-sel="${esc(route.id)}"><div class="desk-list" id="inv-mini">${inventarioMiniHTML(route.id)}</div><div class="desk-detail">${ficha}</div></div>`;
 }
 function wireInventario(main) {
   const q = main.querySelector("#inv-q");
@@ -2178,6 +2251,8 @@ function wireInventario(main) {
     });
     pintarInventario();
   }
+  const split = main.querySelector("#inv-split");
+  if (split) bindInvMini(main, split.getAttribute("data-sel") || "");
   main.querySelectorAll("[data-inv-tab]").forEach((b) => {
     b.onclick = () => {
       const tab = b.getAttribute("data-inv-tab");
@@ -4912,7 +4987,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026desk2"></script>
+<script src="beta-screens.js?v=20261026desk3"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>

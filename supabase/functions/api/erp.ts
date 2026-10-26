@@ -7,7 +7,7 @@ import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguien
 import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
 import { backfillSO, tomarNumero } from "./series.ts";
-import { familiaSku, quincenaActual } from "./ventas.ts";
+import { familiaDeFila, familiaSku, quincenaActual } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -419,7 +419,12 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     return { ok: true, id: pid, sku };
   }
 
-  if (op === "prov_list") return { ok: true, items: await db.all("erp_proveedores") };
+  if (op === "prov_list") {
+    const items = await db.all("erp_proveedores");
+    let hoja: Row[] = [];
+    try { hoja = await db.all("proveedores"); } catch { hoja = []; }
+    return { ok: true, items: items.map((p) => ({ ...p, familia: familiaDeFila(p, hoja) })) };
+  }
   if (op === "prov_save") {
     if (!s(body.nombre)) return { error: "Falta el nombre" };
     const pid = s(body.id) || id();

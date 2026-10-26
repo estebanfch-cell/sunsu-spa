@@ -47,21 +47,70 @@ export function quincenaActual(now: Date, forzar?: number): Quincena {
   return quincenaDe(ec.y, ec.m, ec.d, forzar);
 }
 
+const FAMILIA_CODIGOS = ["HT", "AS", "ML", "PH", "JN", "BV", "SU", "VK"] as const;
+
 export function familiaSku(sku: string): string {
-  const m = skuCode(sku).match(/^(HT|AS|ML|PH|JN)-/);
+  const m = skuCode(sku).match(/^(HT|AS|ML|PH|JN|BV|SU|VK)-/);
   return m ? m[1] : "";
 }
 
+/** HT, AS, ML… tal como está en proveedores.familia. No convierte una marca en código. */
+export function codigoFamilia(raw: unknown): string {
+  const up = s(raw).toUpperCase();
+  if (!up) return "";
+  const m = up.match(/\b(HT|AS|ML|PH|JN|BV|SU|VK)\b/);
+  if (m) return m[1];
+  const limpio = up.replace(/[^A-Z]/g, "");
+  if ((FAMILIA_CODIGOS as readonly string[]).includes(limpio)) return limpio;
+  if (limpio.length >= 2 && limpio.length <= 3) return limpio;
+  return "";
+}
+
+export function claveNombre(nombre: string): string {
+  return s(nombre)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(s\s*\.?\s*a\s*\.?\s*s\s*\.?|s\s*\.?\s*a\s*\.?|cia\.?|ltda\.?|company|compania|corp\.?|inc\.?)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function mismoNombre(a: string, b: string): boolean {
+  const x = claveNombre(a);
+  const y = claveNombre(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
 export function familiaDe(nombre: string, familia?: string): string {
-  const f = s(familia).toUpperCase();
-  if (f) return f.replace(/[^A-Z]/g, "");
-  const n = nombre.toLowerCase();
+  const codigo = codigoFamilia(familia);
+  if (codigo) return codigo;
+  const n = s(nombre).toLowerCase();
   if (n.includes("hebetronic") || n.includes("anua") || n.includes("common")) return "HT";
-  if (n.includes("eyenlip")) return "AS";
-  if (n.includes("esthe")) return "ML";
+  if (n.includes("allskin") || n.includes("eyenlip")) return "AS";
+  if (n.includes("atencio") || n.includes("esthe")) return "ML";
   if (n.includes("aphlora")) return "PH";
   if (n.includes("rire") || n.includes("holika")) return "JN";
+  if (n.includes("vassari")) return "BV";
   return "";
+}
+
+/** La familia sale de proveedores.familia (la hoja). El nombre solo cubre si la hoja no la trae. */
+export function familiaDeFila(prov: Row | null | undefined, hoja: Row[] = []): string {
+  if (!prov) return "";
+  const directa = codigoFamilia(prov.familia);
+  if (directa) return directa;
+  const hit = hoja.find((r) =>
+    (prov.legacy_sheet_row != null && r.sheet_row != null && String(r.sheet_row) === String(prov.legacy_sheet_row))
+    || mismoNombre(s(r.nombre), s(prov.nombre))
+  );
+  if (hit) {
+    const deHoja = codigoFamilia(hit.familia);
+    if (deHoja) return deHoja;
+  }
+  return familiaDe(s(prov.nombre));
 }
 
 export function parseGcCanje(colR: unknown): { codigo: string; aplica: number | null } | null {
