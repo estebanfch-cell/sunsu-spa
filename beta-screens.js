@@ -4351,13 +4351,7 @@ function _buildTicketCard(t, showPrices){
       +'<div style="'+rg+'font-weight:800;opacity:0.9"><span>Total con IVA</span><span>$'+totalCliente.toFixed(2)+'</span></div>'
       +'</div>';
   }
-  // Fix date to dd/mm/yyyy
-  var fechaFmt=t.fecha||'';
-  if(fechaFmt.match(/^\d{4}-\d{2}-\d{2}$/)){
-    var fp=fechaFmt.split('-');fechaFmt=fp[2]+'/'+fp[1]+'/'+fp[0];
-  } else if(fechaFmt.match(/^\d{2}\/\d{2}\/\d{4}$/)){
-    var fp2=fechaFmt.split('/');fechaFmt=fp2[1]+'/'+fp2[0]+'/'+fp2[2];
-  }
+  var fechaFmt=_histFechaFmt(t.fecha);
 
   var isAdminView=CU&&(CU.role==='admin'||CU.role==='admin_master');
   var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
@@ -4368,9 +4362,8 @@ function _buildTicketCard(t, showPrices){
     +'<div style="font-size:0.65rem;color:var(--gray)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "cedula", t.cedula):(t.cedula||''))+' · '+fechaFmt+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">#'+t.tkRow+'</span>':'')+'</div>'
     +(isAdminView&&t.tkRow
       ?'<div style="display:flex;gap:5px;margin-top:6px">'
-        +(window.SunsuInline&&SunsuInline.edita()?'': '<button onclick="editarTicket('+t.tkRow+')" style="padding:4px 10px;background:var(--blue-l);color:var(--navy);border:1.5px solid var(--blue);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">✏️ Editar</button>')
+        +(window.SunsuInline&&SunsuInline.edita()?SunsuInline.borrar("tickets", t.tkRow):'')
         +'<button onclick="abrirModalMulta('+t.tkRow+')" style="padding:4px 10px;background:var(--red-l);color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">⚠️ Multa</button>'
-        +(window.SunsuInline&&SunsuInline.edita()?SunsuInline.borrar("tickets", t.tkRow):'<button onclick="eliminarTicket('+t.tkRow+')" style="padding:4px 10px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">🗑️ Eliminar</button>')
         +'</div>'
       :(window.SunsuInline&&SunsuInline.pide()&&t.tkRow?SunsuInline.pedir("tickets", t.tkRow, {nombre:t.nombre,apellido:t.apellido,cedula:t.cedula,facial:t.facial,pack3:t.pack3,pack6:t.pack6,extras:t.extras,notas:t.notas,recomendaciones:t.recomendaciones,estimado:t.estimado}):''))
     +'</div>'
@@ -4550,7 +4543,85 @@ function _histFiltrarStaff(busq, fechaDesde, fechaHasta){
     return t.cosmetologa&&t.cosmetologa.toLowerCase().indexOf(CU.name.toLowerCase().split(' ')[0].toLowerCase())>=0;
   });
 }
-// HTML de SOLO los resultados (resumen + tarjetas) — se actualiza sin tocar el buscador,
+function _histEsc(v){
+  return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function _histSkus(t){
+  var found=[];
+  var add=function(txt){
+    var s=String(txt||''), re=/SUNSU-[A-Z0-9]+(?:-[A-Z0-9]+)*/gi, m;
+    while((m=re.exec(s))){ var sku=m[0].toUpperCase(); if(found.indexOf(sku)<0) found.push(sku); }
+  };
+  if(!t) return found;
+  add(t.facial); add(t.pack3); add(t.pack6); add(t.extras);
+  (t.productos||[]).forEach(function(p){
+    if(p&&typeof p==='object') add(p.sku||p.nombre||''); else add(p);
+  });
+  return found;
+}
+function _histFechaFmt(fecha){
+  var fechaFmt=fecha||'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(fechaFmt)){
+    var fp=fechaFmt.split('-'); return fp[2]+'/'+fp[1]+'/'+fp[0];
+  }
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(fechaFmt)){
+    var fp2=fechaFmt.split('/'); return fp2[1]+'/'+fp2[0]+'/'+fp2[2];
+  }
+  return fechaFmt;
+}
+function _histClave(t){
+  if(t&&t.tkRow) return 'r'+t.tkRow;
+  return 'k'+String(t&&t.fecha||'')+'|'+String(t&&t.hora||'')+'|'+String(t&&t.cedula||'')+'|'+String(t&&t.nombre||'');
+}
+function _histDetalleHTML(t, showPrices){
+  return '<div class="tk-detail-bar"><button type="button" onclick="_histCerrarTicket()" style="padding:6px 12px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">Cerrar</button></div>'+_buildTicketCard(t, showPrices);
+}
+function _histMasterHTML(tickets, showPrices){
+  window._histVisibles=tickets;
+  window._histShowPrices=showPrices;
+  var sel=window._histTkSel, elegido=null;
+  tickets.forEach(function(t){ if(_histClave(t)===sel) elegido=t; });
+  var rows=tickets.map(function(t,i){
+    var on=_histClave(t)===sel?' on':'';
+    var skus=_histSkus(t).join(', ')||'—';
+    var total=showPrices?('$'+(parseFloat(t.estimado)||0).toFixed(2)):'—';
+    var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
+    return '<tr class="tk-row'+on+'" onclick="_histAbrirTicket('+i+')">'
+      +'<td>'+_histEsc(nombre)+'</td><td>'+_histEsc(t.cedula||'')+'</td><td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>'
+      +'<td class="tk-sku">'+_histEsc(skus)+'</td><td>'+_histEsc(t.cosmetologa||'')+'</td>'
+      +'<td class="num">'+_histEsc(total)+'</td></tr>';
+  }).join('');
+  var detail=elegido?_histDetalleHTML(elegido, showPrices):'<p class="note">Elige un ticket para ver el detalle.</p>';
+  var open=elegido?' tk-open':'';
+  return '<div class="tk-split"><div class="tk-list sheet-scroll"><table class="tk-table"><thead><tr>'
+    +'<th>Clienta</th><th>Cédula</th><th>Fecha</th><th>SKU</th><th>Cosmetóloga</th><th class="num">Total</th>'
+    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="6">Sin tickets</td></tr>')+'</tbody></table></div>'
+    +'<aside class="tk-detail'+open+'" id="tk-detail">'+detail+'</aside></div>';
+}
+function _histAbrirTicket(i){
+  var list=window._histVisibles||[], t=list[i];
+  if(!t) return;
+  window._histTkSel=_histClave(t);
+  var pane=document.getElementById('tk-detail');
+  if(!pane) return;
+  pane.classList.add('tk-open');
+  pane.innerHTML=_histDetalleHTML(t, window._histShowPrices!==false);
+  var rows=document.querySelectorAll('#tk-body .tk-row');
+  for(var r=0;r<rows.length;r++) rows[r].classList.toggle('on', r===i);
+  _histTrasPintar();
+}
+function _histCerrarTicket(){
+  window._histTkSel=null;
+  var pane=document.getElementById('tk-detail');
+  if(!pane) return;
+  pane.classList.remove('tk-open');
+  pane.innerHTML='<p class="note">Elige un ticket para ver el detalle.</p>';
+  document.querySelectorAll('#tk-body .tk-row.on').forEach(function(tr){ tr.classList.remove('on'); });
+}
+function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); }
+// HTML de SOLO los resultados (resumen + lista) — se actualiza sin tocar el buscador,
 // así el teclado del iPhone no se reinicia mientras escribes
 function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
   var totalIngresos=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
@@ -4578,7 +4649,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
   } else {
     html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
-    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
+    html+=_histMasterHTML(tickets, true);
   }
   if(window.SunsuInline&&SunsuInline.edita()) html+=SunsuInline.mas("tickets");
   return html;
@@ -4593,7 +4664,7 @@ function _histResStaffHTML(tickets, busq){
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
   } else {
-    tickets.forEach(function(t){ html+=_buildTicketCard(t, true); });
+    html+=_histMasterHTML(tickets, true);
   }
   return html;
 }
@@ -4607,6 +4678,7 @@ function _histActualizarRes(esStaff){
   var fd=f.desde||fh, fha=f.hasta||fh;
   if(esStaff) res.innerHTML=_histResStaffHTML(_histFiltrarStaff(busq,fd,fha), busq);
   else res.innerHTML=_histResAdminHTML(_histFiltrarAdmin(busq,fd,fha,window._histCosmFiltro||''), window._histCosmFiltro||'', fd, fha, busq);
+  _histTrasPintar();
   return true;
 }
 function _histMatchBusq(t, busq){
@@ -4658,6 +4730,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
 
   html+='<div id="hist-res">'+_histResStaffHTML(tickets, busq)+'</div>';
   c.innerHTML=html;
+  _histTrasPintar();
 }
 
 function _highlightFiltroBtn(prefix, tipo){
@@ -4727,18 +4800,19 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
     +'</div>'
     // Cosmetóloga
     +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">👤 Cosmetóloga</div>'
-    +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+    +'<select id="hist-cosm" onchange="filtrarPorCosm(this.value)" aria-label="Cosmetóloga" style="width:100%;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;font-family:inherit;background:white;color:var(--navy)">'
     +cosms.map(function(name){
       var active = (name==='Todas' && !cosmFiltro) || (name===cosmFiltro);
-      return '<button onclick="filtrarPorCosm(\''+name+'\')" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid '+(active?'var(--navy)':'#ECEEF4')+';background:'+(active?'var(--navy)':'white')+';color:'+(active?'white':'var(--navy)')+'">'+name+'</button>';
+      return '<option value="'+_histEsc(name)+'"'+(active?' selected':'')+'>'+_histEsc(name)+'</option>';
     }).join('')
-    +'</div>'
+    +'</select>'
     +'</div>';
 
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
   window._histCosmFiltro=cosmFiltro;
   html+='<div id="hist-res">'+_histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq)+'</div>';
   c.innerHTML=html;
+  _histTrasPintar();
 }
 
 function filtrarPorCosm(nombre){
@@ -13822,7 +13896,7 @@ function _lineasRol(d){
       ['Sueldo', d.sueldo],
       ['Bono', d.bono],
       ['Com. faciales/extras/recep.', d.comFaciales],
-      ['Comisión paquetes'+(d.paquetes&&d.nivelPaquete?(' ('+d.paquetes+' · '+d.nivelPaquete+')'):(d.nivelPaquete&&String(d.nivelPaquete).indexOf('%')>=0?(' ('+d.nivelPaquete+')':'')), d.comPaquetes],
+      ['Comisión paquetes'+(d.paquetes&&d.nivelPaquete?(' ('+d.paquetes+' · '+d.nivelPaquete+')'):(d.nivelPaquete&&String(d.nivelPaquete).indexOf('%')>=0?(' ('+d.nivelPaquete+')'):'')), d.comPaquetes],
       ['Comisión productos', d.comProductos],
       ['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)', d.valSupl],
       ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)', d.valExtr],
