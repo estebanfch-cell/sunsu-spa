@@ -47,7 +47,7 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
 const ACCION_MODULO: Record<string, Modulo> = {
   getCatalogo: "productos", getCatalogoTabla: "productos", crearProductoApp: "productos", editarProductoCatalogo: "productos",
   toggleActivoCatalogo: "productos", eliminarProductoApp: "productos", prod_list: "productos",
-  prod_get: "productos", prod_save: "productos",
+  prod_get: "productos", prod_save: "productos", prod_foto: "productos",
   getInventario: "inventario", stk_saldo: "inventario", stk_kardex: "kardex",
   getEntradas: "compras", registrarEntrada: "compras", getProveedoresApp: "proveedores",
   guardarProveedorApp: "proveedores", eliminarProveedorApp: "proveedores",

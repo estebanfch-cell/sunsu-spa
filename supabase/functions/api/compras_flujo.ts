@@ -193,6 +193,7 @@ export async function comprasGuardar(db: Db, actor: string, p: Row, now: Date): 
   const snap = {
     tipo: s(p.tipo) || "consignacion",
     conIva, desde: s(p.desde), hasta: s(p.hasta),
+    numero_prov: s(p.numero_prov),
     prov: { id: prov.id, nombre: s(prov.nombre), ruc: s(prov.ruc) },
     fact, pedido: crudas,
   };
@@ -263,34 +264,48 @@ function vistaLinea(ln: Row, prod: Row | undefined, admin: boolean): Row {
   return { ...base, nombre: s(prod?.nombre), precio: n(ln.precio), subtotal: n(ln.subtotal) };
 }
 
-async function vistaOc(db: Db, o: Row, admin: boolean): Promise<Row> {
+async function vistaOc(db: Db, o: Row, admin: boolean, pagos: Row[] = []): Promise<Row> {
   const prods = await productos(db);
   const map = new Map(prods.map((r) => [String(r.id), r]));
   const lineas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
   const prov = admin ? (await db.all("erp_proveedores")).find((r) => r.id === o.proveedor_id) : null;
+  const snap = snapDe(o);
   const out: Row = {
     id: o.id, numero: s(o.numero) || "Borrador", flujo: s(o.flujo) || s(o.estado),
+    fecha: s(o.fecha), estado: s(o.estado),
     lineas: lineas.map((ln) => vistaLinea(ln, map.get(String(ln.producto_id)), admin)),
   };
   if (admin) {
+    const ps = pagos.filter((p) => p.oc_id === o.id);
     out.proveedor = s(prov?.nombre);
     out.proveedor_id = o.proveedor_id;
     out.total = n(o.total);
     out.pagado = n(o.pagado);
     out.saldo = n(o.saldo);
+    out.subtotal = n(o.subtotal);
+    out.iva = n(o.iva);
     out.q_label = s(o.q_label);
     out.tipo = s(o.tipo);
+    out.con_iva = snap.conIva !== false;
+    out.desde = s(snap.desde);
+    out.hasta = s(snap.hasta);
+    out.numero_prov = s(snap.numero_prov);
+    out.pagos = ps.map((p) => ({
+      id: p.id, monto: n(p.monto), fecha: s(p.fecha), nota: s(p.nota), archivo_nombre: s(p.archivo_nombre),
+    }));
+    out.facturas = ps.map((p) => s(p.archivo_nombre)).filter(Boolean);
   }
   return out;
 }
 
 export async function comprasLista(db: Db, admin: boolean): Promise<Row> {
   const ocs = await db.all("erp_oc");
+  const pagos = admin ? await db.all("erp_oc_pagos") : [];
   const items = [];
   for (const o of ocs) {
     const flujo = s(o.flujo);
     if (!admin && !ABIERTAS.has(flujo)) continue;
-    items.push(await vistaOc(db, o, admin));
+    items.push(await vistaOc(db, o, admin, pagos));
   }
   return { ok: true, items };
 }

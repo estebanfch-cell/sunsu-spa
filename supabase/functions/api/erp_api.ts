@@ -1,6 +1,6 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf } from "./lib.ts";
+import { actorOf, guardarArchivo } from "./lib.ts";
 import { ErpError, runErp } from "./erp.ts";
 import { acceso, esAdmin, matrizDe, type Acceso } from "./permisos.ts";
 import { s, type Row } from "./domain.ts";
@@ -87,4 +87,31 @@ extend("permisos_guardar", "any", async (p, ctx, ses) => {
   if (hit) await ctx.db.write(actorOf(ses), "app_modulos", "update", { rol, modulo }, { acceso: acc });
   else await ctx.db.write(actorOf(ses), "app_modulos", "insert", {}, { rol, modulo, acceso: acc });
   return { ok: true };
+});
+
+extend("prod_foto", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin edita el catálogo" };
+  const pid = s((p as Row).id);
+  const raw = s((p as Row).foto_b64 || (p as Row).archivo);
+  if (!pid || !raw) return { error: "Falta la foto" };
+  const dataUrl = raw.startsWith("data:") ? raw : "data:image/jpeg;base64," + raw;
+  const aid = await guardarArchivo(ctx.db, actorOf(ses), "foto-producto", s((p as Row).nombre) || "foto.jpg", dataUrl);
+  if (!aid) return { error: "La foto es demasiado grande o no se pudo leer" };
+  const foto_url = "archivo:" + aid;
+  const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: pid }, { foto_url });
+  if (!saved) return { error: "Producto no encontrado" };
+  const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, "");
+  const key = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
+  const b64 = dataUrl.slice(dataUrl.indexOf("base64,") + 7);
+  if (base && key && b64) {
+    try {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      await ctx.fetchImpl(`${base}/storage/v1/object/productos/${encodeURIComponent(pid + "/" + aid)}`, {
+        method: "POST",
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/octet-stream", "x-upsert": "true" },
+        body: bytes as unknown as BodyInit,
+      });
+    } catch { /* la ficha igual muestra el archivo guardado */ }
+  }
+  return { ok: true, id: pid, foto_url };
 });

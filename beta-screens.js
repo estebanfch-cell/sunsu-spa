@@ -4676,6 +4676,19 @@ function _histMontos(t){
   var tot=parseFloat(t&&t.estimado)||0, sub=Math.round(tot/1.15*100)/100;
   return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
 }
+function _histEstadoDoc(t){
+  if(!t) return 'abierto';
+  if(t.estado_doc==='cerrado'||t.estado_doc==='abierto') return t.estado_doc;
+  var orig=t.orig||{};
+  if(t.anulado===true||orig.anulado===true) return 'cerrado';
+  if(t.fac&&t.cob) return 'cerrado';
+  return 'abierto';
+}
+function _histFactura(t){ return (t&&(t.factura||t.fac_7||t.numFac))||''; }
+function _histSaldo(t){
+  if(t&&t.saldo!=null&&t.saldo!=='') return Number(t.saldo)||0;
+  return _histEstadoDoc(t)==='cerrado'?0:(parseFloat(t&&t.estimado)||0);
+}
 var _HIST_COLS=[
   {k:'num',t:'Nº ticket',v:function(t){var m=/(\d+)$/.exec(_histNum(t));return m?+m[1]:-1;}},
   {k:'cli',t:'Clienta',v:function(t){return ((t.nombre||'')+' '+(t.apellido||'')).trim().toLowerCase();}},
@@ -4684,7 +4697,10 @@ var _HIST_COLS=[
   {k:'cos',t:'Cosmetóloga',v:function(t){return String(t.cosmetologa||'').toLowerCase();}},
   {k:'sub',t:'Subtotal',num:1,v:function(t){return _histMontos(t).sub;}},
   {k:'iva',t:'IVA',num:1,v:function(t){return _histMontos(t).iva;}},
-  {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}}
+  {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}},
+  {k:'est',t:'Estado',v:function(t){return _histEstadoDoc(t);}},
+  {k:'fac',t:'Factura',v:function(t){return String(_histFactura(t)).toLowerCase();}},
+  {k:'sal',t:'Saldo',num:1,v:function(t){return _histSaldo(t);}}
 ];
 function _histOrdenar(list){
   var st=window._histSort||{k:'fecha',d:-1}, col=_HIST_COLS.filter(function(c){return c.k===st.k;})[0]||_HIST_COLS[3];
@@ -4696,7 +4712,7 @@ function _histOrdenar(list){
 }
 function _histSortBy(k){
   var st=window._histSort||{k:'fecha',d:-1};
-  window._histSort= st.k===k ? {k:k,d:-st.d} : {k:k,d:(k==='fecha'||k==='num'||k==='sub'||k==='iva'||k==='tot')?-1:1};
+  window._histSort= st.k===k ? {k:k,d:-st.d} : {k:k,d:(k==='fecha'||k==='num'||k==='sub'||k==='iva'||k==='tot'||k==='sal')?-1:1};
   var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
   _histActualizarRes(esStaff);
 }
@@ -4714,7 +4730,8 @@ function _histMasterHTML(tickets, showPrices){
       +'<td class="tk-num">'+_histEsc(_histNum(t)||'—')+'</td>'
       +'<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td><td>'+_histEsc(t.cedula||'')+'</td><td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>'
       +'<td>'+_histEsc(t.cosmetologa||'')+'</td>'
-      +'<td class="num">'+$(m.sub)+'</td><td class="num">'+$(m.iva)+'</td><td class="num">'+$(m.tot)+'</td></tr>';
+      +'<td class="num">'+$(m.sub)+'</td><td class="num">'+$(m.iva)+'</td><td class="num">'+$(m.tot)+'</td>'
+      +'<td>'+_histEsc(_histEstadoDoc(t))+'</td><td>'+_histEsc(_histFactura(t))+'</td><td class="num">'+(_histSaldo(t)?$(_histSaldo(t)):$(0))+'</td></tr>';
   }).join('');
   var head=_HIST_COLS.map(function(c){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
@@ -4724,7 +4741,7 @@ function _histMasterHTML(tickets, showPrices){
   var open=elegido?' tk-open':'';
   return '<div class="tk-split"><div class="tk-list sheet-scroll"><table class="tk-table nowrap-table"><thead><tr>'
     +head
-    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="8">Sin tickets</td></tr>')+'</tbody></table></div>'
+    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="11">Sin tickets</td></tr>')+'</tbody></table></div>'
     +'<aside class="tk-detail'+open+'" id="tk-detail">'+detail+'</aside></div>';
 }
 function _histAbrirTicket(i){
@@ -4811,12 +4828,15 @@ function _histActualizarRes(esStaff){
 function _histMatchBusq(t, busq){
   var full=((t.nombre||'')+' '+(t.apellido||'')).toLowerCase();
   var fullInv=((t.apellido||'')+' '+(t.nombre||'')).toLowerCase();
-  return (t.cedula||'').indexOf(busq)>=0 || full.indexOf(busq)>=0 || fullInv.indexOf(busq)>=0;
+  return (t.cedula||'').indexOf(busq)>=0 || full.indexOf(busq)>=0 || fullInv.indexOf(busq)>=0
+    || String(t.so_num||'').toLowerCase().indexOf(busq)>=0
+    || String(_histFactura(t)||'').toLowerCase().indexOf(busq)>=0
+    || _histEstadoDoc(t).indexOf(busq)>=0;
 }
 function _histBuscarUI(esStaff, busq){
   return '<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">🔍 Buscar clienta</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:12px">'
-    +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Cédula o nombre..." autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
+    +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Nº, clienta, cédula o factura" autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
     +'<button onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
     +'<button onclick="_histBuscarClear('+esStaff+')" title="Limpiar búsqueda" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>'
     +'</div>';
@@ -16080,7 +16100,7 @@ function _cotDibujarPDF(doc, q, logo){
 }
 
 // ══════ COMPRAS — un solo flujo, sin saltar de módulo ══════
-var _cmp = { step: 0, provId: "", lineas: [], ocId: "", desde: "", hasta: "", conIva: true, nuevo: false };
+var _cmp = { q: "", sort: "fecha", dir: -1, grp: "", canceladas: false, tab: "orden", filtro: "" };
 function _cmpAdmin(){ return !!window._cmpEsAdmin; }
 function _cmpEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
 function _cmpMoney(n){ return (typeof money === "function") ? money(n) : ("$"+Number(n||0).toFixed(2)); }
@@ -16106,7 +16126,6 @@ function _cmpProdsDe(provId){
 }
 async function renderComprasFlujo(){
   var admin = _cmpAdmin();
-  if (!admin) _cmp.step = 4;
   var lista = await api("compras_lista");
   window._cmpLista = (lista && lista.items) || [];
   window._cmpProv = [];
@@ -16117,25 +16136,16 @@ async function renderComprasFlujo(){
     window._cmpProv = (prov && prov.items) || [];
     window._cmpCat = (cat && cat.items) || [];
   }
-  var pasos = admin
-    ? ["Proveedor","Pre-orden","Periodo","Aprobar","Recibir","Pagos"]
-    : ["Recibir"];
-  var bar = pasos.map(function(t,i){
-    var n = admin ? i : 4;
-    return '<button type="button" data-cmp-step="'+n+'" class="'+( _cmp.step===n?"on":"")+'">'+_cmpEsc(t)+'</button>';
-  }).join("");
-  return '<div id="cmp-root"><div class="cmp-bar" id="cmp-bar">'+bar+'</div><div id="cmp-body"></div><p class="err" id="cmp-msg"></p></div>';
+  var abierto = !!(window._cmpSub && window._cmpSub !== "rfq");
+  return '<div id="cmp-root" class="desk"><div class="desk-split'+(abierto?" desk-open":"")+'">'
+    +'<div class="desk-list" id="cmp-list"></div><div class="desk-detail" id="cmp-detail"></div></div>'
+    +'<p class="err" id="cmp-msg"></p></div>';
 }
 function _cmpMsg(t, ok){
   var el = document.getElementById("cmp-msg");
   if (!el) return;
   el.className = ok ? "ok" : "err";
   el.textContent = t || "";
-}
-function _cmpPasos(){
-  document.querySelectorAll("#cmp-bar [data-cmp-step]").forEach(function(b){
-    b.classList.toggle("on", Number(b.getAttribute("data-cmp-step"))===_cmp.step);
-  });
 }
 function _cmpPdfPlano(nombre, titulo, lineas, pie){
   if (typeof pdfPaginas !== "function" || typeof bajarArchivo !== "function") return;
@@ -16216,190 +16226,459 @@ function _cmpPdf(nombre, titulo, lineas, pie){
     });
   });
 }
-function _cmpBody(){
-  var box = document.getElementById("cmp-body");
-  if (!box) return;
-  var admin = _cmpAdmin();
-  if (!admin) _cmp.step = 4;
-  if (_cmp.step===0) box.innerHTML = _cmpHtmlProv();
-  else if (_cmp.step===1) box.innerHTML = _cmpHtmlLineas();
-  else if (_cmp.step===2) box.innerHTML = _cmpHtmlPeriodo();
-  else if (_cmp.step===3) box.innerHTML = _cmpHtmlAprobar();
-  else if (_cmp.step===4) box.innerHTML = _cmpHtmlRecibir();
-  else box.innerHTML = _cmpHtmlPagos();
-  _cmpPasos();
-  _cmpBindBody();
+function _cmpColsDef(){
+  if (!_cmpAdmin()) return [{k:"num",t:"Nº"},{k:"fecha",t:"Fecha"},{k:"est",t:"Estado"}];
+  return [
+    {k:"num",t:"Nº"},{k:"prov",t:"Proveedor"},{k:"nprov",t:"Nº proveedor"},
+    {k:"fecha",t:"Fecha"},{k:"est",t:"Estado"},{k:"tot",t:"Total",num:1},{k:"saldo",t:"Saldo",num:1}
+  ];
 }
-function _cmpHtmlProv(){
-  var opts = (window._cmpProv||[]).map(function(p){
-    return '<option value="'+_cmpEsc(p.id)+'"'+(p.id===_cmp.provId?" selected":"")+'>'+_cmpEsc(p.nombre)+'</option>';
-  }).join("");
-  return '<div class="card"><div class="card-title">Proveedor</div>'
-    +'<label>Proveedor</label><select id="cmp-prov"><option value="">Elegir…</option>'+opts+'<option value="__nuevo">Nuevo proveedor</option></select>'
-    +'<div id="cmp-nuevo" '+(_cmp.nuevo?"":"hidden")+'>'
-    +'<label>Nombre</label><input id="cmp-nom" placeholder="Nombre del proveedor">'
-    +'<label>RUC</label><input id="cmp-ruc"><label>Teléfono</label><input id="cmp-tel"><label>Email</label><input id="cmp-mail">'
-    +'</div>'
-    +'<button class="btn block" type="button" id="cmp-sig">Siguiente</button></div>';
+function _cmpEstado(o){
+  if (o && String(o.estado)==="cancelada") return "Cancelada";
+  return (o && (o.flujo || o.estado)) || "";
 }
-function _cmpHtmlLineas(){
-  var prods = _cmpProdsDe(_cmp.provId);
-  var opts = prods.map(function(p){ return '<option value="'+_cmpEsc(p.sku)+'">'+_cmpEsc(p.sku)+" · "+_cmpEsc(p.nombre)+'</option>'; }).join("");
-  var rows = (_cmp.lineas||[]).map(function(ln,i){
-    return '<div class="cmp-line"><div><b>'+_cmpEsc(ln.sku)+'</b><div class="note">'+_cmpEsc(ln.nombre||"")+' · '+_cmpMoney(ln.precio)+'</div></div>'
-      +'<input data-cmp-qty="'+i+'" type="number" min="0" step="1" value="'+_cmpEsc(ln.cantidad)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'"></div>';
-  }).join("");
-  return '<div class="card"><div class="card-title">Pre-orden de compra</div>'
-    +(opts?'<label>Producto de este proveedor</label><select id="cmp-sku">'+opts+'</select>':'<label>Código</label><input id="cmp-sku-libre" placeholder="HT-002">')
-    +'<button class="btn ghost small" type="button" id="cmp-add">Agregar</button>'
-    +'<div id="cmp-lines">'+ (rows||'<p class="note">Todavía no hay líneas. Agrega productos o usa Consignación + periodo.</p>')+'</div>'
-    +'<button class="btn block" type="button" id="cmp-save">Guardar borrador</button>'
-    +'<button class="btn ghost block" type="button" id="cmp-go-per">Consignación + periodo</button></div>';
+function _cmpColsOn(){
+  var def = _cmpColsDef();
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem("sunsu.desk.oc.cols") || "{}") || {}; } catch (e) { saved = {}; }
+  var on = def.filter(function(c){ return saved[c.k] !== false; });
+  return on.length ? on : def;
 }
-function _cmpHtmlPeriodo(){
-  var hoy = new Date();
-  var iso = function(d){ return d.toISOString().slice(0,10); };
-  var ini = _cmp.desde || iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()<=15?1:16));
-  return '<div class="card"><div class="card-title">Consignación + periodo</div>'
-    +'<p class="note">Suma las unidades y los montos vendidos en tickets, de los códigos de este proveedor, y llena la pre-orden.</p>'
-    +'<label>Desde</label><input id="cmp-desde" type="date" value="'+_cmpEsc(ini)+'">'
-    +'<label>Hasta</label><input id="cmp-hasta" type="date" value="'+_cmpEsc(_cmp.hasta||iso(hoy))+'">'
-    +'<label><input id="cmp-iva" type="checkbox"'+(_cmp.conIva?" checked":"")+'> Con IVA 15%</label>'
-    +'<button class="btn block" type="button" id="cmp-llenar">Llenar pre-orden</button></div>';
+function _cmpToggleCol(k, on){
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem("sunsu.desk.oc.cols") || "{}") || {}; } catch (e) { saved = {}; }
+  saved[k] = !!on;
+  try { localStorage.setItem("sunsu.desk.oc.cols", JSON.stringify(saved)); } catch (e2) {}
 }
-function _cmpHtmlAprobar(){
-  var rows = (_cmp.lineas||[]).map(function(ln){
-    return '<div class="doc-row"><span class="sku-badge">'+_cmpEsc(ln.sku)+'</span><span class="pname">'+_cmpEsc(ln.cantidad)+'</span><span class="money-col">'+_cmpMoney((ln.precio||0)*(ln.cantidad||0))+'</span></div>';
-  }).join("");
-  return '<div class="card"><div class="card-title">Revisar y aprobar</div>'
-    +'<p class="note">Al aprobar se numeran la orden y salen dos PDF: la liquidación para pagarle al proveedor y el pedido que se le envía.</p>'
-    +'<div class="list">'+rows+'</div>'
-    +'<button class="btn block" type="button" id="cmp-aprobar">Aprobar</button>'
-    +'<button class="btn ghost block" type="button" id="cmp-enviar">Marcar enviada</button></div>';
+function _cmpVal(o, k){
+  if (k==="num") return String(o.numero||"");
+  if (k==="prov") return String(o.proveedor||"").toLowerCase();
+  if (k==="nprov") return String(o.numero_prov||"").toLowerCase();
+  if (k==="fecha") return String(o.fecha||"");
+  if (k==="est") return _cmpEstado(o).toLowerCase();
+  if (k==="tot") return Number(o.total)||0;
+  if (k==="saldo") return Number(o.saldo)||0;
+  return "";
 }
-function _cmpHtmlRecibir(){
-  var vivas = { Aprobada:1, Enviada:1, "Recibida parcial":1, Recibida:1, "Pagada parcial":1 };
-  var items = (window._cmpLista||[]).filter(function(o){ return vivas[o.flujo]; });
-  var oc = items.filter(function(o){ return !_cmp.ocId || o.id===_cmp.ocId; })[0] || items[0];
-  var opts = items.map(function(o){
-    return '<option value="'+_cmpEsc(o.id)+'"'+((oc&&o.id===oc.id)?" selected":"")+'>'+_cmpEsc(o.numero)+(_cmpAdmin()&&o.proveedor?" · "+_cmpEsc(o.proveedor):"")+' · '+_cmpEsc(o.flujo)+'</option>';
-  }).join("");
-  var lineas = (oc&&oc.lineas||[]).map(function(ln){
-    return '<div class="cmp-rec"><b>'+_cmpEsc(ln.sku)+'</b><span class="note">pedido '+_cmpEsc(ln.pedido)+' · pendiente '+_cmpEsc(ln.pendiente)+'</span>'
-      +'<input data-rec="'+_cmpEsc(ln.id)+'" type="number" min="0" step="1" value="'+_cmpEsc(ln.pendiente||0)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
-      +'<button class="btn small" type="button" data-ok="'+_cmpEsc(ln.id)+'">Recibido</button>'
-      +'<button class="btn ghost small" type="button" data-no="'+_cmpEsc(ln.id)+'">No recibido</button></div>';
-  }).join("");
-  return '<div class="card"><div class="card-title">Recibir</div>'
-    +(opts?'<label>Orden</label><select id="cmp-oc">'+opts+'</select>':'<p class="note">No hay órdenes por recibir.</p>')
-    +lineas+'</div>';
-}
-function _cmpHtmlPagos(){
-  var items = (window._cmpLista||[]).filter(function(o){ return o.flujo && o.flujo!=="Borrador"; });
-  var opts = items.map(function(o){
-    return '<option value="'+_cmpEsc(o.id)+'"'+(o.id===_cmp.ocId?" selected":"")+'>'+_cmpEsc(o.numero)+' · '+_cmpEsc(o.proveedor||"")+' · saldo '+_cmpMoney(o.saldo)+'</option>';
-  }).join("");
-  var saldos = (window._cmpSaldos||[]).map(function(p){
-    return '<div class="doc-row"><span class="pname">'+_cmpEsc(p.nombre)+'</span><span class="money-col">pagado '+_cmpMoney(p.pagado)+' · pendiente '+_cmpMoney(p.pendiente)+'</span></div>';
-  }).join("");
-  var provOpts = (window._cmpProv||[]).map(function(p){ return '<option value="'+_cmpEsc(p.id)+'">'+_cmpEsc(p.nombre)+'</option>'; }).join("");
-  return '<div class="card"><div class="card-title">Pagos</div>'
-    +'<p class="note">La orden sigue abierta hasta que se paga. La consignación cierra lo vendido del más viejo al más nuevo.</p>'
-    +(opts?'<label>Orden</label><select id="cmp-pago-oc">'+opts+'</select>':'')
-    +'<label>Monto</label><input id="cmp-monto" type="number" min="0" step="0.01">'
-    +'<label>Factura del proveedor</label><input id="cmp-file" type="file" accept="image/*,.pdf">'
-    +'<button class="btn block" type="button" id="cmp-pagar">Registrar pago</button>'
-    +'<div class="card-title">Saldo por proveedor</div><div class="list">'+saldos+'</div>'
-    +'<div class="card-title">Consignación a la fecha</div>'
-    +'<select id="cmp-rep">'+provOpts+'</select>'
-    +'<button class="btn ghost block" type="button" id="cmp-rep-btn">PDF de stock en consignación</button></div>';
-}
-function _cmpBindBody(){
-  var sig = document.getElementById("cmp-sig");
-  if (sig) sig.onclick = function(){
-    var sel = document.getElementById("cmp-prov");
-    if (sel && sel.value==="__nuevo") {
-      _cmp.nuevo = true;
-      _cmp.provId = "";
-      _cmp.nuevoNombre = (document.getElementById("cmp-nom")||{}).value||"";
-    } else {
-      _cmp.nuevo = false;
-      _cmp.provId = sel ? sel.value : "";
-    }
-    if (!_cmp.provId && !_cmp.nuevoNombre) { _cmpMsg("Elige un proveedor"); return; }
-    _cmp.step = 1; _cmpMsg(""); _cmpBody();
-  };
-  var prov = document.getElementById("cmp-prov");
-  if (prov) prov.onchange = function(){
-    _cmp.nuevo = prov.value==="__nuevo";
-    var box = document.getElementById("cmp-nuevo");
-    if (box) box.hidden = !_cmp.nuevo;
-  };
-  var add = document.getElementById("cmp-add");
-  if (add) add.onclick = function(){
-    var sel = document.getElementById("cmp-sku");
-    var libre = document.getElementById("cmp-sku-libre");
-    var sku = sel ? sel.value : (libre?libre.value:"");
-    sku = String(sku||"").toUpperCase().replace(/^SUNSU-/,"");
-    if (!sku) return;
-    var prod = (window._cmpCat||[]).filter(function(p){ return String(p.sku||"").toUpperCase().replace(/^SUNSU-/,"")===sku; })[0];
-    _cmp.lineas.push({ sku: sku, nombre: prod?prod.nombre:"", precio: prod?Number(prod.costo_promedio)||0:0, cantidad: 1 });
-    _cmpBody();
-  };
-  document.querySelectorAll("[data-cmp-qty]").forEach(function(inp){
-    inp.onchange = function(){ var i = Number(inp.getAttribute("data-cmp-qty")); if (_cmp.lineas[i]) _cmp.lineas[i].cantidad = Number(inp.value)||0; };
+function _cmpVisible(){
+  var q = String(_cmp.q||"").trim().toLowerCase();
+  var filtro = _cmp.filtro || "";
+  var rows = (window._cmpLista||[]).filter(function(o){
+    var cancel = String(o.estado)==="cancelada";
+    if (_cmp.canceladas) return cancel;
+    if (cancel) return false;
+    if (filtro && _cmpEstado(o)!==filtro) return false;
+    if (!q) return true;
+    var blob = [o.numero, o.proveedor, o.numero_prov, o.fecha, _cmpEstado(o), (o.facturas||[]).join(" ")].join(" ");
+    (o.lineas||[]).forEach(function(ln){ blob += " "+(ln.sku||"")+" "+(ln.nombre||""); });
+    return blob.toLowerCase().indexOf(q)>=0;
   });
-  var save = document.getElementById("cmp-save");
-  if (save) save.onclick = async function(){
-    document.querySelectorAll("[data-cmp-qty]").forEach(function(inp){ var i = Number(inp.getAttribute("data-cmp-qty")); if (_cmp.lineas[i]) _cmp.lineas[i].cantidad = Number(inp.value)||0; });
-    var body = { id: _cmp.ocId||undefined, proveedor_id: _cmp.provId, lineas: _cmp.lineas.filter(function(l){ return l.cantidad>0; }), con_iva: _cmp.conIva, desde: _cmp.desde, hasta: _cmp.hasta, tipo: "consignacion", fact: _cmp.fact||_cmp.lineas };
-    if (_cmp.nuevoNombre) body.nuevo = { nombre: _cmp.nuevoNombre, ruc: (document.getElementById("cmp-ruc")||{}).value||"", telefono: (document.getElementById("cmp-tel")||{}).value||"", email: (document.getElementById("cmp-mail")||{}).value||"" };
-    var data = await api("compras_guardar", body);
-    if (data.error) { _cmpMsg(data.error); return; }
-    _cmp.ocId = data.id; _cmp.provId = data.proveedor_id || _cmp.provId;
-    _cmpMsg("Borrador guardado", true);
-    _cmp.step = 3; _cmpBody();
-  };
-  var goPer = document.getElementById("cmp-go-per");
-  if (goPer) goPer.onclick = function(){ _cmp.step = 2; _cmpBody(); };
-  var llenar = document.getElementById("cmp-llenar");
-  if (llenar) llenar.onclick = async function(){
-    _cmp.desde = (document.getElementById("cmp-desde")||{}).value||"";
-    _cmp.hasta = (document.getElementById("cmp-hasta")||{}).value||"";
-    _cmp.conIva = !!(document.getElementById("cmp-iva")||{}).checked;
-    var data = await api("compras_periodo", { proveedor_id: _cmp.provId, desde: _cmp.desde, hasta: _cmp.hasta, con_iva: _cmp.conIva });
-    if (data.error) { _cmpMsg(data.error); return; }
-    _cmp.lineas = data.lineas||[];
-    _cmp.fact = data.lineas||[];
-    _cmp.step = 1; _cmpMsg("Pre-orden llena con lo vendido", true); _cmpBody();
-  };
-  var apr = document.getElementById("cmp-aprobar");
-  if (apr) apr.onclick = async function(){
-    if (!_cmp.ocId) { _cmpMsg("Guarda el borrador primero"); return; }
-    var data = await api("compras_aprobar", { id: _cmp.ocId });
-    if (data.error) { _cmpMsg(data.error); return; }
-    var liq = data.liquidacion||{};
-    var ped = data.pedido||{};
-    _cmpPdf("LIQUIDACION "+data.numero, "SUNSU SPA — LIQUIDACION DE CONSIGNACION", (liq.lineas||[]).map(function(it){
-      return (it.sku||"")+"  "+(it.nombre||"")+"  "+(it.vendido||it.cantidad||"")+"  $"+Number(it.subtotal||0).toFixed(2);
-    }), [liq.proveedor||"", liq.periodo||"", "SUBTOTAL $"+Number(liq.subtotal||0).toFixed(2), "IVA $"+Number(liq.iva||0).toFixed(2), "TOTAL $"+Number(liq.total||0).toFixed(2)]);
-    _cmpPdf("OC "+data.numero, "SUNSU SPA — ORDEN DE COMPRA", (ped.lineas||[]).map(function(it){
-      return (it.sku||"")+"  "+(it.nombre||"")+"  pedir "+it.cantidad;
-    }), [data.numero||"", ped.proveedor||"", ped.periodo||""]);
-    _cmpMsg("Aprobada "+data.numero, true);
-    _cmp.step = 4;
-    var lista = await api("compras_lista");
-    window._cmpLista = (lista&&lista.items)||[];
-    _cmpBody();
-  };
-  var env = document.getElementById("cmp-enviar");
-  if (env) env.onclick = async function(){
-    var data = await api("compras_enviar", { id: _cmp.ocId });
-    if (data.error) { _cmpMsg(data.error); return; }
-    _cmpMsg("Enviada", true);
-  };
-  var ocSel = document.getElementById("cmp-oc");
-  if (ocSel) ocSel.onchange = function(){ _cmp.ocId = ocSel.value; _cmpBody(); };
+  var k = _cmp.sort || "fecha";
+  var dir = _cmp.dir || -1;
+  rows.sort(function(a,b){
+    if (_cmp.grp==="proveedor" && _cmpAdmin()) {
+      var pa = String(a.proveedor||"").toLowerCase();
+      var pb = String(b.proveedor||"").toLowerCase();
+      if (pa<pb) return -1;
+      if (pa>pb) return 1;
+    }
+    var x=_cmpVal(a,k), y=_cmpVal(b,k);
+    if (x<y) return -1*dir;
+    if (x>y) return 1*dir;
+    return String(a.fecha||"")<String(b.fecha||"")?1:-1;
+  });
+  return rows;
+}
+function _cmpCelda(o, c){
+  if (c.k==="num") return _cmpEsc(o.numero||"Borrador");
+  if (c.k==="prov") return _cmpEsc(o.proveedor||"");
+  if (c.k==="nprov") return _cmpEsc(o.numero_prov||"");
+  if (c.k==="fecha") return _cmpEsc(o.fecha||"");
+  if (c.k==="est") return _cmpEsc(_cmpEstado(o));
+  if (c.k==="tot") return _cmpMoney(o.total||0);
+  if (c.k==="saldo") return _cmpMoney(o.saldo||0);
+  return "";
+}
+function _cmpRowsHTML(){
+  var cols = _cmpColsOn();
+  var rows = _cmpVisible();
+  var sel = window._cmpSub || "";
+  var html = "";
+  var grp = _cmp.grp==="proveedor" && _cmpAdmin() ? "" : null;
+  if (!rows.length) return '<tr><td colspan="'+cols.length+'">Sin órdenes.</td></tr>';
+  rows.forEach(function(o){
+    if (grp!==null) {
+      var g = o.proveedor || "Sin proveedor";
+      if (g!==grp) { grp = g; html += '<tr class="desk-grp"><td colspan="'+cols.length+'">'+_cmpEsc(g)+'</td></tr>'; }
+    }
+    var on = o.id===sel ? " on" : "";
+    html += '<tr class="desk-row'+on+'" data-oc="'+_cmpEsc(o.id)+'">'+cols.map(function(c){
+      return '<td'+(c.num?' class="num"':'')+'>'+_cmpCelda(o,c)+'</td>';
+    }).join("")+'</tr>';
+  });
+  return html;
+}
+function _cmpListHTML(){
+  var admin = _cmpAdmin();
+  var cols = _cmpColsOn();
+  var st = _cmp.sort;
+  var head = cols.map(function(c){
+    var ar = st===c.k ? (_cmp.dir>0?" ▲":" ▼") : "";
+    return '<th class="sortable'+(c.num?' num':'')+'" data-cmp-sort="'+c.k+'">'+c.t+ar+'</th>';
+  }).join("");
+  var estados = ["Borrador","Aprobada","Enviada","Recibida parcial","Recibida","Pagada parcial","Pagada/Cerrada"];
+  var filtros = estados.map(function(e){
+    return '<label class="desk-check"><input type="checkbox" data-cmp-est="'+_cmpEsc(e)+'"'+(_cmp.filtro===e?" checked":"")+'> '+_cmpEsc(e)+'</label>';
+  }).join("");
+  var colPanel = _cmpColsDef().map(function(c){
+    var on = cols.some(function(x){ return x.k===c.k; });
+    return '<label class="desk-check"><input type="checkbox" data-cmp-col="'+c.k+'"'+(on?" checked":"")+'> '+c.t+'</label>';
+  }).join("");
+  return '<div class="desk-bar">'
+    +'<input class="desk-q" id="cmp-q" type="search" placeholder="Buscar nº, proveedor, factura o SKU" aria-label="Buscar órdenes" value="'+_cmpEsc(_cmp.q||"")+'">'
+    +(admin?'<button class="btn small" type="button" id="cmp-nueva">+ Nueva OC</button>':'')
+    +'<button class="btn ghost small'+(_cmp.canceladas?" on":"")+'" type="button" id="cmp-canceladas">Canceladas</button>'
+    +'<button class="btn ghost small" type="button" id="cmp-filtros">Filtros</button>'
+    +'<button class="btn ghost small" type="button" id="cmp-columnas">Columnas</button>'
+    +(admin?'<button class="btn ghost small'+(_cmp.grp==="proveedor"?" on":"")+'" type="button" id="cmp-agrupar">Agrupar</button>':'')
+    +'</div>'
+    +'<div class="desk-panel" id="cmp-panel-filtros" hidden><div class="note">Estado del flujo Sunsu. Vacío muestra todos, menos las canceladas.</div>'+filtros+'</div>'
+    +'<div class="desk-panel" id="cmp-panel-cols" hidden>'+colPanel+'</div>'
+    +'<div class="sheet-scroll"><table class="desk-table nowrap-table"><thead><tr>'+head+'</tr></thead><tbody id="cmp-tbody">'+_cmpRowsHTML()+'</tbody></table></div>';
+}
+function _cmpOc(){
+  var id = window._cmpSub || "";
+  if (!id || id==="nueva" || id==="rfq") return null;
+  return (window._cmpLista||[]).filter(function(o){ return o.id===id; })[0] || null;
+}
+function _cmpDraft(){
+  if (!window._cmpDraft) {
+    var hoy = new Date();
+    var iso = function(d){ return d.toISOString().slice(0,10); };
+    var ini = iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()<=15?1:16));
+    window._cmpDraft = { lineas: [], conIva: true, consig: true, provId: "", provNom: "", nuevo: false, desde: ini, hasta: iso(hoy), numero_prov: "", ruc: "", tel: "", mail: "" };
+  }
+  return window._cmpDraft;
+}
+function _cmpLinesHTML(lineas, editable){
+  if (!lineas || !lineas.length) return '<p class="note">Todavía no hay líneas.</p>';
+  return lineas.map(function(ln,i){
+    var qty = ln.cantidad!=null ? ln.cantidad : ln.pedido;
+    var costo = _cmpAdmin() ? '<span class="money-col">'+_cmpMoney(ln.precio||0)+'</span>' : '';
+    var sub = _cmpAdmin() ? '<span class="money-col">'+_cmpMoney((Number(ln.precio)||0)*(Number(qty)||0))+'</span>' : '';
+    var input = editable
+      ? '<input data-cmp-qty="'+i+'" type="number" min="0" step="1" value="'+_cmpEsc(qty)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
+      : '<span>'+_cmpEsc(qty)+'</span>';
+    return '<div class="cmp-line"><b>'+_cmpEsc(ln.sku)+'</b><span class="note">'+_cmpEsc(ln.nombre||"")+'</span>'+input+costo+sub+'</div>';
+  }).join("");
+}
+function _cmpNuevaHTML(){
+  var d = _cmpDraft();
+  return '<div class="desk-actions"><button type="button" class="btn ghost small" id="cmp-back">← Órdenes</button></div>'
+    +'<div class="card-title">Nueva OC</div>'
+    +'<p class="note">El número OC-#### se asigna al aprobar. Mientras tanto la orden es Borrador. Consignación llena las líneas con lo vendido en tickets del periodo.</p>'
+    +'<label>Proveedor</label><div class="ac-wrap"><input id="cmp-prov-q" placeholder="Escribe para buscar" autocomplete="off" value="'+_cmpEsc(d.provNom||"")+'"><div class="ac-list" hidden></div></div>'
+    +'<label class="desk-check"><input type="checkbox" id="cmp-nuevo"'+(d.nuevo?" checked":"")+'> Proveedor nuevo</label>'
+    +'<div id="cmp-nuevo-box"'+(d.nuevo?"":" hidden")+'>'
+    +'<label>Nombre</label><input id="cmp-nom" value="'+_cmpEsc(d.provNom||"")+'">'
+    +'<label>RUC</label><input id="cmp-ruc" value="'+_cmpEsc(d.ruc||"")+'">'
+    +'<label>Teléfono</label><input id="cmp-tel" value="'+_cmpEsc(d.tel||"")+'">'
+    +'<label>Email</label><input id="cmp-mail" value="'+_cmpEsc(d.mail||"")+'">'
+    +'</div>'
+    +'<label>Nº proveedor</label><input id="cmp-nprov" value="'+_cmpEsc(d.numero_prov||"")+'">'
+    +'<label class="desk-check"><input type="checkbox" id="cmp-consig"'+(d.consig?" checked":"")+'> Consignación</label>'
+    +'<div id="cmp-periodo"'+(d.consig?"":" hidden")+'>'
+    +'<label>Desde</label><input id="cmp-desde" type="date" value="'+_cmpEsc(d.desde||"")+'">'
+    +'<label>Hasta</label><input id="cmp-hasta" type="date" value="'+_cmpEsc(d.hasta||"")+'">'
+    +'<button class="btn ghost small" type="button" id="cmp-llenar">Llenar con ventas del periodo</button>'
+    +'</div>'
+    +'<label class="desk-check"><input type="checkbox" id="cmp-iva"'+(d.conIva?" checked":"")+'> Con IVA 15%</label>'
+    +'<label>Producto</label><div class="ac-wrap"><input id="cmp-sku-q" placeholder="Escribe código o nombre" autocomplete="off"><div class="ac-list" hidden></div></div>'
+    +'<div id="cmp-lines">'+_cmpLinesHTML(d.lineas, true)+'</div>'
+    +'<button class="btn block" type="button" id="cmp-save">Guardar borrador</button>';
+}
+function _cmpPdfDe(o, bodega){
+  var admin = _cmpAdmin();
+  var lineas = (o.lineas||[]).map(function(ln){
+    if (bodega || !admin) return (ln.sku||"")+"  pedir "+(ln.pedido!=null?ln.pedido:ln.cantidad||"");
+    return (ln.sku||"")+"  "+(ln.nombre||"")+"  "+(ln.pedido!=null?ln.pedido:"")+"  $"+Number(ln.subtotal!=null?ln.subtotal:(Number(ln.precio)||0)*(Number(ln.pedido)||0)).toFixed(2);
+  });
+  var titulo = bodega ? "SUNSU SPA — PEDIDO A BODEGA" : (o.tipo==="consignacion" ? "SUNSU SPA — LIQUIDACION DE CONSIGNACION" : "SUNSU SPA — ORDEN DE COMPRA");
+  var pie = bodega ? [o.numero||"Borrador", "Sin precios"] : [
+    o.proveedor||"", o.q_label||"",
+    "SUBTOTAL $"+Number(o.subtotal||0).toFixed(2),
+    "IVA $"+Number(o.iva||0).toFixed(2),
+    "TOTAL $"+Number(o.total||0).toFixed(2),
+    "SALDO $"+Number(o.saldo||0).toFixed(2)
+  ];
+  _cmpPdf((bodega?"BODEGA ":"OC ")+(o.numero||"borrador"), titulo, lineas, pie);
+}
+function _cmpDetailHTML(){
+  if (window._cmpSub==="nueva") return _cmpNuevaHTML();
+  var o = _cmpOc();
+  if (!o) return '<p class="note">Elige una orden de la lista.</p>';
+  var admin = _cmpAdmin();
+  var cancel = String(o.estado)==="cancelada";
+  var bor = o.flujo==="Borrador" && !cancel;
+  var acciones = '<div class="desk-actions"><button type="button" class="btn ghost small" id="cmp-back">← Órdenes</button>';
+  if (admin) {
+    acciones += '<button type="button" class="btn ghost small" id="cmp-pdf">PDF</button>'
+      +'<button type="button" class="btn ghost small" id="cmp-mail">Email</button>'
+      +'<button type="button" class="btn ghost small" id="cmp-pagos-go">Pagos por factura</button>'
+      +'<button type="button" class="btn ghost small" id="cmp-pdf-bod">PDF bodega (sin precios)</button>'
+      +'<button type="button" class="btn ghost small" id="cmp-dup">Duplicar</button>'
+      +(bor?'<button type="button" class="btn ghost small" id="cmp-add-go">Agregar producto</button>':'')
+      +'<button type="button" class="btn ghost small" id="cmp-cancel">Cancelar OC</button>';
+  }
+  acciones += '</div>';
+  var tabs = admin
+    ? '<div class="desk-tabs"><button type="button" data-cmp-tab="orden"'+(_cmp.tab!=="recibir"?' class="on"':'')+'>Orden</button><button type="button" data-cmp-tab="recibir"'+(_cmp.tab==="recibir"?' class="on"':'')+'>Recibir</button></div>'
+    : '<div class="desk-tabs"><button type="button" class="on">Recibir</button></div>';
+  var cabeza = '<div class="card-title">'+_cmpEsc(o.numero||"Borrador")+(admin&&o.proveedor?" · "+_cmpEsc(o.proveedor):"")+'</div>'
+    +'<p class="note">'+_cmpEsc(_cmpEstado(o))+(o.fecha?" · "+_cmpEsc(o.fecha):"")+(admin&&o.numero_prov?" · Nº proveedor "+_cmpEsc(o.numero_prov):"")+(o.q_label?" · "+_cmpEsc(o.q_label):"")+'</p>';
+  if (!admin || _cmp.tab==="recibir") {
+    var rec = (o.lineas||[]).map(function(ln){
+      return '<div class="cmp-rec"><b>'+_cmpEsc(ln.sku)+'</b>'
+        +(admin&&ln.nombre?'<span class="note">'+_cmpEsc(ln.nombre)+'</span>':'')
+        +'<span class="note">pedido '+_cmpEsc(ln.pedido)+' · pendiente '+_cmpEsc(ln.pendiente)+'</span>'
+        +'<input data-rec="'+_cmpEsc(ln.id)+'" type="number" min="0" step="1" value="'+_cmpEsc(ln.pendiente||0)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
+        +'<button class="btn small" type="button" data-ok="'+_cmpEsc(ln.id)+'">Recibido</button>'
+        +'<button class="btn ghost small" type="button" data-no="'+_cmpEsc(ln.id)+'">No recibido</button></div>';
+    }).join("");
+    return acciones+cabeza+tabs+'<div class="card-title">Recibir</div>'+(rec||'<p class="note">No hay líneas.</p>')
+      +(cancel?'<p class="note">Esta orden está cancelada.</p>':'');
+  }
+  var filas = (o.lineas||[]).map(function(ln){
+    return '<tr><td>'+_cmpEsc(ln.sku)+'</td><td>'+_cmpEsc(ln.nombre||"")+'</td><td class="num">'+_cmpEsc(ln.pedido)+'</td><td class="num">'+_cmpEsc(ln.recibido)+'</td><td class="num">'+_cmpMoney(ln.precio||0)+'</td><td class="num">'+_cmpMoney(ln.subtotal||0)+'</td></tr>';
+  }).join("");
+  var orden = '<div class="sheet-scroll"><table class="desk-table nowrap-table"><thead><tr><th>Código</th><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th class="num">Costo</th><th class="num">Subtotal</th></tr></thead><tbody>'
+    +(filas||'<tr><td colspan="6">Sin líneas.</td></tr>')+'</tbody></table></div>'
+    +'<p class="note">Subtotal '+_cmpMoney(o.subtotal||0)+' · IVA '+_cmpMoney(o.iva||0)+(o.con_iva===false?" (sin IVA)":" (15%)")+' · Total '+_cmpMoney(o.total||0)+' · Saldo '+_cmpMoney(o.saldo||0)+'</p>';
+  if (bor) {
+    orden += '<div id="cmp-add-box"><label>Agregar producto</label><div class="ac-wrap"><input id="cmp-add-q" placeholder="Escribe código o nombre" autocomplete="off"><div class="ac-list" hidden></div></div>'
+      +'<p class="note">Solo en Borrador. Después de aprobar las líneas no se reescriben.</p></div>'
+      +'<button class="btn block" type="button" id="cmp-aprobar">Aprobar</button>';
+  }
+  if (o.flujo==="Aprobada" && !cancel) orden += '<button class="btn ghost block" type="button" id="cmp-enviar">Marcar enviada</button>';
+  var pagos = '<div id="cmp-pagos"><div class="card-title">Pagos</div>';
+  pagos += ((o.pagos||[]).map(function(p){
+    return '<div class="doc-row"><span>'+_cmpEsc(p.fecha||"")+' · '+_cmpEsc(p.archivo_nombre||"sin factura")+'</span><span class="money-col">'+_cmpMoney(p.monto)+'</span></div>';
+  }).join("")) || '<p class="note">Sin pagos.</p>';
+  if (!bor && !cancel) {
+    pagos += '<label>Monto</label><input id="cmp-monto" type="number" min="0" step="0.01">'
+      +'<label>Factura del proveedor</label><input id="cmp-file" type="file" accept="image/*,.pdf">'
+      +'<button class="btn block" type="button" id="cmp-pagar">Registrar pago</button>';
+    if (o.tipo!=="compra") pagos += '<p class="note">La consignación cierra lo vendido del periodo, del más viejo al más nuevo.</p>';
+  }
+  pagos += '</div>';
+  return acciones+cabeza+tabs+orden+pagos;
+}
+function _cmpLeerArchivo(input){
+  return new Promise(function(res){
+    if (!input || !input.files || !input.files[0]) { res(null); return; }
+    var f = input.files[0];
+    var r = new FileReader();
+    r.onload = function(){ res({ nombre: f.name, b64: String(r.result||"").split(",")[1]||"" }); };
+    r.onerror = function(){ res(null); };
+    r.readAsDataURL(f);
+  });
+}
+function _cmpAc(input, items, onPick){
+  if (!input || !input.parentElement) return;
+  var box = input.parentElement.querySelector(".ac-list");
+  if (!box) return;
+  var rows = [];
+  function paint(){
+    var q = String(input.value||"").toLowerCase();
+    rows = items().filter(function(it){
+      var blob = (String(it.label||"")+" "+String(it.extra||"")).toLowerCase();
+      return !q || blob.indexOf(q)>=0;
+    }).slice(0, 12);
+    box.innerHTML = rows.map(function(it,i){
+      return '<button type="button" data-i="'+i+'">'+_cmpEsc(it.label)+(it.extra?" · "+_cmpEsc(it.extra):"")+'</button>';
+    }).join("") || '<div class="note" style="padding:8px">Sin coincidencias.</div>';
+    box.hidden = false;
+    box.querySelectorAll("button").forEach(function(b){
+      b.onmousedown = function(ev){
+        ev.preventDefault();
+        var it = rows[Number(b.getAttribute("data-i"))];
+        box.hidden = true;
+        if (it) onPick(it);
+      };
+    });
+  }
+  input.oninput = paint;
+  input.onfocus = paint;
+  input.addEventListener("blur", function(){ setTimeout(function(){ box.hidden = true; }, 180); });
+}
+function _cmpSyncDraft(){
+  var d = _cmpDraft();
+  var q = document.getElementById("cmp-prov-q");
+  if (q && !d.provId) d.provNom = q.value || d.provNom;
+  var nom = document.getElementById("cmp-nom");
+  if (nom && document.getElementById("cmp-nuevo") && document.getElementById("cmp-nuevo").checked) d.provNom = nom.value || "";
+  ["ruc","tel","mail"].forEach(function(k){
+    var el = document.getElementById("cmp-"+k);
+    if (el) d[k] = el.value || "";
+  });
+  var np = document.getElementById("cmp-nprov");
+  if (np) d.numero_prov = np.value || "";
+  var cons = document.getElementById("cmp-consig");
+  if (cons) d.consig = !!cons.checked;
+  var iva = document.getElementById("cmp-iva");
+  if (iva) d.conIva = !!iva.checked;
+  var desde = document.getElementById("cmp-desde");
+  var hasta = document.getElementById("cmp-hasta");
+  if (desde) d.desde = desde.value || "";
+  if (hasta) d.hasta = hasta.value || "";
+  document.querySelectorAll("[data-cmp-qty]").forEach(function(inp){
+    var i = Number(inp.getAttribute("data-cmp-qty"));
+    if (d.lineas[i]) d.lineas[i].cantidad = Number(inp.value)||0;
+  });
+  return d;
+}
+function _cmpLineasDe(o){
+  return (o.lineas||[]).map(function(ln){
+    return { sku: ln.sku, nombre: ln.nombre||"", cantidad: Number(ln.pedido)||0, precio: ln.precio };
+  }).filter(function(ln){ return ln.cantidad>0 && ln.sku; });
+}
+async function _cmpRecargar(hash){
+  if (typeof go==="function") go(hash);
+  else location.hash = hash;
+}
+function _cmpPintarFilas(){
+  var body = document.getElementById("cmp-tbody");
+  if (body) body.innerHTML = _cmpRowsHTML();
+  document.querySelectorAll("#cmp-tbody [data-oc]").forEach(function(tr){
+    tr.onclick = function(){ _cmpRecargar("#/m/compras/"+encodeURIComponent(tr.getAttribute("data-oc"))); };
+  });
+}
+function _cmpBind(){
+  var q = document.getElementById("cmp-q");
+  if (q) q.oninput = function(){ _cmp.q = q.value; _cmpPintarFilas(); };
+  var nueva = document.getElementById("cmp-nueva");
+  if (nueva) nueva.onclick = function(){ window._cmpDraft = null; _cmpRecargar("#/m/compras/nueva"); };
+  var canc = document.getElementById("cmp-canceladas");
+  if (canc) canc.onclick = function(){ _cmp.canceladas = !_cmp.canceladas; _cmpPintar(); };
+  var agr = document.getElementById("cmp-agrupar");
+  if (agr) agr.onclick = function(){ _cmp.grp = _cmp.grp==="proveedor" ? "" : "proveedor"; _cmpPintar(); };
+  var bf = document.getElementById("cmp-filtros");
+  var pf = document.getElementById("cmp-panel-filtros");
+  if (bf && pf) bf.onclick = function(){ pf.hidden = !pf.hidden; };
+  var bc = document.getElementById("cmp-columnas");
+  var pc = document.getElementById("cmp-panel-cols");
+  if (bc && pc) bc.onclick = function(){ pc.hidden = !pc.hidden; };
+  document.querySelectorAll("[data-cmp-sort]").forEach(function(th){
+    th.onclick = function(){
+      var k = th.getAttribute("data-cmp-sort");
+      _cmp.dir = _cmp.sort===k ? -(_cmp.dir||1) : (k==="fecha"||k==="num"||k==="tot"||k==="saldo" ? -1 : 1);
+      _cmp.sort = k;
+      _cmpPintar();
+    };
+  });
+  document.querySelectorAll("[data-cmp-est]").forEach(function(box){
+    box.onchange = function(){
+      _cmp.filtro = box.checked ? box.getAttribute("data-cmp-est") : "";
+      document.querySelectorAll("[data-cmp-est]").forEach(function(o){ if (o!==box) o.checked = false; });
+      _cmpPintarFilas();
+    };
+  });
+  document.querySelectorAll("[data-cmp-col]").forEach(function(box){
+    box.onchange = function(){ _cmpToggleCol(box.getAttribute("data-cmp-col"), box.checked); _cmpPintar(); };
+  });
+  _cmpPintarFilas();
+  var back = document.getElementById("cmp-back");
+  if (back) back.onclick = function(){ _cmpRecargar("#/m/compras"); };
+  document.querySelectorAll("[data-cmp-tab]").forEach(function(b){
+    b.onclick = function(){ _cmp.tab = b.getAttribute("data-cmp-tab")||"orden"; _cmpPintar(); };
+  });
+  var o = _cmpOc();
+  if (o && _cmpAdmin()) {
+    var pdf = document.getElementById("cmp-pdf");
+    if (pdf) pdf.onclick = function(){ _cmpPdfDe(o, false); };
+    var bod = document.getElementById("cmp-pdf-bod");
+    if (bod) bod.onclick = function(){ _cmpPdfDe(o, true); };
+    var mail = document.getElementById("cmp-mail");
+    if (mail) mail.onclick = function(){
+      var cuerpo = (o.lineas||[]).map(function(ln){ return (ln.sku||"")+"  "+(ln.pedido||""); }).join("\n");
+      location.href = "mailto:?subject="+encodeURIComponent("OC "+(o.numero||"Borrador"))+"&body="+encodeURIComponent(cuerpo);
+    };
+    var goPagos = document.getElementById("cmp-pagos-go");
+    if (goPagos) goPagos.onclick = function(){
+      _cmp.tab = "orden";
+      _cmpPintar();
+      var el = document.getElementById("cmp-pagos");
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    var dup = document.getElementById("cmp-dup");
+    if (dup) dup.onclick = async function(){
+      var body = { proveedor_id: o.proveedor_id, lineas: _cmpLineasDe(o), con_iva: o.con_iva!==false, desde: o.desde||"", hasta: o.hasta||"", tipo: o.tipo||"consignacion", numero_prov: o.numero_prov||"", fact: _cmpLineasDe(o) };
+      var data = await api("compras_guardar", body);
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg("Borrador duplicado", true);
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(data.id));
+    };
+    var addGo = document.getElementById("cmp-add-go");
+    if (addGo) addGo.onclick = function(){
+      var el = document.getElementById("cmp-add-box");
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      var inp = document.getElementById("cmp-add-q");
+      if (inp) inp.focus();
+    };
+    var cancel = document.getElementById("cmp-cancel");
+    if (cancel) cancel.onclick = async function(){
+      if (!window.confirm("¿Cancelar esta orden? Si ya tiene recepciones no se puede.")) return;
+      var data = await api("oc_cancel", { id: o.id });
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg("Orden cancelada", true);
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(o.id));
+    };
+    var aprobar = document.getElementById("cmp-aprobar");
+    if (aprobar) aprobar.onclick = async function(){
+      var data = await api("compras_aprobar", { id: o.id });
+      if (data.error) { _cmpMsg(data.error); return; }
+      var liq = data.liquidacion||{};
+      var ped = data.pedido||{};
+      _cmpPdf("LIQUIDACION "+data.numero, "SUNSU SPA — LIQUIDACION DE CONSIGNACION", (liq.lineas||[]).map(function(it){
+        return (it.sku||"")+"  "+(it.nombre||"")+"  "+(it.vendido||it.cantidad||"")+"  $"+Number(it.subtotal||0).toFixed(2);
+      }), [liq.proveedor||"", liq.periodo||"", "SUBTOTAL $"+Number(liq.subtotal||0).toFixed(2), "IVA $"+Number(liq.iva||0).toFixed(2), "TOTAL $"+Number(liq.total||0).toFixed(2)]);
+      _cmpPdf("OC "+data.numero, "SUNSU SPA — ORDEN DE COMPRA", (ped.lineas||[]).map(function(it){
+        return (it.sku||"")+"  "+(it.nombre||"")+"  pedir "+it.cantidad;
+      }), [data.numero||"", ped.proveedor||"", ped.periodo||""]);
+      _cmpMsg("Aprobada "+(data.numero||""), true);
+      _cmp.tab = "recibir";
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(o.id));
+    };
+    var enviar = document.getElementById("cmp-enviar");
+    if (enviar) enviar.onclick = async function(){
+      var data = await api("compras_enviar", { id: o.id });
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg("Enviada", true);
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(o.id));
+    };
+    var pagar = document.getElementById("cmp-pagar");
+    if (pagar) pagar.onclick = async function(){
+      var monto = Number((document.getElementById("cmp-monto")||{}).value)||0;
+      var file = await _cmpLeerArchivo(document.getElementById("cmp-file"));
+      var body = { oc_id: o.id, monto: monto };
+      if (file) { body.factura_nombre = file.nombre; body.factura_b64 = file.b64; }
+      var data = await api("compras_pago", body);
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg(data.flujo||"Pago registrado", true);
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(o.id));
+    };
+    _cmpAc(document.getElementById("cmp-add-q"), function(){
+      return (window._cmpCat||[]).map(function(p){ return { id: p.sku, label: p.sku, extra: p.nombre, precio: p.costo_promedio, nombre: p.nombre }; });
+    }, async function(it){
+      var sku = String(it.label||"").toUpperCase().replace(/^SUNSU-/,"");
+      var lineas = _cmpLineasDe(o);
+      lineas.push({ sku: sku, nombre: it.nombre||"", cantidad: 1, precio: Number(it.precio)||0 });
+      var data = await api("compras_guardar", { id: o.id, proveedor_id: o.proveedor_id, lineas: lineas, con_iva: o.con_iva!==false, desde: o.desde||"", hasta: o.hasta||"", tipo: o.tipo||"consignacion", numero_prov: o.numero_prov||"", fact: lineas });
+      if (data.error) { _cmpMsg(data.error); return; }
+      _cmpMsg("Producto agregado al borrador", true);
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(o.id));
+    });
+  }
   document.querySelectorAll("[data-ok],[data-no]").forEach(function(btn){
     btn.onclick = async function(){
       var id = btn.getAttribute("data-ok") || btn.getAttribute("data-no");
@@ -16408,64 +16687,102 @@ function _cmpBindBody(){
       if (!(qty>0)) { _cmpMsg("Indica la cantidad"); return; }
       var linea = { oc_linea_id: id };
       if (btn.hasAttribute("data-ok")) linea.recibido = qty; else linea.no_recibido = qty;
-      var oc = (document.getElementById("cmp-oc")||{}).value || _cmp.ocId;
-      var data = await api("compras_recibir", { oc_id: oc, lineas: [linea] });
+      var ocId = (o&&o.id) || window._cmpSub;
+      var data = await api("compras_recibir", { oc_id: ocId, lineas: [linea] });
       if (data.error) { _cmpMsg(data.error); return; }
       _cmpMsg(data.flujo||"Recibido", true);
-      var lista = await api("compras_lista");
-      window._cmpLista = (lista&&lista.items)||[];
-      _cmp.ocId = oc;
-      _cmpBody();
+      _cmp.tab = "recibir";
+      _cmpRecargar("#/m/compras/"+encodeURIComponent(ocId));
     };
   });
-  var pagar = document.getElementById("cmp-pagar");
-  if (pagar) pagar.onclick = async function(){
-    var oc = (document.getElementById("cmp-pago-oc")||{}).value;
-    var monto = Number((document.getElementById("cmp-monto")||{}).value)||0;
-    var file = document.getElementById("cmp-file");
-    var body = { oc_id: oc, monto: monto };
-    if (file && file.files && file.files[0]) {
-      body.factura_nombre = file.files[0].name;
-      body.factura_b64 = await new Promise(function(res){
-        var r = new FileReader();
-        r.onload = function(){ res(String(r.result||"").split(",")[1]||""); };
-        r.readAsDataURL(file.files[0]);
-      });
+  var nuevo = document.getElementById("cmp-nuevo");
+  if (nuevo) nuevo.onchange = function(){
+    var d = _cmpDraft();
+    d.nuevo = !!nuevo.checked;
+    if (d.nuevo) {
+      d.provId = "";
+      var qn = document.getElementById("cmp-prov-q");
+      var nom = document.getElementById("cmp-nom");
+      if (nom && qn && !nom.value) nom.value = qn.value || "";
+      d.provNom = (nom && nom.value) || d.provNom;
     }
-    var data = await api("compras_pago", body);
-    if (data.error) { _cmpMsg(data.error); return; }
-    _cmpMsg(data.flujo||"Pago registrado", true);
-    window._cmpSaldos = ((await api("compras_saldo")).items)||[];
-    var lista = await api("compras_lista");
-    window._cmpLista = (lista&&lista.items)||[];
-    _cmpBody();
+    var box = document.getElementById("cmp-nuevo-box");
+    if (box) box.hidden = !d.nuevo;
   };
-  var rep = document.getElementById("cmp-rep-btn");
-  if (rep) rep.onclick = async function(){
-    var id = (document.getElementById("cmp-rep")||{}).value;
-    var data = await api("compras_reporte", { proveedor_id: id });
-    if (data.error) { _cmpMsg(data.error); return; }
-    _cmpPdf("CONSIGNACION "+(data.proveedor||"stock"), "SUNSU SPA — CONSIGNACION A LA FECHA", (data.items||[]).map(function(it){
-      return it.sku+"  "+(it.nombre||"")+"  stock "+it.stock;
-    }), [data.proveedor||"", "Unidades "+(data.unidades||0)]);
+  var cons = document.getElementById("cmp-consig");
+  if (cons) cons.onchange = function(){
+    _cmpDraft().consig = !!cons.checked;
+    var box = document.getElementById("cmp-periodo");
+    if (box) box.hidden = !cons.checked;
   };
+  _cmpAc(document.getElementById("cmp-prov-q"), function(){
+    return (window._cmpProv||[]).filter(function(p){ return p.activo!==false; }).map(function(p){ return { id: p.id, label: p.nombre, extra: p.ruc||"" }; });
+  }, function(it){
+    var d = _cmpDraft();
+    d.provId = it.id;
+    d.provNom = it.label;
+    d.nuevo = false;
+    var q = document.getElementById("cmp-prov-q");
+    if (q) q.value = it.label;
+    var box = document.getElementById("cmp-nuevo");
+    if (box) box.checked = false;
+    var extra = document.getElementById("cmp-nuevo-box");
+    if (extra) extra.hidden = true;
+  });
+  _cmpAc(document.getElementById("cmp-sku-q"), function(){
+    var d = _cmpDraft();
+    var base = d.provId ? _cmpProdsDe(d.provId) : (window._cmpCat||[]);
+    if (!base.length) base = window._cmpCat||[];
+    return base.map(function(p){ return { id: p.sku, label: String(p.sku||"").toUpperCase().replace(/^SUNSU-/,""), extra: p.nombre, precio: p.costo_promedio, nombre: p.nombre }; });
+  }, function(it){
+    var d = _cmpSyncDraft();
+    d.lineas.push({ sku: it.label, nombre: it.nombre||"", precio: Number(it.precio)||0, cantidad: 1 });
+    var box = document.getElementById("cmp-lines");
+    if (box) box.innerHTML = _cmpLinesHTML(d.lineas, true);
+    var inp = document.getElementById("cmp-sku-q");
+    if (inp) inp.value = "";
+  });
+  var llenar = document.getElementById("cmp-llenar");
+  if (llenar) llenar.onclick = async function(){
+    var d = _cmpSyncDraft();
+    var data = await api("compras_periodo", { proveedor_id: d.provId, proveedor: d.provNom, desde: d.desde, hasta: d.hasta, con_iva: d.conIva });
+    if (data.error) { _cmpMsg(data.error); return; }
+    d.lineas = data.lineas||[];
+    d.fact = data.lineas||[];
+    var box = document.getElementById("cmp-lines");
+    if (box) box.innerHTML = _cmpLinesHTML(d.lineas, true);
+    _cmpMsg("Líneas llenas con lo vendido en el periodo", true);
+  };
+  var save = document.getElementById("cmp-save");
+  if (save) save.onclick = async function(){
+    var d = _cmpSyncDraft();
+    var lineas = (d.lineas||[]).filter(function(l){ return Number(l.cantidad)>0; });
+    var body = { lineas: lineas, con_iva: d.conIva!==false, desde: d.consig?d.desde:"", hasta: d.consig?d.hasta:"", tipo: d.consig?"consignacion":"compra", numero_prov: d.numero_prov||"", fact: d.fact||lineas };
+    if (d.provId && !d.nuevo) body.proveedor_id = d.provId;
+    else body.nuevo = { nombre: d.provNom, ruc: d.ruc||"", telefono: d.tel||"", email: d.mail||"" };
+    var data = await api("compras_guardar", body);
+    if (data.error) { _cmpMsg(data.error); return; }
+    window._cmpDraft = null;
+    _cmpMsg("Borrador guardado", true);
+    _cmpRecargar("#/m/compras/"+encodeURIComponent(data.id));
+  };
+}
+function _cmpPintar(){
+  var list = document.getElementById("cmp-list");
+  var det = document.getElementById("cmp-detail");
+  var root = document.querySelector("#cmp-root .desk-split");
+  if (!list || !det) return;
+  if (root) root.classList.toggle("desk-open", !!(window._cmpSub && window._cmpSub!=="rfq"));
+  list.innerHTML = _cmpListHTML();
+  det.innerHTML = _cmpDetailHTML();
+  _cmpBind();
 }
 function wireComprasFlujo(main){
   if (!main || !main.querySelector("#cmp-root")) return;
-  main.querySelectorAll("[data-cmp-step]").forEach(function(b){
-    b.onclick = function(){
-      var n = Number(b.getAttribute("data-cmp-step"));
-      if (!_cmpAdmin() && n!==4) return;
-      _cmp.step = n;
-      if (n===5) {
-        api("compras_saldo").then(function(d){ window._cmpSaldos = (d&&d.items)||[]; _cmpBody(); });
-      }
-      _cmpBody();
-    };
-  });
-  _cmpBody();
+  if (!window._cmpSub) _cmp.tab = "orden";
+  if (!_cmpAdmin()) _cmp.tab = "recibir";
+  _cmpPintar();
 }
-
 // ══════ CONTEO — secciones por familia de código ══════
 function _cntEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
 function _cntMsg(t, ok){
