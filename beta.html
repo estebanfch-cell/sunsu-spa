@@ -686,6 +686,18 @@
   .sheet-scroll table { min-width: 640px; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
   .chooser-actions { display: flex; flex-direction: column; gap: 8px; }
+  .cmp-bar { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
+  .cmp-bar button { flex: 0 0 auto; border: 1.5px solid var(--cream-d); background: white; color: var(--navy); border-radius: 999px; padding: 6px 10px; font-size: 0.68rem; font-weight: 800; cursor: pointer; }
+  .cmp-bar button.on { background: var(--navy); color: white; border-color: var(--navy); }
+  .cmp-line { display: grid; grid-template-columns: 1fr 72px; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #f0f0f4; }
+  .cmp-rec { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid #f0f0f4; }
+  .cmp-rec b { font-size: 1rem; }
+  .cmp-rec input, .cmp-rec button { min-height: 40px; }
+  .cmp-rec input { width: 72px; }
+  @media (max-width: 640px) {
+    .cmp-rec { display: grid; grid-template-columns: 1fr 1fr; }
+    .cmp-rec b, .cmp-rec .note, .cmp-rec input { grid-column: 1 / -1; width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -1615,7 +1627,7 @@ function pantallaSunsu(route) {
   if (m === "inventario") return "inventario";
   if (m === "conteos" && !route.sub) return "inv-fisico";
   if (m === "conteos" || m === "lugares") return "";
-  if (m === "compras" && route.sub !== "rfq") return "entradas";
+  if (m === "compras") return "";
   if (m === "proveedores") return "proveedores";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
@@ -1975,6 +1987,13 @@ async function renderInventarioBeta(sub) {
 }
 
 async function renderCompras(sub) {
+  if (sub !== "rfq" && typeof renderComprasFlujo === "function") {
+    window._cmpAdmin = !!state.admin;
+    return renderComprasFlujo();
+  }
+  return renderComprasLista(sub);
+}
+async function renderComprasLista(sub) {
   const [oc, rfq, re, prov] = await Promise.all([api("oc_list"), api("rfq_list"), api("reorden_sugerir"), api("prov_list")]);
   if (oc.error) return fail(oc);
   const ordenes = (oc.items || []).map((o) => {
@@ -4015,6 +4034,7 @@ function bind(main) {
   wirePersonal(main);
   wireHorarios(main);
   wireVentas(main);
+  if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
   wireBatch(main);
   montarDirty(main);
   form("#f-paq", savePaq);
@@ -4636,7 +4656,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026tkv2"></script>
+<script src="beta-screens.js?v=20261026cmp"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
