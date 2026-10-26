@@ -1997,7 +1997,7 @@ async function renderInventarioBeta(sub) {
 
 async function renderCompras(sub) {
   if (sub !== "rfq" && typeof renderComprasFlujo === "function") {
-    window._cmpAdmin = !!state.admin;
+    window._cmpEsAdmin = !!state.admin;
     return renderComprasFlujo();
   }
   return renderComprasLista(sub);
@@ -4675,7 +4675,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026cnt"></script>
+<script src="beta-screens.js?v=20261026cmpfix"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
