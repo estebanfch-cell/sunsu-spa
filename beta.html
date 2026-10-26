@@ -1650,11 +1650,13 @@ async function renderComisiones() {
   if (data.error) return fail(data);
   const cards = [
     ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
-    ["Paquetes", data.paquetes], ["Comisión paquetes", money(data.comPaquetes)],
+    ["Paquetes", data.paquetes], ["Tramo", data.nivelAlcanzado || "—"],
+    ["Comisión paquetes", money(data.comPaquetes)],
     ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
     ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
-  return `<p class="note">${esc(data.periodoLabel || "")}. Ves solo tu comisión.</p><div class="grid">${cards}</div>`;
+  const falta = data.regimenTramo && data.nextLabel ? ` Faltan ${data.paqParaSiguiente} paquete(s) para ${data.nextLabel}.` : "";
+  return `<p class="note">${esc(data.periodoLabel || "")}. Ves solo tu comisión.${esc(falta)}</p><div class="grid">${cards}</div>`;
 }
 
 async function renderRol() {
@@ -1790,11 +1792,13 @@ async function renderPersonalComisiones() {
   if (data.error) return sel + fail(data);
   const cards = [
     ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
-    ["Paquetes", data.paquetes], ["Comisión paquetes", money(data.comPaquetes)],
+    ["Paquetes", data.paquetes], ["Tramo", data.nivelAlcanzado || "—"],
+    ["Comisión paquetes", money(data.comPaquetes)],
     ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
     ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
-  const nota = state.admin ? "Elige a quién ves. Cada cosmetóloga, en su cuenta, solo ve lo suyo." : "Ves solo tu comisión.";
+  const falta = data.regimenTramo && data.nextLabel ? ` Faltan ${data.paqParaSiguiente} paquete(s) para ${data.nextLabel}.` : "";
+  const nota = (state.admin ? "Elige a quién ves. Cada cosmetóloga, en su cuenta, solo ve lo suyo." : "Ves solo tu comisión.") + falta;
   return `${sel}<p class="note">${esc(data.periodoLabel || "")}. ${nota}</p><div class="grid">${cards}</div>`;
 }
 async function renderPersonalRol() {
@@ -1805,7 +1809,7 @@ async function renderPersonalRol() {
   const d = data.data;
   const filas = [
     ["Sueldo", money(d.sueldo)], ["Bono", money(d.bono)], ["Faciales", money(d.comFaciales)],
-    ["Paquetes", money(d.comPaquetes)], ["Productos", money(d.comProductos)],
+    ["Paquetes", d.nivelPaquete ? `${d.paquetes} · ${d.nivelPaquete} · ${money(d.comPaquetes)}` : money(d.comPaquetes)], ["Productos", money(d.comProductos)],
     ["Vacaciones", money(d.vacaciones)], ["Fondo de reserva", money(d.fondoReserva)],
     ["Total ingresos", money(d.totalIngresos)], ["IESS", money(d.iess)], ["A recibir", money(d.totalRecibir)],
   ].map(([k, v]) => `<div class="row"><div class="name">${esc(k)}</div><div class="meta">${esc(v)}</div></div>`).join("");
@@ -2965,7 +2969,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261022personal"></script>
+<script src="beta-screens.js?v=20261026paq"></script>
 <script>draw();</script>
 </body>
 </html>

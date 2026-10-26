@@ -1,10 +1,10 @@
-import { extend } from "./handlers.ts";
+import { cfgConTramos, extend } from "./handlers.ts";
 import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, CFG_DEF, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
-  ecuadorParts, esInterno, estadoTicket, facialSku, n, normCedula, normNombre,
-  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
+  ecuadorParts, esInterno, estadoTicket, facialSku, n, netoCatalogo, normCedula, normNombre,
+  productQtys, rolCalcular, round2, s, skuCode, usaTramoPaquetes, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 type R = Record<string, unknown>;
@@ -232,14 +232,18 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const ancla = `${anio}-${String(mes).padStart(2, "0")}-25`;
   const ciclo = cicloInicio(ancla);
   const fin = cicloFin(ciclo);
-  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map(ticketIn);
+  const cat = await ctx.db.all("catalogo");
+  const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
+  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map(ticketIn).map((t) => ({
+    ...t,
+    netoPack3: netoCatalogo(cmap, t.pack3),
+    netoPack6: netoCatalogo(cmap, t.pack6),
+  }));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const calc = calcularCiclo(tks, [{
     id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: true, activa: true, desde: null, hasta: null,
-  }], CFG_DEF, ciclo, null);
+  }], await cfgConTramos(ctx), ciclo, null);
   const persona = calc.personas.find((p) => normNombre(p.cosm).startsWith(key));
-  const cat = await ctx.db.all("catalogo");
-  const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
   const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= fin && normNombre(t.cosm).startsWith(key) && !esInterno(t.cosm, t.cedula) && !t.exclProducto);
   const items = propios.flatMap((t) => t.productos.map((pr) => {
     const row = cmap.get(skuCode(pr.sku));
@@ -266,6 +270,10 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
     comFaciales: persona?.comFaciales || 0,
     comExtras: persona?.comExtras || 0,
     comPaquetes: persona?.comPaquetes || 0,
+    paquetes: persona?.paquetes || 0,
+    nivel: persona?.nivel || "—",
+    tramoPct: persona?.tramoPct ?? null,
+    regimenTramo: calc.regimenTramo,
     comProductos: comisionProductos(items, CFG_DEF.pctProd),
     comRecepcion: round2(comRecepcion),
     multas: round2(multas),
@@ -316,12 +324,18 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   let rpc: R | null = null;
   try { rpc = await ctx.db.rpc("rol_calcular", rpcArgs) as R; } catch { rpc = null; }
   const calculado = rpc && !rpc.error ? rpc : null;
+  const cicloRol = cicloInicio(`${anio}-${String(mes).padStart(2, "0")}-25`);
+  const tramoRol = usaTramoPaquetes(cicloRol);
+  const live = (!calculado || tramoRol) ? await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes) : null;
   const com = calculado
     ? {
       comFaciales: n(calculado.com_faciales), comExtras: n(calculado.com_extras), comRecepcion: n(calculado.com_recepcion),
-      comProductos: n(calculado.com_productos), comPaquetes: n(calculado.com_paquetes), multas: n(calculado.multas_descuentos),
+      comProductos: n(calculado.com_productos),
+      comPaquetes: tramoRol && live ? live.comPaquetes : n(calculado.com_paquetes),
+      multas: n(calculado.multas_descuentos),
     }
-    : await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes);
+    : (live || await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes));
+  const deltaPaq = tramoRol && calculado && live ? round2(live.comPaquetes - n(calculado.com_paquetes)) : 0;
   const local = rolCalcular({
     sueldo: n(e.sueldo_base), bono: n(e.bono_fijo), fondoReserva: s(e.fondo_reserva).toUpperCase() === "SI",
     fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
@@ -340,10 +354,13 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     hrsDesc: horas.hrsDesc, valDesc: round2(horas.hrsDesc * costoH * 2),
     atrasoMin: horas.atrasoMin, faltas: horas.faltas, fuenteHoras: horas.hayDatos ? "asistencia" : "sin_marcajes",
     dec13: local.dec13, dec14: local.dec14, fondoReserva: local.fondoReserva, vacaciones: local.vacaciones,
-    totalIngresos: rpc && !rpc.error ? n(rpc.total_ingresos) : local.totalIngresos,
+    totalIngresos: round2((rpc && !rpc.error ? n(rpc.total_ingresos) : local.totalIngresos) + deltaPaq),
     iess: rpc && !rpc.error ? n(rpc.iess_personal) : local.iess,
     egresos: rpc && !rpc.error ? n(rpc.total_egresos) : local.egresos,
-    totalRecibir: rpc && !rpc.error ? n(rpc.total_recibir) : local.totalRecibir,
+    totalRecibir: round2((rpc && !rpc.error ? n(rpc.total_recibir) : local.totalRecibir) + deltaPaq),
+    paquetes: live ? live.paquetes : undefined,
+    nivelPaquete: live ? live.nivel : undefined,
+    tramoPct: live ? live.tramoPct : null,
     anticipo: 0, prestHip: 0, prestQuir: 0, sheet, multasDetalle: [],
     fuente: rpc && !rpc.error ? "rol_calcular" : "beta-local",
   };

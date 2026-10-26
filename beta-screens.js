@@ -4096,11 +4096,15 @@ function mostrarDashCosmData(c,d){
         ${d.multas>0?`<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$${d.multas.toFixed(2)}</span></div>`:''}
         ${d.descuentos>0?`<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$${d.descuentos.toFixed(2)}</span></div>`:''}
         <div class="ctotal"><span>💰 Neto</span><span style="color:${col}">$${neto.toFixed(2)}</span></div>
-        ${d.bonoActivo
+        ${d.regimenTramo
+          ?(d.nextLabel
+            ?`<div style="font-size:0.65rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🎯 Faltan ${d.paqParaSiguiente} paquete(s) para ${d.nextLabel}</div>`
+            :`<div style="font-size:0.65rem;color:var(--green);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🏆 ¡Tramo máximo alcanzado!</div>`)
+          :(d.bonoActivo
           ?(d.siguienteNivel
             ?`<div style="font-size:0.65rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🎯 Faltan ${d.paqParaSiguiente} paquete(s) para N${d.siguienteNivel} — +$${d.premioSiguiente} acumulado</div>`
             :`<div style="font-size:0.65rem;color:var(--green);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🏆 ¡Nivel máximo alcanzado!</div>`)
-          :`<div style="font-size:0.65rem;color:var(--gold);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">⏳ Bono activo con 60+ clientas — van ${d.totalClientas||0}</div>`}
+          :`<div style="font-size:0.65rem;color:var(--gold);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">⏳ Bono activo con 60+ clientas — van ${d.totalClientas||0}</div>`)}
       </div>
     </div>`;
 }
@@ -13654,7 +13658,7 @@ function _lineasRol(d){
       ['Sueldo', d.sueldo],
       ['Bono', d.bono],
       ['Com. faciales/extras/recep.', d.comFaciales],
-      ['Comisión paquetes', d.comPaquetes],
+      [(d.paquetes!=null && d.nivelPaquete) ? ('Comisión paquetes ('+d.paquetes+' · '+d.nivelPaquete+')') : 'Comisión paquetes', d.comPaquetes],
       ['Comisión productos', d.comProductos],
       ['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)', d.valSupl],
       ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)', d.valExtr],

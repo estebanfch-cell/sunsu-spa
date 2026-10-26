@@ -1,7 +1,7 @@
 // Reglas puras del Sistema Central. Los timestamps importados guardan la hora
 // de Ecuador como si fuera UTC: se leen con componentes UTC (igual que ts_local).
 
-export const APP_VERSION = "2026-10-21-SCOPE";
+export const APP_VERSION = "2026-10-26-PAQ";
 export const LEGACY_APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbyLgY0TJOpjafCtRUgAlq2i1xvWifu7vLFD9dkLR2HX92dtAnMGK7FCBvkrFk7yDP6x/exec";
 export const CEDULA_INTERNA = "1793219469001";
@@ -462,6 +462,17 @@ export function validarBitacora(body: Row): { error: string } | { items: { codig
   return { items, paso2, resultado, observacion: obs };
 }
 
+/** Un tramo del ciclo nuevo: el % final se aplica a TODOS los paquetes. valor>1 en config = por ciento. */
+export interface TramoPaquete { desde: number; hasta: number | null; pct: number }
+export const CICLO_TRAMO_DESDE = "2026-10-26";
+export const CICLO_N8_CONGELADO = "2026-09-26";
+export const TRAMOS_PAQUETE_DEF: TramoPaquete[] = [
+  { desde: 1, hasta: 10, pct: 0.05 },
+  { desde: 11, hasta: 20, pct: 0.08 },
+  { desde: 21, hasta: 30, pct: 0.11 },
+  { desde: 31, hasta: null, pct: 0.14 },
+];
+
 export interface ComCfg {
   minClientas: number;
   facial2: number;
@@ -472,6 +483,7 @@ export interface ComCfg {
   recepMin: number;
   recepMinLunes: number;
   niveles: { nivel: number; pct: number; premio: number }[];
+  tramosPaquete?: TramoPaquete[] | null;
 }
 export const CFG_DEF: ComCfg = {
   minClientas: 60, facial2: 2, facial3: 3, extra: 1, pctProd: 0.30,
@@ -483,6 +495,9 @@ export interface TicketIn {
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number }[];
+  /** Subtotal de catálogo sin IVA, ya resuelto por código SUNSU-NN. */
+  netoPack3?: number;
+  netoPack6?: number;
 }
 export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
 
@@ -503,6 +518,85 @@ export function comisionProductos(items: { venta: number; compra: number; qty: n
   return round2(t);
 }
 
+export function usaTramoPaquetes(ciclo: string): boolean {
+  return ciclo >= CICLO_TRAMO_DESDE;
+}
+export function etiquetaPct(pct: number): string {
+  const p = Math.round(pct * 1000) / 10;
+  const txt = Math.abs(p - Math.round(p)) < 1e-9 ? String(Math.round(p)) : String(p);
+  return txt + "%";
+}
+/** Redondea a centavos y baja al dólar entero. 152.60×5% = 7.63 → 7. */
+export function pisoDolar(neto: number, pct: number): number {
+  if (!(neto > 0) || !(pct > 0)) return 0;
+  return Math.floor(round2(neto * pct) + 1e-9);
+}
+export function tramoPorUnidades(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE_DEF): {
+  pct: number; label: string; next: { label: string; faltan: number } | null;
+} {
+  const list = [...tramos].filter((t) => t.desde > 0 && t.pct > 0).sort((a, b) => a.desde - b.desde);
+  if (!list.length || !(unidades > 0)) {
+    const first = list[0];
+    return { pct: 0, label: "—", next: first ? { label: etiquetaPct(first.pct), faltan: Math.max(1, first.desde) } : null };
+  }
+  let idx = -1;
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (unidades >= t.desde && (t.hasta == null || unidades <= t.hasta)) idx = i;
+  }
+  if (idx < 0) {
+    const nxt = list.find((t) => t.desde > unidades);
+    return { pct: 0, label: "—", next: nxt ? { label: etiquetaPct(nxt.pct), faltan: nxt.desde - unidades } : null };
+  }
+  const nxt = list[idx + 1];
+  return {
+    pct: list[idx].pct,
+    label: etiquetaPct(list[idx].pct),
+    next: nxt ? { label: etiquetaPct(nxt.pct), faltan: Math.max(1, nxt.desde - unidades) } : null,
+  };
+}
+/** Lee tramos de pago_config / paquete_tramos. valor o pct > 1 se toma como por ciento (5 → 5%). */
+export function tramosDesdeConfig(valor: unknown): TramoPaquete[] | null {
+  if (valor == null) return null;
+  const bags: unknown[] = [];
+  if (Array.isArray(valor)) bags.push(valor);
+  else if (typeof valor === "object") {
+    const o = valor as Row;
+    if (Array.isArray(o.tramos)) bags.push(o.tramos);
+    if (Array.isArray(o.paquete_tramos)) bags.push(o.paquete_tramos);
+    const com = o.comisiones;
+    if (com && typeof com === "object" && Array.isArray((com as Row).tramos)) bags.push((com as Row).tramos);
+  }
+  const raw = bags.find((b0) => Array.isArray(b0) && (b0 as unknown[]).length) as Row[] | undefined;
+  if (!raw) return null;
+  const out: TramoPaquete[] = [];
+  for (const t of raw) {
+    if (!t || typeof t !== "object") continue;
+    const desde = n(t.desde);
+    const hastaRaw = t.hasta;
+    const hasta = hastaRaw == null || hastaRaw === "" ? null : n(hastaRaw);
+    let pct = n(t.pct ?? t.valor ?? t.porcentaje);
+    if (!(desde > 0) || !(pct > 0)) continue;
+    if (pct > 1) pct = pct / 100;
+    out.push({ desde, hasta: hasta && hasta > 0 ? hasta : null, pct });
+  }
+  return out.length ? out.sort((a, b) => a.desde - b.desde) : null;
+}
+/** Precio neto sin IVA por código SUNSU-NN, no por el texto completo del ticket. */
+export function netoCatalogo(map: Map<string, Row>, texto: string): number {
+  const facial = facialSku(texto);
+  const extra = s(texto).toUpperCase().match(/SUNSU-([A-Z]{2,3}-\d+)/);
+  const code = facial ? skuCode(facial) : (extra ? extra[1] : "");
+  if (!code) return 0;
+  const r = map.get(skuCode(code));
+  if (!r) return 0;
+  const sub = n(r.subtotal);
+  if (sub > 0) return sub;
+  const tot = n(r.total_con_iva);
+  if (tot > 0) return tot / IVA;
+  return n(r.precio_venta);
+}
+
 export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cfg: ComCfg = CFG_DEF): number {
   const [y, m, d] = fecha.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -510,25 +604,29 @@ export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cf
   return ticketsConFacial >= umbral ? round2(ticketsConFacial * cfg.recepPor) : 0;
 }
 
-/** Espejo de v_comisiones_total + metas. N = cosmetólogas marcadas (no quien tenga tickets). */
+/** Espejo de v_comisiones_total + metas. N = cosmetólogas marcadas (no quien tenga tickets).
+ *  Desde el ciclo 2026-10-26 el premio N se reemplaza por un solo tramo sobre el conteo final. */
 export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCfg, ciclo: string, overrideN?: number | null) {
   const fin = cicloFin(ciclo);
   const propios = tickets.filter((t) => t.fecha >= ciclo && t.fecha <= fin && !esInterno(t.cosm, t.cedula));
   const totalClientas = propios.filter((t) => facialSku(t.facial)).length;
-  const n = Math.max(1, nCosmetologas(marks, ciclo, fin, overrideN));
+  const nEquipo = Math.max(1, nCosmetologas(marks, ciclo, fin, overrideN));
   const bono = totalClientas >= cfg.minClientas;
+  const nuevo = usaTramoPaquetes(ciclo);
+  const tramos = cfg.tramosPaquete && cfg.tramosPaquete.length ? cfg.tramosPaquete : TRAMOS_PAQUETE_DEF;
   const metas = cfg.niveles.map((nv) => ({
     ...nv,
-    meta: Math.ceil(totalClientas * nv.pct / n),
+    meta: Math.ceil(totalClientas * nv.pct / nEquipo),
   }));
   const by = new Map<string, {
     cosm: string; faciales: number; comFaciales: number; paquetes: number; extras: number; comExtras: number;
-    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string;
+    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string; tramoPct: number | null;
   }>();
+  const nets = new Map<string, number[]>();
   const ensure = (cosm: string) => {
     let r = by.get(cosm);
     if (!r) {
-      r = { cosm, faciales: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—" };
+      r = { cosm, faciales: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—", tramoPct: null };
       by.set(cosm, r);
     }
     return r;
@@ -541,8 +639,17 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
       r.comFaciales += FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3;
     }
     if (!t.exclPaquete) {
-      if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") r.paquetes += 1;
-      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") r.paquetes += 2;
+      const p3 = s(t.pack3) && s(t.pack3).toLowerCase() !== "false";
+      const p6 = s(t.pack6) && s(t.pack6).toLowerCase() !== "false";
+      if (nuevo) {
+        const bag = nets.get(r.cosm) || [];
+        if (p3) { r.paquetes += 1; bag.push(n(t.netoPack3)); }
+        if (p6) { r.paquetes += 1; bag.push(n(t.netoPack6)); }
+        nets.set(r.cosm, bag);
+      } else {
+        if (p3) r.paquetes += 1;
+        if (p6) r.paquetes += 2;
+      }
     }
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);
@@ -555,21 +662,40 @@ export function calcularCiclo(tickets: TicketIn[], marks: CosmMark[], cfg: ComCf
     const mark = marks.find((k) => normNombre(r.cosm).includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || normNombre(r.cosm).startsWith(normNombre(k.id)));
     const es = !!(mark && mark.es);
     let nivel = "—", premio = 0, next: { nivel: string; faltan: number; premio: number } | null = null;
-    if (bono && es) {
-      for (const m of metas) {
-        if (r.paquetes >= m.meta) { nivel = "N" + m.nivel; premio = m.premio; }
-        else if (!next) next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio };
+    if (nuevo) {
+      const tr = tramoPorUnidades(r.paquetes, tramos);
+      const com = (nets.get(r.cosm) || []).reduce((a, neto) => a + pisoDolar(neto, tr.pct), 0);
+      r.comPaquetes = com;
+      r.nivel = tr.label;
+      r.tramoPct = tr.pct || null;
+      next = tr.next ? { nivel: tr.next.label, faltan: tr.next.faltan, premio: 0 } : null;
+    } else {
+      if (bono && es) {
+        for (const m of metas) {
+          if (r.paquetes >= m.meta) { nivel = "N" + m.nivel; premio = m.premio; }
+          else if (!next) next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio };
+        }
+      } else if (bono) {
+        for (const m of metas) {
+          if (r.paquetes < m.meta) { next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio }; break; }
+        }
       }
-    } else if (bono) {
-      for (const m of metas) {
-        if (r.paquetes < m.meta) { next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio }; break; }
+      r.comPaquetes = bono && es ? premio : 0;
+      r.nivel = nivel;
+      const primero = normNombre(r.cosm).split(" ")[0];
+      if (ciclo === CICLO_N8_CONGELADO && (primero === "andrea" || primero === "daniela")) {
+        r.comPaquetes = 320;
+        r.nivel = "N8";
+        next = null;
+        for (const m of metas) {
+          if (m.nivel <= 8) continue;
+          if (r.paquetes < m.meta) { next = { nivel: "N" + m.nivel, faltan: m.meta - r.paquetes, premio: m.premio }; break; }
+        }
       }
     }
-    r.comPaquetes = bono && es ? premio : 0;
-    r.nivel = nivel;
     return { ...r, es, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras) };
   });
-  return { ciclo, fin, totalClientas, n, bono, metas, personas };
+  return { ciclo, fin, totalClientas, n: nEquipo, bono, metas, personas, regimenTramo: nuevo };
 }
 
 export function rolCalcular(input: {

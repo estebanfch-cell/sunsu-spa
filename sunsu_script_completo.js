@@ -37,7 +37,150 @@ const CONFIG = {
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
 // El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-10-12-COT (Cotizaciones)';
+var APP_VERSION = '2026-10-26-PAQ (Comisión paquetes por tramo)';
+
+// --- PAQ-TRAMO-START ---
+// Ciclos que EMPIEZAN el 26 oct 2026 en adelante: un solo tramo sobre el conteo final.
+// El ciclo 26 sep–25 oct (inicio 26 sep 2026) queda congelado en N8 $320 para Andrea y Daniela.
+var CICLO_TRAMO_DESDE = new Date(2026, 9, 26, 0, 0, 0);
+var CICLO_CONGELADO_INI = new Date(2026, 8, 26, 0, 0, 0);
+var TRAMOS_PAQUETE = [
+  { desde: 1, hasta: 10, pct: 0.05 },
+  { desde: 11, hasta: 20, pct: 0.08 },
+  { desde: 21, hasta: 30, pct: 0.11 },
+  { desde: 31, hasta: null, pct: 0.14 },
+];
+function _mismoDia_(a, b) {
+  return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function usaTramoPaquetes_(fechaInicio) {
+  return fechaInicio >= CICLO_TRAMO_DESDE;
+}
+function esCicloCongeladoN8_(fechaInicio) {
+  return _mismoDia_(fechaInicio, CICLO_CONGELADO_INI);
+}
+function _primerNombre_(nombre) {
+  return (nombre || '').toString().toLowerCase()
+    .replace(/á/g, 'a').replace(/é/g, 'e').replace(/í/g, 'i').replace(/ó/g, 'o').replace(/ú/g, 'u')
+    .trim().split(/\s+/)[0];
+}
+function esAndreaODaniela_(nombre) {
+  var p = _primerNombre_(nombre);
+  return p === 'andrea' || p === 'daniela';
+}
+function etiquetaPct_(pct) {
+  var p = Math.round(pct * 1000) / 10;
+  return (Math.abs(p - Math.round(p)) < 1e-9 ? String(Math.round(p)) : String(p)) + '%';
+}
+function pisoDolar_(neto, pct) {
+  if (!(neto > 0) || !(pct > 0)) return 0;
+  var cents = Math.round(neto * pct * 100) / 100;
+  return Math.floor(cents + 1e-9);
+}
+function tramoPorUnidades_(unidades, tramos) {
+  tramos = (tramos && tramos.length) ? tramos : TRAMOS_PAQUETE;
+  if (!(unidades > 0)) {
+    return { pct: 0, label: '—', nextLabel: etiquetaPct_(tramos[0].pct), faltan: tramos[0].desde };
+  }
+  var hit = tramos[0], idx = 0;
+  for (var i = 0; i < tramos.length; i++) {
+    var t = tramos[i];
+    if (unidades >= t.desde && (t.hasta == null || unidades <= t.hasta)) { hit = t; idx = i; }
+  }
+  var next = tramos[idx + 1];
+  return {
+    pct: hit.pct,
+    label: etiquetaPct_(hit.pct),
+    nextLabel: next ? etiquetaPct_(next.pct) : null,
+    faltan: next ? (next.desde - unidades) : 0,
+  };
+}
+function netoCatalogoTexto_(texto, precios) {
+  var m = (texto || '').toString().toUpperCase().match(/SUNSU-\d+/);
+  if (!m || !precios) return 0;
+  var full = m[0];
+  var corto = full.replace(/^SUNSU-/, '');
+  var row = precios[full] || precios[corto] || precios['SUNSU-' + corto];
+  if (!row) return 0;
+  return typeof row === 'number' ? row : (parseFloat(row.venta) || 0);
+}
+function contarPacks_(fechaInicio, pack3, pack6, precios) {
+  var nuevo = usaTramoPaquetes_(fechaInicio);
+  var ok = function(t) { return t && String(t).trim() !== '' && String(t).toLowerCase() !== 'false'; };
+  var unidades = 0, nets = [];
+  if (ok(pack3)) { unidades += 1; if (nuevo) nets.push(netoCatalogoTexto_(pack3, precios)); }
+  if (ok(pack6)) { unidades += nuevo ? 1 : 2; if (nuevo) nets.push(netoCatalogoTexto_(pack6, precios)); }
+  return { unidades: unidades, nets: nets };
+}
+function sumarComisionTramo_(nets, unidades, tramos) {
+  var tr = tramoPorUnidades_(unidades, tramos);
+  var sum = 0;
+  (nets || []).forEach(function(neto) { sum += pisoDolar_(neto, tr.pct); });
+  return { com: sum, label: tr.label, pct: tr.pct, nextLabel: tr.nextLabel, faltan: tr.faltan };
+}
+function aplicarPremioPaquetes_(nombre, c, totalClientas, nCosm, bonoActivo, fechaInicio) {
+  if (usaTramoPaquetes_(fechaInicio)) {
+    var tr = sumarComisionTramo_(c._nets || [], c.paquetes || 0);
+    c.comPaquetes = tr.com;
+    c.nivelAlcanzado = tr.label;
+    c.tramoPct = tr.pct;
+    c.nextLabel = tr.nextLabel;
+    c.paqParaSiguiente = tr.faltan;
+    delete c._nets;
+    return c;
+  }
+  c.comPaquetes = 0;
+  c.nivelAlcanzado = '—';
+  c.tramoPct = null;
+  c.nextLabel = null;
+  c.paqParaSiguiente = 0;
+  if (bonoActivo) {
+    var premioMax = 0, nivelMax = -1;
+    CONFIG.NIVELES.forEach(function(par, idx) {
+      if (c.paquetes >= Math.ceil((totalClientas * par[0]) / nCosm)) { nivelMax = idx + 1; premioMax = par[1]; }
+    });
+    if (nivelMax > 0) { c.comPaquetes = premioMax; c.nivelAlcanzado = 'N' + nivelMax; }
+  }
+  if (esCicloCongeladoN8_(fechaInicio) && esAndreaODaniela_(nombre)) {
+    c.comPaquetes = 320;
+    c.nivelAlcanzado = 'N8';
+  }
+  delete c._nets;
+  return c;
+}
+// --- PAQ-TRAMO-END ---
+
+// Solo lectura: en ciclos desde el 26 oct 2026 el rol muestra el tramo vivo.
+// No escribe la hoja de RR.HH. Meses anteriores quedan como están guardados.
+function aplicarTramoEnRol_(rolData, sheetName) {
+  if (!rolData || !sheetName) return;
+  var partes = String(sheetName).split('_');
+  var anioRol = parseInt(partes[partes.length - 1], 10);
+  var mesesMap = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  var mesRol = mesesMap[partes[0]] || 0;
+  if (!mesRol || !anioRol) return;
+  var mesAnt = mesRol === 1 ? 12 : mesRol - 1;
+  var anioAnt = mesRol === 1 ? anioRol - 1 : anioRol;
+  var fDesde = new Date(anioAnt, mesAnt - 1, 26, 0, 0, 0);
+  if (!usaTramoPaquetes_(fDesde)) return;
+  var fHasta = new Date(anioRol, mesRol - 1, 25, 23, 59, 59);
+  var datos = calcularComisiones(fDesde, fHasta);
+  var primero = _primerNombre_(rolData.nombre);
+  var key = Object.keys(datos.cosmetologas).find(function(k){ return _primerNombre_(k) === primero; });
+  if (!key) return;
+  var c = datos.cosmetologas[key];
+  var viejo = parseFloat(String(rolData.comPaquetes == null ? '' : rolData.comPaquetes).replace(/[^0-9.\-]/g, '')) || 0;
+  var nuevo = Math.round((c.comPaquetes || 0) * 100) / 100;
+  var delta = Math.round((nuevo - viejo) * 100) / 100;
+  rolData.comPaquetes = nuevo;
+  rolData.paquetes = c.paquetes || 0;
+  rolData.nivelPaquete = c.nivelAlcanzado || '—';
+  rolData.tramoPct = c.tramoPct || null;
+  var ing = parseFloat(rolData.totalIngresos) || 0;
+  var rec = parseFloat(rolData.totalRecibir) || 0;
+  rolData.totalIngresos = Math.round((ing + delta) * 100) / 100;
+  rolData.totalRecibir = Math.round((rec + delta) * 100) / 100;
+}
 
 // Fecha tolerante: celda de fecha nativa O texto ('17/07/2026', '5/7/26',
 // '2026-07-17', con o sin hora). Devuelve Date o null.
@@ -1583,7 +1726,7 @@ function actualizarDashboard() {
     fechaFin    = new Date(anio, mes, 25, 23, 59, 59);
   }
   const datos = calcularComisiones(fechaInicio, fechaFin);
-  const { cosmetologas, totalClientas, bonoActivo } = datos;
+  const { cosmetologas, totalClientas, bonoActivo, regimenTramo } = datos;
   const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const fmtD  = d => `${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
   wsDash.clearContents();
@@ -1607,9 +1750,11 @@ function actualizarDashboard() {
     .setHorizontalAlignment("right").setVerticalAlignment("middle");
   wsDash.setRowHeight(fila, 30); fila++;
   wsDash.getRange(fila,1,1,10).merge()
-    .setValue(bonoActivo
+    .setValue(regimenTramo
+      ? `COMISIÓN DE PAQUETES POR TRAMO — ${totalClientas} clientas (cada paquete cuenta 1)`
+      : (bonoActivo
       ? `✅ BONO DE PAQUETES ACTIVO — ${totalClientas} clientas este período`
-      : `❌ BONO INACTIVO — ${totalClientas} clientas (se activa con 60+)`)
+      : `❌ BONO INACTIVO — ${totalClientas} clientas (se activa con 60+)`))
     .setBackground(bonoActivo ? COLOR.GREEN_L : COLOR.GOLD_L)
     .setFontColor(bonoActivo ? COLOR.GREEN : COLOR.GOLD)
     .setFontWeight("bold").setFontSize(10).setFontFamily("Arial")
@@ -1626,7 +1771,9 @@ function actualizarDashboard() {
     const totalProds = Object.values(c.detalle_productos).reduce((s,p) => s + p.qty, 0);
     const tieneDeducciones = multas > 0 || descuentos > 0;
     let siguienteNivel = null, paqParaSiguiente = 0;
-    if (bonoActivo) {
+    if (regimenTramo) {
+      if (c.nextLabel) { siguienteNivel = { nivel: c.nextLabel, premio: 0, tramo: true }; paqParaSiguiente = c.paqParaSiguiente || 0; }
+    } else if (bonoActivo) {
       for (let n = 0; n < CONFIG.NIVELES.length; n++) {
         const [pct, premio] = CONFIG.NIVELES[n];
         const requerido = Math.ceil((totalClientas * pct) / nCosm);
@@ -1671,9 +1818,12 @@ function actualizarDashboard() {
     });
     wsDash.setRowHeight(fila, 45); fila++;
     wsDash.getRange(fila,1,1,numCols).merge()
-      .setValue(bonoActivo && siguienteNivel
+      .setValue(regimenTramo && siguienteNivel
+        ? `🎯 Faltan ${paqParaSiguiente} paquete(s) para ${siguienteNivel.nivel}`
+        : regimenTramo ? (c.paquetes > 0 ? "🏆 ¡Tramo máximo (14%)!" : "Sin paquetes vendidos en este ciclo")
+        : (bonoActivo && siguienteNivel
         ? `🎯 Faltan ${paqParaSiguiente} paquete(s) para N${siguienteNivel.nivel} (+$${siguienteNivel.premio} acumulado)`
-        : bonoActivo ? "🏆 ¡Nivel máximo alcanzado!" : "⏳ Bono se activa cuando el spa llegue a 60 clientas")
+        : bonoActivo ? "🏆 ¡Nivel máximo alcanzado!" : "⏳ Bono se activa cuando el spa llegue a 60 clientas"))
       .setBackground(col.bg).setFontColor(col.accent)
       .setFontWeight("bold").setFontSize(9).setFontFamily("Arial")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
@@ -1773,8 +1923,12 @@ function calcularComisiones(fechaInicio, fechaFin) {
     const pack6 = (fila[CONFIG.COL_PACK6 - 1] || "").toString().trim();
     const exclPaquete = fila[EXCL.paquete - 1] === true;
     if (!exclPaquete) {
-      if (pack3 && pack3 !== "" && pack3.toLowerCase() !== "false") c.paquetes += 1;
-      if (pack6 && pack6 !== "" && pack6.toLowerCase() !== "false") c.paquetes += 2;
+      const contado = contarPacks_(fechaInicio, pack3, pack6, precios);
+      c.paquetes += contado.unidades;
+      if (contado.nets.length) {
+        if (!c._nets) c._nets = [];
+        contado.nets.forEach(function(v){ c._nets.push(v); });
+      }
     }
     // ── EXTRAS: $1 de comisión por extra vendido (col W; cortesías no cuentan) ──
     // Exclusión propia: checkbox '❌ EXCLUIR EXTRAS' (col BV)
@@ -1803,14 +1957,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
   const nCosm         = Object.keys(cosmetologas).length || 1;
   const bonoActivo    = totalClientas >= CONFIG.MIN_CLIENTAS_BONO;
   Object.keys(cosmetologas).forEach(cosm => {
-    const c = cosmetologas[cosm];
-    c.comPaquetes = 0; c.nivelAlcanzado = "—";
-    if (!bonoActivo) return;
-    let premioMax = 0, nivelMax = -1;
-    CONFIG.NIVELES.forEach(([pct, premio], idx) => {
-      if (c.paquetes >= Math.ceil((totalClientas * pct) / nCosm)) { nivelMax = idx + 1; premioMax = premio; }
-    });
-    if (nivelMax > 0) { c.comPaquetes = premioMax; c.nivelAlcanzado = "N" + nivelMax; }
+    aplicarPremioPaquetes_(cosm, cosmetologas[cosm], totalClientas, nCosm, bonoActivo, fechaInicio);
   });
   // ── Comisión de recepción: inyectar DESPUÉS del cálculo de niveles (para no
   //    alterar nCosm/umbrales de paquetes) y ANTES de multas (para que se le apliquen) ──
@@ -1832,7 +1979,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
       cosmetologas[cosm].notas_multas = multasData[multaKey].detalle;
     }
   });
-  return { cosmetologas, totalClientas, bonoActivo };
+  return { cosmetologas, totalClientas, bonoActivo, regimenTramo: usaTramoPaquetes_(fechaInicio) };
 }
 
 function leerPrecios(ss) {
@@ -2750,6 +2897,7 @@ function doGet(e) {
           } catch(em) { Logger.log('Error multas detail: '+em.message); }
         }
 
+        try { aplicarTramoEnRol_(rolData, sheetName); } catch(eTrRol) {}
         return ContentService.createTextOutput(JSON.stringify({ok:true, data:rolData}))
           .setMimeType(ContentService.MimeType.JSON);
       } catch(e2) {
@@ -4557,6 +4705,9 @@ function doGet(e) {
             name:  k,
             cf:    Math.round((c.comFaciales||0)*100)/100,
             cpaq:  Math.round((c.comPaquetes||0)*100)/100,
+            paq:   c.paquetes||0,
+            nivel: c.nivelAlcanzado||'—',
+            tramoPct: c.tramoPct || null,
             cprod: Math.round((c.comProductos||0)*100)/100,
             cext:  Math.round((c.comExtras||0)*100)/100,
             crecep:Math.round((c.comRecepcion||0)*100)/100
@@ -4589,7 +4740,11 @@ function doGet(e) {
           var neto=Math.max(0,bruto-(c.multas||0)-(c.descuentos||0));
           var totalProdA=Object.values(c.detalle_productos||{}).reduce(function(s,p){return s+p.qty;},0);
           var nextN=null, faltanPaq=0, nextCp=0;
-          if (datosA.bonoActivo) {
+          if (datosA.regimenTramo) {
+            nextN = c.nextLabel || null;
+            faltanPaq = c.paqParaSiguiente || 0;
+            nextCp = 0;
+          } else if (datosA.bonoActivo) {
             for (var ni=0; ni<CONFIG.NIVELES.length; ni++) {
               var req=Math.ceil((datosA.totalClientas*CONFIG.NIVELES[ni][0])/nCosm3);
               if ((c.paquetes||0)<req){nextN='N'+(ni+1);faltanPaq=req-(c.paquetes||0);nextCp=CONFIG.NIVELES[ni][1];break;}
@@ -4626,7 +4781,7 @@ function doGet(e) {
                 crecep:0, diasRecep:0, m:0, d:0, t:0, nextN:null, faltanPaq:0, nextCp:0});
             });
         } catch(eCeroA) {}
-        return respJsonGet({cosmetologas:cosmsA, periodo:periodoA, bonoActivo:datosA.bonoActivo, totalClientas:datosA.totalClientas}, callback);
+        return respJsonGet({cosmetologas:cosmsA, periodo:periodoA, bonoActivo:datosA.bonoActivo, regimenTramo:!!datosA.regimenTramo, totalClientas:datosA.totalClientas}, callback);
       } catch(errA) {
         return respJsonGet({error:errA.message}, callback);
       }
@@ -5467,8 +5622,11 @@ function doGet(e) {
         var cosm    = cosmKey ? datosC.cosmetologas[cosmKey] : {};
         var totalProds = Object.values(cosm.detalle_productos||{}).reduce(function(s,p){return s+p.qty;},0);
         var nCosm2 = Object.keys(datosC.cosmetologas).length || 1;
-        var siguienteNivel=null, paqParaSiguiente=0, premioSiguiente=0;
-        if (datosC.bonoActivo) {
+        var siguienteNivel=null, paqParaSiguiente=0, premioSiguiente=0, nextLabel=null;
+        if (datosC.regimenTramo) {
+          nextLabel = cosm.nextLabel || null;
+          paqParaSiguiente = cosm.paqParaSiguiente || 0;
+        } else if (datosC.bonoActivo) {
           for (var n=0; n<CONFIG.NIVELES.length; n++) {
             var req=Math.ceil((datosC.totalClientas*CONFIG.NIVELES[n][0])/nCosm2);
             if ((cosm.paquetes||0) < req) { siguienteNivel=n+1; paqParaSiguiente=req-(cosm.paquetes||0); premioSiguiente=CONFIG.NIVELES[n][1]; break; }
@@ -5480,6 +5638,9 @@ function doGet(e) {
           paquetes:        cosm.paquetes||0,
           comPaquetes:     cosm.comPaquetes||0,
           nivelAlcanzado:  cosm.nivelAlcanzado||'—',
+          tramoPct:        cosm.tramoPct || null,
+          regimenTramo:    !!datosC.regimenTramo,
+          nextLabel:       nextLabel,
           comProductos:    cosm.comProductos||0,
           totalProductos:  totalProds,
           extras:          cosm.extras||0,
@@ -11846,6 +12007,9 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
   }
 
   var primerNombre = nombreApp.toLowerCase().split(' ')[0];
+  var regimenNuevoAv = usaTramoPaquetes_(desdeComisiones);
+  var preciosNetoAv = regimenNuevoAv ? leerPrecios(ss) : {};
+  var netsAv = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
@@ -11879,13 +12043,14 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
     }
 
     // ── COMISIÓN PAQUETES ──
-    // Col U (índice 20): paquete x3 vendido → 1 unidad
-    // Col V (índice 21): paquete x6 vendido → 2 unidades (según tu regla)
+    // Antes del 26 oct 2026: x3 = 1, x6 = 2 (el $ lo pone el premio N, no esta función).
+    // Desde ese ciclo: x3 y x6 cuentan 1 y el $ es el tramo del conteo final.
     if (!exclPaq) {
       var pack3 = (row[20] || '').toString().trim();
       var pack6 = (row[21] || '').toString().trim();
-      if (pack3 && pack3 !== 'false' && pack3 !== '') comPUnidades += 1;
-      if (pack6 && pack6 !== 'false' && pack6 !== '') comPUnidades += 2;
+      var contadoAv = contarPacks_(desdeComisiones, pack3, pack6, preciosNetoAv);
+      comPUnidades += contadoAv.unidades;
+      if (contadoAv.nets.length) netsAv = netsAv.concat(contadoAv.nets);
     }
 
     // ── COMISIÓN EXTRAS ── $1 por extra vendido (col W); cortesías no comisionan
@@ -11918,10 +12083,17 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
     try { comRecep = calcularComisionRecepcion(desdeComisiones, hastaComisiones).total; } catch(eRc) {}
   }
 
+  var valorPaqAv = 0, nivelPaqAv = null;
+  if (regimenNuevoAv) {
+    var trAv = sumarComisionTramo_(netsAv, comPUnidades);
+    valorPaqAv = trAv.com;
+    nivelPaqAv = trAv.label;
+  }
   return {
     faciales:         Math.round(comF * 100) / 100,
-    paquetesUnidades: comPUnidades,  // número de paquetes — se convierte a $ según nivel
-    paquetesValor:    0,             // se calcula después según nivel
+    paquetesUnidades: comPUnidades,
+    paquetesValor:    valorPaqAv,
+    nivelPaquete:     nivelPaqAv,
     productos:        Math.round(comProd * 100) / 100,
     extras:           comE,          // $1 por extra vendido — en el rol se suma a COM. FACIALES
     recepcion:        Math.round(comRecep * 100) / 100, // en el rol se suma a COM. FACIALES
@@ -12046,6 +12218,8 @@ function calcularRol(emp, horas, comisiones, multas, diasMes) {
     bono:             bono,
     comF:             comF,
     comP:             comP,
+    paqUnidades:      comisiones.paquetesUnidades || 0,
+    nivelPaquete:     comisiones.nivelPaquete || null,
     comProd:          comProd,
     totalCom:         totalCom,
     hrsSupl:          hrsSupl,
@@ -12341,7 +12515,7 @@ function generarRolIndividual(ss, emp, rol, mesNombre, anio, mes, diasMes, desde
     ['Sueldo',                        '',       '',     rol.sueldoProp],
     ['Bono fijo',                     '',       '',     rol.bono > 0 ? rol.bono : '-'],
     ['Comisiones Faciales',           '',       '',     rol.comF > 0 ? rol.comF : '-'],
-    ['Comisiones Paquetes',           '',       '',     rol.comP > 0 ? rol.comP : '-'],
+    [(rol.paqUnidades && rol.nivelPaquete) ? ('Comisiones Paquetes (' + rol.paqUnidades + ' · ' + rol.nivelPaquete + ')') : 'Comisiones Paquetes', '', '', rol.comP > 0 ? rol.comP : '-'],
     ['Comisiones Productos',          '',       '',     rol.comProd > 0 ? rol.comProd : '-'],
     ['Horas Suplementarias 50%', rol.hrsSupl > 0 ? rol.hrsSupl : 0, 'hrs.', rol.valSupl > 0 ? rol.valSupl : '-'],
     ['Horas Extraordinarias 100%',rol.hrsExtr > 0 ? rol.hrsExtr : 0,'hrs.', rol.valExtr > 0 ? rol.valExtr : '-'],

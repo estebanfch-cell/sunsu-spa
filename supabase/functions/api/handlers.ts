@@ -4,9 +4,9 @@ import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarAr
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, CFG_DEF, FACIALES_2, FACIALES_3, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, comisionProductos, comisionRecepcionDia, contarExtras,
-  cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
+  cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, netoCatalogo, newSalt,
   normCedula, normNombre, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
+  s, skuCode, tramosDesdeConfig, validarBitacora, validarPromo, ymdUtc, type ComCfg, type Row, type TicketIn,
 } from "./domain.ts";
 import { montoGcAplicado, saldoGift } from "./ventas.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
@@ -34,12 +34,21 @@ function catNombre(map: Map<string, R>, sku: string): string {
   return r ? s(r.producto_servicio) : sku;
 }
 function subtotalDe(map: Map<string, R>, sku: string): number {
-  const r = map.get(skuCode(sku));
+  const facial = facialSku(sku);
+  const extra = s(sku).toUpperCase().match(/SUNSU-([A-Z]{2,3}-\d+)/);
+  const code = facial ? skuCode(facial) : (extra ? extra[1] : skuCode(sku));
+  const r = map.get(skuCode(code));
   if (!r) return 0;
   const sub = n(r.subtotal);
   if (sub > 0) return sub;
   const tot = n(r.total_con_iva);
   return tot > 0 ? tot / IVA : 0;
+}
+export async function cfgConTramos(ctx: Ctx): Promise<ComCfg> {
+  const pago = await kvGet(ctx.db, "pago_config");
+  const alt = await kvGet(ctx.db, "paquete_tramos");
+  const tramos = tramosDesdeConfig(pago) || tramosDesdeConfig(alt);
+  return tramos ? { ...CFG_DEF, tramosPaquete: tramos } : CFG_DEF;
 }
 /** 'SUNSU-01 …' o 'SUNSU-HT-002 …' al inicio del texto, como codDeDH del Apps Script. */
 function codAlInicio(txt: string): string | null {
@@ -290,11 +299,15 @@ async function cicloDe(ctx: Ctx, fecha?: string) {
   const ec = fecha || hoy(ctx);
   const { cicloInicio, cicloFin } = await import("./domain.ts");
   const ciclo = cicloInicio(ec);
-  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map(toIn);
+  const cmap = await catMap(ctx);
+  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map(toIn).map((t) => ({
+    ...t,
+    netoPack3: netoCatalogo(cmap, t.pack3),
+    netoPack6: netoCatalogo(cmap, t.pack6),
+  }));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
-  const calc = calcularCiclo(tks, await marks(ctx), CFG_DEF, ciclo, hit ? n(hit.n_cosmetologas) : null);
-  const cmap = await catMap(ctx);
+  const calc = calcularCiclo(tks, await marks(ctx), await cfgConTramos(ctx), ciclo, hit ? n(hit.n_cosmetologas) : null);
   const bases = await ctx.db.all("inventario_base");
   const compraReal = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
   for (const p of calc.personas) {
@@ -1392,19 +1405,22 @@ reg("getDashCosm", "any", async (p, ctx, ses) => {
   const nombre = s(p.cosmetologa) || ses.name;
   const { calc, comRecep, diasRecep, multas, ciclo, fin } = await cicloDe(ctx, hoy(ctx));
   const cosm = calc.personas.find((c) => normNombre(c.cosm) === normNombre(nombre) || normNombre(c.cosm).startsWith(normNombre(nombre).split(" ")[0])) ;
-  const c = cosm || { faciales: 0, comFaciales: 0, paquetes: 0, comPaquetes: 0, nivel: "—", comProductos: 0, totalProductos: 0, extras: 0, comExtras: 0, next: null as null | { nivel: string; faltan: number; premio: number } };
+  const c = cosm || { faciales: 0, comFaciales: 0, paquetes: 0, comPaquetes: 0, nivel: "—", tramoPct: null as number | null, comProductos: 0, totalProductos: 0, extras: 0, comExtras: 0, next: null as null | { nivel: string; faltan: number; premio: number } };
   const md = multasDe(nombre, ciclo, fin, multas);
   const recep = normNombre(nombre).startsWith("alejandra");
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const [y1, m1] = ciclo.split("-").map(Number);
   const [y2, m2] = fin.split("-").map(Number);
+  const tramo = !!calc.regimenTramo;
   return {
     faciales: c.faciales, comFaciales: c.comFaciales, paquetes: c.paquetes, comPaquetes: c.comPaquetes,
-    nivelAlcanzado: c.nivel, comProductos: c.comProductos, totalProductos: c.totalProductos,
+    nivelAlcanzado: c.nivel, tramoPct: c.tramoPct ?? null, regimenTramo: tramo,
+    comProductos: c.comProductos, totalProductos: c.totalProductos,
     extras: c.extras, comExtras: c.comExtras, comRecepcion: recep ? comRecep : 0, diasRecepcion: recep ? diasRecep : 0,
     multas: md.mlt, descuentos: md.desc, totalClientas: calc.totalClientas, bonoActivo: calc.bono,
-    siguienteNivel: c.next ? n(c.next.nivel.replace("N", "")) : null,
-    paqParaSiguiente: c.next?.faltan || 0, premioSiguiente: c.next?.premio || 0,
+    siguienteNivel: !tramo && c.next ? n(String(c.next.nivel).replace(/^N/, "")) : null,
+    nextLabel: tramo ? (c.next?.nivel || null) : null,
+    paqParaSiguiente: c.next?.faltan || 0, premioSiguiente: tramo ? 0 : (c.next?.premio || 0),
     periodoLabel: meses[m1 - 1] + " — " + meses[m2 - 1] + " " + y2, nCosmetologas: calc.n,
   };
 });
@@ -1420,12 +1436,15 @@ reg("getReporteAdmin", ADMIN, async (_p, ctx) => {
       name: c.cosm, color: s(u?.color) || "#5B7FA6", f: c.faciales, paq: c.paquetes, n: c.nivel,
       cf: c.comFaciales, cp: c.comPaquetes, cprod: c.comProductos, totalProd: c.totalProductos,
       ext: c.extras, cext: c.comExtras, crecep: recep, diasRecep: recep ? diasRecep : 0,
-      m: md.mlt, d: md.desc, t: Math.max(0, neto), nextN: c.next?.nivel || null, faltanPaq: c.next?.faltan || 0, nextCp: c.next?.premio || 0,
+      m: md.mlt, d: md.desc, t: Math.max(0, neto),
+      nextN: c.next?.nivel || null, faltanPaq: c.next?.faltan || 0,
+      nextCp: calc.regimenTramo ? 0 : (c.next?.premio || 0),
+      tramoPct: c.tramoPct ?? null, regimenTramo: !!calc.regimenTramo,
     };
   });
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   return {
-    cosmetologas, bonoActivo: calc.bono, totalClientas: calc.totalClientas, nCosmetologas: calc.n,
+    cosmetologas, bonoActivo: calc.bono, regimenTramo: !!calc.regimenTramo, totalClientas: calc.totalClientas, nCosmetologas: calc.n,
     periodo: meses[Number(ciclo.slice(5, 7)) - 1] + " 26 — " + meses[Number(fin.slice(5, 7)) - 1] + " 25, " + fin.slice(0, 4),
   };
 });

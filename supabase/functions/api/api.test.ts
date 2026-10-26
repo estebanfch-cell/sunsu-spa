@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
-import { comisionProductos, nCosmetologas, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
+import {
+  CFG_DEF, calcularCiclo, comisionProductos, nCosmetologas, netoCatalogo, pisoDolar, puedeCotizar, rolCalcular,
+  siguienteOv, tramosDesdeConfig, type CosmMark, type TicketIn,
+} from "./domain.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_VENTA, ErpError, SEED_IDS, erpSeed, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import { numeroTicket, quincenaDe } from "./ventas.ts";
@@ -1239,5 +1242,196 @@ describe("modo prueba", () => {
     assert.match(sql, /PURGA PRUEBA/);
     assert.match(sql, /El kardex no se borra/);
     assert.match(sql, /No hay import\.py/);
+  });
+});
+
+describe("comisión de paquetes por tramo", () => {
+  const marks: CosmMark[] = [
+    { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es: true, activa: true },
+    { id: "daniela", nombre: "Daniela Mora", patron: "daniela%", es: true, activa: true },
+  ];
+  function tk(over: Partial<TicketIn>): TicketIn {
+    return {
+      fecha: "2026-09-10", cosm: "Andrea Robles", cedula: "1711", facial: "",
+      pack3: "", pack6: "", extras: "",
+      exclFacial: false, exclPaquete: false, exclProducto: false, exclExtras: false,
+      productos: [], ...over,
+    };
+  }
+  function cicloSep() {
+    const tickets: TicketIn[] = [];
+    for (let i = 0; i < 60; i++) tickets.push(tk({ facial: "SUNSU-01 Limpieza", cosm: i < 30 ? "Andrea Robles" : "Daniela Mora" }));
+    for (let i = 0; i < 12; i++) tickets.push(tk({ pack6: "SUNSU-23 x6", cosm: "Andrea Robles" }));
+    for (let i = 0; i < 15; i++) tickets.push(tk({ pack3: "SUNSU-18 x3", cosm: "Daniela Mora" }));
+    return tickets;
+  }
+
+  it("redondea hacia abajo el ejemplo de Reparación", () => {
+    assert.equal(pisoDolar(152.60, 0.05), 7);
+    assert.equal(pisoDolar(152.60, 0.08), 12);
+    assert.equal(pisoDolar(288.25, 0.05), 14);
+    assert.equal(pisoDolar(288.25, 0.08), 23);
+    const map = new Map([["18", { subtotal: 152.60 }], ["23", { subtotal: 288.25 }]]);
+    assert.equal(netoCatalogo(map, "SUNSU-18 x3 Facial Reparación"), 152.60);
+    assert.equal(netoCatalogo(map, "SUNSU-23 x6 Facial Reparación"), 288.25);
+    assert.equal(netoCatalogo(map, "Facial Reparación sin código"), 0);
+  });
+
+  it("el ciclo que cierra el 25 sep deja a Andrea en N10 $500 y a Daniela en N8 $320", () => {
+    const calc = calcularCiclo(cicloSep(), marks, CFG_DEF, "2026-08-26");
+    const andrea = calc.personas.find((p) => p.cosm.startsWith("Andrea"));
+    const daniela = calc.personas.find((p) => p.cosm.startsWith("Daniela"));
+    assert.equal(calc.regimenTramo, false);
+    assert.equal(calc.n, 2);
+    assert.equal(calc.totalClientas, 60);
+    assert.equal(andrea?.paquetes, 24);
+    assert.equal(andrea?.nivel, "N10");
+    assert.equal(andrea?.comPaquetes, 500);
+    assert.equal(daniela?.paquetes, 15);
+    assert.equal(daniela?.nivel, "N8");
+    assert.equal(daniela?.comPaquetes, 320);
+  });
+
+  it("el ciclo 26 sep–25 oct congela a Andrea y Daniela en N8 $320", () => {
+    const tickets = cicloSep().map((t) => ({ ...t, fecha: "2026-10-10" }));
+    tickets.push(tk({ fecha: "2026-10-10", cosm: "Camila Ruiz", pack3: "SUNSU-18 x3" }));
+    const calc = calcularCiclo(tickets, marks, CFG_DEF, "2026-09-26");
+    const andrea = calc.personas.find((p) => p.cosm.startsWith("Andrea"));
+    const daniela = calc.personas.find((p) => p.cosm.startsWith("Daniela"));
+    const camila = calc.personas.find((p) => p.cosm.startsWith("Camila"));
+    assert.equal(andrea?.paquetes, 24);
+    assert.equal(andrea?.nivel, "N8");
+    assert.equal(andrea?.comPaquetes, 320);
+    assert.equal(daniela?.nivel, "N8");
+    assert.equal(daniela?.comPaquetes, 320);
+    assert.equal(camila?.comPaquetes, 0);
+    assert.equal(camila?.nivel, "—");
+  });
+
+  it("desde el 26 oct un x6 cuenta 1 y el tramo final se aplica a todos los paquetes", () => {
+    const viejo = calcularCiclo([tk({ fecha: "2026-09-01", pack6: "SUNSU-23 x6", netoPack6: 288.25 })], marks, CFG_DEF, "2026-08-26");
+    assert.equal(viejo.personas[0].paquetes, 2);
+    assert.equal(viejo.personas[0].comPaquetes, 0);
+    const uno = calcularCiclo([
+      tk({ fecha: "2026-10-27", pack3: "SUNSU-18 x3 Facial Reparación", netoPack3: 152.60 }),
+    ], marks, CFG_DEF, "2026-10-26");
+    assert.equal(uno.personas[0].paquetes, 1);
+    assert.equal(uno.personas[0].nivel, "5%");
+    assert.equal(uno.personas[0].comPaquetes, 7);
+    const nets: TicketIn[] = [];
+    for (let i = 0; i < 10; i++) nets.push(tk({ fecha: "2026-10-27", pack3: "SUNSU-18 x3", netoPack3: 152.60 }));
+    nets.push(tk({ fecha: "2026-10-27", pack6: "SUNSU-23 x6", netoPack6: 288.25 }));
+    const once = calcularCiclo(nets, marks, CFG_DEF, "2026-10-26");
+    assert.equal(once.personas[0].paquetes, 11);
+    assert.equal(once.personas[0].nivel, "8%");
+    assert.equal(once.personas[0].comPaquetes, 10 * 12 + 23);
+    assert.equal(once.personas[0].next?.nivel, "11%");
+    assert.equal(once.regimenTramo, true);
+  });
+
+  it("lee tramos de pago_config y, si no hay, usa 5/8/11/14", () => {
+    const custom = tramosDesdeConfig({ comisiones: { tramos: [{ desde: 1, hasta: 100, valor: 10 }] } });
+    assert.equal(custom?.[0].pct, 0.1);
+    const calc = calcularCiclo([
+      tk({ fecha: "2026-11-01", pack3: "SUNSU-18 x3", netoPack3: 152.60 }),
+    ], marks, { ...CFG_DEF, tramosPaquete: custom }, "2026-10-26");
+    assert.equal(calc.personas[0].nivel, "10%");
+    assert.equal(calc.personas[0].comPaquetes, 15);
+    assert.equal(tramosDesdeConfig({}), null);
+    assert.equal(tramosDesdeConfig({ tramos: [] }), null);
+  });
+
+  it("el dashboard del ciclo nuevo muestra unidades, tramo y monto con el código del catálogo", async () => {
+    const db = new MemoryDb();
+    db.tables.set("catalogo", [
+      { sku: "SUNSU-18", subtotal: 152.60, producto_servicio: "Reparación" },
+      { sku: "SUNSU-23", subtotal: 288.25, producto_servicio: "Reparación x6" },
+    ]);
+    const tickets: Row[] = [];
+    for (let i = 0; i < 10; i++) tickets.push({
+      id: i + 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "1711",
+      compra_pack_3: "SUNSU-18 x3 Facial Reparación",
+    });
+    tickets.push({
+      id: 11, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "1711",
+      compra_pack_6: "SUNSU-23 x6 Facial Reparación",
+    });
+    db.tables.set("tickets", tickets);
+    db.tables.set("app_kv", [{ clave: "pago_config", valor: { tramos: [
+      { desde: 1, hasta: 10, valor: 5 }, { desde: 11, hasta: 20, valor: 8 },
+      { desde: 21, hasta: 30, valor: 11 }, { desde: 31, hasta: null, valor: 14 },
+    ] } }]);
+    const c = ctx(db);
+    c.now = new Date("2026-10-27T18:00:00Z");
+    const dash = await handle("getDashCosm", { token: c.token, cosmetologa: "Andrea Robles" }, c) as Row;
+    assert.equal(dash.paquetes, 11);
+    assert.equal(dash.nivelAlcanzado, "8%");
+    assert.equal(dash.comPaquetes, 143);
+    assert.equal(dash.regimenTramo, true);
+    assert.equal(dash.nextLabel, "11%");
+    assert.equal(dash.siguienteNivel, null);
+    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    assert.match(html, /data\.nivelAlcanzado/);
+    assert.match(html, /d\.nivelPaquete/);
+  });
+
+  it("el motor del Apps Script conserva el premio viejo y el piso del tramo nuevo", () => {
+    const src = readFileSync(new URL("../../../sunsu_script_completo.js", import.meta.url), "utf8");
+    const a = src.indexOf("// --- PAQ-TRAMO-START ---");
+    const b = src.indexOf("// --- PAQ-TRAMO-END ---");
+    const chunk = src.slice(a, b);
+    const motor = new Function("CONFIG", chunk + "\nreturn { pisoDolar_: pisoDolar_, contarPacks_: contarPacks_, aplicarPremioPaquetes_: aplicarPremioPaquetes_, netoCatalogoTexto_: netoCatalogoTexto_ };")({
+      NIVELES: [
+        [0.05, 5], [0.10, 20], [0.15, 45], [0.20, 80], [0.25, 125],
+        [0.30, 180], [0.40, 245], [0.50, 320], [0.60, 405], [0.80, 500],
+      ],
+    }) as {
+      pisoDolar_: (neto: number, pct: number) => number;
+      contarPacks_: (ini: Date, p3: string, p6: string, precios: Row) => { unidades: number; nets: number[] };
+      aplicarPremioPaquetes_: (nombre: string, c: Row, clientas: number, n: number, bono: boolean, ini: Date) => Row;
+      netoCatalogoTexto_: (texto: string, precios: Row) => number;
+    };
+    assert.equal(motor.pisoDolar_(152.60, 0.05), 7);
+    assert.equal(motor.pisoDolar_(152.60, 0.08), 12);
+    assert.equal(motor.pisoDolar_(288.25, 0.05), 14);
+    assert.equal(motor.pisoDolar_(288.25, 0.08), 23);
+    assert.equal(motor.netoCatalogoTexto_("SUNSU-18 x3 Facial Reparación", { "SUNSU-18": { venta: 152.6 } }), 152.6);
+    const sep = new Date(2026, 7, 26);
+    let ua = 0;
+    for (let i = 0; i < 12; i++) ua += motor.contarPacks_(sep, "", "SUNSU-23 x6", {}).unidades;
+    let ud = 0;
+    for (let i = 0; i < 15; i++) ud += motor.contarPacks_(sep, "SUNSU-18 x3", "", {}).unidades;
+    assert.equal(ua, 24);
+    assert.equal(ud, 15);
+    const andrea = motor.aplicarPremioPaquetes_("Andrea Robles", { paquetes: ua }, 60, 2, true, sep);
+    const daniela = motor.aplicarPremioPaquetes_("Daniela Mora", { paquetes: ud }, 60, 2, true, sep);
+    assert.equal(andrea.nivelAlcanzado, "N10");
+    assert.equal(andrea.comPaquetes, 500);
+    assert.equal(daniela.nivelAlcanzado, "N8");
+    assert.equal(daniela.comPaquetes, 320);
+    const freeze = new Date(2026, 8, 26);
+    const forzada = motor.aplicarPremioPaquetes_("Andrea Robles", { paquetes: 24 }, 60, 2, true, freeze);
+    assert.equal(forzada.nivelAlcanzado, "N8");
+    assert.equal(forzada.comPaquetes, 320);
+    const otra = motor.aplicarPremioPaquetes_("Camila", { paquetes: 24 }, 60, 2, true, freeze);
+    assert.equal(otra.nivelAlcanzado, "N10");
+    assert.equal(otra.comPaquetes, 500);
+    const nuevo = new Date(2026, 9, 26);
+    const precios = { "SUNSU-18": { venta: 152.6 }, "SUNSU-23": { venta: 288.25 } };
+    const nets: number[] = [];
+    let units = 0;
+    for (let i = 0; i < 10; i++) {
+      const c = motor.contarPacks_(nuevo, "SUNSU-18 x3 Facial Reparación", "", precios);
+      units += c.unidades;
+      nets.push(...c.nets);
+    }
+    const x6 = motor.contarPacks_(nuevo, "", "SUNSU-23 x6 Facial Reparación", precios);
+    units += x6.unidades;
+    nets.push(...x6.nets);
+    assert.equal(units, 11);
+    assert.equal(x6.unidades, 1);
+    const tramo = motor.aplicarPremioPaquetes_("Andrea", { paquetes: units, _nets: nets }, 5, 1, false, nuevo);
+    assert.equal(tramo.nivelAlcanzado, "8%");
+    assert.equal(tramo.comPaquetes, 143);
   });
 });
