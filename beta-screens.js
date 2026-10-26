@@ -12577,9 +12577,76 @@ function cerrarModal(id){
 }
 
 // ══════ BUSCAR GIFT CARDS ══════
+function _gcEsc(v){
+  return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function _gcCerrada(g){
+  if(!g||g.usado) return true;
+  var saldo=parseFloat(g.saldo);
+  return Number.isFinite(saldo)&&saldo<=0;
+}
+function _gcEstado(g){
+  if(!g) return '';
+  if(g.usado) return 'Usada';
+  var saldo=parseFloat(g.saldo);
+  if(Number.isFinite(saldo)&&saldo<=0) return 'Cerrada';
+  var vc=_gcVencimiento(g);
+  if(vc&&vc.cad) return 'Caducada';
+  return 'Vigente';
+}
+function _gcFechaEmision(g){
+  var dia=parseInt(g&&g.dia,10), mes=parseInt(g&&g.mes,10), ano=g&&g.ano;
+  if(!dia||!mes||!ano) return '—';
+  return ('0'+dia).slice(-2)+'/'+('0'+mes).slice(-2)+'/'+ano;
+}
+function _gcVencTxt(g){
+  var vc=_gcVencimiento(g);
+  if(!vc) return '—';
+  if(vc.sinCad) return 'Sin caducidad';
+  return vc.str||'—';
+}
+function _gcMarcarFiltro(filtro){
+  [['gc-f-todas','todas'],['gc-f-vig','vig'],['gc-f-cad','cad'],['gc-f-abiertas','abiertas']].forEach(function(par){
+    var b=document.getElementById(par[0]);
+    if(!b) return;
+    b.setAttribute('aria-pressed', filtro===par[1]?'true':'false');
+  });
+}
+function _gcTablaHTML(lista){
+  window._gcVisibles=lista||[];
+  var rows=window._gcVisibles.map(function(g,i){
+    var saldo=g.saldo;
+    var saldoTxt=(saldo==null||saldo==='')?'—':(typeof saldo==='number'?saldo.toFixed(2):String(saldo));
+    var quien=((g.nombre||'')+' '+(g.apellido||'')).trim()||'—';
+    return '<tr class="gc-row" onclick="_gcAbrir('+i+')">'
+      +'<td>'+_gcEsc(g.codigo||'')+'</td>'
+      +'<td>'+_gcEsc(quien)+'</td>'
+      +'<td class="num">'+_gcEsc(g.valor||'—')+'</td>'
+      +'<td class="num">'+_gcEsc(saldoTxt)+'</td>'
+      +'<td>'+_gcEsc(_gcFechaEmision(g))+'</td>'
+      +'<td>'+_gcEsc(_gcVencTxt(g))+'</td>'
+      +'<td>'+_gcEsc(_gcEstado(g))+'</td></tr>';
+  }).join('');
+  return '<div class="sheet-scroll"><table class="gc-table"><thead><tr>'
+    +'<th>Código</th><th>Clienta / beneficiaria</th><th class="num">Monto</th><th class="num">Saldo</th><th>Emisión</th><th>Vencimiento</th><th>Estado</th>'
+    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="7">Sin gift cards</td></tr>')+'</tbody></table></div>'
+    +'<div id="gc-detail"></div>';
+}
+function _gcAbrir(i){
+  var g=(window._gcVisibles||[])[i];
+  var pane=document.getElementById('gc-detail');
+  if(!g||!pane) return;
+  pane.innerHTML=_buildGCCard(g);
+  if(window.SunsuInline) SunsuInline.aplicar();
+}
 function verTodasGC(filtro){
   var res=document.getElementById('bgc-results');
   if(!res) return;
+  filtro=filtro||'todas';
+  window._gcFiltro=filtro;
+  _gcMarcarFiltro(filtro);
   res.innerHTML='<div class="loading"><div class="spinner"></div>Cargando todas las gift cards...</div>';
   fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent('*')+'&_t='+Date.now())
     .then(function(r){return r.json();})
@@ -12592,12 +12659,12 @@ function verTodasGC(filtro){
       var lista=conEstado.filter(function(x){
         if(filtro==='cad') return x.cad;
         if(filtro==='vig') return x.vig;
+        if(filtro==='abiertas') return !_gcCerrada(x.g);
         return true;
-      });
-      // Caducadas primero, luego por vencer, luego el resto
-      lista.sort(function(a,b){return (b.cad?2:(b.vig?1:0))-(a.cad?2:(a.vig?1:0));});
-      res.innerHTML='<div style="font-size:0.66rem;color:var(--gray);margin-bottom:8px">'+arr.length+' gift cards · <b style="color:#2E7D52">'+nVig+' vigentes</b> · <b style="color:#E8543F">'+nCad+' caducadas</b> · '+nUso+' consumidas</div>'
-        +(lista.length?lista.map(function(x){return _buildGCCard(x.g);}).join(''):'<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin gift cards en este filtro</div>');
+      }).map(function(x){return x.g;});
+      var nota=filtro==='abiertas'?' · sin cerradas ni usadas por completo':(filtro==='todas'?' · incluye cerradas y usadas':'');
+      res.innerHTML='<div style="font-size:0.66rem;color:var(--gray);margin-bottom:8px">'+arr.length+' gift cards · <b style="color:#2E7D52">'+nVig+' vigentes</b> · <b style="color:#E8543F">'+nCad+' caducadas</b> · '+nUso+' consumidas'+nota+'</div>'
+        +(lista.length?_gcTablaHTML(lista):'<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin gift cards en este filtro</div>');
       if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
@@ -12612,11 +12679,16 @@ function renderBuscarGC(c){
     +'<input id="bgc-inp" type="text" placeholder="Código GC, nombre, apellido o cédula..." style="flex:1;padding:10px 13px;border:1.5px solid var(--cream-d);border-radius:11px;font-size:0.86rem;font-family:inherit;outline:none">'
     +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
     +'</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"><button onclick="verTodasGC()" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button><button onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button><button onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
+    +'<button id="gc-f-abiertas" onclick="verTodasGC(\'abiertas\')" aria-pressed="true" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">Abiertas</button>'
+    +'<button id="gc-f-todas" onclick="verTodasGC(\'todas\')" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button>'
+    +'<button id="gc-f-vig" onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button>'
+    +'<button id="gc-f-cad" onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div>'
     +'<div id="gc-nuevo">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.mas("gift_cards"):'')+'</div><div id="bgc-results"></div>';
   var inp=document.getElementById('bgc-inp');
   if(inp){
     if(window._bgcPrefill){inp.value=window._bgcPrefill;window._bgcPrefill='';setTimeout(ejecutarBuscarGC,50);}
+    else verTodasGC('abiertas');
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarGC();});
     inp.addEventListener('input',function(){
       clearTimeout(window._bgcTimer);
@@ -12638,8 +12710,8 @@ function ejecutarBuscarGC(){
     .then(function(d){
       if(d.error){res.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
       var arr=d.resultados||[];
-      if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+q+'"</div>';return;}
-      res.innerHTML=arr.map(function(g){return _buildGCCard(g);}).join('');
+      if(!arr.length){res.innerHTML='<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin resultados para "'+_gcEsc(q)+'"</div>';return;}
+      res.innerHTML=_gcTablaHTML(arr);
       if(window.SunsuInline) SunsuInline.aplicar();
     })
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
@@ -12921,23 +12993,25 @@ function _pintarPaqLista(){
     +'</div></div>'
     ;
   if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
+  else html+='<div class="paq-sheet"><div class="paq-line paq-head"><span>Clienta</span><span>Progreso</span><span>Tarjeta</span><span>WhatsApp</span><span></span></div>';
   arr.forEach(function(x){
     var p=x.p;
     var iSeg=(window._todosPaq||[]).indexOf(x);
-    html+='<div class="card" style="padding:11px;margin-bottom:8px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+(p.nombre+' '+p.apellido).trim()+'</div>'
-      +'<div style="font-size:0.57rem;color:var(--gray)">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
+    var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
+    if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
+    var wa=telQ
+      ?'<a class="paq-btn paq-wa" href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank">💬</a>'
+      :'<span class="paq-btn paq-wa paq-wa-vacio" aria-hidden="true"></span>';
+    html+='<div class="card paq-row" style="padding:11px;margin-bottom:8px">'
+      +'<div class="paq-line">'
+      +'<div class="paq-quien">'
+      +'<div class="paq-nombre">'+(p.nombre+' '+p.apellido).trim()+'</div>'
+      +'<div class="paq-sku">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
       +'</div>'
-      +'<span style="font-size:0.64rem;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;'+(x.pend>0?'background:var(--blue-l);color:var(--navy)':'background:#E8F8EE;color:#2E7D52')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</span>'
-      +'<button onclick="tarjetaPaqueteDe('+iSeg+')" style="padding:7px 10px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>'
-      +(function(){
-        var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
-        if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
-        return telQ?'<a href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
-      })()
-      +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
+      +'<div class="paq-prog'+(x.pend>0?'':' ok')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</div>'
+      +'<button class="paq-btn" type="button" onclick="tarjetaPaqueteDe('+iSeg+')">📄 Tarjeta</button>'
+      +wa
+      +'<button class="paq-btn paq-drop" type="button" onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')">▾</button>'
       +'</div>'
       +(function(){
         var ix=window.SunsuInline;
@@ -12948,6 +13022,7 @@ function _pintarPaqLista(){
       })()
       +'<div id="paq-exp-'+p.fila+'"></div></div>';
   });
+  if(arr.length) html+='</div>';
   cont.innerHTML=html;
   if(window.SunsuInline) SunsuInline.aplicar();
 }
