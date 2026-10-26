@@ -1266,7 +1266,44 @@ function renderTicket(c){
       </div>
     </div>`;}).join('');
 
+  const _cotMode=!!window._esCotizacion;
+  const _cotBanner=_cotMode?'<div class="card" id="cot-banner" style="background:#FBF3E3;border:1.5px solid var(--gold);margin-bottom:12px"><div style="font-weight:800;color:var(--gold);letter-spacing:0.2px">Esto es una COTIZACIÓN</div><div style="font-size:0.72rem;margin-top:4px">Se guarda como COT y se descarga el PDF. No mueve stock, comisiones ni gift cards.</div></div>':'';
+  const _notasCard=_cotMode?'':`
+    <div class="card">
+      <div class="card-title">📝 Notas</div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center"><label>Recomendaciones para el cliente</label>
+        <button type="button" id="mic-inp-recom" onclick="_dictar('inp-recom')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
+        <textarea id="inp-recom" placeholder="Rutina, productos sugeridos..."></textarea>
+      </div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center"><label>Notas generales</label>
+        <button type="button" id="mic-inp-notas" onclick="_dictar('inp-notas')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
+        <textarea id="inp-notas" placeholder="Observaciones del facial, piel del cliente..."></textarea>
+      </div>
+    </div>`;
+  const _fotosCard=_cotMode?'':`
+    <div class="card">
+      <div class="card-title">📷 Fotos de la clienta <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">(opcional · máx 3 por sección)</span></div>
+      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin-bottom:6px">🌑 ANTES del facial</div>
+      <div style="display:flex;gap:8px">
+        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
+        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
+          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
+      </div>
+      <div id="fotos-antes-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
+      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin:12px 0 6px">✨ DESPUÉS del facial</div>
+      <div style="display:flex;gap:8px">
+        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
+        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
+          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
+      </div>
+      <div id="fotos-despues-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
+    </div>`;
   c.innerHTML=`
+    ${_cotBanner}
     <div class="stoggle" onclick="toggleSunsu()">
       <div class="tsw" id="tsw"></div>
       <span class="ttext">🏪 Consumo interno Sunsu</span>
@@ -1297,42 +1334,11 @@ function renderTicket(c){
       ${provsHTML}
     </div>
 
-    <div class="card">
-      <div class="card-title">📝 Notas</div>
-      <div class="field">
-        <div style="display:flex;justify-content:space-between;align-items:center"><label>Recomendaciones para el cliente</label>
-        <button type="button" id="mic-inp-recom" onclick="_dictar('inp-recom')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
-        <textarea id="inp-recom" placeholder="Rutina, productos sugeridos..."></textarea>
-      </div>
-      <div class="field">
-        <div style="display:flex;justify-content:space-between;align-items:center"><label>Notas generales</label>
-        <button type="button" id="mic-inp-notas" onclick="_dictar('inp-notas')" style="background:white;border:1.5px solid var(--cream-d);border-radius:9px;padding:4px 10px;font-size:0.85rem;cursor:pointer" title="Dictar por voz">🎤</button></div>
-        <textarea id="inp-notas" placeholder="Observaciones del facial, piel del cliente..."></textarea>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">📷 Fotos de la clienta <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">(opcional · máx 3 por sección)</span></div>
-      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin-bottom:6px">🌑 ANTES del facial</div>
-      <div style="display:flex;gap:8px">
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
-          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
-      </div>
-      <div id="fotos-antes-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
-      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin:12px 0 6px">✨ DESPUÉS del facial</div>
-      <div style="display:flex;gap:8px">
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
-          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
-      </div>
-      <div id="fotos-despues-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
-    </div>
+    ${_notasCard}
+    ${_fotosCard}
 
     <div id="preview-box" style="display:none"></div>
-    <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">✓ Enviar Ticket</button>
+    <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">${_cotMode?'✓ Guardar cotización':'✓ Enviar Ticket'}</button>
     <div style="height:28px"></div>
   `;
   updateSunsuUI(); updatePreview();
@@ -2139,6 +2145,80 @@ function _ofrecerPrimeraSesion(packs, cedula, facialNombre, ticket){
   siguiente();
 }
 
+function _lineasCotizacionTicket(){
+  var lineas=[];
+  function add(sku, nombre, tipo, cant, precio){
+    cant=Math.round(Number(cant)||0);
+    if(!(cant>0)||(!nombre&&!sku)) return;
+    lineas.push({sku:sku||'', nombre:nombre||sku, tipo:tipo||'', cant:cant, precio:Math.max(0, Number(precio)||0)});
+  }
+  if(T.facial){
+    var f=FACIALES.find(function(x){return x.sku===T.facial;})||{sku:T.facial,n:T.facial,p:0};
+    var precio=f.p;
+    if(T.cobro==='cortesia'||T.cobro==='paquete') precio=0;
+    else if(T.cobro==='giftcard') precio=Number(T._gcDif)||0;
+    add(f.sku, f.n, 'facial', 1, precio);
+  }
+  EXTRAS.forEach(function(e){
+    if(!T.extras||!T.extras[e.sku]) return;
+    var precio=T.extrasCourtesy&&T.extrasCourtesy[e.sku]?0:e.t;
+    var nombre=e.n;
+    if(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]) nombre+=' · '+T.extrasTipo[e.sku];
+    add(e.sku, nombre, 'extra', 1, precio);
+  });
+  if(T.extras&&T.extras.otros&&T.otroExtra) add('OTRO', T.otroExtra, 'extra', 1, 0);
+  if(T.pack3){
+    var p3=PAQ3.find(function(p){return p.sku===T.pack3;})||{sku:T.pack3,n:T.pack3,p:0};
+    add(p3.sku, p3.n, 'paquete', 1, p3.p);
+  }
+  if(T.pack6){
+    var p6=PAQ6.find(function(p){return p.sku===T.pack6;})||{sku:T.pack6,n:T.pack6,p:0};
+    add(p6.sku, p6.n, 'paquete', 1, p6.p);
+  }
+  PROVS.forEach(function(pv){ pv.prods.forEach(function(p){
+    var q=T.productos[p.sku]||0;
+    if(q>0) add(p.sku, p.n, 'producto', q, p.p);
+  }); });
+  var gc=T.gcVenta;
+  if(gc&&gc.activo&&gc.codigo){
+    var valor=gc.cortesia?0:((Number(gc.valor)||65)+(gc.tipo==='fisica'?3:0));
+    add(gc.codigo, 'Gift card '+gc.codigo, 'gift', 1, valor);
+  }
+  return lineas;
+}
+function _enviarCotizacionTicket(info){
+  var btn=info.btn;
+  var cliente=String(info.cliente||'').trim();
+  function fallo(msg){
+    toast(msg,'#B86B6B');
+    if(btn){btn.disabled=false;btn.textContent='✓ Guardar cotización';}
+  }
+  if(!cliente){ fallo('Ingresa el nombre de la clienta'); return; }
+  var lineas=_lineasCotizacionTicket();
+  if(!lineas.length){ fallo('Agrega al menos un servicio o producto'); return; }
+  var body={
+    cliente:cliente,
+    cedula:String(info.cedula||'').trim(),
+    lineas:lineas,
+    dscMode:'$',
+    dscVal:Number(info.dscVal)||0,
+    validez:'Válida por 15 días',
+  };
+  var run=window.api?window.api('guardarCotizacion', body):Promise.resolve({error:'Sin conexión'});
+  Promise.resolve(run).then(function(d){
+    if(!d||d.error||d.ok===false){ fallo((d&&d.error)||'No se pudo guardar la cotización'); return; }
+    toast('✅ '+(d.numero||'Cotización')+' guardada','#6A9E7A');
+    var q={
+      numero:d.numero, cliente:cliente, cedula:body.cedula, fecha:d.fecha||'',
+      validez:body.validez, lineas:d.lineas||lineas, subtotal:d.subtotal, descuento:d.descuento,
+      iva:d.iva, total:d.total, sinIva:d.sinIva, creadoPor:(typeof CU!=='undefined'&&CU&&CU.name)||'',
+    };
+    if(typeof _cotDescargar==='function') _cotDescargar(q);
+    T=newT();
+    if(typeof go==='function'&&d.numero) go('#/doc/cot/'+encodeURIComponent(d.numero));
+    else if(btn){btn.disabled=false;btn.textContent='✓ Guardar cotización';}
+  }).catch(function(){ fallo('Sin conexión'); });
+}
 function enviarTicket(){
   const cedEl=document.getElementById('inp-ced');
   const nomEl=document.getElementById('inp-nom');
@@ -2157,16 +2237,17 @@ function enviarTicket(){
   // re-renderiza con debounce y CAMBIA DE ALTO: el boton se mueve bajo el dedo
   // (iOS) y un tap perdido caia aqui y mandaba el ticket solo. Ahora un solo
   // tap ya no manda nada: el 1ro arma (3.5s para confirmar), el 2do envia.
+  var _etiqEnv=window._esCotizacion?'✓ Guardar cotización':'✓ Enviar Ticket';
   var _btnE=document.getElementById('btn-env-tk');
   if(!window._envArmado){
     window._envArmado=true;
-    if(_btnE){_btnE.textContent='👆 ¿Confirmar envío? Toca de nuevo';_btnE.style.background='#C9A227';}
+    if(_btnE){_btnE.textContent=window._esCotizacion?'👆 ¿Confirmar cotización? Toca de nuevo':'👆 ¿Confirmar envío? Toca de nuevo';_btnE.style.background='#C9A227';}
     clearTimeout(window._envArmT);
-    window._envArmT=setTimeout(function(){window._envArmado=false;var b=document.getElementById('btn-env-tk');if(b){b.textContent='✓ Enviar Ticket';b.style.background='';}},3500);
+    window._envArmT=setTimeout(function(){window._envArmado=false;var b=document.getElementById('btn-env-tk');if(b){b.textContent=window._esCotizacion?'✓ Guardar cotización':'✓ Enviar Ticket';b.style.background='';}},3500);
     return;
   }
   window._envArmado=false; clearTimeout(window._envArmT);
-  if(_btnE){_btnE.textContent='✓ Enviar Ticket';_btnE.style.background='';}
+  if(_btnE){_btnE.textContent=_etiqEnv;_btnE.style.background='';}
 
   // Col T: Facial
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
@@ -2340,6 +2421,16 @@ function enviarTicket(){
   };
 
   const btn=document.querySelector('.submit-btn');
+  if(window._esCotizacion){
+    if(btn){btn.disabled=true;btn.textContent='⏳ Guardando...';}
+    _enviarCotizacionTicket({
+      cliente:((payload.nombre||'')+' '+(payload.apellido||'')).trim(),
+      cedula:T.esSunsu?'':(payload.cedula||''),
+      dscVal:_dscMonto,
+      btn:btn,
+    });
+    return;
+  }
   if(btn){btn.disabled=true;btn.textContent='⏳ Enviando...';}
 
   // Generar número de ticket local para mostrar (el definitivo lo genera el script)
@@ -15680,7 +15771,7 @@ function _cotCargarLista(q){
       if(box) box.innerHTML='<div class="card" style="color:#B86B6B">'+_cotEsc((d&&d.error)||'No se pudo cargar')+'</div>';
       return;
     }
-    window._cotLista=d.cotizaciones||[];
+    window._cotLista=d.cotizaciones||d.items||[];
     _cotPintarHistorial(window._cotLista);
   }).catch(function(){
     if(box) box.innerHTML='<div class="card" style="color:#B86B6B">Sin conexión</div>';
@@ -15694,7 +15785,7 @@ function _cotPintarHistorial(lista){
   }
   box.innerHTML=lista.map(function(q){
     var num=String(q.numero||'');
-    var jsNum=/^COT-\d+$/.test(num)?num:'';
+    var jsNum=/^(COT|TK-SQ|TEST-COT|TEST-TK-SQ)-\d+$/.test(num)?num:'';
     var contacto=[q.telefono,q.email,q.cedula].filter(Boolean).join(' · ');
     return '<div class="card" style="padding:12px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
@@ -15716,8 +15807,10 @@ function _cotBajarPDF(numero){
   fetch(APPS_SCRIPT_URL+'?action=getCotizacion&numero='+encodeURIComponent(numero)+'&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if(!d||!d.ok||!d.cotizacion){ toast((d&&d.error)||'No se encontró la cotización','#B86B6B'); return; }
-      _cotDescargar(d.cotizacion);
+      var qPdf=d&&(d.cotizacion||d.item);
+      if(!d||!d.ok||!qPdf){ toast((d&&d.error)||'No se encontró la cotización','#B86B6B'); return; }
+      if(!qPdf.lineas&&qPdf.items) qPdf.lineas=qPdf.items;
+      _cotDescargar(qPdf);
     }).catch(function(){ toast('Sin conexión','#B86B6B'); });
 }
 function _cotNombreArchivo(q){

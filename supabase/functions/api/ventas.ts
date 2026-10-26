@@ -7,7 +7,7 @@ import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, ecuadorParts, facialSku, n, normCedula, normNombre,
   packSesiones, prodCol, productQtys, round2, s, skuCode, ymdUtc, type ComCfg, type Row,
 } from "./domain.ts";
-import { logAccion } from "./lib.ts";
+import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 
 export const BUFFER_RESTOCK = 0.2;
@@ -483,6 +483,11 @@ export function puntajeCliente(c: Row, qRaw: string): number {
   return Math.max(score, 400 + wordScore);
 }
 
+function veTelefono(ses: SesLite): boolean {
+  const completo: Ses = { ...ses, color: "", token: "" };
+  return conTelefono(completo);
+}
+
 export function ordenarClientes(rows: Row[], q: string): Row[] {
   if (!normBusca(q)) return rows;
   return rows
@@ -499,6 +504,9 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
   let regs: Row[] = [];
   try { regs = await db.all("clientas_registro"); } catch { regs = []; }
   const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)));
+  const fichas = new Map<string, Row>();
+  for (const r of regs) if (!r.borrado_at) fichas.set(claveRegistro(r), r);
+  const telOk = veTelefono(ses);
   if (verTodos) {
     for (const r of regs) {
       if (r.borrado_at) continue;
@@ -531,11 +539,14 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
     aplicarTicket(g, r);
   }
   const clientes = [...map.values()].map((g) => {
+    const ficha = fichas.get(g.key);
     const item: Row = {
       key: g.key, fila: g.fila, cedula: g.cedula, nombres: g.nombres, apellido: g.apellido,
       nombre: (g.nombres + " " + g.apellido).trim(),
       visitas: g.visitas, ultima: g.ultima, cosmetologa: g.cosmetologa,
+      sector: s(ficha?.sector_donde_vive),
     };
+    if (telOk) item.telefono = s(ficha?.telefono);
     if (admin) item.total = round2(g.total);
     return item;
   }).sort((a, b) => s(b.ultima).localeCompare(s(a.ultima)) || s(a.nombre).localeCompare(s(b.nombre)));
@@ -624,6 +635,10 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
     visitas: tickets.length, ultima: s(tickets[0]?.fecha),
   };
   if (admin) cliente.total = round2(total);
+  if (!veTelefono(ses)) {
+    delete cliente.telefono;
+    delete cliente.email;
+  }
   return { ok: true, admin, cliente, tickets, paquetes };
 }
 
