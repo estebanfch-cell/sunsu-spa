@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryDb } from "./db.ts";
-import { CFG_DEF, calcularCiclo, comisionPaquetesTramo, comisionProductos, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
+import { CFG_DEF, calcularCiclo, comisionPaquetesTramo, comisionProductos, contarExtras, desglosePaquetesTramo, listaExtrasPagados, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
 import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
@@ -95,6 +95,30 @@ describe("permisos", () => {
     assert.equal(acceso("cosmetologa", "permisos"), "no");
     assert.equal(acceso("super_admin", "permisos"), "todos");
     assert.equal(acceso("admin", "permisos"), "no");
+    assert.equal(acceso("super_admin", "configuracion"), "todos");
+    assert.equal(acceso("admin", "configuracion"), "todos");
+    assert.equal(acceso("admin_master", "configuracion"), "todos");
+    assert.equal(acceso("cosmetologa", "configuracion"), "no");
+  });
+
+  it("whoami de super_admin incluye Configuración general", async () => {
+    const db = new MemoryDb();
+    const c = ctx(db, "super_admin", "efch", "EFCH");
+    const who = await handle("whoami", { token: c.token }, c) as Row;
+    const mods = who.modulos as Row[];
+    assert.equal(mods.find((m) => m.modulo === "configuracion")?.acceso, "todos");
+    const vista = await handle("config_general", { token: c.token }, c) as Row;
+    assert.equal(vista.ok, true);
+    const cosm = ctx(new MemoryDb(), "cosmetologa", "andrea", "Andrea");
+    const no = await handle("config_general", { token: cosm.token }, cosm) as Row;
+    assert.equal(no.ok, undefined);
+    assert.ok(no.error);
+    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    assert.match(beta, /id="com-ciclo"/);
+    assert.match(beta, /value="Todas"/);
+    assert.doesNotMatch(beta, /id="com-desde"/);
+    assert.doesNotMatch(beta, /id="com-hasta"/);
+    assert.match(beta, /route\.mod === "configuracion" && state\.admin/);
   });
 
   it("redacta costos, tickets ajenos y roles de pago ajenos", () => {
@@ -1742,6 +1766,10 @@ describe("series, comisiones y rol", () => {
   it("los tramos de paquete son 5/8/11/14% del neto, redondeados hacia abajo", () => {
     const netos = Array.from({ length: 12 }, () => 100);
     assert.equal(comisionPaquetesTramo(12, undefined, netos).monto, 10 * 5 + 2 * 8);
+    const partes = desglosePaquetesTramo(12, undefined, netos);
+    assert.equal(partes.reduce((a, t) => a + t.monto, 0), comisionPaquetesTramo(12, undefined, netos).monto);
+    assert.deepEqual(partes.map((t) => [t.desde, t.n, t.pct, t.monto]), [[1, 10, 5, 50], [11, 2, 8, 16]]);
+    assert.equal(listaExtrasPagados("Dermaplaning | LED | CORTESIA").length, contarExtras("Dermaplaning | LED | CORTESIA").n - contarExtras("Dermaplaning | LED | CORTESIA").cortesia);
     assert.equal(comisionPaquetesTramo(12, undefined, netos).etiqueta, "11–20 · 8%");
     assert.equal(comisionPaquetesTramo(1, undefined, [33]).monto, 1);
     const pct = normalizarTramos([
@@ -1768,6 +1796,55 @@ describe("series, comisiones y rol", () => {
     const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Andrea" }, c) as Row;
     const filas = tabla.filas as Row[];
     assert.equal((filas.find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0], 5);
+    const det = tabla.detalle as Row;
+    assert.equal(det.faciales, 1);
+    assert.equal(det.paquetes, 1);
+    assert.equal((det.tramos as Row[])[0]?.n, 1);
+    assert.equal((det.tramos as Row[])[0]?.pct, "5%");
+    assert.equal((det.tramos as Row[]).reduce((a, t) => a + Number(t.monto), 0), 5);
+  });
+
+  it("Todas lista a cada persona y el detalle no cambia el monto", async () => {
+    const db = new MemoryDb({
+      cosmetologas: [
+        { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true },
+        { id: "daniela", nombre: "Daniela Mora", patron: "daniela%", es_cosmetologa: true, activa: true },
+      ],
+      tickets: [{
+        id: 1, sheet_row: 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101",
+        facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18", servicios_adicionales: "Dermaplaning | LED",
+        ht_002: 2, orig: {},
+      }],
+      catalogo: [
+        { sku: "SUNSU-18", producto_servicio: "Facial Reparación x3", subtotal: 100, tipo: "PAQUETE", orig: {} },
+        { sku: "SUNSU-HT-002", producto_servicio: "Serum niacinamide", subtotal: 20, precio_compra: 8, tipo: "PRODUCTO", orig: {} },
+      ],
+    });
+    const c = ctx(db, "super_admin", "efch", "EFCH");
+    const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Todas" }, c) as Row;
+    assert.equal(tabla.todas, true);
+    const equipo = tabla.equipo as Row[];
+    assert.ok(equipo.some((e) => e.persona === "Andrea Robles"));
+    assert.equal(equipo.find((e) => e.persona === "Daniela Mora")?.total, 0);
+    const andrea = equipo.find((e) => e.persona === "Andrea Robles") as Row;
+    const filas = andrea.filas as Row[];
+    const det = andrea.detalle as Row;
+    assert.equal(filas.find((f) => f.concepto === "Faciales")?.total, 2);
+    assert.equal(det.faciales, 1);
+    assert.equal(filas.find((f) => f.concepto === "Paquetes")?.total, 5);
+    assert.equal((det.tramos as Row[]).reduce((a, t) => a + Number(t.monto), 0), 5);
+    assert.equal(det.productosN, 2);
+    assert.equal((det.productos as Row[])[0]?.nombre, "Serum niacinamide");
+    assert.equal((det.productos as Row[])[0]?.qty, 2);
+    assert.equal(filas.find((f) => f.concepto === "Productos")?.total, (det.productos as Row[]).reduce((a, t) => a + Number(t.monto), 0));
+    assert.equal(det.extrasN, 2);
+    assert.equal((det.extras as Row[]).length, 2);
+    assert.equal(filas.find((f) => f.concepto === "Extras")?.total, (det.extras as Row[]).reduce((a, t) => a + Number(t.monto), 0));
+    assert.equal(tabla.totalEquipo, equipo.reduce((a, e) => a + Number(e.total), 0));
+    const propia = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    const no = await handle("getComisionesTabla", { token: propia.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Todas" }, propia) as Row;
+    assert.equal(no.todas, undefined);
+    assert.match(String(no.persona), /Andrea/);
   });
 
   it("un x6 cuenta como 1 y paga el % de su neto completo; el ciclo anterior sigue en 2", async () => {
@@ -2846,8 +2923,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2955,8 +3032,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3023,8 +3100,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3074,8 +3151,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3108,8 +3185,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3155,8 +3232,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026desk2/);
-    assert.match(sw, /sunsu-beta-2026-10-26-DESK2/);
+    assert.match(beta, /beta-screens\.js\?v=20261026com1/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COM1/);
   });
 });
 

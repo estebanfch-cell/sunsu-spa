@@ -15,6 +15,7 @@ export const MODULOS = [
   "inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "ver_costos",
   "clientes", "proveedores", "compras", "inventario", "transferencias", "conteos", "kardex",
   "cotizaciones_cliente", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos",
+  "configuracion",
 ] as const;
 export type Modulo = (typeof MODULOS)[number];
 
@@ -75,6 +76,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getRendimientoProductos: "ver_costos",
   getRoles: "rol_pagos", getRolIndividual: "rol_pagos", getAprobacionesRol: "rol_pagos", aprobarRol: "rol_pagos",
   getRolCiclo: "rol_pagos", getPagoConfig: "rol_pagos", pago_config_guardar: "rol_pagos",
+  config_general: "configuracion",
   testDiasJibble: "asistencia",
   asis_config: "asistencia", asis_config_guardar: "asistencia", asis_marcar: "asistencia",
   asis_hoy: "asistencia", asis_periodo: "asistencia", asis_corregir: "asistencia", asis_auditoria: "asistencia",
@@ -180,7 +182,10 @@ export function gateAccion(action: string, ses: SesLite | null, matriz: Record<s
   if (!ses) return { error: "Inicia sesión" };
   const mod = ACCION_MODULO[action];
   if (!mod) return null;
-  if (acceso(ses.rol, mod, matriz) === "no") return { error: "No tienes permiso" };
+  if (acceso(ses.rol, mod, matriz) === "no") {
+    if (mod === "configuracion") return { error: "Solo administración configura esto" };
+    return { error: "No tienes permiso" };
+  }
   return null;
 }
 

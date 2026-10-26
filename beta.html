@@ -406,6 +406,14 @@
   .crow { display: flex; justify-content: space-between; font-size: 0.76rem; padding: 3px 0; color: var(--gray); }
   .crow .v { font-weight: 700; color: var(--navy); }
   .ctotal { display: flex; justify-content: space-between; font-size: 0.92rem; font-weight: 800; padding-top: 9px; margin-top: 5px; border-top: 1px solid var(--gray-ll); }
+  .com-row { border-bottom: 1px solid var(--gray-ll); }
+  .com-row summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 0.76rem; color: var(--gray); }
+  .com-row summary::-webkit-details-marker { display: none; }
+  .com-row summary::before { content: "▸"; margin-right: 6px; color: var(--gray); }
+  .com-row[open] summary::before { content: "▾"; }
+  .com-row summary .v { font-weight: 700; color: var(--navy); margin-left: auto; }
+  .com-det { padding: 0 0 8px 18px; font-size: 0.74rem; color: var(--navy); }
+  .com-det .rowline { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
   .ua-card { background: var(--white); border-radius: 13px; box-shadow: var(--shadow-sm); padding: 13px; margin-bottom: 9px; display: flex; align-items: center; gap: 11px; }
   .ua-av { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--white); font-size: 0.88rem; flex-shrink: 0; }
   .ua-name { font-size: 0.82rem; font-weight: 700; color: var(--navy); }
@@ -909,7 +917,7 @@ function previewApi(accion, body) {
   if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
     return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
   }
-  const modulos = MENU.map(([modulo]) => ({ modulo, acceso: "todos" }));
+  const modulos = MENU.map(([modulo]) => ({ modulo, acceso: "todos" })).concat([{ modulo: "configuracion", acceso: "todos" }]);
   const equipo = [
     { id: "andrea", name: "Andrea Robles", short: "Andrea", role: "cosmetologa" },
     { id: "daniela", name: "Daniela Mora", short: "Daniela", role: "cosmetologa" },
@@ -1105,6 +1113,41 @@ function previewApi(accion, body) {
       { id: "a1", cuando: "2026-10-22T15:30:00-05:00", cliente: "María Paz", servicio: "Facial S.O.S", notas: "Manchas y textura irregular. Evitar ácidos.", calendario: "Andrea Robles", anterior: { fecha: "2026-09-18", resumen: "SUNSU-01 Facial S.O.S · hidratación", ref: "TK-20260918-1102" } },
       { id: "a2", cuando: "2026-10-23T11:00:00-05:00", cliente: "Ana Luz", servicio: "Limpieza", notas: "Piel sensible.", calendario: "Andrea Robles", anterior: null },
     ] };
+  }
+  if (accion === "config_general") return { ok: true, faciales: [], base: [], extra: [], recepcion: [], tramos: [], productos: [] };
+  if (accion === "getPagoConfig") return { ok: true, configs: [], personas: [] };
+  if (accion === "getComisionesTabla") {
+    const card = (nombre, fac, paq, prodN, prod, ext, rec) => {
+      const filas = [
+        { concepto: "Faciales", total: fac * 2, porCiclo: [fac * 2] },
+        { concepto: "Paquetes", total: paq >= 11 ? 10 * 5 + (paq - 10) * 8 : paq * 5, porCiclo: [paq >= 11 ? 10 * 5 + (paq - 10) * 8 : paq * 5] },
+        { concepto: "Productos", total: prod, porCiclo: [prod] },
+        { concepto: "Recepción", total: rec, porCiclo: [rec] },
+        { concepto: "Extras", total: ext, porCiclo: [ext] },
+      ];
+      const total = filas.reduce((a, f) => a + f.total, 0);
+      filas.push({ concepto: "Total", total, porCiclo: [total] });
+      return {
+        persona: nombre, filas, total,
+        detalle: {
+          faciales: fac, paquetes: paq, regimen: "tramo", nivel: "—",
+          tramos: paq ? [{ etiqueta: "1–10", pct: "5%", n: Math.min(paq, 10), monto: Math.min(paq, 10) * 5 }].concat(paq > 10 ? [{ etiqueta: "11–20", pct: "8%", n: paq - 10, monto: (paq - 10) * 8 }] : []) : [],
+          productosN: prodN, productos: prodN ? [{ nombre: "Niacinamide 10%+TXA 4% Serum 30ml", qty: prodN, monto: prod }] : [],
+          extrasN: ext, extras: ext ? [{ nombre: "Dermaplaning", qty: ext, monto: ext }] : [],
+        },
+      };
+    };
+    const equipo = [
+      card("Andrea Robles", 12, 12, 2, 18, 3, 0),
+      card("Daniela Mora", 8, 4, 0, 0, 1, 0),
+      card("Alejandra Rodriguez", 0, 0, 0, 0, 0, 15),
+    ];
+    const ciclos = [{ inicio: "2026-10-26", fin: "2026-11-25", regimen: "tramo", n: 2 }];
+    if (body.persona === "Todas") {
+      return { ok: true, todas: true, persona: "Todas", personas: equipo.map((e) => e.persona), equipo, totalEquipo: equipo.reduce((a, e) => a + e.total, 0), ciclos };
+    }
+    const hit = equipo.find((e) => e.persona === body.persona) || equipo[0];
+    return { ok: true, persona: hit.persona, personas: equipo.map((e) => e.persona), filas: hit.filas, detalle: hit.detalle, ciclos };
   }
   return { ok: true, items: [] };
 }
@@ -1782,7 +1825,7 @@ async function draw() {
   };
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  const adminVista = route.mod === "usuarios" || route.mod === "permisos";
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || (route.mod === "configuracion" && state.admin);
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -1827,7 +1870,7 @@ function tituloDoc(doc) {
 async function renderMod(route) {
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod === "reportes") return renderReportes();
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
@@ -2711,12 +2754,11 @@ async function renderComisiones() {
   const data = await api("getComisionesTabla", { desde, hasta: desde });
   if (data.error) return fail(data);
   window._com = data;
-  const opts = (data.personas || []).map((n) => `<option ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("");
-  const cicloOpts = ciclos.map((c) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}</option>`).join("");
+  const opts = `<option value="Todas">Todas</option>` + (data.personas || []).map((n) => `<option value="${esc(n)}" ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("");
+  const cicloOpts = ciclos.map((c, i) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}${i === 0 ? " · vigente" : ""}</option>`).join("");
   return `<div class="tools">
       ${state.admin ? `<label>Persona <select id="com-persona">${opts}</select></label>` : `<strong>${esc(data.persona || "")}</strong>`}
-      <label>Del ciclo <select id="com-desde">${cicloOpts}</select></label>
-      <label>al ciclo <select id="com-hasta">${cicloOpts}</select></label>
+      <label>Ciclo <select id="com-ciclo">${cicloOpts}</select></label>
       <button class="btn small" type="button" id="com-ver">Ver</button>
     </div>
     <div id="com-tabla"></div>
@@ -4176,17 +4218,47 @@ function pintarTickets() {
     </tr>`).join("") || `<tr><td colspan="6">Sin tickets.</td></tr>`;
   body.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
 }
+function htmlComDet(concepto, d, total) {
+  const nFacial = Number(d.faciales) || 0;
+  const nPaq = Number(d.paquetes) || 0;
+  const nProd = Number(d.productosN) || 0;
+  const nExt = Number(d.extrasN) || 0;
+  if (concepto === "Faciales") return `<div class="com-det">${nFacial} ${nFacial === 1 ? "facial" : "faciales"} · ${money(total)}</div>`;
+  if (concepto === "Paquetes") {
+    const tiers = (d.tramos || []).map((t) => `<div class="rowline"><span>${esc(t.etiqueta)} al ${esc(t.pct)} · ${esc(t.n)}</span><span>${money(t.monto)}</span></div>`).join("");
+    const nivel = d.regimen === "nivel" ? `<div class="rowline"><span>Nivel ${esc(d.nivel || "—")}</span><span>${money(total)}</span></div>` : "";
+    return `<div class="com-det"><div class="rowline"><span>${nPaq} ${nPaq === 1 ? "paquete" : "paquetes"}</span><span>${money(total)}</span></div>${tiers || nivel}</div>`;
+  }
+  if (concepto === "Productos") {
+    const lines = (d.productos || []).map((p) => `<div class="rowline"><span>${esc(p.nombre)} · ${esc(p.qty)}</span><span>${money(p.monto)}</span></div>`).join("") || `<div class="note">Sin productos en el ciclo.</div>`;
+    return `<div class="com-det"><div class="rowline"><span>${nProd} ${nProd === 1 ? "unidad" : "unidades"}</span></div>${lines}</div>`;
+  }
+  if (concepto === "Extras") {
+    const lines = (d.extras || []).map((p) => `<div class="rowline"><span>${esc(p.nombre)} · ${esc(p.qty)}</span><span>${money(p.monto)}</span></div>`).join("") || `<div class="note">Sin extras en el ciclo.</div>`;
+    return `<div class="com-det"><div class="rowline"><span>${nExt} ${nExt === 1 ? "extra" : "extras"}</span></div>${lines}</div>`;
+  }
+  return "";
+}
+function htmlComCard(persona, filas, detalle) {
+  const d = detalle || {};
+  const cuerpo = (filas || []).map((f) => {
+    if (f.concepto === "Total") return `<div class="ctotal"><span>Total</span><span>${money(f.total)}</span></div>`;
+    if (f.concepto === "Recepción") return `<div class="crow"><span>Recepción</span><span class="v">${money(f.total)}</span></div>`;
+    return `<details class="com-row"><summary><span>${esc(f.concepto)}</span><span class="v">${money(f.total)}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
+  }).join("");
+  return `<div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>${esc(persona || "")}</span></div><div class="cosm-body">${cuerpo}</div></div>`;
+}
 function htmlComTabla(data) {
   const ciclos = data.ciclos || [];
   const ini = ciclos.length ? ciclos[0].inicio : "";
-  const fin = ciclos.length ? ciclos[ciclos.length - 1].fin : "";
-  const filas = (data.filas || []).map((f) => {
-    const cls = f.concepto === "Total" ? "ctotal" : "crow";
-    const extra = ciclos.length > 1 ? ` <span style="font-weight:500;color:var(--gray)">${(f.porCiclo || []).map((v) => money(v)).join(" · ")}</span>` : "";
-    return `<div class="${cls}"><span>${esc(f.concepto)}</span><span class="v">${money(f.total)}${extra}</span></div>`;
-  }).join("");
-  return `<div style="font-size:0.65rem;color:var(--gray);margin-bottom:8px">Del ciclo ${esc(ini)} al ciclo ${esc(fin)}</div>
-    <div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>${esc(data.persona || "")}</span></div><div class="cosm-body">${filas}</div></div>`;
+  const fin = ciclos.length ? ciclos[0].fin : "";
+  const cabeza = `<div style="font-size:0.65rem;color:var(--gray);margin-bottom:8px">Ciclo ${esc(ini)} → ${esc(fin)}</div>`;
+  if (data.todas && Array.isArray(data.equipo)) {
+    const cards = data.equipo.map((e) => htmlComCard(e.persona, e.filas, e.detalle)).join("");
+    const gran = `<div class="cosm-card"><div class="cosm-hdr" style="background:#1A237E"><span>Total</span><span>${money(data.totalEquipo || 0)}</span></div></div>`;
+    return cabeza + cards + gran;
+  }
+  return cabeza + htmlComCard(data.persona, data.filas, data.detalle);
 }
 function pintarCom() {
   const box = document.getElementById("com-tabla");
@@ -4457,9 +4529,8 @@ function wireBatch(main) {
   const comVer = main.querySelector("#com-ver");
   if (comVer) comVer.onclick = async () => {
     const persona = (main.querySelector("#com-persona") || {}).value || "";
-    const data = await api("getComisionesTabla", {
-      persona, desde: main.querySelector("#com-desde").value, hasta: main.querySelector("#com-hasta").value,
-    });
+    const ciclo = (main.querySelector("#com-ciclo") || {}).value || "";
+    const data = await api("getComisionesTabla", { persona, desde: ciclo, hasta: ciclo });
     if (data.error) { toast(data.error); return; }
     window._com = data;
     pintarCom();
@@ -4912,7 +4983,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026desk2"></script>
+<script src="beta-screens.js?v=20261026com1"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>

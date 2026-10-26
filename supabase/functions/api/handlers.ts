@@ -4,6 +4,7 @@ import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarAr
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
+  desglosePaquetesTramo, listaExtrasPagados,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
@@ -338,8 +339,10 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const calc = calcularCiclo(tks, await marks(ctx), cfg, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
   const bases = await ctx.db.all("inventario_base");
   const compraReal = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
+  const lineas = new Map<string, { productos: LineaCom[]; extras: LineaCom[] }>();
   for (const p of calc.personas) {
-    const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= cicloFin(ciclo) && t.cosm === p.cosm && !t.exclProducto);
+    const enCiclo = (t: TicketIn) => t.fecha >= ciclo && t.fecha <= cicloFin(ciclo) && t.cosm === p.cosm;
+    const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto);
     const items = propios.flatMap((t) => t.productos.map((pr) => ({
       venta: subtotalDe(cmap, pr.sku),
       compra: compraReal.get(skuCode(pr.sku)) || n(cmap.get(skuCode(pr.sku))?.precio_compra),
@@ -347,6 +350,15 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
     })));
     p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
     p.totalProductos = items.reduce((a, it) => a + it.qty, 0);
+    const nombres: string[] = [];
+    for (const t of tks) {
+      if (!enCiclo(t) || t.exclExtras) continue;
+      for (const nombre of listaExtrasPagados(t.extras)) nombres.push(nombre);
+    }
+    lineas.set(p.cosm, {
+      productos: cuadrarLineas(agruparProductos(items, cfg.pctProd, cfg.productoSku, (sku) => catNombre(cmap, sku)), p.comProductos),
+      extras: cuadrarLineas(agruparExtras(nombres, cfg.extra), p.comExtras),
+    });
   }
   const recepDias = new Map<string, number>();
   for (const t of tks) {
@@ -359,7 +371,40 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
     if (v > 0) { comRecep += v; diasRecep++; }
   }
   const multas = await ctx.db.all("multas_descuentos");
-  return { calc, comRecep: round2(comRecep), diasRecep, multas, ciclo, fin: cicloFin(ciclo), admins, tramos };
+  return { calc, comRecep: round2(comRecep), diasRecep, multas, ciclo, fin: cicloFin(ciclo), admins, tramos, lineas };
+}
+type LineaCom = { nombre: string; qty: number; monto: number };
+function cuadrarLineas(lineas: LineaCom[], oficial: number): LineaCom[] {
+  if (!lineas.length) return lineas;
+  const suma = round2(lineas.reduce((a, l) => a + l.monto, 0));
+  const diff = round2((oficial || 0) - suma);
+  if (Math.abs(diff) < 0.001) return lineas;
+  let i = 0;
+  lineas.forEach((l, idx) => { if (l.monto >= lineas[i].monto) i = idx; });
+  lineas[i] = { ...lineas[i], monto: round2(lineas[i].monto + diff) };
+  return lineas;
+}
+function agruparProductos(
+  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string }[],
+  pct: number, porSku: Parameters<typeof comisionProductos>[2], nombreDe: (sku: string) => string,
+): LineaCom[] {
+  const groups = new Map<string, typeof items>();
+  for (const it of items) {
+    const sku = skuCode(it.sku || "") || "—";
+    const g = groups.get(sku) || [];
+    g.push(it);
+    groups.set(sku, g);
+  }
+  return [...groups.entries()].map(([sku, its]) => ({
+    nombre: nombreDe(sku) || sku,
+    qty: its.reduce((a, it) => a + it.qty, 0),
+    monto: comisionProductos(its, pct, porSku),
+  })).filter((l) => l.qty > 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+function agruparExtras(nombres: string[], tarifa: number): LineaCom[] {
+  const map = new Map<string, number>();
+  for (const nombre of nombres) map.set(nombre, (map.get(nombre) || 0) + 1);
+  return [...map.entries()].map(([nombre, qty]) => ({ nombre, qty, monto: round2(qty * tarifa) })).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   let mlt = 0, desc = 0;
@@ -1777,6 +1822,62 @@ function montosPersona(nombre: string, pack: { calc: { personas: { cosm: string;
     Total: round2(faciales + paquetes + productos + recepcion + extras),
   };
 }
+type FilaCom = { concepto: string; porCiclo: number[]; total: number };
+type DetalleCom = {
+  faciales: number; paquetes: number; regimen: string; nivel: string;
+  tramos: { etiqueta: string; pct: string; n: number; monto: number }[];
+  productos: LineaCom[]; productosN: number; extras: LineaCom[]; extrasN: number;
+};
+const CONCEPTOS_COM = ["Faciales", "Paquetes", "Productos", "Recepción", "Extras", "Total"] as const;
+function filasPersona(nombre: string, packs: { calc: { personas: { cosm: string; comFaciales: number; comPaquetes: number; comProductos: number; comExtras: number }[] }; comRecep: number }[]): FilaCom[] {
+  return CONCEPTOS_COM.map((concepto) => {
+    const porCiclo = packs.map((pack) => montosPersona(nombre, pack)[concepto]);
+    return { concepto, porCiclo, total: round2(porCiclo.reduce((a, b) => a + b, 0)) };
+  });
+}
+function juntarLineas(a: LineaCom[], b: LineaCom[]): LineaCom[] {
+  const map = new Map<string, LineaCom>();
+  for (const ln of a.concat(b)) {
+    const prev = map.get(ln.nombre);
+    if (!prev) map.set(ln.nombre, { ...ln });
+    else { prev.qty += ln.qty; prev.monto = round2(prev.monto + ln.monto); }
+  }
+  return [...map.values()];
+}
+function detallePersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe>>[]): DetalleCom {
+  const out: DetalleCom = { faciales: 0, paquetes: 0, regimen: "tramo", nivel: "—", tramos: [], productos: [], productosN: 0, extras: [], extrasN: 0 };
+  const tramos = new Map<string, { etiqueta: string; pct: string; n: number; monto: number }>();
+  const key = normNombre(nombre);
+  const primero = key.split(" ")[0] || key;
+  for (const pack of packs) {
+    const p = pack.calc.personas.find((c) => normNombre(c.cosm) === key || normNombre(c.cosm).startsWith(primero));
+    out.regimen = pack.calc.regimen;
+    if (!p) continue;
+    out.faciales += p.faciales || 0;
+    out.paquetes += p.paquetes || 0;
+    out.productosN += p.totalProductos || 0;
+    out.extrasN += p.extras || 0;
+    out.nivel = p.nivel || out.nivel;
+    const extra = pack.lineas.get(p.cosm);
+    if (extra) {
+      out.productos = juntarLineas(out.productos, extra.productos);
+      out.extras = juntarLineas(out.extras, extra.extras);
+    }
+    if (pack.calc.regimen === "tramo" && p.es) {
+      for (const t of desglosePaquetesTramo(p.paquetes, pack.tramos, p.netos || [])) {
+        const etiqueta = t.hasta >= 100000 ? `${t.desde}+` : `${t.desde}–${t.hasta}`;
+        const pct = t.pct == null ? "" : `${t.pct}%`;
+        const id = etiqueta + "|" + pct;
+        const prev = tramos.get(id) || { etiqueta, pct, n: 0, monto: 0 };
+        prev.n += t.n;
+        prev.monto = round2(prev.monto + t.monto);
+        tramos.set(id, prev);
+      }
+    }
+  }
+  out.tramos = [...tramos.values()];
+  return out;
+}
 reg("getComisionesTabla", "any", async (p, ctx, ses) => {
   const desde = s(p.desde) || cicloInicio(hoy(ctx));
   const hasta = s(p.hasta) || desde;
@@ -1792,18 +1893,27 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
   for (const m of await marks(ctx)) {
     if (m.es && !nombreEsAdmin(m.nombre, admins) && !nombreEsAdmin(m.id, admins)) personas.set(normNombre(m.nombre), m.nombre);
   }
+  const ciclos = packs.map((pack) => ({ inicio: pack.ciclo, fin: pack.fin, regimen: pack.calc.regimen, n: pack.calc.n }));
+  const lista = [...personas.values()];
+  const pideTodas = esAdmin(ses.rol) && (s(p.persona) === "Todas" || s(p.persona) === "*");
+  if (pideTodas) {
+    const equipo = lista.map((nombre) => {
+      const filas = filasPersona(nombre, packs);
+      return { persona: nombre, filas, detalle: detallePersona(nombre, packs), total: filas.find((f) => f.concepto === "Total")?.total || 0 };
+    });
+    return {
+      ok: true, todas: true, persona: "Todas", personas: lista, equipo,
+      totalEquipo: round2(equipo.reduce((a, e) => a + e.total, 0)),
+      ciclos, tramos: packs[0]?.tramos || [], admin: true,
+    };
+  }
   let persona = s(p.persona || p.cosmetologa || p.nombre);
   if (!esAdmin(ses.rol)) persona = ses.name;
-  if (!persona || nombreEsAdmin(persona, admins)) persona = [...personas.values()][0] || "";
-  const conceptos = ["Faciales", "Paquetes", "Productos", "Recepción", "Extras", "Total"] as const;
-  const filas = conceptos.map((concepto) => {
-    const porCiclo = packs.map((pack) => montosPersona(persona, pack)[concepto]);
-    return { concepto, porCiclo, total: round2(porCiclo.reduce((a, b) => a + b, 0)) };
-  });
+  if (!persona || nombreEsAdmin(persona, admins)) persona = lista[0] || "";
+  const filas = filasPersona(persona, packs);
   return {
-    ok: true, persona, personas: [...personas.values()], adminExcluido: nombreEsAdmin(s(p.persona), admins),
-    ciclos: packs.map((pack) => ({ inicio: pack.ciclo, fin: pack.fin, regimen: pack.calc.regimen, n: pack.calc.n })),
-    filas, tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
+    ok: true, persona, personas: lista, adminExcluido: nombreEsAdmin(s(p.persona), admins),
+    ciclos, filas, detalle: detallePersona(persona, packs), tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
   };
 });
 reg("getTramos", "any", async (_p, ctx) => {

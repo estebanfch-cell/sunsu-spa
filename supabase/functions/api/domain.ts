@@ -379,6 +379,19 @@ export function contarExtras(txt: unknown): { n: number; cortesia: number } {
   return { n: nEx + cortesia, cortesia };
 }
 
+/** Nombres de extras que sí pagan. Misma regla que contarExtras, sin las cortesías. */
+export function listaExtrasPagados(txt: unknown): string[] {
+  const raw = s(txt);
+  if (!raw || raw.toLowerCase() === "false") return [];
+  const out: string[] = [];
+  for (const p of raw.split("|")) {
+    const t = p.trim();
+    if (!t || t.toUpperCase().includes("CORTES")) continue;
+    out.push(t);
+  }
+  return out;
+}
+
 export function validarPromo(mec: string, valor: number, valor2: number, codigos: string[]): string | null {
   const m = mec.toUpperCase();
   if (m === "%") { if (valor <= 0 || valor > 100) return "El % debe estar entre 1 y 100"; }
@@ -571,6 +584,36 @@ export function comisionPaquetesTramo(unidades: number, tramos: TramoPaquete[] =
     } else monto += tier.valor;
   }
   return { monto: round2(monto), etiqueta: etiquetaTramo(u, ultimo) };
+}
+
+/** Cuántos paquetes caen en cada tramo y cuánto suman. La suma de montos es la de comisionPaquetesTramo. */
+export function desglosePaquetesTramo(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE, netos: number[] = []): { desde: number; hasta: number; pct: number | null; n: number; monto: number }[] {
+  const u = Math.max(0, Math.floor(Number(unidades) || 0));
+  const tarifas = normalizarTramos(tramos);
+  const orden: { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number; n: number; monto: number }[] = [];
+  const porDesde = new Map<number, (typeof orden)[number]>();
+  for (let i = 1; i <= u; i++) {
+    const tier = tarifas.find((t) => i >= t.desde && i <= t.hasta) || tarifas[tarifas.length - 1];
+    if (!tier) continue;
+    let b = porDesde.get(tier.desde);
+    if (!b) {
+      b = { desde: tier.desde, hasta: tier.hasta, modo: tier.modo, valor: tier.valor, n: 0, monto: 0 };
+      porDesde.set(tier.desde, b);
+      orden.push(b);
+    }
+    b.n++;
+    if (tier.modo === "pct") {
+      const neto = netos[i - 1] != null ? netos[i - 1] : (netos.length ? netos[netos.length - 1] : 0);
+      b.monto += Math.floor(round2(tier.valor * (neto || 0)) + 1e-9);
+    } else b.monto += tier.valor;
+  }
+  return orden.map((b) => ({
+    desde: b.desde,
+    hasta: b.hasta,
+    pct: b.modo === "pct" ? Math.round(b.valor * 1000) / 10 : null,
+    n: b.n,
+    monto: round2(b.monto),
+  }));
 }
 
 export function nombreEsAdmin(nombre: string, admins: { nombre?: string; short?: string; id?: string }[]): boolean {
