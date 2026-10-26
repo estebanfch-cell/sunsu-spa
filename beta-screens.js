@@ -12993,23 +12993,25 @@ function _pintarPaqLista(){
     +'</div></div>'
     ;
   if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
+  else html+='<div class="paq-sheet"><div class="paq-line paq-head"><span>Clienta</span><span>Progreso</span><span>Tarjeta</span><span>WhatsApp</span><span></span></div>';
   arr.forEach(function(x){
     var p=x.p;
     var iSeg=(window._todosPaq||[]).indexOf(x);
-    html+='<div class="card" style="padding:11px;margin-bottom:8px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+(p.nombre+' '+p.apellido).trim()+'</div>'
-      +'<div style="font-size:0.57rem;color:var(--gray)">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
+    var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
+    if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
+    var wa=telQ
+      ?'<a class="paq-btn paq-wa" href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank">💬</a>'
+      :'<span class="paq-btn paq-wa paq-wa-vacio" aria-hidden="true"></span>';
+    html+='<div class="card paq-row" style="padding:11px;margin-bottom:8px">'
+      +'<div class="paq-line">'
+      +'<div class="paq-quien">'
+      +'<div class="paq-nombre">'+(p.nombre+' '+p.apellido).trim()+'</div>'
+      +'<div class="paq-sku">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
       +'</div>'
-      +'<span style="font-size:0.64rem;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;'+(x.pend>0?'background:var(--blue-l);color:var(--navy)':'background:#E8F8EE;color:#2E7D52')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</span>'
-      +'<button onclick="tarjetaPaqueteDe('+iSeg+')" style="padding:7px 10px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer;white-space:nowrap">📄 Tarjeta</button>'
-      +(function(){
-        var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
-        if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
-        return telQ?'<a href="'+_waURL(telQ,encodeURIComponent(_msg('MENSAJE PAQUETE CONTROL',{nombre:(p.nombre||'').split(' ')[0]})))+'" target="_blank" style="padding:7px 10px;background:#25D366;color:white;border-radius:9px;font-size:0.62rem;font-weight:800;text-decoration:none">💬</a>':'';
-      })()
-      +'<button onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">▾</button>'
+      +'<div class="paq-prog'+(x.pend>0?'':' ok')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</div>'
+      +'<button class="paq-btn" type="button" onclick="tarjetaPaqueteDe('+iSeg+')">📄 Tarjeta</button>'
+      +wa
+      +'<button class="paq-btn paq-drop" type="button" onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')">▾</button>'
       +'</div>'
       +(function(){
         var ix=window.SunsuInline;
@@ -13020,6 +13022,7 @@ function _pintarPaqLista(){
       })()
       +'<div id="paq-exp-'+p.fila+'"></div></div>';
   });
+  if(arr.length) html+='</div>';
   cont.innerHTML=html;
   if(window.SunsuInline) SunsuInline.aplicar();
 }

@@ -636,6 +636,37 @@
   .gc-table th.num, .gc-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .gc-row { cursor: pointer; }
   .gc-row:hover { background: var(--blue-l); }
+  .paq-sheet { min-width: 0; }
+  .paq-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) 11.5rem 6.4rem 2.8rem 2.4rem;
+    gap: 8px; align-items: center;
+  }
+  .paq-head {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--gray); padding: 0 11px 4px;
+  }
+  .paq-nombre { font-size: 0.74rem; font-weight: 800; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .paq-sku { font-size: 0.57rem; color: var(--gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .paq-prog {
+    justify-self: start; text-align: left; width: 100%; box-sizing: border-box;
+    font-size: 0.64rem; font-weight: 800; color: var(--navy); background: var(--blue-l);
+    border-radius: 8px; padding: 4px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+  .paq-prog.ok { background: #E8F8EE; color: #2E7D52; }
+  .paq-btn {
+    display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 32px;
+    box-sizing: border-box; padding: 7px 8px; border-radius: 9px; font-size: 0.62rem; font-weight: 800;
+    cursor: pointer; white-space: nowrap; text-decoration: none; background: var(--navy); color: white; border: none;
+  }
+  a.paq-wa { background: #25D366; color: white; }
+  .paq-wa-vacio { background: transparent; border: 1.5px dashed var(--cream-d); cursor: default; }
+  .paq-drop { background: white; color: var(--navy); border: 1.5px solid var(--navy); }
+  @media (max-width: 860px) {
+    .paq-sheet { overflow-x: auto; }
+    .paq-line, .paq-row { min-width: 640px; }
+  }
   .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
   .sheet-scroll table { min-width: 640px; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
