@@ -4158,11 +4158,22 @@ function mostrarDashCosmData(c,d){
         ${d.multas>0?`<div class="crow"><span>Multas</span><span class="v" style="color:var(--red)">−$${d.multas.toFixed(2)}</span></div>`:''}
         ${d.descuentos>0?`<div class="crow"><span>Descuentos</span><span class="v" style="color:var(--gold)">−$${d.descuentos.toFixed(2)}</span></div>`:''}
         <div class="ctotal"><span>💰 Neto</span><span style="color:${col}">$${neto.toFixed(2)}</span></div>
-        ${d.bonoActivo
-          ?(d.siguienteNivel
-            ?`<div style="font-size:0.65rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🎯 Faltan ${d.paqParaSiguiente} paquete(s) para N${d.siguienteNivel} — +$${d.premioSiguiente} acumulado</div>`
-            :`<div style="font-size:0.65rem;color:var(--green);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">🏆 ¡Nivel máximo alcanzado!</div>`)
-          :`<div style="font-size:0.65rem;color:var(--gold);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">⏳ Bono activo con 60+ clientas — van ${d.totalClientas||0}</div>`}
+        ${(function(){
+          var nivel=String(d.nivelAlcanzado||'');
+          var escalon=!!d.regimenTramo||nivel.indexOf('%')>=0;
+          var sty='font-size:0.65rem;margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)';
+          if(d.congeladoN8) return '<div style="'+sty+';color:var(--navy)">📌 Ciclo congelado en N8 · $320</div>';
+          if(escalon){
+            if(d.nextLabel&&d.paqParaSiguiente) return '<div style="'+sty+';color:var(--gray)">🎯 Faltan '+d.paqParaSiguiente+' paquete(s) para '+d.nextLabel+'</div>';
+            if(nivel.indexOf('%')>=0) return '<div style="'+sty+';color:var(--gray)">📦 '+nivel+' · cada paquete paga el % de su escalón</div>';
+            return '';
+          }
+          if(d.bonoActivo){
+            if(d.siguienteNivel!=null) return '<div style="'+sty+';color:var(--gray)">🎯 Faltan '+d.paqParaSiguiente+' paquete(s) para N'+d.siguienteNivel+' — +$'+d.premioSiguiente+' acumulado</div>';
+            return '<div style="'+sty+';color:var(--green)">🏆 ¡Nivel máximo alcanzado!</div>';
+          }
+          return '<div style="'+sty+';color:var(--gold)">⏳ Bono activo con 60+ clientas — van '+(d.totalClientas||0)+'</div>';
+        })()}
       </div>
     </div>`;
 }
@@ -13811,7 +13822,7 @@ function _lineasRol(d){
       ['Sueldo', d.sueldo],
       ['Bono', d.bono],
       ['Com. faciales/extras/recep.', d.comFaciales],
-      ['Comisión paquetes', d.comPaquetes],
+      ['Comisión paquetes'+(d.paquetes&&d.nivelPaquete?(' ('+d.paquetes+' · '+d.nivelPaquete+')'):(d.nivelPaquete&&String(d.nivelPaquete).indexOf('%')>=0?(' ('+d.nivelPaquete+')':'')), d.comPaquetes],
       ['Comisión productos', d.comProductos],
       ['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)', d.valSupl],
       ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)', d.valExtr],

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { MemoryDb } from "./db.ts";
-import { comisionPaquetesTramo, comisionProductos, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark } from "./domain.ts";
+import { CFG_DEF, calcularCiclo, comisionPaquetesTramo, comisionProductos, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
 import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
@@ -2664,5 +2666,238 @@ describe("series, comisiones y rol", () => {
     const pagos = kv.find((r) => r.clave === "pago_config")!.valor as Row;
     assert.equal((pagos.filas as Row[])[0].sueldo, 460);
     assert.equal((await db.all("pago_config"))[0].sueldo, 460);
+  });
+});
+
+function escalonLive() {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const src = readFileSync(join(root, "sunsu_script_completo.js"), "utf8");
+  const a = src.indexOf("// --- PAQ-ESCALON-START ---");
+  const b = src.indexOf("// --- PAQ-ESCALON-END ---");
+  assert.ok(a >= 0 && b > a, "marcadores del escalón en el Apps Script");
+  const body = src.slice(a, b);
+  const fn = new Function("CONFIG", `${body}\nreturn { usaTramoPaquetes_, esCicloCongeladoN8_, esAndreaODaniela_, comisionPaquetesEscalon_, netoCatalogoTexto_, premioNivelesPaquete_, aplicarPremioPaquetes_, rolUsaTramo_, aplicarDeltaPaquetesRol_ };`);
+  return fn({
+    NIVELES: [
+      [0.05, 5], [0.10, 20], [0.15, 45], [0.20, 80], [0.25, 125],
+      [0.30, 180], [0.40, 245], [0.50, 320], [0.60, 405], [0.80, 500],
+    ],
+  }) as {
+    usaTramoPaquetes_: (d: Date) => boolean;
+    esCicloCongeladoN8_: (d: Date) => boolean;
+    esAndreaODaniela_: (n: string) => boolean;
+    comisionPaquetesEscalon_: (u: number, netos: number[]) => { monto: number; etiqueta: string };
+    netoCatalogoTexto_: (t: string, precios: Record<string, { venta: number }>) => number;
+    premioNivelesPaquete_: (paq: number, clientas: number, n: number, bono: boolean) => { comPaquetes: number; nivelAlcanzado: string };
+    aplicarPremioPaquetes_: (nombre: string, c: { paquetes: number; _nets?: number[]; comPaquetes?: number; nivelAlcanzado?: string; congeladoN8?: boolean }, clientas: number, n: number, bono: boolean, inicio: Date) => void;
+    rolUsaTramo_: (sheet: string) => boolean;
+    aplicarDeltaPaquetesRol_: (rol: { comPaquetes: number; totalIngresos: number; totalRecibir: number; paquetes?: number; nivelPaquete?: string }, nuevo: number, paquetes: number, nivel: string) => void;
+  };
+}
+
+describe("escalón en el app en vivo", () => {
+  const live = escalonLive();
+  const ago26 = new Date(2026, 7, 26);
+  const sep26 = new Date(2026, 8, 26);
+  const oct26 = new Date(2026, 9, 26);
+
+  it("los ciclos viejos siguen en N1–N10 y el x6 cuenta como 2", () => {
+    assert.equal(live.usaTramoPaquetes_(ago26), false);
+    assert.equal(live.usaTramoPaquetes_(sep26), false);
+    assert.equal(live.usaTramoPaquetes_(new Date(2026, 8, 26, 23, 59, 59)), false);
+    const andrea = live.premioNivelesPaquete_(24, 60, 2, true);
+    const daniela = live.premioNivelesPaquete_(15, 60, 2, true);
+    assert.equal(andrea.comPaquetes, 500);
+    assert.equal(andrea.nivelAlcanzado, "N10");
+    assert.equal(daniela.comPaquetes, 320);
+    assert.equal(daniela.nivelAlcanzado, "N8");
+    assert.equal(live.premioNivelesPaquete_(24, 60, 2, false).comPaquetes, 0);
+    const vieja = { paquetes: 24 };
+    live.aplicarPremioPaquetes_("Andrea Robles", vieja, 60, 2, true, ago26);
+    assert.equal(vieja.comPaquetes, 500);
+    assert.equal(vieja.nivelAlcanzado, "N10");
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../..", "sunsu_script_completo.js"), "utf8");
+    assert.match(src, /\} else \{\s*if \(pack3 && pack3 !== "" && pack3.toLowerCase\(\) !== "false"\) c\.paquetes \+= 1;\s*if \(pack6 && pack6 !== "" && pack6.toLowerCase\(\) !== "false"\) c\.paquetes \+= 2;\s*\}/);
+  });
+
+  it("27 paquetes pagan escalón por escalón, igual que la API", () => {
+    const netos = Array.from({ length: 27 }, () => 100);
+    const api = comisionPaquetesTramo(27, undefined, netos);
+    const esc = live.comisionPaquetesEscalon_(27, netos);
+    assert.equal(api.monto, 10 * 5 + 10 * 8 + 7 * 11);
+    assert.equal(api.etiqueta, "21–30 · 11%");
+    assert.equal(esc.monto, api.monto);
+    assert.equal(esc.etiqueta, api.etiqueta);
+    const mixto = [...Array.from({ length: 20 }, () => 152.6), ...Array.from({ length: 7 }, () => 288.25)];
+    const apiMix = comisionPaquetesTramo(27, undefined, mixto);
+    assert.equal(apiMix.monto, 10 * 7 + 10 * 12 + 7 * 31);
+    assert.equal(live.comisionPaquetesEscalon_(27, mixto).monto, apiMix.monto);
+    assert.equal(live.comisionPaquetesEscalon_(27, mixto).etiqueta, apiMix.etiqueta);
+  });
+
+  it("Andrea y Daniela quedan en N8 $320 el 26 sep y en el escalón desde el 26 oct", () => {
+    assert.equal(live.usaTramoPaquetes_(oct26), true);
+    assert.equal(live.esCicloCongeladoN8_(sep26), true);
+    const marks: CosmMark[] = [
+      { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es: true, activa: true },
+      { id: "daniela", nombre: "Daniela Vega", patron: "daniela%", es: true, activa: true },
+    ];
+    const tk = (fecha: string, cosm: string, i: number, pack: "3" | "6", neto: number): TicketIn => ({
+      fecha, cosm, cedula: String(2000 + i), facial: "SUNSU-01",
+      pack3: pack === "3" ? "SUNSU-18" : "",
+      pack6: pack === "6" ? "SUNSU-23" : "",
+      extras: "", exclFacial: false, exclPaquete: false, exclProducto: true, exclExtras: true, productos: [],
+      netoPack: pack === "3" ? neto : 0,
+      netoPack6: pack === "6" ? neto : 0,
+    });
+    const freeze = calcularCiclo([
+      tk("2026-10-10", "Andrea Robles", 1, "3", 152.6),
+      tk("2026-10-11", "Daniela Vega", 2, "6", 288.25),
+    ], marks, CFG_DEF, "2026-09-26");
+    for (const nombre of ["Andrea Robles", "Daniela Vega"]) {
+      const apiP = freeze.personas.find((p) => p.cosm === nombre);
+      const row = { paquetes: 1 };
+      live.aplicarPremioPaquetes_(nombre, row, 2, 2, false, sep26);
+      assert.equal(apiP?.comPaquetes, 320);
+      assert.equal(apiP?.nivel, "N8");
+      assert.equal(row.comPaquetes, apiP?.comPaquetes);
+      assert.equal(row.nivelAlcanzado, apiP?.nivel);
+    }
+    const otra = { paquetes: 24 };
+    live.aplicarPremioPaquetes_("Carla", otra, 60, 2, true, sep26);
+    assert.equal(otra.comPaquetes, 500);
+    assert.equal(otra.nivelAlcanzado, "N10");
+
+    const aNets = [...Array.from({ length: 20 }, () => 152.6), ...Array.from({ length: 7 }, () => 288.25)];
+    const dNets = [...Array.from({ length: 11 }, () => 152.6), 288.25];
+    const tickets: TicketIn[] = [
+      ...aNets.map((neto, i) => tk("2026-10-27", "Andrea Robles", 10 + i, i < 20 ? "3" : "6", neto)),
+      ...dNets.map((neto, i) => tk("2026-10-27", "Daniela Vega", 50 + i, i < 11 ? "3" : "6", neto)),
+    ];
+    const ciclo = calcularCiclo(tickets, marks, CFG_DEF, "2026-10-26");
+    const aRow = { paquetes: aNets.length, _nets: aNets.slice() };
+    const dRow = { paquetes: dNets.length, _nets: dNets.slice() };
+    live.aplicarPremioPaquetes_("Andrea Robles", aRow, 40, 2, true, oct26);
+    live.aplicarPremioPaquetes_("Daniela Vega", dRow, 40, 2, false, oct26);
+    const apiA = ciclo.personas.find((p) => p.cosm === "Andrea Robles");
+    const apiD = ciclo.personas.find((p) => p.cosm === "Daniela Vega");
+    assert.equal(aRow.comPaquetes, apiA?.comPaquetes);
+    assert.equal(aRow.nivelAlcanzado, apiA?.nivel);
+    assert.equal(dRow.comPaquetes, apiD?.comPaquetes);
+    assert.equal(dRow.nivelAlcanzado, apiD?.nivel);
+    assert.equal(aRow.comPaquetes, 10 * 7 + 10 * 12 + 7 * 31);
+    assert.equal(aRow.nivelAlcanzado, "21–30 · 11%");
+    assert.equal(aRow._nets, undefined);
+  });
+
+  it("el rol de octubre no se pisa y el de noviembre toma el escalón en vivo", () => {
+    assert.equal(live.rolUsaTramo_("OCTUBRE_2026"), false);
+    assert.equal(live.rolUsaTramo_("SEPTIEMBRE_2026"), false);
+    assert.equal(live.rolUsaTramo_("NOVIEMBRE_2026"), true);
+    const rol = { comPaquetes: 0, totalIngresos: 1000, totalRecibir: 800 };
+    live.aplicarDeltaPaquetesRol_(rol, 207, 27, "21–30 · 11%");
+    assert.equal(rol.comPaquetes, 207);
+    assert.equal(rol.paquetes, 27);
+    assert.equal(rol.nivelPaquete, "21–30 · 11%");
+    assert.equal(rol.totalIngresos, 1207);
+    assert.equal(rol.totalRecibir, 1007);
+  });
+
+  it("el neto sale del SUNSU-NN y el sello del motor coincide", () => {
+    const precios = { "SUNSU-18": { venta: 152.6 }, "18": { venta: 100 }, "SUNSU-HT-002": { venta: 9 } };
+    assert.equal(live.netoCatalogoTexto_("SUNSU-18 x3 Facial Reparación", precios), 152.6);
+    assert.equal(live.netoCatalogoTexto_("paquete 18 suelto", { "18": { venta: 100 } }), 0);
+    assert.equal(live.netoCatalogoTexto_("SUNSU-18", { "18": { venta: 100 } }), 100);
+    assert.equal(live.netoCatalogoTexto_("SUNSU-HT-002 crema", precios), 0);
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const script = readFileSync(join(root, "sunsu_script_completo.js"), "utf8");
+    const html = readFileSync(join(root, "sunsu.html"), "utf8");
+    const beta = readFileSync(join(root, "beta.html"), "utf8");
+    const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
+    const sw = readFileSync(join(root, "sw.js"), "utf8");
+    assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
+    assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.10.26.01'/);
+    assert.match(html, /var v='20261026.01'/);
+    assert.match(html, /nivel\.indexOf\('%'\)/);
+    assert.match(screens, /nivel\.indexOf\('%'\)/);
+    assert.match(beta, /Escalón/);
+    assert.match(beta, /beta-screens\.js\?v=20261026esc/);
+    assert.match(sw, /sunsu-beta-2026-10-26-ESC/);
+    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
+  });
+
+  it("Andrea y Daniela en la tabla de la API coinciden con el escalón del app", async () => {
+    const aN = 20;
+    const a6 = 7;
+    const dN = 11;
+    const tickets = [
+      ...Array.from({ length: aN }, (_, i) => ({
+        id: i + 1, sheet_row: i + 1, timestamp: "2026-10-27T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0101",
+        facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18 x3 Facial Reparación", orig: {},
+      })),
+      ...Array.from({ length: a6 }, (_, i) => ({
+        id: 100 + i, sheet_row: 100 + i, timestamp: "2026-10-28T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0102",
+        facial_hecho: "SUNSU-01", compra_pack_6: "SUNSU-23 x6 Facial S.O.S", orig: {},
+      })),
+      ...Array.from({ length: dN }, (_, i) => ({
+        id: 200 + i, sheet_row: 200 + i, timestamp: "2026-10-27T16:00:00Z", atendido_por: "Daniela Vega", id_3: "0103",
+        facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18 x3 Facial Reparación", orig: {},
+      })),
+      {
+        id: 300, sheet_row: 300, timestamp: "2026-10-28T16:00:00Z", atendido_por: "Daniela Vega", id_3: "0104",
+        facial_hecho: "SUNSU-01", compra_pack_6: "SUNSU-23 x6 Facial S.O.S", orig: {},
+      },
+      {
+        id: 400, sheet_row: 400, timestamp: "2026-10-10T15:00:00Z", atendido_por: "Andrea Robles", id_3: "0105",
+        facial_hecho: "SUNSU-01", compra_pack_3: "SUNSU-18 x3 Facial Reparación", orig: {},
+      },
+      {
+        id: 401, sheet_row: 401, timestamp: "2026-10-11T15:00:00Z", atendido_por: "Daniela Vega", id_3: "0106",
+        facial_hecho: "SUNSU-01", compra_pack_6: "SUNSU-23 x6 Facial S.O.S", orig: {},
+      },
+    ];
+    const db = new MemoryDb({
+      cosmetologas: [
+        { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es_cosmetologa: true, activa: true },
+        { id: "daniela", nombre: "Daniela Vega", patron: "daniela%", es_cosmetologa: true, activa: true },
+      ],
+      tickets,
+      catalogo: [
+        { sku: "SUNSU-18", producto_servicio: "Facial Reparación x3", subtotal: 152.6, tipo: "PAQUETE", orig: {} },
+        { sku: "SUNSU-23", producto_servicio: "Facial S.O.S x6", subtotal: 288.25, tipo: "PAQUETE", orig: {} },
+      ],
+    });
+    const precios = { "SUNSU-18": { venta: 152.6 }, "SUNSU-23": { venta: 288.25 } };
+    const aNets = [
+      ...Array.from({ length: aN }, () => live.netoCatalogoTexto_("SUNSU-18 x3 Facial Reparación", precios)),
+      ...Array.from({ length: a6 }, () => live.netoCatalogoTexto_("SUNSU-23 x6 Facial S.O.S", precios)),
+    ];
+    const dNets = [
+      ...Array.from({ length: dN }, () => live.netoCatalogoTexto_("SUNSU-18 x3 Facial Reparación", precios)),
+      live.netoCatalogoTexto_("SUNSU-23 x6 Facial S.O.S", precios),
+    ];
+    const aEsc = live.comisionPaquetesEscalon_(aNets.length, aNets);
+    const dEsc = live.comisionPaquetesEscalon_(dNets.length, dNets);
+    const c = ctx(db, "admin", "emi", "Emi");
+    c.now = new Date("2026-10-27T18:00:00Z");
+    const tablaA = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Andrea" }, c) as Row;
+    const tablaD = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Daniela" }, c) as Row;
+    const paq = (tabla: Row) => ((tabla.filas as Row[]).find((f) => f.concepto === "Paquetes")?.porCiclo as number[])[0];
+    assert.equal(paq(tablaA), aEsc.monto);
+    assert.equal(paq(tablaD), dEsc.monto);
+    const dashA = await handle("getDashCosm", { token: c.token, cosmetologa: "Andrea Robles" }, c) as Row;
+    const dashD = await handle("getDashCosm", { token: c.token, cosmetologa: "Daniela Vega" }, c) as Row;
+    assert.equal(dashA.comPaquetes, aEsc.monto);
+    assert.equal(dashA.nivelAlcanzado, aEsc.etiqueta);
+    assert.equal(dashD.comPaquetes, dEsc.monto);
+    assert.equal(dashD.nivelAlcanzado, dEsc.etiqueta);
+    const congelado = ctx(db, "admin", "emi", "Emi");
+    const rep = await handle("getReporteAdmin", { token: congelado.token }, congelado) as Row;
+    const filas = rep.cosmetologas as Row[];
+    assert.equal(filas.find((r) => String(r.name).startsWith("Andrea"))?.cp, 320);
+    assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.cp, 320);
+    assert.equal(filas.find((r) => String(r.name).startsWith("Andrea"))?.n, "N8");
+    assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.n, "N8");
   });
 });
