@@ -186,7 +186,7 @@
     background: var(--navy); color: var(--white); border: 0; border-radius: 999px;
     padding: 6px 14px; font-weight: 800; font-size: 0.75rem; min-height: 32px;
   }
-  .ix-cell { border-bottom: 1px dashed var(--navy); cursor: text; }
+  .ix-cell { border-bottom: 1px dashed var(--navy); cursor: text; display: inline-block; min-width: 4.5em; min-height: 1.1em; }
   .ix-cell.ix-dirty { background: var(--gold-l); }
   .ix-lines, .ix-nuevo { margin-top: 8px; }
   .ix-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 0.72rem; padding: 3px 0; }
@@ -808,6 +808,7 @@ const MENU = [
   ["permisos", "Permisos"],
 ];
 const state = { token: localStorage.getItem("sunsu.beta.token") || "", user: null, acceso: {}, verCostos: false, admin: false, mega: false, prueba: false, previewDentro: false, persona: "", personaCedula: "", giftQ: "", localId: localStorage.getItem("sunsu.beta.local") || "", lugares: null, unLocal: true, vista: null, previewHorarios: null, previewAsignaciones: null };
+window.state = state;
 let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada.", _t0: Date.now() };
 let relojTick = 0;
 try { state.vista = JSON.parse(sessionStorage.getItem("sunsu.beta.vista") || "null"); } catch { state.vista = null; }
@@ -5192,7 +5193,7 @@ if ("serviceWorker" in navigator && !local) {
 }
 </script>
 <script src="beta-screens.js?v=20261026prov1"></script>
-<script src="beta-inline.js?v=20261024af"></script>
+<script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>
 </html>

@@ -238,7 +238,13 @@
     if (tabla === "clientes" && typeof draw === "function") { draw(); return; }
     if (tabla === "catalogo" && c && typeof renderCatalogoAdmin === "function") { renderCatalogoAdmin(c); return; }
     if (tabla === "inventario" && c && typeof renderInventario === "function") { renderInventario(c); return; }
-    if (tabla === "proveedores" && c && typeof renderProveedores === "function") { renderProveedores(c); return; }
+    if (tabla === "proveedores") {
+      if (typeof go === "function") {
+        go("#/m/proveedores" + (window._provFila ? "/" + encodeURIComponent(window._provFila) : ""));
+        return;
+      }
+      if (c && typeof renderProveedores === "function") { renderProveedores(c); return; }
+    }
     if (tabla === "compras" && c && typeof renderEntradas === "function") { renderEntradas(c); return; }
     if (tabla === "gift_cards" && document.getElementById("bgc-results")) {
       var qGc = (document.getElementById("bgc-inp") || {}).value || "";
