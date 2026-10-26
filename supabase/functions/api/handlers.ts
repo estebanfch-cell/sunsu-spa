@@ -1841,7 +1841,7 @@ reg("guardarCotizacion", RECEP, async (p, ctx, ses) => {
   if (!previewPedido(p)) {
     try { await backfillSQ(ctx.db, actor); } catch { /* sigue con el máximo local */ }
   }
-  const numero = await tomarNumero(ctx.db, "TK-SQ", await ctx.db.all("cotizaciones"), "numero");
+  const numero = await tomarNumero(ctx.db, "COT", await ctx.db.all("cotizaciones"), "numero");
   const saved = await ctx.db.write(actor, "cotizaciones", "insert", {}, {
     numero, fecha: ecuadorParts(ctx.now).isoWall, creado_por: ses.name, cliente: s(p.cliente),
     telefono: s(p.telefono), email: s(p.email), cedula: s(p.cedula), items: calc.lineas,

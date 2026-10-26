@@ -1417,7 +1417,7 @@ describe("modo prueba", () => {
       token: prueba, cliente: "María", lineas: [{ nombre: "Facial", cant: 1, precio: 57 }],
     }, real) as Row;
     assert.equal(cot.ok, true);
-    assert.match(String(cot.numero), /^TEST-TK-SQ-/);
+    assert.match(String(cot.numero), /^TEST-COT-/);
 
     const editReal = await handle("ticket_editar", {
       token: prueba, ref: "5", lineas: [{ clase: "producto", sku: "HT-002", nombre: "Crema", cantidad: 4, precio: 20, costo: 8 }],
@@ -1816,19 +1816,25 @@ describe("series, comisiones y rol", () => {
     db.tables.set("cotizaciones", [
       { id: 1, numero: "COT-0002", fecha: "2026-10-02T00:00:00Z", cliente: "B", items: [], orig: {} },
       { id: 2, numero: "COT-0001", fecha: "2026-10-01T00:00:00Z", cliente: "A", items: [], orig: {} },
+      { id: 3, numero: "", fecha: "2026-10-03T00:00:00Z", cliente: "Sin", items: [], orig: {} },
+      { id: 4, numero: "TK-SQ-0009", fecha: "2026-10-04T00:00:00Z", cliente: "Vieja", items: [], orig: {} },
     ]);
+    const antesTk = (await db.all("tickets")).length;
     const cot = await handle("guardarCotizacion", {
-      token: cotVieja.token, cliente: "C", lineas: [{ nombre: "Facial", cant: 1, precio: 20 }],
+      token: cotVieja.token, cliente: "C", cedula: "1711", lineas: [{ nombre: "Facial", cant: 1, precio: 20 }],
     }, cotVieja) as Row;
-    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "A")?.numero, "TK-SQ-0001");
-    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "B")?.numero, "TK-SQ-0002");
-    assert.equal(cot.numero, "TK-SQ-0003");
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "A")?.numero, "COT-0001");
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "B")?.numero, "COT-0002");
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "Vieja")?.numero, "TK-SQ-0009");
+    assert.equal((await db.all("cotizaciones")).find((r) => r.cliente === "Sin")?.numero, "COT-0003");
+    assert.equal(cot.numero, "COT-0004");
+    assert.equal((await db.all("tickets")).length, antesTk);
     const otra = await handle("guardarCotizacion", {
-      token: cotVieja.token, numero: "TK-SQ-0003", cliente: "C editada", lineas: [{ nombre: "Facial", cant: 2, precio: 20 }],
+      token: cotVieja.token, numero: "COT-0004", cliente: "C editada", lineas: [{ nombre: "Facial", cant: 2, precio: 20 }],
     }, cotVieja) as Row;
     assert.equal(otra.ok, true);
-    assert.equal(otra.numero, "TK-SQ-0003");
-    assert.equal((await db.all("cotizaciones")).filter((r) => r.numero === "TK-SQ-0003").length, 1);
+    assert.equal(otra.numero, "COT-0004");
+    assert.equal((await db.all("cotizaciones")).filter((r) => r.numero === "COT-0004").length, 1);
   });
 
   it("un admin no entra en la tabla ni en N, y el rol usa sueldo, ciclo y jibble", async () => {
@@ -2822,8 +2828,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026tkgcpq/);
-    assert.match(sw, /sunsu-beta-2026-10-26-TKGCPQ/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cot/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COT/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2929,8 +2935,8 @@ describe("tickets de venta", () => {
     assert.match(src, /id="af-hoy"/);
     assert.match(src, /id="sf-semana"/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026tkgcpq/);
-    assert.match(sw, /sunsu-beta-2026-10-26-TKGCPQ/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cot/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COT/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -2990,8 +2996,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026tkgcpq/);
-    assert.match(sw, /sunsu-beta-2026-10-26-TKGCPQ/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cot/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COT/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3041,11 +3047,65 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026tkgcpq/);
-    assert.match(sw, /sunsu-beta-2026-10-26-TKGCPQ/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cot/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COT/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
     assert.match(fila, /paq-wa"/);
+  });
+});
+
+describe("cotizaciones visor", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+  const beta = readFileSync(join(root, "beta.html"), "utf8");
+  const sw = readFileSync(join(root, "sw.js"), "utf8");
+
+  it("nueva cotización es el ticket con aviso, sin notas ni fotos, y no vende", () => {
+    const env = src.indexOf("function enviarTicket(");
+    const corte = src.indexOf("window._esCotizacion", env);
+    const gc = src.indexOf("registrarGC", env);
+    assert.ok(corte > env && corte < gc);
+    assert.match(src, /id="cot-banner"/);
+    assert.match(src, /Esto es una COTIZACIÓN/);
+    assert.match(src, /_notasCard=_cotMode\?'':/);
+    assert.match(src, /_fotosCard=_cotMode\?'':/);
+    assert.match(src, /accion:'guardarCotizacion'|api\('guardarCotizacion'/);
+    assert.match(src, /validez:'Válida por 15 días'/);
+    assert.match(beta, /route\.doc === "cot" && !route\.id\) return "ticket"/);
+    assert.match(beta, /m === "cotizaciones_cliente"\) return ""/);
+    assert.match(beta, /return renderListaCotizaciones\(\)/);
+    assert.match(beta, /window\._esCotizacion = route\.kind === "doc" && route\.doc === "cot" && !route\.id/);
+    assert.match(beta, /th\("numero", "Número"\)/);
+    assert.match(beta, /id="cot-pdf"/);
+    assert.match(beta, /Descargar PDF/);
+    assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cot/);
+    assert.match(sw, /sunsu-beta-2026-10-26-COT/);
+    assert.doesNotThrow(() => new Function(src));
+    const build = new Function(
+      "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
+      src.slice(src.indexOf("function _lineasCotizacionTicket("), src.indexOf("function _enviarCotizacionTicket("))
+      + "\nreturn _lineasCotizacionTicket();",
+    ) as (t: Record<string, unknown>, f: unknown, e: unknown, p3: unknown, p6: unknown, pv: unknown) => { sku: string; nombre: string; precio: number; cant: number }[];
+    const lineas = build(
+      {
+        facial: "SUNSU-01", cobro: "cobrado", extras: { "SUNSU-07": true, "SUNSU-08": true },
+        extrasCourtesy: { "SUNSU-08": true }, pack3: "SUNSU-18", pack6: "",
+        productos: { "SUNSU-HT-002": 2 }, gcVenta: { activo: true, codigo: "26-070", valor: 65, tipo: "digital", cortesia: false },
+      },
+      [{ sku: "SUNSU-01", n: "Facial S.O.S", p: 75 }],
+      [{ sku: "SUNSU-07", n: "Dermaplaning", t: 15 }, { sku: "SUNSU-08", n: "Mascarilla", t: 12 }],
+      [{ sku: "SUNSU-18", n: "x3 Facial Reparación", p: 166.2 }],
+      [],
+      [{ prods: [{ sku: "SUNSU-HT-002", n: "Serum", p: 43.99 }] }],
+    );
+    assert.equal(lineas.find((l) => l.sku === "SUNSU-01")?.precio, 75);
+    assert.equal(lineas.find((l) => l.sku === "SUNSU-07")?.precio, 15);
+    assert.equal(lineas.find((l) => l.sku === "SUNSU-08")?.precio, 0);
+    assert.equal(lineas.find((l) => l.sku === "SUNSU-18")?.precio, 166.2);
+    assert.equal(lineas.find((l) => l.sku === "SUNSU-HT-002")?.cant, 2);
+    assert.equal(lineas.find((l) => l.sku === "26-070")?.precio, 65);
   });
 });
