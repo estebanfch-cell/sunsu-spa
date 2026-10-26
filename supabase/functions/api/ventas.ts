@@ -388,6 +388,14 @@ interface GrupoCliente {
   fila: string;
 }
 
+/** Código visible de clienta: C-00001 = primera fila del registro (fila 2 de la hoja). Filas creadas en beta: C-B00001. */
+export function codigoCliente(r: Row | undefined): string {
+  const sr = Math.trunc(n(r?.sheet_row));
+  if (sr > 1) return "C-" + String(sr - 1).padStart(5, "0");
+  if (sr < 0) return "C-B" + String(-sr).padStart(5, "0");
+  return "";
+}
+
 export function claveRegistro(r: Row): string {
   const ced = normCedula(r.cedula);
   if (ced) return "c:" + ced;
@@ -505,7 +513,16 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
   try { regs = await db.all("clientas_registro"); } catch { regs = []; }
   const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)));
   const fichas = new Map<string, Row>();
-  for (const r of regs) if (!r.borrado_at) fichas.set(claveRegistro(r), r);
+  const codigos = new Map<string, { sr: number; cod: string }>();
+  for (const r of regs) {
+    if (r.borrado_at) continue;
+    const k = claveRegistro(r);
+    fichas.set(k, r);
+    const cod = codigoCliente(r);
+    const sr = Math.abs(n(r.sheet_row));
+    const prev = codigos.get(k);
+    if (cod && (!prev || sr < prev.sr)) codigos.set(k, { sr, cod });
+  }
   const telOk = veTelefono(ses);
   if (verTodos) {
     for (const r of regs) {
@@ -545,6 +562,7 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
       nombre: (g.nombres + " " + g.apellido).trim(),
       visitas: g.visitas, ultima: g.ultima, cosmetologa: g.cosmetologa,
       sector: s(ficha?.sector_donde_vive),
+      codigo: codigos.get(g.key)?.cod || "",
     };
     if (telOk) item.telefono = s(ficha?.telefono);
     if (admin) item.total = round2(g.total);

@@ -4450,7 +4450,7 @@ function _buildTicketCard(t, showPrices){
     +'<div style="flex:1">'
     +'<div style="font-size:0.68rem;font-weight:700;color:'+cosCol+';text-transform:uppercase;margin-bottom:2px">'+t.cosmetologa+'</div>'
     +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "nombre", t.nombre)+' '+SunsuInline.campo("tickets", t.tkRow, "apellido", t.apellido):(t.nombre+' '+t.apellido))+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--gray)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "cedula", t.cedula):(t.cedula||''))+' · '+fechaFmt+' '+t.hora+(t.tkRow?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">#'+t.tkRow+'</span>':'')+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--gray)">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.campo("tickets", t.tkRow, "cedula", t.cedula):(t.cedula||''))+' · '+fechaFmt+' '+t.hora+((t.so_num||t.tkRow)?' · <span style="font-family:monospace;font-weight:700;color:var(--navy)">'+(t.so_num||('#'+t.tkRow))+'</span>':'')+'</div>'
     +(isAdminView&&t.tkRow
       ?'<div style="display:flex;gap:5px;margin-top:6px">'
         +(window.SunsuInline&&SunsuInline.edita()?SunsuInline.borrar("tickets", t.tkRow):'')
@@ -4555,8 +4555,8 @@ function renderHistorial(c){
       if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
       _histData=data;
       window._histCosmFiltro='';
-      if(isAdmin) mostrarHistorialAdmin(c,fechaHoy,fechaHoy,'');
-      else mostrarHistorialStaff(c,fechaHoy,fechaHoy);
+      if(isAdmin) mostrarHistorialAdmin(c,'','','');
+      else mostrarHistorialStaff(c,'','');
     })
     .catch(function(err){
       c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br>'
@@ -4595,7 +4595,8 @@ function _histBuscarGo(esStaff){
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  if(esStaff) mostrarHistorialStaff(c,fh,fh); else mostrarHistorialAdmin(c,fh,fh,window._histCosmFiltro);
+  var f0=window._histFiltroActual||{};fh=null;
+  if(esStaff) mostrarHistorialStaff(c,f0.desde||'',f0.hasta||''); else mostrarHistorialAdmin(c,f0.desde||'',f0.hasta||'',window._histCosmFiltro);
 }
 // Búsqueda EN VIVO: re-filtra sola 350ms después de dejar de teclear (mín. 2 caracteres)
 function _histBuscarLive(esStaff){
@@ -4616,13 +4617,14 @@ function _histBuscarClear(esStaff){
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  if(esStaff) mostrarHistorialStaff(c,fh,fh); else mostrarHistorialAdmin(c,fh,fh,window._histCosmFiltro);
+  var f0=window._histFiltroActual||{};fh=null;
+  if(esStaff) mostrarHistorialStaff(c,f0.desde||'',f0.hasta||''); else mostrarHistorialAdmin(c,f0.desde||'',f0.hasta||'',window._histCosmFiltro);
 }
 // Filtra tickets según búsqueda (todo el historial) o fecha/cosmetóloga
 function _histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro){
   return _histData.filter(function(t){
     if(busq) return _histMatchBusq(t, busq);
-    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
+    if(fechaDesde&&(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta)) return false;
     if(cosmFiltro && t.cosmetologa !== cosmFiltro) return false;
     return true;
   });
@@ -4630,7 +4632,7 @@ function _histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro){
 function _histFiltrarStaff(busq, fechaDesde, fechaHasta){
   return _histData.filter(function(t){
     if(busq) return _histMatchBusq(t, busq);
-    if(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta) return false;
+    if(fechaDesde&&(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta)) return false;
     return t.cosmetologa&&t.cosmetologa.toLowerCase().indexOf(CU.name.toLowerCase().split(' ')[0].toLowerCase())>=0;
   });
 }
@@ -4669,26 +4671,60 @@ function _histClave(t){
 function _histDetalleHTML(t, showPrices){
   return '<div class="tk-detail-bar"><button type="button" onclick="_histCerrarTicket()" style="padding:6px 12px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">Cerrar</button></div>'+_buildTicketCard(t, showPrices);
 }
+function _histNum(t){ return (t&&t.so_num)||''; }
+function _histMontos(t){
+  var tot=parseFloat(t&&t.estimado)||0, sub=Math.round(tot/1.15*100)/100;
+  return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
+}
+var _HIST_COLS=[
+  {k:'num',t:'Nº ticket',v:function(t){var m=/(\d+)$/.exec(_histNum(t));return m?+m[1]:-1;}},
+  {k:'cli',t:'Clienta',v:function(t){return ((t.nombre||'')+' '+(t.apellido||'')).trim().toLowerCase();}},
+  {k:'ced',t:'Cédula',v:function(t){var d=String(t.cedula||'').replace(/\D/g,'');return d?+d:-1;}},
+  {k:'fecha',t:'Fecha',v:function(t){return String(t.fecha||'')+' '+String(t.hora||'');}},
+  {k:'cos',t:'Cosmetóloga',v:function(t){return String(t.cosmetologa||'').toLowerCase();}},
+  {k:'sub',t:'Subtotal',num:1,v:function(t){return _histMontos(t).sub;}},
+  {k:'iva',t:'IVA',num:1,v:function(t){return _histMontos(t).iva;}},
+  {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}}
+];
+function _histOrdenar(list){
+  var st=window._histSort||{k:'fecha',d:-1}, col=_HIST_COLS.filter(function(c){return c.k===st.k;})[0]||_HIST_COLS[3];
+  return list.map(function(t,i){return {t:t,i:i,v:col.v(t)};}).sort(function(a,b){
+    var x=a.v,y=b.v; if(x<y) return -st.d; if(x>y) return st.d;
+    var fa=String(a.t.fecha||'')+String(a.t.hora||''), fb=String(b.t.fecha||'')+String(b.t.hora||'');
+    return fa<fb?1:fa>fb?-1:a.i-b.i;
+  }).map(function(o){return o.t;});
+}
+function _histSortBy(k){
+  var st=window._histSort||{k:'fecha',d:-1};
+  window._histSort= st.k===k ? {k:k,d:-st.d} : {k:k,d:(k==='fecha'||k==='num'||k==='sub'||k==='iva'||k==='tot')?-1:1};
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  _histActualizarRes(esStaff);
+}
 function _histMasterHTML(tickets, showPrices){
+  tickets=_histOrdenar(tickets);
   window._histVisibles=tickets;
   window._histShowPrices=showPrices;
-  var sel=window._histTkSel, elegido=null;
+  var sel=window._histTkSel, elegido=null, st=window._histSort||{k:'fecha',d:-1};
   tickets.forEach(function(t){ if(_histClave(t)===sel) elegido=t; });
+  var $=function(v){return showPrices?('$'+v.toFixed(2)):'—';};
   var rows=tickets.map(function(t,i){
-    var on=_histClave(t)===sel?' on':'';
-    var skus=_histSkus(t).join(', ')||'—';
-    var total=showPrices?('$'+(parseFloat(t.estimado)||0).toFixed(2)):'—';
+    var on=_histClave(t)===sel?' on':'', m=_histMontos(t);
     var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
     return '<tr class="tk-row'+on+'" onclick="_histAbrirTicket('+i+')">'
-      +'<td>'+_histEsc(nombre)+'</td><td>'+_histEsc(t.cedula||'')+'</td><td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>'
-      +'<td class="tk-sku">'+_histEsc(skus)+'</td><td>'+_histEsc(t.cosmetologa||'')+'</td>'
-      +'<td class="num">'+_histEsc(total)+'</td></tr>';
+      +'<td class="tk-num">'+_histEsc(_histNum(t)||'—')+'</td>'
+      +'<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td><td>'+_histEsc(t.cedula||'')+'</td><td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>'
+      +'<td>'+_histEsc(t.cosmetologa||'')+'</td>'
+      +'<td class="num">'+$(m.sub)+'</td><td class="num">'+$(m.iva)+'</td><td class="num">'+$(m.tot)+'</td></tr>';
+  }).join('');
+  var head=_HIST_COLS.map(function(c){
+    var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
+    return '<th class="sortable'+(c.num?' num':'')+'" onclick="_histSortBy(\''+c.k+'\')">'+c.t+ar+'</th>';
   }).join('');
   var detail=elegido?_histDetalleHTML(elegido, showPrices):'<p class="note">Elige un ticket para ver el detalle.</p>';
   var open=elegido?' tk-open':'';
-  return '<div class="tk-split"><div class="tk-list sheet-scroll"><table class="tk-table"><thead><tr>'
-    +'<th>Clienta</th><th>Cédula</th><th>Fecha</th><th>SKU</th><th>Cosmetóloga</th><th class="num">Total</th>'
-    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="6">Sin tickets</td></tr>')+'</tbody></table></div>'
+  return '<div class="tk-split"><div class="tk-list sheet-scroll"><table class="tk-table nowrap-table"><thead><tr>'
+    +head
+    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="8">Sin tickets</td></tr>')+'</tbody></table></div>'
     +'<aside class="tk-detail'+open+'" id="tk-detail">'+detail+'</aside></div>';
 }
 function _histAbrirTicket(i){
@@ -4726,7 +4762,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
   var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
   html+='<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:12px">'
     +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">'
-    +'Resumen'+(busq?' · 🔍 "'+busq+'" (todo el historial)':((cosmFiltro?' · '+cosmFiltro:'')+' · '+fechaDesde+(fechaDesde!==fechaHasta?' → '+fechaHasta:'')))+(tickets.length?' · '+tickets.length+' ticket'+(tickets.length!==1?'s':''):'')
+    +'Resumen'+(busq?' · 🔍 "'+busq+'" (todo el historial)':((cosmFiltro?' · '+cosmFiltro:'')+' · '+(fechaDesde?fechaDesde+(fechaDesde!==fechaHasta?' → '+fechaHasta:''):'Todos')))+(tickets.length?' · '+tickets.length+' ticket'+(tickets.length!==1?'s':''):'')
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin-bottom:8px">'
     +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
@@ -4766,7 +4802,7 @@ function _histActualizarRes(esStaff){
   var f=window._histFiltroActual||{};
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  var fd=f.desde||fh, fha=f.hasta||fh;
+  var fd=f.desde||'', fha=f.hasta||'';
   if(esStaff) res.innerHTML=_histResStaffHTML(_histFiltrarStaff(busq,fd,fha), busq);
   else res.innerHTML=_histResAdminHTML(_histFiltrarAdmin(busq,fd,fha,window._histCosmFiltro||''), window._histCosmFiltro||'', fd, fha, busq);
   _histTrasPintar();
@@ -4786,9 +4822,23 @@ function _histBuscarUI(esStaff, busq){
     +'</div>';
 }
 
+function _histFiltroBtns(pref, fn, desde, hasta){
+  var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
+  var f=function(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+  var h=f(hoy), ay=new Date(hoy); ay.setDate(ay.getDate()-1); var s7=new Date(hoy); s7.setDate(s7.getDate()-6);
+  var act=!desde?'todos':(desde===h&&hasta===h?'hoy':(desde===f(ay)&&hasta===f(ay)?'ayer':(desde===f(s7)&&hasta===h?'semana':(desde===h.slice(0,8)+'01'&&hasta===h?'mes':''))));
+  return [['todos','Todos'],['hoy','Hoy'],['ayer','Ayer'],['semana','7 días'],['mes','Mes']].map(function(b){
+    var on=b[0]===act;
+    return '<button id="'+pref+b[0]+'" onclick="'+fn+'(\''+b[0]+'\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;white-space:nowrap;border:1.5px solid '+(on?'var(--navy)':'#ECEEF4')+';background:'+(on?'var(--navy)':'white')+';color:'+(on?'white':'var(--navy)')+'">'+b[1]+'</button>';
+  }).join('');
+}
+function _histFiltroResumen(desde, hasta, cosm){
+  var t=!desde?'Todos':(desde===hasta?_histFechaFmt(desde):_histFechaFmt(desde)+' → '+_histFechaFmt(hasta));
+  return t+(cosm?' · '+cosm:'');
+}
 function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   if(!_histData) return;
-  if(!fechaHasta) fechaHasta=fechaDesde;
+  if(!fechaHasta) fechaHasta=fechaDesde||'';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
   var tickets=_histFiltrarStaff(busq, fechaDesde, fechaHasta);
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
@@ -4804,19 +4854,15 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   // Same date filters as admin but calls staff version
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +_histBuscarUI(true, busq)
-    +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button id="sf-hoy" onclick="aplicarFiltroStaff(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
-    +'<button id="sf-ayer" onclick="aplicarFiltroStaff(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
-    +'<button id="sf-semana" onclick="aplicarFiltroStaff(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
-    +'<button id="sf-mes" onclick="aplicarFiltroStaff(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
-    +'</div>'
+    +'<details class="hist-filtrar"><summary>⚙️ Filtrar · '+_histFiltroResumen(fechaDesde,fechaHasta,'')+'</summary><div class="hist-filtrar-body">'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'+_histFiltroBtns('sf-','aplicarFiltroStaff',fechaDesde,fechaHasta)+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<input type="date" id="hist-desde-s" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
     +'<span style="font-size:0.7rem;color:var(--gray)">→</span>'
     +'<input type="date" id="hist-hasta-s" value="'+fechaHasta+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
     +'<button onclick="aplicarFiltroFechaStaff()" style="padding:7px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">OK</button>'
     +'</div>'
+    +'</div></details>'
     +'</div>';
 
   html+='<div id="hist-res">'+_histResStaffHTML(tickets, busq)+'</div>';
@@ -4825,7 +4871,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
 }
 
 function _highlightFiltroBtn(prefix, tipo){
-  ['hoy','ayer','semana','mes'].forEach(function(t){
+  ['todos','hoy','ayer','semana','mes'].forEach(function(t){
     var btn=document.getElementById(prefix+t);
     if(!btn) return;
     if(t===tipo){btn.style.background='var(--navy)';btn.style.color='white';btn.style.borderColor='var(--navy)';}
@@ -4838,7 +4884,8 @@ function aplicarFiltroStaff(tipo){
   var pad=function(n){return String(n).padStart(2,'0');};
   var desde,hasta;
   hasta=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  if(tipo==='hoy'){desde=hasta;}
+  if(tipo==='todos'){desde=hasta='';}
+  else if(tipo==='hoy'){desde=hasta;}
   else if(tipo==='ayer'){var ay=new Date(hoy);ay.setDate(ay.getDate()-1);desde=hasta=ay.getFullYear()+'-'+pad(ay.getMonth()+1)+'-'+pad(ay.getDate());}
   else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
   else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
@@ -4875,14 +4922,9 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   // Filters card
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +_histBuscarUI(false, busq)
-    // Fecha
-    +'<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:8px">📅 Rango de fechas</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button id="af-hoy" onclick="aplicarFiltroRapido(\'hoy\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--navy);background:var(--navy);color:white">Hoy</button>'
-    +'<button id="af-ayer" onclick="aplicarFiltroRapido(\'ayer\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Ayer</button>'
-    +'<button id="af-semana" onclick="aplicarFiltroRapido(\'semana\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">7 días</button>'
-    +'<button id="af-mes" onclick="aplicarFiltroRapido(\'mes\')" style="flex:1;padding:6px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1.5px solid #ECEEF4;background:white;color:var(--navy)">Mes</button>'
-    +'</div>'
+    +'<details class="hist-filtrar"><summary>⚙️ Filtrar · '+_histFiltroResumen(fechaDesde,fechaHasta,cosmFiltro)+'</summary><div class="hist-filtrar-body">'
+    +'<div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">📅 Fecha</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'+_histFiltroBtns('af-','aplicarFiltroRapido',fechaDesde,fechaHasta)+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">'
     +'<input type="date" id="hist-desde" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
     +'<span style="font-size:0.7rem;color:var(--gray)">→</span>'
@@ -4897,6 +4939,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
       return '<option value="'+_histEsc(name)+'"'+(active?' selected':'')+'>'+_histEsc(name)+'</option>';
     }).join('')
     +'</select>'
+    +'</div></details>'
     +'</div>';
 
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
@@ -4911,7 +4954,7 @@ function filtrarPorCosm(nombre){
   var f=window._histFiltroActual||{};
   var hoy=new Date(), pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  mostrarHistorialAdmin(document.getElementById('content'), f.desde||fechaHoy, f.hasta||fechaHoy, window._histCosmFiltro);
+  mostrarHistorialAdmin(document.getElementById('content'), f.desde||'', f.hasta||'', window._histCosmFiltro);
 }
 
 function aplicarFiltroRapido(tipo){
@@ -4919,7 +4962,8 @@ function aplicarFiltroRapido(tipo){
   var pad=function(n){return String(n).padStart(2,'0');};
   var desde,hasta;
   hasta=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  if(tipo==='hoy'){desde=hasta;}
+  if(tipo==='todos'){desde=hasta='';}
+  else if(tipo==='hoy'){desde=hasta;}
   else if(tipo==='ayer'){var ay=new Date(hoy);ay.setDate(ay.getDate()-1);desde=hasta=ay.getFullYear()+'-'+pad(ay.getMonth()+1)+'-'+pad(ay.getDate());}
   else if(tipo==='semana'){var s=new Date(hoy);s.setDate(s.getDate()-6);desde=s.getFullYear()+'-'+pad(s.getMonth()+1)+'-'+pad(s.getDate());}
   else if(tipo==='mes'){desde=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-01';}
@@ -4940,7 +4984,7 @@ function aplicarFiltroFecha(){
 function descargarPDFHistorial(){
   if(!_histData||!window._histFiltroActual) return;
   var desde=window._histFiltroActual.desde, hasta=window._histFiltroActual.hasta;
-  var tickets=_histData.filter(function(t){return t.fecha&&t.fecha>=desde&&t.fecha<=hasta;});
+  var tickets=_histData.filter(function(t){return !desde||(t.fecha&&t.fecha>=desde&&t.fecha<=hasta);});
   if(!tickets.length){toast('Sin tickets para imprimir','#B86B6B');return;}
   var total=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
   var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -5011,23 +5055,6 @@ function descargarPDFHistorial(){
     +'<br><button class="noprint" onclick="window.print()" style="padding:9px 22px;background:#C2185B;color:white;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">🖨️ Imprimir / Guardar PDF</button>'
     +'</body></html>');
   win.document.close();
-}
-
-function _histPrecioFacial(txt){
-  if(!txt) return {n:'',p:0};
-  var canje=false;
-  // Check colQ — if there's a colQ it means it was paid with paquete
-  var f=FACIALES.find(function(x){return txt.indexOf(x.sku)>=0;});
-  return f?{n:f.n,p:f.p,sku:f.sku}:{n:txt,p:0,sku:''};
-}
-function _histPrecioPaq(txt){
-  if(!txt) return null;
-  var p=PAQ3.find(function(x){return txt.indexOf(x.sku)>=0;})||PAQ6.find(function(x){return txt.indexOf(x.sku)>=0;});
-  return p?{n:p.n,p:p.p,sku:p.sku}:null;
-}
-function _histPrecioExtra(sku){
-  var e=EXTRAS.find(function(x){return x.sku===sku;});
-  return e?e.t:0;
 }
 
 // ══════ DASH ADMIN ══════
