@@ -2822,8 +2822,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026esc/);
-    assert.match(sw, /sunsu-beta-2026-10-26-ESC/);
+    assert.match(beta, /beta-screens\.js\?v=20261026pq/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PQ/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2899,5 +2899,28 @@ describe("escalón en el app en vivo", () => {
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.cp, 320);
     assert.equal(filas.find((r) => String(r.name).startsWith("Andrea"))?.n, "N8");
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.n, "N8");
+  });
+});
+
+describe("paquetes en columnas", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+  const beta = readFileSync(join(root, "beta.html"), "utf8");
+  const sw = readFileSync(join(root, "sw.js"), "utf8");
+
+  it("alinea clienta, progreso, tarjeta, WhatsApp y el desplegable", () => {
+    assert.match(src, /class="paq-line"/);
+    assert.match(src, /class="paq-prog/);
+    assert.match(src, /paq-wa-vacio/);
+    assert.match(src, /onclick="tarjetaPaqueteDe\(/);
+    assert.match(src, /onclick="paqDesplegar\(/);
+    assert.match(src, /de '\+x\.total\+' · queda/);
+    assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
+    assert.match(beta, /beta-screens\.js\?v=20261026pq/);
+    assert.match(sw, /sunsu-beta-2026-10-26-PQ/);
+    assert.doesNotThrow(() => new Function(src));
+    const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
+    assert.match(fila, /paq-wa-vacio/);
+    assert.match(fila, /paq-wa"/);
   });
 });
