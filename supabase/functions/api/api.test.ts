@@ -17,6 +17,7 @@ import "./horarios_api.ts";
 import "./inline_api.ts";
 import "./personal_api.ts";
 import "./compras_api.ts";
+import "./conteo_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { jornadaDe, normalizarJibble, slotRotativo, type Horario } from "./horarios.ts";
 import { acceso, esPropio, evaluarBloqueo, lecturaEnVista, redactar, type SesLite } from "./permisos.ts";
@@ -2842,8 +2843,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2951,8 +2952,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3015,8 +3016,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3066,8 +3067,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3100,8 +3101,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3147,8 +3148,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026cmp/);
-    assert.match(sw, /sunsu-beta-2026-10-26-CMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261026cnt/);
+    assert.match(sw, /sunsu-beta-2026-10-26-CNT/);
   });
 });
 
@@ -3277,5 +3278,91 @@ describe("compras flujo", () => {
     assert.match(purga, /'erp_oc_pagos'/);
     assert.match(purga, /'erp_consignacion_cierre'/);
     assert.match(purga, /where origin = %L', t, 'test'/);
+  });
+});
+
+describe("conteo por secciones", () => {
+  it("el admin parte el conteo por familia, la cosmetóloga cuenta a ciegas y al aprobar se ajusta el stock", async () => {
+    const db = new MemoryDb(erpSeed());
+    const c = ctx(db);
+    db.tables.get("usuarios")!.push({ id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false });
+    db.tables.get("sesiones")!.push({ token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" });
+    const plan = await handle("conteo_plan", { token: c.token, bodega_ids: [BODEGA_VENTA, BODEGA_CABINA] }, c) as Row;
+    assert.equal(plan.ok, true);
+    const secs = plan.secciones as Row[];
+    const ht = secs.find((r) => r.familia === "HT" && r.bodega_id === BODEGA_VENTA);
+    assert.equal(ht?.etiqueta, "HT — ANUA");
+    assert.equal(secs.some((r) => r.familia === "CB" && r.bodega_id === BODEGA_CABINA), true);
+    assert.equal(secs.some((r) => r.familia === "AB" && r.bodega_id === BODEGA_VENTA), true);
+    const no = await handle("conteo_crear", { token: "t-andrea", bodega_ids: [BODEGA_VENTA] }, c) as Row;
+    assert.match(String(no.error), /admin|permiso/i);
+    const creado = await handle("conteo_crear", {
+      token: c.token, bodega_ids: [BODEGA_VENTA, BODEGA_CABINA],
+      asignaciones: [{ bodega_id: BODEGA_VENTA, familia: "HT", uid: "andrea" }],
+    }, c) as Row;
+    assert.equal(creado.ok, true);
+    assert.match(String(creado.numero), /^CNT-/);
+    assert.equal(creado.flujo, "Abierto");
+    const mios = await handle("conteo_mios", { token: "t-andrea" }, c) as Row;
+    const tarea = (mios.items as Row[])[0];
+    assert.equal((mios.items as Row[]).length, 1);
+    assert.equal(tarea.familia, "HT");
+    const sec = await handle("conteo_seccion", { token: "t-andrea", seccion_id: tarea.id }, c) as Row;
+    const linea = (sec.productos as Row[])[0];
+    assert.equal(linea.sku, "HT-002");
+    assert.equal(linea.nombre, "Crema retail");
+    assert.equal(linea.sistema, undefined);
+    assert.equal("precio" in linea, false);
+    assert.equal("proveedor" in sec, false);
+    const panel0 = await handle("conteo_panel", { token: c.token, id: creado.id }, c) as Row;
+    const cb = ((panel0.items as Row[])[0].secciones as Row[]).find((r) => r.familia === "CB");
+    const vedada = await handle("conteo_seccion", { token: "t-andrea", seccion_id: cb?.id }, c) as Row;
+    assert.match(String(vedada.error), /tuya/i);
+    const parcial = await handle("conteo_guardar_sec", {
+      token: "t-andrea", seccion_id: tarea.id, lineas: [{ id: linea.id, contado: 3 }],
+    }, c) as Row;
+    assert.equal(parcial.estado, "En progreso");
+    assert.equal(parcial.flujo, "En progreso");
+    const fin = await handle("conteo_cerrar_sec", { token: "t-andrea", seccion_id: tarea.id }, c) as Row;
+    assert.equal(fin.estado, "Sección completa");
+    assert.equal(fin.flujo, "Sección completa");
+    const temprano = await handle("conteo_aprobar", { token: c.token, id: creado.id }, c) as Row;
+    assert.match(String(temprano.error), /secciones/i);
+    const noApr = await handle("conteo_aprobar", { token: "t-andrea", id: creado.id }, c) as Row;
+    assert.match(String(noApr.error), /admin|permiso/i);
+    const panel = await handle("conteo_panel", { token: c.token, id: creado.id }, c) as Row;
+    const todas = (panel.items as Row[])[0].secciones as Row[];
+    const htSec = todas.find((r) => r.familia === "HT");
+    assert.equal((htSec?.diferencias as Row[])[0].diferencia, -2);
+    for (const s of todas) {
+      if (s.estado === "Sección completa") continue;
+      const cerrado = await handle("conteo_cerrar_sec", { token: c.token, seccion_id: s.id }, c) as Row;
+      assert.equal(cerrado.ok, true);
+    }
+    const antes = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad;
+    const ok = await handle("conteo_aprobar", { token: c.token, id: creado.id }, c) as Row;
+    assert.equal(ok.flujo, "Aplicado");
+    assert.ok(Number(ok.ajustes) >= 1);
+    const despues = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad;
+    assert.equal(Number(despues), 3);
+    assert.equal(Number(antes), 5);
+    const mov = (await db.all("erp_movimientos")).find((m) => m.tipo === "conteo" && m.producto_id === SEED_IDS.venta);
+    assert.equal(mov?.delta, -2);
+    assert.equal(mov?.doc_tipo, "conteo");
+    assert.equal((await db.all("log_acciones")).some((r) => r.accion === "CONTEO APLICADO"), true);
+    const ya = await handle("conteo_mios", { token: "t-andrea" }, c) as Row;
+    assert.equal((ya.items as Row[]).length, 0);
+  });
+
+  it("0031 agrega secciones de conteo sin tocar el conteo viejo", () => {
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0031_conteo_secciones.sql", import.meta.url), "utf8");
+    assert.match(sql, /add column if not exists flujo text/);
+    assert.match(sql, /create table if not exists public\.erp_conteo_secciones/);
+    assert.match(sql, /create table if not exists public\.erp_conteo_items/);
+    assert.match(sql, /'erp_conteo_secciones','erp_conteo_items'/);
+    assert.equal(sql.includes("drop table"), false);
+    const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(screens, /Hacer conteo/);
+    assert.match(screens, /HT — ANUA/);
   });
 });

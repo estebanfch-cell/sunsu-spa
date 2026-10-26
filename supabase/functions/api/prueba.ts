@@ -22,6 +22,7 @@ const TABLAS = [
   "horarios", "horario_dias", "horario_descansos", "horario_deducciones", "horario_asignaciones",
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock", "erp_oc_pagos", "erp_consignacion_cierre",
+  "erp_conteo_secciones", "erp_conteo_items",
 ];
 
 function round4(x: number): number {
