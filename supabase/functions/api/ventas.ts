@@ -54,6 +54,12 @@ export function familiaSku(sku: string): string {
   return m ? m[1] : "";
 }
 
+/** Consignación de cabina: el conjunto de antes de sumar BV, SU y VK a la búsqueda de Compras. SU es marca propia y VK es compra directa. */
+export function familiaConsignacion(sku: string): string {
+  const m = skuCode(sku).match(/^(HT|AS|ML|PH|JN)-/);
+  return m ? m[1] : "";
+}
+
 /** HT, AS, ML… tal como está en proveedores.familia. No convierte una marca en código. */
 export function codigoFamilia(raw: unknown): string {
   const up = s(raw).toUpperCase();

@@ -7,7 +7,7 @@ import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguien
 import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
 import { backfillSO, tomarNumero } from "./series.ts";
-import { familiaDeFila, familiaSku, quincenaActual } from "./ventas.ts";
+import { familiaConsignacion, familiaDeFila, quincenaActual } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -311,7 +311,7 @@ function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: st
   const q = quincenaActual(now);
   const steps: Step[] = [];
   for (const ln of lineas) {
-    const fam = familiaSku(s(ln.sku));
+    const fam = familiaConsignacion(s(ln.sku));
     const cant = n(ln.cantidad);
     if (!fam || !(cant > 0)) continue;
     steps.push({ op: "upsert", table: "erp_consignacion_consumo", match: { id: id() }, row: {
@@ -785,7 +785,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     }
     if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now));
     await applyPlan(db, actor, steps, now.toISOString());
-    const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => familiaSku(s(ln.sku)));
+    const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => familiaConsignacion(s(ln.sku)));
     return { ok: true, id: tid, numero, inmediata, consumo: !!consumo };
   }
   if (op === "trf_recibir") {
