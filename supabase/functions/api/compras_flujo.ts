@@ -223,22 +223,24 @@ export async function comprasAprobar(db: Db, actor: string, p: Row): Promise<Row
   const prov = (snap.prov as Row) || {};
   const pedido = lineas.map((ln) => {
     const prod = map.get(String(ln.producto_id));
-    return { sku: s(prod?.sku), nombre: s(prod?.nombre), cantidad: n(ln.cantidad), precio: n(ln.precio), subtotal: n(ln.subtotal) };
+    const cantidad = n(ln.cantidad);
+    const subtotal = n(ln.subtotal);
+    return { sku: s(prod?.sku), nombre: s(prod?.nombre), vendido: cantidad, cantidad, precio: n(ln.precio), subtotal };
   });
-  const fact = (Array.isArray(snap.fact) ? snap.fact : pedido) as Row[];
-  const sub = n(o.subtotal);
-  const iva = n(o.iva);
+  const sub = round2(pedido.reduce((a, ln) => a + n(ln.subtotal), 0));
+  const iva = snap.conIva === false ? 0 : round2(sub * 0.15);
+  const total = round2(sub + iva);
   return {
     ok: true, id: o.id, numero, flujo: "Aprobada",
     liquidacion: {
       titulo: "Liquidación de consignación",
       proveedor: s(prov.nombre), ruc: s(prov.ruc), periodo: s(o.q_label),
-      lineas: fact, subtotal: sub, iva, total: n(o.total),
+      lineas: pedido, subtotal: sub, iva, total,
     },
     pedido: {
       titulo: "Orden de compra",
       numero, proveedor: s(prov.nombre), periodo: s(o.q_label),
-      lineas: pedido, subtotal: sub, iva, total: n(o.total),
+      lineas: pedido, subtotal: sub, iva, total,
     },
   };
 }
@@ -341,50 +343,84 @@ export async function comprasRecibir(db: Db, actor: string, p: Row, now: Date, a
   return { ok: true, ...(await vistaOc(db, fresco, admin)), flujo: flujoNuevo };
 }
 
+function round4(x: number): number {
+  return Math.round((x + Number.EPSILON) * 10000) / 10000;
+}
+
+function periodoOc(o: Row): { desde: string; hasta: string } {
+  const snap = snapDe(o);
+  let desde = s(snap.desde);
+  let hasta = s(snap.hasta);
+  if (!desde || !hasta) {
+    const m = s(o.q_label).match(/(\d{4}-\d{2}-\d{2})\s*→\s*(\d{4}-\d{2}-\d{2})/);
+    if (m) {
+      if (!desde) desde = m[1];
+      if (!hasta) hasta = m[2];
+    }
+  }
+  return { desde, hasta };
+}
+
 async function cerrarFifo(db: Db, actor: string, o: Row, pagoId: string, monto: number): Promise<Row[]> {
   const provId = s(o.proveedor_id);
-  const prods = skusProveedor(
-    (await db.all("erp_proveedores")).find((r) => r.id === provId) || { nombre: "" },
-    await productos(db),
-  );
-  const precio = new Map(prods.map((p) => [skuCode(p.sku), precioDe(p)]));
-  const allow = new Set(precio.keys());
+  const { desde, hasta } = periodoOc(o);
+  const prods = await productos(db);
+  const porId = new Map(prods.map((p) => [String(p.id), p]));
+  const costo = new Map(prods.map((p) => [skuCode(p.sku), precioDe(p)]));
+  const allow = new Set<string>();
+  const precioLinea = new Map<string, number>();
+  for (const ln of (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id)) {
+    const prod = porId.get(String(ln.producto_id));
+    const sku = skuCode(prod?.sku || ln.sku);
+    if (!sku) continue;
+    allow.add(sku);
+    if (!(precioLinea.has(sku)) && n(ln.precio) > 0) precioLinea.set(sku, n(ln.precio));
+  }
+  if (!allow.size) return [];
   const ya = new Map<string, number>();
   for (const c of await db.all("erp_consignacion_cierre")) {
-    if (s(c.proveedor_id) !== provId) continue;
-    const k = s(c.ticket_ref) + "|" + skuCode(c.sku);
+    const sku = skuCode(c.sku);
+    if (!allow.has(sku)) continue;
+    const k = s(c.ticket_ref) + "|" + sku;
     ya.set(k, (ya.get(k) || 0) + n(c.qty));
   }
   const ventas: { fecha: string; ticket: string; sku: string; qty: number; precio: number }[] = [];
   for (const t of await db.all("tickets")) {
     const fecha = ymdUtc(t.timestamp);
     if (!fecha) continue;
+    if (desde && fecha < desde) continue;
+    if (hasta && fecha > hasta) continue;
     const ticket = s(t.beta_num) || s(t.so_num) || String(t.id || t.sheet_row || "");
     for (const pr of productQtys(t)) {
       const sku = skuCode(pr.sku);
       if (!allow.has(sku)) continue;
       const k = ticket + "|" + sku;
       const libre = pr.qty - (ya.get(k) || 0);
-      if (libre > 1e-9) ventas.push({ fecha, ticket, sku, qty: libre, precio: precio.get(sku) || 0 });
+      if (libre > 1e-9) ventas.push({ fecha, ticket, sku, qty: libre, precio: precioLinea.get(sku) || costo.get(sku) || 0 });
     }
   }
   ventas.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.ticket.localeCompare(b.ticket));
-  let queda = monto;
+  let queda = round2(monto);
   const cerrados: Row[] = [];
   for (const v of ventas) {
     if (queda <= 0.009) break;
-    const unit = v.precio > 0 ? v.precio : queda;
-    const puede = v.precio > 0 ? Math.min(v.qty, queda / v.precio) : v.qty;
-    if (!(puede > 0)) continue;
-    const qty = round2(puede);
-    const usado = v.precio > 0 ? round2(qty * v.precio) : round2(Math.min(queda, unit));
+    if (!(v.precio > 0) || !(v.qty > 0)) continue;
+    const cabe = round2(v.qty * v.precio);
+    if (!(cabe > 0)) continue;
+    const usado = round2(Math.min(queda, cabe));
+    if (!(usado > 0)) continue;
+    let qty = round4(Math.min(v.qty, usado / v.precio));
+    if (!(qty > 0)) qty = Math.round((Math.min(v.qty, usado / v.precio) + Number.EPSILON) * 1e6) / 1e6;
+    if (!(qty > 0)) continue;
+    const aplicado = round2(Math.min(queda, qty * v.precio));
+    if (!(aplicado > 0)) continue;
     const row = {
-      id: id(), proveedor_id: provId, oc_id: o.id, sku: v.sku, qty, monto: usado,
+      id: id(), proveedor_id: provId, oc_id: o.id, sku: v.sku, qty, monto: aplicado,
       fecha_venta: v.fecha, ticket_ref: v.ticket, pago_id: pagoId,
     };
     await db.write(actor, "erp_consignacion_cierre", "insert", {}, row);
     cerrados.push(row);
-    queda = round2(queda - usado);
+    queda = round2(queda - aplicado);
   }
   return cerrados;
 }
