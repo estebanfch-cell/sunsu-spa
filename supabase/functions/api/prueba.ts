@@ -21,7 +21,7 @@ const TABLAS = [
   "proveedores", "inventario_entradas", "erp_locales", "erp_consignacion_consumo",
   "horarios", "horario_dias", "horario_descansos", "horario_deducciones", "horario_asignaciones",
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
-  "erp_stock",
+  "erp_stock", "erp_oc_pagos", "erp_consignacion_cierre",
 ];
 
 function round4(x: number): number {
