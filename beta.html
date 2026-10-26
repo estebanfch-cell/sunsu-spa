@@ -607,6 +607,29 @@
     margin-top: 12px; padding: 10px 12px; background: var(--navy); color: white; border-radius: 12px;
   }
   .dirty-bar[hidden] { display: none; }
+  .tk-split { display: grid; gap: 12px; align-items: start; }
+  .tk-list { min-width: 0; }
+  .tk-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 640px; }
+  .tk-table th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 6px 8px; border-bottom: 1px solid var(--cream-d); position: sticky; top: 0; background: white; }
+  .tk-table td { padding: 8px; border-bottom: 1px solid var(--cream-d); vertical-align: middle; color: var(--navy); }
+  .tk-table th.num, .tk-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 800; }
+  .tk-row { cursor: pointer; }
+  .tk-row.on { background: var(--blue-l); }
+  .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
+  .tk-detail { background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; min-height: 120px; }
+  .tk-detail-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .tk-detail .note { color: var(--gray); font-size: 0.82rem; margin: 24px 8px; }
+  @media (min-width: 861px) {
+    .tk-split { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 440px); }
+    .tk-detail { display: block; position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+  }
+  @media (max-width: 860px) {
+    .tk-detail { display: none; }
+    .tk-detail.tk-open {
+      display: block; position: fixed; z-index: 80; inset: 0 0 var(--tab-h) 0;
+      overflow: auto; border-radius: 18px 18px 0 0; box-shadow: var(--shadow); margin: 0;
+    }
+  }
   .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
   .sheet-scroll table { min-width: 640px; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
@@ -4407,7 +4430,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026esc"></script>
+<script src="beta-screens.js?v=20261026tk"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
