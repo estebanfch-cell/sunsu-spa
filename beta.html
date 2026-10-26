@@ -630,6 +630,12 @@
       overflow: auto; border-radius: 18px 18px 0 0; box-shadow: var(--shadow); margin: 0;
     }
   }
+  .gc-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 720px; }
+  .gc-table th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 6px 8px; border-bottom: 1px solid var(--cream-d); position: sticky; top: 0; background: white; }
+  .gc-table td { padding: 8px; border-bottom: 1px solid var(--cream-d); vertical-align: middle; color: var(--navy); }
+  .gc-table th.num, .gc-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .gc-row { cursor: pointer; }
+  .gc-row:hover { background: var(--blue-l); }
   .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
   .sheet-scroll table { min-width: 640px; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
@@ -4430,7 +4436,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026tk"></script>
+<script src="beta-screens.js?v=20261026tkgcpq"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
