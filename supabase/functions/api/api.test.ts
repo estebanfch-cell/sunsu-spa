@@ -2822,8 +2822,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026esc/);
-    assert.match(sw, /sunsu-beta-2026-10-26-ESC/);
+    assert.match(beta, /beta-screens\.js\?v=20261026gc/);
+    assert.match(sw, /sunsu-beta-2026-10-26-GC/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -2899,5 +2899,65 @@ describe("escalón en el app en vivo", () => {
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.cp, 320);
     assert.equal(filas.find((r) => String(r.name).startsWith("Andrea"))?.n, "N8");
     assert.equal(filas.find((r) => String(r.name).startsWith("Daniela"))?.n, "N8");
+  });
+});
+
+describe("gift cards lista", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+  const beta = readFileSync(join(root, "beta.html"), "utf8");
+  const sw = readFileSync(join(root, "sw.js"), "utf8");
+  const fns = new Function(
+    src.slice(src.indexOf("function _gcEsc("), src.indexOf("function verTodasGC("))
+    + "\nreturn { _gcCerrada, _gcEstado, _gcTablaHTML, _gcFechaEmision };",
+  )() as {
+    _gcCerrada: (g: Record<string, unknown>) => boolean;
+    _gcEstado: (g: Record<string, unknown>) => string;
+    _gcTablaHTML: (lista: Record<string, unknown>[]) => string;
+    _gcFechaEmision: (g: Record<string, unknown>) => string;
+  };
+
+  it("abre con las abiertas y la tabla trae código, clienta, monto, saldo y estado", async () => {
+    assert.match(src, /verTodasGC\('abiertas'\)/);
+    assert.match(src, /id="gc-f-todas"/);
+    assert.match(src, /id="gc-f-vig"/);
+    assert.match(src, /id="gc-f-cad"/);
+    assert.match(src, /id="bgc-inp"/);
+    assert.match(src, /Clienta \/ beneficiaria/);
+    assert.match(beta, /\.gc-table/);
+    assert.match(beta, /beta-screens\.js\?v=20261026gc/);
+    assert.match(sw, /sunsu-beta-2026-10-26-GC/);
+    assert.doesNotThrow(() => new Function(src));
+    const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
+    g.window = g.window || {};
+    g._gcVencimiento = () => ({ cad: false, sinCad: false, str: "14/01/2027" });
+    assert.equal(fns._gcCerrada({ usado: true, saldo: 65 }), true);
+    assert.equal(fns._gcCerrada({ usado: false, saldo: 0 }), true);
+    assert.equal(fns._gcCerrada({ usado: false, saldo: 35 }), false);
+    assert.equal(fns._gcEstado({ usado: false, saldo: 35 }), "Vigente");
+    assert.equal(fns._gcEstado({ usado: true, saldo: 0 }), "Usada");
+    assert.equal(fns._gcFechaEmision({ dia: 14, mes: 7, ano: 2026 }), "14/07/2026");
+    const html = fns._gcTablaHTML([{ codigo: "26-070", nombre: "María", apellido: "Paz", valor: "65", saldo: 35, dia: 14, mes: 7, ano: 2026, usado: false }]);
+    assert.match(html, /26-070/);
+    assert.match(html, /María Paz/);
+    assert.match(html, /35\.00/);
+    assert.match(html, /14\/07\/2026/);
+    assert.match(html, /Vigente/);
+
+    const db = new MemoryDb({
+      gift_cards: [
+        { sheet_row: 4, codigo_gc: "26-065", valor: "100", usado: false, nombre_comprador: "Ana", apellido_comprador: "Paz", dia: 1, mes: 8, ano: 2026, orig: {} },
+        { sheet_row: 5, codigo_gc: "26-099", valor: "65", usado: true, nombre_comprador: "Rosa", apellido_comprador: "Díaz", dia: 1, mes: 1, ano: 2026, orig: {} },
+      ],
+    });
+    const real = ctx(db);
+    const todas = await handle("buscarGiftCards", { token: real.token, q: "*" }, real) as Row;
+    assert.deepEqual((todas.resultados as Row[]).map((r) => r.codigo).sort(), ["26-065", "26-099"]);
+    assert.equal((todas.resultados as Row[]).find((r) => r.codigo === "26-065")?.saldo, 100);
+    const prueba = "t-prueba";
+    db.tables.get("sesiones")!.push({ token: prueba, uid: "emi", rol: "admin", exp: "2099-01-01T00:00:00.000Z", modo_prueba: true });
+    const enPrueba = await handle("buscarGiftCards", { token: prueba, q: "*" }, real) as Row;
+    assert.equal((enPrueba.resultados as Row[]).find((r) => r.codigo === "26-065")?.saldo, 100);
+    assert.equal((enPrueba.resultados as Row[]).find((r) => r.codigo === "26-099")?.usado, true);
   });
 });
