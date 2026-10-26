@@ -590,7 +590,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       if (!bodegaId) continue;
       steps.push({
         op: "move", producto_id: String(p.id), bodega_id: bodegaId, delta,
-        tipo: s(m.tipo) || "ajuste", doc_tipo: "ticket", doc_id: s(m.doc_id) || undefined,
+        tipo: s(m.tipo) || "ajuste", doc_tipo: s(m.doc_tipo) || "ticket", doc_id: s(m.doc_id) || undefined,
         ticket_ref: s(m.ticket_ref), nota: s(m.nota), aprobar_negativo: body.aprobar_negativo !== false,
         legacy_ref: s(m.legacy_ref) || undefined,
       });

@@ -66,6 +66,8 @@ const ACCION_MODULO: Record<string, Modulo> = {
   compras_periodo: "compras", compras_guardar: "compras", compras_aprobar: "compras", compras_enviar: "compras",
   compras_pago: "compras", compras_saldo: "compras", compras_reporte: "compras",
   compras_lista: "inventario", compras_recibir: "inventario",
+  conteo_plan: "conteos", conteo_crear: "conteos", conteo_asignar: "conteos", conteo_panel: "conteos", conteo_aprobar: "conteos",
+  conteo_mios: "inicio", conteo_seccion: "inicio", conteo_guardar_sec: "inicio", conteo_cerrar_sec: "inicio", conteo_usuarios: "conteos",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
   getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones",
   getPeriodoComision: "comisiones", getReporteAdmin: "comisiones", getReporte: "comisiones",

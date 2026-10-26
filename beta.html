@@ -694,6 +694,10 @@
   .cmp-rec b { font-size: 1rem; }
   .cmp-rec input, .cmp-rec button { min-height: 40px; }
   .cmp-rec input { width: 72px; }
+  .cnt-task { display: block; width: 100%; text-align: left; margin-bottom: 8px; }
+  .cnt-line { display: grid; grid-template-columns: 1fr 88px; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid #f0f0f4; }
+  .cnt-line input { min-height: 44px; font-size: 1.05rem; font-weight: 800; text-align: center; }
+  .cnt-actions { display: grid; gap: 8px; position: sticky; bottom: 8px; background: var(--cream); padding-top: 8px; }
   @media (max-width: 640px) {
     .cmp-rec { display: grid; grid-template-columns: 1fr 1fr; }
     .cmp-rec b, .cmp-rec .note, .cmp-rec input { grid-column: 1 / -1; width: 100%; }
@@ -1125,12 +1129,13 @@ function moduloDeRuta(route) {
   if (route.mod === "gift") return route.sub === "paquetes" ? "paquetes" : "gift_cards";
   if (route.mod === "citas" || route.mod === "inicio") return "inicio";
   if (route.mod === "lugares") return "inventario";
+  if (route.mod === "conteos" && route.sub === "hacer") return "inicio";
   return route.mod;
 }
 function tituloRuta(route, tab) {
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "lugares") return "Locales y cabinas";
-  if (route.mod === "conteos") return route.sub ? "Conteo físico" : "Conteos físicos";
+  if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
   if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
@@ -1800,7 +1805,7 @@ async function renderMod(route) {
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
   if (route.mod === "transferencias") return renderTrf();
-  if (route.mod === "conteos") return renderConteos(route.sub || "");
+  if (route.mod === "conteos") return renderConteos(route);
   if (route.mod === "permisos") return renderPermisosBeta();
   if (route.mod === "usuarios") return renderUsuarios();
   if (route.mod === "configuracion") return renderConfiguracion();
@@ -1893,7 +1898,11 @@ async function renderInicioBeta() {
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
   const ops = data.error && !data.bajos ? "" : `<div class="grid">${oc}<div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div><div class="card"><div class="k">Avisos</div><div class="v">${esc((data.avisos || []).length)}</div></div></div><h2>Para reponer</h2><div class="list">${bajos || `<p class="note">Nada bajo el mínimo, o los mínimos todavía no están cargados.</p>`}</div>`;
-  return homeFail + pulso + ops;
+  let tareas = "";
+  if (typeof renderConteoTareas === "function") {
+    try { tareas = await renderConteoTareas(); } catch { tareas = ""; }
+  }
+  return homeFail + tareas + pulso + ops;
 }
 
 async function renderProductos() {
@@ -3313,7 +3322,16 @@ async function renderTrf() {
   <div class="list">${items || `<p class="note">Todavía no hay transferencias.</p>`}</div>`;
 }
 
-async function renderConteos(id) {
+async function renderConteos(route) {
+  const sub = typeof route === "string" ? route : (route && route.sub) || "";
+  const id = typeof route === "string" ? "" : (route && route.id) || "";
+  window._cntAdmin = !!state.admin;
+  window._cntUid = (state.user && state.user.id) || "";
+  window._cntBodegas = (typeof lugaresVisibles === "function" ? lugaresVisibles() : []).map((b) => ({ id: b.id, nombre: etiquetaLugar(b), tipo: b.tipo }));
+  if (typeof renderConteoFlujo === "function") return renderConteoFlujo(sub, id);
+  return renderConteosClasico(sub);
+}
+async function renderConteosClasico(id) {
   if (id) return renderConteoUno(id);
   const data = await api("conteo_list");
   if (data.error) return fail(data);
@@ -4035,6 +4053,7 @@ function bind(main) {
   wireHorarios(main);
   wireVentas(main);
   if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
+  if (typeof wireConteoFlujo === "function") wireConteoFlujo(main);
   wireBatch(main);
   montarDirty(main);
   form("#f-paq", savePaq);
@@ -4656,7 +4675,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261026cmp"></script>
+<script src="beta-screens.js?v=20261026cnt"></script>
 <script src="beta-inline.js?v=20261024af"></script>
 <script>draw();</script>
 </body>
