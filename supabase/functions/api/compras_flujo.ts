@@ -5,7 +5,7 @@ import { enPrueba, type Db } from "./db.ts";
 import { n, productQtys, round2, s, skuCode, siguienteTestDoc, ymdUtc, type Row } from "./domain.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
 import { guardarArchivo } from "./lib.ts";
-import { familiaDe } from "./ventas.ts";
+import { codigoFamilia, familiaDeFila, mismoNombre } from "./ventas.ts";
 
 export const FLUJO = [
   "Borrador", "Aprobada", "Enviada", "Recibida parcial", "Recibida", "Pagada parcial", "Pagada/Cerrada",
@@ -34,16 +34,94 @@ function snapDe(row: Row): Row {
   return snap && typeof snap === "object" ? snap as Row : {};
 }
 
-export function skusProveedor(prov: Row, prods: Row[]): Row[] {
-  const nombre = s(prov.nombre).toLowerCase();
-  const familia = familiaDe(s(prov.nombre));
+export function skusProveedor(prov: Row, prods: Row[], extra?: { familia?: string }): Row[] {
+  const familia = codigoFamilia(extra?.familia) || codigoFamilia(prov.familia) || familiaDeFila(prov);
+  const nombre = s(prov.nombre);
   return prods.filter((p) => {
     if (p.activo === false) return false;
     const sku = skuCode(p.sku);
     if (familia && sku.startsWith(familia + "-")) return true;
-    const marca = s(p.marca || p.proveedor).toLowerCase();
-    return !!nombre && !!marca && (marca === nombre || marca.includes(nombre) || nombre.includes(marca));
+    if (familia) return false;
+    const marca = [s(p.marca), s(p.proveedor)].filter(Boolean).join(" ");
+    return !!marca && mismoNombre(nombre, marca);
   });
+}
+
+function parseJsonOc(raw: unknown): Row {
+  if (typeof raw === "string") {
+    try {
+      const v = JSON.parse(raw);
+      return v && typeof v === "object" ? v as Row : {};
+    } catch { return {}; }
+  }
+  return raw && typeof raw === "object" ? raw as Row : {};
+}
+
+export function montosLegacy(data: Row, costos: Map<string, number> = new Map()): { subtotal: number; iva: number; total: number; lineas: Row[] } {
+  const fact = Array.isArray(data.fact) ? data.fact as Row[] : [];
+  const directa = Array.isArray(data.directa) ? data.directa as Row[] : [];
+  const lineas: Row[] = [];
+  const push = (it: Row, qty: number) => {
+    if (!(qty > 0)) return;
+    const sku = skuCode(s(it.sku));
+    const precio = n(it.compra ?? it.precio) || costos.get(sku) || 0;
+    lineas.push({
+      sku, nombre: s(it.nombre) || sku, cantidad: qty, precio,
+      subtotal: round2(qty * precio), recibido: 0, no_recibido: 0,
+    });
+  };
+  for (const it of fact) push(it, n(it.vendido ?? it.cantidad));
+  for (const it of directa) push(it, n(it.cant ?? it.qty ?? it.cantidad));
+  if (!lineas.length) {
+    const resto = [
+      ...(Array.isArray(data.items) ? data.items as Row[] : []),
+      ...(Array.isArray(data.stock) ? data.stock as Row[] : []),
+      ...(Array.isArray(data.pedido) ? data.pedido as Row[] : []),
+    ];
+    for (const it of resto) push(it, n(it.cant ?? it.qty ?? it.restock ?? it.cantidad ?? it.vendido));
+  }
+  const subtotal = round2(lineas.reduce((a, ln) => a + n(ln.subtotal), 0));
+  const sinIva = data.conIVA === false || data.conIva === false || data.con_iva === false;
+  const iva = sinIva ? 0 : round2(subtotal * 0.15);
+  return { subtotal, iva, total: round2(subtotal + iva), lineas };
+}
+
+function sumaLineas(lineas: Row[]): number {
+  return round2(lineas.reduce((a, ln) => a + (n(ln.subtotal) || round2(n(ln.cantidad) * n(ln.precio))), 0));
+}
+
+/** El encabezado importado quedó en 0. El dinero está en las líneas o en ordenes_compra.json. */
+export function dineroOc(o: Row, lineas: Row[], legado: Row | null, costos: Map<string, number> = new Map()): { subtotal: number; iva: number; total: number; saldo: number; lineas: Row[] | null } {
+  const pagado = n(o.pagado);
+  if (n(o.total) > 0) {
+    return { subtotal: n(o.subtotal), iva: n(o.iva), total: round2(n(o.total)), saldo: round2(n(o.saldo)), lineas: null };
+  }
+  const subLineas = sumaLineas(lineas);
+  if (subLineas > 0) {
+    const snap = snapDe(o);
+    const iva = snap.conIva === false ? 0 : round2(subLineas * 0.15);
+    const total = round2(subLineas + iva);
+    return { subtotal: subLineas, iva, total, saldo: round2(total - pagado), lineas: null };
+  }
+  if (legado) {
+    const m = montosLegacy(parseJsonOc(legado.json), costos);
+    if (m.subtotal > 0 || m.lineas.length) {
+      return { subtotal: m.subtotal, iva: m.iva, total: m.total, saldo: round2(m.total - pagado), lineas: m.lineas };
+    }
+  }
+  return { subtotal: n(o.subtotal), iva: n(o.iva), total: n(o.total), saldo: n(o.saldo), lineas: null };
+}
+
+async function hojaProveedores(db: Db): Promise<Row[]> {
+  try { return await db.all("proveedores"); } catch { return []; }
+}
+
+async function ordenesLegadas(db: Db): Promise<Map<string, Row>> {
+  const map = new Map<string, Row>();
+  let rows: Row[] = [];
+  try { rows = await db.all("ordenes_compra"); } catch { rows = []; }
+  for (const r of rows) if (s(r.numorden)) map.set(s(r.numorden), r);
+  return map;
 }
 
 function precioDe(p: Row | undefined): number {
@@ -79,13 +157,28 @@ function porSku(prods: Row[]): Map<string, Row> {
 
 export async function comprasPeriodo(db: Db, p: Row): Promise<Row> {
   const provs = await db.all("erp_proveedores");
-  const prov = provs.find((r) => r.id === p.proveedor_id || s(r.nombre).toLowerCase() === s(p.proveedor).toLowerCase());
+  const pedido = s(p.proveedor);
+  let prov = provs.find((r) => r.id === p.proveedor_id || s(r.nombre).toLowerCase() === pedido.toLowerCase());
+  if (!prov && pedido) prov = provs.find((r) => mismoNombre(s(r.nombre), pedido));
   if (!prov) return { error: "Elige el proveedor" };
   const desde = s(p.desde);
   const hasta = s(p.hasta);
   if (!desde || !hasta) return { error: "Elige el periodo" };
+  const hoja = await hojaProveedores(db);
+  const familia = codigoFamilia(p.familia) || familiaDeFila(prov, hoja);
   const prods = await productos(db);
-  const catalogo = skusProveedor(prov, prods);
+  const catalogo = skusProveedor(prov, prods, { familia });
+  const quien = s(prov.nombre);
+  const vacio = (aviso: string): Row => ({
+    ok: true, vacio: true, aviso, familia, desde, hasta, lineas: [],
+    proveedor: { id: prov.id, nombre: quien, ruc: s(prov.ruc), familia },
+    totales: { subtotal: 0, iva: 0, total: 0 },
+  });
+  if (!catalogo.length) {
+    return vacio(familia
+      ? `No hay productos ${familia}- activos para ${quien}.`
+      : `${quien} no tiene familia de códigos. Está en la columna familia de la hoja de proveedores.`);
+  }
   const allow = new Set(catalogo.map((r) => skuCode(r.sku)));
   const vendido = new Map<string, number>();
   for (const t of await db.all("tickets")) {
@@ -106,12 +199,13 @@ export async function comprasPeriodo(db: Db, p: Row): Promise<Row> {
       precio, subtotal: round2(qty * precio),
     };
   }).sort((a, b) => a.sku.localeCompare(b.sku));
+  if (!lineas.length) return vacio(`No hubo ventas de ${familia || quien} entre ${desde} y ${hasta}.`);
   const sub = round2(lineas.reduce((a, it) => a + it.subtotal, 0));
   const conIva = p.con_iva !== false && p.conIva !== false;
   const iva = conIva ? round2(sub * 0.15) : 0;
   return {
-    ok: true,
-    proveedor: { id: prov.id, nombre: s(prov.nombre), ruc: s(prov.ruc) },
+    ok: true, vacio: false, aviso: "", familia,
+    proveedor: { id: prov.id, nombre: quien, ruc: s(prov.ruc), familia },
     desde, hasta, conIva, lineas,
     totales: { subtotal: sub, iva, total: round2(sub + iva) },
   };
@@ -256,34 +350,48 @@ export async function comprasEnviar(db: Db, actor: string, p: Row): Promise<Row>
 
 function vistaLinea(ln: Row, prod: Row | undefined, admin: boolean): Row {
   const base: Row = {
-    id: ln.id, sku: s(prod?.sku) || skuCode(ln.sku),
+    id: ln.id, sku: s(prod?.sku) || skuCode(ln.sku) || s(ln.sku),
     pedido: n(ln.cantidad), recibido: n(ln.recibido), no_recibido: n(ln.no_recibido),
     pendiente: Math.max(0, round2(n(ln.cantidad) - n(ln.recibido) - n(ln.no_recibido))),
   };
   if (!admin) return base;
-  return { ...base, nombre: s(prod?.nombre), precio: n(ln.precio), subtotal: n(ln.subtotal) };
+  const sub = n(ln.subtotal) || round2(n(ln.cantidad) * n(ln.precio));
+  return { ...base, nombre: s(prod?.nombre) || s(ln.nombre), precio: n(ln.precio), subtotal: sub };
 }
 
-async function vistaOc(db: Db, o: Row, admin: boolean, pagos: Row[] = []): Promise<Row> {
-  const prods = await productos(db);
+async function vistaOc(
+  db: Db, o: Row, admin: boolean, pagos: Row[] = [],
+  bag?: { prods: Row[]; provs: Row[]; hoja: Row[]; legadas: Map<string, Row>; lineas: Row[] },
+): Promise<Row> {
+  const prods = bag?.prods || await productos(db);
   const map = new Map(prods.map((r) => [String(r.id), r]));
-  const lineas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
-  const prov = admin ? (await db.all("erp_proveedores")).find((r) => r.id === o.proveedor_id) : null;
+  const costos = new Map(prods.map((r) => [skuCode(r.sku), n(r.costo_promedio)]));
+  let lineas = (bag?.lineas || await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
+  const provs = bag?.provs || (admin ? await db.all("erp_proveedores") : []);
+  const prov = provs.find((r) => r.id === o.proveedor_id) || null;
+  const hoja = bag?.hoja || (admin ? await hojaProveedores(db) : []);
+  const legadas = bag?.legadas || (admin ? await ordenesLegadas(db) : new Map<string, Row>());
   const snap = snapDe(o);
+  const dinero = admin ? dineroOc(o, lineas, legadas.get(s(o.numero)) || null, costos) : null;
+  if (admin && dinero?.lineas && !lineas.length) {
+    lineas = dinero.lineas.map((ln, i) => ({ ...ln, id: "legacy-" + i, orden: i }));
+  }
   const out: Row = {
     id: o.id, numero: s(o.numero) || "Borrador", flujo: s(o.flujo) || s(o.estado),
     fecha: s(o.fecha), estado: s(o.estado),
     lineas: lineas.map((ln) => vistaLinea(ln, map.get(String(ln.producto_id)), admin)),
   };
-  if (admin) {
+  if (admin && dinero) {
     const ps = pagos.filter((p) => p.oc_id === o.id);
+    const familia = familiaDeFila(prov, hoja);
     out.proveedor = s(prov?.nombre);
     out.proveedor_id = o.proveedor_id;
-    out.total = n(o.total);
+    out.familia = familia;
+    out.total = dinero.total;
     out.pagado = n(o.pagado);
-    out.saldo = n(o.saldo);
-    out.subtotal = n(o.subtotal);
-    out.iva = n(o.iva);
+    out.saldo = dinero.saldo;
+    out.subtotal = dinero.subtotal;
+    out.iva = dinero.iva;
     out.q_label = s(o.q_label);
     out.tipo = s(o.tipo);
     out.con_iva = snap.conIva !== false;
@@ -301,11 +409,18 @@ async function vistaOc(db: Db, o: Row, admin: boolean, pagos: Row[] = []): Promi
 export async function comprasLista(db: Db, admin: boolean): Promise<Row> {
   const ocs = await db.all("erp_oc");
   const pagos = admin ? await db.all("erp_oc_pagos") : [];
+  const bag = {
+    prods: await productos(db),
+    provs: admin ? await db.all("erp_proveedores") : [],
+    hoja: admin ? await hojaProveedores(db) : [],
+    legadas: admin ? await ordenesLegadas(db) : new Map<string, Row>(),
+    lineas: await db.all("erp_oc_lineas"),
+  };
   const items = [];
   for (const o of ocs) {
     const flujo = s(o.flujo);
     if (!admin && !ABIERTAS.has(flujo)) continue;
-    items.push(await vistaOc(db, o, admin, pagos));
+    items.push(await vistaOc(db, o, admin, pagos, bag));
   }
   return { ok: true, items };
 }
@@ -486,7 +601,8 @@ export async function comprasSaldo(db: Db): Promise<Row> {
 export async function comprasReporte(db: Db, p: Row): Promise<Row> {
   const prov = (await db.all("erp_proveedores")).find((r) => r.id === p.proveedor_id || s(r.nombre).toLowerCase() === s(p.proveedor).toLowerCase());
   if (!prov) return { error: "Elige el proveedor" };
-  const prods = skusProveedor(prov, await productos(db));
+  const familia = familiaDeFila(prov, await hojaProveedores(db));
+  const prods = skusProveedor(prov, await productos(db), { familia });
   const stock = await db.all("erp_stock");
   const items = prods.map((prod) => {
     const qty = stock.filter((r) => r.producto_id === prod.id).reduce((a, r) => a + n(r.cantidad), 0);
