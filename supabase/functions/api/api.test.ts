@@ -3253,6 +3253,73 @@ describe("compras flujo", () => {
     assert.equal((rep.items as Row[]).find((r) => r.sku === "HT-002")?.stock, Number(despues));
   });
 
+  it("un pago cierra solo el periodo y los SKU de la OC, en parciales de centavo, y el PDF cuadra", async () => {
+    const seed = erpSeed();
+    seed.erp_proveedores[0].nombre = "Hebetronic S.A.";
+    seed.erp_productos.push({
+      id: "ht-extra", sku: "HT-090", nombre: "Serum", uso: "venta", clase: "producto",
+      precio_venta: 20, costo_promedio: 8, activo: true,
+    });
+    const db = new MemoryDb(seed);
+    const tickets: Row[] = [];
+    for (let i = 0; i < 302; i++) {
+      tickets.push({
+        id: "old-" + i, beta_num: "TK-OLD-" + String(i).padStart(4, "0"),
+        timestamp: "2025-06-01T15:00:00Z", ht_002: 1,
+      });
+    }
+    tickets.push(
+      { id: "en-a", beta_num: "TK-A", timestamp: "2026-10-02T15:00:00Z", ht_002: 1 },
+      { id: "en-b", beta_num: "TK-B", timestamp: "2026-10-10T15:00:00Z", ht_002: 1, orig: { "HT-090": 4 } },
+      { id: "fuera", beta_num: "TK-FUERA", timestamp: "2026-10-20T15:00:00Z", ht_002: 1 },
+    );
+    db.tables.set("tickets", tickets);
+    const c = ctx(db);
+    const draft = await handle("compras_guardar", {
+      token: c.token, proveedor_id: SEED_IDS.prov, desde: "2026-10-01", hasta: "2026-10-15",
+      lineas: [{ sku: "HT-002", cantidad: 2, precio: 8 }],
+      fact: [
+        { sku: "HT-002", vendido: 9, cantidad: 9, precio: 8, subtotal: 72 },
+        { sku: "HT-090", vendido: 4, cantidad: 4, precio: 8, subtotal: 32 },
+      ],
+    }, c) as Row;
+    assert.equal(draft.ok, true);
+    const ok = await handle("compras_aprobar", { token: c.token, id: draft.id }, c) as Row;
+    const liq = ok.liquidacion as Row;
+    const lineas = liq.lineas as Row[];
+    assert.equal(lineas.length, 1);
+    assert.equal(lineas[0].sku, "HT-002");
+    assert.equal(lineas[0].cantidad, 2);
+    assert.equal(lineas[0].subtotal, 16);
+    const suma = (lineas).reduce((a, ln) => a + Number(ln.subtotal), 0);
+    assert.equal(liq.subtotal, suma);
+    assert.equal(liq.iva, 2.4);
+    assert.equal(liq.total, 18.4);
+    assert.equal((ok.pedido as Row).total, 18.4);
+    const uno = await handle("compras_pago", { token: c.token, oc_id: draft.id, monto: 1 }, c) as Row;
+    const c1 = uno.cierres as Row[];
+    assert.equal(c1.length, 1);
+    assert.equal(c1[0].ticket_ref, "TK-A");
+    assert.equal(c1[0].sku, "HT-002");
+    assert.equal(c1[0].qty, 0.125);
+    assert.equal(c1[0].monto, 1);
+    const cent = await handle("compras_pago", { token: c.token, oc_id: draft.id, monto: 0.01 }, c) as Row;
+    const cCent = cent.cierres as Row[];
+    assert.equal(cCent.length, 1);
+    assert.equal(cCent[0].ticket_ref, "TK-A");
+    assert.equal(cCent[0].monto, 0.01);
+    assert.ok(Number(cCent[0].qty) > 0 && Number(cCent[0].qty) < 0.01);
+    const resto = await handle("compras_pago", { token: c.token, oc_id: draft.id, monto: 14.99 }, c) as Row;
+    const cResto = resto.cierres as Row[];
+    assert.ok(cResto.length >= 1 && cResto.length <= 4);
+    const todos = await db.all("erp_consignacion_cierre");
+    assert.ok(todos.length < 10);
+    assert.equal(todos.some((r) => !(Number(r.qty) > 0) || !(Number(r.monto) > 0)), false);
+    assert.equal(todos.some((r) => String(r.ticket_ref).startsWith("TK-OLD") || r.ticket_ref === "TK-FUERA" || r.sku === "HT-090"), false);
+    const montos = todos.reduce((a, r) => a + Number(r.monto), 0);
+    assert.ok(Math.abs(montos - 16) < 0.02);
+  });
+
   it("un ticket de producto vendible baja el inventario de venta", async () => {
     const db = new MemoryDb(erpSeed());
     const c = ctx(db);
