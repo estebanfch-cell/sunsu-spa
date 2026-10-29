@@ -13222,6 +13222,7 @@ function _cargarTodosPaquetes(){
     var P3=window._P3S||[], P6=window._P6S||[];
     var parseF=function(s){var m=(s||'').toString().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);if(!m)return null;var a=parseInt(m[3]);if(a<100)a+=2000;return new Date(a,parseInt(m[2])-1,parseInt(m[1]));};
     window._todosPaq=(d.items||[]).map(function(p){
+      p.cedula=_cedTxt(p.cedula); p.notas=_paqNotaTxt(p.notas);
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
       var total=p.total||(esP3?3:6);
       var usados=0;
@@ -13269,13 +13270,6 @@ function _paqDetalleHTML(x){
       +wa
       +'<button class="paq-btn paq-drop" type="button" onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')">▾</button>'
       +'</div>'
-      +(function(){
-        var ix=window.SunsuInline;
-        if(!ix||!p.fila) return '';
-        if(ix.edita()) return '<div style="margin-top:8px">'+ix.lineas("paquetes", p.fila, [["nombre","Nombre",p.nombre||""],["apellido","Apellido",p.apellido||""],["cedula","Cédula",p.cedula||""],["sku","SKU",p.sku||""],["paquete","Paquete",p.paquete||""],["vendidoPor","Vendido por",p.vendidoPor||""],["notas","Notas",p.notas||""]])+ix.borrar("paquetes", p.fila)+'</div>';
-        if(ix.pide()) return ix.pedir("paquetes", p.fila, {nombre:p.nombre||"",apellido:p.apellido||"",cedula:p.cedula||"",sku:p.sku||"",paquete:p.paquete||"",vendidoPor:p.vendidoPor||"",notas:p.notas||""});
-        return '';
-      })()
       +'<div id="paq-exp-'+p.fila+'"></div></div>';
   return html+'</div>';
 }
@@ -13333,9 +13327,10 @@ function paqDesplegar(fila, cedula){
   fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(cedula)+'&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){
+    (d.resultados||[]).forEach(function(r2){ r2.cedula=_cedTxt(r2.cedula); r2.notas=_paqNotaTxt(r2.notas); });
     var arr=(d.resultados||[]).filter(function(r2){return r2.fila===fila;});
     if(!arr.length) arr=d.resultados||[];
-    box.innerHTML=arr.length?('<div style="margin-top:8px">'+arr.map(function(p){return _buildPaqueteCard(p);}).join('')+'</div>')
+    box.innerHTML=arr.length?('<div style="margin-top:8px">'+arr.map(function(p){return _buildPaqueteCard(p, !!document.querySelector('#paq-md .md-detail #paq-exp-'+fila));}).join('')+'</div>')
       :'<div style="padding:8px;color:var(--gray);font-size:0.66rem">No pude cargar el detalle</div>';
     if(window.SunsuInline) SunsuInline.aplicar();
   })
@@ -13402,7 +13397,12 @@ function ejecutarBuscarPaquetes(){
     .catch(function(){res.innerHTML='<div class="card" style="color:var(--red)">❌ Error de conexión</div>';});
 }
 
-function _buildPaqueteCard(p){
+// Cédula sin el '.0' que dejó la importación de la hoja
+function _cedTxt(v){ return String(v==null?'':v).trim().replace(/\.0+$/,''); }
+// Notas: un timestamp ISO (fecha de creación) no es una nota → vacío
+function _paqNotaTxt(v){ v=String(v==null?'':v).trim(); return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.test(v)?'':v; }
+function _buildPaqueteCard(p, enDetalle){
+  p.cedula=_cedTxt(p.cedula); p.notas=_paqNotaTxt(p.notas);
   var completo = p.completo;
   var borderCol = completo ? 'var(--red)' : 'var(--cream-d)';
   var headerBg  = completo ? 'var(--red)' : 'var(--navy)';
@@ -13445,13 +13445,14 @@ function _buildPaqueteCard(p){
   }).join('');
 
   return '<div style="background:white;border:1.5px solid '+borderCol+';border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-sm)">'
-    // Header
-    +'<div style="background:'+headerBg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
+    // Header (en el detalle maestro-detalle ya hay cabecera arriba → solo cédula · fecha · SKU)
+    +(enDetalle?'<div style="padding:8px 14px 0;font-size:0.66rem;color:var(--gray)">'+p.cedula+' · '+fecha+' · <span style="font-family:monospace">'+p.sku+'</span>'+(completo?' · <strong style="color:var(--red)">🔴 PAQUETE TERMINADO</strong>':'')+'</div>':'')
+    +(enDetalle?'':'<div style="background:'+headerBg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
     +'<div><div style="font-size:0.78rem;font-weight:800;color:white">'+p.nombre+' '+p.apellido+'</div>'
     +'<div style="font-size:0.62rem;color:rgba(255,255,255,0.75)">'+p.cedula+' · '+fecha+'</div></div>'
     +'<div style="text-align:right"><div style="font-size:0.65rem;font-family:monospace;color:rgba(255,255,255,0.9);background:rgba(0,0,0,0.2);padding:2px 7px;border-radius:6px">'+p.sku+'</div>'
     +(completo?'<div style="font-size:0.6rem;color:#FFB3B3;margin-top:3px;font-weight:700">🔴 PAQUETE TERMINADO</div>':'')
-    +'</div></div>'
+    +'</div></div>')
     // Body
     +'<div style="padding:12px 14px">'
     // Info
