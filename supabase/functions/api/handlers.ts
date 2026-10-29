@@ -1427,14 +1427,23 @@ async function libresGC(ctx: Ctx, exclude: R, ses?: Ses, nNeed = 1) {
   }
   return out;
 }
-// Modo prueba: códigos TEST-YY-NNN propios; nunca toman un número real.
+// Modo prueba: el código refleja el siguiente código REAL con prefijo TEST- (TEST-26-161 si el
+// siguiente blanco real es 26-161), sin consumirlo. Si ese TEST- ya existe, el siguiente (TEST-26-162).
 async function codigosPruebaGC(ctx: Ctx, nNeed: number): Promise<R[]> {
   const yy = String(ecuadorParts(ctx.now).y).slice(-2);
-  const tests = (await ctx.db.all("gift_cards")).filter((r) => s(r.origin) === "test").map((r) => s(r.codigo_gc).replace(/^TEST-/, ""));
+  const todas = await ctx.db.all("gift_cards");
+  const usadosTest = new Set(todas.filter((r) => s(r.origin) === "test").map((r) => s(r.codigo_gc)));
+  const reales = todas.filter((r) => s(r.origin) !== "test" && !r.borrado_at);
+  const blancos = reales.filter((r) => s(r.codigo_gc).startsWith(yy + "-") && blankDia(r.dia))
+    .map((r) => s(r.codigo_gc)).sort((x, y) => x.localeCompare(y, "es", { numeric: true }));
   const out: R[] = [];
-  for (let i = 0; i < nNeed; i++) {
-    const c = siguienteCodigoGC(tests, yy);
-    tests.push(c);
+  const candidatos = blancos.slice();
+  const todosCod = reales.map((r) => s(r.codigo_gc));
+  while (out.length < nNeed) {
+    let c = candidatos.shift();
+    if (!c) { c = siguienteCodigoGC(todosCod, yy); todosCod.push(c); }
+    if (usadosTest.has("TEST-" + c)) continue;
+    usadosTest.add("TEST-" + c);
     out.push({ codigo: "TEST-" + c, fila: "prueba" });
   }
   return out;

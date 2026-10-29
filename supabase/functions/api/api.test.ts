@@ -1380,7 +1380,7 @@ describe("modo prueba", () => {
     db.tables.set("app_kv", []);
     const { real, prueba } = conPrueba(db);
     const cod = await handle("getCodigoGC", { token: prueba }, real) as Row;
-    assert.match(String(cod.codigo), /^TEST-\d{2}-001$/);
+    assert.equal(cod.codigo, "TEST-26-161");
     const reg = await handle("registrarGC", { token: prueba, fila: cod.fila, codigo: cod.codigo, nombre: "Emi" }, real) as Row;
     assert.equal(reg.ok, true);
     await handle("guardarGCDigital", { token: prueba, codigo: cod.codigo, mensaje: "hola" }, real);
@@ -1390,6 +1390,8 @@ describe("modo prueba", () => {
     assert.equal(db.tables.get("app_kv")!.length, 0);
     const lista = await handle("buscarGiftCards", { token: prueba, q: "*" }, real) as Row;
     assert.ok((lista.resultados as Row[]).some((g) => g.codigo === cod.codigo && g.prueba === true));
+    const otro = await handle("getCodigoGC", { token: prueba }, real) as Row;
+    assert.equal(otro.codigo, "TEST-26-162");
   });
   it("solo un admin enciende el modo, y la otra sesión sigue real", async () => {
     const db = new MemoryDb();
