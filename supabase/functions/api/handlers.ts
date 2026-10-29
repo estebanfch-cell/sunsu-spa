@@ -1476,6 +1476,7 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
       factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
       usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
       total, completo: b(r.completo),
+      codigo: s(r.codigo), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
@@ -1498,6 +1499,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
       vendidoPor: s(r.vendido_por), notas: s(r.notas), usos: usos.slice(0, total), total,
       telefono: tel ? (porCed.get(normCedula(r.cedula)) || "") : "",
       claveWa: clave, wa: wa[clave] || null,
+      codigo: s(r.codigo), prueba: s(r.origin) === "test",
     });
   }
   return { items };

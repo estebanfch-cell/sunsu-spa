@@ -1245,15 +1245,16 @@ function renderTicket(c){
         ${pv.prods.map(p=>{
           const q=T.productos[p.sku]||0;
           const stk=window._stockMap&&window._stockMap[p.sku]!==undefined?window._stockMap[p.sku]:null;
-          const stkColor=stk===null?null:stk===0?'#C00':stk<=3?'#C4943A':null;
-          const stkBg=stk===null?null:stk===0?'#FEE2E2':stk<=3?'#FFF9E6':null;
+          const sinStk=stk!==null&&Number(stk)<=0;
+          const stkColor=stk===null?null:stk<=0?'#C00':stk<=3?'#C4943A':null;
+          const stkBg=stk===null?null:stk<=0?'#FEE2E2':stk<=3?'#FFF9E6':null;
           const stkLabel=stk===null?''
-            :stk===0?'sin stock'
+            :stk<=0?'Sin stock'
             :stk<=3?stk+' uds'
             :'';
           const stkBadge=stkLabel?`<span style="font-size:0.55rem;font-weight:700;color:${stkColor};background:${stkBg};padding:1px 5px;border-radius:4px;display:block;margin-top:2px">${stkLabel}</span>`
             :stk!==null?`<span style="font-size:0.55rem;color:#bbb;display:block;margin-top:1px">${stk} uds</span>`:'';
-          return `<div class="prod-row ${q>0?'has-qty':''}" id="pr-${p.sku}">
+          return `<div class="prod-row ${q>0?'has-qty':''}${sinStk?' sin-stock':''}" id="pr-${p.sku}"${sinStk?' title="Sin stock en Inventario (se puede vender igual)"':''}>
             <div style="display:flex;flex-direction:column;align-items:flex-start">
               <span class="prod-badge" style="background:${pv.colorL};color:${pv.badge}">${p.sku}</span>
               ${stkBadge}
@@ -1596,7 +1597,9 @@ function toggleProv(id){
   if(body) body.classList.toggle('open');
   if(arrow) arrow.classList.toggle('open');
 }
+function _sinStock(sku){ var m=window._stockMap; return !!(m&&m[sku]!==undefined&&m[sku]!==null&&Number(m[sku])<=0); }
 function chgQ(sku,d,provId){
+  if(d>0&&_sinStock(sku)&&!(T.productos[sku]>0)) toast('⚠️ '+sku+' figura sin stock en Inventario','#C9A227');
   T.productos[sku]=Math.max(0,(T.productos[sku]||0)+d);
   const el=document.getElementById('q-'+sku);
   if(el){el.textContent=T.productos[sku];el.className='qval'+(T.productos[sku]>0?' on':'');}
@@ -1897,15 +1900,16 @@ function updatePreview(){
     if(gcEsCort) _fila(1,gcV.codigo,'Gift Card',0,'cortesía');
     else if(gcVTotal>0) _fila(1,gcV.codigo,'Gift Card '+(gcV.tipo==='fisica'?'física (incl. caja $3)':'digital'),gcVTotal);
   }
-  let breakdown='<table class="ov-tabla"><thead><tr><th class="n">Cant.</th><th>Descripción</th><th class="n">P. unit.<small> sin IVA</small></th><th class="n">Total</th></tr></thead><tbody>'
+  // Mismo formato que el detalle del ticket (aprobado): Código | Descripción | Cant. | Precio unit. (sin IVA) | Total
+  let breakdown='<table class="ov-tabla"><thead><tr><th>Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">Precio unit.<small> (sin IVA)</small></th><th class="n">Total</th></tr></thead><tbody>'
     +_ov.map(function(f){
-      return '<tr><td class="n">'+f.cant+'</td><td><span class="ov-cod">'+_tkEsc(f.cod)+'</span>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
-        +'<td class="n">'+_m(f.unit)+'</td><td class="n">'+_m(f.total)+'</td></tr>';
+      return '<tr><td class="ov-cod">'+_tkEsc(f.cod)+'</td><td>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
+        +'<td class="n">'+f.cant+'</td><td class="n">'+_m(f.unit)+'</td><td class="n">'+_m(f.total)+'</td></tr>';
     }).join('');
   // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
   // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
   // el input y el teclado iOS se cerraba). Monto sin IVA, igual que las filas.
-  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
+  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
   breakdown+='</tbody></table>';
   if(T.pack3||T.pack6){
     var _allGCSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
@@ -1973,7 +1977,7 @@ function updatePreview(){
     <div class="pdiv"></div>
     <div class="ov-tot"><span>Subtotal sin IVA</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
     <div class="ov-tot"><span>IVA 15%</span><span id="pv-iva">$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
-    <div class="ptotal ov-gran"><span>Total cliente</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
+    <div class="ptotal ov-gran"><span>Total (con IVA)</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
   </div>`;
@@ -2102,11 +2106,13 @@ function _confirmarSiNo(mensaje){
     document.getElementById('aviso-sino-no').onclick=function(){ cerrar(false); };
   });
 }
-function _notaSesionPaquete(facialNombre){
+function _notaSesionPaquete(facialNombre, quien){
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
+  // 'dd/mm/yy HH:MM Facial · Cosmetóloga del ticket'
   return pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2)
-    +' '+(facialNombre||'Facial')+' · '+(typeof CU!=='undefined'&&CU?CU.name:'—');
+    +' '+pad(hoy.getHours())+':'+pad(hoy.getMinutes())
+    +' '+(facialNombre||'Facial')+' · '+(quien||(typeof CU!=='undefined'&&CU?CU.name:'—'));
 }
 function _marcarSesionPaqueteUnaVez(opts){
   var key='fila:'+opts.fila+':'+opts.idx;
@@ -2137,14 +2143,43 @@ function _buscarFilaPaqueteNuevo(cedula, sku){
       return hits.length?hits[hits.length-1]:null;
     }).catch(function(){ return null; });
 }
-function _ofrecerPrimeraSesion(packs, cedula, facialNombre, ticket){
+// Canje sin paquete elegido: si la clienta tiene UN paquete activo, una sola pregunta y se
+// marca la siguiente sesión con el facial, la fecha y la cosmetóloga del día (sin casilla ni texto).
+// Con varios activos (o ninguno) se abre Paquetes como antes.
+function _canjeMarcarAuto(ced, cliNom, facialNombre, cosme, ticket){
+  var aPaquetes=function(msg){
+    window._paqPrefill=ced||cliNom; showTab('buscar-paquetes');
+    setTimeout(function(){avisoGrande(msg||('📋 Marca la sesión usada en el paquete de '+(cliNom||'la clienta')),'#7A5FA0');},400);
+  };
+  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(String(ced).replace(/\D/g,''))+'&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var act=((d&&d.resultados)||[]).filter(function(p){
+        var tot=Number(p.total)||3, us=(p.usos||[]).filter(function(u){return u&&(u.usado||u.fecha);}).length;
+        return !p.completo&&us<tot;
+      });
+      if(act.length!==1){ aPaquetes(act.length>1?('📋 '+(cliNom||'La clienta')+' tiene '+act.length+' paquetes activos: marca la sesión en el correcto'):null); return; }
+      var p=act[0], tot=Number(p.total)||3, usos=p.usos||[], idx=0;
+      for(var k=0;k<tot;k++){ if(!(usos[k]&&(usos[k].usado||usos[k].fecha))){ idx=k; break; } }
+      _confirmarSiNo('¿Marcar la sesión de '+(cliNom||'la clienta')+' con '+(facialNombre||'el facial')+' de hoy?\n\n📦 '+(p.paquete||p.sku)+' · sesión '+(idx+1)+'/'+tot).then(function(si){
+        if(!si) return;
+        var nota=_notaSesionPaquete(facialNombre, cosme);
+        _marcarSesionPaqueteUnaVez({fila:p.fila, idx:idx, total:tot, nota:nota, ticket:ticket||''}).then(function(res){
+          if(res&&res.ok) toast('📦 Sesión '+(idx+1)+'/'+tot+' marcada · '+nota,'var(--green)');
+          else aPaquetes('⚠️ '+((res&&res.error)||'No se marcó la sesión')+' — márcala aquí');
+        });
+      });
+    })
+    .catch(function(){ aPaquetes(); });
+}
+function _ofrecerPrimeraSesion(packs, cedula, facialNombre, ticket, cliNom, cosme){
   var i=0;
   function siguiente(){
     if(i>=packs.length) return;
     var p=packs[i++];
-    _confirmarSiNo('¿Deseas marcar la primera sesión del paquete '+p.nombre+' ahora?').then(function(si){
+    _confirmarSiNo('¿Marcar la sesión de '+(cliNom||'la clienta')+' con '+(facialNombre||'el facial')+' de hoy?\n\n📦 '+p.nombre).then(function(si){
       if(!si){ siguiente(); return; }
-      var nota=_notaSesionPaquete(facialNombre);
+      var nota=_notaSesionPaquete(facialNombre, cosme);
       var intentar=function(vez){
         var listo=p.fila?Promise.resolve({fila:p.fila, total:p.total||3, usos:[]}):_buscarFilaPaqueteNuevo(cedula, p.sku);
         listo.then(function(row){
@@ -2160,7 +2195,7 @@ function _ofrecerPrimeraSesion(packs, cedula, facialNombre, ticket){
             if(!(usos[u]&&(usos[u].usado||usos[u].fecha))){ idx=u; break; }
           }
           _marcarSesionPaqueteUnaVez({fila:row.fila, idx:idx, total:row.total||usos.length||3, nota:nota, ticket:ticket||''}).then(function(res){
-            if(res&&res.ok) toast('📦 Primera sesión marcada','var(--green)');
+            if(res&&res.ok) toast('📦 Sesión '+(idx+1)+' marcada · '+nota,'var(--green)');
             else toast('❌ '+((res&&res.error)||'No se marcó la sesión'),'#B86B6B');
             siguiente();
           });
@@ -2595,15 +2630,18 @@ function enviarTicket(){
     (_slotsGC||[]).forEach(function(s){ window._gcdCola.push({codigo:s.codigo, de:_cliNom, tipo:s.tipo||'digital'}); });
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
-    if(_packsNuevos.length) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'');
+    var _cosmeT=payload.cosmetologa||(CU?CU.name:'');
+    if(_packsNuevos.length) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'', _cliNom, _cosmeT);
     // Canje contra un paquete ELEGIDO en el ticket: se marca su siguiente sesión sola.
     if(_cobro==='paquete'&&_paqPick&&_paqPick.fila!=='nuevo'){
-      _marcarSesionPaqueteUnaVez({fila:_paqPick.fila, idx:_paqPick.idx, total:_paqPick.total, nota:_notaSesionPaquete(_facialNombre), ticket:(d&&(d.ticket||d.beta_num))||''}).then(function(res){
+      _marcarSesionPaqueteUnaVez({fila:_paqPick.fila, idx:_paqPick.idx, total:_paqPick.total, nota:_notaSesionPaquete(_facialNombre,_cosmeT), ticket:(d&&(d.ticket||d.beta_num))||''}).then(function(res){
         if(res&&res.ok) toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' marcada en '+_paqPick.nombre,'var(--green)');
         else toast('⚠️ '+((res&&res.error)||'No se marcó la sesión')+' — márcala en Paquetes','#C9A227');
       });
     }
-    if(_cobro==='paquete'&&!_paqPick){
+    if(_cobro==='paquete'&&!_paqPick&&!_packsNuevos.length&&_cedCli){
+      _canjeMarcarAuto(_cedCli, _cliNom, _facialNombre, _cosmeT, (d&&(d.ticket||d.beta_num))||'');
+    } else if(_cobro==='paquete'&&!_paqPick&&!_packsNuevos.length){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
         toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
         color:'#7A5FA0'};
@@ -3689,7 +3727,7 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
         doc.text(mFec?mFec[0]:'',cx,cy+33,{align:'center'});
         var facTxt='', porTxt='';
         if(mFec){ // sin fecha (p.ej. 'Gift Card, SUNSU-XX') se deja en blanco, como siempre
-          var restoF=rawF.slice(rawF.indexOf(mFec[0])+mFec[0].length).trim();
+          var restoF=rawF.slice(rawF.indexOf(mFec[0])+mFec[0].length).trim().replace(/^\d{1,2}:\d{2}\s*/,'');
           if(restoF){
             var ip=restoF.lastIndexOf(' · ');
             if(ip>=0){ facTxt=restoF.slice(0,ip).trim(); porTxt=restoF.slice(ip+3).trim(); }
@@ -13183,7 +13221,7 @@ function guardarPaqUso(fila, idx, total){
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaStr=pad(hoy.getDate())+'/'+pad(hoy.getMonth()+1)+'/'+String(hoy.getFullYear()).slice(2);
   var usuario=CU?CU.name:'—';
-  var notaFinal=fechaStr+' '+facialNota+' · '+usuario;
+  var notaFinal=fechaStr+' '+pad(hoy.getHours())+':'+pad(hoy.getMinutes())+' '+facialNota+' · '+usuario;
   fetch(APPS_SCRIPT_URL+'?action=marcarUsoManual'
     +'&fila='+encodeURIComponent(fila)
     +'&idx='+encodeURIComponent(idx)
@@ -13243,17 +13281,28 @@ function _pintarTodosPaquetes(){
   // la lista (bpq-lista). Antes el input se reconstruia a si mismo en cada
   // repintado → el foco moria y el teclado del iPhone se cerraba a mitad de palabra.
   if(!document.getElementById('bpq-lista')){
-    cont.innerHTML='<input id="bpq-q" type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarPaqLista,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin:16px 0 2px">'
+    cont.innerHTML='<input id="bpq-q" type="text" value="'+(window._paqQ||'').replace(/"/g,'&quot;')+'" placeholder="🔍 Filtrar por código, nombre, cédula o paquete..." oninput="window._paqQ=this.value;clearTimeout(window._paqQT);window._paqQT=setTimeout(_pintarPaqLista,250)" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:10px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box;margin:16px 0 2px">'
       +'<div id="bpq-lista"></div>';
   }
   _pintarPaqLista();
 }
 // Detalle de un paquete (panel derecho del maestro-detalle)
+// ⋮ del detalle de paquete: el resto de ediciones (paquete/SKU, vendido por, notas, eliminar)
+function _paqMenu(p){
+  var ix=window.SunsuInline; if(!ix||!p.fila) return '';
+  var cuerpo='';
+  if(ix.edita()) cuerpo=ix.lineas('paquetes', p.fila, [['sku','SKU',p.sku||''],['paquete','Paquete',p.paquete||''],['vendidoPor','Vendido por',p.vendidoPor||''],['notas','Notas',_paqNotaTxt(p.notas)]])
+    +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:0.7rem;color:#B86B6B">'+ix.borrar('paquetes', p.fila)+' Eliminar paquete</div>';
+  else if(ix.pide()) cuerpo=ix.pedir('paquetes', p.fila, {nombre:p.nombre||'',apellido:p.apellido||'',cedula:_cedTxt(p.cedula),sku:p.sku||'',paquete:p.paquete||'',vendidoPor:p.vendidoPor||'',notas:_paqNotaTxt(p.notas)});
+  if(!cuerpo) return '';
+  return '<details class="paq-mas"><summary class="paq-btn" title="Más opciones">⋮</summary><div class="paq-mas-menu">'+cuerpo+'</div></details>';
+}
 function _paqDetalleHTML(x){
   var fS=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
   var iSeg=(window._todosPaq||[]).indexOf(x);
   var html='<div class="paq-sheet">';
     var p=x.p;
+    var _ix=window.SunsuInline, _ixE=!!(_ix&&p.fila&&_ix.edita());
     var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
     if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
     var wa=telQ
@@ -13262,12 +13311,14 @@ function _paqDetalleHTML(x){
     html+='<div class="card paq-row" style="padding:11px;margin-bottom:8px">'
       +'<div class="paq-line">'
       +'<div class="paq-quien">'
-      +'<div class="paq-nombre">'+(p.nombre+' '+p.apellido).trim()+'</div>'
-      +'<div class="paq-sku">📦 '+p.sku+' · comprado '+fS(x.compra)+'</div>'
+      +'<div class="paq-cod">'+_tkEsc(p.codigo||'')+(p.prueba?' <span class="paq-prueba">🧪 PRUEBA</span>':'')+'</div>'
+      +'<div class="paq-nombre">'+(_ixE?(_ix.campo('paquetes',p.fila,'nombre',p.nombre||'')+' '+_ix.campo('paquetes',p.fila,'apellido',p.apellido||'')):_tkEsc((p.nombre+' '+p.apellido).trim()))+'</div>'
+      +'<div class="paq-sku">🪪 '+(_ixE?_ix.campo('paquetes',p.fila,'cedula',_cedTxt(p.cedula)):_tkEsc(_cedTxt(p.cedula)))+' · 📦 '+_tkEsc(p.paquete||p.sku)+' · comprado '+fS(x.compra)+'</div>'
       +'</div>'
       +'<div class="paq-prog'+(x.pend>0?'':' ok')+'">'+(x.pend>0?(x.usados+' de '+x.total+' · queda'+(x.pend!==1?'n':'')+' '+x.pend):'✓ Completo')+'</div>'
       +'<button class="paq-btn" type="button" onclick="tarjetaPaqueteDe('+iSeg+')">📄 Tarjeta</button>'
       +wa
+      +_paqMenu(p)
       +'<button class="paq-btn paq-drop" type="button" onclick="paqDesplegar('+p.fila+',\''+(p.cedula||'').replace(/'/g,'')+'\')">▾</button>'
       +'</div>'
       +'<div id="paq-exp-'+p.fila+'"></div></div>';
@@ -13284,7 +13335,7 @@ function _pintarPaqLista(){
   var arr=(window._todosPaq||[]).slice();
   var q=(window._paqQ||'').toLowerCase().trim();
   if(q) arr=arr.filter(function(x){
-    return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0;
+    return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0||(x.p.codigo||'').toLowerCase().indexOf(q)>=0||(x.p.paquete||'').toLowerCase().indexOf(q)>=0;
   });
   window._paqVer=window._paqVer||'pend';
   var nComp=arr.filter(function(x){return x.pend===0;}).length;
@@ -13305,11 +13356,11 @@ function _pintarPaqLista(){
     var th=function(t,cls){return '<th class="sortable'+(cls?' '+cls:'')+'" onclick="_mdOrdenar(this)">'+t+'</th>';};
     var esc=function(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
     html+='<div class="desk-split md-split" id="paq-md"><div class="desk-list md-list"><div class="sheet-scroll"><table class="gc-table nowrap-table"><thead><tr>'
-      +th('Paquete')+th('Clienta')+th('Progreso','num')+th('Comprado','md-x')+th('Cédula','md-x')
+      +th('Código')+th('Paquete')+th('Clienta')+th('Progreso','num')+th('Comprado','md-x')+th('Cédula','md-x')
       +'</tr></thead><tbody>'
       +arr.map(function(x,i){
         var p=x.p;
-        return '<tr class="gc-row" onclick="_paqAbrir('+i+',this)"><td>'+esc(p.sku)+'</td><td>'+esc((p.nombre+' '+p.apellido).trim())+'</td>'
+        return '<tr class="gc-row" onclick="_paqAbrir('+i+',this)"><td style="font-family:ui-monospace,monospace;font-weight:700">'+esc(p.codigo||'—')+(p.prueba?' <span class="paq-prueba">🧪 PRUEBA</span>':'')+'</td><td>'+esc(p.paquete||p.sku)+'</td><td>'+esc((p.nombre+' '+p.apellido).trim())+'</td>'
           +'<td class="num">'+(x.pend>0?x.usados+'/'+x.total:'✓ '+x.total+'/'+x.total)+'</td><td class="md-x">'+fS(x.compra)+'</td><td class="md-x">'+esc(p.cedula||'')+'</td></tr>';
       }).join('')
       +'</tbody></table></div></div><div class="desk-detail md-detail"></div></div>';
@@ -13476,6 +13527,7 @@ function _buildPaqueteCard(p, enDetalle){
     +(p.notas?'<div style="margin-top:8px;font-size:0.68rem;color:var(--gray);background:var(--cream);padding:6px 9px;border-radius:8px">📝 '+p.notas+'</div>':'')
     +(function(){
       var ix=window.SunsuInline;
+      if(enDetalle) return '';
       if(!ix||!p.fila) return '';
       if(ix.edita()) return '<div style="margin-top:8px">'+ix.lineas("paquetes", p.fila, [["nombre","Nombre",p.nombre||""],["apellido","Apellido",p.apellido||""],["cedula","Cédula",p.cedula||""],["sku","SKU",p.sku||""],["paquete","Paquete",p.paquete||""],["vendidoPor","Vendido por",p.vendidoPor||""],["notas","Notas",p.notas||""]])+ix.borrar("paquetes", p.fila)+'</div>';
       if(ix.pide()) return ix.pedir("paquetes", p.fila, {nombre:p.nombre||"",apellido:p.apellido||"",cedula:p.cedula||"",sku:p.sku||"",paquete:p.paquete||"",vendidoPor:p.vendidoPor||"",notas:p.notas||""});
