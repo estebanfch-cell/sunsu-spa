@@ -1245,7 +1245,7 @@ function renderTicket(c){
         ${pv.prods.map(p=>{
           const q=T.productos[p.sku]||0;
           const stk=window._stockMap&&window._stockMap[p.sku]!==undefined?window._stockMap[p.sku]:null;
-          const sinStk=stk!==null&&Number(stk)<=0&&q<=0;
+          const sinStk=stk!==null&&Number(stk)<=0;
           const stkColor=stk===null?null:stk<=0?'#C00':stk<=3?'#C4943A':null;
           const stkBg=stk===null?null:stk<=0?'#FEE2E2':stk<=3?'#FFF9E6':null;
           const stkLabel=stk===null?''
@@ -1254,7 +1254,7 @@ function renderTicket(c){
             :'';
           const stkBadge=stkLabel?`<span style="font-size:0.55rem;font-weight:700;color:${stkColor};background:${stkBg};padding:1px 5px;border-radius:4px;display:block;margin-top:2px">${stkLabel}</span>`
             :stk!==null?`<span style="font-size:0.55rem;color:#bbb;display:block;margin-top:1px">${stk} uds</span>`:'';
-          return `<div class="prod-row ${q>0?'has-qty':''}${sinStk?' sin-stock':''}" id="pr-${p.sku}"${sinStk?' aria-disabled="true" title="Sin stock"':''}>
+          return `<div class="prod-row ${q>0?'has-qty':''}${sinStk?' sin-stock':''}" id="pr-${p.sku}"${sinStk?' title="Sin stock en Inventario (se puede vender igual)"':''}>
             <div style="display:flex;flex-direction:column;align-items:flex-start">
               <span class="prod-badge" style="background:${pv.colorL};color:${pv.badge}">${p.sku}</span>
               ${stkBadge}
@@ -1263,7 +1263,7 @@ function renderTicket(c){
             <div class="qty-ctrl">
               <button class="qbtn" onclick="event.stopPropagation();chgQ('${p.sku}',-1,'${pv.id}')">−</button>
               <span class="qval ${q>0?'on':''}" id="q-${p.sku}">${q}</span>
-              <button class="qbtn" ${sinStk?'disabled':''} onclick="event.stopPropagation();chgQ('${p.sku}',1,'${pv.id}')">+</button>
+              <button class="qbtn" onclick="event.stopPropagation();chgQ('${p.sku}',1,'${pv.id}')">+</button>
             </div>
           </div>`;}).join('')}
       </div>
@@ -1599,7 +1599,7 @@ function toggleProv(id){
 }
 function _sinStock(sku){ var m=window._stockMap; return !!(m&&m[sku]!==undefined&&m[sku]!==null&&Number(m[sku])<=0); }
 function chgQ(sku,d,provId){
-  if(d>0&&_sinStock(sku)){ toast('🚫 '+sku+' sin stock — no se puede vender','#B86B6B'); return; }
+  if(d>0&&_sinStock(sku)&&!(T.productos[sku]>0)) toast('⚠️ '+sku+' figura sin stock en Inventario','#C9A227');
   T.productos[sku]=Math.max(0,(T.productos[sku]||0)+d);
   const el=document.getElementById('q-'+sku);
   if(el){el.textContent=T.productos[sku];el.className='qval'+(T.productos[sku]>0?' on':'');}

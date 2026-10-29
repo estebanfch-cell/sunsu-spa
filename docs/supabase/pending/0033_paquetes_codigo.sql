@@ -22,7 +22,15 @@ update public.paquetes p set codigo = 'PACK-' || lpad(ord.n::text, greatest(3, l
 select setval('public.paquetes_codigo_seq', greatest(1, (select count(*) from public.paquetes where codigo like 'PACK-%')), (select count(*) from public.paquetes where codigo like 'PACK-%') > 0);
 
 create or replace function public.paquetes_codigo() returns trigger language plpgsql as $$
+declare c text;
 begin
+  -- import.py hace upsert por sheet_row (on_conflict=sheet_row, merge-duplicates): el BEFORE INSERT
+  -- corre aunque la fila ya exista. Reusar el código de esa fila evita gastar números en cada sync
+  -- (y como el payload no trae 'codigo', el UPDATE del upsert no lo pisa).
+  if (new.codigo is null or new.codigo = '') and new.sheet_row is not null and new.sheet_row > 0 then
+    select codigo into c from public.paquetes where sheet_row = new.sheet_row and codigo is not null limit 1;
+    if c is not null then new.codigo := c; return new; end if;
+  end if;
   if (new.codigo is null or new.codigo = '') and coalesce(new.sku,'') <> '' then
     if new.origin = 'test' then new.codigo := 'TEST-PACK-' || lpad(nextval('public.paquetes_codigo_test_seq')::text, greatest(3, length(nextval('public.paquetes_codigo_test_seq')::text)), '0');
     else new.codigo := 'PACK-' || lpad(nextval('public.paquetes_codigo_seq')::text, greatest(3, length(nextval('public.paquetes_codigo_seq')::text)), '0'); end if;

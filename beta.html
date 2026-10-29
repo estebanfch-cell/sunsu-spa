@@ -400,9 +400,8 @@
   .preview .ov-tabla td:nth-child(2) { white-space: normal; width: 100%; padding-right: 8px; }
   .preview .ov-tabla tbody tr + tr td { border-top: 1px solid rgba(255,255,255,0.08); }
   .preview .ov-tabla .n { text-align: right; font-variant-numeric: tabular-nums; width: 1%; padding-left: 10px; }
-  .prod-row.sin-stock { background: #FEE2E2; color: #C00; opacity: 0.85; }
+  .prod-row.sin-stock { background: #FEE2E2; color: #C00; }
   .prod-row.sin-stock .prod-name, .prod-row.sin-stock .prod-price { color: #C00; }
-  .prod-row.sin-stock .qbtn[disabled] { opacity: 0.35; cursor: not-allowed; }
   .paq-cod { font-family: ui-monospace, monospace; font-size: 0.66rem; font-weight: 800; color: var(--gray); }
   .paq-prueba { font-family: inherit; font-size: 0.58rem; font-weight: 800; color: #8A5A00; background: #FFF1C9; border-radius: 6px; padding: 1px 6px; }
   .paq-mas { position: relative; display: inline-block; }
@@ -5362,7 +5361,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029hf1"></script>
+<script src="beta-screens.js?v=20261029hf2"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>

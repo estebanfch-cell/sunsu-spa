@@ -575,14 +575,6 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 }
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
-  // No se vende un producto sin stock (misma fuente que Inventario). También en Modo prueba, por realismo.
-  const pedidos = Object.entries((p.productos || {}) as R).filter(([, q]) => n(q) > 0);
-  if (pedidos.length) {
-    const inv = await FNS.getInventario({}, ctx, ses) as R;
-    const stock = new Map(((inv.items || []) as R[]).map((it) => [skuCode(s(it.sku)), n(it.stock)]));
-    const sin = pedidos.map(([sku]) => sku).filter((sku) => stock.has(skuCode(sku)) && (stock.get(skuCode(sku)) as number) <= 0);
-    if (sin.length) return { error: "Sin stock: " + sin.join(", ") + ". Quita el producto del ticket." };
-  }
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
