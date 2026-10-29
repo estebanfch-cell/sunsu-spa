@@ -648,14 +648,16 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const paqRow = await nextSheet(ctx.db, "paquetes");
     const txt = s(p.pack3) || s(p.pack6);
     const skuM = txt.match(/SUNSU-\d+/);
-    await ctx.db.write(actor, "paquetes", "insert", {}, {
+    const paqSaved = await ctx.db.write(actor, "paquetes", "insert", {}, {
       sheet_row: paqRow, dia: ec.d, mes: ec.m, ano: ec.y, cedula: s(p.cedula),
       nombres: s(p.nombre), apellidos: s(p.apellido), sku: skuM ? skuM[0] : txt, paquete: txt,
       vendido_por: s(p.cosmetologa), notas: ec.isoWall, orig: { ticket, ts: ec.isoWall },
     });
-    paqueteFila = paqRow;
+    // En Modo prueba la fila se guarda con sheet_row negativo: usar la fila REAL guardada,
+    // si no la marca de la 1ª sesión apuntaba a otra fila y el paquete quedaba 0/3.
+    paqueteFila = paqSaved && paqSaved.sheet_row != null && paqSaved.sheet_row !== "" ? n(paqSaved.sheet_row) : paqRow;
     const slots = ([] as R[]).concat((p.paq2gcSlots3 as R[]) || [], (p.paq2gcSlots6 as R[]) || []).filter((x) => x && x.codigo);
-    if (slots.length) await marcarSlotsGC(ctx, actor, paqRow, slots);
+    if (slots.length) await marcarSlotsGC(ctx, actor, paqueteFila, slots);
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
   let inventario = 0;
