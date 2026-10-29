@@ -4316,6 +4316,47 @@ function _toggleDetTicket(id, btn){
   el.style.display = abrir?'block':'none';
   if(btn) btn.textContent = abrir?'▴':'▾';
 }
+// ══════ MAESTRO-DETALLE compartido ══════
+// Toda pantalla lista+detalle: lista angosta a la IZQUIERDA (solo Nº/código,
+// nombre y valor, una línea, ordenable) y el registro abierto a la DERECHA,
+// nunca abajo. En celular se apila (el detalle trae su botón Cerrar).
+// Marcado: <div class="desk-split md-split" id="X"><div class="desk-list md-list">…tabla…</div>
+// <div class="desk-detail md-detail"></div></div>. Las columnas que sobran al abrir llevan class="md-x".
+function _mdRaiz(rootId){ return document.getElementById(rootId); }
+function _mdAbrir(rootId, html, fila){
+  var r=_mdRaiz(rootId); if(!r) return null;
+  r.classList.add('desk-open','md-open');
+  var d=r.querySelector('.md-detail'); if(!d) return null;
+  if(html!=null) d.innerHTML='<div class="md-bar"><button type="button" class="btn ghost small" onclick="_mdCerrar(\''+rootId+'\')">Cerrar</button></div>'+html;
+  [].forEach.call(r.querySelectorAll('.md-list tr.on'),function(tr){tr.classList.remove('on');});
+  if(fila&&fila.classList) fila.classList.add('on');
+  if(window.SunsuInline) SunsuInline.aplicar();
+  if(window.matchMedia&&!window.matchMedia('(min-width: 861px)').matches&&d.scrollIntoView) d.scrollIntoView({block:'start'});
+  return d;
+}
+function _mdCerrar(rootId){
+  var r=_mdRaiz(rootId); if(!r) return;
+  r.classList.remove('desk-open','md-open');
+  [].forEach.call(r.querySelectorAll('.md-list tr.on'),function(tr){tr.classList.remove('on');});
+}
+function _mdValor(td){
+  var t=(td&&td.textContent||'').trim();
+  var f=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if(f) return +(f[3]+('0'+f[2]).slice(-2)+('0'+f[1]).slice(-2));
+  var n=t.replace(/[$,\s]/g,'');
+  if(n!==''&&!isNaN(+n)) return +n;
+  return t.toLowerCase();
+}
+// Ordena cualquier tabla md por la columna del encabezado tocado.
+function _mdOrdenar(th){
+  var tabla=th&&th.closest('table'); if(!tabla||!tabla.tBodies[0]) return;
+  var idx=th.cellIndex, dir=th.getAttribute('data-dir')==='1'?-1:1;
+  [].forEach.call(tabla.querySelectorAll('th'),function(h){h.removeAttribute('data-dir');h.textContent=h.textContent.replace(/ [▲▼]$/,'');});
+  th.setAttribute('data-dir',dir===1?'1':'-1'); th.textContent+=(dir===1?' ▲':' ▼');
+  var filas=[].slice.call(tabla.tBodies[0].rows).filter(function(tr){return tr.cells.length>idx;});
+  filas.sort(function(a,b){var x=_mdValor(a.cells[idx]),y=_mdValor(b.cells[idx]);return x<y?-dir:x>y?dir:0;});
+  filas.forEach(function(tr){tabla.tBodies[0].appendChild(tr);});
+}
 function _tkPartes(v){ return String(v||'').split('|').map(function(x){return x.trim();}).filter(Boolean); }
 // ── Editor de líneas del ticket: dropdowns con búsqueda desde el catálogo ──
 var _TK_GRUPOS=[
@@ -12848,26 +12889,25 @@ function _gcTablaHTML(lista){
     var saldo=g.saldo;
     var saldoTxt=(saldo==null||saldo==='')?'—':(typeof saldo==='number'?saldo.toFixed(2):String(saldo));
     var quien=((g.nombre||'')+' '+(g.apellido||'')).trim()||'—';
-    return '<tr class="gc-row" onclick="_gcAbrir('+i+')">'
+    return '<tr class="gc-row" onclick="_gcAbrir('+i+',this)">'
       +'<td>'+_gcEsc(g.codigo||'')+'</td>'
       +'<td>'+_gcEsc(quien)+'</td>'
       +'<td class="num">'+_gcEsc(g.valor||'—')+'</td>'
-      +'<td class="num">'+_gcEsc(saldoTxt)+'</td>'
-      +'<td>'+_gcEsc(_gcFechaEmision(g))+'</td>'
-      +'<td>'+_gcEsc(_gcVencTxt(g))+'</td>'
-      +'<td>'+_gcEsc(_gcEstado(g))+'</td></tr>';
+      +'<td class="num md-x">'+_gcEsc(saldoTxt)+'</td>'
+      +'<td class="md-x">'+_gcEsc(_gcFechaEmision(g))+'</td>'
+      +'<td class="md-x">'+_gcEsc(_gcVencTxt(g))+'</td>'
+      +'<td class="md-x">'+_gcEsc(_gcEstado(g))+'</td></tr>';
   }).join('');
-  return '<div class="sheet-scroll"><table class="gc-table"><thead><tr>'
-    +'<th>Código</th><th>Clienta / beneficiaria</th><th class="num">Monto</th><th class="num">Saldo</th><th>Emisión</th><th>Vencimiento</th><th>Estado</th>'
-    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="7">Sin gift cards</td></tr>')+'</tbody></table></div>'
-    +'<div id="gc-detail"></div>';
+  var th=function(t,cls){return '<th class="sortable'+(cls?' '+cls:'')+'" onclick="_mdOrdenar(this)">'+t+'</th>';};
+  return '<div class="desk-split md-split" id="gc-md"><div class="desk-list md-list"><div class="sheet-scroll"><table class="gc-table nowrap-table"><thead><tr>'
+    +th('Código')+th('Clienta / beneficiaria')+th('Monto','num')+th('Saldo','num md-x')+th('Emisión','md-x')+th('Vencimiento','md-x')+th('Estado','md-x')
+    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="7">Sin gift cards</td></tr>')+'</tbody></table></div></div>'
+    +'<div class="desk-detail md-detail" id="gc-detail"></div></div>';
 }
-function _gcAbrir(i){
+function _gcAbrir(i, fila){
   var g=(window._gcVisibles||[])[i];
-  var pane=document.getElementById('gc-detail');
-  if(!g||!pane) return;
-  pane.innerHTML=_buildGCCard(g);
-  if(window.SunsuInline) SunsuInline.aplicar();
+  if(!g) return;
+  _mdAbrir('gc-md', _buildGCCard(g), fila);
 }
 function verTodasGC(filtro){
   var res=document.getElementById('bgc-results');
@@ -13199,32 +13239,12 @@ function _pintarTodosPaquetes(){
   }
   _pintarPaqLista();
 }
-function _pintarPaqLista(){
-  var cont=document.getElementById('bpq-lista');
-  if(!cont) return;
-  var arr=(window._todosPaq||[]).slice();
-  var q=(window._paqQ||'').toLowerCase().trim();
-  if(q) arr=arr.filter(function(x){
-    return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0;
-  });
-  window._paqVer=window._paqVer||'pend';
-  var nComp=arr.filter(function(x){return x.pend===0;}).length;
-  var nPend=arr.length-nComp;
-  if(window._paqVer==='pend'&&!q) arr=arr.filter(function(x){return x.pend>0;}); // buscando se ven todos
-  arr.sort(function(a,b){return window._paqOrden==='desc'?b.compra-a.compra:a.compra-b.compra;});
+// Detalle de un paquete (panel derecho del maestro-detalle)
+function _paqDetalleHTML(x){
   var fS=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">'
-    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📦 Todos los paquetes <span style="font-weight:400;font-size:0.6rem;color:var(--gray)">('+arr.length+')</span></div>'
-    +'<div style="display:flex;gap:6px">'
-    +'<button onclick="window._paqVer=window._paqVer===\'pend\'?\'todos\':\'pend\';_pintarTodosPaquetes()" style="padding:6px 11px;background:'+(window._paqVer==='pend'?'var(--blue-l)':'white')+';color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqVer==='pend'?'⏳ Por completar ('+nPend+')':'📋 Todos ('+(nPend+nComp)+')')+'</button>'
-    +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Nuevos':'⬆ Antiguos')+'</button>'
-    +'</div></div>'
-    ;
-  if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
-  else html+='<div class="paq-sheet"><div class="paq-line paq-head"><span>Clienta</span><span>Progreso</span><span>Tarjeta</span><span>WhatsApp</span><span></span></div>';
-  arr.forEach(function(x){
+  var iSeg=(window._todosPaq||[]).indexOf(x);
+  var html='<div class="paq-sheet">';
     var p=x.p;
-    var iSeg=(window._todosPaq||[]).indexOf(x);
     var telQ=(p.telefono||'').replace(/[^0-9]/g,'');
     if(telQ&&telQ.length===10&&telQ.charAt(0)==='0') telQ='593'+telQ.slice(1);
     var wa=telQ
@@ -13249,8 +13269,49 @@ function _pintarPaqLista(){
         return '';
       })()
       +'<div id="paq-exp-'+p.fila+'"></div></div>';
+  return html+'</div>';
+}
+function _paqAbrir(i, fila){
+  var x=(window._paqVisibles||[])[i]; if(!x) return;
+  _mdAbrir('paq-md', _paqDetalleHTML(x), fila);
+  if(x.p&&x.p.fila) paqDesplegar(x.p.fila, String(x.p.cedula||'').replace(/'/g,''));
+}
+function _pintarPaqLista(){
+  var cont=document.getElementById('bpq-lista');
+  if(!cont) return;
+  var arr=(window._todosPaq||[]).slice();
+  var q=(window._paqQ||'').toLowerCase().trim();
+  if(q) arr=arr.filter(function(x){
+    return ((x.p.nombre+' '+x.p.apellido).toLowerCase().indexOf(q)>=0)||(x.p.cedula||'').indexOf(q)>=0||(x.p.sku||'').toLowerCase().indexOf(q)>=0;
   });
-  if(arr.length) html+='</div>';
+  window._paqVer=window._paqVer||'pend';
+  var nComp=arr.filter(function(x){return x.pend===0;}).length;
+  var nPend=arr.length-nComp;
+  if(window._paqVer==='pend'&&!q) arr=arr.filter(function(x){return x.pend>0;}); // buscando se ven todos
+  arr.sort(function(a,b){return window._paqOrden==='desc'?b.compra-a.compra:a.compra-b.compra;});
+  var fS=function(f){return ('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2)+'/'+f.getFullYear();};
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">'
+    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy)">📦 Todos los paquetes <span style="font-weight:400;font-size:0.6rem;color:var(--gray)">('+arr.length+')</span></div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="window._paqVer=window._paqVer===\'pend\'?\'todos\':\'pend\';_pintarTodosPaquetes()" style="padding:6px 11px;background:'+(window._paqVer==='pend'?'var(--blue-l)':'white')+';color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqVer==='pend'?'⏳ Por completar ('+nPend+')':'📋 Todos ('+(nPend+nComp)+')')+'</button>'
+    +'<button onclick="window._paqOrden=window._paqOrden===\'desc\'?\'asc\':\'desc\';_pintarTodosPaquetes()" style="padding:6px 11px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">'+(window._paqOrden==='desc'?'⬇ Nuevos':'⬆ Antiguos')+'</button>'
+    +'</div></div>'
+    ;
+  window._paqVisibles=arr;
+  if(!arr.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:16px">Sin paquetes</div>';
+  else {
+    var th=function(t,cls){return '<th class="sortable'+(cls?' '+cls:'')+'" onclick="_mdOrdenar(this)">'+t+'</th>';};
+    var esc=function(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+    html+='<div class="desk-split md-split" id="paq-md"><div class="desk-list md-list"><div class="sheet-scroll"><table class="gc-table nowrap-table"><thead><tr>'
+      +th('Paquete')+th('Clienta')+th('Progreso','num')+th('Comprado','md-x')+th('Cédula','md-x')
+      +'</tr></thead><tbody>'
+      +arr.map(function(x,i){
+        var p=x.p;
+        return '<tr class="gc-row" onclick="_paqAbrir('+i+',this)"><td>'+esc(p.sku)+'</td><td>'+esc((p.nombre+' '+p.apellido).trim())+'</td>'
+          +'<td class="num">'+(x.pend>0?x.usados+'/'+x.total:'✓ '+x.total+'/'+x.total)+'</td><td class="md-x">'+fS(x.compra)+'</td><td class="md-x">'+esc(p.cedula||'')+'</td></tr>';
+      }).join('')
+      +'</tbody></table></div></div><div class="desk-detail md-detail"></div></div>';
+  }
   cont.innerHTML=html;
   if(window.SunsuInline) SunsuInline.aplicar();
 }
@@ -16985,12 +17046,26 @@ function _cntHtmlUno(c){
   var aprobar = c.flujo === "Por aprobar" ? '<button class="btn block" type="button" data-cnt-ok="'+_cntEsc(c.id)+'">Aplicar ajuste</button>' : "";
   return '<div class="card"><div class="card-title">'+_cntEsc(c.numero)+' · '+_cntEsc(c.flujo)+'</div>'+secs+aprobar+'</div>';
 }
+function _cntAbrir(i, fila){
+  var d=_mdAbrir('cnt-md', null, fila); if(!d) return;
+  [].forEach.call(d.querySelectorAll('[data-cnt-card]'),function(el){ el.hidden = el.getAttribute('data-cnt-card')!==String(i); });
+}
 function _cntHtmlAdmin(){
   var bods = window._cntBodegas || [];
   var checks = bods.map(function(b){
     return '<label style="display:inline-flex;gap:6px;margin:4px 10px 4px 0"><input type="checkbox" data-cnt-bod="'+_cntEsc(b.id)+'"'+(b.tipo==="venta"?" checked":"")+'> '+_cntEsc(b.nombre)+'</label>';
   }).join("");
-  var lista = (window._cntPanel || []).map(_cntHtmlUno).join("");
+  // Maestro-detalle: lista angosta a la izquierda, el conteo abierto a la derecha.
+  // Las tarjetas ya están en el panel (ocultas) para que sus botones queden cableados.
+  var panel = window._cntPanel || [];
+  var avance = function(c){ var hechas=0, tot=0; (c.secciones||[]).forEach(function(s){ hechas+=Number(s.contadas)||0; tot+=Number(s.productos||s.total||0)||0; }); return tot?hechas+'/'+tot:String((c.secciones||[]).length)+' secc.'; };
+  var lista = panel.length ? '<div class="desk-split md-split" id="cnt-md"><div class="desk-list md-list"><div class="sheet-scroll"><table class="gc-table nowrap-table"><thead><tr>'
+    + '<th class="sortable" onclick="_mdOrdenar(this)">Número</th><th class="sortable" onclick="_mdOrdenar(this)">Estado</th><th class="sortable num" onclick="_mdOrdenar(this)">Avance</th>'
+    + '</tr></thead><tbody>' + panel.map(function(c, i){
+      return '<tr class="gc-row" onclick="_cntAbrir('+i+',this)"><td>'+_cntEsc(c.numero)+'</td><td>'+_cntEsc(c.flujo)+'</td><td class="num">'+_cntEsc(avance(c))+'</td></tr>';
+    }).join("") + '</tbody></table></div></div><div class="desk-detail md-detail">'
+    + panel.map(function(c, i){ return '<div data-cnt-card="'+i+'" hidden>'+_cntHtmlUno(c)+'</div>'; }).join("")
+    + '</div></div>' : "";
   return '<div id="cnt-root"><div class="card"><div class="card-title">Nuevo conteo</div>'
     + '<p class="note">Elige una o más bodegas. Cada familia de código es una sección: HT — ANUA, AS — Eyenlip, ML — Dr.esthe, PH — APHLORA, JN — Varios, BV — Bruno Vassari, SU — SUNSU, y cualquier otro prefijo.</p>'
     + '<div>'+checks+'</div>'
