@@ -388,6 +388,20 @@
   .ptotal { display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800; }
   .pnote { font-size: 0.67rem; opacity: 0.5; margin-top: 5px; font-style: italic; }
   .psec { font-size: 0.62rem; opacity: 0.5; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.12); }
+  /* Desglose a cobrar como orden de venta */
+  .ov-tabla { width: 100%; border-collapse: collapse; font-size: 0.74rem; margin: 2px 0 4px; }
+  .ov-tabla th { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.18); }
+  .ov-tabla th small { text-transform: none; letter-spacing: 0; font-size: 0.9em; }
+  .ov-tabla td { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap; vertical-align: baseline; }
+  .ov-tabla td:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 100%; }
+  .ov-tabla .n { text-align: right; font-variant-numeric: tabular-nums; width: 1%; }
+  .ov-cod { font-family: ui-monospace, monospace; font-size: 0.82em; opacity: 0.5; margin-right: 6px; }
+  .ov-etq { font-size: 0.82em; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,0.14); margin-left: 4px; }
+  .ov-dsc td { color: #A8E6BF; font-weight: 700; }
+  .ov-tot { display: flex; justify-content: flex-end; gap: 18px; font-size: 0.68rem; opacity: 0.7; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+  .ov-tot span:last-child { min-width: 72px; text-align: right; }
+  .ov-gran { justify-content: flex-end; gap: 18px; padding: 6px 6px 0; border-top: 1px solid rgba(255,255,255,0.22); margin-top: 4px; }
+  .ov-gran span:last-child { min-width: 72px; text-align: right; }
   .gc-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
   .gc-tbtn { padding: 14px 10px; border: 1.5px solid var(--cream-d); border-radius: 13px; background: var(--white); cursor: pointer; text-align: center; }
   .gc-tbtn.sel { border-color: var(--gold); background: var(--gold-l); }
@@ -628,6 +642,14 @@
   .tk-row { cursor: pointer; }
   .tk-row.on { background: var(--blue-l); }
   .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
+  /* Ticket como orden de venta: Código | Descripción | Cant. | Precio unit. (sin IVA) | Total */
+  .tk-orden { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+  .tk-orden th { text-align: left; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 5px 6px; border-bottom: 1px solid var(--cream-d); }
+  .tk-orden td { padding: 5px 6px; border-bottom: 1px solid var(--cream); color: var(--navy); white-space: nowrap; }
+  .tk-orden td:nth-child(2) { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .tk-orden .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tk-orden tfoot td { border-bottom: 0; color: var(--gray); }
+  .tk-orden tfoot .tk-orden-tot td { color: var(--navy); font-weight: 900; border-top: 1px solid var(--cream-d); }
   .nowrap-table th, .nowrap-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--navy); }
@@ -5328,7 +5350,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029paq1"></script>
+<script src="beta-screens.js?v=20261029paq2"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>

@@ -651,7 +651,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const paqSaved = await ctx.db.write(actor, "paquetes", "insert", {}, {
       sheet_row: paqRow, dia: ec.d, mes: ec.m, ano: ec.y, cedula: s(p.cedula),
       nombres: s(p.nombre), apellidos: s(p.apellido), sku: skuM ? skuM[0] : txt, paquete: txt,
-      vendido_por: s(p.cosmetologa), notas: ec.isoWall, orig: { ticket, ts: ec.isoWall },
+      vendido_por: s(p.cosmetologa), notas: "", orig: { ticket, ts: ec.isoWall },
     });
     // En Modo prueba la fila se guarda con sheet_row negativo: usar la fila REAL guardada,
     // si no la marca de la 1ª sesión apuntaba a otra fila y el paquete quedaba 0/3.
@@ -1464,7 +1464,7 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
   if (!q) return { resultados: [] };
   const resultados = [];
   for (const r of await ctx.db.all("paquetes")) {
-    const ced = s(r.cedula), nom = s(r.nombres), ape = s(r.apellidos);
+    const ced = s(r.cedula).replace(/\.0+$/, ""), nom = s(r.nombres), ape = s(r.apellidos);
     if (!ced && !nom) continue;
     if (r.borrado_at) continue;
     const blob = [ced, nom, ape, nom + " " + ape, s(r.notas)].join(" ").toLowerCase();

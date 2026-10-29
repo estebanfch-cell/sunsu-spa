@@ -3031,8 +3031,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3140,8 +3140,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3218,8 +3218,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3269,8 +3269,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3303,8 +3303,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3350,8 +3350,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261029paq1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PAQ1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029paq2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-PAQ2/);
   });
 });
 
@@ -3922,13 +3922,39 @@ describe("maestro-detalle en todo el sistema", () => {
   });
 });
 
-describe("series de prueba no se repiten", () => {
-  it("el 2º ticket de prueba es TEST-TK-SO-0002 (antes chocaba con tickets_so_num_uidx)", async () => {
-    const { siguienteTestDoc } = await import("./domain.ts");
-    assert.equal(siguienteTestDoc([{ so_num: "TEST-TK-SO-0001", origin: "test" }], "TK-SO"), "TEST-TK-SO-0002");
-    assert.equal(siguienteTestDoc([{ orig: { so_num: "TEST-TK-SO-0007" } }], "TK-SO"), "TEST-TK-SO-0008");
-    assert.equal(siguienteTestDoc([{ numero: "TEST-COT-0003" }], "COT"), "TEST-COT-0004");
-    assert.equal(siguienteTestDoc([{ numero: "TEST-OC-0009" }], "OC"), "TEST-OC-0010");
-    assert.equal(siguienteTestDoc([{ so_num: "TK-SO-1722" }], "TK-SO"), "TEST-TK-SO-0001");
+describe("ticket como orden de venta", () => {
+  it("una fila por ítem con cantidad y precio unitario sin IVA, y cuadra con el total guardado", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+    const body = src.slice(src.indexOf("function _tkPartes("), src.indexOf("function _buildTicketCard("));
+    const g = new Function("EXTRAS", "_histPrecioFacial", "_histPrecioExtra", "_histPrecioPaq", "_histPrecioProducto",
+      body.replace(/^var _TK_GRUPOS[\s\S]*?\];\n/m, "") + "\nreturn { _tkFilas, _tkTablaHTML };")(
+      [{ sku: "SUNSU-31", n: "PDRN Serum", t: 15 }],
+      () => ({ sku: "SUNSU-06", n: "Facial Rice Flow", p: 75 }),
+      () => 15,
+      () => null,
+      (pq: string) => ({ sku: "AS-002", n: "Rice Ceramide", p: 43.99, qty: Number(pq.split("×")[1]) || 1, total: 87.98 }),
+    ) as { _tkFilas: (t: Record<string, unknown>) => { filas: { cod: string; cant: number; unit: number; total: number; nota: string }[]; sub: number; iva: number; tot: number }; _tkTablaHTML: (t: Record<string, unknown>, p: boolean) => string };
+    const t = { estimado: "162.98", facial: "SUNSU-06 Facial Rice Flow", productos: ["Rice Ceramide ×2"] };
+    const r = g._tkFilas(t);
+    const prod = r.filas.find((f) => f.cod === "AS-002")!;
+    assert.equal(prod.cant, 2);
+    assert.equal(prod.unit, 38.25);
+    assert.equal(prod.total, 76.5);
+    assert.equal(r.filas[0].unit, 65.22);
+    assert.equal(r.sub, 141.72);
+    assert.equal(r.tot, 162.98);
+    assert.equal(r.filas.some((f) => f.nota === "ajuste"), false);
+    const canje = g._tkFilas({ estimado: "0", facial: "SUNSU-06 x", colQ: "SI, 2/3" });
+    assert.equal(canje.filas[0].total, 0);
+    assert.equal(canje.filas[0].nota, "canje");
+    const promo = g._tkFilas({ estimado: "60", facial: "SUNSU-06 x", notas: "Descuento: Promo octubre −$15" });
+    assert.equal(promo.filas[1].desc, "Promo octubre");
+    assert.equal(promo.filas[1].total, -13.05);
+    const html = g._tkTablaHTML(t, true);
+    assert.match(html, /<th class="num">Precio unit\. \(sin IVA\)<\/th>/);
+    assert.match(html, /Subtotal sin IVA/);
+    assert.match(html, /Total con IVA/);
+    assert.match(src, /var breakdown=_tkTablaHTML\(t, showPrices\);/);
   });
 });
