@@ -18,6 +18,9 @@ import "./horarios_api.ts";
 import "./inline_api.ts";
 import "./personal_api.ts";
 import "./compras_api.ts";
+import "./consignacion_api.ts";
+import { calcularLinea, repartirConsignado } from "./consignacion.ts";
+import { descontarVentaTicket } from "./compras_flujo.ts";
 import "./conteo_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { jornadaDe, normalizarJibble, slotRotativo, type Horario } from "./horarios.ts";
@@ -1242,6 +1245,12 @@ describe("beta shell", () => {
     assert.match(screens, /Total vendido/);
     assert.match(screens, /class="cmp-qty"/);
     assert.match(screens, /function _cmpLinesHTML/);
+    assert.match(html, /🤝 Consignación/);
+    assert.match(html, /#\/m\/consignacion/);
+    assert.match(screens, /function renderConsignacion/);
+    assert.match(screens, /function _csgTabla/);
+    assert.match(screens, /class="csg-orden"/);
+    assert.match(screens, /_cmpPdf/);
     assert.match(html, /Bitácora/);
     assert.match(html, /Kardex/);
     assert.match(html, /Ficha de producto/);
@@ -3069,8 +3078,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3178,8 +3187,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3257,8 +3266,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3308,8 +3317,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3342,8 +3351,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3389,8 +3398,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
-    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
+    assert.match(beta, /beta-screens\.js\?v=20261029csg1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-CSG1/);
   });
 });
 
@@ -4003,6 +4012,90 @@ describe("ticket como orden de venta", () => {
     assert.match(html, /Subtotal sin IVA/);
     assert.match(html, /Total con IVA/);
     assert.match(src, /var breakdown=_tkTablaHTML\(t, showPrices\);/);
+  });
+});
+
+describe("consignación", () => {
+  it("la entrada no crea deuda, el ticket descuenta el stock y el cierre factura solo lo vendido", async () => {
+    const cal = calcularLinea(2, 10, 1);
+    assert.equal(cal.subtotal, 19);
+    assert.equal(cal.iva, 2.85);
+    assert.equal(cal.total, 21.85);
+    const partes = repartirConsignado(
+      [
+        { proveedor_id: "a", producto_id: "p", bodega_id: "b", sku: "HT-002", nombre: "Crema", cantidad: 5, costo: 8, desde: "2026-10-01T0000" },
+        { proveedor_id: "b", producto_id: "p", bodega_id: "b", sku: "HT-002", nombre: "Crema", cantidad: 4, costo: 10, desde: "2026-10-10T0001" },
+      ],
+      [{ sku: "HT-002", qty: 7 }],
+      [],
+    );
+    assert.equal(partes.find((r) => r.proveedor_id === "a")?.cantidad, 5);
+    assert.equal(partes.find((r) => r.proveedor_id === "b")?.cantidad, 2);
+
+    const db = new MemoryDb(erpSeed());
+    const c = ctx(db);
+    const antes = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
+    const ent = await handle("csg_entrada", {
+      token: c.token, proveedor_id: SEED_IDS.prov,
+      lineas: [{ sku: "HT-002", cantidad: 4, precio: 8, descuento: 0 }],
+    }, c) as Row;
+    assert.equal(ent.ok, true);
+    assert.equal((await db.all("erp_oc")).length, 0);
+    const stockEnt = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
+    assert.equal(stockEnt?.cantidad, Number(antes?.cantidad) + 4);
+    const mov = (await db.all("erp_movimientos")).find((r) => r.doc_tipo === "consignacion");
+    assert.equal(mov?.tipo, "recepcion");
+    assert.equal(mov?.nota, "consignado");
+    assert.equal((await db.all("erp_consignado"))[0]?.cantidad, 4);
+
+    db.tables.set("tickets", [{ timestamp: "2026-10-15T15:00:00.000Z", ht_002: 2, orig: {} }]);
+    const vendidas = await descontarVentaTicket(db, "Emi", "TK-1", { ht_002: 2, orig: {} }, c.now);
+    assert.equal(vendidas, 2);
+    const stockVenta = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA);
+    assert.equal(stockVenta?.cantidad, Number(antes?.cantidad) + 2);
+    assert.equal((await db.all("erp_consignado"))[0]?.cantidad, 4);
+
+    const cie = await handle("csg_cierre", {
+      token: c.token, proveedor_id: SEED_IDS.prov, desde: "2026-10-01", hasta: "2026-10-31",
+    }, c) as Row;
+    assert.equal(cie.ok, true);
+    assert.equal(cie.oc_numero, "OC-0001");
+    const oc = (await db.all("erp_oc"))[0];
+    assert.equal(oc?.flujo, "Aprobada");
+    assert.equal(oc?.estado, "abierta");
+    assert.equal(oc?.pagado, 0);
+    assert.equal(oc?.saldo, oc?.total);
+    const ol = await db.all("erp_oc_lineas");
+    assert.equal(ol.length, 1);
+    assert.equal(ol[0]?.cantidad, 2);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, stockVenta?.cantidad);
+    assert.equal((await db.all("erp_consignado"))[0]?.cantidad, 2);
+    const doc = cie.doc as Row;
+    assert.equal((doc.lineas as Row[])[0]?.cantidad, 2);
+    assert.equal((doc.restante as Row[])[0]?.cantidad, 2);
+
+    const ped = await handle("csg_pedido", {
+      token: c.token, proveedor_id: SEED_IDS.prov,
+      lineas: [{ sku: "HT-002", cantidad: 6, precio: 8, descuento: 0 }],
+    }, c) as Row;
+    assert.equal(ped.ok, true);
+    assert.equal((await db.all("erp_oc")).length, 1);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, stockVenta?.cantidad);
+
+    const otra = await handle("csg_cierre", {
+      token: c.token, proveedor_id: SEED_IDS.prov, desde: "2026-10-01", hasta: "2026-10-31",
+    }, c) as Row;
+    assert.match(String(otra.error), /ya está cerrado/);
+
+    const ajena = ctx(db, "cosmetologa", "andrea", "Andrea");
+    const no = await handle("csg_entrada", { token: ajena.token, proveedor_id: SEED_IDS.prov, lineas: [{ sku: "HT-002", cantidad: 1, precio: 8 }] }, ajena) as Row;
+    assert.match(String(no.error), /permiso/i);
+
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0035_consignacion.sql", import.meta.url), "utf8");
+    assert.match(sql, /create table if not exists public\.erp_consignado/);
+    assert.match(sql, /create table if not exists public\.erp_consignacion/);
+    assert.match(sql, /erp_consignacion_lineas/);
+    assert.equal(sql.includes("insert into public.erp_consignado"), false);
   });
 });
 
