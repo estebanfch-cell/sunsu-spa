@@ -23,6 +23,7 @@ const TABLAS = [
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock", "erp_oc_pagos", "erp_consignacion_cierre",
   "erp_conteo_secciones", "erp_conteo_items",
+  "erp_consignado", "erp_consignacion", "erp_consignacion_lineas",
 ];
 
 function round4(x: number): number {
