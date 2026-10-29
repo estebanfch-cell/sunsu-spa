@@ -17268,5 +17268,354 @@ function wireConteoFlujo(main){
   };
 }
 
+// ══════ CONSIGNACIÓN ══════
+function _csgEsc(v){ return (typeof esc === "function") ? esc(v) : String(v == null ? "" : v); }
+function _csgMoney(n){ return (typeof money === "function") ? money(n) : ("$"+Number(n||0).toFixed(2)); }
+function _csgMes(){
+  var hoy = (typeof ymdEc === "function") ? ymdEc() : new Date().toISOString().slice(0, 10);
+  var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7));
+  var ult = new Date(y, m, 0).getDate();
+  var mm = String(m).padStart(2, "0");
+  return { desde: y + "-" + mm + "-01", hasta: y + "-" + mm + "-" + String(ult).padStart(2, "0") };
+}
+function _csgForm(){
+  var modo = window._csgSub || "entrada";
+  if (modo !== "entrada" && modo !== "pedido" && modo !== "cierre") modo = "entrada";
+  if (!window._csgBorrador) window._csgBorrador = {};
+  if (!window._csgBorrador[modo]) {
+    var mes = _csgMes();
+    window._csgBorrador[modo] = { lineas: [], provId: "", provNom: "", desde: mes.desde, hasta: mes.hasta };
+  }
+  return window._csgBorrador[modo];
+}
+function _csgCal(cant, precio, desc){
+  var bruto = Math.round(Math.max(0, Number(cant)||0) * Math.max(0, Number(precio)||0) * 100) / 100;
+  var d = Math.round(Math.min(Math.max(0, Number(desc)||0), bruto) * 100) / 100;
+  var sub = Math.round((bruto - d) * 100) / 100;
+  var iva = Math.round(sub * 0.15 * 100) / 100;
+  return { descuento: d, subtotal: sub, iva: iva, total: Math.round((sub + iva) * 100) / 100 };
+}
+function _csgTotales(lineas){
+  var sub = 0, iva = 0, tot = 0;
+  (lineas||[]).forEach(function(ln){
+    var c = _csgCal(ln.cantidad, ln.precio, ln.descuento);
+    sub += c.subtotal; iva += c.iva; tot += c.total;
+  });
+  return {
+    subtotal: Math.round(sub * 100) / 100,
+    iva: Math.round(iva * 100) / 100,
+    total: Math.round(tot * 100) / 100,
+  };
+}
+function _csgSync(){
+  var d = _csgForm();
+  var prov = document.getElementById("csg-prov");
+  if (prov && String(d.provNom||"") !== prov.value) {
+    d.provId = "";
+    d.provNom = prov.value || "";
+    var hit = (window._csgProv||[]).filter(function(p){ return String(p.nombre||"").toLowerCase() === String(prov.value||"").toLowerCase(); })[0];
+    if (hit) { d.provId = hit.id; d.provNom = hit.nombre; }
+  }
+  var desde = document.getElementById("csg-desde");
+  var hasta = document.getElementById("csg-hasta");
+  if (desde) d.desde = desde.value || d.desde;
+  if (hasta) d.hasta = hasta.value || d.hasta;
+  (d.lineas||[]).forEach(function(ln, i){
+    var q = document.querySelector('[data-csg-qty="'+i+'"]');
+    var p = document.querySelector('[data-csg-precio="'+i+'"]');
+    var desc = document.querySelector('[data-csg-desc="'+i+'"]');
+    if (q) ln.cantidad = Number(q.value)||0;
+    if (p) ln.precio = Number(p.value)||0;
+    if (desc) ln.descuento = Number(desc.value)||0;
+    var c = _csgCal(ln.cantidad, ln.precio, ln.descuento);
+    ln.subtotal = c.subtotal; ln.iva = c.iva; ln.total = c.total;
+  });
+}
+function _csgTabla(lineas, editable){
+  var rows = (lineas||[]).map(function(ln, i){
+    var c = _csgCal(ln.cantidad, ln.precio, ln.descuento);
+    var qty = editable
+      ? '<input class="csg-qty" data-csg-qty="'+i+'" type="number" min="0" step="1" value="'+_csgEsc(ln.cantidad)+'" aria-label="Cantidad '+_csgEsc(ln.codigo)+'">'
+      : _csgEsc(ln.cantidad);
+    var precio = editable
+      ? '<input data-csg-precio="'+i+'" type="number" min="0" step="0.01" value="'+_csgEsc(ln.precio)+'" aria-label="Precio '+_csgEsc(ln.codigo)+'">'
+      : _csgMoney(ln.precio);
+    var desc = editable
+      ? '<input data-csg-desc="'+i+'" type="number" min="0" step="0.01" value="'+_csgEsc(c.descuento)+'" aria-label="Descuento '+_csgEsc(ln.codigo)+'">'
+      : _csgMoney(c.descuento);
+    return '<tr><td class="tk-sku">'+_csgEsc(ln.codigo||ln.sku)+'</td><td>'+_csgEsc(ln.nombre||"")+'</td>'
+      +'<td class="num">'+qty+'</td><td class="num">'+precio+'</td><td class="num">'+desc+'</td>'
+      +'<td class="num" data-csg-sub="'+i+'">'+_csgMoney(c.subtotal)+'</td>'
+      +'<td class="num" data-csg-iva="'+i+'">'+_csgMoney(c.iva)+'</td>'
+      +'<td class="num" data-csg-tot="'+i+'">'+_csgMoney(c.total)+'</td></tr>';
+  }).join("");
+  if (!rows) return '<p class="note">Todavía no hay productos.</p>';
+  var t = _csgTotales(lineas);
+  return '<div class="csg-sheet"><table class="csg-orden"><thead><tr>'
+    +'<th>Código</th><th>Nombre</th><th class="num">Cantidad</th><th class="num">Precio unit.</th><th class="num">Descuento</th><th class="num">Subtotal</th><th class="num">IVA</th><th class="num">Total</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody><tfoot>'
+    +'<tr><td colspan="5" class="num">Subtotal</td><td class="num" data-csg-sum>'+_csgMoney(t.subtotal)+'</td><td class="num" data-csg-sum-iva>'+_csgMoney(t.iva)+'</td><td class="num" data-csg-sum-tot>'+_csgMoney(t.total)+'</td></tr>'
+    +'<tr class="csg-tot"><td colspan="7" class="num">Total</td><td class="num" data-csg-gran>'+_csgMoney(t.total)+'</td></tr>'
+    +'</tfoot></table></div>';
+}
+function _csgRefrescar(){
+  var antes = (_csgForm().lineas||[]).length;
+  _csgSync();
+  var d = _csgForm();
+  if ((d.lineas||[]).length !== antes) {
+    var host = document.getElementById("csg-lines");
+    if (host) host.innerHTML = _csgTabla(d.lineas, true);
+    return;
+  }
+  (d.lineas||[]).forEach(function(ln, i){
+    var c = _csgCal(ln.cantidad, ln.precio, ln.descuento);
+    [["data-csg-sub", c.subtotal], ["data-csg-iva", c.iva], ["data-csg-tot", c.total]].forEach(function(par){
+      var el = document.querySelector('['+par[0]+'="'+i+'"]');
+      if (el) el.textContent = _csgMoney(par[1]);
+    });
+  });
+  var t = _csgTotales(d.lineas);
+  var sum = document.querySelector("[data-csg-sum]");
+  var iva = document.querySelector("[data-csg-sum-iva]");
+  var tot = document.querySelector("[data-csg-sum-tot]");
+  var gran = document.querySelector("[data-csg-gran]");
+  if (sum) sum.textContent = _csgMoney(t.subtotal);
+  if (iva) iva.textContent = _csgMoney(t.iva);
+  if (tot) tot.textContent = _csgMoney(t.total);
+  if (gran) gran.textContent = _csgMoney(t.total);
+}
+function _csgMsg(t, ok){
+  var el = document.getElementById("csg-msg");
+  if (!el) return;
+  el.className = ok ? "ok" : "err";
+  el.textContent = t || "";
+}
+function _csgTipo(t){
+  if (t === "entrada") return "Entrada";
+  if (t === "pedido") return "Pedido";
+  if (t === "cierre") return "Cierre";
+  return t || "";
+}
+function _csgListHTML(){
+  var q = String(window._csgQ||"").toLowerCase();
+  var sel = window._csgSub || "";
+  var rows = (window._csgLista||[]).filter(function(d){
+    if (!q) return true;
+    return [d.numero, d.tipo, d.proveedor, d.fecha, d.oc_numero].join(" ").toLowerCase().indexOf(q) >= 0;
+  });
+  var body = rows.map(function(d){
+    var on = d.id === sel ? " on" : "";
+    return '<tr class="desk-row'+on+'" data-csg="'+_csgEsc(d.id)+'"><td>'+_csgEsc(d.numero||"")+'</td><td>'+_csgEsc(_csgTipo(d.tipo))+'</td><td>'+_csgEsc(d.proveedor||"")+'</td><td>'+_csgEsc(d.fecha||"")+'</td><td class="num">'+_csgMoney(d.total||0)+'</td></tr>';
+  }).join("") || '<tr><td colspan="5">Sin documentos.</td></tr>';
+  return '<div class="desk-bar">'
+    +'<input class="desk-q" id="csg-q" type="search" placeholder="Buscar número o proveedor" aria-label="Buscar consignación" value="'+_csgEsc(window._csgQ||"")+'">'
+    +'<button class="btn small" type="button" id="csg-nueva-entrada">Entrada</button>'
+    +'<button class="btn ghost small" type="button" id="csg-nueva-pedido">Pedido</button>'
+    +'<button class="btn ghost small" type="button" id="csg-nueva-cierre">Cierre</button>'
+    +'</div>'
+    +'<div class="sheet-scroll"><table class="desk-table nowrap-table"><thead><tr><th>Nº</th><th>Tipo</th><th>Proveedor</th><th>Fecha</th><th class="num">Total</th></tr></thead><tbody id="csg-tbody">'+body+'</tbody></table></div>';
+}
+function _csgPicker(id, label, valor, placeholder){
+  return '<label>'+label+'</label><div class="ac-wrap"><input id="'+id+'" placeholder="'+placeholder+'" autocomplete="off" value="'+_csgEsc(valor||"")+'"><div class="ac-list" hidden></div></div>';
+}
+function _csgFormHTML(){
+  var sub = window._csgSub;
+  var d = _csgForm();
+  var titulo = sub === "pedido" ? "Pedido de consignación" : sub === "cierre" ? "Cierre de periodo" : "Entrada de consignación";
+  var nota = sub === "pedido"
+    ? "Pide mercadería al proveedor. No entra al stock y no genera deuda."
+    : sub === "cierre"
+      ? "Liquida el mes: PDF de lo vendido (cantidad × costo) y una orden de compra abierta solo por eso. Lo que queda sigue consignado. El stock ya bajó con los tickets."
+      : "Registra lo recibido en consignación. El stock sube marcado por proveedor y no se crea deuda.";
+  var html = '<div class="desk-actions"><button type="button" class="btn ghost small" id="csg-back">← Consignación</button></div>'
+    +'<div class="card-title">'+titulo+'</div><p class="note">'+nota+'</p>'
+    +_csgPicker("csg-prov", "Proveedor", d.provNom, "Escribe para buscar");
+  if (sub === "cierre") {
+    html += '<label>Desde</label><input id="csg-desde" type="date" value="'+_csgEsc(d.desde||"")+'">'
+      +'<label>Hasta</label><input id="csg-hasta" type="date" value="'+_csgEsc(d.hasta||"")+'">'
+      +'<button class="btn block" type="button" id="csg-cerrar">Cerrar periodo y generar liquidación</button>';
+    return html;
+  }
+  html += _csgPicker("csg-sku", "Producto", "", "Escribe código o nombre")
+    +'<div id="csg-lines">'+_csgTabla(d.lineas, true)+'</div>'
+    +'<button class="btn block" type="button" id="csg-save">'+(sub === "pedido" ? "Generar pedido PDF" : "Registrar entrada")+'</button>';
+  return html;
+}
+function _csgDocHTML(){
+  var doc = window._csgDoc;
+  if (!doc) return '<p class="note">Elige un documento o registra una entrada.</p>';
+  var pie = "";
+  if (doc.tipo === "cierre") {
+    pie = '<p class="note">'+(doc.oc_numero ? "Orden de compra "+_csgEsc(doc.oc_numero)+" abierta hasta el pago." : "Sin ventas: no se creó orden de compra.")+' Lo que queda sigue consignado.</p>';
+    if (doc.oc_id) pie += '<p><a href="#/m/compras/'+_csgEsc(doc.oc_id)+'">Abrir la orden en Compras</a></p>';
+  } else {
+    pie = '<p class="note">Este documento no genera deuda.</p>';
+  }
+  var resto = doc.tipo === "cierre"
+    ? '<div class="card-title">Stock consignado que queda</div>'+_csgTabla(doc.restante||[], false)
+    : "";
+  return '<div class="desk-actions"><button type="button" class="btn ghost small" id="csg-back">← Consignación</button>'
+    +'<button type="button" class="btn ghost small" id="csg-pdf">PDF</button></div>'
+    +'<div class="card-title">'+_csgEsc(doc.numero||"")+' · '+_csgEsc(_csgTipo(doc.tipo))+'</div>'
+    +'<p class="note">'+_csgEsc(doc.proveedor||"")+(doc.fecha ? " · "+_csgEsc(doc.fecha) : "")+(doc.periodo_ini ? " · "+_csgEsc(doc.periodo_ini)+" → "+_csgEsc(doc.periodo_fin) : "")+'</p>'
+    +pie
+    +'<div class="card-title">'+(doc.tipo === "cierre" ? "Vendido a facturar" : "Productos")+'</div>'
+    +_csgTabla(doc.lineas||[], false)
+    +resto;
+}
+function _csgHomeHTML(){
+  var saldos = (window._csgSaldos||[]).map(function(r){
+    var c = _csgCal(r.cantidad, r.costo, 0);
+    var nombre = (r.nombre || "") + (r.proveedor ? " · " + r.proveedor : "");
+    return { codigo: r.sku, nombre: nombre, cantidad: r.cantidad, precio: r.costo, descuento: 0, subtotal: c.subtotal, iva: c.iva, total: c.total };
+  });
+  return '<div class="card-title">Stock consignado</div><p class="note">Sigue en el local, por proveedor, hasta que se venda y se cierre el mes.</p>'
+    +(saldos.length ? _csgTabla(saldos, false) : '<p class="note">No hay saldo consignado.</p>')
+    +'<p class="note">Entrada recibe mercadería sin deuda. Pedido solo pide más. Cierre liquida lo vendido.</p>';
+}
+function _csgDetailHTML(){
+  var sub = window._csgSub || "";
+  if (sub === "entrada" || sub === "pedido" || sub === "cierre") return _csgFormHTML();
+  if (sub) return _csgDocHTML();
+  return _csgHomeHTML();
+}
+function _csgPdf(doc){
+  if (!doc || typeof _cmpPdf !== "function") return;
+  var titulo = doc.tipo === "cierre" ? "SUNSU SPA — LIQUIDACIÓN DE CONSIGNACIÓN"
+    : doc.tipo === "pedido" ? "SUNSU SPA — PEDIDO DE CONSIGNACIÓN"
+    : "SUNSU SPA — ENTRADA DE CONSIGNACIÓN";
+  function fila(ln){
+    return [ln.codigo||ln.sku||"", ln.nombre||"", "cant "+(ln.cantidad||0), "unit "+_csgMoney(ln.precio), "desc "+_csgMoney(ln.descuento||0), "sub "+_csgMoney(ln.subtotal), "IVA "+_csgMoney(ln.iva), "tot "+_csgMoney(ln.total)].join("   ");
+  }
+  var lineas = [doc.proveedor||"", doc.periodo_ini ? ("Periodo "+doc.periodo_ini+" → "+doc.periodo_fin) : (doc.fecha||""), "Código    Nombre    Cantidad    Precio unit.    Descuento    Subtotal    IVA    Total"];
+  (doc.lineas||[]).forEach(function(ln){ lineas.push(fila(ln)); });
+  if (doc.tipo === "cierre") {
+    lineas.push("");
+    lineas.push("STOCK CONSIGNADO QUE QUEDA");
+    (doc.restante||[]).forEach(function(ln){ lineas.push(fila(ln)); });
+    if (!(doc.restante||[]).length) lineas.push("Nada pendiente con este proveedor.");
+  }
+  var pie = ["SUBTOTAL "+_csgMoney(doc.subtotal), "IVA "+_csgMoney(doc.iva), "TOTAL "+_csgMoney(doc.total)];
+  if (doc.tipo === "cierre") {
+    pie.push(doc.oc_numero ? "Orden de compra "+doc.oc_numero+" abierta hasta el pago." : "Sin ventas: no se creó orden de compra.");
+    pie.push("Lo que queda sigue consignado.");
+  } else pie.push("Este documento no genera deuda.");
+  var nombre = (doc.tipo === "pedido" ? "PEDIDO " : doc.tipo === "cierre" ? "LIQUIDACION " : "ENTRADA ") + (doc.numero || "consignacion");
+  _cmpPdf(nombre, titulo, lineas, pie);
+}
+function _csgAgregar(it){
+  var d = _csgForm();
+  var ya = (d.lineas||[]).filter(function(ln){ return ln.codigo === it.sku; })[0];
+  if (ya) ya.cantidad = (Number(ya.cantidad)||0) + 1;
+  else d.lineas.push({ codigo: it.sku, nombre: it.nombre, cantidad: 1, precio: Number(it.precio)||0, descuento: 0 });
+  var host = document.getElementById("csg-lines");
+  if (host) host.innerHTML = _csgTabla(d.lineas, true);
+  var q = document.getElementById("csg-sku");
+  if (q) q.value = "";
+}
+async function _csgGuardar(kind){
+  _csgSync();
+  var d = _csgForm();
+  if (!d.provId) { _csgMsg("Elige el proveedor"); return; }
+  var btn = document.getElementById(kind === "cierre" ? "csg-cerrar" : "csg-save");
+  if (btn) btn.disabled = true;
+  var payload = { proveedor_id: d.provId, desde: d.desde, hasta: d.hasta, lineas: (d.lineas||[]).filter(function(ln){ return Number(ln.cantidad) > 0; }).map(function(ln){
+    return { sku: ln.codigo, cantidad: ln.cantidad, precio: ln.precio, descuento: ln.descuento };
+  }) };
+  var accion = kind === "pedido" ? "csg_pedido" : kind === "cierre" ? "csg_cierre" : "csg_entrada";
+  var res = await api(accion, payload);
+  if (btn) btn.disabled = false;
+  if (!res || res.error) { _csgMsg((res && res.error) || "No se pudo guardar"); return; }
+  d.lineas = [];
+  var doc = res.doc || res;
+  if (kind !== "entrada") _csgPdf(doc);
+  if (typeof go === "function") go("#/m/consignacion/" + (res.id || doc.id || ""));
+}
+function _csgWire(){
+  var q = document.getElementById("csg-q");
+  if (q) q.oninput = function(){
+    window._csgQ = q.value || "";
+    var tb = document.getElementById("csg-tbody");
+    if (!tb) return;
+    var html = _csgListHTML();
+    var m = html.match(/<tbody id="csg-tbody">([\s\S]*)<\/tbody>/);
+    tb.innerHTML = m ? m[1] : "";
+    document.querySelectorAll("[data-csg]").forEach(function(tr){
+      tr.onclick = function(){ if (typeof go === "function") go("#/m/consignacion/" + tr.getAttribute("data-csg")); };
+    });
+  };
+  var ir = function(id, hash){
+    var b = document.getElementById(id);
+    if (b) b.onclick = function(){ if (typeof go === "function") go(hash); };
+  };
+  ir("csg-nueva-entrada", "#/m/consignacion/entrada");
+  ir("csg-nueva-pedido", "#/m/consignacion/pedido");
+  ir("csg-nueva-cierre", "#/m/consignacion/cierre");
+  ir("csg-back", "#/m/consignacion");
+  document.querySelectorAll("[data-csg]").forEach(function(tr){
+    tr.onclick = function(){ if (typeof go === "function") go("#/m/consignacion/" + tr.getAttribute("data-csg")); };
+  });
+  var pdf = document.getElementById("csg-pdf");
+  if (pdf) pdf.onclick = function(){ _csgPdf(window._csgDoc); };
+  var save = document.getElementById("csg-save");
+  if (save) save.onclick = function(){ _csgGuardar(window._csgSub === "pedido" ? "pedido" : "entrada"); };
+  var cerrar = document.getElementById("csg-cerrar");
+  if (cerrar) cerrar.onclick = function(){ _csgGuardar("cierre"); };
+  var root = document.getElementById("csg-root");
+  if (root && !root._csgIn) {
+    root._csgIn = true;
+    root.addEventListener("input", function(ev){
+      var t = ev.target;
+      if (!t || !t.getAttribute) return;
+      if (t.hasAttribute("data-csg-qty") || t.hasAttribute("data-csg-precio") || t.hasAttribute("data-csg-desc")) _csgRefrescar();
+    });
+  }
+  var prov = document.getElementById("csg-prov");
+  if (prov && typeof _cmpAc === "function") {
+    _cmpAc(prov, function(){
+      return (window._csgProv||[]).map(function(p){ return { id: p.id, label: p.nombre, extra: p.familia || p.ruc || "", raw: p }; });
+    }, function(it){
+      var d = _csgForm();
+      d.provId = it.id; d.provNom = it.label; prov.value = it.label;
+    }, "Sin proveedores.");
+  }
+  var sku = document.getElementById("csg-sku");
+  if (sku && typeof _cmpAc === "function") {
+    _cmpAc(sku, function(){
+      return (window._csgCat||[]).map(function(p){ return { sku: p.sku, nombre: p.nombre, precio: p.costo_promedio || 0, label: p.sku, extra: p.nombre }; });
+    }, function(it){ _csgAgregar(it); }, "Sin productos.");
+  }
+}
+async function renderConsignacion(){
+  var route = (typeof parseRoute === "function") ? parseRoute() : { sub: "" };
+  window._csgSub = route.sub || "";
+  var lista = await api("csg_list");
+  window._csgLista = (lista && lista.items) || [];
+  window._csgSaldos = (lista && lista.saldos) || [];
+  var prov = await api("prov_list");
+  var cat = await api("prod_list");
+  window._csgProv = (prov && prov.items) || [];
+  window._csgCat = (cat && cat.items) || [];
+  window._csgDoc = null;
+  var sub = window._csgSub;
+  if (sub && sub !== "entrada" && sub !== "pedido" && sub !== "cierre") {
+    var got = await api("csg_get", { id: sub });
+    window._csgDoc = (got && (got.doc || (got.numero ? got : null))) || null;
+    if (got && got.error) window._csgDoc = null;
+  }
+  var abierto = !!sub;
+  return '<div id="csg-root" class="desk"><div class="desk-split csg-desk'+(abierto ? " desk-open" : "")+'">'
+    +'<div class="desk-list" id="csg-list"></div><div class="desk-detail" id="csg-detail"></div></div>'
+    +'<p class="err" id="csg-msg"></p></div>';
+}
+function wireConsignacion(main){
+  if (!main || !main.querySelector("#csg-root")) return;
+  var list = main.querySelector("#csg-list");
+  var det = main.querySelector("#csg-detail");
+  if (list) list.innerHTML = _csgListHTML();
+  if (det) det.innerHTML = _csgDetailHTML();
+  _csgWire();
+}
+
 
 

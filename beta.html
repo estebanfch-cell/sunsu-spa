@@ -661,6 +661,18 @@
   .tk-orden .num { text-align: right; font-variant-numeric: tabular-nums; }
   .tk-orden tfoot td { border-bottom: 0; color: var(--gray); }
   .tk-orden tfoot .tk-orden-tot td { color: var(--navy); font-weight: 900; border-top: 1px solid var(--cream-d); }
+  @media (min-width: 861px) {
+    .desk-split.csg-desk { grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); }
+    .desk-split.csg-desk .desk-detail { display: block; position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
+  }
+  .csg-sheet { display: block; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+  .csg-orden { border-collapse: collapse; font-size: 0.78rem; width: max-content; min-width: 720px; overflow: visible; box-shadow: none; }
+  .csg-orden th, .csg-orden td { white-space: nowrap; max-width: none; overflow: visible; text-overflow: clip; padding: 6px 8px; border-bottom: 1px solid var(--cream-d); color: var(--navy); text-align: left; vertical-align: middle; word-break: keep-all; }
+  .csg-orden th { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); }
+  .csg-orden .num, .csg-orden th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .csg-orden tfoot td { border-bottom: 0; color: var(--gray); }
+  .csg-orden tfoot .csg-tot td { color: var(--navy); font-weight: 900; border-top: 1px solid var(--cream-d); }
+  .csg-orden input { width: 4.6rem; margin: 0; padding: 4px 6px; min-height: 32px; }
   .nowrap-table th, .nowrap-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--navy); }
@@ -825,7 +837,7 @@
     .paq-sheet { overflow-x: auto; }
     .paq-line, .paq-row { min-width: 640px; }
   }
-  .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
+  .sheet-scroll { overflow: auto; max-width: 100%; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
   .sheet-scroll table { min-width: 640px; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
   .chooser-actions { display: flex; flex-direction: column; gap: 8px; }
@@ -868,6 +880,7 @@ const MENU = [
   ["productos", "Productos"],
   ["inventario", "Inventario"],
   ["compras", "Compras"],
+  ["consignacion", "Consignación"],
   ["transferencias", "Transferencias"],
   ["conteos", "Conteos"],
   ["kardex", "Kardex"],
@@ -1164,6 +1177,28 @@ function previewApi(accion, body) {
     return { ok: true, vacio: true, familia: fam, aviso: "No hubo ventas de " + (fam || "ese proveedor") + " entre " + (body.desde || "") + " y " + (body.hasta || "") + ".", lineas: [] };
   }
   if (accion === "compras_guardar") return { ok: true, id: "oc-nueva", flujo: "Borrador" };
+  if (accion === "csg_list") return { ok: true, items: [
+    { id: "csg-1", numero: "CSG-0001", tipo: "entrada", proveedor: "Hebetronic S.A", fecha: "2026-10-02", total: 36.8, estado: "registrada" },
+    { id: "csg-2", numero: "CSG-0002", tipo: "cierre", proveedor: "Hebetronic S.A", fecha: "2026-10-31", total: 18.4, estado: "cerrada", oc_numero: "OC-0090" },
+  ], saldos: [
+    { sku: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", proveedor: "Hebetronic S.A", cantidad: 3, costo: 8 },
+  ] };
+  if (accion === "csg_get" || accion === "csg_entrada" || accion === "csg_pedido" || accion === "csg_cierre") {
+    const tipo = accion === "csg_pedido" || body.id === "csg-ped" ? "pedido" : accion === "csg_cierre" || body.id === "csg-2" ? "cierre" : "entrada";
+    const doc = {
+      id: accion === "csg_cierre" ? "csg-2" : accion === "csg_pedido" ? "csg-ped" : (body.id || "csg-1"),
+      numero: tipo === "cierre" ? "CSG-0002" : tipo === "pedido" ? "CSG-0003" : "CSG-0001", tipo,
+      proveedor: "Hebetronic S.A", proveedor_id: "prov-ht", fecha: "2026-10-02",
+      periodo_ini: "2026-10-01", periodo_fin: "2026-10-31",
+      estado: tipo === "cierre" ? "cerrada" : tipo === "pedido" ? "pedido" : "registrada",
+      oc_numero: tipo === "cierre" ? "OC-0090" : "",
+      subtotal: 16, iva: 2.4, total: 18.4,
+      nota: tipo === "pedido" ? "Pedido de consignación. No genera deuda." : "Entrada de consignación. No genera deuda.",
+      lineas: [{ codigo: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", cantidad: 2, precio: 8, descuento: 0, subtotal: 16, iva: 2.4, total: 18.4 }],
+      restante: tipo === "cierre" ? [{ codigo: "HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", cantidad: 3, precio: 8, descuento: 0, subtotal: 24, iva: 3.6, total: 27.6 }] : [],
+    };
+    return { ok: true, id: doc.id, numero: doc.numero, doc };
+  }
   if (accion === "lugares_list" || accion === "lugar_guardar" || accion === "lugar_elegir") {
     return { ok: true, uno: true, local_id: LOCAL_ESQUINA, nombre: "La Esquina", locales: [{ id: LOCAL_ESQUINA, codigo: "ESQUINA", nombre: "La Esquina", direccion: "C.C. La Esquina, Cumbayá", activo: true }], lugares: [
       { id: CASA, codigo: "CASA", nombre: "Casa", tipo: "casa", activo: true, orden: 0 },
@@ -1403,6 +1438,12 @@ function tituloRuta(route, tab) {
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
+  if (route.mod === "consignacion") {
+    if (route.sub === "entrada") return "Entrada de consignación";
+    if (route.sub === "pedido") return "Pedido de consignación";
+    if (route.sub === "cierre") return "Cierre de periodo";
+    return "Consignación";
+  }
   if (route.mod === "compras" && route.sub === "nueva") return "Nueva OC";
   if (route.mod === "compras" && route.sub && route.sub !== "rfq") return "Orden de compra";
   if (route.mod === "inventario" && route.sub === "nuevo") return "Nuevo producto";
@@ -1468,7 +1509,7 @@ function frenteRol() {
   return state.admin || rol === "recepcion" || rol === "gerente";
 }
 function gruposVisibles() {
-  const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias", "configuracion"]);
+  const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias", "configuracion", "consignacion"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
     let vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
@@ -1503,6 +1544,7 @@ function gruposVisibles() {
   const paquetesMenu = [];
   if (acceso("paquetes") !== "no") paquetesMenu.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
   if (paquetesMenu.length) out.push({ id: "paquetes", label: "📦 Paquetes", items: paquetesMenu });
+  if (acceso("consignacion") !== "no") out.push({ id: "consignacion", label: "🤝 Consignación", items: [["consignacion", "Consignación", "#/m/consignacion"]] });
   if (esRolCitas()) add("Citas", "📅", [["inicio", "Mis citas", "#/m/citas"]]);
   const seg = [];
   if (frenteRol()) {
@@ -1909,7 +1951,7 @@ function pantallaSunsu(route) {
   if (m === "inventario") return "inventario";
   if (m === "conteos" && !route.sub) return "inv-fisico";
   if (m === "conteos" || m === "lugares") return "";
-  if (m === "compras") return "";
+  if (m === "compras" || m === "consignacion") return "";
   if (m === "proveedores") return "";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
@@ -2072,6 +2114,7 @@ async function renderMod(route) {
   }
   if (route.mod === "lugares") return renderLugares();
   if (route.mod === "compras") return renderCompras(route.sub);
+  if (route.mod === "consignacion") return renderConsignacion();
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
@@ -4856,6 +4899,7 @@ function bind(main) {
   wireProveedores(main);
   wireCatalogo(main);
   if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
+  if (typeof wireConsignacion === "function") wireConsignacion(main);
   wireInventario(main);
   if (typeof wireConteoFlujo === "function") wireConteoFlujo(main);
   wireBatch(main);
@@ -5502,7 +5546,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029menu1"></script>
+<script src="beta-screens.js?v=20261029csg1"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>

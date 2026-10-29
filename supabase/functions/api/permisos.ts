@@ -13,7 +13,7 @@ export type Acceso = "no" | "propio" | "todos";
 
 export const MODULOS = [
   "inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "ver_costos",
-  "clientes", "proveedores", "compras", "inventario", "transferencias", "conteos", "kardex",
+  "clientes", "proveedores", "compras", "consignacion", "inventario", "transferencias", "conteos", "kardex",
   "cotizaciones_cliente", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos",
   "configuracion",
 ] as const;
@@ -42,6 +42,7 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: T, inventario: T, transferencias: T, conteos: T, kardex: T,
     cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, bitacora: T, cabina: T,
+    consignacion: T,
   },
 };
 
@@ -67,6 +68,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   compras_periodo: "compras", compras_guardar: "compras", compras_aprobar: "compras", compras_enviar: "compras",
   compras_pago: "compras", compras_saldo: "compras", compras_reporte: "compras",
   compras_lista: "inventario", compras_recibir: "inventario",
+  csg_list: "consignacion", csg_get: "consignacion", csg_entrada: "consignacion", csg_pedido: "consignacion", csg_cierre: "consignacion",
   conteo_plan: "conteos", conteo_crear: "conteos", conteo_asignar: "conteos", conteo_panel: "conteos", conteo_aprobar: "conteos",
   conteo_mios: "inicio", conteo_seccion: "inicio", conteo_guardar_sec: "inicio", conteo_cerrar_sec: "inicio", conteo_usuarios: "conteos",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
