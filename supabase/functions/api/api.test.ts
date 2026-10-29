@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { MemoryDb } from "./db.ts";
 import { CFG_DEF, calcularCiclo, comisionPaquetesTramo, comisionProductos, contarExtras, desglosePaquetesTramo, listaExtrasPagados, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
 import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
+import { siguienteCodigoGC } from "./handlers.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
 import { numeroTicket, ordenarClientes, quincenaDe } from "./ventas.ts";
@@ -1373,6 +1374,23 @@ describe("modo prueba", () => {
     return { real, prueba };
   }
 
+  it("GC en prueba: código TEST-, fila de prueba visible, no toca la hoja ni app_kv", async () => {
+    const db = new MemoryDb();
+    db.tables.set("gift_cards", [{ sheet_row: 415, codigo_gc: "26-161", orig: {} }]);
+    db.tables.set("app_kv", []);
+    const { real, prueba } = conPrueba(db);
+    const cod = await handle("getCodigoGC", { token: prueba }, real) as Row;
+    assert.match(String(cod.codigo), /^TEST-\d{2}-001$/);
+    const reg = await handle("registrarGC", { token: prueba, fila: cod.fila, codigo: cod.codigo, nombre: "Emi" }, real) as Row;
+    assert.equal(reg.ok, true);
+    await handle("guardarGCDigital", { token: prueba, codigo: cod.codigo, mensaje: "hola" }, real);
+    const filas = db.tables.get("gift_cards")!;
+    assert.equal(filas.find((r) => r.codigo_gc === "26-161")?.dia, undefined);
+    assert.equal(filas.find((r) => r.codigo_gc === cod.codigo)?.origin, "test");
+    assert.equal(db.tables.get("app_kv")!.length, 0);
+    const lista = await handle("buscarGiftCards", { token: prueba, q: "*" }, real) as Row;
+    assert.ok((lista.resultados as Row[]).some((g) => g.codigo === cod.codigo && g.prueba === true));
+  });
   it("solo un admin enciende el modo, y la otra sesión sigue real", async () => {
     const db = new MemoryDb();
     const cosm = ctx(db, "cosmetologa", "andrea", "Andrea");
@@ -2519,7 +2537,9 @@ describe("series, comisiones y rol", () => {
     const bajaBlanca = await handle("inline_borrar", { token: adminC.token, tabla: "gift_cards", fila: "2" }, adminC) as Row;
     assert.equal(bajaBlanca.ok, true);
     const sin = await handle("getCodigoGC", { token: adminC.token }, adminC) as Row;
-    assert.match(String(sin.error), /sin códigos/i);
+    // Sin blancos del año: crea el siguiente código del año (no reusa el borrado)
+    assert.match(String(sin.codigo), /^\d{2}-\d{3}$/);
+    assert.notEqual(sin.codigo, "26-001");
     const paq = await handle("inline_guardar", {
       token: adminC.token, tabla: "paquetes", fila: "nuevo", campos: { nombre: "Luz", sku: "SUNSU-P3", paquete: "Pack 3" },
     }, adminC) as Row;
@@ -3032,8 +3052,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3141,8 +3161,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3211,16 +3231,17 @@ describe("gift cards lista", () => {
     _gcFechaEmision: (g: Record<string, unknown>) => string;
   };
 
-  it("abre con las abiertas y la tabla trae código, clienta, monto, saldo y estado", async () => {
-    assert.match(src, /verTodasGC\('abiertas'\)/);
+  it("abre en Vigentes (código desc) y la tabla trae código, clienta, monto, saldo y estado", async () => {
+    assert.match(src, /else verTodasGC\('vig'\)/);
+    assert.match(src, /localeCompare\(String\(a\.codigo\|\|''\),'es',\{numeric:true/);
     assert.match(src, /id="gc-f-todas"/);
     assert.match(src, /id="gc-f-vig"/);
     assert.match(src, /id="gc-f-cad"/);
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3270,8 +3291,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3304,8 +3325,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3351,8 +3372,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261029hf2/);
-    assert.match(sw, /sunsu-beta-2026-10-29-HF2/);
+    assert.match(beta, /beta-screens\.js\?v=20261029gc2/);
+    assert.match(sw, /sunsu-beta-2026-10-29-GC2/);
   });
 });
 
@@ -3965,5 +3986,13 @@ describe("ticket como orden de venta", () => {
     assert.match(html, /Subtotal sin IVA/);
     assert.match(html, /Total con IVA/);
     assert.match(src, /var breakdown=_tkTablaHTML\(t, showPrices\);/);
+  });
+});
+
+describe("códigos GC por año", () => {
+  it("YY-NNN y reinicia al cambiar de año", () => {
+    assert.equal(siguienteCodigoGC(["26-160", "26-161", "25-400"], "26"), "26-162");
+    assert.equal(siguienteCodigoGC(["26-160", "26-300"], "27"), "27-001");
+    assert.equal(siguienteCodigoGC(["27-009", "TEST-27-050"], "27"), "27-010");
   });
 });

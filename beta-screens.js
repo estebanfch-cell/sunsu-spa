@@ -12936,7 +12936,7 @@ function _gcTablaHTML(lista){
     var saldoTxt=(saldo==null||saldo==='')?'—':(typeof saldo==='number'?saldo.toFixed(2):String(saldo));
     var quien=((g.nombre||'')+' '+(g.apellido||'')).trim()||'—';
     return '<tr class="gc-row" onclick="_gcAbrir('+i+',this)">'
-      +'<td>'+_gcEsc(g.codigo||'')+'</td>'
+      +'<td>'+_gcEsc(g.codigo||'')+(g.prueba?' <span class="paq-prueba">🧪 PRUEBA</span>':'')+'</td>'
       +'<td>'+_gcEsc(quien)+'</td>'
       +'<td class="num">'+_gcEsc(g.valor||'—')+'</td>'
       +'<td class="num md-x">'+_gcEsc(saldoTxt)+'</td>'
@@ -12958,7 +12958,7 @@ function _gcAbrir(i, fila){
 function verTodasGC(filtro){
   var res=document.getElementById('bgc-results');
   if(!res) return;
-  filtro=filtro||'todas';
+  filtro=filtro||window._gcFiltro||'vig';
   window._gcFiltro=filtro;
   _gcMarcarFiltro(filtro);
   res.innerHTML='<div class="loading"><div class="spinner"></div>Cargando todas las gift cards...</div>';
@@ -12976,6 +12976,8 @@ function verTodasGC(filtro){
         if(filtro==='abiertas') return !_gcCerrada(x.g);
         return true;
       }).map(function(x){return x.g;});
+      // Más nueva primero: código descendente, numérico (26-160 antes que 26-159, 26-100 antes que 26-99)
+      lista.sort(function(a,b){ return String(b.codigo||'').localeCompare(String(a.codigo||''),'es',{numeric:true,sensitivity:'base'}); });
       var nota=filtro==='abiertas'?' · sin cerradas ni usadas por completo':(filtro==='todas'?' · incluye cerradas y usadas':'');
       res.innerHTML='<div style="font-size:0.66rem;color:var(--gray);margin-bottom:8px">'+arr.length+' gift cards · <b style="color:#2E7D52">'+nVig+' vigentes</b> · <b style="color:#E8543F">'+nCad+' caducadas</b> · '+nUso+' consumidas'+nota+'</div>'
         +(lista.length?_gcTablaHTML(lista):'<div class="card" style="text-align:center;color:var(--gray);padding:20px">Sin gift cards en este filtro</div>');
@@ -12994,15 +12996,15 @@ function renderBuscarGC(c){
     +'<button onclick="ejecutarBuscarGC()" style="padding:10px 16px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">🔍</button>'
     +'</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
-    +'<button id="gc-f-abiertas" onclick="verTodasGC(\'abiertas\')" aria-pressed="true" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">Abiertas</button>'
+    +'<button id="gc-f-abiertas" onclick="verTodasGC(\'abiertas\')" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">Abiertas</button>'
     +'<button id="gc-f-todas" onclick="verTodasGC(\'todas\')" style="padding:7px 12px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">📋 Ver todas</button>'
-    +'<button id="gc-f-vig" onclick="verTodasGC(\'vig\')" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button>'
+    +'<button id="gc-f-vig" onclick="verTodasGC(\'vig\')" aria-pressed="true" style="padding:7px 12px;background:#E8F8EE;color:#2E7D52;border:1.5px solid #6A9E7A;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">✓ Vigentes</button>'
     +'<button id="gc-f-cad" onclick="verTodasGC(\'cad\')" style="padding:7px 12px;background:#FDEAE6;color:#E8543F;border:1.5px solid #E8543F;border-radius:9px;font-size:0.66rem;font-weight:700;cursor:pointer">⛔ Caducadas</button></div>'
     +'<div id="gc-nuevo">'+(window.SunsuInline&&SunsuInline.edita()?SunsuInline.mas("gift_cards"):'')+'</div><div id="bgc-results"></div>';
   var inp=document.getElementById('bgc-inp');
   if(inp){
     if(window._bgcPrefill){inp.value=window._bgcPrefill;window._bgcPrefill='';setTimeout(ejecutarBuscarGC,50);}
-    else verTodasGC('abiertas');
+    else verTodasGC('vig');   // siempre abre en Vigentes
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')ejecutarBuscarGC();});
     inp.addEventListener('input',function(){
       clearTimeout(window._bgcTimer);

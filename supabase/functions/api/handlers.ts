@@ -1386,31 +1386,79 @@ reg("marcarAgendadasLote", "any", async (p, ctx, ses) => {
   return { ok: true, n: nOk };
 });
 
-reg("getCodigoGC", "any", async (p, ctx) => unoGC(p, ctx));
-reg("getCodigosGC", "any", async (p, ctx) => {
+reg("getCodigoGC", "any", async (p, ctx, ses) => unoGC(p, ctx, ses));
+reg("getCodigosGC", "any", async (p, ctx, ses) => {
   const nNeed = Math.max(1, n(p.n) || 1);
-  const libres = await libresGC(ctx, {});
+  if (ctx.db.prueba) return { codigos: await codigosPruebaGC(ctx, nNeed) };
+  const libres = await libresGC(ctx, {}, ses, nNeed);
   if (libres.length < nNeed) return { error: "Solo hay " + libres.length + " código(s) disponibles, se necesitan " + nNeed };
   return { codigos: libres.slice(0, nNeed) };
 });
-async function libresGC(ctx: Ctx, exclude: R) {
-  const rows = (await ctx.db.all("gift_cards")).sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
-  const out = [];
+// Códigos GC: YY-NNN con secuencia POR AÑO. Se usan primero los códigos en blanco del año en curso
+// (pre-cargados en la hoja); si no quedan, se crea el siguiente (p. ej. al cambiar de año: 27-001).
+// Los de años anteriores que quedaron en blanco ya no se reparten.
+export function siguienteCodigoGC(codigos: string[], yy: string): string {
+  let max = 0;
+  for (const c of codigos) {
+    const m = /^(\d{2})-(\d+)$/.exec(s(c).trim());
+    if (m && m[1] === yy) max = Math.max(max, Number(m[2]));
+  }
+  return yy + "-" + String(max + 1).padStart(3, "0");
+}
+async function libresGC(ctx: Ctx, exclude: R, ses?: Ses, nNeed = 1) {
+  const yy = String(ecuadorParts(ctx.now).y).slice(-2);
+  const todas = await ctx.db.all("gift_cards");
+  const rows = todas.slice().sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
+  const out: R[] = [];
   for (const r of rows) {
     if (exclude[String(r.sheet_row)]) continue;
     if (r.borrado_at) continue;
-    if (s(r.codigo_gc) && blankDia(r.dia)) out.push({ codigo: s(r.codigo_gc), fila: r.sheet_row });
+    if (s(r.origin) === "test") continue;
+    if (s(r.codigo_gc).startsWith(yy + "-") && blankDia(r.dia)) out.push({ codigo: s(r.codigo_gc), fila: r.sheet_row });
+  }
+  if (out.length < nNeed && ses && !ctx.db.prueba) {
+    const usados = todas.map((r) => s(r.codigo_gc));
+    while (out.length < nNeed) {
+      const codigo = siguienteCodigoGC(usados, yy);
+      usados.push(codigo);
+      const saved = await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, { sheet_row: 1, codigo_gc: codigo, orig: { creado: "beta", ts: ecuadorParts(ctx.now).isoWall } });
+      out.push({ codigo, fila: saved && saved.sheet_row != null ? saved.sheet_row : null });
+    }
   }
   return out;
 }
-async function unoGC(p: R, ctx: Ctx) {
+// Modo prueba: códigos TEST-YY-NNN propios; nunca toman un número real.
+async function codigosPruebaGC(ctx: Ctx, nNeed: number): Promise<R[]> {
+  const yy = String(ecuadorParts(ctx.now).y).slice(-2);
+  const tests = (await ctx.db.all("gift_cards")).filter((r) => s(r.origin) === "test").map((r) => s(r.codigo_gc).replace(/^TEST-/, ""));
+  const out: R[] = [];
+  for (let i = 0; i < nNeed; i++) {
+    const c = siguienteCodigoGC(tests, yy);
+    tests.push(c);
+    out.push({ codigo: "TEST-" + c, fila: "prueba" });
+  }
+  return out;
+}
+async function unoGC(p: R, ctx: Ctx, ses?: Ses) {
+  if (ctx.db.prueba) return (await codigosPruebaGC(ctx, 1))[0];
   const exclude: R = {};
-  for (const f of s(p.excludeFilas).split(",")) if (n(f) > 0) exclude[String(n(f))] = true;
-  const libres = await libresGC(ctx, exclude);
+  for (const f of s(p.excludeFilas).split(",")) if (n(f) !== 0) exclude[String(n(f))] = true;
+  const libres = await libresGC(ctx, exclude, ses);
   if (!libres.length) return { error: "Sin códigos GC disponibles" };
   return libres[0];
 }
 reg("registrarGC", "any", async (p, ctx, ses) => {
+  if (ctx.db.prueba) {
+    // GC de prueba: fila propia origin=test con código TEST-…, visible en la lista con 🧪
+    let codigo = s(p.codigo);
+    if (!codigo.startsWith("TEST-")) codigo = s((await codigosPruebaGC(ctx, 1))[0].codigo);
+    const ec0 = ecuadorParts(ctx.now);
+    const saved = await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, {
+      sheet_row: 1, codigo_gc: codigo, dia: ec0.d, mes: ec0.m, ano: ec0.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre),
+      apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: s(p.notas), valor: s(p.valor || p.monto) || "Gift Card", orig: { prueba: true, ts: ec0.isoWall },
+    });
+    return { ok: true, codigo, fila: saved ? saved.sheet_row : null, prueba: true };
+  }
   const fila = n(p.fila);
   const row = fila ? await rowBySheet(ctx.db, "gift_cards", fila) : (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc) === s(p.codigo));
   if (!row || row.borrado_at) return { error: "Código no encontrado" };
@@ -1438,7 +1486,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
-      saldo: saldoGift(r),
+      saldo: saldoGift(r), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
@@ -2026,6 +2074,12 @@ reg("getGCDigitales", "any", async (_p, ctx) => {
   return { items };
 });
 reg("guardarGCDigital", "any", async (p, ctx, ses) => {
+  if (ctx.db.prueba) {
+    // app_kv / gift_cards_digitales no tienen 'origin': en prueba el detalle digital va en la propia fila de prueba
+    const row = (await ctx.db.all("gift_cards")).find((r) => s(r.origin) === "test" && s(r.codigo_gc) === s(p.codigo));
+    if (row) await ctx.db.write(actorOf(ses), "gift_cards", "update", { sheet_row: row.sheet_row }, { orig: { ...((row.orig || {}) as R), digital: { mensaje: s(p.mensaje), ts: ecuadorParts(ctx.now).isoWall, por: ses.name } } });
+    return { ok: true, prueba: true };
+  }
   const store = await kvGet(ctx.db, "SUNSU_GC_DIGITALES");
   const gc = { mensaje: s(p.mensaje), ts: ecuadorParts(ctx.now).isoWall, por: ses.name, imagen: s(p.imagen).startsWith("http") ? s(p.imagen) : "", codigo: s(p.codigo) };
   store[s(p.codigo)] = gc;
