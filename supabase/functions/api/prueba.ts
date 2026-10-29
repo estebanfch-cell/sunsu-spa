@@ -87,6 +87,8 @@ async function giftVirtual(inner: Db): Promise<Row[]> {
   });
 }
 
+const SIN_ORIGIN = new Set(["app_kv", "gift_cards_digitales"]);
+
 class VistaDb implements Db {
   prueba: boolean;
   inner: Db;
@@ -107,6 +109,8 @@ class VistaDb implements Db {
   }
   async write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null> {
     if (!this.on) return this.inner.write(actor, table, op, match, row);
+    // Tablas sin columna 'origin': una escritura de prueba quedaría como REAL. No se tocan.
+    if (SIN_ORIGIN.has(table)) return { ...(row || {}), origin: "test" };
     if (table === "erp_stock") {
       if (op === "delete") throw new Error("Modo prueba no borra datos reales");
       return { ...(row || {}), origin: "test" };
