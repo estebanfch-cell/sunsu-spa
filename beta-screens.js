@@ -1083,6 +1083,7 @@ function renderTicket(c){
       (T.cobro==='cortesia'?'<div id="cortesia-banner" style="background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>':'<div id="cortesia-banner" style="display:none;background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>')+
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--lavender)">Detalle del canje de paquete</span>'+
+        '<select id="paq-pick" onchange="_paqElegir(this.value)" style="width:100%;padding:9px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.82rem;background:white;color:var(--text);font-family:inherit;margin-bottom:8px"><option value="">Elige el paquete de la clienta…</option></select>'+
         '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Nº de sesión: 1/3, 2/6, 3/3..." oninput="T.usoPaq=this.value">'+
         '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--lavender);cursor:pointer">'+
           '<input type="checkbox" onchange="toggleOtro(this.checked)" style="width:14px;height:14px">Es canje del paquete de otro cliente'+
@@ -1314,7 +1315,7 @@ function renderTicket(c){
       <div class="card">
         <div class="card-title">👤 Cliente</div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" oninput="T.cedula=this.value;window._cedAutofill=false;var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);}">
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" oninput="T.cedula=this.value;window._cedAutofill=false;var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
         </div>
         <div class="two-col">
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
@@ -1364,6 +1365,42 @@ function selFacial(sku){
   if(sub) sub.innerHTML=T.facial?`<span style="color:var(--pink-d);font-weight:600">${FACIALES.find(f=>f.sku===T.facial)?.n}</span>`:'Ninguno seleccionado';
   updatePreview();
 }
+// ── Picker: contra qué paquete ACTIVO de la clienta se canjea el facial ──
+function _paqCargarPicker(){
+  var sel=document.getElementById('paq-pick'); if(!sel) return;
+  var ced=String(T.cedula||'').replace(/\D/g,'');
+  var base='<option value="">Elige el paquete de la clienta…</option>'
+    +((T.pack3||T.pack6)?'<option value="nuevo">Paquete nuevo de este ticket (sesión 1)</option>':'');
+  if(!ced){ sel.innerHTML=base+'<option value="" disabled>Escribe la cédula para ver sus paquetes</option>'; return; }
+  sel.innerHTML=base+'<option value="" disabled>Buscando paquetes…</option>';
+  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)+'&_t='+Date.now())
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var act=((d&&d.resultados)||[]).filter(function(p){
+        var tot=Number(p.total)||3, us=(p.usos||[]).filter(function(u){return u&&(u.usado||u.fecha);}).length;
+        return !p.completo && us<tot && String(p.cedula||'').replace(/\D/g,'')===ced;
+      });
+      window._paqActivos=act;
+      sel.innerHTML=base+(act.length?act.map(function(p,i){
+        var tot=Number(p.total)||3, us=(p.usos||[]).filter(function(u){return u&&(u.usado||u.fecha);}).length;
+        var f=(p.dia&&p.mes)?(' · '+String(p.dia).padStart(2,'0')+'/'+String(p.mes).padStart(2,'0')+'/'+String(p.ano||'').slice(-2)):'';
+        return '<option value="'+i+'">'+_tkEsc((p.sku||'')+' '+(p.paquete||''))+' · '+us+'/'+tot+' usadas'+f+'</option>';
+      }).join(''):'<option value="" disabled>Sin paquetes activos para esta cédula</option>');
+      if(T.paqPick&&T.paqPick.i!=null&&act[T.paqPick.i]) sel.value=String(T.paqPick.i);
+    })
+    .catch(function(){ sel.innerHTML=base+'<option value="" disabled>No se pudieron cargar los paquetes</option>'; });
+}
+function _paqElegir(v){
+  var inp=document.querySelector('#paq-box input[type=text]');
+  if(v===''){ T.paqPick=null; return; }
+  if(v==='nuevo'){ T.paqPick={fila:'nuevo'}; T.usoPaq='1/'+(T.pack6?6:3); if(inp) inp.value=T.usoPaq; return; }
+  var p=(window._paqActivos||[])[Number(v)]; if(!p) return;
+  var tot=Number(p.total)||3, usos=p.usos||[], idx=0;
+  for(var k=0;k<tot;k++){ if(!(usos[k]&&(usos[k].usado||usos[k].fecha))){ idx=k; break; } }
+  T.paqPick={i:Number(v), fila:p.fila, idx:idx, total:tot, nombre:(p.paquete||p.sku||'paquete')};
+  T.usoPaq=(idx+1)+'/'+tot;
+  if(inp) inp.value=T.usoPaq;
+}
 function selCobro(tipo){
   T.cobro=T.cobro===tipo?null:tipo;
   ['cobrado','paquete','gc','cortesia'].forEach(t=>{
@@ -1380,6 +1417,7 @@ function selCobro(tipo){
   });
   const pb=document.getElementById('paq-box'), gb=document.getElementById('gc-box');
   if(pb) pb.style.display=T.cobro==='paquete'?'block':'none';
+  if(T.cobro==='paquete') _paqCargarPicker();
   if(gb) gb.style.display=T.cobro==='giftcard'?'block':'none';
   // Show/hide cortesia banner
   var cb=document.getElementById('cortesia-banner');
@@ -2535,7 +2573,7 @@ function enviarTicket(){
     var _gcEsDigital=_gcVendida&&_gcV.tipo!=='fisica';
     var _gcPre={codigo:(_gcV&&_gcV.codigo)||'', de:((payload.nombre||'')+' '+(payload.apellido||'')).trim()};
     // Canjes: datos capturados ANTES de resetear el ticket
-    var _cobro=T.cobro, _codGC=(T.codigoGC||'').trim();
+    var _cobro=T.cobro, _codGC=(T.codigoGC||'').trim(), _paqPick=T.paqPick||null;
     var _cedCli=payload.cedula||'', _cliNom=((payload.nombre||'')+' '+(payload.apellido||'')).trim();
     T=newT();
     // ── Canje con GIFT CARD: marcarla usada automáticamente por su código ──
@@ -2570,7 +2608,14 @@ function enviarTicket(){
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
     if(_packsNuevos.length) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'');
-    if(_cobro==='paquete'){
+    // Canje contra un paquete ELEGIDO en el ticket: se marca su siguiente sesión sola.
+    if(_cobro==='paquete'&&_paqPick&&_paqPick.fila!=='nuevo'){
+      _marcarSesionPaqueteUnaVez({fila:_paqPick.fila, idx:_paqPick.idx, total:_paqPick.total, nota:_notaSesionPaquete(_facialNombre), ticket:(d&&(d.ticket||d.beta_num))||''}).then(function(res){
+        if(res&&res.ok) toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' marcada en '+_paqPick.nombre,'var(--green)');
+        else toast('⚠️ '+((res&&res.error)||'No se marcó la sesión')+' — márcala en Paquetes','#C9A227');
+      });
+    }
+    if(_cobro==='paquete'&&!_paqPick){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
         toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
         color:'#7A5FA0'};
