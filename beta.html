@@ -389,19 +389,31 @@
   .pnote { font-size: 0.67rem; opacity: 0.5; margin-top: 5px; font-style: italic; }
   .psec { font-size: 0.62rem; opacity: 0.5; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.12); }
   /* Desglose a cobrar como orden de venta */
-  .ov-tabla { width: 100%; border-collapse: collapse; font-size: 0.74rem; margin: 2px 0 4px; }
-  .ov-tabla th { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.18); }
-  .ov-tabla th small { text-transform: none; letter-spacing: 0; font-size: 0.9em; }
-  .ov-tabla td { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap; vertical-align: baseline; }
-  .ov-tabla td:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 100%; }
-  .ov-tabla .n { text-align: right; font-variant-numeric: tabular-nums; width: 1%; }
-  .ov-cod { font-family: ui-monospace, monospace; font-size: 0.82em; opacity: 0.5; margin-right: 6px; }
-  .ov-etq { font-size: 0.82em; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,0.14); margin-left: 4px; }
-  .ov-dsc td { color: #A8E6BF; font-weight: 700; }
-  .ov-tot { display: flex; justify-content: flex-end; gap: 18px; font-size: 0.68rem; opacity: 0.7; padding: 2px 6px; font-variant-numeric: tabular-nums; }
-  .ov-tot span:last-child { min-width: 72px; text-align: right; }
-  .ov-gran { justify-content: flex-end; gap: 18px; padding: 6px 6px 0; border-top: 1px solid rgba(255,255,255,0.22); margin-top: 4px; }
-  .ov-gran span:last-child { min-width: 72px; text-align: right; }
+  /* Desglose a cobrar: misma tarjeta azul de antes, solo con columnas. El estilo global de
+     table (fondo blanco, sombra, td oscuro) NO aplica aquí: texto claro sobre el degradado. */
+  .preview table.ov-tabla { width: 100%; border-collapse: collapse; background: transparent; border-radius: 0; box-shadow: none; overflow: visible; font-size: 0.74rem; margin: 0 0 2px; color: inherit; }
+  .preview .ov-tabla th, .preview .ov-tabla td { background: transparent; color: inherit; border: 0; vertical-align: baseline; }
+  .preview .ov-tabla th { font-size: 0.58rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; opacity: 0.5; padding: 0 0 3px; text-align: left; }
+  .preview .ov-tabla th { white-space: nowrap; }
+  .preview .ov-tabla th small { text-transform: none; letter-spacing: 0; }
+  .preview .ov-tabla td { padding: 3px 0; opacity: 0.85; white-space: nowrap; }
+  .preview .ov-tabla td:nth-child(2) { white-space: normal; width: 100%; padding-right: 8px; }
+  .preview .ov-tabla tbody tr + tr td { border-top: 1px solid rgba(255,255,255,0.08); }
+  .preview .ov-tabla .n { text-align: right; font-variant-numeric: tabular-nums; width: 1%; padding-left: 10px; }
+  .prod-row.sin-stock { background: #FEE2E2; color: #C00; opacity: 0.85; }
+  .prod-row.sin-stock .prod-name, .prod-row.sin-stock .prod-price { color: #C00; }
+  .prod-row.sin-stock .qbtn[disabled] { opacity: 0.35; cursor: not-allowed; }
+  .paq-cod { font-family: ui-monospace, monospace; font-size: 0.66rem; font-weight: 800; color: var(--gray); }
+  .paq-prueba { font-family: inherit; font-size: 0.58rem; font-weight: 800; color: #8A5A00; background: #FFF1C9; border-radius: 6px; padding: 1px 6px; }
+  .paq-mas { position: relative; display: inline-block; }
+  .paq-mas > summary { list-style: none; cursor: pointer; }
+  .paq-mas > summary::-webkit-details-marker { display: none; }
+  .paq-mas-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 260px; background: var(--white); border: 1px solid var(--cream-d); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; }
+  .preview .ov-tabla td.ov-cod { font-family: ui-monospace, monospace; color: rgba(255,255,255,0.55); font-size: 0.64rem; padding-right: 10px; opacity: 1; }
+  .ov-etq { font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,0.14); margin-left: 4px; }
+  .preview .ov-tabla .ov-dsc td { color: var(--green); font-weight: 700; opacity: 1; }
+  .ov-tot { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 2.5px 0; opacity: 0.8; font-variant-numeric: tabular-nums; }
+  .ov-gran { display: flex; justify-content: space-between; padding-top: 6px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.2); }
   .gc-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
   .gc-tbtn { padding: 14px 10px; border: 1.5px solid var(--cream-d); border-radius: 13px; background: var(--white); cursor: pointer; text-align: center; }
   .gc-tbtn.sel { border-color: var(--gold); background: var(--gold-l); }
@@ -5350,7 +5362,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029paq2"></script>
+<script src="beta-screens.js?v=20261029hf1"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>

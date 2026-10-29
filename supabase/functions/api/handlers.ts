@@ -575,6 +575,14 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 }
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
+  // No se vende un producto sin stock (misma fuente que Inventario). También en Modo prueba, por realismo.
+  const pedidos = Object.entries((p.productos || {}) as R).filter(([, q]) => n(q) > 0);
+  if (pedidos.length) {
+    const inv = await FNS.getInventario({}, ctx, ses) as R;
+    const stock = new Map(((inv.items || []) as R[]).map((it) => [skuCode(s(it.sku)), n(it.stock)]));
+    const sin = pedidos.map(([sku]) => sku).filter((sku) => stock.has(skuCode(sku)) && (stock.get(skuCode(sku)) as number) <= 0);
+    if (sin.length) return { error: "Sin stock: " + sin.join(", ") + ". Quita el producto del ticket." };
+  }
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
@@ -1476,6 +1484,7 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
       factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
       usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
       total, completo: b(r.completo),
+      codigo: s(r.codigo), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
@@ -1498,6 +1507,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
       vendidoPor: s(r.vendido_por), notas: s(r.notas), usos: usos.slice(0, total), total,
       telefono: tel ? (porCed.get(normCedula(r.cedula)) || "") : "",
       claveWa: clave, wa: wa[clave] || null,
+      codigo: s(r.codigo), prueba: s(r.origin) === "test",
     });
   }
   return { items };
