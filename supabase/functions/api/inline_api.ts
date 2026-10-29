@@ -11,6 +11,7 @@ import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } 
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
 import { saldoDe } from "./asistencia_api.ts";
 import { claveCliente, claveRegistro } from "./ventas.ts";
+import { LINEA_CAMPOS, patchLineas } from "./ticket_total.ts";
 import { borrarComision, guardarComisionCampos, vistaConfig } from "./comision_cfg.ts";
 
 const CAMPOS: Record<string, string> = {
@@ -637,7 +638,13 @@ export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, camp
   if (row.borrado_at) return { error: "Ese ticket ya está eliminado" };
   const bloqueo = bloqueoPrueba(ses, row);
   if (bloqueo) return { error: bloqueo };
-  const patch = patchDe(campos);
+  // El total no se edita a mano: sale de las líneas (ticket_total.ts).
+  const resto: Row = { ...campos };
+  delete resto.estimado;
+  for (const k of LINEA_CAMPOS) delete resto[k];
+  const patch = patchDe(resto);
+  const lp = patchLineas(row, campos, await ctx.db.all("catalogo"));
+  if (lp) Object.assign(patch, lp);
   if (!Object.keys(patch).length) return { error: "Nada que guardar" };
   const antes = vistaDe(row);
   let saved: Row | null = null;
@@ -648,7 +655,7 @@ export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, camp
   }
   if (!saved) return { error: "No se pudo guardar el ticket" };
   await anotar(ctx, ses, "tickets", filaDe(row), "UPDATE", antes, vistaDe(saved));
-  return { ok: true, fila: filaDe(row) };
+  return { ok: true, fila: filaDe(row), ticket: vistaDe(saved) };
 }
 
 export async function borrarTicketSuave(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {

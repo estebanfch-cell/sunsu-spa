@@ -761,6 +761,7 @@ function _asegurarGrupoProv(fam){
 }
 // Aplica getCatalogo al Ticket: precios, activo, y productos de familias NUEVAS (VK, …).
 function _aplicarCatalogoATicket(items){
+  if(items&&items.length>5) window._catAplicado=true;
   if(!Array.isArray(items)||!items.length) return;
   items.forEach(function(item){
     var activo=item.activo===true;
@@ -4315,6 +4316,60 @@ function _toggleDetTicket(id, btn){
   el.style.display = abrir?'block':'none';
   if(btn) btn.textContent = abrir?'▴':'▾';
 }
+function _tkPartes(v){ return String(v||'').split('|').map(function(x){return x.trim();}).filter(Boolean); }
+// ── Editor de líneas del ticket: dropdowns con búsqueda desde el catálogo ──
+var _TK_GRUPOS=[
+  {k:'facial',t:'Facial',add:'+ Agregar facial',dl:'tk-dl-fac',src:function(){return (FACIALES||[]).map(function(x){return x.sku+' '+x.n;});}},
+  {k:'extras',t:'Extras',add:'+ Agregar extra',dl:'tk-dl-ext',src:function(){return (EXTRAS||[]).map(function(x){return x.sku+' '+x.n;});}},
+  {k:'pack3',t:'Pack x3',add:'+ Agregar paquete',dl:'tk-dl-p3',src:function(){return (PAQ3||[]).map(function(x){return x.sku+' '+x.n;});}},
+  {k:'pack6',t:'Pack x6',add:'+ Agregar paquete',dl:'tk-dl-p6',src:function(){return (PAQ6||[]).map(function(x){return x.sku+' '+x.n;});}}
+];
+function _tkEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function _tkLineaHTML(g, val){
+  return '<div class="tk-ed-row" style="display:flex;gap:6px;margin:3px 0"><input class="tk-ed-in" data-g="'+g.k+'" list="'+g.dl+'" value="'+_tkEsc(val)+'" placeholder="Escribe para buscar…" style="flex:1;min-width:0;padding:5px 8px;border:1.5px solid var(--gray-l);border-radius:8px;font-size:0.72rem">'
+    +'<button type="button" onclick="this.parentNode.remove()" title="Quitar" style="padding:2px 9px;border:1.5px solid var(--red);color:var(--red);background:white;border-radius:8px;cursor:pointer">✕</button></div>';
+}
+function _tkEditorHTML(t){
+  var id='tk-ed-'+t.tkRow, h='<div class="tk-editor" id="'+id+'" style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px">';
+  _TK_GRUPOS.forEach(function(g){
+    h+='<datalist id="'+g.dl+'">'+g.src().map(function(o){return '<option value="'+_tkEsc(o)+'">';}).join('')+'</datalist>';
+    var vals=_tkPartes(t[g.k]);
+    h+='<div style="margin-bottom:6px"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+g.t+'</div><div class="tk-ed-g" data-g="'+g.k+'">'+vals.map(function(v){return _tkLineaHTML(g,v);}).join('')+'</div>'
+      +'<button type="button" onclick="_tkAgregarLinea(\''+id+'\',\''+g.k+'\')" style="padding:3px 10px;border:1.5px dashed var(--blue);color:var(--blue);background:white;border-radius:8px;font-size:0.65rem;font-weight:700;cursor:pointer">'+g.add+'</button></div>';
+  });
+  h+='<button type="button" onclick="_tkGuardarLineas(\''+t.tkRow+'\')" style="padding:6px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">Guardar líneas</button>'
+    +' <span style="font-size:0.62rem;color:var(--gray)">El total se calcula solo (canje de paquete = facial $0 · IVA 15%)</span></div>';
+  return h;
+}
+function _tkAgregarLinea(id,k){
+  var box=document.querySelector('#'+id+' .tk-ed-g[data-g="'+k+'"]'); if(!box) return;
+  var g=_TK_GRUPOS.filter(function(x){return x.k===k;})[0];
+  box.insertAdjacentHTML('beforeend',_tkLineaHTML(g,''));
+  var ins=box.querySelectorAll('input'); if(ins.length) ins[ins.length-1].focus();
+}
+function _tkValidoCat(k,v){
+  var g=_TK_GRUPOS.filter(function(x){return x.k===k;})[0];
+  var sku=(/SUNSU-\d+/i.exec(v)||[''])[0].toUpperCase();
+  return !!sku && g.src().some(function(o){return o.indexOf(sku+' ')===0;});
+}
+async function _tkGuardarLineas(fila){
+  var box=document.getElementById('tk-ed-'+fila); if(!box) return;
+  var campos={}, malo='';
+  _TK_GRUPOS.forEach(function(g){
+    var vals=[].map.call(box.querySelectorAll('.tk-ed-g[data-g="'+g.k+'"] input'),function(i){return i.value.trim();}).filter(Boolean);
+    vals.forEach(function(v){ if(!malo&&!_tkValidoCat(g.k,v)) malo=v; });
+    campos[g.k]=vals.join(' | ');
+  });
+  if(malo){ if(window.toast) toast('Elige de la lista: '+malo); return; }
+  var data=await api('inline_guardar',{tabla:'tickets',fila:String(fila),campos:campos});
+  if(!data||data.error){ if(window.toast) toast((data&&data.error)||'No se pudo guardar'); return; }
+  var t=(window._tkCards||{})[fila], nv=data.ticket||{};
+  if(t){ ['facial','extras','pack3','pack6','estimado'].forEach(function(k){ if(nv[k]!=null) t[k]=String(nv[k]); });
+    if(t.saldo!=null&&Number(t.saldo)>0) t.saldo=parseFloat(t.estimado)||0; }
+  if(window.toast) toast('Líneas guardadas · total $'+(parseFloat(nv.estimado)||0).toFixed(2));
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  if(typeof _histActualizarRes==='function') _histActualizarRes(esStaff);
+}
 function _buildTicketCard(t, showPrices){
   if(t&&t.tkRow){(window._tkCards=window._tkCards||{})[t.tkRow]=t;}
   var cosCol=t.cosmetologa==='Andrea Robles'?'#7A8FAF':t.cosmetologa==='Daniela Mora'?'#9B8EC4':t.cosmetologa==='Dejaneira Espinoza'?'#6A9E7A':t.cosmetologa==='Alejandra Rodriguez'?'#C4956A':'#1A237E';
@@ -4322,8 +4377,10 @@ function _buildTicketCard(t, showPrices){
   var esCanjeGC=t.colR&&t.colR.indexOf('SI')===0;
   var esCanje=esCanjeP||esCanjeGC;
   var facialInfo=t.facial?_histPrecioFacial(t.facial):null;
-  var facialP=facialInfo&&!esCanje?facialInfo.p:0;
-  var packInfo=t.pack3?_histPrecioPaq(t.pack3):t.pack6?_histPrecioPaq(t.pack6):null;
+  var facList=_tkPartes(t.facial).map(_histPrecioFacial);
+  var facialP=esCanje?0:facList.reduce(function(a,f){return a+(f.p||0);},0);
+  var packList=_tkPartes(t.pack3).concat(_tkPartes(t.pack6)).map(function(x){var pi=_histPrecioPaq(x);return pi?{n:pi.n,p:pi.p,sku:pi.sku}:{n:x,p:0,sku:''};});
+  var packInfo=packList.length?{n:packList.map(function(x){return x.n;}).join(' + '),p:packList.reduce(function(a,x){return a+x.p;},0)}:null;
   var prodsDetalle=[],prodTotal=0;
   if(t.productos&&t.productos.length){t.productos.forEach(function(pq){var pi=_histPrecioProducto(pq);if(pi){prodsDetalle.push(pi);prodTotal+=pi.total;}});}
   var gcVenta=null;
@@ -4335,9 +4392,10 @@ function _buildTicketCard(t, showPrices){
   // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
   // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
   // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
-  if(esCanje){
-    totalCliente=extrasCobrables+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
-  }
+  // El total del ticket es UNO solo: el guardado (estimado). Cabecera, líneas,
+  // lista, PDF y saldo salen de ahí; al editar líneas el servidor lo recalcula
+  // (ticket_total.ts). Antes, en canjes, aquí se recalculaba con los precios
+  // fijos de este archivo y la cabecera no cuadraba con la lista (TK-SO-1722).
 
   var rs='display:flex;justify-content:space-between;font-size:0.74rem;padding:3px 0;';
   var rg='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.75;';
@@ -4363,11 +4421,9 @@ function _buildTicketCard(t, showPrices){
   var breakdown='';
 
   // 1. Facial + extras
-  if(facialInfo){
-    var facSku=t.facial?t.facial.match(/(SUNSU-\d+)/):null;
-    var facSkuStr=facSku?skuBadge(facSku[1]):'';
-    breakdown+=rowItem(facSkuStr+'💆',facialInfo.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),(esCanje?'$0.00':_col3(facialP)));
-  }
+  facList.forEach(function(fi){
+    breakdown+=rowItem(skuBadge(fi.sku)+'💆',fi.n+(esCanje?' <span style="font-size:0.62rem;color:#888">(canje)</span>':''),(esCanje?'$0.00':_col3(fi.p||0)));
+  });
   if(t.extras){
     t.extras.split('|').forEach(function(ex){
       ex=ex.trim(); if(!ex) return;
@@ -4384,11 +4440,9 @@ function _buildTicketCard(t, showPrices){
   }
 
   // 2. Paquete
-  if(packInfo){
-    var pakSku=t.pack3?t.pack3.match(/(SUNSU-\d+)/):t.pack6?t.pack6.match(/(SUNSU-\d+)/):null;
-    var pakSkuStr=pakSku?skuBadge(pakSku[1]):'';
-    breakdown+=rowItem(pakSkuStr+'📋',packInfo.n,_col3(packInfo.p));
-  }
+  packList.forEach(function(pk){
+    breakdown+=rowItem(skuBadge(pk.sku)+'📋',pk.n,_col3(pk.p));
+  });
 
   // 3. Productos — total first, then individual
   if(prodsDetalle.length){
@@ -4415,7 +4469,7 @@ function _buildTicketCard(t, showPrices){
   // ACTUAL del catalogo; el total es lo que SE COBRO ese dia. Si difieren
   // (descuento aplicado, canje, o un precio de catalogo que cambio despues),
   // la diferencia se muestra EXPLICITA: el ticket siempre cuadra ante los ojos.
-  if(showPrices && totalCliente>0 && !esCanje){
+  if(showPrices && totalCliente>0){
     var sumLineas=facialP+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0)+extrasCobrables;
     var difCob=totalCliente-sumLineas;
     if(Math.abs(difCob)>0.01){
@@ -4533,10 +4587,11 @@ function _buildTicketCard(t, showPrices){
       +'</div></div>';
   }
   if(window.SunsuInline&&SunsuInline.edita()&&t.tkRow){
+    card+=_tkEditorHTML(t);
     card+=SunsuInline.lineas("tickets", t.tkRow, [
-      ["facial","Facial",t.facial],["extras","Extras",t.extras],["pack3","Pack x3",t.pack3],["pack6","Pack x6",t.pack6],
-      ["recomendaciones","Recomendaciones",t.recomendaciones],["notas","Notas",t.notas],["estimado","Total",t.estimado],
+      ["recomendaciones","Recomendaciones",t.recomendaciones],["notas","Notas",t.notas],
     ]);
+    card+='<div class="ix-lines"><div class="ix-line"><span>Total</span><b title="Se calcula solo con las líneas de arriba">$'+(parseFloat(t.estimado)||0).toFixed(2)+'</b></div></div>';
   }
   card+='</div>';
   return card;
@@ -4684,7 +4739,9 @@ function _histEstadoDoc(t){
   if(t.fac&&t.cob) return 'cerrado';
   return 'abierto';
 }
-function _histFactura(t){ return (t&&(t.factura||t.fac_7||t.numFac))||''; }
+// Nº de factura: es un número asignado, no un valor — 2833.0 → 2833. El texto (SIN FACTURA) queda igual.
+function _facTxt(v){ var x=String(v==null?'':v).trim(); var m=/^(\d+)\.0+$/.exec(x); return m?m[1]:x; }
+function _histFactura(t){ return _facTxt((t&&(t.factura||t.fac_7||t.numFac))||''); }
 function _histSaldo(t){
   if(t&&t.saldo!=null&&t.saldo!=='') return Number(t.saldo)||0;
   return _histEstadoDoc(t)==='cerrado'?0:(parseFloat(t&&t.estimado)||0);
@@ -4768,6 +4825,16 @@ function _histAbrirTicket(i){
   if(!pane) return;
   pane.classList.add('tk-open');
   pane.innerHTML=_histDetalleHTML(t, window._histShowPrices!==false);
+  // Precios y dropdowns del detalle salen del catálogo vivo, no de las listas fijas de este archivo
+  if(!window._catAplicado&&!window._catCargando){
+    window._catCargando=true;
+    fetch(APPS_SCRIPT_URL+'?action=getCatalogo').then(function(r){return r.json();}).then(function(items){
+      if(Array.isArray(items)&&items.length) _aplicarCatalogoATicket(items);
+    }).catch(function(){}).finally(function(){
+      window._catCargando=false;
+      if(window._histTkSel===_histClave(t)&&document.getElementById('tk-detail')) document.getElementById('tk-detail').innerHTML=_histDetalleHTML(t, window._histShowPrices!==false);
+    });
+  }
   var rows=document.querySelectorAll('#tk-body .tk-row');
   for(var r=0;r<rows.length;r++) rows[r].classList.toggle('on', r===i);
   _histTrasPintar();
@@ -5049,9 +5116,10 @@ function descargarPDFHistorial(){
   // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
   // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
   // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
-  if(esCanje){
-    totalCliente=extrasCobrables+(packInfo?packInfo.p:0)+prodTotal+(gcVenta?gcVenta.valor:0);
-  }
+  // El total del ticket es UNO solo: el guardado (estimado). Cabecera, líneas,
+  // lista, PDF y saldo salen de ahí; al editar líneas el servidor lo recalcula
+  // (ticket_total.ts). Antes, en canjes, aquí se recalculaba con los precios
+  // fijos de este archivo y la cabecera no cuadraba con la lista (TK-SO-1722).
     cardsHTML+='<div class="ticket" style="border-left:4px solid '+cosCol+'">'
       +'<div class="th"><div><div class="cosm" style="color:'+cosCol+'">'+t.cosmetologa+'</div><div class="cli">'+t.nombre+' '+t.apellido+'</div><div class="sub">'+t.cedula+' · '+t.hora+'</div></div>'
       +(totalCliente?'<div class="tot">$'+totalCliente.toFixed(2)+'</div>':'')+'</div>';
@@ -9576,7 +9644,7 @@ function verMovimientosSku(sku, nombre){
     h+='<div style="font-size:0.62rem;font-weight:800;color:var(--navy);margin:8px 0 5px">🎫 Ventas en tickets (60 días): '+((d.ventas||[]).reduce(function(s,v){return s+v.cant;},0))+' unidades</div>';
     (d.ventas||[]).forEach(function(v){
       h+='<div style="font-size:0.62rem;padding:3px 0;border-bottom:1px solid var(--cream)">'
-        +'<b>'+v.fecha+'</b> · '+v.clienta+' · <b>'+v.cant+'u</b> · Fact: <b style="color:var(--navy)">'+(v.factura||'SIN FACTURA ⚠️')+'</b> · '+v.cosmetologa.split(' ')[0]+' · fila '+v.fila+'</div>';
+        +'<b>'+v.fecha+'</b> · '+v.clienta+' · <b>'+v.cant+'u</b> · Fact: <b style="color:var(--navy)">'+(_facTxt(v.factura)||'SIN FACTURA ⚠️')+'</b> · '+v.cosmetologa.split(' ')[0]+' · fila '+v.fila+'</div>';
     });
     if(!(d.ventas||[]).length) h+='<div style="font-size:0.6rem;color:var(--gray)">Sin ventas en tickets en 60 días</div>';
     h+='<div style="font-size:0.58rem;color:#C4943A;font-weight:700;margin-top:7px">💡 Compara estas facturas con Mi Negocio: un ticket sin factura o una factura sin ticket suele ser el error. Si faltan unidades sin venta registrada, pudo salir producto sin ticket.</div></div>';
@@ -12423,7 +12491,7 @@ function cargarTicketsDia(offset){
 
 function _buildFacCard(t){
   var hora=t.timestamp?new Date(t.timestamp).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Guayaquil'}):'';
-  var facLabel=t.fac?(t.numFac?'✅ FAC '+t.numFac:'✅ Facturado'):'Sin factura';
+  var facLabel=t.fac?(t.numFac?'✅ FAC '+_facTxt(t.numFac):'✅ Facturado'):'Sin factura';
   var cobLabel=t.cob?('✅ '+(t.comp||'Cobrado')):'Sin cobro';
   var facDone=t.fac&&t.numFac, cobDone=t.cob;
   return '<div id="fac-card-'+t.fila+'" style="background:white;border:1.5px solid var(--cream-d);border-radius:13px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)">'
@@ -12950,7 +13018,7 @@ function _buildGCCard(g){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
     +(g.valor?'<span style="font-size:0.65rem;background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:6px;font-weight:700">💰 '+g.valor+'</span>':'')
     +(g.sku?'<span style="font-size:0.65rem;background:var(--blue-l);color:var(--navy);padding:2px 8px;border-radius:6px">'+g.sku+'</span>':'')
-    +(g.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+g.factura+'</span>':'')
+    +(g.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+_facTxt(g.factura)+'</span>':'')
     +'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">📅 Comprada: '+fecha+'</span>'
     +(vc?(usado
         ?''
@@ -13321,7 +13389,7 @@ function _buildPaqueteCard(p){
     +'<div style="font-size:0.78rem;font-weight:700;color:var(--navy);margin-bottom:6px">'+p.paquete+'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
     +'<span style="font-size:0.65rem;background:var(--blue-l);color:var(--navy);padding:2px 8px;border-radius:6px;font-weight:600">👤 '+p.vendidoPor+'</span>'
-    +(p.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+p.factura+'</span>':'')
+    +(p.factura?'<span style="font-size:0.65rem;background:var(--cream);color:var(--gray);padding:2px 8px;border-radius:6px">🧾 '+_facTxt(p.factura)+'</span>':'')
     +(p.saldo?'<span style="font-size:0.65rem;background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:6px;font-weight:600">💰 Saldo: '+p.saldo+'</span>':'')
     +'</div>'
     // Progress bar

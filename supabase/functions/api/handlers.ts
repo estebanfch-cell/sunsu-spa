@@ -17,6 +17,7 @@ import { familiaDe, montoGcAplicado, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
+import { facturaTxt } from "./ticket_total.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
 
@@ -1206,7 +1207,7 @@ reg("getHistorial", "any", async (p, ctx, ses) => {
       comprobante: s(r.comprobante), fotos: s(r.fotos), fotosAntes: s(r.fotos_antes), fotosDespues: s(r.fotos_despues),
       estado: estadoTicket({ seguimiento: s(r.seguimiento), agendado: b(r.agendado), retorno: s(r.fecha_retorno) }, ec),
       estado_doc: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? "cerrado" : "abierto",
-      factura: s(r.fac_7),
+      factura: facturaTxt(r.fac_7),
       saldo: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? 0 : n(r.estimado),
     };
     if (telOk) item.telefono = porCed.get(normCedula(r.id_3)) || "";
@@ -1224,7 +1225,7 @@ reg("getTicketsDia", "any", async (p, ctx) => {
   const ticketsOut = [];
   for (const r of await tickets(ctx)) {
     if (ymdUtc(r.timestamp) !== target) continue;
-    const fac = b(r.fac), cob = b(r.cob), numFac = s(r.fac_7);
+    const fac = b(r.fac), cob = b(r.cob), numFac = facturaTxt(r.fac_7);
     if (fac && cob && numFac) continue;
     ticketsOut.push({
       fila: r.sheet_row, timestamp: s(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3),
@@ -1260,7 +1261,7 @@ function filaTicket(r: R) {
     facial: s(r.facial_hecho), pack3: s(r.compra_pack_3), pack6: s(r.compra_pack_6),
     extras: s(r.servicios_adicionales), notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones),
     subtotal: sub, iva: round2(sub * 0.15), estimado, total: estimado,
-    estado: cerrado ? "cerrado" : "abierto", factura: s(r.fac_7), saldo: cerrado ? 0 : estimado,
+    estado: cerrado ? "cerrado" : "abierto", factura: facturaTxt(r.fac_7), saldo: cerrado ? 0 : estimado,
   };
 }
 reg("getTicketsLista", "any", async (p, ctx, ses) => {
