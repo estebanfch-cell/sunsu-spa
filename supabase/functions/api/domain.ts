@@ -161,7 +161,10 @@ export function siguienteTestDoc(rows: Row[], prefix: string): string {
   let max = 0;
   const re = new RegExp("^TEST-" + prefix + "-(\\d+)$");
   for (const r of rows) {
-    for (const campo of [r.numero, r.beta_num]) {
+    // so_num (tickets) y sq_num (cotizaciones) también: antes solo miraba numero/beta_num
+    // y el 2º ticket de prueba volvía a salir TEST-TK-SO-0001 → 409 tickets_so_num_uidx.
+    const o = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    for (const campo of [r.numero, r.beta_num, r.so_num, r.sq_num, o.so_num, o.sq_num, o.numero]) {
       const m = re.exec(String(campo || ""));
       if (m) max = Math.max(max, Number(m[1]));
     }

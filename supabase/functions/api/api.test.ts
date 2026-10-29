@@ -3921,3 +3921,14 @@ describe("maestro-detalle en todo el sistema", () => {
     assert.doesNotThrow(() => new Function(src));
   });
 });
+
+describe("series de prueba no se repiten", () => {
+  it("el 2º ticket de prueba es TEST-TK-SO-0002 (antes chocaba con tickets_so_num_uidx)", async () => {
+    const { siguienteTestDoc } = await import("./domain.ts");
+    assert.equal(siguienteTestDoc([{ so_num: "TEST-TK-SO-0001", origin: "test" }], "TK-SO"), "TEST-TK-SO-0002");
+    assert.equal(siguienteTestDoc([{ orig: { so_num: "TEST-TK-SO-0007" } }], "TK-SO"), "TEST-TK-SO-0008");
+    assert.equal(siguienteTestDoc([{ numero: "TEST-COT-0003" }], "COT"), "TEST-COT-0004");
+    assert.equal(siguienteTestDoc([{ numero: "TEST-OC-0009" }], "OC"), "TEST-OC-0010");
+    assert.equal(siguienteTestDoc([{ so_num: "TK-SO-1722" }], "TK-SO"), "TEST-TK-SO-0001");
+  });
+});
