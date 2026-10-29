@@ -540,6 +540,7 @@
   .paq-slot.on { background: var(--navy); color: var(--white); border-color: var(--navy); }
   @media (min-width: 861px) {
     .cli-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); align-items: start; }
+    .cli-layout.cli-open { grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); }
     .cli-desk { display: block; min-width: 0; }
     .cli-phone { display: none !important; }
     .cli-panel { position: sticky; top: 12px; max-height: calc(100vh - 28px); overflow: auto; }
@@ -633,6 +634,15 @@
   .nowrap-table .ix-cell, .nowrap-table td > * { white-space: nowrap; }
   .cli-sheet { overflow-x: auto; }
   .cli-cod { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
+  /* Maestro-detalle compartido (beta-screens.js _mdAbrir): lista angosta izquierda, detalle derecha */
+  .md-split .md-list table { width: 100%; }
+  .md-split .md-list th, .md-split .md-list td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .md-split .md-list tr.on td { background: var(--blue-l); }
+  .md-split.md-open .md-list .md-x { display: none; }
+  .md-split.md-open .md-list .sheet-scroll table { min-width: 0; }
+  .md-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .md-split .md-detail [hidden] { display: none; }
+  .cli-layout.cli-open .cli-sheet table { min-width: 0; }
   .prov-layout { display: grid; gap: 16px; align-items: start; }
   .prov-list { min-width: 0; }
   .prov-sheet tbody tr { cursor: pointer; }
@@ -2630,6 +2640,7 @@ function htmlFichaCliente(c) {
   return "";
 }
 function columnasCliente(rows, moneyOk) {
+  if (window._cliAbierto) return [["codigo", "Código"], ["nombre", "Clienta"], moneyOk ? ["total", "Total", "num"] : ["visitas", "Visitas", "num"]];
   const cols = [
     ["codigo", "Código"],
     ["nombre", "Clienta"],
@@ -2712,6 +2723,7 @@ async function renderClientes() {
   window._cliLista = data.clientes || [];
   window._cliMoney = !!(data.admin || state.admin);
   window._cliQ = "";
+  window._cliAbierto = false;
   const mas = window.SunsuInline && SunsuInline.edita() ? SunsuInline.mas("clientes") : "";
   return `<div class="cli-layout"><div class="cli-list" id="cli-list-host">
       <div class="tools"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>${mas}</div>
@@ -2803,7 +2815,7 @@ function filasProveedorVisibles() {
 }
 function pintarProveedores() {
   const abierto = !!window._provFila;
-  const cols = abierto ? [["codigo", "Código"], ["nombre", "Nombre"]] : PROV_COLS;
+  const cols = abierto ? [["codigo", "Código"], ["nombre", "Nombre"], ["saldo", "Saldo", "num"]] : PROV_COLS;
   const key = window._provSort || "codigo";
   const dir = window._provDir || 1;
   const head = document.getElementById("prov-head");
@@ -2959,14 +2971,25 @@ function cotParaPdf(item) {
   };
 }
 function filaCotizacion(c) {
-  return `<tr>
-      <td><button class="link" type="button" data-go="#/doc/cot/${encodeURIComponent(c.numero)}">${esc(c.numero)}</button></td>
-      <td>${esc(String(c.fecha || "").slice(0, 10))}</td>
+  return `<tr class="${window._cotSel === c.numero ? "on" : ""}" data-cot-abrir="${esc(c.numero)}" style="cursor:pointer">
+      <td>${esc(c.numero)}</td>
       <td>${esc(c.cliente)}</td>
-      <td>${esc(c.cedula || "")}</td>
       <td class="num">${money(c.total)}</td>
-      <td>${esc(c.estado || "")}</td>
+      <td class="md-x">${esc(String(c.fecha || "").slice(0, 10))}</td>
+      <td class="md-x">${esc(c.cedula || "")}</td>
+      <td class="md-x">${esc(c.estado || "")}</td>
     </tr>`;
+}
+// Abre la cotización a la DERECHA de la lista (maestro-detalle), no en otra página.
+async function abrirCotPanel(numero, fila) {
+  window._cotSel = numero;
+  const d = typeof _mdAbrir === "function" ? _mdAbrir("cot-md", `<p class="note">Cargando…</p>`, fila) : null;
+  if (!d) { go("#/doc/cot/" + encodeURIComponent(numero)); return; }
+  const html = await renderCot(numero);
+  if (window._cotSel !== numero) return;
+  _mdAbrir("cot-md", html.replace(/<button class="btn ghost small" type="button" data-go="#\/m\/cotizaciones_cliente">Volver a la lista<\/button>/, ""), fila);
+  const pdf = d.querySelector("#cot-pdf");
+  if (pdf) pdf.onclick = () => { if (window._cotAbierta && typeof _cotDescargar === "function") _cotDescargar(window._cotAbierta); };
 }
 function pintarCotizaciones() {
   const q = normBusca((document.getElementById("filtro-cot") || {}).value || "");
@@ -2983,19 +3006,19 @@ function pintarCotizaciones() {
   const body = document.getElementById("lista");
   if (!body) return;
   body.innerHTML = rows.map(filaCotizacion).join("") || `<tr><td colspan="6">No hay cotizaciones.</td></tr>`;
-  body.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
+  body.querySelectorAll("[data-cot-abrir]").forEach((tr) => { tr.onclick = () => abrirCotPanel(tr.getAttribute("data-cot-abrir"), tr); });
 }
 async function renderListaCotizaciones() {
   const data = await api("getCotizaciones");
   if (data.error) return fail(data);
   window._cotRows = data.items || [];
-  const th = (key, label, num) => `<th${num ? ` class="num"` : ""}><button class="link" type="button" data-cot-sort="${esc(key)}">${label}</button></th>`;
+  const th = (key, label, num, x) => `<th class="${num ? "num" : ""}${x ? " md-x" : ""}"><button class="link" type="button" data-cot-sort="${esc(key)}">${label}</button></th>`;
   return `<div class="tools"><button class="btn small" type="button" data-go="#/doc/cot">Nueva cotización</button>
       <input id="filtro-cot" placeholder="Filtrar número, clienta o cédula" aria-label="Filtrar cotizaciones"></div>
-    <div class="sheet-scroll"><table>
-      <thead><tr>${th("numero", "Número")}${th("fecha", "Fecha")}${th("cliente", "Clienta")}${th("cedula", "Cédula")}${th("total", "Total", true)}${th("estado", "Estado")}</tr></thead>
+    <div class="desk-split md-split" id="cot-md"><div class="desk-list md-list"><div class="sheet-scroll"><table class="nowrap-table">
+      <thead><tr>${th("numero", "Número")}${th("cliente", "Clienta")}${th("total", "Total", true)}${th("fecha", "Fecha", false, true)}${th("cedula", "Cédula", false, true)}${th("estado", "Estado", false, true)}</tr></thead>
       <tbody id="lista"></tbody>
-    </table></div>`;
+    </table></div></div><div class="desk-detail md-detail" id="cot-det"></div></div>`;
 }
 
 function cicloInicioUi(ymd) {
@@ -4183,7 +4206,14 @@ function wireVentas(main) {
     pintarClientes("");
   }
   const cerrar = main.querySelector("[data-cli-cerrar]");
-  if (cerrar) cerrar.onclick = () => { const p = document.getElementById("cli-panel"); if (p) p.hidden = true; };
+  if (cerrar) cerrar.onclick = () => {
+    const p = document.getElementById("cli-panel");
+    if (p) p.hidden = true;
+    window._cliAbierto = false;
+    const lay = main.querySelector(".cli-layout");
+    if (lay) lay.classList.remove("cli-open");
+    pintarClientes(window._cliQ || "");
+  };
   if (busca && window.matchMedia("(min-width: 861px)").matches) {
     const first = (window._cliLista || [])[0];
     if (first) abrirCliente(first.key);
@@ -4205,6 +4235,14 @@ async function abrirCliente(key) {
   if (!panel || !body) return;
   window._cliKey = key;
   panel.hidden = false;
+  if (!window._cliAbierto) {
+    window._cliAbierto = true;
+    const lay = panel.closest(".cli-layout");
+    if (lay) lay.classList.add("cli-open");
+    pintarClientes(window._cliQ || "");
+  } else {
+    document.querySelectorAll("#lista [data-cli]").forEach((tr) => tr.classList.toggle("on", tr.getAttribute("data-cli") === key));
+  }
   body.innerHTML = `<p class="note">Cargando…</p>`;
   const data = await api("cliente_detalle", { key });
   if (data.error) { body.innerHTML = fail(data); return; }
@@ -5290,7 +5328,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029tklin"></script>
+<script src="beta-screens.js?v=20261029md1"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>
