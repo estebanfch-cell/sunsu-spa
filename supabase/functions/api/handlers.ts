@@ -4,7 +4,7 @@ import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarAr
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
-  desglosePaquetesTramo, listaExtrasPagados,
+  compraParaComision, desglosePaquetesTramo, listaExtrasPagados, PCT_COMISION_PRODUCTO,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
@@ -338,15 +338,13 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
   const calc = calcularCiclo(tks, await marks(ctx), cfg, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
-  const bases = await ctx.db.all("inventario_base");
-  const compraReal = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
   const lineas = new Map<string, { productos: LineaCom[]; extras: LineaCom[] }>();
   for (const p of calc.personas) {
     const enCiclo = (t: TicketIn) => t.fecha >= ciclo && t.fecha <= cicloFin(ciclo) && t.cosm === p.cosm;
     const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto);
     const items = propios.flatMap((t) => t.productos.map((pr) => ({
       venta: subtotalDe(cmap, pr.sku),
-      compra: compraReal.get(skuCode(pr.sku)) || n(cmap.get(skuCode(pr.sku))?.precio_compra),
+      compra: compraParaComision(cmap.get(skuCode(pr.sku))),
       qty: pr.qty, excluido: false, sku: pr.sku,
     })));
     p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
@@ -1103,6 +1101,9 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
       proveedor: s(r.proveedor) || s(orig.proveedor),
       activo: activoCat(r.activo), pvp: tot > 0 ? tot : sub, subtotal: sub,
       compra: n(r.precio_compra), compraReal: real,
+      compraComision: compraParaComision(r),
+      comision: round2(Math.max(0, sub - compraParaComision(r)) * PCT_COMISION_PRODUCTO),
+      utilidad: round2(sub - real),
       stock: deHoja ? n(deHoja.stock) : n(erp.venta),
       lugares: {
         venta: deHoja ? n(deHoja.stock) : n(erp.venta),
@@ -2368,11 +2369,16 @@ reg("editarProductoCatalogo", ADMIN, async (p, ctx, ses) => {
   if (p.marca != null) patch.marca = s(p.marca);
   if (p.proveedor != null) patch.proveedor = s(p.proveedor);
   if (p.activo != null) patch.activo = p.activo === false || p.activo === "NO" || p.activo === "false" ? false : true;
-  await ctx.db.write(actorOf(ses), "catalogo", "update", { sheet_row: row.sheet_row }, patch);
+  if (p.compraComision != null && p.compraComision !== "") {
+    const comision = n(p.compraComision);
+    patch.compra_comision = comision;
+    patch.comi_producto_30 = round2(Math.max(0, sub - comision) * PCT_COMISION_PRODUCTO);
+  }
   if (p.compraReal != null && p.compraReal !== "") {
     const bases = await ctx.db.all("inventario_base");
     const base = bases.find((b0) => skuCode(s(b0.sku)) === skuCode(s(row.sku)));
     const compraReal = n(p.compraReal);
+    patch.utilidad = round2(sub - compraReal);
     if (base) {
       const match = base.id != null && base.id !== "" ? { id: base.id } : base.sheet_row != null ? { sheet_row: base.sheet_row } : { sku: base.sku };
       await ctx.db.write(actorOf(ses), "inventario_base", "update", match, { compra: compraReal });
@@ -2380,24 +2386,34 @@ reg("editarProductoCatalogo", ADMIN, async (p, ctx, ses) => {
       await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: s(row.sku), compra: compraReal, stock_inicial: 0 });
     }
   }
+  await ctx.db.write(actorOf(ses), "catalogo", "update", { sheet_row: row.sheet_row }, patch);
   await logAccion(ctx.db, actorOf(ses), "EDITAR CATALOGO", skuCode(s(row.sku)));
   return { ok: true };
 });
+function skuNuevoCatalogo(raw: string): string | null {
+  const code = skuCode(raw);
+  if (/^[A-Z]{2,3}-\d{3}$/.test(code)) return "SUNSU-" + code;
+  if (/^\d{1,3}$/.test(code)) return "SUNSU-" + String(Number(code)).padStart(2, "0");
+  return null;
+}
 reg("crearProductoApp", ADMIN, async (p, ctx, ses) => {
-  const code = skuCode(s(p.sku));
-  if (!/^[A-Z]{2,3}-\d{3}$/.test(code)) return { error: "SKU con formato FAM-###" };
+  const sku = skuNuevoCatalogo(s(p.sku));
+  if (!sku) return { error: "SKU FAM-### o SUNSU-NN" };
   const rows = await ctx.db.all("catalogo");
-  if (rows.some((r) => skuCode(r.sku) === code)) return { error: "Ese SKU ya existe" };
+  if (rows.some((r) => skuCode(r.sku) === skuCode(sku))) return { error: "Ese SKU ya existe" };
   const sub = n(p.subtotal);
+  const comisionCosto = p.compraComision == null || p.compraComision === "" ? n(p.compra) : n(p.compraComision);
+  const real = n(p.compraReal);
   const sheet_row = await nextSheet(ctx.db, "catalogo");
   await ctx.db.write(actorOf(ses), "catalogo", "insert", {}, {
-    sheet_row, sku: "SUNSU-" + code, producto_servicio: s(p.nombre), tipo: s(p.tipo) || "PRODUCTO",
-    subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA), precio_compra: n(p.compra),
-    utilidad: round2(sub - n(p.compra)), comi_producto_30: round2((sub - n(p.compra)) * 0.3), activo: true,
-    orig: { sku: code },
+    sheet_row, sku, producto_servicio: s(p.nombre), tipo: s(p.tipo) || "PRODUCTO",
+    subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA),
+    precio_compra: comisionCosto, compra_comision: comisionCosto,
+    utilidad: round2(sub - real), comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
+    activo: true, orig: { sku },
   });
-  await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: "SUNSU-" + code, stock_inicial: 0, minimo: n(p.minimo) });
-  return { ok: true, sku: "SUNSU-" + code };
+  await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku, stock_inicial: 0, minimo: n(p.minimo), compra: real });
+  return { ok: true, sku };
 });
 reg("eliminarProductoApp", ADMIN, async (p, ctx, ses) => {
   if (s(p.confirmacion) && s(p.confirmacion) !== s(p.sku)) return { error: "Confirmación no coincide" };

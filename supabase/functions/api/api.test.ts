@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryDb } from "./db.ts";
-import { CFG_DEF, calcularCiclo, comisionPaquetesTramo, comisionProductos, contarExtras, desglosePaquetesTramo, listaExtrasPagados, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
+import { CFG_DEF, PCT_COMISION_PRODUCTO, calcularCiclo, comisionPaquetesTramo, comisionProductos, compraParaComision, contarExtras, desglosePaquetesTramo, listaExtrasPagados, nCosmetologas, normalizarTramos, puedeCotizar, rolCalcular, siguienteOv, type CosmMark, type TicketIn } from "./domain.ts";
 import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { siguienteCodigoGC } from "./handlers.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
@@ -174,6 +174,11 @@ describe("permisos", () => {
   });
 
   it("comisión de producto 30% del margen y rol con año cumplido", () => {
+    assert.equal(PCT_COMISION_PRODUCTO, 0.3);
+    assert.equal(CFG_DEF.pctProd, PCT_COMISION_PRODUCTO);
+    assert.equal(compraParaComision({ compra_comision: 4, precio_compra: 9 }), 4);
+    assert.equal(compraParaComision({ precio_compra: 9 }), 9);
+    assert.equal(comisionProductos([{ venta: 20, compra: 4, qty: 1, excluido: false }]), 4.8);
     assert.equal(comisionProductos([{ venta: 20, compra: 8, qty: 2, excluido: false }]), 7.2);
     const nuevo = rolCalcular({
       sueldo: 480, bono: 0, fondoReserva: true, fechaIngreso: "2026-08-01", anio: 2026, mes: 10,
@@ -1223,10 +1228,20 @@ describe("beta shell", () => {
     assert.match(html, /modo-prueba/);
     assert.match(html, /fly-sec/);
     assert.match(html, /Personal/);
-    assert.match(html, /Gift cards y paquetes/);
+    assert.match(html, /👤 Personal/);
+    assert.match(html, /🎁 Gift Cards/);
+    assert.match(html, /📦 Paquetes/);
+    assert.equal(html.includes("#/s/gc-venta"), false);
+    assert.equal(html.includes("Gift cards y paquetes"), false);
     assert.match(html, /Marcar entrada/);
     assert.match(html, /Seguimiento/);
     assert.match(html, /Caja chica/);
+    assert.match(html, /id="cat-pref"/);
+    assert.match(html, /Compra comisión/);
+    assert.match(html, /const PCT_COM_PROD = 0\.30/);
+    assert.match(screens, /Total vendido/);
+    assert.match(screens, /class="cmp-qty"/);
+    assert.match(screens, /function _cmpLinesHTML/);
     assert.match(html, /Bitácora/);
     assert.match(html, /Kardex/);
     assert.match(html, /Ficha de producto/);
@@ -3054,8 +3069,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3163,8 +3178,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3242,8 +3257,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3293,8 +3308,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3327,8 +3342,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3374,8 +3389,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261029pq3/);
-    assert.match(sw, /sunsu-beta-2026-10-29-PQ3/);
+    assert.match(beta, /beta-screens\.js\?v=20261029menu1/);
+    assert.match(sw, /sunsu-beta-2026-10-29-MENU1/);
   });
 });
 

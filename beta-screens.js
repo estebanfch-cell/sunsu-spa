@@ -1886,7 +1886,10 @@ function updatePreview(){
   // Canje y cortesía salen en $0 con su etiqueta. Subtotal/IVA/Total cliente debajo.
   const rowGray='display:flex;justify-content:space-between;font-size:0.68rem;padding:1px 0 1px 10px;opacity:0.6;';
   const _ov=[]; const _m=function(v){return '$'+(Math.round(v*100)/100).toFixed(2);};
-  const _fila=function(cant,cod,desc,unitConIva,etq){ _ov.push({cant:cant,cod:cod||'',desc:desc,unit:unitConIva/1.15,total:unitConIva*cant/1.15,etq:etq||''}); };
+  const _fila=function(cant,cod,desc,unitConIva,etq){
+    var unit=Math.round(((Number(unitConIva)||0)/1.15)*100)/100;
+    _ov.push({cant:cant,cod:cod||'',desc:desc,unit:unit,total:Math.round(unit*cant*100)/100,etq:etq||''});
+  };
   if(T.facial){
     const fx=FACIALES.find(function(x){return x.sku===T.facial;});
     _fila(1,T.facial,facialNombre||(fx?fx.n:'Facial'),facialP,T.cobro==='cortesia'?'cortesía':esCanje?'canje':(T.cobro==='giftcard'&&T._gcUsado?'GC −$'+Number(T._gcUsado).toFixed(2):''));
@@ -16612,20 +16615,37 @@ function _cmpDraft(){
   }
   return window._cmpBorrador;
 }
+function _cmpTotalesLineas(lineas){
+  var sum = 0;
+  (lineas||[]).forEach(function(ln){
+    var qty = ln.cantidad!=null ? ln.cantidad : ln.pedido;
+    sum += (Number(ln.precio)||0) * (Number(qty)||0);
+  });
+  sum = Math.round(sum * 100) / 100;
+  var conIva = !!(_cmpDraft().conIva);
+  var iva = conIva ? Math.round(sum * 0.15 * 100) / 100 : 0;
+  return { sum: sum, iva: iva, tot: Math.round((sum + iva) * 100) / 100, conIva: conIva };
+}
 function _cmpLinesHTML(lineas, editable){
   if (!lineas || !lineas.length) {
     var av = (_cmpDraft().aviso)||"";
     return '<p class="note">'+(av ? _cmpEsc(av) : "Todavía no hay líneas.")+'</p>';
   }
-  return lineas.map(function(ln,i){
+  var rows = lineas.map(function(ln,i){
     var qty = ln.cantidad!=null ? ln.cantidad : ln.pedido;
-    var costo = _cmpAdmin() ? '<span class="money-col">'+_cmpMoney(ln.precio||0)+'</span>' : '';
-    var sub = _cmpAdmin() ? '<span class="money-col">'+_cmpMoney((Number(ln.precio)||0)*(Number(qty)||0))+'</span>' : '';
+    var precio = Number(ln.precio)||0;
+    var total = Math.round(precio * (Number(qty)||0) * 100) / 100;
     var input = editable
-      ? '<input data-cmp-qty="'+i+'" type="number" min="0" step="1" value="'+_cmpEsc(qty)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
-      : '<span>'+_cmpEsc(qty)+'</span>';
-    return '<div class="cmp-line"><b>'+_cmpEsc(ln.sku)+'</b><span class="note">'+_cmpEsc(ln.nombre||"")+'</span>'+input+costo+sub+'</div>';
+      ? '<input class="cmp-qty" data-cmp-qty="'+i+'" type="number" min="0" step="1" value="'+_cmpEsc(qty)+'" aria-label="Cantidad '+_cmpEsc(ln.sku)+'">'
+      : _cmpEsc(qty);
+    return '<tr><td class="tk-sku">'+_cmpEsc(ln.sku)+'</td><td title="'+_cmpEsc(ln.nombre||"")+'">'+_cmpEsc(ln.nombre||"")+'</td>'
+      +'<td class="num">'+_cmpMoney(precio)+'</td><td class="num">'+input+'</td><td class="num" data-cmp-line="'+i+'">'+_cmpMoney(total)+'</td></tr>';
   }).join("");
+  var t = _cmpTotalesLineas(lineas);
+  return '<div class="sheet-scroll"><table class="tk-orden nowrap-table"><thead><tr><th>Código</th><th>Nombre</th><th class="num">Precio unit.</th><th class="num">Cantidad</th><th class="num">Total vendido</th></tr></thead><tbody>'
+    +rows+'</tbody><tfoot><tr><td colspan="4" class="num">Subtotal</td><td class="num" data-cmp-sum>'+_cmpMoney(t.sum)+'</td></tr>'
+    +(t.conIva?'<tr><td colspan="4" class="num">IVA 15%</td><td class="num" data-cmp-iva>'+_cmpMoney(t.iva)+'</td></tr>':'')
+    +'<tr class="tk-orden-tot"><td colspan="4" class="num">Total</td><td class="num" data-cmp-tot>'+_cmpMoney(t.tot)+'</td></tr></tfoot></table></div>';
 }
 function _cmpNuevaHTML(){
   var d = _cmpDraft();
@@ -17062,7 +17082,34 @@ function _cmpPintar(){
   det.innerHTML = _cmpDetailHTML();
   _cmpBind();
 }
+function _cmpRefrescarTotales(){
+  var d = _cmpSyncDraft();
+  (d.lineas||[]).forEach(function(ln,i){
+    var cel = document.querySelector('[data-cmp-line="'+i+'"]');
+    var qty = ln.cantidad!=null ? ln.cantidad : ln.pedido;
+    if (cel) cel.textContent = _cmpMoney(Math.round((Number(ln.precio)||0)*(Number(qty)||0)*100)/100);
+  });
+  var t = _cmpTotalesLineas(d.lineas);
+  var sum = document.querySelector("[data-cmp-sum]");
+  var iva = document.querySelector("[data-cmp-iva]");
+  var tot = document.querySelector("[data-cmp-tot]");
+  if (sum) sum.textContent = _cmpMoney(t.sum);
+  if (iva) iva.textContent = _cmpMoney(t.iva);
+  if (tot) tot.textContent = _cmpMoney(t.tot);
+}
 function wireComprasFlujo(main){
+  if (main && !main._cmpQty) {
+    main._cmpQty = true;
+    main.addEventListener("input", function(ev){
+      if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute("data-cmp-qty")) _cmpRefrescarTotales();
+    });
+    main.addEventListener("change", function(ev){
+      if (ev.target && ev.target.id === "cmp-iva") {
+        var box = document.getElementById("cmp-lines");
+        if (box) box.innerHTML = _cmpLinesHTML(_cmpSyncDraft().lineas, true);
+      }
+    });
+  }
   if (!main || !main.querySelector("#cmp-root")) return;
   if (!window._cmpSub) _cmp.tab = "orden";
   if (!_cmpAdmin()) _cmp.tab = "recibir";

@@ -4,7 +4,7 @@ import { cfgAplicada } from "./comision_cfg.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
-  ecuadorParts, esInterno, estadoTicket, facialSku, n, nombreEsAdmin, normCedula, normNombre,
+  compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, n, nombreEsAdmin, normCedula, normNombre,
   productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
@@ -258,7 +258,7 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= fin && normNombre(t.cosm).startsWith(key) && !esInterno(t.cosm, t.cedula) && !t.exclProducto);
   const items = propios.flatMap((t) => t.productos.map((pr) => {
     const row = cmap.get(skuCode(pr.sku));
-    return { venta: subtotalCatalogo(row), compra: n(row?.precio_compra), qty: pr.qty, excluido: false, sku: pr.sku };
+    return { venta: subtotalCatalogo(row), compra: compraParaComision(row), qty: pr.qty, excluido: false, sku: pr.sku };
   }));
   let comRecepcion = 0;
   if (key.startsWith("alejandra")) {
