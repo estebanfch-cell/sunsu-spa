@@ -6,7 +6,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, kvGet, kvSet, logAccion, nextSheet } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe, MODULOS, normalizarRol, puedeVerContacto, ROLES } from "./permisos.ts";
 import { runErp } from "./erp.ts";
-import { ecuadorParts, IVA, n, normCedula, normNombre, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { compraParaComision, ecuadorParts, IVA, n, normCedula, normNombre, PCT_COMISION_PRODUCTO, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } from "./horarios_api.ts";
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
 import { saldoDe } from "./asistencia_api.ts";
@@ -244,23 +244,26 @@ export async function guardarCatalogoCampos(ctx: Ctx, ses: Ses, fila: string, ca
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
   if (!fila || fila === "nuevo") {
     const code = skuCode(s(campos.sku));
-    if (!/^[A-Z]{2,3}-\d{3}$/.test(code)) return { error: "SKU con formato FAM-###" };
+    const sku = /^[A-Z]{2,3}-\d{3}$/.test(code) ? "SUNSU-" + code : /^\d{1,3}$/.test(code) ? "SUNSU-" + String(Number(code)).padStart(2, "0") : "";
+    if (!sku) return { error: "SKU FAM-### o SUNSU-NN" };
     if (!s(campos.nombre)) return { error: "El nombre es obligatorio" };
     const rows = await ctx.db.all("catalogo");
-    if (rows.some((r) => skuCode(r.sku) === code && r.activo !== false)) return { error: "Ese SKU ya existe" };
+    if (rows.some((r) => skuCode(r.sku) === skuCode(sku) && r.activo !== false)) return { error: "Ese SKU ya existe" };
     const sub = n(campos.subtotal);
-    const compra = n(campos.compra);
+    const comisionCosto = campos.compraComision == null || campos.compraComision === "" ? n(campos.compra) : n(campos.compraComision);
+    const real = n(campos.compraReal);
     const sheet_row = await nextSheet(ctx.db, "catalogo");
     const rec: Row = {
-      sheet_row, sku: "SUNSU-" + code, producto_servicio: s(campos.nombre), tipo: s(campos.tipo) || "PRODUCTO",
-      subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA), precio_compra: compra,
-      utilidad: round2(sub - compra), comi_producto_30: round2(Math.max(0, sub - compra) * 0.3), activo: true,
-      orig: { sku: code },
+      sheet_row, sku, producto_servicio: s(campos.nombre), tipo: s(campos.tipo) || "PRODUCTO",
+      subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA),
+      precio_compra: comisionCosto, compra_comision: comisionCosto,
+      utilidad: round2(sub - real), comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO), activo: true,
+      orig: { sku },
     };
     const saved = await ctx.db.write(actorOf(ses), "catalogo", "insert", {}, rec);
-    await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku: "SUNSU-" + code, stock_inicial: 0, minimo: n(campos.minimo) });
-    if (saved) await anotar(ctx, ses, "catalogo", "SUNSU-" + code, "INSERT", null, vistaCatalogo(saved));
-    return { ok: true, fila: "SUNSU-" + code };
+    await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku, stock_inicial: 0, minimo: n(campos.minimo), compra: real });
+    if (saved) await anotar(ctx, ses, "catalogo", sku, "INSERT", null, vistaCatalogo(saved));
+    return { ok: true, fila: sku };
   }
   const row = await catalogoDe(ctx, fila);
   if (!row) return { error: "Producto no encontrado" };
@@ -268,11 +271,15 @@ export async function guardarCatalogoCampos(ctx: Ctx, ses: Ses, fila: string, ca
   if (bloqueo) return { error: bloqueo };
   const sub = campos.subtotal == null || campos.subtotal === "" ? n(row.subtotal) : n(campos.subtotal);
   const compra = campos.compra == null || campos.compra === "" ? n(row.precio_compra) : n(campos.compra);
+  const comisionCosto = campos.compraComision == null || campos.compraComision === "" ? compraParaComision(row) : n(campos.compraComision);
   const patch: Row = {
     producto_servicio: campos.nombre == null ? s(row.producto_servicio) : s(campos.nombre),
     tipo: campos.tipo == null || campos.tipo === "" ? s(row.tipo) : s(campos.tipo),
     subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA), precio_compra: compra,
+    compra_comision: comisionCosto,
+    comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
   };
+  if (campos.compraReal != null && campos.compraReal !== "") patch.utilidad = round2(sub - n(campos.compraReal));
   if (campos.com != null && campos.com !== "") patch.comi_producto_30 = n(campos.com);
   const antes = vistaCatalogo(row);
   const saved = await ctx.db.write(actorOf(ses), "catalogo", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);

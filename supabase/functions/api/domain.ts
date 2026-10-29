@@ -500,8 +500,11 @@ export interface ComCfg {
   /** % del margen y/o monto fijo por unidad. La clave es el SKU sin SUNSU-. */
   productoSku?: Record<string, TarifaProducto>;
 }
+/** Una sola palanca: comisión de producto = este % × (venta sin IVA − compra comisión). */
+export const PCT_COMISION_PRODUCTO = 0.30;
+
 export const CFG_DEF: ComCfg = {
-  minClientas: 60, facial2: 2, facial3: 3, extra: 1, pctProd: 0.30,
+  minClientas: 60, facial2: 2, facial3: 3, extra: 1, pctProd: PCT_COMISION_PRODUCTO,
   recepPor: 0.50, recepMin: 10, recepMinLunes: 5, niveles: NIVELES,
 };
 
@@ -645,9 +648,16 @@ export function nCosmetologas(marks: CosmMark[], ciclo: string, fin: string, ove
     && (k.activa || !!k.hasta)).length;
 }
 
+/** Costo que entra a la comisión. La compra real (inventario) no se usa aquí. */
+export function compraParaComision(row: { compra_comision?: unknown; precio_compra?: unknown } | null | undefined): number {
+  if (!row) return 0;
+  if (row.compra_comision != null && row.compra_comision !== "") return n(row.compra_comision);
+  return n(row.precio_compra);
+}
+
 export function comisionProductos(
   items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string }[],
-  pct = 0.3,
+  pct = PCT_COMISION_PRODUCTO,
   porSku?: ComCfg["productoSku"],
 ): number {
   let t = 0;

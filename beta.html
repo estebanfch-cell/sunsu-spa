@@ -186,7 +186,7 @@
     background: var(--navy); color: var(--white); border: 0; border-radius: 999px;
     padding: 6px 14px; font-weight: 800; font-size: 0.75rem; min-height: 32px;
   }
-  .ix-cell { border-bottom: 1px dashed var(--navy); cursor: text; display: inline-block; min-width: 4.5em; min-height: 1.1em; }
+  .ix-cell { border-bottom: 0; cursor: text; display: inline-block; min-width: 4.5em; min-height: 1.1em; }
   .ix-cell.ix-dirty { background: var(--gold-l); }
   .ix-lines, .ix-nuevo { margin-top: 8px; }
   .ix-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 0.72rem; padding: 3px 0; }
@@ -833,6 +833,7 @@
   .cmp-bar button { flex: 0 0 auto; border: 1.5px solid var(--cream-d); background: white; color: var(--navy); border-radius: 999px; padding: 6px 10px; font-size: 0.68rem; font-weight: 800; cursor: pointer; }
   .cmp-bar button.on { background: var(--navy); color: white; border-color: var(--navy); }
   .cmp-line { display: grid; grid-template-columns: 1fr 72px; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #f0f0f4; }
+  .tk-orden input.cmp-qty { width: 4.2rem; margin: 0; padding: 4px 6px; min-height: 32px; font-variant-numeric: tabular-nums; }
   .cmp-rec { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid #f0f0f4; }
   .cmp-rec b { font-size: 1rem; }
   .cmp-rec input, .cmp-rec button { min-height: 40px; }
@@ -890,6 +891,7 @@ let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abi
 let relojTick = 0;
 try { state.vista = JSON.parse(sessionStorage.getItem("sunsu.beta.vista") || "null"); } catch { state.vista = null; }
 var IVA_DASH = 0.15;
+const PCT_COM_PROD = 0.30;
 let grupoAbierto = "";
 const AVISO_DS = '<span class="aviso-ds">⚠️ backend DS</span>';
 const AVISO_DW = '<span class="aviso-ds">⚠️ backend DW</span>';
@@ -1325,6 +1327,13 @@ function previewApi(accion, body) {
     const hit = equipo.find((e) => e.persona === body.persona) || equipo[0];
     return { ok: true, persona: hit.persona, personas: equipo.map((e) => e.persona), filas: hit.filas, detalle: hit.detalle, ciclos };
   }
+  if (accion === "getCatalogoTabla") {
+    return { ok: true, items: [
+      { sku: "SUNSU-VK-017", nombre: "Sérum VK", tipo: "PRODUCTO", subtotal: 20, compraReal: 8, compraComision: 6, comision: 4.2, utilidad: 12, activo: true, stock: 3, pvp: 23 },
+      { sku: "SUNSU-17", nombre: "Facial S.O.S", tipo: "FACIAL", subtotal: 40, compraReal: 0, compraComision: 0, comision: 12, utilidad: 40, activo: true, stock: 0, pvp: 46 },
+    ] };
+  }
+  if (accion === "crearProductoApp") return { ok: true, sku: body.sku || "SUNSU-VK-018" };
   return { ok: true, items: [] };
 }
 
@@ -1487,12 +1496,13 @@ function gruposVisibles() {
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
     if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
   }
-  add("Personal", "👤", personal);
+  if (personal.length) out.push({ id: "personal", label: "👤 Personal", items: personal });
   const gift = [];
   if (acceso("gift_cards") !== "no") gift.push(["gift_cards", "Gift cards", "#/m/gift/cards"]);
-  if (acceso("paquetes") !== "no") gift.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
-  if (acceso("gift_cards") !== "no") gift.push(["gift_cards", "Venta de gift card", "#/s/gc-venta"]);
-  add("Gift cards y paquetes", "🎁", gift);
+  if (gift.length) out.push({ id: "gift", label: "🎁 Gift Cards", items: gift });
+  const paquetesMenu = [];
+  if (acceso("paquetes") !== "no") paquetesMenu.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
+  if (paquetesMenu.length) out.push({ id: "paquetes", label: "📦 Paquetes", items: paquetesMenu });
   if (esRolCitas()) add("Citas", "📅", [["inicio", "Mis citas", "#/m/citas"]]);
   const seg = [];
   if (frenteRol()) {
@@ -1876,7 +1886,7 @@ function tituloSunsu(tab) {
     cabina: "Cabina", "dash-admin": "Comisiones", "dash-cosm": "Comisiones", roles: "Rol de pagos",
     admin: "Usuarios", permisos: "Permisos y vacaciones", promos: "Promos", tarjetas: "Tarjetas",
     facturacion: "Facturación", citas: "Citas", recepcion: "Recepción", seguimiento: "Seguimiento",
-    multas: "Multas", kpis: "KPIs", "gc-venta": "Venta de gift card",
+    multas: "Multas", kpis: "KPIs",
   }[tab] || "Sunsu";
 }
 function pantallaSunsu(route) {
@@ -2176,26 +2186,154 @@ async function renderInicioBeta() {
   return homeFail + tareas + pulso + ops;
 }
 
-async function renderProductos() {
-  const data = await api("getCatalogoTabla");
-  if (data.error) return fail(data);
-  window._catRows = data.items || [];
-  const filas = window._catRows.map((p) => `<tr data-cat="${esc(p.sku)}">
+function codigoCat(sku) {
+  return String(sku || "").toUpperCase().replace(/^SUNSU-/, "");
+}
+function tipoNumerico(tipo) {
+  return /FACIAL|PAQUETE|ADD|EXTRA|SERVICIO/.test(String(tipo || "").toUpperCase());
+}
+function prefijosCatalogo(rows) {
+  const set = new Set();
+  (rows || []).forEach((p) => {
+    const m = codigoCat(p.sku).match(/^([A-Z]{2,3})-\d+/);
+    if (m) set.add(m[1]);
+  });
+  return [...set].sort();
+}
+function siguientePrefijo(rows, pref) {
+  let max = 0;
+  (rows || []).forEach((p) => {
+    const m = codigoCat(p.sku).match(new RegExp("^" + pref + "-(\\d+)$"));
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return "SUNSU-" + pref + "-" + String(max + 1).padStart(3, "0");
+}
+function siguienteSunsuNN(rows) {
+  let max = 0;
+  (rows || []).forEach((p) => {
+    const m = String(p.sku || "").toUpperCase().match(/^SUNSU-(\d+)$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return "SUNSU-" + String(max + 1).padStart(2, "0");
+}
+function skuNuevoDe(rows, tipo, prefijo) {
+  if (tipoNumerico(tipo)) return siguienteSunsuNN(rows);
+  const pref = String(prefijo || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  return pref.length >= 2 ? siguientePrefijo(rows, pref) : "";
+}
+function vivosCatalogo(sub, real, comision) {
+  const venta = Number(sub) || 0;
+  const com = Math.round(Math.max(0, venta - (Number(comision) || 0)) * PCT_COM_PROD * 100) / 100;
+  const util = Math.round((venta - (Number(real) || 0)) * 100) / 100;
+  return { com, util };
+}
+function filaCatalogo(p) {
+  const ver = state.admin || state.verCostos;
+  const vivo = vivosCatalogo(p.subtotal, p.compraReal, p.compraComision);
+  return `<tr data-cat="${esc(p.sku)}">
       <td><button class="link" type="button" data-go="#/doc/cat/${encodeURIComponent(p.sku)}">${esc(p.sku)}</button></td>
       <td>${esc(p.tipo || "")}</td>
       <td>${esc(p.nombre)}</td>
       <td>${esc(p.marca || p.proveedor || "")}</td>
       <td>${p.activo ? "Sí" : "No"}</td>
-      <td class="num">${money(p.pvp || 0)}</td>
-      <td class="num">${state.admin || state.verCostos ? money(p.compraReal || 0) : ""}</td>
+      <td class="num">${money(p.subtotal || 0)}</td>
+      <td class="num">${ver ? money(p.compraReal || 0) : ""}</td>
+      <td class="num">${ver ? money(p.compraComision || 0) : ""}</td>
+      <td class="num">${ver ? money(p.comision != null ? p.comision : vivo.com) : ""}</td>
+      <td class="num">${ver ? money(p.utilidad != null ? p.utilidad : vivo.util) : ""}</td>
       <td class="num">${esc(p.stock ?? 0)}</td>
-    </tr>`).join("");
-  return `<input id="filtro-cat" placeholder="Buscar SKU, nombre o marca" aria-label="Buscar en el catálogo">
-    <div class="sheet-scroll"><table>
-      <thead><tr><th>SKU</th><th>Tipo</th><th>Nombre</th><th>Marca / proveedor</th><th>Activo</th><th class="num">PVP</th><th class="num">Compra real</th><th class="num">Stock</th></tr></thead>
-      <tbody id="lista">${filas || `<tr><td colspan="8">El catálogo está vacío.</td></tr>`}</tbody>
+    </tr>`;
+}
+function htmlNuevoProducto() {
+  const rows = window._catRows || [];
+  const prefs = prefijosCatalogo(rows);
+  const tipos = ["PRODUCTO", "FACIAL", "PAQUETE", "ADD-ON"];
+  rows.forEach((p) => { const t = String(p.tipo || "").trim(); if (t && !tipos.includes(t)) tipos.push(t); });
+  const opts = prefs.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("") + `<option value="__nueva__">Nueva</option>`;
+  const tipoOpts = tipos.map((t) => `<option value="${esc(t)}"${t === "PRODUCTO" ? " selected" : ""}>${esc(t)}</option>`).join("");
+  return `<form id="f-cat-nuevo" class="card">
+      <div class="card-title">Nuevo producto</div>
+      <label>Sububicación</label>
+      <select id="cat-pref" name="prefijo">${opts || `<option value="__nueva__">Nueva</option>`}</select>
+      <div id="cat-pref-nueva" hidden><label>Nueva sububicación</label><input id="cat-pref-txt" maxlength="3" placeholder="VK" autocomplete="off"></div>
+      <label>Tipo</label><select id="cat-tipo" name="tipo">${tipoOpts}</select>
+      <label>SKU</label><input id="cat-sku" name="sku" readonly>
+      <label>Nombre</label><input name="nombre" required autocomplete="off">
+      <label>Venta s/IVA</label><input name="subtotal" inputmode="decimal" required>
+      <label>Compra real</label><input name="compraReal" inputmode="decimal" value="0">
+      <label>Compra comisión</label><input name="compraComision" inputmode="decimal" value="0">
+      <p class="note" id="cat-vivo"></p>
+      <button class="btn" type="submit">Crear producto</button>
+      <p class="err" id="f-err"></p><p class="ok" id="f-ok"></p>
+    </form>`;
+}
+function pintarSkuNuevo(root) {
+  const rows = window._catRows || [];
+  const tipo = (root.querySelector("#cat-tipo") || {}).value || "PRODUCTO";
+  const sel = root.querySelector("#cat-pref");
+  const nueva = root.querySelector("#cat-pref-nueva");
+  const txt = root.querySelector("#cat-pref-txt");
+  const sku = root.querySelector("#cat-sku");
+  if (nueva) nueva.hidden = !sel || sel.value !== "__nueva__" || tipoNumerico(tipo);
+  const pref = sel && sel.value === "__nueva__" ? (txt && txt.value) : (sel && sel.value);
+  if (sku) sku.value = skuNuevoDe(rows, tipo, pref);
+  const vivo = root.querySelector("#cat-vivo");
+  if (vivo) {
+    const sub = root.querySelector("[name=subtotal]");
+    const real = root.querySelector("[name=compraReal]");
+    const com = root.querySelector("[name=compraComision]");
+    const v = vivosCatalogo(sub && sub.value, real && real.value, com && com.value);
+    vivo.textContent = "Comisión por producto " + money(v.com) + " = " + Math.round(PCT_COM_PROD * 100) + "% × (Venta s/IVA − Compra comisión). Utilidad " + money(v.util) + " usa Compra real.";
+  }
+}
+async function renderProductos() {
+  const data = await api("getCatalogoTabla");
+  if (data.error) return fail(data);
+  window._catRows = data.items || [];
+  const filas = window._catRows.map(filaCatalogo).join("");
+  const nuevo = state.admin ? `<button class="btn small" type="button" id="cat-mas">+ Nuevo producto</button>` : "";
+  return `<div class="tools">${nuevo}</div>
+    <div id="cat-nuevo" hidden></div>
+    <input id="filtro-cat" placeholder="Buscar SKU, nombre o marca" aria-label="Buscar en el catálogo">
+    <div class="sheet-scroll"><table class="nowrap-table">
+      <thead><tr><th>SKU</th><th>Tipo</th><th>Nombre</th><th>Marca / proveedor</th><th>Activo</th><th class="num">Venta s/IVA</th><th class="num">Compra real</th><th class="num">Compra comisión</th><th class="num">Comisión</th><th class="num">Utilidad</th><th class="num">Stock</th></tr></thead>
+      <tbody id="lista">${filas || `<tr><td colspan="11">El catálogo está vacío.</td></tr>`}</tbody>
     </table></div>
-    <p class="note">La compra real sale de la última orden en Supabase cuando el costo guardado estaba vacío. No se escribe la hoja.</p>`;
+    <p class="note">Compra real entra a la utilidad. Compra comisión entra solo a la comisión (${Math.round(PCT_COM_PROD * 100)}% del margen). La compra real vacía se completa con la última orden.</p>`;
+}
+function wireCatalogo(main) {
+  const mas = main.querySelector("#cat-mas");
+  const host = main.querySelector("#cat-nuevo");
+  if (mas && host) {
+    mas.onclick = () => {
+      host.hidden = false;
+      host.innerHTML = htmlNuevoProducto();
+      pintarSkuNuevo(host);
+      host.querySelectorAll("select, input").forEach((el) => el.addEventListener("input", () => pintarSkuNuevo(host)));
+      host.querySelector("#f-cat-nuevo").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const form = ev.target;
+        const body = Object.fromEntries(new FormData(form).entries());
+        const data = await api("crearProductoApp", body);
+        const err = form.querySelector("#f-err");
+        const ok = form.querySelector("#f-ok");
+        if (data.error) { if (err) err.textContent = data.error; return; }
+        if (ok) ok.textContent = "Creado " + (data.sku || "");
+        go("#/m/productos");
+      });
+    };
+  }
+  const ficha = main.querySelector("#f-cat");
+  if (ficha) {
+    const vivo = () => {
+      const box = ficha.querySelector("#cat-vivo");
+      if (!box) return;
+      const v = vivosCatalogo(ficha.subtotal.value, ficha.compraReal && ficha.compraReal.value, ficha.compraComision && ficha.compraComision.value);
+      box.textContent = "Comisión por producto " + money(v.com) + ". Utilidad " + money(v.util) + ".";
+    };
+    ficha.addEventListener("input", vivo);
+    vivo();
+  }
 }
 
 function htmlLocalSel() {
@@ -4194,7 +4332,9 @@ async function renderCatalogoFicha(sku) {
   const p = (data.items || []).find((r) => String(r.sku).toUpperCase() === String(sku).toUpperCase() || String(r.sku).toUpperCase().endsWith(String(sku).toUpperCase()));
   if (!p) return `<p class="err">SKU no encontrado.</p>`;
   const lug = p.lugares || {};
-  const costo = state.admin || state.verCostos ? `<label>Compra real</label><input name="compraReal" inputmode="decimal" value="${esc(p.compraReal ?? "")}">` : "";
+  const costo = state.admin || state.verCostos ? `<label>Compra real</label><input name="compraReal" inputmode="decimal" value="${esc(p.compraReal ?? "")}">
+    <label>Compra comisión</label><input name="compraComision" inputmode="decimal" value="${esc(p.compraComision ?? "")}">
+    <p class="note" id="cat-vivo"></p>` : "";
   return `<form id="f-cat">
     <input type="hidden" name="sku" value="${esc(p.sku)}">
     <label>SKU</label><input value="${esc(p.sku)}" disabled>
@@ -4714,6 +4854,7 @@ function bind(main) {
   wireHorarios(main);
   wireVentas(main);
   wireProveedores(main);
+  wireCatalogo(main);
   if (typeof wireComprasFlujo === "function") wireComprasFlujo(main);
   wireInventario(main);
   if (typeof wireConteoFlujo === "function") wireConteoFlujo(main);
@@ -5361,7 +5502,7 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261029pq3"></script>
+<script src="beta-screens.js?v=20261029menu1"></script>
 <script src="beta-inline.js?v=20261026prov2"></script>
 <script>draw();</script>
 </body>
