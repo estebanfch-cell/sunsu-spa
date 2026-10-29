@@ -3031,8 +3031,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3140,8 +3140,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3218,8 +3218,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3269,8 +3269,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3303,8 +3303,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3350,8 +3350,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261026mrg8788/);
-    assert.match(sw, /sunsu-beta-2026-10-26-MRG8788/);
+    assert.match(beta, /beta-screens\.js\?v=20261029tklin/);
+    assert.match(sw, /sunsu-beta-2026-10-29-TKLIN/);
   });
 });
 
@@ -3860,5 +3860,46 @@ describe("ninguna variable window._x pisa una función global _x", () => {
     const asign = new Set([...(src + "\n" + beta).matchAll(/window\.(_[A-Za-z0-9]+)\s*=(?!=)/g)].map((m) => m[1]));
     const choque = [...asign].filter((x) => fns.has(x));
     assert.deepEqual(choque, []);
+  });
+});
+
+describe("total del ticket desde sus líneas", () => {
+  it("factura sin decimales, canje = facial $0, el total se mueve solo por las líneas", async () => {
+    const { facturaTxt, totalLineas, patchLineas } = await import("./ticket_total.ts");
+    assert.equal(facturaTxt("2833.0"), "2833");
+    assert.equal(facturaTxt(2833), "2833");
+    assert.equal(facturaTxt("SIN FACTURA"), "SIN FACTURA");
+    assert.equal(facturaTxt(""), "");
+    const cat = [
+      { sku: "SUNSU-52", total_con_iva: "95.0" }, { sku: "SUNSU-53", total_con_iva: "256.5" },
+      { sku: "SUNSU-31", total_con_iva: "20" }, { sku: "SUNSU-01", total_con_iva: "75" },
+    ];
+    // TK-SO-1722: canje de paquete, facial $0, pack x3 = 256.50 → cuadra con lo guardado
+    const tk = { estimado: "256.5", paquete: "SI, 1/3", facial_hecho: "SUNSU-52 Facial de Ginseng", compra_pack_3: "SUNSU-53 x3 Facial de Ginseng" };
+    assert.equal(totalLineas(tk, cat), 256.5);
+    // agregar un extra cobrable y otro de cortesía
+    const p1 = patchLineas(tk, { extras: "SUNSU-31 PDRN Serum | SUNSU-31 PDRN Serum [CORTESIA: Promo]" }, cat)!;
+    assert.equal(p1.estimado, 276.5);
+    // el total enviado por el cliente se ignora
+    const p2 = patchLineas(tk, { estimado: 1, pack3: "" }, cat)!;
+    assert.equal(p2.estimado, 0);
+    // un ticket con promo guardada conserva su descuento al cambiar líneas
+    const promo = { estimado: "60", facial_hecho: "SUNSU-01 Facial S.O.S" };
+    const p3 = patchLineas(promo, { facial: "SUNSU-01 Facial S.O.S | SUNSU-52 Facial de Ginseng" }, cat)!;
+    assert.equal(p3.facial_hecho, "SUNSU-01 Facial S.O.S | SUNSU-52 Facial de Ginseng");
+    assert.equal(p3.estimado, 155);
+    assert.equal(patchLineas(promo, { notas: "x" }, cat), null);
+  });
+
+  it("el detalle no recalcula el canje con precios fijos y el total no es campo libre", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+    assert.doesNotMatch(src, /totalCliente=extrasCobrables\+\(packInfo/);
+    assert.doesNotMatch(src, /\["estimado","Total",t\.estimado\]/);
+    assert.match(src, /\+ Agregar facial/);
+    assert.match(src, /\+ Agregar extra/);
+    assert.match(src, /\+ Agregar paquete/);
+    assert.match(src, /function _facTxt/);
+    assert.doesNotThrow(() => new Function(src));
   });
 });
