@@ -369,6 +369,24 @@ export function repartirPagos(comp: string, total: number): Record<string, numbe
   return pagos;
 }
 
+/**
+ * SUNSU-15 (Ampolla Especial) guarda uno o más tipos después de " · ",
+ * separados por coma: "PDRN" o "PDRN, Hidratación". Un texto viejo sin ese
+ * punto ("Ampolla PDRN") sigue siendo una sola ampolla.
+ */
+export function tiposAmpolla(parte: string): string[] {
+  if (!/SUNSU-15\b/i.test(parte)) return [];
+  const m = parte.match(/·\s*([^[\]]+)/);
+  if (!m) return [];
+  return m[1].split(",").map((x) => x.trim()).filter(Boolean);
+}
+
+/** Cuántas ampollas cuenta esa parte del extra. El resto de extras cuenta 1. */
+export function cantAmpollas(parte: string): number {
+  if (!/SUNSU-15\b/i.test(parte)) return 1;
+  return tiposAmpolla(parte).length || 1;
+}
+
 export function contarExtras(txt: unknown): { n: number; cortesia: number } {
   const raw = s(txt);
   if (!raw || raw.toLowerCase() === "false") return { n: 0, cortesia: 0 };
@@ -376,13 +394,14 @@ export function contarExtras(txt: unknown): { n: number; cortesia: number } {
   for (const p of raw.split("|")) {
     const t = p.trim();
     if (!t) continue;
-    if (t.toUpperCase().includes("CORTES")) cortesia++;
-    else nEx++;
+    const c = cantAmpollas(t);
+    if (t.toUpperCase().includes("CORTES")) cortesia += c;
+    else nEx += c;
   }
   return { n: nEx + cortesia, cortesia };
 }
 
-/** Nombres de extras que sí pagan. Misma regla que contarExtras, sin las cortesías. */
+/** Nombres de extras que sí pagan, repetidos una vez por ampolla. Misma regla que contarExtras, sin las cortesías. */
 export function listaExtrasPagados(txt: unknown): string[] {
   const raw = s(txt);
   if (!raw || raw.toLowerCase() === "false") return [];
@@ -390,7 +409,8 @@ export function listaExtrasPagados(txt: unknown): string[] {
   for (const p of raw.split("|")) {
     const t = p.trim();
     if (!t || t.toUpperCase().includes("CORTES")) continue;
-    out.push(t);
+    const c = cantAmpollas(t);
+    for (let i = 0; i < c; i++) out.push(t);
   }
   return out;
 }

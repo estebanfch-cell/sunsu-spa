@@ -1043,6 +1043,61 @@ function mkAcc(id,icon,bgColor,title,subFn,bodyHtml){
 }
 
 // ══════ TICKET ══════
+// Ampolla Especial (SUNSU-15): una o varias. Se guardan separadas por coma
+// ("PDRN" o "PDRN, Hidratación"). Un valor suelto de antes sigue siendo una.
+var AMP_TIPOS=['Ácido Ascórbico','PDRN','Hidratación','Purificación','Brillo','Elasticidad'];
+function _ampLista(v){
+  return String(v||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+}
+function _ampCantValor(v){
+  var n=_ampLista(v).length;
+  return n>0?n:1;
+}
+function _ampCantParte(part){
+  var p=String(part||'');
+  if(!/SUNSU-15\b/.test(p)) return 1;
+  var m=p.match(/·\s*([^[\]]+)/);
+  if(!m) return 1;
+  var n=m[1].split(',').map(function(x){return x.trim();}).filter(Boolean).length;
+  return n||1;
+}
+function _ampTiposParte(part){
+  var m=String(part||'').match(/·\s*([^[\]]+)/);
+  if(!m) return '';
+  return m[1].split(',').map(function(x){return x.trim();}).filter(Boolean).join(', ');
+}
+function _ampToggle(sku, tipo){
+  if(window.event) window.event.stopPropagation();
+  T.extrasTipo=T.extrasTipo||{};
+  var list=_ampLista(T.extrasTipo[sku]);
+  var i=list.indexOf(tipo);
+  if(i>=0) list.splice(i,1); else list.push(tipo);
+  list=AMP_TIPOS.filter(function(t){return list.indexOf(t)>=0;});
+  if(list.length) T.extrasTipo[sku]=list.join(', ');
+  else delete T.extrasTipo[sku];
+  var box=document.getElementById('amp-tipo-'+sku);
+  if(box) box.querySelectorAll('[data-amp]').forEach(function(b){
+    var on=list.indexOf(b.getAttribute('data-amp'))>=0;
+    b.setAttribute('aria-pressed', on?'true':'false');
+    b.style.borderColor=on?'#C45C86':'#E8B4C8';
+    b.style.background=on?'#FDE8F0':'white';
+    b.style.color=on?'#8A3A58':'#3D2A38';
+    b.textContent=(on?'✓ ':'')+b.getAttribute('data-amp');
+  });
+  if(typeof updatePreview==='function') updatePreview();
+}
+function _ampPickerHtml(sku){
+  var list=_ampLista(T.extrasTipo&&T.extrasTipo[sku]);
+  return '<div id="amp-tipo-'+sku+'" style="flex:1 0 100%;display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;max-width:100%">'
+    +'<div style="flex:1 0 100%;font-size:0.62rem;font-weight:700;color:#9A6A80;letter-spacing:.2px">Tipo de ampolla — puedes elegir varias</div>'
+    +AMP_TIPOS.map(function(t){
+      var on=list.indexOf(t)>=0;
+      return '<button type="button" data-amp="'+t+'" aria-pressed="'+(on?'true':'false')+'" onclick="_ampToggle(\''+sku+'\',\''+t+'\')" '
+        +'style="min-height:40px;padding:8px 12px;border-radius:999px;border:1.5px solid '+(on?'#C45C86':'#E8B4C8')+';background:'+(on?'#FDE8F0':'white')+';color:'+(on?'#8A3A58':'#3D2A38')+';font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;line-height:1.2">'
+        +(on?'✓ ':'')+t+'</button>';
+    }).join('')
+    +'</div>';
+}
 function mkExtraChip(e){
   var sel=!!T.extras[e.sku];
   var cort=sel&&!!T.extrasCourtesy[e.sku];
@@ -1053,15 +1108,8 @@ function mkExtraChip(e){
     var cortBorder=cort?'#EDD89A':'#ECEEF4';
     var cortColor=cort?'#C4A45A':'#7A8499';
     var cortLabel=cort?('🎀 '+(T.extrasCourtesyReason&&T.extrasCourtesyReason[e.sku]||'Cortesía')):'🎀 Cortesía';
-    // Ampolla Especial: dropdown del TIPO usado (solo registro — todas valen igual)
-    if(e.sku==='SUNSU-15'){
-      var tipoAmp=(T.extrasTipo&&T.extrasTipo[e.sku])||'';
-      chip+='<select id="amp-tipo-'+e.sku+'" onchange="T.extrasTipo=T.extrasTipo||{};T.extrasTipo[\''+e.sku+'\']=this.value;if(typeof updatePreview===\'function\')updatePreview();" '
-        +'style="display:block;margin:0 4px 6px;padding:7px 9px;border:1.5px solid #E8B4C8;border-radius:9px;font-size:0.7rem;font-family:inherit;background:white;color:var(--navy);max-width:230px">'
-        +'<option value="">— tipo de ampolla —</option>'
-        +['Ácido Ascórbico','PDRN','Hidratación','Purificación','Brillo','Elasticidad'].map(function(tA){return '<option value="'+tA+'"'+(tipoAmp===tA?' selected':'')+'>'+tA+'</option>';}).join('')
-        +'</select>';
-    }
+    // Ampolla Especial: una o varias. Cada tipo vale lo mismo y cuenta como una.
+    if(e.sku==='SUNSU-15') chip+=_ampPickerHtml(e.sku);
     chip+='<span id="cort-btn-'+e.sku+'" onclick="toggleCourtesy(\''+e.sku+'\')" '+
       'style="display:inline-block;margin:0 4px 5px;padding:2px 9px;border-radius:6px;'+
       'font-size:0.62rem;font-weight:700;cursor:pointer;'+
@@ -1524,20 +1572,15 @@ function selEx(sku){
     var reason=document.getElementById('cort-reason-'+sku);
     if(reason&&reason.parentNode) reason.parentNode.removeChild(reason);
   }
-  // Ampolla Especial: el dropdown de TIPO se crea aquí, imperativo, porque
+  // Ampolla Especial: las fichas se crean aquí, imperativo, porque
   // selEx NO re-renderiza los chips (mkExtraChip solo corre al pintar la sección).
   if(sku==='SUNSU-15'){
     var ampSel=document.getElementById('amp-tipo-'+sku);
     if(T.extras[sku]&&!ampSel){
-      var selA=document.createElement('select');
-      selA.id='amp-tipo-'+sku;
-      selA.style.cssText='display:block;margin:2px 4px 6px;padding:7px 9px;border:1.5px solid #E8B4C8;border-radius:9px;font-size:0.7rem;font-family:inherit;background:white;color:var(--navy);max-width:230px';
-      ['— tipo de ampolla —','Ácido Ascórbico','PDRN','Hidratación','Purificación','Brillo','Elasticidad'].forEach(function(tA,iA){
-        var oA=document.createElement('option'); oA.value=iA===0?'':tA; oA.textContent=tA; selA.appendChild(oA);
-      });
-      selA.onchange=function(){T.extrasTipo=T.extrasTipo||{};T.extrasTipo[sku]=this.value;updatePreview();};
-      var refA=document.getElementById('cort-btn-'+sku)||chip;
-      if(refA&&refA.parentNode) refA.parentNode.insertBefore(selA, refA.nextSibling);
+      var holderA=document.createElement('div');
+      holderA.innerHTML=_ampPickerHtml(sku);
+      var boxA=holderA.firstElementChild;
+      if(chip&&chip.parentNode&&boxA) chip.parentNode.insertBefore(boxA, chip.nextSibling);
     } else if(!T.extras[sku]&&ampSel){
       ampSel.parentNode.removeChild(ampSel);
       if(T.extrasTipo) delete T.extrasTipo[sku];
@@ -1816,12 +1859,14 @@ function updatePreview(){
   EXTRAS.forEach(e=>{
     if(!T.extras[e.sku]) return;
     const cort=T.extrasCourtesy&&T.extrasCourtesy[e.sku];
-    extrasDetalle.push({sku:e.sku,n:e.n+(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]?' · '+T.extrasTipo[e.sku]:''),p:cort?0:e.t,cort});
-    if(!cort) extrasTotal+=e.t;
+    var ampN=e.sku==='SUNSU-15'?_ampCantValor(T.extrasTipo&&T.extrasTipo[e.sku]):1;
+    var tiposAmp=e.sku==='SUNSU-15'?(T.extrasTipo&&T.extrasTipo[e.sku]||''):'';
+    extrasDetalle.push({sku:e.sku,n:e.n+(tiposAmp?' · '+tiposAmp:''),p:cort?0:e.t*ampN,unit:cort?0:e.t,cant:ampN,cort});
+    if(!cort) extrasTotal+=e.t*ampN;
   });
-  if(T.extras['otros']&&T.otroExtra) extrasDetalle.push({n:'Otro',p:0,cort:false});
-  // Comisión extras: $1 por cada extra vendido (cortesías no comisionan)
-  const nExtrasVendidos=extrasDetalle.filter(x=>!x.cort).length;
+  if(T.extras['otros']&&T.otroExtra) extrasDetalle.push({n:'Otro',p:0,unit:0,cant:1,cort:false});
+  // Comisión extras: $1 por cada extra vendido (cada ampolla cuenta; cortesías no)
+  const nExtrasVendidos=extrasDetalle.reduce(function(a,x){return a+(x.cort?0:(x.cant||1));},0);
   const comE=nExtrasVendidos*1;
 
   // Paquete
@@ -1894,7 +1939,7 @@ function updatePreview(){
     const fx=FACIALES.find(function(x){return x.sku===T.facial;});
     _fila(1,T.facial,facialNombre||(fx?fx.n:'Facial'),facialP,T.cobro==='cortesia'?'cortesía':esCanje?'canje':(T.cobro==='giftcard'&&T._gcUsado?'GC −$'+Number(T._gcUsado).toFixed(2):''));
   }
-  extrasDetalle.forEach(function(ex){ _fila(1,ex.sku,ex.n,ex.p,ex.cort?'cortesía':''); });
+  extrasDetalle.forEach(function(ex){ _fila(ex.cant||1,ex.sku,ex.n,ex.cort?0:(ex.unit!=null?ex.unit:ex.p),ex.cort?'cortesía':''); });
   if(T.pack3||T.pack6) _fila(1,T.pack3||T.pack6,packNombre||'Paquete',estPack);
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
     const q=T.productos[p.sku]||0; if(q<=0) return;
@@ -2017,7 +2062,11 @@ function _promoUnits(){
   var u=[];
   var esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
   if(T.facial&&!esCanje){var f=FACIALES.find(function(x){return x.sku===T.facial;});if(f)u.push({sku:f.sku,p:f.p});}
-  EXTRAS.forEach(function(e){if(T.extras[e.sku]&&!(T.extrasCourtesy&&T.extrasCourtesy[e.sku]))u.push({sku:e.sku,p:e.t});});
+  EXTRAS.forEach(function(e){
+    if(!(T.extras[e.sku]&&!(T.extrasCourtesy&&T.extrasCourtesy[e.sku]))) return;
+    var nAmp=e.sku==='SUNSU-15'?_ampCantValor(T.extrasTipo&&T.extrasTipo[e.sku]):1;
+    for(var iAmp=0;iAmp<nAmp;iAmp++) u.push({sku:e.sku,p:e.t});
+  });
   if(T.pack3){var p3=PAQ3.find(function(x){return x.sku===T.pack3;});if(p3)u.push({sku:p3.sku,p:p3.p,pack:3});}
   if(T.pack6){var p6=PAQ6.find(function(x){return x.sku===T.pack6;});if(p6)u.push({sku:p6.sku,p:p6.p,pack:6});}
   PROVS.forEach(function(pv){pv.prods.forEach(function(pr){var q=T.productos[pr.sku]||0;for(var i=0;i<q;i++)u.push({sku:pr.sku,p:pr.p});});});
@@ -2229,8 +2278,9 @@ function _lineasCotizacionTicket(){
     if(!T.extras||!T.extras[e.sku]) return;
     var precio=T.extrasCourtesy&&T.extrasCourtesy[e.sku]?0:e.t;
     var nombre=e.n;
-    if(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]) nombre+=' · '+T.extrasTipo[e.sku];
-    add(e.sku, nombre, 'extra', 1, precio);
+    var nAmp=1;
+    if(e.sku==='SUNSU-15'&&T.extrasTipo&&T.extrasTipo[e.sku]){ nombre+=' · '+T.extrasTipo[e.sku]; nAmp=_ampCantValor(T.extrasTipo[e.sku]); }
+    add(e.sku, nombre, 'extra', nAmp, precio);
   });
   if(T.extras&&T.extras.otros&&T.otroExtra) add('OTRO', T.otroExtra, 'extra', 1, 0);
   if(T.pack3){
@@ -2378,7 +2428,7 @@ function enviarTicket(){
     if(_f && T.cobro==='giftcard') _estF=Number(T._gcDif)||0;
     else if(_f && !_esCanje) _estF=_f.p;
   }
-  EXTRAS.forEach(e=>{if(T.extras[e.sku]&&!T.extrasCourtesy[e.sku])_estF+=e.t;});
+  EXTRAS.forEach(e=>{if(T.extras[e.sku]&&!T.extrasCourtesy[e.sku])_estF+=e.t*(e.sku==='SUNSU-15'?_ampCantValor(T.extrasTipo&&T.extrasTipo[e.sku]):1);});
   if(T.pack3){const _p=PAQ3.find(p=>p.sku===T.pack3);if(_p)_estPack=_p.p;}
   if(T.pack6){const _p=PAQ6.find(p=>p.sku===T.pack6);if(_p)_estPack=_p.p;}
   PROVS.forEach(pv=>pv.prods.forEach(p=>{const q=T.productos[p.sku]||0;if(q>0)_estProd+=p.p*q;}));
@@ -4503,7 +4553,8 @@ function _tkFilas(t){
     var m=ex.match(/(SUNSU-\d+)/); if(!m) return;
     var cort=/\[CORTESIA/.test(ex), cm=ex.match(/\[CORTESIA(?::\s*([^\]]+))?\]/);
     var eo=EXTRAS.find(function(x){return x.sku===m[1];});
-    add(m[1],eo?eo.n:ex.replace(/\s*\[CORTESIA[^\]]*\]/,''),1,_histPrecioExtra(m[1]),cort?('cortesía'+(cm&&cm[1]?' · '+cm[1]:'')):'',cort);
+    var tiposH=_ampTiposParte(ex);
+    add(m[1],(eo?eo.n:ex.replace(/\s*\[CORTESIA[^\]]*\]/,''))+(tiposH?' · '+tiposH:''),_ampCantParte(ex),_histPrecioExtra(m[1]),cort?('cortesía'+(cm&&cm[1]?' · '+cm[1]:'')):'',cort);
   });
   _tkPartes(t.pack3).concat(_tkPartes(t.pack6)).forEach(function(x){ var pi=_histPrecioPaq(x); add(pi?pi.sku:'',pi?pi.n:x,1,pi?pi.p:0); });
   (t.productos||[]).forEach(function(pq){ var pi=_histPrecioProducto(pq); add(pi.sku,pi.n,pi.qty,pi.p||0); });
@@ -4554,7 +4605,7 @@ function _buildTicketCard(t, showPrices){
   var totalCliente=parseFloat(t.estimado)||0;
   // Suma de extras cobrables (sin cortesias), a precio de catalogo
   var extrasCobrables=0;
-  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1]); }); }
+  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1])*_ampCantParte(exC); }); }
   // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
   // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
   // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
@@ -5201,7 +5252,7 @@ function descargarPDFHistorial(){
     var totalCliente=parseFloat(t.estimado)||0;
   // Suma de extras cobrables (sin cortesias), a precio de catalogo
   var extrasCobrables=0;
-  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1]); }); }
+  if(t.extras){ t.extras.split('|').forEach(function(exC){ exC=exC.trim(); if(!exC) return; if(/\[CORTESIA/.test(exC)) return; var ekC=exC.match(/(SUNSU-\d+)/); if(ekC) extrasCobrables+=_histPrecioExtra(ekC[1])*_ampCantParte(exC); }); }
   // ── REGLA ESENCIAL DE CANJES ── El paquete (o la GC) ya pago el facial: se
   // cobra $0 por el facial y SOLO los extras/productos/gc. La col J trae el VALOR
   // del ticket (con el facial adentro), asi que aqui lo cobrado se recalcula.
@@ -9434,6 +9485,12 @@ function guardarEdicionTicket(tkRow){
     if(ck&&ck.checked){
       var cort=document.getElementById('ec-'+ex.sku);
       var str=ex.sku+' '+ex.n;
+      if(ex.sku==='SUNSU-15'){
+        var tAmp=_histData&&_histData.find(function(x){return x.tkRow===tkRow;});
+        var prevAmp=tAmp&&String(tAmp.extras||'').split('|').map(function(s){return s.trim();}).find(function(s){return /SUNSU-15\b/.test(s);});
+        var tiposAmp=_ampTiposParte(prevAmp||'');
+        if(tiposAmp) str+=' · '+tiposAmp;
+      }
       if(cort&&cort.checked) str+=' [CORTESIA]';
       extrasArr.push(str);
     }
@@ -11087,8 +11144,14 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
     seccion('TU EXPERIENCIA DE HOY');
     var filasExp=[];
     if(limpia(t.facial)) filasExp.push({c:1, d:limpia(t.facial), tp:'Facial'});
-    (limpia(t.extras)||'').split(/\s*[,;+]\s*/).forEach(function(ex){
-      if(ex.trim()) filasExp.push({c:1, d:ex.trim(), tp:'Extra'});
+    String(t.extras||'').split('|').forEach(function(raw){
+      raw=raw.trim(); if(!raw) return;
+      var limpio=limpia(raw.replace(/\s*\[CORTESIA[^\]]*\]/g,''));
+      if(!limpio) return;
+      if(/SUNSU-15\b/.test(raw)){ filasExp.push({c:_ampCantParte(raw), d:limpio, tp:'Extra'}); return; }
+      limpio.split(/\s*[,;+]\s*/).forEach(function(ex){
+        if(ex.trim()) filasExp.push({c:1, d:ex.trim(), tp:'Extra'});
+      });
     });
     var paqExp=limpia(t.pack3)||limpia(t.pack6);
     if(paqExp) filasExp.push({c:1, d:paqExp+(t.pack3?' (3 sesiones)':' (6 sesiones)'), tp:'Paquete'});

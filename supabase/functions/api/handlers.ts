@@ -3,7 +3,7 @@ import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, m
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
-  PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
+  PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cantAmpollas, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, PCT_COMISION_PRODUCTO,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
@@ -187,10 +187,11 @@ async function dashboard(ctx: Ctx): Promise<R> {
       for (const pieza of extras.split("|")) {
         const p = pieza.trim();
         if (!p) continue;
-        hoyT.extrasN++;
-        if (p.toUpperCase().includes("CORTES")) { hoyT.extrasCort++; continue; }
+        const cAmp = cantAmpollas(p);
+        hoyT.extrasN += cAmp;
+        if (p.toUpperCase().includes("CORTES")) { hoyT.extrasCort += cAmp; continue; }
         const skuEx = codEnTexto(p);
-        if (skuEx) hoyT.valExtras += subtotalDe(cats, skuEx);
+        if (skuEx) hoyT.valExtras += subtotalDe(cats, skuEx) * cAmp;
       }
     }
     const fac = s(t.facial_hecho);

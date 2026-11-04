@@ -70,7 +70,8 @@ extend("ticket_editar", "any", async (p, ctx, ses) => {
     nuevoMap[k] = (nuevoMap[k] || 0) + ln.cantidad;
   }
   for (const ln of calc.lineas) {
-    if (ln.clase !== "servicio") continue;
+    const esAmpolla = ln.clase === "extra" && skuCode(ln.sku) === "15";
+    if (ln.clase !== "servicio" && !esAmpolla) continue;
     for (const rc of await recetaDe(ctx.db, ln.sku || ln.nombre, ln.cantidad)) {
       const k = "cabina:" + skuCode(rc.sku);
       nuevoMap[k] = (nuevoMap[k] || 0) + rc.qty;
