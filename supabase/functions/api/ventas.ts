@@ -4,8 +4,8 @@
 
 import type { Db } from "./db.ts";
 import {
-  FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, ecuadorParts, facialSku, n, normCedula, normNombre,
-  packSesiones, prodCol, productQtys, round2, s, skuCode, ymdUtc, type ComCfg, type Row,
+  FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
+  packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
 } from "./domain.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
@@ -250,7 +250,15 @@ export function lineasTicket(t: Row, cats: Row[], prods: Row[]): LineaVenta[] {
       const p = pieza.trim();
       if (!p) continue;
       const sku = facialSku(p) || "";
-      out.push({ clase: "extra", sku, nombre: rotulo(cats, prods, sku, p), cantidad: 1, precio: precioDe(cats, prods, sku), descuento_pct: 0 });
+      const tipos = tiposAmpolla(p);
+      const cortesia = /\[CORTESIA[^\]]*\]/i.exec(p);
+      let nombre = rotulo(cats, prods, sku, p).replace(/\s*·[\s\S]*$/, "").replace(/\s*\[CORTESIA[^\]]*\]/i, "").trim();
+      if (tipos.length) nombre += " · " + tipos.join(", ");
+      if (cortesia) nombre += " " + cortesia[0];
+      out.push({
+        clase: "extra", sku, nombre, cantidad: cantAmpollas(p),
+        precio: cortesia ? 0 : precioDe(cats, prods, sku), descuento_pct: 0,
+      });
     }
   }
   for (const pr of productQtys(t)) {
@@ -747,6 +755,17 @@ export async function reporteConsumos(db: Db, p: Row): Promise<Row> {
       const cur = venta.get(k) || { sku: k, nombre: nombreDe(cats, prods, k), unidades: 0 };
       cur.unidades += pr.qty;
       venta.set(k, cur);
+    }
+    for (const pieza of s(t.servicios_adicionales).split("|")) {
+      const pAmp = pieza.trim();
+      if (!/SUNSU-15\b/i.test(pAmp)) continue;
+      for (const rc of await recetaDe(db, "SUNSU-15", cantAmpollas(pAmp))) {
+        const k = skuCode(rc.sku);
+        if (filtroSku && k !== filtroSku) continue;
+        const cur = cabina.get(k) || { sku: k, nombre: nombreDe(cats, prods, k), unidades: 0 };
+        cur.unidades = round2(cur.unidades + rc.qty);
+        cabina.set(k, cur);
+      }
     }
     if (filtroSku && fac && (!filtroFac || fac.toLowerCase().includes(filtroFac))) {
       for (const rc of await recetaDe(db, fac, 1)) {

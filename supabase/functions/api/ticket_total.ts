@@ -4,7 +4,7 @@
 // [CORTESIA…] valen $0. El resto del ticket (productos, venta de GC, promos)
 // no se recalcula: al editar líneas el total se mueve exactamente por la
 // diferencia de las líneas, así el total guardado sigue siendo la única fuente.
-import { n, round2, s, skuCode, type Row } from "./domain.ts";
+import { cantAmpollas, n, round2, s, skuCode, type Row } from "./domain.ts";
 
 export const LINEA_CAMPOS = ["facial", "extras", "pack3", "pack6"] as const;
 const COL: Record<string, string> = { facial: "facial_hecho", extras: "servicios_adicionales", pack3: "compra_pack_3", pack6: "compra_pack_6" };
@@ -37,7 +37,7 @@ export function totalLineas(row: Row, cat: Row[]): number {
   const canje = esCanjeTicket(row);
   let t = 0;
   if (!canje) for (const f of partes(row.facial_hecho)) t += precioCatalogo(cat, f);
-  for (const e of partes(row.servicios_adicionales)) if (!/\[CORTESIA/i.test(e)) t += precioCatalogo(cat, e);
+  for (const e of partes(row.servicios_adicionales)) if (!/\[CORTESIA/i.test(e)) t += precioCatalogo(cat, e) * cantAmpollas(e);
   for (const p of [...partes(row.compra_pack_3), ...partes(row.compra_pack_6)]) t += precioCatalogo(cat, p);
   return round2(t);
 }
