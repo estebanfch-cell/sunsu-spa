@@ -321,6 +321,17 @@ function exclColsFromHeaders_(headers) {
 // Formato: "SUNSU-07 Dermaplaning | SUNSU-12 Ampolla [CORTESIA] | OTRO: xyz"
 // Las cortesías NO comisionan (no fueron vendidas). Se detectan por '[CORTESIA'
 // o por la palabra 'Cortesía' en texto libre (formato de tickets antiguos).
+// SUNSU-15 guarda los tipos tras " · ", separados por coma. Sin ese punto
+// (tickets viejos: "Ampolla PDRN") sigue siendo una sola ampolla.
+function cantAmpollas_(parte) {
+  var p = (parte||'').toString();
+  if (!/SUNSU-15\b/i.test(p)) return 1;
+  var m = p.match(/·\s*([^[\]]+)/);
+  if (!m) return 1;
+  var n = 0;
+  m[1].split(',').forEach(function(x){ if ((''+x).trim()) n++; });
+  return n || 1;
+}
 function contarExtrasVendidos_(extrasStr) {
   var s = (extrasStr||'').toString().trim();
   if (!s || s.toLowerCase() === 'false') return 0;
@@ -329,7 +340,7 @@ function contarExtrasVendidos_(extrasStr) {
     var p = part.trim();
     if (!p) return;
     if (p.toUpperCase().indexOf('CORTES') >= 0) return; // [CORTESIA...], 'Cortesía por...', etc.
-    n++;
+    n += cantAmpollas_(p);
   });
   return n;
 }
@@ -3771,10 +3782,11 @@ function doGet(e) {
           exD.split('|').forEach(function(peD){
             var pD = peD.trim();
             if (!pD) return;
-            if (pD.toUpperCase().indexOf('CORTES') >= 0) { hoyDH.extrasN++; hoyDH.extrasCort=(hoyDH.extrasCort||0)+1; return; }
-            hoyDH.extrasN++;
+            var cAmpD = cantAmpollas_(pD);
+            if (pD.toUpperCase().indexOf('CORTES') >= 0) { hoyDH.extrasN+=cAmpD; hoyDH.extrasCort=(hoyDH.extrasCort||0)+cAmpD; return; }
+            hoyDH.extrasN+=cAmpD;
             var mSkD = pD.toUpperCase().match(/SUNSU-([A-Z]{2,3}-\d+|\d+)/);
-            if (mSkD && subCatDH[mSkD[1]]) hoyDH.valExtras += subCatDH[mSkD[1]];
+            if (mSkD && subCatDH[mSkD[1]]) hoyDH.valExtras += subCatDH[mSkD[1]] * cAmpD;
           });
         }
         if (facD && facD!=='-' && facD!=='—') {
