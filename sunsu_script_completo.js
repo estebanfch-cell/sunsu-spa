@@ -4364,6 +4364,7 @@ function doGet(e) {
           for (var hi = 0; hi < hdrOC.length; hi++) {
             var hOC = (hdrOC[hi]||'').toString().trim();
             if (!hOC || hOC.indexOf(famOC+'-') !== 0) continue;
+            if (_esSkuVentaCabina_(hOC)) continue; // venta de cabina: no se factura ni se repone
             var qty = parseFloat(dTkOC[ti][hi])||0;
             if (qty > 0) {
               if (esPostOC) vendPostOC[hOC] = (vendPostOC[hOC]||0) + qty;
@@ -4409,7 +4410,8 @@ function doGet(e) {
           if (skuOC.indexOf('SUNSU-'+famOC+'-') !== 0) continue;
           var codI = skuOC.replace(/^SUNSU-/,'');
           if (activosOC.hasOwnProperty(codI) && activosOC[codI] !== true) continue; // inactivo → fuera
-          var vendI = vendOC[codI]||0;
+          var esCabV = _esSkuVentaCabina_(skuOC);
+          var vendI = esCabV ? 0 : (vendOC[codI]||0);
           // Stock que ve el proveedor = stock ACTUAL del inventario, tal cual.
           // (La reconstrucción "al corte" se eliminó del borrador: cualquier
           // recepción registrada tarde la descuadraba — el número honesto es
@@ -4425,7 +4427,9 @@ function doGet(e) {
             minimo: parseFloat(dInvOC[vi][8])||0,
             compra: parseFloat(dInvOC[vi][6])||0,
             vendido: vendI,
-            sugerido: Math.ceil(vendI * (1 + INV_CONFIG.BUFFER_RESTOCK))
+            sugerido: esCabV ? 0 : Math.ceil(vendI * (1 + INV_CONFIG.BUFFER_RESTOCK)),
+            // Sigue en el catálogo de compra directa. Facturación, restock y stock de consignación lo omiten.
+            ventaCabina: esCabV
           });
         }
       } catch(eInv) {}
@@ -8371,6 +8375,8 @@ function doPost(e) {
       var mapaProdEd = prodColsFromHeaders_(hdrsEd);
       var prodColMapEd = body.prodColMap || {};
       var productosEd  = body.productos  || {};
+      var prevVentaCab = {};
+      var escritosCab = {};
       Object.keys(productosEd).forEach(function(sku) {
         var colIdx = mapaProdEd[sku] || prodColMapEd[sku];
         if (!colIdx) {
@@ -8383,9 +8389,14 @@ function doPost(e) {
           }
         }
         if (colIdx && colIdx >= 25) {
+          if (_esSkuVentaCabina_(sku)) {
+            prevVentaCab[_skuCabinaNorm_(sku)] = parseFloat(wsEd.getRange(row, colIdx).getValue())||0;
+            escritosCab[sku] = productosEd[sku]||0;
+          }
           wsEd.getRange(row, colIdx).setValue(productosEd[sku]||0);
         }
       });
+      try { _aplicarVentasCabina_(ss, escritosCab, prevVentaCab, 'fila '+row, body.usuario); } catch(eVCEd) {}
       return ContentService.createTextOutput(JSON.stringify({ok:true}))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -8443,6 +8454,7 @@ function doPost(e) {
     // El prodColMap del cliente queda solo como fallback si el encabezado no existe
     var prodColMap = body.prodColMap || {};
     var productos  = body.productos  || {};
+    var escritosCab = {};
     Object.keys(productos).forEach(function(sku) {
       var colIdx = mapaProdHdr[sku] || prodColMap[sku]; // 1-based
       if (!colIdx) {
@@ -8457,6 +8469,7 @@ function doPost(e) {
       if (colIdx && colIdx >= 25) {
         while (row.length < colIdx) row.push('');
         row[colIdx - 1] = productos[sku];
+        if (_esSkuVentaCabina_(sku)) escritosCab[sku] = productos[sku];
       }
     });
 
@@ -8482,6 +8495,10 @@ function doPost(e) {
     var ticketCount = parseInt(props.getProperty('ticketCount') || '0') + 1;
     props.setProperty('ticketCount', ticketCount.toString());
     var ticketNum = 'TK-' + Utilities.formatDate(now, 'America/Guayaquil', 'yyyyMMdd') + '-' + String(ticketCount).padStart(4, '0');
+
+    // Justo después de escribir la fila: ML-009…014 descuentan Cabina (1 envase c/u).
+    // No frena el ticket si falta stock. Un edit posterior solo mueve el delta.
+    try { _aplicarVentasCabina_(ss, escritosCab, {}, ticketNum+' fila '+targetRow, body.usuario||body.cosmetologa||''); } catch(eVC) {}
 
     // ── Fotos ANTES/DESPUÉS → Drive 'SUNSU FOTOS CLIENTAS' / {cédula nombre} / {# ticket} ──
     if ((body.fotosAntes && body.fotosAntes.length) || (body.fotosDespues && body.fotosDespues.length)) {
@@ -9288,6 +9305,13 @@ const INV_CONFIG = {
   SHEET_ENTRADAS:   "📥 ENTRADAS",
   SHEET_INVENTARIO: "📊 INVENTARIO",
   BUFFER_RESTOCK:   0.20,
+  // Máscaras Dr.esthe/Esthemax ya pagadas y usadas en cabina.
+  // El ticket descuenta 🧴 INVENTARIO CABINA (1 envase por unidad), nunca la percha,
+  // y no entran a facturación ni restock de consignación. Siguen activas en el ticket.
+  SKUS_VENTA_CABINA: [
+    "SUNSU-ML-009","SUNSU-ML-010","SUNSU-ML-011",
+    "SUNSU-ML-012","SUNSU-ML-013","SUNSU-ML-014"
+  ],
   PRODUCTOS: {
     "SUNSU-HT-001":{nombre:"Heartleaf Cleansing Oil 200ml",proveedor:"Hebetronic S.A",compra:21.91},
     "SUNSU-HT-002":{nombre:"Niacinamide 10%+TXA 4% Serum 30ml",proveedor:"Hebetronic S.A",compra:26.78},
@@ -9393,6 +9417,7 @@ function _stockCorteFamilia_(ss, famOC, fFinOC) {
     for (var vi=2; vi<dInv.length; vi++) {
       var skuI = (dInv[vi][0]||'').toString().trim();
       if (skuI.indexOf('SUNSU-'+famOC+'-') !== 0) continue;
+      if (_esSkuVentaCabina_(skuI)) continue; // no es stock de consignación
       var codI = skuI.replace(/^SUNSU-/,'');
       var stockNow = parseFloat(dInv[vi][5])||0;
       var stCorteR = Math.round((stockNow - (entPost[codI]||0) + (vendPost[codI]||0))*100)/100;
@@ -9458,7 +9483,7 @@ function calcularVentasQuincena(ss,proveedor,quincena,mes,año) {
   else { const ud=new Date(año,mes+1,0).getDate(); fechaInicio=new Date(año,mes,16); fechaFin=new Date(año,mes,ud,23,59,59); }
   const datos=wsTicket.getDataRange().getValues(), headers=datos[0];
   const familia=INV_CONFIG.PROVEEDORES[proveedor].familia, ventas={};
-  Object.entries(getProductosInv_(ss)).forEach(([sku,info])=>{ if (info.proveedor===proveedor) ventas[sku]={nombre:info.nombre,vendido:0,compra:info.compra}; });
+  Object.entries(getProductosInv_(ss)).forEach(([sku,info])=>{ if (info.proveedor===proveedor && !_esSkuVentaCabina_(sku)) ventas[sku]={nombre:info.nombre,vendido:0,compra:info.compra}; });
   for (let i=1;i<datos.length;i++) {
     const fila=datos[i], ts=fila[0]; if (!ts) continue;
     const fecha=ts instanceof Date?ts:new Date(ts);
@@ -9704,6 +9729,92 @@ function _parcheFormulaDirecta_(ss, sku) {
   }
 }
 
+// ML-009…014: venta de ticket que sale de Cabina, no de la percha ni de consignación.
+function _esSkuVentaCabina_(sku) {
+  var n = _skuCabinaNorm_(sku);
+  if (!n) return false;
+  var list = (INV_CONFIG && INV_CONFIG.SKUS_VENTA_CABINA) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (_skuCabinaNorm_(list[i]) === n) return true;
+  }
+  return false;
+}
+// Descuenta (delta>0) o devuelve (delta<0) envases en 🧴 INVENTARIO CABINA.
+// 1 unidad vendida = 1 envase. Primero H (cerrados locales), luego O (bodega).
+// Nunca toca I (abierto en uso). J = (H+O+I)*D. No crea filas y no frena el ticket:
+// si falta stock o no hay fila, deja el log 'CABINA VENTA TICKET' con ALERTA.
+function _ventaDescuentaCabina_(ss, opts) {
+  opts = opts || {};
+  var sku = (opts.sku||'').toString().trim();
+  var delta = Math.round((parseFloat(opts.delta) || 0) * 1000) / 1000;
+  var ref = (opts.ticket||'').toString();
+  var usuario = opts.usuario || '';
+  if (!_esSkuVentaCabina_(sku) || !delta) return {accion:'sin_cambio', delta:0};
+  var avisar = function(txt) {
+    try { logAccion_(ss, 'CABINA VENTA TICKET', 'ALERTA '+txt+(ref?(' · '+ref):''), usuario); } catch(eA) {}
+    return {accion:'alerta', delta:delta, alerta:txt};
+  };
+  try {
+    var ssCb = _cabinaSS_();
+    if (!ssCb) return avisar(sku+' sin estructura de cabina; el ticket sigue');
+    var wInv = ssCb.getSheetByName('🧴 INVENTARIO CABINA');
+    if (!wInv) return avisar(sku+' sin hoja de cabina; el ticket sigue');
+    _cabInvHeaders_(wInv);
+    var datos = wInv.getDataRange().getValues();
+    var m = _cabinaMatchDirecta_(datos, sku, opts.nombre||'');
+    if (!m || m.idx < 0) return avisar(sku+' sin fila de cabina (col N); el ticket sigue');
+    var idx = m.idx;
+    var fila = idx + 1;
+    var cont = parseFloat(datos[idx][3]) || 0; // D contenido
+    var cerr = parseFloat(datos[idx][7]) || 0; // H cerrados locales
+    var ab = parseFloat(datos[idx][8]) || 0;   // I abierto en uso — no se toca
+    var bod = parseFloat(datos[idx][14]) || 0; // O bodega
+    var nuevoH = cerr, nuevoO = bod, falta = 0, aplicado = 0;
+    if (delta > 0) {
+      var deH = Math.min(cerr, delta);
+      var resta = Math.round((delta - deH) * 1000) / 1000;
+      var deO = Math.min(bod, resta);
+      falta = Math.round((resta - deO) * 1000) / 1000;
+      nuevoH = Math.round((cerr - deH) * 1000) / 1000;
+      nuevoO = Math.round((bod - deO) * 1000) / 1000;
+      aplicado = Math.round((deH + deO) * 1000) / 1000;
+    } else {
+      var dev = Math.round((-delta) * 1000) / 1000;
+      nuevoH = Math.round((cerr + dev) * 1000) / 1000;
+      aplicado = dev;
+    }
+    wInv.getRange(fila, 8).setValue(nuevoH);
+    wInv.getRange(fila, 15).setValue(nuevoO);
+    wInv.getRange(fila, 10).setValue((nuevoH + nuevoO + ab) * cont);
+    var cod = (datos[idx][0]||'').toString();
+    var signo = delta > 0 ? '-' : '+';
+    var det = cod+' '+signo+aplicado+' · '+_skuCabinaNorm_(sku)+' ('+m.via+') H '+nuevoH+' O '+nuevoO+(ref?(' · '+ref):'');
+    if (falta > 0) det = 'ALERTA faltan '+falta+' envases. '+det+' · el ticket sigue';
+    try { logAccion_(ss, 'CABINA VENTA TICKET', det, usuario); } catch(eL) {}
+    return {accion: delta>0?'descontado':'devuelto', codigo:cod, delta:aplicado, falta:falta, cerrados:nuevoH, bodega:nuevoO, alerta: falta>0?det:''};
+  } catch(eV) {
+    return avisar(sku+' '+(eV.message||eV));
+  }
+}
+// previos: mapa normalizado → cantidad que ya estaba en la fila. Solo se mueve el delta.
+function _aplicarVentasCabina_(ss, productos, previos, ref, usuario) {
+  var keys = Object.keys(productos || {});
+  for (var i = 0; i < keys.length; i++) {
+    var sku = keys[i];
+    if (!_esSkuVentaCabina_(sku)) continue;
+    var nuevo = parseFloat(productos[sku]);
+    if (isNaN(nuevo) || nuevo < 0) nuevo = 0;
+    var norm = _skuCabinaNorm_(sku);
+    var antes = (previos && previos[norm] != null) ? (parseFloat(previos[norm]) || 0) : 0;
+    var delta = Math.round((nuevo - antes) * 1000) / 1000;
+    if (!delta) continue;
+    try { _ventaDescuentaCabina_(ss, {sku:sku, delta:delta, ticket:ref, usuario:usuario}); }
+    catch(eAp) {
+      try { logAccion_(ss, 'CABINA VENTA TICKET', 'ALERTA '+norm+' '+(eAp.message||eAp)+' · el ticket sigue'+(ref?(' · '+ref):''), usuario||''); } catch(e2) {}
+    }
+  }
+}
+
 function corregirFormulasInventario() {
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const wsInv=ss.getSheetByName("📊 INVENTARIO"), wsEnt=ss.getSheetByName("📥 ENTRADAS");
@@ -9726,15 +9837,21 @@ function corregirFormulasInventario() {
     const r=i+1, sku=(datos[i][0]||"").toString().trim(); if (!sku) continue;
     // Excluye notas con COMPRA DIRECTA: ese stock va a Cabina, no a percha.
     const dF=_formulaEntradasInventario_(entNombre, r);
-    wsInv.getRange(r,4).setFormula(dF);
+    wsInv.getRange(r,4).setFormula(dF); // D sigue ignorando COMPRA DIRECTA. C no se toca.
     const prodCode=sku.replace("SUNSU-",""); let tkCol="";
     for (let c=0;c<tkHeaders.length;c++) { if ((tkHeaders[c]||"").toString().trim()===prodCode) { tkCol=invColumnToLetter(c+1); break; } }
     // SUMIFS en vez de SUMPRODUCT: ignora celdas de texto ('' de ediciones) en la
     // columna del producto — una sola celda de texto rompía el SUMPRODUCT a 0.
     if (tkCol) wsInv.getRange(r,5).setFormula("=IFERROR(SUMIFS('"+tkNombre+"'!"+tkCol+"2:"+tkCol+"9999,'"+tkNombre+"'!A2:A9999,\">=\"&DATE(2026,5,22)),0)");
     else wsInv.getRange(r,5).setValue(0);
-    wsInv.getRange(r,6).setFormula("=C"+r+"+D"+r+"-E"+r);
-    wsInv.getRange(r,10).setFormula("=MAX(0,I"+r+"-F"+r+")");
+    // Venta de cabina: la percha queda en 0 y no sugiere restock. El catálogo no se desactiva.
+    if (_esSkuVentaCabina_(sku)) {
+      wsInv.getRange(r,6).setFormula("=0");
+      wsInv.getRange(r,10).setFormula("=0");
+    } else {
+      wsInv.getRange(r,6).setFormula("=C"+r+"+D"+r+"-E"+r);
+      wsInv.getRange(r,10).setFormula("=MAX(0,I"+r+"-F"+r+")");
+    }
     wsInv.getRange(r,11).setFormula('=IF(F'+r+'<=0,"SIN STOCK",IF(F'+r+'<=I'+r+',"STOCK BAJO","OK"))');
     fixed++;
   }
