@@ -562,7 +562,44 @@ export interface ReglaCom {
   modo?: "fijo" | "pct";
   valor?: number;
 }
-export interface CosmMark { id: string; nombre: string; patron: string; es: boolean; activa: boolean; desde?: string | null; hasta?: string | null }
+export interface CosmMark {
+  id: string; nombre: string; patron: string; es: boolean; activa: boolean;
+  desde?: string | null; hasta?: string | null;
+  /** false = los faciales de esta persona pagan $0. Ausente = sí cobra. */
+  comFac?: boolean;
+  comFacDesde?: string | null;
+}
+
+export function toCosmMark(r: Row): CosmMark {
+  const desdeFac = s(r.comision_faciales_desde || r.comFacDesde).slice(0, 10);
+  return {
+    id: s(r.id),
+    nombre: s(r.nombre),
+    patron: s(r.patron) || (s(r.nombre) ? s(r.nombre).split(" ")[0] + "%" : ""),
+    es: r.es_cosmetologa !== false && r.es !== false,
+    activa: r.activa !== false,
+    desde: r.desde ? s(r.desde) : null,
+    hasta: r.hasta ? s(r.hasta) : null,
+    comFac: r.comision_faciales === false || r.comFac === false ? false : true,
+    comFacDesde: desdeFac || null,
+  };
+}
+
+/** Misma coincidencia que el premio de paquetes: primer nombre del patrón, o el id. */
+export function marcaDePersona(marks: CosmMark[], cosm: string): CosmMark | undefined {
+  const nombre = normNombre(cosm);
+  return marks.find((k) => nombre.includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || nombre.startsWith(normNombre(k.id)));
+}
+
+/** $0 de facial si la marca está apagada o el ticket es anterior a comFacDesde. Sin marca, cobra. */
+export function pagaComisionFacial(mark: Pick<CosmMark, "comFac" | "comFacDesde"> | undefined, fecha: string): boolean {
+  if (!mark) return true;
+  if (mark.comFac === false) return false;
+  const desde = s(mark.comFacDesde).slice(0, 10);
+  const dia = s(fecha).slice(0, 10);
+  if (desde && dia && dia < desde) return false;
+  return true;
+}
 
 export function usaNivelesPaquete(ciclo: string): boolean {
   return ciclo <= CICLO_NIVEL_HASTA;
@@ -778,7 +815,9 @@ export function calcularCiclo(
       r.faciales++;
       if (FACIALES_2.includes(sku)) r.faciales2++;
       else if (FACIALES_3.includes(sku)) r.faciales3++;
-      r.comFaciales += overFacial != null ? overFacial : (FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3);
+      if (pagaComisionFacial(marcaDePersona(marksLimpios, t.cosm), t.fecha)) {
+        r.comFaciales += overFacial != null ? overFacial : (FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3);
+      }
     }
     if (!t.exclPaquete) {
       const neto = Number(t.netoPack) || 0;
@@ -797,7 +836,7 @@ export function calcularCiclo(
     }
   }
   const personas = [...by.values()].map((r) => {
-    const mark = marksLimpios.find((k) => normNombre(r.cosm).includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || normNombre(r.cosm).startsWith(normNombre(k.id)));
+    const mark = marcaDePersona(marksLimpios, r.cosm);
     const es = !!(mark && mark.es);
     const first = normNombre(r.cosm).split(" ")[0];
     const congelado = ciclo === BONO_N8_CICLO && (first === "andrea" || first === "daniela");

@@ -3,7 +3,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
-import { cicloInicio, ecuadorParts, n, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { cicloInicio, ecuadorParts, marcaDePersona, n, pagaComisionFacial, s, skuCode, toCosmMark, ymdUtc, type Row } from "./domain.ts";
 import { cfgAplicada } from "./comision_cfg.ts";
 import {
   aplicarGiftCard, borradorConsig, claveTicket, clienteDetalle, clientesResumen, kardexPrevio, lineasTicket,
@@ -59,7 +59,10 @@ extend("ticket_editar", "any", async (p, ctx, ses) => {
     };
   });
   const cuando = cicloInicio(ymdUtc(row.timestamp) || ecuadorParts(ctx.now).ymd);
-  const calc = recalcular(lineas, n(p.descuento), (await cfgAplicada(ctx.db, cuando)).cfg);
+  const fechaTk = ymdUtc(row.timestamp) || ecuadorParts(ctx.now).ymd;
+  const marcasTk = (await ctx.db.all("cosmetologas").catch(() => [] as Row[])).map(toCosmMark);
+  const pagaFacial = pagaComisionFacial(marcaDePersona(marcasTk, s(row.atendido_por)), fechaTk);
+  const calc = recalcular(lineas, n(p.descuento), (await cfgAplicada(ctx.db, cuando)).cfg, { pagaFacial });
   const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
   const viejas = lineasTicket(row, cats, prods);
   const previo = kardexPrevio(row, viejas);

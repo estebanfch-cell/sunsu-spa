@@ -1200,7 +1200,75 @@ function vistaUsuario(row: Row): Row {
   return {
     nombre: s(row.nombre || row.name), short: s(row.short),
     rol: normalizarRol(s(row.rol || row.role)), bloqueado: row.bloqueado ? "sí" : "no",
+    es_cosmetologa: row.es_cosmetologa === true ? "sí" : "no",
   };
+}
+
+function siMarca(v: unknown, defecto: boolean): boolean {
+  if (v == null || v === "") return defecto;
+  if (v === false || v === 0) return false;
+  const t = s(v).toLowerCase();
+  if (t === "no" || t === "false" || t === "0" || t === "off") return false;
+  if (t === "si" || t === "sí" || t === "true" || t === "1" || t === "on") return true;
+  return defecto;
+}
+
+function rolCabina(rol: string): boolean {
+  const r = normalizarRol(rol);
+  return r === "cosmetologa" || r === "asistente_cosmetologia" || r === "staff";
+}
+
+function patronDe(nombre: string): string {
+  const first = normNombre(nombre).split(" ")[0] || "user";
+  return first + "%";
+}
+
+async function pinHasheado(ctx: Ctx, pin: string, excepto: string): Promise<{ hash?: string; error?: string }> {
+  if (!/^\d{4}$/.test(pin)) return { error: "El PIN debe ser de 4 dígitos" };
+  let enUso: unknown;
+  let hash: unknown;
+  try { enUso = await ctx.db.rpc("pin_en_uso", { p_pin: pin, p_excepto: excepto }); }
+  catch { return { error: "No se pudo verificar el PIN. Aplica 0009b_compat_0008.sql." }; }
+  if (enUso === true) return { error: "Esa clave ya la usa otro usuario — elige otra" };
+  try { hash = await ctx.db.rpc("hash_pin_bcrypt", { p_pin: pin }); }
+  catch { return { error: "No se pudo guardar el PIN. Aplica 0009b_compat_0008.sql." }; }
+  if (typeof hash !== "string" || !hash.startsWith("$2")) return { error: "No se pudo guardar el PIN. Aplica 0009b_compat_0008.sql." };
+  return { hash };
+}
+
+async function guardarMarcaCosm(ctx: Ctx, ses: Ses, id: string, nombre: string, rol: string, campos: Row): Promise<Row | null> {
+  if (!rolCabina(rol)) return null;
+  const marks = await ctx.db.all("cosmetologas").catch(() => [] as Row[]);
+  const prev = marks.find((m) => String(m.id) === id) || null;
+  const esPrevio = prev ? prev.es_cosmetologa === true : null;
+  const es = siMarca(campos.es_cosmetologa, esPrevio == null ? normalizarRol(rol) === "cosmetologa" : esPrevio);
+  const onPrevio = prev ? prev.comision_faciales !== false : true;
+  const desdePrevio = prev && prev.comision_faciales_desde ? s(prev.comision_faciales_desde).slice(0, 10) : "";
+  const rawOn = campos.comision_faciales != null ? campos.comision_faciales : campos.comFaciales;
+  const rawDesde = campos.comision_faciales_desde != null ? campos.comision_faciales_desde : campos.comFacDesde;
+  let on = onPrevio;
+  let desde = desdePrevio;
+  if (rawOn != null && s(rawOn) !== "") on = siMarca(rawOn, onPrevio);
+  if (on && !onPrevio) desde = s(rawDesde).slice(0, 10) || ecuadorParts(ctx.now).ymd;
+  else if (rawDesde != null) desde = s(rawDesde).slice(0, 10);
+  const row: Row = {
+    id, nombre, patron: prev ? s(prev.patron) || patronDe(nombre) : patronDe(nombre),
+    es_cosmetologa: es, activa: true,
+    comision_faciales: on, comision_faciales_desde: desde || null,
+  };
+  const saved = prev
+    ? await ctx.db.write(actorOf(ses), "cosmetologas", "update", { id: prev.id }, row)
+    : await ctx.db.write(actorOf(ses), "cosmetologas", "insert", {}, row);
+  if (!saved) return { error: "No se pudo guardar la marca de comisión" };
+  const antes = prev ? {
+    es_cosmetologa: prev.es_cosmetologa === true ? "sí" : "no",
+    comision_faciales: prev.comision_faciales === false ? "no" : "sí",
+    comision_faciales_desde: desdePrevio,
+  } : null;
+  await anotar(ctx, ses, "cosmetologas", id, prev ? "UPDATE" : "INSERT", antes, {
+    es_cosmetologa: es ? "sí" : "no", comision_faciales: on ? "sí" : "no", comision_faciales_desde: desde,
+  });
+  return null;
 }
 
 function cuentaProtegida(row: Row): boolean {
@@ -1231,13 +1299,24 @@ export async function guardarUsuarioCampos(ctx: Ctx, ses: Ses, fila: string, cam
     const malo = rolPermitido(ses, rol);
     if (malo) return { error: malo };
     const id = idUsuario(s(campos.short) || nombre, rows);
+    const pin = s(campos.pin);
+    let hash = "";
+    if (pin) {
+      const hecho = await pinHasheado(ctx, pin, id);
+      if (hecho.error || !hecho.hash) return { error: hecho.error || "No se pudo guardar el PIN" };
+      hash = hecho.hash;
+    }
+    const es = rolCabina(rol) ? siMarca(campos.es_cosmetologa, rol === "cosmetologa") : siMarca(campos.es_cosmetologa, false);
     const rec: Row = {
       id, nombre, short: s(campos.short) || nombre.split(" ")[0], rol, color: "#5B7FA6",
-      bloqueado: siBloqueado(campos.bloqueado), pin_reset: true,
+      bloqueado: siBloqueado(campos.bloqueado), pin_reset: true, activo: true, es_cosmetologa: es,
     };
+    if (hash) rec.pin_hash = hash;
     const saved = await ctx.db.write(actorOf(ses), tabla, "insert", {}, rec);
     if (!saved) return { error: "No se pudo guardar" };
-    await anotar(ctx, ses, tabla, id, "INSERT", null, vistaUsuario(saved));
+    const marcaErr = await guardarMarcaCosm(ctx, ses, id, nombre, rol, campos);
+    if (marcaErr) return marcaErr;
+    await anotar(ctx, ses, tabla, id, "INSERT", null, vistaUsuario({ ...saved, es_cosmetologa: es }));
     return { ok: true, fila: id };
   }
   const row = rows.find((r) => s(r.id) === fila);
@@ -1262,16 +1341,25 @@ export async function guardarUsuarioCampos(ctx: Ctx, ses: Ses, fila: string, cam
     if (s(row.id) === "efch" && siBloqueado(campos.bloqueado)) return { error: "El admin_master no se puede bloquear" };
     patch.bloqueado = siBloqueado(campos.bloqueado);
   }
-  if (!Object.keys(patch).length) return { error: "Nada que guardar" };
+  const rolFinal = s(patch.rol || row.rol || row.role);
+  const tocaMarca = rolCabina(rolFinal) || campos.es_cosmetologa != null || campos.comision_faciales != null || campos.comFaciales != null || campos.comision_faciales_desde != null;
+  if (campos.es_cosmetologa != null) patch.es_cosmetologa = siMarca(campos.es_cosmetologa, false);
+  if (!Object.keys(patch).length && !tocaMarca) return { error: "Nada que guardar" };
   const antes = vistaUsuario(row);
-  const saved = await ctx.db.write(actorOf(ses), tabla, "update", { id: row.id }, patch);
+  const saved = Object.keys(patch).length
+    ? await ctx.db.write(actorOf(ses), tabla, "update", { id: row.id }, patch)
+    : row;
   if (!saved) return { error: "No se pudo guardar el usuario" };
   if (patch.bloqueado === true) {
     for (const tk of await ctx.db.all("sesiones").catch(() => [] as Row[])) {
       if (String(tk.uid) === String(row.id)) await ctx.db.write(actorOf(ses), "sesiones", "delete", { token: tk.token }, null);
     }
   }
-  await anotar(ctx, ses, tabla, s(row.id), "UPDATE", antes, vistaUsuario(saved));
+  if (tocaMarca) {
+    const marcaErr = await guardarMarcaCosm(ctx, ses, s(row.id), s(saved.nombre || row.nombre), rolFinal, campos);
+    if (marcaErr) return marcaErr;
+  }
+  if (Object.keys(patch).length) await anotar(ctx, ses, tabla, s(row.id), "UPDATE", antes, vistaUsuario(saved));
   return { ok: true, fila: s(row.id) };
 }
 

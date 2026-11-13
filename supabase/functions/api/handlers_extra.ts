@@ -4,7 +4,7 @@ import { cfgAplicada } from "./comision_cfg.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
-  compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, n, nombreEsAdmin, normCedula, normNombre,
+  compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, marcaDePersona, n, nombreEsAdmin, normCedula, normNombre, toCosmMark,
   productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
 } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
@@ -249,9 +249,11 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
   const aplicado = await cfgAplicada(ctx.db, ciclo);
-  const calc = calcularCiclo(tks, [{
+  const filaCosm = marcaDePersona((await ctx.db.all("cosmetologas").catch(() => [] as R[])).map(toCosmMark), nombreApp);
+  const marcaCosm = filaCosm || {
     id: nombreApp, nombre: nombreApp, patron: nombreApp + "%", es: !nombreEsAdmin(nombreApp, admins), activa: true, desde: null, hasta: null,
-  }], aplicado.cfg, ciclo, null, admins, aplicado.tramos);
+  };
+  const calc = calcularCiclo(tks, [marcaCosm], aplicado.cfg, ciclo, null, admins, aplicado.tramos);
   const persona = calc.personas.find((p) => normNombre(p.cosm).startsWith(key));
   const cat = await ctx.db.all("catalogo");
   const cmap = new Map(cat.map((r) => [skuCode(s(r.sku)), r]));
