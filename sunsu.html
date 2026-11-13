@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.11.13.01 venta cabina mascaras -->
+<!-- v2026.11.13.02 comisión de faciales por persona -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
 // APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.11.13.01';
+var SUNSU_APP_VERSION='v2026.11.13.02';
 var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
 // Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
 var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261113.01';
+  var v='20261113.02';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -327,10 +327,57 @@ const DEFAULT_USERS=[
 ];
 function getUsers(){try{return JSON.parse(localStorage.getItem('sunsu_users'))||DEFAULT_USERS;}catch(e){return DEFAULT_USERS;}}
 function saveUsers(u){
-  localStorage.setItem('sunsu_users',JSON.stringify(u));
-  // Sync to server so all devices get updated PINs
-  fetch(APPS_SCRIPT_URL,{method:'POST',body:JSON.stringify({accion:'saveUsuarios',users:u})})
-    .catch(function(){});
+  return fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({accion:'saveUsuarios', users:u, token:window._token||''})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d.ok){ try{ localStorage.setItem('sunsu_users', JSON.stringify(u)); }catch(eLS){} }
+      return d||{error:'Sin respuesta'};
+    })
+    .catch(function(){ return {error:'Sin conexión'}; });
+}
+function _sinComFaciales_(nombre){
+  var n=String(nombre||'').trim().toLowerCase();
+  var first=n.split(/\s+/)[0];
+  var users=[];
+  try{ users=getUsers(); }catch(e){ users=[]; }
+  for(var i=0;i<users.length;i++){
+    var u=users[i];
+    var un=String(u.name||'').trim().toLowerCase();
+    var us=String(u.short||'').trim().toLowerCase();
+    if(un===n||us===n||(first&&un.split(/\s+/)[0]===first)) return u.comFaciales===false;
+  }
+  return false;
+}
+function _htmlComFacial_(n, dinero, off){
+  var izq='<span style="color:var(--navy);font-weight:700">'+(n||0)+'</span> · ';
+  if(off) return izq+'<span style="color:var(--gray)">— (aprendiz)</span>';
+  return izq+'<span style="color:var(--green)">$'+((Number(dinero)||0).toFixed(2))+'</span>';
+}
+function _nombresMulta_(){
+  var fallback=['Andrea Robles','Daniela Mora','Dejaneira Espinoza','Alejandra Rodriguez'];
+  var users=[];
+  try{ users=getUsers()||[]; }catch(e){ users=[]; }
+  var out=[], seen={};
+  users.forEach(function(u){
+    if(!u||u.bloqueado||!u.name) return;
+    var r=u.role||'';
+    if(r!=='staff'&&r!=='reception'&&r!=='cosmetologa'&&r!=='asistente_cosmetologia'&&r!=='recepcion') return;
+    if(seen[u.name]) return;
+    seen[u.name]=1; out.push(u.name);
+  });
+  return out.length?out:fallback;
+}
+function _hoyEc_(){
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guayaquil',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
+  catch(e){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+}
+function _campoComFacial_(on, desde){
+  return '<div class="field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0">'
+    +'<input type="checkbox" id="mfac" '+(on?'checked':'')+' style="width:auto"> 💆 Gana comisión de faciales</label>'
+    +'<div style="font-size:0.66rem;color:var(--gray);margin-top:4px">Apagado = cosmetóloga aprendiz: los faciales no pagan. Paquetes, productos y extras sí. El rol no cambia.</div></div>'
+    +'<div class="field"><label>Desde</label><input type="date" id="mfacd" value="'+(desde||'')+'">'
+    +'<div style="font-size:0.66rem;color:var(--gray);margin-top:4px">Vacío y encendido = desde siempre. Al pasar de apagado a encendido, si dejas la fecha vacía se usa hoy (sin pago retroactivo).</div></div>';
 }
 function syncUsersFromServer(callback){
   fetch(APPS_SCRIPT_URL+'?action=getUsuarios')
@@ -4400,6 +4447,7 @@ function mostrarDashCosmError(c,msg){
 function mostrarDashCosmData(c,d){
   const col=CU.color;
   const neto=Math.max(0,(d.comFaciales||0)+(d.comPaquetes||0)+(d.comProductos||0)+(d.comExtras||0)+(d.comRecepcion||0)-(d.multas||0)-(d.descuentos||0));
+  const facialOff=d.comFacialesOn===false||(CU&&CU.comFaciales===false);
   const isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   c.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -4413,7 +4461,7 @@ function mostrarDashCosmData(c,d){
     <div class="cosm-card">
       <div class="cosm-hdr" style="background:${col}"><span>${CU.name}</span><span>$${neto.toFixed(2)}</span></div>
       <div class="cosm-body">
-        <div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.faciales||0}</span> · <span style="color:var(--green)">$${(d.comFaciales||0).toFixed(2)}</span></span></div>
+        <div class="crow"><span>Faciales · comisión</span><span class="v">${_htmlComFacial_(d.faciales||0, d.comFaciales, facialOff)}</span></div>
         <div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.paquetes||0} · ${d.nivelAlcanzado||'—'}</span> · <span style="color:var(--green)">$${(d.comPaquetes||0).toFixed(2)}</span></span></div>
         <div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.totalProductos||0}</span> · <span style="color:var(--green)">$${(d.comProductos||0).toFixed(2)}</span></span></div>
         <div class="crow"><span>Extras · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">${d.extras||0}</span> · <span style="color:var(--green)">$${(d.comExtras||0).toFixed(2)}</span></span></div>
@@ -5484,7 +5532,7 @@ function _renderDashAdminData(c, data, periodo){
     html+='<div class="cosm-card">'
       +'<div class="cosm-hdr" style="background:'+d.color+'"><span>'+d.name+'</span><span>$'+d.t.toFixed(2)+'</span></div>'
       +'<div class="cosm-body">'
-      +'<div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+d.f+'</span> · <span style="color:var(--green)">$'+d.cf.toFixed(2)+'</span></span></div>'
+      +'<div class="crow"><span>Faciales · comisión</span><span class="v">'+_htmlComFacial_(d.f, d.cf, _sinComFaciales_(d.name))+'</span></div>'
       +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">'+d.paq+' · '+d.n+'</span> · <span style="color:var(--green)">$'+d.cp.toFixed(2)+'</span></span></div>'
       +'<div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+(d.totalProd||0)+'</span> · <span style="color:var(--green)">$'+d.cprod.toFixed(2)+'</span></span></div>'
       +'<div class="crow"><span>Extras · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+(d.ext||0)+'</span> · <span style="color:var(--green)">$'+(d.cext||0).toFixed(2)+'</span></span></div>'
@@ -6057,7 +6105,7 @@ function verPeriodoComision(btn){
         html+='<div class="cosm-card">'
           +'<div class="cosm-hdr" style="background:'+cosmColor+'"><span>'+name+'</span><span>$'+total.toFixed(2)+'</span></div>'
           +'<div class="cosm-body">'
-          +'<div class="crow"><span>Faciales · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+f+'</span> · <span style="color:var(--green)">$'+cf.toFixed(2)+'</span></span></div>'
+          +'<div class="crow"><span>Faciales · comisión</span><span class="v">'+_htmlComFacial_(f, cf, _sinComFaciales_(name))+'</span></div>'
           +'<div class="crow"><span>Paquetes · nivel · com.</span><span class="v"><span style="color:var(--navy);font-weight:700">'+paq+' · '+niv+'</span> · <span style="color:var(--green)">$'+cpaq.toFixed(2)+'</span></span></div>'
           +'<div class="crow"><span>Productos · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+(cosm.totalProd||cosm.prods||0)+'</span> · <span style="color:var(--green)">$'+cprod.toFixed(2)+'</span></span></div>'
           +((extN>0||cext>0)?'<div class="crow"><span>Extras · comisión</span><span class="v"><span style="color:var(--navy);font-weight:700">'+extN+'</span> · <span style="color:var(--green)">$'+cext.toFixed(2)+'</span></span></div>':'')
@@ -6101,8 +6149,9 @@ function _pintarAdminUsers(c){
         +'<div class="ua-info"><div class="ua-name">'+u.name
           +(u.bloqueado?' <span style="font-size:0.54rem;background:#B86B6B;color:white;padding:1px 7px;border-radius:6px;font-weight:800">🚫 BLOQUEADO</span>':'')
           +(u.pinReset?' <span style="font-size:0.54rem;background:#C9761F;color:white;padding:1px 7px;border-radius:6px;font-weight:800">🔄 nueva clave pendiente</span>':'')
+          +(u.comFaciales===false?' <span style="font-size:0.54rem;background:#8A90A0;color:white;padding:1px 7px;border-radius:6px;font-weight:800">sin com. faciales</span>':'')
           +'</div>'
-        +'<div class="ua-role">'+rLabel(u.role)+' · clave: <b style="color:var(--navy);letter-spacing:2px">'+(u.pin||'—')+'</b></div></div>'
+        +'<div class="ua-role">'+((u.comFaciales===false&&(u.role==='staff'||!u.role))?'Cosmetóloga aprendiz':rLabel(u.role))+' · clave: <b style="color:var(--navy);letter-spacing:2px">'+(u.pin||'—')+'</b></div></div>'
         +'<div class="ua-btns" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end">'
         +'<button class="ua-btn" onclick="showEdit(\''+u.id+'\')">Editar</button>'
         +(u.id!=='efch'?('<button class="ua-btn" style="border-color:#C9761F;color:#C9761F" onclick="_admPedirClave(\''+u.id+'\','+(u.pinReset?'false':'true')+')">'+(u.pinReset?'✖ Retirar solicitud':'🔄 Pedir nueva clave')+'</button>'):'')
@@ -6143,11 +6192,27 @@ function showAdd(){showModal(`<h3>Nuevo usuario</h3>
   <div class="field"><label>Rol</label><select id="mr"><option value="staff">Cosmetóloga</option><option value="reception">Recepción/Admin</option><option value="admin">Admin</option></select></div>
   <div class="field"><label>PIN (4 dígitos)</label><input type="password" inputmode="numeric" maxlength="4" id="mp" placeholder="0000"></div>
   <div class="field"><label>Color</label><input type="color" id="mc" value="#7A8FAF"></div>
+  ${_campoComFacial_(true, '')}
   <div class="modal-btns"><button class="modal-btn cancel" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="saveAdd()">Guardar</button></div>`);}
+function _leerComFacial_(prev){
+  var on=!!(document.getElementById('mfac')&&document.getElementById('mfac').checked);
+  var desdeEl=document.getElementById('mfacd');
+  var desde=desdeEl?desdeEl.value:'';
+  var wasOff=!!(prev&&prev.comFaciales===false);
+  if(!on) return {comFaciales:false, comFacialesDesde:desde||(prev&&prev.comFacialesDesde)||''};
+  if(wasOff) return {comFaciales:true, comFacialesDesde:desde||_hoyEc_()};
+  return {comFaciales:true, comFacialesDesde:desde||''};
+}
 function saveAdd(){
   const n=document.getElementById('mn').value.trim(),s=document.getElementById('ms').value.trim(),r=document.getElementById('mr').value,p=document.getElementById('mp').value,col=document.getElementById('mc').value;
   if(!n||!s||p.length!==4){toast('Completa todos los campos con PIN de 4 dígitos','#B86B6B');return;}
-  const users=getUsers();users.push({id:'u'+Date.now(),name:n,short:s,role:r,color:col,pin:p});saveUsers(users);closeModal();toast('✅ Usuario creado','#6A9E7A');renderAdmin(document.getElementById('content'));
+  var fac=_leerComFacial_(null);
+  const users=getUsers().slice();
+  users.push({id:'u'+Date.now(),name:n,short:s,role:r,color:col,pin:p,pinReset:true,comFaciales:fac.comFaciales,comFacialesDesde:fac.comFacialesDesde});
+  saveUsers(users).then(function(d){
+    if(!d||!d.ok){toast('❌ '+(d&&d.error?d.error:'No se guardó'),'#B86B6B');return;}
+    closeModal();toast('✅ Usuario creado. En el primer ingreso debe cambiar el PIN','#6A9E7A');renderAdmin(document.getElementById('content'));
+  });
 }
 function showEdit(id){
   const u=getUsers().find(u=>u.id===id);if(!u) return;
@@ -6157,19 +6222,32 @@ function showEdit(id){
     <div class="field"><label>Rol</label><select id="mr"><option value="staff" ${u.role==='staff'?'selected':''}>Cosmetóloga</option><option value="reception" ${u.role==='reception'?'selected':''}>Recepción/Admin</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="admin_master" ${u.role==='admin_master'?'selected':''}>Admin Master</option></select></div>
     <div class="field"><label>Nuevo PIN (vacío = no cambiar)</label><input type="password" inputmode="numeric" maxlength="4" id="mp" placeholder="••••"></div>
     <div class="field"><label>Color</label><input type="color" id="mc" value="${u.color}"></div>
+    ${_campoComFacial_(u.comFaciales!==false, u.comFacialesDesde||'')}
     <div class="modal-btns"><button class="modal-btn cancel" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="saveEdit('${id}')">Guardar</button></div>`);}
 function saveEdit(id){
   const users=getUsers(),idx=users.findIndex(u=>u.id===id);if(idx<0) return;
   const p=document.getElementById('mp').value;
+  var prev={comFaciales:users[idx].comFaciales, comFacialesDesde:users[idx].comFacialesDesde};
   users[idx].name=document.getElementById('mn').value.trim();
   users[idx].short=document.getElementById('ms').value.trim();
   users[idx].role=document.getElementById('mr').value;
   users[idx].color=document.getElementById('mc').value;
   if(p.length===4) users[idx].pin=p;
-  saveUsers(users);closeModal();toast('✅ Actualizado','#6A9E7A');renderAdmin(document.getElementById('content'));
+  var fac=_leerComFacial_(prev);
+  users[idx].comFaciales=fac.comFaciales;
+  users[idx].comFacialesDesde=fac.comFacialesDesde;
+  saveUsers(users).then(function(d){
+    if(!d||!d.ok){toast('❌ '+(d&&d.error?d.error:'No se guardó'),'#B86B6B');return;}
+    closeModal();toast('✅ Actualizado','#6A9E7A');renderAdmin(document.getElementById('content'));
+  });
 }
 function showDel(id){showModal(`<h3>¿Eliminar usuario?</h3><p style="font-size:0.8rem;color:var(--gray);margin-bottom:4px">Esta acción no se puede deshacer.</p><div class="modal-btns"><button class="modal-btn cancel" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" style="background:var(--red)" onclick="confDel('${id}')">Eliminar</button></div>`);}
-function confDel(id){saveUsers(getUsers().filter(u=>u.id!==id));closeModal();toast('Usuario eliminado','#B86B6B');renderAdmin(document.getElementById('content'));}
+function confDel(id){
+  saveUsers(getUsers().filter(u=>u.id!==id)).then(function(d){
+    if(!d||!d.ok){toast('❌ '+(d&&d.error?d.error:'No se eliminó'),'#B86B6B');return;}
+    closeModal();toast('Usuario eliminado','#B86B6B');renderAdmin(document.getElementById('content'));
+  });
+}
 function showModal(html){document.getElementById('modal-body').innerHTML=html;document.getElementById('modal').classList.add('show');}
 function closeModal(){document.getElementById('modal').classList.remove('show');}
 document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
@@ -13227,7 +13305,7 @@ function _buildPaqueteCard(p){
 function renderMultas(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   if(!isAdmin){c.innerHTML='<div class="card">Sin acceso</div>';return;}
-  var cosmsOpts=['Andrea Robles','Daniela Mora','Dejaneira Espinoza','Alejandra Rodriguez'].map(function(n){
+  var cosmsOpts=_nombresMulta_().map(function(n){
     return '<option>'+n+'</option>';
   }).join('');
   c.innerHTML=
@@ -13253,7 +13331,7 @@ function abrirModalMulta(tkRow){
   var overlay=document.createElement('div');
   overlay.id='multa-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
-  var cosmsOpts=['Andrea Robles','Daniela Mora','Dejaneira Espinoza','Alejandra Rodriguez'].map(function(n){
+  var cosmsOpts=_nombresMulta_().map(function(n){
     return '<option '+(t&&t.cosmetologa===n?'selected':'')+'>'+n+'</option>';
   }).join('');
   var modal=document.createElement('div');

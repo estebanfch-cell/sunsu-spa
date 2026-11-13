@@ -3626,7 +3626,7 @@ async function renderPersonalComisiones() {
   const data = await api("getDashCosm", { cosmetologa: nombre });
   if (data.error) return sel + fail(data);
   const cards = [
-    ["Faciales", data.faciales], ["Comisión faciales", money(data.comFaciales)],
+    ["Faciales", data.faciales], ["Comisión faciales", data.comFacialesOn === false ? "— (aprendiz)" : money(data.comFaciales)],
     ["Paquetes", data.paquetes], ["Escalón", data.nivelAlcanzado || "—"],
     ["Comisión paquetes", money(data.comPaquetes)],
     ["Productos 30%", money(data.comProductos)], ["Extras", money(data.comExtras)],
@@ -4179,13 +4179,29 @@ async function renderUsuarios() {
   const ix = window.SunsuInline;
   const items = list.map((u) => {
     const fila = String(u.id || "");
-    const vals = { nombre: u.name || "", short: u.short || "", rol: u.role || "", bloqueado: u.bloqueado ? "sí" : "no" };
-    if (ix && ix.edita() && fila) return `<div class="card">${ix.lineas("usuarios", fila, [["nombre", "Nombre", vals.nombre], ["short", "Nombre corto", vals.short], ["rol", "Rol", vals.rol], ["bloqueado", "Bloqueado", vals.bloqueado]])} ${ix.borrar("usuarios", fila)}</div>`;
+    const off = u.comision_faciales === false;
+    const vals = {
+      nombre: u.name || "", short: u.short || "", rol: u.role || "",
+      bloqueado: u.bloqueado ? "sí" : "no",
+      es_cosmetologa: u.es_cosmetologa ? "sí" : "no",
+      comision_faciales: off ? "no" : "sí",
+      comision_faciales_desde: u.comision_faciales_desde || "",
+    };
+    const badge = off ? `<span class="note">sin com. faciales</span>` : "";
+    const aprendiz = off ? " · Cosmetóloga aprendiz" : "";
+    const pares = [
+      ["nombre", "Nombre", vals.nombre], ["short", "Nombre corto", vals.short], ["rol", "Rol", vals.rol],
+      ["bloqueado", "Bloqueado", vals.bloqueado],
+      ["es_cosmetologa", "Cuenta para paquetes (es cosmetóloga)", vals.es_cosmetologa],
+      ["comision_faciales", "💆 Gana comisión de faciales", vals.comision_faciales],
+      ["comision_faciales_desde", "Faciales desde", vals.comision_faciales_desde],
+    ];
+    if (ix && ix.edita() && fila) return `<div class="card">${off ? `<p class="note">sin com. faciales · Cosmetóloga aprendiz</p>` : ""}${ix.lineas("usuarios", fila, pares)} ${ix.borrar("usuarios", fila)}</div>`;
     const pedir = ix && ix.pide() && fila ? ix.pedir("usuarios", fila, vals) : "";
-    return `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"} ${pedir}</div></div>`;
+    return `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)} ${badge}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"}${esc(aprendiz)} ${pedir}</div></div>`;
   }).join("");
   const mas = ix && ix.edita() ? ix.mas("usuarios") : "";
-  return `<p class="note">El PIN no se edita aquí. Una cuenta nueva entra con la clave por restablecer.</p><div id="usr-nuevo">${mas}</div><div class="list">${items || `<p class="note">Sin usuarios.</p>`}</div>`;
+  return `<p class="note">Al crear, el PIN es de 4 dígitos y solo se escribe en la cuenta nueva. En el primer ingreso hay que cambiarlo. «Cuenta para paquetes» marca si entra al N. «Gana comisión de faciales» apagado deja esos faciales en $0; paquetes, productos y extras siguen igual. Si la enciendes y «Faciales desde» queda vacío, cuenta desde hoy: lo anterior no se paga.</p><div id="usr-nuevo">${mas}</div><div class="list">${items || `<p class="note">Sin usuarios.</p>`}</div>`;
 }
 
 async function renderDoc(route) {
@@ -4740,7 +4756,7 @@ function htmlComDet(concepto, d, total) {
   const nPaq = Number(d.paquetes) || 0;
   const nProd = Number(d.productosN) || 0;
   const nExt = Number(d.extrasN) || 0;
-  if (concepto === "Faciales") return `<div class="com-det">${nFacial} ${nFacial === 1 ? "facial" : "faciales"} · ${money(total)}</div>`;
+  if (concepto === "Faciales") return `<div class="com-det">${nFacial} ${nFacial === 1 ? "facial" : "faciales"} · ${d.comFac === false ? "— (aprendiz)" : money(total)}</div>`;
   if (concepto === "Paquetes") {
     const tiers = (d.tramos || []).map((t) => `<div class="rowline"><span>${esc(t.etiqueta)} al ${esc(t.pct)} · ${esc(t.n)}</span><span>${money(t.monto)}</span></div>`).join("");
     const nivel = d.regimen === "nivel" ? `<div class="rowline"><span>Nivel ${esc(d.nivel || "—")}</span><span>${money(total)}</span></div>` : "";
@@ -4761,7 +4777,8 @@ function htmlComCard(persona, filas, detalle) {
   const cuerpo = (filas || []).map((f) => {
     if (f.concepto === "Total") return `<div class="ctotal"><span>Total</span><span>${money(f.total)}</span></div>`;
     if (f.concepto === "Recepción") return `<div class="crow"><span>Recepción</span><span class="v">${money(f.total)}</span></div>`;
-    return `<details class="com-row"><summary><span>${esc(f.concepto)}</span><span class="v">${money(f.total)}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
+    const valor = f.concepto === "Faciales" && d.comFac === false ? "— (aprendiz)" : money(f.total);
+    return `<details class="com-row"><summary><span>${esc(f.concepto)}</span><span class="v">${valor}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
   }).join("");
   return `<div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>${esc(persona || "")}</span></div><div class="cosm-body">${cuerpo}</div></div>`;
 }
@@ -5502,8 +5519,8 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261113cabv1"></script>
-<script src="beta-inline.js?v=20261026prov2"></script>
+<script src="beta-screens.js?v=20261113fac"></script>
+<script src="beta-inline.js?v=20261113fac"></script>
 <script>draw();</script>
 </body>
 </html>

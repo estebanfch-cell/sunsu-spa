@@ -4,7 +4,7 @@ import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarAr
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cantAmpollas, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
-  compraParaComision, desglosePaquetesTramo, listaExtrasPagados, PCT_COMISION_PRODUCTO,
+  compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
@@ -315,11 +315,7 @@ async function marks(ctx: Ctx) {
       { id: "alejandra", nombre: "Alejandra Rodriguez", patron: "alejandra%", es: false, activa: true, desde: null, hasta: null },
     ];
   }
-  return rows.map((r) => ({
-    id: s(r.id), nombre: s(r.nombre), patron: s(r.patron) || s(r.nombre) + "%",
-    es: r.es_cosmetologa !== false && r.es !== false, activa: r.activa !== false,
-    desde: r.desde ? s(r.desde) : null, hasta: r.hasta ? s(r.hasta) : null,
-  }));
+  return rows.map(toCosmMark);
 }
 async function adminsDe(ctx: Ctx) {
   const users = await ctx.db.all("usuarios");
@@ -736,18 +732,28 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   }
 
   if (action === "getUsuarios") {
+    const marcasU = await ctx.db.all("cosmetologas").catch(() => [] as R[]);
+    const conMarca = (id: unknown, nombre: unknown, base: R) => {
+      const mk = marcasU.find((m) => String(m.id) === String(id) || normNombre(s(m.nombre)) === normNombre(s(nombre)));
+      return {
+        ...base,
+        es_cosmetologa: mk ? mk.es_cosmetologa === true : false,
+        comision_faciales: mk ? mk.comision_faciales !== false : true,
+        comision_faciales_desde: mk && mk.comision_faciales_desde ? s(mk.comision_faciales_desde).slice(0, 10) : "",
+      };
+    };
     const app = await ctx.db.all("app_usuarios");
     if (app.length) {
       return app.map((raw) => {
         const u = cuenta(raw);
-        return {
+        return conMarca(u.id, u.nombre, {
           id: u.id, name: u.nombre, short: u.short, role: normalizarRol(s(u.rol)),
           color: u.color, bloqueado: !!u.bloqueado, pinReset: !!u.pin_reset,
-        };
+        });
       });
     }
     await ensureUsers(ctx.db, "sistema");
-    return (await ctx.db.all("usuarios")).map(publico);
+    return (await ctx.db.all("usuarios")).map((u) => conMarca(u.id, u.nombre, publico(u)));
   }
   if (action === "usuarioBloqueado") {
     const app = (await ctx.db.all("app_usuarios")).map(cuenta);
@@ -786,9 +792,23 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
     }
     for (const u of (p.users as R[]) || []) {
       const old = prev.find((x) => String(x.id) === s(u.id));
-      const row = { id: s(u.id), nombre: s(u.name), short: s(u.short), rol: s(u.role) || "staff", color: s(u.color) };
+      const row: R = { id: s(u.id), nombre: s(u.name), short: s(u.short), rol: s(u.role) || "staff", color: s(u.color) };
+      const pin = s(u.pin);
+      if (pin && pin !== "••••") {
+        if (!/^\d{4}$/.test(pin)) return { error: "El PIN debe ser de 4 dígitos" };
+        let enUso: unknown;
+        let hash: unknown;
+        try { enUso = await ctx.db.rpc("pin_en_uso", { p_pin: pin, p_excepto: s(u.id) }); }
+        catch { return { error: "No se pudo verificar el PIN. Aplica 0009b_compat_0008.sql." }; }
+        if (enUso === true) return { error: "Esa clave ya la usa otro usuario — elige otra" };
+        try { hash = await ctx.db.rpc("hash_pin_bcrypt", { p_pin: pin }); }
+        catch { return { error: "No se pudo guardar el PIN. Aplica 0009b_compat_0008.sql." }; }
+        if (typeof hash !== "string" || !hash.startsWith("$2")) return { error: "No se pudo guardar el PIN. Aplica 0009b_compat_0008.sql." };
+        row.pin_hash = hash;
+        if (!old) row.pin_reset = true;
+      }
       if (old) await ctx.db.write(A, table, "update", { id: row.id }, row);
-      else await ctx.db.write(A, table, "insert", {}, { ...row, bloqueado: false, pin_reset: false });
+      else await ctx.db.write(A, table, "insert", {}, { ...row, bloqueado: false, pin_reset: row.pin_reset !== false, activo: true });
     }
     return { ok: true };
   }
@@ -1835,8 +1855,11 @@ reg("getDashCosm", "any", async (p, ctx, ses) => {
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const [y1, m1] = ciclo.split("-").map(Number);
   const [y2, m2] = fin.split("-").map(Number);
+  const marcaDash = marcaDePersona(await marks(ctx), nombre);
   return {
-    faciales: c.faciales, comFaciales: c.comFaciales, paquetes: c.paquetes, comPaquetes: c.comPaquetes,
+    faciales: c.faciales, comFaciales: c.comFaciales,
+    comFacialesOn: !marcaDash || marcaDash.comFac !== false,
+    paquetes: c.paquetes, comPaquetes: c.comPaquetes,
     nivelAlcanzado: c.nivel, comProductos: c.comProductos, totalProductos: c.totalProductos,
     extras: c.extras, comExtras: c.comExtras, comRecepcion: recep ? comRecep : 0, diasRecepcion: recep ? diasRecep : 0,
     multas: md.mlt, descuentos: md.desc, totalClientas: calc.totalClientas, bonoActivo: calc.bono,
@@ -1891,6 +1914,7 @@ type DetalleCom = {
   faciales: number; paquetes: number; regimen: string; nivel: string;
   tramos: { etiqueta: string; pct: string; n: number; monto: number }[];
   productos: LineaCom[]; productosN: number; extras: LineaCom[]; extrasN: number;
+  comFac: boolean;
 };
 const CONCEPTOS_COM = ["Faciales", "Paquetes", "Productos", "Recepción", "Extras", "Total"] as const;
 function filasPersona(nombre: string, packs: { calc: { personas: { cosm: string; comFaciales: number; comPaquetes: number; comProductos: number; comExtras: number }[] }; comRecep: number }[]): FilaCom[] {
@@ -1909,7 +1933,7 @@ function juntarLineas(a: LineaCom[], b: LineaCom[]): LineaCom[] {
   return [...map.values()];
 }
 function detallePersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe>>[]): DetalleCom {
-  const out: DetalleCom = { faciales: 0, paquetes: 0, regimen: "tramo", nivel: "—", tramos: [], productos: [], productosN: 0, extras: [], extrasN: 0 };
+  const out: DetalleCom = { faciales: 0, paquetes: 0, regimen: "tramo", nivel: "—", tramos: [], productos: [], productosN: 0, extras: [], extrasN: 0, comFac: true };
   const tramos = new Map<string, { etiqueta: string; pct: string; n: number; monto: number }>();
   const key = normNombre(nombre);
   const primero = key.split(" ")[0] || key;
@@ -1954,16 +1978,23 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
       if (!nombreEsAdmin(per.cosm, admins)) personas.set(normNombre(per.cosm), per.cosm);
     }
   }
-  for (const m of await marks(ctx)) {
+  const marcasCom = await marks(ctx);
+  for (const m of marcasCom) {
     if (m.es && !nombreEsAdmin(m.nombre, admins) && !nombreEsAdmin(m.id, admins)) personas.set(normNombre(m.nombre), m.nombre);
   }
   const ciclos = packs.map((pack) => ({ inicio: pack.ciclo, fin: pack.fin, regimen: pack.calc.regimen, n: pack.calc.n }));
+  const detalleDe = (nombre: string) => {
+    const det = detallePersona(nombre, packs);
+    const mk = marcaDePersona(marcasCom, nombre);
+    det.comFac = !mk || mk.comFac !== false;
+    return det;
+  };
   const lista = [...personas.values()];
   const pideTodas = esAdmin(ses.rol) && (s(p.persona) === "Todas" || s(p.persona) === "*");
   if (pideTodas) {
     const equipo = lista.map((nombre) => {
       const filas = filasPersona(nombre, packs);
-      return { persona: nombre, filas, detalle: detallePersona(nombre, packs), total: filas.find((f) => f.concepto === "Total")?.total || 0 };
+      return { persona: nombre, filas, detalle: detalleDe(nombre), total: filas.find((f) => f.concepto === "Total")?.total || 0 };
     });
     return {
       ok: true, todas: true, persona: "Todas", personas: lista, equipo,
@@ -1977,7 +2008,7 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
   const filas = filasPersona(persona, packs);
   return {
     ok: true, persona, personas: lista, adminExcluido: nombreEsAdmin(s(p.persona), admins),
-    ciclos, filas, detalle: detallePersona(persona, packs), tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
+    ciclos, filas, detalle: detalleDe(persona), tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
   };
 });
 reg("getTramos", "any", async (_p, ctx) => {

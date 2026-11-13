@@ -173,6 +173,42 @@ describe("permisos", () => {
     assert.equal(nCosmetologas(marks, "2026-09-26", "2026-10-25"), 3);
   });
 
+  it("comFac false cuenta el facial y deja su comisión en 0", () => {
+    const base: CosmMark = { id: "andrea", nombre: "Andrea Robles", patron: "andrea%", es: true, activa: true };
+    const aprendiz: CosmMark = { id: "evelyn", nombre: "Evelyn Pérez", patron: "evelyn%", es: true, activa: true, comFac: false };
+    const tk = (fecha: string, cosm: string, facial: string): TicketIn => ({
+      fecha, cosm, cedula: "0102030405", facial,
+      pack3: "SUNSU-18", pack6: "", extras: "Dermaplaning",
+      exclFacial: false, exclPaquete: false, exclProducto: false, exclExtras: false,
+      productos: [{ sku: "HT-002", qty: 2 }],
+      netoPack: 100,
+    });
+    const off = calcularCiclo([tk("2026-10-27", "Evelyn Pérez", "SUNSU-01")], [aprendiz, base], CFG_DEF, "2026-10-26");
+    const on = calcularCiclo([tk("2026-10-27", "Andrea Robles", "SUNSU-01")], [aprendiz, base], CFG_DEF, "2026-10-26");
+    const e = off.personas.find((p) => p.cosm.startsWith("Evelyn"));
+    const a = on.personas.find((p) => p.cosm.startsWith("Andrea"));
+    assert.ok(e && a);
+    assert.equal(e.faciales, 1);
+    assert.equal(e.comFaciales, 0);
+    assert.equal(a.faciales, 1);
+    assert.equal(a.comFaciales, 2);
+    assert.equal(e.paquetes, a.paquetes);
+    assert.equal(e.comPaquetes, a.comPaquetes);
+    assert.equal(e.extras, a.extras);
+    assert.equal(e.comExtras, a.comExtras);
+    assert.equal(e.comProductos, a.comProductos);
+    assert.equal(e.comPaquetes, 5);
+    assert.equal(e.comExtras, 1);
+    const desde = calcularCiclo([
+      tk("2026-10-27", "Andrea Robles", "SUNSU-01"),
+      tk("2026-10-28", "Andrea Robles", "SUNSU-40"),
+    ], [{ ...base, comFac: true, comFacDesde: "2026-10-28" }], CFG_DEF, "2026-10-26");
+    const ad = desde.personas.find((p) => p.cosm.startsWith("Andrea"));
+    assert.equal(ad?.faciales, 2);
+    assert.equal(ad?.comFaciales, 3);
+    assert.equal(ad?.paquetes, 2);
+  });
+
   it("comisión de producto 30% del margen y rol con año cumplido", () => {
     assert.equal(PCT_COMISION_PRODUCTO, 0.3);
     assert.equal(CFG_DEF.pctProd, PCT_COMISION_PRODUCTO);
@@ -967,6 +1003,52 @@ describe("api", () => {
     assert.equal(emi?.pin_hash, "$2b$06$4444");
     assert.equal(emi?.pin_reset, false);
     assert.equal(db.writes.some((w) => w.table === "usuarios"), false);
+  });
+
+  it("un usuario nuevo con PIN queda hasheado y puede apagar los faciales", async () => {
+    const db = new MemoryDb({
+      app_usuarios: [
+        { id: "emi", nombre: "Emi", short: "Emi", rol: "admin", pin_hash: "$2a$06$emi", bloqueado: false, activo: true },
+      ],
+    });
+    db.rpcImpl = async (name, args) => {
+      if (name === "pin_en_uso") return args.p_pin === "1111";
+      if (name === "hash_pin_bcrypt") return "$2b$06$ok";
+      return null;
+    };
+    const c = ctx(db, "admin", "emi", "Emi");
+    const dup = await handle("inline_guardar", {
+      token: c.token, tabla: "usuarios", fila: "nuevo",
+      campos: { nombre: "Evelyn Pérez", short: "Evelyn", rol: "asistente_cosmetologia", pin: "1111", comision_faciales: "no" },
+    }, c) as Row;
+    assert.match(String(dup.error), /otro usuario/);
+    const ok = await handle("inline_guardar", {
+      token: c.token, tabla: "usuarios", fila: "nuevo",
+      campos: {
+        nombre: "Evelyn Pérez", short: "Evelyn", rol: "asistente_cosmetologia",
+        pin: "2468", es_cosmetologa: "no", comision_faciales: "no",
+      },
+    }, c) as Row;
+    assert.equal(ok.ok, true);
+    assert.equal(JSON.stringify(ok).includes("2468"), false);
+    const creada = (await db.all("app_usuarios")).find((u) => u.id === ok.fila);
+    assert.equal(creada?.pin_hash, "$2b$06$ok");
+    assert.equal(creada?.pin_reset, true);
+    assert.equal(creada?.activo, true);
+    assert.equal(creada?.es_cosmetologa, false);
+    const marca = (await db.all("cosmetologas")).find((m) => m.id === ok.fila);
+    assert.equal(marca?.comision_faciales, false);
+    assert.equal(marca?.es_cosmetologa, false);
+    assert.equal(marca?.patron, "evelyn%");
+    assert.equal(JSON.stringify(await db.all("audit_log")).includes("2468"), false);
+    const on = await handle("inline_guardar", {
+      token: c.token, tabla: "usuarios", fila: String(ok.fila),
+      campos: { comision_faciales: "sí" },
+    }, c) as Row;
+    assert.equal(on.ok, true);
+    const marcaOn = (await db.all("cosmetologas")).find((m) => m.id === ok.fila);
+    assert.equal(marcaOn?.comision_faciales, true);
+    assert.equal(String(marcaOn?.comision_faciales_desde).slice(0, 10), "2026-10-21");
   });
 
   it("getRolIndividual lee tickets de Supabase", async () => {
@@ -3145,6 +3227,29 @@ describe("escalón en el app en vivo", () => {
     assert.equal(aRow._nets, undefined);
   });
 
+  it("el helper viejo apaga el facial sin tocar a quien no tiene el campo", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const src = readFileSync(join(root, "sunsu_script_completo.js"), "utf8");
+    const norm = src.slice(src.indexOf("function _normNombrePaq_("), src.indexOf("function esAndreaODaniela_("));
+    const bloque = src.slice(src.indexOf("// --- COM-FACIAL-START ---"), src.indexOf("// --- COM-FACIAL-END ---"));
+    const fn = new Function(`${norm}\n${bloque}\nreturn _comFacialesDecide_;`)() as (
+      users: { name: string; short?: string; comFaciales?: boolean; comFacialesDesde?: string }[],
+      nombre: string,
+      fecha: Date | string,
+    ) => boolean;
+    const users = [
+      { name: "Andrea Robles", short: "Andrea" },
+      { name: "Evelyn Pérez", short: "Evelyn", comFaciales: false },
+      { name: "Daniela Mora", short: "Daniela", comFaciales: true, comFacialesDesde: "2026-10-28" },
+    ];
+    assert.equal(fn(users, "Evelyn Pérez", new Date(2026, 9, 27)), false);
+    assert.equal(fn(users, "evelyn", "2026-11-01"), false);
+    assert.equal(fn(users, "Andrea Robles", "2026-10-01"), true);
+    assert.equal(fn(users, "Daniela Mora", "2026-10-27"), false);
+    assert.equal(fn(users, "Daniela Mora", "2026-10-28"), true);
+    assert.equal(fn(users, "Alguien Nueva", "2026-10-01"), true);
+  });
+
   it("el rol de octubre no se pisa y el de noviembre toma el escalón en vivo", () => {
     assert.equal(live.rolUsaTramo_("OCTUBRE_2026"), false);
     assert.equal(live.rolUsaTramo_("SEPTIEMBRE_2026"), false);
@@ -3172,13 +3277,13 @@ describe("escalón en el app en vivo", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
     assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
-    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.01'/);
-    assert.match(html, /var v='20261113.01'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.02'/);
+    assert.match(html, /var v='20261113.02'/);
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3286,8 +3391,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3365,8 +3470,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3416,8 +3521,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3450,8 +3555,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3497,8 +3602,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
-    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
+    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
+    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
   });
 });
 
