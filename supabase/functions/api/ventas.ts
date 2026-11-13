@@ -343,7 +343,7 @@ export function claveTicket(r: Row): string {
   return String(r.id ?? "");
 }
 
-export function recalcular(lineas: LineaVenta[], descuento: number, cfg?: ComCfg): {
+export function recalcular(lineas: LineaVenta[], descuento: number, cfg?: ComCfg, opts?: { pagaFacial?: boolean }): {
   lineas: LineaVenta[]; subtotal: number; iva: number; total: number;
   comProductos: number; comFacial: number;
 } {
@@ -370,7 +370,7 @@ export function recalcular(lineas: LineaVenta[], descuento: number, cfg?: ComCfg
         if (over.fijo != null) comP += over.fijo * ln.cantidad;
       } else comP += margen * (cfg?.pctProd ?? 0.3);
     }
-    if (ln.clase === "servicio") {
+    if (ln.clase === "servicio" && opts?.pagaFacial !== false) {
       const sku = facialSku(ln.sku) || facialSku(ln.nombre) || "";
       const overF = sku && cfg?.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
       const tarifa = overF != null ? overF : (FACIALES_2.includes(sku) ? (cfg?.facial2 ?? 2) : FACIALES_3.includes(sku) ? (cfg?.facial3 ?? 3) : 0);

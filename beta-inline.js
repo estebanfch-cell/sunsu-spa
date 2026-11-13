@@ -75,6 +75,10 @@
     ],
     usuarios: [
       ["nombre", "Nombre"], ["short", "Nombre corto"], ["rol", "Rol"], ["bloqueado", "Bloqueado"],
+      ["pin", "PIN (4 dígitos, solo al crear)"],
+      ["es_cosmetologa", "Cuenta para paquetes (es cosmetóloga)"],
+      ["comision_faciales", "💆 Gana comisión de faciales"],
+      ["comision_faciales_desde", "Faciales desde"],
     ],
     acceso: [
       ["acceso", "Acceso"],

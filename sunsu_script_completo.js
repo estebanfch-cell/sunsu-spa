@@ -828,11 +828,81 @@ function _usuariosSunsu_(props) {
   var arrU = [];
   try { arrU = JSON.parse(props.getProperty('SUNSU_USERS')||'[]'); } catch(eU) { arrU = []; }
   if (!arrU || !arrU.length) { arrU = DEF_U; props.setProperty('SUNSU_USERS', JSON.stringify(arrU)); }
+  // Evelyn (cosmetóloga aprendiz) es la primera con faciales en $0. Solo si el campo aún no existe.
+  var tocoEv = false;
+  for (var ie = 0; ie < arrU.length; ie++) {
+    var ne = _normNombrePaq_(arrU[ie].name);
+    if ((ne === 'evelyn' || ne.indexOf('evelyn ') === 0) && arrU[ie].comFaciales === undefined) {
+      arrU[ie].comFaciales = false;
+      tocoEv = true;
+    }
+  }
+  if (tocoEv) { try { props.setProperty('SUNSU_USERS', JSON.stringify(arrU)); } catch (eEv) {} }
   return arrU;
 }
 // Datos publicos de un usuario: TODO menos el PIN.
+// comFaciales ausente = true (todos los que ya estaban cobran).
 function _usuarioPublico_(u) {
-  return {id:u.id, name:u.name, short:u.short, role:u.role, color:u.color, bloqueado:!!u.bloqueado};
+  return {id:u.id, name:u.name, short:u.short, role:u.role, color:u.color, bloqueado:!!u.bloqueado,
+    comFaciales: u.comFaciales !== false, comFacialesDesde: (u.comFacialesDesde||'').toString()};
+}
+// --- COM-FACIAL-START ---
+function _ymdCom_(fecha) {
+  if (fecha == null || fecha === '') return '';
+  if (typeof fecha === 'string') {
+    var iso = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (iso) return iso[1];
+  }
+  var d = fecha instanceof Date ? fecha : new Date(fecha);
+  if (isNaN(d.getTime())) return '';
+  try {
+    if (typeof Utilities !== 'undefined' && Utilities.formatDate) {
+      return Utilities.formatDate(d, 'America/Guayaquil', 'yyyy-MM-dd');
+    }
+  } catch (eYmd) {}
+  var y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+}
+// false solo si la persona está en SUNSU_USERS con comFaciales===false, o la fecha es anterior a comFacialesDesde.
+// Sin ficha, o sin el campo, sigue cobrando (default ON).
+function _comFacialesDecide_(users, nombreTicket, fecha) {
+  var n = _normNombrePaq_(nombreTicket);
+  if (!n) return true;
+  var first = n.split(' ')[0] || '';
+  var hit = null, i, u, un, uf, sh;
+  var lista = users || [];
+  for (i = 0; i < lista.length; i++) {
+    u = lista[i];
+    un = _normNombrePaq_(u.name);
+    if (un && un === n) { hit = u; break; }
+  }
+  if (!hit) {
+    for (i = 0; i < lista.length; i++) {
+      u = lista[i];
+      un = _normNombrePaq_(u.name);
+      uf = un.split(' ')[0] || '';
+      sh = _normNombrePaq_(u.short);
+      if (uf && (uf === first || (first.length >= 3 && un.indexOf(first) === 0))) { hit = u; break; }
+      if (sh && (sh === n || sh === first)) { hit = u; break; }
+    }
+  }
+  if (!hit) return true;
+  if (hit.comFaciales === false) return false;
+  var desde = (hit.comFacialesDesde || '').toString().trim().slice(0, 10);
+  var ymd = _ymdCom_(fecha);
+  if (desde && ymd && ymd < desde) return false;
+  return true;
+}
+// --- COM-FACIAL-END ---
+var _comFacUsers_ = null;
+function _comFacialesCargar_() {
+  _comFacUsers_ = [];
+  try { _comFacUsers_ = _usuariosSunsu_(PropertiesService.getScriptProperties()); }
+  catch (eCf) { _comFacUsers_ = []; }
+}
+function _comFacialesOn_(nombreTicket, fecha) {
+  if (!_comFacUsers_) _comFacialesCargar_();
+  return _comFacialesDecide_(_comFacUsers_, nombreTicket, fecha);
 }
 
 // ── Etiquetar en Acuity 'INGRESADO Y COMP' las citas de los tickets revisados ──
@@ -1936,6 +2006,7 @@ function calcularComisiones(fechaInicio, fechaFin) {
   const EXCL = exclColsFromHeaders_(headers);
   const cosmetologas = {};
   const clientasSet  = new Set();
+  _comFacialesCargar_();
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
     const ts   = fila[CONFIG.COL_TIMESTAMP - 1];
@@ -1954,8 +2025,9 @@ function calcularComisiones(fechaInicio, fechaFin) {
       clientasSet.add(i.toString());
       const exclFacial = fila[EXCL.facial - 1] === true;
       if (!exclFacial) {
-        if (CONFIG.FACIALES_2.includes(sku))      { c.faciales++; c.comFaciales += 2; }
-        else if (CONFIG.FACIALES_3.includes(sku)) { c.faciales++; c.comFaciales += 3; }
+        var pagaFac = _comFacialesOn_(cosm, fecha);
+        if (CONFIG.FACIALES_2.includes(sku))      { c.faciales++; if (pagaFac) c.comFaciales += 2; }
+        else if (CONFIG.FACIALES_3.includes(sku)) { c.faciales++; if (pagaFac) c.comFaciales += 3; }
       }
     }
     const pack3 = (fila[CONFIG.COL_PACK3 - 1] || "").toString().trim();
@@ -2982,6 +3054,7 @@ function doGet(e) {
 
       // Acumular por cosmetóloga
       var porCosm = {};
+      _comFacialesCargar_();
       var EXCLR = exclColsFromHeaders_(repData[0]);
       for (var ri = 1; ri < repData.length; ri++) {
         var fila = repData[ri];
@@ -3006,7 +3079,7 @@ function doGet(e) {
         if (skuFac && !exclFac) {
           var skuF = 'SUNSU-'+skuFac[1];
           var comFac = CONFIG.FACIALES_2.includes(skuF)?2:CONFIG.FACIALES_3.includes(skuF)?3:0;
-          pc.faciales++; pc.comFaciales += comFac;
+          pc.faciales++; if (_comFacialesOn_(cosm, fecha)) pc.comFaciales += comFac;
         }
         // Paquetes — comisión basada en nivel NIVELES
         var tienePaq = (pack3Str && pack3Str !== '' && pack3Str.toLowerCase() !== 'false') ||
@@ -5671,6 +5744,7 @@ function doGet(e) {
         return respJsonGet({
           faciales:        cosm.faciales||0,
           comFaciales:     cosm.comFaciales||0,
+          comFacialesOn:   _comFacialesDecide_(_comFacUsers_||[], cosmNombre, '9999-12-31'),
           paquetes:        cosm.paquetes||0,
           comPaquetes:     cosm.comPaquetes||0,
           nivelAlcanzado:  cosm.nivelAlcanzado||'—',
@@ -7068,7 +7142,13 @@ function doPost(e) {
       var tkUF = mapUF[body.token||''];
       if (!tkUF || tkUF.rol !== 'admin_master' || !tkUF.exp || tkUF.exp < Date.now())
         return respJson({error:'Solo el administrador principal'});
-      return respJson({ok:true, users:_usuariosSunsu_(propsUF)});
+      return respJson({ok:true, users:_usuariosSunsu_(propsUF).map(function(u){
+        var o = {};
+        Object.keys(u).forEach(function(k){ o[k] = u[k]; });
+        o.comFaciales = u.comFaciales !== false;
+        o.comFacialesDesde = (u.comFacialesDesde||'').toString();
+        return o;
+      })});
     }
     if (body.accion === 'usuarioBloquear') {
       var rolUB = _rolDeToken_(PropertiesService.getScriptProperties(), body.token||'');
@@ -7097,17 +7177,53 @@ function doPost(e) {
       return respJson({ok:true, uid:uidBB, bloqueado:uBB.bloqueado});
     }
     if (body.accion === 'saveUsuarios') {
-      // El app manda la lista SIN pines. Si un usuario no trae PIN, se conserva el guardado:
-      // asi editar un nombre o color no deja a nadie sin poder entrar.
+      // El app manda la lista. Lo que no venga explícito se conserva del objeto ya guardado
+      // (bloqueado, pinReset, comFaciales, comFacialesDesde). Un alta obliga a cambiar el PIN.
       var propsS = PropertiesService.getScriptProperties();
+      var rolSV = _rolDeToken_(propsS, body.token||'');
+      if (rolSV !== 'admin' && rolSV !== 'admin_master') return respJson({error:'Solo administradores'});
       var prevS = _usuariosSunsu_(propsS);
-      var pinPrev = {};
-      prevS.forEach(function(u){ pinPrev[u.id] = (u.pin||'').toString(); });
-      var nuevosS = (body.users||[]).map(function(u){
-        return {id:u.id, name:u.name, short:u.short, role:u.role, color:u.color,
-                pin: ((u.pin||'').toString().trim() || pinPrev[u.id] || '')};
+      var byIdS = {};
+      prevS.forEach(function(u){ byIdS[u.id] = u; });
+      var nuevosS = [];
+      var pinsVistos = {};
+      var errSV = '';
+      (body.users||[]).forEach(function(u){
+        if (errSV) return;
+        var idS = (u.id||'').toString().trim();
+        if (!idS) return;
+        var oldS = byIdS[idS] || {};
+        var esNuevoS = !byIdS[idS];
+        var pinIn = (u.pin||'').toString().trim();
+        var pinS = pinIn || (oldS.pin||'').toString();
+        if (esNuevoS && !/^\d{4}$/.test(pinS)) { errSV = 'El PIN de un usuario nuevo debe ser de 4 dígitos'; return; }
+        if (pinIn && !/^\d{4}$/.test(pinIn)) { errSV = 'La clave debe ser de 4 dígitos'; return; }
+        if (pinS) {
+          if (pinsVistos[pinS]) { errSV = 'Esa clave ya la usa otro usuario — elige otra'; return; }
+          pinsVistos[pinS] = idS;
+        }
+        var merged = {};
+        Object.keys(oldS).forEach(function(k){ merged[k] = oldS[k]; });
+        merged.id = idS;
+        merged.name = u.name != null ? u.name : (oldS.name||'');
+        merged.short = u.short != null ? u.short : (oldS.short||'');
+        merged.role = u.role != null ? u.role : (oldS.role||'staff');
+        merged.color = u.color != null ? u.color : (oldS.color||'#5B7FA6');
+        merged.pin = pinS;
+        if (u.bloqueado !== undefined) merged.bloqueado = !!u.bloqueado;
+        if (esNuevoS) merged.pinReset = true;
+        else if (u.pinReset !== undefined) merged.pinReset = !!u.pinReset;
+        if (u.comFaciales !== undefined && u.comFaciales !== null && u.comFaciales !== '') {
+          merged.comFaciales = !(u.comFaciales === false || u.comFaciales === 'false' || u.comFaciales === 0 || u.comFaciales === '0');
+        }
+        if (Object.prototype.hasOwnProperty.call(u, 'comFacialesDesde')) {
+          merged.comFacialesDesde = (u.comFacialesDesde||'').toString().trim().slice(0, 10);
+        }
+        nuevosS.push(merged);
       });
+      if (errSV) return respJson({error: errSV});
       propsS.setProperty('SUNSU_USERS', JSON.stringify(nuevosS));
+      try { logAccion_(ss, 'USUARIOS', 'lista actualizada ('+nuevosS.length+')', body.usuario||''); } catch (eLgS) {}
       return respJson({ok:true});
     }
 
@@ -8846,6 +8962,7 @@ function calcularReporte(fechaInicio, fechaFin) {
       if (sku) preciosCat[sku] = { subtotal, compra:parseFloat(catData[i][6])||0, tipo:(catData[i][2]||"").toString().trim(), nombre:(catData[i][1]||"").toString().trim() };
     }
   }
+  _comFacialesCargar_();
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
     const ts   = fila[CONFIG.COL_TIMESTAMP - 1];
@@ -8907,7 +9024,8 @@ function calcularReporte(fechaInicio, fechaFin) {
       const sku="SUNSU-"+skuMatch[1], info=preciosCat[sku]||{};
       const ingr=estimadoReal;
       const util=ingr*MARGEN_FACIAL;
-      const com=CONFIG.FACIALES_2.includes(sku)?2:CONFIG.FACIALES_3.includes(sku)?3:0;
+      const comBruto=CONFIG.FACIALES_2.includes(sku)?2:CONFIG.FACIALES_3.includes(sku)?3:0;
+      const com=_comFacialesOn_(cosm, fecha)?comBruto:0;
       if (!result.faciales[sku]) result.faciales[sku]={nombre:info.nombre||sku,count:0,cosm:{},ingrBruto:0,utilEstim:0,comTotal:0};
       result.faciales[sku].count++; result.faciales[sku].cosm[cosm]=(result.faciales[sku].cosm[cosm]||0)+1;
       result.faciales[sku].ingrBruto+=ingr; result.faciales[sku].utilEstim+=util; result.faciales[sku].comTotal+=com;
@@ -12122,6 +12240,7 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
   var ss = _ssCentral_();
   var ws = ss ? ss.getSheets().find(function(s){ return s.getName().includes('TICKET_FICHA'); }) : null;
   if (!ws) return { faciales: 0, paquetesUnidades: 0, paquetesValor: 0, productos: 0, extras: 0, recepcion: 0 };
+  _comFacialesCargar_();
 
   var data = ws.getDataRange().getValues();
   var EXCLAV = exclColsFromHeaders_(data[0]);
@@ -12184,7 +12303,7 @@ function leerComisionesPeriodo(nombreApp, desdeComisiones, hastaComisiones) {
     var facialSku = (row[19] || '').toString().trim().split(' ')[0];
     var colQ      = (row[16] || '').toString().trim();
     var esCanje   = colQ !== '' && colQ !== 'false' && colQ !== '0';
-    if (facialSku && !exclFac && !esCanje) {
+    if (facialSku && !exclFac && !esCanje && _comFacialesOn_(row[1], fecha)) {
       comF += getComFacial(facialSku);
     }
 
