@@ -60,6 +60,22 @@ export function familiaConsignacion(sku: string): string {
   return m ? m[1] : "";
 }
 
+/** Bodega Cabina de 0009. Un producto sin bodega_origen_venta sigue saliendo de Venta. */
+export const BODEGA_CABINA_ORIGEN = "22222222-2222-4222-8222-222222222222";
+
+/**
+ * Máscaras Dr.esthe/Esthemax ya pagadas. El ticket descuenta Cabina, no la percha,
+ * y no se facturan ni se reponen como consignación. Siguen activas para venderse.
+ * Un producto con bodega_origen_venta = Cabina se trata igual aunque no esté en la lista.
+ */
+export const SKUS_VENTA_CABINA = ["ML-009", "ML-010", "ML-011", "ML-012", "ML-013", "ML-014"];
+
+export function vendeDesdeCabina(p: Row | null | undefined, sku?: string): boolean {
+  const code = skuCode(s(p?.sku) || sku || "");
+  if (SKUS_VENTA_CABINA.includes(code)) return true;
+  return s(p?.bodega_origen_venta) === BODEGA_CABINA_ORIGEN;
+}
+
 /** HT, AS, ML… tal como está en proveedores.familia. No convierte una marca en código. */
 export function codigoFamilia(raw: unknown): string {
   const up = s(raw).toUpperCase();
@@ -797,6 +813,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   const q = quincenaActual(now, n(p.quincena) || undefined);
   const buffer = bufferDe(p.buffer);
   const prods = await db.all("erp_productos");
+  const porSkuProd = new Map(prods.map((r) => [skuCode(s(r.sku)), r]));
   const stock = await db.all("erp_stock");
   const ventaId = "11111111-1111-4111-8111-111111111111";
   const items: Row[] = [];
@@ -805,8 +822,10 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     const fecha = ymdUtc(t.timestamp);
     if (!fecha || fecha < q.ini || fecha > q.fin) continue;
     for (const pr of productQtys(t)) {
-      if (!skuCode(pr.sku).startsWith(familia + "-")) continue;
-      vendido.set(skuCode(pr.sku), (vendido.get(skuCode(pr.sku)) || 0) + pr.qty);
+      const sku = skuCode(pr.sku);
+      if (!sku.startsWith(familia + "-")) continue;
+      if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
+      vendido.set(sku, (vendido.get(sku) || 0) + pr.qty);
     }
   }
   const consumido = new Map<string, number>();
@@ -816,11 +835,13 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     if (s(c.familia) !== familia) continue;
     if (s(c.quincena_ini) !== q.ini || s(c.quincena_fin) !== q.fin) continue;
     const sku = skuCode(c.sku);
+    if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     consumido.set(sku, (consumido.get(sku) || 0) + n(c.cantidad));
   }
   const vistos = new Set<string>();
   for (const pr of prods) {
     const sku = skuCode(pr.sku);
+    if (vendeDesdeCabina(pr)) continue;
     if (!sku.startsWith(familia + "-") || pr.activo === false) continue;
     vistos.add(sku);
     const hay = stock.filter((r) => r.producto_id === pr.id && String(r.bodega_id) === ventaId).reduce((a, r) => a + n(r.cantidad), 0);
@@ -835,6 +856,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     });
   }
   for (const [sku, v] of vendido) {
+    if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     if (vistos.has(sku)) continue;
     const cns = consumido.get(sku) || 0;
     const paga = v + cns;
@@ -842,6 +864,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     vistos.add(sku);
   }
   for (const [sku, cns] of consumido) {
+    if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     if (vistos.has(sku)) continue;
     items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, compra: 0, sugerido: Math.ceil(cns * (1 + buffer)), subtotal: 0 });
   }
