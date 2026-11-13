@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.11.13.02 comisión de faciales por persona -->
+<!-- v2026.11.13.03 destino al abrir en cabina -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
 // APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.11.13.02';
+var SUNSU_APP_VERSION='v2026.11.13.03';
 var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
 // Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
 var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261113.02';
+  var v='20261113.03';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -6998,7 +6998,7 @@ function renderCabina(c,fresh){
           :'<div class="card" style="text-align:center;color:var(--gray);padding:22px">La cabina aún no se configura — pide a un administrador que cree la estructura</div>');
       return;
     }
-    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], tras:d.traspasos||[], bajas:d.bajas||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
+    window._cab={inv:d.inventario||[], act:d.activos||[], pro:d.protocolos||[], ocs:d.ordenes||[], tras:d.traspasos||[], bajas:d.bajas||[], aperturas:d.aperturas||[], fijoPorFacial:d.fijoPorFacial||0, fijosMensuales:d.fijosMensuales||0, facialesMesRef:d.facialesMesRef||0, mesRef:d.mesRef||'', fijosDetalle:d.fijosDetalle||[]};
     _pintarCabina(c);
   };
   var cachedCb=fresh?null:_swrLee('cabina');
@@ -7027,6 +7027,8 @@ function _cabHayTrabajoAbierto(){
   }
   var inact=document.getElementById('cab-inv-inact');
   if(inact&&inact.style.display==='block') return true;
+  var dests=document.querySelectorAll('[id^="cab-dest-"]');
+  for(var d=0;d<dests.length;d++){ if(dests[d].innerHTML) return true; }
   return false;
 }
 function _cabCrear(btn){
@@ -7817,9 +7819,9 @@ function _cabPintarInventario(){
         // marcar que el abierto se acabó — queda registrado quién y cuándo.
         if(inac) return '';
         var bs=[];
-        if(p.cerrados>0) bs.push('<button onclick="_cabAbrirRapido('+i+',\'abrir\')" style="flex:1;padding:8px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🍾 Abrir envase</button>');
-        if(p.abierto>0) bs.push('<button onclick="_cabAbrirRapido('+i+',\'acabar\')" style="flex:1;padding:8px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✔ Se acabó el abierto</button>');
-        return bs.length?'<div style="display:flex;gap:6px;margin-top:8px">'+bs.join('')+'</div>':'';
+        if(p.cerrados>0) bs.push('<button onclick="_cabAbrirPanel('+i+',\'abrir\')" style="flex:1;min-height:48px;padding:12px 8px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.84rem;font-weight:800;cursor:pointer">🍾 Abrir envase</button>');
+        if(p.abierto>0) bs.push('<button onclick="_cabAbrirPanel('+i+',\'acabar\')" style="flex:1;min-height:48px;padding:12px 8px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:12px;font-size:0.84rem;font-weight:800;cursor:pointer">✔ Se acabó</button>');
+        return _cabDestinoResumen(p)+(bs.length?'<div style="display:flex;gap:8px;margin-top:8px">'+bs.join('')+'</div>':'')+'<div id="cab-dest-'+i+'"></div>';
       })()
       +(esAdm?'<div id="cab-invd-'+i+'" style="display:none"></div>':'')
       +'</div>';
@@ -7873,10 +7875,12 @@ function _cabPintarInventario(){
       +'<div style="font-size:0.7rem;font-weight:800;color:var(--gray)">🍾 Últimas aperturas ('+(window._cab.aperturas||[]).length+')</div>'
       +'<span id="arrow-cab-inv-aps" style="color:var(--gray);font-size:0.75rem">'+(apAb?'▼':'▶')+'</span></div>'
       +'<div id="cab-inv-aps" style="display:'+(apAb?'block':'none')+';padding:8px 12px">'
-      +(window._cab.aperturas||[]).map(function(a){
+      +_cabConDias(window._cab.aperturas||[]).map(function(a){
+        var dest=_cabEtiquetaDestino(_cabNormDestino(a.destino));
+        var dias=_cabEsApertura(a)?(' · '+_cabDiasTxt(a.diasDesdeAnterior)):'';
         return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d);font-size:0.62rem">'
-          +'<div style="flex:1;min-width:0"><b style="color:var(--navy)">'+(a.accion==='APERTURA'?'🍾':'✔')+' '+a.nombre+'</b> · '+a.cantidad
-          +'<br><span style="color:var(--gray)">'+a.fecha+' · '+a.por+'</span></div>'
+          +'<div style="flex:1;min-width:0"><b style="color:var(--navy)">'+(_cabEsApertura(a)?'🍾':'✔')+' '+a.nombre+'</b> · '+dest
+          +'<br><span style="color:var(--gray)">'+a.fecha+' · '+a.por+dias+'</span></div>'
           +'<span style="color:var(--gray);flex-shrink:0">'+a.num+'</span></div>';
       }).join('')
       +'</div></div>';
@@ -7997,22 +8001,156 @@ function _cabFiltroLimpiar(ctx){
 // ── DAR DE BAJA ──
 // Razon OBLIGATORIA + foto opcional (comprobante). Producto: descuenta del lado
 // elegido o vacia el abierto. Activo: pasa a estado DADO DE BAJA (no se borra).
-function _cabAbrirRapido(i,modo){
+function _cabDestinosDef(){
+  return [
+    {id:'CABINA_1', nom:'Cabina 1'},
+    {id:'CABINA_2', nom:'Cabina 2'},
+    {id:'CABINA_3', nom:'Cabina 3'},
+    {id:'LOCAL', nom:'Local'}
+  ];
+}
+function _cabNormDestino(raw){
+  var t=String(raw||'').trim().toUpperCase()
+    .replace(/[ÁÀ]/g,'A').replace(/[ÉÈ]/g,'E').replace(/[ÍÌ]/g,'I').replace(/[ÓÒ]/g,'O').replace(/[ÚÙÜ]/g,'U').replace(/Ñ/g,'N')
+    .replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  if(t==='CABINA_1'||t==='CABINA1'||t==='C1') return 'CABINA_1';
+  if(t==='CABINA_2'||t==='CABINA2'||t==='C2') return 'CABINA_2';
+  if(t==='CABINA_3'||t==='CABINA3'||t==='C3') return 'CABINA_3';
+  if(t==='LOCAL'||t==='GENERAL') return 'LOCAL';
+  return '';
+}
+function _cabEtiquetaDestino(id){
+  var d=_cabDestinosDef().filter(function(x){return x.id===id;})[0];
+  return d?d.nom:'Sin destino';
+}
+function _cabAbiertosMap(p){
+  var src=(p&&p.abiertosDestino)||{};
+  var o={CABINA_1:0,CABINA_2:0,CABINA_3:0,LOCAL:0};
+  _cabDestinosDef().forEach(function(d){ o[d.id]=Math.max(0, parseInt(src[d.id],10)||0); });
+  var sum=o.CABINA_1+o.CABINA_2+o.CABINA_3+o.LOCAL;
+  var ab=parseInt(p&&p.abierto,10)||0;
+  o.sinDestino=(p&&p.sinDestino!=null&&p.sinDestino!=='')?Math.max(0, parseInt(p.sinDestino,10)||0):Math.max(0, ab-sum);
+  return o;
+}
+function _cabParseFecha(raw){
+  var t=String(raw||'').trim();
+  var m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if(!m){
+    var iso=Date.parse(t);
+    return isNaN(iso)?null:iso;
+  }
+  var a=+m[1], b=+m[2], y=+m[3], hh=+(m[4]||0), mm=+(m[5]||0);
+  var day=a, month=b;
+  if(a>12&&b<=12){ day=a; month=b; }
+  else if(b>12&&a<=12){ day=b; month=a; }
+  if(month<1||month>12||day<1||day>31) return null;
+  return Date.UTC(y, month-1, day, hh, mm);
+}
+function _cabEsApertura(a){ return /APERT|ABRIR/i.test((a&&a.accion)||''); }
+function _cabConDias(rows){
+  var items=(rows||[]).map(function(r,i){ return {r:r,i:i,t:_cabParseFecha(r.fecha)}; });
+  items.sort(function(a,b){ return (a.t||0)-(b.t||0) || a.i-b.i; });
+  var prev={}, out={};
+  items.forEach(function(it){
+    if(!_cabEsApertura(it.r)||it.t==null){ out[it.i]=null; return; }
+    var k=it.r.codigo||'';
+    var dias=null;
+    if(prev[k]!=null){
+      var da=new Date(prev[k]).toISOString().slice(0,10);
+      var db=new Date(it.t).toISOString().slice(0,10);
+      dias=Math.round((Date.parse(db)-Date.parse(da))/86400000);
+    }
+    out[it.i]=dias;
+    prev[k]=it.t;
+  });
+  return (rows||[]).map(function(r,i){
+    var c={};
+    for(var k in r) c[k]=r[k];
+    c.diasDesdeAnterior=(r.diasDesdeAnterior===0||r.diasDesdeAnterior)?r.diasDesdeAnterior:out[i];
+    if(r.diasDesdeAnterior==null) c.diasDesdeAnterior=out[i];
+    return c;
+  });
+}
+function _cabDiasTxt(dias){
+  if(dias==null||dias==='') return 'primera apertura';
+  dias=+dias;
+  if(dias===0) return 'mismo día que la anterior';
+  if(dias===1) return '1 día desde la anterior';
+  return dias+' días desde la anterior';
+}
+function _cabDestinoResumen(p){
+  if(!p) return '';
+  var map=_cabAbiertosMap(p);
+  var hay=(p.abierto||0)>0||map.CABINA_1+map.CABINA_2+map.CABINA_3+map.LOCAL>0;
+  var chips='';
+  if(hay){
+    chips='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'
+      +_cabDestinosDef().map(function(d){
+        return '<span style="font-size:0.72rem;font-weight:800;color:var(--navy);background:var(--blue-l);padding:6px 10px;border-radius:10px">'+d.nom+' '+map[d.id]+'</span>';
+      }).join('')
+      +(map.sinDestino>0?'<span style="font-size:0.72rem;font-weight:800;color:var(--gray);background:#F4F5F7;padding:6px 10px;border-radius:10px">Sin destino '+map.sinDestino+'</span>':'')
+      +'</div>';
+  }
+  var hist=_cabConDias((window._cab&&window._cab.aperturas||[]).filter(function(a){return a.codigo===p.codigo;}));
+  var abiertas=hist.filter(function(a){return _cabEsApertura(a)||/ACAB|TERMIN/i.test(a.accion||'');});
+  if(!abiertas.length) return chips;
+  var lista=abiertas.slice().reverse().slice(0,8).map(function(a){
+    var dest=_cabEtiquetaDestino(_cabNormDestino(a.destino));
+    var extra=_cabEsApertura(a)?(' · '+_cabDiasTxt(a.diasDesdeAnterior)):'';
+    return '<div style="padding:4px 0;border-top:1px solid var(--cream-d)">'
+      +'<b style="color:var(--navy)">'+(_cabEsApertura(a)?'🍾':'✔')+' '+dest+'</b>'
+      +' · '+(a.fecha||'')+' · '+(a.por||'')+extra+'</div>';
+  }).join('');
+  return chips+'<div style="margin-top:6px;font-size:0.62rem;color:var(--gray)">'+lista+'</div>';
+}
+function _cabAbrirPanel(i, modo, sel){
   var p=(window._cab&&window._cab.inv||[])[i]; if(!p) return;
-  var msg = modo==='abrir'
-    ? '🍾 ABRIR ENVASE\n\n'+p.producto+'\nSe abre 1 envase de '+p.contenido+p.unidad+'.\nCerrados en local: '+p.cerrados+' → '+(p.cerrados-1)+'\n\n¿Confirmar?'
-    : '✔ SE ACABÓ EL ABIERTO\n\n'+p.producto+'\nSale 1 envase abierto del inventario.\nAbiertos: '+p.abierto+' → '+(p.abierto-1)+'\n\n¿Confirmar?';
-  if(!confirm(msg)) return;
+  var box=document.getElementById('cab-dest-'+i); if(!box) return;
+  if(!sel && box.dataset.modo===modo && box.innerHTML && !box.dataset.sel){ box.innerHTML=''; box.dataset.modo=''; return; }
+  var map=_cabAbiertosMap(p);
+  var titulo=modo==='abrir'?'¿A dónde va el envase?':'¿Dónde se acabó?';
+  var elegido=sel||box.dataset.sel||'';
+  if(sel) box.dataset.sel=sel;
+  box.dataset.modo=modo;
+  var btns=_cabDestinosDef().map(function(d){
+    var n=map[d.id]||0;
+    var off=false;
+    if(modo!=='abrir' && n<=0 && map.sinDestino<=0) off=true;
+    var on=elegido===d.id;
+    var extra=modo==='abrir'?'':(' · '+n);
+    var bg=off?'#F4F5F7':(on?'var(--navy)':'white');
+    var col=off?'#B0B6C0':(on?'white':'var(--navy)');
+    var click=off?'':('onclick="_cabAbrirPanel('+i+',\''+modo+'\',\''+d.id+'\')"');
+    return '<button type="button" '+click+' '+(off?'disabled':'')+' style="min-height:64px;padding:14px 8px;background:'+bg+';color:'+col+';border:2px solid '+(off?'#E4E6EC':'var(--navy)')+';border-radius:14px;font-size:1rem;font-weight:800;cursor:'+(off?'default':'pointer')+'">'
+      +d.nom+extra+'</button>';
+  }).join('');
+  var puede=!!_cabNormDestino(elegido);
+  box.innerHTML='<div style="margin-top:8px;padding:12px;background:var(--blue-ll);border-radius:14px">'
+    +'<div style="font-size:0.9rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+titulo+'</div>'
+    +'<div style="font-size:0.72rem;color:var(--gray);margin-bottom:8px">'+p.producto+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+btns+'</div>'
+    +(map.sinDestino>0&&modo!=='abrir'?'<div style="font-size:0.66rem;color:var(--gray);margin-top:8px">'+map.sinDestino+' abierto'+(map.sinDestino===1?'':'s')+' de antes, sin destino. Elige dónde estaba.</div>':'')
+    +'<button type="button" '+(puede?'onclick="_cabDestinoConfirmar('+i+',\''+modo+'\',\''+elegido+'\')"':'disabled')+' style="margin-top:10px;width:100%;min-height:56px;padding:14px;background:'+(puede?'var(--navy)':'#C5CED8')+';color:white;border:none;border-radius:14px;font-size:1.05rem;font-weight:800;cursor:'+(puede?'pointer':'default')+'">Confirmar</button>'
+    +'<button type="button" onclick="var b=document.getElementById(\'cab-dest-'+i+'\');if(b){b.innerHTML=\'\';b.dataset.modo=\'\';b.dataset.sel=\'\';}" style="margin-top:8px;width:100%;min-height:44px;padding:10px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'</div>';
+}
+function _cabDestinoConfirmar(i, modo, dest){
+  var p=(window._cab&&window._cab.inv||[])[i]; if(!p) return;
+  dest=_cabNormDestino(dest);
+  if(!dest){ toast('Elige el destino','#B86B6B'); return; }
+  if(window._cabDestBusy) return;
+  window._cabDestBusy=true;
   toast('⏳ Guardando...','var(--blue)');
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'cabinaAbrirRapido',codigo:p.codigo,modo:modo,usuario:CU?CU.name:'—',token:window._token||''})})
+    body:JSON.stringify({accion:'cabinaAbrirRapido',codigo:p.codigo,modo:modo,destino:dest,usuario:CU?CU.name:'—',token:window._token||''})})
   .then(function(r){return r.json();})
   .then(function(d){
+    window._cabDestBusy=false;
     if(!d.ok){toast('❌ '+(d.error||'Error'),'#B86B6B');return;}
-    toast(modo==='abrir'?('🍾 Abierto — registrado '+d.num):('✔ Registrado '+d.num),'var(--green)');
+    toast(modo==='abrir'?('🍾 Abierto en '+_cabEtiquetaDestino(dest)+' — '+d.num):('✔ Se acabó en '+_cabEtiquetaDestino(dest)+' — '+d.num),'var(--green)');
     renderCabina(document.getElementById('content'),true);
   })
-  .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+  .catch(function(e){window._cabDestBusy=false; toast('❌ '+e.message,'#B86B6B');});
 }
 function _cabBajaFormProd(i){
   var p=(window._cab.inv||[])[i];

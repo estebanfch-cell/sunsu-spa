@@ -3584,6 +3584,11 @@ function doGet(e) {
         var wInvEns = ssGB.getSheetByName('🧴 INVENTARIO CABINA');
         if (wInvEns) _cabInvHeaders_(wInvEns);
       } catch(eEns) {}
+      var mapaAbGB = {CABINA_1:0, CABINA_2:0, CABINA_3:0, LOCAL:0};
+      try {
+        var wMapAb = ssGB.getSheetByName('🧴 INVENTARIO CABINA');
+        if (wMapAb) mapaAbGB = _cabMapaAbiertos_(wMapAb);
+      } catch(eMapAb) {}
       var fotosGB = {};
       try { fotosGB = JSON.parse(PropertiesService.getScriptProperties().getProperty('CABINA_FOTOS')||'{}'); } catch(eFG) {}
       var invGB = lee('🧴 INVENTARIO CABINA').map(function(r,i){
@@ -3596,7 +3601,9 @@ function doGet(e) {
           ubicacionLocal:(r[18]||'').toString().trim(), ubicacionAbierto:(r[19]||'').toString().trim(),
           maxAbiertos:Math.max(1, parseInt(r[20])||1),
           esterilizable:_cabNormEsterilizable_(r[21]),
-          foto: fotosGB[(r[0]||'').toString().trim()] ? 'https://lh3.googleusercontent.com/d/'+fotosGB[(r[0]||'').toString().trim()] : ''};
+          foto: fotosGB[(r[0]||'').toString().trim()] ? 'https://lh3.googleusercontent.com/d/'+fotosGB[(r[0]||'').toString().trim()] : '',
+          abiertosDestino:_cabCountsDe_(r, mapaAbGB),
+          sinDestino: Math.max(0, (parseFloat(r[8])||0) - ((parseFloat(r[mapaAbGB.CABINA_1-1])||0)+(parseFloat(r[mapaAbGB.CABINA_2-1])||0)+(parseFloat(r[mapaAbGB.CABINA_3-1])||0)+(parseFloat(r[mapaAbGB.LOCAL-1])||0)))};
       }).filter(function(x){return x.codigo||x.producto;});
       var actGB = lee('🛠 ACTIVOS').map(function(r,i){
         // Migracion de LECTURA transparente: filas viejas traen la cantidad como
@@ -3696,11 +3703,19 @@ function doGet(e) {
       var apsGB = [];
       try {
         var wApG = ssGB.getSheetByName('🍾 APERTURAS');
+        if (wApG) wApG = _cabApSheet_(ssGB);
         if (wApG && wApG.getLastRow() > 1) {
-          var iniAp = Math.max(2, wApG.getLastRow()-29);
-          apsGB = wApG.getRange(iniAp,1,wApG.getLastRow()-iniAp+1,7).getValues().map(function(r){
+          var lastCAp = Math.max(wApG.getLastColumn(), 7);
+          var headsApG = wApG.getRange(1,1,1,lastCAp).getValues()[0];
+          var colDestAp = -1;
+          for (var hcAp = 0; hcAp < headsApG.length; hcAp++) {
+            if ((headsApG[hcAp]||'').toString().toUpperCase().indexOf('DESTINO') >= 0) colDestAp = hcAp;
+          }
+          var iniAp = wApG.getLastRow() > 501 ? wApG.getLastRow()-499 : 2;
+          apsGB = wApG.getRange(iniAp,1,wApG.getLastRow()-iniAp+1,lastCAp).getValues().map(function(r){
             return {num:(r[0]||'').toString(), fecha:(r[1]||'').toString(), accion:(r[2]||'').toString(), codigo:(r[3]||'').toString(),
-              nombre:(r[4]||'').toString(), cantidad:(r[5]||'').toString(), por:(r[6]||'').toString()};
+              nombre:(r[4]||'').toString(), cantidad:(r[5]||'').toString(), por:(r[6]||'').toString(),
+              destino: colDestAp>=0 ? (r[colDestAp]||'').toString() : ''};
           }).filter(function(x){return x.num;}).reverse();
         }
       } catch(eApG) {}
@@ -7282,7 +7297,7 @@ function doPost(e) {
         (anchos||[]).forEach(function(a,i){ if(a) w.setColumnWidth(i+1,a); });
         return w;
       };
-      var wInv = mk('🧴 INVENTARIO CABINA', ['CÓDIGO','PRODUCTO','PROVEEDOR','CONTENIDO ENVASE','UNIDAD','COSTO ENVASE','COSTO POR UNIDAD','ENVASES CERRADOS','ABIERTO: RESTANTE','STOCK TOTAL','MÍNIMO (envases)','NOTAS','ACTIVO','SKU CATÁLOGO','BODEGA: CERRADOS','CÓDIGO BARRAS','PRODUCTO BASE','UBICACIÓN','UBICACIÓN LOCAL','UBICACIÓN ABIERTO','MÁX ABIERTOS','ESTERILIZABLE'], [70,190,130,110,70,100,110,120,120,90,110,160,70,110,130,120,110,90,110,110,100,120]);
+      var wInv = mk('🧴 INVENTARIO CABINA', ['CÓDIGO','PRODUCTO','PROVEEDOR','CONTENIDO ENVASE','UNIDAD','COSTO ENVASE','COSTO POR UNIDAD','ENVASES CERRADOS','ABIERTO: RESTANTE','STOCK TOTAL','MÍNIMO (envases)','NOTAS','ACTIVO','SKU CATÁLOGO','BODEGA: CERRADOS','CÓDIGO BARRAS','PRODUCTO BASE','UBICACIÓN','UBICACIÓN LOCAL','UBICACIÓN ABIERTO','MÁX ABIERTOS','ESTERILIZABLE','ABIERTOS CABINA 1','ABIERTOS CABINA 2','ABIERTOS CABINA 3','ABIERTOS LOCAL'], [70,190,130,110,70,100,110,120,120,90,110,160,70,110,130,120,110,90,110,110,100,120,130,130,130,120]);
       var wAct = mk('🛠 ACTIVOS', ['CÓDIGO','ACTIVO','CATEGORÍA','CANTIDAD','UBICACIÓN','ESTADO','FECHA COMPRA','COSTO','NOTAS','LUGAR','CÓDIGO BARRAS','PROVEEDOR','CANTIDAD BODEGA','UNIDAD'], [70,190,120,80,120,100,110,90,180,90,120,130,120,80]);
       var wPro = mk('📋 PROTOCOLOS', ['SKU','FACIAL','VERSIÓN','VIGENTE','MANO DE OBRA $','VIDEO','NOTAS','ACTUALIZADO','POR'], [90,190,70,70,110,180,200,130,110]);
       var wPas = mk('📝 PROTOCOLO PASOS', ['SKU','VERSIÓN','PASO','DESCRIPCIÓN','PRODUCTO COD','CANTIDAD','UNIDAD','MINUTOS'], [90,70,50,300,110,80,70,80]);
@@ -7823,14 +7838,19 @@ function doPost(e) {
     }
 
     // ── CABINA: ACCESO RÁPIDO (todas, no solo admin) — abrir un envase cerrado
-    // del local, o marcar que el abierto se acabó. Cada evento queda en la hoja
-    // 🍾 APERTURAS con quién y cuándo. ──
+    // del local, o marcar que el abierto se acabó. El destino es obligatorio:
+    // Cabina 1, Cabina 2, Cabina 3 o Local. Queda en 🍾 APERTURAS (columna DESTINO,
+    // al final; las filas viejas siguen vacías) y en el conteo de abiertos por sala.
+    // H, I, J y O no se reordenan. ──
     if (body.accion === 'cabinaAbrirRapido') {
       var rolAR = _rolDeToken_(PropertiesService.getScriptProperties(), body.token||'');
       if (!rolAR) return respJson({error:'Sesión inválida — vuelve a entrar'});
+      var destAR = _cabNormDestino_(body.destino);
+      if (!destAR) return respJson({error:'Elige el destino (Cabina 1, Cabina 2, Cabina 3 o Local)'});
       var ssAR = _cabinaSS_(); if (!ssAR) return respJson({error:'Estructura no creada'});
       var wAR = ssAR.getSheetByName('🧴 INVENTARIO CABINA');
       _cabInvHeaders_(wAR);
+      var mapaAR = _cabMapaAbiertos_(wAR);
       var codAR = (body.codigo||'').toString().trim();
       var dAR = wAR.getDataRange().getValues();
       var filaAR = 0;
@@ -7845,31 +7865,41 @@ function doPost(e) {
       var locAR = parseFloat(rAR[7])||0;
       var abAR = parseFloat(rAR[8])||0;
       var bodAR = parseFloat(rAR[14])||0;
+      var countsAR = _cabCountsDe_(rAR, mapaAR);
+      var sumAR = countsAR.CABINA_1+countsAR.CABINA_2+countsAR.CABINA_3+countsAR.LOCAL;
+      var legadoAR = Math.max(0, abAR-sumAR);
       var accAR = '', cantAR = '';
-      // La col ABIERTO cuenta ENVASES abiertos (no ml): abrir = 1 cerrado pasa a
-      // 1 abierto; se acabo = 1 abierto entero desaparece del inventario.
+      // La col I (ABIERTO) sigue siendo el total de envases abiertos.
+      // Las columnas nuevas parten ese total por destino. Lo que ya estaba
+      // abierto, sin destino, no se mueve de columna: se puede terminar eligiendo sala.
       if (body.modo === 'abrir') {
         if (locAR <= 0) return respJson({error:'No hay envases cerrados en el local'});
-        locAR -= 1; abAR += 1;
+        locAR -= 1; abAR += 1; countsAR[destAR] += 1;
         wAR.getRange(filaAR,8).setValue(locAR);
         wAR.getRange(filaAR,9).setValue(abAR);
         accAR = 'APERTURA'; cantAR = '1 envase ('+contAR+uniAR+')';
       } else {
         if (abAR <= 0) return respJson({error:'No hay envase abierto'});
+        if (countsAR[destAR] <= 0 && legadoAR <= 0) return respJson({error:'No hay envase abierto en '+_cabEtiquetaDestino_(destAR)});
+        if (countsAR[destAR] > 0) countsAR[destAR] -= 1;
         abAR -= 1;
         wAR.getRange(filaAR,9).setValue(abAR);
         accAR = 'SE ACABO'; cantAR = '1 envase ('+contAR+uniAR+')';
       }
       wAR.getRange(filaAR,10).setValue((locAR+bodAR+abAR)*contAR);
-      var wAp = ssAR.getSheetByName('🍾 APERTURAS');
-      if (!wAp) {
-        wAp = ssAR.insertSheet('🍾 APERTURAS');
-        wAp.getRange(1,1,1,7).setValues([['NUM','FECHA','ACCIÓN','CÓDIGO','PRODUCTO','CANTIDAD','POR']]).setFontWeight('bold');
-      }
+      _cabGuardarAbiertos_(wAR, filaAR, countsAR, mapaAR);
+      var wAp = _cabApSheet_(ssAR);
       var numAp = _cabNext_(wAp, 'AP-');
-      wAp.appendRow([numAp, Utilities.formatDate(new Date(),'America/Guayaquil','dd/MM/yyyy HH:mm'), accAR, codAR, nomAR, cantAR, body.usuario||'']);
-      try { logAccion_(ss, accAR+' '+numAp, nomAR+' — '+cantAR, body.usuario); } catch(eLAr) {}
-      return respJson({ok:true, num:numAp, abierto:abAR, cerrados:locAR});
+      var fechaAp = Utilities.formatDate(new Date(),'America/Guayaquil','dd/MM/yyyy HH:mm');
+      wAp.appendRow([numAp, fechaAp, accAR, codAR, nomAR, cantAR, body.usuario||'']);
+      var colDestApW = 0;
+      var headsApW = wAp.getRange(1,1,1,Math.max(wAp.getLastColumn(),8)).getValues()[0];
+      for (var cAp = 0; cAp < headsApW.length; cAp++) {
+        if ((headsApW[cAp]||'').toString().toUpperCase().indexOf('DESTINO') >= 0) colDestApW = cAp+1;
+      }
+      if (colDestApW) wAp.getRange(wAp.getLastRow(), colDestApW).setValue(destAR);
+      try { logAccion_(ss, accAR+' '+numAp, nomAR+' — '+cantAR+' — '+_cabEtiquetaDestino_(destAR), body.usuario); } catch(eLAr) {}
+      return respJson({ok:true, num:numAp, abierto:abAR, cerrados:locAR, destino:destAR, abiertosDestino:countsAR});
     }
 
     // ── CABINA: traspaso de envases entre BODEGA CENTRAL y LOCAL SUNSU ──
@@ -10556,6 +10586,93 @@ function _cabBajasSheet_(ssCb) {
   }
   return ws;
 }
+var CAB_ABIERTOS_COLS_ = [
+  {id:'CABINA_1', col:23, head:'ABIERTOS CABINA 1'},
+  {id:'CABINA_2', col:24, head:'ABIERTOS CABINA 2'},
+  {id:'CABINA_3', col:25, head:'ABIERTOS CABINA 3'},
+  {id:'LOCAL', col:26, head:'ABIERTOS LOCAL'}
+];
+function _cabNormDestino_(raw) {
+  var t = (raw||'').toString().trim().toUpperCase()
+    .replace(/Á/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U').replace(/Ü/g,'U').replace(/Ñ/g,'N')
+    .replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  if (t==='CABINA_1'||t==='CABINA1'||t==='C1') return 'CABINA_1';
+  if (t==='CABINA_2'||t==='CABINA2'||t==='C2') return 'CABINA_2';
+  if (t==='CABINA_3'||t==='CABINA3'||t==='C3') return 'CABINA_3';
+  if (t==='LOCAL'||t==='GENERAL') return 'LOCAL';
+  return '';
+}
+function _cabEtiquetaDestino_(id) {
+  if (id==='CABINA_1') return 'Cabina 1';
+  if (id==='CABINA_2') return 'Cabina 2';
+  if (id==='CABINA_3') return 'Cabina 3';
+  if (id==='LOCAL') return 'Local';
+  return 'Sin destino';
+}
+// Asegura las cuatro columnas al final. No pisa un encabezado que ya diga otra cosa.
+function _cabMapaAbiertos_(ws) {
+  var last = Math.max(ws.getLastColumn(), 26);
+  var heads = ws.getRange(1,1,1,last).getValues()[0];
+  var map = {CABINA_1:0, CABINA_2:0, CABINA_3:0, LOCAL:0};
+  CAB_ABIERTOS_COLS_.forEach(function(def){
+    var col = 0;
+    for (var c = 0; c < heads.length; c++) {
+      if ((heads[c]||'').toString().trim().toUpperCase() === def.head.toUpperCase()) col = c+1;
+    }
+    if (!col) {
+      var actual = (heads[def.col-1]||'').toString().trim();
+      if (!actual) {
+        ws.getRange(1, def.col).setValue(def.head).setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+        try { ws.setColumnWidth(def.col, 130); } catch(eAn) {}
+        heads[def.col-1] = def.head;
+        col = def.col;
+      }
+    }
+    map[def.id] = col;
+  });
+  return map;
+}
+function _cabCountsDe_(row, mapa) {
+  var o = {CABINA_1:0, CABINA_2:0, CABINA_3:0, LOCAL:0};
+  if (!mapa) return o;
+  CAB_ABIERTOS_COLS_.forEach(function(def){
+    var col = mapa[def.id]||0;
+    if (col > 0) o[def.id] = parseFloat(row[col-1])||0;
+  });
+  return o;
+}
+function _cabGuardarAbiertos_(ws, fila, counts, mapa) {
+  CAB_ABIERTOS_COLS_.forEach(function(def){
+    var col = (mapa&&mapa[def.id])||0;
+    if (col > 0) ws.getRange(fila, col).setValue(counts[def.id]||0);
+  });
+}
+// Columna DESTINO al final de 🍾 APERTURAS. No mueve NUM..POR. Filas viejas quedan vacías.
+function _cabApSheet_(ssCb) {
+  var ws = ssCb.getSheetByName('🍾 APERTURAS');
+  if (!ws) {
+    ws = ssCb.insertSheet('🍾 APERTURAS');
+    ws.getRange(1,1,1,8).setValues([['NUM','FECHA','ACCIÓN','CÓDIGO','PRODUCTO','CANTIDAD','POR','DESTINO']])
+      .setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+    ws.setFrozenRows(1);
+    try { ws.setColumnWidth(8, 120); } catch(eApN) {}
+    return ws;
+  }
+  var last = Math.max(ws.getLastColumn(), 1);
+  var heads = ws.getRange(1,1,1,last).getValues()[0];
+  var tiene = false;
+  for (var i = 0; i < heads.length; i++) {
+    if ((heads[i]||'').toString().toUpperCase().indexOf('DESTINO') >= 0) tiene = true;
+  }
+  if (!tiene) {
+    var col = 8;
+    if (last >= 8 && (heads[7]||'').toString().trim()) col = last + 1;
+    else if (last > 8 && !(heads[7]||'').toString().trim()) col = 8;
+    ws.getRange(1, col).setValue('DESTINO').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+    try { ws.setColumnWidth(col, 120); } catch(eApC) {}
+  }
+  return ws;
+}
 function _cabInvHeaders_(ws) {
   // Estructuras creadas antes: asegurar las columnas M (ACTIVO) y N (SKU CATALOGO)
   try {
@@ -10572,6 +10689,7 @@ function _cabInvHeaders_(ws) {
       ws.getRange(1,22).setValue('ESTERILIZABLE').setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
       try { ws.setColumnWidth(22, 120); } catch(eW22) {}
     }
+    _cabMapaAbiertos_(ws);
   } catch(eIH) {}
 }
 function _cabActHeaders_(ws) {
