@@ -6,18 +6,24 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.10.26.01 escalones de paquetes -->
+<!-- v2026.11.13.01 venta cabina mascaras -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
 // APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.10.26.01';
+var SUNSU_APP_VERSION='v2026.11.13.01';
 var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
+// Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
+var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
+function _esVentaCabinaSku(sku){
+  var s=String(sku||'').toUpperCase().replace(/^SUNSU-/,'');
+  return !!SKUS_VENTA_CABINA[s];
+}
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261026.01';
+  var v='20261113.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -1552,14 +1558,15 @@ function renderTicket(c){
         ${pv.prods.map(p=>{
           const q=T.productos[p.sku]||0;
           const stk=window._stockMap&&window._stockMap[p.sku]!==undefined?window._stockMap[p.sku]:null;
-          const stkColor=stk===null?null:stk===0?'#C00':stk<=3?'#C4943A':null;
-          const stkBg=stk===null?null:stk===0?'#FEE2E2':stk<=3?'#FFF9E6':null;
-          const stkLabel=stk===null?''
-            :stk===0?'sin stock'
-            :stk<=3?stk+' uds'
+          const stkVis=_esVentaCabinaSku(p.sku)?null:stk;
+          const stkColor=stkVis===null?null:stkVis===0?'#C00':stkVis<=3?'#C4943A':null;
+          const stkBg=stkVis===null?null:stkVis===0?'#FEE2E2':stkVis<=3?'#FFF9E6':null;
+          const stkLabel=stkVis===null?''
+            :stkVis===0?'sin stock'
+            :stkVis<=3?stkVis+' uds'
             :'';
           const stkBadge=stkLabel?`<span style="font-size:0.55rem;font-weight:700;color:${stkColor};background:${stkBg};padding:1px 5px;border-radius:4px;display:block;margin-top:2px">${stkLabel}</span>`
-            :stk!==null?`<span style="font-size:0.55rem;color:#bbb;display:block;margin-top:1px">${stk} uds</span>`:'';
+            :stkVis!==null?`<span style="font-size:0.55rem;color:#bbb;display:block;margin-top:1px">${stkVis} uds</span>`:'';
           return `<div class="prod-row ${q>0?'has-qty':''}" id="pr-${p.sku}">
             <div style="display:flex;flex-direction:column;align-items:flex-start">
               <span class="prod-badge" style="background:${pv.colorL};color:${pv.badge}">${p.sku}</span>
@@ -11170,16 +11177,20 @@ function cargarBorradorOC(){
   .then(function(d){
     if(d.error){box.innerHTML='<div class="card" style="color:#B86B6B">❌ '+d.error+'</div>';return;}
     var itemsB=(d.items||[]).map(function(it){it.cant=it.sugerido;return it;});
-    window._ocBorrador={prov:p,qLabel:d.qLabel,items:itemsB,
+    var esCabOC=function(it){return !!(it&&(it.ventaCabina||_esVentaCabinaSku(it.sku)));};
+    var itemsConsig=itemsB.filter(function(it){return !esCabOC(it);});
+    window._ocBorrador={prov:p,qLabel:d.qLabel,items:itemsConsig,
       // Bloque de facturación EDITABLE: cantidades vendidas y precios (los productos
-      // propios de Sunsu que no son a consignación se quitan aquí con ✕)
-      fact:itemsB.filter(function(it){return (it.vendido||0)>0;})
+      // propios de Sunsu que no son a consignación se quitan aquí con ✕).
+      // ML-009…014 no entran: se venden de cabina.
+      fact:itemsConsig.filter(function(it){return (it.vendido||0)>0;})
         .map(function(it){return {sku:it.sku,nombre:it.nombre,vendido:it.vendido,compra:it.compra};}),
       // Stock al corte que VERÁ el proveedor: lista INDEPENDIENTE con TODOS los
       // activos — quitar del restock o de facturación NO lo afecta. Cada uno con
       // su tipo: CONSIG (consignación) o SUNSU (stock propio), toggleable.
-      stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
-      // Catálogo congelado del proveedor (para agregar compra directa)
+      stockV:itemsConsig.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
+      // Catálogo congelado del proveedor (para agregar compra directa).
+      // Las máscaras de cabina pueden seguir aquí; no van a facturación ni restock.
       catalogo:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,compra:it.compra||0};}),
       // Compra DIRECTA: se paga en la misma factura y, al recibir, entra a Cabina
       // (no al inventario de ventas).

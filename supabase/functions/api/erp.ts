@@ -7,7 +7,7 @@ import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguien
 import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
 import { backfillSO, tomarNumero } from "./series.ts";
-import { familiaConsignacion, familiaDeFila, quincenaActual } from "./ventas.ts";
+import { familiaConsignacion, familiaDeFila, quincenaActual, vendeDesdeCabina, SKUS_VENTA_CABINA } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -306,11 +306,14 @@ function lineNet(cant: number, precio: number, desc = 0): number {
   return round2(cant * precio * (1 - (desc || 0) / 100));
 }
 
-function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: string, actor: string, now: Date): Step[] {
+function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: string, actor: string, now: Date, porId?: Map<string, Row>): Step[] {
   if (s(destino.tipo) !== "cabina") return [];
   const q = quincenaActual(now);
   const steps: Step[] = [];
   for (const ln of lineas) {
+    const prod = porId?.get(String(ln.producto_id));
+    // Venta desde Cabina (ML-009…014 y bodega_origen_venta = Cabina) no es consignación.
+    if (vendeDesdeCabina(prod, s(ln.sku))) continue;
     const fam = familiaConsignacion(s(ln.sku));
     const cant = n(ln.cantidad);
     if (!fam || !(cant > 0)) continue;
@@ -395,15 +398,21 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     if (uso !== "cabina" && uso !== "venta" && uso !== "ambos") return { error: "El uso es obligatorio: cabina, venta o ambos" };
     if (!s(body.sku) || !s(body.nombre)) return { error: "SKU y nombre son obligatorios" };
     const sku = s(body.sku).toUpperCase().replace(/^SUNSU-/, "");
-    const prev = porSku.get(skuCode(sku));
+    const code = skuCode(sku);
+    const esMascaraCabina = (SKUS_VENTA_CABINA as readonly string[]).includes(code);
+    const prev = porSku.get(code);
     const pid = prev ? String(prev.id) : id();
+    // vender() rechaza uso cabina, y Cabina rechaza uso venta. Estas máscaras quedan en ambos.
+    const usoFinal = esMascaraCabina ? "ambos" : uso;
     const row: Row = {
       sku, nombre: s(body.nombre), marca: s(body.marca), categoria: s(body.categoria),
       clase: s(body.clase) || "producto", unidad: s(body.unidad) || "u",
       unidad_consumo: s(body.unidad_consumo), factor_consumo: n(body.factor_consumo) || 1,
-      uso, precio_venta: body.precio_venta == null ? null : n(body.precio_venta),
+      uso: usoFinal, precio_venta: body.precio_venta == null ? null : n(body.precio_venta),
       iva: body.iva !== false, activo: body.activo !== false,
     };
+    if (esMascaraCabina) row.bodega_origen_venta = BODEGA_CABINA;
+    else if (body.bodega_origen_venta != null) row.bodega_origen_venta = s(body.bodega_origen_venta) || null;
     if (s(body.foto_url)) row.foto_url = s(body.foto_url);
     if (body.sku_proveedor != null) row.sku_proveedor = s(body.sku_proveedor);
     if (body.linea != null) row.linea = s(body.linea);
@@ -635,9 +644,13 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       if (!p) return { error: "Producto no está en el catálogo: " + s(ln.sku || ln.producto_id) };
       const neto = lineNet(n(ln.cantidad), n(ln.precio), n(ln.descuento_pct));
       sub += neto;
+      let bodegaLinea = s(ln.bodega_id) || s(body.bodega_destino_id) || "";
+      if (vendeDesdeCabina(p) && (!bodegaLinea || bodegaLinea === String(venta?.id || "") || bodegaLinea === BODEGA_VENTA)) {
+        bodegaLinea = String(cabina?.id || BODEGA_CABINA);
+      }
       steps.push({ op: "upsert", table: "erp_oc_lineas", match: { id: s(ln.id) || id() }, row: {
         oc_id: ocId, producto_id: p.id, cantidad: n(ln.cantidad), precio: n(ln.precio), descuento_pct: n(ln.descuento_pct),
-        bodega_id: s(ln.bodega_id) || s(body.bodega_destino_id) || null, subtotal: neto, recibido: n(ln.recibido), plazo: s(ln.plazo), orden: i++,
+        bodega_id: bodegaLinea || null, subtotal: neto, recibido: n(ln.recibido), plazo: s(ln.plazo), orden: i++,
       } });
     }
     const iva = round2(sub * 0.15);
@@ -688,8 +701,9 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       const p = porId.get(String(ol.producto_id));
       if (!p) return { error: "Producto no existe" };
       let bodegaId = s(ln.bodega_id) || s(ol.bodega_id) || s(o.bodega_destino_id);
-      if (!bodegaId && s(p.uso) === "cabina") bodegaId = String(cabina?.id || "");
-      if (!bodegaId && s(p.uso) === "venta") bodegaId = String(venta?.id || "");
+      if (vendeDesdeCabina(p)) bodegaId = String(cabina?.id || BODEGA_CABINA);
+      if (!vendeDesdeCabina(p) && !bodegaId && s(p.uso) === "cabina") bodegaId = String(cabina?.id || "");
+      if (!vendeDesdeCabina(p) && !bodegaId && s(p.uso) === "venta") bodegaId = String(venta?.id || "");
       if (!bodegaId) return { error: `Elige bodega para ${s(p.sku)} (uso ambos)` };
       const b = bod.get(bodegaId);
       if (!b) return { error: "Bodega no existe" };
@@ -783,9 +797,12 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
         }
       }
     }
-    if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now));
+    if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now, porId));
     await applyPlan(db, actor, steps, now.toISOString());
-    const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => familiaConsignacion(s(ln.sku)));
+    const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => {
+      const p = porId.get(String(ln.producto_id));
+      return !vendeDesdeCabina(p, s(ln.sku)) && !!familiaConsignacion(s(ln.sku));
+    });
     return { ok: true, id: tid, numero, inmediata, consumo: !!consumo };
   }
   if (op === "trf_recibir") {
@@ -801,7 +818,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       steps.push({ op: "move", producto_id: String(ln.producto_id), bodega_id: String(t.destino_id), delta: n(ln.cantidad), tipo: "transferencia_in", doc_tipo: "transferencia", doc_id: String(t.id), lote: s(ln.lote), nota: s(t.numero) });
       paraConsumo.push({ producto_id: ln.producto_id, sku: s(p?.sku), cantidad: n(ln.cantidad), costo: p?.costo_promedio });
     }
-    if (bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, String(t.id), s(t.numero), actor, now));
+    if (bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, String(t.id), s(t.numero), actor, now, porId));
     await applyPlan(db, actor, steps, now.toISOString());
     return { ok: true };
   }
@@ -1029,9 +1046,11 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
     const neto = lineNet(cant, precio, n(ln.descuento_pct));
     sub += neto;
     const lid = id();
+    const desdeCab = !!(p && clase !== "servicio" && vendeDesdeCabina(p));
+    const bodegaLinea = clase === "servicio" ? cabina?.id : (desdeCab ? cabina?.id : venta.id);
     steps.push({ op: "upsert", table: "erp_ov_lineas", match: { id: lid }, row: {
       ov_id: ovId, producto_id: p?.id || null, sku: s(ln.sku || p?.sku), nombre: s(ln.nombre || p?.nombre),
-      cantidad: cant, precio, descuento_pct: n(ln.descuento_pct), subtotal: neto, clase, bodega_id: clase === "servicio" ? cabina?.id : venta.id,
+      cantidad: cant, precio, descuento_pct: n(ln.descuento_pct), subtotal: neto, clase, bodega_id: bodegaLinea,
     } });
     const lineaRef = s(ln.linea_ref) || s(ln.sku || p?.sku) || lid;
     if (clase === "servicio") {
@@ -1050,11 +1069,16 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
       }
       steps.push({ op: "upsert", table: "erp_tickets_procesados", match: { ticket_ref: ref, linea_ref: lineaRef }, row: { tipo: "servicio", estado: "ok" } });
     } else if (p && s(p.clase) !== "servicio") {
-      if (!usoCompatible(s(p.uso), "venta") && s(p.uso) !== "ambos") {
+      if (desdeCab && !cabina) return { error: "Falta la bodega Cabina. Aplica 0009_erp_permisos.sql." };
+      if (desdeCab && s(p.uso) === "venta") {
+        return { error: `${s(p.sku)} es de uso venta y Cabina no lo acepta. Aplica 0035_venta_cabina.sql (uso ambos).` };
+      }
+      if (!desdeCab && !usoCompatible(s(p.uso), "venta") && s(p.uso) !== "ambos") {
         return { error: `${s(p.sku)} es de uso ${s(p.uso)} y no se vende en Venta` };
       }
+      const bodegaMove = desdeCab ? String(cabina?.id) : String(venta.id);
       steps.push({
-        op: "move", producto_id: String(p.id), bodega_id: String(venta.id), delta: -cant,
+        op: "move", producto_id: String(p.id), bodega_id: bodegaMove, delta: -cant,
         tipo: "venta", doc_tipo: "ov", doc_id: ovId, ticket_ref: ref, aprobar_negativo: !!body.aprobar_negativo,
         nota: numero, legacy_ref: `tk:${ref}:${lineaRef}`,
       });

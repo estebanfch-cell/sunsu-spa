@@ -9,7 +9,7 @@ import { CORTE_VENTA, aplicarTrasCorte } from "./stock_corte.ts";
 import { siguienteCodigoGC } from "./handlers.ts";
 import { applyPlan, BODEGA_CABINA, BODEGA_CASA, BODEGA_VENTA, ErpError, LOCAL_ESQUINA, SEED_IDS, erpSeed, puedeTransferir, runErp, usoCompatible } from "./erp.ts";
 import { handle } from "./handlers.ts";
-import { numeroTicket, ordenarClientes, quincenaDe } from "./ventas.ts";
+import { numeroTicket, ordenarClientes, quincenaDe, vendeDesdeCabina } from "./ventas.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
@@ -542,10 +542,11 @@ describe("lugares, conteo y transferencias", () => {
       lineas: [{ producto_id: prod?.id, cantidad: 1 }],
     }, db, "Andrea");
     assert.match(String(no.error), /admin/i);
+    const cuando = new Date("2026-10-21T15:00:00Z");
     const si = await runErp("trf_enviar", {
       inmediata: true, _rol: "cosmetologa", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
       lineas: [{ producto_id: prod?.id, cantidad: 2 }],
-    }, db, "Andrea");
+    }, db, "Andrea", cuando);
     assert.equal(si.ok, true);
     assert.equal(si.consumo, true);
     assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === prod?.id && r.bodega_id === BODEGA_VENTA)?.cantidad, 2);
@@ -556,7 +557,7 @@ describe("lugares, conteo y transferencias", () => {
     assert.equal(cons.costo_unit, 8);
     const prov = (await db.all("erp_proveedores"))[0];
     await db.write("Emi", "erp_proveedores", "update", { id: prov.id }, { nombre: "Hebetronic" });
-    const per = await (await import("./ventas.ts")).borradorConsig(db, new Date("2026-10-21T15:00:00Z"), { proveedor_id: prov.id });
+    const per = await (await import("./ventas.ts")).borradorConsig(db, cuando, { proveedor_id: prov.id });
     const fila = (per.fact as Row[]).find((r) => r.sku === "HT-090");
     assert.equal(fila?.consumido, 2);
     assert.equal(fila?.subtotal, 16);
@@ -634,7 +635,114 @@ describe("lugares, conteo y transferencias", () => {
     assert.equal(skusProveedor({ nombre: "Vassari", familia: "BV" }, catalogo).some((p) => p.sku === "BV-002"), true);
     assert.equal(skusProveedor({ nombre: "Sunsu", familia: "SU" }, catalogo).some((p) => p.sku === "HT-091"), false);
   });
+
+  it("ML-013 se vende de Cabina y un producto de Venta no cambia", async () => {
+    assert.equal(vendeDesdeCabina({ sku: "ML-013", uso: "venta" }), true);
+    assert.equal(vendeDesdeCabina({ sku: "SUNSU-ML-009" }), true);
+    assert.equal(vendeDesdeCabina({ sku: "HT-002", uso: "venta" }), false);
+    assert.equal(vendeDesdeCabina({ sku: "XX-001", bodega_origen_venta: BODEGA_CABINA }), true);
+
+    const db = new MemoryDb(erpSeed());
+    const saved = await runErp("prod_save", {
+      sku: "ML-013", nombre: "Mascarilla Esthemax", uso: "cabina", precio_venta: 20, costo_promedio: 8,
+    }, db, "Emi");
+    assert.equal(saved.ok, true, String(saved.error));
+    const prod = (await db.all("erp_productos")).find((r) => r.sku === "ML-013");
+    assert.ok(prod);
+    assert.equal(prod?.uso, "ambos");
+    assert.equal(prod?.bodega_origen_venta, BODEGA_CABINA);
+    assert.equal(prod?.activo, true);
+    await db.write("Emi", "erp_stock", "insert", {}, {
+      producto_id: prod?.id, bodega_id: BODEGA_CABINA, sububicacion: "", lote: "", cantidad: 6,
+    });
+    await db.write("Emi", "erp_stock", "insert", {}, {
+      producto_id: prod?.id, bodega_id: BODEGA_VENTA, sububicacion: "", lote: "", cantidad: 4,
+    });
+    const ventaHt = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad;
+    const cabAmp = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina && r.bodega_id === BODEGA_CABINA)?.cantidad;
+
+    const venta = await runErp("ov_save", {
+      ticket_ref: "TK-ML13", nombre: "María",
+      lineas: [{ sku: "ML-013", cantidad: 2, precio: 20, clase: "producto" }],
+    }, db, "Andrea");
+    assert.equal(venta.ok, true, String(venta.error));
+    const stockDe = async (bodega: string) => (await db.all("erp_stock")).find((r) => r.producto_id === prod?.id && r.bodega_id === bodega)?.cantidad;
+    assert.equal(await stockDe(BODEGA_CABINA), 4);
+    assert.equal(await stockDe(BODEGA_VENTA), 4);
+    const movs = (await db.all("erp_movimientos")).filter((m) => m.producto_id === prod?.id && m.tipo === "venta");
+    assert.equal(movs.length, 1);
+    assert.equal(movs[0].bodega_id, BODEGA_CABINA);
+    assert.equal(movs[0].delta, -2);
+    assert.equal((await db.all("erp_movimientos")).some((m) => m.producto_id === prod?.id && m.tipo === "venta" && m.bodega_id === BODEGA_VENTA), false);
+    const linea = (await db.all("erp_ov_lineas")).find((r) => r.producto_id === prod?.id);
+    assert.equal(linea?.bodega_id, BODEGA_CABINA);
+    assert.equal((await db.all("erp_consignacion_consumo")).length, 0);
+
+    const normal = await runErp("ov_save", {
+      ticket_ref: "TK-HT", nombre: "Ana",
+      lineas: [{ sku: "HT-002", cantidad: 1, precio: 20, clase: "producto" }],
+    }, db, "Andrea");
+    assert.equal(normal.ok, true, String(normal.error));
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad, nCant(ventaHt) - 1);
+    assert.equal((await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.cabina && r.bodega_id === BODEGA_CABINA)?.cantidad, cabAmp);
+    assert.equal(await stockDe(BODEGA_VENTA), 4);
+    assert.equal(await stockDe(BODEGA_CABINA), 4);
+    const lineaHt = (await db.all("erp_ov_lineas")).find((r) => r.sku === "HT-002");
+    assert.equal(lineaHt?.bodega_id, BODEGA_VENTA);
+
+    const oc = await runErp("oc_save", {
+      proveedor_id: SEED_IDS.prov,
+      bodega_destino_id: BODEGA_VENTA,
+      lineas: [{ producto_id: prod?.id, cantidad: 3, precio: 8, bodega_id: BODEGA_VENTA }],
+    }, db, "Emi");
+    assert.equal(oc.ok, true, String(oc.error));
+    const lid = (await db.all("erp_oc_lineas")).find((r) => r.oc_id === oc.id);
+    assert.equal(lid?.bodega_id, BODEGA_CABINA);
+    const rec = await runErp("oc_recibir", {
+      oc_id: oc.id, lineas: [{ oc_linea_id: lid?.id, bodega_id: BODEGA_VENTA, cantidad: 3 }],
+    }, db, "Emi");
+    assert.equal(rec.ok, true, String(rec.error));
+    assert.equal(await stockDe(BODEGA_CABINA), 7);
+    assert.equal(await stockDe(BODEGA_VENTA), 4);
+    const recLinea = (await db.all("erp_recepcion_lineas")).find((r) => r.producto_id === prod?.id);
+    assert.equal(recLinea?.bodega_id, BODEGA_CABINA);
+    assert.equal((await db.all("erp_movimientos")).some((m) => m.producto_id === prod?.id && m.tipo === "recepcion" && m.bodega_id === BODEGA_VENTA), false);
+
+    const tr = await runErp("trf_enviar", {
+      inmediata: true, _rol: "admin", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA,
+      lineas: [{ producto_id: prod?.id, cantidad: 1 }],
+    }, db, "Emi");
+    assert.equal(tr.ok, true, String(tr.error));
+    assert.equal(tr.consumo, false);
+    assert.equal(await stockDe(BODEGA_VENTA), 3);
+    assert.equal(await stockDe(BODEGA_CABINA), 8);
+    assert.equal((await db.all("erp_consignacion_consumo")).some((r) => r.sku === "ML-013" || r.producto_id === prod?.id), false);
+
+    const tkMl = (await db.all("tickets")).find((t) => (t.orig as Row)?.ticket_ref === "TK-ML13");
+    assert.equal(tkMl?.ml_013, 2);
+    await db.write("Emi", "tickets", "insert", {}, {
+      timestamp: tkMl?.timestamp, ml_004: 3, orig: { "ML-004": 3 }, atendido_por: "Andrea",
+    });
+    const { borradorConsig } = await import("./ventas.ts");
+    const per = await borradorConsig(db, new Date(), { proveedor_id: SEED_IDS.prov, familia: "ML" });
+    assert.equal(per.ok, true, String(per.error));
+    assert.equal((per.fact as Row[]).some((r) => r.sku === "ML-004"), true);
+    assert.equal((per.fact as Row[]).some((r) => r.sku === "ML-013"), false);
+    assert.equal((per.restock as Row[]).some((r) => r.sku === "ML-013"), false);
+    assert.equal((per.items as Row[]).some((r) => r.sku === "ML-013"), false);
+
+    const sql = readFileSync(new URL("../../../docs/supabase/pending/0035_venta_cabina.sql", import.meta.url), "utf8");
+    assert.match(sql, /add column if not exists bodega_origen_venta/);
+    assert.match(sql, /22222222-2222-4222-8222-222222222222/);
+    assert.match(sql, /ML-013/);
+    assert.equal(/drop table/i.test(sql), false);
+    assert.equal(/delete from/i.test(sql), false);
+  });
 });
+
+function nCant(v: unknown): number {
+  return Number(v) || 0;
+}
 
 describe("sql erp", () => {
   it("0010b deja escribir el kardex y 0011 guarda la transacción", () => {
@@ -3064,13 +3172,13 @@ describe("escalón en el app en vivo", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
     assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
-    assert.match(html, /SUNSU_APP_VERSION='v2026.10.26.01'/);
-    assert.match(html, /var v='20261026.01'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.01'/);
+    assert.match(html, /var v='20261113.01'/);
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3178,8 +3286,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3257,8 +3365,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3308,8 +3416,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3342,8 +3450,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3389,8 +3497,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261104amp/);
-    assert.match(sw, /sunsu-beta-2026-11-04-AMP/);
+    assert.match(beta, /beta-screens\.js\?v=20261113cabv1/);
+    assert.match(sw, /sunsu-beta-2026-11-13-CABV1/);
   });
 });
 
