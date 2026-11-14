@@ -22,6 +22,7 @@ import "./conteo_api.ts";
 import { reimportarTickets } from "./lib.ts";
 import { jornadaDe, normalizarJibble, slotRotativo, type Horario } from "./horarios.ts";
 import { acceso, esPropio, evaluarBloqueo, lecturaEnVista, redactar, type SesLite } from "./permisos.ts";
+import { conDiasDesdeApertura, normDestinoCabina } from "./aperturas.ts";
 import type { Row } from "./domain.ts";
 
 const andrea: SesLite = { rol: "cosmetologa", name: "Andrea Robles", short: "Andrea", uid: "andrea" };
@@ -3277,13 +3278,13 @@ describe("escalón en el app en vivo", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
     assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
-    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.02'/);
-    assert.match(html, /var v='20261113.02'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.03'/);
+    assert.match(html, /var v='20261113.03'/);
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3391,8 +3392,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3470,8 +3471,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3521,8 +3522,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3555,8 +3556,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3602,8 +3603,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261113fac/);
-    assert.match(sw, /sunsu-beta-2026-11-13-FAC/);
+    assert.match(beta, /beta-screens\.js\?v=20261113ape/);
+    assert.match(sw, /sunsu-beta-2026-11-13-APE/);
   });
 });
 
@@ -4240,5 +4241,118 @@ describe("códigos GC por año", () => {
     assert.equal(siguienteCodigoGC(["26-160", "26-161", "25-400"], "26"), "26-162");
     assert.equal(siguienteCodigoGC(["26-160", "26-300"], "27"), "27-001");
     assert.equal(siguienteCodigoGC(["27-009", "TEST-27-050"], "27"), "27-010");
+  });
+});
+
+describe("apertura de cabina con destino", () => {
+  it("normaliza el destino y cuenta los días desde la apertura anterior del mismo producto", () => {
+    assert.equal(normDestinoCabina("Cabina 2"), "CABINA_2");
+    assert.equal(normDestinoCabina("local"), "LOCAL");
+    assert.equal(normDestinoCabina("bodega"), "");
+    const rows = conDiasDesdeApertura([
+      { codigo: "INV-014", accion: "APERTURA", fecha: "01/11/2026 10:00", destino: "" },
+      { codigo: "INV-014", accion: "APERTURA", fecha: "13/11/2026 10:00", destino: "CABINA_1" },
+      { codigo: "INV-014", accion: "SE ACABO", fecha: "14/11/2026 09:00", destino: "CABINA_1" },
+      { codigo: "INV-020", accion: "APERTURA", fecha: "13/11/2026 11:00", destino: "LOCAL" },
+    ]);
+    assert.equal(rows[0].diasDesdeAnterior, null);
+    assert.equal(rows[1].diasDesdeAnterior, 12);
+    assert.equal(rows[2].diasDesdeAnterior, null);
+    assert.equal(rows[3].diasDesdeAnterior, null);
+  });
+
+  it("la cosmetóloga abre y termina con destino, y la fila vieja sigue sin destino", async () => {
+    const prodId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const db = new MemoryDb({
+      cabina_inventario: [{
+        sheet_row: 4, codigo: "INV-014", producto: "Tónico", contenido_envase: 150, unidad: "ml",
+        envases_cerrados: 3, abierto_restante: 1, bodega_cerrados: 2, sku_catalogo: "SUNSU-HT-004", orig: {},
+      }],
+      cabina_aperturas: [{
+        sheet_row: 2, fecha: "01/11/2026 10:00", producto: "INV-014", contenido: "Tónico", quien: "Andrea",
+        orig: { num: "AP-001", fecha: "01/11/2026 10:00", accion: "APERTURA", codigo: "INV-014", nombre: "Tónico", cantidad: "1 envase", por: "Andrea" },
+      }],
+      erp_productos: [{ id: prodId, sku: "SUNSU-HT-004", nombre: "Tónico" }],
+    });
+    const c = ctx(db, "cosmetologa", "andrea", "Andrea Robles");
+    c.now = new Date("2026-11-13T15:00:00Z");
+    const sin = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "abrir" }, c) as Row;
+    assert.match(String(sin.error), /destino/);
+    assert.equal((await db.all("cabina_inventario"))[0].envases_cerrados, 3);
+    const malo = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "abrir", destino: "bodega" }, c) as Row;
+    assert.match(String(malo.error), /destino/);
+    const ok = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "abrir", destino: "Cabina 2" }, c) as Row;
+    assert.equal(ok.ok, true);
+    assert.equal(ok.destino, "CABINA_2");
+    assert.equal(ok.cerrados, 2);
+    assert.equal(ok.abierto, 2);
+    assert.equal((ok.abiertosDestino as Row).CABINA_2, 1);
+    const inv = (await db.all("cabina_inventario"))[0];
+    assert.equal(inv.envases_cerrados, 2);
+    assert.equal(inv.abierto_restante, 2);
+    assert.equal(inv.bodega_cerrados, 2);
+    assert.equal(inv.stock_total, 900);
+    assert.equal((inv.orig as Row)["ABIERTOS CABINA 2"], 1);
+    const log = (await db.all("cabina_aperturas")).find((r) => (r.orig as Row).num !== "AP-001");
+    assert.equal((log?.orig as Row).DESTINO, "CABINA_2");
+    assert.equal((log?.orig as Row).accion, "APERTURA");
+    const erp = await db.all("erp_aperturas");
+    assert.equal(erp.length, 1);
+    assert.equal(erp[0].tipo, "ABRIR");
+    assert.equal(erp[0].destino, "CABINA_2");
+    assert.equal(erp[0].origen, "beta");
+    assert.equal(erp[0].producto_id, prodId);
+    assert.equal(erp[0].bodega_id, "22222222-2222-4222-8222-222222222222");
+    assert.equal(erp[0].usuario, "Andrea Robles");
+    const otra = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "acabar", destino: "CABINA_1" }, c) as Row;
+    assert.equal(otra.ok, true);
+    assert.equal(otra.abierto, 1);
+    assert.equal((otra.abiertosDestino as Row).CABINA_2, 1);
+    const fin = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "acabar", destino: "CABINA_2" }, c) as Row;
+    assert.equal(fin.ok, true);
+    assert.equal(fin.abierto, 0);
+    assert.equal((fin.abiertosDestino as Row).CABINA_2, 0);
+    const no = await handle("cabinaAbrirRapido", { token: c.token, codigo: "INV-014", modo: "acabar", destino: "LOCAL" }, c) as Row;
+    assert.match(String(no.error), /abierto/);
+    const vista = await handle("getCabina", { token: c.token }, c) as Row;
+    const prod = (vista.inventario as Row[]).find((r) => r.codigo === "INV-014");
+    assert.equal((prod?.abiertosDestino as Row).CABINA_2, 0);
+    assert.equal(prod?.sinDestino, 0);
+    const aps = vista.aperturas as Row[];
+    const vieja = aps.find((a) => a.num === "AP-001");
+    assert.equal(vieja?.destino, "");
+    assert.equal(vieja?.diasDesdeAnterior, null);
+    const nueva = aps.find((a) => a.destino === "CABINA_2" && a.accion === "APERTURA");
+    assert.equal(nueva?.diasDesdeAnterior, 12);
+    assert.equal(nueva?.codigo, "INV-014");
+    assert.equal((await db.all("erp_aperturas")).filter((r) => r.tipo === "TERMINADO").length, 2);
+  });
+
+  it("la hoja y la beta piden destino sin cambiar columnas viejas ni el permiso de quien ya abre", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const script = readFileSync(join(root, "sunsu_script_completo.js"), "utf8");
+    const html = readFileSync(join(root, "sunsu.html"), "utf8");
+    const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
+    const sql = readFileSync(join(root, "docs/supabase/pending/0038_erp_aperturas.sql"), "utf8");
+    assert.match(html, /SUNSU_APP_VERSION='v2026\.11\.13\.03'/);
+    assert.match(html, /function _cabAbrirPanel/);
+    assert.match(html, /min-height:64px/);
+    assert.match(html, />Confirmar</);
+    assert.match(screens, /function _cabDestinoConfirmar/);
+    assert.match(screens, /Cabina 1/);
+    assert.match(screens, /días desde la anterior/);
+    assert.match(script, /if \(!rolAR\) return respJson\(\{error:'Sesión inválida/);
+    assert.match(script, /Elige el destino \(Cabina 1, Cabina 2, Cabina 3 o Local\)/);
+    assert.match(script, /wAp\.appendRow\(\[numAp, fechaAp, accAR, codAR, nomAR, cantAR, body\.usuario\|\|''\]\)/);
+    assert.match(script, /ABIERTOS CABINA 1/);
+    assert.match(script, /ABIERTOS LOCAL/);
+    assert.doesNotMatch(script.slice(script.indexOf("accion === 'cabinaAbrirRapido'"), script.indexOf("accion === 'cabinaTraspaso'")), /Solo administradores/);
+    assert.match(sql, /create table if not exists public\.erp_aperturas/);
+    assert.match(sql, /check \(destino in \('CABINA_1','CABINA_2','CABINA_3','LOCAL'\)\)/);
+    assert.match(sql, /check \(tipo in \('ABRIR','TERMINADO'\)\)/);
+    assert.match(sql, /check \(origen in \('sheet','beta'\)\)/);
+    assert.match(sql, /erp_aperturas_desde_hoja/);
+    assert.doesNotMatch(sql, /drop table/i);
+    assert.doesNotThrow(() => new Function(screens));
   });
 });
