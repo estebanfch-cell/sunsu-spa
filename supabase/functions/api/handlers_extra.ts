@@ -1,5 +1,9 @@
 import { cicloDe, extend } from "./handlers.ts";
 import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
+import {
+  BODEGA_CABINA_APERTURA, DESTINOS_CABINA, conDiasDesdeApertura, escribirAbiertos, etiquetaDestino,
+  fechaCabina, leerAbiertos, normDestinoCabina, type AperturaFila, type DestinoCabina,
+} from "./aperturas.ts";
 import { cfgAplicada } from "./comision_cfg.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import {
@@ -652,6 +656,7 @@ extend("getCabina", "any", async (_p, ctx) => {
     barras: s(r.codigo_barras), base: s(r.producto_base), ubicacion: s(r.ubicacion),
     ubicacionLocal: s(r.ubicacion_local), ubicacionAbierto: s(r.ubicacion_abierto), maxAbiertos: Math.max(1, n(r.max_abiertos) || 1),
     esterilizable: s(r.esterilizable), foto: s(fotos[s(r.codigo)] || ""),
+    abiertosDestino: abiertosDeInventario(r).counts, sinDestino: abiertosDeInventario(r).sinDestino,
   }));
   const activos = (await ctx.db.all("cabina_activos")).filter((r) => s(r.codigo) || s(r.activo)).map((r) => ({
     row: r.sheet_row, codigo: s(r.codigo), nombre: s(r.activo), categoria: s(r.categoria),
@@ -678,42 +683,135 @@ extend("getCabina", "any", async (_p, ctx) => {
   const traspasos = (await ctx.db.all("cabina_traspasos")).map((r) => ({
     num: s(r.col_1), fecha: s(r.fecha), ruta: s(r.de_a), items: parseJson(r.items), por: s(r.por),
   }));
-  const aperturas = (await ctx.db.all("cabina_aperturas")).map((r) => {
-    const o = (r.orig && typeof r.orig === "object" ? r.orig : {}) as R;
-    return { num: s(o.num || r.col_6), fecha: s(o.fecha || r.fecha), accion: s(o.accion), codigo: s(o.codigo || r.producto), nombre: s(o.nombre || r.contenido), cantidad: s(o.cantidad), por: s(o.por || r.quien) };
-  });
+  const aperturas = await aperturasCabina(ctx);
   if (!inv.length && !activos.length) return { sinEstructura: true, inventario: [], activos: [], protocolos: [], ordenes: [], traspasos: [], bajas: [], aperturas: [] };
   return { inventario: inv, activos, protocolos, ordenes, traspasos, bajas, aperturas, fijosMensuales: 0, fijosDetalle: [], facialesMesRef: 0, mesRef: "", fijoPorFacial: 0 };
 });
+function abiertosDeInventario(r: Row): { counts: Record<DestinoCabina, number>; sinDestino: number } {
+  const o = (r.orig && typeof r.orig === "object" ? r.orig : {}) as Record<string, unknown>;
+  const counts = leerAbiertos(o);
+  const sum = DESTINOS_CABINA.reduce((a, id) => a + counts[id], 0);
+  return { counts, sinDestino: Math.max(0, n(r.abierto_restante) - sum) };
+}
+async function aperturasCabina(ctx: Ctx): Promise<(AperturaFila & { diasDesdeAnterior: number | null })[]> {
+  let erpAps: Row[] = [];
+  try { erpAps = await ctx.db.all("erp_aperturas"); } catch { erpAps = []; }
+  const erpPorRef = new Map(erpAps.map((e) => [s(e.sheet_ref), e]));
+  const prods = await ctx.db.all("erp_productos");
+  const nombreDe = (id: unknown) => s(prods.find((pr) => s(pr.id) === s(id))?.nombre);
+  const codigoDe = (id: unknown) => s(prods.find((pr) => s(pr.id) === s(id))?.sku);
+  const vistos = new Set<string>();
+  const crudas: AperturaFila[] = [];
+  for (const r of await ctx.db.all("cabina_aperturas")) {
+    const o = (r.orig && typeof r.orig === "object" ? r.orig : {}) as R;
+    const num = s(o.num || r.col_6);
+    const erp = num ? erpPorRef.get(num) : undefined;
+    const destino = normDestinoCabina(o.DESTINO || o.destino || erp?.destino);
+    if (num) vistos.add(num);
+    const cuando = s(o.fecha || r.fecha);
+    crudas.push({
+      num, fecha: cuando || fechaDeErp(erp?.created_at), accion: s(o.accion || (erp ? (s(erp.tipo) === "TERMINADO" ? "SE ACABO" : "APERTURA") : "")),
+      codigo: s(o.codigo || r.producto), nombre: s(o.nombre || r.contenido), cantidad: s(o.cantidad), por: s(o.por || r.quien || erp?.usuario),
+      destino,
+    });
+  }
+  for (const e of erpAps) {
+    const ref = s(e.sheet_ref);
+    if (ref && vistos.has(ref)) continue;
+    crudas.push({
+      num: ref, fecha: fechaDeErp(e.created_at), accion: s(e.tipo) === "TERMINADO" ? "SE ACABO" : "APERTURA",
+      codigo: codigoDe(e.producto_id), nombre: nombreDe(e.producto_id), cantidad: "1 envase", por: s(e.usuario),
+      destino: normDestinoCabina(e.destino),
+    });
+  }
+  return conDiasDesdeApertura(crudas);
+}
+function fechaDeErp(v: unknown): string {
+  const t = s(v);
+  if (!t) return "";
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(t)) return t;
+  const ms = Date.parse(t);
+  if (Number.isNaN(ms)) return t;
+  return fechaCabina(new Date(ms));
+}
+async function anotarErp(ctx: Ctx, ses: Ses, row: R): Promise<void> {
+  const args: R = {
+    p_producto_id: row.producto_id || null,
+    p_bodega_id: row.bodega_id || null,
+    p_destino: row.destino,
+    p_tipo: row.tipo,
+    p_usuario: row.usuario || "",
+    p_origen: row.origen || "beta",
+    p_sheet_ref: row.sheet_ref || "",
+    p_created_at: row.created_at || null,
+  };
+  try {
+    const via = await ctx.db.rpc("erp_apertura_anotar", args);
+    if (via && typeof via === "object") return;
+  } catch { /* 0038 todavía no está aplicada, o el test no simula la función */ }
+  try {
+    const ins: R = {
+      producto_id: row.producto_id || undefined,
+      bodega_id: row.bodega_id, destino: row.destino, tipo: row.tipo,
+      usuario: row.usuario || "", created_at: row.created_at, origen: row.origen || "beta", sheet_ref: row.sheet_ref,
+    };
+    if (!ins.producto_id) delete ins.producto_id;
+    await ctx.db.write(actorOf(ses), "erp_aperturas", "insert", {}, ins);
+  } catch { /* sin la tabla, el espejo cabina_aperturas igual guarda el destino */ }
+}
 function parseJson(v: unknown): unknown[] {
   if (Array.isArray(v)) return v;
   try { const x = JSON.parse(s(v) || "[]"); return Array.isArray(x) ? x : []; } catch { return []; }
 }
 
 extend("cabinaAbrirRapido", "any", async (p, ctx, ses) => {
+  const destino = normDestinoCabina(p.destino);
+  if (!destino) return { error: "Elige el destino (Cabina 1, Cabina 2, Cabina 3 o Local)" };
   const rows = await ctx.db.all("cabina_inventario");
   const row = rows.find((r) => s(r.codigo) === s(p.codigo));
   if (!row) return { error: "Producto no encontrado" };
   let loc = n(row.envases_cerrados), ab = n(row.abierto_restante);
   const bod = n(row.bodega_cerrados), cont = n(row.contenido_envase);
+  const orig0 = (row.orig && typeof row.orig === "object" ? { ...(row.orig as R) } : {}) as Record<string, unknown>;
+  const counts = leerAbiertos(orig0);
+  const sum = DESTINOS_CABINA.reduce((a, id) => a + counts[id], 0);
+  const legado = Math.max(0, ab - sum);
+  const abrir = p.modo === "abrir";
   let acc = "";
-  if (p.modo === "abrir") {
+  if (abrir) {
     if (loc <= 0) return { error: "No hay envases cerrados en el local" };
-    loc -= 1; ab += 1; acc = "APERTURA";
+    loc -= 1; ab += 1; counts[destino] += 1; acc = "APERTURA";
   } else {
     if (ab <= 0) return { error: "No hay envase abierto" };
+    if (counts[destino] <= 0 && legado <= 0) return { error: "No hay envase abierto en " + etiquetaDestino(destino) };
+    if (counts[destino] > 0) counts[destino] -= 1;
     ab -= 1; acc = "SE ACABO";
   }
   const stock = (loc + bod + ab) * cont;
-  await ctx.db.write(actorOf(ses), "cabina_inventario", "update", { sheet_row: row.sheet_row }, { envases_cerrados: loc, abierto_restante: ab, stock_total: stock });
+  const orig = escribirAbiertos(orig0, counts);
+  await ctx.db.write(actorOf(ses), "cabina_inventario", "update", { sheet_row: row.sheet_row }, {
+    envases_cerrados: loc, abierto_restante: ab, stock_total: stock, orig,
+  });
   const sr = await nextSheet(ctx.db, "cabina_aperturas");
   const num = "AP-" + String(sr).padStart(3, "0");
-  const ec = ecuadorParts(ctx.now);
+  const fecha = fechaCabina(ctx.now);
+  const prods = await ctx.db.all("erp_productos");
+  const clave = skuCode(row.sku_catalogo) || skuCode(p.codigo);
+  const prod = clave ? prods.find((pr) => skuCode(pr.sku) === clave) : undefined;
   await ctx.db.write(actorOf(ses), "cabina_aperturas", "insert", {}, {
-    sheet_row: sr, fecha: ec.stamp, producto: s(p.codigo), contenido: s(row.producto), quien: ses.name,
-    orig: { num, fecha: ec.stamp, accion: acc, codigo: s(p.codigo), nombre: s(row.producto), cantidad: "1 envase", por: ses.name },
+    sheet_row: sr, fecha, producto: s(p.codigo), contenido: s(row.producto), quien: ses.name,
+    orig: {
+      num, fecha, accion: acc, codigo: s(p.codigo), nombre: s(row.producto),
+      cantidad: "1 envase (" + cont + s(row.unidad) + ")", por: ses.name, DESTINO: destino, destino,
+    },
   });
-  return { ok: true, num, abierto: ab, cerrados: loc };
+  await anotarErp(ctx, ses, {
+    producto_id: prod ? s(prod.id) : "",
+    bodega_id: BODEGA_CABINA_APERTURA,
+    destino, tipo: abrir ? "ABRIR" : "TERMINADO",
+    usuario: ses.name, created_at: ctx.now.toISOString(), origen: "beta", sheet_ref: num,
+  });
+  return { ok: true, num, abierto: ab, cerrados: loc, destino, abiertosDestino: counts };
 });
 
 extend("cabinaTraspaso", ADMIN, async (p, ctx, ses) => {
