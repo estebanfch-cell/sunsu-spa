@@ -99,7 +99,7 @@
       if (f.estado === "bajo" && p.estado !== "bajo") return false;
       if (f.estado === "agotado" && p.estado !== "agotado") return false;
       if (qq) {
-        var hay = norm([p.nombre, p.sku, p.marca, p.categoria, p.codigoCabina, p.subtipo].join(" "));
+        var hay = norm([p.nombre, p.sku, p.skuVisible, p.marca, p.categoria, p.codigoCabina, p.subtipo].join(" "));
         if (qq.split(/\s+/).some(function (w) { return hay.indexOf(w) < 0; })) return false;
       }
       return true;
@@ -116,7 +116,7 @@
       var tipo = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
       var st = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>" + (p.estado === "agotado" ? ' <span class="mcp-tag agot">agotado</span>' : p.estado === "bajo" ? ' <span class="mcp-tag bajo">bajo</span>' : "");
       return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '"><td><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + '</b><span class="mcp-sub">' + e(p.subtipo) + (p.activo === false ? " · inactivo" : "") + "</span></div></div></td>" +
-        '<td class="mcp-sku">' + e(p.sku) + "</td><td>" + tipo + '</td><td class="mcp-hide">' + e(p.categoria || "—") + '</td><td class="mcp-hide">' + e(p.marca || "—") + '</td><td class="num">' + st + "</td></tr>";
+        '<td class="mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "") + "</td><td>" + tipo + '</td><td class="mcp-hide">' + e(p.categoria || "—") + '</td><td class="mcp-hide">' + e(p.marca || "—") + '</td><td class="num">' + st + "</td></tr>";
     }).join("");
   }
   function opt(v, t, cur) { return '<option value="' + e(v) + '"' + (String(v) === String(cur) ? " selected" : "") + ">" + e(t) + "</option>"; }
@@ -217,7 +217,7 @@
       '<div class="mcp-ph' + (can ? " can" : "") + '" id="mcp-foto">' + foto + (can ? '<span class="mcp-phh">' + (p.foto_data ? "Cambiar foto" : "Subir foto") + "</span>" : "") + "</div>" +
       '<input type="file" accept="image/*" id="mcp-file" hidden>' +
       '<div style="flex:1;min-width:0"><h2 class="mcp-tt">' + V("nombre") + "</h2>" +
-      '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.sku) + (p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + "</span></div>" +
+      '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + "</span></div>" +
       kv("sku_proveedor") + kv("codigo_barras") +
       '<div class="mcp-g">' + kv("marca") + kv("categoria") + kv("linea") +
       '<div class="mcp-kv"><span class="mcp-l">Tipo</span><span class="mcp-v">' + e(tipo) + "</span></div>" +
@@ -424,7 +424,7 @@
       return '<option value="' + e(f.prefijo) + '">' + e(f.etiqueta) + " · " + f.total + " SKU · último " + e(f.ejemplo) + (cl ? " · " + e(cl) : "") + "</option>";
     }).join("");
     var filas = MC.familias.map(function (f) {
-      return "<tr><td><b>" + e(f.prefijo === "#" ? "01, 02…" : f.prefijo) + "</b></td><td>" + f.total + "</td><td>" + e(f.ejemplo) + '</td><td class="mcp-sku">' + e(f.siguiente) + "</td></tr>";
+      return "<tr><td><b>" + e(f.prefijo === "#" ? "SUNSU-01, 02… (servicios)" : f.prefijo) + "</b></td><td>" + f.total + "</td><td>" + e(f.ejemplo) + '</td><td class="mcp-sku">' + e(f.siguiente) + "</td></tr>";
     }).join("");
     return '<div class="mcp"><div class="mcp-top"><button class="btn ghost small" type="button" data-go="#/m/productos">← Productos</button></div>' +
       '<form class="mcp-card" id="mcp-f-nuevo"><div class="card-title">Nuevo producto</div><div class="mcp-form">' +

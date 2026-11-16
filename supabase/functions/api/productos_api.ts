@@ -9,7 +9,7 @@ import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domai
 import { runErp } from "./erp.ts";
 import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
-  marcaDe, preciosDe, stockDe, stockTotal, tipoDe,
+  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible,
 } from "./productos.ts";
 
 /** Del diff del audit_log quita lo que no se muestra (miniatura base64, sellos de edición). */
@@ -95,8 +95,9 @@ function fila(p: Row, b: Base): Row {
   });
   const total = stockTotal(stock);
   const activo = p.activo !== false && (cat ? cat.activo !== false : true);
+  const vis = skuVisible(code, tipo, cat);
   return {
-    id: p.id, sku: code, nombre, tipo, subtipo,
+    id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, nombre, tipo, subtipo,
     categoria: s(p.categoria) || (cat ? (subtipo === "Producto" ? "Producto" : subtipo) : (cab ? "Insumo cabina" : "")),
     linea: s(p.linea), marca: mk.marca, marcaDeducida: mk.deducida, activo,
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),
