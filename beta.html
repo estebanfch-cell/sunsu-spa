@@ -1196,6 +1196,25 @@ function previewApi(accion, body) {
   }
   if (accion === "buscarGiftCards") return { resultados: [{ codigo: body.q || "26-065", valor: "65", saldo: 65, usado: false }] };
   if (accion === "oc_get") return { ok: true, orden: { id: body.id || "oc-demo", numero: "OC-0080", estado: "abierta", total: 27.6, snap: { tipo: "consignacion", qLabel: "16-fin Oct 2026", buffer: 0.2, prov: { nombre: "Hebetronic S.A.", ruc: "1793161898001" }, fact: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", vendido: 3, compra: 8, subtotal: 24 }], items: [{ sku: "SUNSU-HT-002", nombre: "Niacinamide 10%+TXA 4% Serum 30ml", sugerido: 4 }], totales: { subtotal: 24, iva: 3.6, total: 27.6 }, nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará únicamente los productos vendidos en la quincena indicada." } }, lineas: [{ id: "l1", producto_id: "SUNSU-HT-002", cantidad: 4, recibido: 0, plazo: "RESTOCK" }] };
+  if (accion === "getDashboard") {
+    const dias = Array.from({ length: 30 }, (_, i) => {
+      const v = [0, 420.5, 610.25, 380, 0, 905.4, 512.8][i % 7];
+      return { k: "2026-10-" + String(i + 1).padStart(2, "0"), label: (i + 1) + " oct", venta: v, utilidad: v * 0.74, margen: v ? 74 : 0, faciales: v ? 6 : 0, productos: v ? 3 : 0, tickets: v ? 8 : 0 };
+    });
+    const act = { tickets: 12, ticketsConVenta: 10, ventaConIva: 559.48, ventaSinIva: 486.5, iva: 72.98, costo: 98.4, utilidad: 388.1, margen: 79.8, ticketPromedio: 48.65,
+      faciales: 7, facCanjes: 2, valFac: 210, paquetes: 2, valPaq: 160, productosN: 5, valProd: 86.96, costoProd: 62.4, margenProd: 28.2, extrasN: 4, valExtras: 28, extrasCort: 1,
+      gcN: 1, gcVal: 56.52, pagos: { efectivo: 120, transferencia: 156.5, tarjeta: 210, mixto: 0, otros: 0 } };
+    const prev = { ...act, ventaSinIva: 402.1, utilidad: 300.2, margen: 74.7, faciales: 8, productosN: 3, paquetes: 0, valPaq: 0, gcN: 0, gcVal: 0, ticketPromedio: 44.1 };
+    return { ok: true, periodo: body.periodo || "hoy", desde: "2026-10-30", hasta: "2026-10-30", prevDesde: "2026-10-29", prevHasta: "2026-10-29",
+      label: "Hoy · 30 oct 2026", labelPrev: "29 oct", metaMargen: 70, actual: act, anterior: prev, historia: dias, historiaMensual: false,
+      topFaciales: [{ code: "02", nombre: "Facial Reparación", n: 3, canjes: 1, val: 120, pct: 42.9 }, { code: "40", nombre: "Facial Reset 3x1", n: 2, canjes: 1, val: 60, pct: 28.6 }],
+      productos: [{ sku: "ML-001", nombre: "Rejuvenating Ampoule PDRN Salmon", qty: 2, val: 191.3, margen: 26.08, margenPct: 13.6, pct: 60 }, { sku: "HT-007", nombre: "Rice Ceramide 7 Serum", qty: 3, val: 114.75, margen: 34.41, margenPct: 30, pct: 40 }],
+      productosVendidos: 2, topClientas: [{ nombre: "Clienta Demo", tickets: 1, val: 120, pct: 24.7 }],
+      porCosmetologa: [{ nombre: "Andrea", tickets: 6, faciales: 4, val: 260, pct: 53.4 }, { nombre: "Daniela", tickets: 5, faciales: 3, val: 226.5, pct: 46.6 }],
+      ventasCompras: ["may", "jun", "jul", "ago", "sep", "oct"].map((label, i) => ({ k: "2026-" + (i + 5), label, ventas: 20000 + i * 1500, compras: 6000 + i * 300 })),
+      compras: { actual: 0, anterior: 0, ocs: 0, neto: 486.5 }, inventario: { valor: 13915.14, unidades: 363, bajos: 3, bodegas: [{ nombre: "Venta", valor: 13915.14, unidades: 363 }], raros: [], error: "" },
+      actualizado: "11:30" };
+  }
   if (accion === "getDashboardHoy") {
     const dias = [
       ["Lun 19", 320, 8], ["Mar 20", 410, 11], ["Mié 21", 280, 7], ["Jue 22", 486.5, 12],
@@ -5519,8 +5538,8 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261113ape"></script>
-<script src="beta-inline.js?v=20261113ape"></script>
+<script src="beta-screens.js?v=20261116dsh"></script>
+<script src="beta-inline.js?v=20261116dsh"></script>
 <script>draw();</script>
 </body>
 </html>

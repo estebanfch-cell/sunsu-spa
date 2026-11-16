@@ -103,6 +103,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   permisos_get: "inicio", permisos_guardar: "permisos",
   home: "inicio",
   getDashboardHoy: "ver_costos",
+  getDashboard: "ver_costos",
 };
 
 const COSTO = new Set([

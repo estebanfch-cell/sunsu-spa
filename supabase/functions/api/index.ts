@@ -8,6 +8,7 @@ import "./inline_api.ts";
 import "./personal_api.ts";
 import "./compras_api.ts";
 import "./conteo_api.ts";
+import "./dashboard_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

@@ -1,4 +1,4 @@
-const CACHE = "sunsu-beta-2026-11-13-APE";
+const CACHE = "sunsu-beta-2026-11-16-DSH";
 const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
 
 function scopePath() {
