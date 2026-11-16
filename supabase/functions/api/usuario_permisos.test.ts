@@ -119,4 +119,40 @@ describe("permisos por usuario (MineCore perm.ts)", () => {
     assert.ok(Array.isArray(w.modulos), JSON.stringify(w).slice(0, 200));
     assert.ok(!(w.modulos as Row[]).some((m) => m.modulo === "caja"));
   });
+  it("interruptores de comisiones y rol de pagos: apagados cierran el módulo y quitan montos", () => {
+    const o = limpiarOverride({ uid: "andrea", niveles: { comisiones: 2, rol_pagos: 1 }, flags: { comisiones: false, rol_pagos: false } })!;
+    assert.equal(accesoEfectivo("propio", "comisiones", o), "no");
+    assert.equal(accesoEfectivo("propio", "rol_pagos", o), "no");
+    assert.ok(gateNivel("getComisionesTabla", "cosmetologa", o)?.error);
+    const out = redactarFlags({ ok: true, total: 3, comision: 9, items: [{ comision_neta: 1, sku: "A" }] }, "cosmetologa", o) as Row;
+    assert.equal(out.comision, undefined);
+    assert.deepEqual((out.items as Row[])[0], { sku: "A" });
+    assert.equal(out.total, 3);
+  });
+
+  it("alcance de personas: solo ella, una lista o todas; se aplica en el servidor", async () => {
+    const db = semilla();
+    const r0 = await handle("uperm_guardar", { token: "t-admin", uid: "ale", niveles: { comisiones: 1, rol_pagos: 1, tickets: 1 }, alcance: { _personas: ["Nadie Raro"] }, flags: { comisiones: true, rol_pagos: true } }, C(db, "t-admin")) as Row;
+    assert.match(String(r0.error), /No está en el equipo/);
+    const r = await handle("uperm_guardar", { token: "t-admin", uid: "ale", niveles: { comisiones: 1, rol_pagos: 1, tickets: 1 }, alcance: { _personas: ["Andrea Robles"] }, flags: { comisiones: true, rol_pagos: true } }, C(db, "t-admin")) as Row;
+    assert.equal(r.ok, true);
+    const o = limpiarOverride((db.tables.get("app_usuario_permisos") || [])[0])!;
+    assert.deepEqual(o.personas, ["Andrea Robles"]);
+    assert.equal(o.alcance._personas, undefined);
+    assert.equal(accesoEfectivo("todos", "comisiones", o), "propio");
+    const { clampPersonal, esPropio } = await import("./permisos.ts");
+    const ses = { rol: "recepcion", name: "Alejandra Rodriguez", short: "Ale", uid: "ale", personas: o.personas };
+    const m = await matrizDe(conPermisosUsuario(db, "recepcion", o));
+    assert.equal(clampPersonal("getComisionesTabla", { nombre: "Andrea Robles" }, ses, m).nombre, "Andrea Robles");
+    assert.equal(clampPersonal("getComisionesTabla", { nombre: "Emilia" }, ses, m).nombre, "Alejandra Rodriguez");
+    assert.equal(esPropio("Andrea", ses), true);
+    assert.equal(esPropio("Emilia", ses), false);
+    const todas = limpiarOverride({ uid: "x", niveles: { comisiones: 1 }, alcance: { _personas: ["Andrea Robles", "*"] } })!;
+    assert.deepEqual(todas.personas, ["*"]);
+    assert.equal(accesoEfectivo("propio", "comisiones", todas), "todos");
+    const lista = await handle("uperm_list", { token: "t-admin" }, C(db, "t-admin")) as Row;
+    assert.ok((lista.equipo as Row[]).some((u) => u.nombre === "Andrea Robles"));
+    const ale = (lista.usuarios as Row[]).find((u) => u.uid === "ale") as Row;
+    assert.deepEqual((ale.efectivo as Row).personas, ["Andrea Robles"]);
+  });
 });

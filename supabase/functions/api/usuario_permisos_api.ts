@@ -45,8 +45,13 @@ function efectivo(rol: string, matriz: Record<string, Partial<Record<string, "no
     costos: admin || (o?.flags.costos ?? acceso(rol, "ver_costos", matriz) === "todos"),
     precios: admin || (o?.flags.precios ?? true),
     saldos: admin || (o?.flags.saldos ?? true),
+    comisiones: admin || (o?.flags.comisiones ?? acceso(rol, "comisiones", matriz) !== "no"),
+    rol_pagos: admin || (o?.flags.rol_pagos ?? acceso(rol, "rol_pagos", matriz) !== "no"),
   };
-  return { niveles, alcance, flags };
+  // Sin lista: lo dice el alcance del rol (todo → todas; si no, solo ella).
+  const conAlcance = FINOS.filter((m) => m.alcance && alcance[m.id] !== "no");
+  const personas = admin ? ["*"] : o?.personas ?? (conAlcance.length && conAlcance.every((m) => alcance[m.id] === "todos") ? ["*"] : []);
+  return { niveles, alcance, flags, personas };
 }
 
 extend("uperm_list", "any", async (_p, ctx, ses) => {
@@ -70,7 +75,8 @@ extend("uperm_list", "any", async (_p, ctx, ses) => {
       const o = limpiarOverride({ uid: "", ...x })!;
       return { id: s(x.id), nombre: s(x.nombre), sistema: false, niveles: o.niveles, alcance: o.alcance, flags: o.flags };
     }));
-  return { ok: true, modulos: FINOS, flags: FLAGS, usuarios, perfiles };
+  const equipo = (await personas(ctx)).map((u) => ({ uid: u.uid, nombre: u.nombre, rol: ROL_LABEL[String(u.rol)] || u.rol }));
+  return { ok: true, modulos: FINOS, flags: FLAGS, usuarios, perfiles, equipo };
 });
 
 function validar(p: Row): { o: Override; error?: string } {
@@ -83,6 +89,14 @@ function validar(p: Row): { o: Override; error?: string } {
   }
   return { o };
 }
+/** alcance + _personas (así no hace falta otra columna). Solo nombres del equipo, o «*». */
+function alcanceGuardado(o: Override, equipo: Row[]): { alcance: Row; error?: string } {
+  if (o.personas === undefined) return { alcance: o.alcance };
+  const nombres = new Set(equipo.map((u) => s(u.nombre)));
+  const malos = o.personas.filter((x) => x !== "*" && !nombres.has(x));
+  if (malos.length) return { alcance: o.alcance, error: "No está en el equipo: " + malos.join(", ") };
+  return { alcance: { ...o.alcance, _personas: o.personas } };
+}
 
 extend("uperm_guardar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita permisos" };
@@ -92,8 +106,10 @@ extend("uperm_guardar", "any", async (p, ctx, ses) => {
   if (esAdmin(String(u.rol))) return { error: "Admin y super admin siempre tienen todo; no llevan permisos por usuario" };
   const { o, error } = validar(p);
   if (error) return { error };
+  const ag = alcanceGuardado(o, await personas(ctx));
+  if (ag.error) return { error: ag.error };
   const out = await ctx.db.rpc("app_usuario_permiso_guardar", {
-    p_uid: uid, p_perfil: o.perfil || null, p_niveles: o.niveles, p_alcance: o.alcance, p_flags: o.flags, p_actor: actorOf(ses),
+    p_uid: uid, p_perfil: o.perfil || null, p_niveles: o.niveles, p_alcance: ag.alcance, p_flags: o.flags, p_actor: actorOf(ses),
   });
   if (out == null) return { error: "Falta aplicar 0040_permisos_usuario.sql" };
   return { ok: true, uid, personalizado: !vacio(o) };
