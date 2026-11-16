@@ -101,6 +101,30 @@ supabase db query --linked --project-ref heuolwxyxoezkewyufrl < docs/supabase/pe
 supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
 ```
 
+## Permisos por usuario (estilo MineCore)
+
+Admin → **Usuarios y permisos** (`#/m/mc/upermisos`, `mc-permisos.js`, acciones `uperm_list`, `uperm_guardar`, `uperm_perfil_guardar` en `usuario_permisos_api.ts`). Va encima del rol de cada persona, como `portal-api/perm.ts` de MineCore:
+
+- **Niveles 0 a 3 por módulo:** 0 nada, 1 ver, 2 crear/editar, 3 aprobar/anular/borrar.
+  - Si existe un nivel explícito, manda.
+  - Nivel 1 deja pasar solo lecturas.
+  - Anular, aprobar y borrar (`NIVEL3`) piden nivel 3.
+- **Alcance** (solo lo suyo / todo): en tickets, clientas, compras, comisiones, rol, asistencia y paquetes.
+- **Interruptores:**
+  - «Ver costos y márgenes» reemplaza `ver_costos`.
+  - «Ver precios» y «Ver saldos y pagos» quitan esos campos de las respuestas, con los mismos patrones de MineCore.
+- **Perfiles:**
+  - «Como <rol>» sale de la matriz de roles.
+  - Los perfiles propios se guardan en `app_perfiles_permiso`.
+- **Sin fila en `app_usuario_permisos` la persona queda igual que hoy.** Admin y super_admin siempre tienen todo.
+- **Cómo se aplica.** `handle()` envuelve el Db de la petición, así que `app_modulos` ya llega con el override de esa persona y todo `matrizDe()` del edge lo ve. Pasa lo mismo en el login, en `whoami` y en «Ver como…». Después de `gateAccion` corre `gateNivel`.
+- Solo admin edita. Se escribe con `app_usuario_permiso_guardar` (security definer, solo `service_role`) y queda en `audit_log`.
+
+```bash
+supabase db query --linked --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0040_permisos_usuario.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
+
 ## Qué está hecho
 
 | Módulo | Estado |
