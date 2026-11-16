@@ -31,6 +31,7 @@
       ".mcu-seg button.ch{box-shadow:inset 0 -3px 0 var(--gold)}",
       ".mcu-t select{margin:0;padding:5px 8px;font-size:.75rem;width:auto}",
       ".mcu-rol{color:var(--gray);font-size:.68rem}",
+      ".mcu-cero{background:var(--red-l);color:var(--red);border-radius:10px;padding:8px 12px;font-weight:800;font-size:.8rem}",
       ".mcu-flags label{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--text);font-weight:600;margin:6px 0}",
       ".mcu-flags input{width:auto;margin:0}",
       ".mcu-save{position:sticky;bottom:10px;z-index:5;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--gold-l);border:1.5px solid var(--gold-m);border-radius:14px;padding:10px 14px;margin:10px 0}",
@@ -49,20 +50,28 @@
     (P.data.modulos || []).forEach(function (m) { if (m.alcance) alc[m.id] = (ef.alcance || {})[m.id] === "no" ? ((u.rolBase.alcance || {})[m.id] || "propio") : (ef.alcance || {})[m.id]; });
     return { niveles: Object.assign({}, ef.niveles), alcance: alc, flags: Object.assign({}, ef.flags), perfil: u.perfil || "" };
   }
+  /** Punto de partida al personalizar: todo apagado (Emilia, 2026-11-16). */
+  function ceros() {
+    var d = { niveles: {}, alcance: {}, flags: { costos: false, precios: false, saldos: false }, perfil: "" };
+    (P.data.modulos || []).forEach(function (m) { d.niveles[m.id] = 0; if (m.alcance) d.alcance[m.id] = "propio"; });
+    return d;
+  }
   function base(u) { return u.rolBase || { niveles: {}, alcance: {}, flags: {} }; }
   function iguales(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
   function sucio() {
     var u = usuario();
-    return !!(u && P.draft && !iguales(P.draft, draftDe(u)));
+    if (!u || !P.draft) return false;
+    if (!u.personalizado) return true;
+    return !iguales(P.draft, draftDe(u));
   }
-  /** Solo lo que difiere del rol (sin diferencias = la persona vuelve a su rol). */
+  /** Se guarda completo: cada módulo con su nivel y cada interruptor, así nada cae de vuelta al rol. */
   function diff(u, d) {
-    var b = base(u), out = { niveles: {}, alcance: {}, flags: {} };
+    var out = { niveles: {}, alcance: {}, flags: {} };
     (P.data.modulos || []).forEach(function (m) {
-      if (d.niveles[m.id] !== b.niveles[m.id]) out.niveles[m.id] = d.niveles[m.id];
-      if (m.alcance && d.niveles[m.id] > 0 && d.alcance[m.id] && d.alcance[m.id] !== (b.alcance[m.id] || "")) out.alcance[m.id] = d.alcance[m.id];
+      out.niveles[m.id] = Number(d.niveles[m.id]) || 0;
+      if (m.alcance && out.niveles[m.id] > 0) out.alcance[m.id] = d.alcance[m.id] === "todos" ? "todos" : "propio";
     });
-    ["costos", "precios", "saldos"].forEach(function (k) { if (!!d.flags[k] !== !!b.flags[k]) out.flags[k] = !!d.flags[k]; });
+    ["costos", "precios", "saldos"].forEach(function (k) { out.flags[k] = !!d.flags[k]; });
     return out;
   }
 
@@ -100,14 +109,22 @@
     var u = usuario();
     if (!u) return '<div class="mcu-card"><p class="note">Elige una persona de la lista.</p></div>';
     if (u.admin) return '<div class="mcu-card"><div class="mcu-h"><h3>' + e(u.nombre) + '</h3><span class="mcu-tag a">' + e(u.rolLabel) + '</span></div><p class="note">Admin y super admin siempre tienen todo (como en MineCore). Para quitarle algo, cámbiale el rol en Usuarios.</p></div>';
+    var b = base(u);
+    if (!u.personalizado && !P.draft) {
+      return '<div class="mcu-card"><div class="mcu-h"><div><h3>' + e(u.nombre) + '</h3><div class="mcu-rol">' + e(u.rolLabel) + ' · Según su rol</div></div></div>' +
+        '<p class="note">Hoy tiene lo de su rol (abajo, solo lectura). Al personalizar, <b>empieza todo apagado</b>: cada módulo en «Nada» y cada interruptor apagado; tú vas dando lo que necesita. Hasta que guardes, nada cambia para ella.</p>' +
+        '<p><button class="btn" type="button" id="mcu-empezar">Personalizar (empieza todo apagado)</button></p>' +
+        editorHtml(draftDe(u), b, true) + "</div>";
+    }
     if (!P.draft) P.draft = draftDe(u);
-    var d = P.draft, b = base(u);
+    var d = P.draft;
     var perf = '<select id="mcu-perfil"><option value="">Aplicar un perfil…</option>' + (P.data.perfiles || []).map(function (p) { return '<option value="' + e(p.id) + '">' + e(p.nombre) + "</option>"; }).join("") + "</select>";
     var dirty = sucio();
     return '<div class="mcu-card"><div class="mcu-h"><div><h3>' + e(u.nombre) + '</h3><div class="mcu-rol">' + e(u.rolLabel) + " · " + (u.personalizado ? "Permisos propios" + (u.perfil ? " (" + e(u.perfil) + ")" : "") : "Según su rol") +
       (u.editadoPor ? " · editado por " + e(u.editadoPor) : "") + "</div></div><div>" + perf + "</div></div>" +
       '<div class="mcu-save" id="mcu-save"' + (dirty ? "" : " hidden") + '><span>Cambios sin guardar</span><input id="mcu-pnombre" placeholder="Nombre del perfil (opcional)" value="' + e(d.perfil || "") + '"><span style="display:flex;gap:6px"><button class="btn small" type="button" id="mcu-guardar">Guardar</button><button class="btn ghost small" type="button" id="mcu-descartar">Descartar</button><button class="btn ghost small" type="button" id="mcu-como-perfil">Guardar como perfil</button></span></div>' +
       '<p class="err" id="mcu-err"></p>' +
+      (!u.personalizado ? '<p class="mcu-cero">Empieza todo apagado. Da solo lo que necesita y guarda.</p>' : "") +
       editorHtml(d, b, false) +
       (u.personalizado ? '<button class="btn ghost small" type="button" id="mcu-reset">Volver a lo de su rol</button>' : "") +
       '<p class="note">Nada = no ve el módulo. Ver = solo mira. Crear / editar = trabaja en él. Aprobar / borrar = además anula, aprueba y borra. Lo marcado con raya dorada difiere de su rol. Cada cambio queda en el registro.</p></div>';
@@ -168,6 +185,8 @@
     });
     root.querySelectorAll("[data-mcu-a]").forEach(function (s) { s.onchange = function () { P.draft.alcance[s.getAttribute("data-mcu-a")] = s.value; pinta(main); }; });
     root.querySelectorAll("[data-mcu-f]").forEach(function (c) { c.onchange = function () { P.draft.flags[c.getAttribute("data-mcu-f")] = c.checked; pinta(main); }; });
+    var emp = root.querySelector("#mcu-empezar");
+    if (emp) emp.onclick = function () { P.draft = ceros(); pinta(main); };
     var ps = root.querySelector("#mcu-perfil");
     if (ps) ps.onchange = function () {
       var p = perfil(ps.value);
