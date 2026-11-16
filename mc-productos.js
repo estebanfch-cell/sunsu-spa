@@ -556,7 +556,7 @@
     var r = MC.cur, p = r.producto;
     if (p.tipo === "servicio") {
       var pr = r.protocolo;
-      if (!pr) return '<div class="mcp-card"><p class="note">Este servicio no tiene protocolo todavía. <a href="#/m/mc/protocolos">Ir a Protocolos</a></p></div>';
+      if (!pr) return '<div class="mcp-card"><p class="note">Este servicio no tiene protocolo todavía. ' + (MC.admin || (typeof state !== "undefined" && state.admin) ? '<a href="#/m/mc/protocolos/nuevo?sku=' + encodeURIComponent(p.skuVisible || p.sku) + '">Crear su protocolo</a>' : '<a href="#/m/mc/protocolos">Ir a Protocolos</a>') + "</p></div>";
       var cols = [["paso", "Paso", 1], ["descripcion", "Descripción"], ["producto", "Producto"], [function (x) { return q2(x.cantidad) + " " + e(x.unidad); }, "Cantidad", 1], ["minutos", "Min", 1]];
       return '<div class="mcp-card"><div class="card-title">Protocolo ' + e(pr.sku) + " · " + e(pr.nombre) + "</div>" +
         '<p class="mcp-sub">Versión ' + e(pr.version) + (pr.vigente ? " · vigente " + e(pr.vigente) : "") + (MC.verCostos && pr.manoDeObra ? " · mano de obra " + $m(pr.manoDeObra) : "") + "</p>" +

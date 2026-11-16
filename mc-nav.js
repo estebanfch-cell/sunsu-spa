@@ -151,7 +151,7 @@
       [ok("transferencias"), "Transferencia", "#/m/transferencias"],
       [ok("ajuste"), "Ajuste", "#/m/mc/ajuste"],
       [adm(), "Nuevo producto", "#/m/productos/nuevo"],
-      [adm(), "Nuevo protocolo", "#/m/mc/pronto/nuevo_protocolo"],
+      [adm(), "Nuevo protocolo", "#/m/mc/protocolos/nuevo"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
@@ -277,7 +277,7 @@
     render: async function (route) {
       css();
       if (route.sub === "pronto") return pronto(route.id);
-      if (route.sub === "protocolos") return ok("cabina") ? protocolos() : '<p class="err">Este módulo no está en tu menú.</p>';
+      if (route.sub === "protocolos") return !ok("cabina") ? '<p class="err">Este módulo no está en tu menú.</p>' : window.MCProtocolos ? window.MCProtocolos.render(route) : protocolos();
       if (route.sub === "reorden") return ok("compras") ? reorden() : '<p class="err">Este módulo no está en tu menú.</p>';
       if (route.sub === "ajuste") return ajuste();
       if (route.sub === "upermisos" && window.MCPermisos) return window.MCPermisos.render(route);
@@ -285,6 +285,7 @@
     },
     wire: function (main, route) {
       if (route.sub === "ajuste") wireAjuste(main);
+      if (route.sub === "protocolos" && window.MCProtocolos) window.MCProtocolos.wire(main, route);
       if (route.sub === "upermisos" && window.MCPermisos) window.MCPermisos.wire(main, route);
     },
     _pronto: PRONTO,
