@@ -8,7 +8,7 @@ import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domain.ts";
 import { runErp } from "./erp.ts";
 import {
-  CAMPOS_COSTO, GRUPO_NOMBRE, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
+  CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
   marcaDe, preciosDe, stockDe, stockTotal, tipoDe,
 } from "./productos.ts";
 
@@ -310,15 +310,49 @@ extend("mcprod_foto", "any", async (p, ctx, ses) => {
   return { ok: true, id: pid, foto_url: patch.foto_url };
 });
 
+/** Todos los códigos que ya existen: erp_productos + catalogo + cabina_inventario. */
+async function codigosExistentes(ctx: Ctx): Promise<{ codigo: string; clase: string }[]> {
+  const [erp, cat, cab] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario")]);
+  const out: { codigo: string; clase: string }[] = [];
+  const claseDe = new Map<string, string>();
+  for (const r of erp) { const c = codigoNorm(r.sku); if (c) { claseDe.set(c, s(r.clase) || "producto"); out.push({ codigo: c, clase: s(r.clase) || "producto" }); } }
+  for (const r of cat) { const c = codigoNorm(r.sku); if (c) out.push({ codigo: c, clase: claseDe.get(c) || "catalogo" }); }
+  for (const r of cab) {
+    for (const v of [r.codigo, r.sku_catalogo]) { const c = codigoNorm(v); if (c) out.push({ codigo: c, clase: claseDe.get(c) || "insumo cabina" }); }
+  }
+  return out;
+}
+
+extend("mcprod_familias", "any", async (_p, ctx, ses) => {
+  const pr = await permisos(ctx, ses);
+  if (!pr.puede) return { error: "Productos no está en tu menú" };
+  const fams = familiasDe(await codigosExistentes(ctx));
+  return { ok: true, admin: pr.admin, familias: fams };
+});
+
 extend("mcprod_nuevo", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin crea productos" };
+  // El SKU lo asigna el servidor dentro de la familia elegida; nunca se toma el que mande la pantalla
+  // ni se reescribe uno que ya existe.
+  const pedido = s(p.familia);
+  const prefijo = prefijoNormal(pedido);
+  if (!prefijo) return { error: "Elige una familia de SKU (por ejemplo ML- o la serie numérica)" };
+  const existentes = await codigosExistentes(ctx);
+  const fams = familiasDe(existentes);
+  const fam = fams.find((f) => f.prefijo === prefijo);
+  if (!fam && !p.familia_nueva) return { error: "Esa familia no existe. Márcala como familia nueva para crearla." };
+  if (fam && p.familia_nueva) return { error: "La familia " + prefijo + " ya existe" };
+  const codigos = existentes.map((x) => x.codigo);
+  const sku = siguienteCodigo(prefijo, codigos, fam ? fam.ancho : prefijo === FAMILIA_NUMERICA ? 2 : 3);
+  if (new Set(codigos).has(codigoNorm(sku))) return { error: "El código " + sku + " ya existe; vuelve a intentar" };
   const tipo = s(p.tipo) === "servicio" ? "servicio" : "producto";
   const uso = s(p.uso) || (tipo === "servicio" ? "cabina" : "venta");
+  if (!s(p.nombre)) return { error: "El nombre es obligatorio" };
   const out = await runErp("prod_save", {
-    sku: s(p.sku), nombre: s(p.nombre), marca: s(p.marca), categoria: s(p.categoria), clase: tipo,
+    sku, nombre: s(p.nombre), marca: s(p.marca), categoria: s(p.categoria), clase: tipo,
     unidad: s(p.unidad) || "u", uso, _rol: ses.rol,
   }, ctx.db, actorOf(ses), ctx.now);
   if (out.error) return out;
   if (p.pvp != null && p.pvp !== "") await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(out.id) }, { beta_pvp: round2(n(p.pvp)), beta_editado_por: actorOf(ses), beta_editado_at: ctx.now.toISOString() });
-  return { ok: true, id: out.id, sku: out.sku };
+  return { ok: true, id: out.id, sku, familia: prefijo };
 });

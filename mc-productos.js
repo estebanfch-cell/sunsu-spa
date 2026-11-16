@@ -414,29 +414,75 @@
   }
 
   // ---------- Nuevo ----------
-  function nuevoHtml() {
+  async function nuevoHtml() {
     if (!(typeof state !== "undefined" && state.admin)) return '<p class="err">Solo un admin crea productos.</p>';
+    var r = await api("mcprod_familias", {});
+    if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudieron leer las familias de SKU") + "</p>";
+    MC.familias = r.familias || [];
+    var opts = MC.familias.map(function (f) {
+      var cl = Object.keys(f.clases || {}).sort(function (a, b) { return f.clases[b] - f.clases[a]; })[0] || "";
+      return '<option value="' + e(f.prefijo) + '">' + e(f.etiqueta) + " · " + f.total + " SKU · último " + e(f.ejemplo) + (cl ? " · " + e(cl) : "") + "</option>";
+    }).join("");
+    var filas = MC.familias.map(function (f) {
+      return "<tr><td><b>" + e(f.prefijo === "#" ? "01, 02…" : f.prefijo) + "</b></td><td>" + f.total + "</td><td>" + e(f.ejemplo) + '</td><td class="mcp-sku">' + e(f.siguiente) + "</td></tr>";
+    }).join("");
     return '<div class="mcp"><div class="mcp-top"><button class="btn ghost small" type="button" data-go="#/m/productos">← Productos</button></div>' +
       '<form class="mcp-card" id="mcp-f-nuevo"><div class="card-title">Nuevo producto</div><div class="mcp-form">' +
       '<label>Tipo<select name="tipo"><option value="producto">Inventariable</option><option value="servicio">Servicio</option></select></label>' +
-      '<label>SKU<input name="sku" required placeholder="ML-015"></label>' +
+      '<label>Familia de SKU<select name="familia" id="mcp-fam" required><option value="">Elige la familia…</option>' + opts + '<option value="__nueva">+ Nueva familia…</option></select></label>' +
+      '<label id="mcp-fam-nueva-l" style="display:none">Prefijo nuevo (2 a 5 letras)<input name="prefijo_nuevo" id="mcp-fam-nueva" maxlength="6" placeholder="KR-"></label>' +
+      '<label>SKU asignado<input id="mcp-sku-prev" readonly class="mcp-sku"></label>' +
       '<label>Nombre<input name="nombre" required></label>' +
       '<label>Marca<input name="marca"></label>' +
       '<label>Categoría<input name="categoria"></label>' +
       '<label>Uso<select name="uso"><option value="venta">Venta (Consignación)</option><option value="cabina">Cabina</option><option value="ambos">Ambos</option></select></label>' +
       '<label>PVP con IVA<input name="pvp" inputmode="decimal"></label>' +
-      '</div><p class="note">Se crea en la beta. El catálogo del sistema actual no cambia.</p><p class="err" id="mcp-f-err"></p>' +
-      '<button class="btn" type="submit">Crear producto</button></form></div>';
+      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre después del mayor de la familia, revisado contra productos, catálogo e inventario de cabina. Los SKU que ya existen no cambian. Se crea en la beta; el catálogo del sistema actual no cambia.</p><p class="err" id="mcp-f-err"></p>' +
+      '<button class="btn" type="submit">Crear producto</button></form>' +
+      '<div class="mcp-card"><div class="card-title">Familias de SKU detectadas</div><table class="mcp-mini"><thead><tr><th>Familia</th><th>SKU</th><th>Último</th><th>Siguiente</th></tr></thead><tbody>' + filas + "</tbody></table></div></div>";
   }
   function wireNuevo(main) {
     var f = main.querySelector("#mcp-f-nuevo");
     if (!f) return;
+    var sel = f.querySelector("#mcp-fam"), nueva = f.querySelector("#mcp-fam-nueva"), nuevaL = f.querySelector("#mcp-fam-nueva-l"), prev = f.querySelector("#mcp-sku-prev");
+    function prefijoNuevo() {
+      var p = String(nueva.value || "").trim().toUpperCase();
+      if (p && p.slice(-1) !== "-") p += "-";
+      return /^[A-Z]{2,5}-$/.test(p) ? p : "";
+    }
+    function pinta() {
+      var esNueva = sel.value === "__nueva";
+      nuevaL.style.display = esNueva ? "" : "none";
+      if (esNueva) {
+        var p = prefijoNuevo();
+        var ya = (MC.familias || []).some(function (x) { return x.prefijo === p; });
+        prev.value = !p ? "Escribe el prefijo" : ya ? p + " ya existe: elígelo en la lista" : p + "001";
+        return;
+      }
+      var fam = (MC.familias || []).find(function (x) { return x.prefijo === sel.value; });
+      prev.value = fam ? fam.siguiente + " (se confirma al guardar)" : "Elige una familia";
+    }
+    sel.addEventListener("change", pinta);
+    nueva.addEventListener("input", pinta);
+    var tipo = f.querySelector("[name=tipo]");
+    tipo.addEventListener("change", function () {
+      if (tipo.value === "servicio" && (MC.familias || []).some(function (x) { return x.prefijo === "#"; })) { sel.value = "#"; pinta(); }
+    });
+    pinta();
     f.addEventListener("submit", async function (ev) {
       ev.preventDefault();
       var body = Object.fromEntries(new FormData(f).entries());
+      var er = f.querySelector("#mcp-f-err");
+      if (body.familia === "__nueva") {
+        var p = prefijoNuevo();
+        if (!p) { er.textContent = "El prefijo nuevo va con 2 a 5 letras, por ejemplo KR-"; return; }
+        body.familia = p; body.familia_nueva = true;
+      }
+      delete body.prefijo_nuevo;
       var r = await api("mcprod_nuevo", body);
-      if (!r || r.error) { var er = f.querySelector("#mcp-f-err"); if (er) er.textContent = (r && r.error) || "No se pudo crear"; return; }
+      if (!r || r.error) { if (er) er.textContent = (r && r.error) || "No se pudo crear"; return; }
       MC.listAt = 0;
+      if (typeof toast === "function") try { toast("Creado " + r.sku); } catch (x) {}
       go("#/m/productos/p/" + encodeURIComponent(r.id));
     });
   }
