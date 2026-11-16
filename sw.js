@@ -1,5 +1,5 @@
-const CACHE = "sunsu-beta-2026-11-16-DSH";
-const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
+const CACHE = "sunsu-beta-2026-11-16-PRD";
+const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
 
 function scopePath() {
   try { return new URL(self.registration.scope).pathname || "/"; } catch { return "/"; }

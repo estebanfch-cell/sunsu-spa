@@ -86,6 +86,21 @@ La cuenta bloqueada responde: «⚙️ Sistema en actualización — si requiere
 
 El número de ticket usa `next_ticket_num()` (`ticket_seq`) cuando la función existe. Si no, sigue el contador de `app_kv`. La OC nueva usa `next_oc_num()` (`oc_seq_2026`) con la misma reserva.
 
+## Productos (estilo MineCore)
+
+`#/m/productos` es la lista única de `erp_productos` + `catalogo` + `cabina_inventario`, unidas por SKU / código (`mc-productos.js`, acciones `mcprod_list`, `mcprod_get`, `mcprod_save`, `mcprod_foto`, `mcprod_nuevo` en `productos_api.ts`). La pantalla anterior sigue en `#/m/productos/catalogo`.
+
+- **Bodegas, solo como etiqueta.** Consignación ← `VENTA`. Bodega Cabina ← `CABINA` + `CAB2` + `CAB3`, con las sububicaciones Cabina 1/2/3 (`erp_sububicaciones`). Bodega Oficina ← `CASA` y `bodega_cerrados` de cabina. `erp_bodega_grupos` guarda ese mapeo. No se movió ninguna fila de `erp_stock`, y `CAB2` / `CAB3` siguen activas para el código que las lee. El stock de Cabina que no tiene cabina asignada sale como «Sin cabina asignada».
+- **Las ediciones de la beta viven en `erp_productos`.** La sincronización horaria Sheets→Supabase reescribe `catalogo`, así que la ficha nunca escribe ahí. Los precios editados van a `beta_pvp`, `beta_compra_real` y `beta_compra_comision`, y ganan solo dentro de esta ficha. Ni el sistema actual ni las comisiones de tickets los leen todavía.
+- Editan solo admin y super_admin. Cambiar un precio o un costo exige un motivo (`beta_precio_motivo`). Todo cambio queda en `audit_log` (trigger `trg_audit`) y se lee con `erp_producto_cambios(id)`.
+- Comisión por unidad = 30 % × (PVP sin IVA − compra para comisiones). Si `compra_comision` está vacía, usa `precio_compra`. REGLAS_NEGOCIO §441 dice «compra», sin distinguir.
+- La foto se guarda en `app_archivos` (`foto_url = archivo:<id>`) y, si el bucket privado `productos` existe, también en Storage.
+
+```bash
+supabase db query --linked --project-ref heuolwxyxoezkewyufrl < docs/supabase/pending/0039_productos_minecore.sql
+supabase functions deploy api --project-ref heuolwxyxoezkewyufrl --no-verify-jwt
+```
+
 ## Qué está hecho
 
 | Módulo | Estado |
