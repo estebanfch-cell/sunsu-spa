@@ -118,7 +118,23 @@ export function puedeVerContacto(rol: string): boolean {
   return r === "recepcion" || r === "gerente" || r === "admin" || r === "super_admin";
 }
 
-export interface SesLite { rol: string; name: string; short: string; uid: string }
+/** personas: de quién más ve datos por persona (permisos por usuario, alcance._personas). */
+export interface SesLite { rol: string; name: string; short: string; uid: string; personas?: string[] }
+
+/** ¿Ese nombre está entre las personas extra que el admin le dio? (nombre completo o primer nombre). */
+export function enAlcancePersonas(nombreFila: unknown, ses: SesLite): boolean {
+  const L = ses.personas;
+  if (!L || !L.length) return false;
+  const a = normNombre(String(nombreFila ?? ""));
+  if (!a) return false;
+  if (L.includes("*")) return true;
+  return L.some((x) => {
+    const b = normNombre(x);
+    if (!b) return false;
+    const fb = b.split(" ")[0] || "";
+    return a === b || a.startsWith(b + " ") || b.startsWith(a + " ") || (a === fb);
+  });
+}
 
 export function normalizarRol(rol: string): string {
   const r = (rol || "").trim();
@@ -156,7 +172,7 @@ export function esPropio(nombreFila: unknown, ses: SesLite): boolean {
   if (b && (a === b || a.startsWith(first + " ") || a === first || b.startsWith(firstA + " ") || b === firstA)) return true;
   if (c && c.length >= 3 && (a === c || a.startsWith(c + " ") || a.includes(c))) return true;
   if (u && a === u) return true;
-  return false;
+  return enAlcancePersonas(nombreFila, ses);
 }
 
 export async function matrizDe(db: Db): Promise<Record<string, Partial<Record<string, Acceso>>>> {
@@ -194,14 +210,21 @@ export function clampPersonal(action: string, p: Row, ses: SesLite | null, matri
   if (!ses || esAdmin(ses.rol)) return p;
   const out = { ...p };
   const propio = (mod: string) => acceso(ses.rol, mod, matriz) === "propio";
+  // Con alcance de personas, puede pedir a alguien de su lista; si no, siempre ella.
+  const pedido = (): string => {
+    const x = String(p.nombre ?? p.cosmetologa ?? p.persona ?? "").trim();
+    return x && enAlcancePersonas(x, ses) ? x : ses.name;
+  };
   if (propio("comisiones") && ["getDashCosm", "getComisionesRol", "getPeriodoComision", "getComisionRecepcion", "getComisionesTabla"].includes(action)) {
-    out.cosmetologa = ses.name;
-    out.nombre = ses.name;
-    out.persona = ses.name;
+    const n = pedido();
+    out.cosmetologa = n;
+    out.nombre = n;
+    out.persona = n;
   }
   if (acceso(ses.rol, "rol_pagos", matriz) !== "todos" && ["getRolIndividual", "getRoles", "aprobarRol", "getRolCiclo"].includes(action)) {
-    out.nombre = ses.name;
-    out.persona = ses.name;
+    const n = pedido();
+    out.nombre = n;
+    out.persona = n;
   }
   if (propio("asistencia") && action === "testDiasJibble") out.nombre = ses.name;
   if (propio("tickets") && (action === "crearTicket" || action === "ov_save" || action === "")) {

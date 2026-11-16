@@ -11,6 +11,8 @@ export interface Ses {
   token: string;
   prueba?: boolean;
   bloqueado?: boolean;
+  /** Permisos por usuario: de quién más ve datos por persona ("*" = todas). */
+  personas?: string[];
 }
 
 export interface Ctx {

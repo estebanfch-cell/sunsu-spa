@@ -3,14 +3,16 @@
 // app_modulos). Con fila:
 //   niveles {modulo: 0..3}  0 nada · 1 ver · 2 crear/editar · 3 aprobar/anular/borrar. Si existe, MANDA.
 //   alcance {modulo: "propio"|"todos"}  solo lo suyo / todo (donde el rol ya distingue).
-//   flags {costos, precios, saldos}  ver costos y márgenes / ver precios / ver saldos y pagos.
+//   flags {costos, precios, saldos, comisiones, rol_pagos}  interruptores finos (apagado = no lo ve).
+//   personas (se guarda en alcance._personas)  de quién ve datos: [] solo ella · [nombres] ella y esas
+//     personas · ["*"] todas. Aplica a comisiones, rol de pagos, tickets, asistencia y demás datos por persona.
 // admin y super_admin siempre tienen todo (igual que MineCore: admin → nivel máximo).
 import type { Db } from "./db.ts";
 import type { Row } from "./domain.ts";
 import { DEFAULT_MATRIZ, MODULOS, acceso, esAdmin, lecturaEnVista, matrizDe, moduloDeAccion, normalizarRol, type Acceso } from "./permisos.ts";
 
 export type Nivel = 0 | 1 | 2 | 3;
-export type Override = { uid: string; perfil?: string; niveles: Record<string, number>; alcance: Record<string, string>; flags: Record<string, boolean> };
+export type Override = { uid: string; perfil?: string; niveles: Record<string, number>; alcance: Record<string, string>; flags: Record<string, boolean>; personas?: string[] };
 
 /** Módulos finos de Sunsu, con su nivel máximo (como MAXN de MineCore) y si distinguen «lo suyo». */
 export const FINOS: { id: string; label: string; grupo: string; max: Nivel; alcance?: boolean }[] = [
@@ -39,7 +41,12 @@ export const FLAGS = [
   { id: "costos", label: "Ver costos y márgenes" },
   { id: "precios", label: "Ver precios" },
   { id: "saldos", label: "Ver saldos y pagos" },
+  { id: "comisiones", label: "Ver comisiones" },
+  { id: "rol_pagos", label: "Ver roles de pago" },
 ];
+/** Interruptores que además cierran un módulo entero cuando están apagados. */
+const FLAG_MODULO: Record<string, string> = { comisiones: "comisiones", rol_pagos: "rol_pagos" };
+export const TODOS = "*";
 const FINO = new Map(FINOS.map((m) => [m.id, m]));
 
 /** Acciones de nivel 3: aprobar, anular, borrar, deshacer. */
@@ -84,11 +91,17 @@ export function limpiarOverride(v: Row): Override | null {
   for (const [k, a] of Object.entries(parse(v.alcance))) if (FINO.get(k)?.alcance && (a === "propio" || a === "todos")) alcance[k] = String(a);
   const flags: Record<string, boolean> = {};
   for (const [k, b] of Object.entries(parse(v.flags))) if (FLAGS.some((f) => f.id === k) && typeof b === "boolean") flags[k] = b;
-  return { uid: String(v.uid || ""), perfil: v.perfil ? String(v.perfil) : "", niveles, alcance, flags };
+  const crudo = parse(v.alcance)._personas;
+  let personas: string[] | undefined;
+  if (Array.isArray(crudo)) {
+    const L = crudo.map((x) => String(x ?? "").trim().slice(0, 80)).filter(Boolean);
+    personas = L.includes(TODOS) ? [TODOS] : [...new Set(L)].slice(0, 60);
+  }
+  return { uid: String(v.uid || ""), perfil: v.perfil ? String(v.perfil) : "", niveles, alcance, flags, ...(personas ? { personas } : {}) };
 }
 
 export function vacio(o: Override | null): boolean {
-  return !o || (!Object.keys(o.niveles).length && !Object.keys(o.alcance).length && !Object.keys(o.flags).length);
+  return !o || (!Object.keys(o.niveles).length && !Object.keys(o.alcance).length && !Object.keys(o.flags).length && o.personas === undefined);
 }
 
 export async function cargarOverride(db: Db, uid: string): Promise<Override | null> {
@@ -103,6 +116,13 @@ export async function cargarOverride(db: Db, uid: string): Promise<Override | nu
 /** Acceso efectivo de un módulo con el override. */
 export function accesoEfectivo(base: Acceso, mod: string, o: Override | null): Acceso {
   if (!o) return base;
+  for (const [f, m] of Object.entries(FLAG_MODULO)) if (m === mod && o.flags[f] === false) return "no";
+  if (o.personas && FINO.get(mod)?.alcance) {
+    const n0 = o.niveles[mod];
+    const abierto = n0 === undefined ? base !== "no" : n0 > 0;
+    if (!abierto) return "no";
+    return o.personas.includes(TODOS) ? "todos" : "propio";
+  }
   const n = o.niveles[mod];
   const a = o.alcance[mod];
   if (n === undefined) return base === "no" ? "no" : ((a as Acceso) || base);
@@ -160,6 +180,7 @@ export function gateNivel(action: string, rol: string, o: Override | null): { er
   const n = o.niveles[mod];
   if (n === undefined) return null;
   const label = FINO.get(mod)?.label || mod;
+  for (const [f, m] of Object.entries(FLAG_MODULO)) if (m === mod && o.flags[f] === false) return { error: "No tienes permiso" };
   if (n <= 0) return { error: "No tienes permiso" };
   const lectura = lecturaEnVista(action) || LECTURAS.has(action);
   if (n === 1 && !lectura) return { error: "En «" + label + "» solo puedes ver" };
@@ -169,6 +190,7 @@ export function gateNivel(action: string, rol: string, o: Override | null): { er
 
 // Mismos patrones que MineCore (RX_PRECIO / RX_SALDO), solo si el interruptor está apagado.
 const RX_PRECIO = /^(unit_price|price|precio|precios|precio_.*|.*_price|pvp|beta_pvp|subtotal|total|total_.*|tax\d?|iva|discount|descuento|line_total|monto|valor|valor_.*)$/i;
+const RX_COMISION = /^(comision|comisiones|comision_.*|.*_comision|.*_comisiones)$/i;
 const RX_SALDO = /^(balance|saldo|saldo_.*|amount_paid|pagado|pagado_.*|deuda|vencido|por_cobrar|cartera|abonos?)$/i;
 function quitar(x: unknown, rx: RegExp, d = 0): unknown {
   if (d > 12 || x == null) return x;
@@ -183,6 +205,7 @@ export function redactarFlags(out: unknown, rol: string, o: Override | null): un
   let x = out;
   if (o.flags.precios === false) x = quitar(x, RX_PRECIO);
   if (o.flags.saldos === false) x = quitar(x, RX_SALDO);
+  if (o.flags.comisiones === false) x = quitar(x, RX_COMISION);
   return x;
 }
 
@@ -195,7 +218,13 @@ export function perfilDeRol(rol: string, matriz: Record<string, Partial<Record<s
     niveles[m.id] = nivelDeRol(a, m.id);
     if (m.alcance && a !== "no") alcance[m.id] = a;
   }
-  return { niveles, alcance, flags: { costos: acceso(rol, "ver_costos", matriz) === "todos", precios: true, saldos: true } };
+  return {
+    niveles, alcance,
+    flags: {
+      costos: acceso(rol, "ver_costos", matriz) === "todos", precios: true, saldos: true,
+      comisiones: acceso(rol, "comisiones", matriz) !== "no", rol_pagos: acceso(rol, "rol_pagos", matriz) !== "no",
+    },
+  };
 }
 
 export const ROLES_EDITABLES = Object.keys(DEFAULT_MATRIZ);
