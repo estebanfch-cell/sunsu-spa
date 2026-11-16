@@ -298,6 +298,11 @@ const LECTURA_VISTA = new Set([
   "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos",
 ]);
 
+/** Módulo que habilita una acción (para el nivel por usuario). */
+export function moduloDeAccion(action: string): string {
+  return ACCION_MODULO[action] || "";
+}
+
 export function lecturaEnVista(action: string): boolean {
   if (!action) return false;
   if (action.startsWith("get") || action.endsWith("_list") || action.endsWith("_get")) return true;

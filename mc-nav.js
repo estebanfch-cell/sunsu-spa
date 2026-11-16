@@ -87,7 +87,8 @@
       ] },
       { id: "admin", label: "Admin", items: [
         ["usuarios|admin", "Usuarios", "#/m/usuarios"],
-        ["permisos|admin", "Permisos", "#/m/permisos"],
+        ["admin", "Usuarios y permisos", "#/m/mc/upermisos"],
+        ["permisos|admin", "Permisos por rol", "#/m/permisos"],
         ["admin", "Aprobaciones", "#/m/mc/pronto/aprobaciones"],
         ["admin", "Configuración general", "#/m/configuracion"],
       ] },
@@ -264,7 +265,7 @@
     document.head.appendChild(s);
   }
 
-  var TITULOS = { protocolos: "Protocolos", reorden: "Reorden", ajuste: "Ajuste de stock" };
+  var TITULOS = { protocolos: "Protocolos", reorden: "Reorden", ajuste: "Ajuste de stock", upermisos: "Usuarios y permisos" };
   window.MCNav = {
     grupos: grupos,
     crearHtml: crearHtml,
@@ -279,10 +280,12 @@
       if (route.sub === "protocolos") return ok("cabina") ? protocolos() : '<p class="err">Este módulo no está en tu menú.</p>';
       if (route.sub === "reorden") return ok("compras") ? reorden() : '<p class="err">Este módulo no está en tu menú.</p>';
       if (route.sub === "ajuste") return ajuste();
+      if (route.sub === "upermisos" && window.MCPermisos) return window.MCPermisos.render(route);
       return '<p class="note">Pantalla desconocida.</p>';
     },
     wire: function (main, route) {
       if (route.sub === "ajuste") wireAjuste(main);
+      if (route.sub === "upermisos" && window.MCPermisos) window.MCPermisos.wire(main, route);
     },
     _pronto: PRONTO,
   };

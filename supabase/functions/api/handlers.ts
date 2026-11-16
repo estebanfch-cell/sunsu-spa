@@ -1,4 +1,5 @@
 import type { Ctx, Ses } from "./lib.ts";
+import { cargarOverride, conPermisosUsuario, gateNivel, redactarFlags } from "./usuario_permisos.ts";
 import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
@@ -541,7 +542,7 @@ export async function doLogin(p: R, ctx: Ctx): Promise<R> {
   await logAccion(ctx.db, s(found.nombre), "LOGIN", s(found.nombre));
   const pub = publico(found);
   pub.role = normalizarRol(s(pub.role));
-  const matriz = await matrizDe(ctx.db);
+  const matriz = await matrizDe(conPermisosUsuario(ctx.db, s(pub.role), esAdmin(s(pub.role)) ? null : await cargarOverride(ctx.db, s(found.id))));
   return { ok: true, token, user: pub, modulos: modulosVisibles(s(pub.role), matriz), ver_costos: acceso(s(pub.role), "ver_costos", matriz) === "todos" };
 }
 
@@ -554,7 +555,7 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
   const exp = new Date(ctx.now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
   await ctx.db.write(nombre, "sesiones", "insert", {}, { token, uid: id, rol, exp });
   await logAccion(ctx.db, nombre, "LOGIN", nombre);
-  const matriz = await matrizDe(ctx.db);
+  const matriz = await matrizDe(conPermisosUsuario(ctx.db, rol, esAdmin(rol) ? null : await cargarOverride(ctx.db, id)));
   let esCosm = false;
   try {
     const marks = await ctx.db.all("cosmetologas");
@@ -859,8 +860,14 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
     db = dbSoloLectura(ocultarPrueba(ctx.db));
     ctx = { ...ctx, db, ses: ses0 };
   }
+  // Permisos por usuario (0040): sin fila, todo sigue igual que con el rol.
+  const ovUsuario = ses0 && !esAdmin(ses0.rol) ? await cargarOverride(db, ses0.uid) : null;
+  if (ovUsuario && ses0) {
+    db = conPermisosUsuario(db, ses0.rol, ovUsuario);
+    if (ctx.ses) ctx = { ...ctx, db };
+  }
   const matriz = await matrizDe(db);
-  const gate = gateAccion(action, ses0, matriz);
+  const gate = gateAccion(action, ses0, matriz) || (ses0 ? gateNivel(action, ses0.rol, ovUsuario) : null);
   if (gate) return gate;
   if (action === "modo_prueba" || action === "prueba_borrar") {
     if (!ses0) return { error: "Inicia sesión" };
@@ -876,7 +883,8 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   }
   try {
     const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db });
-    return redactar(action, out, ses0, matriz);
+    const red = redactar(action, out, ses0, matriz);
+    return ses0 ? redactarFlags(red, ses0.rol, ovUsuario) : red;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === VISTA_MSG) return { error: VISTA_MSG };
