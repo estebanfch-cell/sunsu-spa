@@ -54,6 +54,7 @@ function sinCostos<T extends Row>(o: T): T {
 interface Base {
   productos: Row[]; catalogo: Map<string, Row>; cabina: Map<string, Row>; bodegas: Row[]; stock: Row[];
   ventaLegacy: Map<string, number>; compraBase: Map<string, number>; minimos: Map<string, number>;
+  antes?: Map<string, string[]>;
 }
 
 async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
@@ -61,6 +62,12 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
     safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario"),
     safeAll(ctx, "erp_bodegas"), safeAll(ctx, "erp_stock"), safeAll(ctx, "inventario_base"),
   ]);
+  // Códigos anteriores (0043 beta_sku_alias, ej. SUNSU-INV-000002 → INV-002): solo para buscar y mostrar.
+  const antes = new Map<string, string[]>();
+  for (const a of await safeAll(ctx, "beta_sku_alias")) {
+    const k = skuCode(s(a.sku)); const v = s(a.alias).toUpperCase();
+    if (k && v && v !== k) antes.set(k, [...(antes.get(k) || []), v]);
+  }
   const catalogo = new Map<string, Row>();
   for (const r of cat) { const c = skuCode(s(r.sku)); if (c) catalogo.set(c, r); }
   const cabina = new Map<string, Row>();
@@ -79,7 +86,7 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
   } catch { /* sin el cálculo viejo se usa erp_stock VENTA */ }
   const minimos = new Map<string, number>();
   for (const b of bases) minimos.set(skuCode(s(b.sku)), n(b.minimo));
-  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos };
+  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes };
 }
 
 function fila(p: Row, b: Base): Row {
@@ -101,7 +108,7 @@ function fila(p: Row, b: Base): Row {
   const reorden = p.beta_punto_reorden != null && p.beta_punto_reorden !== "" ? n(p.beta_punto_reorden) : null;
   const vis = skuVisible(code, tipo, cat);
   return {
-    id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, nombre, tipo, subtipo,
+    id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, skuAntes: b.antes?.get(code) || [], nombre, tipo, subtipo,
     categoria: s(p.categoria) || (cat ? (subtipo === "Producto" ? "Producto" : subtipo) : (cab ? "Insumo cabina" : "")),
     linea: s(p.linea), marca: mk.marca, marcaDeducida: mk.deducida, activo,
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),

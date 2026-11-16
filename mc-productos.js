@@ -139,8 +139,9 @@
       if (f.estado === "bajo" && p.estado !== "bajo") return false;
       if (f.estado === "agotado" && p.estado !== "agotado") return false;
       if (qq) {
-        var hay = norm([p.nombre, p.sku, p.skuVisible, p.marca, p.categoria, p.linea, p.codigoCabina, p.subtipo].join(" "));
-        if (qq.split(/\s+/).some(function (w) { return hay.indexOf(w) < 0; })) return false;
+        var hay = norm([p.nombre, p.sku, p.skuVisible, (p.skuAntes || []).join(" "), p.marca, p.categoria, p.linea, p.codigoCabina, p.subtipo].join(" "));
+        // INV-000123 (código viejo de 6 dígitos) busca también INV-123.
+        if (qq.split(/\s+/).some(function (w) { var m = w.match(/^(?:sunsu-)?inv-?(\d{4,})$/); var w2 = m ? "inv-" + String(Number(m[1])).padStart(3, "0") : w; return hay.indexOf(w) < 0 && hay.indexOf(w2) < 0; })) return false;
       }
       return true;
     });
@@ -376,7 +377,7 @@
       '<div class="mcp-ph' + (can ? " can" : "") + '" id="mcp-foto">' + foto + (can ? '<span class="mcp-phh">' + (p.foto_data ? "Cambiar foto" : "Subir foto") + "</span>" : "") + "</div>" +
       '<input type="file" accept="image/*" id="mcp-file" hidden>' +
       '<div style="flex:1;min-width:0"><h2 class="mcp-tt">' + V("nombre") + "</h2>" +
-      '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + "</span></div>" +
+      '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina && p.codigoCabina !== p.sku ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + (p.skuAntes && p.skuAntes.length ? ' <span class="mcp-sub">· antes ' + e(p.skuAntes.join(", ")) + "</span>" : "") + "</span></div>" +
       kv("sku_proveedor") + kv("codigo_barras") +
       '<div class="mcp-g">' + kv("marca") + kv("categoria") + kv("linea") +
       '<div class="mcp-kv"><span class="mcp-l">Tipo</span><span class="mcp-v">' + e(tipo) + "</span></div>" +
