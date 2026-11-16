@@ -7,7 +7,7 @@
   "use strict";
   var MC = {
     list: null, listAt: 0, admin: false, verCostos: false, filtrosData: null,
-    f: { q: "", tipo: "", bodega: "", marca: "", categoria: "", estado: "" },
+    f: { q: "", tipo: "", sub: "", bodega: "", marca: "", categoria: "", estado: "", linea: "", activo: "" }, orden: null,
     cur: null, ch: {}, ed: null, tab: "resumen", motivo: "",
   };
   var GRUPOS = [["CONSIGNACION", "Consignación"], ["CABINA", "Bodega Cabina"], ["OFICINA", "Bodega Oficina"]];
@@ -69,6 +69,9 @@
       ".mcp-mini{width:100%;border-collapse:collapse;font-size:.8rem}.mcp-mini th{text-align:left;color:var(--navy-d);font-size:.68rem;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--cream-d)}.mcp-mini td{padding:6px;border-bottom:1px solid var(--gray-l)}.mcp-mini td.num{text-align:right}",
       ".mcp-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.mcp-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d)}",
       ".mcp-form input,.mcp-form select{padding:9px 10px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit}",
+      ".mcp-sort{cursor:pointer;user-select:none;white-space:nowrap}",
+      ".mcp-colsp{background:var(--white);border:1.5px solid var(--cream-d);border-radius:12px;padding:10px 12px;margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}",
+      ".mcp-colsp label{display:flex;gap:6px;align-items:center;font-size:.8rem;color:var(--text)}.mcp-colsp input{width:auto;margin:0}",
       "@media(max-width:820px){.mcp-head{flex-direction:column}.mcp-ph{flex:none;width:100%;height:210px}.mcp-cols{grid-template-columns:1fr}.mcp-tbl .mcp-hide{display:none}.mcp-g{grid-template-columns:1fr}}",
     ].join("");
     document.head.appendChild(s);
@@ -86,72 +89,173 @@
     MC.filtrosData = d.filtros || { marcas: [], categorias: [] };
     return { ok: true };
   }
+  // Columnas (como MineCore): el usuario elige cuáles ve; se guarda en este equipo.
+  var COLS = [
+    { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
+    { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "linea", t: "Línea", hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
+    { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
+    { id: "g_CONSIGNACION", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
+    { id: "stock", t: "Stock", def: 1, num: 1 },
+  ];
+  var COLS_KEY = "sunsu.mcp.cols";
+  function colsVis() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(COLS_KEY) || "null"); } catch (x) { saved = null; }
+    return COLS.filter(function (c) { return (!c.costos || MC.verCostos) && (Array.isArray(saved) ? saved.indexOf(c.id) >= 0 : c.def); });
+  }
+  function guardarCols(ids) { try { localStorage.setItem(COLS_KEY, JSON.stringify(ids)); } catch (x) {} }
+  // Árbol de categorías: tipo → subtipo → categoría.
+  var ARBOL = [["inventariable", "Inventariable", ["Producto", "Insumo cabina"]], ["servicio", "Servicio", ["Facial", "Facial especial", "Add-on", "Paquete", "Gift card", "Servicio"]]];
+  function valor(p, id) {
+    if (id === "sku") return p.skuVisible || p.sku;
+    if (id === "tipo") return p.tipo;
+    if (id === "pvp") return Number(p.pvp) || 0;
+    if (id === "costo") return Number(p.compraReal) || 0;
+    if (id === "margen") return Number(p.margenPct) || 0;
+    if (id === "stock") return p.tipo === "servicio" ? -1 : Number(p.stock) || 0;
+    if (id.indexOf("g_") === 0) return Number((p.porGrupo || {})[id.slice(2)]) || 0;
+    return String(p[id] || "");
+  }
   function filtrar() {
     var f = MC.f, qq = norm(f.q).trim();
-    return (MC.list || []).filter(function (p) {
+    var rows = (MC.list || []).filter(function (p) {
       if (f.tipo && p.tipo !== f.tipo) return false;
+      if (f.sub && p.subtipo !== f.sub) return false;
       if (f.marca && p.marca !== f.marca) return false;
       if (f.categoria && p.categoria !== f.categoria) return false;
+      if (f.linea && (f.linea === "__sin" ? !!p.linea : p.linea !== f.linea)) return false;
       if (f.bodega && !(p.porGrupo && Number(p.porGrupo[f.bodega]) > 0)) return false;
-      if (f.estado === "inactivos") { if (p.activo !== false) return false; }
-      else if (p.activo === false && !qq) return false;
+      var act = f.activo || (f.estado === "inactivos" ? "inactivos" : "");
+      if (act === "inactivos") { if (p.activo !== false) return false; }
+      else if (act !== "todos" && p.activo === false && !qq) return false;
       if (f.estado === "con" && !(Number(p.stock) > 0)) return false;
       if (f.estado === "bajo" && p.estado !== "bajo") return false;
       if (f.estado === "agotado" && p.estado !== "agotado") return false;
       if (qq) {
-        var hay = norm([p.nombre, p.sku, p.skuVisible, p.marca, p.categoria, p.codigoCabina, p.subtipo].join(" "));
+        var hay = norm([p.nombre, p.sku, p.skuVisible, p.marca, p.categoria, p.linea, p.codigoCabina, p.subtipo].join(" "));
         if (qq.split(/\s+/).some(function (w) { return hay.indexOf(w) < 0; })) return false;
       }
       return true;
     });
+    if (MC.orden && MC.orden.col) {
+      var c = MC.orden.col, dir = MC.orden.dir === "desc" ? -1 : 1;
+      rows = rows.slice().sort(function (a, b) {
+        var x = c === "nombre" ? String(a.nombre || "") : valor(a, c), y = c === "nombre" ? String(b.nombre || "") : valor(b, c);
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "es", { numeric: true })) * dir;
+      });
+    }
+    return rows;
   }
   function iniciales(n) { return e(String(n || "?").replace(/[^A-Za-zÁÉÍÓÚÑ0-9 ]/g, "").split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase() || "?"); }
   function thumb(p) { return '<div class="mcp-th">' + (p.foto_thumb ? '<img src="' + e(p.foto_thumb) + '" alt="">' : iniciales(p.nombre)) + "</div>"; }
+  function money(v) { return v == null || v === "" ? "—" : "$" + (Number(v) || 0).toFixed(2); }
+  function celda(p, c) {
+    var cls = (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "");
+    var v;
+    if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
+    else if (c.id === "tipo") v = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
+    else if (c.id === "stock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>" + (p.estado === "agotado" ? ' <span class="mcp-tag agot">agotado</span>' : p.estado === "bajo" ? ' <span class="mcp-tag bajo">bajo</span>' : "");
+    else if (c.id === "pvp") v = money(p.pvp);
+    else if (c.id === "costo") v = money(p.compraReal);
+    else if (c.id === "margen") v = p.margenPct == null ? "—" : q2(Math.round(Number(p.margenPct) * 10) / 10) + "%";
+    else if (c.id.indexOf("g_") === 0) v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : q2((p.porGrupo || {})[c.id.slice(2)] || 0);
+    else v = e(p[c.id] || "—");
+    return '<td class="' + cls + '">' + v + "</td>";
+  }
   function filasHtml() {
-    var rows = filtrar();
+    var rows = filtrar(), cols = colsVis();
     var cnt = document.getElementById("mcp-count");
     if (cnt) cnt.textContent = rows.length + " de " + (MC.list || []).length + " productos";
-    if (!rows.length) return '<tr><td colspan="6" class="mcp-sub" style="padding:18px">Sin productos con ese filtro.</td></tr>';
+    if (!rows.length) return '<tr><td colspan="' + (cols.length + 1) + '" class="mcp-sub" style="padding:18px">Sin productos con ese filtro.</td></tr>';
     return rows.map(function (p) {
-      var tipo = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
-      var st = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>" + (p.estado === "agotado" ? ' <span class="mcp-tag agot">agotado</span>' : p.estado === "bajo" ? ' <span class="mcp-tag bajo">bajo</span>' : "");
       return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '"><td><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + '</b><span class="mcp-sub">' + e(p.subtipo) + (p.activo === false ? " · inactivo" : "") + "</span></div></div></td>" +
-        '<td class="mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "") + "</td><td>" + tipo + '</td><td class="mcp-hide">' + e(p.categoria || "—") + '</td><td class="mcp-hide">' + e(p.marca || "—") + '</td><td class="num">' + st + "</td></tr>";
+        cols.map(function (c) { return celda(p, c); }).join("") + "</tr>";
     }).join("");
   }
+  function cabeceraHtml() {
+    var o = MC.orden || {};
+    var th = function (id, t, cls) { return '<th class="' + (cls || "") + ' mcp-sort" data-mcp-sort="' + id + '">' + e(t) + (o.col === id ? (o.dir === "desc" ? " ▾" : " ▴") : "") + "</th>"; };
+    return "<tr>" + th("nombre", "Producto") + colsVis().map(function (c) { return th(c.id, c.t, (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "")); }).join("") + "</tr>";
+  }
+  function colsPanelHtml() {
+    var vis = colsVis().map(function (c) { return c.id; });
+    return '<div class="mcp-colsp" id="mcp-colsp" hidden><div class="mcp-sub" style="margin-bottom:6px">Columnas que ves (se guarda en este equipo)</div>' +
+      COLS.filter(function (c) { return !c.costos || MC.verCostos; }).map(function (c) {
+        return '<label><input type="checkbox" data-mcp-col="' + e(c.id) + '"' + (vis.indexOf(c.id) >= 0 ? " checked" : "") + "> " + e(c.t) + "</label>";
+      }).join("") + '<button class="btn ghost small" type="button" id="mcp-cols-def">Volver a las de siempre</button></div>';
+  }
   function opt(v, t, cur) { return '<option value="' + e(v) + '"' + (String(v) === String(cur) ? " selected" : "") + ">" + e(t) + "</option>"; }
+  function arbolSel(f) {
+    var cur = f.sub ? "s:" + f.sub : f.tipo ? "t:" + f.tipo : "";
+    return '<select id="mcp-f-arbol" aria-label="Tipo y categoría">' + opt("", "Todos los tipos", cur) + ARBOL.map(function (t) {
+      return '<optgroup label="' + e(t[1]) + '">' + opt("t:" + t[0], "Todo " + t[1].toLowerCase(), cur) + t[2].map(function (s2) { return opt("s:" + s2, "· " + s2, cur); }).join("") + "</optgroup>";
+    }).join("") + "</select>";
+  }
   async function renderLista() {
     var r = await cargarLista(false);
     if (r && r.error) return '<p class="err">' + e(r.error) + "</p>";
     var f = MC.f, fd = MC.filtrosData || {};
+    var lineas = [];
+    (MC.list || []).forEach(function (p) { if (p.linea && lineas.indexOf(p.linea) < 0) lineas.push(p.linea); });
+    lineas.sort();
     var nuevo = MC.admin ? '<button class="btn small" type="button" id="mcp-nuevo">+ Nuevo producto</button>' : "";
     return '<div class="mcp">' +
       '<div class="mcp-bar"><input class="mcp-q" id="mcp-q" type="search" placeholder="Buscar producto, SKU, marca o código" aria-label="Buscar producto, SKU, marca o código" value="' + e(f.q) + '">' + nuevo + "</div>" +
-      '<div class="mcp-bar">' +
-      '<select id="mcp-f-tipo" aria-label="Tipo">' + opt("", "Todos los tipos", f.tipo) + opt("inventariable", "Inventariable", f.tipo) + opt("servicio", "Servicio", f.tipo) + "</select>" +
+      '<div class="mcp-bar">' + arbolSel(f) +
       '<select id="mcp-f-bodega" aria-label="Bodega">' + opt("", "Todas las bodegas", f.bodega) + GRUPOS.map(function (g) { return opt(g[0], g[1], f.bodega); }).join("") + "</select>" +
       '<select id="mcp-f-marca" aria-label="Marca">' + opt("", "Todas las marcas", f.marca) + (fd.marcas || []).map(function (m) { return opt(m, m, f.marca); }).join("") + "</select>" +
       '<select id="mcp-f-categoria" aria-label="Categoría">' + opt("", "Todas las categorías", f.categoria) + (fd.categorias || []).map(function (m) { return opt(m, m, f.categoria); }).join("") + "</select>" +
-      '<select id="mcp-f-estado" aria-label="Stock">' + opt("", "Todo el stock", f.estado) + opt("con", "Con stock", f.estado) + opt("bajo", "Stock bajo", f.estado) + opt("agotado", "Agotado", f.estado) + opt("inactivos", "Inactivos", f.estado) + "</select>" +
-      '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div>' +
+      '<select id="mcp-f-linea" aria-label="Línea">' + opt("", "Todas las líneas", f.linea) + opt("__sin", "Sin línea", f.linea) + lineas.map(function (m) { return opt(m, m, f.linea); }).join("") + "</select>" +
+      '<select id="mcp-f-estado" aria-label="Stock">' + opt("", "Todo el stock", f.estado) + opt("con", "Con stock", f.estado) + opt("bajo", "Stock bajo", f.estado) + opt("agotado", "Agotado", f.estado) + "</select>" +
+      '<select id="mcp-f-activo" aria-label="Activo">' + opt("", "Activos", f.activo) + opt("inactivos", "Inactivos / archivados", f.activo) + opt("todos", "Activos e inactivos", f.activo) + "</select>" +
+      '<button class="btn ghost small" type="button" id="mcp-cols">Columnas</button>' +
+      '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div>' + colsPanelHtml() +
       '<div class="mcp-count" id="mcp-count"></div>' +
-      '<div class="sheet-scroll"><table class="mcp-tbl"><thead><tr><th>Producto</th><th>SKU</th><th>Tipo</th><th class="mcp-hide">Categoría</th><th class="mcp-hide">Marca</th><th class="num">Stock</th></tr></thead><tbody id="mcp-body"></tbody></table></div>' +
-      '<p class="note">Una sola lista: catálogo, Cabina y productos de la beta unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. <a href="#/m/productos/catalogo">Catálogo anterior</a></p>' +
+      '<div class="sheet-scroll"><table class="mcp-tbl"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
+      '<p class="note">Una sola lista: catálogo, Cabina y productos de la beta unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. <a href="#/m/productos/catalogo">Catálogo anterior</a></p>' +
       "</div>";
   }
   function wireLista(main) {
     var body = main.querySelector("#mcp-body");
     if (!body) return;
-    var pintar = function () { body.innerHTML = filasHtml(); };
+    var head = main.querySelector("#mcp-head");
+    var pintar = function () { body.innerHTML = filasHtml(); if (head) head.innerHTML = cabeceraHtml(); };
     pintar();
     var q = main.querySelector("#mcp-q");
     if (q) q.addEventListener("input", function () { MC.f.q = q.value; pintar(); });
-    ["tipo", "bodega", "marca", "categoria", "estado"].forEach(function (k) {
+    ["bodega", "marca", "categoria", "estado", "linea", "activo"].forEach(function (k) {
       var s = main.querySelector("#mcp-f-" + k);
       if (s) s.addEventListener("change", function () { MC.f[k] = s.value; pintar(); });
     });
+    var ar = main.querySelector("#mcp-f-arbol");
+    if (ar) ar.addEventListener("change", function () {
+      var v = ar.value;
+      MC.f.tipo = v.indexOf("t:") === 0 ? v.slice(2) : "";
+      MC.f.sub = v.indexOf("s:") === 0 ? v.slice(2) : "";
+      if (MC.f.sub) ARBOL.forEach(function (t) { if (t[2].indexOf(MC.f.sub) >= 0) MC.f.tipo = t[0]; });
+      pintar();
+    });
+    if (head) head.addEventListener("click", function (ev) {
+      var th = ev.target.closest("[data-mcp-sort]");
+      if (!th) return;
+      var c = th.getAttribute("data-mcp-sort"), o = MC.orden || {};
+      MC.orden = o.col === c ? { col: c, dir: o.dir === "desc" ? "asc" : "desc" } : { col: c, dir: "asc" };
+      pintar();
+    });
+    var cb = main.querySelector("#mcp-cols"), cp = main.querySelector("#mcp-colsp");
+    if (cb && cp) cb.onclick = function () { cp.hidden = !cp.hidden; };
+    if (cp) {
+      cp.querySelectorAll("[data-mcp-col]").forEach(function (x) {
+        x.onchange = function () {
+          var ids = [].map.call(cp.querySelectorAll("[data-mcp-col]:checked"), function (y) { return y.getAttribute("data-mcp-col"); });
+          guardarCols(ids); pintar();
+        };
+      });
+      var dflt = cp.querySelector("#mcp-cols-def");
+      if (dflt) dflt.onclick = function () { try { localStorage.removeItem(COLS_KEY); } catch (x) {} go("#/m/productos"); };
+    }
     var lim = main.querySelector("#mcp-limpiar");
-    if (lim) lim.onclick = function () { MC.f = { q: "", tipo: "", bodega: "", marca: "", categoria: "", estado: "" }; go("#/m/productos"); };
+    if (lim) lim.onclick = function () { MC.f = { q: "", tipo: "", sub: "", bodega: "", marca: "", categoria: "", estado: "", linea: "", activo: "" }; MC.orden = null; go("#/m/productos"); };
     body.addEventListener("click", function (ev) {
       var tr = ev.target.closest("tr[data-mcp-id]");
       if (tr) go("#/m/productos/p/" + encodeURIComponent(tr.getAttribute("data-mcp-id")));
