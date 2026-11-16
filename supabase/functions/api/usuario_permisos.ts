@@ -57,7 +57,7 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios"]);
+const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
@@ -65,6 +65,7 @@ const MOD_EXTRA: Record<string, string> = {
   mcprod_estado: "productos", mcprod_duplicar: "productos", mcprod_archivo: "productos", mcprod_archivo_subir: "productos",
   mcprod_archivo_quitar: "productos", mcprod_archivo_principal: "productos", mcprod_codigos_save: "productos",
   mcprod_codigo_interno: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
+  proto_list: "cabina", proto_get: "cabina", proto_guardar: "cabina", proto_historial: "cabina",
 };
 export function moduloFino(action: string): string {
   return MOD_EXTRA[action] || moduloDeAccion(action);
