@@ -8,7 +8,7 @@ import type { Row } from "./domain.ts";
 import {
   BOD_CAB2, BOD_CAB3, BOD_CABINA, BOD_CASA, BOD_VENTA, comisionUnidad, grupoDeBodega, limpiarCambios,
   lineasOcLegacy, marcaDe, preciosDe, stockDe, stockTotal, tipoDe,
-  codigoNorm, familiaDeCodigo, familiasDe, prefijoNormal, siguienteCodigo,
+  codigoNorm, skuVisible, familiaDeCodigo, familiasDe, prefijoNormal, siguienteCodigo,
 } from "./productos.ts";
 
 const BODEGAS: Row[] = [
@@ -218,5 +218,11 @@ describe("productos MineCore: familias de SKU", () => {
     const cr = ctx(db, "recepcion");
     const no = await handle("mcprod_nuevo", { token: cr.token, familia: "ML-", nombre: "X" }, cr) as Row;
     assert.match(String(no.error), /admin/);
+  });
+  it("servicios muestran el SKU del catálogo (SUNSU-01) y guardan el número como alias", () => {
+    assert.deepEqual(skuVisible("01", "servicio", { sku: "SUNSU-01" }), { sku: "SUNSU-01", alias: "01" });
+    assert.deepEqual(skuVisible("60", "servicio", undefined), { sku: "60", alias: "" });
+    assert.deepEqual(skuVisible("07", "servicio", { sku: "SUNSU-08" }), { sku: "07", alias: "" });
+    assert.deepEqual(skuVisible("ML-001", "inventariable", { sku: "SUNSU-ML-001" }), { sku: "ML-001", alias: "" });
   });
 });
