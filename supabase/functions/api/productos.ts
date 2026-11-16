@@ -197,6 +197,7 @@ export const CAMPOS_EDITABLES: Record<string, "text" | "num" | "bool"> = {
   nombre: "text", marca: "text", categoria: "text", linea: "text", sku_proveedor: "text", codigo_barras: "text",
   unidad: "text", observaciones: "text", producto_base: "text", bodega_def: "text", sububicacion_def: "text",
   activo: "bool", beta_pvp: "num", beta_compra_real: "num", beta_compra_comision: "num",
+  beta_descripcion: "text", beta_stock_minimo: "num", beta_punto_reorden: "num",
 };
 export const CAMPOS_COSTO = new Set(["beta_compra_real", "beta_compra_comision"]);
 
@@ -295,4 +296,98 @@ export function familiasDe(items: { codigo: unknown; clase?: unknown }[]): Famil
     });
   }
   return out.sort((a, b) => b.total - a.total || a.prefijo.localeCompare(b.prefijo));
+}
+
+// ---------- Paridad MineCore (0041): códigos de barras, escalas, proveedores, archivos ----------
+
+/** Dígito de control EAN-13 para los 12 primeros dígitos. */
+export function ean13Control(doce: string): number {
+  let t = 0;
+  for (let i = 0; i < 12; i++) t += Number(doce[i]) * (i % 2 ? 3 : 1);
+  return (10 - (t % 10)) % 10;
+}
+export function ean13Valido(c: string): boolean {
+  return /^\d{13}$/.test(c) && ean13Control(c.slice(0, 12)) === Number(c[12]);
+}
+/** Código interno EAN-13 de uso en tienda (prefijo 20, rango GS1 reservado para uso interno). */
+export function siguienteInterno(existentes: string[]): string {
+  let max = 0;
+  for (const c of existentes) if (/^20\d{11}$/.test(c)) max = Math.max(max, Number(c.slice(2, 12)));
+  const doce = "20" + String(max + 1).padStart(10, "0");
+  return doce + ean13Control(doce);
+}
+/** Normaliza un código leído (los de la hoja vienen como 8809937360834.0). */
+export function codigoBarrasNorm(v: unknown): string {
+  return String(v ?? "").trim().replace(/\.0+$/, "").replace(/\s+/g, "");
+}
+export type CodigoBarras = { codigo: string; tipo: "ean13" | "interno" | "otro"; principal: boolean };
+export function limpiarCodigos(v: unknown): { codigos: CodigoBarras[]; error?: string } {
+  const L = Array.isArray(v) ? v : [];
+  const out: CodigoBarras[] = [];
+  for (const x of L as Row[]) {
+    const codigo = codigoBarrasNorm(x?.codigo);
+    if (!codigo) continue;
+    if (codigo.length > 40 || !/^[0-9A-Za-z\-.]+$/.test(codigo)) return { codigos: [], error: "Código inválido: " + codigo };
+    let tipo = (s(x?.tipo) || (/^\d{13}$/.test(codigo) ? "ean13" : "otro")) as CodigoBarras["tipo"];
+    if (!["ean13", "interno", "otro"].includes(tipo)) tipo = "otro";
+    if ((tipo === "ean13" || tipo === "interno") && !ean13Valido(codigo)) return { codigos: [], error: "El EAN-13 " + codigo + " no cuadra (dígito de control)" };
+    if (out.some((y) => y.codigo === codigo)) return { codigos: [], error: "Código repetido: " + codigo };
+    out.push({ codigo, tipo, principal: x?.principal === true });
+  }
+  if (out.length && !out.some((x) => x.principal)) out[0].principal = true;
+  let vis = false;
+  for (const x of out) { if (x.principal && vis) x.principal = false; if (x.principal) vis = true; }
+  return { codigos: out.slice(0, 20) };
+}
+export type Escala = { nombre: string; desde: number; precio: number | null; markup: number | null };
+export function limpiarEscalas(v: unknown): { escalas: Escala[]; error?: string } {
+  const out: Escala[] = [];
+  for (const x of (Array.isArray(v) ? v : []) as Row[]) {
+    const nombre = s(x?.nombre).trim().slice(0, 60);
+    const desde = Number(x?.desde ?? 1);
+    const precio = x?.precio === "" || x?.precio == null ? null : Number(String(x.precio).replace(",", "."));
+    const markup = x?.markup === "" || x?.markup == null ? null : Number(String(x.markup).replace(",", "."));
+    if (!nombre && precio == null && markup == null) continue;
+    if (!nombre) return { escalas: [], error: "Cada escala necesita un nombre (por ejemplo Mayorista)" };
+    if (!Number.isFinite(desde) || desde < 1) return { escalas: [], error: "«Desde» va de 1 en adelante en " + nombre };
+    if (precio == null && markup == null) return { escalas: [], error: "Pon precio o markup en " + nombre };
+    if (precio != null && (!Number.isFinite(precio) || precio < 0)) return { escalas: [], error: "Precio inválido en " + nombre };
+    if (markup != null && (!Number.isFinite(markup) || markup < -100 || markup > 1000)) return { escalas: [], error: "Markup inválido en " + nombre };
+    out.push({ nombre, desde: Math.floor(desde), precio: precio == null ? null : round2(precio), markup: markup == null ? null : round2(markup) });
+  }
+  out.sort((a, b) => a.desde - b.desde || a.nombre.localeCompare(b.nombre));
+  return { escalas: out.slice(0, 20) };
+}
+/** Precio de una escala: el fijo, o costo × (1 + markup %). Con IVA 15 % para mostrarlo como PVP. */
+export function precioEscala(e: Escala, costo: number, iva = 0.15): number | null {
+  if (e.precio != null) return e.precio;
+  if (e.markup == null || !(costo > 0)) return null;
+  return round2(costo * (1 + e.markup / 100) * (1 + iva));
+}
+export type ProvProducto = { proveedor_id: string; proveedor: string; codigo: string; precio: number | null; predeterminado: boolean };
+export function limpiarProveedores(v: unknown, catalogo: Row[]): { proveedores: ProvProducto[]; error?: string } {
+  const byId = new Map(catalogo.map((p) => [s(p.id), p]));
+  const out: ProvProducto[] = [];
+  for (const x of (Array.isArray(v) ? v : []) as Row[]) {
+    const id = s(x?.proveedor_id);
+    const nombre = s(x?.proveedor).trim();
+    if (!id && !nombre) continue;
+    const p = id ? byId.get(id) : undefined;
+    if (id && !p) return { proveedores: [], error: "Proveedor no encontrado" };
+    const precio = x?.precio === "" || x?.precio == null ? null : Number(String(x.precio).replace(",", "."));
+    if (precio != null && (!Number.isFinite(precio) || precio < 0)) return { proveedores: [], error: "Precio inválido" };
+    const key = id || nombre.toLowerCase();
+    if (out.some((y) => (y.proveedor_id || y.proveedor.toLowerCase()) === key)) return { proveedores: [], error: "Proveedor repetido: " + (p ? s(p.nombre) : nombre) };
+    out.push({ proveedor_id: id, proveedor: p ? s(p.nombre) : nombre.slice(0, 80), codigo: s(x?.codigo).trim().slice(0, 60), precio: precio == null ? null : round2(precio), predeterminado: x?.predeterminado === true });
+  }
+  let vis = false;
+  for (const x of out) { if (x.predeterminado && vis) x.predeterminado = false; if (x.predeterminado) vis = true; }
+  if (out.length && !vis) out[0].predeterminado = true;
+  return { proveedores: out.slice(0, 20) };
+}
+/** jsonb de la fila → arreglo (llega como texto en algunos lectores). */
+export function arr(v: unknown): Row[] {
+  if (Array.isArray(v)) return v as Row[];
+  if (typeof v === "string" && v.trim().startsWith("[")) { try { const x = JSON.parse(v); return Array.isArray(x) ? x : []; } catch { return []; } }
+  return [];
 }

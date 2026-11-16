@@ -1,0 +1,224 @@
+// Productos · paridad MineCore (0041). Todo es de la beta: columnas beta_* de erp_productos y
+// app_archivos. Nada va a catalogo ni a la hoja. Escribe solo admin; leer pide Productos.
+//   mcprod_estado            archivar / desarchivar / eliminar (borrado suave) / restaurar, por lote
+//   mcprod_duplicar          copia con el siguiente SKU de la misma familia
+//   mcprod_archivo_subir / mcprod_archivo / mcprod_archivo_quitar / mcprod_archivo_principal
+//   mcprod_codigos_save / mcprod_codigo_interno   códigos de barras (EAN-13 e internos)
+//   mcprod_escalas_save      escalas de precio (precio fijo o markup sobre costo)
+//   mcprod_proveedores_save  proveedores del producto (código, precio, predeterminado)
+import { extend } from "./handlers.ts";
+import type { Ctx, Ses } from "./lib.ts";
+import { actorOf, guardarArchivo } from "./lib.ts";
+import { acceso, esAdmin, matrizDe } from "./permisos.ts";
+import { s, type Row } from "./domain.ts";
+import { runErp } from "./erp.ts";
+import {
+  FAMILIA_NUMERICA, arr, codigoBarrasNorm, codigoNorm, familiaDeCodigo, familiasDe, limpiarCodigos, limpiarEscalas,
+  limpiarProveedores, siguienteCodigo, siguienteInterno,
+} from "./productos.ts";
+
+async function safeAll(ctx: Ctx, t: string): Promise<Row[]> {
+  try { return await ctx.db.all(t); } catch { return []; }
+}
+async function puedeVer(ctx: Ctx, ses: Ses): Promise<boolean> {
+  return esAdmin(ses.rol) || acceso(ses.rol, "productos", await matrizDe(ctx.db)) !== "no";
+}
+async function producto(ctx: Ctx, id: string): Promise<Row | undefined> {
+  return (await safeAll(ctx, "erp_productos")).find((p) => s(p.id) === id);
+}
+function sello(ses: Ses, ctx: Ctx): Row {
+  return { beta_editado_por: actorOf(ses), beta_editado_at: ctx.now.toISOString() };
+}
+const FALTA_0041 = "Falta aplicar 0041_productos_paridad.sql";
+async function actualizar(ctx: Ctx, ses: Ses, id: string, row: Row): Promise<Row | { error: string }> {
+  const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id }, { ...row, ...sello(ses, ctx) });
+  if (!saved) return { error: "Producto no encontrado" };
+  const k = Object.keys(row).find((x) => x.startsWith("beta_"));
+  if (k && !(k in (saved as Row))) return { error: FALTA_0041 };
+  return saved as Row;
+}
+
+extend("mcprod_estado", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin archiva o elimina productos" };
+  const accion = s(p.que);
+  const ids = (Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => s(x)).filter(Boolean).slice(0, 300);
+  if (!ids.length) return { error: "Elige al menos un producto" };
+  const now = ctx.now.toISOString(), yo = actorOf(ses);
+  const row: Row | null = accion === "archivar" ? { beta_archivado_at: now, beta_archivado_por: yo }
+    : accion === "desarchivar" ? { beta_archivado_at: null, beta_archivado_por: null }
+    : accion === "eliminar" ? { beta_eliminado_at: now, beta_eliminado_por: yo }
+    : accion === "restaurar" ? { beta_eliminado_at: null, beta_eliminado_por: null } : null;
+  if (!row) return { error: "Acción inválida" };
+  if (accion === "eliminar" && s(p.confirmar) !== "ELIMINAR") return { error: "Escribe ELIMINAR para confirmar" };
+  let ok = 0;
+  for (const id of ids) {
+    const r = await actualizar(ctx, ses, id, row);
+    if ("error" in r && r.error) { if (r.error === FALTA_0041) return r; continue; }
+    ok++;
+  }
+  return { ok: true, accion, cambiados: ok };
+});
+
+extend("mcprod_duplicar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin copia productos" };
+  const src = await producto(ctx, s(p.id));
+  if (!src) return { error: "Producto no encontrado" };
+  const [erp, cat, cab] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario")]);
+  const existentes: { codigo: string; clase: string }[] = [];
+  for (const r of erp) { const c = codigoNorm(r.sku); if (c) existentes.push({ codigo: c, clase: s(r.clase) }); }
+  for (const r of cat) { const c = codigoNorm(r.sku); if (c) existentes.push({ codigo: c, clase: "catalogo" }); }
+  for (const r of cab) for (const v of [r.codigo, r.sku_catalogo]) { const c = codigoNorm(v); if (c) existentes.push({ codigo: c, clase: "cabina" }); }
+  const fam0 = familiaDeCodigo(src.sku);
+  if (!fam0) return { error: "Este SKU no tiene familia; créalo con «Nuevo producto»" };
+  const fam = familiasDe(existentes).find((f) => f.prefijo === fam0.prefijo);
+  const codigos = existentes.map((x) => x.codigo);
+  const sku = siguienteCodigo(fam0.prefijo, codigos, fam ? fam.ancho : fam0.prefijo === FAMILIA_NUMERICA ? 2 : 3);
+  if (new Set(codigos).has(codigoNorm(sku))) return { error: "El código " + sku + " ya existe; vuelve a intentar" };
+  const nombre = (s(p.nombre).trim() || s(src.nombre) + " (copia)").slice(0, 200);
+  const out = await runErp("prod_save", {
+    sku, nombre, marca: s(src.marca), categoria: s(src.categoria), clase: s(src.clase) || "producto",
+    unidad: s(src.unidad) || "u", uso: ["cabina", "venta", "ambos"].includes(s(src.uso)) ? s(src.uso) : "venta",
+    unidad_consumo: s(src.unidad_consumo), factor_consumo: src.factor_consumo, linea: s(src.linea), observaciones: s(src.observaciones),
+    sku_proveedor: s(src.sku_proveedor), precio_venta: src.precio_venta ?? null, _rol: ses.rol,
+  }, ctx.db, actorOf(ses), ctx.now);
+  if (out.error) return out;
+  const extra: Row = {};
+  for (const k of ["beta_pvp", "beta_compra_real", "beta_compra_comision", "beta_descripcion", "beta_stock_minimo", "beta_punto_reorden", "beta_escalas", "beta_proveedores", "bodega_def", "sububicacion_def", "producto_base"]) {
+    if (src[k] != null && src[k] !== "") extra[k] = src[k];
+  }
+  if (Object.keys(extra).length) await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(out.id) }, { ...extra, ...sello(ses, ctx), beta_precio_motivo: "Copia de " + s(src.sku) });
+  return { ok: true, id: out.id, sku, familia: fam0.prefijo, de: s(src.sku) };
+});
+
+// ---------- Fotos y archivos ----------
+const MIMES = /^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/(csv|plain)|application\/vnd\.openxmlformats-officedocument\.(spreadsheetml\.sheet|wordprocessingml\.document)|application\/vnd\.ms-excel|application\/msword)$/;
+
+extend("mcprod_archivo_subir", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin sube fotos y archivos" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const data = s(p.data);
+  const mime = data.startsWith("data:") ? data.slice(5, data.indexOf(";")) : "";
+  if (!MIMES.test(mime)) return { error: "Tipo de archivo no permitido (fotos, PDF, Excel, Word, CSV)" };
+  const tipo = mime.startsWith("image/") ? "foto" : "archivo";
+  const nombre = (s(p.nombre).trim() || (tipo === "foto" ? "foto.jpg" : "archivo")).slice(0, 120);
+  const aid = await guardarArchivo(ctx.db, actorOf(ses), tipo === "foto" ? "foto-producto" : "archivo-producto", nombre, data);
+  if (!aid) return { error: "El archivo es demasiado grande (máx. ~1 MB)" };
+  const lista = arr(prod.beta_archivos).concat([{ id: aid, nombre, mime, tipo, at: ctx.now.toISOString(), por: actorOf(ses) }]).slice(-60);
+  const row: Row = { beta_archivos: lista };
+  const thumb = s(p.thumb);
+  if (tipo === "foto" && (!s(prod.foto_url) || p.principal === true)) {
+    row.foto_url = "archivo:" + aid;
+    if (thumb.startsWith("data:image/") && thumb.length < 60000) row.foto_thumb = thumb;
+  }
+  const r = await actualizar(ctx, ses, s(prod.id), row);
+  if ("error" in r && r.error) return r;
+  return { ok: true, archivo_id: aid, tipo };
+});
+
+extend("mcprod_archivo", "any", async (p, ctx, ses) => {
+  if (!(await puedeVer(ctx, ses))) return { error: "No tienes permiso" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const aid = s(p.archivo_id);
+  const mio = arr(prod.beta_archivos).some((a) => s(a.id) === aid && !a.borrado) || s(prod.foto_url) === "archivo:" + aid;
+  if (!aid || !mio) return { error: "Archivo no encontrado" };
+  const a = (await safeAll(ctx, "app_archivos")).find((x) => s(x.id) === aid);
+  if (!a || !s(a.data_b64)) return { error: "Archivo no encontrado" };
+  return { ok: true, nombre: s(a.nombre), mime: s(a.mime), data: "data:" + (s(a.mime) || "application/octet-stream") + ";base64," + s(a.data_b64) };
+});
+
+extend("mcprod_archivo_quitar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin quita fotos y archivos" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const aid = s(p.archivo_id);
+  let hay = false;
+  // No se borra el archivo: queda marcado (se puede recuperar desde app_archivos).
+  const lista = arr(prod.beta_archivos).map((a) => { if (s(a.id) === aid) { hay = true; return { ...a, borrado: true, borrado_por: actorOf(ses), borrado_at: ctx.now.toISOString() }; } return a; });
+  if (!hay) return { error: "Archivo no encontrado" };
+  const row: Row = { beta_archivos: lista };
+  if (s(prod.foto_url) === "archivo:" + aid) {
+    const otra = lista.find((a) => !a.borrado && s(a.tipo) === "foto");
+    row.foto_url = otra ? "archivo:" + s(otra.id) : null;
+    row.foto_thumb = null;
+  }
+  const r = await actualizar(ctx, ses, s(prod.id), row);
+  if ("error" in r && r.error) return r;
+  return { ok: true };
+});
+
+extend("mcprod_archivo_principal", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin cambia la foto principal" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const aid = s(p.archivo_id);
+  const a = arr(prod.beta_archivos).find((x) => s(x.id) === aid && !x.borrado && s(x.tipo) === "foto");
+  if (!a) return { error: "Esa foto no está en el producto" };
+  const row: Row = { foto_url: "archivo:" + aid };
+  const thumb = s(p.thumb);
+  row.foto_thumb = thumb.startsWith("data:image/") && thumb.length < 60000 ? thumb : null;
+  const r = await actualizar(ctx, ses, s(prod.id), row);
+  if ("error" in r && r.error) return r;
+  return { ok: true };
+});
+
+// ---------- Códigos de barras ----------
+async function codigosDeOtros(ctx: Ctx, pid: string): Promise<Map<string, string>> {
+  const usados = new Map<string, string>();
+  for (const r of await safeAll(ctx, "erp_productos")) {
+    if (s(r.id) === pid || s(r.beta_eliminado_at)) continue;
+    const c = codigoBarrasNorm(r.codigo_barras);
+    if (c) usados.set(c, s(r.sku));
+    for (const x of arr(r.beta_codigos)) { const k = codigoBarrasNorm(x.codigo); if (k) usados.set(k, s(r.sku)); }
+  }
+  return usados;
+}
+extend("mcprod_codigos_save", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita códigos de barras" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const { codigos, error } = limpiarCodigos(p.codigos);
+  if (error) return { error };
+  const otros = await codigosDeOtros(ctx, s(prod.id));
+  for (const c of codigos) if (otros.has(c.codigo)) return { error: "El código " + c.codigo + " ya lo tiene " + otros.get(c.codigo) };
+  const principal = codigos.find((c) => c.principal);
+  const r = await actualizar(ctx, ses, s(prod.id), { beta_codigos: codigos, codigo_barras: principal ? principal.codigo : null });
+  if ("error" in r && r.error) return r;
+  return { ok: true, codigos };
+});
+extend("mcprod_codigo_interno", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin genera códigos" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const todos = [...(await codigosDeOtros(ctx, "")).keys()];
+  for (const x of arr(p.pendientes)) todos.push(codigoBarrasNorm(x));
+  return { ok: true, codigo: siguienteInterno(todos) };
+});
+
+// ---------- Escalas de precio y proveedores ----------
+extend("mcprod_escalas_save", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita precios" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const { escalas, error } = limpiarEscalas(p.escalas);
+  if (error) return { error };
+  const motivo = s(p.motivo).trim();
+  if (motivo.length < 3) return { error: "El motivo es obligatorio para cambiar precios" };
+  const r = await actualizar(ctx, ses, s(prod.id), { beta_escalas: escalas, beta_precio_motivo: motivo.slice(0, 300) });
+  if ("error" in r && r.error) return r;
+  return { ok: true, escalas };
+});
+extend("mcprod_proveedores_save", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita proveedores" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const { proveedores, error } = limpiarProveedores(p.proveedores, await safeAll(ctx, "erp_proveedores"));
+  if (error) return { error };
+  const def = proveedores.find((x) => x.predeterminado);
+  const row: Row = { beta_proveedores: proveedores };
+  if (def && def.codigo) row.sku_proveedor = def.codigo;
+  const r = await actualizar(ctx, ses, s(prod.id), row);
+  if ("error" in r && r.error) return r;
+  return { ok: true, proveedores };
+});

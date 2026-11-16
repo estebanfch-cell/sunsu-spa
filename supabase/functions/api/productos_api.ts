@@ -10,6 +10,7 @@ import { runErp } from "./erp.ts";
 import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
   marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible,
+  arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
 } from "./productos.ts";
 
 /** Del diff del audit_log quita lo que no se muestra (miniatura base64, sellos de edición). */
@@ -94,7 +95,10 @@ function fila(p: Row, b: Base): Row {
     erpStock: b.stock.filter((r) => s(r.producto_id) === s(p.id)), bodegas: b.bodegas,
   });
   const total = stockTotal(stock);
-  const activo = p.activo !== false && (cat ? cat.activo !== false : true);
+  const archivado = !!s(p.beta_archivado_at);
+  const activo = p.activo !== false && (cat ? cat.activo !== false : true) && !archivado;
+  const minimo = p.beta_stock_minimo != null && p.beta_stock_minimo !== "" ? n(p.beta_stock_minimo) : (b.minimos.get(code) || 0);
+  const reorden = p.beta_punto_reorden != null && p.beta_punto_reorden !== "" ? n(p.beta_punto_reorden) : null;
   const vis = skuVisible(code, tipo, cat);
   return {
     id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, nombre, tipo, subtipo,
@@ -103,7 +107,8 @@ function fila(p: Row, b: Base): Row {
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),
     stock: tipo === "servicio" ? null : total,
     porGrupo: Object.fromEntries(stock.map((g) => [g.grupo, g.cantidad])),
-    estado: tipo === "servicio" ? "servicio" : estadoStock(total, b.minimos.get(code) || 0),
+    estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
+    archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
     pvp: precios.pvp, comision: precios.comision,
     compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct,
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
@@ -111,16 +116,20 @@ function fila(p: Row, b: Base): Row {
   };
 }
 
-extend("mcprod_list", "any", async (_p, ctx, ses) => {
+extend("mcprod_list", "any", async (p0, ctx, ses) => {
   const pr = await permisos(ctx, ses);
   if (!pr.puede) return { error: "No tienes permiso" };
   const b = await cargarBase(ctx, ses);
-  let items = b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku)))).map((p) => fila(p, b));
+  const todos = b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))));
+  const eliminados = todos.filter((p) => s(p.beta_eliminado_at)).length;
+  // Eliminados (borrado suave) no salen; solo un admin los ve para restaurarlos.
+  const verElim = pr.admin && p0.eliminados === true;
+  let items = todos.filter((p) => verElim ? !!s(p.beta_eliminado_at) : !s(p.beta_eliminado_at)).map((p) => fila(p, b));
   items.sort((x, y) => String(x.sku).localeCompare(String(y.sku)));
   if (!pr.costos) items = items.map(sinCostos);
   const uniq = (k: string) => [...new Set(items.map((i) => s(i[k])).filter(Boolean))].sort((a, c) => a.localeCompare(c));
   return {
-    ok: true, items, admin: pr.admin, verCostos: pr.costos,
+    ok: true, items, admin: pr.admin, verCostos: pr.costos, eliminados: pr.admin ? eliminados : 0,
     filtros: { marcas: uniq("marca"), categorias: uniq("categoria"), bodegas: Object.entries(GRUPO_NOMBRE).filter(([k]) => k !== "OTRA").map(([k, v]) => ({ id: k, nombre: v })) },
   };
 });
@@ -133,6 +142,7 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   const code0 = skuCode(s(p.sku));
   const prod = b.productos.find((x) => s(x.id) === want) || b.productos.find((x) => skuCode(s(x.sku)) === code0);
   if (!prod) return { error: "Producto no encontrado" };
+  if (s(prod.beta_eliminado_at) && !pr.admin) return { error: "Producto no encontrado" };
   const code = skuCode(s(prod.sku));
   const cat = b.catalogo.get(code);
   const cab = b.cabina.get(code);
@@ -247,6 +257,7 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
     precios: { ...precios, pvpCatalogo: n(cat?.total_con_iva), compraComisionCatalogo: cat ? (cat.compra_comision != null && cat.compra_comision !== "" ? n(cat.compra_comision) : n(cat.precio_compra)) : null, compraRealSistema: b.compraBase.get(code) || null, beta_pvp: prod.beta_pvp ?? null, beta_compra_real: prod.beta_compra_real ?? null, beta_compra_comision: prod.beta_compra_comision ?? null },
     stock, subsCabina: SUBS_CABINA, abiertos,
     proveedores: [...provAgg.values()], historial: hist.slice(0, 150), kardex, cambios, preciosHist,
+    ...(await extrasFicha(ctx, prod, base, cat, cab, hist, precios)),
   };
   if (!pr.costos) {
     out = sinCostos(out);
@@ -256,6 +267,9 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
     out.historial = (out.historial as Row[]).map((x) => { const y = { ...x }; delete y.precio; return y; });
     out.preciosHist = (out.preciosHist as Row[]).filter((x) => x.campo === "pvp");
     out.kardex = (out.kardex as Row[]).map((x) => { const y = { ...x }; delete y.costo_unit; return y; });
+    out.provProducto = (out.provProducto as Row[] || []).map((x) => { const y = { ...x }; delete y.precio; return y; });
+    delete out.costoPromedio; delete out.costoProm;
+    out.escalas = (out.escalas as Row[] || []).map((x) => { const y = { ...x }; delete y.markup; if (y.precio == null) delete y.precio; return y; });
     const pz = { ...(out.precios as Row) }; delete pz.compraComisionCatalogo; delete pz.compraRealSistema; out.precios = pz;
   }
   return out;
@@ -310,6 +324,57 @@ extend("mcprod_foto", "any", async (p, ctx, ses) => {
   }
   return { ok: true, id: pid, foto_url: patch.foto_url };
 });
+
+/** Lo nuevo de la ficha (0041): descripción, mínimos, escalas, proveedores, códigos, archivos, protocolo. */
+async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined, cab: Row | undefined, hist: Row[], precios: { compraReal?: number | null }): Promise<Row> {
+  const code = skuCode(s(prod.sku));
+  // Costo promedio ponderado de las compras (OC beta y de la hoja) + el de la ficha si existe.
+  let q = 0, v = 0;
+  for (const h of hist) if (/^OC/.test(s(h.tipo)) && n(h.precio) > 0 && n(h.cantidad) > 0) { q += n(h.cantidad); v += n(h.cantidad) * n(h.precio); }
+  const costoProm = q > 0 ? round2(v / q) : null;
+  const costoPromedio = prod.costo_promedio != null && prod.costo_promedio !== "" ? n(prod.costo_promedio) : null;
+  const costo = n(precios.compraReal) || costoProm || 0;
+  const escalas = limpiarEscalas(arr(prod.beta_escalas)).escalas.map((e) => ({ ...e, pvp: precioEscala(e, costo) }));
+  const legado = codigoBarrasNorm(prod.codigo_barras) || codigoBarrasNorm(cab?.codigo_barras);
+  const codigos = limpiarCodigos(arr(prod.beta_codigos)).codigos;
+  if (legado && !codigos.some((c) => c.codigo === legado)) codigos.unshift({ codigo: legado, tipo: ean13Valido(legado) ? "ean13" : "otro", principal: !codigos.length, legado: true } as CodigoBarras);
+  const archivos = arr(prod.beta_archivos).filter((a) => !a.borrado).map((a) => ({ id: s(a.id), nombre: s(a.nombre), mime: s(a.mime), tipo: s(a.tipo) || "archivo", at: s(a.at), por: s(a.por), principal: s(prod.foto_url) === "archivo:" + s(a.id) }));
+  // Protocolo (servicios) o «Se usa en» (insumos y productos).
+  const [protos, pasos] = await Promise.all([safeAll(ctx, "cabina_protocolos"), safeAll(ctx, "cabina_protocolo_pasos")]);
+  const visible = s(base.skuVisible) || code;
+  const nombreProto = new Map(protos.map((x) => [s(x.sku).toUpperCase(), s(x.facial)]));
+  let protocolo: Row | null = null;
+  const seUsaEn: Row[] = [];
+  if (base.tipo === "servicio") {
+    const pr = protos.find((x) => s(x.sku).toUpperCase() === visible.toUpperCase());
+    const ps = pasos.filter((x) => s(x.sku).toUpperCase() === visible.toUpperCase());
+    const ver = Math.max(0, ...ps.map((x) => n(x.version)));
+    if (pr || ps.length) protocolo = {
+      sku: visible, nombre: s(pr?.facial), version: n(pr?.version), vigente: s(pr?.vigente), manoDeObra: n(pr?.mano_de_obra),
+      pasos: ps.filter((x) => n(x.version) === ver).sort((a, b) => n(a.paso) - n(b.paso)).map((x) => ({ paso: n(x.paso), descripcion: s(x.descripcion), producto: s(x.producto_cod), cantidad: n(x.cantidad), unidad: s(x.unidad), minutos: n(x.minutos) })),
+    };
+  } else {
+    const mios = new Set([code, s(cab?.codigo).toUpperCase()].filter(Boolean));
+    const agg = new Map<string, Row>();
+    for (const x of pasos) {
+      if (!mios.has(s(x.producto_cod).toUpperCase())) continue;
+      const k = s(x.sku).toUpperCase();
+      const r = agg.get(k) || { sku: k, nombre: nombreProto.get(k) || "", pasos: 0, cantidad: 0, unidad: s(x.unidad) };
+      r.pasos = n(r.pasos) + 1; r.cantidad = round2(n(r.cantidad) + n(x.cantidad));
+      agg.set(k, r);
+    }
+    seUsaEn.push(...[...agg.values()].sort((a, b) => s(a.sku).localeCompare(s(b.sku))));
+  }
+  return {
+    descripcion: s(prod.beta_descripcion),
+    minimos: { minimo: prod.beta_stock_minimo ?? null, reorden: prod.beta_punto_reorden ?? null, minimoSistema: base.minimo },
+    archivado: !!s(prod.beta_archivado_at), archivadoPor: s(prod.beta_archivado_por), archivadoAt: s(prod.beta_archivado_at),
+    eliminado: !!s(prod.beta_eliminado_at), eliminadoPor: s(prod.beta_eliminado_por),
+    costoProm, costoPromedio, escalas, provProducto: arr(prod.beta_proveedores),
+    codigos, archivos, protocolo, seUsaEn,
+    proveedoresCat: (await safeAll(ctx, "erp_proveedores")).filter((x) => x.activo !== false).map((x) => ({ id: s(x.id), nombre: s(x.nombre) })),
+  };
+}
 
 /** Todos los códigos que ya existen: erp_productos + catalogo + cabina_inventario. */
 async function codigosExistentes(ctx: Ctx): Promise<{ codigo: string; clase: string }[]> {
