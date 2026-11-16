@@ -340,7 +340,16 @@ async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined,
   if (legado && !codigos.some((c) => c.codigo === legado)) codigos.unshift({ codigo: legado, tipo: ean13Valido(legado) ? "ean13" : "otro", principal: !codigos.length, legado: true } as CodigoBarras);
   const archivos = arr(prod.beta_archivos).filter((a) => !a.borrado).map((a) => ({ id: s(a.id), nombre: s(a.nombre), mime: s(a.mime), tipo: s(a.tipo) || "archivo", at: s(a.at), por: s(a.por), principal: s(prod.foto_url) === "archivo:" + s(a.id) }));
   // Protocolo (servicios) o «Se usa en» (insumos y productos).
-  const [protos, pasos] = await Promise.all([safeAll(ctx, "cabina_protocolos"), safeAll(ctx, "cabina_protocolo_pasos")]);
+  let protos: Row[], pasos: Row[];
+  let beta: Row[] | null = null;
+  try { beta = (await ctx.db.all("beta_protocolos")).filter((r) => !s(r.borrado_at)); } catch { beta = null; }
+  if (beta && beta.length) {
+    // Protocolos de la beta (0042): mismos campos que Cabina para lo de abajo.
+    protos = beta.map((r) => ({ sku: s(r.sku), facial: s(r.nombre), version: n(r.version), vigente: r.vigente !== false ? "SI" : "NO", mano_de_obra: r.mano_de_obra }));
+    pasos = beta.flatMap((r) => arr(r.pasos).map((x) => ({ ...x, sku: s(r.sku), version: 1 })));
+  } else {
+    [protos, pasos] = await Promise.all([safeAll(ctx, "cabina_protocolos"), safeAll(ctx, "cabina_protocolo_pasos")]);
+  }
   const visible = s(base.skuVisible) || code;
   const nombreProto = new Map(protos.map((x) => [s(x.sku).toUpperCase(), s(x.facial)]));
   let protocolo: Row | null = null;
