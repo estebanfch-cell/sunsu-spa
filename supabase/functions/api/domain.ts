@@ -265,7 +265,18 @@ export function normNombre(v: unknown): string {
   return s(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
 export function skuCode(v: unknown): string {
-  return s(v).toUpperCase().replace(/^SUNSU-/, "");
+  return invCorto(s(v).toUpperCase().replace(/^SUNSU-/, ""));
+}
+/**
+ * Familia INV con 3 dígitos como las demás (Emilia 16/11): el sistema viejo y el historial de ventas
+ * de la hoja traen «SUNSU-INV-000123» / «INV 000003»; la beta usa «INV-123». Solo compara y muestra:
+ * no reescribe columnas de la hoja. Más de 999 conserva sus dígitos (INV-1234). Otras familias igual.
+ */
+export function invCorto(v: unknown): string {
+  const c = s(v).trim().toUpperCase();
+  const m = c.match(/^(?:SUNSU-)?INV[-_ ]?(\d+)$/);
+  if (!m) return s(v);
+  return "INV-" + String(Number(m[1])).padStart(3, "0");
 }
 export function facialSku(v: unknown): string | null {
   const m = s(v).toUpperCase().match(/SUNSU-\d+/);

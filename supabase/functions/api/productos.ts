@@ -7,7 +7,7 @@
 //   Bodega Cabina  <- CABINA, CAB2, CAB3 como sububicaciones Cabina 1/2/3
 //   Bodega Oficina <- CASA (más los envases "en bodega" de cabina_inventario)
 
-import { IVA, PCT_COMISION_PRODUCTO, n, round2, s, skuCode, type Row } from "./domain.ts";
+import { IVA, PCT_COMISION_PRODUCTO, n, round2, s, invCorto, skuCode, type Row } from "./domain.ts";
 
 export const BOD_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BOD_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -225,7 +225,7 @@ export function limpiarCambios(cambios: Row): { row: Row; error?: string } {
 
 /** Código comparable: mayúsculas, sin espacios y sin el «SUNSU-» del catálogo. */
 export function codigoNorm(v: unknown): string {
-  return String(v ?? "").trim().toUpperCase().replace(/\s+/g, "").replace(/^SUNSU-/, "");
+  return invCorto(String(v ?? "").trim().toUpperCase().replace(/\s+/g, "").replace(/^SUNSU-/, ""));
 }
 
 /** Prefijo «#» = serie numérica (01, 02…). */
