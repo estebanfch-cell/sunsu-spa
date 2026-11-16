@@ -56,6 +56,19 @@ export function tipoDe(cat: Row | undefined, erp: Row | undefined): { tipo: Tipo
   return { tipo: "inventariable", subtipo: "Producto" };
 }
 
+/**
+ * SKU que se muestra. Los servicios (faciales, add-ons, paquetes, gift cards) se guardaron en
+ * erp_productos como 01, 02…, pero el sistema viejo, el catálogo, historial_ventas, erp_servicios y
+ * los protocolos siempre usaron SUNSU-01, SUNSU-02… (lo que ve contabilidad). Se muestra ese código
+ * del catálogo, sin inventar nada: si el catálogo no lo tiene, queda el número. El número sigue
+ * siendo el alias interno (tickets, paquetes, stock).
+ */
+export function skuVisible(code: string, tipo: string, cat: Row | undefined): { sku: string; alias: string } {
+  const c = s(cat?.sku).trim().toUpperCase();
+  if (tipo === "servicio" && /^\d+$/.test(code) && /^SUNSU-\d+$/.test(c) && c === "SUNSU-" + code) return { sku: c, alias: code };
+  return { sku: code, alias: "" };
+}
+
 /** Marca: la de la ficha; si no, la del catálogo; si no, lo que va después de " - " en el nombre. */
 export function marcaDe(erp: Row | undefined, cat: Row | undefined, nombre: string): { marca: string; deducida: boolean } {
   const orig = cat?.orig && typeof cat.orig === "object" ? cat.orig as Row : {};
