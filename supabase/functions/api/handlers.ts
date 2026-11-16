@@ -865,6 +865,10 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (ovUsuario && ses0) {
     db = conPermisosUsuario(db, ses0.rol, ovUsuario);
     if (ctx.ses) ctx = { ...ctx, db };
+    if (ovUsuario.personas && ovUsuario.personas.length) {
+      ses0 = { ...ses0, personas: ovUsuario.personas };
+      ctx = { ...ctx, ses: ses0 };
+    }
   }
   const matriz = await matrizDe(db);
   const gate = gateAccion(action, ses0, matriz) || (ses0 ? gateNivel(action, ses0.rol, ovUsuario) : null);

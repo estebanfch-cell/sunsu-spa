@@ -34,6 +34,7 @@
       ".mcu-cero{background:var(--red-l);color:var(--red);border-radius:10px;padding:8px 12px;font-weight:800;font-size:.8rem}",
       ".mcu-flags label{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--text);font-weight:600;margin:6px 0}",
       ".mcu-flags input{width:auto;margin:0}",
+      ".mcu-pp{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:0 12px;padding:4px 0 0 22px}",
       ".mcu-save{position:sticky;bottom:10px;z-index:5;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--gold-l);border:1.5px solid var(--gold-m);border-radius:14px;padding:10px 14px;margin:10px 0}",
       ".mcu-save[hidden]{display:none}.mcu-save span{font-weight:800;color:var(--navy-d)}.mcu-save input{margin:0;width:220px}",
       ".mcu-tabs{display:flex;gap:6px;margin-bottom:12px}.mcu-tabs button{border:1.5px solid var(--cream-d);background:var(--white);border-radius:999px;padding:7px 14px;font-weight:700;color:var(--navy);font-size:.78rem}.mcu-tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}",
@@ -48,11 +49,28 @@
     var ef = u.efectivo || {};
     var alc = {};
     (P.data.modulos || []).forEach(function (m) { if (m.alcance) alc[m.id] = (ef.alcance || {})[m.id] === "no" ? ((u.rolBase.alcance || {})[m.id] || "propio") : (ef.alcance || {})[m.id]; });
-    return { niveles: Object.assign({}, ef.niveles), alcance: alc, flags: Object.assign({}, ef.flags), perfil: u.perfil || "" };
+    return { niveles: Object.assign({}, ef.niveles), alcance: alc, flags: Object.assign({}, ef.flags), personas: (ef.personas || []).slice(), perfil: u.perfil || "" };
+  }
+  /** Un perfil no trae lista de personas: «todas» si todo lo que abre es «todo», si no «solo ella». */
+  function personasDe(p) {
+    var abiertos = (P.data.modulos || []).filter(function (m) { return m.alcance && (p.niveles || {})[m.id] > 0; });
+    return abiertos.length && abiertos.every(function (m) { return (p.alcance || {})[m.id] === "todos"; }) ? ["*"] : [];
+  }
+  function desdePerfil(p, nombre) {
+    var fl = { precios: true, saldos: true, comisiones: true, rol_pagos: true };
+    return { niveles: Object.assign({}, p.niveles), alcance: Object.assign({}, p.alcance), flags: Object.assign(fl, p.flags), personas: personasDe(p), perfil: nombre };
+  }
+  /** alcance que se guarda: lo dice «Datos de quién» (+ la lista en _personas). */
+  function alcanceDe(d) {
+    var out = {}, todos = (d.personas || []).indexOf("*") >= 0;
+    (P.data.modulos || []).forEach(function (m) { if (m.alcance && (Number(d.niveles[m.id]) || 0) > 0) out[m.id] = todos ? "todos" : "propio"; });
+    out._personas = todos ? ["*"] : (d.personas || []).slice();
+    return out;
   }
   /** Punto de partida al personalizar: todo apagado (Emilia, 2026-11-16). */
   function ceros() {
-    var d = { niveles: {}, alcance: {}, flags: { costos: false, precios: false, saldos: false }, perfil: "" };
+    var d = { niveles: {}, alcance: {}, flags: {}, personas: [], perfil: "" };
+    (P.data.flags || []).forEach(function (f) { d.flags[f.id] = false; });
     (P.data.modulos || []).forEach(function (m) { d.niveles[m.id] = 0; if (m.alcance) d.alcance[m.id] = "propio"; });
     return d;
   }
@@ -66,12 +84,9 @@
   }
   /** Se guarda completo: cada módulo con su nivel y cada interruptor, así nada cae de vuelta al rol. */
   function diff(u, d) {
-    var out = { niveles: {}, alcance: {}, flags: {} };
-    (P.data.modulos || []).forEach(function (m) {
-      out.niveles[m.id] = Number(d.niveles[m.id]) || 0;
-      if (m.alcance && out.niveles[m.id] > 0) out.alcance[m.id] = d.alcance[m.id] === "todos" ? "todos" : "propio";
-    });
-    ["costos", "precios", "saldos"].forEach(function (k) { out.flags[k] = !!d.flags[k]; });
+    var out = { niveles: {}, alcance: alcanceDe(d), flags: {} };
+    (P.data.modulos || []).forEach(function (m) { out.niveles[m.id] = Number(d.niveles[m.id]) || 0; });
+    (P.data.flags || []).forEach(function (f) { out.flags[f.id] = !!d.flags[f.id]; });
     return out;
   }
 
@@ -94,15 +109,33 @@
         var cls = (i === n ? "on" : "") + (i === n && n !== (b.niveles[m.id] || 0) ? " ch" : "");
         return '<button type="button" class="' + cls + '" data-mcu-n="' + e(m.id) + '" data-v="' + i + '"' + (i > m.max || soloLectura ? " disabled" : "") + ">" + e(t) + "</button>";
       }).join("") + "</span>";
-      var alc = m.alcance && n > 0 ? '<select data-mcu-a="' + e(m.id) + '"' + (soloLectura ? " disabled" : "") + '><option value="propio"' + (d.alcance[m.id] === "propio" ? " selected" : "") + '>Solo lo suyo</option><option value="todos"' + (d.alcance[m.id] === "todos" ? " selected" : "") + ">Todo</option></select>" : "";
+      var alc = m.alcance && n > 0 ? '<span class="mcu-rol">' + e(quienCorto(d)) + "</span>" : "";
       var rol = '<div class="mcu-rol">Rol: ' + e(NIV[b.niveles[m.id] || 0]) + (m.alcance && b.alcance[m.id] ? " · " + (b.alcance[m.id] === "propio" ? "lo suyo" : "todo") : "") + "</div>";
       return g + "<tr><td><b>" + e(m.label) + "</b>" + rol + "</td><td>" + seg + "</td><td>" + alc + "</td></tr>";
     }).join("");
     var flags = (P.data.flags || []).map(function (f) {
       return '<label><input type="checkbox" data-mcu-f="' + e(f.id) + '"' + (d.flags[f.id] ? " checked" : "") + (soloLectura ? " disabled" : "") + "> " + e(f.label) + (!!d.flags[f.id] !== !!b.flags[f.id] ? ' <span class="mcu-tag p">cambiado</span>' : "") + "</label>";
     }).join("");
-    return '<table class="mcu-t"><thead><tr><th>Módulo</th><th>Nivel</th><th>Alcance</th></tr></thead><tbody>' + filas + "</tbody></table>" +
-      '<div class="mcu-card mcu-flags" style="box-shadow:none;padding:10px 0 0"><div class="card-title">Interruptores</div>' + flags + "</div>";
+    return '<table class="mcu-t"><thead><tr><th>Módulo</th><th>Nivel</th><th>Datos de</th></tr></thead><tbody>' + filas + "</tbody></table>" +
+      '<div class="mcu-card mcu-flags" style="box-shadow:none;padding:10px 0 0"><div class="card-title">Interruptores</div>' + flags + "</div>" +
+      quienHtml(d, soloLectura);
+  }
+  function modo(d) { var L = d.personas || []; return L.indexOf("*") >= 0 ? "todos" : L.length || P.verLista ? "lista" : "ella"; }
+  function quienCorto(d) {
+    var m = modo(d);
+    return m === "todos" ? "Todas las personas" : m === "lista" ? "Ella + " + d.personas.length : "Solo ella";
+  }
+  /** Selector «Datos de quién»: solo ella · ella y algunas personas · todas. Lo aplica el servidor. */
+  function quienHtml(d, soloLectura) {
+    var m = modo(d), dis = soloLectura ? " disabled" : "";
+    var op = function (v, t) { return '<label><input type="radio" name="mcu-sc" data-mcu-sc="' + v + '"' + (m === v ? " checked" : "") + dis + "> " + t + "</label>"; };
+    var equipo = (P.data.equipo || []).filter(function (x) { return x.uid !== P.sel; });
+    var lista = m === "lista" ? '<div class="mcu-pp">' + equipo.map(function (x) {
+      return '<label><input type="checkbox" data-mcu-pp="' + e(x.nombre) + '"' + ((d.personas || []).indexOf(x.nombre) >= 0 ? " checked" : "") + dis + "> " + e(x.nombre) + ' <small class="mcu-rol">' + e(x.rol) + "</small></label>";
+    }).join("") + "</div>" : "";
+    return '<div class="mcu-card mcu-flags" style="box-shadow:none;padding:10px 0 0"><div class="card-title">Datos de quién ve</div>' +
+      '<p class="note" style="margin:0 0 4px">Comisiones, roles de pago, tickets, asistencia y paquetes: de quién puede ver datos.</p>' +
+      op("ella", "Solo ella") + op("lista", "Ella y estas personas…") + op("todos", "Todas las personas") + lista + "</div>";
   }
 
   function fichaHtml() {
@@ -112,7 +145,7 @@
     var b = base(u);
     if (!u.personalizado && !P.draft) {
       return '<div class="mcu-card"><div class="mcu-h"><div><h3>' + e(u.nombre) + '</h3><div class="mcu-rol">' + e(u.rolLabel) + ' · Según su rol</div></div></div>' +
-        '<p class="note">Hoy tiene lo de su rol (abajo, solo lectura). Al personalizar, <b>empieza todo apagado</b>: cada módulo en «Nada» y cada interruptor apagado; tú vas dando lo que necesita. Hasta que guardes, nada cambia para ella.</p>' +
+        '<p class="note">Hoy tiene lo de su rol (abajo, solo lectura). Al personalizar, <b>empieza todo apagado</b>: cada módulo en «Nada», cada interruptor apagado y solo ve sus propios datos; tú vas dando lo que necesita. Hasta que guardes, nada cambia para ella.</p>' +
         '<p><button class="btn" type="button" id="mcu-empezar">Personalizar (empieza todo apagado)</button></p>' +
         editorHtml(draftDe(u), b, true) + "</div>";
     }
@@ -127,7 +160,7 @@
       (!u.personalizado ? '<p class="mcu-cero">Empieza todo apagado. Da solo lo que necesita y guarda.</p>' : "") +
       editorHtml(d, b, false) +
       (u.personalizado ? '<button class="btn ghost small" type="button" id="mcu-reset">Volver a lo de su rol</button>' : "") +
-      '<p class="note">Nada = no ve el módulo. Ver = solo mira. Crear / editar = trabaja en él. Aprobar / borrar = además anula, aprueba y borra. Lo marcado con raya dorada difiere de su rol. Cada cambio queda en el registro.</p></div>';
+      '<p class="note">Empezar a personalizar = todo apagado y solo sus datos. Nada = no ve el módulo. Ver = solo mira. Crear / editar = trabaja en él. Aprobar / borrar = además anula, aprueba y borra. Lo marcado con raya dorada difiere de su rol. Cada cambio queda en el registro.</p></div>';
   }
 
   function perfilesHtml() {
@@ -138,7 +171,7 @@
     }).join("") + '<button class="btn small" type="button" id="mcu-p-nuevo" style="margin-top:8px">+ Nuevo perfil</button>';
     var ficha = '<div class="mcu-card"><p class="note">Elige un perfil. Los «Como …» salen de la matriz de roles y no se editan aquí.</p></div>';
     if (sel || P.perfilSel === "__nuevo") {
-      if (!P.draft) P.draft = sel ? { niveles: Object.assign({}, sel.niveles), alcance: Object.assign({}, sel.alcance), flags: Object.assign({ precios: true, saldos: true }, sel.flags), perfil: sel.nombre } : { niveles: {}, alcance: {}, flags: { precios: true, saldos: true }, perfil: "" };
+      if (!P.draft) P.draft = sel ? desdePerfil(sel, sel.nombre) : ceros();
       var b = sel || { niveles: {}, alcance: {}, flags: {} };
       var ro = !!(sel && sel.sistema);
       ficha = '<div class="mcu-card"><div class="mcu-h"><h3>' + e(sel ? sel.nombre : "Nuevo perfil") + "</h3></div>" +
@@ -171,7 +204,7 @@
     root.querySelectorAll("[data-mcu-tab]").forEach(function (b) { b.onclick = function () { if (sucio() && !confirm("Hay cambios sin guardar. ¿Descartarlos?")) return; P.tab = b.getAttribute("data-mcu-tab"); P.draft = null; pinta(main); }; });
     var q = root.querySelector("#mcu-q");
     if (q) q.oninput = function () { P.q = q.value; var l = root.querySelector(".mcu-list"); var pos = q.selectionStart; pinta(main); var q2 = main.querySelector("#mcu-q"); if (q2) { q2.focus(); q2.setSelectionRange(pos, pos); } };
-    root.querySelectorAll("[data-mcu-u]").forEach(function (b) { b.onclick = function () { if (sucio() && !confirm("Hay cambios sin guardar. ¿Descartarlos?")) return; P.sel = b.getAttribute("data-mcu-u"); P.draft = null; pinta(main); }; });
+    root.querySelectorAll("[data-mcu-u]").forEach(function (b) { b.onclick = function () { if (sucio() && !confirm("Hay cambios sin guardar. ¿Descartarlos?")) return; P.sel = b.getAttribute("data-mcu-u"); P.draft = null; P.verLista = false; pinta(main); }; });
     root.querySelectorAll("[data-mcu-p]").forEach(function (b) { b.onclick = function () { P.perfilSel = b.getAttribute("data-mcu-p"); P.draft = null; pinta(main); }; });
     var pn = root.querySelector("#mcu-p-nuevo"); if (pn) pn.onclick = function () { P.perfilSel = "__nuevo"; P.draft = null; pinta(main); };
     root.querySelectorAll("[data-mcu-n]").forEach(function (b) {
@@ -180,18 +213,42 @@
         P.draft.niveles[m] = v;
         var def = (P.data.modulos || []).find(function (x) { return x.id === m; });
         if (def && def.alcance && v > 0 && !P.draft.alcance[m]) P.draft.alcance[m] = "propio";
+        if ((m === "comisiones" || m === "rol_pagos") && v > 0) P.draft.flags[m] = true;
         pinta(main);
       };
     });
     root.querySelectorAll("[data-mcu-a]").forEach(function (s) { s.onchange = function () { P.draft.alcance[s.getAttribute("data-mcu-a")] = s.value; pinta(main); }; });
-    root.querySelectorAll("[data-mcu-f]").forEach(function (c) { c.onchange = function () { P.draft.flags[c.getAttribute("data-mcu-f")] = c.checked; pinta(main); }; });
+    root.querySelectorAll("[data-mcu-f]").forEach(function (c) {
+      c.onchange = function () {
+        var f = c.getAttribute("data-mcu-f");
+        P.draft.flags[f] = c.checked;
+        if (c.checked && (f === "comisiones" || f === "rol_pagos") && !(P.draft.niveles[f] > 0)) P.draft.niveles[f] = 1;
+        pinta(main);
+      };
+    });
+    root.querySelectorAll("[data-mcu-sc]").forEach(function (r) {
+      r.onchange = function () {
+        var v = r.getAttribute("data-mcu-sc");
+        P.verLista = v === "lista";
+        P.draft.personas = v === "todos" ? ["*"] : v === "ella" ? [] : (P.draft.personas || []).filter(function (x) { return x !== "*"; });
+        pinta(main);
+      };
+    });
+    root.querySelectorAll("[data-mcu-pp]").forEach(function (c) {
+      c.onchange = function () {
+        var n = c.getAttribute("data-mcu-pp"), L = (P.draft.personas || []).filter(function (x) { return x !== "*" && x !== n; });
+        if (c.checked) L.push(n);
+        P.draft.personas = L; P.verLista = true;
+        pinta(main);
+      };
+    });
     var emp = root.querySelector("#mcu-empezar");
-    if (emp) emp.onclick = function () { P.draft = ceros(); pinta(main); };
+    if (emp) emp.onclick = function () { P.draft = ceros(); P.verLista = false; pinta(main); };
     var ps = root.querySelector("#mcu-perfil");
     if (ps) ps.onchange = function () {
       var p = perfil(ps.value);
       if (!p) return;
-      P.draft = { niveles: Object.assign({}, p.niveles), alcance: Object.assign({}, p.alcance), flags: Object.assign({ precios: true, saldos: true }, p.flags), perfil: p.sistema ? "" : p.nombre };
+      P.draft = desdePerfil(p, p.sistema ? "" : p.nombre);
       pinta(main);
     };
     var err = root.querySelector("#mcu-err");
@@ -221,14 +278,14 @@
     if (cp) cp.onclick = async function () {
       var nombre = ((root.querySelector("#mcu-pnombre") || {}).value || "").trim();
       if (nombre.length < 3) { if (err) err.textContent = "Escribe el nombre del perfil"; return; }
-      var r = await api("uperm_perfil_guardar", { nombre: nombre, niveles: P.draft.niveles, alcance: P.draft.alcance, flags: P.draft.flags });
+      var r = await api("uperm_perfil_guardar", { nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags });
       if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo"; return; }
       var keep = P.draft; await cargar(); P.draft = keep; P.draft.perfil = nombre; pinta(main);
     };
     var pg = root.querySelector("#mcu-pf-guardar");
     if (pg) pg.onclick = async function () {
       var nombre = ((root.querySelector("#mcu-pf-nombre") || {}).value || "").trim();
-      var r = await api("uperm_perfil_guardar", { id: P.perfilSel === "__nuevo" ? "" : P.perfilSel, nombre: nombre, niveles: P.draft.niveles, alcance: P.draft.alcance, flags: P.draft.flags });
+      var r = await api("uperm_perfil_guardar", { id: P.perfilSel === "__nuevo" ? "" : P.perfilSel, nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags });
       if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo"; return; }
       P.perfilSel = r.id; P.draft = null; await cargar(); pinta(main);
     };
