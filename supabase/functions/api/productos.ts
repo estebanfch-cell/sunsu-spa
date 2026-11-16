@@ -203,3 +203,83 @@ export function limpiarCambios(cambios: Row): { row: Row; error?: string } {
   if ("nombre" in row && !row.nombre) return { row: {}, error: "El nombre es obligatorio" };
   return { row };
 }
+
+// ---------- Familias de SKU ----------
+// Los SKU que ya existen no se tocan nunca. Un producto nuevo elige una familia (el prefijo
+// que ya usan los SKU: ML-, VK-, INV-… o la serie numérica 01, 02… de los servicios) y el
+// servidor le da el siguiente código libre después del mayor de esa familia.
+
+/** Código comparable: mayúsculas, sin espacios y sin el «SUNSU-» del catálogo. */
+export function codigoNorm(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase().replace(/\s+/g, "").replace(/^SUNSU-/, "");
+}
+
+/** Prefijo «#» = serie numérica (01, 02…). */
+export const FAMILIA_NUMERICA = "#";
+
+export function familiaDeCodigo(v: unknown): { prefijo: string; num: number; ancho: number } | null {
+  const c = codigoNorm(v);
+  let m = c.match(/^([A-Z]{1,6}-)(\d+)$/);
+  if (m) return { prefijo: m[1], num: Number(m[2]), ancho: m[2].length };
+  m = c.match(/^(\d+)$/);
+  if (m) return { prefijo: FAMILIA_NUMERICA, num: Number(m[1]), ancho: m[1].length };
+  return null;
+}
+
+/** Un prefijo nuevo: 2 a 5 letras y un guion (ej. «KR-»). */
+export function prefijoNormal(v: unknown): string {
+  const p = String(v ?? "").trim().toUpperCase();
+  if (p === FAMILIA_NUMERICA) return p;
+  const conGuion = p.endsWith("-") ? p : p + "-";
+  return /^[A-Z]{2,5}-$/.test(conGuion) ? conGuion : "";
+}
+
+export type Familia = { prefijo: string; etiqueta: string; total: number; max: number; ancho: number; ejemplo: string; siguiente: string; clases: Record<string, number> };
+
+/** Siguiente código libre de la familia: mayor + 1, saltando cualquiera que ya exista. */
+export function siguienteCodigo(prefijo: string, codigos: Iterable<string>, anchoMin?: number): string {
+  const usados = new Set<string>();
+  let max = 0;
+  let ancho = anchoMin || (prefijo === FAMILIA_NUMERICA ? 2 : 3);
+  for (const c of codigos) {
+    const k = codigoNorm(c);
+    usados.add(k);
+    const f = familiaDeCodigo(k);
+    if (f && f.prefijo === prefijo) { if (f.num > max) max = f.num; if (f.ancho > ancho && !anchoMin) ancho = f.ancho; }
+  }
+  const armar = (x: number) => (prefijo === FAMILIA_NUMERICA ? "" : prefijo) + String(x).padStart(ancho, "0");
+  let x = max + 1;
+  while (usados.has(armar(x))) x++;
+  return armar(x);
+}
+
+/** Familias detectadas en los códigos existentes, con cuántos SKU tiene cada una. */
+export function familiasDe(items: { codigo: unknown; clase?: unknown }[]): Familia[] {
+  const map = new Map<string, { codigos: Set<string>; max: number; ancho: number; clases: Record<string, number> }>();
+  const todos: string[] = [];
+  for (const it of items) {
+    const c = codigoNorm(it.codigo);
+    if (!c) continue;
+    todos.push(c);
+    const f = familiaDeCodigo(c);
+    if (!f) continue;
+    const g = map.get(f.prefijo) || { codigos: new Set<string>(), max: 0, ancho: 0, clases: {} };
+    if (!g.codigos.has(c)) {
+      g.codigos.add(c);
+      const cl = String(it.clase || "") || "sin clase";
+      g.clases[cl] = (g.clases[cl] || 0) + 1;
+    }
+    if (f.num > g.max) g.max = f.num;
+    if (f.ancho > g.ancho) g.ancho = f.ancho;
+    map.set(f.prefijo, g);
+  }
+  const out: Familia[] = [];
+  for (const [prefijo, g] of map) {
+    const ejemplo = (prefijo === FAMILIA_NUMERICA ? "" : prefijo) + String(g.max).padStart(g.ancho, "0");
+    out.push({
+      prefijo, etiqueta: prefijo === FAMILIA_NUMERICA ? "Numérica (01, 02…)" : prefijo + "###",
+      total: g.codigos.size, max: g.max, ancho: g.ancho, ejemplo, siguiente: siguienteCodigo(prefijo, todos, g.ancho), clases: g.clases,
+    });
+  }
+  return out.sort((a, b) => b.total - a.total || a.prefijo.localeCompare(b.prefijo));
+}

@@ -1419,6 +1419,11 @@ function moduloDeRuta(route) {
   return route.mod;
 }
 function tituloRuta(route, tab) {
+  if (route.mod === "mc" && window.MCNav) return window.MCNav.titulo(route);
+  if (route.mod === "proveedores" && route.sub === "nuevo") return "Nuevo proveedor";
+  if (route.mod === "tickets") return "Tickets";
+  if (route.mod === "clientes") return "Registro de clientas";
+  if (route.mod === "caja") return "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "productos") return route.sub === "p" ? "Producto" : route.sub === "nuevo" ? "Nuevo producto" : route.sub === "catalogo" ? "Catálogo anterior" : "Productos";
   if (route.mod === "lugares") return "Locales y cabinas";
@@ -1488,6 +1493,7 @@ function frenteRol() {
   return state.admin || rol === "recepcion" || rol === "gerente";
 }
 function gruposVisibles() {
+  if (window.MCNav) return window.MCNav.grupos();
   const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias", "configuracion"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
@@ -1643,7 +1649,7 @@ function paintShell(title) {
   const u = state.user || {};
   const puedeTicket = acceso("tickets") !== "no";
   const puedeOc = !!(state.admin && acceso("compras") !== "no");
-  const muestraPlus = puedeTicket || puedeOc;
+  const muestraPlus = window.MCNav ? window.MCNav.crearItems().length > 0 : puedeTicket || puedeOc;
   const plus = muestraPlus
     ? `<button class="plus" type="button" id="nuevo-ticket" aria-label="Crear ticket">+</button>`
     : "";
@@ -1651,7 +1657,7 @@ function paintShell(title) {
     ? `<button class="plus tab-plus" type="button" id="nuevo-ticket-tab" aria-label="Crear ticket">+</button>`
     : "";
   const grupos = gruposVisibles();
-  const nav = grupos.map((g) => `<button class="grp${grupoAbierto === g.id ? " on" : ""}" type="button" data-group="${esc(g.id)}">${esc(g.label)}<span class="chev">›</span></button>`).join("");
+  const nav = grupos.filter((g) => !g.soloMovil).map((g) => `<button class="grp${grupoAbierto === g.id ? " on" : ""}" type="button" data-group="${esc(g.id)}">${esc(g.label)}<span class="chev">›</span></button>`).join("");
   const moreOn = grupoAbierto === "otros" ? " on" : "";
   document.getElementById("app").innerHTML = `
     <div class="scrim" id="scrim" hidden></div>
@@ -1685,9 +1691,9 @@ function paintShell(title) {
       <div class="vista-sheet card" id="crear-menu" hidden>
         <div class="card-title">Crear</div>
         <div class="chooser-actions">
-          ${puedeTicket ? `<button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>` : ""}
+          ${window.MCNav ? window.MCNav.crearHtml() : `${puedeTicket ? `<button class="btn block" type="button" data-go="#/doc/ov">Nuevo ticket</button>` : ""}
           ${acceso("cotizaciones_cliente") !== "no" ? `<button class="btn ghost block" type="button" data-go="#/doc/cot">Nueva cotización</button>` : ""}
-          ${puedeOc ? `<button class="btn ghost block" type="button" data-go="#/m/compras/nueva">Nueva orden de compra</button>` : ""}
+          ${puedeOc ? `<button class="btn ghost block" type="button" data-go="#/m/compras/nueva">Nueva orden de compra</button>` : ""}`}
           <button class="btn ghost" type="button" id="crear-close">Cerrar</button>
         </div>
       </div>
@@ -2033,7 +2039,7 @@ async function draw() {
   };
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || (route.mod === "configuracion" && state.admin);
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "configuracion" && state.admin);
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -2062,6 +2068,8 @@ async function draw() {
     main.innerHTML = banner() + html;
     bind(main, route);
     if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
+    if (route.kind === "mod" && route.mod === "mc" && window.MCNav) window.MCNav.wire(main, route);
+    if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
     main.innerHTML = banner() + `<p class="err">${esc(e.message || e)}</p>`;
@@ -2077,6 +2085,7 @@ function tituloDoc(doc) {
 }
 
 async function renderMod(route) {
+  if (route.mod === "mc" && window.MCNav) return window.MCNav.render(route);
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
@@ -5540,9 +5549,10 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261116prd"></script>
-<script src="beta-inline.js?v=20261116prd"></script>
-<script src="mc-productos.js?v=20261116prd"></script>
+<script src="beta-screens.js?v=20261116nav"></script>
+<script src="beta-inline.js?v=20261116nav"></script>
+<script src="mc-productos.js?v=20261116nav"></script>
+<script src="mc-nav.js?v=20261116nav"></script>
 <script>draw();</script>
 </body>
 </html>

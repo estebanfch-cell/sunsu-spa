@@ -8,6 +8,7 @@ import type { Row } from "./domain.ts";
 import {
   BOD_CAB2, BOD_CAB3, BOD_CABINA, BOD_CASA, BOD_VENTA, comisionUnidad, grupoDeBodega, limpiarCambios,
   lineasOcLegacy, marcaDe, preciosDe, stockDe, stockTotal, tipoDe,
+  codigoNorm, familiaDeCodigo, familiasDe, prefijoNormal, siguienteCodigo,
 } from "./productos.ts";
 
 const BODEGAS: Row[] = [
@@ -159,5 +160,63 @@ describe("productos MineCore: adaptador api", () => {
     assert.equal(cab.cantidad, 128);
     const bad = await handle("mcprod_save", { token: ca.token, id: "p1", cambios: { precio_compra: 1 } }, ca) as Row;
     assert.ok(bad.error);
+  });
+});
+
+describe("productos MineCore: familias de SKU", () => {
+  it("detecta familias por prefijo y la serie numérica, sin el SUNSU- del catálogo", () => {
+    assert.equal(codigoNorm(" sunsu-ml-009 "), "ML-009");
+    assert.deepEqual(familiaDeCodigo("SUNSU-45"), { prefijo: "#", num: 45, ancho: 2 });
+    assert.equal(familiaDeCodigo("Lámpara"), null);
+    const f = familiasDe([{ codigo: "ML-009", clase: "producto" }, { codigo: "SUNSU-ML-009" }, { codigo: "ML-014" }, { codigo: "01", clase: "servicio" }, { codigo: "59" }, { codigo: "INV-130" }]);
+    const ml = f.find((x) => x.prefijo === "ML-")!;
+    assert.equal(ml.total, 2);
+    assert.equal(ml.siguiente, "ML-015");
+    assert.equal(f.find((x) => x.prefijo === "#")!.siguiente, "60");
+    assert.equal(f.find((x) => x.prefijo === "INV-")!.siguiente, "INV-131");
+  });
+  it("siguiente = mayor + 1 y salta uno ya usado; no rellena huecos", () => {
+    assert.equal(siguienteCodigo("ML-", ["ML-001", "ML-009", "ML-010"]), "ML-011");
+    assert.equal(siguienteCodigo("#", ["01", "08", "12"]), "13");
+    assert.equal(siguienteCodigo("KR-", []), "KR-001");
+  });
+  it("prefijo nuevo: 2 a 5 letras con guion", () => {
+    assert.equal(prefijoNormal("kr"), "KR-");
+    assert.equal(prefijoNormal("K-"), "");
+    assert.equal(prefijoNormal("AB1-"), "");
+    assert.equal(prefijoNormal("#"), "#");
+  });
+  it("mcprod_nuevo asigna el SKU en el servidor, ignora el que mande la pantalla y no pisa existentes", async () => {
+    const db = new MemoryDb();
+    db.tables.set("erp_bodegas", BODEGAS);
+    db.tables.set("erp_productos", [
+      { id: "p1", sku: "ML-009", nombre: "Mask", clase: "producto", uso: "venta", activo: true },
+      { id: "p2", sku: "02", nombre: "Facial", clase: "servicio", uso: "cabina", activo: true },
+    ]);
+    db.tables.set("catalogo", [{ sku: "SUNSU-ML-010", producto_servicio: "Otra", activo: true }]);
+    db.tables.set("cabina_inventario", [{ codigo: "INV-107", sku_catalogo: "SUNSU-ML-011" }]);
+    for (const t of ["erp_stock", "erp_movimientos", "app_modulos"]) db.tables.set(t, []);
+    const c = ctx(db);
+    const fam = await handle("mcprod_familias", { token: c.token }, c) as Row;
+    assert.equal((fam.familias as Row[]).find((x) => x.prefijo === "ML-")!.siguiente, "ML-012");
+    const r = await handle("mcprod_nuevo", { token: c.token, familia: "ML-", sku: "ML-009", nombre: "Nuevo", uso: "venta" }, c) as Row;
+    assert.equal(r.ok, true, String(r.error));
+    assert.equal(r.sku, "ML-012");
+    const prods = db.tables.get("erp_productos")!;
+    assert.equal(prods.find((x) => x.id === "p1")!.nombre, "Mask");
+    assert.equal(prods.filter((x) => x.sku === "ML-012").length, 1);
+    const s2 = await handle("mcprod_nuevo", { token: c.token, familia: "#", nombre: "Facial nuevo", tipo: "servicio" }, c) as Row;
+    assert.equal(s2.sku, "03");
+    const sinFam = await handle("mcprod_nuevo", { token: c.token, nombre: "X" }, c) as Row;
+    assert.match(String(sinFam.error), /familia/);
+    const noExiste = await handle("mcprod_nuevo", { token: c.token, familia: "KR-", nombre: "X" }, c) as Row;
+    assert.match(String(noExiste.error), /no existe/);
+    const nueva = await handle("mcprod_nuevo", { token: c.token, familia: "KR", familia_nueva: true, nombre: "Kerastase" }, c) as Row;
+    assert.equal(nueva.sku, "KR-001");
+    const dup = await handle("mcprod_nuevo", { token: c.token, familia: "ML-", familia_nueva: true, nombre: "X" }, c) as Row;
+    assert.match(String(dup.error), /ya existe/);
+    const cr = ctx(db, "recepcion");
+    const no = await handle("mcprod_nuevo", { token: cr.token, familia: "ML-", nombre: "X" }, cr) as Row;
+    assert.match(String(no.error), /admin/);
   });
 });
