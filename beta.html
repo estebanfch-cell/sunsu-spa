@@ -902,8 +902,8 @@ const GRUPOS = [
     ["clientes", "Clientes", "#/m/clientes"],
   ]],
   ["inventario", "Inventario", [
-    ["productos", "Catálogo", "#/m/productos"],
     ["productos", "Productos", "#/m/productos"],
+    ["productos", "Catálogo anterior", "#/m/productos/catalogo"],
     ["conteos", "Conteos físicos", "#/m/conteos"],
     ["inventario", "Inventario", "#/m/inventario"],
     ["ver_costos", "Consumos / reportes", "#/m/reportes"],
@@ -1420,6 +1420,7 @@ function moduloDeRuta(route) {
 }
 function tituloRuta(route, tab) {
   if (route.mod === "configuracion") return "Configuración general";
+  if (route.mod === "productos") return route.sub === "p" ? "Producto" : route.sub === "nuevo" ? "Nuevo producto" : route.sub === "catalogo" ? "Catálogo anterior" : "Productos";
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
   if (route.mod === "compras" && route.sub === "nueva") return "Nueva OC";
@@ -1922,7 +1923,7 @@ function pantallaSunsu(route) {
   if (m === "tickets") return "historial";
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "";
-  if (m === "productos") return "catalogo";
+  if (m === "productos") return route.sub === "catalogo" || !window.MCProductos ? "catalogo" : "";
   if (m === "inventario" && (!route.sub || route.sub === "nuevo" || route.sub === "prod")) return "";
   if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
@@ -2060,6 +2061,7 @@ async function draw() {
     const html = route.kind === "doc" ? await renderDoc(route) : await renderMod(route);
     main.innerHTML = banner() + html;
     bind(main, route);
+    if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
     autosize(main);
   } catch (e) {
     main.innerHTML = banner() + `<p class="err">${esc(e.message || e)}</p>`;
@@ -2083,7 +2085,7 @@ async function renderMod(route) {
   if (route.mod === "personal") return renderPersonal(route);
   if (route.mod === "gift") return renderGiftMod(route);
   if (route.mod === "citas") return renderCitasBeta();
-  if (route.mod === "productos") return renderProductos();
+  if (route.mod === "productos") return route.sub !== "catalogo" && window.MCProductos ? window.MCProductos.render(route) : renderProductos();
   if (route.mod === "inventario") {
     if (!route.sub || route.sub === "lista") return renderInventarioLista();
     if (route.sub === "nuevo" || route.sub === "prod") return renderInventarioFicha(route);
@@ -5538,8 +5540,9 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261116dsh"></script>
-<script src="beta-inline.js?v=20261116dsh"></script>
+<script src="beta-screens.js?v=20261116prd"></script>
+<script src="beta-inline.js?v=20261116prd"></script>
+<script src="mc-productos.js?v=20261116prd"></script>
 <script>draw();</script>
 </body>
 </html>
