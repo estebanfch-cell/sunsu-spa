@@ -456,3 +456,37 @@ export function aplicarMovimientos(stock: StockGrupo[], movs: Row[]): StockGrupo
   }
   return out;
 }
+
+// ---------- TK18b: datos que se deducen solos ----------
+/** Del nombre «Heartleaf Cleansing Oil 200ml - ANUA» sale contenido 200 ml; «70 Pads» = 70 unidades; «Spray» = spray. */
+export function deducirDelNombre(nombre: unknown): { contenido?: number; unidad?: string; envase?: string } {
+  const t = String(nombre ?? "").toLowerCase().replace(/,/g, ".");
+  const out: { contenido?: number; unidad?: string; envase?: string } = {};
+  const m = t.match(/(\d+(?:\.\d+)?)\s*(ml|g|gr|grs|gramos|oz|pads?|parches|patches|unidades|uds?|piezas|sheets?|ampollas?|ampoules?|sachets?|tabletas)\b/);
+  if (m) {
+    const q = Number(m[1]), u = m[2];
+    if (q > 0 && q < 100000) {
+      if (u === "ml") { out.contenido = q; out.unidad = "ml"; }
+      else if (/^(g|gr|grs|gramos)$/.test(u)) { out.contenido = q; out.unidad = "g"; }
+      else if (u === "oz") { out.contenido = Math.round(q * 29.57); out.unidad = "ml"; }
+      else { out.contenido = q; out.unidad = "unidades"; }
+    }
+  }
+  const ENV: [RegExp, string][] = [[/\bspray|mist\b/, "spray"], [/ampoule|ampolla/, "ampolla"], [/sachet|sobre\b/, "sachet"], [/\btub[eo]\b/, "tubo"], [/serum|s[eé]rum|essence|oil\b|aceite/, "gotero"], [/\bpads?\b|parches|patch/, "pote"], [/cream|crema|balm|mask\b|mascarilla/, "pote"], [/toner|t[oó]nico|cleanser|foam|gel|lotion|loci[oó]n/, "botella"]];
+  for (const [re, env] of ENV) if (re.test(t)) { out.envase = env; break; }
+  return out;
+}
+/** Mínimo y punto de reorden automáticos desde lo que salió en 90 días (ventas + envases abiertos en cabina).
+ *  Mínimo = 1 semana de consumo; reorden = 3 semanas (2 de entrega + 1 de colchón). Sin movimiento: null. */
+export function autoMinimos(salidas90: number): { minimo: number | null; reorden: number | null; porDia: number } {
+  const d = salidas90 > 0 ? salidas90 / 90 : 0;
+  if (!(d > 0)) return { minimo: null, reorden: null, porDia: 0 };
+  const minimo = Math.max(1, Math.ceil(d * 7));
+  return { minimo, reorden: Math.max(minimo, Math.ceil(d * 21)), porDia: Math.round(d * 1000) / 1000 };
+}
+export const ETIQUETA_REVISION: Record<string, string> = { sin_precio: "sin precio", sin_costo: "sin costo", sin_contenido: "sin contenido", sin_envase: "sin envase", sin_reorden: "sin punto de reorden", sin_foto: "sin foto" };
+/** «Por revisar» (beta_v_producto_revision). Insumos de cabina no se venden: no piden precio. Si hay reorden automático, no falta. */
+export function faltantesDe(vista: unknown, uso: string, hayReordenAuto: boolean): string[] {
+  const L = Array.isArray(vista) ? vista.map((x) => String(x)) : [];
+  return L.filter((f) => !(f === "sin_precio" && uso === "cabina") && !(f === "sin_reorden" && hayReordenAuto));
+}
