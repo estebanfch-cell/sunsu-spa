@@ -1420,7 +1420,7 @@ function moduloDeRuta(route) {
 function tituloRuta(route, tab) {
   if (route.mod === "mc" && window.MCNav) return window.MCNav.titulo(route);
   if (route.mod === "proveedores" && route.sub === "nuevo") return "Nuevo proveedor";
-  if (route.mod === "tickets") return "Tickets";
+  if (route.mod === "tickets") return route.sub === "t" ? "Ticket" : "Tickets";
   if (route.mod === "clientes") return "Registro de clientas";
   if (route.mod === "caja") return "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
@@ -1544,7 +1544,7 @@ function gruposVisibles() {
     if (row[3] === "admin" && !state.admin) continue;
     spa.push([row[0], row[1], row[2]]);
   }
-  if (acceso("cabina") !== "no") spa.push(["cabina", "Cabina", "#/m/cabina"]);
+  // «Cabina» fuera del menú (Emilia 17/11): solo se oculta; la ruta #/m/cabina y los datos siguen.
   add("Spa", "✨", spa);
   if (state.admin) add("Configuración general", "⚙️", [["configuracion", "Configuración general", "#/m/configuracion"]]);
   const adminItems = [
@@ -1927,7 +1927,7 @@ function pantallaSunsu(route) {
   }
   const m = route.mod;
   if (m === "inicio") return state.admin ? "inicio" : "staff-home";
-  if (m === "tickets") return "historial";
+  if (m === "tickets") return route.sub === "t" && route.id && window.MCTickets ? "" : "historial";
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "";
   if (m === "productos") return route.sub === "catalogo" || !window.MCProductos ? "catalogo" : "";
@@ -2086,6 +2086,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "conteos" && route.sub !== "hacer" && window.MCConteo) window.MCConteo.wire(main, route);
     if (route.kind === "mod" && route.mod === "transferencias" && window.MCTransferencias) window.MCTransferencias.wire(main, route);
     if (route.kind === "mod" && route.mod === "ajustes" && window.MCAjustes) window.MCAjustes.wire(main, route);
+    if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) window.MCTickets.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2119,6 +2120,7 @@ async function renderMod(route) {
   }
   if (route.mod === "lugares") return renderLugares();
   if (route.mod === "compras") return renderCompras(route.sub);
+  if (route.mod === "tickets" && route.sub === "t" && route.id && window.MCTickets) return window.MCTickets.render(route);
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes") return renderClientes();
@@ -5582,16 +5584,18 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117aj1"></script>
-<script src="beta-screens.js?v=20261117aj1"></script>
-<script src="beta-inline.js?v=20261117aj1"></script>
-<script src="mc-productos.js?v=20261117aj1"></script>
-<script src="mc-nav.js?v=20261117aj1"></script>
-<script src="mc-permisos.js?v=20261117aj1"></script>
-<script src="mc-protocolos.js?v=20261117aj1"></script>
-<script src="mc-conteo.js?v=20261117aj1"></script>
-<script src="mc-transferencias.js?v=20261117aj1"></script>
-<script src="mc-ajustes.js?v=20261117aj1"></script>
+<script src="mc-buscar.js?v=20261117tk1"></script>
+<script src="beta-screens.js?v=20261117tk1"></script>
+<script src="beta-inline.js?v=20261117tk1"></script>
+<script src="mc-productos.js?v=20261117tk1"></script>
+<script src="mc-nav.js?v=20261117tk1"></script>
+<script src="mc-permisos.js?v=20261117tk1"></script>
+<script src="mc-protocolos.js?v=20261117tk1"></script>
+<script src="mc-conteo.js?v=20261117tk1"></script>
+<script src="mc-transferencias.js?v=20261117tk1"></script>
+<script src="mc-ajustes.js?v=20261117tk1"></script>
+<script src="vendor-qrcode.js?v=20261117tk1"></script>
+<script src="mc-tickets.js?v=20261117tk1"></script>
 <script>draw();</script>
 </body>
 </html>
