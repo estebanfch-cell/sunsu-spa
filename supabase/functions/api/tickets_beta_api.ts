@@ -112,7 +112,13 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const cobrado = n(r.estimado);
   // Facial canjeado (sesión de paquete o gift card de facial): va en $0 y el cobro se reparte en el resto.
   const canjeF = canjeFacial(r);
-  const L = L0.filter((x) => !(canjeF && x.tipo === "facial") && !cort.has(skuCode(x.codigo)));
+  // Descuento por línea al crear (orig.desc_lineas): esa línea va a precio de lista con su descuento real,
+  // y lo cobrado restante se reparte entre las demás.
+  const oD = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  const dl = new Map((Array.isArray(oD.desc_lineas) ? oD.desc_lineas as Row[] : []).map((x) => [skuCode(s(x.sku)), x]));
+  let cobradoResto = cobrado;
+  for (const [k, x] of dl) if (L0.some((l) => skuCode(l.codigo) === k)) cobradoResto -= n(x.bruto) - n(x.monto);
+  const L = L0.filter((x) => !(canjeF && x.tipo === "facial") && !cort.has(skuCode(x.codigo)) && !dl.has(skuCode(x.codigo)));
   const nombreDe = (c: string) => s(porCode.get(skuCode(c))?.nombre) || c;
   const vistos = new Set<string>();
   const out: LineaTk[] = [];
@@ -123,7 +129,13 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
     const qty = L0.filter((x) => x.codigo === l.codigo && x.tipo === l.tipo).reduce((a, x) => a + x.qty, 0);
     if (canjeF && l.tipo === "facial") { out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, canje: true }); continue; }
     if (cort.has(skuCode(l.codigo)) && l.tipo !== "facial") { out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, cortesia: true }); continue; }
-    const pr = precioLineaTicket(L, l.codigo, cobrado);
+    const dx = dl.get(skuCode(l.codigo));
+    if (dx && !(canjeF && l.tipo === "facial")) {
+      const unitL = qty > 0 ? n(dx.bruto) / qty : n(dx.bruto);
+      out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unitL), descuento_tipo: s(dx.modo) === "%" ? "%" : "$", descuento_valor: s(dx.modo) === "%" ? n(dx.valor) : n(dx.monto), excluir_comision: false, estimado: false });
+      continue;
+    }
+    const pr = precioLineaTicket(L, l.codigo, Math.max(0, round2(cobradoResto)));
     const unit = pr.unit != null ? pr.unit : l.lista;
     out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: pr.estimado || pr.unit == null });
   }

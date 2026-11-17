@@ -277,7 +277,7 @@ window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -1442,6 +1442,7 @@ function renderTicket(c){
     ${_notasCard}
     ${_fotosCard}
 
+    <div id="ld-card" class="ld-card" style="display:none"></div>
     <div id="preview-box" style="display:none"></div>
     <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">${_cotMode?'✓ Guardar cotización':'✓ Enviar Ticket'}</button>
     <div style="height:28px"></div>
@@ -1885,6 +1886,85 @@ function onToggleAcc(id){
   if(id==='gcventa') T.gcVenta.activo=true;
 }
 
+
+// ── Descuento por línea al crear el ticket (Emilia 17/11, como MineCore): $ o % por cada línea cobrada,
+// antes de la promo/descuento del ticket. Se guarda en orig.desc_lineas.
+function _ldParse(txt){
+  var x=String(txt==null?'':txt).trim().replace(',','.'); if(!x) return null;
+  var pct=/%/.test(x), v=parseFloat(x.replace(/[%$\s]/g,''));
+  if(!(v>0)) return null;
+  return pct?{m:'%',v:Math.min(v,100)}:{m:'$',v:Math.round(v*100)/100};
+}
+function _ldTxt(d){ return !d?'':d.m==='%'?(d.v+'%'):('$'+d.v); }
+function _ldMonto(k,gross){
+  var d=T.lineDesc&&T.lineDesc[k]; if(!d||!(gross>0)) return 0;
+  var m=d.m==='%'?gross*d.v/100:d.v;
+  return Math.round(Math.min(m,gross)*100)/100;
+}
+/** Líneas cobradas del ticket en curso (precio con IVA, sin descuentos). */
+function _ldLineas(){
+  var L=[], esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
+  if(T.facial){
+    var f=FACIALES.find(function(x){return x.sku===T.facial;});
+    var g=!f?0:T.cobro==='giftcard'?(Number(T._gcDif)||0):esCanje?0:f.p;
+    if(g>0) L.push({k:T.facial,n:f.n,g:g,b:'f',e:'💆'});
+  }
+  EXTRAS.forEach(function(e){
+    if(!T.extras[e.sku]||(T.extrasCourtesy&&T.extrasCourtesy[e.sku])) return;
+    var g=e.t*(e.sku==='SUNSU-15'?_ampCantValor(T.extrasTipo&&T.extrasTipo[e.sku]):1);
+    if(g>0) L.push({k:e.sku,n:e.n,g:g,b:'e',e:'✨'});
+  });
+  var pk=T.pack3?PAQ3.find(function(p){return p.sku===T.pack3;}):T.pack6?PAQ6.find(function(p){return p.sku===T.pack6;}):null;
+  if(pk&&pk.p>0) L.push({k:pk.sku,n:pk.n,g:pk.p,b:'pack',e:'📦'});
+  PROVS.forEach(function(pv){pv.prods.forEach(function(p){var q=T.productos[p.sku]||0;if(q>0&&p.p>0)L.push({k:p.sku,n:p.n+(q>1?' ×'+q:''),g:p.p*q,b:'prod',e:'🧴'});});});
+  return L;
+}
+/** Monto de descuento por grupo (f, e, pack, prod) y por código. */
+function _ldAplicar(){
+  var out={f:0,e:0,pack:0,prod:0,total:0,by:{},lineas:[]};
+  if(T.esSunsu) return out;
+  var vivas={};
+  _ldLineas().forEach(function(l){
+    vivas[l.k]=1;
+    var m=_ldMonto(l.k,l.g); if(!(m>0)) return;
+    out[l.b]+=m; out.total+=m; out.by[l.k]=m;
+    var d=T.lineDesc[l.k];
+    out.lineas.push({sku:l.k,nombre:l.n,modo:d.m,valor:d.v,bruto:Math.round(l.g*100)/100,monto:m});
+  });
+  // Si quitaron la línea, el descuento se va con ella.
+  Object.keys(T.lineDesc||{}).forEach(function(k){ if(!vivas[k]) delete T.lineDesc[k]; });
+  ['f','e','pack','prod','total'].forEach(function(k){out[k]=Math.round(out[k]*100)/100;});
+  return out;
+}
+var _ldSig='';
+function _ldRender(){
+  var box=document.getElementById('ld-card'); if(!box) return;
+  var L=T.esSunsu?[]:_ldLineas();
+  if(!L.length){ box.style.display='none'; box.innerHTML=''; _ldSig=''; return; }
+  box.style.display='block';
+  var $=function(v){return '$'+(Math.round(v*100)/100).toFixed(2);};
+  var sig=L.map(function(l){return l.k+':'+l.g;}).join('|');
+  if(sig!==_ldSig){
+    _ldSig=sig;
+    box.innerHTML='<div class="ld-h">🏷️ Descuento por línea <small>opcional · escribe 10% o 5 ($)</small></div>'+
+      L.map(function(l){
+        return '<div class="ld-row" data-k="'+_tkEsc(l.k)+'"><span class="ld-n">'+l.e+' '+_tkEsc(l.n)+'</span><span class="ld-g">'+$(l.g)+'</span>'+
+          '<span class="ld-in"><input type="text" inputmode="decimal" placeholder="—" value="'+_tkEsc(_ldTxt(T.lineDesc[l.k]))+'" data-ld="'+_tkEsc(l.k)+'"></span><span class="ld-net" data-net="'+_tkEsc(l.k)+'"></span></div>';
+      }).join('');
+    box.querySelectorAll('[data-ld]').forEach(function(inp){
+      inp.oninput=function(){
+        var k=inp.getAttribute('data-ld'), d=_ldParse(inp.value);
+        if(d) T.lineDesc[k]=d; else delete T.lineDesc[k];
+        updatePreview();
+      };
+    });
+  }
+  L.forEach(function(l){
+    var el=box.querySelector('[data-net="'+l.k.replace(/"/g,'')+'"]'); if(!el) return;
+    var m=_ldMonto(l.k,l.g);
+    el.innerHTML=m>0?'<s>'+$(l.g)+'</s> <b>'+$(l.g-m)+'</b>':'';
+  });
+}
 function updatePreview(){
   let comF=0,comP=0;
   const esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
@@ -1945,6 +2025,9 @@ function updatePreview(){
   const gcEsCort=gcV&&gcV.cortesia;
   const gcVTotal=(gcV&&gcV.activo&&gcV.codigo&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
 
+  // Descuento por línea (antes del descuento del ticket)
+  const _LD=_ldAplicar();
+  facialP=Math.max(0,facialP-_LD.f); extrasTotal=Math.max(0,extrasTotal-_LD.e); estPack=Math.max(0,estPack-_LD.pack); estProd=Math.max(0,estProd-_LD.prod);
   const estF=facialP+extrasTotal;
   const totC=T.esSunsu?0:(comF+comP+comE);
   const totE=estF+estPack+estProd+gcVTotal;
@@ -1983,6 +2066,7 @@ function updatePreview(){
   const totEFinal = (T.descuento&&T.descuento.tipo==='directo') ? 0 : Math.max(0, totE - dscMonto);
   // Bases para la actualizacion EN VIVO del descuento personalizado (_dscLive)
   window._pvB={facialP:facialP,estPack:estPack,estProd:estProd,gcVTotal:gcVTotal,totE:totE};
+  try{ _ldRender(); }catch(eLd){}
   const box=document.getElementById('preview-box');if(!box) return;
   const hasExtras=extrasDetalle.length>0;
   if(totC===0&&totE===0&&!T.facial&&!T.pack3&&!T.pack6&&!hasExtras){box.style.display='none';return;}
@@ -1994,14 +2078,15 @@ function updatePreview(){
   const _ov=[]; const _m=function(v){return '$'+(Math.round(v*100)/100).toFixed(2);};
   const _fila=function(cant,cod,desc,unitConIva,etq){
     var unit=Math.round(((Number(unitConIva)||0)/1.15)*100)/100;
-    _ov.push({cant:cant,cod:cod||'',desc:desc,unit:unit,total:Math.round(unit*cant*100)/100,etq:etq||''});
+    var ld=cod&&_LD.by[cod]?_LD.by[cod]:0, dd=ld>0&&T.lineDesc[cod]?T.lineDesc[cod]:null;
+    _ov.push({cant:cant,cod:cod||'',desc:desc,unit:unit,total:Math.max(0,Math.round((unit*cant-ld/1.15)*100)/100),etq:(etq||'')+(dd?(etq?' · ':'')+'🏷️ −'+_ldTxt(dd):'')});
   };
   if(T.facial){
     const fx=FACIALES.find(function(x){return x.sku===T.facial;});
-    _fila(1,T.facial,facialNombre||(fx?fx.n:'Facial'),facialP,T.cobro==='cortesia'?'cortesía':esCanje?'canje':(T.cobro==='giftcard'&&T._gcUsado?'GC −$'+Number(T._gcUsado).toFixed(2):''));
+    _fila(1,T.facial,facialNombre||(fx?fx.n:'Facial'),facialP+_LD.f,T.cobro==='cortesia'?'cortesía':esCanje?'canje':(T.cobro==='giftcard'&&T._gcUsado?'GC −$'+Number(T._gcUsado).toFixed(2):''));
   }
   extrasDetalle.forEach(function(ex){ _fila(ex.cant||1,ex.sku,ex.n,ex.cort?0:(ex.unit!=null?ex.unit:ex.p),ex.cort?'cortesía':''); });
-  if(T.pack3||T.pack6) _fila(1,T.pack3||T.pack6,packNombre||'Paquete',estPack);
+  if(T.pack3||T.pack6) _fila(1,T.pack3||T.pack6,packNombre||'Paquete',estPack+_LD.pack);
   PROVS.forEach(function(pv){pv.prods.forEach(function(p){
     const q=T.productos[p.sku]||0; if(q<=0) return;
     _fila(q,p.sku,p.n,p.p);
@@ -2493,6 +2578,9 @@ function enviarTicket(){
   if(T.pack3){const _p=PAQ3.find(p=>p.sku===T.pack3);if(_p)_estPack=_p.p;}
   if(T.pack6){const _p=PAQ6.find(p=>p.sku===T.pack6);if(_p)_estPack=_p.p;}
   PROVS.forEach(pv=>pv.prods.forEach(p=>{const q=T.productos[p.sku]||0;if(q>0)_estProd+=p.p*q;}));
+  // Descuento por línea (antes del descuento del ticket), igual que en updatePreview
+  const _LDs=_ldAplicar();
+  _estF=Math.max(0,_estF-_LDs.f-_LDs.e); _estPack=Math.max(0,_estPack-_LDs.pack); _estProd=Math.max(0,_estProd-_LDs.prod);
   // GC vendida: agregar su valor al estimado (igual que en updatePreview)
   const _gcVenta=T.gcVenta;
   const _gcVTotal=(_gcVenta&&_gcVenta.activo&&_gcVenta.codigo&&!_gcVenta.cortesia)
@@ -2571,6 +2659,7 @@ function enviarTicket(){
     nombre:         T.esSunsu?'Sunsu':(nomEl?.value||'').trim(),
     clienteCodigo:  T.esSunsu?'':(T.clienteCodigo||''),
     clienteKey:     T.esSunsu?'':(T.clienteKey||''),
+    lineDescuentos: T.esSunsu?[]:_LDs.lineas,
     apellido:       T.esSunsu?'Spa':(apeEl?.value||'').trim(),
     factura:        (facEl?.value||'').trim(),
     fechaRetorno:   _retFmt,

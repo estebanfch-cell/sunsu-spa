@@ -119,6 +119,14 @@ function activoVenta(est: Map<string, { act: boolean; fijado: boolean }>, sku: s
   if (!e) return activoCat(catActivo);
   return e.fijado ? e.act : e.act && activoCat(catActivo);
 }
+/** Descuento por línea del formulario de ticket (orig.desc_lineas): sku, modo $/%, valor y monto con IVA. */
+export function descLineas(v: unknown): R[] {
+  if (!Array.isArray(v)) return [];
+  return (v as R[]).slice(0, 60).map((x) => ({
+    sku: s(x.sku).slice(0, 40), nombre: s(x.nombre).slice(0, 120), modo: s(x.modo) === "%" ? "%" : "$",
+    valor: Math.max(0, n(x.valor)), bruto: Math.max(0, round2(n(x.bruto))), monto: Math.max(0, round2(n(x.monto))),
+  })).filter((x) => x.sku && x.monto > 0 && x.monto <= x.bruto + 0.01);
+}
 async function tickets(ctx: Ctx) {
   return (await ctx.db.all("tickets")).filter((r) => !r.borrado_at);
 }
@@ -622,7 +630,10 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     servicios_adicionales: s(p.extras),
     seguimiento: "",
     agendado: false,
-    orig: s(p.clienteCodigo) || s(p.clienteKey) ? { cliente_codigo: s(p.clienteCodigo), cliente_key: s(p.clienteKey) } : {},
+    orig: {
+      ...(s(p.clienteCodigo) || s(p.clienteKey) ? { cliente_codigo: s(p.clienteCodigo), cliente_key: s(p.clienteKey) } : {}),
+      ...(descLineas(p.lineDescuentos).length ? { desc_lineas: descLineas(p.lineDescuentos) } : {}),
+    },
   };
   const prod = productosPatch((p.productos || {}) as R, false, base);
   Object.assign(base, prod);
