@@ -5,7 +5,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, conTelefono } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
-import { n, normCedula, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
+import { n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, saldoGift } from "./ventas.ts";
 import { claveDe } from "./ticket_beta.ts";
@@ -99,6 +99,7 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     if (d.cedula != null) item.cedula = s(d.cedula);
     if (d.sector != null) item.sector = s(d.sector);
     if (d.telefono != null && "telefono" in c) item.telefono = s(d.telefono);
+    if ("telefono" in item) item.telefono = telefonoEc(item.telefono);
     const ced = normCedula(c.cedula), nom = normNombre(s(c.nombre));
     item.paquetesActivos = (ced && porCedP.get(ced)) || porNomP.get(nom) || 0;
     if (admin) item.giftSaldo = (ced && porCedG.get(ced)) || porNomG.get(nom) || 0;
@@ -126,6 +127,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   if (!vacio(cli.email)) datos.email = s(cli.email);
   const corr = (ov?.datos || {}) as Row;
   for (const [k, v] of Object.entries(corr)) datos[k] = s(v);
+  if (datos.telefono) datos.telefono = telefonoEc(datos.telefono);
   const ced = normCedula(datos.cedula || cli.cedula), nom = normNombre((s(datos.nombres) + " " + s(datos.apellido)).trim() || s(cli.nombre));
   // Historial: cada ticket con la clave que abre el detalle de ticket de la beta.
   const filas = (await todas(ctx, "tickets")).filter((r) => !r.borrado_at && claveCliente(r) === key);
@@ -176,6 +178,14 @@ extend("cl_get", "any", async (p, ctx, ses) => {
   return ficha(ctx, ses, key);
 });
 
+/** Datos de la clienta editados en un ticket → ficha (beta_clientes), con historial «desde ticket». */
+export async function propagarDesdeTicket(ctx: Ctx, ses: Ses, key: string, datosTk: Row, so: string): Promise<Row> {
+  const MAPA: Record<string, string> = { nombre: "nombres", apellido: "apellido", cedula: "cedula", email: "email", telefono: "telefono" };
+  const cambios: Row = {};
+  for (const [k, v] of Object.entries(datosTk || {})) if (MAPA[k] && s(v)) cambios[MAPA[k]] = k === "telefono" ? s(v).replace(/[^\d+]/g, "") : s(v);
+  if (!key || !Object.keys(cambios).length) return { ok: true, sinCambios: true };
+  return await guardarCliente(ctx, ses, key, cambios, "desde ticket " + so);
+}
 async function guardarCliente(ctx: Ctx, ses: Ses, key: string, cambios: Row, via: string): Promise<Row> {
   if (!(await hay(ctx))) return { error: FALTA };
   const permitidos = new Set(CAMPOS_CLIENTE.map(([k]) => k));

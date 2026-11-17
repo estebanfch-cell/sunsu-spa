@@ -139,6 +139,14 @@
   ];
   function emojiRuta(h) { h = String(h || ""); for (var i = 0; i < EMO_RUTA.length; i++) if (h === EMO_RUTA[i][0] || h.indexOf(EMO_RUTA[i][0] + "/") === 0) return EMO_RUTA[i][1]; return ""; }
   function conEmoji(txt, emo) { txt = String(txt || ""); return emo && txt.indexOf(emo) !== 0 ? emo + " " + txt : txt; }
+  // Emoji por campo (fichas de clienta y ticket).
+  var EMO_CAMPO = { "nombre": "👤", "nombres": "👤", "apellido": "👤", "cédula": "🪪", "ci": "🪪", "teléfono": "📱", "email": "✉️", "nacimiento": "🎂", "sector": "🏠",
+    "tipo de piel": "🧴", "estado actual": "🌡️", "alergias": "⚠️", "medicación": "💊", "condiciones": "🩺", "reacciones previas": "🔴", "exfoliantes / retinoides": "🧪",
+    "desea extracciones": "🔍", "autoriza fotos": "📷", "ciclo menstrual": "🌙", "cortesía complementaria": "🎀", "aprueba consentimiento": "✍️", "notas": "📝",
+    "fecha de registro": "🗓️", "último registro": "🗓️", "atendió": "💆", "recomendaciones": "💡", "fecha": "📅", "local": "📍", "orden": "#️⃣", "fecha de regreso": "🔁",
+    "reagendada": "📆", "ficha": "📇", "factura": "🧾", "cosmetóloga": "💆" };
+  function emojiCampo(lbl) { var k = String(lbl || "").trim().toLowerCase(), m = EMO_CAMPO[k]; return m ? m + " " + lbl : lbl; }
+  window.MCEmojiCampo = emojiCampo;
   var TABS = { ventas: 1, inventario: 1, compras: 1 };
   function grupos() {
     var out = [];

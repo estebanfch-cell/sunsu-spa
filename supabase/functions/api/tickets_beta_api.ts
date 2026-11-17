@@ -7,7 +7,7 @@ import { consultar } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
-import { b, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { conTelefono } from "./lib.ts";
@@ -73,10 +73,10 @@ export async function ticketPorClave(ctx: Ctx, clave: string): Promise<Row | nul
 export function docsDe(r: Row): Row[] {
   const urls = (v: unknown) => s(v).split(/\s*\|\s*|\s*,\s*(?=https?:|archivo:)|\s+(?=https?:|archivo:)/).map((x) => x.trim()).filter((x) => /^(https?:|archivo:[-\w]+$)/.test(x));
   const out: Row[] = [];
-  for (const u of urls(r.comprobante)) out.push({ tipo: "comprobante", nombre: "Comprobante de pago", url: u });
-  urls(r.fotos_antes).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto antes " + (i + 1), url: u }));
-  urls(r.fotos_despues).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto después " + (i + 1), url: u }));
-  urls(r.fotos).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto " + (i + 1), url: u }));
+  for (const u of urls(colTicket(r, "comprobante"))) out.push({ tipo: "comprobante", nombre: "Comprobante de pago", url: u });
+  urls(colTicket(r, "fotos_antes")).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto antes " + (i + 1), url: u }));
+  urls(colTicket(r, "fotos_despues")).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto después " + (i + 1), url: u }));
+  urls(colTicket(r, "fotos")).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto " + (i + 1), url: u }));
   return out;
 }
 /** Líneas del ticket: las de la beta si se editó; si no, las del sistema con el precio cobrado (real o prorrateado). */
@@ -307,7 +307,7 @@ export function faltaDe(r: Row, d: Row): string[] {
   const out: string[] = [];
   const mets = metodosPago(r.comp).map((m) => s(m.metodo));
   const comps = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
-  if (mets.includes("transferencia") && !tieneUrl(r.comprobante) && !comps.length) out.push("Foto del comprobante de transferencia");
+  if (mets.includes("transferencia") && !tieneUrl(colTicket(r, "comprobante")) && !comps.length) out.push("Foto del comprobante de transferencia");
   const fac7 = s(r.fac_7);
   if (b(r.cob) && !b(r.fac) && !s(d.factura) && !/sin/i.test(fac7) && !(Number(fac7) > 0) && !mets.includes("canje") && !mets.includes("cortesía")) out.push("Número de factura");
   return out;
@@ -354,9 +354,13 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const d = (cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row;
   const ced = s(r.id_3).split(".")[0];
   const reg = (ced ? await registroDe(ctx, [ced], []) : []).filter((x) => !x.borrado_at && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
+  // Ficha de la clienta (beta_clientes): manda sobre la fila vieja del ticket y el registro.
+  let fc: Row = {};
+  try { const k = claveCliente(r); if (k) fc = ((await consultar(ctx.db, "beta_clientes", { cols: ["key", "datos"], filtros: [{ col: "key", op: "eq", val: k }], limite: 1 })).rows[0]?.datos || {}) as Row; } catch { fc = {}; }
+  const vf = (x: unknown) => (s(x) ? s(x) : undefined);
   const info: Row = {
-    factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? r.nombre), apellido: s(d.apellido ?? r.apellido), cedula: s(d.cedula ?? ced),
-    email: s(d.email ?? reg?.email), telefono: s(d.telefono ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
+    factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? vf(fc.nombres) ?? r.nombre), apellido: s(d.apellido ?? vf(fc.apellido) ?? r.apellido), cedula: s(d.cedula ?? ced),
+    email: s(d.email ?? vf(fc.email) ?? reg?.email), telefono: telefonoEc(d.telefono ?? vf(fc.telefono) ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
     notas: s(d.notas ?? r.notas_generales), recomendaciones: s(d.recomendaciones ?? r.recomendaciones), retorno: s(d.retorno ?? s(r.fecha_retorno).slice(0, 10)),
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
@@ -417,7 +421,10 @@ async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string)
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: via, detalle: "datos: " + Object.keys(limpio).join(", ") }].slice(-100);
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
-  return { ok: true, clave };
+  // Lo de la clienta (nombre, apellido, CI, email, teléfono) también va a su ficha.
+  let ficha: Row = {};
+  try { const { propagarDesdeTicket } = await import("./clientes_beta_api.ts"); ficha = await propagarDesdeTicket(ctx, ses, claveCliente(r), limpio, so || clave); } catch (e) { ficha = { error: String((e as Error)?.message || e) }; }
+  return { ok: true, clave, ficha: ficha.error ? { error: ficha.error } : { ok: true, cambios: ficha.cambios || [] } };
 }
 const SOLO_DATOS = (p: Row) => p.datos && typeof p.datos === "object" && p.lineas == null && p.descuento == null && p.promo == null && p.excluir_cosmetologa == null;
 export async function guardarTodo(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {

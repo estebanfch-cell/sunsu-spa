@@ -114,6 +114,7 @@
   // ---------- vista previa de documentos (solo el documento, sin salir de la página) ----------
   function driveId(u) { var m = String(u || "").match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=|thumbnail\?id=)([-\w]{20,})/); return m ? m[1] : ""; }
   function miniatura(u) { var id = driveId(u); return id ? "https://drive.google.com/thumbnail?id=" + id + "&sz=w400" : /^archivo:/.test(String(u)) ? "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'><text x='36' y='44' font-size='28' text-anchor='middle'>🖼️</text></svg>" : u; }
+  function lblE(x) { return window.MCEmojiCampo ? window.MCEmojiCampo(x) : x; }
   function cerrarPrevia() { var x = document.getElementById("mcpv"); if (x) { var fr = x.querySelector("[data-blob]"); if (fr) URL.revokeObjectURL(fr.getAttribute("data-blob")); x.remove(); } }
   function marcoPrevia(titulo, cuerpo) {
     cerrarPrevia();
@@ -145,11 +146,21 @@
     var cards = window._tkCards = window._tkCards || {};
     if (!cards[sheetRow]) { try { var r = await api("tk_historial", { rows: [sheetRow], limit: 1 }); if (r && r.items && r.items[0]) cards[sheetRow] = r.items[0]; } catch (x) {} }
     if (!cards[sheetRow] || typeof tarjetaTicket !== "function") { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No encontré la tarjeta de este ticket</p>'; return; }
-    tarjetaTicket(sheetRow, function (doc) {
-      if (!document.getElementById("mcpv")) return;
-      try { var u = URL.createObjectURL(doc.output("blob")); box.querySelector(".mcpv-b").innerHTML = '<iframe data-blob="' + u + '" src="' + u + '"></iframe>'; }
-      catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
-    });
+    tarjetaTicket(sheetRow, function (doc, nom) { mostrarPdf(box, doc, nom || "Tarjeta.pdf"); });
+  }
+  /** Muestra un PDF de jsPDF en la ventana con «Descargar» y «Abrir»: en el iPhone el visor dentro de la página a veces sale en blanco. */
+  function mostrarPdf(box, doc, nom) {
+    if (!document.getElementById("mcpv")) return;
+    try {
+      var u = URL.createObjectURL(doc.output("blob"));
+      box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> <a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
+    } catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
+  }
+  /** Igual que la tarjeta, para cualquier PDF que se arma en el navegador (reporte del paquete). */
+  function previaPdf(titulo, hacer) {
+    var box = marcoPrevia(titulo, '<p class="mccf-sub">Generando…</p>');
+    Promise.resolve().then(hacer).then(function (x) { if (!x || !x.doc) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; return; } mostrarPdf(box, x.doc, x.nom || "Documento.pdf"); })
+      .catch(function (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">' + e((x && x.message) || "No se pudo generar el PDF") + "</p>"; });
   }
   var VACIA = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
   var MINIS = {};
@@ -162,7 +173,7 @@
       api("fotoB64", { id: id, sz: 240 }).then(function (r) { if (r && r.ok) { MINIS[id] = "data:" + (r.mime || "image/jpeg") + ";base64," + r.b64; im.src = MINIS[id]; } });
     });
   }
-  window.MCPrevia = { abrir: previa, tarjeta: previaTarjeta, miniatura: miniatura };
+  window.MCPrevia = { abrir: previa, tarjeta: previaTarjeta, pdf: previaPdf, miniatura: miniatura };
 
   // ---------- ficha ----------
   function tabHtml() {
@@ -206,18 +217,18 @@
     var val = function (k) { return P[k] != null ? P[k] : d.datos[k] || ""; };
     return '<div class="mccl-reg">' + d.campos.map(function (c) {
       var v = val(c[0]), sh = c[0] === "nacimiento" && v ? f(v) : v;
-      return "<div><b>" + e(c[1]) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>";
-    }).join("") + (d.lectura || []).filter(function (c) { return d.datos[c[0]]; }).map(function (c) { return '<div class="ro"><b>' + e(c[1]) + ":</b> " + e(f(d.datos[c[0]])) + "</div>"; }).join("") + "</div>" +
+      return "<div><b>" + e(lblE(c[1])) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>";
+    }).join("") + (d.lectura || []).filter(function (c) { return d.datos[c[0]]; }).map(function (c) { return '<div class="ro"><b>' + e(lblE(c[1])) + ":</b> " + e(f(d.datos[c[0]])) + "</div>"; }).join("") + "</div>" +
       (n ? (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
         '<p class="err" id="mccl-err"></p><div class="mccl-acts" style="margin-top:8px"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + " (" + n + ')</button><button class="btn ghost small" type="button" id="mccl-no">Descartar</button></div>' : "");
   }
   function regHtmlViejo() {
     var d = K.d;
-    if (K.edit) return '<div class="mccl-reg">' + d.campos.map(function (c) { return "<div><b>" + e(c[1]) + '</b><input data-c="' + e(c[0]) + '" value="' + e(d.datos[c[0]] || "") + '"' + (c[0] === "nacimiento" ? ' type="date"' : "") + "></div>"; }).join("") + "</div>" +
+    if (K.edit) return '<div class="mccl-reg">' + d.campos.map(function (c) { return "<div><b>" + e(lblE(c[1])) + '</b><input data-c="' + e(c[0]) + '" value="' + e(d.datos[c[0]] || "") + '"' + (c[0] === "nacimiento" ? ' type="date"' : "") + "></div>"; }).join("") + "</div>" +
       (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
       '<p class="err" id="mccl-err"></p><div class="mccl-acts"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + '</button><button class="btn ghost small" type="button" id="mccl-no">Cancelar</button></div>';
     var v = d.campos.filter(function (c) { return d.datos[c[0]]; });
-    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(c[1]) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : d.datos[c[0]]) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
+    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : d.datos[c[0]]) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
   }
   function htmlFicha() {
     var d = K.d, r = d.resumen, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
