@@ -685,7 +685,7 @@ export async function borrarTicketSuave(ctx: Ctx, ses: Ses, row: Row): Promise<R
   return { ok: true };
 }
 
-async function veTicket(ctx: Ctx, ses: Ses, row: Row): Promise<boolean> {
+export async function veTicket(ctx: Ctx, ses: Ses, row: Row): Promise<boolean> {
   const nivel = acceso(ses.rol, "tickets", await matrizDe(ctx.db));
   if (nivel === "no") return false;
   if (nivel === "todos" || esAdmin(ses.rol)) return true;
@@ -1536,7 +1536,13 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
   return borrarTicketSuave(ctx, ses, row);
 });
 
+/** Tablas que otros módulos registran para el flujo de solicitudes (p. ej. el detalle de ticket de la beta). */
+export const SOLICITUD_HOOKS: Record<string, {
+  fila: (ctx: Ctx, ses: Ses, fila: string) => Promise<{ row: Row; antes: Row } | { error: string }>;
+  aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row) => Promise<Row>;
+}> = {};
 async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row } | { error: string }> {
+  if (SOLICITUD_HOOKS[tabla]) return SOLICITUD_HOOKS[tabla].fila(ctx, ses, fila);
   if (tabla === "tickets") {
     const row = await ticketDe(ctx, fila);
     if (!row || row.borrado_at) return { error: "Ticket no encontrado" };
@@ -1655,6 +1661,7 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   const fila = s(row.fila);
   const propuestos = (row.propuestos && typeof row.propuestos === "object" ? row.propuestos : {}) as Row;
   const borrar = s(row.tipo) === "eliminacion";
+  if (SOLICITUD_HOOKS[tabla] && !borrar) return SOLICITUD_HOOKS[tabla].aplicar(ctx, ses, fila, propuestos);
   if (tabla === "clientes") return borrar ? borrarClienteSuave(ctx, ses, fila) : guardarClienteCampos(ctx, ses, fila, propuestos);
   if (tabla === "catalogo") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarCatalogoCampos(ctx, ses, fila, propuestos);
   if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);

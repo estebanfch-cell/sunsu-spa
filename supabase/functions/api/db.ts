@@ -83,7 +83,7 @@ export class MemoryDb implements Db {
 }
 
 /** Tablas que escribe app_beta_write (0045). */
-export const BETA_TABLAS = new Set(["beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_transferencias", "beta_transferencia_lineas", "beta_ajustes", "beta_ajuste_lineas", "beta_stock", "beta_stock_movimientos"]);
+export const BETA_TABLAS = new Set(["beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_transferencias", "beta_transferencia_lineas", "beta_ajustes", "beta_ajuste_lineas", "beta_stock", "beta_stock_movimientos", "beta_tickets", "beta_ticket_lineas", "beta_clientes", "beta_cliente_notas"]);
 export class SupabaseDb implements Db {
   private url: string;
   private key: string;

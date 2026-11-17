@@ -4809,6 +4809,7 @@ function renderHistorial(c){
       window._histCosmFiltro='';
       if(isAdmin) mostrarHistorialAdmin(c,'','','');
       else mostrarHistorialStaff(c,'','');
+      _histAutoRefresh();
     })
     .catch(function(err){
       c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br>'
@@ -4816,6 +4817,26 @@ function renderHistorial(c){
     });
 }
 
+// La lista de tickets se refresca sola (sin botón Actualizar): cada 45 s con la pestaña visible y al volver a ella.
+function _histAutoRefresh(){
+  if(window._histAutoOn) return; window._histAutoOn=true;
+  var ultimo=0;
+  var tick=function(){
+    if(document.hidden||!document.getElementById('hist-res')||Date.now()-ultimo<15000) return;
+    ultimo=Date.now();
+    fetch(APPS_SCRIPT_URL+'?action=getHistorial&_t='+Date.now()).then(function(r){return r.json();}).then(function(data){
+      if(!Array.isArray(data)||!document.getElementById('hist-res')) return;
+      var firma=function(L){return L.length+'|'+JSON.stringify(L.slice(0,40).map(function(x){return [x.tkRow,x.so_num,x.estimado,x.estado_doc,x.factura,x.saldo];}));};
+      if(_histData&&firma(data)===firma(_histData)) return;
+      _histData=data;
+      var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+      _histActualizarRes(esStaff);
+    }).catch(function(){});
+  };
+  setInterval(tick,45000);
+  window.addEventListener('focus',tick);
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) tick(); });
+}
 function renderBuscar(c){
   if(!_histData){
     c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando datos...</div>';
@@ -5015,6 +5036,8 @@ function _histMasterHTML(tickets, showPrices){
 function _histAbrirTicket(i){
   var list=window._histVisibles||[], t=list[i];
   if(!t) return;
+  // Beta: el detalle es la orden de venta estilo MineCore (mc-tickets.js).
+  if(window.MCTickets&&typeof go==='function'){ var kk=window.MCTickets.claveDe(t); if(kk){ go('#/m/tickets/t/'+encodeURIComponent(kk)); return; } }
   window._histTkSel=_histClave(t);
   var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
   if(typeof _histActualizarRes==='function' && _histActualizarRes(esStaff)) return;
@@ -5150,7 +5173,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
 
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
     +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Mis tickets</div>'
-    +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span>'
     +'</div>';
 
   // Same date filters as admin but calls staff version
@@ -5218,7 +5241,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
 
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
     +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Historial</div>'
-    +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 11px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span>'
     +'</div>';
 
   // Filters card

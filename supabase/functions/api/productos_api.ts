@@ -349,6 +349,16 @@ extend("mcprod_save", "any", async (p, ctx, ses) => {
     if (motivo.length < 3) return { error: "El motivo es obligatorio para cambiar precio o costo" };
     row.beta_precio_motivo = motivo.slice(0, 300);
   }
+  // Código de barras de fábrica (tecleado o escaneado): único entre productos.
+  if ("codigo_barras" in row && row.codigo_barras != null && s(row.codigo_barras) !== "") {
+    const c = codigoBarrasNorm(row.codigo_barras);
+    if (!/^\d{6,14}$|^[A-Z0-9-]{4,30}$/i.test(c)) return { error: "Código de barras inválido" };
+    for (const o of await safeAll(ctx, "erp_productos")) {
+      if (s(o.id) === id || s(o.beta_eliminado_at)) continue;
+      if (codigoBarrasNorm(o.codigo_barras) === c || arr(o.beta_codigos).some((x) => codigoBarrasNorm((x as Row).codigo) === c)) return { error: "El código " + c + " ya lo tiene " + (s(o.sku) || "otro producto") + " · " + s(o.nombre) };
+    }
+    row.codigo_barras = c;
+  }
   row.beta_editado_por = actorOf(ses);
   row.beta_editado_at = ctx.now.toISOString();
   const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id }, row);
