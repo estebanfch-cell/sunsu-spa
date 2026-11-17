@@ -89,10 +89,21 @@ export function docsDe(r: Row): Row[] {
   return out;
 }
 /** Líneas del ticket: las de la beta si se editó; si no, las del sistema con el precio cobrado (real o prorrateado). */
+/** Códigos marcados «[CORTESIA…]» al crear el ticket (servicios adicionales): van en $0 con la píldora Cortesía. */
+export function cortesiasDe(r: Row): Set<string> {
+  const out = new Set<string>();
+  for (const part of s(r.servicios_adicionales).split("|")) {
+    if (!/\[CORTES[IÍ]A/i.test(part)) continue;
+    const m = part.trim().match(/^(SUNSU-[A-Z]{0,3}-?\d+|[A-Z]{2,3}-\d{3})/i);
+    if (m) out.add(skuCode(m[1]));
+  }
+  return out;
+}
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
+  const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
     return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
-      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}) }));
+      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}) }));
   }
   const porCode = new Map(cat.map((c) => [s(c.sku), c]));
   const pvpDe = (c: string) => n(porCode.get(skuCode(c))?.pvp);
@@ -100,7 +111,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const cobrado = n(r.estimado);
   // Facial canjeado (sesión de paquete o gift card de facial): va en $0 y el cobro se reparte en el resto.
   const canjeF = canjeFacial(r);
-  const L = canjeF ? L0.filter((x) => x.tipo !== "facial") : L0;
+  const L = L0.filter((x) => !(canjeF && x.tipo === "facial") && !cort.has(skuCode(x.codigo)));
   const nombreDe = (c: string) => s(porCode.get(skuCode(c))?.nombre) || c;
   const vistos = new Set<string>();
   const out: LineaTk[] = [];
@@ -110,6 +121,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
     vistos.add(k);
     const qty = L0.filter((x) => x.codigo === l.codigo && x.tipo === l.tipo).reduce((a, x) => a + x.qty, 0);
     if (canjeF && l.tipo === "facial") { out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, canje: true }); continue; }
+    if (cort.has(skuCode(l.codigo)) && l.tipo !== "facial") { out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, cortesia: true }); continue; }
     const pr = precioLineaTicket(L, l.codigo, cobrado);
     const unit = pr.unit != null ? pr.unit : l.lista;
     out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: pr.estimado || pr.unit == null });

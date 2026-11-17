@@ -37,3 +37,11 @@ describe("mapaColores", () => {
     assert.notEqual(m["andrea robles"].color, m["evelyn"].color);
   });
 });
+import { cortesiasDe } from "./tickets_beta_api.ts";
+describe("cortesiasDe", () => {
+  it("lee la cortesía marcada al crear (TK-SO-1894)", () => {
+    const c = cortesiasDe({ servicios_adicionales: "SUNSU-16 Peeling Enzimático | SUNSU-31 PDRN Serum [CORTESIA: Cumpleaños]" });
+    assert.deepEqual([...c], ["31"].map((x) => [...cortesiasDe({ servicios_adicionales: "SUNSU-31 X [CORTESIA]" })][0]));
+    assert.equal(c.size, 1);
+  });
+});
