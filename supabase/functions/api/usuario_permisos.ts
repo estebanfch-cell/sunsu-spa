@@ -57,7 +57,7 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios"]);
+const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
@@ -66,6 +66,9 @@ const MOD_EXTRA: Record<string, string> = {
   mcprod_archivo_quitar: "productos", mcprod_archivo_principal: "productos", mcprod_codigos_save: "productos",
   mcprod_codigo_interno: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
   proto_list: "cabina", proto_get: "cabina", proto_guardar: "cabina", proto_historial: "cabina",
+  // Conteo físico (0045): crear/revisar es de admin; contar lo hace la asignada aunque no tenga el módulo.
+  cf_meta: "conteos", cf_list: "inicio", cf_crear: "conteos", cf_revisar: "conteos",
+  cf_get: "inicio", cf_iniciar: "inicio", cf_guardar: "inicio", cf_enviar: "inicio", notif_mias: "inicio", notif_leer: "inicio",
 };
 export function moduloFino(action: string): string {
   return MOD_EXTRA[action] || moduloDeAccion(action);
