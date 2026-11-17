@@ -173,8 +173,16 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const quien = { key, ced, nom, codigo };
   for (const d of pdfs0) if (esDeClienta(d, quien)) documentos.push(vistaDoc(d));
   for (const c of reg.consentimientos) documentos.push({ tipo: "consentimiento", nombre: "Consentimiento informado" + (c.autorizaFotos ? " · fotos: " + c.autorizaFotos : ""), fecha: c.fecha, url: c.firma, texto: c.texto });
-  const gifts = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) &&
-    (mismaPersona(ced, nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!nom && normNombre(r.usado_por) === nom)))
+  const giftsCli = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) &&
+    (mismaPersona(ced, nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!nom && normNombre(r.usado_por) === nom)));
+  // PDFs de gift cards (TK20) de las gift cards de esta clienta → Documentos.
+  if (giftsCli.length) {
+    const ids = new Set(giftsCli.map((r) => String(r.id)));
+    let gdocs: Row[] = [];
+    try { gdocs = (await consultar(ctx.db, "beta_gift_documentos", { filtros: [{ col: "gift_id", op: "in", val: [...ids].map(Number) }] })).rows; } catch { gdocs = []; }
+    for (const d of gdocs) if (ids.has(String(d.gift_id))) documentos.push({ tipo: "pdf", sub: "gift_card", docId: "gc:" + s(d.id), nombre: "Gift card " + s(d.codigo) + " · certificado PDF", fecha: localEc(d.created_at).slice(0, 10), hora: localEc(d.created_at).slice(11, 16), giftId: d.gift_id });
+  }
+  const gifts = giftsCli
     .map((r) => ({ codigo: s(r.codigo_gc), valor: s(r.valor), saldo: admin ? saldoGift(r) : undefined, usado: r.usado === true, fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por),
       comprador: (s(r.nombre_comprador) + " " + s(r.apellido_comprador)).trim(), fecha: [r.dia, r.mes, r.ano].every((x) => x != null && s(x) !== "") ? `${s(r.ano).split(".")[0]}-${String(n(r.mes)).padStart(2, "0")}-${String(n(r.dia)).padStart(2, "0")}` : "" }));
   const total = historial.reduce((a, t) => a + n(t.total), 0);
@@ -198,6 +206,15 @@ async function docPorId(ctx: Ctx, id: string): Promise<Row | null> {
 extend("cl_doc_url", "any", async (p, ctx, ses) => {
   const id = s(p.id), key = s(p.key);
   if (!id) return { error: "Falta el documento" };
+  if (id.startsWith("gc:")) {
+    // PDF de gift card: quien ve la ficha de la clienta (y el documento está en su lista).
+    if (!key) return { error: "Falta la clienta" };
+    const f = await ficha(ctx, ses, key);
+    if (f.error) return f;
+    if (!((f.documentos || []) as Row[]).some((x) => s(x.docId) === id)) return { error: "Ese documento no es de esta clienta" };
+    const { urlGiftDoc } = await import("./gift_beta_api.ts");
+    return urlGiftDoc(ctx, id.slice(3), p.descargar === true || p.descargar === "1");
+  }
   const d = await docPorId(ctx, id);
   if (!d || !s(d.storage_path)) return { error: "No encontré ese documento" };
   if (!s(d.cliente_id)) {
