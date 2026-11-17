@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test supabase/functions/api/api.test.ts supabase/functions/api/asistencia.test.ts supabase/functions/api/dashboard.test.ts supabase/functions/api/productos.test.ts supabase/functions/api/productos_paridad.test.ts supabase/functions/api/protocolos.test.ts supabase/functions/api/inv_sku.test.ts supabase/functions/api/buscar.test.ts supabase/functions/api/productos_feedback.test.ts supabase/functions/api/conteo_fisico.test.ts supabase/functions/api/transferencias_beta.test.ts supabase/functions/api/mcnav.test.ts supabase/functions/api/usuario_permisos.test.ts",
+    "test": "node --experimental-strip-types --test supabase/functions/api/api.test.ts supabase/functions/api/asistencia.test.ts supabase/functions/api/dashboard.test.ts supabase/functions/api/productos.test.ts supabase/functions/api/productos_paridad.test.ts supabase/functions/api/protocolos.test.ts supabase/functions/api/inv_sku.test.ts supabase/functions/api/buscar.test.ts supabase/functions/api/productos_feedback.test.ts supabase/functions/api/conteo_fisico.test.ts supabase/functions/api/transferencias_beta.test.ts supabase/functions/api/ajustes_beta.test.ts supabase/functions/api/mcnav.test.ts supabase/functions/api/usuario_permisos.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
