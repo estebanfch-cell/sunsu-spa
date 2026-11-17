@@ -77,6 +77,10 @@
       ".mcp-form input,.mcp-form select{padding:9px 10px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit}",
       ".mcp-sort{cursor:pointer;user-select:none;white-space:nowrap}.mcp-ck{width:34px}.mcp-ck input{width:18px;height:18px;margin:0}",
       ".mcp-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.mcp-acc{display:flex;gap:6px;flex-wrap:wrap;align-items:center}",
+      ".mcp-md{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}.mcp-side{position:sticky;top:8px;background:#fff;border-radius:14px;padding:8px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08));max-height:calc(100vh - 110px);display:flex;flex-direction:column}",
+      ".mcp-side input{padding:8px 10px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:10px;font:inherit;font-size:.8rem;margin-bottom:6px}#mcp-side-list{overflow:auto;flex:1;position:relative}",
+      ".mcp-side-it{display:flex;flex-direction:column;padding:6px 8px;border-radius:8px;text-decoration:none;color:var(--navy,#2c3e66);font-size:.76rem;border-left:3px solid transparent}.mcp-side-it:hover{background:var(--blue-l,#eef3fb)}.mcp-side-it.on{background:var(--blue-l,#eef3fb);border-left-color:var(--navy,#2c3e66);font-weight:700}.mcp-side-it small{color:var(--gray,#8a93a6)}",
+      ".mcp-nav{display:inline-flex;gap:4px}@media(max-width:1150px){.mcp-md{display:block}.mcp-side{display:none}}",
       ".mcp-danger{color:var(--red)!important;border-color:var(--red)!important}",
       ".mcp-af{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--gray-l)}.mcp-afb{border:0;background:none;color:var(--navy);font:inherit;cursor:pointer;text-align:left}",
       ".mcp-bars svg{display:block;margin-top:4px}.mcp-bars rect{fill:#1f2d3d}",
@@ -826,9 +830,57 @@
     if (MC.tab === "movimientos") return tabMov();
     return resumen();
   }
+  // Ficha estilo MineCore (TK18): lista a la izquierda para saltar entre productos, ‹ › anterior/siguiente y «+ Vender».
+  function sideRows() {
+    var q = String(MC.sideQ || "").trim().toLowerCase();
+    var L = (MC.list || []).filter(function (x) { return !x.eliminado; });
+    if (!q) return L;
+    return L.filter(function (x) { return [x.sku, x.skuVisible, x.nombre, x.marca].concat(x.barras || []).join(" ").toLowerCase().indexOf(q) >= 0; });
+  }
+  function sideList() {
+    var cur = MC.cur && MC.cur.producto ? MC.cur.producto.id : "", R = sideRows();
+    return R.slice(0, 300).map(function (x) {
+      return '<a href="#" class="mcp-side-it' + (x.id === cur ? " on" : "") + '" data-side-id="' + e(x.id) + '"><span class="mcp-sku">' + e(x.skuVisible || x.sku) + "</span><span>" + e(x.nombre) + "</span>" + (x.activo === false ? '<small>inactivo</small>' : "") + "</a>";
+    }).join("") + (R.length > 300 ? '<p class="mcp-sub">… ' + (R.length - 300) + " más: filtra para verlos</p>" : "") + (R.length ? "" : '<p class="mcp-sub">Sin resultados.</p>');
+  }
+  function vecinos() {
+    var R = sideRows(), cur = MC.cur && MC.cur.producto ? MC.cur.producto.id : "", i = -1;
+    for (var k = 0; k < R.length; k++) if (R[k].id === cur) { i = k; break; }
+    return { prev: i > 0 ? R[i - 1] : null, next: i >= 0 && i < R.length - 1 ? R[i + 1] : null };
+  }
+  function puedeVender() {
+    var p = MC.cur && MC.cur.producto;
+    if (!p || p.tipo === "servicio" || p.activo === false || MC.cur.eliminado || MC.cur.archivado) return false;
+    return typeof acceso !== "function" || acceso("tickets") !== "no";
+  }
+  function navHtml() {
+    var v = vecinos();
+    return '<span class="mcp-nav"><button class="btn ghost small" type="button" data-side-id="' + e(v.prev ? v.prev.id : "") + '"' + (v.prev ? ' title="' + e(v.prev.nombre) + '"' : " disabled") + '>‹</button><button class="btn ghost small" type="button" data-side-id="' + e(v.next ? v.next.id : "") + '"' + (v.next ? ' title="' + e(v.next.nombre) + '"' : " disabled") + ">›</button></span>";
+  }
   function fichaHtml() {
-    return '<div class="mcp mcp-ficha"><div class="mcp-top"><button class="btn ghost small" type="button" id="mcp-volver">← Productos</button><span class="mcp-acc" id="mcp-acc">' + acciones() + "</span></div>" +
-      '<div id="mcp-head">' + head() + "</div>" + tabs() + '<div id="mcp-cuerpo">' + cuerpo() + "</div></div>";
+    return '<div class="mcp-md"><aside class="mcp-side"><input id="mcp-side-q" type="search" placeholder="Filtrar la lista" value="' + e(MC.sideQ || "") + '" autocomplete="off"><div id="mcp-side-list">' + sideList() + "</div></aside>" +
+      '<div class="mcp mcp-ficha"><div class="mcp-top"><span style="display:flex;gap:6px;align-items:center"><button class="btn ghost small" type="button" id="mcp-volver">← Productos</button>' + navHtml() +
+      (puedeVender() ? '<button class="btn small" type="button" id="mcp-vender">+ Vender</button>' : "") + '</span><span class="mcp-acc" id="mcp-acc">' + acciones() + "</span></div>" +
+      '<div id="mcp-head">' + head() + "</div>" + tabs() + '<div id="mcp-cuerpo">' + cuerpo() + "</div></div></div>";
+  }
+  /** «+ Vender»: abre Nuevo ticket y suma 1 de este producto cuando la pantalla esté lista. */
+  function vender() {
+    if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return;
+    MC.ch = {};
+    var p = MC.cur.producto, skus = [p.skuVisible, "SUNSU-" + p.sku, p.sku].filter(Boolean);
+    go("#/doc/ov");
+    var t0 = Date.now();
+    var iv = setInterval(function () {
+      if (Date.now() - t0 > 10000) { clearInterval(iv); if (typeof toast === "function") toast("Abre el ticket y agrega «" + p.nombre + "» a mano", "var(--red, #c0392b)"); return; }
+      if (typeof window.chgQ !== "function" || !window.PROVS || !document.querySelector('[id^="q-SUNSU-"]')) return;
+      clearInterval(iv);
+      var hit = null;
+      window.PROVS.some(function (pv) { return (pv.prods || []).some(function (x) { if (skus.indexOf(x.sku) >= 0) { hit = { sku: x.sku, pv: pv.id }; return true; } return false; }); });
+      if (!hit) { if (typeof toast === "function") toast("«" + p.nombre + "» no está en la lista de venta del ticket", "var(--red, #c0392b)"); return; }
+      window.chgQ(hit.sku, 1, hit.pv);
+      var row = document.getElementById("pr-" + hit.sku); if (row) try { row.scrollIntoView({ block: "center" }); } catch (x) { /* scroll */ }
+      if (typeof toast === "function") toast("✓ " + p.nombre + " +1 en el ticket", "var(--green)");
+    }, 250);
   }
   /** «Aplica a faciales» (📦 Abrir producto → costo por facial) en la pestaña Protocolo. */
   function montarAplica() {
@@ -924,6 +976,15 @@
   }
   function wireFicha(main) {
     setTimeout(montarAplica, 0);
+    var side = main.querySelector(".mcp-md");
+    if (side) {
+      var irA = function (id) { if (!id) return; if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; MC.ch = {}; go("#/m/productos/p/" + id); };
+      side.addEventListener("click", function (ev) { var a = ev.target.closest("[data-side-id]"); if (a) { ev.preventDefault(); irA(a.getAttribute("data-side-id")); } if (ev.target.closest("#mcp-vender")) vender(); });
+      var sq = main.querySelector("#mcp-side-q");
+      if (sq) sq.addEventListener("input", function () { MC.sideQ = sq.value; var l = main.querySelector("#mcp-side-list"); if (l) l.innerHTML = sideList(); var nv = main.querySelector(".mcp-nav"); if (nv) nv.outerHTML = navHtml(); });
+      var on = main.querySelector(".mcp-side-it.on"), lst = main.querySelector("#mcp-side-list");
+      if (on && lst) lst.scrollTop = Math.max(0, on.offsetTop - lst.clientHeight / 2);
+    }
     var host = main.querySelector(".mcp-ficha");
     if (!host) return;
     host.addEventListener("click", function (ev) {
