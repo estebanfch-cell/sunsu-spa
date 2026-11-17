@@ -7,6 +7,7 @@ import { actorOf, conTelefono } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
+import { consultar, type Filtro } from "./query.ts";
 import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, saldoGift } from "./ventas.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { docsDe } from "./tickets_beta_api.ts";
@@ -93,6 +94,7 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     if (o?.borrado === true) continue;
     const d = sinPrivados((o?.datos || {}) as Row, ses);
     const item: Row = { ...c };
+    if (s(o?.codigo)) item.codigo = s(o!.codigo);
     if (d.nombres != null) item.nombres = s(d.nombres);
     if (d.apellido != null) item.apellido = s(d.apellido);
     item.nombre = (s(item.nombres) + " " + s(item.apellido)).trim() || s(c.nombre);
@@ -119,7 +121,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const cli = det.cliente as Row;
   const regs = (await todas(ctx, "clientas_registro")).filter((r) => !r.borrado_at && claveRegistro(r) === key);
   const reg = registroUnico(regs);
-  const codigo = regs.map((r) => codigoCliente(r)).filter(Boolean).sort()[0] || "";
+  const codigo = s(ov?.codigo) || regs.map((r) => codigoCliente(r)).filter(Boolean).sort()[0] || "";
   const datos: Row = { ...reg.datos };
   if (reg.primera) datos.registrada = reg.primera;
   if (reg.ultima && reg.ultima !== reg.primera) datos.ultimoRegistro = reg.ultima;
@@ -246,3 +248,23 @@ SOLICITUD_HOOKS["cliente_beta"] = {
   aplicar: (ctx, ses, key, propuestos) => guardarCliente(ctx, ses, key, propuestos, "solicitud aprobada"),
   borrar: (ctx, ses, key, motivo) => borrarCliente(ctx, ses, key, motivo || "solicitud aprobada", "eliminación por solicitud"),
 };
+
+/** Buscador de clientas para el ticket nuevo: nombre, cédula, celular o código C-xxxxx (beta_clientes). */
+extend("cl_buscar", "any", async (p, ctx, ses) => {
+  const q = s(p.q).trim();
+  if (q.length < 2) return { ok: true, items: [] };
+  const dig = q.replace(/\D/g, "");
+  let F: Filtro;
+  if (/^c-?b?\d+$/i.test(q)) F = { op: "palabras", cols: ["codigo"], val: [q.toUpperCase().replace(/^C-?/, "")] };
+  else if (dig.length >= 5 && dig.length === q.replace(/[\s+.()-]/g, "").length) F = { op: "palabras", cols: ["cedula", "telefono"], val: [dig.length >= 9 && !dig.startsWith("1") && !dig.startsWith("2") ? dig.replace(/^(593)?0?/, "").slice(-9) : dig.replace(/^0+/, "")] };
+  else F = { op: "palabras", cols: ["nombre", "cedula"], val: q.split(/\s+/).filter(Boolean) };
+  let rows: Row[] = [];
+  try { rows = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "codigo", "nombre", "cedula", "telefono", "datos", "borrado"], filtros: [F], limite: 12, orden: [{ col: "nombre" }] })).rows; } catch { rows = []; }
+  const tel = conTelefono(ses);
+  const items = rows.filter((r) => r.borrado !== true).slice(0, 8).map((r) => {
+    const d = (r.datos || {}) as Row;
+    const nombre = ((s(d.nombres) || "") + " " + (s(d.apellido) || "")).trim() || s(r.nombre);
+    return { key: s(r.key), codigo: s(r.codigo), nombre, cedula: s(d.cedula) || s(r.cedula), ...(tel ? { telefono: telefonoEc(s(d.telefono) || s(r.telefono)) } : {}) };
+  });
+  return { ok: true, items };
+});

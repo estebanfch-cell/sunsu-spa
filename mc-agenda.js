@@ -72,7 +72,7 @@
     }
     return '<div class="mcag-c' + (c.atendida ? " ok" : "") + '" style="border-left-color:' + (c.nueva ? "#7C6BB0" : "#3E7CB1") + '"><div class="mcag-h">' + e(hora(c.datetime)) + "<small>" + e(c.duracion ? c.duracion + " min" : "") + "</small></div>" +
       '<div><span class="mcag-n" data-ver="' + e(c.id) + '">' + e((c.nombre + " " + c.apellido).trim() || "Sin nombre") + "</span>" + '<span class="mcag-tag' + (c.nueva ? "" : " ant") + '">' + (c.nueva ? "Nueva" : "Antigua") + "</span> " + etqPill(c.etiqueta) +
-      '<div class="mcag-sub">' + e(calNom(c.calendarID) || c.calendario) + " · " + e(c.tipo) + "</div>" + (c.notas ? '<div class="mcag-sub">📝 ' + e(c.notas) + "</div>" : "") + "</div>" +
+      '<div class="mcag-sub">' + (window.MCColor ? window.MCColor.pill(calNom(c.calendarID) || c.calendario) : e(calNom(c.calendarID) || c.calendario)) + " · " + e(c.tipo) + "</div>" + (c.notas ? '<div class="mcag-sub">📝 ' + e(c.notas) + "</div>" : "") + "</div>" +
       '<div class="mcag-acts">' + acts.join("") + "</div></div>";
   }
   function vistaDia() {
@@ -127,7 +127,7 @@
     var c = r.cita, f = c.ficha;
     var kv = function (k, v) { return v ? "<dt>" + e(k) + "</dt><dd>" + e(v) + "</dd>" : ""; };
     b.querySelector(".mcag-box").innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px"><h3 style="margin:0">' + e(c.nombre + " " + c.apellido) + '</h3><button class="btn ghost small" data-x>×</button></div>' +
-      '<div class="mcag-sub">' + e(hora(c.datetime)) + " · " + e(c.duracion + " min") + " · " + e(calNom(c.calendarID) || c.calendario) + " · " + e(c.tipo) + " " + etqPill(c.etiqueta) + "</div>" +
+      '<div class="mcag-sub">' + e(hora(c.datetime)) + " · " + e(c.duracion + " min") + " · " + (window.MCColor ? window.MCColor.pill(calNom(c.calendarID) || c.calendario) : e(calNom(c.calendarID) || c.calendario)) + " · " + e(c.tipo) + " " + etqPill(c.etiqueta) + "</div>" +
       '<dl class="mcag-kv">' + kv("Teléfono", c.telefono) + kv("Email", c.email) + kv("Notas", c.notas) + (c.forms || []).map(function (x) { return kv(x.campo, x.valor); }).join("") + "</dl>" +
       (f ? '<b style="font-size:.84rem">Ficha de registro</b><dl class="mcag-kv">' + kv("CI", f.cedula) + kv("Tipo de piel", f.tipoPiel) + kv("Alergias", f.alergias) + kv("Medicación", f.medicacion) + kv("Autoriza fotos", f.autorizaFotos) + "</dl>" : '<p class="mccf-note">No encontré una ficha de registro única para este nombre (no se usa el teléfono como cédula).</p>') +
       '<div class="mccf-acts" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:10px">' + (f ? '<button class="btn ghost small" type="button" data-ficha="' + e(f.clienteKey) + '">Abrir ficha</button>' : "") +

@@ -28,3 +28,12 @@ describe("colTicket", () => {
     assert.equal(colTicket({ comprobante: "False", orig: { COMPROBANTE: "https://x/y" } }, "comprobante"), "https://x/y");
   });
 });
+import { mapaColores, PALETA } from "./colores_api.ts";
+describe("mapaColores", () => {
+  it("respeta el color guardado y da pasteles distintos al resto", () => {
+    const m = mapaColores([{ nombre: "Daniela Mora" }, { nombre: "Andrea Robles" }, { nombre: "Evelyn" }], [{ usuario: "daniela mora", nombre: "Daniela Mora", color: "#e7dbff" }]);
+    assert.equal(m["daniela mora"].color, "#E7DBFF");
+    assert.ok(m["andrea robles"].color !== "#E7DBFF" && PALETA.includes(m["andrea robles"].color));
+    assert.notEqual(m["andrea robles"].color, m["evelyn"].color);
+  });
+});

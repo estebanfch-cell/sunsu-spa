@@ -138,7 +138,15 @@
       op("ella", "Solo ella") + op("lista", "Ella y estas personas…") + op("todos", "Todas las personas") + lista + "</div>";
   }
 
-  function fichaHtml() {
+  function colorHtml(u) {
+    if (!u || !window.MCColor) return "";
+    var D = window.MCColor.datos() || {}, pal = D.paleta || [], cur = window.MCColor.color(u.nombre) || "";
+    return '<div class="mcu-card" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:.84rem">🎨 Color en tickets y agenda</b> ' + window.MCColor.pill(u.nombre) +
+      '<span style="display:flex;gap:5px;flex-wrap:wrap">' + pal.map(function (c) { return '<button type="button" data-mcu-col="' + c + '" title="' + c + '" style="width:22px;height:22px;border-radius:50%;background:' + c + ";border:2px solid " + (c === cur ? "#3D5A7A" : "#ddd") + ';cursor:pointer"></button>'; }).join("") +
+      '</span><label style="font-size:.78rem">Otro <input type="color" id="mcu-colin" value="' + (cur || "#E7DBFF") + '" style="width:34px;height:24px;border:0;background:none;vertical-align:middle"></label></div></div>';
+  }
+  function fichaHtml() { var u = usuario(); return colorHtml(u) + fichaHtml0(); }
+  function fichaHtml0() {
     var u = usuario();
     if (!u) return '<div class="mcu-card"><p class="note">Elige una persona de la lista.</p></div>';
     if (u.admin) return '<div class="mcu-card"><div class="mcu-h"><h3>' + e(u.nombre) + '</h3><span class="mcu-tag a">' + e(u.rolLabel) + '</span></div><p class="note">Admin y super admin siempre tienen todo (como en MineCore). Para quitarle algo, cámbiale el rol en Usuarios.</p></div>';
@@ -206,6 +214,15 @@
     if (q) q.oninput = function () { P.q = q.value; var l = root.querySelector(".mcu-list"); var pos = q.selectionStart; pinta(main); var q2 = main.querySelector("#mcu-q"); if (q2) { q2.focus(); q2.setSelectionRange(pos, pos); } };
     root.querySelectorAll("[data-mcu-u]").forEach(function (b) { b.onclick = function () { if (sucio() && !confirm("Hay cambios sin guardar. ¿Descartarlos?")) return; P.sel = b.getAttribute("data-mcu-u"); P.draft = null; P.verLista = false; pinta(main); }; });
     root.querySelectorAll("[data-mcu-p]").forEach(function (b) { b.onclick = function () { P.perfilSel = b.getAttribute("data-mcu-p"); P.draft = null; pinta(main); }; });
+    var setCol = async function (c) {
+      var u = usuario(); if (!u) return;
+      var r = await api("color_guardar", { nombre: u.nombre, color: c });
+      if (!r || r.error) { alert((r && r.error) || "No se pudo guardar el color"); return; }
+      if (window.MCColor) await window.MCColor.cargar(true);
+      pinta(main);
+    };
+    root.querySelectorAll("[data-mcu-col]").forEach(function (b) { b.onclick = function () { setCol(b.getAttribute("data-mcu-col")); }; });
+    var ci = root.querySelector("#mcu-colin"); if (ci) ci.onchange = function () { setCol(ci.value); };
     var pn = root.querySelector("#mcu-p-nuevo"); if (pn) pn.onclick = function () { P.perfilSel = "__nuevo"; P.draft = null; pinta(main); };
     root.querySelectorAll("[data-mcu-n]").forEach(function (b) {
       b.onclick = function () {
