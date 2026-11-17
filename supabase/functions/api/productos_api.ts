@@ -9,7 +9,7 @@ import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domai
 import { runErp } from "./erp.ts";
 import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
-  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket,
+  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
 } from "./productos.ts";
 
@@ -55,6 +55,7 @@ interface Base {
   productos: Row[]; catalogo: Map<string, Row>; cabina: Map<string, Row>; bodegas: Row[]; stock: Row[];
   ventaLegacy: Map<string, number>; compraBase: Map<string, number>; minimos: Map<string, number>;
   antes?: Map<string, string[]>;
+  movs?: Map<string, Row[]>;
 }
 
 async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
@@ -86,7 +87,10 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
   } catch { /* sin el cálculo viejo se usa erp_stock VENTA */ }
   const minimos = new Map<string, number>();
   for (const b of bases) minimos.set(skuCode(s(b.sku)), n(b.minimo));
-  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes };
+  // Movimientos de la beta (transferencias / ajustes, 0046): se suman al stock del sistema.
+  const movs = new Map<string, Row[]>();
+  for (const m of await safeAll(ctx, "beta_stock_movimientos")) { const k = s(m.producto_id); movs.set(k, [...(movs.get(k) || []), m]); }
+  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes, movs };
 }
 
 function fila(p: Row, b: Base): Row {
@@ -97,10 +101,10 @@ function fila(p: Row, b: Base): Row {
   const nombre = s(p.nombre) || s(cat?.producto_servicio) || s(cab?.producto) || code;
   const mk = marcaDe(p, cat, nombre);
   const precios = preciosDe(cat, p, b.compraBase.get(code) || 0);
-  const stock = tipo === "servicio" ? [] : stockDe({
+  const stock = tipo === "servicio" ? [] : aplicarMovimientos(stockDe({
     ventaLegacy: b.ventaLegacy.has(code) ? b.ventaLegacy.get(code) : null, cab,
     erpStock: b.stock.filter((r) => s(r.producto_id) === s(p.id)), bodegas: b.bodegas,
-  });
+  }), b.movs?.get(s(p.id)) || []);
   const total = stockTotal(stock);
   const archivado = !!s(p.beta_archivado_at);
   // Estado: si un admin lo fijó en la beta (beta_activo) manda eso; si no, el del sistema viejo
@@ -169,10 +173,10 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   const cab = b.cabina.get(code);
   const base = fila(prod, b);
   const precios = preciosDe(cat, prod, b.compraBase.get(code) || 0);
-  const stock = base.tipo === "servicio" ? [] : stockDe({
+  const stock = base.tipo === "servicio" ? [] : aplicarMovimientos(stockDe({
     ventaLegacy: b.ventaLegacy.has(code) ? b.ventaLegacy.get(code) : null, cab,
     erpStock: b.stock.filter((r) => s(r.producto_id) === s(prod.id)), bodegas: b.bodegas,
-  });
+  }), b.movs?.get(s(prod.id)) || []);
   // Aperturas con destino (Cabina 1/2/3/Local) de la beta.
   const aperturas = (await safeAll(ctx, "erp_aperturas")).filter((a) => s(a.producto_id) === s(prod.id));
   const abiertos: Row = {};
@@ -255,9 +259,14 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
 
   // Movimientos: kardex beta + cambios de la ficha (audit_log).
   const bodNom = new Map(b.bodegas.map((x) => [s(x.id), s(x.nombre)]));
-  const kardex = (await safeAll(ctx, "erp_movimientos")).filter((m) => s(m.producto_id) === s(prod.id))
+  const kardex: Row[] = (await safeAll(ctx, "erp_movimientos")).filter((m) => s(m.producto_id) === s(prod.id))
     .sort((x, y) => s(y.fecha).localeCompare(s(x.fecha))).slice(0, 200)
     .map((m) => ({ fecha: s(m.fecha), tipo: s(m.tipo), bodega: bodNom.get(s(m.bodega_id)) || "", sububicacion: s(m.sububicacion), delta: n(m.delta), saldo: n(m.saldo), doc: s(m.doc_tipo) + (s(m.doc_id) ? " " + s(m.doc_id).slice(0, 8) : ""), ticket: s(m.ticket_ref), actor: s(m.actor), nota: s(m.nota), costo_unit: n(m.costo_unit) }));
+  // Movimientos de la beta (transferencias / ajustes) también en el kardex de la ficha.
+  for (const m of b.movs?.get(s(prod.id)) || []) {
+    kardex.push({ fecha: s(m.fecha), tipo: s(m.tipo), bodega: GRUPO_NOMBRE[s(m.bodega) as keyof typeof GRUPO_NOMBRE] || s(m.bodega), sububicacion: s(m.sububicacion), delta: n(m.delta), saldo: null, doc: s(m.doc_numero), ticket: "", actor: s(m.actor), nota: s(m.nota), costo_unit: 0, beta: true });
+  }
+  kardex.sort((x, y) => s(y.fecha).localeCompare(s(x.fecha)));
   let cambios: Row[] = [];
   try {
     const r = await ctx.db.rpc("erp_producto_cambios", { p_id: s(prod.id) });
