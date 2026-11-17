@@ -1931,7 +1931,7 @@ function pantallaSunsu(route) {
   if (m === "inventario" && (!route.sub || route.sub === "nuevo" || route.sub === "prod")) return "";
   if (m === "inventario" && route.sub === "cabina") return "cabina";
   if (m === "inventario") return "inventario";
-  if (m === "conteos" && !route.sub) return "inv-fisico";
+  if (m === "conteos" && !route.sub) return window.MCConteo ? "" : "inv-fisico";
   if (m === "conteos" || m === "lugares") return "";
   if (m === "compras") return "";
   if (m === "proveedores") return "";
@@ -1987,17 +1987,29 @@ async function avisoMarcajes() {
   box.innerHTML = `<div class="card-title">Marcaje faltante</div><p class="note">Asistió a un ticket y no marcó entrada. No descuenta el sueldo.</p>${lineas.join("")}`;
   main.appendChild(box);
 }
+// Tarjeta «Asignado a ti» arriba del dashboard (conteos físicos asignados + avisos sin leer).
+async function tarjetaAsignado(c) {
+  if (!window.MCConteo || state.vista) return;
+  let html = "";
+  try { html = await window.MCConteo.tarjetaInicio(); } catch { html = ""; }
+  if (!html || !c.isConnected || document.getElementById("mccf-dash")) return;
+  const box = document.createElement("div");
+  box.style.padding = "12px 16px 0";
+  box.innerHTML = html;
+  c.prepend(box);
+}
 async function montarSunsu(tab) {
   CU = cuSunsu();
   window._token = state.token;
   const main = document.getElementById("main");
   main.innerHTML = `<div id="content"></div>`;
   const c = document.getElementById("content");
-  if (tab === "staff-home") { c.innerHTML = htmlStaffHome(); return; }
+  if (tab === "staff-home") { c.innerHTML = htmlStaffHome(); void tarjetaAsignado(c); return; }
   if (tab === "ticket") await prepararTicket();
   if (tab === "proveedores") renderProveedores(c);
   else if (tab === "inv-fisico") renderInvFisico(c);
   else showTab(tab);
+  if (tab === "inicio") void tarjetaAsignado(c);
   if (tab === "roles" && state.admin && !state.vista) avisoMarcajes();
   if (tab === "roles" && state.admin) {
     const extra = document.createElement("div");
@@ -2037,7 +2049,8 @@ async function draw() {
   };
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "configuracion" && state.admin);
+  // Un conteo asignado se abre aunque la persona no tenga el módulo Conteos (el servidor valida la asignación).
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -2067,6 +2080,7 @@ async function draw() {
     bind(main, route);
     if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
     if (route.kind === "mod" && route.mod === "mc" && window.MCNav) window.MCNav.wire(main, route);
+    if (route.kind === "mod" && route.mod === "conteos" && route.sub !== "hacer" && window.MCConteo) window.MCConteo.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2086,7 +2100,7 @@ async function renderMod(route) {
   if (route.mod === "mc" && window.MCNav) return window.MCNav.render(route);
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod === "reportes") return renderReportes();
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
@@ -2114,7 +2128,7 @@ async function renderMod(route) {
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
   if (route.mod === "transferencias") return renderTrf();
-  if (route.mod === "conteos") return renderConteos(route);
+  if (route.mod === "conteos") return window.MCConteo && route.sub !== "hacer" ? window.MCConteo.render(route) : renderConteos(route);
   if (route.mod === "permisos") return renderPermisosBeta();
   if (route.mod === "usuarios") return renderUsuarios();
   if (route.mod === "configuracion") return renderConfiguracion();
@@ -2208,7 +2222,10 @@ async function renderInicioBeta() {
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
   const ops = data.error && !data.bajos ? "" : `<div class="grid">${oc}<div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div><div class="card"><div class="k">Avisos</div><div class="v">${esc((data.avisos || []).length)}</div></div></div><h2>Para reponer</h2><div class="list">${bajos || `<p class="note">Nada bajo el mínimo, o los mínimos todavía no están cargados.</p>`}</div>`;
   let tareas = "";
-  if (typeof renderConteoTareas === "function") {
+  // Tarjeta «Asignado a ti» (conteos físicos asignados + avisos sin leer). Reemplaza la de conteos anteriores.
+  if (window.MCConteo) {
+    try { tareas = await window.MCConteo.tarjetaInicio(); } catch { tareas = ""; }
+  } else if (typeof renderConteoTareas === "function") {
     try { tareas = await renderConteoTareas(); } catch { tareas = ""; }
   }
   return homeFail + tareas + pulso + ops;
@@ -5559,13 +5576,14 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117pf3"></script>
-<script src="beta-screens.js?v=20261117pf3"></script>
-<script src="beta-inline.js?v=20261117pf3"></script>
-<script src="mc-productos.js?v=20261117pf3"></script>
-<script src="mc-nav.js?v=20261117pf3"></script>
-<script src="mc-permisos.js?v=20261117pf3"></script>
-<script src="mc-protocolos.js?v=20261117pf3"></script>
+<script src="mc-buscar.js?v=20261117cf1"></script>
+<script src="beta-screens.js?v=20261117cf1"></script>
+<script src="beta-inline.js?v=20261117cf1"></script>
+<script src="mc-productos.js?v=20261117cf1"></script>
+<script src="mc-nav.js?v=20261117cf1"></script>
+<script src="mc-permisos.js?v=20261117cf1"></script>
+<script src="mc-protocolos.js?v=20261117cf1"></script>
+<script src="mc-conteo.js?v=20261117cf1"></script>
 <script>draw();</script>
 </body>
 </html>

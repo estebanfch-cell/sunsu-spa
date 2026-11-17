@@ -12,6 +12,7 @@ import "./dashboard_api.ts";
 import "./productos_api.ts";
 import "./productos_paridad_api.ts";
 import "./protocolos_api.ts";
+import "./conteo_fisico_api.ts";
 import "./usuario_permisos_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
