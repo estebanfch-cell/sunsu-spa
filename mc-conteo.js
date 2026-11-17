@@ -48,7 +48,7 @@
     if (!r.length) return '<tr><td colspan="7" class="mccf-sub" style="padding:16px">' + ((C.list || []).length ? "Sin conteos con ese filtro." : "Todavía no hay conteos.") + "</td></tr>";
     return r.map(function (c) {
       return '<tr class="mccf-row" data-cf-go="' + e(c.id) + '"><td><b>' + e(c.numero) + '</b><div class="mccf-sub">' + e(fecha(c.creadoAt)) + "</div></td><td>" + e(c.bodegaNombre) + "</td><td>" + e(c.asignadoNombre || "—") + "</td><td>" + chip(c) + "</td>" +
-        '<td class="num">' + (c.lineas ? e(c.contadas) + "/" + e(c.lineas) : "—") + '</td><td class="num mccf-hide">' + (c.conDiferencia ? '<span class="mccf-dif-n">' + e(c.conDiferencia) + "</span>" : "—") + '</td><td class="mccf-hide mccf-sub">' + e(c.nota || "") + "</td></tr>";
+        '<td class="num">' + (c.lineas ? e(c.contadas) + "/" + e(c.lineas) : "—") + '</td><td class="num mccf-hide">' + (c.conDiferencia == null ? "—" : c.conDiferencia ? '<span class="mccf-dif-n">' + e(c.conDiferencia) + "</span>" : "—") + '</td><td class="mccf-hide mccf-sub">' + e(c.nota || "") + "</td></tr>";
     }).join("");
   }
   function formNuevo(m) {
@@ -103,28 +103,32 @@
   }
   function lineasVis() {
     var L = C.cur.lineas || [], f = String(C.filtro || "").trim();
-    if (C.soloDif) L = L.filter(function (l) { return l.estado !== "pendiente" && Math.abs(Number(l.diferencia) || 0) > 1e-9; });
+    if (C.soloDif && !ciego()) L = L.filter(function (l) { return l.estado !== "pendiente" && Math.abs(Number(l.diferencia) || 0) > 1e-9; });
     if (f && window.MCBuscar) L = window.MCBuscar.filtrar(L, f, function (l) { return [[l.sku, l.barras || ""], [l.nombre]]; });
     return L;
   }
+  function ciego() { return !!(C.cur && C.cur.ciego); }
+  function clsLinea(l) { return l.estado === "pendiente" ? "" : !ciego() && Math.abs(Number(l.diferencia) || 0) > 1e-9 ? " dif" : " ok"; }
   function lineaHtml(l, can, cab) {
-    var cls = l.estado === "pendiente" ? "" : Math.abs(Number(l.diferencia) || 0) > 1e-9 ? " dif" : " ok";
+    var cls = clsLinea(l), bl = ciego();
     var sub = cab ? '<select class="mccf-sel" data-cf-sub="' + e(l.id) + '"' + (can ? "" : " disabled") + '>' + opt("", l.sububicacion ? "Igual (" + nomSub(l.sububicacion) + ")" : "—", l.subContada) + C.meta.subsCabina.map(function (x) { return opt(x.id, x.nombre, l.subContada); }).join("") + opt("SIN", "Sin cabina", l.subContada) + "</select>" : "";
     return '<tr class="mccf-ln' + cls + '" data-cf-ln="' + e(l.id) + '"><td><span class="mccf-sku">' + e(l.sku) + "</span>" + (l.agregado ? ' <span class="mccf-chip a">agregado</span>' : "") + '<div class="mccf-sub">' + e(l.nombre) + "</div></td>" +
-      '<td class="num">' + q2(l.sistema) + "</td>" +
+      (bl ? "" : '<td class="num">' + q2(l.sistema) + "</td>") +
       '<td class="num">' + (can ? '<input class="mccf-in" inputmode="decimal" data-cf-cant="' + e(l.id) + '" value="' + (l.contado == null ? "" : e(l.contado)) + '" placeholder="—"' + (l.estado === "no_encontrado" ? " disabled" : "") + ">" : l.estado === "no_encontrado" ? "0" : l.contado == null ? "—" : q2(l.contado)) + "</td>" +
       "<td>" + (can ? '<button type="button" class="mccf-ne' + (l.estado === "no_encontrado" ? " on" : "") + '" data-cf-ne="' + e(l.id) + '">No está</button>' : l.estado === "no_encontrado" ? '<span class="mccf-chip r">No está</span>' : "") + "</td>" +
       (cab ? '<td class="mccf-hide">' + sub + "</td>" : "") +
-      '<td class="num">' + difHtml(l) + "</td></tr>";
+      (bl ? "" : '<td class="num">' + difHtml(l) + "</td>") + "</tr>";
   }
   function nomSub(c) { var x = (C.meta.subsCabina || []).find(function (s) { return s.id === c; }); return x ? x.nombre : c === "SIN" ? "Sin cabina" : c; }
   function tablaHtml() {
     var d = C.cur, can = d.puedeContar, cab = d.conteo.bodega === "CABINA";
     var L = lineasVis();
-    return '<table class="mccf-t"><thead><tr><th>Producto</th><th class="num">Sistema</th><th class="num">Contado</th><th></th>' + (cab ? '<th class="mccf-hide">Sububicación real</th>' : "") + '<th class="num">Diferencia</th></tr></thead><tbody>' +
+    var bl = ciego();
+    return '<table class="mccf-t"><thead><tr><th>Producto</th>' + (bl ? "" : '<th class="num">Sistema</th>') + '<th class="num">Contado</th><th></th>' + (cab ? '<th class="mccf-hide">Sububicación real</th>' : "") + (bl ? "" : '<th class="num">Diferencia</th>') + "</tr></thead><tbody>" +
       (L.length ? L.map(function (l) { return lineaHtml(l, can, cab); }).join("") : '<tr><td colspan="6" class="mccf-sub" style="padding:14px">' + ((d.lineas || []).length ? "Sin productos con ese filtro." : "Sin líneas.") + "</td></tr>") + "</tbody></table>";
   }
   function kpisHtml(c) {
+    if (ciego()) return '<div class="mccf-kpis"><div class="mccf-kpi"><b>' + e(c.contadas) + "/" + e(c.lineas) + '</b>contados</div><div class="mccf-kpi"><b>' + e(c.pendientes) + '</b>pendientes</div></div>';
     return '<div class="mccf-kpis"><div class="mccf-kpi"><b>' + e(c.contadas) + "/" + e(c.lineas) + '</b>contados</div><div class="mccf-kpi"><b>' + e(c.pendientes) + '</b>pendientes</div><div class="mccf-kpi"><b>' + e(c.conDiferencia) + '</b>con diferencia</div>' +
       '<div class="mccf-kpi"><b class="mccf-dif-n">' + q2(c.faltan) + '</b>faltan (u)</div><div class="mccf-kpi"><b class="mccf-dif-p">+' + q2(c.sobran) + "</b>sobran (u)</div></div>";
   }
@@ -136,12 +140,12 @@
     if (d.puedeRevisar) acciones += '<button class="btn small" type="button" id="mccf-aprobar">Aprobar</button> <button class="btn ghost small" type="button" id="mccf-devolver">Devolver</button>';
     if (d.admin && ["asignado", "en_conteo", "en_revision"].indexOf(c.estado) >= 0) acciones += ' <button class="btn ghost small" type="button" id="mccf-cancelar">Cancelar conteo</button>';
     var aviso = "";
-    if (c.estado === "asignado") aviso = '<div class="mccf-note">Al tocar <b>Empezar conteo</b> se toma la foto del stock del sistema en ' + e(c.bodegaNombre) + ". Luego cuenta cada producto (o búscalo / escanéalo).</div>";
+    if (c.estado === "asignado") aviso = '<div class="mccf-note">' + (ciego() ? "Conteo a ciegas: cuenta lo que ves en " + e(c.bodegaNombre) + " producto por producto (o búscalo / escanéalo). No se muestra la cantidad del sistema." : "Al tocar <b>Empezar conteo</b> se toma la foto del stock del sistema en " + e(c.bodegaNombre) + ". Luego cuenta cada producto (o búscalo / escanéalo).") + "</div>";
     if (c.estado === "en_conteo" && c.revisionNota) aviso = '<div class="mccf-note"><b>Devuelto por revisión:</b> ' + e(c.revisionNota) + "</div>";
     if (c.estado === "en_revision") aviso = '<div class="mccf-note">Enviado a revisión ' + e(fecha(c.enviadoAt)) + ". " + (d.admin ? "Revisa las diferencias y aprueba o devuelve." : "Un admin lo revisará.") + "</div>";
     if (c.estado === "aprobado") aviso = '<div class="mccf-note">Aprobado por ' + e(c.aprobadoPor) + " · " + e(fecha(c.aprobadoAt)) + ". <b>No movió stock</b>: queda como inventario físico inicial hasta que se confirme el ajuste.</div>";
     var buscar = (d.puedeContar || (d.lineas || []).length) ? '<div class="mccf-bar"><input type="search" id="mccf-f" placeholder="' + (d.puedeContar ? "Buscar o escanear (código, SKU, nombre). Enter = ir al producto" : "Buscar en el conteo") + '" value="' + e(C.filtro) + '" autocomplete="off">' +
-      '<label class="mccf-sub"><input type="checkbox" id="mccf-solodif"' + (C.soloDif ? " checked" : "") + "> Solo diferencias</label></div>" + (d.puedeContar ? '<div class="mccf-hits" id="mccf-hits" hidden></div>' : "") : "";
+      (ciego() ? "" : '<label class="mccf-sub"><input type="checkbox" id="mccf-solodif"' + (C.soloDif ? " checked" : "") + "> Solo diferencias</label>") + "</div>" + (d.puedeContar ? '<div class="mccf-hits" id="mccf-hits" hidden></div>' : "") : "";
     return '<div id="mccf-root"><p><button class="btn ghost small" type="button" data-go="#/m/conteos">← Volver a la lista</button></p>' +
       '<div class="mccf-card"><div class="mccf-h"><h2>' + e(c.numero) + "</h2>" + chip(c) + '<span class="mccf-sub">' + e(c.bodegaNombre) + " · asignado a <b>" + e(c.asignadoNombre || "—") + "</b> · creado " + e(fecha(c.creadoAt)) + "</span></div>" +
       (c.nota ? '<div class="mccf-sub" style="margin-top:6px">' + e(c.nota) + "</div>" : "") + ((c.lineas || c.estado !== "asignado") ? kpisHtml(c) : "") + aviso +
@@ -162,6 +166,7 @@
   function lin(id) { return (C.cur.lineas || []).find(function (l) { return l.id === id; }); }
   function recalc() {
     var L = C.cur.lineas || [], c = C.cur.conteo;
+    if (ciego()) { c.contadas = L.filter(function (l) { return l.estado !== "pendiente"; }).length; c.pendientes = L.length - c.contadas; c.lineas = L.length; return; }
     L.forEach(function (l) { l.diferencia = l.estado === "no_encontrado" ? -l.sistema : l.contado == null ? 0 : Math.round((l.contado - l.sistema) * 100) / 100; });
     var dif = L.filter(function (l) { return l.estado !== "pendiente" && Math.abs(l.diferencia) > 1e-9; });
     c.contadas = L.filter(function (l) { return l.estado !== "pendiente"; }).length; c.pendientes = L.length - c.contadas; c.lineas = L.length; c.conDiferencia = dif.length;
@@ -224,8 +229,9 @@
         if (v !== "" && !(Number(v) >= 0)) return;
         l.contado = v === "" ? null : Number(v); l.estado = v === "" ? "pendiente" : "contado";
         recalc(); pintarKpis(main);
-        var tr = i.closest("tr"), td = tr.lastElementChild; td.innerHTML = difHtml(l);
-        tr.className = "mccf-ln" + (l.estado === "pendiente" ? "" : Math.abs(l.diferencia) > 1e-9 ? " dif" : " ok");
+        var tr = i.closest("tr");
+        if (!ciego()) tr.lastElementChild.innerHTML = difHtml(l);
+        tr.className = "mccf-ln" + clsLinea(l);
         guardarLinea(main, l);
       });
       tabla.addEventListener("keydown", function (ev) {
