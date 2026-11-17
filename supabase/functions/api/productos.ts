@@ -118,7 +118,7 @@ export function comisionUnidad(subtotal: number, compraComision: number, pct = P
 }
 
 export interface StockSub { codigo: string; nombre: string; cantidad: number }
-export interface StockGrupo { grupo: Grupo; nombre: string; cantidad: number; subs: StockSub[]; nota?: string; abierto?: number; unidad?: string }
+export interface StockGrupo { grupo: Grupo; nombre: string; cantidad: number; subs: StockSub[]; nota?: string; abierto?: number; unidad?: string; beta?: number }
 
 /**
  * Stock por bodega para la ficha.
@@ -435,4 +435,24 @@ export function precioLineaTicket(lineas: LineaTicket[], codigo: string, totalCo
   if (!(lista > 0) || !(mio > 0)) return { unit: null, total: null, estimado: true };
   const tot = totalCobrado * (mio / lista);
   return { unit: round2(tot / qty), total: round2(tot), estimado: true };
+}
+
+/** Stock beta = stock del sistema + movimientos de la beta (beta_stock_movimientos, 0046). */
+export function aplicarMovimientos(stock: StockGrupo[], movs: Row[]): StockGrupo[] {
+  if (!movs.length) return stock;
+  const out = stock.map((g) => ({ ...g, subs: g.subs.map((x) => ({ ...x })) }));
+  for (const m of movs) {
+    const gr = s(m.bodega).toUpperCase();
+    const g = out.find((x) => x.grupo === gr);
+    if (!g) continue;
+    const d = n(m.delta);
+    g.cantidad = round2(n(g.cantidad) + d);
+    g.beta = round2(n(g.beta) + d);
+    if (gr === "CABINA") {
+      const code = s(m.sububicacion);
+      const sub = g.subs.find((x) => x.codigo === code) || g.subs.find((x) => x.codigo === "");
+      if (sub) sub.cantidad = round2(n(sub.cantidad) + d);
+    }
+  }
+  return out;
 }

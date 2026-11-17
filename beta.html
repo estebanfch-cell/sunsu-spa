@@ -2081,6 +2081,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
     if (route.kind === "mod" && route.mod === "mc" && window.MCNav) window.MCNav.wire(main, route);
     if (route.kind === "mod" && route.mod === "conteos" && route.sub !== "hacer" && window.MCConteo) window.MCConteo.wire(main, route);
+    if (route.kind === "mod" && route.mod === "transferencias" && window.MCTransferencias) window.MCTransferencias.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2127,7 +2128,7 @@ async function renderMod(route) {
   if (route.mod === "caja") return renderCaja();
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
-  if (route.mod === "transferencias") return renderTrf();
+  if (route.mod === "transferencias") return window.MCTransferencias ? window.MCTransferencias.render(route) : renderTrf();
   if (route.mod === "conteos") return window.MCConteo && route.sub !== "hacer" ? window.MCConteo.render(route) : renderConteos(route);
   if (route.mod === "permisos") return renderPermisosBeta();
   if (route.mod === "usuarios") return renderUsuarios();
@@ -5576,14 +5577,15 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117cf1"></script>
-<script src="beta-screens.js?v=20261117cf1"></script>
-<script src="beta-inline.js?v=20261117cf1"></script>
-<script src="mc-productos.js?v=20261117cf1"></script>
-<script src="mc-nav.js?v=20261117cf1"></script>
-<script src="mc-permisos.js?v=20261117cf1"></script>
-<script src="mc-protocolos.js?v=20261117cf1"></script>
-<script src="mc-conteo.js?v=20261117cf1"></script>
+<script src="mc-buscar.js?v=20261117tr1"></script>
+<script src="beta-screens.js?v=20261117tr1"></script>
+<script src="beta-inline.js?v=20261117tr1"></script>
+<script src="mc-productos.js?v=20261117tr1"></script>
+<script src="mc-nav.js?v=20261117tr1"></script>
+<script src="mc-permisos.js?v=20261117tr1"></script>
+<script src="mc-protocolos.js?v=20261117tr1"></script>
+<script src="mc-conteo.js?v=20261117tr1"></script>
+<script src="mc-transferencias.js?v=20261117tr1"></script>
 <script>draw();</script>
 </body>
 </html>

@@ -57,7 +57,7 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias"]);
+const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
@@ -69,6 +69,7 @@ const MOD_EXTRA: Record<string, string> = {
   // Conteo físico (0045): crear/revisar es de admin; contar lo hace la asignada aunque no tenga el módulo.
   cf_meta: "conteos", cf_list: "inicio", cf_crear: "conteos", cf_revisar: "conteos",
   cf_get: "inicio", cf_iniciar: "inicio", cf_guardar: "inicio", cf_enviar: "inicio", notif_mias: "inicio", notif_leer: "inicio",
+  trfb_list: "transferencias", trfb_get: "transferencias", trfb_save: "transferencias", trfb_estado: "transferencias",
 };
 export function moduloFino(action: string): string {
   return MOD_EXTRA[action] || moduloDeAccion(action);
