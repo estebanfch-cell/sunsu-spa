@@ -8,16 +8,16 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, type Row, type TicketIn,
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn,
 } from "./domain.ts";
-import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
+import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { familiaDe, montoGcAplicado, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
-import type { Db } from "./db.ts";
+import { enPrueba, type Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
 
@@ -599,7 +599,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   if (!previewPedido(p)) {
     try { await backfillSO(ctx.db, actorPrev); } catch { /* vista o sin columna */ }
   }
-  const soNum = await tomarNumero(ctx.db, "TK-SO", await ctx.db.all("tickets"), "so_num");
+  const soNum = await tomarNumero(ctx.db, "TK-SO", enPrueba(ctx.db) ? await ctx.db.all("tickets") : await filasSerie(ctx.db), "so_num");
   const notas = s(p.notas) + (p.descuento ? " · 🏷 Descuento: " + s(p.descuento) : "");
   const base: R = {
     sheet_row: null,
@@ -1008,7 +1008,7 @@ function fichaDe(r: R, tel: boolean): R {
     ciclo: s(r.ciclo_mestrual_si_aplica), extracciones: s(r.deseas_extracciones_de_comedones_o_espinillas_si_es_nec),
     cortesia: s(r.cortesia_complementaria), autorizaFotos: s(r.autoriza_fotos),
   };
-  if (tel) o.telefono = s(r.telefono);
+  if (tel) o.telefono = telefonoEc(r.telefono);
   return o;
 }
 async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise<R> {
@@ -1255,14 +1255,14 @@ export function itemHistorial(r: R, map: Map<string, R>, ec: string, telOk: bool
       recomendaciones: s(r.recomendaciones), notas: s(r.notas_generales), retorno: s(r.fecha_retorno).slice(0, 10),
       productos: prods, exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete),
       exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
-      comprobante: s(r.comprobante), fotos: s(r.fotos), fotosAntes: s(r.fotos_antes), fotosDespues: s(r.fotos_despues),
+      comprobante: colTicket(r, "comprobante"), fotos: colTicket(r, "fotos"), fotosAntes: colTicket(r, "fotos_antes"), fotosDespues: colTicket(r, "fotos_despues"),
       estado: estadoTicket({ seguimiento: s(r.seguimiento), agendado: b(r.agendado), retorno: s(r.fecha_retorno) }, ec),
       estado_doc: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? "cerrado" : "abierto",
       factura: facturaTxt(r.fac_7),
       fac: b(r.fac), cob: b(r.cob), anulado: !!(r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true), sheetId: r.id ?? null,
       saldo: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? 0 : n(r.estimado),
     };
-    if (telOk) item.telefono = porCed.get(normCedula(r.id_3)) || "";
+    if (telOk) item.telefono = telefonoEc(porCed.get(normCedula(r.id_3)) || "");
     else item.telefono = "";
     return item;
   }
@@ -1628,7 +1628,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
       fila: r.sheet_row, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula),
       nombre: s(r.nombres), apellido: s(r.apellidos), sku: s(r.sku), paquete: s(r.paquete),
       vendidoPor: s(r.vendido_por), notas: s(r.notas), usos: usos.slice(0, total), total,
-      telefono: tel ? (porCed.get(normCedula(r.cedula)) || "") : "",
+      telefono: tel ? telefonoEc(porCed.get(normCedula(r.cedula)) || "") : "",
       claveWa: clave, wa: wa[clave] || null,
       codigo: codigoPaquete(r), prueba: s(r.origin) === "test",
     });

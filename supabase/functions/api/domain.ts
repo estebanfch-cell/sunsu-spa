@@ -198,6 +198,29 @@ export function siguienteCodigoGc(rows: Row[], yy: string, prueba = false): stri
 
 /** PQ-0001 si la hoja no traía código. Sigue el mayor PQ- que ya exista. */
 /** Código visible del paquete: PQ-#### de la beta, si no el PACK-### importado, si no el de orig. */
+/** Teléfono para mostrar y para WhatsApp: siempre «+593 9X XXX XXXX» (quita el 0 inicial, el «.0» de la hoja, notación científica). Solo al leer: no escribe en la hoja. */
+export function telefonoEc(v: unknown): string {
+  let t = String(v ?? "").trim();
+  if (!t || /^(false|null|undefined|-)$/i.test(t)) return "";
+  if (/^\d+(\.\d+)?e\+?\d+$/i.test(t)) t = Number(t).toFixed(0);
+  t = t.replace(/\.0+$/, "");
+  let d = t.replace(/\D/g, "");
+  if (!d) return t;
+  if (d.startsWith("593")) d = d.slice(3);
+  d = d.replace(/^0+/, "");
+  if (d.length === 9 && d[0] === "9") return "+593 " + d.slice(0, 2) + " " + d.slice(2, 5) + " " + d.slice(5);
+  if (d.length === 8 && /^[2-7]/.test(d)) return "+593 " + d[0] + " " + d.slice(1, 4) + " " + d.slice(4);
+  return t.startsWith("+") ? t : (t.replace(/\.0+$/, ""));
+}
+/** Columna de foto/comprobante del ticket; el sync deja la URL solo en orig (columna de la hoja), así que se lee de ahí si la columna está vacía o en «False». */
+const COL_HOJA: Record<string, string> = { fotos_antes: "FOTOS ANTES", fotos_despues: "FOTOS DESPUES", fotos: "FOTOS", comprobante: "COMPROBANTE" };
+export function colTicket(r: Row, col: string): string {
+  const v = s(r[col]);
+  if (/https?:|archivo:|base64,/.test(v)) return v;
+  const o = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  const w = s(o[COL_HOJA[col] || col]);
+  return /https?:|archivo:/.test(w) ? w : v;
+}
 export function codigoPaquete(r: Row): string {
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
   return String(r.beta_codigo || "") || String(orig.codigo || "") || String(r.codigo || "");

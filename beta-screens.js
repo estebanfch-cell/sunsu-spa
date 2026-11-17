@@ -3261,6 +3261,10 @@ function _copiarTexto_(txt){
 // enlaces corrompe los emojis (llegan como '?'). web.whatsapp.com los respeta
 // porque todo queda en el navegador. En celular, wa.me sigue siendo lo correcto.
 function _waURL(tel, encTxt){
+  // Siempre 593 + 9 dígitos (quita 0 inicial, «.0» de la hoja, espacios y +).
+  tel=String(tel||'').trim().replace(/\.0+$/,'').replace(/\D/g,'');
+  if(tel.indexOf('593')===0) tel=tel.slice(3);
+  tel=tel.replace(/^0+/,''); if(tel.length===9||tel.length===8) tel='593'+tel;
   return _esMovil_() ? 'https://wa.me/'+tel+'?text='+encTxt
                      : 'https://web.whatsapp.com/send?phone='+tel+'&text='+encTxt;
 }
@@ -3803,7 +3807,8 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
     doc.text(nomCli,W/2,y,{align:'center'}); y+=12;
     var nomPaqL=limpiaFac(p.nombrePaq||'');
     doc.setFontSize(8); doc.setTextColor(NAVY); doc.setFont('helvetica','bold');
-    doc.text((p.sku+' - Paquete '+x.total+(nomPaqL?' - '+nomPaqL:'')),W/2,y,{align:'center'}); y+=11;
+    doc.text(((p.codigo?p.codigo+' · ':'')+p.sku+' - Paquete '+x.total+(nomPaqL?' - '+nomPaqL:'')),W/2,y,{align:'center'}); y+=11;
+    if(x.sesion){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT); doc.text('Sesión de hoy: '+x.sesion+' de '+x.total+' · '+(x.pend>0?('te quedan '+x.pend+' sesi'+(x.pend===1?'ón':'ones')):'paquete completo'),W/2,y,{align:'center'}); y+=10; }
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GOLD);
     doc.text('Gracias por confiar el cuidado de tu piel en Sunsu Spa',W/2,y,{align:'center'});
     // ── Rejilla de sesiones CENTRADA verticalmente ──

@@ -1,6 +1,7 @@
 // Flujo continuo de Compras. Reusa erp_proveedores, erp_productos, erp_oc,
 // erp_oc_lineas, erp_stock y el kardex. No toca hojas ni Apps Script.
 
+import { consultar } from "./query.ts";
 import { enPrueba, type Db } from "./db.ts";
 import { n, productQtys, round2, s, skuCode, siguienteTestDoc, ymdUtc, type Row } from "./domain.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
@@ -618,9 +619,12 @@ export async function comprasReporte(db: Db, p: Row): Promise<Row> {
 }
 
 export async function descontarVentaTicket(db: Db, actor: string, ticketRef: string, row: Row, now: Date): Promise<number> {
-  const prods = porSku(await productos(db));
+  const qs = productQtys(row);
+  if (!qs.length) return 0;
+  // Solo sku/clase/uso (sin fotos): antes bajaba erp_productos completo con miniaturas en cada ticket.
+  const prods = porSku((await consultar(db, "erp_productos", { cols: ["id", "sku", "clase", "uso"] })).rows);
   const moves: Row[] = [];
-  for (const pr of productQtys(row)) {
+  for (const pr of qs) {
     const prod = prods.get(skuCode(pr.sku));
     if (!prod) continue;
     const clase = s(prod.clase) || "producto";

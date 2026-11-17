@@ -7,7 +7,7 @@ import { catMap, itemHistorial } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { conTelefono } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
-import { ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
+import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
@@ -64,6 +64,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const cabsAll = await todas(ctx, "beta_tickets");
   const cabMap = new Map(cabsAll.map((c) => [s(c.clave), c]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
+  // El comprobante de la hoja vive en orig: solo para los que parecen sin comprobante se lee orig (pocos).
+  const sinComp = L.filter((r) => faltaDe(r, datosDe(r)).length > 0).map((r) => n(r.id)).filter(Boolean);
+  if (sinComp.length) {
+    const oo = await consultar(ctx.db, "tickets", { cols: ["id", "orig"], filtros: [{ col: "id", op: "in", val: sinComp.slice(0, 1500) }] });
+    const om = new Map(oo.rows.map((x) => [n(x.id), x.orig]));
+    for (const r of L) if (om.has(n(r.id))) r.comprobante = colTicket({ comprobante: r.comprobante, orig: om.get(n(r.id)) }, "comprobante");
+  }
   if (seg === "faltadoc") L = L.filter((r) => faltaDe(r, datosDe(r)).length > 0);
   let envB: Set<string> | null = null;
   const envClaves = async (filas: Row[]) => {

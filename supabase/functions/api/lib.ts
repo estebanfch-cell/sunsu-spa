@@ -1,6 +1,7 @@
 import { enPrueba, type Db } from "./db.ts";
 import { ecuadorParts, siguienteBetaNum, siguienteTestTicket, s, type Row } from "./domain.ts";
 import { normalizarRol } from "./permisos.ts";
+import { consultar } from "./query.ts";
 
 export interface Ses {
   uid: string;
@@ -163,13 +164,15 @@ export async function reimportarTickets(db: Db, actor: string, filas: Row[]): Pr
 }
 
 export async function nextSheet(db: Db, table: string): Promise<number> {
-  const rows = await db.all(table);
+  // Solo la columna sheet_row (antes bajaba la tabla entera: log_acciones en cada ticket).
+  const rows = (await consultar(db, table, { cols: ["sheet_row"] })).rows;
   let m = 1;
   for (const r of rows) m = Math.max(m, Number(r.sheet_row) || 0);
   return m + 1;
 }
 export async function rowBySheet(db: Db, table: string, sheetRow: number): Promise<Row | null> {
-  const rows = await db.all(table);
+  if (!Number.isFinite(sheetRow)) return null;
+  const rows = (await consultar(db, table, { filtros: [{ col: "sheet_row", op: "eq", val: sheetRow }], limite: 5 })).rows;
   return rows.find((r) => Number(r.sheet_row) === sheetRow) || null;
 }
 
