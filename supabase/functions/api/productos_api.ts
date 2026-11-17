@@ -118,6 +118,7 @@ function fila(p: Row, b: Base): Row {
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),
     stock: tipo === "servicio" ? null : total,
     porGrupo: Object.fromEntries(stock.map((g) => [g.grupo, g.cantidad])),
+    porSubCabina: Object.fromEntries((stock.find((g) => g.grupo === "CABINA")?.subs || []).map((x) => [x.codigo || "SIN", x.cantidad])),
     estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
     pvp: precios.pvp, comision: precios.comision,
@@ -128,6 +129,12 @@ function fila(p: Row, b: Base): Row {
     skuProveedor: s(p.sku_proveedor),
     barras: [s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo))].filter(Boolean),
   };
+}
+
+/** Lista de productos de la beta (misma fila que Productos) para otros módulos: conteo, transferencias, ajustes. */
+export async function listaProductos(ctx: Ctx, ses: Ses): Promise<Row[]> {
+  const b = await cargarBase(ctx, ses);
+  return b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))) && !s(p.beta_eliminado_at)).map((p) => fila(p, b));
 }
 
 extend("mcprod_list", "any", async (p0, ctx, ses) => {

@@ -82,6 +82,8 @@ export class MemoryDb implements Db {
   }
 }
 
+/** Tablas que escribe app_beta_write (0045). */
+export const BETA_TABLAS = new Set(["beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_transferencias", "beta_transferencia_lineas", "beta_ajustes", "beta_ajuste_lineas", "beta_stock", "beta_stock_movimientos"]);
 export class SupabaseDb implements Db {
   private url: string;
   private key: string;
@@ -115,12 +117,14 @@ export class SupabaseDb implements Db {
     return out;
   }
   async write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null> {
-    const res = await this.fetchImpl(`${this.url}/rest/v1/rpc/app_write`, {
+    // Tablas nuevas de la beta (0045+) van por app_beta_write; app_write sigue igual.
+    const fn = BETA_TABLAS.has(table) ? "app_beta_write" : "app_write";
+    const res = await this.fetchImpl(`${this.url}/rest/v1/rpc/${fn}`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({ p_actor: actor, p_table: table, p_op: op, p_match: match || {}, p_row: row || {} }),
     });
-    if (!res.ok) throw new Error(`app_write ${table} ${res.status} ${await res.text()}`);
+    if (!res.ok) throw new Error(`${fn} ${table} ${res.status} ${await res.text()}`);
     const data = await res.json();
     return data || null;
   }
