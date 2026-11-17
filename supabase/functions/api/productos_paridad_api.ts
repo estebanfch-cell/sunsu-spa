@@ -47,13 +47,15 @@ extend("mcprod_estado", "any", async (p, ctx, ses) => {
   const row: Row | null = accion === "archivar" ? { beta_archivado_at: now, beta_archivado_por: yo }
     : accion === "desarchivar" ? { beta_archivado_at: null, beta_archivado_por: null }
     : accion === "eliminar" ? { beta_eliminado_at: now, beta_eliminado_por: yo }
-    : accion === "restaurar" ? { beta_eliminado_at: null, beta_eliminado_por: null } : null;
+    : accion === "restaurar" ? { beta_eliminado_at: null, beta_eliminado_por: null }
+    // Activo/Inactivo de la beta (0044 beta_activo): manda sobre el catálogo viejo y la sync no lo toca.
+    : accion === "activar" || accion === "desactivar" ? { beta_activo: accion === "activar", beta_activo_por: yo, beta_activo_at: now, beta_activo_motivo: s(p.motivo).trim().slice(0, 300) || null } : null;
   if (!row) return { error: "Acción inválida" };
   if (accion === "eliminar" && s(p.confirmar) !== "ELIMINAR") return { error: "Escribe ELIMINAR para confirmar" };
   let ok = 0;
   for (const id of ids) {
     const r = await actualizar(ctx, ses, id, row);
-    if ("error" in r && r.error) { if (r.error === FALTA_0041) return r; continue; }
+    if ("error" in r && r.error) { if (r.error === FALTA_0041) return accion === "activar" || accion === "desactivar" ? { error: "Falta aplicar 0044_productos_presentacion.sql" } : r; continue; }
     ok++;
   }
   return { ok: true, accion, cambiados: ok };
@@ -194,6 +196,37 @@ extend("mcprod_codigo_interno", "any", async (p, ctx, ses) => {
   const todos = [...(await codigosDeOtros(ctx, "")).keys()];
   for (const x of arr(p.pendientes)) todos.push(codigoBarrasNorm(x));
   return { ok: true, codigo: siguienteInterno(todos) };
+});
+
+// «Generar código» (Emilia 17/11): asigna un EAN-13 interno Sunsu (prefijo 20, dígito de control válido)
+// como código de barras principal. Nunca pisa un código que ya existe.
+extend("mcprod_barras_generar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin genera códigos" };
+  const prod = await producto(ctx, s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const actual = codigoBarrasNorm(prod.codigo_barras);
+  if (actual) return { error: "Este producto ya tiene código de barras (" + actual + "); no se reemplaza" };
+  const todos = [...(await codigosDeOtros(ctx, "")).keys()];
+  const codigo = siguienteInterno(todos);
+  const previos = arr(prod.beta_codigos).map((c) => ({ ...c, principal: false }));
+  const r = await actualizar(ctx, ses, s(prod.id), { codigo_barras: codigo, beta_codigos: [...previos, { codigo, tipo: "interno", principal: true }] });
+  if ("error" in r && r.error) return r;
+  return { ok: true, codigo };
+});
+
+// Presentaciones del mismo producto base (0044): lista de ids de otros productos.
+extend("mcprod_presentaciones_save", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita productos" };
+  const prods = await safeAll(ctx, "erp_productos");
+  const prod = prods.find((x) => s(x.id) === s(p.id));
+  if (!prod) return { error: "Producto no encontrado" };
+  const ids = [...new Set(arr(p.ids).map((x) => s(x)))].filter((x) => x && x !== s(prod.id));
+  for (const id of ids) if (!prods.some((x) => s(x.id) === id && !s(x.beta_eliminado_at))) return { error: "Producto no encontrado: " + id };
+  if (ids.length > 20) return { error: "Máximo 20 presentaciones" };
+  const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(prod.id) }, { beta_presentaciones: ids, ...sello(ses, ctx) });
+  if (!saved) return { error: "Producto no encontrado" };
+  if (!("beta_presentaciones" in (saved as Row))) return { error: "Falta aplicar 0044_productos_presentacion.sql" };
+  return { ok: true, ids };
 });
 
 // ---------- Escalas de precio y proveedores ----------
