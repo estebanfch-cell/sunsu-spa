@@ -37,6 +37,16 @@
       ".mctk-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mctk-box{background:var(--white,#fff);border-radius:14px;padding:16px;width:min(520px,94vw);max-height:88vh;overflow:auto}",
       ".mctk-box label{display:flex;gap:8px;align-items:center;font-size:.84rem;margin:6px 0}.mctk-box textarea,.mctk-box input[type=text]{width:100%;box-sizing:border-box;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit}",
       ".mctk-xc{color:#b2452a;font-size:.68rem;font-weight:800}",
+      ".mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
+      ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
+      ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
+      ".mctk-pen{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.85rem;padding:0 3px}.mctk-pen:hover{color:var(--navy-d)}.mctk-in{padding:5px 7px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.82rem;width:min(100%,260px)}textarea.mctk-in{width:100%}",
+      ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
+      ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:280px}",
+      ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
+      ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
+      "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
+
     ].join("");
     document.head.appendChild(s);
   }
@@ -63,51 +73,91 @@
   }
 
   // ---------- pintar ----------
+  // ---------- detalle v2 (como la orden de MineCore) ----------
+  var CHIP = { abierto: "#3E7CB1", cerrado: "#56627A", porcobrar: "#C98A00", pagado: "#2E8B57", sinfactura: "#D2603A", facturado: "#2A8C8C", anulado: "#C0392B", ok: "#2E8B57", pend: "#8A93A6", info: "#7C6BB0" };
+  function pill(c, t, tip) { var col = CHIP[c] || "#8A93A6"; return '<span class="mctk-pill" style="color:' + col + ";border-color:" + col + '"' + (tip ? ' title="' + e(tip) + '"' : "") + ">" + e(t) + "</span>"; }
+  function val(k) { var d = K.d, v = K.datos && K.datos[k] != null ? K.datos[k] : (d.info || {})[k]; return v == null ? "" : String(v); }
+  function campo(k, lbl, opts) {
+    opts = opts || {};
+    var v = val(k), ed = K.d.puedeEditar || K.d.puedePedir, mod = K.datos && K.datos[k] != null;
+    var shown = opts.fmt ? opts.fmt(v) : v;
+    return '<div class="mctk-f"><dt>' + e(lbl) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + '">' + (shown ? e(shown) : '<span class="mccf-sub">—</span>') + "</span>" +
+      (ed && !opts.ro ? ' <button type="button" class="mctk-pen" data-ed="' + e(k) + '" title="Editar ' + e(lbl) + '">✎</button>' : "") + "</dd></div>";
+  }
+  function ro(lbl, v) { return '<div class="mctk-f"><dt>' + e(lbl) + "</dt><dd>" + (v ? v : '<span class="mccf-sub">—</span>') + "</dd></div>"; }
+  function chipsHtml() { return (K.d.chips || []).map(function (c) { return pill(c.c, c.t); }).join(""); }
+  function waHtml() {
+    var d = K.d, p = d.paquete || {}, conPaq = !!(p.vigentes && p.vigentes.length) || !!p.uso;
+    return '<button type="button" data-wa="facial">💬 Enviar reporte facial</button>' + (conPaq ? '<button type="button" data-wa="paquete">🎴 Enviar reporte de paquete</button>' : "") + '<button type="button" data-wa="chat">Abrir chat</button>';
+  }
+  function docsHtml2() {
+    var d = K.d, t = d.ticket, h = "";
+    if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
+    (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
+    (d.documentos || []).forEach(function (x) { h += '<a href="' + e(x.url) + '" target="_blank" rel="noopener">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</a>"; });
+    return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
+  }
   function lineasHtml() {
-    calc(); // deja total_linea al día antes de pintar
-    if (!K.L.length) return '<tr><td colspan="9" class="mccf-sub" style="padding:14px">Sin líneas. Agrega productos o servicios arriba.</td></tr>';
+    calc();
+    if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td><span class="mccf-chip">' + e(TIPO[l.tipo] || l.tipo) + '</span></td><td><span class="mccf-sku">' + e(l.sku) + "</span></td><td>" + e(l.nombre) + (l.estimado ? '<span class="mctk-est" title="Precio prorrateado del total cobrado">estimado</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + "</td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-pn">' + e(l.nombre) + (l.estimado ? '<span class="mctk-est" title="Precio prorrateado del total cobrado">estimado</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(l.sku) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></td>" +
         '<td class="num"><input class="q" type="number" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num"><input class="p" type="number" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></td>' +
         '<td class="num" style="white-space:nowrap"><select data-f="descuento_tipo">' + opt("", "—", l.descuento_tipo || "") + opt("%", "%", l.descuento_tipo) + opt("$", "$", l.descuento_tipo) + '</select> <input class="dv" type="number" min="0" step="any" data-f="descuento_valor" value="' + e(l.descuento_valor ? q2(l.descuento_valor) : "") + '"></td>' +
-        '<td class="num" data-tl>' + e($m(l.total_linea)) + "</td>" + '<td><button class="mccf-ne" type="button" data-del="' + i + '">Quitar</button></td></tr>';
+        '<td class="num" data-tl>' + e($m(l.total_linea)) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
   }
   function totHtml() {
-    var c = calc(), d = K.d;
-    return '<div class="mctk-tot"><span>Suma de líneas</span><b>' + $m(c.suma) + "</b>" + (c.promo ? "<span>Promoción " + e(K.promo) + "</span><b>−" + $m(c.promo) + "</b>" : "") + (c.desc ? "<span>Descuento del ticket</span><b>−" + $m(c.desc) + "</b>" : "") +
-      "<span>Subtotal sin IVA</span><b>" + $m(c.subtotal) + "</b><span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
-      (Math.abs(c.total - d.ticket.cobradoSistema) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(d.ticket.cobradoSistema) + "</b>" : "") + "</div>";
+    var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc), pag = pg.cobrado ? Math.min(c.total, pg.pagado || c.total) : 0;
+    var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
+    return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(c.suma / 1.15) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(desc / 1.15) + "</b>" : "") +
+      "<span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
+      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (c.total - pag > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(Math.max(0, c.total - pag)) + "</b>" +
+      (met ? '<span class="mccf-sub">Forma de pago</span><span style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
+      (Math.abs(c.total - d.ticket.cobradoSistema) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(d.ticket.cobradoSistema) + "</b>" : "") + "</div>" +
+      (d.costosVisibles ? '<p style="text-align:right;margin:6px 0 0"><a href="#" id="mctk-costos" class="mctk-link">Detalle de costos</a></p>' : "");
   }
-  function docsHtml() {
-    var d = K.d, t = d.ticket, h = "";
-    if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
-    (d.documentos || []).forEach(function (x) { h += '<a href="' + e(x.url) + '" target="_blank" rel="noopener">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</a>"; });
-    return h || '<div class="mccf-sub" style="padding:8px">Sin documentos adjuntos.</div>';
+  function flagsHtml() {
+    var F = K.d.flags || []; if (!F.length) return "";
+    return '<div class="mctk-flag">' + F.map(function (f) {
+      return '<div><b>⚠ Por corregir: ' + e(f.motivo) + "</b>" + (f.factura ? ' <span class="mccf-sub">· factura ' + e(f.factura) + "</span>" : "") + (f.detalle ? "<div>" + e(f.detalle) + "</div>" : "") +
+        (K.d.puedeEditar ? ' <button type="button" class="btn ghost small" data-flag="' + e(f.id) + '">Marcar resuelto</button>' : '<div class="mccf-sub">Corrige con «Solicitar cambio»; un admin lo revisa.</div>') + "</div>";
+    }).join("") + "</div>";
+  }
+  function relHtml() {
+    var d = K.d, h = "", G = d.giftcards || [], p = d.paquete || {}, E = d.envios || [];
+    if (G.length) h += '<div class="mccf-card"><b>Gift cards</b><table class="mccf-t mctk-t" style="margin-top:6px"><thead><tr><th>Código</th><th>En este ticket</th><th>Compró</th><th>Para</th><th>Facial</th><th class="num">Saldo</th></tr></thead><tbody>' +
+      G.map(function (g) { return "<tr><td><b>" + e(g.codigo) + "</b></td><td>" + e(g.uso) + "</td><td>" + e(g.comprador || g.de || "—") + "</td><td>" + e(g.para || "—") + "</td><td>" + e(g.facial || g.valor || "—") + '</td><td class="num">' + (g.saldo != null ? e($m(g.saldo)) : g.usado ? "usada" : "—") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+    if (p.uso || p.compra || (p.vigentes || []).length) h += '<div class="mccf-card"><b>Paquete</b><div class="mctk-grid1">' + (p.uso ? ro("Sesión en este ticket", e(p.uso)) : "") + (p.compra ? ro("Compra", e(p.compra)) : "") +
+      (p.vigentes || []).map(function (v) { return ro(v.nombre || v.codigo, e(v.usados + "/" + v.total + " usadas · quedan " + v.pendientes)); }).join("") + "</div></div>";
+    h += '<div class="mccf-card"><b>Reportes enviados</b>' + (E.length ? '<ul class="mctr-log">' + E.map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · " + e(x.tipo) + " · " + e(x.por || "—") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Todavía no se envía el reporte a la clienta.</p>') + "</div>";
+    h += '<div class="mccf-card"><b>Historial</b>' + ((d.historial || []).length ? '<ul class="mctr-log">' + d.historial.slice().reverse().map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · <b>" + e(x.accion) + "</b> · " + e(x.detalle) + " · " + e(x.actor) + (x.total != null ? " · total " + $m(x.total) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios en la beta. ' + (d.lineasBeta ? "" : "Las líneas salen del sistema; si el ticket tiene varias, el precio por línea es un estimado del total cobrado.") + "</p>") + "</div>";
+    return h;
   }
   function html() {
-    var d = K.d, t = d.ticket;
-    var nombre = (t.nombre + " " + t.apellido).trim() || "Sin nombre";
-    return '<div id="mctk-root">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
-      '<p><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Volver a la clienta" : "← Volver a la lista") + '</button></p>' +
-      '<div class="mccf-card"><div class="mctk-h"><div><h2>' + e(nombre) + '</h2><div class="mctk-meta">Ticket <b>' + e(t.soNum || t.betaNum || ("#" + t.sheetRow)) + "</b>" + (t.sheetRow ? " · orden " + e(t.sheetRow) : "") + " · " + e(fecha(t.fecha, t.hora)) + " · atendió <b>" + e(t.cosmetologa || "—") + "</b>" + (t.cedula ? " · CI " + e(t.cedula) : "") + "</div>" +
-      '<div class="mctk-leds">' + t.leds.map(function (l) { return '<span class="mctk-led ' + e(l.c) + '">' + e(l.t) + "</span>"; }).join("") + "</div></div>" +
-      '<div class="mctk-acts"><div class="mctk-menu"><button class="btn ghost small" type="button" id="mctk-docs">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml() + "</div></div>" +
-      '<button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button></div></div>' +
-      (t.notas ? '<p class="mccf-sub" style="margin:10px 0 0"><b>Notas:</b> ' + e(t.notas) + "</p>" : "") + (t.recomendaciones ? '<p class="mccf-sub" style="margin:4px 0 0"><b>Recomendaciones:</b> ' + e(t.recomendaciones) + "</p>" : "") +
+    var d = K.d, t = d.ticket, inf = d.info || {}, rg = d.reagendada || {};
+    var num = t.soNum || t.betaNum || ("#" + t.sheetRow), fac = val("factura");
+    var reag = rg.si ? (rg.cita ? "Sí · " + fechaIso(rg.cita) : "Sí") : "No";
+    return '<div id="mctk-root" class="mctk2">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
+      '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
+      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
+      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
+      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button></div>' +
+      flagsHtml() +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1><div class="mctk-fac" data-k="factura">' + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') +
+      ((d.puedeEditar || d.puedePedir) ? ' <button type="button" class="mctk-pen" data-ed="factura" title="Editar factura">✎</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
+      '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
+      "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) + ro("Fase A", d.faseA ? "Completa" : "Pendiente") +
+      (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
-      '<div class="mccf-card"><b>Agregar producto</b> <span class="mccf-sub">· busca por nombre o SKU, o escanea el código de barras</span><div class="mctk-scan" style="margin-top:8px"><input type="search" id="mctk-q" placeholder="Buscar o escanear: productos, faciales, servicios, paquetes" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div>' +
-      '<div class="sheet-scroll" style="margin-top:10px"><table class="mccf-t mctk-t"><thead><tr><th>Tipo</th><th>SKU</th><th>Producto / servicio</th><th class="num">Cant.</th><th class="num">P. unit. (con IVA)</th><th class="num">Descuento</th><th class="num">Total línea</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
-      '<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;margin-top:12px"><div class="mccf-form" style="min-width:260px;flex:1;max-width:420px">' +
-      '<label>Promoción<select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" +
-      '<label>Descuento del ticket<span style="display:flex;gap:6px"><select id="mctk-dt">' + opt("", "—", K.desc.tipo || "") + opt("%", "%", K.desc.tipo) + opt("$", "$", K.desc.tipo) + '</select><input id="mctk-dv" type="number" min="0" step="any" value="' + e(K.desc.valor ? q2(K.desc.valor) : "") + '" style="flex:1"></span></label></div><div id="mctk-tot" style="flex:1">' + totHtml() + "</div></div>" +
-      '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + '>' + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
-      '<div class="mccf-card"><b>Historial</b>' + ((d.historial || []).length ? '<ul class="mctr-log">' + d.historial.slice().reverse().map(function (h) { return "<li>" + e(fechaIso(h.fecha)) + " · <b>" + e(h.accion) + "</b> · " + e(h.detalle) + " · " + e(h.actor) + (h.total != null ? " · total " + $m(h.total) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios en la beta. ' + (d.lineasBeta ? "" : "Las líneas salen del sistema; si el ticket tiene varias, el precio por línea es un estimado del total cobrado.") + "</p>") + "</div></div>";
+      '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
+      '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
+      '<div class="mctk-foot"><div class="mctk-adj"><label>Promoción <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" +
+      '<label>Descuento del ticket <span style="display:inline-flex;gap:4px"><select id="mctk-dt">' + opt("", "—", K.desc.tipo || "") + opt("%", "%", K.desc.tipo) + opt("$", "$", K.desc.tipo) + '</select><input id="mctk-dv" type="number" min="0" step="any" value="' + e(K.desc.valor ? q2(K.desc.valor) : "") + '" style="width:70px"></span></label></div><div id="mctk-tot">' + totHtml() + "</div></div>" +
+      '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
+      relHtml() + "</div>";
   }
-  function marcar() { K.dirty = true; var s = document.getElementById("mctk-save"); if (s) s.hidden = false; }
-  function pintarTot() { var t = document.getElementById("mctk-tot"); if (t) t.innerHTML = totHtml(); }
-  function pintarLin() { var b = document.getElementById("mctk-lin"); if (b) b.innerHTML = lineasHtml(); pintarTot(); }
 
   // ---------- agregar / escanear ----------
   function norm(c) { return String(c || "").trim().replace(/\.0+$/, "").replace(/\s+/g, ""); }
@@ -157,7 +207,7 @@
         var box = document.getElementById("mctk-q"); if (!box || document.activeElement === box) return;
         var tg = ev.target; if (tg && (tg.tagName === "INPUT" || tg.tagName === "TEXTAREA" || tg.tagName === "SELECT" || tg.isContentEditable)) return;
         var now = Date.now(); if (now - last > 60) buf = ""; last = now;
-        if (ev.key === "Enter" && buf.length >= 6) { box.value = buf; buf = ""; box.focus(); box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); ev.preventDefault(); return; }
+        if (ev.key === "Enter" && buf.length >= 6) { var wr = document.getElementById("mctk-addbox"); if (wr) wr.hidden = false; box.value = buf; buf = ""; box.focus(); box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); ev.preventDefault(); return; }
         if (ev.key.length === 1) buf += ev.key;
       });
     }
@@ -187,11 +237,13 @@
 
   // ---------- guardar / pedir ----------
   function propuesta() {
-    return { lineas: K.L.map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit, descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado }; }),
-      descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN };
+    var dat = K.datos && Object.keys(K.datos).length ? { datos: K.datos } : {};
+    if (!K.dirtyL) return dat;
+    return Object.assign(dat, { lineas: K.L.map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit, descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado }; }),
+      descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN });
   }
   function cargarEstado(d) {
-    K.d = d; K.dirty = false;
+    K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
     K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, total_linea: Number(l.total_linea) || 0 }; });
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
@@ -206,26 +258,175 @@
     return html();
   }
   function repintar(main) { var root = main.querySelector("#mctk-root"); if (root) { root.outerHTML = html(); wire(main); } }
+  function marcar(soloDatos) { K.dirty = true; if (!soloDatos) K.dirtyL = true; var s = document.getElementById("mctk-save"); if (s) s.hidden = false; }
+  function pintarTot() { var t = document.getElementById("mctk-tot"); if (t) t.innerHTML = totHtml(); wireCostos(); }
+  function pintarLin() { var b = document.getElementById("mctk-lin"); if (b) b.innerHTML = lineasHtml(); pintarTot(); }
+  function wireCostos() { var a = document.getElementById("mctk-costos"); if (a) a.onclick = function (ev) { ev.preventDefault(); dlgCostos(); }; }
+  function telWa() {
+    var t = String(val("telefono") || "").replace(/\D/g, "");
+    if (t.length === 10 && t.charAt(0) === "0") t = "593" + t.slice(1);
+    if (t.length === 9) t = "593" + t;
+    return t;
+  }
+  async function cardDelTicket() {
+    var t = K.d.ticket, busca = function () { return (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }); };
+    var h = busca();
+    if (!h && typeof APPS_SCRIPT_URL !== "undefined") {
+      toast2("⏳ Cargando la tarjeta…");
+      try { var r = await fetch(APPS_SCRIPT_URL + "?action=getHistorial&_t=" + Date.now()); var data = await r.json(); if (Array.isArray(data)) { _histData = data; window._histData = data; } } catch (x) {}
+      h = busca();
+    }
+    if (h) (window._tkCards = window._tkCards || {})[t.sheetRow] = h;
+    return h || null;
+  }
+  function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); tarjetaTicket(K.d.ticket.sheetRow, function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }
+  async function pdfPaquete() {
+    var ced = String(val("cedula") || "").split(".")[0], x = (window._tarjPaqRef || {})["c" + ced];
+    if (!x && typeof APPS_SCRIPT_URL !== "undefined") {
+      try {
+        var r = await fetch(APPS_SCRIPT_URL + "?action=getSeguimientoPaquetes&_t=" + Date.now()); var j = await r.json(), P3 = window._P3S || [];
+        ((j && j.items) || []).forEach(function (p) {
+          if (String(p.cedula || "").split(".")[0] !== ced) return;
+          var esP3 = P3.some(function (s) { return String(p.sku || "").indexOf(s) >= 0; }), total = p.total || (esP3 ? 3 : 6), us = 0;
+          (p.usos || []).slice(0, total).forEach(function (u) { if (u.u || u.f) us++; });
+          var it = { p: p, total: total, usados: Math.min(us, total), pend: Math.max(0, total - us) };
+          if (!x || it.pend > 0) x = it;
+        });
+      } catch (e2) {}
+      if (x) (window._tarjPaqRef = window._tarjPaqRef || {})["c" + ced] = x;
+    }
+    if (!x || typeof _pdfTarjetaPaquete !== "function") return { x: null };
+    return await new Promise(function (res) {
+      var img = new Image(); img.crossOrigin = "anonymous";
+      var fin = function (im) { _pdfTarjetaPaquete(x, im, function (doc, nom) { res({ x: x, doc: doc, nom: nom }); }); };
+      img.onload = function () { fin(img); }; img.onerror = function () { fin(null); };
+      img.src = typeof GCD_PAG3_URL !== "undefined" ? GCD_PAG3_URL : "giftcard_pag3_fondo.jpg";
+    });
+  }
+  function msgT(clave, vars) { try { return typeof _msg === "function" ? _msg(clave, vars || {}) : ""; } catch (e3) { return ""; } }
+  function abrirWa(tel, txt) {
+    var enc = encodeURIComponent(txt || ""), u = typeof _waURL === "function" ? _waURL(tel, enc) : "https://wa.me/" + tel + "?text=" + enc;
+    var w = window.open(u, "_blank"); if (!w) location.href = u;
+  }
+  function entregarPdfs(docs) {
+    docs = docs.filter(function (x) { return x && x.doc; }); if (!docs.length) return;
+    var files = []; docs.forEach(function (x) { try { files.push(new File([x.doc.output("blob")], x.nom, { type: "application/pdf" })); } catch (e4) {} });
+    var movil = typeof _esMovil_ === "function" && _esMovil_();
+    if (movil && navigator.canShare && files.length && navigator.canShare({ files: files })) {
+      var box = document.createElement("div"); box.className = "mctk-dlg";
+      box.innerHTML = '<div class="mctk-box"><h3 style="margin:0 0 6px">Adjuntar el PDF</h3><p class="mccf-sub">Ya se abrió el chat. Toca para compartir ' + (files.length > 1 ? "los PDFs" : "el PDF") + ' en WhatsApp.</p><div class="mctk-acts" style="justify-content:flex-end"><button class="btn ghost small" type="button" data-x>Cerrar</button><button class="btn small" type="button" data-s>📎 Compartir</button></div></div>';
+      document.body.appendChild(box);
+      box.querySelector("[data-x]").onclick = function () { box.remove(); };
+      box.querySelector("[data-s]").onclick = function () { navigator.share({ files: files }).catch(function () {}); box.remove(); };
+    } else docs.forEach(function (x, i) { setTimeout(function () { try { x.doc.save(x.nom); } catch (e5) {} }, i * 700); });
+  }
+  async function enviarReporte(tipo) {
+    var tel = telWa();
+    if (!tel) { tel = (prompt("No hay teléfono en la ficha. Escribe el celular de la clienta:") || "").replace(/\D/g, ""); if (tel.length === 10 && tel.charAt(0) === "0") tel = "593" + tel.slice(1); if (!tel) return; }
+    var nombre = String(val("nombre") || "").split(" ")[0];
+    if (tipo === "chat") { abrirWa(tel, msgT("MENSAJE TARJETA SALUDO", { nombre: nombre })); return; }
+    var docs = [], txt = msgT("MENSAJE TARJETA SALUDO", { nombre: nombre });
+    if (tipo === "facial") {
+      if (!(await cardDelTicket())) { toast2("No encontré la tarjeta de este ticket", true); return; }
+      txt += "\n\n" + msgT("MENSAJE TARJETA TRATAMIENTO", {});
+    }
+    abrirWa(tel, txt);
+    toast2("⏳ Preparando el PDF…");
+    if (tipo === "facial") docs.push(await pdfTarjeta());
+    var pq = await pdfPaquete();
+    if (pq.x && (tipo === "paquete" || (pq.x.pend > 0 && confirm("La clienta tiene paquete (" + pq.x.usados + "/" + pq.x.total + "). ¿Adjuntar también el control de paquete?")))) docs.push(pq);
+    if (tipo === "paquete" && !pq.x) { toast2("No encontré el paquete de la clienta", true); return; }
+    entregarPdfs(docs);
+    var r = await api("tk_envio", { clave: K.d.clave, tipo: tipo === "paquete" || docs.length > 1 ? "paquete" : "facial", telefono: tel });
+    if (r && r.ok) { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { var keep = K.dirty ? null : d; if (keep) { cargarEstado(keep); repintar(document.getElementById("main")); } } toast2("Reporte registrado como enviado"); }
+  }
+  function abrirGiftCard(cod) {
+    var g = (K.d.giftcards || []).find(function (x) { return x.codigo === cod; }) || { codigo: cod };
+    if (typeof renderGiftCardDigital !== "function") { toast2("No está disponible el generador de gift cards", true); return; }
+    var main = document.getElementById("main"), volver = location.hash;
+    main.innerHTML = '<div style="padding:12px 16px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" type="button" id="mctk-gcv">← Volver al ticket</button><button class="btn small" type="button" id="mctk-gcd">⬇️ Descargar PDF ' + e(cod) + '</button></div><div id="content"></div>';
+    try { if (typeof cuSunsu === "function") CU = cuSunsu(); } catch (e6) {}
+    renderGiftCardDigital({ codigo: g.codigo, para: g.para, de: g.de || g.comprador, facial: g.facial || undefined, mensaje: g.mensaje, valido: g.valido || undefined });
+    main.querySelector("#mctk-gcv").onclick = function () { if (typeof draw === "function") draw(); else go(volver); };
+    main.querySelector("#mctk-gcd").onclick = function () {
+      if (typeof _gcdPDF !== "function") return;
+      _gcdPDF(function (blob, nom) { if (!blob) { toast2("No se pudo generar el PDF", true); return; } var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nom; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000); });
+    };
+  }
+  async function dlgCostos() {
+    var box = document.createElement("div"); box.className = "mctk-dlg"; box.innerHTML = '<div class="mctk-box"><p class="mccf-sub">Calculando…</p></div>'; document.body.appendChild(box);
+    var r = await api("tk_costos", { clave: K.d.clave });
+    if (!r || r.error) { box.innerHTML = '<div class="mctk-box"><p class="err">' + e((r && r.error) || "No se pudo") + '</p><button class="btn ghost small" type="button" data-x>Cerrar</button></div>'; box.querySelector("[data-x]").onclick = function () { box.remove(); }; return; }
+    var c = r.costos, pintar = function () {
+      var nc = c.costos_no_cliente_tipo === "%" ? r2(c.subtotal * (Number(c.costos_no_cliente_valor) || 0) / 100) : r2(Number(c.costos_no_cliente_valor) || 0);
+      var gan = r2(c.subtotal - nc - c.cogs), mg = c.subtotal > 0 ? Math.round(gan / c.subtotal * 1000) / 10 : null;
+      box.innerHTML = '<div class="mctk-box mctk-cost"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Detalle de costos · ' + e(c.numero || "") + '</h3><button class="mctk-x" type="button" data-x>×</button></div>' +
+        '<dl class="mctk-cd"><dt>Subtotal (sin IVA)</dt><dd>' + $m(c.subtotal) + "</dd>" +
+        '<dt>Costos no relacionados al cliente</dt><dd><select id="mctk-nct">' + opt("$", "$", c.costos_no_cliente_tipo) + opt("%", "%", c.costos_no_cliente_tipo) + '</select> <input id="mctk-ncv" type="number" min="0" step="any" value="' + e(c.costos_no_cliente_valor || "") + '" style="width:80px"> <span class="mccf-sub">= ' + $m(nc) + "</span></dd>" +
+        "<dt>Costo estimado de lo vendido</dt><dd>" + $m(c.cogs) + '<div class="mccf-sub">' + e(c.cogs_nota) + "</div></dd>" +
+        "<dt>Ganancia estimada</dt><dd><b>" + $m(gan) + "</b></dd>" +
+        "<dt>Margen</dt><dd><b" + (mg != null && mg < 25 ? ' style="color:#C0392B"' : ' style="color:#2E8B57"') + ">" + (mg == null ? "—" : mg + "%") + "</b></dd></dl>" +
+        '<b style="font-size:.82rem">Costo por línea</b><table class="mccf-t mctk-t" style="margin-top:4px"><thead><tr><th>Producto</th><th class="num">Cant</th><th class="num">Costo unit.</th><th class="num">Costo total</th></tr></thead><tbody>' +
+        c.lineas.map(function (l) { return "<tr><td>" + e(l.descripcion) + '<div class="mctk-sku">' + e(l.sku) + '</div></td><td class="num">' + e(q2(l.cantidad)) + '</td><td class="num">' + $m(l.costo_unit) + '</td><td class="num">' + $m(l.costo_total) + "</td></tr>"; }).join("") + "</tbody></table>" +
+        '<p class="err" id="mctk-cerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:8px"><button class="btn ghost small" type="button" data-x>Cerrar</button><button class="btn small" type="button" id="mctk-cok">Guardar costos no relacionados</button></div></div>';
+      box.querySelectorAll("[data-x]").forEach(function (b) { b.onclick = function () { box.remove(); }; });
+      box.querySelector("#mctk-nct").onchange = function () { c.costos_no_cliente_tipo = this.value; pintar(); };
+      box.querySelector("#mctk-ncv").onchange = function () { c.costos_no_cliente_valor = Number(this.value) || 0; pintar(); };
+      box.querySelector("#mctk-cok").onclick = async function () {
+        var g = await api("tk_costos_guardar", { clave: K.d.clave, tipo: c.costos_no_cliente_tipo, valor: Number(c.costos_no_cliente_valor) || 0 });
+        if (!g || g.error) { box.querySelector("#mctk-cerr").textContent = (g && g.error) || "No se pudo guardar"; return; }
+        toast2("Costos guardados"); box.remove();
+      };
+    };
+    pintar();
+  }
+  function editarCampo(main, k) {
+    var dd = main.querySelector('[data-k="' + k + '"]'); if (!dd) return;
+    var lbl = ((K.d.campos || []).find(function (c) { return c[0] === k; }) || [k, k])[1], v = val(k), largo = k === "notas" || k === "recomendaciones";
+    var tipo = k === "retorno" ? "date" : k === "email" ? "email" : "text";
+    dd.innerHTML = (largo ? '<textarea rows="3" class="mctk-in">' + e(v) + "</textarea>" : '<input class="mctk-in" type="' + tipo + '" value="' + e(v) + '"' + (k === "factura" ? ' placeholder="001-001-000000000"' : "") + ">") +
+      ' <button type="button" class="btn small" data-ok>✓</button> <button type="button" class="btn ghost small" data-no>×</button>';
+    var inp = dd.querySelector(".mctk-in"); inp.focus();
+    dd.querySelector("[data-no]").onclick = function () { repintar(main); };
+    var ok = function () {
+      var nv = inp.value.trim();
+      if (nv === v) { repintar(main); return; }
+      if (k === "factura" && nv && !/^\d{3}-\d{3}-\d{1,9}$/.test(nv) && !/^\d{1,9}$/.test(nv)) { toast2("Factura: usa 001-001-000000000", true); return; }
+      K.datos = K.datos || {}; K.datos[k] = k === "factura" && /^\d{1,9}$/.test(nv) ? "001-001-" + ("000000000" + nv).slice(-9) : nv;
+      var dirty = K.dirty, dl = K.dirtyL; repintar(main); K.dirty = dirty; K.dirtyL = dl; marcar(true);
+      toast2(lbl + ": " + (K.d.puedeEditar ? "guarda los cambios para aplicarlo" : "envía la solicitud de cambio"));
+    };
+    dd.querySelector("[data-ok]").onclick = ok;
+    inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") repintar(main); };
+  }
   function wire(main) {
     if (!K.d) return;
     main.querySelector("#mctk-volver").onclick = function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); };
-    var dd = main.querySelector("#mctk-dd");
-    main.querySelector("#mctk-docs").onclick = function (ev) { ev.stopPropagation(); dd.hidden = !dd.hidden; };
-    if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { var x = document.getElementById("mctk-dd"); if (x && !ev.target.closest(".mctk-menu")) x.hidden = true; }); }
-    dd.onclick = async function (ev) {
+    main.querySelectorAll("[data-menu]").forEach(function (b) {
+      b.onclick = function (ev) { ev.stopPropagation(); var id = b.getAttribute("data-menu"); main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; }); var dd = main.querySelector("#" + id); dd.hidden = !dd.hidden; };
+    });
+    if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { if (!ev.target.closest(".mctk-menu")) document.querySelectorAll(".mctk-dd").forEach(function (x) { x.hidden = true; }); }); }
+    main.querySelector("#mctk-dd").onclick = async function (ev) {
       var b = ev.target.closest("[data-doc]"); if (!b) return;
-      var t = K.d.ticket, busca = function () { return (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }); };
-      var h = busca();
-      if (!h && typeof APPS_SCRIPT_URL !== "undefined") {
-        // Si se llegó desde la ficha de la clienta, el historial aún no está cargado: se pide una vez.
-        toast2("⏳ Cargando la tarjeta…");
-        try { var r = await fetch(APPS_SCRIPT_URL + "?action=getHistorial&_t=" + Date.now()); var data = await r.json(); if (Array.isArray(data)) { _histData = data; window._histData = data; } } catch (x) {}
-        h = busca();
-      }
+      this.hidden = true;
+      if (b.getAttribute("data-doc") === "gc") { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; abrirGiftCard(b.getAttribute("data-cod")); return; }
+      var h = await cardDelTicket();
       if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }
-      (window._tkCards = window._tkCards || {})[t.sheetRow] = h; tarjetaTicket(t.sheetRow);
+      tarjetaTicket(K.d.ticket.sheetRow);
     };
+    main.querySelector("#mctk-wa").onclick = function (ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; this.hidden = true; enviarReporte(b.getAttribute("data-wa")); };
+    main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;
+    main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; });
+    var fi = main.querySelector("#mctk-ficha"); if (fi) fi.onclick = function (ev) { ev.preventDefault(); go("#/m/clientes/c/" + encodeURIComponent(K.d.clienteKey)); };
+    main.querySelectorAll("[data-flag]").forEach(function (b) {
+      b.onclick = async function () {
+        var nota = prompt("¿Cómo se resolvió? (opcional)"); if (nota === null) return;
+        var r = await api("tk_flag_resolver", { id: b.getAttribute("data-flag"), nota: nota });
+        if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; }
+        toast2("Marcado como resuelto"); var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
+      };
+    });
     var lin = main.querySelector("#mctk-lin");
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("tr[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
@@ -236,9 +437,11 @@
     });
     lin.addEventListener("change", function (ev) { if (ev.target.getAttribute("data-f") === "descuento_tipo") { var l = K.L[+ev.target.closest("tr").getAttribute("data-i")]; l.descuento_tipo = ev.target.value || null; calc(); ev.target.closest("tr").querySelector("[data-tl]").textContent = $m(l.total_linea); pintarTot(); marcar(); } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
+    main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
     main.querySelector("#mctk-promo").onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
     main.querySelector("#mctk-dt").onchange = function () { K.desc.tipo = this.value || null; marcar(); pintarTot(); };
     main.querySelector("#mctk-dv").oninput = function () { K.desc.valor = Number(this.value) || 0; marcar(); pintarTot(); };
+    wireCostos();
     wireBuscar(main);
     var err = main.querySelector("#mctk-err");
     var g = main.querySelector("#mctk-guardar");
@@ -247,7 +450,7 @@
       var r = await api("tk_guardar", Object.assign({ clave: K.d.clave }, propuesta()));
       g.disabled = false;
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; return; }
-      toast2("Ticket guardado · total " + $m(r.total));
+      toast2("Ticket guardado" + (r.total != null ? " · total " + $m(r.total) : ""));
       var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
     };
     var pd = main.querySelector("#mctk-pedir");

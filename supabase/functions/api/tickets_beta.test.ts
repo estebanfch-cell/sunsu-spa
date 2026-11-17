@@ -91,3 +91,65 @@ describe("detalle de ticket beta", () => {
   });
 });
 function round(v: number) { return Math.round(v * 100) / 100; }
+
+describe("detalle de ticket v2", () => {
+  it("factura completa, formas de pago y Fase A", async () => {
+    const { facturaCompleta, metodosPago, faseA } = await import("./tickets_beta_api.ts");
+    assert.equal(facturaCompleta("2559.0"), "001-001-000002559");
+    assert.equal(facturaCompleta("001-001-2559"), "001-001-000002559");
+    assert.equal(facturaCompleta("SIN FACTURA"), "");
+    assert.deepEqual(metodosPago("Tarje:2505, Efect:15"), [{ metodo: "tarjeta", ref: "2505" }, { metodo: "efectivo", ref: "15" }]);
+    assert.equal(faseA({ facial_hecho: "SUNSU-40", notas_generales: "ok", fotos_antes: "https://x/a.jpg" }), true);
+    assert.equal(faseA({ facial_hecho: "SUNSU-40", notas_generales: "", fotos_antes: "https://x/a.jpg" }), false);
+  });
+  it("datos editables, costos, envío de reporte, marca por corregir y estados de la lista", async () => {
+    const { db, h } = semilla();
+    for (const t of ["beta_ticket_envios", "envios_tarjetas", "gift_cards", "gift_cards_digitales"]) db.tables.set(t, []);
+    db.tables.set("beta_ticket_flags", [{ id: "migo:1:x", ticket_id: 1, ticket_clave: "TK-SO-1", motivo: "Sin factura", detalle: "No está en Migo", resuelto: false, fuente: "migo" }]);
+    db.tables.get("tickets")![0].fac_7 = "2559.0";
+    db.tables.get("tickets")![0].comp = "Efect:69";
+    db.tables.get("tickets")![0].cob = true;
+    db.tables.get("tickets")![0].venta_gift = "SI, 26-148, Facial";
+    db.tables.set("gift_cards", [{ codigo_gc: "26-148", nombre_comprador: "Luz", apellido_comprador: "Mar", valor: "46", saldo: 46 }]);
+    db.tables.set("gift_cards_digitales", [{ codigo: "26-148", para: "Sol", de: "Luz" }]);
+    db.tables.get("erp_productos")![1].costo_promedio = 8;
+    const antes = JSON.stringify(db.tables.get("tickets"));
+    const g = await h("tk_get", "adm", { clave: "TK-SO-1" });
+    assert.equal((g.info as Row).factura, "001-001-000002559");
+    assert.equal((g.pagos as Row).pagado, 69);
+    assert.deepEqual(((g.giftcards as Row[])[0]), { ...(g.giftcards as Row[])[0], codigo: "26-148", uso: "vendida", comprador: "Luz Mar", para: "Sol" });
+    assert.equal((g.flags as Row[]).length, 1);
+    assert.ok((g.chips as Row[]).some((c) => c.t === "Por corregir"));
+    // Admin corrige la cabecera sin tocar las líneas.
+    const sv = await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { factura: "2600", email: "m@b.com", retorno: "2026-12-01" } });
+    assert.equal(sv.ok, true, String(sv.error));
+    const g2 = await h("tk_get", "adm", { clave: "TK-SO-1" });
+    assert.equal((g2.info as Row).factura, "001-001-000002600");
+    assert.equal(g2.lineasBeta, false);
+    assert.match(String((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { email: "malo" } })).error), /Email/);
+    // Costos: admin solamente; producto a costo promedio.
+    assert.match(String((await h("tk_costos", "cos", { clave: "TK-SO-1" })).error), /administradores/);
+    assert.equal((await h("tk_costos_guardar", "adm", { clave: "TK-SO-1", tipo: "%", valor: 10 })).ok, true);
+    const c = (await h("tk_costos", "adm", { clave: "TK-SO-1" })).costos as Row;
+    assert.equal(c.cogs, 8);
+    assert.equal(c.costos_no_cliente, Math.round(n6(c.subtotal) * 10) / 100);
+    // Envío de reporte (cosmetóloga, su ticket) y estados de la lista.
+    assert.equal((await h("tk_envio", "cos", { clave: "TK-SO-1", tipo: "facial", telefono: "593999111222" })).ok, true);
+    assert.equal((db.tables.get("beta_ticket_envios") as Row[])[0].telefono_fin, "1222");
+    const est = await h("tk_estados", "cos");
+    assert.equal(est.ok, true);
+    const it = (est.items as Record<string, Row>)["10"];
+    assert.equal(it.r, 1); assert.equal(it.p, 1); assert.equal(it.ret, "2026-12-01"); assert.match(String(it.flag), /Sin factura/);
+    // Resolver la marca: solo admin.
+    assert.match(String((await h("tk_flag_resolver", "cos", { id: "migo:1:x" })).error), /Solo un admin/);
+    assert.equal((await h("tk_flag_resolver", "adm", { id: "migo:1:x", nota: "corregido en Migo" })).ok, true);
+    assert.equal(((await h("tk_estados", "adm")).items as Record<string, Row>)["10"].flag, undefined);
+    // Cosmetóloga pide corregir la cabecera por solicitud.
+    const sol = await h("solicitud_crear", "cos", { tabla: "ticket_detalle", fila: "TK-SO-1", tipo: "cambio", motivo: "CI mal", propuestos: { datos: { cedula: "1700000002" } } });
+    assert.equal(sol.ok, true, String(sol.error));
+    assert.equal((await h("solicitud_resolver", "adm", { id: sol.id, aprobar: true })).ok, true);
+    assert.equal(((await h("tk_get", "adm", { clave: "TK-SO-1" })).info as Row).cedula, "1700000002");
+    assert.equal(JSON.stringify(db.tables.get("tickets")), antes);
+  });
+});
+function n6(v: unknown) { return Number(v) || 0; }
