@@ -65,6 +65,11 @@
   .login-logo { text-align: center; margin-bottom: 18px; }
   .login-logo img { width: min(220px, 70vw); height: auto; }
   .login-card h2 { color: var(--navy); font-size: 0.88rem; margin-bottom: 16px; text-align: center; font-weight: 600; }
+  .lg-tabs { display: flex; gap: 4px; background: var(--celeste-soft, #eaf4fb); border-radius: 999px; padding: 3px; margin-bottom: 14px; }
+  .lg-tab { flex: 1; border: 0; background: transparent; border-radius: 999px; padding: 7px 8px; font: inherit; font-size: 0.78rem; color: var(--navy); cursor: pointer; }
+  .lg-tab.on { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }
+  .lg-passw { display: flex; gap: 6px; align-items: center; } .lg-passw input { flex: 1; }
+  .lg-nota { font-size: 0.72rem; text-align: center; margin-top: 10px; }
   .lede { color: var(--gray); margin: 0 0 16px; font-size: 0.8rem; text-align: center; }
   label { display: block; font-size: 0.67rem; font-weight: 700; color: var(--gray); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.6px; }
   input, select, textarea {
@@ -134,6 +139,7 @@
   .who { margin-top: auto; padding: 12px 8px 4px; color: var(--gray); font-size: 0.75rem; border-top: 1px solid var(--cream-d); }
   .who strong { color: var(--navy); display: block; font-weight: 800; }
   .who button { margin-top: 8px; background: var(--gray-l); color: var(--navy); border: none; border-radius: 8px; padding: 6px 10px; font-weight: 700; font-size: 0.72rem; }
+  .who .mi-acceso { font-size: 0.72rem; color: var(--navy); font-weight: 700; text-decoration: none; }
   .fly {
     position: fixed; z-index: 30; left: var(--side-w); top: 0; bottom: 0; width: 280px;
     background: var(--white); box-shadow: 8px 0 24px rgba(91,127,166,0.12);
@@ -1047,7 +1053,7 @@ function previewApi(accion, body) {
     const u = equipo.find((x) => x.id === body.uid);
     return u ? { ok: true, preview: true, user: u } : { error: "Esa persona no está en el equipo" };
   }
-  if (accion === "whoami" || accion === "login") {
+  if (accion === "whoami" || accion === "login" || accion === "login_pass") {
     if (state.vista) {
       const propios = ["inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "clientes", "inventario", "transferencias", "paquetes", "bitacora", "cabina", "conteos", "gift_cards", "caja"];
       return { ok: true, token: "preview", ver_costos: false, modo_prueba: false, modulos: propios.map((modulo) => ({ modulo, acceso: "propio" })), user: state.vista };
@@ -1438,6 +1444,8 @@ function moduloDeRuta(route) {
   if (route.mod === "ajustes") return "inventario";
   // 📦 Abrir producto: cualquiera del equipo; el costo por facial va por inventario (y los $ por ver_costos en el servidor).
   if (route.mod === "aperturas") return route.sub === "costo" ? "inventario" : "inicio";
+  // 🔑 Mi acceso: cada quien el suyo (la lista del equipo la decide el servidor: solo admin).
+  if (route.mod === "acceso") return "inicio";
   return route.mod;
 }
 function tituloRuta(route, tab) {
@@ -1446,6 +1454,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "tickets") return route.sub === "t" ? "Ticket" : "Tickets";
   if (route.mod === "agenda") return "Agenda";
   if (route.mod === "aperturas") return route.sub === "costo" ? "Costo por facial" : "Abrir producto";
+  if (route.mod === "acceso") return "Mi acceso";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
@@ -1484,27 +1493,47 @@ function autosize(root) {
 }
 
 function paintLogin(msg) {
+  const modo = localStorage.getItem("sunsu.beta.loginModo") === "usuario" ? "usuario" : "pin";
+  const campos = modo === "usuario" ? `
+        <label for="lg-usuario">Usuario</label>
+        <input id="lg-usuario" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" required>
+        <label for="lg-pass">Contraseña</label>
+        <div class="lg-passw"><input id="lg-pass" name="password" type="password" autocomplete="current-password" maxlength="128" required><button type="button" class="btn ghost sm" id="lg-ver" aria-label="Mostrar contraseña">👁</button></div>` : `
+        <label for="pin">PIN</label>
+        <input id="pin" class="pin" name="pin" inputmode="numeric" autocomplete="off" maxlength="8" required>`;
   document.getElementById("app").innerHTML = `
     <main class="login">
       <div class="login-logo"><img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu"></div>
       <form class="login-card" id="login-form">
-        <h2>Entra con tu PIN</h2>
+        <div class="lg-tabs" role="tablist"><button type="button" role="tab" class="lg-tab${modo === "pin" ? " on" : ""}" data-modo="pin">PIN</button><button type="button" role="tab" class="lg-tab${modo === "usuario" ? " on" : ""}" data-modo="usuario">Usuario y contraseña</button></div>
+        <h2>${modo === "usuario" ? "Entra con tu usuario" : "Entra con tu PIN"}</h2>
         <p class="lede">Sistema central en prueba. La app de todos los días no cambia.</p>
-        <label for="pin">PIN</label>
-        <input id="pin" class="pin" name="pin" inputmode="numeric" autocomplete="off" maxlength="8" required>
+        ${campos}
         <p class="err" id="login-err">${esc(msg || "")}</p>
         <button class="btn wide" id="login-btn" type="submit">Entrar</button>
+        ${modo === "usuario" ? `<p class="muted lg-nota">¿Todavía no tienes usuario? Entra con tu PIN y créalo en «Mi acceso», o pídeselo a Emilia.</p>` : ""}
       </form>
     </main>`;
+  document.querySelectorAll(".lg-tab").forEach((b) => b.addEventListener("click", () => { localStorage.setItem("sunsu.beta.loginModo", b.dataset.modo); paintLogin(""); }));
+  const ver = document.getElementById("lg-ver");
+  if (ver) ver.addEventListener("click", () => { const i = document.getElementById("lg-pass"); i.type = i.type === "password" ? "text" : "password"; });
+  (document.getElementById(modo === "usuario" ? "lg-usuario" : "pin") || {}).focus?.();
   document.getElementById("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const pin = document.getElementById("pin").value.trim();
     const btn = document.getElementById("login-btn");
     btn.disabled = true;
-    const data = await api("login", { pin });
+    let data;
+    if (modo === "usuario") {
+      const usuario = document.getElementById("lg-usuario").value.trim().toLowerCase();
+      const password = document.getElementById("lg-pass").value;
+      data = await api("login_pass", { usuario, password });
+    } else {
+      const pin = document.getElementById("pin").value.trim();
+      data = await api("login", { pin });
+    }
     btn.disabled = false;
     if (!data.ok || !data.token) {
-      document.getElementById("login-err").textContent = data.error || "PIN incorrecto";
+      document.getElementById("login-err").textContent = data.error || (modo === "usuario" ? "Usuario o contraseña incorrectos" : "PIN incorrecto");
       return;
     }
     state.token = data.token;
@@ -1695,7 +1724,7 @@ function paintShell(title) {
         ${plus}
         <span class="beta-tag">BETA</span>
         <nav>${nav}</nav>
-        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><button class="salir" type="button">Salir</button></div>
+        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a> · <button class="salir" type="button">Salir</button></div>
       </aside>
       <div class="fly" id="fly" hidden></div>
       <div class="reloj-sheet card" id="reloj-sheet" hidden>
@@ -1740,6 +1769,7 @@ function paintShell(title) {
             ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
             ${!state.vista ? `<button class="btn ghost small" type="button" id="btn-solicitudes">Solicitudes</button>` : ""}
+            <a class="btn ghost small top-salir" href="#/m/acceso" title="Mi acceso">🔑</a>
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
           ${state.vista ? `<div class="vista-bar" id="vista-bar">Viendo como ${esc(state.vista.name || state.vista.short || "…")} — <button type="button" id="vista-salir">Salir</button></div>` : ""}
@@ -1974,7 +2004,7 @@ function pantallaSunsu(route) {
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "personal" && route.sub === "permisos") return "permisos";
   if (m === "personal" && route.sub === "multas" && window.MCMultas) return "";
-  if (m === "aperturas") return "";
+  if (m === "aperturas" || m === "acceso") return "";
   if (m === "personal" && route.sub === "multas") return "multas";
   if (m === "usuarios" || m === "permisos" || m === "configuracion") return "";
   return "";
@@ -2119,6 +2149,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
+    if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
@@ -2165,6 +2196,7 @@ async function renderMod(route) {
   if (route.mod === "rol_pagos") return renderRol();
   if (route.mod === "asistencia") return renderAsistencia();
   if (route.mod === "aperturas" && window.MCAperturas) return window.MCAperturas.render(route);
+  if (route.mod === "acceso" && window.MCAcceso) return window.MCAcceso.render(route);
   if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.mod === "paquetes") return renderPaquetes();
   if (route.mod === "gift_cards") return renderGift();
@@ -5623,23 +5655,24 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk15"></script>
-<script src="beta-screens.js?v=20261117tk15"></script>
-<script src="beta-inline.js?v=20261117tk15"></script>
-<script src="mc-productos.js?v=20261117tk15"></script>
-<script src="mc-nav.js?v=20261117tk15"></script>
-<script src="mc-permisos.js?v=20261117tk15"></script>
-<script src="mc-protocolos.js?v=20261117tk15"></script>
-<script src="mc-conteo.js?v=20261117tk15"></script>
-<script src="mc-transferencias.js?v=20261117tk15"></script>
-<script src="mc-ajustes.js?v=20261117tk15"></script>
-<script src="vendor-qrcode.js?v=20261117tk15"></script>
-<script src="mc-tickets.js?v=20261117tk15"></script>
-<script src="mc-paquetes.js?v=20261117tk15"></script>
-<script src="mc-aperturas.js?v=20261117tk15"></script>
-<script src="mc-multas.js?v=20261117tk15"></script>
-<script src="mc-clientes.js?v=20261117tk15"></script>
-<script src="mc-agenda.js?v=20261117tk15"></script>
+<script src="mc-buscar.js?v=20261117tk16"></script>
+<script src="beta-screens.js?v=20261117tk16"></script>
+<script src="beta-inline.js?v=20261117tk16"></script>
+<script src="mc-productos.js?v=20261117tk16"></script>
+<script src="mc-nav.js?v=20261117tk16"></script>
+<script src="mc-permisos.js?v=20261117tk16"></script>
+<script src="mc-protocolos.js?v=20261117tk16"></script>
+<script src="mc-conteo.js?v=20261117tk16"></script>
+<script src="mc-transferencias.js?v=20261117tk16"></script>
+<script src="mc-ajustes.js?v=20261117tk16"></script>
+<script src="vendor-qrcode.js?v=20261117tk16"></script>
+<script src="mc-tickets.js?v=20261117tk16"></script>
+<script src="mc-paquetes.js?v=20261117tk16"></script>
+<script src="mc-aperturas.js?v=20261117tk16"></script>
+<script src="mc-acceso.js?v=20261117tk16"></script>
+<script src="mc-multas.js?v=20261117tk16"></script>
+<script src="mc-clientes.js?v=20261117tk16"></script>
+<script src="mc-agenda.js?v=20261117tk16"></script>
 <script>draw();</script>
 </body>
 </html>

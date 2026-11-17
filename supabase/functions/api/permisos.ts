@@ -194,7 +194,7 @@ export async function matrizDe(db: Db): Promise<Record<string, Partial<Record<st
 }
 
 export function gateAccion(action: string, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>>): { error: string } | null {
-  const pub = new Set(["", "version", "getVersion", "login", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami"]);
+  const pub = new Set(["", "version", "getVersion", "login", "login_pass", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami"]);
   if (pub.has(action)) return null;
   if (!ses) return { error: "Inicia sesión" };
   const mod = ACCION_MODULO[action];
