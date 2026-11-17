@@ -1,6 +1,7 @@
 // 📦 Abrir producto: rendimiento de cada envase abierto (faciales por envase) y costo por facial.
-// Los tickets no dicen en qué cabina se hizo el facial: cada facial se reparte en partes iguales entre
-// los envases de ese producto que estaban abiertos en ese momento (en cualquier destino).
+// Cada facial se reparte en partes iguales entre los envases de ese producto abiertos en ese momento.
+// Si el ticket dice la cabina (campo opcional «Cabina» del ticket) y hay envases abiertos ahí, solo entre esos;
+// si no dice o no hay ninguno abierto en esa cabina, entre todos los abiertos (en cualquier destino).
 import { n, round2, s, type Row } from "./domain.ts";
 
 export const DESTINOS = [
@@ -12,7 +13,9 @@ const H5 = 5 * 3600e3;
 /** Instante real (UTC) → misma escala que el timestamp de los tickets (hora de pared de Ecuador con Z). */
 export const aPared = (iso: unknown) => { const t = Date.parse(s(iso)); return Number.isFinite(t) ? t - H5 : NaN; };
 
-export interface Facial { t: number; code: string }
+export interface Facial { t: number; code: string; cabina?: string }
+/** «Cabina 2» del ticket → código de bodega del destino (CAB2). */
+export const destinoDeCabina = (c: unknown) => DESTINOS.find((d) => d.nombre.toLowerCase() === s(c).trim().toLowerCase() || d.codigo === s(c).trim().toUpperCase())?.codigo || "";
 export interface Rendimiento { id: string; faciales: number; enCurso: boolean; usoPorFacial: number | null; costoPorFacial: number | null }
 
 /** Faciales que rindió cada apertura (no anuladas) de UN producto. `ahora` en escala de pared. */
@@ -22,7 +25,9 @@ export function rendimiento(aps: Row[], faciales: Facial[], aplica: string[], ah
   const cuenta = new Map<string, number>(vivas.map((v) => [s(v.a.id), 0]));
   if (A.size) for (const f of faciales) {
     if (!A.has(f.code.toUpperCase())) continue;
-    const abiertas = vivas.filter((v) => f.t >= v.ini && f.t < v.fin);
+    const todasAb = vivas.filter((v) => f.t >= v.ini && f.t < v.fin);
+    const enCab = f.cabina ? todasAb.filter((v) => s(v.a.destino) === f.cabina) : [];
+    const abiertas = enCab.length ? enCab : todasAb;
     for (const v of abiertas) cuenta.set(s(v.a.id), (cuenta.get(s(v.a.id)) || 0) + 1 / abiertas.length);
   }
   const out = new Map<string, Rendimiento>();
