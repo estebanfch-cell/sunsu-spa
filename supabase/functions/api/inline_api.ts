@@ -1540,6 +1540,7 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
 export const SOLICITUD_HOOKS: Record<string, {
   fila: (ctx: Ctx, ses: Ses, fila: string) => Promise<{ row: Row; antes: Row } | { error: string }>;
   aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row) => Promise<Row>;
+  borrar?: (ctx: Ctx, ses: Ses, fila: string, motivo: string) => Promise<Row>;
 }> = {};
 async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row } | { error: string }> {
   if (SOLICITUD_HOOKS[tabla]) return SOLICITUD_HOOKS[tabla].fila(ctx, ses, fila);
@@ -1662,6 +1663,7 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   const propuestos = (row.propuestos && typeof row.propuestos === "object" ? row.propuestos : {}) as Row;
   const borrar = s(row.tipo) === "eliminacion";
   if (SOLICITUD_HOOKS[tabla] && !borrar) return SOLICITUD_HOOKS[tabla].aplicar(ctx, ses, fila, propuestos);
+  if (SOLICITUD_HOOKS[tabla]?.borrar && borrar) return SOLICITUD_HOOKS[tabla].borrar!(ctx, ses, fila, s(row.motivo));
   if (tabla === "clientes") return borrar ? borrarClienteSuave(ctx, ses, fila) : guardarClienteCampos(ctx, ses, fila, propuestos);
   if (tabla === "catalogo") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarCatalogoCampos(ctx, ses, fila, propuestos);
   if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);
