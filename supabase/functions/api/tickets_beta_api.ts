@@ -3,7 +3,7 @@
 // beta_ticket_lineas (0048): cantidad, precio unitario, descuento y total por línea; descuento del ticket
 // (% o $), promoción y exclusión de comisión. Admin edita directo; los demás piden el cambio (solicitudes).
 import { extend, registroDe } from "./handlers.ts";
-import { consultar } from "./query.ts";
+import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
@@ -66,8 +66,17 @@ async function promosVigentes(ctx: Ctx): Promise<Promo[]> {
 export async function ticketPorClave(ctx: Ctx, clave: string): Promise<Row | null> {
   const k = s(clave).trim();
   if (!k) return null;
-  const rows = (await ctx.db.all("tickets")).filter((r) => !r.borrado_at);
   const fila = /^r\d+$/.test(k) ? k.slice(1) : "";
+  // Búsqueda directa (antes bajaba la tabla entera en cada apertura/guardado del ticket).
+  try {
+    const de: Filtro[] = [{ col: "so_num", op: "eq", val: k }, { col: "beta_num", op: "eq", val: k }];
+    if (fila) de.push({ col: "sheet_row", op: "eq", val: Number(fila) });
+    if (/^\d{1,9}$/.test(k)) de.push({ col: "id", op: "eq", val: Number(k) });
+    const hit = (await consultar(ctx.db, "tickets", { filtros: [{ op: "or", de }], limite: 5 })).rows.filter((r) => !r.borrado_at);
+    const x = hit.find((r) => leerSerie(r, "so_num") === k || s(r.beta_num) === k || (fila && s(r.sheet_row) === fila) || s(r.id) === k);
+    if (x) return x;
+  } catch { /* cae a la búsqueda completa */ }
+  const rows = (await ctx.db.all("tickets")).filter((r) => !r.borrado_at);
   return rows.find((r) => leerSerie(r, "so_num") === k || s(r.beta_num) === k || (fila && s(r.sheet_row) === fila) || s(r.id) === k) || null;
 }
 export function docsDe(r: Row): Row[] {
