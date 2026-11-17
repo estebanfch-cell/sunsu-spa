@@ -40,7 +40,7 @@ extend("cmpb_meta", "any", async (_p, ctx, ses) => {
   return {
     ok: true,
     proveedores: provs.filter((p) => p.activo !== false).map((p) => provVista(p, hoja)).sort((a, b) => s(a.nombre).localeCompare(s(b.nombre))),
-    productos: prods.filter((p) => p.activo !== false && !p.beta_eliminado_at && !p.beta_archivado_at).map((p) => ({ id: s(p.id), sku: skuCode(p.sku), nombre: s(p.nombre), costo: precioDe(p), uso: s(p.uso), origen: s(p.beta_origen), marca: s(p.marca) })),
+    productos: prods.filter((p) => p.activo !== false && s(p.tipo) !== "servicio" && !p.beta_eliminado_at && !p.beta_archivado_at).map((p) => ({ id: s(p.id), sku: skuCode(p.sku), nombre: s(p.nombre), costo: precioDe(p), uso: s(p.uso), origen: s(p.beta_origen), marca: s(p.marca) })),
   };
 });
 
