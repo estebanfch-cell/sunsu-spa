@@ -2,6 +2,7 @@
 // El saldo vive en gift_cards.notas (SALDO:n), en orig.usos y, si 0015 ya corrió, en saldo.
 // La quincena de proveedores es 1–15 y 16–fin. No es el ciclo de comisiones 26–25.
 
+import { aplicarAjuste, vistaPaquete } from "./paquetes_beta.ts";
 import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
@@ -658,20 +659,22 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
   let rows: Row[] = [];
   try { rows = await db.all("paquetes"); } catch { return []; }
   const out: Row[] = [];
-  for (const r of rows) {
-    if (r.borrado_at) continue;
+  // Ajustes beta del paquete (sesiones, clienta, producto, baja): beta_paquete_ajustes.
+  const AJ = new Map(((await db.all("beta_paquete_ajustes").catch(() => [] as Row[])) as Row[]).map((a) => [String(a.paquete_id), a]));
+  for (const r0 of rows) {
+    if (r0.borrado_at) continue;
+    const aj = AJ.get(String(r0.id)) || null;
+    const r = aplicarAjuste(r0, aj);
+    if (r.__borrado === true) continue;
     const pc = normCedula(r.cedula);
     const pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
     if (!(ced && pc === ced) && !(nom && pn === nom && (!ced || !pc))) continue;
-    const usos = usosPaquete(r);
-    const total = packSesiones(s(r.sku), s(r.paquete), usos);
-    const corte = usos.slice(0, total);
-    const usados = corte.filter((u) => u.usado).length;
-    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    const v = vistaPaquete(r0, aj);
+    const corte = v.sesiones as Row[];
     out.push({
-      codigo: codigoPaquete(r), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
-      usados, pendientes: Math.max(0, total - usados), total,
-      usos: corte.map((u, i) => ({ slot: i + 1, usado: u.usado, fecha: u.fecha })),
+      id: r0.id, fila: r0.sheet_row, codigo: s(v.codigo), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
+      usados: v.usados, pendientes: v.pendientes, total: v.total,
+      usos: corte.map((u) => ({ slot: u.slot, usado: u.usado, fecha: u.fecha || (u.texto ? s(u.texto) : ""), cosmetologa: u.cosmetologa })),
     });
   }
   return out;

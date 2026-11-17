@@ -194,8 +194,9 @@
     }
     if (t === "paquetes") {
       if (!d.paquetes.length) return '<p class="mccf-sub">Sin paquetes.</p>';
-      return '<table class="mccf-t"><thead><tr><th>Código</th><th>Paquete</th><th>Sesiones</th><th class="num">Quedan</th></tr></thead><tbody>' +
-        d.paquetes.map(function (p) { return '<tr><td class="mccl-cod">' + e(p.codigo || "—") + "</td><td>" + e(p.nombre) + "</td><td>" + (p.usos || []).map(function (u) { return '<span class="mccl-ses' + (u.usado ? " u" : "") + '" title="Sesión ' + u.slot + (u.fecha ? " · " + e(u.fecha) : "") + '"></span>'; }).join("") + " " + e(p.usados) + "/" + e(p.total) + '</td><td class="num"><b>' + e(p.pendientes) + "</b></td></tr>"; }).join("") + "</tbody></table>";
+      K._paqs = d.paquetes;
+      return '<table class="mccf-t"><thead><tr><th>Código</th><th>Paquete</th><th>Sesiones</th><th class="num">Quedan</th><th></th></tr></thead><tbody>' +
+        d.paquetes.map(function (p, i) { return '<tr><td class="mccl-cod">' + (p.id ? '<a href="#/m/gift/paquetes/' + encodeURIComponent(p.id) + '">' + e(p.codigo || "—") + "</a>" : e(p.codigo || "—")) + "</td><td>" + e(p.nombre) + "</td><td>" + (p.usos || []).map(function (u) { return '<span class="mccl-ses' + (u.usado ? " u" : "") + '" title="Sesión ' + u.slot + (u.fecha ? " · " + e(u.fecha) : "") + '"></span>'; }).join("") + " " + e(p.usados) + "/" + e(p.total) + '</td><td class="num"><b>' + e(p.pendientes) + '</b></td><td style="text-align:right">' + (p.id && p.pendientes > 0 && window.MCPaquetes ? '<button class="btn small" type="button" data-pqm="' + i + '">✓ Marcar sesión</button>' : "") + "</td></tr>"; }).join("") + "</tbody></table>";
     }
     if (t === "gift") {
       if (!d.giftcards.length) return '<p class="mccf-sub">Sin gift cards.</p>';
@@ -260,6 +261,12 @@
     var d = K.d; if (!d || !main.querySelector("#mccl-root")) return;
     main.querySelectorAll("[data-tab]").forEach(function (b) { b.onclick = function () { K.tab = b.getAttribute("data-tab"); repintarFicha(main); }; });
     main.querySelector("#mccl-tab").onclick = function (ev) {
+      var pm = ev.target.closest("[data-pqm]");
+      if (pm && window.MCPaquetes) {
+        var pq = (K._paqs || [])[+pm.getAttribute("data-pqm")];
+        if (pq) window.MCPaquetes.marcarSesion(pq, 0, async function () { var nd = await api("cl_get", { key: d.key }); if (nd && !nd.error) { K.d = nd; repintarFicha(main); } });
+        return;
+      }
       var pv = ev.target.closest("[data-pv]"); if (pv) { previa(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
       var pt = ev.target.closest("[data-pvt]"); if (pt) { previaTarjeta(pt.getAttribute("data-pvt"), pt.getAttribute("data-pvn")); return; }
       var hx = ev.target.closest("tr[data-hx]"); if (hx) { var i = +hx.getAttribute("data-hx"); K.abiertos[i] = !K.abiertos[i]; main.querySelector("#mccl-tab").innerHTML = tabHtml(); cargarMinis(main.querySelector("#mccl-tab")); return; }
