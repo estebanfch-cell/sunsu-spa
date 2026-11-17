@@ -48,6 +48,7 @@
       ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:280px}",
       ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
+      ".mctk-ln input.q,.mctk-ln input.p{-moz-appearance:textfield;appearance:textfield;padding:6px 10px;text-align:center;box-sizing:border-box}.mctk-ln input.q{width:64px}.mctk-ln input.p{width:92px;padding-left:20px}.mctk-ln input.q::-webkit-outer-spin-button,.mctk-ln input.q::-webkit-inner-spin-button,.mctk-ln input.p::-webkit-outer-spin-button,.mctk-ln input.p::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-money{position:relative;display:inline-block}.mctk-money>span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:.82rem;pointer-events:none}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
     ].join("");
@@ -85,9 +86,9 @@
     var v = val(k), ed = K.d.puedeEditar || K.d.puedePedir, mod = K.datos && K.datos[k] != null;
     var shown = opts.fmt ? opts.fmt(v) : v;
     var edit = ed && !opts.ro;
-    return '<div class="mctk-f"><dt>' + e(lbl) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + (edit ? ' mctk-ed" data-ed="' + e(k) + '" tabindex="0" title="Clic para editar' : "") + '">' + (shown ? e(shown) : '<span class="mccf-sub">—</span>') + "</span></dd></div>";
+    return '<div class="mctk-f"><dt>' + e((window.MCEmojiCampo ? window.MCEmojiCampo(lbl) : lbl)) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + (edit ? ' mctk-ed" data-ed="' + e(k) + '" tabindex="0" title="Clic para editar' : "") + '">' + (shown ? e(shown) : '<span class="mccf-sub">—</span>') + "</span></dd></div>";
   }
-  function ro(lbl, v) { return '<div class="mctk-f"><dt>' + e(lbl) + "</dt><dd>" + (v ? v : '<span class="mccf-sub">—</span>') + "</dd></div>"; }
+  function ro(lbl, v) { return '<div class="mctk-f"><dt>' + e((window.MCEmojiCampo ? window.MCEmojiCampo(lbl) : lbl)) + "</dt><dd>" + (v ? v : '<span class="mccf-sub">—</span>') + "</dd></div>"; }
   function chipsHtml() { return (K.d.chips || []).map(function (c) { return pill(c.c, c.t); }).join(""); }
   function waHtml() {
     var d = K.d, p = d.paquete || {}, conPaq = !!(p.vigentes && p.vigentes.length) || !!p.uso;
@@ -96,6 +97,7 @@
   function docsHtml2() {
     var d = K.d, t = d.ticket, h = "";
     if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
+    var pq0 = d.paquete || {}; if ((pq0.vigentes && pq0.vigentes.length) || pq0.uso) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
     (d.documentos || []).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
@@ -125,8 +127,8 @@
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
       return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
-        '<td class="num"><input class="q" type="number" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
-        '<td class="num">' + (l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<input class="p" type="number" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '">') + "</td>" +
+        '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
+        '<td class="num">' + (l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
         '<td class="num" data-tl>' + (l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(l.total_linea))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
@@ -330,20 +332,29 @@
     return h || null;
   }
   function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); tarjetaTicket(K.d.ticket.sheetRow, function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }
+  /** Paquete de ESTE ticket: el que tiene una sesión con la fecha del ticket (o el código del ticket); si no, el vigente. */
+  function paqueteDelTicket(items, ced) {
+    var tk = K.d.ticket || {}, f = String(tk.fecha || tk.timestamp || "").slice(0, 10), P3 = window._P3S || [];
+    var dmy = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.slice(8, 10) + "/" + f.slice(5, 7) + "/" + f.slice(2, 4) : "";
+    var claveTk = String(K.d.clave || ""), mejor = null, vig = null;
+    (items || []).forEach(function (p) {
+      if (String(p.cedula || "").split(".")[0] !== ced) return;
+      var esP3 = P3.some(function (s) { return String(p.sku || "").indexOf(s) >= 0; }), total = Number(p.total) || (esP3 ? 3 : 6);
+      var usos = (p.usos || []).slice(0, total), usado = function (u) { return !!(u && (u.usado || u.u || u.fecha || u.f)); };
+      var us = usos.filter(usado).length, ses = -1;
+      usos.forEach(function (u, i) { var tx = String((u && (u.fecha || u.f)) || ""); if (ses < 0 && ((dmy && tx.indexOf(dmy) === 0) || (claveTk && tx.indexOf(claveTk) >= 0))) ses = i + 1; });
+      var it = { p: Object.assign({}, p, { usos: usos.map(function (u) { return Object.assign({ u: usado(u), f: (u && (u.fecha || u.f)) || "" }, u); }) }), total: total, usados: Math.min(us, total), pend: Math.max(0, total - us), sesion: ses > 0 ? ses : null, codigo: p.codigo || "" };
+      // Sesión de este ticket: el reporte muestra lo usado HASTA esta sesión y lo que queda después de ella.
+      if (it.sesion) { it.usados = it.sesion; it.pend = Math.max(0, total - it.sesion); if (!mejor) mejor = it; }
+      else if (!vig || it.pend > 0) vig = it;
+    });
+    return mejor || vig;
+  }
   async function pdfPaquete() {
-    var ced = String(val("cedula") || "").split(".")[0], x = (window._tarjPaqRef || {})["c" + ced];
+    var ced = String(val("cedula") || "").split(".")[0], key = "t" + K.d.clave, x = (window._tarjPaqRef || {})[key];
     if (!x && ced) {
-      try {
-        var j = await api("getSeguimientoPaquetes", { cedulas: [ced] }), P3 = window._P3S || [];
-        ((j && j.items) || []).forEach(function (p) {
-          if (String(p.cedula || "").split(".")[0] !== ced) return;
-          var esP3 = P3.some(function (s) { return String(p.sku || "").indexOf(s) >= 0; }), total = p.total || (esP3 ? 3 : 6), us = 0;
-          (p.usos || []).slice(0, total).forEach(function (u) { if (u.u || u.f) us++; });
-          var it = { p: p, total: total, usados: Math.min(us, total), pend: Math.max(0, total - us) };
-          if (!x || it.pend > 0) x = it;
-        });
-      } catch (e2) {}
-      if (x) (window._tarjPaqRef = window._tarjPaqRef || {})["c" + ced] = x;
+      try { var j = await api("getSeguimientoPaquetes", { cedulas: [ced] }); x = paqueteDelTicket(j && j.items, ced); } catch (e2) {}
+      if (x) (window._tarjPaqRef = window._tarjPaqRef || {})[key] = x;
     }
     if (!x || typeof _pdfTarjetaPaquete !== "function") return { x: null };
     return await new Promise(function (res) {
@@ -384,7 +395,7 @@
     toast2("⏳ Preparando el PDF…");
     if (tipo === "facial") docs.push(await pdfTarjeta());
     var pq = await pdfPaquete();
-    if (pq.x && (tipo === "paquete" || (pq.x.pend > 0 && confirm("La clienta tiene paquete (" + pq.x.usados + "/" + pq.x.total + "). ¿Adjuntar también el control de paquete?")))) docs.push(pq);
+    if (pq.x && (tipo === "paquete" || confirm("Paquete " + (pq.x.codigo ? pq.x.codigo + " " : "") + "(" + (pq.x.sesion ? "sesión " + pq.x.sesion + " de " + pq.x.total + " en este ticket, quedan " + pq.x.pend : pq.x.usados + "/" + pq.x.total) + "). ¿Adjuntar también el control de paquete?"))) docs.push(pq);
     if (tipo === "paquete" && !pq.x) { toast2("No encontré el paquete de la clienta", true); return; }
     entregarPdfs(docs);
     var r = await api("tk_envio", { clave: K.d.clave, tipo: tipo === "paquete" || docs.length > 1 ? "paquete" : "facial", telefono: tel });
@@ -466,6 +477,7 @@
       var b = ev.target.closest("[data-doc]"); if (!b) return;
       this.hidden = true;
       if (b.getAttribute("data-doc") === "tarjeta" && window.MCPrevia) { var hh = await cardDelTicket(); if (!hh) { toast2("No encontré la tarjeta de este ticket", true); return; } window.MCPrevia.tarjeta(K.d.ticket.sheetRow, "Tarjeta del tratamiento"); return; }
+      if (b.getAttribute("data-doc") === "paquete" && window.MCPrevia && window.MCPrevia.pdf) { window.MCPrevia.pdf("Reporte del paquete", function () { return pdfPaquete().then(function (x) { if (!x.x) throw new Error("No encontré el paquete de este ticket"); return x; }); }); return; }
       if (b.getAttribute("data-doc") === "gc") { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; abrirGiftCard(b.getAttribute("data-cod")); return; }
       var h = await cardDelTicket();
       if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }

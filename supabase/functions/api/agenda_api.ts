@@ -6,7 +6,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, conTelefono } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
-import { esCanje, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
+import { esCanje, telefonoEc, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
 import { acuityCache, acuityReq, citaDeNombre, citasRango, fechaCita, limpiarCacheAcuity, nombreCita } from "./acuity.ts";
 import { claveRegistro } from "./ventas.ts";
 import { leerSerie } from "./series.ts";
@@ -119,7 +119,7 @@ extend("ag_cita", "any", async (p, ctx, ses) => {
     forms, ticket: ln ? s(ln.ticket_clave) : "",
     ficha: f ? { clienteKey: claveRegistro(f), cedula: normCedula(f.cedula), nombre: s(f.nombre), apellido: s(f.apellido), tipoPiel: s(f.tipo_de_piel), alergias: s(f.alergias), medicacion: s(f.medicacion), autorizaFotos: s(f.autoriza_fotos) } : null,
   });
-  if (conTelefono(ses)) { out.telefono = s(a.phone); out.email = s(a.email); }
+  if (conTelefono(ses)) { out.telefono = telefonoEc(a.phone); out.email = s(a.email); }
   return { ok: true, cita: out };
 });
 

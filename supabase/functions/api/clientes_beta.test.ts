@@ -82,7 +82,7 @@ describe("clientes de la beta", () => {
     const { h } = semilla();
     assert.equal((await h("cl_guardar", "adm", { key: "c:1700000002", cambios: { telefono: "0992222222", cedula: "abc" } })).error, "Cédula inválida");
     assert.equal((await h("cl_guardar", "adm", { key: "c:1700000002", cambios: { telefono: "0992222222" } })).ok, true);
-    assert.equal(((await h("cl_list", "adm")).clientes as Row[]).find((c) => c.key === "c:1700000002")!.telefono, "0992222222");
+    assert.equal(((await h("cl_list", "adm")).clientes as Row[]).find((c) => c.key === "c:1700000002")!.telefono, "+593 99 222 2222");
     assert.match(String((await h("cl_borrar", "adm", { key: "c:1700000002" })).error), /motivo/);
   });
 });

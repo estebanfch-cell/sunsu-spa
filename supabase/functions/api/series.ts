@@ -2,6 +2,7 @@
 import type { Db } from "./db.ts";
 import { enPrueba } from "./db.ts";
 import { n, s, siguienteTestDoc, type Row } from "./domain.ts";
+import { consultar } from "./query.ts";
 
 export function formatoSerie(serie: string, num: number): string {
   return `${serie}-${String(Math.trunc(num)).padStart(4, "0")}`;
@@ -34,6 +35,14 @@ export function maxSerie(rows: Row[], serie: string, campo: string): number {
   return max;
 }
 
+/** Fila de la hoja en blanco (sin fecha, nombre ni cédula): no lleva número. */
+export function filaVacia(r: Row): boolean {
+  return !s(r.timestamp) && !s(r.nombre) && !s(r.id_3) && !s(r.beta_num);
+}
+/** Lo justo para numerar (la tabla tickets sin orig, que es lo pesado). */
+export async function filasSerie(db: Db): Promise<Row[]> {
+  return (await consultar(db, "tickets", { cols: ["id", "sheet_row", "timestamp", "nombre", "id_3", "so_num", "origin", "beta_num"] })).rows;
+}
 function matchDe(row: Row): Row {
   if (row.id != null && row.id !== "") return { id: row.id };
   if (row.sheet_row != null && row.sheet_row !== "") return { sheet_row: row.sheet_row };
@@ -52,8 +61,11 @@ function porFecha(a: Row, b: Row): number {
 /** Asigna TK-SO-0001 en orden cronológico a los tickets reales que todavía no tienen serie. */
 export async function backfillSO(db: Db, actor: string, opts: { preview?: boolean } = {}): Promise<number> {
   if (opts.preview || enPrueba(db)) return 0;
-  const rows = await db.all("tickets");
-  const faltan = rows.filter((r) => !esFilaPrueba(r) && !/^TK-SO-\d+$/.test(leerSerie(r, "so_num")));
+  // Columnas livianas (sin orig): antes bajaba la tabla entera en cada ticket nuevo y tardaba ~30 s.
+  const rows = await filasSerie(db);
+  const faltanIds = rows.filter((r) => !esFilaPrueba(r) && !filaVacia(r) && !/^TK-SO-\d+$/.test(s(r.so_num))).map((r) => r.id as string | number).filter((x) => x != null);
+  const conOrig = faltanIds.length ? (await consultar(db, "tickets", { cols: ["id", "sheet_row", "timestamp", "so_num", "origin", "beta_num", "orig"], filtros: [{ col: "id", op: "in", val: faltanIds.slice(0, 2000) }] })).rows : [];
+  const faltan = conOrig.filter((r) => !esFilaPrueba(r) && !/^TK-SO-\d+$/.test(leerSerie(r, "so_num")));
   faltan.sort(porFecha);
   let seq = maxSerie(rows, "TK-SO", "so_num");
   let nAsig = 0;
