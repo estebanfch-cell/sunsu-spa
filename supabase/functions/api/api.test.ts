@@ -4334,7 +4334,7 @@ describe("apertura de cabina con destino", () => {
     const html = readFileSync(join(root, "sunsu.html"), "utf8");
     const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
     const sql = readFileSync(join(root, "docs/supabase/pending/0038_erp_aperturas.sql"), "utf8");
-    assert.match(html, /SUNSU_APP_VERSION='v2026\.11\.13\.03'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026\.11\.17\.01'/);
     assert.match(html, /function _cabAbrirPanel/);
     assert.match(html, /min-height:64px/);
     assert.match(html, />Confirmar</);
