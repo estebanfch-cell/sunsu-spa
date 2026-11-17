@@ -46,7 +46,7 @@ function deny(ses: Ses | null, roles: string[]): R | null {
   if (!roles.includes(ses.rol)) return { error: "No tienes permiso" };
   return null;
 }
-async function catMap(ctx: Ctx) {
+export async function catMap(ctx: Ctx) {
   const rows = await ctx.db.all("catalogo");
   const map = new Map<string, R>();
   for (const r of rows) {
@@ -1242,18 +1242,7 @@ reg("getInventario", "any", async (_p, ctx) => {
   };
 });
 
-reg("getHistorial", "any", async (p, ctx, ses) => {
-  if (!previewPedido(p)) {
-    try { await backfillSO(ctx.db, actorOf(ses)); } catch { /* la lista igual sale sin número */ }
-  }
-  const map = await catMap(ctx);
-  const telOk = conTelefono(ses);
-  const regs = await ctx.db.all("clientas_registro");
-  const porCed = new Map(regs.map((r) => [normCedula(r.cedula), s(r.telefono)]));
-  const rows = (await tickets(ctx)).filter((r) => r.timestamp);
-  rows.sort((a, b) => ymdUtc(a.timestamp).localeCompare(ymdUtc(b.timestamp)) || hmUtc(a.timestamp).localeCompare(hmUtc(b.timestamp)) || n(a.sheet_row) - n(b.sheet_row));
-  const ec = hoy(ctx);
-  const out = rows.map((r) => {
+export function itemHistorial(r: R, map: Map<string, R>, ec: string, telOk: boolean, porCed: Map<string, string>): R {
     const prods = productQtys(r).map((pr) => (catNombre(map, pr.sku) || pr.sku) + " ×" + pr.qty);
     const item: R = {
       fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), tkRow: r.sheet_row, so_num: leerSerie(r, "so_num"),
@@ -1267,12 +1256,26 @@ reg("getHistorial", "any", async (p, ctx, ses) => {
       estado: estadoTicket({ seguimiento: s(r.seguimiento), agendado: b(r.agendado), retorno: s(r.fecha_retorno) }, ec),
       estado_doc: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? "cerrado" : "abierto",
       factura: facturaTxt(r.fac_7),
+      fac: b(r.fac), cob: b(r.cob), anulado: !!(r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true), sheetId: r.id ?? null,
       saldo: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? 0 : n(r.estimado),
     };
     if (telOk) item.telefono = porCed.get(normCedula(r.id_3)) || "";
     else item.telefono = "";
     return item;
-  });
+  }
+
+reg("getHistorial", "any", async (p, ctx, ses) => {
+  if (!previewPedido(p)) {
+    try { await backfillSO(ctx.db, actorOf(ses)); } catch { /* la lista igual sale sin número */ }
+  }
+  const map = await catMap(ctx);
+  const telOk = conTelefono(ses);
+  const regs = await ctx.db.all("clientas_registro");
+  const porCed = new Map(regs.map((r) => [normCedula(r.cedula), s(r.telefono)]));
+  const rows = (await tickets(ctx)).filter((r) => r.timestamp);
+  rows.sort((a, b) => ymdUtc(a.timestamp).localeCompare(ymdUtc(b.timestamp)) || hmUtc(a.timestamp).localeCompare(hmUtc(b.timestamp)) || n(a.sheet_row) - n(b.sheet_row));
+  const ec = hoy(ctx);
+  const out = rows.map((r) => itemHistorial(r, map, ec, telOk, porCed));
   out.reverse();
   return out;
 });

@@ -42,6 +42,7 @@
         ["tickets", "Tickets", "#/m/tickets"],
         ["cotizaciones_cliente", "Cotizaciones", "#/m/cotizaciones_cliente"],
         ["clientes", "Registro de clientas", "#/m/clientes"],
+        ["agenda", "Agenda", "#/m/agenda"],
       ] },
       { id: "protocolos", label: "Protocolos", items: [
         ["cabina", "Protocolos", "#/m/mc/protocolos"],
@@ -107,7 +108,8 @@
     }
     if (personal.length) out.push({ id: "personal", label: "Personal", items: personal });
     var spa = [];
-    if (typeof esRolCitas === "function" && esRolCitas()) spa.push(["inicio", "Mis citas", "#/m/citas"]);
+    if (ok("agenda")) spa.push(["agenda", adm() ? "Agenda" : "Mi agenda", "#/m/agenda"]);
+    else if (typeof esRolCitas === "function" && esRolCitas()) spa.push(["inicio", "Mis citas", "#/m/citas"]);
     if (ok("gift_cards")) spa.push(["gift_cards", "Gift cards", "#/m/gift/cards"]);
     if (ok("paquetes")) spa.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
     if (typeof frenteRol === "function" && frenteRol()) {

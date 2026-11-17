@@ -1,4 +1,5 @@
 import type { Row } from "./domain.ts";
+import { type Consulta, type Resultado, urlConsulta } from "./query.ts";
 
 export interface Db {
   all(table: string): Promise<Row[]>;
@@ -117,6 +118,18 @@ export class SupabaseDb implements Db {
       if (rows.length < page) break;
     }
     return out;
+  }
+  async consultar(table: string, q: Consulta): Promise<Resultado> {
+    const d = q.desde || 0, lim = q.limite;
+    const headers: Record<string, string> = { Prefer: q.contar ? "count=exact" : "count=none" };
+    if (lim != null) headers.Range = `${d}-${d + Math.max(0, lim - 1)}`;
+    else if (d) headers.Range = `${d}-`;
+    const res = await this.fetchImpl(urlConsulta(this.url, table, q), { headers: this.headers(headers) });
+    if (!res.ok && res.status !== 416) throw new Error(`${table} ${res.status} ${await res.text()}`);
+    const rows = res.status === 416 ? [] : await res.json();
+    const cr = res.headers.get("content-range") || "";
+    const tot = q.contar ? Number(cr.split("/")[1]) : NaN;
+    return { rows: Array.isArray(rows) ? rows : [], total: Number.isFinite(tot) ? tot : null };
   }
   async write(actor: string, table: string, op: "insert" | "update" | "delete", match: Row, row: Row | null): Promise<Row | null> {
     // Tablas nuevas de la beta (0045+) van por app_beta_write; app_write sigue igual.

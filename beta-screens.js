@@ -2677,6 +2677,7 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+((d&&(d.ticket||d.beta_num))||_tkNum)+' registrado'+_gcMsg,'#6A9E7A');
+    try{ if(typeof window._onTicketGuardado==='function') window._onTicketGuardado(d, payload); }catch(eHook){}
     if(d&&d.paqueteFila&&_packsNuevos.length) _packsNuevos[0].fila=d.paqueteFila;
     // Conversiones a gift card. La primera sesión del paquete NO se marca sola.
     (function(){
@@ -4798,40 +4799,72 @@ function _buildTicketCard(t, showPrices){
 function renderHistorial(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
-  var hoy=new Date();
-  var pad=function(n){return String(n).padStart(2,'0');};
-  var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
-  fetch(APPS_SCRIPT_URL+'?action=getHistorial')
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(data.error){c.innerHTML='<div class="card" style="color:var(--red)">Error: '+data.error+'</div>';return;}
-      _histData=data;
-      window._histCosmFiltro='';
-      if(isAdmin) mostrarHistorialAdmin(c,'','','');
-      else mostrarHistorialStaff(c,'','');
-      _histAutoRefresh();
-    })
-    .catch(function(err){
-      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ Error<br><small>'+err.message+'</small><br><br>'
+  window._histCosmFiltro='';
+  window._tkServer=true;
+  _tkPedir({desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()}, false).then(function(ok){
+    if(!ok){
+      c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ No se pudo cargar la lista<br><br>'
         +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
-    });
+      return;
+    }
+    if(isAdmin) mostrarHistorialAdmin(c,'','','');
+    else mostrarHistorialStaff(c,'','');
+    _histAutoRefresh();
+  });
 }
-
+// ── Lista paginada desde Supabase (hotfix 17/11): 50 filas + «Mostrar más»; LED en lote; Acuity después ──
+function _tkClave(q){ var f=_tkF(); return [q.desde||'',q.hasta||'',q.cosm||'',(q.q||'').toLowerCase(),f.est||'',f.seg||''].join('|'); }
+function _tkPedir(q, mas){
+  var f=_tkF(), off=mas?(window._histData||[]).length:0, lim=mas?50:Math.max(50, Math.min(200, window._tkLim||50));
+  var key=_tkClave(q), seq=(window._tkSeq=(window._tkSeq||0)+1);
+  window._tkQ=q; window._tkKey=key; window._tkCargandoLista=true;
+  return Promise.resolve(api('tk_historial',{desde:q.desde||'',hasta:q.hasta||'',cosm:q.cosm||'',q:q.q||'',est:f.est||'',seg:f.seg||'',offset:off,limit:lim})).then(function(r){
+    if(seq!==window._tkSeq) return false;
+    window._tkCargandoLista=false;
+    if(!r||!r.ok) { toast((r&&r.error)||'No se pudo cargar la lista','#B86B6B'); return false; }
+    var items=r.items||[];
+    window._tkLeds=window._tkLeds||{};
+    items.forEach(function(it){ if(it.led) window._tkLeds[String(it.tkRow)]=it.led; });
+    _histData=mas?(window._histData||[]).concat(items):items; window._histData=_histData;
+    window._tkTot={total:r.total, suma:r.suma, hayMas:r.hayMas};
+    window._tkLim=_histData.length;
+    _tkReagendadas(items);
+    return true;
+  }).catch(function(){ window._tkCargandoLista=false; return false; });
+}
+function _tkMas(btn){ if(btn){btn.disabled=true;btn.textContent='Cargando…';} _tkPedir(window._tkQ||{}, true).then(function(){ _histActualizarRes(!!window._histEsStaff, true); }); }
+function _tkReagendadas(items){
+  var rows=items.filter(function(it){return it.led&&!it.led.g;}).map(function(it){return it.tkRow;});
+  if(!rows.length) return;
+  Promise.resolve(api('tk_reagendadas',{rows:rows})).then(function(r){
+    if(!r||!r.ok||!r.items) return;
+    var cambio=false;
+    Object.keys(r.items).forEach(function(k){ var L=window._tkLeds[k]; if(L&&r.items[k].g&&!L.g){ L.g=1; L.pr=0; L.cita=r.items[k].cita; cambio=true; } });
+    if(cambio&&document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff, true);
+  }).catch(function(){});
+}
+/** Si cambió el filtro (fechas, cosmetóloga, búsqueda, estado), pide al servidor y vuelve a pintar. */
+function _tkAsegurar(q){
+  if(!window._tkServer) return false;
+  if(_tkClave(q)===window._tkKey) return false;
+  clearTimeout(window._tkDeb);
+  window._tkKey=_tkClave(q); window._tkLim=50;
+  window._tkDeb=setTimeout(function(){ _tkPedir(q,false).then(function(ok){ if(ok&&document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff, true); }); }, q.q?300:0);
+  return true;
+}
 // La lista de tickets se refresca sola (sin botón Actualizar): cada 45 s con la pestaña visible y al volver a ella.
 function _histAutoRefresh(){
   if(window._histAutoOn) return; window._histAutoOn=true;
   var ultimo=0;
   var tick=function(){
-    if(document.hidden||!document.getElementById('hist-res')||Date.now()-ultimo<15000) return;
+    if(document.hidden||!document.getElementById('hist-res')||Date.now()-ultimo<15000||window._tkCargandoLista) return;
     ultimo=Date.now();
-    fetch(APPS_SCRIPT_URL+'?action=getHistorial&_t='+Date.now()).then(function(r){return r.json();}).then(function(data){
-      if(!Array.isArray(data)||!document.getElementById('hist-res')) return;
-      var firma=function(L){return L.length+'|'+JSON.stringify(L.slice(0,40).map(function(x){return [x.tkRow,x.so_num,x.estimado,x.estado_doc,x.factura,x.saldo];}));};
-      if(_histData&&firma(data)===firma(_histData)) return;
-      _histData=data;
-      var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
-      _histActualizarRes(esStaff);
-    }).catch(function(){});
+    var antes=JSON.stringify((window._histData||[]).slice(0,20).map(function(x){return [x.tkRow,x.estimado,x.estado_doc,x.factura];}))+'|'+((window._tkTot||{}).total);
+    _tkPedir(window._tkQ||{}, false).then(function(ok){
+      if(!ok) return;
+      var ahora=JSON.stringify((window._histData||[]).slice(0,20).map(function(x){return [x.tkRow,x.estimado,x.estado_doc,x.factura];}))+'|'+((window._tkTot||{}).total);
+      if(ahora!==antes&&document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff, true);
+    });
   };
   setInterval(tick,45000);
   window.addEventListener('focus',tick);
@@ -4895,6 +4928,7 @@ function _histBuscarClear(esStaff){
 }
 // Filtra tickets según búsqueda (todo el historial) o fecha/cosmetóloga
 function _histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro){
+  if(window._tkServer) return _histData.slice();
   return _histData.filter(function(t){
     if(busq) return _histMatchBusq(t, busq);
     if(fechaDesde&&(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta)) return false;
@@ -4903,6 +4937,7 @@ function _histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro){
   });
 }
 function _histFiltrarStaff(busq, fechaDesde, fechaHasta){
+  if(window._tkServer) return _histData.slice();
   return _histData.filter(function(t){
     if(busq) return _histMatchBusq(t, busq);
     if(fechaDesde&&(!t.fecha||t.fecha<fechaDesde||t.fecha>fechaHasta)) return false;
@@ -5092,7 +5127,7 @@ function _tkLedsHTML(t){
   return '<td class="tk-leds">'+_TK_LEDS.map(function(x){var on=!!L[x[0]];return '<span class="tk-led '+(on?'on':'off')+'" title="'+(on?x[1]:x[2])+(x[0]==='g'&&L.ret?' · regreso '+_histFechaFmt(L.ret):'')+'"></span>';}).join('')+(L.pr?'<span class="tk-reag" title="Por reagendar: regreso '+_histFechaFmt(L.ret)+'">↻</span>':'')+'</td>';
 }
 function _tkCargarLeds(forzar){
-  if(window._tkLedsCargando) return;
+  if(window._tkServer||window._tkLedsCargando) return;
   if(!forzar&&window._tkLeds&&Date.now()-(window._tkLedsT||0)<60000) return;
   if(typeof api!=='function') return;
   window._tkLedsCargando=true;
@@ -5106,7 +5141,7 @@ function _tkCargarLeds(forzar){
 var _TK_SEG=[['','Todos'],['faseA_no','Fase A pendiente'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','Por corregir']];
 var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Anulado']];
 function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
-function _tkSetF(k,v){ _tkF()[k]=v; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
+function _tkSetF(k,v){ _tkF()[k]=v; window._tkKey=''; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
 function _tkFiltroTxt(){ var f=_tkF(), o=[]; if(f.est) o.push(_TK_EST.filter(function(x){return x[0]===f.est;})[0][1]); if(f.seg) o.push(_TK_SEG.filter(function(x){return x[0]===f.seg;})[0][1]); return o.join(' · '); }
 function _tkFiltrosUI(){
   var f=_tkF(), sel=function(id,k,L){return '<select id="'+id+'" onchange="_tkSetF(\''+k+'\',this.value)" style="width:100%;padding:7px 9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;background:white;color:var(--navy)">'+L.map(function(x){return '<option value="'+x[0]+'"'+(f[k]===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select>';};
@@ -5114,7 +5149,7 @@ function _tkFiltrosUI(){
     +'<div><div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Seguimiento</div>'+sel('tk-fseg','seg',_TK_SEG)+'</div></div>';
 }
 function _tkFiltrar(tickets){
-  var f=_tkF(); if(!f.est&&!f.seg) return tickets;
+  var f=_tkF(); if(window._tkServer||(!f.est&&!f.seg)) return tickets;
   var LL=window._tkLeds||{};
   return tickets.filter(function(t){
     if(f.est&&!_tkEstados(t).some(function(x){return x.c===f.est;})) return false;
@@ -5126,9 +5161,10 @@ function _tkFiltrar(tickets){
   });
 }
 function _tkResumenLinea(tickets, conPrecio){
-  var sub=tickets.reduce(function(s,t){return s+(_histMontos(t).sub||0);},0), fl=_tkF();
-  var n=tickets.length, pend=window._tkLeds?'':' <span style="color:var(--gray)">· cargando estados…</span>';
-  return '<div class="tk-sum"><b>'+n+'</b> ticket'+(n!==1?'s':'')+(conPrecio?' · subtotal <b>$'+sub.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b>':'')+((fl.est||fl.seg)?' · <span style="color:var(--pink-d,#b85c7a)">filtro: '+_tkFiltroTxt()+'</span> <a href="#" onclick="window._tkFiltro={est:\'\',seg:\'\'};_histActualizarRes(!!window._histEsStaff);return false">quitar</a>':'')+pend+'</div>';
+  var T0=window._tkServer&&window._tkTot, fl=_tkF();
+  var sub=T0?(Number(T0.suma)||0)/1.15:tickets.reduce(function(s,t){return s+(_histMontos(t).sub||0);},0);
+  var n=T0?T0.total:tickets.length, pend=window._tkCargandoLista?' <span style="color:var(--gray)">· actualizando…</span>':'';
+  return '<div class="tk-sum"><b>'+n+'</b> ticket'+(n!==1?'s':'')+(conPrecio?' · subtotal <b>$'+sub.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b>':'')+((fl.est||fl.seg)?' · <span style="color:var(--pink-d,#b85c7a)">filtro: '+_tkFiltroTxt()+'</span> <a href="#" onclick="window._tkFiltro={est:\'\',seg:\'\'};window._tkKey=\'\';_histActualizarRes(!!window._histEsStaff);return false">quitar</a>':'')+pend+'</div>';
 }
 // HTML de SOLO los resultados (resumen + lista) — se actualiza sin tocar el buscador,
 // así el teclado del iPhone no se reinicia mientras escribes
@@ -5139,7 +5175,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
   } else {
-    html+=_histMasterHTML(tickets, true);
+    html+=_histMasterHTML(tickets, true)+_tkMasHTML();
   }
   if(window.SunsuInline&&SunsuInline.edita()) html+=SunsuInline.mas("tickets");
   return html;
@@ -5151,15 +5187,20 @@ function _histResStaffHTML(tickets, busq){
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
   } else {
-    html+=_histMasterHTML(tickets, true);
+    html+=_histMasterHTML(tickets, true)+_tkMasHTML();
   }
   return html;
 }
+function _tkMasHTML(){
+  var T0=window._tkTot; if(!window._tkServer||!T0||!T0.hayMas) return '';
+  return '<div style="text-align:center;margin:10px 0"><button onclick="_tkMas(this)" style="padding:8px 18px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">Mostrar más ('+(window._histData||[]).length+' de '+T0.total+')</button></div>';
+}
 // Actualiza SOLO el contenedor de resultados (el buscador y el teclado quedan intactos)
-function _histActualizarRes(esStaff){
+function _histActualizarRes(esStaff, yaPedido){
   var res=document.getElementById('hist-res'); if(!res) return false;
   var busq=(window._histBusqueda||'').trim().toLowerCase();
   var f=window._histFiltroActual||{};
+  if(!yaPedido&&_tkAsegurar({desde:f.desde||'',hasta:f.hasta||'',cosm:esStaff?'':(window._histCosmFiltro||''),q:busq})){ var sl=document.querySelector('.tk-sum'); if(sl) sl.innerHTML='<span style="color:var(--gray)">Buscando…</span>'; return true; }
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
   var fd=f.desde||'', fha=f.hasta||'';
@@ -5203,8 +5244,9 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   if(!_histData) return;
   if(!fechaHasta) fechaHasta=fechaDesde||'';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
-  var tickets=_histFiltrarStaff(busq, fechaDesde, fechaHasta);
   window._histEsStaff=true;
+  _tkAsegurar({desde:fechaDesde||'',hasta:fechaHasta||'',cosm:'',q:busq});
+  var tickets=_histFiltrarStaff(busq, fechaDesde, fechaHasta);
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
@@ -5271,8 +5313,9 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   if(!_histData) return;
   cosmFiltro = cosmFiltro || window._histCosmFiltro || '';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
-  var tickets=_histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro);
   window._histEsStaff=false;
+  _tkAsegurar({desde:fechaDesde||'',hasta:fechaHasta||'',cosm:cosmFiltro||'',q:busq});
+  var tickets=_histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro);
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());

@@ -3,6 +3,7 @@
 // Fuera del modo, all() esconde origin=test. La purga corre sobre la base cruda.
 
 import { enPrueba, type Db } from "./db.ts";
+import { type Consulta, consultarEnJs, type Resultado } from "./query.ts";
 import { n, round2, s, siguienteTestDoc, type Row } from "./domain.ts";
 import { logAccion } from "./lib.ts";
 import { saldoGift } from "./ventas.ts";
@@ -97,6 +98,13 @@ class VistaDb implements Db {
     this.inner = inner;
     this.on = on;
     this.prueba = on;
+  }
+  async consultar(table: string, q: Consulta): Promise<Resultado> {
+    const inner = this.inner as unknown as { consultar?: (t: string, q: Consulta) => Promise<Resultado> };
+    if (!this.on && typeof inner.consultar === "function") {
+      return await inner.consultar(table, { ...q, filtros: [...(q.filtros || []), { op: "or", de: [{ col: "origin", op: "is_null" }, { col: "origin", op: "neq", val: "test" }] }] });
+    }
+    return consultarEnJs(await this.all(table), q);
   }
   async all(table: string): Promise<Row[]> {
     if (!this.on) {

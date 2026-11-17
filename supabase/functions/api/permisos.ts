@@ -15,7 +15,7 @@ export const MODULOS = [
   "inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "ver_costos",
   "clientes", "proveedores", "compras", "inventario", "transferencias", "conteos", "kardex",
   "cotizaciones_cliente", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos",
-  "configuracion",
+  "configuracion", "agenda",
 ] as const;
 export type Modulo = (typeof MODULOS)[number];
 
@@ -27,7 +27,7 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   cosmetologa: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: P, inventario: T, transferencias: T, paquetes: P, bitacora: T, cabina: T,
-    compras: P,
+    compras: P, agenda: P,
   },
   asistente_cosmetologia: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
@@ -36,12 +36,12 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   },
   recepcion: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
-    clientes: T, inventario: T, cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T,
+    clientes: T, inventario: T, cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, agenda: T,
   },
   gerente: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: T, inventario: T, transferencias: T, conteos: T, kardex: T,
-    cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, bitacora: T, cabina: T,
+    cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, bitacora: T, cabina: T, agenda: T,
   },
 };
 
