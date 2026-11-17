@@ -81,7 +81,7 @@
       '<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "Sin venir +6 meses", F.visita) + o("nunca", "Sin tickets", F.visita) + "</select>" +
       '<label class="mccf-sub"><input type="checkbox" id="mccl-paq"' + (F.paq ? " checked" : "") + "> Con paquete activo</label>" +
       (K.admin ? '<label class="mccf-sub"><input type="checkbox" id="mccl-gift"' + (F.gift ? " checked" : "") + "> Con gift card con saldo</label>" : "") +
-      '<button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button></div>' +
+      '<button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' + (K.admin ? ' <button class="btn ghost small" type="button" data-go="#/m/clientes/docs">📑 Documentos sin asignar</button>' : "") + "</div>" +
       '<p class="mccf-sub" id="mccl-n">' + c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "") + "</p>" +
       '<div class="sheet-scroll"><table class="mccf-t mccl-t"><thead id="mccl-head">' + c.head + '</thead><tbody id="mccl-body">' + c.body + "</tbody></table></div>" +
       (c.n > K.max ? '<p><button class="btn ghost small" type="button" id="mccl-mas">Mostrar más</button></p>' : "") + "</div>";
@@ -166,6 +166,74 @@
       box.querySelector(".mcpv-b").classList.add("pdf"); box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> <a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
     } catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
   }
+  /** PDF guardado en el bucket (K-Lift / Focus Skin): link firmado → se muestra dentro de la página. */
+  async function previaBucket(id, titulo) {
+    var box = marcoPrevia(titulo, '<p class="mccf-sub">Abriendo el PDF…</p>');
+    var r = await api("cl_doc_url", { id: id, key: (K.d && K.d.key) || "" });
+    if (!document.getElementById("mcpv")) return;
+    if (!r || !r.ok) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">' + e((r && r.error) || "No se pudo abrir el PDF") + "</p>"; return; }
+    var nom = /\.pdf$/i.test(r.nombre || "") ? r.nombre : (r.nombre || "documento") + ".pdf";
+    try {
+      var bl = await (await fetch(r.url)).blob();
+      mostrarPdf(box, { output: function () { return new Blob([bl], { type: "application/pdf" }); } }, nom);
+    } catch (x) {
+      box.querySelector(".mcpv-b").classList.add("pdf");
+      box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn ghost small" href="' + e(r.url) + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe src="' + e(r.url) + '"></iframe>';
+    }
+  }
+  /** ZIP de fotos K-Lift (o cualquier documento): link firmado de descarga. */
+  async function descargarDoc(id, key) {
+    var r = await api("cl_doc_url", { id: id, key: key || (K.d && K.d.key), descargar: "1" });
+    if (!r || !r.ok) { alert((r && r.error) || "No se pudo descargar"); return; }
+    var a = document.createElement("a"); a.href = r.url; a.download = r.nombre || ""; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+  }
+  // ---------- Documentos sin asignar (admin) ----------
+  var SA = { q: "", items: null, total: 0, busca: {} };
+  function saFila(x) {
+    var b = SA.busca[x.docId] || "";
+    var cands = b.length >= 2 ? (K.L || []).filter(function (c) { var t = norm(c.nombre + " " + (c.cedula || "") + " " + (c.codigo || "")); return norm(b).split(/\s+/).every(function (w) { return t.indexOf(w) >= 0; }); }).slice(0, 8) : [];
+    var opt = function (c) { return '<button class="btn ghost small" type="button" data-sa-as="' + e(x.docId) + '" data-sa-k="' + e(c.key) + '" data-sa-n="' + e(c.nombre) + '">' + e(c.nombre) + (c.codigo ? " · " + e(c.codigo) : "") + (c.cedula ? " · " + e(c.cedula) : "") + "</button>"; };
+    return '<tr data-sa="' + e(x.docId) + '"><td>' + e(f(x.fecha)) + (x.hora ? " " + e(x.hora) : "") + "</td><td>" + (x.zip ? "🗂️" : "📑") + " " + e(x.sub === "klift" ? "K-Lift" : "Focus Skin") + "</td><td><b>" + e(x.archivo || "—") + '</b><div class="mccf-sub">' + e(x.confianza === "ambiguous" ? "Nombre ambiguo (varias clientas)" : "Sin coincidencia") + "</div></td>" +
+      '<td><button class="btn ghost small" type="button" data-sa-ver="' + e(x.docId) + '" data-sa-z="' + (x.zip ? 1 : 0) + '" data-pvn="' + e(x.nombre) + '">' + (x.zip ? "⬇️ Zip" : "Ver") + "</button></td>" +
+      '<td style="min-width:240px">' + (x.sugerencias && x.sugerencias.length ? '<div class="mccf-sub">Sugeridas:</div>' + x.sugerencias.map(opt).join(" ") : "") +
+      '<div style="margin-top:4px"><input type="search" placeholder="Buscar clienta (nombre, cédula, código)" data-sa-q="' + e(x.docId) + '" value="' + e(b) + '" style="width:100%"></div><div data-sa-c="' + e(x.docId) + '">' + cands.map(opt).join(" ") + "</div></td></tr>";
+  }
+  function norm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  async function renderSinAsignar() {
+    css();
+    if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now(); } }
+    var r = await api("doc_sin_asignar", { q: SA.q, limit: 300 });
+    if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver</button>';
+    SA.items = r.items || []; SA.total = r.total || 0;
+    return '<div class="mccf"><p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button></p><h2>📑 Documentos sin asignar</h2>' +
+      '<p class="mccf-sub">Análisis Focus Skin y K-Lift que no se pudieron emparejar solos (nombre ambiguo o sin coincidencia). Elige la clienta y queda en su pestaña Documentos; cada asignación queda en el registro.</p>' +
+      '<div class="mccf-bar"><input type="search" id="sa-q" placeholder="Filtrar por nombre del archivo" value="' + e(SA.q) + '"></div>' +
+      '<p class="mccf-sub" id="sa-n">' + SA.total + " documento" + (SA.total === 1 ? "" : "s") + " sin asignar" + (SA.total > SA.items.length ? " · mostrando " + SA.items.length : "") + "</p>" +
+      '<div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Nombre en el archivo</th><th></th><th>Asignar a</th></tr></thead><tbody id="sa-body">' + SA.items.map(saFila).join("") + "</tbody></table></div></div>";
+  }
+  function wireSinAsignar(main) {
+    var q = main.querySelector("#sa-q"), tmr;
+    if (q) q.onchange = function () { SA.q = q.value; renderSinAsignar().then(function (h) { main.innerHTML = h; wireSinAsignar(main); }); };
+    var body = main.querySelector("#sa-body"); if (!body) return;
+    body.oninput = function (ev) {
+      var i = ev.target.closest("[data-sa-q]"); if (!i) return;
+      var id = i.getAttribute("data-sa-q"); SA.busca[id] = i.value; clearTimeout(tmr);
+      tmr = setTimeout(function () { var x = SA.items.filter(function (y) { return y.docId === id; })[0]; var box = body.querySelector('[data-sa-c="' + id + '"]'); if (x && box) { var tmp = document.createElement("tbody"); tmp.innerHTML = saFila(x); var nb = tmp.querySelector('[data-sa-c="' + id + '"]'); box.innerHTML = nb ? nb.innerHTML : ""; } }, 150);
+    };
+    body.onclick = async function (ev) {
+      var v = ev.target.closest("[data-sa-ver]");
+      if (v) { var id0 = v.getAttribute("data-sa-ver"); if (v.getAttribute("data-sa-z") === "1") descargarDoc(id0, ""); else { previaBucket(id0, v.getAttribute("data-pvn")); } return; }
+      var a = ev.target.closest("[data-sa-as]"); if (!a) return;
+      var id = a.getAttribute("data-sa-as"), key = a.getAttribute("data-sa-k"), nom = a.getAttribute("data-sa-n");
+      if (!confirm("¿Asignar este documento a " + nom + "?")) return;
+      a.disabled = true;
+      var r = await api("doc_asignar", { id: id, key: key });
+      if (!r || !r.ok) { a.disabled = false; alert((r && r.error) || "No se pudo asignar"); return; }
+      SA.items = SA.items.filter(function (y) { return y.docId !== id; }); SA.total = Math.max(0, SA.total - 1);
+      var tr = body.querySelector('tr[data-sa="' + id + '"]'); if (tr) tr.remove();
+      var n = main.querySelector("#sa-n"); if (n) n.textContent = SA.total + " documento" + (SA.total === 1 ? "" : "s") + " sin asignar · ✓ asignado a " + nom;
+    };
+  }
   /** Igual que la tarjeta, para cualquier PDF que se arma en el navegador (reporte del paquete). */
   function previaPdf(titulo, hacer) {
     var box = marcoPrevia(titulo, '<p class="mccf-sub">Generando…</p>');
@@ -214,9 +282,9 @@
     }
     if (t === "docs") {
       if (!d.documentos.length) return '<p class="mccf-sub">Sin documentos.</p>';
-      var ico = { tarjeta: "📄", foto: "🖼️", comprobante: "🧾", consentimiento: "✍️", analisis: "🔬" };
+      var ico = { pdf: "📑", zip: "🗂️", tarjeta: "📄", foto: "🖼️", comprobante: "🧾", consentimiento: "✍️", analisis: "🔬" };
       return '<table class="mccf-t mccl-t"><thead><tr><th>Fecha</th><th>Documento</th><th></th></tr></thead><tbody>' + d.documentos.map(function (x) {
-        var acc = x.url ? '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : x.tipo === "tarjeta" && x.sheetRow ? '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : "";
+        var acc = x.docId ? (x.zip ? '<button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '">⬇️ Descargar zip</button>' : '<button class="btn ghost small" type="button" data-pvd="' + e(x.docId) + '" data-pvn="' + e(x.nombre) + '">Ver</button> <button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '" title="Descargar">⬇️</button>') : x.url ? '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : x.tipo === "tarjeta" && x.sheetRow ? '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : "";
         return "<tr><td>" + e(f(x.fecha)) + "</td><td>" + (ico[x.tipo] || "•") + " " + e(x.nombre) + (x.texto ? '<div class="mccf-sub">' + e(x.texto) + "</div>" : "") + "</td><td>" + acc + "</td></tr>";
       }).join("") + "</tbody></table>";
     }
@@ -277,6 +345,8 @@
         return;
       }
       var pv = ev.target.closest("[data-pv]"); if (pv) { previa(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
+      var dz = ev.target.closest("[data-dzip]"); if (dz) { descargarDoc(dz.getAttribute("data-dzip")); return; }
+      var pd = ev.target.closest("[data-pvd]"); if (pd) { previaBucket(pd.getAttribute("data-pvd"), pd.getAttribute("data-pvn")); return; }
       var pt = ev.target.closest("[data-pvt]"); if (pt) { previaTarjeta(pt.getAttribute("data-pvt"), pt.getAttribute("data-pvn")); return; }
       var hx = ev.target.closest("tr[data-hx]"); if (hx) { var i = +hx.getAttribute("data-hx"); K.abiertos[i] = !K.abiertos[i]; main.querySelector("#mccl-tab").innerHTML = tabHtml(); cargarMinis(main.querySelector("#mccl-tab")); return; }
       var tr = ev.target.closest("[data-tk]"); if (!tr || ev.target.closest("a")) return;
@@ -338,8 +408,8 @@
   }
 
   window.MCClientes = {
-    render: function (route) { return route.sub === "c" && route.id ? renderFicha(String(route.id)) : renderLista(); },
-    wire: function (main, route) { if (route.sub === "c") wireFicha(main); else wireLista(main); },
+    render: function (route) { return route.sub === "c" && route.id ? renderFicha(String(route.id)) : route.sub === "docs" ? renderSinAsignar() : renderLista(); },
+    wire: function (main, route) { if (route.sub === "c") wireFicha(main); else if (route.sub === "docs") wireSinAsignar(main); else wireLista(main); },
     _k: K,
   };
 })();
