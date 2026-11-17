@@ -198,7 +198,17 @@ export const CAMPOS_EDITABLES: Record<string, "text" | "num" | "bool"> = {
   unidad: "text", observaciones: "text", producto_base: "text", bodega_def: "text", sububicacion_def: "text",
   activo: "bool", beta_pvp: "num", beta_compra_real: "num", beta_compra_comision: "num",
   beta_descripcion: "text", beta_stock_minimo: "num", beta_punto_reorden: "num",
+  // Presentación / envase (0044): para costo por g/ml.
+  beta_contenido: "num", beta_contenido_unidad: "text", beta_envase: "text", beta_unidades_empaque: "num",
 };
+export const UNIDADES_CONTENIDO = ["g", "ml", "unidades"];
+export const ENVASES = ["frasco", "tubo", "ampolla", "sachet", "caja", "pote", "botella", "spray", "gotero", "sobre", "otro"];
+/** Costo por g/ml/unidad del contenido: compra real ÷ contenido del envase. Null si falta algo. */
+export function costoPorContenido(compraReal: unknown, contenido: unknown): number | null {
+  const c = n(compraReal), q = n(contenido);
+  if (!(c > 0) || !(q > 0)) return null;
+  return Math.round(c / q * 10000) / 10000;
+}
 export const CAMPOS_COSTO = new Set(["beta_compra_real", "beta_compra_comision"]);
 
 export function limpiarCambios(cambios: Row): { row: Row; error?: string } {
