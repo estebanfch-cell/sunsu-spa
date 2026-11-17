@@ -76,7 +76,7 @@
     if (!F.lineas.length) return '<tr><td colspan="5" class="mccf-sub" style="padding:14px">Busca y agrega productos arriba.</td></tr>';
     return F.lineas.map(function (l, i) {
       var p = byId[l.producto_id], dv = disp(p, F.origen, F.origen_sub), mal = Number(l.cantidad) > dv;
-      return '<tr class="mccf-ln' + (mal ? " dif" : "") + '"><td><span class="mccf-sku">' + e(l.sku) + "</span></td><td>" + e(l.nombre) + '</td><td class="num">' + e(q2(dv)) + '</td><td class="num"><input class="mccf-in" type="number" min="0" step="any" data-tr-q="' + i + '" value="' + e(l.cantidad) + '">' + (mal ? '<div class="mccf-dif-n" style="font-size:.7rem">Más que el disponible</div>' : "") + '</td><td><button class="mccf-ne" type="button" data-tr-del="' + i + '">Quitar</button></td></tr>';
+      return '<tr class="mccf-ln' + (mal ? " dif" : "") + '"><td><span class="mccf-sku">' + e(l.sku) + "</span></td><td>" + e(l.nombre) + '</td><td class="num">' + e(q2(dv)) + '</td><td class="num"><input class="mccf-in" type="number" min="0" step="any" data-tr-q="' + i + '" value="' + e(l.cantidad) + '">' + '<div class="mccf-dif-n mctr-warn" style="font-size:.7rem"' + (mal ? "" : " hidden") + '>Más que el disponible</div>' + '</td><td><button class="mccf-ne" type="button" data-tr-del="' + i + '">Quitar</button></td></tr>';
     }).join("");
   }
   async function renderForm(id) {
@@ -130,7 +130,13 @@
       bq.value = ""; hits.hidden = true; main.querySelector("#mctr-lin").innerHTML = lineasFormHtml(); bq.focus();
     };
     var lin = main.querySelector("#mctr-lin");
-    lin.addEventListener("change", function (ev) { var i = ev.target.getAttribute("data-tr-q"); if (i != null) { F.lineas[+i].cantidad = Number(ev.target.value) || 0; lin.innerHTML = lineasFormHtml(); } });
+    lin.addEventListener("input", function (ev) {
+      var i = ev.target.getAttribute("data-tr-q"); if (i == null) return;
+      F.lineas[+i].cantidad = Number(ev.target.value) || 0;
+      var tr = ev.target.closest("tr"), dv = Number(tr.children[2].textContent) || 0, mal = F.lineas[+i].cantidad > dv;
+      tr.classList.toggle("dif", mal);
+      var w = tr.querySelector(".mctr-warn"); if (w) w.hidden = !mal;
+    });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-tr-del]"); if (b) { F.lineas.splice(+b.getAttribute("data-tr-del"), 1); lin.innerHTML = lineasFormHtml(); } });
     async function guardar(enviar) {
       leer();
