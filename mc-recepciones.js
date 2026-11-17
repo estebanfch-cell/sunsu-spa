@@ -46,7 +46,7 @@
   function detHtml() {
     var d = K.d, o = d.oc;
     var filas = d.grupos.map(function (g) {
-      var s = K.sel[g.producto_id] || {}, listo = g.pendiente <= 0;
+      var s = K.sel[g.producto_id] || {}, listo = g.pendiente <= 0, bloq = !!d.bloqueado;
       var chips = d.admin
         ? '<div class="mcrc-chips"><select data-origen="' + e(g.producto_id) + '" title="Origen"><option value="consignacion"' + (g.origen === "consignacion" ? " selected" : "") + '>Consignación</option><option value="propio"' + (g.origen === "propio" ? " selected" : "") + '>Propio</option></select><select data-uso="' + e(g.producto_id) + '" title="Uso"><option value="vendible"' + (g.uso === "vendible" ? " selected" : "") + '>Vendible</option><option value="insumo"' + (g.uso === "insumo" ? " selected" : "") + ">Insumo cabina</option></select></div>"
         : '<div class="mcrc-chips">' + pill(g.origen) + pill(g.uso) + "</div>";
@@ -54,15 +54,16 @@
         (g.consigEnEspera && !listo ? '<div class="mcrc-nota">Consignación: entra aquí mientras se decide la bodega de consignación</div>' : "") +
         (g.deshacer > 0 ? '<button type="button" class="mcrc-undo" data-undo="' + e(g.producto_id) + '">↶ Deshacer «No recibido» (' + e(g.deshacer) + ") — hasta las " + e(hm(g.deshacerHasta)) + "</button>" : "") + "</td>" +
         '<td class="num">' + e(g.pedido) + '</td><td class="num">' + e(g.recibido) + (g.no_recibido ? '<div class="mcrc-sku">no recibido ' + e(g.no_recibido) + "</div>" : "") + '</td><td class="num"><b>' + e(g.pendiente) + "</b></td>" +
-        (listo ? '<td colspan="3" class="mccf-sub">Listo</td>' :
+        (bloq ? '<td colspan="3" class="mccf-sub">En espera</td>' : listo ? '<td colspan="3" class="mccf-sub">Listo</td>' :
           '<td><input class="mcrc-q" data-q="' + e(g.producto_id) + '" type="text" inputmode="decimal" value="' + e(s.cantidad != null ? s.cantidad : g.pendiente) + '"' + (s.accion === "no_recibido" ? " disabled" : "") + "></td><td>" + bodSel(g) + '</td><td><div class="mcrc-ac"><button type="button" class="r' + (s.accion === "recibido" ? " on" : "") + '" data-ac="recibido" data-p="' + e(g.producto_id) + '">✓ Recibido</button><button type="button" class="n' + (s.accion === "no_recibido" ? " on" : "") + '" data-ac="no_recibido" data-p="' + e(g.producto_id) + '">✗ No recibido</button></div></td>') + "</tr>";
     }).join("");
     var recs = (d.recepciones || []).map(function (r) { return "<li><b>" + e(r.numero) + "</b> · " + e(fh(r.fecha)) + (r.por ? " · " + e(r.por) : "") + (r.anulada ? " · deshecha" : "") + "</li>"; }).join("");
     var marcados = Object.keys(K.sel).filter(function (k) { return K.sel[k].accion; }).length;
     return '<div class="mcoc-bar" style="display:flex;gap:6px;margin-bottom:10px"><button class="btn ghost small" type="button" data-go="#/m/recepciones">← Por recibir</button></div>' +
       '<div class="mccf-card"><div class="mcrc-top"><div><h1>' + e(o.numero) + '</h1><div class="mcrc-prov">' + e(o.proveedor) + '</div><div class="mccf-sub">Fecha ' + e(f(o.fecha)) + (o.fecha_esperada ? " · esperada " + e(f(o.fecha_esperada)) : "") + "</div></div><div>" + pill(o.estado) + "</div></div></div>" +
+      (d.bloqueado ? '<div class="mcoc-aviso" style="background:#f1edf8;border-radius:10px;padding:10px 12px;margin:0 0 10px;color:#4b3f72;font-size:.84rem">⏸️ ' + e(d.bloqueado) + "</div>" : "") +
       '<div class="mccf-card"><div class="sheet-scroll"><table class="mcrc-t"><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Ya recibido</th><th class="num">Pendiente</th><th>Llegó</th><th>Bodega</th><th></th></tr></thead><tbody>' + filas + "</tbody></table></div>" +
-      '<p class="err" id="rc-err"></p><div class="mcrc-acts"><span class="mccf-sub" id="rc-cuenta">' + (marcados ? marcados + " producto(s) marcados" : "Marca cada producto") + '</span><button class="btn small" type="button" id="rc-ok"' + (marcados ? "" : " disabled") + ">Confirmar recepción</button></div></div>" +
+      '<p class="err" id="rc-err"></p><div class="mcrc-acts"><span class="mccf-sub" id="rc-cuenta">' + (marcados ? marcados + " producto(s) marcados" : "Marca cada producto") + '</span>' + (d.bloqueado ? "" : '<button class="btn small" type="button" id="rc-ok"' + (marcados ? "" : " disabled") + ">Confirmar recepción</button>") + "</div></div>" +
       '<div class="mccf-card"><b>Recepciones de esta orden</b>' + (recs ? '<ul class="mcrc-log">' + recs + "</ul>" : '<p class="mccf-sub">Todavía ninguna</p>') + "</div>";
   }
   function pintar(main) { main.innerHTML = detHtml(); wireDet(main); }
@@ -83,7 +84,7 @@
       var no = G.filter(function (x) { return x.accion === "no_recibido"; }).length;
       if (no && !confirm(no + " producto(s) quedarán como No recibido (lo pendiente se anula). Se puede deshacer durante 1 hora. ¿Seguir?")) return;
       ok.disabled = true;
-      try { var r = await A("rcp_recibir", { oc_id: d.oc.id, grupos: G }); toast2(r.recepcion ? "Recepción " + r.recepcion + " registrada" : "Listo"); K.sel = {}; await cargar(d.oc.id); pintar(main); if (window.MCRecepciones && window.MCRecepciones.trasRecibir) window.MCRecepciones.trasRecibir(main, d, r); }
+      try { var r = await A("rcp_recibir", { oc_id: d.oc.id, grupos: G }); toast2((r.recepcion ? "Recepción " + r.recepcion + " registrada" : "Listo") + (r.acta ? " · acta " + r.acta + " en la OC" : "")); K.sel = {}; await cargar(d.oc.id); pintar(main); if (window.MCRecepciones && window.MCRecepciones.trasRecibir) window.MCRecepciones.trasRecibir(main, d, r); }
       catch (x) { ok.disabled = false; main.querySelector("#rc-err").textContent = x.message || x; }
     };
   }
@@ -91,7 +92,8 @@
   async function render(route) {
     css();
     try {
-      if (route.sub) { if (!K.d || K.d.oc.id !== route.sub) K.sel = {}; await cargar(route.sub); return detHtml(); }
+      var sub = route.sub ? decodeURIComponent(route.sub) : "";
+      if (sub) { if (!K.d || K.d.oc.id !== sub) K.sel = {}; await cargar(sub); return detHtml(); }
       K.items = (await A("rcp_lista")).items || []; return listaHtml();
     } catch (x) { return '<p class="err">' + e(x.message || x) + '</p><button class="btn ghost small" type="button" data-go="#/m/recepciones">← Recepciones</button>'; }
   }

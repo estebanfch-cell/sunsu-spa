@@ -10,7 +10,7 @@
   function toast2(msg, bad) { if (typeof toast === "function") toast(msg, bad ? "var(--red, #c0392b)" : "var(--green)"); }
   function hoy() { var d = new Date(Date.now() - 5 * 3600 * 1000); return d.toISOString().slice(0, 10); }
   var K = { tab: "oc", q: "", estado: "activas", items: [], cot: [], admin: false, meta: null, d: null, form: null, cons: null };
-  var COL = { "Por recibir": "#3E7CB1", "Recibida parcial": "#C98A00", "Recibida": "#2E8B57", "Cancelada": "#C0392B", "Histórica": "#8A93A6", "Pagada": "#2E8B57", "Saldo pendiente": "#C98A00", "Por pagar": "#D2603A", "Abierta": "#3E7CB1", "Convertida": "#2E8B57", "Consignación": "#7C6BB0" };
+  var COL = { "Aprobada": "#3E7CB1", "Firmada": "#2E8B57", "Por firmar": "#C98A00", "Por recibir": "#3E7CB1", "Recibida parcial": "#C98A00", "Recibida": "#2E8B57", "Cancelada": "#C0392B", "Histórica": "#8A93A6", "Pagada": "#2E8B57", "Saldo pendiente": "#C98A00", "Por pagar": "#D2603A", "Abierta": "#3E7CB1", "Convertida": "#2E8B57", "Consignación": "#7C6BB0" };
   function pill(t, tip) { var c = COL[t] || "#8A93A6"; return '<span class="tk-pill mcoc-pill" style="color:' + c + ";border-color:" + c + '"' + (tip ? ' title="' + e(tip) + '"' : "") + ">" + e(t) + "</span>"; }
   function css() {
     if (window.MCConteo && window.MCConteo._css) window.MCConteo._css();
@@ -44,12 +44,12 @@
   async function meta() { if (!K.meta) K.meta = await A("cmpb_meta"); return K.meta; }
 
   // ---------- lista ----------
-  var CHIPS = [["activas", "Por recibir"], ["parcial", "Recibida parcial"], ["recibidas", "Recibidas"], ["pago", "Con saldo"], ["canceladas", "Canceladas"], ["historicas", "Históricas"], ["todas", "Todas"]];
+  var CHIPS = [["activas", "Abiertas"], ["parcial", "Recibida parcial"], ["recibidas", "Recibidas"], ["pago", "Con saldo"], ["canceladas", "Canceladas"], ["historicas", "Históricas"], ["todas", "Todas"]];
   function filtra(it) {
     var q = (K.q || "").toLowerCase().trim();
     if (q && ![it.numero, it.prov && it.prov.nombre, it.proveedor, it.nota].join(" ").toLowerCase().includes(q)) return false;
     var s = K.estado;
-    if (s === "activas") return it.estado === "Por recibir";
+    if (s === "activas") return it.estado === "Por recibir" || it.estado === "Aprobada";
     if (s === "parcial") return it.estado === "Recibida parcial";
     if (s === "recibidas") return it.estado === "Recibida";
     if (s === "canceladas") return it.estado === "Cancelada";
@@ -119,11 +119,65 @@
       (adm ? '<div class="mcoc-foot"><dl class="mcoc-tot"><dt>Subtotal</dt><dd>' + $m(o.subtotal) + "</dd><dt>IVA</dt><dd>" + $m(o.iva) + "</dd>" + (o.flete ? "<dt>Flete</dt><dd>" + $m(o.flete) + "</dd>" : "") + '<dt class="big">Total</dt><dd class="big">' + $m(o.total) + "</dd><dt>Pagado</dt><dd>" + $m(o.pagado) + '</dd><dt class="big">Saldo</dt><dd class="big">' + $m(o.saldo) + "</dd></dl></div>" : "") + "</div>" +
       (adm ? '<div class="mccf-card"><b>💵 Pagos</b><div class="sheet-scroll" style="margin-top:6px"><table class="mcoc-t"><thead><tr><th>Fecha</th><th>Banco / cuenta</th><th>Referencia</th><th>Comprobante</th><th class="num">Monto</th></tr></thead><tbody>' + pagos + "</tbody></table></div></div>" : "") +
       '<div class="mccf-card"><b>📥 Recepciones</b>' + (recs ? '<ul class="mcoc-log">' + recs + "</ul>" : '<p class="mcoc-sub">Aún no se recibe nada' + (o.estado === "Por recibir" ? ' — se recibe en <a href="#/m/recepciones/' + encodeURIComponent(o.id) + '">📥 Recepciones</a>' : "") + "</p>") + "</div>" +
+      actasHtml(o) +
       '<div class="mccf-card"><b>Historial</b>' + (hist ? '<ul class="mcoc-log">' + hist + "</ul>" : '<p class="mcoc-sub">Sin movimientos registrados</p>') + "</div></div>";
+  }
+  function actasHtml(o) {
+    var A_ = o.actas || []; if (!A_.length) return "";
+    return '<div class="mccf-card"><b>📝 Actas de entrega-recepción</b><div class="sheet-scroll" style="margin-top:6px"><table class="mcoc-t"><thead><tr><th>Acta</th><th>Fecha</th><th>Productos</th><th>Sunsu</th><th>Proveedor</th><th></th></tr></thead><tbody>' +
+      A_.map(function (a) {
+        return "<tr><td class=\"mcoc-num\">" + e(a.numero) + "</td><td>" + e(fh(a.fecha)) + "</td><td>" + e(a.lineas.length) + "</td><td>" + (a.firmaSunsu ? pill("Firmada") + ' <span class="mcoc-sub">' + e(a.firmadoPor) + "</span>" : pill("Por firmar")) + "</td><td>" + (a.firmaProveedor ? pill("Firmada") : '<span class="mcoc-sub" title="La firma del proveedor por link público está en espera">Pendiente</span>') + '</td><td style="white-space:nowrap">' +
+          (K.admin && !a.firmaSunsu ? '<button class="btn ghost small" type="button" data-afirma="' + e(a.id) + '">✍️ Firmar</button> ' : "") + '<button class="btn ghost small" type="button" data-apdf="' + e(a.id) + '">📄 PDF</button> ' + (K.admin ? '<button class="btn ghost small" type="button" data-alink="' + e(a.id) + '">🔗 Copiar link</button>' : "") + "</td></tr>";
+      }).join("") + '</tbody></table></div><p class="mcoc-sub" style="margin-top:6px">El acta se genera sola al recibir. «Copiar link» copia un link al PDF (vale 7 días) para mandarlo por WhatsApp. La firma del proveedor en línea y el correo automático están en espera.</p></div>';
+  }
+  function fh(iso) { try { return new Date(iso).toLocaleString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" }); } catch (x) { return String(iso || ""); } }
+  function specActa(o, a) {
+    var P = o.prov || {}, rec = (o.recepciones || []).find(function (r) { return r.id === a.recepcion_id; }) || {};
+    return { nombre: a.numero + " " + o.numero, paginas: [{
+      titulo: "Acta de entrega-recepción", numero: a.numero, subt: "Orden " + o.numero,
+      info: [["Proveedor", P.nombre || o.proveedor || ""], ["RUC", P.ruc || ""], ["Orden", o.numero], ["Recepción", rec.numero || ""], ["Fecha", fh(a.fecha)], ["Recibió", rec.por || ""]],
+      tabla: { cols: [{ t: "SKU", w: 1.1 }, { t: "Producto", w: 3.4 }, { t: "Pedido", w: 0.9, al: "r" }, { t: "Recibido", w: 0.9, al: "r" }, { t: "No recibido", w: 1, al: "r" }, { t: "Bodega", w: 1.1 }], filas: a.lineas.map(function (l) { return [l.sku, l.nombre, l.pedido, l.recibido, l.no_recibido || "", l.bodega || ""]; }) },
+      notas: ["Sunsu Spa deja constancia de lo recibido en esta entrega. Lo marcado como «No recibido» no llegó y no se paga."],
+      firmas: [{ label: "Recibe · Sunsu Spa", nombre: a.firmadoPor, img: a.firmaSunsu, fecha: a.firmadoAt ? fh(a.firmadoAt) : "" }, { label: "Entrega · " + (P.nombre || "Proveedor"), nombre: a.firmaProveedorNombre, img: a.firmaProveedor, fecha: a.firmaProveedorAt ? fh(a.firmaProveedorAt) : "" }],
+    }] };
+  }
+  function firmaDlg(a, listo) {
+    var d = dlg('<h3>✍️ Firmar ' + e(a.numero) + '<button class="mcoc-xx" data-x>×</button></h3><p class="mcoc-sub">Firma por Sunsu Spa (quien recibe).</p><label>Nombre</label><input class="mcoc-in" id="fa-n" value="' + e((typeof state !== "undefined" && state.user && state.user.name) || "") + '"><label>Firma</label><canvas id="fa-c" width="400" height="160" style="width:100%;height:160px;border:1.5px dashed var(--cream-d,#e6dccb);border-radius:10px;touch-action:none;background:#fff"></canvas><div class="mcoc-acts"><button class="btn ghost small" type="button" id="fa-b">Borrar</button><button class="btn ghost small" data-x type="button">Cancelar</button><button class="btn small" type="button" id="fa-ok">Firmar</button></div><p class="err" id="fa-err"></p>');
+    var cv = d.querySelector("#fa-c"), cx = cv.getContext("2d"), dib = false, hay = false;
+    cx.lineWidth = 2.4; cx.lineCap = "round"; cx.strokeStyle = "#2b3f5c";
+    function pt(ev) { var r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) * cv.width / r.width, (ev.clientY - r.top) * cv.height / r.height]; }
+    cv.addEventListener("pointerdown", function (ev) { dib = true; hay = true; var p = pt(ev); cx.beginPath(); cx.moveTo(p[0], p[1]); cv.setPointerCapture(ev.pointerId); });
+    cv.addEventListener("pointermove", function (ev) { if (!dib) return; var p = pt(ev); cx.lineTo(p[0], p[1]); cx.stroke(); });
+    cv.addEventListener("pointerup", function () { dib = false; });
+    d.querySelector("#fa-b").onclick = function () { cx.clearRect(0, 0, cv.width, cv.height); hay = false; };
+    d.querySelector("#fa-ok").onclick = async function () {
+      if (!hay) { d.querySelector("#fa-err").textContent = "Dibuja la firma"; return; }
+      try { await A("acta_firmar", { id: a.id, firma: cv.toDataURL("image/png"), nombre: d.querySelector("#fa-n").value }); d.remove(); toast2("Acta firmada"); listo(); } catch (x) { d.querySelector("#fa-err").textContent = x.message || x; }
+    };
+  }
+  async function subirActa(o, a) {
+    var x = await window.MCDocPdf.generar(specActa(o, a));
+    var uri = x.doc.output("datauristring").replace(/^data:application\/pdf;[^,]*base64,/, "data:application/pdf;base64,");
+    await A("acta_pdf_guardar", { id: a.id, pdf: uri });
+  }
+  function wireActas(main, o) {
+    main.querySelectorAll("[data-afirma]").forEach(function (b) { b.onclick = function () { var a = (o.actas || []).find(function (x) { return x.id === b.getAttribute("data-afirma"); }); if (a) firmaDlg(a, function () { render2(main, { sub: "oc", id: o.id }); }); }; });
+    main.querySelectorAll("[data-apdf]").forEach(function (b) { b.onclick = function () { var a = (o.actas || []).find(function (x) { return x.id === b.getAttribute("data-apdf"); }); if (a) window.MCDocPdf.ver(a.numero, specActa(o, a)); }; });
+    main.querySelectorAll("[data-alink]").forEach(function (b) { b.onclick = async function () {
+      var a = (o.actas || []).find(function (x) { return x.id === b.getAttribute("data-alink"); }); if (!a) return;
+      b.disabled = true;
+      try {
+        if (!a.pdf) { await subirActa(o, a); a.pdf = true; }
+        var r = await A("acta_link", { id: a.id });
+        try { await navigator.clipboard.writeText(r.url); toast2("Link copiado (vale 7 días)"); } catch (x) { prompt("Copia el link:", r.url); }
+      } catch (x) { toast2(x.message || x, true); }
+      b.disabled = false;
+    }; });
   }
   function specOc(o) {
     var P = o.prov || {};
     var esCons = o.tipo === "consignacion";
+    if (esCons && !o.periodo && o.desde) o.periodo = f(o.desde) + " al " + f(o.hasta);
     return {
       nombre: o.numero + " " + (P.nombre || ""),
       paginas: [{
@@ -157,6 +211,7 @@
         toast2("PDF descargado: adjúntalo en el correo que se abrió");
       }).catch(function (x) { toast2(x.message || x, true); });
     };
+    wireActas(main, o);
     var bc = main.querySelector("#mcoc-cancelar"); if (bc) bc.onclick = function () {
       var d = dlg('<h3>Cancelar ' + e(o.numero) + '<button class="mcoc-xx" data-x>×</button></h3><p class="mcoc-sub">Solo se puede cancelar si no se ha recibido nada.</p><label>Motivo</label><textarea class="mcoc-in" id="mcoc-mot" rows="3"></textarea><p class="err" id="mcoc-err"></p><div class="mcoc-acts"><button class="btn ghost small" data-x type="button">Volver</button><button class="btn small mcoc-cancel" type="button" id="mcoc-okc">Cancelar OC</button></div>');
       d.querySelector("#mcoc-okc").onclick = async function () {
@@ -329,5 +384,5 @@
     var pc = main.querySelector("#pre-conv"); if (pc) { pc.onclick = async function () { try { var r = await A("cmpb_cot_convertir", { id: pc.getAttribute("data-id") }); toast2(r.numero + " creada"); go("#/m/compras/oc/" + encodeURIComponent(r.id)); } catch (x) { main.querySelector("#pre-err").textContent = x.message || x; } }; return; }
     if (main.querySelector("#mcoc-q")) wireLista(main);
   }
-  window.MCCompras = { render: render, wire: wire, _k: K, _specOc: specOc, _pill: pill, _A: A, _dlg: dlg, _f: f };
+  window.MCCompras = { render: render, wire: wire, _k: K, _specOc: specOc, _specActa: specActa, _pill: pill, _A: A, _dlg: dlg, _f: f };
 })();

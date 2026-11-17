@@ -14,7 +14,8 @@
   }
   function logo() { return new Promise(function (res) { if (typeof _cotCargarLogo !== "function") { res(null); return; } try { _cotCargarLogo(function (l) { res(l || null); }); } catch (x) { res(null); } }); }
   function $m(v) { return "$" + (Math.round((Number(v) || 0) * 100) / 100).toFixed(2); }
-  function txt(v) { return String(v == null ? "" : v); }
+  // jsPDF con helvetica solo dibuja WinAnsi: «→» y otros símbolos descuadran el texto.
+  function txt(v) { return String(v == null ? "" : v).replace(/→/g, "–").replace(/[✓✔]/g, "OK").replace(/[^\x00-\xFF–—‘’“”•…€]/g, ""); }
 
   function pagina(doc, pg, lg, W, H) {
     var m = 40, y = 28;
