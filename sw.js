@@ -1,4 +1,4 @@
-const CACHE = "sunsu-beta-2026-11-17-PF2";
+const CACHE = "sunsu-beta-2026-11-17-PF3";
 const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
   "/mc-nav.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
 

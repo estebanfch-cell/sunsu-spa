@@ -7,7 +7,7 @@
 //   Bodega Cabina  <- CABINA, CAB2, CAB3 como sububicaciones Cabina 1/2/3
 //   Bodega Oficina <- CASA (más los envases "en bodega" de cabina_inventario)
 
-import { IVA, PCT_COMISION_PRODUCTO, n, round2, s, invCorto, skuCode, type Row } from "./domain.ts";
+import { IVA, PCT_COMISION_PRODUCTO, n, productQtys, round2, s, invCorto, skuCode, type Row } from "./domain.ts";
 
 export const BOD_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BOD_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -400,4 +400,39 @@ export function arr(v: unknown): Row[] {
   if (Array.isArray(v)) return v as Row[];
   if (typeof v === "string" && v.trim().startsWith("[")) { try { const x = JSON.parse(v); return Array.isArray(x) ? x : []; } catch { return []; } }
   return [];
+}
+
+/**
+ * Líneas de un ticket viejo con su precio de lista (con IVA) y lo cobrado por línea.
+ * Los tickets de la hoja no guardan precio por línea (revisado 17/11: tickets, orig, historial_ventas,
+ * erp_ordenes_venta con total 0, v_ticket_productos usa el catálogo). Por eso:
+ *  - si el ticket tiene una sola línea, lo cobrado es real: total del ticket ÷ cantidad;
+ *  - si tiene varias, se prorratea el total cobrado según el precio de lista ("estimado").
+ * Un facial usado de un paquete ("SI, 2/3") no se cobra en ese ticket y no entra al prorrateo.
+ */
+export type LineaTicket = { codigo: string; qty: number; lista: number; tipo: "producto" | "facial" | "extra" | "paquete" | "gift" };
+export function lineasTicket(t: Row, pvpDe: (codigo: string) => number): LineaTicket[] {
+  const out: LineaTicket[] = [];
+  const sunsu = (v: unknown) => [...s(v).toUpperCase().matchAll(/SUNSU-\d+/g)].map((m) => skuCode(m[0]));
+  for (const x of productQtys(t)) out.push({ codigo: skuCode(x.sku), qty: x.qty, lista: pvpDe(skuCode(x.sku)), tipo: "producto" });
+  const usoPaquete = /^\s*SI\b/i.test(s(t.paquete)) && !s(t.compra_pack_3) && !s(t.compra_pack_6);
+  const fac = sunsu(t.facial_hecho)[0] || sunsu(t.fac)[0];
+  if (fac) out.push({ codigo: fac, qty: 1, lista: usoPaquete ? 0 : pvpDe(fac), tipo: "facial" });
+  for (const c of sunsu(t.servicios_adicionales)) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "extra" });
+  for (const c of [...sunsu(t.compra_pack_3), ...sunsu(t.compra_pack_6)]) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "paquete" });
+  if (/^\s*SI\b/i.test(s(t.venta_gift))) out.push({ codigo: "GIFT", qty: 1, lista: pvpDe(skuCode("SUNSU-34")) || 65, tipo: "gift" });
+  return out;
+}
+
+/** Precio unitario cobrado (con IVA) de `codigo` en el ticket: real si es la única línea, si no prorrateado. */
+export function precioLineaTicket(lineas: LineaTicket[], codigo: string, totalCobrado: number): { unit: number | null; total: number | null; estimado: boolean } {
+  const mia = lineas.filter((l) => l.codigo === codigo);
+  const qty = mia.reduce((a, l) => a + l.qty, 0);
+  if (!qty || !(totalCobrado > 0)) return { unit: null, total: null, estimado: false };
+  if (lineas.length === mia.length) return { unit: round2(totalCobrado / qty), total: round2(totalCobrado), estimado: false };
+  const lista = lineas.reduce((a, l) => a + l.qty * l.lista, 0);
+  const mio = mia.reduce((a, l) => a + l.qty * l.lista, 0);
+  if (!(lista > 0) || !(mio > 0)) return { unit: null, total: null, estimado: true };
+  const tot = totalCobrado * (mio / lista);
+  return { unit: round2(tot / qty), total: round2(tot), estimado: true };
 }

@@ -99,6 +99,26 @@ function montoGift(r: R): number {
 function activoCat(v: unknown): boolean {
   return !(v === false || v === "FALSE" || v === "NO" || v === 0 || v === "0");
 }
+/** Estado de la beta por código (Emilia 17/11): lo que un admin fijó en Productos (beta_activo) manda;
+ * si no, erp_productos.activo. Archivado o eliminado = inactivo. Solo códigos que existen en erp_productos. */
+async function estadoBeta(ctx: Ctx): Promise<Map<string, { act: boolean; fijado: boolean }>> {
+  const out = new Map<string, { act: boolean; fijado: boolean }>();
+  let rows: R[] = [];
+  try { rows = await ctx.db.all("erp_productos"); } catch { return out; }
+  for (const p of rows) {
+    const code = skuCode(s(p.sku));
+    if (!code) continue;
+    const fijado = p.beta_activo === true || p.beta_activo === false;
+    const fuera = !!s(p.beta_archivado_at) || !!s(p.beta_eliminado_at);
+    out.set(code, { act: (fijado ? p.beta_activo === true : p.activo !== false) && !fuera, fijado: fijado || fuera });
+  }
+  return out;
+}
+function activoVenta(est: Map<string, { act: boolean; fijado: boolean }>, sku: string, catActivo: unknown): boolean {
+  const e = est.get(skuCode(sku));
+  if (!e) return activoCat(catActivo);
+  return e.fijado ? e.act : e.act && activoCat(catActivo);
+}
 async function tickets(ctx: Ctx) {
   return (await ctx.db.all("tickets")).filter((r) => !r.borrado_at);
 }
@@ -1035,6 +1055,7 @@ function reg(name: string, roles: string[] | "any", fn: (p: R, ctx: Ctx, ses: Se
 
 reg("getCatalogo", "any", async (_p, ctx) => {
   const map = await catMap(ctx);
+  const est = await estadoBeta(ctx);
   const bases = await ctx.db.all("inventario_base");
   const compra = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
   const items = [];
@@ -1045,7 +1066,7 @@ reg("getCatalogo", "any", async (_p, ctx) => {
     items.push({
       sku, nombre: s(r.producto_servicio), tipo: s(r.tipo), subtotal: sub,
       total: tot > 0 ? tot : sub, compra: n(r.precio_compra),
-      compraReal: compra.get(skuCode(sku)) || 0, com: n(r.comi_producto_30), activo: activoCat(r.activo),
+      compraReal: compra.get(skuCode(sku)) || 0, com: n(r.comi_producto_30), activo: activoVenta(est, sku, r.activo),
     });
   }
   return items;
@@ -1099,6 +1120,7 @@ async function asegurarCompra(ctx: Ctx, ses: Ses, preview: boolean) {
 reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
   const precios = await asegurarCompra(ctx, ses, previewPedido(p));
   const map = await catMap(ctx);
+  const est = await estadoBeta(ctx);
   const bases = await ctx.db.all("inventario_base");
   const compra = new Map(bases.map((b0) => [skuCode(s(b0.sku)), n(b0.compra)]));
   const inv = await FNS.getInventario(p, ctx, ses) as R;
@@ -1132,7 +1154,7 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
       sku, nombre: s(r.producto_servicio), tipo: s(r.tipo),
       marca: s(r.marca) || s(r.proveedor) || s(orig.marca) || s(orig.proveedor),
       proveedor: s(r.proveedor) || s(orig.proveedor),
-      activo: activoCat(r.activo), pvp: tot > 0 ? tot : sub, subtotal: sub,
+      activo: activoVenta(est, sku, r.activo), pvp: tot > 0 ? tot : sub, subtotal: sub,
       compra: n(r.precio_compra), compraReal: real,
       compraComision: compraParaComision(r),
       comision: round2(Math.max(0, sub - compraParaComision(r)) * PCT_COMISION_PRODUCTO),

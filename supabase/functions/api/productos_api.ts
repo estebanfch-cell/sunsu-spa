@@ -9,7 +9,7 @@ import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domai
 import { runErp } from "./erp.ts";
 import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
-  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible,
+  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
 } from "./productos.ts";
 
@@ -175,6 +175,12 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   const hist: Row[] = [];
   const esServ = base.tipo === "servicio";
   const cat0 = cat;
+  const pvpDe = (c: string): number => {
+    const r = b.catalogo.get(skuCode(c)) || b.catalogo.get(c);
+    if (!r) return 0;
+    const tot = n(r.total_con_iva), sub = n(r.subtotal);
+    return tot > 0 ? tot : sub > 0 ? round2(sub * 1.15) : 0;
+  };
   for (const t of await safeAll(ctx, "tickets")) {
     if (t.borrado_at) continue;
     let qty = 0;
@@ -184,18 +190,20 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
       if (f && skuCode(f) === code) qty = 1;
     }
     if (qty > 0) {
-      // Precio de venta: el ticket no guarda precio por línea. Se muestra el PVP de lista y, si el ticket
-      // solo tiene este producto, lo cobrado (estimado ÷ cantidad) y el descuento contra la lista.
+      // Precio por línea (Emilia 17/11): la hoja no guarda precio por línea. Si el ticket tiene una sola
+      // línea, lo cobrado es real (total ÷ cantidad); si tiene varias, se prorratea por precio de lista
+      // y se marca «estimado». Facial usado de paquete = $0 en ese ticket.
       const pv = preciosDe(cat0, prod, 0);
-      const otros = productQtys(t).filter((x) => skuCode(x.sku) !== code).length + (esServ ? 0 : (facialSku(t.fac) || facialSku(t.facial_hecho) ? 1 : 0)) + (s(t.servicios_adicionales) ? 1 : 0) + (s(t.paquete) || s(t.gift_card) || s(t.venta_gift) ? 1 : 0);
+      const lineas = lineasTicket(t, pvpDe);
       const est = n(t.estimado);
-      const solo = !esServ && otros === 0 && est > 0;
-      const cobrado = solo ? round2(est / qty) : null;
+      const pl = precioLineaTicket(lineas, lineas.some((l) => l.codigo === code) ? code : "", est);
+      const cobrado = pl.unit;
       hist.push({
         tipo: "Ticket", fecha: s(t.timestamp).slice(0, 10), doc: s(t.beta_num) || s(t.so_num) || ("#" + s(t.sheet_row)), quien: s(t.atendido_por), cliente: [s(t.nombre), s(t.apellido)].filter(Boolean).join(" "), cantidad: qty,
         pvpLista: pv.pvp > 0 ? pv.pvp : null, sinIvaLista: pv.subtotal > 0 ? pv.subtotal : null,
-        cobrado, cobradoSinIva: cobrado != null ? round2(cobrado / 1.15) : null,
+        cobrado, cobradoSinIva: cobrado != null ? round2(cobrado / 1.15) : null, totalLinea: pl.total, estimado: pl.estimado,
         descuento: cobrado != null && pv.pvp > 0 && pv.pvp - cobrado > 0.009 ? round2(pv.pvp - cobrado) : null,
+        lineasTicket: lineas.length,
       });
     }
   }
