@@ -1959,6 +1959,7 @@ function pantallaSunsu(route) {
   if (m === "conteos" || m === "lugares") return "";
   if (m === "compras") return "";
   if (m === "proveedores") return "";
+  if ((m === "paquetes" || (m === "gift" && route.sub === "paquetes")) && window.MCPaquetes) return "";
   if (m === "paquetes") return "buscar-paquetes";
   if (m === "gift_cards") return "buscar-gc";
   if (m === "gift" && route.sub === "paquetes" && !route.id) return "buscar-paquetes";
@@ -2111,6 +2112,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) window.MCTickets.wire(main, route);
     if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) window.MCClientes.wire(main, route);
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
+    if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2155,6 +2157,7 @@ async function renderMod(route) {
   if (route.mod === "comisiones") return renderComisiones();
   if (route.mod === "rol_pagos") return renderRol();
   if (route.mod === "asistencia") return renderAsistencia();
+  if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.mod === "paquetes") return renderPaquetes();
   if (route.mod === "gift_cards") return renderGift();
   if (route.mod === "caja") return renderCaja();
@@ -3843,6 +3846,7 @@ async function renderCitasBeta() {
   return `${sel}<p class="note">${nota}</p>${cuerpo}`;
 }
 async function renderGiftMod(route) {
+  if (route.sub === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.sub === "paquetes") return route.id ? renderPaqDetalle(route.id) : renderPaqLista();
   return route.id ? renderGcDetalle(route.id) : renderGcLista();
 }
@@ -5610,20 +5614,21 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk9"></script>
-<script src="beta-screens.js?v=20261117tk9"></script>
-<script src="beta-inline.js?v=20261117tk9"></script>
-<script src="mc-productos.js?v=20261117tk9"></script>
-<script src="mc-nav.js?v=20261117tk9"></script>
-<script src="mc-permisos.js?v=20261117tk9"></script>
-<script src="mc-protocolos.js?v=20261117tk9"></script>
-<script src="mc-conteo.js?v=20261117tk9"></script>
-<script src="mc-transferencias.js?v=20261117tk9"></script>
-<script src="mc-ajustes.js?v=20261117tk9"></script>
-<script src="vendor-qrcode.js?v=20261117tk9"></script>
-<script src="mc-tickets.js?v=20261117tk9"></script>
-<script src="mc-clientes.js?v=20261117tk9"></script>
-<script src="mc-agenda.js?v=20261117tk9"></script>
+<script src="mc-buscar.js?v=20261117tk10"></script>
+<script src="beta-screens.js?v=20261117tk10"></script>
+<script src="beta-inline.js?v=20261117tk10"></script>
+<script src="mc-productos.js?v=20261117tk10"></script>
+<script src="mc-nav.js?v=20261117tk10"></script>
+<script src="mc-permisos.js?v=20261117tk10"></script>
+<script src="mc-protocolos.js?v=20261117tk10"></script>
+<script src="mc-conteo.js?v=20261117tk10"></script>
+<script src="mc-transferencias.js?v=20261117tk10"></script>
+<script src="mc-ajustes.js?v=20261117tk10"></script>
+<script src="vendor-qrcode.js?v=20261117tk10"></script>
+<script src="mc-tickets.js?v=20261117tk10"></script>
+<script src="mc-paquetes.js?v=20261117tk10"></script>
+<script src="mc-clientes.js?v=20261117tk10"></script>
+<script src="mc-agenda.js?v=20261117tk10"></script>
 <script>draw();</script>
 </body>
 </html>
