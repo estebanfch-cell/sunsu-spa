@@ -2,7 +2,7 @@
 import { extend, origConMarca, rechazoSegundaMarca } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, bajasDe, logAccion, nextSheet } from "./lib.ts";
-import { ecuadorParts, n, normNombre, s, siguienteCodigoGc, siguienteCodigoPaq, USO_FIELDS, type Row } from "./domain.ts";
+import { codigoPaquete, ecuadorParts, n, normNombre, s, siguienteCodigoGc, siguienteCodigoPaq, USO_FIELDS, type Row } from "./domain.ts";
 import { enPrueba } from "./db.ts";
 import { esAdmin, esPropio, acceso, matrizDe } from "./permisos.ts";
 import { saldoGift } from "./ventas.ts";
@@ -13,10 +13,7 @@ function yyDe(ctx: Ctx): string {
   return String(ecuadorParts(ctx.now).y).slice(-2);
 }
 
-function codigoPaq(r: Row): string {
-  const orig = r.orig && typeof r.orig === "object" ? r.orig as R : {};
-  return s(orig.codigo);
-}
+function codigoPaq(r: Row): string { return codigoPaquete(r); }
 
 extend("getMultas", "any", async (p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
@@ -166,7 +163,7 @@ extend("paq_emitir", "any", async (p, ctx, ses) => {
     sheet_row: sr, dia: ec.d, mes: ec.m, ano: ec.y, cedula: s(p.cedula),
     nombres: s(p.nombre), apellidos: s(p.apellido), sku: s(p.sku), paquete: s(p.paquete) || s(p.sku),
     vendido_por: s(p.vendidoPor) || ses.name, notas: s(p.notas),
-    orig: { codigo, beta: true },
+    orig: { codigo, beta: true }, ...(enPrueba(ctx.db) ? {} : { beta_codigo: codigo }),
   });
   await logAccion(ctx.db, actorOf(ses), "PAQ EMITIR", codigo);
   return { ok: true, codigo };

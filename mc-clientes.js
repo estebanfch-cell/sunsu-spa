@@ -18,6 +18,10 @@
       ".mccl-reg{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 18px;font-size:.84rem}.mccl-reg div b{color:var(--navy-d);font-weight:700}.mccl-reg input{width:100%;box-sizing:border-box;padding:6px 8px;border:1.5px solid var(--cream-d);border-radius:8px;font:inherit;font-size:.82rem}",
       ".mccl-tabs{display:flex;gap:4px;border-bottom:1.5px solid var(--cream-d);margin:14px 0 10px;flex-wrap:wrap}.mccl-tabs button{border:none;background:none;padding:8px 14px;font:inherit;font-size:.84rem;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1.5px}.mccl-tabs button.on{color:var(--navy-d);border-bottom-color:var(--navy)}",
       ".mccl-acts{display:flex;gap:8px;flex-wrap:wrap}.mccl-del{color:#b2452a!important;border-color:#e4b4a8!important}.mccl-pend{font-size:.66rem;background:#e3f0e6;color:#226b38;border-radius:6px;padding:1px 6px;margin-left:4px}",
+      ".mccl-hx td{background:var(--cream)!important;cursor:default}.mccl-hx ul{margin:4px 0 6px 18px;padding:0;font-size:.82rem}.mccl-car{display:inline-block;width:12px;color:var(--gray);transition:transform .15s}tr.open .mccl-car{transform:rotate(90deg)}",
+      ".mccl-ph{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.mccl-ph img{width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--cream-d)}",
+      ".mccl-reg .mccl-v{cursor:text;border-radius:5px;padding:1px 4px;display:inline-block;min-width:30px}.mccl-reg .mccl-v:hover{background:var(--cream);outline:1px dashed var(--cream-d)}.mccl-reg .mccl-v.mod{background:#fff3d6}.mccl-reg .ro{color:var(--gray)}",
+      ".mcpv{position:fixed;inset:0;background:rgba(20,30,50,.6);display:flex;align-items:center;justify-content:center;z-index:10000}.mcpv-box{background:#fff;border-radius:12px;width:min(980px,96vw);height:min(90vh,900px);display:flex;flex-direction:column;overflow:hidden}.mcpv-h{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--cream-d);font-size:.86rem;font-weight:700}.mcpv-b{flex:1;display:flex;align-items:center;justify-content:center;background:#f4f4f6;overflow:auto}.mcpv-b img{max-width:100%;max-height:100%;object-fit:contain}.mcpv-b iframe{width:100%;height:100%;border:0}",
       ".mccl-ses{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--navy);margin-right:3px;vertical-align:middle}.mccl-ses.u{background:var(--navy)}",
     ].join("");
     document.head.appendChild(s);
@@ -107,13 +111,74 @@
     if (!K.q) q.focus();
   }
 
+  // ---------- vista previa de documentos (solo el documento, sin salir de la página) ----------
+  function driveId(u) { var m = String(u || "").match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=|thumbnail\?id=)([-\w]{20,})/); return m ? m[1] : ""; }
+  function miniatura(u) { var id = driveId(u); return id ? "https://drive.google.com/thumbnail?id=" + id + "&sz=w400" : /^archivo:/.test(String(u)) ? "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'><text x='36' y='44' font-size='28' text-anchor='middle'>🖼️</text></svg>" : u; }
+  function cerrarPrevia() { var x = document.getElementById("mcpv"); if (x) { var fr = x.querySelector("[data-blob]"); if (fr) URL.revokeObjectURL(fr.getAttribute("data-blob")); x.remove(); } }
+  function marcoPrevia(titulo, cuerpo) {
+    cerrarPrevia();
+    var box = document.createElement("div"); box.className = "mcpv"; box.id = "mcpv";
+    box.innerHTML = '<div class="mcpv-box"><div class="mcpv-h"><span>' + e(titulo || "Documento") + '</span><button type="button" class="mctk-x" data-x title="Cerrar">×</button></div><div class="mcpv-b">' + cuerpo + "</div></div>";
+    box.onclick = function (ev) { if (ev.target === box || ev.target.closest("[data-x]")) cerrarPrevia(); };
+    document.addEventListener("keydown", function esc1(ev) { if (ev.key === "Escape") { cerrarPrevia(); document.removeEventListener("keydown", esc1); } });
+    document.body.appendChild(box); return box;
+  }
+  async function previaArchivo(u, titulo) {
+    var box = marcoPrevia(titulo, '<p class="mccf-sub">Cargando…</p>');
+    var r = await api("fotoB64", { id: u.slice(8) });
+    if (!document.getElementById("mcpv")) return;
+    if (!r || !r.ok) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">' + e((r && r.error) || "No se pudo abrir") + "</p>"; return; }
+    var src = "data:" + (r.mime || "image/jpeg") + ";base64," + r.b64;
+    box.querySelector(".mcpv-b").innerHTML = /pdf/.test(r.mime || "") ? '<iframe src="' + src + '"></iframe>' : '<img src="' + src + '" alt="">';
+  }
+  function previa(url, titulo) {
+    var id = driveId(url), u = String(url || "");
+    if (/^archivo:/.test(u)) return previaArchivo(u, titulo);
+    var img = /\.(jpe?g|png|gif|webp|heic)(\?|$)/i.test(u) || /^data:image\//.test(u) || (id && /foto/i.test(titulo || ""));
+    if (id && img) return previaArchivo("archivo:" + id, titulo);
+    if (id) return marcoPrevia(titulo, '<iframe src="https://drive.google.com/file/d/' + id + '/preview" allow="autoplay"></iframe>');
+    if (img) return marcoPrevia(titulo, '<img src="' + e(u) + '" alt="">');
+    return marcoPrevia(titulo, '<iframe src="' + e(u) + '"></iframe>');
+  }
+  async function previaTarjeta(sheetRow, titulo) {
+    var box = marcoPrevia(titulo, '<p class="mccf-sub">Generando la tarjeta…</p>');
+    var cards = window._tkCards = window._tkCards || {};
+    if (!cards[sheetRow]) { try { var r = await api("tk_historial", { rows: [sheetRow], limit: 1 }); if (r && r.items && r.items[0]) cards[sheetRow] = r.items[0]; } catch (x) {} }
+    if (!cards[sheetRow] || typeof tarjetaTicket !== "function") { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No encontré la tarjeta de este ticket</p>'; return; }
+    tarjetaTicket(sheetRow, function (doc) {
+      if (!document.getElementById("mcpv")) return;
+      try { var u = URL.createObjectURL(doc.output("blob")); box.querySelector(".mcpv-b").innerHTML = '<iframe data-blob="' + u + '" src="' + u + '"></iframe>'; }
+      catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
+    });
+  }
+  var VACIA = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+  var MINIS = {};
+  /** Miniaturas por el servidor (Drive no deja leerlas directo desde la beta). */
+  function cargarMinis(root) {
+    [].slice.call(root.querySelectorAll("img[data-mini]")).slice(0, 12).forEach(function (im) {
+      var u = im.getAttribute("data-mini"), id = driveId(u) || (/^archivo:/.test(u) ? u.slice(8) : "");
+      if (!id) { im.src = u; return; }
+      if (MINIS[id]) { im.src = MINIS[id]; return; }
+      api("fotoB64", { id: id, sz: 240 }).then(function (r) { if (r && r.ok) { MINIS[id] = "data:" + (r.mime || "image/jpeg") + ";base64," + r.b64; im.src = MINIS[id]; } });
+    });
+  }
+  window.MCPrevia = { abrir: previa, tarjeta: previaTarjeta, miniatura: miniatura };
+
   // ---------- ficha ----------
   function tabHtml() {
     var d = K.d, t = K.tab;
     if (t === "historial") {
       if (!d.historial.length) return '<p class="mccf-sub">Sin tickets.</p>';
-      return '<table class="mccf-t mccl-t"><thead><tr><th>Fecha</th><th>Ticket</th><th>Cosmetóloga</th><th>Detalle</th>' + (d.admin ? '<th class="num">Total</th>' : "") + "</tr></thead><tbody>" +
-        d.historial.map(function (h) { return '<tr' + (h.clave ? ' data-tk="' + e(h.clave) + '"' : "") + "><td>" + e(f(h.fecha)) + " " + e(h.hora || "") + '</td><td class="mccl-cod">' + e(h.ref) + (h.editadoBeta ? ' <span class="mccl-pend">beta</span>' : "") + "</td><td>" + e(h.cosmetologa) + "</td><td>" + e([h.facial, h.lineas].filter(function (x) { return x && x !== "-"; }).join(" · ")) + "</td>" + (d.admin ? '<td class="num">' + e($m(h.total)) + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>";
+      var nc = d.admin ? 4 : 3;
+      return '<table class="mccf-t mccl-t"><thead><tr><th>Fecha</th><th>Ticket</th><th>Cosmetóloga</th>' + (d.admin ? '<th class="num">Total</th>' : "") + "</tr></thead><tbody>" +
+        d.historial.map(function (h, i) {
+          var open = K.abiertos && K.abiertos[i];
+          var det = (h.detalle || []).length ? "<ul>" + h.detalle.map(function (l) { return "<li>" + e(l.nombre) + (l.cantidad > 1 ? " ×" + e(l.cantidad) : "") + "</li>"; }).join("") + "</ul>" : (h.facial && h.facial !== "-" ? "<ul><li>" + e(h.facial) + "</li></ul>" : '<div class="mccf-sub">Sin detalle.</div>');
+          var fotos = (h.fotos || []).length ? '<div class="mccl-ph">' + h.fotos.map(function (x) { return '<img data-mini="' + e(x.url) + '" src="' + e(VACIA) + '" alt="' + e(x.nombre) + '" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre + " · " + h.ref) + '">'; }).join("") + "</div>" : "";
+          var nota = h.notas ? '<div class="mccf-sub"><b>Notas:</b> ' + e(h.notas) + "</div>" : "";
+          return '<tr data-hx="' + i + '"' + (open ? ' class="open"' : "") + '><td><span class="mccl-car">▸</span> ' + e(f(h.fecha)) + " " + e(h.hora || "") + '</td><td class="mccl-cod">' + e(h.ref) + (h.editadoBeta ? ' <span class="mccl-pend">beta</span>' : "") + "</td><td>" + e(h.cosmetologa) + "</td>" + (d.admin ? '<td class="num">' + e($m(h.total)) + "</td>" : "") + "</tr>" +
+            (open ? '<tr class="mccl-hx"><td colspan="' + nc + '">' + det + nota + fotos + (h.clave ? '<button class="btn ghost small" type="button" data-tk="' + e(h.clave) + '">Abrir ticket</button>' : "") + "</td></tr>" : "");
+        }).join("") + "</tbody></table>";
     }
     if (t === "paquetes") {
       if (!d.paquetes.length) return '<p class="mccf-sub">Sin paquetes.</p>';
@@ -129,7 +194,7 @@
       if (!d.documentos.length) return '<p class="mccf-sub">Sin documentos.</p>';
       var ico = { tarjeta: "📄", foto: "🖼️", comprobante: "🧾", consentimiento: "✍️", analisis: "🔬" };
       return '<table class="mccf-t mccl-t"><thead><tr><th>Fecha</th><th>Documento</th><th></th></tr></thead><tbody>' + d.documentos.map(function (x) {
-        var acc = x.url ? '<a class="btn ghost small" href="' + e(x.url) + '" target="_blank" rel="noopener">Abrir</a>' : x.clave ? '<button class="btn ghost small" type="button" data-tk="' + e(x.clave) + '">Ver ticket</button>' : "";
+        var acc = x.url ? '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : x.tipo === "tarjeta" && x.sheetRow ? '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : "";
         return "<tr><td>" + e(f(x.fecha)) + "</td><td>" + (ico[x.tipo] || "•") + " " + e(x.nombre) + (x.texto ? '<div class="mccf-sub">' + e(x.texto) + "</div>" : "") + "</td><td>" + acc + "</td></tr>";
       }).join("") + "</tbody></table>";
     }
@@ -137,6 +202,16 @@
     return "";
   }
   function regHtml() {
+    var d = K.d, P = K.pend || {}, ed = !d.borrado && (d.puedeEditar || d.puedePedir), n = Object.keys(P).length;
+    var val = function (k) { return P[k] != null ? P[k] : d.datos[k] || ""; };
+    return '<div class="mccl-reg">' + d.campos.map(function (c) {
+      var v = val(c[0]), sh = c[0] === "nacimiento" && v ? f(v) : v;
+      return "<div><b>" + e(c[1]) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>";
+    }).join("") + (d.lectura || []).filter(function (c) { return d.datos[c[0]]; }).map(function (c) { return '<div class="ro"><b>' + e(c[1]) + ":</b> " + e(f(d.datos[c[0]])) + "</div>"; }).join("") + "</div>" +
+      (n ? (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
+        '<p class="err" id="mccl-err"></p><div class="mccl-acts" style="margin-top:8px"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + " (" + n + ')</button><button class="btn ghost small" type="button" id="mccl-no">Descartar</button></div>' : "");
+  }
+  function regHtmlViejo() {
     var d = K.d;
     if (K.edit) return '<div class="mccl-reg">' + d.campos.map(function (c) { return "<div><b>" + e(c[1]) + '</b><input data-c="' + e(c[0]) + '" value="' + e(d.datos[c[0]] || "") + '"' + (c[0] === "nacimiento" ? ' type="date"' : "") + "></div>"; }).join("") + "</div>" +
       (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
@@ -153,7 +228,7 @@
       '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · CI " + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
       '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
       (d.borrado ? (d.puedeEditar ? '<button class="btn ghost small" type="button" id="mccl-rest">Restaurar</button>' : "") :
-        '<button class="btn ghost small" type="button" id="mccl-ed">' + (d.puedeEditar ? "Editar datos" : "Solicitar cambio") + '</button><button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div></div>" +
+        '<button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div></div>" +
       '<div class="mccl-kpis">' + (d.admin ? '<div class="mccl-kpi"><span>Total gastado</span><b>' + e($m(r.total)) + '</b></div><div class="mccl-kpi"><span>Ticket promedio</span><b>' + e($m(r.promedio)) + "</b></div>" : "") +
       '<div class="mccl-kpi"><span>Tickets</span><b>' + e(r.tickets) + '</b></div><div class="mccl-kpi"><span>Última visita</span><b>' + e(f(r.ultima)) + '</b></div><div class="mccl-kpi"><span>Primera visita</span><b>' + e(f(r.primera)) + '</b></div><div class="mccl-kpi"><span>Sesiones por usar</span><b>' + e(r.sesionesPendientes) + "</b></div></div>" +
       '<div class="card-title" style="margin-top:4px">Datos de registro</div><div id="mccl-regbox">' + regHtml() + "</div></div>" +
@@ -164,7 +239,8 @@
     var d = await api("cl_get", { key: key });
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button>';
     if (K.d && K.d.key !== d.key) K.tab = "historial";
-    K.d = d; K.edit = false;
+    if (!K.d || K.d.key !== d.key) K.abiertos = {};
+    K.d = d; K.edit = false; K.pend = {};
     return htmlFicha();
   }
   function repintarFicha(main) { var root = main.querySelector("#mccl-root"); if (root) { root.outerHTML = htmlFicha(); wireFicha(main); } }
@@ -172,15 +248,42 @@
     var d = K.d; if (!d || !main.querySelector("#mccl-root")) return;
     main.querySelectorAll("[data-tab]").forEach(function (b) { b.onclick = function () { K.tab = b.getAttribute("data-tab"); repintarFicha(main); }; });
     main.querySelector("#mccl-tab").onclick = function (ev) {
+      var pv = ev.target.closest("[data-pv]"); if (pv) { previa(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
+      var pt = ev.target.closest("[data-pvt]"); if (pt) { previaTarjeta(pt.getAttribute("data-pvt"), pt.getAttribute("data-pvn")); return; }
+      var hx = ev.target.closest("tr[data-hx]"); if (hx) { var i = +hx.getAttribute("data-hx"); K.abiertos[i] = !K.abiertos[i]; main.querySelector("#mccl-tab").innerHTML = tabHtml(); cargarMinis(main.querySelector("#mccl-tab")); return; }
       var tr = ev.target.closest("[data-tk]"); if (!tr || ev.target.closest("a")) return;
       sessionStorage.setItem("mctk.volver", location.hash); go("#/m/tickets/t/" + encodeURIComponent(tr.getAttribute("data-tk")));
     };
-    var ed = main.querySelector("#mccl-ed"); if (ed) ed.onclick = function () { K.edit = true; repintarFicha(main); };
-    var no = main.querySelector("#mccl-no"); if (no) no.onclick = function () { K.edit = false; repintarFicha(main); };
-    var ok = main.querySelector("#mccl-ok");
+    wireReg(main); wireAcciones(main);
+  }
+  function wireReg(main) {
+    var d = K.d, box = main.querySelector("#mccl-regbox"); if (!box) return;
+    var pintar = function () { box.innerHTML = regHtml(); wireReg(main); };
+    box.querySelectorAll("[data-rc]").forEach(function (sp) {
+      var abrir = function () {
+        if (sp.querySelector("input")) return;
+        var k = sp.getAttribute("data-rc"), v = K.pend[k] != null ? K.pend[k] : d.datos[k] || "", hecho = false;
+        sp.innerHTML = '<input class="mctk-in" ' + (k === "nacimiento" ? 'type="date"' : 'type="text"') + ' value="' + e(v) + '">';
+        var inp = sp.querySelector("input"); inp.focus();
+        var fin = function (guardar) {
+          if (hecho) return; hecho = true;
+          var nv = inp.value.trim();
+          if (guardar && nv !== (d.datos[k] || "")) K.pend[k] = nv; else if (guardar) delete K.pend[k];
+          pintar();
+        };
+        inp.onblur = function () { fin(true); };
+        inp.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); fin(true); } if (ev.key === "Escape") fin(false); };
+      };
+      sp.onclick = abrir; sp.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); abrir(); } };
+    });
+    var no = box.querySelector("#mccl-no"); if (no) no.onclick = function () { K.pend = {}; pintar(); };
+    var ok = box.querySelector("#mccl-ok");
+    if (ok) ok.onmousedown = function (ev) { ev.preventDefault(); };
     if (ok) ok.onclick = async function () {
-      var cambios = {}; main.querySelectorAll("[data-c]").forEach(function (i) { var k = i.getAttribute("data-c"); if ((d.datos[k] || "") !== i.value.trim()) cambios[k] = i.value.trim(); });
-      var err = main.querySelector("#mccl-err");
+      var abierto = box.querySelector("[data-rc] input");
+      if (abierto) { var kk = abierto.closest("[data-rc]").getAttribute("data-rc"), vv = abierto.value.trim(); if (vv !== (d.datos[kk] || "")) K.pend[kk] = vv; }
+      var cambios = Object.assign({}, K.pend);
+      var err = box.querySelector("#mccl-err");
       if (!Object.keys(cambios).length) { err.textContent = "No cambiaste nada"; return; }
       ok.disabled = true;
       var r = d.puedeEditar ? await api("cl_guardar", { key: d.key, cambios: cambios })
@@ -188,8 +291,11 @@
       ok.disabled = false;
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo"; return; }
       toast2(d.puedeEditar ? "✓ Datos guardados" : "✓ Solicitud enviada a administración");
-      K.t = 0; draw();
+      K.t = 0; K.pend = {}; draw();
     };
+  }
+  function wireAcciones(main) {
+    var d = K.d;
     var del = main.querySelector("#mccl-del");
     if (del) del.onclick = async function () {
       var mot = prompt(d.puedeEditar ? "¿Eliminar a esta clienta de la beta? Escribe el motivo (queda en el registro; sus tickets no se borran):" : "Motivo para pedir la eliminación:");

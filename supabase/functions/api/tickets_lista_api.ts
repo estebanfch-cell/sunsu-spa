@@ -31,7 +31,9 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const q = s(p.q).trim().slice(0, 80);
   const F: Filtro[] = [{ col: "borrado_at", op: "is_null" }, { col: "timestamp", op: "not_null" }];
   // Con búsqueda se mira todo el historial (como antes); si no, el rango de fechas.
-  if (!q) {
+  const soloRows = (Array.isArray(p.rows) ? p.rows : []).map((x: unknown) => n(x)).filter(Boolean).slice(0, 200);
+  if (soloRows.length) F.push({ col: "sheet_row", op: "in", val: soloRows });
+  else if (!q) {
     if (YMD.test(s(p.desde))) F.push({ col: "timestamp", op: "gte", val: s(p.desde) + "T00:00:00" });
     if (YMD.test(s(p.hasta))) F.push({ col: "timestamp", op: "lt", val: addD(s(p.hasta), 1) + "T00:00:00" });
   }
