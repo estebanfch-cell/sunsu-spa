@@ -68,7 +68,7 @@
       ".mcp-cols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}",
       ".mcp-big{font-size:1.9rem;font-weight:700;color:var(--navy)}",
       ".mcp-grp{margin-top:10px}.mcp-gh{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--navy-d);padding:6px 0;border-bottom:1px solid var(--cream-d)}",
-      ".mcp-gh small{font-weight:400;color:var(--gray);margin-left:6px}.mcp-gq{color:var(--green);font-weight:700}",
+      ".mcp-gh small{font-weight:400;color:var(--gray);margin-left:6px}.mcp-gq{color:var(--green);font-weight:700}.mcp-aj{border:none;background:none;cursor:pointer;color:var(--navy);font-size:.8rem;padding:0 2px;margin-left:4px;opacity:.65}.mcp-aj:hover{opacity:1}",
       ".mcp-sr{display:flex;justify-content:space-between;padding:6px 0 6px 18px;border-bottom:1px dashed var(--gray-l);font-size:.85rem}.mcp-sr.vac{color:var(--gray)}",
       ".mcp-pr{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--gray-l);gap:10px}",
       ".mcp-pvp{font-size:1.7rem;font-weight:700;color:var(--green)}.mcp-ref{color:var(--gray);font-size:.72rem}",
@@ -425,6 +425,13 @@
   }
   function hayPrecio() { return Object.keys(MC.ch).some(function (k) { return PRECIO[k]; }); }
 
+  function puedeAjustar() {
+    if (!window.MCAjustes) return false;
+    try { return !!(state.admin || acceso("inventario") === "todos" || acceso("conteos") === "todos"); } catch (x) { return false; }
+  }
+  function ajBtn(bod, sub, lugar, cant) {
+    return ' <button type="button" class="mcp-aj" title="Ajustar stock" data-mcp-aj="' + e(bod) + '" data-sub="' + e(sub) + '" data-lugar="' + e(lugar) + '" data-cant="' + e(cant) + '">✎</button>';
+  }
   function stockChips(stock) {
     var out = [];
     (stock || []).forEach(function (g) {
@@ -479,9 +486,9 @@
       var tot = (r.stock || []).reduce(function (a, g) { return a + (Number(g.cantidad) || 0); }, 0);
       left = '<div class="mcp-card"><div class="mcp-sub">Cantidad disponible · todas las bodegas</div><div class="mcp-big">' + q2(tot) + "</div>" +
         (r.stock || []).map(function (g) {
-          var hh = '<div class="mcp-grp"><div class="mcp-gh"><span>▾ ' + e(g.nombre) + (g.nota ? "<small>" + e(g.nota) + "</small>" : "") + '</span><span class="mcp-gq">' + q2(g.cantidad) + " u</span></div>";
+          var hh = '<div class="mcp-grp"><div class="mcp-gh"><span>▾ ' + e(g.nombre) + (g.nota ? "<small>" + e(g.nota) + "</small>" : "") + '</span><span class="mcp-gq">' + q2(g.cantidad) + " u" + (puedeAjustar() && g.grupo !== "CABINA" ? ajBtn(g.grupo, "", g.nombre, g.cantidad) : "") + "</span></div>";
           if (g.grupo === "CABINA") {
-            hh += (g.subs || []).map(function (s) { return '<div class="mcp-sr' + (Number(s.cantidad) ? "" : " vac") + '"><span>' + e(s.nombre) + "</span><span>" + q2(s.cantidad) + "</span></div>"; }).join("");
+            hh += (g.subs || []).map(function (s) { return '<div class="mcp-sr' + (Number(s.cantidad) ? "" : " vac") + '"><span>' + e(s.nombre) + "</span><span>" + q2(s.cantidad) + (puedeAjustar() ? ajBtn("CABINA", s.codigo || "", g.nombre + " · " + s.nombre, s.cantidad) : "") + "</span></div>"; }).join("");
             if (g.abierto) hh += '<div class="mcp-sr"><span>Abierto en uso</span><span>' + q2(g.abierto) + " " + e(g.unidad || "") + "</span></div>";
             var ab = r.abiertos || {}, ks = Object.keys(ab);
             if (ks.length) hh += '<div class="mcp-sr"><span>Aperturas registradas</span><span>' + ks.map(function (k) { return e(k.replace("CABINA_", "Cabina ").replace("LOCAL", "Local")) + ": " + q2(ab[k]); }).join(" · ") + "</span></div>";
@@ -489,7 +496,7 @@
           return hh + "</div>";
         }).join("") +
         (p.cabina ? '<p class="note" style="margin-top:8px">Cabina ' + e(p.cabina.codigo) + ": envase de " + q2(p.cabina.contenido_envase) + " " + e(p.cabina.unidad) + (p.cabina.ubicacion ? " · ubicación " + e(p.cabina.ubicacion) : "") + (p.cabina.ubicacion_local ? " · oficina " + e(p.cabina.ubicacion_local) : "") + (p.cabina.minimo_envases ? " · mínimo " + q2(p.cabina.minimo_envases) : "") + "</p>" : "") +
-        '<p class="note">Solo se muestra cómo están hoy las bodegas; no se movió stock. Lo que no tiene cabina asignada queda en «Sin cabina asignada».</p></div>';
+        '<p class="note">' + (puedeAjustar() ? "Toca ✎ para corregir un número: se crea un ajuste de stock con motivo (Inventario → Ajustes de stock). " : "") + "Lo que no tiene cabina asignada queda en «Sin cabina asignada».</p></div>";
     }
     var ed = pr.editadoBeta || [];
     var badge = function (k) { return ed.indexOf(k) >= 0 ? ' <span class="mcp-tag beta">editado en beta</span>' : ""; };
@@ -672,6 +679,12 @@
   }
   async function accionFicha(t) {
     var r = MC.cur, p = r.producto;
+    var aj = t.closest("[data-mcp-aj]");
+    if (aj && window.MCAjustes) {
+      var res = await window.MCAjustes.editarStock({ productoId: p.id, nombre: p.nombre, bodega: aj.getAttribute("data-mcp-aj"), sub: aj.getAttribute("data-sub"), lugar: aj.getAttribute("data-lugar"), actual: Number(aj.getAttribute("data-cant")) || 0 });
+      if (res && res.estado === "aplicado") await recargar();
+      return;
+    }
     if (t.closest("#mcp-bar-gen")) {
       if (!confirm("¿Asignar un código de barras interno de Sunsu (EAN-13) a " + p.nombre + "?")) return;
       var g = await api("mcprod_barras_generar", { id: p.id });
@@ -909,7 +922,7 @@
       var tb = t.closest("[data-mcp-tab]"); if (tb) { MC.tab = tb.getAttribute("data-mcp-tab"); repintar(); return; }
       var ed = t.closest("[data-mcp-ed]"); if (ed && puede()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
       if (t.closest("#mcp-guardar")) { void guardar(); return; }
-      if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo")) { void accionFicha(t); return; }
+      if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo,[data-mcp-aj]")) { void accionFicha(t); return; }
       if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar(); return; }
       if (t.closest("#mcp-foto")) {
         if (puede()) { var f = document.getElementById("mcp-file"); if (f) f.click(); }
