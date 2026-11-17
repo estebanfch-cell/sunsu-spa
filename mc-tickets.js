@@ -266,7 +266,10 @@
   }
   async function render(clave) {
     css();
-    var r = await Promise.all([api("tk_get", { clave: clave }), K.cat ? Promise.resolve(null) : api("tk_catalogo", {})]);
+    K.d = null;
+    var r;
+    try { r = await Promise.all([api("tk_get", { clave: clave }), K.cat ? Promise.resolve(null) : api("tk_catalogo", {}).catch(function () { return null; })]); }
+    catch (x) { r = [{ error: (x && x.message) || String(x) }, null]; }
     var d = r[0];
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/tickets">← Volver a la lista</button>';
     if (r[1] && r[1].items) K.cat = r[1].items;
@@ -414,7 +417,12 @@
     inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") { hecho = true; repintar(main); } };
   }
   function wire(main) {
-    if (!K.d) return;
+    // Si el ticket no cargó (error) no hay nada que conectar: antes reventaba con «null is not an object».
+    if (!K.d || !main || !main.querySelector("#mctk-root")) return;
+    try { wire2(main); } catch (x) { try { console.error(x); } catch (y) {} var er = main.querySelector("#mctk-err"); if (er) er.textContent = "Error en la pantalla: " + ((x && x.message) || x); }
+  }
+  function on(main, sel, ev, fn) { var el = main.querySelector(sel); if (el) el[ev] = fn; return el; }
+  function wire2(main) {
     main.querySelector("#mctk-volver").onclick = function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); };
     main.querySelectorAll("[data-menu]").forEach(function (b) {
       b.onclick = function (ev) { ev.stopPropagation(); var id = b.getAttribute("data-menu"); main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; }); var dd = main.querySelector("#" + id); dd.hidden = !dd.hidden; };
