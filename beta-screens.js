@@ -5000,7 +5000,6 @@ function _histSaldo(t){
   return _histEstadoDoc(t)==='cerrado'?0:(parseFloat(t&&t.estimado)||0);
 }
 var _HIST_COLS=[
-  {k:'led',t:'●',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.p+L.r+L.g):-1;}},
   {k:'num',t:'Nº ticket',v:function(t){var m=/(\d+)$/.exec(_histNum(t));return m?+m[1]:-1;}},
   {k:'cli',t:'Clienta',v:function(t){return ((t.nombre||'')+' '+(t.apellido||'')).trim().toLowerCase();}},
   {k:'ced',t:'Cédula',v:function(t){var d=String(t.cedula||'').replace(/\D/g,'');return d?+d:-1;}},
@@ -5009,8 +5008,9 @@ var _HIST_COLS=[
   {k:'sub',t:'Subtotal',num:1,v:function(t){return _histMontos(t).sub;}},
   {k:'iva',t:'IVA',num:1,v:function(t){return _histMontos(t).iva;}},
   {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}},
-  {k:'est',t:'Estado',v:function(t){return _histEstadoDoc(t);}},
-  {k:'fac',t:'Factura',v:function(t){return String(_histFactura(t)).toLowerCase();}},
+  {k:'pago',t:'Pago',v:function(t){return t.anulado?-1:(t.cob?1:0);}},
+  {k:'fac',t:'Factura',v:function(t){return _tkFacFull(t)||'~';}},
+  {k:'reag',t:'Reagendada',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.g?1:0):-1;}},
   {k:'sal',t:'Saldo',num:1,v:function(t){return _histSaldo(t);}}
 ];
 function _histOrdenar(list){
@@ -5039,9 +5039,9 @@ function _histCelda(t, c, showPrices){
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
-  if(c.k==='led') return _tkLedsHTML(t);
-  if(c.k==='est') return '<td class="tk-pills">'+_tkEstados(t).map(function(x){return _tkPill(x.c,x.t);}).join('')+'</td>';
-  if(c.k==='fac') return '<td>'+_histEsc(_histFactura(t))+'</td>';
+  if(c.k==='pago') return '<td>'+(t.anulado===true?_tkPill('anulado','Anulado'):t.cob?_tkPill('pagado','Pagado'):_tkPill('porcobrar','Por cobrar'))+'</td>';
+  if(c.k==='fac'){ var ff=_tkFacFull(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>':_tkPill('sinfactura','Sin factura'))+'</td>'; }
+  if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
 }
@@ -5057,8 +5057,9 @@ function _histMasterHTML(tickets, showPrices){
     : _HIST_COLS;
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
-    var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag;
-    return '<tr class="tk-row'+on+(fl?' tk-flagged':'')+'"'+(fl?' title="Por corregir: '+_histEsc(fl)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
+    var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+    var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
+    return '<tr class="tk-row'+on+(fl?' tk-flagged':fa?' tk-falta':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
@@ -5109,7 +5110,14 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',sinfactura:'#D2603A',anulado:'#C0392B'};
+var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',sinfactura:'#D2603A',anulado:'#C0392B'};
+// Factura completa 001-001-000002956: la corregida en la beta, si no la del sistema (fac_7).
+function _tkFacFull(t){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)]; if(L&&L.factura) return L.factura;
+  var v=String(_histFactura(t)||'').trim(); if(!v||/sin/i.test(v)) return '';
+  var m=/^(\d{3})-(\d{3})-(\d{1,9})$/.exec(v); if(m) return m[1]+'-'+m[2]+'-'+('000000000'+m[3]).slice(-9);
+  var d=v.replace(/\D/g,''); return d&&Number(d)>0?'001-001-'+('000000000'+d).slice(-9):'';
+}
 function _tkPill(c,txt){var col=_TK_PILL[c]||'#8A93A6';return '<span class="tk-pill" style="color:'+col+';border-color:'+col+'">'+txt+'</span>';}
 function _tkEstados(t){
   var orig=(t&&t.orig)||{};
@@ -5138,7 +5146,7 @@ function _tkCargarLeds(forzar){
     if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff);
   }).catch(function(){window._tkLedsCargando=false;});
 }
-var _TK_SEG=[['','Todos'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','Por corregir']];
+var _TK_SEG=[['','Todos'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','No cuadra (rojo)'],['faltadoc','Falta documento (amarillo)']];
 var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Anulado']];
 function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
 function _tkSetF(k,v){ _tkF()[k]=v; window._tkKey=''; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
@@ -11525,7 +11533,15 @@ function _cargarFotoTk(url){
         if(!d.ok||!d.b64){res(null);return;}
         var data='data:'+(d.mime||'image/jpeg')+';base64,'+d.b64;
         var img=new Image();
-        img.onload=function(){res({data:data, w:img.width, h:img.height});};
+        // jsPDF mete el JPEG crudo e ignora la orientación EXIF (fotos de celular salen giradas):
+        // se redibuja en un canvas, que sí la respeta, y se usa ese JPEG ya derecho.
+        img.onload=function(){
+          try{
+            var c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+            c.getContext('2d').drawImage(img,0,0); var dj=c.toDataURL('image/jpeg',0.9);
+            res({data:dj, w:c.width, h:c.height});
+          }catch(eO){ res({data:data, w:img.width, h:img.height}); }
+        };
         img.onerror=function(){res(null);};
         img.src=data;
       })

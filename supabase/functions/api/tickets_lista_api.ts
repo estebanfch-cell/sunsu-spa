@@ -11,13 +11,13 @@ import { ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, type Row } 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { faseA } from "./tickets_beta_api.ts";
+import { faltaDe, faseA, facturaCompleta } from "./tickets_beta_api.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado"];
+const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num"];
 
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
@@ -60,6 +60,11 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   let L = idx.rows;
   if (!todos) L = L.filter((r) => esPropio(s(r.atendido_por), ses));
   if (seg === "faseA_no") L = L.filter((r) => !faseA(r));
+  // Datos de la beta de todos los tickets (tabla chica): factura corregida y comprobantes subidos.
+  const cabsAll = await todas(ctx, "beta_tickets");
+  const cabMap = new Map(cabsAll.map((c) => [s(c.clave), c]));
+  const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
+  if (seg === "faltadoc") L = L.filter((r) => faltaDe(r, datosDe(r)).length > 0);
   let envB: Set<string> | null = null;
   const envClaves = async (filas: Row[]) => {
     envB ||= new Set((await todas(ctx, "beta_ticket_envios")).map((e) => s(e.ticket_clave)));
@@ -86,15 +91,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   // 3) en lote: catálogo, teléfonos, envíos, datos beta, marcas
   const telOk = conTelefono(ses);
   const ceds = [...new Set(filas.map((r) => normCedula(r.id_3)).filter(Boolean))];
-  const [map, regs, env, cabs] = await Promise.all([
+  const [map, regs, env] = await Promise.all([
     catMap(ctx),
     telOk && ceds.length ? consultar(ctx.db, "clientas_registro", { cols: ["cedula", "telefono", "timestamp"], filtros: [{ col: "cedula", op: "in", val: [...new Set(filas.map((r) => s(r.id_3)).filter(Boolean))] }] }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
     envClaves(filas),
-    todas(ctx, "beta_tickets"),
   ]);
   const porCed = new Map<string, string>();
   for (const r of regs.sort((a, b) => s(a.timestamp).localeCompare(s(b.timestamp)))) if (s(r.telefono)) porCed.set(normCedula(r.cedula), s(r.telefono));
-  const cabMap = new Map(cabs.map((c) => [s(c.clave), c]));
   const items = filas.map((r) => {
     const it = itemHistorial(r, map, hoy, telOk, porCed);
     const clave = claveDe(r, leerSerie(r, "so_num")), d = ((cabMap.get(clave)?.datos || {}) as Row);
@@ -105,7 +108,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       a: faseA(r) ? 1 : 0, p: r.cob === true || s(r.cob).toLowerCase() === "true" ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && it.anulado !== true && YMD.test(ret) && ret <= addD(hoy, 7) && ret >= addD(hoy, -60) ? 1 : 0,
       ...(fl.length ? { flag: fl.map((x) => s(x.motivo) + (x.factura ? " · factura " + s(x.factura) : "")).join(" / ") } : {}),
-      ...(d.factura ? { factura: s(d.factura) } : {}),
+      factura: s(d.factura) || (Number(s(r.fac_7)) > 0 ? facturaCompleta(r.fac_7) : ""),
+      ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),
     };
     return it;
   });

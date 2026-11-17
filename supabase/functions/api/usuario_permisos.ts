@@ -71,7 +71,7 @@ const MOD_EXTRA: Record<string, string> = {
   cf_get: "inicio", cf_iniciar: "inicio", cf_guardar: "inicio", cf_enviar: "inicio", notif_mias: "inicio", notif_leer: "inicio",
   trfb_list: "transferencias", trfb_get: "transferencias", trfb_save: "transferencias", trfb_estado: "transferencias",
   aj_meta: "inicio", aj_list: "inventario", aj_get: "inventario", aj_crear: "inventario", aj_revisar: "inventario", aj_desde_conteo: "conteos",
-  tk_get: "tickets", tk_catalogo: "tickets", tk_guardar: "tickets", tk_estados: "tickets", tk_historial: "tickets", tk_reagendadas: "tickets", tk_envio: "tickets", tk_costos: "tickets", tk_costos_guardar: "tickets", tk_flag_resolver: "tickets", tk_flag_crear: "tickets",
+  tk_get: "tickets", tk_catalogo: "tickets", tk_guardar: "tickets", tk_estados: "tickets", tk_historial: "tickets", tk_reagendadas: "tickets", tk_envio: "tickets", tk_costos: "tickets", tk_costos_guardar: "tickets", tk_flag_resolver: "tickets", tk_flag_crear: "tickets", tk_subir_doc: "tickets",
   ag_meta: "agenda", ag_citas: "agenda", ag_cita: "agenda", ag_disponibilidad: "agenda", ag_crear: "agenda", ag_reagendar: "agenda", ag_cancelar: "agenda", ag_eliminar: "agenda", ag_etiqueta: "agenda", ag_vincular: "agenda", ag_ingresado: "agenda", ag_calendario_guardar: "agenda",
   cl_list: "clientes", cl_get: "clientes", cl_guardar: "clientes", cl_borrar: "clientes", cl_restaurar: "clientes",
 };
