@@ -204,7 +204,7 @@
       flagsHtml() + faltaHtml() +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span></div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
-      "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
+      "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
@@ -521,7 +521,8 @@
     var lbl = ((K.d.campos || []).find(function (c) { return c[0] === k; }) || [k, k])[1], v = val(k), largo = k === "notas" || k === "recomendaciones";
     var tipo = k === "retorno" ? "date" : k === "email" ? "email" : "text";
     if (dd.querySelector(".mctk-in")) return;
-    dd.innerHTML = largo ? '<textarea rows="3" class="mctk-in">' + e(v) + "</textarea>" : '<input class="mctk-in" type="' + tipo + '" value="' + e(v) + '"' + (k === "factura" ? ' placeholder="001-001-000000000"' : "") + ">";
+    var esSel = k === "cabina";
+    dd.innerHTML = esSel ? '<select class="mctk-in">' + ["", "Cabina 1", "Cabina 2", "Cabina 3", "Local"].map(function (c) { return '<option value="' + c + '"' + (c === v ? " selected" : "") + ">" + (c || "— sin cabina —") + "</option>"; }).join("") + "</select>" : largo ? '<textarea rows="3" class="mctk-in">' + e(v) + "</textarea>" : '<input class="mctk-in" type="' + tipo + '" value="' + e(v) + '"' + (k === "factura" ? ' placeholder="001-001-000000000"' : "") + ">";
     var inp = dd.querySelector(".mctk-in"), hecho = false; inp.focus();
     var ok = function () {
       if (hecho) return; hecho = true;
@@ -533,7 +534,7 @@
       // Admin: cada dato se guarda al momento (antes quedaba resaltado y se perdía si no tocaba «Guardar» o recargaba).
       if (K.d.puedeEditar) guardarDato(main, k, lbl);
     };
-    inp.onblur = ok;
+    inp.onblur = ok; if (esSel) inp.onchange = ok;
     inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") { hecho = true; repintar(main); } };
   }
   async function guardarDato(main, k, lbl) {

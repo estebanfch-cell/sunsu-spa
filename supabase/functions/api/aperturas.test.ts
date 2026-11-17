@@ -4,7 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./erp_api.ts";
 import "./aperturas_api.ts";
-import { promedioProducto, rendimiento } from "./aperturas_beta.ts";
+import { destinoDeCabina, promedioProducto, rendimiento } from "./aperturas_beta.ts";
 import type { Row } from "./domain.ts";
 
 const FIRMA = "data:image/png;base64," + "A".repeat(400);
@@ -26,6 +26,22 @@ function semilla() {
 }
 
 describe("📦 Abrir producto", () => {
+  it("si el ticket dice la cabina, el facial va solo a los envases abiertos en esa cabina", () => {
+    const t = (iso: string) => Date.parse(iso);
+    const aps = [
+      { id: "c1", destino: "CABINA", abierto_at: "2026-11-01T14:00:00Z", cerrado_at: null, contenido: 30, costo: 12 },
+      { id: "c2", destino: "CAB2", abierto_at: "2026-11-01T14:00:00Z", cerrado_at: null, contenido: 30, costo: 12 },
+    ];
+    assert.equal(destinoDeCabina("Cabina 2"), "CAB2"); assert.equal(destinoDeCabina("Local"), "VENTA"); assert.equal(destinoDeCabina(""), "");
+    const fac = [
+      { t: t("2026-11-02T12:00:00Z"), code: "SUNSU-01", cabina: "CAB2" },
+      { t: t("2026-11-02T13:00:00Z"), code: "SUNSU-01" },
+      { t: t("2026-11-02T14:00:00Z"), code: "SUNSU-01", cabina: "CAB3" }, // nada abierto en Cabina 3 → entre todos
+    ];
+    const R = rendimiento(aps, fac, ["SUNSU-01"], t("2026-11-10T00:00:00Z"));
+    assert.equal(R.get("c1")!.faciales, 1);
+    assert.equal(R.get("c2")!.faciales, 2);
+  });
   it("reparte cada facial entre los envases abiertos y promedia los cerrados", () => {
     const aps = [
       { id: "a", abierto_at: "2026-11-01T14:00:00Z", cerrado_at: "2026-11-03T14:00:00Z", contenido: 30, costo: 12 },

@@ -127,6 +127,10 @@ describe("detalle de ticket v2", () => {
     assert.equal((g2.info as Row).factura, "001-001-000002600");
     assert.equal(g2.lineasBeta, false);
     assert.match(String((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { email: "malo" } })).error), /Email/);
+    // Cabina (opcional): solo Cabina 1/2/3 o Local.
+    assert.equal((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { cabina: "cabina 2" } })).ok, true);
+    assert.equal(((await h("tk_get", "adm", { clave: "TK-SO-1" })).info as Row).cabina, "Cabina 2");
+    assert.match(String((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { cabina: "Cabina 9" } })).error), /Cabina/);
     // Costos: admin solamente; producto a costo promedio.
     assert.match(String((await h("tk_costos", "cos", { clave: "TK-SO-1" })).error), /administradores/);
     assert.equal((await h("tk_costos_guardar", "adm", { clave: "TK-SO-1", tipo: "%", valor: 10 })).ok, true);
