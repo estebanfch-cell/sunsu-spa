@@ -2,6 +2,7 @@
 // El saldo vive en gift_cards.notas (SALDO:n), en orig.usos y, si 0015 ya corrió, en saldo.
 // La quincena de proveedores es 1–15 y 16–fin. No es el ciclo de comisiones 26–25.
 
+import { consultar } from "./query.ts";
 import { aplicarAjuste, vistaPaquete } from "./paquetes_beta.ts";
 import type { Db } from "./db.ts";
 import {
@@ -585,12 +586,49 @@ export function ordenarClientes(rows: Row[], q: string): Row[] {
     .map((x) => x.r);
 }
 
+
+// ── Lecturas livianas (Emilia 17/11: Clientes tardaba): solo las columnas que se usan, en paralelo.
+const TK_LIGERO = ["id", "sheet_row", "beta_num", "timestamp", "atendido_por", "nombre", "apellido", "id_3", "estimado", "borrado_at"];
+/** Tickets con columnas mínimas; los cancelados/anulados llevan orig.anulado para que no sumen. */
+export async function ticketsLigeros(db: Db): Promise<Row[]> {
+  try {
+    const [rows, anul] = await Promise.all([
+      consultar(db, "tickets", { cols: TK_LIGERO }),
+      consultar(db, "tickets", { cols: ["id"], filtros: [{ op: "or", de: [{ col: "orig->>anulado", op: "eq", val: "true" }, { col: "orig->>cancelado", op: "eq", val: "true" }] }] }),
+    ]);
+    const A = new Set(anul.rows.map((r) => String(r.id)));
+    for (const r of rows.rows) if (A.has(String(r.id))) r.orig = { anulado: true };
+    return rows.rows;
+  } catch { return await db.all("tickets"); }
+}
+/** Tickets completos de una clienta (por su clave), sin bajar la tabla entera. */
+export async function ticketsDeClave(db: Db, key: string): Promise<Row[]> {
+  try {
+    const idx = (await consultar(db, "tickets", { cols: ["id", "sheet_row", "beta_num", "nombre", "apellido", "id_3"] })).rows.filter((r) => claveCliente(r) === key);
+    if (!idx.length) return [];
+    if (idx.some((r) => r.id == null)) throw new Error("sin id");
+    const out: Row[] = [];
+    for (let i = 0; i < idx.length; i += 150) out.push(...(await consultar(db, "tickets", { filtros: [{ col: "id", op: "in", val: idx.slice(i, i + 150).map((r) => n(r.id)) }] })).rows);
+    return out;
+  } catch { return (await db.all("tickets")).filter((r) => claveCliente(r) === key); }
+}
+/** Registros (QR) completos de una clienta por su clave. */
+export async function registrosDeClave(db: Db, key: string): Promise<Row[]> {
+  try {
+    const idx = (await consultar(db, "clientas_registro", { cols: ["id", "sheet_row", "cedula", "nombre", "apellido"] })).rows.filter((r) => claveRegistro(r) === key);
+    if (!idx.length) return [];
+    if (idx.some((r) => r.id == null)) throw new Error("sin id");
+    return (await consultar(db, "clientas_registro", { filtros: [{ col: "id", op: "in", val: idx.slice(0, 150).map((r) => n(r.id)) }] })).rows;
+  } catch { return (await db.all("clientas_registro").catch(() => [] as Row[])).filter((r) => claveRegistro(r) === key); }
+}
+const REG_LIGERO = ["id", "sheet_row", "cedula", "nombre", "apellido", "borrado_at", "sector_donde_vive", "telefono"];
+export async function registrosLigeros(db: Db): Promise<Row[]> {
+  try { return (await consultar(db, "clientas_registro", { cols: REG_LIGERO })).rows; } catch { return await db.all("clientas_registro").catch(() => [] as Row[]); }
+}
 export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verTodos = admin): Promise<Row> {
-  let rows = await db.all("tickets");
+  let [rows, regs] = await Promise.all([ticketsLigeros(db), registrosLigeros(db)]);
   if (!verTodos) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
   const map = new Map<string, GrupoCliente>();
-  let regs: Row[] = [];
-  try { regs = await db.all("clientas_registro"); } catch { regs = []; }
   const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)));
   const fichas = new Map<string, Row>();
   const codigos = new Map<string, { sr: number; cod: string }>();
@@ -657,10 +695,21 @@ function usosPaquete(r: Row): { usado: boolean; fecha: string }[] {
 
 export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[]> {
   let rows: Row[] = [];
-  try { rows = await db.all("paquetes"); } catch { return []; }
-  const out: Row[] = [];
   // Ajustes beta del paquete (sesiones, clienta, producto, baja): beta_paquete_ajustes.
   const AJ = new Map(((await db.all("beta_paquete_ajustes").catch(() => [] as Row[])) as Row[]).map((a) => [String(a.paquete_id), a]));
+  try {
+    // Índice liviano → solo se bajan completos los paquetes de esta clienta.
+    const idx = (await consultar(db, "paquetes", { cols: ["id", "cedula", "nombres", "apellidos", "borrado_at"] })).rows.filter((r0) => {
+      const r = aplicarAjuste(r0, AJ.get(String(r0.id)) || null);
+      const pc = normCedula(r.cedula), pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
+      return (ced && pc === ced) || (nom && pn === nom && (!ced || !pc));
+    });
+    if (idx.some((r) => r.id == null)) throw new Error("sin id");
+    for (let i = 0; i < idx.length; i += 150) rows.push(...(await consultar(db, "paquetes", { filtros: [{ col: "id", op: "in", val: idx.slice(i, i + 150).map((r) => r.id as string | number) }] })).rows);
+  } catch {
+    try { rows = await db.all("paquetes"); } catch { return []; }
+  }
+  const out: Row[] = [];
   for (const r0 of rows) {
     if (r0.borrado_at) continue;
     const aj = AJ.get(String(r0.id)) || null;
@@ -681,11 +730,14 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
 }
 
 export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string): Promise<Row> {
-  let rows = (await db.all("tickets")).filter((r) => claveCliente(r) === key);
+  // En paralelo y liviano: tickets de la clienta, catálogo, productos (sin fotos) y su registro.
+  let [rows, cats, prods, regs] = await Promise.all([
+    ticketsDeClave(db, key),
+    db.all("catalogo").catch(() => [] as Row[]),
+    consultar(db, "erp_productos", { cols: ["id", "sku", "nombre", "clase", "uso", "precio_venta", "beta_pvp", "costo_promedio", "activo"] }).then((x) => x.rows).catch(() => db.all("erp_productos").catch(() => [] as Row[])),
+    registrosDeClave(db, key),
+  ]);
   if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
-  const cats = await db.all("catalogo").catch(() => [] as Row[]);
-  const prods = await db.all("erp_productos").catch(() => [] as Row[]);
-  const regs = await db.all("clientas_registro").catch(() => [] as Row[]);
   const ficha = regs.find((r) => !r.borrado_at && claveRegistro(r) === key) || {};
   if (!s(ficha.cedula) && !s(ficha.nombre) && regs.some((r) => r.borrado_at && claveRegistro(r) === key)) {
     return { error: "Esa clienta está eliminada" };
