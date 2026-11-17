@@ -3278,8 +3278,8 @@ describe("escalón en el app en vivo", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
     assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
-    assert.match(html, /SUNSU_APP_VERSION='v2026.11.13.03'/);
-    assert.match(html, /var v='20261113.03'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.11.17.01'/);
+    assert.match(html, /var v='20261117.01'/);
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
