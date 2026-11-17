@@ -19,6 +19,7 @@ import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
+import { cargarAlias } from "./clientes_alias.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
@@ -911,6 +912,7 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   const real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  if (real) await cargarAlias(ctx.db).catch(() => null); // 🔗 clientas unidas (clientes_alias)
   if (action === "ver_como") {
     if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
     const view = await loadUsuario(ctx, s(p.uid) || s(p.preview_uid));

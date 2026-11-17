@@ -1392,12 +1392,55 @@ function lecturaEnVista(accion) {
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
   return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
 }
+// Formato único de identificaciones y celulares (Emilia 17/11): lo usan todas las pantallas y cada respuesta de la api.
+// Cédula/RUC/pasaporte sin «.0», puntos ni espacios (con el 0 de provincia); celular +593 99 999 9999. Solo lectura.
+window.MCFmt = (function () {
+  function id(v) {
+    var t = String(v == null ? "" : v).trim();
+    if (!t || /^(false|null|undefined)$/i.test(t)) return "";
+    if (/^\d+(\.\d+)?e\+?\d+$/i.test(t)) t = Number(t).toFixed(0);
+    t = t.replace(/\.0+$/, "");
+    if (/[a-z]/i.test(t)) { var a = t.toUpperCase().replace(/[^A-Z0-9]/g, ""); return /\d/.test(a) && a.length >= 5 && !/\s\S+\s/.test(t) ? a : t; }
+    var d = t.replace(/\D/g, "");
+    if (!d) return t;
+    return d.length === 9 || d.length === 12 ? "0" + d : d;
+  }
+  function tel(v) {
+    var t = String(v == null ? "" : v).trim();
+    if (!t || /^(false|null|undefined|-)$/i.test(t)) return "";
+    if (/^\d+(\.\d+)?e\+?\d+$/i.test(t)) t = Number(t).toFixed(0);
+    t = t.replace(/\.0+$/, "");
+    var d = t.replace(/\D/g, "");
+    if (!d) return t;
+    if (d.indexOf("593") === 0) d = d.slice(3);
+    d = d.replace(/^0+/, "");
+    if (d.length === 9 && d[0] === "9") return "+593 " + d.slice(0, 2) + " " + d.slice(2, 5) + " " + d.slice(5);
+    if (d.length === 8 && /^[2-7]/.test(d)) return "+593 " + d[0] + " " + d.slice(1, 4) + " " + d.slice(4);
+    return t;
+  }
+  var RX_ID = /(^|_)(cedula|cedulas|ruc|ci|pasaporte|identificacion|id_3|ced)(_|$)/, RX_TEL = /(^|_)(telefono|telefonos|tel|celular|movil|whatsapp|phone|fono)(_|$)/;
+  function clave(k) { return String(k).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_"); }
+  function resp(v, p) {
+    p = p || 0;
+    if (p > 12 || v == null || typeof v !== "object") return v;
+    if (Array.isArray(v)) { for (var i = 0; i < v.length; i++) v[i] = resp(v[i], p + 1); return v; }
+    Object.keys(v).forEach(function (k) {
+      var x = v[k];
+      if (x != null && typeof x === "object") { v[k] = resp(x, p + 1); return; }
+      if (typeof x !== "string" && typeof x !== "number") return;
+      var c = clave(k);
+      if (RX_ID.test(c)) v[k] = id(x); else if (RX_TEL.test(c)) v[k] = tel(x);
+    });
+    return v;
+  }
+  return { id: id, tel: tel, resp: resp };
+})();
 async function api(accion, body = {}) {
   if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
     return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
   }
-  if (previewOn()) return previewApi(accion, body);
-  const payload = { accion, ...body, ...(state.vista ? { preview_uid: state.vista.uid, preview: true } : {}) };
+  if (previewOn()) { const pv = await previewApi(accion, body); return window.MCFmt ? window.MCFmt.resp(pv) : pv; }
+  const payload = { accion, _fmt: 1, ...body, ...(state.vista ? { preview_uid: state.vista.uid, preview: true } : {}) };
   if (state.token) payload.token = state.token;
   let res;
   try {
@@ -1411,6 +1454,7 @@ async function api(accion, body = {}) {
   }
   let data;
   try { data = await res.json(); } catch { return { error: "La función no devolvió JSON." }; }
+  if (window.MCFmt) data = window.MCFmt.resp(data);
   if (data && data.requiere_aprobacion && !body.aprobar_negativo) {
     const ok = window.confirm(data.error || "El stock quedaría negativo. ¿Aprobar y dejar constancia de quién lo autorizó?");
     if (!ok) return data;
@@ -1464,7 +1508,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "aperturas") return route.sub === "costo" ? "Costo por facial" : "Abrir producto";
   if (route.mod === "acceso") return "Mi acceso";
   if (route.mod === "barras") return "Códigos de barras";
-  if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : "Clientes") : "Registro de clientas";
+  if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : route.sub === "duplicados" ? "Clientas duplicadas" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return route.sub === "pagos" ? "Pagos recibidos" : "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "productos") return route.sub === "p" ? "Producto" : route.sub === "nuevo" ? "Nuevo producto" : route.sub === "catalogo" ? "Catálogo anterior" : "Productos";
@@ -5671,27 +5715,28 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk22"></script>
-<script src="beta-screens.js?v=20261117tk22"></script>
-<script src="beta-inline.js?v=20261117tk22"></script>
-<script src="mc-productos.js?v=20261117tk22"></script>
-<script src="mc-nav.js?v=20261117tk22"></script>
-<script src="mc-permisos.js?v=20261117tk22"></script>
-<script src="mc-protocolos.js?v=20261117tk22"></script>
-<script src="mc-conteo.js?v=20261117tk22"></script>
-<script src="mc-transferencias.js?v=20261117tk22"></script>
-<script src="mc-ajustes.js?v=20261117tk22"></script>
-<script src="vendor-qrcode.js?v=20261117tk22"></script>
-<script src="mc-tickets.js?v=20261117tk22"></script>
-<script src="mc-paquetes.js?v=20261117tk22"></script>
-<script src="mc-aperturas.js?v=20261117tk22"></script>
-<script src="mc-acceso.js?v=20261117tk22"></script>
-<script src="mc-barras.js?v=20261117tk22"></script>
-<script src="mc-caja.js?v=20261117tk22"></script>
-<script src="mc-giftcards.js?v=20261117tk22"></script>
-<script src="mc-multas.js?v=20261117tk22"></script>
-<script src="mc-clientes.js?v=20261117tk22"></script>
-<script src="mc-agenda.js?v=20261117tk22"></script>
+<script src="mc-buscar.js?v=20261117tk23"></script>
+<script src="beta-screens.js?v=20261117tk23"></script>
+<script src="beta-inline.js?v=20261117tk23"></script>
+<script src="mc-productos.js?v=20261117tk23"></script>
+<script src="mc-nav.js?v=20261117tk23"></script>
+<script src="mc-permisos.js?v=20261117tk23"></script>
+<script src="mc-protocolos.js?v=20261117tk23"></script>
+<script src="mc-conteo.js?v=20261117tk23"></script>
+<script src="mc-transferencias.js?v=20261117tk23"></script>
+<script src="mc-ajustes.js?v=20261117tk23"></script>
+<script src="vendor-qrcode.js?v=20261117tk23"></script>
+<script src="mc-tickets.js?v=20261117tk23"></script>
+<script src="mc-paquetes.js?v=20261117tk23"></script>
+<script src="mc-aperturas.js?v=20261117tk23"></script>
+<script src="mc-acceso.js?v=20261117tk23"></script>
+<script src="mc-barras.js?v=20261117tk23"></script>
+<script src="mc-caja.js?v=20261117tk23"></script>
+<script src="mc-giftcards.js?v=20261117tk23"></script>
+<script src="mc-multas.js?v=20261117tk23"></script>
+<script src="mc-clientes.js?v=20261117tk23"></script>
+<script src="mc-clientes-dup.js?v=20261117tk23"></script>
+<script src="mc-agenda.js?v=20261117tk23"></script>
 <script>draw();</script>
 </body>
 </html>
