@@ -26,6 +26,11 @@ function validarLado(b: string, sub: string): string | null {
   if (sub && (b !== "CABINA" || !SUBS_CABINA.some((x) => x.codigo === sub))) return "Sububicación inválida";
   return null;
 }
+/** Disponible en un lado: en Bodega Cabina sin sububicación cuenta lo «Sin cabina asignada». */
+export function disponibleEn(p: Row, bodega: string, sub: string): number {
+  if (bodega === "CABINA") return n((p.porSubCabina as Row | undefined)?.[sub || "SIN"]);
+  return sistemaDe(p, bodega, sub);
+}
 function sigNumero(rows: Row[]): string {
   let max = 0;
   for (const r of rows) { const m = s(r.numero).match(/^TR-(\d+)$/); if (m) max = Math.max(max, Number(m[1])); }
@@ -60,7 +65,7 @@ async function validarLineas(ctx: Ctx, ses: Ses, origen: string, origenSub: stri
     ya.add(s(p.id));
     const q = n(x.cantidad);
     if (!(q > 0)) return { error: s(p.skuVisible || p.sku) + ": la cantidad tiene que ser mayor a 0" };
-    const disp = sistemaDe(p, origen, origenSub);
+    const disp = disponibleEn(p, origen, origenSub);
     if (q > disp + 1e-9) return { error: s(p.skuVisible || p.sku) + ": stock insuficiente en " + bodegaNombre(origen, origenSub) + " (" + round2(disp) + ")" };
     L.push({ producto_id: s(p.id), sku: s(p.skuVisible || p.sku), nombre: s(p.nombre), cantidad: round2(q), disponible: round2(disp) });
   }
@@ -90,7 +95,7 @@ extend("trfb_get", "any", async (p, ctx, ses) => {
   const porId = new Map(prods.map((x) => [s(x.id), x]));
   const lineas = r.L.map((l) => {
     const pr = porId.get(s(l.producto_id));
-    return { id: l.id, productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), disponibleAlCrear: n(l.disponible), disponibleAhora: pr ? round2(sistemaDe(pr, s(r.t.origen), s(r.t.origen_sub))) : null };
+    return { id: l.id, productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), disponibleAlCrear: n(l.disponible), disponibleAhora: pr ? round2(disponibleEn(pr, s(r.t.origen), s(r.t.origen_sub))) : null };
   });
   const movs = (await todas(ctx, "beta_stock_movimientos")).filter((m) => s(m.doc_id) === s(r.t.id)).sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
   let log: Row[] = [];

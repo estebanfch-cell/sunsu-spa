@@ -23,7 +23,7 @@
   async function prods() { if (T.prods) return T.prods; var d = await api("mcprod_list", {}); T.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; }); return T.prods; }
   function disp(p, bod, sub) {
     if (!p) return 0;
-    if (bod === "CABINA" && sub) return Number((p.porSubCabina || {})[sub]) || 0;
+    if (bod === "CABINA") return Number((p.porSubCabina || {})[sub || "SIN"]) || 0;
     return Number((p.porGrupo || {})[bod]) || 0;
   }
   function lugar(m, bod, sub) {
@@ -68,7 +68,7 @@
   function permitido(m, o, d) { return m.admin || [o, d].sort().join("|") !== "CABINA|OFICINA"; }
   function ladoHtml(m, k, bod, sub) {
     return '<label>' + (k === "o" ? "Origen" : "Destino") + '<select id="mctr-' + k + 'b">' + m.bodegas.map(function (b) { return opt(b.id, b.nombre, bod); }).join("") + "</select></label>" +
-      '<label id="mctr-' + k + 'sw"' + (bod === "CABINA" ? "" : " hidden") + '>Sububicación ' + (k === "o" ? "origen" : "destino") + '<select id="mctr-' + k + 's">' + opt("", "Bodega Cabina (sin cabina)", sub) + m.subsCabina.map(function (b) { return opt(b.id, b.nombre, sub); }).join("") + "</select></label>";
+      '<label id="mctr-' + k + 'sw"' + (bod === "CABINA" ? "" : " hidden") + '>Sububicación ' + (k === "o" ? "origen" : "destino") + '<select id="mctr-' + k + 's">' + opt("", "Sin cabina asignada", sub) + m.subsCabina.map(function (b) { return opt(b.id, b.nombre, sub); }).join("") + "</select></label>";
   }
   function lineasFormHtml() {
     var F = T.form, byId = {};

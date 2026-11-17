@@ -73,6 +73,7 @@ describe("transferencias beta", () => {
     await h("trfb_estado", "adm", { id: c2.id, que: "recibir" });
     const s2 = await grupo(h, "p1");
     assert.equal(s2.g.CABINA, 2); assert.equal(s2.s.CABINA_2, 1); assert.equal(s2.s.CABINA_3, 1);
+    assert.match(String((await h("trfb_save", "adm", { origen: "CABINA", destino: "CONSIGNACION", lineas: [{ producto_id: "p1", cantidad: 1 }] })).error), /Sin cabina asignada \(0\)|insuficiente/);
     const ls = await h("trfb_list", "adm");
     assert.deepEqual((ls.items as Row[]).map((t) => t.numero).sort(), ["TR-001", "TR-002"]);
   });
