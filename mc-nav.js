@@ -61,6 +61,7 @@
       { id: "compras", label: "Compras", items: [
         ["compras", "Órdenes de compra", "#/m/compras"],
         ["compras", "Cotizaciones de proveedor", "#/m/compras/cotizaciones"],
+        ["recepciones", "Recepciones", "#/m/recepciones"],
         ["proveedores", "Proveedores", "#/m/proveedores"],
         // Órdenes pendientes, Actas de recepción y Pagos a proveedores fuera (Emilia 17/11): los pagos van dentro de cada OC.
       ] },
