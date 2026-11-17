@@ -945,7 +945,7 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
     }
   }
   const matriz = await matrizDe(db);
-  const gate = gateAccion(action, ses0, matriz) || (ses0 ? gateNivel(action, ses0.rol, ovUsuario) : null);
+  const gate = gateAccion(action, ses0, matriz) || (ses0 ? gateNivel(action, ses0.rol, ovUsuario, p as Row) : null);
   if (gate) return gate;
   if (action === "modo_prueba" || action === "prueba_borrar") {
     if (!ses0) return { error: "Inicia sesión" };

@@ -4338,7 +4338,7 @@ async function renderUsuarios() {
       ["comision_faciales", "💆 Gana comisión de faciales", vals.comision_faciales],
       ["comision_faciales_desde", "Faciales desde", vals.comision_faciales_desde],
     ];
-    if (ix && ix.edita() && fila) return `<div class="card">${off ? `<p class="note">sin com. faciales · Cosmetóloga aprendiz</p>` : ""}${ix.lineas("usuarios", fila, pares)} ${ix.borrar("usuarios", fila)}</div>`;
+    if (ix && ix.edita() && fila) return `<div class="card">${off ? `<p class="note">sin com. faciales · Cosmetóloga aprendiz</p>` : ""}${ix.lineas("usuarios", fila, pares)} ${ix.borrar("usuarios", fila)} ${window.MCPermisos && !/admin/i.test(String(u.role || "")) ? `<a class="btn ghost small" href="#/m/mc/upermisos/${encodeURIComponent(fila)}">🔐 Permisos (módulos · ver / crear / editar / eliminar)</a>` : ""}</div>`;
     const pedir = ix && ix.pide() && fila ? ix.pedir("usuarios", fila, vals) : "";
     return `<div class="row"><div class="sku">${esc(u.role)}</div><div class="name">${esc(u.name)} ${badge}</div><div class="meta">${u.bloqueado ? "bloqueada" : "activa"}${esc(aprendiz)} ${pedir}</div></div>`;
   }).join("");
@@ -5671,27 +5671,27 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk20"></script>
-<script src="beta-screens.js?v=20261117tk20"></script>
-<script src="beta-inline.js?v=20261117tk20"></script>
-<script src="mc-productos.js?v=20261117tk20"></script>
-<script src="mc-nav.js?v=20261117tk20"></script>
-<script src="mc-permisos.js?v=20261117tk20"></script>
-<script src="mc-protocolos.js?v=20261117tk20"></script>
-<script src="mc-conteo.js?v=20261117tk20"></script>
-<script src="mc-transferencias.js?v=20261117tk20"></script>
-<script src="mc-ajustes.js?v=20261117tk20"></script>
-<script src="vendor-qrcode.js?v=20261117tk20"></script>
-<script src="mc-tickets.js?v=20261117tk20"></script>
-<script src="mc-paquetes.js?v=20261117tk20"></script>
-<script src="mc-aperturas.js?v=20261117tk20"></script>
-<script src="mc-acceso.js?v=20261117tk20"></script>
-<script src="mc-barras.js?v=20261117tk20"></script>
-<script src="mc-caja.js?v=20261117tk20"></script>
-<script src="mc-giftcards.js?v=20261117tk20"></script>
-<script src="mc-multas.js?v=20261117tk20"></script>
-<script src="mc-clientes.js?v=20261117tk20"></script>
-<script src="mc-agenda.js?v=20261117tk20"></script>
+<script src="mc-buscar.js?v=20261117tk21"></script>
+<script src="beta-screens.js?v=20261117tk21"></script>
+<script src="beta-inline.js?v=20261117tk21"></script>
+<script src="mc-productos.js?v=20261117tk21"></script>
+<script src="mc-nav.js?v=20261117tk21"></script>
+<script src="mc-permisos.js?v=20261117tk21"></script>
+<script src="mc-protocolos.js?v=20261117tk21"></script>
+<script src="mc-conteo.js?v=20261117tk21"></script>
+<script src="mc-transferencias.js?v=20261117tk21"></script>
+<script src="mc-ajustes.js?v=20261117tk21"></script>
+<script src="vendor-qrcode.js?v=20261117tk21"></script>
+<script src="mc-tickets.js?v=20261117tk21"></script>
+<script src="mc-paquetes.js?v=20261117tk21"></script>
+<script src="mc-aperturas.js?v=20261117tk21"></script>
+<script src="mc-acceso.js?v=20261117tk21"></script>
+<script src="mc-barras.js?v=20261117tk21"></script>
+<script src="mc-caja.js?v=20261117tk21"></script>
+<script src="mc-giftcards.js?v=20261117tk21"></script>
+<script src="mc-multas.js?v=20261117tk21"></script>
+<script src="mc-clientes.js?v=20261117tk21"></script>
+<script src="mc-agenda.js?v=20261117tk21"></script>
 <script>draw();</script>
 </body>
 </html>

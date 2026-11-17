@@ -30,6 +30,8 @@
       ".mcu-seg button:last-child{border-right:0}.mcu-seg button.on{background:var(--navy);color:#fff}.mcu-seg button:disabled{opacity:.3;cursor:not-allowed}",
       ".mcu-seg button.ch{box-shadow:inset 0 -3px 0 var(--gold)}",
       ".mcu-t select{margin:0;padding:5px 8px;font-size:.75rem;width:auto}",
+      ".mcu-ck{text-align:center!important;width:58px}.mcu-ck input{width:17px;height:17px;margin:0;accent-color:var(--navy,#3D5A7A);cursor:pointer}.mcu-ck input:disabled{opacity:.3;cursor:not-allowed}.mcu-ck.ch{box-shadow:inset 0 -3px 0 var(--gold)}",
+      ".mcu-sw{position:relative;display:inline-block;width:38px;height:22px;margin:0}.mcu-sw input{opacity:0;width:0;height:0;position:absolute}.mcu-sw i{position:absolute;inset:0;border-radius:999px;background:var(--gray-l,#d9dde5);transition:.15s;cursor:pointer}.mcu-sw i:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}.mcu-sw input:checked+i{background:var(--green,#2e7d52)}.mcu-sw input:checked+i:before{transform:translateX(16px)}.mcu-sw input:disabled+i{opacity:.5;cursor:not-allowed}.mcu-sw.ch i{box-shadow:0 0 0 2px var(--gold)}",
       ".mcu-rol{color:var(--gray);font-size:.68rem}",
       ".mcu-cero{background:var(--red-l);color:var(--red);border-radius:10px;padding:8px 12px;font-weight:800;font-size:.8rem}",
       ".mcu-flags label{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--text);font-weight:600;margin:6px 0}",
@@ -42,6 +44,11 @@
     document.head.appendChild(s);
   }
 
+  var LET = [["v", "Ver"], ["c", "Crear"], ["e", "Editar"], ["d", "Eliminar"]];
+  function crudDeNivel(n) { n = Number(n) || 0; return n <= 0 ? "" : n === 1 ? "v" : n === 2 ? "vce" : "vced"; }
+  function nivelDeCrud(c, max) { if (!c) return 0; if (c.indexOf("d") >= 0) return Math.min(3, max); if (c.indexOf("c") >= 0 || c.indexOf("e") >= 0) return Math.min(2, max); return 1; }
+  function crudDe(x, mod) { return x.crud && x.crud[mod] !== undefined ? x.crud[mod] : crudDeNivel((x.niveles || {})[mod]); }
+  function crudTodo(x) { var o = {}; (P.data.modulos || []).forEach(function (m) { o[m.id] = crudDe(x, m.id); }); return o; }
   function usuario() { return (P.data.usuarios || []).find(function (u) { return u.uid === P.sel; }); }
   function perfil(id) { return (P.data.perfiles || []).find(function (p) { return p.id === id; }); }
 
@@ -49,7 +56,7 @@
     var ef = u.efectivo || {};
     var alc = {};
     (P.data.modulos || []).forEach(function (m) { if (m.alcance) alc[m.id] = (ef.alcance || {})[m.id] === "no" ? ((u.rolBase.alcance || {})[m.id] || "propio") : (ef.alcance || {})[m.id]; });
-    return { niveles: Object.assign({}, ef.niveles), alcance: alc, flags: Object.assign({}, ef.flags), personas: (ef.personas || []).slice(), perfil: u.perfil || "" };
+    return { niveles: Object.assign({}, ef.niveles), alcance: alc, flags: Object.assign({}, ef.flags), personas: (ef.personas || []).slice(), perfil: u.perfil || "", crud: crudTodo(ef) };
   }
   /** Un perfil no trae lista de personas: «todas» si todo lo que abre es «todo», si no «solo ella». */
   function personasDe(p) {
@@ -58,7 +65,7 @@
   }
   function desdePerfil(p, nombre) {
     var fl = { precios: true, saldos: true, comisiones: true, rol_pagos: true };
-    return { niveles: Object.assign({}, p.niveles), alcance: Object.assign({}, p.alcance), flags: Object.assign(fl, p.flags), personas: personasDe(p), perfil: nombre };
+    return { niveles: Object.assign({}, p.niveles), alcance: Object.assign({}, p.alcance), flags: Object.assign(fl, p.flags), personas: personasDe(p), perfil: nombre, crud: crudTodo(p) };
   }
   /** alcance que se guarda: lo dice «Datos de quién» (+ la lista en _personas). */
   function alcanceDe(d) {
@@ -69,9 +76,9 @@
   }
   /** Punto de partida al personalizar: todo apagado (Emilia, 2026-11-16). */
   function ceros() {
-    var d = { niveles: {}, alcance: {}, flags: {}, personas: [], perfil: "" };
+    var d = { niveles: {}, alcance: {}, flags: {}, personas: [], perfil: "", crud: {} };
     (P.data.flags || []).forEach(function (f) { d.flags[f.id] = false; });
-    (P.data.modulos || []).forEach(function (m) { d.niveles[m.id] = 0; if (m.alcance) d.alcance[m.id] = "propio"; });
+    (P.data.modulos || []).forEach(function (m) { d.niveles[m.id] = 0; d.crud[m.id] = ""; if (m.alcance) d.alcance[m.id] = "propio"; });
     return d;
   }
   function base(u) { return u.rolBase || { niveles: {}, alcance: {}, flags: {} }; }
@@ -84,8 +91,8 @@
   }
   /** Se guarda completo: cada módulo con su nivel y cada interruptor, así nada cae de vuelta al rol. */
   function diff(u, d) {
-    var out = { niveles: {}, alcance: alcanceDe(d), flags: {} };
-    (P.data.modulos || []).forEach(function (m) { out.niveles[m.id] = Number(d.niveles[m.id]) || 0; });
+    var out = { niveles: {}, alcance: alcanceDe(d), flags: {}, crud: {} };
+    (P.data.modulos || []).forEach(function (m) { var c = crudDe(d, m.id); out.crud[m.id] = c; out.niveles[m.id] = nivelDeCrud(c, m.max); });
     (P.data.flags || []).forEach(function (f) { out.flags[f.id] = !!d.flags[f.id]; });
     return out;
   }
@@ -102,24 +109,26 @@
   function editorHtml(d, b, soloLectura) {
     var grupo = "";
     var filas = (P.data.modulos || []).map(function (m) {
-      var g = m.grupo !== grupo ? '<tr class="mcu-g"><td colspan="3">' + e(m.grupo) + "</td></tr>" : "";
+      var g = m.grupo !== grupo ? '<tr class="mcu-g"><td colspan="7">' + e(m.grupo) + "</td></tr>" : "";
       grupo = m.grupo;
-      var n = d.niveles[m.id] || 0;
-      var seg = '<span class="mcu-seg">' + NIV.map(function (t, i) {
-        var cls = (i === n ? "on" : "") + (i === n && n !== (b.niveles[m.id] || 0) ? " ch" : "");
-        return '<button type="button" class="' + cls + '" data-mcu-n="' + e(m.id) + '" data-v="' + i + '"' + (i > m.max || soloLectura ? " disabled" : "") + ">" + e(t) + "</button>";
-      }).join("") + "</span>";
+      var c = crudDe(d, m.id), cb = crudDe(b, m.id), n = c ? 1 : 0, dis = soloLectura ? " disabled" : "";
+      var on = '<label class="mcu-sw' + (!!c !== !!cb ? " ch" : "") + '" title="Módulo encendido / apagado"><input type="checkbox" data-mcu-on="' + e(m.id) + '"' + (c ? " checked" : "") + dis + '><i></i></label>';
+      var cajas = LET.map(function (l) {
+        var tiene = c.indexOf(l[0]) >= 0, cambio = tiene !== (cb.indexOf(l[0]) >= 0);
+        return '<td class="mcu-ck' + (cambio ? " ch" : "") + '"><input type="checkbox" aria-label="' + e(l[1] + " " + m.label) + '" data-mcu-c="' + e(m.id) + '" data-l="' + l[0] + '"' + (tiene ? " checked" : "") + (!c || soloLectura ? " disabled" : "") + "></td>";
+      }).join("");
       var alc = m.alcance && n > 0 ? '<span class="mcu-rol">' + e(quienCorto(d)) + "</span>" : "";
-      var rol = '<div class="mcu-rol">Rol: ' + e(NIV[b.niveles[m.id] || 0]) + (m.alcance && b.alcance[m.id] ? " · " + (b.alcance[m.id] === "propio" ? "lo suyo" : "todo") : "") + "</div>";
-      return g + "<tr><td><b>" + e(m.label) + "</b>" + rol + "</td><td>" + seg + "</td><td>" + alc + "</td></tr>";
+      var rol = '<div class="mcu-rol">Rol: ' + e(textoCrud(cb)) + (m.alcance && b.alcance[m.id] ? " · " + (b.alcance[m.id] === "propio" ? "lo suyo" : "todo") : "") + "</div>";
+      return g + "<tr><td><b>" + e(m.label) + "</b>" + rol + "</td><td>" + on + "</td>" + cajas + "<td>" + alc + "</td></tr>";
     }).join("");
     var flags = (P.data.flags || []).map(function (f) {
       return '<label><input type="checkbox" data-mcu-f="' + e(f.id) + '"' + (d.flags[f.id] ? " checked" : "") + (soloLectura ? " disabled" : "") + "> " + e(f.label) + (!!d.flags[f.id] !== !!b.flags[f.id] ? ' <span class="mcu-tag p">cambiado</span>' : "") + "</label>";
     }).join("");
-    return '<table class="mcu-t"><thead><tr><th>Módulo</th><th>Nivel</th><th>Datos de</th></tr></thead><tbody>' + filas + "</tbody></table>" +
+    return '<table class="mcu-t"><thead><tr><th>Módulo</th><th>Activo</th><th class="mcu-ck">Ver</th><th class="mcu-ck">Crear</th><th class="mcu-ck">Editar</th><th class="mcu-ck">Eliminar</th><th>Datos de</th></tr></thead><tbody>' + filas + "</tbody></table>" +
       '<div class="mcu-card mcu-flags" style="box-shadow:none;padding:10px 0 0"><div class="card-title">Interruptores</div>' + flags + "</div>" +
       quienHtml(d, soloLectura);
   }
+  function textoCrud(c) { if (!c) return "Apagado"; return LET.filter(function (l) { return c.indexOf(l[0]) >= 0; }).map(function (l) { return l[1]; }).join(" · "); }
   function modo(d) { var L = d.personas || []; return L.indexOf("*") >= 0 ? "todos" : L.length || P.verLista ? "lista" : "ella"; }
   function quienCorto(d) {
     var m = modo(d);
@@ -168,7 +177,7 @@
       (!u.personalizado ? '<p class="mcu-cero">Empieza todo apagado. Da solo lo que necesita y guarda.</p>' : "") +
       editorHtml(d, b, false) +
       (u.personalizado ? '<button class="btn ghost small" type="button" id="mcu-reset">Volver a lo de su rol</button>' : "") +
-      '<p class="note">Empezar a personalizar = todo apagado y solo sus datos. Nada = no ve el módulo. Ver = solo mira. Crear / editar = trabaja en él. Aprobar / borrar = además anula, aprueba y borra. Lo marcado con raya dorada difiere de su rol. Cada cambio queda en el registro.</p></div>';
+      '<p class="note">Empezar a personalizar = todo apagado y solo sus datos. Apagado = no ve el módulo. Ver = solo mira. Crear = agrega cosas nuevas. Editar = cambia lo que existe. Eliminar = borra, anula o desmarca. Lo marcado en dorado difiere de su rol. Cada cambio queda en el registro.</p></div>';
   }
 
   function perfilesHtml() {
@@ -224,6 +233,23 @@
     root.querySelectorAll("[data-mcu-col]").forEach(function (b) { b.onclick = function () { setCol(b.getAttribute("data-mcu-col")); }; });
     var ci = root.querySelector("#mcu-colin"); if (ci) ci.onchange = function () { setCol(ci.value); };
     var pn = root.querySelector("#mcu-p-nuevo"); if (pn) pn.onclick = function () { P.perfilSel = "__nuevo"; P.draft = null; pinta(main); };
+    var ponCrud = function (m, c) {
+      var def = (P.data.modulos || []).find(function (x) { return x.id === m; }) || { max: 3 };
+      P.draft.crud = P.draft.crud || {}; P.draft.crud[m] = c; P.draft.niveles[m] = nivelDeCrud(c, def.max);
+      if (def.alcance && c && !P.draft.alcance[m]) P.draft.alcance[m] = "propio";
+      if ((m === "comisiones" || m === "rol_pagos") && c) P.draft.flags[m] = true;
+      pinta(main);
+    };
+    root.querySelectorAll("[data-mcu-on]").forEach(function (x) { x.onchange = function () { ponCrud(x.getAttribute("data-mcu-on"), x.checked ? "v" : ""); }; });
+    root.querySelectorAll("[data-mcu-c]").forEach(function (x) {
+      x.onchange = function () {
+        var m = x.getAttribute("data-mcu-c"), l = x.getAttribute("data-l"), c = crudDe(P.draft, m).replace(l, "");
+        if (x.checked) c += l;
+        if (/[ced]/.test(c) && c.indexOf("v") < 0) c += "v"; // crear/editar/eliminar incluyen ver
+        if (l === "v" && !x.checked) c = ""; // sin ver no hay módulo
+        ponCrud(m, "vced".split("").filter(function (k) { return c.indexOf(k) >= 0; }).join(""));
+      };
+    });
     root.querySelectorAll("[data-mcu-n]").forEach(function (b) {
       b.onclick = function () {
         var m = b.getAttribute("data-mcu-n"), v = Number(b.getAttribute("data-v"));
@@ -239,7 +265,7 @@
       c.onchange = function () {
         var f = c.getAttribute("data-mcu-f");
         P.draft.flags[f] = c.checked;
-        if (c.checked && (f === "comisiones" || f === "rol_pagos") && !(P.draft.niveles[f] > 0)) P.draft.niveles[f] = 1;
+        if (c.checked && (f === "comisiones" || f === "rol_pagos") && !(P.draft.niveles[f] > 0)) { P.draft.niveles[f] = 1; if (P.draft.crud && !P.draft.crud[f]) P.draft.crud[f] = "v"; }
         pinta(main);
       };
     });
@@ -275,7 +301,7 @@
       var dd = diff(u, P.draft);
       var nombre = (root.querySelector("#mcu-pnombre") || {}).value || "";
       g.disabled = true;
-      var r = await api("uperm_guardar", { uid: u.uid, perfil: nombre.trim(), niveles: dd.niveles, alcance: dd.alcance, flags: dd.flags });
+      var r = await api("uperm_guardar", { uid: u.uid, perfil: nombre.trim(), niveles: dd.niveles, alcance: dd.alcance, flags: dd.flags, crud: dd.crud });
       g.disabled = false;
       if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo guardar"; return; }
       P.draft = null;
@@ -295,14 +321,14 @@
     if (cp) cp.onclick = async function () {
       var nombre = ((root.querySelector("#mcu-pnombre") || {}).value || "").trim();
       if (nombre.length < 3) { if (err) err.textContent = "Escribe el nombre del perfil"; return; }
-      var r = await api("uperm_perfil_guardar", { nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags });
+      var r = await api("uperm_perfil_guardar", { nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags, crud: crudTodo(P.draft) });
       if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo"; return; }
       var keep = P.draft; await cargar(); P.draft = keep; P.draft.perfil = nombre; pinta(main);
     };
     var pg = root.querySelector("#mcu-pf-guardar");
     if (pg) pg.onclick = async function () {
       var nombre = ((root.querySelector("#mcu-pf-nombre") || {}).value || "").trim();
-      var r = await api("uperm_perfil_guardar", { id: P.perfilSel === "__nuevo" ? "" : P.perfilSel, nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags });
+      var r = await api("uperm_perfil_guardar", { id: P.perfilSel === "__nuevo" ? "" : P.perfilSel, nombre: nombre, niveles: P.draft.niveles, alcance: alcanceDe(P.draft), flags: P.draft.flags, crud: crudTodo(P.draft) });
       if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo"; return; }
       P.perfilSel = r.id; P.draft = null; await cargar(); pinta(main);
     };
@@ -313,6 +339,7 @@
     render: async function () {
       css();
       if (!(typeof state !== "undefined" && state.admin)) return '<p class="err">Solo un admin ve y edita los permisos por persona.</p>';
+      if (arguments[0] && arguments[0].id && P.sel !== String(arguments[0].id)) { P.sel = String(arguments[0].id); P.draft = null; P.tab = "usuarios"; }
       var er = await cargar();
       if (er) return '<p class="err">' + e(er.error) + "</p>";
       return '<p class="note">Encima del rol de cada persona, como en MineCore: lo que no cambies aquí sigue igual que hoy. La matriz por rol sigue en «Permisos por rol».</p><div id="mcu-root"></div>';
