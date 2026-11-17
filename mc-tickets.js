@@ -100,7 +100,8 @@
   }
   function docsHtml2() {
     var d = K.d, t = d.ticket, h = "";
-    if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
+    // Siempre que el ticket tenga facial/servicio (o datos del tratamiento), aunque no tenga fila en la hoja ni tarjeta enviada.
+    if (t.sheetRow || conTratamiento()) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
     var pq0 = d.paquete || {}; if ((pq0.vigentes && pq0.vigentes.length) || pq0.uso) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
     (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
@@ -356,17 +357,56 @@
     if (t.length === 9) t = "593" + t;
     return t;
   }
-  async function cardDelTicket() {
-    var t = K.d.ticket, busca = function () { return (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }); };
-    var h = busca();
-    if (!h && t.sheetRow) {
-      // Solo este ticket (antes bajaba todo el historial).
-      try { var r = await api("tk_historial", { rows: [t.sheetRow], limit: 1 }); h = (r && r.items && r.items[0]) || null; } catch (x) {}
-    }
-    if (h) (window._tkCards = window._tkCards || {})[t.sheetRow] = h;
-    return h || null;
+  function conTratamiento() {
+    var d = K.d || {}, t = d.ticket || {};
+    return (d.lineas || []).some(function (l) { return l.tipo === "facial" || l.tipo === "servicio" || l.tipo === "extra" || l.tipo === "paquete"; }) || !!(t.notas || t.recomendaciones || t.retorno);
   }
-  function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); tarjetaTicket(K.d.ticket.sheetRow, function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }
+  /** Clave de la tarjeta en window._tkCards: la fila de la hoja o, si el ticket es de la beta, su id. */
+  function claveCard() { var t = K.d.ticket; return t.sheetRow ? t.sheetRow : "tk:" + (t.id || K.d.clave); }
+  /** Tarjeta armada con los datos del ticket que se ve (líneas, notas, recomendaciones, regreso, cosmetóloga, fotos). */
+  function cardDesdeTicket(base) {
+    var d = K.d, t = d.ticket, L = d.lineas || [], out = Object.assign({}, base || {});
+    var nom = function (l) { return String(l.nombre || l.sku || "").trim(); };
+    var fac = L.filter(function (l) { return l.tipo === "facial" || l.tipo === "servicio"; });
+    var ext = L.filter(function (l) { return l.tipo === "extra"; });
+    var paq = L.filter(function (l) { return l.tipo === "paquete"; });
+    var prod = L.filter(function (l) { return l.tipo === "producto"; });
+    if (L.length && !base) {
+      out.facial = fac.map(nom).join(" + ");
+      out.extras = ext.map(function (l) { return nom(l) + (l.cantidad > 1 ? " ×" + l.cantidad : ""); }).join(" | ");
+      var p3 = window._P3S || [], pq = paq[0], es3 = pq && p3.some(function (x) { return String(pq.sku || "").indexOf(x) >= 0; });
+      out.pack3 = pq && es3 ? nom(pq) : ""; out.pack6 = pq && !es3 ? nom(pq) : "";
+      out.productos = prod.map(function (l) { return nom(l) + (l.cantidad > 1 ? " ×" + l.cantidad : ""); });
+    }
+    out.nombre = t.nombre || out.nombre; out.apellido = t.apellido || out.apellido;
+    out.cosmetologa = t.cosmetologa || out.cosmetologa; out.fecha = t.fecha || out.fecha;
+    if (t.notas && !out.notas) out.notas = t.notas;
+    if (t.recomendaciones && !out.recomendaciones) out.recomendaciones = t.recomendaciones;
+    var ret = String(t.retorno || "").trim(), mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(ret);
+    if (mdy) ret = mdy[3] + "-" + ("0" + mdy[1]).slice(-2) + "-" + ("0" + mdy[2]).slice(-2);
+    if (ret && !out.retorno) out.retorno = ret;
+    var fotos = (d.documentos || []).filter(function (x) { return x.tipo === "foto"; });
+    if (!out.fotosAntes && !out.fotosDespues && fotos.length) {
+      out.fotosAntes = fotos.filter(function (x) { return !/despu/i.test(x.nombre || ""); }).map(function (x) { return x.url; }).join(" | ");
+      out.fotosDespues = fotos.filter(function (x) { return /despu/i.test(x.nombre || ""); }).map(function (x) { return x.url; }).join(" | ");
+    }
+    if (!out.colS && t.paquete) out.colS = "";
+    return out;
+  }
+  async function cardDelTicket() {
+    var t = K.d.ticket, h = null;
+    if (t.sheetRow) {
+      h = (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }) || null;
+      // Solo este ticket (antes bajaba todo el historial).
+      if (!h) { try { var r = await api("tk_historial", { rows: [t.sheetRow], limit: 1 }); h = (r && r.items && r.items[0]) || null; } catch (x) {} }
+    }
+    // Sin fila de la hoja (ticket hecho en la beta) o sin tarjeta previa: se arma con los datos del ticket.
+    if (!h && !conTratamiento()) return null;
+    h = cardDesdeTicket(h);
+    (window._tkCards = window._tkCards || {})[claveCard()] = h;
+    return h;
+  }
+  function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); cardDelTicket().then(function (hh) { if (!hh) return res(null); tarjetaTicket(claveCard(), function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }); }
   /** Paquete de ESTE ticket: el que tiene una sesión con la fecha del ticket (o el código del ticket); si no, el vigente. */
   function paqueteDelTicket(items, ced) {
     var tk = K.d.ticket || {}, f = String(tk.fecha || tk.timestamp || "").slice(0, 10), P3 = window._P3S || [];
@@ -525,12 +565,12 @@
       if (pv && window.MCPrevia) { this.hidden = true; window.MCPrevia.abrir(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
       var b = ev.target.closest("[data-doc]"); if (!b) return;
       this.hidden = true;
-      if (b.getAttribute("data-doc") === "tarjeta" && window.MCPrevia) { var hh = await cardDelTicket(); if (!hh) { toast2("No encontré la tarjeta de este ticket", true); return; } window.MCPrevia.tarjeta(K.d.ticket.sheetRow, "Tarjeta del tratamiento"); return; }
+      if (b.getAttribute("data-doc") === "tarjeta" && window.MCPrevia) { var hh = await cardDelTicket(); if (!hh) { toast2("No encontré la tarjeta de este ticket", true); return; } window.MCPrevia.tarjeta(claveCard(), "Tarjeta del tratamiento"); return; }
       if (b.getAttribute("data-doc") === "paquete" && window.MCPrevia && window.MCPrevia.pdf) { window.MCPrevia.pdf("Reporte del paquete", function () { return pdfPaquete().then(function (x) { if (!x.x) throw new Error("No encontré el paquete de este ticket"); return x; }); }); return; }
       if (b.getAttribute("data-doc") === "gc") { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; abrirGiftCard(b.getAttribute("data-cod")); return; }
       var h = await cardDelTicket();
       if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }
-      tarjetaTicket(K.d.ticket.sheetRow);
+      tarjetaTicket(claveCard());
     };
     main.querySelector("#mctk-wa").onclick = function (ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; this.hidden = true; enviarReporte(b.getAttribute("data-wa")); };
     main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
