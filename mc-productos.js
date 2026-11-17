@@ -229,7 +229,7 @@
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
       '<div class="mcp-count" id="mcp-count"></div>' +
       '<div class="sheet-scroll"><table class="mcp-tbl"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
-      '<p class="note">Una sola lista: catálogo, Cabina y productos de la beta unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. <a href="#/m/productos/catalogo">Catálogo anterior</a></p>' +
+      '<p class="note">Una sola lista: catálogo, Cabina y productos de la beta unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
       "</div>";
   }
   function wireLista(main) {
@@ -523,12 +523,13 @@
   }
   function tabHistorial() {
     var cols = [["tipo", "Tipo"], [function (r) { return e(fecha(r.fecha)); }, "Fecha"], ["doc", "Ticket / doc."], ["quien", "Cosmetóloga / proveedor"], ["cliente", "Clienta"], ["cantidad", "Cant.", 1],
-      [function (r) { if (r.tipo !== "Ticket") return ""; var v = r.cobrado != null ? r.cobrado : r.pvpLista; return v != null ? $m(v) + (r.cobrado == null ? ' <span class="mcp-ref">lista</span>' : "") : "—"; }, "P. unit. con IVA", 1],
+      [function (r) { if (r.tipo !== "Ticket") return ""; var v = r.cobrado != null ? r.cobrado : r.pvpLista; return v != null ? $m(v) + (r.cobrado == null ? ' <span class="mcp-ref">lista</span>' : r.estimado ? ' <span class="mcp-ref" title="Prorrateado del total cobrado del ticket según precio de lista">estimado</span>' : "") : "—"; }, "P. unit. cobrado (con IVA)", 1],
       [function (r) { if (r.tipo !== "Ticket") return ""; var v = r.cobrado != null ? r.cobradoSinIva : r.sinIvaLista; return v != null ? $m(v) : "—"; }, "Sin IVA", 1],
-      [function (r) { return r.descuento ? "−" + $m(r.descuento) : ""; }, "Desc.", 1]];
+      [function (r) { return r.descuento ? "−" + $m(r.descuento) : ""; }, "Desc.", 1],
+      [function (r) { return r.tipo === "Ticket" && r.totalLinea != null ? $m(r.totalLinea) : ""; }, "Total línea", 1]];
     if (MC.verCostos) cols.push([function (r) { return r.precio ? $m(r.precio) : ""; }, "Costo compra", 1]);
     cols.push(["estado", "Estado"]);
-    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150). El ticket no guarda precio por línea: si el ticket solo tiene este producto se muestra lo cobrado y el descuento; si no, el PVP de lista (marcado «lista»).</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
+    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150). Precio cobrado por línea: los tickets anteriores no guardaban precio por línea; si el ticket tenía solo este producto el precio es el real (total ÷ cantidad); si tenía más cosas se reparte el total cobrado según el precio de lista y se marca «estimado». Un facial usado de paquete no suma. Los tickets nuevos de la beta guardarán cantidad, precio, descuento y total por línea.</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
   }
   function tabMov() {
     var k = MC.cur.kardex || [];
