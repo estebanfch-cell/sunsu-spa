@@ -23,7 +23,7 @@
     actas: ["Actas de recepción", "El listado de actas de todas las recepciones. Hoy el acta se abre desde cada orden de compra.", "#/m/compras", "Órdenes de compra"],
     pagos: ["Pagos a proveedores", "El listado de pagos y saldos por proveedor. Hoy el pago se registra dentro de cada orden de compra.", "#/m/compras", "Órdenes de compra"],
     rep_ventas: ["Reporte de ventas", "Ventas por producto, cosmetóloga y período.", "#/m/inicio", "Dashboard"],
-    rep_stock: ["Niveles de stock", "Stock por bodega y sububicación, con valor.", "#/m/inventario", "Stock actual"],
+    rep_stock: ["Niveles de stock", "Stock por bodega y sububicación, con valor.", "#/m/productos", "Productos"],
     rep_compras: ["Reporte de compras", "Compras por proveedor y producto.", "#/m/compras", "Órdenes de compra"],
     auditoria: ["Registro de auditoría", "Quién cambió qué y cuándo, en todos los módulos. Los cambios de la ficha de producto ya se ven en su pestaña Movimientos.", "", ""],
     consignacion: ["Consignación", "Lo que está en consignación, para que cada proveedor lo vea en su app. Las OC de consignación siguen en Compras.", "#/m/compras", "Órdenes de compra"],
@@ -48,8 +48,7 @@
       ] },
       { id: "inventario", label: "Inventario", items: [
         ["productos", "Productos", "#/m/productos"],
-        ["compras", "Reorden", "#/m/mc/reorden"],
-        ["inventario", "Stock actual", "#/m/inventario"],
+        // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["conteos", "Conteos físicos", "#/m/conteos"],
         ["conteos", "Asignado a ti", "#/m/mc/pronto/asignado"],
         ["transferencias", "Transferencias", "#/m/transferencias"],

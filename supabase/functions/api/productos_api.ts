@@ -120,6 +120,9 @@ function fila(p: Row, b: Base): Row {
     compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct,
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
     codigoCabina: cab ? s(cab.codigo) : "",
+    // Para el buscador: SKU proveedor y códigos de barras.
+    skuProveedor: s(p.sku_proveedor),
+    barras: [s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo))].filter(Boolean),
   };
 }
 
