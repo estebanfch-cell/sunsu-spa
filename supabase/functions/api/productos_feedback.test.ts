@@ -80,3 +80,32 @@ describe("Activo/Inactivo beta", () => {
     assert.equal(((l.items as Row[]).find((x) => x.id === "p1") as Row).activo, false);
   });
 });
+
+describe("precio por línea de tickets viejos", () => {
+  it("una línea = real; varias = prorrateo marcado estimado; facial de paquete no cuenta", async () => {
+    const { lineasTicket, precioLineaTicket } = await import("./productos.ts");
+    const pvp = (c: string) => ({ "ML-001": 23, "ML-002": 46, "03": 80, "31": 20 } as Record<string, number>)[c] || 0;
+    const solo = lineasTicket({ ml_001: 2 }, pvp);
+    assert.deepEqual(precioLineaTicket(solo, "ML-001", 40), { unit: 20, total: 40, estimado: false });
+    const mix = lineasTicket({ ml_001: 1, ml_002: 1 }, pvp);
+    assert.deepEqual(precioLineaTicket(mix, "ML-001", 60), { unit: 20, total: 20, estimado: true });
+    const paq = lineasTicket({ ml_001: 1, facial_hecho: "SUNSU-03 7 Pieles", paquete: "SI, 2/3", servicios_adicionales: "SUNSU-31 PDRN Serum" }, pvp);
+    assert.equal(paq.find((l) => l.tipo === "facial")!.lista, 0);
+    assert.deepEqual(precioLineaTicket(paq, "ML-001", 43), { unit: 23, total: 23, estimado: true });
+  });
+});
+
+describe("pickers de venta: inactivos fuera", () => {
+  it("getCatalogo usa el estado de la beta (beta_activo manda; si no, erp + catálogo)", async () => {
+    const { db, c, token } = semilla();
+    db.tables.set("catalogo", [
+      { sheet_row: 2, sku: "SUNSU-ML-001", producto_servicio: "Ampoule 30ml", tipo: "PRODUCTO", subtotal: 20, total_con_iva: 23, activo: true },
+      { sheet_row: 3, sku: "SUNSU-ML-002", producto_servicio: "Ampoule 50ml", tipo: "PRODUCTO", subtotal: 40, total_con_iva: 46, activo: false },
+    ]);
+    const act = async () => Object.fromEntries(((await handle("getCatalogo", { token }, c)) as Row[]).map((x) => [x.sku, x.activo]));
+    assert.deepEqual(await act(), { "SUNSU-ML-001": true, "SUNSU-ML-002": false });
+    await handle("mcprod_estado", { token, que: "desactivar", ids: ["p1"] }, c);
+    await handle("mcprod_estado", { token, que: "activar", ids: ["p2"] }, c);
+    assert.deepEqual(await act(), { "SUNSU-ML-001": false, "SUNSU-ML-002": true });
+  });
+});
