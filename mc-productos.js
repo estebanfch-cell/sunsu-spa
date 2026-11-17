@@ -18,7 +18,10 @@
   function $m(v) { var x = Number(v); return Number.isFinite(x) ? "$" + x.toFixed(2) : "—"; }
   function q2(v) { var x = Number(v) || 0; return Math.round(x) === x ? String(x) : x.toFixed(2); }
   function norm(v) { return String(v == null ? "" : v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
-  function fecha(v) { var t = String(v || ""); if (!t) return ""; var d = t.slice(0, 10).split("-"); return d.length === 3 ? d[2] + "/" + d[1] + "/" + d[0] + (t.length > 11 ? " " + t.slice(11, 16) : "") : t; }
+  function fecha(v) {
+    var t = String(v || ""); if (!t) return "";
+    // Sellos con zona (UTC de la base) se muestran en hora de Ecuador.
+    if (/T\d\d:\d\d.*(Z|[+-]\d\d:?\d\d)$/.test(t)) { var dd = new Date(t); if (!isNaN(dd)) { var z = new Date(dd.getTime() - 5 * 3600000).toISOString(); t = z.slice(0, 10) + " " + z.slice(11, 16); } } var d = t.slice(0, 10).split("-"); return d.length === 3 ? d[2] + "/" + d[1] + "/" + d[0] + (t.length > 11 ? " " + t.slice(11, 16) : "") : t; }
 
   function css() {
     if (document.getElementById("mcp-css")) return;
@@ -38,6 +41,9 @@
       ".mcp-th img{width:100%;height:100%;object-fit:cover}",
       ".mcp-pn{display:flex;gap:10px;align-items:center;min-width:220px}.mcp-pn b{display:block;color:var(--text);font-weight:600;line-height:1.25}",
       ".mcp-sub{color:var(--gray);font-size:.72rem}",
+      ".mcp-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}.mcp-dot.on{background:#2e9e5b}.mcp-dot.off{background:#b5b5b5}",
+      ".mcp-est{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px}.mcp-sw{position:relative;width:46px;height:26px;border-radius:13px;border:none;background:#c9c9c9;cursor:pointer;transition:background .15s}.mcp-sw.on{background:#2e9e5b}.mcp-sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}.mcp-sw.on::after{left:23px}.mcp-sw:disabled{opacity:.6;cursor:default}",
+      ".mcp-chip{display:inline-flex;align-items:center;gap:4px;background:var(--cream);border:1px solid var(--cream-d);border-radius:999px;padding:2px 8px;margin:2px;font-size:.74rem}.mcp-chx{border:none;background:none;cursor:pointer;color:var(--gray)}",
       ".mcp-tag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:.7rem;font-weight:700;background:var(--blue-l);color:var(--navy-d);white-space:nowrap}",
       ".mcp-tag.serv{background:var(--gold-l);color:#8a6420}.mcp-tag.bajo{background:var(--peach-l);color:var(--pink-d)}.mcp-tag.agot{background:var(--red-l);color:var(--red)}.mcp-tag.beta{background:var(--green-l);color:#4d7360}",
       ".mcp-sku{font-family:ui-monospace,Menlo,monospace;font-size:.8rem;color:var(--navy-d)}",
@@ -98,7 +104,7 @@
   }
   // Columnas (como MineCore): el usuario elige cuáles ve; se guarda en este equipo.
   var COLS = [
-    { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
+    { id: "estado", t: "Estado", def: 1, fijo: 1 }, { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
     { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
     { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
     { id: "g_CONSIGNACION", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
@@ -108,12 +114,13 @@
   function colsVis() {
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem(COLS_KEY) || "null"); } catch (x) { saved = null; }
-    return COLS.filter(function (c) { return (!c.costos || MC.verCostos) && (Array.isArray(saved) ? saved.indexOf(c.id) >= 0 : c.def); });
+    return COLS.filter(function (c) { return (!c.costos || MC.verCostos) && (c.fijo || (Array.isArray(saved) ? saved.indexOf(c.id) >= 0 : c.def)); });
   }
   function guardarCols(ids) { try { localStorage.setItem(COLS_KEY, JSON.stringify(ids)); } catch (x) {} }
   // Árbol de categorías: tipo → subtipo → categoría.
   var ARBOL = [["inventariable", "Inventariable", ["Producto", "Insumo cabina"]], ["servicio", "Servicio", ["Facial", "Facial especial", "Add-on", "Paquete", "Gift card", "Servicio"]]];
   function valor(p, id) {
+    if (id === "estado") return p.activo === false ? 1 : 0;
     if (id === "sku") return p.skuVisible || p.sku;
     if (id === "tipo") return p.tipo;
     if (id === "pvp") return Number(p.pvp) || 0;
@@ -162,7 +169,8 @@
   function celda(p, c) {
     var cls = (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "");
     var v;
-    if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
+    if (c.id === "estado") v = p.activo === false ? '<span class="mcp-dot off" title="Inactivo"></span><span class="mcp-sub">Inactivo</span>' : '<span class="mcp-dot on" title="Activo"></span><span class="mcp-sub">Activo</span>';
+    else if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
     else if (c.id === "tipo") v = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
     else if (c.id === "stock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>" + (p.estado === "agotado" ? ' <span class="mcp-tag agot">agotado</span>' : p.estado === "bajo" ? ' <span class="mcp-tag bajo">bajo</span>' : "");
     else if (c.id === "pvp") v = money(p.pvp);
@@ -179,7 +187,7 @@
     MC.vis = rows.map(function (p) { return p.id; });
     if (!rows.length) return '<tr><td colspan="' + (cols.length + 2) + '" class="mcp-sub" style="padding:18px">Sin productos con ese filtro.</td></tr>';
     return rows.map(function (p) {
-      return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '">' + (MC.admin ? '<td class="mcp-ck"><input type="checkbox" data-mcp-sel="' + e(p.id) + '"' + (MC.sel && MC.sel[p.id] ? " checked" : "") + ' aria-label="Elegir"></td>' : "") + '<td><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + '</b><span class="mcp-sub">' + e(p.subtipo) + (p.activo === false ? " · inactivo" : "") + "</span></div></div></td>" +
+      return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '">' + (MC.admin ? '<td class="mcp-ck"><input type="checkbox" data-mcp-sel="' + e(p.id) + '"' + (MC.sel && MC.sel[p.id] ? " checked" : "") + ' aria-label="Elegir"></td>' : "") + '<td><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + '</b><span class="mcp-sub">' + e(p.subtipo) + "</span></div></div></td>" +
         cols.map(function (c) { return celda(p, c); }).join("") + "</tr>";
     }).join("");
   }
@@ -214,7 +222,7 @@
       '<select id="mcp-f-marca" aria-label="Marca">' + opt("", "Todas las marcas", f.marca) + (fd.marcas || []).map(function (m) { return opt(m, m, f.marca); }).join("") + "</select>" +
       '<select id="mcp-f-categoria" aria-label="Categoría">' + opt("", "Todas las categorías", f.categoria) + (fd.categorias || []).map(function (m) { return opt(m, m, f.categoria); }).join("") + "</select>" +
       '<select id="mcp-f-estado" aria-label="Stock">' + opt("", "Todo el stock", f.estado) + opt("con", "Con stock", f.estado) + opt("bajo", "Stock bajo", f.estado) + opt("agotado", "Agotado", f.estado) + "</select>" +
-      '<select id="mcp-f-activo" aria-label="Activo">' + opt("", "Activos", f.activo) + opt("inactivos", "Inactivos / archivados", f.activo) + opt("todos", "Activos e inactivos", f.activo) + "</select>" +
+      '<select id="mcp-f-activo" aria-label="Activo">' + opt("", "Estado: activos", f.activo) + opt("inactivos", "Estado: inactivos", f.activo) + opt("todos", "Estado: todos", f.activo) + "</select>" +
       '<button class="btn ghost small" type="button" id="mcp-cols">Columnas</button>' +
       '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div>' + colsPanelHtml() +
       (MC.admin && (MC.eliminadosN || MC.verElim) ? '<p><button class="btn ghost small" type="button" id="mcp-elim">' + (MC.verElim ? "← Volver a productos" : "Eliminados (" + MC.eliminadosN + ")") + "</button>" + (MC.verElim ? ' <span class="mcp-sub">Productos eliminados: elige y restaura.</span>' : "") + "</p>" : "") +
@@ -317,7 +325,10 @@
     producto_base: "Producto base (subcódigos)", observaciones: "Observaciones", activo: "Activo",
     beta_pvp: "PVP con IVA", beta_compra_real: "Compra real", beta_compra_comision: "Compra para comisiones",
     beta_descripcion: "Descripción", beta_stock_minimo: "Stock mínimo", beta_punto_reorden: "Punto de reorden",
+    beta_contenido: "Contenido", beta_contenido_unidad: "Unidad del contenido", beta_envase: "Tipo de envase", beta_unidades_empaque: "Unidades por empaque",
   };
+  var UNID_CONT = [["g", "g"], ["ml", "ml"], ["unidades", "unidades"]];
+  var ENVASES = ["frasco", "tubo", "ampolla", "sachet", "caja", "pote", "botella", "spray", "gotero", "sobre", "otro"];
   function base(k) {
     var p = MC.cur.producto, pr = MC.cur.precios || {};
     if (k === "beta_pvp") return pr.pvp;
@@ -349,6 +360,9 @@
     if (k === "activo") return '<select class="mcp-in" data-mcp-in="' + k + '">' + opt("true", "Sí", v === false || v === "false" ? "" : "true") + opt("false", "No", v === false || v === "false" ? "false" : "") + "</select>";
     if (k === "bodega_def") return '<select class="mcp-in" data-mcp-in="' + k + '">' + opt("", "—", v) + GRUPOS.map(function (g) { return opt(g[0], g[1], v); }).join("") + "</select>";
     if (k === "sububicacion_def") return '<select class="mcp-in" data-mcp-in="' + k + '">' + opt("", "—", v) + SUBS.map(function (g) { return opt(g[0], g[1], v); }).join("") + "</select>";
+    if (k === "beta_contenido_unidad") return '<select class="mcp-in" data-mcp-in="' + k + '">' + opt("", "—", v) + UNID_CONT.map(function (g) { return opt(g[0], g[1], v); }).join("") + "</select>";
+    if (k === "beta_envase") return '<select class="mcp-in" data-mcp-in="' + k + '">' + opt("", "—", v) + ENVASES.concat(v && ENVASES.indexOf(v) < 0 ? [v] : []).map(function (g) { return opt(g, g, v); }).join("") + "</select>";
+    if (k === "beta_contenido" || k === "beta_unidades_empaque") return '<input class="mcp-in" data-mcp-in="' + k + '" inputmode="decimal" value="' + e(v == null ? "" : v) + '">';
     var num = PRECIO[k];
     return '<input class="mcp-in" data-mcp-in="' + k + '"' + (num ? ' inputmode="decimal"' : "") + ' value="' + e(v == null ? "" : (num ? Number(v).toFixed(2) : v)) + '">';
   }
@@ -357,6 +371,58 @@
     return '<div class="mcp-kv"><span class="mcp-l">' + e(CAMPOS[k]) + (mm.minimo == null && mm.minimoSistema ? ' <span class="mcp-sub">(sistema ' + q2(mm.minimoSistema) + ")</span>" : "") + "</span>" + V(k) + "</div>";
   }
   function kv(k, label) { return '<div class="mcp-kv"><span class="mcp-l">' + e(label || CAMPOS[k]) + "</span>" + V(k) + "</div>"; }
+  function kvBarras() {
+    var t = txt("codigo_barras"), can = puede(), cambiado = Object.prototype.hasOwnProperty.call(MC.ch, "codigo_barras");
+    return '<div class="mcp-kv"><span class="mcp-l">' + e(CAMPOS.codigo_barras) + "</span>" + V("codigo_barras") +
+      (can && !t && !cambiado ? ' <button class="btn ghost small" type="button" id="mcp-bar-gen" title="Asigna un EAN-13 interno de Sunsu (empieza con 20)">Generar código</button>' : "") +
+      (t ? ' <button class="btn ghost small" type="button" id="mcp-etq">Etiqueta</button>' : "") + "</div>";
+  }
+  // Presentación / envase (0044) + costo por g/ml.
+  function presentacionHtml() {
+    var r = MC.cur, can = puede(), cpc = calcVivo().costoCont, u = val("beta_contenido_unidad") || "";
+    var L = r.presentaciones || [];
+    var chips = L.map(function (x) {
+      return '<span class="mcp-chip"><a href="#/m/productos/p/' + e(x.id) + '">' + e(x.sku) + " · " + e(x.nombre) + (x.contenido ? " (" + q2(x.contenido) + " " + e(x.unidad) + ")" : "") + "</a>" + (can && x.propia ? ' <button type="button" class="mcp-chx" data-mcp-pres-del="' + e(x.id) + '" aria-label="Quitar">✕</button>' : "") + "</span>";
+    }).join(" ");
+    return '<div class="mcp-pres"><div class="mcp-sub" style="font-weight:800;margin:10px 0 4px">Presentación / envase</div><div class="mcp-g">' +
+      kv("beta_contenido") + kv("beta_contenido_unidad") + kv("beta_envase") + kv("beta_unidades_empaque") +
+      (MC.verCostos ? '<div class="mcp-kv"><span class="mcp-l">Costo por ' + e(u === "unidades" ? "unidad" : u || "g/ml") + '</span><span class="mcp-v" id="mcp-cv-cont">' + (cpc != null ? "$" + cpc.toFixed(4) : '<span class="mcp-sub">pon compra real y contenido</span>') + "</span></div>" : "") +
+      "</div>" +
+      '<div class="mcp-kv"><span class="mcp-l">Otras presentaciones</span><span class="mcp-v">' + (chips || '<span class="mcp-sub">Ninguna</span>') + "</span></div>" +
+      (can ? '<div style="display:flex;gap:6px;margin-top:4px"><input id="mcp-pres-q" list="mcp-pres-dl" placeholder="Agregar presentación: código o nombre" style="flex:1;min-width:0"><datalist id="mcp-pres-dl">' +
+        (MC.list || []).filter(function (x) { return x.id !== r.producto.id && x.tipo !== "servicio"; }).map(function (x) { return '<option value="' + e(x.sku + " · " + x.nombre) + '"></option>'; }).join("") +
+        '</datalist><button class="btn ghost small" type="button" id="mcp-pres-add">Agregar</button></div>' : "") + "</div>";
+  }
+  // Cálculo en vivo (antes y después de guardar). El PVP es el que se escribe; nunca se cambia solo.
+  function num(v) { if (v == null || v === "") return null; var x = Number(String(v).replace(",", ".")); return Number.isFinite(x) ? x : null; }
+  function r2(x) { return Math.round(x * 100) / 100; }
+  function calcVivo() {
+    var r = MC.cur || {}, pr = r.precios || {};
+    var pvp = num(val("beta_pvp")); if (!(pvp > 0)) pvp = null;
+    var sub = pvp != null ? r2(pvp / 1.15) : null;
+    var cr = num(val("beta_compra_real")), cc = num(val("beta_compra_comision"));
+    var ccEf = cc != null ? cc : cr;
+    var com = sub != null && ccEf != null ? r2(Math.max(0, sub - ccEf) * 0.30) : null;
+    var util = sub != null && cr != null ? r2(sub - cr) : null;
+    var neta = util != null && com != null ? r2(util - com) : null;
+    var cambiaCompra = Object.prototype.hasOwnProperty.call(MC.ch, "beta_compra_real");
+    var prom = r.costoProm != null && !cambiaCompra ? r.costoProm : cr;
+    return { pvp: pvp, sub: sub, com: com, util: util, neta: neta, margen: util != null && sub ? r2(util / sub * 100) : null, prom: prom, promHist: r.costoProm, costoCont: cr != null ? costoCont(cr) : null, pr: pr };
+  }
+  function costoCont(cr) {
+    var q = num(val("beta_contenido"));
+    return cr > 0 && q > 0 ? Math.round(cr / q * 10000) / 10000 : null;
+  }
+  function pintarCalc() {
+    var c = calcVivo(), set = function (id, h) { var el = document.getElementById(id); if (el) el.innerHTML = h; };
+    set("mcp-cv-sub", c.sub != null ? "Sin IVA " + $m(c.sub) : "Sin IVA —");
+    set("mcp-cv-com", c.com != null ? $m(c.com) : "—");
+    set("mcp-cv-util", c.util != null ? $m(c.util) + ' <span class="mcp-ref">' + q2(c.margen) + " %</span>" : "—");
+    set("mcp-cv-neta", c.neta != null ? $m(c.neta) : "—");
+    set("mcp-cv-prom", c.prom != null ? $m(c.prom) : "—");
+    var u = val("beta_contenido_unidad") || "";
+    set("mcp-cv-cont", c.costoCont != null ? "$" + c.costoCont.toFixed(4) : '<span class="mcp-sub">pon compra real y contenido</span>');
+  }
   function hayPrecio() { return Object.keys(MC.ch).some(function (k) { return PRECIO[k]; }); }
 
   function stockChips(stock) {
@@ -367,6 +433,16 @@
     });
     return out.length ? out.join(" &nbsp; ") : '<span class="mcp-sub">Sin stock</span>';
   }
+  // Activo / Inactivo (beta_activo): un admin lo cambia cuando quiera; queda en el historial.
+  function estadoHtml() {
+    var r = MC.cur, p = r.producto, on = p.activo !== false, adm = MC.admin;
+    var ult = (r.estadoHist || [])[0];
+    return '<div class="mcp-est"><span class="mcp-l" style="min-width:auto">Estado</span>' +
+      '<button type="button" class="mcp-sw' + (on ? " on" : "") + '" id="mcp-activo" role="switch" aria-checked="' + on + '" aria-label="Activo"' + (adm && !r.archivado ? "" : " disabled") + '></button>' +
+      '<b style="color:' + (on ? "#2e9e5b" : "#888") + '">' + (on ? "Activo" : "Inactivo") + "</b>" +
+      (p.activoFijado ? "" : '<span class="mcp-sub">(como en el sistema anterior)</span>') +
+      (ult ? '<span class="mcp-sub">· último cambio ' + e(fecha(ult.fecha)) + " por " + e(ult.actor) + (ult.motivo ? " — " + e(ult.motivo) : "") + "</span>" : "") + "</div>";
+  }
   function head() {
     var r = MC.cur, p = r.producto, can = puede();
     var foto = p.foto_data ? '<img src="' + e(p.foto_data) + '" alt="">' : "📷";
@@ -376,11 +452,11 @@
       '<input type="file" accept="image/*" id="mcp-file" hidden>' +
       '<div style="flex:1;min-width:0"><h2 class="mcp-tt">' + V("nombre") + "</h2>" +
       '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina && p.codigoCabina !== p.sku ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + (p.skuAntes && p.skuAntes.length ? ' <span class="mcp-sub">· antes ' + e(p.skuAntes.join(", ")) + "</span>" : "") + "</span></div>" +
-      kv("sku_proveedor") + kv("codigo_barras") +
+      estadoHtml() + kv("sku_proveedor") + kvBarras() +
       '<div class="mcp-g">' + kv("marca") + kv("categoria") +
       '<div class="mcp-kv"><span class="mcp-l">Tipo</span><span class="mcp-v">' + e(tipo) + "</span></div>" +
-      kv("unidad") + (p.tipo === "servicio" ? "" : kv("bodega_def") + kv("sububicacion_def") + kvMin("beta_stock_minimo") + kv("beta_punto_reorden")) + kv("producto_base") + kv("observaciones") + kv("activo") + "</div>" +
-      kv("beta_descripcion") +
+      kv("unidad") + (p.tipo === "servicio" ? "" : kv("bodega_def") + kv("sububicacion_def") + kvMin("beta_stock_minimo") + kv("beta_punto_reorden")) + kv("producto_base") + kv("observaciones") + "</div>" +
+      kv("beta_descripcion") + (p.tipo === "servicio" ? "" : presentacionHtml()) +
       (r.archivado ? '<p class="note"><span class="mcp-tag bajo">Archivado</span> por ' + e(r.archivadoPor) + " · " + e(fecha(r.archivadoAt)) + ". No aparece en la lista activa ni en buscadores.</p>" : "") +
       (p.tipo === "servicio" ? "" : '<div class="mcp-stk"><span class="mcp-l">Stock por sububicación</span>' + stockChips(r.stock) + "</div>") +
       (p.beta_editado_por ? '<p class="note" style="margin-top:8px">Última edición en la beta: ' + e(p.beta_editado_por) + " · " + e(fecha(p.beta_editado_at)) + "</p>" : "") +
@@ -419,15 +495,17 @@
     var badge = function (k) { return ed.indexOf(k) >= 0 ? ' <span class="mcp-tag beta">editado en beta</span>' : ""; };
     var right = '<div class="mcp-card"><div class="card-title">Precios y costo</div>' +
       '<div class="mcp-sub">Precio PVP (con IVA)' + badge("pvp") + '</div><div class="mcp-pvp">' + V("beta_pvp") + "</div>" +
-      '<div class="mcp-ref">Sin IVA ' + $m(pr.subtotal) + (pr.pvpCatalogo && ed.indexOf("pvp") >= 0 ? " · sistema actual " + $m(pr.pvpCatalogo) : "") + "</div>";
+      '<div class="mcp-ref"><span id="mcp-cv-sub">' + (calcVivo().sub != null ? "Sin IVA " + $m(calcVivo().sub) : "Sin IVA —") + "</span>" + (pr.pvpCatalogo && ed.indexOf("pvp") >= 0 ? " · sistema actual " + $m(pr.pvpCatalogo) : "") + "</div>";
     if (!serv) {
       if (MC.verCostos) {
         right += '<div class="mcp-pr"><span>Compra real' + badge("compraReal") + '<br><span class="mcp-ref">entra a la utilidad' + (pr.compraRealSistema != null && ed.indexOf("compraReal") >= 0 ? " · sistema " + $m(pr.compraRealSistema) : "") + "</span></span>" + V("beta_compra_real") + "</div>" +
           '<div class="mcp-pr"><span>Compra para comisiones' + badge("compraComision") + '<br><span class="mcp-ref">entra solo a la comisión' + (pr.compraComisionCatalogo != null && ed.indexOf("compraComision") >= 0 ? " · sistema " + $m(pr.compraComisionCatalogo) : "") + "</span></span>" + V("beta_compra_comision") + "</div>";
       }
-      right += '<div class="mcp-pr"><span>Comisión por unidad<br><span class="mcp-ref">30 % × (precio sin IVA − compra para comisiones)</span></span><b>' + $m(pr.comision) + "</b></div>";
-      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad por unidad</span><b>' + $m(pr.utilidad) + ' <span class="mcp-ref">' + q2(pr.margenPct) + " %</span></b></div>";
-      if (MC.verCostos) right += '<div class="mcp-pr"><span>Costo promedio<br><span class="mcp-ref">ponderado de las compras registradas' + (r.costoPromedio != null ? " · ERP " + $m(r.costoPromedio) : "") + "</span></span><b>" + (r.costoProm != null ? $m(r.costoProm) : "—") + "</b></div>";
+      var cv = calcVivo();
+      right += '<div class="mcp-pr"><span>Comisión por unidad<br><span class="mcp-ref">30 % × (precio sin IVA − compra para comisiones; si no hay, compra real)</span></span><b id="mcp-cv-com">' + (cv.com != null ? $m(cv.com) : "—") + "</b></div>";
+      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad por unidad<br><span class="mcp-ref">precio sin IVA − compra real</span></span><b id="mcp-cv-util">' + (cv.util != null ? $m(cv.util) + ' <span class="mcp-ref">' + q2(cv.margen) + " %</span>" : "—") + "</b></div>";
+      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad neta<br><span class="mcp-ref">utilidad − comisión</span></span><b id="mcp-cv-neta">' + (cv.neta != null ? $m(cv.neta) : "—") + "</b></div>";
+      if (MC.verCostos) right += '<div class="mcp-pr"><span>Costo promedio<br><span class="mcp-ref">ponderado de las compras registradas; sin compras, la compra real' + (r.costoPromedio != null ? " · ERP " + $m(r.costoPromedio) : "") + "</span></span><b id=\"mcp-cv-prom\">" + (cv.prom != null ? $m(cv.prom) : "—") + "</b></div>";
     } else {
       right += '<p class="note" style="margin-top:8px">Servicio: sin stock. La comisión de faciales y paquetes sale de Configuración general.</p>';
     }
@@ -444,10 +522,13 @@
       rows.map(function (r) { return "<tr>" + cols.map(function (c) { var v = typeof c[0] === "function" ? c[0](r) : e(r[c[0]] == null ? "" : r[c[0]]); return "<td" + (c[2] ? ' class="num"' : "") + ">" + v + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>";
   }
   function tabHistorial() {
-    var cols = [["tipo", "Tipo"], [function (r) { return e(fecha(r.fecha)); }, "Fecha"], ["doc", "Documento"], ["quien", "Quién / proveedor"], ["cliente", "Clienta"], ["cantidad", "Cant.", 1]];
-    if (MC.verCostos) cols.push([function (r) { return r.precio ? $m(r.precio) : ""; }, "Precio", 1]);
+    var cols = [["tipo", "Tipo"], [function (r) { return e(fecha(r.fecha)); }, "Fecha"], ["doc", "Ticket / doc."], ["quien", "Cosmetóloga / proveedor"], ["cliente", "Clienta"], ["cantidad", "Cant.", 1],
+      [function (r) { if (r.tipo !== "Ticket") return ""; var v = r.cobrado != null ? r.cobrado : r.pvpLista; return v != null ? $m(v) + (r.cobrado == null ? ' <span class="mcp-ref">lista</span>' : "") : "—"; }, "P. unit. con IVA", 1],
+      [function (r) { if (r.tipo !== "Ticket") return ""; var v = r.cobrado != null ? r.cobradoSinIva : r.sinIvaLista; return v != null ? $m(v) : "—"; }, "Sin IVA", 1],
+      [function (r) { return r.descuento ? "−" + $m(r.descuento) : ""; }, "Desc.", 1]];
+    if (MC.verCostos) cols.push([function (r) { return r.precio ? $m(r.precio) : ""; }, "Costo compra", 1]);
     cols.push(["estado", "Estado"]);
-    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150).</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
+    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150). El ticket no guarda precio por línea: si el ticket solo tiene este producto se muestra lo cobrado y el descuento; si no, el PVP de lista (marcado «lista»).</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
   }
   function tabMov() {
     var k = MC.cur.kardex || [];
@@ -590,6 +671,37 @@
   }
   async function accionFicha(t) {
     var r = MC.cur, p = r.producto;
+    if (t.closest("#mcp-bar-gen")) {
+      if (!confirm("¿Asignar un código de barras interno de Sunsu (EAN-13) a " + p.nombre + "?")) return;
+      var g = await api("mcprod_barras_generar", { id: p.id });
+      if (!g || g.error) { alert((g && g.error) || "No se pudo generar"); return; }
+      if (typeof toast === "function") try { toast("Código " + g.codigo); } catch (x) {}
+      await recargar(); return;
+    }
+    if (t.closest("#mcp-etq")) { etiqueta(); return; }
+    if (t.closest("#mcp-activo")) {
+      var act = p.activo !== false;
+      var mot = prompt((act ? "Pasar a INACTIVO: " : "Pasar a ACTIVO: ") + p.nombre + "\nMotivo (opcional):", "");
+      if (mot === null) return;
+      var ra = await api("mcprod_estado", { que: act ? "desactivar" : "activar", ids: [p.id], motivo: mot });
+      if (!ra || ra.error) { alert((ra && ra.error) || "No se pudo cambiar"); return; }
+      MC.listAt = 0; MC.list = null; try { await cargarLista(true); } catch (x) {}
+      await recargar(); return;
+    }
+    if (t.closest("#mcp-pres-add") || t.closest("[data-mcp-pres-del]")) {
+      var ids = (r.presentaciones || []).filter(function (x) { return x.propia; }).map(function (x) { return x.id; });
+      var del = t.closest("[data-mcp-pres-del]");
+      if (del) ids = ids.filter(function (x) { return x !== del.getAttribute("data-mcp-pres-del"); });
+      else {
+        var qv = String((document.getElementById("mcp-pres-q") || {}).value || ""), sku = qv.split(" · ")[0].trim().toUpperCase();
+        var hit = (MC.list || []).filter(function (x) { return String(x.sku).toUpperCase() === sku; })[0];
+        if (!hit) { alert("Elige un producto de la lista"); return; }
+        if (ids.indexOf(hit.id) < 0) ids.push(hit.id);
+      }
+      var sp = await api("mcprod_presentaciones_save", { id: p.id, ids: ids });
+      if (!sp || sp.error) { alert((sp && sp.error) || "No se pudo guardar"); return; }
+      await recargar(); return;
+    }
     var acc = t.closest("[data-mcp-acc]");
     if (acc) {
       var a = acc.getAttribute("data-mcp-acc"), body = { ids: [p.id], que: a };
@@ -719,8 +831,41 @@
     var same = (b == null ? "" : String(b)) === (v == null ? "" : String(v));
     if (same) delete MC.ch[k]; else MC.ch[k] = v;
   }
+  async function recargar() {
+    var d = await api("mcprod_get", { id: MC.cur.producto.id });
+    if (d && d.ok) { var keep = MC.ch; MC.cur = d; MC.ch = keep; MC.listAt = 0; }
+    repintar();
+  }
+  // Etiqueta para impresora de etiquetas (50 × 25 mm): barras, SKU, nombre corto y PVP opcional.
+  function etiqueta() {
+    var p = MC.cur.producto, cod = String(txt("codigo_barras") || "").replace(/\s+/g, "");
+    if (!cod) return;
+    var conPvp = confirm("¿Incluir el PVP en la etiqueta?\nAceptar = con PVP · Cancelar = sin PVP");
+    var pvp = calcVivo().pvp;
+    var svg = /^\d{13}$/.test(cod) ? barras(cod).replace('width="190" height="44"', 'width="100%" height="100%"') : code128(cod);
+    var nom = String(p.nombre || "").slice(0, 34);
+    var w = window.open("", "_blank");
+    if (!w) { alert("Permite ventanas emergentes para imprimir"); return; }
+    w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>Etiqueta " + e(p.skuVisible || p.sku) + "</title><style>@page{size:50mm 25mm;margin:0}html,body{margin:0;padding:0}" +
+      ".l{width:50mm;height:25mm;box-sizing:border-box;padding:1.2mm 2mm;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow:hidden}" +
+      ".n{font-size:7pt;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.b{flex:1;min-height:0;margin:.6mm 0}.b svg{width:100%;height:100%;display:block}" +
+      ".f{display:flex;justify-content:space-between;font-size:6.5pt}.f b{font-size:8pt}</style></head><body><div class='l'><div class='n'>" + e(nom) + "</div><div class='b'>" + svg + "</div><div class='f'><span>" + e(cod) + " · " + e(p.skuVisible || p.sku) + "</span>" + (conPvp && pvp ? "<b>$" + pvp.toFixed(2) + "</b>" : "") + "</div></div>" +
+      "<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>");
+    w.document.close();
+  }
+  // Code 128-B en SVG para códigos que no son EAN-13.
+  function code128(s) {
+    var P = ["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
+    var codes = [104], sum = 104;
+    for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i) - 32; if (c < 0 || c > 94) c = 0; codes.push(c); sum += c * (i + 1); }
+    codes.push(sum % 103); codes.push(106);
+    var x = 10, rects = "";
+    codes.forEach(function (c) { var pat = P[c]; for (var j = 0; j < pat.length; j++) { var wdt = +pat[j]; if (j % 2 === 0) rects += '<rect x="' + x + '" y="0" width="' + wdt + '" height="40"/>'; x += wdt; } });
+    return '<svg viewBox="0 0 ' + (x + 10) + ' 40" preserveAspectRatio="none" aria-hidden="true">' + rects + "</svg>";
+  }
   async function renderFicha(id) {
     MC.ch = {}; MC.ed = null; MC.motivo = ""; MC.escalas = null; MC.provs = null; MC.codigos = null;
+    if (!MC.list) { try { await cargarLista(false); } catch (x) { /* el picker de presentaciones queda vacío */ } }
     var d = await api("mcprod_get", { id: id });
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/productos">← Productos</button>';
     MC.cur = d; MC.admin = !!d.admin; MC.verCostos = !!d.verCostos;
@@ -763,7 +908,7 @@
       var tb = t.closest("[data-mcp-tab]"); if (tb) { MC.tab = tb.getAttribute("data-mcp-tab"); repintar(); return; }
       var ed = t.closest("[data-mcp-ed]"); if (ed && puede()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
       if (t.closest("#mcp-guardar")) { void guardar(); return; }
-      if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ]")) { void accionFicha(t); return; }
+      if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo")) { void accionFicha(t); return; }
       if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar(); return; }
       if (t.closest("#mcp-foto")) {
         if (puede()) { var f = document.getElementById("mcp-file"); if (f) f.click(); }
@@ -780,6 +925,7 @@
       if (!k || ev.target.tagName === "SELECT") return;
       setVal(k, ev.target.value);
       var bar = document.getElementById("mcp-savebar"); if (bar) bar.hidden = !Object.keys(MC.ch).length;
+      if (PRECIO[k] || k === "beta_contenido") pintarCalc();
     });
     host.addEventListener("change", function (ev) {
       var k = ev.target.getAttribute && ev.target.getAttribute("data-mcp-in");

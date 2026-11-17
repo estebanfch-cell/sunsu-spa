@@ -21,7 +21,8 @@
       ".mcpr-tag{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.66rem;font-weight:800;background:var(--green-l,#e6f4ea);color:var(--green,#2e7d32)}.mcpr-tag.off{background:var(--gray-l);color:var(--gray)}",
       ".mcpr-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.mcpr-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d)}",
       ".mcpr-form input,.mcpr-form select,.mcpr-form textarea,.mcpr-ps input,.mcpr-ps select{padding:8px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.82rem}",
-      ".mcpr-ps td{padding:5px 4px}.mcpr-ps .n{width:34px;text-align:center;font-weight:800;color:var(--navy)}.mcpr-ps .num input{width:74px}.mcpr-ps .bt{white-space:nowrap}",
+      ".mcpr-ps td{padding:5px 4px}.mcpr-ps .n{width:54px;white-space:nowrap;text-align:center;font-weight:800;color:var(--navy)}.mcpr-ps .num input{width:74px}.mcpr-ps .bt{white-space:nowrap}",
+      ".mcpr-drag{display:inline-block;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:6px 6px;margin-left:-4px;color:var(--gray);font-weight:900;letter-spacing:-2px}.mcpr-arr{background:var(--gold-l);box-shadow:0 4px 14px rgba(0,0,0,.15)}.mcpr-arr .mcpr-drag{cursor:grabbing}",
       ".mcpr-ps .bt button{border:1.5px solid var(--cream-d);background:var(--white);border-radius:8px;padding:5px 8px;cursor:pointer;font:inherit}",
       ".mcpr-save[hidden]{display:none}.mcpr-save{position:sticky;top:0;z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--gold-l);border:1px solid var(--gold-m);border-radius:12px;padding:8px 12px;margin-bottom:10px}",
       "@media(max-width:820px){.mcpr-hide{display:none}.mcpr-ps .desc input{min-width:140px}}",
@@ -68,12 +69,12 @@
     var dl = '<datalist id="mcpr-dl">' + (d.productos || []).map(function (x) { return '<option value="' + e(x.codigo) + '">' + e(x.nombre) + "</option>"; }).join("") + "</datalist>";
     var filas = (p.pasos || []).map(function (x, i) {
       var uOpts = UNIDADES.concat(x.unidad && UNIDADES.indexOf(x.unidad) < 0 ? [x.unidad] : []);
-      return '<tr><td class="n">' + (i + 1) + '</td><td class="desc"><input data-ps="descripcion" data-i="' + i + '" value="' + e(x.descripcion) + '" placeholder="Qué se hace"' + dis + "></td>" +
+      return '<tr data-row="' + i + '"><td class="n">' + (can ? '<span class="mcpr-drag" data-drag="' + i + '" title="Arrastra para ordenar" aria-label="Arrastrar paso">⋮⋮</span> ' : "") + (i + 1) + '</td><td class="desc"><input data-ps="descripcion" data-i="' + i + '" value="' + e(x.descripcion) + '" placeholder="Qué se hace"' + dis + "></td>" +
         '<td><input data-ps="producto_cod" data-i="' + i + '" list="mcpr-dl" value="' + e(x.producto_cod) + '" placeholder="INV-…" style="width:110px"' + dis + '><div class="mcpr-sub" data-psn="' + i + '">' + e(prodNombre(x.producto_cod)) + "</div></td>" +
         '<td class="num"><input data-ps="cantidad" data-i="' + i + '" inputmode="decimal" value="' + e(x.cantidad) + '"' + dis + "></td>" +
         '<td><select data-ps="unidad" data-i="' + i + '"' + dis + ">" + uOpts.map(function (u) { return '<option value="' + e(u) + '"' + (u === x.unidad ? " selected" : "") + ">" + e(u) + "</option>"; }).join("") + "</select></td>" +
         '<td class="num"><input data-ps="minutos" data-i="' + i + '" inputmode="decimal" value="' + e(x.minutos) + '"' + dis + "></td>" +
-        (can ? '<td class="bt"><button type="button" data-up="' + i + '" aria-label="Subir">↑</button> <button type="button" data-down="' + i + '" aria-label="Bajar">↓</button> <button type="button" data-del="' + i + '" aria-label="Quitar">✕</button></td>' : "") + "</tr>";
+        (can ? '<td class="bt"><button type="button" data-del="' + i + '" aria-label="Quitar">✕</button></td>' : "") + "</tr>";
     }).join("");
     var tot = (p.pasos || []).reduce(function (a, x) { return a + (Number(String(x.minutos).replace(",", ".")) || 0); }, 0);
     var hist = (P.hist || []).map(function (h) { return "<li>" + e(fecha(h.fecha)) + " · " + e(h.actor) + (h.version ? " · v" + e(h.version) : "") + "</li>"; }).join("");
@@ -118,9 +119,30 @@
         marcar(main);
       });
     });
-    var mover = function (i, d) { var j = i + d; if (j < 0 || j >= p.pasos.length) return; var t = p.pasos[i]; p.pasos[i] = p.pasos[j]; p.pasos[j] = t; P.dirty = true; pinta(main); };
-    root.querySelectorAll("[data-up]").forEach(function (b) { b.onclick = function () { mover(+b.getAttribute("data-up"), -1); }; });
-    root.querySelectorAll("[data-down]").forEach(function (b) { b.onclick = function () { mover(+b.getAttribute("data-down"), 1); }; });
+    // Arrastrar para ordenar (dedo en iPhone/iPad y mouse): Pointer Events sobre la manija ⋮⋮.
+    root.querySelectorAll("[data-drag]").forEach(function (h) {
+      h.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        var tbody = h.closest("tbody"), fila = h.closest("tr"), desde = +h.getAttribute("data-drag"), hasta = desde;
+        try { h.setPointerCapture(ev.pointerId); } catch (x) { /* sin captura */ }
+        fila.classList.add("mcpr-arr");
+        var mover = function (e2) {
+          var y = e2.clientY, filas = [].slice.call(tbody.querySelectorAll("tr[data-row]"));
+          var otra = filas.filter(function (f) { if (f === fila) return false; var r = f.getBoundingClientRect(); return y >= r.top && y <= r.bottom; })[0];
+          if (!otra) return;
+          var r = otra.getBoundingClientRect();
+          if (y < r.top + r.height / 2) tbody.insertBefore(fila, otra); else tbody.insertBefore(fila, otra.nextSibling);
+          hasta = [].indexOf.call(tbody.querySelectorAll("tr[data-row]"), fila);
+        };
+        var soltar = function () {
+          document.removeEventListener("pointermove", mover); document.removeEventListener("pointerup", soltar); document.removeEventListener("pointercancel", soltar);
+          fila.classList.remove("mcpr-arr");
+          if (hasta !== desde && hasta >= 0) { var x = p.pasos.splice(desde, 1)[0]; p.pasos.splice(hasta, 0, x); P.dirty = true; }
+          pinta(main);
+        };
+        document.addEventListener("pointermove", mover); document.addEventListener("pointerup", soltar); document.addEventListener("pointercancel", soltar);
+      });
+    });
     root.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { p.pasos.splice(+b.getAttribute("data-del"), 1); P.dirty = true; pinta(main); }; });
     var add = root.querySelector("#mcpr-add");
     if (add) add.onclick = function () { var last = p.pasos[p.pasos.length - 1]; p.pasos.push({ descripcion: "", producto_cod: "", cantidad: "", unidad: last ? last.unidad : "ml", minutos: "" }); P.dirty = true; pinta(main); var ins = main.querySelectorAll('[data-ps="descripcion"]'); if (ins.length) ins[ins.length - 1].focus(); };

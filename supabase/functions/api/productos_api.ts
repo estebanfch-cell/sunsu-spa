@@ -103,14 +103,18 @@ function fila(p: Row, b: Base): Row {
   });
   const total = stockTotal(stock);
   const archivado = !!s(p.beta_archivado_at);
-  const activo = p.activo !== false && (cat ? cat.activo !== false : true) && !archivado;
+  // Estado: si un admin lo fijó en la beta (beta_activo) manda eso; si no, el del sistema viejo
+  // (erp_productos.activo, catálogo de la hoja y Cabina con activo = NO). Archivado siempre es inactivo.
+  const viejo = p.activo !== false && (cat ? cat.activo !== false : true) && !(cab && /^no$/i.test(s(cab.activo)));
+  const fijado = p.beta_activo === true || p.beta_activo === false;
+  const activo = (fijado ? p.beta_activo === true : viejo) && !archivado;
   const minimo = p.beta_stock_minimo != null && p.beta_stock_minimo !== "" ? n(p.beta_stock_minimo) : (b.minimos.get(code) || 0);
   const reorden = p.beta_punto_reorden != null && p.beta_punto_reorden !== "" ? n(p.beta_punto_reorden) : null;
   const vis = skuVisible(code, tipo, cat);
   return {
     id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, skuAntes: b.antes?.get(code) || [], nombre, tipo, subtipo,
     categoria: s(p.categoria) || (cat ? (subtipo === "Producto" ? "Producto" : subtipo) : (cab ? "Insumo cabina" : "")),
-    linea: s(p.linea), marca: mk.marca, marcaDeducida: mk.deducida, activo,
+    linea: s(p.linea), marca: mk.marca, marcaDeducida: mk.deducida, activo, activoViejo: viejo, activoFijado: fijado,
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),
     stock: tipo === "servicio" ? null : total,
     porGrupo: Object.fromEntries(stock.map((g) => [g.grupo, g.cantidad])),
@@ -170,6 +174,7 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   // Historial: tickets, OC (beta y hoja) y cotizaciones a clientas.
   const hist: Row[] = [];
   const esServ = base.tipo === "servicio";
+  const cat0 = cat;
   for (const t of await safeAll(ctx, "tickets")) {
     if (t.borrado_at) continue;
     let qty = 0;
@@ -178,7 +183,21 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
       const f = facialSku(t.fac) || facialSku(t.facial_hecho);
       if (f && skuCode(f) === code) qty = 1;
     }
-    if (qty > 0) hist.push({ tipo: "Ticket", fecha: s(t.timestamp).slice(0, 10), doc: s(t.beta_num) || s(t.so_num) || ("#" + s(t.sheet_row)), quien: s(t.atendido_por), cliente: [s(t.nombre), s(t.apellido)].filter(Boolean).join(" "), cantidad: qty });
+    if (qty > 0) {
+      // Precio de venta: el ticket no guarda precio por línea. Se muestra el PVP de lista y, si el ticket
+      // solo tiene este producto, lo cobrado (estimado ÷ cantidad) y el descuento contra la lista.
+      const pv = preciosDe(cat0, prod, 0);
+      const otros = productQtys(t).filter((x) => skuCode(x.sku) !== code).length + (esServ ? 0 : (facialSku(t.fac) || facialSku(t.facial_hecho) ? 1 : 0)) + (s(t.servicios_adicionales) ? 1 : 0) + (s(t.paquete) || s(t.gift_card) || s(t.venta_gift) ? 1 : 0);
+      const est = n(t.estimado);
+      const solo = !esServ && otros === 0 && est > 0;
+      const cobrado = solo ? round2(est / qty) : null;
+      hist.push({
+        tipo: "Ticket", fecha: s(t.timestamp).slice(0, 10), doc: s(t.beta_num) || s(t.so_num) || ("#" + s(t.sheet_row)), quien: s(t.atendido_por), cliente: [s(t.nombre), s(t.apellido)].filter(Boolean).join(" "), cantidad: qty,
+        pvpLista: pv.pvp > 0 ? pv.pvp : null, sinIvaLista: pv.subtotal > 0 ? pv.subtotal : null,
+        cobrado, cobradoSinIva: cobrado != null ? round2(cobrado / 1.15) : null,
+        descuento: cobrado != null && pv.pvp > 0 && pv.pvp - cobrado > 0.009 ? round2(pv.pvp - cobrado) : null,
+      });
+    }
   }
   const ocs = await safeAll(ctx, "erp_oc");
   const ocById = new Map(ocs.map((o) => [s(o.id), o]));
@@ -227,7 +246,7 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   let cambios: Row[] = [];
   try {
     const r = await ctx.db.rpc("erp_producto_cambios", { p_id: s(prod.id) });
-    if (Array.isArray(r)) cambios = (r as Row[]).map((a) => ({ fecha: s(a.ts), actor: s(a.actor), accion: s(a.accion), cambios: limpiarAudit(a.cambios), motivo: s((a.despues as Row | undefined)?.beta_precio_motivo) }));
+    if (Array.isArray(r)) cambios = (r as Row[]).map((a) => ({ fecha: s(a.ts), actor: s(a.actor), accion: s(a.accion), cambios: limpiarAudit(a.cambios), motivo: s((a.despues as Row | undefined)?.beta_precio_motivo), motivoEstado: s((a.despues as Row | undefined)?.beta_activo_motivo) }));
   } catch { /* 0039 sin aplicar */ }
   if (!pr.costos) {
     cambios = cambios.map((c) => {
@@ -237,6 +256,13 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
     }).filter((c) => !c.cambios || Object.keys(c.cambios as Row).length);
   }
 
+  const estadoHist: Row[] = [];
+  for (const c of cambios) {
+    const ch = c.cambios && typeof c.cambios === "object" ? c.cambios as Row : {};
+    const d = (ch.beta_activo ?? ch.activo) as Row | undefined;
+    if (!d || typeof d !== "object") continue;
+    estadoHist.push({ fecha: c.fecha, actor: c.actor, antes: d.antes ?? null, despues: d.despues ?? null, motivo: s(c.motivoEstado) });
+  }
   const preciosHist: Row[] = [];
   for (const c of cambios) {
     const ch = c.cambios && typeof c.cambios === "object" ? c.cambios as Row : {};
@@ -261,12 +287,13 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
       sku_proveedor: s(prod.sku_proveedor), codigo_barras: s(prod.codigo_barras) || s(cab?.codigo_barras), unidad: s(prod.unidad) || s(cab?.unidad),
       observaciones: s(prod.observaciones), producto_base: s(prod.producto_base) || s(cab?.producto_base), bodega_def: s(prod.bodega_def), sububicacion_def: s(prod.sububicacion_def),
       uso: s(prod.uso), clase: s(prod.clase), beta_editado_por: s(prod.beta_editado_por), beta_editado_at: s(prod.beta_editado_at),
+      beta_contenido: prod.beta_contenido ?? null, beta_contenido_unidad: s(prod.beta_contenido_unidad), beta_envase: s(prod.beta_envase), beta_unidades_empaque: prod.beta_unidades_empaque ?? null,
       nombre_catalogo: s(cat?.producto_servicio), sku_catalogo: s(cat?.sku), tipo_catalogo: s(cat?.tipo),
       cabina: cab ? { codigo: s(cab.codigo), contenido_envase: n(cab.contenido_envase), unidad: s(cab.unidad), abierto_restante: n(cab.abierto_restante), max_abiertos: n(cab.max_abiertos), ubicacion: s(cab.ubicacion), ubicacion_local: s(cab.ubicacion_local), ubicacion_abierto: s(cab.ubicacion_abierto), minimo_envases: n(cab.minimo_envases), costo_envase: n(cab.costo_envase) } : null,
     },
     precios: { ...precios, pvpCatalogo: n(cat?.total_con_iva), compraComisionCatalogo: cat ? (cat.compra_comision != null && cat.compra_comision !== "" ? n(cat.compra_comision) : n(cat.precio_compra)) : null, compraRealSistema: b.compraBase.get(code) || null, beta_pvp: prod.beta_pvp ?? null, beta_compra_real: prod.beta_compra_real ?? null, beta_compra_comision: prod.beta_compra_comision ?? null },
     stock, subsCabina: SUBS_CABINA, abiertos,
-    proveedores: [...provAgg.values()], historial: hist.slice(0, 150), kardex, cambios, preciosHist,
+    proveedores: [...provAgg.values()], historial: hist.slice(0, 150), kardex, cambios, preciosHist, estadoHist,
     ...(await extrasFicha(ctx, prod, base, cat, cab, hist, precios)),
   };
   if (!pr.costos) {
@@ -336,6 +363,13 @@ extend("mcprod_foto", "any", async (p, ctx, ses) => {
 });
 
 /** Lo nuevo de la ficha (0041): descripción, mínimos, escalas, proveedores, códigos, archivos, protocolo. */
+/** Presentaciones enlazadas (0044) en las dos direcciones, con su contenido para comparar. */
+async function presentacionesDe(ctx: Ctx, prod: Row): Promise<Row[]> {
+  const todos = await safeAll(ctx, "erp_productos");
+  const mias = new Set(arr(prod.beta_presentaciones).map((x) => s(x)));
+  return todos.filter((x) => s(x.id) !== s(prod.id) && !s(x.beta_eliminado_at) && (mias.has(s(x.id)) || arr(x.beta_presentaciones).map((y) => s(y)).includes(s(prod.id))))
+    .map((x) => ({ id: s(x.id), sku: skuCode(s(x.sku)), nombre: s(x.nombre), contenido: x.beta_contenido ?? null, unidad: s(x.beta_contenido_unidad), envase: s(x.beta_envase), propia: mias.has(s(x.id)) }));
+}
 async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined, cab: Row | undefined, hist: Row[], precios: { compraReal?: number | null }): Promise<Row> {
   const code = skuCode(s(prod.sku));
   // Costo promedio ponderado de las compras (OC beta y de la hoja) + el de la ficha si existe.
@@ -391,6 +425,7 @@ async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined,
     eliminado: !!s(prod.beta_eliminado_at), eliminadoPor: s(prod.beta_eliminado_por),
     costoProm, costoPromedio, escalas, provProducto: arr(prod.beta_proveedores),
     codigos, archivos, protocolo, seUsaEn,
+    presentaciones: await presentacionesDe(ctx, prod),
     proveedoresCat: (await safeAll(ctx, "erp_proveedores")).filter((x) => x.activo !== false).map((x) => ({ id: s(x.id), nombre: s(x.nombre) })),
   };
 }

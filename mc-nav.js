@@ -50,12 +50,10 @@
         ["productos", "Productos", "#/m/productos"],
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["conteos", "Conteos físicos", "#/m/conteos"],
-        ["conteos", "Asignado a ti", "#/m/mc/pronto/asignado"],
         ["transferencias", "Transferencias", "#/m/transferencias"],
         ["ajuste", "Ajustes de stock", "#/m/mc/ajuste"],
-        ["admin", "Kardex", "#/m/kardex"],
-        ["inventario", "Locales y cabinas", "#/m/lugares"],
-        ["productos", "Catálogo anterior", "#/m/productos/catalogo"],
+        // Kardex, Locales y cabinas y Catálogo anterior fuera del menú (Emilia 17/11); el historial y los
+        // movimientos están en la ficha de cada producto. Las rutas siguen existiendo.
       ] },
       { id: "compras", label: "Compras", items: [
         ["compras", "Órdenes de compra", "#/m/compras"],
