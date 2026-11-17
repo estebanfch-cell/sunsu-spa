@@ -57,14 +57,14 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["barras_resumen", "mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo", "tk_estados", "tk_costos", "tk_historial", "tk_reagendadas", "cl_list", "cl_get", "ag_meta", "ag_citas", "ag_cita", "ag_disponibilidad"]);
+const LECTURAS = new Set(["pg_ticket", "pg_lista", "cj_resumen", "cj_comprobante", "barras_resumen", "mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo", "tk_estados", "tk_costos", "tk_historial", "tk_reagendadas", "cl_list", "cl_get", "ag_meta", "ag_citas", "ag_cita", "ag_disponibilidad"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
   mcprod_save: "productos", mcprod_foto: "productos", mcprod_nuevo: "productos",
   mcprod_estado: "productos", mcprod_duplicar: "productos", mcprod_archivo: "productos", mcprod_archivo_subir: "productos",
   mcprod_archivo_quitar: "productos", mcprod_archivo_principal: "productos", mcprod_codigos_save: "productos",
-  mcprod_codigo_interno: "productos", barras_resumen: "productos", barras_generar_lote: "productos", barras_asignar: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_presentacion_nueva: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
+  mcprod_codigo_interno: "productos", pg_ticket: "tickets", pg_registrar: "tickets", pg_anular: "tickets", pg_lista: "caja", cj_resumen: "caja", cj_iniciar: "caja", cj_mov: "caja", cj_cuadre: "caja", cj_anular: "caja", cj_comprobante: "caja", barras_resumen: "productos", barras_generar_lote: "productos", barras_asignar: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_presentacion_nueva: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
   proto_list: "cabina", proto_get: "cabina", proto_guardar: "cabina", proto_historial: "cabina",
   // Conteo físico (0045): crear/revisar es de admin; contar lo hace la asignada aunque no tenga el módulo.
   cf_meta: "conteos", cf_list: "inicio", cf_crear: "conteos", cf_revisar: "conteos",

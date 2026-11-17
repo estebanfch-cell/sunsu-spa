@@ -138,7 +138,7 @@
     }).join("");
   }
   function totHtml() {
-    var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc), pag = pg.cobrado ? Math.min(c.total, pg.pagado || c.total) : 0;
+    var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc), pag = r2((pg.cobrado ? Math.min(c.total, pg.pagado || c.total) : 0) + (K.pagoBeta || 0));
     var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
     return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(c.suma / 1.15) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(desc / 1.15) + "</b>" : "") +
       "<span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
@@ -209,7 +209,7 @@
       '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><label>Promoción <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" +
-      '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + "</div></div>" +
+      '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -576,6 +576,9 @@
     main.querySelector("#mctk-promo").onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
     main.querySelector("#mctk-dv").oninput = function () { var x = descParse(this.value); this.classList.toggle("bad", !x); if (!x) return; K.desc.tipo = x.tipo; K.desc.valor = x.valor; marcar(); pintarTot(); };
     wireCostos();
+    // 💵 Pagos de la beta (TK19): lista, registrar y anular; el efectivo entra solo a la caja chica.
+    var hp = main.querySelector("#mctk-pagos");
+    if (hp && window.MCPagos && K.d && K.d.clave) window.MCPagos.montar(hp, K.d.clave, function () { return calc().total; }, function (pagadoBeta) { K.pagoBeta = pagadoBeta; pintarTot(); });
     wireBuscar(main);
     var err = main.querySelector("#mctk-err");
     var g = main.querySelector("#mctk-guardar");

@@ -80,6 +80,7 @@
       ] },
       { id: "finanzas", label: "Finanzas", items: [
         ["caja", "Caja chica", "#/m/caja"],
+        ["caja", "Pagos recibidos", "#/m/caja/pagos"],
         ["admin", "Facturas SRI y retenciones", "#/m/mc/pronto/sri"],
         ["admin", "Cobranza", "#/m/mc/pronto/cobranza"],
         ["admin", "Estado de cuenta", "#/m/mc/pronto/edc"],
@@ -206,7 +207,7 @@
       [ok("tickets"), "🎫 Nuevo ticket", "#/doc/ov"],
       [ok("cotizaciones_cliente"), "📝 Nueva cotización", "#/doc/cot"],
       [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva"],
-      [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja"],
+      [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja/nuevo"],
       [true, "📦 Abrir producto", "#/m/aperturas"],
     ].filter(function (x) { return x[0]; });
   }
