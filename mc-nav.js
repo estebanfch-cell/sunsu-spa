@@ -49,6 +49,7 @@
       ] },
       { id: "inventario", label: "Inventario", items: [
         ["productos", "Productos", "#/m/productos"],
+        ["productos", "Códigos de barras", "#/m/barras"],
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["conteos", "Conteos físicos", "#/m/conteos"],
         ["transferencias", "Transferencias", "#/m/transferencias"],

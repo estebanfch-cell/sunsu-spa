@@ -187,6 +187,6 @@
   window.MCAperturas = {
     render: async function (route) { css(); return '<div id="mcap-root">' + (route.sub === "costo" ? await htmlCosto() : htmlAbrir()) + "</div>"; },
     wire: function (main, route) { if (route.sub === "costo") wireCosto(main); else wireAbrir(main); },
-    aplicaCard: aplicaCard,
+    aplicaCard: aplicaCard, escanear: escanear,
   };
 })();
