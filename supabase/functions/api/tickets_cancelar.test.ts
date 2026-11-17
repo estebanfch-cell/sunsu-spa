@@ -75,3 +75,24 @@ describe("Cancelar ticket (admin)", () => {
     assert.equal(Number(dev[0].delta), 1);
   });
 });
+
+describe("Descuento por línea al crear", () => {
+  it("descLineas limpia la entrada", async () => {
+    const { descLineas } = await import("./handlers.ts");
+    const d = descLineas([{ sku: "SUNSU-ML-002", modo: "%", valor: 10, bruto: 23, monto: 2.3 }, { sku: "", monto: 1, bruto: 2 }, { sku: "X", monto: 50, bruto: 10 }]);
+    assert.equal(d.length, 1);
+    assert.equal(d[0].modo, "%");
+  });
+  it("el detalle muestra la línea a precio de lista con su descuento", async () => {
+    const { db, h } = semilla();
+    const tk = db.tables.get("tickets")![0];
+    tk.estimado = 66.7;
+    tk.orig = { "ML-002": 1, beta: true, desc_lineas: [{ sku: "SUNSU-ML-002", modo: "%", valor: 10, bruto: 23, monto: 2.3 }] };
+    const g = await h("tk_get", "adm", { clave: "TK-SO-1" });
+    const l = (g.lineas as Row[]).find((x) => x.tipo === "producto")!;
+    assert.equal(Number(l.precio_unit), 23);
+    assert.equal(l.descuento_tipo, "%");
+    assert.equal(Number(l.total_linea), 20.7);
+    assert.equal(Number((g.totales as Row).total), 66.7);
+  });
+});
