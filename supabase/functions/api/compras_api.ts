@@ -12,7 +12,7 @@ function soloAdmin(ses: Ses): Row | null {
   return null;
 }
 
-async function subirFactura(ctx: Ctx, actor: string, pagoId: string, nombre: string, b64: string): Promise<string> {
+export async function subirFactura(ctx: Ctx, actor: string, pagoId: string, nombre: string, b64: string): Promise<string> {
   const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, "");
   const key = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!base || !key || !b64) return "";

@@ -113,11 +113,11 @@ export function dineroOc(o: Row, lineas: Row[], legado: Row | null, costos: Map<
   return { subtotal: n(o.subtotal), iva: n(o.iva), total: n(o.total), saldo: n(o.saldo), lineas: null };
 }
 
-async function hojaProveedores(db: Db): Promise<Row[]> {
+export async function hojaProveedores(db: Db): Promise<Row[]> {
   try { return await db.all("proveedores"); } catch { return []; }
 }
 
-async function ordenesLegadas(db: Db): Promise<Map<string, Row>> {
+export async function ordenesLegadas(db: Db): Promise<Map<string, Row>> {
   const map = new Map<string, Row>();
   let rows: Row[] = [];
   try { rows = await db.all("ordenes_compra"); } catch { rows = []; }
@@ -125,7 +125,7 @@ async function ordenesLegadas(db: Db): Promise<Map<string, Row>> {
   return map;
 }
 
-function precioDe(p: Row | undefined): number {
+export function precioDe(p: Row | undefined): number {
   return round2(n(p?.costo_promedio));
 }
 
@@ -229,7 +229,7 @@ function cotizarLineas(lineas: Row[], prods: Row[]): { error: string } | { sub: 
   return { sub, n: escritas };
 }
 
-async function escribirLineas(db: Db, actor: string, ocId: string, lineas: Row[], prods: Row[]): Promise<Row | null> {
+export async function escribirLineas(db: Db, actor: string, ocId: string, lineas: Row[], prods: Row[]): Promise<Row | null> {
   const map = porSku(prods);
   for (const ln of lineas) {
     if (!(n(ln.cantidad ?? ln.vendido) > 0)) continue;
@@ -360,7 +360,7 @@ function vistaLinea(ln: Row, prod: Row | undefined, admin: boolean): Row {
   return { ...base, nombre: s(prod?.nombre) || s(ln.nombre), precio: n(ln.precio), subtotal: sub };
 }
 
-async function vistaOc(
+export async function vistaOc(
   db: Db, o: Row, admin: boolean, pagos: Row[] = [],
   bag?: { prods: Row[]; provs: Row[]; hoja: Row[]; legadas: Map<string, Row>; lineas: Row[] },
 ): Promise<Row> {
