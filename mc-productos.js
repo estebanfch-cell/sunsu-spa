@@ -608,7 +608,7 @@
         (can ? '<td><button class="btn ghost small" type="button" data-mcp-cb-del="' + i + '">Quitar</button></td>' : "") + "</tr>";
     }).join("");
     return '<div class="mcp-card"><div class="card-title">Códigos de barras</div><table class="mcp-mini"><tbody>' + (filas || '<tr><td class="mcp-sub">Sin códigos.</td></tr>') + "</tbody></table>" +
-      (can ? '<p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><input id="mcp-cb-new" placeholder="Escanea o escribe un código" inputmode="numeric" style="flex:1;min-width:180px"><button class="btn ghost small" type="button" id="mcp-cb-add">Agregar</button><button class="btn ghost small" type="button" id="mcp-cb-gen">Generar interno (EAN-13)</button><button class="btn small" type="button" id="mcp-cb-save">Guardar códigos</button></p>' +
+      (can ? '<p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><input id="mcp-cb-new" placeholder="Escanea o escribe un código" inputmode="numeric" style="flex:1;min-width:180px"><button class="btn ghost small" type="button" id="mcp-cb-cam" title="Leer con la cámara">📷</button><button class="btn ghost small" type="button" id="mcp-cb-add">Agregar</button><button class="btn ghost small" type="button" id="mcp-cb-gen">Generar interno (EAN-13)</button><button class="btn small" type="button" id="mcp-cb-save">Guardar códigos</button></p>' +
         '<p class="note">Los EAN-13 se validan con su dígito de control. Los internos empiezan con 20 (rango GS1 de uso interno) y no se repiten entre productos.</p>' : "") + "</div>";
   }
   // Barras EAN-13 en SVG (para ver y para imprimir).
@@ -757,7 +757,7 @@
     // Códigos
     if (t.closest("#mcp-cb-add")) {
       var inp = document.getElementById("mcp-cb-new"), v = String((inp && inp.value) || "").trim();
-      if (v) { MC.codigos.push({ codigo: v, tipo: /^\d{13}$/.test(v) ? "ean13" : "otro", principal: !MC.codigos.length }); repintar(); }
+      if (v) { MC.codigos.push({ codigo: v, tipo: /^\d{13}$/.test(v) ? "ean13" : "otro", principal: !MC.codigos.length }); repintar(); setTimeout(function () { var i2 = document.getElementById("mcp-cb-new"); if (i2) i2.focus(); }, 0); }
       return true;
     }
     if (t.closest("#mcp-cb-gen")) {
@@ -933,11 +933,19 @@
       var ed = t.closest("[data-mcp-ed]"); if (ed && puede()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
       if (t.closest("#mcp-guardar")) { void guardar(); return; }
       if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo,[data-mcp-aj]")) { void accionFicha(t); return; }
+      if (t.closest("#mcp-cb-cam")) {
+        if (window.MCAperturas && window.MCAperturas.escanear) window.MCAperturas.escanear(function (c) { var i = document.getElementById("mcp-cb-new"); if (i) { i.value = c; var b = document.getElementById("mcp-cb-add"); if (b) b.click(); } });
+        return;
+      }
       if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar(); return; }
       if (t.closest("#mcp-foto")) {
         if (puede()) { var f = document.getElementById("mcp-file"); if (f) f.click(); }
         else { var im = host.querySelector("#mcp-foto img"); if (im) window.open(im.src, "_blank"); }
       }
+    });
+    // Lector de códigos (teclado + Enter) en «Códigos de barras»: Enter agrega sin tocar el mouse.
+    host.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && ev.target && ev.target.id === "mcp-cb-new") { ev.preventDefault(); var b = document.getElementById("mcp-cb-add"); if (b) b.click(); }
     });
     host.addEventListener("input", function (ev) {
       var es = ev.target.getAttribute && ev.target.getAttribute("data-mcp-es");
@@ -1075,6 +1083,7 @@
       return wireLista(main);
     },
     dirty: function () { return Object.keys(MC.ch).length > 0; },
+    barras: barras, code128: code128,
     _mc: MC,
   };
 })();

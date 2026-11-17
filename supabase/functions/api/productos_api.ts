@@ -131,7 +131,8 @@ function fila(p: Row, b: Base): Row {
     codigoCabina: cab ? s(cab.codigo) : "",
     // Para el buscador: SKU proveedor y códigos de barras.
     skuProveedor: s(p.sku_proveedor),
-    barras: [s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo))].filter(Boolean),
+    // Incluye el código de la hoja de cabina (cabina_inventario) si el producto aún no tiene uno propio.
+    barras: [...new Set([s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo)), s(p.codigo_barras) || arr(p.beta_codigos).length ? "" : s(cab?.codigo_barras).replace(/\.0+$/, "")].filter(Boolean))],
   };
 }
 
