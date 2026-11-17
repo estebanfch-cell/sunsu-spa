@@ -50,12 +50,21 @@ describe("conteo físico beta", () => {
     assert.equal((await h("cf_iniciar", "cos", { id: cr.id })).lineas, 2);
     let g = await h("cf_get", "cos", { id: cr.id });
     const L = g.lineas as Row[];
-    assert.deepEqual(L.map((l) => [l.sku, l.sistema]), [["ML-001", 5], ["ML-002", 2]]);
+    // Conteo a ciegas: la persona que cuenta no recibe el stock del sistema ni diferencias.
+    assert.equal(g.ciego, true);
+    assert.deepEqual(L.map((l) => [l.sku, l.sistema, l.diferencia]), [["ML-001", null, null], ["ML-002", null, null]]);
+    assert.equal((g.conteo as Row).conDiferencia, null);
+    assert.ok(!JSON.stringify(g).includes('"sistema":5'));
+    const ga = await h("cf_get", "adm", { id: cr.id });
+    assert.equal(ga.ciego, false);
+    assert.deepEqual((ga.lineas as Row[]).map((l) => [l.sku, l.sistema]), [["ML-001", 5], ["ML-002", 2]]);
     assert.match(String((await h("cf_enviar", "cos", { id: cr.id })).error), /Faltan 2/);
     await h("cf_guardar", "cos", { id: cr.id, lineas: [{ id: L[0].id, contado: 4 }, { id: L[1].id, estado: "no_encontrado" }], agregar: { sku: "HT-001", contado: 3 } });
-    g = await h("cf_get", "cos", { id: cr.id });
+    g = await h("cf_get", "adm", { id: cr.id });
     assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.estado, l.diferencia]), [["ML-001", "contado", -1], ["ML-002", "no_encontrado", -2], ["HT-001", "contado", 3]]);
     assert.equal((g.conteo as Row).conDiferencia, 3);
+    const gl = await h("cf_list", "cos", { mios: true });
+    assert.equal(((gl.items as Row[])[0]).conDiferencia, null);
     assert.equal((await h("cf_enviar", "cos", { id: cr.id })).ok, true);
     assert.equal((await h("notif_mias", "adm")).sinLeer, 1);
     assert.match(String((await h("cf_guardar", "cos", { id: cr.id, lineas: [] })).error), /no está abierto/);
