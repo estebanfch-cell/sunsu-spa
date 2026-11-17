@@ -281,6 +281,7 @@
     },
     wire: function (main, route) { if (route.sub === "cf") wireDetalle(main); else wireLista(main); },
     tarjetaInicio: tarjetaInicio,
+    _css: css,
     _c: C,
   };
 })();
