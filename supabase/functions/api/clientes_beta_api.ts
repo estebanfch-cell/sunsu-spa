@@ -3,7 +3,7 @@
 // beta_clientes (0049); clientas_registro y la hoja no se tocan. Borrar solo por acción de admin o solicitud.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, conTelefono } from "./lib.ts";
+import { actorOf, conTelefono, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
@@ -12,6 +12,7 @@ import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCli
 import { claveDe } from "./ticket_beta.ts";
 import { docsDe } from "./tickets_beta_api.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
+import { esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vistaDoc } from "./documentos_beta.ts";
 
 const FALTA = "Falta aplicar 0049_clientes_beta.sql";
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -122,12 +123,13 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const ov = (await overlays(ctx)).get(key);
   if (ov?.borrado === true && !admin) return { error: "Esa clienta está eliminada" };
   const vt = admin || await verTodos(ctx, ses);
-  const [det, regs0, filas0, cabs0, gifts0] = await Promise.all([
+  const [det, regs0, filas0, cabs0, gifts0, pdfs0] = await Promise.all([
     clienteDetalle(ctx.db, lite(ses), vt, key),
     registrosDeClave(ctx.db, key),
     ticketsDeClave(ctx.db, key),
     todas(ctx, "beta_tickets"),
     todas(ctx, "gift_cards"),
+    consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "eq", val: key }] }).then((x) => x.rows).catch(() => [] as Row[]),
   ]);
   if (det.error) return det;
   const cli = det.cliente as Row;
@@ -167,6 +169,9 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
     if (cab) item.editadoBeta = true;
     return item;
   });
+  // PDFs del bucket (K-Lift simetría, Focus Skin): por id de clienta, cédula, código o nombre del archivo.
+  const quien = { key, ced, nom, codigo };
+  for (const d of pdfs0) if (esDeClienta(d, quien)) documentos.push(vistaDoc(d));
   for (const c of reg.consentimientos) documentos.push({ tipo: "consentimiento", nombre: "Consentimiento informado" + (c.autorizaFotos ? " · fotos: " + c.autorizaFotos : ""), fecha: c.fecha, url: c.firma, texto: c.texto });
   const gifts = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) &&
     (mismaPersona(ced, nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!nom && normNombre(r.usado_por) === nom)))
@@ -185,6 +190,75 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
     puedeEditar: admin, puedePedir: !admin,
   };
 }
+
+/** Link firmado (10 min) de un PDF del bucket «cliente-documentos»; solo quien puede ver la ficha de esa clienta. */
+async function docPorId(ctx: Ctx, id: string): Promise<Row | null> {
+  try { return (await consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "id", op: "eq", val: id }] })).rows[0] || null; } catch { return null; }
+}
+extend("cl_doc_url", "any", async (p, ctx, ses) => {
+  const id = s(p.id), key = s(p.key);
+  if (!id) return { error: "Falta el documento" };
+  const d = await docPorId(ctx, id);
+  if (!d || !s(d.storage_path)) return { error: "No encontré ese documento" };
+  if (!s(d.cliente_id)) {
+    // Sin asignar: solo el admin lo abre (para decidir a quién va).
+    if (!esAdmin(ses.rol)) return { error: "Ese documento todavía no está asignado" };
+  } else {
+    if (!key) return { error: "Falta la clienta" };
+    const f = await ficha(ctx, ses, key);
+    if (f.error) return f;
+    if (!((f.documentos || []) as Row[]).some((x) => s(x.docId) === id)) return { error: "Ese documento no es de esta clienta" };
+  }
+  const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, ""), sk = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!base || !sk) return { error: "El almacén de documentos no está configurado." };
+  const path = s(d.storage_path).replace(/^\/+/, "").replace(/^cliente-documentos\//, "");
+  const res = await ctx.fetchImpl(`${base}/storage/v1/object/sign/cliente-documentos/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    method: "POST", headers: { authorization: `Bearer ${sk}`, apikey: sk, "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 600 }),
+  });
+  let data: Row = {}; try { data = await res.json() as Row; } catch { data = {}; }
+  const signed = s(data.signedURL || data.signedUrl);
+  if (!res.ok || !signed) return { error: "No se pudo abrir el PDF" };
+  const nombre = nombreDescarga(d);
+  let url = signed.startsWith("http") ? signed : `${base}/storage/v1${signed.startsWith("/") ? "" : "/"}${signed}`;
+  if (p.descargar === true || p.descargar === "1" || /\.zip$/i.test(path)) url += (url.includes("?") ? "&" : "?") + "download=" + encodeURIComponent(nombre);
+  return { ok: true, url, nombre, zip: /\.zip$/i.test(path) };
+});
+
+// ── Documentos sin asignar (admin): los que el cruce por nombre no pudo emparejar (ambiguo / sin match).
+extend("doc_sin_asignar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin" };
+  const q = normNombre(s(p.q));
+  const docs = (await consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "is_null" }] }).catch(() => ({ rows: [] as Row[] }))).rows
+    .filter((d) => !q || normNombre(d.cliente_nombre_archivo).includes(q))
+    .sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
+  // Sugerencias: clientas cuyo nombre contiene las palabras del archivo.
+  const res = await clientesResumen(ctx.db, lite(ses), true, true);
+  const ov = await overlays(ctx);
+  const cl = ((res.clientes || []) as Row[]).filter((c) => ov.get(s(c.key))?.borrado !== true).map((c) => {
+    const o = ov.get(s(c.key)); const dd = (o?.datos || {}) as Row;
+    const nom = ((dd.nombres != null ? s(dd.nombres) : s(c.nombres)) + " " + (dd.apellido != null ? s(dd.apellido) : s(c.apellido))).trim() || s(c.nombre);
+    return { key: s(c.key), nombre: nom, codigo: s(o?.codigo) || s(c.codigo), cedula: s(dd.cedula ?? c.cedula), ultima: s(c.ultima) };
+  });
+  const lim = Math.min(300, Math.max(1, n(p.limit) || 120));
+  const items = docs.slice(0, lim).map((d) => ({
+    ...vistaDoc(d), archivo: nombreDeArchivo(d.cliente_nombre_archivo), confianza: s(d.match_confianza) || "none",
+    sugerencias: cl.filter((c) => mismoNombre(s(d.cliente_nombre_archivo), normNombre(c.nombre))).slice(0, 6),
+  }));
+  return { ok: true, total: docs.length, items };
+});
+extend("doc_asignar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo admin" };
+  const id = s(p.id), key = s(p.key);
+  if (!id) return { error: "Falta el documento" };
+  const d = await docPorId(ctx, id);
+  if (!d) return { error: "No encontré ese documento" };
+  if (key && !/^(c|n|t):/.test(key)) return { error: "Clienta inválida" };
+  const antes = s(d.cliente_id);
+  await ctx.db.write(actorOf(ses), "beta_cliente_documentos", "update", { id }, { cliente_id: key || null, match_confianza: key ? "manual" : "none" });
+  await logAccion(ctx.db, actorOf(ses), key ? "DOCUMENTO ASIGNAR" : "DOCUMENTO DESASIGNAR",
+    `${s(d.tipo)} «${s(d.cliente_nombre_archivo)}» ${localEc(d.fecha).slice(0, 16)} · ${antes || "sin asignar"} → ${key || "sin asignar"} · ${id}`);
+  return { ok: true, id, key: key || null };
+});
 
 extend("cl_get", "any", async (p, ctx, ses) => {
   const key = s(p.key);
