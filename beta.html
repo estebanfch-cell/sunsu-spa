@@ -1446,6 +1446,8 @@ function moduloDeRuta(route) {
   if (route.mod === "aperturas") return route.sub === "costo" ? "inventario" : "inicio";
   // 🔑 Mi acceso: cada quien el suyo (la lista del equipo la decide el servidor: solo admin).
   if (route.mod === "acceso") return "inicio";
+  // 🏷️ Códigos de barras: mismo permiso que Productos (generar/asignar es solo admin en el servidor).
+  if (route.mod === "barras") return "productos";
   return route.mod;
 }
 function tituloRuta(route, tab) {
@@ -1455,6 +1457,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "agenda") return "Agenda";
   if (route.mod === "aperturas") return route.sub === "costo" ? "Costo por facial" : "Abrir producto";
   if (route.mod === "acceso") return "Mi acceso";
+  if (route.mod === "barras") return "Códigos de barras";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
@@ -2004,7 +2007,7 @@ function pantallaSunsu(route) {
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "personal" && route.sub === "permisos") return "permisos";
   if (m === "personal" && route.sub === "multas" && window.MCMultas) return "";
-  if (m === "aperturas" || m === "acceso") return "";
+  if (m === "aperturas" || m === "acceso" || m === "barras") return "";
   if (m === "personal" && route.sub === "multas") return "multas";
   if (m === "usuarios" || m === "permisos" || m === "configuracion") return "";
   return "";
@@ -2150,6 +2153,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
+    if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
@@ -2197,6 +2201,7 @@ async function renderMod(route) {
   if (route.mod === "asistencia") return renderAsistencia();
   if (route.mod === "aperturas" && window.MCAperturas) return window.MCAperturas.render(route);
   if (route.mod === "acceso" && window.MCAcceso) return window.MCAcceso.render(route);
+  if (route.mod === "barras" && window.MCBarras) return window.MCBarras.render(route);
   if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.mod === "paquetes") return renderPaquetes();
   if (route.mod === "gift_cards") return renderGift();
@@ -5655,24 +5660,25 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk16"></script>
-<script src="beta-screens.js?v=20261117tk16"></script>
-<script src="beta-inline.js?v=20261117tk16"></script>
-<script src="mc-productos.js?v=20261117tk16"></script>
-<script src="mc-nav.js?v=20261117tk16"></script>
-<script src="mc-permisos.js?v=20261117tk16"></script>
-<script src="mc-protocolos.js?v=20261117tk16"></script>
-<script src="mc-conteo.js?v=20261117tk16"></script>
-<script src="mc-transferencias.js?v=20261117tk16"></script>
-<script src="mc-ajustes.js?v=20261117tk16"></script>
-<script src="vendor-qrcode.js?v=20261117tk16"></script>
-<script src="mc-tickets.js?v=20261117tk16"></script>
-<script src="mc-paquetes.js?v=20261117tk16"></script>
-<script src="mc-aperturas.js?v=20261117tk16"></script>
-<script src="mc-acceso.js?v=20261117tk16"></script>
-<script src="mc-multas.js?v=20261117tk16"></script>
-<script src="mc-clientes.js?v=20261117tk16"></script>
-<script src="mc-agenda.js?v=20261117tk16"></script>
+<script src="mc-buscar.js?v=20261117tk17"></script>
+<script src="beta-screens.js?v=20261117tk17"></script>
+<script src="beta-inline.js?v=20261117tk17"></script>
+<script src="mc-productos.js?v=20261117tk17"></script>
+<script src="mc-nav.js?v=20261117tk17"></script>
+<script src="mc-permisos.js?v=20261117tk17"></script>
+<script src="mc-protocolos.js?v=20261117tk17"></script>
+<script src="mc-conteo.js?v=20261117tk17"></script>
+<script src="mc-transferencias.js?v=20261117tk17"></script>
+<script src="mc-ajustes.js?v=20261117tk17"></script>
+<script src="vendor-qrcode.js?v=20261117tk17"></script>
+<script src="mc-tickets.js?v=20261117tk17"></script>
+<script src="mc-paquetes.js?v=20261117tk17"></script>
+<script src="mc-aperturas.js?v=20261117tk17"></script>
+<script src="mc-acceso.js?v=20261117tk17"></script>
+<script src="mc-barras.js?v=20261117tk17"></script>
+<script src="mc-multas.js?v=20261117tk17"></script>
+<script src="mc-clientes.js?v=20261117tk17"></script>
+<script src="mc-agenda.js?v=20261117tk17"></script>
 <script>draw();</script>
 </body>
 </html>
