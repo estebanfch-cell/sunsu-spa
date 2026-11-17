@@ -199,16 +199,12 @@
   // Botón «+»: los mismos de MineCore que pidió Emilia, sin rutas.
   function crearItems() {
     var puedeOc = adm() && ok("compras");
+    // Emilia 17/11: solo cuatro accesos rápidos, cada uno con su emoji.
     return [
-      [ok("tickets"), "Nuevo ticket", "#/doc/ov"],
-      [ok("cotizaciones_cliente"), "Nueva cotización", "#/doc/cot"],
-      [puedeOc, "Nueva orden de compra", "#/m/compras/nueva"],
-      [adm() && ok("proveedores"), "Nuevo proveedor", "#/m/proveedores/nuevo"],
-      [ok("caja"), "Ingreso / gasto de caja chica", "#/m/caja"],
-      [ok("transferencias"), "Transferencia", "#/m/transferencias/nueva"],
-      [ok("ajuste"), "Ajuste", "#/m/ajustes/nueva"],
-      [adm(), "Nuevo producto", "#/m/productos/nuevo"],
-      [adm(), "Nuevo protocolo", "#/m/mc/protocolos/nuevo"],
+      [ok("tickets"), "🎫 Nuevo ticket", "#/doc/ov"],
+      [ok("cotizaciones_cliente"), "📝 Nueva cotización", "#/doc/cot"],
+      [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva"],
+      [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
