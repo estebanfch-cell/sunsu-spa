@@ -23,9 +23,9 @@ describe("menú MineCore (mc-nav.js)", () => {
     for (const no of ["Rutas", "Ruta", "liquidación", "Proyectos", "Alquiler", "WhatsApp", "Bots", "importaciones", "Impresión", "Manufactura"]) assert.ok(!textos.includes(no), no);
     assert.deepEqual([...g[0].items.map((i) => i[1])], ["🎫 Tickets", "📝 Cotizaciones", "👩 Registro de clientas"]);
   });
-  it("«+»: los nueve de Emilia, en orden, sin rutas", () => {
+  it("«+»: los cuatro de Emilia, con emoji", () => {
     const nav = cargar("admin", TODO);
-    assert.deepEqual([...nav.crearItems().map((x) => x[1])], ["Nuevo ticket", "Nueva cotización", "Nueva orden de compra", "Nuevo proveedor", "Ingreso / gasto de caja chica", "Transferencia", "Ajuste", "Nuevo producto", "Nuevo protocolo"]);
+    assert.deepEqual([...nav.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "🧾 Nueva orden de compra", "💵 Ingreso / gasto de caja chica"]);
     assert.equal(nav.crearItems()[0][2], "#/doc/ov");
   });
   it("cada ruta «Próximamente» tiene su texto; recepción no ve compras ni admin", () => {
@@ -37,6 +37,6 @@ describe("menú MineCore (mc-nav.js)", () => {
     const rec = cargar("recepcion", { tickets: "propio", cotizaciones_cliente: "todos", clientes: "todos", caja: "todos", inventario: "propio" });
     const ids = rec.grupos().filter((x) => !x.soloMovil).map((x) => x.id);
     assert.ok(!ids.includes("compras") && !ids.includes("admin"));
-    assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["Nuevo ticket", "Nueva cotización", "Ingreso / gasto de caja chica"]);
+    assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "💵 Ingreso / gasto de caja chica"]);
   });
 });

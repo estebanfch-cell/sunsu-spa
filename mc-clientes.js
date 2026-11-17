@@ -21,6 +21,7 @@
       ".mccl-hx td{background:var(--cream)!important;cursor:default}.mccl-hx ul{margin:4px 0 6px 18px;padding:0;font-size:.82rem}.mccl-car{display:inline-block;width:12px;color:var(--gray);transition:transform .15s}tr.open .mccl-car{transform:rotate(90deg)}",
       ".mccl-ph{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.mccl-ph img{width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--cream-d)}",
       ".mccl-reg .mccl-v{cursor:text;border-radius:5px;padding:1px 4px;display:inline-block;min-width:30px}.mccl-reg .mccl-v:hover{background:var(--cream);outline:1px dashed var(--cream-d)}.mccl-reg .mccl-v.mod{background:#fff3d6}.mccl-reg .ro{color:var(--gray)}",
+      ".mcpv-b.pdf{flex-direction:column;align-items:stretch;justify-content:flex-start}.mcpv-acc{display:flex;gap:8px;justify-content:flex-end;padding:8px 12px;background:#fff;border-bottom:1px solid var(--cream-d)}.mcpv-b.pdf iframe{flex:1;min-height:0}.mcpv-h .mctk-x{background:none;border:0;font-size:1.5rem;line-height:1;color:var(--navy);cursor:pointer;padding:0 4px}",
       ".mcpv{position:fixed;inset:0;background:rgba(20,30,50,.6);display:flex;align-items:center;justify-content:center;z-index:10000}.mcpv-box{background:#fff;border-radius:12px;width:min(980px,96vw);height:min(90vh,900px);display:flex;flex-direction:column;overflow:hidden}.mcpv-h{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--cream-d);font-size:.86rem;font-weight:700}.mcpv-b{flex:1;display:flex;align-items:center;justify-content:center;background:#f4f4f6;overflow:auto}.mcpv-b img{max-width:100%;max-height:100%;object-fit:contain}.mcpv-b iframe{width:100%;height:100%;border:0}",
       ".mccl-ses{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--navy);margin-right:3px;vertical-align:middle}.mccl-ses.u{background:var(--navy)}",
     ].join("");
@@ -117,7 +118,7 @@
   function lblE(x) { return window.MCEmojiCampo ? window.MCEmojiCampo(x) : x; }
   function cerrarPrevia() { var x = document.getElementById("mcpv"); if (x) { var fr = x.querySelector("[data-blob]"); if (fr) URL.revokeObjectURL(fr.getAttribute("data-blob")); x.remove(); } }
   function marcoPrevia(titulo, cuerpo) {
-    cerrarPrevia();
+    cerrarPrevia(); css();
     var box = document.createElement("div"); box.className = "mcpv"; box.id = "mcpv";
     box.innerHTML = '<div class="mcpv-box"><div class="mcpv-h"><span>' + e(titulo || "Documento") + '</span><button type="button" class="mctk-x" data-x title="Cerrar">×</button></div><div class="mcpv-b">' + cuerpo + "</div></div>";
     box.onclick = function (ev) { if (ev.target === box || ev.target.closest("[data-x]")) cerrarPrevia(); };
@@ -153,7 +154,7 @@
     if (!document.getElementById("mcpv")) return;
     try {
       var u = URL.createObjectURL(doc.output("blob"));
-      box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> <a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
+      box.querySelector(".mcpv-b").classList.add("pdf"); box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> <a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
     } catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
   }
   /** Igual que la tarjeta, para cualquier PDF que se arma en el navegador (reporte del paquete). */

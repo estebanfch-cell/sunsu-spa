@@ -50,6 +50,7 @@
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
       ".mctk-ln input.q,.mctk-ln input.p{-moz-appearance:textfield;appearance:textfield;padding:6px 10px;text-align:center;box-sizing:border-box}.mctk-ln input.q{width:64px}.mctk-ln input.p{width:92px;padding-left:20px}.mctk-ln input.q::-webkit-outer-spin-button,.mctk-ln input.q::-webkit-inner-spin-button,.mctk-ln input.p::-webkit-outer-spin-button,.mctk-ln input.p::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-money{position:relative;display:inline-block}.mctk-money>span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:.82rem;pointer-events:none}",
       ".mctk-cli{font-size:.9rem;font-weight:700;color:var(--navy-d);margin:-2px 0 2px}.mctk-cod{font-family:ui-monospace,monospace;color:var(--navy);text-decoration:none;border-bottom:1px dashed}",
+      ".mctk-xdlg .mctk-box{width:min(620px,94vw);max-height:88vh;overflow:auto}.mctk-xh{display:flex;justify-content:space-between;align-items:center}.mctk-xh h3{margin:0}.mctk-xx{background:none;border:0;font-size:1.6rem;line-height:1;cursor:pointer;color:var(--navy)}.mctk-xtog{display:flex!important;align-items:center;gap:10px;padding:10px 12px;margin:8px 0;background:var(--cream);border-radius:10px;font-size:.86rem;cursor:pointer}.mctk-xdlg input[type=checkbox]{width:18px!important;height:18px;margin:0;flex:none;accent-color:var(--navy)}.mctk-xt{width:100%;border-collapse:collapse;font-size:.84rem;margin:4px 0 10px}.mctk-xt th{font-size:.68rem;text-transform:uppercase;color:var(--gray);text-align:left;padding:6px 8px;border-bottom:1px solid var(--cream-d)}.mctk-xt td{padding:8px;border-bottom:1px solid #f0ece4;vertical-align:middle}.mctk-xt .num{text-align:right;white-space:nowrap}.mctk-xt .c{text-align:center;width:70px}.mctk-xlbl{display:block;font-size:.8rem;font-weight:700}.mctk-xlbl input{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-weight:400}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
     ].join("");
@@ -101,7 +102,7 @@
     if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
     var pq0 = d.paquete || {}; if ((pq0.vigentes && pq0.vigentes.length) || pq0.uso) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
-    (d.documentos || []).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
+    (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
   }
   function descTxt(tp, v) { v = Number(v) || 0; if (!(v > 0) || !tp) return ""; return tp === "$" ? "$" + q2(v) : q2(v) + "%"; }
@@ -128,11 +129,11 @@
     calc();
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
-        '<td class="num">' + (l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
+        '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
-        '<td class="num" data-tl>' + (l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(l.total_linea))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
+        '<td class="num" data-tl>' + (l.cortesia && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(l.total_linea))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
   }
   function totHtml() {
@@ -267,14 +268,20 @@
 
   // ---------- excluir comisión ----------
   function dlgExcluir() {
-    var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg";
-    box.innerHTML = '<div class="mctk-box"><h3 style="margin:0 0 6px">Excluir comisión</h3><p class="mccf-sub">Marca las líneas que no pagan comisión, o toda la comisión de la cosmetóloga en este ticket. Queda en el historial y entra en el cálculo de comisiones de la beta.</p>' +
-      '<label><input type="checkbox" id="mctk-xall"' + (K.exclC ? " checked" : "") + "> Toda la comisión de <b>" + e(t.cosmetologa || "la cosmetóloga") + "</b> en este ticket</label><hr>" +
-      K.L.map(function (l, i) { return '<label><input type="checkbox" data-x="' + i + '"' + (l.excluir_comision ? " checked" : "") + "> " + e(TIPO[l.tipo] || l.tipo) + " · " + e(l.sku) + " · " + e(l.nombre) + " ×" + e(q2(l.cantidad)) + "</label>"; }).join("") +
-      '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo</p><input type="text" id="mctk-xn" value="' + e(K.exclN) + '" placeholder="Ej. producto de cortesía, ticket de prueba">' +
-      '<p class="err" id="mctk-xerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost small" type="button" id="mctk-xno">Cancelar</button><button class="btn small" type="button" id="mctk-xok">Aplicar</button></div></div>';
+    var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg mctk-xdlg";
+    box.innerHTML = '<div class="mctk-box"><div class="mctk-xh"><h3>Excluir comisión</h3><button type="button" class="mctk-xx" data-cerrar title="Cerrar">×</button></div>' +
+      '<p class="mccf-sub">Marca las líneas que no pagan comisión, o toda la comisión de la cosmetóloga. Queda en el historial.</p>' +
+      '<label class="mctk-xtog"><input type="checkbox" id="mctk-xall"' + (K.exclC ? " checked" : "") + '><span>Excluir toda la comisión de <b>' + e(t.cosmetologa || "la cosmetóloga") + "</b> en este ticket</span></label>" +
+      '<table class="mctk-xt"><thead><tr><th>Producto / servicio</th><th class="num">Subtotal</th><th class="c">Excluir</th></tr></thead><tbody>' +
+      K.L.map(function (l, i) { return '<tr><td><div class="mctk-pn">' + e(l.nombre) + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + " ×" + e(q2(l.cantidad)) + '</div></td><td class="num">' + $m(l.total_linea != null ? l.total_linea : l.precio_unit * l.cantidad) + '</td><td class="c"><input type="checkbox" data-x="' + i + '"' + (l.excluir_comision ? " checked" : "") + "></td></tr>"; }).join("") +
+      '</tbody></table><label class="mctk-xlbl">Motivo<input type="text" id="mctk-xn" value="' + e(K.exclN) + '" placeholder="Ej. producto de cortesía, ticket de prueba"></label>' +
+      '<p class="err" id="mctk-xerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn small" type="button" id="mctk-xok">' + (d.puedeEditar ? "Guardar" : "Aplicar") + "</button></div></div>";
     document.body.appendChild(box);
-    box.querySelector("#mctk-xno").onclick = function () { box.remove(); };
+    var cerrar = function () { box.remove(); };
+    box.querySelector("[data-cerrar]").onclick = cerrar;
+    box.onclick = function (ev) { if (ev.target === box) cerrar(); };
+    var tog = function () { var all = box.querySelector("#mctk-xall").checked; box.querySelectorAll("[data-x]").forEach(function (c) { c.disabled = all; }); };
+    box.querySelector("#mctk-xall").onchange = tog; tog();
     box.querySelector("#mctk-xok").onclick = function () {
       var all = box.querySelector("#mctk-xall").checked, nota = box.querySelector("#mctk-xn").value.trim();
       var marcadas = [].slice.call(box.querySelectorAll("[data-x]")).filter(function (c) { return c.checked; }).length;
@@ -282,8 +289,8 @@
       K.exclC = all; K.exclN = nota;
       box.querySelectorAll("[data-x]").forEach(function (c) { K.L[+c.getAttribute("data-x")].excluir_comision = c.checked; });
       box.remove(); marcar(); pintarLin();
-      var note = "Comisión: guarda los cambios para aplicarla.";
-      document.getElementById("mctk-err").textContent = note;
+      var g = document.getElementById("mctk-guardar");
+      if (K.d.puedeEditar && g) g.click(); else document.getElementById("mctk-err").textContent = "Comisión: envía la solicitud para aplicarla.";
     };
   }
 
@@ -296,7 +303,7 @@
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, total_linea: Number(l.total_linea) || 0 }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, total_linea: Number(l.total_linea) || 0 }; });
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
   }
