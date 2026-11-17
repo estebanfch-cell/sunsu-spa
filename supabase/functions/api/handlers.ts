@@ -1,3 +1,4 @@
+import { bloqueada, ESPERA_MIN, hashPass, igualSeguro, ITER, MAX_INTENTOS, normUsuario } from "./credenciales.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { cargarOverride, conPermisosUsuario, gateNivel, redactarFlags } from "./usuario_permisos.ts";
 import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
@@ -575,6 +576,46 @@ export async function doLogin(p: R, ctx: Ctx): Promise<R> {
   return { ok: true, token, user: pub, modulos: modulosVisibles(s(pub.role), matriz), ver_costos: acceso(s(pub.role), "ver_costos", matriz) === "todos" };
 }
 
+/** Login con usuario + contraseña (beta_credenciales). Mismo resultado que el PIN: abre la sesión del usuario. */
+export async function doLoginPass(p: R, ctx: Ctx): Promise<R> {
+  const usuario = normUsuario(p.usuario), pass = s(p.password);
+  if (!usuario || !pass) return { error: "Escribe tu usuario y contraseña" };
+  const ip = s(p.ip);
+  if (ip) {
+    try {
+      const desde = new Date(ctx.now.getTime() - ESPERA_MIN * 60000).toISOString();
+      const n0 = (await ctx.db.all("login_intentos")).filter((r) => s(r.ip) === ip && s(r.ts) > desde).length;
+      if (n0 >= 8) return { error: "Demasiados intentos. Espera 15 minutos." };
+    } catch { /* sin tabla de intentos */ }
+  }
+  const fallo = async (c: R | null): Promise<R> => {
+    if (ip) await ctx.db.write("login", "login_intentos", "insert", {}, { ip, ts: ctx.now.toISOString() }).catch(() => null);
+    if (c) {
+      const intentos = n(c.intentos) + 1;
+      await ctx.db.write("login", "beta_credenciales", "update", { usuario_id: s(c.usuario_id) }, {
+        intentos, bloqueado_hasta: intentos >= MAX_INTENTOS ? new Date(ctx.now.getTime() + ESPERA_MIN * 60000).toISOString() : null,
+      }).catch(() => null);
+    }
+    return { error: "Usuario o contraseña incorrectos" };
+  };
+  let creds: R[] = [];
+  try { creds = await ctx.db.all("beta_credenciales"); } catch { return { error: "El acceso con usuario todavía no está activo" }; }
+  const c = creds.find((x) => normUsuario(x.usuario) === usuario) || null;
+  if (!c) { await hashPass(pass, "0".repeat(32), ITER); return fallo(null); }
+  if (bloqueada(c, ctx.now)) return { error: "Demasiados intentos. Espera unos minutos." };
+  const h = await hashPass(pass, s(c.pass_salt), n(c.iteraciones) || ITER);
+  if (!igualSeguro(h, s(c.pass_hash))) return fallo(c);
+  const uid = s(c.usuario_id);
+  let u: R | undefined;
+  try { u = (await ctx.db.all("app_usuarios")).find((x) => s(x.id) === uid); } catch { u = undefined; }
+  if (!u) u = (await ctx.db.all("usuarios").catch(() => [] as R[])).find((x) => s(x.id) === uid);
+  if (!u || u.activo === false) return { error: "Esa cuenta no está activa" };
+  await ctx.db.write("login", "beta_credenciales", "update", { usuario_id: uid }, { intentos: 0, bloqueado_hasta: null }).catch(() => null);
+  const out = await abrirSesion(ctx, { id: uid, nombre: s(u.nombre) || s(u.name), short: s(u.short), rol: s(u.rol) || s(u.role), color: s(u.color), bloqueado: u.bloqueado === true, pin_reset: false });
+  if (out.ok) await logAccion(ctx.db, s(u.nombre) || s(u.name) || uid, "LOGIN USUARIO", usuario).catch(() => null);
+  return out;
+}
+
 async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
   const id = s(u.id || u.usuario);
   const nombre = s(u.nombre || u.name || id);
@@ -719,6 +760,7 @@ async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R
 async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (action === "version" || action === "getVersion") return { version: APP_VERSION };
   if (action === "login") return doLogin(p, ctx);
+  if (action === "login_pass") return doLoginPass(p, ctx);
   const ses = ctx.ses !== undefined ? ctx.ses : await loadSes(ctx, p.token);
   const need = (roles: string[]) => deny(ses, roles);
   const A = actorOf(ses, s(p.usuario) || "beta");
@@ -846,7 +888,7 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
     return { ok: true };
   }
 
-  const sessionActions = new Set(["version", "getVersion", "login", "usuarioCambiarPin", "getUsuarios", "usuarioBloqueado"]);
+  const sessionActions = new Set(["version", "getVersion", "login", "login_pass", "usuarioCambiarPin", "getUsuarios", "usuarioBloqueado"]);
   if (!sessionActions.has(action)) {
     const openReads = new Set(["getCatalogo", "getPromos", "getCodigoGC", "getCodigosGC", "getProdColMap", "getMensajes", "getPlantillaGC", "existeCedula", "getRegistro"]);
     if (!ses && !openReads.has(action)) return { error: "Inicia sesión" };
@@ -868,7 +910,7 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 }
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
-  const real = action === "login" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  const real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
   if (action === "ver_como") {
     if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
     const view = await loadUsuario(ctx, s(p.uid) || s(p.preview_uid));
