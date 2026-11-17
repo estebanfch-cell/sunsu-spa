@@ -53,6 +53,7 @@
         ["conteos", "Conteos físicos", "#/m/conteos"],
         ["transferencias", "Transferencias", "#/m/transferencias"],
         ["ajuste", "Ajustes de stock", "#/m/ajustes"],
+        ["inventario", "Costo por facial", "#/m/aperturas/costo"],
         // Kardex, Locales y cabinas y Catálogo anterior fuera del menú (Emilia 17/11); el historial y los
         // movimientos están en la ficha de cada producto. Las rutas siguen existiendo.
       ] },
@@ -199,12 +200,13 @@
   // Botón «+»: los mismos de MineCore que pidió Emilia, sin rutas.
   function crearItems() {
     var puedeOc = adm() && ok("compras");
-    // Emilia 17/11: solo cuatro accesos rápidos, cada uno con su emoji.
+    // Emilia 17/11: accesos rápidos con emoji; el 5.º es 📦 Abrir producto (cabina/local).
     return [
       [ok("tickets"), "🎫 Nuevo ticket", "#/doc/ov"],
       [ok("cotizaciones_cliente"), "📝 Nueva cotización", "#/doc/cot"],
       [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva"],
       [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja"],
+      [true, "📦 Abrir producto", "#/m/aperturas"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
