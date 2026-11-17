@@ -39,7 +39,7 @@
 
   function listaHtml() {
     var d = P.data, q = norm(P.q);
-    var L = (d.protocolos || []).filter(function (p) { return !q || norm([p.sku, p.nombre, p.servicio && p.servicio.nombre].join(" ")).indexOf(q) >= 0; });
+    var L = window.MCBuscar ? window.MCBuscar.filtrar(d.protocolos || [], P.q, function (p) { return [[p.sku], [p.nombre, p.servicio && p.servicio.nombre]]; }) : (d.protocolos || []).filter(function (p) { return !q || norm([p.sku, p.nombre, p.servicio && p.servicio.nombre].join(" ")).indexOf(q) >= 0; });
     var sinProto = (d.servicios || []).filter(function (s) { return s.activo && !(d.protocolos || []).some(function (p) { return p.sku === s.sku; }); });
     var filas = L.map(function (p) {
       return '<tr class="mcpr-row" data-pr="' + e(p.id) + '"><td class="mcpr-sku">' + e(p.sku) + "</td><td><b>" + e(p.nombre) + '</b><div class="mcpr-sub">' + e(p.servicio ? p.servicio.nombre : "Servicio no encontrado") + "</div></td>" +
