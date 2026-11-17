@@ -10,6 +10,8 @@ import { runErp } from "./erp.ts";
 import { flujoTrasRecibir } from "./compras_flujo.ts";
 import { estadoOc } from "./compras_beta.ts";
 import { agrupar, estadoTrasRecibir, repartir, UNDO_MS } from "./recepciones.ts";
+import { crearActa } from "./actas_api.ts";
+import { restockParaRecibir, restocksAbiertos } from "./consignacion_beta_api.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const BODEGAS_OK = ["VENTA", "CASA", "CABINA", "CAB2", "CAB3"];
@@ -21,6 +23,7 @@ async function refrescar(ctx: Ctx, actor: string, ocId: string): Promise<void> {
   await ctx.db.write(actor, "erp_oc", "update", { id: ocId }, { estado: estadoTrasRecibir(L), flujo: flujoTrasRecibir(L, n(o.pagado), n(o.total)) });
 }
 function recibible(o: Row): boolean {
+  if (s(o.tipo) === "consignacion") return false; // la OC de consignación factura lo vendido: no se recibe
   if (s(o.estado) === "cancelada" || s(o.flujo) === "Borrador" || s(o.estado) === "borrador") return false;
   return true;
 }
@@ -38,11 +41,13 @@ extend("rcp_lista", "any", async (_p, ctx) => {
     if (pend <= 0 && !reciente) continue;
     items.push({ id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: est, proveedor: s(provs.find((p) => p.id === o.proveedor_id)?.nombre), productos: new Set(L.map((l) => s(l.producto_id))).size, pendiente: round2(pend) });
   }
+  for (const r of await restocksAbiertos(ctx)) items.push(r);
   items.sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
   return { ok: true, items };
 });
 
 extend("rcp_get", "any", async (p, ctx, ses) => {
+  if (/^rst:/.test(s(p.id))) { const r = await restockParaRecibir(ctx, s(p.id).slice(4)); return r || { error: "Pedido no encontrado" }; }
   const o = (await todas(ctx, "erp_oc")).find((r) => r.id === s(p.id) || s(r.numero) === s(p.id));
   if (!o) return { error: "OC no encontrada" };
   const [lineas, prods, provs, bods, recs] = await Promise.all([todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_productos"), todas(ctx, "erp_proveedores"), todas(ctx, "erp_bodegas"), todas(ctx, "erp_recepciones")]);
@@ -107,7 +112,21 @@ extend("rcp_recibir", "any", async (p, ctx, ses) => {
   }
   await refrescar(ctx, actor, s(o.id));
   await logAccion(ctx.db, actor, "OC RECIBIR", `${s(o.numero)} · ${log.join(" · ")}${rec.numero ? " · " + s(rec.numero) : ""} · ${o.id}`);
-  return { ok: true, recepcion: s(rec.numero), recepcion_id: s(rec.id) };
+  // Acta de entrega-recepción automática (TK26): lo recibido y lo no recibido de esta vez.
+  let actaNum = "";
+  try {
+    const nombreBod = (id: string) => s(bods.find((b) => b.id === id)?.nombre);
+    const filas: Row[] = [];
+    for (const it of ins) {
+      const g = G.get(s(it.producto_id)); if (!g) continue;
+      const rc = recibir.filter((r) => (L.find((l) => l.id === r.oc_linea_id) || {}).producto_id === g.producto_id);
+      const qr = round2(rc.reduce((a, r) => a + n(r.cantidad), 0));
+      const qn = round2(anular.filter((x) => (L.find((l) => l.id === x.id) || {}).producto_id === g.producto_id).reduce((a, x) => a + x.qty, 0));
+      if (qr > 0 || qn > 0) filas.push({ sku: s(g.sku), nombre: s(g.nombre), pedido: n(g.pedido), recibido: qr, no_recibido: qn, bodega: rc.length ? nombreBod(s(rc[0].bodega_id)) : "" });
+    }
+    if (filas.length) actaNum = s((await crearActa(ctx, actor, { oc: o, recepcion_id: s(rec.id) || undefined, lineas: filas })).numero);
+  } catch { actaNum = ""; }
+  return { ok: true, recepcion: s(rec.numero), recepcion_id: s(rec.id), acta: actaNum };
 });
 
 extend("rcp_no_recibido_undo", "any", async (p, ctx, ses) => {

@@ -62,6 +62,7 @@
         ["compras", "Órdenes de compra", "#/m/compras"],
         ["compras", "Cotizaciones de proveedor", "#/m/compras/cotizaciones"],
         ["recepciones", "Recepciones", "#/m/recepciones"],
+        ["compras", "Consignación", "#/m/compras/consignacion"],
         ["proveedores", "Proveedores", "#/m/proveedores"],
         // Órdenes pendientes, Actas de recepción y Pagos a proveedores fuera (Emilia 17/11): los pagos van dentro de cada OC.
       ] },
@@ -74,9 +75,7 @@
         ["ver_costos", "Compras", "#/m/mc/pronto/rep_compras"],
         ["admin", "Registro de auditoría", "#/m/mc/pronto/auditoria"],
       ] },
-      { id: "consignacion", label: "Consignación", items: [
-        ["compras", "Consignación", "#/m/mc/pronto/consignacion"],
-      ] },
+      // Consignación vive dentro de Compras (pestaña 🤝 Consignación, Emilia 17/11).
       { id: "finanzas", label: "Finanzas", items: [
         ["caja", "Caja chica", "#/m/caja"],
         ["caja", "Pagos recibidos", "#/m/caja/pagos"],
