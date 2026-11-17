@@ -5838,21 +5838,21 @@ function _dTrend(hist,meta){
     +'<polyline points="'+line+'" fill="none" stroke="var(--navy)" stroke-width="2" vector-effect="non-scaling-stroke"/>'+dots+'</svg>'
     +'<div class="dsh-sub" style="display:flex;justify-content:space-between"><span>eje '+lo+'%–'+hi+'%</span></div><div class="dsh-sub" style="display:flex;justify-content:space-between"><span>'+_dE(pts[0].label)+'</span><span style="color:#C9761F">- - meta '+(Number(meta)||0).toFixed(0)+'%</span><span>'+_dE(pts[pts.length-1].label)+'</span></div>';
 }
-function _dRank(items,valFn,subFn,labelFn){
+function _dRank(items,valFn,subFn,labelFn,ddFn){
   if(!items||!items.length) return '<div class="dsh-sub">— sin ventas en el periodo —</div>';
   var max=Math.max.apply(null,items.map(function(x){return Math.abs(valFn(x).n)||0;}).concat([0.0001]));
   return items.map(function(x){
-    var v=valFn(x);
-    return '<div style="padding:5px 0">'
+    var v=valFn(x), dd=ddFn?ddFn(x):null;
+    return '<div style="padding:5px 0'+(dd?';cursor:pointer':'')+'"'+(dd?' class="dsh-dd" data-dd="'+_dE(dd[0])+'" data-ddk="'+_dE(dd[1])+'" data-ddn="'+_dE(dd[2]||'')+'" title="Ver los comprobantes"':'')+'>'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:0.7rem;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+labelFn(x)+'</span><span style="font-size:0.72rem;font-weight:800;color:var(--navy-d);white-space:nowrap">'+v.txt+'</span></div>'
       +'<div style="background:var(--blue-l);border-radius:5px;height:7px;margin:3px 0 2px;overflow:hidden"><div style="width:'+Math.max(2,Math.round(Math.abs(v.n)/max*100))+'%;height:100%;background:var(--navy);border-radius:5px"></div></div>'
       +'<div class="dsh-sub">'+subFn(x)+'</div></div>';
   }).join('');
 }
-function _dKpi(titulo,valor,act,prev,prevTxt,extra){
+function _dKpi(titulo,valor,act,prev,prevTxt,extra,pie){
   return '<div class="card dsh-card"><div class="dsh-head"><span class="dsh-t">'+titulo+'</span>'+_dDelta(act,prev)+'</div>'
     +'<div class="dsh-v">'+valor+'</div>'+(extra||'')
-    +'<div class="dsh-sub">vs '+_dE(_dashSt._labelPrev||'')+' '+prevTxt+'</div></div>';
+    +'<div class="dsh-sub">vs '+_dE(_dashSt._labelPrev||'')+' '+prevTxt+'</div>'+(pie||'')+'</div>';
 }
 function _dashCss(){
   if(document.getElementById('dsh-css')) return;
@@ -5878,6 +5878,7 @@ function _dashCss(){
     +'.dsh-tile{border:1.5px solid var(--blue);border-radius:10px;padding:8px 9px}'
     +'.dsh-tbl{width:100%;border-collapse:collapse;font-size:0.62rem}.dsh-tbl th{color:var(--gray);font-weight:800;text-align:right;padding:4px 3px;border-bottom:1.2px solid var(--cream-d);position:sticky;top:0;background:#fff}.dsh-tbl th:first-child,.dsh-tbl td:first-child{text-align:left}.dsh-tbl td{padding:4px 3px;text-align:right;border-bottom:1px solid var(--gray-l);color:var(--text);font-weight:700}'
     +'.dsh-ptabs{display:flex;gap:3px;background:var(--blue-l);border-radius:10px;padding:3px;margin:6px 0}.dsh-ptabs button{flex:1;border:0;background:transparent;font-size:0.6rem;font-weight:800;color:var(--gray);padding:6px 2px;border-radius:8px;cursor:pointer}.dsh-ptabs button.on{background:var(--navy);color:#fff}'
+    +'.dsh-ov{position:fixed;inset:0;background:rgba(20,30,50,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px}.dsh-ovb{background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:88vh;overflow:hidden;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}.dsh-x{border:0;background:var(--blue-l);border-radius:50%;width:30px;height:30px;font-size:1.1rem;cursor:pointer}.dsh-dd:hover{background:var(--blue-l);border-radius:8px}.dsh-ovb .dsh-tbl td:nth-child(2),.dsh-ovb .dsh-tbl td:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(4){text-align:left}'
     +'@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
   document.head.appendChild(st);
 }
@@ -5898,7 +5899,46 @@ function _dProdHtml(d){
   return '<div class="dsh-ptabs">'+tabs+'</div>'+_dRank(list,
     function(x){ return key==='val'?{n:x.val,txt:_dM(x.val)}:key==='margen'?{n:x.margen,txt:_dM(x.margen)}:key==='margenPct'?{n:x.margenPct,txt:_dP(x.margenPct)}:{n:x.qty,txt:_dN(x.qty)+' u'}; },
     function(x){ return _dE(x.sku)+' · '+_dN(x.qty)+' u · '+_dM(x.val)+' · margen '+_dM(x.margen)+' ('+_dP(x.margenPct)+') · '+_dP(x.pct)+' del total'; },
-    function(x){ return _dE(x.nombre); });
+    function(x){ return _dE(x.nombre); }, function(x){ return ['producto',x.sku,x.nombre]; });
+}
+// Presets de rango (Migo trae desde marzo 2025) y drill-down de cualquier número.
+function _dYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dashPreset(x){
+  var hoy=new Date(), a='', b=_dYmd(hoy);
+  if(x==='12m'){ var d=new Date(hoy); d.setMonth(d.getMonth()-11); d.setDate(1); a=_dYmd(d); }
+  else if(x==='2025'){ a='2025-01-01'; b='2025-12-31'; }
+  else if(x==='migo'){ a='2025-03-01'; b='2026-04-30'; }
+  else if(x==='todo'){ a='2025-03-01'; }
+  _dashSt.periodo='rango'; _dashSt.desde=a; _dashSt.hasta=b; _dashSt.preset=x;
+  renderInicio(document.getElementById('content'));
+}
+function dashMes(k){
+  var y=+k.slice(0,4), m=+k.slice(5,7), fin=new Date(y,m,0).getDate();
+  _dashSt.periodo='rango'; _dashSt.desde=k+'-01'; _dashSt.hasta=k+'-'+String(fin).padStart(2,'0'); _dashSt.preset='';
+  renderInicio(document.getElementById('content'));
+}
+function dashDetalle(tipo,k,titulo){
+  var d=window._dashData||{}, ov=document.createElement('div');
+  var cerrar=function(){ ov.remove(); };
+  ov.className='dsh-ov'; ov.innerHTML='<div class="dsh-ovb"><div class="dsh-head"><b style="color:var(--navy-d)">'+_dE(titulo||'Detalle')+'</b><button type="button" class="dsh-x" title="Cerrar">×</button></div><div class="dsh-ovc"><div class="loading"><div class="spinner"></div>Cargando…</div></div></div>';
+  ov.onclick=function(ev){ if(ev.target===ov||ev.target.closest('.dsh-x')) cerrar(); };
+  document.body.appendChild(ov);
+  var q='&tipo='+encodeURIComponent(tipo)+'&k='+encodeURIComponent(k||'')+'&desde='+encodeURIComponent(d.desde||'')+'&hasta='+encodeURIComponent(d.hasta||'');
+  fetch(APPS_SCRIPT_URL+'?action=getDashboardDetalle&token='+encodeURIComponent(window._token||'')+q+'&_t='+Date.now()).then(function(r){return r.json();}).then(function(r){
+    var box=ov.querySelector('.dsh-ovc'); if(!box) return;
+    if(!r||r.error){ box.innerHTML='<div class="dsh-sub" style="color:#B04A4A">'+_dE((r&&r.error)||'Error')+'</div>'; return; }
+    box.innerHTML='<div class="dsh-sub" style="margin-bottom:6px">'+_dN(r.n)+' comprobante'+(r.n===1?'':'s')+' · '+_dM(r.ventaSinIva)+' sin IVA'+(r.n>r.mostrando?' · mostrando '+_dN(r.mostrando):'')+'</div>'
+      +'<div style="max-height:60vh;overflow:auto"><table class="dsh-tbl"><thead><tr><th>Fecha</th><th>Comprobante</th><th>Clienta</th><th>Detalle</th><th>Valor</th></tr></thead><tbody>'
+      +(r.rows||[]).map(function(x){ return '<tr><td>'+_dE(x.fecha)+'</td><td>'+(x.fuente==='migo'?'<span class="dsh-pill dsh-pill-gray">Migo</span> ':'')+_dE(x.ref)+'</td><td>'+_dE(x.clienta||'—')+'</td><td style="text-align:left;max-width:260px">'+_dE(x.detalle)+'</td><td>'+_dM(x.valor)+'</td></tr>'; }).join('')
+      +'</tbody></table></div>';
+  }).catch(function(){ var box=ov.querySelector('.dsh-ovc'); if(box) box.innerHTML='<div class="dsh-sub" style="color:#B04A4A">Sin conexión</div>'; });
+}
+function _dashWire(c){
+  var w=c.querySelector('.dsh-wrap'); if(!w) return;
+  w.addEventListener('click',function(ev){
+    var m=ev.target.closest('[data-dmes]'); if(m){ dashMes(m.getAttribute('data-dmes')); return; }
+    var x=ev.target.closest('[data-dd]'); if(x){ dashDetalle(x.getAttribute('data-dd'),x.getAttribute('data-ddk'),x.getAttribute('data-ddn')); }
+  });
 }
 function renderInicio(c){
   _dashCss();
@@ -5921,35 +5961,38 @@ function renderInicio(c){
       +'<div class="dsh-tabs">'+tabs+'</div>'
       +'<div class="dsh-rango"><span>Rango exacto</span><input type="date" id="dsh-desde" value="'+_dE(d.desde)+'"><span>a</span><input type="date" id="dsh-hasta" value="'+_dE(d.hasta)+'">'
       +'<button class="'+(d.periodo==='rango'?'on':'')+'" onclick="dashRango()">Aplicar</button>'
-      +'<span>'+_dE(d.label)+' · vs '+_dE(d.labelPrev)+'</span></div>';
+      +[['12m','12 meses'],['2025','2025'],['migo','Migo (mar 25–abr 26)'],['todo','Todo']].map(function(x){return '<button class="'+(d.periodo==='rango'&&st.preset===x[0]?'on':'')+'" onclick="dashPreset(\''+x[0]+'\')">'+x[1]+'</button>';}).join('')
+      +'<span>'+_dE(d.label)+' · vs '+_dE(d.labelPrev)+'</span></div>'
+      +(d.fuentes&&d.fuentes.conMigo?'<div class="dsh-sub" style="background:var(--blue-l);border-radius:8px;padding:6px 9px;margin-bottom:8px">📒 Hasta abril 2026 los números salen de las <b>facturas de Migo</b>; desde mayo 2026, de los <b>tickets del sistema</b>.</div>':'');
     var spark=_dSpark(hist.map(function(x){return x.venta;}));
     var kVenta=_dKpi('Venta sin IVA',_dM(a.ventaSinIva),a.ventaSinIva,p.ventaSinIva,_dM(p.ventaSinIva),
       '<div class="dsh-sub">IVA '+_dM(a.iva)+' · Total c/IVA '+_dM(a.ventaConIva)+' · '+_dN(a.tickets)+' ticket'+(a.tickets===1?'':'s')+'</div>'+spark);
-    var kUtil=_dKpi('Utilidad bruta',_dM(a.utilidad),a.utilidad,p.utilidad,_dM(p.utilidad)+' · margen '+_dP(p.margen),
-      _dGauge(a.margen,d.metaMargen)+'<div class="dsh-sub" style="text-align:center">venta sin IVA − costo de productos y extras '+_dM(a.costo)+'</div>');
+    var kUtil=_dKpi('Utilidad · solo productos',_dM(a.utilidadProd),a.utilidadProd,p.utilidadProd,_dM(p.utilidadProd)+' · margen '+_dP(p.margenProd),
+      _dGauge(a.margenProd,d.metaMargen)+'<div class="dsh-sub" style="text-align:center">venta de productos '+_dM(a.valProd)+' − costo '+_dM(a.costoProd)+' · meta '+_dP(d.metaMargen)+'</div>'
+      +'<div class="dsh-sub" style="text-align:center;color:#C9761F">Nota: solo productos tienen costo cargado. Faciales, paquetes y servicios todavía no restan costo, por eso no entran en la utilidad.</div>');
     var kFac=_dKpi('Faciales vendidos',_dN(a.faciales),a.faciales,p.faciales,_dN(p.faciales)+' · '+_dM(p.valFac),
-      '<div class="dsh-sub">'+_dM(a.valFac)+' sin IVA · '+_dN(a.facCanjes)+' canje'+(a.facCanjes===1?'':'s')+' de paquete/GC en $0.00</div>');
+      '<div class="dsh-sub">'+_dM(a.valFac)+' sin IVA · '+_dN(a.facCanjes)+' canje'+(a.facCanjes===1?'':'s')+' de paquete/GC en $0.00</div>','<div class="dsh-sub dsh-dd" data-dd="faciales" data-ddk="" data-ddn="Faciales" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
     var kProd=_dKpi('Productos vendidos',_dN(a.productosN)+' <span style="font-size:0.7rem;color:var(--gray)">u</span>',a.productosN,p.productosN,_dN(p.productosN)+' u · '+_dM(p.valProd),
-      '<div class="dsh-sub">'+_dM(a.valProd)+' sin IVA · margen '+_dM((a.valProd||0)-(a.costoProd||0))+' ('+_dP(a.margenProd)+')</div>');
-    var kPaq=_dKpi('Paquetes',_dN(a.paquetes),a.paquetes,p.paquetes,_dN(p.paquetes)+' · '+_dM(p.valPaq),'<div class="dsh-sub">'+_dM(a.valPaq)+' sin IVA</div>');
-    var kGc=_dKpi('Gift cards',_dN(a.gcN),a.gcN,p.gcN,_dN(p.gcN)+' · '+_dM(p.gcVal),'<div class="dsh-sub">'+_dM(a.gcVal)+' sin IVA</div>');
-    var kExt=_dKpi('Extras',_dN(a.extrasN),a.extrasN,p.extrasN,_dN(p.extrasN)+' · '+_dM(p.valExtras),'<div class="dsh-sub">'+_dM(a.valExtras)+' sin IVA'+((a.extrasCort||0)>0?' · '+_dN(a.extrasCort)+' cortesía'+(a.extrasCort===1?'':'s'):'')+'</div>');
+      '<div class="dsh-sub">'+_dM(a.valProd)+' sin IVA · margen '+_dM((a.valProd||0)-(a.costoProd||0))+' ('+_dP(a.margenProd)+')</div>','<div class="dsh-sub dsh-dd" data-dd="productos" data-ddk="" data-ddn="Productos" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
+    var kPaq=_dKpi('Paquetes',_dN(a.paquetes),a.paquetes,p.paquetes,_dN(p.paquetes)+' · '+_dM(p.valPaq),'<div class="dsh-sub">'+_dM(a.valPaq)+' sin IVA</div>','<div class="dsh-sub dsh-dd" data-dd="paquetes" data-ddk="" data-ddn="Paquetes" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
+    var kGc=_dKpi('Gift cards',_dN(a.gcN),a.gcN,p.gcN,_dN(p.gcN)+' · '+_dM(p.gcVal),'<div class="dsh-sub">'+_dM(a.gcVal)+' sin IVA</div>','<div class="dsh-sub dsh-dd" data-dd="gift" data-ddk="" data-ddn="Gift cards" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
+    var kExt=_dKpi('Extras',_dN(a.extrasN),a.extrasN,p.extrasN,_dN(p.extrasN)+' · '+_dM(p.valExtras),'<div class="dsh-sub">'+_dM(a.valExtras)+' sin IVA'+((a.extrasCort||0)>0?' · '+_dN(a.extrasCort)+' cortesía'+(a.extrasCort===1?'':'s'):'')+'</div>','<div class="dsh-sub dsh-dd" data-dd="extras" data-ddk="" data-ddn="Extras" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
     var kTp=_dKpi('Ticket promedio',_dM(a.ticketPromedio),a.ticketPromedio,p.ticketPromedio,_dM(p.ticketPromedio),'<div class="dsh-sub">sin IVA · '+_dN(a.ticketsConVenta)+' tickets con cobro</div>');
     var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.mixto||0)+(pg.otros||0);
     var pf=function(lbl,v){ return '<div style="display:flex;justify-content:space-between" class="dsh-l"><span>'+lbl+'</span><span><b>'+_dM(v)+'</b> <span class="dsh-sub">'+(pagosTot>0?_dP(v/pagosTot*100):'0.0%')+'</span></span></div>'; };
     var kPag='<div class="card dsh-card"><div class="dsh-head"><span class="dsh-t">Formas de pago · sin IVA</span><span class="dsh-sub">'+_dM(pagosTot)+'</span></div>'
-      +pf('Efectivo',pg.efectivo)+pf('Transferencia',pg.transferencia)+pf('Tarjeta',pg.tarjeta)+pf('Mixto sin desglose',pg.mixto)+((pg.otros||0)>0.004?pf('Sin método claro',pg.otros):'')+'</div>';
-    var tabla=hist.slice().reverse().map(function(x){return '<tr><td>'+_dE(x.label)+'</td><td>'+_dM(x.venta)+'</td><td>'+((x.venta||0)>0?_dP(x.margen):'—')+'</td><td>'+_dN(x.faciales)+'</td><td>'+_dN(x.productos)+'</td></tr>';}).join('');
+      +pf('Efectivo',pg.efectivo)+pf('Transferencia',pg.transferencia)+pf('Tarjeta',pg.tarjeta)+pf('Mixto sin desglose',pg.mixto)+((pg.otros||0)>0.004?pf(d.fuentes&&d.fuentes.conMigo?'Sin método claro / «Crédito» en Migo':'Sin método claro',pg.otros):'')+'</div>';
+    var tabla=hist.slice().reverse().map(function(x){return '<tr style="cursor:pointer" '+(d.historiaMensual?'data-dmes="'+_dE(x.k)+'" title="Ver los días de este mes"':'data-dd="dia" data-ddk="'+_dE(x.k)+'" data-ddn="'+_dE(x.label)+'" title="Ver los comprobantes del día"')+'><td>'+_dE(x.label)+(x.fuente==='migo'?' <span class="dsh-pill dsh-pill-gray">Migo</span>':'')+'</td><td>'+_dM(x.venta)+'</td><td>'+((x.valProd||0)>0?_dP(x.margenProd):'—')+'</td><td>'+_dN(x.faciales)+'</td><td>'+_dN(x.productos)+'</td></tr>';}).join('');
     var hCard='<div class="card dsh-card"><div class="dsh-t" style="margin-bottom:6px">Historia <span class="dsh-sub" style="text-transform:none">'+(d.periodo==='hoy'?'últimos 30 días':d.historiaMensual?'cada mes':'cada día del periodo')+'</span></div>'
       +_dBars(hist,'venta',d.historiaMensual)
-      +'<div style="max-height:230px;overflow-y:auto;margin-top:8px"><table class="dsh-tbl"><thead><tr><th>'+(d.historiaMensual?'Mes':'Día')+'</th><th>Venta</th><th>Margen</th><th>Faciales</th><th>Productos</th></tr></thead><tbody>'+tabla+'</tbody></table></div></div>';
+      +'<div style="max-height:230px;overflow-y:auto;margin-top:8px"><table class="dsh-tbl"><thead><tr><th>'+(d.historiaMensual?'Mes':'Día')+'</th><th>Venta</th><th>Margen prod.</th><th>Faciales</th><th>Productos</th></tr></thead><tbody>'+tabla+'</tbody></table></div></div>';
     var topFac='<div class="card dsh-card"><div class="dsh-t">Top 5 faciales <span class="dsh-sub" style="text-transform:none">'+_dN(a.faciales)+' en total</span></div>'
-      +_dRank(d.topFaciales,function(x){return {n:x.n,txt:_dN(x.n)};},function(x){return _dM(x.val)+' sin IVA · '+_dN(x.canjes)+' canje'+(x.canjes===1?'':'s')+' · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);})+'</div>';
+      +_dRank(d.topFaciales,function(x){return {n:x.n,txt:_dN(x.n)};},function(x){return _dM(x.val)+' sin IVA · '+_dN(x.canjes)+' canje'+(x.canjes===1?'':'s')+' · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);},function(x){return ['facial',x.code,x.nombre];})+'</div>';
     var topProd='<div class="card dsh-card"><div class="dsh-t">Top 5 productos <span class="dsh-sub" style="text-transform:none">'+_dN(d.productosVendidos)+' productos vendidos</span></div><div id="dsh-prod">'+_dProdHtml(d)+'</div></div>';
     var topCli='<div class="card dsh-card"><div class="dsh-t">Top 5 clientas</div>'
-      +_dRank(d.topClientas,function(x){return {n:x.val,txt:_dM(x.val)};},function(x){return _dN(x.tickets)+' ticket'+(x.tickets===1?'':'s')+' · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);})+'</div>';
+      +_dRank(d.topClientas,function(x){return {n:x.val,txt:_dM(x.val)};},function(x){return _dN(x.tickets)+' ticket'+(x.tickets===1?'':'s')+' · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);},function(x){return x.key?['clienta',x.key,x.nombre]:null;})+'</div>';
     var cosm='<div class="card dsh-card"><div class="dsh-t">Venta por cosmetóloga <span class="dsh-sub" style="text-transform:none">quién atendió el ticket</span></div>'
-      +_dRank((d.porCosmetologa||[]).filter(function(x){return (x.val||0)>0||(x.faciales||0)>0;}),function(x){return {n:x.val,txt:_dM(x.val)};},function(x){return _dN(x.tickets)+' tickets · '+_dN(x.faciales)+' faciales · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);})+'</div>';
+      +_dRank((d.porCosmetologa||[]).filter(function(x){return (x.val||0)>0||(x.faciales||0)>0;}),function(x){return {n:x.val,txt:_dM(x.val)};},function(x){return _dN(x.tickets)+' tickets · '+_dN(x.faciales)+' faciales · '+_dP(x.pct)+' del total';},function(x){return _dE(x.nombre);},function(x){return ['cosmetologa',x.nombre,x.nombre];})+'</div>';
     var vc=d.ventasCompras||[], vmax=Math.max.apply(null,vc.map(function(x){return Math.max(x.ventas||0,x.compras||0);}).concat([1]));
     var vcBars='<div style="display:flex;align-items:flex-end;gap:8px;height:120px;margin-top:6px">'+vc.map(function(x){
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px"><div style="display:flex;align-items:flex-end;gap:2px;height:100px">'
@@ -5968,11 +6011,12 @@ function renderInicio(c){
       +'<div class="dsh-sub">Stock bajo mínimo: <b>'+_dN(inv.bajos)+'</b> SKU</div>'
       +(raros.length?'<div class="dsh-sub" style="color:#C9761F;margin-top:3px">⚠ Fuera del total, revisar en el conteo (100+ envases en una bodega, ¿ml cargados como unidades?): '+raros.map(function(r){return _dE(r.sku)+' '+_dN(r.cantidad)+' en '+_dE(r.bodega);}).join(' · ')+'</div>':'')
       +(inv.error?'<div class="dsh-sub" style="color:#B04A4A">'+_dE(inv.error)+'</div>':'')+'</div>';
-    var trCard='<div class="card dsh-card"><div class="dsh-t" style="margin-bottom:4px">Tendencia del margen % <span class="dsh-sub" style="text-transform:none">'+(d.historiaMensual?'por mes':'por día')+'</span></div>'+_dTrend(hist,d.metaMargen)+'</div>';
+    var trCard='<div class="card dsh-card"><div class="dsh-t" style="margin-bottom:4px">Tendencia del margen de productos % <span class="dsh-sub" style="text-transform:none">'+(d.historiaMensual?'por mes':'por día')+'</span></div>'+_dTrend(hist.map(function(x){return {label:x.label,venta:x.valProd,margen:x.margenProd};}),d.metaMargen)+'</div>';
     c.innerHTML='<div class="dsh-wrap">'+head+kVenta+kUtil
       +'<div class="dsh-grid">'+kFac+kProd+kPaq+kGc+kExt+kTp+'</div><div style="height:8px"></div>'
       +kPag+hCard+topFac+topProd+topCli+cosm+vcCard+invCard+trCard
       +'<div class="dsh-sub" style="text-align:center;padding:4px 0 10px">Montos sin IVA 15% · fechas en hora de Ecuador · se actualiza con ↻</div></div>';
+    _dashWire(c);
     if (typeof cargarReloj === "function") cargarReloj();
   })
   .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
