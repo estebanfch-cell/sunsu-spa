@@ -60,11 +60,9 @@
       ] },
       { id: "compras", label: "Compras", items: [
         ["compras", "Órdenes de compra", "#/m/compras"],
-        ["compras", "Cotizaciones de compra", "#/m/compras/rfq"],
+        ["compras", "Cotizaciones de proveedor", "#/m/compras/cotizaciones"],
         ["proveedores", "Proveedores", "#/m/proveedores"],
-        ["compras", "Órdenes pendientes", "#/m/mc/pronto/pendientes"],
-        ["compras", "Actas de recepción", "#/m/mc/pronto/actas"],
-        ["admin", "Pagos a proveedores", "#/m/mc/pronto/pagos"],
+        // Órdenes pendientes, Actas de recepción y Pagos a proveedores fuera (Emilia 17/11): los pagos van dentro de cada OC.
       ] },
       { id: "reportes", label: "Reportes", items: [
         ["*", "Dashboard", "#/m/inicio"],
@@ -132,7 +130,7 @@
   var EMO_RUTA = [
     ["#/m/tickets", "🎫"], ["#/doc/ov", "🎫"], ["#/m/cotizaciones_cliente", "📝"], ["#/doc/cot", "📝"], ["#/m/clientes", "👩"], ["#/m/agenda", "📅"], ["#/m/citas", "📅"],
     ["#/m/mc/protocolos", "🧪"], ["#/m/mc/nuevo_protocolo", "🧪"], ["#/m/productos", "🧴"], ["#/m/inventario", "🧴"], ["#/m/conteos", "🔢"], ["#/m/transferencias", "🔄"], ["#/m/ajustes", "⚖️"],
-    ["#/m/compras/rfq", "📨"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
+    ["#/m/compras/rfq", "📨"], ["#/m/compras/cotizaciones", "📨"], ["#/m/recepciones", "📥"], ["#/m/compras/consignacion", "🤝"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
     ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
     ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
     ["#/m/mc/upermisos", "🔐"], ["#/m/mc/pronto/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],

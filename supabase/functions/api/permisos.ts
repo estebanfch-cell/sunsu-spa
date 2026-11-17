@@ -64,6 +64,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   inline_guardar: "tickets", inline_borrar: "tickets", solicitud_crear: "tickets", getSolicitudes: "tickets", solicitud_resolver: "tickets",
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
   reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
+  cmpb_meta: "compras", cmpb_lista: "compras", cmpb_get: "compras", cmpb_crear: "compras", cmpb_cancelar: "compras", cmpb_pago: "compras", cmpb_cot_guardar: "compras", cmpb_cot_get: "compras", cmpb_cot_convertir: "compras", cmpb_cot_anular: "compras",
   compras_periodo: "compras", compras_guardar: "compras", compras_aprobar: "compras", compras_enviar: "compras",
   compras_pago: "compras", compras_saldo: "compras", compras_reporte: "compras",
   compras_lista: "inventario", compras_recibir: "inventario",
