@@ -18,7 +18,9 @@ describe("menú MineCore (mc-nav.js)", () => {
   it("admin: grupos en el orden de MineCore, sin lo que Emilia sacó", () => {
     const nav = cargar("admin", TODO);
     const g = nav.grupos().filter((x) => !x.soloMovil);
-    assert.deepEqual([...g.map((x) => x.label.replace(/^\S+ /, "")).slice(0, 8)], ["Ventas", "Protocolos", "Inventario", "Compras", "Reportes", "Consignación", "Finanzas", "Admin"]);
+    assert.deepEqual([...g.map((x) => x.label.replace(/^\S+ /, "")).slice(0, 7)], ["Ventas", "Protocolos", "Inventario", "Compras", "Reportes", "Finanzas", "Admin"]);
+    // Consignación vive dentro de Compras (TK26).
+    assert.ok(g.find((x) => x.label.includes("Compras"))!.items.some((i) => i[2] === "#/m/compras/consignacion"));
     const textos = g.flatMap((x) => x.items.map((i) => i[1])).join("|");
     for (const no of ["Rutas", "Ruta", "liquidación", "Proyectos", "Alquiler", "WhatsApp", "Bots", "importaciones", "Impresión", "Manufactura"]) assert.ok(!textos.includes(no), no);
     assert.deepEqual([...g[0].items.map((i) => i[1])], ["🎫 Tickets", "📝 Cotizaciones", "👩 Registro de clientas"]);

@@ -868,7 +868,8 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   if (!nombre && !s(p.familia)) return { error: "Elige el proveedor" };
   const familia = familiaDe(nombre, s(p.familia));
   if (!familia) return { error: "Ese proveedor no tiene familia de consignación (HT, AS, ML, PH, JN)" };
-  const q = quincenaActual(now, n(p.quincena) || undefined);
+  // Periodo elegido (Consignación en Compras, TK26): año + mes + quincena; si no, la quincena actual de siempre.
+  const q = n(p.anio) && n(p.mes) ? quincenaDe(n(p.anio), n(p.mes), 1, (n(p.quincena) === 2 ? 2 : 1)) : quincenaActual(now, n(p.quincena) || undefined);
   const buffer = bufferDe(p.buffer);
   const prods = await db.all("erp_productos");
   const porSkuProd = new Map(prods.map((r) => [skuCode(s(r.sku)), r]));

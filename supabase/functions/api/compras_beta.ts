@@ -17,6 +17,7 @@ export function estadoOc(o: Row, lineas: Row[], legacy = false): string {
   if (s(o.estado) === "cancelada") return "Cancelada";
   if (s(o.flujo) === "Borrador" || s(o.estado) === "borrador") return "Cotización";
   if (legacy) return "Histórica";
+  if (s(o.tipo) === "consignacion") return "Aprobada"; // factura lo vendido en el periodo: no se recibe
   const ped = (l: Row) => n(l.cantidad ?? l.pedido);
   const vivas = lineas.filter((l) => !lineaAnulada(l));
   if (lineas.length && !vivas.length) return "Cancelada";

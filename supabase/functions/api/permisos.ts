@@ -68,6 +68,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
   reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
   rcp_lista: "recepciones", rcp_get: "recepciones", rcp_recibir: "recepciones", rcp_no_recibido_undo: "recepciones", rcp_producto_attr: "productos",
+  cns_meta: "compras", cns_calc: "compras", cns_crear_oc: "compras", cns_restock_guardar: "compras", cns_restock_anular: "compras", acta_get: "compras", acta_firmar: "compras", acta_pdf_guardar: "compras", acta_link: "compras",
   cmpb_meta: "compras", cmpb_lista: "compras", cmpb_get: "compras", cmpb_crear: "compras", cmpb_cancelar: "compras", cmpb_pago: "compras", cmpb_cot_guardar: "compras", cmpb_cot_get: "compras", cmpb_cot_convertir: "compras", cmpb_cot_anular: "compras",
   compras_periodo: "compras", compras_guardar: "compras", compras_aprobar: "compras", compras_enviar: "compras",
   compras_pago: "compras", compras_saldo: "compras", compras_reporte: "compras",

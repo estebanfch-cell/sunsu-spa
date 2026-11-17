@@ -10,6 +10,7 @@ import { comprasPago, escribirLineas, hojaProveedores, ordenesLegadas, precioDe,
 import { subirFactura } from "./compras_api.ts";
 import { runErp } from "./erp.ts";
 import { consultar } from "./query.ts";
+import { actasDeOc } from "./actas_api.ts";
 import { familiaDeFila } from "./ventas.ts";
 import { estadoOc, estadoPago, siguienteAnual, totales } from "./compras_beta.ts";
 
@@ -93,7 +94,8 @@ extend("cmpb_get", "any", async (p, ctx, ses) => {
   let logs: Row[] = [];
   try { logs = (await consultar(ctx.db, "log_acciones", { cols: ["fecha", "usuario", "accion", "detalle"], filtros: [{ op: "palabras", cols: ["detalle"], val: [s(o.id)] }], limite: 60 })).rows; } catch { logs = []; }
   out.historial = logs.sort((a, b2) => s(a.fecha).localeCompare(s(b2.fecha))).map((x) => ({ fecha: s(x.fecha), accion: s(x.accion), detalle: s(x.detalle).replace(" · " + s(o.id), ""), actor: s(x.usuario) }));
-  out.puedeCancelar = admin && out.estado === "Por recibir";
+  out.puedeCancelar = admin && (out.estado === "Por recibir" || out.estado === "Aprobada");
+  out.actas = await actasDeOc(ctx, s(o.id));
   out.puedePagar = admin && out.estado !== "Cancelada" && out.pago !== "Pagada" && !out.legacy;
   return { ok: true, admin, oc: out };
 });
