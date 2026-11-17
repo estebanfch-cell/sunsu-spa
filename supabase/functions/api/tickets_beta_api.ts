@@ -5,7 +5,7 @@
 import { extend, registroDe } from "./handlers.ts";
 import { consultar } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf } from "./lib.ts";
+import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import { b, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
@@ -147,7 +147,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: docsDe(r), promos, puedeEditar: admin, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: faltaDe(r, (cab?.datos || {}) as Row), promos, puedeEditar: admin, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
   };
@@ -158,6 +158,26 @@ extend("tk_get", "any", async (p, ctx, ses) => {
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ver ese ticket" };
   return await vistaTicket(ctx, ses, r);
+});
+/** Subir el documento que falta (comprobante). Lo puede hacer quien ve el ticket aunque no pueda editarlo. */
+extend("tk_subir_doc", "any", async (p, ctx, ses) => {
+  if (!(await hay(ctx))) return { error: FALTA };
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
+  const img = s(p.imagen);
+  if (!/^data:(image\/|application\/pdf)/.test(img)) return { error: "Sube una foto o PDF" };
+  const actor = actorOf(ses), now = ctx.now.toISOString();
+  const id = await guardarArchivo(ctx.db, actor, "comprobante", "Comprobante " + s(p.clave), img);
+  if (!id) return { error: "El archivo pesa más de 1.5 MB" };
+  const clave = claveDe(r, leerSerie(r, "so_num"));
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  const datos = { ...((cab?.datos || {}) as Row) };
+  datos.comprobantes = [...(Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : []), { url: "archivo:" + id, por: ses.name, fecha: now }].slice(-10);
+  const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle: "subió comprobante" }].slice(-100);
+  if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
+  else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos, historial: hist, actualizado_por: actor, updated_at: now });
+  return { ok: true, url: "archivo:" + id, faltan: faltaDe(r, datos) };
 });
 extend("tk_catalogo", "any", async (_p, ctx, ses) => ({ ok: true, items: await catalogoTicket(ctx, ses), promos: await promosVigentes(ctx) }));
 
@@ -275,6 +295,27 @@ export function canjeFacial(r: Row): boolean {
   const g = parseGcCanje(r.gift_card);
   if (g && g.aplica == null) return true;
   return /\[F\]/.test(s(r.gift_card)) || metodosPago(r.comp).some((m) => m.metodo === "canje");
+}
+/** Desde cuándo se marca en amarillo lo que falta (antes del corte de Migo no se revisó). */
+export const FALTA_DESDE = "2026-11-01";
+const tieneUrl = (v: unknown) => /https?:|archivo:/.test(s(v));
+/** Lo que falta en un ticket que sí cuadra (fila amarilla): comprobante de transferencia, número de factura. */
+export function faltaDe(r: Row, d: Row): string[] {
+  if (ymdUtc(r.timestamp) < FALTA_DESDE) return [];
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  if (orig.anulado === true) return [];
+  const out: string[] = [];
+  const mets = metodosPago(r.comp).map((m) => s(m.metodo));
+  const comps = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
+  if (mets.includes("transferencia") && !tieneUrl(r.comprobante) && !comps.length) out.push("Foto del comprobante de transferencia");
+  const fac7 = s(r.fac_7);
+  if (b(r.cob) && !b(r.fac) && !s(d.factura) && !/sin/i.test(fac7) && !(Number(fac7) > 0) && !mets.includes("canje") && !mets.includes("cortesía")) out.push("Número de factura");
+  return out;
+}
+/** Documentos subidos en la beta (comprobantes que faltaban). */
+export function docsBeta(cab: Row | undefined): Row[] {
+  const d = (cab?.datos || {}) as Row, L = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
+  return L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
 }
 export function faseA(r: Row): boolean {
   const fac = s(r.facial_hecho).trim(), notas = s(r.notas_generales).trim() || s(r.recomendaciones).trim();

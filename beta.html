@@ -376,6 +376,7 @@
   .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--navy-d), var(--navy)); color: var(--white); border: none; border-radius: 13px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 11px; font-weight: 600; font-size: 0.8rem; box-shadow: var(--shadow); opacity: 0; transition: opacity 0.25s; z-index: 999999; pointer-events: none; color: var(--white); white-space: nowrap; max-width: calc(100vw - 24px); }
   .tabbar { display: none; }
+  .tab-emo { font-size: 1.25rem; line-height: 1; display: block; }
   .sheet-grab { display: none; }
   .fly-empty { padding: 8px 12px 16px; }
   .toast.show { opacity: 1; }
@@ -654,6 +655,9 @@
   .tk-row.on { background: var(--blue-l); }
   .tk-row.tk-flagged td { background: #fdecea; color: #8a2216; }
   .tk-row.tk-flagged:hover td { background: #f9d8d3; }
+  .tk-row.tk-falta td { background: #fff6d6; color: #6b4e00; }
+  .tk-row.tk-falta:hover td { background: #ffefb8; }
+  .tk-fac { font-family: ui-monospace, monospace; font-size: 0.74rem; white-space: nowrap; }
   .tk-pills { white-space: nowrap; }
   .tk-pill { display: inline-block; border: 1.5px solid; border-radius: 999px; padding: 1px 8px; font-size: 0.64rem; font-weight: 700; margin-right: 3px; background: transparent; line-height: 1.5; }
   .tk-leds { white-space: nowrap; }
@@ -1652,7 +1656,7 @@ function muestraReloj() { return !!state.user && !esAdminRol() && acceso("asiste
 function tabButton(id, label) {
   const cur = location.hash || "#/m/inicio";
   const on = grupoAbierto === id || phoneItems(id).some((row) => row[2] === cur);
-  return `<button class="tab${on ? " on" : ""}" type="button" data-group="${id}">${tabIcon(id)}<span>${esc(label)}</span></button>`;
+  return `<button class="tab${on ? " on" : ""}" type="button" data-group="${id}">${window.MCNav && window.MCNav.emojiGrupo(id) ? `<span class="tab-emo" aria-hidden="true">${window.MCNav.emojiGrupo(id)}</span>` : tabIcon(id)}<span>${esc(label)}</span></button>`;
 }
 
 function paintShell(title) {
@@ -2053,7 +2057,8 @@ async function draw() {
   const route = parseRoute();
   window._esCotizacion = route.kind === "doc" && route.doc === "cot" && !route.id;
   const tab = pantallaSunsu(route);
-  const title = tituloRuta(route, tab);
+  const title0 = tituloRuta(route, tab);
+  const title = window.MCNav && window.MCNav.conEmoji ? window.MCNav.conEmoji(title0, window.MCNav.emojiRuta(location.hash.split("?")[0])) : title0;
   paintShell(title);
   const main = document.getElementById("main");
   const listo = () => {
@@ -5600,20 +5605,20 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117hf2"></script>
-<script src="beta-screens.js?v=20261117hf2"></script>
-<script src="beta-inline.js?v=20261117hf2"></script>
-<script src="mc-productos.js?v=20261117hf2"></script>
-<script src="mc-nav.js?v=20261117hf2"></script>
-<script src="mc-permisos.js?v=20261117hf2"></script>
-<script src="mc-protocolos.js?v=20261117hf2"></script>
-<script src="mc-conteo.js?v=20261117hf2"></script>
-<script src="mc-transferencias.js?v=20261117hf2"></script>
-<script src="mc-ajustes.js?v=20261117hf2"></script>
-<script src="vendor-qrcode.js?v=20261117hf2"></script>
-<script src="mc-tickets.js?v=20261117hf2"></script>
-<script src="mc-clientes.js?v=20261117hf2"></script>
-<script src="mc-agenda.js?v=20261117hf2"></script>
+<script src="mc-buscar.js?v=20261117tk4"></script>
+<script src="beta-screens.js?v=20261117tk4"></script>
+<script src="beta-inline.js?v=20261117tk4"></script>
+<script src="mc-productos.js?v=20261117tk4"></script>
+<script src="mc-nav.js?v=20261117tk4"></script>
+<script src="mc-permisos.js?v=20261117tk4"></script>
+<script src="mc-protocolos.js?v=20261117tk4"></script>
+<script src="mc-conteo.js?v=20261117tk4"></script>
+<script src="mc-transferencias.js?v=20261117tk4"></script>
+<script src="mc-ajustes.js?v=20261117tk4"></script>
+<script src="vendor-qrcode.js?v=20261117tk4"></script>
+<script src="mc-tickets.js?v=20261117tk4"></script>
+<script src="mc-clientes.js?v=20261117tk4"></script>
+<script src="mc-agenda.js?v=20261117tk4"></script>
 <script>draw();</script>
 </body>
 </html>

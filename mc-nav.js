@@ -124,12 +124,27 @@
     return out;
   }
 
+  // Un emoji por módulo (Emilia 17/11): el mismo en el menú, la barra de abajo y el título de la pantalla.
+  var EMO_GRUPO = { ventas: "🛍️", protocolos: "🧪", inventario: "📦", bodega: "🏬", compras: "🛒", reportes: "📊", consignacion: "🤝", finanzas: "💰", admin: "⚙️", personal: "👥", spa: "💆", otros: "☰" };
+  var EMO_RUTA = [
+    ["#/m/tickets", "🎫"], ["#/doc/ov", "🎫"], ["#/m/cotizaciones_cliente", "📝"], ["#/doc/cot", "📝"], ["#/m/clientes", "👩"], ["#/m/agenda", "📅"], ["#/m/citas", "📅"],
+    ["#/m/mc/protocolos", "🧪"], ["#/m/mc/nuevo_protocolo", "🧪"], ["#/m/productos", "🧴"], ["#/m/inventario", "🧴"], ["#/m/conteos", "🔢"], ["#/m/transferencias", "🔄"], ["#/m/ajustes", "⚖️"],
+    ["#/m/compras/rfq", "📨"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
+    ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
+    ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
+    ["#/m/mc/upermisos", "🔐"], ["#/m/mc/pronto/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],
+    ["#/m/personal/comisiones", "💰"], ["#/m/personal/rol", "🧾"], ["#/m/personal/asistencia", "⏰"], ["#/m/personal/permisos", "🏖️"], ["#/m/personal/multas", "⚠️"], ["#/m/personal/horarios", "🗓️"],
+    ["#/m/gift/cards", "🎁"], ["#/m/gift/paquetes", "🎴"], ["#/s/seguimiento", "📋"], ["#/s/recepcion", "🛎️"], ["#/m/bitacora", "🧼"], ["#/s/promos", "🏷️"], ["#/s/tarjetas", "📤"],
+    ["#/m/inicio", "📊"], ["#/s/historial", "🎫"], ["#/m/mc", "📦"],
+  ];
+  function emojiRuta(h) { h = String(h || ""); for (var i = 0; i < EMO_RUTA.length; i++) if (h === EMO_RUTA[i][0] || h.indexOf(EMO_RUTA[i][0] + "/") === 0) return EMO_RUTA[i][1]; return ""; }
+  function conEmoji(txt, emo) { txt = String(txt || ""); return emo && txt.indexOf(emo) !== 0 ? emo + " " + txt : txt; }
   var TABS = { ventas: 1, inventario: 1, compras: 1 };
   function grupos() {
     var out = [];
     catalogo().concat(propios()).forEach(function (g) {
-      var vis = g.items.filter(function (it) { return ok(it[0]); });
-      if (vis.length) out.push({ id: g.id, label: g.label, items: vis });
+      var vis = g.items.filter(function (it) { return ok(it[0]); }).map(function (it) { var c = it.slice(); c[1] = conEmoji(it[1], emojiRuta(it[2])); return c; });
+      if (vis.length) out.push({ id: g.id, label: conEmoji(g.label, EMO_GRUPO[g.id]), items: vis });
     });
     // En el teléfono Ventas, Inventario y Compras van en la barra de abajo; el resto en «•••».
     var resto = out.filter(function (g) { return !TABS[g.id]; });
@@ -266,7 +281,7 @@
 
   var TITULOS = { protocolos: "Protocolos", reorden: "Reorden", ajuste: "Ajuste de stock", upermisos: "Usuarios y permisos" };
   window.MCNav = {
-    grupos: grupos,
+    grupos: grupos, emojiRuta: emojiRuta, emojiGrupo: function (id) { return EMO_GRUPO[id] || ""; }, conEmoji: conEmoji,
     crearHtml: crearHtml,
     crearItems: crearItems,
     titulo: function (route) {

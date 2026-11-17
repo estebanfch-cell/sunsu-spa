@@ -37,6 +37,8 @@
       ".mctk-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mctk-box{background:var(--white,#fff);border-radius:14px;padding:16px;width:min(520px,94vw);max-height:88vh;overflow:auto}",
       ".mctk-box label{display:flex;gap:8px;align-items:center;font-size:.84rem;margin:6px 0}.mctk-box textarea,.mctk-box input[type=text]{width:100%;box-sizing:border-box;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit}",
       ".mctk-xc{color:#b2452a;font-size:.68rem;font-weight:800}",
+      ".mctk-lnw{display:flex;gap:8px;align-items:center}.mctk-ph{width:38px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--cream-d);flex:none}",
+      ".mctk-falta{background:#fff6d6;border:1.5px solid #e8cf7a;color:#6b4e00;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-ed{cursor:text;border-radius:5px;padding:1px 4px;margin:-1px -4px;display:inline-block;min-width:40px}.mctk-ed:hover,.mctk-ed:focus{background:var(--cream);outline:1px dashed var(--cream-d)}.mctk-t .dv{width:64px}.mctk-t input.bad{border-color:#d9534f}.mctk-canje{font-size:.7rem;font-weight:800;color:#7C6BB0}",
       ".mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
@@ -108,6 +110,10 @@
     var tp = m[1] || m[3] === "$" ? "$" : "%"; if (tp === "%" && v > 100) return null;
     return { tipo: tp, valor: v };
   }
+  function fotoLinea(l) {
+    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
+    return c && c.foto ? '<img class="mctk-ph" src="' + e(c.foto) + '" alt="" loading="lazy">' : "";
+  }
   function codigoVisible(l) {
     var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
     if (c && c.skuVisible) return c.skuVisible;
@@ -118,7 +124,7 @@
     calc();
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num">' + (l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<input class="p" type="number" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '">') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
@@ -142,6 +148,32 @@
         (K.d.puedeEditar ? ' <button type="button" class="btn ghost small" data-flag="' + e(f.id) + '">Marcar resuelto</button>' : '<div class="mccf-sub">Corrige con «Solicitar cambio»; un admin lo revisa.</div>') + "</div>";
     }).join("") + "</div>";
   }
+  function faltaHtml() {
+    var F = K.d.faltan || []; if (!F.length || (K.d.flags || []).length) return "";
+    var comp = F.some(function (x) { return /comprobante/i.test(x); });
+    return '<div class="mctk-falta"><b>Falta: ' + e(F.join(" · ")) + "</b>" +
+      (comp ? '<div><label class="btn small" style="cursor:pointer">📷 Subir comprobante<input type="file" id="mctk-subir" accept="image/*,application/pdf" capture="environment" hidden></label> <span class="mccf-sub">Foto del comprobante de la transferencia. Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
+  }
+  function comprimir(file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onerror = function () { rej(new Error("No se pudo leer el archivo")); };
+      fr.onload = function () {
+        var url = fr.result;
+        if (!/^data:image\//.test(url)) return res(url);
+        var im = new Image();
+        im.onload = function () {
+          var k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+          c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+          c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+          res(c.toDataURL("image/jpeg", 0.85));
+        };
+        im.onerror = function () { res(url); };
+        im.src = url;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
   function relHtml() {
     var d = K.d, h = "", G = d.giftcards || [], p = d.paquete || {}, E = d.envios || [];
     if (G.length) h += '<div class="mccf-card"><b>Gift cards</b><table class="mccf-t mctk-t" style="margin-top:6px"><thead><tr><th>Código</th><th>En este ticket</th><th>Compró</th><th>Para</th><th>Facial</th><th class="num">Saldo</th></tr></thead><tbody>' +
@@ -161,7 +193,7 @@
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
       '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button></div>' +
-      flagsHtml() +
+      flagsHtml() + faltaHtml() +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1><div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span></div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
@@ -443,6 +475,18 @@
     main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
+    var sub = main.querySelector("#mctk-subir");
+    if (sub) sub.onchange = async function () {
+      var f = sub.files && sub.files[0]; if (!f) return;
+      toast2("⏳ Subiendo comprobante…");
+      try {
+        var data = await comprimir(f);
+        var r = await api("tk_subir_doc", { clave: K.d.clave, imagen: data });
+        if (!r || r.error) { toast2((r && r.error) || "No se pudo subir", true); return; }
+        toast2("✓ Comprobante subido");
+        var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); }
+      } catch (x) { toast2((x && x.message) || "No se pudo subir", true); }
+    };
     var fi = main.querySelector("#mctk-ficha"); if (fi) fi.onclick = function (ev) { ev.preventDefault(); go("#/m/clientes/c/" + encodeURIComponent(K.d.clienteKey)); };
     main.querySelectorAll("[data-flag]").forEach(function (b) {
       b.onclick = async function () {
