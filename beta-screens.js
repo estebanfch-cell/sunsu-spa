@@ -5051,7 +5051,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
-  if(c.k==='pago') return '<td>'+(t.anulado===true?_tkPill('anulado','Anulado'):t.cob?_tkPill('pagado','Pagado'):_tkPill('porcobrar','Por cobrar'))+'</td>';
+  if(c.k==='pago') return '<td>'+(t.anulado===true?_tkPill('anulado','Cancelado'):t.cob?_tkPill('pagado','Pagado'):_tkPill('porcobrar','Por cobrar'))+'</td>';
   if(c.k==='fac'){ var ff=_tkFacFull(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>':_tkPill('sinfactura','Sin factura'))+'</td>'; }
   if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
@@ -5133,7 +5133,7 @@ function _tkFacFull(t){
 function _tkPill(c,txt){var col=_TK_PILL[c]||'#8A93A6';return '<span class="tk-pill" style="color:'+col+';border-color:'+col+'">'+txt+'</span>';}
 function _tkEstados(t){
   var orig=(t&&t.orig)||{};
-  if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Anulado'}];
+  if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
   out.push(t.cob?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=(window._tkLeds||{})[String(t.tkRow)];
@@ -5159,7 +5159,7 @@ function _tkCargarLeds(forzar){
   }).catch(function(){window._tkLedsCargando=false;});
 }
 var _TK_SEG=[['','Todos'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','No cuadra (rojo)'],['faltadoc','Falta documento (amarillo)']];
-var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Anulado']];
+var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Cancelado']];
 function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
 function _tkSetF(k,v){ _tkF()[k]=v; window._tkKey=''; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
 function _tkFiltroTxt(){ var f=_tkF(), o=[]; if(f.est) o.push(_TK_EST.filter(function(x){return x[0]===f.est;})[0][1]); if(f.seg) o.push(_TK_SEG.filter(function(x){return x[0]===f.seg;})[0][1]); return o.join(' · '); }
