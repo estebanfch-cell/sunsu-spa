@@ -1412,8 +1412,13 @@ function renderTicket(c){
     <div id="sec-cli">
       <div class="card">
         <div class="card-title">👤 Cliente</div>
+        <div class="field" style="position:relative"><label>Buscar clienta</label>
+          <input type="search" id="inp-cli-q" placeholder="Nombre, cédula, celular o C-código" autocomplete="off" oninput="_cliBuscar(this.value)">
+          <div id="cli-sug" class="cli-sug" hidden></div>
+          <div id="cli-sel" class="note" style="margin-top:4px"></div>
+        </div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" oninput="T.cedula=this.value;window._cedAutofill=false;var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" oninput="T.cedula=this.value;window._cedAutofill=false;T.clienteCodigo='';T.clienteKey='';var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
         </div>
         <div class="two-col">
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
@@ -2564,6 +2569,8 @@ function enviarTicket(){
     esSunsu:        T.esSunsu,
     cedula:         T.esSunsu?'1793219469001':(cedEl?.value||'').trim(),
     nombre:         T.esSunsu?'Sunsu':(nomEl?.value||'').trim(),
+    clienteCodigo:  T.esSunsu?'':(T.clienteCodigo||''),
+    clienteKey:     T.esSunsu?'':(T.clienteKey||''),
     apellido:       T.esSunsu?'Spa':(apeEl?.value||'').trim(),
     factura:        (facEl?.value||'').trim(),
     fechaRetorno:   _retFmt,
@@ -5040,7 +5047,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='cli') return '<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td>';
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
-  if(c.k==='cos') return '<td>'+_histEsc(t.cosmetologa||'')+'</td>';
+  if(c.k==='cos') return '<td>'+(window.MCColor?window.MCColor.pill(t.cosmetologa||''):_histEsc(t.cosmetologa||''))+'</td>';
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
@@ -6826,6 +6833,32 @@ function _cliMsgTicket(texto, tipo){ // tipo: 'ok' | 'nueva'
   el.textContent=texto;
 }
 // Lookup unificado nombre+apellido del formulario del ticket (debounce 250ms)
+// Buscador de clientas (beta_clientes): muestra «Nombre · C-xxxxx» y deja el ticket ligado a ese código.
+function _cliBuscar(q){
+  clearTimeout(window._cliBT);
+  var box=document.getElementById('cli-sug'); if(!box) return;
+  q=(q||'').trim(); if(q.length<2){box.hidden=true;return;}
+  window._cliBT=setTimeout(function(){
+    Promise.resolve(window.api('cl_buscar',{q:q})).then(function(r){
+      var L=(r&&r.items)||[]; window._cliSug=L;
+      if(!L.length){box.innerHTML='<div class="cli-sug-i nada">Sin resultados — llena los datos abajo (cliente nueva)</div>';box.hidden=false;return;}
+      box.innerHTML=L.map(function(c,i){return '<button type="button" class="cli-sug-i" onclick="_cliElegir('+i+')"><b>'+_histEsc(c.nombre)+'</b> · <span class="cli-cod">'+_histEsc(c.codigo||'sin código')+'</span><span class="cli-sub">'+(c.cedula?'CI '+_histEsc(c.cedula):'')+(c.telefono?' · '+_histEsc(c.telefono):'')+'</span></button>';}).join('');
+      box.hidden=false;
+    }).catch(function(){box.hidden=true;});
+  },220);
+}
+function _cliElegir(i){
+  var c=(window._cliSug||[])[i]; if(!c) return;
+  var partes=(c.nombre||'').split(' '), nom=partes.length>2?partes.slice(0,partes.length-2).join(' '):partes[0]||'', ape=partes.length>2?partes.slice(-2).join(' '):partes.slice(1).join(' ');
+  var nEl=document.getElementById('inp-nom'), aEl=document.getElementById('inp-ape'), cEl=document.getElementById('inp-ced');
+  if(nEl){nEl.value=nom;T.nombre=nom;} if(aEl){aEl.value=ape;T.apellido=ape;}
+  if(cEl&&c.cedula){cEl.value=c.cedula;T.cedula=c.cedula;window._cedAutofill=false;}
+  T.clienteCodigo=c.codigo||''; T.clienteKey=c.key||''; T._clienteNuevo=false;
+  var box=document.getElementById('cli-sug'); if(box) box.hidden=true;
+  var q=document.getElementById('inp-cli-q'); if(q) q.value='';
+  var sel=document.getElementById('cli-sel'); if(sel) sel.innerHTML='✓ <b>'+_histEsc(c.nombre)+'</b> · '+_histEsc(c.codigo||'');
+  _cliMsgTicket('Cliente: '+c.nombre+(c.codigo?' · '+c.codigo:''),'ok');
+}
 function _lookupNombreTicket(){
   clearTimeout(window._regTimerN);
   window._regTimerN=setTimeout(function(){
