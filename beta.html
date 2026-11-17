@@ -1480,7 +1480,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
   if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
-  if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id ? "Gift card" : "Gift cards");
+  if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id === "nueva" ? "Nueva gift card" : route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
   if (route.kind === "doc" && route.doc === "cot") return "Cotización";
   if (tab) return tituloSunsu(tab);
@@ -2003,6 +2003,7 @@ function pantallaSunsu(route) {
   if (m === "proveedores") return "";
   if ((m === "paquetes" || (m === "gift" && route.sub === "paquetes")) && window.MCPaquetes) return "";
   if (m === "paquetes") return "buscar-paquetes";
+  if (m === "gift" && route.sub !== "paquetes" && window.MCGiftCards) return "";
   if (m === "gift_cards") return "buscar-gc";
   if (m === "gift" && route.sub === "paquetes" && !route.id) return "buscar-paquetes";
   if (m === "gift" && !route.id) return "buscar-gc";
@@ -2161,6 +2162,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
     if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
     if (route.kind === "mod" && route.mod === "caja" && window.MCCaja) window.MCCaja.wire(main, route);
+    if (route.kind === "mod" && route.mod === "gift" && route.sub !== "paquetes" && window.MCGiftCards) window.MCGiftCards.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
@@ -3900,6 +3902,7 @@ async function renderCitasBeta() {
   return `${sel}<p class="note">${nota}</p>${cuerpo}`;
 }
 async function renderGiftMod(route) {
+  if (route.sub !== "paquetes" && window.MCGiftCards) return window.MCGiftCards.render(route);
   if (route.sub === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.sub === "paquetes") return route.id ? renderPaqDetalle(route.id) : renderPaqLista();
   return route.id ? renderGcDetalle(route.id) : renderGcLista();
@@ -5668,26 +5671,27 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk19c"></script>
-<script src="beta-screens.js?v=20261117tk19c"></script>
-<script src="beta-inline.js?v=20261117tk19c"></script>
-<script src="mc-productos.js?v=20261117tk19c"></script>
-<script src="mc-nav.js?v=20261117tk19c"></script>
-<script src="mc-permisos.js?v=20261117tk19c"></script>
-<script src="mc-protocolos.js?v=20261117tk19c"></script>
-<script src="mc-conteo.js?v=20261117tk19c"></script>
-<script src="mc-transferencias.js?v=20261117tk19c"></script>
-<script src="mc-ajustes.js?v=20261117tk19c"></script>
-<script src="vendor-qrcode.js?v=20261117tk19c"></script>
-<script src="mc-tickets.js?v=20261117tk19c"></script>
-<script src="mc-paquetes.js?v=20261117tk19c"></script>
-<script src="mc-aperturas.js?v=20261117tk19c"></script>
-<script src="mc-acceso.js?v=20261117tk19c"></script>
-<script src="mc-barras.js?v=20261117tk19c"></script>
-<script src="mc-caja.js?v=20261117tk19c"></script>
-<script src="mc-multas.js?v=20261117tk19c"></script>
-<script src="mc-clientes.js?v=20261117tk19c"></script>
-<script src="mc-agenda.js?v=20261117tk19c"></script>
+<script src="mc-buscar.js?v=20261117tk20"></script>
+<script src="beta-screens.js?v=20261117tk20"></script>
+<script src="beta-inline.js?v=20261117tk20"></script>
+<script src="mc-productos.js?v=20261117tk20"></script>
+<script src="mc-nav.js?v=20261117tk20"></script>
+<script src="mc-permisos.js?v=20261117tk20"></script>
+<script src="mc-protocolos.js?v=20261117tk20"></script>
+<script src="mc-conteo.js?v=20261117tk20"></script>
+<script src="mc-transferencias.js?v=20261117tk20"></script>
+<script src="mc-ajustes.js?v=20261117tk20"></script>
+<script src="vendor-qrcode.js?v=20261117tk20"></script>
+<script src="mc-tickets.js?v=20261117tk20"></script>
+<script src="mc-paquetes.js?v=20261117tk20"></script>
+<script src="mc-aperturas.js?v=20261117tk20"></script>
+<script src="mc-acceso.js?v=20261117tk20"></script>
+<script src="mc-barras.js?v=20261117tk20"></script>
+<script src="mc-caja.js?v=20261117tk20"></script>
+<script src="mc-giftcards.js?v=20261117tk20"></script>
+<script src="mc-multas.js?v=20261117tk20"></script>
+<script src="mc-clientes.js?v=20261117tk20"></script>
+<script src="mc-agenda.js?v=20261117tk20"></script>
 <script>draw();</script>
 </body>
 </html>

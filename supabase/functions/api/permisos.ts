@@ -92,7 +92,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getTicketsLista: "tickets", getTicket: "tickets", editarTicket: "tickets",
   buscarPaquetes: "paquetes", getSeguimientoPaquetes: "paquetes",
   getCodigoGC: "gift_cards", getCodigosGC: "gift_cards", buscarGiftCards: "gift_cards", getGCDigitales: "gift_cards",
-  gc_list: "gift_cards", gc_detalle: "gift_cards", gc_emitir: "gift_cards", gc_editar: "gift_cards",
+  gc_list: "gift_cards", gc_detalle: "gift_cards", gcb_lista: "gift_cards", gcb_get: "gift_cards", gcb_vender: "gift_cards", gcb_usar: "gift_cards", gcb_pdf_guardar: "gift_cards", gcb_doc_url: "gift_cards", gc_emitir: "gift_cards", gc_editar: "gift_cards",
   paq_list: "paquetes", paq_detalle: "paquetes", paq_emitir: "paquetes", paq_editar: "paquetes",
   getMultas: "asistencia", personal_personas: "inicio", citas_proximas: "inicio",
   getCajaV2: "caja", cajaV2Mov: "caja", cajaV2Iniciar: "caja", cajaGasto: "caja", cajaDeposito: "caja",
