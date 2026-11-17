@@ -37,6 +37,7 @@
       ".mctk-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mctk-box{background:var(--white,#fff);border-radius:14px;padding:16px;width:min(520px,94vw);max-height:88vh;overflow:auto}",
       ".mctk-box label{display:flex;gap:8px;align-items:center;font-size:.84rem;margin:6px 0}.mctk-box textarea,.mctk-box input[type=text]{width:100%;box-sizing:border-box;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit}",
       ".mctk-xc{color:#b2452a;font-size:.68rem;font-weight:800}",
+      ".mctk-ed{cursor:text;border-radius:5px;padding:1px 4px;margin:-1px -4px;display:inline-block;min-width:40px}.mctk-ed:hover,.mctk-ed:focus{background:var(--cream);outline:1px dashed var(--cream-d)}.mctk-t .dv{width:64px}.mctk-t input.bad{border-color:#d9534f}.mctk-canje{font-size:.7rem;font-weight:800;color:#7C6BB0}",
       ".mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
       ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
@@ -81,8 +82,8 @@
     opts = opts || {};
     var v = val(k), ed = K.d.puedeEditar || K.d.puedePedir, mod = K.datos && K.datos[k] != null;
     var shown = opts.fmt ? opts.fmt(v) : v;
-    return '<div class="mctk-f"><dt>' + e(lbl) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + '">' + (shown ? e(shown) : '<span class="mccf-sub">—</span>') + "</span>" +
-      (ed && !opts.ro ? ' <button type="button" class="mctk-pen" data-ed="' + e(k) + '" title="Editar ' + e(lbl) + '">✎</button>' : "") + "</dd></div>";
+    var edit = ed && !opts.ro;
+    return '<div class="mctk-f"><dt>' + e(lbl) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + (edit ? ' mctk-ed" data-ed="' + e(k) + '" tabindex="0" title="Clic para editar' : "") + '">' + (shown ? e(shown) : '<span class="mccf-sub">—</span>') + "</span></dd></div>";
   }
   function ro(lbl, v) { return '<div class="mctk-f"><dt>' + e(lbl) + "</dt><dd>" + (v ? v : '<span class="mccf-sub">—</span>') + "</dd></div>"; }
   function chipsHtml() { return (K.d.chips || []).map(function (c) { return pill(c.c, c.t); }).join(""); }
@@ -94,18 +95,34 @@
     var d = K.d, t = d.ticket, h = "";
     if (t.sheetRow) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
-    (d.documentos || []).forEach(function (x) { h += '<a href="' + e(x.url) + '" target="_blank" rel="noopener">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</a>"; });
+    (d.documentos || []).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
+  }
+  function descTxt(tp, v) { v = Number(v) || 0; if (!(v > 0) || !tp) return ""; return tp === "$" ? "$" + q2(v) : q2(v) + "%"; }
+  /** «10%», «10», «$5», «5$» → {tipo, valor}; vacío = sin descuento; null = no se entiende. */
+  function descParse(txt) {
+    var t = String(txt || "").replace(/\s+/g, "").replace(",", ".");
+    if (!t) return { tipo: null, valor: 0 };
+    var m = t.match(/^(\$)?(\d+(?:\.\d+)?)(%|\$)?$/); if (!m) return null;
+    var v = Number(m[2]); if (!(v > 0)) return { tipo: null, valor: 0 };
+    var tp = m[1] || m[3] === "$" ? "$" : "%"; if (tp === "%" && v > 100) return null;
+    return { tipo: tp, valor: v };
+  }
+  function codigoVisible(l) {
+    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
+    if (c && c.skuVisible) return c.skuVisible;
+    var s0 = String(l.sku || "");
+    return (l.tipo === "facial" || l.tipo === "extra" || l.tipo === "servicio" || l.tipo === "paquete") && /^\d+$/.test(s0) ? "SUNSU-" + s0 : s0;
   }
   function lineasHtml() {
     calc();
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-pn">' + e(l.nombre) + (l.estimado ? '<span class="mctk-est" title="Precio prorrateado del total cobrado">estimado</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(l.sku) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></td>" +
         '<td class="num"><input class="q" type="number" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
-        '<td class="num"><input class="p" type="number" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></td>' +
-        '<td class="num" style="white-space:nowrap"><select data-f="descuento_tipo">' + opt("", "—", l.descuento_tipo || "") + opt("%", "%", l.descuento_tipo) + opt("$", "$", l.descuento_tipo) + '</select> <input class="dv" type="number" min="0" step="any" data-f="descuento_valor" value="' + e(l.descuento_valor ? q2(l.descuento_valor) : "") + '"></td>' +
-        '<td class="num" data-tl>' + e($m(l.total_linea)) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
+        '<td class="num">' + (l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<input class="p" type="number" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '">') + "</td>" +
+        '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
+        '<td class="num" data-tl>' + (l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(l.total_linea))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
   }
   function totHtml() {
@@ -145,16 +162,15 @@
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
       '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button></div>' +
       flagsHtml() +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1><div class="mctk-fac" data-k="factura">' + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') +
-      ((d.puedeEditar || d.puedePedir) ? ' <button type="button" class="mctk-pen" data-ed="factura" title="Editar factura">✎</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1><div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span></div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
-      "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) + ro("Fase A", d.faseA ? "Completa" : "Pendiente") +
+      "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><label>Promoción <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" +
-      '<label>Descuento del ticket <span style="display:inline-flex;gap:4px"><select id="mctk-dt">' + opt("", "—", K.desc.tipo || "") + opt("%", "%", K.desc.tipo) + opt("$", "$", K.desc.tipo) + '</select><input id="mctk-dv" type="number" min="0" step="any" value="' + e(K.desc.valor ? q2(K.desc.valor) : "") + '" style="width:70px"></span></label></div><div id="mctk-tot">' + totHtml() + "</div></div>" +
+      '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + "</div></div>" +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -244,7 +260,7 @@
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, total_linea: Number(l.total_linea) || 0 }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, total_linea: Number(l.total_linea) || 0 }; });
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
   }
@@ -271,10 +287,9 @@
   async function cardDelTicket() {
     var t = K.d.ticket, busca = function () { return (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }); };
     var h = busca();
-    if (!h && typeof APPS_SCRIPT_URL !== "undefined") {
-      toast2("⏳ Cargando la tarjeta…");
-      try { var r = await fetch(APPS_SCRIPT_URL + "?action=getHistorial&_t=" + Date.now()); var data = await r.json(); if (Array.isArray(data)) { _histData = data; window._histData = data; } } catch (x) {}
-      h = busca();
+    if (!h && t.sheetRow) {
+      // Solo este ticket (antes bajaba todo el historial).
+      try { var r = await api("tk_historial", { rows: [t.sheetRow], limit: 1 }); h = (r && r.items && r.items[0]) || null; } catch (x) {}
     }
     if (h) (window._tkCards = window._tkCards || {})[t.sheetRow] = h;
     return h || null;
@@ -282,9 +297,9 @@
   function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); tarjetaTicket(K.d.ticket.sheetRow, function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }
   async function pdfPaquete() {
     var ced = String(val("cedula") || "").split(".")[0], x = (window._tarjPaqRef || {})["c" + ced];
-    if (!x && typeof APPS_SCRIPT_URL !== "undefined") {
+    if (!x && ced) {
       try {
-        var r = await fetch(APPS_SCRIPT_URL + "?action=getSeguimientoPaquetes&_t=" + Date.now()); var j = await r.json(), P3 = window._P3S || [];
+        var j = await api("getSeguimientoPaquetes", { cedulas: [ced] }), P3 = window._P3S || [];
         ((j && j.items) || []).forEach(function (p) {
           if (String(p.cedula || "").split(".")[0] !== ced) return;
           var esP3 = P3.some(function (s) { return String(p.sku || "").indexOf(s) >= 0; }), total = p.total || (esP3 ? 3 : 6), us = 0;
@@ -384,20 +399,19 @@
     var dd = main.querySelector('[data-k="' + k + '"]'); if (!dd) return;
     var lbl = ((K.d.campos || []).find(function (c) { return c[0] === k; }) || [k, k])[1], v = val(k), largo = k === "notas" || k === "recomendaciones";
     var tipo = k === "retorno" ? "date" : k === "email" ? "email" : "text";
-    dd.innerHTML = (largo ? '<textarea rows="3" class="mctk-in">' + e(v) + "</textarea>" : '<input class="mctk-in" type="' + tipo + '" value="' + e(v) + '"' + (k === "factura" ? ' placeholder="001-001-000000000"' : "") + ">") +
-      ' <button type="button" class="btn small" data-ok>✓</button> <button type="button" class="btn ghost small" data-no>×</button>';
-    var inp = dd.querySelector(".mctk-in"); inp.focus();
-    dd.querySelector("[data-no]").onclick = function () { repintar(main); };
+    if (dd.querySelector(".mctk-in")) return;
+    dd.innerHTML = largo ? '<textarea rows="3" class="mctk-in">' + e(v) + "</textarea>" : '<input class="mctk-in" type="' + tipo + '" value="' + e(v) + '"' + (k === "factura" ? ' placeholder="001-001-000000000"' : "") + ">";
+    var inp = dd.querySelector(".mctk-in"), hecho = false; inp.focus();
     var ok = function () {
+      if (hecho) return; hecho = true;
       var nv = inp.value.trim();
       if (nv === v) { repintar(main); return; }
-      if (k === "factura" && nv && !/^\d{3}-\d{3}-\d{1,9}$/.test(nv) && !/^\d{1,9}$/.test(nv)) { toast2("Factura: usa 001-001-000000000", true); return; }
+      if (k === "factura" && nv && !/^\d{3}-\d{3}-\d{1,9}$/.test(nv) && !/^\d{1,9}$/.test(nv)) { hecho = false; toast2("Factura: usa 001-001-000000000", true); return; }
       K.datos = K.datos || {}; K.datos[k] = k === "factura" && /^\d{1,9}$/.test(nv) ? "001-001-" + ("000000000" + nv).slice(-9) : nv;
       var dirty = K.dirty, dl = K.dirtyL; repintar(main); K.dirty = dirty; K.dirtyL = dl; marcar(true);
-      toast2(lbl + ": " + (K.d.puedeEditar ? "guarda los cambios para aplicarlo" : "envía la solicitud de cambio"));
     };
-    dd.querySelector("[data-ok]").onclick = ok;
-    inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") repintar(main); };
+    inp.onblur = ok;
+    inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") { hecho = true; repintar(main); } };
   }
   function wire(main) {
     if (!K.d) return;
@@ -407,8 +421,11 @@
     });
     if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { if (!ev.target.closest(".mctk-menu")) document.querySelectorAll(".mctk-dd").forEach(function (x) { x.hidden = true; }); }); }
     main.querySelector("#mctk-dd").onclick = async function (ev) {
+      var pv = ev.target.closest("[data-pv]");
+      if (pv && window.MCPrevia) { this.hidden = true; window.MCPrevia.abrir(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
       var b = ev.target.closest("[data-doc]"); if (!b) return;
       this.hidden = true;
+      if (b.getAttribute("data-doc") === "tarjeta" && window.MCPrevia) { var hh = await cardDelTicket(); if (!hh) { toast2("No encontré la tarjeta de este ticket", true); return; } window.MCPrevia.tarjeta(K.d.ticket.sheetRow, "Tarjeta del tratamiento"); return; }
       if (b.getAttribute("data-doc") === "gc") { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; abrirGiftCard(b.getAttribute("data-cod")); return; }
       var h = await cardDelTicket();
       if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }
@@ -417,7 +434,7 @@
     main.querySelector("#mctk-wa").onclick = function (ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; this.hidden = true; enviarReporte(b.getAttribute("data-wa")); };
     main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;
-    main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; });
+    main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
     var fi = main.querySelector("#mctk-ficha"); if (fi) fi.onclick = function (ev) { ev.preventDefault(); go("#/m/clientes/c/" + encodeURIComponent(K.d.clienteKey)); };
     main.querySelectorAll("[data-flag]").forEach(function (b) {
       b.onclick = async function () {
@@ -431,16 +448,15 @@
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("tr[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
       var l = K.L[+tr.getAttribute("data-i")];
-      l[f] = f === "descuento_tipo" ? (ev.target.value || null) : Number(ev.target.value) || 0;
+      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.valor; }
+      else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
       calc(); tr.querySelector("[data-tl]").textContent = $m(l.total_linea); pintarTot(); marcar();
     });
-    lin.addEventListener("change", function (ev) { if (ev.target.getAttribute("data-f") === "descuento_tipo") { var l = K.L[+ev.target.closest("tr").getAttribute("data-i")]; l.descuento_tipo = ev.target.value || null; calc(); ev.target.closest("tr").querySelector("[data-tl]").textContent = $m(l.total_linea); pintarTot(); marcar(); } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
     main.querySelector("#mctk-promo").onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
-    main.querySelector("#mctk-dt").onchange = function () { K.desc.tipo = this.value || null; marcar(); pintarTot(); };
-    main.querySelector("#mctk-dv").oninput = function () { K.desc.valor = Number(this.value) || 0; marcar(); pintarTot(); };
+    main.querySelector("#mctk-dv").oninput = function () { var x = descParse(this.value); this.classList.toggle("bad", !x); if (!x) return; K.desc.tipo = x.tipo; K.desc.valor = x.valor; marcar(); pintarTot(); };
     wireCostos();
     wireBuscar(main);
     var err = main.querySelector("#mctk-err");

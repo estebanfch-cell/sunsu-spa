@@ -80,3 +80,14 @@ export async function consultar(db: Db, table: string, q: Consulta): Promise<Res
   if (typeof x.consultar === "function") return await x.consultar(table, q);
   return consultarEnJs(await db.all(table), q);
 }
+
+/** Formas en que la misma cédula aparece en las tablas del sheet (1712…, 1712….0, 0912…). */
+export function cedVariantes(ceds: unknown[]): string[] {
+  const out = new Set<string>();
+  for (const c of ceds) {
+    const x = String(c ?? "").split(".")[0].replace(/[^0-9]/g, "").replace(/^0+/, "");
+    if (x.length < 5) continue;
+    for (const v of [x, "0" + x]) { out.add(v); out.add(v + ".0"); }
+  }
+  return [...out];
+}

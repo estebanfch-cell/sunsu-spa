@@ -5000,7 +5000,7 @@ function _histSaldo(t){
   return _histEstadoDoc(t)==='cerrado'?0:(parseFloat(t&&t.estimado)||0);
 }
 var _HIST_COLS=[
-  {k:'led',t:'●',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.a+L.p+L.r+L.g):-1;}},
+  {k:'led',t:'●',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.p+L.r+L.g):-1;}},
   {k:'num',t:'Nº ticket',v:function(t){var m=/(\d+)$/.exec(_histNum(t));return m?+m[1]:-1;}},
   {k:'cli',t:'Clienta',v:function(t){return ((t.nombre||'')+' '+(t.apellido||'')).trim().toLowerCase();}},
   {k:'ced',t:'Cédula',v:function(t){var d=String(t.cedula||'').replace(/\D/g,'');return d?+d:-1;}},
@@ -5120,7 +5120,7 @@ function _tkEstados(t){
   if(!t.fac&&!(Lx&&Lx.factura)) out.push({c:'sinfactura',t:'Sin factura'});
   return out;
 }
-var _TK_LEDS=[['a','Fase A completada','Fase A pendiente'],['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
+var _TK_LEDS=[['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
 function _tkLedsHTML(t){
   var L=(window._tkLeds||{})[String(t.tkRow)];
   if(!L) return '<td class="tk-leds" title="Cargando estados…">'+_TK_LEDS.map(function(){return '<span class="tk-led q"></span>';}).join('')+'</td>';
@@ -5138,7 +5138,7 @@ function _tkCargarLeds(forzar){
     if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff);
   }).catch(function(){window._tkLedsCargando=false;});
 }
-var _TK_SEG=[['','Todos'],['faseA_no','Fase A pendiente'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','Por corregir']];
+var _TK_SEG=[['','Todos'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','Por corregir']];
 var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Anulado']];
 function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
 function _tkSetF(k,v){ _tkF()[k]=v; window._tkKey=''; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
@@ -11084,23 +11084,41 @@ function _verEnviosTarjetas(btn){
   })
   .catch(function(){ if(btn) btn.textContent='📚 Historial de envíos'; toast('❌ No se pudo cargar el historial','#B86B6B'); });
 }
+function _tarjCargar(){
+  var ymd=function(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);};
+  var hoy=new Date(), ant=new Date(); ant.setDate(ant.getDate()-2);
+  var items=[];
+  var pag=function(off){
+    return window.api('tk_historial',{desde:ymd(ant),hasta:ymd(hoy),offset:off,limit:200}).then(function(d){
+      if(!d||d.error) throw new Error((d&&d.error)||'No se pudo cargar');
+      items=items.concat(d.items||[]);
+      return d.hayMas&&off<1800?pag(off+200):items;
+    });
+  };
+  return pag(0).then(function(L){
+    var ceds=[], aps=[];
+    L.forEach(function(t){ var c=(t.cedula||'').toString().split('.')[0]; if(c&&ceds.indexOf(c)<0) ceds.push(c); if(t.apellido&&aps.indexOf(t.apellido)<0) aps.push(t.apellido); });
+    return Promise.all([
+      Promise.resolve(L),
+      window.api('getTarjetasInfo',{}).catch(function(){return {};}),
+      window.api('getSeguimientoPaquetes',{cedulas:ceds}).catch(function(){return {};}),
+      window.api('getFichasRegistro',{cedulas:ceds,apellidos:aps}).catch(function(){return {};})
+    ]);
+  });
+}
 function renderTarjetasPendientes(c){
   c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📤 Tarjetas de tratamiento</div>'
     +'<button onclick="_verEnviosTarjetas(this)" style="background:white;color:var(--navy);border:1.5px solid var(--navy);padding:6px 11px;border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">📚 Historial de envíos</button>'
     +'</div><div id="tj-envios"></div>'
     +'<div class="loading"><div class="spinner"></div>Cargando tickets...</div>';
-  Promise.all([
-    // SIEMPRE fresco: el ticket recién enviado debe aparecer de inmediato
-    fetch(APPS_SCRIPT_URL+'?action=getHistorial&_t='+Date.now()).then(function(r){return r.json();}),
-    fetch(APPS_SCRIPT_URL+'?action=getTarjetasInfo&_t='+Date.now()).then(function(r){return r.json();}),
-    fetch(APPS_SCRIPT_URL+'?action=getSeguimientoPaquetes&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch(APPS_SCRIPT_URL+'?action=getFichasRegistro&_t='+Date.now()).then(function(r){return r.json();}).catch(function(){return {};})
-  ]).then(function(rr){
+  // Solo Supabase y solo lo necesario (Emilia 17/11): tickets de hoy/ayer/antier y, de esas clientas,
+  // sus fichas y paquetes. Antes bajaba todo el historial, todo el registro y todos los paquetes.
+  _tarjCargar().then(function(rr){
     window._fichasReg={porCedula:(rr[3]||{}).porCedula||{},porNombre:(rr[3]||{}).porNombre||{}};
     var data=rr[0], info=rr[1]||{}, paqs=rr[2]||{};
     if(data.error){c.innerHTML='<div class="card" style="color:#B86B6B">❌ '+data.error+'</div>';return;}
-    _histData=data;
+    window._tarjData=data;
     window._tarjEnv=info.enviadas||{};
     window._tarjTelCed=info.telCed||{};
     window._tarjTelNom=info.telNom||{};
@@ -11160,7 +11178,7 @@ function _pintarTarjetasPend(){
   var f=new Date(); f.setDate(f.getDate()-dia);
   var fStr=f.getFullYear()+'-'+('0'+(f.getMonth()+1)).slice(-2)+'-'+('0'+f.getDate()).slice(-2);
   var fFmtDia=('0'+f.getDate()).slice(-2)+'/'+('0'+(f.getMonth()+1)).slice(-2);
-  var lista=(_histData||[]).filter(function(t){
+  var lista=(window._tarjData||[]).filter(function(t){
     if(t.fecha!==fStr) return false;                       // solo el día elegido
     if((t.cosmetologa||'').toUpperCase()==='SUNSU') return false;
     if(((t.cedula||'').toString().split('.')[0])==='1793219469001') return false;   // consumo interno Sunsu Spa
@@ -13439,6 +13457,13 @@ function guardarUnificado(fila,sinFac,soloCobro){
       toast('Escribe el número de factura','#B86B6B');
       return;
     }
+  }
+  // Transferencia: la foto del comprobante es obligatoria (Emilia 17/11; pendiente de su confirmación).
+  if(seleccionados.indexOf('Trans')>=0&&!((_compFotos[fila]||[]).length)){
+    if(errEl){errEl.textContent='📷 Toma o sube la foto del comprobante de la transferencia';errEl.style.display='block';}
+    var fbT=document.getElementById('cobfoto-'+fila); if(fbT){fbT.style.display='block';try{fbT.scrollIntoView({block:'nearest'});}catch(eS){}}
+    toast('Falta la foto del comprobante de transferencia','#B86B6B');
+    return;
   }
   var compStr=seleccionados.map(function(tipo){var det=document.getElementById('cobdet-'+fila+'-'+tipo);var val=det?det.value.trim():'';return val?tipo+':'+val:tipo;}).join(', ');
   cerrarModal('modal-uni-'+fila);

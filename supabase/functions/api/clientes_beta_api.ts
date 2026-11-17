@@ -22,15 +22,19 @@ export const CAMPOS_CLIENTE: [string, string][] = [
   ["nombres", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"], ["telefono", "Teléfono"], ["email", "Email"],
   ["nacimiento", "Nacimiento"], ["sector", "Sector"], ["tipoPiel", "Tipo de piel"], ["estado", "Estado actual"],
   ["alergias", "Alergias"], ["medicacion", "Medicación"], ["condiciones", "Condiciones"], ["reacciones", "Reacciones previas"],
-  ["exfoliantes", "Exfoliantes / retinoides"], ["extracciones", "Desea extracciones"], ["autorizaFotos", "Autoriza fotos"], ["notas", "Notas"],
+  ["exfoliantes", "Exfoliantes / retinoides"], ["extracciones", "Desea extracciones"], ["autorizaFotos", "Autoriza fotos"], ["ciclo", "Ciclo menstrual"], ["cortesia", "Cortesía complementaria"],
+  ["consentimiento", "Aprueba consentimiento"], ["notas", "Notas"],
 ];
+/** Solo lectura en la ficha (vienen del formulario de registro). */
+export const CAMPOS_LECTURA: [string, string][] = [["registrada", "Fecha de registro"], ["ultimoRegistro", "Último registro"]];
 const PRIVADOS = new Set(["telefono", "email"]);
 const DE_REGISTRO: Record<string, string> = {
   nombres: "nombre", apellido: "apellido", cedula: "cedula", telefono: "telefono", sector: "sector_donde_vive",
   tipoPiel: "tipo_de_piel", estado: "estado_actual", alergias: "alergias", medicacion: "medicacion",
   condiciones: "condiciones_medicas_o_dermatologicas_que_debamos_saber", reacciones: "reacciones_previas_a_tratamientos",
   exfoliantes: "uso_de_exfoliantes_retintines", extracciones: "deseas_extracciones_de_comedones_o_espinillas_si_es_nec",
-  autorizaFotos: "autoriza_fotos",
+  autorizaFotos: "autoriza_fotos", ciclo: "ciclo_mestrual_si_aplica", cortesia: "cortesia_complementaria",
+  consentimiento: "apruebo_consentimiento_individual",
 };
 function vacio(v: unknown): boolean { const t = s(v).trim(); return !t || t === "-" || t === "—" || /^n\/?a$/i.test(t); }
 
@@ -116,6 +120,8 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const reg = registroUnico(regs);
   const codigo = regs.map((r) => codigoCliente(r)).filter(Boolean).sort()[0] || "";
   const datos: Row = { ...reg.datos };
+  if (reg.primera) datos.registrada = reg.primera;
+  if (reg.ultima && reg.ultima !== reg.primera) datos.ultimoRegistro = reg.ultima;
   for (const k of ["nombres", "apellido", "cedula"]) if (vacio(datos[k]) && !vacio(cli[k])) datos[k] = s(cli[k]);
   if (!vacio(cli.email)) datos.email = s(cli.email);
   const corr = (ov?.datos || {}) as Row;
@@ -137,7 +143,10 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
       if (/k-?lift|skin|an[aá]lisis|primera/i.test(s(r.facial_hecho))) documentos.push({ tipo: "analisis", nombre: "Análisis de piel / " + s(r.facial_hecho) + " · " + tk, fecha: f, clave });
     }
     const item: Row = { ref: t.ref, clave, fecha: t.fecha, hora: t.hora, cosmetologa: t.cosmetologa, facial: t.facial, paquete: t.paquete, gift_card: t.gift_card,
-      lineas: ((t.lineas || []) as Row[]).map((l) => s(l.nombre || l.sku) + (n(l.cantidad) > 1 ? " ×" + n(l.cantidad) : "")).join(", ") };
+      lineas: ((t.lineas || []) as Row[]).map((l) => s(l.nombre || l.sku) + (n(l.cantidad) > 1 ? " ×" + n(l.cantidad) : "")).join(", "),
+      detalle: ((t.lineas || []) as Row[]).slice(0, 30).map((l) => ({ nombre: s(l.nombre || l.sku), sku: s(l.sku), cantidad: n(l.cantidad) || 1 })),
+      notas: r ? s(r.notas_generales).slice(0, 400) : "", recomendaciones: r ? s(r.recomendaciones).slice(0, 400) : "",
+      fotos: r ? docsDe(r).filter((d) => d.tipo === "foto").map((d) => ({ nombre: s(d.nombre), url: s(d.url) })) : [], sheetRow: r?.sheet_row ?? null };
     if (admin) item.total = cab && cab.total != null ? n(cab.total) : n(t.total);
     if (cab) item.editadoBeta = true;
     return item;
@@ -154,7 +163,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const paquetes = ((det.paquetes || []) as Row[]);
   resumen.sesionesPendientes = paquetes.reduce((a, p) => a + n(p.pendientes), 0);
   return {
-    ok: true, admin, key, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => conTelefono(ses) || !PRIVADOS.has(k)),
+    ok: true, admin, key, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => conTelefono(ses) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
     corregidos: Object.keys(corr), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))),
     bitacora: (ov?.historial || []) as Row[], borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
     puedeEditar: admin, puedePedir: !admin,
