@@ -126,6 +126,8 @@ export class VistaDb implements Db {
     if (!this.on) return this.inner.write(actor, table, op, match, row);
     // Tablas sin columna 'origin': una escritura de prueba quedaría como REAL. No se tocan.
     if (SIN_ORIGIN.has(table)) return { ...(row || {}), origin: "test" };
+    // Tablas beta_* no tienen origin: antes fallaba con un error críptico. Se avisa claro.
+    if (table.startsWith("beta_")) throw new Error("Estás en Modo prueba: este cambio no se guarda. Sal de Modo prueba y vuelve a intentarlo.");
     if (table === "erp_stock") {
       if (op === "delete") throw new Error("Modo prueba no borra datos reales");
       return { ...(row || {}), origin: "test" };
