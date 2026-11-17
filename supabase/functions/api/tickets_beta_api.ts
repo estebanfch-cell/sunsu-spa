@@ -64,7 +64,7 @@ export async function ticketPorClave(ctx: Ctx, clave: string): Promise<Row | nul
   const fila = /^r\d+$/.test(k) ? k.slice(1) : "";
   return rows.find((r) => leerSerie(r, "so_num") === k || s(r.beta_num) === k || (fila && s(r.sheet_row) === fila) || s(r.id) === k) || null;
 }
-function docsDe(r: Row): Row[] {
+export function docsDe(r: Row): Row[] {
   const urls = (v: unknown) => s(v).split(/\s*\|\s*|\s*,\s*(?=https?:)|\s+(?=https?:)/).map((x) => x.trim()).filter((x) => /^https?:/.test(x));
   const out: Row[] = [];
   for (const u of urls(r.comprobante)) out.push({ tipo: "comprobante", nombre: "Comprobante de pago", url: u });

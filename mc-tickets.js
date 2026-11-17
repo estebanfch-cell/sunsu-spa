@@ -90,7 +90,7 @@
     var d = K.d, t = d.ticket;
     var nombre = (t.nombre + " " + t.apellido).trim() || "Sin nombre";
     return '<div id="mctk-root">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
-      '<p><button class="btn ghost small" type="button" id="mctk-volver">← Volver a la lista</button></p>' +
+      '<p><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Volver a la clienta" : "← Volver a la lista") + '</button></p>' +
       '<div class="mccf-card"><div class="mctk-h"><div><h2>' + e(nombre) + '</h2><div class="mctk-meta">Ticket <b>' + e(t.soNum || t.betaNum || ("#" + t.sheetRow)) + "</b>" + (t.sheetRow ? " · orden " + e(t.sheetRow) : "") + " · " + e(fecha(t.fecha, t.hora)) + " · atendió <b>" + e(t.cosmetologa || "—") + "</b>" + (t.cedula ? " · CI " + e(t.cedula) : "") + "</div>" +
       '<div class="mctk-leds">' + t.leds.map(function (l) { return '<span class="mctk-led ' + e(l.c) + '">' + e(l.t) + "</span>"; }).join("") + "</div></div>" +
       '<div class="mctk-acts"><div class="mctk-menu"><button class="btn ghost small" type="button" id="mctk-docs">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml() + "</div></div>" +
@@ -208,14 +208,21 @@
   function repintar(main) { var root = main.querySelector("#mctk-root"); if (root) { root.outerHTML = html(); wire(main); } }
   function wire(main) {
     if (!K.d) return;
-    main.querySelector("#mctk-volver").onclick = function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; go("#/m/tickets"); };
+    main.querySelector("#mctk-volver").onclick = function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); };
     var dd = main.querySelector("#mctk-dd");
     main.querySelector("#mctk-docs").onclick = function (ev) { ev.stopPropagation(); dd.hidden = !dd.hidden; };
     if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { var x = document.getElementById("mctk-dd"); if (x && !ev.target.closest(".mctk-menu")) x.hidden = true; }); }
-    dd.onclick = function (ev) {
+    dd.onclick = async function (ev) {
       var b = ev.target.closest("[data-doc]"); if (!b) return;
-      var t = K.d.ticket, h = (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); });
-      if (!h || typeof tarjetaTicket !== "function") { toast2("Abre la tarjeta desde la lista de tickets (se está cargando el historial)", true); return; }
+      var t = K.d.ticket, busca = function () { return (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }); };
+      var h = busca();
+      if (!h && typeof APPS_SCRIPT_URL !== "undefined") {
+        // Si se llegó desde la ficha de la clienta, el historial aún no está cargado: se pide una vez.
+        toast2("⏳ Cargando la tarjeta…");
+        try { var r = await fetch(APPS_SCRIPT_URL + "?action=getHistorial&_t=" + Date.now()); var data = await r.json(); if (Array.isArray(data)) { _histData = data; window._histData = data; } } catch (x) {}
+        h = busca();
+      }
+      if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }
       (window._tkCards = window._tkCards || {})[t.sheetRow] = h; tarjetaTicket(t.sheetRow);
     };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;

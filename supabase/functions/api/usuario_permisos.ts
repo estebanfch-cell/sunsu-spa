@@ -57,7 +57,7 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo"]);
+const LECTURAS = new Set(["mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo", "cl_list", "cl_get"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
@@ -72,6 +72,7 @@ const MOD_EXTRA: Record<string, string> = {
   trfb_list: "transferencias", trfb_get: "transferencias", trfb_save: "transferencias", trfb_estado: "transferencias",
   aj_meta: "inicio", aj_list: "inventario", aj_get: "inventario", aj_crear: "inventario", aj_revisar: "inventario", aj_desde_conteo: "conteos",
   tk_get: "tickets", tk_catalogo: "tickets", tk_guardar: "tickets",
+  cl_list: "clientes", cl_get: "clientes", cl_guardar: "clientes", cl_borrar: "clientes", cl_restaurar: "clientes",
 };
 export function moduloFino(action: string): string {
   return MOD_EXTRA[action] || moduloDeAccion(action);
