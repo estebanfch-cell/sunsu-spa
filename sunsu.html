@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261113.03';
+  var v='20261117.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -11395,7 +11395,9 @@ function cargarBorradorOC(){
     var itemsB=(d.items||[]).map(function(it){it.cant=it.sugerido;return it;});
     var esCabOC=function(it){return !!(it&&(it.ventaCabina||_esVentaCabinaSku(it.sku)));};
     var itemsConsig=itemsB.filter(function(it){return !esCabOC(it);});
-    window._ocBorrador={prov:p,qLabel:d.qLabel,items:itemsConsig,
+    // Restock y Stock en Sunsu: TODOS los activos (Emilia 17/11). Las máscaras que se venden
+    // desde Cabina (ML-009…014) solo cambiaron de bodega: siguen saliendo aquí, marcadas «Cabina».
+    window._ocBorrador={prov:p,qLabel:d.qLabel,items:itemsB.map(function(it){if(esCabOC(it))it.cabina=true;return it;}),
       // Bloque de facturación EDITABLE: cantidades vendidas y precios (los productos
       // propios de Sunsu que no son a consignación se quitan aquí con ✕).
       // ML-009…014 no entran: se venden de cabina.
@@ -11404,7 +11406,7 @@ function cargarBorradorOC(){
       // Stock al corte que VERÁ el proveedor: lista INDEPENDIENTE con TODOS los
       // activos — quitar del restock o de facturación NO lo afecta. Cada uno con
       // su tipo: CONSIG (consignación) o SUNSU (stock propio), toggleable.
-      stockV:itemsConsig.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
+      stockV:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,tipo:esCabOC(it)?'SUNSU':'CONSIG',stockCorte:(it.stockCorte!==undefined&&it.stockCorte!==null)?it.stockCorte:(it.stock||0)};}),
       // Catálogo congelado del proveedor (para agregar compra directa).
       // Las máscaras de cabina pueden seguir aquí; no van a facturación ni restock.
       catalogo:itemsB.map(function(it){return {sku:it.sku,nombre:it.nombre,compra:it.compra||0};}),
@@ -11479,7 +11481,7 @@ function _pintarBorradorOC(){
     var stCol=it.stock<=0?'#B86B6B':(it.stock<=it.minimo?'#C4943A':'var(--navy)');
     html+='<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--cream-d)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:700;color:var(--navy)">'+it.nombre+'</div>'
-      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+' · vendido '+it.vendido+' · $'+(it.compra||0).toFixed(2)+' c/u</div></div>'
+      +'<div style="font-size:0.56rem;color:var(--gray)">'+it.sku.replace('SUNSU-','')+(it.cabina?' · bodega Cabina':'')+' · vendido '+it.vendido+' · $'+(it.compra||0).toFixed(2)+' c/u</div></div>'
       +'<div style="text-align:center;flex-shrink:0;min-width:36px"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">STOCK</div><div style="font-size:0.84rem;font-weight:900;color:'+stCol+'">'+it.stock+'</div></div>'
       +'<div style="text-align:center;flex-shrink:0"><div style="font-size:0.48rem;font-weight:800;color:var(--gray)">PEDIR</div>'
       +'<input type="number" inputmode="numeric" min="0" value="'+(it.cant||0)+'" oninput="window._ocBorrador.items['+i+'].cant=parseFloat(this.value)||0;_ocTotal()" style="width:56px;padding:7px;border:1.5px solid '+((it.cant||0)>0?'var(--navy)':'#ECEEF4')+';border-radius:9px;font-size:0.84rem;font-weight:800;text-align:center;color:var(--navy);outline:none"></div>'
