@@ -352,7 +352,8 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const tramos = aplicado.tramos;
   const cfg = aplicado.cfg;
   const cmap = await catMap(ctx);
-  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map((r) => toIn(r, cmap));
+  const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
+  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map((r) => ovb(r, toIn(r, cmap)));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
   const calc = calcularCiclo(tks, await marks(ctx), cfg, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);

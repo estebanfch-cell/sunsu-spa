@@ -248,7 +248,8 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const fin = cicloFin(ciclo);
   const cat0 = await ctx.db.all("catalogo").catch(() => [] as R[]);
   const cmap0 = new Map(cat0.map((r) => [skuCode(s(r.sku)), r]));
-  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map((r) => ticketIn(r, cmap0));
+  const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
+  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map((r) => ovb(r, ticketIn(r, cmap0)));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));

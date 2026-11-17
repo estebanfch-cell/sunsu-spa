@@ -855,6 +855,9 @@
     var p = MC.cur.producto, cod = String(txt("codigo_barras") || "").replace(/\s+/g, "");
     if (!cod) return;
     var conPvp = confirm("¿Incluir el PVP en la etiqueta?\nAceptar = con PVP · Cancelar = sin PVP");
+    var conQr = typeof window.qrcode === "function" && confirm("¿Agregar también un código QR?\nAceptar = barras + QR · Cancelar = solo barras");
+    var qr = "";
+    if (conQr) { try { var q = window.qrcode(0, "M"); q.addData(cod); q.make(); qr = q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }); } catch (x) { qr = ""; } }
     var pvp = calcVivo().pvp;
     var svg = /^\d{13}$/.test(cod) ? barras(cod).replace('width="190" height="44"', 'width="100%" height="100%"') : code128(cod);
     var nom = String(p.nombre || "").slice(0, 34);
@@ -863,7 +866,7 @@
     w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>Etiqueta " + e(p.skuVisible || p.sku) + "</title><style>@page{size:50mm 25mm;margin:0}html,body{margin:0;padding:0}" +
       ".l{width:50mm;height:25mm;box-sizing:border-box;padding:1.2mm 2mm;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow:hidden}" +
       ".n{font-size:7pt;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.b{flex:1;min-height:0;margin:.6mm 0}.b svg{width:100%;height:100%;display:block}" +
-      ".f{display:flex;justify-content:space-between;font-size:6.5pt}.f b{font-size:8pt}</style></head><body><div class='l'><div class='n'>" + e(nom) + "</div><div class='b'>" + svg + "</div><div class='f'><span>" + e(cod) + " · " + e(p.skuVisible || p.sku) + "</span>" + (conPvp && pvp ? "<b>$" + pvp.toFixed(2) + "</b>" : "") + "</div></div>" +
+      ".q{height:100%;aspect-ratio:1}.q svg{width:100%;height:100%;display:block}.f{display:flex;justify-content:space-between;font-size:6.5pt}.f b{font-size:8pt}</style></head><body><div class='l'><div class='n'>" + e(nom) + "</div><div class='b'>" + (qr ? "<div style='display:flex;gap:1.2mm;height:100%'><div style='flex:1;min-width:0'>" + svg + "</div><div class='q'>" + qr + "</div></div>" : svg) + "</div><div class='f'><span>" + e(cod) + " · " + e(p.skuVisible || p.sku) + "</span>" + (conPvp && pvp ? "<b>$" + pvp.toFixed(2) + "</b>" : "") + "</div></div>" +
       "<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>");
     w.document.close();
   }

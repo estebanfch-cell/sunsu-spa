@@ -115,7 +115,7 @@
       spa.push(["recepcion", "Recepción", "#/s/recepcion"]);
     }
     if (ok("bitacora")) spa.push(["bitacora", "Bitácora de esterilización", "#/m/bitacora"]);
-    if (ok("cabina")) spa.push(["cabina", "Cabina", "#/m/cabina"]);
+    // «Cabina» fuera del menú (Emilia 17/11): solo se oculta; la ruta #/m/cabina y los datos siguen.
     if (adm()) spa.push(["promos", "Promos", "#/s/promos"]);
     spa.push(["tarjetas", "Tarjetas", "#/s/tarjetas"]);
     out.push({ id: "spa", label: "Spa", items: spa });
