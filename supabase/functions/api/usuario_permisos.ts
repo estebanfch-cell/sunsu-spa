@@ -12,7 +12,19 @@ import type { Row } from "./domain.ts";
 import { DEFAULT_MATRIZ, MODULOS, acceso, esAdmin, lecturaEnVista, matrizDe, moduloDeAccion, normalizarRol, type Acceso } from "./permisos.ts";
 
 export type Nivel = 0 | 1 | 2 | 3;
-export type Override = { uid: string; perfil?: string; niveles: Record<string, number>; alcance: Record<string, string>; flags: Record<string, boolean>; personas?: string[] };
+export type Override = { uid: string; perfil?: string; niveles: Record<string, number>; alcance: Record<string, string>; flags: Record<string, boolean>; personas?: string[]; crud?: Record<string, string> };
+/** Permisos finos por módulo (TK21): v ver · c crear · e editar · d eliminar. "" = módulo apagado. Se guardan en alcance._crud. */
+export const LETRAS_CRUD = "vced";
+export function limpiarCrud(x: unknown): string { const t = String(x ?? ""); return LETRAS_CRUD.split("").filter((l) => t.includes(l)).join(""); }
+/** Nivel 0-3 equivalente (para lo que sigue leyendo niveles): apagado 0, solo ver 1, crear/editar 2, eliminar 3. */
+export function nivelDeCrud(c: string, max: number): number {
+  if (!c) return 0;
+  if (c.includes("d")) return Math.min(3, max);
+  if (c.includes("c") || c.includes("e")) return Math.min(2, max);
+  return 1;
+}
+/** Al revés: lo que da un nivel de antes. */
+export function crudDeNivel(n: number): string { return n <= 0 ? "" : n === 1 ? "v" : n === 2 ? "vce" : "vced"; }
 
 /** Módulos finos de Sunsu, con su nivel máximo (como MAXN de MineCore) y si distinguen «lo suyo». */
 export const FINOS: { id: string; label: string; grupo: string; max: Nivel; alcance?: boolean }[] = [
@@ -109,11 +121,18 @@ export function limpiarOverride(v: Row): Override | null {
     const L = crudo.map((x) => String(x ?? "").trim().slice(0, 80)).filter(Boolean);
     personas = L.includes(TODOS) ? [TODOS] : [...new Set(L)].slice(0, 60);
   }
-  return { uid: String(v.uid || ""), perfil: v.perfil ? String(v.perfil) : "", niveles, alcance, flags, ...(personas ? { personas } : {}) };
+  const crudCrudo = parse(v.alcance)._crud;
+  let crud: Record<string, string> | undefined;
+  if (crudCrudo && typeof crudCrudo === "object" && !Array.isArray(crudCrudo)) {
+    crud = {};
+    for (const [k, c] of Object.entries(crudCrudo as Row)) if (FINO.get(k)) crud[k] = limpiarCrud(c);
+    for (const [k, c] of Object.entries(crud)) niveles[k] = nivelDeCrud(c, FINO.get(k)!.max);
+  }
+  return { uid: String(v.uid || ""), perfil: v.perfil ? String(v.perfil) : "", niveles, alcance, flags, ...(personas ? { personas } : {}), ...(crud ? { crud } : {}) };
 }
 
 export function vacio(o: Override | null): boolean {
-  return !o || (!Object.keys(o.niveles).length && !Object.keys(o.alcance).length && !Object.keys(o.flags).length && o.personas === undefined);
+  return !o || (!Object.keys(o.niveles).length && !Object.keys(o.alcance).length && !Object.keys(o.flags).length && o.personas === undefined && !Object.keys(o.crud || {}).length);
 }
 
 export async function cargarOverride(db: Db, uid: string): Promise<Override | null> {
@@ -185,10 +204,33 @@ export function conPermisosUsuario<T extends Db>(db: T, rol: string, o: Override
 }
 
 /** Candado de nivel: 0 nada, 1 solo lecturas, 3 para aprobar/anular/borrar. */
-export function gateNivel(action: string, rol: string, o: Override | null): { error: string } | null {
+const RX_ELIMINAR = /(borrar|eliminar|anular|quitar|cancel|desmarcar|delete|_del$|undo|deshacer|bloquear)/i;
+const RX_CREAR = /(crear|nuev|registrar|vender|emitir|agregar|alta|duplicar|generar|_new$|insert|iniciar|abrir|subir|pdf_guardar|importar|lote)/i;
+const RX_GUARDAR = /(guardar|save|_set$|editar|actualizar)/i;
+const CLAVES_FILA = ["id", "clave", "fila", "codigo", "numero", "uid", "sheetRow", "tkRow", "key"];
+/** ver · crear · editar · eliminar de una acción (lecturas por convención; guardar sin id = crear). */
+export function tipoAccion(action: string, p: Row = {}): "ver" | "crear" | "editar" | "eliminar" {
+  if (lecturaEnVista(action) || LECTURAS.has(action)) return "ver";
+  if (NIVEL3.has(action) || RX_ELIMINAR.test(action) || p.desmarcar === true) return "eliminar";
+  if (RX_CREAR.test(action)) return "crear";
+  if (RX_GUARDAR.test(action) && !CLAVES_FILA.some((k) => p[k] != null && String(p[k]) !== "" && String(p[k]) !== "nuevo")) return "crear";
+  return "editar";
+}
+const LETRA: Record<string, string> = { ver: "v", crear: "c", editar: "e", eliminar: "d" };
+const VERBO: Record<string, string> = { ver: "ver", crear: "crear", editar: "editar", eliminar: "eliminar" };
+export function gateNivel(action: string, rol: string, o: Override | null, p: Row = {}): { error: string } | null {
   if (!o || esAdmin(rol)) return null;
   const mod = moduloFino(action);
   if (!mod) return null;
+  const c = o.crud?.[mod];
+  if (c !== undefined) {
+    const label0 = FINO.get(mod)?.label || mod;
+    for (const [f, m] of Object.entries(FLAG_MODULO)) if (m === mod && o.flags[f] === false) return { error: "No tienes permiso" };
+    if (!c) return { error: "No tienes permiso" };
+    const tipo = tipoAccion(action, p);
+    if (!c.includes(LETRA[tipo])) return { error: "En «" + label0 + "» no tienes permiso para " + VERBO[tipo] };
+    return null;
+  }
   const n = o.niveles[mod];
   if (n === undefined) return null;
   const label = FINO.get(mod)?.label || mod;

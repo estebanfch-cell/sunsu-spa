@@ -4,7 +4,7 @@ import type { Ctx } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { s, type Row } from "./domain.ts";
 import { acceso, esAdmin, matrizDe, normalizarRol } from "./permisos.ts";
-import { FINOS, FLAGS, ROLES_EDITABLES, accesoEfectivo, limpiarOverride, nivelDeRol, perfilDeRol, vacio, type Override } from "./usuario_permisos.ts";
+import { FINOS, FLAGS, ROLES_EDITABLES, accesoEfectivo, crudDeNivel, limpiarOverride, nivelDeRol, perfilDeRol, vacio, type Override } from "./usuario_permisos.ts";
 
 async function safeAll(ctx: Ctx, t: string): Promise<Row[]> {
   try { return await ctx.db.all(t); } catch { return []; }
@@ -51,7 +51,9 @@ function efectivo(rol: string, matriz: Record<string, Partial<Record<string, "no
   // Sin lista: lo dice el alcance del rol (todo → todas; si no, solo ella).
   const conAlcance = FINOS.filter((m) => m.alcance && alcance[m.id] !== "no");
   const personas = admin ? ["*"] : o?.personas ?? (conAlcance.length && conAlcance.every((m) => alcance[m.id] === "todos") ? ["*"] : []);
-  return { niveles, alcance, flags, personas };
+  const crud: Record<string, string> = {};
+  for (const m of FINOS) crud[m.id] = admin ? "vced" : o?.crud?.[m.id] ?? crudDeNivel(niveles[m.id]);
+  return { niveles, alcance, flags, personas, crud };
 }
 
 extend("uperm_list", "any", async (_p, ctx, ses) => {
@@ -73,14 +75,17 @@ extend("uperm_list", "any", async (_p, ctx, ses) => {
   const perfiles = ROLES_EDITABLES.map((rol) => ({ id: "rol:" + rol, nombre: "Como " + (ROL_LABEL[rol] || rol), sistema: true, ...perfilDeRol(rol, matriz) }))
     .concat(perfilesRows.filter((x) => x.activo !== false).map((x) => {
       const o = limpiarOverride({ uid: "", ...x })!;
-      return { id: s(x.id), nombre: s(x.nombre), sistema: false, niveles: o.niveles, alcance: o.alcance, flags: o.flags };
+      return { id: s(x.id), nombre: s(x.nombre), sistema: false, niveles: o.niveles, alcance: o.alcance, flags: o.flags, ...(o.crud ? { crud: o.crud } : {}) };
     }));
   const equipo = (await personas(ctx)).map((u) => ({ uid: u.uid, nombre: u.nombre, rol: ROL_LABEL[String(u.rol)] || u.rol }));
   return { ok: true, modulos: FINOS, flags: FLAGS, usuarios, perfiles, equipo };
 });
 
 function validar(p: Row): { o: Override; error?: string } {
-  const o = limpiarOverride({ uid: s(p.uid), perfil: s(p.perfil), niveles: p.niveles, alcance: p.alcance, flags: p.flags })!;
+  const alc0 = (p.alcance && typeof p.alcance === "object" ? p.alcance : {}) as Row;
+  const conCrud = p.crud && typeof p.crud === "object" ? { ...alc0, _crud: p.crud } : alc0;
+  for (const k of Object.keys((p.crud as Row) || {})) if (!FINOS.some((x) => x.id === k)) return { o: limpiarOverride({ uid: "" })!, error: "Módulo desconocido: " + k };
+  const o = limpiarOverride({ uid: s(p.uid), perfil: s(p.perfil), niveles: p.niveles, alcance: conCrud, flags: p.flags })!;
   for (const [k, n] of Object.entries((p.niveles as Row) || {})) {
     const m = FINOS.find((x) => x.id === k);
     if (!m) return { o, error: "Módulo desconocido: " + k };
@@ -91,11 +96,12 @@ function validar(p: Row): { o: Override; error?: string } {
 }
 /** alcance + _personas (así no hace falta otra columna). Solo nombres del equipo, o «*». */
 function alcanceGuardado(o: Override, equipo: Row[]): { alcance: Row; error?: string } {
-  if (o.personas === undefined) return { alcance: o.alcance };
+  const base: Row = o.crud ? { ...o.alcance, _crud: o.crud } : { ...o.alcance };
+  if (o.personas === undefined) return { alcance: base };
   const nombres = new Set(equipo.map((u) => s(u.nombre)));
   const malos = o.personas.filter((x) => x !== "*" && !nombres.has(x));
   if (malos.length) return { alcance: o.alcance, error: "No está en el equipo: " + malos.join(", ") };
-  return { alcance: { ...o.alcance, _personas: o.personas } };
+  return { alcance: { ...base, _personas: o.personas } };
 }
 
 extend("uperm_guardar", "any", async (p, ctx, ses) => {
@@ -123,7 +129,7 @@ extend("uperm_perfil_guardar", "any", async (p, ctx, ses) => {
   if (error) return { error };
   const id = s(p.id) && !s(p.id).startsWith("rol:") ? s(p.id) : "pf-" + crypto.randomUUID().slice(0, 8);
   const out = await ctx.db.rpc("app_perfil_permiso_guardar", {
-    p_id: id, p_nombre: nombre, p_niveles: o.niveles, p_alcance: o.alcance, p_flags: o.flags, p_activo: p.activo !== false, p_actor: actorOf(ses),
+    p_id: id, p_nombre: nombre, p_niveles: o.niveles, p_alcance: o.crud ? { ...o.alcance, _crud: o.crud } : o.alcance, p_flags: o.flags, p_activo: p.activo !== false, p_actor: actorOf(ses),
   });
   if (out == null) return { error: "Falta aplicar 0040_permisos_usuario.sql" };
   return { ok: true, id };
