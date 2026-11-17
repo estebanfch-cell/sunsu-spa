@@ -7933,7 +7933,7 @@ function _cabPbuscar(pi){
   var q=_normNomCli((document.getElementById('cab-pq-'+pi)||{}).value||'');
   var cont=document.getElementById('cab-pr-'+pi); if(!cont) return;
   if(!q){ cont.innerHTML=''; return; }
-  var hits=(window._cab.inv||[]).filter(function(p){
+  var hits=window.MCBuscar?window.MCBuscar.filtrar((window._cab.inv||[]).filter(function(p){ return (p.activo||'SI')!=='NO'; }),q,function(p){return [[p.codigo,p.barras],[p.producto]];}).slice(0,8):(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false; // desactivados no se ofrecen para pasos nuevos
     return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
@@ -7988,7 +7988,7 @@ function _cabRepBuscar(i){
   var q=_normNomCli((document.getElementById('cab-repq-'+i)||{}).value||'');
   var res=document.getElementById('cab-repr-'+i); if(!res) return;
   if(!q){ res.innerHTML=''; return; }
-  var hits=(window._cab.inv||[]).filter(function(p){
+  var hits=window.MCBuscar?window.MCBuscar.filtrar((window._cab.inv||[]).filter(function(p){ return (p.activo||'SI')!=='NO'; }),q,function(p){return [[p.codigo,p.barras],[p.producto]];}).slice(0,8):(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false;
     return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
@@ -9230,7 +9230,7 @@ function _cabOCBuscar(){
   var q=_normNomCli((document.getElementById('cab-oc-q')||{}).value||'');
   var res=document.getElementById('cab-oc-res'); if(!res) return;
   if(!q){ res.innerHTML=''; return; }
-  var hits=(window._cab.inv||[]).filter(function(p){
+  var hits=window.MCBuscar?window.MCBuscar.filtrar((window._cab.inv||[]).filter(function(p){ return (p.activo||'SI')!=='NO'; }),q,function(p){return [[p.codigo,p.barras],[p.producto]];}).slice(0,8):(window._cab.inv||[]).filter(function(p){
     if((p.activo||'SI')==='NO') return false;
     return _normNomCli(p.producto+' '+p.codigo+' '+(p.barras||'')).indexOf(q)>=0;
   }).slice(0,8);
@@ -10502,7 +10502,7 @@ function _pintarCatalogoAdmin(){
   var ordenCarp=['🛍️ Productos','💆 Faciales','✨ Servicios add-on','📦 Paquetes','🎁 Gift cards'];
   var fams={};
   items.forEach(function(it,i){
-    if(q && _skuVista(it.sku).toLowerCase().indexOf(q)<0 && (it.nombre||'').toLowerCase().indexOf(q)<0) return;
+    if(q && !(window.MCBuscar?window.MCBuscar.coincide(q,[it.sku,_skuVista(it.sku)],[it.nombre]):(_skuVista(it.sku).toLowerCase().indexOf(q)>=0||(it.nombre||'').toLowerCase().indexOf(q)>=0))) return;
     var f=_carpetaDe(it);
     (fams[f]=fams[f]||[]).push({it:it,i:i});
   });
@@ -15708,7 +15708,7 @@ function _bePintarQuickHits(){
   if(!wrap){ _bePintar(); return; }
   var otros=(window._beData&&window._beData.otros)||[];
   var q=(window._beQuickQ||'').toLowerCase();
-  var hits=otros.filter(function(p){ return !q || (p.producto+' '+p.codigo).toLowerCase().indexOf(q)>=0; }).slice(0,8);
+  var hits=(window.MCBuscar?window.MCBuscar.filtrar(otros,q,function(p){return [[p.codigo],[p.producto]];}):otros.filter(function(p){ return !q || (p.producto+' '+p.codigo).toLowerCase().indexOf(q)>=0; })).slice(0,8);
   wrap.innerHTML=hits.length?hits.map(function(p){
     return '<button type="button" onclick="_beMarcar(\''+_beEsc(p.codigo)+'\')" style="display:block;width:100%;text-align:left;padding:7px 9px;margin-bottom:3px;border:1px solid var(--cream-d);border-radius:8px;background:white;cursor:pointer;font-size:0.66rem;font-weight:700;color:var(--navy)">'
       +_beEsc(p.producto)+' <span style="color:var(--gray);font-weight:600">'+_beEsc(p.codigo)+'</span></button>';
@@ -17260,10 +17260,10 @@ function _cmpAc(input, items, onPick, vacio){
   var rows = [];
   function paint(){
     var q = String(input.value||"").toLowerCase();
-    rows = items().filter(function(it){
+    rows = (window.MCBuscar ? window.MCBuscar.filtrar(items(), q, function(it){ var pa = window.MCBuscar.partes(it.label); return [pa[0].concat(window.MCBuscar.partes(it.extra)[0]), [String(it.label||""), String(it.extra||"")]]; }) : items().filter(function(it){
       var blob = (String(it.label||"")+" "+String(it.extra||"")).toLowerCase();
       return !q || blob.indexOf(q)>=0;
-    }).slice(0, 12);
+    })).slice(0, 12);
     var aviso = (typeof vacio==="function" ? vacio() : vacio) || "Sin coincidencias.";
     box.innerHTML = rows.map(function(it,i){
       return '<button type="button" data-i="'+i+'">'+_cmpEsc(it.label)+(it.extra?" · "+_cmpEsc(it.extra):"")+'</button>';

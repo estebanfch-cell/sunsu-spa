@@ -2456,6 +2456,7 @@ function pintarInventario() {
   const dir = window._invDir || 1;
   const rows = (window._invRows || []).filter((p) => {
     if (!q) return true;
+    if (window.MCBuscar) return window.MCBuscar.coincide(q, [p.sku, p.sku_proveedor, p.codigo_barras], [p.nombre, p.marca, p.categoria, p.uso, p.clase]);
     return normBusca([p.sku, p.nombre, p.marca, p.categoria, p.uso, p.clase, p.sku_proveedor, p.linea].join(" ")).includes(q);
   }).slice().sort((a, b) => {
     const av = sort === "stock" ? stockTotal(a) : String(a[sort] || "").toLowerCase();
@@ -2477,6 +2478,7 @@ function inventarioMiniFilas(selId, qRaw) {
   const q = normBusca(qRaw == null ? (window._invQ || "") : qRaw);
   const rows = (window._invRows || []).filter((p) => {
     if (!q) return true;
+    if (window.MCBuscar) return window.MCBuscar.coincide(q, [p.sku, p.sku_proveedor, p.codigo_barras], [p.nombre, p.marca]);
     return normBusca([p.sku, p.nombre, p.marca].join(" ")).includes(q);
   });
   return rows.map((p) => `<tr class="desk-row${p.id === selId ? " on" : ""}" data-inv="${esc(p.id)}"><td class="tk-sku">${esc(p.sku || "")}</td><td>${esc(p.nombre || "")}</td><td class="num">${esc(stockTotal(p))}</td></tr>`).join("") || `<tr><td colspan="3">Sin productos.</td></tr>`;
@@ -5062,7 +5064,10 @@ function wireBatch(main) {
   const cat = main.querySelector("#filtro-cat");
   if (cat) cat.addEventListener("input", () => {
     const q = normBusca(cat.value);
-    main.querySelectorAll("#lista tr").forEach((row) => { row.hidden = q && !normBusca(row.textContent).includes(q); });
+    main.querySelectorAll("#lista tr").forEach((row) => {
+      const t = row.textContent || "";
+      row.hidden = !!q && !(window.MCBuscar ? window.MCBuscar.coincide(cat.value, (t.match(/\b[A-Z]{1,6}-?\d{1,6}\b|SUNSU-[A-Z0-9-]+/g) || []), [t]) : normBusca(t).includes(q));
+    });
   });
   const cot = main.querySelector("#filtro-cot");
   if (cot) {
@@ -5172,6 +5177,13 @@ function wireTrf(main) {
   const elegido = main.querySelector("#trf-elegido");
   const consig = main.querySelector("#trf-consig");
   const oculto = main.querySelector("#trf-prod");
+  const tq = main.querySelector("#trf-q");
+  if (tq) tq.addEventListener("input", () => {
+    main.querySelectorAll("[data-trf-prod]").forEach((b) => {
+      const t = b.textContent || "";
+      b.hidden = !!tq.value.trim() && !(window.MCBuscar ? window.MCBuscar.coincide(tq.value, (t.match(/\b[A-Z]{1,6}-?\d{1,6}\b|SUNSU-[A-Z0-9-]+/g) || []), [t]) : normBusca(t).includes(normBusca(tq.value)));
+    });
+  });
   const pintar = (btn) => {
     main.querySelectorAll("[data-trf-prod]").forEach((b) => { b.classList.toggle("on", b === btn); });
     oculto.value = btn.getAttribute("data-trf-prod");
@@ -5549,12 +5561,13 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="beta-screens.js?v=20261116iv1"></script>
-<script src="beta-inline.js?v=20261116iv1"></script>
-<script src="mc-productos.js?v=20261116iv1"></script>
-<script src="mc-nav.js?v=20261116iv1"></script>
-<script src="mc-permisos.js?v=20261116iv1"></script>
-<script src="mc-protocolos.js?v=20261116iv1"></script>
+<script src="mc-buscar.js?v=20261117pf1"></script>
+<script src="beta-screens.js?v=20261117pf1"></script>
+<script src="beta-inline.js?v=20261117pf1"></script>
+<script src="mc-productos.js?v=20261117pf1"></script>
+<script src="mc-nav.js?v=20261117pf1"></script>
+<script src="mc-permisos.js?v=20261117pf1"></script>
+<script src="mc-protocolos.js?v=20261117pf1"></script>
 <script>draw();</script>
 </body>
 </html>

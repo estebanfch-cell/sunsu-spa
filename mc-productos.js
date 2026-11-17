@@ -99,7 +99,7 @@
   // Columnas (como MineCore): el usuario elige cuáles ve; se guarda en este equipo.
   var COLS = [
     { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
-    { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "linea", t: "Línea", hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
+    { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
     { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
     { id: "g_CONSIGNACION", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
     { id: "stock", t: "Stock", def: 1, num: 1 },
@@ -130,7 +130,6 @@
       if (f.sub && p.subtipo !== f.sub) return false;
       if (f.marca && p.marca !== f.marca) return false;
       if (f.categoria && p.categoria !== f.categoria) return false;
-      if (f.linea && (f.linea === "__sin" ? !!p.linea : p.linea !== f.linea)) return false;
       if (f.bodega && !(p.porGrupo && Number(p.porGrupo[f.bodega]) > 0)) return false;
       var act = f.activo || (f.estado === "inactivos" ? "inactivos" : "");
       if (act === "inactivos") { if (p.activo !== false) return false; }
@@ -138,13 +137,16 @@
       if (f.estado === "con" && !(Number(p.stock) > 0)) return false;
       if (f.estado === "bajo" && p.estado !== "bajo") return false;
       if (f.estado === "agotado" && p.estado !== "agotado") return false;
-      if (qq) {
-        var hay = norm([p.nombre, p.sku, p.skuVisible, (p.skuAntes || []).join(" "), p.marca, p.categoria, p.linea, p.codigoCabina, p.subtipo].join(" "));
-        // INV-000123 (código viejo de 6 dígitos) busca también INV-123.
-        if (qq.split(/\s+/).some(function (w) { var m = w.match(/^(?:sunsu-)?inv-?(\d{4,})$/); var w2 = m ? "inv-" + String(Number(m[1])).padStart(3, "0") : w; return hay.indexOf(w) < 0 && hay.indexOf(w2) < 0; })) return false;
-      }
       return true;
     });
+    // Buscador común (mc-buscar.js): SKU con o sin guion, nombre, marca, SKU proveedor y código de barras.
+    // INV-000123 (código viejo de 6 dígitos) busca también INV-123.
+    if (qq) {
+      var m6 = qq.match(/^(?:sunsu-)?inv-?(\d{4,})$/), q2b = m6 ? "inv-" + String(Number(m6[1])).padStart(3, "0") : f.q;
+      rows = window.MCBuscar.filtrar(rows, q2b, function (p) {
+        return [[p.sku, p.skuVisible, p.skuAlias, p.codigoCabina, p.skuProveedor].concat(p.skuAntes || [], p.barras || []), [p.nombre, p.marca, p.categoria, p.subtipo]];
+      });
+    }
     if (MC.orden && MC.orden.col) {
       var c = MC.orden.col, dir = MC.orden.dir === "desc" ? -1 : 1;
       rows = rows.slice().sort(function (a, b) {
@@ -204,9 +206,6 @@
     var r = await cargarLista(false);
     if (r && r.error) return '<p class="err">' + e(r.error) + "</p>";
     var f = MC.f, fd = MC.filtrosData || {};
-    var lineas = [];
-    (MC.list || []).forEach(function (p) { if (p.linea && lineas.indexOf(p.linea) < 0) lineas.push(p.linea); });
-    lineas.sort();
     var nuevo = MC.admin ? '<button class="btn small" type="button" id="mcp-nuevo">+ Nuevo producto</button>' : "";
     return '<div class="mcp">' +
       '<div class="mcp-bar"><input class="mcp-q" id="mcp-q" type="search" placeholder="Buscar producto, SKU, marca o código" aria-label="Buscar producto, SKU, marca o código" value="' + e(f.q) + '">' + nuevo + "</div>" +
@@ -214,7 +213,6 @@
       '<select id="mcp-f-bodega" aria-label="Bodega">' + opt("", "Todas las bodegas", f.bodega) + GRUPOS.map(function (g) { return opt(g[0], g[1], f.bodega); }).join("") + "</select>" +
       '<select id="mcp-f-marca" aria-label="Marca">' + opt("", "Todas las marcas", f.marca) + (fd.marcas || []).map(function (m) { return opt(m, m, f.marca); }).join("") + "</select>" +
       '<select id="mcp-f-categoria" aria-label="Categoría">' + opt("", "Todas las categorías", f.categoria) + (fd.categorias || []).map(function (m) { return opt(m, m, f.categoria); }).join("") + "</select>" +
-      '<select id="mcp-f-linea" aria-label="Línea">' + opt("", "Todas las líneas", f.linea) + opt("__sin", "Sin línea", f.linea) + lineas.map(function (m) { return opt(m, m, f.linea); }).join("") + "</select>" +
       '<select id="mcp-f-estado" aria-label="Stock">' + opt("", "Todo el stock", f.estado) + opt("con", "Con stock", f.estado) + opt("bajo", "Stock bajo", f.estado) + opt("agotado", "Agotado", f.estado) + "</select>" +
       '<select id="mcp-f-activo" aria-label="Activo">' + opt("", "Activos", f.activo) + opt("inactivos", "Inactivos / archivados", f.activo) + opt("todos", "Activos e inactivos", f.activo) + "</select>" +
       '<button class="btn ghost small" type="button" id="mcp-cols">Columnas</button>' +
@@ -234,7 +232,7 @@
     pintar();
     var q = main.querySelector("#mcp-q");
     if (q) q.addEventListener("input", function () { MC.f.q = q.value; pintar(); });
-    ["bodega", "marca", "categoria", "estado", "linea", "activo"].forEach(function (k) {
+    ["bodega", "marca", "categoria", "estado", "activo"].forEach(function (k) {
       var s = main.querySelector("#mcp-f-" + k);
       if (s) s.addEventListener("change", function () { MC.f[k] = s.value; pintar(); });
     });
@@ -379,7 +377,7 @@
       '<div style="flex:1;min-width:0"><h2 class="mcp-tt">' + V("nombre") + "</h2>" +
       '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina && p.codigoCabina !== p.sku ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + (p.skuAntes && p.skuAntes.length ? ' <span class="mcp-sub">· antes ' + e(p.skuAntes.join(", ")) + "</span>" : "") + "</span></div>" +
       kv("sku_proveedor") + kv("codigo_barras") +
-      '<div class="mcp-g">' + kv("marca") + kv("categoria") + kv("linea") +
+      '<div class="mcp-g">' + kv("marca") + kv("categoria") +
       '<div class="mcp-kv"><span class="mcp-l">Tipo</span><span class="mcp-v">' + e(tipo) + "</span></div>" +
       kv("unidad") + (p.tipo === "servicio" ? "" : kv("bodega_def") + kv("sububicacion_def") + kvMin("beta_stock_minimo") + kv("beta_punto_reorden")) + kv("producto_base") + kv("observaciones") + kv("activo") + "</div>" +
       kv("beta_descripcion") +
@@ -395,7 +393,7 @@
   }
   function tabs() {
     var serv = MC.cur && MC.cur.producto && MC.cur.producto.tipo === "servicio";
-    var T = [["resumen", "Resumen"], ["precios", "Precios"]].concat(serv ? [] : [["proveedores", "Proveedores"]]).concat([["historial", "Historial"]]).concat(serv ? [] : [["movimientos", "Movimientos"], ["codigos", "Códigos de barras"]]).concat([["archivos", "Fotos y archivos"], ["protocolo", serv ? "Protocolo" : "Se usa en"]]);
+    var T = [["resumen", "Resumen"]].concat(serv ? [] : [["proveedores", "Proveedores"]]).concat([["historial", "Historial"]]).concat(serv ? [] : [["movimientos", "Movimientos"], ["codigos", "Códigos de barras"]]).concat([["archivos", "Fotos y archivos"], ["protocolo", serv ? "Protocolo" : "Se usa en"]]);
     return '<div class="mcp-tabs">' + T.map(function (t) { return '<button type="button" class="mcp-tab' + (MC.tab === t[0] ? " on" : "") + '" data-mcp-tab="' + t[0] + '">' + t[1] + "</button>"; }).join("") + "</div>";
   }
   function resumen() {
@@ -572,7 +570,7 @@
     var h = "<!doctype html><html><head><meta charset='utf-8'><title>" + e(p.skuVisible || p.sku) + " · " + e(p.nombre) + "</title><style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;margin:28px}h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:12px;font-size:12px}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.s{color:#666;font-size:12px}img{max-width:180px;max-height:180px;float:right;border-radius:8px}</style></head><body>" +
       (p.foto_data ? "<img src='" + e(p.foto_data) + "'>" : "") + "<div class='s'>SUNSU SPA · ficha de producto</div><h1>" + e(p.nombre) + "</h1><div class='s'>SKU " + e(p.skuVisible || p.sku) + (p.skuAlias ? " (alias " + e(p.skuAlias) + ")" : "") + "</div>" +
       (cod && /^\d{13}$/.test(cod.codigo) ? "<div style='margin-top:8px'>" + barras(cod.codigo) + "<div class='s'>" + e(cod.codigo) + "</div></div>" : "") +
-      "<table><tbody>" + [["Tipo", (p.tipo === "servicio" ? "Servicio" : "Inventariable") + (p.subtipo ? " · " + p.subtipo : "")], ["Marca", p.marca], ["Categoría", p.categoria], ["Línea", p.linea], ["Unidad", p.unidad], ["SKU proveedor", p.sku_proveedor], ["PVP con IVA", $m(pr.pvp)], ["Sin IVA", $m(pr.subtotal)], ["Stock", p.tipo === "servicio" ? "—" : q2(p.stock)], ["Descripción", r.descripcion], ["Observaciones", p.observaciones]]
+      "<table><tbody>" + [["Tipo", (p.tipo === "servicio" ? "Servicio" : "Inventariable") + (p.subtipo ? " · " + p.subtipo : "")], ["Marca", p.marca], ["Categoría", p.categoria], ["Unidad", p.unidad], ["SKU proveedor", p.sku_proveedor], ["PVP con IVA", $m(pr.pvp)], ["Sin IVA", $m(pr.subtotal)], ["Stock", p.tipo === "servicio" ? "—" : q2(p.stock)], ["Descripción", r.descripcion], ["Observaciones", p.observaciones]]
         .filter(function (x) { return x[1] != null && x[1] !== ""; }).map(function (x) { return "<tr><th>" + e(x[0]) + "</th><td>" + e(x[1]) + "</td></tr>"; }).join("") + "</tbody></table>" +
       ((r.escalas || []).length ? "<table><thead><tr><th>Escala</th><th>Desde</th><th>PVP</th></tr></thead><tbody>" + r.escalas.map(function (x) { return "<tr><td>" + e(x.nombre) + "</td><td>" + e(x.desde) + "</td><td>" + (x.pvp != null ? $m(x.pvp) : "—") + "</td></tr>"; }).join("") + "</tbody></table>" : "") +
       (r.protocolo ? "<h3>Protocolo</h3><table><tbody>" + (r.protocolo.pasos || []).map(function (x) { return "<tr><td>" + e(x.paso) + "</td><td>" + e(x.descripcion) + "</td><td>" + e(x.producto) + "</td><td>" + q2(x.cantidad) + " " + e(x.unidad) + "</td></tr>"; }).join("") + "</tbody></table>" : "") +
@@ -842,7 +840,7 @@
       '<label>Marca<input name="marca"></label>' +
       '<label>Categoría<input name="categoria"></label>' +
       '<label>Uso<select name="uso"><option value="venta">Venta (Consignación)</option><option value="cabina">Cabina</option><option value="ambos">Ambos</option></select></label>' +
-      '<label>PVP con IVA<input name="pvp" inputmode="decimal"></label>' +
+      '<label>PVP con IVA (opcional)<input name="pvp" inputmode="decimal" placeholder="Lo puedes poner después en la ficha"></label>' +
       '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre después del mayor de la familia, revisado contra productos, catálogo e inventario de cabina. Los SKU que ya existen no cambian. Se crea en la beta; el catálogo del sistema actual no cambia.</p><p class="err" id="mcp-f-err"></p>' +
       '<button class="btn" type="submit">Crear producto</button></form>' +
       '<div class="mcp-card"><div class="card-title">Familias de SKU detectadas</div><table class="mcp-mini"><thead><tr><th>Familia</th><th>SKU</th><th>Último</th><th>Siguiente</th></tr></thead><tbody>' + filas + "</tbody></table></div></div>";
