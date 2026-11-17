@@ -15,7 +15,7 @@ const ROL_LABEL: Record<string, string> = {
   gerente: "Gerencia", admin: "Admin", super_admin: "Super admin",
 };
 
-async function personas(ctx: Ctx): Promise<Row[]> {
+export async function personas(ctx: Ctx): Promise<Row[]> {
   const app = await safeAll(ctx, "app_usuarios");
   const rows = app.length ? app : await safeAll(ctx, "usuarios");
   const marks = await safeAll(ctx, "cosmetologas");

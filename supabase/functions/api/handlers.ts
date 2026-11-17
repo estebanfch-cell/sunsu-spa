@@ -623,7 +623,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     servicios_adicionales: s(p.extras),
     seguimiento: "",
     agendado: false,
-    orig: {},
+    orig: s(p.clienteCodigo) || s(p.clienteKey) ? { cliente_codigo: s(p.clienteCodigo), cliente_key: s(p.clienteKey) } : {},
   };
   const prod = productosPatch((p.productos || {}) as R, false, base);
   Object.assign(base, prod);

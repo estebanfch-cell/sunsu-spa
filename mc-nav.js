@@ -147,6 +147,41 @@
     "reagendada": "📆", "ficha": "📇", "factura": "🧾", "cosmetóloga": "💆" };
   function emojiCampo(lbl) { var k = String(lbl || "").trim().toLowerCase(), m = EMO_CAMPO[k]; return m ? m + " " + lbl : lbl; }
   window.MCEmojiCampo = emojiCampo;
+  // Color fijo por cosmetóloga (Usuarios). Se lee una vez y queda en el navegador.
+  var COL = null; try { COL = JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem("sunsu.colores")) || "null"); } catch (x) { COL = null; }
+  function nn(x) { return String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim(); }
+  function colorDe(nombre) {
+    var m = (COL && COL.colores) || {}, k = nn(nombre); if (!k) return "";
+    if (m[k]) return m[k].color;
+    var ks = Object.keys(m), pri = k.split(" ")[0];
+    var hit = ks.filter(function (x) { return x.indexOf(k) === 0 || k.indexOf(x) === 0; });
+    if (hit.length === 1) return m[hit[0]].color;
+    hit = ks.filter(function (x) { return x.split(" ")[0] === pri; });
+    if (hit.length === 1) return m[hit[0]].color;
+    // Nombre que no está en Usuarios (exempleada, texto libre): color fijo por el nombre.
+    var pal = (COL && COL.paleta) || ["#E7DBFF", "#FFF1B8", "#D4F5E2", "#FFDCE5", "#D6ECFF", "#FFE3C9"], h = 0;
+    for (var i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+    return pal[h % pal.length];
+  }
+  function oscuro(hex) { var n = parseInt(String(hex).slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255; return "rgb(" + Math.round(r * .55) + "," + Math.round(g * .55) + "," + Math.round(b * .55) + ")"; }
+  function escH(x) { return String(x == null ? "" : x).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  window.MCColor = {
+    cargar: function (forzar) {
+      if (!forzar && COL && Date.now() - (COL.t || 0) < 10 * 60 * 1000) return Promise.resolve(COL);
+      if (typeof window.api !== "function") return Promise.resolve(COL);
+      return Promise.resolve(window.api("colores_list", {})).then(function (r) { if (r && r.ok) { COL = { t: Date.now(), colores: r.colores, paleta: r.paleta }; try { localStorage.setItem("sunsu.colores", JSON.stringify(COL)); } catch (x) {} } return COL; }).catch(function () { return COL; });
+    },
+    color: colorDe,
+    datos: function () { return COL; },
+    pill: function (nombre) {
+      if (!nombre) return "";
+      var c = colorDe(nombre);
+      if (!c) return escH(nombre);
+      return '<span class="mc-cos" style="background:' + c + ";color:" + oscuro(c) + ";border-color:" + oscuro(c) + '33">' + escH(nombre) + "</span>";
+    },
+  };
+  if (typeof document !== "undefined") (function () { var st = document.createElement("style"); st.textContent = ".mc-cos{display:inline-block;padding:1px 9px;border-radius:999px;border:1px solid transparent;font-size:.78rem;font-weight:700;line-height:1.5;white-space:nowrap}"; document.head.appendChild(st); })();
+  if (typeof setTimeout === "function" && typeof document !== "undefined") setTimeout(function () { window.MCColor.cargar(); }, 1500);
   var TABS = { ventas: 1, inventario: 1, compras: 1 };
   function grupos() {
     var out = [];

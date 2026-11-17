@@ -365,12 +365,13 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const reg = (ced ? await registroDe(ctx, [ced], []) : []).filter((x) => !x.borrado_at && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
   // Ficha de la clienta (beta_clientes): manda sobre la fila vieja del ticket y el registro.
   let fc: Row = {};
-  try { const k = claveCliente(r); if (k) fc = ((await consultar(ctx.db, "beta_clientes", { cols: ["key", "datos"], filtros: [{ col: "key", op: "eq", val: k }], limite: 1 })).rows[0]?.datos || {}) as Row; } catch { fc = {}; }
+  try { const k = claveCliente(r); if (k) { const fr = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "datos", "codigo"], filtros: [{ col: "key", op: "eq", val: k }], limite: 1 })).rows[0]; fc = { ...((fr?.datos || {}) as Row), _codigo: s(fr?.codigo) }; } } catch { fc = {}; }
   const vf = (x: unknown) => (s(x) ? s(x) : undefined);
   const info: Row = {
     factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? vf(fc.nombres) ?? r.nombre), apellido: s(d.apellido ?? vf(fc.apellido) ?? r.apellido), cedula: s(d.cedula ?? ced),
     email: s(d.email ?? vf(fc.email) ?? reg?.email), telefono: telefonoEc(d.telefono ?? vf(fc.telefono) ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
     notas: s(d.notas ?? r.notas_generales), recomendaciones: s(d.recomendaciones ?? r.recomendaciones), retorno: s(d.retorno ?? s(r.fecha_retorno).slice(0, 10)),
+    clienteCodigo: s(fc._codigo) || s((r.orig as Row | undefined)?.cliente_codigo),
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
   if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
