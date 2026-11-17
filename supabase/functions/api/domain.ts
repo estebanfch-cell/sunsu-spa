@@ -197,12 +197,17 @@ export function siguienteCodigoGc(rows: Row[], yy: string, prueba = false): stri
 }
 
 /** PQ-0001 si la hoja no traía código. Sigue el mayor PQ- que ya exista. */
+/** Código visible del paquete: PQ-#### de la beta, si no el PACK-### importado, si no el de orig. */
+export function codigoPaquete(r: Row): string {
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  return String(r.beta_codigo || "") || String(orig.codigo || "") || String(r.codigo || "");
+}
 export function siguienteCodigoPaq(rows: Row[], prueba = false): string {
   const re = prueba ? /^TEST-PQ-(\d+)$/ : /^PQ-(\d+)$/;
   let max = 0;
   for (const r of rows) {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-    for (const campo of [orig.codigo, r.notas]) {
+    for (const campo of [orig.codigo, r.notas, r.beta_codigo]) {
       const m = re.exec(String(campo || ""));
       if (m) max = Math.max(max, Number(m[1]));
     }

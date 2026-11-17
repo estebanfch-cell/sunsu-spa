@@ -8,7 +8,7 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, type Row, type TicketIn,
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, type Row, type TicketIn,
 } from "./domain.ts";
 import { backfillSO, backfillSQ, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
@@ -19,6 +19,7 @@ import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import type { Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
+import { cedVariantes, consultar, type Filtro } from "./query.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
 
@@ -1011,7 +1012,9 @@ function fichaDe(r: R, tel: boolean): R {
   return o;
 }
 async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise<R> {
-  const rows = (await ctx.db.all("clientas_registro")).filter((r) => !r.borrado_at);
+  // Con «cedulas»/«apellidos» (pantalla de tarjetas) se leen solo esas fichas, no todo el registro.
+  const dirigida = Array.isArray(_p.cedulas) || Array.isArray(_p.apellidos);
+  const rows = (dirigida ? await registroDe(ctx, _p.cedulas as unknown[] || [], _p.apellidos as unknown[] || []) : await ctx.db.all("clientas_registro")).filter((r) => !r.borrado_at);
   const tel = conTelefono(ses);
   if (action === "getAutorizaFotos") {
     const noAutoriza: R = {}, noAutorizaNom: R = {};
@@ -1593,18 +1596,29 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
       factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
       usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
       total, completo: b(r.completo),
-      codigo: s(r.codigo), prueba: s(r.origin) === "test",
+      codigo: codigoPaquete(r), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
 });
+export async function registroDe(ctx: Ctx, cedulas: unknown[], apellidos: unknown[]): Promise<R[]> {
+  const cv = cedVariantes(cedulas).slice(0, 600), ap = [...new Set(apellidos.map((x) => s(x).trim()).filter(Boolean))].slice(0, 200);
+  const or: Filtro[] = [];
+  if (cv.length) or.push({ col: "cedula", op: "in", val: cv });
+  if (ap.length) or.push({ col: "apellido", op: "in", val: ap });
+  if (!or.length) return [];
+  return (await consultar(ctx.db, "clientas_registro", { filtros: [{ op: "or", de: or }], limite: 2000 })).rows;
+}
 reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
   const tel = conTelefono(ses);
-  const regs = await ctx.db.all("clientas_registro");
+  // Con «cedulas» (tarjetas / detalle de ticket) se leen solo los paquetes de esas clientas.
+  const dir = Array.isArray(p.cedulas);
+  const regs = dir ? await registroDe(ctx, p.cedulas as unknown[], []) : await ctx.db.all("clientas_registro");
   const porCed = new Map(regs.map((r) => [normCedula(r.cedula), s(r.telefono)]));
   const wa = await kvGet(ctx.db, "SUNSU_SEG_PAQ");
   const items = [];
-  for (const r of await ctx.db.all("paquetes")) {
+  const paqs = dir ? (cedVariantes(p.cedulas as unknown[]).length ? (await consultar(ctx.db, "paquetes", { filtros: [{ col: "cedula", op: "in", val: cedVariantes(p.cedulas as unknown[]).slice(0, 600) }], limite: 2000 })).rows : []) : await ctx.db.all("paquetes");
+  for (const r of paqs) {
     if (!s(r.sku)) continue;
     if (r.borrado_at) continue;
     const usos = usosDe(r);
@@ -1616,7 +1630,7 @@ reg("getSeguimientoPaquetes", "any", async (p, ctx, ses) => {
       vendidoPor: s(r.vendido_por), notas: s(r.notas), usos: usos.slice(0, total), total,
       telefono: tel ? (porCed.get(normCedula(r.cedula)) || "") : "",
       claveWa: clave, wa: wa[clave] || null,
-      codigo: s(r.codigo), prueba: s(r.origin) === "test",
+      codigo: codigoPaquete(r), prueba: s(r.origin) === "test",
     });
   }
   return { items };
@@ -2181,10 +2195,21 @@ reg("subirComprobante", "any", async (p, ctx, ses) => {
 });
 reg("fotoB64", "any", async (p, ctx) => {
   const id = s(p.id).replace(/[^-\w]/g, "");
-  const rows = await ctx.db.all("app_archivos");
-  const f = rows.find((r) => r.id === id);
-  if (!f) return { error: "La beta no lee Drive. Esta foto no está en el almacén de la beta.", parcial: true };
-  return { ok: true, mime: s(f.mime) || "image/jpeg", b64: s(f.data_b64) };
+  if (!id) return { error: "Falta la foto" };
+  // Solo esa fila (antes bajaba todo el almacén con los base64).
+  const f = (await consultar(ctx.db, "app_archivos", { filtros: [{ col: "id", op: "eq", val: id }], limite: 1 }).catch(() => ({ rows: [] as R[] }))).rows[0];
+  if (f) return { ok: true, mime: s(f.mime) || "image/jpeg", b64: s(f.data_b64) };
+  // Fotos del sistema en Drive (compartidas por enlace): se leen por la miniatura pública, solo id de Drive.
+  if (!/^[-\w]{25,}$/.test(id)) return { error: "Foto no encontrada", parcial: true };
+  try {
+    const res = await (ctx.fetchImpl || fetch)("https://drive.google.com/thumbnail?id=" + id + "&sz=w" + Math.min(2000, Math.max(120, n(p.sz) || 1600)), { redirect: "follow" });
+    const mime = s(res.headers.get("content-type")).split(";")[0];
+    if (!res.ok || !/^image\//.test(mime)) return { error: "No se pudo leer la foto de Drive", parcial: true };
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length > 6_000_000) return { error: "Foto muy grande", parcial: true };
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return { ok: true, mime, b64: btoa(bin), fuente: "drive" };
+  } catch { return { error: "No se pudo leer la foto de Drive", parcial: true }; }
 });
 
 reg("getEntradas", "any", async (_p, ctx) => {

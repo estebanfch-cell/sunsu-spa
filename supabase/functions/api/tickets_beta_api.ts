@@ -2,7 +2,8 @@
 // Lee el ticket del sistema (tabla tickets, que llena la hoja) y guarda lo editado SOLO en beta_tickets /
 // beta_ticket_lineas (0048): cantidad, precio unitario, descuento y total por línea; descuento del ticket
 // (% o $), promoción y exclusión de comisión. Admin edita directo; los demás piden el cambio (solicitudes).
-import { extend } from "./handlers.ts";
+import { extend, registroDe } from "./handlers.ts";
+import { consultar } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
@@ -10,7 +11,7 @@ import { b, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { conTelefono } from "./lib.ts";
-import { claveCliente, paquetesDe, recetaDe, saldoGift } from "./ventas.ts";
+import { claveCliente, paquetesDe, parseGcCanje, recetaDe, saldoGift } from "./ventas.ts";
 import { normCedula, normNombre } from "./domain.ts";
 import { acceso, esPropio, matrizDe } from "./permisos.ts";
 import { facturaTxt } from "./ticket_total.ts";
@@ -70,7 +71,7 @@ export async function ticketPorClave(ctx: Ctx, clave: string): Promise<Row | nul
   return rows.find((r) => leerSerie(r, "so_num") === k || s(r.beta_num) === k || (fila && s(r.sheet_row) === fila) || s(r.id) === k) || null;
 }
 export function docsDe(r: Row): Row[] {
-  const urls = (v: unknown) => s(v).split(/\s*\|\s*|\s*,\s*(?=https?:)|\s+(?=https?:)/).map((x) => x.trim()).filter((x) => /^https?:/.test(x));
+  const urls = (v: unknown) => s(v).split(/\s*\|\s*|\s*,\s*(?=https?:|archivo:)|\s+(?=https?:|archivo:)/).map((x) => x.trim()).filter((x) => /^(https?:|archivo:[-\w]+$)/.test(x));
   const out: Row[] = [];
   for (const u of urls(r.comprobante)) out.push({ tipo: "comprobante", nombre: "Comprobante de pago", url: u });
   urls(r.fotos_antes).forEach((u, i) => out.push({ tipo: "foto", nombre: "Foto antes " + (i + 1), url: u }));
@@ -82,20 +83,24 @@ export function docsDe(r: Row): Row[] {
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   if (cab && cab.lineas_beta === true) {
     return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
-      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true }));
+      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}) }));
   }
   const porCode = new Map(cat.map((c) => [s(c.sku), c]));
   const pvpDe = (c: string) => n(porCode.get(skuCode(c))?.pvp);
-  const L = lineasTicket(r, pvpDe);
+  const L0 = lineasTicket(r, pvpDe);
   const cobrado = n(r.estimado);
+  // Facial canjeado (sesión de paquete o gift card de facial): va en $0 y el cobro se reparte en el resto.
+  const canjeF = canjeFacial(r);
+  const L = canjeF ? L0.filter((x) => x.tipo !== "facial") : L0;
   const nombreDe = (c: string) => s(porCode.get(skuCode(c))?.nombre) || c;
   const vistos = new Set<string>();
   const out: LineaTk[] = [];
-  for (const l of L) {
+  for (const l of L0) {
     const k = l.tipo + "|" + l.codigo;
     if (vistos.has(k)) continue;
     vistos.add(k);
-    const qty = L.filter((x) => x.codigo === l.codigo && x.tipo === l.tipo).reduce((a, x) => a + x.qty, 0);
+    const qty = L0.filter((x) => x.codigo === l.codigo && x.tipo === l.tipo).reduce((a, x) => a + x.qty, 0);
+    if (canjeF && l.tipo === "facial") { out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, canje: true }); continue; }
     const pr = precioLineaTicket(L, l.codigo, cobrado);
     const unit = pr.unit != null ? pr.unit : l.lista;
     out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: pr.estimado || pr.unit == null });
@@ -264,6 +269,13 @@ export function metodosPago(comp: unknown): Row[] {
     return { metodo: met, ref: s(ref).trim() };
   });
 }
+/** El facial del ticket se canjeó (sesión de paquete o gift card de facial, sin monto aplicado). */
+export function canjeFacial(r: Row): boolean {
+  if (/^\s*SI\b/i.test(s(r.paquete))) return true;
+  const g = parseGcCanje(r.gift_card);
+  if (g && g.aplica == null) return true;
+  return /\[F\]/.test(s(r.gift_card)) || metodosPago(r.comp).some((m) => m.metodo === "canje");
+}
 export function faseA(r: Row): boolean {
   const fac = s(r.facial_hecho).trim(), notas = s(r.notas_generales).trim() || s(r.recomendaciones).trim();
   const fotos = [r.fotos, r.fotos_antes, r.fotos_despues].some((v) => /https?:/.test(s(v)));
@@ -300,7 +312,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const admin = esAdmin(ses.rol), clave = claveDe(r, leerSerie(r, "so_num"));
   const d = (cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row;
   const ced = s(r.id_3).split(".")[0];
-  const reg = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at && ced && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
+  const reg = (ced ? await registroDe(ctx, [ced], []) : []).filter((x) => !x.borrado_at && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
   const info: Row = {
     factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? r.nombre), apellido: s(d.apellido ?? r.apellido), cedula: s(d.cedula ?? ced),
     email: s(d.email ?? reg?.email), telefono: s(d.telefono ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
@@ -312,7 +324,9 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const metodos = metodosPago(r.comp);
   const pagos = { metodos, pagado: pagadoSis, saldo: round2(Math.max(0, total - pagadoSis)), cobrado: b(r.cob) };
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
-  const gcs = await todas(ctx, "gift_cards"), dig = await todas(ctx, "gift_cards_digitales");
+  const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
+  const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];
+  const dig = codsGc.length ? (await consultar(ctx.db, "gift_cards_digitales", { filtros: [{ col: "codigo", op: "in", val: codsGc }] })).rows : [];
   const gc = (cod: string, uso: string) => {
     const g = gcs.find((x) => !x.borrado_at && s(x.codigo_gc) === cod), dg = dig.find((x) => s(x.codigo) === cod);
     return { codigo: cod, uso, valor: s(g?.valor), saldo: g && admin ? saldoGift(g) : undefined, usado: g?.usado === true,
@@ -336,7 +350,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     { k: "estado", t: anulado ? "Anulado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
     { k: "cobro", t: b(r.cob) ? "Pagado" : "Por cobrar", c: b(r.cob) ? "pagado" : "porcobrar" },
     { k: "fac", t: fac ? "Facturado" : "Sin factura", c: fac ? "facturado" : "sinfactura" },
-    { k: "faseA", t: faseA(r) ? "Fase A completa" : "Fase A pendiente", c: faseA(r) ? "ok" : "pend" },
+    ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
     { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },
     ...(paquete.uso ? [{ k: "paq", t: "Paquete " + paquete.uso, c: "info" }] : []),

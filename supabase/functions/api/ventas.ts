@@ -6,6 +6,7 @@ import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
   packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
+  codigoPaquete,
 } from "./domain.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
@@ -669,7 +670,7 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
     const usados = corte.filter((u) => u.usado).length;
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
     out.push({
-      codigo: s(orig.codigo), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
+      codigo: codigoPaquete(r), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
       usados, pendientes: Math.max(0, total - usados), total,
       usos: corte.map((u, i) => ({ slot: i + 1, usado: u.usado, fecha: u.fecha })),
     });
