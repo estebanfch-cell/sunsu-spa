@@ -40,6 +40,7 @@ export const FINOS: { id: string; label: string; grupo: string; max: Nivel; alca
   { id: "cabina", label: "Cabina y protocolos", grupo: "Inventario", max: 2 },
   { id: "compras", label: "Compras", grupo: "Compras", max: 3, alcance: true },
   { id: "proveedores", label: "Proveedores", grupo: "Compras", max: 2 },
+  { id: "recepciones", label: "📥 Recepciones", grupo: "Compras", max: 3 },
   { id: "caja", label: "Caja chica", grupo: "Finanzas", max: 2 },
   { id: "comisiones", label: "Comisiones", grupo: "Personal", max: 2, alcance: true },
   { id: "rol_pagos", label: "Rol de pagos", grupo: "Personal", max: 3, alcance: true },
@@ -69,7 +70,7 @@ export const NIVEL3 = new Set([
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
-const LECTURAS = new Set(["gcb_lista", "gcb_get", "gcb_siguiente", "gcb_doc_url", "pg_ticket", "pg_lista", "cj_resumen", "cj_comprobante", "barras_resumen", "mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo", "tk_estados", "tk_costos", "tk_historial", "tk_reagendadas", "cl_list", "cl_get", "cl_dup_lista", "cmpb_meta", "cmpb_lista", "cmpb_get", "cmpb_cot_get", "ag_meta", "ag_citas", "ag_cita", "ag_disponibilidad"]);
+const LECTURAS = new Set(["gcb_lista", "gcb_get", "gcb_siguiente", "gcb_doc_url", "pg_ticket", "pg_lista", "cj_resumen", "cj_comprobante", "barras_resumen", "mcprod_familias", "mcprod_archivo", "proto_historial", "clientes_resumen", "cliente_detalle", "reorden_sugerir", "reporte_consumos", "periodo_consignacion", "compras_saldo", "compras_reporte", "conteo_panel", "conteo_mios", "cf_meta", "cf_list", "cf_get", "notif_mias", "trfb_list", "trfb_get", "aj_meta", "aj_list", "aj_get", "tk_get", "tk_catalogo", "tk_estados", "tk_costos", "tk_historial", "tk_reagendadas", "cl_list", "cl_get", "cl_dup_lista", "cmpb_meta", "cmpb_lista", "cmpb_get", "cmpb_cot_get", "rcp_lista", "rcp_get", "ag_meta", "ag_citas", "ag_cita", "ag_disponibilidad"]);
 
 const MOD_EXTRA: Record<string, string> = {
   mcprod_list: "productos", mcprod_get: "productos", mcprod_familias: "productos",
@@ -86,6 +87,7 @@ const MOD_EXTRA: Record<string, string> = {
   tk_get: "tickets", tk_catalogo: "tickets", tk_guardar: "tickets", tk_estados: "tickets", tk_historial: "tickets", tk_reagendadas: "tickets", tk_envio: "tickets", tk_costos: "tickets", tk_costos_guardar: "tickets", tk_flag_resolver: "tickets", tk_flag_crear: "tickets", tk_subir_doc: "tickets",
   ag_meta: "agenda", ag_citas: "agenda", ag_cita: "agenda", ag_disponibilidad: "agenda", ag_crear: "agenda", ag_reagendar: "agenda", ag_cancelar: "agenda", ag_eliminar: "agenda", ag_etiqueta: "agenda", ag_vincular: "agenda", ag_ingresado: "agenda", ag_calendario_guardar: "agenda",
   cl_list: "clientes", cl_get: "clientes", cl_guardar: "clientes", cl_borrar: "clientes", cl_restaurar: "clientes",
+  rcp_lista: "recepciones", rcp_get: "recepciones", rcp_recibir: "recepciones", rcp_no_recibido_undo: "recepciones",
   cmpb_meta: "compras", cmpb_lista: "compras", cmpb_get: "compras", cmpb_crear: "compras", cmpb_cancelar: "compras", cmpb_pago: "compras", cmpb_cot_guardar: "compras", cmpb_cot_get: "compras", cmpb_cot_convertir: "compras", cmpb_cot_anular: "compras",
   cl_dup_lista: "clientes", cl_dup_unir: "clientes", cl_dup_nodup: "clientes", cl_dup_separar: "clientes", cl_dup_deshacer: "clientes",
 };
