@@ -286,8 +286,76 @@ export function cicloFin(inicio: string): string {
   return ymdUtc(new Date(Date.UTC(y, m, 25)));
 }
 
+/**
+ * Cédula / RUC / pasaporte normalizado para comparar (Emilia 17/11, unir clientas): sin «.0» de la hoja, sin
+ * puntos ni guiones; RUC de persona (cédula + 001) = su cédula; «…001.0» pegado («…0010») también. Pasaporte
+ * (letras y números) queda en MAYÚSCULAS solo con letras y dígitos. Sin ceros a la izquierda (es la clave «c:»
+ * de siempre); para mostrar usa cedulaVer. Solo lectura: no reescribe la hoja.
+ */
 export function normCedula(v: unknown): string {
+  const t = s(v).trim().replace(/\.0+$/, "");
+  if (/[a-z]/i.test(t)) { const a = t.toUpperCase().replace(/[^A-Z0-9]/g, ""); return /\d/.test(a) && a.length >= 5 ? a : ""; }
+  let d = t.split(".")[0].replace(/[^0-9]/g, "").replace(/^0+/, "");
+  if ((d.length === 13 || d.length === 14) && d.endsWith("0010")) d = d.slice(0, -4);
+  else if ((d.length === 12 || d.length === 13) && d.endsWith("001")) d = d.slice(0, -3);
+  return d;
+}
+/** La clave vieja (antes de unir RUC/cédula): solo para «Deshacer unión» de un grupo automático. */
+export function normCedulaVieja(v: unknown): string {
   return s(v).split(".")[0].replace(/[^0-9]/g, "").replace(/^0+/, "");
+}
+/** Para mostrar: la cédula de 10 dígitos (con el 0 de provincia), o el pasaporte limpio. Nunca «.0» ni puntos. */
+export function cedulaVer(v: unknown): string {
+  const c = normCedula(v);
+  return /^\d{9}$/.test(c) ? "0" + c : c;
+}
+/**
+ * Identificación para mostrar en cualquier módulo (cédula, RUC, pasaporte): sin «.0», sin puntos ni espacios,
+ * con el 0 de provincia que la hoja perdió al guardarla como número. El RUC queda RUC (proveedores); para
+ * comparar clientas usa normCedula. Texto sin dígitos (un nombre mal puesto) se deja igual.
+ */
+export function idVer(v: unknown): string {
+  let t = String(v ?? "").trim();
+  if (!t || /^(false|null|undefined|-|—)$/i.test(t)) return t === "-" || t === "—" ? t : "";
+  if (/^\d+(\.\d+)?e\+?\d+$/i.test(t)) t = Number(t).toFixed(0);
+  t = t.replace(/\.0+$/, "");
+  if (/[a-z]/i.test(t)) { const a = t.toUpperCase().replace(/[^A-Z0-9]/g, ""); return /\d/.test(a) && a.length >= 5 && !/\s\S+\s/.test(t) ? a : t; }
+  const d = t.replace(/\D/g, "");
+  if (!d) return t;
+  return d.length === 9 || d.length === 12 ? "0" + d : d;
+}
+/** Claves de respuesta que son identificaciones o teléfonos (sin tildes, minúsculas, _). */
+const RX_ID = /(^|_)(cedula|cedulas|ruc|ci|pasaporte|identificacion|id_3|ced)(_|$)/;
+const RX_TEL = /(^|_)(telefono|telefonos|tel|celular|movil|whatsapp|phone|fono)(_|$)/;
+const claveNorm = (k: string) => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_");
+/**
+ * Lectura (Emilia 17/11): toda respuesta de la api a la beta sale con identificaciones y celulares limpios
+ * (idVer / telefonoEc +593). No cambia lo guardado ni la hoja.
+ */
+export function formatearRespuesta<T>(v: T, prof = 0): T {
+  if (prof > 12 || v == null) return v;
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = formatearRespuesta(v[i], prof + 1); return v; }
+  if (typeof v !== "object") return v;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) {
+    const x = o[k];
+    if (x != null && typeof x === "object") { o[k] = formatearRespuesta(x, prof + 1); continue; }
+    if (typeof x !== "string" && typeof x !== "number") continue;
+    const c = claveNorm(k);
+    if (RX_ID.test(c)) o[k] = idVer(x);
+    else if (RX_TEL.test(c)) o[k] = telefonoEc(x);
+  }
+  return v;
+}
+/** Dígito verificador de cédula ecuatoriana (módulo 10). */
+export function cedulaValida(v: unknown): boolean {
+  const c = cedulaVer(v);
+  if (!/^\d{10}$/.test(c)) return false;
+  const prov = Number(c.slice(0, 2));
+  if (!((prov >= 1 && prov <= 24) || prov === 30) || Number(c[2]) >= 6) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) { let x = Number(c[i]) * (i % 2 === 0 ? 2 : 1); if (x > 9) x -= 9; sum += x; }
+  return (10 - (sum % 10)) % 10 === Number(c[9]);
 }
 export function normNombre(v: unknown): string {
   return s(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();

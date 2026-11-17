@@ -5,11 +5,12 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, conTelefono, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
-import { n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
+import { cedulaVer, n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { consultar, type Filtro } from "./query.ts";
 import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, registrosDeClave, saldoGift, ticketsDeClave } from "./ventas.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { canonDeClave, clavesDe } from "./clientes_alias.ts";
 import { docsDe } from "./tickets_beta_api.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
 import { esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vistaDoc } from "./documentos_beta.ts";
@@ -17,7 +18,7 @@ import { esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vis
 const FALTA = "Falta aplicar 0049_clientes_beta.sql";
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_clientes"); return true; } catch { return false; } }
-const lite = (ses: Ses) => ({ rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid });
+export const lite = (ses: Ses) => ({ rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid });
 
 /** Campos de la ficha que se pueden corregir en la beta (clave → etiqueta). */
 export const CAMPOS_CLIENTE: [string, string][] = [
@@ -64,8 +65,31 @@ function sinPrivados(d: Row, ses: Ses): Row {
   if (conTelefono(ses)) return d;
   const o: Row = {}; for (const [k, v] of Object.entries(d)) if (!PRIVADOS.has(k)) o[k] = v; return o;
 }
-async function overlays(ctx: Ctx): Promise<Map<string, Row>> {
-  return new Map((await todas(ctx, "beta_clientes")).map((r) => [s(r.key), r]));
+export async function overlays(ctx: Ctx): Promise<Map<string, Row>> {
+  // Varias filas de la misma clienta (c:…001, c:… o unidas a mano) → una sola: la de la clave principal manda,
+  // los datos que le falten salen de las otras, y el código es el más antiguo.
+  const grupos = new Map<string, Row[]>();
+  for (const r of await todas(ctx, "beta_clientes")) { const k = canonDeClave(s(r.key)); const L = grupos.get(k) || []; L.push(r); grupos.set(k, L); }
+  const m = new Map<string, Row>();
+  for (const [k, L] of grupos) m.set(k, L.length === 1 ? L[0] : fusionarFilas(k, L));
+  return m;
+}
+const nDatos = (r: Row) => Object.values((r.datos || {}) as Row).filter((v) => s(v).trim()).length;
+/** Fusiona filas de beta_clientes de una misma clienta (sin escribir). Exportada para las pruebas. */
+export function fusionarFilas(k: string, L: Row[]): Row {
+  const orden = [...L].sort((a, b) => (s(a.key) === k ? -1 : s(b.key) === k ? 1 : nDatos(b) - nDatos(a)));
+  const prin = orden[0];
+  const datos: Row = {};
+  for (const r of [...orden].reverse()) for (const [c, v] of Object.entries((r.datos || {}) as Row)) if (s(v).trim()) datos[c] = v;
+  const cods = L.map((r) => s(r.codigo)).filter(Boolean).sort();
+  const hist = L.flatMap((r) => Array.isArray(r.historial) ? r.historial as Row[] : []).sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
+  return { ...prin, datos, codigo: cods[0] || s(prin.codigo), historial: hist, borrado: s(prin.key) === k ? prin.borrado === true : L.every((r) => r.borrado === true), _filas: L.map((r) => s(r.key)), _key: s(prin.key) };
+}
+/** Claves con las que puede estar guardada esta clienta (documentos, filas viejas c:…001, uniones a mano). */
+function clavesGuardadas(key: string): string[] {
+  const out = new Set(clavesDe(key));
+  for (const k of [...out]) if (/^c:\d{9,10}$/.test(k)) out.add(k + "001");
+  return [...out];
 }
 function mismaPersona(ced: string, nom: string, c2: unknown, n2: string): boolean {
   const pc = normCedula(c2);
@@ -83,15 +107,19 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
   ]);
   const paqs = paqs0.filter((r) => !r.borrado_at);
   const gcs = gcs0.filter((r) => !r.borrado_at && s(r.codigo_gc));
-  const porCedP = new Map<string, number>(), porNomP = new Map<string, number>(), porCedG = new Map<string, number>(), porNomG = new Map<string, number>();
+  const porKeyP = new Map<string, number>(), porKeyG = new Map<string, number>(), porCedP = new Map<string, number>(), porNomP = new Map<string, number>(), porCedG = new Map<string, number>(), porNomG = new Map<string, number>();
   for (const r of paqs) {
     if (r.completo === true) continue;
     const c = normCedula(r.cedula), nm = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
+    const kk = c ? canonDeClave("c:" + c) : nm ? canonDeClave("n:" + nm) : "";
+    if (kk) porKeyP.set(kk, (porKeyP.get(kk) || 0) + 1);
     if (c) porCedP.set(c, (porCedP.get(c) || 0) + 1); else if (nm) porNomP.set(nm, (porNomP.get(nm) || 0) + 1);
   }
   for (const r of gcs) {
     const sal = saldoGift(r); if (!(sal > 0)) continue;
     const c = normCedula(r.cedula_comprador), nm = normNombre((s(r.nombre_comprador) + " " + s(r.apellido_comprador)).trim());
+    const kk = c ? canonDeClave("c:" + c) : nm ? canonDeClave("n:" + nm) : "";
+    if (kk) porKeyG.set(kk, round2((porKeyG.get(kk) || 0) + sal));
     if (c) porCedG.set(c, round2((porCedG.get(c) || 0) + sal)); else if (nm) porNomG.set(nm, round2((porNomG.get(nm) || 0) + sal));
   }
   const clientes: Row[] = [];
@@ -109,8 +137,9 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     if (d.telefono != null && "telefono" in c) item.telefono = s(d.telefono);
     if ("telefono" in item) item.telefono = telefonoEc(item.telefono);
     const ced = normCedula(c.cedula), nom = normNombre(s(c.nombre));
-    item.paquetesActivos = (ced && porCedP.get(ced)) || porNomP.get(nom) || 0;
-    if (admin) item.giftSaldo = (ced && porCedG.get(ced)) || porNomG.get(nom) || 0;
+    item.paquetesActivos = porKeyP.get(s(c.key)) || (ced && porCedP.get(ced)) || porNomP.get(nom) || 0;
+    if (admin) item.giftSaldo = porKeyG.get(s(c.key)) || (ced && porCedG.get(ced)) || porNomG.get(nom) || 0;
+    item.cedula = cedulaVer(item.cedula);
     item.editado = !!o;
     clientes.push(item);
   }
@@ -118,8 +147,9 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
   return { ok: true, admin, clientes, cosmetologas: uniq("cosmetologa"), sectores: uniq("sector"), puedeEditar: admin, puedePedir: !admin };
 });
 
-async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
+async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   const admin = esAdmin(ses.rol);
+  const key = canonDeClave(key0), claves = clavesGuardadas(key);
   const ov = (await overlays(ctx)).get(key);
   if (ov?.borrado === true && !admin) return { error: "Esa clienta está eliminada" };
   const vt = admin || await verTodos(ctx, ses);
@@ -129,7 +159,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
     ticketsDeClave(ctx.db, key),
     todas(ctx, "beta_tickets"),
     todas(ctx, "gift_cards"),
-    consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "eq", val: key }] }).then((x) => x.rows).catch(() => [] as Row[]),
+    consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "in", val: claves }] }).then((x) => x.rows).catch(() => [] as Row[]),
   ]);
   if (det.error) return det;
   const cli = det.cliente as Row;
@@ -144,6 +174,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const corr = (ov?.datos || {}) as Row;
   for (const [k, v] of Object.entries(corr)) datos[k] = s(v);
   if (datos.telefono) datos.telefono = telefonoEc(datos.telefono);
+  if (datos.cedula) datos.cedula = cedulaVer(datos.cedula) || s(datos.cedula);
   const ced = normCedula(datos.cedula || cli.cedula), nom = normNombre((s(datos.nombres) + " " + s(datos.apellido)).trim() || s(cli.nombre));
   // Historial: cada ticket con la clave que abre el detalle de ticket de la beta.
   const filas = filas0.filter((r) => !r.borrado_at && claveCliente(r) === key);
@@ -173,8 +204,10 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const quien = { key, ced, nom, codigo };
   for (const d of pdfs0) if (esDeClienta(d, quien)) documentos.push(vistaDoc(d));
   for (const c of reg.consentimientos) documentos.push({ tipo: "consentimiento", nombre: "Consentimiento informado" + (c.autorizaFotos ? " · fotos: " + c.autorizaFotos : ""), fecha: c.fecha, url: c.firma, texto: c.texto });
-  const giftsCli = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) &&
-    (mismaPersona(ced, nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!nom && normNombre(r.usado_por) === nom)));
+  // Gift cards: de ella o de las clientas unidas a ella (🔗 Duplicados).
+  const otras = clavesDe(key).filter((k) => k !== key).map((k) => ({ ced: k.startsWith("c:") ? k.slice(2) : "", nom: k.startsWith("n:") ? k.slice(2) : "" }));
+  const giftsCli = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) && [{ ced, nom }, ...otras].some((q) =>
+    mismaPersona(q.ced, q.nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!q.nom && normNombre(r.usado_por) === q.nom)));
   // PDFs de gift cards (TK20) de las gift cards de esta clienta → Documentos.
   if (giftsCli.length) {
     const ids = new Set(giftsCli.map((r) => String(r.id)));
@@ -192,7 +225,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const paquetes = ((det.paquetes || []) as Row[]);
   resumen.sesionesPendientes = paquetes.reduce((a, p) => a + n(p.pendientes), 0);
   return {
-    ok: true, admin, key, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => conTelefono(ses) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
+    ok: true, admin, key, unidas: ov?._filas || undefined, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => conTelefono(ses) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
     corregidos: Object.keys(corr), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))),
     bitacora: (ov?.historial || []) as Row[], borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
     puedeEditar: admin, puedePedir: !admin,
@@ -254,7 +287,7 @@ extend("doc_sin_asignar", "any", async (p, ctx, ses) => {
   const cl = ((res.clientes || []) as Row[]).filter((c) => ov.get(s(c.key))?.borrado !== true).map((c) => {
     const o = ov.get(s(c.key)); const dd = (o?.datos || {}) as Row;
     const nom = ((dd.nombres != null ? s(dd.nombres) : s(c.nombres)) + " " + (dd.apellido != null ? s(dd.apellido) : s(c.apellido))).trim() || s(c.nombre);
-    return { key: s(c.key), nombre: nom, codigo: s(o?.codigo) || s(c.codigo), cedula: s(dd.cedula ?? c.cedula), ultima: s(c.ultima) };
+    return { key: s(c.key), nombre: nom, codigo: s(o?.codigo) || s(c.codigo), cedula: cedulaVer(dd.cedula ?? c.cedula), ultima: s(c.ultima) };
   });
   const lim = Math.min(300, Math.max(1, n(p.limit) || 120));
   const items = docs.slice(0, lim).map((d) => ({
@@ -291,8 +324,9 @@ export async function propagarDesdeTicket(ctx: Ctx, ses: Ses, key: string, datos
   if (!key || !Object.keys(cambios).length) return { ok: true, sinCambios: true };
   return await guardarCliente(ctx, ses, key, cambios, "desde ticket " + so);
 }
-async function guardarCliente(ctx: Ctx, ses: Ses, key: string, cambios: Row, via: string): Promise<Row> {
+async function guardarCliente(ctx: Ctx, ses: Ses, key0: string, cambios: Row, via: string): Promise<Row> {
   if (!(await hay(ctx))) return { error: FALTA };
+  const key = canonDeClave(key0);
   const permitidos = new Set(CAMPOS_CLIENTE.map(([k]) => k));
   const limpio: Row = {};
   for (const [k, v] of Object.entries(cambios || {})) if (permitidos.has(k)) limpio[k] = s(v).trim().slice(0, 500);
@@ -310,17 +344,18 @@ async function guardarCliente(ctx: Ctx, ses: Ses, key: string, cambios: Row, via
   const datos = { ...((ov?.datos || {}) as Row), ...limpio };
   const historial = [...((ov?.historial || []) as Row[]), { fecha: ctx.now.toISOString(), por: ses.name, accion: via, cambios: cambio }];
   const fila = { datos, historial, actualizado_por: ses.name, updated_at: ctx.now.toISOString() };
-  if (ov) await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key }, fila);
+  if (ov && s(ov._key ?? ov.key) === key) await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key }, fila);
   else await ctx.db.write(actorOf(ses), "beta_clientes", "insert", {}, { key, ...fila });
   return { ok: true, key, cambios: Object.keys(cambio) };
 }
-async function borrarCliente(ctx: Ctx, ses: Ses, key: string, motivo: string, via: string): Promise<Row> {
+async function borrarCliente(ctx: Ctx, ses: Ses, key0: string, motivo: string, via: string): Promise<Row> {
+  const key = canonDeClave(key0);
   if (!(await hay(ctx))) return { error: FALTA };
   if (!s(motivo).trim()) return { error: "El motivo es obligatorio" };
   const ov = (await overlays(ctx)).get(key);
   const historial = [...((ov?.historial || []) as Row[]), { fecha: ctx.now.toISOString(), por: ses.name, accion: via, motivo }];
   const fila = { borrado: true, borrado_motivo: s(motivo).trim(), borrado_por: ses.name, borrado_at: ctx.now.toISOString(), historial, actualizado_por: ses.name, updated_at: ctx.now.toISOString() };
-  if (ov) await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key }, fila);
+  if (ov && s(ov._key ?? ov.key) === key) await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key }, fila);
   else await ctx.db.write(actorOf(ses), "beta_clientes", "insert", {}, { key, datos: {}, ...fila });
   return { ok: true, key, borrado: true };
 }
@@ -335,10 +370,10 @@ extend("cl_borrar", "any", async (p, ctx, ses) => {
 });
 extend("cl_restaurar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
-  const key = s(p.key), ov = (await overlays(ctx)).get(key);
+  const key = canonDeClave(s(p.key)), ov = (await overlays(ctx)).get(key);
   if (!ov?.borrado) return { error: "La clienta no está eliminada" };
   const historial = [...((ov.historial || []) as Row[]), { fecha: ctx.now.toISOString(), por: ses.name, accion: "restaurada" }];
-  await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key }, { borrado: false, borrado_motivo: null, borrado_por: null, borrado_at: null, historial, actualizado_por: ses.name, updated_at: ctx.now.toISOString() });
+  for (const k of ((ov._filas as string[] | undefined) || [s(ov.key)])) await ctx.db.write(actorOf(ses), "beta_clientes", "update", { key: k }, { borrado: false, borrado_motivo: null, borrado_por: null, borrado_at: null, historial, actualizado_por: ses.name, updated_at: ctx.now.toISOString() });
   return { ok: true, key };
 });
 
@@ -364,10 +399,17 @@ extend("cl_buscar", "any", async (p, ctx, ses) => {
   let rows: Row[] = [];
   try { rows = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "codigo", "nombre", "cedula", "telefono", "datos", "borrado"], filtros: [F], limite: 12, orden: [{ col: "nombre" }] })).rows; } catch { rows = []; }
   const tel = conTelefono(ses);
-  const items = rows.filter((r) => r.borrado !== true).slice(0, 8).map((r) => {
-    const d = (r.datos || {}) as Row;
+  // Una sola fila por clienta (🔗 Duplicados): se juntan sus otras filas (c:…001, unidas a mano) aunque la búsqueda no las trajo.
+  const canon = [...new Set(rows.map((r) => canonDeClave(s(r.key))))];
+  const extra = new Set(canon.flatMap((k) => clavesGuardadas(k)));
+  for (const r of rows) extra.delete(s(r.key));
+  if (extra.size) { try { rows = rows.concat((await consultar(ctx.db, "beta_clientes", { cols: ["key", "codigo", "nombre", "cedula", "telefono", "datos", "borrado"], filtros: [{ col: "key", op: "in", val: [...extra] }] })).rows); } catch { /* sin extra */ } }
+  const grupos = new Map<string, Row[]>();
+  for (const r of rows) { const k = canonDeClave(s(r.key)); const L = grupos.get(k) || []; L.push(r); grupos.set(k, L); }
+  const items = canon.map((k) => fusionarFilas(k, grupos.get(k) || [])).filter((r) => r.borrado !== true).slice(0, 8).map((r) => {
+    const d = (r.datos || {}) as Row, k = canonDeClave(s(r.key));
     const nombre = ((s(d.nombres) || "") + " " + (s(d.apellido) || "")).trim() || s(r.nombre);
-    return { key: s(r.key), codigo: s(r.codigo), nombre, cedula: s(d.cedula) || s(r.cedula), ...(tel ? { telefono: telefonoEc(s(d.telefono) || s(r.telefono)) } : {}) };
+    return { key: k, codigo: s(r.codigo), nombre, cedula: cedulaVer(s(d.cedula) || s(r.cedula) || (k.startsWith("c:") ? k.slice(2) : "")), ...(tel ? { telefono: telefonoEc(s(d.telefono) || s(r.telefono)) } : {}) };
   });
   return { ok: true, items };
 });

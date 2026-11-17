@@ -81,7 +81,7 @@
       '<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "Sin venir +6 meses", F.visita) + o("nunca", "Sin tickets", F.visita) + "</select>" +
       '<label class="mccf-sub"><input type="checkbox" id="mccl-paq"' + (F.paq ? " checked" : "") + "> Con paquete activo</label>" +
       (K.admin ? '<label class="mccf-sub"><input type="checkbox" id="mccl-gift"' + (F.gift ? " checked" : "") + "> Con gift card con saldo</label>" : "") +
-      '<button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' + (K.admin ? ' <button class="btn ghost small" type="button" data-go="#/m/clientes/docs">📑 Documentos sin asignar</button>' : "") + "</div>" +
+      '<button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' + (K.admin ? ' <button class="btn ghost small" type="button" data-go="#/m/clientes/docs">📑 Documentos sin asignar</button> <button class="btn ghost small" type="button" data-go="#/m/clientes/duplicados">🔗 Duplicados</button>' : "") + "</div>" +
       '<p class="mccf-sub" id="mccl-n">' + c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "") + "</p>" +
       '<div class="sheet-scroll"><table class="mccf-t mccl-t"><thead id="mccl-head">' + c.head + '</thead><tbody id="mccl-body">' + c.body + "</tbody></table></div>" +
       (c.n > K.max ? '<p><button class="btn ghost small" type="button" id="mccl-mas">Mostrar más</button></p>' : "") + "</div>";
@@ -408,8 +408,8 @@
   }
 
   window.MCClientes = {
-    render: function (route) { return route.sub === "c" && route.id ? renderFicha(String(route.id)) : route.sub === "docs" ? renderSinAsignar() : renderLista(); },
-    wire: function (main, route) { if (route.sub === "c") wireFicha(main); else if (route.sub === "docs") wireSinAsignar(main); else wireLista(main); },
+    render: function (route) { return route.sub === "duplicados" && window.MCClientesDup ? window.MCClientesDup.render() : route.sub === "c" && route.id ? renderFicha(String(route.id)) : route.sub === "docs" ? renderSinAsignar() : renderLista(); },
+    wire: function (main, route) { if (route.sub === "duplicados" && window.MCClientesDup) window.MCClientesDup.wire(main); else if (route.sub === "c") wireFicha(main); else if (route.sub === "docs") wireSinAsignar(main); else wireLista(main); },
     _k: K,
   };
 })();

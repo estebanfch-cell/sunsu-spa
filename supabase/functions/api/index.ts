@@ -1,4 +1,5 @@
 import { handle } from "./handlers.ts";
+import { formatearRespuesta } from "./domain.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
@@ -29,6 +30,7 @@ import "./credenciales_api.ts";
 import "./barras_api.ts";
 import "./pagos_caja_api.ts";
 import "./gift_beta_api.ts";
+import "./clientes_dup_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
@@ -85,7 +87,9 @@ Deno.serve(async (req) => {
     },
   };
   try {
-    const data = await handle(action, body, ctx);
+    const data0 = await handle(action, body, ctx);
+    // Beta (_fmt): cédulas/RUC/pasaportes y celulares limpios en toda respuesta (solo lectura; la hoja no cambia).
+    const data = body && (body as Record<string, unknown>)._fmt ? formatearRespuesta(data0) : data0;
     const cb = url.searchParams.get("callback");
     if (cb && /^[$A-Z_a-z][0-9A-Z_$a-z]*$/.test(cb)) {
       return new Response(`${cb}(${JSON.stringify(data)})`, { headers: { "content-type": "application/javascript", ...CORS } });
