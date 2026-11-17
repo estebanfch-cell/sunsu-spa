@@ -652,6 +652,17 @@
   .tk-table th.num, .tk-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 800; }
   .tk-row { cursor: pointer; }
   .tk-row.on { background: var(--blue-l); }
+  .tk-row.tk-flagged td { background: #fdecea; color: #8a2216; }
+  .tk-row.tk-flagged:hover td { background: #f9d8d3; }
+  .tk-pills { white-space: nowrap; }
+  .tk-pill { display: inline-block; border: 1.5px solid; border-radius: 999px; padding: 1px 8px; font-size: 0.64rem; font-weight: 700; margin-right: 3px; background: transparent; line-height: 1.5; }
+  .tk-leds { white-space: nowrap; }
+  .tk-led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .tk-led.on { background: #2E8B57; }
+  .tk-led.off { background: transparent; border: 1.5px solid #C3C8D4; width: 6px; height: 6px; }
+  .tk-led.q { background: #ECEEF4; }
+  .tk-reag { color: #C98A00; font-weight: 900; font-size: 0.8rem; margin-left: 2px; }
+  .tk-sum { font-size: 0.78rem; color: var(--navy); margin: 2px 2px 8px; }
   .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
   /* Ticket como orden de venta: Código | Descripción | Cant. | Precio unit. (sin IVA) | Total */
   .tk-orden { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
@@ -5586,19 +5597,19 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117cl1"></script>
-<script src="beta-screens.js?v=20261117cl1"></script>
-<script src="beta-inline.js?v=20261117cl1"></script>
-<script src="mc-productos.js?v=20261117cl1"></script>
-<script src="mc-nav.js?v=20261117cl1"></script>
-<script src="mc-permisos.js?v=20261117cl1"></script>
-<script src="mc-protocolos.js?v=20261117cl1"></script>
-<script src="mc-conteo.js?v=20261117cl1"></script>
-<script src="mc-transferencias.js?v=20261117cl1"></script>
-<script src="mc-ajustes.js?v=20261117cl1"></script>
-<script src="vendor-qrcode.js?v=20261117cl1"></script>
-<script src="mc-tickets.js?v=20261117cl1"></script>
-<script src="mc-clientes.js?v=20261117cl1"></script>
+<script src="mc-buscar.js?v=20261117tk2"></script>
+<script src="beta-screens.js?v=20261117tk2"></script>
+<script src="beta-inline.js?v=20261117tk2"></script>
+<script src="mc-productos.js?v=20261117tk2"></script>
+<script src="mc-nav.js?v=20261117tk2"></script>
+<script src="mc-permisos.js?v=20261117tk2"></script>
+<script src="mc-protocolos.js?v=20261117tk2"></script>
+<script src="mc-conteo.js?v=20261117tk2"></script>
+<script src="mc-transferencias.js?v=20261117tk2"></script>
+<script src="mc-ajustes.js?v=20261117tk2"></script>
+<script src="vendor-qrcode.js?v=20261117tk2"></script>
+<script src="mc-tickets.js?v=20261117tk2"></script>
+<script src="mc-clientes.js?v=20261117tk2"></script>
 <script>draw();</script>
 </body>
 </html>

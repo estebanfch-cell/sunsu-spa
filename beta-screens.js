@@ -4965,6 +4965,7 @@ function _histSaldo(t){
   return _histEstadoDoc(t)==='cerrado'?0:(parseFloat(t&&t.estimado)||0);
 }
 var _HIST_COLS=[
+  {k:'led',t:'●',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.a+L.p+L.r+L.g):-1;}},
   {k:'num',t:'Nº ticket',v:function(t){var m=/(\d+)$/.exec(_histNum(t));return m?+m[1]:-1;}},
   {k:'cli',t:'Clienta',v:function(t){return ((t.nombre||'')+' '+(t.apellido||'')).trim().toLowerCase();}},
   {k:'ced',t:'Cédula',v:function(t){var d=String(t.cedula||'').replace(/\D/g,'');return d?+d:-1;}},
@@ -5003,7 +5004,8 @@ function _histCelda(t, c, showPrices){
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
-  if(c.k==='est') return '<td>'+_histEsc(_histEstadoDoc(t))+'</td>';
+  if(c.k==='led') return _tkLedsHTML(t);
+  if(c.k==='est') return '<td class="tk-pills">'+_tkEstados(t).map(function(x){return _tkPill(x.c,x.t);}).join('')+'</td>';
   if(c.k==='fac') return '<td>'+_histEsc(_histFactura(t))+'</td>';
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
@@ -5020,7 +5022,8 @@ function _histMasterHTML(tickets, showPrices){
     : _HIST_COLS;
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
-    return '<tr class="tk-row'+on+'" onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
+    var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag;
+    return '<tr class="tk-row'+on+(fl?' tk-flagged':'')+'"'+(fl?' title="Por corregir: '+_histEsc(fl)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
@@ -5069,47 +5072,82 @@ function _histCerrarTicket(){
   pane.innerHTML='<p class="note">Elige un ticket para ver el detalle.</p>';
   document.querySelectorAll('#tk-body .tk-row.on').forEach(function(tr){ tr.classList.remove('on'); });
 }
-function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); }
+function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); }
+// ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
+var _TK_PILL={abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',sinfactura:'#D2603A',anulado:'#C0392B'};
+function _tkPill(c,txt){var col=_TK_PILL[c]||'#8A93A6';return '<span class="tk-pill" style="color:'+col+';border-color:'+col+'">'+txt+'</span>';}
+function _tkEstados(t){
+  var orig=(t&&t.orig)||{};
+  if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Anulado'}];
+  var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
+  out.push(t.cob?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
+  var Lx=(window._tkLeds||{})[String(t.tkRow)];
+  if(!t.fac&&!(Lx&&Lx.factura)) out.push({c:'sinfactura',t:'Sin factura'});
+  return out;
+}
+var _TK_LEDS=[['a','Fase A completada','Fase A pendiente'],['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
+function _tkLedsHTML(t){
+  var L=(window._tkLeds||{})[String(t.tkRow)];
+  if(!L) return '<td class="tk-leds" title="Cargando estados…">'+_TK_LEDS.map(function(){return '<span class="tk-led q"></span>';}).join('')+'</td>';
+  return '<td class="tk-leds">'+_TK_LEDS.map(function(x){var on=!!L[x[0]];return '<span class="tk-led '+(on?'on':'off')+'" title="'+(on?x[1]:x[2])+(x[0]==='g'&&L.ret?' · regreso '+_histFechaFmt(L.ret):'')+'"></span>';}).join('')+(L.pr?'<span class="tk-reag" title="Por reagendar: regreso '+_histFechaFmt(L.ret)+'">↻</span>':'')+'</td>';
+}
+function _tkCargarLeds(forzar){
+  if(window._tkLedsCargando) return;
+  if(!forzar&&window._tkLeds&&Date.now()-(window._tkLedsT||0)<60000) return;
+  if(typeof api!=='function') return;
+  window._tkLedsCargando=true;
+  Promise.resolve(api('tk_estados',{})).then(function(r){
+    window._tkLedsCargando=false;
+    if(!r||!r.ok) return;
+    var antes=!!window._tkLeds; window._tkLeds=r.items||{}; window._tkLedsT=Date.now(); window._tkAcuity=r.acuity;
+    if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff);
+  }).catch(function(){window._tkLedsCargando=false;});
+}
+var _TK_SEG=[['','Todos'],['faseA_no','Fase A pendiente'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','Por corregir']];
+var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Anulado']];
+function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
+function _tkSetF(k,v){ _tkF()[k]=v; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
+function _tkFiltroTxt(){ var f=_tkF(), o=[]; if(f.est) o.push(_TK_EST.filter(function(x){return x[0]===f.est;})[0][1]); if(f.seg) o.push(_TK_SEG.filter(function(x){return x[0]===f.seg;})[0][1]); return o.join(' · '); }
+function _tkFiltrosUI(){
+  var f=_tkF(), sel=function(id,k,L){return '<select id="'+id+'" onchange="_tkSetF(\''+k+'\',this.value)" style="width:100%;padding:7px 9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;background:white;color:var(--navy)">'+L.map(function(x){return '<option value="'+x[0]+'"'+(f[k]===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select>';};
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><div><div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Estado</div>'+sel('tk-fest','est',_TK_EST)+'</div>'
+    +'<div><div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Seguimiento</div>'+sel('tk-fseg','seg',_TK_SEG)+'</div></div>';
+}
+function _tkFiltrar(tickets){
+  var f=_tkF(); if(!f.est&&!f.seg) return tickets;
+  var LL=window._tkLeds||{};
+  return tickets.filter(function(t){
+    if(f.est&&!_tkEstados(t).some(function(x){return x.c===f.est;})) return false;
+    if(!f.seg) return true;
+    var L=LL[String(t.tkRow)]; if(!L) return false;
+    if(f.seg==='faseA_no') return !L.a; if(f.seg==='pago_no') return !L.p; if(f.seg==='rep_no') return !L.r; if(f.seg==='reag_no') return !L.g;
+    if(f.seg==='porreag') return !!L.pr; if(f.seg==='corregir') return !!L.flag;
+    return true;
+  });
+}
+function _tkResumenLinea(tickets, conPrecio){
+  var sub=tickets.reduce(function(s,t){return s+(_histMontos(t).sub||0);},0), fl=_tkF();
+  var n=tickets.length, pend=window._tkLeds?'':' <span style="color:var(--gray)">· cargando estados…</span>';
+  return '<div class="tk-sum"><b>'+n+'</b> ticket'+(n!==1?'s':'')+(conPrecio?' · subtotal <b>$'+sub.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b>':'')+((fl.est||fl.seg)?' · <span style="color:var(--pink-d,#b85c7a)">filtro: '+_tkFiltroTxt()+'</span> <a href="#" onclick="window._tkFiltro={est:\'\',seg:\'\'};_histActualizarRes(!!window._histEsStaff);return false">quitar</a>':'')+pend+'</div>';
+}
 // HTML de SOLO los resultados (resumen + lista) — se actualiza sin tocar el buscador,
 // así el teclado del iPhone no se reinicia mientras escribes
 function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
-  var totalIngresos=tickets.reduce(function(s,t){return s+(parseFloat(t.estimado)||0);},0);
-  var totFac=0, totPaq=0, totProd=0;
-  tickets.forEach(function(t){
-    if(t.facial) totFac++;
-    if(t.pack3||t.pack6) totPaq++;
-    if(t.productos&&t.productos.length) totProd+=t.productos.length;
-  });
-  var avgTicket=tickets.length?totalIngresos/tickets.length:0;
-  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
-  html+='<div style="background:white;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px;margin-bottom:12px">'
-    +'<div style="font-size:0.65rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:9px;letter-spacing:0.5px">'
-    +'Resumen'+(busq?' · 🔍 "'+busq+'" (todo el historial)':((cosmFiltro?' · '+cosmFiltro:'')+' · '+(fechaDesde?fechaDesde+(fechaDesde!==fechaHasta?' → '+fechaHasta:''):'Todos')))+(tickets.length?' · '+tickets.length+' ticket'+(tickets.length!==1?'s':''):'')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin-bottom:8px">'
-    +'<div style="background:var(--blue-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--navy)">'+totFac+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Faciales</div></div>'
-    +'<div style="background:var(--lavender-l,#F3F0FA);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--lavender,#9B8EC4)">'+totPaq+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Paquetes</div></div>'
-    +'<div style="background:var(--peach-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:var(--peach)">'+totProd+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Productos</div></div>'
-    +'<div style="background:var(--gold-l);border-radius:9px;padding:9px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--gold)">$'+(totalIngresos/1.15).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div><div style="font-size:0.55rem;color:var(--gray)">c/IVA $'+totalIngresos.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div><div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase">Subtotal</div></div>'
-    +'</div>'
-    +(tickets.length?'<div style="font-size:0.68rem;color:var(--gray);text-align:right">Promedio por ticket: <strong>$'+(avgTicket/1.15).toFixed(2)+'</strong> <span style="font-size:0.58rem">(c/IVA $'+avgTicket.toFixed(2)+')</span></div>':'')
-    +'</div>';
+  tickets=_tkFiltrar(tickets);
+  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
+  html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
   } else {
-    html+='<button onclick="descargarPDFHistorial()" style="width:100%;padding:10px;background:var(--pink);color:white;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:10px">⬇️ Descargar PDF</button>';
     html+=_histMasterHTML(tickets, true);
   }
   if(window.SunsuInline&&SunsuInline.edita()) html+=SunsuInline.mas("tickets");
   return html;
 }
 function _histResStaffHTML(tickets, busq){
-  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:10px">🔍 Mostrando TODO el historial de "'+busq+'"</div>':'');
-  html+='<div style="background:var(--blue-l);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;gap:10px;align-items:center">'
-    +'<div style="font-size:1.8rem;font-weight:900;color:var(--navy)">'+tickets.length+'</div>'
-    +'<div><div style="font-size:0.78rem;font-weight:700;color:var(--navy)">'+(busq?'Tickets de la clienta':'Tickets enviados')+'</div>'
-    +'<div style="font-size:0.68rem;color:var(--gray)">'+(busq?('🔍 '+busq):CU.name)+'</div></div>'
-    +'</div>';
+  tickets=_tkFiltrar(tickets);
+  var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'"</div>':'');
+  html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
   } else {
@@ -5166,6 +5204,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   if(!fechaHasta) fechaHasta=fechaDesde||'';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
   var tickets=_histFiltrarStaff(busq, fechaDesde, fechaHasta);
+  window._histEsStaff=true;
   window._histFiltroActual={desde:fechaDesde,hasta:fechaHasta};
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
@@ -5179,7 +5218,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   // Same date filters as admin but calls staff version
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +_histBuscarUI(true, busq)
-    +'<details class="hist-filtrar"><summary>⚙️ Filtrar · '+_histFiltroResumen(fechaDesde,fechaHasta,'')+'</summary><div class="hist-filtrar-body">'
+    +'<details class="hist-filtrar"><summary>Filtros ▾ · '+_histFiltroResumen(fechaDesde,fechaHasta,'')+' <span id="tk-fsum" style="color:var(--pink-d,#b85c7a)">'+_tkFiltroTxt()+'</span></summary><div class="hist-filtrar-body">'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'+_histFiltroBtns('sf-','aplicarFiltroStaff',fechaDesde,fechaHasta)+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<input type="date" id="hist-desde-s" value="'+fechaDesde+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
@@ -5187,6 +5226,7 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
     +'<input type="date" id="hist-hasta-s" value="'+fechaHasta+'" style="flex:1;padding:7px 8px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.75rem;outline:none">'
     +'<button onclick="aplicarFiltroFechaStaff()" style="padding:7px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">OK</button>'
     +'</div>'
+    +_tkFiltrosUI()
     +'</div></details>'
     +'</div>';
 
@@ -5232,6 +5272,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   cosmFiltro = cosmFiltro || window._histCosmFiltro || '';
   var busq=(window._histBusqueda||'').trim().toLowerCase();
   var tickets=_histFiltrarAdmin(busq, fechaDesde, fechaHasta, cosmFiltro);
+  window._histEsStaff=false;
   var hoy=new Date();
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
@@ -5247,7 +5288,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   // Filters card
   html+='<div class="card" style="padding:12px;margin-bottom:10px">'
     +_histBuscarUI(false, busq)
-    +'<details class="hist-filtrar"><summary>⚙️ Filtrar · '+_histFiltroResumen(fechaDesde,fechaHasta,cosmFiltro)+'</summary><div class="hist-filtrar-body">'
+    +'<details class="hist-filtrar"><summary>Filtros ▾ · '+_histFiltroResumen(fechaDesde,fechaHasta,cosmFiltro)+' <span id="tk-fsum" style="color:var(--pink-d,#b85c7a)">'+_tkFiltroTxt()+'</span></summary><div class="hist-filtrar-body">'
     +'<div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">📅 Fecha</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'+_histFiltroBtns('af-','aplicarFiltroRapido',fechaDesde,fechaHasta)+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">'
@@ -5264,6 +5305,7 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
       return '<option value="'+_histEsc(name)+'"'+(active?' selected':'')+'>'+_histEsc(name)+'</option>';
     }).join('')
     +'</select>'
+    +_tkFiltrosUI()
     +'</div></details>'
     +'</div>';
 

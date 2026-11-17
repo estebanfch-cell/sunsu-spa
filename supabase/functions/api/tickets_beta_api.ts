@@ -8,6 +8,11 @@ import { actorOf } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import { b, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
+import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
+import { conTelefono } from "./lib.ts";
+import { claveCliente, paquetesDe, recetaDe, saldoGift } from "./ventas.ts";
+import { normCedula, normNombre } from "./domain.ts";
+import { acceso, esPropio, matrizDe } from "./permisos.ts";
 import { facturaTxt } from "./ticket_total.ts";
 import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
@@ -139,6 +144,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
     documentos: docsDe(r), promos, puedeEditar: admin, puedePedir: !admin,
     productosSistema: productQtys(r).length,
+    ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
   };
 }
 
@@ -216,7 +222,7 @@ extend("tk_guardar", "any", async (p, ctx, ses) => {
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
   if (!esAdmin(ses.rol)) return { error: "Un cambio de ticket lo pide con «Solicitar cambio» (lo aprueba un admin)" };
-  return await guardar(ctx, ses, r, p);
+  return await guardarTodo(ctx, ses, r, p);
 });
 
 // Solicitud de cambio del detalle de ticket (quien no es admin): la aprueba un admin en Solicitudes.
@@ -231,6 +237,241 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
   aplicar: async (ctx, ses, fila, propuestos) => {
     const r = await ticketPorClave(ctx, fila);
     if (!r) return { error: "Ticket no encontrado" };
-    return await guardar(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" });
+    return await guardarTodo(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" });
   },
 };
+
+// ───────────── Detalle v2 (Emilia 17/11, como la orden de venta de MineCore) ─────────────
+// Cabecera editable (factura completa, clienta, contacto, notas…), pagos, gift cards, paquete, reportes enviados,
+// marcas «por corregir» (cruce con Migo), detalle de costos y estados para la lista (LED).
+export const DATOS_TK: [string, string][] = [
+  ["factura", "Factura"], ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "CI"], ["email", "Email"], ["telefono", "Teléfono"],
+  ["cosmetologa", "Atendió"], ["notas", "Notas"], ["recomendaciones", "Recomendaciones"], ["retorno", "Fecha de regreso"], ["local", "Local"],
+];
+export function facturaCompleta(v: unknown): string {
+  const t = s(v).trim();
+  if (!t || /sin/i.test(t)) return "";
+  const m = t.match(/^(\d{3})-(\d{3})-(\d{1,9})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3].padStart(9, "0")}`;
+  const d = facturaTxt(t).replace(/\D/g, "");
+  return d ? "001-001-" + d.slice(-9).padStart(9, "0") : t;
+}
+const METODO: [RegExp, string][] = [[/^efec/i, "efectivo"], [/^tarj/i, "tarjeta"], [/^tran/i, "transferencia"], [/^canj/i, "canje"], [/^cort/i, "cortesía"], [/^gift|^gc/i, "gift card"]];
+export function metodosPago(comp: unknown): Row[] {
+  return s(comp).split(/\s*[,;|]\s*/).map((x) => x.trim()).filter(Boolean).map((x) => {
+    const [m, ref] = x.split(":");
+    const met = METODO.find(([re]) => re.test(m.trim()))?.[1] || m.trim().toLowerCase();
+    return { metodo: met, ref: s(ref).trim() };
+  });
+}
+export function faseA(r: Row): boolean {
+  const fac = s(r.facial_hecho).trim(), notas = s(r.notas_generales).trim() || s(r.recomendaciones).trim();
+  const fotos = [r.fotos, r.fotos_antes, r.fotos_despues].some((v) => /https?:/.test(s(v)));
+  return !!fac && fac !== "-" && !!notas && fotos;
+}
+function codigosGc(v: unknown): string[] { return [...new Set((s(v).match(/\b\d{2}-\d{3}\b/g) || []))]; }
+function hhmm(v: unknown): string { return hmUtc(v).replace(":", ""); }
+function claveTarjeta(r: Row): string { return "tk_" + ymdUtc(r.timestamp) + "_" + hhmm(r.timestamp) + "_" + s(r.id_3).split(".")[0]; }
+
+async function enviosDe(ctx: Ctx, r: Row, clave: string): Promise<Row[]> {
+  const out: Row[] = [];
+  for (const e of await todas(ctx, "beta_ticket_envios")) if (s(e.ticket_clave) === clave) out.push({ tipo: s(e.tipo), fecha: s(e.created_at), por: s(e.por), fuente: "beta" });
+  const ck = claveTarjeta(r), ced = s(r.id_3).split(".")[0], f = ymdUtc(r.timestamp);
+  for (const e of await todas(ctx, "envios_tarjetas")) {
+    if (s(e.clave) === ck || (ced && s(e.cedula).split(".")[0] === ced && ymdUtc(e.fecha_del_ticket) === f)) {
+      out.push({ tipo: /paquete/i.test(s(e.que_se_envio)) ? "facial+paquete" : "facial", fecha: s(e.fecha_envio), por: s(e.enviado_por), fuente: "sistema" });
+    }
+  }
+  return out.sort((a, b0) => s(b0.fecha).localeCompare(s(a.fecha)));
+}
+async function reagendadaDe(ctx: Ctx, r: Row): Promise<{ si: boolean; cita: string; fuente: string }> {
+  if (r.agendado === true || s(r.agendado).toLowerCase() === "true") return { si: true, cita: "", fuente: "sistema" };
+  const f = ymdUtc(r.timestamp); if (!f) return { si: false, cita: "", fuente: "" };
+  const hoy = new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
+  const desde = f > hoy ? f : (addDaysYmd(hoy, -30) > f ? addDaysYmd(hoy, -30) : addDaysYmd(f, 1));
+  const L = await citasRango(ctx, desde, addDaysYmd(hoy, 90), { ms: 600000 });
+  if (!Array.isArray(L)) return { si: false, cita: "", fuente: "sin acuity" };
+  const c = citaDeNombre(L.filter((a) => fechaCita(a) > f), s(r.nombre), s(r.apellido));
+  return c ? { si: true, cita: s(c.datetime), fuente: "acuity" } : { si: false, cita: "", fuente: "acuity" };
+}
+function addDaysYmd(ymd: string, d: number): string { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); }
+
+async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, total: number): Promise<Row> {
+  const admin = esAdmin(ses.rol), clave = claveDe(r, leerSerie(r, "so_num"));
+  const d = (cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row;
+  const ced = s(r.id_3).split(".")[0];
+  const reg = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at && ced && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
+  const info: Row = {
+    factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? r.nombre), apellido: s(d.apellido ?? r.apellido), cedula: s(d.cedula ?? ced),
+    email: s(d.email ?? reg?.email), telefono: s(d.telefono ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
+    notas: s(d.notas ?? r.notas_generales), recomendaciones: s(d.recomendaciones ?? r.recomendaciones), retorno: s(d.retorno ?? s(r.fecha_retorno).slice(0, 10)),
+    local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
+  };
+  if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
+  const pagadoSis = b(r.cob) ? round2(n(r.estimado)) : 0;
+  const metodos = metodosPago(r.comp);
+  const pagos = { metodos, pagado: pagadoSis, saldo: round2(Math.max(0, total - pagadoSis)), cobrado: b(r.cob) };
+  // Gift cards: vendidas en el ticket y canjeadas en el ticket.
+  const gcs = await todas(ctx, "gift_cards"), dig = await todas(ctx, "gift_cards_digitales");
+  const gc = (cod: string, uso: string) => {
+    const g = gcs.find((x) => !x.borrado_at && s(x.codigo_gc) === cod), dg = dig.find((x) => s(x.codigo) === cod);
+    return { codigo: cod, uso, valor: s(g?.valor), saldo: g && admin ? saldoGift(g) : undefined, usado: g?.usado === true,
+      comprador: g ? (s(g.nombre_comprador) + " " + s(g.apellido_comprador)).trim() : "", para: s(dg?.para), de: s(dg?.de), facial: s(dg?.facial), mensaje: s(dg?.mensaje), valido: s(dg?.valido), digital: !!dg };
+  };
+  const giftcards = [...codigosGc(r.venta_gift).map((c) => gc(c, "vendida")), ...codigosGc(r.gift_card).map((c) => gc(c, "canjeada"))];
+  // Paquete: uso en este ticket, compra y paquetes vigentes de la clienta.
+  const paqs = await paquetesDe(ctx.db, normCedula(ced), normNombre(s(r.nombre) + " " + s(r.apellido)));
+  const paquete = {
+    uso: /^\s*SI\b/i.test(s(r.paquete)) ? s(r.paquete).replace(/^\s*SI,?\s*/i, "") : "",
+    compra: [s(r.compra_pack_3), s(r.compra_pack_6)].filter((x) => x && x !== "-").join(" · "),
+    vigentes: paqs.filter((p) => n(p.pendientes) > 0).map((p) => ({ codigo: p.codigo, nombre: p.nombre, usados: p.usados, total: p.total, pendientes: p.pendientes })),
+  };
+  const envios = await enviosDe(ctx, r, clave);
+  const flags = (await todas(ctx, "beta_ticket_flags")).filter((f) => !f.resuelto && (n(f.ticket_id) === n(r.id) || s(f.ticket_clave) === clave))
+    .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
+  const reag = await reagendadaDe(ctx, r);
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  const anulado = orig.anulado === true, fac = b(r.fac) || !!s(d.factura);
+  const chips: Row[] = [
+    { k: "estado", t: anulado ? "Anulado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
+    { k: "cobro", t: b(r.cob) ? "Pagado" : "Por cobrar", c: b(r.cob) ? "pagado" : "porcobrar" },
+    { k: "fac", t: fac ? "Facturado" : "Sin factura", c: fac ? "facturado" : "sinfactura" },
+    { k: "faseA", t: faseA(r) ? "Fase A completa" : "Fase A pendiente", c: faseA(r) ? "ok" : "pend" },
+    { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
+    { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },
+    ...(paquete.uso ? [{ k: "paq", t: "Paquete " + paquete.uso, c: "info" }] : []),
+    ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
+  ];
+  return { info, campos: DATOS_TK.filter(([k]) => conTelefono(ses) || (k !== "email" && k !== "telefono")), corregidos: Object.keys(d), pagos, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+    costosVisibles: admin };
+}
+
+async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string): Promise<Row> {
+  if (!(await hay(ctx))) return { error: FALTA };
+  const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  const ok = new Set(DATOS_TK.map(([k]) => k)), limpio: Row = {};
+  for (const [k, v] of Object.entries(datos || {})) if (ok.has(k)) limpio[k] = s(v).trim().slice(0, 600);
+  if (!Object.keys(limpio).length) return { error: "Nada que cambiar" };
+  if (limpio.factura && !/^\d{3}-\d{3}-\d{9}$/.test(facturaCompleta(limpio.factura))) return { error: "Factura: usa 001-001-000000000" };
+  if (limpio.factura) limpio.factura = facturaCompleta(limpio.factura);
+  if (limpio.retorno && !/^\d{4}-\d{2}-\d{2}$/.test(String(limpio.retorno))) return { error: "Fecha de regreso: AAAA-MM-DD" };
+  if (limpio.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(limpio.email))) return { error: "Email inválido" };
+  const actor = actorOf(ses), now = ctx.now.toISOString();
+  const nuevo = { ...((cab?.datos || {}) as Row), ...limpio };
+  const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: via, detalle: "datos: " + Object.keys(limpio).join(", ") }].slice(-100);
+  if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
+  else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
+  return { ok: true, clave };
+}
+const SOLO_DATOS = (p: Row) => p.datos && typeof p.datos === "object" && p.lineas == null && p.descuento == null && p.promo == null && p.excluir_cosmetologa == null;
+export async function guardarTodo(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
+  if (p.datos && typeof p.datos === "object" && Object.keys(p.datos as Row).length) {
+    const g = await guardarDatos(ctx, ses, r, p.datos as Row, s(p._via) || "edición");
+    if (g.error || SOLO_DATOS(p)) return g;
+  }
+  return guardar(ctx, ses, r, p);
+}
+
+/** Costo de lo vendido por línea: producto = costo promedio; facial/servicio = receta de cabina a costo promedio. */
+async function costosDe(ctx: Ctx, r: Row, cab: Row | undefined, lineas: Row[], subtotal: number): Promise<Row> {
+  const prods = await todas(ctx, "erp_productos");
+  const costoDe = (code: string, id?: string) => { const p = prods.find((x) => (id && s(x.id) === id) || skuCode(s(x.sku)) === skuCode(code)); return n(p?.costo_promedio ?? p?.costo); };
+  const out: Row[] = [];
+  let cogs = 0; const notas = new Set<string>();
+  for (const l of lineas) {
+    let cu = 0;
+    if (l.tipo === "producto") { cu = costoDe(s(l.sku)); if (!(cu > 0)) notas.add("productos sin costo cargado: costo 0"); }
+    else if (l.tipo === "facial" || l.tipo === "extra" || l.tipo === "servicio") {
+      const rec = await recetaDe(ctx.db, s(l.sku) || s(l.nombre), 1);
+      cu = rec.reduce((a, x) => a + costoDe(x.sku, x.producto_id) * n(x.qty), 0);
+      if (!rec.length) notas.add("servicios sin receta: costo 0");
+    } else notas.add(l.tipo === "gift" ? "gift card: sin costo" : "paquete: el costo va en cada sesión");
+    const ct = round2(cu * n(l.cantidad));
+    cogs += ct;
+    out.push({ sku: l.sku, descripcion: l.nombre, cantidad: n(l.cantidad), costo_unit: round2(cu), costo_total: ct });
+  }
+  const tipo = s(cab?.costos_nc_tipo) || "$", valor = n(cab?.costos_nc_valor);
+  const nc = round2(tipo === "%" ? subtotal * valor / 100 : valor);
+  const ganancia = round2(subtotal - nc - cogs);
+  return { subtotal, costos_no_cliente_tipo: tipo, costos_no_cliente_valor: valor, costos_no_cliente: nc, cogs: round2(cogs), cogs_nota: [...notas].join(" · ") || "costo promedio actual", ganancia, margenPct: subtotal > 0 ? Math.round(ganancia / subtotal * 1000) / 10 : null, lineas: out };
+}
+
+extend("tk_costos", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  const v = await vistaTicket(ctx, ses, r);
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === s(v.clave));
+  return { ok: true, costos: { numero: (v.ticket as Row).soNum, ...(await costosDe(ctx, r, cab, v.lineas as Row[], n((v.totales as Row).subtotal))) } };
+});
+extend("tk_costos_guardar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
+  if (!(await hay(ctx))) return { error: FALTA };
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  const tipo = s(p.tipo) === "%" ? "%" : "$", valor = n(p.valor);
+  if (valor < 0 || (tipo === "%" && valor > 100)) return { error: tipo === "%" ? "Máximo 100%" : "Valor inválido" };
+  const clave = claveDe(r, leerSerie(r, "so_num")), cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave), actor = actorOf(ses), now = ctx.now.toISOString();
+  if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { costos_nc_tipo: tipo, costos_nc_valor: valor, actualizado_por: actor, updated_at: now });
+  else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, costos_nc_tipo: tipo, costos_nc_valor: valor, actualizado_por: actor, updated_at: now });
+  return { ok: true };
+});
+extend("tk_envio", "any", async (p, ctx, ses) => {
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
+  const tipo = s(p.tipo) === "paquete" ? "paquete" : "facial";
+  try {
+    await ctx.db.write(actorOf(ses), "beta_ticket_envios", "insert", {}, { id: crypto.randomUUID(), ticket_clave: claveDe(r, leerSerie(r, "so_num")), tipo, telefono_fin: s(p.telefono).replace(/\D/g, "").slice(-4), por: ses.name, created_at: ctx.now.toISOString() });
+  } catch { return { error: "Falta aplicar 0050_agenda_beta.sql" }; }
+  return { ok: true };
+});
+extend("tk_flag_resolver", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin marca resuelto; pide la corrección con «Solicitar cambio»" };
+  const f = (await todas(ctx, "beta_ticket_flags")).find((x) => s(x.id) === s(p.id));
+  if (!f) return { error: "Marca no encontrada" };
+  await ctx.db.write(actorOf(ses), "beta_ticket_flags", "update", { id: f.id }, { resuelto: true, resuelto_por: ses.name, resuelto_at: ctx.now.toISOString(), nota: s(p.nota).slice(0, 300) || null, updated_at: ctx.now.toISOString() });
+  return { ok: true };
+});
+extend("tk_flag_crear", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  if (!s(p.motivo).trim()) return { error: "Escribe el motivo" };
+  const id = "manual:" + crypto.randomUUID();
+  await ctx.db.write(actorOf(ses), "beta_ticket_flags", "insert", {}, { id, ticket_id: r.id ?? null, ticket_clave: claveDe(r, leerSerie(r, "so_num")), motivo: s(p.motivo).trim().slice(0, 120), detalle: s(p.detalle).slice(0, 500) || null, fuente: "manual" });
+  return { ok: true, id };
+});
+
+/** Estados para la lista de tickets: Fase A, pagado, reporte, reagendada, fecha de regreso y marcas por corregir. */
+extend("tk_estados", "any", async (_p, ctx, ses) => {
+  const verTodos = esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
+  const rows = (await todas(ctx, "tickets")).filter((r) => !r.borrado_at && (verTodos || esPropio(s(r.atendido_por), ses)));
+  const flags = (await todas(ctx, "beta_ticket_flags")).filter((f) => !f.resuelto);
+  const envB = new Set((await todas(ctx, "beta_ticket_envios")).map((e) => s(e.ticket_clave)));
+  const envS = new Set<string>(), envCF = new Set<string>();
+  for (const e of await todas(ctx, "envios_tarjetas")) { envS.add(s(e.clave)); envCF.add(s(e.cedula).split(".")[0] + "|" + ymdUtc(e.fecha_del_ticket)); }
+  const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const hoy = new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
+  const citas = await citasRango(ctx, addDaysYmd(hoy, -30), addDaysYmd(hoy, 90), { ms: 600000 });
+  const conAcuity = Array.isArray(citas);
+  const items: Record<string, Row> = {};
+  for (const r of rows) {
+    const clave = claveDe(r, leerSerie(r, "so_num")), f = ymdUtc(r.timestamp), ced = s(r.id_3).split(".")[0];
+    const d = ((cabs.get(clave)?.datos || {}) as Row);
+    const rep = envB.has(clave) || envS.has(claveTarjeta(r)) || (!!ced && envCF.has(ced + "|" + f));
+    let g = r.agendado === true || s(r.agendado).toLowerCase() === "true";
+    if (!g && conAcuity && f >= addDaysYmd(hoy, -120)) g = !!citaDeNombre((citas as Row[]).filter((a) => fechaCita(a) > f), s(r.nombre), s(r.apellido));
+    const ret = s(d.retorno || s(r.fecha_retorno).slice(0, 10));
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    const fl = flags.filter((x) => n(x.ticket_id) === n(r.id) || s(x.ticket_clave) === clave);
+    items[String(r.sheet_row)] = {
+      a: faseA(r) ? 1 : 0, p: b(r.cob) ? 1 : 0, r: rep ? 1 : 0, g: g ? 1 : 0, ret,
+      pr: !g && orig.anulado !== true && /^\d{4}-\d{2}-\d{2}$/.test(ret) && ret <= addDaysYmd(hoy, 7) && ret >= addDaysYmd(hoy, -60) ? 1 : 0,
+      ...(fl.length ? { flag: fl.map((x) => s(x.motivo) + (x.factura ? " · factura " + s(x.factura) : "")).join(" / ") } : {}),
+      ...(d.factura ? { factura: s(d.factura) } : {}),
+    };
+  }
+  return { ok: true, items, acuity: conAcuity, hoy };
+});
