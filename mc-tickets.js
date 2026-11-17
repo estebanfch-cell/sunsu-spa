@@ -455,10 +455,24 @@
       if (k === "factura" && nv && !/^\d{3}-\d{3}-\d{1,9}$/.test(nv) && !/^\d{1,9}$/.test(nv)) { hecho = false; toast2("Factura: usa 001-001-000000000", true); return; }
       K.datos = K.datos || {}; K.datos[k] = k === "factura" && /^\d{1,9}$/.test(nv) ? "001-001-" + ("000000000" + nv).slice(-9) : nv;
       var dirty = K.dirty, dl = K.dirtyL; repintar(main); K.dirty = dirty; K.dirtyL = dl; marcar(true);
+      // Admin: cada dato se guarda al momento (antes quedaba resaltado y se perdía si no tocaba «Guardar» o recargaba).
+      if (K.d.puedeEditar) guardarDato(main, k, lbl);
     };
     inp.onblur = ok;
     inp.onkeydown = function (ev) { if (ev.key === "Enter" && !largo) { ev.preventDefault(); ok(); } if (ev.key === "Escape") { hecho = true; repintar(main); } };
   }
+  async function guardarDato(main, k, lbl) {
+    var v0 = K.datos[k], one = {}; one[k] = v0;
+    var r; try { r = await api("tk_guardar", { clave: K.d.clave, datos: one }); } catch (x) { r = { error: (x && x.message) || String(x) }; }
+    if (!r || r.error) { toast2("No se guardó " + lbl + ": " + ((r && r.error) || "sin respuesta"), true); return; }
+    if (K.datos[k] === v0) delete K.datos[k];
+    K.d.info = K.d.info || {}; K.d.info[k] = v0; K.d.corregidos = (K.d.corregidos || []).concat([k]);
+    if (!Object.keys(K.datos).length && !K.dirtyL) K.dirty = false;
+    var dirty = K.dirty, dl = K.dirtyL; repintar(main); K.dirty = dirty; K.dirtyL = dl;
+    if (K.dirty) marcar(true);
+    toast2("✓ " + lbl + " guardado" + (r.ficha && r.ficha.ok && (r.ficha.cambios || []).length ? " (también en la ficha de la clienta)" : ""));
+  }
+  if (!window._mctkUnload) { window._mctkUnload = true; window.addEventListener("beforeunload", function (ev) { if (K.dirty && document.getElementById("mctk-root")) { ev.preventDefault(); ev.returnValue = ""; } }); }
   function wire(main) {
     // Si el ticket no cargó (error) no hay nada que conectar: antes reventaba con «null is not an object».
     if (!K.d || !main || !main.querySelector("#mctk-root")) return;
@@ -529,8 +543,8 @@
       err.textContent = ""; g.disabled = true;
       var r = await api("tk_guardar", Object.assign({ clave: K.d.clave }, propuesta()));
       g.disabled = false;
-      if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; return; }
-      toast2("Ticket guardado" + (r.total != null ? " · total " + $m(r.total) : ""));
+      if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; toast2("No se guardó: " + err.textContent, true); return; }
+      toast2("✓ Ticket guardado" + (r.total != null ? " · total " + $m(r.total) : ""));
       var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
     };
     var pd = main.querySelector("#mctk-pedir");
