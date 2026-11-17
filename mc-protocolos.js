@@ -90,7 +90,7 @@
       '<div class="sheet-scroll"><table class="mcpr-t mcpr-ps"><thead><tr><th>#</th><th>Descripción</th><th>Producto</th><th>Cant.</th><th>Unidad</th><th>Min</th>' + (can ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table></div>" +
       (can ? '<p><button class="btn ghost small" type="button" id="mcpr-add">+ Paso</button></p>' : "") +
       '<p class="note">Producto: escribe o elige el código (INV-…, ML-…). Pasos sin producto (toalla caliente, extracción) llevan solo descripción y minutos.</p></div>' +
-      (p.id ? '<div class="card"><div class="card-title">Historial</div>' + (hist ? '<ul class="mcpr-sub">' + hist + "</ul>" : '<p class="note">' + (p.origen === "cabina" ? "Copiado de Cabina; sin cambios en la beta." : "Sin cambios.") + "</p>") + "</div>" : "") + "</div>";
+      (p.id ? '<div class="card"><div class="card-title">Historial</div>' + (hist ? '<ul class="mc-hist mcpr-sub">' + hist + "</ul>" : '<p class="note">' + (p.origen === "cabina" ? "Copiado de Cabina; sin cambios en la beta." : "Sin cambios.") + "</p>") + "</div>" : "") + "</div>";
   }
   function pinta(main) {
     var box = main.querySelector("#mcpr-root");

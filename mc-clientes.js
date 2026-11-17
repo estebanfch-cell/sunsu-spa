@@ -288,7 +288,7 @@
         return "<tr><td>" + e(f(x.fecha)) + "</td><td>" + (ico[x.tipo] || "•") + " " + e(x.nombre) + (x.texto ? '<div class="mccf-sub">' + e(x.texto) + "</div>" : "") + "</td><td>" + acc + "</td></tr>";
       }).join("") + "</tbody></table>";
     }
-    if (t === "bitacora") return d.bitacora.length ? "<ul>" + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios hechos en la beta.</p>';
+    if (t === "bitacora") return d.bitacora.length ? '<ul class="mc-hist">' + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios hechos en la beta.</p>';
     return "";
   }
   function regHtml() {
