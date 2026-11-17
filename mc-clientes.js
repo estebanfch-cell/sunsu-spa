@@ -88,10 +88,19 @@
   }
   async function renderLista() {
     css();
-    if (!K.L || Date.now() - (K.t || 0) > 60000) {
+    var poner = function (d) { K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now(); };
+    if (!K.L) {
       var d = await api("cl_list", {});
       if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
-      K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now();
+      poner(d);
+    } else if (Date.now() - (K.t || 0) > 60000 && !K.cargando) {
+      // Se muestra la lista que ya estaba y se actualiza por detrás (sin esperar a la base).
+      K.cargando = true;
+      api("cl_list", {}).then(function (d2) {
+        K.cargando = false; if (!d2 || d2.error) return; poner(d2);
+        var main = document.querySelector("#mccl-body") && document.querySelector("#mccl-body").closest("main, .main, #main, body");
+        if (main) repintarLista(main);
+      }, function () { K.cargando = false; });
     }
     return htmlLista();
   }

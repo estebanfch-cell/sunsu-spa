@@ -8,7 +8,7 @@ import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, saldoGift } from "./ventas.ts";
+import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, registrosDeClave, saldoGift, ticketsDeClave } from "./ventas.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { docsDe } from "./tickets_beta_api.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
@@ -73,10 +73,15 @@ function mismaPersona(ced: string, nom: string, c2: unknown, n2: string): boolea
 
 extend("cl_list", "any", async (_p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
-  const res = await clientesResumen(ctx.db, lite(ses), admin, await verTodos(ctx, ses));
-  const ov = await overlays(ctx);
-  const paqs = (await todas(ctx, "paquetes")).filter((r) => !r.borrado_at);
-  const gcs = (await todas(ctx, "gift_cards")).filter((r) => !r.borrado_at && s(r.codigo_gc));
+  // Todo en paralelo y con columnas livianas (la lista tardaba por bajar tablas enteras en serie).
+  const [res, ov, paqs0, gcs0] = await Promise.all([
+    verTodos(ctx, ses).then((vt) => clientesResumen(ctx.db, lite(ses), admin, vt)),
+    overlays(ctx),
+    consultar(ctx.db, "paquetes", { cols: ["id", "cedula", "nombres", "apellidos", "completo", "borrado_at"] }).then((x) => x.rows).catch(() => todas(ctx, "paquetes")),
+    todas(ctx, "gift_cards"),
+  ]);
+  const paqs = paqs0.filter((r) => !r.borrado_at);
+  const gcs = gcs0.filter((r) => !r.borrado_at && s(r.codigo_gc));
   const porCedP = new Map<string, number>(), porNomP = new Map<string, number>(), porCedG = new Map<string, number>(), porNomG = new Map<string, number>();
   for (const r of paqs) {
     if (r.completo === true) continue;
@@ -116,10 +121,17 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   const admin = esAdmin(ses.rol);
   const ov = (await overlays(ctx)).get(key);
   if (ov?.borrado === true && !admin) return { error: "Esa clienta está eliminada" };
-  const det = await clienteDetalle(ctx.db, lite(ses), admin || await verTodos(ctx, ses), key);
+  const vt = admin || await verTodos(ctx, ses);
+  const [det, regs0, filas0, cabs0, gifts0] = await Promise.all([
+    clienteDetalle(ctx.db, lite(ses), vt, key),
+    registrosDeClave(ctx.db, key),
+    ticketsDeClave(ctx.db, key),
+    todas(ctx, "beta_tickets"),
+    todas(ctx, "gift_cards"),
+  ]);
   if (det.error) return det;
   const cli = det.cliente as Row;
-  const regs = (await todas(ctx, "clientas_registro")).filter((r) => !r.borrado_at && claveRegistro(r) === key);
+  const regs = regs0.filter((r) => !r.borrado_at && claveRegistro(r) === key);
   const reg = registroUnico(regs);
   const codigo = s(ov?.codigo) || regs.map((r) => codigoCliente(r)).filter(Boolean).sort()[0] || "";
   const datos: Row = { ...reg.datos };
@@ -132,9 +144,9 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
   if (datos.telefono) datos.telefono = telefonoEc(datos.telefono);
   const ced = normCedula(datos.cedula || cli.cedula), nom = normNombre((s(datos.nombres) + " " + s(datos.apellido)).trim() || s(cli.nombre));
   // Historial: cada ticket con la clave que abre el detalle de ticket de la beta.
-  const filas = (await todas(ctx, "tickets")).filter((r) => !r.borrado_at && claveCliente(r) === key);
+  const filas = filas0.filter((r) => !r.borrado_at && claveCliente(r) === key);
   const porNum = new Map(filas.map((r) => [numeroTicket(r), r]));
-  const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const cabs = new Map(cabs0.map((c) => [s(c.clave), c]));
   const documentos: Row[] = [];
   const historial = ((det.tickets || []) as Row[]).map((t) => {
     const r = porNum.get(s(t.ref));
@@ -156,7 +168,7 @@ async function ficha(ctx: Ctx, ses: Ses, key: string): Promise<Row> {
     return item;
   });
   for (const c of reg.consentimientos) documentos.push({ tipo: "consentimiento", nombre: "Consentimiento informado" + (c.autorizaFotos ? " · fotos: " + c.autorizaFotos : ""), fecha: c.fecha, url: c.firma, texto: c.texto });
-  const gifts = (await todas(ctx, "gift_cards")).filter((r) => !r.borrado_at && s(r.codigo_gc) &&
+  const gifts = gifts0.filter((r) => !r.borrado_at && s(r.codigo_gc) &&
     (mismaPersona(ced, nom, r.cedula_comprador, s(r.nombre_comprador) + " " + s(r.apellido_comprador)) || (!!nom && normNombre(r.usado_por) === nom)))
     .map((r) => ({ codigo: s(r.codigo_gc), valor: s(r.valor), saldo: admin ? saldoGift(r) : undefined, usado: r.usado === true, fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por),
       comprador: (s(r.nombre_comprador) + " " + s(r.apellido_comprador)).trim(), fecha: [r.dia, r.mes, r.ano].every((x) => x != null && s(x) !== "") ? `${s(r.ano).split(".")[0]}-${String(n(r.mes)).padStart(2, "0")}-${String(n(r.dia)).padStart(2, "0")}` : "" }));
