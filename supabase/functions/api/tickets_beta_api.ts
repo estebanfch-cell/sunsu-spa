@@ -19,6 +19,7 @@ import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
+import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
 const TIPOS = new Set(["producto", "facial", "extra", "paquete", "gift", "servicio"]);
@@ -155,8 +156,9 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
       cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7), comprobante: s(r.comp),
       notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones), retorno: s(r.fecha_retorno).slice(0, 10), paquete: s(r.paquete),
       estado: anulado ? "anulado" : fac && cob ? "cerrado" : "abierto",
+      cancelado: anulado ? { motivo: s(orig.cancelado_motivo), por: s(orig.cancelado_por), ts: s(orig.cancelado_ts) } : null,
       leds: [
-        { k: "estado", t: anulado ? "Anulado" : fac && cob ? "Cerrado" : "Abierto", c: anulado ? "x" : fac && cob ? "ok" : "c" },
+        { k: "estado", t: anulado ? "Cancelado" : fac && cob ? "Cerrado" : "Abierto", c: anulado ? "x" : fac && cob ? "ok" : "c" },
         { k: "fac", t: fac ? "Facturado" + (facturaTxt(r.fac_7) ? " " + facturaTxt(r.fac_7) : "") : "Sin factura", c: fac ? "ok" : "off" },
         { k: "cob", t: cob ? "Cobrado" : "Por cobrar", c: cob ? "ok" : "r" },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
@@ -168,7 +170,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: faltaDe(r, (cab?.datos || {}) as Row), promos, puedeEditar: admin, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: faltaDe(r, (cab?.datos || {}) as Row), promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
   };
@@ -205,6 +207,7 @@ extend("tk_catalogo", "any", async (_p, ctx, ses) => ({ ok: true, items: await c
 /** Valida y guarda lo propuesto (líneas, descuento, promo, exclusiones). Lo usan el admin y la solicitud aprobada. */
 async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   if (!(await hay(ctx))) return { error: FALTA };
+  if ((r.orig as Row | undefined)?.anulado === true) return { error: "El ticket está cancelado: no se edita" };
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
   const cat = await catalogoTicket(ctx, ses);
@@ -237,6 +240,11 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   const promo = promoNom ? promos.find((x) => x.nombre === promoNom) || null : null;
   if (promoNom && !promo && promoNom !== s(cab?.promo_nombre)) return { error: "Esa promoción no está vigente" };
   const calc = calcularTicket(L, { tipo: dTipo || null, valor: dVal }, promo || (promoNom ? { nombre: promoNom, tipo: "$", valor: n(cab?.promo_monto), codigos: [] } : null));
+  if (entrada) {
+    // Quitar un producto devuelve a su bodega lo que el ticket sacó; agregar uno lo descuenta (kardex).
+    try { await ajustarStockLineas(ctx, ses, r, actuales, L); }
+    catch (e) { return { error: "No se pudo mover el stock: " + (e instanceof Error ? e.message : String(e)) }; }
+  }
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const exclC = p.excluir_cosmetologa != null ? p.excluir_cosmetologa === true : cab?.excluir_cosmetologa === true;
   const exclN = p.excluir_nota != null ? s(p.excluir_nota).slice(0, 300) : s(cab?.excluir_nota);
@@ -414,7 +422,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
   const anulado = orig.anulado === true, fac = b(r.fac) || !!s(d.factura);
   const chips: Row[] = [
-    { k: "estado", t: anulado ? "Anulado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
+    { k: "estado", t: anulado ? "Cancelado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
     { k: "cobro", t: b(r.cob) ? "Pagado" : "Por cobrar", c: b(r.cob) ? "pagado" : "porcobrar" },
     { k: "fac", t: fac ? "Facturado" : "Sin factura", c: fac ? "facturado" : "sinfactura" },
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
@@ -429,6 +437,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
 
 async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string): Promise<Row> {
   if (!(await hay(ctx))) return { error: FALTA };
+  if ((r.orig as Row | undefined)?.anulado === true) return { error: "El ticket está cancelado: no se edita" };
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
   const ok = new Set(DATOS_TK.map(([k]) => k)), limpio: Row = {};

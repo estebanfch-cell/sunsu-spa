@@ -5,8 +5,7 @@ import type { Ctx } from "./lib.ts";
 import { kvGet } from "./lib.ts";
 import {
   ADMIN, IVA, addDays, cantAmpollas, ecuadorParts, esCanje, esInterno, facialSku, n, normCedula,
-  productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row,
-} from "./domain.ts";
+  productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado } from "./domain.ts";
 import { montoGcAplicado } from "./ventas.ts";
 import { runErp } from "./erp.ts";
 import type { Db } from "./db.ts";
@@ -267,7 +266,7 @@ export async function calcularDashboard(db: Db, now: Date, p: Row): Promise<Row>
   const per = (["hoy", "semana", "mes", "ano", "rango"].includes(s(p.periodo)) ? s(p.periodo) : "hoy") as Periodo;
   const R = rangos(per, ec.ymd, s(p.desde), s(p.hasta));
   const pr = await precios(db);
-  const rows = (await db.all("tickets")).filter((r) => !r.borrado_at);
+  const rows = (await db.all("tickets")).filter((r) => !r.borrado_at && !esCancelado(r));
   const hechos: Hecho[] = [];
   for (const t of rows) { const h = hechoDe(t, pr); if (h) hechos.push(h); }
   const ocs = (await db.all("erp_oc").catch(() => [] as Row[]))

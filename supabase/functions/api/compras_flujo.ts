@@ -3,7 +3,7 @@
 
 import { consultar } from "./query.ts";
 import { enPrueba, type Db } from "./db.ts";
-import { n, productQtys, round2, s, skuCode, siguienteTestDoc, ymdUtc, type Row } from "./domain.ts";
+import { n, productQtys, round2, s, skuCode, siguienteTestDoc, ymdUtc, type Row, esCancelado } from "./domain.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
 import { guardarArchivo } from "./lib.ts";
 import { codigoFamilia, familiaDeFila, mismoNombre } from "./ventas.ts";
@@ -184,7 +184,7 @@ export async function comprasPeriodo(db: Db, p: Row): Promise<Row> {
   const vendido = new Map<string, number>();
   for (const t of await db.all("tickets")) {
     const fecha = ymdUtc(t.timestamp);
-    if (!fecha || fecha < desde || fecha > hasta) continue;
+    if (!fecha || fecha < desde || fecha > hasta || esCancelado(t)) continue;
     for (const pr of productQtys(t)) {
       const sku = skuCode(pr.sku);
       if (!allow.has(sku)) continue;

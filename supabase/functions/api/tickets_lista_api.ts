@@ -88,7 +88,9 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     return envB!.has(claveDe(r, leerSerie(r, "so_num"))) || env.has("tk_" + f + "_" + hhmm(r.timestamp) + "_" + ced) || (!!ced && env.has(ced + "|" + f));
   };
   if (seg === "rep_no") { const env = await envClaves(L); L = L.filter((r) => !enviado(r, env)); }
-  const total = L.length, suma = round2(L.reduce((a, r) => a + n(r.estimado), 0));
+  // Cancelados (beta_ticket_cancelados) no suman al total de la lista.
+  const canc = new Set((await todas(ctx, "beta_ticket_cancelados")).filter((c) => c.revertido !== true).map((c) => n(c.ticket_id)));
+  const total = L.length, suma = round2(L.reduce((a, r) => a + (canc.has(n(r.id)) ? 0 : n(r.estimado)), 0));
   const desde = Math.max(0, n(p.offset)), lim = Math.min(200, Math.max(1, n(p.limit) || 50));
   const pagIds = L.slice(desde, desde + lim).map((r) => n(r.id));
   // 2) página completa

@@ -9,8 +9,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
   compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, marcaDePersona, n, nombreEsAdmin, normCedula, normNombre, toCosmMark,
-  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn,
-} from "./domain.ts";
+  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn, esCancelado } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 type R = Record<string, unknown>;
 
@@ -153,7 +152,7 @@ extend("getKPIsMes", "any", async (p, ctx) => {
   const desde = s(p.desde) || ecuadorParts(ctx.now).ymd.slice(0, 8) + "01";
   const hasta = s(p.hasta) || ecuadorParts(ctx.now).ymd;
   const primera = new Map<string, string>();
-  const tks = await ctx.db.all("tickets");
+  const tks = (await ctx.db.all("tickets")).filter((r) => !esCancelado(r));
   for (const t of tks) {
     const c = normCedula(t.id_3);
     const f = ymdUtc(t.timestamp);
@@ -249,7 +248,7 @@ async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes
   const cat0 = await ctx.db.all("catalogo").catch(() => [] as R[]);
   const cmap0 = new Map(cat0.map((r) => [skuCode(s(r.sku)), r]));
   const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
-  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp).map((r) => ovb(r, ticketIn(r, cmap0)));
+  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp && !esCancelado(r)).map((r) => ovb(r, ticketIn(r, cmap0)));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
