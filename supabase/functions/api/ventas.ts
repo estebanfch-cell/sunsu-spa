@@ -8,7 +8,8 @@ import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
   packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
-  codigoPaquete, esCancelado } from "./domain.ts";
+  codigoPaquete, esCancelado, normCedulaVieja } from "./domain.ts";
+import { claveIdentidad, clavesDe } from "./clientes_alias.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 
@@ -234,10 +235,8 @@ function bUsado(r: Row): boolean {
 }
 
 export function claveCliente(r: Row): string {
-  const ced = normCedula(r.id_3);
-  if (ced) return "c:" + ced;
-  const nom = normNombre(s(r.nombre) + " " + s(r.apellido));
-  return nom ? "n:" + nom : "t:" + s(r.beta_num || r.sheet_row || r.id);
+  // Misma cédula normalizada (RUC 001, «.0») = misma clienta; uniones a mano de 🔗 Duplicados (clientes_alias).
+  return claveIdentidad(r.id_3, s(r.nombre) + " " + s(r.apellido), normCedulaVieja) || "t:" + s(r.beta_num || r.sheet_row || r.id);
 }
 
 export interface LineaVenta {
@@ -478,11 +477,7 @@ export function codigoCliente(r: Row | undefined): string {
 }
 
 export function claveRegistro(r: Row): string {
-  const ced = normCedula(r.cedula);
-  if (ced) return "c:" + ced;
-  const nom = normNombre((s(r.nombre) + " " + s(r.apellido)).trim());
-  if (nom) return "n:" + nom;
-  return "r:" + s(r.sheet_row || r.id);
+  return claveIdentidad(r.cedula, (s(r.nombre) + " " + s(r.apellido)).trim(), normCedulaVieja) || "r:" + s(r.sheet_row || r.id);
 }
 
 function aplicarTicket(g: GrupoCliente, r: Row): void {
@@ -629,7 +624,9 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
   let [rows, regs] = await Promise.all([ticketsLigeros(db), registrosLigeros(db)]);
   if (!verTodos) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
   const map = new Map<string, GrupoCliente>();
-  const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)));
+  // Oculta solo si TODOS sus registros están borrados (con clientas unidas, uno borrado no esconde a las demás).
+  const vivas = new Set(regs.filter((r) => !r.borrado_at).map((r) => claveRegistro(r)));
+  const ocultas = new Set(regs.filter((r) => r.borrado_at).map((r) => claveRegistro(r)).filter((k) => !vivas.has(k)));
   const fichas = new Map<string, Row>();
   const codigos = new Map<string, { sr: number; cod: string }>();
   for (const r of regs) {
@@ -750,6 +747,12 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   const ced = normCedula(primero?.id_3 || ficha.cedula);
   const nom = normNombre(((primero ? s(primero.nombre) : s(ficha.nombre)) + " " + (primero ? s(primero.apellido) : s(ficha.apellido))).trim());
   const paquetes = await paquetesDe(db, ced, nom);
+  // Clientas unidas a mano (🔗 Duplicados): también sus paquetes.
+  for (const k of clavesDe(key)) {
+    if (k === key) continue;
+    const extra = await paquetesDe(db, k.startsWith("c:") ? k.slice(2) : "", k.startsWith("n:") ? k.slice(2) : "");
+    for (const x of extra) if (!paquetes.some((y) => String(y.id) === String(x.id))) paquetes.push(x);
+  }
   let total = 0;
   const tickets = rows.map((r) => {
     if (!esCancelado(r)) total += n(r.estimado);
