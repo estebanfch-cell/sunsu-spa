@@ -1432,6 +1432,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "mc" && window.MCNav) return window.MCNav.titulo(route);
   if (route.mod === "proveedores" && route.sub === "nuevo") return "Nuevo proveedor";
   if (route.mod === "tickets") return route.sub === "t" ? "Ticket" : "Tickets";
+  if (route.mod === "agenda") return "Agenda";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
@@ -2099,6 +2100,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "ajustes" && window.MCAjustes) window.MCAjustes.wire(main, route);
     if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) window.MCTickets.wire(main, route);
     if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) window.MCClientes.wire(main, route);
+    if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2136,6 +2138,7 @@ async function renderMod(route) {
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes" && window.MCClientes) return window.MCClientes.render(route);
+  if (route.mod === "agenda" && window.MCAgenda) return window.MCAgenda.render(route);
   if (route.mod === "clientes") return renderClientes();
   if (route.mod === "proveedores") return renderProveedoresDesk(route);
   if (route.mod === "cotizaciones_cliente") return renderListaCotizaciones();
@@ -5597,19 +5600,20 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk2"></script>
-<script src="beta-screens.js?v=20261117tk2"></script>
-<script src="beta-inline.js?v=20261117tk2"></script>
-<script src="mc-productos.js?v=20261117tk2"></script>
-<script src="mc-nav.js?v=20261117tk2"></script>
-<script src="mc-permisos.js?v=20261117tk2"></script>
-<script src="mc-protocolos.js?v=20261117tk2"></script>
-<script src="mc-conteo.js?v=20261117tk2"></script>
-<script src="mc-transferencias.js?v=20261117tk2"></script>
-<script src="mc-ajustes.js?v=20261117tk2"></script>
-<script src="vendor-qrcode.js?v=20261117tk2"></script>
-<script src="mc-tickets.js?v=20261117tk2"></script>
-<script src="mc-clientes.js?v=20261117tk2"></script>
+<script src="mc-buscar.js?v=20261117hf1"></script>
+<script src="beta-screens.js?v=20261117hf1"></script>
+<script src="beta-inline.js?v=20261117hf1"></script>
+<script src="mc-productos.js?v=20261117hf1"></script>
+<script src="mc-nav.js?v=20261117hf1"></script>
+<script src="mc-permisos.js?v=20261117hf1"></script>
+<script src="mc-protocolos.js?v=20261117hf1"></script>
+<script src="mc-conteo.js?v=20261117hf1"></script>
+<script src="mc-transferencias.js?v=20261117hf1"></script>
+<script src="mc-ajustes.js?v=20261117hf1"></script>
+<script src="vendor-qrcode.js?v=20261117hf1"></script>
+<script src="mc-tickets.js?v=20261117hf1"></script>
+<script src="mc-clientes.js?v=20261117hf1"></script>
+<script src="mc-agenda.js?v=20261117hf1"></script>
 <script>draw();</script>
 </body>
 </html>
