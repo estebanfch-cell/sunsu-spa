@@ -163,7 +163,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   return {
     ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA,
     ticket: {
-      clave, soNum: so, betaNum: s(r.beta_num), sheetRow: r.sheet_row ?? null, fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp),
+      clave, id: r.id ?? null, soNum: so, betaNum: s(r.beta_num), sheetRow: r.sheet_row ?? null, fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp),
       nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3), cosmetologa: s(r.atendido_por),
       cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7), comprobante: s(r.comp),
       notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones), retorno: s(r.fecha_retorno).slice(0, 10), paquete: s(r.paquete),
