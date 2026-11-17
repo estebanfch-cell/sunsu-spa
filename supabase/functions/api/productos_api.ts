@@ -11,6 +11,7 @@ import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
   marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
+  autoMinimos, deducirDelNombre, faltantesDe,
 } from "./productos.ts";
 
 /** Del diff del audit_log quita lo que no se muestra (miniatura base64, sellos de edición). */
@@ -56,6 +57,7 @@ interface Base {
   ventaLegacy: Map<string, number>; compraBase: Map<string, number>; minimos: Map<string, number>;
   antes?: Map<string, string[]>;
   movs?: Map<string, Row[]>;
+  salidas90?: Map<string, number>; aperturas90?: Map<string, number>; revision?: Map<string, unknown>;
 }
 
 async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
@@ -90,7 +92,19 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
   // Movimientos de la beta (transferencias / ajustes, 0046): se suman al stock del sistema.
   const movs = new Map<string, Row[]>();
   for (const m of await safeAll(ctx, "beta_stock_movimientos")) { const k = s(m.producto_id); movs.set(k, [...(movs.get(k) || []), m]); }
-  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes, movs };
+  // TK18b: salidas de 90 días (tickets + envases abiertos) para mínimo/reorden automáticos, y «Por revisar».
+  const desde = new Date(ctx.now.getTime() - 90 * 86400000).toISOString().slice(0, 10);
+  const salidas90 = new Map<string, number>(), aperturas90 = new Map<string, number>(), revision = new Map<string, unknown>();
+  for (const t of await safeAll(ctx, "tickets")) {
+    if (t.borrado_at || s(t.timestamp).slice(0, 10) < desde) continue;
+    for (const x of productQtys(t)) { const c = skuCode(x.sku); salidas90.set(c, (salidas90.get(c) || 0) + x.qty); }
+  }
+  for (const a of await safeAll(ctx, "beta_aperturas")) {
+    if (a.anulada === true || s(a.abierto_at).slice(0, 10) < desde) continue;
+    aperturas90.set(s(a.producto_id), (aperturas90.get(s(a.producto_id)) || 0) + 1);
+  }
+  for (const r of await safeAll(ctx, "beta_v_producto_revision")) revision.set(s(r.producto), r.faltantes);
+  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes, movs, salidas90, aperturas90, revision };
 }
 
 function fila(p: Row, b: Base): Row {
@@ -112,8 +126,11 @@ function fila(p: Row, b: Base): Row {
   const viejo = p.activo !== false && (cat ? cat.activo !== false : true) && !(cab && /^no$/i.test(s(cab.activo)));
   const fijado = p.beta_activo === true || p.beta_activo === false;
   const activo = (fijado ? p.beta_activo === true : viejo) && !archivado;
-  const minimo = p.beta_stock_minimo != null && p.beta_stock_minimo !== "" ? n(p.beta_stock_minimo) : (b.minimos.get(code) || 0);
-  const reorden = p.beta_punto_reorden != null && p.beta_punto_reorden !== "" ? n(p.beta_punto_reorden) : null;
+  const salidas90 = tipo === "servicio" ? 0 : (b.salidas90?.get(code) || 0) + (b.aperturas90?.get(s(p.id)) || 0);
+  const auto = autoMinimos(salidas90);
+  const minimo = p.beta_stock_minimo != null && p.beta_stock_minimo !== "" ? n(p.beta_stock_minimo) : (b.minimos.get(code) || auto.minimo || 0);
+  const reorden = p.beta_punto_reorden != null && p.beta_punto_reorden !== "" ? n(p.beta_punto_reorden) : auto.reorden;
+  const revisar = tipo === "servicio" || !b.revision ? [] : faltantesDe(b.revision.get(s(p.id)), s(p.uso), auto.reorden != null);
   const vis = skuVisible(code, tipo, cat);
   return {
     id: p.id, sku: code, skuVisible: vis.sku, skuAlias: vis.alias, skuAntes: b.antes?.get(code) || [], nombre, tipo, subtipo,
@@ -125,6 +142,7 @@ function fila(p: Row, b: Base): Row {
     porSubCabina: Object.fromEntries((stock.find((g) => g.grupo === "CABINA")?.subs || []).map((x) => [x.codigo || "SIN", x.cantidad])),
     estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
+    minimoAuto: auto.minimo, reordenAuto: auto.reorden, salidas90, revisar,
     pvp: precios.pvp, comision: precios.comision,
     compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct,
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
@@ -455,7 +473,8 @@ async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined,
   }
   return {
     descripcion: s(prod.beta_descripcion),
-    minimos: { minimo: prod.beta_stock_minimo ?? null, reorden: prod.beta_punto_reorden ?? null, minimoSistema: base.minimo },
+    minimos: { minimo: prod.beta_stock_minimo ?? null, reorden: prod.beta_punto_reorden ?? null, minimoSistema: base.minimo, minimoAuto: base.minimoAuto, reordenAuto: base.reordenAuto, salidas90: base.salidas90 },
+    revisar: base.revisar, sugeridos: deducirDelNombre(s(prod.nombre) || s(base.nombre)),
     archivado: !!s(prod.beta_archivado_at), archivadoPor: s(prod.beta_archivado_por), archivadoAt: s(prod.beta_archivado_at),
     eliminado: !!s(prod.beta_eliminado_at), eliminadoPor: s(prod.beta_eliminado_por),
     costoProm, costoPromedio, escalas, provProducto: arr(prod.beta_proveedores),

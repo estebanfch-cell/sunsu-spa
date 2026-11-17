@@ -8,7 +8,7 @@
 //   mcprod_proveedores_save  proveedores del producto (código, precio, predeterminado)
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, guardarArchivo } from "./lib.ts";
+import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { s, type Row } from "./domain.ts";
 import { runErp } from "./erp.ts";
@@ -254,4 +254,50 @@ extend("mcprod_proveedores_save", "any", async (p, ctx, ses) => {
   const r = await actualizar(ctx, ses, s(prod.id), row);
   if ("error" in r && r.error) return r;
   return { ok: true, proveedores };
+});
+
+// «+ Nueva presentación» (TK18b): crea el subcódigo HT-007-1, HT-007-2… del producto base, copia marca/categoría/uso/precios,
+// guarda su contenido y envase, y enlaza las dos fichas. El producto base no se toca salvo la lista de presentaciones.
+export function siguientePresentacion(base: string, existentes: string[]): string {
+  const b = codigoNorm(base);
+  let max = 0;
+  const re = new RegExp("^" + b.replace(/[-]/g, "\\-") + "-(\\d+)$");
+  for (const c of existentes) { const m = codigoNorm(c).match(re); if (m) max = Math.max(max, Number(m[1])); }
+  return b + "-" + (max + 1);
+}
+extend("mcprod_presentacion_nueva", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin crea presentaciones" };
+  const prods = await safeAll(ctx, "erp_productos");
+  let src = prods.find((x) => s(x.id) === s(p.id));
+  if (!src) return { error: "Producto no encontrado" };
+  // Si se crea desde una presentación, el base es su producto_base (HT-007-1 → HT-007).
+  const baseSku = s(src.producto_base) && prods.some((x) => codigoNorm(x.sku) === codigoNorm(src!.producto_base)) ? codigoNorm(src.producto_base) : codigoNorm(src.sku);
+  if (!/^[A-Z]{1,6}-\d+$|^\d+$/.test(baseSku)) return { error: "El producto base debe tener un código como HT-007" };
+  src = prods.find((x) => codigoNorm(x.sku) === baseSku) || src;
+  const contenido = Number(String(p.contenido ?? "").replace(",", "."));
+  const unidad = s(p.unidad);
+  if (!(contenido > 0)) return { error: "Escribe el contenido (por ejemplo 50)" };
+  if (!["g", "ml", "unidades"].includes(unidad)) return { error: "Elige la unidad: g, ml o unidades" };
+  const envase = s(p.envase).trim().slice(0, 40);
+  const sku = siguientePresentacion(baseSku, prods.map((x) => s(x.sku)));
+  if (prods.some((x) => codigoNorm(x.sku) === sku)) return { error: "El código " + sku + " ya existe; vuelve a intentar" };
+  const etq = (unidad === "unidades" ? contenido + " u" : contenido + unidad);
+  const sinCont = s(src.nombre).replace(/\s*\d+(?:[.,]\d+)?\s*(ml|g|gr|u|pads?)\b/i, "").trim();
+  const guion = sinCont.lastIndexOf(" - ");
+  const auto = guion > 0 ? sinCont.slice(0, guion).trim() + " " + etq + sinCont.slice(guion) : sinCont + " " + etq;
+  const nombre = (s(p.nombre).trim() || auto).slice(0, 200);
+  const out = await runErp("prod_save", {
+    sku, nombre, marca: s(src.marca), categoria: s(src.categoria), clase: s(src.clase) || "producto",
+    unidad: s(src.unidad) || "u", uso: ["cabina", "venta", "ambos"].includes(s(src.uso)) ? s(src.uso) : "venta",
+    linea: s(src.linea), sku_proveedor: s(p.sku_proveedor), precio_venta: null, _rol: ses.rol,
+  }, ctx.db, actorOf(ses), ctx.now);
+  if (out.error) return out;
+  await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(out.id) }, {
+    producto_base: baseSku, beta_contenido: contenido, beta_contenido_unidad: unidad, beta_envase: envase || null,
+    beta_presentaciones: [s(src.id)], ...sello(ses, ctx),
+  });
+  const ya = arr(src.beta_presentaciones).map((x) => s(x));
+  await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(src.id) }, { beta_presentaciones: [...new Set([...ya, s(out.id)])].slice(0, 20), ...sello(ses, ctx) });
+  await logAccion(ctx.db, actorOf(ses), "PRODUCTO PRESENTACION", sku + " (" + etq + ") de " + baseSku);
+  return { ok: true, id: out.id, sku, nombre };
 });
