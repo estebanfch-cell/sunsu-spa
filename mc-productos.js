@@ -651,7 +651,7 @@
         mini(cols, pr.pasos || [], "Sin pasos.") + '<p class="note"><a href="#/m/mc/protocolos">Abrir en Protocolos</a></p></div>';
     }
     var cols2 = [["sku", "Facial"], ["nombre", "Protocolo"], ["pasos", "Pasos", 1], [function (x) { return q2(x.cantidad) + " " + e(x.unidad); }, "Usa por servicio", 1]];
-    return '<div class="mcp-card"><div class="card-title">Se usa en</div>' + mini(cols2, r.seUsaEn || [], "No aparece en ningún protocolo.") + '<p class="note"><a href="#/m/mc/protocolos">Ver Protocolos</a></p></div>';
+    return '<div id="mcp-aplica"></div><div class="mcp-card"><div class="card-title">Se usa en</div>' + mini(cols2, r.seUsaEn || [], "No aparece en ningún protocolo.") + '<p class="note"><a href="#/m/mc/protocolos">Ver Protocolos</a></p></div>';
   }
   function pdfFicha() {
     var r = MC.cur, p = r.producto, pr = r.precios || {};
@@ -830,12 +830,18 @@
     return '<div class="mcp mcp-ficha"><div class="mcp-top"><button class="btn ghost small" type="button" id="mcp-volver">← Productos</button><span class="mcp-acc" id="mcp-acc">' + acciones() + "</span></div>" +
       '<div id="mcp-head">' + head() + "</div>" + tabs() + '<div id="mcp-cuerpo">' + cuerpo() + "</div></div>";
   }
+  /** «Aplica a faciales» (📦 Abrir producto → costo por facial) en la pestaña Protocolo. */
+  function montarAplica() {
+    var h = document.getElementById("mcp-aplica");
+    if (h && window.MCAperturas && MC.cur && MC.cur.producto) window.MCAperturas.aplicaCard(h, MC.cur.producto.id, !!(MC.admin || (typeof state !== "undefined" && state.admin)));
+  }
   function repintar(foco) {
     var h = document.getElementById("mcp-head"), c = document.getElementById("mcp-cuerpo"), t = document.querySelector(".mcp-tabs");
     if (h) h.innerHTML = head();
     if (c) c.innerHTML = cuerpo();
     if (t) t.outerHTML = tabs();
     var ac = document.getElementById("mcp-acc"); if (ac) ac.innerHTML = acciones();
+    montarAplica();
     if (foco) { var i = document.querySelector("[data-mcp-in]"); if (i) { i.focus(); try { if (i.select) i.select(); } catch (x) { /* select */ } } }
   }
   function setVal(k, v) {
@@ -917,6 +923,7 @@
     repintar();
   }
   function wireFicha(main) {
+    setTimeout(montarAplica, 0);
     var host = main.querySelector(".mcp-ficha");
     if (!host) return;
     host.addEventListener("click", function (ev) {

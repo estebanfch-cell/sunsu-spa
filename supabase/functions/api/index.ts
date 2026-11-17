@@ -24,6 +24,7 @@ import "./colores_api.ts";
 import "./tickets_cancelar_api.ts";
 import "./paquetes_beta_api.ts";
 import "./multas_beta_api.ts";
+import "./aperturas_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

@@ -25,7 +25,7 @@ describe("menú MineCore (mc-nav.js)", () => {
   });
   it("«+»: los cuatro de Emilia, con emoji", () => {
     const nav = cargar("admin", TODO);
-    assert.deepEqual([...nav.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "🧾 Nueva orden de compra", "💵 Ingreso / gasto de caja chica"]);
+    assert.deepEqual([...nav.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "🧾 Nueva orden de compra", "💵 Ingreso / gasto de caja chica", "📦 Abrir producto"]);
     assert.equal(nav.crearItems()[0][2], "#/doc/ov");
   });
   it("cada ruta «Próximamente» tiene su texto; recepción no ve compras ni admin", () => {
@@ -37,6 +37,6 @@ describe("menú MineCore (mc-nav.js)", () => {
     const rec = cargar("recepcion", { tickets: "propio", cotizaciones_cliente: "todos", clientes: "todos", caja: "todos", inventario: "propio" });
     const ids = rec.grupos().filter((x) => !x.soloMovil).map((x) => x.id);
     assert.ok(!ids.includes("compras") && !ids.includes("admin"));
-    assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "💵 Ingreso / gasto de caja chica"]);
+    assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "💵 Ingreso / gasto de caja chica", "📦 Abrir producto"]);
   });
 });
