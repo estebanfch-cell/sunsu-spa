@@ -58,7 +58,7 @@ function siguienteNumero(rows: Row[]): string {
   for (const r of rows) { const m = s(r.numero).match(/^CF-(\d+)$/); if (m) max = Math.max(max, Number(m[1])); }
   return "CF-" + String(max + 1).padStart(3, "0");
 }
-async function notificar(ctx: Ctx, ses: Ses, usuario: string, titulo: string, cuerpo: string, link: string, ref: string, tipo = "conteo"): Promise<void> {
+export async function notificar(ctx: Ctx, ses: Ses, usuario: string, titulo: string, cuerpo: string, link: string, ref: string, tipo = "conteo"): Promise<void> {
   if (!usuario) return;
   try {
     await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
@@ -78,8 +78,13 @@ function vista(c: Row, L: Row[], ses: Ses): Row {
     familias: s(c.familias), asignadoA: s(c.asignado_a), asignadoNombre: s(c.asignado_nombre), estado: s(c.estado), estadoNombre: ESTADOS_CONTEO[s(c.estado)] || s(c.estado),
     nota: s(c.nota), revisionNota: s(c.revision_nota), creadoPor: s(c.creado_por), creadoAt: s(c.creado_at),
     iniciadoAt: s(c.iniciado_at), enviadoAt: s(c.enviado_at), aprobadoAt: s(c.aprobado_at), aprobadoPor: s(c.aprobado_por),
-    stockAplicado: c.stock_aplicado === true, mia: esAsignada(c, ses), ...resumenLineas(L),
+    stockAplicado: c.stock_aplicado === true, mia: esAsignada(c, ses), ...ciego(resumenLineas(L), ses),
   };
+}
+/** Conteo CIEGO (Emilia 17/11): quien no es admin nunca recibe el stock del sistema ni las diferencias. */
+function ciego(r: Row, ses: Ses): Row {
+  if (esAdmin(ses.rol)) return r;
+  return { lineas: r.lineas, contadas: r.contadas, pendientes: r.pendientes, conDiferencia: null, faltan: null, sobran: null };
 }
 
 extend("cf_meta", "any", async (_p, ctx, ses) => {
@@ -140,12 +145,12 @@ extend("cf_get", "any", async (p, ctx, ses) => {
   if (!admin && !esAsignada(r.c, ses) && !(await puedeVerModulo(ctx, ses))) return { error: "No tienes permiso" };
   const lineas = r.L.map((l) => ({
     id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre), sububicacion: s(l.sububicacion),
-    sistema: n(l.sistema), contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado), subContada: s(l.sub_contada),
-    agregado: l.agregado === true, nota: s(l.nota), contadoPor: s(l.contado_por), contadoAt: s(l.contado_at), diferencia: difLinea(l),
+    sistema: admin ? n(l.sistema) : null, contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado), subContada: s(l.sub_contada),
+    agregado: l.agregado === true, nota: s(l.nota), contadoPor: s(l.contado_por), contadoAt: s(l.contado_at), diferencia: admin ? difLinea(l) : null,
   }));
   const c = vista(r.c, r.L, ses);
   const puedeContar = (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "en_conteo";
-  return { ok: true, conteo: c, lineas, admin, puedeContar, puedeEmpezar: (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "asignado", puedeRevisar: admin && s(r.c.estado) === "en_revision" };
+  return { ok: true, conteo: c, lineas, admin, ciego: !admin, puedeContar, puedeEmpezar: (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "asignado", puedeRevisar: admin && s(r.c.estado) === "en_revision" };
 });
 
 extend("cf_iniciar", "any", async (p, ctx, ses) => {
