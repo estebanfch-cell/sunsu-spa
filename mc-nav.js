@@ -51,7 +51,7 @@
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["conteos", "Conteos físicos", "#/m/conteos"],
         ["transferencias", "Transferencias", "#/m/transferencias"],
-        ["ajuste", "Ajustes de stock", "#/m/mc/ajuste"],
+        ["ajuste", "Ajustes de stock", "#/m/ajustes"],
         // Kardex, Locales y cabinas y Catálogo anterior fuera del menú (Emilia 17/11); el historial y los
         // movimientos están en la ficha de cada producto. Las rutas siguen existiendo.
       ] },
@@ -145,8 +145,8 @@
       [puedeOc, "Nueva orden de compra", "#/m/compras/nueva"],
       [adm() && ok("proveedores"), "Nuevo proveedor", "#/m/proveedores/nuevo"],
       [ok("caja"), "Ingreso / gasto de caja chica", "#/m/caja"],
-      [ok("transferencias"), "Transferencia", "#/m/transferencias"],
-      [ok("ajuste"), "Ajuste", "#/m/mc/ajuste"],
+      [ok("transferencias"), "Transferencia", "#/m/transferencias/nueva"],
+      [ok("ajuste"), "Ajuste", "#/m/ajustes/nueva"],
       [adm(), "Nuevo producto", "#/m/productos/nuevo"],
       [adm(), "Nuevo protocolo", "#/m/mc/protocolos/nuevo"],
     ].filter(function (x) { return x[0]; });
