@@ -26,3 +26,32 @@ describe("tk_historial consulta paginada (fallback JS)", () => {
     assert.deepEqual(r.rows.map((x) => x.id).sort(), [1, 4]);
   });
 });
+
+import { SupabaseDb } from "./db.ts";
+import { VistaDb } from "./prueba.ts";
+describe("consulta en Supabase", () => {
+  const filas = Array.from({ length: 2345 }, (_, i) => ({ id: i + 1 }));
+  const urls: string[] = [];
+  const fake = (async (url: string, init?: RequestInit) => {
+    urls.push(String(url));
+    const rg = String((init?.headers as Record<string, string>)?.Range || "0-");
+    const [a, b] = rg.split("-").map((x) => (x === "" ? NaN : Number(x)));
+    const fin = Math.min(filas.length - 1, Number.isFinite(b) ? b : 999, a + 999);
+    const parte = filas.slice(a, fin + 1);
+    return new Response(JSON.stringify(parte), { status: 200, headers: { "content-range": `${a}-${fin}/${filas.length}` } });
+  }) as unknown as typeof fetch;
+  it("pasa de 1000 filas pidiendo por bloques y cuenta el total real", async () => {
+    const db = new SupabaseDb("https://x.supabase.co", "k", fake);
+    const r = await db.consultar("tickets", { cols: ["id"], contar: true });
+    assert.equal(r.rows.length, 2345);
+    assert.equal(r.total, 2345);
+  });
+  it("sin columna origin (gift_cards_digitales) no agrega el filtro de prueba", async () => {
+    urls.length = 0;
+    const v = new VistaDb(new SupabaseDb("https://x.supabase.co", "k", fake), false);
+    await v.consultar("gift_cards_digitales", { filtros: [{ col: "codigo", op: "in", val: ["26-159"] }], limite: 5 });
+    assert.ok(!decodeURIComponent(urls[0]).includes("origin"));
+    await v.consultar("tickets", { limite: 5 });
+    assert.ok(decodeURIComponent(urls[1]).includes("origin"));
+  });
+});

@@ -120,6 +120,20 @@ export class SupabaseDb implements Db {
     return out;
   }
   async consultar(table: string, q: Consulta): Promise<Resultado> {
+    // Sin límite: PostgREST corta en 1000 filas (max-rows), así que se pide por bloques hasta el final.
+    if (q.limite == null) {
+      const out: Row[] = []; let total: number | null = null, d = q.desde || 0;
+      for (let i = 0; i < 100; i++) {
+        const r = await this.consultar1(table, { ...q, desde: d, limite: 1000, contar: q.contar && i === 0 });
+        if (i === 0) total = r.total;
+        out.push(...r.rows); d += r.rows.length;
+        if (r.rows.length < 1000) break;
+      }
+      return { rows: out, total: q.contar ? (total ?? out.length) : null };
+    }
+    return await this.consultar1(table, q);
+  }
+  private async consultar1(table: string, q: Consulta): Promise<Resultado> {
     const d = q.desde || 0, lim = q.limite;
     const headers: Record<string, string> = { Prefer: q.contar ? "count=exact" : "count=none" };
     if (lim != null) headers.Range = `${d}-${d + Math.max(0, lim - 1)}`;

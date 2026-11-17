@@ -90,7 +90,7 @@ async function giftVirtual(inner: Db): Promise<Row[]> {
 
 const SIN_ORIGIN = new Set(["app_kv", "gift_cards_digitales"]);
 
-class VistaDb implements Db {
+export class VistaDb implements Db {
   prueba: boolean;
   inner: Db;
   private on: boolean;
@@ -102,7 +102,14 @@ class VistaDb implements Db {
   async consultar(table: string, q: Consulta): Promise<Resultado> {
     const inner = this.inner as unknown as { consultar?: (t: string, q: Consulta) => Promise<Resultado> };
     if (!this.on && typeof inner.consultar === "function") {
-      return await inner.consultar(table, { ...q, filtros: [...(q.filtros || []), { op: "or", de: [{ col: "origin", op: "is_null" }, { col: "origin", op: "neq", val: "test" }] }] });
+      // Solo las tablas con filas de prueba tienen «origin» (gift_cards_digitales no: el filtro daba 400).
+      const conOrigen = TABLAS.includes(table);
+      try {
+        return await inner.consultar(table, conOrigen ? { ...q, filtros: [...(q.filtros || []), { op: "or", de: [{ col: "origin", op: "is_null" }, { col: "origin", op: "neq", val: "test" }] }] } : q);
+      } catch (e) {
+        console.error("consultar", table, String(e).slice(0, 300));
+        return consultarEnJs(await this.all(table), q); // respaldo: nunca romper la pantalla por la consulta
+      }
     }
     return consultarEnJs(await this.all(table), q);
   }
