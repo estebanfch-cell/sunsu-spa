@@ -8,8 +8,7 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn,
-} from "./domain.ts";
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado } from "./domain.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
@@ -154,7 +153,7 @@ async function citasAcuity(ctx: Ctx, ymd: string): Promise<number> {
 }
 async function dashboard(ctx: Ctx): Promise<R> {
   const ec = ecuadorParts(ctx.now);
-  const rows = [...await tickets(ctx)].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
+  const rows = [...(await tickets(ctx)).filter((r) => !esCancelado(r))].sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
   const cats = await catMap(ctx);
   const compra = await compraMap(ctx, cats);
   const lunes = addDays(ec.ymd, -((ec.dow + 6) % 7));
@@ -354,7 +353,7 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const cfg = aplicado.cfg;
   const cmap = await catMap(ctx);
   const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
-  const tks = (await tickets(ctx)).filter((r) => r.timestamp).map((r) => ovb(r, toIn(r, cmap)));
+  const tks = (await tickets(ctx)).filter((r) => r.timestamp && !esCancelado(r)).map((r) => ovb(r, toIn(r, cmap)));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
   const calc = calcularCiclo(tks, await marks(ctx), cfg, ciclo, hit ? n(hit.n_cosmetologas) : null, admins, tramos);
@@ -1760,7 +1759,7 @@ reg("getCajaV2", "any", async (_p, ctx, ses) => {
 async function syncEfectivo(ctx: Ctx, ses: Ses) {
   const desde = addDays(hoy(ctx), -3);
   const refs = new Set((await ctx.db.all("caja_chica")).map((r) => s(r.ref)));
-  for (const t of await tickets(ctx)) {
+  for (const t of (await tickets(ctx)).filter((r) => !esCancelado(r))) {
     const f = ymdUtc(t.timestamp);
     if (f < desde) continue;
     if (!s(t.comp).toLowerCase().includes("efect")) continue;

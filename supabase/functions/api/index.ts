@@ -21,6 +21,7 @@ import "./agenda_api.ts";
 import "./tickets_lista_api.ts";
 import "./usuario_permisos_api.ts";
 import "./colores_api.ts";
+import "./tickets_cancelar_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

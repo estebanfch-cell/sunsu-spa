@@ -6,8 +6,7 @@ import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
   packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
-  codigoPaquete,
-} from "./domain.ts";
+  codigoPaquete, esCancelado } from "./domain.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 
@@ -495,7 +494,7 @@ function aplicarTicket(g: GrupoCliente, r: Row): void {
     if (!g.cedula && s(r.id_3)) g.cedula = s(r.id_3).split(".")[0];
   }
   // estimado es el total con IVA guardado en el ticket (hoja y beta).
-  g.total = round2(g.total + n(r.estimado));
+  if (!esCancelado(r)) g.total = round2(g.total + n(r.estimado));
 }
 
 export function normBusca(v: unknown): string {
@@ -698,7 +697,7 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   const paquetes = await paquetesDe(db, ced, nom);
   let total = 0;
   const tickets = rows.map((r) => {
-    total += n(r.estimado);
+    if (!esCancelado(r)) total += n(r.estimado);
     const lineas = lineasTicket(r, cats, prods);
     const item: Row = {
       ref: numeroTicket(r),
@@ -751,7 +750,7 @@ export async function reporteConsumos(db: Db, p: Row): Promise<Row> {
   const venta = new Map<string, { sku: string; nombre: string; unidades: number }>();
   const cabina = new Map<string, { sku: string; nombre: string; unidades: number }>();
   const faciales = new Map<string, number>();
-  for (const t of await db.all("tickets")) {
+  for (const t of (await db.all("tickets")).filter((r) => !esCancelado(r))) {
     const fecha = ymdUtc(t.timestamp);
     if (!fecha || fecha < desde || fecha > hasta) continue;
     const fac = s(t.facial_hecho);

@@ -977,3 +977,9 @@ export const BETA_TABLES = [
   "cabina_inventario", "cabina_bitacora", "cabina_activos", "cabina_protocolos",
   "cabina_ordenes", "cabina_bajas", "cabina_traspasos", "cotizaciones",
 ] as const;
+
+/** Ticket cancelado/anulado (orig.anulado, lo conserva el trigger tickets_zzz_cancelado): no suma en totales, comisiones ni dashboard. */
+export function esCancelado(r: Row | null | undefined): boolean {
+  const o = r && r.orig && typeof r.orig === "object" ? r.orig as Row : null;
+  return !!o && (o.anulado === true || o.cancelado === true);
+}

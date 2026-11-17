@@ -50,6 +50,7 @@
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
       ".mctk-ln input.q,.mctk-ln input.p{-moz-appearance:textfield;appearance:textfield;padding:6px 10px;text-align:center;box-sizing:border-box}.mctk-ln input.q{width:64px}.mctk-ln input.p{width:92px;padding-left:20px}.mctk-ln input.q::-webkit-outer-spin-button,.mctk-ln input.q::-webkit-inner-spin-button,.mctk-ln input.p::-webkit-outer-spin-button,.mctk-ln input.p::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-money{position:relative;display:inline-block}.mctk-money>span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:.82rem;pointer-events:none}",
       ".mctk-cli{font-size:.9rem;font-weight:700;color:var(--navy-d);margin:-2px 0 2px}.mctk-cod{font-family:ui-monospace,monospace;color:var(--navy);text-decoration:none;border-bottom:1px dashed}",
+      ".mctk-cancel{color:#C0392B!important;border-color:#E6B0AA!important}.btn.small.mctk-cancel:not(.ghost){background:#C0392B!important;color:#fff!important}.mctk-canc{background:#FDECEA;border:1px solid #E6B0AA;color:#922B21;border-radius:10px;padding:10px 12px;margin:8px 0;font-size:.85rem}" +
       ".mctk-xdlg .mctk-box{width:min(620px,94vw);max-height:88vh;overflow:auto}.mctk-xh{display:flex;justify-content:space-between;align-items:center}.mctk-xh h3{margin:0}.mctk-xx{background:none;border:0;font-size:1.6rem;line-height:1;cursor:pointer;color:var(--navy)}.mctk-xtog{display:flex!important;align-items:center;gap:10px;padding:10px 12px;margin:8px 0;background:var(--cream);border-radius:10px;font-size:.86rem;cursor:pointer}.mctk-xdlg input[type=checkbox]{width:18px!important;height:18px;margin:0;flex:none;accent-color:var(--navy)}.mctk-xt{width:100%;border-collapse:collapse;font-size:.84rem;margin:4px 0 10px}.mctk-xt th{font-size:.68rem;text-transform:uppercase;color:var(--gray);text-align:left;padding:6px 8px;border-bottom:1px solid var(--cream-d)}.mctk-xt td{padding:8px;border-bottom:1px solid #f0ece4;vertical-align:middle}.mctk-xt .num{text-align:right;white-space:nowrap}.mctk-xt .c{text-align:center;width:70px}.mctk-xlbl{display:block;font-size:.8rem;font-weight:700}.mctk-xlbl input{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-weight:400}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
@@ -197,7 +198,8 @@
       '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
-      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button></div>' +
+      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + "</div>" +
+      (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span></div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
@@ -267,6 +269,30 @@
   }
 
   // ---------- excluir comisión ----------
+  function dlgCancelar() {
+    var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg mctk-xdlg";
+    var prods = K.L.filter(function (l) { return l.tipo === "producto"; });
+    box.innerHTML = '<div class="mctk-box"><div class="mctk-xh"><h3>🚫 Cancelar ' + e(t.soNum || t.betaNum || "ticket") + '</h3><button type="button" class="mctk-xx" data-cerrar title="Cerrar">×</button></div>' +
+      '<p class="mccf-sub">El ticket no se borra: queda <b>Cancelado</b> y sale de totales, comisiones y dashboard. ' + (prods.length ? "Los productos (" + prods.map(function (l) { return e(l.nombre) + " ×" + e(q2(l.cantidad)); }).join(", ") + ") vuelven a la bodega de donde salieron. " : "") + "Los servicios solo se cancelan. Si el ticket creó un paquete, el paquete se da de baja.</p>" +
+      '<label class="mctk-xlbl">Motivo<input type="text" id="mctk-cm" placeholder="Ej. ticket duplicado, la clienta no vino"></label>' +
+      '<p class="err" id="mctk-cerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost small" type="button" data-cerrar2>Volver</button><button class="btn small mctk-cancel" type="button" id="mctk-cok">Cancelar ticket</button></div></div>';
+    document.body.appendChild(box);
+    var cerrar = function () { box.remove(); };
+    box.querySelector("[data-cerrar]").onclick = cerrar; box.querySelector("[data-cerrar2]").onclick = cerrar;
+    box.onclick = function (ev) { if (ev.target === box) cerrar(); };
+    box.querySelector("#mctk-cok").onclick = async function () {
+      var m = box.querySelector("#mctk-cm").value.trim(), err = box.querySelector("#mctk-cerr");
+      if (m.length < 3) { err.textContent = "Escribe el motivo"; return; }
+      this.disabled = true; this.textContent = "Cancelando…";
+      try {
+        var r = await api("tk_cancelar", { clave: d.clave, motivo: m });
+        if (!r || r.error) throw new Error((r && r.error) || "No se pudo cancelar");
+        box.remove();
+        if (window.toast) toast("Ticket cancelado" + (r.unidades ? " · " + r.unidades + " u. devueltas a bodega" : "") + (r.paquetes && r.paquetes.length ? " · paquete dado de baja" : ""), "var(--green)");
+        var nd = await api("tk_get", { clave: d.clave }); if (nd && nd.ok) { cargarEstado(nd); repintar(document.getElementById("main")); }
+      } catch (x) { err.textContent = x.message || String(x); this.disabled = false; this.textContent = "Cancelar ticket"; }
+    };
+  }
   function dlgExcluir() {
     var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg mctk-xdlg";
     box.innerHTML = '<div class="mctk-box"><div class="mctk-xh"><h3>Excluir comisión</h3><button type="button" class="mctk-xx" data-cerrar title="Cerrar">×</button></div>' +
@@ -509,6 +535,7 @@
     main.querySelector("#mctk-wa").onclick = function (ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; this.hidden = true; enviarReporte(b.getAttribute("data-wa")); };
     main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;
+    if (main.querySelector("#mctk-cancelar")) main.querySelector("#mctk-cancelar").onclick = dlgCancelar;
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
     var sub = main.querySelector("#mctk-subir");
     if (sub) sub.onchange = async function () {
