@@ -64,7 +64,7 @@ const MOD_EXTRA: Record<string, string> = {
   mcprod_save: "productos", mcprod_foto: "productos", mcprod_nuevo: "productos",
   mcprod_estado: "productos", mcprod_duplicar: "productos", mcprod_archivo: "productos", mcprod_archivo_subir: "productos",
   mcprod_archivo_quitar: "productos", mcprod_archivo_principal: "productos", mcprod_codigos_save: "productos",
-  mcprod_codigo_interno: "productos", barras_resumen: "productos", barras_generar_lote: "productos", barras_asignar: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
+  mcprod_codigo_interno: "productos", barras_resumen: "productos", barras_generar_lote: "productos", barras_asignar: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_presentacion_nueva: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
   proto_list: "cabina", proto_get: "cabina", proto_guardar: "cabina", proto_historial: "cabina",
   // Conteo físico (0045): crear/revisar es de admin; contar lo hace la asignada aunque no tenga el módulo.
   cf_meta: "conteos", cf_list: "inicio", cf_crear: "conteos", cf_revisar: "conteos",
