@@ -344,6 +344,16 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
       comProductos: n(calculado.com_productos), comPaquetes: n(calculado.com_paquetes), multas: n(calculado.multas_descuentos),
     }
     : await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes);
+  // Multas de la beta (beta_multas) del mismo corte 26→25: se suman a las del sistema central.
+  const cicloM = cicloInicio(`${anio}-${String(mes).padStart(2, "0")}-25`), finM = cicloFin(cicloM);
+  const { multasBetaRol } = await import("./multas_beta_api.ts");
+  const mBeta = await multasBetaRol(ctx.db, s(e.nombre_app) || s(e.apellidos_y_nombres), cicloM, finM);
+  com.multas = round2(n(com.multas) + mBeta.total);
+  const multasCentral = (await ctx.db.all("multas_descuentos").catch(() => [] as R[])).filter((r) => {
+    if (r.borrado_at) return false;
+    const f = ymdUtc(r.fecha);
+    return !!f && f >= cicloM && f <= finM && normNombre(s(r.cosmetologa) || s(r.empleada) || s(r.nombre)).startsWith(normNombre(s(e.nombre_app)).split(" ")[0] || "—");
+  }).map((r) => ({ tipo: s(r.tipo) || "MULTA", fecha: ymdUtc(r.fecha), monto: n(r.monto), motivo: s(r.motivo), fuente: "sistema" }));
   const dinero = (...keys: string[]) => {
     for (const k of keys) if (n(e[k]) > 0) return n(e[k]);
     return 0;
@@ -368,7 +378,8 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   // egresos del PDF es lo que va además del IESS (el PDF suma iess + egresos).
   const deHoja = rpc && !rpc.error && !cfg ? rpc : null;
   const iess = deHoja ? n(deHoja.iess_personal) : local.iess;
-  const egresosConIess = deHoja ? n(deHoja.total_egresos) : local.egresos;
+  // rol_calcular (SQL) no conoce beta_multas: se suman aquí.
+  const egresosConIess = deHoja ? round2(n(deHoja.total_egresos) + mBeta.total) : local.egresos;
   const data = {
     nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
     diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasJibble: horas.hayDatos ? horas.diasJibble : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
@@ -382,8 +393,8 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     totalIngresos: deHoja ? n(deHoja.total_ingresos) : local.totalIngresos,
     iess,
     egresos: round2(Math.max(0, egresosConIess - iess)),
-    totalRecibir: deHoja ? n(deHoja.total_recibir) : local.totalRecibir,
-    anticipo: 0, prestHip: 0, prestQuir: 0, sheet, multasDetalle: [],
+    totalRecibir: deHoja ? round2(n(deHoja.total_recibir) - mBeta.total) : local.totalRecibir,
+    anticipo: 0, prestHip: 0, prestQuir: 0, sheet, multasDetalle: [...multasCentral, ...mBeta.detalle.map((x) => ({ ...x, tipo: "MULTA " + s(x.concepto) }))], multasBeta: mBeta.total,
     fuente: deHoja ? "rol_calcular" : "beta-local",
   };
   return { ok: true, data };
@@ -535,6 +546,9 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     if (!normNombre(s(r.cosmetologa)).includes(key)) continue;
     if (s(r.tipo).toLowerCase() === "multa" || !s(r.tipo)) multas += n(r.monto);
   }
+  const { multasBetaRol } = await import("./multas_beta_api.ts");
+  const mBetaC = await multasBetaRol(ctx.db, persona, pack.ciclo, fin);
+  multas = round2(multas + mBetaC.total);
   const [y, m, d0] = pack.ciclo.split("-").map(Number);
   const [y2, m2, d2] = fin.split("-").map(Number);
   const diasPeriodo = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d0)) / 86400000) + 1;
@@ -576,13 +590,18 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const descuentos = [
     ["IESS", local.iess], ["Multas", round2(multas)],
   ].map(([concepto, monto]) => ({ concepto, monto }));
+  const multasDetalle = [
+    ...pack.multas.filter((r) => { const f = ymdUtc(r.fecha); return !r.borrado_at && !!f && f >= pack.ciclo && f <= fin && normNombre(s(r.cosmetologa)).includes(key) && (s(r.tipo).toLowerCase() === "multa" || !s(r.tipo)); })
+      .map((r) => ({ tipo: "MULTA", concepto: s(r.tipo) || "Multa", fecha: ymdUtc(r.fecha), monto: n(r.monto), motivo: s(r.motivo), fuente: "sistema" })),
+    ...mBetaC.detalle,
+  ];
   return {
     ok: true,
     persona, ciclo: pack.ciclo, fin, diasPeriodo,
     cargo: s(e?.cargo), cedula: s(e?.cedula),
     fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
     marcajesFaltantes,
-    ingresos, descuentos,
+    ingresos, descuentos, multasDetalle,
     totalIngresos: local.totalIngresos, totalDescuentos: local.egresos, neto: local.totalRecibir,
     personas, admin: esAdmin(ses.rol), config: cfg,
     comisiones: com,

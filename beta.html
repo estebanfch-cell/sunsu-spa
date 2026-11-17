@@ -1970,6 +1970,7 @@ function pantallaSunsu(route) {
   if (m === "comisiones" || (m === "personal" && route.sub === "comisiones")) return "";
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "roles";
   if (m === "personal" && route.sub === "permisos") return "permisos";
+  if (m === "personal" && route.sub === "multas" && window.MCMultas) return "";
   if (m === "personal" && route.sub === "multas") return "multas";
   if (m === "usuarios" || m === "permisos" || m === "configuracion") return "";
   return "";
@@ -2112,6 +2113,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) window.MCTickets.wire(main, route);
     if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) window.MCClientes.wire(main, route);
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
+    if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
@@ -3700,6 +3702,7 @@ async function renderPersonal(route) {
   if (route.sub === "comisiones") return renderComisiones();
   if (route.sub === "rol") return renderPersonalRol();
   if (route.sub === "permisos") return renderPersonalPermisos();
+  if (route.sub === "multas" && window.MCMultas) return window.MCMultas.render(route);
   if (route.sub === "multas") return renderPersonalMultas();
   if (route.sub === "horarios") return renderHorarios();
   return renderAsistencia();
@@ -5614,21 +5617,22 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk10"></script>
-<script src="beta-screens.js?v=20261117tk10"></script>
-<script src="beta-inline.js?v=20261117tk10"></script>
-<script src="mc-productos.js?v=20261117tk10"></script>
-<script src="mc-nav.js?v=20261117tk10"></script>
-<script src="mc-permisos.js?v=20261117tk10"></script>
-<script src="mc-protocolos.js?v=20261117tk10"></script>
-<script src="mc-conteo.js?v=20261117tk10"></script>
-<script src="mc-transferencias.js?v=20261117tk10"></script>
-<script src="mc-ajustes.js?v=20261117tk10"></script>
-<script src="vendor-qrcode.js?v=20261117tk10"></script>
-<script src="mc-tickets.js?v=20261117tk10"></script>
-<script src="mc-paquetes.js?v=20261117tk10"></script>
-<script src="mc-clientes.js?v=20261117tk10"></script>
-<script src="mc-agenda.js?v=20261117tk10"></script>
+<script src="mc-buscar.js?v=20261117tk11"></script>
+<script src="beta-screens.js?v=20261117tk11"></script>
+<script src="beta-inline.js?v=20261117tk11"></script>
+<script src="mc-productos.js?v=20261117tk11"></script>
+<script src="mc-nav.js?v=20261117tk11"></script>
+<script src="mc-permisos.js?v=20261117tk11"></script>
+<script src="mc-protocolos.js?v=20261117tk11"></script>
+<script src="mc-conteo.js?v=20261117tk11"></script>
+<script src="mc-transferencias.js?v=20261117tk11"></script>
+<script src="mc-ajustes.js?v=20261117tk11"></script>
+<script src="vendor-qrcode.js?v=20261117tk11"></script>
+<script src="mc-tickets.js?v=20261117tk11"></script>
+<script src="mc-paquetes.js?v=20261117tk11"></script>
+<script src="mc-multas.js?v=20261117tk11"></script>
+<script src="mc-clientes.js?v=20261117tk11"></script>
+<script src="mc-agenda.js?v=20261117tk11"></script>
 <script>draw();</script>
 </body>
 </html>
