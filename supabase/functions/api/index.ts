@@ -27,6 +27,7 @@ import "./multas_beta_api.ts";
 import "./aperturas_api.ts";
 import "./credenciales_api.ts";
 import "./barras_api.ts";
+import "./pagos_caja_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

@@ -1459,7 +1459,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "acceso") return "Mi acceso";
   if (route.mod === "barras") return "Códigos de barras";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : "Clientes") : "Registro de clientas";
-  if (route.mod === "caja") return "Caja chica";
+  if (route.mod === "caja") return route.sub === "pagos" ? "Pagos recibidos" : "Caja chica";
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "productos") return route.sub === "p" ? "Producto" : route.sub === "nuevo" ? "Nuevo producto" : route.sub === "catalogo" ? "Catálogo anterior" : "Productos";
   if (route.mod === "lugares") return "Locales y cabinas";
@@ -2000,7 +2000,7 @@ function pantallaSunsu(route) {
   if (m === "gift_cards") return "buscar-gc";
   if (m === "gift" && route.sub === "paquetes" && !route.id) return "buscar-paquetes";
   if (m === "gift" && !route.id) return "buscar-gc";
-  if (m === "caja") return "caja";
+  if (m === "caja") return window.MCCaja ? "" : "caja";
   if (m === "bitacora") return "bitacora";
   if (m === "cabina") return "cabina";
   if (m === "comisiones" || (m === "personal" && route.sub === "comisiones")) return "";
@@ -2154,6 +2154,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
     if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
+    if (route.kind === "mod" && route.mod === "caja" && window.MCCaja) window.MCCaja.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
@@ -2205,6 +2206,7 @@ async function renderMod(route) {
   if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.mod === "paquetes") return renderPaquetes();
   if (route.mod === "gift_cards") return renderGift();
+  if (route.mod === "caja" && window.MCCaja) return window.MCCaja.render(route);
   if (route.mod === "caja") return renderCaja();
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
@@ -5660,25 +5662,26 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk18b"></script>
-<script src="beta-screens.js?v=20261117tk18b"></script>
-<script src="beta-inline.js?v=20261117tk18b"></script>
-<script src="mc-productos.js?v=20261117tk18b"></script>
-<script src="mc-nav.js?v=20261117tk18b"></script>
-<script src="mc-permisos.js?v=20261117tk18b"></script>
-<script src="mc-protocolos.js?v=20261117tk18b"></script>
-<script src="mc-conteo.js?v=20261117tk18b"></script>
-<script src="mc-transferencias.js?v=20261117tk18b"></script>
-<script src="mc-ajustes.js?v=20261117tk18b"></script>
-<script src="vendor-qrcode.js?v=20261117tk18b"></script>
-<script src="mc-tickets.js?v=20261117tk18b"></script>
-<script src="mc-paquetes.js?v=20261117tk18b"></script>
-<script src="mc-aperturas.js?v=20261117tk18b"></script>
-<script src="mc-acceso.js?v=20261117tk18b"></script>
-<script src="mc-barras.js?v=20261117tk18b"></script>
-<script src="mc-multas.js?v=20261117tk18b"></script>
-<script src="mc-clientes.js?v=20261117tk18b"></script>
-<script src="mc-agenda.js?v=20261117tk18b"></script>
+<script src="mc-buscar.js?v=20261117tk19"></script>
+<script src="beta-screens.js?v=20261117tk19"></script>
+<script src="beta-inline.js?v=20261117tk19"></script>
+<script src="mc-productos.js?v=20261117tk19"></script>
+<script src="mc-nav.js?v=20261117tk19"></script>
+<script src="mc-permisos.js?v=20261117tk19"></script>
+<script src="mc-protocolos.js?v=20261117tk19"></script>
+<script src="mc-conteo.js?v=20261117tk19"></script>
+<script src="mc-transferencias.js?v=20261117tk19"></script>
+<script src="mc-ajustes.js?v=20261117tk19"></script>
+<script src="vendor-qrcode.js?v=20261117tk19"></script>
+<script src="mc-tickets.js?v=20261117tk19"></script>
+<script src="mc-paquetes.js?v=20261117tk19"></script>
+<script src="mc-aperturas.js?v=20261117tk19"></script>
+<script src="mc-acceso.js?v=20261117tk19"></script>
+<script src="mc-barras.js?v=20261117tk19"></script>
+<script src="mc-caja.js?v=20261117tk19"></script>
+<script src="mc-multas.js?v=20261117tk19"></script>
+<script src="mc-clientes.js?v=20261117tk19"></script>
+<script src="mc-agenda.js?v=20261117tk19"></script>
 <script>draw();</script>
 </body>
 </html>
