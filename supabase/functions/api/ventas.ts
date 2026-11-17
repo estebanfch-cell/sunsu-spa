@@ -654,7 +654,7 @@ function usosPaquete(r: Row): { usado: boolean; fecha: string }[] {
   return USO_FIELDS.map(([u, f]) => ({ usado: r[u] === true || r[u] === "true" || !!s(r[f]), fecha: s(r[f]) }));
 }
 
-async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[]> {
+export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[]> {
   let rows: Row[] = [];
   try { rows = await db.all("paquetes"); } catch { return []; }
   const out: Row[] = [];
