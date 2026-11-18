@@ -19,7 +19,7 @@ import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
-import { esDiferenciaMejora } from "./migo_lineas.ts";
+import { esDiferenciaMejora, skuMigoABeta } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
@@ -101,6 +101,31 @@ export function cortesiasDe(r: Row): Set<string> {
   }
   return out;
 }
+/** TK72 (Emilia 18/11): la factura Migo del ticket (Ventas Detalladas), si está cargada: líneas con IVA tal cual se facturaron. */
+export async function facturaMigoDe(ctx: Ctx, fac: string): Promise<{ total: number; lineas: { sku: string; nombre: string; cantidad: number; unitCon: number; descCon: number; totalCon: number }[] } | null> {
+  const dig = s(fac).replace(/\.0+$/, "").replace(/\D/g, "").replace(/^0+/, "");
+  if (!dig) return null;
+  const pad = dig.padStart(9, "0");
+  const es = (f: unknown) => s(f).replace(/\D/g, "").replace(/^0+/, "").endsWith(dig) && s(f).replace(/\D/g, "").slice(-9) === pad;
+  const F: Filtro = { op: "palabras", cols: ["factura"], val: [pad] };
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const armar = (L: Row[]) => L.map((l) => {
+    const cant = n(l.cantidad) || 1, sub = n(l.subtotal), iva = n(l.iva);
+    const tot = n(l.total) || r2(sub + (iva || sub * 0.15));
+    const unitSin = n(l.precio_unit) || (cant ? sub / cant : 0);
+    const unitCon = r2(unitSin * 1.15), bruto = r2(unitCon * cant);
+    return { sku: skuMigoABeta(s(l.codigo || l.sku) || s(l.producto)), nombre: s(l.producto || l.nombre), cantidad: cant, unitCon, descCon: Math.max(0, r2(bruto - tot)), totalCon: r2(tot) };
+  }).filter((l) => l.sku || l.nombre);
+  try {
+    const v = (await consultar(ctx.db, "beta_migo_facturas_vivo", { cols: ["factura", "total", "lineas"], filtros: [F], limite: 3 })).rows.find((x) => es(x.factura));
+    if (v && Array.isArray(v.lineas) && (v.lineas as Row[]).length) return { total: n(v.total), lineas: armar(v.lineas as Row[]) };
+  } catch { /* sin tabla */ }
+  try {
+    const L = (await consultar(ctx.db, "beta_migo_lineas", { cols: ["factura", "codigo", "producto", "cantidad", "precio_unit", "subtotal", "iva", "total"], filtros: [F], limite: 60 })).rows.filter((x) => es(x.factura));
+    if (L.length) { const ls = armar(L); return { total: r2(ls.reduce((a, l) => a + l.totalCon, 0)), lineas: ls }; }
+  } catch { /* sin tabla */ }
+  return null;
+}
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
@@ -111,8 +136,21 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const pvpDe = (c: string) => n(porCode.get(skuCode(c))?.pvp);
   const L0 = lineasTicket(r, pvpDe);
   const cobrado = n(r.estimado);
-  // Facial canjeado (sesión de paquete o gift card de facial): va en $0 y el cobro se reparte en el resto.
+  // Facial canjeado (sesión de paquete o gift card de facial): va en $0.
   const canjeF = canjeFacial(r);
+  // TK72: si la factura Migo del ticket está cargada y cuadra con lo cobrado, las líneas son las de la factura.
+  const fm = b(r.fac) || s(r.fac_7) ? await facturaMigoDe(ctx, s(r.fac_7)) : null;
+  if (fm && fm.lineas.length && Math.abs(fm.total - cobrado) <= 1) {
+    const nombreCat = (c: string) => s(porCode.get(skuCode(c))?.nombre);
+    const tipoCat = (c: string) => s(porCode.get(skuCode(c))?.tipo) || (L0.find((x) => skuCode(x.codigo) === skuCode(c))?.tipo) || "producto";
+    const outF: LineaTk[] = [];
+    for (const l of L0) {
+      if (canjeF && l.tipo === "facial" && !fm.lineas.some((x) => skuCode(x.sku) === skuCode(l.codigo))) outF.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreCat(l.codigo) || l.codigo, cantidad: l.qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, canje: true });
+      else if (cort.has(skuCode(l.codigo)) && !fm.lineas.some((x) => skuCode(x.sku) === skuCode(l.codigo))) outF.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreCat(l.codigo) || l.codigo, cantidad: l.qty, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, cortesia: true });
+    }
+    for (const x of fm.lineas) outF.push({ tipo: tipoCat(x.sku), sku: x.sku, nombre: nombreCat(x.sku) || x.nombre, cantidad: x.cantidad, precio_unit: x.unitCon, descuento_tipo: x.descCon > 0 ? "$" : null, descuento_valor: x.descCon, excluir_comision: false, estimado: false });
+    return outF;
+  }
   // Descuento por línea al crear (orig.desc_lineas): esa línea va a precio de lista con su descuento real,
   // y lo cobrado restante se reparte entre las demás.
   const oD = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
@@ -136,10 +174,15 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
       out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unitL), descuento_tipo: s(dx.modo) === "%" ? "%" : "$", descuento_valor: s(dx.modo) === "%" ? n(dx.valor) : n(dx.monto), excluir_comision: false, estimado: false, ...(s(dx.promo) ? { promo: s(dx.promo) } : {}) });
       continue;
     }
+    // TK72: nunca se prorratea. Una sola línea cobrada = lo cobrado es su precio; varias = precio de catálogo
+    // y lo que no cuadra va en una línea aparte «Diferencia sin explicar» (para revisar).
     const pr = precioLineaTicket(L, l.codigo, Math.max(0, round2(cobradoResto)));
-    const unit = pr.unit != null ? pr.unit : l.lista;
-    out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: pr.estimado || pr.unit == null });
+    const unit = !pr.estimado && pr.unit != null ? pr.unit : (l.lista > 0 ? l.lista : 0);
+    out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: !(l.lista > 0) && (pr.estimado || pr.unit == null) });
   }
+  const suma = round2(out.reduce((a, l) => a + round2(n(l.cantidad) * n(l.precio_unit)) - (l.descuento_tipo === "$" ? n(l.descuento_valor) : l.descuento_tipo === "%" ? round2(n(l.cantidad) * n(l.precio_unit) * n(l.descuento_valor) / 100) : 0), 0));
+  const dif = round2(cobrado - suma);
+  if (cobrado > 0 && Math.abs(dif) > 0.05) out.push({ tipo: "diferencia", sku: "DIF", nombre: "Diferencia sin explicar", cantidad: 1, precio_unit: dif, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: true });
   return out;
 }
 function promoDe(cab: Row | undefined, promos: Promo[]): Promo | null {
@@ -183,7 +226,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: faltaDe(r, (cab?.datos || {}) as Row), promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(calc.lineas.some((l) => l.tipo === "diferencia") ? ["revisar la «Diferencia sin explicar» (lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada)"] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
   };
