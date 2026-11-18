@@ -4,11 +4,24 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./tickets_beta_api.ts";
 import "./migo_cuadre_api.ts";
-import { candidatosParaFactura, cruzar, ticketClaveValida, esConsumidorFinal, esperandoFacturaLunes, exentoCuadre, facSeq, fechaGye, fechasCandidatasBorrador, flagsDeseadas, formaDeTicket, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
+import { candidatosParaFactura, cruzar, ticketClaveValida, esConsumidorFinal, esperandoFacturaLunes, estadoBorrador, borradorSePuedeVincular, exentoCuadre, facSeq, fechaGye, fechasCandidatasBorrador, flagsDeseadas, formaDeTicket, idFlag, mensajeNoVincula, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
 import { docsBeta, faltaDe } from "./tickets_beta_api.ts";
 import type { Row } from "./domain.ts";
 
 describe("cruce Migo (solo lectura)", () => {
+  it("acepta pendiente / asignado / pendiente por aprobar y rechaza estados finales", () => {
+    assert.equal(estadoBorrador("Pendiente por aprobar"), "pendiente_por_aprobar");
+    assert.equal(estadoBorrador("pendiente_aprobar"), "pendiente_aprobar");
+    assert.equal(borradorSePuedeVincular("pendiente"), true);
+    assert.equal(borradorSePuedeVincular("asignado"), true);
+    assert.equal(borradorSePuedeVincular("pendiente_aprobar"), true);
+    assert.equal(borradorSePuedeVincular("pendiente por aprobar"), true);
+    assert.equal(borradorSePuedeVincular("vinculado"), false);
+    assert.equal(borradorSePuedeVincular("aprobado"), false);
+    assert.equal(borradorSePuedeVincular("descartado"), false);
+    assert.match(mensajeNoVincula("vinculado", ["TK-SO-1899", "TK-SO-1901", "TK-SO-1902"]), /ya está vinculada a TK-SO-1899 \+ TK-SO-1901 \+ TK-SO-1902/);
+  });
+
   it("lee el secuencial 2951.0 y compara nombres sin tildes", () => {
     assert.equal(facSeq("2951.0"), 2951);
     assert.equal(facSeq("001-001-000002951"), 2951);
@@ -347,6 +360,47 @@ describe("borradores de factura sin ticket", () => {
     assert.deepEqual((after.vinculados as Row[])[0].ticket_claves, ["TK-SO-1902", "TK-SO-1899", "TK-SO-1901"]);
   });
 
+  it("vincula un borrador pendiente_aprobar y, si ya está vinculado a esos tickets, no falla: avisa que ya estaba", async () => {
+    const db = new MemoryDb();
+    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+    db.tables.set("tickets", [
+      { id: 1894, sheet_row: 1895, so_num: "TK-SO-1902", timestamp: "2026-11-17T18:00:00Z", nombre: "Paola", apellido: "Urvano", estimado: 224.99, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+      { id: 1891, sheet_row: 1892, so_num: "TK-SO-1899", timestamp: "2026-11-17T18:00:00Z", nombre: "Isabella", apellido: "Reina", estimado: 57.98, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+      { id: 1893, sheet_row: 1894, so_num: "TK-SO-1901", timestamp: "2026-11-17T18:00:00Z", nombre: "Nataly", apellido: "Reina", estimado: 43.99, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+    ]);
+    db.tables.set("beta_tickets", []);
+    db.tables.set("beta_ticket_flags", []);
+    db.tables.set("beta_ticket_cancelados", []);
+    db.tables.set("beta_migo_facturas_vivo", []);
+    db.tables.set("beta_migo_importes", []);
+    db.tables.set("beta_cuadre_link", []);
+    db.tables.set("beta_migo_borradores", [{
+      factura: "001-001-000002960", fecha: "2026-11-17", cliente: "PAOLA URVANO", total: 326.97, forma: "tarjeta",
+      estado: "pendiente_aprobar", ticket_clave: null, datos: {},
+    }]);
+    db.tables.set("log_acciones", []);
+    const ctx = { db, now: new Date("2026-11-18T16:30:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, token: "adm", legacyLogin: async () => ({}) };
+    const tres = ["TK-SO-1899", "TK-SO-1901", "TK-SO-1902"];
+    const vinc = await handle("migo_borrador_vincular", { token: "adm", factura: "2960", tickets: tres }, ctx) as Row;
+    assert.equal(vinc.ok, true, String(vinc.error));
+    assert.deepEqual(vinc.tickets, tres);
+    const otra = await handle("migo_borrador_vincular", { token: "adm", factura: "2960", tickets: tres }, ctx) as Row;
+    assert.equal(otra.ok, true, String(otra.error));
+    assert.equal(otra.ya_vinculado, true);
+    assert.match(String(otra.mensaje), /ya está vinculada/);
+    const bad = await handle("migo_borrador_vincular", { token: "adm", factura: "2960", tickets: ["TK-SO-1899"] }, ctx) as Row;
+    // mismo set o subconjunto: también idempotente
+    assert.equal(bad.ok, true, String(bad.error));
+    assert.equal(bad.ya_vinculado, true);
+    const desc = db.tables.get("beta_migo_borradores")![0];
+    desc.estado = "descartado";
+    desc.ticket_clave = null;
+    desc.datos = {};
+    const no = await handle("migo_borrador_vincular", { token: "adm", factura: "2960", tickets: tres }, ctx) as Row;
+    assert.match(String(no.error || ""), /descartada/i);
+  });
+
   it("el cron con clave corre el import sin sesión de persona (la clave no se imprime)", async () => {
     const db = new MemoryDb();
     db.tables.set("tickets", []);
@@ -406,12 +460,17 @@ describe("PDF de factura Migo", () => {
 
 import { readFileSync } from "node:fs";
 describe("Historial forma de pago (TK38)", () => {
-  it("columna entre Cosmetóloga y Subtotal, pill Pagado en Migo, caché tk38", () => {
+  it("columna entre Cosmetóloga y Subtotal, pill Pagado (Migo en tooltip), acordeón de bandeja", () => {
     const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
     assert.match(js, /k:'fpago',t:'💳 Forma de pago'/);
     assert.match(js, /k:'cos'[\s\S]{0,180}k:'fpago'[\s\S]{0,180}k:'sub'/);
-    assert.match(js, /Pagado en Migo/);
+    assert.match(js, /cobro confirmado en Migo/);
+    assert.equal(js.includes("Pagado en Migo"), false);
+    assert.match(js, /migo-acc-alerta/);
+    assert.match(js, /migo-acc-badge/);
+    assert.match(js, /sin ticket/);
+
     assert.match(js, /Pendiente por lunes/);
     assert.match(js, /function _tkFormaPill/);
     assert.match(js, /function _tkFacPdf/);
