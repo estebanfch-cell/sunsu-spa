@@ -49,12 +49,14 @@
       ] },
       { id: "inventario", label: "Inventario", items: [
         ["productos", "Productos", "#/m/productos"],
+        ["inventario", "Stock Venta", "#/m/inventario/venta"],
+        ["inventario", "Stock Cabina", "#/m/inventario/cabina"],
         ["productos", "Códigos de barras", "#/m/barras"],
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["conteos", "Conteos físicos", "#/m/conteos"],
         ["transferencias", "Transferencias", "#/m/transferencias"],
         ["ajuste", "Ajustes de stock", "#/m/ajustes"],
-        ["inventario", "Costo por facial", "#/m/aperturas/costo"],
+        ["ver_costos", "Costo por facial", "#/m/aperturas/costo"],
         // Kardex, Locales y cabinas y Catálogo anterior fuera del menú (Emilia 17/11); el historial y los
         // movimientos están en la ficha de cada producto. Las rutas siguen existiendo.
       ] },
@@ -113,9 +115,11 @@
     else if (typeof esRolCitas === "function" && esRolCitas()) spa.push(["inicio", "Mis citas", "#/m/citas"]);
     if (ok("gift_cards")) spa.push(["gift_cards", "Gift cards", "#/m/gift/cards"]);
     if (ok("paquetes")) spa.push(["paquetes", "Paquetes", "#/m/gift/paquetes"]);
-    if (typeof frenteRol === "function" && frenteRol()) {
-      spa.push(["seguimiento", "Seguimiento", "#/s/seguimiento"]);
-      spa.push(["recepcion", "Recepción", "#/s/recepcion"]);
+    // Recepción / Seguimiento solo para recepcionista (y admin, para encontrarlo).
+    var rol = (state.user && state.user.role) || "";
+    if (adm() || rol === "recepcion") {
+      spa.push(["*", "Seguimiento", "#/s/seguimiento"]);
+      spa.push(["*", "Recepción", "#/s/recepcion"]);
     }
     if (ok("bitacora")) spa.push(["bitacora", "Bitácora de esterilización", "#/m/bitacora"]);
     // «Cabina» fuera del menú (Emilia 17/11): solo se oculta; la ruta #/m/cabina y los datos siguen.
@@ -129,7 +133,7 @@
   var EMO_GRUPO = { ventas: "🛍️", protocolos: "🧪", inventario: "📦", bodega: "🏬", compras: "🛒", reportes: "📊", consignacion: "🤝", finanzas: "💰", admin: "⚙️", personal: "👥", spa: "💆", otros: "☰" };
   var EMO_RUTA = [
     ["#/m/tickets", "🎫"], ["#/doc/ov", "🎫"], ["#/m/cotizaciones_cliente", "📝"], ["#/doc/cot", "📝"], ["#/m/clientes", "👩"], ["#/m/agenda", "📅"], ["#/m/citas", "📅"],
-    ["#/m/mc/protocolos", "🧪"], ["#/m/mc/nuevo_protocolo", "🧪"], ["#/m/productos", "🧴"], ["#/m/inventario", "🧴"], ["#/m/conteos", "🔢"], ["#/m/transferencias", "🔄"], ["#/m/ajustes", "⚖️"],
+    ["#/m/mc/protocolos", "🧪"], ["#/m/mc/nuevo_protocolo", "🧪"], ["#/m/productos", "🧴"], ["#/m/inventario/venta", "🏪"], ["#/m/inventario/cabina", "🧴"], ["#/m/inventario", "📦"], ["#/m/conteos", "🔢"], ["#/m/transferencias", "🔄"], ["#/m/ajustes", "⚖️"],
     ["#/m/compras/rfq", "📨"], ["#/m/compras/cotizaciones", "📨"], ["#/m/recepciones", "📥"], ["#/m/compras/consignacion", "🤝"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
     ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
     ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
@@ -183,7 +187,7 @@
   };
   if (typeof document !== "undefined") (function () { var st = document.createElement("style"); st.textContent = ".mc-cos{display:inline-block;padding:1px 9px;border-radius:999px;border:1px solid transparent;font-size:.78rem;font-weight:700;line-height:1.5;white-space:nowrap}"; document.head.appendChild(st); })();
   if (typeof setTimeout === "function" && typeof document !== "undefined") setTimeout(function () { window.MCColor.cargar(); }, 1500);
-  var TABS = { ventas: 1, inventario: 1, compras: 1 };
+  var TABS = { ventas: 1, inventario: 1, spa: 1, compras: 1 };
   function grupos() {
     var out = [];
     // Orden (Emilia 18/11): Ventas primero, luego Spa; después el resto como en MineCore.
@@ -192,10 +196,16 @@
     todos = todos.filter(function (g) { return g.id !== "spa"; });
     Array.prototype.splice.apply(todos, [1, 0].concat(spaG));
     todos.forEach(function (g) {
-      var vis = g.items.filter(function (it) { return ok(it[0]); }).map(function (it) { var c = it.slice(); c[1] = conEmoji(it[1], emojiRuta(it[2])); return c; });
+      var items = g.items;
+      if (!adm()) {
+        // Personal: sin Protocolos, Reportes ni dashboard admin; Compras solo Recepciones.
+        if (g.id === "protocolos" || g.id === "reportes") return;
+        if (g.id === "compras") items = items.filter(function (it) { return it[0] === "recepciones" || String(it[2]) === "#/m/recepciones"; });
+      }
+      var vis = items.filter(function (it) { return ok(it[0]); }).map(function (it) { var c = it.slice(); c[1] = conEmoji(it[1], emojiRuta(it[2])); return c; });
       if (vis.length) out.push({ id: g.id, label: conEmoji(g.label, EMO_GRUPO[g.id]), items: vis });
     });
-    // En el teléfono Ventas, Inventario y Compras van en la barra de abajo; el resto en «•••».
+    // En el teléfono Ventas, Inventario, Spa y Compras van en la barra de abajo; el resto en «•••».
     var resto = out.filter(function (g) { return !TABS[g.id]; });
     out.push({ id: "otros", label: "Más", soloMovil: true, items: resto.flatMap(function (g) { return g.items; }),
       sections: resto.map(function (g) { return { title: g.label, icon: "", items: g.items }; }) });

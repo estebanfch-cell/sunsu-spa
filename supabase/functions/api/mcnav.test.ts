@@ -43,4 +43,26 @@ describe("menú MineCore (mc-nav.js)", () => {
     assert.ok(!ids.includes("compras") && !ids.includes("admin"));
     assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "💵 Ingreso / gasto de caja chica", "📦 Abrir producto"]);
   });
+
+  it("personal: sin Bodega ni Reportes ni Protocolos; Compras solo Recepciones; Venta/Cabina en Inventario; Recepción solo recepcionista", () => {
+    const staffAcc = { ...TODO, clientes: "todos", recepciones: "todos", agenda: "todos" };
+    const cos = cargar("cosmetologa", staffAcc);
+    const ids = cos.grupos().filter((x) => !x.soloMovil).map((x) => x.id);
+    assert.ok(!ids.includes("protocolos"), "sin Protocolos");
+    assert.ok(!ids.includes("reportes"), "sin Reportes");
+    assert.ok(!ids.includes("bodega"), "sin Bodega");
+    assert.ok(ids.includes("spa") && ids.includes("inventario") && ids.includes("compras") && ids.includes("personal"));
+    const compras = cos.grupos().find((x) => x.id === "compras")!.items.map((i) => i[2]);
+    assert.deepEqual([...compras], ["#/m/recepciones"]);
+    const inv = cos.grupos().find((x) => x.id === "inventario")!.items.map((i) => i[2]);
+    assert.ok(inv.includes("#/m/inventario/venta") && inv.includes("#/m/inventario/cabina"));
+    assert.ok(!inv.includes("#/m/aperturas/costo"));
+    const spa = cos.grupos().find((x) => x.id === "spa")!.items;
+    const spaHash = spa.map((i) => i[2]);
+    assert.ok(spaHash.includes("#/m/gift/cards") && spaHash.includes("#/m/gift/paquetes") && spaHash.includes("#/m/bitacora"));
+    assert.ok(!spaHash.includes("#/s/recepcion") && !spaHash.includes("#/s/seguimiento"));
+    const rec = cargar("recepcion", { ...staffAcc, tickets: "todos" });
+    const recSpa = rec.grupos().find((x) => x.id === "spa")!.items.map((i) => i[2]);
+    assert.ok(recSpa.includes("#/s/recepcion") && recSpa.includes("#/s/seguimiento"));
+  });
 });
