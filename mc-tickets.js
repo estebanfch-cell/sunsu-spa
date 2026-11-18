@@ -645,7 +645,7 @@
     wireCostos();
     // 💵 Pagos de la beta (TK19): lista, registrar y anular; el efectivo entra solo a la caja chica.
     var hp = main.querySelector("#mctk-pagos");
-    if (hp && window.MCPagos && K.d && K.d.clave) window.MCPagos.montar(hp, K.d.clave, function () { return calc().total; }, function (pagadoBeta) { K.pagoBeta = pagadoBeta; pintarTot(); });
+    if (hp && window.MCPagos && K.d && K.d.clave) window.MCPagos.montar(hp, K.d.clave, function () { return calc().total; }, function (pagadoBeta) { K.pagoBeta = pagadoBeta; pintarTot(); }, async function () { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); } });
     wireBuscar(main);
     var err = main.querySelector("#mctk-err");
     var g = main.querySelector("#mctk-guardar");
