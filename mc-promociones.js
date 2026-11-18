@@ -176,7 +176,7 @@
     async function calcular() {
       var r = await api("promo_calcular", { lineas: L, ids: sel });
       if (!r || r.error) { body.innerHTML = '<p class="err">' + e((r && r.error) || "No se pudo calcular") + "</p>"; return; }
-      if (first) { first = false; if (!sel.length) { sel = r.promos.filter(function (p) { return p.monto > 0; }).map(function (p) { return p.id; }); if (sel.length) return calcular(); } }
+      if (first) { first = false; if (!sel.length && !opts.auto) { sel = r.promos.filter(function (p) { return p.monto > 0; }).map(function (p) { return p.id; }); if (sel.length) return calcular(); } }
       last = r; pintarPanel(r);
     }
     function pintarPanel(r) {
@@ -184,16 +184,18 @@
       var res = r.resultado, nom = {}; L.forEach(function (l) { nom[l.k] = l.nombre || l.sku; });
       body.innerHTML = r.promos.map(function (p) {
         var ok = p.monto > 0, on = sel.indexOf(p.id) >= 0;
-        return '<label class="mcpm-p' + (ok ? "" : " no") + '"><input type="checkbox" data-pid="' + e(p.id) + '"' + (on ? " checked" : "") + (ok || on ? "" : " disabled") + '><div style="min-width:0"><div class="t">' + e(p.nombre) + "</div>" +
+        return '<label class="mcpm-p' + (ok ? "" : " no") + '"><input type="checkbox" data-pid="' + e(p.id) + '"' + (on ? " checked" : "") + ((ok || on) && opts.admin !== false ? "" : " disabled") + '><div style="min-width:0"><div class="t">' + e(p.nombre) + "</div>" +
           '<div class="mcpm-sub">' + (p.reglasTxt || []).map(e).join(" · ") + "</div>" + (ok ? "" : '<div class="mcpm-sub" style="color:#B84A3F">' + e(p.motivo || "No aplica") + "</div>") + '</div><span class="m">' + (ok ? "−" + $m(p.monto) : "") + "</span></label>";
       }).join("") +
         '<div class="mcpm-tot">' + res.lineas.filter(function (l) { return l.monto > 0; }).map(function (l) { return '<div class="mcpm-ln"><span>' + e(nom[l.k]) + " · " + e(l.etiqueta) + "</span><span>−" + $m(l.monto) + "</span></div>"; }).join("") +
         "<div><span>Total sin promociones</span><b>" + $m(res.bruto) + '</b></div><div style="color:var(--green)"><span>Descuento de promociones</span><b>−' + $m(res.descuento) + '</b></div><div class="fin"><span>Total final</span><span>' + $m(res.total) + "</span></div>" +
-        '<div class="mcpm-sub">Varias promos a la vez: cada línea recibe una sola (la primera marcada que le aplica). Se suma al descuento del ticket si hay.</div></div>' +
-        '<div class="mcpm-acts" style="justify-content:flex-end"><button class="btn ghost small" type="button" id="mcpm-quitar">Quitar promociones</button><button class="btn small" type="button" id="mcpm-ok">Aplicar al ticket</button></div>';
+        '<div class="mcpm-sub">' + (opts.auto ? "Se aplican solas cuando el ticket cumple; cada línea recibe una sola (la que más descuenta). " + (opts.admin !== false ? "Como admin puedes desmarcar una que cayó mal." : "Si una cayó mal, avisa a un admin.") : "Varias promos a la vez: cada línea recibe una sola (la primera marcada que le aplica).") + "</div></div>" +
+        (opts.admin === false ? '<div class="mcpm-acts" style="justify-content:flex-end"><button class="btn small" type="button" id="mcpm-cerrar">Cerrar</button></div>'
+          : '<div class="mcpm-acts" style="justify-content:flex-end"><button class="btn ghost small" type="button" id="mcpm-quitar">Quitar promociones</button><button class="btn small" type="button" id="mcpm-ok">' + (opts.auto ? "Guardar elección" : "Aplicar al ticket") + "</button></div>");
       body.querySelectorAll("[data-pid]").forEach(function (c) { c.onchange = function () { var id = c.getAttribute("data-pid"); sel = sel.filter(function (x) { return x !== id; }); if (c.checked) sel.push(id); calcular(); }; });
-      body.querySelector("#mcpm-ok").onclick = function () { opts.aplicar(last.resultado, sel.slice()); cerrar(); toast2(last.resultado.descuento > 0 ? "🏷️ Promociones aplicadas: −" + $m(last.resultado.descuento) : "Sin promociones"); };
-      body.querySelector("#mcpm-quitar").onclick = function () { opts.aplicar({ lineas: [], descuento: 0 }, []); cerrar(); };
+      var bc = body.querySelector("#mcpm-cerrar"); if (bc) { bc.onclick = cerrar; return; }
+      body.querySelector("#mcpm-ok").onclick = function () { opts.aplicar(last.resultado, sel.slice(), last.promos); cerrar(); toast2(last.resultado.descuento > 0 ? "🏷️ Promociones: −" + $m(last.resultado.descuento) : "Sin promociones"); };
+      body.querySelector("#mcpm-quitar").onclick = function () { opts.aplicar({ lineas: [], descuento: 0 }, [], last.promos); cerrar(); };
     }
     calcular();
   }

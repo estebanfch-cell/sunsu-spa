@@ -103,6 +103,10 @@ describe("🏷️ promociones beta", () => {
     const res = c.resultado as Row;
     assert.deepEqual((res.lineas as Row[]).map((x) => x.monto), [16.5, 5]);
     assert.equal(res.total, 108.5);
+    const au = await h("promo_calcular", "cos", { auto: true, lineas: [{ k: "1", sku: "ML-001", cantidad: 1, bruto: 110 }, { k: "2", sku: "ML-013", cantidad: 1, bruto: 20 }] });
+    assert.ok((au.aplicadas as string[]).includes(String(g.id)));
+    const au2 = await h("promo_calcular", "cos", { auto: true, excluir: [g.id], lineas: [{ k: "1", sku: "ML-001", cantidad: 1, bruto: 110 }] });
+    assert.ok(!(au2.aplicadas as string[]).includes(String(g.id)));
     await h("promo_activar", "adm", { id: g.id, activa: false });
     const c2 = await h("promo_calcular", "cos", { lineas: [{ k: "1", sku: "ML-001", cantidad: 1, bruto: 110 }], ids: [g.id] });
     assert.equal((c2.resultado as Row).descuento, 0);

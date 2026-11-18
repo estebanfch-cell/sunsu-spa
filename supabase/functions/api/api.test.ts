@@ -3278,13 +3278,13 @@ describe("escalón en el app en vivo", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(script, /APP_VERSION = '2026-10-26-ESC /);
     assert.match(html, /SUNSU_MOTOR_ESPERADO='2026-10-26-ESC'/);
-    assert.match(html, /SUNSU_APP_VERSION='v2026.11.17.02'/);
-    assert.match(html, /var v='20261117.02'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026.11.17.03'/);
+    assert.match(html, /var v='20261117.03'/);
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3392,8 +3392,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3474,8 +3474,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3525,8 +3525,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3559,8 +3559,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3606,8 +3606,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261117tk31/);
-    assert.match(sw, /sunsu-beta-2026-11-17-TK31/);
+    assert.match(beta, /beta-screens\.js\?v=20261117tk32/);
+    assert.match(sw, /sunsu-beta-2026-11-17-TK32/);
   });
 });
 
@@ -4337,7 +4337,7 @@ describe("apertura de cabina con destino", () => {
     const html = readFileSync(join(root, "sunsu.html"), "utf8");
     const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
     const sql = readFileSync(join(root, "docs/supabase/pending/0038_erp_aperturas.sql"), "utf8");
-    assert.match(html, /SUNSU_APP_VERSION='v2026\.11\.17\.02'/);
+    assert.match(html, /SUNSU_APP_VERSION='v2026\.11\.17\.03'/);
     assert.match(html, /function _cabAbrirPanel/);
     assert.match(html, /min-height:64px/);
     assert.match(html, />Confirmar</);
