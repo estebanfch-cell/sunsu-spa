@@ -318,6 +318,107 @@ export function facturasSinTicket(facturas: FacturaVivo[], links: LinkCuadre[]):
 }
 
 /** Un borrador pendiente encaja con un ticket que se está creando (mismo día ±1, nombre y monto, o mismo nº de factura). */
+
+export function addDaysYmd(ymd: string, d: number): string {
+  const t0 = new Date(s(ymd).slice(0, 10) + "T12:00:00Z");
+  t0.setUTCDate(t0.getUTCDate() + d);
+  return t0.toISOString().slice(0, 10);
+}
+
+/** Mismo día de la factura; si el día anterior es lunes, también esos tickets (facturación no está el lunes). */
+export function fechasCandidatasBorrador(fechaFac: string): string[] {
+  const f = s(fechaFac).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return [];
+  const prev = addDaysYmd(f, -1);
+  return dowYmd(prev) === 1 ? [prev, f] : [f];
+}
+
+function montoExacto(a: number, b: number): boolean {
+  return Math.round((Number(a) || 0) * 100) === Math.round((Number(b) || 0) * 100);
+}
+
+export type CandidatoBorrador = {
+  ticket_ids: number[];
+  claves: string[];
+  nombres: string[];
+  totales: number[];
+  fechas: string[];
+  cosmetologas: string[];
+  tipo: "nombre_monto" | "nombre" | "monto" | "suma2";
+  names: number;
+  motivo: string;
+  total: number;
+};
+
+/**
+ * Candidatos para vincular un borrador de Migo a tickets ya existentes.
+ * Orden: primero coincidencia de nombre, luego monto exacto (total con IVA), luego suma exacta de 2 tickets.
+ * No vincula solo: la admin elige. No incluye cédulas ni teléfonos.
+ */
+export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number }, tickets: Row[]): CandidatoBorrador[] {
+  const dias = new Set(fechasCandidatasBorrador(inv.fecha));
+  const pool = tickets.filter((t) => {
+    if (n(t.id) === NUNCA_TICKET_ID) return false;
+    if (exentoCuadre(t)) return false;
+    if (!dias.has(s(t.fecha).slice(0, 10))) return false;
+    const fac = s(t.facturaBeta || t.fac_7);
+    if (fac && !/sin/i.test(fac)) return false;
+    return true;
+  });
+  const pub = (t: Row) => ({
+    id: n(t.id),
+    clave: s(t.clave || t.so_num),
+    nombre: nombreTicket(t),
+    total: totalTicket(t),
+    fecha: s(t.fecha).slice(0, 10),
+    cosm: s(t.atendido_por || t.cosmetologa),
+  });
+  const singles: CandidatoBorrador[] = [];
+  for (const t of pool) {
+    const x = pub(t);
+    const tokens = namesMatch(x.nombre, inv.cliente);
+    const exact = montoExacto(x.total, inv.total);
+    if (tokens < 1 && !exact) continue;
+    const tipo: CandidatoBorrador["tipo"] = exact && tokens >= 1 ? "nombre_monto" : exact ? "monto" : "nombre";
+    const avisos: string[] = [];
+    if (tokens >= 2) avisos.push("El nombre cuadra con «" + s(inv.cliente) + "».");
+    else if (tokens >= 1) avisos.push("Hay una coincidencia de nombre, pero no es el mismo de Migo («" + s(inv.cliente) + "»).");
+    else avisos.push("El nombre no coincide con «" + s(inv.cliente) + "».");
+    if (exact) avisos.push("Monto exacto ($" + Number(inv.total).toFixed(2) + ", total con IVA).");
+    else avisos.push("Monto distinto: ticket $" + x.total.toFixed(2) + " vs factura $" + Number(inv.total).toFixed(2) + ".");
+    singles.push({
+      ticket_ids: [x.id], claves: [x.clave], nombres: [x.nombre], totales: [x.total],
+      fechas: [x.fecha], cosmetologas: [x.cosm], tipo, names: tokens, motivo: avisos.join(" "), total: x.total,
+    });
+  }
+  singles.sort((a, b) => {
+    const an = a.names > 0 ? 1 : 0, bn = b.names > 0 ? 1 : 0;
+    if (an !== bn) return bn - an;
+    if (a.names !== b.names) return b.names - a.names;
+    const am = a.tipo === "nombre_monto" || a.tipo === "monto" ? 1 : 0;
+    const bm = b.tipo === "nombre_monto" || b.tipo === "monto" ? 1 : 0;
+    if (am !== bm) return bm - am;
+    return (a.claves[0] || "").localeCompare(b.claves[0] || "");
+  });
+  const combos: CandidatoBorrador[] = [];
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) {
+      const a = pub(pool[i]), b = pub(pool[j]);
+      if (!montoExacto(a.total + b.total, inv.total)) continue;
+      const na = namesMatch(a.nombre, inv.cliente), nb = namesMatch(b.nombre, inv.cliente);
+      const avisos = ["Suma exacta de 2 tickets: $" + a.total.toFixed(2) + " + $" + b.total.toFixed(2) + " = $" + Number(inv.total).toFixed(2) + " (total con IVA)."];
+      if (na < 1 && nb < 1) avisos.push("Ninguno coincide en nombre con «" + s(inv.cliente) + "».");
+      combos.push({
+        ticket_ids: [a.id, b.id], claves: [a.clave, b.clave], nombres: [a.nombre, b.nombre],
+        totales: [a.total, b.total], fechas: [a.fecha, b.fecha], cosmetologas: [a.cosm, b.cosm],
+        tipo: "suma2", names: Math.max(na, nb), motivo: avisos.join(" "), total: a.total + b.total,
+      });
+    }
+  }
+  combos.sort((a, b) => b.names - a.names || (a.claves.join()).localeCompare(b.claves.join()));
+  return [...singles, ...combos];
+}
+
 export function ofertaBorrador(borradores: Row[], p: { nombre?: unknown; apellido?: unknown; estimado?: unknown; fecha?: unknown; factura?: unknown }): Row | null {
   const vivos = borradores.filter((b) => ["pendiente", "asignado"].includes(s(b.estado)));
   const fac = facturaNorm(p.factura);
