@@ -1,6 +1,7 @@
 // TK98 (Emilia 18/11): cuando ticket(s) y factura no cuadran, decir QUÉ SKU/línea hace la diferencia.
 // Se compara solo por SKU (nunca por nombre), con el total con IVA de cada línea.
 import { round2, s, type Row } from "./domain.ts";
+import { expandirLineasGiftCaja } from "./alias_migo.ts";
 import { lineasDeTicket, normalizarLineaFactura, type LineaNorm } from "./migo_lineas.ts";
 
 type Acum = { sku: string; codigo: string; nombre: string; q: number; tot: number };
@@ -25,7 +26,7 @@ function agrupar(L: LineaNorm[]): Map<string, Acum> {
 
 /** Diferencias por SKU entre la factura y el/los ticket(s): «Falta en ticket: SUNSU-35 GIFT CARD $3.00». */
 export function difPorSku(facLineas: Row[] | undefined, tickets: Row[], catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): string[] {
-  const F = agrupar((facLineas || []).map((l) => normalizarLineaFactura(l)).filter(Boolean) as LineaNorm[]);
+  const F = agrupar(expandirLineasGiftCaja(facLineas).map((l) => normalizarLineaFactura(l)).filter(Boolean) as LineaNorm[]);
   const T = agrupar(tickets.flatMap((t) => lineasDeTicket(t, catalogo)));
   const out: string[] = [];
   for (const [k, f] of F) {

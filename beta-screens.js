@@ -349,9 +349,9 @@ window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
-let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
+let GC={tipo:'digital',valor:65,caja:false,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
 /** TK97: + / Nuevo ticket siempre arranca en blanco. Un borrador de Migo solo se abre desde Facturas borrador. */
 function _ticketNuevoEnBlanco(){
@@ -1405,7 +1405,7 @@ function renderTicket(c){
     T.gcVenta&&T.gcVenta.activo&&!T.gcVenta.codigo&&T.gcVenta.deFactura
       ?'<span style="color:#8a6d00;background:#fff8e6;border:1px solid #e8cf7a;border-radius:8px;padding:1px 8px;font-weight:600">Falta código · $'+(Number(T.gcVenta.valor)||0).toFixed(2)+'</span>'
     :T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo
-      ?'<span style="color:var(--pink-d);font-weight:600">'+(_gcFis?'📦':'📱')+' '+T.gcVenta.codigo+(_gcCort?' 🎁 Cortesía':' · $'+(_gcFis?(T.gcVenta.valor+3):(T.gcVenta.valor||65)).toFixed(2))+'</span>'
+      ?'<span style="color:var(--pink-d);font-weight:600">'+(_gcFis?'📦':'📱')+' '+T.gcVenta.codigo+(_gcCort?' 🎁 Cortesía':' · $'+(Number(T.gcVenta.valor)||65).toFixed(2)+((T.gcVenta&&T.gcVenta.caja)||_qtyCajaGift()>0?' + caja':''))+'</span>'
       :'No vendida',
     '<div style="display:flex;gap:10px;margin-bottom:12px">'+
       '<div id="gcbtn-digital" onclick="selGCTipo(\'digital\')" style="flex:1;padding:12px 8px;border-radius:11px;text-align:center;cursor:pointer;transition:all 0.15s;border:2px solid '+(_gcDig?'var(--pink)':'#ECEEF4')+';background:'+(_gcDig?'var(--pink-l)':'white')+'">'+
@@ -1415,8 +1415,8 @@ function renderTicket(c){
       '</div>'+
       '<div id="gcbtn-fisica" onclick="selGCTipo(\'fisica\')" style="flex:1;padding:12px 8px;border-radius:11px;text-align:center;cursor:pointer;transition:all 0.15s;border:2px solid '+(_gcFis?'var(--pink)':'#ECEEF4')+';background:'+(_gcFis?'var(--pink-l)':'white')+'">'+
         '<div style="font-size:1.4rem">📦</div>'+
-        '<div style="font-weight:700;font-size:0.78rem;color:'+(_gcFis?'var(--pink-d)':'#888')+'">Física + caja</div>'+
-        '<div style="font-size:0.65rem;color:#aaa">+$3.00</div>'+
+        '<div style="font-weight:700;font-size:0.78rem;color:'+(_gcFis?'var(--pink-d)':'#888')+'">Física</div>'+
+        '<div style="font-size:0.65rem;color:#aaa">tarjeta impresa</div>'+
       '</div>'+
       '<div id="gcbtn-cortesia" onclick="toggleGCCortesia()" style="flex:1;padding:12px 8px;border-radius:11px;text-align:center;cursor:pointer;transition:all 0.15s;border:2px solid '+(_gcCort?'var(--green)':'#ECEEF4')+';background:'+(_gcCort?'var(--green-l)':'white')+'">'+
         '<div style="font-size:1.4rem">🎁</div>'+
@@ -1424,15 +1424,19 @@ function renderTicket(c){
         '<div style="font-size:0.65rem;color:#aaa">Sin cobro</div>'+
       '</div>'+
     '</div>'+
-    '<div class="field"><label>Valor</label>'+
+    '<div id="gcbtn-caja" onclick="toggleCajaGift()" style="margin:0 0 12px;padding:10px 12px;border-radius:11px;cursor:pointer;border:2px solid '+((T.gcVenta&&T.gcVenta.caja)?'var(--pink)':'#ECEEF4')+';background:'+((T.gcVenta&&T.gcVenta.caja)?'var(--pink-l)':'white')+'">'+
+      '<div style="font-weight:700;font-size:0.8rem;color:'+((T.gcVenta&&T.gcVenta.caja)?'var(--pink-d)':'#555')+'">Agregar caja (+$3)</div>'+
+      '<div style="font-size:0.65rem;color:#888">INV-123 · Caja de gift card · $3.00 con IVA · descuenta stock</div>'+
+    '</div>'+
+    '<div class="field"><label>Valor de la gift card</label>'+
       '<select id="gcv-sel" onchange="selGCVal(this.value)" '+(_gcCort?'disabled style="opacity:0.4"':'')+'>'+
-        '<option value="65" '+(!_gcCustom?'selected':'')+'>$65.00 — Estándar</option>'+
-        '<option value="custom" '+(_gcCustom?'selected':'')+'>Personalizado...</option>'+
+        '<option value="65" '+(!_gcCustom?'selected':'')+'>Facial Premium $65.00 con IVA</option>'+
+        '<option value="custom" '+(_gcCustom?'selected':'')+'>Otro valor (con IVA)...</option>'+
       '</select>'+
     '</div>'+
-    '<div id="gcv-custom" style="display:'+(_gcCustom&&!_gcCort?'block':'none')+'"><div class="field"><label>Valor personalizado ($)</label>'+
-      '<input type="number" placeholder="0.00" value="'+(_gcCustom&&T.gcVenta?T.gcVenta.valor:'')+'" oninput="if(T.gcVenta){T.gcVenta.valor=parseFloat(this.value)||0;updatePreview();}">'+
-    '</div></div>'+
+    '<div id="gcv-custom" style="display:'+(!_gcCort?'block':'none')+'"><div class="field"><label>Valor con IVA ($)</label>'+
+      '<input type="number" step="0.01" min="0" placeholder="Ej: 150" value="'+(T.gcVenta&&T.gcVenta.valor?T.gcVenta.valor:'')+'" oninput="onGcValorIva(this.value)">'+
+    '</div><div id="gcv-iva">'+_gcDesgloseHtml(T.gcVenta&&T.gcVenta.valor)+'</div></div>'+
     (_gcCort?'<div style="background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:0.78rem;color:var(--green);font-weight:600">🎁 Gift Card de cortesía — $0.00 para el cliente</div>':'')+
     '<div class="field"><label>Código GC</label>'+
       '<div style="display:flex;gap:7px;align-items:center">'+
@@ -1957,14 +1961,14 @@ function _renderP2GCSlots(n){
     html += '</div>';
     html += '<div style="display:flex;gap:6px;margin-bottom:7px">';
     html += '<button data-i="'+i+'" data-t="digital" onclick="selPaqGCTipo(+this.dataset.i,this.dataset.t,'+n+')" style="flex:1;padding:6px;border-radius:8px;border:1.5px solid '+(isDig?bordLav:bordGray)+';background:'+(isDig?bgLav:'white')+';font-size:0.68rem;font-weight:700;cursor:pointer;color:'+(isDig?bordLav:'var(--gray)')+'">📱 Digital</button>';
-    html += '<button data-i="'+i+'" data-t="fisica" onclick="selPaqGCTipo(+this.dataset.i,this.dataset.t,'+n+')" style="flex:1;padding:6px;border-radius:8px;border:1.5px solid '+(isFis?bordLav:bordGray)+';background:'+(isFis?bgLav:'white')+';font-size:0.68rem;font-weight:700;cursor:pointer;color:'+(isFis?bordLav:'var(--gray)')+'">📦 Física +$3</button>';
+    html += '<button data-i="'+i+'" data-t="fisica" onclick="selPaqGCTipo(+this.dataset.i,this.dataset.t,'+n+')" style="flex:1;padding:6px;border-radius:8px;border:1.5px solid '+(isFis?bordLav:bordGray)+';background:'+(isFis?bgLav:'white')+';font-size:0.68rem;font-weight:700;cursor:pointer;color:'+(isFis?bordLav:'var(--gray)')+'">📦 Física</button>';
     html += '</div>';
     html += '<button data-i="'+i+'" onclick="generarCodigoGC_paq(+this.dataset.i,'+n+')" style="width:100%;padding:7px;background:'+(hasCode?'var(--green-l)':'var(--lavender)')+';color:'+(hasCode?'var(--green)':'white')+';border:none;border-radius:9px;font-size:0.72rem;font-weight:700;cursor:pointer">';
     html += (hasCode?'🔄 Regenerar':'🎲 Generar código')+'</button>';
     html += '</div>';
   });
   var cajas = slots.filter(function(s){return s.tipo==='fisica';}).length;
-  if(cajas > 0) html += '<div style="font-size:0.68rem;color:var(--lavender);font-weight:600;margin-top:2px">📦 Cajas: +$'+(cajas*3)+'.00</div>';
+  if(cajas > 0) html += '<div style="font-size:0.68rem;color:var(--lavender);font-weight:600;margin-top:2px">📦 Cajas INV-123: '+(cajas)+' × $3.00 (stock)</div>';
   box.innerHTML = html;
 }
 
@@ -1973,6 +1977,7 @@ function selPaqGCTipo(idx, tipo, n){
   var slotKey = n===3?'paq2gcSlots3':'paq2gcSlots6';
   if(!T[slotKey] || !T[slotKey][idx]) return;
   T[slotKey][idx].tipo = tipo;
+  if(typeof _syncCajaGiftQty==='function') _syncCajaGiftQty();
   _renderP2GCSlots(n);
   updatePreview();
 }
@@ -2062,11 +2067,89 @@ function selGCTipo(t){
   }
   updatePreview();
 }
+// TK101: caja INV-123 es un producto inventariado (no se suma al valor de la gift).
+var CAJA_GIFT={sku:'SUNSU-INV-123',code:'INV-123',n:'Caja de gift card',p:3};
+function _cajaGiftKeys(){
+  return Object.keys(T.productos||{}).filter(function(k){
+    var s=typeof _migoSkuKey==='function'?_migoSkuKey(k):String(k||'').toUpperCase().replace(/^SUNSU-/,'');
+    return s==='INV-123';
+  });
+}
+function _qtyCajaGift(){ return _cajaGiftKeys().reduce(function(a,k){return a+(Number(T.productos[k])||0);},0); }
+function _asegurarCajaGiftProd(){
+  var found=null;
+  (typeof PROVS!=='undefined'?PROVS:[]).forEach(function(pv){
+    (pv.prods||[]).forEach(function(pr){
+      if(found) return;
+      var s=typeof _migoSkuKey==='function'?_migoSkuKey(pr.sku):String(pr.sku||'').toUpperCase().replace(/^SUNSU-/,'');
+      if(s==='INV-123') found=pr;
+    });
+  });
+  if(found) return found;
+  var pv=typeof _asegurarGrupoProv==='function'?_asegurarGrupoProv('inv'):null;
+  var it={sku:CAJA_GIFT.sku,n:CAJA_GIFT.n,p:CAJA_GIFT.p,_activo:true};
+  if(pv) pv.prods.push(it);
+  return it;
+}
+function _setCajaGift(q){
+  var it=_asegurarCajaGiftProd();
+  _cajaGiftKeys().forEach(function(k){ T.productos[k]=0; });
+  T.productos[it.sku]=Math.max(0,Number(q)||0);
+}
+function _cajasPaq2gc(){
+  return (T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[], T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
+}
+function _syncCajaGiftQty(){
+  if(typeof _setCajaGift!=='function') return;
+  _setCajaGift(((T.gcVenta&&T.gcVenta.caja)?1:0)+_cajasPaq2gc());
+}
+function toggleCajaGift(){
+  if(!T.gcVenta) T.gcVenta={activo:true,tipo:'digital',valor:65,codigo:'',nota:'',cortesia:false,caja:false};
+  T.gcVenta.activo=true;
+  T.gcVenta.caja=!T.gcVenta.caja;
+  _syncCajaGiftQty();
+  var on=!!T.gcVenta.caja;
+  var btn=document.getElementById('gcbtn-caja');
+  if(btn){
+    btn.style.borderColor=on?'var(--pink)':'#ECEEF4';
+    btn.style.background=on?'var(--pink-l)':'white';
+    var t1=btn.querySelector('div'); if(t1) t1.style.color=on?'var(--pink-d)':'#555';
+  }
+  updatePreview();
+}
+function _gcDesglose(v){
+  v=Number(v)||0;
+  var sub=Math.round(v/1.15*100)/100, iva=Math.round((v-sub)*100)/100;
+  return {v:v,sub:sub,iva:iva};
+}
+function _gcDesgloseHtml(v){
+  var d=_gcDesglose(v);
+  if(!(d.v>0)) return '<div class="gc-iva" style="font-size:0.72rem;color:#888;margin-top:4px">Escribe el valor con IVA. El sistema calcula subtotal = valor / 1.15 e IVA.</div>';
+  return '<div class="gc-iva" style="font-size:0.72rem;color:#555;margin-top:4px">Subtotal $'+d.sub.toFixed(2)+' · IVA $'+d.iva.toFixed(2)+' · Total $'+d.v.toFixed(2)+' con IVA</div>';
+}
+function onGcValorIva(raw){
+  if(!T.gcVenta) return;
+  T.gcVenta.activo=true;
+  T.gcVenta.valor=parseFloat(raw)||0;
+  var sel=document.getElementById('gcv-sel');
+  if(sel) sel.value=Math.abs((T.gcVenta.valor||0)-65)<0.001?'65':'custom';
+  var el=document.getElementById('gcv-iva');
+  if(el) el.innerHTML=_gcDesgloseHtml(T.gcVenta.valor);
+  updatePreview();
+}
 function selGCVal(v){
   if(!T.gcVenta)return;
   var cf=document.getElementById('gcv-custom');
-  if(v==='custom'){if(cf)cf.style.display='block';T.gcVenta.valor=0;}
-  else{if(cf)cf.style.display='none';T.gcVenta.valor=parseFloat(v)||65;}
+  if(cf) cf.style.display=T.gcVenta.cortesia?'none':'block';
+  if(v==='custom'){
+    if(!(T.gcVenta.valor>0) || Math.abs(T.gcVenta.valor-65)<0.001) T.gcVenta.valor=0;
+  } else {
+    T.gcVenta.valor=parseFloat(v)||65;
+  }
+  var inp=cf&&cf.querySelector('input');
+  if(inp && v!=='custom') inp.value=T.gcVenta.valor||'';
+  var el=document.getElementById('gcv-iva');
+  if(el) el.innerHTML=_gcDesgloseHtml(T.gcVenta.valor);
   updatePreview();
 }
 function onToggleAcc(id){
@@ -2257,7 +2340,7 @@ function updatePreview(){
   // Gift Card venta
   const gcV=T.gcVenta;
   const gcEsCort=gcV&&gcV.cortesia;
-  const gcVTotal=(gcV&&gcV.activo&&(gcV.codigo||gcV.deFactura)&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
+  const gcVTotal=(gcV&&gcV.activo&&(gcV.codigo||gcV.deFactura)&&!gcEsCort)?(gcV.valor||65):0;
 
   // Descuento por línea (antes del descuento del ticket)
   const _LD=_ldAplicar();
@@ -2326,9 +2409,9 @@ function updatePreview(){
     const q=T.productos[p.sku]||0; if(q<=0) return;
     _fila(q,p.sku,p.n,p.p);
   });});
-  if(gcV&&gcV.activo&&gcV.codigo){
+  if(gcV&&gcV.activo&&(gcV.codigo||gcV.deFactura)){
     if(gcEsCort) _fila(1,gcV.codigo,'Gift Card',0,'cortesía');
-    else if(gcVTotal>0) _fila(1,gcV.codigo,'Gift Card '+(gcV.tipo==='fisica'?'física (incl. caja $3)':'digital'),gcVTotal);
+    else if(gcVTotal>0) _fila(1,gcV.codigo||'SUNSU-35','Gift Card '+(gcV.tipo==='fisica'?'física':'digital'),gcVTotal);
   }
   // Mismo formato que el detalle del ticket (aprobado): Código | Descripción | Cant. | Precio unit. (sin IVA) | Total
   // t491u: por línea Subtotal (sin IVA) · IVA · Total (con IVA); en el iPhone van en una franja compacta bajo la línea.
@@ -2825,7 +2908,7 @@ function enviarTicket(){
   // GC vendida: agregar su valor al estimado (igual que en updatePreview)
   const _gcVenta=T.gcVenta;
   const _gcVTotal=(_gcVenta&&_gcVenta.activo&&(_gcVenta.codigo||_gcVenta.deFactura)&&!_gcVenta.cortesia)
-    ?(_gcVenta.valor||65)+(_gcVenta.tipo==='fisica'?3:0):0;
+    ?(_gcVenta.valor||65):0;
   const _totBruto=_estF+_estPack+_estProd+_gcVTotal;
   // Apply discount
   let _dscMonto=0, _dscLabel='';
@@ -2850,9 +2933,8 @@ function enviarTicket(){
   }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
   const estTotal=Math.max(0,_totBruto-_dscMonto);
-  // Caja física de GCs de conversión paquete (+$3 cada una)
-  var _cajasGC=(T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
-  const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : Math.max(0, estTotal+(_cajasGC*3));
+  // TK101: las cajas van como INV-123 en productos (estProd); no se vuelven a sumar $3 aquí.
+  const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : estTotal;
   // Paquete reducido: el control de sesiones registra las que dice la promo (ej: paquete de 3 vendido como de 2)
   if(T.descuento&&T.descuento.tipo==='promo'&&T.descuento.promoObj&&T.descuento.promoObj.tipo==='PACK'&&_promoArmada(T.descuento.promoObj)){
     var _sesPR=Math.round(T.descuento.promoObj.valor2)||0;
@@ -3719,20 +3801,21 @@ function renderGCVenta(c){
           <span class="gci">📱</span><div class="gcl">Digital</div><div class="gcs">WhatsApp / email</div>
         </div>
         <div class="gc-tbtn ${GC.tipo==='fisica'?'sel':''}" id="gct-fisica" onclick="selGCT('fisica')">
-          <span class="gci">📦</span><div class="gcl">Física + caja</div><div class="gcs">+$3.00 por la caja</div>
+          <span class="gci">📦</span><div class="gcl">Física</div><div class="gcs">tarjeta impresa</div>
         </div>
       </div>
-      <div class="field"><label>Valor</label>
+      <div class="gc-tbtn ${GC.caja?'sel':''}" id="gct-caja" onclick="selGCCaja()" style="margin:0 0 12px;padding:10px 12px">
+        <div class="gcl">Agregar caja (+$3)</div><div class="gcs">INV-123 · $3.00 con IVA · descuenta stock</div>
+      </div>
+      <div class="field"><label>Valor de la gift card</label>
         <select id="gc-val" onchange="onGCVal(this.value)">
-          <option value="65">$65.00 — Estándar</option>
-          <option value="57">$57.00 — Solo facial</option>
-          <option value="130">$130.00 — 2 faciales</option>
-          <option value="custom">Personalizado...</option>
+          <option value="65">Facial Premium $65.00 con IVA</option>
+          <option value="custom">Otro valor (con IVA)...</option>
         </select>
       </div>
-      <div id="gc-custom" style="display:none">
-        <div class="field"><label>Valor personalizado</label>
-          <input type="number" placeholder="0.00" oninput="GC.valor=parseFloat(this.value)||0;updateGCPrev()">
+      <div id="gc-custom" style="display:block">
+        <div class="field"><label>Valor con IVA ($)</label>
+          <input type="number" step="0.01" min="0" placeholder="Ej: 150" value="${GC.valor||''}" oninput="GC.valor=parseFloat(this.value)||0;updateGCPrev()">
         </div>
       </div>
       <div class="field"><label>Código GC</label>
@@ -3753,14 +3836,17 @@ function renderGCVenta(c){
 
 function onCedGC(v){}
 function selGCT(t){GC.tipo=t;document.getElementById('gct-digital').classList.toggle('sel',t==='digital');document.getElementById('gct-fisica').classList.toggle('sel',t==='fisica');updateGCPrev();}
-function onGCVal(v){const cf=document.getElementById('gc-custom');if(v==='custom'){cf.style.display='block';GC.valor=0;}else{cf.style.display='none';GC.valor=parseFloat(v);}updateGCPrev();}
+function selGCCaja(){GC.caja=!GC.caja;var el=document.getElementById('gct-caja');if(el)el.classList.toggle('sel',!!GC.caja);updateGCPrev();}
+function onGCVal(v){const cf=document.getElementById('gc-custom');if(cf)cf.style.display='block';if(v==='custom'){/* deja el campo */}else{GC.valor=parseFloat(v)||65;}updateGCPrev();}
 function updateGCPrev(){
-  const ext=GC.tipo==='fisica'?3:0, tot=GC.valor+ext;
+  const ext=GC.caja?3:0, tot=(Number(GC.valor)||0)+ext;
+  const sub=Math.round((Number(GC.valor)||0)/1.15*100)/100, iva=Math.round(((Number(GC.valor)||0)-sub)*100)/100;
   const box=document.getElementById('gc-prev');if(!box) return;
   box.innerHTML=`<div class="preview">
     <div class="plbl">Resumen de la venta</div>
-    <div class="prow"><span>Gift Card ${GC.tipo==='fisica'?'física (+caja)':'digital'}</span><span>$${GC.valor.toFixed(2)}</span></div>
-    ${ext>0?`<div class="prow"><span>Caja física</span><span>+$${ext.toFixed(2)}</span></div>`:''}
+    <div class="prow"><span>Gift Card ${GC.tipo==='fisica'?'física':'digital'}</span><span>$${(Number(GC.valor)||0).toFixed(2)}</span></div>
+    <div class="prow"><span>Subtotal / IVA</span><span>$${sub.toFixed(2)} / $${iva.toFixed(2)}</span></div>
+    ${ext>0?`<div class="prow"><span>Caja de gift card (INV-123)</span><span>+$${ext.toFixed(2)}</span></div>`:''}
     <div class="pdiv"></div>
     <div class="ptotal"><span>Total a cobrar</span><span>$${tot.toFixed(2)}</span></div>
     ${GC.codigo?`<div class="pnote">Código: ${GC.codigo}</div>`:''}
@@ -3808,7 +3894,7 @@ function enviarGC(){
 
   // Col S: "SI, CODIGO, NOTA"
   var colS = 'SI, '+GC.codigo+(GC.nota?', '+GC.nota:'');
-  var total = GC.valor + (GC.tipo==='fisica'?3:0);
+  var total = (Number(GC.valor)||0) + (GC.caja?3:0);
 
   var payload = {
     cosmetologa:    CU.name,
@@ -3863,7 +3949,7 @@ function enviarGC(){
     toast('✅ Gift Card registrada — '+GC.codigo,'#6A9E7A');
     var eraDigital=(GC.tipo!=='fisica');
     var pre={codigo:GC.codigo, de:(GC.nombre+' '+(GC.apellido||'')).trim()};
-    GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
+    GC={tipo:'digital',valor:65,caja:false,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
     if(eraDigital){
       // Venta digital → armar la Gift Card digital de una vez
       renderGiftCardDigital(pre);
@@ -18951,6 +19037,21 @@ function _migoLineasTicket(b){
     return {seccion:sec, sku:String(l.sku||l.codigo||''), skuFactura:String(l.sku||l.codigo||''), nombre:l.producto||l.nombre||'', cantidad:q, precio_unit:Math.round(tot/q*100)/100, total:tot, enCatalogo:!!m, pack:m&&m.tipo==='pack6'?6:3};
   });
 }
+function _migoPartirGiftCaja(L){
+  var out=[];
+  (L||[]).forEach(function(l){
+    var q=Number(l.cantidad||1)||1;
+    var tot=Number(l.total||0)||Math.round((Number(l.precio_unit||0)*q)*100)/100;
+    var unit=q?tot/q:tot;
+    var sku=typeof _migoSkuKey==='function'?_migoSkuKey(l.sku||l.skuFactura||l.codigo||''):String(l.sku||'');
+    if(sku==='35' && Math.abs(unit-68)<=0.05){
+      var gTot=Math.round(65*q*100)/100, cTot=Math.round(3*q*100)/100;
+      out.push(Object.assign({}, l, {seccion:'gift', tipo:'gift', sku:'35', skuFactura:l.skuFactura||l.sku||'SUNSU-35', nombre:l.nombre||'GIFT CARD', cantidad:q, precio_unit:65, total:gTot}));
+      out.push(Object.assign({}, l, {seccion:'producto', tipo:'producto', sku:'INV-123', skuFactura:'INV-123', nombre:'Caja de gift card', cantidad:q, precio_unit:3, total:cTot, enCatalogo:true}));
+    } else out.push(l);
+  });
+  return out;
+}
 function _migoPoblarTDesdeFac(b){
   _migoRestaurarPrecios();
   if(typeof newT==='function') T=newT();
@@ -18966,7 +19067,7 @@ function _migoPoblarTDesdeFac(b){
   if(b.asignado_a) T._migoAsignado=b.asignado_a;
   T.lineDesc={};
   T.extras=T.extras||{}; T.productos=T.productos||{};
-  var L=_migoLineasTicket(b), revisa=[], sinItems=!L.length, P=[], tot=0;
+  var L=_migoPartirGiftCaja(_migoLineasTicket(b)), revisa=[], sinItems=!L.length, P=[], tot=0;
   L.forEach(function(l){
     var q=Number(l.cantidad||1)||1, pu=Number(l.precio_unit||0);
     tot+=Number(l.total||pu*q)||0;
