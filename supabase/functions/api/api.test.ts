@@ -3304,8 +3304,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3413,8 +3413,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3495,8 +3495,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3546,8 +3546,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3580,8 +3580,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3627,8 +3627,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk49/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk50/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
   });
 });
 
@@ -4237,26 +4237,26 @@ describe("TK46 maestro-detalle tickets estilo MineCore", () => {
     assert.match(js, /#\/m\/tickets\/t\//);
     assert.match(js, /interceptDraw/);
     assert.match(js, /renderTickets/);
-    assert.match(beta, /mc-maestro\.js\?v=20261118tk49/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk50/);
     assert.match(beta, /\.ss-md-list \{[^}]*width: 250px/);
     assert.match(beta, /@media \(max-width: 860px\)[\s\S]*\.ss-md-list \{ display: none/);
     assert.match(beta, /MCMaestro\.interceptDraw/);
-    assert.match(beta, /MCMaestro\.renderTickets/);
+    assert.match(beta, /MCMaestro\.render\("tickets"/);
     assert.match(sw, /\/mc-maestro\.js/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK49/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
     assert.match(tk, /isDirty:\s*function/);
     const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
     g.window = g.window || g;
     g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
     assert.doesNotThrow(() => new Function("window", "document", js)(g.window, g.document));
     const w = g.window as { MCMaestro: { listRowsHTML: (sel: string) => string; wide: () => boolean; shellHTML: (id: string, l: string, d: string) => string }; _histData?: Record<string, unknown>[]; _histVisibles?: Record<string, unknown>[] | null };
-    const M = w.MCMaestro;
+    const M = w.MCMaestro as { listRowsHTML: (name: string, sel: string) => string; wide: () => boolean; shellHTML: (id: string, l: string, d: string) => string };
     const demo = [
       { tkRow: 1861, so_num: "TK-SO-1861", nombre: "Ana", apellido: "Paz", estimado: "107.99" },
     ];
     w._histVisibles = demo;
     w._histData = demo;
-    const rows = M.listRowsHTML("TK-SO-1861");
+    const rows = M.listRowsHTML("tickets", "TK-SO-1861");
     assert.match(rows, /ss-md-item on/);
     assert.match(rows, /TK-SO-1861/);
     assert.match(rows, /Ana Paz/);
@@ -4269,6 +4269,57 @@ describe("TK46 maestro-detalle tickets estilo MineCore", () => {
     assert.match(shell, /mctk-root/);
   });
 });
+
+describe("TK50 maestro-detalle clientas y proveedores", () => {
+  it("lista compacta de clientas y proveedores con Filtrar… y hash linkeable", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const js = readFileSync(join(root, "mc-maestro.js"), "utf8");
+    const beta = readFileSync(join(root, "beta.html"), "utf8");
+    const cli = readFileSync(join(root, "mc-clientes.js"), "utf8");
+    const sw = readFileSync(join(root, "sw.js"), "utf8");
+    assert.match(js, /register\("clientes"/);
+    assert.match(js, /register\("proveedores"/);
+    assert.match(js, /#\/m\/clientes\/c\//);
+    assert.match(js, /#\/m\/proveedores\//);
+    assert.match(beta, /MCMaestro\.render\("clientes"/);
+    assert.match(beta, /MCMaestro\.render\("proveedores"/);
+    assert.match(beta, /ss-md-clientes/);
+    assert.match(beta, /ss-md-proveedores/);
+    assert.match(beta, /function wireProveedoresDetalle/);
+    assert.match(cli, /ensureList/);
+    assert.match(cli, /isDirty:/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK50/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk50/);
+    const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
+    g.window = g.window || g;
+    g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
+    assert.doesNotThrow(() => new Function("window", "document", js)(g.window, g.document));
+    const w = g.window as {
+      MCMaestro: { listRowsHTML: (name: string, sel: string) => string; shellHTML: (id: string, l: string, d: string) => string };
+      _histData?: unknown;
+      _histVisibles?: unknown;
+      _provRows?: Record<string, unknown>[];
+      MCClientes?: { items: () => Record<string, unknown>[] };
+    };
+    const M = w.MCMaestro;
+    w.MCClientes = { items: () => [{ key: "k1", codigo: "C-001", nombre: "Ana Paz", total: 120, giftSaldo: 0 }] };
+    const cliRows = M.listRowsHTML("clientes", "k1");
+    assert.match(cliRows, /ss-md-item on/);
+    assert.match(cliRows, /C-001/);
+    assert.match(cliRows, /Ana Paz/);
+    w._provRows = [{ fila: "12", codigo: "PV-01", nombre: "Laboratorio Andes", saldo: 40.5 }];
+    const pvRows = M.listRowsHTML("proveedores", "12");
+    assert.match(pvRows, /ss-md-item on/);
+    assert.match(pvRows, /PV-01/);
+    assert.match(pvRows, /Laboratorio Andes/);
+    assert.match(pvRows, /\$40\.50/);
+    const shell = M.shellHTML("clientes", cliRows, "<div id=\"mccl-root\">ficha</div>");
+    assert.match(shell, /id="ss-md-clientes"/);
+    assert.match(shell, /placeholder="Filtrar…"/);
+    assert.match(shell, /mccl-root/);
+  });
+});
+
 
 describe("ticket como orden de venta", () => {
   it("una fila por ítem con cantidad y precio unitario sin IVA, y cuadra con el total guardado", () => {
