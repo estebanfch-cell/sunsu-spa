@@ -304,6 +304,7 @@ async function aplicarPagosMigo(ctx: Ctx, actor: string, tickets: Row[], links: 
   let nuevos = 0;
   for (const L of links) {
     if (L.ticket_id === NUNCA_TICKET_ID || porFac.get(L.factura) !== 1 || L.confianza !== "alta") continue; // solo vínculo por número de factura, una factura = un ticket
+    if (Math.abs(n(L.diferencia_fecha)) > 3) continue; // TK92: factura de otra fecha (p. ej. # mal tipeado): no se adivina el pago
     const t = byId.get(L.ticket_id), inv = byFac.get(L.factura);
     if (!t || !inv) continue;
     // Con cobro del sistema anterior (monto en el ticket), Pagos ya lo muestra repartido con las formas de Migo

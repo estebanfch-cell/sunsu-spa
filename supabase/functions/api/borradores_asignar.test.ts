@@ -198,8 +198,8 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
     assert.match(home, /Por completar/);
     assert.match(home, /data-borrador/);
     assert.match(screens, /pendiente_aprobar/);
-    assert.match(beta, /mc-staff-home\.js\?v=20261118tk91/);
+    assert.match(beta, /mc-staff-home\.js\?v=20261118tk92/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-18-TK91/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK92/);
   });
 });
