@@ -303,7 +303,7 @@
   }
   function agregar(p, flashBad) {
     if (!p) return false;
-    if (p.activo === false) { beep(false); toast2("«" + p.nombre + "» está inactivo: no se puede vender", true); flashBad(); return false; }
+    if (p.activo === false && !p.enMigo) { beep(false); toast2("«" + p.nombre + "» está inactivo: no se puede vender", true); flashBad(); return false; }
     var l = K.L.find(function (x) { return x.sku === p.sku && x.tipo === p.tipo; });
     if (l) l.cantidad = r2(l.cantidad + 1);
     else K.L.push({ tipo: p.tipo, sku: p.sku, nombre: p.nombre, cantidad: 1, precio_unit: r2(p.pvp), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false });
@@ -317,7 +317,7 @@
     function bad() { q.classList.remove("mctk-flash-bad"); void q.offsetWidth; q.classList.add("mctk-flash-bad"); }
     function lista() {
       var v = q.value.trim(); if (!v) { hits.hidden = true; return; }
-      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible].concat(p.barras || []), [p.nombre]]; }) : []).filter(function (p) { return p.activo !== false; }).slice(0, 10);
+      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible].concat(p.barras || []), [p.nombre]]; }) : []).filter(function (p) { return p.activo !== false || p.enMigo; }).slice(0, 10);
       hits.hidden = false;
       hits.innerHTML = H.length ? H.map(function (p) { return '<button type="button" data-add="' + e(p.tipo + "|" + p.sku) + '"><span class="mccf-chip">' + e(TIPO[p.tipo] || p.tipo) + '</span> <span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + ' <span class="mccf-sub">· ' + e($m(p.pvp)) + (p.stock != null ? " · stock " + e(q2(p.stock)) : "") + "</span></button>"; }).join("") : '<div class="mccf-sub" style="padding:8px">Sin resultados</div>';
     }
@@ -796,7 +796,7 @@
     try { if (!K.cat) { var r = await api("tk_catalogo", {}); K.cat = (r && r.items) || []; } } catch (x) { toast2("No se pudo leer el catálogo: " + ((x && x.message) || x), true); return; }
     var p = porBarras(code);
     if (!p) { beep(false); toast2("Código " + norm(code) + " no encontrado", true); return; }
-    if (p.activo === false) { beep(false); toast2("«" + p.nombre + "» está inactivo: no se puede vender", true); return; }
+    if (p.activo === false && !p.enMigo) { beep(false); toast2("«" + p.nombre + "» está inactivo: no se puede vender", true); return; }
     var hit = null;
     (window.PROVS || []).some(function (pv) { return (pv.prods || []).some(function (x) { if (x.sku === p.skuVisible || x.sku === "SUNSU-" + p.sku) { hit = { sku: x.sku, pv: pv.id }; return true; } return false; }); });
     if (!hit) { beep(false); toast2("«" + p.nombre + "» no está en la lista de productos de esta pantalla", true); return; }
