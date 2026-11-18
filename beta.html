@@ -1514,7 +1514,7 @@ function previewApi(accion, body) {
 function lecturaEnVista(accion) {
   if (!accion) return false;
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
-  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
+  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "staff_home", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
 }
 // Formato único de identificaciones y celulares (Emilia 17/11): lo usan todas las pantallas y cada respuesta de la api.
 // Cédula/RUC/pasaporte sin «.0», puntos ni espacios (con el 0 de provincia); celular +593 99 999 9999. Solo lectura.
@@ -2352,6 +2352,7 @@ async function draw() {
       await window.MCMaestro.after("proveedores", main, route);
     }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
+    if (route.kind === "mod" && route.mod === "inicio" && !state.admin && window.MCStaffHome) window.MCStaffHome.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
@@ -2520,6 +2521,7 @@ function htmlDashboard(d) {
 }
 
 async function renderInicioBeta() {
+  if (!state.admin && window.MCStaffHome) return window.MCStaffHome.render();
   const data = await api("home");
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
   let pulso = htmlStaffHome();
@@ -5904,37 +5906,38 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk58"></script>
-<script src="beta-screens.js?v=20261118tk58"></script>
-<script src="beta-inline.js?v=20261118tk58"></script>
-<script src="mc-productos.js?v=20261118tk58"></script>
-<script src="mc-nav.js?v=20261118tk58"></script>
-<script src="mc-permisos.js?v=20261118tk58"></script>
-<script src="mc-protocolos.js?v=20261118tk58"></script>
-<script src="mc-conteo.js?v=20261118tk58"></script>
-<script src="mc-transferencias.js?v=20261118tk58"></script>
-<script src="mc-ajustes.js?v=20261118tk58"></script>
-<script src="vendor-qrcode.js?v=20261118tk58"></script>
-<script src="mc-tickets.js?v=20261118tk58"></script>
-<script src="mc-maestro.js?v=20261118tk58"></script>
-<script src="mc-edit.js?v=20261118tk58"></script>
-<script src="mc-paquetes.js?v=20261118tk58"></script>
-<script src="mc-aperturas.js?v=20261118tk58"></script>
-<script src="mc-acceso.js?v=20261118tk58"></script>
-<script src="mc-barras.js?v=20261118tk58"></script>
-<script src="mc-caja.js?v=20261118tk58"></script>
-<script src="mc-giftcards.js?v=20261118tk58"></script>
-<script src="mc-multas.js?v=20261118tk58"></script>
-<script src="mc-clientes.js?v=20261118tk58"></script>
-<script src="mc-clientes-dup.js?v=20261118tk58"></script>
-<script src="mc-docpdf.js?v=20261118tk58"></script>
-<script src="mc-compras.js?v=20261118tk58"></script>
-<script src="mc-consignacion.js?v=20261118tk58"></script>
-<script src="mc-proveedores.js?v=20261118tk58"></script>
-<script src="mc-recepciones.js?v=20261118tk58"></script>
-<script src="mc-movil.js?v=20261118tk58"></script>
-<script src="mc-promociones.js?v=20261118tk58"></script>
-<script src="mc-agenda.js?v=20261118tk58"></script>
+<script src="mc-buscar.js?v=20261118tk59"></script>
+<script src="beta-screens.js?v=20261118tk59"></script>
+<script src="beta-inline.js?v=20261118tk59"></script>
+<script src="mc-productos.js?v=20261118tk59"></script>
+<script src="mc-nav.js?v=20261118tk59"></script>
+<script src="mc-permisos.js?v=20261118tk59"></script>
+<script src="mc-protocolos.js?v=20261118tk59"></script>
+<script src="mc-conteo.js?v=20261118tk59"></script>
+<script src="mc-transferencias.js?v=20261118tk59"></script>
+<script src="mc-ajustes.js?v=20261118tk59"></script>
+<script src="vendor-qrcode.js?v=20261118tk59"></script>
+<script src="mc-tickets.js?v=20261118tk59"></script>
+<script src="mc-maestro.js?v=20261118tk59"></script>
+<script src="mc-edit.js?v=20261118tk59"></script>
+<script src="mc-paquetes.js?v=20261118tk59"></script>
+<script src="mc-aperturas.js?v=20261118tk59"></script>
+<script src="mc-acceso.js?v=20261118tk59"></script>
+<script src="mc-barras.js?v=20261118tk59"></script>
+<script src="mc-caja.js?v=20261118tk59"></script>
+<script src="mc-giftcards.js?v=20261118tk59"></script>
+<script src="mc-multas.js?v=20261118tk59"></script>
+<script src="mc-clientes.js?v=20261118tk59"></script>
+<script src="mc-clientes-dup.js?v=20261118tk59"></script>
+<script src="mc-docpdf.js?v=20261118tk59"></script>
+<script src="mc-compras.js?v=20261118tk59"></script>
+<script src="mc-consignacion.js?v=20261118tk59"></script>
+<script src="mc-proveedores.js?v=20261118tk59"></script>
+<script src="mc-recepciones.js?v=20261118tk59"></script>
+<script src="mc-movil.js?v=20261118tk59"></script>
+<script src="mc-promociones.js?v=20261118tk59"></script>
+<script src="mc-agenda.js?v=20261118tk59"></script>
+<script src="mc-staff-home.js?v=20261118tk59"></script>
 <script>draw();</script>
 </body>
 </html>

@@ -19,6 +19,7 @@ import "./ajustes_beta_api.ts";
 import "./tickets_beta_api.ts";
 import "./clientes_beta_api.ts";
 import "./agenda_api.ts";
+import "./staff_home_api.ts";
 import "./tickets_lista_api.ts";
 import "./usuario_permisos_api.ts";
 import "./colores_api.ts";
