@@ -9,6 +9,7 @@ import "./asistencia_api.ts";
 import {
   saldoVacaciones, validarSolicitudVacacion,
   CONFIG_DEF, calcularDia, calcularNomina, distanciaMetros, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia,
+  debeCerrarAutomaticamente,
   type MarcajeIn,
 } from "./asistencia.ts";
 
@@ -184,7 +185,7 @@ describe("asistencia", () => {
     assert.match(String((sinFoto as { error?: string }).error), /selfie/);
     assert.equal(uploads.length, 0);
     const sinPunto = await handle("asis_marcar", { token, tipo: "entrada", lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie }, ctx);
-    assert.match(String((sinPunto as { error?: string }).error), /ubicación del spa/);
+    assert.match(String((sinPunto as { error?: string }).error), /ubicación del local/);
     assert.equal(uploads.length, 0);
     db.tables.set("sesiones", [
       ...(db.tables.get("sesiones") || []),
@@ -200,7 +201,7 @@ describe("asistencia", () => {
     }, ctx);
     assert.equal((conf as { ok?: boolean }).ok, true);
     const lejos = await handle("asis_marcar", { token, tipo: "entrada", lat: 0, lng: 0, precision_m: 10, foto: selfie }, ctx);
-    assert.match(String((lejos as { error?: string }).error), /m del spa/);
+    assert.match(String((lejos as { error?: string }).error), /radio permitido/);
     assert.equal(uploads.length, 0);
     const ok = await handle("asis_marcar", { token, tipo: "entrada", origen: "telefono", lat: -0.18, lng: -78.47, precision_m: 20, foto: selfie }, ctx);
     assert.equal((ok as { ok?: boolean }).ok, true);
@@ -318,5 +319,29 @@ describe("asistencia", () => {
     assert.match(String((await h("asis_dia", { token: "t-ger" })).error), /admin/);
     const acc = (await db.all("asistencia_auditoria")).map((r) => `${r.accion}:${r.actor}`);
     for (const a of ["solicitud", "permiso", "permiso_cancelado", "marca_manual"]) assert.ok(acc.some((x) => x.startsWith(a + ":")), a);
+  });
+
+  it("en su día de descanso el trabajo es extraordinaria; la madrugada en día laboral es +100%", () => {
+    const jueves = calcularDia("2026-11-19", [
+      marca("entrada", "2026-11-19", "09:00"),
+      marca("salida", "2026-11-19", "13:00"),
+    ], cfg, [], [], null, { trabaja: false, desde: null, hasta: null });
+    assert.equal(jueves.esDescanso, true);
+    assert.ok(jueves.extraordinariasMin >= 240);
+    assert.equal(jueves.ordinaryMin, 0);
+    const madrugada = calcularDia("2026-11-20", [
+      marca("entrada", "2026-11-20", "04:00"),
+      marca("salida", "2026-11-20", "09:00"),
+    ], cfg, [], [], null, { trabaja: true, desde: "09:00", hasta: "18:00" });
+    assert.ok(madrugada.supl100Min >= 120);
+  });
+
+  it("cierra sola 2 horas después del fin del horario, a la hora de salida (sin foto)", () => {
+    const entra = instanteEcuador("2026-11-18", "09:00");
+    const antes = debeCerrarAutomaticamente({ entradaTs: entra, horaSalida: "18:00", ahoraIso: instanteEcuador("2026-11-18", "19:59") });
+    assert.equal(antes.aplicar, false);
+    const despues = debeCerrarAutomaticamente({ entradaTs: entra, horaSalida: "18:00", ahoraIso: instanteEcuador("2026-11-18", "20:00") });
+    assert.equal(despues.aplicar, true);
+    assert.equal(despues.tsSalida, instanteEcuador("2026-11-18", "18:00"));
   });
 });

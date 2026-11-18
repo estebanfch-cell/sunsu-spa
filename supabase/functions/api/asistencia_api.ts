@@ -93,11 +93,21 @@ async function nominaDe(ctx: Ctx, nombre: string, anio: number, mes: number, des
     feriadosDe(ctx),
     configDe(ctx).catch(() => configDesde(undefined)),
   ]);
+  let jornadaFn: ((fecha: string) => { trabaja: boolean; desde: string | null; hasta: string | null }) | undefined;
+  try {
+    const { cargarHorarios } = await import("./horarios_api.ts");
+    const { horarioAsignado, jornadaDe } = await import("./horarios.ts");
+    const pack = await cargarHorarios(ctx);
+    const emp = await empleadaDe(ctx, nombre);
+    const h = horarioAsignado(pack.horarios, pack.asignaciones, [nombre, s(emp?.nombre_app), s(emp?.apellidos_y_nombres), s(emp?.nombre_jibble)]);
+    if (h) jornadaFn = (f) => jornadaDe(h, f);
+  } catch { /* horarios opcionales */ }
   return calcularNomina({
     anio, mes, desde, hasta, config, feriados, hoy: ecuadorParts(ctx.now).ymd,
     marcajes: marcajesDe(marcajes, nombre),
     jibble: jibbleDe(jibble, nombre),
     permisos: permisosDe(permisos, nombre),
+    jornadaDe: jornadaFn,
   });
 }
 export async function horasDeEmpleada(ctx: Ctx, nombre: string, anio: number, mes: number): Promise<NominaHoras> {
@@ -122,7 +132,7 @@ extend("asis_config", "any", async (_p, ctx, ses) => {
     config: admin ? { ...cfg, punto_listo: cfg.lat != null && cfg.lng != null } : {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
-      jornada_horas: cfg.jornada_horas,
+      jornada_horas: cfg.jornada_horas, lugar_nombre: cfg.lugar_nombre,
     },
   };
 });
@@ -140,6 +150,7 @@ extend("asis_config_guardar", "any", async (p, ctx, ses) => {
     jornada_horas: Math.min(12, Math.max(1, n(p.jornada_horas) || antes.jornada_horas)),
     gracia_min: Math.max(0, p.gracia_min == null || p.gracia_min === "" ? antes.gracia_min : n(p.gracia_min)),
     cuenta_antes: p.cuenta_antes === true || s(p.cuenta_antes) === "true",
+    lugar_nombre: s(p.lugar_nombre) || antes.lugar_nombre || "C.C. La Esquina",
   };
   const rows = await ctx.db.all("asistencia_config");
   if (rows.length) await ctx.db.write(actorOf(ses), "asistencia_config", "update", { id: rows[0].id }, row);
@@ -227,6 +238,7 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     config: {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
+      lugar_nombre: cfg.lugar_nombre || "C.C. La Esquina",
       lat: esAdmin(ses.rol) ? cfg.lat : undefined, lng: esAdmin(ses.rol) ? cfg.lng : undefined,
     },
   };
@@ -281,7 +293,12 @@ extend("asis_auditoria", "any", async (_p, ctx, ses) => {
 });
 
 extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
-  const tipo = /vacac/i.test(s(p.tipo)) ? "VACACIONES" : "PERMISO";
+  const tipoRaw = s(p.tipo).toUpperCase();
+  const tipo = /vacac/i.test(tipoRaw) ? "VACACIONES"
+    : /med/i.test(tipoRaw) ? "PERMISO MEDICO"
+    : /calam/i.test(tipoRaw) ? "CALAMIDAD"
+    : /person/i.test(tipoRaw) ? "PERSONAL"
+    : "PERMISO";
   const desde = s(p.desde).slice(0, 10);
   const hasta = s(p.hasta || p.desde).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return { error: "Falta la fecha" };
@@ -299,9 +316,27 @@ extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
     fecha_inicio: desde, fecha_fin: hasta,
     horas: n(p.horas), motivo: s(p.motivo), estado: "PENDIENTE", solicitado: ecuadorParts(ctx.now).ymd,
     dias, origin: "beta", orig: { tipo, por: ses.name },
+    url_certificado: s(p.adjunto || p.url || p.url_certificado) || null,
   };
   await ctx.db.write(actorOf(ses), "permisos", "insert", {}, fila);
   await auditar(ctx, ses, "solicitud", { nombre, permiso_sheet_row: sr, despues: { tipo, desde, hasta, dias, horas: n(p.horas) }, motivo: s(p.motivo) || tipo });
+  try {
+    const admins = (await ctx.db.all("app_usuarios").catch(() => [] as Row[])).concat(await ctx.db.all("usuarios").catch(() => [] as Row[]));
+    const vistos = new Set<string>();
+    for (const u of admins) {
+      const rol = s(u.rol || u.role);
+      if (rol !== "admin" && rol !== "super_admin" && rol !== "admin_master") continue;
+      const uid = s(u.id);
+      if (!uid || vistos.has(uid)) continue;
+      vistos.add(uid);
+      await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
+        id: crypto.randomUUID(), usuario: uid,
+        titulo: "Solicitud de permiso",
+        texto: `${nombre} pidió ${tipo.toLowerCase()} del ${desde} al ${hasta}.`,
+        tipo: "permiso", ruta: "#/m/personal/permisos", created_at: ctx.now.toISOString(),
+      });
+    }
+  } catch { /* la notificación no debe tumbar la solicitud */ }
   return { ok: true, id: String(ctx.now.getTime() + Math.abs(sr)), dias };
 });
 
@@ -427,6 +462,9 @@ function marcaPub(r: Row) {
   return {
     id: s(r.id), nombre: s(r.nombre), tipo: s(r.tipo), ts: s(r.ts),
     anulado: r.anulado === true, tieneFoto: s(r.foto).startsWith("asistencia/"),
+    origen: s(r.origen) || "telefono",
+    automatica: s(r.origen) === "automatica" || /salida autom[aá]tica/i.test(s(r.motivo_manual)),
+    motivo_manual: s(r.motivo_manual),
   };
 }
 
@@ -496,4 +534,118 @@ function audPub(r: Row) {
   return { ts: s(r.ts), actor: s(r.actor), accion: s(r.accion), nombre: s(r.nombre), motivo: s(r.motivo), antes: r.antes || null, despues: r.despues || null };
 }
 
+
+export function sesionCronAsis(p: Row, env: Record<string, string | undefined>): { uid: string; rol: string; name: string; short: string; color: string; token: string } | null {
+  const key = s(env.ASIS_CRON_KEY || env.MIGO_CRON_KEY);
+  if (key.length < 16) return null;
+  const got = s(p.cron_key || p.asis_cron_key || p.migo_cron_key);
+  if (got.length !== key.length) return null;
+  let x = 0;
+  for (let i = 0; i < key.length; i++) x |= key.charCodeAt(i) ^ got.charCodeAt(i);
+  if (x !== 0) return null;
+  return { uid: "asis-cron", rol: "admin", name: "Asistencia cron", short: "asis", color: "", token: "" };
+}
+
+extend("asis_calendario", "any", async (p, ctx, ses) => {
+  const matriz = await matrizDe(ctx.db);
+  if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
+  const nombre = (!esAdmin(ses.rol) || propio(ses, matriz)) ? ses.name : (s(p.nombre) || ses.name);
+  const ancla = s(p.fecha) || ecuadorParts(ctx.now).ymd;
+  const vista = s(p.vista || "mes") || "mes";
+  const [y, m, d] = ancla.split("-").map(Number);
+  let desde = ancla, hasta = ancla;
+  if (vista === "semana") {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    const dow = dt.getUTCDay();
+    dt.setUTCDate(dt.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+    desde = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+    const fin = new Date(dt);
+    fin.setUTCDate(fin.getUTCDate() + 6);
+    hasta = `${fin.getUTCFullYear()}-${String(fin.getUTCMonth() + 1).padStart(2, "0")}-${String(fin.getUTCDate()).padStart(2, "0")}`;
+  } else if (vista === "mes") {
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    desde = `${y}-${String(m).padStart(2, "0")}-01`;
+    hasta = `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+  }
+  const horas = await horasEnRango(ctx, nombre, desde, hasta);
+  const feriados = await feriadosDe(ctx);
+  const ferSet = new Set(feriados);
+  const historialMeses: string[] = [];
+  for (let k = 0; k < 12; k++) {
+    const dt = new Date(Date.UTC(y, m - 1 - k, 1));
+    historialMeses.push(`${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+  return {
+    ok: true, vista, fecha: ancla, desde, hasta, nombre,
+    feriados,
+    dias: horas.dias || [],
+    resumen: {
+      diasAsistidos: horas.diasPropios,
+      hrsNormales: horas.hrsOrdinarias,
+      hrsSupl50: horas.hrsSupl,
+      hrsSupl100: horas.hrsExtr,
+      hrsExtraordinarias: horas.hrsDesc,
+      hrsTrabajadas: horas.hrsTrabajadas,
+      atrasoMin: horas.atrasoMin,
+      faltas: horas.faltas,
+    },
+    historialMeses,
+    hayDatos: horas.hayDatos,
+  };
+});
+
+extend("asis_cierre_automatico", "any", async (_p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un proceso de admin o el cron cierra las salidas automáticas." };
+  const cfg = await configDe(ctx);
+  const todos = (await ctx.db.all("asistencia_marcajes").catch(() => [] as Row[])).filter((r) => r.anulado !== true);
+  const porPersona = new Map<string, Row[]>();
+  for (const r of todos) {
+    const nomb = s(r.nombre);
+    if (!nomb) continue;
+    const arr = porPersona.get(nomb) || [];
+    arr.push(r);
+    porPersona.set(nomb, arr);
+  }
+  const { debeCerrarAutomaticamente } = await import("./asistencia.ts");
+  const { cargarHorarios } = await import("./horarios_api.ts").catch(() => ({ cargarHorarios: async () => ({ horarios: [], asignaciones: [] }) }));
+  const { horarioAsignado, jornadaDe } = await import("./horarios.ts").catch(() => ({ horarioAsignado: () => null, jornadaDe: () => ({ trabaja: true, desde: cfg.hora_entrada, hasta: cfg.hora_salida }) }));
+  let pack: { horarios: unknown[]; asignaciones: unknown[] } | null = null;
+  try { pack = await cargarHorarios(ctx) as { horarios: unknown[]; asignaciones: unknown[] }; } catch { pack = null; }
+  const cerrados: Row[] = [];
+  const ahora = ctx.now.toISOString();
+  for (const [nombre, filas] of porPersona) {
+    const vivos = filas.slice().sort((a, b) => s(a.ts).localeCompare(s(b.ts)));
+    const lastE = [...vivos].reverse().find((r) => s(r.tipo) === "entrada");
+    const lastS = [...vivos].reverse().find((r) => s(r.tipo) === "salida");
+    if (!lastE || (lastS && s(lastS.ts) >= s(lastE.ts))) continue;
+    let hasta = cfg.hora_salida;
+    try {
+      const emp = await empleadaDe(ctx, nombre);
+      const h = pack ? horarioAsignado(pack.horarios as never, pack.asignaciones as never, [nombre, s(emp?.nombre_app), s(emp?.apellidos_y_nombres)]) : null;
+      const { ecuadorParts } = await import("./domain.ts");
+      const ymd = ecuadorParts(new Date(s(lastE.ts))).ymd;
+      const dia = h ? jornadaDe(h as never, ymd) : null;
+      if (dia && dia.hasta) hasta = dia.hasta;
+    } catch { /* usa hora de config */ }
+    const dec = debeCerrarAutomaticamente({ entradaTs: s(lastE.ts), horaSalida: hasta, ahoraIso: ahora });
+    if (!dec.aplicar) continue;
+    const despues = vivos.filter((r) => s(r.ts) > s(lastE.ts));
+    if (despues.some((r) => s(r.tipo) === "almuerzo_inicio") && !despues.some((r) => s(r.tipo) === "almuerzo_fin")) {
+      await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
+        usuario_id: s(lastE.usuario_id) || "", nombre, tipo: "almuerzo_fin", ts: dec.tsSalida,
+        origen: "automatica", motivo_manual: "Salida automática", creado_por: "sistema",
+      });
+    }
+    const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
+      usuario_id: s(lastE.usuario_id) || "", nombre, tipo: "salida", ts: dec.tsSalida,
+      origen: "automatica", motivo_manual: "Salida automática", creado_por: "sistema",
+    });
+    await auditar(ctx, ses, "salida_automatica", { nombre, marcaje_id: saved && s((saved as Row).id), motivo: "Salida automática", despues: { ts: dec.tsSalida, hora_salida: hasta } });
+    cerrados.push({ nombre, ts: dec.tsSalida });
+  }
+  return { ok: true, cerrados: cerrados.length, detalle: cerrados };
+});
+
+
 export { instanteEcuador };
+

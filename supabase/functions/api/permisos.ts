@@ -82,6 +82,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getRendimientoProductos: "ver_costos",
   getRoles: "rol_pagos", getRolIndividual: "rol_pagos", getAprobacionesRol: "rol_pagos", aprobarRol: "rol_pagos",
   getRolCiclo: "rol_pagos", getPagoConfig: "rol_pagos", pago_config_guardar: "rol_pagos",
+  roles_lista: "rol_pagos", rol_publicar: "rol_pagos",
   config_general: "configuracion",
   testDiasJibble: "asistencia",
   asis_config: "asistencia", asis_config_guardar: "asistencia", asis_marcar: "asistencia",
