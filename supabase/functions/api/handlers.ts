@@ -1,7 +1,7 @@
 import { bloqueada, ESPERA_MIN, hashPass, igualSeguro, ITER, MAX_INTENTOS, normUsuario } from "./credenciales.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { cargarOverride, conPermisosUsuario, gateNivel, redactarFlags } from "./usuario_permisos.ts";
-import { acceso, clampPersonal, esAdmin, esPropio, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
+import { acceso, clampPersonal, esAdmin, esPropio, flagsDeRol, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
@@ -984,6 +984,10 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
     }
   }
   const matriz = await matrizDe(db);
+  if (ses0) {
+    ses0 = { ...ses0, priv: flagsDeRol(ses0.rol, matriz) };
+    ctx = { ...ctx, ses: ses0 };
+  }
   const gate = gateAccion(action, ses0, matriz) || (ses0 ? gateNivel(action, ses0.rol, ovUsuario, p as Row) : null);
   if (gate) return gate;
   if (action === "modo_prueba" || action === "prueba_borrar") {

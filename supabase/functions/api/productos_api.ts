@@ -38,7 +38,7 @@ async function permisos(ctx: Ctx, ses: Ses) {
     puede: admin || acceso(ses.rol, "productos", matriz) !== "no",
     admin,
     costos: admin || acceso(ses.rol, "ver_costos", matriz) === "todos",
-    puedeDescargar: admin,
+    puedeDescargar: admin || acceso(ses.rol, "descargas", matriz) !== "no",
   };
 }
 

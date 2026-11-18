@@ -13,10 +13,36 @@ export type Acceso = "no" | "propio" | "todos";
 
 export const MODULOS = [
   "inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "ver_costos",
+  "ver_telefonos", "ver_emails", "ver_sector", "descargas",
   "clientes", "proveedores", "compras", "inventario", "transferencias", "conteos", "kardex",
   "cotizaciones_cliente", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos",
   "configuracion", "agenda", "recepciones",
 ] as const;
+
+/** Interruptores de privacidad (TK73): por defecto nadie del personal los tiene. Admin siempre sí. */
+export const PRIV_FLAGS = [
+  { id: "telefonos", modulo: "ver_telefonos", label: "Teléfonos" },
+  { id: "emails", modulo: "ver_emails", label: "Emails" },
+  { id: "sector", modulo: "ver_sector", label: "Sector / dirección" },
+  { id: "costos", modulo: "ver_costos", label: "Costos y márgenes" },
+  { id: "descargas", modulo: "descargas", label: "Descargar archivos" },
+  { id: "tickets_todos", modulo: "tickets", label: "Ver todos los tickets" },
+] as const;
+export type PrivFlag = (typeof PRIV_FLAGS)[number]["id"];
+
+export function puedePriv(rol: string, id: PrivFlag, matriz?: Record<string, Partial<Record<string, Acceso>>>): boolean {
+  if (esAdmin(rol)) return true;
+  const f = PRIV_FLAGS.find((x) => x.id === id);
+  if (!f) return false;
+  if (id === "tickets_todos") return acceso(rol, "tickets", matriz) === "todos";
+  return acceso(rol, f.modulo, matriz) !== "no";
+}
+
+export function flagsDeRol(rol: string, matriz?: Record<string, Partial<Record<string, Acceso>>>): Record<PrivFlag, boolean> {
+  const out = {} as Record<PrivFlag, boolean>;
+  for (const f of PRIV_FLAGS) out[f.id] = puedePriv(rol, f.id, matriz);
+  return out;
+}
 export type Modulo = (typeof MODULOS)[number];
 
 const P = "propio" as const;
@@ -109,6 +135,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   usuariosFull: "usuarios", saveUsuarios: "usuarios", usuarioBloquear: "usuarios", usuarioPinReset: "usuarios",
   betaTablas: "usuarios", betaFilas: "usuarios", betaGuardar: "usuarios", betaEliminar: "usuarios", betaMover: "usuarios",
   permisos_get: "inicio", permisos_guardar: "permisos",
+  cfg_priv_get: "configuracion", cfg_priv_guardar: "configuracion",
   home: "inicio",
   getDashboardHoy: "ver_costos",
   getDashboard: "ver_costos",
@@ -121,9 +148,9 @@ const COSTO = new Set([
 ]);
 const CONTACTO = new Set(["telefono", "tel", "celular", "whatsapp", "email", "correo"]);
 
-export function puedeVerContacto(rol: string): boolean {
-  const r = normalizarRol(rol);
-  return r === "recepcion" || r === "gerente" || r === "admin" || r === "super_admin";
+/** @deprecated Preferir puedePriv(rol, "telefonos", matriz). Sin matriz, solo admin (TK73). */
+export function puedeVerContacto(rol: string, matriz?: Record<string, Partial<Record<string, Acceso>>>): boolean {
+  return puedePriv(rol, "telefonos", matriz);
 }
 
 /** personas: de quién más ve datos por persona (permisos por usuario, alcance._personas). */
@@ -243,13 +270,18 @@ export function clampPersonal(action: string, p: Row, ses: SesLite | null, matri
   return out;
 }
 
-function quitarContacto(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(quitarContacto);
+const CONTACTO_TEL = new Set(["telefono", "tel", "celular", "whatsapp"]);
+const CONTACTO_MAIL = new Set(["email", "correo"]);
+function quitarContacto(v: unknown, tel: boolean, mail: boolean): unknown {
+  if (tel && mail) return v;
+  if (Array.isArray(v)) return v.map((x) => quitarContacto(x, tel, mail));
   if (!v || typeof v !== "object") return v;
   const o: Row = {};
   for (const [k, val] of Object.entries(v as Row)) {
-    if (CONTACTO.has(k.toLowerCase())) continue;
-    o[k] = quitarContacto(val);
+    const n = k.toLowerCase();
+    if (!tel && CONTACTO_TEL.has(n)) continue;
+    if (!mail && CONTACTO_MAIL.has(n)) continue;
+    o[k] = quitarContacto(val, tel, mail);
   }
   return o;
 }
@@ -273,7 +305,7 @@ export function redactar(action: string, data: unknown, ses: SesLite | null, mat
     if (nombre && !esPropio(nombre, ses)) return { error: "No tienes permiso para ver el rol de otra persona" };
   }
   let out = quitarCostos(structuredClone(data), verCostos(ses.rol, matriz));
-  if (!puedeVerContacto(ses.rol)) out = quitarContacto(out);
+  out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));
   const ticketsPropio = acceso(ses.rol, "tickets", matriz) === "propio";
   const rolPropio = acceso(ses.rol, "rol_pagos", matriz) !== "todos";
   const comPropio = acceso(ses.rol, "comisiones", matriz) === "propio";

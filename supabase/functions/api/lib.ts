@@ -1,6 +1,6 @@
 import { enPrueba, type Db } from "./db.ts";
 import { ecuadorParts, siguienteBetaNum, siguienteTestTicket, s, type Row } from "./domain.ts";
-import { normalizarRol } from "./permisos.ts";
+import { normalizarRol, puedePriv, type PrivFlag } from "./permisos.ts";
 import { consultar } from "./query.ts";
 
 export interface Ses {
@@ -14,6 +14,8 @@ export interface Ses {
   bloqueado?: boolean;
   /** Permisos por usuario: de quién más ve datos por persona ("*" = todas). */
   personas?: string[];
+  /** Interruptores de privacidad resueltos para esta petición (TK73). */
+  priv?: { telefonos?: boolean; emails?: boolean; sector?: boolean; costos?: boolean; descargas?: boolean; tickets_todos?: boolean };
 }
 
 export interface Ctx {
@@ -204,9 +206,18 @@ export async function ensureUsers(db: Db, actor: string): Promise<void> {
   }
 }
 
-export function conTelefono(ses: Ses | null): boolean {
-  return !!ses && ["admin", "admin_master", "super_admin", "gerente", "reception", "recepcion"].includes(ses.rol);
+function flagPriv(ses: Ses | null, id: PrivFlag): boolean {
+  if (!ses) return false;
+  if (ses.priv && ses.priv[id] !== undefined) return !!ses.priv[id];
+  return puedePriv(ses.rol, id);
 }
+
+/** Teléfono de clientas: admin, o el interruptor ver_telefonos / flag telefonos (TK73). */
+export function conTelefono(ses: Ses | null): boolean { return flagPriv(ses, "telefonos"); }
+export function conEmail(ses: Ses | null): boolean { return flagPriv(ses, "emails"); }
+export function conSector(ses: Ses | null): boolean { return flagPriv(ses, "sector"); }
+export function conDescargas(ses: Ses | null): boolean { return flagPriv(ses, "descargas"); }
+
 
 /** Copia a una tabla de la migración 0008. Columnas que no existan se ignoran en app_write; un NOT NULL distinto no tumba la acción que ya se guardó en kv. */
 export async function espejo(db: Db, actor: string, table: string, row: Row): Promise<void> {

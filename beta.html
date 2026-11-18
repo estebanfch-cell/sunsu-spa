@@ -267,7 +267,9 @@
   .local-sel { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
   .local-sel[hidden] { display: none !important; }
   .local-sel select { color: var(--navy-d); background: #fff; border: 0; border-radius: 8px; padding: 6px 8px; font-weight: 800; }
-  .inv-subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+  .cfg-priv-lab{display:inline-flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-weight:600}
+.cfg-priv-lab input{width:auto;margin:0}
+.inv-subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
     .lugar-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
   .lugar-chips .btn { min-height: 44px; }
   .cnt-num { font-size: 2rem; text-align: center; height: 72px; font-variant-numeric: tabular-nums; font-weight: 800; }
@@ -1535,6 +1537,7 @@ function previewApi(accion, body) {
     ] };
   }
   if (accion === "config_general") return { ok: true, faciales: [], base: [], extra: [], recepcion: [], tramos: [], productos: [] };
+  if (accion === "cfg_priv_get") return { ok: true, flags: [], roles: [], usuarios: [], nota: "" };
   if (accion === "getPagoConfig") return { ok: true, configs: [], personas: [] };
   if (accion === "getComisionesTabla") {
     const card = (nombre, fac, paq, prodN, prod, ext, rec) => {
@@ -3675,9 +3678,34 @@ function cfgLinea(tabla, fila, pares, fabrica, titulo) {
   if (ix && ix.edita()) return `<div class="row">${head}${ix.lineas(tabla, fila, pares)} ${fabrica ? "" : ix.borrar(tabla, fila)}</div>`;
   return `<div class="row">${head}<div class="note">${pares.map((p) => esc(p[1] + ": " + (p[2] ?? ""))).join(" · ")}</div></div>`;
 }
+function htmlCfgPriv(data) {
+  if (!data || data.error) return `<p class="err">${esc((data && data.error) || "No pude cargar los permisos.")}</p>`;
+  const flags = data.flags || [];
+  const roles = data.roles || [];
+  const usuarios = data.usuarios || [];
+  const head = `<tr><th>Permiso</th>${roles.map((r) => `<th>${esc(r.rol)}</th>`).join("")}</tr>`;
+  const body = flags.map((f) => `<tr><td>${esc(f.label)}</td>${roles.map((r) => {
+    const on = !!(r.flags && r.flags[f.id]);
+    return `<td class="matrix"><label class="cfg-priv-lab"><input type="checkbox" data-priv-ambito="rol" data-priv-rol="${esc(r.rol)}" data-priv-flag="${esc(f.id)}"${on ? " checked" : ""}> ${on ? "sí" : "no"}</label></td>`;
+  }).join("")}</tr>`).join("");
+  const opts = [`<option value="">Elige a alguien</option>`].concat(usuarios.map((u) => `<option value="${esc(u.uid)}">${esc(u.nombre)} · ${esc(u.rol)}</option>`));
+  const filasUser = flags.map((f) => `<tr><td>${esc(f.label)}</td><td class="matrix" data-priv-user-cell="${esc(f.id)}"><span class="note">—</span></td></tr>`).join("");
+  return `<p class="note">${esc(data.nota || "")}</p>
+    <div class="card" id="cfg-priv-roles"><div class="card-title">Por rol</div>
+      <div style="overflow:auto"><table class="cfg-priv">${head}<tbody>${body}</tbody></table></div>
+    </div>
+    <div class="card" id="cfg-priv-user"><div class="card-title">Por usuario</div>
+      <p class="note">Si lo dejas igual que el rol, la persona hereda. Un tilde distinto queda solo para ella.</p>
+      <label>Persona <select id="cfg-priv-uid">${opts.join("")}</select></label>
+      <div style="overflow:auto"><table class="cfg-priv"><thead><tr><th>Permiso</th><th>Esta persona</th></tr></thead><tbody>${filasUser}</tbody></table></div>
+      <p class="note" id="cfg-priv-msg" hidden></p>
+    </div>
+    <script type="application/json" id="cfg-priv-json">${JSON.stringify({ flags, usuarios }).replace(/</g, "\u003c")}</script>`;
+}
+
 async function renderConfiguracion() {
   if (!state.admin) return `<p class="err">Solo administración entra a Configuración general.</p>`;
-  const data = await api("config_general");
+  const [data, priv] = await Promise.all([api("config_general"), api("cfg_priv_get")]);
   if (data.error) return fail(data);
   const ix = window.SunsuInline;
   const faciales = (data.faciales || []).map((r) => cfgLinea("com_facial", r.fila, [["sku", "Facial", r.sku], ["monto", "Comisión", r.monto], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
@@ -3688,7 +3716,9 @@ async function renderConfiguracion() {
   const productos = (data.productos || []).map((r) => cfgLinea("com_producto", r.fila, [["sku", "SKU", r.sku], ["pct", "% del margen", r.pct], ["fijo", "Fijo por unidad", r.fijo], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
   const pago = await htmlPagoConfig();
   return `<p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso.</p>
-    <p class="note"><a href="#cfg-roles">Roles</a> · <a href="#cfg-comisiones">Comisiones</a></p>
+    <p class="note"><a href="#cfg-permisos">Permisos</a> · <a href="#cfg-roles">Roles</a> · <a href="#cfg-comisiones">Comisiones</a></p>
+    <h2 id="cfg-permisos">Permisos por rol y usuario</h2>
+    <div id="cfg-permisos-box">${htmlCfgPriv(priv)}</div>
     <h2 id="cfg-roles">Roles</h2>
     <div class="card"><div class="card-title">Sueldo fijo, bono fijo y otros valores del rol</div>${pago}</div>
     <h2 id="cfg-asistencia">Asistencia, geocerca y feriados</h2>
@@ -4721,7 +4751,7 @@ async function renderPermisosBeta() {
   const data = await api("permisos_get");
   if (data.error) return fail(data);
   const ix = window.SunsuInline;
-  const mods = (data.modulos || []).filter((m) => m !== "permisos");
+  const mods = (data.modulos || []).filter((m) => m !== "permisos" && m !== "ver_telefonos" && m !== "ver_emails" && m !== "ver_sector" && m !== "descargas");
   const head = `<tr><th>Módulo</th>${(data.roles || []).map((r) => `<th>${esc(r)}</th>`).join("")}</tr>`;
   const body = mods.map((mod) => `<tr><td>${esc(mod)}</td>${(data.roles || []).map((rol) => {
     const val = (data.matriz && data.matriz[rol] && data.matriz[rol][mod]) || "no";
@@ -4730,7 +4760,7 @@ async function renderPermisosBeta() {
     const pedir = ix && ix.pide() ? ix.pedir("acceso", fila, { acceso: val }) : "";
     return `<td class="matrix">${esc(val)} ${pedir}</td>`;
   }).join("")}</tr>`).join("");
-  return `<p class="note">${esc(data.nota || "")} Recepción y gerencia arrancan con tickets en propio. Ver costos no se puede soltar. Quitar la celda vuelve al acceso de fábrica.</p>
+  return `<p class="note">${esc(data.nota || "")} Recepción y gerencia arrancan con tickets en propio. Teléfonos, emails, sector, costos, descargas y ver todos los tickets se sueltan en <a href="#/m/configuracion">Configuración general</a>. Quitar la celda vuelve al acceso de fábrica.</p>
     <table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
@@ -5384,7 +5414,64 @@ function pintarRol() {
   const box = document.getElementById("rol-sheet");
   if (box && window._rol) box.innerHTML = htmlRol(window._rol);
 }
+function bindCfgPriv(main) {
+  const box = main.querySelector("#cfg-permisos-box");
+  if (!box) return;
+  const raw = main.querySelector("#cfg-priv-json");
+  let data = { flags: [], usuarios: [] };
+  try { data = JSON.parse(raw && raw.textContent || "{}"); } catch (e) { data = { flags: [], usuarios: [] }; }
+  const msg = (t, ok) => {
+    const p = main.querySelector("#cfg-priv-msg");
+    if (!p) return;
+    p.hidden = !t;
+    p.className = ok ? "ok" : "err";
+    p.id = "cfg-priv-msg";
+    p.textContent = t || "";
+  };
+  const pintar = (uid) => {
+    const u = (data.usuarios || []).find((x) => x.uid === uid);
+    main.querySelectorAll("[data-priv-user-cell]").forEach((td) => {
+      const id = td.getAttribute("data-priv-user-cell");
+      if (!u) { td.innerHTML = '<span class="note">—</span>'; return; }
+      const on = !!(u.flags && u.flags[id]);
+      const origen = u.origen && u.origen[id] === "usuario" ? ' <span class="note">personalizado</span>' : ' <span class="note">del rol</span>';
+      td.innerHTML = `<label class="cfg-priv-lab"><input type="checkbox" data-priv-ambito="usuario" data-priv-uid="${esc(u.uid)}" data-priv-flag="${esc(id)}"${on ? " checked" : ""}> ${on ? "sí" : "no"}</label>${origen}`;
+    });
+  };
+  const sel = main.querySelector("#cfg-priv-uid");
+  if (sel) {
+    sel.addEventListener("change", () => { msg(""); pintar(sel.value); });
+    if (sel.value) pintar(sel.value);
+  }
+  box.addEventListener("change", async (e) => {
+    const t = e.target;
+    if (!t || !t.getAttribute || !t.getAttribute("data-priv-flag")) return;
+    const payload = { ambito: t.getAttribute("data-priv-ambito"), flag: t.getAttribute("data-priv-flag"), valor: t.checked };
+    if (payload.ambito === "rol") payload.rol = t.getAttribute("data-priv-rol");
+    else payload.uid = t.getAttribute("data-priv-uid");
+    t.disabled = true;
+    const r = await api("cfg_priv_guardar", payload);
+    t.disabled = false;
+    if (r && r.error) { t.checked = !t.checked; msg(r.error, false); return; }
+    msg("Guardado.", true);
+    if (payload.ambito === "rol") {
+      const lab = t.parentNode;
+      if (lab && lab.lastChild) lab.lastChild.textContent = " " + (t.checked ? "sí" : "no");
+    } else if (payload.uid) {
+      const u = (data.usuarios || []).find((x) => x.uid === payload.uid);
+      if (u) {
+        u.flags = u.flags || {};
+        u.origen = u.origen || {};
+        if (r.origen === "rol") { u.flags[payload.flag] = t.checked; u.origen[payload.flag] = "rol"; }
+        else { u.flags[payload.flag] = t.checked; u.origen[payload.flag] = "usuario"; }
+      }
+      pintar(payload.uid);
+    }
+  });
+}
+
 function bind(main) {
+  bindCfgPriv(main);
   main.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => {
       const shell = document.getElementById("shell");
@@ -6157,39 +6244,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk74"></script>
-<script src="beta-screens.js?v=20261118tk74"></script>
-<script src="beta-inline.js?v=20261118tk74"></script>
-<script src="mc-productos.js?v=20261118tk74"></script>
-<script src="mc-nav.js?v=20261118tk74"></script>
-<script src="mc-permisos.js?v=20261118tk74"></script>
-<script src="mc-protocolos.js?v=20261118tk74"></script>
-<script src="mc-conteo.js?v=20261118tk74"></script>
-<script src="mc-transferencias.js?v=20261118tk74"></script>
-<script src="mc-ajustes.js?v=20261118tk74"></script>
-<script src="vendor-qrcode.js?v=20261118tk74"></script>
-<script src="mc-tickets.js?v=20261118tk74"></script>
-<script src="mc-maestro.js?v=20261118tk74"></script>
-<script src="mc-empleados.js?v=20261118tk74"></script>
-<script src="mc-edit.js?v=20261118tk74"></script>
-<script src="mc-paquetes.js?v=20261118tk74"></script>
-<script src="mc-aperturas.js?v=20261118tk74"></script>
-<script src="mc-acceso.js?v=20261118tk74"></script>
-<script src="mc-barras.js?v=20261118tk74"></script>
-<script src="mc-caja.js?v=20261118tk74"></script>
-<script src="mc-giftcards.js?v=20261118tk74"></script>
-<script src="mc-multas.js?v=20261118tk74"></script>
-<script src="mc-clientes.js?v=20261118tk74"></script>
-<script src="mc-clientes-dup.js?v=20261118tk74"></script>
-<script src="mc-docpdf.js?v=20261118tk74"></script>
-<script src="mc-compras.js?v=20261118tk74"></script>
-<script src="mc-consignacion.js?v=20261118tk74"></script>
-<script src="mc-proveedores.js?v=20261118tk74"></script>
-<script src="mc-recepciones.js?v=20261118tk74"></script>
-<script src="mc-movil.js?v=20261118tk74"></script>
-<script src="mc-promociones.js?v=20261118tk74"></script>
-<script src="mc-agenda.js?v=20261118tk74"></script>
-<script src="mc-staff-home.js?v=20261118tk74"></script>
+<script src="mc-buscar.js?v=20261118tk75"></script>
+<script src="beta-screens.js?v=20261118tk75"></script>
+<script src="beta-inline.js?v=20261118tk75"></script>
+<script src="mc-productos.js?v=20261118tk75"></script>
+<script src="mc-nav.js?v=20261118tk75"></script>
+<script src="mc-permisos.js?v=20261118tk75"></script>
+<script src="mc-protocolos.js?v=20261118tk75"></script>
+<script src="mc-conteo.js?v=20261118tk75"></script>
+<script src="mc-transferencias.js?v=20261118tk75"></script>
+<script src="mc-ajustes.js?v=20261118tk75"></script>
+<script src="vendor-qrcode.js?v=20261118tk75"></script>
+<script src="mc-tickets.js?v=20261118tk75"></script>
+<script src="mc-maestro.js?v=20261118tk75"></script>
+<script src="mc-empleados.js?v=20261118tk75"></script>
+<script src="mc-edit.js?v=20261118tk75"></script>
+<script src="mc-paquetes.js?v=20261118tk75"></script>
+<script src="mc-aperturas.js?v=20261118tk75"></script>
+<script src="mc-acceso.js?v=20261118tk75"></script>
+<script src="mc-barras.js?v=20261118tk75"></script>
+<script src="mc-caja.js?v=20261118tk75"></script>
+<script src="mc-giftcards.js?v=20261118tk75"></script>
+<script src="mc-multas.js?v=20261118tk75"></script>
+<script src="mc-clientes.js?v=20261118tk75"></script>
+<script src="mc-clientes-dup.js?v=20261118tk75"></script>
+<script src="mc-docpdf.js?v=20261118tk75"></script>
+<script src="mc-compras.js?v=20261118tk75"></script>
+<script src="mc-consignacion.js?v=20261118tk75"></script>
+<script src="mc-proveedores.js?v=20261118tk75"></script>
+<script src="mc-recepciones.js?v=20261118tk75"></script>
+<script src="mc-movil.js?v=20261118tk75"></script>
+<script src="mc-promociones.js?v=20261118tk75"></script>
+<script src="mc-agenda.js?v=20261118tk75"></script>
+<script src="mc-staff-home.js?v=20261118tk75"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
