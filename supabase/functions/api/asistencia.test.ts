@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
 import { rolCalcular } from "./domain.ts";
 import { handle } from "./handlers.ts";
+import { lecturaEnVista } from "./permisos.ts";
 import "./handlers_extra.ts";
 import "./erp_api.ts";
 import "./asistencia_api.ts";
@@ -344,4 +345,85 @@ describe("asistencia", () => {
     assert.equal(despues.aplicar, true);
     assert.equal(despues.tsSalida, instanteEcuador("2026-11-18", "18:00"));
   });
+
+  it("Ver como no escribe marcas ni permisos; modo prueba solo deja origin=test", async () => {
+    const db = new MemoryDb();
+    const selfie = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAg=";
+    const uploads: string[] = [];
+    db.tables.set("sesiones", [
+      { token: "t-emi", uid: "emi", rol: "super_admin", exp: "2099-01-01T00:00:00.000Z" },
+      { token: "t-andrea", uid: "andrea", rol: "cosmetologa", exp: "2099-01-01T00:00:00.000Z" },
+      { token: "t-prueba", uid: "emi", rol: "super_admin", exp: "2099-01-01T00:00:00.000Z", modo_prueba: true },
+    ]);
+    db.tables.set("usuarios", [
+      { id: "emi", nombre: "Emi", short: "Emi", rol: "super_admin", bloqueado: false },
+      { id: "andrea", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa", bloqueado: false },
+    ]);
+    db.tables.set("rrhh_empleadas", [{ sheet_row: 2, nombre_app: "Andrea Robles", fecha_ingreso: "2025-05-01", sueldo_base: 480 }]);
+    const ctx = {
+      db, now: new Date(instanteEcuador("2026-11-18", "09:00")),
+      env: { SUPABASE_URL: "https://heuolwxyxoezkewyufrl.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "service-test" },
+      fetchImpl: (async (url: string) => {
+        uploads.push(String(url));
+        return new Response(JSON.stringify({ Key: "ok" }), { status: 200 });
+      }) as typeof fetch,
+      legacyLogin: async () => ({ ok: false }),
+    };
+    const conf = await handle("asis_config_guardar", { token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 150, motivo: "punto del spa" }, ctx);
+    assert.equal((conf as { ok?: boolean }).ok, true);
+
+    assert.equal(lecturaEnVista("asis_marcar"), false);
+    assert.equal(lecturaEnVista("asis_permiso_solicitar"), false);
+    assert.equal(lecturaEnVista("asis_calendario"), true);
+
+    const vistaMarca = await handle("asis_marcar", {
+      token: "t-emi", preview: true, preview_uid: "andrea", tipo: "entrada",
+      lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie,
+    }, ctx);
+    assert.match(String((vistaMarca as { error?: string }).error), /Sal de la vista para guardar/);
+    assert.equal((await db.all("asistencia_marcajes")).length, 0);
+    assert.equal(uploads.length, 0);
+
+    const vistaPerm = await handle("asis_permiso_solicitar", {
+      token: "t-emi", preview: true, preview_uid: "andrea",
+      tipo: "PERSONAL", desde: "2026-11-19", hasta: "2026-11-19", motivo: "trámite",
+    }, ctx);
+    assert.match(String((vistaPerm as { error?: string }).error), /Sal de la vista para guardar/);
+    assert.equal((await db.all("permisos")).length, 0);
+
+    const ambos = await handle("asis_marcar", {
+      token: "t-prueba", preview: true, preview_uid: "andrea", tipo: "entrada",
+      lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie,
+    }, ctx);
+    assert.match(String((ambos as { error?: string }).error), /Sal de la vista para guardar/);
+    assert.equal((await db.all("asistencia_marcajes")).length, 0);
+    assert.equal(uploads.length, 0);
+
+    const cal = await handle("asis_calendario", { token: "t-emi", preview: true, preview_uid: "andrea" }, ctx) as { ok?: boolean; error?: string };
+    assert.equal(cal.ok, true, String(cal.error || ""));
+
+    const prueba = await handle("asis_marcar", {
+      token: "t-prueba", tipo: "entrada", origen: "telefono",
+      lat: -0.18, lng: -78.47, precision_m: 10, foto: selfie,
+    }, ctx);
+    assert.equal((prueba as { ok?: boolean }).ok, true);
+    const marcas = await db.all("asistencia_marcajes");
+    assert.equal(marcas.length, 1);
+    assert.equal(marcas[0].origin, "test");
+    assert.equal(uploads.length, 0);
+    const hoyReal = await handle("asis_hoy", { token: "t-emi" }, ctx) as { marcajes?: unknown[] };
+    assert.equal((hoyReal.marcajes || []).length, 0);
+
+    const ped = await handle("asis_permiso_solicitar", {
+      token: "t-prueba", tipo: "PERSONAL", desde: "2026-11-19", hasta: "2026-11-19", motivo: "trámite de prueba",
+    }, ctx);
+    assert.equal((ped as { ok?: boolean }).ok, true);
+    const pers = await db.all("permisos");
+    assert.equal(pers.length, 1);
+    assert.equal(pers[0].origin, "test");
+    const perReal = await handle("getPermisos", { token: "t-emi" }, ctx) as { data?: unknown[]; items?: unknown[] };
+    const visibles = (perReal.data || perReal.items || []) as unknown[];
+    assert.equal(visibles.length, 0);
+  });
+
 });

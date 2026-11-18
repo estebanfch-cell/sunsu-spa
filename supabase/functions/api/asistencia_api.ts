@@ -9,6 +9,7 @@ import {
   calcularDia, calcularNomina, configDesde, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia,
   type JibbleIn, type MarcajeIn, type NominaHoras, type PermisoIn,
 } from "./asistencia.ts";
+import { enPrueba } from "./db.ts";
 
 type R = Record<string, unknown>;
 
@@ -193,6 +194,7 @@ extend("asis_marcar", "any", async (p, ctx, ses) => {
   const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
     usuario_id: ses.uid, nombre, tipo, ts, lat, lng, precision_m: accuracy,
     dentro_radio: true, foto: subida.path, origen: s(p.origen) === "recepcion" ? "recepcion" : "telefono", anulado: false,
+    origin: enPrueba(ctx.db) ? "test" : undefined,
   });
   const dia = calcularDia(fecha, marcajesDe(await ctx.db.all("asistencia_marcajes"), nombre), cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   return { ok: true, id: saved?.id, marcaje: { id: saved?.id, nombre, tipo, ts }, dia };
@@ -315,12 +317,13 @@ extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
     sheet_row: sr, id_1: ctx.now.getTime() + Math.abs(sr), empleada: nombre, tipo,
     fecha_inicio: desde, fecha_fin: hasta,
     horas: n(p.horas), motivo: s(p.motivo), estado: "PENDIENTE", solicitado: ecuadorParts(ctx.now).ymd,
-    dias, origin: "beta", orig: { tipo, por: ses.name },
+    dias, origin: enPrueba(ctx.db) ? "test" : "beta", orig: { tipo, por: ses.name },
     url_certificado: s(p.adjunto || p.url || p.url_certificado) || null,
   };
   await ctx.db.write(actorOf(ses), "permisos", "insert", {}, fila);
   await auditar(ctx, ses, "solicitud", { nombre, permiso_sheet_row: sr, despues: { tipo, desde, hasta, dias, horas: n(p.horas) }, motivo: s(p.motivo) || tipo });
   try {
+    if (enPrueba(ctx.db)) throw new Error("skip");
     const admins = (await ctx.db.all("app_usuarios").catch(() => [] as Row[])).concat(await ctx.db.all("usuarios").catch(() => [] as Row[]));
     const vistos = new Set<string>();
     for (const u of admins) {
@@ -487,6 +490,10 @@ function selfieBytes(dataUrl: string): { mime: string; bytes: Uint8Array } | { e
 }
 
 async function subirSelfie(ctx: Ctx, uid: string, fecha: string, tipo: string, foto: { mime: string; bytes: Uint8Array }): Promise<{ path: string } | { error: string }> {
+  if (enPrueba(ctx.db)) {
+    const ext = foto.mime === "image/png" ? "png" : foto.mime === "image/webp" ? "webp" : "jpg";
+    return { path: `asistencia/test/${uid}/${fecha}/${tipo}.${ext}` };
+  }
   const base = s(ctx.env.SUPABASE_URL).replace(/\/$/, "");
   const key = s(ctx.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!base || !key) return { error: "El almacén de selfies no está configurado." };

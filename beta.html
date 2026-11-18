@@ -5798,6 +5798,7 @@ function wireAsistencia(main) {
   const perm = main.querySelector("#f-asis-perm");
   if (perm) perm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (state.vista) { const err = main.querySelector("#f-err-perm"); const msg = "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar."; if (err) err.textContent = msg; toast(msg); return; }
     const data = await api("asis_permiso_solicitar", Object.fromEntries(new FormData(perm).entries()));
     const err = main.querySelector("#f-err-perm");
     if (data.error) { err.textContent = data.error; return; }
@@ -6010,6 +6011,7 @@ function wirePersonal(main) {
   const perm = main.querySelector("#f-personal-perm");
   if (perm) perm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (state.vista) { const err = main.querySelector("#f-err-perm"); const msg = "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar."; if (err) err.textContent = msg; toast(msg); return; }
     const fd = new FormData(perm);
     const file = fd.get("adjunto_file");
     fd.delete("adjunto_file");
