@@ -342,6 +342,8 @@ export function canjeFacial(r: Row): boolean {
 }
 /** Desde cuándo se marca en amarillo lo que falta (antes del corte de Migo no se revisó). */
 export const FALTA_DESDE = "2026-11-01";
+/** Desde cuándo un ticket con tarjeta pide la foto del voucher (hora de pared, como el timestamp del ticket). */
+export const VOUCHER_FOTO_DESDE = "2026-11-18T10:30:00";
 const tieneUrl = (v: unknown) => /https?:|archivo:/.test(s(v));
 /** Lo que falta en un ticket que sí cuadra (fila amarilla): foto de transferencia o voucher de tarjeta. El efectivo no pide foto. La factura que no cuadra va en rojo (flags), no aquí. */
 export function faltaDe(r: Row, d: Row): string[] {
@@ -351,7 +353,11 @@ export function faltaDe(r: Row, d: Row): string[] {
   const out: string[] = [];
   const mets = metodosPago(r.comp).map((m) => s(m.metodo));
   const comps = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
-  const pideFoto = mets.includes("transferencia") || mets.includes("tarjeta");
+  // TK41 (Emilia 18/11): transferencia siempre pide foto. Tarjeta: los tickets viejos con N.º de voucher ya cuentan
+  // como completos; desde VOUCHER_FOTO_DESDE la tarjeta también pide la foto del voucher.
+  const tarj = metodosPago(r.comp).filter((m) => m.metodo === "tarjeta");
+  const tarjOk = tarj.length > 0 && s(r.timestamp).replace(" ", "T").slice(0, 19) < VOUCHER_FOTO_DESDE && tarj.every((m) => /\d/.test(s(m.ref)));
+  const pideFoto = mets.includes("transferencia") || (mets.includes("tarjeta") && !tarjOk);
   if (pideFoto && !tieneUrl(colTicket(r, "comprobante")) && !comps.length) out.push("Foto del comprobante de pago (transferencia o voucher de tarjeta)");
   return out;
 }

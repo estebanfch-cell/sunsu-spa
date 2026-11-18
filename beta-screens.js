@@ -13583,14 +13583,15 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
   tipos.forEach(function(t){
     html+='<div style="margin-bottom:7px"><button id="cobtn-'+fila+'-'+t+'" data-fila="'+fila+'" data-tipo="'+t+'" onclick="toggleCobro(this)" style="width:100%;padding:9px 13px;background:#F4F5F8;color:#1A2744;border:1.5px solid #E5E7EF;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;text-align:left">'+icons[t]+' '+t+'</button>';
     if(needs[t]) html+='<input type="text" id="cobdet-'+fila+'-'+t+'" placeholder="'+needs[t]+'" style="display:none;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid #eee;border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box">';
-    if(t==='Trans') html+='<div id="cobfoto-'+fila+'" style="display:none;margin-top:6px">'
+    html+='</div>';
+  });
+  // TK41 (Emilia 18/11): foto obligatoria para transferencia Y para el voucher de tarjeta.
+  html+='<div id="cobfoto-'+fila+'" style="display:none;margin:-2px 0 8px"><div style="font-size:0.66rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:4px">📷 Foto del comprobante / voucher</div>'
       +'<div style="display:flex;gap:6px">'
       +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">📷 Tomar foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
       +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
       +'</div>'
       +'<div id="cobfoto-prev-'+fila+'" style="display:none;margin-top:6px"></div></div>';
-    html+='</div>';
-  });
   html+='<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:red;margin-bottom:8px;display:none">Selecciona al menos un método</div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
     +'<button id="btn-cancel-'+fila+'" style="flex:1;padding:11px;background:#F4F5F8;color:#999;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer">Cancelar</button>'
@@ -13614,7 +13615,7 @@ function toggleCobro(btn){
   _cobroSelects[fila][tipo]=active;
   btn.style.background=active?'var(--navy)':'var(--cream)';btn.style.color=active?'white':'var(--navy)';btn.style.borderColor=active?'var(--navy)':'var(--cream-d)';
   if(det){det.style.display=active?'block':'none';if(active)setTimeout(function(){det.focus();},50);}
-  if(tipo==='Trans'){var fb=document.getElementById('cobfoto-'+fila);if(fb)fb.style.display=active?'block':'none';}
+  if(tipo==='Trans'||tipo==='Tarje'){var fb=document.getElementById('cobfoto-'+fila);var sel=_cobroSelects[fila]||{};if(fb)fb.style.display=(sel.Trans||sel.Tarje)?'block':'none';}
 }
 
 // ══════ FOTO DE COMPROBANTE DE TRANSFERENCIA ══════
@@ -13777,17 +13778,18 @@ function guardarUnificado(fila,sinFac,soloCobro){
       return;
     }
   }
-  // Transferencia: la foto del comprobante es obligatoria (Emilia 17/11; pendiente de su confirmación).
-  if(seleccionados.indexOf('Trans')>=0&&!((_compFotos[fila]||[]).length)){
-    if(errEl){errEl.textContent='📷 Toma o sube la foto del comprobante de la transferencia';errEl.style.display='block';}
+  // Transferencia y tarjeta: la foto (comprobante / voucher) es obligatoria (Emilia 17/11 y 18/11).
+  var _pideFoto=seleccionados.indexOf('Trans')>=0||seleccionados.indexOf('Tarje')>=0;
+  if(_pideFoto&&!((_compFotos[fila]||[]).length)){
+    if(errEl){errEl.textContent=seleccionados.indexOf('Trans')>=0?'📷 Toma o sube la foto del comprobante de la transferencia':'📷 Toma la foto del voucher de la tarjeta';errEl.style.display='block';}
     var fbT=document.getElementById('cobfoto-'+fila); if(fbT){fbT.style.display='block';try{fbT.scrollIntoView({block:'nearest'});}catch(eS){}}
-    toast('Falta la foto del comprobante de transferencia','#B86B6B');
+    toast(seleccionados.indexOf('Trans')>=0?'Falta la foto del comprobante de transferencia':'Falta la foto del voucher de la tarjeta','#B86B6B');
     return;
   }
   var compStr=seleccionados.map(function(tipo){var det=document.getElementById('cobdet-'+fila+'-'+tipo);var val=det?det.value.trim():'';return val?tipo+':'+val:tipo;}).join(', ');
   cerrarModal('modal-uni-'+fila);
   // Si hay foto de comprobante (transferencia), subirla primero a Drive
-  var _fotosComp=(seleccionados.indexOf('Trans')>=0)?((_compFotos[fila]||[]).slice()):[];
+  var _fotosComp=_pideFoto?((_compFotos[fila]||[]).slice()):[];
   var _subida=Promise.resolve([]);
   if(_fotosComp.length){
     toast('⏳ Subiendo '+_fotosComp.length+' comprobante'+(_fotosComp.length===1?'':'s')+'...','var(--navy)');
