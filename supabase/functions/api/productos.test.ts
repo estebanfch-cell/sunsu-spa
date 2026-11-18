@@ -80,7 +80,12 @@ describe("productos MineCore: reglas puras", () => {
     assert.equal(stockTotal(g), 15);
     // Con fila de cabina_inventario: cerrados en Cabina, "en bodega" en Oficina; venta del sistema viejo en Consignación.
     const g2 = stockDe({ ventaLegacy: 7, cab: { envases_cerrados: 128, bodega_cerrados: 4, abierto_restante: 1 }, erpStock: [], bodegas: BODEGAS });
-    assert.deepEqual(g2.map((x) => [x.grupo, x.cantidad]), [["CONSIGNACION", 7], ["CABINA", 128], ["OFICINA", 4]]);
+    assert.deepEqual(g2.map((x) => [x.grupo, x.cantidad]), [["CONSIGNACION", 7], ["BCONSIG", 0], ["CABINA", 128], ["OFICINA", 4]]);
+    // TK27: la bodega CONSIGNACION va aparte (BCONSIG) y lo vendido desde ahí vuelve a Venta (el cálculo viejo ya lo restó).
+    const B3 = [...BODEGAS, { id: "66666666-6666-4666-8666-666666666666", codigo: "CONSIGNACION", nombre: "Consignación", tipo: "consignacion" }];
+    const g3 = stockDe({ ventaLegacy: 5, consigVendido: 2, erpStock: [{ producto_id: "p", bodega_id: "66666666-6666-4666-8666-666666666666", cantidad: 8 }], bodegas: B3 });
+    assert.equal(g3.find((x) => x.grupo === "CONSIGNACION")!.cantidad, 7);
+    assert.equal(g3.find((x) => x.grupo === "BCONSIG")!.cantidad, 8);
   });
   it("lineasOcLegacy encuentra el SKU en el json libre de la OC vieja", () => {
     const j = JSON.stringify({ prov: { nombre: "X" }, fact: [{ sku: "SUNSU-VK-005", vendido: 1, compra: 23.8 }, { sku: "SUNSU-VK-010", vendido: 2, compra: 9 }] });

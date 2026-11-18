@@ -875,6 +875,8 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   const porSkuProd = new Map(prods.map((r) => [skuCode(s(r.sku)), r]));
   const stock = await db.all("erp_stock");
   const ventaId = "11111111-1111-4111-8111-111111111111";
+  // TK27: lo que está en la bodega CONSIGNACION también es stock en consignación (Venta + Consignación).
+  const consigId = "66666666-6666-4666-8666-666666666666";
   const items: Row[] = [];
   const vendido = new Map<string, number>();
   for (const t of await db.all("tickets")) {
@@ -903,7 +905,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     if (vendeDesdeCabina(pr)) continue;
     if (!sku.startsWith(familia + "-") || pr.activo === false) continue;
     vistos.add(sku);
-    const hay = stock.filter((r) => r.producto_id === pr.id && String(r.bodega_id) === ventaId).reduce((a, r) => a + n(r.cantidad), 0);
+    const hay = stock.filter((r) => r.producto_id === pr.id && (String(r.bodega_id) === ventaId || String(r.bodega_id) === consigId)).reduce((a, r) => a + n(r.cantidad), 0);
     const v = vendido.get(sku) || 0;
     const cns = consumido.get(sku) || 0;
     const paga = v + cns;

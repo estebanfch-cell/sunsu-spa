@@ -1,6 +1,6 @@
 // 📥 Recepciones (TK25, Emilia 17/11): módulo para quien solo recibe. Lista las OC por recibir, y por cada
 // producto: pedido, recibido (cantidad) y Recibido / No recibido. Recibido mete el stock a su bodega
-// (Propio+Vendible → Venta, Insumo → Casa); No recibido anula lo pendiente y se puede deshacer por 1 hora.
+// (Propio+Vendible → Venta, Insumo → Casa, Consignación → CONSIGNACION [TK27]); No recibido anula lo pendiente y se puede deshacer por 1 hora.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
@@ -11,10 +11,16 @@ import { flujoTrasRecibir } from "./compras_flujo.ts";
 import { estadoOc } from "./compras_beta.ts";
 import { agrupar, estadoTrasRecibir, repartir, UNDO_MS } from "./recepciones.ts";
 import { crearActa } from "./actas_api.ts";
-import { restockParaRecibir, restocksAbiertos } from "./consignacion_beta_api.ts";
+import { recibirRestock, restockParaRecibir, restocksAbiertos } from "./consignacion_beta_api.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
-const BODEGAS_OK = ["VENTA", "CASA", "CABINA", "CAB2", "CAB3"];
+const BODEGAS_OK = ["VENTA", "CASA", "CABINA", "CAB2", "CAB3", "CONSIGNACION"];
+
+/** Si la bodega destino no existe (p. ej. sin la SQL de CONSIGNACION), entra a Venta como antes. */
+function conBodega(G: Row[], bods: Row[]): Row[] {
+  const ids = new Set(bods.map((b) => s(b.id)));
+  return G.map((g) => ids.has(s(g.bodega_id)) ? g : { ...g, bodega_id: s(bods.find((b) => s(b.codigo) === "VENTA")?.id) || s(g.bodega_id) });
+}
 
 async function refrescar(ctx: Ctx, actor: string, ocId: string): Promise<void> {
   const L = (await ctx.db.all("erp_oc_lineas")).filter((r) => r.oc_id === ocId);
@@ -56,7 +62,7 @@ extend("rcp_get", "any", async (p, ctx, ses) => {
   return {
     ok: true, admin: esAdmin(ses.rol),
     oc: { id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: estadoOc(o, L), proveedor: s(provs.find((x) => x.id === o.proveedor_id)?.nombre), recibible: recibible(o) },
-    grupos: agrupar(L, porId, ctx.now),
+    grupos: conBodega(agrupar(L, porId, ctx.now), bods),
     bodegas: bods.filter((b) => BODEGAS_OK.includes(s(b.codigo))).map((b) => ({ id: s(b.id), codigo: s(b.codigo), nombre: s(b.nombre), tipo: s(b.tipo) })),
     recepciones: recs.filter((r) => r.oc_id === o.id).map((r) => ({ id: s(r.id), numero: s(r.numero), fecha: s(r.fecha), por: s(r.recibido_por), anulada: r.anulada === true })),
   };
@@ -65,13 +71,14 @@ extend("rcp_get", "any", async (p, ctx, ses) => {
 /** grupos: [{producto_id, accion: "recibido"|"no_recibido", cantidad, bodega_id?}] */
 extend("rcp_recibir", "any", async (p, ctx, ses) => {
   const actor = actorOf(ses);
+  if (/^rst:/.test(s(p.oc_id))) return await recibirRestock(ctx, ses, s(p.oc_id).slice(4), (Array.isArray(p.grupos) ? p.grupos : []) as Row[], s(p.nota).slice(0, 300));
   const o = (await todas(ctx, "erp_oc")).find((r) => r.id === s(p.oc_id));
   if (!o) return { error: "OC no encontrada" };
   if (!recibible(o)) return { error: "Esta orden no se puede recibir" };
   const [lineas, prods, bods] = await Promise.all([todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_productos"), todas(ctx, "erp_bodegas")]);
   const L = lineas.filter((l) => l.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
   const porId = new Map(prods.map((x) => [s(x.id), x]));
-  const G = new Map(agrupar(L, porId, ctx.now).map((g) => [s(g.producto_id), g]));
+  const G = new Map(conBodega(agrupar(L, porId, ctx.now), bods).map((g) => [s(g.producto_id), g]));
   const ins = (Array.isArray(p.grupos) ? p.grupos : []) as Row[];
   const recibir: Row[] = [];
   const anular: { id: string; qty: number }[] = [];
