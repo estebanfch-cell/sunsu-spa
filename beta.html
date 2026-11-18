@@ -4441,7 +4441,9 @@ function wireReloj(root) {
     b.onclick = () => {
       const menu = document.getElementById("crear-menu");
       if (menu) menu.hidden = true;
-      abrirCamara(b.getAttribute("data-reloj-open") || reloj.accion || "entrada");
+      const raw = b.getAttribute("data-reloj-open");
+      const tipo = (raw === "entrada" || raw === "salida") ? raw : (reloj.accion || "entrada");
+      abrirCamara(tipo);
     };
   });
   const tomar = document.getElementById("reloj-tomar");
