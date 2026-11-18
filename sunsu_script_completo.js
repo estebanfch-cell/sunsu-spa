@@ -37,7 +37,7 @@ const CONFIG = {
 // ══════ SELLO DE VERSIÓN — ?action=version (o getVersion), sin autenticación ══════
 // doGet lo responde ANTES de abrir el Sheet. Solo devuelve este texto.
 // El login compara el sello 2026-10-02-KL con SUNSU_MOTOR_ESPERADO.
-var APP_VERSION = '2026-10-26-ESC (escalones por paquete)';
+var APP_VERSION = '2026-11-18-BF (promos con grupo y mínimo)';
 
 // --- PAQ-ESCALON-START ---
 // Desde el ciclo que abre el 2026-10-26 cada paquete (x3 o x6 = 1) paga el % de
@@ -4004,13 +4004,18 @@ function doGet(e) {
         var finPm = _ultimaFilaDatos_(wsPm);
         if (finPm >= 2) {
           var hoyPm = new Date(); hoyPm.setHours(12,0,0,0);
-          wsPm.getRange(2,1,finPm-1,10).getValues().forEach(function(r,ix){
+          // K GRUPO (una promo con varias reglas = varias filas con el mismo grupo),
+          // L MIN (unidades mínimas sumando TODOS sus códigos), M POR (UNIDAD = el $ es por cada unidad).
+          var colsPm = Math.max(10, Math.min(13, wsPm.getLastColumn()));
+          wsPm.getRange(2,1,finPm-1,colsPm).getValues().forEach(function(r,ix){
             var it = {fila:ix+2, nombre:(r[0]||'').toString(), aplica:(r[1]||'').toString(),
               tipo:(r[2]||'').toString().toUpperCase()||'%', valor:parseFloat(r[3])||0,
               desde:(r[4]||'').toString(), hasta:(r[5]||'').toString(),
               por:(r[6]||'').toString(), activa:((r[7]||'')+'').toUpperCase()!=='NO',
               codigos:(r[8]||'').toString().split(',').map(function(x){return x.trim();}).filter(function(x){return !!x;}),
-              valor2:parseFloat(r[9])||0};
+              valor2:parseFloat(r[9])||0,
+              grupo:(r[10]||'').toString().trim(), minU:Math.max(1,Math.round(parseFloat(r[11])||1)),
+              porUnidad:((r[12]||'')+'').trim().toUpperCase()==='UNIDAD'};
             if(!it.nombre) return;
             todasPm.push(it);
             var d1=_fechaDe_(r[4]), d2=_fechaDe_(r[5]);
@@ -8106,6 +8111,10 @@ function doPost(e) {
       var nPC=(body.nombre||'').toString().trim(), vPC=parseFloat(body.valor)||0;
       var mecPC=(body.mecanismo||'%').toString().toUpperCase();
       var v2PC=parseFloat(body.valor2)||0;
+      var grPC=(body.grupo||'').toString().trim().slice(0,60);
+      var minPC=Math.max(1,Math.round(parseFloat(body.min)||1));
+      var porUPC=body.porUnidad===true||body.porUnidad==='SI';
+      if(minPC>50) return respJson({error:'Mínimo de unidades: entre 1 y 50'});
       var codsPC=Array.isArray(body.codigos)?body.codigos.map(function(x){return (x||'').toString().trim();}).filter(function(x){return !!x;}):[];
       if(!nPC) return respJson({error:'Falta el nombre de la promo'});
       if(!body.desde || !body.hasta) return respJson({error:'Faltan fechas de vigencia'});
@@ -8141,10 +8150,18 @@ function doPost(e) {
         wsPC.getRange(1,9,1,2).setValues([['CODIGOS','VALOR2']])
           .setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
       }
+      if(porUPC&&mecPC!=='$') porUPC=false;
+      if(minPC>1&&!codsPC.length) return respJson({error:'El mínimo de unidades necesita códigos'});
+      // Columnas K-M (GRUPO, MIN, POR): encabezados una sola vez, sin tocar datos.
+      if((wsPC.getRange(1,11).getValue()||'').toString().trim()!=='GRUPO'){
+        wsPC.getRange(1,11,1,3).setValues([['GRUPO','MIN','POR']])
+          .setFontWeight('bold').setBackground('#1A2744').setFontColor('white');
+      }
       var aplicaPC=codsPC.length?codsPC.join(', '):'Total';
-      wsPC.getRange(_ultimaFilaDatos_(wsPC)+1,1,1,10).setValues([[nPC,aplicaPC,mecPC,vPC,
-        (body.desde||'').toString(),(body.hasta||'').toString(),body.usuario||'','SI',codsPC.join(','),v2PC]]);
-      var descLog=mecPC==='$'?('−$'+vPC):mecPC==='NXM'?(vPC+'×'+v2PC):mecPC==='PACK'?('paquete reducido $'+vPC+' · '+v2PC+' ses'):('−'+vPC+'%');
+      wsPC.getRange(_ultimaFilaDatos_(wsPC)+1,1,1,13).setValues([[nPC,aplicaPC,mecPC,vPC,
+        (body.desde||'').toString(),(body.hasta||'').toString(),body.usuario||'','SI',codsPC.join(','),v2PC,
+        grPC,minPC>1?minPC:'',porUPC?'UNIDAD':'']]);
+      var descLog=(grPC?'['+grPC+'] ':'')+(minPC>1?'lleva '+minPC+'+: ':'')+(mecPC==='$'?('−$'+vPC+(porUPC?' c/u':'')):mecPC==='NXM'?(vPC+'×'+v2PC):mecPC==='PACK'?('paquete reducido $'+vPC+' · '+v2PC+' ses'):('−'+vPC+'%'));
       try { logAccion_(ss,'PROMO CREADA',nPC+' '+descLog+' ['+aplicaPC+'] ('+body.desde+' a '+body.hasta+')',body.usuario); } catch(ePC){}
       return respJson({ok:true});
     }
