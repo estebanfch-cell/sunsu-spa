@@ -643,6 +643,10 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 }
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
+  if (s(p.vincular_borrador) && !esAdmin(ses.rol)) {
+    const { completarBorradorStaff } = await import("./borradores_asig.ts");
+    return completarBorradorStaff(ctx, ses, p) as Promise<R>;
+  }
   if (!p.ignorar_borrador && !s(p.vincular_borrador)) {
     const { ofrecerBorradorMigo } = await import("./migo_cuadre_api.ts");
     const of = await ofrecerBorradorMigo(ctx, p);
@@ -1437,7 +1441,10 @@ reg("getTicketsLista", "any", async (p, ctx, ses) => {
     .filter((r) => !propio || esPropio(s(r.atendido_por), ses))
     .map(filaTicket)
     .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (a.hora < b.hora ? 1 : -1)));
-  return { ok: true, items };
+  const { itemBorradorLista, listarBorradoresVisibles } = await import("./borradores_asig.ts");
+  const bor = (await listarBorradoresVisibles(ctx, ses)).map(itemBorradorLista)
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  return { ok: true, items: bor.concat(items) };
 });
 reg("getTicket", "any", async (p, ctx, ses) => {
   const row = await ticketPorClave(ctx, s(p.clave || p.so_num || p.beta_num || p.tkRow));

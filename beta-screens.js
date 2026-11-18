@@ -2972,6 +2972,16 @@ function enviarTicket(){
   .then(function(r){ return r.json(); })
   .then((d)=>{
     if(d&&d.error){ toast('❌ '+d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';} return; }
+    if(d&&d.pendiente_aprobar){
+      toast('✅ Listo. Quedó pendiente de aprobar (Fac. '+(d.factura||window._migoVincularFac||'')+'). Una administradora lo revisa.','#6A9E7A');
+      window._migoVincularFac=''; window._migoForma=''; window._migoPrefillAviso='';
+      if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(true);
+      T=newT();
+      if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';}
+      if(typeof go==='function') go('#/m/tickets');
+      else if(typeof renderTicket==='function') renderTicket(document.getElementById('content'));
+      return;
+    }
     var _gcMsg='';
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
@@ -5285,13 +5295,14 @@ function _histFechaFmt(fecha){
   return fechaFmt;
 }
 function _histClave(t){
+  if(t&&(t.borrador||t.factura_migo)&& (t.factura||t.factura_migo)) return 'b'+String(t.factura||t.factura_migo);
   if(t&&t.tkRow) return 'r'+t.tkRow;
-  return 'k'+String(t&&t.fecha||'')+'|'+String(t&&t.hora||'')+'|'+String(t&&t.cedula||'')+'|'+String(t&&t.nombre||'');
+  return 'k'+String(t&&t.fecha||'')+'|'+String(t&&t.hora||'')+'|'+String(t&&t.nombre||'');
 }
 function _histDetalleHTML(t, showPrices){
   return '<div class="tk-detail-bar"><button type="button" onclick="_histCerrarTicket()" style="padding:6px 12px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">Cerrar</button></div>'+_buildTicketCard(t, showPrices);
 }
-function _histNum(t){ return (t&&t.so_num)||''; }
+function _histNum(t){ if(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num) return 'Borrador'; return (t&&t.so_num)||''; }
 function _histMontos(t){
   var tot=parseFloat(t&&t.estimado)||0, sub=Math.round(tot/1.15*100)/100;
   return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
@@ -5344,7 +5355,7 @@ function _histCelda(t, c, showPrices){
   var m=_histMontos(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
   var $=function(v){return showPrices?('$'+Number(v||0).toFixed(2)):'—';};
-  if(c.k==='num') return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+'</td>';
+  if(c.k==='num'){ var extra=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?' '+(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):''; return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+extra+'</td>'; }
   if(c.k==='cli') return '<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td>';
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
@@ -5394,7 +5405,7 @@ function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
-  var est=anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto');
+  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'));
   var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
   var l3=[_histEsc(_histFechaFmt(t.fecha))];
   if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
@@ -5402,7 +5413,9 @@ function _histCardHTML(t, i, showPrices){
   if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
   var fp=_tkForma(t);
   var pills=[];
-  if(!anul){
+  if(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num){
+    pills.push(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar'));
+  } else if(!anul){
     pills.push(_tkPagoPill(t));
     if(fp) pills.push(_tkFormaPill(fp));
     if(!ff) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
@@ -5419,6 +5432,10 @@ function _histCardHTML(t, i, showPrices){
 function _histAbrirTicket(i){
   var list=window._histVisibles||[], t=list[i];
   if(!t) return;
+  if((t.borrador||t.por_completar||t.factura_migo)&&!t.so_num){
+    var fac=t.factura_migo||t.factura;
+    if(fac&&typeof _migoAbrirEnTicket==='function'){ _migoAbrirEnTicket(fac); return; }
+  }
   // Beta: el detalle es la orden de venta estilo MineCore (mc-tickets.js).
   if(window.MCTickets&&typeof go==='function'){ var kk=window.MCTickets.claveDe(t); if(kk){ go('#/m/tickets/t/'+encodeURIComponent(kk)); return; } }
   window._histTkSel=_histClave(t);
@@ -5454,7 +5471,7 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B'};
+var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A'};
 var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía'};
 function _tkFormaNorm(v){
@@ -18480,7 +18497,9 @@ function _migoPintarBandeja(forzar){
         }
         var pill=linked
           ? '<span class="tk-pill" style="color:#1b6b45;border:1px solid #9ad7b6">Vinculada a '+_migoTicketLinks(claves)+'</span>'
-          : '<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente por aprobar</span>';
+          : (modo==='mias'&&!b.listo
+            ? '<span class="tk-pill" style="color:#C98A00;border:1px solid #e8cf7a">Por completar</span>'
+            : '<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente de aprobar</span>');
         var cand=(!linked&&b.candidatos&&b.candidatos.length)?_migoSugInline(b.candidatos,b.total):'';
         var avisos=_migoAvisosHtml(b);
         return '<div class="migo-bandeja-item">'

@@ -14,6 +14,7 @@ import { consultar, type Filtro } from "./query.ts";
 import { faltaDe, faseA, facturaCompleta } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
+import { itemBorradorHistorial, listarBorradoresVisibles } from "./borradores_asig.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
@@ -134,7 +135,20 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     };
     return it;
   });
-  return { ok: true, items, total, suma, offset: desde, limit: lim, hayMas: desde + items.length < total, ms: Date.now() - t0 };
+  const qn = q.toLowerCase();
+  const cosmF = s(p.cosm);
+  let borr = await listarBorradoresVisibles(ctx, ses);
+  if (YMD.test(s(p.desde))) borr = borr.filter((b0) => s(b0.fecha).slice(0, 10) >= s(p.desde));
+  if (YMD.test(s(p.hasta))) borr = borr.filter((b0) => s(b0.fecha).slice(0, 10) <= s(p.hasta));
+  if (qn) borr = borr.filter((b0) => (s(b0.cliente) + " " + s(b0.factura)).toLowerCase().includes(qn));
+  if (todos && cosmF && !qn) {
+    const cf = cosmF.toLowerCase();
+    borr = borr.filter((b0) => s(b0.asignado_a).toLowerCase().includes(cf) || cf.includes(s(b0.asignado_a).toLowerCase()));
+  }
+  if (est && est !== "abierto" && est !== "pagado") borr = [];
+  const borItems = desde === 0 ? borr.map(itemBorradorHistorial) : [];
+  const itemsOut = borItems.concat(items);
+  return { ok: true, items: itemsOut, total, suma, offset: desde, limit: lim, hayMas: desde + items.length < total, ms: Date.now() - t0, borradores: borr.length };
 });
 
 /** Reagendada por Acuity (próxima cita después del ticket) para las filas que se ven; caché de 10 min. */
