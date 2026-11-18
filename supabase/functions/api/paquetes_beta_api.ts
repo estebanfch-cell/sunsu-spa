@@ -69,10 +69,11 @@ extend("pq_lista", "any", async (p, ctx, ses) => {
   const AJ = await ajustes(ctx);
   let L = rows.map((r) => vistaPaquete(r, AJ.get(String(r.id)))).filter((v) => !v.borrado && (v.cedula || v.nombre));
   if (perm === "propio") L = L.filter((v) => esPropio(s(v.vendidoPor), ses));
-  const cuenta = { todos: L.length, activos: L.filter((v) => v.estado !== "completo").length, completos: L.filter((v) => v.estado === "completo").length };
+  const cuenta = { todos: L.length, activos: L.filter((v) => v.estado !== "completo" && v.estado !== "anulado").length, completos: L.filter((v) => v.estado === "completo").length, anulados: L.filter((v) => v.estado === "anulado").length };
   const est = s(p.estado) || "activos";
-  if (est === "activos") L = L.filter((v) => v.estado !== "completo");
+  if (est === "activos") L = L.filter((v) => v.estado !== "completo" && v.estado !== "anulado");
   if (est === "completos") L = L.filter((v) => v.estado === "completo");
+  if (est === "anulados") L = L.filter((v) => v.estado === "anulado");
   const desde = Math.max(0, n(p.offset)), lim = Math.min(200, Math.max(1, n(p.limit) || 50));
   const pag = L.slice(desde, desde + lim);
   const cods = await codigosCliente(ctx, pag.map((v) => s(v.cedula)));
@@ -117,8 +118,9 @@ extend("pq_marcar", "any", async (p, ctx, ses) => {
   const aj = await ajusteDe(ctx, r.id);
   const v = vistaPaquete(r, aj);
   if (v.borrado) return { error: "El paquete está dado de baja" };
-  const ses2 = v.sesiones as Row[];
   const desmarcar = p.desmarcar === true;
+  if (v.anulado && !desmarcar) return { error: "Este paquete está anulado" + (v.anuladoPor ? " (ticket " + v.anuladoPor + " cancelado)" : "") + ": no se pueden marcar sesiones" };
+  const ses2 = v.sesiones as Row[];
   if (desmarcar && !esAdmin(ses.rol)) return { error: "Solo un admin desmarca una sesión" };
   let idx = n(p.slot) > 0 ? n(p.slot) - 1 : ses2.findIndex((x) => !x.usado);
   if (idx < 0 || idx >= n(v.total)) return { error: desmarcar ? "Sesión inválida" : "El paquete ya no tiene sesiones libres" };

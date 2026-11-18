@@ -1671,7 +1671,8 @@ reg("buscarPaquetes", "any", async (p, ctx) => {
       factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
       usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
       total, completo: b(r.completo),
-      codigo: codigoPaquete(r), prueba: s(r.origin) === "test",
+      codigo: codigoPaquete(r), prueba: s(r.origin) === "test", id: r.id,
+      ticketOrigen: s((r.orig as R | undefined)?.ticket), anulado: (r.orig as R | undefined)?.anulado === true,
     });
   }
   return { resultados };
@@ -1745,6 +1746,14 @@ export function origConMarca(row: R, idx: number, ticket: string, nowMs: number,
   const tickets = Array.isArray(orig.marcas_ticket) ? (orig.marcas_ticket as unknown[]).map((x) => s(x)).filter(Boolean) : [];
   if (ticket && !tickets.includes(ticket)) tickets.push(ticket);
   orig.marcas_ticket = tickets.slice(-8);
+  // Qué sesión marcó cada ticket (TK58): al cancelar el ticket se libera justo esa sesión.
+  if (ticket) {
+    const ms = orig.marcas_slot && typeof orig.marcas_slot === "object" ? { ...(orig.marcas_slot as R) } : {};
+    const L = Array.isArray(ms[ticket]) ? (ms[ticket] as unknown[]).map((x) => n(x)) : [];
+    if (!L.includes(idx + 1)) L.push(idx + 1);
+    ms[ticket] = L;
+    orig.marcas_slot = ms;
+  }
   orig.ultima_marca_ms = nowMs;
   orig.ultima_marca_ticket = ticket;
   orig.ultima_marca_slot = idx + 1;
@@ -1764,6 +1773,7 @@ async function marcarUso(p: R, ctx: Ctx, ses: Ses, primero: boolean): Promise<R>
     }
   }
   if (!row || row.borrado_at) return { error: primero ? "No hay paquete de hoy para esa cédula" : "Paquete no encontrado" };
+  if ((row.orig as R | undefined)?.anulado === true) return { error: "Ese paquete está anulado (su ticket se canceló): no se pueden marcar sesiones" };
   const usos = usosDe(row);
   const total = packSesiones(s(row.sku), s(row.paquete), usos);
   const pedido = s(p.idx) !== "" ? n(p.idx) : (s(p.slot) !== "" ? n(p.slot) - 1 : -1);

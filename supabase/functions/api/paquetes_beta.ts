@@ -61,7 +61,8 @@ export function vistaPaquete(r0: Row, aj?: Row | null): Row {
     id: r.id, fila: r.sheet_row, codigo: codigoPaquete(r) || (r.sheet_row != null ? "PACK-" + r.sheet_row : ""), cedula: s(r.cedula).split(".")[0],
     nombre: s(r.nombres), apellido: s(r.apellidos), clienteCodigo: s(r.__cliente_codigo), sku: s(r.sku), paquete: s(r.paquete) || s(r.sku) || "Paquete",
     vendidoPor: s(r.vendido_por), fechaCompra: fechaCompra(r), ticketOrigen: s(o.ticket), notas: s(r.notas),
-    total, usados, pendientes: Math.max(0, total - usados), estado: usados >= total ? "completo" : usados ? "en_curso" : "nuevo",
+    total, usados, pendientes: Math.max(0, total - usados), estado: o.anulado === true ? "anulado" : usados >= total ? "completo" : usados ? "en_curso" : "nuevo",
+    anulado: o.anulado === true, anuladoPor: s(o.cancelado_por_ticket), anuladoMotivo: s(o.cancelado_motivo), factura: s(r.factura).replace(/\.0+$/, ""),
     sesiones, borrado: !!r.borrado_at || r.__borrado === true, ajustado: !!aj,
     historial: aj && Array.isArray(aj.historial) ? aj.historial : [],
   };

@@ -106,7 +106,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const ed = readFileSync(join(root, "mc-edit.js"), "utf8");
     assert.match(ed, /Enviar solicitud/); assert.match(ed, /Solicitar eliminación/); assert.match(ed, /Descartar/);
     const beta = readFileSync(join(root, "beta.html"), "utf8");
-    assert.match(beta, /mc-edit\.js\?v=20261118tk57/);
+    assert.match(beta, /mc-edit\.js\?v=20261118tk58/);
     assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
   });
 
@@ -124,5 +124,28 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const src = readFileSync(join(root, "mc-paquetes.js"), "utf8");
     assert.match(src, /📄 Descargar ficha/); assert.match(src, /MCDocPdf\.bajar\(fichaSpec\(v\)\)/);
     for (const k of ["Clienta", "Producto", "Vendió", "Quedan", "Cosmetóloga", "Ticket"]) assert.match(src, new RegExp('"' + k + '"'));
+  });
+
+  it("Paquete anulado (su ticket se canceló): se ve como «anulado», no se marcan sesiones y el buscador lo avisa", async () => {
+    const { db, h } = semilla();
+    db.tables.get("paquetes")![0].orig = { ticket: "TK-SO-9", anulado: true, cancelado_por_ticket: "TK-SO-9", cancelado_motivo: "dup" };
+    const g = await h("pq_get", "adm", { id: 5 });
+    assert.equal((g.item as Row).estado, "anulado");
+    assert.match(String((await h("pq_marcar", "adm", { id: 5, slot: 2 })).error), /anulado/);
+    const L = await h("pq_lista", "adm", {});
+    assert.equal(((L.cuenta as Row).anulados), 1); assert.equal(((L.cuenta as Row).activos), 0);
+    const b = await h("buscarPaquetes", "adm", { q: "1700000001" });
+    const p0 = (b.resultados as Row[])[0];
+    assert.equal(p0.anulado, true); assert.equal(p0.ticketOrigen, "TK-SO-9"); assert.equal(p0.id, 5);
+  });
+
+  it("Ticket con canje de paquete: sugiere el paquete pero exige confirmarlo y avisa duplicados lado a lado", () => {
+    const src = readFileSync(join(root, "beta-screens.js"), "utf8");
+    assert.match(src, /✓ Confirmo: canjear de/);
+    assert.match(src, /T\.cobro==='paquete'&&!T\.canjeOtro&&!\(T\.paqPick&&T\.paqConfirmado\)/);
+    assert.match(src, /parecen duplicados/);
+    assert.match(src, /mismo ticket de origen/); assert.match(src, /mismo producto y fecha de compra/);
+    assert.match(src, /No está en la lista — lo marco después en Paquetes/);
+    assert.match(src, /!p\.anulado && !p\.completo/);
   });
 });
