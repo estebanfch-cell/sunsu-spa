@@ -206,15 +206,25 @@
     }).join("");
   }
   function totHtml() {
-    var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc), pag = r2((pg.cobrado ? Math.min(c.total, pg.pagado || c.total) : 0) + (K.pagoBeta || 0));
+    var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc);
+    var cobrado = r2(d.ticket && d.ticket.cobradoSistema || 0);
+    var anulado = !!(d.ticket && d.ticket.cancelado);
+    var difRnd = pg.cobrado && cobrado > 0 ? r2(c.total - cobrado) : 0;
+    var redondeo = pg.cobrado && Math.abs(difRnd) > 0 && Math.abs(difRnd) <= 0.05;
+    var total = redondeo ? cobrado : c.total;
+    var pag = r2((pg.cobrado ? cobrado : 0) + (K.pagoBeta || 0));
+    var saldo = anulado ? 0 : saldoPend(total, pag);
     var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
     var sumNet = r2(K.L.reduce(function (a, l) { return a + net(l.total_linea); }, 0));
     // TK68: todo lo de Sunsu es gravado 15 %: Subtotal, IVA 15 %, Total, Pagado, Saldo (sin «Subtotal 0 %» ni duplicados).
+    // TK82: tickets migrados, el cobrado del sistema anterior es la verdad si |líneas − cobrado| ≤ $0.05: Total = cobrado, sin saldo amarillo.
     return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(sumNet) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(net(desc)) + "</b>" : "") +
-      "<span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
-      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (saldoPend(c.total, pag) > 0 ? ' style="color:#C98A00"' : "") + ">" + $m(saldoPend(c.total, pag)) + "</b>" +
+      "<span>IVA 15%</span><b>" + $m(c.iva) + "</b>" +
+      (redondeo ? "<span>Ajuste por redondeo</span><b>" + (difRnd > 0 ? "−" : "+") + $m(Math.abs(difRnd)) + "</b>" : "") +
+      '<span class="big">Total</span><b class="big">' + $m(total) + "</b>" +
+      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (saldo > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(saldo) + "</b>" +
       (met ? '<span class="mccf-sub">Forma de pago</span><span style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
-      (Math.abs(c.total - d.ticket.cobradoSistema) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(d.ticket.cobradoSistema) + "</b>" : "") + "</div>" +
+      (!redondeo && Math.abs(c.total - cobrado) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(cobrado) + "</b>" : "") + "</div>" +
       (d.costosVisibles ? '<p style="text-align:right;margin:6px 0 0"><a href="#" id="mctk-costos" class="mctk-link">Detalle de costos</a></p>' : "");
   }
   function flagsHtml() {
