@@ -719,6 +719,9 @@
     table.mob-stack td > * { max-width: 100%; }
     table.mob-stack td input:not([type=checkbox]):not([type=radio]), table.mob-stack td select { min-width: 0; width: 58% !important; max-width: 58%; display: inline-block; vertical-align: middle; }
     table.mob-stack td:empty { display: none; }
+    .ld-row { grid-template-columns: minmax(0, 1fr) 92px 110px !important; }
+    .ld-row .ld-n { grid-column: 1 / -1; }
+    .ld-row .ld-g { grid-column: 1; }
     input[type=date], input[type=time], input[type=month] { min-width: 0; max-width: 100%; box-sizing: border-box; }
     .mctk-f { grid-template-columns: minmax(84px, 38%) minmax(0, 1fr) !important; }
     .mctk-f > *, .mctk-f dd { min-width: 0; overflow-wrap: anywhere; }
@@ -1004,7 +1007,7 @@ const GRUPOS = [
   ]],
 ];
 const SUNSU_MENU = [
-  ["promos", "Promos", "#/s/promos", "admin"],
+  ["promos", "Promociones", "#/m/promociones", "admin"],
   ["tarjetas", "Tarjetas", "#/s/tarjetas", "todos"],
   ["kpis", "KPIs", "#/s/kpis", "admin"],
 ];
@@ -2228,7 +2231,7 @@ async function draw() {
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   // Un conteo asignado se abre aunque la persona no tenga el módulo Conteos (el servidor valida la asignación).
-  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "promociones" && state.admin) || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -2269,6 +2272,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
     if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
     if (route.kind === "mod" && route.mod === "caja" && window.MCCaja) window.MCCaja.wire(main, route);
+    if (route.kind === "mod" && route.mod === "promociones" && state.admin && window.MCPromociones) window.MCPromociones.wire(main, route);
     if (route.kind === "mod" && route.mod === "compras" && window.MCCompras) window.MCCompras.wire(main, route);
     if (route.kind === "mod" && route.mod === "recepciones" && window.MCRecepciones) window.MCRecepciones.wire(main, route);
     if (route.kind === "mod" && route.mod === "gift" && route.sub !== "paquetes" && window.MCGiftCards) window.MCGiftCards.wire(main, route);
@@ -2290,6 +2294,7 @@ function tituloDoc(doc) {
 
 async function renderMod(route) {
   if (route.mod === "mc" && window.MCNav) return window.MCNav.render(route);
+  if (route.mod === "promociones" && window.MCPromociones) return state.admin ? window.MCPromociones.render(route) : `<p class="err">Solo administradores.</p>`;
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
@@ -5781,33 +5786,34 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk30"></script>
-<script src="beta-screens.js?v=20261117tk30"></script>
-<script src="beta-inline.js?v=20261117tk30"></script>
-<script src="mc-productos.js?v=20261117tk30"></script>
-<script src="mc-nav.js?v=20261117tk30"></script>
-<script src="mc-permisos.js?v=20261117tk30"></script>
-<script src="mc-protocolos.js?v=20261117tk30"></script>
-<script src="mc-conteo.js?v=20261117tk30"></script>
-<script src="mc-transferencias.js?v=20261117tk30"></script>
-<script src="mc-ajustes.js?v=20261117tk30"></script>
-<script src="vendor-qrcode.js?v=20261117tk30"></script>
-<script src="mc-tickets.js?v=20261117tk30"></script>
-<script src="mc-paquetes.js?v=20261117tk30"></script>
-<script src="mc-aperturas.js?v=20261117tk30"></script>
-<script src="mc-acceso.js?v=20261117tk30"></script>
-<script src="mc-barras.js?v=20261117tk30"></script>
-<script src="mc-caja.js?v=20261117tk30"></script>
-<script src="mc-giftcards.js?v=20261117tk30"></script>
-<script src="mc-multas.js?v=20261117tk30"></script>
-<script src="mc-clientes.js?v=20261117tk30"></script>
-<script src="mc-clientes-dup.js?v=20261117tk30"></script>
-<script src="mc-docpdf.js?v=20261117tk30"></script>
-<script src="mc-compras.js?v=20261117tk30"></script>
-<script src="mc-consignacion.js?v=20261117tk30"></script>
-<script src="mc-recepciones.js?v=20261117tk30"></script>
-<script src="mc-movil.js?v=20261117tk30"></script>
-<script src="mc-agenda.js?v=20261117tk30"></script>
+<script src="mc-buscar.js?v=20261117tk31"></script>
+<script src="beta-screens.js?v=20261117tk31"></script>
+<script src="beta-inline.js?v=20261117tk31"></script>
+<script src="mc-productos.js?v=20261117tk31"></script>
+<script src="mc-nav.js?v=20261117tk31"></script>
+<script src="mc-permisos.js?v=20261117tk31"></script>
+<script src="mc-protocolos.js?v=20261117tk31"></script>
+<script src="mc-conteo.js?v=20261117tk31"></script>
+<script src="mc-transferencias.js?v=20261117tk31"></script>
+<script src="mc-ajustes.js?v=20261117tk31"></script>
+<script src="vendor-qrcode.js?v=20261117tk31"></script>
+<script src="mc-tickets.js?v=20261117tk31"></script>
+<script src="mc-paquetes.js?v=20261117tk31"></script>
+<script src="mc-aperturas.js?v=20261117tk31"></script>
+<script src="mc-acceso.js?v=20261117tk31"></script>
+<script src="mc-barras.js?v=20261117tk31"></script>
+<script src="mc-caja.js?v=20261117tk31"></script>
+<script src="mc-giftcards.js?v=20261117tk31"></script>
+<script src="mc-multas.js?v=20261117tk31"></script>
+<script src="mc-clientes.js?v=20261117tk31"></script>
+<script src="mc-clientes-dup.js?v=20261117tk31"></script>
+<script src="mc-docpdf.js?v=20261117tk31"></script>
+<script src="mc-compras.js?v=20261117tk31"></script>
+<script src="mc-consignacion.js?v=20261117tk31"></script>
+<script src="mc-recepciones.js?v=20261117tk31"></script>
+<script src="mc-movil.js?v=20261117tk31"></script>
+<script src="mc-promociones.js?v=20261117tk31"></script>
+<script src="mc-agenda.js?v=20261117tk31"></script>
 <script>draw();</script>
 </body>
 </html>

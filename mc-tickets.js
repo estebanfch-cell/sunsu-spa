@@ -131,7 +131,7 @@
     calc();
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
@@ -209,7 +209,7 @@
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
-      '<div class="mctk-foot"><div class="mctk-adj"><label>Promoción <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" +
+      '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos" style="border-color:#C9A227;color:#7a5c12;background:#fbf4e4">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
@@ -325,12 +325,13 @@
   function propuesta() {
     var dat = K.datos && Object.keys(K.datos).length ? { datos: K.datos } : {};
     if (!K.dirtyL) return dat;
-    return Object.assign(dat, { lineas: K.L.map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit, descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado }; }),
+    return Object.assign(dat, { lineas: K.L.map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit, descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, promo: l.promo || "" }; }),
       descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN });
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, total_linea: Number(l.total_linea) || 0 }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
+    K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
   }
@@ -607,14 +608,28 @@
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("tr[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
       var l = K.L[+tr.getAttribute("data-i")];
-      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.valor; }
+      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.valor; l.promo = ""; }
       else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
       calc(); tr.querySelector("[data-tl]").textContent = $m(l.total_linea); pintarTot(); marcar();
     });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
-    main.querySelector("#mctk-promo").onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
+    var _pS = main.querySelector("#mctk-promo"); if (_pS) _pS.onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
+    var _pB = main.querySelector("#mctk-promos");
+    if (_pB) _pB.onclick = function () {
+      if (!window.MCPromociones) { toast2("Recarga la página para ver las promociones", true); return; }
+      window.MCPromociones.panel({
+        lineas: function () { return K.L.map(function (l, i) { return { k: String(i), sku: l.sku, nombre: l.nombre, tipo: l.tipo, cantidad: l.cantidad, bruto: r2(l.cantidad * l.precio_unit) }; }); },
+        aplicadas: K.promoIds || [],
+        aplicar: function (res, ids) {
+          K.L.forEach(function (l) { if (l.promo) { l.promo = ""; l.descuento_tipo = null; l.descuento_valor = 0; } });
+          (res.lineas || []).forEach(function (x) { var l = K.L[+x.k]; if (l && x.monto > 0) { l.descuento_tipo = "$"; l.descuento_valor = x.monto; l.promo = x.etiqueta; } });
+          if (ids.length && K.promo) K.promo = "";
+          K.promoIds = ids; marcar(); pintarLin();
+        },
+      });
+    };
     main.querySelector("#mctk-dv").oninput = function () { var x = descParse(this.value); this.classList.toggle("bad", !x); if (!x) return; K.desc.tipo = x.tipo; K.desc.valor = x.valor; marcar(); pintarTot(); };
     wireCostos();
     // 💵 Pagos de la beta (TK19): lista, registrar y anular; el efectivo entra solo a la caja chica.
