@@ -4,8 +4,8 @@
 Qué hace
   Lee el Excel de «Ventas → Cobros Realizados» (el reporte horario: Fecha Pago,
   Forma Pago, Valor, Número Factura, Cliente). Si el archivo es el viejo
-  «Ventas → Formas de pago», también lo entiende. Opcional: «Ventas → Detalle»
-  para ítems de borrador (Cobros Realizados no trae Detalle).
+  «Ventas → Formas de pago», también lo entiende. Opcional: «Ventas → Ventas Detalladas» (REPORTE DETALLADO DE VENTAS, --detalle)
+  para ítems de borrador (Cobros Realizados no trae ítems). Solo filas Tipo=Factura.
   POST JSON a la edge function `api` (acción migo_importar). NUNCA entra a
   emitir, anular, ni a Cerrar Caja.
 
@@ -230,31 +230,89 @@ def parse_formas(path: Path) -> list[dict]:
         return parse_cobros(book)
     return parse_formas_pago(book)
 
+def _mapa_detalle(s, fila: int) -> dict[str, int]:
+    """Encabezados de «REPORTE DETALLADO DE VENTAS» (Ventas → Ventas Detalladas).
+    Hay columnas vacías de relleno; no se leen identificación (cédula/RUC)."""
+    alias = {
+        "fecha": "fecha", "tipo": "tipo",
+        "num. factura": "factura", "num factura": "factura", "numero factura": "factura",
+        "nro factura": "factura", "factura": "factura",
+        "cliente": "cliente",
+        "cod. producto": "codigo", "cod producto": "codigo", "codigo producto": "codigo",
+        "codigo": "codigo", "sku": "codigo",
+        "producto": "producto", "descripcion": "producto",
+        "precio unitario": "precio_unit", "precio unit": "precio_unit", "p. unitario": "precio_unit",
+        "cantidad": "cantidad", "cant.": "cantidad", "cant": "cantidad",
+        "subtotal": "subtotal", "iva": "iva", "total": "total",
+        "promocion": "promo", "observacion detalle": "obs",
+    }
+    m: dict[str, int] = {}
+    for c in range(s.ncols):
+        k = alias.get(_norm_header(s.cell(fila, c).value))
+        if k and k not in m:
+            m[k] = c
+    return m
+
 def parse_detalle(path: Path, facturas: list[dict]) -> None:
+    """Adjunta ítems (Tipo=Factura) a las facturas ya leídas de Cobros Realizados.
+    Precio unitario y subtotal vienen sin IVA; Total es con IVA. Sin columna Descuento:
+    se estima como precio_unit*cantidad − subtotal cuando hay diferencia (p. ej. promo).
+    """
     by = {f["factura"]: f for f in facturas}
     book = xlrd.open_workbook(str(path))
     s = book.sheet_by_index(0)
-    for r in range(3, s.nrows):
-        num = fac_norm(s.cell(r, 3).value)
+    head = None
+    for r in range(min(12, s.nrows)):
+        m = _mapa_detalle(s, r)
+        if "factura" in m and ("codigo" in m or "producto" in m) and ("total" in m or "subtotal" in m):
+            head = (r, m)
+            break
+    if not head:
+        return
+    start, cols = head
+    tiene_tipo = "tipo" in cols
+    for r in range(start + 1, s.nrows):
+        if tiene_tipo:
+            typ = str(s.cell(r, cols["tipo"]).value or "").strip().lower()
+            if typ and typ != "factura":
+                continue
+        num = fac_norm(s.cell(r, cols["factura"]).value)
         if not num:
             continue
-        # No leer cols 6 u 8 (tipo/número de identificación).
-        producto = str(s.cell(r, 12).value or "").strip()
-        codigo = str(s.cell(r, 11).value or "").strip()
+        codigo = str(s.cell(r, cols["codigo"]).value or "").strip() if "codigo" in cols else ""
+        producto = str(s.cell(r, cols["producto"]).value or "").strip() if "producto" in cols else ""
         if not producto and not codigo:
             continue
         f = by.get(num)
         if not f:
             continue
+        qty = money(s.cell(r, cols["cantidad"]).value) if "cantidad" in cols else 1
+        if not qty:
+            qty = 1
+        unit = money(s.cell(r, cols["precio_unit"]).value) if "precio_unit" in cols else 0.0
+        sub = money(s.cell(r, cols["subtotal"]).value) if "subtotal" in cols else money(unit * qty)
+        iva = money(s.cell(r, cols["iva"]).value) if "iva" in cols else 0.0
+        tot = money(s.cell(r, cols["total"]).value) if "total" in cols else money(sub + iva)
+        desc = money(unit * qty - sub) if unit and qty and sub else 0.0
+        if desc < 0:
+            desc = 0.0
         f.setdefault("lineas", []).append({
             "codigo": codigo,
+            "sku": codigo,
             "producto": producto,
-            "cantidad": money(s.cell(r, 14).value) or 1,
-            "precio_unit": money(s.cell(r, 13).value),
-            "subtotal": money(s.cell(r, 15).value),
-            "iva": money(s.cell(r, 16).value),
-            "total": money(s.cell(r, 17).value),
+            "cantidad": qty,
+            "precio_unit": unit,
+            "descuento": desc,
+            "subtotal": sub,
+            "iva": iva,
+            "total": tot,
         })
+        if sub and not f.get("subtotal"):
+            f["subtotal"] = 0.0
+        if sub:
+            f["subtotal"] = money((f.get("subtotal") or 0) + sub)
+        if iva:
+            f["iva"] = money((f.get("iva") or 0) + iva)
 
 
 def pdfs_de_dir(folder: Path) -> list[dict]:
@@ -317,7 +375,7 @@ def main():
         epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags existentes (--xls, --detalle, --url,\n--token-file, --cron-key-file, --fuente, --dry-run). --pdf-dir es un flag\nnuevo, optativo.\n\nPDFs de factura (solo lectura): dejar cada RIDE en\n/workspace/sunsu/migo_exports/pdf/001-001-000002951.pdf (también vale 2951.pdf).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --pdf-dir /workspace/sunsu/migo_exports/pdf \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
     )
     ap.add_argument("--xls", help="Ventas → Cobros Realizados (.xls); también acepta Formas de pago")
-    ap.add_argument("--detalle", help="Ventas detalle (.xls), opcional para ítems de borrador")
+    ap.add_argument("--detalle", help="Ventas → Ventas Detalladas / REPORTE DETALLADO DE VENTAS (.xls), opcional para ítems")
     ap.add_argument("--pdf-dir", help="Carpeta con RIDE PDF nombrados 001-001-000002951.pdf (o 2951.pdf)")
     ap.add_argument("--url", default=os.environ.get("SUNSU_API_URL", URL_DEFAULT), help="URL de la edge function api (SUNSU_API_URL)")
     ap.add_argument("--token-file", help="Archivo con token de sesión admin (no imprimir)")

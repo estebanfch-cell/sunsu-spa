@@ -1,6 +1,7 @@
 // Cruce de tickets con facturas vivas de Migo (solo lectura). No emite ni anula facturas.
 import { b, n, s, type Row } from "./domain.ts";
 
+import { compararFacturaYTickets } from "./migo_lineas.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
 export const FALTA_CUADRE_DESDE = "2026-11-01";
@@ -97,7 +98,7 @@ export function formaDeTicket(t: Row, datos?: Row, formaMigo?: string): string {
 }
 
 
-export type LineaFactura = { codigo?: string; sku?: string; producto?: string; tipo?: string; cantidad?: number; precio_unit?: number; subtotal?: number; iva?: number; total?: number };
+export type LineaFactura = { codigo?: string; sku?: string; producto?: string; tipo?: string; cantidad?: number; precio_unit?: number; descuento?: number; subtotal?: number; iva?: number; total?: number };
 
 export type FacturaVivo = {
   factura: string; seq: number; fecha: string; hora?: string; cliente: string;
@@ -109,7 +110,7 @@ export type LinkCuadre = {
   diferencia_monto: number; diferencia_fecha: number; estado: "cuadra" | "redondeo" | "diferencia";
   motivo: string; cliente_migo: string; total_factura: number; total_tickets: number;
 };
-export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac"; motivo: string; detalle: string; factura: string | null };
+export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac" | "lineas"; motivo: string; detalle: string; factura: string | null };
 
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
@@ -249,6 +250,19 @@ export function flagsDeseadas(p: {
           });
         }
       }
+      const facV = p.facturas.find((f) => f.factura === L.factura);
+      if (facV && facV.lineas && facV.lineas.length) {
+        const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
+        const avisos = compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t]);
+        if (avisos.length) {
+          out.push({
+            ticket_id: id, ticket_clave: clave, kind: "lineas",
+            motivo: "Revisa productos vs factura",
+            detalle: avisos.map((a) => a.texto).join(" "),
+            factura: L.factura,
+          });
+        }
+      }
       continue;
     }
     const seq = facSeq(t.facturaBeta || t.fac_7);
@@ -301,7 +315,7 @@ export function parseFacturaVivo(x: Row): FacturaVivo | null {
     codigo: s(l.codigo).slice(0, 40), sku: s(l.sku || l.codigo).slice(0, 40),
     producto: s(l.producto || l.nombre).slice(0, 200), tipo: s(l.tipo).slice(0, 40),
     cantidad: n(l.cantidad) || 1, precio_unit: n(l.precio_unit ?? l.precio),
-    subtotal: n(l.subtotal), iva: n(l.iva), total: n(l.total),
+    descuento: n(l.descuento), subtotal: n(l.subtotal), iva: n(l.iva), total: n(l.total),
   })) : [];
   return {
     factura, seq, fecha, hora: s(x.hora).slice(0, 8) || undefined,
@@ -350,6 +364,42 @@ export type CandidatoBorrador = {
 };
 
 /** Fila vacía o clave «r1899» (sin SO): no se sugiere ni aparece en la búsqueda. */
+/** Estados de los que ya no se sale: vinculado, aprobado, descartado. */
+export function estadoBorrador(v: unknown): string {
+  return s(v).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, "_");
+}
+
+export function borradorEsFinal(v: unknown): boolean {
+  const e = estadoBorrador(v);
+  return e === "vinculado" || e === "aprobado" || e === "descartado";
+}
+
+/** pendiente, asignado, pendiente_aprobar / pendiente por aprobar, y cualquier otro no final. */
+export function borradorSePuedeVincular(v: unknown): boolean {
+  const e = estadoBorrador(v);
+  return !!e && !borradorEsFinal(e);
+}
+
+export function clavesDeBorrador(b0: Row): string[] {
+  const col = b0.tickets_vinculados;
+  if (Array.isArray(col) && col.length) return (col as unknown[]).map((x) => s(x)).filter(Boolean);
+  const d = (b0.datos && typeof b0.datos === "object" ? (b0.datos as Row).tickets_vinculados : null);
+  if (Array.isArray(d) && d.length) return (d as unknown[]).map((x) => s(x)).filter(Boolean);
+  return s(b0.ticket_clave) ? [s(b0.ticket_clave)] : [];
+}
+
+export function mensajeNoVincula(estado: unknown, ya?: string[]): string {
+  const e = estadoBorrador(estado);
+  if (e === "vinculado") {
+    return ya && ya.length
+      ? "Esta factura ya está vinculada a " + ya.join(" + ") + "."
+      : "Esta factura ya está vinculada a un ticket.";
+  }
+  if (e === "aprobado") return "Esta factura ya fue aprobada; no se puede volver a vincular.";
+  if (e === "descartado") return "Esta factura fue descartada; no se puede vincular.";
+  return "No se puede vincular esta factura" + (s(estado) ? " (estado: " + s(estado) + ")" : "") + ".";
+}
+
 export function ticketClaveValida(t: Row): boolean {
   const clave = s(t.clave || t.so_num);
   if (!clave || /^r\d+$/i.test(clave)) return false;
