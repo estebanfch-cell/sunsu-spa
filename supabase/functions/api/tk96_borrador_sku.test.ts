@@ -62,7 +62,8 @@ describe("TK96 · borrador Migo solo por SKU, con precio de la factura", () => {
     const by = new Map(r.lineas.map((l) => [l.sku, l]));
     assert.equal(by.get("18")!.seccion, "paquete"); assert.equal(by.get("18")!.precio_unit, 175.5); assert.equal(by.get("18")!.pack, 3);
     assert.equal(by.get("31")!.seccion, "extra"); assert.equal(by.get("31")!.precio_unit, 15);
-    assert.equal(by.get("35")!.seccion, "gift"); assert.equal(by.get("35")!.precio_unit, 3);
+    // TK98: SUNSU-35 a $3.00 = caja de gift card (producto INV-123), no venta de gift card.
+    assert.equal(by.get("INV-123")!.seccion, "producto"); assert.equal(by.get("INV-123")!.precio_unit, 3); assert.equal(by.get("INV-123")!.nombre, "Caja de gift card");
     for (const k of ["AS-005", "VK-010", "AS-010", "JN-008"]) assert.equal(by.get(k)!.seccion, "producto", k);
     assert.equal(by.get("AS-010")!.precio_unit, 39.67);
     assert.ok(!r.lineas.some((l) => l.sku === "02"), "nunca el facial suelto SUNSU-02 por nombre");
@@ -91,11 +92,11 @@ describe("TK96 · borrador Migo solo por SKU, con precio de la factura", () => {
     assert.equal(cab.lineas_beta, true);
     assert.equal(cab.total, 353.16);
     const L = db.tables.get("beta_ticket_lineas")!.filter((l) => l.ticket_clave === clave);
-    assert.deepEqual(L.map((l) => l.sku).sort(), ["18", "31", "35", "AS-005", "AS-010", "JN-008", "VK-010"]);
+    assert.deepEqual(L.map((l) => l.sku).sort(), ["18", "31", "AS-005", "AS-010", "INV-123", "JN-008", "VK-010"]);
     assert.equal(Math.round(L.reduce((a, l) => a + Number(l.total_linea), 0) * 100) / 100, 353.16);
     assert.ok(L.every((l) => !l.promo && !(Number(l.descuento_monto) > 0)));
     assert.equal(L.find((l) => l.sku === "18")!.tipo, "paquete");
-    assert.equal(L.find((l) => l.sku === "35")!.tipo, "gift");
+    assert.equal(L.find((l) => l.sku === "INV-123")!.tipo, "producto");
     const g = await h("adm", "tk_get", { clave });
     assert.equal(((g.totales as Row) || {}).total, 353.16, JSON.stringify(g.totales));
   });
