@@ -759,6 +759,15 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const { vincularBorradorATicket } = await import("./migo_cuadre_api.ts");
     const v = await vincularBorradorATicket(ctx, ses, s(p.vincular_borrador), saved);
     out.vinculado = v;
+    // TK96: el ticket nuevo de un borrador lleva las líneas exactas de la factura (total = factura).
+    if (v && (v as R).ok) {
+      try {
+        const { lineasDeFacturaATicket } = await import("./migo_cuadre_api.ts");
+        out.lineas_factura = await lineasDeFacturaATicket(ctx, actorOf(ses), s(p.vincular_borrador), { ...saved, clave: s((v as R).clave) });
+        const { reevaluarFlags } = await import("./migo_cuadre_api.ts");
+        await reevaluarFlags(ctx, actorOf(ses));
+      } catch { /* el ticket ya quedó */ }
+    }
   }
   return out;
 }
