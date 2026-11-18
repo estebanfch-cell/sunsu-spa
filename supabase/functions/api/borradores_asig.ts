@@ -18,10 +18,14 @@ export function puedeGestionarBorradores(ses: { rol: string }): boolean {
   return esAdmin(ses.rol) || esRecepcion(ses.rol);
 }
 
-export function puedeVerBorrador(ses: Ses, b0: Row): boolean {
+/** TK94: sin asignar y del día (hora de Ecuador): cualquiera del personal lo puede completar. */
+export function sinAsignarDelDia(b0: Row, hoy?: string): boolean {
+  return !!hoy && !s(b0.asignado_a) && s(b0.fecha).slice(0, 10) === hoy;
+}
+export function puedeVerBorrador(ses: Ses, b0: Row, hoy?: string): boolean {
   if (puedeGestionarBorradores(ses)) return true;
   const a = s(b0.asignado_a);
-  if (!a) return false;
+  if (!a) return sinAsignarDelDia(b0, hoy);
   const yo = ses.name;
   const short = s(ses.short);
   return esPropio(a, ses) || a.toLowerCase() === yo.toLowerCase() ||
@@ -163,7 +167,8 @@ export async function completarBorradorStaff(ctx: Ctx, ses: Ses, p: Row): Promis
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
   if (!abiertoSinTicket(b0)) return { error: "Ese borrador ya no se completa" };
-  if (!puedeVerBorrador(ses, b0)) return { error: "No tienes permiso" };
+  const { ecuadorParts } = await import("./domain.ts");
+  if (!puedeVerBorrador(ses, b0, ecuadorParts(ctx.now).ymd)) return { error: "No tienes permiso" };
   const actor = actorOf(ses);
   const now = ctx.now.toISOString();
   const prev = (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row;
@@ -194,4 +199,23 @@ export async function completarBorradorStaff(ctx: Ctx, ses: Ses, p: Row): Promis
   await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, patch);
   try { await logAccion(ctx.db, actor, "MIGO BORRADOR", "completó " + fac + " · queda pendiente de aprobar"); } catch { /* */ }
   return { ok: true, pendiente_aprobar: true, factura: fac, mensaje: "Quedó pendiente de aprobar. Una administradora lo revisa." };
+}
+
+/**
+ * TK94 (Emilia 18/11): «Facturas borrador» (Ventas › #/m/borradores). Fuera de la lista de Tickets.
+ * Personal: las suyas + las sin asignar de su día. Admin y recepción: todas. Sin cédulas ni teléfonos;
+ * el total solo para quien gestiona.
+ */
+export async function listaFacturasBorrador(ctx: Ctx, ses: Ses, hoy: string): Promise<Row[]> {
+  const gestiona = puedeGestionarBorradores(ses);
+  const rows = (await todas(ctx, "beta_migo_borradores")).filter((b0) => abiertoSinTicket(b0) && puedeVerBorrador(ses, b0, hoy));
+  return rows.sort((a, b0) => s(b0.fecha).localeCompare(s(a.fecha)) || s(b0.factura).localeCompare(s(a.factura))).map((b0) => {
+    const p = partesCliente(b0), listo = listoBorrador(b0);
+    return {
+      factura: s(b0.factura), fecha: s(b0.fecha).slice(0, 10), nombre: p.nombre, apellido: p.apellido,
+      asignado_a: s(b0.asignado_a), sin_asignar: !s(b0.asignado_a),
+      estado: listo ? "pendiente_aprobar" : "por_completar", listo,
+      ...(gestiona ? { total: n(b0.total) } : {}),
+    };
+  });
 }

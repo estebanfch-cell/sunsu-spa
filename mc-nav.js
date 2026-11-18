@@ -40,6 +40,7 @@
     return [
       { id: "ventas", label: "Ventas", items: [
         ["tickets", "Tickets", "#/m/tickets"],
+        ["tickets", "Facturas borrador", "#/m/borradores"],
         ["cotizaciones_cliente", "Cotizaciones", "#/m/cotizaciones_cliente"],
         ["clientes", "Registro de clientas", "#/m/clientes"],
         // Agenda solo en Spa (Emilia 18/11: una sola Agenda).
@@ -133,7 +134,7 @@
   // Un emoji por módulo (Emilia 17/11): el mismo en el menú, la barra de abajo y el título de la pantalla.
   var EMO_GRUPO = { ventas: "🛍️", protocolos: "🧪", inventario: "📦", bodega: "🏬", compras: "🛒", reportes: "📊", consignacion: "🤝", finanzas: "💰", admin: "⚙️", personal: "👥", spa: "💆", otros: "☰" };
   var EMO_RUTA = [
-    ["#/m/tickets", "🎫"], ["#/doc/ov", "🎫"], ["#/m/cotizaciones_cliente", "📝"], ["#/doc/cot", "📝"], ["#/m/clientes", "👩"], ["#/m/agenda", "📅"], ["#/m/citas", "📅"],
+    ["#/m/tickets", "🎫"], ["#/m/borradores", "📄"], ["#/doc/ov", "🎫"], ["#/m/cotizaciones_cliente", "📝"], ["#/doc/cot", "📝"], ["#/m/clientes", "👩"], ["#/m/agenda", "📅"], ["#/m/citas", "📅"],
     ["#/m/mc/protocolos", "🧪"], ["#/m/mc/nuevo_protocolo", "🧪"], ["#/m/productos", "🧴"], ["#/m/inventario/venta", "🏪"], ["#/m/inventario/cabina", "🧴"], ["#/m/inventario", "📦"], ["#/m/conteos", "🔢"], ["#/m/transferencias", "🔄"], ["#/m/ajustes", "⚖️"],
     ["#/m/compras/rfq", "📨"], ["#/m/compras/cotizaciones", "📨"], ["#/m/recepciones", "📥"], ["#/m/compras/consignacion", "🤝"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
     ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
