@@ -426,4 +426,34 @@ describe("asistencia", () => {
     assert.equal(visibles.length, 0);
   });
 
+  it("asis_hoy devuelve ámbito y fuente del feriado que carga el admin", async () => {
+    const db = new MemoryDb();
+    db.tables.set("sesiones", [{ token: "t-emi", uid: "emi", rol: "super_admin", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "emi", nombre: "Emi", short: "Emi", rol: "super_admin", bloqueado: false }]);
+    const ctx = { db, now: new Date(instanteEcuador("2026-11-18", "14:30")), env: {}, fetchImpl: fetch, legacyLogin: async () => ({ ok: false }) };
+    const fer = await handle("asis_feriado", {
+      token: "t-emi", fecha: "2026-11-20",
+      nombre: "Suspensión de jornada (Festival de Artes Vivas de Loja)",
+      ambito: "nacional",
+      fuente: "Decreto Ejecutivo 507, R.O. 8vo Supl. 380 (30 sep 2026)",
+    }, ctx);
+    assert.equal((fer as { ok?: boolean }).ok, true);
+    const quito = await handle("asis_feriado", {
+      token: "t-emi", fecha: "2026-12-07",
+      nombre: "Fundación de Quito (traslado)",
+      ambito: "quito",
+      fuente: "Traslado del 6 dic al lunes 7; solo DMQ",
+    }, ctx);
+    assert.equal((quito as { ok?: boolean }).ok, true);
+    const hoy = await handle("asis_hoy", { token: "t-emi" }, ctx) as {
+      feriados?: { fecha?: string; nombre?: string; ambito?: string; fuente?: string }[];
+    };
+    const vie = hoy.feriados?.find((f) => f.fecha === "2026-11-20");
+    assert.equal(vie?.ambito, "nacional");
+    assert.match(String(vie?.fuente), /Decreto Ejecutivo 507/);
+    const lun = hoy.feriados?.find((f) => f.fecha === "2026-12-07");
+    assert.equal(lun?.ambito, "quito");
+    assert.match(String(lun?.nombre), /Fundación de Quito/);
+  });
+
 });
