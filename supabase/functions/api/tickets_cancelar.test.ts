@@ -31,8 +31,11 @@ function semilla() {
   db.tables.set("tickets", [
     { id: 1, sheet_row: 10, so_num: "TK-SO-1", beta_num: "TK-20261117-1", origin: "beta", timestamp: "2026-11-17T15:00:00Z", atendido_por: "Ana Pérez", nombre: "María", apellido: "Banda", id_3: "1700000001", facial_hecho: "SUNSU-40 Facial Reset", estimado: 69, orig: { "ML-002": 1, beta: true } },
   ]);
-  db.tables.set("paquetes", [{ id: 7, sheet_row: 50, paquete: "Pack 3 Reset", orig: { ticket: "TK-20261117-1" }, borrado_at: null }]);
-  for (const t of ["app_modulos", "cabina_inventario", "inventario_base", "promos", "beta_tickets", "beta_ticket_lineas", "solicitudes_cambio", "clientas_registro", "beta_stock_movimientos", "beta_ticket_cancelados", "log_acciones"]) db.tables.set(t, []);
+  db.tables.set("paquetes", [
+    { id: 7, sheet_row: 50, paquete: "Pack 3 Reset", orig: { ticket: "TK-20261117-1" }, borrado_at: null },
+    { id: 8, sheet_row: 51, paquete: "Pack 3 Glow", cedula: "1700000001", uso_1: true, fecha_1: "10/11/2026", uso_2: true, fecha_2: "17/11/2026", completo: false, orig: { ticket: "TK-OTRO", marcas_ticket: ["TK-SO-0", "TK-SO-1"], marcas_slot: { "TK-SO-1": [2] }, ultima_marca_ticket: "TK-SO-1", ultima_marca_slot: 2 }, borrado_at: null },
+  ]);
+  for (const t of ["beta_paquete_ajustes", "app_modulos", "cabina_inventario", "inventario_base", "promos", "beta_tickets", "beta_ticket_lineas", "solicitudes_cambio", "clientas_registro", "beta_stock_movimientos", "beta_ticket_cancelados", "log_acciones"]) db.tables.set(t, []);
   const c = { db, now: new Date("2026-11-17T18:30:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
@@ -45,7 +48,7 @@ describe("Cancelar ticket (admin)", () => {
     assert.match(String((await h("tk_cancelar", "cos", { clave: "TK-SO-1", motivo: "x prueba" })).error), /admin/);
     assert.match(String((await h("tk_cancelar", "adm", { clave: "TK-SO-1", motivo: "" })).error), /motivo/);
   });
-  it("devuelve stock a su bodega, da de baja el paquete, queda Cancelado y no se repite", async () => {
+  it("devuelve stock a su bodega, ANULA el paquete, libera la sesión que marcó, queda Cancelado y no se repite", async () => {
     const { db, h } = semilla();
     const r = await h("tk_cancelar", "adm", { clave: "TK-SO-1", motivo: "Ticket duplicado" });
     assert.equal(r.ok, true, String(r.error));
@@ -56,7 +59,17 @@ describe("Cancelar ticket (admin)", () => {
     const tk = db.tables.get("tickets")![0];
     assert.ok(esCancelado(tk));
     assert.equal((tk.orig as Row).cancelado_por, "Emilia");
-    assert.ok(db.tables.get("paquetes")![0].borrado_at);
+    const [p7, p8] = db.tables.get("paquetes")!;
+    assert.equal(p7.borrado_at, null, "el paquete no desaparece: queda anulado");
+    assert.equal((p7.orig as Row).anulado, true);
+    assert.equal((p7.orig as Row).cancelado_por_ticket, "TK-SO-1");
+    assert.equal(p8.uso_1, true, "la sesión de otro ticket sigue usada");
+    assert.equal(p8.uso_2, false, "la sesión que marcó este ticket queda libre");
+    assert.equal(p8.fecha_2, "");
+    assert.deepEqual((r.liberadas as Row[]).map((x) => x.slot), [2]);
+    const hist = (db.tables.get("beta_paquete_ajustes") || []).flatMap((a) => (a.historial as Row[]) || []);
+    assert.ok(hist.some((x) => /liberada: ticket TK-SO-1 cancelado/.test(String(x.detalle))));
+    assert.ok(hist.some((x) => x.accion === "anular"));
     assert.equal(db.tables.get("beta_ticket_cancelados")!.length, 1);
     const g = await h("tk_get", "adm", { clave: "TK-SO-1" });
     assert.equal((g.ticket as Row).estado, "anulado");
