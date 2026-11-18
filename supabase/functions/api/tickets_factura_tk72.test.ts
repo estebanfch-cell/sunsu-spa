@@ -8,6 +8,7 @@ import "./erp_api.ts";
 import "./inline_api.ts";
 import "./productos_api.ts";
 import "./tickets_beta_api.ts";
+import "./migo_cuadre_api.ts";
 import type { Row } from "./domain.ts";
 
 function semilla() {
@@ -63,5 +64,26 @@ describe("TK72 · líneas desde la factura Migo, sin prorrateo", () => {
     assert.equal(d.precio_unit, -9); assert.equal(d.nombre, "Diferencia sin explicar");
     assert.equal((g.totales as Row).total, 60);
     assert.ok((g.faltan as string[]).some((x) => /Diferencia sin explicar/.test(x)));
+  });
+});
+
+describe("TK80 · los flags se recalculan con las líneas reconstruidas", () => {
+  it("Karina (TK-SO-1891): el «Falta en ticket: PDRN SERUM» se resuelve solo y queda en el log", async () => {
+    const { db, h } = semilla();
+    const fv = db.tables.get("beta_migo_facturas_vivo")![0];
+    Object.assign(fv, { cliente: "LINO KARINA", forma: "Tarjeta de crédito", fecha: "2026-11-16" });
+    Object.assign(db.tables.get("tickets")![0], { cob: true, comp: "Tarje:949" });
+    db.tables.set("beta_migo_importes", [{ id: 1, imported_at: "2026-11-18T12:00:00Z", fuente: "vivo" }]);
+    db.tables.set("beta_ticket_flags", [{ id: "migo:1884:lineas", ticket_id: 1884, ticket_clave: "TK-SO-1891", motivo: "Revisa productos vs factura", detalle: "Falta en ticket: PDRN SERUM (SUNSU-31) $15.00 × 1", factura: "001-001-000002956", fuente: "migo", resuelto: false }]);
+    for (const x of ["beta_cuadre_link", "beta_ticket_cancelados", "beta_migo_borradores", "log_acciones"]) db.tables.set(x, []);
+    const r = await h("migo_cuadre_hora");
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.ok(db.tables.get("beta_cuadre_link")!.some((x) => Number(x.ticket_id) === 1884), "el ticket se cruza con su factura: " + JSON.stringify(db.tables.get("beta_cuadre_link")));
+    const f = db.tables.get("beta_ticket_flags")!.find((x) => x.id === "migo:1884:lineas")!;
+    assert.equal(f.resuelto, true, "ya no está en rojo");
+    assert.match(String(f.nota), /coinciden con la factura/);
+    assert.ok(db.tables.get("log_acciones")!.some((x) => x.accion === "FLAG AUTO-RESUELTO"));
+    const g = await h("tk_get", { clave: "TK-SO-1891" });
+    assert.equal(((g.chips || g.info?.chips || []) as Row[]).some((c) => c.k === "flag"), false, "sin pill «Por corregir»");
   });
 });
