@@ -86,3 +86,12 @@ describe("TK91 · ticket ya cobrado en el sistema anterior", () => {
   });
 });
 
+describe("TK92 · factura de otra fecha no copia pagos", () => {
+  it("ticket de septiembre con # de una factura de noviembre: no se copia nada", async () => {
+    const { db, h } = semilla();
+    db.tables.get("tickets")![0].timestamp = "2026-09-25T12:50:41Z";
+    await h("migo_importar", { facturas: [{ factura: FAC, fecha: "2026-11-18", cliente: "ANA RUIZ", total: 171.5, formas_pago: inv.formas_pago, lineas: [] }] });
+    assert.equal(db.tables.get("beta_pagos")!.length, 0);
+  });
+});
+
