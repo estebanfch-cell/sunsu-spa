@@ -526,6 +526,10 @@
       border-top: 1px solid var(--cream-d);
       box-shadow: 0 -4px 16px rgba(91,127,166,0.08);
     }
+    /* TK67: con el teclado abierto (iPhone) la barra de abajo se esconde; vuelve al cerrarlo. */
+    body.kb-open .tabbar, body.kb-open [data-oculta-teclado] { display: none !important; }
+    body.kb-open { --tab-h: 0px; }
+    body.kb-open .scrim { bottom: 0; }
     .tab {
       background: transparent; border: 0; color: var(--gray);
       display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
@@ -6123,38 +6127,72 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk66"></script>
-<script src="beta-screens.js?v=20261118tk66"></script>
-<script src="beta-inline.js?v=20261118tk66"></script>
-<script src="mc-productos.js?v=20261118tk66"></script>
-<script src="mc-nav.js?v=20261118tk66"></script>
-<script src="mc-permisos.js?v=20261118tk66"></script>
-<script src="mc-protocolos.js?v=20261118tk66"></script>
-<script src="mc-conteo.js?v=20261118tk66"></script>
-<script src="mc-transferencias.js?v=20261118tk66"></script>
-<script src="mc-ajustes.js?v=20261118tk66"></script>
-<script src="vendor-qrcode.js?v=20261118tk66"></script>
-<script src="mc-tickets.js?v=20261118tk66"></script>
-<script src="mc-maestro.js?v=20261118tk66"></script>
-<script src="mc-edit.js?v=20261118tk66"></script>
-<script src="mc-paquetes.js?v=20261118tk66"></script>
-<script src="mc-aperturas.js?v=20261118tk66"></script>
-<script src="mc-acceso.js?v=20261118tk66"></script>
-<script src="mc-barras.js?v=20261118tk66"></script>
-<script src="mc-caja.js?v=20261118tk66"></script>
-<script src="mc-giftcards.js?v=20261118tk66"></script>
-<script src="mc-multas.js?v=20261118tk66"></script>
-<script src="mc-clientes.js?v=20261118tk66"></script>
-<script src="mc-clientes-dup.js?v=20261118tk66"></script>
-<script src="mc-docpdf.js?v=20261118tk66"></script>
-<script src="mc-compras.js?v=20261118tk66"></script>
-<script src="mc-consignacion.js?v=20261118tk66"></script>
-<script src="mc-proveedores.js?v=20261118tk66"></script>
-<script src="mc-recepciones.js?v=20261118tk66"></script>
-<script src="mc-movil.js?v=20261118tk66"></script>
-<script src="mc-promociones.js?v=20261118tk66"></script>
-<script src="mc-agenda.js?v=20261118tk66"></script>
-<script src="mc-staff-home.js?v=20261118tk66"></script>
+<script src="mc-buscar.js?v=20261118tk67"></script>
+<script src="beta-screens.js?v=20261118tk67"></script>
+<script src="beta-inline.js?v=20261118tk67"></script>
+<script src="mc-productos.js?v=20261118tk67"></script>
+<script src="mc-nav.js?v=20261118tk67"></script>
+<script src="mc-permisos.js?v=20261118tk67"></script>
+<script src="mc-protocolos.js?v=20261118tk67"></script>
+<script src="mc-conteo.js?v=20261118tk67"></script>
+<script src="mc-transferencias.js?v=20261118tk67"></script>
+<script src="mc-ajustes.js?v=20261118tk67"></script>
+<script src="vendor-qrcode.js?v=20261118tk67"></script>
+<script src="mc-tickets.js?v=20261118tk67"></script>
+<script src="mc-maestro.js?v=20261118tk67"></script>
+<script src="mc-edit.js?v=20261118tk67"></script>
+<script src="mc-paquetes.js?v=20261118tk67"></script>
+<script src="mc-aperturas.js?v=20261118tk67"></script>
+<script src="mc-acceso.js?v=20261118tk67"></script>
+<script src="mc-barras.js?v=20261118tk67"></script>
+<script src="mc-caja.js?v=20261118tk67"></script>
+<script src="mc-giftcards.js?v=20261118tk67"></script>
+<script src="mc-multas.js?v=20261118tk67"></script>
+<script src="mc-clientes.js?v=20261118tk67"></script>
+<script src="mc-clientes-dup.js?v=20261118tk67"></script>
+<script src="mc-docpdf.js?v=20261118tk67"></script>
+<script src="mc-compras.js?v=20261118tk67"></script>
+<script src="mc-consignacion.js?v=20261118tk67"></script>
+<script src="mc-proveedores.js?v=20261118tk67"></script>
+<script src="mc-recepciones.js?v=20261118tk67"></script>
+<script src="mc-movil.js?v=20261118tk67"></script>
+<script src="mc-promociones.js?v=20261118tk67"></script>
+<script src="mc-agenda.js?v=20261118tk67"></script>
+<script src="mc-staff-home.js?v=20261118tk67"></script>
 <script>draw();</script>
+<script>
+// TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Bodega/Compras) nunca queda encima del teclado.
+// Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
+(function () {
+  var NO_TECLADO = /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i;
+  function editable(el) {
+    if (!el || el === document.body) return false;
+    if (el.isContentEditable) return true;
+    var t = el.tagName;
+    if (t === "TEXTAREA" || t === "SELECT") return !el.disabled;
+    if (t === "INPUT") return !el.disabled && !el.readOnly && !NO_TECLADO.test(el.type || "text");
+    return false;
+  }
+  var base = window.innerHeight;
+  function tecladoPorAltura() {
+    var vv = window.visualViewport;
+    if (!vv) return false;
+    if (!editable(document.activeElement) && vv.height >= base - 40) base = Math.max(base, window.innerHeight);
+    return base - vv.height * (vv.scale || 1) > 140;
+  }
+  var t0 = null;
+  function pinta() {
+    var abierto = editable(document.activeElement) || tecladoPorAltura();
+    document.body.classList.toggle("kb-open", abierto);
+  }
+  function luego() { clearTimeout(t0); t0 = setTimeout(pinta, 120); }
+  document.addEventListener("focusin", function (e) { if (editable(e.target)) document.body.classList.add("kb-open"); }, true);
+  document.addEventListener("focusout", luego, true);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", luego);
+  window.addEventListener("orientationchange", function () { base = 0; setTimeout(function () { base = window.innerHeight; pinta(); }, 400); });
+  window.addEventListener("resize", function () { if (!editable(document.activeElement)) base = window.innerHeight; luego(); });
+  window.SunsuTeclado = { editable: editable, pinta: pinta };
+})();
+</script>
 </body>
 </html>
