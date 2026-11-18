@@ -1,6 +1,7 @@
 /** Ítems de factura Migo (Ventas Detalladas o RIDE) y cuadre línea a línea con el ticket. */
 import { n, s, skuCode, type Row } from "./domain.ts";
 
+import { aliasMigo } from "./alias_migo.ts";
 export const NOMBRE_DIFERENCIA_MEJORA = "Diferencia por mejora de paquete";
 
 export type LineaNorm = {
@@ -81,7 +82,8 @@ export function normalizarLineaFactura(l: Row): LineaNorm | null {
   if (!tot && sub) tot = Math.round((sub + (iva || Math.round(sub * 0.15 * 100) / 100)) * 100) / 100;
   const unitSin = unit || (qty ? Math.round((sub / qty) * 10000) / 10000 : 0);
   return {
-    sku: skuMigoABeta(codigo || nombre),
+    // TK98: SUNSU-35 a $3.00 es la caja de gift card (INV-123), no una gift card.
+    sku: codigo ? aliasMigo(codigo, qty ? tot / qty : tot) : skuMigoABeta(nombre),
     codigo,
     nombre: nombre || codigo,
     cantidad: qty,
