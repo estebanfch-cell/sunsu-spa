@@ -6,14 +6,14 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.11.17.03 promociones automáticas en el ticket -->
+<!-- v2026.11.18.01 promos Black Friday: grupo + mínimo de unidades + $ c/u -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
-// APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
+// APP_VERSION del Apps Script hoy: '2026-11-18-BF (promos con grupo y mínimo)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.11.17.03';
-var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
+var SUNSU_APP_VERSION='v2026.11.18.01';
+var SUNSU_MOTOR_ESPERADO='2026-11-18-BF';
 // Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
 var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
 function _esVentaCabinaSku(sku){
@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261117.03';
+  var v='20261118.01';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -2132,7 +2132,7 @@ function updatePreview(){
     var _ptUP=_promoTotal();
     if(_ptUP.items.length){
       dscMonto=Math.min(_ptUP.monto,totE);
-      dscLabel=_ptUP.items.map(function(x){return '🎉 '+x.p.nombre+' '+x.mech;}).join(' + ');
+      dscLabel=_ptUP.items.map(function(x){return '🎉 '+_pmNom(x.p)+' '+x.mech;}).join(' + ');
     } else {
       // Sacaron del ticket los códigos (o el descuento cayó a $0): se desarma sola
       T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
@@ -2204,7 +2204,7 @@ function updatePreview(){
   // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
   // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
   // el input y el teclado iOS se cerraba).
-  if(T.descuento&&T.descuento.tipo==='promo'){ var _ptBD=_promoTotal(); if(_ptBD.items.length>1){ _ptBD.items.forEach(function(x){ breakdown+=`<div style="${rowGray};color:#E8C07A"><span>🎉 ${x.p.nombre} · ${x.p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')}</span><span>−$${x.monto.toFixed(2)}</span></div>`; }); dscLabel=_ptBD.items.length>1?'🎉 Total promociones':dscLabel; } }
+  if(T.descuento&&T.descuento.tipo==='promo'){ var _ptBD=_promoTotal(); if(_ptBD.items.length>1){ _ptBD.items.forEach(function(x){ breakdown+=`<div style="${rowGray};color:#E8C07A"><span>🎉 ${_pmNom(x.p)} · ${x.p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')}</span><span>−$${x.monto.toFixed(2)}</span></div>`; }); dscLabel=_ptBD.items.length>1?'🎉 Total promociones':dscLabel; } }
   breakdown+=`<div id="pv-dsc-row" style="${rowStyle};color:var(--green);${dscMonto>0?'':'display:none'}"><span id="pv-dsc-lbl">${dscLabel}</span><span id="pv-dsc-mto" style="font-weight:700">−$${dscMonto.toFixed(2)}</span></div>`;
 
   // Discount buttons
@@ -2312,8 +2312,18 @@ function _promoArmada(p,units){
   return p.codigos.some(function(c){return u.some(function(x){return x.sku===c;});});
 }
 // Texto corto del mecanismo (chips del ticket + lista de promos)
+// Nombre a mostrar: con GRUPO (col. K) → «Black Friday · regla». Sin grupo, igual que antes.
+function _pmNom(p){ return (p&&p.grupo)?p.grupo+' · '+p.nombre:(p?p.nombre:''); }
+// Varias reglas del mismo grupo → «Black Friday: regla A + regla B» (sin repetir el grupo).
+function _pmNomLista(lista){
+  var gs=[], por={};
+  lista.forEach(function(x){ var g=x.grupo||''; if(!(g in por)){ por[g]=[]; gs.push(g); } por[g].push(x.nombre); });
+  return gs.map(function(g){ return g?g+': '+por[g].join(' + '):por[g].join(' + '); }).join(' + ');
+}
+function _pmMinTxt(p){ return (p&&p.minU>1)?'lleva '+p.minU+'+: ':''; }
 function _pmMechTxt(p){
-  if(p.tipo==='$') return '−$'+(parseFloat(p.valor)||0).toFixed(2);
+  if(p.tipo==='$') return _pmMinTxt(p)+'−$'+(parseFloat(p.valor)||0).toFixed(2)+(p.porUnidad?' c/u':'');
+  if(p.minU>1&&p.tipo!=='NXM'&&p.tipo!=='PACK') return _pmMinTxt(p)+'−'+p.valor+'%';
   if(p.tipo==='NXM') return Math.round(p.valor)+'×'+Math.round(p.valor2);
   if(p.tipo==='PACK') return 'paquete a $'+(parseFloat(p.valor)||0).toFixed(2)+' ('+Math.round(p.valor2)+' ses)';
   return '−'+p.valor+'%';
@@ -2323,7 +2333,10 @@ function _promoCalc(p,units){
   var u=(units||_promoUnits()).filter(function(x){return p.codigos.indexOf(x.sku)>=0;});
   var sum=0; u.forEach(function(x){sum+=x.p;});
   var monto=0;
-  if(p.tipo==='$'){ monto=Math.min(parseFloat(p.valor)||0,sum); }
+  // MIN (col. L): unidades mínimas sumando TODOS sus códigos (1 ML-001 + 1 ML-013 = 2). Sin MIN = como antes.
+  var minU=Math.max(1,Math.round(parseFloat(p.minU)||1));
+  if(u.length<minU) return {monto:0, mech:_pmMechTxt(p), falta:'Lleva '+u.length+'; la promo pide '+minU+' o más'};
+  if(p.tipo==='$'){ monto=p.porUnidad?Math.min((parseFloat(p.valor)||0)*u.length,sum):Math.min(parseFloat(p.valor)||0,sum); }
   else if(p.tipo==='NXM'){
     var N=Math.round(p.valor)||0, M=Math.round(p.valor2)||0;
     if(N>=2&&M>=1&&M<N){
@@ -2373,11 +2386,11 @@ function _promoPanelHTML(totE,dscMonto){
     var coded=p.codigos&&p.codigos.length, est='', ok=true, monto=0;
     if(coded){
       if(!_promoArmada(p,uu)){ ok=false; est='No aplica: el ticket no lleva '+p.codigos.map(function(c){return _promoNomSku(c);}).join(' / '); }
-      else { var c=_promoCalc(p,uu); monto=c?c.monto:0; if(monto<=0){ ok=false; est='Faltan unidades para que descuente algo'; } else est='Descuenta −$'+monto.toFixed(2); }
+      else { var c=_promoCalc(p,uu); monto=c?c.monto:0; if(monto<=0){ ok=false; est=(c&&c.falta)||'Faltan unidades para que descuente algo'; } else est='Descuenta −$'+monto.toFixed(2); }
     } else est='Sobre el total del ticket (−'+p.valor+'%)';
     var activa=on(p);
     h+='<div style="display:flex;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,0.1)">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:800;color:'+(ok?'#E8C07A':'rgba(255,255,255,0.55)')+'">'+p.nombre+' <span style="font-weight:700">'+_pmMechTxt(p)+'</span></div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:800;color:'+(ok?'#E8C07A':'rgba(255,255,255,0.55)')+'">'+_pmNom(p)+' <span style="font-weight:700">'+_pmMechTxt(p)+'</span></div>'
       +'<div style="font-size:0.58rem;opacity:0.75;overflow-wrap:anywhere">'+(coded?p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')+' · ':'')+est+'</div></div>'
       +(ok&&!coded&&!_pmEsAdm()?'':ok&&coded&&!_pmEsAdm()?'<span style="flex:0 0 auto;font-size:0.6rem;font-weight:800;color:'+(activa?'var(--green)':'rgba(255,255,255,0.55)')+'">'+(activa?'✓ Aplicada':'Otra promo ya cubre este producto')+'</span>':'')
       +(ok&&(_pmEsAdm()||!coded)?'<button onclick="aplicarPromo('+i+')" style="flex:0 0 auto;padding:6px 10px;border-radius:8px;border:1.5px solid #E8C07A;background:'+(activa?'#E8C07A':'transparent')+';color:'+(activa?'#1A2744':'#E8C07A')+';font-size:0.62rem;font-weight:800;cursor:pointer">'+(activa?'✓ Quitar':'Aplicar')+'</button>':'')
@@ -2424,7 +2437,7 @@ function _promoAuto(){
     .sort(function(a,b){return (b.f-a.f)||(b.m-a.m);});
   var lista=[];
   cand.forEach(function(x){ if(lista.some(function(y){return y.codigos.some(function(c){return x.p.codigos.indexOf(c)>=0;});})) return; lista.push(x.p); });
-  T.descuento=lista.length?{tipo:'promo',auto:true,promo:lista.map(function(x){return x.nombre;}).join(' + '),promoObj:lista[0],promoObjs:lista,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}
+  T.descuento=lista.length?{tipo:'promo',auto:true,promo:_pmNomLista(lista),promoObj:lista[0],promoObjs:lista,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}
     :{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
 }
 function toggleDescuento(tipo){
@@ -2650,7 +2663,7 @@ function enviarTicket(){
     var _ptE=_promoTotal();
     if(_ptE.items.length){
       _dscMonto=Math.min(_ptE.monto,_totBruto);
-      _dscLabel=_ptE.items.map(function(x){return 'Promo '+x.p.nombre+' ('+x.mech+') −$'+x.monto.toFixed(2);}).join(' + ');
+      _dscLabel=_ptE.items.map(function(x){return 'Promo '+_pmNom(x.p)+' ('+x.mech+') −$'+x.monto.toFixed(2);}).join(' + ');
     }
   }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
@@ -5278,7 +5291,7 @@ function _pmSetMech(m){
   var mini='width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box';
   var lbl='font-size:0.56rem;font-weight:800;color:var(--navy)';
   if(m==='%') vr.innerHTML='<div style="width:110px"><div style="'+lbl+'">Descuento %</div><input id="pm-val" type="number" min="1" max="100" style="'+mini+'" oninput="_pmCalcRender()"></div>';
-  else if(m==='$') vr.innerHTML='<div style="width:110px"><div style="'+lbl+'">Descuento $</div><input id="pm-val" type="number" min="0.01" step="0.01" style="'+mini+'" oninput="_pmCalcRender()"></div>';
+  else if(m==='$') vr.innerHTML='<div style="display:flex;gap:8px;align-items:flex-end"><div style="width:110px"><div style="'+lbl+'">Descuento $</div><input id="pm-val" type="number" min="0.01" step="0.01" style="'+mini+'" oninput="_pmCalcRender()"></div><label style="font-size:0.62rem;font-weight:700;color:var(--navy);display:flex;gap:5px;align-items:center;padding-bottom:9px"><input id="pm-poru" type="checkbox"> por cada unidad (c/u)</label></div>';
   else if(m==='NXM') vr.innerHTML='<div style="display:flex;gap:5px;align-items:flex-end"><div style="width:80px"><div style="'+lbl+'">Lleva (N)</div><input id="pm-val" type="number" min="2" value="3" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="width:80px"><div style="'+lbl+'">Paga (M)</div><input id="pm-val2" type="number" min="1" value="2" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="flex:1;font-size:0.54rem;color:var(--gray);padding-bottom:8px">Cobra las M más caras de N llevadas</div></div>';
   else vr.innerHTML='<div style="display:flex;gap:5px"><div style="width:120px"><div style="'+lbl+'">Precio especial $</div><input id="pm-val" type="number" min="0.01" step="0.01" style="'+mini+'" oninput="_pmCalcRender()"></div><div style="width:120px"><div style="'+lbl+'">Sesiones que registra</div><input id="pm-val2" type="number" min="1" max="6" value="2" style="'+mini+'" oninput="_pmCalcRender()"></div></div>';
   _pmChipsRender(); _pmCalcRender();
@@ -5376,6 +5389,8 @@ function renderPromos(c){
       +'<div class="card" style="padding:13px;margin-bottom:10px">'
       +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">Nueva promo</div>'
       +'<input id="pm-nom" placeholder="Nombre (ej: 3×2 en ampollas)" style="'+inp+';margin-bottom:6px">'
+      +'<div style="display:flex;gap:5px;margin-bottom:6px;align-items:flex-end"><div style="flex:1"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Grupo (opcional · ej: Black Friday)</div><input id="pm-grupo" list="pm-grupos" placeholder="Une varias reglas en una promo" style="'+inp+'"><datalist id="pm-grupos">'+(d.todas||[]).map(function(x){return x.grupo;}).filter(function(g,i,a){return g&&a.indexOf(g)===i;}).map(function(g){return '<option value="'+g.replace(/"/g,'&quot;')+'">';}).join('')+'</datalist></div>'
+      +'<div style="width:96px"><div style="font-size:0.56rem;font-weight:800;color:var(--navy)">Mínimo unidades</div><input id="pm-min" type="number" min="1" max="50" value="1" style="'+inp+'"></div></div>'
       +'<div id="pm-mechrow" style="display:flex;gap:5px;margin-bottom:6px"></div>'
       +'<div id="pm-valrow" style="margin-bottom:6px"></div>'
       +'<input id="pm-buscar" placeholder="🔍 Código o nombre del catálogo..." style="'+inp+';margin-bottom:4px" oninput="_pmBuscar(this.value)">'
@@ -5393,8 +5408,8 @@ function renderPromos(c){
     (d.todas||[]).slice().reverse().forEach(function(p){
       var viva=(d.vigentes||[]).some(function(v){return v.fila===p.fila;});
       h+='<div class="card" style="padding:11px 13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px'+(p.activa?'':';opacity:0.5')+'">'
-        +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">🎉 '+p.nombre+' '+_pmMechTxt(p)+'</div>'
-        +((p.codigos&&p.codigos.length)?'<div style="font-size:0.56rem;color:var(--lavender);font-weight:700">'+p.codigos.join(' + ')+'</div>':'')
+        +'<div><div style="font-size:0.74rem;font-weight:800;color:var(--navy)">🎉 '+_pmNom(p)+' '+_pmMechTxt(p)+'</div>'
+        +((p.codigos&&p.codigos.length)?'<div style="font-size:0.56rem;color:var(--lavender);font-weight:700">'+p.codigos.join(' + ')+(p.minU>1?' · mínimo '+p.minU+' unidades entre todos':'')+'</div>':'')
         +'<div style="font-size:0.58rem;color:var(--gray)">'+p.desde+' → '+p.hasta+' · por '+p.por+' · '+(!p.activa?'🚫 desactivada':(viva?'🟢 vigente hoy':'⏸ fuera de fechas'))+'</div></div>'
         +(p.activa?'<button onclick="promoOff('+p.fila+',this)" style="padding:6px 11px;background:white;color:#B84A3F;border:1.5px solid #B84A3F;border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;white-space:nowrap">Desactivar</button>':'')
         +'</div>';
@@ -5411,6 +5426,10 @@ function promoCrear(btn){
   var val=parseFloat((document.getElementById('pm-val')||{}).value)||0;
   var val2=parseFloat((document.getElementById('pm-val2')||{}).value)||0;
   var d1=(document.getElementById('pm-d1')||{}).value||'', d2=(document.getElementById('pm-d2')||{}).value||'';
+  var grupo=((document.getElementById('pm-grupo')||{}).value||'').trim();
+  var minU=Math.max(1,Math.round(parseFloat((document.getElementById('pm-min')||{}).value)||1));
+  var porU=v.mech==='$'&&!!(document.getElementById('pm-poru')||{}).checked;
+  if(minU>1&&!v.cods.length){ toast('⚠️ El mínimo de unidades necesita códigos','#C9A227'); return; }
   if(!nom.trim()||!d1||!d2){ toast('⚠️ Nombre y las dos fechas','#C9A227'); return; }
   if(v.mech==='%'&&(val<=0||val>100)){ toast('⚠️ El % debe estar entre 1 y 100','#C9A227'); return; }
   if(v.mech==='$'&&(val<=0||!v.cods.length)){ toast('⚠️ Monto $ y al menos un código','#C9A227'); return; }
@@ -5418,7 +5437,7 @@ function promoCrear(btn){
   if(v.mech==='PACK'&&(val<=0||v.cods.length!==1||Math.round(val2)<1||Math.round(val2)>6)){ toast('⚠️ Precio especial, sesiones (1-6) y exactamente 1 paquete','#C9A227'); return; }
   btn.disabled=true; btn.textContent='⏳ Creando...';
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'promoCrear', nombre:nom, mecanismo:v.mech, valor:val, valor2:val2, codigos:v.cods, desde:d1, hasta:d2, token:window._token||'', usuario:CU?CU.name:'—'})})
+    body:JSON.stringify({accion:'promoCrear', nombre:nom, mecanismo:v.mech, valor:val, valor2:val2, codigos:v.cods, desde:d1, hasta:d2, grupo:grupo, min:minU, porUnidad:porU, token:window._token||'', usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
   .then(function(dd){
     btn.disabled=false; btn.textContent='🎉 Crear promo';
