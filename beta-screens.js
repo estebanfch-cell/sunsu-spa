@@ -1505,7 +1505,7 @@ function _paqDuplicados(L){
 }
 function _paqTarjeta(p, sel){
   var tot=Number(p.total)||3, us=_paqUsadas(p);
-  return '<div style="flex:1;min-width:150px;border:1.5px solid '+(sel?'var(--lavender)':'#E4DDF2')+';border-radius:10px;padding:8px 10px;background:white;font-size:0.72rem;line-height:1.45">'
+  return '<div style="flex:1 1 0;min-width:120px;border:1.5px solid '+(sel?'var(--lavender)':'#E4DDF2')+';border-radius:10px;padding:8px 10px;background:white;font-size:0.72rem;line-height:1.45">'
     +'<b style="color:var(--navy)">'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b>'+(p.anulado?' <span style="color:#B86B6B;font-weight:800">ANULADO</span>':'')+'<br>'
     +_tkEsc(p.paquete||p.sku||'')+'<br>Compra: '+_tkEsc(_paqFecha(p)||'—')+'<br>Usadas: <b>'+us+'/'+tot+'</b>'+(p.completo||us>=tot?' · completo':'')+'<br>'
     +'Vendió: '+_tkEsc(p.vendidoPor||'—')+(p.factura?'<br>Factura: '+_tkEsc(String(p.factura).replace(/\.0+$/,'')):'')+(p.ticketOrigen?'<br>Ticket: '+_tkEsc(p.ticketOrigen):'')+'</div>';
