@@ -12,6 +12,7 @@ import {
 import { claveIdentidad, clavesDe } from "./clientes_alias.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
+import { cargarPreciosConsig, resolverPrecio } from "./consig_precios.ts";
 
 export const BUFFER_RESTOCK = 0.2;
 
@@ -873,6 +874,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   const buffer = bufferDe(p.buffer);
   const prods = await db.all("erp_productos");
   const porSkuProd = new Map(prods.map((r) => [skuCode(s(r.sku)), r]));
+  const precios = await cargarPreciosConsig(db, familia);
   const stock = await db.all("erp_stock");
   const ventaId = "11111111-1111-4111-8111-111111111111";
   // TK27: lo que está en la bodega CONSIGNACION también es stock en consignación (Venta + Consignación).
@@ -911,9 +913,11 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     const v = vendido.get(sku) || 0;
     const cns = consumido.get(sku) || 0;
     const paga = v + cns;
-    const compra = n(pr.costo_promedio);
+    const res = precios.get(sku) || resolverPrecio(sku, { costo: n(pr.costo_promedio) });
+    const compra = n(res.precio);
     items.push({
       sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, consumido: cns, compra,
+      precioFuente: res.fuente, ocNumero: res.oc_numero || "",
       sugerido: paga > 0 ? Math.ceil(paga * (1 + buffer)) : 0,
       subtotal: round2(paga * compra),
     });
@@ -923,13 +927,15 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     if (vistos.has(sku)) continue;
     const cns = consumido.get(sku) || 0;
     const paga = v + cns;
-    items.push({ sku, nombre: sku, stock: 0, vendido: v, consumido: cns, compra: 0, sugerido: Math.ceil(paga * (1 + buffer)), subtotal: 0 });
+    const res = precios.get(sku) || resolverPrecio(sku, { costo: 0 });
+    items.push({ sku, nombre: sku, stock: 0, vendido: v, consumido: cns, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: Math.ceil(paga * (1 + buffer)), subtotal: round2(paga * n(res.precio)) });
     vistos.add(sku);
   }
   for (const [sku, cns] of consumido) {
     if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     if (vistos.has(sku)) continue;
-    items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, compra: 0, sugerido: Math.ceil(cns * (1 + buffer)), subtotal: 0 });
+    const res = precios.get(sku) || resolverPrecio(sku, { costo: 0 });
+    items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: Math.ceil(cns * (1 + buffer)), subtotal: round2(cns * n(res.precio)) });
   }
   items.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
   const fact = items.filter((it) => n(it.vendido) + n(it.consumido) > 0);

@@ -16,6 +16,7 @@ import { BODEGA_CABINA, BODEGA_CASA, BODEGA_CONSIGNACION, BODEGA_VENTA, runErp }
 import { crearActa } from "./actas_api.ts";
 import { listaProductos } from "./productos_api.ts";
 import { consigEfectiva, famsConsig } from "./consig_config.ts";
+import { cargarPreciosConsig, ocLegacyDelPeriodo } from "./consig_precios.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const soloAdmin = (ses: Ses): Row | null => esAdmin(ses.rol) ? null : { error: "Solo administradores" };
@@ -52,13 +53,20 @@ async function stockConsig(ctx: Ctx, ses: Ses, familia: string): Promise<Row[]> 
     const f = fila.get(s(p.id)); if (!f) continue;
     const g = (f.porGrupo || {}) as Row;
     const consignacion = round2(n(g.BCONSIG)), venta = round2(n(g.CONSIGNACION)), cabina = round2(n(g.CABINA)), casa = round2(n(g.OFICINA));
-    out.push({ producto_id: s(p.id), sku, nombre: s(p.nombre), consignacion, venta, cabina, casa, fuera: round2(venta + cabina + casa), total: consignacion, fuente: f.stockFuente || {} });
+    // En Sunsu = bodega CONSIGNACION + lo que todavía está en Venta (el stock del sistema viejo).
+    // La bodega CONSIGNACION empieza en 0 hasta el «Conteo inicial»; esas unidades no son «fuera» de consignación.
+    const enSunsu = round2(consignacion + venta);
+    out.push({ producto_id: s(p.id), sku, nombre: s(p.nombre), consignacion, venta, cabina, casa, enSunsu, fuera: round2(cabina + casa), total: enSunsu, fuente: f.stockFuente || {} });
   }
   return out.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
 }
 function notaStock(stock: Row[]): string {
+  const venta = stock.filter((x) => n(x.venta) > 0 && n(x.consignacion) === 0).length;
   const fuera = stock.filter((x) => n(x.fuera) > 0).length;
-  return fuera ? `${fuera} producto(s) todavía tienen stock en Venta / Cabinas / Casa: pásalo con «Conteo inicial consignación».` : "";
+  const bits = [];
+  if (venta) bits.push(`${venta} producto(s) tienen el stock de consignación todavía en Venta (el del sistema viejo): la columna «En consignación» ya lo suma. Si quieres pasarlo a la bodega Consignación, usa «Conteo inicial consignación».`);
+  if (fuera) bits.push(`${fuera} producto(s) tienen stock en Cabinas / Casa.`);
+  return bits.join(" ");
 }
 function periodoDe(o: Row): { desde: string; hasta: string } {
   let snap: Row = {};
@@ -92,10 +100,16 @@ extend("cns_calc", "any", async (p, ctx, ses) => {
     .sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)))
     .map((c) => ({ fecha: s(c.fecha), sku: skuCode(s(c.sku)), producto: nomDe.get(skuCode(s(c.sku))) || skuCode(s(c.sku)), cantidad: n(c.cantidad), costo: round2(n(c.costo_unit)), origen: /apertura:/.test(s(c.nota)) ? "📦 Abrir producto" : s(c.transferencia_id) ? "🔁 Transferencia a cabina" : "Consumo", detalle: s(c.nota).replace(/\s*·?\s*apertura:[0-9a-f-]+/i, ""), por: s(c.creado_por) }));
   const historial = ocs.map((o) => ({ id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), total: n(o.total), ...periodoDe(o) })).sort((a, b) => s(b.desde).localeCompare(s(a.desde)));
+  let ordenes: Row[] = [];
+  try { ordenes = await todas(ctx, "ordenes_compra"); } catch { ordenes = []; }
+  const ocLegacy = ocLegacyDelPeriodo(ordenes, s(prov.familia), s(r.qLabel));
+  const precios = await cargarPreciosConsig(ctx.db, s(prov.familia));
   return {
     ok: true, proveedor: prov, familia: prov.familia, desde: r.ini, hasta: r.fin, label: r.qLabel,
     items, fact: items.filter((it) => n(it.vendido) + n(it.consumido) > 0), totales: r.totales,
     oc: oc ? { id: s(oc.id), numero: s(oc.numero), total: n(oc.total) } : null,
+    ocLegacy: ocLegacy ? { numero: s(ocLegacy.numero), fecha: s(ocLegacy.fecha), total: n(ocLegacy.total), subtotal: n(ocLegacy.subtotal) } : null,
+    precios: [...precios.values()].sort((a, b) => a.sku.localeCompare(b.sku)),
     restock: restock ? { id: s(restock.id), numero: s(restock.numero), lineas: restock.lineas, estado: s(restock.estado), fecha: s(restock.created_at) } : null,
     stock, stockNota: notaStock(stock), bodegaConsig: (await todas(ctx, "erp_bodegas")).some((b) => s(b.id) === BODEGA_CONSIGNACION),
     consumos, historial, restocks: rst.map((x) => ({ id: s(x.id), numero: s(x.numero), desde: s(x.desde), hasta: s(x.hasta), estado: s(x.estado), oc_id: s(x.oc_id) })),
@@ -111,6 +125,10 @@ extend("cns_crear_oc", "any", async (p, ctx, ses) => {
   if (r.error) return r;
   const ya = (await todas(ctx, "erp_oc")).find((o) => o.proveedor_id === prov.id && s(o.tipo) === "consignacion" && s(o.estado) !== "cancelada" && periodoDe(o).desde === r.ini && periodoDe(o).hasta === r.fin);
   if (ya) return { error: `Ya existe ${s(ya.numero)} para este periodo`, id: s(ya.id) };
+  let ordenes: Row[] = [];
+  try { ordenes = await todas(ctx, "ordenes_compra"); } catch { ordenes = []; }
+  const yaLegacy = ocLegacyDelPeriodo(ordenes, s(prov.familia), s(r.qLabel));
+  if (yaLegacy) return { error: `Ya existe ${s(yaLegacy.numero)} para este periodo (enviada el ${s(yaLegacy.fecha)})`, numero: s(yaLegacy.numero) };
   const fact = ((r.fact || []) as Row[]);
   if (!fact.length) return { error: "No hay ventas de productos en consignación en este periodo" };
   const out = await crearOc(ctx, ses, {
@@ -120,6 +138,7 @@ extend("cns_crear_oc", "any", async (p, ctx, ses) => {
     snap: { periodo: r.qLabel, familia: prov.familia },
   });
   if (out.ok) {
+    await upsertPreciosDeFact(ctx, actorOf(ses), s(prov.familia), prov.id, s(out.numero), fact);
     for (const x of (await todas(ctx, "beta_consig_restock")).filter((x) => s(x.proveedor_id) === prov.id && s(x.desde) === s(r.ini) && s(x.hasta) === s(r.fin) && !s(x.oc_id))) {
       await ctx.db.write(actorOf(ses), "beta_consig_restock", "update", { id: x.id }, { oc_id: out.id });
       // TK27: las actas de lo ya recibido de ese restock pasan a verse en la OC.
@@ -311,4 +330,48 @@ extend("cns_conteo_transferir", "any", async (p, ctx, ses) => {
   for (const b of beta) await ctx.db.write(actor, "beta_stock_movimientos", "insert", {}, b);
   await logAccion(ctx.db, actor, "CONSIG CONTEO INICIAL", `${numero} · ${s(prov.nombre)} · ${log.join(" · ")}`);
   return { ok: true, numero, n: log.length };
+});
+
+async function upsertPreciosDeFact(ctx: Ctx, actor: string, familia: string, proveedorId: unknown, ocNumero: string, fact: Row[]): Promise<void> {
+  let rows: Row[] = [];
+  try { rows = await todas(ctx, "beta_consig_precios"); } catch { return; }
+  for (const it of fact) {
+    const sku = skuCode(s(it.sku));
+    const precio = n(it.compra);
+    if (!sku || !(precio > 0)) continue;
+    const prev = rows.find((r) => s(r.familia).toUpperCase() === familia.toUpperCase() && skuCode(s(r.sku)) === sku);
+    if (prev && s(prev.fuente) === "manual") continue;
+    const row = { familia: familia.toUpperCase(), sku, producto_id: s(it.producto_id) || null, proveedor_id: proveedorId || null, precio, fuente: "oc", oc_numero: ocNumero, actualizado_por: actor, updated_at: ctx.now.toISOString() };
+    if (prev) await ctx.db.write(actor, "beta_consig_precios", "update", { id: prev.id }, row);
+    else await ctx.db.write(actor, "beta_consig_precios", "insert", {}, { id: crypto.randomUUID(), ...row, created_at: ctx.now.toISOString() });
+  }
+}
+
+extend("cns_precios_guardar", "any", async (p, ctx, ses) => {
+  const no = soloAdmin(ses); if (no) return no;
+  const actor = actorOf(ses);
+  const provs = await provsConsig(ctx);
+  const prov = provs.find((x) => x.id === s(p.proveedor_id));
+  if (!prov) return { error: "Elige un proveedor en consignación" };
+  const prods = await todas(ctx, "erp_productos");
+  const porSku = new Map(prods.map((x) => [skuCode(s(x.sku)), x]));
+  let rows: Row[] = [];
+  try { rows = await todas(ctx, "beta_consig_precios"); } catch { return { error: "Falta la tabla de precios de consignación (20261118_tk70_consig_precios.sql)" }; }
+  const out: Row[] = [];
+  for (const l of (Array.isArray(p.precios) ? p.precios : []) as Row[]) {
+    const sku = skuCode(s(l.sku));
+    const precio = n(l.precio);
+    if (!sku || !sku.startsWith(s(prov.familia) + "-")) return { error: `SKU inválido: ${sku || "(vacío)"}` };
+    if (!(precio > 0)) return { error: `${sku}: el precio de consignación tiene que ser mayor a 0` };
+    const prod = porSku.get(sku);
+    const prev = rows.find((r) => s(r.familia).toUpperCase() === s(prov.familia).toUpperCase() && skuCode(s(r.sku)) === sku);
+    const row = { familia: s(prov.familia).toUpperCase(), sku, producto_id: prod ? s(prod.id) : null, proveedor_id: prov.id, precio, fuente: "manual", oc_numero: prev ? s(prev.oc_numero) : null, actualizado_por: actor, updated_at: ctx.now.toISOString() };
+    const saved = prev
+      ? await ctx.db.write(actor, "beta_consig_precios", "update", { id: prev.id }, row)
+      : await ctx.db.write(actor, "beta_consig_precios", "insert", {}, { id: crypto.randomUUID(), ...row, created_at: ctx.now.toISOString() });
+    out.push(saved || row);
+  }
+  if (!out.length) return { error: "No hay precios para guardar" };
+  await logAccion(ctx.db, actor, "CONSIG PRECIO", `${s(prov.nombre)} · ${out.map((x) => `${s(x.sku)} $${n(x.precio)}`).join(" · ")}`);
+  return { ok: true, n: out.length, precios: out };
 });
