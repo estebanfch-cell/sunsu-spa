@@ -9,6 +9,12 @@ import { vendeDesdeCabina } from "./ventas.ts";
 export const FAM_CONSIG_DEF = ["HT", "AS", "ML", "PH", "JN"];
 /** Familia (código del proveedor) de un SKU: HT-007 → HT. */
 export function famDe(sku: string): string { const m = skuCode(s(sku)).match(/^([A-Z]{2,6})-/); return m ? m[1] : ""; }
+/** Igual que famsConsig pero con la db directa (erp.ts no tiene ctx). */
+export async function famsConsigDb(db: { all: (t: string) => Promise<Row[]> }): Promise<Set<string>> {
+  let f: Row[] | null; try { f = await db.all("beta_proveedores_ficha"); } catch { f = null; }
+  if (!f || !f.length) return new Set(FAM_CONSIG_DEF);
+  return new Set(f.filter((r) => r.consignacion === true).map((r) => s(r.familia).toUpperCase()));
+}
 export async function fichasProv(ctx: Ctx): Promise<Row[] | null> { try { return await ctx.db.all("beta_proveedores_ficha"); } catch { return null; } }
 /** Familias con consignación ON. */
 export async function famsConsig(ctx: Ctx): Promise<Set<string>> {

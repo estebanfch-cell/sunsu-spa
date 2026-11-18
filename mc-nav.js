@@ -42,7 +42,7 @@
         ["tickets", "Tickets", "#/m/tickets"],
         ["cotizaciones_cliente", "Cotizaciones", "#/m/cotizaciones_cliente"],
         ["clientes", "Registro de clientas", "#/m/clientes"],
-        ["agenda", "Agenda", "#/m/agenda"],
+        // Agenda solo en Spa (Emilia 18/11: una sola Agenda).
       ] },
       { id: "protocolos", label: "Protocolos", items: [
         ["cabina", "Protocolos", "#/m/mc/protocolos"],
@@ -186,7 +186,12 @@
   var TABS = { ventas: 1, inventario: 1, compras: 1 };
   function grupos() {
     var out = [];
-    catalogo().concat(propios()).forEach(function (g) {
+    // Orden (Emilia 18/11): Ventas primero, luego Spa; después el resto como en MineCore.
+    var todos = catalogo().concat(propios());
+    var spaG = todos.filter(function (g) { return g.id === "spa"; });
+    todos = todos.filter(function (g) { return g.id !== "spa"; });
+    Array.prototype.splice.apply(todos, [1, 0].concat(spaG));
+    todos.forEach(function (g) {
       var vis = g.items.filter(function (it) { return ok(it[0]); }).map(function (it) { var c = it.slice(); c[1] = conEmoji(it[1], emojiRuta(it[2])); return c; });
       if (vis.length) out.push({ id: g.id, label: conEmoji(g.label, EMO_GRUPO[g.id]), items: vis });
     });
