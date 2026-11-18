@@ -2,7 +2,7 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, bajasDe, nextSheet } from "./lib.ts";
-import { ecuadorParts, n, s, type Row } from "./domain.ts";
+import { ecuadorParts, n, s, normNombre, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
   diasDeVacacion, saldoVacaciones, validarSolicitudVacacion,
@@ -118,6 +118,114 @@ export async function horasEnRango(ctx: Ctx, nombre: string, desde: string, hast
   const [y, m] = desde.split("-").map(Number);
   return nominaDe(ctx, nombre, y, m, desde, hasta);
 }
+
+
+export function hmDeMinutos(min: number): { h: number; min: number; texto: string; totalMin: number } {
+  const t = Math.max(0, Math.round(Number(min) || 0));
+  const h = Math.floor(t / 60);
+  const m = t % 60;
+  const texto = h === 0 ? `${m} min` : (m === 0 ? `${h} h` : `${h} h ${m} min`);
+  return { h, min: m, texto, totalMin: t };
+}
+
+export function minutosDeNomina(horas: NominaHoras): { trabajadas: number; normales: number; extra50: number; extra100: number } {
+  const dias = horas.dias || [];
+  if (dias.length) {
+    let worked = 0, ordinary = 0, e50 = 0, e100 = 0;
+    for (const d of dias) {
+      ordinary += Number(d.ordinaryMin) || 0;
+      e50 += Number(d.supl50Min || d.suplMin) || 0;
+      e100 += (Number(d.supl100Min || d.extrMin) || 0) + (Number(d.extraordinariasMin || d.descMin) || 0);
+      worked += Number(d.workedMin) || 0;
+    }
+    return { trabajadas: worked || ordinary + e50 + e100, normales: ordinary, extra50: e50, extra100: e100 };
+  }
+  return {
+    trabajadas: Math.round((horas.hrsTrabajadas || 0) * 60),
+    normales: Math.round((horas.hrsOrdinarias || 0) * 60),
+    extra50: Math.round((horas.hrsSupl || 0) * 60),
+    extra100: Math.round(((horas.hrsExtr || 0) + (horas.hrsDesc || 0)) * 60),
+  };
+}
+
+export function bloqueDeHoras(horas: NominaHoras) {
+  const m = minutosDeNomina(horas);
+  return {
+    total: hmDeMinutos(m.trabajadas),
+    normales: hmDeMinutos(m.normales),
+    extra50: hmDeMinutos(m.extra50),
+    extra100: hmDeMinutos(m.extra100),
+    atrasoMin: horas.atrasoMin || 0,
+    faltas: horas.faltas || 0,
+    diasAsistidos: horas.diasPropios || 0,
+    hayDatos: horas.hayDatos,
+  };
+}
+
+function ymdUtc(dt: Date): string {
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function lunesADomingo(ymd: string): { desde: string; hasta: string } {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay();
+  dt.setUTCDate(dt.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  const fin = new Date(dt);
+  fin.setUTCDate(fin.getUTCDate() + 6);
+  return { desde: ymdUtc(dt), hasta: ymdUtc(fin) };
+}
+
+export function limitesMes(ymd: string): { desde: string; hasta: string; anio: number; mes: number } {
+  const [y, m] = ymd.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    desde: `${y}-${String(m).padStart(2, "0")}-01`,
+    hasta: `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`,
+    anio: y, mes: m,
+  };
+}
+
+function idHorasMes(nombre: string, anio: number, mes: number): string {
+  return `${normNombre(nombre)}-${anio}-${String(mes).padStart(2, "0")}`;
+}
+
+function histPub(r: Row) {
+  return {
+    anio: n(r.anio), mes: n(r.mes),
+    total: hmDeMinutos(n(r.min_trabajadas)),
+    normales: hmDeMinutos(n(r.min_normales)),
+    extra50: hmDeMinutos(n(r.min_extra50)),
+    extra100: hmDeMinutos(n(r.min_extra100)),
+    atrasoMin: n(r.atraso_min), faltas: n(r.faltas),
+    diasAsistidos: n(r.dias_asistidos),
+    cerrado: r.cerrado === true,
+    actualizado: s(r.actualizado_at).slice(0, 10),
+  };
+}
+
+async function guardarHistorialMes(ctx: Ctx, ses: Ses, nombre: string, ymd: string, horas: NominaHoras) {
+  const lim = limitesMes(ymd);
+  const hoy = ecuadorParts(ctx.now);
+  const cerrado = lim.anio < hoy.y || (lim.anio === hoy.y && lim.mes < hoy.m);
+  const b = bloqueDeHoras(horas);
+  const id = idHorasMes(nombre, lim.anio, lim.mes);
+  const fila = {
+    id, nombre, anio: lim.anio, mes: lim.mes,
+    min_trabajadas: b.total.totalMin, min_normales: b.normales.totalMin,
+    min_extra50: b.extra50.totalMin, min_extra100: b.extra100.totalMin,
+    atraso_min: b.atrasoMin, faltas: b.faltas, dias_asistidos: b.diasAsistidos,
+    cerrado, actualizado_por: actorOf(ses), actualizado_at: ctx.now.toISOString(),
+  };
+  const ya = (await ctx.db.all("beta_asistencia_horas_mes").catch(() => [] as Row[])).find((r) => s(r.id) === id || (mismo(s(r.nombre), nombre) && n(r.anio) === lim.anio && n(r.mes) === lim.mes));
+  if (ya) await ctx.db.write(actorOf(ses), "beta_asistencia_horas_mes", "update", { id: ya.id }, fila);
+  else await ctx.db.write(actorOf(ses), "beta_asistencia_horas_mes", "insert", {}, fila);
+  await ctx.db.write(actorOf(ses), "beta_asistencia_horas_log", "insert", {}, {
+    nombre, anio: lim.anio, mes: lim.mes, min_trabajadas: b.total.totalMin, cerrado,
+    accion: ya ? "actualizar" : "guardar", por: actorOf(ses), created_at: ctx.now.toISOString(),
+  }).catch(() => null);
+}
+
 
 async function auditar(ctx: Ctx, ses: Ses, accion: string, extra: R) {
   await ctx.db.write(actorOf(ses), "asistencia_auditoria", "insert", {}, {
@@ -565,33 +673,82 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
   const matriz = await matrizDe(ctx.db);
   if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
   const nombre = (!esAdmin(ses.rol) || propio(ses, matriz)) ? ses.name : (s(p.nombre) || ses.name);
-  const ancla = s(p.fecha) || ecuadorParts(ctx.now).ymd;
+  const hoyYmd = ecuadorParts(ctx.now).ymd;
+  const ancla = s(p.fecha) || hoyYmd;
   const vista = s(p.vista || "mes") || "mes";
-  const [y, m, d] = ancla.split("-").map(Number);
   let desde = ancla, hasta = ancla;
   if (vista === "semana") {
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    const dow = dt.getUTCDay();
-    dt.setUTCDate(dt.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
-    desde = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
-    const fin = new Date(dt);
-    fin.setUTCDate(fin.getUTCDate() + 6);
-    hasta = `${fin.getUTCFullYear()}-${String(fin.getUTCMonth() + 1).padStart(2, "0")}-${String(fin.getUTCDate()).padStart(2, "0")}`;
+    const semVista = lunesADomingo(ancla);
+    desde = semVista.desde; hasta = semVista.hasta;
   } else if (vista === "mes") {
-    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    desde = `${y}-${String(m).padStart(2, "0")}-01`;
-    hasta = `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+    const mesVista = limitesMes(ancla);
+    desde = mesVista.desde; hasta = mesVista.hasta;
   }
-  const horas = await horasEnRango(ctx, nombre, desde, hasta);
+  const semHoy = lunesADomingo(hoyYmd);
+  const mesHoy = limitesMes(hoyYmd);
+  const [horas, horasHoy, horasSem, horasMes] = await Promise.all([
+    horasEnRango(ctx, nombre, desde, hasta),
+    horasEnRango(ctx, nombre, hoyYmd, hoyYmd),
+    horasEnRango(ctx, nombre, semHoy.desde, semHoy.hasta),
+    horasEnRango(ctx, nombre, mesHoy.desde, mesHoy.hasta),
+  ]);
+  let rango: ReturnType<typeof bloqueDeHoras> | null = null;
+  const rDesde = s(p.desde).slice(0, 10), rHasta = s(p.hasta).slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rDesde) && /^\d{4}-\d{2}-\d{2}$/.test(rHasta) && rHasta >= rDesde) {
+    rango = bloqueDeHoras(await horasEnRango(ctx, nombre, rDesde, rHasta));
+  }
   const feriados = await feriadosDe(ctx);
-  const ferSet = new Set(feriados);
+  const [y, m] = ancla.split("-").map(Number);
   const historialMeses: string[] = [];
   for (let k = 0; k < 12; k++) {
     const dt = new Date(Date.UTC(y, m - 1 - k, 1));
     historialMeses.push(`${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`);
   }
+  const enVista = p.preview === true || Boolean(p.preview_uid);
+  if (!enVista) {
+    try {
+      await guardarHistorialMes(ctx, ses, nombre, hoyYmd, horasMes);
+      const prev = new Date(Date.UTC(mesHoy.anio, mesHoy.mes - 2, 1));
+      const prevYmd = ymdUtc(prev);
+      const horasPrev = await horasEnRango(ctx, nombre, limitesMes(prevYmd).desde, limitesMes(prevYmd).hasta);
+      await guardarHistorialMes(ctx, ses, nombre, prevYmd, horasPrev);
+    } catch { /* la tabla puede no existir todavía; el dashboard igual muestra el cálculo vivo */ }
+  }
+  let historial: ReturnType<typeof histPub>[] = [];
+  try {
+    historial = (await ctx.db.all("beta_asistencia_horas_mes"))
+      .filter((r) => mismo(s(r.nombre), nombre))
+      .sort((a, b) => (n(b.anio) * 100 + n(b.mes)) - (n(a.anio) * 100 + n(a.mes)))
+      .slice(0, 18)
+      .map(histPub);
+  } catch { historial = []; }
+  let color = "#E7DBFF";
+  try {
+    const { mapaColores, PALETA } = await import("./colores_api.ts");
+    const { personas } = await import("./usuario_permisos_api.ts");
+    const gente = await personas(ctx).catch(() => [{ nombre }]);
+    const guardados = await ctx.db.all("beta_permisos_usuario").catch(() => [] as Row[]);
+    const mapa = mapaColores(gente, guardados);
+    color = (mapa[normNombre(nombre)] || Object.values(mapa)[0])?.color || PALETA[0];
+  } catch { /* paleta por defecto */ }
+  let mostrar = nombre;
+  try {
+    const { nombreMostrar, aliasesDe } = await import("./personas_unir.ts");
+    mostrar = nombreMostrar(nombre, await aliasesDe(ctx));
+  } catch { mostrar = nombre; }
+  const permisos = (await ctx.db.all("permisos").catch(() => [] as Row[]))
+    .filter((r) => !r.borrado_at && mismo(s(r.empleada), nombre))
+    .filter((r) => !(enPrueba(ctx.db) === false && s(r.origin) === "test"))
+    .map(permisoPub)
+    .sort((a, b) => s(b.desde).localeCompare(s(a.desde)))
+    .slice(0, 24);
+  let vacaciones: { diasDisponibles: number; diasPendientes: number } | null = null;
+  try {
+    const sal = await saldoDe(ctx, nombre);
+    vacaciones = { diasDisponibles: sal.diasDisponibles, diasPendientes: sal.diasPendientes };
+  } catch { vacaciones = null; }
   return {
-    ok: true, vista, fecha: ancla, desde, hasta, nombre,
+    ok: true, vista, fecha: ancla, desde, hasta, nombre, nombreMostrar: mostrar, color,
     feriados,
     dias: horas.dias || [],
     resumen: {
@@ -604,7 +761,18 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
       atrasoMin: horas.atrasoMin,
       faltas: horas.faltas,
     },
+    bloques: {
+      hoy: bloqueDeHoras(horasHoy),
+      semana: bloqueDeHoras(horasSem),
+      mes: bloqueDeHoras(horasMes),
+      rango,
+      rangoDesde: rDesde || "",
+      rangoHasta: rHasta || "",
+    },
     historialMeses,
+    historial,
+    permisos,
+    vacaciones,
     hayDatos: horas.hayDatos,
   };
 });

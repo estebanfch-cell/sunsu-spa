@@ -1130,11 +1130,46 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
     #rol-preview, .rol-oficial, .roles-grid { overflow-x: hidden; }
     .rol-card { height: auto; min-height: 160px; padding: 12px; }
   }
-  .asis-tabs { display: flex; gap: 6px; margin: 0 0 12px; }
+  .asis-tabs { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
   .asis-tabs .btn { min-width: 72px; }
   .asis-timer { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); font-size: .95rem; }
-  .asis-dia-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 9px; }
-  .asis-dia-grid .card { height: 130px; margin: 0; display: flex; flex-direction: column; }
+  #asis-dash { margin-top: 10px; }
+  #asis-dash > .card-title { margin-bottom: 8px; }
+  .asis-totales { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+  .asis-tot { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--asis-color, #e7dbff); min-width: 0; }
+  .asis-tot .k { font-size: 11px; letter-spacing: .02em; margin: 0; }
+  .asis-tot .v { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; margin: 2px 0 0; line-height: 1.2; }
+  .asis-desglose { font-size: 12px; color: var(--muted, #5b5b66); margin: 0 0 10px; }
+  .asis-rango { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; margin: 0 0 12px; }
+  .asis-rango label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; min-width: 0; }
+  .asis-rango input[type="date"] { width: 138px; max-width: 100%; }
+  .asis-cal { margin: 8px 0 10px; }
+  .asis-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .asis-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .asis-dow { font-size: 10px; text-align: center; color: var(--muted, #5b5b66); padding: 2px 0; }
+  .asis-celda { min-height: 52px; padding: 4px; border-radius: 8px; background: #f4f4f6; font-size: 11px; min-width: 0; overflow: hidden; }
+  .asis-celda.con { background: var(--asis-color, #e7dbff); }
+  .asis-celda.perm { box-shadow: inset 0 0 0 1.5px #7a6bb5; }
+  .asis-celda.fer { background: #fff3c4; }
+  .asis-celda.falta { background: #ffd6d6; }
+  .asis-celda.hoy { outline: 2px solid var(--navy, #1c2a4a); }
+  .asis-celda .n { font-weight: 700; display: block; }
+  .asis-celda .hm { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .asis-celda .tag { display: block; font-size: 10px; opacity: .85; }
+  .asis-celda.vacio { background: transparent; }
+  .asis-dias { display: flex; flex-direction: column; gap: 4px; }
+  .asis-dia { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 6px; align-items: baseline; padding: 6px 8px; border-radius: 8px; background: #f7f7f8; font-size: 13px; }
+  .asis-dia .hm { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .asis-priv { margin-top: 10px; }
+  .asis-priv .asis-dia { background: #fff; border: 1px solid #ececef; }
+  .asis-hist-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .asis-hist-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 6px 8px; border-radius: 8px; background: #f7f7f8; font-size: 13px; }
+  @media (max-width: 420px) {
+    .asis-totales { grid-template-columns: 1fr; }
+    .asis-celda { min-height: 46px; padding: 3px; font-size: 10px; }
+    .asis-dia { grid-template-columns: 76px minmax(0, 1fr); }
+    .asis-dia .hm { grid-column: 1 / -1; }
+  }
 
 </style>
 </head>
@@ -1588,11 +1623,17 @@ function previewApi(accion, body) {
   if (accion === "asis_periodo") return { ok: true, personas: [{ nombre: body.nombre || "Emilia", hrsTrabajadas: 8, hrsOrdinarias: 8, hrsAlmuerzo: 1, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasPropios: 1, diasJibble: 0, hayDatos: true }] };
   if (accion === "asis_calendario") {
     const fecha = body.fecha || "2026-11-18";
+    const hm = (min) => { const tot = Math.max(0, Math.round(Number(min) || 0)); const h = Math.floor(tot / 60), m = tot % 60; return { h, min: m, texto: h === 0 ? m + " min" : (m === 0 ? h + " h" : h + " h " + m + " min"), totalMin: tot }; };
+    const bloque = { total: hm(480), normales: hm(480), extra50: hm(0), extra100: hm(0), atrasoMin: 0, faltas: 0, diasAsistidos: 1, hayDatos: true };
     return { ok: true, vista: body.vista || "mes", fecha, desde: "2026-11-01", hasta: "2026-11-30",
+      nombre: "Emilia", nombreMostrar: "Emilia", color: "#E7DBFF",
       feriados: ["2026-11-02","2026-11-03"],
       dias: [{ fecha, ordinaryMin: 480, suplMin: 0, extrMin: 0, descMin: 0, supl50Min: 0, supl100Min: 0, extraordinariasMin: 0, workedMin: 480, atrasoMin: 0, diaContado: true, fuente: "marcaje", esFeriado: false, esDescanso: false }],
       resumen: { diasAsistidos: 1, hrsNormales: 8, hrsSupl50: 0, hrsSupl100: 0, hrsExtraordinarias: 0, hrsTrabajadas: 8, atrasoMin: 0, faltas: 0 },
-      historialMeses: ["2026-11","2026-10","2026-09"], hayDatos: true };
+      bloques: { hoy: bloque, semana: bloque, mes: Object.assign({}, bloque, { total: hm(9600), diasAsistidos: 20 }), rango: body.desde && body.hasta ? bloque : null, rangoDesde: body.desde || "", rangoHasta: body.hasta || "" },
+      historialMeses: ["2026-11","2026-10","2026-09"],
+      historial: [{ anio: 2026, mes: 10, total: hm(9600), normales: hm(9600), extra50: hm(0), extra100: hm(0), cerrado: true, diasAsistidos: 20 }],
+      permisos: [], vacaciones: { diasDisponibles: 5, diasPendientes: 0 }, hayDatos: true };
   }
   if (accion === "asis_cierre_automatico") return { ok: true, cerrados: 0, detalle: [] };
   if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4 };
@@ -4027,29 +4068,114 @@ async function htmlPagoConfig() {
 function hHrs(min) {
   return Math.round((Number(min) || 0) / 60 * 100) / 100;
 }
+function hHm(min) {
+  const t = Math.max(0, Math.round(Number(min) || 0));
+  const h = Math.floor(t / 60), m = t % 60;
+  return h === 0 ? m + " min" : (m === 0 ? h + " h" : h + " h " + m + " min");
+}
+function minDia(d) {
+  if (!d) return 0;
+  if (d.workedMin) return Number(d.workedMin) || 0;
+  return (Number(d.ordinaryMin) || 0) + (Number(d.supl50Min || d.suplMin) || 0) + (Number(d.supl100Min || d.extrMin) || 0) + (Number(d.extraordinariasMin || d.descMin) || 0);
+}
+function htmlDesgloseHoras(b) {
+  if (!b) return "";
+  const parts = [];
+  if ((b.normales && b.normales.totalMin) > 0) parts.push("Horas normales: " + esc(b.normales.texto));
+  if ((b.extra50 && b.extra50.totalMin) > 0) parts.push("Horas extra 50%: " + esc(b.extra50.texto));
+  if ((b.extra100 && b.extra100.totalMin) > 0) parts.push("Horas extra 100%: " + esc(b.extra100.texto));
+  if ((b.atrasoMin || 0) > 0) parts.push("Atraso: " + esc(b.atrasoMin) + " min");
+  return parts.length ? `<div class="asis-desglose">${parts.join(" · ")}</div>` : "";
+}
+function etiquetaDiaAsis(d) {
+  if (d.esFeriado) return "Feriado";
+  if (d.fuente === "permiso") return "Permiso";
+  if (d.falta) return "Falta";
+  if (d.esDescanso && (d.workedMin || 0) > 0) return "Descanso trabajado";
+  if ((d.workedMin || d.diaContado)) return "Asistió";
+  return "";
+}
+function htmlAsisMesGrid(cal, fecha) {
+  const ymd = fecha || cal.fecha || "";
+  const Y = Number(String(ymd).slice(0, 4));
+  const M = Number(String(ymd).slice(5, 7));
+  if (!Y || !M) return "";
+  const mesesNom = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const first = new Date(Date.UTC(Y, M - 1, 1));
+  const start = (first.getUTCDay() + 6) % 7;
+  const daysIn = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+  const byFecha = {};
+  (cal.dias || []).forEach((d) => { byFecha[String(d.fecha || "").slice(0, 10)] = d; });
+  const ferSet = new Set((cal.feriados || []).map((f) => String(f.fecha || f).slice(0, 10)));
+  const prev = new Date(Date.UTC(Y, M - 2, 1));
+  const next = new Date(Date.UTC(Y, M, 1));
+  const prevYmd = prev.toISOString().slice(0, 7) + "-01";
+  const nextYmd = next.toISOString().slice(0, 7) + "-01";
+  const hoy = (typeof ymdGuayaquil === "function" ? ymdGuayaquil() : "");
+  const dow = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map((d) => `<div class="asis-dow">${d}</div>`).join("");
+  let cells = "";
+  for (let i = 0; i < start; i++) cells += '<div class="asis-celda vacio"></div>';
+  for (let d = 1; d <= daysIn; d++) {
+    const f = Y + "-" + String(M).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    const dia = byFecha[f];
+    const mins = minDia(dia);
+    const tag = dia ? etiquetaDiaAsis(dia) : (ferSet.has(f) ? "Feriado" : "");
+    const cls = ["asis-celda", mins > 0 ? "con" : "", tag === "Permiso" ? "perm" : "", (dia && dia.esFeriado) || ferSet.has(f) ? "fer" : "", dia && dia.falta ? "falta" : "", f === hoy ? "hoy" : ""].filter(Boolean).join(" ");
+    cells += `<div class="${cls}" title="${esc(f + (mins ? " · " + hHm(mins) : "") + (tag ? " · " + tag : ""))}"><span class="n">${d}</span>${mins ? `<span class="hm">${esc(hHm(mins))}</span>` : ""}${tag && !mins ? `<span class="tag">${esc(tag)}</span>` : ""}</div>`;
+  }
+  return `<div class="asis-cal">
+    <div class="asis-cal-nav">
+      <button type="button" class="btn ghost small" data-asis-mes="${esc(prevYmd)}" aria-label="Mes anterior">‹</button>
+      <b>${mesesNom[M - 1]} ${Y}</b>
+      <button type="button" class="btn ghost small" data-asis-mes="${esc(nextYmd)}" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="asis-grid">${dow}${cells}</div>
+  </div>`;
+}
 function htmlAsisCalendario(cal, vista, fecha) {
   if (!cal || cal.error) return cal && cal.error ? `<p class="err">${esc(cal.error)}</p>` : "";
-  const res = cal.resumen || {};
+  const b = cal.bloques || {};
+  const tit = cal.nombreMostrar || cal.nombre || "Tu asistencia";
   const tabs = ["dia","semana","mes"].map((v) => `<button class="btn ${vista===v?"":"ghost "}small" type="button" data-asis-vista="${v}">${v==="dia"?"Día":v==="semana"?"Semana":"Mes"}</button>`).join("");
   const meses = (cal.historialMeses || []).map((m) => `<option value="${esc(m+"-01")}" ${String(fecha||"").slice(0,7)===m?"selected":""}>${esc(m)}</option>`).join("");
-  const cards = [
-    ["Días que asististe", res.diasAsistidos ?? 0],
-    ["Normales", (res.hrsNormales ?? 0) + " h"],
-    ["Suplementarias +50%", (res.hrsSupl50 ?? 0) + " h"],
-    ["Nocturnas +100%", (res.hrsSupl100 ?? 0) + " h"],
-    ["Extraordinarias +100%", (res.hrsExtraordinarias ?? 0) + " h"],
-  ].map(([k,v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:1.2rem">${esc(v)}</div></div>`).join("");
-  const dias = (cal.dias || []).filter((d) => d.diaContado || d.falta || d.esFeriado || d.fuente==="permiso" || (d.workedMin||0)>0).map((d) => {
-    const marca = d.esFeriado ? "Feriado" : d.esDescanso && (d.workedMin||0)>0 ? "Extraordinaria" : d.fuente==="permiso" ? "Permiso" : d.falta ? "Falta" : "Asistió";
-    return `<div class="card"><div class="k">${esc(d.fecha)}</div><div class="note">${esc(marca)}</div><div class="note">N ${hHrs(d.ordinaryMin)} h · S50 ${hHrs(d.supl50Min||d.suplMin)} h · N100 ${hHrs(d.supl100Min||d.extrMin)} h · Ext ${hHrs(d.extraordinariasMin||d.descMin)} h</div></div>`;
+  const tot = (key, label, bloque) => `<div class="asis-tot"><div class="k">${esc(label)}</div><div class="v">${esc((bloque && bloque.total && bloque.total.texto) || "0 min")}</div></div>`;
+  const rangoTxt = b.rango ? `<div class="asis-tot"><div class="k">De ${esc(b.rangoDesde)} a ${esc(b.rangoHasta)}</div><div class="v">${esc(b.rango.total.texto)}</div></div>` : "";
+  const desgloseVista = vista === "dia" ? b.hoy : vista === "semana" ? b.semana : b.mes;
+  const listaDias = (cal.dias || []).filter((d) => d.diaContado || d.falta || d.esFeriado || d.fuente==="permiso" || minDia(d) > 0).map((d) => {
+    const marca = etiquetaDiaAsis(d);
+    const mins = minDia(d);
+    return `<div class="asis-dia"><div>${esc(d.fecha)}</div><div class="note">${esc(marca)}</div><div class="hm">${mins ? esc(hHm(mins)) : "—"}</div></div>`;
   }).join("");
-  return `<div class="card" style="margin-top:14px">
-    <div class="card-title">Tu asistencia</div>
+  const cuerpo = vista === "mes" ? htmlAsisMesGrid(cal, fecha) : `<div class="asis-dias">${listaDias || `<p class="note">Sin marcas en este periodo.</p>`}</div>`;
+  const vac = cal.vacaciones;
+  const vacLine = vac ? `<p class="note">Vacaciones: ${esc(vac.diasDisponibles ?? 0)} días disponibles${vac.diasPendientes ? " · " + esc(vac.diasPendientes) + " pendientes de aprobar" : ""}.</p>` : "";
+  const perms = (cal.permisos || []).map((p) => {
+    const rango = p.desde === p.hasta ? p.desde : (p.desde || "") + " – " + (p.hasta || "");
+    return `<div class="asis-dia"><div>${esc(rango)}</div><div class="note">${esc(p.tipo || "Permiso")} · ${esc(p.estado || "")}</div><div class="hm">${p.dias ? esc(p.dias) + " d" : (p.horas ? esc(p.horas) + " h" : "")}</div></div>`;
+  }).join("");
+  const histRows = (cal.historial || []).map((h) => {
+    const etiqueta = String(h.anio) + "-" + String(h.mes).padStart(2, "0");
+    return `<button class="asis-hist-row" type="button" data-asis-mes="${esc(etiqueta + "-01")}"><span>${esc(etiqueta)}${h.cerrado ? " · cerrado" : ""}</span><b>${esc((h.total && h.total.texto) || "0 min")}</b></button>`;
+  }).join("");
+  return `<div class="card" id="asis-dash" style="--asis-color:${esc(cal.color || "#E7DBFF")};margin-top:14px">
+    <div class="card-title">Horas de ${esc(tit)}</div>
+    <div class="asis-totales">${tot("hoy","Hoy", b.hoy)}${tot("semana","Esta semana", b.semana)}${tot("mes","Este mes", b.mes)}${rangoTxt}</div>
+    ${htmlDesgloseHoras(desgloseVista)}
+    <form id="f-asis-rango" class="asis-rango">
+      <label>Desde <input name="desde" type="date" value="${esc(b.rangoDesde || "")}" required></label>
+      <label>Hasta <input name="hasta" type="date" value="${esc(b.rangoHasta || "")}" required></label>
+      <button class="btn small" type="submit">Sumar rango</button>
+    </form>
     <div class="asis-tabs">${tabs}</div>
-    <div class="tools"><label>Historial <select id="asis-hist">${meses}</select></label></div>
-    <div class="grid">${cards}</div>
-    <div class="asis-dia-grid">${dias || `<p class="note">Sin marcas en este periodo.</p>`}</div>
-    <p class="note">Suplementarias: más de 8 h en un día laborable (+50%), tope 4 h/día y 12 h/semana. Entre 00:00 y 06:00 van al +100%. En tu día de descanso o un feriado, las horas son extraordinarias (+100%). Esto se verá en el rol más adelante; hoy solo se marca.</p>
+    ${cuerpo}
+    <div class="asis-priv">
+      <div class="card-title" style="margin-top:8px">Permisos y vacaciones</div>
+      ${vacLine}
+      ${perms || `<p class="note">Sin permisos en el registro. Se piden en <button class="btn ghost small" type="button" data-go="#/m/personal/permisos">Solicitar permiso</button>.</p>`}
+    </div>
+    <div class="tools" style="margin-top:10px"><label>Historial <select id="asis-hist">${meses}</select></label></div>
+    <div class="asis-hist-list">${histRows || `<p class="note">El mes que termina queda guardado aquí.</p>`}</div>
+    <p class="note">El total es lo que trabajaste. Las horas extra 50% (más de 8 h en un día laborable) y las horas extra 100% (noche, descanso o feriado) solo aparecen cuando hay. Cada mes se guarda como historial.</p>
   </div>`;
 }
 
@@ -4060,7 +4186,7 @@ async function renderAsistencia() {
   if (hoy.error) return fail(hoy);
   const vistaAsis = state.asisVista || "mes";
   const fechaAsis = state.asisFecha || hoy.fecha;
-  const cal = await api("asis_calendario", Object.assign({ vista: vistaAsis, fecha: fechaAsis }, ajena && state.persona ? { nombre: state.persona } : {}));
+  const cal = await api("asis_calendario", Object.assign({ vista: vistaAsis, fecha: fechaAsis, desde: state.asisDesde || "", hasta: state.asisHasta || "" }, ajena && state.persona ? { nombre: state.persona } : {}));
   const cfg = hoy.config || {};
   const dia = hoy.dia || {};
   const ixAs = window.SunsuInline;
@@ -4074,12 +4200,8 @@ async function renderAsistencia() {
     return `<div class="row"><div class="sku">${esc(hora)}</div><div class="name">${esc(etiquetaMarca(m.tipo))}${m.automatica ? " · Salida automática" : ""}</div><div class="meta">${m.tieneFoto ? `<button class="btn ghost small" type="button" data-foto="${esc(m.id)}">Ver selfie</button>` : ""} ${pedir}</div></div>`;
   };
   const marcas = (hoy.marcajes || []).filter((m) => !m.anulado).map((m) => marcaFila(m, true)).join("");
-  const cards = [
-    ["Atraso", (dia.atrasoMin || 0) + " min"],
-    ["Jornada", Math.round((dia.ordinaryMin || 0) / 60 * 100) / 100 + " h"],
-    ["Suplementarias", Math.round((dia.suplMin || 0) / 60 * 100) / 100 + " h"],
-    ["Estado", dia.abierto ? "Adentro" : (dia.diaContado ? "Cerrada" : "Sin marca")],
-  ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:22px">${esc(v)}</div></div>`).join("");
+  const estadoHoy = dia.abierto ? "Adentro" : (dia.diaContado ? "Jornada cerrada" : "Sin marca");
+  const chipHoy = `<p class="note">Hoy: ${esc(estadoHoy)}${(dia.atrasoMin || 0) > 0 ? " · atraso " + esc(dia.atrasoMin) + " min" : ""}.</p>`;
   const audit = (hoy.auditoria || []).map((a) => `<div class="row"><div class="sku">${esc(a.accion)}</div><div><div class="name">${esc(a.actor)}</div><div class="note">${esc(a.motivo || "")}</div></div><div class="meta">${esc(horaEc(a.ts))}</div></div>`).join("");
   const admin = state.admin ? `
     <p class="note">La geocerca, los feriados y los horarios del local se editan en <a href="#/m/configuracion">Configuración general</a>. Los horarios de cada persona están en <a href="#/m/personal/horarios">Horarios</a> y en <a href="#/m/personal/empleados">Empleados</a>.</p>
@@ -4107,15 +4229,13 @@ async function renderAsistencia() {
       <button class="btn ghost" type="button" id="asis-anular">Anular marca</button>
       <p class="err" id="f-err-corr"></p>
     </form>
-    <h2>Reporte del mes</h2>
+    <h2>Horas del equipo</h2>
     <form id="f-asis-mes"><label>Mes</label><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver horas</button></form>
-    <div id="asis-mes"></div>` : `
-    <h2>Mi mes</h2>
-    <form id="f-asis-mes"><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver mis horas</button></form>
-    <div id="asis-mes"></div>`;
+    <div id="asis-mes"></div>` : "";
   return sel + `
     <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 150)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
-    <div class="grid">${cards}</div>
+    ${htmlAsisCalendario(cal, vistaAsis, fechaAsis)}
+    ${chipHoy}
     ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
     ${!state.admin || hoy.empleada ? `<div class="tools">
       <button class="btn" type="button" data-marca="entrada">Entrar</button>
@@ -4124,10 +4244,8 @@ async function renderAsistencia() {
       <button class="btn" type="button" data-marca="salida">Salir</button>
     </div>
     <p class="note">Entrar abre la cámara frontal, tomas la foto y pulsas Registrar.</p>` : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`}
-    <h2>Hoy</h2>
+    <h2>Marcas de hoy</h2>
     <div class="list">${marcas || `<p class="note">Todavía no marcas hoy.</p>`}</div>
-    <p class="note">Los permisos y las vacaciones se piden en <button class="btn ghost small" type="button" data-go="#/m/personal/permisos">Solicitar permiso</button>.</p>
-    ${htmlAsisCalendario(cal, vistaAsis, fechaAsis)}
     ${admin}
     <h2>Auditoría</h2>
     <div class="list">${audit || `<p class="note">Sin correcciones recientes.</p>`}</div>`;
@@ -6189,7 +6307,17 @@ function wireAsistencia(main) {
     b.onclick = () => { state.asisVista = b.getAttribute("data-asis-vista"); recargarAsis(); };
   });
   const hist = main.querySelector("#asis-hist");
-  if (hist) hist.onchange = () => { state.asisFecha = hist.value; recargarAsis(); };
+  if (hist) hist.onchange = () => { state.asisFecha = hist.value; state.asisVista = "mes"; recargarAsis(); };
+  main.querySelectorAll("[data-asis-mes]").forEach((b) => {
+    b.onclick = () => { state.asisFecha = b.getAttribute("data-asis-mes"); state.asisVista = "mes"; recargarAsis(); };
+  });
+  const rango = main.querySelector("#f-asis-rango");
+  if (rango) rango.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    state.asisDesde = rango.desde.value;
+    state.asisHasta = rango.hasta.value;
+    recargarAsis();
+  });
   main.querySelectorAll("[data-marca]").forEach((b) => {
     b.onclick = () => abrirCamara(b.getAttribute("data-marca"));
   });
@@ -6247,12 +6375,11 @@ function wireAsistencia(main) {
     const data = await api("asis_dia", { fecha: fdia.fecha.value });
     const box = main.querySelector("#asis-dia");
     if (data.error) { box.innerHTML = fail(data); return; }
-    const h = (m) => Math.round((m || 0) / 60 * 100) / 100;
     box.innerHTML = (data.filas || []).map((f) => {
       const d = f.dia || {};
       const estado = d.falta ? "Falta" : d.fuente === "permiso" ? "Permiso/vacación" : d.fuente === "jibble" ? "Jibble" : d.abierto ? "Adentro" : d.diaContado ? "Cerrada" : "—";
       const marcas = (f.marcas || []).map((m) => `${horaEc(m.ts).slice(-5)} ${etiquetaMarca(m.tipo)}${m.anulado ? " (anulada)" : ""}`).join(" · ");
-      return `<div class="row"><div class="sku">${esc(estado)}</div><div><div class="name">${esc(f.nombre)}</div><div class="note">${esc(marcas || "sin marcas")}</div></div><div class="meta">${h(d.workedMin)} h · alm ${esc(d.almuerzoMin || 0)} min · atraso ${esc(d.atrasoMin || 0)} min</div></div>`;
+      return `<div class="row"><div class="sku">${esc(estado)}</div><div><div class="name">${esc(f.nombre)}</div><div class="note">${esc(marcas || "sin marcas")}</div></div><div class="meta">${esc(hHm(d.workedMin))} · almuerzo ${esc(d.almuerzoMin || 0)} min${(d.atrasoMin||0)>0 ? " · atraso " + esc(d.atrasoMin) + " min" : ""}</div></div>`;
     }).join("") || `<p class="note">Sin personas.</p>`;
   });
   const cfg = main.querySelector("#f-asis-cfg");
@@ -6330,7 +6457,13 @@ function wireAsistencia(main) {
     const data = await api("asis_periodo", { anio: Number(anio), mes: Number(m) });
     const box = main.querySelector("#asis-mes");
     if (data.error) { box.innerHTML = fail(data); return; }
-    box.innerHTML = (data.personas || []).map((p) => `<div class="card"><div class="k">${esc(p.nombre)}</div><div class="note">Trabajadas ${esc(p.hrsTrabajadas ?? 0)} h · Ordinarias ${esc(p.hrsOrdinarias ?? 0)} h · Almuerzo ${esc(p.hrsAlmuerzo ?? 0)} h · Supl ${esc(p.hrsSupl)} h · Extr ${esc(p.hrsExtr)} h · Descanso ${esc(p.hrsDesc)} h · Atraso ${esc(p.atrasoMin)} min · Faltas ${esc(p.faltas)} · Días propios ${esc(p.diasPropios ?? 0)} / Jibble ${esc(p.diasJibble ?? 0)}${p.hayDatos ? "" : " · sin marcas, el rol no recorta el sueldo"}</div></div>`).join("") || `<p class="note">Sin personas.</p>`;
+    box.innerHTML = (data.personas || []).map((p) => {
+      const totMin = Math.round(Number(p.hrsTrabajadas || 0) * 60);
+      const extra50 = Number(p.hrsSupl || 0);
+      const extra100 = Number(p.hrsExtr || 0) + Number(p.hrsDesc || 0);
+      const extra = [extra50 ? "Horas extra 50%: " + extra50 + " h" : "", extra100 ? "Horas extra 100%: " + extra100 + " h" : "", (p.atrasoMin || 0) > 0 ? "Atraso " + p.atrasoMin + " min" : ""].filter(Boolean).join(" · ");
+      return `<div class="asis-hist-row"><span>${esc(p.nombre)}${p.hayDatos ? "" : " · sin marcas"}</span><b>${esc(hHm(totMin))}</b></div>${extra ? `<div class="asis-desglose">${esc(extra)}</div>` : ""}`;
+    }).join("") || `<p class="note">Sin personas.</p>`;
   });
 }
 
@@ -6645,39 +6778,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk87"></script>
-<script src="beta-screens.js?v=20261118tk87"></script>
-<script src="beta-inline.js?v=20261118tk87"></script>
-<script src="mc-productos.js?v=20261118tk87"></script>
-<script src="mc-nav.js?v=20261118tk87"></script>
-<script src="mc-permisos.js?v=20261118tk87"></script>
-<script src="mc-protocolos.js?v=20261118tk87"></script>
-<script src="mc-conteo.js?v=20261118tk87"></script>
-<script src="mc-transferencias.js?v=20261118tk87"></script>
-<script src="mc-ajustes.js?v=20261118tk87"></script>
-<script src="vendor-qrcode.js?v=20261118tk87"></script>
-<script src="mc-tickets.js?v=20261118tk87"></script>
-<script src="mc-maestro.js?v=20261118tk87"></script>
-<script src="mc-empleados.js?v=20261118tk87"></script>
-<script src="mc-edit.js?v=20261118tk87"></script>
-<script src="mc-paquetes.js?v=20261118tk87"></script>
-<script src="mc-aperturas.js?v=20261118tk87"></script>
-<script src="mc-acceso.js?v=20261118tk87"></script>
-<script src="mc-barras.js?v=20261118tk87"></script>
-<script src="mc-caja.js?v=20261118tk87"></script>
-<script src="mc-giftcards.js?v=20261118tk87"></script>
-<script src="mc-multas.js?v=20261118tk87"></script>
-<script src="mc-clientes.js?v=20261118tk87"></script>
-<script src="mc-clientes-dup.js?v=20261118tk87"></script>
-<script src="mc-docpdf.js?v=20261118tk87"></script>
-<script src="mc-compras.js?v=20261118tk87"></script>
-<script src="mc-consignacion.js?v=20261118tk87"></script>
-<script src="mc-proveedores.js?v=20261118tk87"></script>
-<script src="mc-recepciones.js?v=20261118tk87"></script>
-<script src="mc-movil.js?v=20261118tk87"></script>
-<script src="mc-promociones.js?v=20261118tk87"></script>
-<script src="mc-agenda.js?v=20261118tk87"></script>
-<script src="mc-staff-home.js?v=20261118tk87"></script>
+<script src="mc-buscar.js?v=20261118tk89"></script>
+<script src="beta-screens.js?v=20261118tk89"></script>
+<script src="beta-inline.js?v=20261118tk89"></script>
+<script src="mc-productos.js?v=20261118tk89"></script>
+<script src="mc-nav.js?v=20261118tk89"></script>
+<script src="mc-permisos.js?v=20261118tk89"></script>
+<script src="mc-protocolos.js?v=20261118tk89"></script>
+<script src="mc-conteo.js?v=20261118tk89"></script>
+<script src="mc-transferencias.js?v=20261118tk89"></script>
+<script src="mc-ajustes.js?v=20261118tk89"></script>
+<script src="vendor-qrcode.js?v=20261118tk89"></script>
+<script src="mc-tickets.js?v=20261118tk89"></script>
+<script src="mc-maestro.js?v=20261118tk89"></script>
+<script src="mc-empleados.js?v=20261118tk89"></script>
+<script src="mc-edit.js?v=20261118tk89"></script>
+<script src="mc-paquetes.js?v=20261118tk89"></script>
+<script src="mc-aperturas.js?v=20261118tk89"></script>
+<script src="mc-acceso.js?v=20261118tk89"></script>
+<script src="mc-barras.js?v=20261118tk89"></script>
+<script src="mc-caja.js?v=20261118tk89"></script>
+<script src="mc-giftcards.js?v=20261118tk89"></script>
+<script src="mc-multas.js?v=20261118tk89"></script>
+<script src="mc-clientes.js?v=20261118tk89"></script>
+<script src="mc-clientes-dup.js?v=20261118tk89"></script>
+<script src="mc-docpdf.js?v=20261118tk89"></script>
+<script src="mc-compras.js?v=20261118tk89"></script>
+<script src="mc-consignacion.js?v=20261118tk89"></script>
+<script src="mc-proveedores.js?v=20261118tk89"></script>
+<script src="mc-recepciones.js?v=20261118tk89"></script>
+<script src="mc-movil.js?v=20261118tk89"></script>
+<script src="mc-promociones.js?v=20261118tk89"></script>
+<script src="mc-agenda.js?v=20261118tk89"></script>
+<script src="mc-staff-home.js?v=20261118tk89"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
