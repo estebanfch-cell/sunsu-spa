@@ -340,6 +340,7 @@
     background: var(--gold-l); border: 1px solid var(--gold-m); color: var(--navy-d);
     border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.75rem; font-weight: 600;
   }
+  .top-ico { display: none; }
   .top-stack { position: sticky; top: 0; z-index: 12; }
   .top-stack .top { position: relative; top: auto; }
   .modo-prueba {
@@ -645,8 +646,14 @@
     .tab-more.on { color: var(--gold); }
     .reloj-head { display: inline-flex; }
     .reloj-btn { font-size: 0.68rem; min-height: 30px; padding: 4px 10px; }
-    .top { flex-wrap: wrap; row-gap: 6px; }
-    .top h1 { min-width: 0; }
+    .top { flex-wrap: nowrap; gap: 6px; padding: 8px 8px; }
+    .top h1 { min-width: 0; font-size: 0.82rem; }
+    .top-icon, .top-salir { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; padding: 0; background: rgba(255,255,255,0.16); color: var(--white); border-color: transparent; border-radius: 8px; font-size: 0.95rem; line-height: 1; text-decoration: none; }
+    .top-icon .top-ico-txt { display: none; }
+    .top-icon .top-ico { display: inline; }
+    .local-sel { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+    .local-sel span { display: none; }
+    .local-sel select { max-width: 7.5rem; font-size: 0.68rem; padding: 3px 4px; }
     .linea { grid-template-columns: 1fr 1fr; }
     .row { grid-template-columns: max-content minmax(0, 1fr) auto; }
     .row .meta, .meta { grid-column: auto; text-align: right; white-space: nowrap; }
@@ -2154,9 +2161,9 @@ function paintShell(title) {
             ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj()}</div>` : ""}
             ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
-            ${!state.vista ? `<button class="btn ghost small" type="button" id="btn-solicitudes">Solicitudes</button>` : ""}
-            <a class="btn ghost small top-salir" href="#/m/acceso" title="Mi acceso">🔑</a>
-            <button class="btn ghost small salir top-salir" type="button">Salir</button>
+            ${!state.vista ? `<button class="btn ghost small top-icon" type="button" id="btn-solicitudes" title="Solicitudes" aria-label="Solicitudes"><span class="top-ico-txt">Solicitudes</span><span class="top-ico" aria-hidden="true">📋</span></button>` : ""}
+            <a class="btn ghost small top-salir top-icon" href="#/m/acceso" title="Mi acceso" aria-label="Mi acceso">🔑</a>
+            <button class="btn ghost small salir top-salir top-icon" type="button" title="Salir" aria-label="Salir"><span class="top-ico-txt">Salir</span><span class="top-ico" aria-hidden="true">⎋</span></button>
           </header>
           ${state.vista ? `<div class="vista-bar${state.vistaPrueba ? " prueba" : ""}" id="vista-bar"><span>Viendo como ${esc(state.vista.name || state.vista.short || "…")}${state.vistaPrueba ? ` · <b>🧪 Modo prueba</b>: puedes enviar solicitudes como ${esc(state.vista.short || state.vista.name || "ella")}; llegan a tu bandeja marcadas PRUEBA y aprobarlas o rechazarlas no cambia nada.` : " — solo lectura"}</span><span class="vista-acts"><button type="button" id="vista-prueba" class="${state.vistaPrueba ? "on" : ""}">${state.vistaPrueba ? "Salir de Modo prueba" : "🧪 Modo prueba"}</button> <button type="button" id="vista-salir">Salir</button></span></div>` : ""}
           <div class="aviso-reloj" id="aviso-reloj" hidden></div>
@@ -2375,7 +2382,9 @@ function pantallaSunsu(route) {
     return "";
   }
   const m = route.mod;
-  if (m === "inicio") return state.admin ? "inicio" : "staff-home";
+  // TK90: el personal (y «Ver como» staff) entra a MCStaffHome (citas del día + acciones), no al fallback «Buen día».
+  if (m === "inicio") return state.admin ? "inicio" : "";
+  if (m === "citas" && !state.admin) return "";
   if (m === "tickets") return route.sub === "t" && route.id && window.MCTickets ? "" : "historial";
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "";
@@ -2460,7 +2469,15 @@ async function montarSunsu(tab) {
   const main = document.getElementById("main");
   main.innerHTML = `<div id="content"></div>`;
   const c = document.getElementById("content");
-  if (tab === "staff-home") { c.innerHTML = htmlStaffHome(); void tarjetaAsignado(c); return; }
+  if (tab === "staff-home") {
+    if (window.MCStaffHome) {
+      c.innerHTML = await window.MCStaffHome.render();
+      window.MCStaffHome.wire(c);
+      return;
+    }
+    c.innerHTML = htmlStaffHome();
+    return;
+  }
   if (tab === "ticket") await prepararTicket();
   if (tab === "proveedores") renderProveedores(c);
   else if (tab === "inv-fisico") renderInvFisico(c);
@@ -2564,7 +2581,7 @@ async function draw() {
       await window.MCMaestro.after("proveedores", main, route);
     }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
-    if (route.kind === "mod" && route.mod === "inicio" && !state.admin && window.MCStaffHome) window.MCStaffHome.wire(main, route);
+    if (route.kind === "mod" && (route.mod === "inicio" || route.mod === "citas") && !state.admin && window.MCStaffHome) window.MCStaffHome.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "empleados" && window.MCEmpleados) {
       if (window.MCMaestro && document.getElementById("ss-md-empleados")) await window.MCMaestro.after("empleados", main, route);
       else window.MCEmpleados.wire(main, route);
@@ -2610,7 +2627,7 @@ async function renderMod(route) {
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
   if (route.mod === "gift") return renderGiftMod(route);
-  if (route.mod === "citas") return renderCitasBeta();
+  if (route.mod === "citas") return (!state.admin && window.MCStaffHome) ? renderInicioBeta() : renderCitasBeta();
   if (route.mod === "productos") return route.sub !== "catalogo" && window.MCProductos ? window.MCProductos.render(route) : renderProductos();
   if (route.mod === "inventario") {
     if (!route.sub || route.sub === "lista") return renderInventarioLista();
@@ -2672,10 +2689,7 @@ function chipsDash(lista) {
 }
 function htmlStaffHome() {
   const nombre = (state.user && (state.user.short || state.user.name)) || "";
-  const citas = esRolCitas() ? `<div id="citas-dash"></div>` : "";
-  return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div></div>
-    ${citas}
-    <div class="card"><p class="note">Buen día. Tus módulos están en el menú. El pulso de ventas, los precios, los costos, las comisiones de otras personas y los roles de pago quedan en la cuenta de admin.</p></div>`;
+  return `<div class="dash-head"><div class="hola">Hola, ${esc(nombre)}</div></div>`;
 }
 function htmlDashboard(d) {
   const hoy = d.hoy || {};
@@ -6778,39 +6792,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk92"></script>
-<script src="beta-screens.js?v=20261118tk92"></script>
-<script src="beta-inline.js?v=20261118tk92"></script>
-<script src="mc-productos.js?v=20261118tk92"></script>
-<script src="mc-nav.js?v=20261118tk92"></script>
-<script src="mc-permisos.js?v=20261118tk92"></script>
-<script src="mc-protocolos.js?v=20261118tk92"></script>
-<script src="mc-conteo.js?v=20261118tk92"></script>
-<script src="mc-transferencias.js?v=20261118tk92"></script>
-<script src="mc-ajustes.js?v=20261118tk92"></script>
-<script src="vendor-qrcode.js?v=20261118tk92"></script>
-<script src="mc-tickets.js?v=20261118tk92"></script>
-<script src="mc-maestro.js?v=20261118tk92"></script>
-<script src="mc-empleados.js?v=20261118tk92"></script>
-<script src="mc-edit.js?v=20261118tk92"></script>
-<script src="mc-paquetes.js?v=20261118tk92"></script>
-<script src="mc-aperturas.js?v=20261118tk92"></script>
-<script src="mc-acceso.js?v=20261118tk92"></script>
-<script src="mc-barras.js?v=20261118tk92"></script>
-<script src="mc-caja.js?v=20261118tk92"></script>
-<script src="mc-giftcards.js?v=20261118tk92"></script>
-<script src="mc-multas.js?v=20261118tk92"></script>
-<script src="mc-clientes.js?v=20261118tk92"></script>
-<script src="mc-clientes-dup.js?v=20261118tk92"></script>
-<script src="mc-docpdf.js?v=20261118tk92"></script>
-<script src="mc-compras.js?v=20261118tk92"></script>
-<script src="mc-consignacion.js?v=20261118tk92"></script>
-<script src="mc-proveedores.js?v=20261118tk92"></script>
-<script src="mc-recepciones.js?v=20261118tk92"></script>
-<script src="mc-movil.js?v=20261118tk92"></script>
-<script src="mc-promociones.js?v=20261118tk92"></script>
-<script src="mc-agenda.js?v=20261118tk92"></script>
-<script src="mc-staff-home.js?v=20261118tk92"></script>
+<script src="mc-buscar.js?v=20261118tk93"></script>
+<script src="beta-screens.js?v=20261118tk93"></script>
+<script src="beta-inline.js?v=20261118tk93"></script>
+<script src="mc-productos.js?v=20261118tk93"></script>
+<script src="mc-nav.js?v=20261118tk93"></script>
+<script src="mc-permisos.js?v=20261118tk93"></script>
+<script src="mc-protocolos.js?v=20261118tk93"></script>
+<script src="mc-conteo.js?v=20261118tk93"></script>
+<script src="mc-transferencias.js?v=20261118tk93"></script>
+<script src="mc-ajustes.js?v=20261118tk93"></script>
+<script src="vendor-qrcode.js?v=20261118tk93"></script>
+<script src="mc-tickets.js?v=20261118tk93"></script>
+<script src="mc-maestro.js?v=20261118tk93"></script>
+<script src="mc-empleados.js?v=20261118tk93"></script>
+<script src="mc-edit.js?v=20261118tk93"></script>
+<script src="mc-paquetes.js?v=20261118tk93"></script>
+<script src="mc-aperturas.js?v=20261118tk93"></script>
+<script src="mc-acceso.js?v=20261118tk93"></script>
+<script src="mc-barras.js?v=20261118tk93"></script>
+<script src="mc-caja.js?v=20261118tk93"></script>
+<script src="mc-giftcards.js?v=20261118tk93"></script>
+<script src="mc-multas.js?v=20261118tk93"></script>
+<script src="mc-clientes.js?v=20261118tk93"></script>
+<script src="mc-clientes-dup.js?v=20261118tk93"></script>
+<script src="mc-docpdf.js?v=20261118tk93"></script>
+<script src="mc-compras.js?v=20261118tk93"></script>
+<script src="mc-consignacion.js?v=20261118tk93"></script>
+<script src="mc-proveedores.js?v=20261118tk93"></script>
+<script src="mc-recepciones.js?v=20261118tk93"></script>
+<script src="mc-movil.js?v=20261118tk93"></script>
+<script src="mc-promociones.js?v=20261118tk93"></script>
+<script src="mc-agenda.js?v=20261118tk93"></script>
+<script src="mc-staff-home.js?v=20261118tk93"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
