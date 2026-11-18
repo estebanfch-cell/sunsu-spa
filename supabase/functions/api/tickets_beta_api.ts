@@ -5,7 +5,7 @@
 import { extend, registroDe } from "./handlers.ts";
 import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, guardarArchivo } from "./lib.ts";
+import { actorOf, copiarAStorage, guardarArchivo, logAccion } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import { b, colTicket, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
@@ -244,26 +244,93 @@ extend("tk_subir_doc", "any", async (p, ctx, ses) => {
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
-  const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante");
+  const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante", s(p.pago_id) || undefined);
   if (x.error) return x;
   return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row) };
 });
-/** Guarda la foto (archivos) y la agrega a beta_tickets.datos.comprobantes: lo usan tk_subir_doc y el cobro de Caja (pg_registrar). */
-export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string): Promise<Row> {
+/** Comprobantes vivos (no borrados) en beta_tickets.datos.comprobantes. */
+export function compsVivos(d: Row | undefined): Row[] {
+  const L = Array.isArray(d?.comprobantes) ? d!.comprobantes as Row[] : [];
+  return L.filter((x) => x && x.borrado !== true && /https?:|archivo:/.test(s(x.url)));
+}
+export function archivoIdDe(url: unknown): string {
+  const t = s(url);
+  return t.startsWith("archivo:") ? t.slice(8) : t;
+}
+/** Última foto del ticket que todavía no está enlazada a un pago. */
+export function fotoPendienteDe(d: Row | undefined): Row | undefined {
+  return [...compsVivos(d)].reverse().find((x) => !s(x.pago_id));
+}
+/** Guarda la foto (app_archivos + copia en Storage si se puede) y la agrega a beta_tickets.datos.comprobantes. */
+export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string, pagoId?: string): Promise<Row> {
   const img = s(imagen);
   if (!/^data:(image\/|application\/pdf)/.test(img)) return { error: "Sube una foto o PDF" };
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const id = await guardarArchivo(ctx.db, actor, "comprobante", "Comprobante " + nombre, img);
   if (!id) return { error: "El archivo pesa más de 1.5 MB" };
+  try { await copiarAStorage(ctx.env || {}, ctx.fetchImpl, "comprobantes", id, img); } catch { /* queda en app_archivos */ }
   const clave = claveDe(r, leerSerie(r, "so_num"));
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
   const datos = { ...((cab?.datos || {}) as Row) };
-  datos.comprobantes = [...(Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : []), { url: "archivo:" + id, por: ses.name, fecha: now }].slice(-10);
+  const item: Row = { url: "archivo:" + id, por: ses.name, fecha: now, pago_id: pagoId || null };
+  datos.comprobantes = [...(Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : []), item].slice(-10);
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle }].slice(-100);
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos, historial: hist, actualizado_por: actor, updated_at: now });
-  return { ok: true, url: "archivo:" + id, datos };
+  if (pagoId) {
+    try { await ctx.db.write(actor, "beta_pagos", "update", { id: pagoId }, { comprobante_id: id }); } catch { /* columna aún no aplicada */ }
+  }
+  try { await logAccion(ctx.db, actor, "COMPROBANTE SUBIR", clave + (pagoId ? " · pago " + pagoId : "") + " · archivo:" + id); } catch { /* el log no tumba la subida */ }
+  return { ok: true, url: "archivo:" + id, datos, archivo_id: id };
 }
+/** Enlaza una foto del ticket (la indicada, o la última pendiente) a un pago de la beta. */
+export async function vincularComprobante(ctx: Ctx, ses: Ses, r: Row, pagoId: string, url?: string): Promise<Row> {
+  const clave = claveDe(r, leerSerie(r, "so_num"));
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  if (!cab) return { error: "Sin comprobante" };
+  const datos = { ...((cab.datos || {}) as Row) };
+  const L = Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : [];
+  const hit = (url ? L.find((x) => s(x.url) === s(url) && x.borrado !== true) : undefined)
+    || [...L].reverse().find((x) => x && x.borrado !== true && !s(x.pago_id));
+  if (!hit) return { error: "Sin comprobante" };
+  hit.pago_id = pagoId;
+  const actor = actorOf(ses), now = ctx.now.toISOString();
+  await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, actualizado_por: actor, updated_at: now });
+  const aid = archivoIdDe(hit.url);
+  try { await ctx.db.write(actor, "beta_pagos", "update", { id: pagoId }, { comprobante_id: aid }); } catch { /* columna aún no aplicada */ }
+  return { ok: true, url: s(hit.url), comprobante_id: aid };
+}
+/** Marca borrado el comprobante (no se borra el archivo). Admin directo; staff vía solicitud. */
+export async function quitarComprobante(ctx: Ctx, ses: Ses, r: Row, url: string): Promise<Row> {
+  const clave = claveDe(r, leerSerie(r, "so_num"));
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  if (!cab) return { error: "Comprobante no encontrado" };
+  const datos = { ...((cab.datos || {}) as Row) };
+  const L = Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : [];
+  const hit = L.find((x) => s(x.url) === s(url) && x.borrado !== true);
+  if (!hit) return { error: "Comprobante no encontrado" };
+  const actor = actorOf(ses), now = ctx.now.toISOString();
+  hit.borrado = true;
+  hit.borrado_por = ses.name;
+  hit.borrado_at = now;
+  const hist = [...(Array.isArray(cab.historial) ? cab.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle: "quitó comprobante" }].slice(-100);
+  await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
+  if (s(hit.pago_id)) {
+    try { await ctx.db.write(actor, "beta_pagos", "update", { id: s(hit.pago_id) }, { comprobante_id: null }); } catch { /* ok */ }
+  }
+  try { await logAccion(ctx.db, actor, "COMPROBANTE QUITAR", clave + " · " + s(url)); } catch { /* ok */ }
+  return { ok: true };
+}
+extend("tk_quitar_doc", "any", async (p, ctx, ses) => {
+  if (!(await hay(ctx))) return { error: FALTA };
+  if (!esAdmin(ses.rol)) return { error: "Solicita la eliminación a un admin", solicitud: true };
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
+  const url = s(p.url);
+  if (!url) return { error: "Falta el comprobante" };
+  return await quitarComprobante(ctx, ses, r, url);
+});
 extend("tk_catalogo", "any", async (_p, ctx, ses) => ({ ok: true, items: await catalogoTicket(ctx, ses), promos: await promosVigentes(ctx) }));
 
 /** Valida y guarda lo propuesto (líneas, descuento, promo, exclusiones). Lo usan el admin y la solicitud aprobada. */
@@ -360,7 +427,15 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
   aplicar: async (ctx, ses, fila, propuestos) => {
     const r = await ticketPorClave(ctx, fila);
     if (!r) return { error: "Ticket no encontrado" };
-    return await reflags(ctx, ses, propuestos, await guardarTodo(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" }));
+    const qurl = s((propuestos as Row).quitar_comprobante);
+    const rest = { ...(propuestos as Row) };
+    delete rest.quitar_comprobante;
+    if (qurl) {
+      const q = await quitarComprobante(ctx, ses, r, qurl);
+      if (q.error) return q;
+      if (!Object.keys(rest).filter((k) => k !== "_via" && rest[k] != null && rest[k] !== "").length) return q;
+    }
+    return await reflags(ctx, ses, rest, await guardarTodo(ctx, ses, r, { ...rest, _via: "solicitud aprobada" }));
   },
   // «Solicitar eliminación» (TK59): al aprobar, la admin cancela el ticket (no se borra; queda Cancelado).
   borrar: async (ctx, ses, fila, motivo, sol) => {
@@ -423,7 +498,7 @@ export function faltaDe(r: Row, d: Row): string[] {
   if (orig.anulado === true) return [];
   const out: string[] = [];
   const mets = metodosPago(r.comp).map((m) => s(m.metodo));
-  const comps = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
+  const comps = compsVivos(d);
   // TK41 (Emilia 18/11): transferencia siempre pide foto. Tarjeta: los tickets viejos con N.º de voucher ya cuentan
   // como completos; desde VOUCHER_FOTO_DESDE la tarjeta también pide la foto del voucher.
   const tarj = metodosPago(r.comp).filter((m) => m.metodo === "tarjeta");
@@ -434,7 +509,7 @@ export function faltaDe(r: Row, d: Row): string[] {
 }
 /** Documentos subidos en la beta (comprobantes que faltaban). */
 export function docsBeta(cab: Row | undefined): Row[] {
-  const d = (cab?.datos || {}) as Row, L = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
+  const d = (cab?.datos || {}) as Row, L = compsVivos(d);
   const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
   const pdfs = Array.isArray(d.factura_pdfs) ? d.factura_pdfs as Row[] : (d.factura_pdf && typeof d.factura_pdf === "object" ? [d.factura_pdf as Row] : []);
   for (const x of pdfs) {

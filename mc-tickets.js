@@ -50,7 +50,7 @@
       ".mctk-lnw{display:flex;gap:8px;align-items:center}.mctk-ph{width:38px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--cream-d);flex:none}",
       ".mctk-falta{background:#fff6d6;border:1.5px solid #e8cf7a;color:#6b4e00;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-ed{cursor:text;border-radius:5px;padding:1px 4px;margin:-1px -4px;display:inline-block;min-width:40px}.mctk-ed:hover,.mctk-ed:focus{background:var(--cream);outline:1px dashed var(--cream-d)}.mctk-t .dv{width:64px}.mctk-t input.bad{border-color:#d9534f}.mctk-canje{font-size:.7rem;font-weight:800;color:#7C6BB0}",
-      ".mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
+      ".mctk-voucher{flex:0 0 auto;white-space:nowrap!important;cursor:pointer}.mctk-vthumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}.mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
       ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
       ".mctk-pen{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.85rem;padding:0 3px}.mctk-pen:hover{color:var(--navy-d)}.mctk-in{padding:5px 7px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.82rem;width:min(100%,260px)}textarea.mctk-in{width:100%}",
@@ -238,7 +238,16 @@
     var F = K.d.faltan || []; if (!F.length || (K.d.flags || []).length) return "";
     var comp = F.some(function (x) { return /comprobante/i.test(x); });
     return '<div class="mctk-falta"><b>Falta: ' + e(F.join(" · ")) + "</b>" +
-      (comp ? '<div><label class="btn small" style="cursor:pointer">📷 Subir comprobante<input type="file" id="mctk-subir" accept="image/*,application/pdf" capture="environment" hidden></label> <span class="mccf-sub">Foto de la transferencia o del voucher de la tarjeta. Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
+      (comp ? '<div><label class="btn small mctk-voucher" style="cursor:pointer">📷 Voucher<input type="file" class="mctk-voucher-inp" accept="image/*,application/pdf" hidden></label> <span class="mccf-sub">En el iPhone se abre el menú: Tomar foto, Fototeca o Archivos (también PDF). Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
+  }
+  function voucherThumbsHtml() {
+    var docs = (K.d.documentos || []).filter(function (x) { return x.tipo === "comprobante" && x.url; });
+    if (!docs.length) return "";
+    var h = docs.map(function (x) {
+      if (window.MCVoucher && window.MCVoucher.thumbHtml) return window.MCVoucher.thumbHtml(x.url, x.nombre || "Voucher", true);
+      return '<button type="button" class="btn ghost small" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre || "Voucher") + '">🧾 ' + e(x.nombre || "Voucher") + "</button>";
+    }).join("");
+    return '<div class="mctk-vthumbs pg-thumbs" id="mctk-vthumbs">' + h + "</div>";
   }
   function comprimir(file) {
     return new Promise(function (res, rej) {
@@ -277,11 +286,12 @@
     var reag = rg.si ? (rg.cita ? "Sí · " + fechaIso(rg.cita) : "Sí") : "No";
     return '<div id="mctk-root" class="mctk2">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
       '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
+      '<label class="btn ghost small mctk-voucher">📷 Voucher<input type="file" class="mctk-voucher-inp" accept="image/*,application/pdf" hidden></label>' +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
       '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !t.cancelado ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>" +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
-      flagsHtml() + faltaHtml() +
+      flagsHtml() + faltaHtml() + voucherThumbsHtml() +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
@@ -673,18 +683,30 @@
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });
     };
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
-    var sub = main.querySelector("#mctk-subir");
-    if (sub) sub.onchange = async function () {
-      var f = sub.files && sub.files[0]; if (!f) return;
-      toast2("⏳ Subiendo comprobante…");
-      try {
-        var data = await comprimir(f);
-        var r = await api("tk_subir_doc", { clave: K.d.clave, imagen: data });
-        if (!r || r.error) { toast2((r && r.error) || "No se pudo subir", true); return; }
-        toast2("✓ Comprobante subido");
+    function subirVoucherDe(inp) {
+      inp.onchange = async function () {
+        var f = inp.files && inp.files[0]; inp.value = ""; if (!f) return;
+        toast2("⏳ Subiendo voucher…");
+        try {
+          var data = await (window.MCVoucher && window.MCVoucher.comprimir ? window.MCVoucher.comprimir(f) : comprimir(f));
+          var r = await api("tk_subir_doc", { clave: K.d.clave, imagen: data });
+          if (!r || r.error) { toast2((r && r.error) || "No se pudo subir", true); return; }
+          toast2("✓ Voucher subido");
+          var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); }
+        } catch (x) { toast2((x && x.message) || "No se pudo subir", true); }
+      };
+    }
+    main.querySelectorAll(".mctk-voucher-inp").forEach(subirVoucherDe);
+    var vth = main.querySelector("#mctk-vthumbs");
+    if (vth) {
+      if (window.MCVoucher && window.MCVoucher.cargarThumbs) window.MCVoucher.cargarThumbs(vth);
+      if (window.MCVoucher && window.MCVoucher.wireQuitar) window.MCVoucher.wireQuitar(vth, K.d.clave, async function () {
         var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); }
-      } catch (x) { toast2((x && x.message) || "No se pudo subir", true); }
-    };
+      });
+      vth.querySelectorAll("[data-pv]").forEach(function (b) {
+        b.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(b.getAttribute("data-pv"), b.getAttribute("data-pvn") || "Voucher"); };
+      });
+    }
     var fi = main.querySelector("#mctk-ficha"); if (fi) fi.onclick = function (ev) { ev.preventDefault(); go("#/m/clientes/c/" + encodeURIComponent(K.d.clienteKey)); };
     main.querySelectorAll("[data-flag]").forEach(function (b) {
       b.onclick = async function () {

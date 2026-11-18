@@ -5,7 +5,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { b, n, round2, s, saldoPendiente, ymdUtc, type Row } from "./domain.ts";
-import { ticketPorClave, agregarComprobante, estaCobrado } from "./tickets_beta_api.ts";
+import { ticketPorClave, agregarComprobante, archivoIdDe, compsVivos, estaCobrado, fotoPendienteDe, vincularComprobante } from "./tickets_beta_api.ts";
 import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar } from "./query.ts";
@@ -61,12 +61,22 @@ async function estadoTicket(ctx: Ctx, r: Row, total: number): Promise<Row> {
 }
 
 // ---------- Pagos de tickets ----------
+function fotoDePago(p: Row, fotos: Row[]): string {
+  if (s(p.comprobante_id)) return s(p.comprobante_id).startsWith("archivo:") ? s(p.comprobante_id) : "archivo:" + s(p.comprobante_id);
+  const m = s(p.nota).match(/foto\s+(archivo:[\w-]+|https?:\S+)/i);
+  if (m) return m[1];
+  const hit = fotos.find((f) => s(f.pago_id) === s(p.id));
+  return hit ? s(hit.url) : "";
+}
 extend("pg_ticket", "any", async (p, ctx, ses) => {
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ver ese ticket" };
   const e = await estadoTicket(ctx, r, n(p.total));
-  return { ok: true, ...e, metodos: METODOS.map((m) => ({ id: m, nombre: ETQ_METODO[m] })), legadoMetodos: metodosPago(r.comp), admin: esAdmin(ses.rol) };
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === s(e.clave));
+  const fotos = compsVivos((cab?.datos || {}) as Row).map((x) => ({ url: s(x.url), por: s(x.por), fecha: s(x.fecha), pago_id: s(x.pago_id) }));
+  const beta = (e.beta as Row[]).map((x) => ({ ...x, foto: fotoDePago(x, fotos) }));
+  return { ok: true, ...e, beta, fotos, metodos: METODOS.map((m) => ({ id: m, nombre: ETQ_METODO[m] })), legadoMetodos: metodosPago(r.comp), admin: esAdmin(ses.rol) };
 });
 extend("pg_registrar", "any", async (p, ctx, ses) => {
   if (!(await hay(ctx))) return { error: FALTA };
@@ -85,13 +95,19 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   if (total > 0 && monto > n(e.saldo) + 0.009 && p.forzar !== true) return { error: "El pago ($" + monto.toFixed(2) + ") es mayor que el saldo ($" + n(e.saldo).toFixed(2) + ")", mayor: true };
   const ref = s(p.ref).trim().slice(0, 80);
   if ((metodo === "tarjeta" || metodo === "transferencia" || metodo === "deuna") && !ref) return { error: "Escribe el número de voucher / comprobante" };
-  // TK42: tarjeta y transferencia piden también la foto del voucher / comprobante (misma bodega que tk_subir_doc).
+  // TK42/TK97: tarjeta y transferencia piden la foto del voucher. Si ya se subió al ticket (botón Voucher), se enlaza al pago.
   let fotoUrl = "";
-  if (metodo === "tarjeta" || metodo === "transferencia") {
-    if (!/^data:(image\/|application\/pdf)/.test(s(p.imagen))) return { error: metodo === "tarjeta" ? "Toma la foto del voucher de la tarjeta" : "Toma la foto del comprobante de la transferencia", foto: true };
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === s(e.clave));
+  const pendiente = fotoPendienteDe((cab?.datos || {}) as Row);
+  if (/^data:(image\/|application\/pdf)/.test(s(p.imagen))) {
     const f = await agregarComprobante(ctx, ses, r, p.imagen, e.clave + " · " + (ETQ_METODO[metodo] || metodo) + " " + ref, "subió comprobante (cobro en Caja)");
     if (f.error) return f;
     fotoUrl = s(f.url);
+  } else if (pendiente) {
+    fotoUrl = s(pendiente.url);
+  }
+  if ((metodo === "tarjeta" || metodo === "transferencia") && !fotoUrl) {
+    return { error: metodo === "tarjeta" ? "Toma la foto del voucher de la tarjeta" : "Toma la foto del comprobante de la transferencia", foto: true };
   }
   const id = crypto.randomUUID();
   const actor = actorOf(ses), quien = s(ses.name) || actor;
@@ -101,9 +117,11 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
     const m = await movCaja(ctx, ses, { tipo: "efectivo_ticket", entrada: monto, salida: 0, detalle: "Ticket " + e.clave + (cliente ? " · " + cliente : ""), quien: s(r.atendido_por) || quien, ref: "PAGO:" + id });
     caja_mov_id = s(m.id);
   }
-  await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: (s(p.nota).trim().slice(0, 300) || (fotoUrl ? "foto " + fotoUrl : "")) || null, registrado_por: quien, caja_mov_id });
-  await logAccion(ctx.db, actor, "PAGO REGISTRAR", e.clave + " · " + ETQ_METODO[metodo] + " $" + monto.toFixed(2) + (ref ? " · " + ref : ""));
-  return { ok: true, id, saldo: saldoPendiente(n(e.saldo), monto) };
+  const compId = fotoUrl ? archivoIdDe(fotoUrl) : null;
+  await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: (s(p.nota).trim().slice(0, 300) || (fotoUrl ? "foto " + fotoUrl : "")) || null, registrado_por: quien, caja_mov_id, comprobante_id: compId });
+  if (fotoUrl) await vincularComprobante(ctx, ses, r, id, fotoUrl);
+  await logAccion(ctx.db, actor, "PAGO REGISTRAR", e.clave + " · " + ETQ_METODO[metodo] + " $" + monto.toFixed(2) + (ref ? " · " + ref : "") + (fotoUrl ? " · " + fotoUrl : ""));
+  return { ok: true, id, saldo: saldoPendiente(n(e.saldo), monto), foto: fotoUrl || undefined };
 });
 extend("pg_anular", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin anula pagos" };
