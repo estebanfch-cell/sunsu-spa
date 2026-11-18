@@ -95,7 +95,7 @@
   function listaCot() {
     var L = K.cot.filter(function (c) { var q = (K.q || "").toLowerCase().trim(); return !q || [c.numero, c.prov && c.prov.nombre].join(" ").toLowerCase().includes(q); });
     return tabs() + '<div class="mcoc-tools"><button class="btn small" type="button" data-go="#/m/compras/nueva-cot">+ Nueva cotización</button><input type="search" id="mcoc-q" placeholder="Buscar número o proveedor" value="' + e(K.q) + '"></div>' +
-      '<div class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Nº</th><th>Proveedor</th><th>Fecha</th><th>Líneas</th><th>Estado</th><th>OC</th><th class="num">Total</th></tr></thead><tbody>' +
+      '<div class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Nº</th><th>Proveedor</th><th>Fecha</th><th>Líneas</th><th>Estado</th><th>OC</th><th class="num">Total</th></tr></thead><tbody id="mcoc-cot-body">' +
       (L.map(function (c) { return '<tr class="tk-row" data-cot="' + e(c.id) + '"><td class="mcoc-num">' + e(c.numero) + "</td><td>" + e((c.prov && c.prov.nombre) || "—") + "</td><td>" + e(f(c.fecha)) + "</td><td>" + e(c.nLineas) + "</td><td>" + pill(c.estado) + "</td><td>" + e(c.ocNumero || "") + '</td><td class="num">' + $m(c.total) + "</td></tr>"; }).join("") || '<tr><td colspan="7" class="mcoc-sub">Sin cotizaciones</td></tr>') +
       '</tbody></table></div><p class="note">La cotización del proveedor es lo que antes era «Borrador»: no compromete nada hasta convertirla en OC (toma el siguiente número OC del año).</p>';
   }
@@ -400,5 +400,5 @@
     var pc = main.querySelector("#pre-conv"); if (pc) { pc.onclick = async function () { try { var r = await A("cmpb_cot_convertir", { id: pc.getAttribute("data-id") }); toast2(r.numero + " creada"); go("#/m/compras/oc/" + encodeURIComponent(r.id)); } catch (x) { main.querySelector("#pre-err").textContent = x.message || x; } }; return; }
     if (main.querySelector("#mcoc-q")) wireLista(main);
   }
-  window.MCCompras = { render: render, wire: wire, _k: K, _specOc: specOc, _specActa: specActa, _pill: pill, _A: A, _dlg: dlg, _f: f };
+  window.MCCompras = { render: render, wire: wire, ensureList: async function () { await cargarLista(); return true; }, _k: K, _specOc: specOc, _specActa: specActa, _pill: pill, _A: A, _dlg: dlg, _f: f };
 })();
