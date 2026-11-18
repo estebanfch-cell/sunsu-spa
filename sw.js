@@ -1,4 +1,4 @@
-const CACHE = "sunsu-beta-2026-11-17-TK27";
+const CACHE = "sunsu-beta-2026-11-17-TK29";
 const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
   "/mc-nav.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
 

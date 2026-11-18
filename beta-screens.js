@@ -5166,12 +5166,40 @@ function _histMasterHTML(tickets, showPrices){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
     return '<th class="sortable'+(c.num?' num':'')+'" onclick="_histSortBy(\''+c.k+'\')">'+c.t+ar+'</th>';
   }).join('');
+  var cards=tickets.map(function(t,i){ return _histCardHTML(t,i,showPrices); }).join('');
   var detail=elegido?_histDetalleHTML(elegido, showPrices):'<p class="note">Elige un ticket para ver el detalle.</p>';
   var open=elegido?' tk-open':'';
   return '<div class="tk-split'+(abierto?' tk-side':'')+'"><div class="tk-list sheet-scroll"><table class="tk-table nowrap-table"><thead><tr>'
     +head
-    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="'+cols.length+'">Sin tickets</td></tr>')+'</tbody></table></div>'
+    +'</tr></thead><tbody id="tk-body">'+(rows||'<tr><td colspan="'+cols.length+'">Sin tickets</td></tr>')+'</tbody></table>'
+    +'<div class="mob-cards" id="tk-cards">'+cards+'</div></div>'
     +'<aside class="tk-detail'+open+'" id="tk-detail">'+detail+'</aside></div>';
+}
+// Tarjeta para iPhone (≤640px), como Órdenes de venta de MineCore pero en colores Sunsu y sin fotos.
+// Rojo/amarillo de cuadre como borde izquierdo; sin cédula.
+function _histCardHTML(t, i, showPrices){
+  var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+  var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
+  var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
+  var est=anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto');
+  var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
+  var l3=[_histEsc(_histFechaFmt(t.fecha))];
+  if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
+  if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+'</span>');
+  if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
+  var pills=[];
+  if(!anul){
+    pills.push(t.cob?'<span class="tk-pill" style="color:#2E8B57;border-color:#2E8B57">Pagado</span>':'<span class="tk-pill" style="color:#3E7CB1;border-color:#3E7CB1">Por cobrar</span>');
+    if(!ff) pills.push(_tkPill('sinfactura','Sin factura'));
+  }
+  var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
+  return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(_histNum(t)||'—')+'</span>'+est+'</div>'
+    +'<div class="mob-l2">'+_histEsc(nombre)+'</div>'
+    +'<div class="mob-l3">'+l3.join('<span>·</span>')+'</div>'
+    +(pills.length?'<div class="mob-pills">'+pills.join('')+'</div>':'')
+    +(tip?'<div style="font-size:.72rem;margin-top:6px;color:'+(fl?'#8a2216':'#6b4e00')+'">'+_histEsc(tip)+'</div>':'')
+    +'</div>';
 }
 function _histAbrirTicket(i){
   var list=window._histVisibles||[], t=list[i];
@@ -5327,11 +5355,12 @@ function _histMatchBusq(t, busq){
     || _histEstadoDoc(t).indexOf(busq)>=0;
 }
 function _histBuscarUI(esStaff, busq){
-  return '<div style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">🔍 Buscar clienta</div>'
+  return '<div class="mob-hide" style="font-size:0.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">🔍 Buscar clienta</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:12px">'
     +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Nº, clienta, cédula o factura" autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
-    +'<button onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
-    +'<button onclick="_histBuscarClear('+esStaff+')" title="Limpiar búsqueda" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>'
+    +'<button class="mob-hide" onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
+    +'<button class="mob-hide" onclick="_histBuscarClear('+esStaff+')" title="Limpiar búsqueda" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>'
+    +'<button class="mob-only" onclick="if(typeof go===\'function\')go(\'#/doc/ov\')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;font-weight:800;cursor:pointer;white-space:nowrap;align-items:center">+ Nuevo</button>'
     +'</div>';
 }
 
