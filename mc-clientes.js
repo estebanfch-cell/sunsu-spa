@@ -526,9 +526,19 @@
     if (rest) rest.onclick = async function () { var r = await api("cl_restaurar", { key: d.key }); if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; } K.t = 0; draw(); };
   }
 
+  async function ensureList() {
+    if (K.L && K.L.length) return true;
+    var d = await api("cl_list", {});
+    if (!d || d.error) return false;
+    K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now();
+    return true;
+  }
   window.MCClientes = {
     render: function (route) { return route.sub === "duplicados" && window.MCClientesDup ? window.MCClientesDup.render() : route.sub === "c" && route.id ? renderFicha(String(route.id)) : route.sub === "docs" ? renderSinAsignar() : renderLista(); },
     wire: function (main, route) { if (route.sub === "duplicados" && window.MCClientesDup) window.MCClientesDup.wire(main); else if (route.sub === "c") wireFicha(main); else if (route.sub === "docs") wireSinAsignar(main); else wireLista(main); },
+    items: function () { return filtrados().slice(0, K.max); },
+    ensureList: ensureList,
+    isDirty: function () { return !!(K.pend && Object.keys(K.pend).length); },
     _k: K,
   };
 })();

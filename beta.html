@@ -2325,10 +2325,16 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "transferencias" && window.MCTransferencias) window.MCTransferencias.wire(main, route);
     if (route.kind === "mod" && route.mod === "ajustes" && window.MCAjustes) window.MCAjustes.wire(main, route);
     if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) {
-      if (window.MCMaestro && document.getElementById("ss-md-tickets")) await window.MCMaestro.afterTickets(main, route);
+      if (window.MCMaestro && document.getElementById("ss-md-tickets")) await window.MCMaestro.after("tickets", main, route);
       else window.MCTickets.wire(main, route);
     }
-    if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) window.MCClientes.wire(main, route);
+    if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) {
+      if (window.MCMaestro && document.getElementById("ss-md-clientes")) await window.MCMaestro.after("clientes", main, route);
+      else window.MCClientes.wire(main, route);
+    }
+    if (route.kind === "mod" && route.mod === "proveedores" && window.MCMaestro && document.getElementById("ss-md-proveedores")) {
+      await window.MCMaestro.after("proveedores", main, route);
+    }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
@@ -2376,15 +2382,21 @@ async function renderMod(route) {
   if (route.mod === "recepciones" && window.MCRecepciones) return window.MCRecepciones.render(route);
   if (route.mod === "compras") return window.MCCompras ? window.MCCompras.render(route) : renderCompras(route.sub);
   if (route.mod === "tickets" && route.sub === "t" && route.id && window.MCTickets) {
-    if (window.MCMaestro && window.MCMaestro.wide()) return window.MCMaestro.renderTickets(route);
+    if (window.MCMaestro && window.MCMaestro.wide()) return window.MCMaestro.render("tickets", route);
     return window.MCTickets.render(route);
   }
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
-  if (route.mod === "clientes" && window.MCClientes) return window.MCClientes.render(route);
+  if (route.mod === "clientes" && window.MCClientes) {
+    if (window.MCMaestro && window.MCMaestro.wide() && route.sub === "c" && route.id) return window.MCMaestro.render("clientes", route);
+    return window.MCClientes.render(route);
+  }
   if (route.mod === "agenda" && window.MCAgenda) return window.MCAgenda.render(route);
   if (route.mod === "clientes") return renderClientes();
-  if (route.mod === "proveedores") return renderProveedoresDesk(route);
+  if (route.mod === "proveedores") {
+    if (window.MCMaestro && window.MCMaestro.wide() && route.sub && route.sub !== "nuevo") return window.MCMaestro.render("proveedores", route);
+    return renderProveedoresDesk(route);
+  }
   if (route.mod === "cotizaciones_cliente") return renderListaCotizaciones();
   if (route.mod === "comisiones") return renderComisiones();
   if (route.mod === "rol_pagos") return renderRol();
@@ -3402,11 +3414,7 @@ async function renderProveedoresDesk(route) {
     <aside class="prov-panel" id="prov-panel"${sel ? "" : " hidden"}>${sel ? htmlProvDetalle(sel) : ""}</aside>
   </div>`;
 }
-function wireProveedores(main) {
-  const q = main.querySelector("#prov-q");
-  if (!q) return;
-  q.addEventListener("input", () => { window._provQ = q.value; pintarProveedores(); });
-  pintarProveedores();
+function wireProveedoresDetalle(main) {
   const cerrar = main.querySelector("#prov-cerrar");
   if (cerrar) cerrar.onclick = () => { window._provFila = ""; go("#/m/proveedores"); };
   const fichaEl = main.querySelector("#mcpf-ficha");
@@ -3426,6 +3434,14 @@ function wireProveedores(main) {
     go("#/m/proveedores");
   };
   if (window.SunsuInline) SunsuInline.aplicar();
+}
+function wireProveedores(main) {
+  if (document.getElementById("ss-md-proveedores") && window.MCMaestro) return;
+  const q = main.querySelector("#prov-q");
+  if (!q) return;
+  q.addEventListener("input", () => { window._provQ = q.value; pintarProveedores(); });
+  pintarProveedores();
+  wireProveedoresDetalle(main);
 }
 
 function previewCotizacion(accion, body) {
@@ -5865,36 +5881,36 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk49"></script>
-<script src="beta-screens.js?v=20261118tk49"></script>
-<script src="beta-inline.js?v=20261118tk49"></script>
-<script src="mc-productos.js?v=20261118tk49"></script>
-<script src="mc-nav.js?v=20261118tk49"></script>
-<script src="mc-permisos.js?v=20261118tk49"></script>
-<script src="mc-protocolos.js?v=20261118tk49"></script>
-<script src="mc-conteo.js?v=20261118tk49"></script>
-<script src="mc-transferencias.js?v=20261118tk49"></script>
-<script src="mc-ajustes.js?v=20261118tk49"></script>
-<script src="vendor-qrcode.js?v=20261118tk49"></script>
-<script src="mc-tickets.js?v=20261118tk49"></script>
-<script src="mc-maestro.js?v=20261118tk49"></script>
-<script src="mc-paquetes.js?v=20261118tk49"></script>
-<script src="mc-aperturas.js?v=20261118tk49"></script>
-<script src="mc-acceso.js?v=20261118tk49"></script>
-<script src="mc-barras.js?v=20261118tk49"></script>
-<script src="mc-caja.js?v=20261118tk49"></script>
-<script src="mc-giftcards.js?v=20261118tk49"></script>
-<script src="mc-multas.js?v=20261118tk49"></script>
-<script src="mc-clientes.js?v=20261118tk49"></script>
-<script src="mc-clientes-dup.js?v=20261118tk49"></script>
-<script src="mc-docpdf.js?v=20261118tk49"></script>
-<script src="mc-compras.js?v=20261118tk49"></script>
-<script src="mc-consignacion.js?v=20261118tk49"></script>
-<script src="mc-proveedores.js?v=20261118tk49"></script>
-<script src="mc-recepciones.js?v=20261118tk49"></script>
-<script src="mc-movil.js?v=20261118tk49"></script>
-<script src="mc-promociones.js?v=20261118tk49"></script>
-<script src="mc-agenda.js?v=20261118tk49"></script>
+<script src="mc-buscar.js?v=20261118tk50"></script>
+<script src="beta-screens.js?v=20261118tk50"></script>
+<script src="beta-inline.js?v=20261118tk50"></script>
+<script src="mc-productos.js?v=20261118tk50"></script>
+<script src="mc-nav.js?v=20261118tk50"></script>
+<script src="mc-permisos.js?v=20261118tk50"></script>
+<script src="mc-protocolos.js?v=20261118tk50"></script>
+<script src="mc-conteo.js?v=20261118tk50"></script>
+<script src="mc-transferencias.js?v=20261118tk50"></script>
+<script src="mc-ajustes.js?v=20261118tk50"></script>
+<script src="vendor-qrcode.js?v=20261118tk50"></script>
+<script src="mc-tickets.js?v=20261118tk50"></script>
+<script src="mc-maestro.js?v=20261118tk50"></script>
+<script src="mc-paquetes.js?v=20261118tk50"></script>
+<script src="mc-aperturas.js?v=20261118tk50"></script>
+<script src="mc-acceso.js?v=20261118tk50"></script>
+<script src="mc-barras.js?v=20261118tk50"></script>
+<script src="mc-caja.js?v=20261118tk50"></script>
+<script src="mc-giftcards.js?v=20261118tk50"></script>
+<script src="mc-multas.js?v=20261118tk50"></script>
+<script src="mc-clientes.js?v=20261118tk50"></script>
+<script src="mc-clientes-dup.js?v=20261118tk50"></script>
+<script src="mc-docpdf.js?v=20261118tk50"></script>
+<script src="mc-compras.js?v=20261118tk50"></script>
+<script src="mc-consignacion.js?v=20261118tk50"></script>
+<script src="mc-proveedores.js?v=20261118tk50"></script>
+<script src="mc-recepciones.js?v=20261118tk50"></script>
+<script src="mc-movil.js?v=20261118tk50"></script>
+<script src="mc-promociones.js?v=20261118tk50"></script>
+<script src="mc-agenda.js?v=20261118tk50"></script>
 <script>draw();</script>
 </body>
 </html>
