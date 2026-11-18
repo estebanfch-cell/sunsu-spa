@@ -1456,25 +1456,15 @@ function renderTicket(c){
         <textarea id="inp-notas" placeholder="Observaciones del facial, piel del cliente..."></textarea>
       </div>
     </div>`;
+  // TK68: fotos compactas — ANTES y DESPUÉS en una fila cada una, con botones-ícono (📷 cámara · 🖼️ galería).
   const _fotosCard=_cotMode?'':`
-    <div class="card">
-      <div class="card-title">📷 Fotos de la clienta <span style="font-weight:400;font-size:0.62rem;color:var(--gray)">(opcional · máx 3 por sección)</span></div>
-      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin-bottom:6px">🌑 ANTES del facial</div>
-      <div style="display:flex;gap:8px">
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
-          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'antes')"></label>
-      </div>
-      <div id="fotos-antes-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
-      <div style="font-size:0.68rem;font-weight:800;color:var(--navy);margin:12px 0 6px">✨ DESPUÉS del facial</div>
-      <div style="display:flex;gap:8px">
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">📷 Tomar foto
-          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
-        <label style="flex:1;display:block;padding:9px;border:1.5px dashed var(--cream-d);border-radius:10px;text-align:center;font-size:0.68rem;font-weight:700;color:var(--navy);cursor:pointer">🖼️ Galería
-          <input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'despues')"></label>
-      </div>
-      <div id="fotos-despues-prev" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"></div>
+    <div class="card fc-card">
+      <style>.fc-card{padding:10px 12px}.fc-row{display:flex;align-items:center;gap:8px;min-height:38px}.fc-row+.fc-prev+.fc-row,.fc-prev:empty+.fc-row{border-top:1px solid var(--cream-d);margin-top:4px;padding-top:4px}.fc-lbl{flex:1;min-width:0;font-size:0.7rem;font-weight:800;color:var(--navy)}.fc-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:34px;border:1.5px solid var(--cream-d);border-radius:9px;background:white;font-size:1rem;cursor:pointer}.fc-prev{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 4px}.fc-prev:empty{display:none}</style>
+      <div class="card-title" style="margin-bottom:4px">📷 Fotos de la clienta <span style="font-weight:400;font-size:0.6rem;color:var(--gray)">(opcional · máx 3 c/u)</span></div>
+      <div class="fc-row"><span class="fc-lbl">🌑 Antes</span><label class="fc-btn" title="Tomar foto (antes)">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'antes')"></label><label class="fc-btn" title="Galería (antes)">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'antes')"></label></div>
+      <div id="fotos-antes-prev" class="fc-prev"></div>
+      <div class="fc-row"><span class="fc-lbl">✨ Después</span><label class="fc-btn" title="Tomar foto (después)">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoClienta(this,'despues')"></label><label class="fc-btn" title="Galería (después)">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="cargarFotoClienta(this,'despues')"></label></div>
+      <div id="fotos-despues-prev" class="fc-prev"></div>
     </div>`;
   c.innerHTML=`
     ${_cotBanner}
@@ -2370,11 +2360,9 @@ function updatePreview(){
     <div class="psec">💳 Desglose a cobrar</div>
     ${breakdown}
     <div class="pdiv"></div>
-    <div class="ov-tot"><span>Subtotal sin IVA</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
-    <div class="ov-tot"><span>Subtotal gravado 15%</span><span id="pv-grav">$${(totEFinal/1.15).toFixed(2)}</span></div>
-    <div class="ov-tot"><span>Subtotal 0%</span><span>$0.00</span></div>
+    <div class="ov-tot"><span>Subtotal</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
     <div class="ov-tot"><span>IVA 15%</span><span id="pv-iva">$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
-    <div class="ptotal ov-gran"><span>Total (con IVA)</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
+    <div class="ptotal ov-gran"><span>Total</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
   </div>`;
@@ -4961,7 +4949,7 @@ function _tkTablaHTML(t, showPrices){
   });
   if(!r.filas.length) h+='<tr><td colspan="'+(showPrices?5:3)+'" class="note">Sin ítems</td></tr>';
   h+='</tbody>';
-  if(showPrices) h+='<tfoot><tr><td colspan="4" class="num">Subtotal sin IVA</td><td class="num">'+$(r.sub)+'</td></tr>'
+  if(showPrices) h+='<tfoot><tr><td colspan="4" class="num">Subtotal</td><td class="num">'+$(r.sub)+'</td></tr>'
     +'<tr><td colspan="4" class="num">IVA 15%</td><td class="num">'+$(r.iva)+'</td></tr>'
     +'<tr class="tk-orden-tot"><td colspan="4" class="num">Total con IVA</td><td class="num">'+$(r.tot)+'</td></tr></tfoot>';
   h+='</table></div>';
@@ -5850,7 +5838,7 @@ function descargarPDFHistorial(){
       var r=_tkFilas(t), m=function(v){return (v<0?'−$':'$')+Math.abs(v).toFixed(2);};
       cardsHTML+='<table class="orden"><tr><th>Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">P. unit. sin IVA</th><th class="n">Total</th></tr>'
         +r.filas.map(function(f){return '<tr><td>'+f.cod+'</td><td>'+f.desc+(f.nota&&f.nota!=='ajuste'?' ('+f.nota+')':'')+'</td><td class="n">'+f.cant+'</td><td class="n">'+m(f.unit)+'</td><td class="n">'+m(f.total)+'</td></tr>';}).join('')
-        +'<tr><td colspan="4" class="n">Subtotal sin IVA</td><td class="n">'+m(r.sub)+'</td></tr><tr><td colspan="4" class="n">IVA 15%</td><td class="n">'+m(r.iva)+'</td></tr><tr><td colspan="4" class="n"><b>Total con IVA</b></td><td class="n"><b>'+m(r.tot)+'</b></td></tr></table>';
+        +'<tr><td colspan="4" class="n">Subtotal</td><td class="n">'+m(r.sub)+'</td></tr><tr><td colspan="4" class="n">IVA 15%</td><td class="n">'+m(r.iva)+'</td></tr><tr><td colspan="4" class="n"><b>Total con IVA</b></td><td class="n"><b>'+m(r.tot)+'</b></td></tr></table>';
       if(t.colQ&&t.colQ.indexOf('SI')===0) cardsHTML+='<div class="row sub"><span class="lbl">Canje paq: '+t.colQ+'</span><span></span></div>';
       if(t.colR) cardsHTML+='<div class="row sub"><span class="lbl">'+(t.colR.indexOf('GC,')===0?'Conv GC: ':'Canje GC: ')+t.colR+'</span><span></span></div>';
     })();
@@ -17114,7 +17102,7 @@ function _cotPintarResumen(){
     +'<div class="pdiv"></div>'
     +'<div class="prow"><span>Subtotal</span><span id="cot-sum-sub">'+_cot$(calc.subtotal)+'</span></div>'
     +'<div class="prow"><span>'+descLbl+'</span><span id="cot-sum-desc">−'+_cot$(calc.descuento)+'</span></div>'
-    +'<div class="prow"><span>Subtotal sin IVA</span><span id="cot-sum-sin">'+_cot$(calc.sinIva)+'</span></div>'
+    +'<div class="prow"><span>Subtotal</span><span id="cot-sum-sin">'+_cot$(calc.sinIva)+'</span></div>'
     +'<div class="prow"><span>IVA 15%</span><span id="cot-sum-iva">'+_cot$(calc.iva)+'</span></div>'
     +'<div class="pdiv"></div>'
     +'<div class="ptotal"><span>Total</span><span id="cot-sum-tot">'+_cot$(calc.total)+'</span></div>'
@@ -17424,7 +17412,7 @@ function _cotDibujarPDF(doc, q, logo){
   var sinIva=q.sinIva!=null?q.sinIva:_cotRedondear((Number(q.total)||0)-(Number(q.iva)||0));
   filaTot('Subtotal', _cotPdf$(q.subtotal));
   filaTot('Descuentos', '-'+_cotPdf$(q.descuento));
-  filaTot('Subtotal sin IVA', _cotPdf$(sinIva));
+  filaTot('Subtotal', _cotPdf$(sinIva));
   filaTot('IVA 15%', _cotPdf$(q.iva));
   doc.setDrawColor(CEL[0], CEL[1], CEL[2]);
   doc.setLineWidth(0.6);
