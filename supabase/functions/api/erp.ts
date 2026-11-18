@@ -7,7 +7,8 @@ import { ecuadorParts, elegirNumeroOv, facialSku, n, prodCol, round2, s, siguien
 import { CORTE_ERP, aperturaVenta, aplicarTrasCorte, despuesDeErp } from "./stock_corte.ts";
 import { asignarTicketBeta } from "./lib.ts";
 import { backfillSO, tomarNumero } from "./series.ts";
-import { familiaConsignacion, familiaDeFila, quincenaActual, vendeDesdeCabina, SKUS_VENTA_CABINA } from "./ventas.ts";
+import { famDe, famsConsigDb, consigEfectiva } from "./consig_config.ts";
+import { familiaDeFila, quincenaActual, vendeDesdeCabina, SKUS_VENTA_CABINA } from "./ventas.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -351,15 +352,19 @@ function lineNet(cant: number, precio: number, desc = 0): number {
   return round2(cant * precio * (1 - (desc || 0) / 100));
 }
 
-function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: string, actor: string, now: Date, porId?: Map<string, Row>): Step[] {
+// TK37: consignación por proveedor/producto (🤝 en la ficha del proveedor), no la lista fija HT/AS/ML/PH/JN.
+function esConsumoConsig(prod: Row | undefined, sku: string, on: Set<string>): boolean {
+  return consigEfectiva(prod || { sku }, on);
+}
+function pasosConsumoCabina(destino: Row, lineas: Row[], tid: string, numero: string, actor: string, now: Date, porId: Map<string, Row> | undefined, on: Set<string>): Step[] {
   if (s(destino.tipo) !== "cabina") return [];
   const q = quincenaActual(now);
   const steps: Step[] = [];
   for (const ln of lineas) {
     const prod = porId?.get(String(ln.producto_id));
     // Venta desde Cabina (ML-009…014 y bodega_origen_venta = Cabina) no es consignación.
-    if (vendeDesdeCabina(prod, s(ln.sku))) continue;
-    const fam = familiaConsignacion(s(ln.sku));
+    if (vendeDesdeCabina(prod, s(ln.sku)) || !esConsumoConsig(prod, s(ln.sku), on)) continue;
+    const fam = famDe(s(ln.sku));
     const cant = n(ln.cantidad);
     if (!fam || !(cant > 0)) continue;
     steps.push({ op: "upsert", table: "erp_consignacion_consumo", match: { id: id() }, row: {
@@ -843,11 +848,12 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
         }
       }
     }
-    if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now, porId));
+    const onC = await famsConsigDb(db);
+    if (inmediata && bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, tid, numero, actor, now, porId, onC));
     await applyPlan(db, actor, steps, now.toISOString());
     const consumo = inmediata && bd && s(bd.tipo) === "cabina" && paraConsumo.some((ln) => {
       const p = porId.get(String(ln.producto_id));
-      return !vendeDesdeCabina(p, s(ln.sku)) && !!familiaConsignacion(s(ln.sku));
+      return !vendeDesdeCabina(p, s(ln.sku)) && esConsumoConsig(p, s(ln.sku), onC);
     });
     return { ok: true, id: tid, numero, inmediata, consumo: !!consumo };
   }
@@ -864,7 +870,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       steps.push({ op: "move", producto_id: String(ln.producto_id), bodega_id: String(t.destino_id), delta: n(ln.cantidad), tipo: "transferencia_in", doc_tipo: "transferencia", doc_id: String(t.id), lote: s(ln.lote), nota: s(t.numero) });
       paraConsumo.push({ producto_id: ln.producto_id, sku: s(p?.sku), cantidad: n(ln.cantidad), costo: p?.costo_promedio });
     }
-    if (bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, String(t.id), s(t.numero), actor, now, porId));
+    if (bd) steps.push(...pasosConsumoCabina(bd, paraConsumo, String(t.id), s(t.numero), actor, now, porId, await famsConsigDb(db)));
     await applyPlan(db, actor, steps, now.toISOString());
     return { ok: true };
   }

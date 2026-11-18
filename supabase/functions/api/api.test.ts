@@ -567,6 +567,27 @@ describe("lugares, conteo y transferencias", () => {
     assert.equal((await db.all("erp_ajustes")).length, 1);
   });
 
+  it("TK37: el consumo de cabina sigue el 🤝 del proveedor y del producto (no la lista fija)", async () => {
+    const db = new MemoryDb(erpSeed());
+    db.tables.set("beta_proveedores_ficha", [{ familia: "HT", consignacion: false }, { familia: "VK", consignacion: true }, { familia: "AS", consignacion: true }]);
+    const ids: Record<string, string> = {};
+    for (const [sku, extra] of [["VK-090", {}], ["HT-091", {}], ["AS-092", { beta_origen: "propio" }], ["AS-093", {}]] as [string, Row][]) {
+      await runErp("prod_save", { sku, nombre: sku, uso: "ambos", costo_promedio: 8, precio_venta: 20 }, db, "Emi");
+      const pr = (await db.all("erp_productos")).find((r) => r.sku === sku)!;
+      if (Object.keys(extra).length) await db.write("t", "erp_productos", "update", { id: pr.id }, extra);
+      ids[sku] = String(pr.id);
+      const oc = await runErp("oc_save", { proveedor_id: SEED_IDS.prov, lineas: [{ producto_id: pr.id, cantidad: 2, precio: 8 }] }, db, "Emi");
+      const lid = (await db.all("erp_oc_lineas")).find((l) => l.oc_id === oc.id)!.id;
+      await runErp("oc_recibir", { oc_id: oc.id, lineas: [{ oc_linea_id: lid, bodega_id: BODEGA_VENTA, cantidad: 2 }] }, db, "Emi");
+    }
+    const pasa = (sku: string) => runErp("trf_enviar", { inmediata: true, _rol: "cosmetologa", origen_id: BODEGA_VENTA, destino_id: BODEGA_CABINA, lineas: [{ producto_id: ids[sku], cantidad: 1 }] }, db, "Andrea", new Date("2026-11-18T15:00:00Z"));
+    assert.equal((await pasa("VK-090")).consumo, true);
+    assert.equal((await pasa("HT-091")).consumo, false);
+    assert.equal((await pasa("AS-092")).consumo, false);
+    assert.equal((await pasa("AS-093")).consumo, true);
+    assert.deepEqual((await db.all("erp_consignacion_consumo")).map((c) => c.familia).sort(), ["AS", "VK"]);
+  });
+
   it("la cosmetóloga pasa venta a cabina y la consignación entra a la quincena", async () => {
     const db = new MemoryDb(erpSeed());
     await runErp("prod_save", { sku: "HT-090", nombre: "Sérum consigna", uso: "ambos", costo_promedio: 8, precio_venta: 20 }, db, "Emi");
@@ -3283,8 +3304,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3392,8 +3413,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3474,8 +3495,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3525,8 +3546,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3559,8 +3580,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3606,8 +3627,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk36/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK36/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk37/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK37/);
   });
 });
 
