@@ -104,7 +104,7 @@
     if (t.sheetRow || conTratamiento()) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
     var pq0 = d.paquete || {}; if ((pq0.vigentes && pq0.vigentes.length) || pq0.uso) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
-    (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
+    (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "factura" ? "📄 " : x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
   }
   function descTxt(tp, v) { v = Number(v) || 0; if (!(v > 0) || !tp) return ""; return tp === "$" ? "$" + q2(v) : q2(v) + "%"; }
@@ -194,6 +194,7 @@
   function html() {
     var d = K.d, t = d.ticket, inf = d.info || {}, rg = d.reagendada || {};
     var num = t.soNum || t.betaNum || ("#" + t.sheetRow), fac = val("factura");
+    var facPdf = (d.documentos || []).filter(function (x) { return x.tipo === "factura" && x.url; })[0];
     var reag = rg.si ? (rg.cita ? "Sí · " + fechaIso(rg.cita) : "Sí") : "No";
     return '<div id="mctk-root" class="mctk2">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
       '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
@@ -202,7 +203,7 @@
       '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + "</div>" +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span></div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
@@ -562,6 +563,8 @@
       b.onclick = function (ev) { ev.stopPropagation(); var id = b.getAttribute("data-menu"); main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; }); var dd = main.querySelector("#" + id); dd.hidden = !dd.hidden; };
     });
     if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { if (!ev.target.closest(".mctk-menu")) document.querySelectorAll(".mctk-dd").forEach(function (x) { x.hidden = true; }); }); }
+    var facBtn = main.querySelector(".mctk-fac [data-pv]");
+    if (facBtn) facBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(facBtn.getAttribute("data-pv"), facBtn.getAttribute("data-pvn")); };
     main.querySelector("#mctk-dd").onclick = async function (ev) {
       var pv = ev.target.closest("[data-pv]");
       if (pv && window.MCPrevia) { this.hidden = true; window.MCPrevia.abrir(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
