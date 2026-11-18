@@ -11,12 +11,15 @@
   var IVA = 1.15;
   function net(v) { return r2((Number(v) || 0) / IVA); }
   function q2(v) { return r2(v) + ""; }
+  // TK81: redondeos de hasta $0.05 no dejan saldo.
+  function saldoPend(tot, pag) { var x = r2(tot - pag); return x > 0.05 ? x : 0; }
   function opt(v, t, sel) { return '<option value="' + e(v) + '"' + (String(v) === String(sel == null ? "" : sel) ? " selected" : "") + ">" + e(t) + "</option>"; }
   function fecha(f, h) { return f ? f.split("-").reverse().join("/") + (h ? " " + h : "") : ""; }
   function fechaIso(v) { var d = new Date(v); if (isNaN(d)) return String(v || ""); var z = new Date(d.getTime() - 5 * 3600000).toISOString(); return z.slice(8, 10) + "/" + z.slice(5, 7) + "/" + z.slice(0, 4) + " " + z.slice(11, 16); }
   var TIPO = { producto: "Producto", facial: "Facial", extra: "Servicio", paquete: "Paquete", gift: "Gift card", servicio: "Servicio", diferencia_mejora: "Diferencia por mejora", diferencia: "Por revisar" };
   var NOMBRE_MEJORA = "Diferencia por mejora de paquete";
-  function esMejora(l) { return !!(l && (l.mejoraPaquete || l.tipo === "diferencia_mejora" || /diferencia por mejora/i.test(l.nombre || l.promo || ""))); }
+  // TK81/82: «Diferencia por mejora» solo si es una línea real con monto (nunca en el canje mismo).
+  function esMejora(l) { return !!(l && !l.canje && Number(l.precio_unit) > 0 && (l.mejoraPaquete || l.tipo === "diferencia_mejora" || /diferencia por mejora/i.test(l.nombre || l.promo || ""))); }
   function hayMejoraDe(sku) { return (K.L || []).some(function (x) { return esMejora(x) && String(x.sku) === String(sku); }); }
   function toast2(msg, mal) { if (typeof toast === "function") { try { toast(msg, mal ? "#B86B6B" : undefined); return; } catch (x) {} } alert(msg); }
   function beep(ok) {
@@ -56,16 +59,22 @@
       ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:280px}",
       ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
-      ".mctk-ln input.q,.mctk-ln input.p{-moz-appearance:textfield;appearance:textfield;padding:6px 10px;text-align:center;box-sizing:border-box}.mctk-ln input.q{width:64px}.mctk-ln input.p{width:92px;padding-left:20px}.mctk-ln input.q::-webkit-outer-spin-button,.mctk-ln input.q::-webkit-inner-spin-button,.mctk-ln input.p::-webkit-outer-spin-button,.mctk-ln input.p::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-money{position:relative;display:inline-block}.mctk-money>span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:.82rem;pointer-events:none}",
+      "",
       ".mctk-cli{font-size:.9rem;font-weight:700;color:var(--navy-d);margin:-2px 0 2px}.mctk-cod{font-family:ui-monospace,monospace;color:var(--navy);text-decoration:none;border-bottom:1px dashed}",
       ".mctk-cancel{color:#C0392B!important;border-color:#E6B0AA!important}.btn.small.mctk-cancel:not(.ghost){background:#C0392B!important;color:#fff!important}.mctk-canc{background:#FDECEA;border:1px solid #E6B0AA;color:#922B21;border-radius:10px;padding:10px 12px;margin:8px 0;font-size:.85rem}" +
       ".mctk-xdlg .mctk-box{width:min(620px,94vw);max-height:88vh;overflow:auto}.mctk-xh{display:flex;justify-content:space-between;align-items:center}.mctk-xh h3{margin:0}.mctk-xx{background:none;border:0;font-size:1.6rem;line-height:1;cursor:pointer;color:var(--navy)}.mctk-xtog{display:flex!important;align-items:center;gap:10px;padding:10px 12px;margin:8px 0;background:var(--cream);border-radius:10px;font-size:.86rem;cursor:pointer}.mctk-xdlg input[type=checkbox]{width:18px!important;height:18px;margin:0;flex:none;accent-color:var(--navy)}.mctk-xt{width:100%;border-collapse:collapse;font-size:.84rem;margin:4px 0 10px}.mctk-xt th{font-size:.68rem;text-transform:uppercase;color:var(--gray);text-align:left;padding:6px 8px;border-bottom:1px solid var(--cream-d)}.mctk-xt td{padding:8px;border-bottom:1px solid #f0ece4;vertical-align:middle}.mctk-xt .num{text-align:right;white-space:nowrap}.mctk-xt .c{text-align:center;width:70px}.mctk-xlbl{display:block;font-size:.8rem;font-weight:700}.mctk-xlbl input{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-weight:400}",
-      ".mctk-lwrap{container-type:inline-size;container-name:mctkl}.mctk-ls{display:flex;flex-direction:column}.mctk-ln{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'p x' 'n n';gap:4px 6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--cream-d)}.mctk-ln:last-child{border-bottom:0}" +
-      ".mctk-lp{grid-area:p;display:flex;gap:8px;align-items:center;min-width:0}.mctk-lpt{min-width:0;line-height:1.3;overflow-wrap:anywhere}.mctk-lpt .mctk-pn{font-weight:700;font-size:.86rem}.mctk-lpt .mctk-sku{display:inline;margin:0;font-size:.68rem}.mctk-lpt .mctk-pill{font-size:.62rem;padding:0 7px;vertical-align:1px}.mctk-promo{font-size:.66rem;color:#8A6D1F;font-weight:700}.mctk-mej{font-size:.68rem!important;font-weight:700;margin:0 0 0 4px!important}.mctk-ln .mctk-ph{width:30px;height:30px}.mctk-ln>.mctk-x{grid-area:x;align-self:start;padding:0 4px;line-height:1}" +
-      ".mctk-nums{grid-area:n;display:grid;grid-template-columns:58px 86px 62px minmax(0,1fr);gap:6px;align-items:end;min-width:0}.mctk-nums label,.mctk-nums>span{display:flex;flex-direction:column;gap:1px;min-width:0;margin:0}.mctk-nums small{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);line-height:1.1}.mctk-nums input{width:100%!important;box-sizing:border-box;padding:5px 6px!important;font-size:.82rem;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit}.mctk-nums .mctk-money{display:block}.mctk-nums .mctk-money input{padding-left:16px!important}.mctk-nums .mctk-money>span{left:6px}" +
-      ".mctk-nums .mctk-c3{display:none}.mctk-nums>span{align-items:flex-end;text-align:right}.mctk-nums b{font-size:.86rem;white-space:nowrap}.mctk-mini{font-style:normal;font-size:.56rem;color:var(--gray);white-space:nowrap}.mctk-lh{display:none}" +
-      "@container mctkl (min-width:430px){.mctk-nums{grid-template-columns:58px 90px 62px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}.mctk-nums .mctk-c3{display:flex}.mctk-mini{display:none}}" +
-      "@container mctkl (min-width:680px){.mctk-ln{grid-template-columns:minmax(180px,1fr) 450px 24px;grid-template-areas:'p n x';padding:6px 0}.mctk-nums{grid-template-columns:54px 90px 60px 78px 62px 82px;align-items:center}.mctk-ln>.mctk-x{align-self:center}.mctk-ln .mctk-nums small{display:none}.mctk-lh{display:grid;grid-template-columns:minmax(180px,1fr) 450px 24px;gap:6px;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);padding:2px 0 4px;border-bottom:1px solid var(--cream-d)}.mctk-lh .mctk-nums{display:grid;grid-area:auto}.mctk-lh .mctk-nums>span{align-items:flex-end}.mctk-lh .mctk-c3{display:flex}}" +
+      // TK81 (Emilia pt523u): líneas en grilla fija — # · Producto (código debajo) · Cant · P. sin IVA · Desc · Subtotal · IVA · Total; texto plano, se edita con clic.
+      ".mctk-lwrap{container-type:inline-size;container-name:mctkl}.mctk-ls{display:flex;flex-direction:column}" +
+      ".mctk-ln{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:'i p x' '. n n';gap:4px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--cream-d)}.mctk-ln:last-child{border-bottom:0}" +
+      ".mctk-li{grid-area:i;align-self:start;padding-top:2px;text-align:center;font-size:.74rem;font-weight:800;color:var(--gray);font-variant-numeric:tabular-nums}" +
+      ".mctk-lp{grid-area:p;display:flex;gap:8px;align-items:center;min-width:0}.mctk-lpt{min-width:0;line-height:1.3;overflow-wrap:anywhere}.mctk-lpt .mctk-pn{display:block;font-weight:700;font-size:.86rem}.mctk-lpt .mctk-sku{display:block;margin:1px 0 0;font-size:.68rem;color:var(--gray);font-weight:500}.mctk-lpt .mctk-pill{font-size:.6rem;padding:0 7px;margin-left:4px;vertical-align:1px}.mctk-promo{font-size:.66rem;color:#8A6D1F;font-weight:700;margin-left:4px}.mctk-ln .mctk-ph{width:30px;height:30px}" +
+      ".mctk-lx{grid-area:x;align-self:start;display:flex;gap:2px;align-items:center;justify-content:flex-end}.mctk-lx .mctk-x,.mctk-mej{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.95rem;line-height:1;padding:2px 4px;border-radius:6px}.mctk-mej{font-size:.78rem;font-weight:800;white-space:nowrap}.mctk-lx .mctk-x:hover,.mctk-mej:hover{background:var(--cream);color:var(--navy-d)}" +
+      ".mctk-nums{grid-area:n;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;min-width:0}.mctk-c{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;min-width:0;font-size:.84rem;font-variant-numeric:tabular-nums;white-space:nowrap}.mctk-c small{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);line-height:1.2}.mctk-c b{font-weight:700}.mctk-c3{display:none}" +
+      ".mctk-cv{display:block;min-height:1.35em;min-width:100%;padding:1px 2px;border-radius:5px;box-sizing:border-box}.mctk-c[data-le] .mctk-cv{cursor:text}.mctk-c[data-le]:hover .mctk-cv{background:var(--cream);outline:1px dashed var(--cream-d)}" +
+      ".mctk-cin{width:100%;max-width:96px;box-sizing:border-box;border:0;border-bottom:1.5px solid var(--navy);background:transparent;font:inherit;font-size:.84rem;text-align:center;padding:1px 2px;outline:none;-moz-appearance:textfield;appearance:textfield}.mctk-cin::-webkit-outer-spin-button,.mctk-cin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-cin.bad{border-bottom-color:#C0392B}.mctk-lh{display:none}" +
+      "@container mctkl (min-width:480px){.mctk-nums{grid-template-columns:repeat(6,minmax(0,1fr))}.mctk-c3{display:flex}}" +
+      "@container mctkl (min-width:700px){.mctk-ln,.mctk-lh{grid-template-columns:24px minmax(180px,1fr) 48px 80px 56px 76px 64px 80px 44px;grid-template-areas:'i p q u d s v t x';gap:0 4px;padding:7px 0}.mctk-lh{display:grid;align-items:end;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);padding:2px 0 5px;border-bottom:1px solid var(--cream-d)}.mctk-lh>span{text-align:center}.mctk-lh>span:nth-child(2){text-align:left}" +
+      ".mctk-ln .mctk-nums{display:contents}.mctk-ln .mctk-c small{display:none}.mctk-li{align-self:center;padding:0}.mctk-lx{align-self:center}.mctk-c[data-c=q]{grid-area:q}.mctk-c[data-c=u]{grid-area:u}.mctk-c[data-c=d]{grid-area:d}.mctk-c[data-c=s]{grid-area:s}.mctk-c[data-c=v]{grid-area:v}.mctk-c[data-c=t]{grid-area:t}}",
       ".mctk-foot{display:flex;gap:10px 16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;margin-top:10px}.mctk-adj{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.76rem;color:var(--gray)}.mctk-adj label{display:flex;gap:6px;align-items:center;margin:0}#mctk-dv{width:96px}#mctk-promos{border-color:#C9A227;color:#7a5c12;background:#fbf4e4;padding:5px 10px}" +
       ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:300px!important;line-height:1.35}#mctk-tot{min-width:min(260px,100%)!important;flex:1 1 240px;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:100%;margin-left:auto}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
@@ -157,7 +166,7 @@
   function etqLinea(l) { return l.cortesia && !(l.total_linea > 0) ? ' <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? ' <span class="mctk-canje">Canje</span>' : ""; }
   function pintarMontos(tr, l) {
     var m = montos(l), q = function (x) { return tr.querySelector(x); };
-    if (q("[data-tl]")) q("[data-tl]").innerHTML = e($m(m.sub)) + etqLinea(l);
+    if (q("[data-tl]")) q("[data-tl]").textContent = $m(m.sub);
     if (q("[data-iva]")) q("[data-iva]").textContent = $m(m.iva);
     if (q("[data-tot]")) q("[data-tot]").textContent = $m(m.tot);
     if (q("[data-mini]")) q("[data-mini]").textContent = "sub " + $m(m.sub) + " · IVA " + $m(m.iva);
@@ -165,27 +174,35 @@
   function lineasHtml() {
     calc();
     if (!K.L.length) return '<div class="mccf-sub" style="padding:12px">Sin líneas.</div>';
-    var hd = '<div class="mctk-lh"><span>Producto</span><span class="mctk-nums"><span>Cant</span><span>P. sin IVA</span><span>Desc</span><span class="mctk-c3">Subtotal</span><span class="mctk-c3">IVA</span><span>Total</span></span><span></span></div>';
+    var ed = !!(K.d.puedeEditar || K.d.puedePedir);
+    var hd = '<div class="mctk-lh"><span>#</span><span>Producto</span><span>Cant</span><span>P. sin IVA</span><span>Desc</span><span>Subtotal</span><span>IVA</span><span>Total</span><span></span></div>';
+    // celda: data-le="campo" = editable con clic (admin edita, recepción solicita); vacío = en blanco
+    function celda(c, lbl, html, le, extra) {
+      return '<span class="mctk-c' + (extra || "") + '" data-c="' + c + '"' + (le && ed ? ' data-le="' + le + '" tabindex="0" title="Clic para editar"' : "") + "><small>" + lbl + '</small><span class="mctk-cv">' + html + "</span></span>";
+    }
     return hd + K.L.map(function (l, i) {
-      var precio = l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" aria-label="Precio sin IVA" value="' + e(net(l.precio_unit).toFixed(2)) + '"></span>';
-      var m = montos(l);
-      return '<div data-i="' + i + '" class="mctk-ln">' +
-        '<div class="mctk-lp">' + fotoLinea(l) + '<div class="mctk-lpt"><span class="mctk-pn">' + e(l.nombre) + "</span>" +
-        ' <span class="mctk-sku">' + e(codigoVisible(l)) + (l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "") + "</span>" + irProdBtn(l) +
-        (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (esMejora(l) ? ' <span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
-        (l.canje && !hayMejoraDe(l.sku) && (K.d.puedeEditar || K.d.puedePedir) ? ' <button type="button" class="mctk-link mctk-mej" data-mejora="' + i + '">+ Diferencia por mejora</button>' : "") +
-        (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
-        (l.tipo === "diferencia" ? ' <span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
-        (l.promo && l.descuento_valor > 0 ? ' <span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "") + "</div></div>" +
+      var fijo = (l.cortesia || l.canje) && !(l.precio_unit > 0);
+      var precio = l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(net(l.precio_unit)));
+      var m = montos(l), tipoTxt = l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
+      var pills = (l.canje ? '<span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") +
+        (esMejora(l) ? '<span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
+        (l.cortesia ? '<span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
+        (l.tipo === "diferencia" ? '<span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
+        (l.promo && l.descuento_valor > 0 ? '<span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "");
+      // TK81: la «Diferencia por mejora» solo se ve si existe; agregarla es un botoncito discreto en las acciones de la fila
+      var mej = l.canje && !hayMejoraDe(l.sku) && ed ? '<button type="button" class="mctk-mej" data-mejora="' + i + '" title="Agregar diferencia por mejora (el facial vale más que el paquete)" aria-label="Agregar diferencia por mejora">＋$</button>' : "";
+      return '<div data-i="' + i + '" class="mctk-ln"><span class="mctk-li">' + (i + 1) + "</span>" +
+        '<div class="mctk-lp">' + fotoLinea(l) + '<div class="mctk-lpt"><span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + "</span>" +
+        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span></div></div>" +
         '<span class="mctk-nums">' +
-        '<label><small>Cant</small><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></label>' +
-        "<label><small>P. sin IVA</small>" + precio + "</label>" +
-        '<label><small>Desc</small><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></label>' +
-        '<span class="mctk-c3"><small>Subtotal</small><b data-tl>' + e($m(m.sub)) + etqLinea(l) + "</b></span>" +
-        '<span class="mctk-c3"><small>IVA</small><b data-iva>' + e($m(m.iva)) + "</b></span>" +
-        '<span class="mctk-ltot"><small>Total</small><b data-tot>' + e($m(m.tot)) + '</b><i class="mctk-mini" data-mini>' + e("sub " + $m(m.sub) + " · IVA " + $m(m.iva)) + "</i></span>" +
+        celda("q", "Cant", e(q2(l.cantidad)), "cantidad") +
+        celda("u", "P. sin IVA", precio, fijo ? "" : "precio_unit") +
+        celda("d", "Desc", e(descTxt(l.descuento_tipo, l.descuento_valor)), "desc") +
+        celda("s", "Subtotal", "<span data-tl>" + e($m(m.sub)) + "</span>", "", " mctk-c3") +
+        celda("v", "IVA", "<span data-iva>" + e($m(m.iva)) + "</span>", "", " mctk-c3") +
+        celda("t", "Total", "<b data-tot>" + e($m(m.tot)) + "</b>", "") +
         "</span>" +
-        '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button></div>';
+        '<span class="mctk-lx">' + mej + '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button></span></div>';
     }).join("");
   }
   function totHtml() {
@@ -195,7 +212,7 @@
     // TK68: todo lo de Sunsu es gravado 15 %: Subtotal, IVA 15 %, Total, Pagado, Saldo (sin «Subtotal 0 %» ni duplicados).
     return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(sumNet) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(net(desc)) + "</b>" : "") +
       "<span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
-      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (c.total - pag > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(Math.max(0, c.total - pag)) + "</b>" +
+      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (saldoPend(c.total, pag) > 0 ? ' style="color:#C98A00"' : "") + ">" + $m(saldoPend(c.total, pag)) + "</b>" +
       (met ? '<span class="mccf-sub">Forma de pago</span><span style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
       (Math.abs(c.total - d.ticket.cobradoSistema) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(d.ticket.cobradoSistema) + "</b>" : "") + "</div>" +
       (d.costosVisibles ? '<p style="text-align:right;margin:6px 0 0"><a href="#" id="mctk-costos" class="mctk-link">Detalle de costos</a></p>' : "");
@@ -671,12 +688,27 @@
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
       var l = K.L[+tr.getAttribute("data-i")];
-      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.tipo === "$" ? x.valor * IVA : x.valor; l.promo = ""; }
+      if (f === "desc" && !String(ev.target.value).trim()) { l.descuento_tipo = null; l.descuento_valor = 0; l.promo = ""; ev.target.classList.remove("bad"); }
+      else if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.tipo === "$" ? x.valor * IVA : x.valor; l.promo = ""; }
       else if (f === "precio_unit") l.precio_unit = (Number(ev.target.value) || 0) * IVA; // se escribe sin IVA
       else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
       calc(); pintarMontos(tr, l); pintarTot(); marcar();
     });
+    // TK81: clic en Cant / P. sin IVA / Desc → campo en línea; Enter o salir aplica, Esc deshace.
+    function editarCelda(c) {
+      if (!c || c.querySelector("input")) return;
+      var tr = c.closest("[data-i]"), l = K.L[+tr.getAttribute("data-i")], f = c.getAttribute("data-le"); if (!l || !f) return;
+      var antes = JSON.stringify(l), v = f === "cantidad" ? q2(l.cantidad) : f === "precio_unit" ? net(l.precio_unit).toFixed(2) : descTxt(l.descuento_tipo, l.descuento_valor);
+      var cv = c.querySelector(".mctk-cv");
+      cv.innerHTML = '<input class="mctk-cin" data-f="' + (f === "desc" ? "desc" : f) + '" ' + (f === "desc" ? 'type="text" inputmode="decimal" placeholder="10% o $5"' : 'type="number" inputmode="decimal" min="0" step="any"') + ' value="' + e(v) + '" aria-label="' + e(c.querySelector("small").textContent) + '">';
+      var inp = cv.querySelector("input"), fin = false; inp.focus(); inp.select();
+      function cerrar(deshacer) { if (fin) return; fin = true; if (deshacer) { Object.assign(l, JSON.parse(antes)); calc(); } pintarLin(); }
+      inp.addEventListener("keydown", function (k) { if (k.key === "Enter") { k.preventDefault(); cerrar(false); } else if (k.key === "Escape") { k.preventDefault(); cerrar(true); } });
+      inp.addEventListener("blur", function () { cerrar(false); });
+    }
+    lin.addEventListener("click", function (ev) { var c = ev.target.closest("[data-le]"); if (c && !ev.target.closest("input")) editarCelda(c); });
+    lin.addEventListener("keydown", function (ev) { if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches("[data-le]")) { ev.preventDefault(); editarCelda(ev.target); } });
     lin.addEventListener("click", function (ev) { var ir = ev.target.closest("[data-irp]"); if (ir) { ev.preventDefault(); ev.stopPropagation(); go("#/m/productos/p/" + encodeURIComponent(ir.getAttribute("data-irp"))); return; } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     lin.addEventListener("click", function (ev) {

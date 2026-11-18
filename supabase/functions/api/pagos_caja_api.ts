@@ -4,7 +4,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
-import { b, n, round2, s, ymdUtc, type Row } from "./domain.ts";
+import { b, n, round2, s, saldoPendiente, ymdUtc, type Row } from "./domain.ts";
 import { ticketPorClave, metodosPago, agregarComprobante } from "./tickets_beta_api.ts";
 import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
@@ -30,7 +30,7 @@ async function estadoTicket(ctx: Ctx, r: Row, total: number): Promise<Row> {
   const beta = pagosDe(await todas(ctx, "beta_pagos"), clave);
   const legado = b(r.cob) ? round2(n(r.estimado)) : 0;
   const pagadoBeta = round2(beta.reduce((a, p) => a + n(p.monto), 0));
-  return { clave, beta, legado, pagadoBeta, saldo: round2(Math.max(0, total - legado - pagadoBeta)) };
+  return { clave, beta, legado, pagadoBeta, saldo: saldoPendiente(total, legado + pagadoBeta) };
 }
 
 // ---------- Pagos de tickets ----------
@@ -74,7 +74,7 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   }
   await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: (s(p.nota).trim().slice(0, 300) || (fotoUrl ? "foto " + fotoUrl : "")) || null, registrado_por: quien, caja_mov_id });
   await logAccion(ctx.db, actor, "PAGO REGISTRAR", e.clave + " · " + ETQ_METODO[metodo] + " $" + monto.toFixed(2) + (ref ? " · " + ref : ""));
-  return { ok: true, id, saldo: round2(Math.max(0, n(e.saldo) - monto)) };
+  return { ok: true, id, saldo: saldoPendiente(n(e.saldo), monto) };
 });
 extend("pg_anular", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin anula pagos" };

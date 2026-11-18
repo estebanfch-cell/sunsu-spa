@@ -7,7 +7,7 @@ import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
-import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, saldoPendiente, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { conTelefono } from "./lib.ts";
@@ -19,7 +19,7 @@ import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
-import { esDiferenciaMejora, skuMigoABeta } from "./migo_lineas.ts";
+import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
@@ -180,6 +180,19 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
     const unit = !pr.estimado && pr.unit != null ? pr.unit : (l.lista > 0 ? l.lista : 0);
     out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: !(l.lista > 0) && (pr.estimado || pr.unit == null) });
   }
+  // TK81: con factura (aunque la compartan varios tickets), un servicio suelto con otro SKU al mismo precio y cantidad
+  // es el de la factura (la factura manda): se muestra con el SKU y nombre de la factura.
+  if (fm && fm.lineas.length) {
+    const enTk = new Set(out.map((l) => skuCode(l.sku))), enFac = new Set(fm.lineas.map((x) => skuCode(x.sku)));
+    for (const l of out) {
+      if (l.canje || l.cortesia || enFac.has(skuCode(l.sku)) || !esServicioSuelto({ sku: skuCode(l.sku), nombre: l.nombre })) continue;
+      const x = fm.lineas.find((y) => !enTk.has(skuCode(y.sku)) && esServicioSuelto({ sku: skuCode(y.sku), nombre: y.nombre }) && Math.abs(n(y.cantidad) - n(l.cantidad)) < 0.001 && Math.abs(n(y.totalCon) - round2(n(l.cantidad) * n(l.precio_unit))) <= 0.05);
+      if (!x) continue;
+      enTk.add(skuCode(x.sku));
+      (l as Row).corregidoFactura = l.sku;
+      l.sku = skuCode(x.sku); l.nombre = s(porCode.get(skuCode(x.sku))?.nombre) || x.nombre;
+    }
+  }
   const suma = round2(out.reduce((a, l) => a + round2(n(l.cantidad) * n(l.precio_unit)) - (l.descuento_tipo === "$" ? n(l.descuento_valor) : l.descuento_tipo === "%" ? round2(n(l.cantidad) * n(l.precio_unit) * n(l.descuento_valor) / 100) : 0), 0));
   const dif = round2(cobrado - suma);
   if (cobrado > 0 && Math.abs(dif) > 0.05) out.push({ tipo: "diferencia", sku: "DIF", nombre: "Diferencia sin explicar", cantidad: 1, precio_unit: dif, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: true });
@@ -339,8 +352,14 @@ extend("tk_guardar", "any", async (p, ctx, ses) => {
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
   if (!esAdmin(ses.rol)) return { error: "Un cambio de ticket lo pide con «Solicitar cambio» (lo aprueba un admin)" };
-  return await guardarTodo(ctx, ses, r, p);
+  return await reflags(ctx, ses, p, await guardarTodo(ctx, ses, r, p));
 });
+/** TK81 (Emilia 18/11): cada cambio de líneas o factura vuelve a evaluar los flags contra las líneas actuales (nunca quedan rancios). */
+async function reflags(ctx: Ctx, ses: Ses, p: Row, out: Row): Promise<Row> {
+  if (!out || out.error || !(Array.isArray(p.lineas) || (p.datos && typeof p.datos === "object"))) return out;
+  try { const { reevaluarFlags } = await import("./migo_cuadre_api.ts"); await reevaluarFlags(ctx, actorOf(ses)); } catch { /* el guardado ya quedó; el cuadre de la hora lo recalcula */ }
+  return out;
+}
 
 // Solicitud de cambio del detalle de ticket (quien no es admin): la aprueba un admin en Solicitudes.
 SOLICITUD_HOOKS["ticket_detalle"] = {
@@ -354,7 +373,7 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
   aplicar: async (ctx, ses, fila, propuestos) => {
     const r = await ticketPorClave(ctx, fila);
     if (!r) return { error: "Ticket no encontrado" };
-    return await guardarTodo(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" });
+    return await reflags(ctx, ses, propuestos, await guardarTodo(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" }));
   },
   // «Solicitar eliminación» (TK59): al aprobar, la admin cancela el ticket (no se borra; queda Cancelado).
   borrar: async (ctx, ses, fila, motivo, sol) => {
@@ -480,7 +499,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
   const pagadoSis = b(r.cob) ? round2(n(r.estimado)) : 0;
   const metodos = metodosPago(r.comp);
-  const pagos = { metodos, pagado: pagadoSis, saldo: round2(Math.max(0, total - pagadoSis)), cobrado: b(r.cob) };
+  const pagos = { metodos, pagado: pagadoSis, saldo: saldoPendiente(total, pagadoSis), cobrado: b(r.cob) };
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
   const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];

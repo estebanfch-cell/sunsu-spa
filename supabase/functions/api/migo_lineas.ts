@@ -14,13 +14,32 @@ export type LineaNorm = {
   totalCon: number;
   canje?: boolean;
   mejoraPaquete?: boolean;
+  /** id del ticket de donde salió la línea (cuando se comparan varios tickets contra una factura). */
+  ticketId?: number;
 };
 
 export type AvisoLinea = {
-  tipo: "revisa" | "falta" | "sobra" | "sugerencia";
+  tipo: "revisa" | "falta" | "sobra" | "sugerencia" | "cambio_sku";
   sku: string;
   texto: string;
+  /** cambio_sku: la línea del ticket (desde) se corrige con el SKU de la factura (hacia). */
+  desde?: string;
+  hacia?: string;
+  ticketId?: number;
 };
+
+/** TK81 (Emilia 18/11): servicios sueltos de la misma familia (extras SUNSU-NN, no faciales ni paquetes). */
+export function esServicioSuelto(l: { sku?: unknown; nombre?: unknown }): boolean {
+  return /^\d+$/.test(s(l.sku)) && !/paquete|facial/i.test(s(l.nombre));
+}
+/** Mismo precio y misma cantidad, distinto SKU de la misma familia: es la misma venta mal etiquetada; manda la factura. */
+export function mismoServicioOtroSku(fac: LineaNorm, tk: LineaNorm, tol = TOL, precioTk = 0): boolean {
+  if (!fac.sku || !tk.sku || fac.sku === tk.sku || tk.canje) return false;
+  if (!esServicioSuelto(fac) || !esServicioSuelto(tk)) return false;
+  if (!cerca(fac.cantidad, tk.cantidad, 0.001)) return false;
+  const mf = montoLinea(fac), mt = montoLinea(tk) || precioTk * tk.cantidad;
+  return mf > tol && cerca(mf, mt, tol);
+}
 
 /** Línea que cobra solo el plus cuando el facial canjeado vale más que el paquete. */
 export function esDiferenciaMejora(l: { tipo?: unknown; nombre?: unknown; promo?: unknown; mejoraPaquete?: unknown }): boolean {
@@ -128,12 +147,18 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
     const nombre = facial.replace(codigo, "").trim() || facial;
     pushSku(codigo, 1, nombre, canje);
   }
-  const extras = s(t.extras || orig["Servicios Adicionales "] || orig["Servicios Adicionales"] || orig.extras);
+  const extras = s(t.extras || t.servicios_adicionales || orig["Servicios Adicionales "] || orig["Servicios Adicionales"] || orig.extras);
   if (extras) {
     for (const part of extras.split(/\s*[|,;]\s*/).filter(Boolean)) {
       const m = part.match(/^(SUNSU-?[A-Z0-9-]+|[A-Z]{2,}-?\d+)\s*(.*)$/i);
       if (m) pushSku(m[1], 1, m[2].replace(/^[·\-–]\s*/, "").trim() || m[1]);
     }
+  }
+  // TK81: la compra de paquete (compra_pack_3/6) también es una línea del ticket (como en el detalle del ticket).
+  for (const pk of [s(t.compra_pack_3), s(t.compra_pack_6)]) {
+    if (!pk || /^(false|no|-|—)$/i.test(pk)) continue;
+    const m = pk.match(/SUNSU-?\d+/i);
+    if (m) pushSku(m[0], 1, pk.replace(m[0], "").replace(/^[·\-–\s]+/, "").trim() || m[0]);
   }
   const skip = new Set(["id", "estado", "nombre", "apellido", "so_num", "timestamp", "paquete?", "paquete", "facial hecho", "fotos antes", "fotos despues", "fecha retorno", "atendido por:", "atendido por", "notas generales", "recomendaciónes", "recomendaciones", "servicios adicionales", "servicios adicionales ", "$$ estimado"]);
   for (const [k, v] of Object.entries(orig)) {
@@ -162,7 +187,7 @@ function pvpCatalogo(sku: string, catalogo?: Map<string, { nombre?: string; pvpC
   return Number(cat.pvpConIva || 0) || (cat.pvpSinIva ? Math.round(cat.pvpSinIva * 1.15 * 100) / 100 : 0);
 }
 
-export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
+export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>, catPrecios?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
   const fac = factura.filter(Boolean);
   const tks = tickets.filter(Boolean);
   const usedT = new Set<number>();
@@ -183,18 +208,16 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
     return hit;
   };
 
+  const sinPar: LineaNorm[] = [];
   for (const f of fac) {
     const i = tomas(f);
-    if (i < 0) {
-      avisos.push({
-        tipo: "falta",
-        sku: f.sku || f.codigo,
-        texto: "Falta en ticket: " + etq(f) + " " + money(montoLinea(f)) + " × " + String(f.cantidad),
-      });
-      continue;
-    }
+    if (i < 0) { sinPar.push(f); continue; }
     usedT.add(i);
     const t = tks[i];
+    // TK81: emparejadas por nombre pero con otro SKU del mismo servicio: manda el SKU de la factura (se registra).
+    if (!t.canje && t.sku && f.sku && t.sku !== f.sku && esServicioSuelto(t) && esServicioSuelto(f)) {
+      avisos.push({ tipo: "cambio_sku", sku: f.sku, desde: t.sku, hacia: f.sku, ticketId: t.ticketId, texto: "Corregido con la factura: " + etq(t) + " → " + etq(f) + " " + money(montoLinea(f)) + " × " + String(f.cantidad) });
+    }
     if (t.canje) {
       const j = tks.findIndex((x, k) => !usedT.has(k) && (x.mejoraPaquete || esDiferenciaMejora(x)) && x.sku === (f.sku || t.sku));
       if (j >= 0) {
@@ -241,6 +264,22 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
         + " vs factura " + money(montoLinea(f)) + " × " + String(f.cantidad),
     });
   }
+  // TK81: lo que falta en el ticket puede ser el mismo servicio con otro SKU (mismo precio y cantidad): se corrige con la factura.
+  const facSkus = new Set(fac.map((f) => f.sku));
+  for (const f of sinPar) {
+    const j = tks.findIndex((t, k) => !usedT.has(k) && !facSkus.has(t.sku) && mismoServicioOtroSku(f, t, tol, pvpCatalogo(t.sku, catalogo || catPrecios)));
+    if (j >= 0) {
+      usedT.add(j);
+      const t = tks[j];
+      avisos.push({ tipo: "cambio_sku", sku: f.sku || f.codigo, desde: t.sku, hacia: f.sku, ticketId: t.ticketId, texto: "Corregido con la factura: " + etq(t) + " → " + etq(f) + " " + money(montoLinea(f)) + " × " + String(f.cantidad) });
+      continue;
+    }
+    avisos.push({
+      tipo: "falta",
+      sku: f.sku || f.codigo,
+      texto: "Falta en ticket: " + etq(f) + " " + money(montoLinea(f)) + " × " + String(f.cantidad),
+    });
+  }
   for (let i = 0; i < tks.length; i++) {
     if (usedT.has(i)) continue;
     const t = tks[i];
@@ -254,11 +293,11 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
   return avisos;
 }
 
-export function compararFacturaYTickets(lineasFac: Row[] | undefined, tickets: Row[], catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
+export function compararFacturaYTickets(lineasFac: Row[] | undefined, tickets: Row[], catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>, catPrecios?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
   const fac = (lineasFac || []).map(normalizarLineaFactura).filter((x): x is LineaNorm => !!x);
   if (!fac.length) return [];
-  const tks = tickets.flatMap((t) => lineasDeTicket(t, catalogo));
-  return compararLineas(fac, tks, TOL, catalogo);
+  const tks = tickets.flatMap((t) => lineasDeTicket(t, catalogo).map((l) => ({ ...l, ticketId: n(t.id) || undefined })));
+  return compararLineas(fac, tks, TOL, catalogo, catPrecios);
 }
 
 function claveSkuCant(l: LineaNorm): string {
