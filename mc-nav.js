@@ -262,7 +262,8 @@
     return L.map(function (b) {
       var c = String(b.codigo || "").toUpperCase(), t = String(b.tipo || "");
       var label = b.nombre || c;
-      if (c === "VENTA" || t === "venta") label = "Consignación";
+      if (c === "CONSIGNACION" || t === "consignacion") label = "Consignación";
+      else if (c === "VENTA" || t === "venta") label = "Venta";
       else if (c === "CASA" || t === "casa") label = "Bodega Oficina";
       else if (c === "CAB2" || /2$/.test(b.nombre || "") && t === "cabina") label = "Bodega Cabina · Cabina 2";
       else if (c === "CAB3" || /3$/.test(b.nombre || "") && t === "cabina") label = "Bodega Cabina · Cabina 3";

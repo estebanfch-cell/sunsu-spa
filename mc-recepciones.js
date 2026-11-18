@@ -1,5 +1,6 @@
 // 📥 Recepciones (TK25, Emilia 17/11): para quien solo recibe. Lista de OC por recibir y, por producto,
-// pedido · recibido (cantidad) · Recibido / No recibido. Recibido mete el stock a su bodega; No recibido
+// pedido · recibido (cantidad) · Recibido / No recibido. Recibido mete el stock a su bodega (consignación y
+// pedidos de restock RST → bodega Consignación, TK27); No recibido
 // anula lo pendiente (se puede deshacer por 1 hora). Las líneas repetidas del mismo producto van juntas.
 (function () {
   "use strict";
@@ -40,7 +41,7 @@
   }
   function bodSel(g) {
     var B = K.d.bodegas || [];
-    var ok = B.filter(function (b) { return g.uso === "insumo" ? b.tipo !== "venta" : (b.tipo === "venta" || b.tipo === "casa"); });
+    var ok = B.filter(function (b) { return g.uso === "insumo" ? b.tipo !== "venta" : (b.tipo === "venta" || b.tipo === "casa" || b.tipo === "consignacion"); });
     return '<select class="mcrc-b" data-b="' + e(g.producto_id) + '">' + ok.map(function (b) { return '<option value="' + e(b.id) + '"' + (b.id === g.bodega_id ? " selected" : "") + ">" + e(b.nombre) + "</option>"; }).join("") + "</select>";
   }
   function detHtml() {
@@ -51,7 +52,6 @@
         ? '<div class="mcrc-chips"><select data-origen="' + e(g.producto_id) + '" title="Origen"><option value="consignacion"' + (g.origen === "consignacion" ? " selected" : "") + '>Consignación</option><option value="propio"' + (g.origen === "propio" ? " selected" : "") + '>Propio</option></select><select data-uso="' + e(g.producto_id) + '" title="Uso"><option value="vendible"' + (g.uso === "vendible" ? " selected" : "") + '>Vendible</option><option value="insumo"' + (g.uso === "insumo" ? " selected" : "") + ">Insumo cabina</option></select></div>"
         : '<div class="mcrc-chips">' + pill(g.origen) + pill(g.uso) + "</div>";
       return '<tr class="' + (listo ? "listo" : s.accion === "recibido" ? "ok" : s.accion === "no_recibido" ? "no" : "") + '" data-g="' + e(g.producto_id) + '"><td><div class="mcrc-pn">' + e(g.nombre || g.sku) + '</div><div class="mcrc-sku">' + e(g.sku) + (g.lineas.length > 1 ? " · " + g.lineas.length + " líneas juntas" : "") + "</div>" + chips +
-        (g.consigEnEspera && !listo ? '<div class="mcrc-nota">Consignación: entra aquí mientras se decide la bodega de consignación</div>' : "") +
         (g.deshacer > 0 ? '<button type="button" class="mcrc-undo" data-undo="' + e(g.producto_id) + '">↶ Deshacer «No recibido» (' + e(g.deshacer) + ") — hasta las " + e(hm(g.deshacerHasta)) + "</button>" : "") + "</td>" +
         '<td class="num">' + e(g.pedido) + '</td><td class="num">' + e(g.recibido) + (g.no_recibido ? '<div class="mcrc-sku">no recibido ' + e(g.no_recibido) + "</div>" : "") + '</td><td class="num"><b>' + e(g.pendiente) + "</b></td>" +
         (bloq ? '<td colspan="3" class="mccf-sub">En espera</td>' : listo ? '<td colspan="3" class="mccf-sub">Listo</td>' :
@@ -82,9 +82,10 @@
         G.push({ producto_id: g.producto_id, accion: s.accion, cantidad: s.accion === "recibido" ? num(s.cantidad != null ? s.cantidad : g.pendiente) : 0, bodega_id: (bsel && bsel.value) || g.bodega_id });
       });
       var no = G.filter(function (x) { return x.accion === "no_recibido"; }).length;
-      if (no && !confirm(no + " producto(s) quedarán como No recibido (lo pendiente se anula). Se puede deshacer durante 1 hora. ¿Seguir?")) return;
+      var rst = d.oc.tipo === "restock";
+      if (no && !confirm(no + " producto(s) quedarán como No recibido (lo pendiente se anula)." + (rst ? "" : " Se puede deshacer durante 1 hora.") + " ¿Seguir?")) return;
       ok.disabled = true;
-      try { var r = await A("rcp_recibir", { oc_id: d.oc.id, grupos: G }); toast2((r.recepcion ? "Recepción " + r.recepcion + " registrada" : "Listo") + (r.acta ? " · acta " + r.acta + " en la OC" : "")); K.sel = {}; await cargar(d.oc.id); pintar(main); if (window.MCRecepciones && window.MCRecepciones.trasRecibir) window.MCRecepciones.trasRecibir(main, d, r); }
+      try { var r = await A("rcp_recibir", { oc_id: d.oc.id, grupos: G }); toast2((r.recepcion ? "Recepción " + r.recepcion + " registrada" : "Listo") + (r.acta ? " · acta " + r.acta + (rst ? " (se ve en la OC de consignación del periodo)" : " en la OC") : "")); K.sel = {}; await cargar(d.oc.id); pintar(main); if (window.MCRecepciones && window.MCRecepciones.trasRecibir) window.MCRecepciones.trasRecibir(main, d, r); }
       catch (x) { ok.disabled = false; main.querySelector("#rc-err").textContent = x.message || x; }
     };
   }

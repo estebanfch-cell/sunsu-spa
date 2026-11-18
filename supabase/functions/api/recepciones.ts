@@ -5,6 +5,8 @@ import { familiaConsignacion, vendeDesdeCabina } from "./ventas.ts";
 
 export const BOD_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BOD_CASA = "44444444-4444-4444-8444-444444444444";
+/** TK27: bodega CONSIGNACION (aparte de Venta). */
+export const BOD_CONSIG = "66666666-6666-4666-8666-666666666666";
 export const BOD_CABINA = "22222222-2222-4222-8222-222222222222";
 export const UNDO_MS = 3600e3;
 
@@ -18,12 +20,12 @@ export function origenDe(p: Row | undefined): "consignacion" | "propio" {
 /** Vendible (venta / ambos) o Insumo cabina (cabina). */
 export const usoDe = (p: Row | undefined): "vendible" | "insumo" => s(p?.uso) === "cabina" ? "insumo" : "vendible";
 
-/** Bodega a la que entra lo recibido. Propio+Vendible → Venta; Insumo → Casa (o la cabina que se elija).
- *  Consignación: la bodega de consignación está en espera de Emilia — por ahora entra igual que un propio, y se marca. */
-export function destinoDe(p: Row | undefined): { bodega_id: string; consigEnEspera: boolean } {
-  if (vendeDesdeCabina(p)) return { bodega_id: BOD_CABINA, consigEnEspera: false };
-  const b = usoDe(p) === "insumo" ? BOD_CASA : BOD_VENTA;
-  return { bodega_id: b, consigEnEspera: origenDe(p) === "consignacion" };
+/** Bodega a la que entra lo recibido. Propio+Vendible → Venta; Insumo → Casa (o la cabina que se elija);
+ *  Consignación (TK27) → bodega CONSIGNACION. Las máscaras que se venden desde Cabina siguen yendo a Cabina. */
+export function destinoDe(p: Row | undefined): { bodega_id: string } {
+  if (vendeDesdeCabina(p)) return { bodega_id: BOD_CABINA };
+  if (origenDe(p) === "consignacion") return { bodega_id: BOD_CONSIG };
+  return { bodega_id: usoDe(p) === "insumo" ? BOD_CASA : BOD_VENTA };
 }
 
 /** Une las líneas del mismo producto (OC-0001 tenía JN-001 dos veces) en una sola fila para recibir. */
