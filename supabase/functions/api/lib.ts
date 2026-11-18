@@ -223,12 +223,13 @@ export async function bajasDe(db: { all: (t: string) => Promise<Record<string, u
   return (nombre: string) => set.has(norm(nombre));
 }
 
-export async function guardarArchivo(db: Db, actor: string, kind: string, nombre: string, dataUrl: string): Promise<string | null> {
+export async function guardarArchivo(db: Db, actor: string, kind: string, nombre: string, dataUrl: string, maxB64 = 1_500_000): Promise<string | null> {
   const i = dataUrl.indexOf("base64,");
   if (i < 0) return null;
   const mime = dataUrl.slice(5, dataUrl.indexOf(";")) || "image/jpeg";
   const b64 = dataUrl.slice(i + 7);
-  if (b64.length > 1_500_000) return null;
+  const tope = /pdf/i.test(mime) ? Math.max(maxB64, 4_000_000) : maxB64;
+  if (b64.length > tope) return null;
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
   await db.write(actor, "app_archivos", "insert", {}, { id, kind, nombre, mime, data_b64: b64, created_by: actor });
   return id;

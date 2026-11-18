@@ -358,7 +358,14 @@ export function faltaDe(r: Row, d: Row): string[] {
 /** Documentos subidos en la beta (comprobantes que faltaban). */
 export function docsBeta(cab: Row | undefined): Row[] {
   const d = (cab?.datos || {}) as Row, L = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
-  return L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
+  const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
+  const pdfs = Array.isArray(d.factura_pdfs) ? d.factura_pdfs as Row[] : (d.factura_pdf && typeof d.factura_pdf === "object" ? [d.factura_pdf as Row] : []);
+  for (const x of pdfs) {
+    if (!s(x.url)) continue;
+    const fac = s(x.factura);
+    out.unshift({ tipo: "factura", nombre: "Factura " + (fac || "Migo") + " (PDF)", url: s(x.url), factura: fac || undefined });
+  }
+  return out;
 }
 export function faseA(r: Row): boolean {
   const fac = s(r.facial_hecho).trim(), notas = s(r.notas_generales).trim() || s(r.recomendaciones).trim();

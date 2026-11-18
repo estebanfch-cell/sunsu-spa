@@ -129,6 +129,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(formaDeTicket(r, d, formaMigo) ? { forma: formaDeTicket(r, d, formaMigo) } : {}),
       ...(!cob && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
+      ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),
     };
     return it;

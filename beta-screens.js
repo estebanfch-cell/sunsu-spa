@@ -5188,7 +5188,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>':(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
@@ -5232,7 +5232,7 @@ function _histCardHTML(t, i, showPrices){
   var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
   var l3=[_histEsc(_histFechaFmt(t.fecha))];
   if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
-  if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+'</span>');
+  if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+( _tkFacPdf(t)?' 📄':'')+'</span>');
   if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
   var fp=_tkForma(t);
   var pills=[];
@@ -5326,6 +5326,10 @@ function _tkPagoMigo(t){
 function _tkPendienteLunes(t){
   var L=(window._tkLeds||{})[String(t&&t.tkRow)];
   return !!(L&&L.pendienteLunes);
+}
+function _tkFacPdf(t){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  return !!(L&&L.facturaPdf);
 }
 function _tkPagoPill(t){
   if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
