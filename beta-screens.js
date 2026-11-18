@@ -5282,7 +5282,7 @@ function _histCerrarTicket(){
   pane.innerHTML='<p class="note">Elige un ticket para ver el detalle.</p>';
   document.querySelectorAll('#tk-body .tk-row.on').forEach(function(tr){ tr.classList.remove('on'); });
 }
-function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); }
+function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
 var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',sinfactura:'#D2603A',anulado:'#C0392B'};
 // Factura completa 001-001-000002956: la corregida en la beta, si no la del sistema (fac_7).
@@ -5353,6 +5353,7 @@ function _tkResumenLinea(tickets, conPrecio){
 function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
   tickets=_tkFiltrar(tickets);
   var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
+  html+='<div id="migo-borradores-banner"></div>';
   html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
@@ -5365,6 +5366,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
 function _histResStaffHTML(tickets, busq){
   tickets=_tkFiltrar(tickets);
   var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'"</div>':'');
+  html+='<div id="migo-borradores-banner"></div>';
   html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
@@ -18163,3 +18165,82 @@ function wireConteoFlujo(main){
 
 
 
+
+
+// Borradores de factura Migo sin ticket (Pendiente de aprobar). Sin cédulas ni teléfonos.
+function _migoEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function _migoPintarBandeja(){
+  var box=document.getElementById('migo-borradores-banner');
+  if(!box||typeof api!=='function') return;
+  if(window._migoBandejaCargando) return;
+  window._migoBandejaCargando=true;
+  Promise.resolve(api('migo_borradores_lista',{})).then(function(r){
+    window._migoBandejaCargando=false;
+    if(!box.isConnected) return;
+    if(!r||!r.ok) return;
+    var mias=r.mias||[], bandeja=r.bandeja||[];
+    if(!mias.length&&!bandeja.length){ box.innerHTML=''; return; }
+    var filas=function(L, admin){
+      return L.map(function(b){
+        return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #f0e6c8">'
+          +'<div style="flex:1;min-width:180px"><b>'+_migoEsc(b.cliente||'—')+'</b>'
+          +'<div class="mccf-sub" style="font-size:.72rem">Fac. '+_migoEsc(b.factura)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+(b.forma?' · '+_migoEsc(b.forma):'')+(b.asignado_a?' · '+_migoEsc(b.asignado_a):'')+'</div></div>'
+          +'<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente de aprobar</span>'
+          +'<button type="button" class="btn small" onclick="_migoAbrirBorrador(\''+_migoEsc(b.factura)+'\')">Abrir</button>'
+          +(admin&&!b.asignado_a?'<button type="button" class="btn ghost small" onclick="_migoAsignarBorrador(\''+_migoEsc(b.factura)+'\')">Asignar</button>':'')
+          +'</div>';
+      }).join('');
+    };
+    var html='';
+    if(mias.length) html+='<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin-bottom:10px;padding:12px 14px"><b>Tienes '+mias.length+' factura'+(mias.length>1?'s':'')+' pendiente'+(mias.length>1?'s':'')+' de aprobar</b><div class="mccf-sub">Llegaron a Migo antes del ticket. Completa notas o cabina y aprueba: no cuentan en comisiones ni inventario hasta entonces.</div>'+filas(mias,false)+'</div>';
+    if(bandeja.length) html+='<div class="card" style="background:#f6f3ff;border:1.5px solid #cfc4ee;margin-bottom:10px;padding:12px 14px"><b>Facturas sin ticket</b> <span class="mccf-sub">('+bandeja.length+' en bandeja, sin cita de Acuity ese día)</span>'+filas(bandeja,true)+'</div>';
+    box.innerHTML=html;
+  }).catch(function(){ window._migoBandejaCargando=false; });
+}
+function _migoAbrirBorrador(fac){
+  if(typeof api!=='function') return;
+  Promise.resolve(api('migo_borrador_get',{factura:fac})).then(function(r){
+    if(!r||!r.ok){ alert((r&&r.error)||'No pude abrir el borrador'); return; }
+    var b=r.borrador, d=b.datos||{};
+    var lineas=(b.lineas||[]).map(function(l){ return _migoEsc((l.producto||l.sku||l.codigo||'')+' × '+(l.cantidad||1)+(l.total!=null?'  $'+Number(l.total).toFixed(2):'')); }).join('<br>')||'<span class="mccf-sub">Sin detalle de productos en el reporte de Migo (Formas de pago). Puedes anotarlos abajo.</span>';
+    var wrap=document.createElement('div');
+    wrap.style.cssText='position:fixed;inset:0;background:rgba(20,16,40,.45);z-index:80;display:flex;align-items:flex-end;justify-content:center;padding:12px';
+    wrap.innerHTML='<form id="migo-borrador-form" style="background:white;border-radius:16px 16px 0 0;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px 16px 20px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Borrador · Fac. '+_migoEsc(b.factura)+'</b><button type="button" class="btn ghost small" data-close>Cerrar</button></div>'
+      +'<div class="mccf-sub" style="margin:6px 0 10px">'+_migoEsc(b.cliente)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+' · '+_migoEsc(b.estado_txt)+'</div>'
+      +'<div style="margin-bottom:10px"><b style="font-size:.78rem">Ítems</b><div>'+lineas+'</div></div>'
+      +'<label style="display:block;font-size:.78rem;margin-bottom:6px">Notas / cabina<textarea name="notas" rows="3" style="width:100%;margin-top:4px;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font:inherit">'+(d.notas||d.cabina||'')+'</textarea></label>'
+      +'<label style="display:block;font-size:.78rem;margin-bottom:10px">Recomendaciones<textarea name="recomendaciones" rows="2" style="width:100%;margin-top:4px;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font:inherit">'+(d.recomendaciones||'')+'</textarea></label>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px"><button type="submit" class="btn small">Aprobar ticket</button><button type="button" class="btn ghost small" data-save>Solo guardar</button></div>'
+      +'<div class="mccf-sub" style="margin-top:8px">Hasta aprobarlo no cuenta para comisiones ni descuenta inventario.</div></form>';
+    document.body.appendChild(wrap);
+    wrap.querySelector('[data-close]').onclick=function(){ wrap.remove(); };
+    wrap.addEventListener('click',function(ev){ if(ev.target===wrap) wrap.remove(); });
+    wrap.querySelector('[data-save]').onclick=function(){
+      var f=wrap.querySelector('#migo-borrador-form');
+      api('migo_borrador_guardar',{factura:fac,datos:{notas:f.notas.value,recomendaciones:f.recomendaciones.value}}).then(function(x){
+        if(x&&x.ok){ wrap.remove(); if(typeof toast==='function') toast('Borrador guardado','var(--green)'); }
+        else alert((x&&x.error)||'No se guardó');
+      });
+    };
+    wrap.querySelector('#migo-borrador-form').onsubmit=function(ev){
+      ev.preventDefault();
+      var f=ev.target;
+      if(!confirm('¿Aprobar este ticket? Recién entonces cuenta en comisiones e inventario.')) return;
+      api('migo_borrador_aprobar',{factura:fac,datos:{notas:f.notas.value,recomendaciones:f.recomendaciones.value}}).then(function(x){
+        if(!x||!x.ok){ alert((x&&x.error)||'No se pudo aprobar'); return; }
+        wrap.remove();
+        if(typeof toast==='function') toast('Ticket aprobado '+((x.so_num||x.ticket)||''),'var(--green)');
+        if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
+      });
+    };
+  });
+}
+function _migoAsignarBorrador(fac){
+  var quien=prompt('¿A qué cosmetóloga se lo asigno?');
+  if(!quien||!quien.trim()) return;
+  api('migo_borrador_asignar',{factura:fac,asignado_a:quien.trim()}).then(function(x){
+    if(x&&x.ok){ if(typeof toast==='function') toast('Asignado a '+quien.trim(),'var(--green)'); if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff); }
+    else alert((x&&x.error)||'No se pudo asignar');
+  });
+}

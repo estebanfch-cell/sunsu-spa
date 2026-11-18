@@ -36,6 +36,7 @@ import "./recepciones_api.ts";
 import "./consignacion_beta_api.ts";
 import "./actas_api.ts";
 import "./promos_beta_api.ts";
+import "./migo_cuadre_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
@@ -80,6 +81,7 @@ Deno.serve(async (req) => {
       JIBBLE_CLIENT_SECRET: Deno.env.get("JIBBLE_CLIENT_SECRET"),
       SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
       SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      MIGO_CRON_KEY: Deno.env.get("MIGO_CRON_KEY"),
     },
     fetchImpl: fetch,
     legacyLogin: async (pin: string) => {

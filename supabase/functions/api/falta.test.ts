@@ -4,8 +4,14 @@ import { faltaDe } from "./tickets_beta_api.ts";
 describe("faltaDe (fila amarilla)", () => {
   it("transferencia sin comprobante pide foto; con comprobante subido en la beta ya no", () => {
     const r = { timestamp: "2026-11-10T15:00:00Z", comp: "Transferencia $20", comprobante: "", cob: false, fac: false, fac_7: "" };
-    assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de transferencia"]);
+    assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
     assert.deepEqual(faltaDe(r, { comprobantes: [{ url: "archivo:1" }] }), []);
+  });
+  it("tarjeta sin voucher pide foto; efectivo no; ya no pide número de factura", () => {
+    const r = { timestamp: "2026-11-17T16:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
+    assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
+    assert.deepEqual(faltaDe(r, { comprobantes: [{ url: "archivo:1" }] }), []);
+    assert.deepEqual(faltaDe({ timestamp: "2026-11-17T16:00:00Z", comp: "Efect:10", cob: true, fac: false, fac_7: "" }, {}), []);
   });
   it("historia anterior a noviembre no se marca", () => {
     assert.deepEqual(faltaDe({ timestamp: "2026-10-10T15:00:00Z", comp: "Transferencia $20" }, {}), []);
