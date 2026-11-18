@@ -62,7 +62,7 @@ describe("TK69 productos del personal", () => {
     assert.match(js, /pvpSinIva/);
     assert.match(js, /Va en protocolo/);
     assert.match(js, /MC\.admin \? "Buscar producto, SKU, marca o código"/);
-    assert.match(beta, /mc-productos\.js\?v=20261118tk75/);
+    assert.match(beta, /mc-productos\.js\?v=20261118tk77/);
   });
 
   it("lista y ficha: todo el catálogo, solo PVP con/sin IVA, último consumo y protocolo, sin descargar", async () => {
@@ -118,5 +118,17 @@ describe("TK69 productos del personal", () => {
     assert.match(String(down.error), /no puede descargar/i);
     const okDown = await handle("mcprod_archivo", { token: admin.token, id: "p1", archivo_id: "a1" }, admin) as Row;
     assert.equal(okDown.ok, true);
+  });
+});
+
+describe("TK77 ficha de producto en secciones", () => {
+  it("Identificación siempre visible y el resto en secciones plegables que recuerdan si están abiertas", () => {
+    const js = readFileSync(new URL("../../../mc-productos.js", import.meta.url), "utf8");
+    assert.match(js, /function identificacion\(\)/);
+    for (const t of ["Inventario y bodegas", "Presentación / envase", "Códigos de barras", "Precios y costos", "Observaciones / descripción"]) assert.ok(js.includes('"' + t + '"'), t);
+    assert.match(js, /if \(MC\.admin\) \{\s*var cv = calcVivo\(\)/, "Precios y costos solo para admin");
+    assert.match(js, /localStorage\.setItem\("mcp-secs"/);
+    assert.match(js, /container-type:inline-size;container-name:mcpsec/);
+    assert.doesNotMatch(js, /\[\["resumen", "Resumen"\]/);
   });
 });
