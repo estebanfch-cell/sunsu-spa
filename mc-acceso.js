@@ -42,7 +42,7 @@
       h += '<div class="mcac-card"><b>Accesos del equipo</b> <span class="mcac-sub">· solo admin. Nunca se muestra la contraseña; si alguien la olvida, pon una nueva.</span>' +
         '<table class="mcac-t"><thead><tr><th>Persona</th><th>Rol</th><th>Usuario</th><th></th></tr></thead><tbody>' +
         it.map(function (u) {
-          return "<tr><td>" + e(u.nombre) + "</td><td>" + e(u.rol) + "</td><td>" + (u.usuario ? '<span class="mcac-pill">' + e(u.usuario) + "</span>" + (u.bloqueada ? ' <span class="mcac-pill r">bloqueado 15 min</span>' : "") : '<span class="mcac-pill g">solo PIN</span>') + "</td>" +
+          return "<tr><td>" + e(u.nombre) + "</td><td>" + e(u.rol) + "</td><td>" + (u.usuario ? '<span class="mcac-pill">' + e(u.usuario) + "</span>" + (u.debe_cambiar ? ' <span class="mcac-pill r">debe cambiar clave</span>' : "") + (u.bloqueada ? ' <span class="mcac-pill r">bloqueado 15 min</span>' : "") : '<span class="mcac-pill g">solo PIN</span>') + "</td>" +
             '<td style="text-align:right;white-space:nowrap"><button class="btn ghost small" data-cpon="' + e(u.id) + '" data-n="' + e(u.nombre) + '" data-u="' + e(u.usuario || "") + '">' + (u.usuario ? "Cambiar" : "Crear") + "</button>" +
             (u.bloqueada ? ' <button class="btn ghost small" data-cdes="' + e(u.id) + '">Desbloquear</button>' : "") +
             (u.usuario ? ' <button class="btn ghost small" data-cqui="' + e(u.id) + '" data-n="' + e(u.nombre) + '">Quitar</button>' : "") + "</td></tr>";
@@ -65,7 +65,7 @@
     document.querySelectorAll("[data-cpon]").forEach(function (b) {
       b.onclick = function () {
         var ov = document.createElement("div"); ov.className = "mcac-ov";
-        ov.innerHTML = "<div><b>Acceso de " + e(b.dataset.n) + "</b><div style='margin-top:8px'>" + formHtml("mcac-adm", b.dataset.u, false) + "</div><p class='mcac-sub'>Dale la contraseña en persona; luego puede cambiarla en «Mi acceso».</p><div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
+        ov.innerHTML = "<div><b>Acceso de " + e(b.dataset.n) + "</b><div style='margin-top:8px'>" + formHtml("mcac-adm", b.dataset.u, false) + "</div><p class='mcac-sub'>Pon una contraseña temporal y dásela en persona. En el primer ingreso tendrá que elegir la suya (no puede repetir la temporal).</p><div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
         document.body.appendChild(ov);
         ov.querySelector("[data-x]").onclick = function () { ov.remove(); };
         ov.querySelector("[data-ok]").onclick = async function () {

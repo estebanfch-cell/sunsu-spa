@@ -87,4 +87,23 @@ describe("🔑 Usuario y contraseña", () => {
     assert.equal((await h("cred_quitar", "adm", { usuario_id: "u-ana" })).ok, true);
     assert.equal(db.tables.get("beta_credenciales")!.length, 0);
   });
+
+  it("una clave que pone el admin es temporal: obliga a cambiarla y no se puede repetir", async () => {
+    const { h } = semilla();
+    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-ana", usuario: "ana", password: "Temporal1x" })).ok, true);
+    const L = await h("login_pass", "", { usuario: "ana", password: "Temporal1x" });
+    assert.equal(L.ok, true);
+    assert.equal(L.debe_cambiar, true);
+    assert.equal(L.usuario, "ana");
+    const same = await h("cred_mia_guardar", "cos", { usuario: "ana", password: "Temporal1x", password2: "Temporal1x" });
+    assert.match(String(same.error), /distinta a la temporal/);
+    const own = await h("cred_mia_guardar", "cos", { usuario: "ana", password: "LaMia2026", password2: "LaMia2026" });
+    assert.equal(own.ok, true);
+    assert.equal(own.debe_cambiar, false);
+    const L2 = await h("login_pass", "", { usuario: "ana", password: "LaMia2026" });
+    assert.equal(L2.ok, true);
+    assert.equal(L2.debe_cambiar, false);
+    const items = (await h("cred_lista", "adm")).items as Row[];
+    assert.equal(items.find((x) => x.id === "u-ana")!.debe_cambiar, false);
+  });
 });

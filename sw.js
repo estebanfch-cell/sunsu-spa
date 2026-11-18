@@ -1,6 +1,6 @@
-const CACHE = "sunsu-beta-2026-11-18-TK99";
+const CACHE = "sunsu-beta-2026-11-18-TK100";
 const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
-  "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/assets/sunsu-logo-celeste.png"];
+  "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
 
 function scopePath() {
   try { return new URL(self.registration.scope).pathname || "/"; } catch { return "/"; }
@@ -37,7 +37,7 @@ self.addEventListener("push", (event) => {
   try { payload = event.data ? event.data.json() : payload; } catch { /* el texto por defecto alcanza */ }
   event.waitUntil(self.registration.showNotification(payload.title || "Sunsu", {
     body: payload.body || "Recuerda marcar entrada",
-    icon: "/icon-beta.png",
+    icon: "/icon-sunsu-192.png",
     tag: payload.tag || "sunsu-reloj",
     data: { url: "/beta.html#/m/inicio" },
   }));
