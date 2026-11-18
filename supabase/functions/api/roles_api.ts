@@ -120,6 +120,29 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
       });
     }
   }
+  const propios = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
+  for (const r of propios) {
+    if (s(r.origin) === "test") continue;
+    const persona = s(r.persona);
+    const periodo = clavePeriodo(r.periodo);
+    const snap = (r.snapshot && typeof r.snapshot === "object") ? r.snapshot as Row : {};
+    const pub = s(r.estado) === "aprobado" || estaPublicado(pubs, periodo, persona);
+    if (!admin && (s(r.estado) !== "aprobado" || !pub)) continue;
+    if (!admin && !esPropio(persona, ses)) continue;
+    if (admin && s(p.persona) && !mismoNombre(persona, s(p.persona))) continue;
+    const anio = anioDeClave(periodo) || n(r.anio);
+    if (anioFiltro && anio !== anioFiltro) continue;
+    const ix = items.findIndex((x) => clavePeriodo(x.periodo) === periodo && mismoNombre(s(x.persona), persona));
+    const item: Row = {
+      id: r.id, periodo, etiqueta: etiquetaPeriodo(periodo), anio,
+      persona, cedula: s(r.cedula) || s(snap.cedula),
+      totalIngresos: n(snap.totalIngresos), neto: n(snap.totalRecibir || snap.neto),
+      publicado: pub, estado: s(r.estado) || "borrador",
+      fuente: "beta", sheet: periodo, motivoRechazo: s(r.motivo_rechazo),
+    };
+    if (ix >= 0) items[ix] = item;
+    else items.push(item);
+  }
   items.sort((a, b) => s(b.periodo).localeCompare(s(a.periodo)) || s(a.persona).localeCompare(s(b.persona)));
   const anios = [...new Set(items.map((x) => n(x.anio)).filter(Boolean))].sort((a, b) => b - a);
   return { ok: true, items, anios, admin };
