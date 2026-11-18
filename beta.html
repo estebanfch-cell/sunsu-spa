@@ -1107,7 +1107,29 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rol-card .v { font-size: 1.35rem; margin: 6px 0 8px; }
   .rol-card .note { flex: 1; }
   .rol-card .tools { margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+
   .rol-card.is-off { opacity: .55; }
+  .rol-pill { display:inline-block; border-radius:999px; padding:1px 8px; font-size:.64rem; font-weight:700; line-height:1.5; border:1.5px solid; }
+  .rol-pill.borrador { color:#8A6D1A; border-color:#C4A35A; }
+  .rol-pill.aprobado { color:#2E7D52; border-color:#2E7D52; }
+  .rol-pill.rechazado { color:#B84040; border-color:#B84040; }
+  #rol-preview, .rol-oficial { overflow-x: hidden; max-width: 100%; box-sizing: border-box; }
+  .rol-oficial .rol-line { display:flex; justify-content:space-between; gap:10px; align-items:baseline; padding:4px 0; border-bottom:1px solid var(--cream-d,#E6DCCB); font-size:.86rem; }
+  .rol-oficial .rol-line .concepto { min-width:0; flex:1; overflow-wrap:anywhere; }
+  .rol-oficial .rol-line .monto, .rol-oficial .rol-line input.rol-edit { font-variant-numeric: tabular-nums; text-align:right; min-width:4.8rem; width:5.2rem; border:0; background:transparent; padding:0; font: inherit; color: inherit; }
+  .rol-oficial .rol-line input.rol-edit:focus { outline:1px solid var(--navy,#3D5A7A); border-radius:4px; background:#fff; }
+  .rol-oficial .rol-total { font-weight:800; border-bottom:0; margin-top:4px; }
+  .rol-patronal { background:#EEF3FA; border-radius:10px; padding:10px 12px; margin:12px 0; }
+  .rol-patronal strong { display:block; margin-bottom:4px; color:var(--navy,#3D5A7A); }
+  .rol-acciones { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .rol-dirty-bar { display:none; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  #rol-preview.is-dirty .rol-dirty-bar { display:flex; }
+  .rol-crear-box { display:grid; gap:8px; margin:8px 0 14px; }
+  .rol-crear-box .tools { margin:0; }
+  @media (max-width: 375px) {
+    #rol-preview, .rol-oficial, .roles-grid { overflow-x: hidden; }
+    .rol-card { height: auto; min-height: 160px; padding: 12px; }
+  }
   .asis-tabs { display: flex; gap: 6px; margin: 0 0 12px; }
   .asis-tabs .btn { min-width: 72px; }
   .asis-timer { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); font-size: .95rem; }
@@ -4342,41 +4364,133 @@ async function renderPersonalComisiones() {
   const nota = state.admin ? "Elige a quién ves. Cada cosmetóloga, en su cuenta, solo ve lo suyo." : "Ves solo tu comisión.";
   return `${sel}<p class="note">${esc(data.periodoLabel || "")}. ${nota}</p><div class="grid">${cards}</div>`;
 }
+
 async function renderPersonalRol() {
   const sel = await htmlSelectorPersona();
   const lista = await api("roles_lista", state.admin && state.persona ? { persona: state.persona } : {});
   if (lista.error) return sel + fail(lista);
   const items = lista.items || [];
   const anios = (lista.anios || []).length ? lista.anios : [...new Set(items.map((x) => x.anio).filter(Boolean))].sort((a, b) => b - a);
-  if (!items.length) {
-    return sel + `<h2>Roles 2026</h2><p class="note">${state.admin ? "Todavía no hay roles, o no has publicado ninguno." : "Cuando administración publique tu rol, aparece aquí."}</p>`;
-  }
+  const crear = state.admin ? await htmlRolCrear() : "";
+  const vacio = !items.length ? `<h2>Roles</h2><p class="note">${state.admin ? "Todavía no hay roles. Usa «Crear rol» para armar el del mes." : "Cuando administración apruebe tu rol, aparece aquí."}</p>` : "";
   const porAnio = {};
   items.forEach((it) => {
     const a = it.anio || 2026;
     if (!porAnio[a]) porAnio[a] = [];
     porAnio[a].push(it);
   });
-  const bloques = (anios.length ? anios : Object.keys(porAnio).sort((a, b) => b - a)).map((anio) => {
+  const bloques = items.length ? (anios.length ? anios : Object.keys(porAnio).sort((a, b) => b - a)).map((anio) => {
     const cards = (porAnio[anio] || []).map((it) => htmlRolCard(it, !!lista.admin)).join("");
     return `<section class="roles-anio"><h2>Roles ${esc(anio)}</h2><div class="roles-grid">${cards}</div></section>`;
-  }).join("");
-  const bulk = lista.admin && items.length ? `<div class="tools" id="roles-bulk">${[...new Set(items.map((x) => x.periodo))].map((per) => `<button class="btn ghost small" type="button" data-rol-pub="${esc(per)}" data-todos="1" data-on="1">Publicar ${esc(per.replace(/_/g, " "))}</button><button class="btn ghost small" type="button" data-rol-pub="${esc(per)}" data-todos="1" data-on="0">Ocultar ${esc(per.replace(/_/g, " "))}</button>`).join("")}</div>` : "";
-  return sel + bulk + bloques;
+  }).join("") : "";
+  return sel + crear + `<div id="rol-preview"></div>` + vacio + bloques;
+}
+async function htmlRolCrear() {
+  const op = await api("rol_opciones");
+  if (op.error) return `<p class="note">${esc(op.error)}</p>`;
+  const personas = (op.afiliadas || []).map((p) => `<option value="${esc(p.nombre)}" data-cedula="${esc(p.cedula || "")}">${esc(p.nombre)}</option>`).join("");
+  const meses = (op.meses || []).map((m) => `<option value="${esc(m.periodo)}">${esc(m.etiqueta)}</option>`).join("");
+  const oc = (op.sinIess || []).length
+    ? `<p class="note">Sin afiliación IESS (${(op.sinIess || []).map((x) => esc(x.nombre)).join(", ")}): no sale rol. <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Generar OC del mes</button> en su ficha de Empleados.</p>`
+    : "";
+  return `<div class="card rol-crear-box"><div class="card-title">Crear rol</div>
+    <div class="tools">
+      <label>Persona <select id="rol-nueva-persona">${personas}</select></label>
+      <label>Mes <select id="rol-nuevo-periodo">${meses}</select></label>
+      <button class="btn small" type="button" id="rol-crear-btn">Crear rol</button>
+    </div>${oc}</div>`;
+}
+function rolPill(estado) {
+  const e = String(estado || (arguments[0] && arguments[0].publicado ? "aprobado" : "borrador")).toLowerCase();
+  const label = e === "aprobado" ? "Aprobado" : e === "rechazado" ? "Rechazado" : "Borrador";
+  const cls = e === "aprobado" ? "aprobado" : e === "rechazado" ? "rechazado" : "borrador";
+  return `<span class="rol-pill ${cls}">${label}</span>`;
 }
 function htmlRolCard(it, admin) {
-  const off = admin && !it.publicado;
-  const acc = admin
-    ? `<button class="btn ghost small" type="button" data-rol-pub="${esc(it.periodo)}" data-persona="${esc(it.persona || "")}" data-on="${it.publicado ? "0" : "1"}">${it.publicado ? "Ocultar" : "Publicar"}</button>`
-    : "";
-  const ver = `<button class="btn small" type="button" data-rol-ver="${esc(it.sheet || it.periodo)}" data-cedula="${esc(it.cedula || "")}" data-persona="${esc(it.persona || "")}">Ver</button>`;
+  const est = it.estado || (it.publicado ? "aprobado" : "borrador");
+  const off = admin && est !== "aprobado";
+  const ver = it.id
+    ? `<button class="btn small" type="button" data-rol-ab="${esc(it.id)}">Ver</button>`
+    : `<button class="btn small" type="button" data-rol-ver="${esc(it.sheet || it.periodo)}" data-cedula="${esc(it.cedula || "")}" data-persona="${esc(it.persona || "")}">Ver</button>`;
   return `<div class="card rol-card${off ? " is-off" : ""}">
-    <div class="k">${esc(it.etiqueta || it.periodo)}</div>
-    <div class="v">${money(it.totalIngresos)}</div>
-    <div class="note">${esc(it.persona || "")}${admin ? (it.publicado ? " · Publicado" : " · No publicado") : ""}</div>
-    <div class="tools">${ver}${acc}</div>
+    <div class="k">${esc(it.etiqueta || it.periodo)} ${rolPill(est)}</div>
+    <div class="v">${money(it.neto != null ? it.neto : it.totalIngresos)}</div>
+    <div class="note">${esc(it.persona || "")}${it.motivoRechazo ? " · " + esc(it.motivoRechazo) : ""}</div>
+    <div class="tools">${ver}</div>
   </div>`;
 }
+function mon2(v) { return (Math.round((Number(v) + Number.EPSILON) * 100) / 100).toFixed(2); }
+function htmlRolOficial(pack) {
+  const d = (pack && (pack.data || pack)) || {};
+  const admin = !!(pack && pack.admin && state.admin);
+  const editable = admin && pack.estado !== "aprobado";
+  const campo = (key, val, label) => {
+    const v = mon2(val);
+    if (!editable) return `<div class="rol-line"><span class="concepto">${esc(label)}</span><span class="monto">$${v}</span></div>`;
+    return `<div class="rol-line"><span class="concepto">${esc(label)}</span><input class="rol-edit" data-rol-campo="${esc(key)}" value="${esc(v)}" inputmode="decimal"></div>`;
+  };
+  const linea = (label, val) => `<div class="rol-line"><span class="concepto">${esc(label)}</span><span class="monto">$${mon2(val)}</span></div>`;
+  const hrs = (label, h, mon) => `<div class="rol-line"><span class="concepto">${esc(label)} (${esc(h || 0)} hrs)</span><span class="monto">$${mon2(mon)}</span></div>`;
+  const patron = d.aportesPatronal || {};
+  const motivo = pack.motivoRechazo ? `<p class="note">No aprobado: ${esc(pack.motivoRechazo)}</p>` : "";
+  const canAct = admin && pack.estado !== "aprobado" && !state.prueba && !state.vista;
+  const acciones = canAct
+    ? `<div class="rol-acciones"><button class="btn" type="button" data-rol-ok="${esc(pack.id || "")}">Aprobar rol</button><button class="btn ghost" type="button" data-rol-no="${esc(pack.id || "")}">No aprobar</button><button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button></div>`
+    : `<div class="rol-acciones">${admin ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : (pack.estado === "aprobado" ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : "")}${state.prueba || state.vista ? `<p class="note">En «Ver como» o modo prueba no se aprueban roles reales.</p>` : ""}</div>`;
+  return `<div class="card rol-oficial" data-rol-id="${esc(pack.id || "")}">
+    <div class="card-title">Rol de pagos ${rolPill(pack.estado)} · ${esc(d.etiqueta || pack.etiqueta || pack.periodo || "")}</div>
+    <p class="note">${esc(d.nombre || pack.persona || "")}${d.cargo ? " · " + esc(d.cargo) : ""}${d.cedula ? " · " + esc(d.cedula) : ""}<br>
+      Días trabajados ${esc(d.diasTrabajados || 0)} · asumidos ${esc(d.diasAsumidos || 0)} · faltas ${esc(d.faltas || 0)}${d.diasJibble ? " · " + esc(d.diasJibble) + " días en el rol" : ""}<br>
+      ${esc(d.fuenteHoras || "")}${d.reglaHoras ? " · " + esc(d.reglaHoras) : ""}</p>
+    ${motivo}
+    <h3>Ingresos</h3>
+    ${campo("sueldoBase", d.sueldoBase, "Sueldo base")}
+    ${linea("Sueldo (después de faltas)", d.sueldo)}
+    ${campo("bono", d.bono, "Bono")}
+    ${campo("comFacialesSolo", d.comFacialesSolo, "Com. faciales")}
+    ${campo("comExtras", d.comExtras, "Com. extras")}
+    ${campo("comRecepcion", d.comRecepcion, "Com. recepción")}
+    ${campo("comPaquetes", d.comPaquetes, "Comisión paquetes")}
+    ${campo("comProductos", d.comProductos, "Comisión productos")}
+    <div class="rol-line"><span class="concepto">Horas normales (${esc(d.hrsOrdinarias || 0)} hrs)</span><span class="monto"></span></div>
+    ${editable ? campo("hrsSupl", d.hrsSupl, "Horas suplementarias 50% (hrs)") : hrs("Horas suplementarias 50%", d.hrsSupl, d.valSupl)}
+    ${!editable ? "" : `<div class="rol-line"><span class="concepto">Valor suplementarias</span><span class="monto">$${mon2(d.valSupl)}</span></div>`}
+    ${editable ? campo("hrsExtr", d.hrsExtr, "Horas extraordinarias 100% (hrs)") : hrs("Horas extraordinarias 100%", d.hrsExtr, d.valExtr)}
+    ${!editable ? "" : `<div class="rol-line"><span class="concepto">Valor extraordinarias</span><span class="monto">$${mon2(d.valExtr)}</span></div>`}
+    ${editable ? campo("hrsDesc", d.hrsDesc, "Horas descanso 100% (hrs)") : hrs("Horas descanso 100%", d.hrsDesc, d.valDesc)}
+    ${d.hrsNoct ? `<div class="rol-line"><span class="concepto">De esas extraordinarias, ${esc(d.hrsNoct)} hrs son nocturnas (antes de 06:00)</span><span class="monto"></span></div>` : ""}
+    ${linea("Décimo tercero", d.dec13)}
+    ${linea("Décimo cuarto", d.dec14)}
+    ${linea("Fondo de reserva", d.fondoReserva)}
+    <div class="rol-line rol-total"><span class="concepto">Total ingresos</span><span class="monto">${money(d.totalIngresos)}</span></div>
+    <h3>Descuentos</h3>
+    ${linea("Aporte IESS (9.45%)", d.iess)}
+    ${campo("anticipo", d.anticipo, "Anticipo de sueldo")}
+    ${campo("prestHip", d.prestHip, "Préstamo hipotecario")}
+    ${campo("prestQuir", d.prestQuir, "Préstamo quirografario")}
+    ${campo("prestOtro", d.prestOtro, "Otros descuentos IESS")}
+    ${campo("multas", d.multas, "Multas")}
+    ${campo("faltas", d.faltas, "Faltas (días)")}
+    <div class="rol-line rol-total"><span class="concepto">Total descuentos</span><span class="monto">${money(d.totalEgresos)}</span></div>
+    <div class="rol-line rol-total"><span class="concepto">Neto a pagar</span><span class="monto">${money(d.totalRecibir || d.neto)}</span></div>
+    <div class="rol-patronal">
+      <strong>Aporte patronal a pagar: ${money(patron.total)}</strong>
+      IESS 11.15%: ${money(patron.iess)} · SECAP 0.5%: ${money(patron.secap)} · IECE 0.5%: ${money(patron.iece)} · Total 12.15%<br>
+      Costo empresa: ${money(patron.costoEmpresa)}
+    </div>
+    <div class="rol-dirty-bar"><button class="btn small" type="button" data-rol-guardar="${esc(pack.id || "")}">Guardar</button><button class="btn ghost small" type="button" data-rol-descartar="${esc(pack.id || "")}">Descartar</button></div>
+    ${acciones}
+  </div>`;
+}
+function mostrarRolOficial(pack) {
+  window._rolOficial = pack;
+  const box = document.getElementById("rol-preview");
+  if (!box) return;
+  box.classList.remove("is-dirty");
+  box.innerHTML = htmlRolOficial(pack);
+  box.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 async function renderPersonalPermisos() {
   const sel = await htmlSelectorPersona();
   const nombre = state.admin && state.persona ? state.persona : "";
@@ -6288,6 +6402,88 @@ async function marcarAsistencia(tipo, foto) {
 }
 function wirePersonal(main) {
   if (window.SunsuInline) SunsuInline.aplicar();
+
+  const crearBtn = main.querySelector("#rol-crear-btn");
+  if (crearBtn) crearBtn.onclick = async () => {
+    const persona = (main.querySelector("#rol-nueva-persona") || {}).value || "";
+    const periodo = (main.querySelector("#rol-nuevo-periodo") || {}).value || "";
+    const data = await api("rol_crear", { persona, periodo });
+    if (data.error) {
+      if (data.ocServicios) toast(data.error + " Usa Generar OC del mes en Empleados.");
+      else toast(data.error);
+      return;
+    }
+    toast("Borrador listo");
+    window._rolPendiente = data;
+    if ((location.hash || "").indexOf("/personal/rol") >= 0) await draw();
+    else go("#/m/personal/rol");
+  };
+  main.querySelectorAll("[data-rol-ab]").forEach((b) => {
+    b.onclick = async () => {
+      const data = await api("rol_get", { id: b.getAttribute("data-rol-ab") });
+      if (data.error) { toast(data.error); return; }
+      mostrarRolOficial(data);
+    };
+  });
+  const box = main.querySelector("#rol-preview");
+  if (box) {
+    box.addEventListener("input", (ev) => {
+      if (ev.target && ev.target.getAttribute && ev.target.getAttribute("data-rol-campo")) box.classList.add("is-dirty");
+    });
+    box.addEventListener("click", async (ev) => {
+      const t = ev.target.closest("[data-rol-guardar],[data-rol-descartar],[data-rol-ok],[data-rol-no],[data-rol-pdf]");
+      if (!t) return;
+      const id = t.getAttribute("data-rol-guardar") || t.getAttribute("data-rol-descartar") || t.getAttribute("data-rol-ok") || t.getAttribute("data-rol-no") || t.getAttribute("data-rol-pdf");
+      if (t.hasAttribute("data-rol-descartar")) {
+        if (window._rolOficial) mostrarRolOficial(window._rolOficial);
+        return;
+      }
+      if (t.hasAttribute("data-rol-guardar")) {
+        const ajustes = {};
+        box.querySelectorAll("[data-rol-campo]").forEach((inp) => { ajustes[inp.getAttribute("data-rol-campo")] = Number(inp.value); });
+        const data = await api("rol_ajustar", { id, ajustes });
+        if (data.error) { toast(data.error); return; }
+        toast("Cambios guardados");
+        mostrarRolOficial(data);
+        return;
+      }
+      if (t.hasAttribute("data-rol-ok")) {
+        if (state.prueba || state.vista) { toast("En «Ver como» o modo prueba no se aprueban roles reales."); return; }
+        const data = await api("rol_aprobar", { id });
+        if (data.error) { toast(data.error); return; }
+        toast("Rol aprobado y publicado");
+        window._rolPendiente = data;
+        await draw();
+        return;
+      }
+      if (t.hasAttribute("data-rol-no")) {
+        if (state.prueba || state.vista) { toast("En «Ver como» o modo prueba no se rechazan roles reales."); return; }
+        const motivo = window.prompt("¿Por qué no se aprueba este rol?");
+        if (!motivo) return;
+        const data = await api("rol_rechazar", { id, motivo });
+        if (data.error) { toast(data.error); return; }
+        toast("Rol no aprobado");
+        window._rolPendiente = data;
+        await draw();
+        return;
+      }
+      if (t.hasAttribute("data-rol-pdf")) {
+        const pack = window._rolOficial || {};
+        const d = pack.data || pack;
+        if (typeof _pdfRolFondo === "function") {
+          _pdfRolFondo(d, pack.periodo || d.periodo, pack.estado === "aprobado", null);
+          return;
+        }
+        const lineas = ["SUNSU SPA — ROL DE PAGOS", (d.nombre || "") + " · " + (d.etiqueta || d.periodo || ""), "Neto a pagar  " + money(d.totalRecibir || d.neto), "Aporte patronal  " + money((d.aportesPatronal || {}).total)];
+        bajarArchivo("rol-" + (d.nombre || "pago") + ".pdf", pdfTexto(lineas), "application/pdf");
+      }
+    });
+    if (window._rolPendiente) {
+      const pend = window._rolPendiente;
+      window._rolPendiente = null;
+      mostrarRolOficial(pend);
+    }
+  }
   const sel = main.querySelector("#persona-sel");
   if (sel) sel.addEventListener("change", () => {
     const opt = sel.selectedOptions[0];
