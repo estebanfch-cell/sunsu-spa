@@ -4,7 +4,7 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
-import { acceso, esAdmin, matrizDe } from "./permisos.ts";
+import { acceso, esAdmin, matrizDe, puedePriv, type PrivFlag } from "./permisos.ts";
 import { cedulaVer, n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { consultar, type Filtro } from "./query.ts";
@@ -18,7 +18,7 @@ import { agruparDocumentos, agruparSinAsignar, esDeClienta, localEc, mismoNombre
 const FALTA = "Falta aplicar 0049_clientes_beta.sql";
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_clientes"); return true; } catch { return false; } }
-export const lite = (ses: Ses) => ({ rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid });
+export const lite = (ses: Ses) => ({ rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid, priv: ses.priv });
 
 /** Campos de la ficha que se pueden corregir en la beta (clave → etiqueta). */
 export const CAMPOS_CLIENTE: [string, string][] = [
@@ -31,8 +31,18 @@ export const CAMPOS_CLIENTE: [string, string][] = [
 /** Solo lectura en la ficha (vienen del formulario de registro). */
 export const CAMPOS_LECTURA: [string, string][] = [["registrada", "Fecha de registro"], ["ultimoRegistro", "Último registro"]];
 const PRIVADOS = new Set(["telefono", "email", "sector"]);
-/** Teléfono, correo y sector/dirección: solo admin. El personal no los ve (ni recepción, por defecto). */
-export function verPrivados(ses: Ses): boolean { return esAdmin(ses.rol); }
+const CAMPO_FLAG: Record<string, PrivFlag> = { telefono: "telefonos", email: "emails", sector: "sector" };
+/** Teléfono, correo y sector/dirección: por defecto solo admin. Un admin puede soltarlos por rol o usuario (TK73). */
+export function verPrivados(ses: Ses, matriz?: Parameters<typeof puedePriv>[2], campo?: string): boolean {
+  if (esAdmin(ses.rol)) return true;
+  if (!matriz) return false;
+  if (campo && CAMPO_FLAG[campo]) return puedePriv(ses.rol, CAMPO_FLAG[campo], matriz);
+  return puedePriv(ses.rol, "telefonos", matriz) && puedePriv(ses.rol, "emails", matriz) && puedePriv(ses.rol, "sector", matriz);
+}
+async function matrizSes(ctx: { db: Parameters<typeof matrizDe>[0] }) { return matrizDe(ctx.db); }
+function puedeDescargarDe(ses: Ses, matriz: Parameters<typeof puedePriv>[2]): boolean {
+  return puedePriv(ses.rol, "descargas", matriz);
+}
 const DE_REGISTRO: Record<string, string> = {
   nombres: "nombre", apellido: "apellido", cedula: "cedula", telefono: "telefono", sector: "sector_donde_vive",
   tipoPiel: "tipo_de_piel", estado: "estado_actual", alergias: "alergias", medicacion: "medicacion",
@@ -63,18 +73,26 @@ export function registroUnico(regs: Row[]): { datos: Row; veces: number; primera
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "clientes", await matrizDe(ctx.db)) === "todos";
 }
-function sinPrivados(d: Row, ses: Ses): Row {
-  if (verPrivados(ses)) return d;
-  const o: Row = {}; for (const [k, v] of Object.entries(d)) if (!PRIVADOS.has(k)) o[k] = v; return o;
+function sinPrivados(d: Row, ses: Ses, matriz?: Parameters<typeof puedePriv>[2]): Row {
+  const o: Row = {};
+  for (const [k, v] of Object.entries(d)) {
+    if (PRIVADOS.has(k) && !verPrivados(ses, matriz, k)) continue;
+    o[k] = v;
+  }
+  return o;
 }
-function limpioStaff(v: unknown, admin: boolean): boolean {
-  if (admin) return true;
-  return !/"telefono"|"email"|"correo"|sector_donde|direccion|"sector"/i.test(JSON.stringify(v || {}));
+function limpioStaff(v: unknown, ses: Ses, matriz?: Parameters<typeof puedePriv>[2]): boolean {
+  if (esAdmin(ses.rol)) return true;
+  const json = JSON.stringify(v || {});
+  if (!verPrivados(ses, matriz, "telefono") && /"telefono"/i.test(json)) return false;
+  if (!verPrivados(ses, matriz, "email") && /"email"|"correo"/i.test(json)) return false;
+  if (!verPrivados(ses, matriz, "sector") && /sector_donde|direccion|"sector"/i.test(json)) return false;
+  return true;
 }
-function redactarBitacora(L: Row[]): Row[] {
+function redactarBitacora(L: Row[], ses: Ses, matriz?: Parameters<typeof puedePriv>[2]): Row[] {
   return L.map((x) => {
     const c = (x.cambios || {}) as Row, limpio: Row = {};
-    for (const [k, v] of Object.entries(c)) if (!PRIVADOS.has(k)) limpio[k] = v;
+    for (const [k, v] of Object.entries(c)) if (!PRIVADOS.has(k) || verPrivados(ses, matriz, k)) limpio[k] = v;
     return { ...x, cambios: limpio };
   });
 }
@@ -111,6 +129,10 @@ function mismaPersona(ced: string, nom: string, c2: unknown, n2: string): boolea
 
 extend("cl_list", "any", async (_p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
+  const matriz = await matrizSes(ctx);
+  const veTel = verPrivados(ses, matriz, "telefono");
+  const veSec = verPrivados(ses, matriz, "sector");
+  const veMail = verPrivados(ses, matriz, "email");
   // Todo en paralelo y con columnas livianas (la lista tardaba por bajar tablas enteras en serie).
   const [res, ov, paqs0, gcs0] = await Promise.all([
     verTodos(ctx, ses).then((vt) => clientesResumen(ctx.db, lite(ses), admin, vt)),
@@ -139,17 +161,22 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
   for (const c of (res.clientes || []) as Row[]) {
     const o = ov.get(s(c.key));
     if (o?.borrado === true) continue;
-    const d = sinPrivados((o?.datos || {}) as Row, ses);
+    const d = sinPrivados((o?.datos || {}) as Row, ses, matriz);
     const item: Row = { ...c };
     if (s(o?.codigo)) item.codigo = s(o!.codigo);
     if (d.nombres != null) item.nombres = s(d.nombres);
     if (d.apellido != null) item.apellido = s(d.apellido);
     item.nombre = (s(item.nombres) + " " + s(item.apellido)).trim() || s(c.nombre);
     if (d.cedula != null) item.cedula = s(d.cedula);
-    if (admin && d.sector != null) item.sector = s(d.sector);
-    if (admin && d.telefono != null && "telefono" in c) item.telefono = s(d.telefono);
-    if (admin && "telefono" in item) item.telefono = telefonoEc(item.telefono);
-    if (!admin) { delete item.telefono; delete item.email; delete item.sector; }
+    if (veSec && d.sector != null) item.sector = s(d.sector);
+    else delete item.sector;
+    if (veTel) {
+      const tel = d.telefono != null ? s(d.telefono) : item.telefono;
+      if (s(tel)) item.telefono = telefonoEc(tel);
+      else delete item.telefono;
+    } else delete item.telefono;
+    if (veMail && d.email != null) item.email = s(d.email);
+    else delete item.email;
     const ced = normCedula(c.cedula), nom = normNombre(s(c.nombre));
     item.paquetesActivos = porKeyP.get(s(c.key)) || (ced && porCedP.get(ced)) || porNomP.get(nom) || 0;
     if (admin) item.giftSaldo = porKeyG.get(s(c.key)) || (ced && porCedG.get(ced)) || porNomG.get(nom) || 0;
@@ -158,13 +185,14 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     clientes.push(item);
   }
   const uniq = (k: string) => [...new Set(clientes.map((c) => s(c[k])).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const payload = { ok: true, admin, puedeDescargar: admin, clientes, cosmetologas: admin ? uniq("cosmetologa") : [], sectores: admin ? uniq("sector") : [], puedeEditar: admin, puedePedir: !admin };
-  if (!limpioStaff(payload, admin)) return { error: "Respuesta de cl_list con datos que el personal no debe ver" };
+  const payload = { ok: true, admin, puedeDescargar: puedeDescargarDe(ses, matriz), clientes, cosmetologas: admin ? uniq("cosmetologa") : [], sectores: veSec ? uniq("sector") : [], puedeEditar: admin, puedePedir: !admin };
+  if (!limpioStaff(payload, ses, matriz)) return { error: "Respuesta de cl_list con datos que el personal no debe ver" };
   return payload;
 });
 
 async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   const admin = esAdmin(ses.rol);
+  const matriz = await matrizSes(ctx);
   const key = canonDeClave(key0), claves = clavesGuardadas(key);
   const ov = (await overlays(ctx)).get(key);
   if (ov?.borrado === true && !admin) return { error: "Esa clienta está eliminada" };
@@ -241,12 +269,12 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   const paquetes = ((det.paquetes || []) as Row[]);
   resumen.sesionesPendientes = paquetes.reduce((a, p) => a + n(p.pendientes), 0);
   const payload = {
-    ok: true, admin, key, unidas: ov?._filas || undefined, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => verPrivados(ses) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
-    corregidos: Object.keys(corr).filter((k) => admin || !PRIVADOS.has(k)), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))), grupos: agruparDocumentos(documentos),
-    bitacora: admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[]), borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
-    puedeEditar: admin, puedePedir: !admin, puedeDescargar: admin,
+    ok: true, admin, key, unidas: ov?._filas || undefined, codigo, datos: sinPrivados(datos, ses, matriz), campos: CAMPOS_CLIENTE.filter(([k]) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
+    corregidos: Object.keys(corr).filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))), grupos: agruparDocumentos(documentos),
+    bitacora: admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[], ses, matriz), borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
+    puedeEditar: admin, puedePedir: !admin, puedeDescargar: puedeDescargarDe(ses, matriz),
   };
-  if (!limpioStaff(payload, admin)) return { error: "Respuesta de cl_get con datos que el personal no debe ver" };
+  if (!limpioStaff(payload, ses, matriz)) return { error: "Respuesta de cl_get con datos que el personal no debe ver" };
   return payload;
 }
 
@@ -258,7 +286,8 @@ extend("cl_doc_url", "any", async (p, ctx, ses) => {
   const id = s(p.id), key = s(p.key);
   if (!id) return { error: "Falta el documento" };
   const quiereBajar = p.descargar === true || p.descargar === "1";
-  if (quiereBajar && !esAdmin(ses.rol)) return { error: "El personal no puede descargar archivos" };
+  const matrizDoc = await matrizSes(ctx);
+  if (quiereBajar && !puedeDescargarDe(ses, matrizDoc)) return { error: "El personal no puede descargar archivos" };
   if (id.startsWith("gc:")) {
     // PDF de gift card: quien ve la ficha de la clienta (y el documento está en su lista).
     if (!key) return { error: "Falta la clienta" };
@@ -266,7 +295,7 @@ extend("cl_doc_url", "any", async (p, ctx, ses) => {
     if (f.error) return f;
     if (!((f.documentos || []) as Row[]).some((x) => s(x.docId) === id)) return { error: "Ese documento no es de esta clienta" };
     const { urlGiftDoc } = await import("./gift_beta_api.ts");
-    return urlGiftDoc(ctx, id.slice(3), quiereBajar && esAdmin(ses.rol));
+    return urlGiftDoc(ctx, id.slice(3), quiereBajar && puedeDescargarDe(ses, matrizDoc));
   }
   const d = await docPorId(ctx, id);
   if (!d || !s(d.storage_path)) return { error: "No encontré ese documento" };
@@ -290,7 +319,7 @@ extend("cl_doc_url", "any", async (p, ctx, ses) => {
   if (!res.ok || !signed) return { error: "No se pudo abrir el PDF" };
   const nombre = nombreDescarga(d);
   let url = signed.startsWith("http") ? signed : `${base}/storage/v1${signed.startsWith("/") ? "" : "/"}${signed}`;
-  if (/\.zip$/i.test(path) && !esAdmin(ses.rol)) return { error: "El personal no puede descargar archivos" };
+  if (/\.zip$/i.test(path) && !puedeDescargarDe(ses, matrizDoc)) return { error: "El personal no puede descargar archivos" };
   if (quiereBajar || /\.zip$/i.test(path)) url += (url.includes("?") ? "&" : "?") + "download=" + encodeURIComponent(nombre);
   return { ok: true, url, nombre, zip: /\.zip$/i.test(path) };
 });
@@ -486,22 +515,24 @@ export function puntajeClienta(r: Row, q: string, conTel = true): number {
 extend("cl_buscar", "any", async (p, ctx, ses) => {
   const q = s(p.q).trim();
   if (q.length < 2) return { ok: true, items: [] };
+  const matriz = await matrizSes(ctx);
+  const veTel = verPrivados(ses, matriz, "telefono");
   let todas: Row[] = [];
   try { todas = await todasLasClientas(ctx); } catch { todas = []; }
-  let rows: Row[] = todas.map((r) => ({ r, pts: puntajeClienta(r, q, verPrivados(ses)) })).filter((x) => x.pts > 0)
+  let rows: Row[] = todas.map((r) => ({ r, pts: puntajeClienta(r, q, veTel) })).filter((x) => x.pts > 0)
     .sort((a, b) => b.pts - a.pts || s(a.r.nombre).localeCompare(s(b.r.nombre))).slice(0, 12).map((x) => x.r);
   // Recién creadas (aún no están en la copia de 1 minuto): también la consulta directa.
   const dig = q.replace(/\D/g, "");
   const F: Filtro = dig.length >= 5 && dig.length === q.replace(/[\s+.()-]/g, "").length
-    ? { op: "palabras", cols: verPrivados(ses) ? ["cedula", "telefono", "key"] : ["cedula", "key"], val: [nucleoCedula(dig).slice(0, 10) || dig] }
+    ? { op: "palabras", cols: veTel ? ["cedula", "telefono", "key"] : ["cedula", "key"], val: [nucleoCedula(dig).slice(0, 10) || dig] }
     : /^c-?b?\d+$/i.test(q) ? { op: "palabras", cols: ["codigo"], val: [q.toUpperCase().replace(/^C-?/, "")] }
     : { op: "palabras", cols: ["nombre", "cedula"], val: q.split(/\s+/).filter(Boolean) };
   try {
     const ya = new Set(rows.map((r) => s(r.key)));
     const directas = (await consultar(ctx.db, "beta_clientes", { cols: COLS_BUSCAR, filtros: [F], limite: 12, orden: [{ col: "nombre" }] })).rows;
-    for (const r of directas) if (!ya.has(s(r.key)) && puntajeClienta(r, q, verPrivados(ses)) > 0) rows.push(r);
+    for (const r of directas) if (!ya.has(s(r.key)) && puntajeClienta(r, q, veTel) > 0) rows.push(r);
   } catch { /* solo la copia */ }
-  const tel = verPrivados(ses);
+  const tel = veTel;
   // Una sola fila por clienta (🔗 Duplicados): se juntan sus otras filas (c:…001, unidas a mano) aunque la búsqueda no las trajo.
   const canon = [...new Set(rows.map((r) => canonDeClave(s(r.key))))];
   const extra = new Set(canon.flatMap((k) => clavesGuardadas(k)));

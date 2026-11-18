@@ -90,6 +90,7 @@
         ["usuarios|admin", "Usuarios", "#/m/usuarios"],
         ["admin", "Usuarios y permisos", "#/m/mc/upermisos"],
         ["permisos|admin", "Permisos por rol", "#/m/permisos"],
+        ["admin", "Permisos por rol/usuario", "#/m/configuracion"],
         ["admin", "Aprobaciones", "#/m/mc/pronto/aprobaciones"],
         ["admin", "Configuración general", "#/m/configuracion"],
       ] },
