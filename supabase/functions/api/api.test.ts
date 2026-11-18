@@ -3304,8 +3304,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
@@ -3413,8 +3413,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
@@ -3495,8 +3495,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
@@ -3546,8 +3546,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
@@ -3580,8 +3580,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
@@ -3627,8 +3627,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /beta-screens\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
   });
 });
 
@@ -4237,13 +4237,13 @@ describe("TK46 maestro-detalle tickets estilo MineCore", () => {
     assert.match(js, /#\/m\/tickets\/t\//);
     assert.match(js, /interceptDraw/);
     assert.match(js, /renderTickets/);
-    assert.match(beta, /mc-maestro\.js\?v=20261118tk53/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk54/);
     assert.match(beta, /\.ss-md-list \{[^}]*width: 250px/);
     assert.match(beta, /@media \(max-width: 860px\)[\s\S]*\.ss-md-list \{ display: none/);
     assert.match(beta, /MCMaestro\.interceptDraw/);
     assert.match(beta, /MCMaestro\.render\("tickets"/);
     assert.match(sw, /\/mc-maestro\.js/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.match(tk, /isDirty:\s*function/);
     const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
     g.window = g.window || g;
@@ -4305,8 +4305,8 @@ describe("TK50 maestro-detalle clientas y proveedores", () => {
     assert.match(beta, /function wireProveedoresDetalle/);
     assert.match(cli, /ensureList/);
     assert.match(cli, /isDirty:/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
-    assert.match(beta, /mc-maestro\.js\?v=20261118tk53/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk54/);
     const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
     g.window = g.window || g;
     g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
@@ -4368,8 +4368,8 @@ describe("TK51 maestro-detalle en listas con búsqueda", () => {
     assert.match(beta, /MCMaestro\.which\(route\)/);
     assert.match(beta, /#\/m\/cotizaciones_cliente\/c\//);
     assert.match(beta, /soloFicha/);
-    assert.match(beta, /mc-maestro\.js\?v=20261118tk53/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK52/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
     assert.match(prod, /ensureList/);
     assert.match(prod, /isDirty:/);
     assert.match(oc, /mcoc-cot-body/);
@@ -4413,6 +4413,53 @@ describe("TK51 maestro-detalle en listas con búsqueda", () => {
     assert.match(shell, /id="ss-md-compras"/);
     assert.match(shell, /placeholder="Filtrar…"/);
     assert.match(shell, /mcoc-root/);
+  });
+});
+
+describe("TK54 agenda horas 12h y vistas Lista / Día / Semana / Mes", () => {
+  it("muestra AM/PM, cambia de vista y guarda la elección", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const js = readFileSync(join(root, "mc-agenda.js"), "utf8");
+    const beta = readFileSync(join(root, "beta.html"), "utf8");
+    const sw = readFileSync(join(root, "sw.js"), "utf8");
+    assert.match(js, /\["lista", "Lista"\]/);
+    assert.match(js, /\["dia", "Día"\]/);
+    assert.match(js, /\["semana", "Semana"\]/);
+    assert.match(js, /\["mes", "Mes"\]/);
+    assert.match(js, /sunsu\.agenda\.vista/);
+    assert.match(js, /function vistaLista/);
+    assert.match(js, /mcag-tg/);
+    assert.match(js, /mcag-wkg/);
+    assert.match(js, /mcag-bl/);
+    assert.match(js, /hora12/);
+    assert.match(js, /function hora\(iso\) \{ return hora12\(hm24\(iso\)\); \}/);
+    assert.match(beta, /mc-agenda\.js\?v=20261118tk54/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK54/);
+    const g = globalThis as { window?: Record<string, unknown>; document?: unknown; localStorage?: { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void }; addEventListener?: () => void };
+    const store: Record<string, string> = {};
+    const ls = { getItem(k: string) { return store[k] || null; }, setItem(k: string, v: string) { store[k] = v; } };
+    const doc = {
+      getElementById() { return null; },
+      createElement() { return { id: "", textContent: "" }; },
+      head: { appendChild() { /* no-op */ } },
+      addEventListener() { /* no-op */ },
+    };
+    g.window = Object.assign(g.window || g, { matchMedia() { return { matches: false }; }, addEventListener() { /* no-op */ }, MCColor: null });
+    g.document = doc;
+    g.localStorage = ls;
+    g.addEventListener = function () { /* no-op */ };
+    assert.doesNotThrow(() => new Function("window", "document", "localStorage", "setTimeout", js)(g.window, g.document, ls, function () { return 0; }));
+    const A = (g.window as { MCAgenda: { hora: (s: string) => string; hora12: (s: string) => string; horaEje: (h: number) => string; hm24: (s: string) => string } }).MCAgenda;
+    assert.equal(A.hora("2026-11-18T10:00:00-0500"), "10:00 AM");
+    assert.equal(A.hora("2026-11-18T13:30:00-0500"), "1:30 PM");
+    assert.equal(A.hora("2026-11-18T15:00:00-0500"), "3:00 PM");
+    assert.equal(A.hora("2026-11-18T00:00:00-0500"), "12:00 AM");
+    assert.equal(A.hora("2026-11-18T12:00:00-0500"), "12:00 PM");
+    assert.equal(A.horaEje(8), "8 AM");
+    assert.equal(A.horaEje(12), "12 PM");
+    assert.equal(A.horaEje(20), "8 PM");
+    assert.equal(A.hm24("2026-11-18T13:30:00-0500"), "13:30");
+    assert.equal(A.hora12("13:30"), "1:30 PM");
   });
 });
 
