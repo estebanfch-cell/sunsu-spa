@@ -34,23 +34,13 @@ extend("getMultas", "any", async (p, ctx, ses) => {
 });
 
 extend("personal_personas", "any", async (_p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, cedula: "" }] };
-  const nombres = new Map<string, { nombre: string; cedula: string }>();
-  const baja = await bajasDe(ctx.db);
-  const { esFilaNotasRrhh } = await import("./empleados_api.ts");
-  for (const r of await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[])) {
-    if (esFilaNotasRrhh(r)) continue;
-    const nombre = s(r.nombre_app) || s(r.apellidos_y_nombres);
-    if (baja(nombre) || baja(s(r.cedula)) || baja(s(r.nombre_jibble))) continue;
-    if (nombre && !nombres.has(normNombre(nombre))) nombres.set(normNombre(nombre), { nombre, cedula: s(r.cedula) });
-  }
-  for (const r of await ctx.db.all("usuarios")) {
-    const nombre = s(r.nombre);
-    if (baja(nombre)) continue;
-    if (nombre && !nombres.has(normNombre(nombre))) nombres.set(normNombre(nombre), { nombre, cedula: "" });
-  }
-  if (!nombres.size) nombres.set(normNombre(ses.name), { nombre: ses.name, cedula: "" });
-  const personas = [...nombres.values()];
+  const { personasUnicas, nombreMostrar, aliasesDe } = await import("./personas_unir.ts");
+  const aliases = await aliasesDe(ctx);
+  if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: nombreMostrar(ses.name, aliases), cedula: "" }] };
+  const personas = (await personasUnicas(ctx, { incluirAdmin: true })).map((p) => ({
+    nombre: p.nombre, cedula: p.cedula || "", uid: p.uid || "",
+  }));
+  if (!personas.length) personas.push({ nombre: nombreMostrar(ses.name, aliases), cedula: "", uid: "" });
   return { ok: true, personas };
 });
 

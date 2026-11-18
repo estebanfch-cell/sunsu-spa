@@ -56,11 +56,11 @@ describe("TK83 config compacto y feriados 2026", () => {
     assert.doesNotMatch(sql, /delete from public\.asistencia_feriados/i);
   });
 
-  it("la caché de la app pasa a TK86", () => {
-    assert.match(sw, /sunsu-beta-2026-11-18-TK86/);
-    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK85/);
+  it("la caché de la app pasa a TK87", () => {
+    assert.match(sw, /sunsu-beta-2026-11-18-TK87/);
+    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK86/);
     const vers = [...html.matchAll(/\?v=([a-z0-9]+)/g)].map((m) => m[1]);
     assert.ok(vers.length >= 20, "faltan scripts en beta.html");
-    assert.ok(vers.every((v) => v === "20261118tk86"), "scripts con versión vieja: " + [...new Set(vers)].join(","));
+    assert.ok(vers.every((v) => v === "20261118tk87"), "scripts con versión vieja: " + [...new Set(vers)].join(","));
   });
 });
