@@ -764,6 +764,47 @@
   .nowrap-table .ix-cell, .nowrap-table td > * { white-space: nowrap; }
   .cli-sheet { overflow-x: auto; }
   .cli-cod { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
+
+  /* TK46: lista compacta estilo MineCore (Filtrar… + ítem con barra de acento), tema Sunsu */
+  .ss-md { display: flex; gap: 10px; align-items: flex-start; min-width: 0; max-width: 100%; overflow-x: hidden; }
+  .ss-md-list {
+    width: 250px; flex: 0 0 250px; min-width: 0;
+    background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px;
+    box-shadow: var(--shadow-sm); padding: 0; margin: 0;
+    position: sticky; top: 8px; max-height: calc(100vh - 28px);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .ss-md-q { display: flex; gap: 4px; padding: 6px; flex: 0 0 auto; }
+  .ss-md-input { flex: 1; min-width: 0; margin: 0; }
+  .ss-md-full {
+    flex: 0 0 auto; border: 1.5px solid var(--cream-d); background: var(--white);
+    color: var(--navy); border-radius: 9px; padding: 6px 9px; font-weight: 800; cursor: pointer;
+  }
+  .ss-md-lb { overflow: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+  .ss-md-item {
+    display: block; width: 100%; box-sizing: border-box; text-align: left;
+    background: transparent; border: 0; border-bottom: 1px solid var(--cream-d);
+    border-left: 3px solid transparent; padding: 7px 9px; cursor: pointer;
+    font: inherit; color: var(--text);
+  }
+  .ss-md-item.on { background: var(--blue-l); border-left-color: var(--navy); }
+  .ss-md-item:hover { background: var(--blue-ll); }
+  .ss-md-item.ss-md-flag { background: #fdecea; color: #8a2216; }
+  .ss-md-item.ss-md-flag.on, .ss-md-item.ss-md-flag:hover { background: #f9d8d3; }
+  .ss-md-item.ss-md-falta { background: #fff6d6; color: #6b4e00; }
+  .ss-md-item.ss-md-falta.on, .ss-md-item.ss-md-falta:hover { background: #ffefb8; }
+  .ss-md-l1 { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; min-width: 0; }
+  .ss-md-l1 b { font-size: 12.5px; color: var(--navy-d); font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ss-md-amt { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+  .ss-md-l2 { font-size: 11px; color: var(--gray); white-space: normal; overflow: visible; }
+  .ss-md-l3 { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .ss-md-empty { padding: 10px; color: var(--gray); font-size: 0.8rem; }
+  .ss-md-r { flex: 1; min-width: 0; overflow-x: hidden; }
+  @media (max-width: 860px) {
+    .ss-md { display: block; overflow-x: hidden; }
+    .ss-md-list { display: none; }
+    .ss-md-r { width: 100%; max-width: 100%; }
+  }
   /* Maestro-detalle compartido (beta-screens.js _mdAbrir): lista angosta izquierda, detalle derecha */
   .md-split .md-list table { width: 100%; }
   .md-split .md-list th, .md-split .md-list td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2232,6 +2273,13 @@ async function draw() {
   const tab = pantallaSunsu(route);
   const title0 = tituloRuta(route, tab);
   const title = window.MCNav && window.MCNav.conEmoji ? window.MCNav.conEmoji(title0, window.MCNav.emojiRuta(location.hash.split("?")[0])) : title0;
+  if (window.MCMaestro && await window.MCMaestro.interceptDraw(route, { title })) {
+    void cargarReloj();
+    void pintarAviso();
+    if (!window._avisoT) window._avisoT = setInterval(() => { if (state.user) void pintarAviso(); }, 60000);
+    if (document.getElementById("citas-dash")) void cargarCitasDash();
+    return;
+  }
   paintShell(title);
   const main = document.getElementById("main");
   const listo = () => {
@@ -2276,7 +2324,10 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "conteos" && route.sub !== "hacer" && window.MCConteo) window.MCConteo.wire(main, route);
     if (route.kind === "mod" && route.mod === "transferencias" && window.MCTransferencias) window.MCTransferencias.wire(main, route);
     if (route.kind === "mod" && route.mod === "ajustes" && window.MCAjustes) window.MCAjustes.wire(main, route);
-    if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) window.MCTickets.wire(main, route);
+    if (route.kind === "mod" && route.mod === "tickets" && route.sub === "t" && window.MCTickets) {
+      if (window.MCMaestro && document.getElementById("ss-md-tickets")) await window.MCMaestro.afterTickets(main, route);
+      else window.MCTickets.wire(main, route);
+    }
     if (route.kind === "mod" && route.mod === "clientes" && window.MCClientes) window.MCClientes.wire(main, route);
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
@@ -2324,7 +2375,10 @@ async function renderMod(route) {
   if (route.mod === "lugares") return renderLugares();
   if (route.mod === "recepciones" && window.MCRecepciones) return window.MCRecepciones.render(route);
   if (route.mod === "compras") return window.MCCompras ? window.MCCompras.render(route) : renderCompras(route.sub);
-  if (route.mod === "tickets" && route.sub === "t" && route.id && window.MCTickets) return window.MCTickets.render(route);
+  if (route.mod === "tickets" && route.sub === "t" && route.id && window.MCTickets) {
+    if (window.MCMaestro && window.MCMaestro.wide()) return window.MCMaestro.renderTickets(route);
+    return window.MCTickets.render(route);
+  }
   if (route.mod === "tickets") return renderTickets();
   if (route.mod === "kardex") return renderKardex();
   if (route.mod === "clientes" && window.MCClientes) return window.MCClientes.render(route);
@@ -5823,6 +5877,7 @@ if ("serviceWorker" in navigator && !local) {
 <script src="mc-ajustes.js?v=20261118tk47"></script>
 <script src="vendor-qrcode.js?v=20261118tk47"></script>
 <script src="mc-tickets.js?v=20261118tk47"></script>
+<script src="mc-maestro.js?v=20261118tk47"></script>
 <script src="mc-paquetes.js?v=20261118tk47"></script>
 <script src="mc-aperturas.js?v=20261118tk47"></script>
 <script src="mc-acceso.js?v=20261118tk47"></script>
