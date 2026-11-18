@@ -86,6 +86,7 @@ const mov = (db: MemoryDb, pid: string, bod: string) => (db.tables.get("erp_movi
 describe("bodega CONSIGNACION (TK27)", () => {
   it("el restock (RST) se recibe en Recepciones y entra a CONSIGNACION, con acta", async () => {
     const db = semilla27();
+    const c0 = Number((db.tables.get("erp_productos") || []).find((x) => x.id === "a")?.costo_promedio ?? 0);
     const r = await h(db, "cns_restock_guardar", { proveedor_id: "p1", desde: "2026-11-01", hasta: "2026-11-15", lineas: [{ producto_id: "a", cantidad: 5 }] });
     const d = await h(db, "rcp_get", { id: "rst:" + r.id });
     assert.equal(d.bloqueado, ""); assert.equal(d.oc.recibible, true);
@@ -94,6 +95,9 @@ describe("bodega CONSIGNACION (TK27)", () => {
     assert.equal(x.ok, true, JSON.stringify(x));
     assert.equal(x.acta, "ACTA-2026-0001");
     assert.equal(mov(db, "a", CONS), 3);
+    // TK74: un restock no trae costo; no debe bajar el costo promedio del producto.
+    const pa = (db.tables.get("erp_productos") || []).find((x) => x.id === "a");
+    assert.equal(Number(pa?.costo_promedio ?? 0), c0, "el costo promedio no cambia con un restock sin costo");
     assert.equal((await h(db, "rcp_get", { id: "rst:" + r.id })).oc.estado, "Recibida parcial");
     assert.match((await h(db, "rcp_recibir", { oc_id: "rst:" + r.id, grupos: [{ producto_id: "a", accion: "recibido", cantidad: 9 }] })).error, /solo quedan 2/);
     const y = await h(db, "rcp_recibir", { oc_id: "rst:" + r.id, grupos: [{ producto_id: "a", accion: "no_recibido" }] });
