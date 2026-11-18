@@ -11,6 +11,7 @@ import { flujoTrasRecibir } from "./compras_flujo.ts";
 import { estadoOc } from "./compras_beta.ts";
 import { agrupar, estadoTrasRecibir, repartir, UNDO_MS } from "./recepciones.ts";
 import { crearActa } from "./actas_api.ts";
+import { famsConsig } from "./consig_config.ts";
 import { recibirRestock, restockParaRecibir, restocksAbiertos } from "./consignacion_beta_api.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -62,7 +63,7 @@ extend("rcp_get", "any", async (p, ctx, ses) => {
   return {
     ok: true, admin: esAdmin(ses.rol),
     oc: { id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: estadoOc(o, L), proveedor: s(provs.find((x) => x.id === o.proveedor_id)?.nombre), recibible: recibible(o) },
-    grupos: conBodega(agrupar(L, porId, ctx.now), bods),
+    grupos: conBodega(agrupar(L, porId, ctx.now, await famsConsig(ctx)), bods),
     bodegas: bods.filter((b) => BODEGAS_OK.includes(s(b.codigo))).map((b) => ({ id: s(b.id), codigo: s(b.codigo), nombre: s(b.nombre), tipo: s(b.tipo) })),
     recepciones: recs.filter((r) => r.oc_id === o.id).map((r) => ({ id: s(r.id), numero: s(r.numero), fecha: s(r.fecha), por: s(r.recibido_por), anulada: r.anulada === true })),
   };
@@ -78,7 +79,7 @@ extend("rcp_recibir", "any", async (p, ctx, ses) => {
   const [lineas, prods, bods] = await Promise.all([todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_productos"), todas(ctx, "erp_bodegas")]);
   const L = lineas.filter((l) => l.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
   const porId = new Map(prods.map((x) => [s(x.id), x]));
-  const G = new Map(conBodega(agrupar(L, porId, ctx.now), bods).map((g) => [s(g.producto_id), g]));
+  const G = new Map(conBodega(agrupar(L, porId, ctx.now, await famsConsig(ctx)), bods).map((g) => [s(g.producto_id), g]));
   const ins = (Array.isArray(p.grupos) ? p.grupos : []) as Row[];
   const recibir: Row[] = [];
   const anular: { id: string; qty: number }[] = [];

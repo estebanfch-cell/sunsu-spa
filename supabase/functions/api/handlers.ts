@@ -2411,7 +2411,7 @@ async function tablaProveedores(ctx: Ctx): Promise<R[]> {
     }
     vistas.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)) || s(b.numero).localeCompare(s(a.numero)));
     return {
-      fila: r.fila, codigo, nombre: r.nombre, ruc: r.ruc, telefono: r.telefono, email: r.email,
+      fila: r.fila, codigo, erpId: r.erpId, nombre: r.nombre, ruc: r.ruc, telefono: r.telefono, email: r.email,
       direccion: r.direccion, notas: r.notas, ordenes: vistas.length,
       total: round2(vistas.reduce((a, o) => a + n(o.total), 0)),
       saldo: round2(vistas.reduce((a, o) => a + n(o.saldo), 0)),

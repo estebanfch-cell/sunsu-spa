@@ -15,10 +15,10 @@ import { siguienteAnual } from "./compras_beta.ts";
 import { BODEGA_CABINA, BODEGA_CASA, BODEGA_CONSIGNACION, BODEGA_VENTA, runErp } from "./erp.ts";
 import { crearActa } from "./actas_api.ts";
 import { listaProductos } from "./productos_api.ts";
+import { consigEfectiva, famsConsig } from "./consig_config.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const soloAdmin = (ses: Ses): Row | null => esAdmin(ses.rol) ? null : { error: "Solo administradores" };
-const FAM_CONSIG = ["HT", "AS", "ML", "PH", "JN"];
 const ec = (d: Date) => { const x = new Date(d.getTime() - 5 * 3600e3); return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate() }; };
 
 /** Periodos para elegir: el actual y los 7 anteriores. El por defecto es el anterior al actual (ya cerrado). */
@@ -33,21 +33,22 @@ export function periodos(now: Date): Row[] {
   }
   return out;
 }
+/** TK34: solo los proveedores con 🤝 Consignación ON (ficha del proveedor). */
 async function provsConsig(ctx: Ctx): Promise<Row[]> {
-  const [provs, hoja] = await Promise.all([todas(ctx, "erp_proveedores"), hojaProveedores(ctx.db)]);
+  const [provs, hoja, on] = await Promise.all([todas(ctx, "erp_proveedores"), hojaProveedores(ctx.db), famsConsig(ctx)]);
   return provs.filter((p) => p.activo !== false).map((p) => ({ id: s(p.id), nombre: s(p.nombre), ruc: s(p.ruc), email: s(p.email), telefono: s(p.telefono), familia: familiaDeFila(p, hoja) }))
-    .filter((p) => FAM_CONSIG.includes(s(p.familia))).sort((a, b) => s(a.nombre).localeCompare(s(b.nombre)));
+    .filter((p) => on.has(s(p.familia).toUpperCase())).sort((a, b) => s(a.nombre).localeCompare(s(b.nombre)));
 }
 /** TK27: stock de los productos en consignación de la familia, como se ve en 📦 Productos:
  *  consignacion = bodega CONSIGNACION (real); venta / cabina / casa = lo que todavía está fuera
  *  (se pasa con «Conteo inicial consignación»). */
 async function stockConsig(ctx: Ctx, ses: Ses, familia: string): Promise<Row[]> {
-  const [prods, lista] = await Promise.all([todas(ctx, "erp_productos"), listaProductos(ctx, ses)]);
+  const [prods, lista, on] = await Promise.all([todas(ctx, "erp_productos"), listaProductos(ctx, ses), famsConsig(ctx)]);
   const fila = new Map(lista.map((r) => [s(r.id), r]));
   const out: Row[] = [];
   for (const p of prods) {
     const sku = skuCode(s(p.sku));
-    if (!sku.startsWith(familia + "-") || p.activo === false || vendeDesdeCabina(p) || s(p.beta_origen) === "propio" || s(p.beta_eliminado_at)) continue;
+    if (!sku.startsWith(familia + "-") || p.activo === false || !consigEfectiva(p, on) || s(p.beta_eliminado_at)) continue;
     const f = fila.get(s(p.id)); if (!f) continue;
     const g = (f.porGrupo || {}) as Row;
     const consignacion = round2(n(g.BCONSIG)), venta = round2(n(g.CONSIGNACION)), cabina = round2(n(g.CABINA)), casa = round2(n(g.OFICINA));
@@ -75,7 +76,7 @@ extend("cns_calc", "any", async (p, ctx, ses) => {
   const provs = await provsConsig(ctx);
   const prov = provs.find((x) => x.id === s(p.proveedor_id));
   if (!prov) return { error: "Elige un proveedor en consignación" };
-  const r = await borradorConsig(ctx.db, ctx.now, { proveedor_id: prov.id, familia: prov.familia, anio: p.anio, mes: p.mes, quincena: p.quincena });
+  const r = await borradorConsig(ctx.db, ctx.now, { proveedor_id: prov.id, familia: prov.familia, anio: p.anio, mes: p.mes, quincena: p.quincena, soloConsig: true });
   if (r.error) return r;
   const prods = await todas(ctx, "erp_productos");
   const idDe = new Map(prods.map((x) => [skuCode(s(x.sku)), s(x.id)]));

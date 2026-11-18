@@ -11,7 +11,18 @@
     cur: null, ch: {}, ed: null, tab: "resumen", motivo: "",
   };
   // TK27: la clave CONSIGNACION es la bodega Venta; BCONSIG es la bodega Consignación real.
-  var GRUPOS = [["CONSIGNACION", "Venta"], ["BCONSIG", "Consignación"], ["CABINA", "Bodega Cabina"], ["OFICINA", "Bodega Oficina"]];
+  // TK34 (Emilia 18/11): la bodega Consignación ya no se muestra como bodega aparte (ni filtro ni columna);
+  // su stock se ve dentro de Venta como «🤝 en consignación». Los datos y la ruta de recepción no cambian.
+  var GRUPOS = [["CONSIGNACION", "Venta"], ["CABINA", "Bodega Cabina"], ["OFICINA", "Bodega Oficina"]];
+  function sinBodConsig(stock) {
+    var L = (stock || []).slice(), i = -1;
+    L.forEach(function (g, k) { if (g.grupo === "BCONSIG") i = k; });
+    if (i < 0) return L;
+    var c = L.splice(i, 1)[0], v = null;
+    L.forEach(function (g) { if (g.grupo === "CONSIGNACION") v = g; });
+    if (v) v._consig = (Number(c.cantidad) || 0); else L.unshift({ grupo: "CONSIGNACION", nombre: "Venta", cantidad: 0, _consig: Number(c.cantidad) || 0 });
+    return L;
+  }
   var SUBS = [["CABINA_1", "Cabina 1"], ["CABINA_2", "Cabina 2"], ["CABINA_3", "Cabina 3"]];
   var PRECIO = { beta_pvp: 1, beta_compra_real: 1, beta_compra_comision: 1 };
 
@@ -115,7 +126,7 @@
     { id: "estado", t: "Estado", def: 1, fijo: 1 }, { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
     { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
     { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
-    { id: "g_CONSIGNACION", t: "Venta", num: 1 }, { id: "g_BCONSIG", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
+    { id: "g_CONSIGNACION", t: "Venta", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
     { id: "stock", t: "Stock", def: 1, num: 1 },
   ];
   var COLS_KEY = "sunsu.mcp.cols";
@@ -511,7 +522,8 @@
   }
   function stockChips(stock) {
     var out = [];
-    (stock || []).forEach(function (g) {
+    sinBodConsig(stock).forEach(function (g) {
+      if (g._consig) out.push('<span class="mcp-sc">🤝 consignación</span> ' + q2(g._consig) + " u");
       if (g.grupo === "CABINA") (g.subs || []).forEach(function (s) { if (Number(s.cantidad)) out.push('<span class="mcp-sc">' + e(s.nombre) + "</span> " + q2(s.cantidad) + " u"); });
       else if (Number(g.cantidad)) out.push('<span class="mcp-sc">' + e(g.nombre) + "</span> " + q2(g.cantidad) + " u");
     });
@@ -563,8 +575,9 @@
     if (!serv) {
       var tot = (r.stock || []).reduce(function (a, g) { return a + (Number(g.cantidad) || 0); }, 0);
       left = '<div class="mcp-card"><div class="mcp-sub">Cantidad disponible · todas las bodegas</div><div class="mcp-big">' + q2(tot) + "</div>" +
-        (r.stock || []).map(function (g) {
+        sinBodConsig(r.stock).map(function (g) {
           var hh = '<div class="mcp-grp"><div class="mcp-gh"><span>▾ ' + e(g.nombre) + (g.nota ? "<small>" + e(g.nota) + "</small>" : "") + '</span><span class="mcp-gq">' + q2(g.cantidad) + " u" + (puedeAjustar() && g.grupo !== "CABINA" ? ajBtn(g.grupo, "", g.nombre, g.cantidad) : "") + "</span></div>";
+          if (g._consig) hh += '<div class="mcp-sr"><span>🤝 En consignación (del proveedor, aparte)</span><span>' + q2(g._consig) + " u</span></div>";
           if (g.grupo === "CABINA") {
             hh += (g.subs || []).map(function (s) { return '<div class="mcp-sr' + (Number(s.cantidad) ? "" : " vac") + '"><span>' + e(s.nombre) + "</span><span>" + q2(s.cantidad) + (puedeAjustar() ? ajBtn("CABINA", s.codigo || "", g.nombre + " · " + s.nombre, s.cantidad) : "") + "</span></div>"; }).join("");
             if (g.abierto) hh += '<div class="mcp-sr"><span>Abierto en uso</span><span>' + q2(g.abierto) + " " + e(g.unidad || "") + "</span></div>";
