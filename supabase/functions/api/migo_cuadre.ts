@@ -333,10 +333,6 @@ export function fechasCandidatasBorrador(fechaFac: string): string[] {
   return dowYmd(prev) === 1 ? [prev, f] : [f];
 }
 
-function montoExacto(a: number, b: number): boolean {
-  return Math.round((Number(a) || 0) * 100) === Math.round((Number(b) || 0) * 100);
-}
-
 export type CandidatoBorrador = {
   ticket_ids: number[];
   claves: string[];
@@ -344,21 +340,71 @@ export type CandidatoBorrador = {
   totales: number[];
   fechas: string[];
   cosmetologas: string[];
-  tipo: "nombre_monto" | "nombre" | "monto" | "suma2";
+  tipo: "nombre_monto" | "nombre" | "monto" | "suma2" | "suma3";
   names: number;
+  familia: number;
+  cuadra: boolean;
+  diferencia: number;
   motivo: string;
   total: number;
 };
 
+/** Fila vacía o clave «r1899» (sin SO): no se sugiere ni aparece en la búsqueda. */
+export function ticketClaveValida(t: Row): boolean {
+  const clave = s(t.clave || t.so_num);
+  if (!clave || /^r\d+$/i.test(clave)) return false;
+  if (n(t.id) === NUNCA_TICKET_ID) return false;
+  if (!nombreTicket(t) && !(totalTicket(t) > 0.004)) return false;
+  return true;
+}
+
+function cents(v: number): number {
+  return Math.round((Number(v) || 0) * 100);
+}
+function montoDiff(a: number, b: number): number {
+  return (cents(a) - cents(b)) / 100;
+}
+function montoCerca(a: number, b: number): boolean {
+  return Math.abs(cents(a) - cents(b)) <= Math.round(TOL_MONTO * 100);
+}
+
+const APE_STOP = new Set(["de", "del", "la", "las", "los", "van", "von", "da", "di", "san", "santa", "y", "e"]);
+function apellidoToken(nombre: string): string {
+  const toks = s(nombre).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !APE_STOP.has(w));
+  return toks.length ? toks[toks.length - 1] : "";
+}
+function familiaEn(nombres: string[]): number {
+  const ape = new Map<string, number>();
+  for (const nom of nombres) {
+    const a = apellidoToken(nom);
+    if (a) ape.set(a, (ape.get(a) || 0) + 1);
+  }
+  let nFam = 0;
+  for (const c of ape.values()) if (c >= 2) nFam += c;
+  return nFam;
+}
+
+function etiquetaCuadra(sum: number, invTotal: number): string {
+  const d = montoDiff(sum, invTotal);
+  if (cents(d) === 0) return "✅ Cuadra. Monto exacto ($" + Number(invTotal).toFixed(2) + ", total con IVA).";
+  const signo = d > 0 ? "+" : "";
+  return "✅ Cuadra. Suma $" + Number(sum).toFixed(2) + " vs factura $" + Number(invTotal).toFixed(2) + " (diferencia " + signo + "$" + Math.abs(d).toFixed(2) + ", dentro de ±$0.05, total con IVA).";
+}
+function etiquetaNoCuadra(sum: number, invTotal: number): string {
+  const d = montoDiff(sum, invTotal);
+  const signo = d > 0 ? "+" : "";
+  return "⚠️ No cuadra (diferencia " + signo + "$" + Math.abs(d).toFixed(2) + "). Ticket(s) $" + Number(sum).toFixed(2) + " vs factura $" + Number(invTotal).toFixed(2) + " (total con IVA).";
+}
+
 /**
  * Candidatos para vincular un borrador de Migo a tickets ya existentes.
- * Orden: primero coincidencia de nombre, luego monto exacto (total con IVA), luego suma exacta de 2 tickets.
- * No vincula solo: la admin elige. No incluye cédulas ni teléfonos.
+ * Combos de 2 o 3 que cuadran (±$0.05) van primero, marcados ✅ Cuadra.
+ * Misma familia (apellido) suma puntos. No vincula solo: la admin elige.
  */
 export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number }, tickets: Row[]): CandidatoBorrador[] {
   const dias = new Set(fechasCandidatasBorrador(inv.fecha));
   const pool = tickets.filter((t) => {
-    if (n(t.id) === NUNCA_TICKET_ID) return false;
+    if (!ticketClaveValida(t)) return false;
     if (exentoCuadre(t)) return false;
     if (!dias.has(s(t.fecha).slice(0, 10))) return false;
     const fac = s(t.facturaBeta || t.fac_7);
@@ -373,51 +419,68 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     fecha: s(t.fecha).slice(0, 10),
     cosm: s(t.atendido_por || t.cosmetologa),
   });
+  const avisoNombre = (nombres: string[], scores: number[]): string => {
+    const max = Math.max(0, ...scores);
+    const parts: string[] = [];
+    if (max >= 2) parts.push("El nombre cuadra con «" + s(inv.cliente) + "».");
+    else if (max >= 1) parts.push("Hay una coincidencia de nombre, pero no es el mismo de Migo («" + s(inv.cliente) + "»).");
+    else parts.push("El nombre no coincide con «" + s(inv.cliente) + "».");
+    const shared = [...new Set(nombres.map(apellidoToken).filter(Boolean))].filter((a) => nombres.filter((nm) => apellidoToken(nm) === a).length >= 2);
+    if (shared.length) parts.push("Hay tickets de la misma familia (" + shared.map((a) => a[0].toUpperCase() + a.slice(1)).join(", ") + ").");
+    return parts.join(" ");
+  };
+  const item = (xs: ReturnType<typeof pub>[], tipo: CandidatoBorrador["tipo"]): CandidatoBorrador => {
+    const sum = xs.reduce((a, x) => a + x.total, 0);
+    const scores = xs.map((x) => namesMatch(x.nombre, inv.cliente));
+    const cuadra = montoCerca(sum, inv.total);
+    const motivo = (cuadra ? etiquetaCuadra(sum, inv.total) : etiquetaNoCuadra(sum, inv.total)) + " " + avisoNombre(xs.map((x) => x.nombre), scores);
+    return {
+      ticket_ids: xs.map((x) => x.id), claves: xs.map((x) => x.clave), nombres: xs.map((x) => x.nombre),
+      totales: xs.map((x) => x.total), fechas: xs.map((x) => x.fecha), cosmetologas: xs.map((x) => x.cosm),
+      tipo, names: Math.max(0, ...scores), familia: familiaEn(xs.map((x) => x.nombre)),
+      cuadra, diferencia: montoDiff(sum, inv.total), motivo, total: sum,
+    };
+  };
+
   const singles: CandidatoBorrador[] = [];
   for (const t of pool) {
     const x = pub(t);
     const tokens = namesMatch(x.nombre, inv.cliente);
-    const exact = montoExacto(x.total, inv.total);
+    const exact = montoCerca(x.total, inv.total);
     if (tokens < 1 && !exact) continue;
     const tipo: CandidatoBorrador["tipo"] = exact && tokens >= 1 ? "nombre_monto" : exact ? "monto" : "nombre";
-    const avisos: string[] = [];
-    if (tokens >= 2) avisos.push("El nombre cuadra con «" + s(inv.cliente) + "».");
-    else if (tokens >= 1) avisos.push("Hay una coincidencia de nombre, pero no es el mismo de Migo («" + s(inv.cliente) + "»).");
-    else avisos.push("El nombre no coincide con «" + s(inv.cliente) + "».");
-    if (exact) avisos.push("Monto exacto ($" + Number(inv.total).toFixed(2) + ", total con IVA).");
-    else avisos.push("Monto distinto: ticket $" + x.total.toFixed(2) + " vs factura $" + Number(inv.total).toFixed(2) + ".");
-    singles.push({
-      ticket_ids: [x.id], claves: [x.clave], nombres: [x.nombre], totales: [x.total],
-      fechas: [x.fecha], cosmetologas: [x.cosm], tipo, names: tokens, motivo: avisos.join(" "), total: x.total,
-    });
+    singles.push(item([x], tipo));
   }
-  singles.sort((a, b) => {
-    const an = a.names > 0 ? 1 : 0, bn = b.names > 0 ? 1 : 0;
-    if (an !== bn) return bn - an;
-    if (a.names !== b.names) return b.names - a.names;
-    const am = a.tipo === "nombre_monto" || a.tipo === "monto" ? 1 : 0;
-    const bm = b.tipo === "nombre_monto" || b.tipo === "monto" ? 1 : 0;
-    if (am !== bm) return bm - am;
-    return (a.claves[0] || "").localeCompare(b.claves[0] || "");
-  });
+
   const combos: CandidatoBorrador[] = [];
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      const a = pub(pool[i]), b = pub(pool[j]);
-      if (!montoExacto(a.total + b.total, inv.total)) continue;
-      const na = namesMatch(a.nombre, inv.cliente), nb = namesMatch(b.nombre, inv.cliente);
-      const avisos = ["Suma exacta de 2 tickets: $" + a.total.toFixed(2) + " + $" + b.total.toFixed(2) + " = $" + Number(inv.total).toFixed(2) + " (total con IVA)."];
-      if (na < 1 && nb < 1) avisos.push("Ninguno coincide en nombre con «" + s(inv.cliente) + "».");
-      combos.push({
-        ticket_ids: [a.id, b.id], claves: [a.clave, b.clave], nombres: [a.nombre, b.nombre],
-        totales: [a.total, b.total], fechas: [a.fecha, b.fecha], cosmetologas: [a.cosm, b.cosm],
-        tipo: "suma2", names: Math.max(na, nb), motivo: avisos.join(" "), total: a.total + b.total,
-      });
+  const P = pool.map(pub);
+  for (let i = 0; i < P.length; i++) {
+    for (let j = i + 1; j < P.length; j++) {
+      const two = [P[i], P[j]];
+      if (montoCerca(two[0].total + two[1].total, inv.total)) combos.push(item(two, "suma2"));
+      for (let k = j + 1; k < P.length; k++) {
+        const three = [P[i], P[j], P[k]];
+        const sum = three[0].total + three[1].total + three[2].total;
+        if (montoCerca(sum, inv.total)) combos.push(item(three, "suma3"));
+      }
     }
   }
-  combos.sort((a, b) => b.names - a.names || (a.claves.join()).localeCompare(b.claves.join()));
-  return [...singles, ...combos];
+
+  const rank = (a: CandidatoBorrador, b: CandidatoBorrador) => {
+    if (a.cuadra !== b.cuadra) return a.cuadra ? -1 : 1;
+    const as = a.names + a.familia, bs = b.names + b.familia;
+    if (as !== bs) return bs - as;
+    if (a.names !== b.names) return b.names - a.names;
+    if (a.familia !== b.familia) return b.familia - a.familia;
+    if (Math.abs(a.diferencia) !== Math.abs(b.diferencia)) return Math.abs(a.diferencia) - Math.abs(b.diferencia);
+    if (a.claves.length !== b.claves.length) return b.claves.length - a.claves.length;
+    return (a.claves.join()).localeCompare(b.claves.join());
+  };
+  combos.sort(rank);
+  singles.sort(rank);
+  return [...combos, ...singles].sort(rank);
 }
+
 
 export function ofertaBorrador(borradores: Row[], p: { nombre?: unknown; apellido?: unknown; estimado?: unknown; fecha?: unknown; factura?: unknown }): Row | null {
   const vivos = borradores.filter((b) => ["pendiente", "asignado"].includes(s(b.estado)));
