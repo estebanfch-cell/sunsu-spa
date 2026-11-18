@@ -73,7 +73,7 @@ function presentacionDe(p: Row): string {
   const c = n(p.beta_contenido), u = s(p.beta_contenido_unidad), e = s(p.beta_envase);
   return [e, c > 0 ? c + (u ? " " + u : "") : ""].filter(Boolean).join(" ") || "";
 }
-function codigosDe(p: Row): string[] {
+function codigosBase(p: Row): string[] {
   return [s(p.sku), skuCode(s(p.sku)), s(p.codigo_barras), s(p.sku_proveedor), ...arr(p.beta_codigos).map((x) => typeof x === "object" && x ? s((x as Row).codigo ?? (x as Row).valor) : s(x))].filter(Boolean);
 }
 async function stockDe(ctx: Ctx, pid: string): Promise<Map<string, number>> {
@@ -89,6 +89,10 @@ extend("ap_opciones", "any", async (_p, ctx) => {
 extend("ap_buscar", "any", async (p, ctx) => {
   const q = normNombre(s(p.q)), code = s(p.q).trim().toUpperCase();
   if (q.length < 2) return { ok: true, items: [] };
+  // TK49: el código viejo (beta_sku_alias, ej. INV-098 → BV-002) también encuentra el producto.
+  const viejos = new Map<string, string[]>();
+  for (const al of await todas(ctx, "beta_sku_alias")) { const k = skuCode(s(al.sku)); viejos.set(k, [...(viejos.get(k) || []), s(al.alias)]); }
+  const codigosDe = (x: Row) => [...codigosBase(x), ...(viejos.get(skuCode(s(x.sku))) || [])];
   const prods = (await todas(ctx, "erp_productos")).filter((x) => !s(x.beta_eliminado_at) && !s(x.beta_archivado_at) && x.activo !== false && (s(x.clase) || "producto") === "producto");
   const exact = prods.filter((x) => codigosDe(x).some((c) => c.toUpperCase() === code || skuCode(c) === skuCode(code)));
   const words = q.split(/\s+/);

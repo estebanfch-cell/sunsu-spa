@@ -64,7 +64,9 @@ async function costeador(ctx: Ctx) {
 }
 
 async function catalogos(ctx: Ctx) {
-  const [erp, cat, cab] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario")]);
+  const [erp, cat, cab, alias] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario"), safeAll(ctx, "beta_sku_alias")]);
+  // TK49: código viejo (alias) → código nuevo; la fila de cabina con el código viejo es el mismo producto.
+  const nuevoDe = new Map((alias || []).map((a) => [skuCode(s(a.alias)), skuCode(s(a.sku))]));
   const catMap = new Map((cat || []).map((r) => [skuCode(s(r.sku)), r]));
   const servicios: Row[] = [];
   const productos = new Map<string, Row>();
@@ -79,9 +81,9 @@ async function catalogos(ctx: Ctx) {
     } else productos.set(code, { codigo: code, nombre: s(p.nombre), unidad: s(p.unidad_consumo) || s(p.unidad) });
   }
   for (const k of cab || []) {
-    const c = s(k.codigo).toUpperCase();
+    const c0 = s(k.codigo).toUpperCase(), c = nuevoDe.get(skuCode(c0)) || c0;
     if (c && !productos.has(c)) productos.set(c, { codigo: c, nombre: s(k.producto), unidad: s(k.unidad) });
-    const cc = codigoCabina(k);
+    const cc = nuevoDe.get(codigoCabina(k)) || codigoCabina(k);
     if (cc && productos.has(cc) && !s(productos.get(cc)!.unidad)) productos.get(cc)!.unidad = s(k.unidad);
   }
   servicios.sort((a, b) => s(a.sku).localeCompare(s(b.sku), "es", { numeric: true }));

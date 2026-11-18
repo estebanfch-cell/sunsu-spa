@@ -136,4 +136,12 @@ describe("📦 Abrir producto", () => {
     const C2 = db.tables.get("erp_consignacion_consumo")!;
     assert.equal(C2.length, 2); assert.equal(C2.reduce((x, c) => x + Number(c.cantidad), 0), 0);
   });
+  it("TK49: el código viejo (alias INV-098 → BV-002) encuentra el producto recodificado", async () => {
+    const { db, h } = semilla();
+    db.tables.get("erp_productos")!.push({ id: "pbv", sku: "BV-002", nombre: "Concentrado Calmante - Bruno Vassari", clase: "producto", uso: "cabina", activo: true });
+    db.tables.set("beta_sku_alias", [{ alias: "INV-098", sku: "BV-002", origen: "recodificacion_bv" }]);
+    const r = await h("ap_buscar", "cos", { q: "INV-098" });
+    assert.equal(r.exacto, "pbv");
+    assert.equal(((r.items as Row[])[0]).sku, "BV-002");
+  });
 });
