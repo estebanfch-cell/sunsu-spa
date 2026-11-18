@@ -5,10 +5,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#5B7FA6">
-<title>순수 Sunsu · Beta</title>
+<title>순수 Sunsu Spa</title>
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon-beta.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAjUlEQVR42u3boQ2AQBAEwC8Eg6UCeqA2Gn2HeftIGiAk3I5YcXbEZZPLtW1dZnIaAADPcB57RAAAAAAAAAAAAAAAAADgNYBx9c8DAEBxgPgdAAAAAACaIAAANQDKN0EAAAAAAAAAAABNEAAAOwAAAAAA4gDcBgGEA2iCAAAAAAAAAAAAAAD8F8DvMIC83FNeRXlbgRroAAAAAElFTkSuQmCC">
+<link rel="icon" href="/icon-sunsu-192.png" type="image/png" sizes="192x192">
+<link rel="icon" href="/icon-sunsu-64.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
+<meta name="apple-mobile-web-app-title" content="Sunsu">
+<meta name="application-name" content="순수 Sunsu Spa">
 <style>
   :root {
     /* Misma paleta que sunsu.html */
@@ -1801,6 +1804,9 @@ async function api(accion, body = {}) {
 
 function applySession(data) {
   state.user = data.user || null;
+  if (state.user && data.usuario) state.user.usuario = data.usuario;
+  state.debe_cambiar = !!data.debe_cambiar;
+  if (Object.prototype.hasOwnProperty.call(data, "debe_cambiar")) state.passOk = !data.debe_cambiar;
   state.verCostos = !!data.ver_costos;
   state.acceso = {};
   for (const m of data.modulos || []) state.acceso[m.modulo] = m.acceso;
@@ -1939,6 +1945,38 @@ function paintLogin(msg) {
     state.token = data.token;
     localStorage.setItem("sunsu.beta.token", data.token);
     applySession(data);
+    if (data.debe_cambiar) { paintCambiarClave(); return; }
+    go("#/m/inicio");
+  });
+}
+
+function paintCambiarClave(msg) {
+  document.getElementById("app").innerHTML = `
+    <main class="login">
+      <div class="login-logo"><img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu"></div>
+      <form class="login-card" id="f-clave-nueva">
+        <h2>Elige tu contraseña</h2>
+        <p class="lede">Entraste con una clave temporal. Ahora pon la tuya, de al menos 8 caracteres, con letras y números. No la compartas. Tu PIN sigue sirviendo si lo necesitas.</p>
+        <label for="nc-p">Contraseña nueva</label>
+        <input id="nc-p" type="password" autocomplete="new-password" maxlength="128" required>
+        <label for="nc-p2">Repítela</label>
+        <input id="nc-p2" type="password" autocomplete="new-password" maxlength="128" required>
+        <p class="err" id="nc-err">${esc(msg || "")}</p>
+        <button class="btn wide" id="nc-btn" type="submit">Guardar y entrar</button>
+      </form>
+    </main>`;
+  const u = ((state.user && state.user.usuario) || "").toString().trim().toLowerCase();
+  document.getElementById("f-clave-nueva").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const p = document.getElementById("nc-p").value, p2 = document.getElementById("nc-p2").value;
+    const err = document.getElementById("nc-err");
+    if (p !== p2) { err.textContent = "Las dos contraseñas no coinciden"; return; }
+    const btn = document.getElementById("nc-btn");
+    btn.disabled = true;
+    const data = await api("cred_mia_guardar", { usuario: u, password: p, password2: p2, desde_temporal: true });
+    btn.disabled = false;
+    if (!data.ok) { err.textContent = data.error || "No se pudo guardar"; return; }
+    state.passOk = true; state.debe_cambiar = false;
     go("#/m/inicio");
   });
 }
@@ -2522,6 +2560,15 @@ async function draw() {
     }
     if (!who.ok) { state.token = ""; localStorage.removeItem("sunsu.beta.token"); paintLogin(who.error); return; }
     applySession(who);
+  }
+  if (!previewOn() && state.user && state.passOk !== true) {
+    const acc = await api("cred_mia_get");
+    if (acc && acc.ok && acc.debe_cambiar) {
+      if (acc.usuario && state.user) state.user.usuario = acc.usuario;
+      paintCambiarClave();
+      return;
+    }
+    state.passOk = true;
   }
   await asegurarLugares();
   const route = parseRoute();
@@ -6810,40 +6857,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk99"></script>
-<script src="beta-screens.js?v=20261118tk99"></script>
-<script src="beta-inline.js?v=20261118tk99"></script>
-<script src="mc-productos.js?v=20261118tk99"></script>
-<script src="mc-nav.js?v=20261118tk99"></script>
-<script src="mc-permisos.js?v=20261118tk99"></script>
-<script src="mc-protocolos.js?v=20261118tk99"></script>
-<script src="mc-conteo.js?v=20261118tk99"></script>
-<script src="mc-transferencias.js?v=20261118tk99"></script>
-<script src="mc-ajustes.js?v=20261118tk99"></script>
-<script src="vendor-qrcode.js?v=20261118tk99"></script>
-<script src="mc-tickets.js?v=20261118tk99"></script>
-<script src="mc-maestro.js?v=20261118tk99"></script>
-<script src="mc-empleados.js?v=20261118tk99"></script>
-<script src="mc-edit.js?v=20261118tk99"></script>
-<script src="mc-paquetes.js?v=20261118tk99"></script>
-<script src="mc-aperturas.js?v=20261118tk99"></script>
-<script src="mc-acceso.js?v=20261118tk99"></script>
-<script src="mc-barras.js?v=20261118tk99"></script>
-<script src="mc-caja.js?v=20261118tk99"></script>
-<script src="mc-giftcards.js?v=20261118tk99"></script>
-<script src="mc-multas.js?v=20261118tk99"></script>
-<script src="mc-clientes.js?v=20261118tk99"></script>
-<script src="mc-clientes-dup.js?v=20261118tk99"></script>
-<script src="mc-docpdf.js?v=20261118tk99"></script>
-<script src="mc-compras.js?v=20261118tk99"></script>
-<script src="mc-consignacion.js?v=20261118tk99"></script>
-<script src="mc-proveedores.js?v=20261118tk99"></script>
-<script src="mc-recepciones.js?v=20261118tk99"></script>
-<script src="mc-movil.js?v=20261118tk99"></script>
-<script src="mc-promociones.js?v=20261118tk99"></script>
-<script src="mc-agenda.js?v=20261118tk99"></script>
-<script src="mc-staff-home.js?v=20261118tk99"></script>
-<script src="mc-borradores.js?v=20261118tk99"></script>
+<script src="mc-buscar.js?v=20261118tk100"></script>
+<script src="beta-screens.js?v=20261118tk100"></script>
+<script src="beta-inline.js?v=20261118tk100"></script>
+<script src="mc-productos.js?v=20261118tk100"></script>
+<script src="mc-nav.js?v=20261118tk100"></script>
+<script src="mc-permisos.js?v=20261118tk100"></script>
+<script src="mc-protocolos.js?v=20261118tk100"></script>
+<script src="mc-conteo.js?v=20261118tk100"></script>
+<script src="mc-transferencias.js?v=20261118tk100"></script>
+<script src="mc-ajustes.js?v=20261118tk100"></script>
+<script src="vendor-qrcode.js?v=20261118tk100"></script>
+<script src="mc-tickets.js?v=20261118tk100"></script>
+<script src="mc-maestro.js?v=20261118tk100"></script>
+<script src="mc-empleados.js?v=20261118tk100"></script>
+<script src="mc-edit.js?v=20261118tk100"></script>
+<script src="mc-paquetes.js?v=20261118tk100"></script>
+<script src="mc-aperturas.js?v=20261118tk100"></script>
+<script src="mc-acceso.js?v=20261118tk100"></script>
+<script src="mc-barras.js?v=20261118tk100"></script>
+<script src="mc-caja.js?v=20261118tk100"></script>
+<script src="mc-giftcards.js?v=20261118tk100"></script>
+<script src="mc-multas.js?v=20261118tk100"></script>
+<script src="mc-clientes.js?v=20261118tk100"></script>
+<script src="mc-clientes-dup.js?v=20261118tk100"></script>
+<script src="mc-docpdf.js?v=20261118tk100"></script>
+<script src="mc-compras.js?v=20261118tk100"></script>
+<script src="mc-consignacion.js?v=20261118tk100"></script>
+<script src="mc-proveedores.js?v=20261118tk100"></script>
+<script src="mc-recepciones.js?v=20261118tk100"></script>
+<script src="mc-movil.js?v=20261118tk100"></script>
+<script src="mc-promociones.js?v=20261118tk100"></script>
+<script src="mc-agenda.js?v=20261118tk100"></script>
+<script src="mc-staff-home.js?v=20261118tk100"></script>
+<script src="mc-borradores.js?v=20261118tk100"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
