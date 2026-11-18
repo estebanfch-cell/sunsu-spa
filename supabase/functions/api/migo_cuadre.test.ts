@@ -485,3 +485,31 @@ describe("Historial forma de pago (TK38)", () => {
     assert.match(html, /beta-screens\.js\?v=20261118tk\d+/);
   });
 });
+
+describe("TK90 · sugerencias de la bandeja Migo sin tickets de $0", () => {
+  const inv = { fecha: "2026-11-18", cliente: "SEBASTIAN GUERRA", total: 271.5 };
+  const tickets: Row[] = [
+    { id: 1898, clave: "TK-SO-1906", fecha: "2026-11-18", nombre: "Sunsu", apellido: "Spa", estimado: null, fac_7: "" },
+    { id: 1901, clave: "TK-SO-1909", fecha: "2026-11-18", nombre: "Emilia", apellido: "Gallegos", estimado: null, fac_7: "" },
+    { id: 1902, clave: "TK-SO-1910", fecha: "2026-11-18", nombre: "Emilia", apellido: "Gallegos", estimado: 0, fac_7: "" },
+    { id: 1904, clave: "TK-SO-1912", fecha: "2026-11-18", nombre: "Joanna", apellido: "Manvik", estimado: 271.496, fac_7: "" },
+    { id: 1905, clave: "TK-SO-1913", fecha: "2026-11-18", nombre: "Sunsu", apellido: "Spa", estimado: null, fac_7: "" },
+    { id: 1906, clave: "TK-SO-1914", fecha: "2026-11-18", nombre: "Ana", apellido: "Anulada", estimado: 271.5, fac_7: "", orig: { anulado: true } },
+    { id: 1907, clave: "TK-SO-1915", fecha: "2026-11-18", nombre: "Uno", apellido: "Medio", estimado: 200, fac_7: "" },
+    { id: 1908, clave: "TK-SO-1916", fecha: "2026-11-18", nombre: "Dos", apellido: "Medio", estimado: 71.5, fac_7: "" },
+  ];
+  const C = candidatosParaFactura(inv, tickets);
+  it("nunca tickets de $0 ni cancelados", () => {
+    for (const k of ["TK-SO-1906", "TK-SO-1909", "TK-SO-1910", "TK-SO-1913", "TK-SO-1914"]) assert.equal(C.some((c) => c.claves.includes(k)), false, k);
+  });
+  it("el que cuadra solo (1912) sale solo, nunca dentro de una combinación", () => {
+    const solo = C.filter((c) => c.claves.includes("TK-SO-1912"));
+    assert.equal(solo.length, 1); assert.equal(solo[0].claves.length, 1); assert.equal(solo[0].cuadra, true);
+  });
+  it("sin combinaciones repetidas", () => {
+    const k = C.map((c) => c.ticket_ids.slice().sort().join(","));
+    assert.equal(new Set(k).size, k.length);
+    assert.equal(C.filter((c) => c.claves.length > 1).length, 1, "solo 1915+1916");
+  });
+});
+
