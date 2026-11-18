@@ -69,11 +69,27 @@
       return '<tr class="tk-row" data-oc="' + e(it.id) + '"><td class="mcoc-num">' + e(it.numero) + (it.tipo === "consignacion" ? " " + pill("Consignación") : "") + "</td><td>" + e((it.prov && it.prov.nombre) || it.proveedor || "—") + "</td><td>" + e(f(it.fecha)) + "</td><td>" + e(it.nLineas || 0) + "</td><td>" + pill(it.estado) + "</td><td>" + (K.admin && it.estado !== "Cancelada" ? pill(it.pago) : "") + '</td><td class="num">' + (K.admin ? $m(it.total) : "—") + '</td><td class="num">' + (K.admin ? $m(it.saldo) : "—") + "</td></tr>";
     }).join("");
   }
+  // Tarjetas para iPhone (≤640px): Nº + estado, proveedor, fecha · total · líneas · saldo, y el pago abajo.
+  function tarjetasOc() {
+    var L = K.items.filter(filtra);
+    if (!L.length) return '<p class="mcoc-sub">Sin órdenes en este filtro</p>';
+    return L.map(function (it) {
+      var l3 = [e(f(it.fecha))];
+      if (K.admin) l3.push("<b>" + $m(it.total) + "</b>");
+      l3.push(e(it.nLineas || 0) + " línea" + (Number(it.nLineas) === 1 ? "" : "s"));
+      if (K.admin && it.estado !== "Cancelada" && Number(it.saldo) > 0.004) l3.push('<span class="mob-saldo">saldo ' + $m(it.saldo) + "</span>");
+      var pills = [];
+      if (K.admin && it.estado !== "Cancelada" && it.pago) pills.push(pill(it.pago));
+      if (it.tipo === "consignacion") pills.push(pill("Consignación"));
+      return '<div class="mob-card mcoc-card" role="button" tabindex="0" data-oc="' + e(it.id) + '"><div class="mob-l1"><span class="mob-num">' + e(it.numero) + "</span>" + pill(it.estado) + '</div><div class="mob-l2">' + e((it.prov && it.prov.nombre) || it.proveedor || "—") + '</div><div class="mob-l3">' + l3.join("<span>·</span>") + "</div>" + (pills.length ? '<div class="mob-pills">' + pills.join("") + "</div>" : "") + "</div>";
+    }).join("");
+  }
   function listaOc() {
     return tabs() + '<div class="mcoc-tools">' + (K.admin ? '<button class="btn small" type="button" data-go="#/m/compras/nueva">+ Nueva OC</button>' : "") +
       '<input type="search" id="mcoc-q" placeholder="Buscar número, proveedor o nota" value="' + e(K.q) + '"></div>' +
       '<div class="mcoc-tools">' + CHIPS.map(function (c) { return '<button type="button" class="mcoc-chip' + (K.estado === c[0] ? " on" : "") + '" data-est="' + c[0] + '">' + c[1] + " · " + K.items.filter(function (it) { var s = K.estado; K.estado = c[0]; var ok = filtra(it); K.estado = s; return ok; }).length + "</button>"; }).join("") + "</div>" +
-      '<div class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Nº OC</th><th>Proveedor</th><th>Fecha</th><th>Líneas</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead><tbody id="mcoc-body">' + filasOc() + "</tbody></table></div>" +
+      '<div class="mob-cards" id="mcoc-cards">' + tarjetasOc() + "</div>" +
+      '<div class="sheet-scroll mob-table"><table class="tk-table nowrap-table"><thead><tr><th>Nº OC</th><th>Proveedor</th><th>Fecha</th><th>Líneas</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead><tbody id="mcoc-body">' + filasOc() + "</tbody></table></div>" +
       '<p class="note">Una OC es una compra que el proveedor factura. Las aprobadas quedan «Por recibir» y se reciben en 📥 Recepciones. Las «Históricas» vienen del Sheet sin líneas de recepción.</p>';
   }
   function listaCot() {
@@ -85,10 +101,10 @@
   }
   function wireLista(main) {
     var q = main.querySelector("#mcoc-q");
-    if (q) q.addEventListener("input", function () { K.q = q.value; var b = main.querySelector("#mcoc-body"); if (b) b.innerHTML = filasOc(); else { var pos = q.selectionStart; main.innerHTML = listaCot(); wireLista(main); var q2 = main.querySelector("#mcoc-q"); q2.focus(); q2.setSelectionRange(pos, pos); } });
+    if (q) q.addEventListener("input", function () { K.q = q.value; var b = main.querySelector("#mcoc-body"); if (b) { b.innerHTML = filasOc(); var cd = main.querySelector("#mcoc-cards"); if (cd) cd.innerHTML = tarjetasOc(); } else { var pos = q.selectionStart; main.innerHTML = listaCot(); wireLista(main); var q2 = main.querySelector("#mcoc-q"); q2.focus(); q2.setSelectionRange(pos, pos); } });
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = function () { K.estado = b.getAttribute("data-est"); main.innerHTML = listaOc(); wireLista(main); }; });
     main.addEventListener("click", function (ev) {
-      var tr = ev.target.closest && ev.target.closest("tr[data-oc],tr[data-cot]"); if (!tr) return;
+      var tr = ev.target.closest && ev.target.closest("tr[data-oc],tr[data-cot],.mcoc-card[data-oc]"); if (!tr) return;
       if (tr.hasAttribute("data-oc")) go("#/m/compras/oc/" + encodeURIComponent(tr.getAttribute("data-oc")));
       else go("#/m/compras/cot/" + encodeURIComponent(tr.getAttribute("data-cot")));
     });

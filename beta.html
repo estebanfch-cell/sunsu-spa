@@ -679,6 +679,30 @@
   .tk-led.q { background: #ECEEF4; }
   .tk-reag { color: #C98A00; font-weight: 900; font-size: 0.8rem; margin-left: 2px; }
   .tk-sum { font-size: 0.78rem; color: var(--navy); margin: 2px 2px 8px; }
+  /* Lista en tarjetas para iPhone (≤640px), Tickets y Compras (Emilia 17/11). Escritorio: tabla de siempre. */
+  .mob-cards { display: none; flex-direction: column; gap: 10px; }
+  .mob-only { display: none !important; }
+  .mob-card { background: #fff; border: 1px solid var(--cream-d); border-left: 4px solid transparent; border-radius: 16px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(43,63,92,.06); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mob-card:active { background: var(--cream); }
+  .mob-card.tk-flagged { border-left-color: #d9534f; background: #fff8f7; }
+  .mob-card.tk-falta { border-left-color: #e0b100; background: #fffcf0; }
+  .mob-l1 { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.98rem; }
+  .mob-l2 { color: var(--navy); font-size: 0.92rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mob-l3 { color: var(--gray); font-size: 0.8rem; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
+  .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 0.9rem; }
+  .mob-saldo { color: #B8901F; font-weight: 800; }
+  .mob-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .mob-pills .tk-pill, .mob-l1 .tk-pill { font-size: 0.7rem; padding: 2px 10px; margin: 0; }
+  @media (max-width: 640px) {
+    .mob-cards { display: flex; }
+    .mob-hide { display: none !important; }
+    .mob-only { display: inline-flex !important; }
+    #hist-buscar, #mcoc-q { font-size: 16px !important; } /* iPhone no hace zoom al escribir */
+    .mcoc-tools:has(.mcoc-chip) { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .mcoc-tools .mcoc-chip { flex: none; }
+    .tk-split .tk-list > table, .mob-table { display: none !important; }
+  }
   .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
   /* Ticket como orden de venta: Código | Descripción | Cant. | Precio unit. (sin IVA) | Total */
   .tk-orden { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
@@ -5726,32 +5750,32 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk27"></script>
-<script src="beta-screens.js?v=20261117tk27"></script>
-<script src="beta-inline.js?v=20261117tk27"></script>
-<script src="mc-productos.js?v=20261117tk27"></script>
-<script src="mc-nav.js?v=20261117tk27"></script>
-<script src="mc-permisos.js?v=20261117tk27"></script>
-<script src="mc-protocolos.js?v=20261117tk27"></script>
-<script src="mc-conteo.js?v=20261117tk27"></script>
-<script src="mc-transferencias.js?v=20261117tk27"></script>
-<script src="mc-ajustes.js?v=20261117tk27"></script>
-<script src="vendor-qrcode.js?v=20261117tk27"></script>
-<script src="mc-tickets.js?v=20261117tk27"></script>
-<script src="mc-paquetes.js?v=20261117tk27"></script>
-<script src="mc-aperturas.js?v=20261117tk27"></script>
-<script src="mc-acceso.js?v=20261117tk27"></script>
-<script src="mc-barras.js?v=20261117tk27"></script>
-<script src="mc-caja.js?v=20261117tk27"></script>
-<script src="mc-giftcards.js?v=20261117tk27"></script>
-<script src="mc-multas.js?v=20261117tk27"></script>
-<script src="mc-clientes.js?v=20261117tk28"></script>
-<script src="mc-clientes-dup.js?v=20261117tk27"></script>
-<script src="mc-docpdf.js?v=20261117tk27"></script>
-<script src="mc-compras.js?v=20261117tk27"></script>
-<script src="mc-consignacion.js?v=20261117tk27"></script>
-<script src="mc-recepciones.js?v=20261117tk27"></script>
-<script src="mc-agenda.js?v=20261117tk27"></script>
+<script src="mc-buscar.js?v=20261117tk29"></script>
+<script src="beta-screens.js?v=20261117tk29"></script>
+<script src="beta-inline.js?v=20261117tk29"></script>
+<script src="mc-productos.js?v=20261117tk29"></script>
+<script src="mc-nav.js?v=20261117tk29"></script>
+<script src="mc-permisos.js?v=20261117tk29"></script>
+<script src="mc-protocolos.js?v=20261117tk29"></script>
+<script src="mc-conteo.js?v=20261117tk29"></script>
+<script src="mc-transferencias.js?v=20261117tk29"></script>
+<script src="mc-ajustes.js?v=20261117tk29"></script>
+<script src="vendor-qrcode.js?v=20261117tk29"></script>
+<script src="mc-tickets.js?v=20261117tk29"></script>
+<script src="mc-paquetes.js?v=20261117tk29"></script>
+<script src="mc-aperturas.js?v=20261117tk29"></script>
+<script src="mc-acceso.js?v=20261117tk29"></script>
+<script src="mc-barras.js?v=20261117tk29"></script>
+<script src="mc-caja.js?v=20261117tk29"></script>
+<script src="mc-giftcards.js?v=20261117tk29"></script>
+<script src="mc-multas.js?v=20261117tk29"></script>
+<script src="mc-clientes.js?v=20261117tk29"></script>
+<script src="mc-clientes-dup.js?v=20261117tk29"></script>
+<script src="mc-docpdf.js?v=20261117tk29"></script>
+<script src="mc-compras.js?v=20261117tk29"></script>
+<script src="mc-consignacion.js?v=20261117tk29"></script>
+<script src="mc-recepciones.js?v=20261117tk29"></script>
+<script src="mc-agenda.js?v=20261117tk29"></script>
 <script>draw();</script>
 </body>
 </html>
