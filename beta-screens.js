@@ -1943,14 +1943,41 @@ function _promoBetaLineas(){
   return _ldLineas().map(function(l){ var q=l.b==='prod'?(T.productos[l.k]||1):1; return {k:l.k,sku:l.k,nombre:l.n,tipo:B[l.b]||'producto',cantidad:q,bruto:Math.round(l.g*100)/100}; });
 }
 function _promoSigNow(){ return _promoBetaLineas().map(function(l){return l.k+':'+l.cantidad+':'+l.bruto;}).join('|'); }
+function _promoBetaAplicar(res){
+  T.lineDesc=T.lineDesc||{};
+  Object.keys(T.lineDesc).forEach(function(k){ if(T.lineDesc[k]&&T.lineDesc[k].promo) delete T.lineDesc[k]; });
+  (res.lineas||[]).forEach(function(l){ if(l.monto>0&&!(T.lineDesc[l.k]&&!T.lineDesc[l.k].promo)) T.lineDesc[l.k]={m:'$',v:l.monto,promo:l.etiqueta}; });
+}
+// AUTO (Emilia 17/11 22:53): cada vez que cambian las líneas, el servidor dice qué promos aplican y se aplican solas.
+// Una línea con descuento escrito a mano no recibe promo. Solo un admin quita/fuerza una promo (T._promoQuit/_promoForz).
+var _promoAutoReq=0;
+function _promoBetaAuto(){
+  if(T.esSunsu&&T._promoIds&&T._promoIds.length){ _promoBetaAplicar({lineas:[]}); T._promoIds=[]; T._promoSigAuto=''; _ldSig=''; return; }
+  if(T.esSunsu||!window.MCPromociones||typeof api!=='function') return;
+  var L=_promoBetaLineas().filter(function(l){ var d=T.lineDesc&&T.lineDesc[l.k]; return !(d&&!d.promo); });
+  var sig=JSON.stringify([L,T._promoQuit||[],T._promoForz||[]]);
+  if(sig===T._promoSigAuto) return;
+  T._promoSigAuto=sig;
+  if(!L.length){ if(T._promoIds&&T._promoIds.length){ _promoBetaAplicar({lineas:[]}); T._promoIds=[]; _ldSig=''; updatePreview(); } return; }
+  var my=++_promoAutoReq, T0=T;
+  api('promo_calcular',{auto:true,lineas:L,excluir:T._promoQuit||[],forzar:T._promoForz||[]}).then(function(r){
+    if(my!==_promoAutoReq||T0!==T||!r||r.error) return;
+    var antes=JSON.stringify(T.lineDesc||{});
+    _promoBetaAplicar(r.resultado||{lineas:[]}); T._promoIds=r.aplicadas||[];
+    if(JSON.stringify(T.lineDesc||{})!==antes){ _ldSig=''; updatePreview(); }
+  }).catch(function(){});
+}
 function _promoBeta(){
   if(T.esSunsu){ toast('Consumo interno: sin promociones','#C9A227'); return; }
   if(!window.MCPromociones){ toast('Recarga la página para ver las promociones','#C9A227'); return; }
-  window.MCPromociones.panel({lineas:_promoBetaLineas, aplicadas:T._promoIds||[], aplicar:function(res,ids){
-    T.lineDesc=T.lineDesc||{};
-    Object.keys(T.lineDesc).forEach(function(k){ if(T.lineDesc[k]&&T.lineDesc[k].promo) delete T.lineDesc[k]; });
-    (res.lineas||[]).forEach(function(l){ if(l.monto>0) T.lineDesc[l.k]={m:'$',v:l.monto,promo:l.etiqueta}; });
-    T._promoIds=ids; T._promoSig=_promoSigNow(); _ldSig=''; updatePreview();
+  var adm=!!(window.state&&state.admin)||(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  window.MCPromociones.panel({auto:true, admin:adm, lineas:function(){ return _promoBetaLineas().filter(function(l){ var d=T.lineDesc&&T.lineDesc[l.k]; return !(d&&!d.promo); }); }, aplicadas:T._promoIds||[], aplicar:function(res,ids,promos){
+    // Solo se excluye lo que el admin desmarcó (estaba aplicada o ya excluida); las demás siguen automáticas.
+    var prev=(T._promoIds||[]).concat(T._promoQuit||[]);
+    if(!ids.length&&!(res.lineas||[]).length) prev=prev.concat((promos||[]).filter(function(p){return p.monto>0;}).map(function(p){return p.id;}));
+    T._promoQuit=prev.filter(function(id,i){return ids.indexOf(id)<0&&prev.indexOf(id)===i;});
+    T._promoForz=ids.filter(function(id){return (T._promoIds||[]).indexOf(id)<0;});
+    T._promoSigAuto=''; _promoBetaAuto();
   }});
 }
 function _ldRender(){
@@ -2083,6 +2110,7 @@ function updatePreview(){
   const totEFinal = (T.descuento&&T.descuento.tipo==='directo') ? 0 : Math.max(0, totE - dscMonto);
   // Bases para la actualizacion EN VIVO del descuento personalizado (_dscLive)
   window._pvB={facialP:facialP,estPack:estPack,estProd:estProd,gcVTotal:gcVTotal,totE:totE};
+  try{ _promoBetaAuto(); }catch(eAu){}
   try{ _ldRender(); }catch(eLd){}
   const box=document.getElementById('preview-box');if(!box) return;
   const hasExtras=extrasDetalle.length>0;
@@ -2156,7 +2184,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      <button onclick="_promoBeta()" style="width:100%;padding:9px 10px;margin-bottom:6px;border-radius:10px;border:1.5px solid #E8C07A;background:${(T._promoIds&&T._promoIds.length)?'rgba(232,192,122,0.22)':'transparent'};color:#E8C07A;font-size:0.72rem;font-weight:800;cursor:pointer;text-align:left">🏷️ Promociones${(T._promoIds&&T._promoIds.length)?(T._promoSig&&T._promoSig!==_promoSigNow()?' · ⚠️ cambió el ticket: toca para recalcular':' · '+T._promoIds.length+' aplicada'+(T._promoIds.length===1?'':'s')+' ✓'):' · ver cuáles aplican'}</button>
+      <button onclick="_promoBeta()" style="width:100%;padding:9px 10px;margin-bottom:6px;border-radius:10px;border:1.5px solid #E8C07A;background:${(T._promoIds&&T._promoIds.length)?'rgba(232,192,122,0.22)':'transparent'};color:#E8C07A;font-size:0.72rem;font-weight:800;cursor:pointer;text-align:left">🏷️ Promociones${(T._promoIds&&T._promoIds.length)?(' · '+T._promoIds.length+' aplicada'+(T._promoIds.length===1?'':'s')+' sola'+(T._promoIds.length===1?'':'s')+' ✓ −$'+Object.keys(T.lineDesc||{}).reduce(function(s,k){var d=T.lineDesc[k];return s+(d&&d.promo?(+d.v||0):0);},0).toFixed(2)):' · se aplican solas · ver vigentes'}</button>
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
