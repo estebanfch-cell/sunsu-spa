@@ -15,7 +15,7 @@ import { claveCliente, paquetesDe, parseGcCanje, recetaDe, saldoGift } from "./v
 import { normCedula, normNombre } from "./domain.ts";
 import { acceso, esPropio, matrizDe } from "./permisos.ts";
 import { facturaTxt } from "./ticket_total.ts";
-import { estadoCobro, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
+import { estadoCobro, esMetodoPago, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
 export { metodosPago } from "./pagos_caja.ts";
 import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
@@ -235,12 +235,12 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
       nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3), cosmetologa: s(r.atendido_por),
       cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7), comprobante: s(r.comp),
       notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones), retorno: s(r.fecha_retorno).slice(0, 10), paquete: s(r.paquete),
-      estado: anulado ? "anulado" : fac && cob ? "cerrado" : "abierto",
+      estado: anulado ? "anulado" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "cerrado" : "abierto",
       cancelado: anulado ? { motivo: s(orig.cancelado_motivo), por: s(orig.cancelado_por), ts: s(orig.cancelado_ts) } : null,
       leds: [
-        { k: "estado", t: anulado ? "Cancelado" : fac && cob ? "Cerrado" : "Abierto", c: anulado ? "x" : fac && cob ? "ok" : "c" },
+        { k: "estado", t: anulado ? "Cancelado" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "Cerrado" : "Abierto", c: anulado ? "x" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "ok" : "c" },
         { k: "fac", t: hayFactura(r.fac_7) ? "Facturado" + (facturaTxt(r.fac_7) && !/sin/i.test(facturaTxt(r.fac_7)) ? " " + facturaTxt(r.fac_7) : "") : "Sin factura", c: hayFactura(r.fac_7) ? "ok" : "off" },
-        { k: "cob", t: cob ? "Cobrado" : "Por cobrar", c: cob ? "ok" : "r" },
+        { k: "cob", t: estaCobrado(r) ? "Cobrado" : "Por cobrar", c: estaCobrado(r) ? "ok" : "r" },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
         ...(exclBeta || Object.values(exclSistema).some(Boolean) ? [{ k: "com", t: "Comisión excluida", c: "r" }] : []),
         ...(cab ? [{ k: "beta", t: "Editado en la beta", c: "a" }] : []),
@@ -411,10 +411,22 @@ export function facturaCompleta(v: unknown): string {
   return d ? "001-001-" + d.slice(-9).padStart(9, "0") : t;
 }
 /** Hay una factura real (no el texto «SIN FACTURA» ni el flag fac solo). */
-export function hayFactura(fac7: unknown, datosFac?: unknown): boolean {
-  const nro = s(datosFac).trim();
-  if (nro && !/sin/i.test(nro)) return true;
+export function hayFactura(fac7: unknown, datosFac?: unknown, linkFac?: unknown): boolean {
+  for (const v of [datosFac, linkFac, fac7]) {
+    const nro = s(v).trim();
+    if (nro && !/sin/i.test(nro) && (facturaCompleta(nro) || /^\d+(\.0+)?$/.test(nro))) return true;
+  }
   return !!facturaCompleta(fac7);
+}
+
+/** Cobrado en el sistema anterior: flag cob, o (si no está anulado ni es de prueba) tiene método de pago o factura real. */
+export function estaCobrado(r: Row, datosFac?: unknown, linkFac?: unknown): boolean {
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  if (orig.anulado === true) return false;
+  if (s(r.origin) === "test" || /^TEST-/i.test(s(r.so_num) || s(r.beta_num))) return b(r.cob);
+  if (b(r.cob)) return true;
+  if (metodosPago(r.comp).some((m) => esMetodoPago(m.metodo))) return true;
+  return hayFactura(r.fac_7, datosFac, linkFac);
 }
 /** El facial del ticket se canjeó (sesión de paquete o gift card de facial, sin monto aplicado). */
 export function canjeFacial(r: Row): boolean {
@@ -506,9 +518,9 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
   if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
-  const stCob = estadoCobro({ cobrado: b(r.cob), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
+  const stCob = estadoCobro({ cobrado: estaCobrado(r, d.factura), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
   const metodos = metodosPago(r.comp);
-  const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: b(r.cob), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
+  const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: estaCobrado(r, d.factura), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
   const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];
@@ -531,10 +543,11 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-  const anulado = orig.anulado === true, fac = b(r.fac) || !!s(d.factura), facReal = hayFactura(r.fac_7, d.factura);
+  const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura), cobrado = estaCobrado(r, d.factura);
+  const fac = facReal || b(r.fac);
   const chips: Row[] = [
-    { k: "estado", t: anulado ? "Cancelado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
-    { k: "cobro", t: b(r.cob) ? "Pagado" : "Por cobrar", c: b(r.cob) ? "pagado" : "porcobrar" },
+    { k: "estado", t: anulado ? "Cancelado" : cobrado && fac ? "Cerrado" : "Abierto", c: anulado ? "anulado" : cobrado && fac ? "cerrado" : "abierto" },
+    { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
     { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },

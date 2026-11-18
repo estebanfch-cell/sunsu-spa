@@ -11,7 +11,7 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { faltaDe, faseA, facturaCompleta } from "./tickets_beta_api.ts";
+import { estaCobrado, faltaDe, faseA, facturaCompleta, hayFactura } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { itemBorradorHistorial, listarBorradoresVisibles } from "./borradores_asig.ts";
@@ -45,11 +45,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   }
   if (todos && s(p.cosm) && !q) F.push({ col: "atendido_por", op: "eq", val: s(p.cosm) });
   const est = s(p.est), seg = s(p.seg);
-  if (est === "pagado") F.push({ col: "cob", op: "is_true" });
-  if (est === "porcobrar") F.push({ col: "cob", op: "not_true" });
-  if (est === "sinfactura") F.push({ col: "fac", op: "not_true" });
-  if (est === "cerrado") F.push({ col: "fac", op: "is_true" }, { col: "cob", op: "is_true" });
-  if (est === "abierto") F.push({ op: "or", de: [{ col: "fac", op: "not_true" }, { col: "cob", op: "not_true" }] });
+  // TK83: pagado / porcobrar / sinfactura / cerrado / abierto se filtran después con hayFactura + estaCobrado
+  // (el flag fac y el texto «SIN FACTURA» no definen si hay factura; un ticket con método o factura real se trata cobrado).
   if (est === "anulado") F.push({ col: "orig->>anulado", op: "eq", val: "true" });
   if (seg === "pago_no") F.push({ col: "cob", op: "not_true" });
   if (seg === "reag_no") F.push({ col: "agendado", op: "not_true" });
@@ -68,6 +65,17 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const factByFac = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [s(f.factura), f]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
+  const facDe = (r: Row) => hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  const cobDe = (r: Row) => estaCobrado(r, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  const cerradoDe = (r: Row) => {
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    return orig.anulado === true || (cobDe(r) && (facDe(r) || r.fac === true || s(r.fac).toLowerCase() === "true"));
+  };
+  if (est === "sinfactura") L = L.filter((r) => !facDe(r));
+  if (est === "pagado") L = L.filter((r) => cobDe(r));
+  if (est === "porcobrar") L = L.filter((r) => !cobDe(r));
+  if (est === "cerrado") L = L.filter((r) => cerradoDe(r) && (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado !== true : true));
+  if (est === "abierto") L = L.filter((r) => !cerradoDe(r));
   // El comprobante de la hoja vive en orig: solo para los que parecen sin comprobante se lee orig (pocos).
   const sinComp = L.filter((r) => faltaDe(r, datosDe(r)).length > 0).map((r) => n(r.id)).filter(Boolean);
   if (sinComp.length) {
@@ -122,13 +130,18 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const inv = Lnk ? factByFac.get(s(Lnk.factura)) : undefined;
     const facTxt = s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(Lnk?.factura);
     const formaMigo = s(inv?.forma) || (d.pago_migo && typeof d.pago_migo === "object" ? s((d.pago_migo as Row).forma) : "");
+    const cobrado = estaCobrado(r, d.factura, Lnk?.factura);
+    const facReal = hayFactura(r.fac_7, d.factura, Lnk?.factura);
+    it.cob = cobrado;
+    it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";
+    it.estado_doc = (it.anulado === true || (cobrado && (facReal || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
     it.led = {
-      a: faseA(r) ? 1 : 0, p: cob ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
+      a: faseA(r) ? 1 : 0, p: cobrado ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && it.anulado !== true && YMD.test(ret) && ret <= addD(hoy, 7) && ret >= addD(hoy, -60) ? 1 : 0,
       ...(fl.length ? { flag: fl.map((x) => s(x.motivo) + (x.factura ? " · factura " + s(x.factura) : "")).join(" / ") } : {}),
-      factura: facturaCompleta(facTxt),
-      ...(formaDeTicket(r, d, formaMigo) ? { forma: formaDeTicket(r, d, formaMigo) } : {}),
-      ...(!cob && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
+      factura: facReal ? facturaCompleta(facTxt) : "",
+      ...((formaDeTicket(r, d, formaMigo) || (cobrado ? "no_registrado" : "")) ? { forma: formaDeTicket(r, d, formaMigo) || "no_registrado" } : {}),
+      ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),

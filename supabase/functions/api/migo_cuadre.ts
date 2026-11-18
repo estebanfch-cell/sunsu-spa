@@ -58,7 +58,7 @@ export function metodosTicket(comp: unknown): string[] {
     if (/^tarj/.test(m)) return "tarjeta";
     if (/^tran/.test(m)) return "transferencia";
     if (/^canj/.test(m)) return "canje";
-    if (/^cort/.test(m)) return "cortesia";
+    if (/^cortesia|^cortesía/.test(m)) return "cortesia";
     return m;
   });
 }
@@ -82,9 +82,11 @@ export function formaNorm(v: unknown): string {
   if (/^tarj/.test(m)) return "tarjeta";
   if (/^tran/.test(m)) return "transferencia";
   if (/^canj/.test(m)) return "canje";
-  if (/^cort/.test(m)) return "cortesia";
+  if (/^cortesia|^cortesía/.test(m)) return "cortesia";
   if (/^mix/.test(m)) return "mixto";
-  return m;
+  if (/^deuna/.test(m)) return "deuna";
+  if (/^gift/.test(m)) return "gift_card";
+  return "no_registrado";
 }
 
 /** Forma visible: primero el ticket (comp), si no la beta, si no Migo. Varios métodos → mixto. */
