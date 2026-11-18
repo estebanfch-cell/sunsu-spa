@@ -83,6 +83,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getRoles: "rol_pagos", getRolIndividual: "rol_pagos", getAprobacionesRol: "rol_pagos", aprobarRol: "rol_pagos",
   getRolCiclo: "rol_pagos", getPagoConfig: "rol_pagos", pago_config_guardar: "rol_pagos",
   roles_lista: "rol_pagos", rol_publicar: "rol_pagos",
+  emp_list: "asistencia", emp_get: "asistencia", emp_guardar: "asistencia", emp_iess_guardar: "rol_pagos", emp_iess_borrar: "rol_pagos", emp_doc_subir: "asistencia", emp_doc_url: "asistencia", emp_oc_servicios: "rol_pagos",
   config_general: "configuracion",
   testDiasJibble: "asistencia",
   asis_config: "asistencia", asis_config_guardar: "asistencia", asis_marcar: "asistencia",
