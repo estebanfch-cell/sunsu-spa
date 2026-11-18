@@ -56,7 +56,17 @@ export const FLAGS = [
   { id: "saldos", label: "Ver saldos y pagos" },
   { id: "comisiones", label: "Ver comisiones" },
   { id: "rol_pagos", label: "Ver roles de pago" },
+  { id: "telefonos", label: "Ver teléfonos de clientas" },
+  { id: "emails", label: "Ver emails de clientas" },
+  { id: "sector", label: "Ver sector / dirección" },
+  { id: "descargas", label: "Descargar archivos" },
+  { id: "tickets_todos", label: "Ver todos los tickets" },
 ];
+/** Flags de privacidad que se reflejan en un módulo de app_modulos. */
+const FLAG_PRIV: Record<string, string> = {
+  costos: "ver_costos", telefonos: "ver_telefonos", emails: "ver_emails",
+  sector: "ver_sector", descargas: "descargas",
+};
 /** Interruptores que además cierran un módulo entero cuando están apagados. */
 const FLAG_MODULO: Record<string, string> = { comisiones: "comisiones", rol_pagos: "rol_pagos" };
 export const TODOS = "*";
@@ -175,8 +185,12 @@ export function filasEfectivas(rol: string, matriz: Record<string, Partial<Recor
     if (mod === "permisos" || mod === "configuracion") continue;
     const base = acceso(rol, mod, matriz);
     let v: Acceso = base;
-    if (mod === "ver_costos") { if (o.flags.costos !== undefined) v = o.flags.costos ? "todos" : "no"; }
-    else v = accesoEfectivo(base, mod, o);
+    const flagPriv = Object.entries(FLAG_PRIV).find(([, m]) => m === mod);
+    if (flagPriv && o.flags[flagPriv[0]] !== undefined) v = o.flags[flagPriv[0]] ? "todos" : "no";
+    else if (mod === "tickets" && o.flags.tickets_todos !== undefined) {
+      v = accesoEfectivo(base, mod, o);
+      if (v !== "no") v = o.flags.tickets_todos ? "todos" : "propio";
+    } else v = accesoEfectivo(base, mod, o);
     out.push({ rol, modulo: mod, acceso: v });
   }
   return out;

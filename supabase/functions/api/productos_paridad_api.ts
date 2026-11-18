@@ -120,7 +120,8 @@ extend("mcprod_archivo_subir", "any", async (p, ctx, ses) => {
 
 extend("mcprod_archivo", "any", async (p, ctx, ses) => {
   if (!(await puedeVer(ctx, ses))) return { error: "No tienes permiso" };
-  if (!esAdmin(ses.rol)) return { error: "El personal no puede descargar archivos" };
+  const matriz = await matrizDe(ctx.db);
+  if (!esAdmin(ses.rol) && acceso(ses.rol, "descargas", matriz) === "no") return { error: "El personal no puede descargar archivos" };
   const prod = await producto(ctx, s(p.id));
   if (!prod) return { error: "Producto no encontrado" };
   const aid = s(p.archivo_id);

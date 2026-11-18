@@ -24,6 +24,7 @@ import "./agenda_api.ts";
 import "./staff_home_api.ts";
 import "./tickets_lista_api.ts";
 import "./usuario_permisos_api.ts";
+import "./priv_permisos_api.ts";
 import "./colores_api.ts";
 import "./tickets_cancelar_api.ts";
 import "./paquetes_beta_api.ts";
