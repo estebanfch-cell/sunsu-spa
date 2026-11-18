@@ -4170,13 +4170,13 @@ async function renderGcDetalle(codigo) {
   const data = await api("gc_detalle", { codigo });
   if (data.error) return fail(data);
   const g = data.item || {};
-  const edit = state.admin ? `<form id="f-gc-editar" class="card" data-codigo="${esc(g.codigo)}">
-      <div class="card-title">Editar</div>
+  const edit = state.admin ? `<form id="f-gc-editar" class="card" data-codigo="${esc(g.codigo)}" oninput="var b=this.querySelector('[data-lg-save]');if(b)b.hidden=false">
+      <div class="card-title">Saldo y notas</div>
       <div class="field"><label>Saldo</label><input name="saldo" value="${esc(g.saldo)}" inputmode="decimal"></div>
       <div class="field"><label>Valor</label><input name="valor" value="${esc(g.valor)}"></div>
       <div class="field"><label>Notas</label><textarea name="notas">${esc(g.notas || "")}</textarea></div>
       <div class="tools">
-        <button class="btn" type="submit">Guardar saldo</button>
+        <button class="btn" type="submit" data-lg-save hidden>Guardar cambios</button>
         <button class="btn ghost" type="button" data-gc-usado="${g.usado ? "0" : "1"}">${g.usado ? "Desmarcar usada" : "Marcar usada"}</button>
       </div>
       <p class="err" id="f-err"></p>

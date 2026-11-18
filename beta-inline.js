@@ -365,6 +365,9 @@
   function diff(antes, propuestos) {
     antes = antes || {};
     propuestos = propuestos || {};
+    // Pantallas viejas (TK61): el antes y los nombres viajan dentro de la propuesta.
+    if (propuestos.__antes && typeof propuestos.__antes === "object") antes = Object.assign({}, propuestos.__antes, antes);
+    if (propuestos.__campos && typeof propuestos.__campos === "object") antes = Object.assign({ _campos: propuestos.__campos }, antes);
     var nombres = antes._campos && typeof antes._campos === "object" ? antes._campos : {};
     // Solo lo que la persona propuso cambiar (las propuestas parciales no muestran campos «borrados»).
     var keys = Object.keys(propuestos).filter(function (k) { return k.charAt(0) !== "_"; });

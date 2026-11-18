@@ -39,6 +39,7 @@ import "./actas_api.ts";
 import "./promos_beta_api.ts";
 import "./proveedores_beta_api.ts";
 import "./migo_cuadre_api.ts";
+import "./legacy_solicitudes_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

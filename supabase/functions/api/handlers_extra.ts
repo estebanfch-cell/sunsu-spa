@@ -884,17 +884,36 @@ extend("cabinaBaja", ADMIN, async (p, ctx, ses) => {
   return { ok: true, num };
 });
 
-extend("cabinaSaveProducto", ADMIN, async (p, ctx, ses) => saveCab(ctx, ses, "cabina_inventario", p, {
-  codigo: s(p.codigo), producto: s(p.producto || p.nombre), proveedor: s(p.proveedor), contenido_envase: n(p.contenido),
-  unidad: s(p.unidad), costo_envase: n(p.costoEnvase), costo_por_unidad: n(p.costoUnidad), envases_cerrados: n(p.cerrados),
-  abierto_restante: n(p.abierto), minimo_envases: n(p.minimo), notas: s(p.notas), activo: s(p.activo) || "SI",
-  sku_catalogo: s(p.skuCat), bodega_cerrados: n(p.bodega), esterilizable: s(p.esterilizable),
-}));
-extend("cabinaSaveActivo", ADMIN, async (p, ctx, ses) => saveCab(ctx, ses, "cabina_activos", p, {
-  codigo: s(p.codigo), activo: s(p.nombre || p.activo), categoria: s(p.categoria), cantidad: n(p.local ?? p.cantidad),
-  cantidad_bodega: n(p.bodega), unidad: s(p.unidad), ubicacion: s(p.ubicacion), estado: s(p.estado) || "ACTIVO",
-  costo: n(p.costo), notas: s(p.notas), proveedor: s(p.proveedor),
-}));
+// Las pantallas viejas mandan {row, campos:{...}}: se aplanan y, al actualizar, solo se escriben las columnas
+// que vinieron en el pedido (nunca se borra un costo o un nombre por omisión).
+type CampoCab = [col: string, keys: string[], conv: (v: unknown) => unknown, defecto?: unknown];
+function camposCab(p: R, mapa: CampoCab[], nuevo: boolean): R {
+  const q: R = { ...((p.campos && typeof p.campos === "object") ? p.campos as R : {}), ...p };
+  delete q.campos;
+  const out: R = {};
+  for (const [col, keys, conv, defecto] of mapa) {
+    const k = keys.find((x) => q[x] !== undefined && q[x] !== null);
+    if (k === undefined) { if (nuevo) out[col] = defecto !== undefined ? defecto : conv(""); continue; }
+    const v = conv(q[k]);
+    out[col] = (defecto !== undefined && (v === "" || v == null)) ? defecto : v;
+  }
+  return out;
+}
+const MAPA_INV: CampoCab[] = [
+  ["codigo", ["codigo"], s], ["producto", ["producto", "nombre"], s], ["proveedor", ["proveedor"], s],
+  ["contenido_envase", ["contenido"], n], ["unidad", ["unidad"], s], ["costo_envase", ["costoEnvase"], n],
+  ["costo_por_unidad", ["costoUnidad"], n], ["envases_cerrados", ["cerrados"], n], ["abierto_restante", ["abierto"], n],
+  ["minimo_envases", ["minimo"], n], ["notas", ["notas"], s], ["activo", ["activo"], s, "SI"],
+  ["sku_catalogo", ["skuCat"], s], ["bodega_cerrados", ["bodega"], n], ["esterilizable", ["esterilizable"], s],
+];
+const MAPA_ACT: CampoCab[] = [
+  ["codigo", ["codigo"], s], ["activo", ["nombre", "activo"], s], ["categoria", ["categoria"], s],
+  ["cantidad", ["local", "cantidadLocal", "cantidad"], n], ["cantidad_bodega", ["bodega", "cantidadBodega"], n],
+  ["unidad", ["unidad", "unidadC"], s], ["ubicacion", ["ubicacion"], s], ["estado", ["estado"], s, "ACTIVO"],
+  ["costo", ["costo"], n], ["notas", ["notas"], s], ["proveedor", ["proveedor"], s],
+];
+extend("cabinaSaveProducto", ADMIN, async (p, ctx, ses) => saveCab(ctx, ses, "cabina_inventario", p, camposCab(p, MAPA_INV, !n(p.row))));
+extend("cabinaSaveActivo", ADMIN, async (p, ctx, ses) => saveCab(ctx, ses, "cabina_activos", p, camposCab(p, MAPA_ACT, !n(p.row))));
 extend("cabinaProductoActivo", ADMIN, async (p, ctx, ses) => {
   const row = await rowBySheet(ctx.db, "cabina_inventario", n(p.row));
   if (!row) return { error: "No encontrado" };
@@ -904,11 +923,15 @@ extend("cabinaProductoActivo", ADMIN, async (p, ctx, ses) => {
 async function saveCab(ctx: Ctx, ses: Ses, table: string, p: R, fields: R): Promise<R> {
   const actor = actorOf(ses);
   if (!s(fields.codigo) && !n(p.row)) return { error: "Falta el código" };
-  fields.orig = { codigo: fields.codigo };
   if (n(p.row)) {
+    const ex = await rowBySheet(ctx.db, table, n(p.row));
+    if (!ex) return { error: "No encontrado" };
+    if (!s(fields.codigo)) delete fields.codigo;
+    fields.orig = { codigo: s(fields.codigo || ex.codigo) };
     await ctx.db.write(actor, table, "update", { sheet_row: n(p.row) }, fields);
     return { ok: true, row: n(p.row) };
   }
+  fields.orig = { codigo: fields.codigo };
   const rows = await ctx.db.all(table);
   const max = rows.reduce((m, r) => Math.max(m, n(String(r.codigo).replace(/\D/g, ""))), 0);
   if (!s(fields.codigo)) fields.codigo = (table.includes("activo") ? "AC-" : "INV-") + String(max + 1).padStart(3, "0");
@@ -926,7 +949,7 @@ extend("cabinaSaveProtocolo", ADMIN, async (p, ctx, ses) => {
   }
   const sr = await nextSheet(ctx.db, "cabina_protocolos");
   await ctx.db.write(actorOf(ses), "cabina_protocolos", "insert", {}, {
-    sheet_row: sr, sku: s(p.sku), facial: s(p.nombre), version: ver, vigente: "SI", mano_de_obra: n(p.mo),
+    sheet_row: sr, sku: s(p.sku), facial: s(p.nombre), version: ver, vigente: "SI", mano_de_obra: n(p.mo ?? p.manoObra),
     video: s(p.video), notas: s(p.notas), por: ses.name, actualizado: ecuadorParts(ctx.now).isoWall, orig: { sku: s(p.sku), version: ver },
   });
   let paso = 1;
