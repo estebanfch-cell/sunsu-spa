@@ -282,7 +282,8 @@ export function redactar(action: string, data: unknown, ses: SesLite | null, mat
 function filtrar(v: unknown, ses: SesLite, f: { ticketsPropio: boolean; rolPropio: boolean; comPropio: boolean; action: string }): unknown {
   if (Array.isArray(v)) {
     let arr = v.map((x) => filtrar(x, ses, f));
-    if (f.ticketsPropio && arr.length && arr.every((x) => x && typeof x === "object" && ("cosmetologa" in (x as Row) || "cosm" in (x as Row)))) {
+    // Las sesiones de un paquete (pq_*) no son tickets: se ven todas para saber cuántas quedan (TK55).
+    if (f.ticketsPropio && !f.action.startsWith("pq_") && arr.length && arr.every((x) => x && typeof x === "object" && ("cosmetologa" in (x as Row) || "cosm" in (x as Row)))) {
       arr = arr.filter((x) => esPropio((x as Row).cosmetologa ?? (x as Row).cosm, ses));
     }
     return arr;

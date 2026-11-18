@@ -8,6 +8,7 @@ import { actorOf, logAccion, nextSheet } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { ecuadorParts, normCedula, normNombre, s, type Row } from "./domain.ts";
 import { consultar } from "./query.ts";
+import { SOLICITUD_HOOKS } from "./inline_api.ts";
 import { ETQ_ESTADO, codigoTomado, estadoGift, fechaVenta, leerNotas, normCod, ordenCodigo, repetidos, siguienteGift, usadaGift, validoPorDefecto, vendidaGift } from "./gift_beta.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -104,7 +105,7 @@ extend("gcb_get", "any", async (p, ctx, ses) => {
   const docs = (await todas(ctx, "beta_gift_documentos")).filter((d) => String(d.gift_id) === String(r.id))
     .sort((a, b) => s(b.created_at).localeCompare(s(a.created_at))).map((d) => ({ id: s(d.id), nombre: s(d.nombre), fecha: s(d.created_at), por: s(d.creado_por), bytes: Number(d.bytes) || 0 }));
   const personas = (await todas(ctx, "usuarios")).filter((u) => s(u.nombre) && u.bloqueado !== true).map((u) => s(u.nombre));
-  return { ok: true, item: v, documentos: docs, admin, puedeEditar: admin, puedeUsar: !v.usado && v.estado !== "disponible" && !r.borrado_at, personas, hoy: hoyDe(ctx) };
+  return { ok: true, item: v, documentos: docs, admin, puedeEditar: admin, puedePedir: !admin && !r.borrado_at, puedeUsar: !v.usado && v.estado !== "disponible" && !r.borrado_at, personas, hoy: hoyDe(ctx) };
 });
 
 extend("gcb_siguiente", "any", async (_p, ctx, ses) => {
@@ -166,12 +167,12 @@ extend("gcb_usar", "any", async (p, ctx, ses) => {
 
 const CAMPOS_HOJA: [string, string][] = [["nombre", "nombre_comprador"], ["apellido", "apellido_comprador"], ["cedula", "cedula_comprador"], ["factura", "factura"], ["valor", "valor"], ["notas", "notas"]];
 const CAMPOS_AJ: [string, string][] = [["para", "para"], ["de", "de"], ["servicio", "servicio"], ["mensaje", "mensaje"], ["validoHasta", "valido_hasta"], ["ticketVenta", "ticket_venta"], ["ticketUso", "ticket_uso"]];
-extend("gcb_guardar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita una gift card" };
-  const r = await filaGift(ctx, p.id);
+/** Edición de una gift card: solo lo que cambió, con «antes → después» y quién en el historial. */
+async function guardarGift(ctx: Ctx, ses: Ses, id: unknown, d0: unknown, via = ""): Promise<Row> {
+  const r = await filaGift(ctx, id);
   if (!r || r.borrado_at) return { error: "Gift card no encontrada" };
   const b = bloqueo(ses, r); if (b) return { error: b };
-  const d = (p.datos && typeof p.datos === "object" ? p.datos : {}) as Row;
+  const d = (d0 && typeof d0 === "object" ? d0 : {}) as Row;
   const rows = await todas(ctx, "gift_cards");
   const aj = (await ajustesMap(ctx)).get(String(r.id));
   const antes = vista(r, aj, undefined, new Set(), hoyDe(ctx), true);
@@ -184,7 +185,7 @@ extend("gcb_guardar", "any", async (p, ctx, ses) => {
   }
   for (const [k, col] of CAMPOS_HOJA) if (d[k] != null && s(d[k]).trim() !== s(r[col]).trim().replace(/\.0+$/, "")) { hoja[col] = s(d[k]).trim(); cambios.push(k + ": " + (s(r[col]) || "—") + " → " + (s(d[k]).trim() || "—")); }
   if (d.fechaVenta != null && /^\d{4}-\d{2}-\d{2}$/.test(s(d.fechaVenta)) && s(d.fechaVenta) !== antes.fechaVenta) {
-    const [y, m, dd] = s(d.fechaVenta).split("-").map(Number); hoja.dia = dd; hoja.mes = m; hoja.ano = y; cambios.push("fecha de venta → " + s(d.fechaVenta));
+    const [y, m, dd] = s(d.fechaVenta).split("-").map(Number); hoja.dia = dd; hoja.mes = m; hoja.ano = y; cambios.push("fecha de venta: " + (s(antes.fechaVenta) || "—") + " → " + s(d.fechaVenta));
   }
   for (const [k, col] of CAMPOS_AJ) {
     if (d[k] == null) continue;
@@ -196,20 +197,49 @@ extend("gcb_guardar", "any", async (p, ctx, ses) => {
   if (!cambios.length) return { ok: true, sinCambios: true };
   if (Object.keys(hoja).length) await ctx.db.write(actorOf(ses), "gift_cards", "update", { id: r.id }, hoja);
   const r2 = { ...r, ...hoja };
-  await guardarAjuste(ctx, ses, r2, extra, "EDITAR", cambios.join(" · "));
-  return { ok: true };
+  await guardarAjuste(ctx, ses, r2, extra, "EDITAR", cambios.join(" · ") + (via ? " (" + via + ")" : ""));
+  return { ok: true, cambios };
+}
+extend("gcb_guardar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin guarda directo: envía una solicitud" };
+  return guardarGift(ctx, ses, p.id, p.datos);
 });
 
-extend("gcb_borrar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina una gift card" };
-  const r = await filaGift(ctx, p.id);
+async function borrarGift(ctx: Ctx, ses: Ses, id: unknown, motivo0: unknown): Promise<Row> {
+  const r = await filaGift(ctx, id);
   if (!r || r.borrado_at) return { error: "Gift card no encontrada" };
   const b = bloqueo(ses, r); if (b) return { error: b };
-  const motivo = s(p.motivo).trim(); if (!motivo) return { error: "Escribe el motivo" };
+  const motivo = s(motivo0).trim(); if (!motivo) return { error: "Escribe el motivo" };
   await ctx.db.write(actorOf(ses), "gift_cards", "update", { id: r.id }, { borrado_at: ctx.now.toISOString(), borrado_por: actorOf(ses) });
   await guardarAjuste(ctx, ses, r, {}, "ELIMINAR", motivo);
   return { ok: true };
+}
+extend("gcb_borrar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina una gift card: envía una solicitud" };
+  return borrarGift(ctx, ses, p.id, p.motivo);
 });
+
+// Solicitudes del personal (Emilia 18/11): el cambio queda pendiente hasta que un admin lo aprueba.
+const ETQ_GC: Row = { codigo: "Código", nombre: "Nombre", apellido: "Apellido", cedula: "Cédula", para: "Para", de: "De", servicio: "Facial / servicio", valor: "Valor", fechaVenta: "Fecha de venta", validoHasta: "Válido hasta", factura: "Factura", ticketVenta: "Ticket de venta", ticketUso: "Ticket de uso", mensaje: "Mensaje" };
+const viaSol = (sol?: Row) => "solicitud" + (sol && s(sol.solicitante) ? " de " + s(sol.solicitante) : "") + " aprobada";
+SOLICITUD_HOOKS["gift_beta"] = {
+  fila: async (ctx, ses, fila) => {
+    if (await nivel(ctx, ses) === "no") return { error: "No tienes permiso" };
+    const r = await filaGift(ctx, fila);
+    if (!r || r.borrado_at) return { error: "Gift card no encontrada" };
+    const v = vista(r, (await ajustesMap(ctx)).get(String(r.id)), undefined, new Set(), hoyDe(ctx), false);
+    const antes: Row = {};
+    for (const k of Object.keys(ETQ_GC)) antes[k] = s(v[k]);
+    antes._campos = ETQ_GC;
+    return { row: r, antes, etiqueta: "Gift card " + s(v.codigo) + (s(v.comprador) ? " · " + s(v.comprador) : ""), enlace: "#/m/gift/cards/" + r.id };
+  },
+  aplicar: (ctx, ses, fila, prop, sol) => {
+    const d: Row = {};
+    for (const [k, v] of Object.entries(prop || {})) if (k in ETQ_GC) d[k] = v;
+    return guardarGift(ctx, ses, fila, d, viaSol(sol));
+  },
+  borrar: (ctx, ses, fila, motivo, sol) => borrarGift(ctx, ses, fila, (motivo || "sin motivo") + " (" + viaSol(sol) + ")"),
+};
 
 // ── PDF de la gift card → Documentos (bucket privado «cliente-documentos», carpeta gift_cards/).
 const MAX_PDF = 8 * 1024 * 1024;

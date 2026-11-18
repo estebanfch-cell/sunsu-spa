@@ -1538,11 +1538,11 @@ extend("inline_borrar", "any", async (p, ctx, ses) => {
 
 /** Tablas que otros módulos registran para el flujo de solicitudes (p. ej. el detalle de ticket de la beta). */
 export const SOLICITUD_HOOKS: Record<string, {
-  fila: (ctx: Ctx, ses: Ses, fila: string) => Promise<{ row: Row; antes: Row } | { error: string }>;
-  aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row) => Promise<Row>;
-  borrar?: (ctx: Ctx, ses: Ses, fila: string, motivo: string) => Promise<Row>;
+  fila: (ctx: Ctx, ses: Ses, fila: string) => Promise<{ row: Row; antes: Row; etiqueta?: string; enlace?: string } | { error: string }>;
+  aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row, sol?: Row) => Promise<Row>;
+  borrar?: (ctx: Ctx, ses: Ses, fila: string, motivo: string, sol?: Row) => Promise<Row>;
 }> = {};
-async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row } | { error: string }> {
+async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row; etiqueta?: string; enlace?: string } | { error: string }> {
   if (SOLICITUD_HOOKS[tabla]) return SOLICITUD_HOOKS[tabla].fila(ctx, ses, fila);
   if (tabla === "tickets") {
     const row = await ticketDe(ctx, fila);
@@ -1662,8 +1662,8 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   const fila = s(row.fila);
   const propuestos = (row.propuestos && typeof row.propuestos === "object" ? row.propuestos : {}) as Row;
   const borrar = s(row.tipo) === "eliminacion";
-  if (SOLICITUD_HOOKS[tabla] && !borrar) return SOLICITUD_HOOKS[tabla].aplicar(ctx, ses, fila, propuestos);
-  if (SOLICITUD_HOOKS[tabla]?.borrar && borrar) return SOLICITUD_HOOKS[tabla].borrar!(ctx, ses, fila, s(row.motivo));
+  if (SOLICITUD_HOOKS[tabla] && !borrar) return SOLICITUD_HOOKS[tabla].aplicar(ctx, ses, fila, propuestos, row);
+  if (SOLICITUD_HOOKS[tabla]?.borrar && borrar) return SOLICITUD_HOOKS[tabla].borrar!(ctx, ses, fila, s(row.motivo), row);
   if (tabla === "clientes") return borrar ? borrarClienteSuave(ctx, ses, fila) : guardarClienteCampos(ctx, ses, fila, propuestos);
   if (tabla === "catalogo") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarCatalogoCampos(ctx, ses, fila, propuestos);
   if (tabla === "inventario") return borrar ? borrarCatalogoSuave(ctx, ses, fila) : guardarInventarioCampos(ctx, ses, fila, propuestos);
@@ -1706,10 +1706,11 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
   const rec = {
     id, solicitante: ses.name, solicitante_uid: ses.uid, creado: ctx.now.toISOString(),
     tabla, fila, tipo, propuestos, antes: hecho.antes, motivo, estado: "pendiente",
-  };
+    ...(hecho.etiqueta ? { etiqueta: hecho.etiqueta } : {}), ...(hecho.enlace ? { enlace: hecho.enlace } : {}),
+  } as Row;
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
-  const cosa = tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : tabla === "usuarios" ? "un usuario" : tabla === "acceso" ? "un acceso" : tabla === "lugares" ? "un lugar" : "un ticket";
+  const cosa = hecho.etiqueta ? "«" + hecho.etiqueta + "»" : tabla === "clientes" || tabla === "cliente_beta" ? "una clienta" : tabla === "ticket_detalle" ? "un ticket" : tabla === "paquete_beta" ? "un paquete" : tabla === "gift_beta" ? "una gift card" : tabla === "producto_beta" ? "un producto" : tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : tabla === "usuarios" ? "un usuario" : tabla === "acceso" ? "un acceso" : tabla === "lugares" ? "un lugar" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
 });

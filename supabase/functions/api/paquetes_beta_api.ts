@@ -9,6 +9,7 @@ import { ecuadorParts, n, normCedula, s, USO_FIELDS, ymdUtc, type Row } from "./
 import { consultar, type Filtro } from "./query.ts";
 import { textoUso, vistaPaquete } from "./paquetes_beta.ts";
 import { origConMarca } from "./handlers.ts";
+import { SOLICITUD_HOOKS } from "./inline_api.ts";
 
 const COLS = ["id", "sheet_row", "codigo", "beta_codigo", "cedula", "nombres", "apellidos", "sku", "paquete", "vendido_por", "dia", "mes", "ano", "completo", "notas", "orig", "borrado_at",
   ...USO_FIELDS.flatMap(([u, f]) => [u, f])];
@@ -105,7 +106,7 @@ extend("pq_get", "any", async (p, ctx, ses) => {
     } catch { /* sin tickets */ }
   }
   const personas = (await todas(ctx, "usuarios")).filter((u) => s(u.nombre) && u.bloqueado !== true).map((u) => s(u.nombre));
-  return { ok: true, item: v, admin: esAdmin(ses.rol), puedeMarcar: true, puedeEditar: esAdmin(ses.rol), personas, hoy: ecuadorParts(ctx.now).ymd };
+  return { ok: true, item: v, admin: esAdmin(ses.rol), puedeMarcar: true, puedeEditar: esAdmin(ses.rol), puedePedir: !esAdmin(ses.rol), personas, hoy: ecuadorParts(ctx.now).ymd };
 });
 
 extend("pq_marcar", "any", async (p, ctx, ses) => {
@@ -143,28 +144,41 @@ extend("pq_marcar", "any", async (p, ctx, ses) => {
   return { ok: true, slot: idx + 1, completo: patch.completo === true };
 });
 
-extend("pq_guardar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita un paquete" };
+const CAMPOS_PQ: [string, string, string][] = [["sesiones", "Sesiones", "total"], ["nombres", "Nombre", "nombre"], ["apellidos", "Apellido", "apellido"], ["cedula", "Cédula", "cedula"], ["cliente_codigo", "Código clienta", "clienteCodigo"], ["paquete", "Producto", "paquete"], ["sku", "SKU", "sku"], ["fecha_compra", "Fecha de compra", "fechaCompra"], ["vendido_por", "Vendió", "vendidoPor"]];
+/** Valores planos del paquete (para «antes» de una solicitud y el diff de la bandeja). */
+function planoPaquete(v: Row): Row {
+  const o: Row = {};
+  for (const [k, , c] of CAMPOS_PQ) o[k] = s(v[c]);
+  for (const se of (v.sesiones as Row[]) || []) if (se.usado) o["fs:" + se.slot] = s(se.fecha);
+  const campos: Row = {};
+  for (const [k, lab] of CAMPOS_PQ) campos[k] = lab;
+  for (const se of (v.sesiones as Row[]) || []) campos["fs:" + se.slot] = "Fecha sesión " + se.slot;
+  o._campos = campos;
+  return o;
+}
+/** Edición de un paquete: solo lo que cambió, con «antes → después» y quién en el historial. */
+async function guardarPaquete(ctx: Ctx, ses: Ses, p: Row, via = ""): Promise<Row> {
   const r = await filaPaq(ctx, p);
   if (!r || r.borrado_at) return { error: "Paquete no encontrado" };
   const aj = await ajusteDe(ctx, r.id);
   const antes = vistaPaquete(r, aj);
+  if (antes.borrado) return { error: "El paquete está dado de baja" };
   const dIn = p.datos && typeof p.datos === "object" ? p.datos as Row : {};
   const datos: Row = { ...(aj && aj.datos && typeof aj.datos === "object" ? aj.datos as Row : {}) };
   const cambios: string[] = [];
-  const set = (k: string, val: unknown, label: string) => { datos[k] = val; cambios.push(label + ": " + s(val)); };
-  if (dIn.sesiones != null) {
+  const set = (k: string, val: unknown, label: string, prev: unknown) => { datos[k] = val; cambios.push(label + ": " + (s(prev) || "—") + " → " + (s(val) || "—")); };
+  if (dIn.sesiones != null && s(dIn.sesiones) !== "") {
     const ns = Math.round(n(dIn.sesiones));
     if (!(ns >= 1 && ns <= 6)) return { error: "Las sesiones van de 1 a 6" };
     if (ns < n(antes.usados)) return { error: "Ya hay " + antes.usados + " sesiones marcadas: desmarca antes de bajar el total" };
-    if (ns !== n(antes.total)) set("sesiones", ns, "sesiones");
+    if (ns !== n(antes.total)) set("sesiones", ns, "sesiones", antes.total);
   }
   for (const [k, lab, cur] of [["cedula", "cédula", antes.cedula], ["nombres", "nombre", antes.nombre], ["apellidos", "apellido", antes.apellido], ["cliente_codigo", "código clienta", antes.clienteCodigo], ["sku", "SKU", antes.sku], ["paquete", "producto", antes.paquete], ["vendido_por", "vendido por", antes.vendidoPor]] as const) {
-    if (dIn[k] != null && s(dIn[k]).trim() !== s(cur)) set(k, s(dIn[k]).trim().slice(0, 160), lab);
+    if (dIn[k] != null && s(dIn[k]).trim() !== s(cur)) set(k, s(dIn[k]).trim().slice(0, 160), lab, cur);
   }
   if (dIn.fecha_compra != null && s(dIn.fecha_compra) !== s(antes.fechaCompra)) {
     if (!s(dIn.fecha_compra).match(/^\d{4}-\d{2}-\d{2}$/)) return { error: "Fecha de compra inválida" };
-    set("fecha_compra", s(dIn.fecha_compra), "fecha de compra");
+    set("fecha_compra", s(dIn.fecha_compra), "fecha de compra", antes.fechaCompra);
   }
   // Fechas de sesiones ya marcadas (van a la fila, como la marca).
   const patch: Row = {};
@@ -177,17 +191,49 @@ extend("pq_guardar", "any", async (p, ctx, ses) => {
   }
   if (!cambios.length) return { ok: true, sinCambios: true };
   if (Object.keys(patch).length) await ctx.db.write(actorOf(ses), "paquetes", "update", { id: r.id }, patch);
-  await guardarAjuste(ctx, ses, r, { datos }, "editar", cambios.join(", "));
+  await guardarAjuste(ctx, ses, r, { datos }, "editar", cambios.join(", ") + (via ? " (" + via + ")" : ""));
   return { ok: true, cambios };
-});
-
-extend("pq_borrar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina un paquete" };
-  const motivo = s(p.motivo).trim().slice(0, 300);
+}
+async function borrarPaquete(ctx: Ctx, ses: Ses, p: Row, motivo0: string): Promise<Row> {
+  const motivo = s(motivo0).trim().slice(0, 300);
   if (motivo.length < 3) return { error: "Escribe el motivo" };
   const r = await filaPaq(ctx, p);
   if (!r || r.borrado_at) return { error: "Paquete no encontrado" };
   await guardarAjuste(ctx, ses, r, { borrado: true, motivo }, "eliminar", motivo);
   await ctx.db.write(actorOf(ses), "paquetes", "update", { id: r.id }, { borrado_at: ctx.now.toISOString(), borrado_por: s(ses.name) || actorOf(ses) });
   return { ok: true };
+}
+
+extend("pq_guardar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin guarda directo: envía una solicitud" };
+  return guardarPaquete(ctx, ses, p);
 });
+
+extend("pq_borrar", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina un paquete: envía una solicitud" };
+  return borrarPaquete(ctx, ses, p, s(p.motivo));
+});
+
+// Solicitudes del personal (Emilia 18/11): el cambio queda pendiente hasta que un admin lo aprueba.
+const viaSol = (sol?: Row) => "solicitud" + (sol && s(sol.solicitante) ? " de " + s(sol.solicitante) : "") + " aprobada";
+SOLICITUD_HOOKS["paquete_beta"] = {
+  fila: async (ctx, ses, fila) => {
+    const perm = await permiso(ctx, ses);
+    if (perm === "no") return { error: "No tienes permiso" };
+    const r = await filaPaq(ctx, { id: fila });
+    if (!r || r.borrado_at) return { error: "Paquete no encontrado" };
+    const v = vistaPaquete(r, await ajusteDe(ctx, r.id));
+    if (v.borrado) return { error: "El paquete está dado de baja" };
+    if (perm === "propio" && !esPropio(s(v.vendidoPor), ses)) return { error: "No tienes permiso" };
+    const cli = (s(v.nombre) + " " + s(v.apellido)).trim();
+    return { row: r, antes: planoPaquete(v), etiqueta: "Paquete " + s(v.codigo) + (cli ? " · " + cli : ""), enlace: "#/m/gift/paquetes/" + r.id };
+  },
+  aplicar: (ctx, ses, fila, prop, sol) => {
+    const datos: Row = {}, fechas: Row = {};
+    for (const [k, v] of Object.entries(prop || {})) {
+      if (k.startsWith("fs:")) fechas[k.slice(3)] = v; else if (!k.startsWith("_")) datos[k] = v;
+    }
+    return guardarPaquete(ctx, ses, { id: fila, datos, fechas }, viaSol(sol));
+  },
+  borrar: (ctx, ses, fila, motivo, sol) => borrarPaquete(ctx, ses, { id: fila }, (motivo || "sin motivo") + " (" + viaSol(sol) + ")"),
+};
