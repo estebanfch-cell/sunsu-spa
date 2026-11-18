@@ -83,7 +83,7 @@ describe("🎁 Gift cards (TK20)", () => {
     assert.equal((await h("gcb_usar", "adm", { id: 400, desmarcar: true })).error, "Escribe el motivo");
     assert.equal((await h("gcb_usar", "adm", { id: 400, desmarcar: true, motivo: "se marcó por error" })).ok, true);
     assert.equal(db.tables.get("gift_cards")!.find((r) => r.id === 400)!.usado, false);
-    assert.equal((await h("gcb_guardar", "rec", { id: 400, datos: { para: "X" } })).error, "Solo un admin edita una gift card");
+    assert.equal((await h("gcb_guardar", "rec", { id: 400, datos: { para: "X" } })).error, "Solo un admin guarda directo: envía una solicitud");
     assert.match(String((await h("gcb_guardar", "adm", { id: 400, datos: { codigo: "26-008" } })).error), /ya existe/);
     assert.equal((await h("gcb_guardar", "adm", { id: 400, datos: { para: "Carolina E.", validoHasta: "2027-01-31", factura: "2951" } })).ok, true);
     // el repetido viejo se puede editar sin tocar su código

@@ -1,9 +1,10 @@
 // Paquetes estilo MineCore (Emilia 17/11): lista paginada con progreso, detalle con sesiones
-// (fecha / ticket / cosmetóloga), marcar sesión con confirmación, edición admin inline y baja con motivo.
+// (fecha / ticket / cosmetóloga), marcar sesión con confirmación, edición en línea sin botón «Editar» (TK55: la admin guarda, el personal
+// manda solicitud) y baja con motivo.
 (function () {
   "use strict";
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  var K = { q: "", estado: "activos", items: [], total: 0, cuenta: null, d: null, edit: false };
+  var K = { q: "", estado: "activos", items: [], total: 0, cuenta: null, d: null, st: null };
   function f(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (ymd || ""); }
   function pill(nombre) { return nombre ? (window.MCColor ? window.MCColor.pill(nombre) : e(nombre)) : '<span class="mccf-sub">—</span>'; }
   function prog(v) {
@@ -11,6 +12,7 @@
     var c = v.estado === "completo" ? "ok" : v.usados ? "c" : "n";
     return '<span class="mcpq-prog ' + c + '"><span class="mcpq-dots">' + dots + "</span>" + e(v.usados) + "/" + e(v.total) + (v.estado === "completo" ? " · Completo" : " · quedan " + e(v.pendientes)) + "</span>";
   }
+  function hora(iso) { var d = new Date(iso || ""); return isNaN(d) ? String(iso || "") : d.toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
   function toast2(msg, bad) { if (typeof toast === "function") toast(msg, bad ? "var(--red, #c0392b)" : "var(--green)"); }
   function css() {
     if (window.MCConteo && window.MCConteo._css) window.MCConteo._css();
@@ -64,33 +66,34 @@
   async function cargarDet(id) {
     var r = await api("pq_get", /^\d+$/.test(id) ? { id: id } : { codigo: id });
     if (!r || r.error) throw new Error((r && r.error) || "Paquete no encontrado");
-    K.d = r; return r;
+    K.d = r; K.st = null; return r;
   }
   function detHtml() {
-    var d = K.d, v = d.item, adm = d.puedeEditar, ed = K.edit && adm;
+    var d = K.d, v = d.item, adm = d.puedeEditar, st = K.st || (K.st = window.MCEdit.nuevo({ admin: adm, pedir: d.puedePedir }));
     var cli = ((v.nombre || "") + " " + (v.apellido || "")).trim() || "Sin nombre";
     var link = v.cedula ? "#/m/clientes/c/" + encodeURIComponent("c:" + v.cedula) : "";
-    var inp = function (k, val, type) { return '<input data-f="' + k + '" type="' + (type || "text") + '" value="' + e(val || "") + '">'; };
-    var dl = function (t, ro, rw) { return "<div><dt>" + t + "</dt><dd>" + (ed ? rw : ro) + "</dd></div>"; };
-    var sesSel = '<select data-f="sesiones">' + [1, 2, 3, 4, 5, 6].map(function (x) { return '<option value="' + x + '"' + (x === v.total ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select>";
+    var E = function (k, shown, raw, o) { return window.MCEdit.v(st, k, shown, raw, o); };
+    var dl = function (t, html) { return "<div><dt>" + t + "</dt><dd>" + html + "</dd></div>"; };
+    var fmtF = function (x) { return e(f(x) || "—"); };
+    var pers = (d.personas || []).slice(); if (v.vendidoPor && pers.indexOf(v.vendidoPor) < 0) pers.unshift(v.vendidoPor);
     var libre = (v.sesiones || []).findIndex(function (x) { return !x.usado; });
     var filas = (v.sesiones || []).map(function (se, i) {
       var acc = !se.usado ? (i === libre ? '<button class="btn small" type="button" data-marcar="' + se.slot + '">✓ Marcar</button>' : "") : (adm ? '<button class="btn ghost small" type="button" data-desmarcar="' + se.slot + '">Desmarcar</button>' : "");
-      var fecha = se.usado ? (ed ? '<input type="date" data-fs="' + se.slot + '" value="' + e(se.fecha) + '">' : e(f(se.fecha) || se.texto)) : '<span class="libre">Libre</span>';
+      var fecha = se.usado ? E("fs:" + se.slot, e(f(se.fecha) || se.texto), se.fecha, { tipo: "date", fmt: fmtF, label: "Fecha sesión " + se.slot }) : '<span class="libre">Libre</span>';
       var tk = se.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(se.ticket) + '" class="mcpq-cod">' + e(se.ticket) + "</a>" : (se.usado ? '<span class="mccf-sub">—</span>' : "");
       return '<tr class="' + (se.usado ? "" : "libre") + '"><td class="num">' + se.slot + "</td><td>" + fecha + "</td><td>" + tk + "</td><td>" + (se.usado ? pill(se.cosmetologa) : "") + "</td><td>" + e(se.usado ? se.facial : "") + '</td><td style="text-align:right">' + acc + "</td></tr>";
     }).join("");
     return '<div id="mcpq-root">' +
       '<div class="mcpq-acts" style="justify-content:space-between;margin:0 0 8px"><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">← Paquetes</button><span>' +
-      (adm ? (ed ? '<button class="btn ghost small" type="button" id="mcpq-cancel">Cancelar</button> <button class="btn small" type="button" id="mcpq-save">💾 Guardar</button>' : '<button class="btn ghost small" type="button" id="mcpq-edit">✏️ Editar</button> <button class="btn ghost small mcpq-del" type="button" id="mcpq-del">🗑️ Eliminar</button>') : "") + "</span></div>" +
+      window.MCEdit.botonBorrar(st, "mcpq-del") + "</span></div>" +
       '<div class="mccf-card"><div class="mcpq-top"><div><h1>' + e(v.codigo) + '</h1><div class="mcpq-cli">' + (link ? '<a href="' + link + '">' + e(cli) + "</a>" : e(cli)) + (v.clienteCodigo ? ' <span class="mcpq-cc">· ' + e(v.clienteCodigo) + "</span>" : "") + '</div><div class="mccf-sub">' + e(v.paquete) + "</div></div><div>" + prog(v) + "</div></div>" +
       '<dl class="mcpq-grid">' +
-      dl("Sesiones", e(v.total), sesSel) + dl("Nombre", e(v.nombre), inp("nombres", v.nombre)) + dl("Apellido", e(v.apellido), inp("apellidos", v.apellido)) + dl("Cédula", e(v.cedula), inp("cedula", v.cedula)) +
-      dl("Código clienta", e(v.clienteCodigo || "—"), inp("cliente_codigo", v.clienteCodigo)) + dl("Producto", e(v.paquete), inp("paquete", v.paquete)) + dl("SKU", e(v.sku || "—"), inp("sku", v.sku)) +
-      dl("Fecha de compra", e(f(v.fechaCompra) || "—"), inp("fecha_compra", v.fechaCompra, "date")) + dl("Vendió", pill(v.vendidoPor), inp("vendido_por", v.vendidoPor)) +
-      (v.ticketOrigen ? "<div><dt>Ticket de venta</dt><dd>" + e(v.ticketOrigen) + "</dd></div>" : "") + "</dl></div>" +
+      dl("Sesiones", E("sesiones", e(v.total), v.total, { opciones: [1, 2, 3, 4, 5, 6], label: "Sesiones" })) + dl("Nombre", E("nombres", e(v.nombre), v.nombre, { label: "Nombre" })) + dl("Apellido", E("apellidos", e(v.apellido), v.apellido, { label: "Apellido" })) + dl("Cédula", E("cedula", e(v.cedula), v.cedula, { label: "Cédula" })) +
+      dl("Código clienta", E("cliente_codigo", e(v.clienteCodigo || ""), v.clienteCodigo, { label: "Código clienta" })) + dl("Producto", E("paquete", e(v.paquete), v.paquete, { label: "Producto" })) + dl("SKU", E("sku", e(v.sku || ""), v.sku, { label: "SKU" })) +
+      dl("Fecha de compra", E("fecha_compra", e(f(v.fechaCompra) || ""), v.fechaCompra, { tipo: "date", fmt: fmtF, label: "Fecha de compra" })) + dl("Vendió", E("vendido_por", pill(v.vendidoPor), v.vendidoPor, { opciones: pers.length ? pers : null, label: "Vendió" })) +
+      (v.ticketOrigen ? "<div><dt>Ticket de venta</dt><dd>" + e(v.ticketOrigen) + "</dd></div>" : "") + "</dl>" + window.MCEdit.hint(st) + window.MCEdit.barra(st) + "</div>" +
       '<div class="mccf-card"><b>Sesiones</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mcpq-ses"><thead><tr><th>#</th><th>Fecha</th><th>Ticket</th><th>Cosmetóloga</th><th>Facial</th><th></th></tr></thead><tbody>' + filas + "</tbody></table></div></div>" +
-      ((v.historial || []).length ? '<div class="mccf-card"><b>Historial</b>' + v.historial.slice().reverse().map(function (h) { return '<p class="mcpq-hist">' + e(String(h.fecha || "").slice(0, 16).replace("T", " ")) + " · " + e(h.actor) + " · " + e(h.accion) + ": " + e(h.detalle) + "</p>"; }).join("") + "</div>" : "") +
+      ((v.historial || []).length ? '<div class="mccf-card"><b>Historial</b>' + v.historial.slice().reverse().map(function (h) { return '<p class="mcpq-hist">' + e(hora(h.fecha)) + " · " + e(h.actor) + " · " + e(h.accion) + ": " + e(h.detalle) + "</p>"; }).join("") + "</div>" : "") +
       "</div>";
   }
   function dlg(html, onOk) {
@@ -137,29 +140,31 @@
         });
       };
     });
-    var ed = main.querySelector("#mcpq-edit"); if (ed) ed.onclick = function () { K.edit = true; repDet(main); };
-    var ca = main.querySelector("#mcpq-cancel"); if (ca) ca.onclick = function () { K.edit = false; repDet(main); };
-    var sv = main.querySelector("#mcpq-save"); if (sv) sv.onclick = async function () {
-      var datos = {}, fechas = {};
-      main.querySelectorAll("[data-f]").forEach(function (i) { datos[i.getAttribute("data-f")] = i.value; });
-      main.querySelectorAll("[data-fs]").forEach(function (i) { fechas[i.getAttribute("data-fs")] = i.value; });
-      sv.disabled = true;
-      try {
-        var r = await api("pq_guardar", { id: v.id, datos: datos, fechas: fechas });
-        if (!r || r.error) throw new Error((r && r.error) || "No se pudo guardar");
-        toast2(r.sinCambios ? "Sin cambios" : "Paquete guardado"); K.edit = false; await recargar();
-      } catch (x) { toast2(x.message, true); sv.disabled = false; }
-    };
+    var st = K.st;
+    window.MCEdit.wire(main.querySelector("#mcpq-root"), st, {
+      redibujar: function () { repDet(main); },
+      guardar: function (pend) { var x = partir(pend); return api("pq_guardar", { id: v.id, datos: x.datos, fechas: x.fechas }); },
+      pedir: function (pend, motivo) { return api("solicitud_crear", { tabla: "paquete_beta", fila: String(v.id), tipo: "cambio", motivo: motivo, propuestos: pend }); },
+      listo: async function (r) { toast2(st.admin ? (r.sinCambios ? "Sin cambios" : "Paquete guardado") : "📨 Solicitud enviada a Emilia / Emi"); await recargar(); },
+    });
     var del = main.querySelector("#mcpq-del"); if (del) del.onclick = function () {
-      dlg('<h3>🗑️ Eliminar ' + e(v.codigo) + '<button type="button" class="mcpq-x">×</button></h3><p class="mccf-sub">El paquete sale de la lista y de la ficha de la clienta. Queda en el historial con el motivo.</p><label>Motivo</label><input type="text" data-mot placeholder="Ej. duplicado, se devolvió">', async function (box) {
-        var r = await api("pq_borrar", { id: v.id, motivo: box.querySelector("[data-mot]").value });
-        if (!r || r.error) throw new Error((r && r.error) || "No se pudo eliminar");
-        toast2("Paquete eliminado"); location.hash = "#/m/gift/paquetes";
+      var adm = st.admin;
+      dlg('<h3>🗑️ ' + (adm ? "Eliminar " : "Solicitar eliminación de ") + e(v.codigo) + '<button type="button" class="mcpq-x">×</button></h3><p class="mccf-sub">' + (adm ? "El paquete sale de la lista y de la ficha de la clienta. Queda en el historial con el motivo." : "No se borra ahora: la solicitud llega a Emilia / Emi para que la aprueben.") + '</p><label>Motivo</label><input type="text" data-mot placeholder="Ej. duplicado, se devolvió">', async function (box) {
+        var mot = box.querySelector("[data-mot]").value.trim();
+        if (!mot) throw new Error("Escribe el motivo");
+        var r = adm ? await api("pq_borrar", { id: v.id, motivo: mot }) : await api("solicitud_crear", { tabla: "paquete_beta", fila: String(v.id), tipo: "eliminacion", motivo: mot });
+        if (!r || r.error) throw new Error((r && r.error) || "No se pudo");
+        if (adm) { toast2("Paquete eliminado"); location.hash = "#/m/gift/paquetes"; } else toast2("📨 Solicitud de eliminación enviada");
       });
     };
   }
+  function partir(pend) {
+    var datos = {}, fechas = {};
+    Object.keys(pend).forEach(function (k) { if (k.indexOf("fs:") === 0) fechas[k.slice(3)] = pend[k]; else datos[k] = pend[k]; });
+    return { datos: datos, fechas: fechas };
+  }
   async function render(route) {
-    css(); K.edit = false;
+    css(); K.st = null;
     try {
       if (route.id) { await cargarDet(String(route.id)); return detHtml(); }
       await cargarLista(false); return listaHtml();

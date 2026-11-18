@@ -9,6 +9,7 @@
   var K = { q: "", estado: "vigentes", items: [], total: 0, cuenta: null, d: null, edit: false, siguiente: "", pdfCache: {} };
   var SERVICIOS = ["Facial Premium", "Purificación SOS", "Glass Skin", "Facial Reset", "Hydra Glow", "Valor en dólares"];
   function f(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (ymd || ""); }
+  function hora(iso) { var d = new Date(iso || ""); return isNaN(d) ? String(iso || "") : d.toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
   function toast2(msg, bad) { if (typeof toast === "function") toast(msg, bad ? "var(--red, #c0392b)" : "var(--green)"); }
   function pill(nombre) { return nombre ? (window.MCColor ? window.MCColor.pill(nombre) : e(nombre)) : '<span class="mccf-sub">—</span>'; }
   function css() {
@@ -186,13 +187,13 @@
   }
 
   // ---------- detalle ----------
-  async function cargarDet(id) { var r = await api("gcb_get", { id: id }); if (!r || r.error) throw new Error((r && r.error) || "Gift card no encontrada"); K.d = r; return r; }
+  async function cargarDet(id) { var r = await api("gcb_get", { id: id }); if (!r || r.error) throw new Error((r && r.error) || "Gift card no encontrada"); K.d = r; K.st = null; return r; }
   function detHtml() {
-    var d = K.d, v = d.item, adm = d.puedeEditar, ed = K.edit && adm;
-    var inp = function (k, val, type) { return '<input data-f="' + k + '" type="' + (type || "text") + '" value="' + e(val || "") + '">'; };
-    var dl = function (t, ro, rw) { return "<div><dt>" + t + "</dt><dd>" + (ed && rw ? rw : ro) + "</dd></div>"; };
-    var tk = function (c) { return c ? '<a href="#/m/tickets/t/' + encodeURIComponent(c) + '" class="mcgc-cod">' + e(c) + "</a>" : '<span class="mccf-sub">—</span>'; };
-    var cli = v.cedula ? '<a href="#/m/clientes/c/' + encodeURIComponent("c:" + v.cedula) + '">' + e(v.comprador || v.cedula) + "</a>" : e(v.comprador || "—");
+    var d = K.d, v = d.item, adm = d.puedeEditar, st = K.st || (K.st = window.MCEdit.nuevo({ admin: adm && v.estado !== "eliminada", pedir: d.puedePedir && v.estado !== "eliminada" }));
+    var E = function (k, shown, raw, o) { return window.MCEdit.v(st, k, shown, raw, o); };
+    var dl = function (t, html) { return "<div><dt>" + t + "</dt><dd>" + html + "</dd></div>"; };
+    var fmtF = function (x) { return e(f(x) || "—"); };
+    var tk = function (c) { return c ? ' <a href="#/m/tickets/t/' + encodeURIComponent(c) + '" title="Abrir ticket">↗</a>' : ""; };
     var acc = "";
     if (d.puedeUsar) acc += '<button class="btn small" type="button" id="mcgc-usar">✓ Marcar usada</button> ';
     if (v.usado && adm) acc += '<button class="btn ghost small" type="button" id="mcgc-desusar">Desmarcar uso</button> ';
@@ -200,22 +201,21 @@
     var docs = (d.documentos || []).length ? '<ul class="mcgc-docs">' + d.documentos.map(function (x) { return '<li><span>📄 ' + e(x.nombre) + '<div class="mcgc-sub">' + e(String(x.fecha || "").slice(0, 16).replace("T", " ")) + " · " + e(x.por) + (x.bytes ? " · " + Math.round(x.bytes / 1024) + " KB" : "") + '</div></span><span><button class="btn ghost small" type="button" data-doc="' + e(x.id) + '">Abrir</button> <button class="btn ghost small" type="button" data-doc="' + e(x.id) + '" data-dl="1">⬇️</button></span></li>'; }).join("") + "</ul>" : '<p class="mccf-sub">Todavía no hay PDF guardado. «Generar PDF» lo crea y lo guarda aquí y en Documentos de la clienta.</p>';
     return '<div id="mcgc-root">' +
       '<div class="mcgc-acts" style="justify-content:space-between;margin:0 0 8px"><button class="btn ghost small" type="button" data-go="#/m/gift/cards">← Gift cards</button><span>' +
-      (adm && v.estado !== "eliminada" ? (ed ? '<button class="btn ghost small" type="button" id="mcgc-cancel">Cancelar</button> <button class="btn small" type="button" id="mcgc-save">💾 Guardar</button>' : '<button class="btn ghost small" type="button" id="mcgc-edit">✏️ Editar</button> <button class="btn ghost small mcgc-del" type="button" id="mcgc-del">🗑️ Eliminar</button>') : "") + "</span></div>" +
-      '<div class="mccf-card"><div class="mcgc-top"><div><h1>' + e(v.codigo) + (v.repetido ? '<span class="mcgc-rep">código repetido en la hoja</span>' : "") + (v.prueba ? " 🧪" : "") + '</h1><div style="margin-top:4px">' + estHtml(v) + ' <span class="mcgc-sub">' + e(v.servicio || v.valor || "") + '</span></div></div><div>' + acc + "</div></div>" +
+      window.MCEdit.botonBorrar(st, "mcgc-del") + "</span></div>" +
+      '<div class="mccf-card"><div class="mcgc-top"><div><h1>' + (adm ? E("codigo", e(v.codigo), v.codigo, { label: "Código" }) : e(v.codigo)) + (v.repetido ? '<span class="mcgc-rep">código repetido en la hoja</span>' : "") + (v.prueba ? " 🧪" : "") + '</h1><div style="margin-top:4px">' + estHtml(v) + ' <span class="mcgc-sub">' + e(v.servicio || v.valor || "") + '</span></div></div><div>' + acc + "</div></div>" +
       '<dl class="mcgc-grid">' +
-      (ed ? dl("Código", "", inp("codigo", v.codigo)) : "") +
-      dl("Comprador", cli, inp("nombre", v.nombre) + inp("apellido", v.apellido)) + dl("Cédula", e(v.cedula || "—"), inp("cedula", v.cedula)) +
-      dl("Para", e(v.para || "—"), inp("para", v.para)) + dl("De", e(v.de || "—"), inp("de", v.de)) +
-      dl("Facial / servicio", e(v.servicio || "—"), inp("servicio", v.servicio)) + dl("Valor", e(v.valor || "—"), inp("valor", v.valor)) +
-      dl("Fecha de venta", e(f(v.fechaVenta) || "—"), inp("fechaVenta", v.fechaVenta, "date")) + dl("Válido hasta", e(f(v.validoHasta) || v.validoTxt || "—"), inp("validoHasta", v.validoHasta, "date")) +
-      dl("Factura", e(v.factura || "—"), inp("factura", v.factura)) + dl("Ticket de venta", tk(v.ticketVenta), inp("ticketVenta", v.ticketVenta)) +
-      dl("Uso", v.usado ? e(f(v.fechaUso)) + " · " + pill(v.usadoPor) : '<span class="mccf-sub">Sin usar</span>') + dl("Ticket de uso", tk(v.ticketUso), inp("ticketUso", v.ticketUso)) +
-      (v.mensaje || ed ? dl("Mensaje", e(v.mensaje || "—"), inp("mensaje", v.mensaje)) : "") +
-      (adm ? dl("Notas (hoja)", e(v.notas || "—"), inp("notas", v.notas)) : "") + "</dl>" +
+      dl("Nombre comprador", E("nombre", e(v.nombre), v.nombre, { label: "Nombre" }) + (v.cedula ? ' <a href="#/m/clientes/c/' + encodeURIComponent("c:" + v.cedula) + '" title="Ver clienta">↗</a>' : "")) + dl("Apellido", E("apellido", e(v.apellido), v.apellido, { label: "Apellido" })) + dl("Cédula", E("cedula", e(v.cedula), v.cedula, { label: "Cédula" })) +
+      dl("Para", E("para", e(v.para), v.para, { label: "Para" })) + dl("De", E("de", e(v.de), v.de, { label: "De" })) +
+      dl("Facial / servicio", E("servicio", e(v.servicio), v.servicio, { label: "Facial / servicio" })) + dl("Valor", E("valor", e(v.valor), v.valor, { label: "Valor" })) +
+      dl("Fecha de venta", E("fechaVenta", e(f(v.fechaVenta)), v.fechaVenta, { tipo: "date", fmt: fmtF, label: "Fecha de venta" })) + dl("Válido hasta", E("validoHasta", e(f(v.validoHasta) || v.validoTxt || ""), v.validoHasta, { tipo: "date", fmt: fmtF, label: "Válido hasta" })) +
+      dl("Factura", E("factura", e(v.factura), v.factura, { label: "Factura" })) + dl("Ticket de venta", E("ticketVenta", e(v.ticketVenta), v.ticketVenta, { label: "Ticket de venta" }) + tk(v.ticketVenta)) +
+      dl("Uso", v.usado ? e(f(v.fechaUso)) + " · " + pill(v.usadoPor) : '<span class="mccf-sub">Sin usar</span>') + dl("Ticket de uso", E("ticketUso", e(v.ticketUso), v.ticketUso, { label: "Ticket de uso" }) + tk(v.ticketUso)) +
+      dl("Mensaje", E("mensaje", e(v.mensaje), v.mensaje, { label: "Mensaje" })) +
+      (adm ? dl("Notas (hoja)", E("notas", e(v.notas), v.notas, { label: "Notas" })) : "") + "</dl>" + window.MCEdit.hint(st) + window.MCEdit.barra(st) +
       (sePuedeEnviar(v) ? htmlLienzo(camposDe(v)) + shareHtml(v.id, K.recienVendida === String(v.id)) : "") +
       "</div>" +
       '<div class="mccf-card"><b>Documentos</b>' + docs + "</div>" +
-      ((v.historial || []).length ? '<div class="mccf-card"><b>Historial</b><ul class="mc-hist">' + v.historial.slice().reverse().map(function (h) { return "<li>" + e(String(h.fecha || "").slice(0, 16).replace("T", " ")) + " · " + e(h.actor) + " · <b>" + e(h.accion) + "</b>" + (h.detalle ? " · " + e(h.detalle) : "") + "</li>"; }).join("") + "</ul></div>" : "") +
+      ((v.historial || []).length ? '<div class="mccf-card"><b>Historial</b><ul class="mc-hist">' + v.historial.slice().reverse().map(function (h) { return "<li>" + e(hora(h.fecha)) + " · " + e(h.actor) + " · <b>" + e(h.accion) + "</b>" + (h.detalle ? " · " + e(h.detalle) : "") + "</li>"; }).join("") + "</ul></div>" : "") +
       "</div>";
   }
   function dlg(html, onOk) {
@@ -368,29 +368,28 @@
         window.open(r.url, "_blank", "noopener");
       };
     });
-    var ed = main.querySelector("#mcgc-edit"); if (ed) ed.onclick = function () { K.edit = true; repDet(main); };
-    var ca = main.querySelector("#mcgc-cancel"); if (ca) ca.onclick = function () { K.edit = false; repDet(main); };
-    var sv = main.querySelector("#mcgc-save"); if (sv) sv.onclick = async function () {
-      var datos = {}; main.querySelectorAll("[data-f]").forEach(function (i) { datos[i.getAttribute("data-f")] = i.value; });
-      sv.disabled = true;
-      try {
-        var r = await api("gcb_guardar", { id: v.id, datos: datos });
-        if (!r || r.error) throw new Error((r && r.error) || "No se pudo guardar");
-        toast2(r.sinCambios ? "Sin cambios" : "Gift card guardada"); K.edit = false; if (K.pdfCache) delete K.pdfCache[String(v.id)]; await recargar();
-      } catch (x) { toast2(x.message, true); sv.disabled = false; }
-    };
+    var st = K.st;
+    window.MCEdit.wire(main.querySelector("#mcgc-root"), st, {
+      redibujar: function () { repDet(main); },
+      guardar: function (pend) { return api("gcb_guardar", { id: v.id, datos: pend }); },
+      pedir: function (pend, motivo) { return api("solicitud_crear", { tabla: "gift_beta", fila: String(v.id), tipo: "cambio", motivo: motivo, propuestos: pend }); },
+      listo: async function (r) { toast2(st.admin ? (r.sinCambios ? "Sin cambios" : "Gift card guardada") : "📨 Solicitud enviada a Emilia / Emi"); if (K.pdfCache) delete K.pdfCache[String(v.id)]; await recargar(); },
+    });
     var del = main.querySelector("#mcgc-del"); if (del) del.onclick = function () {
-      dlg('<h3>🗑️ Eliminar ' + e(v.codigo) + '<button type="button" class="mcgc-x">×</button></h3><p class="mccf-sub">Sale de la lista y de la ficha de la clienta. El código no se vuelve a usar. Queda en el historial con el motivo.</p><label>Motivo</label><input data-mot placeholder="Ej. duplicada, anulada">', async function (box) {
-        var r = await api("gcb_borrar", { id: v.id, motivo: box.querySelector("[data-mot]").value });
-        if (!r || r.error) throw new Error((r && r.error) || "No se pudo eliminar");
-        toast2("Gift card eliminada"); location.hash = "#/m/gift/cards";
+      var adm = st.admin;
+      dlg('<h3>🗑️ ' + (adm ? "Eliminar " : "Solicitar eliminación de ") + e(v.codigo) + '<button type="button" class="mcgc-x">×</button></h3><p class="mccf-sub">' + (adm ? "Sale de la lista y de la ficha de la clienta. El código no se vuelve a usar. Queda en el historial con el motivo." : "No se borra ahora: la solicitud llega a Emilia / Emi para que la aprueben.") + '</p><label>Motivo</label><input data-mot placeholder="Ej. duplicada, anulada">', async function (box) {
+        var mot = box.querySelector("[data-mot]").value.trim();
+        if (!mot) throw new Error("Escribe el motivo");
+        var r = adm ? await api("gcb_borrar", { id: v.id, motivo: mot }) : await api("solicitud_crear", { tabla: "gift_beta", fila: String(v.id), tipo: "eliminacion", motivo: mot });
+        if (!r || r.error) throw new Error((r && r.error) || "No se pudo");
+        if (adm) { toast2("Gift card eliminada"); location.hash = "#/m/gift/cards"; } else toast2("📨 Solicitud de eliminación enviada");
       });
     };
     if (K.recienVendida === String(v.id)) { var b = main.querySelector("#mcgc-pdf"); if (b) b.classList.remove("ghost"); }
   }
 
   async function render(route) {
-    css(); K.edit = false;
+    css(); K.st = null;
     try {
       if (route.id === "nueva") return await nuevaHtml();
       if (route.id) { await cargarDet(String(route.id)); return detHtml(); }
