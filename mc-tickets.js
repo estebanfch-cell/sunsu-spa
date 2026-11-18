@@ -240,7 +240,7 @@
       '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
-      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + "</div>" +
+      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !t.cancelado ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>" +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
@@ -330,7 +330,7 @@
         var r = await api("tk_cancelar", { clave: d.clave, motivo: m });
         if (!r || r.error) throw new Error((r && r.error) || "No se pudo cancelar");
         box.remove();
-        if (window.toast) toast("Ticket cancelado" + (r.unidades ? " · " + r.unidades + " u. devueltas a bodega" : "") + (r.paquetes && r.paquetes.length ? " · paquete dado de baja" : ""), "var(--green)");
+        if (window.toast) toast("Ticket cancelado" + (r.unidades ? " · " + r.unidades + " u. devueltas a bodega" : "") + (r.paquetes && r.paquetes.length ? " · paquete anulado" : "") + (r.liberadas && r.liberadas.length ? " · " + r.liberadas.length + " sesión(es) de paquete liberada(s)" : ""), "var(--green)");
         var nd = await api("tk_get", { clave: d.clave }); if (nd && nd.ok) { cargarEstado(nd); repintar(document.getElementById("main")); }
       } catch (x) { err.textContent = x.message || String(x); this.disabled = false; this.textContent = "Cancelar ticket"; }
     };
@@ -621,6 +621,14 @@
     main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
     main.querySelector("#mctk-excl").onclick = dlgExcluir;
     if (main.querySelector("#mctk-cancelar")) main.querySelector("#mctk-cancelar").onclick = dlgCancelar;
+    if (main.querySelector("#mctk-solcancel")) main.querySelector("#mctk-solcancel").onclick = async function () {
+      var mo = prompt("¿Por qué hay que eliminar (cancelar) este ticket? Lo aprueba un admin.");
+      if (mo == null) return;
+      if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
+      var rr = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "eliminacion", motivo: String(mo).trim() });
+      if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
+      if (window.toast) toast(rr.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
+    };
     if (main.querySelector("#mctk-multa")) main.querySelector("#mctk-multa").onclick = function () {
       var t = K.d.ticket, inf = K.d.info || {};
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });

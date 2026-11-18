@@ -945,6 +945,16 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   }
   let ses0 = real;
   let db = real?.prueba ? activarPrueba(ctx.db) : ocultarPrueba(ctx.db);
+  if (previewPedido(p) && action === "solicitud_crear" && (p.prueba_vista === true || p.prueba_vista === "true")) {
+    // Ver como → Modo prueba (TK59): la solicitud queda marcada PRUEBA en la bandeja de esta admin.
+    if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
+    const view = await loadUsuario(ctx, s(p.preview_uid));
+    if (!view) return { error: "Esa persona no está en el equipo" };
+    const vses = { ...view, token: real.token, prueba: false };
+    const vdb = dbSoloLectura(ocultarPrueba(ctx.db));
+    const { solicitudPrueba } = await import("./inline_api.ts");
+    return await solicitudPrueba(p as R, { ...ctx, db: vdb, ses: vses }, vses, real, ctx.db);
+  }
   if (previewPedido(p)) {
     if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
     if (!lecturaEnVista(action)) return { error: VISTA_MSG };

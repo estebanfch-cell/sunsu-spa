@@ -377,8 +377,11 @@
     return v == null ? "" : String(v);
   }
   function puede() { return MC.admin && !(typeof state !== "undefined" && state.vista); }
+  // Personal (TK59): toca el dato como la admin, pero en vez de Guardar manda una solicitud.
+  function pide() { return !MC.admin && !!(MC.cur && MC.cur.puedePedir); }
+  function puedeCampo() { return puede() || pide(); }
   function V(k, cls) {
-    var can = puede(), t = txt(k), ch = Object.prototype.hasOwnProperty.call(MC.ch, k);
+    var can = puedeCampo(), t = txt(k), ch = Object.prototype.hasOwnProperty.call(MC.ch, k);
     if (MC.ed === k) return '<span class="mcp-v">' + input(k) + "</span>";
     return '<span class="mcp-v ' + (cls || "") + (can ? " can" : "") + (ch ? " ch" : "") + (t ? "" : " vac") + '"' + (can ? ' data-mcp-ed="' + k + '"' : "") + ' title="' + e(t) + '">' + (t ? e(t) : (can ? "Agregar dato" : "—")) + "</span>";
   }
@@ -562,7 +565,12 @@
       (p.beta_editado_por ? '<p class="note" style="margin-top:8px">Última edición en la beta: ' + e(p.beta_editado_por) + " · " + e(fecha(p.beta_editado_at)) + "</p>" : "") +
       "</div></div></div>";
     var n = Object.keys(MC.ch).length;
-    h += '<div class="mcp-save" id="mcp-savebar"' + (n ? "" : " hidden") + "><span>Cambios sin guardar (" + n + ")</span>" +
+    h += pide()
+      ? '<div class="mcp-save" id="mcp-savebar"' + (n ? "" : " hidden") + "><span>Cambios para pedir (" + n + ")</span>" +
+        '<input id="mcp-motivo" placeholder="Motivo del cambio (obligatorio)" value="' + e(MC.motivo) + '">' +
+        '<button class="btn small" type="button" id="mcp-guardar">📨 Enviar solicitud (' + n + ')</button><button class="btn ghost small" type="button" id="mcp-descartar">Descartar</button>' +
+        '<small style="flex-basis:100%;color:var(--gray)">No se guarda directo: Emilia o Emi lo aprueban desde Solicitudes.</small></div>'
+      : '<div class="mcp-save" id="mcp-savebar"' + (n ? "" : " hidden") + "><span>Cambios sin guardar (" + n + ")</span>" +
       (hayPrecio() ? '<input id="mcp-motivo" placeholder="Motivo del cambio de precio o costo (obligatorio)" value="' + e(MC.motivo) + '">' : "") +
       '<button class="btn small" type="button" id="mcp-guardar">Guardar</button><button class="btn ghost small" type="button" id="mcp-descartar">Descartar</button></div>';
     return h;
@@ -645,7 +653,7 @@
   // ---------- Paridad MineCore: acciones, precios, proveedores, códigos, archivos, protocolo ----------
   function acciones() {
     var r = MC.cur, p = r.producto;
-    if (!puede()) return '<button class="btn ghost small" type="button" id="mcp-pdf">PDF ficha</button>';
+    if (!puede()) return '<button class="btn ghost small" type="button" id="mcp-pdf">PDF ficha</button>' + (pide() && !r.eliminado ? '<button class="btn ghost small mcp-danger" type="button" id="mcp-soldel">🗑️ Solicitar eliminación</button>' : "");
     if (r.eliminado) return '<span class="mcp-tag agot">Eliminado por ' + e(r.eliminadoPor) + '</span> <button class="btn small" type="button" data-mcp-acc="restaurar">Restaurar</button>';
     return '<button class="btn ghost small" type="button" id="mcp-pdf">PDF ficha</button>' +
       '<button class="btn ghost small" type="button" id="mcp-dup">Copiar (siguiente SKU)</button>' +
@@ -1055,6 +1063,15 @@
     var mot = document.getElementById("mcp-motivo");
     if (mot) MC.motivo = mot.value;
     if (hayPrecio() && String(MC.motivo || "").trim().length < 3) { alert("Escribe el motivo del cambio de precio o costo."); if (mot) mot.focus(); return; }
+    if (pide()) {
+      if (String(MC.motivo || "").trim().length < 3) { alert("Escribe el motivo del cambio"); if (mot) mot.focus(); return; }
+      var bs = document.getElementById("mcp-guardar"); if (bs) { bs.disabled = true; bs.textContent = "Enviando…"; }
+      var rs = await api("solicitud_crear", { tabla: "producto_beta", fila: String(MC.cur.producto.id), tipo: "cambio", motivo: String(MC.motivo).trim(), propuestos: cambios });
+      if (!rs || rs.error) { if (bs) { bs.disabled = false; bs.textContent = "📨 Enviar solicitud"; } alert((rs && rs.error) || "No se pudo enviar"); return; }
+      if (typeof toast === "function") toast(rs.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud enviada: un admin la revisa", "var(--green)");
+      MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar();
+      return;
+    }
     var bt = document.getElementById("mcp-guardar"); if (bt) { bt.disabled = true; bt.textContent = "Guardando…"; }
     var r = await api("mcprod_save", { id: MC.cur.producto.id, cambios: cambios, motivo: MC.motivo });
     if (!r || r.error) { if (bt) { bt.disabled = false; bt.textContent = "Guardar"; } alert((r && r.error) || "No se pudo guardar"); return; }
@@ -1081,8 +1098,18 @@
       var t = ev.target;
       if (t.closest("#mcp-volver")) { if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; go("#/m/productos"); return; }
       var tb = t.closest("[data-mcp-tab]"); if (tb) { MC.tab = tb.getAttribute("data-mcp-tab"); repintar(); return; }
-      var ed = t.closest("[data-mcp-ed]"); if (ed && puede()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
+      var ed = t.closest("[data-mcp-ed]"); if (ed && puedeCampo()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
       if (t.closest("#mcp-guardar")) { void guardar(); return; }
+      if (t.closest("#mcp-soldel")) {
+        var mo = prompt("¿Por qué hay que eliminar este producto? (lo aprueba un admin)");
+        if (mo == null) return;
+        if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
+        void api("solicitud_crear", { tabla: "producto_beta", fila: String(MC.cur.producto.id), tipo: "eliminacion", motivo: String(mo).trim() }).then(function (rr) {
+          if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
+          if (typeof toast === "function") toast(rr.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
+        });
+        return;
+      }
       if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo,[data-mcp-aj]")) { void accionFicha(t); return; }
       if (t.closest("#mcp-sug-ok")) {
         var sg = sugeridos(); Object.keys(sg).forEach(function (k) { setVal(k, sg[k]); });

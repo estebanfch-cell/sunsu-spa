@@ -9,6 +9,9 @@ import { handle } from "./handlers.ts";
 import "./inline_api.ts";
 import "./paquetes_beta_api.ts";
 import "./gift_beta_api.ts";
+import "./productos_api.ts";
+import "./tickets_beta_api.ts";
+import "./tickets_cancelar_api.ts";
 import type { Row } from "./domain.ts";
 
 const root = join(import.meta.dirname, "../../..");
@@ -106,7 +109,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const ed = readFileSync(join(root, "mc-edit.js"), "utf8");
     assert.match(ed, /Enviar solicitud/); assert.match(ed, /Solicitar eliminación/); assert.match(ed, /Descartar/);
     const beta = readFileSync(join(root, "beta.html"), "utf8");
-    assert.match(beta, /mc-edit\.js\?v=20261118tk59/);
+    assert.match(beta, /mc-edit\.js\?v=20261118tk60/);
     assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
   });
 
@@ -147,5 +150,69 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     assert.match(src, /mismo ticket de origen/); assert.match(src, /mismo producto y fecha de compra/);
     assert.match(src, /No está en la lista — lo marco después en Paquetes/);
     assert.match(src, /!p\.anulado && !p\.completo/);
+  });
+
+  it("Ver como → Modo prueba: la solicitud queda PRUEBA solo para esa admin y aprobarla no cambia nada", async () => {
+    const { db, h } = semilla();
+    const sinPrueba = await h("solicitud_crear", "adm", { preview_uid: "u-ana", preview: true, tabla: "paquete_beta", fila: "5", tipo: "cambio", motivo: "x", propuestos: { nombres: "Z" } });
+    assert.ok(sinPrueba.error, "sin Modo prueba la vista sigue de solo lectura");
+    const r = await h("solicitud_crear", "adm", { preview_uid: "u-ana", preview: true, prueba_vista: true, tabla: "paquete_beta", fila: "5", tipo: "cambio", motivo: "probando", propuestos: { nombres: "Zoila" } });
+    assert.equal(r.ok, true, String(r.error)); assert.equal(r.prueba, true);
+    const sol = db.tables.get("solicitudes_cambio")!.at(-1)!;
+    assert.equal(sol.prueba, true); assert.equal(sol.prueba_para, "admin"); assert.equal(sol.solicitante, "Ana Pérez");
+    const mia = await h("getSolicitudes", "adm", {});
+    assert.equal((mia.items as Row[]).length, 1); assert.equal(mia.pendientesPrueba, 1);
+    assert.equal(((await h("getSolicitudes", "cos", {})).items as Row[]).length, 0, "la cosmetóloga real no la ve");
+    const ap = await h("solicitud_resolver", "adm", { id: sol.id, aprobar: true });
+    assert.equal(ap.ok, true); assert.equal(ap.prueba, true);
+    assert.equal(db.tables.get("paquetes")![0].nombres, "Elena", "el dato real no cambia");
+    assert.equal((db.tables.get("beta_paquete_ajustes") || []).length, 0);
+    const del = await h("solicitud_crear", "adm", { preview_uid: "u-ana", preview: true, prueba_vista: true, tabla: "paquete_beta", fila: "5", tipo: "eliminacion", motivo: "probando" });
+    await h("solicitud_resolver", "adm", { id: del.id, aprobar: true });
+    assert.equal(db.tables.get("paquetes")![0].borrado_at ?? null, null, "eliminar en prueba no borra");
+  });
+
+  it("Productos: el personal pide el cambio o la eliminación; la admin aprueba y queda quién", async () => {
+    const { db, h } = semilla();
+    db.tables.set("erp_productos", [{ id: "p1", sku: "ML-001", nombre: "Crema", clase: "producto", uso: "venta", activo: true, marca: "Sunsu" }]);
+    db.tables.set("catalogo", [{ sku: "SUNSU-ML-001", producto_servicio: "Crema", tipo: "PRODUCTO", total_con_iva: 20, activo: true }]);
+    assert.match(String((await h("mcprod_save", "rec", { id: "p1", cambios: { marca: "X" } })).error), /solicitud/);
+    const g = await h("mcprod_get", "rec", { id: "p1" });
+    assert.equal(g.puedePedir, true, String(g.error));
+    const s1 = await h("solicitud_crear", "rec", { tabla: "producto_beta", fila: "p1", tipo: "cambio", motivo: "marca mal", propuestos: { marca: "Sunsu Pro" } });
+    assert.equal(s1.ok, true, String(s1.error));
+    const sol = db.tables.get("solicitudes_cambio")!.at(-1)!;
+    assert.match(String(sol.etiqueta), /Producto ML-001/);
+    await h("solicitud_resolver", "adm", { id: s1.id, aprobar: true });
+    const p1 = db.tables.get("erp_productos")![0];
+    assert.equal(p1.marca, "Sunsu Pro");
+    assert.match(String(p1.beta_editado_por), /solicitud de Alejandra aprobada/);
+    const s2 = await h("solicitud_crear", "rec", { tabla: "producto_beta", fila: "p1", tipo: "eliminacion", motivo: "duplicado" });
+    await h("solicitud_resolver", "adm", { id: s2.id, aprobar: false });
+    assert.ok(!db.tables.get("erp_productos")![0].beta_eliminado_at, "rechazar no cambia nada");
+    const s3 = await h("solicitud_crear", "rec", { tabla: "producto_beta", fila: "p1", tipo: "eliminacion", motivo: "duplicado" });
+    await h("solicitud_resolver", "adm", { id: s3.id, aprobar: true });
+    assert.ok(db.tables.get("erp_productos")![0].beta_eliminado_at);
+  });
+
+  it("Tickets: «Solicitar eliminación» del personal; al aprobar se cancela el ticket", async () => {
+    const { db, h } = semilla();
+    db.tables.set("tickets", [{ id: 1, sheet_row: 10, so_num: "TK-SO-1", beta_num: "TK-20261117-1", origin: "beta", timestamp: "2026-11-17T15:00:00Z", atendido_por: "Alejandra", nombre: "María", apellido: "Banda", id_3: "1700000001", estimado: 10, orig: { beta: true } }]);
+    for (const t of ["erp_movimientos", "erp_productos", "erp_stock", "erp_bodegas", "beta_ticket_cancelados", "beta_tickets", "beta_ticket_lineas", "catalogo", "promos", "clientas_registro"]) if (!db.tables.has(t)) db.tables.set(t, []);
+    const s1 = await h("solicitud_crear", "rec", { tabla: "ticket_detalle", fila: "TK-SO-1", tipo: "eliminacion", motivo: "ticket duplicado" });
+    assert.equal(s1.ok, true, String(s1.error));
+    const ap = await h("solicitud_resolver", "adm", { id: s1.id, aprobar: true });
+    assert.equal(ap.ok, true, String(ap.error));
+    const o = db.tables.get("tickets")![0].orig as Row;
+    assert.equal(o.anulado === true || o.cancelado === true, true);
+    assert.match(String(o.cancelado_motivo || o.motivo_cancelacion || JSON.stringify(o)), /pedido por Alejandra/);
+  });
+
+  it("UI: Modo prueba en la barra de Ver como; productos y tickets con solicitud", () => {
+    const b = readFileSync(join(root, "beta.html"), "utf8");
+    assert.match(b, /id="vista-prueba"/); assert.match(b, /prueba_vista: true/);
+    const pr = readFileSync(join(root, "mc-productos.js"), "utf8");
+    assert.match(pr, /📨 Enviar solicitud/); assert.match(pr, /🗑️ Solicitar eliminación/); assert.match(pr, /tabla: "producto_beta"/);
+    assert.match(readFileSync(join(root, "mc-tickets.js"), "utf8"), /id="mctk-solcancel"/);
   });
 });
