@@ -146,6 +146,12 @@ describe("API migo_importar / migo_cuadre_hora", () => {
       { factura: "001-001-000002951", fecha: "2026-11-17", cliente: "CAMILA CADENA", total: 65 },
     ] }, ctx) as Row;
     assert.equal(r.ok, true, String(r.error));
+    const resumen = ((r.cuadre as Row)?.resumen || {}) as Row;
+    const flagsNuevas = (resumen.flags as Row[]) || [];
+    assert.ok(flagsNuevas.some((f) => f.ticket === "TK-SO-1902" && f.color === "rojo" && String(f.motivo).includes("Sin factura") && !f.factura), "resumen debe listar la flag nueva de Paola");
+    assert.equal(flagsNuevas.some((f) => String(f.ticket).includes("1827") || String(f.ticket).includes("1820")), false, "el 1820 no es novedad de esta corrida");
+    const porF = (resumen.por_facturar as Row[]) || [];
+    assert.ok(porF.some((x) => x.ticket === "TK-SO-1902"), "Paola queda por facturar");
     const flags = db.tables.get("beta_ticket_flags")!;
     assert.equal(flags.some((f) => String(f.id) === "migo:1902:sinfac" && f.resuelto !== true), true);
     assert.equal(flags.filter((f) => f.ticket_id === 1820 && f.resuelto !== true).length, 1);
