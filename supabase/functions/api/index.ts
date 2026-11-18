@@ -2,6 +2,8 @@ import { handle } from "./handlers.ts";
 import { formatearRespuesta } from "./domain.ts";
 import "./handlers_extra.ts";
 import "./roles_api.ts";
+import "./roles_crear_api.ts";
+import "./jibble_importar.ts";
 import "./empleados_api.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
@@ -86,6 +88,10 @@ Deno.serve(async (req) => {
       ACUITY_KEY: Deno.env.get("ACUITY_KEY"),
       JIBBLE_CLIENT_ID: Deno.env.get("JIBBLE_CLIENT_ID"),
       JIBBLE_CLIENT_SECRET: Deno.env.get("JIBBLE_CLIENT_SECRET"),
+      JIBBLE_CLIENT_ID_NEW: Deno.env.get("JIBBLE_CLIENT_ID_NEW"),
+      JIBBLE_CLIENT_SECRET_NEW: Deno.env.get("JIBBLE_CLIENT_SECRET_NEW"),
+      JIBBLE_API_KEY: Deno.env.get("JIBBLE_API_KEY"),
+      JIBBLE_API_SECRET: Deno.env.get("JIBBLE_API_SECRET"),
       SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
       SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
       MIGO_CRON_KEY: Deno.env.get("MIGO_CRON_KEY"),

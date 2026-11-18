@@ -78,7 +78,7 @@ describe("TK73 empleados e IESS", () => {
     assert.match(nav, /#\/m\/personal\/empleados/);
     assert.match(beta, /mc-empleados\.js\?v=20261118tk87/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-18-TK87/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK88/);
   });
 
   it("omite la fila de notas de RRHH y no deja ver el módulo al personal", async () => {

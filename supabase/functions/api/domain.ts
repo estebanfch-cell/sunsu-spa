@@ -1023,6 +1023,96 @@ export function rolCalcular(input: {
   };
 }
 
+/** Recorte al centavo inferior, como FLOOR de las celdas M/O/Q del rol RRHH. */
+export function floorCent(x: number): number {
+  return Math.floor((Number(x) + Number.EPSILON) * 100) / 100;
+}
+
+/** Salario básico usado en el décimo cuarto del generador RRHH (fórmula fija =482/12). */
+export const SBU_ROL = 482;
+export const IESS_PERSONAL_PCT = 0.0945;
+export const IESS_PATRONAL_PCT = 0.1115;
+export const SECAP_PCT = 0.005;
+export const IECE_PCT = 0.005;
+export const FONDO_RESERVA_PCT = 0.0833;
+
+export type RolOficialIn = {
+  sueldoBase: number; bono: number; faltas: number;
+  hrsSupl?: number; hrsExtr?: number; hrsDesc?: number;
+  anticipo?: number; hip?: number; quir?: number; sandalo?: number; multas?: number;
+  comFaciales: number; comExtras: number; comRecepcion: number; comProductos: number; comPaquetes: number;
+  fondoReserva: boolean; fechaIngreso?: string; anio?: number; mes?: number;
+};
+
+export type RolOficialOut = {
+  sueldo: number; bono: number;
+  comFaciales: number; comExtras: number; comRecepcion: number;
+  comFacialesExtrasRecep: number; comPaquetes: number; comProductos: number; comisiones: number;
+  hrsSupl: number; valSupl: number; hrsExtr: number; valExtr: number; hrsDesc: number; valDesc: number;
+  ingresoAportable: number; dec13: number; dec14: number; fondoReserva: number;
+  totalIngresos: number; iess: number; anticipo: number; prestHip: number; prestQuir: number;
+  prestOtro: number; multas: number; egresos: number; totalEgresos: number; totalRecibir: number;
+  iessPatronal: number; secap: number; iece: number; aportePatronal: number; aportePatronalPct: number;
+  costoEmpresa: number;
+};
+
+/**
+ * Motor del rol mensual RRHH (pestaña MES_AÑO). No usa rolCalcular del beta:
+ * sueldo con divisor 30, extras con FLOOR, fondo = A×0.0833, sin vacaciones mensualizadas.
+ */
+export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
+  const sueldoBase = Number(input.sueldoBase) || 0;
+  const faltas = Math.max(0, Number(input.faltas) || 0);
+  const sueldo = round2(sueldoBase - (sueldoBase / 30) * faltas);
+  const bono = Number(input.bono) || 0;
+  const hrsSupl = Number(input.hrsSupl) || 0;
+  const hrsExtr = Number(input.hrsExtr) || 0;
+  const hrsDesc = Number(input.hrsDesc) || 0;
+  const valSupl = floorCent(hrsSupl * sueldoBase / 240 * 1.5);
+  const valExtr = floorCent(hrsExtr * sueldoBase / 240 * 2);
+  const valDesc = floorCent(hrsDesc * sueldoBase / 240 * 2);
+  const comFaciales = Number(input.comFaciales) || 0;
+  const comExtras = Number(input.comExtras) || 0;
+  const comRecepcion = Number(input.comRecepcion) || 0;
+  const comPaquetes = Number(input.comPaquetes) || 0;
+  const comProductos = Number(input.comProductos) || 0;
+  const comFacialesExtrasRecep = comFaciales + comExtras + comRecepcion;
+  const comisiones = round2(comFacialesExtrasRecep + comPaquetes + comProductos);
+  const A = sueldo + bono + comFacialesExtrasRecep + comPaquetes + comProductos + valSupl + valExtr + valDesc;
+  const dec13 = A / 12;
+  const dec14 = SBU_ROL / 12;
+  let fondoOk = !!input.fondoReserva;
+  if (fondoOk && input.fechaIngreso && input.anio && input.mes) {
+    const fin = new Date(Date.UTC(input.anio, input.mes, 0));
+    const ing = new Date(input.fechaIngreso);
+    const dias = (fin.getTime() - ing.getTime()) / 86400000;
+    fondoOk = dias >= 365;
+  }
+  const fondoReserva = fondoOk ? A * FONDO_RESERVA_PCT : 0;
+  const totalIngresos = A + dec13 + dec14 + fondoReserva;
+  const iess = A * IESS_PERSONAL_PCT;
+  const anticipo = Number(input.anticipo) || 0;
+  const prestHip = Number(input.hip) || 0;
+  const prestQuir = Number(input.quir) || 0;
+  const prestOtro = Number(input.sandalo) || 0;
+  const multas = Number(input.multas) || 0;
+  const egresos = anticipo + prestHip + prestQuir + prestOtro + multas;
+  const totalEgresos = iess + egresos;
+  const totalRecibir = totalIngresos - totalEgresos;
+  const iessPatronal = round2(A * IESS_PATRONAL_PCT);
+  const secap = round2(A * SECAP_PCT);
+  const iece = round2(A * IECE_PCT);
+  const aportePatronal = round2(iessPatronal + secap + iece);
+  return {
+    sueldo, bono, comFaciales, comExtras, comRecepcion, comFacialesExtrasRecep, comPaquetes, comProductos, comisiones,
+    hrsSupl, valSupl, hrsExtr, valExtr, hrsDesc, valDesc,
+    ingresoAportable: A, dec13, dec14, fondoReserva,
+    totalIngresos, iess, anticipo, prestHip, prestQuir, prestOtro, multas, egresos, totalEgresos, totalRecibir,
+    iessPatronal, secap, iece, aportePatronal, aportePatronalPct: 0.1215,
+    costoEmpresa: round2(totalIngresos + aportePatronal),
+  };
+}
+
 export async function hashPin(pin: string, salt: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pin));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");

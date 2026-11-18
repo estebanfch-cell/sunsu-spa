@@ -333,6 +333,12 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   if (!iessFicha.afiliada) {
     return { ok: false, error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: s(e.nombre_app) || s(e.apellidos_y_nombres) };
   }
+  const { rolAprobadoDe } = await import("./roles_crear_api.ts");
+  const aprobado = await rolAprobadoDe(ctx, sheet || clavePeriodo(partes[0], anio), s(e.nombre_app) || s(e.apellidos_y_nombres));
+  if (aprobado) {
+    const snap = (aprobado.snapshot && typeof aprobado.snapshot === "object") ? aprobado.snapshot as R : {};
+    return { ok: true, data: { ...snap, fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado" };
+  }
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
   try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }

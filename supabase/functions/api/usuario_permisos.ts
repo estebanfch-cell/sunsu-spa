@@ -76,7 +76,7 @@ const FINO = new Map(FINOS.map((m) => [m.id, m]));
 export const NIVEL3 = new Set([
   "eliminarTicket", "inline_borrar", "solicitud_resolver", "ov_anular",
   "oc_cancel", "oc_devolver", "oc_recibir_undo", "ocEliminar", "compras_aprobar",
-  "conteo_aplicar", "conteo_aprobar", "aprobarRol", "asis_permiso_resolver", "asis_corregir", "asis_marca_manual",
+  "conteo_aplicar", "conteo_aprobar", "aprobarRol", "rol_aprobar", "rol_rechazar", "asis_permiso_resolver", "asis_corregir", "asis_marca_manual",
   "bitacoraAnular", "eliminarProveedorApp", "eliminarProductoApp", "betaEliminar", "usuarioBloquear",
 ]);
 /** Lecturas que no siguen la convención get… / …_list / …_get. */
