@@ -185,10 +185,18 @@ extend("promo_calcular", "any", async (p, ctx, ses) => {
   }).filter((l) => l.sku);
   const vig = (await todasPromos(ctx)).filter((x) => vigente(x, hoy));
   const ids = Array.isArray(p.ids) ? (p.ids as unknown[]).map(s) : [];
-  const elegidas = ids.map((id) => vig.find((x) => x.id === id)).filter((x): x is PromoB => !!x);
   // Cada vigente sola (para decir cuáles aplican y cuánto) + la combinación elegida.
   const cada = vig.map((x) => { const r = aplicarPromos([x], lineas, nombreDe); return { id: x.id, nombre: x.nombre, origen: x.origen, reglasTxt: x.reglas.map((rr) => textoRegla(rr, nombreDe)), monto: r.descuento, motivo: r.noAplican[0] ? s(r.noAplican[0].motivo) : "" }; });
-  return { ok: true, promos: cada, resultado: aplicarPromos(elegidas, lineas, nombreDe) };
+  // AUTO (Emilia 17/11 22:53): todas las que aplican, salvo las que un admin quitó; primero las forzadas, luego la que más descuenta.
+  let elegidas: PromoB[];
+  if (p.auto === true) {
+    const exc = new Set(Array.isArray(p.excluir) ? (p.excluir as unknown[]).map(s) : []), frz = Array.isArray(p.forzar) ? (p.forzar as unknown[]).map(s) : [];
+    const monto = new Map(cada.map((x) => [x.id, x.monto]));
+    elegidas = vig.filter((x) => !exc.has(x.id) && (monto.get(x.id) || 0) > 0)
+      .sort((a, b) => ((frz.includes(b.id) ? 1 : 0) - (frz.includes(a.id) ? 1 : 0)) || ((monto.get(b.id) || 0) - (monto.get(a.id) || 0)));
+  } else elegidas = ids.map((id) => vig.find((x) => x.id === id)).filter((x): x is PromoB => !!x);
+  const resultado = aplicarPromos(elegidas, lineas, nombreDe);
+  return { ok: true, promos: cada, resultado, aplicadas: (resultado.aplicadas as Row[]).map((x) => s(x.id)) };
 });
 
 extend("promo_guardar", "any", async (p, ctx, ses) => {
