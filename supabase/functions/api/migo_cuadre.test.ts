@@ -4,7 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./tickets_beta_api.ts";
 import "./migo_cuadre_api.ts";
-import { cruzar, esConsumidorFinal, exentoCuadre, facSeq, fechaGye, flagsDeseadas, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
+import { cruzar, esConsumidorFinal, esperandoFacturaLunes, exentoCuadre, facSeq, fechaGye, flagsDeseadas, formaDeTicket, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
 import { faltaDe } from "./tickets_beta_api.ts";
 import type { Row } from "./domain.ts";
 
@@ -38,6 +38,26 @@ describe("cruce Migo (solo lectura)", () => {
     assert.equal(cam.tipo, "nombre_fecha_monto");
     assert.equal(cam.estado, "cuadra");
   });
+
+  it("une tickets no cobrados por nombre+fecha+monto (2+ tokens); no mezcla Prado $65", () => {
+    const facs: FacturaVivo[] = [
+      { factura: "001-001-000002961", seq: 2961, fecha: "2026-11-17", cliente: "Maria Gracia Arellano", total: 15, forma: "tarjeta" },
+      { factura: "001-001-000002962", seq: 2962, fecha: "2026-11-17", cliente: "Verónica Prado", total: 65, forma: "tarjeta" },
+      { factura: "001-001-000002959", seq: 2959, fecha: "2026-11-17", cliente: "Carolina Cadena", total: 52.82, forma: "tarjeta" },
+    ];
+    const tickets: Row[] = [
+      { id: 1898, fecha: "2026-11-17", nombre: "María Gracia", apellido: "Arellano", estimado: 15, fac_7: "", cob: false },
+      { id: 1905, fecha: "2026-11-17", nombre: "Juan Martín Hajj", apellido: "Prado", estimado: 65, fac_7: "", cob: false },
+      { id: 1897, fecha: "2026-11-17", nombre: "Carolina", apellido: "Cadena", estimado: 15, fac_7: "", cob: false },
+    ];
+    const L = cruzar(facs, tickets);
+    assert.equal(L.find((x) => x.ticket_id === 1898)?.factura, "001-001-000002961");
+    assert.equal(L.find((x) => x.ticket_id === 1905), undefined);
+    assert.equal(L.find((x) => x.ticket_id === 1897), undefined); // $15 vs $52.82
+    assert.equal(formaDeTicket({ comp: "Trans:24255919" }), "transferencia");
+    assert.equal(formaDeTicket({ comp: "" }, { forma_pago: "tarjeta" }), "tarjeta");
+    assert.equal(formaDeTicket({ comp: "Trans:1, Tarje:2" }), "mixto");
+  });
   it("rojo: diferencia de monto, clienta distinta, o cobrado sin factura al cerrar el día; nunca el #1820; no marca si el import está atrasado", () => {
     const facs: FacturaVivo[] = [
       { factura: "001-001-000002951", seq: 2951, fecha: "2026-11-17", cliente: "OTRA PERSONA", total: 50 },
@@ -62,6 +82,25 @@ describe("cruce Migo (solo lectura)", () => {
     const flagsStale = flagsDeseadas({ tickets, links, facturas: facs, hoyGye: "2026-11-18", importadoGye: "2026-11-17" });
     assert.equal(flagsStale.some((f) => f.ticket_id === 1902 && f.kind === "sinfac"), false);
     assert.equal(idFlag(1902, "sinfac"), "migo:1902:sinfac");
+  });
+
+  it("ticket del lunes cobrado sin factura: Pendiente por lunes hasta el cierre del martes; rojo desde el miércoles", () => {
+    assert.equal(esperandoFacturaLunes("2026-11-16", "2026-11-16"), true);
+    assert.equal(esperandoFacturaLunes("2026-11-16", "2026-11-17"), true);
+    assert.equal(esperandoFacturaLunes("2026-11-16", "2026-11-18"), false);
+    assert.equal(esperandoFacturaLunes("2026-11-17", "2026-11-18"), false);
+    const facs: FacturaVivo[] = [];
+    const tickets: Row[] = [
+      { id: 1880, clave: "TK-SO-1880", fecha: "2026-11-16", nombre: "Ana", apellido: "Lunes", estimado: 20, fac_7: "", cob: true },
+      { id: 1890, clave: "TK-SO-1890", fecha: "2026-11-17", nombre: "Beto", apellido: "Martes", estimado: 20, fac_7: "", cob: true },
+    ];
+    const links = cruzar(facs, tickets);
+    const martes = flagsDeseadas({ tickets, links, facturas: facs, hoyGye: "2026-11-17", importadoGye: "2026-11-17" });
+    assert.equal(martes.some((f) => f.ticket_id === 1880 && f.kind === "sinfac"), false);
+    assert.equal(martes.some((f) => f.ticket_id === 1890 && f.kind === "sinfac"), false); // el 17 aún no cierra el 17
+    const mie = flagsDeseadas({ tickets, links, facturas: facs, hoyGye: "2026-11-18", importadoGye: "2026-11-18" });
+    assert.equal(mie.some((f) => f.ticket_id === 1880 && f.kind === "sinfac"), true);
+    assert.equal(mie.some((f) => f.ticket_id === 1890 && f.kind === "sinfac"), true);
   });
   it("amarillo: voucher de tarjeta o foto de transferencia; efectivo no; ya no pide número de factura", () => {
     const rTar = { timestamp: "2026-11-17T16:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
@@ -108,6 +147,16 @@ describe("API migo_importar / migo_cuadre_hora", () => {
     const paola = flags2.find((f) => String(f.id) === "migo:1902:sinfac")!;
     assert.equal(paola.resuelto, true);
     assert.equal(flags2.filter((f) => f.ticket_id === 1820 && f.resuelto !== true).length, 1);
+    const cabs = db.tables.get("beta_tickets") || [];
+    const camila = cabs.find((c) => String(c.clave).includes("1893"));
+    assert.ok(camila, "debe escribir datos beta de Camila");
+    const dCam = (camila!.datos || {}) as Row;
+    assert.equal(dCam.factura, "001-001-000002951");
+    assert.equal(dCam.forma_pago, "transferencia");
+    assert.equal((dCam.pago_migo as Row).fuente, "migo");
+    const paolaCab = cabs.find((c) => String(c.clave).includes("1902"));
+    assert.equal(((paolaCab!.datos || {}) as Row).factura, "001-001-000002960");
+    assert.equal(cabs.some((c) => String(c.clave).includes("1827")), false);
   });
 });
 
@@ -166,3 +215,17 @@ describe("borradores de factura sin ticket", () => {
 function sId(f: Row, id: string): boolean {
   return String(f.id) === id && f.resuelto !== true;
 }
+
+import { readFileSync } from "node:fs";
+describe("Historial forma de pago (TK38)", () => {
+  it("columna entre Cosmetóloga y Subtotal, pill Pagado en Migo, caché tk38", () => {
+    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    assert.match(js, /k:'fpago',t:'💳 Forma de pago'/);
+    assert.match(js, /k:'cos'[\s\S]{0,180}k:'fpago'[\s\S]{0,180}k:'sub'/);
+    assert.match(js, /Pagado en Migo/);
+    assert.match(js, /Pendiente por lunes/);
+    assert.match(js, /function _tkFormaPill/);
+    assert.match(html, /beta-screens\.js\?v=20261118tk38/);
+  });
+});

@@ -12,6 +12,7 @@ import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
 import { faltaDe, faseA, facturaCompleta } from "./tickets_beta_api.ts";
+import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -63,6 +64,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   // Datos de la beta de todos los tickets (tabla chica): factura corregida y comprobantes subidos.
   const cabsAll = await todas(ctx, "beta_tickets");
   const cabMap = new Map(cabsAll.map((c) => [s(c.clave), c]));
+  const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
+  const factByFac = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [s(f.factura), f]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
   // El comprobante de la hoja vive en orig: solo para los que parecen sin comprobante se lee orig (pocos).
   const sinComp = L.filter((r) => faltaDe(r, datosDe(r)).length > 0).map((r) => n(r.id)).filter(Boolean);
@@ -113,11 +116,19 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const g = r.agendado === true || s(r.agendado).toLowerCase() === "true";
     const ret = s(d.retorno || s(r.fecha_retorno).slice(0, 10));
     const fl = flags.filter((x) => n(x.ticket_id) === n(r.id) || s(x.ticket_clave) === clave);
+    const cob = r.cob === true || s(r.cob).toLowerCase() === "true";
+    const Lnk = linkByTk.get(n(r.id));
+    const inv = Lnk ? factByFac.get(s(Lnk.factura)) : undefined;
+    const facTxt = s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(Lnk?.factura);
+    const formaMigo = s(inv?.forma) || (d.pago_migo && typeof d.pago_migo === "object" ? s((d.pago_migo as Row).forma) : "");
     it.led = {
-      a: faseA(r) ? 1 : 0, p: r.cob === true || s(r.cob).toLowerCase() === "true" ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
+      a: faseA(r) ? 1 : 0, p: cob ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && it.anulado !== true && YMD.test(ret) && ret <= addD(hoy, 7) && ret >= addD(hoy, -60) ? 1 : 0,
       ...(fl.length ? { flag: fl.map((x) => s(x.motivo) + (x.factura ? " · factura " + s(x.factura) : "")).join(" / ") } : {}),
-      factura: s(d.factura) || (Number(s(r.fac_7)) > 0 ? facturaCompleta(r.fac_7) : ""),
+      factura: facturaCompleta(facTxt),
+      ...(formaDeTicket(r, d, formaMigo) ? { forma: formaDeTicket(r, d, formaMigo) } : {}),
+      ...(!cob && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
+      ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),
     };
     return it;

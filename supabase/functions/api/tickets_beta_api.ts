@@ -562,6 +562,7 @@ extend("tk_estados", "any", async (_p, ctx, ses) => {
   const envS = new Set<string>(), envCF = new Set<string>();
   for (const e of await todas(ctx, "envios_tarjetas")) { envS.add(s(e.clave)); envCF.add(s(e.cedula).split(".")[0] + "|" + ymdUtc(e.fecha_del_ticket)); }
   const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const hoy = new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
   const citas = await citasRango(ctx, addDaysYmd(hoy, -30), addDaysYmd(hoy, 90), { ms: 600000 });
   const conAcuity = Array.isArray(citas);
@@ -579,7 +580,9 @@ extend("tk_estados", "any", async (_p, ctx, ses) => {
       a: faseA(r) ? 1 : 0, p: b(r.cob) ? 1 : 0, r: rep ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && orig.anulado !== true && /^\d{4}-\d{2}-\d{2}$/.test(ret) && ret <= addDaysYmd(hoy, 7) && ret >= addDaysYmd(hoy, -60) ? 1 : 0,
       ...(fl.length ? { flag: fl.map((x) => s(x.motivo) + (x.factura ? " · factura " + s(x.factura) : "")).join(" / ") } : {}),
-      ...(d.factura ? { factura: s(d.factura) } : {}),
+      ...((s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(linkByTk.get(n(r.id))?.factura))
+        ? { factura: facturaCompleta(s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(linkByTk.get(n(r.id))?.factura)) }
+        : {}),
     };
   }
   return { ok: true, items, acuity: conAcuity, hoy };
