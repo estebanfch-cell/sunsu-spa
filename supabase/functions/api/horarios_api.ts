@@ -178,19 +178,10 @@ export async function guardarHorario(ctx: Ctx, ses: Ses, h: Horario): Promise<vo
 }
 
 async function personasDe(ctx: Ctx): Promise<{ nombre: string; rol: string }[]> {
-  const out: { nombre: string; rol: string }[] = [];
-  const vistos = new Set<string>();
-  const baja = await bajasDe(ctx.db);
-  const sumar = (nombre: string, rol: string) => {
-    const nomb = s(nombre);
-    if (!nomb || vistos.has(nomb) || baja(nomb)) return;
-    vistos.add(nomb);
-    out.push({ nombre: nomb, rol: normalizarRol(rol || "") });
-  };
-  for (const u of await todas(ctx, "app_usuarios")) sumar(s(u.nombre || u.name), s(u.rol));
-  for (const u of await todas(ctx, "usuarios")) sumar(s(u.nombre || u.name), s(u.rol));
-  for (const e of await todas(ctx, "rrhh_empleadas")) sumar(s(e.nombre_app || e.nombre), "");
-  return out;
+  const { personasUnicas } = await import("./personas_unir.ts");
+  return (await personasUnicas(ctx, { incluirAdmin: true })).map((p) => ({
+    nombre: p.nombre, rol: normalizarRol(p.rol || ""),
+  }));
 }
 
 function marcajesDe(rows: Row[], nombre: string): MarcajeIn[] {

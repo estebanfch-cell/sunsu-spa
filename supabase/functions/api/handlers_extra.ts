@@ -437,8 +437,10 @@ extend("getPagoConfig", "any", async (_p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin configura los pagos" };
   const emps = await ctx.db.all("rrhh_empleadas");
   const configs = await pagoFilas(ctx);
+  const { preferirNombreCorto, aliasesDe } = await import("./personas_unir.ts");
+  const aliasesPago = await aliasesDe(ctx);
   const personas = emps.filter((e) => s(e.nombre_app) || s(e.apellidos_y_nombres)).map((e) => ({
-    nombre: s(e.nombre_app) || s(e.apellidos_y_nombres),
+    nombre: preferirNombreCorto([s(e.nombre_app), s(e.nombre_jibble), s(e.apellidos_y_nombres)], aliasesPago),
     cedula: s(e.cedula),
     sueldo: dineroDe(e, ["sueldo_base", "sueldo", "sueldo_mensual"]),
     bono: dineroDe(e, ["bono_fijo", "bono"]),
@@ -513,7 +515,10 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const emps = await ctx.db.all("rrhh_empleadas");
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));
-  const personas = emps.map((e) => s(e.nombre_app) || s(e.apellidos_y_nombres)).filter((nombre) => nombre && !nombreEsAdmin(nombre, admins));
+  const { personasUnicas, mismaPersonaNombre } = await import("./personas_unir.ts");
+  const personas = (await personasUnicas(ctx, { incluirAdmin: false }))
+    .map((x) => x.nombre)
+    .filter((nombre) => nombre && !nombreEsAdmin(nombre, admins));
   let persona = s(p.persona || p.nombre);
   if (!esAdmin(ses.rol)) persona = ses.name;
   if (!persona || nombreEsAdmin(persona, admins)) persona = personas[0] || ses.name;

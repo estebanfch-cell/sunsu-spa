@@ -829,6 +829,8 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   }
 
   if (action === "getUsuarios") {
+    const { nombreMostrar, aliasesDe } = await import("./personas_unir.ts");
+    const aliasesU = await aliasesDe(ctx);
     const marcasU = await ctx.db.all("cosmetologas").catch(() => [] as R[]);
     const conMarca = (id: unknown, nombre: unknown, base: R) => {
       const mk = marcasU.find((m) => String(m.id) === String(id) || normNombre(s(m.nombre)) === normNombre(s(nombre)));
@@ -844,15 +846,19 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
       const incluir = p && (p.incluir_inactivos === true || p.incluir_inactivos === "1");
       return app.filter((raw) => incluir || raw.activo !== false).map((raw) => {
         const u = cuenta(raw);
-        return conMarca(u.id, u.nombre, {
+        const pub = conMarca(u.id, u.nombre, {
           id: u.id, name: u.nombre, short: u.short, role: normalizarRol(s(u.rol)),
           color: u.color, bloqueado: !!u.bloqueado, pinReset: !!u.pin_reset,
           activo: raw.activo !== false,
         });
+        return { ...pub, name: nombreMostrar(s(pub.name), aliasesU) };
       });
     }
     await ensureUsers(ctx.db, "sistema");
-    return (await ctx.db.all("usuarios")).map((u) => conMarca(u.id, u.nombre, publico(u)));
+    return (await ctx.db.all("usuarios")).map((u) => {
+      const pub = conMarca(u.id, u.nombre, publico(u));
+      return { ...pub, name: nombreMostrar(s(pub.name), aliasesU) };
+    });
   }
   if (action === "usuarioBloqueado") {
     const app = (await ctx.db.all("app_usuarios")).map(cuenta);
@@ -2155,7 +2161,8 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
     det.comFac = !mk || mk.comFac !== false;
     return det;
   };
-  const lista = [...personas.values()];
+  const { unirPersonas, aliasesDe } = await import("./personas_unir.ts");
+  const lista = unirPersonas([...personas.values()].map((nombre) => ({ nombre })), await aliasesDe(ctx)).map((x) => x.nombre);
   const pideTodas = esAdmin(ses.rol) && (s(p.persona) === "Todas" || s(p.persona) === "*");
   if (pideTodas) {
     const equipo = lista.map((nombre) => {
