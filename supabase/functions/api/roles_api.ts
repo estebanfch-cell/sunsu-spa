@@ -96,6 +96,8 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
     arr.push(r);
     porPeriodo.set(clave, arr);
   }
+  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
+  const { afiliadaSegunOverlay } = await import("./empleados_api.ts");
   const anioFiltro = n(p.anio) || 0;
   const items: Row[] = [];
   for (const [periodo, filas] of porPeriodo) {
@@ -107,6 +109,7 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
       if (!admin && !pub) continue;
       if (!admin && !esPropio(persona, ses) && !esPropio(s(r.nombre_app), ses)) continue;
       if (admin && s(p.persona) && !mismoNombre(persona, s(p.persona))) continue;
+      if (!afiliadaSegunOverlay(overlays, persona)) continue;
       items.push({
         periodo, etiqueta: etiquetaPeriodo(periodo), anio,
         persona, cedula: s(r.cedula),
@@ -155,6 +158,8 @@ export async function exigirRolPublicado(ctx: Ctx, ses: Ses, periodo: string, pe
 extend("getRoles", "any", async (_p, ctx, ses) => {
   const pubs = await pubsDe(ctx);
   const hist = await ctx.db.all("rrhh_historial");
+  const overlaysGet = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
+  const { afiliadaSegunOverlay } = await import("./empleados_api.ts");
   const meses = new Map<string, Row>();
   const admin = esAdmin(ses.rol);
   for (const r of hist) {
@@ -163,6 +168,7 @@ extend("getRoles", "any", async (_p, ctx, ses) => {
     const pub = estaPublicado(pubs, periodo, s(r.empleada));
     if (!admin && !pub) continue;
     if (!admin && !esPropio(s(r.empleada), ses)) continue;
+    if (!afiliadaSegunOverlay(overlaysGet || [], s(r.empleada))) continue;
     const g = meses.get(periodo) || { mes: s(r.mes), anio: r.ano, empleadas: [], sheetName: periodo, publicado: pub };
     (g.empleadas as Row[]).push({
       nombre: s(r.empleada), cedula: s(r.cedula), sueldo: n(r.sueldo), bono: n(r.bono), comisiones: n(r.comisiones),

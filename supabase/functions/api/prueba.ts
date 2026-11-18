@@ -24,6 +24,7 @@ const TABLAS = [
   "app_archivos", "cabina_ordenes", "roles_aprobados", "historial_comisiones",
   "erp_stock", "erp_oc_pagos", "erp_consignacion_cierre",
   "erp_conteo_secciones", "erp_conteo_items",
+  "beta_empleados", "beta_iess_descuentos", "beta_empleado_docs",
 ];
 
 function round4(x: number): number {
@@ -126,8 +127,8 @@ export class VistaDb implements Db {
     if (!this.on) return this.inner.write(actor, table, op, match, row);
     // Tablas sin columna 'origin': una escritura de prueba quedaría como REAL. No se tocan.
     if (SIN_ORIGIN.has(table)) return { ...(row || {}), origin: "test" };
-    // Tablas beta_* no tienen origin: antes fallaba con un error críptico. Se avisa claro.
-    if (table.startsWith("beta_")) throw new Error("Estás en Modo prueba: este cambio no se guarda. Sal de Modo prueba y vuelve a intentarlo.");
+    // La mayoría de beta_* se bloqueaban porque no tenían origin. Las que sí están en TABLAS (p. ej. ficha de empleadas) se escriben con origin=test.
+    if (table.startsWith("beta_") && !TABLAS.includes(table)) throw new Error("Estás en Modo prueba: este cambio no se guarda. Sal de Modo prueba y vuelve a intentarlo.");
     if (table === "erp_stock") {
       if (op === "delete") throw new Error("Modo prueba no borra datos reales");
       return { ...(row || {}), origin: "test" };

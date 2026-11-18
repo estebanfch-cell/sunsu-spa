@@ -15457,7 +15457,8 @@ function _lineasRol(d){
     ['Aporte IESS (9.45%)', d.iess],
     ['Anticipo de sueldo', d.anticipo],
     ['Préstamo hipotecario', d.prestHip],
-    ['Préstamo quirografario', d.prestQuir]
+    ['Préstamo quirografario', d.prestQuir],
+    ['Otros descuentos IESS', d.prestOtro || d.sandalo]
   ];
   multas.forEach(function(m){
     egresos.push([((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:'')), m.monto]);

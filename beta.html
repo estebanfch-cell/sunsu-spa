@@ -177,8 +177,30 @@
   .aviso-reloj[hidden] { display: none !important; }
   .aviso-reloj.entrada { background: #E7F6EE; }
   .aviso-reloj.salida { background: #FDECEC; }
-  .hor-dia { display: grid; grid-template-columns: 92px 28px 1fr 1fr; gap: 6px; align-items: center; margin: 0 0 6px; }
+  .hor-dia { display: grid; grid-template-columns: 70px 22px 1fr 1fr; gap: 4px; align-items: center; margin: 0 0 4px; font-size: 0.82rem; }
   .hor-dia input[type="checkbox"] { width: auto; }
+  .hor-editor-compact input, .hor-editor-compact select, .emp-in {
+    width: 100%; min-height: 34px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--line, #ddd); border-radius: 8px;
+  }
+  .hor-editor-compact .btn { min-height: 34px; padding: 6px 12px; font-size: 0.8rem; }
+  .emp-ficha h1, .emp-nombre { font-size: 1.15rem; margin: 0 0 10px; }
+  .emp-sec { margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--line, #eee); border-radius: 12px; background: #fff; }
+  .emp-sec h2 { font-size: 0.92rem; margin: 0 0 8px; }
+  .emp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 12px; margin: 0 0 10px; }
+  .emp-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+  .emp-k { color: var(--muted, #667); font-size: 0.75rem; font-weight: 700; min-width: 9.5rem; }
+  .emp-si-no { display: inline-flex; gap: 4px; }
+  .emp-chip { border: 1px solid var(--gold-m, #e8c07a); background: #fff; color: var(--navy-d, #1a2744); border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: 0.75rem; min-height: 30px; cursor: pointer; }
+  .emp-chip.on { background: var(--navy, #1a2744); color: #fff; border-color: var(--navy, #1a2744); }
+  .emp-week { max-width: 420px; }
+  .emp-hor-asig { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin: 0 0 8px; max-width: 420px; }
+  .emp-iess-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; align-items: end; margin-top: 8px; }
+  .emp-desc-row, .emp-doc { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; }
+  .emp-plantillas-lista, .emp-lista-movil { display: flex; flex-direction: column; gap: 4px; }
+  .emp-plantilla, .emp-li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 1px solid #eee; background: #fff; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+  .emp-file { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 700; margin-top: 8px; }
+  .emp-oc-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .emp-save-hint { font-size: 0.75rem; }
   .btn-vista {
     background: transparent; color: var(--gold-m); border: 1px solid rgba(232,192,122,0.85);
     border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 0.72rem; white-space: nowrap;
@@ -1700,7 +1722,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "inventario" && !route.sub) return "Inventario";
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
-  if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
+  if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios", empleados: "Empleados" }[route.sub] || "Personal");
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id === "nueva" ? "Nueva gift card" : route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
   if (route.mod === "cotizaciones_cliente") return route.id ? "Cotización" : "Cotizaciones";
@@ -1806,7 +1828,7 @@ function gruposVisibles() {
     personal.push(["asistencia", etiquetaMia("Mi asistencia"), "#/m/personal/asistencia"]);
     personal.push(["asistencia", "Permisos y vacaciones", "#/m/personal/permisos"]);
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
-    if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
+    if (state.admin) personal.push(["asistencia", "Empleados", "#/m/personal/empleados"]);
   }
   if (personal.length) out.push({ id: "personal", label: "👤 Personal", items: personal });
   const gift = [];
@@ -2411,6 +2433,10 @@ async function draw() {
     }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
     if (route.kind === "mod" && route.mod === "inicio" && !state.admin && window.MCStaffHome) window.MCStaffHome.wire(main, route);
+    if (route.kind === "mod" && route.mod === "personal" && route.sub === "empleados" && window.MCEmpleados) {
+      if (window.MCMaestro && document.getElementById("ss-md-empleados")) await window.MCMaestro.after("empleados", main, route);
+      else window.MCEmpleados.wire(main, route);
+    }
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
@@ -3935,7 +3961,7 @@ function htmlEditorHorario(h) {
     return `<div class="hor-dia" data-dia="${esc(d.dia)}"><span>${esc(label)}</span><input type="checkbox" data-trabaja ${d.trabaja ? "checked" : ""}><input data-desde type="time" value="${esc(d.desde || "")}"><input data-hasta type="time" value="${esc(d.hasta || "")}"></div>`;
   }).join("");
   const descanso = (h.descansos || [])[0] || {};
-  return `<form id="f-horario" data-id="${esc(h.id || "")}">
+  return `<form id="f-horario" class="hor-editor-compact" data-id="${esc(h.id || "")}">
     <label>Nombre</label><input name="nombre" value="${esc(h.nombre || "")}" required>
     <label>Arreglo</label>
     <select name="arreglo" id="hor-arreglo">
@@ -3977,8 +4003,7 @@ async function renderHorarios() {
   const ixH = window.SunsuInline;
   const lista = horarios.map((h) => {
     const nombre = ixH && ixH.edita() ? ixH.campo("horarios", h.id, "nombre", h.nombre) : `<b>${esc(h.nombre)}</b>`;
-    const trash = ixH && ixH.edita() ? ixH.borrar("horarios", h.id) : "";
-    return `<div class="row"><button class="cli-row" type="button" data-hor="${esc(h.id)}"><span class="cli-main">${nombre}<span class="note">${esc(etiquetaArreglo(h.arreglo))}${h.esDefault ? " · por defecto" : ""}</span></span></button>${trash}</div>`;
+    return `<button class="emp-plantilla" type="button" data-hor="${esc(h.id)}">${nombre}<span class="note">${esc(etiquetaArreglo(h.arreglo))}${h.esDefault ? " · por defecto" : ""}</span></button>`;
   }).join("")
     || `<p class="note">Todavía no hay horarios. Jibble no se pudo leer desde este entorno, así que la lista nace vacía. Traer de Jibble los copia cuando la función tiene las credenciales. También puedes crear uno.</p>`;
   const asign = personas.map((p) => {
@@ -3986,13 +4011,11 @@ async function renderHorarios() {
     const opts = `<option value="">Por defecto</option>` + horarios.map((h) => `<option value="${esc(h.id)}"${a && a.horarioId === h.id ? " selected" : ""}>${esc(h.nombre)}</option>`).join("");
     return `<div class="row"><div class="name">${esc(p.nombre)}</div><div class="meta"><select data-asig="${esc(p.nombre)}">${opts}</select></div></div>`;
   }).join("") || `<p class="note">No hay personas en el equipo.</p>`;
-  return `<div class="tools"><button class="btn" type="button" id="hor-nuevo">Nuevo horario</button><button class="btn ghost" type="button" id="hor-jibble">Traer de Jibble</button>${ixH && ixH.edita() ? ixH.mas("horarios") : ""}</div>
+  return `<div class="emp-plantillas-tools"><button class="btn ghost small" type="button" id="hor-nuevo">Nueva plantilla</button><button class="btn ghost small" type="button" id="hor-jibble">Traer de Jibble</button></div>
+    <p class="note">La asignación de cada persona se hace en su ficha de <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Empleados</button>. Aquí solo se editan las plantillas, en línea y compactas.</p>
     <p class="err" id="hor-err"></p>
-    <div class="list" id="hor-lista">${lista}</div>
-    <div id="hor-editor"></div>
-    <h2>Asignación</h2>
-    <p class="note">Cada persona tiene un solo horario. Por defecto usa el horario marcado así. Si alguien tiene el suyo, ese gana.</p>
-    <div class="list">${asign}</div>`;
+    <div class="emp-plantillas-lista" id="hor-lista">${lista}</div>
+    <div id="hor-editor" class="hor-editor-compact"></div>`;
 }
 function leerDiasHorario(form) {
   return [...form.querySelectorAll(".hor-dia[data-dia]")].map((row, i) => {
@@ -4111,7 +4134,14 @@ async function renderPersonal(route) {
   if (route.sub === "permisos") return renderPersonalPermisos();
   if (route.sub === "multas" && window.MCMultas) return window.MCMultas.render(route);
   if (route.sub === "multas") return renderPersonalMultas();
-  if (route.sub === "horarios") return renderHorarios();
+  if (route.sub === "empleados") {
+    if (!state.admin) return `<p class="err">Solo administración ve el módulo de empleados.</p>`;
+    return window.MCEmpleados ? window.MCEmpleados.render(route) : `<p class="err">No se cargó el módulo de empleados.</p>`;
+  }
+  if (route.sub === "horarios") {
+    if (state.admin) return `<p class="note">Los horarios viven ahora en la ficha de cada persona, en <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Personal › Empleados</button>. Ahí se asignan y se editan en línea, sin lápiz.</p>` + (await renderHorarios());
+    return renderHorarios();
+  }
   return renderAsistencia();
 }
 async function renderPersonalComisiones() {
@@ -6127,38 +6157,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk72"></script>
-<script src="beta-screens.js?v=20261118tk72"></script>
-<script src="beta-inline.js?v=20261118tk72"></script>
-<script src="mc-productos.js?v=20261118tk72"></script>
-<script src="mc-nav.js?v=20261118tk72"></script>
-<script src="mc-permisos.js?v=20261118tk72"></script>
-<script src="mc-protocolos.js?v=20261118tk72"></script>
-<script src="mc-conteo.js?v=20261118tk72"></script>
-<script src="mc-transferencias.js?v=20261118tk72"></script>
-<script src="mc-ajustes.js?v=20261118tk72"></script>
-<script src="vendor-qrcode.js?v=20261118tk72"></script>
-<script src="mc-tickets.js?v=20261118tk72"></script>
-<script src="mc-maestro.js?v=20261118tk72"></script>
-<script src="mc-edit.js?v=20261118tk72"></script>
-<script src="mc-paquetes.js?v=20261118tk72"></script>
-<script src="mc-aperturas.js?v=20261118tk72"></script>
-<script src="mc-acceso.js?v=20261118tk72"></script>
-<script src="mc-barras.js?v=20261118tk72"></script>
-<script src="mc-caja.js?v=20261118tk72"></script>
-<script src="mc-giftcards.js?v=20261118tk72"></script>
-<script src="mc-multas.js?v=20261118tk72"></script>
-<script src="mc-clientes.js?v=20261118tk72"></script>
-<script src="mc-clientes-dup.js?v=20261118tk72"></script>
-<script src="mc-docpdf.js?v=20261118tk72"></script>
-<script src="mc-compras.js?v=20261118tk72"></script>
-<script src="mc-consignacion.js?v=20261118tk72"></script>
-<script src="mc-proveedores.js?v=20261118tk72"></script>
-<script src="mc-recepciones.js?v=20261118tk72"></script>
-<script src="mc-movil.js?v=20261118tk72"></script>
-<script src="mc-promociones.js?v=20261118tk72"></script>
-<script src="mc-agenda.js?v=20261118tk72"></script>
-<script src="mc-staff-home.js?v=20261118tk72"></script>
+<script src="mc-buscar.js?v=20261118tk73"></script>
+<script src="beta-screens.js?v=20261118tk73"></script>
+<script src="beta-inline.js?v=20261118tk73"></script>
+<script src="mc-productos.js?v=20261118tk73"></script>
+<script src="mc-nav.js?v=20261118tk73"></script>
+<script src="mc-permisos.js?v=20261118tk73"></script>
+<script src="mc-protocolos.js?v=20261118tk73"></script>
+<script src="mc-conteo.js?v=20261118tk73"></script>
+<script src="mc-transferencias.js?v=20261118tk73"></script>
+<script src="mc-ajustes.js?v=20261118tk73"></script>
+<script src="vendor-qrcode.js?v=20261118tk73"></script>
+<script src="mc-tickets.js?v=20261118tk73"></script>
+<script src="mc-maestro.js?v=20261118tk73"></script>
+<script src="mc-empleados.js?v=20261118tk73"></script>
+<script src="mc-edit.js?v=20261118tk73"></script>
+<script src="mc-paquetes.js?v=20261118tk73"></script>
+<script src="mc-aperturas.js?v=20261118tk73"></script>
+<script src="mc-acceso.js?v=20261118tk73"></script>
+<script src="mc-barras.js?v=20261118tk73"></script>
+<script src="mc-caja.js?v=20261118tk73"></script>
+<script src="mc-giftcards.js?v=20261118tk73"></script>
+<script src="mc-multas.js?v=20261118tk73"></script>
+<script src="mc-clientes.js?v=20261118tk73"></script>
+<script src="mc-clientes-dup.js?v=20261118tk73"></script>
+<script src="mc-docpdf.js?v=20261118tk73"></script>
+<script src="mc-compras.js?v=20261118tk73"></script>
+<script src="mc-consignacion.js?v=20261118tk73"></script>
+<script src="mc-proveedores.js?v=20261118tk73"></script>
+<script src="mc-recepciones.js?v=20261118tk73"></script>
+<script src="mc-movil.js?v=20261118tk73"></script>
+<script src="mc-promociones.js?v=20261118tk73"></script>
+<script src="mc-agenda.js?v=20261118tk73"></script>
+<script src="mc-staff-home.js?v=20261118tk73"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.

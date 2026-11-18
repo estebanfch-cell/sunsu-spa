@@ -37,7 +37,9 @@ extend("personal_personas", "any", async (_p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, cedula: "" }] };
   const nombres = new Map<string, { nombre: string; cedula: string }>();
   const baja = await bajasDe(ctx.db);
+  const { esFilaNotasRrhh } = await import("./empleados_api.ts");
   for (const r of await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[])) {
+    if (esFilaNotasRrhh(r)) continue;
     const nombre = s(r.nombre_app) || s(r.apellidos_y_nombres);
     if (baja(nombre) || baja(s(r.cedula)) || baja(s(r.nombre_jibble))) continue;
     if (nombre && !nombres.has(normNombre(nombre))) nombres.set(normNombre(nombre), { nombre, cedula: s(r.cedula) });
