@@ -22,7 +22,7 @@ export const TIPOS_REGLA = ["pct", "monto", "precio", "nxm"] as const;
 export const ALCANCES = ["codigos", "combo", "marca", "categoria", "tipo", "todo"] as const;
 
 export interface Regla { tipo: string; alcance: string; codigos: string[]; marca?: string; categoria?: string; tipoLinea?: string; valor: number; valor2?: number; min?: number; por?: string; etiqueta?: string }
-export interface PromoB { id: string; nombre: string; desde: string; hasta: string; activa: boolean; reglas: Regla[]; origen: string; sheet_row?: number | null; notas?: string }
+export interface PromoB { id: string; nombre: string; desde: string; hasta: string; activa: boolean; reglas: Regla[]; origen: string; sheet_row?: number | null; sheet_filas?: number[]; grupo?: string; notas?: string }
 export interface LineaP { k: string; sku: string; nombre?: string; tipo?: string; cantidad: number; bruto: number; marca?: string; categoria?: string }
 
 function hoyEc(ctx: Ctx): string { return new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10); }
@@ -138,26 +138,45 @@ export function aplicarPromos(promos: PromoB[], lineas: LineaP[], nombreDe: (c: 
   return { aplicadas, noAplican, lineas: L, bruto, descuento: desc, total: round2(bruto - desc) };
 }
 
-/** Promo de la hoja (sistema viejo) → promo de la beta con una regla, con la MISMA regla de cálculo de allá. */
+/** Promo de la hoja (sistema viejo) → promo de la beta con una regla, con la MISMA regla de cálculo de allá.
+ *  Columnas nuevas (18/11): K GRUPO (varias filas = una promo), L MIN (unidades sumando sus códigos), M POR (UNIDAD = $ c/u). */
 export function promoDeHoja(r: Row): PromoB | null {
   const nombre = s(r.nombre).trim(); if (!nombre) return null;
+  const o = (r.orig && typeof r.orig === "object" ? r.orig : {}) as Row;
+  const grupo = s(r.grupo ?? o.GRUPO).trim(), min = Math.max(1, Math.round(n(r.min ?? o.MIN) || 1)), porU = s(r.por_unidad ?? o.POR).trim().toUpperCase() === "UNIDAD";
   const t = s(r.tipo).toUpperCase() || "%", cods = s(r.codigos).split(",").map((x) => skuCode(x.trim())).filter(Boolean);
+  const et = grupo ? { etiqueta: nombre.slice(0, 80) } : {};
   let regla: Regla;
-  if (t === "$") regla = { tipo: "monto", alcance: cods.length ? "codigos" : "todo", codigos: cods, valor: n(r.valor), min: 1, por: "una" };
-  else if (t === "NXM") regla = { tipo: "nxm", alcance: "codigos", codigos: cods, valor: Math.round(n(r.valor)), valor2: Math.round(n(r.valor2)), min: 1 };
-  else if (t === "PACK") regla = { tipo: "precio", alcance: "codigos", codigos: cods, valor: n(r.valor), min: 1 };
-  else regla = { tipo: "pct", alcance: cods.length ? "codigos" : "todo", codigos: cods, valor: n(r.valor), min: 1 };
-  return { id: "s:" + s(r.sheet_row), nombre, desde: ymd(r.desde), hasta: ymd(r.hasta), activa: s(r.activa).toUpperCase() !== "NO" && r.activa !== false, reglas: [regla], origen: "sheet", sheet_row: n(r.sheet_row) || null };
+  if (t === "$") regla = { tipo: "monto", alcance: cods.length ? "codigos" : "todo", codigos: cods, valor: n(r.valor), min, por: porU ? "unidad" : "una", ...et };
+  else if (t === "NXM") regla = { tipo: "nxm", alcance: "codigos", codigos: cods, valor: Math.round(n(r.valor)), valor2: Math.round(n(r.valor2)), min: 1, ...et };
+  else if (t === "PACK") regla = { tipo: "precio", alcance: "codigos", codigos: cods, valor: n(r.valor), min: 1, ...et };
+  else regla = { tipo: "pct", alcance: cods.length ? "codigos" : "todo", codigos: cods, valor: n(r.valor), min: cods.length ? min : 1, ...et };
+  const fila = n(r.sheet_row) || null;
+  return { id: "s:" + s(r.sheet_row), nombre, desde: ymd(r.desde), hasta: ymd(r.hasta), activa: s(r.activa).toUpperCase() !== "NO" && r.activa !== false, reglas: [regla], origen: "sheet", sheet_row: fila, sheet_filas: fila ? [fila] : [], ...(grupo ? { grupo } : {}) };
 }
+/** Filas de la hoja con el mismo GRUPO → UNA promo con varias reglas (solo las filas activas aportan reglas). */
+export function agruparHoja(lista: PromoB[]): PromoB[] {
+  const out: PromoB[] = [], por = new Map<string, PromoB[]>();
+  for (const x of lista) { if (!x.grupo) { out.push(x); continue; } const k = norm(x.grupo); if (!por.has(k)) por.set(k, []); por.get(k)!.push(x); }
+  for (const [k, xs] of por) {
+    const act = xs.filter((x) => x.activa), base = act.length ? act : xs;
+    const des = base.map((x) => x.desde).filter(Boolean).sort(), has = base.map((x) => x.hasta).filter(Boolean).sort();
+    const filas = xs.map((x) => n(x.sheet_row)).filter((f) => f > 0).sort((a, b) => a - b);
+    out.push({ id: "s:g:" + k, nombre: xs[0].grupo!, desde: des[0] || "", hasta: has[has.length - 1] || "", activa: act.length > 0, reglas: act.flatMap((x) => x.reglas), origen: "sheet", sheet_row: filas[0] || null, sheet_filas: filas, grupo: xs[0].grupo });
+  }
+  return out;
+}
+const filasDe = (p: PromoB) => (p.sheet_filas && p.sheet_filas.length ? p.sheet_filas : p.sheet_row != null ? [n(p.sheet_row)] : []);
+async function hojaAgrupada(ctx: Ctx): Promise<PromoB[]> { return agruparHoja((await todas(ctx, "promos")).map(promoDeHoja).filter((p): p is PromoB => !!p)); }
 function promoDeFila(r: Row): PromoB {
   const reglas = (Array.isArray(r.reglas) ? r.reglas as Row[] : []).map(reglaDe).filter((x): x is Regla => typeof x !== "string");
-  return { id: s(r.id), nombre: s(r.nombre), desde: ymd(r.desde), hasta: ymd(r.hasta), activa: r.activa !== false, reglas, origen: s(r.origen) || "beta", sheet_row: r.sheet_row == null ? null : n(r.sheet_row), notas: s(r.notas) };
+  return { id: s(r.id), nombre: s(r.nombre), desde: ymd(r.desde), hasta: ymd(r.hasta), activa: r.activa !== false, reglas, origen: s(r.origen) || "beta", sheet_row: r.sheet_row == null ? null : n(r.sheet_row), sheet_filas: Array.isArray(r.sheet_filas) ? (r.sheet_filas as unknown[]).map(n).filter((f) => f > 0) : [], notas: s(r.notas) };
 }
 /** Todas: beta + las de la hoja que todavía no se importaron. */
 export async function todasPromos(ctx: Ctx): Promise<PromoB[]> {
   const beta = (await todas(ctx, "beta_promociones")).map(promoDeFila);
-  const imp = new Set(beta.filter((p) => p.sheet_row != null).map((p) => p.sheet_row));
-  const hoja = (await todas(ctx, "promos")).map(promoDeHoja).filter((p): p is PromoB => !!p && !imp.has(p.sheet_row));
+  const imp = new Set(beta.flatMap(filasDe));
+  const hoja = (await hojaAgrupada(ctx)).filter((p) => !filasDe(p).some((f) => imp.has(f)));
   return [...beta, ...hoja];
 }
 export const vigente = (p: PromoB, hoy: string) => p.activa && !!p.desde && !!p.hasta && p.desde <= hoy && hoy <= p.hasta && p.reglas.length > 0;
@@ -220,7 +239,9 @@ extend("promo_guardar", "any", async (p, ctx, ses) => {
     return { ok: true, id };
   }
   const nid = crypto.randomUUID();
-  const sheet = id.startsWith("s:") ? n(id.slice(2)) || null : null;
+  const hs = id.startsWith("s:") ? (await hojaAgrupada(ctx)).find((x) => x.id === id) : undefined;
+  const sheet = hs ? hs.sheet_row ?? null : id.startsWith("s:") ? n(id.slice(2)) || null : null;
+  if (hs) row.sheet_filas = filasDe(hs);
   await ctx.db.write(actor, "beta_promociones", "insert", {}, { id: nid, ...row, origen: sheet ? "sheet" : "beta", sheet_row: sheet, creado_por: actor, created_at: now, historial: [{ fecha: now, actor, accion: sheet ? "importada del sistema" : "creada" }] });
   return { ok: true, id: nid };
 });
@@ -240,11 +261,11 @@ extend("promo_importar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
   if (!(await hay(ctx))) return { error: FALTA };
   const hoy = hoyEc(ctx), soloVig = p.todas !== true;
-  const ya = new Set((await todas(ctx, "beta_promociones")).filter((r) => r.sheet_row != null).map((r) => n(r.sheet_row)));
-  const hoja = (await todas(ctx, "promos")).map(promoDeHoja).filter((x): x is PromoB => !!x && !ya.has(n(x.sheet_row)) && (!soloVig || vigente(x, hoy)));
+  const ya = new Set((await todas(ctx, "beta_promociones")).map(promoDeFila).flatMap(filasDe));
+  const hoja = (await hojaAgrupada(ctx)).filter((x) => !filasDe(x).some((f) => ya.has(f)) && (!soloVig || vigente(x, hoy)));
   const actor = actorOf(ses), now = ctx.now.toISOString();
   for (const x of hoja) {
-    await ctx.db.write(actor, "beta_promociones", "insert", {}, { id: crypto.randomUUID(), nombre: x.nombre, desde: x.desde || hoy, hasta: x.hasta || hoy, activa: x.activa, reglas: x.reglas, origen: "sheet", sheet_row: x.sheet_row, creado_por: actor, created_at: now, updated_at: now, historial: [{ fecha: now, actor, accion: "importada del sistema" }] });
+    await ctx.db.write(actor, "beta_promociones", "insert", {}, { id: crypto.randomUUID(), nombre: x.nombre, desde: x.desde || hoy, hasta: x.hasta || hoy, activa: x.activa, reglas: x.reglas, origen: "sheet", sheet_row: x.sheet_row, sheet_filas: filasDe(x), creado_por: actor, created_at: now, updated_at: now, historial: [{ fecha: now, actor, accion: "importada del sistema" }] });
   }
   return { ok: true, importadas: hoja.length };
 });
