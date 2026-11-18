@@ -131,7 +131,7 @@ describe("TK78 Configuración general no se corta por </script>", () => {
       return { ok: true, faciales: [], base: [], extra: [], recepcion: [], tramos: [], productos: [] };
     };
     const fn = new Function(
-      "state", "api", "esc", "cfgLinea", "window", "fail", "htmlPagoConfig", "htmlAsisConfig",
+      "state", "api", "esc", "cfgLinea", "window", "fail", "htmlPagoConfig", "htmlAsisConfig", "htmlCfgJump",
       src + "\n; return renderConfiguracion;",
     );
     const render = fn(
@@ -143,6 +143,7 @@ describe("TK78 Configuración general no se corta por </script>", () => {
       (d: { error?: string }) => `<p class="err">${d && d.error ? d.error : ""}</p>`,
       async () => `<p>pago</p>`,
       async () => `<p>asis</p>`,
+      () => "",
     ) as () => Promise<string>;
     const out = await render();
     assert.equal(out.includes("async function"), false, out.slice(0, 400));

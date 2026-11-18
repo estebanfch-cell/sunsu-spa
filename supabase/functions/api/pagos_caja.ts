@@ -4,7 +4,7 @@
 import { n, repartirPagos, round2, s, saldoPendiente, type Row } from "./domain.ts";
 
 export const METODOS = ["efectivo", "tarjeta", "transferencia", "deuna", "gift_card", "otro"] as const;
-export const ETQ_METODO: Record<string, string> = { efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia", deuna: "DeUna", gift_card: "Gift card", otro: "Otro", canje: "Canje (paquete/gift)", cortesía: "Cortesía", corte: "Corte", "gift card": "Gift card", mixto: "Varios métodos", sin: "Sin método" };
+export const ETQ_METODO: Record<string, string> = { efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia", deuna: "DeUna", gift_card: "Gift card", otro: "Método no registrado", canje: "Canje (paquete/gift)", cortesía: "Cortesía", corte: "Método no registrado", "gift card": "Gift card", mixto: "Varios métodos", sin: "Método no registrado", no_registrado: "Método no registrado" };
 /** Tipos de movimiento: los que sacan plata de la caja (salida) y los que la meten (entrada). */
 export const SALEN = new Set(["gasto", "deposito", "propina_pago"]);
 export const ENTRAN = new Set(["ingreso", "propina_entrada"]);
@@ -73,35 +73,118 @@ export function estadoCobro(o: { cobrado: boolean; cobradoMonto: number; totalLi
   return { total, cobrado, pagadoSis, pagadoBeta, pagado, saldo, redondeo, dif };
 }
 
+const METODOS_PAGO = new Set(["efectivo", "tarjeta", "transferencia", "deuna", "gift_card", "gift card", "canje", "cortesía", "cortesia", "mixto"]);
+/** Métodos de cobro reales. «Corte» u otro texto suelto no se adivina: se muestra «Método no registrado». */
+export function esMetodoPago(m: unknown): boolean {
+  return METODOS_PAGO.has(s(m).toLowerCase());
+}
+export function metodoVisible(m: unknown): string {
+  const x = s(m).toLowerCase();
+  return esMetodoPago(x) ? (x === "cortesia" ? "cortesía" : x === "gift card" ? "gift_card" : x) : "no_registrado";
+}
+/** En el sheet, Tarje:950 y Trans:59585784 son vouchers; Efect:40.33 es el monto en efectivo. */
+export function esVoucherPago(num: number, total: number, metodo?: string): boolean {
+  if (!Number.isFinite(num) || !(num > 0)) return false;
+  const met = s(metodo).toLowerCase();
+  if (met === "tarjeta") return true;
+  if (met === "transferencia") return Number.isInteger(num) || num > round2(total) + 0.05;
+  if (met === "efectivo") return num > round2(total) + 0.05;
+  return num > round2(total) + 0.05;
+}
+
+function filaPago(base: Row, metodo: string, m: number, ref: string): Row {
+  const met = metodoVisible(metodo);
+  return { ...base, metodo: met, monto: round2(m), ref: s(ref), nombre: ETQ_METODO[met] || "Método no registrado" };
+}
+
+/** Formas de pago de Migo (`formas_pago: [{forma, valor}]`) si suman cerca del total. */
+export function filasDesdeMigo(formas: Row[] | undefined, total: number, fecha?: string, comps?: Row[]): Row[] {
+  if (!formas || !formas.length) return [];
+  const base = { fuente: "sistema", fecha: fecha || "", registrado_por: "Sistema anterior" };
+  const rows: Row[] = [];
+  for (const f of formas) {
+    const met = metodoVisible(f.forma || f.metodo);
+    const amt = round2(n(f.valor ?? f.monto));
+    if (!(amt > 0)) continue;
+    const ref = s(f.ref) || s((comps || []).find((c) => metodoVisible(c.metodo) === met && esVoucherPago(Number(s(c.ref).replace(",", ".")), total, met))?.ref);
+    rows.push(filaPago(base, met, amt, ref));
+  }
+  const sum = round2(rows.reduce((a, x) => a + n(x.monto), 0));
+  if (!rows.length || (rows.length === 1 && rows[0].metodo === "no_registrado")) return [];
+  if (Math.abs(sum - round2(total)) > Math.max(0.05, round2(total) * 0.02) && rows.length > 1) return [];
+  return rows;
+}
+
+/** Reparte un mixto: un valor ≤ total es monto; uno mayor (voucher / id de transferencia) se deja como referencia y el resto va a ese método. */
+export function repartirMixto(comp: unknown, total: number): Row[] | null {
+  const T = round2(total);
+  const money = metodosPago(comp).map((m) => ({ ...m, metodo: metodoVisible(m.metodo) }))
+    .filter((m) => m.metodo !== "canje" && m.metodo !== "cortesía" && m.metodo !== "no_registrado");
+  if (money.length < 2) return null;
+  const parsed = money.map((m) => {
+    const raw = s(m.ref).replace(",", ".");
+    const num = raw && Number.isFinite(Number(raw)) ? Number(raw) : NaN;
+    const esMonto = Number.isFinite(num) && num > 0 && !esVoucherPago(num, T, s(m.metodo));
+    return { metodo: s(m.metodo), ref: s(m.ref), num, esMonto };
+  });
+  const mon = parsed.filter((p) => p.esMonto);
+  const vou = parsed.filter((p) => !p.esMonto);
+  const base: Row[] = [];
+  if (mon.length >= 2 && Math.abs(round2(mon.reduce((a, p) => a + p.num, 0)) - T) <= 0.05) {
+    return mon.map((p) => ({ metodo: p.metodo, monto: round2(p.num), ref: "" }));
+  }
+  if (mon.length === 1 && vou.length >= 1) {
+    const amt = round2(mon[0].num);
+    const resto = round2(T - amt);
+    if (resto >= -0.009) {
+      if (amt > 0) base.push({ metodo: mon[0].metodo, monto: amt, ref: "" });
+      if (resto > 0.009) {
+        if (vou.length === 1) base.push({ metodo: vou[0].metodo, monto: resto, ref: vou[0].ref });
+        else return null;
+      }
+      return base.length ? base : null;
+    }
+  }
+  return null;
+}
+
 /** Filas de pago del sistema anterior, con el método y voucher reales (no un texto suelto). */
-export function filasPagoLegado(comp: unknown, monto: number, fecha?: string): Row[] {
+export function filasPagoLegado(comp: unknown, monto: number, fecha?: string, formasMigo?: Row[]): Row[] {
   const total = round2(n(monto));
   if (!(total > 0)) return [];
   const base = { fuente: "sistema", fecha: fecha || "", registrado_por: "Sistema anterior" };
+  const fila = (metodo: string, m: number, ref: string) => filaPago(base, metodo, m, ref);
+  const deMigo = filasDesdeMigo(formasMigo, total, fecha, metodosPago(comp));
+  if (deMigo.length) return deMigo;
   const ms = metodosPago(comp);
-  const money = ms.filter((m) => m.metodo !== "canje" && m.metodo !== "cortesía");
-  const fila = (metodo: string, m: number, ref: string): Row => ({ ...base, metodo, monto: round2(m), ref: s(ref), nombre: ETQ_METODO[metodo] || metodo });
-  if (!money.length) {
-    const m0 = ms[0];
-    return [fila(s(m0?.metodo) || "otro", total, s(m0?.ref))];
+  const money = ms.map((m) => ({ ...m, metodo: metodoVisible(m.metodo) })).filter((m) => m.metodo !== "canje" && m.metodo !== "cortesía");
+  if (!money.length || money.every((m) => m.metodo === "no_registrado")) {
+    return [fila("no_registrado", total, s(ms[0]?.ref))];
   }
-  if (money.length === 1) return [fila(s(money[0].metodo), total, s(money[0].ref))];
+  const reales = money.filter((m) => m.metodo !== "no_registrado");
+  if (reales.length === 1) return [fila(s(reales[0].metodo), total, s(reales[0].ref))];
+  const split = repartirMixto(comp, total);
+  if (split && split.length) return split.map((x) => fila(s(x.metodo), n(x.monto), s(x.ref)));
   const parts = repartirPagos(s(comp), total);
   const keys: [string, number][] = [["efectivo", parts.efectivo], ["tarjeta", parts.tarjeta], ["transferencia", parts.transferencia]];
   const rows: Row[] = [];
   for (const [met, amt] of keys) {
-    if (amt > 0) rows.push(fila(met, amt, s(money.find((x) => x.metodo === met)?.ref)));
+    if (amt > 0) {
+      const ref0 = s(reales.find((x) => x.metodo === met)?.ref);
+      const num = Number(ref0.replace(",", "."));
+      rows.push(fila(met, amt, Number.isFinite(num) && !esVoucherPago(num, total, met) ? "" : ref0));
+    }
   }
   const cubierto = round2(rows.reduce((a, x) => a + n(x.monto), 0));
   if (parts.mixto > 0 || cubierto + 0.009 < total) {
     const resto = round2(total - cubierto);
     if (resto > 0) {
-      const ref = money.map((m) => [ETQ_METODO[s(m.metodo)] || m.metodo, m.ref].filter(Boolean).join(" ")).join(", ");
+      const ref = reales.map((m) => [ETQ_METODO[s(m.metodo)] || m.metodo, m.ref].filter(Boolean).join(" ")).join(", ");
       rows.push(fila("mixto", resto, ref || s(comp)));
     }
   }
   if (!rows.length) {
-    const ref = money.map((m) => [ETQ_METODO[s(m.metodo)] || m.metodo, m.ref].filter(Boolean).join(" ")).join(", ");
+    const ref = reales.map((m) => [ETQ_METODO[s(m.metodo)] || m.metodo, m.ref].filter(Boolean).join(" ")).join(", ");
     rows.push(fila("mixto", total, ref || s(comp)));
   }
   return rows;

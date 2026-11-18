@@ -5,8 +5,8 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./tickets_beta_api.ts";
 import "./pagos_caja_api.ts";
-import { estadoCobro, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
-import { facturaCompleta, hayFactura } from "./tickets_beta_api.ts";
+import { estadoCobro, esMetodoPago, filasPagoLegado, metodoVisible, metodosPago } from "./pagos_caja.ts";
+import { estaCobrado, facturaCompleta, hayFactura } from "./tickets_beta_api.ts";
 import type { Row } from "./domain.ts";
 
 describe("TK82 redondeo cobrado + pagos legado", () => {
@@ -117,5 +117,57 @@ describe("TK82 redondeo cobrado + pagos legado", () => {
     assert.equal(hayFactura("1639.0"), true);
     assert.equal(hayFactura("", "001-001-000001639"), true);
     assert.equal(hayFactura("1640", "SIN FACTURA"), true);
+  });
+});
+
+describe("TK83 datos: factura, mixto, método y cobrado inferido", () => {
+  it("reparte mixtos cuando un valor es monto y el otro voucher", () => {
+    const a = filasPagoLegado("Efect:40.33, Trans:59585784", 60.33);
+    assert.equal(a.length, 2);
+    const by = Object.fromEntries(a.map((x) => [x.metodo, x]));
+    assert.equal(by.efectivo.monto, 40.33);
+    assert.equal(by.transferencia.monto, 20);
+    assert.equal(by.transferencia.ref, "59585784");
+    const b = filasPagoLegado("Efect:5, Tarje:486", 65);
+    const byb = Object.fromEntries(b.map((x) => [x.metodo, x]));
+    assert.equal(byb.efectivo.monto, 5);
+    assert.equal(byb.tarjeta.monto, 60);
+    assert.equal(byb.tarjeta.ref, "486");
+    const c = filasPagoLegado("Tarje, Trans", 165);
+    assert.equal(c.length, 1);
+    assert.equal(c[0].metodo, "mixto");
+  });
+
+  it("Corte o sin método no se adivina: Método no registrado", () => {
+    const a = filasPagoLegado("Corte", 80);
+    assert.equal(a.length, 1);
+    assert.equal(a[0].metodo, "no_registrado");
+    assert.equal(a[0].nombre, "Método no registrado");
+    const b = filasPagoLegado("", 43.99);
+    assert.equal(b[0].metodo, "no_registrado");
+    assert.equal(metodoVisible("corte"), "no_registrado");
+    assert.equal(esMetodoPago("corte"), false);
+    assert.equal(esMetodoPago("tarjeta"), true);
+  });
+
+  it("ticket con factura o método, sin flag cob, se trata cobrado; SIN FACTURA no es factura", () => {
+    assert.equal(estaCobrado({ cob: false, comp: "Trans", fac_7: "1631.0", so_num: "TK-SO-0043" }), true);
+    assert.equal(estaCobrado({ cob: false, comp: "Tarje", fac_7: "1742.0", so_num: "TK-SO-0184" }), true);
+    assert.equal(estaCobrado({ cob: false, comp: "", fac_7: "1639.0", so_num: "TK-SO-0051" }), true);
+    assert.equal(estaCobrado({ cob: false, comp: "", fac_7: "SIN FACTURA", so_num: "TK-SO-1827" }), false);
+    assert.equal(estaCobrado({ cob: false, comp: "", fac_7: "", so_num: "TEST-TK-SO-0001", origin: "test", estimado: 100 }), false);
+    assert.equal(hayFactura("SIN FACTURA"), false);
+    assert.equal(hayFactura("1639.0"), true);
+  });
+
+  it("lista Ventas: pill y filtro Sin factura usan hayFactura; no el flag fac", () => {
+    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const lista = readFileSync(new URL("./tickets_lista_api.ts", import.meta.url), "utf8");
+    assert.match(js, /if\(!_tkFacFull\(t\)\)/);
+    assert.doesNotMatch(js, /if\(!t\.fac&&!\(Lx&&Lx\.factura\)\)/);
+    assert.match(js, /Método no registrado/);
+    assert.match(lista, /est === "sinfactura"\) L = L\.filter/);
+    assert.match(lista, /estaCobrado/);
+    assert.doesNotMatch(lista, /est === "sinfactura"\) F\.push/);
   });
 });
