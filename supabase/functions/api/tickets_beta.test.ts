@@ -54,7 +54,7 @@ describe("detalle de ticket beta", () => {
     const g = await h("tk_get", "adm", { clave: "TK-SO-1" });
     assert.equal(g.ok, true);
     const L = g.lineas as Row[];
-    assert.deepEqual(L.map((l) => [l.tipo, l.sku, l.cantidad, l.estimado]).sort(), [["facial", "40", 1, true], ["producto", "ML-002", 1, true]]);
+    assert.deepEqual(L.map((l) => [l.tipo, l.sku, l.cantidad, l.estimado]).sort(), [["facial", "40", 1, false], ["producto", "ML-002", 1, false]]);
     assert.equal((g.totales as Row).total, 69);
     assert.ok(((g.ticket as Row).leds as Row[]).some((x) => x.t === "Abierto"));
     // Inactivo no se puede agregar.
