@@ -1,0 +1,1180 @@
+{
+ "tabla": "beta_protocolos",
+ "exportado": "2026-11-18 (America/Guayaquil)",
+ "motivo": "TK36: respaldo antes de vaciar los pasos de los protocolos a pedido de Emilia",
+ "filas": [
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-01",
+   "mano_de_obra": "23.2",
+   "nombre": "Facial S.O.S",
+   "notas": "Migrado del Excel original",
+   "origen": "cabina",
+   "origen_version": 12,
+   "pasos": [
+    {
+     "cantidad": 1,
+     "descripcion": "Desmaquillar",
+     "minutos": 1,
+     "paso": 1,
+     "producto_cod": "INV-120",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.1,
+     "descripcion": "Desmaquillar",
+     "minutos": 1,
+     "paso": 2,
+     "producto_cod": "INV-035",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Limpieza",
+     "minutos": 1,
+     "paso": 3,
+     "producto_cod": "INV-121",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Doble limpieza",
+     "minutos": 1,
+     "paso": 4,
+     "producto_cod": "INV-121",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Toalla caliente",
+     "minutos": 3,
+     "paso": 5,
+     "producto_cod": "",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Extracción",
+     "minutos": 15,
+     "paso": 6,
+     "producto_cod": "",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Alta Frecuencia",
+     "minutos": 3,
+     "paso": 7,
+     "producto_cod": "",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Reflexología",
+     "minutos": 10,
+     "paso": 8,
+     "producto_cod": "",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Aplicar mascarilla",
+     "minutos": 10,
+     "paso": 9,
+     "producto_cod": "INV-084",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0.5,
+     "descripcion": "Aplicar sérum",
+     "minutos": 3,
+     "paso": 10,
+     "producto_cod": "INV-033",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.5,
+     "descripcion": "Aplicar crema hidratante",
+     "minutos": 3,
+     "paso": 11,
+     "producto_cod": "INV-032",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.5,
+     "descripcion": "Aplicar protector solar",
+     "minutos": 3,
+     "paso": 12,
+     "producto_cod": "INV-079",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.1,
+     "descripcion": "Aplicar contorno de ojos",
+     "minutos": 0.5,
+     "paso": 13,
+     "producto_cod": "INV-123",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.1,
+     "descripcion": "Aplicar crema de labios",
+     "minutos": 0.5,
+     "paso": 14,
+     "producto_cod": "INV-038",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 15,
+     "producto_cod": "INV-088",
+     "unidad": "unidad"
+    },
+    {
+     "cantidad": 0.1,
+     "descripcion": "Aplicar contorno de Cejas",
+     "minutos": 0,
+     "paso": 16,
+     "producto_cod": "INV-086",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 17,
+     "producto_cod": "INV-087",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 6,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 18,
+     "producto_cod": "INV-095",
+     "unidad": "unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 19,
+     "producto_cod": "INV-093",
+     "unidad": "unidad"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 20,
+     "producto_cod": "INV-091",
+     "unidad": "unidad"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Consumible",
+     "minutos": 0,
+     "paso": 21,
+     "producto_cod": "INV-094",
+     "unidad": "unidad"
+    }
+   ],
+   "sku": "SUNSU-01",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-02",
+   "mano_de_obra": null,
+   "nombre": "Facial Reparación",
+   "notas": "Migrado del Excel original",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [
+    {
+     "cantidad": 3,
+     "descripcion": "**Limpieza para usar maquina**",
+     "minutos": 2,
+     "paso": 1,
+     "producto_cod": "INV-037",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 2,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)",
+     "minutos": 30,
+     "paso": 3,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "** Aplicar solo de ser necesario**",
+     "minutos": 2,
+     "paso": 4,
+     "producto_cod": "INV-045",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 5,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Light Cleansing Oil",
+     "minutos": 2,
+     "paso": 6,
+     "producto_cod": "INV-035",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Winner Soft Face Towels",
+     "minutos": 0,
+     "paso": 7,
+     "producto_cod": "INV-061",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Bubble O2 Cleansing Mask",
+     "minutos": 2,
+     "paso": 8,
+     "producto_cod": "INV-044",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE — **Toalla caliente para abrir los poros y suavisar la piel**",
+     "minutos": 2,
+     "paso": 9,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**Se mezcla polvo de arroz con pepita de uva, y se exfolia**",
+     "minutos": 0,
+     "paso": 10,
+     "producto_cod": "INV-057",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "A.VEG. PEPITA DE UVA",
+     "minutos": 0,
+     "paso": 11,
+     "producto_cod": "INV-056",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 10,
+     "paso": 12,
+     "producto_cod": "INV-054",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "EXTRACCIÓN DE GRANOS",
+     "minutos": 4,
+     "paso": 13,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR ALTA FREQUENCIA",
+     "minutos": 2,
+     "paso": 14,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER — **Movimientos lentos sin fricción ni calor**",
+     "minutos": 10,
+     "paso": 15,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Azulene Skin Toner 1000ml",
+     "minutos": 2,
+     "paso": 16,
+     "producto_cod": "INV-043",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "PROBIOTIC SKIN BALANCING MASK",
+     "minutos": 30,
+     "paso": 17,
+     "producto_cod": "INV-055",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS — **se puede aplicar piedra caliente en corazon**",
+     "minutos": 0,
+     "paso": 18,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 50,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 0,
+     "paso": 19,
+     "producto_cod": "INV-047",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 2,
+     "paso": 20,
+     "producto_cod": "INV-053",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "NOSCA9 Trouble Serum S",
+     "minutos": 2,
+     "paso": 21,
+     "producto_cod": "INV-062",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**aplicar con booster**",
+     "minutos": 6,
+     "paso": 22,
+     "producto_cod": "INV-004",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Beauty of Joseon Revive Eye Serum",
+     "minutos": 2,
+     "paso": 23,
+     "producto_cod": "INV-029",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "INSERTAR PRODUCTO CON BOOSTER",
+     "minutos": 0,
+     "paso": 24,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0.25,
+     "descripcion": "Jojoba Lip Essence",
+     "minutos": 1,
+     "paso": 25,
+     "producto_cod": "INV-038",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Cotoneetes Tippy's Frasco",
+     "minutos": 0,
+     "paso": 26,
+     "producto_cod": "INV-060",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum",
+     "minutos": 1,
+     "paso": 27,
+     "producto_cod": "INV-031",
+     "unidad": "ml"
+    }
+   ],
+   "sku": "SUNSU-02",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-03",
+   "mano_de_obra": null,
+   "nombre": "7 Pieles (Arroz+H₂O)",
+   "notas": "Migrado del Excel original",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [
+    {
+     "cantidad": 3,
+     "descripcion": "**Limpieza para usar maquina**",
+     "minutos": 2,
+     "paso": 1,
+     "producto_cod": "INV-037",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 2,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)",
+     "minutos": 30,
+     "paso": 3,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "** Aplicar solo de ser necesario**",
+     "minutos": 2,
+     "paso": 4,
+     "producto_cod": "INV-045",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 5,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Light Cleansing Oil",
+     "minutos": 2,
+     "paso": 6,
+     "producto_cod": "INV-035",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Winner Soft Face Towels",
+     "minutos": 0,
+     "paso": 7,
+     "producto_cod": "INV-061",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Bubble O2 Cleansing Mask",
+     "minutos": 2,
+     "paso": 8,
+     "producto_cod": "INV-044",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE — **Toalla caliente para abrir los poros y suavisar la piel**",
+     "minutos": 2,
+     "paso": 9,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**Se mezcla polvo de arroz con pepita de uva, y se exfolia**",
+     "minutos": 0,
+     "paso": 10,
+     "producto_cod": "INV-057",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "A.VEG. PEPITA DE UVA",
+     "minutos": 0,
+     "paso": 11,
+     "producto_cod": "INV-056",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 10,
+     "paso": 12,
+     "producto_cod": "INV-054",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "EXTRACCIÓN DE GRANOS",
+     "minutos": 4,
+     "paso": 13,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR ALTA FREQUENCIA",
+     "minutos": 2,
+     "paso": 14,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER",
+     "minutos": 0,
+     "paso": 15,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Azulene Skin Toner 1000ml",
+     "minutos": 2,
+     "paso": 16,
+     "producto_cod": "INV-043",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "PROBIOTIC SKIN BALANCING MASK",
+     "minutos": 30,
+     "paso": 17,
+     "producto_cod": "INV-055",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS — **se puede aplicar piedra caliente en corazon**",
+     "minutos": 0,
+     "paso": 18,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 50,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 0,
+     "paso": 19,
+     "producto_cod": "INV-046",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 2,
+     "paso": 20,
+     "producto_cod": "INV-052",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "d'alba Piedmont Italian White Truffle First Spray Serum",
+     "minutos": 2,
+     "paso": 21,
+     "producto_cod": "INV-040",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**aplicar con booster**",
+     "minutos": 6,
+     "paso": 22,
+     "producto_cod": "INV-004",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "INSERTAR PRODUCTO CON BOOSTER",
+     "minutos": 0,
+     "paso": 23,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Beauty of Joseon Revive Eye Serum",
+     "minutos": 2,
+     "paso": 24,
+     "producto_cod": "INV-029",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.25,
+     "descripcion": "Jojoba Lip Essence",
+     "minutos": 1,
+     "paso": 25,
+     "producto_cod": "INV-038",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Cotoneetes Tippy's Frasco",
+     "minutos": 0,
+     "paso": 26,
+     "producto_cod": "INV-060",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum",
+     "minutos": 1,
+     "paso": 27,
+     "producto_cod": "INV-031",
+     "unidad": "ml"
+    }
+   ],
+   "sku": "SUNSU-03",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-04",
+   "mano_de_obra": null,
+   "nombre": "Facial Gold-Aging",
+   "notas": "Migrado del Excel original",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [
+    {
+     "cantidad": 3,
+     "descripcion": "**Limpieza para usar maquina**",
+     "minutos": 2,
+     "paso": 1,
+     "producto_cod": "INV-037",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 2,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)",
+     "minutos": 30,
+     "paso": 3,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "** Aplicar solo de ser necesario**",
+     "minutos": 2,
+     "paso": 4,
+     "producto_cod": "INV-045",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 5,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Light Cleansing Oil",
+     "minutos": 2,
+     "paso": 6,
+     "producto_cod": "INV-035",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Winner Soft Face Towels",
+     "minutos": 0,
+     "paso": 7,
+     "producto_cod": "INV-061",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Bubble O2 Cleansing Mask",
+     "minutos": 2,
+     "paso": 8,
+     "producto_cod": "INV-044",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "NO APLICA TOALLA CALLENTE ANTES DE EXFOLIANTE — **Toalla caliente para abrir los poros y suavisar la piel**",
+     "minutos": 2,
+     "paso": 9,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**Se mezcla polvo de arroz con pepita de uva, y se exfolia**",
+     "minutos": 0,
+     "paso": 10,
+     "producto_cod": "INV-057",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "A.VEG. PEPITA DE UVA",
+     "minutos": 0,
+     "paso": 11,
+     "producto_cod": "INV-056",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 10,
+     "paso": 12,
+     "producto_cod": "INV-054",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "EXTRACCIÓN DE GRANOS",
+     "minutos": 4,
+     "paso": 13,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR ALTA FREQUENCIA",
+     "minutos": 2,
+     "paso": 14,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER — **Movimientos lentos sin fricción ni calor**",
+     "minutos": 0,
+     "paso": 15,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Azulene Skin Toner 1000ml",
+     "minutos": 2,
+     "paso": 16,
+     "producto_cod": "INV-043",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "PROBIOTIC SKIN BALANCING MASK",
+     "minutos": 30,
+     "paso": 17,
+     "producto_cod": "INV-055",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS — **se puede aplicar piedra caliente en corazon**",
+     "minutos": 0,
+     "paso": 18,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 50,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 0,
+     "paso": 19,
+     "producto_cod": "INV-048",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 2,
+     "paso": 20,
+     "producto_cod": "INV-051",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Medicube Zero Exosome Shot 2,000 PPM Spicule Facial Serum",
+     "minutos": 2,
+     "paso": 21,
+     "producto_cod": "INV-012",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**aplicar con booster**",
+     "minutos": 6,
+     "paso": 22,
+     "producto_cod": "INV-004",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "INSERTAR PRODUCTO CON BOOSTER",
+     "minutos": 0,
+     "paso": 23,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Beauty of Joseon Revive Eye Serum",
+     "minutos": 2,
+     "paso": 24,
+     "producto_cod": "INV-029",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.25,
+     "descripcion": "Jojoba Lip Essence",
+     "minutos": 1,
+     "paso": 25,
+     "producto_cod": "INV-038",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Cotoneetes Tippy's Frasco",
+     "minutos": 0,
+     "paso": 26,
+     "producto_cod": "INV-060",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum",
+     "minutos": 1,
+     "paso": 27,
+     "producto_cod": "INV-031",
+     "unidad": "ml"
+    }
+   ],
+   "sku": "SUNSU-04",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-05",
+   "mano_de_obra": null,
+   "nombre": "Facial Porcelana",
+   "notas": "Migrado del Excel original",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [
+    {
+     "cantidad": 3,
+     "descripcion": "**Limpieza para usar maquina**",
+     "minutos": 2,
+     "paso": 1,
+     "producto_cod": "INV-037",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 2,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "Analisis facial con explicaccion de piel (con Focuskin Skin Analyzer)",
+     "minutos": 30,
+     "paso": 3,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "** Aplicar solo de ser necesario**",
+     "minutos": 2,
+     "paso": 4,
+     "producto_cod": "INV-045",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Discos Desmaquilladores de Algodon Sort duo",
+     "minutos": 0,
+     "paso": 5,
+     "producto_cod": "INV-059",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Light Cleansing Oil",
+     "minutos": 2,
+     "paso": 6,
+     "producto_cod": "INV-035",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Winner Soft Face Towels",
+     "minutos": 0,
+     "paso": 7,
+     "producto_cod": "INV-061",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Bubble O2 Cleansing Mask",
+     "minutos": 2,
+     "paso": 8,
+     "producto_cod": "INV-044",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR TOALLA CALLENTE ANTES DE EXFOLIANTE — **Toalla caliente para abrir los poros y suavisar la piel**",
+     "minutos": 2,
+     "paso": 9,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**Se mezcla polvo de arroz con pepita de uva, y se exfolia**",
+     "minutos": 0,
+     "paso": 10,
+     "producto_cod": "INV-057",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "A.VEG. PEPITA DE UVA",
+     "minutos": 0,
+     "paso": 11,
+     "producto_cod": "INV-056",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 10,
+     "paso": 12,
+     "producto_cod": "INV-054",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "EXTRACCIÓN DE GRANOS",
+     "minutos": 4,
+     "paso": 13,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "APLICAR ALTA FREQUENCIA",
+     "minutos": 2,
+     "paso": 14,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "NO APLICA MASAJE DRENANTE POR QUE HAY BOOSTER — **Movimientos lentos sin fricción ni calor**",
+     "minutos": 0,
+     "paso": 15,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 3,
+     "descripcion": "Azulene Skin Toner 1000ml",
+     "minutos": 2,
+     "paso": 16,
+     "producto_cod": "INV-043",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "PROBIOTIC SKIN BALANCING MASK",
+     "minutos": 30,
+     "paso": 17,
+     "producto_cod": "INV-055",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "DURANTE MASCARILLA MASAJE CAPILAR O EN MANOS — **se puede aplicar piedra caliente en corazon**",
+     "minutos": 0,
+     "paso": 18,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 50,
+     "descripcion": "** Solo si es contratado EXTRA**",
+     "minutos": 0,
+     "paso": 19,
+     "producto_cod": "INV-049",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "Medicube Deep Vita C Serum 2.0",
+     "minutos": 2,
+     "paso": 20,
+     "producto_cod": "INV-024",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "**aplicar con booster**",
+     "minutos": 6,
+     "paso": 21,
+     "producto_cod": "INV-010",
+     "unidad": "g"
+    },
+    {
+     "cantidad": 0,
+     "descripcion": "INSERTAR PRODUCTO CON BOOSTER",
+     "minutos": 0,
+     "paso": 22,
+     "producto_cod": "",
+     "unidad": ""
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Beauty of Joseon Revive Eye Serum",
+     "minutos": 2,
+     "paso": 23,
+     "producto_cod": "INV-029",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 0.25,
+     "descripcion": "Jojoba Lip Essence",
+     "minutos": 1,
+     "paso": 24,
+     "producto_cod": "INV-038",
+     "unidad": "ml"
+    },
+    {
+     "cantidad": 1,
+     "descripcion": "Cotoneetes Tippy's Frasco",
+     "minutos": 0,
+     "paso": 25,
+     "producto_cod": "INV-060",
+     "unidad": "Unidad"
+    },
+    {
+     "cantidad": 2,
+     "descripcion": "SKIN1004 Madagascar Centella Hyalu-CICA Water-fit Sun Serum",
+     "minutos": 1,
+     "paso": 26,
+     "producto_cod": "INV-031",
+     "unidad": "ml"
+    }
+   ],
+   "sku": "SUNSU-05",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-40",
+   "mano_de_obra": null,
+   "nombre": "Facial Reset 3x1",
+   "notas": "Protocolo por definir",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [],
+   "sku": "SUNSU-40",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-42",
+   "mano_de_obra": null,
+   "nombre": "Facial Peeling Marino de Perla",
+   "notas": "Protocolo por definir",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [],
+   "sku": "SUNSU-42",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-43",
+   "mano_de_obra": null,
+   "nombre": "Facial de Geisha",
+   "notas": "Protocolo por definir",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [],
+   "sku": "SUNSU-43",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  },
+  {
+   "actualizado_por": "semilla 0042",
+   "borrado_at": null,
+   "created_at": "2026-11-16 19:17:10.914878+00",
+   "id": "pr-sunsu-52",
+   "mano_de_obra": null,
+   "nombre": "Facial de Ginseng",
+   "notas": "Protocolo por definir",
+   "origen": "cabina",
+   "origen_version": 1,
+   "pasos": [],
+   "sku": "SUNSU-52",
+   "updated_at": "2026-11-16 19:17:10.914878+00",
+   "version": 1,
+   "vigente": true
+  }
+ ]
+}

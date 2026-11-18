@@ -45,14 +45,14 @@
     var filas = L.map(function (p) {
       return '<tr class="mcpr-row" data-pr="' + e(p.id) + '"><td class="mcpr-sku">' + e(p.sku) + "</td><td><b>" + e(p.nombre) + '</b><div class="mcpr-sub">' + e(p.servicio ? p.servicio.nombre : "Servicio no encontrado") + "</div></td>" +
         "<td>" + (p.vigente ? '<span class="mcpr-tag">vigente</span>' : '<span class="mcpr-tag off">no vigente</span>') + "</td>" +
-        '<td class="num">' + (p.pasos || []).length + '</td><td class="num mcpr-hide">' + p.productos + '</td><td class="num mcpr-hide">' + q2(p.minutos) + ' min</td><td class="mcpr-hide">v' + e(p.version) + ' <span class="mcpr-sub">' + e(p.actualizado_por || "") + "</span></td></tr>";
+        '<td class="num">' + (p.pasos || []).length + '</td><td class="num mcpr-hide">' + p.productos + '</td><td class="num mcpr-hide">' + q2(p.minutos) + ' min</td>' + (d.verCostos ? '<td class="num">' + (p.costoTotal != null ? "$" + q2(p.costoTotal) : "—") + "</td>" : "") + '<td class="mcpr-hide">v' + e(p.version) + ' <span class="mcpr-sub">' + e(p.actualizado_por || "") + "</span></td></tr>";
     }).join("");
     return '<div class="mcpr">' + (d.beta ? "" : '<p class="note">Vista de solo lectura: falta aplicar 0042 para editar.</p>') +
       '<div class="mcpr-bar"><input type="search" id="mcpr-q" placeholder="Buscar protocolo o facial" value="' + e(P.q) + '">' + (d.editable ? '<button class="btn small" type="button" data-go="#/m/mc/protocolos/nuevo">+ Nuevo protocolo</button>' : "") + "</div>" +
-      '<div class="card"><div class="sheet-scroll"><table class="mcpr-t"><thead><tr><th>Facial</th><th>Protocolo</th><th>Estado</th><th class="num">Pasos</th><th class="num mcpr-hide">Productos</th><th class="num mcpr-hide">Tiempo</th><th class="mcpr-hide">Versión</th></tr></thead><tbody>' +
-      (filas || '<tr><td colspan="7" class="mcpr-sub">Sin protocolos.</td></tr>') + "</tbody></table></div></div>" +
+      '<div class="card"><div class="sheet-scroll"><table class="mcpr-t"><thead><tr><th>Facial</th><th>Protocolo</th><th>Estado</th><th class="num">Pasos</th><th class="num mcpr-hide">Productos</th><th class="num mcpr-hide">Tiempo</th>' + (d.verCostos ? '<th class="num">💲 Costo</th>' : "") + '<th class="mcpr-hide">Versión</th></tr></thead><tbody>' +
+      (filas || '<tr><td colspan="8" class="mcpr-sub">Sin protocolos.</td></tr>') + "</tbody></table></div></div>" +
       (sinProto.length ? '<p class="note">Servicios sin protocolo: ' + sinProto.map(function (s) { return e(s.sku) + " " + e(s.nombre); }).join(" · ") + "</p>" : "") +
-      '<p class="note">Qué productos lleva cada facial, en qué cantidad y en qué paso (la «orden de manufactura» de MineCore). Los editas aquí; la hoja de Cabina ya no los pisa. El descuento de stock de Cabina sigue usando su receta hasta que se decida pasarlo a estos protocolos.</p></div>';
+      '<p class="note">Qué productos lleva cada facial, en qué cantidad y en qué paso (la «orden de manufactura» de MineCore). Los editas aquí; la hoja de Cabina ya no los pisa. 🔗 Automático: si en un producto marcas «Aplica a» un facial (📦 Abrir producto), entra solo al protocolo de ese facial; y el costo es la suma del costo de uso de sus productos. El descuento de stock de Cabina sigue usando su receta hasta que se decida pasarlo a estos protocolos.</p></div>';
   }
 
   function nuevo() {
@@ -74,6 +74,7 @@
         '<td class="num"><input data-ps="cantidad" data-i="' + i + '" inputmode="decimal" value="' + e(x.cantidad) + '"' + dis + "></td>" +
         '<td><select data-ps="unidad" data-i="' + i + '"' + dis + ">" + uOpts.map(function (u) { return '<option value="' + e(u) + '"' + (u === x.unidad ? " selected" : "") + ">" + e(u) + "</option>"; }).join("") + "</select></td>" +
         '<td class="num"><input data-ps="minutos" data-i="' + i + '" inputmode="decimal" value="' + e(x.minutos) + '"' + dis + "></td>" +
+        (d.verCostos ? '<td class="num" title="' + (x.costoFuente === "aperturas" ? "Costo real por facial (aperturas)" : x.costoFuente === "cantidad" ? "Costo × cantidad ÷ contenido" : "Sin costo: falta cantidad/contenido o aperturas cerradas") + '">' + (x.costo != null ? "$" + q2(x.costo) + (x.costoFuente === "aperturas" ? " 📦" : "") : (x.producto_cod ? "—" : "")) + "</td>" : "") +
         (can ? '<td class="bt"><button type="button" data-del="' + i + '" aria-label="Quitar">✕</button></td>' : "") + "</tr>";
     }).join("");
     var tot = (p.pasos || []).reduce(function (a, x) { return a + (Number(String(x.minutos).replace(",", ".")) || 0); }, 0);
@@ -87,7 +88,9 @@
       (d.verCostos ? '<label>Mano de obra ($)<input id="mcpr-mo" inputmode="decimal" value="' + e(p.mano_de_obra == null ? "" : p.mano_de_obra) + '"' + dis + "></label>" : "") +
       '<label style="grid-column:1/-1">Notas<textarea id="mcpr-notas" rows="2"' + dis + ">" + e(p.notas) + "</textarea></label></div></div>" +
       '<div class="card"><div class="card-title">Pasos <span class="mcpr-sub">' + (p.pasos || []).length + " pasos · " + q2(tot) + " min</span></div>" + dl +
-      '<div class="sheet-scroll"><table class="mcpr-t mcpr-ps"><thead><tr><th>#</th><th>Descripción</th><th>Producto</th><th>Cant.</th><th>Unidad</th><th>Min</th>' + (can ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table></div>" +
+      (d.verCostos && p.costoProductos != null ? '<p class="mcpr-cost">💲 Productos <b>$' + q2(p.costoProductos) + "</b>" + (p.mano_de_obra != null && p.mano_de_obra !== "" ? " + mano de obra $" + q2(p.mano_de_obra) : "") + " = <b>$" + q2(p.costoTotal) + "</b>" + (p.sinCosto ? ' <span class="mcpr-sub">· ' + p.sinCosto + " sin costo aún</span>" : "") + (P.dirty ? ' <span class="mcpr-sub">(se recalcula al guardar)</span>' : "") + "</p>" : "") +
+      (!(p.pasos || []).length ? '<p class="note">Sin pasos todavía. Marca en cada producto «Aplica a» este facial y entra solo aquí.</p>' : "") +
+      '<div class="sheet-scroll"><table class="mcpr-t mcpr-ps"><thead><tr><th>#</th><th>Descripción</th><th>Producto</th><th>Cant.</th><th>Unidad</th><th>Min</th>' + (d.verCostos ? "<th>💲</th>" : "") + (can ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table></div>" +
       (can ? '<p><button class="btn ghost small" type="button" id="mcpr-add">+ Paso</button></p>' : "") +
       '<p class="note">Producto: escribe o elige el código (INV-…, ML-…). Pasos sin producto (toalla caliente, extracción) llevan solo descripción y minutos.</p></div>' +
       (p.id ? '<div class="card"><div class="card-title">Historial</div>' + (hist ? '<ul class="mc-hist mcpr-sub">' + hist + "</ul>" : '<p class="note">' + (p.origen === "cabina" ? "Copiado de Cabina; sin cambios en la beta." : "Sin cambios.") + "</p>") + "</div>" : "") + "</div>";
