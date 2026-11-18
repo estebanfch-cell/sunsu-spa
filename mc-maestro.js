@@ -225,16 +225,35 @@
     if (window.MCTickets && window.MCTickets.claveDe) return window.MCTickets.claveDe(t);
     return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : "");
   }
+  function tkFacCorta(t) {
+    var full = "";
+    try { if (typeof _tkFacFull === "function") full = _tkFacFull(t) || ""; } catch (e) {}
+    if (!full) {
+      var raw = String((t && (t.factura || t.fac_7 || t.numFac)) || "").trim();
+      try { if (typeof _facTxt === "function") raw = _facTxt(raw); } catch (e) {}
+      if (raw && !/sin/i.test(raw)) full = raw;
+    }
+    if (!full) return "Sin factura";
+    var m = /(\d{1,9})$/.exec(String(full).replace(/\s/g, ""));
+    if (m) {
+      var n = String(Number(m[1]));
+      if (n !== "0") return "Fac " + n;
+    }
+    return "Fac " + full;
+  }
+  function tkCosmPill(t) {
+    var nom = String((t && t.cosmetologa) || "").trim();
+    if (!nom) return "";
+    var corto = nom.split(/\s+/)[0];
+    if (window.MCColor && window.MCColor.pill) {
+      var html = window.MCColor.pill(corto) || window.MCColor.pill(nom);
+      if (html) return html;
+    }
+    var col = (typeof colorCosm === "function" ? colorCosm(nom) : "") || "#1A237E";
+    return '<span class="mc-cos ss-md-cos" style="background:' + col + ';color:#fff">' + esc(corto) + "</span>";
+  }
   function tkPills(t) {
-    var html = "";
-    try {
-      if (typeof _tkPagoPill === "function") html += _tkPagoPill(t) || "";
-      if (typeof _tkForma === "function" && typeof _tkFormaPill === "function") {
-        var fp = _tkForma(t);
-        if (fp) html += _tkFormaPill(fp);
-      }
-    } catch (e) {}
-    return html;
+    return '<span class="ss-md-fac">' + esc(tkFacCorta(t)) + "</span>" + tkCosmPill(t);
   }
   function tkStatusClass(t) {
     var Lf = (window._tkLeds || {})[String(t && t.tkRow)];
