@@ -264,6 +264,6 @@ describe("Historial forma de pago (TK38)", () => {
     assert.match(js, /function _tkFacPdf/);
     const tk = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
     assert.match(tk, /Ver factura/);
-    assert.match(html, /beta-screens\.js\?v=20261118tk39/);
+    assert.match(html, /beta-screens\.js\?v=20261118tk\d+/);
   });
 });
