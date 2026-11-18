@@ -9,8 +9,8 @@
   function norm(v) { return String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); }
   function css() {
     if (window.MCConteo && window.MCConteo._css) window.MCConteo._css();
-    if (document.getElementById("mccl-css")) return;
-    var s = document.createElement("style"); s.id = "mccl-css";
+    var s = document.getElementById("mccl-css");
+    if (!s) { s = document.createElement("style"); s.id = "mccl-css"; document.head.appendChild(s); }
     s.textContent = [
       ".mccl-t tr[data-k]{cursor:pointer}.mccl-t tr[data-k]:hover td{background:var(--cream)}.mccl-cod{font-family:ui-monospace,monospace;font-size:.74rem;color:var(--navy)}",
       ".mccl-h{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}.mccl-h h2{margin:0;font-size:1.3rem}.mccl-meta{color:var(--gray);font-size:.8rem;margin-top:3px}",
@@ -26,8 +26,11 @@
       ".mccl-ses{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--navy);margin-right:3px;vertical-align:middle}.mccl-ses.u{background:var(--navy)}",
       ".mcd-g{border:1px solid var(--cream-d);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--white,#fff)}.mcd-gh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}.mcd-gh b{color:var(--navy-d)}.mcd-rep{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--cream-d)}.mcd-g>.mcd-rep:first-of-type{border-top:0}",
       ".mcd-fotos,.mcd-fold{margin:6px 0 0;border:1px solid var(--cream-d);border-radius:10px;background:#fafaf8}.mcd-fotos>summary,.mcd-fold>summary{cursor:pointer;list-style:none;padding:8px 12px;font-weight:700;font-size:.84rem;color:var(--navy-d)}.mcd-fotos>summary::-webkit-details-marker,.mcd-fold>summary::-webkit-details-marker{display:none}.mcd-fotos>summary:before,.mcd-fold>summary:before{content:'▸ ';display:inline-block;transition:transform .15s}.mcd-fotos[open]>summary:before,.mcd-fold[open]>summary:before{transform:rotate(90deg)}.mcd-fold{margin:6px 10px 8px;background:#fff}.mcd-fold .mccl-ph{padding:0 10px 10px}",
+      ".mccl-filt{position:relative;flex:0 0 auto}.mccl-filt-btn{appearance:none;border:1px solid var(--cream-d,#EDE6D8);background:#fff;color:var(--navy-d,#3D5A7A);font:inherit;font-size:.72rem;font-weight:650;padding:5px 9px;border-radius:8px;cursor:pointer;opacity:.88}",
+      ".mccl-filt-btn:hover,.mccl-filt-btn.on{opacity:1;border-color:var(--navy,#5B7FA6);background:var(--blue-l,#EEF3FA)}",
+      ".mccl-filt-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:20;min-width:220px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:10px;box-shadow:0 6px 18px rgba(20,30,50,.12);padding:10px;flex-direction:column;gap:8px}",
+      ".mccl-filt-menu.open{display:flex}.mccl-filt-menu select,.mccl-filt-menu label{width:100%;font-size:.8rem}",
     ].join("");
-    document.head.appendChild(s);
   }
 
   // ---------- Documentos: una entrada por día / ticket; informe PDF primero; fotos del ticket en Antes / Después; zips K-Lift ocultos ----------
@@ -106,7 +109,7 @@
     }).filter(Boolean).sort(function (a, b) { return (String(b.fecha) + (b.hora || "")).localeCompare(String(a.fecha) + (a.hora || "")); });
   }
   function accDoc(x) {
-    if (x.docId) return (x.zip ? "" : '<button class="btn ghost small" type="button" data-pvd="' + e(x.docId) + '" data-pvn="' + e(x.nombre) + '">Ver</button> ') + '<button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '" title="Descargar">⬇️</button>';
+    if (x.docId) return (x.zip ? "" : '<button class="btn ghost small" type="button" data-pvd="' + e(x.docId) + '" data-pvn="' + e(x.nombre) + '">Ver</button> ') + (K.admin || (K.d && K.d.puedeDescargar) ? '<button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '" title="Descargar">⬇️</button>' : "");
     if (x.url) return '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>';
     if (x.tipo === "tarjeta" && x.sheetRow) return '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>';
     return "";
@@ -145,7 +148,7 @@
         if (F.visita === "180+" && !(d > 180 && d < 1e9)) return false; if (F.visita === "nunca" && c.visitas > 0) return false;
       }
       if (!q) return true;
-      var blob = norm([c.codigo, c.nombre, c.cedula, c.telefono, c.sector].join(" "));
+      var blob = norm((K.admin ? [c.codigo, c.nombre, c.cedula, c.telefono, c.sector] : [c.codigo, c.nombre]).join(" "));
       return q.split(/\s+/).every(function (w) { return blob.indexOf(w) >= 0 || blob.replace(/\D/g, "").indexOf(w.replace(/\D/g, "") || "~") >= 0; });
     });
     var k = K.sort, dir = K.dir;
@@ -156,7 +159,9 @@
     var c = [["codigo", "Código"], ["nombre", "Clienta"], ["cedula", "Cédula"], ["visitas", "Visitas", 1], ["ultima", "Última visita"]];
     if (K.admin) c.push(["total", "Total gastado", 1]);
     if ((K.L || []).some(function (x) { return "telefono" in x; })) c.push(["telefono", "Teléfono"]);
-    c.push(["paquetesActivos", "Paquetes", 1], ["sector", "Sector"], ["cosmetologa", "Cosmetóloga"]);
+    c.push(["paquetesActivos", "Paquetes", 1]);
+    if (K.admin) c.push(["sector", "Sector"]);
+    c.push(["cosmetologa", "Cosmetóloga"]);
     return c;
   }
   function cuerpo() {
@@ -178,11 +183,16 @@
   function htmlLista() {
     var F = K.f, o = function (v, t, sel) { return '<option value="' + e(v) + '"' + (v === sel ? " selected" : "") + ">" + e(t) + "</option>"; };
     var c = cuerpo();
-    return '<div id="mccl-root"><div class="mccf-bar"><input type="search" id="mccl-q" placeholder="Buscar por código, nombre, cédula o teléfono" value="' + e(K.q) + '" autocomplete="off">' +
-      '<select id="mccl-cosm">' + o("", "Todas las cosmetólogas", F.cosm) + (K.cosms || []).map(function (x) { return o(x, x, F.cosm); }).join("") + "</select>" +
-      '<select id="mccl-sec">' + o("", "Todos los sectores", F.sector) + (K.secs || []).map(function (x) { return o(x, x, F.sector); }).join("") + "</select>" +
-      '<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "Sin venir +6 meses", F.visita) + o("nunca", "Sin tickets", F.visita) + "</select>" +
-      '<label class="mccf-sub"><input type="checkbox" id="mccl-paq"' + (F.paq ? " checked" : "") + "> Con paquete activo</label>" +
+    var extra = '<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "Sin venir +6 meses", F.visita) + o("nunca", "Sin tickets", F.visita) + "</select>" +
+      '<label class="mccf-sub"><input type="checkbox" id="mccl-paq"' + (F.paq ? " checked" : "") + "> Con paquete activo</label>";
+    var onFilt = !!(F.visita || F.paq || (K.admin && F.gift) || F.cosm || F.sector);
+    var qph = K.admin ? "Buscar por código, nombre, cédula o teléfono" : "Buscar por nombre";
+    var filtros = K.admin
+      ? '<select id="mccl-cosm">' + o("", "Todas las cosmetólogas", F.cosm) + (K.cosms || []).map(function (x) { return o(x, x, F.cosm); }).join("") + "</select>" +
+        '<select id="mccl-sec">' + o("", "Todos los sectores", F.sector) + (K.secs || []).map(function (x) { return o(x, x, F.sector); }).join("") + "</select>" + extra
+      : '<div class="mccl-filt"><button type="button" class="mccl-filt-btn' + (onFilt ? " on" : "") + '" id="mccl-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (onFilt ? " •" : "") + " ▾</button>" +
+        '<div class="mccl-filt-menu" id="mccl-filt-menu">' + extra + "</div></div>";
+    return '<div id="mccl-root"><div class="mccf-bar"><input type="search" id="mccl-q" placeholder="' + qph + '" value="' + e(K.q) + '" autocomplete="off">' + filtros +
       (K.admin ? '<label class="mccf-sub"><input type="checkbox" id="mccl-gift"' + (F.gift ? " checked" : "") + "> Con gift card con saldo</label>" : "") +
       '<button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' + (K.admin ? ' <button class="btn ghost small" type="button" data-go="#/m/clientes/docs">📑 Documentos sin asignar</button> <button class="btn ghost small" type="button" data-go="#/m/clientes/duplicados">🔗 Duplicados</button>' : "") + "</div>" +
       '<p class="mccf-sub" id="mccl-n">' + c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "") + "</p>" +
@@ -191,7 +201,7 @@
   }
   async function renderLista() {
     css();
-    var poner = function (d) { K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now(); };
+    var poner = function (d) { K.L = d.clientes || []; K.admin = !!d.admin; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); };
     if (!K.L) {
       var d = await api("cl_list", {});
       if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
@@ -218,6 +228,25 @@
     var tmr; q.oninput = function () { clearTimeout(tmr); tmr = setTimeout(function () { K.q = q.value; K.max = 300; repintarLista(main); }, 120); };
     var set = function (id, k, chk) { var x = main.querySelector(id); if (x) x.onchange = function () { K.f[k] = chk ? x.checked : x.value; K.max = 300; repintarLista(main); }; };
     set("#mccl-cosm", "cosm"); set("#mccl-sec", "sector"); set("#mccl-vis", "visita"); set("#mccl-paq", "paq", 1); set("#mccl-gift", "gift", 1);
+    var fb = main.querySelector("#mccl-filt-btn"), fm = main.querySelector("#mccl-filt-menu");
+    if (fb && fm) {
+      fb.onclick = function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        var open = !fm.classList.contains("open");
+        fm.classList.toggle("open", open);
+        fb.setAttribute("aria-expanded", open ? "true" : "false");
+        fb.classList.toggle("on", open || !!(K.f.visita || K.f.paq));
+      };
+      if (!window._mcclFiltDoc) {
+        window._mcclFiltDoc = true;
+        document.addEventListener("click", function (ev) {
+          var btn = document.querySelector("#mccl-filt-btn"), menu = document.querySelector("#mccl-filt-menu");
+          if (!btn || !menu || !menu.classList.contains("open")) return;
+          if (menu.contains(ev.target) || btn.contains(ev.target)) return;
+          menu.classList.remove("open"); btn.setAttribute("aria-expanded", "false");
+        });
+      }
+    }
     main.querySelector("#mccl-head").onclick = function (ev) { var b = ev.target.closest("[data-sort]"); if (!b) return; var k = b.getAttribute("data-sort"); K.dir = K.sort === k ? -K.dir : (/ultima|total|visitas|paquetes/.test(k) ? -1 : 1); K.sort = k; repintarLista(main); };
     main.querySelector("#mccl-body").onclick = function (ev) { var tr = ev.target.closest("tr[data-k]"); if (tr) go("#/m/clientes/c/" + encodeURIComponent(tr.getAttribute("data-k"))); };
     var m = main.querySelector("#mccl-mas"); if (m) m.onclick = function () { K.max += 500; repintarLista(main); };
@@ -273,7 +302,7 @@
     if (!document.getElementById("mcpv")) return;
     try {
       var u = URL.createObjectURL(doc.output("blob"));
-      box.querySelector(".mcpv-b").classList.add("pdf"); box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc"><a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> <a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
+      box.querySelector(".mcpv-b").classList.add("pdf"); box.querySelector(".mcpv-b").innerHTML = '<div class="mcpv-acc">' + (K.admin || (K.d && K.d.puedeDescargar) ? '<a class="btn small" href="' + u + '" download="' + e(nom) + '">⬇️ Descargar PDF</a> ' : "") + '<a class="btn ghost small" href="' + u + '" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div><iframe data-blob="' + u + '" src="' + u + '"></iframe>';
     } catch (x) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No se pudo generar el PDF</p>'; }
   }
   /** PDF guardado en el bucket (K-Lift / Focus Skin): link firmado → se muestra dentro de la página. */
@@ -293,6 +322,7 @@
   }
   /** ZIP de fotos K-Lift (o cualquier documento): link firmado de descarga. */
   async function descargarDoc(id, key) {
+    if (!(K.admin || (K.d && K.d.puedeDescargar))) { alert("El personal no puede descargar archivos"); return; }
     var r = await api("cl_doc_url", { id: id, key: key || (K.d && K.d.key), descargar: "1" });
     if (!r || !r.ok) { alert((r && r.error) || "No se pudo descargar"); return; }
     var a = document.createElement("a"); a.href = r.url; a.download = r.nombre || ""; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
@@ -316,7 +346,7 @@
   function norm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
   async function renderSinAsignar() {
     css();
-    if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now(); } }
+    if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); } }
     var r = await api("doc_sin_asignar", { q: SA.q, limit: 300 });
     if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver</button>';
     SA.items = r.items || [];
@@ -530,7 +560,7 @@
     if (K.L && K.L.length) return true;
     var d = await api("cl_list", {});
     if (!d || d.error) return false;
-    K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now();
+    K.L = d.clientes || []; K.admin = !!d.admin; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now();
     return true;
   }
   window.MCClientes = {
