@@ -189,6 +189,7 @@
         (esMejora(l) ? '<span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
         (l.cortesia ? '<span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
         (l.consumoInterno ? '<span class="mctk-pill" style="color:#56627A;border-color:#56627A">Consumo interno</span>' : "") +
+        (l.paqueteSesion ? '<span class="mctk-pill" style="color:#56627A;border-color:#56627A">Canje de paquete</span>' : "") +
         (l.valorNominal > 0 && l.tipo === "gift" ? ' <span style="color:#56627A;font-size:.72rem">valor nominal ' + e($m(l.valorNominal)) + "</span>" : "") +
         (l.tipo === "diferencia" ? '<span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
         (l.promo && l.descuento_valor > 0 ? '<span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "");
@@ -423,7 +424,7 @@
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, consumoInterno: !!l.consumoInterno, valorNominal: Number(l.valorNominal) || 0, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, consumoInterno: !!l.consumoInterno, paqueteSesion: l.paqueteSesion || "", valorNominal: Number(l.valorNominal) || 0, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
     K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";

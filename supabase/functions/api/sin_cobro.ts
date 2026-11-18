@@ -4,7 +4,8 @@
 // Se muestran con sus líneas a $0 y estado gris «Cortesía» / «Consumo interno»; nunca «Por cobrar» ni «Sin factura».
 import { CEDULA_INTERNA, n, normCedula, round2, s, skuCode, type Row } from "./domain.ts";
 
-export type SinCobro = "cortesia" | "interno";
+export type SinCobro = "cortesia" | "interno" | "canje";
+// TK99 (Emilia 18/11): canje de sesión de paquete en $0 («Paquete?» = «SI, 2/3»): estado gris «Canje de paquete».
 export type GiftCortesia = { codigo: string; tipo: string; de: string; para: string };
 
 function sinTildes(v: unknown): string { return s(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim(); }
@@ -33,9 +34,32 @@ export function tipoSinCobro(t: Row): SinCobro | null {
   if (n(t.estimado) > 0.004) return null;
   if (esConsumoInterno(t)) return "interno";
   if (giftCortesia(t.venta_gift)) return "cortesia";
+  if (sesionPaquete(t)) return "canje";
   return null;
 }
-export const ETQ_SIN_COBRO: Record<SinCobro, string> = { cortesia: "Cortesía", interno: "Consumo interno" };
+export const ETQ_SIN_COBRO: Record<SinCobro, string> = { cortesia: "Cortesía", interno: "Consumo interno", canje: "Canje de paquete" };
+
+/** Sesión canjeada del paquete: «SI, 2/3» → { n: 2, total: 3 }. Solo «SI…» (canje); «NO» o vacío → null. */
+export function sesionPaquete(t: Row): { n: number; total: number } | null {
+  const v = s(t.paquete || (t.orig && typeof t.orig === "object" ? (t.orig as Row)["Paquete?"] : ""));
+  if (!/^\s*SI\b/i.test(v)) return null;
+  const m = /(\d+)\s*\/\s*(\d+)/.exec(v);
+  return m ? { n: Number(m[1]), total: Number(m[2]) } : { n: 0, total: 0 };
+}
+
+/** Paquete del que sale la sesión: el que tiene un uso con la fecha del ticket; si no, el de N sesiones más reciente. */
+export function paqueteDeCanje(paqs: Row[], fecha: string, ses: { n: number; total: number }): Row | null {
+  const ymd = s(fecha).slice(0, 10);
+  const conFecha = paqs.find((p) => (Array.isArray(p.usos) ? p.usos as Row[] : []).some((u) => u.usado && s(u.fecha).slice(0, 10) === ymd));
+  if (conFecha) return conFecha;
+  const mismos = paqs.filter((p) => !ses.total || n(p.total) === ses.total).sort((a, b0) => Number(b0.id || 0) - Number(a.id || 0));
+  return mismos[0] || null;
+}
+
+export function textoCanje(p: Row | null, ses: { n: number; total: number }): string {
+  const cod = p ? s(p.codigo) || s(p.sku) : "";
+  return ["Canje paquete" + (cod ? " " + cod : ""), ses.total ? "sesión " + ses.n + "/" + ses.total : ""].filter(Boolean).join(" · ");
+}
 
 /** Valor nominal de la gift card: $ escrito, o el facial del catálogo por su tipo (K-LIFT → Facial K-Lift), o la gift card estándar. */
 export function valorNominalGift(g: GiftCortesia, catalogo: Row[]): number {

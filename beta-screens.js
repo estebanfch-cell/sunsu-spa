@@ -5413,7 +5413,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
@@ -5606,9 +5606,11 @@ function _tkFacPdf(t){
   var L=(window._tkLeds||{})[String(t&&t.tkRow)];
   return !!(L&&L.facturaPdf);
 }
+// TK99: etiqueta gris de tickets en $0 (cortesía, consumo interno, canje de paquete).
+function _tkEtqSinCobro(x){ return x==='interno'?'Consumo interno':x==='canje'?'Canje de paquete':'Cortesía'; }
 function _tkPagoPill(t){
   if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
-  if(t&&t.sin_cobro) return _tkPill('gris',t.sin_cobro==='interno'?'Consumo interno':'Cortesía'); // TK98
+  if(t&&t.sin_cobro) return _tkPill('gris',_tkEtqSinCobro(t.sin_cobro)); // TK98
   if(t&&t.cob) return _tkPill('pagado','Pagado');
   if(_tkPagoMigo(t)){
     var tip=(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'))?'cobro confirmado en Migo':'';
@@ -5629,7 +5631,7 @@ function _tkEstados(t){
   if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
   // TK98: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
-  if(t.sin_cobro){ out.push({c:'gris',t:t.sin_cobro==='interno'?'Consumo interno':'Cortesía'}); return out; }
+  if(t.sin_cobro){ out.push({c:'gris',t:_tkEtqSinCobro(t.sin_cobro)}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=(window._tkLeds||{})[String(t.tkRow)];
   if(!_tkFacFull(t)) out.push(_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});

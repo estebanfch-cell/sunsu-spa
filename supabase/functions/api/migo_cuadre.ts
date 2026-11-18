@@ -3,6 +3,7 @@ import { b, n, s, type Row } from "./domain.ts";
 
 import { compararFacturaYTickets } from "./migo_lineas.ts";
 import { difPorSku } from "./cuadre_sku.ts";
+import { tipoSinCobro } from "./sin_cobro.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
 export const FALTA_CUADRE_DESDE = "2026-11-01";
@@ -69,6 +70,8 @@ export function exentoCuadre(t: Row): boolean {
   if (/sin\s*factura|s\/f/i.test(fac)) return true;
   const mets = metodosTicket(t.comp);
   if (mets.includes("canje") || mets.includes("cortesia") || mets.includes("cortesía")) return true;
+  // TK99: en $0 por cortesía, consumo interno o canje de paquete: no se cruza con Migo.
+  if (tipoSinCobro(t)) return true;
   return false;
 }
 

@@ -233,7 +233,7 @@
       try { if (typeof _facTxt === "function") raw = _facTxt(raw); } catch (e) {}
       if (raw && !/sin/i.test(raw)) full = raw;
     }
-    if (!full) return t && t.sin_cobro ? (t.sin_cobro === "interno" ? "Consumo interno" : "Cortesía") : "Sin factura"; // TK98
+    if (!full) return t && t.sin_cobro ? (t.sin_cobro === "interno" ? "Consumo interno" : t.sin_cobro === "canje" ? "Canje de paquete" : "Cortesía") : "Sin factura"; // TK98
     var m = /(\d{1,9})$/.exec(String(full).replace(/\s/g, ""));
     if (m) {
       var n = String(Number(m[1]));
