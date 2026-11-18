@@ -1360,7 +1360,9 @@ reg("getHistorial", "any", async (p, ctx, ses) => {
   const telOk = conTelefono(ses);
   const regs = await ctx.db.all("clientas_registro");
   const porCed = new Map(regs.map((r) => [normCedula(r.cedula), s(r.telefono)]));
-  const rows = (await tickets(ctx)).filter((r) => r.timestamp);
+  const matriz = await matrizDe(ctx.db);
+  const todos = esAdmin(ses.rol) || acceso(ses.rol, "tickets", matriz) === "todos";
+  const rows = (await tickets(ctx)).filter((r) => r.timestamp).filter((r) => todos || esPropio(s(r.atendido_por), ses));
   rows.sort((a, b) => ymdUtc(a.timestamp).localeCompare(ymdUtc(b.timestamp)) || hmUtc(a.timestamp).localeCompare(hmUtc(b.timestamp)) || n(a.sheet_row) - n(b.sheet_row));
   const ec = hoy(ctx);
   const out = rows.map((r) => itemHistorial(r, map, ec, telOk, porCed));
