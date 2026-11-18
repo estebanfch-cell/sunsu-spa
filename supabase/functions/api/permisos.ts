@@ -323,6 +323,7 @@ export function modulosVisibles(rol: string, matriz: Record<string, Partial<Reco
 /** Lecturas permitidas mientras un admin mira la app como otra persona. Lo demás se rechaza. */
 const LECTURA_VISTA = new Set([
   "pq_lista", "gcb_lista", // Paquetes y Gift cards en «Ver como» (TK60)
+  "cl_buscar", // buscador de clientas del ticket en «Ver como» (TK66)
   "whoami", "version", "getVersion", "home", "erp_home",
   "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "asis_calendario", "roles_lista",
   "horarios_list", "push_clave",

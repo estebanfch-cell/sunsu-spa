@@ -412,17 +412,95 @@ SOLICITUD_HOOKS["cliente_beta"] = {
   borrar: (ctx, ses, key, motivo) => borrarCliente(ctx, ses, key, motivo || "solicitud aprobada", "eliminación por solicitud"),
 };
 
-/** Buscador de clientas para el ticket nuevo: nombre, cédula, celular o código C-xxxxx (beta_clientes). */
+/** Buscador de clientas para el ticket nuevo: nombre, cédula, RUC, celular o código C-xxxxx (beta_clientes).
+ * TK66 (Emilia 18/11): la cédula o el RUC (cédula+001) siempre encuentran a la clienta, aunque estén guardados
+ * con .0, sin el 0 inicial, como RUC o con guiones; el nombre no distingue tildes ni orden de palabras. */
+export function nucleoCedula(v: unknown): string {
+  let d = s(v).trim().replace(/\.0+$/, "").replace(/\D/g, "");
+  if (d.length === 13 && d.endsWith("001")) d = d.slice(0, 10);
+  return d.replace(/^0+/, "");
+}
+function nucleoTelefono(v: unknown): string {
+  const d = s(v).replace(/\.0+$/, "").replace(/\D/g, "");
+  return d.replace(/^593/, "").replace(/^0+/, "");
+}
+const normTexto = (v: unknown) => s(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9ñ]+/g, " ").trim();
+const COLS_BUSCAR = ["key", "codigo", "nombre", "cedula", "telefono", "datos", "borrado"];
+const _cacheClientas = new WeakMap<object, { t: number; rows: Row[] }>();
+const _llaveProd = {};
+async function todasLasClientas(ctx: Ctx): Promise<Row[]> {
+  // En producción cada pedido trae su propia conexión: la copia vive en el proceso (1 minuto).
+  const llave = (ctx.db as unknown as { tables?: unknown }).tables ? ctx.db as object : _llaveProd;
+  const c = _cacheClientas.get(llave);
+  if (c && ctx.now.getTime() - c.t < 60_000 && ctx.now.getTime() >= c.t) return c.rows;
+  const rows: Row[] = [];
+  for (let desde = 0; desde < 50_000; desde += 1000) {
+    const r = (await consultar(ctx.db, "beta_clientes", { cols: COLS_BUSCAR, limite: 1000, desde, orden: [{ col: "key" }] })).rows;
+    rows.push(...r);
+    if (r.length < 1000) break;
+  }
+  _cacheClientas.set(llave, { t: ctx.now.getTime(), rows });
+  return rows;
+}
+/** 0 = no coincide; más alto = mejor. Cada palabra debe calzar con el nombre, la cédula/RUC, el celular o el código. */
+export function puntajeClienta(r: Row, q: string, conTel = true): number {
+  const d = (r.datos || {}) as Row;
+  const nombre = normTexto([s(d.nombres), s(d.apellido), s(r.nombre)].join(" "));
+  const palabrasNom = nombre.split(" ").filter(Boolean);
+  const ced = nucleoCedula(s(d.cedula) || s(r.cedula)), cedK = nucleoCedula(s(r.key).replace(/^c:/, ""));
+  const tel = conTel ? nucleoTelefono(s(d.telefono) || s(r.telefono)) : "";
+  const cod = s(r.codigo).toUpperCase(), codN = cod.replace(/\D/g, "").replace(/^0+/, "");
+  const limpio = q.trim();
+  const soloDig = limpio.replace(/\.0+$/, "").replace(/[\s.()+-]/g, "");
+  // Todo el texto es un número (cédula, RUC, celular): se compara como número.
+  if (/^\d{5,}(\.0+)?$/.test(soloDig)) {
+    const qc = nucleoCedula(soloDig), qt = nucleoTelefono(soloDig);
+    if (qc && (ced === qc || cedK === qc)) return 100;
+    if (qc.length >= 5 && (ced.startsWith(qc) || cedK.startsWith(qc))) return 80;
+    if (qt.length >= 6 && tel && (tel === qt || tel.endsWith(qt) || tel.startsWith(qt))) return 70;
+    if (qc.length >= 6 && (ced.includes(qc) || cedK.includes(qc))) return 50;
+    return 0;
+  }
+  const mCod = limpio.match(/^c-?(b?)\s*0*(\d+)$/i);
+  if (mCod) return codN === mCod[2].replace(/^0+/, "") && (!mCod[1] || /CB/.test(cod)) ? 100 : 0;
+  const toks = normTexto(limpio).split(" ").filter(Boolean);
+  if (!toks.length) return 0;
+  let pts = 0, fallan = 0, calzan = 0;
+  for (const t of toks) {
+    if (/^\d+$/.test(t)) {
+      const qc = nucleoCedula(t);
+      if (t.length >= 4 && (ced.includes(qc) || cedK.includes(qc) || (tel && tel.includes(nucleoTelefono(t))) || codN === qc)) { pts += 5; calzan++; continue; }
+      return 0;
+    }
+    if (palabrasNom.includes(t)) { pts += 10; calzan++; }
+    else if (palabrasNom.some((w) => w.startsWith(t))) { pts += 7; calzan++; }
+    else if (t.length >= 3 && nombre.includes(t)) { pts += 3; calzan++; }
+    else fallan++;
+  }
+  // «Esteban Ferlito Chiriboga» encuentra a «Esteban Ferlito»: se tolera UNA palabra de más si al menos dos calzan.
+  if (fallan && !(fallan === 1 && calzan >= 2)) return 0;
+  pts -= fallan * 6;
+  if (nombre.startsWith(toks[0])) pts += 2;
+  return pts;
+}
 extend("cl_buscar", "any", async (p, ctx, ses) => {
   const q = s(p.q).trim();
   if (q.length < 2) return { ok: true, items: [] };
+  let todas: Row[] = [];
+  try { todas = await todasLasClientas(ctx); } catch { todas = []; }
+  let rows: Row[] = todas.map((r) => ({ r, pts: puntajeClienta(r, q, verPrivados(ses)) })).filter((x) => x.pts > 0)
+    .sort((a, b) => b.pts - a.pts || s(a.r.nombre).localeCompare(s(b.r.nombre))).slice(0, 12).map((x) => x.r);
+  // Recién creadas (aún no están en la copia de 1 minuto): también la consulta directa.
   const dig = q.replace(/\D/g, "");
-  let F: Filtro;
-  if (/^c-?b?\d+$/i.test(q)) F = { op: "palabras", cols: ["codigo"], val: [q.toUpperCase().replace(/^C-?/, "")] };
-  else if (dig.length >= 5 && dig.length === q.replace(/[\s+.()-]/g, "").length) F = { op: "palabras", cols: ["cedula", "telefono"], val: [dig.length >= 9 && !dig.startsWith("1") && !dig.startsWith("2") ? dig.replace(/^(593)?0?/, "").slice(-9) : dig.replace(/^0+/, "")] };
-  else F = { op: "palabras", cols: ["nombre", "cedula"], val: q.split(/\s+/).filter(Boolean) };
-  let rows: Row[] = [];
-  try { rows = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "codigo", "nombre", "cedula", "telefono", "datos", "borrado"], filtros: [F], limite: 12, orden: [{ col: "nombre" }] })).rows; } catch { rows = []; }
+  const F: Filtro = dig.length >= 5 && dig.length === q.replace(/[\s+.()-]/g, "").length
+    ? { op: "palabras", cols: verPrivados(ses) ? ["cedula", "telefono", "key"] : ["cedula", "key"], val: [nucleoCedula(dig).slice(0, 10) || dig] }
+    : /^c-?b?\d+$/i.test(q) ? { op: "palabras", cols: ["codigo"], val: [q.toUpperCase().replace(/^C-?/, "")] }
+    : { op: "palabras", cols: ["nombre", "cedula"], val: q.split(/\s+/).filter(Boolean) };
+  try {
+    const ya = new Set(rows.map((r) => s(r.key)));
+    const directas = (await consultar(ctx.db, "beta_clientes", { cols: COLS_BUSCAR, filtros: [F], limite: 12, orden: [{ col: "nombre" }] })).rows;
+    for (const r of directas) if (!ya.has(s(r.key)) && puntajeClienta(r, q, verPrivados(ses)) > 0) rows.push(r);
+  } catch { /* solo la copia */ }
   const tel = verPrivados(ses);
   // Una sola fila por clienta (🔗 Duplicados): se juntan sus otras filas (c:…001, unidas a mano) aunque la búsqueda no las trajo.
   const canon = [...new Set(rows.map((r) => canonDeClave(s(r.key))))];

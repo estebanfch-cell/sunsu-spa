@@ -7286,6 +7286,8 @@ function _cliBuscar(q){
   q=(q||'').trim(); if(q.length<2){box.hidden=true;return;}
   window._cliBT=setTimeout(function(){
     Promise.resolve(window.api('cl_buscar',{q:q})).then(function(r){
+      var qEl=document.getElementById('inp-cli-q'); if(qEl&&String(q)!==String(qEl.value||'').trim()) return; // llegó tarde: ya escribió otra cosa
+      if(r&&r.error){box.innerHTML='<div class="cli-sug-i nada">⚠️ '+_histEsc(r.error)+'</div>';box.hidden=false;return;}
       var L=(r&&r.items)||[]; window._cliSug=L;
       if(!L.length){box.innerHTML='<div class="cli-sug-i nada">Sin resultados — llena los datos abajo (cliente nueva)</div>';box.hidden=false;return;}
       box.innerHTML=L.map(function(c,i){return '<button type="button" class="cli-sug-i" onclick="_cliElegir('+i+')"><b>'+_histEsc(c.nombre)+'</b> · <span class="cli-cod">'+_histEsc(c.codigo||'sin código')+'</span><span class="cli-sub">'+(c.cedula?'CI '+_histEsc(c.cedula):'')+(c.telefono?' · '+_histEsc(c.telefono):'')+'</span></button>';}).join('');
