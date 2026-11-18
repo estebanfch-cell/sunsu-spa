@@ -201,13 +201,20 @@ export function esperandoFacturaLunes(fecha: string, hoyGye: string): boolean {
   return h <= martes.toISOString().slice(0, 10);
 }
 
+export type CambioSku = { ticket_id: number; ticket_clave: string; factura: string; desde: string; hacia: string; texto: string };
+
 export function flagsDeseadas(p: {
   tickets: Row[];
   links: LinkCuadre[];
   facturas: FacturaVivo[];
   hoyGye: string;
   importadoGye: string;
+  /** TK81: aquí se juntan las líneas corregidas con la factura (mismo servicio, otro SKU). */
+  cambios?: CambioSku[];
+  /** TK81: precios de catálogo (con IVA) por código, solo para reconocer el mismo servicio con otro SKU. */
+  catalogo?: Map<string, { nombre?: string; pvpConIva?: number }>;
 }): FlagDeseada[] {
+  const cambios = p.cambios || [];
   const maxSeq = p.facturas.reduce((a, f) => Math.max(a, f.seq || 0), 0);
   const linksByTk = new Map<number, LinkCuadre[]>();
   const tksByInv = new Map<string, number[]>();
@@ -257,8 +264,9 @@ export function flagsDeseadas(p: {
         // ya se muestra con las líneas de esa factura (TK72): no hay nada que revisar entre ticket y factura.
         const sinBeta = (x: Row) => !(Array.isArray(x.lineasDetalle) && (x.lineasDetalle as Row[]).length);
         const desdeFactura = hermanos.length <= 1 && sinBeta(t) && n(facV.total) > 0 && Math.abs(n(facV.total) - n(t.estimado)) <= 1;
-        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t]);
-        const rojos = avisos.filter((a) => a.tipo !== "sugerencia");
+        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t], undefined, p.catalogo);
+        const rojos = avisos.filter((a) => a.tipo !== "sugerencia" && a.tipo !== "cambio_sku");
+        for (const a of avisos) if (a.tipo === "cambio_sku" && a.ticketId === id) cambios.push({ ticket_id: id, ticket_clave: clave, factura: L.factura, desde: s(a.desde), hacia: s(a.hacia), texto: a.texto });
         if (rojos.length) {
           out.push({
             ticket_id: id, ticket_clave: clave, kind: "lineas",

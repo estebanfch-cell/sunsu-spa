@@ -1051,3 +1051,10 @@ export function esCancelado(r: Row | null | undefined): boolean {
   const o = r && r.orig && typeof r.orig === "object" ? r.orig as Row : null;
   return !!o && (o.anulado === true || o.cancelado === true);
 }
+
+/** TK81 (Emilia 18/11): diferencias de redondeo de hasta $0.05 no dejan saldo pendiente. */
+export const TOL_SALDO = 0.05;
+export function saldoPendiente(total: number, pagado: number): number {
+  const x = Math.round((Number(total || 0) - Number(pagado || 0)) * 100) / 100;
+  return x > TOL_SALDO ? x : 0;
+}

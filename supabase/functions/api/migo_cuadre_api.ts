@@ -1,7 +1,7 @@
 // Import de facturas Migo (solo lectura), cruce horario, marcas rojo/amarillo y borradores
 // «Pendiente de aprobar» cuando la factura llega antes que el ticket. Nunca emite ni anula facturas.
 import { extend, crearTicket } from "./handlers.ts";
-import { ADMIN, ecuadorParts, n, s, type Row } from "./domain.ts";
+import { ADMIN, ecuadorParts, n, s, skuCode, type Row } from "./domain.ts";
 import { actorOf, guardarArchivo, logAccion, type Ctx, type Ses } from "./lib.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
@@ -15,7 +15,7 @@ import {
   mensajeNoVincula,
   candidatosParaFactura, ticketClaveValida, facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
   type CandidatoBorrador,
-  type FacturaVivo, type FlagDeseada, type LinkCuadre,
+  type CambioSku, type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
 
@@ -76,9 +76,10 @@ async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
   for (const r of tickets) {
     if (canc.has(n(r.id))) continue;
     const clave = claveDe(r, leerSerie(r, "so_num"));
-    const d = (cabs.get(clave)?.datos || {}) as Row;
+    const cab = cabs.get(clave);
+    const d = (cab?.datos || {}) as Row;
     const dets = (lineasByClave.get(clave) || []).slice().sort((a, b0) => n(a.orden) - n(b0.orden)).map((l) => ({
-      sku: s(l.sku), codigo: s(l.sku), producto: s(l.nombre), cantidad: n(l.cantidad) || 1,
+      sku: s(l.sku), codigo: s(l.sku), producto: s(l.nombre), tipo: s(l.tipo), cantidad: n(l.cantidad) || 1,
       precio_unit: n(l.precio_unit), descuento: n(l.descuento_monto),
       subtotal: n(l.total_linea) ? Math.round((n(l.total_linea) / 1.15) * 100) / 100 : 0,
       total: n(l.total_linea),
@@ -90,6 +91,8 @@ async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
       apellido: s(d.apellido) || s(r.apellido),
       extras: s(r.extras) || s((r.orig && typeof r.orig === "object" ? r.orig as Row : {})["Servicios Adicionales "]),
       lineasDetalle: dets,
+      // TK81: con líneas beta, el monto del ticket es el total actual (no el cobrado viejo de la hoja).
+      ...(cab && cab.lineas_beta === true && dets.length && n(cab.total) > 0 ? { estimado: n(cab.total) } : {}),
     });
   }
   return out;
@@ -254,6 +257,52 @@ async function aplicarDatosMigo(ctx: Ctx, actor: string, tickets: Row[], links: 
   return nAct;
 }
 
+/** TK81: precio de catálogo con IVA por código (SUNSU-15 → "15"). */
+async function catalogoPrecios(ctx: Ctx): Promise<Map<string, { nombre?: string; pvpConIva?: number }>> {
+  const m = new Map<string, { nombre?: string; pvpConIva?: number }>();
+  try {
+    for (const c of await todas(ctx, "catalogo")) {
+      const k = skuCode(s(c.sku)); if (!k) continue;
+      m.set(k, { nombre: s(c.producto_servicio), pvpConIva: Math.round(n(c.total_con_iva) * 100) / 100 });
+    }
+  } catch { /* sin catálogo */ }
+  return m;
+}
+/** TK81: línea del ticket con otro SKU del mismo servicio (mismo precio y cantidad) → manda la factura. Se registra una vez y queda en el log. */
+async function registrarCambiosSku(ctx: Ctx, actor: string, cambios: CambioSku[]): Promise<number> {
+  if (!cambios.length) return 0;
+  const prev = new Set((await todas(ctx, "beta_ticket_flags")).map((f) => s(f.id)));
+  const now = ctx.now.toISOString();
+  let nuevos = 0;
+  for (const c of cambios) {
+    const id = "migo:" + c.ticket_id + ":sku:" + c.desde + ">" + c.hacia;
+    if (prev.has(id)) continue;
+    prev.add(id);
+    await ctx.db.write(actor, "beta_ticket_flags", "insert", {}, {
+      id, ticket_id: c.ticket_id, ticket_clave: c.ticket_clave, motivo: "Línea corregida con la factura", detalle: c.texto,
+      factura: c.factura, fuente: "migo", resuelto: true, resuelto_por: actor, resuelto_at: now,
+      nota: "mismo servicio, mismo precio y cantidad; SKU de la factura", created_at: now, updated_at: now,
+    });
+    try { await logAccion(ctx.db, actor, "LÍNEA CORREGIDA POR FACTURA", c.ticket_clave + " · " + c.factura + " · " + c.texto); } catch { /* log opcional */ }
+    nuevos++;
+  }
+  return nuevos;
+}
+/** TK81 (Emilia 18/11): los flags se recalculan cada vez que cambian las líneas de un ticket (sin tocar cruces ni borradores). */
+export async function reevaluarFlags(ctx: Ctx, actor: string): Promise<Row> {
+  const tickets = await ticketsParaCuadre(ctx);
+  const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
+  if (!facturas.length) return { ok: true, omitido: "sin facturas" };
+  const links = cruzar(facturas, tickets);
+  let importadoGye = "";
+  for (const r of await todas(ctx, "beta_migo_importes")) { const g = fechaGye(r.imported_at); if (g > importadoGye) importadoGye = g; }
+  const cambios: CambioSku[] = [];
+  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye: ecuadorParts(ctx.now).ymd, importadoGye, cambios, catalogo: await catalogoPrecios(ctx) });
+  const fl = await syncFlags(ctx, actor, flags);
+  const cs = await registrarCambiosSku(ctx, actor, cambios);
+  return { ok: true, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs };
+}
+
 async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const tickets = await ticketsParaCuadre(ctx);
   const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
@@ -267,8 +316,10 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
     const g = fechaGye(r.imported_at);
     if (g > importadoGye) importadoGye = g;
   }
-  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye, importadoGye });
+  const cambios: CambioSku[] = [];
+  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye, importadoGye, cambios, catalogo: await catalogoPrecios(ctx) });
   const fl = await syncFlags(ctx, actor, flags);
+  const cs = await registrarCambiosSku(ctx, actor, cambios);
   const br = await syncBorradores(ctx, actor, facturas, links);
   const flagsNuevas = fl.nuevas || [];
   const porFacturar = flagsNuevas.filter((x) => s(x.kind) === "sinfac").map((x) => ({
@@ -276,7 +327,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   }));
   return {
     ok: true, hoy: hoyGye, importado: importadoGye || null, facturas: facturas.length, links: links.length,
-    datos_migo: datosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas,
+    datos_migo: datosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs,
     borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados,
     // Solo novedades de ESTA corrida (para el resumen del CLI). No cambia el cruce.
     resumen: { borradores: br.creados || [], flags: flagsNuevas, por_facturar: porFacturar },
