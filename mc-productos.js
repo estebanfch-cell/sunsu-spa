@@ -57,7 +57,7 @@
       ".mcp-est{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px}.mcp-sw{position:relative;width:46px;height:26px;border-radius:13px;border:none;background:#c9c9c9;cursor:pointer;transition:background .15s}.mcp-sw.on{background:#2e9e5b}.mcp-sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}.mcp-sw.on::after{left:23px}.mcp-sw:disabled{opacity:.6;cursor:default}",
       ".mcp-chip{display:inline-flex;align-items:center;gap:4px;background:var(--cream);border:1px solid var(--cream-d);border-radius:999px;padding:2px 8px;margin:2px;font-size:.74rem}.mcp-chx{border:none;background:none;cursor:pointer;color:var(--gray)}",
       ".mcp-tag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:.7rem;font-weight:700;background:var(--blue-l);color:var(--navy-d);white-space:nowrap}",
-      ".mcp-tag.serv{background:var(--gold-l);color:#8a6420}.mcp-tag.bajo{background:var(--peach-l);color:var(--pink-d)}.mcp-tag.agot{background:var(--red-l);color:var(--red)}.mcp-tag.beta{background:var(--green-l);color:#4d7360}",
+      ".mcp-tag.serv{background:var(--gold-l);color:#8a6420}.mcp-tag.bajo{background:var(--peach-l);color:var(--pink-d)}.mcp-tag.agot{background:var(--red-l);color:var(--red)}.mcp-tag.beta{background:var(--green-l);color:#4d7360}.mcp-tag.ok{background:var(--green-l,#e8f5ee);color:#2e7d52}",
       ".mcp-sku{font-family:ui-monospace,Menlo,monospace;font-size:.8rem;color:var(--navy-d)}",
       ".mcp-top{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}",
       ".mcp-card{background:var(--white);border-radius:16px;box-shadow:var(--shadow);padding:16px}",
@@ -127,13 +127,13 @@
     { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
     { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
     { id: "g_CONSIGNACION", t: "Venta", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
-    { id: "stock", t: "Stock", def: 1, num: 1 },
+    { id: "stock", t: "Stock", def: 1, num: 1 }, { id: "estStock", t: "Estado stock", def: 1, nuevo: 1 },
   ];
   var COLS_KEY = "sunsu.mcp.cols";
   function colsVis() {
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem(COLS_KEY) || "null"); } catch (x) { saved = null; }
-    return COLS.filter(function (c) { return (!c.costos || MC.verCostos) && (c.fijo || (Array.isArray(saved) ? saved.indexOf(c.id) >= 0 : c.def)); });
+    return COLS.filter(function (c) { return (!c.costos || MC.verCostos) && (c.fijo || (Array.isArray(saved) ? saved.indexOf(c.id) >= 0 || (c.nuevo && saved.indexOf("stock") >= 0 && saved.indexOf("-" + c.id) < 0) : c.def)); });
   }
   function guardarCols(ids) { try { localStorage.setItem(COLS_KEY, JSON.stringify(ids)); } catch (x) {} }
   // Árbol de categorías: tipo → subtipo → categoría.
@@ -146,6 +146,7 @@
     if (id === "costo") return Number(p.compraReal) || 0;
     if (id === "margen") return Number(p.margenPct) || 0;
     if (id === "stock") return p.tipo === "servicio" ? -1 : Number(p.stock) || 0;
+    if (id === "estStock") return p.tipo === "servicio" ? 9 : p.estado === "agotado" ? 0 : p.estado === "bajo" ? 1 : 2;
     if (id.indexOf("g_") === 0) return Number((p.porGrupo || {})[id.slice(2)]) || 0;
     return String(p[id] || "");
   }
@@ -196,7 +197,8 @@
     if (c.id === "estado") v = p.activo === false ? '<span class="mcp-dot off" title="Inactivo"></span><span class="mcp-sub">Inactivo</span>' : '<span class="mcp-dot on" title="Activo"></span><span class="mcp-sub">Activo</span>';
     else if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
     else if (c.id === "tipo") v = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
-    else if (c.id === "stock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>" + (p.estado === "agotado" ? ' <span class="mcp-tag agot">agotado</span>' : p.estado === "bajo" ? ' <span class="mcp-tag bajo">bajo</span>' : "");
+    else if (c.id === "stock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>";
+    else if (c.id === "estStock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : p.estado === "agotado" ? '<span class="mcp-tag agot">Agotado</span>' : p.estado === "bajo" ? '<span class="mcp-tag bajo">Bajo</span>' : '<span class="mcp-tag ok">OK</span>';
     else if (c.id === "pvp") v = money(p.pvp);
     else if (c.id === "costo") v = money(p.compraReal);
     else if (c.id === "margen") v = p.margenPct == null ? "—" : q2(Math.round(Number(p.margenPct) * 10) / 10) + "%";
@@ -289,6 +291,7 @@
       cp.querySelectorAll("[data-mcp-col]").forEach(function (x) {
         x.onchange = function () {
           var ids = [].map.call(cp.querySelectorAll("[data-mcp-col]:checked"), function (y) { return y.getAttribute("data-mcp-col"); });
+          COLS.forEach(function (c) { if (c.nuevo && ids.indexOf(c.id) < 0) ids.push("-" + c.id); });
           guardarCols(ids); pintar();
         };
       });
