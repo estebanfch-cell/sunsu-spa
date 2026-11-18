@@ -90,6 +90,7 @@ function _lgPedir(tabla,accion,body){
   Object.keys(campos).forEach(function(k){
     if(['accion','token','usuario','row','cedula','sku','codigo'].indexOf(k)>=0) return;
     var a=_lgTxt(base[k]), d=_lgTxt(campos[k]);
+    if(/^(no|)$/i.test(a)&&/^(no|)$/i.test(d)) return;
     if(k==='manoObra'){ a=String(parseFloat(base[k])||0); d=String(parseFloat(campos[k])||0); }
     if(a!==d){ cambios[k]=campos[k]; antes[k]=base[k]==null?'':base[k]; }
   });
@@ -8508,7 +8509,7 @@ function _cabProFormPintar(){
   bd.innerHTML=h;
   window._lgBase=window._lgBase||{}; window._lgBase.cabina_protocolo={nombre:p.nombre, manoObra:p.manoObra||0, video:p.video||'', notas:p.notas||'', pasos:p.pasos||[]};
   var foto=function(){ return JSON.stringify([(window._cabEd||[]).map(function(x){return [x.desc||'',x.productoCod||'',+x.cantidad||0,x.unidad||'',+x.minutos||0];}),parseFloat((document.getElementById('cab-mo-'+i)||{}).value)||0,((document.getElementById('cab-vid-'+i)||{}).value||'').trim(),((document.getElementById('cab-not-'+i)||{}).value||'').trim()]); };
-  if(window._cabEdBaseIdx!==i||!window._cabEdBase) { window._cabEdBaseIdx=i; window._cabEdBase=JSON.stringify([(p.pasos||[]).map(function(x){return [x.desc||'',x.productoCod||'',+x.cantidad||0,x.unidad||'',+x.minutos||0];}),parseFloat(p.manoObra)||0,String(p.video||'').trim(),String(p.notas||'').trim()]); }
+  if(window._cabEdBaseIdx!==i||!window._cabEdBase) { window._cabEdBaseIdx=i; window._cabEdBase=foto(); }
   _lgMirarFn(bd, foto, window._cabEdBase);
 }
 // Acciones tipicas de un protocolo de spa: dropdown para armar pasos rapido.
