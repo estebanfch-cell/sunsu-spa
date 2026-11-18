@@ -698,9 +698,40 @@
     .mob-cards { display: flex; }
     .mob-hide { display: none !important; }
     .mob-only { display: inline-flex !important; }
-    #hist-buscar, #mcoc-q { font-size: 16px !important; } /* iPhone no hace zoom al escribir */
-    .mcoc-tools:has(.mcoc-chip) { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
-    .mcoc-tools .mcoc-chip { flex: none; }
+    /* iPhone: nada con scroll horizontal (Emilia 17/11 22:13) */
+    html, body { overflow-x: hidden; max-width: 100%; }
+    input, select, textarea { font-size: 16px !important; max-width: 100%; }
+    img, video, canvas, iframe { max-width: 100%; }
+    .sheet-scroll { overflow-x: visible !important; }
+    .btn, button { white-space: normal; }
+    table.mob-stack { display: block; width: 100% !important; min-width: 0 !important; max-width: 100% !important; border: 0 !important; box-shadow: none !important; background: transparent !important; }
+    table.mob-stack > thead, table.mob-stack > colgroup { display: none !important; }
+    table.mob-stack > tbody, table.mob-stack > tfoot { display: block; width: 100%; }
+    table.mob-stack tr { display: block; background: #fff; border: 1px solid var(--cream-d); border-radius: 14px; padding: 8px 12px; margin: 0 0 10px; box-shadow: 0 1px 3px rgba(43,63,92,.05); }
+    table.mob-stack tr:has(> th:only-child), table.mob-stack tr.tk-flagged { border-left: 4px solid #d9534f; }
+    table.mob-stack tr.tk-falta { border-left: 4px solid #e0b100; }
+    table.mob-stack td, table.mob-stack tbody th, table.mob-stack tfoot th { display: flow-root; overflow-wrap: anywhere; width: auto !important; max-width: none !important; min-width: 0 !important; padding: 4px 0 !important; border: 0 !important; white-space: normal !important; overflow: visible !important; text-overflow: clip !important; text-align: right !important; background: transparent !important; position: static !important; overflow-wrap: anywhere; }
+    table.mob-stack td::before, table.mob-stack tbody th::before { content: attr(data-label); float: left; max-width: 46%; margin: 1px 12px 0 0; text-align: left; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--gray); }
+    table.mob-stack td[data-label=""]::before, table.mob-stack td:not([data-label])::before { display: none; }
+    table.mob-stack td[data-label=""] { text-align: left !important; }
+    table.mob-stack tr > td:first-child { font-weight: 800; font-size: .95rem; color: var(--navy-d, #2b3f5c); text-align: left !important; }
+    table.mob-stack tr > td:first-child::before { display: none; }
+    table.mob-stack td > * { max-width: 100%; }
+    table.mob-stack td input:not([type=checkbox]):not([type=radio]), table.mob-stack td select { min-width: 0; width: 58% !important; max-width: 58%; display: inline-block; vertical-align: middle; }
+    table.mob-stack td:empty { display: none; }
+    input[type=date], input[type=time], input[type=month] { min-width: 0; max-width: 100%; box-sizing: border-box; }
+    .mctk-f { grid-template-columns: minmax(84px, 38%) minmax(0, 1fr) !important; }
+    .mctk-f > *, .mctk-f dd { min-width: 0; overflow-wrap: anywhere; }
+    .ix-line { flex-wrap: wrap; }
+    .ix-line > * { min-width: 0; overflow-wrap: anywhere; }
+    .ix-cell { min-width: 2.5em; max-width: 100%; }
+    .row > * { min-width: 0; }
+    .row:has(> .ix-lines) { grid-template-columns: minmax(0, 1fr) auto; }
+    .row:has(> .ix-lines) > :first-child { grid-column: 1 / -1; }
+    .row:has(> .ix-lines) .name { white-space: normal; overflow-wrap: anywhere; }
+    .mctk-ed { max-width: 100%; margin-right: 0; }
+    .mc-cos { white-space: normal !important; max-width: 100%; }
+    .mccf-card, .mctk-grid, .mctk-grid dl { min-width: 0; max-width: 100%; }
     .tk-split .tk-list > table, .mob-table { display: none !important; }
   }
   .tk-sku { font-family: ui-monospace, monospace; font-size: 0.68rem; }
@@ -5750,32 +5781,33 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261117tk29"></script>
-<script src="beta-screens.js?v=20261117tk29"></script>
-<script src="beta-inline.js?v=20261117tk29"></script>
-<script src="mc-productos.js?v=20261117tk29"></script>
-<script src="mc-nav.js?v=20261117tk29"></script>
-<script src="mc-permisos.js?v=20261117tk29"></script>
-<script src="mc-protocolos.js?v=20261117tk29"></script>
-<script src="mc-conteo.js?v=20261117tk29"></script>
-<script src="mc-transferencias.js?v=20261117tk29"></script>
-<script src="mc-ajustes.js?v=20261117tk29"></script>
-<script src="vendor-qrcode.js?v=20261117tk29"></script>
-<script src="mc-tickets.js?v=20261117tk29"></script>
-<script src="mc-paquetes.js?v=20261117tk29"></script>
-<script src="mc-aperturas.js?v=20261117tk29"></script>
-<script src="mc-acceso.js?v=20261117tk29"></script>
-<script src="mc-barras.js?v=20261117tk29"></script>
-<script src="mc-caja.js?v=20261117tk29"></script>
-<script src="mc-giftcards.js?v=20261117tk29"></script>
-<script src="mc-multas.js?v=20261117tk29"></script>
-<script src="mc-clientes.js?v=20261117tk29"></script>
-<script src="mc-clientes-dup.js?v=20261117tk29"></script>
-<script src="mc-docpdf.js?v=20261117tk29"></script>
-<script src="mc-compras.js?v=20261117tk29"></script>
-<script src="mc-consignacion.js?v=20261117tk29"></script>
-<script src="mc-recepciones.js?v=20261117tk29"></script>
-<script src="mc-agenda.js?v=20261117tk29"></script>
+<script src="mc-buscar.js?v=20261117tk30"></script>
+<script src="beta-screens.js?v=20261117tk30"></script>
+<script src="beta-inline.js?v=20261117tk30"></script>
+<script src="mc-productos.js?v=20261117tk30"></script>
+<script src="mc-nav.js?v=20261117tk30"></script>
+<script src="mc-permisos.js?v=20261117tk30"></script>
+<script src="mc-protocolos.js?v=20261117tk30"></script>
+<script src="mc-conteo.js?v=20261117tk30"></script>
+<script src="mc-transferencias.js?v=20261117tk30"></script>
+<script src="mc-ajustes.js?v=20261117tk30"></script>
+<script src="vendor-qrcode.js?v=20261117tk30"></script>
+<script src="mc-tickets.js?v=20261117tk30"></script>
+<script src="mc-paquetes.js?v=20261117tk30"></script>
+<script src="mc-aperturas.js?v=20261117tk30"></script>
+<script src="mc-acceso.js?v=20261117tk30"></script>
+<script src="mc-barras.js?v=20261117tk30"></script>
+<script src="mc-caja.js?v=20261117tk30"></script>
+<script src="mc-giftcards.js?v=20261117tk30"></script>
+<script src="mc-multas.js?v=20261117tk30"></script>
+<script src="mc-clientes.js?v=20261117tk30"></script>
+<script src="mc-clientes-dup.js?v=20261117tk30"></script>
+<script src="mc-docpdf.js?v=20261117tk30"></script>
+<script src="mc-compras.js?v=20261117tk30"></script>
+<script src="mc-consignacion.js?v=20261117tk30"></script>
+<script src="mc-recepciones.js?v=20261117tk30"></script>
+<script src="mc-movil.js?v=20261117tk30"></script>
+<script src="mc-agenda.js?v=20261117tk30"></script>
 <script>draw();</script>
 </body>
 </html>

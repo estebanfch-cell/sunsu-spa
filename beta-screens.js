@@ -5805,7 +5805,9 @@ function promoOff(fila,btn){
   .catch(function(){ btn.disabled=false; toast('❌ Sin conexión','#B86B6B'); });
 }
 // ── Dashboard estilo MineCore (Hoy / Semana / Mes / Año / Rango exacto vs periodo anterior) ──
-var _dashSt=window._dashSt||{periodo:'hoy',desde:'',hasta:'',prodTab:'val'};
+// Solo rango exacto desde — hasta (Emilia 17/11 22:13: sin Hoy/Semana/Mes/Año ni 12 meses/Migo/Todo). Por defecto: hoy.
+var _dashSt=window._dashSt||(function(){ var h=new Date(), y=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); return {periodo:'rango',desde:y,hasta:y,prodTab:'val'}; })();
+if(_dashSt.periodo!=='rango'){ _dashSt.periodo='rango'; _dashSt.desde=''; _dashSt.hasta=''; }
 window._dashSt=_dashSt;
 function _dE(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function _dM(v){var x=Number(v)||0;var neg=x<0;return (neg?'-$':'$')+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -5890,8 +5892,11 @@ function _dashCss(){
     +'.dsh-tabs{display:flex;background:var(--blue-l);border-radius:12px;padding:4px;gap:3px;margin:6px 0 8px}'
     +'.dsh-tab{flex:1;border:0;background:transparent;color:var(--gray);font-weight:800;font-size:0.72rem;padding:8px 4px;border-radius:9px;cursor:pointer}'
     +'.dsh-tab.on{background:var(--navy);color:#fff;box-shadow:var(--shadow-sm)}'
-    +'.dsh-rango{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:0.64rem;font-weight:700;color:var(--gray);margin-bottom:10px}'
-    +'.dsh-rango input{width:auto!important;flex:0 1 140px;min-width:118px;margin:0!important;border:1.2px solid var(--cream-d);border-radius:8px;padding:5px 6px;font-size:0.66rem;color:var(--text);background:#fff}'
+    +'.dsh-rango{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:8px;font-size:0.64rem;font-weight:700;color:var(--gray);margin:8px 0 4px}'
+    +'.dsh-rango label{display:flex;flex-direction:column;gap:3px;min-width:0;text-transform:uppercase;letter-spacing:.04em}'
+    +'.dsh-rango input{width:100%!important;min-width:0!important;box-sizing:border-box;margin:0!important;border:1.2px solid var(--cream-d);border-radius:8px;padding:7px 6px;font-size:0.8rem;color:var(--text);background:#fff;-webkit-appearance:none;appearance:none}'
+    +'.dsh-rlbl{font-size:0.64rem;font-weight:700;color:var(--gray);margin-bottom:10px}'
+    +'@media(max-width:640px){.dsh-rango{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dsh-rango button{grid-column:1/-1}}'
     +'.dsh-rango button{border:1.5px solid var(--navy);background:#fff;color:var(--navy);font-weight:800;border-radius:8px;padding:5px 11px;font-size:0.64rem;cursor:pointer}'
     +'.dsh-rango button.on{background:var(--navy);color:#fff}'
     +'.dsh-card{padding:12px 14px;margin-bottom:8px}'
@@ -5912,9 +5917,11 @@ function _dashCss(){
   document.head.appendChild(st);
 }
 function dashPeriodo(p){ _dashSt.periodo=p; renderInicio(document.getElementById('content')); }
-function dashRango(){
+function dashRango(auto){
   var a=document.getElementById('dsh-desde'), b=document.getElementById('dsh-hasta');
-  if(!a||!b||!a.value||!b.value){ if(typeof toast==='function') toast('Elige las dos fechas','#B86B6B'); return; }
+  if(!a||!b||!a.value||!b.value){ if(!auto&&typeof toast==='function') toast('Elige las dos fechas','#B86B6B'); return; }
+  if(a.value>b.value){ if(!auto&&typeof toast==='function') toast('«Desde» va antes de «Hasta»','#B86B6B'); return; }
+  if(auto&&a.value===_dashSt.desde&&b.value===_dashSt.hasta) return;
   _dashSt.periodo='rango'; _dashSt.desde=a.value; _dashSt.hasta=b.value;
   renderInicio(document.getElementById('content'));
 }
@@ -5987,12 +5994,9 @@ function renderInicio(c){
     var head='<div style="display:flex;justify-content:space-between;align-items:center">'
       +'<div style="font-size:1.02rem;font-weight:800;color:var(--navy-d);letter-spacing:1px">DASHBOARD</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+_dE(d.actualizado||'')+'</button></div>'
-      +'<div class="dsh-tabs">'+tabs+'</div>'
-      +'<div class="dsh-rango"><span>Rango exacto</span><input type="date" id="dsh-desde" value="'+_dE(d.desde)+'"><span>a</span><input type="date" id="dsh-hasta" value="'+_dE(d.hasta)+'">'
-      +'<button class="'+(d.periodo==='rango'?'on':'')+'" onclick="dashRango()">Aplicar</button>'
-      +[['12m','12 meses'],['2025','2025'],['migo','Migo (mar 25–abr 26)'],['todo','Todo']].map(function(x){return '<button class="'+(d.periodo==='rango'&&st.preset===x[0]?'on':'')+'" onclick="dashPreset(\''+x[0]+'\')">'+x[1]+'</button>';}).join('')
-      +'<span>'+_dE(d.label)+' · vs '+_dE(d.labelPrev)+'</span></div>'
-      +(d.fuentes&&d.fuentes.conMigo?'<div class="dsh-sub" style="background:var(--blue-l);border-radius:8px;padding:6px 9px;margin-bottom:8px">📒 Hasta abril 2026 los números salen de las <b>facturas de Migo</b>; desde mayo 2026, de los <b>tickets del sistema</b>.</div>':'');
+      +'<div class="dsh-rango"><label>Desde<input type="date" id="dsh-desde" value="'+_dE(d.desde)+'" onchange="dashRango(1)"></label><label>Hasta<input type="date" id="dsh-hasta" value="'+_dE(d.hasta)+'" onchange="dashRango(1)"></label>'
+      +'<button class="on" onclick="dashRango()">Aplicar</button></div>'
+      +'<div class="dsh-rlbl">'+_dE(d.label)+' · vs '+_dE(d.labelPrev)+'</div>';
     var spark=_dSpark(hist.map(function(x){return x.venta;}));
     var kVenta=_dKpi('Venta sin IVA',_dM(a.ventaSinIva),a.ventaSinIva,p.ventaSinIva,_dM(p.ventaSinIva),
       '<div class="dsh-sub">IVA '+_dM(a.iva)+' · Total c/IVA '+_dM(a.ventaConIva)+' · '+_dN(a.tickets)+' ticket'+(a.tickets===1?'':'s')+'</div>'+spark);
@@ -6010,7 +6014,7 @@ function renderInicio(c){
     var pagosTot=(pg.efectivo||0)+(pg.transferencia||0)+(pg.tarjeta||0)+(pg.mixto||0)+(pg.otros||0);
     var pf=function(lbl,v){ return '<div style="display:flex;justify-content:space-between" class="dsh-l"><span>'+lbl+'</span><span><b>'+_dM(v)+'</b> <span class="dsh-sub">'+(pagosTot>0?_dP(v/pagosTot*100):'0.0%')+'</span></span></div>'; };
     var kPag='<div class="card dsh-card"><div class="dsh-head"><span class="dsh-t">Formas de pago · sin IVA</span><span class="dsh-sub">'+_dM(pagosTot)+'</span></div>'
-      +pf('Efectivo',pg.efectivo)+pf('Transferencia',pg.transferencia)+pf('Tarjeta',pg.tarjeta)+pf('Mixto sin desglose',pg.mixto)+((pg.otros||0)>0.004?pf(d.fuentes&&d.fuentes.conMigo?'Sin método claro / «Crédito» en Migo':'Sin método claro',pg.otros):'')+'</div>';
+      +pf('Efectivo',pg.efectivo)+pf('Transferencia',pg.transferencia)+pf('Tarjeta',pg.tarjeta)+pf('Mixto sin desglose',pg.mixto)+((pg.otros||0)>0.004?pf('Sin método claro',pg.otros):'')+'</div>';
     var tabla=hist.slice().reverse().map(function(x){return '<tr style="cursor:pointer" '+(d.historiaMensual?'data-dmes="'+_dE(x.k)+'" title="Ver los días de este mes"':'data-dd="dia" data-ddk="'+_dE(x.k)+'" data-ddn="'+_dE(x.label)+'" title="Ver los comprobantes del día"')+'><td>'+_dE(x.label)+(x.fuente==='migo'?' <span class="dsh-pill dsh-pill-gray">Migo</span>':'')+'</td><td>'+_dM(x.venta)+'</td><td>'+((x.valProd||0)>0?_dP(x.margenProd):'—')+'</td><td>'+_dN(x.faciales)+'</td><td>'+_dN(x.productos)+'</td></tr>';}).join('');
     var hCard='<div class="card dsh-card"><div class="dsh-t" style="margin-bottom:6px">Historia <span class="dsh-sub" style="text-transform:none">'+(d.periodo==='hoy'?'últimos 30 días':d.historiaMensual?'cada mes':'cada día del periodo')+'</span></div>'
       +_dBars(hist,'venta',d.historiaMensual)
@@ -6540,9 +6544,9 @@ function renderKpis(c){
     +_kpiToggle('mes')
     +'<div style="background:white;border-radius:13px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow-sm)">'
     +'<div style="display:flex;gap:8px;align-items:flex-end">'
-    +'<div style="flex:1"><div style="font-size:0.6rem;color:var(--gray);margin-bottom:3px">Desde</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:0.6rem;color:var(--gray);margin-bottom:3px">Desde</div>'
     +'<input type="date" id="kpi-desde" value="'+inicioStr+'" style="width:100%;padding:7px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
-    +'<div style="flex:1"><div style="font-size:0.6rem;color:var(--gray);margin-bottom:3px">Hasta</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:0.6rem;color:var(--gray);margin-bottom:3px">Hasta</div>'
     +'<input type="date" id="kpi-hasta" value="'+todayStr+'" style="width:100%;padding:7px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.78rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'
     +'<button onclick="cargarKpis()" style="padding:9px 16px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer">Ver</button>'
     +'</div>'
