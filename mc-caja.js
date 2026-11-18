@@ -76,7 +76,7 @@
           (r.admin ? '<td class="num"><button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button></td>' : "") + "</tr>";
       }).join("");
       var legado = r.legado > 0 ? '<p class="mccj-sub">Cobrado en el sistema anterior: ' + $m(r.legado) + ((r.legadoMetodos || []).length ? " · " + e(r.legadoMetodos.map(function (m) { return m.metodo + (m.ref ? " " + m.ref : ""); }).join(", ")) : "") + "</p>" : "";
-      var saldo = Math.max(0, Math.round((total - (r.legado || 0) - (r.pagadoBeta || 0)) * 100) / 100);
+      var saldo = Math.round((total - (r.legado || 0) - (r.pagadoBeta || 0)) * 100) / 100; if (!(saldo > 0.05)) saldo = 0; // TK81: redondeo ≤ $0.05 no es saldo
       host.innerHTML = '<div class="mccf-card mccj-card"><b>💵 Pagos</b> <span class="mccj-sub">· saldo ' + $m(saldo) + "</span>" + legado +
         (filas ? '<table class="mccj-t"><thead><tr><th>Fecha</th><th>Forma</th><th class="num">Monto</th><th>Registró</th>' + (r.admin ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table>" : "") +
         (saldo > 0.009 ? '<div class="mccj-f" style="margin-top:8px"><label>Forma de pago<select id="pg-met">' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("") + "</select></label>" +
