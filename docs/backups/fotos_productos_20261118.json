@@ -1,0 +1,438 @@
+{
+ "fecha": "2026-11-18",
+ "nota": "Fotos de productos guardadas en app_archivos (kind foto-producto), sin hotlink. Amazon bloquea curl/fetch de imágenes, así que la fuente es la marca o una tienda reconocida con el mismo producto y tamaño. Respaldo previo: tabla beta_productos_backup_20261118_fotos (id, sku, foto_url, foto_thumb).",
+ "puestas": [
+  {
+   "sku": "AS-003",
+   "archivo": "10d09894f2d34fb5adef",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-centella-skin-resurrection-cream-50ml/info.html/pid.1118468043",
+   "nombre": "Crema Centella Skin Resurrection - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-004",
+   "archivo": "8d127fe172604c899afd",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-centella-skin-resurrection-toner-150ml/info.html/pid.1118468046",
+   "nombre": "Tónico Centella Skin Resurrection - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-005",
+   "archivo": "1d3123424edd4eae939e",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-centella-skin-resurrection-serum-60ml/info.html/pid.1118468045",
+   "nombre": "Serum Centella Skin Resurrection - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-006",
+   "archivo": "cb4034a6255a4951bbbd",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-ac-clear-spot-patch-24-patches/info.html/pid.1118468055",
+   "nombre": "AC Clear Spot Patch - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-007",
+   "archivo": "6d72b707c63642798b4c",
+   "fuente": "https://www.b2b.koseon.eu/en/products/fabyou-aqua-relaxing-sun-cream-spf50-pa-50ml",
+   "nombre": "Bloqueador Aqua Relaxing Sun Cream SPF50+ - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-009",
+   "archivo": "b570868191ee4b958e44",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-ac-clear-cleansing-foam-150g/info.html/pid.1118468056",
+   "nombre": "AC CLEAR Clensing foam - eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "AS-010",
+   "archivo": "9aeabd58b7e342f38b0e",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-cica-blemish-clear-cream-50g/info.html/pid.1118467999",
+   "nombre": "CICA BLEMISH Clear Cream - Eyenlip",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "BV-002",
+   "archivo": "62b93c9896a244a3931b",
+   "fuente": "Google Drive (foto existente, SUNSU cabina_fotos)",
+   "nombre": "BV-002",
+   "foto_url_anterior": "https://lh3.googleusercontent.com/d/1M7gd2dDubbmZ0knB7Z3EnUG1EYZ0u-Q2"
+  },
+  {
+   "sku": "BV-003",
+   "archivo": "f5e2efb58dae4cc6a172",
+   "fuente": "Google Drive (foto existente, SUNSU cabina_fotos)",
+   "nombre": "BV-003",
+   "foto_url_anterior": "https://lh3.googleusercontent.com/d/1zT-FIXfZ00EfMDcJ4K8ifAAmQij6AlXs"
+  },
+  {
+   "sku": "INV-003",
+   "archivo": "9cd32a20a9614b56b933",
+   "fuente": "https://www.dodoskin.com/products/skinfood-rice-mask-wash-off-100g",
+   "nombre": "SKINFOOD Rice Mask Wash Off",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-005",
+   "archivo": "2739325accff40fea437",
+   "fuente": "https://www.dodoskin.com/products/im-from-rice-serum-30ml",
+   "nombre": "I'm from Rice Serum",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-010",
+   "archivo": "890f0d0e40e74d41988f",
+   "fuente": "https://www.stylekorean.com/product/deep-vita-c-capsule-cream-55g/1718075429",
+   "nombre": "Medicube Deep Vitamin C Golden Capsule Face Moisturizer",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-014",
+   "archivo": "90c87caf05e743539498",
+   "fuente": "https://www.dodoskin.com/products/im-from-rice-toner-150ml",
+   "nombre": "I'm from Rice Toner",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-028",
+   "archivo": "ee95f5cb0e894e859c48",
+   "fuente": "https://shopseoulia.com/en-us/products/daleaf-chlorella-better-root-hair-tonic-100ml",
+   "nombre": "Daleaf Chlorella Better Root Hair Tonic",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-032",
+   "archivo": "4d2412e257604c3680ac",
+   "fuente": "https://www.dodoskin.com/products/dr-jart-cicapair%E2%84%A2-intensive-soothing-repair-gel-cream-50ml",
+   "nombre": "Dr.Jart+ Cicapair Intensive Soothing Repair Gel Cream",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-033",
+   "archivo": "a9ff6d06326f4b5bb250",
+   "fuente": "https://www.dodoskin.com/products/dr-jart-cicapair%E2%84%A2-intensive-soothing-repair-serum-30ml",
+   "nombre": "Dr.Jart+ Cicapair Intensive Soothing Repair Serum",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-038",
+   "archivo": "0f695985e2d24ca994e5",
+   "fuente": "https://www.dodoskin.com/products/sidmool-jojoba-lip-essence-13ml",
+   "nombre": "Jojoba Lip Essence",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-040",
+   "archivo": "f368f5c91f7c454c8490",
+   "fuente": "https://www.dodoskin.com/products/copy-of-d-alba-white-truffle-first-spray-serum-100ml",
+   "nombre": "d'alba Piedmont Italian White Truffle First Spray Serum",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-050",
+   "archivo": "414e936641594245a058",
+   "fuente": "https://krkoco.com/products/dr-cpu-bright-arbutin-special-ampoule-100pcs",
+   "nombre": "Special Ampoule Bright",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-051",
+   "archivo": "d0ac081288b64806bceb",
+   "fuente": "https://krkoco.com/products/dr-cpu-elastic-peptide-special-ampoule-100pcs",
+   "nombre": "Special Ampoule Elastic",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-052",
+   "archivo": "88c311cf5e3445b2ad04",
+   "fuente": "https://krkoco.com/products/dr-cpu-moist-waterlin-special-ampoule-100pcs",
+   "nombre": "Special Ampoule Moist",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-053",
+   "archivo": "90fdb71e643345e18015",
+   "fuente": "https://krkoco.com/products/dr-cpu-purifying-special-ampoule-100pcs",
+   "nombre": "Special Ampoule Purifying",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-059",
+   "archivo": "1b631729e3614719984e",
+   "fuente": "https://www.fybeca.com/discos-desmaquilladores-de-algodon-soft-duo-100-unidades/ECFY_84956.html",
+   "nombre": "Discos Desmaquilladores de Algodon Sort duo",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-060",
+   "archivo": "13cb4755bdae40ecb3a0",
+   "fuente": "https://www.fybeca.com/cotonetes-frasco/ECFY_157001.html",
+   "nombre": "Cotoneetes Tippy's Frasco",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-062",
+   "archivo": "412a065bb91248429797",
+   "fuente": "https://www.stylekorean.com/product/nosca9-trouble-serum-s-30ml/1747297340",
+   "nombre": "NOSCA9 Trouble Serum S",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-075",
+   "archivo": "e1fc4e1bf7284b4c8a6a",
+   "fuente": "https://drestheeurope.com/en/products/azulene-relief-solution-ampoule-52ml",
+   "nombre": "Azulene Relief Solution Ampoule - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "INV-077",
+   "archivo": "b681dcdcd27f4c2788f9",
+   "fuente": "https://drestheeurope.com/en/products/vita-c-radiance-solution-ampoule-52ml",
+   "nombre": "Vita C Radiance Solution Ampoule - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "JN-001",
+   "archivo": "38c1554978cd4b05936f",
+   "fuente": "https://www.dodoskin.com/products/rire-premium-white-pure-goat-milk-cream-50ml",
+   "nombre": "Premium White Goat Milk Cream - RiRe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "JN-003",
+   "archivo": "d6e7db446fd94624a75b",
+   "fuente": "https://www.dodoskin.com/products/holika-holika-aloe-cooling-sunscreen-stick-spf50-pa-23g",
+   "nombre": "Aloe Cooling Sunscreen Stick SPF/PA ++++ 50 23g - HOLIKA HOLIKA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "JN-005",
+   "archivo": "13f8ed6dce2d4da8928d",
+   "fuente": "https://dermarolleronlinestore.co.za/product/dermaline-bio-activating-pdrn-cream-100g/",
+   "nombre": "PDRN Cream - Dermaline",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "JN-008",
+   "archivo": "701288c703bc4ff8bdc0",
+   "fuente": "https://www.stylekorean.com/product/black-tea-time-reverse-eye-cream-25ml/1733808240",
+   "nombre": "Black Tea Time Reverse Eye Cream 25ml - Pyunkanf Yul",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "JN-009",
+   "archivo": "6412f2077750414da4e9",
+   "fuente": "https://www.stylekorean.com/product/miniature-black-tea-time-reverse-eye-cream-9ml/1617676259",
+   "nombre": "Black Tea Time Reverse Eye Cream 9ml - Pyunkanf Yul",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-001",
+   "archivo": "2b099326076f4d63b2d5",
+   "fuente": "https://drestheeurope.com/en/products/rejuvenating-ampoule",
+   "nombre": "Rejuvenating Ampoule PDRN Salmon - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-002",
+   "archivo": "4f9202856851472b9045",
+   "fuente": "https://drestheeurope.com/en/products/c-tox-eye-cream-25ml",
+   "nombre": "C.Tox Eye Cream - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-005",
+   "archivo": "bdaea49f6548423782c8",
+   "fuente": "https://www.drestheusa.com/products/whitening-a-serum-50ml",
+   "nombre": "Whitening A Serum - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-007",
+   "archivo": "bca31be91eeb4d60b5bb",
+   "fuente": "https://drestheeurope.com/en/products/sun-protection-mild-spf50-50ml",
+   "nombre": "Sun Protection Mild - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-010",
+   "archivo": "e61f2c5eb683478ea702",
+   "fuente": "https://dresthe.ca/products/rejuvenating-lifting-mask-5ea-pro",
+   "nombre": "Rejuvenating Lifting Mask - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "ML-011",
+   "archivo": "b7b0aefb4f434cbcbd93",
+   "fuente": "https://drestheeurope.com/en/products/moisture-cleansing-gel-200-ml",
+   "nombre": "Moisture Clensing Gel - Dr.esthe",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "PH-003",
+   "archivo": "97160a26ae134787b297",
+   "fuente": "https://www.aphlora.com.ec/woman-balance/p",
+   "nombre": "Woman Balance - APHLORA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "PH-004",
+   "archivo": "b6a5ef2405cb40f4ae50",
+   "fuente": "https://www.aphlora.com.ec/gut-bliss/p",
+   "nombre": "Gut Bliss (Digestive Balance) - APHLORA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "PH-005",
+   "archivo": "f0b5a6c0da4e429ebd44",
+   "fuente": "https://www.aphlora.com.ec/reset-balance/p",
+   "nombre": "Reset Balance (Purifying Balance) - APHLORA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "PH-007",
+   "archivo": "e475c35a080a4b30adb7",
+   "fuente": "https://www.aphlora.com.ec/skin-drops/p",
+   "nombre": "Skin Drops - APHLORA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "PH-008",
+   "archivo": "dfc300950523453aa065",
+   "fuente": "https://www.aphlora.com.ec/harmony-drops/p",
+   "nombre": "Harmony Drops (Rejuvenate Tonic) - APHLORA",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "SU-002",
+   "archivo": "983ae284e08d487b8821",
+   "fuente": "https://matrigenusa.com/products/matrigen-lipo-exosome-b-archive-complex",
+   "nombre": "Lipoexosome B-Archive Complex - MATRIGEN",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "SU-008",
+   "archivo": "5f556a3d2d4743ad9ed1",
+   "fuente": "https://drrejuall.com/products/advanced-pdrn-rejuvenating-lip-serum",
+   "nombre": "Advance PDRN Rejuvenating Lip Serum - DR. REJU-ALL",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "SU-009",
+   "archivo": "94e41f6ed6364a789ce5",
+   "fuente": "https://www.sidmool.com/shop/shopdetail.html?branduid=77381",
+   "nombre": "Olive lip Mask 13 ml - SIDMOOL",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "VK-011",
+   "archivo": "2c09f6cda96349518f8d",
+   "fuente": "https://doctoraltheaglobal.com/products/vitamin-c-boosting-serum",
+   "nombre": "DR. ALTHEA Vitamin C Boosting Serum",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "VK-012",
+   "archivo": "0f446328649f44e4b4f4",
+   "fuente": "https://www.dodoskin.com/products/dr-althea-345-relief-cream-50ml",
+   "nombre": "DR. ALTHEA 345 Relief Cream",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "VK-016",
+   "archivo": "1b90b73ef32c47128cd9",
+   "fuente": "https://www.dodoskin.com/products/eqqualberry-bakuchiol-plumping-serum-30ml",
+   "nombre": "EQQUALBERRY Bakuchiol Plumping Serum 30ml",
+   "foto_url_anterior": ""
+  },
+  {
+   "sku": "VK-017",
+   "archivo": "f955c3ab2add4e45bc61",
+   "fuente": "https://eqqualberryglobal.com/products/nad-peptide-boosting-serum",
+   "nombre": "EQQUALBERRY NAD+ Peptide Boosting Serum 30ml",
+   "foto_url_anterior": ""
+  }
+ ],
+ "pendientes": [
+  {
+   "sku": "AS-001",
+   "nombre": "Aceite Limpiador - Eyenlip",
+   "motivo": "eyeNlip vende 3 aceites (Eggplant Pore / PH Cica / VC Control); no se sabe cuál"
+  },
+  {
+   "sku": "AS-002",
+   "nombre": "Jabón Limpiador Ceramide Foam - Eyenlip",
+   "motivo": "5 variantes (Tomato/Lemon/Apple/Rice/Cica); no se sabe cuál"
+  },
+  {
+   "sku": "INV-054",
+   "nombre": "PEELING ENZIMATICO PAPAYA Y PINA (Arôms Natur)",
+   "motivo": "No se encontró la ficha oficial en formato profesional 500 g"
+  },
+  {
+   "sku": "INV-055",
+   "nombre": "PROBIOTIC SKIN BALANCING MASK (Arôms Natur)",
+   "motivo": "Solo aparece en INCI Beauty, sin foto de tienda fiable"
+  },
+  {
+   "sku": "INV-056",
+   "nombre": "A.VEG. PEPITA DE UVA (Arôms Natur) 1000 ml",
+   "motivo": "Formato profesional 1 L; solo listado de otra marca (Esential Arôms)"
+  },
+  {
+   "sku": "INV-057",
+   "nombre": "POLVO DE ARROZ (Arôms Natur) 400 g",
+   "motivo": "Solo se encuentra el de 100 g"
+  },
+  {
+   "sku": "INV-058",
+   "nombre": "ESSENCEBALM (Arôms Natur) 200 g",
+   "motivo": "No se encontró el producto en la tienda de la marca"
+  },
+  {
+   "sku": "INV-061",
+   "nombre": "Winner Soft Face Towels",
+   "motivo": "Solo en Amazon; Amazon bloquea la descarga de imágenes desde la caja"
+  },
+  {
+   "sku": "INV-093",
+   "nombre": "Guante Quirúrgico",
+   "motivo": "Genérico (Kywi), sin marca ni modelo"
+  },
+  {
+   "sku": "INV-100",
+   "nombre": "Daleaf Chlorella Better Root Hair Tonic 50 ml",
+   "motivo": "No se encontró la presentación de 50 ml (sí la de 100 ml, INV-028)"
+  },
+  {
+   "sku": "INV-120",
+   "nombre": "Bioderma Sensibo H2O 125 ml",
+   "motivo": "125 ml es el formato «Sensibio H2O Eye» bifásico; la micelar clásica es 100/250 ml. Confirmar cuál es"
+  },
+  {
+   "sku": "INV-122",
+   "nombre": "Lanceta Estéril",
+   "motivo": "Genérico (Ultra Limpio), sin marca ni modelo"
+  },
+  {
+   "sku": "JN-006",
+   "nombre": "PDRN Ampoule - Dermaline",
+   "motivo": "Dermaline tiene 2 ampollas PDRN (Bio Activing 75 ml / PDRN Solution Salmon 35 ml); no se sabe cuál"
+  },
+  {
+   "sku": "ML-004",
+   "nombre": "Skin Laser Toner - Dr.esthe",
+   "motivo": "Existe en 30 ml, 200 ml y Mist 100 ml; no se sabe el tamaño"
+  },
+  {
+   "sku": "ML-012",
+   "nombre": "PEEL-N-GLOW Pearl Program - Dr.esthe",
+   "motivo": "Kit profesional; solo se encuentran piezas sueltas (máscara, gel crema)"
+  },
+  {
+   "sku": "ML-014",
+   "nombre": "Mummy Mask - Esthemax",
+   "motivo": "Esthemax tiene varias (Thermal, Collagen, Vitamin); no se sabe cuál"
+  }
+ ]
+}
