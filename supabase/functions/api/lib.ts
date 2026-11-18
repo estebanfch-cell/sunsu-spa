@@ -245,3 +245,24 @@ export async function guardarArchivo(db: Db, actor: string, kind: string, nombre
   await db.write(actor, "app_archivos", "insert", {}, { id, kind, nombre, mime, data_b64: b64, created_by: actor });
   return id;
 }
+
+/** Copia opcional a Storage. Si el bucket no existe o falla, el archivo ya está en app_archivos. */
+export async function copiarAStorage(env: Record<string, string | undefined>, fetchImpl: typeof fetch, bucket: string, path: string, dataUrl: string): Promise<boolean> {
+  const base = String(env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "");
+  const i = dataUrl.indexOf("base64,");
+  if (!base || !key || i < 0) return false;
+  const mime = dataUrl.slice(5, dataUrl.indexOf(";")) || "application/octet-stream";
+  const b64 = dataUrl.slice(i + 7);
+  try {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const res = await fetchImpl(`${base}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(path)}`, {
+      method: "POST",
+      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": mime, "x-upsert": "true" },
+      body: bytes as unknown as BodyInit,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
