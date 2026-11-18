@@ -17,7 +17,7 @@
     var s = document.createElement("style"); s.id = "mcpm-css";
     s.textContent = [
       ".mcpm h2{margin:0 0 8px;font-size:1.2rem}.mcpm-h{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcpm-h h2{flex:1;margin:0}",
-      ".mcpm-card{background:var(--white,#fff);border-radius:14px;box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:10px}",
+      ".mcpm-toca{cursor:pointer}.mcpm-toca:hover{box-shadow:0 0 0 2px rgba(61,90,122,.25)}.mcpm-card{background:var(--white,#fff);border-radius:14px;box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:10px}",
       ".mcpm-card h3{margin:0;font-size:1rem;color:var(--navy)}.mcpm-sub{font-size:.75rem;color:var(--gray,#8a93a6)}",
       ".mcpm-pill{display:inline-block;font-size:.66rem;font-weight:800;border-radius:999px;padding:2px 8px;border:1px solid var(--cream-d);margin-left:6px;vertical-align:middle}",
       ".mcpm-on{color:#2E7D52;border-color:#9fd3b3;background:#eef8f1}.mcpm-off{color:#8a93a6}.mcpm-old{color:#8A6D1F;border-color:#E8C07A;background:#fbf4e4}",
@@ -61,10 +61,10 @@
   function tarjeta(p) {
     var est = p.vigente ? '<span class="mcpm-pill mcpm-on">Vigente</span>' : !p.activa ? '<span class="mcpm-pill mcpm-off">Desactivada</span>' : '<span class="mcpm-pill mcpm-off">Fuera de fecha</span>';
     var vieja = String(p.id).indexOf("s:") === 0;
-    return '<div class="mcpm-card"><h3>' + e(p.nombre) + est + (vieja ? '<span class="mcpm-pill mcpm-old">Sistema viejo · sin importar</span>' : p.origen === "sheet" ? '<span class="mcpm-pill mcpm-old">Importada</span>' : "") + "</h3>" +
+    return '<div class="mcpm-card mcpm-toca" data-ed="' + e(p.id) + '" title="Toca para ' + (vieja ? "importarla y cambiarla" : "cambiarla") + '"><h3>' + e(p.nombre) + est + (vieja ? '<span class="mcpm-pill mcpm-old">Sistema viejo · sin importar</span>' : p.origen === "sheet" ? '<span class="mcpm-pill mcpm-old">Importada</span>' : "") + "</h3>" +
       '<div class="mcpm-sub">' + e(f(p.desde)) + " → " + e(f(p.hasta)) + (p.notas ? " · " + e(p.notas) : "") + "</div>" +
       '<ul class="mcpm-rg">' + (p.reglasTxt || []).map(function (t) { return "<li>🏷️ " + e(t) + "</li>"; }).join("") + "</ul>" +
-      '<div class="mcpm-acts"><button class="btn ghost small" type="button" data-ed="' + e(p.id) + '">' + (vieja ? "Importar y editar" : "Editar") + "</button>" +
+      '<div class="mcpm-acts">' + (vieja ? '<button class="btn ghost small" type="button" data-ed="' + e(p.id) + '">Importar</button>' : "") +
       (vieja ? "" : '<button class="btn ghost small" type="button" data-act="' + e(p.id) + '" data-v="' + (p.activa ? "0" : "1") + '">' + (p.activa ? "Desactivar" : "Activar") + "</button>") + "</div></div>";
   }
   function pintar(main) {
@@ -77,15 +77,18 @@
       (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
       '<p class="mcpm-sub">Una promoción puede tener varias reglas (ej. Black Friday: −20% en paquetes de Ginseng y $100 c/u la ampolla si lleva 2). En el ticket, el botón 🏷️ Promociones muestra las que aplican y las aplica como descuento por línea; la comisión se calcula sobre el neto.</p>' +
       (T.length ? T.slice().sort(function (a, b) { return (b.vigente - a.vigente) || String(b.desde).localeCompare(String(a.desde)); }).map(tarjeta).join("") : '<p class="note">Todavía no hay promociones.</p>');
-    var nb = root.querySelector("#mcpm-nueva"); if (nb) nb.onclick = function () { K.edit = { id: "", nombre: "", desde: hoy(), hasta: hoy(), activa: true, notas: "", reglas: [{ tipo: "pct", alcance: "codigos", codigos: [], valor: "", min: 1 }] }; pintar(main); };
+    var nb = root.querySelector("#mcpm-nueva"); if (nb) nb.onclick = function () { K.ini = null; K.edit = { id: "", nombre: "", desde: hoy(), hasta: hoy(), activa: true, notas: "", reglas: [{ tipo: "pct", alcance: "codigos", codigos: [], valor: "", min: 1 }] }; pintar(main); };
     var ib = root.querySelector("#mcpm-imp"); if (ib) ib.onclick = async function () {
       ib.disabled = true; var r = await api("promo_importar", {}); ib.disabled = false;
       if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; }
       toast2("Importadas: " + r.importadas); cargar(main);
     };
-    root.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () {
+    root.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function (ev) {
+      if (ev && ev.target.closest("[data-act]")) return;
+      if (ev) ev.stopPropagation();
       var p = T.find(function (x) { return String(x.id) === b.getAttribute("data-ed"); }); if (!p) return;
-      K.edit = JSON.parse(JSON.stringify({ id: p.id, nombre: p.nombre, desde: p.desde, hasta: p.hasta, activa: p.activa, notas: p.notas || "", reglas: p.reglas })); pintar(main);
+      K.edit = JSON.parse(JSON.stringify({ id: p.id, nombre: p.nombre, desde: p.desde, hasta: p.hasta, activa: p.activa, notas: p.notas || "", reglas: p.reglas }));
+      K.ini = String(p.id).indexOf("s:") === 0 ? null : JSON.stringify(K.edit); K.iniNorm = false; pintar(main);
     }; });
     root.querySelectorAll("[data-act]").forEach(function (b) { b.onclick = async function () {
       var r = await api("promo_activar", { id: b.getAttribute("data-act"), activa: b.getAttribute("data-v") === "1" });
@@ -111,14 +114,14 @@
       '<label>Texto en el ticket (opcional)</label><input data-rf="etiqueta" value="' + e(r.etiqueta || "") + '" placeholder="Se arma solo si lo dejas vacío"></div>';
   }
   function formHtml(p) {
-    return '<div class="mcpm-h"><h2>' + (p.id && String(p.id).indexOf("s:") !== 0 ? "Editar promoción" : "Nueva promoción") + '</h2><button class="btn ghost small" type="button" id="mcpm-cancel">← Volver</button></div>' +
+    return '<div class="mcpm-h"><h2>' + (p.id && String(p.id).indexOf("s:") !== 0 ? "Promoción" : "Nueva promoción") + '</h2><button class="btn ghost small" type="button" id="mcpm-cancel">← Volver</button></div>' +
       '<div class="mcpm-card mcpm-f"><label>Nombre</label><input id="mcpm-nom" value="' + e(p.nombre) + '" placeholder="ej. Black Friday 2026">' +
       '<div class="mcpm-2"><div><label>Desde</label><input id="mcpm-d1" type="date" value="' + e(p.desde) + '"></div><div><label>Hasta</label><input id="mcpm-d2" type="date" value="' + e(p.hasta) + '"></div></div>' +
       '<label><input type="checkbox" id="mcpm-act" style="width:auto"' + (p.activa !== false ? " checked" : "") + "> Activa</label>" +
       '<label>Notas</label><input id="mcpm-notas" value="' + e(p.notas || "") + '">' +
       '<div id="mcpm-reglas">' + (p.reglas || []).map(reglaHtml).join("") + "</div>" +
       '<div class="mcpm-acts"><button class="btn ghost small" type="button" id="mcpm-addr">+ Agregar regla</button></div>' +
-      '<p class="err" id="mcpm-err"></p><div class="mcpm-acts"><button class="btn small" type="button" id="mcpm-save">Guardar promoción</button></div></div>';
+      '<p class="err" id="mcpm-err"></p><div class="mcpm-acts"><button class="btn small" type="button" id="mcpm-save"' + (K.ini && JSON.stringify(p) === K.ini ? " hidden" : "") + '>Guardar promoción</button>' + (K.ini ? '<button class="btn ghost small" type="button" id="mcpm-desc"' + (JSON.stringify(p) === K.ini ? " hidden" : "") + '>Descartar</button>' : "") + "</div>" + (K.ini ? '<p class="mccf-sub" id="mcpm-hint">✎ Cambia lo que necesites; «Guardar» aparece cuando hay un cambio.</p>' : "") + "</div>";
   }
   function leerForm(main) {
     var p = K.edit; if (!p) return;
@@ -132,7 +135,15 @@
   }
   function wireForm(main) {
     var root = main.querySelector("#mcpm-root");
-    root.querySelector("#mcpm-cancel").onclick = function () { K.edit = null; pintar(main); };
+    root.querySelector("#mcpm-cancel").onclick = function () { K.edit = null; K.ini = null; pintar(main); };
+    // Sin botón «Editar» (TK55): Guardar / Descartar aparecen solo si algo cambió.
+    if (K.ini && !K.iniNorm) { leerForm(main); K.ini = JSON.stringify(K.edit); K.iniNorm = true; }
+    if (K.ini) {
+      var mirar = function () { setTimeout(function () { leerForm(main); var c = JSON.stringify(K.edit) !== K.ini, sv = root.querySelector("#mcpm-save"), ds = root.querySelector("#mcpm-desc"); if (sv) sv.hidden = !c; if (ds) ds.hidden = !c; }, 0); };
+      root.addEventListener("input", mirar); root.addEventListener("change", mirar);
+      mirar();
+      var dsc = root.querySelector("#mcpm-desc"); if (dsc) dsc.onclick = function () { K.edit = JSON.parse(K.ini); pintar(main); };
+    }
     root.querySelector("#mcpm-addr").onclick = function () { leerForm(main); K.edit.reglas.push({ tipo: "pct", alcance: "codigos", codigos: [], valor: "", min: 1 }); pintar(main); };
     root.querySelectorAll("[data-rdel]").forEach(function (b) { b.onclick = function () { leerForm(main); K.edit.reglas.splice(+b.getAttribute("data-rdel"), 1); pintar(main); }; });
     root.querySelectorAll('select[data-rf="tipo"],select[data-rf="alcance"]').forEach(function (s) { s.onchange = function () { leerForm(main); pintar(main); }; });
@@ -155,10 +166,10 @@
       var r = await api("promo_guardar", { id: p.id, nombre: p.nombre, desde: p.desde, hasta: p.hasta, activa: p.activa, notas: p.notas, reglas: p.reglas.map(function (x) { return { tipo: x.tipo, alcance: x.alcance, codigos: x.codigos || [], marca: x.marca, categoria: x.categoria, tipoLinea: x.tipoLinea, valor: Number(x.valor) || 0, valor2: Number(x.valor2) || 0, min: Number(x.min) || 1, por: x.por, etiqueta: x.etiqueta }; }) });
       b.disabled = false;
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; return; }
-      toast2("🏷️ Promoción guardada"); K.edit = null; cargar(main);
+      toast2("🏷️ Promoción guardada"); K.edit = null; K.ini = null; cargar(main);
     };
   }
-  function wire(main) { css(); K.edit = null; cargar(main); }
+  function wire(main) { css(); K.edit = null; K.ini = null; cargar(main); }
 
   // ---------- Panel del ticket ----------
   // opts.lineas(): [{k, sku, nombre, tipo, cantidad, bruto}] · opts.aplicadas: ids ya aplicados · opts.aplicar(resultado, ids)

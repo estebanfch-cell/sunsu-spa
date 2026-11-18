@@ -1,6 +1,8 @@
 /** Ítems de factura Migo (Ventas Detalladas o RIDE) y cuadre línea a línea con el ticket. */
 import { n, s, skuCode, type Row } from "./domain.ts";
 
+export const NOMBRE_DIFERENCIA_MEJORA = "Diferencia por mejora de paquete";
+
 export type LineaNorm = {
   sku: string;
   codigo: string;
@@ -11,13 +13,21 @@ export type LineaNorm = {
   subtotalSin: number;
   totalCon: number;
   canje?: boolean;
+  mejoraPaquete?: boolean;
 };
 
 export type AvisoLinea = {
-  tipo: "revisa" | "falta" | "sobra";
+  tipo: "revisa" | "falta" | "sobra" | "sugerencia";
   sku: string;
   texto: string;
 };
+
+/** Línea que cobra solo el plus cuando el facial canjeado vale más que el paquete. */
+export function esDiferenciaMejora(l: { tipo?: unknown; nombre?: unknown; promo?: unknown; mejoraPaquete?: unknown }): boolean {
+  if (l && l.mejoraPaquete === true) return true;
+  if (s(l?.tipo) === "diferencia_mejora") return true;
+  return /diferencia por mejora/i.test(s(l?.nombre) || s(l?.promo));
+}
 
 const TOL = 0.05;
 
@@ -73,6 +83,7 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
   const beta = (t.lineasDetalle || t.lineasBeta || t.lineas_beta || t.lineas) as Row[] | undefined;
   if (Array.isArray(beta) && beta.length && beta.some((l) => s(l.sku || l.codigo))) {
     for (const l of beta) {
+      const tot = n(l.total ?? l.total_linea);
       const nrm = normalizarLineaFactura({
         codigo: s(l.sku || l.codigo),
         producto: s(l.nombre || l.producto),
@@ -81,9 +92,12 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
         descuento: n(l.descuento_monto ?? l.descuento),
         subtotal: n(l.subtotal),
         iva: n(l.iva),
-        total: n(l.total),
+        total: tot,
       });
-      if (nrm) out.push(nrm);
+      if (!nrm) continue;
+      if (l.canje === true || (s(l.tipo) === "facial" && !(nrm.totalCon > 0) && !(nrm.unitSin > 0))) nrm.canje = true;
+      if (esDiferenciaMejora(l)) { nrm.mejoraPaquete = true; nrm.canje = false; }
+      out.push(nrm);
     }
     if (out.length) return out;
   }
@@ -141,14 +155,23 @@ function montoLinea(l: LineaNorm): number {
   return l.totalCon || Math.round((l.subtotalSin || l.unitSin * l.cantidad) * 1.15 * 100) / 100;
 }
 
-export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL): AvisoLinea[] {
+function pvpCatalogo(sku: string, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): number {
+  if (!catalogo) return 0;
+  const cat = catalogo.get(sku) || catalogo.get("SUNSU-" + sku);
+  if (!cat) return 0;
+  return Number(cat.pvpConIva || 0) || (cat.pvpSinIva ? Math.round(cat.pvpSinIva * 1.15 * 100) / 100 : 0);
+}
+
+export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
   const fac = factura.filter(Boolean);
   const tks = tickets.filter(Boolean);
   const usedT = new Set<number>();
   const avisos: AvisoLinea[] = [];
 
   const tomas = (want: LineaNorm): number => {
-    let hit = tks.findIndex((t, i) => !usedT.has(i) && t.sku && want.sku && t.sku === want.sku);
+    // La diferencia por mejora (mismo SKU, con monto) manda sobre el canje a $0.
+    let hit = tks.findIndex((t, i) => !usedT.has(i) && t.sku && want.sku && t.sku === want.sku && !t.canje);
+    if (hit < 0) hit = tks.findIndex((t, i) => !usedT.has(i) && t.sku && want.sku && t.sku === want.sku);
     if (hit < 0) {
       const wn = s(want.nombre).toLowerCase();
       hit = tks.findIndex((t, i) => {
@@ -172,17 +195,49 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
     }
     usedT.add(i);
     const t = tks[i];
+    if (t.canje) {
+      const j = tks.findIndex((x, k) => !usedT.has(k) && (x.mejoraPaquete || esDiferenciaMejora(x)) && x.sku === (f.sku || t.sku));
+      if (j >= 0) {
+        usedT.add(j);
+        const d = tks[j];
+        if (equivalentesIva(montoLinea(d), montoLinea(f), tol) || equivalentesIva(d.unitSin || d.subtotalSin, f.unitSin || f.subtotalSin, tol)) continue;
+        avisos.push({
+          tipo: "revisa",
+          sku: f.sku || f.codigo,
+          texto: "⚠️ Revisa " + etq(f) + ": diferencia por mejora " + money(montoLinea(d)) + " vs factura " + money(montoLinea(f)),
+        });
+        continue;
+      }
+      const pvp = pvpCatalogo(f.sku || t.sku, catalogo);
+      const facMonto = montoLinea(f);
+      const menorQueLista = !pvp || facMonto + tol < pvp;
+      if (menorQueLista && facMonto > tol) {
+        avisos.push({
+          tipo: "sugerencia",
+          sku: f.sku || f.codigo,
+          texto: "Sugerencia: agrega «" + NOMBRE_DIFERENCIA_MEJORA + "» en " + etq(f)
+            + ": la factura cobró " + money(facMonto) + " (sin IVA " + money(Math.round((facMonto / 1.15) * 100) / 100)
+            + "). El canje de paquete cubre el resto.",
+        });
+        continue;
+      }
+      avisos.push({
+        tipo: "revisa",
+        sku: f.sku || f.codigo,
+        texto: "⚠️ Revisa " + etq(f) + ": ticket $0.00 × " + String(t.cantidad) + " (paquete, no cobrado en el ticket)"
+          + " vs factura " + money(facMonto) + " × " + String(f.cantidad),
+      });
+      continue;
+    }
     const qtyOk = cerca(t.cantidad, f.cantidad, 0.001);
-    const precioConocido = !t.canje && (t.unitSin > 0 || t.subtotalSin > 0 || t.totalCon > 0);
+    const precioConocido = (t.unitSin > 0 || t.subtotalSin > 0 || t.totalCon > 0);
     const precioOk = !precioConocido || equivalentesIva(t.unitSin || t.subtotalSin, f.unitSin || f.subtotalSin, tol)
       || equivalentesIva(montoLinea(t), montoLinea(f), tol);
-    if (qtyOk && precioOk && !t.canje) continue;
-    const ticketMonto = t.canje || !precioConocido ? (t.canje ? 0 : montoLinea(t)) : montoLinea(t);
-    const extra = t.canje ? " (paquete, no cobrado en el ticket)" : "";
+    if (qtyOk && precioOk) continue;
     avisos.push({
       tipo: "revisa",
       sku: f.sku || f.codigo,
-      texto: "⚠️ Revisa " + etq(f) + ": ticket " + money(ticketMonto) + " × " + String(t.cantidad) + extra
+      texto: "⚠️ Revisa " + etq(f) + ": ticket " + money(montoLinea(t)) + " × " + String(t.cantidad)
         + " vs factura " + money(montoLinea(f)) + " × " + String(f.cantidad),
     });
   }
@@ -203,7 +258,7 @@ export function compararFacturaYTickets(lineasFac: Row[] | undefined, tickets: R
   const fac = (lineasFac || []).map(normalizarLineaFactura).filter((x): x is LineaNorm => !!x);
   if (!fac.length) return [];
   const tks = tickets.flatMap((t) => lineasDeTicket(t, catalogo));
-  return compararLineas(fac, tks);
+  return compararLineas(fac, tks, TOL, catalogo);
 }
 
 function claveSkuCant(l: LineaNorm): string {

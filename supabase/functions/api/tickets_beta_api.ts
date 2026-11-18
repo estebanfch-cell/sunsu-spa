@@ -19,6 +19,7 @@ import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
+import { esDiferenciaMejora } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
@@ -104,7 +105,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
     return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
-      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}) , promo: s(l.promo) || undefined}));
+      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}), ...(esDiferenciaMejora(l) ? { mejoraPaquete: true } : {}), promo: s(l.promo) || undefined, total_linea: n(l.total_linea) }));
   }
   const porCode = new Map(cat.map((c) => [s(c.sku), c]));
   const pvpDe = (c: string) => n(porCode.get(skuCode(c))?.pvp);
