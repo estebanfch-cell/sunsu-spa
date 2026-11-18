@@ -241,7 +241,7 @@ function subtotalCatalogo(row: R | undefined): number {
   const tot = n(row.total_con_iva);
   return tot > 0 ? tot / 1.15 : n(row.precio_venta);
 }
-async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes: number) {
+export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: number, mes: number) {
   const ancla = `${anio}-${String(mes).padStart(2, "0")}-25`;
   const ciclo = cicloInicio(ancla);
   const fin = cicloFin(ciclo);
@@ -328,6 +328,11 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   const { clavePeriodo, exigirRolPublicado } = await import("./roles_api.ts");
   const noPub = await exigirRolPublicado(ctx, ses, sheet || clavePeriodo(partes[0], anio), s(e.nombre_app) || s(e.apellidos_y_nombres));
   if (noPub) return { ok: false, error: noPub };
+  const { fichaIessDe } = await import("./empleados_api.ts");
+  const iessFicha = await fichaIessDe(ctx, s(e.nombre_app) || s(e.apellidos_y_nombres), `${anio}-${String(mes).padStart(2, "0")}-25`);
+  if (!iessFicha.afiliada) {
+    return { ok: false, error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: s(e.nombre_app) || s(e.apellidos_y_nombres) };
+  }
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
   try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }
@@ -375,14 +380,16 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
     comFaciales: com.comFaciales, comExtras: com.comExtras, comRecepcion: com.comRecepcion,
     comProductos: com.comProductos, comPaquetes: com.comPaquetes, multas: com.multas,
+    hip: iessFicha.hip, quir: iessFicha.quir, sandalo: iessFicha.otros,
   });
   const costoH = sueldoBase / 240;
   // Con configurador manda el cálculo local: rol_calcular SQL sigue leyendo la ficha, no pago_config.
   // egresos del PDF es lo que va además del IESS (el PDF suma iess + egresos).
   const deHoja = rpc && !rpc.error && !cfg ? rpc : null;
   const iess = deHoja ? n(deHoja.iess_personal) : local.iess;
-  // rol_calcular (SQL) no conoce beta_multas: se suman aquí.
-  const egresosConIess = deHoja ? round2(n(deHoja.total_egresos) + mBeta.total) : local.egresos;
+  const iessDesc = round2(iessFicha.hip + iessFicha.quir + iessFicha.otros);
+  // rol_calcular (SQL) no conoce beta_multas ni descuentos IESS manuales: se suman aquí.
+  const egresosConIess = deHoja ? round2(n(deHoja.total_egresos) + mBeta.total + iessDesc) : local.egresos;
   const data = {
     nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
     diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasJibble: horas.hayDatos ? horas.diasJibble : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
@@ -396,8 +403,8 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     totalIngresos: deHoja ? n(deHoja.total_ingresos) : local.totalIngresos,
     iess,
     egresos: round2(Math.max(0, egresosConIess - iess)),
-    totalRecibir: deHoja ? round2(n(deHoja.total_recibir) - mBeta.total) : local.totalRecibir,
-    anticipo: 0, prestHip: 0, prestQuir: 0, sheet, multasDetalle: [...multasCentral, ...mBeta.detalle.map((x) => ({ ...x, tipo: "MULTA " + s(x.concepto) }))], multasBeta: mBeta.total,
+    totalRecibir: deHoja ? round2(n(deHoja.total_recibir) - mBeta.total - iessDesc) : local.totalRecibir,
+    anticipo: 0, prestHip: iessFicha.hip, prestQuir: iessFicha.quir, prestOtro: iessFicha.otros, sheet, multasDetalle: [...multasCentral, ...mBeta.detalle.map((x) => ({ ...x, tipo: "MULTA " + s(x.concepto) }))], multasBeta: mBeta.total,
     fuente: deHoja ? "rol_calcular" : "beta-local",
   };
   return { ok: true, data };
@@ -517,6 +524,11 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   const { exigirRolPublicado } = await import("./roles_api.ts");
   const noPubC = await exigirRolPublicado(ctx, ses, "CICLO_" + inicio, persona);
   if (noPubC) return { error: noPubC };
+  const { fichaIessDe } = await import("./empleados_api.ts");
+  const iessFichaC = await fichaIessDe(ctx, persona, fin);
+  if (!iessFichaC.afiliada) {
+    return { error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: persona };
+  }
   const cfg = pagoVigente(await pagoFilas(ctx), persona, fin);
   const sueldo = cfg ? n(cfg.sueldo) : dineroDe(e, ["sueldo_base", "sueldo", "sueldo_mensual"]);
   const bono = cfg ? n(cfg.bono) : dineroDe(e, ["bono_fijo", "bono"]);
@@ -582,6 +594,7 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     anio: y2, mes: m2, diasPeriodo, diasLaborados,
     hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
     ...com, multas: round2(multas),
+    hip: iessFichaC.hip, quir: iessFichaC.quir, sandalo: iessFichaC.otros,
     iessPct: cfg ? n(cfg.iess_pct) : undefined,
     fondoDesde: cfg ? s(cfg.fondo_desde) || null : null,
     vacacionesDesdeAnio: cfg && cfg.vacaciones_desde_anio != null && cfg.vacaciones_desde_anio !== "" ? n(cfg.vacaciones_desde_anio) : undefined,
@@ -595,7 +608,10 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   ].map(([concepto, monto]) => ({ concepto, monto }));
   const descuentos = [
     ["IESS", local.iess], ["Multas", round2(multas)],
-  ].map(([concepto, monto]) => ({ concepto, monto }));
+    ["Préstamo quirografario", iessFichaC.quir],
+    ["Préstamo hipotecario", iessFichaC.hip],
+    ["Otros descuentos IESS", iessFichaC.otros],
+  ].filter(([, monto]) => n(monto) > 0).map(([concepto, monto]) => ({ concepto, monto }));
   const multasDetalle = [
     ...pack.multas.filter((r) => { const f = ymdUtc(r.fecha); return !r.borrado_at && !!f && f >= pack.ciclo && f <= fin && normNombre(s(r.cosmetologa)).includes(key) && (s(r.tipo).toLowerCase() === "multa" || !s(r.tipo)); })
       .map((r) => ({ tipo: "MULTA", concepto: s(r.tipo) || "Multa", fecha: ymdUtc(r.fecha), monto: n(r.monto), motivo: s(r.motivo), fuente: "sistema" })),
