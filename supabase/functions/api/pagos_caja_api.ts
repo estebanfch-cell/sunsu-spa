@@ -31,6 +31,12 @@ async function formasPagoMigo(ctx: Ctx, fac7: unknown): Promise<Row[] | undefine
   if (!dig) return undefined;
   const pad = dig.padStart(9, "0");
   const es = (f: unknown) => s(f).replace(/\D/g, "").slice(-9) === pad;
+  // TK91: el import vivo (Cobros Realizados) trae cada forma con su monto.
+  try {
+    const v = (await consultar(ctx.db, "beta_migo_facturas_vivo", { cols: ["factura", "formas_pago"], filtros: [{ op: "palabras", cols: ["factura"], val: [pad] }], limite: 3 })).rows.find((x) => es(x.factura));
+    const fp = v && Array.isArray(v.formas_pago) ? (v.formas_pago as Row[]).filter((f) => n(f.valor) > 0) : [];
+    if (fp.length) return fp;
+  } catch { /* columna aún no aplicada */ }
   try {
     const hit = (await consultar(ctx.db, "beta_migo_facturas", { cols: ["factura", "formas_pago"], filtros: [{ op: "palabras", cols: ["factura"], val: [pad] }], limite: 5 })).rows.find((x) => es(x.factura));
     const fp = hit && Array.isArray(hit.formas_pago) ? hit.formas_pago as Row[] : [];

@@ -55,6 +55,9 @@ class TestCobros(unittest.TestCase):
         self.assertEqual(inv["001-001-000002906"]["forma"], "mixto")
         self.assertEqual(inv["001-001-000002906"]["total"], 74.16)
         self.assertEqual(len(inv), 3)
+        # TK91: cada forma con su monto (no solo «mixto»).
+        self.assertEqual(inv["001-001-000002906"]["formas_pago"], [{"forma": "transferencia", "valor": 40.0}, {"forma": "tarjeta", "valor": 34.16}])
+        self.assertEqual(inv["001-001-000002940"]["formas_pago"], [{"forma": "tarjeta", "valor": 100.0}, {"forma": "tarjeta", "valor": 171.5}])
 
     def test_archivo_vivo_si_existe(self):
         path = Path("/workspace/sunsu/migo_exports/cobros_realizados_2026-11-01_2026-11-18.xls")
@@ -62,10 +65,10 @@ class TestCobros(unittest.TestCase):
             self.skipTest("export no está en esta caja")
         facts = m.parse_formas(path)
         self.assertGreaterEqual(len(facts), 100)
-        self.assertEqual(facts[-1]["factura"], "001-001-000002962")
-        self.assertAlmostEqual(sum(f["total"] for f in facts), 12798.02, places=2)
+        # el export se renueva cada hora: solo crece
+        self.assertGreaterEqual(facts[-1]["factura"], "001-001-000002962")
         nov17 = [f for f in facts if f["fecha"] == "2026-11-17"]
-        self.assertEqual(len(nov17), 12)
+        self.assertGreaterEqual(len(nov17), 12)
 
 
 

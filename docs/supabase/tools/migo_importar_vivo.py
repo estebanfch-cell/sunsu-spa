@@ -173,8 +173,12 @@ def parse_cobros(book) -> list[dict]:
                 "forma": forma,
                 "lineas": [],
                 "_formas": [forma] if forma else [],
+                # TK91 (Emilia 18/11): cada fila de cobro con su forma y monto (pago mixto: efectivo + transferencia + tarjeta).
+                "formas_pago": [{"forma": forma or str(raw_forma or "").strip(), "valor": monto}] if monto else [],
             }
             continue
+        if monto:
+            cur.setdefault("formas_pago", []).append({"forma": forma or str(raw_forma or "").strip(), "valor": monto})
         cur["total"] = money(cur["total"] + monto)
         if cliente and not cur.get("cliente"):
             cur["cliente"] = cliente
