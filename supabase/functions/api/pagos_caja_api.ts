@@ -5,9 +5,10 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { b, n, round2, s, saldoPendiente, ymdUtc, type Row } from "./domain.ts";
-import { ticketPorClave, agregarComprobante } from "./tickets_beta_api.ts";
+import { ticketPorClave, agregarComprobante, estaCobrado } from "./tickets_beta_api.ts";
 import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { consultar } from "./query.ts";
 import { leerSerie } from "./series.ts";
 import { CATEGORIAS_GASTO, ENTRAN, ETQ_CAJA, ETQ_METODO, METODOS, SALEN, estadoCobro, filasPagoLegado, metodosPago, montoDe, pagosDe, saldoDe } from "./pagos_caja.ts";
 
@@ -25,13 +26,31 @@ async function movCaja(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
   return { id, ...row };
 }
 /** Saldo del ticket = total − (lo cobrado en el sistema anterior) − pagos de la beta. */
+async function formasPagoMigo(ctx: Ctx, fac7: unknown): Promise<Row[] | undefined> {
+  const dig = s(fac7).replace(/\.0+$/, "").replace(/\D/g, "").replace(/^0+/, "");
+  if (!dig) return undefined;
+  const pad = dig.padStart(9, "0");
+  const es = (f: unknown) => s(f).replace(/\D/g, "").slice(-9) === pad;
+  try {
+    const hit = (await consultar(ctx.db, "beta_migo_facturas", { cols: ["factura", "formas_pago"], filtros: [{ op: "palabras", cols: ["factura"], val: [pad] }], limite: 5 })).rows.find((x) => es(x.factura));
+    const fp = hit && Array.isArray(hit.formas_pago) ? hit.formas_pago as Row[] : [];
+    if (fp.length) return fp;
+  } catch { /* tabla no disponible en pruebas */ }
+  try {
+    const v = (await consultar(ctx.db, "beta_migo_facturas_vivo", { cols: ["factura", "forma", "total"], filtros: [{ op: "palabras", cols: ["factura"], val: [pad] }], limite: 3 })).rows.find((x) => es(x.factura));
+    if (v && s(v.forma)) return [{ forma: s(v.forma), valor: n(v.total) }];
+  } catch { /* sin vivo */ }
+  return undefined;
+}
+
 async function estadoTicket(ctx: Ctx, r: Row, total: number): Promise<Row> {
   const clave = claveDe(r, leerSerie(r, "so_num"));
   const beta = pagosDe(await todas(ctx, "beta_pagos"), clave);
   const pagadoBeta = round2(beta.reduce((a, p) => a + n(p.monto), 0));
   const anulado = r.orig && typeof r.orig === "object" && (r.orig as Row).anulado === true;
-  const st = estadoCobro({ cobrado: b(r.cob), cobradoMonto: n(r.estimado), totalLineas: total, pagadoBeta, anulado });
-  const pagosLegado = st.pagadoSis > 0 ? filasPagoLegado(r.comp, st.pagadoSis, s(r.timestamp)) : [];
+  const st = estadoCobro({ cobrado: estaCobrado(r), cobradoMonto: n(r.estimado), totalLineas: total, pagadoBeta, anulado });
+  const migo = st.pagadoSis > 0 ? await formasPagoMigo(ctx, r.fac_7) : undefined;
+  const pagosLegado = st.pagadoSis > 0 ? filasPagoLegado(r.comp, st.pagadoSis, s(r.timestamp), migo) : [];
   return { clave, beta, legado: st.pagadoSis, pagadoBeta, saldo: st.saldo, total: st.total, redondeo: st.redondeo, dif: st.dif, pagosLegado, anulado };
 }
 
