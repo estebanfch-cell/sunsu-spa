@@ -136,9 +136,10 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
     if (want.has(id)) continue;
     if (f.resuelto === true) continue;
     await ctx.db.write(actor, "beta_ticket_flags", "update", { id }, {
-      resuelto: true, resuelto_por: actor, resuelto_at: now, nota: "cuadró automáticamente", updated_at: now,
+      resuelto: true, resuelto_por: actor, resuelto_at: now, nota: m[2] === "lineas" ? "cuadró automáticamente: las líneas del ticket ya coinciden con la factura" : "cuadró automáticamente", updated_at: now,
     });
     resueltas++;
+    try { await logAccion(ctx.db, actor, "FLAG AUTO-RESUELTO", `${s(f.ticket_clave)} · ${s(f.motivo)}${f.factura ? " · " + s(f.factura) : ""}`); } catch { /* log opcional */ }
   }
   for (const [id, d] of want) {
     if (d.ticket_id === NUNCA_TICKET_ID) continue;

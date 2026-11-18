@@ -253,7 +253,11 @@ export function flagsDeseadas(p: {
       const facV = p.facturas.find((f) => f.factura === L.factura);
       if (facV && facV.lineas && facV.lineas.length) {
         const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
-        const avisos = compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t]);
+        // TK80: un ticket migrado sin líneas beta, solo en su factura y con lo cobrado = total de la factura (±$1)
+        // ya se muestra con las líneas de esa factura (TK72): no hay nada que revisar entre ticket y factura.
+        const sinBeta = (x: Row) => !(Array.isArray(x.lineasDetalle) && (x.lineasDetalle as Row[]).length);
+        const desdeFactura = hermanos.length <= 1 && sinBeta(t) && n(facV.total) > 0 && Math.abs(n(facV.total) - n(t.estimado)) <= 1;
+        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t]);
         const rojos = avisos.filter((a) => a.tipo !== "sugerencia");
         if (rojos.length) {
           out.push({
