@@ -291,7 +291,7 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
     }
     saldo.set(k, queda);
     quedaDe.set(step, queda);
-    if (step.tipo === "recepcion" && step.delta > 0) {
+    if (step.tipo === "recepcion" && step.delta > 0 && step.costo_unit != null) {
       const antes = onHand(step.producto_id) - step.delta;
       const old = costos.get(step.producto_id) || 0;
       const costo = n(step.costo_unit);
