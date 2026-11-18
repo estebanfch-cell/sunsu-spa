@@ -353,6 +353,49 @@ function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,c
 let T=newT();
 let GC={tipo:'digital',valor:65,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
+/** TK97: + / Nuevo ticket siempre arranca en blanco. Un borrador de Migo solo se abre desde Facturas borrador. */
+function _ticketNuevoEnBlanco(){
+  if(typeof newT==='function') T=newT();
+  _migoLimpiarPrefill();
+  window._migoVincularFac='';
+  window._migoForma='';
+  if(!window._ticketOrigen){
+    try{ sessionStorage.removeItem('ag.tk'); }catch(e){}
+    window._agCitaTk=null;
+  }
+}
+function _ticketHayCitaPrefill(){
+  try{ return !!sessionStorage.getItem('ag.tk'); }catch(e){ return false; }
+}
+function _ticketAlAbrirFormulario(){
+  if(window._ticketOrigen==='migo'||window._ticketOrigen==='cita'||window._ticketOrigen==='clienta'){ window._ticketOrigen=''; return; }
+  var cita=_ticketHayCitaPrefill();
+  if(typeof newT==='function') T=newT();
+  _migoLimpiarPrefill();
+  window._migoVincularFac='';
+  window._migoForma='';
+  if(!cita){ try{ sessionStorage.removeItem('ag.tk'); }catch(e){} window._agCitaTk=null; }
+  window._ticketOrigen='';
+}
+function _ticketAntesDeIr(hash){
+  var h=String(hash||'');
+  var path=h.split('?')[0];
+  if(path!=='#/doc/ov' && path!=='#/s/ticket') return;
+  if(/[?&]fac=/.test(h)) return;
+  if(window._ticketOrigen==='migo'||window._ticketOrigen==='cita'||window._ticketOrigen==='clienta') return;
+  if(_ticketHayCitaPrefill()) return;
+  window._ticketOrigen='';
+  _ticketNuevoEnBlanco();
+}
+(function _purgarFormTicketTk97(){
+  try{
+    if(sessionStorage.getItem('sunsu.form.purga')==='tk97') return;
+    sessionStorage.removeItem('sunsu.migo.prefill');
+    sessionStorage.setItem('sunsu.form.purga','tk97');
+  }catch(e){}
+})();
+
+
 // ══════ LOGIN ══════
 // ══════ LOGIN: PIN identifica al usuario · sesión persistente · Face ID/huella ══════
 function _sesionGet(){try{return JSON.parse(localStorage.getItem('sunsu_sesion'));}catch(e){return null;}}
@@ -1100,7 +1143,7 @@ function showTab(id,btn){
   if(btn) btn.classList.add('active');
   _navActualizar(id);
   const c=document.getElementById('content');
-  if(id==='ticket') renderTicket(c);
+  if(id==='ticket'){ if(typeof _ticketAlAbrirFormulario==='function') _ticketAlAbrirFormulario(); renderTicket(c); }
   else if(id==='cotizaciones') renderCotizaciones(c);
   else if(id==='inicio') renderInicio(c);
   else if(id==='promos') renderPromos(c);
@@ -1239,7 +1282,6 @@ function mkExtraChip(e){
   return chip;
 }
 function renderTicket(c){
-  if(typeof _migoAplicarPrefillAT==='function') _migoAplicarPrefillAT();
   const facialAcc=mkAcc('facial','💆','var(--pink)','Facial realizado',
     T.facial?'<span style="color:var(--pink-d);font-weight:600">'+( FACIALES.find(f=>f.sku===T.facial)||{n:''}).n+'</span>':'Ninguno seleccionado',
     '<div class="chip-wrap">'+FACIALES.map(f=>'<div class="chip '+(T.facial===f.sku?'sel-pink':'')+'" id="cf-'+f.sku+'" onclick="selFacial(\''+f.sku+'\')">'+'<span class="sku">'+f.sku+'</span>'+f.n+' · $'+f.p.toFixed(2)+' · <span style="color:var(--green);font-size:0.65rem;font-weight:700">+$'+f.com+'</span></div>').join('')+'</div>'+
@@ -2671,7 +2713,7 @@ function _enviarCotizacionTicket(info){
       iva:d.iva, total:d.total, sinIva:d.sinIva, creadoPor:(typeof CU!=='undefined'&&CU&&CU.name)||'',
     };
     if(typeof _cotDescargar==='function') _cotDescargar(q);
-    T=newT();
+    if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT();
     if(typeof go==='function'&&d.numero) go('#/doc/cot/'+encodeURIComponent(d.numero));
     else if(btn){btn.disabled=false;btn.textContent='✓ Guardar cotización';}
   }).catch(function(){ fallo('Sin conexión'); });
@@ -2979,8 +3021,8 @@ function enviarTicket(){
     if(d&&d.pendiente_aprobar){
       toast('✅ Listo. Quedó pendiente de aprobar (Fac. '+(d.factura||window._migoVincularFac||'')+'). Una administradora lo revisa.','#6A9E7A');
       window._migoVincularFac=''; window._migoForma=''; window._migoPrefillAviso='';
+      if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT();
       if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(true);
-      T=newT();
       if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';}
       if(typeof go==='function') go('#/m/tickets');
       else if(typeof renderTicket==='function') renderTicket(document.getElementById('content'));
@@ -3028,7 +3070,7 @@ function enviarTicket(){
     // Canjes: datos capturados ANTES de resetear el ticket
     var _cobro=T.cobro, _codGC=(T.codigoGC||'').trim(), _paqPick=T.paqPick||null;
     var _cedCli=payload.cedula||'', _cliNom=((payload.nombre||'')+' '+(payload.apellido||'')).trim();
-    T=newT();
+    if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT();
     // ── Canje con GIFT CARD: marcarla usada automáticamente por su código ──
     if(_cobro==='giftcard'&&_codGC&&d&&d.gc&&d.gc.ok){
       toast('🎁 GC '+_codGC+' · aplicado $'+Number(d.gc.aplicado||0).toFixed(2)+' · saldo $'+Number(d.gc.saldo||0).toFixed(2),'var(--green)');
@@ -5431,7 +5473,47 @@ function _histCardHTML(t, i, showPrices){
     +'<div class="mob-l3">'+l3.join('<span>·</span>')+'</div>'
     +(pills.length?'<div class="mob-pills">'+pills.join('')+'</div>':'')
     +(tip?'<div style="font-size:.72rem;margin-top:6px;color:'+(fl?'#8a2216':'#6b4e00')+'">'+_histEsc(tip)+'</div>':'')
+    +'<div class="mob-voucher" onclick="event.stopPropagation()"><label class="btn ghost small">📷 Voucher<input type="file" accept="image/*,application/pdf" hidden onchange="_tkVoucherCard(event,'+i+')"></label></div>'
     +'</div>';
+}
+function _tkVoucherCard(ev, i){
+  ev.stopPropagation();
+  var inp = ev.target, f = inp && inp.files && inp.files[0];
+  if (inp) inp.value = "";
+  if (!f) return;
+  var list = window._histVisibles || [], t = list[i];
+  var clave = (t && window.MCTickets && typeof window.MCTickets.claveDe === "function") ? window.MCTickets.claveDe(t) : "";
+  if (!clave) { if (typeof toast === "function") toast("No pude identificar el ticket", "#B86B6B"); return; }
+  var comprimir = (window.MCVoucher && window.MCVoucher.comprimir) || function (file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onerror = function () { rej(new Error("No se pudo leer el archivo")); };
+      fr.onload = function () {
+        var url = String(fr.result || "");
+        if (!/^data:image\//.test(url)) return res(url);
+        var im = new Image();
+        im.onload = function () {
+          var k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement("canvas");
+          cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+          cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL("image/jpeg", 0.85));
+        };
+        im.onerror = function () { res(url); };
+        im.src = url;
+      };
+      fr.readAsDataURL(file);
+    });
+  };
+  if (typeof toast === "function") toast("⏳ Subiendo voucher…");
+  Promise.resolve(comprimir(f)).then(function (data) {
+    return api("tk_subir_doc", { clave: clave, imagen: data });
+  }).then(function (r) {
+    if (!r || r.error) { if (typeof toast === "function") toast((r && r.error) || "No se pudo subir", "#B86B6B"); return; }
+    if (typeof toast === "function") toast("✓ Voucher subido");
+    if (typeof _tkCargarLeds === "function") _tkCargarLeds();
+  }).catch(function (x) {
+    if (typeof toast === "function") toast((x && x.message) || "No se pudo subir", "#B86B6B");
+  });
 }
 function _histAbrirTicket(i){
   var list=window._histVisibles||[], t=list[i];
@@ -5653,7 +5735,7 @@ function _histBuscarUI(esStaff, busq){
     +'<input type="text" id="hist-buscar" value="'+(window._histBusqueda||'').replace(/"/g,'&quot;')+'" placeholder="Nº, clienta, cédula o factura" autocomplete="off" oninput="_histBuscarLive('+esStaff+')" onkeydown="if(event.key===\'Enter\')_histBuscarGo('+esStaff+')" style="flex:1;padding:8px 10px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.78rem;outline:none;font-family:inherit">'
     +'<button class="mob-hide" onclick="_histBuscarGo('+esStaff+')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">🔍</button>'
     +'<button class="mob-hide" onclick="_histBuscarClear('+esStaff+')" title="Limpiar búsqueda" style="padding:8px 11px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.78rem;font-weight:700;cursor:pointer">✕</button>'
-    +'<button class="mob-only" onclick="if(typeof go===\'function\')go(\'#/doc/ov\')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;font-weight:800;cursor:pointer;white-space:nowrap;align-items:center">+ Nuevo</button>'
+    +'<button class="mob-only" onclick="if(typeof _ticketAntesDeIr===\'function\')_ticketAntesDeIr(\'#/doc/ov\');if(typeof go===\'function\')go(\'#/doc/ov\')" style="padding:8px 14px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;font-weight:800;cursor:pointer;white-space:nowrap;align-items:center">+ Nuevo</button>'
     +'</div>';
 }
 
@@ -7685,6 +7767,7 @@ function generarTicketDesdeCita(btn){
 
   // Pre-fill ticket state (sin cedula - la busca el REGISTRO)
   T = newT();
+  window._ticketOrigen='cita';
   T.nombre   = _nom;
   T.apellido = _ape;
 
@@ -7762,6 +7845,7 @@ function guardarAcuity(){
 
 function irATicket(btn){
   T=newT();
+  window._ticketOrigen='clienta';
   T.nombre=btn.getAttribute('data-nom')||'';
   T.apellido=btn.getAttribute('data-ape')||'';
   T.cedula='';
@@ -13804,11 +13888,8 @@ function abrirModalUnificado(fila,estimado,sinFac,soloCobro){
     html+='</div>';
   });
   // TK41 (Emilia 18/11): foto obligatoria para transferencia Y para el voucher de tarjeta.
-  html+='<div id="cobfoto-'+fila+'" style="display:none;margin:-2px 0 8px"><div style="font-size:0.66rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:4px">📷 Foto del comprobante / voucher</div>'
-      +'<div style="display:flex;gap:6px">'
-      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">📷 Tomar foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
-      +'<label style="flex:1;padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
-      +'</div>'
+  html+='<div id="cobfoto-'+fila+'" style="display:none;margin:-2px 0 8px"><div style="font-size:0.66rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:4px">📷 Voucher</div>'
+      +'<label class="btn ghost small" style="cursor:pointer;white-space:nowrap">📷 Voucher<input type="file" accept="image/*,application/pdf" style="display:none" onchange="cargarComprobante(this,\''+fila+'\')"></label>'
       +'<div id="cobfoto-prev-'+fila+'" style="display:none;margin-top:6px"></div></div>';
   html+='<div id="cob-error-'+fila+'" style="font-size:0.72rem;color:red;margin-bottom:8px;display:none">Selecciona al menos un método</div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
@@ -18835,7 +18916,7 @@ function _migoGuardarPrefill(p){
 function _migoLimpiarPrefill(){
   try{ sessionStorage.removeItem('sunsu.migo.prefill'); }catch(e){}
   window._migoPrefillAviso='';
-  _migoRestaurarPrecios();
+  if(typeof _migoRestaurarPrecios==='function') _migoRestaurarPrecios();
 }
 function _migoLineasTicket(b){
   if(b&&Array.isArray(b.lineas_ticket)) return b.lineas_ticket;
@@ -18897,10 +18978,7 @@ function _migoPoblarTDesdeFac(b){
   return {sinItems:sinItems, aviso:window._migoPrefillAviso, total:Math.round(tot*100)/100};
 }
 function _migoAplicarPrefillAT(){
-  var p=_migoLeerPrefill();
-  if(!p||!p.factura) return;
-  if(T && T.factura && String(T.factura)===String(p.factura) && (T.nombre||T.facial||(T.productos&&Object.keys(T.productos).length))) return;
-  _migoPoblarTDesdeFac(p);
+  // TK97: ya no se aplica solo. El borrador se abre solo desde Facturas borrador (_migoAbrirEnTicket).
 }
 function _migoPintarPrefillAviso(c){
   var msg=window._migoPrefillAviso;
@@ -18924,12 +19002,15 @@ function _migoAbrirEnTicket(fac){
     var b=r.borrador||{};
     var claves=b.ticket_claves&&b.ticket_claves.length?b.ticket_claves:(b.ticket_clave?[b.ticket_clave]:[]);
     if(claves.length && typeof go==='function'){ go(_migoTicketHref(claves[0])); return; }
-    _migoGuardarPrefill(b);
     var info=_migoPoblarTDesdeFac(b);
+    window._ticketOrigen='migo';
+    // No llamar _migoLimpiarPrefill aquí: también restaura precios de catálogo (TK96). Solo no persistir el prefill.
+    try{ sessionStorage.removeItem('sunsu.migo.prefill'); }catch(e){}
     var hash=(location.hash||'').split('?')[0];
     if(hash==='#/doc/ov'){
       var c=document.getElementById('content');
       if(c && typeof renderTicket==='function') renderTicket(c);
+      window._ticketOrigen='';
     } else if(typeof go==='function'){
       go('#/doc/ov');
     } else if(typeof showTab==='function'){
