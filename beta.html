@@ -4170,13 +4170,13 @@ async function renderGcDetalle(codigo) {
   const data = await api("gc_detalle", { codigo });
   if (data.error) return fail(data);
   const g = data.item || {};
-  const edit = state.admin ? `<form id="f-gc-editar" class="card" data-codigo="${esc(g.codigo)}">
-      <div class="card-title">Editar</div>
+  const edit = state.admin ? `<form id="f-gc-editar" class="card" data-codigo="${esc(g.codigo)}" oninput="var b=this.querySelector('[data-lg-save]');if(b)b.hidden=false">
+      <div class="card-title">Saldo y notas</div>
       <div class="field"><label>Saldo</label><input name="saldo" value="${esc(g.saldo)}" inputmode="decimal"></div>
       <div class="field"><label>Valor</label><input name="valor" value="${esc(g.valor)}"></div>
       <div class="field"><label>Notas</label><textarea name="notas">${esc(g.notas || "")}</textarea></div>
       <div class="tools">
-        <button class="btn" type="submit">Guardar saldo</button>
+        <button class="btn" type="submit" data-lg-save hidden>Guardar cambios</button>
         <button class="btn ghost" type="button" data-gc-usado="${g.usado ? "0" : "1"}">${g.usado ? "Desmarcar usada" : "Marcar usada"}</button>
       </div>
       <p class="err" id="f-err"></p>
@@ -5925,38 +5925,38 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk63"></script>
-<script src="beta-screens.js?v=20261118tk63"></script>
-<script src="beta-inline.js?v=20261118tk63"></script>
-<script src="mc-productos.js?v=20261118tk63"></script>
-<script src="mc-nav.js?v=20261118tk63"></script>
-<script src="mc-permisos.js?v=20261118tk63"></script>
-<script src="mc-protocolos.js?v=20261118tk63"></script>
-<script src="mc-conteo.js?v=20261118tk63"></script>
-<script src="mc-transferencias.js?v=20261118tk63"></script>
-<script src="mc-ajustes.js?v=20261118tk63"></script>
-<script src="vendor-qrcode.js?v=20261118tk63"></script>
-<script src="mc-tickets.js?v=20261118tk63"></script>
-<script src="mc-maestro.js?v=20261118tk63"></script>
-<script src="mc-edit.js?v=20261118tk63"></script>
-<script src="mc-paquetes.js?v=20261118tk63"></script>
-<script src="mc-aperturas.js?v=20261118tk63"></script>
-<script src="mc-acceso.js?v=20261118tk63"></script>
-<script src="mc-barras.js?v=20261118tk63"></script>
-<script src="mc-caja.js?v=20261118tk63"></script>
-<script src="mc-giftcards.js?v=20261118tk63"></script>
-<script src="mc-multas.js?v=20261118tk63"></script>
-<script src="mc-clientes.js?v=20261118tk63"></script>
-<script src="mc-clientes-dup.js?v=20261118tk63"></script>
-<script src="mc-docpdf.js?v=20261118tk63"></script>
-<script src="mc-compras.js?v=20261118tk63"></script>
-<script src="mc-consignacion.js?v=20261118tk63"></script>
-<script src="mc-proveedores.js?v=20261118tk63"></script>
-<script src="mc-recepciones.js?v=20261118tk63"></script>
-<script src="mc-movil.js?v=20261118tk63"></script>
-<script src="mc-promociones.js?v=20261118tk63"></script>
-<script src="mc-agenda.js?v=20261118tk63"></script>
-<script src="mc-staff-home.js?v=20261118tk63"></script>
+<script src="mc-buscar.js?v=20261118tk64"></script>
+<script src="beta-screens.js?v=20261118tk64"></script>
+<script src="beta-inline.js?v=20261118tk64"></script>
+<script src="mc-productos.js?v=20261118tk64"></script>
+<script src="mc-nav.js?v=20261118tk64"></script>
+<script src="mc-permisos.js?v=20261118tk64"></script>
+<script src="mc-protocolos.js?v=20261118tk64"></script>
+<script src="mc-conteo.js?v=20261118tk64"></script>
+<script src="mc-transferencias.js?v=20261118tk64"></script>
+<script src="mc-ajustes.js?v=20261118tk64"></script>
+<script src="vendor-qrcode.js?v=20261118tk64"></script>
+<script src="mc-tickets.js?v=20261118tk64"></script>
+<script src="mc-maestro.js?v=20261118tk64"></script>
+<script src="mc-edit.js?v=20261118tk64"></script>
+<script src="mc-paquetes.js?v=20261118tk64"></script>
+<script src="mc-aperturas.js?v=20261118tk64"></script>
+<script src="mc-acceso.js?v=20261118tk64"></script>
+<script src="mc-barras.js?v=20261118tk64"></script>
+<script src="mc-caja.js?v=20261118tk64"></script>
+<script src="mc-giftcards.js?v=20261118tk64"></script>
+<script src="mc-multas.js?v=20261118tk64"></script>
+<script src="mc-clientes.js?v=20261118tk64"></script>
+<script src="mc-clientes-dup.js?v=20261118tk64"></script>
+<script src="mc-docpdf.js?v=20261118tk64"></script>
+<script src="mc-compras.js?v=20261118tk64"></script>
+<script src="mc-consignacion.js?v=20261118tk64"></script>
+<script src="mc-proveedores.js?v=20261118tk64"></script>
+<script src="mc-recepciones.js?v=20261118tk64"></script>
+<script src="mc-movil.js?v=20261118tk64"></script>
+<script src="mc-promociones.js?v=20261118tk64"></script>
+<script src="mc-agenda.js?v=20261118tk64"></script>
+<script src="mc-staff-home.js?v=20261118tk64"></script>
 <script>draw();</script>
 </body>
 </html>

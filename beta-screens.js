@@ -22,6 +22,12 @@
       Object.keys(body.permiso).forEach(function(k){ if (body[k] == null || body[k] === "") body[k] = body.permiso[k]; });
       if (!body.certificado && body.foto) body.certificado = body.foto;
     }
+    // Pantallas viejas sin «Editar» (TK64): el personal manda la misma acción como solicitud.
+    if (window._lgAccionTabla && window._lgAccionTabla[accion] && window._lgPide && window._lgPide()) {
+      return Promise.resolve(window._lgPedir(window._lgAccionTabla[accion], accion, body)).then(function(d){
+        return new Response(JSON.stringify(d || {}), { status: 200, headers: { "Content-Type": "application/json" } });
+      });
+    }
     const run = window.api(accion, body);
     return Promise.resolve(run).then(function(data){
       if (accion === "getProveedoresApp" && data && !data.proveedores && Array.isArray(data.items)) data.proveedores = data.items;
@@ -43,6 +49,72 @@
     });
   };
 })();
+// ══════ Sin botón «Editar» en las pantallas viejas (Emilia 18/11, TK64) ══════
+// Se toca el dato y se edita ahí. Guardar/Descartar aparecen solo cuando algo cambió. El personal (no admin)
+// ve «📨 Enviar solicitud»: la misma acción viaja como solicitud y Emilia o Emi la aprueban en Solicitudes.
+window._lgAccionTabla={cabinaSaveProducto:'cabina_inventario', cabinaSaveActivo:'cabina_activos', cabinaSaveProtocolo:'cabina_protocolo', saveRegistroCliente:'registro_cliente'};
+function _lgEsAdmin(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master')); }
+function _lgPide(){ return !!(typeof CU!=='undefined'&&CU)&&!_lgEsAdmin(); }
+function _lgPuedeTocar(){ return !!(typeof CU!=='undefined'&&CU); }
+function _lgTxtGuardar(){ return _lgPide()?'📨 Enviar solicitud':'💾 Guardar'; }
+function _lgAviso(){ return _lgPide()?'<div style="font-size:0.6rem;color:#7A5FA0;font-weight:700;margin:-4px 0 8px">No se guarda directo: Emilia o Emi lo aprueban desde Solicitudes.</div>':''; }
+function _lgValores(root){
+  var o=[]; root.querySelectorAll('input,select,textarea').forEach(function(el){ if(el.type==='file'||el.dataset.lgIgnora!=null) return; o.push(el.type==='checkbox'||el.type==='radio'?(el.checked?'1':'0'):String(el.value)); });
+  return JSON.stringify(o);
+}
+/** Oculta Guardar (data-lg-save) hasta que algún campo cambie; Cerrar (data-lg-desc) pasa a «Descartar». */
+function _lgMirar(root){ if(!root) return; var base=_lgValores(root); _lgMirarFn(root,function(){return _lgValores(root);},base); }
+function _lgMirarFn(root,foto,base){
+  if(!root) return;
+  var pinta=function(){
+    var cambio=foto()!==base;
+    root.querySelectorAll('[data-lg-save]').forEach(function(b){ b.style.display=cambio?'':'none'; });
+    root.querySelectorAll('[data-lg-desc]').forEach(function(b){ b.textContent=cambio?'Descartar':'Cerrar'; });
+  };
+  if(root._lgFn){ root.removeEventListener('input',root._lgFn,true); root.removeEventListener('change',root._lgFn,true); root.removeEventListener('click',root._lgFn2,true); }
+  root._lgFn=pinta; root._lgFn2=function(){ setTimeout(pinta,0); };
+  root.addEventListener('input',pinta,true); root.addEventListener('change',pinta,true); root.addEventListener('click',root._lgFn2,true);
+  pinta();
+}
+function _lgTxt(v){
+  if(v==null) return '';
+  if(Array.isArray(v)) return v.map(function(x){ return x&&typeof x==='object'?(x.desc||x.descripcion||x.texto||JSON.stringify(x)):String(x); }).join(' · ');
+  if(typeof v==='object') return JSON.stringify(v);
+  return String(v).trim();
+}
+/** Convierte el guardado de una pantalla vieja en una solicitud (solo los campos que cambiaron). */
+function _lgPedir(tabla,accion,body){
+  var base=((window._lgBase||{})[tabla])||{};
+  var campos=body.campos&&typeof body.campos==='object'?body.campos:body;
+  var cambios={}, antes={};
+  Object.keys(campos).forEach(function(k){
+    if(['accion','token','usuario','row','cedula','sku','codigo'].indexOf(k)>=0) return;
+    var a=_lgTxt(base[k]), d=_lgTxt(campos[k]);
+    if(/^(no|)$/i.test(a)&&/^(no|)$/i.test(d)) return;
+    if(k==='manoObra'){ a=String(parseFloat(base[k])||0); d=String(parseFloat(campos[k])||0); }
+    if(a!==d){ cambios[k]=campos[k]; antes[k]=base[k]==null?'':base[k]; }
+  });
+  if(!Object.keys(cambios).length) return {ok:false,error:'No cambiaste nada'};
+  var motivo=prompt('Motivo del cambio (lo aprueban Emilia o Emi):');
+  if(motivo==null) return {ok:false,error:'Solicitud cancelada'};
+  if(String(motivo).trim().length<3) return {ok:false,error:'Escribe el motivo del cambio'};
+  var fila=tabla==='cabina_protocolo'?String(body.sku||''):String(body.row||'');
+  var limpio={}; Object.keys(body).forEach(function(k){ if(k!=='token') limpio[k]=body[k]; });
+  var prop=Object.assign({},cambios,{__antes:antes,__payload:limpio});
+  return Promise.resolve(window.api('solicitud_crear',{tabla:tabla,fila:fila,tipo:'cambio',motivo:String(motivo).trim(),propuestos:prop})).then(function(r){
+    if(!r||r.error) return {ok:false,error:(r&&r.error)||'No se pudo enviar la solicitud'};
+    return {ok:true,solicitud:true,prueba:!!r.prueba};
+  });
+}
+function _lgPedirBaja(tabla,row,nombre){
+  var motivo=prompt('¿Por qué hay que eliminar «'+nombre+'»? (queda desactivado si Emilia o Emi lo aprueban)');
+  if(motivo==null) return;
+  if(String(motivo).trim().length<3){ toast('Escribe el motivo','#B86B6B'); return; }
+  Promise.resolve(window.api('solicitud_crear',{tabla:tabla,fila:String(row),tipo:'eliminacion',motivo:String(motivo).trim()})).then(function(r){
+    if(!r||r.error){ toast('❌ '+((r&&r.error)||'No se pudo enviar'),'#B86B6B'); return; }
+    toast(r.prueba?'🧪 Solicitud de PRUEBA enviada a tu bandeja':'📨 Solicitud de eliminación enviada','var(--green)');
+  });
+}
 // ══════ USERS ══════
 // SIN PIN a proposito: este archivo es PUBLICO en GitHub Pages.
 // Los PIN viven solo en el servidor (Script Properties) y se validan alla.
@@ -3121,7 +3193,7 @@ function pintarGCDigitales(){
       +'<div style="font-size:0.58rem;color:var(--gray)">🕐 '+(g.ts||'')+(g.u?' · por '+g.u:'')+'</div>'
       +'</div>'
       +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">'
-      +'<button onclick="abrirGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️ Abrir</button>'
+      +'<button onclick="abrirGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🎁 Abrir</button>'
       +'<button onclick="eliminarGCDigital(\''+(g.codigo||'').replace(/'/g,'')+'\')" style="padding:6px 13px;background:white;color:var(--red);border:1.5px solid var(--red);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑️ Borrar</button>'
       +'</div>'
       +'</div>';
@@ -7041,7 +7113,7 @@ function _pintarAdminUsers(c){
   c.innerHTML='<div class="card">'
     +'<div class="card-title">⚙ Gestión de usuarios</div>'
     +'<div id="ulist">'+users.map(function(u){
-      return '<div class="ua-card" style="'+(u.bloqueado?'opacity:0.65;background:#FBF2F2':'')+'">'
+      return '<div class="ua-card" onclick="if(!event.target.closest(\'button,a,input\'))showEdit(\''+u.id+'\')" title="Toca para cambiar" style="cursor:pointer;'+(u.bloqueado?'opacity:0.65;background:#FBF2F2':'')+'">'
         +'<div class="ua-av" style="background:'+u.color+'">'+(u.short||'?').charAt(0)+'</div>'
         +'<div class="ua-info"><div class="ua-name">'+u.name
           +(u.bloqueado?' <span style="font-size:0.54rem;background:#B86B6B;color:white;padding:1px 7px;border-radius:6px;font-weight:800">🚫 BLOQUEADO</span>':'')
@@ -7050,7 +7122,6 @@ function _pintarAdminUsers(c){
           +'</div>'
         +'<div class="ua-role">'+((u.comFaciales===false&&(u.role==='staff'||!u.role))?'Cosmetóloga aprendiz':rLabel(u.role))+' · clave: <b style="color:var(--navy);letter-spacing:2px">'+(u.pin||'—')+'</b></div></div>'
         +'<div class="ua-btns" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end">'
-        +'<button class="ua-btn" onclick="showEdit(\''+u.id+'\')">Editar</button>'
         +(u.id!=='efch'?('<button class="ua-btn" style="border-color:#C9761F;color:#C9761F" onclick="_admPedirClave(\''+u.id+'\','+(u.pinReset?'false':'true')+')">'+(u.pinReset?'✖ Retirar solicitud':'🔄 Pedir nueva clave')+'</button>'):'')
         +(u.id!=='efch'?('<button class="ua-btn" style="'+(u.bloqueado?'border-color:#2E7D52;color:#2E7D52':'border-color:#B86B6B;color:#B86B6B')+'" onclick="_admBloquear(\''+u.id+'\','+(u.bloqueado?'false':'true')+')">'+(u.bloqueado?'✅ Desbloquear':'🚫 Bloquear')+'</button>'):'')
         +(u.id!=='efch'?'<button class="ua-btn del" onclick="showDel(\''+u.id+'\')">✕</button>':'')
@@ -7113,14 +7184,15 @@ function saveAdd(){
 }
 function showEdit(id){
   const u=getUsers().find(u=>u.id===id);if(!u) return;
-  showModal(`<h3>Editar — ${u.short}</h3>
+  showModal(`<h3>${u.short}</h3>
     <div class="field"><label>Nombre completo</label><input type="text" id="mn" value="${u.name}"></div>
     <div class="field"><label>Nombre corto</label><input type="text" id="ms" value="${u.short}"></div>
     <div class="field"><label>Rol</label><select id="mr"><option value="staff" ${u.role==='staff'?'selected':''}>Cosmetóloga</option><option value="reception" ${u.role==='reception'?'selected':''}>Recepción/Admin</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="admin_master" ${u.role==='admin_master'?'selected':''}>Admin Master</option></select></div>
     <div class="field"><label>Nuevo PIN (vacío = no cambiar)</label><input type="password" inputmode="numeric" maxlength="4" id="mp" placeholder="••••"></div>
     <div class="field"><label>Color</label><input type="color" id="mc" value="${u.color}"></div>
     ${_campoComFacial_(u.comFaciales!==false, u.comFacialesDesde||'')}
-    <div class="modal-btns"><button class="modal-btn cancel" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="saveEdit('${id}')">Guardar</button></div>`);}
+    <div class="modal-btns"><button class="modal-btn cancel" data-lg-desc onclick="closeModal()">Cerrar</button><button class="modal-btn primary" data-lg-save onclick="saveEdit('${id}')">Guardar</button></div>`);
+  _lgMirar(document.getElementById('modal-body'));}
 function saveEdit(id){
   const users=getUsers(),idx=users.findIndex(u=>u.id===id);if(idx<0) return;
   const p=document.getElementById('mp').value;
@@ -8329,11 +8401,15 @@ function _cabProCuerpo(i,editando){
         +'</div>';
     }
     h+='<div style="font-size:0.54rem;color:var(--gray);margin-top:6px">v'+p.version+' · Actualizado '+(p.actualizado||'—')+(p.por?' por '+p.por:'')+'</div>';
-    if(esAdm) h+='<button onclick="_cabProCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar protocolo</button>';
+    // Sin botón «Editar» (TK64): se toca el protocolo y se edita ahí; el personal manda solicitud.
+    if(_lgPuedeTocar()) h+='<div style="margin-top:8px;font-size:0.6rem;color:var(--gray)">✎ Toca el protocolo para cambiarlo'+(_lgPide()?' (se envía como solicitud)':'')+'.</div>';
     bd.innerHTML=h;
+    bd.style.cursor=_lgPuedeTocar()?'pointer':'';
+    bd.onclick=_lgPuedeTocar()?function(ev){ if(ev.target.closest('button,a,input,select,textarea,video,iframe')) return; _cabProCuerpo(i,true); }:null;
     return;
   }
   // ── Edicion: pasos dinamicos ──
+  bd.onclick=null; bd.style.cursor=''; window._cabEdBase=null;
   window._cabEd=JSON.parse(JSON.stringify(p.pasos||[]));
   if(!window._cabEd.length) window._cabEd=[{desc:'',productoCod:'',cantidad:0,unidad:'ml',minutos:0}];
   window._cabEdIdx=i;
@@ -8427,10 +8503,14 @@ function _cabProFormPintar(){
     +'<input id="cab-vid-'+i+'" value="'+String(p.video||'').replace(/"/g,'&quot;')+'" placeholder="Link de video (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:6px">'
     +'<input id="cab-not-'+i+'" value="'+String(p.notas||'').replace(/"/g,'&quot;')+'" placeholder="Notas (opcional)" style="width:100%;padding:9px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px">'
     +'<div style="display:flex;gap:6px">'
-    +'<button onclick="_cabProGuardar('+i+',this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">💾 Guardar v'+(p.version+1)+'</button>'
-    +'<button onclick="_cabProCuerpo('+i+',false)" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'<button data-lg-save onclick="_cabProGuardar('+i+',this)" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">'+(_lgPide()?'📨 Enviar solicitud':'💾 Guardar v'+(p.version+1))+'</button>'
+    +'<button data-lg-desc onclick="_cabProCuerpo('+i+',false)" style="padding:10px 14px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.7rem;font-weight:800;cursor:pointer">Cerrar</button>'
     +'</div>';
   bd.innerHTML=h;
+  window._lgBase=window._lgBase||{}; window._lgBase.cabina_protocolo={nombre:p.nombre, manoObra:p.manoObra||0, video:p.video||'', notas:p.notas||'', pasos:p.pasos||[]};
+  var foto=function(){ return JSON.stringify([(window._cabEd||[]).map(function(x){return [x.desc||'',x.productoCod||'',+x.cantidad||0,x.unidad||'',+x.minutos||0];}),parseFloat((document.getElementById('cab-mo-'+i)||{}).value)||0,((document.getElementById('cab-vid-'+i)||{}).value||'').trim(),((document.getElementById('cab-not-'+i)||{}).value||'').trim()]); };
+  if(window._cabEdBaseIdx!==i||!window._cabEdBase) { window._cabEdBaseIdx=i; window._cabEdBase=foto(); }
+  _lgMirarFn(bd, foto, window._cabEdBase);
 }
 // Acciones tipicas de un protocolo de spa: dropdown para armar pasos rapido.
 // Llena la descripcion (editable) — la ultima opcion es escribir uno propio.
@@ -8562,7 +8642,8 @@ function _cabProGuardar(i,btn){
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
-    toast('💾 Protocolo guardado como v'+d.version,'var(--green)');
+    window._cabEdBase=null;
+    toast(d.solicitud?'📨 Solicitud enviada: Emilia o Emi la aprueban':'💾 Protocolo guardado como v'+d.version,'var(--green)');
     renderCabina(document.getElementById('content'),true);
     window._cabSec='pro';
   })
@@ -8687,7 +8768,7 @@ function _cabPintarInventario(){
     var hijas=(window._cab.inv||[]).filter(function(x){return x.base===p.codigo&&(x.activo||'SI')!=='NO';});
     var sub=(esAdm&&p.proveedor&&p.proveedor!=='—'?p.proveedor+' · ':'')+'envase '+p.contenido+p.unidad
       +(esAdm?' · $'+p.costoEnvase.toFixed(2)+' ($'+p.costoUnidad.toFixed(3)+'/'+p.unidad+')':'');
-    var h='<div class="card" style="padding:11px 13px;margin-bottom:7px'+(esHija?';margin-left:16px;border-left:3px solid var(--gold)':'')+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
+    var h='<div class="card"'+(_lgPuedeTocar()?' onclick="if(!event.target.closest(\'button,a,input,select,label\'))_cabInvForm('+i+')" title="Toca para cambiar"':'')+' style="padding:11px 13px;margin-bottom:7px'+(_lgPuedeTocar()?';cursor:pointer':'')+(esHija?';margin-left:16px;border-left:3px solid var(--gold)':'')+(bajo&&!inac?';border:1.5px solid #E8543F':'')+(inac?';opacity:0.65':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
       +'<div style="flex:1;min-width:0'+(esAdm?';cursor:pointer':'')+'"'+(esAdm?' onclick="_cabInvDetalle('+i+')"':'')+'>'
       +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.4px">'+p.codigo+(esHija?' <span style="color:var(--gold)">· 👪 presentación de '+p.base+'</span>':'')+'</div>'
@@ -8723,7 +8804,6 @@ function _cabPintarInventario(){
         +(!esHija?'<button onclick="_cabInvFormPresentacion('+i+')" title="Agregar presentación" style="padding:6px 9px;background:white;color:var(--gold);border:1.5px solid var(--gold);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">👪</button>':'')
         +'<button onclick="_cabBajaFormProd('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
         +'<button onclick="_cabInvActivo('+i+',this)" title="'+(inac?'Reactivar':'Desactivar')+'" style="padding:6px 9px;background:white;color:'+(inac?'#2E7D52':'var(--gray)')+';border:1.5px solid '+(inac?'#8FBF9F':'var(--cream-d)')+';border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">'+(inac?'▶':'⏸')+'</button>'
-        +'<button onclick="_cabInvForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button>'
         +'</div>':'')
       +'</div>'
       +(function(){
@@ -8763,7 +8843,7 @@ function _cabPintarInventario(){
   html+=esAdm?'<div style="display:flex;gap:6px;margin-bottom:9px">'
     +'<button onclick="_cabNuevoChooser()" style="flex:1;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">＋ Nuevo</button>'
     +'<button onclick="_cabTrasForm()" style="flex:1;padding:10px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">🚚 Traspaso</button>'
-    +'</div><div id="cab-nuevo-ch"></div><div id="cab-inv-form"></div><div id="cab-tras-form"></div>':'';
+    +'</div><div id="cab-nuevo-ch"></div><div id="cab-inv-form"></div><div id="cab-tras-form"></div>':'<div id="cab-inv-form"></div>';
   activosL.forEach(function(par){ html+=card(par); });
   if(!activosL.length) html+='<div class="card" style="text-align:center;color:var(--gray);padding:18px">Sin productos activos</div>';
   // Carpeta plegable de desactivados: fuera de la vista hasta que la abras
@@ -8782,10 +8862,10 @@ function _cabPintarInventario(){
     (window._cab.inv||[]).forEach(function(p,i){
       if((p.activo||'SI')==='NO') return; // los desactivados no molestan aqui
       var f=_cabProdFaltas(p);
-      if(f.length) faltasInv.push('<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
+      if(f.length) faltasInv.push('<div onclick="_cabInvForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
         +'<div style="flex:1;min-width:0"><span style="font-size:0.64rem;font-weight:700;color:var(--navy)">'+p.producto+'</span><br>'
         +'<span style="font-size:0.56rem;color:#9A7B1E">falta: '+f.join(', ')+'</span></div>'
-        +'<button onclick="_cabInvForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="padding:5px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;flex-shrink:0">✏️ Llenar</button>'
+        +'<span style="font-size:0.6rem;font-weight:800;color:var(--navy);flex-shrink:0">Completar →</span>'
         +'</div>');
     });
     html+=_cabCarpetaFaltas('cab-inv-faltas','Les faltan datos',faltasInv);
@@ -9537,7 +9617,7 @@ function _cabInvForm(i){
   var p=i>=0?(window._cab.inv||[])[i]:{codigo:'',producto:'',proveedor:'',contenido:'',unidad:'ml',costoEnvase:'',cerrados:0,abierto:0,bodega:0,minimo:0,notas:'',skuCat:'',barras:'',ubicacion:'',ubicacionLocal:'',ubicacionAbierto:'',maxAbiertos:1,activo:'SI',esterilizable:'No',row:0};
   var inp=function(id,lbl,v,tipo){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cbi-'+id+'" type="'+(tipo||'text')+'" step="0.01" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
-    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' producto</div>'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'Producto':'＋ Nuevo producto')+(i>=0?'':'')+'</div>'+_lgAviso()
     +inp('producto','Producto *',p.producto)
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">Proveedor</div>'
     +(function(){
@@ -9599,12 +9679,15 @@ function _cabInvForm(i){
     +'<input id="cbi-esterilizable" type="checkbox" '+((p.esterilizable==='Sí')?'checked':'')+' style="width:18px;height:18px;margin-top:1px;flex-shrink:0">'
     +'<span>Esterilizable — aparece en la Bitácora de Esterilización</span></label>'
     +inp('notas','Notas',p.notas)
-    +(i>=0&&!p.base?'<button onclick="_cabConvertir(\'inv\',\''+p.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a ACTIVO (herramienta/equipo)</button>':'')
+    +(i>=0&&!p.base&&!_lgPide()?'<button onclick="_cabConvertir(\'inv\',\''+p.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a ACTIVO (herramienta/equipo)</button>':'')
     +'<div style="display:flex;gap:6px;margin-top:4px">'
-    +'<button onclick="_cabInvGuardar('+i+','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
-    +(i>=0?'<button onclick="_cabBorrar(\'inv\','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
-    +'<button onclick="document.getElementById(\'cab-inv-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'<button data-lg-save onclick="_cabInvGuardar('+i+','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">'+_lgTxtGuardar()+'</button>'
+    +(i>=0&&!_lgPide()?'<button onclick="_cabBorrar(\'inv\','+(p.row||0)+',\''+(p.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
+    +(i>=0&&_lgPide()?'<button onclick="_lgPedirBaja(\'cabina_inventario\','+(p.row||0)+',\''+String(p.producto||'').replace(/[\'"\\]/g,'')+'\')" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.62rem;font-weight:800;cursor:pointer">🗑️ Solicitar eliminación</button>':'')
+    +'<button data-lg-desc onclick="document.getElementById(\'cab-inv-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cerrar</button>'
     +'</div></div>';
+  window._lgBase=window._lgBase||{}; window._lgBase.cabina_inventario=p;
+  if(i>=0) _lgMirar(f);
   f.scrollIntoView({behavior:'smooth'});
 }
 // La foto se achica en el celular (max 600px, JPEG) antes de subir — pesa ~100KB.
@@ -9680,7 +9763,7 @@ function _cabInvGuardar(i,row,codigo,btn){
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
-    toast('💾 Guardado','var(--green)');
+    toast(d.solicitud?'📨 Solicitud enviada: Emilia o Emi la aprueban':'💾 Guardado','var(--green)');
     window._cabSec='inv';
     _cabFotoSubir(d.codigo||codigo).then(function(){ renderCabina(document.getElementById('content'),true); });
   })
@@ -9834,7 +9917,7 @@ function _cabPintarActivos(){
   var b=document.getElementById('cab-inv-cuerpo')||document.getElementById('cab-body'); if(!b) return;
   var lugA=window._cabActLugar||'todo';
   var html=_cabFiltroUI('act');
-  html+=_cabEsAdmin()?'<button onclick="_cabNuevoChooser()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo</button><div id="cab-nuevo-ch"></div><div id="cab-act-form"></div>':'';
+  html+=_cabEsAdmin()?'<button onclick="_cabNuevoChooser()" style="width:100%;padding:10px;background:#6A9E7A;color:white;border:none;border-radius:10px;font-size:0.72rem;font-weight:800;cursor:pointer;margin-bottom:9px">＋ Nuevo</button><div id="cab-nuevo-ch"></div><div id="cab-act-form"></div>':'<div id="cab-act-form"></div>';
   var bajaAbierto=false;
   var elBja=document.getElementById('cab-act-baja');
   if(elBja&&elBja.style.display==='block') bajaAbierto=true;
@@ -9851,7 +9934,7 @@ function _cabPintarActivos(){
     // Tarjeta espejo del inventario: codigo primero, nombre grande, tocar despliega ficha
     html+='<div class="card" style="padding:11px 13px;margin-bottom:7px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1;min-width:0'+(_cabEsAdmin()?';cursor:pointer':'')+'"'+(_cabEsAdmin()?' onclick="_cabActDetalle('+i+')"':'')+'>'
+      +'<div style="flex:1;min-width:0'+(_lgPuedeTocar()?';cursor:pointer':'')+'"'+(_lgPuedeTocar()?' onclick="_cabActForm('+i+')" title="Toca para cambiar"':'')+'>'
       +'<div style="font-size:0.58rem;font-weight:800;color:var(--gray);letter-spacing:0.4px">'+a.codigo+'</div>'
       +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy)">'+a.activo+' <span style="font-size:0.56rem;background:var(--blue-l);color:var(--navy);padding:2px 6px;border-radius:6px">'+(a.categoria||'—')+'</span></div>'
       +'<div style="font-size:0.58rem;color:var(--gray)">'+(a.estado?a.estado:'')+(_cabEsAdmin()&&a.costo?' · $'+a.costo:'')+(a.notas?' · '+a.notas:'')+'</div>'
@@ -9870,7 +9953,7 @@ function _cabPintarActivos(){
       })()
       +'</div>'
       +(_cabEsAdmin()?'<div style="display:flex;gap:4px;flex-shrink:0"><button onclick="_cabBajaFormAct('+i+')" title="Dar de baja" style="padding:6px 9px;background:white;color:#B86B6B;border:1.5px solid #E8C4C4;border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">🪦</button>'
-      +'<button onclick="_cabActForm('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️</button></div>':'')
+      +'<button onclick="_cabActDetalle('+i+')" title="Detalle e historial" style="padding:6px 9px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.64rem;font-weight:800;cursor:pointer">📋</button></div>':'')
       +'</div>'
       +(function(){
         var enL=(a.cantLocal||0)>0, enB=(a.cantBodega||0)>0;
@@ -9888,10 +9971,10 @@ function _cabPintarActivos(){
       if((a.estado||'')==='DADO DE BAJA') return;
       if(lugA!=='todo'&&((a.lugar||'SUNSU')!==lugA)) return;
       var f=_cabActFaltas(a);
-      if(f.length) faltasAct.push('<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
+      if(f.length) faltasAct.push('<div onclick="_cabActForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cream-d)">'
         +'<div style="flex:1;min-width:0"><span style="font-size:0.64rem;font-weight:700;color:var(--navy)">'+a.activo+'</span><br>'
         +'<span style="font-size:0.56rem;color:#9A7B1E">falta: '+f.join(', ')+'</span></div>'
-        +'<button onclick="_cabActForm('+i+');window.scrollTo({top:0,behavior:\'smooth\'})" style="padding:5px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;font-size:0.6rem;font-weight:800;cursor:pointer;flex-shrink:0">✏️ Llenar</button>'
+        +'<span style="font-size:0.6rem;font-weight:800;color:var(--navy);flex-shrink:0">Completar →</span>'
         +'</div>');
     });
     html+=_cabCarpetaFaltas('cab-act-faltas','Les faltan datos',faltasAct);
@@ -9929,7 +10012,7 @@ function _cabActForm(i){
   if(mF) fISO=mF[3]+'-'+('0'+mF[2]).slice(-2)+'-'+('0'+mF[1]).slice(-2);
   var inp=function(id,lbl,v){ return '<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">'+lbl+'</div><input id="cba-'+id+'" value="'+String(v==null?'':v).replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:8px;font-size:0.72rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
   f.innerHTML='<div class="card" style="padding:12px;margin-bottom:9px;border:2px solid var(--navy)">'
-    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' activo</div>'
+    +'<div style="font-size:0.7rem;font-weight:800;color:var(--navy);margin-bottom:8px">'+(i>=0?'Activo':'＋ Nuevo activo')+'</div>'+_lgAviso()
     +inp('activo','Activo *',a.activo)
     +'<div style="margin-bottom:6px"><div style="font-size:0.58rem;font-weight:800;color:var(--navy)">📍 Ubicación (cuadrante)</div>'
     +(function(){
@@ -9986,12 +10069,14 @@ function _cabActForm(i){
     +'<button onclick="document.getElementById(\'cba-foto-file\').click()" style="padding:9px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.66rem;font-weight:800;cursor:pointer">📷 Tomar o subir foto</button>'
     +'<input id="cba-foto-file" type="file" accept="image/*" style="display:none" onchange="_cabFotoSel(this,\'cba-foto-prev\')">'
     +'</div></div>'
-    +(i>=0?'<button onclick="_cabConvertir(\'act\',\''+a.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a CONSUMIBLE (producto de uso)</button>':'')
+    +(i>=0&&!_lgPide()?'<button onclick="_cabConvertir(\'act\',\''+a.codigo+'\')" style="width:100%;margin-bottom:6px;padding:8px;background:white;color:#9A7B1E;border:1.5px solid var(--gold);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">🔁 Convertir a CONSUMIBLE (producto de uso)</button>':'')
     +'<div style="display:flex;gap:6px;margin-top:4px">'
-    +'<button onclick="_cabActGuardar('+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
-    +(i>=0?'<button onclick="_cabBorrar(\'act\','+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
-    +'<button onclick="document.getElementById(\'cab-act-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'<button data-lg-save onclick="_cabActGuardar('+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">'+_lgTxtGuardar()+'</button>'
+    +(i>=0&&!_lgPide()?'<button onclick="_cabBorrar(\'act\','+(a.row||0)+',\''+(a.codigo||'')+'\',this)" style="padding:9px 12px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">🗑</button>':'')
+    +'<button data-lg-desc onclick="document.getElementById(\'cab-act-form\').innerHTML=\'\'" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cerrar</button>'
     +'</div></div>';
+  window._lgBase=window._lgBase||{}; window._lgBase.cabina_activos=a;
+  if(i>=0) _lgMirar(f);
   f.scrollIntoView({behavior:'smooth'});
 }
 function _cabActGuardar(row,codigo,btn){
@@ -10010,7 +10095,7 @@ function _cabActGuardar(row,codigo,btn){
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok){ if(btn){btn.disabled=false;btn.textContent='💾 Guardar';} toast('❌ '+(d.error||'Error'),'#B86B6B'); return; }
-    toast('💾 Guardado','var(--green)');
+    toast(d.solicitud?'📨 Solicitud enviada: Emilia o Emi la aprueban':'💾 Guardado','var(--green)');
     window._cabSec='inv'; window._cabTipo='act';
     _cabFotoSubir(d.codigo||codigo).then(function(){ renderCabina(document.getElementById('content'),true); });
   })
@@ -10087,9 +10172,12 @@ function _regDirCuerpo(i,editando){
       +fila('✂️','Extracciones',it.extracciones)
       +fila('💆','Cortesía',it.cortesia)
       +fila('📸','Fotos',it.autorizaFotos)
-      +(esAdmin?'<button onclick="_regDirCuerpo('+i+',true)" style="margin-top:8px;padding:7px 13px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.64rem;font-weight:800;cursor:pointer">✏️ Editar</button>':'');
+      +(_lgPuedeTocar()?'<div style="margin-top:6px;font-size:0.6rem;color:var(--gray)">✎ Toca la ficha para cambiarla'+(_lgPide()?' (se envía como solicitud)':'')+'.</div>':'');
+    b.style.cursor=_lgPuedeTocar()?'pointer':'';
+    b.onclick=_lgPuedeTocar()?function(ev){ if(ev.target.closest('button,a,input,select')) return; _regDirCuerpo(i,true); }:null;
     return;
   }
+  b.onclick=null; b.style.cursor='';
   // Modo edicion (solo admins; el servidor lo re-valida igual)
   var inp=function(id,lbl,v){ return '<div style="margin:6px 0"><div style="font-size:0.6rem;font-weight:800;color:var(--navy)">'+lbl+'</div>'
     +'<input id="rde-'+id+'-'+i+'" value="'+String(v||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>'; };
@@ -10098,9 +10186,11 @@ function _regDirCuerpo(i,editando){
     +inp('sector','Sector',it.sector)+inp('tipoPiel','Tipo de piel',it.tipoPiel)+inp('estado','Estado',it.estado)
     +inp('alergias','Alergias',it.alergias)+inp('medicacion','Medicación',it.medicacion)+inp('condiciones','Condiciones',it.condiciones)
     +'<div style="display:flex;gap:6px;margin-top:9px">'
-    +'<button onclick="_regDirGuardar('+i+',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">💾 Guardar</button>'
-    +'<button onclick="_regDirCuerpo('+i+',false)" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cancelar</button>'
+    +'<button data-lg-save onclick="_regDirGuardar('+i+',this)" style="flex:1;padding:9px;background:var(--green);color:white;border:none;border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">'+_lgTxtGuardar()+'</button>'
+    +'<button data-lg-desc onclick="_regDirCuerpo('+i+',false)" style="padding:9px 13px;background:white;color:var(--gray);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cerrar</button>'
     +'</div>';
+  window._lgBase=window._lgBase||{}; window._lgBase.registro_cliente=it;
+  _lgMirar(b);
 }
 function _regDirGuardar(i,btn){
   var it=(window._regDirItems||[])[i]; if(!it) return;
@@ -10116,6 +10206,7 @@ function _regDirGuardar(i,btn){
   .then(function(d){
     if(btn){ btn.disabled=false; btn.textContent='💾 Guardar'; }
     if(!d.ok){ toast('❌ '+(d.error||'No se pudo guardar'),'#B86B6B'); return; }
+    if(d.solicitud){ _regDirCuerpo(i,false); toast('📨 Solicitud enviada: Emilia o Emi la aprueban','var(--green)'); return; }
     Object.keys(campos).forEach(function(k){ it[k]=campos[k]; });
     window._fichasReg=null; // las fichas de citas se refrescan con el dato nuevo
     _regDirCuerpo(i,false);
@@ -10401,7 +10492,7 @@ function editarTicket(tkRow){
   modal.style.cssText='background:white;border-radius:18px;padding:20px;width:100%;max-width:480px;margin-top:8px;margin-bottom:40px;box-shadow:0 8px 40px rgba(91,127,166,0.2)';
   modal.innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
-    +'<div><div style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase">✏️ Ticket #'+tkRow+'</div>'
+    +'<div><div style="font-size:0.68rem;font-weight:700;color:var(--gray);text-transform:uppercase">🧾 Ticket #'+tkRow+'</div>'
     +'<div style="font-size:0.92rem;font-weight:800;color:var(--navy)">'+t.nombre+' '+t.apellido+'</div>'
     +'<div style="font-size:0.65rem;color:var(--gray)">'+t.fecha+' · '+t.cosmetologa+'</div></div>'
     +'<button onclick="document.getElementById(\'edit-overlay\').remove()" style="background:var(--gray-l);border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;flex-shrink:0">×</button>'
@@ -11050,7 +11141,8 @@ function _pintarCatalogoAdmin(){
     var compra=edita?ix.campo("catalogo", it.sku, "compra", it.compra||0):('$'+(it.compra||0).toFixed(2));
     var toggle=(pide||vista)?'':'<button onclick="toggleActivoCat('+i+')" style="padding:6px 10px;border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1.5px solid '+(it.activo?'#6A9E7A;background:#E8F8EE;color:#2E7D52':'#B86B6B;background:white;color:#B86B6B')+'">'+(it.activo?'✓ Activo':'✕ Inactivo')+'</button>';
     var extra=edita?ix.borrar("catalogo", it.sku):(pide?ix.pedir("catalogo", it.sku, {nombre:it.nombre||"", tipo:it.tipo||"", subtotal:it.subtotal||"", compra:it.compra||""}):'');
-    var lapiz=(!edita&&!pide&&!vista)?'<button onclick="formEditarProducto('+i+')" style="padding:6px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️</button>':'';
+    var lapiz=(!edita&&!pide&&!vista)?'1':'';
+    if(lapiz){ nombre='<span onclick="formEditarProducto('+i+')" title="Toca para cambiar" style="cursor:pointer;border-bottom:1px dashed var(--cream-d)">'+nombre+'</span>'; lapiz=''; }
     return '<div style="padding:8px 0;border-bottom:1px solid var(--cream-d);'+(it.activo?'':'opacity:0.45')+'">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.7rem;font-weight:700;color:var(--navy)">'+nombre+'</div>'
@@ -12282,7 +12374,8 @@ function renderProveedores(c){
       var dirPv=editaPv?('<div style="font-size:0.62rem;color:var(--gray)">📍 '+ixPv.campo("proveedores", p.fila, "direccion", p.direccion||"")+'</div>'):(p.direccion?'<div style="font-size:0.62rem;color:var(--gray)">📍 '+p.direccion+'</div>':'');
       var notasPv=editaPv?('<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+ixPv.campo("proveedores", p.fila, "notas", p.notas||"")+'</div>'):(p.notas?'<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+p.notas+'</div>':'');
       var extraPv=editaPv?ixPv.borrar("proveedores", p.fila):(pidePv?ixPv.pedir("proveedores", p.fila, {nombre:p.nombre||"", familia:p.familia||"", ruc:p.ruc||"", telefono:p.telefono||"", direccion:p.direccion||"", email:p.email||"", notas:p.notas||""}):'');
-      var lapizPv=(!editaPv&&!pidePv&&!vistaPv)?'<button onclick="formProveedor('+i+')" style="padding:7px 10px;background:white;color:var(--navy);border:1.5px solid var(--navy);border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">✏️</button><button onclick="eliminarProveedor('+i+')" style="padding:7px 10px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🗑️</button>':'';
+      var lapizPv=(!editaPv&&!pidePv&&!vistaPv)?'1':'';
+      if(lapizPv){ nomPv='<span onclick="formProveedor('+i+')" title="Toca para cambiar" style="cursor:pointer;border-bottom:1px dashed var(--cream-d)">'+nomPv+'</span>'; lapizPv='<button onclick="eliminarProveedor('+i+')" style="padding:7px 10px;background:white;color:#B86B6B;border:1.5px solid #B86B6B;border-radius:9px;font-size:0.68rem;font-weight:700;cursor:pointer">🗑️</button>'; }
       html+='<div class="card" style="padding:12px;margin-bottom:9px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
         +'<div style="flex:1;min-width:0"><div style="font-size:0.76rem;font-weight:800;color:var(--navy)">'+nomPv+' <span style="font-size:0.6rem;background:var(--blue-l);color:var(--navy);padding:2px 7px;border-radius:6px">'+famPv+'</span></div>'
@@ -12302,7 +12395,7 @@ function formProveedor(i){
   var p=i>=0?window._provsApp[i]:{nombre:'',ruc:'',telefono:'',direccion:'',email:'',familia:'',notas:'',fila:0};
   var f=function(lbl,id,val,ph){return '<div style="margin-bottom:8px"><div style="font-size:0.62rem;font-weight:700;color:var(--gray);margin-bottom:3px">'+lbl+'</div><input type="text" id="'+id+'" value="'+(val||'').replace(/"/g,'&quot;')+'" placeholder="'+(ph||'')+'" style="width:100%;padding:9px;border:1.5px solid #ECEEF4;border-radius:9px;font-size:0.76rem;font-family:inherit;outline:none;box-sizing:border-box"></div>';};
   document.getElementById('prov-form').innerHTML='<div class="card" style="padding:14px;margin:10px 0;border:2px solid var(--navy)">'
-    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy);margin-bottom:10px">'+(i>=0?'✏️ Editar':'＋ Nuevo')+' proveedor</div>'
+    +'<div style="font-size:0.76rem;font-weight:800;color:var(--navy);margin-bottom:10px">'+(i>=0?'Proveedor':'＋ Nuevo proveedor')+'</div>'
     +f('Nombre *','pv-nombre',p.nombre,'Ej. Hebetronic S.A')
     +f('RUC','pv-ruc',p.ruc,'179...')
     +f('Teléfono','pv-tel',p.telefono,'09...')
@@ -13017,7 +13110,7 @@ function editarOrdenApp(numOrden){
     };
     var c=document.getElementById('content');
     if(c){
-      c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">✏️ Editar orden de compra</div>'
+      c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🧾 Orden de compra (borrador)</div>'
         +'<div id="oc-borrador"></div>';
       _pintarBorradorOC();
       window.scrollTo(0,0);
@@ -13405,7 +13498,7 @@ function renderHistorialOC(){
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
-          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Editar la orden (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">✏️ Editar</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
+          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Reabre la orden como borrador para agregar o quitar productos (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🧾 Reabrir borrador</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
           +(g.soloFact?'':'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>')
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
@@ -13425,10 +13518,10 @@ function renderHistorialOC(){
             +'<div style="flex:1;min-width:0"><div style="font-size:0.74rem;font-weight:700;color:var(--navy)">'+nomH+(_esCompraDirectaLinea(it)?' <span style="font-size:0.55rem;font-weight:800;color:#7A5EA6;background:#F0EAF7;border-radius:6px;padding:1px 5px">🛍 CABINA</span>':'')+'</div>'
             +'<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+it.sku+' · Pedido: '+pedH+'</div></div>'
             +'<div style="text-align:right;flex-shrink:0">'
-            +'<div id="hst-'+it.fila+'"><span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
+            +'<div id="hst-'+it.fila+'" onclick="editarEntregaHist('+it.fila+','+it.pedida+')" title="Toca para corregir la cantidad" style="cursor:pointer"><span style="font-size:0.72rem;font-weight:700;color:'+eColor+'">'+eLabel+'</span>'
             +'<div style="font-size:0.55rem;color:var(--gray)">'+quien+'</div></div>'
             +'</div>'
-            +'<div id="hedit-'+it.fila+'" style="flex-shrink:0"><button onclick="editarEntregaHist('+it.fila+','+it.pedida+')" style="padding:6px 9px;background:var(--cream);border:none;border-radius:8px;font-size:0.75rem;cursor:pointer">✏️</button></div>'
+            +'<div id="hedit-'+it.fila+'" style="flex-shrink:0"></div>'
             +'</div></div>';
         });
         html+='</div></div>';
@@ -13443,8 +13536,8 @@ function renderHistorialOC(){
 function editarEntregaHist(fila,pedida){
   var d=document.getElementById('hedit-'+fila); if(!d) return;
   d.innerHTML='<div style="display:flex;gap:4px;align-items:center">'
-    +'<input type="number" id="hi-'+fila+'" min="0" placeholder="Cant." style="width:64px;padding:6px 8px;border:1.5px solid var(--navy);border-radius:8px;font-size:0.78rem;outline:none;font-family:inherit">'
-    +'<button onclick="guardarEdicionEntrega('+fila+','+pedida+')" style="padding:6px 10px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">✓</button>'
+    +'<input type="number" id="hi-'+fila+'" min="0" placeholder="Cant." oninput="var g=document.getElementById(\'hg-'+fila+'\');if(g)g.style.display=this.value===\'\'?\'none\':\'\'" style="width:64px;padding:6px 8px;border:1.5px solid var(--navy);border-radius:8px;font-size:0.78rem;outline:none;font-family:inherit">'
+    +'<button id="hg-'+fila+'" onclick="guardarEdicionEntrega('+fila+','+pedida+')" style="display:none;padding:6px 10px;background:var(--navy);color:white;border:none;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">✓</button>'
     +'<button onclick="cancelarEdicionEntrega('+fila+','+pedida+')" style="padding:6px 8px;background:var(--cream);color:var(--gray);border:none;border-radius:8px;font-size:0.68rem;cursor:pointer">✕</button>'
     +'</div>';
   setTimeout(function(){var i=document.getElementById('hi-'+fila);if(i)i.focus();},50);
@@ -13452,7 +13545,7 @@ function editarEntregaHist(fila,pedida){
 
 function cancelarEdicionEntrega(fila,pedida){
   var d=document.getElementById('hedit-'+fila); if(!d) return;
-  d.innerHTML='<button onclick="editarEntregaHist('+fila+','+pedida+')" style="padding:6px 9px;background:var(--cream);border:none;border-radius:8px;font-size:0.75rem;cursor:pointer">✏️</button>';
+  d.innerHTML='';
 }
 
 function guardarEdicionEntrega(fila,pedida){
