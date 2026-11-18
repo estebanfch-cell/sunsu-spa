@@ -9,7 +9,7 @@ import { esAdmin } from "./permisos.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import {
   cruzar, exentoCuadre, facSeq, facturaNorm, flagsDeseadas, formaAComp, formaDeTicket, FALTA_CUADRE_DESDE,
-  candidatosParaFactura, facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
+  candidatosParaFactura, ticketClaveValida, facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
   type CandidatoBorrador,
   type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
@@ -29,7 +29,7 @@ function pubBorrador(b0: Row): Row {
     estado: s(b0.estado), estado_txt: s(b0.estado) === "pendiente" || s(b0.estado) === "asignado" ? "Pendiente de aprobar" : s(b0.estado),
     asignado_a: s(b0.asignado_a) || null, bandeja: s(b0.estado) === "pendiente",
     ticket_id: n(b0.ticket_id) || null, ticket_clave: s(b0.ticket_clave) || null,
-    ticket_claves: (Array.isArray((b0.datos as Row | undefined)?.tickets_vinculados) ? (b0.datos as Row).tickets_vinculados as string[] : (s(b0.ticket_clave) ? [s(b0.ticket_clave)] : [])),
+    ticket_claves: (Array.isArray(b0.tickets_vinculados) && (b0.tickets_vinculados as unknown[]).length ? b0.tickets_vinculados as string[] : (Array.isArray((b0.datos as Row | undefined)?.tickets_vinculados) ? (b0.datos as Row).tickets_vinculados as string[] : (s(b0.ticket_clave) ? [s(b0.ticket_clave)] : []))),
     datos: (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row,
     nota: s(b0.nota) || null, acuity: s(b0.acuity_appointment_id) || null,
   };
@@ -447,7 +447,7 @@ extend("migo_borrador_buscar", ADMIN, async (p, ctx, _ses) => {
   const pal = q.split(/\s+/).filter(Boolean).slice(0, 5);
   const items = [];
   for (const t of await ticketsParaCuadre(ctx)) {
-    if (n(t.id) === NUNCA_TICKET_ID || exentoCuadre(t)) continue;
+    if (!ticketClaveValida(t) || exentoCuadre(t)) continue;
     const blob = (s(t.clave || t.so_num) + " " + s(t.nombre) + " " + s(t.apellido) + " " + s(t.atendido_por)).toLowerCase();
     if (!pal.every((w) => blob.includes(w))) continue;
     const fac = s(t.facturaBeta || t.fac_7);
@@ -474,7 +474,7 @@ extend("migo_borrador_vincular", ADMIN, async (p, ctx, ses) => {
   for (const w of want) {
     const hit = todos.find((t) => s(t.clave) === w || s(t.so_num) === w || s(t.id) === w || s(t.sheet_row) === w);
     if (!hit) return { error: "No encontré el ticket " + w };
-    if (n(hit.id) === NUNCA_TICKET_ID) return { error: "Ese ticket no se vincula" };
+    if (n(hit.id) === NUNCA_TICKET_ID || !ticketClaveValida(hit)) return { error: "Ese ticket no se vincula" };
     picks.push(hit);
   }
   const actor = actorOf(ses);
@@ -491,12 +491,18 @@ extend("migo_borrador_vincular", ADMIN, async (p, ctx, ses) => {
     } catch { /* overlay; no tocar Sheets */ }
   }
   const datosB = { ...((b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row), tickets_vinculados: claves };
-  await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, {
+  const updB: Row = {
     estado: "vinculado", ticket_id: n(picks[0].id) || null, ticket_clave: claves[0],
     aprobado_por: actor, aprobado_at: now, updated_at: now,
     nota: s(b0.nota) || (claves.length > 1 ? "vinculada a " + claves.join(" + ") : "vinculada a " + claves[0]),
-    datos: datosB,
-  });
+    datos: datosB, tickets_vinculados: claves,
+  };
+  try {
+    await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, updB);
+  } catch {
+    delete updB.tickets_vinculados;
+    await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, updB);
+  }
   await correrCuadre(ctx, actor);
   await logSafe(ctx, actor, "MIGO BORRADOR", "vinculó " + fac + " → " + claves.join(" + "));
   return { ok: true, vinculado: true, factura: fac, ticket_clave: claves[0], tickets: claves };
