@@ -23,6 +23,7 @@
       ".mcap-cam{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}.mcap-cam video{max-width:94vw;max-height:70vh;border-radius:12px}",
       ".mcap-tabs{display:flex;gap:6px;margin:6px 0 10px;flex-wrap:wrap}.mcap-tabs button{border:1.5px solid var(--cream-d,#e6dccb);background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:.8rem;cursor:pointer}.mcap-tabs button.on{background:var(--navy,#2c3e66);color:#fff;border-color:var(--navy,#2c3e66)}",
       ".mcap-t{width:100%;border-collapse:collapse;font-size:.8rem}.mcap-t th{text-align:left;color:var(--gray,#8a93a6);font-size:.7rem;padding:5px;border-bottom:1.2px solid var(--cream-d,#e6dccb)}.mcap-t td{padding:6px 5px;border-bottom:1px solid #f1ece2;vertical-align:top}.mcap-t .num{text-align:right}.mcap-t tr.an td{opacity:.5;text-decoration:line-through}",
+      ".mcap-consig{margin-top:8px;padding:9px 11px;border-radius:10px;background:#fbf4e4;border:1px solid #e6cf9a;color:#6b5217;font-size:.78rem;line-height:1.35}.mcap-dest small.mcap-cg{color:#8A6D1F;font-weight:800}" +
       ".mcap-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#e8f5ee;color:#2e7d52;font-weight:800}.mcap-pill.g{background:#eef0f4;color:#6b7280}.mcap-chips{display:flex;flex-wrap:wrap;gap:6px}.mcap-chips label{border:1.5px solid var(--cream-d,#e6dccb);border-radius:999px;padding:4px 10px;font-size:.78rem;cursor:pointer}.mcap-chips label.on{border-color:var(--navy,#2c3e66);background:var(--blue-l,#eef3fb)}",
       "@media(max-width:560px){.mcap-dest{grid-template-columns:repeat(2,1fr)}}",
     ].join("\n");
@@ -36,8 +37,9 @@
       '<div class="mcap-card"><div class="mcap-q"><input id="mcap-q" type="search" placeholder="Código, nombre o código de barras" autocomplete="off" value="' + e(K.q || "") + '"><button class="btn ghost" type="button" id="mcap-cam">📷 Escanear</button></div>' +
       '<div class="mcap-res" id="mcap-res">' + (p ? "" : htmlRes()) + "</div></div>" +
       (p ? '<div class="mcap-card"><div><b>' + e(p.producto.nombre) + '</b> <span class="mcap-sku">' + e(p.producto.sku) + "</span>" + (p.producto.presentacion ? ' <span class="mcap-sub">· ' + e(p.producto.presentacion) + "</span>" : "") + "</div>" +
+        (p.producto.consignacion ? '<div class="mcap-consig">🤝 <b>Producto en consignación' + (p.producto.proveedor ? " de " + e(p.producto.proveedor) : "") + '</b><br>Al abrirlo se descuenta del <b>stock en consignación</b> (bodega ' + (d.some(function (x) { return x.saleDe === "Consignación"; }) ? "Consignación" : "Local, donde todavía está") + ') y queda como <b>consumo interno a costo</b>: entra a la liquidación' + (p.producto.proveedor ? " de " + e(p.producto.proveedor) : " del proveedor") + ' como una unidad vendida (se le paga). No genera comisión. Ya no hace falta el «ticket de consignación».</div>' : "") +
         '<div class="mcap-sub" style="margin-top:8px">¿Dónde se va a usar?</div><div class="mcap-dest">' + d.map(function (x) {
-          return '<button type="button" data-dest="' + e(x.codigo) + '" class="' + (K.destino === x.codigo ? "on" : "") + '">' + e(x.nombre) + "<small>stock " + e(x.stock) + (x.saleDe ? " en " + e(x.saleDe) : "") + "</small>" + (x.abierto ? "<small>abierto desde " + e(fh(x.abierto.desde)) + "</small>" : "") + "</button>";
+          return '<button type="button" data-dest="' + e(x.codigo) + '" class="' + (K.destino === x.codigo ? "on" : "") + '">' + e(x.nombre) + "<small>stock " + e(x.stock) + (x.saleDe ? " en " + e(x.saleDe) : "") + "</small>" + (p.producto.consignacion ? (x.consig ? '<small class="mcap-cg">🤝 de consignación</small>' : "<small>ya está en la cabina</small>") : "") + (x.abierto ? "<small>abierto desde " + e(fh(x.abierto.desde)) + "</small>" : "") + "</button>";
         }).join("") + "</div>" +
         '<div class="mcap-sub">Firma con el dedo</div><canvas class="mcap-firma" id="mcap-firma"></canvas>' +
         '<div class="mcap-acts"><button class="btn ghost small" type="button" id="mcap-limpiar">Borrar firma</button><button class="btn" type="button" id="mcap-ok">📦 Abrir y descontar 1</button></div></div>' : "") +
@@ -93,11 +95,11 @@
       ok.disabled = true; ok.textContent = "Guardando…";
       var r = await api("ap_abrir", { producto_id: K.prod, destino: K.destino, firma: cv.toDataURL("image/png") });
       if (!r || !r.ok) { ok.disabled = false; ok.textContent = "📦 Abrir y descontar 1"; toast2((r && r.error) || "No se pudo guardar", 1); return; }
-      toast2("✓ Abierto en " + r.destino + (r.saleDe && r.saleDe !== r.destino ? " (sale de " + r.saleDe + ")" : "") + (r.cerradas && r.cerradas.length ? " · se cerró el envase anterior" : ""));
+      toast2("✓ Abierto en " + r.destino + (r.saleDe && r.saleDe !== r.destino ? " (sale de " + r.saleDe + ")" : "") + (r.consignacion ? " · 🤝 consumo de consignación" : "") + (r.cerradas && r.cerradas.length ? " · se cerró el envase anterior" : ""));
       var nombre = K.info.producto.nombre;
       K.prod = null; K.info = null; K.destino = ""; K.items = []; K.q = "";
       pintar(main);
-      main.querySelector("#mcap-res").innerHTML = '<p class="mcap-pill" style="display:inline-block">✓ ' + e(nombre) + " abierto en " + e(r.destino) + "</p>";
+      main.querySelector("#mcap-res").innerHTML = '<p class="mcap-pill" style="display:inline-block">✓ ' + e(nombre) + " abierto en " + e(r.destino) + (r.consignacion ? " · 🤝 consumo de consignación (va a la liquidación del proveedor)" : "") + "</p>";
     };
   }
   /** Cámara: BarcodeDetector del navegador (Chrome/Android, Safari reciente). Si no hay, se escribe el código. */

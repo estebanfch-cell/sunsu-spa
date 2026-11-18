@@ -86,6 +86,11 @@ extend("cns_calc", "any", async (p, ctx, ses) => {
   const restock = rst.find((x) => s(x.desde) === s(r.ini) && s(x.hasta) === s(r.fin));
   const stock = await stockConsig(ctx, ses, s(prov.familia));
   const items: Row[] = ((r.items || []) as Row[]).map((it) => ({ ...it, producto_id: idDe.get(skuCode(s(it.sku))) || "" }));
+  // TK44: detalle del consumo interno del periodo (📦 Abrir producto o transferencia a cabina), a costo.
+  const nomDe = new Map(prods.map((x) => [skuCode(s(x.sku)), s(x.nombre)]));
+  const consumos = (await todas(ctx, "erp_consignacion_consumo")).filter((c) => s(c.familia) === s(prov.familia) && s(c.quincena_ini).slice(0, 10) === s(r.ini) && s(c.quincena_fin).slice(0, 10) === s(r.fin))
+    .sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)))
+    .map((c) => ({ fecha: s(c.fecha), sku: skuCode(s(c.sku)), producto: nomDe.get(skuCode(s(c.sku))) || skuCode(s(c.sku)), cantidad: n(c.cantidad), costo: round2(n(c.costo_unit)), origen: /apertura:/.test(s(c.nota)) ? "📦 Abrir producto" : s(c.transferencia_id) ? "🔁 Transferencia a cabina" : "Consumo", detalle: s(c.nota).replace(/\s*·?\s*apertura:[0-9a-f-]+/i, ""), por: s(c.creado_por) }));
   const historial = ocs.map((o) => ({ id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), total: n(o.total), ...periodoDe(o) })).sort((a, b) => s(b.desde).localeCompare(s(a.desde)));
   return {
     ok: true, proveedor: prov, familia: prov.familia, desde: r.ini, hasta: r.fin, label: r.qLabel,
@@ -93,7 +98,7 @@ extend("cns_calc", "any", async (p, ctx, ses) => {
     oc: oc ? { id: s(oc.id), numero: s(oc.numero), total: n(oc.total) } : null,
     restock: restock ? { id: s(restock.id), numero: s(restock.numero), lineas: restock.lineas, estado: s(restock.estado), fecha: s(restock.created_at) } : null,
     stock, stockNota: notaStock(stock), bodegaConsig: (await todas(ctx, "erp_bodegas")).some((b) => s(b.id) === BODEGA_CONSIGNACION),
-    historial, restocks: rst.map((x) => ({ id: s(x.id), numero: s(x.numero), desde: s(x.desde), hasta: s(x.hasta), estado: s(x.estado), oc_id: s(x.oc_id) })),
+    consumos, historial, restocks: rst.map((x) => ({ id: s(x.id), numero: s(x.numero), desde: s(x.desde), hasta: s(x.hasta), estado: s(x.estado), oc_id: s(x.oc_id) })),
   };
 });
 
