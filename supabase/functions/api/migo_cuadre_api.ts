@@ -2,7 +2,7 @@
 // «Pendiente de aprobar» cuando la factura llega antes que el ticket. Nunca emite ni anula facturas.
 import { extend, crearTicket } from "./handlers.ts";
 import { ADMIN, ecuadorParts, n, s, type Row } from "./domain.ts";
-import { actorOf, logAccion, type Ctx, type Ses } from "./lib.ts";
+import { actorOf, guardarArchivo, logAccion, type Ctx, type Ses } from "./lib.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
 import { esAdmin } from "./permisos.ts";
@@ -181,6 +181,7 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
 
 async function aplicarDatosMigo(ctx: Ctx, actor: string, tickets: Row[], links: LinkCuadre[], facturas: FacturaVivo[]): Promise<number> {
   const byFac = new Map(facturas.map((f) => [f.factura, f]));
+  const vivoPdf = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((r) => [s(r.factura), s(r.pdf_archivo)]));
   const byId = new Map(tickets.map((t) => [n(t.id), t]));
   const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
   const now = ctx.now.toISOString();
@@ -205,6 +206,8 @@ async function aplicarDatosMigo(ctx: Ctx, actor: string, tickets: Row[], links: 
       total: inv?.total ?? L.total_factura,
       fuente: "migo",
     };
+    const pdfUrl = s((prev.factura_pdf && typeof prev.factura_pdf === "object" ? (prev.factura_pdf as Row).url : "") || vivoPdf.get(L.factura));
+    if (pdfUrl) next.factura_pdf = { url: pdfUrl, factura: L.factura, fuente: "migo" };
     if (JSON.stringify(prev) === JSON.stringify(next)) continue;
     try {
       if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: next, updated_at: now, actualizado_por: actor });
@@ -239,6 +242,64 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   };
 }
 
+
+async function adjuntarPdfsMigo(ctx: Ctx, actor: string, raw: unknown): Promise<Row> {
+  const items = Array.isArray(raw) ? raw as Row[] : [];
+  if (!items.length) return { ok: true, adjuntos: 0, tickets: 0, pendientes: 0, omitidos: 0 };
+  const now = ctx.now.toISOString();
+  const tickets = await ticketsParaCuadre(ctx);
+  const links = await todas(ctx, "beta_cuadre_link");
+  const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const vivos = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((r) => [s(r.factura), r]));
+  let adjuntos = 0, nTk = 0, omitidos = 0;
+  const pendientes: string[] = [];
+  for (const it of items) {
+    const fac = facturaNorm(it.factura || it.nombre);
+    const data = s(it.data || it.data_url || it.imagen || it.pdf);
+    if (!fac || facSeq(fac) === null) { omitidos++; continue; }
+    if (!data.includes("base64,")) { omitidos++; continue; }
+    const id = await guardarArchivo(ctx.db, actor, "factura_migo", "Factura " + fac, data);
+    if (!id) { omitidos++; continue; }
+    const url = "archivo:" + id;
+    const vivo = vivos.get(fac);
+    if (vivo) {
+      try { await ctx.db.write(actor, "beta_migo_facturas_vivo", "update", { factura: fac }, { pdf_archivo: url, updated_at: now }); }
+      catch { /* columna nueva opcional */ }
+      vivos.set(fac, { ...vivo, pdf_archivo: url });
+    }
+    const seq = facSeq(fac)!;
+    const ids = new Set<number>();
+    for (const L of links) if (s(L.factura) === fac && n(L.ticket_id) !== NUNCA_TICKET_ID) ids.add(n(L.ticket_id));
+    for (const tk of tickets) {
+      if (n(tk.id) === NUNCA_TICKET_ID) continue;
+      if (facSeq(tk.facturaBeta || tk.fac_7) === seq) ids.add(n(tk.id));
+    }
+    if (!ids.size) { adjuntos++; pendientes.push(fac); continue; }
+    for (const tid of ids) {
+      const tk = tickets.find((x) => n(x.id) === tid);
+      if (!tk) continue;
+      const clave = s(tk.clave) || claveDe(tk, leerSerie(tk, "so_num"));
+      if (!clave) continue;
+      const cab = cabs.get(clave);
+      const prev = { ...((cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row) };
+      const next: Row = {
+        ...prev,
+        factura: s(prev.factura) || fac,
+        factura_pdf: { url, factura: fac, fuente: "migo", por: actor, fecha: now },
+      };
+      try {
+        if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: next, updated_at: now, actualizado_por: actor });
+        else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: tk.sheet_row ?? null, datos: next, actualizado_por: actor, updated_at: now });
+        cabs.set(clave, { ...(cab || {}), clave, datos: next });
+        nTk++;
+      } catch { /* overlay opcional */ }
+    }
+    adjuntos++;
+  }
+  await logSafe(ctx, actor, "MIGO PDF", adjuntos + " pdfs, " + nTk + " tickets, " + pendientes.length + " sin ticket");
+  return { ok: true, adjuntos, tickets: nTk, pendientes: pendientes.length, pendientes_fac: pendientes, omitidos };
+}
+
 async function importarFacturas(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   const raw = Array.isArray(p.facturas) ? p.facturas as Row[] : [];
   const parsed = raw.map(parseFacturaVivo).filter((x): x is FacturaVivo => !!x);
@@ -269,11 +330,16 @@ async function importarFacturas(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
     fuente: s(p.fuente) || "json", actor, imported_at: now,
   });
   const cuadre = await correrCuadre(ctx, actor);
+  let pdfs: Row = { adjuntos: 0 };
+  if (Array.isArray(p.pdfs) && (p.pdfs as unknown[]).length) {
+    pdfs = await adjuntarPdfsMigo(ctx, actor, p.pdfs);
+  }
   await logSafe(ctx, actor, "MIGO IMPORTAR", parsed.length + " facturas, +" + nNuevas + " nuevas, máx " + maxSeq);
-  return { ok: true, importadas: parsed.length, nuevas: nNuevas, actualizadas: nAct, max_seq: maxSeq, cuadre };
+  return { ok: true, importadas: parsed.length, nuevas: nNuevas, actualizadas: nAct, max_seq: maxSeq, cuadre, pdfs };
 }
 
 extend("migo_importar", ADMIN, (p, ctx, ses) => importarFacturas(ctx, ses, p));
+extend("migo_adjuntar_pdfs", ADMIN, (p, ctx, ses) => adjuntarPdfsMigo(ctx, actorOf(ses), p.pdfs));
 extend("migo_cuadre_hora", ADMIN, async (_p, ctx, ses) => {
   const out = await correrCuadre(ctx, actorOf(ses));
   await logSafe(ctx, actorOf(ses), "MIGO CUADRE", "links " + n(out.links) + ", flags " + n(out.flags_abiertas));

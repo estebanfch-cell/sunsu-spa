@@ -5,7 +5,7 @@ import { handle } from "./handlers.ts";
 import "./tickets_beta_api.ts";
 import "./migo_cuadre_api.ts";
 import { cruzar, esConsumidorFinal, esperandoFacturaLunes, exentoCuadre, facSeq, fechaGye, flagsDeseadas, formaDeTicket, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
-import { faltaDe } from "./tickets_beta_api.ts";
+import { docsBeta, faltaDe } from "./tickets_beta_api.ts";
 import type { Row } from "./domain.ts";
 
 describe("cruce Migo (solo lectura)", () => {
@@ -216,6 +216,41 @@ function sId(f: Row, id: string): boolean {
   return String(f.id) === id && f.resuelto !== true;
 }
 
+describe("PDF de factura Migo", () => {
+
+  it("adjunta el PDF de la factura al ticket vinculado y lo lista en documentos", async () => {
+    const db = new MemoryDb();
+    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+    db.tables.set("tickets", [
+      { id: 1886, sheet_row: 1887, so_num: "TK-SO-1893", timestamp: "2026-11-17T11:55:00Z", nombre: "Camila", apellido: "Cadena", estimado: 65, fac: true, fac_7: "2951.0", cob: true, comp: "Trans:1", orig: {} },
+    ]);
+    db.tables.set("beta_tickets", []);
+    db.tables.set("beta_ticket_flags", []);
+    db.tables.set("beta_migo_facturas_vivo", [{ factura: "001-001-000002951", seq: 2951, fecha: "2026-11-17", cliente: "CAMILA CADENA", total: 65 }]);
+    db.tables.set("beta_cuadre_link", [{ ticket_id: 1886, factura: "001-001-000002951", tipo: "numero", confianza: "alta", estado: "cuadra" }]);
+    db.tables.set("app_archivos", []);
+    db.tables.set("log_acciones", []);
+    const ctx = { db, now: new Date("2026-11-18T12:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, token: "adm", legacyLogin: async () => ({}) };
+    const data = "data:application/pdf;base64,JVBERi0xLjE="; // %PDF-1.1
+    const r = await handle("migo_adjuntar_pdfs", { token: "adm", pdfs: [{ factura: "001-001-000002951", data }] }, ctx) as Row;
+    assert.equal(r.ok, true, String(r.error));
+    assert.equal(r.adjuntos, 1);
+    assert.equal(r.tickets, 1);
+    const cab = (db.tables.get("beta_tickets") || []).find((c) => String(c.clave).includes("1893"))!;
+    const pdf = ((cab.datos as Row).factura_pdf) as Row;
+    assert.match(String(pdf.url), /^archivo:/);
+    const docs = docsBeta(cab);
+    assert.equal(docs[0].tipo, "factura");
+    assert.match(String(docs[0].nombre), /001-001-000002951/);
+    const arch = db.tables.get("app_archivos") || [];
+    assert.equal(arch.length, 1);
+    assert.equal(arch[0].kind, "factura_migo");
+    // #1820 nunca
+    assert.equal((db.tables.get("beta_tickets") || []).some((c) => String(c.clave).includes("1827")), false);
+  });
+});
+
 import { readFileSync } from "node:fs";
 describe("Historial forma de pago (TK38)", () => {
   it("columna entre Cosmetóloga y Subtotal, pill Pagado en Migo, caché tk38", () => {
@@ -226,6 +261,9 @@ describe("Historial forma de pago (TK38)", () => {
     assert.match(js, /Pagado en Migo/);
     assert.match(js, /Pendiente por lunes/);
     assert.match(js, /function _tkFormaPill/);
-    assert.match(html, /beta-screens\.js\?v=20261118tk38/);
+    assert.match(js, /function _tkFacPdf/);
+    const tk = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
+    assert.match(tk, /Ver factura/);
+    assert.match(html, /beta-screens\.js\?v=20261118tk39/);
   });
 });

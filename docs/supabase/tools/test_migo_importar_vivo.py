@@ -67,5 +67,23 @@ class TestCobros(unittest.TestCase):
         nov17 = [f for f in facts if f["fecha"] == "2026-11-17"]
         self.assertEqual(len(nov17), 12)
 
+
+
+class TestPdfs(unittest.TestCase):
+    def test_nombra_por_secuencial(self):
+        import tempfile, shutil
+        d = Path(tempfile.mkdtemp())
+        try:
+            pdf = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+            (d / "001-001-000002951.pdf").write_bytes(pdf)
+            (d / "2961.pdf").write_bytes(pdf)
+            (d / "nota.txt").write_text("no")
+            items = m.pdfs_de_dir(d)
+            facs = {x["factura"] for x in items}
+            self.assertEqual(facs, {"001-001-000002951", "001-001-000002961"})
+            self.assertTrue(all(x["data"].startswith("data:application/pdf;base64,") for x in items))
+        finally:
+            shutil.rmtree(d)
+
 if __name__ == "__main__":
     unittest.main()

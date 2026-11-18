@@ -256,6 +256,41 @@ def parse_detalle(path: Path, facturas: list[dict]) -> None:
             "total": money(s.cell(r, 17).value),
         })
 
+
+def pdfs_de_dir(folder: Path) -> list[dict]:
+    """Lee PDFs nombrados por número de factura (001-001-000002951.pdf o 2951.pdf)."""
+    import base64
+    if not folder.is_dir():
+        return []
+    out = []
+    for path in sorted(folder.glob("*.pdf")):
+        fac = fac_norm(path.stem.split("_")[0])
+        if not fac:
+            continue
+        raw = path.read_bytes()
+        if not raw.startswith(b"%PDF"):
+            continue
+        out.append({
+            "factura": fac,
+            "nombre": path.name,
+            "data": "data:application/pdf;base64," + base64.b64encode(raw).decode("ascii"),
+        })
+    return out
+
+def post_accion(url: str, accion: str, payload: dict, token: str | None, cron_key: str | None) -> dict:
+    body = dict(payload)
+    body["accion"] = accion
+    if token:
+        body["token"] = token
+    if cron_key:
+        body["cron_key"] = cron_key
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "sunsu-migo-import"})
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, context=ctx, timeout=180) as res:
+        raw = res.read().decode()
+    return json.loads(raw) if raw else {}
+
 def post_import(url: str, payload: dict, token: str | None, cron_key: str | None) -> dict:
     body = dict(payload)
     body["accion"] = "migo_importar"
@@ -279,19 +314,28 @@ def main():
     ap = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Importa el Excel de Migo (solo lectura) a la beta y dispara el cruce.",
-        epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags (--xls, --detalle, --url, --token-file,\n--cron-key-file, --fuente, --dry-run).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
+        epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags existentes (--xls, --detalle, --url,\n--token-file, --cron-key-file, --fuente, --dry-run). --pdf-dir es un flag\nnuevo, optativo.\n\nPDFs de factura (solo lectura): dejar cada RIDE en\n/workspace/sunsu/migo_exports/pdf/001-001-000002951.pdf (también vale 2951.pdf).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --pdf-dir /workspace/sunsu/migo_exports/pdf \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
     )
-    ap.add_argument("--xls", required=True, help="Ventas → Cobros Realizados (.xls); también acepta Formas de pago")
+    ap.add_argument("--xls", help="Ventas → Cobros Realizados (.xls); también acepta Formas de pago")
     ap.add_argument("--detalle", help="Ventas detalle (.xls), opcional para ítems de borrador")
+    ap.add_argument("--pdf-dir", help="Carpeta con RIDE PDF nombrados 001-001-000002951.pdf (o 2951.pdf)")
     ap.add_argument("--url", default=os.environ.get("SUNSU_API_URL", URL_DEFAULT), help="URL de la edge function api (SUNSU_API_URL)")
     ap.add_argument("--token-file", help="Archivo con token de sesión admin (no imprimir)")
     ap.add_argument("--cron-key-file", help="Archivo con MIGO_CRON_KEY (no imprimir)")
     ap.add_argument("--fuente", default="xls", help="Etiqueta de origen del import (por defecto: xls)")
     ap.add_argument("--dry-run", action="store_true", help="Solo parsea e imprime el conteo; no llama a la API")
     args = ap.parse_args()
-    facturas = parse_formas(Path(args.xls))
+
+    if not args.xls and not args.pdf_dir:
+        sys.stderr.write("Falta --xls o --pdf-dir\n")
+        sys.exit(2)
+    facturas = parse_formas(Path(args.xls)) if args.xls else []
     if args.detalle:
+        if not facturas:
+            sys.stderr.write("--detalle requiere --xls\n")
+            sys.exit(2)
         parse_detalle(Path(args.detalle), facturas)
+    pdfs = pdfs_de_dir(Path(args.pdf_dir)) if args.pdf_dir else []
     fechas = [f["fecha"] for f in facturas]
     # Resumen sin nombres si se pide dry-run? nombres sí se pueden listar; no cédulas.
     print(f"Facturas leídas: {len(facturas)}" + (f"  {fechas[0]} → {fechas[-1]}" if fechas else ""))
@@ -300,6 +344,8 @@ def main():
         con_lineas = sum(1 for f in facturas if f.get("lineas"))
         if args.detalle:
             print(f"Con ítems de detalle: {con_lineas}")
+    if args.pdf_dir:
+        print(f"PDFs en carpeta: {len(pdfs)}")
     payload = {
         "fecha_desde": fechas[0] if fechas else None,
         "fecha_hasta": fechas[-1] if fechas else None,
@@ -314,26 +360,39 @@ def main():
     if not token and not cron:
         sys.stderr.write("Falta --token-file o --cron-key-file\n")
         sys.exit(2)
-    out = post_import(args.url, payload, token, cron)
-    # No volcar el payload ni secretos.
-    if not out.get("ok"):
-        sys.stderr.write("Error: " + str(out.get("error") or out) + "\n")
-        sys.exit(1)
-    cuadre = out.get("cuadre") or {}
-    print(
-        "Import ok:",
-        out.get("importadas"),
-        "facturas,",
-        "+" + str(out.get("nuevas")),
-        "nuevas, máx",
-        out.get("max_seq"),
-        "| links",
-        cuadre.get("links"),
-        "flags abiertas",
-        cuadre.get("flags_abiertas"),
-        "borradores nuevos",
-        cuadre.get("borradores_nuevos"),
-    )
+    if facturas:
+        out = post_import(args.url, payload, token, cron)
+        if not out.get("ok"):
+            sys.stderr.write("Error: " + str(out.get("error") or out) + "\n")
+            sys.exit(1)
+        cuadre = out.get("cuadre") or {}
+        print(
+            "Import ok:",
+            out.get("importadas"),
+            "facturas,",
+            "+" + str(out.get("nuevas")),
+            "nuevas, máx",
+            out.get("max_seq"),
+            "| links",
+            cuadre.get("links"),
+            "flags abiertas",
+            cuadre.get("flags_abiertas"),
+            "borradores nuevos",
+            cuadre.get("borradores_nuevos"),
+        )
+    if pdfs:
+        adjuntos = tickets = pendientes = omitidos = 0
+        for i in range(0, len(pdfs), 6):
+            lote = [{k: x[k] for k in ("factura", "nombre", "data")} for x in pdfs[i:i+6]]
+            r = post_accion(args.url, "migo_adjuntar_pdfs", {"pdfs": lote}, token, cron)
+            if not r.get("ok"):
+                sys.stderr.write("Error PDFs: " + str(r.get("error") or r) + "\n")
+                sys.exit(1)
+            adjuntos += int(r.get("adjuntos") or 0)
+            tickets += int(r.get("tickets") or 0)
+            pendientes += int(r.get("pendientes") or 0)
+            omitidos += int(r.get("omitidos") or 0)
+        print("PDFs ok:", adjuntos, "adjuntos,", tickets, "tickets,", pendientes, "sin ticket,", omitidos, "omitidos")
 
 if __name__ == "__main__":
     main()
