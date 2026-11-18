@@ -1447,10 +1447,8 @@ reg("getTicketsLista", "any", async (p, ctx, ses) => {
     .filter((r) => !propio || esPropio(s(r.atendido_por), ses))
     .map(filaTicket)
     .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (a.hora < b.hora ? 1 : -1)));
-  const { itemBorradorLista, listarBorradoresVisibles } = await import("./borradores_asig.ts");
-  const bor = (await listarBorradoresVisibles(ctx, ses)).map(itemBorradorLista)
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  return { ok: true, items: bor.concat(items) };
+  // TK94 (Emilia 18/11): los borradores Migo no van en Tickets (Ventas › Facturas borrador).
+  return { ok: true, items };
 });
 reg("getTicket", "any", async (p, ctx, ses) => {
   const row = await ticketPorClave(ctx, s(p.clave || p.so_num || p.beta_num || p.tkRow));

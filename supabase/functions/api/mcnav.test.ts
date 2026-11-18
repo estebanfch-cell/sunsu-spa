@@ -23,7 +23,7 @@ describe("menú MineCore (mc-nav.js)", () => {
     assert.ok(g.find((x) => x.label.includes("Compras"))!.items.some((i) => i[2] === "#/m/compras/consignacion"));
     const textos = g.flatMap((x) => x.items.map((i) => i[1])).join("|");
     for (const no of ["Rutas", "Ruta", "liquidación", "Proyectos", "Alquiler", "WhatsApp", "Bots", "importaciones", "Impresión", "Manufactura"]) assert.ok(!textos.includes(no), no);
-    assert.deepEqual([...g[0].items.map((i) => i[1])], ["🎫 Tickets", "📝 Cotizaciones", "👩 Registro de clientas"]);
+    assert.deepEqual([...g[0].items.map((i) => i[1])], ["🎫 Tickets", "📄 Facturas borrador", "📝 Cotizaciones", "👩 Registro de clientas"]);
     // Una sola Agenda (en Spa).
     assert.equal(g.flatMap((x) => x.items).filter((i) => i[2] === "#/m/agenda").length <= 1, true);
   });
