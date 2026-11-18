@@ -159,7 +159,7 @@
     var F = K.d.faltan || []; if (!F.length || (K.d.flags || []).length) return "";
     var comp = F.some(function (x) { return /comprobante/i.test(x); });
     return '<div class="mctk-falta"><b>Falta: ' + e(F.join(" · ")) + "</b>" +
-      (comp ? '<div><label class="btn small" style="cursor:pointer">📷 Subir comprobante<input type="file" id="mctk-subir" accept="image/*,application/pdf" capture="environment" hidden></label> <span class="mccf-sub">Foto del comprobante de la transferencia. Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
+      (comp ? '<div><label class="btn small" style="cursor:pointer">📷 Subir comprobante<input type="file" id="mctk-subir" accept="image/*,application/pdf" capture="environment" hidden></label> <span class="mccf-sub">Foto de la transferencia o del voucher de la tarjeta. Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
   }
   function comprimir(file) {
     return new Promise(function (res, rej) {
@@ -689,4 +689,21 @@
     claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); },
     _k: K, _calc: calc,
   };
+})();
+
+
+(function(){
+  var orig = window.api;
+  if (typeof orig !== "function" || orig._migoWrap) return;
+  window.api = function(accion, body){
+    return Promise.resolve(orig(accion, body)).then(function(r){
+      if (accion === "crearTicket" && r && r.requiere === "vincular_borrador" && r.borrador && !(body && (body.vincular_borrador || body.ignorar_borrador))) {
+        var b = r.borrador;
+        var ok = confirm("Ya hay un borrador de la factura " + (b.factura || "") + " (" + (b.cliente || "") + ", $" + Number(b.total || 0).toFixed(2) + ").\n\n¿Vincular este ticket al borrador en vez de crear otro?");
+        return orig("crearTicket", Object.assign({}, body || {}, ok ? { vincular_borrador: b.factura } : { ignorar_borrador: true }));
+      }
+      return r;
+    });
+  };
+  window.api._migoWrap = true;
 })();

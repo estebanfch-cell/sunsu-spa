@@ -343,7 +343,7 @@ export function canjeFacial(r: Row): boolean {
 /** Desde cuándo se marca en amarillo lo que falta (antes del corte de Migo no se revisó). */
 export const FALTA_DESDE = "2026-11-01";
 const tieneUrl = (v: unknown) => /https?:|archivo:/.test(s(v));
-/** Lo que falta en un ticket que sí cuadra (fila amarilla): comprobante de transferencia, número de factura. */
+/** Lo que falta en un ticket que sí cuadra (fila amarilla): foto de transferencia o voucher de tarjeta. El efectivo no pide foto. La factura que no cuadra va en rojo (flags), no aquí. */
 export function faltaDe(r: Row, d: Row): string[] {
   if (ymdUtc(r.timestamp) < FALTA_DESDE) return [];
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
@@ -351,9 +351,8 @@ export function faltaDe(r: Row, d: Row): string[] {
   const out: string[] = [];
   const mets = metodosPago(r.comp).map((m) => s(m.metodo));
   const comps = Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [];
-  if (mets.includes("transferencia") && !tieneUrl(colTicket(r, "comprobante")) && !comps.length) out.push("Foto del comprobante de transferencia");
-  const fac7 = s(r.fac_7);
-  if (b(r.cob) && !b(r.fac) && !s(d.factura) && !/sin/i.test(fac7) && !(Number(fac7) > 0) && !mets.includes("canje") && !mets.includes("cortesía")) out.push("Número de factura");
+  const pideFoto = mets.includes("transferencia") || mets.includes("tarjeta");
+  if (pideFoto && !tieneUrl(colTicket(r, "comprobante")) && !comps.length) out.push("Foto del comprobante de pago (transferencia o voucher de tarjeta)");
   return out;
 }
 /** Documentos subidos en la beta (comprobantes que faltaban). */
