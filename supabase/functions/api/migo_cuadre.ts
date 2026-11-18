@@ -254,11 +254,12 @@ export function flagsDeseadas(p: {
       if (facV && facV.lineas && facV.lineas.length) {
         const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
         const avisos = compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t]);
-        if (avisos.length) {
+        const rojos = avisos.filter((a) => a.tipo !== "sugerencia");
+        if (rojos.length) {
           out.push({
             ticket_id: id, ticket_clave: clave, kind: "lineas",
             motivo: "Revisa productos vs factura",
-            detalle: avisos.map((a) => a.texto).join(" "),
+            detalle: rojos.map((a) => a.texto).join(" "),
             factura: L.factura,
           });
         }

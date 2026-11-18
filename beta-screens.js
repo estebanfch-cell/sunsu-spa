@@ -18582,13 +18582,20 @@ function _migoMatchLinea(l){
   return null;
 }
 function _migoAvisosHtml(b){
-  var bits=[], i;
+  var rojos=[], sugs=[], i;
   if(!b) return '';
-  if(b.sin_items) bits.push('Faltan los productos de la factura (detalle aún no importado).');
+  if(b.sin_items) rojos.push('Faltan los productos de la factura (detalle aún no importado).');
   var av=b.avisos_lineas||[];
-  for(i=0;i<av.length;i++) if(av[i]) bits.push(String(av[i]));
-  if(!bits.length) return '';
-  return '<div class="migo-avisos" style="margin-top:6px;padding:8px 10px;background:#fff8e6;border:1.5px solid #e8cf7a;border-radius:9px;font-size:.72rem;color:#6b4a00;line-height:1.35">'+bits.map(_migoEsc).join('<br>')+'</div>';
+  for(i=0;i<av.length;i++){
+    if(!av[i]) continue;
+    var txt=String(av[i]);
+    if(/^Sugerencia:/i.test(txt)) sugs.push(txt);
+    else rojos.push(txt);
+  }
+  var html='';
+  if(sugs.length) html+='<div class="migo-avisos migo-sugs" style="margin-top:6px;padding:8px 10px;background:#eef6fb;border:1.5px solid #9ec3dc;border-radius:9px;font-size:.72rem;color:#1A6B8A;line-height:1.35">'+sugs.map(_migoEsc).join('<br>')+'</div>';
+  if(rojos.length) html+='<div class="migo-avisos" style="margin-top:6px;padding:8px 10px;background:#fff8e6;border:1.5px solid #e8cf7a;border-radius:9px;font-size:.72rem;color:#6b4a00;line-height:1.35">'+rojos.map(_migoEsc).join('<br>')+'</div>';
+  return html;
 }
 function _migoLeerPrefill(){
   try{

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { compararFacturaYTickets, compararLineas, equivalentesIva, gapPrecioGrande, lineasDeTicket, mismoProductoYCantidad, normalizarLineaFactura, skuMigoABeta } from "./migo_lineas.ts";
+import { compararFacturaYTickets, compararLineas, esDiferenciaMejora, equivalentesIva, gapPrecioGrande, lineasDeTicket, mismoProductoYCantidad, NOMBRE_DIFERENCIA_MEJORA, normalizarLineaFactura, skuMigoABeta } from "./migo_lineas.ts";
 
 describe("ítems Migo vs ticket (línea a línea)", () => {
   it("skuMigoABeta quita el prefijo SUNSU- (AS y numéricos)", () => {
@@ -62,7 +62,8 @@ describe("ítems Migo vs ticket (línea a línea)", () => {
       extras: "SUNSU-15 Ampolla Especial · Ácido Ascórbico",
       orig: {},
     }]);
-    assert.ok(avisos.some((a) => a.tipo === "revisa" && /SUNSU-40/.test(a.texto) && /paquete/.test(a.texto) && /37\.82/.test(a.texto)));
+    assert.ok(avisos.some((a) => a.tipo === "sugerencia" && /Diferencia por mejora de paquete/.test(a.texto) && /37\.82/.test(a.texto)));
+    assert.equal(avisos.some((a) => a.tipo === "revisa"), false);
     assert.equal(avisos.some((a) => a.tipo === "sobra"), false);
   });
 
@@ -89,5 +90,30 @@ describe("ítems Migo vs ticket (línea a línea)", () => {
     ];
     assert.equal(mismoProductoYCantidad(fac, lejos), true);
     assert.equal(gapPrecioGrande(fac, lejos).grande, true);
+  });
+
+  it("canje + diferencia por mejora cuadra con la línea de Migo (Reset $37.82)", () => {
+    const fac = [normalizarLineaFactura({ codigo: "SUNSU-40", producto: "FACIAL RESET 3x1", cantidad: 1, precio_unit: 32.89, subtotal: 32.89, iva: 4.93, total: 37.82 })!];
+    const tk = [
+      { sku: "40", codigo: "SUNSU-40", nombre: "Facial Reset 3x1", cantidad: 1, unitSin: 0, descuento: 0, subtotalSin: 0, totalCon: 0, canje: true },
+      { sku: "40", codigo: "SUNSU-40", nombre: NOMBRE_DIFERENCIA_MEJORA, cantidad: 1, unitSin: 32.89, descuento: 0, subtotalSin: 32.89, totalCon: 37.82, mejoraPaquete: true },
+    ];
+    assert.equal(esDiferenciaMejora({ nombre: NOMBRE_DIFERENCIA_MEJORA, tipo: "servicio" }), true);
+    assert.deepEqual(compararLineas(fac, tk), []);
+  });
+
+  it("canje sin diferencia y factura menor al catálogo sugiere Diferencia por mejora, no rojo", () => {
+    const fac = [normalizarLineaFactura({ codigo: "SUNSU-40", producto: "FACIAL RESET 3x1", cantidad: 1, precio_unit: 32.89, subtotal: 32.89, total: 37.82 })!];
+    const tk = lineasDeTicket({ facial_hecho: "SUNSU-40 Facial Reset 3x1", paquete: "SI, 2/3", extras: "SUNSU-15 Ampolla Especial", orig: {} });
+    const cat = new Map([["40", { nombre: "Facial Reset 3x1", pvpConIva: 95 }]]);
+    const avisos = compararFacturaYTickets(
+      [{ codigo: "SUNSU-40", producto: "FACIAL RESET 3x1", cantidad: 1, precio_unit: 32.89, subtotal: 32.89, total: 37.82 },
+       { codigo: "SUNSU-15", producto: "Ampolla Especial", cantidad: 1, precio_unit: 13.04, total: 15 }],
+      [{ facial_hecho: "SUNSU-40 Facial Reset 3x1", paquete: "SI, 2/3", extras: "SUNSU-15 Ampolla Especial", orig: {} }],
+      cat,
+    );
+    assert.ok(avisos.some((a) => a.tipo === "sugerencia" && /Diferencia por mejora de paquete/.test(a.texto) && /37\.82/.test(a.texto)));
+    assert.equal(avisos.some((a) => a.tipo === "revisa" && /SUNSU-40/.test(a.texto)), false);
+    assert.equal(avisos.some((a) => a.tipo === "falta" && /SUNSU-15|Ampolla/.test(a.texto)), false);
   });
 });
