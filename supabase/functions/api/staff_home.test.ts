@@ -11,7 +11,7 @@ import type { Row } from "./domain.ts";
 
 function s10(v: string | null) { return String(v || "").slice(0, 10); }
 
-function semilla() {
+function semilla(now = new Date("2026-11-18T16:30:00Z")) {
   limpiarCacheAcuity();
   const db = new MemoryDb();
   db.tables.set("sesiones", [
@@ -35,6 +35,8 @@ function semilla() {
   ]);
   db.tables.set("tickets", [
     { id: 1, sheet_row: 10, so_num: "TK-SO-9", timestamp: "2026-10-02T15:00:00Z", nombre: "María", apellido: "Banda", facial_hecho: "Limpieza facial", estimado: 80, telefono: "0999", efch: true },
+    { id: 2, sheet_row: 20, so_num: "TK-SO-20", timestamp: "2026-11-18T15:00:00Z", nombre: "Ana", apellido: "Pérez", atendido_por: "Andrea Robles", facial_hecho: "SUNSU-02 Facial Reparación", compra_pack_3: "Glow x3", estimado: 130, orig: { "VK-017": 2 }, comp: "Efect", efch: true, id_3: "1712345678" },
+    { id: 3, sheet_row: 21, so_num: "TK-SO-21", timestamp: "2026-11-18T16:00:00Z", nombre: "Lia", apellido: "Cruz", atendido_por: "Daniela Mora", facial_hecho: "SUNSU-02 Facial Reparación", estimado: 65, comp: "Efect", efch: true, id_3: "1712345679" },
   ]);
   const apts: Row[] = [
     { id: 501, firstName: "María", lastName: "Banda", datetime: "2026-11-18T10:00:00-0500", time: "10:00am", duration: 90, calendarID: 11689550, calendar: "Andrea", type: "!GRACIAS POR REGRESAR!", appointmentTypeID: 1, labels: [{ id: 1, name: "CONFIRMADA" }], phone: "0991111111", email: "oculta@test.com", canceled: false, price: 45 },
@@ -53,7 +55,7 @@ function semilla() {
     }
     return json({ message: "no" }, 404);
   }) as typeof fetch;
-  const c = { db, now: new Date("2026-11-18T16:30:00Z"), env: { ACUITY_UID: "1", ACUITY_KEY: "k" } as Record<string, string | undefined>, fetchImpl, legacyLogin: async () => ({}) };
+  const c = { db, now, env: { ACUITY_UID: "1", ACUITY_KEY: "k" } as Record<string, string | undefined>, fetchImpl, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => { limpiarCacheAcuity(); return handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>; };
   return { h };
 }
@@ -124,6 +126,39 @@ describe("TK59 dashboard del personal", () => {
     assert.match(js, /Visita anterior/);
     assert.doesNotMatch(js, /grid-template-columns:132px/);
     assert.match(js, /Crear ticket/);
-    assert.match(beta, /mc-staff-home\.js\?v=20261118tk92/);
+    assert.match(js, /Productos vendidos/);
+    assert.match(js, /Paquetes vendidos/);
+    assert.match(js, /Faciales hechos/);
+    assert.match(js, /data-periodo=/);
+    assert.match(beta, /mc-staff-home\.js\?v=20261118tk93/);
+    assert.doesNotMatch(beta, /Buen día\. Tus módulos están en el menú/);
+    assert.doesNotMatch(beta, /return state\.admin \? "inicio" : "staff-home"/);
+    assert.match(beta, /return state\.admin \? "inicio" : ""/);
+    assert.match(beta, /MCStaffHome\.render\(\)/);
+    assert.match(beta, /flex-wrap: nowrap/);
+  });
+
+  it("los kpis son solo de ella (no los de Daniela) y el home pinta Crear ticket", async () => {
+    const { h } = semilla();
+    const r = await h("staff_home", "and");
+    const k = r.kpis as Row;
+    assert.equal(k.faciales, 1);
+    assert.equal(k.paquetes, 1);
+    assert.equal(k.productos, 2);
+    assert.equal(k.periodo, "hoy");
+    const js = readFileSync(new URL("../../../mc-staff-home.js", import.meta.url), "utf8");
+    assert.match(js, /Crear ticket/);
+    const htmlFn = js.split("function html(d)")[1] || js;
+    assert.match(htmlFn, /data-crear/);
+  });
+
+  it("si no hay citas hoy, muestra todas las del siguiente día (no una sola «próxima»)", async () => {
+    const { h } = semilla(new Date("2026-11-17T16:30:00Z"));
+    const r = await h("staff_home", "and");
+    assert.equal(r.hoy, "2026-11-17");
+    assert.equal(r.citasFecha, "2026-11-18");
+    const citas = r.citas as Row[];
+    assert.equal(citas.length, 1);
+    assert.equal(citas[0].id, 501);
   });
 });

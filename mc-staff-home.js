@@ -42,6 +42,14 @@
       "#mcsh-root{max-width:920px;margin:0 auto;padding:2px 0 16px}",
       ".mcsh-hola{font-size:1.35rem;font-weight:800;color:var(--navy-d,#3D5A7A);letter-spacing:-0.02em;line-height:1.2;margin:4px 0 2px}",
       ".mcsh-sub{color:var(--gray,#8A90A0);font-size:.78rem;font-weight:600;margin:0 0 10px}",
+      ".mcsh-seg{display:flex;gap:3px;background:#EEF3FA;border-radius:999px;padding:3px;margin:0 0 8px}",
+      ".mcsh-seg button{flex:1 1 0;border:0;background:transparent;color:var(--navy-d,#3D5A7A);font:inherit;font-size:.72rem;font-weight:700;padding:6px 0;border-radius:999px;cursor:pointer}",
+      ".mcsh-seg button.on{background:#fff;box-shadow:0 1px 4px rgba(20,30,50,.08)}",
+      ".mcsh-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}",
+      ".mcsh-kpi{background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:10px;padding:7px 6px;text-align:center;min-width:0}",
+      ".mcsh-kpi .v{font-size:1.05rem;font-weight:800;color:var(--navy-d,#3D5A7A);line-height:1.1}",
+      ".mcsh-kpi .k{font-size:.58rem;font-weight:700;color:var(--gray,#8A90A0);text-transform:uppercase;letter-spacing:.02em;line-height:1.25;margin-top:2px}",
+      "@media (max-width:360px){.mcsh-kpis{grid-template-columns:1fr 1fr}.mcsh-kpi:last-child{grid-column:1/-1}}",
       ".mcsh-empty{background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:12px;padding:16px 14px;text-align:center;color:var(--gray);font-size:.85rem}",
       ".mcsh-empty b{display:block;color:var(--navy-d,#3D5A7A);font-size:.95rem;margin-bottom:4px}",
       ".mcsh-aviso{background:var(--gold-l,#FBF3E3);border:1px solid var(--gold-m,#E8C07A);border-radius:10px;padding:7px 10px;font-size:.75rem;color:var(--navy-d);margin-bottom:10px}",
@@ -132,15 +140,28 @@
     var puede = (d && d.puede) || { ticket: true, noLlego: true, mover: false };
     var bor = (d && d.borradores) || [];
     var nPc = bor.filter(function (b) { return !b.listo; }).length;
+    var k = (d && d.kpis) || {};
+    var per = k.periodo || "hoy";
+    var segs = [["hoy","Día"],["semana","Semana"],["mes","Mes"],["ano","Año"]];
+    var seg = '<div class="mcsh-seg" role="tablist">' + segs.map(function (x) {
+      return '<button type="button" data-periodo="' + x[0] + '" class="' + (per === x[0] ? "on" : "") + '">' + x[1] + "</button>";
+    }).join("") + "</div>";
+    var kpis = '<div class="mcsh-kpis">' +
+      '<div class="mcsh-kpi"><div class="v">' + e(k.productos || 0) + '</div><div class="k">Productos vendidos</div></div>' +
+      '<div class="mcsh-kpi"><div class="v">' + e(k.paquetes || 0) + '</div><div class="k">Paquetes vendidos</div></div>' +
+      '<div class="mcsh-kpi"><div class="v">' + e(k.faciales || 0) + '</div><div class="k">Faciales hechos</div></div>' +
+      "</div>";
+    var dia = (d && (d.citasFecha || d.hoy)) || "";
     var cuerpo = citas.length
       ? '<div class="mcsh-list">' + citas.map(function (c) { return card(c, puede); }).join("") + "</div>"
-      : '<div class="mcsh-empty"><b>No tienes citas hoy</b>Cuando se agende una, aparecerá aquí.</div>';
+      : '<div class="mcsh-empty"><b>No tienes citas próximas</b>Cuando se agende una, aparecerá aquí.</div>';
     var caja = bor.length
       ? '<div class="mcsh-bor"><b class="mcsh-bt">' + (nPc ? ("Tienes " + nPc + " ticket" + (nPc === 1 ? "" : "s") + " por completar") : "Tickets pendientes de aprobar") + "</b>" +
         bor.map(cardBorrador).join("") + "</div>"
       : "";
     return '<div id="mcsh-root"><div class="mcsh-hola">Hola ' + e(nombre) + " 👋</div>" +
-      '<p class="mcsh-sub">' + e(fechaLarga(d && d.hoy)) + (citas.length ? " · " + citas.length + " cita" + (citas.length === 1 ? "" : "s") : "") + "</p>" +
+      seg + kpis +
+      '<p class="mcsh-sub">' + e(fechaLarga(dia)) + (citas.length ? " · " + citas.length + " cita" + (citas.length === 1 ? "" : "s") : "") + "</p>" +
       (d && d.aviso ? '<p class="mcsh-aviso">' + e(d.aviso) + "</p>" : "") +
       caja + cuerpo + "</div>";
   }
@@ -161,9 +182,10 @@
   function cerrarMenus(root) {
     (root || document).querySelectorAll(".mcsh-c.open").forEach(function (x) { x.classList.remove("open"); });
   }
-  async function render() {
+  async function render(opts) {
     css();
-    var d = await api("staff_home", {});
+    var per = (opts && opts.periodo) || (render._last && render._last.kpis && render._last.kpis.periodo) || "hoy";
+    var d = await api("staff_home", { periodo: per });
     if (d && d.error) return '<p class="err">' + e(d.error) + "</p>";
     render._last = d;
     return html(d);
@@ -173,6 +195,16 @@
     if (!root) return;
     root._citas = (render._last && render._last.citas) || [];
     root.onclick = async function (ev) {
+      var perBtn = ev.target.closest("[data-periodo]");
+      if (perBtn && root.contains(perBtn)) {
+        ev.preventDefault();
+        var mainEl = root.parentNode || document.getElementById("main");
+        if (typeof api === "function") {
+          var html2 = await render({ periodo: perBtn.getAttribute("data-periodo") });
+          if (mainEl) { mainEl.innerHTML = html2; wire(mainEl); }
+        }
+        return;
+      }
       var more = ev.target.closest("[data-acts]");
       if (more && root.contains(more)) {
         ev.preventDefault();
