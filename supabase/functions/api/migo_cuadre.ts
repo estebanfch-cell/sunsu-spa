@@ -105,6 +105,7 @@ export type LineaFactura = { codigo?: string; sku?: string; producto?: string; t
 export type FacturaVivo = {
   factura: string; seq: number; fecha: string; hora?: string; cliente: string;
   total: number; subtotal?: number; descuento?: number; forma?: string;
+  formas_pago?: { forma: string; valor: number }[];
   lineas?: LineaFactura[];
 };
 export type LinkCuadre = {
@@ -330,7 +331,9 @@ export function parseFacturaVivo(x: Row): FacturaVivo | null {
     factura, seq, fecha, hora: s(x.hora).slice(0, 8) || undefined,
     cliente: s(x.cliente).slice(0, 200),
     total: n(x.total ?? x.total_pagar), subtotal: n(x.subtotal), descuento: n(x.descuento),
-    forma: s(x.forma || x.forma_pago || x.formas).slice(0, 80),
+    forma: s(x.forma || x.forma_pago || (typeof x.formas === "string" ? x.formas : "")).slice(0, 80),
+    // TK91: pago mixto de Migo (Cobros Realizados): cada forma con su monto.
+    formas_pago: (Array.isArray(x.formas_pago) ? x.formas_pago as Row[] : []).map((f) => ({ forma: s(f.forma || f.metodo).slice(0, 80), valor: Math.round(n(f.valor ?? f.monto) * 100) / 100 })).filter((f) => f.valor > 0),
     lineas,
   };
 }
