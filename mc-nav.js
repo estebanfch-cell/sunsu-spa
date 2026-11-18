@@ -31,7 +31,7 @@
     sri: ["Facturas SRI y retenciones", "Facturación electrónica y retenciones.", "", ""],
     edc: ["Estado de cuenta", "Estado de cuenta por clienta o proveedor.", "", ""],
     banco: ["Banco", "Movimientos y conciliación bancaria.", "", ""],
-    aprobaciones: ["Aprobaciones", "Solicitudes que esperan aprobación. Hoy están en el botón «Solicitudes» de arriba.", "", ""],
+    aprobaciones: ["Aprobaciones", "Lo que espera tu visto bueno está en el botón del dashboard y en Aprobaciones.", "#/m/aprobaciones", "Ir a Aprobaciones"],
     nuevo_protocolo: ["Nuevo protocolo", "Crear la receta de un facial: qué productos lleva, en qué cantidad y en qué paso. La lista de protocolos ya se puede ver en Protocolos.", "#/m/mc/protocolos", "Protocolos"],
   };
 
@@ -91,7 +91,7 @@
         ["admin", "Usuarios y permisos", "#/m/mc/upermisos"],
         ["permisos|admin", "Permisos por rol", "#/m/permisos"],
         ["admin", "Permisos por rol/usuario", "#/m/configuracion"],
-        ["admin", "Aprobaciones", "#/m/mc/pronto/aprobaciones"],
+        ["admin", "Aprobaciones", "#/m/aprobaciones"],
         ["admin", "Configuración general", "#/m/configuracion"],
       ] },
     ];
@@ -138,7 +138,7 @@
     ["#/m/compras/rfq", "📨"], ["#/m/compras/cotizaciones", "📨"], ["#/m/recepciones", "📥"], ["#/m/compras/consignacion", "🤝"], ["#/m/compras", "🧾"], ["#/m/proveedores", "🏭"], ["#/m/mc/pronto/pendientes", "⏳"], ["#/m/mc/pronto/actas", "📥"], ["#/m/mc/pronto/pagos", "💸"],
     ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
     ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
-    ["#/m/mc/upermisos", "🔐"], ["#/m/mc/pronto/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],
+    ["#/m/mc/upermisos", "🔐"], ["#/m/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],
     ["#/m/personal/comisiones", "💰"], ["#/m/personal/rol", "🧾"], ["#/m/personal/asistencia", "⏰"], ["#/m/personal/permisos", "🏖️"], ["#/m/personal/multas", "⚠️"], ["#/m/personal/horarios", "🗓️"], ["#/m/personal/empleados", "👥"],
     ["#/m/gift/cards", "🎁"], ["#/m/gift/paquetes", "🎴"], ["#/s/seguimiento", "📋"], ["#/s/recepcion", "🛎️"], ["#/m/bitacora", "🧼"], ["#/m/promociones", "🏷️"], ["#/s/promos", "🏷️"], ["#/s/tarjetas", "📤"],
     ["#/m/inicio", "📊"], ["#/s/historial", "🎫"], ["#/m/mc", "📦"],

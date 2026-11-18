@@ -378,7 +378,22 @@
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--cream); vertical-align: top; }
   th { font-size: 0.72rem; color: var(--gray); font-weight: 700; }
   .matrix select { margin: 0; padding: 8px; }
-  .dash-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+  .dash-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+  .apr-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; font-size: 0.75rem; font-weight: 800; padding: 6px 12px; min-height: 34px; border: 1.5px solid var(--cream-d, #EDE6D8); background: #fff; color: var(--navy); cursor: pointer; }
+  .apr-btn.on { background: #C45C26; color: #fff; border-color: #C45C26; box-shadow: 0 0 0 3px rgba(196,92,38,.28); }
+  .apr-n { display: inline-flex; align-items: center; justify-content: center; min-width: 1.25rem; height: 1.25rem; padding: 0 5px; border-radius: 999px; background: #fff; color: #C45C26; font-size: 0.7rem; font-weight: 800; }
+  .apr-btn:not(.on) .apr-n { background: var(--cream, #F7F1E6); color: var(--navy); }
+  .apr-grupos { display: flex; flex-direction: column; gap: 10px; }
+  .apr-grupo .card-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .apr-grupo .apr-n { margin-left: auto; }
+  .apr-fila { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--cream-d, #EDE6D8); }
+  .apr-fila .name { font-size: 0.8rem; font-weight: 700; flex: 1 1 10rem; min-width: 0; }
+  .apr-fila .note { font-size: 0.7rem; color: var(--gray); flex: 1 1 8rem; min-width: 0; overflow-wrap: anywhere; }
+  .apr-fila .meta { font-size: 0.65rem; color: var(--gray); }
+  @media (max-width: 375px) {
+    .apr-btn { font-size: 0.7rem; padding: 5px 10px; }
+    .dash-head { align-items: flex-start; }
+  }
   .hola { font-size: 1rem; font-weight: 800; color: var(--navy); }
   .hero-venta { background: var(--navy); color: white; text-align: center; padding: 14px; margin-bottom: 8px; }
   .hero-venta .hv-k { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.6px; color: rgba(255,255,255,0.75); }
@@ -1751,6 +1766,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "barras") return "Códigos de barras";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : route.sub === "duplicados" ? "Clientas duplicadas" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return route.sub === "pagos" ? "Pagos recibidos" : "Caja chica";
+  if (route.mod === "aprobaciones" || (route.mod === "mc" && route.sub === "pronto" && route.id === "aprobaciones")) return "Aprobaciones";
   if (route.mod === "configuracion") return "Configuración general";
   if (route.mod === "productos") return route.sub === "p" ? "Producto" : route.sub === "nuevo" ? "Nuevo producto" : route.sub === "catalogo" ? "Catálogo anterior" : "Productos";
   if (route.mod === "lugares") return "Locales y cabinas";
@@ -2429,7 +2445,7 @@ async function draw() {
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   // Un conteo asignado se abre aunque la persona no tenga el módulo Conteos (el servidor valida la asignación).
-  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "mc" || (route.mod === "promociones" && state.admin) || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
+  const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "aprobaciones" || route.mod === "mc" || (route.mod === "promociones" && state.admin) || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -2515,12 +2531,13 @@ async function renderMod(route) {
   if (route.mod === "promociones" && window.MCPromociones) return state.admin ? window.MCPromociones.render(route) : `<p class="err">Solo administradores.</p>`;
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
-  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && route.mod !== "aprobaciones" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (window.MCMaestro && window.MCMaestro.wide()) {
     const md = window.MCMaestro.which(route);
     if (md) return window.MCMaestro.render(md, route);
   }
   if (route.mod === "reportes") return renderReportes();
+  if (route.mod === "aprobaciones" || (route.mod === "mc" && route.sub === "pronto" && route.id === "aprobaciones")) return renderAprobaciones();
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
   if (route.mod === "gift") return renderGiftMod(route);
@@ -2629,7 +2646,10 @@ function htmlDashboard(d) {
     return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="font-size:0.6rem;font-weight:700;color:var(--gray);flex-shrink:0">${esc(x.label)}</span><div style="flex:1;background:var(--gray-ll);border-radius:6px;height:14px;overflow:hidden;min-width:36px"><div style="width:${w}%;height:100%;background:var(--blue)"></div></div><span style="font-size:0.64rem;font-weight:800;color:var(--navy);white-space:nowrap">$${fmtDash(subIva(x.total))}</span></div>`;
   }).join("");
   const pagos = pagosTot > 0 ? `<div class="card" style="padding:11px 13px"><div class="sec-k">💳 CÓMO PAGARON HOY</div>${pagoFila("💵", "Efectivo", pg.efectivo || 0)}${pagoFila("🏦", "Transferencia", pg.transferencia || 0)}${pagoFila("💳", "Tarjeta", pg.tarjeta || 0)}${pagoFila("🔀", "Mixto (sin desglose)", pg.mixto || 0)}${(pg.otros || 0) > 0.01 ? pagoFila("❓", "Sin método claro", pg.otros || 0) : ""}${hoy.canjes ? `<div class="pago-row"><span style="color:#7A5FA0">📋 Canjes hoy</span><span class="pago-val" style="color:#7A5FA0">${esc(hoy.canjes)}</span></div>` : ""}<div class="pago-row" style="border-top:1.2px solid var(--cream-d);margin-top:4px;padding-top:5px"><span>TOTAL</span><span><span class="pago-val" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">$${fmtDash(subIva(pagosTot))}</span> <span class="pago-iva" style="color:${cuadra ? "#2E7D52" : "#B86B6B"}">c/IVA $${fmtDash(pagosTot)} ${cuadra ? "✓ cuadra" : "⚠ no cuadra con $" + fmtDash(hoy.venta || 0)}</span></span></div></div>` : "";
-  return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div><button class="btn ghost small" type="button" data-go="#/m/inicio">↻ ${esc(d.actualizado || "")}</button></div>
+  const apr = d.aprobaciones || {};
+  const aprN = Number(apr.total || 0);
+  const aprBtn = `<button class="apr-btn${aprN ? " on" : ""}" type="button" data-go="#/m/aprobaciones" title="${aprN ? aprN + " pendientes" : "Nada pendiente"}">Aprobaciones${aprN ? ` <span class="apr-n">${aprN}</span>` : ""}</button>`;
+  return `<div class="dash-head"><div class="hola">🏠 Hola, ${esc(nombre)}</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${aprBtn}<button class="btn ghost small" type="button" data-go="#/m/inicio">↻ ${esc(d.actualizado || "")}</button></div></div>
     <div class="card hero-venta"><div class="hv-k">VENTA DE HOY · SUBTOTAL</div><div class="hv-v">$${fmtDash(subIva(hoy.venta))}</div><div class="hv-s">con IVA $${fmtDash(hoy.venta || 0)} · ${esc(hoy.tickets || 0)} tickets · promedio $${fmtDash(hoy.tickets ? subIva(hoy.venta) / hoy.tickets : 0)}</div></div>
     <div class="kpi-row">
       ${kpiDash("💆‍♀️", "Faciales hoy", esc(hoy.faciales || 0), "", facSub)}
@@ -2651,14 +2671,53 @@ function htmlDashboard(d) {
     <div class="dash-foot">Subtotal = sin IVA ${(IVA_DASH * 100).toFixed(0)}% · se actualiza con ↻ o al volver a entrar</div>`;
 }
 
+
+async function renderAprobaciones() {
+  if (!state.admin) return `<p class="err">Solo administración entra a Aprobaciones.</p>`;
+  const data = await api("aprobaciones_pendientes", {});
+  if (data.error) return fail(data);
+  const total = Number(data.total || 0);
+  const grupos = (data.grupos || []).map((g) => {
+    const filas = (g.items || []).map((it) => {
+      const acc = it.tipo === "solicitud" && it.id
+        ? `<button class="btn small" type="button" data-apr-ok="${esc(it.id)}">Aprobar</button><button class="btn ghost small" type="button" data-apr-no="${esc(it.id)}">Rechazar</button>`
+        : `<button class="btn ghost small" type="button" data-go="${esc(it.href || g.href || "#/m/inicio")}">Abrir</button>`;
+      return `<div class="apr-fila"><div class="name">${esc(it.titulo || "")}${it.prueba ? ' <span class="ix-prueba">PRUEBA</span>' : ""}</div><div class="note">${esc(it.detalle || "")}</div><div class="meta">${acc}</div></div>`;
+    }).join("") || `<p class="note">Nada pendiente aquí.</p>`;
+    return `<div class="card apr-grupo"><div class="card-title">${esc(g.titulo)} <span class="apr-n">${esc(g.n || 0)}</span></div>${filas}${g.href && g.id !== "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" data-go="${esc(g.href)}">Ver todos</button></p>` : (g.id === "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" id="apr-panel-sol">Panel de solicitudes</button></p>` : "")}</div>`;
+  }).join("");
+  return `<div id="apr-page">
+    <div class="dash-head"><div class="hola">Aprobaciones</div><button class="apr-btn${total ? " on" : ""}" type="button" data-go="#/m/aprobaciones">${total ? `Pendientes <span class="apr-n">${total}</span>` : "Nada pendiente"}</button></div>
+    <p class="note">${total ? "Esto espera tu visto bueno: solicitudes, borradores de ticket, permisos y ajustes de stock." : "No hay nada esperando aprobación."}</p>
+    <div class="apr-grupos">${grupos}</div>
+  </div>`;
+}
+
+function bindAprobaciones(main) {
+  const recargar = () => go(location.hash || "#/m/aprobaciones");
+  main.querySelectorAll("[data-apr-ok],[data-apr-no]").forEach((btn) => {
+    btn.onclick = async () => {
+      const aprobar = btn.hasAttribute("data-apr-ok");
+      const id = btn.getAttribute(aprobar ? "data-apr-ok" : "data-apr-no");
+      const comentario = aprobar ? "" : (prompt("Comentario (opcional)") || "");
+      const res = await api("solicitud_resolver", { id, aprobar, comentario });
+      if (res.error) { toast(res.error); return; }
+      recargar();
+    };
+  });
+  const panel = main.querySelector("#apr-panel-sol");
+  if (panel) panel.onclick = () => { if (window.SunsuInline && window.SunsuInline.panel) window.SunsuInline.panel(); };
+}
+
 async function renderInicioBeta() {
   if (!state.admin && window.MCStaffHome) return window.MCStaffHome.render();
   const data = await api("home");
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
   let pulso = htmlStaffHome();
   if (state.admin) {
-    const dash = await api("getDashboardHoy", {});
-    pulso = dash.error || !dash.hoy ? fail(dash) : htmlDashboard(dash);
+    const [dash, apr] = await Promise.all([api("getDashboardHoy", {}), api("aprobaciones_pendientes", {})]);
+    if (dash.error || !dash.hoy) pulso = fail(dash);
+    else pulso = htmlDashboard(Object.assign({}, dash, { aprobaciones: apr && !apr.error ? apr : { total: 0, grupos: [] } }));
   }
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
@@ -3832,7 +3891,7 @@ function htmlCfgJump() {
     ["#cfg-tramos", "Tramos"],
     ["#cfg-geocerca", "Asistencia / geocerca"],
     ["#cfg-feriados", "Feriados"],
-    ["#/m/mc/pronto/aprobaciones", "Aprobaciones"],
+    ["#/m/aprobaciones", "Aprobaciones"],
   ];
   const opts = items.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
   return `<div class="cfg-jump" id="cfg-jump"><label for="cfg-jump-sel">Ir a</label><select id="cfg-jump-sel"><option value="">Secciones…</option>${opts}</select></div>`;
@@ -5561,6 +5620,7 @@ function bindCfgPriv(main) {
 function bind(main) {
   bindCfgPriv(main);
   bindCfgJump(main);
+  bindAprobaciones(main);
   main.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => {
       const shell = document.getElementById("shell");
@@ -6375,39 +6435,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk84"></script>
-<script src="beta-screens.js?v=20261118tk84"></script>
-<script src="beta-inline.js?v=20261118tk84"></script>
-<script src="mc-productos.js?v=20261118tk84"></script>
-<script src="mc-nav.js?v=20261118tk84"></script>
-<script src="mc-permisos.js?v=20261118tk84"></script>
-<script src="mc-protocolos.js?v=20261118tk84"></script>
-<script src="mc-conteo.js?v=20261118tk84"></script>
-<script src="mc-transferencias.js?v=20261118tk84"></script>
-<script src="mc-ajustes.js?v=20261118tk84"></script>
-<script src="vendor-qrcode.js?v=20261118tk84"></script>
-<script src="mc-tickets.js?v=20261118tk84"></script>
-<script src="mc-maestro.js?v=20261118tk84"></script>
-<script src="mc-empleados.js?v=20261118tk84"></script>
-<script src="mc-edit.js?v=20261118tk84"></script>
-<script src="mc-paquetes.js?v=20261118tk84"></script>
-<script src="mc-aperturas.js?v=20261118tk84"></script>
-<script src="mc-acceso.js?v=20261118tk84"></script>
-<script src="mc-barras.js?v=20261118tk84"></script>
-<script src="mc-caja.js?v=20261118tk84"></script>
-<script src="mc-giftcards.js?v=20261118tk84"></script>
-<script src="mc-multas.js?v=20261118tk84"></script>
-<script src="mc-clientes.js?v=20261118tk84"></script>
-<script src="mc-clientes-dup.js?v=20261118tk84"></script>
-<script src="mc-docpdf.js?v=20261118tk84"></script>
-<script src="mc-compras.js?v=20261118tk84"></script>
-<script src="mc-consignacion.js?v=20261118tk84"></script>
-<script src="mc-proveedores.js?v=20261118tk84"></script>
-<script src="mc-recepciones.js?v=20261118tk84"></script>
-<script src="mc-movil.js?v=20261118tk84"></script>
-<script src="mc-promociones.js?v=20261118tk84"></script>
-<script src="mc-agenda.js?v=20261118tk84"></script>
-<script src="mc-staff-home.js?v=20261118tk84"></script>
+<script src="mc-buscar.js?v=20261118tk85"></script>
+<script src="beta-screens.js?v=20261118tk85"></script>
+<script src="beta-inline.js?v=20261118tk85"></script>
+<script src="mc-productos.js?v=20261118tk85"></script>
+<script src="mc-nav.js?v=20261118tk85"></script>
+<script src="mc-permisos.js?v=20261118tk85"></script>
+<script src="mc-protocolos.js?v=20261118tk85"></script>
+<script src="mc-conteo.js?v=20261118tk85"></script>
+<script src="mc-transferencias.js?v=20261118tk85"></script>
+<script src="mc-ajustes.js?v=20261118tk85"></script>
+<script src="vendor-qrcode.js?v=20261118tk85"></script>
+<script src="mc-tickets.js?v=20261118tk85"></script>
+<script src="mc-maestro.js?v=20261118tk85"></script>
+<script src="mc-empleados.js?v=20261118tk85"></script>
+<script src="mc-edit.js?v=20261118tk85"></script>
+<script src="mc-paquetes.js?v=20261118tk85"></script>
+<script src="mc-aperturas.js?v=20261118tk85"></script>
+<script src="mc-acceso.js?v=20261118tk85"></script>
+<script src="mc-barras.js?v=20261118tk85"></script>
+<script src="mc-caja.js?v=20261118tk85"></script>
+<script src="mc-giftcards.js?v=20261118tk85"></script>
+<script src="mc-multas.js?v=20261118tk85"></script>
+<script src="mc-clientes.js?v=20261118tk85"></script>
+<script src="mc-clientes-dup.js?v=20261118tk85"></script>
+<script src="mc-docpdf.js?v=20261118tk85"></script>
+<script src="mc-compras.js?v=20261118tk85"></script>
+<script src="mc-consignacion.js?v=20261118tk85"></script>
+<script src="mc-proveedores.js?v=20261118tk85"></script>
+<script src="mc-recepciones.js?v=20261118tk85"></script>
+<script src="mc-movil.js?v=20261118tk85"></script>
+<script src="mc-promociones.js?v=20261118tk85"></script>
+<script src="mc-agenda.js?v=20261118tk85"></script>
+<script src="mc-staff-home.js?v=20261118tk85"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.

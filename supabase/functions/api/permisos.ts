@@ -137,6 +137,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   permisos_get: "inicio", permisos_guardar: "permisos",
   cfg_priv_get: "configuracion", cfg_priv_guardar: "configuracion",
   home: "inicio",
+  aprobaciones_pendientes: "inicio",
   getDashboardHoy: "ver_costos",
   getDashboard: "ver_costos",
 };
