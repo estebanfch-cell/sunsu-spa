@@ -1,6 +1,7 @@
 import { handle } from "./handlers.ts";
 import { formatearRespuesta } from "./domain.ts";
 import "./handlers_extra.ts";
+import "./roles_api.ts";
 import "./erp_api.ts";
 import "./ventas_api.ts";
 import "./asistencia_api.ts";

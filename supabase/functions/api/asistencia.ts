@@ -17,12 +17,20 @@ export interface AsistenciaConfig {
   jornada_horas: number;
   gracia_min: number;
   cuenta_antes: boolean;
+  lugar_nombre: string;
 }
 
 export const CONFIG_DEF: AsistenciaConfig = {
   lat: null, lng: null, radio_m: 150,
   hora_entrada: "09:00", hora_salida: "18:00", jornada_horas: 8, gracia_min: 10, cuenta_antes: false,
+  lugar_nombre: "C.C. La Esquina",
 };
+
+export interface JornadaDia {
+  trabaja: boolean;
+  desde: string | null;
+  hasta: string | null;
+}
 
 export interface MarcajeIn {
   id?: string;
@@ -62,6 +70,13 @@ export interface DiaAsistencia {
   almuerzoPendiente: boolean;
   falta: boolean;
   diaContado: boolean;
+  /** Alias de ley para la vista: no cambian el cálculo del rol (hrsSupl / hrsExtr / hrsDesc). */
+  supl50Min: number;
+  supl100Min: number;
+  extraordinariasMin: number;
+  extrFueraHorarioMin: number;
+  esFeriado: boolean;
+  esDescanso: boolean;
 }
 
 export interface NominaHoras {
@@ -135,26 +150,37 @@ function permisoEn(permisos: PermisoIn[], fecha: string, jornada: number): { ful
   return { full, horas };
 }
 
-function laboral(fecha: string, feriados: Set<string>): boolean {
+function esFinDeSemana(fecha: string): boolean {
   const [y, m, d] = fecha.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return dow !== 0 && dow !== 6 && !feriados.has(fecha);
+  return dow === 0 || dow === 6;
+}
+
+export function esDescansoDia(fecha: string, feriados: Set<string>, jornada?: JornadaDia | null): boolean {
+  if (feriados.has(fecha)) return true;
+  if (jornada) return !jornada.trabaja;
+  return esFinDeSemana(fecha);
+}
+
+function laboral(fecha: string, feriados: Set<string>, jornada?: JornadaDia | null): boolean {
+  return !esDescansoDia(fecha, feriados, jornada);
 }
 
 interface ClaseMin { dentro: number; supl: number; extr: number; desc: number }
 
-function clasificarIntervalo(inicio: string, fin: string, config: AsistenciaConfig, feriados: Set<string>): ClaseMin {
+function clasificarIntervalo(inicio: string, fin: string, config: AsistenciaConfig, feriados: Set<string>, jornada?: JornadaDia | null, fechaDia?: string): ClaseMin {
   const out = { dentro: 0, supl: 0, extr: 0, desc: 0 };
   let t = new Date(inicio).getTime();
   const end = new Date(fin).getTime();
   if (!(end > t)) return out;
-  const entrada = hmToMin(config.hora_entrada);
-  const salida = hmToMin(config.hora_salida);
+  const entrada = hmToMin((jornada && jornada.desde) || config.hora_entrada);
+  const salida = hmToMin((jornada && jornada.hasta) || config.hora_salida);
   while (t < end) {
     const p = ecuadorParts(new Date(t));
     const hh = p.hh === 24 ? 0 : p.hh;
     const cur = hh * 60 + p.mm;
-    if (feriados.has(p.ymd) || p.dow === 0 || p.dow === 6) out.desc++;
+    const jHoy = !fechaDia || p.ymd === fechaDia ? jornada : undefined;
+    if (esDescansoDia(p.ymd, feriados, jHoy)) out.desc++;
     else if (hh < 6) out.extr++;
     else if (!config.cuenta_antes && cur < entrada) { /* llegada temprana no se paga */ }
     else if (cur >= entrada && cur < salida) out.dentro++;
@@ -224,11 +250,12 @@ export function estadoReloj(marcajes: MarcajeIn[], ahoraIso: string): RelojHoy {
 }
 
 export function evaluarUbicacion(config: AsistenciaConfig, lat: number | null, lng: number | null, accuracy: number | null): { ok: true; distancia: number | null } | { ok: false; error: string; distancia?: number } {
-  if (config.lat == null || config.lng == null) return { ok: false, error: "Falta la ubicación del spa. Un admin la guarda en Asistencia." };
+  const local = config.lugar_nombre || "C.C. La Esquina";
+  if (config.lat == null || config.lng == null) return { ok: false, error: "Falta la ubicación del local. Un admin la guarda en Configuración general." };
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return { ok: false, error: "Activa la ubicación del teléfono. Sin eso no se puede marcar." };
-  if (accuracy != null && accuracy > config.radio_m * 2) return { ok: false, error: "La ubicación es muy imprecisa. Acércate a una ventana o marca desde el spa." };
+  if (accuracy != null && accuracy > config.radio_m * 2) return { ok: false, error: "La ubicación es muy imprecisa. Acércate a una ventana o marca desde el local." };
   const distancia = distanciaMetros(lat, lng, config.lat, config.lng);
-  if (distancia > config.radio_m) return { ok: false, error: `Estás a ${Math.round(distancia)} m del spa. El radio es ${config.radio_m} m.`, distancia };
+  if (distancia > config.radio_m) return { ok: false, error: `Estás a ${Math.round(distancia)} m de ${local}. El radio permitido es ${config.radio_m} m. Acércate al local para registrar.`, distancia };
   return { ok: true, distancia };
 }
 
@@ -236,13 +263,26 @@ function marcasDelDia(marcajes: MarcajeIn[], fecha: string): MarcajeIn[] {
   return marcajes.filter((m) => !m.anulado && ymdDe(m.ts) === fecha).sort((a, b) => a.ts.localeCompare(b.ts));
 }
 
-export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: AsistenciaConfig, feriados: string[], permisos: PermisoIn[], jibble?: JibbleIn | null): DiaAsistencia {
+function aliases(d: DiaAsistencia): DiaAsistencia {
+  return {
+    ...d,
+    supl50Min: d.suplMin,
+    supl100Min: d.extrMin,
+    extraordinariasMin: d.descMin,
+    extrFueraHorarioMin: d.extrFueraHorarioMin || 0,
+  };
+}
+
+export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: AsistenciaConfig, feriados: string[], permisos: PermisoIn[], jibble?: JibbleIn | null, jornada?: JornadaDia | null): DiaAsistencia {
   const fer = new Set(feriados);
   const perm = permisoEn(permisos, fecha, config.jornada_horas);
   const delDia = marcasDelDia(marcajes, fecha);
+  const descanso = esDescansoDia(fecha, fer, jornada);
   const vacio: DiaAsistencia = {
     fecha, fuente: "vacio", workedMin: 0, ordinaryMin: 0, suplMin: 0, extrMin: 0, descMin: 0,
     atrasoMin: 0, almuerzoMin: 0, abierto: false, almuerzoPendiente: false, falta: false, diaContado: false,
+    supl50Min: 0, supl100Min: 0, extraordinariasMin: 0, extrFueraHorarioMin: 0,
+    esFeriado: fer.has(fecha), esDescanso: descanso,
   };
   if (!delDia.length) {
     if (jibble && (jibble.payrollMin || jibble.suplMin || jibble.extrMin || jibble.descMin)) {
@@ -251,33 +291,37 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
         suplMin: jibble.suplMin, extrMin: jibble.extrMin, descMin: jibble.descMin, diaContado: true,
       };
     }
-    if (perm.full) return { ...vacio, fuente: "permiso", diaContado: true };
-    if (laboral(fecha, fer)) return { ...vacio, falta: true };
-    return vacio;
+    if (perm.full) return aliases({ ...vacio, fuente: "permiso", diaContado: true });
+    if (laboral(fecha, fer, jornada)) return aliases({ ...vacio, falta: true });
+    return aliases(vacio);
   }
   const entrada = delDia.find((m) => m.tipo === "entrada");
   const salida = [...delDia].reverse().find((m) => m.tipo === "salida" && entrada && m.ts > entrada.ts);
   const lunchIn = delDia.find((m) => m.tipo === "almuerzo_inicio" && entrada && m.ts > entrada.ts && (!salida || m.ts < salida.ts));
   const lunchOut = delDia.find((m) => m.tipo === "almuerzo_fin" && lunchIn && m.ts > lunchIn.ts && (!salida || m.ts <= salida.ts));
   const pEnt = entrada ? ecuadorParts(new Date(entrada.ts)) : null;
-  const atraso = !entrada || !pEnt || !laboral(fecha, fer) || perm.full ? 0 : Math.max(0, (pEnt.hh === 24 ? 0 : pEnt.hh) * 60 + pEnt.mm - hmToMin(config.hora_entrada) - config.gracia_min);
+  const horaEnt = (jornada && jornada.desde) || config.hora_entrada;
+  const atraso = !entrada || !pEnt || !laboral(fecha, fer, jornada) || perm.full ? 0 : Math.max(0, (pEnt.hh === 24 ? 0 : pEnt.hh) * 60 + pEnt.mm - hmToMin(horaEnt) - config.gracia_min);
   if (!entrada || !salida) {
-    return { ...vacio, fuente: "marcaje", atrasoMin: atraso, abierto: !!entrada && !salida, diaContado: !!entrada, falta: false };
+    return aliases({ ...vacio, fuente: "marcaje", atrasoMin: atraso, abierto: !!entrada && !salida, diaContado: !!entrada, falta: false });
   }
   const tramos: [string, string][] = lunchIn && lunchOut
     ? [[entrada.ts, lunchIn.ts], [lunchOut.ts, salida.ts]]
     : [[entrada.ts, salida.ts]];
   let clase = { dentro: 0, supl: 0, extr: 0, desc: 0 };
-  for (const [a, b] of tramos) clase = sumarClase(clase, clasificarIntervalo(a, b, config, fer));
+  for (const [a, b] of tramos) clase = sumarClase(clase, clasificarIntervalo(a, b, config, fer, jornada, fecha));
   const tope = Math.round(config.jornada_horas * 60);
   const ordinaryMin = Math.min(clase.dentro, tope);
   const suplMin = clase.supl + Math.max(0, clase.dentro - tope);
   const workedMin = ordinaryMin + suplMin + clase.extr + clase.desc;
   const almuerzoMin = lunchIn && lunchOut ? Math.max(0, Math.round((new Date(lunchOut.ts).getTime() - new Date(lunchIn.ts).getTime()) / 60000)) : 0;
-  return {
+  const extrFueraHorarioMin = descanso ? Math.max(0, workedMin - tope) : 0;
+  return aliases({
     fecha, fuente: "marcaje", workedMin, ordinaryMin, suplMin, extrMin: clase.extr, descMin: clase.desc,
     atrasoMin: atraso, almuerzoMin, abierto: false, almuerzoPendiente: !(lunchIn && lunchOut), falta: false, diaContado: true,
-  };
+    supl50Min: 0, supl100Min: 0, extraordinariasMin: 0, extrFueraHorarioMin,
+    esFeriado: fer.has(fecha), esDescanso: descanso,
+  });
 }
 
 function cadaFecha(desde: string, hasta: string): string[] {
@@ -311,13 +355,14 @@ export function calcularNomina(opts: {
   config: AsistenciaConfig;
   feriados: string[];
   hoy?: string;
+  jornadaDe?: (fecha: string) => JornadaDia | null;
 }): NominaHoras {
   const last = new Date(Date.UTC(opts.anio, opts.mes, 0)).getUTCDate();
   const desde = opts.desde || `${opts.anio}-${pad(opts.mes)}-01`;
   const hasta = opts.hasta || `${opts.anio}-${pad(opts.mes)}-${pad(last)}`;
   const dias = cadaFecha(desde, hasta);
   const jibblePorFecha = new Map(opts.jibble.map((j) => [j.fecha, j]));
-  const crudos = dias.map((f) => calcularDia(f, opts.marcajes, opts.config, opts.feriados, opts.permisos, jibblePorFecha.get(f) || null));
+  const crudos = dias.map((f) => calcularDia(f, opts.marcajes, opts.config, opts.feriados, opts.permisos, jibblePorFecha.get(f) || null, opts.jornadaDe ? opts.jornadaDe(f) : null));
   const primera = crudos.find((d) => d.fuente !== "vacio" && (d.diaContado || d.abierto || d.fuente === "permiso"));
   if (!primera) {
     return {
@@ -423,6 +468,7 @@ export function configDesde(row: Record<string, unknown> | undefined): Asistenci
     jornada_horas: n(row.jornada_horas) || CONFIG_DEF.jornada_horas,
     gracia_min: row.gracia_min == null ? CONFIG_DEF.gracia_min : n(row.gracia_min),
     cuenta_antes: row.cuenta_antes === true,
+    lugar_nombre: String(row.lugar_nombre || CONFIG_DEF.lugar_nombre),
   };
 }
 
@@ -494,4 +540,23 @@ export function validarSolicitudVacacion(saldo: SaldoVacaciones, dias: number): 
   const libre = saldo.diasDisponibles - saldo.diasPendientes;
   if (dias > libre) return `Pides ${dias} días y te quedan ${Math.max(0, libre)} disponibles.`;
   return null;
+}
+
+/** Si pasaron `graciaHoras` (2) después de la hora de salida del horario, hay que cerrar la jornada a esa hora de salida (sin foto). */
+export function debeCerrarAutomaticamente(opts: {
+  entradaTs: string;
+  horaSalida: string;
+  ahoraIso: string;
+  graciaHoras?: number;
+}): { aplicar: boolean; tsSalida: string; ymd: string } {
+  const ymd = ecuadorParts(new Date(opts.entradaTs)).ymd;
+  let tsSalida = instanteEcuador(ymd, opts.horaSalida || "18:00");
+  if (new Date(tsSalida).getTime() <= new Date(opts.entradaTs).getTime()) {
+    const [y, m, d] = ymd.split("-").map(Number);
+    const nx = new Date(Date.UTC(y, m - 1, d + 1));
+    const y2 = `${nx.getUTCFullYear()}-${pad(nx.getUTCMonth() + 1)}-${pad(nx.getUTCDate())}`;
+    tsSalida = instanteEcuador(y2, opts.horaSalida || "18:00");
+  }
+  const gracia = (opts.graciaHoras ?? 2) * 3600000;
+  return { aplicar: new Date(opts.ahoraIso).getTime() >= new Date(tsSalida).getTime() + gracia, tsSalida, ymd };
 }

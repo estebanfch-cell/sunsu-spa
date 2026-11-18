@@ -206,17 +206,22 @@
   function crearItems() {
     var puedeOc = adm() && ok("compras");
     // Emilia 17/11: accesos rápidos con emoji; el 5.º es 📦 Abrir producto (cabina/local).
+    var abierta = (typeof reloj !== "undefined" && reloj && reloj.abierto);
+    var muestra = typeof muestraReloj === "function" && muestraReloj();
     return [
-      [ok("tickets"), "🎫 Nuevo ticket", "#/doc/ov"],
-      [ok("cotizaciones_cliente"), "📝 Nueva cotización", "#/doc/cot"],
-      [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva"],
-      [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja/nuevo"],
-      [true, "📦 Abrir producto", "#/m/aperturas"],
+      [ok("tickets"), "🎫 Nuevo ticket", "#/doc/ov", ""],
+      [ok("cotizaciones_cliente"), "📝 Nueva cotización", "#/doc/cot", ""],
+      [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva", ""],
+      [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja/nuevo", ""],
+      [true, "📦 Abrir producto", "#/m/aperturas", ""],
+      [muestra && !abierta, "📷 Registrar entrada", "", "entrada"],
+      [muestra && abierta, "📷 Registrar salida", "", "salida"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
     return crearItems().map(function (x, i) {
-      return '<button class="btn ' + (i === 0 ? "" : "ghost ") + 'block" type="button" data-go="' + e(x[2]) + '">' + e(x[1]) + "</button>";
+      var acc = x[3] ? ' data-reloj-open="' + e(x[3]) + '"' : ' data-go="' + e(x[2]) + '"';
+      return '<button class="btn ' + (i === 0 ? "" : "ghost ") + 'block" type="button"' + acc + ">" + e(x[1]) + "</button>";
     }).join("");
   }
 
