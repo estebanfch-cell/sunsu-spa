@@ -14,7 +14,10 @@
   function opt(v, t, sel) { return '<option value="' + e(v) + '"' + (String(v) === String(sel == null ? "" : sel) ? " selected" : "") + ">" + e(t) + "</option>"; }
   function fecha(f, h) { return f ? f.split("-").reverse().join("/") + (h ? " " + h : "") : ""; }
   function fechaIso(v) { var d = new Date(v); if (isNaN(d)) return String(v || ""); var z = new Date(d.getTime() - 5 * 3600000).toISOString(); return z.slice(8, 10) + "/" + z.slice(5, 7) + "/" + z.slice(0, 4) + " " + z.slice(11, 16); }
-  var TIPO = { producto: "Producto", facial: "Facial", extra: "Servicio", paquete: "Paquete", gift: "Gift card", servicio: "Servicio" };
+  var TIPO = { producto: "Producto", facial: "Facial", extra: "Servicio", paquete: "Paquete", gift: "Gift card", servicio: "Servicio", diferencia_mejora: "Diferencia por mejora" };
+  var NOMBRE_MEJORA = "Diferencia por mejora de paquete";
+  function esMejora(l) { return !!(l && (l.mejoraPaquete || l.tipo === "diferencia_mejora" || /diferencia por mejora/i.test(l.nombre || l.promo || ""))); }
+  function hayMejoraDe(sku) { return (K.L || []).some(function (x) { return esMejora(x) && String(x.sku) === String(sku); }); }
   function toast2(msg, mal) { if (typeof toast === "function") { try { toast(msg, mal ? "#B86B6B" : undefined); return; } catch (x) {} } alert(msg); }
   function beep(ok) {
     try {
@@ -164,7 +167,7 @@
     calc();
     if (!K.L.length) return '<tr><td colspan="10" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + irProdBtn(l) + "</div></div></div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (esMejora(l) ? ' <span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") + (l.canje && !hayMejoraDe(l.sku) && (K.d.puedeEditar || K.d.puedePedir) ? ' <button type="button" class="mctk-link" data-mejora="' + i + '" style="font-size:.7rem;font-weight:700;margin-left:4px">+ Diferencia por mejora</button>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) + irProdBtn(l) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(net(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
@@ -368,7 +371,7 @@
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
     K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
@@ -656,6 +659,22 @@
     });
     lin.addEventListener("click", function (ev) { var ir = ev.target.closest("[data-irp]"); if (ir) { ev.preventDefault(); ev.stopPropagation(); go("#/m/productos/p/" + encodeURIComponent(ir.getAttribute("data-irp"))); return; } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
+    lin.addEventListener("click", function (ev) {
+      var b = ev.target.closest("[data-mejora]"); if (!b) return;
+      ev.preventDefault();
+      var ix = +b.getAttribute("data-mejora"), canje = K.L[ix];
+      if (!canje || hayMejoraDe(canje.sku)) return;
+      var raw = prompt("Diferencia por mejora de paquete\nEl facial vale más que el paquete: se cobra solo la diferencia (precio sin IVA; se agrega el IVA 15 %). La sesión de paquete sigue como canje.\n\nMonto sin IVA:", "");
+      if (raw == null) return;
+      var v = Number(String(raw).replace(",", "."));
+      if (!(v > 0)) { toast2("Escribe un monto mayor a 0", true); return; }
+      K.L.splice(ix + 1, 0, {
+        tipo: "servicio", sku: canje.sku, nombre: NOMBRE_MEJORA, cantidad: 1,
+        precio_unit: r2(v * IVA), descuento_tipo: null, descuento_valor: 0,
+        excluir_comision: false, estimado: false, mejoraPaquete: true, promo: NOMBRE_MEJORA
+      });
+      marcar(); pintarLin();
+    });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
     var _pS = main.querySelector("#mctk-promo"); if (_pS) _pS.onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
     var _pB = main.querySelector("#mctk-promos");
