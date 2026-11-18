@@ -200,20 +200,26 @@ extend("tk_subir_doc", "any", async (p, ctx, ses) => {
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
-  const img = s(p.imagen);
+  const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante");
+  if (x.error) return x;
+  return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row) };
+});
+/** Guarda la foto (archivos) y la agrega a beta_tickets.datos.comprobantes: lo usan tk_subir_doc y el cobro de Caja (pg_registrar). */
+export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string): Promise<Row> {
+  const img = s(imagen);
   if (!/^data:(image\/|application\/pdf)/.test(img)) return { error: "Sube una foto o PDF" };
   const actor = actorOf(ses), now = ctx.now.toISOString();
-  const id = await guardarArchivo(ctx.db, actor, "comprobante", "Comprobante " + s(p.clave), img);
+  const id = await guardarArchivo(ctx.db, actor, "comprobante", "Comprobante " + nombre, img);
   if (!id) return { error: "El archivo pesa más de 1.5 MB" };
   const clave = claveDe(r, leerSerie(r, "so_num"));
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
   const datos = { ...((cab?.datos || {}) as Row) };
   datos.comprobantes = [...(Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : []), { url: "archivo:" + id, por: ses.name, fecha: now }].slice(-10);
-  const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle: "subió comprobante" }].slice(-100);
+  const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle }].slice(-100);
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos, historial: hist, actualizado_por: actor, updated_at: now });
-  return { ok: true, url: "archivo:" + id, faltan: faltaDe(r, datos) };
-});
+  return { ok: true, url: "archivo:" + id, datos };
+}
 extend("tk_catalogo", "any", async (_p, ctx, ses) => ({ ok: true, items: await catalogoTicket(ctx, ses), promos: await promosVigentes(ctx) }));
 
 /** Valida y guarda lo propuesto (líneas, descuento, promo, exclusiones). Lo usan el admin y la solicitud aprobada. */

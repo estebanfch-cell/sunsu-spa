@@ -41,9 +41,30 @@
     });
   }
 
+  /** Foto → JPEG ≤1600 px (lo que guarda tk_subir_doc); un PDF pasa tal cual. */
+  function comprimirFoto(file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onerror = function () { rej(new Error("No se pudo leer el archivo")); };
+      fr.onload = function () {
+        var url = String(fr.result || "");
+        if (!/^data:image\//.test(url)) return res(url);
+        var im = new Image();
+        im.onload = function () {
+          var k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement("canvas");
+          cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+          cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL("image/jpeg", 0.85));
+        };
+        im.onerror = function () { res(url); };
+        im.src = url;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
   // ---------- Pagos dentro del ticket ----------
   var MCPagos = {
-    montar: async function (host, clave, totalFn, onPagado) {
+    montar: async function (host, clave, totalFn, onPagado, onFoto) {
       css();
       var total = totalFn();
       var r = await api("pg_ticket", { clave: clave, total: total });
@@ -60,23 +81,41 @@
         (filas ? '<table class="mccj-t"><thead><tr><th>Fecha</th><th>Forma</th><th class="num">Monto</th><th>Registró</th>' + (r.admin ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table>" : "") +
         (saldo > 0.009 ? '<div class="mccj-f" style="margin-top:8px"><label>Forma de pago<select id="pg-met">' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("") + "</select></label>" +
           '<label>Monto<input id="pg-monto" inputmode="decimal" value="' + saldo.toFixed(2) + '"></label><label>Voucher / comprobante<input id="pg-ref" placeholder="N.º (tarjeta, transferencia)"></label>' +
+          '<div id="pg-foto" style="display:none;grid-column:1/-1;flex-basis:100%"><div style="font-size:0.66rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:4px">📷 Foto del comprobante / voucher</div><div style="display:flex;gap:6px">' +
+          '<label style="padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer;flex:1">📷 Tomar foto<input id="pg-cam" type="file" accept="image/*" capture="environment" style="display:none"></label>' +
+          '<label style="padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer;flex:1">🖼️ Galería<input id="pg-gal" type="file" accept="image/*,application/pdf" style="display:none"></label></div><div id="pg-prev" class="mccj-sub" style="margin-top:6px"></div></div>' +
           '<label style="justify-content:flex-end"><button class="btn" type="button" id="pg-ok">Registrar pago</button></label></div><p class="mccj-sub">El efectivo entra solo a la caja chica.</p>' : '<p class="mccj-sub">✓ Pagado completo.</p>') + "</div>";
+      // TK42: tarjeta y transferencia piden la foto del voucher / comprobante (como el cobro del ticket).
+      var foto = "", selM = host.querySelector("#pg-met"), boxF = host.querySelector("#pg-foto"), prevF = host.querySelector("#pg-prev");
+      var pideFoto = function () { var m = selM && selM.value; return m === "tarjeta" || m === "transferencia"; };
+      var verFoto = function () { if (boxF) boxF.style.display = pideFoto() ? "block" : "none"; };
+      if (selM) { selM.onchange = verFoto; verFoto(); }
+      ["#pg-cam", "#pg-gal"].forEach(function (q) {
+        var inp = host.querySelector(q); if (!inp) return;
+        inp.onchange = async function () {
+          var f = inp.files && inp.files[0]; if (!f) return;
+          try { foto = await comprimirFoto(f); } catch (x) { foto = ""; }
+          if (prevF) prevF.innerHTML = foto ? (/^data:image\//.test(foto) ? '<img src="' + foto + '" alt="" style="max-height:90px;border-radius:8px;vertical-align:middle"> ' : "📄 ") + "✓ " + e(f.name || "foto") : "No se pudo leer la foto";
+        };
+      });
       var ok = host.querySelector("#pg-ok");
       if (ok) ok.onclick = async function () {
+        if (pideFoto() && !foto) { toast2(selM.value === "tarjeta" ? "Toma la foto del voucher de la tarjeta" : "Toma la foto del comprobante de la transferencia", 1); if (boxF) { boxF.style.display = "block"; try { boxF.scrollIntoView({ block: "nearest" }); } catch (x) {} } return; }
         ok.disabled = true;
-        var body = { clave: clave, total: totalFn(), metodo: host.querySelector("#pg-met").value, monto: host.querySelector("#pg-monto").value, ref: host.querySelector("#pg-ref").value };
+        var body = { clave: clave, total: totalFn(), metodo: selM.value, monto: host.querySelector("#pg-monto").value, ref: host.querySelector("#pg-ref").value };
+        if (pideFoto()) body.imagen = foto;
         var x = await api("pg_registrar", body);
         if (x && x.mayor && confirm(x.error + ". ¿Registrarlo igual?")) { body.forzar = true; x = await api("pg_registrar", body); }
         ok.disabled = false;
         if (!x || !x.ok) { toast2((x && x.error) || "No se pudo registrar", 1); return; }
-        toast2("Pago registrado"); MCPagos.montar(host, clave, totalFn, onPagado);
+        toast2(body.imagen ? "Pago registrado · ✓ comprobante subido" : "Pago registrado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto); if (body.imagen && onFoto) onFoto();
       };
       host.querySelectorAll("[data-pg-anul]").forEach(function (b) {
         b.onclick = async function () {
           var motivo = prompt("Motivo para anular el pago:"); if (!motivo) return;
           var x = await api("pg_anular", { id: b.getAttribute("data-pg-anul"), motivo: motivo });
           if (!x || !x.ok) { toast2((x && x.error) || "No se pudo anular", 1); return; }
-          toast2("Pago anulado"); MCPagos.montar(host, clave, totalFn, onPagado);
+          toast2("Pago anulado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
         };
       });
     },

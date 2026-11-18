@@ -61,7 +61,14 @@ describe("💵 Pagos + caja chica", () => {
     const t0 = await h("pg_ticket", "rec", { clave: "TK-SO-2001", total: 80 });
     assert.equal(t0.saldo, 80, JSON.stringify(t0));
     assert.equal((await h("pg_registrar", "rec", { clave: "TK-SO-2001", total: 80, metodo: "tarjeta", monto: 30 })).error, "Escribe el número de voucher / comprobante");
-    assert.equal((await h("pg_registrar", "rec", { clave: "TK-SO-2001", total: 80, metodo: "tarjeta", monto: 30, ref: "778" })).saldo, 50);
+    const sinFoto = await h("pg_registrar", "rec", { clave: "TK-SO-2001", total: 80, metodo: "tarjeta", monto: 30, ref: "778" });
+    assert.equal(sinFoto.error, "Toma la foto del voucher de la tarjeta");
+    assert.equal(db.tables.get("beta_pagos")!.length, 0);
+    assert.equal((await h("pg_registrar", "rec", { clave: "TK-SO-2001", total: 80, metodo: "tarjeta", monto: 30, ref: "778", imagen: "data:image/jpeg;base64,AAAA" })).saldo, 50);
+    // TK42: la foto queda en la misma bodega que tk_subir_doc (beta_tickets.datos.comprobantes → apaga el amarillo)
+    const cab = db.tables.get("beta_tickets")!.find((c) => c.clave === "TK-SO-2001")!;
+    assert.equal(((cab.datos as Record<string, unknown>).comprobantes as unknown[]).length, 1);
+    assert.equal(db.tables.get("app_archivos")!.length, 1);
     const ef = await h("pg_registrar", "rec", { clave: "TK-SO-2001", total: 80, metodo: "efectivo", monto: 50 });
     assert.equal(ef.saldo, 0);
     assert.equal((await h("cj_resumen", "rec")).saldo, 50);
