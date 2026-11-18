@@ -17,9 +17,14 @@ describe("ticket sin IVA (TK39, TK-SO-1861)", () => {
     for (let x = 0.01; x < 300; x += 0.37) assert.equal(r2(r2(r2(x) * iva) / iva), r2(x));
   });
   it("mc-tickets.js: precio sin IVA, bloque como Migo", () => {
-    assert.match(src, /Precio sin IVA/);
-    assert.match(src, /Subtotal gravado 15%/);
-    assert.match(src, /Subtotal 0%/);
+    assert.match(src, /P\. sin IVA/);
+    // TK68: totales solo Subtotal, IVA 15 %, Total, Pagado, Saldo.
+    assert.doesNotMatch(src, /Subtotal gravado 15%|<span>Subtotal 0%|Subtotal \(sin IVA\)/);
+    for (const t of ["<span>Subtotal</span>", "<span>IVA 15%</span>", ">Total</span>", "<span>Pagado</span>", "<span>Saldo</span>"]) assert.ok(src.includes(t), t);
+    // Líneas en 1–2 filas con container query (sin tabla con scroll horizontal).
+    assert.match(src, /container-type:inline-size/);
+    assert.match(src, /@container mctkl \(min-width:680px\)/);
+    assert.doesNotMatch(src, /mctk-lt"><thead>/);
     assert.match(src, /l\.precio_unit = \(Number\(ev\.target\.value\) \|\| 0\) \* IVA/);
     assert.doesNotThrow(() => new Function(src));
   });

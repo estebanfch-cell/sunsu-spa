@@ -4494,7 +4494,7 @@ describe("ticket como orden de venta", () => {
     assert.equal(promo.filas[1].total, -13.05);
     const html = g._tkTablaHTML(t, true);
     assert.match(html, /<th class="num">Precio unit\. \(sin IVA\)<\/th>/);
-    assert.match(html, /Subtotal sin IVA/);
+    assert.match(html, />Subtotal</); // TK68: sin «sin IVA» / «0%» en los totales
     assert.match(html, /Total con IVA/);
     assert.match(src, /var breakdown=_tkTablaHTML\(t, showPrices\);/);
   });
