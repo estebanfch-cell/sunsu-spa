@@ -11,7 +11,9 @@ export const BOD_CABINA = "22222222-2222-4222-8222-222222222222";
 export const UNDO_MS = 3600e3;
 
 /** Consignación si el producto lo dice; si no, lo que diga el proveedor (HT, AS, ML, PH, JN entregan en consignación). */
-export function origenDe(p: Row | undefined): "consignacion" | "propio" {
+export function origenDe(p: Row | undefined, on?: Set<string>): "consignacion" | "propio" {
+  // TK34: con la lista de proveedores en consignación manda el interruptor del proveedor (+ el del producto).
+  if (on) { const m = skuCode(s(p?.sku)).match(/^([A-Z]{2,6})-/); return p && !vendeDesdeCabina(p) && on.has(m ? m[1] : "") && s(p.beta_origen) !== "propio" ? "consignacion" : "propio"; }
   const o = s(p?.beta_origen);
   if (o === "consignacion" || o === "propio") return o;
   const sku = skuCode(s(p?.sku));
@@ -22,19 +24,19 @@ export const usoDe = (p: Row | undefined): "vendible" | "insumo" => s(p?.uso) ==
 
 /** Bodega a la que entra lo recibido. Propio+Vendible → Venta; Insumo → Casa (o la cabina que se elija);
  *  Consignación (TK27) → bodega CONSIGNACION. Las máscaras que se venden desde Cabina siguen yendo a Cabina. */
-export function destinoDe(p: Row | undefined): { bodega_id: string } {
+export function destinoDe(p: Row | undefined, on?: Set<string>): { bodega_id: string } {
   if (vendeDesdeCabina(p)) return { bodega_id: BOD_CABINA };
-  if (origenDe(p) === "consignacion") return { bodega_id: BOD_CONSIG };
+  if (origenDe(p, on) === "consignacion") return { bodega_id: BOD_CONSIG };
   return { bodega_id: usoDe(p) === "insumo" ? BOD_CASA : BOD_VENTA };
 }
 
 /** Une las líneas del mismo producto (OC-0001 tenía JN-001 dos veces) en una sola fila para recibir. */
-export function agrupar(lineas: Row[], prods: Map<string, Row>, now: Date): Row[] {
+export function agrupar(lineas: Row[], prods: Map<string, Row>, now: Date, on?: Set<string>): Row[] {
   const g = new Map<string, Row>();
   for (const l of lineas) {
     const k = s(l.producto_id);
     const p = prods.get(k);
-    const x = g.get(k) || { producto_id: k, sku: skuCode(s(p?.sku)), nombre: s(p?.nombre), uso: usoDe(p), origen: origenDe(p), pedido: 0, recibido: 0, no_recibido: 0, lineas: [] as string[], deshacer: 0, deshacerHasta: "" };
+    const x = g.get(k) || { producto_id: k, sku: skuCode(s(p?.sku)), nombre: s(p?.nombre), uso: usoDe(p), origen: origenDe(p, on), pedido: 0, recibido: 0, no_recibido: 0, lineas: [] as string[], deshacer: 0, deshacerHasta: "" };
     x.pedido = round2(n(x.pedido) + n(l.cantidad));
     x.recibido = round2(n(x.recibido) + n(l.recibido));
     x.no_recibido = round2(n(x.no_recibido) + n(l.no_recibido));
@@ -47,7 +49,7 @@ export function agrupar(lineas: Row[], prods: Map<string, Row>, now: Date): Row[
     }
     g.set(k, x);
   }
-  return [...g.values()].map((x) => ({ ...x, pendiente: Math.max(0, round2(n(x.pedido) - n(x.recibido) - n(x.no_recibido))), ...destinoDe(prods.get(s(x.producto_id))) }));
+  return [...g.values()].map((x) => ({ ...x, pendiente: Math.max(0, round2(n(x.pedido) - n(x.recibido) - n(x.no_recibido))), ...destinoDe(prods.get(s(x.producto_id)), on) }));
 }
 
 /** Reparte una cantidad recibida del grupo entre sus líneas, en orden, sin pasar lo pendiente de cada una. */
