@@ -374,9 +374,327 @@
     },
   });
 
+
+  /* ---------- Órdenes de compra ---------- */
+  function ocK() { return (window.MCCompras && window.MCCompras._k) || {}; }
+  function ocProv(it) { return (it && it.prov && it.prov.nombre) || (it && it.proveedor) || "—"; }
+  function ocPill(txt) {
+    if (!txt) return "";
+    return (window.MCCompras && window.MCCompras._pill) ? window.MCCompras._pill(txt) : '<span class="tk-pill">' + esc(txt) + "</span>";
+  }
+  register("compras", {
+    listHash: "#/m/compras",
+    itemHash: function (id) { return "#/m/compras/oc/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "compras" && route.sub === "oc" && route.id && window.MCCompras); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mcoc-q") && document.getElementById("mcoc-body") && !document.getElementById("ss-md-compras")); },
+    items: function () { return ocK().items || []; },
+    hasItems: function () { return !!((ocK().items || []).length); },
+    itemId: function (it) { return it && it.id; },
+    title: function (it) { return (it && it.numero) || "—"; },
+    subtitle: ocProv,
+    amount: function (it) { return ocK().admin ? money(it && it.total) : ""; },
+    pills: function (it) { return ocPill(it && it.estado) + (it && it.tipo === "consignacion" ? ocPill("Consignación") : ""); },
+    blob: function (it) { return [it.id, it.numero, ocProv(it), it.estado, it.nota].join(" "); },
+    renderDetail: function (route) { return window.MCCompras.render(route); },
+    wireDetail: function (main, route) { if (window.MCCompras) window.MCCompras.wire(main, route); },
+    ensureItems: async function () {
+      if ((ocK().items || []).length) return true;
+      if (window.MCCompras && window.MCCompras.ensureList) return window.MCCompras.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Cotizaciones de proveedor ---------- */
+  register("compras_cot", {
+    listHash: "#/m/compras/cotizaciones",
+    itemHash: function (id) { return "#/m/compras/cot/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "compras" && route.sub === "cot" && route.id && window.MCCompras); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mcoc-q") && document.getElementById("mcoc-cot-body") && !document.getElementById("ss-md-compras_cot")); },
+    items: function () { return ocK().cot || []; },
+    hasItems: function () { return !!((ocK().cot || []).length); },
+    itemId: function (it) { return it && it.id; },
+    title: function (it) { return (it && it.numero) || "—"; },
+    subtitle: ocProv,
+    amount: function (it) { return ocK().admin ? money(it && it.total) : ""; },
+    pills: function (it) { return ocPill(it && it.estado); },
+    blob: function (it) { return [it.id, it.numero, ocProv(it), it.estado, it.ocNumero].join(" "); },
+    renderDetail: function (route) { return window.MCCompras.render(route); },
+    wireDetail: function (main, route) { if (window.MCCompras) window.MCCompras.wire(main, route); },
+    ensureItems: async function () {
+      if ((ocK().cot || []).length) return true;
+      if (window.MCCompras && window.MCCompras.ensureList) return window.MCCompras.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Cotizaciones de clienta ---------- */
+  function wireCotDetalle(main) {
+    var pdf = main && main.querySelector && main.querySelector("#cot-pdf");
+    if (pdf) pdf.onclick = function () {
+      if (window._cotAbierta && typeof _cotDescargar === "function") _cotDescargar(window._cotAbierta);
+    };
+  }
+  register("cotizaciones", {
+    listHash: "#/m/cotizaciones_cliente",
+    itemHash: function (id) { return "#/m/cotizaciones_cliente/c/" + encodeURIComponent(id); },
+    match: function (route) {
+      if (!route) return false;
+      if (route.kind === "mod" && route.mod === "cotizaciones_cliente" && route.sub === "c" && route.id) return true;
+      if (route.kind === "doc" && route.doc === "cot" && route.id) return true;
+      return false;
+    },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("filtro-cot") && document.getElementById("cot-md") && !document.getElementById("ss-md-cotizaciones")); },
+    items: function () { return window._cotRows || []; },
+    hasItems: function () { return !!((window._cotRows || []).length); },
+    itemId: function (c) { return c && c.numero; },
+    title: function (c) { return (c && c.numero) || "—"; },
+    subtitle: function (c) { return (c && c.cliente) || "Sin clienta"; },
+    amount: function (c) { return money(c && c.total); },
+    pills: function (c) { return c && c.estado ? '<span class="tk-pill">' + esc(c.estado) + "</span>" : ""; },
+    blob: function (c) { return [c.numero, c.cliente, c.cedula, c.estado, c.fecha].join(" "); },
+    renderDetail: async function (route) {
+      var id = String((route && route.id) || "");
+      window._cotSel = id;
+      return typeof renderCot === "function" ? await renderCot(id) : "";
+    },
+    wireDetail: function (main) { wireCotDetalle(main); },
+    ensureItems: async function () {
+      if ((window._cotRows || []).length) return true;
+      if (typeof api !== "function") return false;
+      try {
+        var data = await api("getCotizaciones");
+        if (data && !data.error) { window._cotRows = data.items || []; return true; }
+      } catch (e) {}
+      return false;
+    },
+  });
+
+  /* ---------- Productos ---------- */
+  function prK() { return (window.MCProductos && (window.MCProductos._mc || window.MCProductos._k)) || {}; }
+  register("productos", {
+    listHash: "#/m/productos",
+    itemHash: function (id) { return "#/m/productos/p/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "productos" && route.sub === "p" && route.id && window.MCProductos); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mcp-q") && !document.getElementById("ss-md-productos")); },
+    items: function () { return window.MCProductos && window.MCProductos.items ? window.MCProductos.items() : (prK().list || []); },
+    hasItems: function () { return !!((prK().list || []).length); },
+    itemId: function (p) { return p && p.id; },
+    title: function (p) { return (p && (p.skuVisible || p.sku)) || "—"; },
+    subtitle: function (p) { return (p && p.nombre) || "Sin nombre"; },
+    amount: function (p) {
+      if (!p || p.tipo === "servicio") return "";
+      var n = Number(p.stock);
+      return isNaN(n) ? "" : String(Math.round(n) === n ? n : n.toFixed(2));
+    },
+    pills: function (p) {
+      if (!p || p.tipo === "servicio") return "";
+      if (p.estado === "agotado") return '<span class="tk-pill" style="color:#C0392B;border-color:#C0392B">Agotado</span>';
+      if (p.estado === "bajo") return '<span class="tk-pill" style="color:#C98A00;border-color:#C98A00">Bajo</span>';
+      return '<span class="tk-pill" style="color:#2E8B57;border-color:#2E8B57">OK</span>';
+    },
+    cls: function (p) { return p && p.estado === "agotado" ? " ss-md-flag" : (p && p.estado === "bajo" ? " ss-md-falta" : ""); },
+    blob: function (p) { return [p.sku, p.skuVisible, p.skuAlias, p.nombre, p.marca, p.categoria, p.subtipo, p.skuProveedor].join(" "); },
+    isDirty: function () { return !!(window.MCProductos && (window.MCProductos.isDirty ? window.MCProductos.isDirty() : window.MCProductos.dirty && window.MCProductos.dirty())); },
+    renderDetail: function (route) { return window.MCProductos.render(route); },
+    wireDetail: function (main, route) { if (window.MCProductos) window.MCProductos.wire(main, route); },
+    ensureItems: async function () {
+      if ((prK().list || []).length) return true;
+      if (window.MCProductos && window.MCProductos.ensureList) return window.MCProductos.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Gift cards ---------- */
+  function gcK() { return (window.MCGiftCards && window.MCGiftCards._k) || {}; }
+  register("gift", {
+    listHash: "#/m/gift/cards",
+    itemHash: function (id) { return "#/m/gift/cards/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "gift" && route.sub === "cards" && route.id && route.id !== "nueva" && window.MCGiftCards); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mcgc-q") && !document.getElementById("ss-md-gift")); },
+    items: function () { return gcK().items || []; },
+    hasItems: function () { return !!((gcK().items || []).length); },
+    itemId: function (v) { return v && v.id; },
+    title: function (v) { return (v && v.codigo) || "—"; },
+    subtitle: function (v) { return (v && (v.comprador || v.para)) || "Sin nombre"; },
+    pills: function (v) { return v && (v.estadoTxt || v.estado) ? '<span class="tk-pill">' + esc(v.estadoTxt || v.estado) + "</span>" : ""; },
+    blob: function (v) { return [v.id, v.codigo, v.comprador, v.cedula, v.para, v.factura, v.servicio, v.valor].join(" "); },
+    isDirty: function () { return !!(gcK().edit); },
+    renderDetail: function (route) { return window.MCGiftCards.render(route); },
+    wireDetail: function (main, route) { if (window.MCGiftCards) window.MCGiftCards.wire(main, route); },
+    ensureItems: async function () {
+      if ((gcK().items || []).length) return true;
+      if (window.MCGiftCards && window.MCGiftCards.ensureList) return window.MCGiftCards.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Paquetes ---------- */
+  function pqK() { return (window.MCPaquetes && window.MCPaquetes._k) || {}; }
+  register("paquetes", {
+    listHash: "#/m/gift/paquetes",
+    itemHash: function (id) { return "#/m/gift/paquetes/" + encodeURIComponent(id); },
+    match: function (route) {
+      if (!(window.MCPaquetes) || !route) return false;
+      if (route.kind === "mod" && route.mod === "gift" && route.sub === "paquetes" && route.id) return true;
+      if (route.kind === "mod" && route.mod === "paquetes" && route.sub && route.sub !== "nuevo") return true;
+      return false;
+    },
+    sel: function (route) { return String((route && (route.id || route.sub)) || ""); },
+    onList: function () { return !!(document.getElementById("mcpq-q") && !document.getElementById("ss-md-paquetes")); },
+    items: function () { return pqK().items || []; },
+    hasItems: function () { return !!((pqK().items || []).length); },
+    itemId: function (v) { return v && v.id; },
+    title: function (v) { return (v && v.codigo) || "—"; },
+    subtitle: function (v) { return ((((v && v.nombre) || "") + " " + ((v && v.apellido) || "")).trim() || (v && v.paquete) || "Sin nombre"); },
+    amount: function (v) { return v && v.total != null ? String(v.usados || 0) + "/" + String(v.total) : ""; },
+    pills: function (v) { return v && v.estado ? '<span class="tk-pill">' + esc(v.estado) + "</span>" : ""; },
+    blob: function (v) { return [v.id, v.codigo, v.nombre, v.apellido, v.cedula, v.paquete, v.clienteCodigo].join(" "); },
+    renderDetail: function (route) { return window.MCPaquetes.render(route); },
+    wireDetail: function (main, route) { if (window.MCPaquetes) window.MCPaquetes.wire(main, route); },
+    ensureItems: async function () {
+      if ((pqK().items || []).length) return true;
+      if (window.MCPaquetes && window.MCPaquetes.ensureList) return window.MCPaquetes.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Recepciones ---------- */
+  function rcK() { return (window.MCRecepciones && window.MCRecepciones._k) || {}; }
+  register("recepciones", {
+    listHash: "#/m/recepciones",
+    itemHash: function (id) { return "#/m/recepciones/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "recepciones" && route.sub && window.MCRecepciones); },
+    sel: function (route) { return String((route && route.sub) || ""); },
+    onList: function () { return !!(document.getElementById("mcrc-lista") && !document.getElementById("ss-md-recepciones")); },
+    items: function () { return rcK().items || []; },
+    hasItems: function () { return !!((rcK().items || []).length); },
+    itemId: function (o) { return o && o.id; },
+    title: function (o) { return (o && o.numero) || "—"; },
+    subtitle: function (o) { return (o && o.proveedor) || "—"; },
+    amount: function (o) { return o && o.pendiente != null ? String(o.pendiente) + " pend." : ""; },
+    pills: function (o) { return ocPill(o && o.estado); },
+    blob: function (o) { return [o.id, o.numero, o.proveedor, o.estado].join(" "); },
+    renderDetail: function (route) { return window.MCRecepciones.render(route); },
+    wireDetail: function (main, route) { if (window.MCRecepciones) window.MCRecepciones.wire(main, route); },
+    ensureItems: async function () {
+      if ((rcK().items || []).length) return true;
+      if (window.MCRecepciones && window.MCRecepciones.ensureList) return window.MCRecepciones.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Transferencias ---------- */
+  function trK() { return (window.MCTransferencias && window.MCTransferencias._t) || {}; }
+  register("transferencias", {
+    listHash: "#/m/transferencias",
+    itemHash: function (id) { return "#/m/transferencias/t/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "transferencias" && route.sub === "t" && route.id && window.MCTransferencias); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mctr-q") && document.getElementById("mctr-body") && !document.getElementById("ss-md-transferencias")); },
+    items: function () { return trK().list || []; },
+    hasItems: function () { return !!((trK().list || []).length); },
+    itemId: function (t) { return t && t.id; },
+    title: function (t) { return (t && t.numero) || "—"; },
+    subtitle: function (t) { return ((t && t.origenNombre) || "—") + " → " + ((t && t.destinoNombre) || "—"); },
+    pills: function (t) { return t && t.estado ? '<span class="tk-pill">' + esc(t.estado) + "</span>" : ""; },
+    blob: function (t) { return [t.id, t.numero, t.origenNombre, t.destinoNombre, t.estado].join(" "); },
+    renderDetail: function (route) { return window.MCTransferencias.render(route); },
+    wireDetail: function (main, route) { if (window.MCTransferencias) window.MCTransferencias.wire(main, route); },
+    ensureItems: async function () {
+      if ((trK().list || []).length) return true;
+      if (window.MCTransferencias && window.MCTransferencias.ensureList) return window.MCTransferencias.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Ajustes de stock ---------- */
+  function ajK() { return (window.MCAjustes && window.MCAjustes._a) || {}; }
+  register("ajustes", {
+    listHash: "#/m/ajustes",
+    itemHash: function (id) { return "#/m/ajustes/a/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "ajustes" && route.sub === "a" && route.id && window.MCAjustes); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mcaj-q") && document.getElementById("mcaj-body") && !document.getElementById("ss-md-ajustes")); },
+    items: function () { return ajK().list || []; },
+    hasItems: function () { return !!((ajK().list || []).length); },
+    itemId: function (a) { return a && a.id; },
+    title: function (a) { return (a && a.numero) || "—"; },
+    subtitle: function (a) { return [a && a.bodegaNombre, a && a.motivo].filter(Boolean).join(" · ") || "—"; },
+    pills: function (a) { return a && a.estado ? '<span class="tk-pill">' + esc(a.estado) + "</span>" : ""; },
+    blob: function (a) { return [a.id, a.numero, a.bodegaNombre, a.motivo, a.estado].join(" "); },
+    renderDetail: function (route) { return window.MCAjustes.render(route); },
+    wireDetail: function (main, route) { if (window.MCAjustes) window.MCAjustes.wire(main, route); },
+    ensureItems: async function () {
+      if ((ajK().list || []).length) return true;
+      if (window.MCAjustes && window.MCAjustes.ensureList) return window.MCAjustes.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Conteos físicos ---------- */
+  function cfK() { return (window.MCConteo && window.MCConteo._c) || {}; }
+  register("conteos", {
+    listHash: "#/m/conteos",
+    itemHash: function (id) { return "#/m/conteos/cf/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "conteos" && route.sub === "cf" && route.id && window.MCConteo); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("mccf-q") && document.getElementById("mccf-body") && !document.getElementById("ss-md-conteos")); },
+    items: function () { return cfK().list || []; },
+    hasItems: function () { return !!((cfK().list || []).length); },
+    itemId: function (c) { return c && c.id; },
+    title: function (c) { return (c && c.numero) || "—"; },
+    subtitle: function (c) { return (c && (c.bodegaNombre || c.asignadoA)) || "—"; },
+    pills: function (c) { return c && c.estado ? '<span class="tk-pill">' + esc(c.estado) + "</span>" : ""; },
+    blob: function (c) { return [c.id, c.numero, c.bodegaNombre, c.asignadoA, c.estado, c.nota].join(" "); },
+    renderDetail: function (route) { return window.MCConteo.render(route); },
+    wireDetail: function (main, route) { if (window.MCConteo) window.MCConteo.wire(main, route); },
+    ensureItems: async function () {
+      if ((cfK().list || []).length) return true;
+      if (window.MCConteo && window.MCConteo.ensureList) return window.MCConteo.ensureList();
+      return false;
+    },
+  });
+
+  /* ---------- Inventario (ficha de stock) ---------- */
+  register("inventario", {
+    listHash: "#/m/inventario",
+    itemHash: function (id) { return "#/m/inventario/prod/" + encodeURIComponent(id); },
+    match: function (route) { return !!(route && route.kind === "mod" && route.mod === "inventario" && route.sub === "prod" && route.id); },
+    sel: function (route) { return String((route && route.id) || ""); },
+    onList: function () { return !!(document.getElementById("inv-q") && !document.getElementById("ss-md-inventario")); },
+    items: function () { return window._invRows || []; },
+    hasItems: function () { return !!((window._invRows || []).length); },
+    itemId: function (p) { return p && p.id; },
+    title: function (p) { return (p && p.sku) || "—"; },
+    subtitle: function (p) { return (p && p.nombre) || "Sin nombre"; },
+    amount: function (p) {
+      var n = Number(p && (p.stock != null ? p.stock : p.cantidad));
+      return isNaN(n) ? "" : String(Math.round(n) === n ? n : n.toFixed(2));
+    },
+    blob: function (p) { return [p.id, p.sku, p.nombre, p.marca, p.categoria].join(" "); },
+    renderDetail: function (route) { return typeof renderInventarioFicha === "function" ? renderInventarioFicha(route, true) : ""; },
+    wireDetail: function (main) { if (typeof wireInventario === "function") wireInventario(main); },
+    ensureItems: async function () {
+      if ((window._invRows || []).length) return true;
+      if (typeof api !== "function") return false;
+      try {
+        var data = await api("prod_list");
+        if (data && !data.error) { window._invRows = data.items || []; return true; }
+      } catch (e) {}
+      return false;
+    },
+  });
+
+
   window.MCMaestro = {
     wide: wide,
     register: register,
+    which: matchMod,
     shellHTML: shellHTML,
     listRowsHTML: listRowsHTML,
     render: render,

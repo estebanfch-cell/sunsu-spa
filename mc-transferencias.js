@@ -213,6 +213,7 @@
   }
 
   window.MCTransferencias = {
+    ensureList: async function () { if ((T.list || []).length) return true; await meta(); return !!(T.list || []).length; },
     render: async function (r) {
       css();
       if (r.sub === "t" && r.id) return renderDetalle(String(r.id));

@@ -1234,6 +1234,9 @@
   }
 
   window.MCProductos = {
+    items: function () { return filtrar(); },
+    ensureList: async function () { var r = await cargarLista(false); return !!(r && r.ok); },
+    isDirty: function () { return Object.keys(MC.ch).length > 0; },
     render: async function (route) {
       css();
       if (route.sub === "p" && route.id) return renderFicha(route.id);

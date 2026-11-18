@@ -1645,6 +1645,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios" }[route.sub] || "Personal");
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id === "nueva" ? "Nueva gift card" : route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
+  if (route.mod === "cotizaciones_cliente") return route.id ? "Cotización" : "Cotizaciones";
   if (route.kind === "doc" && route.doc === "cot") return "Cotización";
   if (tab) return tituloSunsu(tab);
   if (route.kind === "doc") return tituloDoc(route.doc);
@@ -2319,7 +2320,12 @@ async function draw() {
     const html = route.kind === "doc" ? await renderDoc(route) : await renderMod(route);
     main.innerHTML = banner() + html;
     bind(main, route);
-    if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
+    const mdName = window.MCMaestro && window.MCMaestro.which ? window.MCMaestro.which(route) : "";
+    const mdOn = !!(mdName && document.getElementById("ss-md-" + mdName));
+    if (mdOn) {
+      await window.MCMaestro.after(mdName, main, route);
+    } else if (route.kind === "mod" && route.mod === "productos" && route.sub !== "catalogo" && window.MCProductos) window.MCProductos.wire(main, route);
+    if (!mdOn) {
     if (route.kind === "mod" && route.mod === "mc" && window.MCNav) window.MCNav.wire(main, route);
     if (route.kind === "mod" && route.mod === "conteos" && route.sub !== "hacer" && window.MCConteo) window.MCConteo.wire(main, route);
     if (route.kind === "mod" && route.mod === "transferencias" && window.MCTransferencias) window.MCTransferencias.wire(main, route);
@@ -2346,6 +2352,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "recepciones" && window.MCRecepciones) window.MCRecepciones.wire(main, route);
     if (route.kind === "mod" && route.mod === "gift" && route.sub !== "paquetes" && window.MCGiftCards) window.MCGiftCards.wire(main, route);
     if (route.kind === "mod" && ((route.mod === "gift" && route.sub === "paquetes") || route.mod === "paquetes") && window.MCPaquetes) window.MCPaquetes.wire(main, route);
+    }
     if (route.kind === "mod" && route.mod === "proveedores" && route.sub === "nuevo") { const b = main.querySelector('[data-ix-mas="proveedores"]'); if (b) b.click(); }
     autosize(main);
   } catch (e) {
@@ -2367,6 +2374,10 @@ async function renderMod(route) {
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
+  if (window.MCMaestro && window.MCMaestro.wide()) {
+    const md = window.MCMaestro.which(route);
+    if (md) return window.MCMaestro.render(md, route);
+  }
   if (route.mod === "reportes") return renderReportes();
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
@@ -2397,7 +2408,10 @@ async function renderMod(route) {
     if (window.MCMaestro && window.MCMaestro.wide() && route.sub && route.sub !== "nuevo") return window.MCMaestro.render("proveedores", route);
     return renderProveedoresDesk(route);
   }
-  if (route.mod === "cotizaciones_cliente") return renderListaCotizaciones();
+  if (route.mod === "cotizaciones_cliente") {
+    if (route.sub === "c" && route.id) return renderCot(route.id);
+    return renderListaCotizaciones();
+  }
   if (route.mod === "comisiones") return renderComisiones();
   if (route.mod === "rol_pagos") return renderRol();
   if (route.mod === "asistencia") return renderAsistencia();
@@ -2804,7 +2818,7 @@ function bindInvMini(main, selId) {
   if (q) q.addEventListener("input", paint);
   paint();
 }
-async function renderInventarioFicha(route) {
+async function renderInventarioFicha(route, soloFicha) {
   const nuevo = route.sub === "nuevo" || !route.id;
   if (nuevo && !state.admin) return `<p class="err">Solo admin crea productos.</p>`;
   let p = { uso: "venta", unidad: "u", activo: true };
@@ -2889,6 +2903,7 @@ async function renderInventarioFicha(route) {
     if (lista && !lista.error) window._invRows = lista.items || [];
   }
   window._invSel = route.id;
+  if (soloFicha) return ficha;
   return `<div class="desk-split desk-open" id="inv-split" data-sel="${esc(route.id)}"><div class="desk-list" id="inv-mini">${inventarioMiniHTML(route.id)}</div><div class="desk-detail">${ficha}</div></div>`;
 }
 function wireInventario(main) {
@@ -3501,15 +3516,9 @@ function filaCotizacion(c) {
     </tr>`;
 }
 // Abre la cotización a la DERECHA de la lista (maestro-detalle), no en otra página.
-async function abrirCotPanel(numero, fila) {
+async function abrirCotPanel(numero) {
   window._cotSel = numero;
-  const d = typeof _mdAbrir === "function" ? _mdAbrir("cot-md", `<p class="note">Cargando…</p>`, fila) : null;
-  if (!d) { go("#/doc/cot/" + encodeURIComponent(numero)); return; }
-  const html = await renderCot(numero);
-  if (window._cotSel !== numero) return;
-  _mdAbrir("cot-md", html.replace(/<button class="btn ghost small" type="button" data-go="#\/m\/cotizaciones_cliente">Volver a la lista<\/button>/, ""), fila);
-  const pdf = d.querySelector("#cot-pdf");
-  if (pdf) pdf.onclick = () => { if (window._cotAbierta && typeof _cotDescargar === "function") _cotDescargar(window._cotAbierta); };
+  go("#/m/cotizaciones_cliente/c/" + encodeURIComponent(numero));
 }
 function pintarCotizaciones() {
   const q = normBusca((document.getElementById("filtro-cot") || {}).value || "");
@@ -4557,6 +4566,10 @@ async function renderUsuarios() {
 }
 
 async function renderDoc(route) {
+  if (window.MCMaestro && window.MCMaestro.wide()) {
+    const md = window.MCMaestro.which(route);
+    if (md) return window.MCMaestro.render(md, route);
+  }
   if (route.doc === "prod") return renderProd(route.id);
   if (route.doc === "cat") return renderCatalogoFicha(route.id);
   if (route.doc === "oc") return route.id ? renderOc(route.id) : renderOcNueva();
@@ -5881,36 +5894,36 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk50"></script>
-<script src="beta-screens.js?v=20261118tk50"></script>
-<script src="beta-inline.js?v=20261118tk50"></script>
-<script src="mc-productos.js?v=20261118tk50"></script>
-<script src="mc-nav.js?v=20261118tk50"></script>
-<script src="mc-permisos.js?v=20261118tk50"></script>
-<script src="mc-protocolos.js?v=20261118tk50"></script>
-<script src="mc-conteo.js?v=20261118tk50"></script>
-<script src="mc-transferencias.js?v=20261118tk50"></script>
-<script src="mc-ajustes.js?v=20261118tk50"></script>
-<script src="vendor-qrcode.js?v=20261118tk50"></script>
-<script src="mc-tickets.js?v=20261118tk50"></script>
-<script src="mc-maestro.js?v=20261118tk50"></script>
-<script src="mc-paquetes.js?v=20261118tk50"></script>
-<script src="mc-aperturas.js?v=20261118tk50"></script>
-<script src="mc-acceso.js?v=20261118tk50"></script>
-<script src="mc-barras.js?v=20261118tk50"></script>
-<script src="mc-caja.js?v=20261118tk50"></script>
-<script src="mc-giftcards.js?v=20261118tk50"></script>
-<script src="mc-multas.js?v=20261118tk50"></script>
-<script src="mc-clientes.js?v=20261118tk50"></script>
-<script src="mc-clientes-dup.js?v=20261118tk50"></script>
-<script src="mc-docpdf.js?v=20261118tk50"></script>
-<script src="mc-compras.js?v=20261118tk50"></script>
-<script src="mc-consignacion.js?v=20261118tk50"></script>
-<script src="mc-proveedores.js?v=20261118tk50"></script>
-<script src="mc-recepciones.js?v=20261118tk50"></script>
-<script src="mc-movil.js?v=20261118tk50"></script>
-<script src="mc-promociones.js?v=20261118tk50"></script>
-<script src="mc-agenda.js?v=20261118tk50"></script>
+<script src="mc-buscar.js?v=20261118tk51"></script>
+<script src="beta-screens.js?v=20261118tk51"></script>
+<script src="beta-inline.js?v=20261118tk51"></script>
+<script src="mc-productos.js?v=20261118tk51"></script>
+<script src="mc-nav.js?v=20261118tk51"></script>
+<script src="mc-permisos.js?v=20261118tk51"></script>
+<script src="mc-protocolos.js?v=20261118tk51"></script>
+<script src="mc-conteo.js?v=20261118tk51"></script>
+<script src="mc-transferencias.js?v=20261118tk51"></script>
+<script src="mc-ajustes.js?v=20261118tk51"></script>
+<script src="vendor-qrcode.js?v=20261118tk51"></script>
+<script src="mc-tickets.js?v=20261118tk51"></script>
+<script src="mc-maestro.js?v=20261118tk51"></script>
+<script src="mc-paquetes.js?v=20261118tk51"></script>
+<script src="mc-aperturas.js?v=20261118tk51"></script>
+<script src="mc-acceso.js?v=20261118tk51"></script>
+<script src="mc-barras.js?v=20261118tk51"></script>
+<script src="mc-caja.js?v=20261118tk51"></script>
+<script src="mc-giftcards.js?v=20261118tk51"></script>
+<script src="mc-multas.js?v=20261118tk51"></script>
+<script src="mc-clientes.js?v=20261118tk51"></script>
+<script src="mc-clientes-dup.js?v=20261118tk51"></script>
+<script src="mc-docpdf.js?v=20261118tk51"></script>
+<script src="mc-compras.js?v=20261118tk51"></script>
+<script src="mc-consignacion.js?v=20261118tk51"></script>
+<script src="mc-proveedores.js?v=20261118tk51"></script>
+<script src="mc-recepciones.js?v=20261118tk51"></script>
+<script src="mc-movil.js?v=20261118tk51"></script>
+<script src="mc-promociones.js?v=20261118tk51"></script>
+<script src="mc-agenda.js?v=20261118tk51"></script>
 <script>draw();</script>
 </body>
 </html>
