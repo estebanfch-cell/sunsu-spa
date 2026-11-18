@@ -837,11 +837,13 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
     };
     const app = await ctx.db.all("app_usuarios");
     if (app.length) {
-      return app.map((raw) => {
+      const incluir = p && (p.incluir_inactivos === true || p.incluir_inactivos === "1");
+      return app.filter((raw) => incluir || raw.activo !== false).map((raw) => {
         const u = cuenta(raw);
         return conMarca(u.id, u.nombre, {
           id: u.id, name: u.nombre, short: u.short, role: normalizarRol(s(u.rol)),
           color: u.color, bloqueado: !!u.bloqueado, pinReset: !!u.pin_reset,
+          activo: raw.activo !== false,
         });
       });
     }
@@ -932,6 +934,10 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (!real) {
     const { MIGO_CRON_ACCIONES, sesionCronMigo } = await import("./migo_cuadre.ts");
     if (MIGO_CRON_ACCIONES.has(action)) real = sesionCronMigo(p, ctx.env);
+    if (!real && action === "asis_cierre_automatico") {
+      const { sesionCronAsis } = await import("./asistencia_api.ts");
+      real = sesionCronAsis(p, ctx.env);
+    }
   }
   if (real) await cargarAlias(ctx.db).catch(() => null); // 🔗 clientas unidas (clientes_alias)
   if (action === "ver_como") {

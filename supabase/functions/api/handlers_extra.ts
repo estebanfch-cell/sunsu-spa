@@ -325,6 +325,9 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
       return { ok: false, error: "No tienes permiso para ver el rol de otra persona" };
     }
   }
+  const { clavePeriodo, exigirRolPublicado } = await import("./roles_api.ts");
+  const noPub = await exigirRolPublicado(ctx, ses, sheet || clavePeriodo(partes[0], anio), s(e.nombre_app) || s(e.apellidos_y_nombres));
+  if (noPub) return { ok: false, error: noPub };
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
   try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }
@@ -511,6 +514,9 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   if (acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos" && e) {
     if (!esPropio(s(e.nombre_app), ses) && !esPropio(s(e.apellidos_y_nombres), ses)) return { error: "No tienes permiso para ver el rol de otra persona" };
   }
+  const { exigirRolPublicado } = await import("./roles_api.ts");
+  const noPubC = await exigirRolPublicado(ctx, ses, "CICLO_" + inicio, persona);
+  if (noPubC) return { error: noPubC };
   const cfg = pagoVigente(await pagoFilas(ctx), persona, fin);
   const sueldo = cfg ? n(cfg.sueldo) : dineroDe(e, ["sueldo_base", "sueldo", "sueldo_mensual"]);
   const bono = cfg ? n(cfg.bono) : dineroDe(e, ["bono_fijo", "bono"]);
