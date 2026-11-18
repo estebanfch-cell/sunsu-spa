@@ -343,6 +343,7 @@
       + '<p class="ix-err" id="ix-err"></p><button type="button" class="ix-send" id="ix-send">Enviar solicitud</button></div>';
     document.body.appendChild(overlay);
     overlay.querySelector("#ix-x").onclick = function () { overlay.remove(); };
+    overlay.querySelectorAll("[data-ix-abrir]").forEach(function (a) { a.addEventListener("click", function () { overlay.remove(); }); });
     overlay.querySelector("#ix-tipo").onchange = function (ev) {
       overlay.querySelector("#ix-props").hidden = ev.target.value === "eliminacion";
     };
@@ -360,14 +361,15 @@
     };
   }
 
+  function txt(v) { return v == null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v); }
   function diff(antes, propuestos) {
     antes = antes || {};
     propuestos = propuestos || {};
-    var keys = {};
-    Object.keys(antes).forEach(function (k) { keys[k] = 1; });
-    Object.keys(propuestos).forEach(function (k) { keys[k] = 1; });
-    return Object.keys(keys).filter(function (k) { return String(antes[k] == null ? "" : antes[k]) !== String(propuestos[k] == null ? "" : propuestos[k]); }).map(function (k) {
-      return '<div class="ix-diff"><b>' + esc(k) + '</b> ' + esc(antes[k] || "—") + " → " + esc(propuestos[k] || "—") + "</div>";
+    var nombres = antes._campos && typeof antes._campos === "object" ? antes._campos : {};
+    // Solo lo que la persona propuso cambiar (las propuestas parciales no muestran campos «borrados»).
+    var keys = Object.keys(propuestos).filter(function (k) { return k.charAt(0) !== "_"; });
+    return keys.filter(function (k) { return txt(antes[k]) !== txt(propuestos[k]); }).map(function (k) {
+      return '<div class="ix-diff"><b>' + esc(nombres[k] || k) + '</b> ' + esc(txt(antes[k])) + " → " + esc(txt(propuestos[k])) + "</div>";
     }).join("") || '<div class="ix-diff">Sin diferencia de campos</div>';
   }
 
@@ -378,15 +380,20 @@
     overlay.className = "ix-overlay";
     var admin = edita();
     var items = (data.items || []).map(function (s) {
-      var cuerpo = s.tipo === "eliminacion" ? "<div>Eliminar la fila " + esc(s.fila) + "</div>" : diff(s.antes, s.propuestos);
+      var cosa = s.etiqueta ? esc(s.etiqueta) : esc(s.tabla) + " " + esc(s.fila);
+      var cuerpo = s.tipo === "eliminacion" ? "<div>🗑️ Eliminar " + cosa + "</div>" : diff(s.antes, s.propuestos);
       var acciones = admin && s.estado === "pendiente"
         ? '<div class="ix-acc"><button type="button" data-ok="' + esc(s.id) + '">Aprobar</button><button type="button" data-no="' + esc(s.id) + '">Rechazar</button></div>'
         : '<div class="ix-estado">' + esc(s.estado) + (s.comentario ? " · " + esc(s.comentario) : "") + "</div>";
-      return '<article class="ix-sol"><div><b>' + esc(s.solicitante) + "</b> · " + esc(s.tipo) + " · " + esc(s.tabla) + " " + esc(s.fila) + "</div><div>" + esc(s.motivo) + "</div>" + cuerpo + acciones + "</article>";
+      var cuando = s.creado ? new Date(s.creado).toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+      var abrir = s.enlace ? ' <a href="' + esc(s.enlace) + '" data-ix-abrir>Abrir →</a>' : "";
+      var prueba = s.prueba ? '<span class="ix-prueba">PRUEBA</span> ' : "";
+      return '<article class="ix-sol' + (s.prueba ? " prueba" : "") + '"><div>' + prueba + "<b>" + esc(s.solicitante) + "</b> · " + (s.tipo === "eliminacion" ? "pide eliminar" : "pide un cambio") + " · " + cosa + abrir + (cuando ? ' <span class="ix-cuando">' + esc(cuando) + "</span>" : "") + "</div><div><i>Motivo:</i> " + esc(s.motivo) + "</div>" + cuerpo + (s.prueba ? '<div class="ix-nota">Solicitud de prueba: aprobar o rechazar no cambia datos reales.</div>' : "") + acciones + "</article>";
     }).join("") || '<p>No hay solicitudes.</p>';
     overlay.innerHTML = '<div class="ix-sheet"><div class="ix-line"><b>Solicitudes</b><button type="button" id="ix-x">×</button></div>' + items + "</div>";
     document.body.appendChild(overlay);
     overlay.querySelector("#ix-x").onclick = function () { overlay.remove(); };
+    overlay.querySelectorAll("[data-ix-abrir]").forEach(function (a) { a.addEventListener("click", function () { overlay.remove(); }); });
     overlay.querySelectorAll("[data-ok],[data-no]").forEach(function (btn) {
       btn.onclick = async function () {
         var aprobar = btn.hasAttribute("data-ok");
