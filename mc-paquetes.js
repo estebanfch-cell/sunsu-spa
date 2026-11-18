@@ -85,7 +85,7 @@
     }).join("");
     return '<div id="mcpq-root">' +
       '<div class="mcpq-acts" style="justify-content:space-between;margin:0 0 8px"><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">← Paquetes</button><span>' +
-      window.MCEdit.botonBorrar(st, "mcpq-del") + "</span></div>" +
+      '<button class="btn ghost small" type="button" id="mcpq-ficha">📄 Descargar ficha</button> ' + window.MCEdit.botonBorrar(st, "mcpq-del") + "</span></div>" +
       '<div class="mccf-card"><div class="mcpq-top"><div><h1>' + e(v.codigo) + '</h1><div class="mcpq-cli">' + (link ? '<a href="' + link + '">' + e(cli) + "</a>" : e(cli)) + (v.clienteCodigo ? ' <span class="mcpq-cc">· ' + e(v.clienteCodigo) + "</span>" : "") + '</div><div class="mccf-sub">' + e(v.paquete) + "</div></div><div>" + prog(v) + "</div></div>" +
       '<dl class="mcpq-grid">' +
       dl("Sesiones", E("sesiones", e(v.total), v.total, { opciones: [1, 2, 3, 4, 5, 6], label: "Sesiones" })) + dl("Nombre", E("nombres", e(v.nombre), v.nombre, { label: "Nombre" })) + dl("Apellido", E("apellidos", e(v.apellido), v.apellido, { label: "Apellido" })) + dl("Cédula", E("cedula", e(v.cedula), v.cedula, { label: "Cédula" })) +
@@ -147,6 +147,12 @@
       pedir: function (pend, motivo) { return api("solicitud_crear", { tabla: "paquete_beta", fila: String(v.id), tipo: "cambio", motivo: motivo, propuestos: pend }); },
       listo: async function (r) { toast2(st.admin ? (r.sinCambios ? "Sin cambios" : "Paquete guardado") : "📨 Solicitud enviada a Emilia / Emi"); await recargar(); },
     });
+    var fb = main.querySelector("#mcpq-ficha"); if (fb) fb.onclick = async function () {
+      if (!window.MCDocPdf) { toast2("El generador de PDF no cargó. Recarga la página.", true); return; }
+      fb.disabled = true; var t0 = fb.textContent; fb.textContent = "Generando…";
+      try { await window.MCDocPdf.bajar(fichaSpec(v)); toast2("📄 Ficha descargada"); } catch (x) { toast2((x && x.message) || "No se pudo generar la ficha", true); }
+      fb.disabled = false; fb.textContent = t0;
+    };
     var del = main.querySelector("#mcpq-del"); if (del) del.onclick = function () {
       var adm = st.admin;
       dlg('<h3>🗑️ ' + (adm ? "Eliminar " : "Solicitar eliminación de ") + e(v.codigo) + '<button type="button" class="mcpq-x">×</button></h3><p class="mccf-sub">' + (adm ? "El paquete sale de la lista y de la ficha de la clienta. Queda en el historial con el motivo." : "No se borra ahora: la solicitud llega a Emilia / Emi para que la aprueben.") + '</p><label>Motivo</label><input type="text" data-mot placeholder="Ej. duplicado, se devolvió">', async function (box) {
@@ -156,6 +162,25 @@
         if (!r || r.error) throw new Error((r && r.error) || "No se pudo");
         if (adm) { toast2("Paquete eliminado"); location.hash = "#/m/gift/paquetes"; } else toast2("📨 Solicitud de eliminación enviada");
       });
+    };
+  }
+  /** Ficha del paquete en PDF (Emilia 18/11): clienta, producto, sesiones con fecha / ticket / cosmetóloga, cuántas quedan y quién vendió. */
+  function fichaSpec(v) {
+    var cli = ((v.nombre || "") + " " + (v.apellido || "")).trim() || "Sin nombre";
+    var yo = (window.state && window.state.user && (window.state.user.name || window.state.user.short)) || "";
+    var ahora = new Date().toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    var filas = (v.sesiones || []).map(function (se) { return [String(se.slot), se.usado ? (f(se.fecha) || se.texto || "") : "", se.ticket || "", se.usado ? (se.cosmetologa || "") : "", se.usado ? (se.facial || "") : "", se.usado ? "Usada" : "Libre"]; });
+    return {
+      nombre: "Ficha " + v.codigo + " " + cli,
+      paginas: [{
+        titulo: "Ficha de paquete", numero: v.codigo, subt: v.paquete || "",
+        info: [["Clienta", cli], ["Cédula", v.cedula || ""], ["Código clienta", v.clienteCodigo || ""], ["Producto", v.paquete || ""], ["SKU", v.sku || ""],
+          ["Fecha de compra", f(v.fechaCompra) || ""], ["Vendió", v.vendidoPor || ""], ["Ticket de venta", v.ticketOrigen || ""],
+          ["Sesiones", v.usados + " de " + v.total + " usadas"], ["Quedan", v.estado === "completo" ? "0 · Completo" : String(v.pendientes)]],
+        aviso: v.estado === "completo" ? "Paquete completo: ya se usaron todas las sesiones." : "Quedan " + v.pendientes + " de " + v.total + " sesiones.",
+        tabla: { cols: [{ t: "#", w: 0.5 }, { t: "Fecha", w: 1.2 }, { t: "Ticket", w: 1.5 }, { t: "Cosmetóloga", w: 1.8 }, { t: "Facial", w: 2.2 }, { t: "Estado", w: 0.9 }], filas: filas, vacio: "Sin sesiones" },
+        notas: ["Generada el " + ahora + (yo ? " por " + yo : "") + "."],
+      }],
     };
   }
   function partir(pend) {
@@ -171,5 +196,5 @@
     } catch (x) { return '<p class="err">' + e(x.message || x) + '</p><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">← Paquetes</button>'; }
   }
   function wire(main, route) { if (route.id) { if (K.d) wireDet(main); } else wireLista(main); }
-  window.MCPaquetes = { render: render, wire: wire, marcarSesion: marcarSesion, ensureList: async function () { if ((K.items || []).length) return true; await cargarLista(false); return true; }, _k: K };
+  window.MCPaquetes = { render: render, wire: wire, marcarSesion: marcarSesion, fichaSpec: fichaSpec, ensureList: async function () { if ((K.items || []).length) return true; await cargarLista(false); return true; }, _k: K };
 })();

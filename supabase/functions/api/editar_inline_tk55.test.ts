@@ -106,7 +106,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const ed = readFileSync(join(root, "mc-edit.js"), "utf8");
     assert.match(ed, /Enviar solicitud/); assert.match(ed, /Solicitar eliminación/); assert.match(ed, /Descartar/);
     const beta = readFileSync(join(root, "beta.html"), "utf8");
-    assert.match(beta, /mc-edit\.js\?v=20261118tk56/);
+    assert.match(beta, /mc-edit\.js\?v=20261118tk57/);
     assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
   });
 
@@ -118,5 +118,11 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const pm = readFileSync(join(root, "mc-promociones.js"), "utf8");
     assert.doesNotMatch(pm, /"Importar y editar" : "Editar"/); assert.match(pm, /mcpm-toca/); assert.match(pm, /id="mcpm-desc"/);
     assert.match(readFileSync(join(root, "beta.html"), "utf8"), /\.btn\[hidden\] \{ display: none !important; \}/);
+  });
+
+  it("Paquete: botón «Descargar ficha» arma el PDF Sunsu con clienta, producto, sesiones, quedan y vendió", () => {
+    const src = readFileSync(join(root, "mc-paquetes.js"), "utf8");
+    assert.match(src, /📄 Descargar ficha/); assert.match(src, /MCDocPdf\.bajar\(fichaSpec\(v\)\)/);
+    for (const k of ["Clienta", "Producto", "Vendió", "Quedan", "Cosmetóloga", "Ticket"]) assert.match(src, new RegExp('"' + k + '"'));
   });
 });
