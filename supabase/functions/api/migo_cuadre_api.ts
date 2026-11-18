@@ -18,6 +18,7 @@ import {
   type CambioSku, type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
+import { catalogoBorradores, lineasBorradorDeFactura, lineasTicketDeBorrador, type LineaBorrador } from "./borrador_lineas.ts";
 import { contactoDeFactura } from "./clientes_contacto.ts";
 import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
 
@@ -29,15 +30,19 @@ async function logSafe(ctx: Ctx, actor: string, accion: string, detalle: string)
   try { await logAccion(ctx.db, actor, accion, detalle); } catch { /* tests o log no listo */ }
 }
 
-function pubBorrador(b0: Row, vivo?: FacturaVivo | null, tickets?: Row[]): Row {
+function pubBorrador(b0: Row, vivo?: FacturaVivo | null, tickets?: Row[], catalogo?: Row[]): Row {
+  const lineasVivo = vivo && Array.isArray(vivo.lineas) ? vivo.lineas as Row[] : [];
   const lineas0 = Array.isArray(b0.lineas) ? b0.lineas as Row[] : [];
-  const lineas = lineas0.length ? lineas0 : (vivo && Array.isArray(vivo.lineas) ? vivo.lineas as Row[] : []);
+  // TK96: la factura viva manda (si está cargada); el borrador es su copia.
+  const lineas = lineasVivo.length ? lineasVivo : lineas0;
   const avisos = tickets && tickets.length ? compararFacturaYTickets(lineas, tickets).map((a) => a.texto) : [];
+  const armado = catalogo ? lineasBorradorDeFactura(lineas, catalogo) : null;
   return {
     factura: s(b0.factura), fecha: s(b0.fecha).slice(0, 10), cliente: s(b0.cliente),
     total: n(b0.total), forma: s(b0.forma), lineas,
     sin_items: !lineas.length,
-    avisos_lineas: avisos,
+    avisos_lineas: armado ? armado.avisos.concat(avisos) : avisos,
+    ...(armado ? { lineas_ticket: armado.lineas, total_lineas: armado.total } : {}),
     estado: s(b0.estado), estado_txt: borradorSePuedeVincular(b0.estado) ? "Pendiente de aprobar" : s(b0.estado),
     asignado_a: s(b0.asignado_a) || null, bandeja: s(b0.estado) === "pendiente" && !s(b0.asignado_a),
     listo: listoBorrador(b0), por_completar: abiertoSinTicket(b0) && !listoBorrador(b0),
@@ -553,10 +558,11 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
     .slice(0, 30);
   const tickets = await ticketsParaCuadre(ctx);
   const vivos = new Map(facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [f.factura, f]));
+  const catB = await catalogoBorradores(ctx);
   const conPub = (b0: Row, conCand = false) => {
     const cands = conCand ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets) : [];
     const tks = ticketsDeBorrador(b0, tickets, cands);
-    const pub = pubBorrador(b0, vivos.get(s(b0.factura)) || null, tks);
+    const pub = pubBorrador(b0, vivos.get(s(b0.factura)) || null, tks, catB);
     if (conCand) pub.candidatos = cands;
     return pub;
   };
@@ -587,7 +593,7 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
     ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets)
     : [];
   const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
-  const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands));
+  const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
   if (cands.length) pub.candidatos = cands;
   return { ok: true, borrador: pub };
 });
@@ -750,6 +756,7 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
     if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, updated_at: now, actualizado_por: actor });
     else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, datos, actualizado_por: actor, updated_at: now });
   } catch { /* overlay opcional */ }
+  try { await lineasDeFacturaATicket(ctx, actor, fac, { ...creado, clave, id: tid, so_num: creado.so_num }); } catch { /* el ticket ya quedó; el cuadre avisa */ }
   await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, {
     estado: "aprobado", ticket_id: tid || null, ticket_clave: clave, aprobado_por: actor, aprobado_at: now, updated_at: now,
     datos: d,
@@ -771,6 +778,40 @@ export async function ofrecerBorradorMigo(ctx: Ctx, p: Row): Promise<Row | null>
     fecha: s(p.fecha) || ecuadorParts(ctx.now).ymd, factura: p.factura || p.fac_7 || p.fac,
   });
   return hit ? pubBorrador(hit) : null;
+}
+
+/**
+ * TK96: el ticket que nace de un borrador lleva EXACTAMENTE las líneas de la factura (SKU, cantidad, precio
+ * unitario con IVA), sin promos ni descuentos automáticos: el total del ticket es el de la factura. Solo escribe
+ * la beta (beta_tickets / beta_ticket_lineas); no mueve stock ni toca Sheets.
+ */
+export async function lineasDeFacturaATicket(ctx: Ctx, actor: string, factura: string, ticket: Row): Promise<{ ok: boolean; total?: number; lineas?: number }> {
+  const fac = facturaNorm(factura);
+  const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac);
+  const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
+  const fuente = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0?.lineas) ? b0!.lineas : [])) as Row[];
+  if (!fuente.length) return { ok: false };
+  const armado = lineasBorradorDeFactura(fuente, await catalogoBorradores(ctx));
+  const clave = s(ticket.clave) || claveDe(ticket, leerSerie(ticket, "so_num"));
+  if (!clave) return { ok: false };
+  const now = ctx.now.toISOString();
+  const total = armado.total, subtotal = Math.round((total / 1.15) * 100) / 100;
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "factura Migo", detalle: "líneas de la factura " + fac, total }].slice(-100);
+  const fila: Row = {
+    lineas_beta: true, subtotal, iva: Math.round((total - subtotal) * 100) / 100, total,
+    descuento_tipo: null, descuento_valor: 0, descuento_monto: 0, promo_nombre: null, promo_monto: 0,
+    datos: { ...((cab?.datos || {}) as Row), factura: fac }, historial: hist, actualizado_por: actor, updated_at: now,
+  };
+  if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, fila);
+  else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: ticket.sheet_row ?? null, ...fila });
+  for (const l of await todas(ctx, "beta_ticket_lineas")) if (s(l.ticket_clave) === clave) await ctx.db.write(actor, "beta_ticket_lineas", "delete", { id: l.id }, null);
+  let i = 0;
+  for (const l of lineasTicketDeBorrador(armado.lineas)) {
+    await ctx.db.write(actor, "beta_ticket_lineas", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, ...l });
+  }
+  await logSafe(ctx, actor, "MIGO BORRADOR LINEAS", clave + " ← " + fac + " · " + armado.lineas.length + " líneas · $" + total.toFixed(2));
+  return { ok: true, total, lineas: armado.lineas.length };
 }
 
 export async function vincularBorradorATicket(ctx: Ctx, ses: Ses, factura: string, ticket: Row): Promise<Row> {

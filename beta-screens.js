@@ -943,6 +943,8 @@ function _aplicarCatalogoATicket(items){
   PAQ6=PAQ6.filter(function(p){return p._activo!==false;});
   PROVS.forEach(function(pv){pv.prods=pv.prods.filter(function(p){return p._activo!==false;});});
   for(var i=PROVS.length-1;i>=0;i--){if(PROVS[i].prods.length===0) PROVS.splice(i,1);}
+  // TK96: si hay un borrador Migo abierto, su precio de factura vuelve a mandar tras cargar el catálogo.
+  if(window._migoPrecios&&typeof _migoAplicarPrecios==='function'){ window._migoPrecios.forEach(function(x){ x.it=null; }); _migoAplicarPrecios(); }
 }
 function initApp(){
   document.getElementById('t-av').textContent=CU.short.charAt(0);
@@ -2094,6 +2096,8 @@ function _promoBetaAplicar(res){
 // Una línea con descuento escrito a mano no recibe promo. Solo un admin quita/fuerza una promo (T._promoQuit/_promoForz).
 var _promoAutoReq=0;
 function _promoBetaAuto(){
+  // TK96: un borrador de factura Migo lleva el precio de la factura: nunca promos automáticas.
+  if(T&&T._migoFac){ if(T._promoIds&&T._promoIds.length){ _promoBetaAplicar({lineas:[]}); T._promoIds=[]; T._promoSigAuto=''; _ldSig=''; } return; }
   if(T.esSunsu&&T._promoIds&&T._promoIds.length){ _promoBetaAplicar({lineas:[]}); T._promoIds=[]; T._promoSigAuto=''; _ldSig=''; return; }
   if(T.esSunsu||!window.MCPromociones||typeof api!=='function') return;
   var L=_promoBetaLineas().filter(function(l){ var d=T.lineDesc&&T.lineDesc[l.k]; return !(d&&!d.promo); });
@@ -18748,27 +18752,60 @@ function _migoVincularBorrador(fac){
     else pintarSuma();
   }).catch(function(){ _migoAviso("No pude abrir el borrador. Intenta de nuevo.", false); });
 }
+// TK96 (Emilia 18/11): el borrador se arma SOLO por SKU/código exacto (nunca por nombre), con la cantidad y el
+// precio unitario de la factura; sin promos ni descuentos automáticos. La sección sale del catálogo (servidor).
+function _migoSkuKey(x){
+  var s=String(x||'').trim().toUpperCase().replace(/^SUNSU-/,'');
+  var m=/^INV[-\s]?0*(\d+)$/.exec(s);
+  if(m) s='INV-'+(m[1].length<3?('000'+m[1]).slice(-3):m[1]);
+  return s;
+}
+function _migoBuscarSku(list,key){ return (list||[]).find(function(x){ return x&&_migoSkuKey(x.sku)===key; })||null; }
 function _migoMatchLinea(l){
-  var sku=_migoNormTxt(l.sku||l.codigo||'');
-  var nom=_migoNormTxt(l.producto||l.nombre||l.descripcion||'');
-  var hit=function(list){
-    return (list||[]).find(function(x){
-      var xs=_migoNormTxt(x.sku), xn=_migoNormTxt(x.n||x.nombre||'');
-      return (sku&&(xs===sku||xs.indexOf(sku)>=0||sku.indexOf(xs)>=0)) || (nom&&xn&&(xn===nom||xn.indexOf(nom)>=0||nom.indexOf(xn)>=0));
-    })||null;
-  };
-  var fac=(typeof FACIALES!=='undefined')?hit(FACIALES):null;
+  var key=_migoSkuKey(l.sku||l.codigo||'');
+  if(!key) return null;
+  var fac=(typeof FACIALES!=='undefined')?_migoBuscarSku(FACIALES,key):null;
   if(fac) return {tipo:'facial', item:fac};
-  var pa3=(typeof PAQ3!=='undefined')?hit(PAQ3):null;
+  var pa3=(typeof PAQ3!=='undefined')?_migoBuscarSku(PAQ3,key):null;
   if(pa3) return {tipo:'pack3', item:pa3};
-  var pa6=(typeof PAQ6!=='undefined')?hit(PAQ6):null;
+  var pa6=(typeof PAQ6!=='undefined')?_migoBuscarSku(PAQ6,key):null;
   if(pa6) return {tipo:'pack6', item:pa6};
-  var ex=(typeof EXTRAS!=='undefined')?hit(EXTRAS):null;
+  var ex=(typeof EXTRAS!=='undefined')?_migoBuscarSku(EXTRAS,key):null;
   if(ex) return {tipo:'extra', item:ex};
   var prod=null;
-  if(typeof PROVS!=='undefined'){ (PROVS||[]).forEach(function(pv){ if(!prod) prod=hit(pv.prods||[]); }); }
+  if(typeof PROVS!=='undefined'){ (PROVS||[]).forEach(function(pv){ if(!prod) prod=_migoBuscarSku(pv.prods||[],key); }); }
   if(prod) return {tipo:'prod', item:prod};
   return null;
+}
+/** Precio de la factura en las listas del formulario mientras dura el borrador (se restaura al salir). */
+window._migoPrecios=null;
+function _migoRestaurarPrecios(){
+  var P=window._migoPrecios; window._migoPrecios=null;
+  (P||[]).forEach(function(x){
+    var it=x.it; if(!it) return;
+    if(it._migo){
+      [FACIALES,EXTRAS,PAQ3,PAQ6].forEach(function(L){ var i=L.indexOf(it); if(i>=0) L.splice(i,1); });
+      (PROVS||[]).forEach(function(pv){ var i=pv.prods.indexOf(it); if(i>=0) pv.prods.splice(i,1); });
+    } else if(it._pOrig!==undefined){ it[x.campo]=it._pOrig; delete it._pOrig; }
+  });
+  window.FACIALES=FACIALES;
+}
+function _migoAplicarPrecios(){
+  var P=window._migoPrecios; if(!P||!P.length) return;
+  P.forEach(function(x){
+    var key=_migoSkuKey(x.sku), it=null, campo='p';
+    if(x.sec==='facial'){ it=_migoBuscarSku(FACIALES,key); if(!it){ it={sku:x.skuFE,n:x.n,p:x.p,com:2,_migo:true}; FACIALES.push(it); window.FACIALES=FACIALES; } }
+    else if(x.sec==='extra'){ campo='t'; it=_migoBuscarSku(EXTRAS,key); if(!it){ it={sku:x.skuFE,n:x.n,t:x.p,_migo:true}; EXTRAS.push(it); } }
+    else if(x.sec==='paquete'){ it=_migoBuscarSku(PAQ3,key)||_migoBuscarSku(PAQ6,key); if(!it){ it={sku:x.skuFE,n:x.n,p:x.p,_migo:true}; (x.pack===6?PAQ6:PAQ3).push(it); } }
+    else if(x.sec==='producto'){
+      (PROVS||[]).forEach(function(pv){ if(!it) it=_migoBuscarSku(pv.prods||[],key); });
+      if(!it){ var r=(typeof _skuRetail==='function')?_skuRetail(x.skuFE):null; var pv=_asegurarGrupoProv(r?r.fam:'mg'); it={sku:r?r.sku:x.skuFE,n:x.n,p:x.p,_migo:true}; pv.prods.push(it); }
+    }
+    if(!it) return;
+    x.it=it; x.campo=campo; x.skuFE=it.sku;
+    if(!it._migo && it._pOrig===undefined) it._pOrig=it[campo];
+    it[campo]=x.p;
+  });
 }
 function _migoAvisosHtml(b){
   var rojos=[], sugs=[], i;
@@ -18798,48 +18835,66 @@ function _migoGuardarPrefill(p){
 function _migoLimpiarPrefill(){
   try{ sessionStorage.removeItem('sunsu.migo.prefill'); }catch(e){}
   window._migoPrefillAviso='';
+  _migoRestaurarPrecios();
+}
+function _migoLineasTicket(b){
+  if(b&&Array.isArray(b.lineas_ticket)) return b.lineas_ticket;
+  // Respaldo (servidor viejo): misma regla, sección por la lista donde está el SKU exacto.
+  return (b&&b.lineas||[]).map(function(l){
+    var m=_migoMatchLinea(l), q=Number(l.cantidad||1)||1, tot=Number(l.total||0)||Math.round((Number(l.subtotal||0)*1.15)*100)/100;
+    var sec=!m?'producto':m.tipo==='facial'?'facial':(m.tipo==='pack3'||m.tipo==='pack6')?'paquete':m.tipo==='extra'?'extra':'producto';
+    return {seccion:sec, sku:String(l.sku||l.codigo||''), skuFactura:String(l.sku||l.codigo||''), nombre:l.producto||l.nombre||'', cantidad:q, precio_unit:Math.round(tot/q*100)/100, total:tot, enCatalogo:!!m, pack:m&&m.tipo==='pack6'?6:3};
+  });
 }
 function _migoPoblarTDesdeFac(b){
+  _migoRestaurarPrecios();
   if(typeof newT==='function') T=newT();
   else T=T||{};
   var parts=String(b.cliente||'').trim().split(/\s+/);
   T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
   T.factura=b.factura||'';
+  T._migoFac=b.factura||'';
   T.notas=(b.datos&&(b.datos.notas||b.datos.cabina))||'';
   T.recom=(b.datos&&b.datos.recomendaciones)||'';
   var forma=String(b.forma||'');
   T.cobro=/cortes[ií]a|canje/i.test(forma)?'cortesia':'cobrado';
   if(b.asignado_a) T._migoAsignado=b.asignado_a;
-  T.lineDesc=T.lineDesc||{};
-  var unmatched=[], avisos=[], sinItems=!(b.lineas&&b.lineas.length);
-  (b.lineas||[]).forEach(function(l){
-    var m=_migoMatchLinea(l), qty=Number(l.cantidad||1)||1;
-    var tot=Number(l.total!=null?l.total:0);
-    if(!m){ unmatched.push((l.producto||l.sku||l.codigo||'ítem')+' ×'+qty+(tot?' $'+tot.toFixed(2):'')); return; }
-    if(m.tipo==='facial'&&!T.facial) T.facial=m.item.sku;
-    else if(m.tipo==='pack3') T.pack3=m.item.sku;
-    else if(m.tipo==='pack6') T.pack6=m.item.sku;
-    else if(m.tipo==='extra') T.extras[m.item.sku]=true;
-    else if(m.tipo==='prod') T.productos[m.item.sku]=(T.productos[m.item.sku]||0)+qty;
-    else { unmatched.push((l.producto||l.sku||'')+' ×'+qty); return; }
-    var list=Number(m.item.p||m.item.t||0)*qty;
-    if(list>0 && tot>0 && Math.abs(list-tot)>0.05){
-      T.lineDesc[m.item.sku]={m:'$',v:Math.round((list-tot)*100)/100};
-      avisos.push((l.producto||m.item.n||m.item.sku)+': lista $'+list.toFixed(2)+' vs factura $'+tot.toFixed(2)+' (se aplica el precio de la factura, sin cambiar el catálogo).');
+  T.lineDesc={};
+  T.extras=T.extras||{}; T.productos=T.productos||{};
+  var L=_migoLineasTicket(b), revisa=[], sinItems=!L.length, P=[], tot=0;
+  L.forEach(function(l){
+    var q=Number(l.cantidad||1)||1, pu=Number(l.precio_unit||0);
+    tot+=Number(l.total||pu*q)||0;
+    var sec=String(l.seccion||l.tipo||'producto');
+    if(!l.enCatalogo) revisa.push('Revisa: el SKU '+(l.skuFactura||l.sku||'—')+' ('+(l.nombre||'')+') no está en el catálogo; se copió con el precio de la factura.');
+    if(sec==='gift'){
+      T.gcVenta={activo:true,tipo:'digital',valor:pu*q,codigo:'',nota:'Factura Migo '+(T.factura||''),cortesia:false};
+      revisa.push('Revisa: Gift card $'+(pu*q).toFixed(2)+' de la factura: asigna su código en «Venta Gift Card» para que el total sea $'+Number(b.total||0).toFixed(2)+'.');
+      return;
     }
+    if(sec==='facial'&&T.facial){ sec='extra'; }
+    P.push({sec:sec, sku:l.sku||l.skuFactura, skuFE:l.skuFactura||l.sku, n:l.nombre||l.sku, p:pu, q:q, pack:l.pack});
   });
-  var notaFac='Factura Migo '+(T.factura||'')+(forma?' · '+forma:'')+(b.fecha?' · '+b.fecha:'')+' · total $'+Number(b.total||0).toFixed(2)+' (con IVA).';
+  window._migoPrecios=P;
+  _migoAplicarPrecios();
+  P.forEach(function(x){
+    if(!x.it) return;
+    if(x.sec==='facial') T.facial=x.it.sku;
+    else if(x.sec==='paquete'){ if(PAQ6.indexOf(x.it)>=0) T.pack6=x.it.sku; else T.pack3=x.it.sku; }
+    else if(x.sec==='extra') T.extras[x.it.sku]=true;
+    else T.productos[x.it.sku]=(T.productos[x.it.sku]||0)+x.q;
+  });
+  var totalFac=Number(b.total||0);
+  var notaFac='Factura Migo '+(T.factura||'')+(forma?' · '+forma:'')+(b.fecha?' · '+b.fecha:'')+' · total $'+totalFac.toFixed(2)+' (con IVA). Líneas copiadas de la factura (SKU, cantidad y precio de la factura).';
   if(sinItems) notaFac+=' Faltan los productos de la factura (detalle aún no importado). Completa cliente y forma de pago; agrega los ítems a mano.';
-  if(unmatched.length) notaFac+=' Ítems de Migo no hallados en el catálogo (revísalos o agrégalos): '+unmatched.join('; ')+'.';
-  if(avisos.length) notaFac+=' '+avisos.join(' ');
-  notaFac+=' Si faltan cortesías u otros ítems, agrégalos aquí antes de enviar.';
+  if(revisa.length) notaFac+=' '+revisa.join(' ');
   T.notas=(T.notas?T.notas+'\n':'')+notaFac;
   window._migoVincularFac=T.factura;
   window._migoForma=forma;
   window._migoPrefillAviso=sinItems
     ? 'Faltan los productos de la factura (detalle aún no importado). Cliente, fecha y forma de pago sí vienen de Migo.'
-    : (avisos.length||unmatched.length?avisos.concat(unmatched.map(function(x){return 'Revisa: '+x;})).join(' '):'Ticket prellenado desde Fac. '+T.factura+'. Revisa ítems y envía.');
-  return {sinItems:sinItems, aviso:window._migoPrefillAviso};
+    : (revisa.length?revisa.join(' '):'Ticket prellenado desde Fac. '+T.factura+': '+L.length+' líneas, total $'+(Math.round(tot*100)/100).toFixed(2)+'. Revisa y envía.');
+  return {sinItems:sinItems, aviso:window._migoPrefillAviso, total:Math.round(tot*100)/100};
 }
 function _migoAplicarPrefillAT(){
   var p=_migoLeerPrefill();

@@ -17,6 +17,6 @@ describe("TK65 clientas del personal", () => {
     // los filtros de cosmetóloga y sector quedan solo para admin
     assert.match(js, /K\.admin[\s\S]*Todas las cosmetólogas/);
     assert.match(js, /K\.admin[\s\S]*Todos los sectores/);
-    assert.match(beta, /mc-clientes\.js\?v=20261118tk95/);
+    assert.match(beta, /mc-clientes\.js\?v=20261118tk96/);
   });
 });

@@ -197,14 +197,7 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
     // La diferencia por mejora (mismo SKU, con monto) manda sobre el canje a $0.
     let hit = tks.findIndex((t, i) => !usedT.has(i) && t.sku && want.sku && t.sku === want.sku && !t.canje);
     if (hit < 0) hit = tks.findIndex((t, i) => !usedT.has(i) && t.sku && want.sku && t.sku === want.sku);
-    if (hit < 0) {
-      const wn = s(want.nombre).toLowerCase();
-      hit = tks.findIndex((t, i) => {
-        if (usedT.has(i)) return false;
-        const tn = s(t.nombre).toLowerCase();
-        return wn && tn && (wn.includes(tn) || tn.includes(wn)) && cerca(t.cantidad, want.cantidad, 0.001);
-      });
-    }
+    // TK96 (Emilia 18/11): nunca por nombre; solo SKU/código exacto.
     return hit;
   };
 
@@ -214,10 +207,6 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
     if (i < 0) { sinPar.push(f); continue; }
     usedT.add(i);
     const t = tks[i];
-    // TK81: emparejadas por nombre pero con otro SKU del mismo servicio: manda el SKU de la factura (se registra).
-    if (!t.canje && t.sku && f.sku && t.sku !== f.sku && esServicioSuelto(t) && esServicioSuelto(f)) {
-      avisos.push({ tipo: "cambio_sku", sku: f.sku, desde: t.sku, hacia: f.sku, ticketId: t.ticketId, texto: "Corregido con la factura: " + etq(t) + " → " + etq(f) + " " + money(montoLinea(f)) + " × " + String(f.cantidad) });
-    }
     if (t.canje) {
       const j = tks.findIndex((x, k) => !usedT.has(k) && (x.mejoraPaquete || esDiferenciaMejora(x)) && x.sku === (f.sku || t.sku));
       if (j >= 0) {
@@ -266,8 +255,18 @@ export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol =
   }
   // TK81: lo que falta en el ticket puede ser el mismo servicio con otro SKU (mismo precio y cantidad): se corrige con la factura.
   const facSkus = new Set(fac.map((f) => f.sku));
-  for (const f of sinPar) {
-    const j = tks.findIndex((t, k) => !usedT.has(k) && !facSkus.has(t.sku) && mismoServicioOtroSku(f, t, tol, pvpCatalogo(t.sku, catalogo || catPrecios)));
+  // TK96: sin nombres. Si hay varios candidatos del mismo precio, se emparejan por código más cercano (estable).
+  const numSku = (x: string) => { const m = /^(\d+)$/.exec(s(x)); return m ? Number(m[1]) : 9999; };
+  const pares: { fi: number; tj: number; d: number }[] = [];
+  sinPar.forEach((f, fi) => tks.forEach((t, k) => {
+    if (!usedT.has(k) && !facSkus.has(t.sku) && mismoServicioOtroSku(f, t, tol, pvpCatalogo(t.sku, catalogo || catPrecios))) pares.push({ fi, tj: k, d: Math.abs(numSku(f.sku) - numSku(t.sku)) });
+  }));
+  pares.sort((x, y) => x.d - y.d || x.fi - y.fi || x.tj - y.tj);
+  const parDe = new Map<number, number>();
+  for (const pr of pares) if (!parDe.has(pr.fi) && ![...parDe.values()].includes(pr.tj)) parDe.set(pr.fi, pr.tj);
+  for (let fi = 0; fi < sinPar.length; fi++) {
+    const f = sinPar[fi];
+    const j = parDe.has(fi) ? parDe.get(fi)! : -1;
     if (j >= 0) {
       usedT.add(j);
       const t = tks[j];
