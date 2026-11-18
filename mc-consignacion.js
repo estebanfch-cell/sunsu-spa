@@ -17,6 +17,15 @@
     return '<div class="mccf-card"><div class="mcoc-form"><div><label>Proveedor en consignación</label><select class="mcoc-in" id="cn-prov"><option value="">Elige…</option>' + M.proveedores.map(function (p) { return '<option value="' + e(p.id) + '"' + (p.id === K.prov ? " selected" : "") + ">" + e(p.nombre) + " (" + e(p.familia) + "-)</option>"; }).join("") + "</select></div>" +
       '<div><label>Periodo</label><select class="mcoc-in" id="cn-per">' + M.periodos.map(function (p) { return '<option value="' + e(p.clave) + '"' + (p.clave === K.per ? " selected" : "") + ">" + e(p.label) + (p.actual ? " (en curso)" : p.defecto ? " (anterior)" : "") + "</option>"; }).join("") + "</select></div></div></div>";
   }
+  /** TK44: detalle del consumo interno del periodo (cada envase abierto de consignación), a costo. */
+  function consumosHtml(c) {
+    var L = c.consumos || []; if (!L.length) return "";
+    var tot = L.reduce(function (a, x) { return a + Number(x.cantidad || 0) * Number(x.costo || 0); }, 0);
+    return '<details style="margin-top:8px"><summary class="mccf-sub" style="cursor:pointer;font-weight:700">🤝 Consumo interno del periodo: ' + L.length + " registro" + (L.length === 1 ? "" : "s") + " · " + $m(tot) + " a costo (sin comisión)</summary>" +
+      '<div class="sheet-scroll"><table class="mcoc-t"><thead><tr><th>Fecha</th><th>Producto</th><th>Origen</th><th>Quién</th><th class="num">Cant.</th><th class="num">Costo</th></tr></thead><tbody>' +
+      L.map(function (x) { return "<tr><td>" + e(f(String(x.fecha).slice(0, 10))) + "</td><td>" + e(x.producto) + "</td><td>" + e(x.origen) + (x.detalle ? '<div class="mccf-sub">' + e(x.detalle) + "</div>" : "") + "</td><td>" + e(x.por) + '</td><td class="num">' + e(x.cantidad) + '</td><td class="num">' + $m(x.costo) + "</td></tr>"; }).join("") +
+      "</tbody></table></div></details>";
+  }
   function calcHtml() {
     var c = K.c; if (!c) return K.prov ? '<p class="mccf-sub">Calculando…</p>' : '<p class="note">Elige el proveedor y el periodo.</p>';
     var fact = c.fact || [];
@@ -30,7 +39,7 @@
     }).join("");
     var restAb = !c.restock || c.restock.estado === "abierta";
     return '<div class="mccf-card"><div class="mcoc-top"><div><b>1 · Vendido en consignación</b><div class="mccf-sub">' + e(c.proveedor.nombre) + " · " + e(c.label) + " (" + e(f(c.desde)) + " → " + e(f(c.hasta)) + ')</div></div><div class="mcoc-pills">' + (c.oc ? '<a class="btn ghost small" href="#/m/compras/oc/' + encodeURIComponent(c.oc.id) + '">' + e(c.oc.numero) + " →</a>" : "") + "</div></div>" +
-      '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Vendido</th><th class="num">Pasado a cabina</th><th class="num">Precio compra</th><th class="num">Subtotal</th></tr></thead><tbody>' + tf + "</tbody></table></div>" +
+      '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Vendido</th><th class="num" title="📦 Abrir producto o pasado a cabina: se paga a costo como vendido">Consumo interno</th><th class="num">Precio compra</th><th class="num">Subtotal</th></tr></thead><tbody>' + tf + "</tbody></table></div>" + consumosHtml(c) +
       '<div class="mcoc-foot"><dl class="mcoc-tot"><dt>Subtotal</dt><dd>' + $m(c.totales.subtotal) + "</dd><dt>IVA</dt><dd>" + $m(c.totales.iva) + '</dd><dt class="big">Total</dt><dd class="big">' + $m(c.totales.total) + "</dd></dl></div>" +
       '<div class="mcoc-acts">' + (c.oc ? '<span class="mccf-sub">OC del periodo: ' + e(c.oc.numero) + "</span>" : '<button class="btn small" type="button" id="cn-oc"' + (fact.length ? "" : " disabled") + ">Crear OC de consignación</button>") + "</div></div>" +
       '<div class="mccf-card"><div class="mcoc-top"><div><b>2 · Pedido de restock</b><div class="mccf-sub">Pon cuánto pedir de cada producto. ' + (c.restock ? e(c.restock.numero) + " · " + e(c.restock.estado) : "Sin guardar") + "</div></div></div>" +

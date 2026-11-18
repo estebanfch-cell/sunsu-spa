@@ -77,6 +77,15 @@
       return '<div class="mcpf-row"><div class="x"><b>' + e(m.sku) + " · " + e(m.bodega || "") + "</b><span>" + f(m.fecha) + " · " + e(m.tipo || m.doc || "") + (m.nota ? " · " + e(m.nota) : "") + '</span></div><div class="m" style="color:' + (pos ? "#2e8b57" : "#b2452a") + '">' + (pos ? "+" : "") + e(m.delta) + "</div></div>";
     }).join("");
   }
+  /** TK44: lo que se consumió de su consignación (📦 Abrir producto o pasado a cabina): se le paga a costo en la liquidación. */
+  function tabConsumo() {
+    var C = K.d.consumos || [];
+    var tot = C.reduce(function (a, x) { return a + (x.total || 0); }, 0);
+    return '<div class="mcpf-vacio" style="text-align:left">Cada envase de consignación que se abre (📦 Abrir producto) o se pasa a cabina se registra aquí y entra a Compras › Consignación como vendido, a costo. No genera comisión.' + (adm() && C.length ? " Total: <b>" + $m(tot) + "</b>." : "") + "</div>" +
+      (C.length ? C.map(function (x) {
+        return '<div class="mcpf-row"><div class="x"><b>' + e(x.producto) + "</b><span>" + f(x.fecha) + " · " + e(x.origen) + (x.detalle ? " · " + e(x.detalle) : "") + (x.por ? " · " + e(x.por) : "") + " · periodo " + e(x.periodo) + '</span></div><div class="m">' + (x.cantidad > 0 ? "" : "") + e(x.cantidad) + (x.total != null ? '<div style="font-size:.68rem">' + $m(x.total) + "</div>" : "") + "</div></div>";
+      }).join("") : '<div class="mcpf-vacio">Todavía no hay consumo interno de este proveedor.</div>');
+  }
   function tabNotas() {
     var N = K.d.notas || [];
     return (adm() ? '<div class="mcpf-n"><textarea id="mcpf-nt" placeholder="🗒️ Nota interna del proveedor (acuerdos, contactos, reclamos…)"></textarea><div style="text-align:right;margin-top:4px"><button class="btn small" type="button" id="mcpf-nb">Guardar nota</button></div></div>' : "") +
@@ -87,8 +96,8 @@
     return C.length ? C.map(function (x) { return '<div class="mcpf-row"><div class="x"><b>' + e(x.accion) + "</b><span>" + f(x.fecha) + " · " + e(x.actor || "") + "</span></div></div>"; }).join("") : '<div class="mcpf-vacio">Sin cambios registrados.</div>';
   }
   function cuerpo() {
-    var T = [["productos", "📦 Productos (" + (K.d.productos || []).length + ")"], ["historial", "🗂️ Historial (" + (K.d.historial || []).length + ")"], ["movimientos", "🔄 Movimientos"], ["notas", "🗒️ Notas (" + (K.d.notas || []).length + ")"], ["cambios", "🕓 Cambios"]];
-    var tb = K.tab === "historial" ? tabHist() : K.tab === "movimientos" ? tabMov() : K.tab === "notas" ? tabNotas() : K.tab === "cambios" ? tabCambios() : tabProductos();
+    var T = [["productos", "📦 Productos (" + (K.d.productos || []).length + ")"], ["historial", "🗂️ Historial (" + (K.d.historial || []).length + ")"], ["movimientos", "🔄 Movimientos"]].concat((K.d.consumos || []).length || K.d.consignacion ? [["consumo", "🤝 Consumo interno (" + (K.d.consumos || []).length + ")"]] : []).concat([ ["notas", "🗒️ Notas (" + (K.d.notas || []).length + ")"], ["cambios", "🕓 Cambios"]]);
+    var tb = K.tab === "historial" ? tabHist() : K.tab === "movimientos" ? tabMov() : K.tab === "consumo" ? tabConsumo() : K.tab === "notas" ? tabNotas() : K.tab === "cambios" ? tabCambios() : tabProductos();
     return '<div class="mcpf-tabs">' + T.map(function (t) { return '<button type="button" data-mcpf-tab="' + t[0] + '"' + (K.tab === t[0] ? ' class="on"' : "") + ">" + t[1] + "</button>"; }).join("") + "</div>" + tb;
   }
   function pintar(el) {
