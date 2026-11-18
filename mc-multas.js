@@ -15,7 +15,7 @@
     s.textContent = [
       ".mcmu-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}.mcmu-h h2{margin:0;flex:1;font-size:1.2rem}",
       ".mcmu-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcmu-f select,.mcmu-f input,.mcmu-t input,.mcmu-t select,.mcmu-dlg input,.mcmu-dlg select,.mcmu-dlg textarea{padding:7px 9px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:8px;font:inherit;font-size:.82rem;box-sizing:border-box}",
-      ".mcmu-t td{vertical-align:middle}.mcmu-t .an td{opacity:.5;text-decoration:line-through}.mcmu-t .an td:last-child{text-decoration:none;opacity:1}.mcmu-src{font-size:.62rem;border-radius:6px;padding:1px 6px;background:#eef2f8;color:#3e5f8a;font-weight:700}",
+      ".mcmu-toca{cursor:pointer}.mcmu-toca:hover{background:rgba(61,90,122,.06)}.mcmu-t td{vertical-align:middle}.mcmu-t .an td{opacity:.5;text-decoration:line-through}.mcmu-t .an td:last-child{text-decoration:none;opacity:1}.mcmu-src{font-size:.62rem;border-radius:6px;padding:1px 6px;background:#eef2f8;color:#3e5f8a;font-weight:700}",
       ".mcmu-tabs{display:flex;gap:6px;margin-bottom:10px}.mcmu-tabs button{border:1.5px solid var(--cream-d,#e6dccb);background:var(--white,#fff);border-radius:999px;padding:5px 12px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer}.mcmu-tabs button.on{background:var(--navy-d,#2b3f5c);color:#fff}",
       ".mcmu-sum{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}.mcmu-sum span{background:#fdecea;color:#922b21;border-radius:999px;padding:3px 10px;font-size:.75rem;font-weight:800}",
       ".mcmu-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mcmu-box{background:var(--white,#fff);border-radius:14px;padding:16px 18px;width:min(480px,94vw);box-shadow:0 12px 40px rgba(0,0,0,.2)}",
@@ -44,11 +44,12 @@
   function selTipo(cur, attr, conVacio) { return "<select " + attr + ">" + (conVacio ? opt("", conVacio, cur) : "") + (K.d.tipos || []).filter(function (t) { return t.activo || t.nombre === cur; }).map(function (t) { return '<option value="' + e(t.nombre) + '" data-monto="' + e(t.monto) + '"' + (t.nombre === cur ? " selected" : "") + ">" + e(t.nombre) + " (" + $m(t.monto) + ")</option>"; }).join("") + "</select>"; }
   function filaEdit(m) {
     return '<tr data-row="' + e(m ? m.id : "nueva") + '"><td><input type="date" data-k="fecha" value="' + e(m ? m.fecha : K.d.hoy) + '"></td><td>' + selPersona(m ? m.persona : K.F.persona, 'data-k="persona"') + "</td><td>" + selTipo(m ? m.tipo : "", 'data-k="tipo"') +
-      '</td><td><input type="text" inputmode="decimal" data-k="monto" style="width:80px;text-align:right" value="' + e(m ? m.monto : (K.d.tipos[0] ? K.d.tipos[0].monto : "")) + '"></td><td><input type="text" data-k="motivo" style="width:100%" value="' + e(m ? m.motivo : "") + '" placeholder="Motivo"></td><td>' + e(m && m.ticket || "") + '</td><td style="white-space:nowrap"><button class="btn small" type="button" data-save>💾</button> <button class="btn ghost small" type="button" data-cancel>✕</button></td></tr>';
+      '</td><td><input type="text" inputmode="decimal" data-k="monto" style="width:80px;text-align:right" value="' + e(m ? m.monto : (K.d.tipos[0] ? K.d.tipos[0].monto : "")) + '"></td><td><input type="text" data-k="motivo" style="width:100%" value="' + e(m ? m.motivo : "") + '" placeholder="Motivo"></td><td>' + e(m && m.ticket || "") + '</td><td style="white-space:nowrap">' + (m ? '<span data-solo-cambio hidden><button class="btn small" type="button" data-save>💾 Guardar</button> <button class="btn ghost small" type="button" data-cancel>Descartar</button></span><button class="btn ghost small" type="button" data-cancel data-sin-cambio title="Cerrar">✕</button>' : '<button class="btn small" type="button" data-save>💾</button> <button class="btn ghost small" type="button" data-cancel>✕</button>') + "</td></tr>";
   }
   function filaVer(m) {
-    var acts = K.d.admin && m.editable ? (m.estado === "anulada" ? '<button class="btn ghost small" type="button" data-react="' + e(m.id) + '">Reactivar</button>' : '<button class="btn ghost small" type="button" data-edit="' + e(m.id) + '">✏️</button> <button class="btn ghost small mcmu-red" type="button" data-anular="' + e(m.id) + '">Anular</button>') : (m.editable ? "" : '<span class="mcmu-src" title="Registrada en el sistema anterior (hoja)">sistema</span>');
-    return '<tr class="' + (m.estado === "anulada" ? "an" : "") + '" title="' + e(m.estado === "anulada" ? "Anulada" + (m.anuladaPor ? " por " + m.anuladaPor : "") + (m.anuladaMotivo ? ": " + m.anuladaMotivo : "") : (m.creadoPor ? "Aplicada por " + m.creadoPor : "")) + '"><td>' + e(f(m.fecha)) + "</td><td>" + pill(m.persona) + "</td><td>" + e(m.tipo) + '</td><td class="num"><b>' + $m(m.monto) + "</b></td><td>" + e(m.motivo) + "</td><td>" + (m.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(m.ticket) + '">' + e(m.ticket) + "</a>" : "") + '</td><td style="white-space:nowrap">' + acts + "</td></tr>";
+    var acts = K.d.admin && m.editable ? (m.estado === "anulada" ? '<button class="btn ghost small" type="button" data-react="' + e(m.id) + '">Reactivar</button>' : '<button class="btn ghost small mcmu-red" type="button" data-anular="' + e(m.id) + '">Anular</button>') : (m.editable ? "" : '<span class="mcmu-src" title="Registrada en el sistema anterior (hoja)">sistema</span>');
+    var toca = K.d.admin && m.editable && m.estado !== "anulada";
+    return '<tr class="' + (m.estado === "anulada" ? "an" : "") + (toca ? " mcmu-toca" : "") + '"' + (toca ? ' data-edit="' + e(m.id) + '"' : "") + ' title="' + e(toca ? "Toca para cambiar · " : "") + e(m.estado === "anulada" ? "Anulada" + (m.anuladaPor ? " por " + m.anuladaPor : "") + (m.anuladaMotivo ? ": " + m.anuladaMotivo : "") : (m.creadoPor ? "Aplicada por " + m.creadoPor : "")) + '"><td>' + e(f(m.fecha)) + "</td><td>" + pill(m.persona) + "</td><td>" + e(m.tipo) + '</td><td class="num"><b>' + $m(m.monto) + "</b></td><td>" + e(m.motivo) + "</td><td>" + (m.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(m.ticket) + '">' + e(m.ticket) + "</a>" : "") + '</td><td style="white-space:nowrap">' + acts + "</td></tr>";
   }
   function html() {
     var d = K.d, F = K.F;
@@ -83,9 +84,14 @@
     var fa = root.querySelector("#mcmu-fa"); if (fa) fa.onchange = function () { K.F.anuladas = fa.checked; recargar(main); };
     var nv = root.querySelector("#mcmu-nueva"); if (nv) nv.onclick = function () { K.nueva = true; K.edit = ""; rep(main); };
     root.querySelectorAll("select[data-k='tipo']").forEach(function (sel) { sel.onchange = function () { var o = sel.selectedOptions[0], tr = sel.closest("tr"), mi = tr && tr.querySelector("[data-k='monto']"); if (o && mi) mi.value = o.getAttribute("data-monto") || mi.value; }; });
+    root.querySelectorAll("tr[data-row]").forEach(function (tr) {
+      if (tr.getAttribute("data-row") === "nueva") return;
+      var ini = JSON.stringify(leerFila(tr));
+      var mirar = function () { var cambio = JSON.stringify(leerFila(tr)) !== ini; var a = tr.querySelector("[data-solo-cambio]"), z = tr.querySelector("[data-sin-cambio]"); if (a) a.hidden = !cambio; if (z) z.hidden = cambio; };
+      tr.addEventListener("input", mirar); tr.addEventListener("change", function () { setTimeout(mirar, 0); });
+    });
     root.onclick = async function (ev) {
       var b;
-      if ((b = ev.target.closest("[data-edit]"))) { K.edit = b.getAttribute("data-edit"); K.nueva = false; rep(main); return; }
       if ((b = ev.target.closest("[data-cancel]"))) { K.edit = ""; K.nueva = false; rep(main); return; }
       if ((b = ev.target.closest("[data-save]"))) {
         var tr = b.closest("tr"), id = tr.getAttribute("data-row"), o = leerFila(tr); b.disabled = true;
@@ -102,6 +108,8 @@
         });
         return;
       }
+      // Sin botón «Editar» (TK55): se toca la fila y se edita ahí; Guardar aparece solo si algo cambió.
+      if ((b = ev.target.closest("[data-edit]")) && !ev.target.closest("button,a,input,select")) { K.edit = b.getAttribute("data-edit"); K.nueva = false; rep(main); return; }
       if ((b = ev.target.closest("[data-tsave]"))) {
         var tt = b.closest("tr"), q = function (k) { return tt.querySelector("[data-tk='" + k + "']"); };
         var r2 = await api("mt_tipo_guardar", { id: tt.getAttribute("data-tipo"), nombre: q("nombre").value, monto: q("monto").value, activo: q("activo").checked });
