@@ -242,8 +242,15 @@
     var r = await api("fotoB64", { id: u.slice(8) });
     if (!document.getElementById("mcpv")) return;
     if (!r || !r.ok) { box.querySelector(".mcpv-b").innerHTML = '<p class="err">' + e((r && r.error) || "No se pudo abrir") + "</p>"; return; }
+    if (/pdf/i.test(r.mime || "")) {
+      var bin = atob(r.b64), arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var nom = /\.pdf$/i.test(titulo || "") ? titulo : (titulo || "Factura") + ".pdf";
+      mostrarPdf(box, { output: function () { return new Blob([arr], { type: "application/pdf" }); } }, nom);
+      return;
+    }
     var src = "data:" + (r.mime || "image/jpeg") + ";base64," + r.b64;
-    box.querySelector(".mcpv-b").innerHTML = /pdf/.test(r.mime || "") ? '<iframe src="' + src + '"></iframe>' : '<img src="' + src + '" alt="">';
+    box.querySelector(".mcpv-b").innerHTML = '<img src="' + src + '" alt="">';
   }
   function previa(url, titulo) {
     var id = driveId(url), u = String(url || "");
