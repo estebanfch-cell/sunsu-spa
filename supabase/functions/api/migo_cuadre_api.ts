@@ -8,7 +8,7 @@ import { leerSerie } from "./series.ts";
 import { esAdmin } from "./permisos.ts";
 import {
   abiertoSinTicket, asignarBorradoresAbiertos, cosmDeCita,
-  listoBorrador, puedeGestionarBorradores, puedeVerBorrador as puedeVerBorradorAsig,
+  listoBorrador, puedeGestionarBorradores, puedeVerBorrador as puedeVerBorradorAsig, sinAsignarDelDia,
 } from "./borradores_asig.ts";
 import {
   borradorSePuedeVincular, clavesDeBorrador, cruzar, exentoCuadre, estadoBorrador, facSeq, facturaNorm, flagsDeseadas, formaAComp, formaDeTicket, FALTA_CUADRE_DESDE,
@@ -57,7 +57,7 @@ function ticketsDeBorrador(b0: Row, tickets: Row[], candidatos?: { clave?: strin
   return tickets.filter((t) => claves.has(s(t.clave)) || ids.has(n(t.id)));
 }
 
-function puedeVerBorrador(ses: Ses, b0: Row): boolean { return puedeVerBorradorAsig(ses, b0); }
+function puedeVerBorrador(ses: Ses, b0: Row, hoy?: string): boolean { return puedeVerBorradorAsig(ses, b0, hoy); }
 
 async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
   const tickets = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at);
@@ -536,7 +536,7 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const bandeja = gestiona ? vivas.filter((b0) => sinTicket(b0)) : [];
   const hoy = ecuadorParts(ctx.now).ymd;
   const vinculados = (gestiona ? rows : rows.filter((b0) => puedeVerBorrador(ses, b0)))
-    .filter((b0) => ["vinculado", "aprobado"].includes(s(b0.estado)) && s(b0.ticket_clave) && s(b0.updated_at || b0.aprobado_at || b0.assigned_at).slice(0, 10) >= fechasDias(hoy, -14))
+    .filter((b0) => ["vinculado", "aprobado"].includes(s(b0.estado)) && s(b0.ticket_clave) && s(b0.vinculado_at || b0.aprobado_at || b0.updated_at || b0.assigned_at).slice(0, 10) >= fechasDias(hoy, -2)) // TK94: «Vinculadas» solo 2 días; después se ocultan (no se borran)
     .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)))
     .slice(0, 30);
   const tickets = await ticketsParaCuadre(ctx);
@@ -557,12 +557,19 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   };
 });
 
+extend("mb_facturas_borrador", "any", async (_p, ctx, ses) => {
+  const { listaFacturasBorrador } = await import("./borradores_asig.ts");
+  const items = await listaFacturasBorrador(ctx, ses, ecuadorParts(ctx.now).ymd);
+  return { ok: true, items, gestiona: puedeGestionarBorradores(ses), hoy: ecuadorParts(ctx.now).ymd };
+});
+
 extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   const fac = facturaNorm(p.factura);
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
-  if (!puedeVerBorrador(ses, b0) && s(b0.estado) !== "pendiente") return { error: "No tienes permiso" };
-  if (s(b0.estado) === "pendiente" && !s(b0.asignado_a) && !puedeGestionarBorradores(ses)) return { error: "Esta factura está en la bandeja de admin o recepción" };
+  const hoyB = ecuadorParts(ctx.now).ymd;
+  if (!puedeVerBorrador(ses, b0, hoyB) && s(b0.estado) !== "pendiente") return { error: "No tienes permiso" };
+  if (s(b0.estado) === "pendiente" && !s(b0.asignado_a) && !puedeGestionarBorradores(ses) && !sinAsignarDelDia(b0, hoyB)) return { error: "Esta factura está en la bandeja de admin o recepción" };
   const tickets = await ticketsParaCuadre(ctx);
   const cands = (!s(b0.ticket_clave) && !n(b0.ticket_id))
     ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets)
@@ -578,7 +585,7 @@ extend("migo_borrador_guardar", "any", async (p, ctx, ses) => {
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
   if (!borradorSePuedeVincular(b0.estado)) return { error: "Ese borrador ya no se edita" };
-  if (!puedeVerBorrador(ses, b0)) return { error: "No tienes permiso" };
+  if (!puedeVerBorrador(ses, b0, ecuadorParts(ctx.now).ymd)) return { error: "No tienes permiso" };
   const prev = (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row;
   const datos = { ...prev, ...((p.datos && typeof p.datos === "object" ? p.datos : {}) as Row) };
   const patch: Row = { datos, updated_at: ctx.now.toISOString() };

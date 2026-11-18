@@ -53,8 +53,8 @@ describe("TK89 dashboard de horas de Asistencia", () => {
     assert.doesNotMatch(beta, /S50 /);
     assert.doesNotMatch(beta, /N100 /);
     assert.doesNotMatch(beta, /N \$\{hHrs/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK93/);
-    assert.match(beta, /20261118tk93/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK94/);
+    assert.match(beta, /20261118tk94/);
   });
 
   it("el SQL 0059 crea el historial y no recorta app_beta_write", () => {

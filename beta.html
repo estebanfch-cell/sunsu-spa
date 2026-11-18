@@ -1233,6 +1233,7 @@ const AVISO_DW = '<span class="aviso-ds">⚠️ backend DW</span>';
 const GRUPOS = [
   ["ventas", "Ventas", [
     ["tickets", "Tickets de venta", "#/m/tickets"],
+    ["tickets", "Facturas borrador", "#/m/borradores"],
     ["cotizaciones_cliente", "Cotizaciones", "#/m/cotizaciones_cliente"],
     ["clientes", "Clientes", "#/m/clientes"],
   ]],
@@ -1821,6 +1822,7 @@ function moduloDeRuta(route) {
   }
   if (route.mod === "gift") return route.sub === "paquetes" ? "paquetes" : "gift_cards";
   if (route.mod === "citas" || route.mod === "inicio") return "inicio";
+  if (route.mod === "borradores") return "tickets"; // TK94: Facturas borrador vive en Ventas con el permiso de Tickets
   if (route.mod === "lugares") return "inventario";
   if (route.mod === "conteos" && route.sub === "hacer") return "inicio";
   if (route.mod === "ajustes") return "inventario";
@@ -2386,6 +2388,7 @@ function pantallaSunsu(route) {
   if (m === "inicio") return state.admin ? "inicio" : "";
   if (m === "citas" && !state.admin) return "";
   if (m === "tickets") return route.sub === "t" && route.id && window.MCTickets ? "" : "historial";
+  if (m === "borradores") return window.MCBorradores ? "" : "historial";
   if (m === "clientes" || m === "reportes") return "";
   if (m === "cotizaciones_cliente") return "";
   if (m === "productos") return route.sub === "catalogo" || !window.MCProductos ? "catalogo" : "";
@@ -2591,6 +2594,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
     if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
     if (route.kind === "mod" && route.mod === "caja" && window.MCCaja) window.MCCaja.wire(main, route);
+    if (route.kind === "mod" && route.mod === "borradores" && window.MCBorradores) window.MCBorradores.wire(main, route);
     if (route.kind === "mod" && route.mod === "promociones" && state.admin && window.MCPromociones) window.MCPromociones.wire(main, route);
     if (route.kind === "mod" && route.mod === "compras" && window.MCCompras) window.MCCompras.wire(main, route);
     if (route.kind === "mod" && route.mod === "recepciones" && window.MCRecepciones) window.MCRecepciones.wire(main, route);
@@ -2667,6 +2671,7 @@ async function renderMod(route) {
   if (route.mod === "paquetes") return renderPaquetes();
   if (route.mod === "gift_cards") return renderGift();
   if (route.mod === "caja" && window.MCCaja) return window.MCCaja.render(route);
+  if (route.mod === "borradores" && window.MCBorradores) return window.MCBorradores.render(route);
   if (route.mod === "caja") return renderCaja();
   if (route.mod === "bitacora") return renderBitacora();
   if (route.mod === "cabina") return renderCabina();
@@ -6792,39 +6797,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk93"></script>
-<script src="beta-screens.js?v=20261118tk93"></script>
-<script src="beta-inline.js?v=20261118tk93"></script>
-<script src="mc-productos.js?v=20261118tk93"></script>
-<script src="mc-nav.js?v=20261118tk93"></script>
-<script src="mc-permisos.js?v=20261118tk93"></script>
-<script src="mc-protocolos.js?v=20261118tk93"></script>
-<script src="mc-conteo.js?v=20261118tk93"></script>
-<script src="mc-transferencias.js?v=20261118tk93"></script>
-<script src="mc-ajustes.js?v=20261118tk93"></script>
-<script src="vendor-qrcode.js?v=20261118tk93"></script>
-<script src="mc-tickets.js?v=20261118tk93"></script>
-<script src="mc-maestro.js?v=20261118tk93"></script>
-<script src="mc-empleados.js?v=20261118tk93"></script>
-<script src="mc-edit.js?v=20261118tk93"></script>
-<script src="mc-paquetes.js?v=20261118tk93"></script>
-<script src="mc-aperturas.js?v=20261118tk93"></script>
-<script src="mc-acceso.js?v=20261118tk93"></script>
-<script src="mc-barras.js?v=20261118tk93"></script>
-<script src="mc-caja.js?v=20261118tk93"></script>
-<script src="mc-giftcards.js?v=20261118tk93"></script>
-<script src="mc-multas.js?v=20261118tk93"></script>
-<script src="mc-clientes.js?v=20261118tk93"></script>
-<script src="mc-clientes-dup.js?v=20261118tk93"></script>
-<script src="mc-docpdf.js?v=20261118tk93"></script>
-<script src="mc-compras.js?v=20261118tk93"></script>
-<script src="mc-consignacion.js?v=20261118tk93"></script>
-<script src="mc-proveedores.js?v=20261118tk93"></script>
-<script src="mc-recepciones.js?v=20261118tk93"></script>
-<script src="mc-movil.js?v=20261118tk93"></script>
-<script src="mc-promociones.js?v=20261118tk93"></script>
-<script src="mc-agenda.js?v=20261118tk93"></script>
-<script src="mc-staff-home.js?v=20261118tk93"></script>
+<script src="mc-buscar.js?v=20261118tk94"></script>
+<script src="beta-screens.js?v=20261118tk94"></script>
+<script src="beta-inline.js?v=20261118tk94"></script>
+<script src="mc-productos.js?v=20261118tk94"></script>
+<script src="mc-nav.js?v=20261118tk94"></script>
+<script src="mc-permisos.js?v=20261118tk94"></script>
+<script src="mc-protocolos.js?v=20261118tk94"></script>
+<script src="mc-conteo.js?v=20261118tk94"></script>
+<script src="mc-transferencias.js?v=20261118tk94"></script>
+<script src="mc-ajustes.js?v=20261118tk94"></script>
+<script src="vendor-qrcode.js?v=20261118tk94"></script>
+<script src="mc-tickets.js?v=20261118tk94"></script>
+<script src="mc-maestro.js?v=20261118tk94"></script>
+<script src="mc-empleados.js?v=20261118tk94"></script>
+<script src="mc-edit.js?v=20261118tk94"></script>
+<script src="mc-paquetes.js?v=20261118tk94"></script>
+<script src="mc-aperturas.js?v=20261118tk94"></script>
+<script src="mc-acceso.js?v=20261118tk94"></script>
+<script src="mc-barras.js?v=20261118tk94"></script>
+<script src="mc-caja.js?v=20261118tk94"></script>
+<script src="mc-giftcards.js?v=20261118tk94"></script>
+<script src="mc-multas.js?v=20261118tk94"></script>
+<script src="mc-clientes.js?v=20261118tk94"></script>
+<script src="mc-clientes-dup.js?v=20261118tk94"></script>
+<script src="mc-docpdf.js?v=20261118tk94"></script>
+<script src="mc-compras.js?v=20261118tk94"></script>
+<script src="mc-consignacion.js?v=20261118tk94"></script>
+<script src="mc-proveedores.js?v=20261118tk94"></script>
+<script src="mc-recepciones.js?v=20261118tk94"></script>
+<script src="mc-movil.js?v=20261118tk94"></script>
+<script src="mc-promociones.js?v=20261118tk94"></script>
+<script src="mc-agenda.js?v=20261118tk94"></script>
+<script src="mc-staff-home.js?v=20261118tk94"></script>
+<script src="mc-borradores.js?v=20261118tk94"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
