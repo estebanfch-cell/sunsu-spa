@@ -45,6 +45,14 @@
       ".mcsh-empty{background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:12px;padding:16px 14px;text-align:center;color:var(--gray);font-size:.85rem}",
       ".mcsh-empty b{display:block;color:var(--navy-d,#3D5A7A);font-size:.95rem;margin-bottom:4px}",
       ".mcsh-aviso{background:var(--gold-l,#FBF3E3);border:1px solid var(--gold-m,#E8C07A);border-radius:10px;padding:7px 10px;font-size:.75rem;color:var(--navy-d);margin-bottom:10px}",
+      ".mcsh-bor{background:#fff8e6;border:1.5px solid #e8cf7a;border-radius:12px;padding:10px 12px;margin:0 0 12px}",
+      ".mcsh-bor b.mcsh-bt{display:block;color:var(--navy-d,#3D5A7A);font-size:.9rem;margin-bottom:6px}",
+      ".mcsh-bi{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #f0e6c8}",
+      ".mcsh-bi:first-of-type{border-top:0}",
+      ".mcsh-bi .mcsh-n{font-weight:700;color:var(--navy-d,#3D5A7A)}",
+      ".mcsh-pill-pc{display:inline-block;border:1.5px solid #e8cf7a;color:#C98A00;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent}",
+      ".mcsh-pill-pa{display:inline-block;border:1.5px solid #e8cf7a;color:#8A6D00;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent}",
+      ".mcsh-bor .mcsh-act{margin-left:auto}",
       ".mcsh-list{display:flex;flex-direction:column;gap:6px}",
       ".mcsh-c{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-left:4px solid var(--navy);border-radius:10px;padding:7px 8px 7px 10px;position:relative}",
       ".mcsh-c.ok{opacity:.68}",
@@ -104,17 +112,37 @@
       '<div class="mcsh-acts-narrow"><button type="button" class="mcsh-more" data-acts="' + e(c.id) + '" aria-haspopup="true" aria-label="Acciones por hacer">Acciones ▾</button>' +
         '<div class="mcsh-menu" role="menu">' + botones(c, puede) + "</div></div></article>";
   }
+  function cardBorrador(b) {
+    var nom = ((b.nombre || "") + " " + (b.apellido || "")).trim() || "Sin nombre";
+    var pill = b.listo
+      ? '<span class="mcsh-pill-pa">Pendiente de aprobar</span>'
+      : '<span class="mcsh-pill-pc">Por completar</span>';
+    var fac = e(b.factura || "");
+    return '<div class="mcsh-bi">' +
+      '<span class="mcsh-n">' + e(nom) + "</span>" +
+      (b.fecha ? '<span class="mcsh-dot">·</span><span>' + e(fechaCorta(b.fecha)) + "</span>" : "") +
+      (fac ? '<span class="mcsh-dot">·</span><span>Fac. ' + fac + "</span>" : "") +
+      pill +
+      '<button type="button" class="mcsh-act pri" data-borrador="' + fac + '">Completar</button>' +
+      "</div>";
+  }
   function html(d) {
     var nombre = (d && d.nombre) || "";
     var citas = (d && d.citas) || [];
     var puede = (d && d.puede) || { ticket: true, noLlego: true, mover: false };
+    var bor = (d && d.borradores) || [];
+    var nPc = bor.filter(function (b) { return !b.listo; }).length;
     var cuerpo = citas.length
       ? '<div class="mcsh-list">' + citas.map(function (c) { return card(c, puede); }).join("") + "</div>"
       : '<div class="mcsh-empty"><b>No tienes citas hoy</b>Cuando se agende una, aparecerá aquí.</div>';
+    var caja = bor.length
+      ? '<div class="mcsh-bor"><b class="mcsh-bt">' + (nPc ? ("Tienes " + nPc + " ticket" + (nPc === 1 ? "" : "s") + " por completar") : "Tickets pendientes de aprobar") + "</b>" +
+        bor.map(cardBorrador).join("") + "</div>"
+      : "";
     return '<div id="mcsh-root"><div class="mcsh-hola">Hola ' + e(nombre) + " 👋</div>" +
       '<p class="mcsh-sub">' + e(fechaLarga(d && d.hoy)) + (citas.length ? " · " + citas.length + " cita" + (citas.length === 1 ? "" : "s") : "") + "</p>" +
       (d && d.aviso ? '<p class="mcsh-aviso">' + e(d.aviso) + "</p>" : "") +
-      cuerpo + "</div>";
+      caja + cuerpo + "</div>";
   }
   function citaDe(root, id) {
     var L = (root._citas || []);
@@ -153,6 +181,15 @@
         var open = cardEl && cardEl.classList.contains("open");
         cerrarMenus(root);
         if (cardEl && !open) cardEl.classList.add("open");
+        return;
+      }
+      var borBtn = ev.target.closest("[data-borrador]");
+      if (borBtn && root.contains(borBtn)) {
+        ev.preventDefault();
+        var fac = borBtn.getAttribute("data-borrador");
+        cerrarMenus(root);
+        if (fac && typeof _migoAbrirEnTicket === "function") _migoAbrirEnTicket(fac);
+        else if (fac && typeof go === "function") go("#/doc/ov?fac=" + encodeURIComponent(fac));
         return;
       }
       var t = ev.target.closest("[data-crear],[data-llego],[data-hist],[data-mover],[data-nolleg],[data-tk]");
