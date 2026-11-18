@@ -9,11 +9,15 @@ import { esAdmin } from "./permisos.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import {
   cruzar, exentoCuadre, facSeq, facturaNorm, flagsDeseadas, formaAComp, formaDeTicket, FALTA_CUADRE_DESDE,
-  facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
+  candidatosParaFactura, ticketClaveValida, facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
+  type CandidatoBorrador,
   type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
+function fechasDias(ymd: string, d: number): string {
+  const t0 = new Date(s(ymd).slice(0, 10) + "T12:00:00Z"); t0.setUTCDate(t0.getUTCDate() + d); return t0.toISOString().slice(0, 10);
+}
 async function logSafe(ctx: Ctx, actor: string, accion: string, detalle: string): Promise<void> {
   try { await logAccion(ctx.db, actor, accion, detalle); } catch { /* tests o log no listo */ }
 }
@@ -24,7 +28,9 @@ function pubBorrador(b0: Row): Row {
     total: n(b0.total), forma: s(b0.forma), lineas: Array.isArray(b0.lineas) ? b0.lineas : [],
     estado: s(b0.estado), estado_txt: s(b0.estado) === "pendiente" || s(b0.estado) === "asignado" ? "Pendiente de aprobar" : s(b0.estado),
     asignado_a: s(b0.asignado_a) || null, bandeja: s(b0.estado) === "pendiente",
-    ticket_clave: s(b0.ticket_clave) || null, datos: (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row,
+    ticket_id: n(b0.ticket_id) || null, ticket_clave: s(b0.ticket_clave) || null,
+    ticket_claves: (Array.isArray(b0.tickets_vinculados) && (b0.tickets_vinculados as unknown[]).length ? b0.tickets_vinculados as string[] : (Array.isArray((b0.datos as Row | undefined)?.tickets_vinculados) ? (b0.datos as Row).tickets_vinculados as string[] : (s(b0.ticket_clave) ? [s(b0.ticket_clave)] : []))),
+    datos: (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row,
     nota: s(b0.nota) || null, acuity: s(b0.acuity_appointment_id) || null,
   };
 }
@@ -367,12 +373,27 @@ extend("migo_cuadre_estado", ADMIN, async (_p, ctx) => {
 extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const rows = await todas(ctx, "beta_migo_borradores");
   const vivas = rows.filter((b0) => ["pendiente", "asignado"].includes(s(b0.estado)));
-  const mias = vivas.filter((b0) => puedeVerBorrador(ses, b0) && s(b0.estado) === "asignado");
-  const bandeja = esAdmin(ses.rol) ? vivas.filter((b0) => s(b0.estado) === "pendiente") : [];
+  const sinTicket = (b0: Row) => !s(b0.ticket_clave) && !n(b0.ticket_id);
+  const mias = vivas.filter((b0) => puedeVerBorrador(ses, b0) && s(b0.estado) === "asignado" && (esAdmin(ses.rol) ? !sinTicket(b0) : true));
+  // Admin: siguen en «Facturas sin ticket» las pendientes y las asignadas que aún no tienen ticket (para no “perderlas”).
+  const bandeja = esAdmin(ses.rol) ? vivas.filter((b0) => sinTicket(b0)) : [];
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const vinculados = (esAdmin(ses.rol) ? rows : rows.filter((b0) => puedeVerBorrador(ses, b0)))
+    .filter((b0) => ["vinculado", "aprobado"].includes(s(b0.estado)) && s(b0.ticket_clave) && s(b0.updated_at || b0.aprobado_at || b0.assigned_at).slice(0, 10) >= fechasDias(hoy, -14))
+    .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)))
+    .slice(0, 30);
+  const tickets = bandeja.length ? await ticketsParaCuadre(ctx) : [];
+  const conCand = (b0: Row) => {
+    const pub = pubBorrador(b0);
+    if (!bandeja.includes(b0)) return pub;
+    pub.candidatos = candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets);
+    return pub;
+  };
   return {
     ok: true,
     mias: mias.map(pubBorrador),
-    bandeja: bandeja.map(pubBorrador),
+    bandeja: bandeja.map(conCand),
+    vinculados: vinculados.map(pubBorrador),
     pendientes: (esAdmin(ses.rol) ? vivas : mias).map(pubBorrador),
   };
 });
@@ -383,7 +404,11 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   if (!b0) return { error: "No encontré ese borrador" };
   if (!puedeVerBorrador(ses, b0) && s(b0.estado) !== "pendiente") return { error: "No tienes permiso" };
   if (s(b0.estado) === "pendiente" && !esAdmin(ses.rol)) return { error: "Esta factura está en la bandeja de admin" };
-  return { ok: true, borrador: pubBorrador(b0) };
+  const pub = pubBorrador(b0);
+  if (!s(b0.ticket_clave) && !n(b0.ticket_id)) {
+    pub.candidatos = candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, await ticketsParaCuadre(ctx));
+  }
+  return { ok: true, borrador: pub };
 });
 
 extend("migo_borrador_guardar", "any", async (p, ctx, ses) => {
@@ -415,7 +440,76 @@ extend("migo_borrador_asignar", ADMIN, async (p, ctx, ses) => {
   return { ok: true };
 });
 
+
+extend("migo_borrador_buscar", ADMIN, async (p, ctx, _ses) => {
+  const q = s(p.q).trim().toLowerCase();
+  if (q.length < 2) return { ok: true, items: [] };
+  const pal = q.split(/\s+/).filter(Boolean).slice(0, 5);
+  const items = [];
+  for (const t of await ticketsParaCuadre(ctx)) {
+    if (!ticketClaveValida(t) || exentoCuadre(t)) continue;
+    const blob = (s(t.clave || t.so_num) + " " + s(t.nombre) + " " + s(t.apellido) + " " + s(t.atendido_por)).toLowerCase();
+    if (!pal.every((w) => blob.includes(w))) continue;
+    const fac = s(t.facturaBeta || t.fac_7);
+    items.push({
+      id: n(t.id), clave: s(t.clave || t.so_num), nombre: (s(t.nombre) + " " + s(t.apellido)).trim(),
+      fecha: s(t.fecha).slice(0, 10), total: n(t.estimado), cosmetologa: s(t.atendido_por),
+      factura: fac && !/sin/i.test(fac) ? fac : "",
+    });
+    if (items.length >= 20) break;
+  }
+  return { ok: true, items };
+});
+
+extend("migo_borrador_vincular", ADMIN, async (p, ctx, ses) => {
+  const fac = facturaNorm(p.factura);
+  const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
+  if (!b0) return { error: "No encontré ese borrador" };
+  if (!["pendiente", "asignado"].includes(s(b0.estado))) return { error: "Ese borrador ya no se vincula" };
+  const raw = Array.isArray(p.tickets) ? p.tickets as unknown[] : (p.ticket_clave || p.ticket_id ? [p.ticket_clave || p.ticket_id] : []);
+  const want = raw.map((x) => s(x)).filter(Boolean);
+  if (!want.length) return { error: "Elige un ticket para vincular" };
+  const todos = await ticketsParaCuadre(ctx);
+  const picks: Row[] = [];
+  for (const w of want) {
+    const hit = todos.find((t) => s(t.clave) === w || s(t.so_num) === w || s(t.id) === w || s(t.sheet_row) === w);
+    if (!hit) return { error: "No encontré el ticket " + w };
+    if (n(hit.id) === NUNCA_TICKET_ID || !ticketClaveValida(hit)) return { error: "Ese ticket no se vincula" };
+    picks.push(hit);
+  }
+  const actor = actorOf(ses);
+  const now = ctx.now.toISOString();
+  const claves = picks.map((t) => s(t.clave) || s(t.so_num));
+  for (const tk of picks) {
+    const clave = s(tk.clave) || claveDe(tk, leerSerie(tk, "so_num"));
+    try {
+      const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+      const prev = { ...((cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row) };
+      const datos = { ...prev, factura: fac, forma_pago: prev.forma_pago || formaDeTicket(tk, prev, s(b0.forma)) };
+      if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, updated_at: now, actualizado_por: actor });
+      else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: tk.sheet_row ?? null, datos, actualizado_por: actor, updated_at: now });
+    } catch { /* overlay; no tocar Sheets */ }
+  }
+  const datosB = { ...((b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row), tickets_vinculados: claves };
+  const updB: Row = {
+    estado: "vinculado", ticket_id: n(picks[0].id) || null, ticket_clave: claves[0],
+    aprobado_por: actor, aprobado_at: now, updated_at: now,
+    nota: s(b0.nota) || (claves.length > 1 ? "vinculada a " + claves.join(" + ") : "vinculada a " + claves[0]),
+    datos: datosB, tickets_vinculados: claves,
+  };
+  try {
+    await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, updB);
+  } catch {
+    delete updB.tickets_vinculados;
+    await ctx.db.write(actor, "beta_migo_borradores", "update", { factura: fac }, updB);
+  }
+  await correrCuadre(ctx, actor);
+  await logSafe(ctx, actor, "MIGO BORRADOR", "vinculó " + fac + " → " + claves.join(" + "));
+  return { ok: true, vinculado: true, factura: fac, ticket_clave: claves[0], tickets: claves };
+});
+
 extend("migo_borrador_descartar", ADMIN, async (p, ctx, ses) => {
+
   const fac = facturaNorm(p.factura);
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };

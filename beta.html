@@ -422,6 +422,15 @@
   .ld-g { opacity: .75; } .ld-in input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid rgba(61,90,122,.3); border-radius: 8px; text-align: right; font-size: .8rem; }
   .ld-net { text-align: right; } .ld-net s { opacity: .5; margin-right: 4px; } .ld-net b { color: #2E8B57; }
   .ov-etq { font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,0.14); margin-left: 4px; }
+  .preview .ov-tabla tr.ov-m3 { display: none; }
+  .preview .ov-tabla tr.ov-m3 td { border-top: 0 !important; padding: 0 0 5px; white-space: normal; }
+  .preview .ov-tabla tr.ov-m3 .ov-m3g { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; text-align: right; font-variant-numeric: tabular-nums; }
+  .preview .ov-tabla tr.ov-m3 span { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+  .preview .ov-tabla tr.ov-m3 small { font-size: 0.55rem; letter-spacing: 1px; text-transform: uppercase; opacity: 0.55; }
+  @media (max-width: 640px) {
+    .preview .ov-tabla .ov-c3, .preview .ov-tabla .ov-hc { display: none; }
+    .preview .ov-tabla tr.ov-m3 { display: table-row; }
+  }
   .preview .ov-tabla .ov-dsc td { color: var(--green); font-weight: 700; opacity: 1; }
   .ov-tot { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 2.5px 0; opacity: 0.8; font-variant-numeric: tabular-nums; }
   .ov-gran { display: flex; justify-content: space-between; padding-top: 6px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.2); }
@@ -5802,35 +5811,35 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk44"></script>
-<script src="beta-screens.js?v=20261118tk44"></script>
-<script src="beta-inline.js?v=20261118tk44"></script>
-<script src="mc-productos.js?v=20261118tk44"></script>
-<script src="mc-nav.js?v=20261118tk44"></script>
-<script src="mc-permisos.js?v=20261118tk44"></script>
-<script src="mc-protocolos.js?v=20261118tk44"></script>
-<script src="mc-conteo.js?v=20261118tk44"></script>
-<script src="mc-transferencias.js?v=20261118tk44"></script>
-<script src="mc-ajustes.js?v=20261118tk44"></script>
-<script src="vendor-qrcode.js?v=20261118tk44"></script>
-<script src="mc-tickets.js?v=20261118tk44"></script>
-<script src="mc-paquetes.js?v=20261118tk44"></script>
-<script src="mc-aperturas.js?v=20261118tk44"></script>
-<script src="mc-acceso.js?v=20261118tk44"></script>
-<script src="mc-barras.js?v=20261118tk44"></script>
-<script src="mc-caja.js?v=20261118tk44"></script>
-<script src="mc-giftcards.js?v=20261118tk44"></script>
-<script src="mc-multas.js?v=20261118tk44"></script>
-<script src="mc-clientes.js?v=20261118tk44"></script>
-<script src="mc-clientes-dup.js?v=20261118tk44"></script>
-<script src="mc-docpdf.js?v=20261118tk44"></script>
-<script src="mc-compras.js?v=20261118tk44"></script>
-<script src="mc-consignacion.js?v=20261118tk44"></script>
-<script src="mc-proveedores.js?v=20261118tk44"></script>
-<script src="mc-recepciones.js?v=20261118tk44"></script>
-<script src="mc-movil.js?v=20261118tk44"></script>
-<script src="mc-promociones.js?v=20261118tk44"></script>
-<script src="mc-agenda.js?v=20261118tk44"></script>
+<script src="mc-buscar.js?v=20261118tk47"></script>
+<script src="beta-screens.js?v=20261118tk47"></script>
+<script src="beta-inline.js?v=20261118tk47"></script>
+<script src="mc-productos.js?v=20261118tk47"></script>
+<script src="mc-nav.js?v=20261118tk47"></script>
+<script src="mc-permisos.js?v=20261118tk47"></script>
+<script src="mc-protocolos.js?v=20261118tk47"></script>
+<script src="mc-conteo.js?v=20261118tk47"></script>
+<script src="mc-transferencias.js?v=20261118tk47"></script>
+<script src="mc-ajustes.js?v=20261118tk47"></script>
+<script src="vendor-qrcode.js?v=20261118tk47"></script>
+<script src="mc-tickets.js?v=20261118tk47"></script>
+<script src="mc-paquetes.js?v=20261118tk47"></script>
+<script src="mc-aperturas.js?v=20261118tk47"></script>
+<script src="mc-acceso.js?v=20261118tk47"></script>
+<script src="mc-barras.js?v=20261118tk47"></script>
+<script src="mc-caja.js?v=20261118tk47"></script>
+<script src="mc-giftcards.js?v=20261118tk47"></script>
+<script src="mc-multas.js?v=20261118tk47"></script>
+<script src="mc-clientes.js?v=20261118tk47"></script>
+<script src="mc-clientes-dup.js?v=20261118tk47"></script>
+<script src="mc-docpdf.js?v=20261118tk47"></script>
+<script src="mc-compras.js?v=20261118tk47"></script>
+<script src="mc-consignacion.js?v=20261118tk47"></script>
+<script src="mc-proveedores.js?v=20261118tk47"></script>
+<script src="mc-recepciones.js?v=20261118tk47"></script>
+<script src="mc-movil.js?v=20261118tk47"></script>
+<script src="mc-promociones.js?v=20261118tk47"></script>
+<script src="mc-agenda.js?v=20261118tk47"></script>
 <script>draw();</script>
 </body>
 </html>

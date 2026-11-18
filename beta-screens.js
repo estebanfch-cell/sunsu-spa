@@ -2141,15 +2141,18 @@ function updatePreview(){
     else if(gcVTotal>0) _fila(1,gcV.codigo,'Gift Card '+(gcV.tipo==='fisica'?'física (incl. caja $3)':'digital'),gcVTotal);
   }
   // Mismo formato que el detalle del ticket (aprobado): Código | Descripción | Cant. | Precio unit. (sin IVA) | Total
-  let breakdown='<table class="ov-tabla"><thead><tr><th>Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">Precio unit.<small> (sin IVA)</small></th><th class="n">Total</th></tr></thead><tbody>'
+  // t491u: por línea Subtotal (sin IVA) · IVA · Total (con IVA); en el iPhone van en una franja compacta bajo la línea.
+  let breakdown='<table class="ov-tabla mob-no"><thead><tr><th class="ov-hc">Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">Precio unit.<small> (sin IVA)</small></th><th class="n ov-c3">Subtotal<small> (sin IVA)</small></th><th class="n ov-c3">IVA</th><th class="n ov-c3">Total<small> (con IVA)</small></th></tr></thead><tbody>'
     +_ov.map(function(f){
-      return '<tr><td class="ov-cod">'+_tkEsc(f.cod)+'</td><td>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
-        +'<td class="n">'+f.cant+'</td><td class="n">'+_m(f.unit)+'</td><td class="n">'+_m(f.total)+'</td></tr>';
+      var iva=Math.round(f.total*0.15*100)/100, tci=Math.round((f.total+iva)*100)/100;
+      return '<tr><td class="ov-cod ov-hc">'+_tkEsc(f.cod)+'</td><td>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
+        +'<td class="n">'+f.cant+'</td><td class="n">'+_m(f.unit)+'</td><td class="n ov-c3">'+_m(f.total)+'</td><td class="n ov-c3">'+_m(iva)+'</td><td class="n ov-c3"><b>'+_m(tci)+'</b></td></tr>'
+        +'<tr class="ov-m3"><td colspan="7"><div class="ov-m3g"><span><small>Subtotal</small>'+_m(f.total)+'</span><span><small>IVA</small>'+_m(iva)+'</span><span><small>Total</small><b>'+_m(tci)+'</b></span></div></td></tr>';
     }).join('');
   // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
   // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
   // el input y el teclado iOS se cerraba). Monto sin IVA, igual que las filas.
-  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
+  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td class="ov-hc"></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
   breakdown+='</tbody></table>';
   if(T.pack3||T.pack6){
     var _allGCSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
@@ -2216,6 +2219,8 @@ function updatePreview(){
     ${breakdown}
     <div class="pdiv"></div>
     <div class="ov-tot"><span>Subtotal sin IVA</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div class="ov-tot"><span>Subtotal gravado 15%</span><span id="pv-grav">$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div class="ov-tot"><span>Subtotal 0%</span><span>$0.00</span></div>
     <div class="ov-tot"><span>IVA 15%</span><span id="pv-iva">$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
     <div class="ptotal ov-gran"><span>Total (con IVA)</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
@@ -2244,6 +2249,7 @@ function _dscLive(){
   var r=g('pv-dsc-row');
   if(r){ r.style.display=m>0?'':'none'; var l=g('pv-dsc-lbl'); if(l)l.textContent=lbl; var mm=g('pv-dsc-mto'); if(mm)mm.textContent='−$'+(m/1.15).toFixed(2); }
   if(g('pv-sub')) g('pv-sub').textContent='$'+(tf/1.15).toFixed(2);
+  if(g('pv-grav')) g('pv-grav').textContent='$'+(tf/1.15).toFixed(2);
   if(g('pv-iva')) g('pv-iva').textContent='$'+(tf-tf/1.15).toFixed(2);
   if(g('pv-tot')) g('pv-tot').textContent='$'+tf.toFixed(2);
 }
@@ -2732,6 +2738,16 @@ function enviarTicket(){
 
     prodColMap:     PROD_COL_MAP,
   };
+  if(window._migoVincularFac){
+    payload.vincular_borrador=window._migoVincularFac;
+    if(!payload.factura) payload.factura=window._migoVincularFac;
+  }
+  if(window._migoForma && payload.cobrado){
+    var _mf=String(window._migoForma).toLowerCase();
+    if(/transf/.test(_mf)) payload.cobTipo='Transferencia';
+    else if(/tarj/.test(_mf)) payload.cobTipo='Tarjeta';
+    else if(/efec/.test(_mf)) payload.cobTipo='Efectivo';
+  }
 
   const btn=document.querySelector('.submit-btn');
   if(window._esCotizacion){
@@ -2818,6 +2834,12 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+((d&&(d.ticket||d.beta_num))||_tkNum)+' registrado'+_gcMsg,'#6A9E7A');
+    if(window._migoVincularFac){
+      var _vk=(d&&(d.so_num||d.ticket||d.beta_num))||'';
+      if(_vk) toast('Vinculada a factura '+window._migoVincularFac+' → ticket '+_vk,'var(--green)');
+      window._migoVincularFac=''; window._migoForma='';
+      if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(true);
+    }
     try{ if(typeof window._onTicketGuardado==='function') window._onTicketGuardado(d, payload); }catch(eHook){}
     if(d&&d.paqueteFila&&_packsNuevos.length) _packsNuevos[0].fila=d.paqueteFila;
     // Conversiones a gift card. La primera sesión del paquete NO se marca sola.
@@ -18223,78 +18245,308 @@ function wireConteoFlujo(main){
 
 // Borradores de factura Migo sin ticket (Pendiente de aprobar). Sin cédulas ni teléfonos.
 function _migoEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-function _migoPintarBandeja(){
+function _migoTicketHref(clave){ return '#/m/tickets/t/'+encodeURIComponent(String(clave||'')); }
+function _migoTicketLink(clave){ var c=String(clave||''); if(!c) return '—'; return '<a href="'+_migoTicketHref(c)+'" style="font-weight:700;color:var(--navy-d,#1A2744);text-decoration:underline">'+_migoEsc(c)+'</a>'; }
+function _migoTicketLinks(claves){ return (claves||[]).filter(Boolean).map(_migoTicketLink).join(' + '); }
+function _migoNormTxt(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+function _migoCosmetologas(){
+  var users=[], seen={};
+  try{ users=(typeof getUsers==='function'?getUsers():[])||[]; }catch(e){ users=[]; }
+  var out=users.filter(function(u){
+    if(!u||!u.name) return false;
+    var rol=String(u.role||'');
+    return rol==='staff'||rol==='reception'||rol==='cosmetologa'||rol==='asistente_cosmetologia'||rol==='recepcion';
+  });
+  if(!out.length) out=[{name:'Andrea Robles'},{name:'Daniela Mora'},{name:'Dejaneira Espinoza'},{name:'Alejandra Rodriguez'}];
+  return out.filter(function(u){ var k=_migoNormTxt(u.name); if(seen[k]) return false; seen[k]=1; return true; });
+}
+function _migoSelectAsignar(fac, selected){
+  return '<select aria-label="Asignar a cosmetóloga" data-fac="'+_migoEsc(fac)+'" onchange="_migoAsignarSel(this)" style="padding:6px 8px;border:1.5px solid #cfc4ee;border-radius:9px;font:inherit;font-size:.75rem;background:white;color:var(--navy);max-width:180px">'
+    +'<option value="">Asignar a…</option>'
+    +_migoCosmetologas().map(function(u){ return '<option value="'+_migoEsc(u.name)+'"'+(selected&&String(selected)===String(u.name)?' selected':'')+'>'+_migoEsc(u.name)+'</option>'; }).join('')
+    +'</select>';
+}
+function _migoAsignarSel(sel){
+  var fac=sel&&sel.getAttribute('data-fac'), quien=sel&&String(sel.value||'').trim();
+  if(!fac||!quien||typeof api!=='function') return;
+  api('migo_borrador_asignar',{factura:fac,asignado_a:quien}).then(function(x){
+    if(x&&x.ok){ if(typeof toast==='function') toast('Asignada a '+quien,'var(--green)'); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(true); else if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff); }
+    else { alert((x&&x.error)||'No se pudo asignar'); sel.value=''; }
+  });
+}
+function _migoPintarBandeja(forzar){
   var box=document.getElementById('migo-borradores-banner');
-  if(!box||typeof api!=='function') return;
+  if(!box) return;
+  if(window._migoBandejaHtml!=null && box.innerHTML!==window._migoBandejaHtml) box.innerHTML=window._migoBandejaHtml;
+  if(!forzar && window._migoBandejaT && Date.now()-window._migoBandejaT<30000 && window._migoBandejaHtml!=null) return;
+  if(typeof api!=='function') return;
   if(window._migoBandejaCargando) return;
   window._migoBandejaCargando=true;
   Promise.resolve(api('migo_borradores_lista',{})).then(function(r){
     window._migoBandejaCargando=false;
-    if(!box.isConnected) return;
+    var dest=document.getElementById('migo-borradores-banner');
+    if(!dest||!dest.isConnected) return;
     if(!r||!r.ok) return;
-    var mias=r.mias||[], bandeja=r.bandeja||[];
-    if(!mias.length&&!bandeja.length){ box.innerHTML=''; return; }
-    var filas=function(L, admin){
+    var mias=r.mias||[], bandeja=r.bandeja||[], vinculados=r.vinculados||[];
+    if(!mias.length&&!bandeja.length&&!vinculados.length){
+      window._migoBandejaHtml=''; window._migoBandejaT=Date.now();
+      if(dest.innerHTML) dest.innerHTML='';
+      return;
+    }
+    var filas=function(L, modo){
       return L.map(function(b){
+        var claves=b.ticket_claves&&b.ticket_claves.length?b.ticket_claves:(b.ticket_clave?[b.ticket_clave]:[]);
+        var linked=claves.length>0;
+        var acciones='';
+        if(modo==='bandeja'&&!linked){
+          acciones='<button type="button" class="btn small" onclick="_migoVincularBorrador(\''+_migoEsc(b.factura)+'\')">Vincular ticket</button>'
+            +_migoSelectAsignar(b.factura,b.asignado_a)
+            +'<button type="button" class="btn ghost small" onclick="_migoAbrirEnTicket(\''+_migoEsc(b.factura)+'\')">Crear ticket</button>';
+        } else if(modo==='mias'&&!linked){
+          acciones='<button type="button" class="btn small" onclick="_migoAbrirEnTicket(\''+_migoEsc(b.factura)+'\')">Abrir ticket</button>';
+        } else {
+          acciones='<button type="button" class="btn ghost small" onclick="_migoAbrirBorrador(\''+_migoEsc(b.factura)+'\')">Ver</button>';
+        }
+        var pill=linked
+          ? '<span class="tk-pill" style="color:#1b6b45;border:1px solid #9ad7b6">Vinculada a '+_migoTicketLinks(claves)+'</span>'
+          : '<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente por aprobar</span>';
+        var cand=(!linked&&b.candidatos&&b.candidatos.length)?_migoSugInline(b.candidatos,b.total):'';
         return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #f0e6c8">'
           +'<div style="flex:1;min-width:180px"><b>'+_migoEsc(b.cliente||'—')+'</b>'
-          +'<div class="mccf-sub" style="font-size:.72rem">Fac. '+_migoEsc(b.factura)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+(b.forma?' · '+_migoEsc(b.forma):'')+(b.asignado_a?' · '+_migoEsc(b.asignado_a):'')+'</div></div>'
-          +'<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente de aprobar</span>'
-          +'<button type="button" class="btn small" onclick="_migoAbrirBorrador(\''+_migoEsc(b.factura)+'\')">Abrir</button>'
-          +(admin&&!b.asignado_a?'<button type="button" class="btn ghost small" onclick="_migoAsignarBorrador(\''+_migoEsc(b.factura)+'\')">Asignar</button>':'')
-          +'</div>';
+          +'<div class="mccf-sub" style="font-size:.72rem">Fac. '+_migoEsc(b.factura)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+(b.forma?' · '+_migoEsc(b.forma):'')+(b.asignado_a?' · '+_migoEsc(b.asignado_a):'')+'</div>'
+          +cand
+          +(linked?'<div class="mccf-sub" style="font-size:.78rem;margin-top:2px">Ticket: '+_migoTicketLinks(claves)+'</div>':'')
+          +'</div>'+pill+acciones+'</div>';
       }).join('');
     };
     var html='';
-    if(mias.length) html+='<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin-bottom:10px;padding:12px 14px"><b>Tienes '+mias.length+' factura'+(mias.length>1?'s':'')+' pendiente'+(mias.length>1?'s':'')+' de aprobar</b><div class="mccf-sub">Llegaron a Migo antes del ticket. Completa notas o cabina y aprueba: no cuentan en comisiones ni inventario hasta entonces.</div>'+filas(mias,false)+'</div>';
-    if(bandeja.length) html+='<div class="card" style="background:#f6f3ff;border:1.5px solid #cfc4ee;margin-bottom:10px;padding:12px 14px"><b>Facturas sin ticket</b> <span class="mccf-sub">('+bandeja.length+' en bandeja, sin cita de Acuity ese día)</span>'+filas(bandeja,true)+'</div>';
-    box.innerHTML=html;
+    if(mias.length) html+='<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin-bottom:10px;padding:12px 14px"><b>Tienes '+mias.length+' factura'+(mias.length>1?'s':'')+' pendiente'+(mias.length>1?'s':'')+' por aprobar</b><div class="mccf-sub">Llegaron a Migo antes del ticket. Ábrela en el ticket completo (cliente, ítems, precios y forma de pago ya vienen de la factura). Puedes agregar o corregir — las facturas a veces no traen cortesías u otros ítems. No cuenta en comisiones ni inventario hasta que lo envíes.</div>'+filas(mias,'mias')+'</div>';
+    if(bandeja.length) html+='<div class="card" style="background:#f6f3ff;border:1.5px solid #cfc4ee;margin-bottom:10px;padding:12px 14px"><b>Facturas sin ticket</b> <span class="mccf-sub">('+bandeja.length+' en bandeja — elige el ticket a vincular, o asígnala a una cosmetóloga; si el día anterior es lunes, también se sugieren esos)</span>'+filas(bandeja,'bandeja')+'</div>';
+    if(vinculados.length) html+='<div class="card" style="background:#f3faf6;border:1.5px solid #9ad7b6;margin-bottom:10px;padding:12px 14px"><b>Facturas vinculadas</b> <span class="mccf-sub">(recientes; entra al ticket desde el enlace)</span>'+filas(vinculados,'ok')+'</div>';
+    window._migoBandejaHtml=html; window._migoBandejaT=Date.now();
+    if(dest.innerHTML!==html) dest.innerHTML=html;
   }).catch(function(){ window._migoBandejaCargando=false; });
 }
-function _migoAbrirBorrador(fac){
+function _migoMoney(v){ return "$"+Number(v||0).toFixed(2); }
+function _migoSugInline(cands, totalFac){
+  if(!cands||!cands.length) return "";
+  var extra=cands.length>3?'<div class="mccf-sub" style="font-size:.7rem;margin-top:2px">+'+(cands.length-3)+' más en «Vincular ticket»</div>':'';
+  return '<div style="margin-top:6px">'+cands.slice(0,3).map(function(c){
+    var ok=c.cuadra!==false && Math.abs(Number(c.diferencia)||0)<=0.05;
+    if(c.cuadra===true) ok=true;
+    if(c.cuadra===false) ok=false;
+    var lineas=(c.claves||[]).map(function(k,i){
+      return _migoTicketLink(k)+' · '+_migoEsc((c.nombres&&c.nombres[i])||'')+' · '+_migoMoney((c.totales&&c.totales[i])||0);
+    }).join(' + ');
+    var dif=Math.abs(Number(c.diferencia)||0);
+    var lab=ok?'✅ Cuadra':'⚠️ No cuadra (diferencia '+_migoMoney(dif)+')';
+    var suma=(c.claves&&c.claves.length>1)?' = '+_migoMoney(c.total):'';
+    return '<div style="font-size:.74rem;margin-top:3px;line-height:1.35;color:'+(ok?'#1b6b45':'#8a6d00')+'">'+lab+': '+lineas+suma+'</div>';
+  }).join('')+extra+'</div>';
+}
+function _migoCandCard(c){
+  var claves=c.claves||[];
+  var ok=c.cuadra===true || (c.cuadra!==false && Math.abs(Number(c.diferencia)||0)<=0.05);
+  if(c.cuadra===false) ok=false;
+  var tit=claves.map(function(k,i){
+    return '<label style="display:flex;gap:6px;align-items:flex-start;margin:2px 0;cursor:pointer"><input type="checkbox" class="migo-pick" data-clave="'+_migoEsc(k)+'" data-nombre="'+_migoEsc((c.nombres&&c.nombres[i])||'')+'" data-total="'+Number((c.totales&&c.totales[i])||0)+'">'
+      +'<span>'+_migoTicketLink(k)+' · '+_migoEsc((c.nombres&&c.nombres[i])||'')+' · '+_migoMoney((c.totales&&c.totales[i])||0)
+      +((c.fechas&&c.fechas[i])?' · '+_migoEsc(c.fechas[i]):'')
+      +((c.cosmetologas&&c.cosmetologas[i])?' · '+_migoEsc(c.cosmetologas[i]):'')+'</span></label>';
+  }).join('');
+  var warn=ok?'#e8f6ee':'#fff8e6';
+  var bord=ok?'#9ad7b6':'#e8cf7a';
+  return '<div class="card" style="background:'+warn+';border:1.5px solid '+bord+';margin:8px 0;padding:10px 12px">'
+    +'<div>'+tit+'</div>'
+    +'<div class="mccf-sub" style="margin:6px 0 8px">'+_migoEsc(c.motivo||'')+'</div>'
+    +'<button type="button" class="btn ghost small" data-marcar="'+claves.map(_migoEsc).join(',')+'">Marcar '+(claves.length>1?'estos':'este')+'</button> '
+    +'<button type="button" class="btn small" data-vinc="'+claves.map(_migoEsc).join(',')+'">Vincular '+(claves.length>1?'estos tickets':'este ticket')+'</button></div>';
+}
+function _migoVincularBorrador(fac){
+  if(typeof api!=='function') return;
+  Promise.resolve(api('migo_borrador_get',{factura:fac})).then(function(r){
+    if(!r||!r.ok){ alert((r&&r.error)||'No pude abrir el borrador'); return; }
+    var b=r.borrador, cands=b.candidatos||[], totalFac=Number(b.total||0);
+    var wrap=document.createElement('div');
+    wrap.style.cssText='position:fixed;inset:0;background:rgba(20,16,40,.45);z-index:80;display:flex;align-items:flex-end;justify-content:center;padding:12px';
+    wrap.innerHTML='<div id="migo-vinc-form" style="background:white;border-radius:16px 16px 0 0;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px 16px 20px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Vincular ticket · Fac. '+_migoEsc(b.factura)+'</b><button type="button" class="btn ghost small" data-close>Cerrar</button></div>'
+      +'<div class="mccf-sub" style="margin:6px 0 10px">'+_migoEsc(b.cliente)+' · '+_migoEsc(b.fecha)+' · '+_migoMoney(totalFac)+(b.forma?' · '+_migoEsc(b.forma):'')+(b.asignado_a?' · asignada a '+_migoEsc(b.asignado_a):'')+'</div>'
+      +'<div class="mccf-sub" style="margin-bottom:8px">Marca uno o varios tickets. Las combinaciones de 2 o 3 que cuadran (±$0.05, total con IVA) van primero, con ✅. Misma familia (apellido) también cuenta. Revisa las advertencias antes de vincular.</div>'
+      +'<div id="migo-vinc-cands">'+(cands.length?cands.map(_migoCandCard).join(''):'<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin:8px 0;padding:10px 12px"><div class="mccf-sub">No hay un ticket del día (ni del lunes anterior) que cuadre por nombre, monto o suma de 2–3. Busca a mano o crea un ticket nuevo.</div></div>')+'</div>'
+      +'<div style="margin-top:12px"><b style="font-size:.78rem">Buscar ticket a mano</b>'
+      +'<div style="display:flex;gap:6px;margin-top:6px"><input id="migo-vinc-q" placeholder="Nombre o TK-SO-…" style="flex:1;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font:inherit"><button type="button" class="btn ghost small" id="migo-vinc-buscar">Buscar</button></div>'
+      +'<div id="migo-vinc-manual" style="margin-top:6px"></div></div>'
+      +'<div style="margin-top:12px"><b style="font-size:.78rem">Asignar a cosmetóloga</b><div style="margin-top:6px">'+_migoSelectAsignar(b.factura,b.asignado_a)+'</div></div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px"><button type="button" class="btn ghost small" id="migo-vinc-crear">Crear ticket nuevo (prellenado)</button></div>'
+      +'<div id="migo-vinc-ok" class="card" style="display:none;margin-top:12px;background:#f3faf6;border:1.5px solid #9ad7b6;padding:10px 12px"></div>'
+      +'<div id="migo-vinc-bar" style="position:sticky;bottom:0;background:white;border-top:1.5px solid #ECEEF4;margin:16px -16px -20px;padding:10px 16px 16px">'
+      +'<div id="migo-vinc-sum" class="mccf-sub" style="margin-bottom:8px">Ningún ticket marcado.</div>'
+      +'<button type="button" class="btn small" id="migo-vinc-sel" disabled>Vincular tickets marcados</button></div>'
+      +'</div>';
+    document.body.appendChild(wrap);
+    var picked={};
+    function listPicked(){ return Object.keys(picked); }
+    function pintarSuma(){
+      var keys=listPicked(), suma=0, bits=[];
+      keys.forEach(function(k){ suma+=Number(picked[k].total||0); bits.push(_migoTicketLink(k)+' · '+_migoMoney(picked[k].total)); });
+      var dif=Math.round((suma-totalFac)*100)/100, ok=Math.abs(dif)<=0.05, box=wrap.querySelector('#migo-vinc-sum'), btn=wrap.querySelector('#migo-vinc-sel');
+      if(!keys.length){ box.innerHTML='Ningún ticket marcado.'; btn.disabled=true; btn.textContent='Vincular tickets marcados'; return; }
+      var lab=ok?'✅ Cuadra':'⚠️ No cuadra (diferencia '+(dif>0?'+':'')+_migoMoney(dif)+')';
+      box.innerHTML='<b>'+lab+'</b> · Suma '+_migoMoney(suma)+' de '+_migoMoney(totalFac)+' · '+keys.length+' ticket'+(keys.length>1?'s':'')+': '+bits.join(' + ');
+      box.style.color=ok?'#1b6b45':'#8a6d00';
+      btn.disabled=false;
+      btn.textContent='Vincular '+keys.length+' ticket'+(keys.length>1?'s':'');
+    }
+    function setPick(clave, nombre, total, on){
+      if(!clave) return;
+      if(on) picked[clave]={nombre:nombre||'', total:Number(total)||0};
+      else delete picked[clave];
+      wrap.querySelectorAll('.migo-pick[data-clave="'+clave+'"]').forEach(function(el){ el.checked=!!on; });
+      pintarSuma();
+    }
+    function syncFromBox(box){
+      var el=box&&box.querySelector?box:null;
+      if(!el||!el.getAttribute) return;
+      setPick(el.getAttribute('data-clave'), el.getAttribute('data-nombre'), el.getAttribute('data-total'), el.checked);
+    }
+    var close=function(){ wrap.remove(); };
+    wrap.querySelector('[data-close]').onclick=close;
+    wrap.addEventListener('click',function(ev){ if(ev.target===wrap) close(); });
+    function mostrarVinculado(claves){
+      var ok=wrap.querySelector('#migo-vinc-ok');
+      ok.style.display='block';
+      ok.innerHTML='<b>Vinculada a '+_migoTicketLinks(claves)+'</b><div class="mccf-sub" style="margin-top:4px">Ya quedó en cada ticket. Entra desde el enlace. En el Historial verás la misma factura en todos.</div>';
+      if(typeof toast==='function') toast('Vinculada a '+(claves||[]).join(' + '),'var(--green)');
+      if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(true);
+      else if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
+    }
+    function vincular(tickets){
+      if(!tickets||!tickets.length) return;
+      api('migo_borrador_vincular',{factura:fac,tickets:tickets}).then(function(x){
+        if(!x||!x.ok){ alert((x&&x.error)||'No se pudo vincular'); return; }
+        mostrarVinculado(x.tickets||tickets);
+      });
+    }
+    wrap.addEventListener('change',function(ev){
+      var el=ev.target.closest&&ev.target.closest('.migo-pick');
+      if(!el) return;
+      setPick(el.getAttribute('data-clave'), el.getAttribute('data-nombre'), el.getAttribute('data-total'), el.checked);
+    });
+    wrap.querySelector('#migo-vinc-cands').addEventListener('click',function(ev){
+      var mark=ev.target.closest('[data-marcar]');
+      if(mark){
+        String(mark.getAttribute('data-marcar')||'').split(',').filter(Boolean).forEach(function(k){
+          var cb=wrap.querySelector('.migo-pick[data-clave="'+k+'"]');
+          setPick(k, cb&&cb.getAttribute('data-nombre'), cb&&cb.getAttribute('data-total'), true);
+        });
+        return;
+      }
+      var btn=ev.target.closest('[data-vinc]');
+      if(!btn) return;
+      var tickets=String(btn.getAttribute('data-vinc')||'').split(',').filter(Boolean);
+      if(!tickets.length) return;
+      if(!confirm('¿Vincular la factura '+fac+' a '+(tickets.join(' + '))+'?')) return;
+      vincular(tickets);
+    });
+    wrap.querySelector('#migo-vinc-buscar').onclick=function(){
+      var q=(wrap.querySelector('#migo-vinc-q').value||'').trim();
+      var dest=wrap.querySelector('#migo-vinc-manual');
+      if(q.length<2){ dest.innerHTML='<div class="mccf-sub">Escribe al menos 2 letras.</div>'; return; }
+      api('migo_borrador_buscar',{q:q}).then(function(x){
+        var items=(x&&x.items)||[];
+        if(!items.length){ dest.innerHTML='<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;padding:10px 12px"><div class="mccf-sub">No encontré un ticket con eso. Puedes crear uno nuevo.</div></div>'; return; }
+        dest.innerHTML=items.map(function(it){
+          var aviso=it.factura?'Ya tiene factura '+it.factura+'.':'Sin factura aún. Márcalo para sumarlo con otros.';
+          var on=!!picked[it.clave];
+          return '<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin:8px 0;padding:10px 12px">'
+            +'<label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer"><input type="checkbox" class="migo-pick" data-clave="'+_migoEsc(it.clave)+'" data-nombre="'+_migoEsc(it.nombre||'')+'" data-total="'+Number(it.total||0)+'"'+(on?' checked':'')+'>'
+            +'<span>'+_migoTicketLink(it.clave)+' · '+_migoEsc(it.nombre||'')+' · '+_migoMoney(it.total)+' · '+_migoEsc(it.fecha||'')+(it.cosmetologa?' · '+_migoEsc(it.cosmetologa):'')+'</span></label>'
+            +'<div class="mccf-sub" style="margin:6px 0 0">'+_migoEsc(aviso)+'</div></div>';
+        }).join('');
+      });
+    };
+    wrap.querySelector('#migo-vinc-sel').onclick=function(){
+      var tickets=listPicked();
+      if(!tickets.length) return;
+      if(!confirm('¿Vincular la factura '+fac+' a '+(tickets.join(' + '))+'?')) return;
+      vincular(tickets);
+    };
+    wrap.querySelector('#migo-vinc-crear').onclick=function(){ wrap.remove(); _migoAbrirEnTicket(fac); };
+    var best=(cands||[]).find(function(c){ return c.cuadra; });
+    if(best&&best.claves) best.claves.forEach(function(k,i){ setPick(k, (best.nombres&&best.nombres[i])||'', (best.totales&&best.totales[i])||0, true); });
+    else pintarSuma();
+  });
+}
+function _migoMatchLinea(l){
+  var sku=_migoNormTxt(l.sku||l.codigo||'');
+  var nom=_migoNormTxt(l.producto||l.nombre||l.descripcion||'');
+  var hit=function(list){
+    return (list||[]).find(function(x){
+      var xs=_migoNormTxt(x.sku), xn=_migoNormTxt(x.n||x.nombre||'');
+      return (sku&&(xs===sku||xs.indexOf(sku)>=0||sku.indexOf(xs)>=0)) || (nom&&xn&&(xn===nom||xn.indexOf(nom)>=0||nom.indexOf(xn)>=0));
+    })||null;
+  };
+  var fac=(typeof FACIALES!=='undefined')?hit(FACIALES):null;
+  if(fac) return {tipo:'facial', item:fac};
+  var pa3=(typeof PAQ3!=='undefined')?hit(PAQ3):null;
+  if(pa3) return {tipo:'pack3', item:pa3};
+  var pa6=(typeof PAQ6!=='undefined')?hit(PAQ6):null;
+  if(pa6) return {tipo:'pack6', item:pa6};
+  var ex=(typeof EXTRAS!=='undefined')?hit(EXTRAS):null;
+  if(ex) return {tipo:'extra', item:ex};
+  var prod=null;
+  if(typeof PROVS!=='undefined'){ (PROVS||[]).forEach(function(pv){ if(!prod) prod=hit(pv.prods||[]); }); }
+  if(prod) return {tipo:'prod', item:prod};
+  return null;
+}
+function _migoAbrirEnTicket(fac){
   if(typeof api!=='function') return;
   Promise.resolve(api('migo_borrador_get',{factura:fac})).then(function(r){
     if(!r||!r.ok){ alert((r&&r.error)||'No pude abrir el borrador'); return; }
     var b=r.borrador, d=b.datos||{};
-    var lineas=(b.lineas||[]).map(function(l){ return _migoEsc((l.producto||l.sku||l.codigo||'')+' × '+(l.cantidad||1)+(l.total!=null?'  $'+Number(l.total).toFixed(2):'')); }).join('<br>')||'<span class="mccf-sub">Sin detalle de productos en el reporte de Migo (Formas de pago). Puedes anotarlos abajo.</span>';
-    var wrap=document.createElement('div');
-    wrap.style.cssText='position:fixed;inset:0;background:rgba(20,16,40,.45);z-index:80;display:flex;align-items:flex-end;justify-content:center;padding:12px';
-    wrap.innerHTML='<form id="migo-borrador-form" style="background:white;border-radius:16px 16px 0 0;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px 16px 20px">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Borrador · Fac. '+_migoEsc(b.factura)+'</b><button type="button" class="btn ghost small" data-close>Cerrar</button></div>'
-      +'<div class="mccf-sub" style="margin:6px 0 10px">'+_migoEsc(b.cliente)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+' · '+_migoEsc(b.estado_txt)+'</div>'
-      +'<div style="margin-bottom:10px"><b style="font-size:.78rem">Ítems</b><div>'+lineas+'</div></div>'
-      +'<label style="display:block;font-size:.78rem;margin-bottom:6px">Notas / cabina<textarea name="notas" rows="3" style="width:100%;margin-top:4px;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font:inherit">'+(d.notas||d.cabina||'')+'</textarea></label>'
-      +'<label style="display:block;font-size:.78rem;margin-bottom:10px">Recomendaciones<textarea name="recomendaciones" rows="2" style="width:100%;margin-top:4px;padding:8px;border:1.5px solid #ECEEF4;border-radius:9px;font:inherit">'+(d.recomendaciones||'')+'</textarea></label>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:8px"><button type="submit" class="btn small">Aprobar ticket</button><button type="button" class="btn ghost small" data-save>Solo guardar</button></div>'
-      +'<div class="mccf-sub" style="margin-top:8px">Hasta aprobarlo no cuenta para comisiones ni descuenta inventario.</div></form>';
-    document.body.appendChild(wrap);
-    wrap.querySelector('[data-close]').onclick=function(){ wrap.remove(); };
-    wrap.addEventListener('click',function(ev){ if(ev.target===wrap) wrap.remove(); });
-    wrap.querySelector('[data-save]').onclick=function(){
-      var f=wrap.querySelector('#migo-borrador-form');
-      api('migo_borrador_guardar',{factura:fac,datos:{notas:f.notas.value,recomendaciones:f.recomendaciones.value}}).then(function(x){
-        if(x&&x.ok){ wrap.remove(); if(typeof toast==='function') toast('Borrador guardado','var(--green)'); }
-        else alert((x&&x.error)||'No se guardó');
-      });
-    };
-    wrap.querySelector('#migo-borrador-form').onsubmit=function(ev){
-      ev.preventDefault();
-      var f=ev.target;
-      if(!confirm('¿Aprobar este ticket? Recién entonces cuenta en comisiones e inventario.')) return;
-      api('migo_borrador_aprobar',{factura:fac,datos:{notas:f.notas.value,recomendaciones:f.recomendaciones.value}}).then(function(x){
-        if(!x||!x.ok){ alert((x&&x.error)||'No se pudo aprobar'); return; }
-        wrap.remove();
-        if(typeof toast==='function') toast('Ticket aprobado '+((x.so_num||x.ticket)||''),'var(--green)');
-        if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
-      });
-    };
+    var claves=b.ticket_claves&&b.ticket_claves.length?b.ticket_claves:(b.ticket_clave?[b.ticket_clave]:[]);
+    if(claves.length && typeof go==='function'){ go(_migoTicketHref(claves[0])); return; }
+    if(typeof newT!=='function'||typeof showTab!=='function'){ alert('No pude abrir el ticket completo en esta pantalla'); return; }
+    T=newT();
+    var parts=String(b.cliente||'').trim().split(/\s+/);
+    T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
+    T.factura=b.factura||fac;
+    T.notas=(d.notas||d.cabina||'');
+    T.recom=d.recomendaciones||'';
+    var forma=String(b.forma||'');
+    T.cobro=/cortes[ií]a|canje/i.test(forma)?'cortesia':'cobrado';
+    var unmatched=[];
+    (b.lineas||[]).forEach(function(l){
+      var m=_migoMatchLinea(l), qty=Number(l.cantidad||1)||1;
+      if(!m){ unmatched.push((l.producto||l.sku||l.codigo||'ítem')+' ×'+qty+(l.total!=null?' $'+Number(l.total).toFixed(2):'')); return; }
+      if(m.tipo==='facial'&&!T.facial) T.facial=m.item.sku;
+      else if(m.tipo==='pack3') T.pack3=m.item.sku;
+      else if(m.tipo==='pack6') T.pack6=m.item.sku;
+      else if(m.tipo==='extra') T.extras[m.item.sku]=true;
+      else if(m.tipo==='prod') T.productos[m.item.sku]=(T.productos[m.item.sku]||0)+qty;
+      else unmatched.push((l.producto||l.sku||'')+' ×'+qty);
+    });
+    var notaFac='Factura Migo '+T.factura+(forma?' · '+forma:'')+' · total $'+Number(b.total||0).toFixed(2)+' (con IVA).';
+    if(unmatched.length) notaFac+=' Ítems de Migo no hallados en el catálogo (revísalos o agrégalos): '+unmatched.join('; ')+'.';
+    notaFac+=' Si faltan cortesías u otros ítems, agrégalos aquí antes de enviar.';
+    T.notas=(T.notas?T.notas+'\n':'')+notaFac;
+    window._migoVincularFac=T.factura;
+    window._migoForma=forma;
+    showTab('ticket');
+    setTimeout(function(){
+      var nom=document.getElementById('inp-nom'), ape=document.getElementById('inp-ape'), facEl=document.getElementById('inp-fac');
+      if(nom) nom.value=T.nombre;
+      if(ape) ape.value=T.apellido;
+      if(facEl) facEl.value=T.factura;
+      if(typeof _lookupNombreTicket==='function' && T.nombre && T.apellido) _lookupNombreTicket();
+      if(typeof toast==='function') toast('Ticket prellenado desde Fac. '+T.factura+'. Revisa ítems y envía.','var(--green)');
+    },120);
   });
 }
+function _migoAbrirBorrador(fac){ _migoAbrirEnTicket(fac); }
 function _migoAsignarBorrador(fac){
-  var quien=prompt('¿A qué cosmetóloga se lo asigno?');
-  if(!quien||!quien.trim()) return;
-  api('migo_borrador_asignar',{factura:fac,asignado_a:quien.trim()}).then(function(x){
-    if(x&&x.ok){ if(typeof toast==='function') toast('Asignado a '+quien.trim(),'var(--green)'); if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff); }
-    else alert((x&&x.error)||'No se pudo asignar');
-  });
+  var box=document.getElementById('migo-borradores-banner');
+  var sel=box&&box.querySelector('select[data-fac="'+fac+'"]');
+  if(sel) sel.focus();
 }

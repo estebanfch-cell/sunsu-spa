@@ -4,7 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./tickets_beta_api.ts";
 import "./migo_cuadre_api.ts";
-import { cruzar, esConsumidorFinal, esperandoFacturaLunes, exentoCuadre, facSeq, fechaGye, flagsDeseadas, formaDeTicket, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
+import { candidatosParaFactura, cruzar, ticketClaveValida, esConsumidorFinal, esperandoFacturaLunes, exentoCuadre, facSeq, fechaGye, fechasCandidatasBorrador, flagsDeseadas, formaDeTicket, idFlag, namesMatch, NUNCA_TICKET_ID, type FacturaVivo } from "./migo_cuadre.ts";
 import { docsBeta, faltaDe } from "./tickets_beta_api.ts";
 import type { Row } from "./domain.ts";
 
@@ -160,6 +160,57 @@ describe("API migo_importar / migo_cuadre_hora", () => {
   });
 });
 
+
+describe("candidatos de bandeja para vincular un borrador", () => {
+  it("el martes incluye tickets del lunes; ordena por nombre, monto exacto y suma de 2", () => {
+    assert.deepEqual(fechasCandidatasBorrador("2026-11-17"), ["2026-11-16", "2026-11-17"]);
+    assert.deepEqual(fechasCandidatasBorrador("2026-11-18"), ["2026-11-18"]);
+    const inv = { fecha: "2026-11-17", cliente: "VERONICA PRADO", total: 65 };
+    const tickets: Row[] = [
+      { id: 1897, clave: "TK-SO-1905", fecha: "2026-11-17", nombre: "Juan Martín", apellido: "Hajj Prado", estimado: 65, fac_7: "", atendido_por: "Andrea Robles" },
+      { id: 1886, clave: "TK-SO-1893", fecha: "2026-11-17", nombre: "Camila", apellido: "Cadena", estimado: 65, fac_7: "001-001-000002951" },
+      { id: 1801, clave: "TK-SO-1801", fecha: "2026-11-16", nombre: "Ana", apellido: "Lunes", estimado: 30, fac_7: "" },
+      { id: 1802, clave: "TK-SO-1802", fecha: "2026-11-16", nombre: "Beto", apellido: "Lunes", estimado: 35, fac_7: "" },
+      { id: 1999, clave: "TK-SO-1999", fecha: "2026-11-17", nombre: "Veronica", apellido: "Prado Extra", estimado: 10, fac_7: "" },
+      { id: NUNCA_TICKET_ID, clave: "TK-SO-1827", fecha: "2026-11-17", nombre: "Veronica", apellido: "Prado", estimado: 65, fac_7: "" },
+    ];
+    const C = candidatosParaFactura(inv, tickets);
+    assert.equal(C.some((c) => c.claves.includes("TK-SO-1893")), false);
+    assert.equal(C.some((c) => c.ticket_ids.includes(NUNCA_TICKET_ID)), false);
+    const suma = C.find((c) => c.tipo === "suma2" && c.claves.includes("TK-SO-1801") && c.claves.includes("TK-SO-1802"))!;
+    assert.ok(suma); assert.equal(suma.cuadra, true);
+    const monto = C.find((c) => c.claves.length === 1 && c.claves[0] === "TK-SO-1905")!;
+    assert.ok(monto && monto.cuadra, "1905 entra por monto, no se autoelige");
+    assert.match(monto.motivo, /no es el mismo|coinciden/i);
+    const nom = C.find((c) => c.claves[0] === "TK-SO-1999" && c.tipo === "nombre")!;
+    assert.ok(nom && nom.cuadra === false);
+    assert.ok(C.indexOf(suma) < C.indexOf(nom), "los que cuadran van antes que los que no");
+    assert.ok(C.indexOf(monto) < C.indexOf(nom));
+  });
+  it("2960: suma de 3 (Paola + familia Reina) cuadra a 1 centavo y va primero; oculta r1899", () => {
+    const inv = { fecha: "2026-11-17", cliente: "PAOLA URVANO", total: 326.97 };
+    const tickets: Row[] = [
+      { id: 1894, clave: "TK-SO-1902", fecha: "2026-11-17", nombre: "Paola", apellido: "Urvano", estimado: 224.991, fac_7: "", atendido_por: "Daniela Mora" },
+      { id: 1891, clave: "TK-SO-1899", fecha: "2026-11-17", nombre: "Isabella", apellido: "Reina", estimado: 57.982, fac_7: "", atendido_por: "Daniela Mora" },
+      { id: 1893, clave: "TK-SO-1901", fecha: "2026-11-17", nombre: "Nataly", apellido: "Reina", estimado: 43.989999985, fac_7: "", atendido_por: "Daniela Mora" },
+      { id: 1898, clave: "r1899", sheet_row: 1899, fecha: "", nombre: "", apellido: "", estimado: 0, fac_7: "" },
+    ];
+    assert.equal(ticketClaveValida(tickets[3]), false);
+    const C = candidatosParaFactura(inv, tickets);
+    assert.equal(C.some((c) => c.claves.includes("r1899") || c.claves.some((k) => /^r\d+$/i.test(k))), false);
+    const tres = C.find((c) => c.tipo === "suma3" && c.claves.includes("TK-SO-1902") && c.claves.includes("TK-SO-1899") && c.claves.includes("TK-SO-1901"))!;
+    assert.ok(tres && tres.cuadra, "224.99+57.98+43.99 = 326.96 cuadra a 1 centavo");
+    assert.ok(Math.abs(tres.diferencia) <= 0.05);
+    assert.match(tres.motivo, /✅|Cuadra/i);
+    assert.match(tres.motivo, /familia|Reina/i);
+    assert.equal(C[0].tipo, "suma3");
+    const solo = C.find((c) => c.claves.length === 1 && c.claves[0] === "TK-SO-1902")!;
+    assert.ok(solo && solo.cuadra === false);
+    assert.match(solo.motivo, /No cuadra|diferencia/i);
+    assert.ok(C.indexOf(tres) < C.indexOf(solo));
+  });
+});
+
 describe("borradores de factura sin ticket", () => {
   it("crea un borrador Pendiente de aprobar cuando la factura no tiene ticket, y lo ofrece al crear uno después", async () => {
     const db = new MemoryDb();
@@ -194,6 +245,108 @@ describe("borradores de factura sin ticket", () => {
     assert.equal(oferta.requiere, "vincular_borrador");
     assert.equal((oferta.borrador as Row).factura, "001-001-000002959");
   });
+
+  it("tras asignar sigue en la bandeja, propone el ticket y al vincular solo escribe la beta (no Sheets)", async () => {
+    const db = new MemoryDb();
+    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+    db.tables.set("tickets", [
+      { id: 1897, sheet_row: 1898, so_num: "TK-SO-1905", timestamp: "2026-11-17T16:00:00Z", nombre: "Juan Martín", apellido: "Hajj Prado", estimado: 65, cob: true, fac: false, fac_7: "", comp: "", atendido_por: "Andrea Robles", orig: {} },
+    ]);
+    db.tables.set("beta_tickets", []);
+    db.tables.set("beta_ticket_flags", []);
+    db.tables.set("beta_ticket_cancelados", []);
+    db.tables.set("beta_migo_facturas_vivo", []);
+    db.tables.set("beta_migo_importes", []);
+    db.tables.set("beta_cuadre_link", []);
+    db.tables.set("beta_migo_borradores", []);
+    db.tables.set("beta_acuity_calendars", []);
+    db.tables.set("log_acciones", []);
+    const ctx = { db, now: new Date("2026-11-18T15:42:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, token: "adm", legacyLogin: async () => ({}) };
+    const r = await handle("migo_importar", { token: "adm", fecha_desde: "2026-11-17", fecha_hasta: "2026-11-17", facturas: [
+      { factura: "001-001-000002962", fecha: "2026-11-17", cliente: "VERONICA PRADO", total: 65, forma: "Tarjeta" },
+    ] }, ctx) as Row;
+    assert.equal(r.ok, true, String(r.error));
+    const bor0 = db.tables.get("beta_migo_borradores")!.find((b) => String(b.factura).includes("2962"))!;
+    assert.equal(bor0.estado, "pendiente");
+    assert.equal(bor0.ticket_clave, undefined);
+    const asg = await handle("migo_borrador_asignar", { token: "adm", factura: "2962", asignado_a: "Andrea" }, ctx) as Row;
+    assert.equal(asg.ok, true, String(asg.error));
+    const lista = await handle("migo_borradores_lista", { token: "adm" }, ctx) as Row;
+    const bandeja = lista.bandeja as Row[];
+    assert.equal(bandeja.length, 1, "la asignada sin ticket no desaparece de la bandeja de admin");
+    assert.equal(bandeja[0].estado, "asignado");
+    const cands = bandeja[0].candidatos as Row[];
+    const monto = cands.find((c) => (c.claves as string[]).includes("TK-SO-1905"));
+    assert.ok(monto, "propone 1905 por monto exacto");
+    assert.ok(monto!.tipo === "monto" || monto!.tipo === "nombre_monto");
+    assert.equal(cands.some((c) => (c.ticket_ids as number[]).includes(1820)), false);
+    db.tables.get("tickets")!.push({ id: 1820, sheet_row: 1821, so_num: "TK-SO-1827", timestamp: "2026-11-17T16:00:00Z", nombre: "Veronica", apellido: "Prado", estimado: 65, cob: true, fac: false, fac_7: "", orig: {} });
+    const bad = await handle("migo_borrador_vincular", { token: "adm", factura: "2962", tickets: ["TK-SO-1827"] }, ctx) as Row;
+    assert.match(String(bad.error || ""), /no se vincula/i);
+    const vinc = await handle("migo_borrador_vincular", { token: "adm", factura: "2962", tickets: ["TK-SO-1905"] }, ctx) as Row;
+    assert.equal(vinc.ok, true, String(vinc.error));
+    assert.equal(vinc.ticket_clave, "TK-SO-1905");
+    const tk = db.tables.get("tickets")!.find((x) => x.id === 1897)!;
+    assert.equal(tk.fac_7, "");
+    assert.equal(tk.fac, false);
+    const cab = (db.tables.get("beta_tickets") || []).find((c) => String(c.clave).includes("1905"))!;
+    assert.equal((cab.datos as Row).factura, "001-001-000002962");
+    const after = await handle("migo_borradores_lista", { token: "adm" }, ctx) as Row;
+    assert.equal((after.bandeja as Row[]).length, 0);
+    const vins = after.vinculados as Row[];
+    assert.equal(vins[0].ticket_clave, "TK-SO-1905");
+    const bus = await handle("migo_borrador_buscar", { token: "adm", q: "1905" }, ctx) as Row;
+    assert.equal(((bus.items as Row[])[0] || {}).clave, "TK-SO-1905");
+  });
+
+
+  it("vincula tres tickets a una factura, deja la misma factura en cada uno y no escribe Sheets; oculta r1899 en la búsqueda", async () => {
+    const db = new MemoryDb();
+    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+    const ts = "2026-11-17T18:00:00Z";
+    db.tables.set("tickets", [
+      { id: 1894, sheet_row: 1895, so_num: "TK-SO-1902", timestamp: ts, nombre: "Paola", apellido: "Urvano", estimado: 224.991, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+      { id: 1891, sheet_row: 1892, so_num: "TK-SO-1899", timestamp: ts, nombre: "Isabella", apellido: "Reina", estimado: 57.982, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+      { id: 1893, sheet_row: 1894, so_num: "TK-SO-1901", timestamp: ts, nombre: "Nataly", apellido: "Reina", estimado: 43.99, cob: true, fac: false, fac_7: "", atendido_por: "Daniela Mora", orig: {} },
+      { id: 1898, sheet_row: 1899, so_num: null, timestamp: null, nombre: null, apellido: null, estimado: null, fac: false, fac_7: null, orig: {} },
+    ]);
+    db.tables.set("beta_tickets", []);
+    db.tables.set("beta_ticket_flags", []);
+    db.tables.set("beta_ticket_cancelados", []);
+    db.tables.set("beta_migo_facturas_vivo", []);
+    db.tables.set("beta_migo_importes", []);
+    db.tables.set("beta_cuadre_link", []);
+    db.tables.set("beta_migo_borradores", []);
+    db.tables.set("beta_acuity_calendars", []);
+    db.tables.set("log_acciones", []);
+    const ctx = { db, now: new Date("2026-11-18T16:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, token: "adm", legacyLogin: async () => ({}) };
+    const r = await handle("migo_importar", { token: "adm", fecha_desde: "2026-11-17", fecha_hasta: "2026-11-17", facturas: [
+      { factura: "001-001-000002960", fecha: "2026-11-17", cliente: "PAOLA URVANO", total: 326.97, forma: "Tarjeta" },
+    ] }, ctx) as Row;
+    assert.equal(r.ok, true, String(r.error));
+    const lista = await handle("migo_borradores_lista", { token: "adm" }, ctx) as Row;
+    const cands = ((lista.bandeja as Row[])[0].candidatos || []) as Row[];
+    const tres = cands.find((c) => (c.claves as string[]).includes("TK-SO-1902") && (c.claves as string[]).length === 3);
+    assert.ok(tres && tres.cuadra);
+    const bus = await handle("migo_borrador_buscar", { token: "adm", q: "1899" }, ctx) as Row;
+    const items = (bus.items || []) as Row[];
+    assert.equal(items.some((it) => String(it.clave).toLowerCase() === "r1899"), false);
+    assert.equal(items.some((it) => String(it.clave).includes("1899")), true);
+    const vinc = await handle("migo_borrador_vincular", { token: "adm", factura: "2960", tickets: ["TK-SO-1902", "TK-SO-1899", "TK-SO-1901"] }, ctx) as Row;
+    assert.equal(vinc.ok, true, String(vinc.error));
+    assert.deepEqual(vinc.tickets, ["TK-SO-1902", "TK-SO-1899", "TK-SO-1901"]);
+    for (const so of ["1902", "1899", "1901"]) {
+      const tk = db.tables.get("tickets")!.find((x) => String(x.so_num).includes(so))!;
+      assert.equal(tk.fac_7, "");
+      const cab = (db.tables.get("beta_tickets") || []).find((c) => String(c.clave).includes(so))!;
+      assert.equal((cab.datos as Row).factura, "001-001-000002960");
+    }
+    const after = await handle("migo_borradores_lista", { token: "adm" }, ctx) as Row;
+    assert.deepEqual((after.vinculados as Row[])[0].ticket_claves, ["TK-SO-1902", "TK-SO-1899", "TK-SO-1901"]);
+  });
+
   it("el cron con clave corre el import sin sesión de persona (la clave no se imprime)", async () => {
     const db = new MemoryDb();
     db.tables.set("tickets", []);
