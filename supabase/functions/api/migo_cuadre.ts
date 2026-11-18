@@ -105,6 +105,7 @@ export type LineaFactura = { codigo?: string; sku?: string; producto?: string; t
 export type FacturaVivo = {
   factura: string; seq: number; fecha: string; hora?: string; cliente: string;
   total: number; subtotal?: number; descuento?: number; forma?: string;
+  formas_pago?: { forma: string; valor: number }[];
   lineas?: LineaFactura[];
 };
 export type LinkCuadre = {
@@ -116,6 +117,11 @@ export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "mont
 
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
+}
+/** TK90: cancelado/anulado (beta o sistema anterior). */
+export function ticketCancelado(t: Row): boolean {
+  const o = t.orig && typeof t.orig === "object" ? t.orig as Row : {};
+  return o.anulado === true || t.cancelado === true || t.anulado === true || !!t.borrado_at || /cancel|anulad/i.test(s(t.estado_beta || t.estado_ticket));
 }
 function totalTicket(t: Row): number {
   return n(t.estimado);
@@ -325,7 +331,9 @@ export function parseFacturaVivo(x: Row): FacturaVivo | null {
     factura, seq, fecha, hora: s(x.hora).slice(0, 8) || undefined,
     cliente: s(x.cliente).slice(0, 200),
     total: n(x.total ?? x.total_pagar), subtotal: n(x.subtotal), descuento: n(x.descuento),
-    forma: s(x.forma || x.forma_pago || x.formas).slice(0, 80),
+    forma: s(x.forma || x.forma_pago || (typeof x.formas === "string" ? x.formas : "")).slice(0, 80),
+    // TK91: pago mixto de Migo (Cobros Realizados): cada forma con su monto.
+    formas_pago: (Array.isArray(x.formas_pago) ? x.formas_pago as Row[] : []).map((f) => ({ forma: s(f.forma || f.metodo).slice(0, 80), valor: Math.round(n(f.valor ?? f.monto) * 100) / 100 })).filter((f) => f.valor > 0),
     lineas,
   };
 }
@@ -463,6 +471,9 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     if (!dias.has(s(t.fecha).slice(0, 10))) return false;
     const fac = s(t.facturaBeta || t.fac_7);
     if (fac && !/sin/i.test(fac)) return false;
+    // TK90 (Emilia 18/11): nunca tickets de $0 (retiros internos, gift cards de cortesía) ni cancelados.
+    if (!(totalTicket(t) > 0.004)) return false;
+    if (ticketCancelado(t)) return false;
     return true;
   });
   const pub = (t: Row) => ({
@@ -506,8 +517,10 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     singles.push(item([x], tipo));
   }
 
+  // TK90: un ticket que cuadra solo va solo: nunca se mezcla en combinaciones de 2 o 3.
+  const solos = new Set(singles.filter((c) => c.cuadra).map((c) => c.ticket_ids[0]));
   const combos: CandidatoBorrador[] = [];
-  const P = pool.map(pub);
+  const P = pool.map(pub).filter((x) => !solos.has(x.id));
   for (let i = 0; i < P.length; i++) {
     for (let j = i + 1; j < P.length; j++) {
       const two = [P[i], P[j]];
@@ -530,9 +543,10 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     if (a.claves.length !== b.claves.length) return b.claves.length - a.claves.length;
     return (a.claves.join()).localeCompare(b.claves.join());
   };
-  combos.sort(rank);
-  singles.sort(rank);
-  return [...combos, ...singles].sort(rank);
+  // TK90: sin repetidos (mismo conjunto de tickets en otro orden).
+  const vistos = new Set<string>();
+  const unicos = [...combos, ...singles].filter((c) => { const k = c.ticket_ids.slice().sort((x, y) => x - y).join(","); if (vistos.has(k)) return false; vistos.add(k); return true; });
+  return unicos.sort(rank);
 }
 
 

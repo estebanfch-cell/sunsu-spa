@@ -257,6 +257,73 @@ async function aplicarDatosMigo(ctx: Ctx, actor: string, tickets: Row[], links: 
   return nAct;
 }
 
+/**
+ * TK91 (Emilia 18/11): las formas de pago de la factura Migo (también mixtas: efectivo + transferencia + tarjeta)
+ * pasan a Pagos del ticket vinculado, cada una con su monto. Solo si el ticket no tiene ya ese pago (ni cobro del
+ * sistema anterior, que ya se muestra con las formas de Migo), solo vínculo por número y factura de un solo ticket. Nunca duplica
+ * (marca «Factura Migo <factura> · forma n» en la nota); no mueve la caja chica (el efectivo ya entró). Queda en el log.
+ */
+export function pagosMigoParaTicket(inv: FacturaVivo, pagosBeta: Row[]): { metodo: string; monto: number; idx: number }[] {
+  const formas = inv.formas_pago && inv.formas_pago.length ? inv.formas_pago : (inv.forma && inv.forma !== "mixto" ? [{ forma: inv.forma, valor: inv.total }] : []);
+  const vivos = pagosBeta.filter((p) => p.anulado !== true);
+  let resta = Math.round((n(inv.total) - vivos.reduce((a, p) => a + n(p.monto), 0)) * 100) / 100;
+  const usados = new Set<string>();
+  const out: { metodo: string; monto: number; idx: number }[] = [];
+  formas.forEach((f, idx) => {
+    const metodo = metodoDeMigo(f.forma);
+    const monto = Math.round(n(f.valor) * 100) / 100;
+    if (!metodo || !(monto > 0)) return;
+    if (vivos.some((p) => s(p.nota) === marcaPagoMigo(inv.factura, idx))) return;
+    const ya = vivos.find((p) => !usados.has(s(p.id)) && s(p.metodo) === metodo && Math.abs(n(p.monto) - monto) <= 0.05);
+    if (ya) { usados.add(s(ya.id)); return; }
+    if (!(resta > 0.05)) return;
+    const m = Math.min(monto, resta);
+    out.push({ metodo, monto: Math.round(m * 100) / 100, idx });
+    resta = Math.round((resta - m) * 100) / 100;
+  });
+  return out;
+}
+export function marcaPagoMigo(factura: string, idx: number): string { return "Factura Migo " + factura + " · forma " + (idx + 1); }
+export function metodoDeMigo(forma: unknown): string {
+  const u = s(forma).toLowerCase();
+  if (/deuna/.test(u)) return "deuna";
+  if (/tarj|cr[eé]dito corriente|d[eé]bito|visa|master|diners|amex/.test(u)) return "tarjeta";
+  if (/trans|dep[oó]s|pichincha|produbanco|guayaquil/.test(u)) return "transferencia";
+  if (/efec|cash/.test(u)) return "efectivo";
+  if (/gift/.test(u)) return "gift_card";
+  return ""; // crédito de cliente, nota de crédito, cargo a cuenta: no son cobros del ticket
+}
+async function aplicarPagosMigo(ctx: Ctx, actor: string, tickets: Row[], links: LinkCuadre[], facturas: FacturaVivo[]): Promise<number> {
+  let pagosAll: Row[];
+  try { pagosAll = await ctx.db.all("beta_pagos"); } catch { return 0; }
+  const byFac = new Map(facturas.map((f) => [f.factura, f]));
+  const byId = new Map(tickets.map((t) => [n(t.id), t]));
+  const porFac = new Map<string, number>();
+  for (const L of links) porFac.set(L.factura, (porFac.get(L.factura) || 0) + 1);
+  const now = ctx.now.toISOString();
+  let nuevos = 0;
+  for (const L of links) {
+    if (L.ticket_id === NUNCA_TICKET_ID || porFac.get(L.factura) !== 1 || L.confianza !== "alta") continue; // solo vínculo por número de factura, una factura = un ticket
+    const t = byId.get(L.ticket_id), inv = byFac.get(L.factura);
+    if (!t || !inv) continue;
+    // Con cobro del sistema anterior (monto en el ticket), Pagos ya lo muestra repartido con las formas de Migo
+    // (formasPagoMigo → filasPagoLegado): copiarlo sería duplicar.
+    if (n(t.estimado) > 0) continue;
+    const clave = s(t.clave) || claveDe(t, leerSerie(t, "so_num"));
+    const beta = pagosAll.filter((p) => s(p.ticket_clave) === clave);
+    for (const x of pagosMigoParaTicket(inv, beta)) {
+      const row = { id: crypto.randomUUID(), ticket_clave: clave, ticket_id: t.id ?? null, fecha: inv.fecha ? inv.fecha + "T17:00:00.000Z" : now, metodo: x.metodo, monto: x.monto, ref: null, nota: marcaPagoMigo(inv.factura, x.idx), registrado_por: "Migo (import)", caja_mov_id: null };
+      try {
+        await ctx.db.write(actor, "beta_pagos", "insert", {}, row);
+        pagosAll.push(row);
+        nuevos++;
+        await logSafe(ctx, actor, "PAGO MIGO", clave + " · " + inv.factura + " · " + x.metodo + " $" + x.monto.toFixed(2));
+      } catch { /* sin tabla o id repetido: no duplica */ }
+    }
+  }
+  return nuevos;
+}
+
 /** TK81: precio de catálogo con IVA por código (SUNSU-15 → "15"). */
 async function catalogoPrecios(ctx: Ctx): Promise<Map<string, { nombre?: string; pvpConIva?: number }>> {
   const m = new Map<string, { nombre?: string; pvpConIva?: number }>();
@@ -309,6 +376,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const links = cruzar(facturas, tickets);
   await guardarLinks(ctx, actor, links);
   const datosMigo = await aplicarDatosMigo(ctx, actor, tickets, links, facturas);
+  const pagosMigo = await aplicarPagosMigo(ctx, actor, tickets, links, facturas);
   const hoyGye = ecuadorParts(ctx.now).ymd;
   const imports = await todas(ctx, "beta_migo_importes");
   let importadoGye = "";
@@ -327,7 +395,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   }));
   return {
     ok: true, hoy: hoyGye, importado: importadoGye || null, facturas: facturas.length, links: links.length,
-    datos_migo: datosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs,
+    datos_migo: datosMigo, pagos_migo: pagosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs,
     borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados,
     // Solo novedades de ESTA corrida (para el resumen del CLI). No cambia el cruce.
     resumen: { borradores: br.creados || [], flags: flagsNuevas, por_facturar: porFacturar },
@@ -405,6 +473,7 @@ async function importarFacturas(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
       factura: f.factura, seq: f.seq, fecha: f.fecha, hora: f.hora || null, cliente: f.cliente,
       total: f.total, subtotal: f.subtotal ?? null, descuento: f.descuento ?? null, forma: f.forma || null,
       lineas: f.lineas || [], imported_at: now, updated_at: now,
+      ...(f.formas_pago && f.formas_pago.length ? { formas_pago: f.formas_pago } : {}),
     };
     if (prev.has(f.factura)) {
       await ctx.db.write(actor, "beta_migo_facturas_vivo", "update", { factura: f.factura }, row);
