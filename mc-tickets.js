@@ -48,7 +48,7 @@
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
       ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
       ".mctk-pen{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.85rem;padding:0 3px}.mctk-pen:hover{color:var(--navy-d)}.mctk-in{padding:5px 7px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.82rem;width:min(100%,260px)}textarea.mctk-in{width:100%}",
-      ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
+      ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-irp{display:inline-block;margin-left:4px;padding:0 6px;line-height:16px;border:1px solid #d9cfbd;border-radius:7px;font-size:.68rem;color:#8A6D1F;text-decoration:none;white-space:nowrap;vertical-align:baseline}.mctk-irp:active{background:#f4ecdc}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
       ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:280px}",
       ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
@@ -125,6 +125,15 @@
     var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
     return c && c.foto ? '<img class="mctk-ph" src="' + e(c.foto) + '" alt="" loading="lazy">' : "";
   }
+  /** TK43 (Emilia t486u, como MineCore mcIrBtn): botoncito sutil ↗ que abre la ficha del producto de la línea. */
+  function prodIdLinea(l) {
+    var C = K.cat || [], c = C.find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; }) || C.find(function (p) { return p.sku === l.sku; });
+    return c && c.productoId ? String(c.productoId) : "";
+  }
+  function irProdBtn(l) {
+    var id = prodIdLinea(l);
+    return id ? ' <a href="#/m/productos/p/' + e(id) + '" class="mctk-irp" data-irp="' + e(id) + '" title="Ir al producto" aria-label="Ir a la ficha del producto">↗</a>' : "";
+  }
   function codigoVisible(l) {
     var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
     if (c && c.skuVisible) return c.skuVisible;
@@ -135,7 +144,7 @@
     calc();
     if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
-      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
+      return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + irProdBtn(l) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(net(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
@@ -624,6 +633,7 @@
       if (f === "precio_unit") l.estimado = false;
       calc(); tr.querySelector("[data-tl]").textContent = $m(net(l.total_linea)); pintarTot(); marcar();
     });
+    lin.addEventListener("click", function (ev) { var ir = ev.target.closest("[data-irp]"); if (ir) { ev.preventDefault(); ev.stopPropagation(); go("#/m/productos/p/" + encodeURIComponent(ir.getAttribute("data-irp"))); return; } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
     var _pS = main.querySelector("#mctk-promo"); if (_pS) _pS.onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
