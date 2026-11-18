@@ -38,11 +38,12 @@ async function permisos(ctx: Ctx, ses: Ses) {
     puede: admin || acceso(ses.rol, "productos", matriz) !== "no",
     admin,
     costos: admin || acceso(ses.rol, "ver_costos", matriz) === "todos",
+    puedeDescargar: admin,
   };
 }
 
 const PRECIO_KEYS = ["beta_pvp", "beta_compra_real", "beta_compra_comision"];
-const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "beta_compra_real", "beta_compra_comision", "costo_promedio"];
+const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "comision", "beta_compra_real", "beta_compra_comision", "costo_promedio"];
 function sinCostos<T extends Row>(o: T): T {
   const x: Row = { ...o };
   for (const k of SIN_COSTO) delete x[k];
@@ -163,7 +164,7 @@ function fila(p: Row, b: Base): Row {
     estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
     minimoAuto: auto.minimo, reordenAuto: auto.reorden, salidas90, revisar,
-    pvp: precios.pvp, comision: precios.comision,
+    pvp: precios.pvp, pvpSinIva: precios.subtotal, comision: precios.comision,
     compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct,
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
     codigoCabina: cab ? s(cab.codigo) : "",
@@ -193,7 +194,7 @@ extend("mcprod_list", "any", async (p0, ctx, ses) => {
   if (!pr.costos) items = items.map(sinCostos);
   const uniq = (k: string) => [...new Set(items.map((i) => s(i[k])).filter(Boolean))].sort((a, c) => a.localeCompare(c));
   return {
-    ok: true, items, admin: pr.admin, verCostos: pr.costos, eliminados: pr.admin ? eliminados : 0,
+    ok: true, items, admin: pr.admin, verCostos: pr.costos, puedeDescargar: !!pr.puedeDescargar, eliminados: pr.admin ? eliminados : 0,
     filtros: { marcas: uniq("marca"), categorias: uniq("categoria"), bodegas: Object.entries(GRUPO_NOMBRE).filter(([k]) => k !== "OTRA").map(([k, v]) => ({ id: k, nombre: v })) },
   };
 });
@@ -370,10 +371,37 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
     out.provProducto = (out.provProducto as Row[] || []).map((x) => { const y = { ...x }; delete y.precio; return y; });
     delete out.costoPromedio; delete out.costoProm;
     out.escalas = (out.escalas as Row[] || []).map((x) => { const y = { ...x }; delete y.markup; if (y.precio == null) delete y.precio; return y; });
-    const pz = { ...(out.precios as Row) }; delete pz.compraComisionCatalogo; delete pz.compraRealSistema; out.precios = pz;
+    const pz = { ...(out.precios as Row) }; delete pz.compraComisionCatalogo; delete pz.compraRealSistema; delete pz.comision; out.precios = pz;
   }
+  out.puedeDescargar = !!pr.puedeDescargar;
+  if (!pr.admin) out = limpioStaffFicha(out);
   return out;
 });
+
+
+/** El personal ve precio de venta (con/sin IVA), stock, último consumo y en qué protocolo va. Nada de costos, compras ni descargas. */
+function limpioStaffFicha(out: Row): Row {
+  const tickets = ((out.historial as Row[]) || []).filter((h) => s(h.tipo) === "Ticket");
+  const u = tickets[0];
+  const uso = u
+    ? { fecha: u.fecha, tipo: u.tipo, doc: u.doc, quien: u.quien, cliente: u.cliente, cantidad: u.cantidad }
+    : null;
+  const pz = { ...(out.precios as Row) };
+  for (const k of ["comision", "compraComisionCatalogo", "compraRealSistema", "compraReal", "compraComision", "utilidad", "margenPct", "beta_compra_real", "beta_compra_comision"]) delete pz[k];
+  return {
+    ...out,
+    historial: uso ? [uso] : [],
+    ultimoUso: uso,
+    proveedores: [],
+    kardex: [],
+    cambios: [],
+    preciosHist: [],
+    estadoHist: [],
+    provProducto: [],
+    precios: pz,
+    puedeDescargar: false,
+  };
+}
 
 extend("mcprod_save", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin guarda directo: envía una solicitud" };
