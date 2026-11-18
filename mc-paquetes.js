@@ -9,6 +9,7 @@
   function pill(nombre) { return nombre ? (window.MCColor ? window.MCColor.pill(nombre) : e(nombre)) : '<span class="mccf-sub">—</span>'; }
   function prog(v) {
     var dots = ""; for (var i = 0; i < v.total; i++) dots += '<i class="' + (i < v.usados ? "u" : "") + '"></i>';
+    if (v.estado === "anulado") return '<span class="mcpq-prog n" style="background:#F6E3E3;color:#B86B6B">⛔ Anulado · ' + e(v.usados) + "/" + e(v.total) + "</span>";
     var c = v.estado === "completo" ? "ok" : v.usados ? "c" : "n";
     return '<span class="mcpq-prog ' + c + '"><span class="mcpq-dots">' + dots + "</span>" + e(v.usados) + "/" + e(v.total) + (v.estado === "completo" ? " · Completo" : " · quedan " + e(v.pendientes)) + "</span>";
   }
@@ -48,7 +49,7 @@
     var c = K.cuenta || {};
     var chip = function (k, t, nn) { return '<button type="button" class="mcpq-chip' + (K.estado === k ? " on" : "") + '" data-est="' + k + '">' + t + (nn != null ? " (" + nn + ")" : "") + "</button>"; };
     return '<div id="mcpq-root"><div class="mcpq-h"><h2>🎴 Paquetes</h2></div>' +
-      '<div class="mcpq-tools"><input type="search" id="mcpq-q" placeholder="🔎 Código PQ, clienta, cédula o paquete" value="' + e(K.q) + '">' + chip("activos", "Activos", c.activos) + chip("completos", "Completos", c.completos) + chip("todos", "Todos", c.todos) + "</div>" +
+      '<div class="mcpq-tools"><input type="search" id="mcpq-q" placeholder="🔎 Código PQ, clienta, cédula o paquete" value="' + e(K.q) + '">' + chip("activos", "Activos", c.activos) + chip("completos", "Completos", c.completos) + (c.anulados ? chip("anulados", "Anulados", c.anulados) : "") + chip("todos", "Todos", c.todos) + "</div>" +
       '<div class="mccf-card"><div class="sheet-scroll"><table class="mccf-t mcpq-t"><thead><tr><th>Código</th><th>Clienta</th><th>Paquete</th><th>Progreso</th><th>Vendió</th><th>Compra</th></tr></thead><tbody id="mcpq-body">' +
       (K.items.length ? K.items.map(filaHtml).join("") : '<tr><td colspan="6" class="mccf-sub">Sin paquetes.</td></tr>') + "</tbody></table></div>" +
       '<div class="mcpq-acts" style="justify-content:space-between"><span class="mccf-sub">' + e(K.items.length) + " de " + e(K.total) + "</span>" + (K.items.length < K.total ? '<button class="btn ghost small" type="button" id="mcpq-mas">Cargar más</button>' : "") + "</div></div></div>";
@@ -78,7 +79,7 @@
     var pers = (d.personas || []).slice(); if (v.vendidoPor && pers.indexOf(v.vendidoPor) < 0) pers.unshift(v.vendidoPor);
     var libre = (v.sesiones || []).findIndex(function (x) { return !x.usado; });
     var filas = (v.sesiones || []).map(function (se, i) {
-      var acc = !se.usado ? (i === libre ? '<button class="btn small" type="button" data-marcar="' + se.slot + '">✓ Marcar</button>' : "") : (adm ? '<button class="btn ghost small" type="button" data-desmarcar="' + se.slot + '">Desmarcar</button>' : "");
+      var acc = v.anulado && !se.usado ? "" : !se.usado ? (i === libre ? '<button class="btn small" type="button" data-marcar="' + se.slot + '">✓ Marcar</button>' : "") : (adm ? '<button class="btn ghost small" type="button" data-desmarcar="' + se.slot + '">Desmarcar</button>' : "");
       var fecha = se.usado ? E("fs:" + se.slot, e(f(se.fecha) || se.texto), se.fecha, { tipo: "date", fmt: fmtF, label: "Fecha sesión " + se.slot }) : '<span class="libre">Libre</span>';
       var tk = se.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(se.ticket) + '" class="mcpq-cod">' + e(se.ticket) + "</a>" : (se.usado ? '<span class="mccf-sub">—</span>' : "");
       return '<tr class="' + (se.usado ? "" : "libre") + '"><td class="num">' + se.slot + "</td><td>" + fecha + "</td><td>" + tk + "</td><td>" + (se.usado ? pill(se.cosmetologa) : "") + "</td><td>" + e(se.usado ? se.facial : "") + '</td><td style="text-align:right">' + acc + "</td></tr>";
@@ -87,6 +88,7 @@
       '<div class="mcpq-acts" style="justify-content:space-between;margin:0 0 8px"><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">← Paquetes</button><span>' +
       '<button class="btn ghost small" type="button" id="mcpq-ficha">📄 Descargar ficha</button> ' + window.MCEdit.botonBorrar(st, "mcpq-del") + "</span></div>" +
       '<div class="mccf-card"><div class="mcpq-top"><div><h1>' + e(v.codigo) + '</h1><div class="mcpq-cli">' + (link ? '<a href="' + link + '">' + e(cli) + "</a>" : e(cli)) + (v.clienteCodigo ? ' <span class="mcpq-cc">· ' + e(v.clienteCodigo) + "</span>" : "") + '</div><div class="mccf-sub">' + e(v.paquete) + "</div></div><div>" + prog(v) + "</div></div>" +
+      (v.anulado ? '<p style="background:#F6E3E3;color:#8A3B3B;border-radius:10px;padding:8px 12px;font-size:0.8rem;font-weight:700;margin:8px 0">⛔ Paquete anulado' + (v.anuladoPor ? " · ticket " + e(v.anuladoPor) + " cancelado" : "") + (v.anuladoMotivo ? " · " + e(v.anuladoMotivo) : "") + ". Sus sesiones ya no se pueden usar.</p>" : "") +
       '<dl class="mcpq-grid">' +
       dl("Sesiones", E("sesiones", e(v.total), v.total, { opciones: [1, 2, 3, 4, 5, 6], label: "Sesiones" })) + dl("Nombre", E("nombres", e(v.nombre), v.nombre, { label: "Nombre" })) + dl("Apellido", E("apellidos", e(v.apellido), v.apellido, { label: "Apellido" })) + dl("Cédula", E("cedula", e(v.cedula), v.cedula, { label: "Cédula" })) +
       dl("Código clienta", E("cliente_codigo", e(v.clienteCodigo || ""), v.clienteCodigo, { label: "Código clienta" })) + dl("Producto", E("paquete", e(v.paquete), v.paquete, { label: "Producto" })) + dl("SKU", E("sku", e(v.sku || ""), v.sku, { label: "SKU" })) +
