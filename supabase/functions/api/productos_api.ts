@@ -11,8 +11,9 @@ import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
   marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
-  autoMinimos, deducirDelNombre, faltantesDe,
+  autoMinimos, deducirDelNombre, faltantesDe, BOD_CONSIG,
 } from "./productos.ts";
+import { consultar } from "./query.ts";
 
 /** Del diff del audit_log quita lo que no se muestra (miniatura base64, sellos de edición). */
 function limpiarAudit(v: unknown): Row | null {
@@ -58,6 +59,7 @@ interface Base {
   antes?: Map<string, string[]>;
   movs?: Map<string, Row[]>;
   salidas90?: Map<string, number>; aperturas90?: Map<string, number>; revision?: Map<string, unknown>;
+  consigVendido?: Map<string, number>;
 }
 
 async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
@@ -104,7 +106,14 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
     aperturas90.set(s(a.producto_id), (aperturas90.get(s(a.producto_id)) || 0) + 1);
   }
   for (const r of await safeAll(ctx, "beta_v_producto_revision")) revision.set(s(r.producto), r.faltantes);
-  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes, movs, salidas90, aperturas90, revision };
+  // TK27: ventas (y sus anulaciones) que salieron de la bodega CONSIGNACION, por producto.
+  const consigVendido = new Map<string, number>();
+  if (bodegas.some((b) => s(b.id) === BOD_CONSIG)) {
+    let mv: Row[] = [];
+    try { mv = (await consultar(ctx.db, "erp_movimientos", { cols: ["producto_id", "delta", "tipo"], filtros: [{ col: "bodega_id", op: "eq", val: BOD_CONSIG }] })).rows; } catch { mv = []; }
+    for (const m of mv) if (s(m.tipo) === "venta" || s(m.tipo) === "anulacion") consigVendido.set(s(m.producto_id), (consigVendido.get(s(m.producto_id)) || 0) - n(m.delta));
+  }
+  return { productos, catalogo, cabina, bodegas, stock, ventaLegacy, compraBase, minimos, antes, movs, salidas90, aperturas90, revision, consigVendido };
 }
 
 function fila(p: Row, b: Base): Row {
@@ -118,6 +127,7 @@ function fila(p: Row, b: Base): Row {
   const stock = tipo === "servicio" ? [] : aplicarMovimientos(stockDe({
     ventaLegacy: b.ventaLegacy.has(code) ? b.ventaLegacy.get(code) : null, cab,
     erpStock: b.stock.filter((r) => s(r.producto_id) === s(p.id)), bodegas: b.bodegas,
+    consigVendido: b.consigVendido?.get(s(p.id)) || 0,
   }), b.movs?.get(s(p.id)) || []);
   const total = stockTotal(stock);
   const archivado = !!s(p.beta_archivado_at);
@@ -139,6 +149,8 @@ function fila(p: Row, b: Base): Row {
     foto_thumb: s(p.foto_thumb), tieneFoto: !!s(p.foto_url),
     stock: tipo === "servicio" ? null : total,
     porGrupo: Object.fromEntries(stock.map((g) => [g.grupo, g.cantidad])),
+    // TK27: de dónde sale lo que se muestra (hoja/sistema viejo o kardex), para el conteo inicial de consignación.
+    stockFuente: { venta: b.ventaLegacy.has(code) ? "hoja" : "erp", cabina: cab ? "hoja" : "erp" },
     porSubCabina: Object.fromEntries((stock.find((g) => g.grupo === "CABINA")?.subs || []).map((x) => [x.codigo || "SIN", x.cantidad])),
     estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,

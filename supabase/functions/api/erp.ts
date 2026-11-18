@@ -15,11 +15,56 @@ export const LOCAL_ESQUINA = "33333333-3333-4333-8333-333333333333";
 export const BODEGA_CASA = "44444444-4444-4444-8444-444444444444";
 export const BODEGA_CABINA_2 = "55555555-5555-4555-8555-555555555552";
 export const BODEGA_CABINA_3 = "55555555-5555-4555-8555-555555555553";
+/** TK27: bodega de consignación aparte de Venta (20261117_beta_bodega_consignacion.sql). */
+export const BODEGA_CONSIGNACION = "66666666-6666-4666-8666-666666666666";
 
 export function usoCompatible(uso: string, tipoBodega: string): boolean {
-  if (tipoBodega === "casa" || tipoBodega === "ubicacion") return true;
+  if (tipoBodega === "casa" || tipoBodega === "ubicacion" || tipoBodega === "consignacion") return true;
   if (uso === "ambos") return tipoBodega === "cabina" || tipoBodega === "venta";
   return uso === tipoBodega;
+}
+
+/** TK27: una venta que sale de Venta toma primero lo que el producto tenga en la bodega CONSIGNACION
+ *  (solo lo que hay: nunca la deja en negativo; el resto sigue saliendo de Venta como antes).
+ *  Una devolución por edición de ticket («edit:…») vuelve a CONSIGNACION hasta lo que ese ticket sacó de ahí. */
+export async function ventasDesdeConsignacion(db: Db, steps: Step[], bodegas: Row[]): Promise<Step[]> {
+  const cons = bodegas.find((b) => s(b.codigo).toUpperCase() === "CONSIGNACION" || s(b.tipo) === "consignacion");
+  const ven = bodegas.find((b) => s(b.codigo).toUpperCase() === "VENTA");
+  if (!cons || !ven) return steps;
+  const cid = String(cons.id), vid = String(ven.id);
+  const toca = steps.some((x) => x.op === "move" && String(x.bodega_id) === vid && (s(x.tipo) === "venta" || s(x.tipo) === "anulacion"));
+  if (!toca) return steps;
+  const saldo = new Map<string, number>();
+  for (const r of await db.all("erp_stock")) if (String(r.bodega_id) === cid) saldo.set(String(r.producto_id), (saldo.get(String(r.producto_id)) || 0) + n(r.cantidad));
+  if (!saldo.size) return steps;
+  let movsC: Row[] | null = null;
+  const out: Step[] = [];
+  for (const st of steps) {
+    if (st.op !== "move" || String(st.bodega_id) !== vid) { out.push(st); continue; }
+    const pid = String(st.producto_id), d = n(st.delta);
+    if (!saldo.has(pid)) { out.push(st); continue; }
+    if (s(st.tipo) === "venta" && d < 0) {
+      const hay = Math.max(0, saldo.get(pid) || 0);
+      const toma = round4(Math.min(hay, -d));
+      if (toma <= 0) { out.push(st); continue; }
+      saldo.set(pid, round4(hay - toma));
+      out.push({ ...st, bodega_id: cid, delta: -toma, legacy_ref: st.legacy_ref ? st.legacy_ref + (toma < -d ? ":consig" : "") : undefined });
+      if (toma < -d) out.push({ ...st, delta: round4(d + toma) });
+      continue;
+    }
+    if (s(st.tipo) === "anulacion" && d > 0 && s(st.legacy_ref).startsWith("edit:") && s(st.ticket_ref)) {
+      if (!movsC) movsC = (await db.all("erp_movimientos")).filter((m) => String(m.bodega_id) === cid);
+      const sacado = -movsC.filter((m) => String(m.producto_id) === pid && s(m.ticket_ref) === s(st.ticket_ref)).reduce((a, m) => a + n(m.delta), 0);
+      const vuelve = round4(Math.min(Math.max(0, sacado), d));
+      if (vuelve <= 0) { out.push(st); continue; }
+      movsC.push({ producto_id: pid, bodega_id: cid, ticket_ref: s(st.ticket_ref), delta: vuelve });
+      out.push({ ...st, bodega_id: cid, delta: vuelve });
+      if (vuelve < d) out.push({ ...st, delta: round4(d - vuelve), legacy_ref: st.legacy_ref + ":venta" });
+      continue;
+    }
+    out.push(st);
+  }
+  return out;
 }
 
 /** Vacío se trata como admin: los tests llaman runErp directo. */
@@ -619,8 +664,9 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
         legacy_ref: s(m.legacy_ref) || undefined,
       });
     }
-    if (steps.length) await applyPlan(db, actor, steps, now.toISOString(), "stock_delta");
-    return { ok: true, n: steps.length };
+    const plan = await ventasDesdeConsignacion(db, steps, bodegas);
+    if (plan.length) await applyPlan(db, actor, plan, now.toISOString(), "stock_delta");
+    return { ok: true, n: plan.length };
   }
 
   if (op === "oc_save") {
@@ -1121,7 +1167,7 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
     nombre: (s(body.nombre) + " " + s(body.apellido)).trim(), fecha: ec.isoWall, estado: "despachada",
     subtotal: round2(sub), iva, total, bodega_id: venta.id, nota: s(body.notas), creado_por: actor,
   } });
-  const applied = await applyPlan(db, actor, steps, now.toISOString(), "ov_save");
+  const applied = await applyPlan(db, actor, await ventasDesdeConsignacion(db, steps, await db.all("erp_bodegas")), now.toISOString(), "ov_save");
   const numeroFinal = s(applied.numero) || numero;
   const refFinal = ticketRef || numeroFinal;
   await alertarMinimos(db, actor);
@@ -1163,6 +1209,7 @@ export function erpSeed(): Record<string, Row[]> {
       { id: BODEGA_CABINA, codigo: "CABINA", nombre: "Cabina 1", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 2 },
       { id: BODEGA_CABINA_2, codigo: "CAB2", nombre: "Cabina 2", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 3 },
       { id: BODEGA_CABINA_3, codigo: "CAB3", nombre: "Cabina 3", tipo: "cabina", activo: true, local_id: LOCAL_ESQUINA, orden: 4 },
+      { id: BODEGA_CONSIGNACION, codigo: "CONSIGNACION", nombre: "Consignación", tipo: "consignacion", activo: true, local_id: LOCAL_ESQUINA, orden: 5 },
     ],
     erp_productos: [
       { id: ventaP, sku: "HT-002", nombre: "Crema retail", uso: "venta", clase: "producto", precio_venta: 20, costo_promedio: 8, activo: true },

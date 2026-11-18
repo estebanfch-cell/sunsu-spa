@@ -10,7 +10,8 @@
     f: { q: "", tipo: "", sub: "", bodega: "", marca: "", categoria: "", estado: "", linea: "", activo: "" }, orden: null,
     cur: null, ch: {}, ed: null, tab: "resumen", motivo: "",
   };
-  var GRUPOS = [["CONSIGNACION", "Consignación"], ["CABINA", "Bodega Cabina"], ["OFICINA", "Bodega Oficina"]];
+  // TK27: la clave CONSIGNACION es la bodega Venta; BCONSIG es la bodega Consignación real.
+  var GRUPOS = [["CONSIGNACION", "Venta"], ["BCONSIG", "Consignación"], ["CABINA", "Bodega Cabina"], ["OFICINA", "Bodega Oficina"]];
   var SUBS = [["CABINA_1", "Cabina 1"], ["CABINA_2", "Cabina 2"], ["CABINA_3", "Cabina 3"]];
   var PRECIO = { beta_pvp: 1, beta_compra_real: 1, beta_compra_comision: 1 };
 
@@ -114,7 +115,7 @@
     { id: "estado", t: "Estado", def: 1, fijo: 1 }, { id: "sku", t: "SKU", def: 1 }, { id: "tipo", t: "Tipo", def: 1 }, { id: "categoria", t: "Categoría", def: 1, hide: 1 },
     { id: "marca", t: "Marca", def: 1, hide: 1 }, { id: "pvp", t: "PVP", num: 1 },
     { id: "costo", t: "Costo", num: 1, costos: 1 }, { id: "margen", t: "Margen", num: 1, costos: 1 },
-    { id: "g_CONSIGNACION", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
+    { id: "g_CONSIGNACION", t: "Venta", num: 1 }, { id: "g_BCONSIG", t: "Consignación", num: 1 }, { id: "g_CABINA", t: "Bodega Cabina", num: 1 }, { id: "g_OFICINA", t: "Bodega Oficina", num: 1 },
     { id: "stock", t: "Stock", def: 1, num: 1 },
   ];
   var COLS_KEY = "sunsu.mcp.cols";

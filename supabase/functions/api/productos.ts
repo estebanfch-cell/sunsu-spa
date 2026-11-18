@@ -3,7 +3,8 @@
 // cabina_inventario (envases de Cabina y de la Oficina). Funciones puras: se prueban sin BD.
 //
 // Bodegas que se muestran (solo etiquetas, no se mueve stock):
-//   Consignación   <- VENTA (inventario principal del sistema viejo)
+//   Venta          <- VENTA (inventario principal del sistema viejo; clave interna CONSIGNACION)
+//   Consignación   <- bodega CONSIGNACION (TK27, clave BCONSIG; stock del kardex erp_stock)
 //   Bodega Cabina  <- CABINA, CAB2, CAB3 como sububicaciones Cabina 1/2/3
 //   Bodega Oficina <- CASA (más los envases "en bodega" de cabina_inventario)
 
@@ -14,10 +15,13 @@ export const BOD_CABINA = "22222222-2222-4222-8222-222222222222";
 export const BOD_CASA = "44444444-4444-4444-8444-444444444444";
 export const BOD_CAB2 = "55555555-5555-4555-8555-555555555552";
 export const BOD_CAB3 = "55555555-5555-4555-8555-555555555553";
+export const BOD_CONSIG = "66666666-6666-4666-8666-666666666666";
 
-export type Grupo = "CONSIGNACION" | "CABINA" | "OFICINA" | "OTRA";
+// La clave CONSIGNACION es la bodega VENTA (así quedó en transferencias/ajustes/conteos de la beta);
+// desde TK27 se llama «Venta» y la bodega CONSIGNACION real usa la clave BCONSIG.
+export type Grupo = "CONSIGNACION" | "BCONSIG" | "CABINA" | "OFICINA" | "OTRA";
 export const GRUPO_NOMBRE: Record<Grupo, string> = {
-  CONSIGNACION: "Consignación", CABINA: "Bodega Cabina", OFICINA: "Bodega Oficina", OTRA: "Otra bodega",
+  CONSIGNACION: "Venta", BCONSIG: "Consignación", CABINA: "Bodega Cabina", OFICINA: "Bodega Oficina", OTRA: "Otra bodega",
 };
 export const SUBS_CABINA = [
   { codigo: "CABINA_1", nombre: "Cabina 1" },
@@ -31,6 +35,7 @@ export function grupoDeBodega(b: Row | undefined, sub = ""): { grupo: Grupo; sub
   const cod = s(b?.codigo).toUpperCase();
   const tipo = s(b?.tipo).toLowerCase();
   const sb = s(sub).toUpperCase().replace(/\s+/g, "_");
+  if (id === BOD_CONSIG || cod === "CONSIGNACION" || tipo === "consignacion") return { grupo: "BCONSIG", sub: "" };
   if (id === BOD_VENTA || cod === "VENTA" || tipo === "venta") return { grupo: "CONSIGNACION", sub: "" };
   if (id === BOD_CASA || cod === "CASA" || tipo === "casa") return { grupo: "OFICINA", sub: "" };
   if (id === BOD_CAB2 || cod === "CAB2") return { grupo: "CABINA", sub: "CABINA_2" };
@@ -128,9 +133,11 @@ export interface StockGrupo { grupo: Grupo; nombre: string; cantidad: number; su
  *    cabina asignada queda en "Sin cabina asignada". No se inventa a qué cabina pertenece.
  *  - Bodega Oficina: envases "en bodega" de cabina_inventario + erp_stock CASA.
  */
-export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock: Row[]; bodegas: Row[] }): StockGrupo[] {
+/** consigVendido (TK27): lo que se vendió desde la bodega CONSIGNACION. El cálculo viejo de Venta resta
+ *  todos los tickets; esas unidades no salieron de Venta, así que se le devuelven a Venta. */
+export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock: Row[]; bodegas: Row[]; consigVendido?: number }): StockGrupo[] {
   const bod = new Map(opts.bodegas.map((b) => [s(b.id), b]));
-  const erp: Record<Grupo, number> = { CONSIGNACION: 0, CABINA: 0, OFICINA: 0, OTRA: 0 };
+  const erp: Record<Grupo, number> = { CONSIGNACION: 0, BCONSIG: 0, CABINA: 0, OFICINA: 0, OTRA: 0 };
   const subQ: Record<string, number> = {};
   for (const r of opts.erpStock) {
     const g = grupoDeBodega(bod.get(s(r.bodega_id)), s(r.sububicacion));
@@ -138,8 +145,9 @@ export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock
     if (g.grupo === "CABINA" && g.sub) subQ[g.sub] = (subQ[g.sub] || 0) + n(r.cantidad);
   }
   const out: StockGrupo[] = [];
-  const consig = opts.ventaLegacy != null ? n(opts.ventaLegacy) : erp.CONSIGNACION;
+  const consig = opts.ventaLegacy != null ? n(opts.ventaLegacy) + n(opts.consigVendido) : erp.CONSIGNACION;
   out.push({ grupo: "CONSIGNACION", nombre: GRUPO_NOMBRE.CONSIGNACION, cantidad: round2(consig), subs: [], nota: "bodega VENTA" });
+  out.push({ grupo: "BCONSIG", nombre: GRUPO_NOMBRE.BCONSIG, cantidad: round2(erp.BCONSIG), subs: [], nota: "bodega CONSIGNACION" });
   const cab = opts.cab;
   const cabTotal = cab ? n(cab.envases_cerrados) : erp.CABINA;
   const subs: StockSub[] = SUBS_CABINA.map((x) => ({ codigo: x.codigo, nombre: x.nombre, cantidad: round2(subQ[x.codigo] || 0) }));
