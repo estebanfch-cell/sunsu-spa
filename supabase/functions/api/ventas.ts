@@ -905,6 +905,8 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     if (vendeDesdeCabina(pr)) continue;
     if (!sku.startsWith(familia + "-") || pr.activo === false) continue;
     vistos.add(sku);
+    // TK34: en Compras › Consignación, un producto apagado en la ficha del proveedor no entra al cálculo.
+    if (p.soloConsig === true && s(pr.beta_origen) === "propio") continue;
     const hay = stock.filter((r) => r.producto_id === pr.id && (String(r.bodega_id) === ventaId || String(r.bodega_id) === consigId)).reduce((a, r) => a + n(r.cantidad), 0);
     const v = vendido.get(sku) || 0;
     const cns = consumido.get(sku) || 0;
