@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#8d4b38"/>
-  <rect x="3" y="3" width="58" height="58" rx="10" fill="none" stroke="#2a211c" stroke-width="3"/>
-  <text x="32" y="42" text-anchor="middle" font-family="Georgia, serif" font-size="32" fill="#f6f1ea">S</text>
+  <rect width="64" height="64" rx="12" fill="#F5F0E8"/>
+  <text x="32" y="28" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="#5B7FA6">순수</text>
+  <text x="32" y="46" text-anchor="middle" font-family="Georgia, serif" font-size="10" font-weight="700" fill="#5B7FA6">SUNSU</text>
 </svg>

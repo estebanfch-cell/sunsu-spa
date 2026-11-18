@@ -614,7 +614,12 @@ export async function doLoginPass(p: R, ctx: Ctx): Promise<R> {
   if (!u || u.activo === false) return { error: "Esa cuenta no está activa" };
   await ctx.db.write("login", "beta_credenciales", "update", { usuario_id: uid }, { intentos: 0, bloqueado_hasta: null }).catch(() => null);
   const out = await abrirSesion(ctx, { id: uid, nombre: s(u.nombre) || s(u.name), short: s(u.short), rol: s(u.rol) || s(u.role), color: s(u.color), bloqueado: u.bloqueado === true, pin_reset: false });
-  if (out.ok) await logAccion(ctx.db, s(u.nombre) || s(u.name) || uid, "LOGIN USUARIO", usuario).catch(() => null);
+  if (out.ok) {
+    out.usuario = usuario;
+    out.debe_cambiar = c.debe_cambiar_pass === true;
+    if (out.user && typeof out.user === "object") (out.user as R).usuario = usuario;
+    await logAccion(ctx.db, s(u.nombre) || s(u.name) || uid, "LOGIN USUARIO", usuario).catch(() => null);
+  }
   return out;
 }
 
