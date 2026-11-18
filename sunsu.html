@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.11.17.02 botón Promociones en el ticket -->
+<!-- v2026.11.17.03 promociones automáticas en el ticket -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
 // APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.11.17.02';
+var SUNSU_APP_VERSION='v2026.11.17.03';
 var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
 // Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
 var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261117.02';
+  var v='20261117.03';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -2069,6 +2069,7 @@ function onToggleAcc(id){
 }
 
 function updatePreview(){
+  try{ _promoAuto(); }catch(_eA){}
   let comF=0,comP=0;
   const esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
 
@@ -2203,6 +2204,7 @@ function updatePreview(){
   // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
   // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
   // el input y el teclado iOS se cerraba).
+  if(T.descuento&&T.descuento.tipo==='promo'){ var _ptBD=_promoTotal(); if(_ptBD.items.length>1){ _ptBD.items.forEach(function(x){ breakdown+=`<div style="${rowGray};color:#E8C07A"><span>🎉 ${x.p.nombre} · ${x.p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')}</span><span>−$${x.monto.toFixed(2)}</span></div>`; }); dscLabel=_ptBD.items.length>1?'🎉 Total promociones':dscLabel; } }
   breakdown+=`<div id="pv-dsc-row" style="${rowStyle};color:var(--green);${dscMonto>0?'':'display:none'}"><span id="pv-dsc-lbl">${dscLabel}</span><span id="pv-dsc-mto" style="font-weight:700">−$${dscMonto.toFixed(2)}</span></div>`;
 
   // Discount buttons
@@ -2377,14 +2379,15 @@ function _promoPanelHTML(totE,dscMonto){
     h+='<div style="display:flex;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,0.1)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:800;color:'+(ok?'#E8C07A':'rgba(255,255,255,0.55)')+'">'+p.nombre+' <span style="font-weight:700">'+_pmMechTxt(p)+'</span></div>'
       +'<div style="font-size:0.58rem;opacity:0.75;overflow-wrap:anywhere">'+(coded?p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')+' · ':'')+est+'</div></div>'
-      +(ok?'<button onclick="aplicarPromo('+i+')" style="flex:0 0 auto;padding:6px 10px;border-radius:8px;border:1.5px solid #E8C07A;background:'+(activa?'#E8C07A':'transparent')+';color:'+(activa?'#1A2744':'#E8C07A')+';font-size:0.62rem;font-weight:800;cursor:pointer">'+(activa?'✓ Quitar':'Aplicar')+'</button>':'')
+      +(ok&&!coded&&!_pmEsAdm()?'':ok&&coded&&!_pmEsAdm()?'<span style="flex:0 0 auto;font-size:0.6rem;font-weight:800;color:'+(activa?'var(--green)':'rgba(255,255,255,0.55)')+'">'+(activa?'✓ Aplicada':'Otra promo ya cubre este producto')+'</span>':'')
+      +(ok&&(_pmEsAdm()||!coded)?'<button onclick="aplicarPromo('+i+')" style="flex:0 0 auto;padding:6px 10px;border-radius:8px;border:1.5px solid #E8C07A;background:'+(activa?'#E8C07A':'transparent')+';color:'+(activa?'#1A2744':'#E8C07A')+';font-size:0.62rem;font-weight:800;cursor:pointer">'+(activa?'✓ Quitar':'Aplicar')+'</button>':'')
       +'</div>';
   });
   var tf=(T.descuento&&T.descuento.tipo==='directo')?0:Math.max(0,totE-(dscMonto||0));
   h+='<div style="display:flex;justify-content:space-between;font-size:0.64rem;padding-top:6px;opacity:0.8"><span>Total sin promos</span><span>$'+totE.toFixed(2)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;font-size:0.64rem;color:var(--green)"><span>Descuento aplicado</span><span>−$'+(dscMonto||0).toFixed(2)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;font-size:0.8rem;font-weight:800;color:#E8C07A"><span>Total final cliente</span><span>$'+tf.toFixed(2)+'</span></div>'
-    +'<div style="font-size:0.54rem;opacity:0.6;margin-top:3px">Se pueden aplicar varias. Cada una descuenta solo sus productos; una promo que se cruza con otra en el mismo producto la reemplaza.</div>'
+    +'<div style="font-size:0.54rem;opacity:0.6;margin-top:3px">Se aplican solas cuando el ticket cumple. Cada una descuenta solo sus productos; si dos caen sobre el mismo producto, va la que más descuenta. '+(_pmEsAdm()?'Como admin puedes quitar una que cayó mal.':'Si una cayó mal, avisa a un admin.')+'</div>'
     +'</div>';
   return h;
 }
@@ -2397,22 +2400,35 @@ function aplicarPromo(i){
     else T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre};
     updatePreview(); return;
   }
-  var lista=_promoLista().slice();
-  var ya=lista.findIndex(function(x){return x.nombre===p.nombre&&x.fila===p.fila;});
-  if(ya>=0){ lista.splice(ya,1); }
-  else {
-    if(!_promoArmada(p)){ toast('⚠️ El ticket no lleva ningún producto de esta promo','#C9A227'); return; }
-    var _pcAp=_promoCalc(p);
-    if(!_pcAp||_pcAp.monto<=0){ toast('⚠️ Faltan unidades para que la promo descuente algo','#C9A227'); return; }
-    var antes=lista.length;
-    lista=lista.filter(function(x){return !x.codigos.some(function(c){return p.codigos.indexOf(c)>=0;});});
-    if(lista.length<antes) toast('ℹ️ Reemplacé la promo que caía sobre el mismo producto','#C9A227');
-    lista.push(p);
-  }
-  T.descuento=lista.length?{tipo:'promo',promo:lista.map(function(x){return x.nombre;}).join(' + '),promoObj:lista[0],promoObjs:lista,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}:vacio;
+  // Promos por códigos: se aplican SOLAS (_promoAuto). Solo un admin quita una que cayó mal (o fuerza otra).
+  if(!_pmEsAdm()){ toast('ℹ️ Las promociones se aplican solas. Solo un admin puede quitarlas.','#C9A227'); return; }
+  T._promoQuitadas=T._promoQuitadas||{}; T._promoForzadas=T._promoForzadas||{};
+  var on=_promoLista().some(function(x){return x.fila===p.fila&&x.nombre===p.nombre;});
+  if(on){ T._promoQuitadas[p.fila]=true; delete T._promoForzadas[p.fila]; toast('🚫 Promo quitada de este ticket','#C9A227'); }
+  else { delete T._promoQuitadas[p.fila]; T._promoForzadas[p.fila]=true; }
+  if(T.descuento&&T.descuento.tipo&&T.descuento.tipo!=='promo') T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
   updatePreview();
 }
+function _pmEsAdm(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master')); }
+// ── AUTO (Emilia 17/11 22:53): toda promo vigente por códigos que aplica al ticket se aplica sola.
+// Si dos caen sobre el mismo producto, gana la que más descuenta (o la que un admin forzó). Un descuento manual
+// (F&F, Personalizado, Pago Directo, promo sobre el total) manda: mientras esté, no se auto-aplica nada.
+function _promoAuto(){
+  var vs=(window._promosVig||[]); if(!vs.length||T.esSunsu) return;
+  var d=T.descuento;
+  if(d&&d.tipo&&d.tipo!=='promo') return;
+  var quit=T._promoQuitadas||{}, forz=T._promoForzadas||{}, uu=_promoUnits();
+  var cand=vs.filter(function(p){return p.codigos&&p.codigos.length&&!quit[p.fila]&&_promoArmada(p,uu);})
+    .map(function(p){return {p:p,m:_promoCalc(p,uu).monto,f:forz[p.fila]?1:0};})
+    .filter(function(x){return x.m>0;})
+    .sort(function(a,b){return (b.f-a.f)||(b.m-a.m);});
+  var lista=[];
+  cand.forEach(function(x){ if(lista.some(function(y){return y.codigos.some(function(c){return x.p.codigos.indexOf(c)>=0;});})) return; lista.push(x.p); });
+  T.descuento=lista.length?{tipo:'promo',auto:true,promo:lista.map(function(x){return x.nombre;}).join(' + '),promoObj:lista[0],promoObjs:lista,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}
+    :{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
+}
 function toggleDescuento(tipo){
+  if(T.descuento&&T.descuento.tipo==='promo') T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
   if(!T.descuento) T.descuento={tipo:null,pct:0,custom:0};
   if(T.descuento.tipo===tipo){
     T.descuento.tipo=null; T.descuento.custom=0;
