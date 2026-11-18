@@ -2141,15 +2141,18 @@ function updatePreview(){
     else if(gcVTotal>0) _fila(1,gcV.codigo,'Gift Card '+(gcV.tipo==='fisica'?'física (incl. caja $3)':'digital'),gcVTotal);
   }
   // Mismo formato que el detalle del ticket (aprobado): Código | Descripción | Cant. | Precio unit. (sin IVA) | Total
-  let breakdown='<table class="ov-tabla"><thead><tr><th>Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">Precio unit.<small> (sin IVA)</small></th><th class="n">Total</th></tr></thead><tbody>'
+  // t491u: por línea Subtotal (sin IVA) · IVA · Total (con IVA); en el iPhone van en una franja compacta bajo la línea.
+  let breakdown='<table class="ov-tabla mob-no"><thead><tr><th class="ov-hc">Código</th><th>Descripción</th><th class="n">Cant.</th><th class="n">Precio unit.<small> (sin IVA)</small></th><th class="n ov-c3">Subtotal<small> (sin IVA)</small></th><th class="n ov-c3">IVA</th><th class="n ov-c3">Total<small> (con IVA)</small></th></tr></thead><tbody>'
     +_ov.map(function(f){
-      return '<tr><td class="ov-cod">'+_tkEsc(f.cod)+'</td><td>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
-        +'<td class="n">'+f.cant+'</td><td class="n">'+_m(f.unit)+'</td><td class="n">'+_m(f.total)+'</td></tr>';
+      var iva=Math.round(f.total*0.15*100)/100, tci=Math.round((f.total+iva)*100)/100;
+      return '<tr><td class="ov-cod ov-hc">'+_tkEsc(f.cod)+'</td><td>'+_tkEsc(f.desc)+(f.etq?' <span class="ov-etq">'+_tkEsc(f.etq)+'</span>':'')+'</td>'
+        +'<td class="n">'+f.cant+'</td><td class="n">'+_m(f.unit)+'</td><td class="n ov-c3">'+_m(f.total)+'</td><td class="n ov-c3">'+_m(iva)+'</td><td class="n ov-c3"><b>'+_m(tci)+'</b></td></tr>'
+        +'<tr class="ov-m3"><td colspan="7"><div class="ov-m3g"><span><small>Subtotal</small>'+_m(f.total)+'</span><span><small>IVA</small>'+_m(iva)+'</span><span><small>Total</small><b>'+_m(tci)+'</b></span></div></td></tr>';
     }).join('');
   // Descuento row — SIEMPRE en el DOM (oculta si $0): _dscLive() la refresca
   // por textContent mientras se teclea, SIN re-renderizar (el re-render destruia
   // el input y el teclado iOS se cerraba). Monto sin IVA, igual que las filas.
-  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
+  breakdown+=`<tr id="pv-dsc-row" class="ov-dsc" style="${dscMonto>0?'':'display:none'}"><td class="ov-hc"></td><td id="pv-dsc-lbl">${dscLabel}</td><td></td><td></td><td class="n" id="pv-dsc-mto">−$${(dscMonto/1.15).toFixed(2)}</td></tr>`;
   breakdown+='</tbody></table>';
   if(T.pack3||T.pack6){
     var _allGCSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
@@ -2216,6 +2219,8 @@ function updatePreview(){
     ${breakdown}
     <div class="pdiv"></div>
     <div class="ov-tot"><span>Subtotal sin IVA</span><span id="pv-sub">$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div class="ov-tot"><span>Subtotal gravado 15%</span><span id="pv-grav">$${(totEFinal/1.15).toFixed(2)}</span></div>
+    <div class="ov-tot"><span>Subtotal 0%</span><span>$0.00</span></div>
     <div class="ov-tot"><span>IVA 15%</span><span id="pv-iva">$${(totEFinal-totEFinal/1.15).toFixed(2)}</span></div>
     <div class="ptotal ov-gran"><span>Total (con IVA)</span><span id="pv-tot">$${totEFinal.toFixed(2)}</span></div>
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
@@ -2244,6 +2249,7 @@ function _dscLive(){
   var r=g('pv-dsc-row');
   if(r){ r.style.display=m>0?'':'none'; var l=g('pv-dsc-lbl'); if(l)l.textContent=lbl; var mm=g('pv-dsc-mto'); if(mm)mm.textContent='−$'+(m/1.15).toFixed(2); }
   if(g('pv-sub')) g('pv-sub').textContent='$'+(tf/1.15).toFixed(2);
+  if(g('pv-grav')) g('pv-grav').textContent='$'+(tf/1.15).toFixed(2);
   if(g('pv-iva')) g('pv-iva').textContent='$'+(tf-tf/1.15).toFixed(2);
   if(g('pv-tot')) g('pv-tot').textContent='$'+tf.toFixed(2);
 }
