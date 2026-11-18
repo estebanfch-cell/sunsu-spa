@@ -1,4 +1,5 @@
-// Dashboard del personal: Hola + citas de hoy en tarjetas grandes (estilo Agenda).
+// Dashboard del personal: Hola + citas de hoy en filas compactas (una o dos líneas).
+// En escritorio, acciones sutiles a la derecha; en iPhone, menú «Acciones ▾».
 // Solo lectura de staff_home. Crear ticket reutiliza el precargado de la Agenda.
 (function () {
   function e(v) { return String(v ?? "").replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
@@ -16,12 +17,6 @@
     if (window.MCColor && window.MCColor.color) { var c = window.MCColor.color(nom); if (c) return c; }
     if (typeof colorCosm === "function") return colorCosm(nom) || "#5B7FA6";
     return "#5B7FA6";
-  }
-  function pill(nom) {
-    if (!nom) return "";
-    if (window.MCColor && window.MCColor.pill) return window.MCColor.pill(nom);
-    var c = colorDe(nom);
-    return '<span class="mcsh-pill" style="background:' + c + ";border-color:" + c + ';color:#fff">' + e(nom) + "</span>";
   }
   function etqPill(nom) {
     if (!nom) return "";
@@ -41,60 +36,73 @@
     return Number(m[3]) + " " + meses[+m[2] - 1] + " " + m[1];
   }
   function css() {
-    if (document.getElementById("mcsh-css")) return;
-    var s = document.createElement("style");
-    s.id = "mcsh-css";
+    var s = document.getElementById("mcsh-css");
+    if (!s) { s = document.createElement("style"); s.id = "mcsh-css"; document.head.appendChild(s); }
     s.textContent = [
-      "#mcsh-root{max-width:720px;margin:0 auto;padding:4px 0 28px}",
-      ".mcsh-hola{font-size:1.85rem;font-weight:800;color:var(--navy-d,#3D5A7A);letter-spacing:-0.03em;line-height:1.15;margin:8px 0 4px}",
-      ".mcsh-sub{color:var(--gray,#8A90A0);font-size:.92rem;font-weight:600;margin:0 0 18px;text-transform:capitalize}",
-      ".mcsh-empty{background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:18px;padding:28px 20px;text-align:center;color:var(--gray)}",
-      ".mcsh-empty b{display:block;color:var(--navy-d,#3D5A7A);font-size:1.05rem;margin-bottom:6px}",
-      ".mcsh-aviso{background:var(--gold-l,#FBF3E3);border:1px solid var(--gold-m,#E8C07A);border-radius:12px;padding:10px 12px;font-size:.82rem;color:var(--navy-d);margin-bottom:14px}",
-      ".mcsh-list{display:flex;flex-direction:column;gap:14px}",
-      ".mcsh-c{display:grid;grid-template-columns:132px 1fr;gap:12px 16px;align-items:start;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-left:8px solid var(--navy);border-radius:18px;padding:16px 16px 14px;box-shadow:0 2px 14px rgba(91,127,166,.08)}",
-      ".mcsh-c.ok{opacity:.72}",
-      ".mcsh-h{font-weight:800;color:var(--navy-d,#3D5A7A);font-size:1.45rem;line-height:1.1;letter-spacing:-0.02em}",
-      ".mcsh-h small{display:block;color:var(--gray);font-weight:600;font-size:.78rem;margin-top:4px;letter-spacing:0}",
-      ".mcsh-n{font-weight:800;color:var(--navy-d,#3D5A7A);font-size:1.22rem;line-height:1.2}",
-      ".mcsh-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}",
-      ".mcsh-tag{font-size:.68rem;font-weight:800;border-radius:8px;padding:2px 8px;background:#efe9fb;color:#5d4a9c}",
-      ".mcsh-tag.ant{background:#e8f1f8;color:#2f5f86}",
-      ".mcsh-etq,.mcsh-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;white-space:nowrap}",
-      ".mcsh-tipo{color:var(--gray);font-size:.88rem;margin-top:6px;font-weight:600}",
-      ".mcsh-prev{margin-top:8px;font-size:.82rem;color:var(--navy-d,#3D5A7A);background:var(--cream,#F5F0E8);border-radius:10px;padding:8px 10px}",
-      ".mcsh-prev b{font-weight:800}",
-      ".mcsh-acts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}",
-      "@media (max-width:860px){.mcsh-hola{font-size:1.55rem}.mcsh-c{grid-template-columns:1fr;padding:16px 14px}.mcsh-h{font-size:1.35rem}.mcsh-n{font-size:1.12rem}.mcsh-acts .btn{min-height:40px}}",
+      "#mcsh-root{max-width:920px;margin:0 auto;padding:2px 0 16px}",
+      ".mcsh-hola{font-size:1.35rem;font-weight:800;color:var(--navy-d,#3D5A7A);letter-spacing:-0.02em;line-height:1.2;margin:4px 0 2px}",
+      ".mcsh-sub{color:var(--gray,#8A90A0);font-size:.78rem;font-weight:600;margin:0 0 10px}",
+      ".mcsh-empty{background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:12px;padding:16px 14px;text-align:center;color:var(--gray);font-size:.85rem}",
+      ".mcsh-empty b{display:block;color:var(--navy-d,#3D5A7A);font-size:.95rem;margin-bottom:4px}",
+      ".mcsh-aviso{background:var(--gold-l,#FBF3E3);border:1px solid var(--gold-m,#E8C07A);border-radius:10px;padding:7px 10px;font-size:.75rem;color:var(--navy-d);margin-bottom:10px}",
+      ".mcsh-list{display:flex;flex-direction:column;gap:6px}",
+      ".mcsh-c{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-left:4px solid var(--navy);border-radius:10px;padding:7px 8px 7px 10px;position:relative}",
+      ".mcsh-c.ok{opacity:.68}",
+      ".mcsh-main{flex:1 1 auto;min-width:0}",
+      ".mcsh-l1{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 .35em;min-width:0;line-height:1.25}",
+      ".mcsh-h{font-weight:800;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap}",
+      ".mcsh-dot{color:var(--gray,#8A90A0);font-weight:600}",
+      ".mcsh-n{font-weight:700;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22ch}",
+      ".mcsh-tipo{color:var(--gray,#8A90A0);font-size:.8rem;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22ch}",
+      ".mcsh-etq{display:inline-block;border:1px solid;border-radius:999px;padding:0 6px;font-size:.62rem;font-weight:700;white-space:nowrap;line-height:1.5;vertical-align:middle}",
+      ".mcsh-tag{font-size:.58rem;font-weight:800;border-radius:6px;padding:0 5px;background:#efe9fb;color:#5d4a9c;line-height:1.5}",
+      ".mcsh-prev{display:block;margin-top:1px;font-size:.68rem;color:var(--gray,#8A90A0);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".mcsh-act{appearance:none;border:0;background:transparent;color:var(--navy-d,#3D5A7A);font:inherit;font-size:.68rem;font-weight:650;padding:3px 6px;border-radius:6px;cursor:pointer;white-space:nowrap;opacity:.8}",
+      ".mcsh-act:hover,.mcsh-act:focus{background:var(--blue-l,#EEF3FA);opacity:1}",
+      ".mcsh-act.pri{color:var(--navy);font-weight:800}",
+      ".mcsh-acts-wide{display:flex;flex:0 0 auto;align-items:center;gap:1px;flex-wrap:nowrap}",
+      ".mcsh-acts-narrow{display:none;flex:0 0 auto;position:relative}",
+      ".mcsh-more{appearance:none;border:1px solid var(--cream-d,#EDE6D8);background:#fff;color:var(--navy-d,#3D5A7A);font:inherit;font-size:.68rem;font-weight:650;padding:3px 8px;border-radius:8px;cursor:pointer;white-space:nowrap}",
+      ".mcsh-c.open .mcsh-more{border-color:var(--navy);background:var(--blue-l,#EEF3FA)}",
+      ".mcsh-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:8;min-width:156px;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:10px;box-shadow:0 6px 18px rgba(20,30,50,.12);padding:4px;flex-direction:column}",
+      ".mcsh-c.open .mcsh-menu{display:flex}",
+      ".mcsh-menu .mcsh-act{display:block;width:100%;text-align:left;padding:7px 10px;opacity:1}",
+      "@media (max-width:860px){.mcsh-hola{font-size:1.2rem}.mcsh-acts-wide{display:none}.mcsh-acts-narrow{display:block}.mcsh-n{max-width:16ch}.mcsh-tipo{max-width:18ch}}",
     ].join("");
-    document.head.appendChild(s);
+  }
+  function botones(c, puede, cls) {
+    var acts = [], id = e(c.id);
+    function b(attr, label, pri) {
+      return '<button type="button" class="mcsh-act' + (pri ? " pri" : "") + '" ' + attr + '="' + id + '">' + label + "</button>";
+    }
+    if (c.ticket) acts.push('<button type="button" class="mcsh-act" data-tk="' + e(c.ticket) + '">Ver ticket</button>');
+    else if (!c.atendida && puede.ticket) {
+      acts.push(b("data-crear", "Crear ticket", 1));
+      acts.push(b("data-llego", "Llegó"));
+    }
+    acts.push(b("data-hist", "Historial"));
+    if (puede.mover && !c.atendida) acts.push(b("data-mover", "Mover"));
+    if (!c.atendida && c.etiqueta !== "NO LLEGO") acts.push(b("data-nolleg", "No llegó"));
+    return acts.join("");
   }
   function card(c, puede) {
     var col = colorDe(c.calendario || "");
     var nom = ((c.nombre || "") + " " + (c.apellido || "")).trim() || "Sin nombre";
-    var acts = [];
-    if (c.ticket) acts.push('<button class="btn ghost small" type="button" data-tk="' + e(c.ticket) + '">Ver ticket</button>');
-    else if (!c.atendida && puede.ticket) {
-      acts.push('<button class="btn small" type="button" data-crear="' + e(c.id) + '">Crear ticket</button>');
-      acts.push('<button class="btn ghost small" type="button" data-llego="' + e(c.id) + '">Llegó</button>');
-    }
-    acts.push('<button class="btn ghost small" type="button" data-hist="' + e(c.id) + '">Historial de la clienta</button>');
-    if (puede.mover && !c.atendida) acts.push('<button class="btn ghost small" type="button" data-mover="' + e(c.id) + '">Mover</button>');
-    if (!c.atendida && c.etiqueta !== "NO LLEGO") acts.push('<button class="btn ghost small" type="button" data-nolleg="' + e(c.id) + '">No llegó</button>');
     var ant = (!c.nueva && c.anterior && c.anterior.fecha)
-      ? '<div class="mcsh-prev"><b>Visita anterior:</b> ' + e(fechaCorta(c.anterior.fecha)) + (c.anterior.servicio ? " · " + e(c.anterior.servicio) : "") + "</div>"
+      ? '<span class="mcsh-prev">Visita anterior: ' + e(fechaCorta(c.anterior.fecha)) + (c.anterior.servicio ? " · " + e(c.anterior.servicio) : "") + "</span>"
       : "";
-    return '<article class="mcsh-c' + (c.atendida ? " ok" : "") + '" style="border-left-color:' + col + '" data-id="' + e(c.id) + '">' +
-      '<div class="mcsh-h">' + e(hora(c.datetime)) + "<small>" + e(c.duracion ? c.duracion + " min" : "") + "</small></div>" +
-      "<div><div class=\"mcsh-n\">" + e(nom) + "</div>" +
-      '<div class="mcsh-tags">' +
-        '<span class="mcsh-tag' + (c.nueva ? "" : " ant") + '">' + (c.nueva ? "Nueva" : "Antigua") + "</span>" +
-        etqPill(c.etiqueta) + pill(c.calendario) +
-      "</div>" +
-      (c.tipo ? '<div class="mcsh-tipo">' + e(c.tipo) + "</div>" : "") +
-      ant +
-      "</div>" +
-      '<div class="mcsh-acts">' + acts.join("") + "</div></article>";
+    var tipo = (c.tipo || "").replace(/\s+/g, " ").trim();
+    return '<article class="mcsh-c' + (c.atendida ? " ok" : "") + '" style="border-left-color:' + col + '" data-id="' + e(c.id) + '" title="' + e(hora(c.datetime) + (c.duracion ? " · " + c.duracion + " min" : "") + " · " + nom) + '">' +
+      '<div class="mcsh-main"><div class="mcsh-l1">' +
+        '<span class="mcsh-h">' + e(hora(c.datetime)) + "</span>" +
+        '<span class="mcsh-dot">·</span><span class="mcsh-n">' + e(nom) + "</span>" +
+        (tipo ? '<span class="mcsh-dot">·</span><span class="mcsh-tipo">' + e(tipo) + "</span>" : "") +
+        (c.nueva ? '<span class="mcsh-tag">Nueva</span>' : "") +
+        etqPill(c.etiqueta) +
+      "</div>" + ant + "</div>" +
+      '<div class="mcsh-acts-wide">' + botones(c, puede) + "</div>" +
+      '<div class="mcsh-acts-narrow"><button type="button" class="mcsh-more" data-acts="' + e(c.id) + '" aria-haspopup="true" aria-label="Acciones por hacer">Acciones ▾</button>' +
+        '<div class="mcsh-menu" role="menu">' + botones(c, puede) + "</div></div></article>";
   }
   function html(d) {
     var nombre = (d && d.nombre) || "";
@@ -102,7 +110,7 @@
     var puede = (d && d.puede) || { ticket: true, noLlego: true, mover: false };
     var cuerpo = citas.length
       ? '<div class="mcsh-list">' + citas.map(function (c) { return card(c, puede); }).join("") + "</div>"
-      : '<div class="mcsh-empty"><b>No tienes citas hoy</b>Cuando se agende una, aparecerá aquí en grande, con su hora y botones.</div>';
+      : '<div class="mcsh-empty"><b>No tienes citas hoy</b>Cuando se agende una, aparecerá aquí.</div>';
     return '<div id="mcsh-root"><div class="mcsh-hola">Hola ' + e(nombre) + " 👋</div>" +
       '<p class="mcsh-sub">' + e(fechaLarga(d && d.hoy)) + (citas.length ? " · " + citas.length + " cita" + (citas.length === 1 ? "" : "s") : "") + "</p>" +
       (d && d.aviso ? '<p class="mcsh-aviso">' + e(d.aviso) + "</p>" : "") +
@@ -122,24 +130,36 @@
     if (typeof go === "function") go(dest);
     else location.hash = dest;
   }
+  function cerrarMenus(root) {
+    (root || document).querySelectorAll(".mcsh-c.open").forEach(function (x) { x.classList.remove("open"); });
+  }
   async function render() {
     css();
     var d = await api("staff_home", {});
     if (d && d.error) return '<p class="err">' + e(d.error) + "</p>";
-    var out = html(d);
-    // se adjunta _citas al pintar en wire
     render._last = d;
-    return out;
+    return html(d);
   }
   function wire(main) {
     var root = main.querySelector("#mcsh-root");
     if (!root) return;
     root._citas = (render._last && render._last.citas) || [];
     root.onclick = async function (ev) {
+      var more = ev.target.closest("[data-acts]");
+      if (more && root.contains(more)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cardEl = more.closest(".mcsh-c");
+        var open = cardEl && cardEl.classList.contains("open");
+        cerrarMenus(root);
+        if (cardEl && !open) cardEl.classList.add("open");
+        return;
+      }
       var t = ev.target.closest("[data-crear],[data-llego],[data-hist],[data-mover],[data-nolleg],[data-tk]");
-      if (!t) return;
+      if (!t) { cerrarMenus(root); return; }
       var id = t.getAttribute("data-crear") || t.getAttribute("data-llego") || t.getAttribute("data-hist") || t.getAttribute("data-mover") || t.getAttribute("data-nolleg") || "";
       var c = id ? citaDe(root, id) : null;
+      cerrarMenus(root);
       if (t.hasAttribute("data-tk")) {
         var tk = t.getAttribute("data-tk");
         if (typeof go === "function") go("#/m/tickets/t/" + encodeURIComponent(tk));
