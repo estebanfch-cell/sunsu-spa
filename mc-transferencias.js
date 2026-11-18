@@ -16,7 +16,7 @@
     if (window.MCConteo && window.MCConteo._css) window.MCConteo._css();
     if (document.getElementById("mctr-css")) return;
     var s = document.createElement("style"); s.id = "mctr-css";
-    s.textContent = ".mctr-flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.9rem}.mctr-flow b{background:var(--cream);border-radius:9px;padding:5px 10px}.mctr-steps{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.mctr-step{font-size:.7rem;border-radius:999px;padding:4px 10px;background:var(--gray-l);color:var(--gray)}.mctr-step.on{background:var(--navy);color:#fff}.mctr-step.done{background:#e6f4ea;color:#2e7d32}.mctr-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.mctr-log li{margin:3px 0;font-size:.8rem}";
+    s.textContent = ".mctr-toca{cursor:pointer}.mctr-toca:hover{background:rgba(61,90,122,.06)}.mctr-flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.9rem}.mctr-flow b{background:var(--cream);border-radius:9px;padding:5px 10px}.mctr-steps{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.mctr-step{font-size:.7rem;border-radius:999px;padding:4px 10px;background:var(--gray-l);color:var(--gray)}.mctr-step.on{background:var(--navy);color:#fff}.mctr-step.done{background:#e6f4ea;color:#2e7d32}.mctr-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.mctr-log li{margin:3px 0;font-size:.8rem}";
     document.head.appendChild(s);
   }
   async function meta() { if (!T.meta) { var d = await api("trfb_list", {}); if (d && d.ok) { T.meta = d; T.list = d.items; } return d; } return T.meta; }
@@ -96,7 +96,7 @@
       '<p class="mccf-note" id="mctr-aviso" hidden></p></div>' +
       '<div class="mccf-card"><b>Productos</b><div class="mccf-bar" style="margin-top:8px"><input type="search" id="mctr-buscar" placeholder="Buscar producto por nombre, SKU o código de barras"></div><div class="mccf-hits" id="mctr-hits" hidden></div>' +
       '<div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Disponible en origen</th><th class="num">Cantidad</th><th></th></tr></thead><tbody id="mctr-lin">' + lineasFormHtml() + "</tbody></table></div>" +
-      '<p class="err" id="mctr-err"></p><div class="mctr-acts"><button class="btn small" type="button" id="mctr-guardar">Guardar borrador</button><button class="btn small" type="button" id="mctr-enviar">Guardar y enviar</button></div></div>';
+      '<p class="err" id="mctr-err"></p><div class="mctr-acts"><button class="btn small" type="button" id="mctr-guardar"' + (F.id ? " hidden" : "") + '>Guardar borrador</button>' + (F.id ? '<button class="btn ghost small" type="button" id="mctr-descartar" hidden>Descartar</button>' : "") + '<button class="btn small" type="button" id="mctr-enviar">Guardar y enviar</button></div></div>';
   }
   function wireForm(main) {
     var F = T.form, m = T.meta;
@@ -147,6 +147,15 @@
       go("#/m/transferencias/t/" + encodeURIComponent(r.id));
     }
     main.querySelector("#mctr-guardar").onclick = function () { void guardar(false); };
+    // Editando un borrador: Guardar / Descartar aparecen solo si algo cambió de verdad.
+    if (F.id) {
+      var foto = function () { return JSON.stringify([F.origen, F.origen_sub, F.destino, F.destino_sub, F.nota || "", F.lineas.map(function (l) { return [l.producto_id, Number(l.cantidad) || 0]; })]); };
+      var ini = foto();
+      var mirar = function () { setTimeout(function () { var c = foto() !== ini, g = main.querySelector("#mctr-guardar"), x = main.querySelector("#mctr-descartar"); if (g) g.hidden = !c; if (x) x.hidden = !c; }, 0); };
+      ["input", "change", "click"].forEach(function (ev) { if (main._mctrMirar) main.removeEventListener(ev, main._mctrMirar); main.addEventListener(ev, mirar); });
+      main._mctrMirar = mirar;
+      var ds = main.querySelector("#mctr-descartar"); if (ds) ds.onclick = function () { go("#/m/transferencias/t/" + encodeURIComponent(F.id)); };
+    }
     main.querySelector("#mctr-enviar").onclick = function () { void guardar(true); };
   }
 
@@ -166,15 +175,16 @@
     T.cur = d;
     var t = d.transferencia;
     return '<p><button class="btn ghost small" type="button" id="mctr-volver">← Volver a la lista</button></p><div class="mccf-card"><div class="mccf-h"><h2>' + e(t.numero) + "</h2>" + chip(t) + '<span class="mccf-sub">' + e(fecha(t.creadoAt)) + "</span></div>" +
-      '<div class="mctr-flow" style="margin-top:10px"><b>' + e(t.origenNombre) + "</b> → <b>" + e(t.destinoNombre) + "</b></div>" + pasos(t) +
+      '<div class="mctr-flow' + (d.puedeEditar ? " mctr-toca" : "") + '" style="margin-top:10px"' + (d.puedeEditar ? ' data-tr-tocar title="Toca para cambiar el borrador"' : "") + '><b>' + e(t.origenNombre) + "</b> → <b>" + e(t.destinoNombre) + "</b></div>" + pasos(t) +
+      (d.puedeEditar ? '<p class="mccf-sub" style="margin-top:6px">✎ Es un borrador: toca el origen / destino o un producto para cambiarlo.</p>' : "") +
       (t.nota ? '<p class="mccf-sub" style="margin-top:8px">' + e(t.nota) + "</p>" : "") +
       (d.soloAdmin && !d.admin ? '<p class="mccf-note">Entre Oficina y Bodega Cabina solo mueve un admin.</p>' : "") +
       '<div class="mccf-kpis"><div class="mccf-kpi"><b>' + e(t.items) + '</b>ítems</div><div class="mccf-kpi"><b>' + e(q2(t.unidades)) + "</b>unidades</div></div>" +
-      '<div class="mctr-acts">' + (d.puedeEditar ? '<button class="btn ghost small" type="button" id="mctr-editar">Editar</button>' : "") + (d.puedeEnviar ? '<button class="btn small" type="button" data-tr-est="enviar">Enviar</button>' : "") +
+      '<div class="mctr-acts">' + "" + (d.puedeEnviar ? '<button class="btn small" type="button" data-tr-est="enviar">Enviar</button>' : "") +
       (d.puedeRecibir ? '<button class="btn small" type="button" data-tr-est="recibir">Recibir (mueve el stock)</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small" type="button" data-tr-est="cancelar">Cancelar</button>' : "") +
       '<button class="btn ghost small" type="button" data-tr-pdf="doc">PDF</button><button class="btn ghost small" type="button" data-tr-pdf="bodega">PDF para bodega</button></div><p class="err" id="mctr-err"></p></div>' +
       '<div class="mccf-card" style="padding:0"><div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Cantidad</th><th class="num mccf-hide">Disponible en origen</th></tr></thead><tbody>' +
-      d.lineas.map(function (l) { return '<tr><td><span class="mccf-sku">' + e(l.sku) + "</span></td><td>" + e(l.nombre) + '</td><td class="num"><b>' + e(q2(l.cantidad)) + '</b></td><td class="num mccf-hide">' + (t.estado === "recibida" || t.estado === "cancelada" ? "—" : e(q2(l.disponibleAhora))) + "</td></tr>"; }).join("") + "</tbody></table></div></div>" +
+      d.lineas.map(function (l) { return '<tr' + (d.puedeEditar ? ' class="mctr-toca" data-tr-tocar' : "") + '><td><span class="mccf-sku">' + e(l.sku) + "</span></td><td>" + e(l.nombre) + '</td><td class="num"><b>' + e(q2(l.cantidad)) + '</b></td><td class="num mccf-hide">' + (t.estado === "recibida" || t.estado === "cancelada" ? "—" : e(q2(l.disponibleAhora))) + "</td></tr>"; }).join("") + "</tbody></table></div></div>" +
       '<div class="mccf-card"><b>Historial</b>' + historial(t) +
       (d.movimientos.length ? '<b>Movimientos de stock</b><ul class="mctr-log">' + d.movimientos.map(function (m) { return "<li>" + e(fecha(m.fecha)) + " · " + e(m.sku) + " · " + e(m.bodega) + " · " + (m.delta > 0 ? "+" : "") + e(q2(m.delta)) + " · " + e(m.actor) + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Todavía no mueve stock (se mueve al recibir).</p>') + "</div>";
   }
@@ -194,7 +204,8 @@
   function wireDetalle(main) {
     var d = T.cur; if (!d) return;
     var v = main.querySelector("#mctr-volver"); if (v) v.onclick = function () { go("#/m/transferencias"); };
-    var ed = main.querySelector("#mctr-editar"); if (ed) ed.onclick = function () { go("#/m/transferencias/editar/" + encodeURIComponent(d.transferencia.id)); };
+    // Sin botón «Editar» (TK55): en borrador se toca el dato y se abre el borrador para cambiarlo.
+    main.querySelectorAll("[data-tr-tocar]").forEach(function (x) { x.onclick = function () { go("#/m/transferencias/editar/" + encodeURIComponent(d.transferencia.id)); }; });
     main.querySelectorAll("[data-tr-pdf]").forEach(function (b) { b.onclick = function () { pdf(d, b.getAttribute("data-tr-pdf")); }; });
     main.querySelectorAll("[data-tr-est]").forEach(function (b) {
       b.onclick = async function () {
