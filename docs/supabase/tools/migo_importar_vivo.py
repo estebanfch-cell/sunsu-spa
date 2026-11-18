@@ -368,11 +368,72 @@ def read_secret_file(p: str | None) -> str | None:
         return None
     return Path(p).read_text().strip() or None
 
+
+# No se imprimen cédulas, teléfonos, correos ni secretos (ni en el resumen).
+_RE_EMAIL = re.compile(r"\b[\w.+-]+@[\w.-]+\.\w+\b")
+_RE_PHONE = re.compile(r"\b(?:\+593\s?|0)(?:9\d{8}|[2-7]\d{7})\b")
+_RE_CEDULA = re.compile(r"\b\d{10}\b")
+_RE_SECRET = re.compile(r"(?i)(cron_key|token|password|secret|apikey|service_role|authorization)[=:\s]+\S+")
+
+def texto_seguro(v: object) -> str:
+    s = "" if v is None else str(v)
+    s = _RE_SECRET.sub("[oculto]", s)
+    s = _RE_EMAIL.sub("[oculto]", s)
+    s = _RE_PHONE.sub("[oculto]", s)
+    s = _RE_CEDULA.sub("[oculto]", s)
+    return s
+
+def _tk(item: dict) -> str:
+    return texto_seguro(item.get("ticket") or item.get("ticket_clave") or "—")
+
+def _fac(item: dict) -> str:
+    f = item.get("factura")
+    return texto_seguro(f) if f else "—"
+
+def formato_resumen(resumen: dict | None) -> str:
+    """Texto de las novedades de ESTA corrida: borradores, flags nuevas y tickets por facturar."""
+    r = resumen if isinstance(resumen, dict) else {}
+    borr = list(r.get("borradores") or [])
+    flags = list(r.get("flags") or [])
+    porf = list(r.get("por_facturar") or [])
+    lines = ["=== Resumen de esta corrida ==="]
+    if not (borr or flags or porf):
+        lines.append("Sin novedades.")
+        return "\n".join(lines)
+
+    lines.append(f"Borradores creados ({len(borr)}):")
+    if not borr:
+        lines.append("  (ninguno)")
+    for b in borr:
+        est = texto_seguro(b.get("estado") or "pendiente")
+        lines.append(f"  {_tk(b)}  · factura {_fac(b)}  (sin ticket, {est})")
+
+    lines.append(f"Flags nuevas ({len(flags)}):")
+    if not flags:
+        lines.append("  (ninguna)")
+    for f in flags:
+        color = texto_seguro(f.get("color") or "rojo")
+        motivo = texto_seguro(f.get("motivo") or f.get("kind") or "")
+        extra = f"  · {color}" + (f" · {motivo}" if motivo else "")
+        lines.append(f"  {_tk(f)}  · factura {_fac(f)}{extra}")
+
+    lines.append(f"Tickets por facturar ({len(porf)}):")
+    if not porf:
+        lines.append("  (ninguno)")
+    for t in porf:
+        motivo = texto_seguro(t.get("motivo") or "")
+        extra = f"  · {motivo}" if motivo else ""
+        lines.append(f"  {_tk(t)}  · factura {_fac(t)}{extra}")
+    return "\n".join(lines)
+
+def imprimir_resumen(resumen: dict | None) -> None:
+    print(formato_resumen(resumen))
+
 def main():
     ap = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Importa el Excel de Migo (solo lectura) a la beta y dispara el cruce.",
-        epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags existentes (--xls, --detalle, --url,\n--token-file, --cron-key-file, --fuente, --dry-run). --pdf-dir es un flag\nnuevo, optativo.\n\nPDFs de factura (solo lectura): dejar cada RIDE en\n/workspace/sunsu/migo_exports/pdf/001-001-000002951.pdf (también vale 2951.pdf).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --pdf-dir /workspace/sunsu/migo_exports/pdf \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
+        epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags existentes (--xls, --detalle, --url,\n--token-file, --cron-key-file, --fuente, --dry-run). --pdf-dir y --resumen son\noptativos. Al final de cada corrida se imprime un resumen de novedades\n(borradores, flags rojas/amarillas y tickets por facturar: TK + factura).\n--resumen deja ese comportamiento explícito.\n\nPDFs de factura (solo lectura): dejar cada RIDE en\n/workspace/sunsu/migo_exports/pdf/001-001-000002951.pdf (también vale 2951.pdf).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --pdf-dir /workspace/sunsu/migo_exports/pdf \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
     )
     ap.add_argument("--xls", help="Ventas → Cobros Realizados (.xls); también acepta Formas de pago")
     ap.add_argument("--detalle", help="Ventas → Ventas Detalladas / REPORTE DETALLADO DE VENTAS (.xls), opcional para ítems")
@@ -382,6 +443,7 @@ def main():
     ap.add_argument("--cron-key-file", help="Archivo con MIGO_CRON_KEY (no imprimir)")
     ap.add_argument("--fuente", default="xls", help="Etiqueta de origen del import (por defecto: xls)")
     ap.add_argument("--dry-run", action="store_true", help="Solo parsea e imprime el conteo; no llama a la API")
+    ap.add_argument("--resumen", action="store_true", help="Imprime al final las novedades de esta corrida (TK, factura, color/motivo). Ya se imprime por defecto.")
     args = ap.parse_args()
 
     if not args.xls and not args.pdf_dir:
@@ -412,18 +474,22 @@ def main():
     }
     if args.dry_run:
         print("Dry-run: no se envió nada.")
+        print("=== Resumen de esta corrida ===")
+        print("Dry-run: sin novedades de cruce (no se llamó a la API).")
         return
     token = read_secret_file(args.token_file)
     cron = read_secret_file(args.cron_key_file)
     if not token and not cron:
         sys.stderr.write("Falta --token-file o --cron-key-file\n")
         sys.exit(2)
+    resumen = None
     if facturas:
         out = post_import(args.url, payload, token, cron)
         if not out.get("ok"):
             sys.stderr.write("Error: " + str(out.get("error") or out) + "\n")
             sys.exit(1)
         cuadre = out.get("cuadre") or {}
+        resumen = cuadre.get("resumen") if isinstance(cuadre, dict) else None
         print(
             "Import ok:",
             out.get("importadas"),
@@ -451,6 +517,8 @@ def main():
             pendientes += int(r.get("pendientes") or 0)
             omitidos += int(r.get("omitidos") or 0)
         print("PDFs ok:", adjuntos, "adjuntos,", tickets, "tickets,", pendientes, "sin ticket,", omitidos, "omitidos")
+    # El resumen de novedades va al final, por defecto (también con --resumen).
+    imprimir_resumen(resumen)
 
 if __name__ == "__main__":
     main()

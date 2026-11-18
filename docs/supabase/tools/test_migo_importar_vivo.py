@@ -85,5 +85,57 @@ class TestPdfs(unittest.TestCase):
         finally:
             shutil.rmtree(d)
 
+
+class TestResumen(unittest.TestCase):
+    def test_lista_novedades_de_la_corrida(self):
+        txt = m.formato_resumen({
+            "borradores": [
+                {"factura": "001-001-000002951", "ticket": None, "estado": "pendiente"},
+            ],
+            "flags": [
+                {"ticket": "TK-SO-1888", "factura": "001-001-000002940", "color": "rojo", "motivo": "Diferencia de monto", "kind": "monto"},
+                {"ticket": "TK-SO-1902", "factura": None, "color": "rojo", "motivo": "Sin factura en Migo", "kind": "sinfac"},
+            ],
+            "por_facturar": [
+                {"ticket": "TK-SO-1902", "factura": None, "motivo": "Sin factura en Migo"},
+            ],
+        })
+        self.assertIn("=== Resumen de esta corrida ===", txt)
+        self.assertIn("Borradores creados (1):", txt)
+        self.assertIn("—  · factura 001-001-000002951  (sin ticket, pendiente)", txt)
+        self.assertIn("Flags nuevas (2):", txt)
+        self.assertIn("TK-SO-1888  · factura 001-001-000002940  · rojo · Diferencia de monto", txt)
+        self.assertIn("TK-SO-1902  · factura —  · rojo · Sin factura en Migo", txt)
+        self.assertIn("Tickets por facturar (1):", txt)
+        self.assertIn("TK-SO-1902  · factura —  · Sin factura en Migo", txt)
+        # Nunca cédulas, teléfonos, correos ni secretos, aunque vengan en el motivo.
+        sucio = m.formato_resumen({
+            "borradores": [],
+            "flags": [{
+                "ticket": "TK-SO-1",
+                "factura": "001-001-000002900",
+                "color": "amarillo",
+                "motivo": "ver 1710034069 o 0991234567 o ana@correo.com cron_key=supersecreto",
+            }],
+            "por_facturar": [],
+        })
+        self.assertNotIn("1710034069", sucio)
+        self.assertNotIn("0991234567", sucio)
+        self.assertNotIn("ana@correo.com", sucio)
+        self.assertNotIn("supersecreto", sucio)
+        self.assertIn("[oculto]", sucio)
+        self.assertIn("amarillo", sucio)
+        self.assertEqual(m.formato_resumen(None).splitlines()[-1], "Sin novedades.")
+        self.assertEqual(m.formato_resumen({}).splitlines()[-1], "Sin novedades.")
+
+    def test_flag_resumen_esta_en_el_cli(self):
+        import argparse
+        # --resumen existe y no altera el resto de flags; el resumen se imprime igual por defecto.
+        src = Path(m.__file__).read_text()
+        self.assertIn('--resumen', src)
+        self.assertIn("imprimir_resumen", src)
+        self.assertIn("Ya se imprime por defecto", src)
+
+
 if __name__ == "__main__":
     unittest.main()

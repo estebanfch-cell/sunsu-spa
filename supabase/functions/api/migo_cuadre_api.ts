@@ -124,11 +124,12 @@ async function guardarLinks(ctx: Ctx, actor: string, links: LinkCuadre[]): Promi
 
 const KIND_ID = /^(monto|clienta|sinfac|lineas)$/;
 
-async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Promise<{ creadas: number; resueltas: number }> {
+async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Promise<{ creadas: number; resueltas: number; nuevas: Row[] }> {
   const prev = await todas(ctx, "beta_ticket_flags");
   const want = new Map(deseadas.map((f) => [idFlag(f.ticket_id, f.kind), f]));
   const now = ctx.now.toISOString();
   let creadas = 0, resueltas = 0;
+  const nuevas: Row[] = [];
   for (const f of prev) {
     const id = s(f.id);
     const m = /^migo:(\d+):(monto|clienta|sinfac|lineas)$/.exec(id);
@@ -157,8 +158,9 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
       factura: d.factura, fuente: "migo", resuelto: false, created_at: now, updated_at: now,
     });
     creadas++;
+    nuevas.push({ ticket: d.ticket_clave, factura: d.factura || null, color: "rojo", motivo: d.motivo, kind: d.kind });
   }
-  return { creadas, resueltas };
+  return { creadas, resueltas, nuevas };
 }
 
 async function cosmDeCita(ctx: Ctx, cliente: string, fecha: string): Promise<{ persona: string; appointment_id: string } | null> {
@@ -178,7 +180,7 @@ async function cosmDeCita(ctx: Ctx, cliente: string, fecha: string): Promise<{ p
   return { persona, appointment_id: s(hit.id) };
 }
 
-async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], links: LinkCuadre[]): Promise<{ nuevos: number; vinculados: number }> {
+async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], links: LinkCuadre[]): Promise<{ nuevos: number; vinculados: number; creados: Row[] }> {
   const existentes = await todas(ctx, "beta_migo_borradores");
   const byFac = new Map(existentes.map((b) => [s(b.factura), b]));
   const linkedFac = new Set(links.map((L) => L.factura));
@@ -189,6 +191,7 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
   }
   const now = ctx.now.toISOString();
   let nuevos = 0, vinculados = 0;
+  const creados: Row[] = [];
   // Si la factura ya tiene ticket, el borrador pendiente se vincula solo.
   for (const b0 of existentes) {
     if (!borradorSePuedeVincular(b0.estado)) continue;
@@ -215,6 +218,7 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
       datos: {}, created_at: now, updated_at: now,
     });
     nuevos++;
+    creados.push({ factura: f.factura, ticket: null, estado });
   }
   for (const f of facturas) {
     const b0 = byFac.get(f.factura);
@@ -224,7 +228,7 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
       lineas: f.lineas, updated_at: now,
     });
   }
-  return { nuevos, vinculados };
+  return { nuevos, vinculados, creados };
 }
 
 
@@ -284,10 +288,16 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const flags = flagsDeseadas({ tickets, links, facturas, hoyGye, importadoGye });
   const fl = await syncFlags(ctx, actor, flags);
   const br = await syncBorradores(ctx, actor, facturas, links);
+  const flagsNuevas = fl.nuevas || [];
+  const porFacturar = flagsNuevas.filter((x) => s(x.kind) === "sinfac").map((x) => ({
+    ticket: s(x.ticket), factura: x.factura || null, motivo: s(x.motivo) || "Sin factura en Migo",
+  }));
   return {
     ok: true, hoy: hoyGye, importado: importadoGye || null, facturas: facturas.length, links: links.length,
     datos_migo: datosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas,
     borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados,
+    // Solo novedades de ESTA corrida (para el resumen del CLI). No cambia el cruce.
+    resumen: { borradores: br.creados || [], flags: flagsNuevas, por_facturar: porFacturar },
   };
 }
 
