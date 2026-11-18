@@ -2,8 +2,10 @@
 """Import de solo lectura de facturas Migo hacia la beta (migo_importar).
 
 Qué hace
-  Lee el Excel «Ventas — Formas de pago» (el mismo reporte que se usó en el
-  cuadre de noviembre) y, si se pasa, el de «Ventas — Detalle» para los ítems.
+  Lee el Excel de «Ventas → Cobros Realizados» (el reporte horario: Fecha Pago,
+  Forma Pago, Valor, Número Factura, Cliente). Si el archivo es el viejo
+  «Ventas → Formas de pago», también lo entiende. Opcional: «Ventas → Detalle»
+  para ítems de borrador (Cobros Realizados no trae Detalle).
   POST JSON a la edge function `api` (acción migo_importar). NUNCA entra a
   emitir, anular, ni a Cerrar Caja.
 
@@ -17,18 +19,22 @@ Qué NO hace (y no se puede inventar en headless)
 
   1. Entrar a https://sistema.migo.com.ec SOLO con el login de la bóveda
      5135118 (nunca 5134734). No pulsar Cerrar Caja. No emitir ni anular.
-  2. Ir al reporte Ventas → Formas de pago, rango desde 2026-11-01 (o el
-     mes en curso) hasta hoy, Exportar a Excel. Opcional: el Detalle del
-     mismo rango, para prefijar ítems en los borradores.
-  3. Guardar los .xls y correr este script (o un cron en esa caja, en
-     minutos :20–:50, nunca :00–:15 de merge/deploy):
+  2. Ir al reporte Ventas → Cobros Realizados, rango desde 2026-11-01 (o el
+     mes en curso) hasta hoy, Exportar a Excel. El Detalle es opcional y no
+     viene en este reporte; si existe un Excel de Detalle, se puede pasar
+     igual para prefijar ítems en los borradores.
+  3. Guardar el .xls y correr este script (o un cron en esa caja, en
+     minutos :20–:55, nunca :00–:15 de merge/deploy):
 
-       python3 docs/supabase/tools/migo_importar_vivo.py \\
-         --xls /ruta/migo_ventas_formas_pago.xls \\
-         --detalle /ruta/migo_ventas_detalle.xls \\
+       python3 docs/supabase/tools/migo_importar_vivo.py \
+         --xls /ruta/cobros_realizados.xls \
          --cron-key-file /ruta/secreto_migo_cron
 
      El script no imprime la clave ni cédulas/teléfonos.
+
+  Desde el 18-nov-2026 11:30 (America/Guayaquil) el trabajo horario lo corre
+  el bot CUADRE, invocando este mismo CLI. Los flags se mantienen estables;
+  ver python3 docs/supabase/tools/migo_importar_vivo.py --help.
 
   Si Emilia prefiere no dejar un navegador abierto, basta con exportar el
   Excel a mano y correr el script; el cruce (migo_cuadre_hora) también se
@@ -99,15 +105,101 @@ def forma_migo(raw) -> str:
         return "efectivo"
     return t
 
-def parse_formas(path: Path) -> list[dict]:
-    book = xlrd.open_workbook(str(path))
+def _norm_header(v) -> str:
+    t = str(v or "").strip().lower()
+    t = t.replace("ú", "u").replace("ó", "o").replace("á", "a").replace("é", "e").replace("í", "i")
+    return " ".join(t.split())
+
+def es_cobros_realizados(book) -> bool:
+    s = book.sheet_by_index(0)
+    blob = " ".join(_norm_header(s.cell(r, c).value) for r in range(min(8, s.nrows)) for c in range(s.ncols))
+    return "cobros realizados" in blob or ("forma pago" in blob and "numero factura" in blob and "fecha pago" in blob)
+
+def _mapa_encabezado(s, fila: int) -> dict[str, int]:
+    m: dict[str, int] = {}
+    alias = {
+        "fecha pago": "fecha", "fecha": "fecha", "fecha emision": "fecha", "emision": "fecha",
+        "forma pago": "forma", "forma de pago": "forma",
+        "valor": "valor", "total": "total", "total pagar": "total",
+        "numero factura": "factura", "factura": "factura", "nro factura": "factura",
+        "cliente": "cliente",
+        "subtotal": "subtotal", "descuento": "descuento", "iva": "iva",
+    }
+    for c in range(s.ncols):
+        k = alias.get(_norm_header(s.cell(fila, c).value))
+        if k and k not in m:
+            m[k] = c
+    return m
+
+def parse_cobros(book) -> list[dict]:
+    """Ventas → Cobros Realizados: una o varias filas de pago por factura."""
+    s = book.sheet_by_index(0)
+    head = None
+    for r in range(min(12, s.nrows)):
+        m = _mapa_encabezado(s, r)
+        if "factura" in m and "forma" in m and ("valor" in m or "total" in m):
+            head = (r, m)
+            break
+    if not head:
+        return []
+    _, cols = head
+    inv: dict[str, dict] = {}
+    for r in range(s.nrows):
+        raw_fac = s.cell(r, cols["factura"]).value if cols["factura"] < s.ncols else ""
+        raw_forma = s.cell(r, cols["forma"]).value if cols["forma"] < s.ncols else ""
+        if str(raw_forma or "").strip().upper().startswith("TOTAL"):
+            continue
+        fac = fac_norm(raw_fac)
+        if not fac:
+            continue
+        fe = parse_dt(book, s.cell(r, cols["fecha"]).value) if "fecha" in cols else None
+        if not fe:
+            continue
+        monto_col = cols.get("valor", cols.get("total"))
+        monto = money(s.cell(r, monto_col).value) if monto_col is not None else 0.0
+        forma = forma_migo(raw_forma)
+        cliente = str(s.cell(r, cols["cliente"]).value or "").strip() if "cliente" in cols else ""
+        cur = inv.get(fac)
+        if not cur:
+            inv[fac] = {
+                "factura": fac,
+                "fecha": fe.date().isoformat(),
+                "hora": fe.strftime("%H:%M:%S") if hasattr(fe, "hour") and (fe.hour or fe.minute or fe.second) else "",
+                "cliente": cliente,
+                "subtotal": 0.0,
+                "descuento": 0.0,
+                "iva": 0.0,
+                "total": monto,
+                "forma": forma,
+                "lineas": [],
+                "_formas": [forma] if forma else [],
+            }
+            continue
+        cur["total"] = money(cur["total"] + monto)
+        if cliente and not cur.get("cliente"):
+            cur["cliente"] = cliente
+        if forma:
+            cur.setdefault("_formas", [])
+            if forma not in cur["_formas"]:
+                cur["_formas"].append(forma)
+            cur["forma"] = cur["_formas"][0] if len(cur["_formas"]) == 1 else "mixto"
+        if fe.date().isoformat() < cur["fecha"]:
+            cur["fecha"] = fe.date().isoformat()
+    out = []
+    for k in sorted(inv):
+        cur = inv[k]
+        cur.pop("_formas", None)
+        out.append(cur)
+    return out
+
+def parse_formas_pago(book) -> list[dict]:
+    """Formato anterior: Ventas → Formas de pago (tipo + número en cols 2-3)."""
     s = book.sheet_by_index(0)
     inv = {}
     for r in range(s.nrows):
         row = [s.cell(r, c).value if c < s.ncols else None for c in range(max(s.ncols, 18))]
         typ, num = row[2], row[3]
         fac = fac_norm(num) if typ not in (None, "") else None
-        # filas de factura: tipo + número tipo 001-001-…
         if not fac:
             continue
         if str(typ or "").strip().upper().startswith("TOTAL"):
@@ -127,11 +219,16 @@ def parse_formas(path: Path) -> list[dict]:
             "forma": forma_migo(row[12]),
             "lineas": [],
         }
-        # pagos mixtos: conservar la primera forma; no pisa el total
         if not cur.get("cliente"):
             cur["cliente"] = str(row[4] or "").strip()
         inv[fac] = cur
     return [inv[k] for k in sorted(inv)]
+
+def parse_formas(path: Path) -> list[dict]:
+    book = xlrd.open_workbook(str(path))
+    if es_cobros_realizados(book):
+        return parse_cobros(book)
+    return parse_formas_pago(book)
 
 def parse_detalle(path: Path, facturas: list[dict]) -> None:
     by = {f["factura"]: f for f in facturas}
@@ -179,14 +276,18 @@ def read_secret_file(p: str | None) -> str | None:
     return Path(p).read_text().strip() or None
 
 def main():
-    ap = argparse.ArgumentParser(description="Importa el Excel de Migo (solo lectura) a la beta.")
-    ap.add_argument("--xls", required=True, help="Ventas formas de pago (.xls)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Importa el Excel de Migo (solo lectura) a la beta y dispara el cruce.",
+        epilog='Reporte: Ventas → Cobros Realizados (Fecha Pago, Forma Pago, Valor,\nNúmero Factura, Cliente). El formato anterior «Formas de pago» también se acepta.\n--detalle es opcional; Cobros Realizados no trae ítems.\n\nEl trabajo horario lo corre el bot CUADRE desde el 18-nov-2026 11:30\n(America/Guayaquil). Este CLI es el que ese bot invoca: no se cambian los\nnombres ni el significado de los flags (--xls, --detalle, --url, --token-file,\n--cron-key-file, --fuente, --dry-run).\n\nVentana del import/cruce: minutos :20–:55. Nunca en :00–:15 (merge/deploy).\nNo imprime la clave, cédulas ni teléfonos. No emite ni anula facturas, ni\ncierra caja. No escribe en Sheets.\n\nEjemplo:\n  python3 docs/supabase/tools/migo_importar_vivo.py \\\n    --xls /ruta/cobros_realizados.xls \\\n    --cron-key-file /ruta/secreto_migo_cron\n',
+    )
+    ap.add_argument("--xls", required=True, help="Ventas → Cobros Realizados (.xls); también acepta Formas de pago")
     ap.add_argument("--detalle", help="Ventas detalle (.xls), opcional para ítems de borrador")
-    ap.add_argument("--url", default=os.environ.get("SUNSU_API_URL", URL_DEFAULT))
+    ap.add_argument("--url", default=os.environ.get("SUNSU_API_URL", URL_DEFAULT), help="URL de la edge function api (SUNSU_API_URL)")
     ap.add_argument("--token-file", help="Archivo con token de sesión admin (no imprimir)")
     ap.add_argument("--cron-key-file", help="Archivo con MIGO_CRON_KEY (no imprimir)")
-    ap.add_argument("--fuente", default="xls")
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--fuente", default="xls", help="Etiqueta de origen del import (por defecto: xls)")
+    ap.add_argument("--dry-run", action="store_true", help="Solo parsea e imprime el conteo; no llama a la API")
     args = ap.parse_args()
     facturas = parse_formas(Path(args.xls))
     if args.detalle:

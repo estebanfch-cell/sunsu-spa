@@ -8,7 +8,7 @@ import { leerSerie } from "./series.ts";
 import { esAdmin } from "./permisos.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import {
-  cruzar, exentoCuadre, facSeq, facturaNorm, flagsDeseadas, formaAComp, FALTA_CUADRE_DESDE,
+  cruzar, exentoCuadre, facSeq, facturaNorm, flagsDeseadas, formaAComp, formaDeTicket, FALTA_CUADRE_DESDE,
   facturasSinTicket, fechaGye, idFlag, NUNCA_TICKET_ID, ofertaBorrador, parseFacturaVivo, splitCliente,
   type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
@@ -178,11 +178,50 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
   return { nuevos, vinculados };
 }
 
+
+async function aplicarDatosMigo(ctx: Ctx, actor: string, tickets: Row[], links: LinkCuadre[], facturas: FacturaVivo[]): Promise<number> {
+  const byFac = new Map(facturas.map((f) => [f.factura, f]));
+  const byId = new Map(tickets.map((t) => [n(t.id), t]));
+  const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const now = ctx.now.toISOString();
+  let nAct = 0;
+  for (const L of links) {
+    if (L.ticket_id === NUNCA_TICKET_ID) continue;
+    const t = byId.get(L.ticket_id);
+    if (!t) continue;
+    const clave = s(t.clave) || claveDe(t, leerSerie(t, "so_num"));
+    if (!clave) continue;
+    const inv = byFac.get(L.factura);
+    const cab = cabs.get(clave);
+    const prev = { ...((cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row) };
+    const forma = formaDeTicket(t, prev, inv?.forma);
+    const next: Row = { ...prev };
+    next.factura = L.factura;
+    if (forma) next.forma_pago = forma;
+    next.pago_migo = {
+      factura: L.factura,
+      forma: (inv?.forma || forma || "").slice(0, 80),
+      fecha: inv?.fecha || "",
+      total: inv?.total ?? L.total_factura,
+      fuente: "migo",
+    };
+    if (JSON.stringify(prev) === JSON.stringify(next)) continue;
+    try {
+      if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: next, updated_at: now, actualizado_por: actor });
+      else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: t.sheet_row ?? null, datos: next, actualizado_por: actor, updated_at: now });
+      cabs.set(clave, { ...(cab || {}), clave, datos: next });
+      nAct++;
+    } catch { /* overlay opcional; no tocar tickets/Sheets */ }
+  }
+  return nAct;
+}
+
 async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const tickets = await ticketsParaCuadre(ctx);
   const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
   const links = cruzar(facturas, tickets);
   await guardarLinks(ctx, actor, links);
+  const datosMigo = await aplicarDatosMigo(ctx, actor, tickets, links, facturas);
   const hoyGye = ecuadorParts(ctx.now).ymd;
   const imports = await todas(ctx, "beta_migo_importes");
   let importadoGye = "";
@@ -195,7 +234,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const br = await syncBorradores(ctx, actor, facturas, links);
   return {
     ok: true, hoy: hoyGye, importado: importadoGye || null, facturas: facturas.length, links: links.length,
-    flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas,
+    datos_migo: datosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas,
     borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados,
   };
 }
