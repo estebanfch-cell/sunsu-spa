@@ -139,7 +139,7 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
     if (want.has(id)) continue;
     if (f.resuelto === true) continue;
     await ctx.db.write(actor, "beta_ticket_flags", "update", { id }, {
-      resuelto: true, resuelto_por: actor, resuelto_at: now, nota: m[2] === "lineas" ? "cuadró automáticamente: las líneas del ticket ya coinciden con la factura" : "cuadró automáticamente", updated_at: now,
+      resuelto: true, resuelto_por: actor, resuelto_at: now, nota: m[2] === "lineas" ? "cuadró automáticamente: las líneas del ticket ya coinciden con la factura" : m[2] === "clienta" ? "facturado a otro nombre: no es un error (regla 18/11)" : "cuadró automáticamente", updated_at: now,
     });
     resueltas++;
     try { await logAccion(ctx.db, actor, "FLAG AUTO-RESUELTO", `${s(f.ticket_clave)} · ${s(f.motivo)}${f.factura ? " · " + s(f.factura) : ""}`); } catch { /* log opcional */ }
