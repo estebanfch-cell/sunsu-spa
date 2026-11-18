@@ -19,7 +19,7 @@ describe("TK83 config compacto y feriados 2026", () => {
     assert.match(html, /#cfg-geocerca/);
     assert.match(html, /#cfg-feriados/);
     assert.match(html, /#\/m\/usuarios/);
-    assert.match(html, /#\/m\/mc\/pronto\/aprobaciones/);
+    assert.match(html, /#\/m\/aprobaciones/);
     assert.match(html, /class="cfg-geo"/);
     assert.match(html, /#cfg-page \.ix-lines \{ display: flex; flex-wrap: wrap/);
     assert.match(html, /\.ix-trash \{ background: transparent/);
@@ -56,11 +56,11 @@ describe("TK83 config compacto y feriados 2026", () => {
     assert.doesNotMatch(sql, /delete from public\.asistencia_feriados/i);
   });
 
-  it("la caché de la app pasa a TK83", () => {
-    assert.match(sw, /sunsu-beta-2026-11-18-TK84/);
-    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK82/);
+  it("la caché de la app pasa a TK85", () => {
+    assert.match(sw, /sunsu-beta-2026-11-18-TK85/);
+    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK84/);
     const vers = [...html.matchAll(/\?v=([a-z0-9]+)/g)].map((m) => m[1]);
     assert.ok(vers.length >= 20, "faltan scripts en beta.html");
-    assert.ok(vers.every((v) => v === "20261118tk84"), "scripts con versión vieja: " + [...new Set(vers)].join(","));
+    assert.ok(vers.every((v) => v === "20261118tk85"), "scripts con versión vieja: " + [...new Set(vers)].join(","));
   });
 });
