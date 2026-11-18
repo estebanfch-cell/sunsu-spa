@@ -244,19 +244,8 @@ export function flagsDeseadas(p: {
           factura: L.factura,
         });
       }
-      if (!esConsumidorFinal(L.cliente_migo)) {
-        const nom = nombreTicket(t);
-        const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
-        const ok = hermanos.some((h) => namesMatch(nombreTicket(h), L.cliente_migo) > 0) || namesMatch(nom, L.cliente_migo) > 0;
-        if (!ok) {
-          out.push({
-            ticket_id: id, ticket_clave: clave, kind: "clienta",
-            motivo: "Clienta no cuadra",
-            detalle: "La factura " + L.factura + " está a nombre de «" + L.cliente_migo + "», no de «" + nom + "».",
-            factura: L.factura,
-          });
-        }
-      }
+      // TK84 (Emilia 18/11): una factura a otro nombre (p. ej. la mamá de la clienta) NO es un error ni bloquea el cuadre:
+      // nunca se crea flag «Clienta no cuadra». El detalle muestra solo una nota gris «Facturado a otro nombre».
       const facV = p.facturas.find((f) => f.factura === L.factura);
       if (facV && facV.lineas && facV.lineas.length) {
         const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
@@ -579,4 +568,11 @@ export function sesionCronMigo(p: Row, env: Record<string, string | undefined>):
   for (let i = 0; i < key.length; i++) x |= key.charCodeAt(i) ^ got.charCodeAt(i);
   if (x !== 0) return null;
   return { uid: "migo-cron", rol: "admin", name: "Migo cron", short: "migo", color: "", token: "" };
+}
+
+/** TK84: nota neutra (gris) cuando la factura está a nombre de otra persona; nunca es flag. */
+export function facturadoAOtroNombre(nombreTk: unknown, clienteMigo: unknown): boolean {
+  const c = s(clienteMigo).trim();
+  if (!c || esConsumidorFinal(c)) return false;
+  return namesMatch(s(nombreTk), c) <= 0;
 }

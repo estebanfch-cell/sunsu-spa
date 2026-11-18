@@ -71,7 +71,7 @@ describe("cruce Migo (solo lectura)", () => {
     assert.equal(formaDeTicket({ comp: "" }, { forma_pago: "tarjeta" }), "tarjeta");
     assert.equal(formaDeTicket({ comp: "Trans:1, Tarje:2" }), "mixto");
   });
-  it("rojo: diferencia de monto, clienta distinta, o cobrado sin factura al cerrar el día; nunca el #1820; no marca si el import está atrasado", () => {
+  it("rojo: diferencia de monto, o cobrado sin factura al cerrar el día; nunca el #1820; no marca si el import está atrasado", () => {
     const facs: FacturaVivo[] = [
       { factura: "001-001-000002951", seq: 2951, fecha: "2026-11-17", cliente: "OTRA PERSONA", total: 50 },
     ];
@@ -86,7 +86,7 @@ describe("cruce Migo (solo lectura)", () => {
     const links = cruzar(facs, tickets);
     const flags = flagsDeseadas({ tickets, links, facturas: facs, hoyGye: "2026-11-18", importadoGye: "2026-11-18" });
     const kinds = (id: number) => flags.filter((f) => f.ticket_id === id).map((f) => f.kind).sort();
-    assert.deepEqual(kinds(1886), ["clienta", "monto"]);
+    assert.deepEqual(kinds(1886), ["monto"]); // TK84: factura a otro nombre ya no es flag
     assert.deepEqual(kinds(1902), ["sinfac"]);
     assert.deepEqual(kinds(1901), []); // no cobrado
     assert.deepEqual(kinds(NUNCA_TICKET_ID), []);

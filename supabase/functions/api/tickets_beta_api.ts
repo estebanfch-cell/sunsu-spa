@@ -204,6 +204,15 @@ function promoDe(cab: Row | undefined, promos: Promo[]): Promo | null {
   const nom = s(cab?.promo_nombre);
   return nom ? promos.find((p) => p.nombre === nom) || null : null;
 }
+/** TK84: nota gris si la factura Migo del ticket está a nombre de otra persona (no es error). */
+async function otroNombre(ctx: Ctx, r: Row): Promise<boolean> {
+  try {
+    const L = (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "ticket_id", op: "eq", val: n(r.id) }], limite: 1 })).rows[0];
+    if (!L || !s(L.cliente_migo)) return false;
+    const { facturadoAOtroNombre } = await import("./migo_cuadre.ts");
+    return facturadoAOtroNombre(s(r.nombre) + " " + s(r.apellido), L.cliente_migo);
+  } catch { return false; }
+}
 async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
@@ -532,6 +541,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },
     ...(paquete.uso ? [{ k: "paq", t: "Paquete " + paquete.uso, c: "info" }] : []),
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
+    ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
   return { info, campos: DATOS_TK.filter(([k]) => conTelefono(ses) || (k !== "email" && k !== "telefono")), corregidos: Object.keys(d), pagos, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
