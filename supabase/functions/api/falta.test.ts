@@ -7,9 +7,13 @@ describe("faltaDe (fila amarilla)", () => {
     assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
     assert.deepEqual(faltaDe(r, { comprobantes: [{ url: "archivo:1" }] }), []);
   });
-  it("tarjeta sin voucher pide foto; efectivo no; ya no pide número de factura", () => {
-    const r = { timestamp: "2026-11-17T16:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
+  it("TK41: tarjeta vieja con N.º de voucher ya cuenta; sin número o desde hoy 10:30 pide la foto; efectivo no", () => {
+    const r = { timestamp: "2026-11-18T11:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
     assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
+    assert.deepEqual(faltaDe({ ...r, timestamp: "2026-11-17T16:00:00Z" }, {}), []);
+    assert.deepEqual(faltaDe({ ...r, timestamp: "2026-11-12 19:05:43+00", comp: "Tarje:931" }, {}), []);
+    assert.deepEqual(faltaDe({ ...r, timestamp: "2026-11-17T16:00:00Z", comp: "Tarje" }, {}).length, 1);
+    assert.deepEqual(faltaDe({ ...r, timestamp: "2026-11-17T16:00:00Z", comp: "Tarje:953, Trans:12" }, {}).length, 1);
     assert.deepEqual(faltaDe(r, { comprobantes: [{ url: "archivo:1" }] }), []);
     assert.deepEqual(faltaDe({ timestamp: "2026-11-17T16:00:00Z", comp: "Efect:10", cob: true, fac: false, fac_7: "" }, {}), []);
   });

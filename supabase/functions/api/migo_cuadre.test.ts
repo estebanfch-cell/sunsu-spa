@@ -102,8 +102,8 @@ describe("cruce Migo (solo lectura)", () => {
     assert.equal(mie.some((f) => f.ticket_id === 1880 && f.kind === "sinfac"), true);
     assert.equal(mie.some((f) => f.ticket_id === 1890 && f.kind === "sinfac"), true);
   });
-  it("amarillo: voucher de tarjeta o foto de transferencia; efectivo no; ya no pide número de factura", () => {
-    const rTar = { timestamp: "2026-11-17T16:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
+  it("amarillo (TK41: tarjeta desde hoy pide foto): voucher de tarjeta o foto de transferencia; efectivo no; ya no pide número de factura", () => {
+    const rTar = { timestamp: "2026-11-18T12:00:00Z", comp: "Tarje:953", comprobante: "", cob: true, fac: true, fac_7: "2957.0" };
     assert.deepEqual(faltaDe(rTar, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
     assert.deepEqual(faltaDe(rTar, { comprobantes: [{ url: "archivo:1" }] }), []);
     const rTr = { timestamp: "2026-11-17T16:00:00Z", comp: "Trans:24255919", comprobante: "", cob: true, fac: true, fac_7: "2951.0" };
