@@ -48,6 +48,7 @@
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
       ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
       ".mctk-pen{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.85rem;padding:0 3px}.mctk-pen:hover{color:var(--navy-d)}.mctk-in{padding:5px 7px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.82rem;width:min(100%,260px)}textarea.mctk-in{width:100%}",
+      ".mctk-lt .mctk-c3m{display:none}.mctk-lt th small{font-weight:600;opacity:.75}.mctk-lt.mob-stack td.mctk-c3{display:none!important}.mctk-lt.mob-stack td.mctk-c3m{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px;padding:6px 8px!important;background:var(--cream,#faf6ef);border-radius:9px}.mctk-c3m span{display:flex;flex-direction:column;align-items:flex-end;min-width:0}.mctk-c3m small{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--gray)}.mctk-c3m b{font-size:.86rem;white-space:nowrap}" +
       ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-irp{display:inline-block;margin-left:4px;padding:0 6px;line-height:16px;border:1px solid #d9cfbd;border-radius:7px;font-size:.68rem;color:#8A6D1F;text-decoration:none;white-space:nowrap;vertical-align:baseline}.mctk-irp:active{background:#f4ecdc}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
       ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:280px}",
       ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
@@ -140,15 +141,35 @@
     var s0 = String(l.sku || "");
     return (l.tipo === "facial" || l.tipo === "extra" || l.tipo === "servicio" || l.tipo === "paquete") && /^\d+$/.test(s0) ? "SUNSU-" + s0 : s0;
   }
+  /** t491u: por línea Subtotal (sin IVA) · IVA · Total (con IVA). En el iPhone (tabla apilada) van juntas en una franja compacta. */
+  function montos(l) { var tot = r2(Number(l.total_linea) || 0), sub = net(tot); return { sub: sub, iva: r2(tot - sub), tot: tot }; }
+  function etqLinea(l) { return l.cortesia && !(l.total_linea > 0) ? ' <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? ' <span class="mctk-canje">Canje</span>' : ""; }
+  function montosIn(l) {
+    var m = montos(l);
+    return '<span><small>Subtotal</small><b data-m="sub">' + e($m(m.sub)) + '</b></span><span><small>IVA</small><b data-m="iva">' + e($m(m.iva)) + '</b></span><span><small>Total</small><b data-m="tot">' + e($m(m.tot)) + "</b></span>";
+  }
+  function montosTds(l) {
+    var m = montos(l);
+    return '<td class="num mctk-c3" data-tl>' + e($m(m.sub)) + etqLinea(l) + '</td><td class="num mctk-c3" data-iva>' + e($m(m.iva)) + '</td><td class="num mctk-c3" data-tot><b>' + e($m(m.tot)) + "</b></td>" +
+      '<td class="mctk-c3m" data-label="">' + montosIn(l) + "</td>";
+  }
+  function pintarMontos(tr, l) {
+    var m = montos(l), q = function (s) { return tr.querySelector(s); };
+    if (q("[data-tl]")) q("[data-tl]").innerHTML = e($m(m.sub)) + etqLinea(l);
+    if (q("[data-iva]")) q("[data-iva]").textContent = $m(m.iva);
+    if (q("[data-tot]")) q("[data-tot]").innerHTML = "<b>" + e($m(m.tot)) + "</b>";
+    var mm = q(".mctk-c3m"); if (mm) mm.innerHTML = montosIn(l);
+  }
   function lineasHtml() {
     calc();
-    if (!K.L.length) return '<tr><td colspan="8" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
+    if (!K.L.length) return '<tr><td colspan="10" class="mccf-sub" style="padding:12px">Sin líneas.</td></tr>';
     return K.L.map(function (l, i) {
       return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + irProdBtn(l) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
         '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(net(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
-        '<td class="num" data-tl>' + (l.cortesia && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(net(l.total_linea)))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
+        montosTds(l) +
+        '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
   }
   function totHtml() {
@@ -224,7 +245,7 @@
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
-      '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio sin IVA</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
+      '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio sin IVA</th><th class="num">Desc</th><th class="num">Subtotal<small> sin IVA</small></th><th class="num">IVA</th><th class="num">Total<small> con IVA</small></th><th class="mctk-c3m"></th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos" style="border-color:#C9A227;color:#7a5c12;background:#fbf4e4">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
@@ -631,7 +652,7 @@
       else if (f === "precio_unit") l.precio_unit = (Number(ev.target.value) || 0) * IVA; // se escribe sin IVA
       else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
-      calc(); tr.querySelector("[data-tl]").textContent = $m(net(l.total_linea)); pintarTot(); marcar();
+      calc(); pintarMontos(tr, l); pintarTot(); marcar();
     });
     lin.addEventListener("click", function (ev) { var ir = ev.target.closest("[data-irp]"); if (ir) { ev.preventDefault(); ev.stopPropagation(); go("#/m/productos/p/" + encodeURIComponent(ir.getAttribute("data-irp"))); return; } });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
