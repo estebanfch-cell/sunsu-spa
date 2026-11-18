@@ -8,6 +8,8 @@ import { actorOf, conTelefono } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import { esCanje, telefonoEc, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
 import { acuityCache, acuityReq, citaDeNombre, citasRango, fechaCita, limpiarCacheAcuity, nombreCita } from "./acuity.ts";
+import { contactoDeAcuity } from "./clientes_contacto.ts";
+import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
 import { claveRegistro } from "./ventas.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
@@ -79,6 +81,10 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
   if (c.niv !== "todos") { if (!c.mios.length) return { ok: true, citas: [], porDia: {}, aviso: "No tienes un calendario de Acuity asignado. Pide a un admin que lo enlace en Agenda → Calendarios." }; if (cal && !c.mios.includes(Number(cal))) cal = ""; }
   const L = await citasRango(ctx, desde, hasta, { calendarID: cal || undefined });
   if (!Array.isArray(L)) return { error: L.error };
+  try {
+    const extras = L.map((a) => contactoDeAcuity(a as Row)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (extras.length) await rellenarContactosDeFuentes(ctx, actorOf(ses), extras);
+  } catch { /* el listado de citas no depende del relleno */ }
   const vis = L.filter((a) => c.niv === "todos" || c.mios.includes(Number(a.calendarID)));
   const links = await todas(ctx, "beta_citas_ticket");
   const tks = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at && ymdUtc(t.timestamp) >= desde && ymdUtc(t.timestamp) <= hasta);
