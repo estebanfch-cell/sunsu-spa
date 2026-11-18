@@ -117,8 +117,13 @@ describe("TK59 dashboard del personal", () => {
     assert.match(beta, /staff_home/);
     assert.match(js, /Hola/);
     assert.match(js, /hora12/);
-    assert.match(js, /Historial de la clienta/);
+    assert.match(js, /Historial/);
+    assert.match(js, /Acciones/);
+    assert.match(js, /mcsh-acts-narrow/);
+    assert.match(js, /mcsh-act/);
+    assert.match(js, /Visita anterior/);
+    assert.doesNotMatch(js, /grid-template-columns:132px/);
     assert.match(js, /Crear ticket/);
-    assert.match(beta, /mc-staff-home\.js\?v=20261118tk61/);
+    assert.match(beta, /mc-staff-home\.js\?v=20261118tk63/);
   });
 });
