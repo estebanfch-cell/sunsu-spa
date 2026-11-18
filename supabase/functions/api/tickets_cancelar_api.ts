@@ -84,12 +84,14 @@ export async function ajustarStockLineas(ctx: Ctx, ses: Ses, r: Row, antes: { ti
 }
 
 /** Anota en el historial del paquete (beta_paquete_ajustes). */
-async function historialPaquete(ctx: Ctx, actor: string, quien: string, pq: Row, accion: string, detalle: string, usos?: Row): Promise<void> {
+async function historialPaquete(ctx: Ctx, actor: string, quien: string, pq: Row, accion: string, detalle: string, usos?: Row, datosExtra?: Row): Promise<void> {
   const now = ctx.now.toISOString();
   let aj: Row | null = null;
   try { aj = (await consultar(ctx.db, "beta_paquete_ajustes", { filtros: [{ col: "paquete_id", op: "eq", val: n(pq.id) }] })).rows[0] || null; } catch { aj = null; }
   const hist = [...(aj && Array.isArray(aj.historial) ? aj.historial as Row[] : []), { fecha: now, actor: quien, accion, detalle }].slice(-100);
-  const fila: Row = { sheet_row: pq.sheet_row ?? null, historial: hist, actualizado_por: actor, updated_at: now, ...(usos ? { usos } : {}) };
+  // datos.anulado lo vuelve a poner el trigger zzy_paquetes_beta_ajuste aunque la importación reescriba la fila (TK61).
+  const datos = datosExtra ? { ...((aj && aj.datos && typeof aj.datos === "object" ? aj.datos : {}) as Row), ...datosExtra } : null;
+  const fila: Row = { sheet_row: pq.sheet_row ?? null, historial: hist, actualizado_por: actor, updated_at: now, ...(usos ? { usos } : {}), ...(datos ? { datos } : {}) };
   if (aj) await ctx.db.write(actor, "beta_paquete_ajustes", "update", { paquete_id: n(pq.id) }, fila);
   else await ctx.db.write(actor, "beta_paquete_ajustes", "insert", {}, { paquete_id: n(pq.id), datos: {}, usos: usos || {}, borrado: false, ...fila });
 }
@@ -138,7 +140,9 @@ export async function liberarSesionesDe(ctx: Ctx, actor: string, quien: string, 
     if (refs.has(s(po.ultima_marca_ticket))) { po.ultima_marca_ticket = ""; po.ultima_marca_slot = 0; po.ultima_marca_ms = 0; }
     patch.orig = po;
     await ctx.db.write(actor, "paquetes", "update", { id: pq.id }, patch);
-    await historialPaquete(ctx, actor, quien, pq, "liberar", "sesión " + hechos.join(", ") + " liberada: ticket " + so + " cancelado", meta);
+    const fijar: Row = { ...((aj && aj.datos && typeof (aj.datos as Row).fijar === "object" ? (aj.datos as Row).fijar : {}) as Row) };
+    for (const [k, v] of Object.entries(patch)) if (k !== "orig") fijar[k] = v;
+    await historialPaquete(ctx, actor, quien, pq, "liberar", "sesión " + hechos.join(", ") + " liberada: ticket " + so + " cancelado", meta, { fijar });
     for (const sl of hechos) out.push({ id: pq.id, codigo: s(pq.codigo) || s(pq.beta_codigo) || "PACK-" + s(pq.sheet_row), paquete: s(pq.paquete), slot: sl });
   }
   return out;
@@ -176,7 +180,8 @@ export async function cancelarTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
       const po = pq.orig && typeof pq.orig === "object" ? pq.orig as Row : {};
       if (!refs.has(s(po.ticket)) || po.anulado === true) continue;
       await ctx.db.write(actor, "paquetes", "update", { id: pq.id }, { orig: { ...po, anulado: true, anulado_ts: ts0, anulado_por: s(ses.name) || actor, cancelado_por_ticket: so, cancelado_motivo: motivo } });
-      await historialPaquete(ctx, actor, s(ses.name) || actor, pq, "anular", "ticket " + so + " cancelado: " + motivo);
+      await historialPaquete(ctx, actor, s(ses.name) || actor, pq, "anular", "ticket " + so + " cancelado: " + motivo, undefined,
+        { anulado: true, anulado_motivo: motivo, anulado_ticket: so, anulado_por: s(ses.name) || actor, anulado_ts: ts0 });
       paqs.push({ id: pq.id, codigo: s(pq.codigo) || s(pq.beta_codigo), paquete: s(pq.paquete) });
     }
   } catch { /* sin paquetes */ }
