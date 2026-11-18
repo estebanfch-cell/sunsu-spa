@@ -15,11 +15,12 @@ import { estaCobrado, faltaDe, faseA, facturaCompleta, hayFactura } from "./tick
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { listarBorradoresVisibles } from "./borradores_asig.ts";
+import { tipoSinCobro } from "./sin_cobro.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num"];
+const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift"];
 
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
@@ -65,7 +66,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const factByFac = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [s(f.factura), f]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
-  const facDe = (r: Row) => hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  // TK97: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
+  const facDe = (r: Row) => !!tipoSinCobro(r) || hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
   const cobDe = (r: Row) => estaCobrado(r, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
   const cerradoDe = (r: Row) => {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
@@ -134,7 +136,9 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const facReal = hayFactura(r.fac_7, d.factura, Lnk?.factura);
     it.cob = cobrado;
     it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";
-    it.estado_doc = (it.anulado === true || (cobrado && (facReal || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
+    const sinCobro = tipoSinCobro(r);
+    if (sinCobro) it.sin_cobro = sinCobro;
+    it.estado_doc = (it.anulado === true || (cobrado && (facReal || !!sinCobro || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
     it.led = {
       a: faseA(r) ? 1 : 0, p: cobrado ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && it.anulado !== true && YMD.test(ret) && ret <= addD(hoy, 7) && ret >= addD(hoy, -60) ? 1 : 0,

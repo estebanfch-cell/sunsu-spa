@@ -1360,7 +1360,9 @@ function renderTicket(c){
   const _gcCustom=T.gcVenta&&T.gcVenta.valor!==65&&T.gcVenta.valor>0;
   const _gcCort=T.gcVenta&&T.gcVenta.cortesia;
   const gcVentaAcc=mkAcc('gcventa','🎁','var(--pink)','Venta Gift Card',
-    T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo
+    T.gcVenta&&T.gcVenta.activo&&!T.gcVenta.codigo&&T.gcVenta.deFactura
+      ?'<span style="color:#8a6d00;background:#fff8e6;border:1px solid #e8cf7a;border-radius:8px;padding:1px 8px;font-weight:600">Falta código · $'+(Number(T.gcVenta.valor)||0).toFixed(2)+'</span>'
+    :T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo
       ?'<span style="color:var(--pink-d);font-weight:600">'+(_gcFis?'📦':'📱')+' '+T.gcVenta.codigo+(_gcCort?' 🎁 Cortesía':' · $'+(_gcFis?(T.gcVenta.valor+3):(T.gcVenta.valor||65)).toFixed(2))+'</span>'
       :'No vendida',
     '<div style="display:flex;gap:10px;margin-bottom:12px">'+
@@ -2213,7 +2215,7 @@ function updatePreview(){
   // Gift Card venta
   const gcV=T.gcVenta;
   const gcEsCort=gcV&&gcV.cortesia;
-  const gcVTotal=(gcV&&gcV.activo&&gcV.codigo&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
+  const gcVTotal=(gcV&&gcV.activo&&(gcV.codigo||gcV.deFactura)&&!gcEsCort)?(gcV.valor||65)+(gcV.tipo==='fisica'?3:0):0;
 
   // Descuento por línea (antes del descuento del ticket)
   const _LD=_ldAplicar();
@@ -2637,9 +2639,9 @@ function _lineasCotizacionTicket(){
     if(q>0) add(p.sku, p.n, 'producto', q, p.p);
   }); });
   var gc=T.gcVenta;
-  if(gc&&gc.activo&&gc.codigo){
+  if(gc&&gc.activo&&(gc.codigo||gc.deFactura)){
     var valor=gc.cortesia?0:((Number(gc.valor)||65)+(gc.tipo==='fisica'?3:0));
-    add(gc.codigo, 'Gift card '+gc.codigo, 'gift', 1, valor);
+    add(gc.codigo||'35', gc.codigo?'Gift card '+gc.codigo:'Gift card (falta código)', 'gift', 1, valor);
   }
   return lineas;
 }
@@ -2686,7 +2688,7 @@ function enviarTicket(){
   const notasEl=document.getElementById('inp-notas');
 
   if(!T.esSunsu&&!(cedEl?.value||'').trim()){toast('Ingresa la cédula del cliente','#B86B6B');return;}
-  const tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(v=>v)||Object.values(T.productos).some(q=>q>0)||(T.gcVenta&&T.gcVenta.activo&&T.gcVenta.codigo);
+  const tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(v=>v)||Object.values(T.productos).some(q=>q>0)||(T.gcVenta&&T.gcVenta.activo&&(T.gcVenta.codigo||T.gcVenta.deFactura));
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica cómo se cobra el facial','#B86B6B');return;}
   // Canje con paquete: hay que confirmar SIEMPRE de qué paquete sale la sesión (TK58).
@@ -2780,7 +2782,7 @@ function enviarTicket(){
   _estF=Math.max(0,_estF-_LDs.f-_LDs.e); _estPack=Math.max(0,_estPack-_LDs.pack); _estProd=Math.max(0,_estProd-_LDs.prod);
   // GC vendida: agregar su valor al estimado (igual que en updatePreview)
   const _gcVenta=T.gcVenta;
-  const _gcVTotal=(_gcVenta&&_gcVenta.activo&&_gcVenta.codigo&&!_gcVenta.cortesia)
+  const _gcVTotal=(_gcVenta&&_gcVenta.activo&&(_gcVenta.codigo||_gcVenta.deFactura)&&!_gcVenta.cortesia)
     ?(_gcVenta.valor||65)+(_gcVenta.tipo==='fisica'?3:0):0;
   const _totBruto=_estF+_estPack+_estProd+_gcVTotal;
   // Apply discount
@@ -5369,7 +5371,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
@@ -5422,7 +5424,7 @@ function _histCardHTML(t, i, showPrices){
   } else if(!anul){
     pills.push(_tkPagoPill(t));
     if(fp) pills.push(_tkFormaPill(fp));
-    if(!ff) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
+    if(!ff&&!t.sin_cobro) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
   }
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
@@ -5524,6 +5526,7 @@ function _tkFacPdf(t){
 }
 function _tkPagoPill(t){
   if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
+  if(t&&t.sin_cobro) return _tkPill('gris',t.sin_cobro==='interno'?'Consumo interno':'Cortesía'); // TK97
   if(t&&t.cob) return _tkPill('pagado','Pagado');
   if(_tkPagoMigo(t)){
     var tip=(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'))?'cobro confirmado en Migo':'';
@@ -5543,6 +5546,8 @@ function _tkEstados(t){
   var orig=(t&&t.orig)||{};
   if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
+  // TK97: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
+  if(t.sin_cobro){ out.push({c:'gris',t:t.sin_cobro==='interno'?'Consumo interno':'Cortesía'}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=(window._tkLeds||{})[String(t.tkRow)];
   if(!_tkFacFull(t)) out.push(_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
@@ -18630,9 +18635,7 @@ function _migoCandCard(c){
   var bord=ok?"#9ad7b6":"#e8cf7a";
   return '<div class="card migo-cand-card" style="background:'+warn+";border:1.5px solid "+bord+'">'
     +"<div>"+tit+"</div>"
-    +'<div class="mccf-sub" style="margin:6px 0 8px">'+_migoEsc(c.motivo||"")+"</div>"
-    +'<button type="button" class="btn ghost small" data-marcar="'+claves.map(_migoEsc).join(",")+'">Marcar '+(claves.length>1?"estos":"este")+"</button> "
-    +'<button type="button" class="btn small" data-vinc="'+claves.map(_migoEsc).join(",")+'">Vincular '+(claves.length>1?"estos tickets":"este ticket")+"</button></div>";
+    +'<div class="mccf-sub" style="margin:6px 0 2px">'+_migoEsc(c.motivo||"")+"</div></div>";
 }
 function _migoVincularBorrador(fac){
   if(typeof api!=="function") return;
@@ -18658,7 +18661,8 @@ function _migoVincularBorrador(fac){
       +"</div>"
       +'<div id="migo-vinc-bar">'
       +'<div id="migo-vinc-sum" class="mccf-sub" style="margin-bottom:8px">Ningún ticket marcado.</div>'
-      +'<button type="button" class="btn small" id="migo-vinc-sel" disabled>Vincular tickets marcados</button></div>'
+      +'<div id="migo-vinc-dif" class="mccf-sub" style="display:none;margin:-4px 0 8px;color:#8a6d00;overflow-wrap:anywhere"></div>'
+      +'<button type="button" class="btn small" id="migo-vinc-sel" disabled style="width:100%">Vincular</button></div>'
       +"</div>";
     document.body.appendChild(wrap);
     var picked={};
@@ -18668,12 +18672,23 @@ function _migoVincularBorrador(fac){
       var keys=listPicked(), suma=0, bits=[];
       keys.forEach(function(k){ suma+=Number(picked[k].total||0); bits.push(_migoTicketLink(k)+" · "+_migoMoney(picked[k].total)); });
       var dif=Math.round((suma-totalFac)*100)/100, ok=Math.abs(dif)<=0.05, box=wrap.querySelector("#migo-vinc-sum"), btn=wrap.querySelector("#migo-vinc-sel");
-      if(!keys.length){ box.innerHTML="Ningún ticket marcado."; btn.disabled=true; btn.textContent="Vincular tickets marcados"; return; }
+      var difBox=wrap.querySelector("#migo-vinc-dif"); difBox.style.display="none"; difBox.innerHTML="";
+      if(!keys.length){ box.innerHTML="Ningún ticket marcado."; btn.disabled=true; btn.textContent="Vincular"; return; }
       var lab=ok?"✅ Cuadra":"⚠️ No cuadra (diferencia "+(dif>0?"+":"")+_migoMoney(dif)+")";
       box.innerHTML="<b>"+lab+"</b> · Suma "+_migoMoney(suma)+" de "+_migoMoney(totalFac)+" · "+keys.length+" ticket"+(keys.length>1?"s":"")+": "+bits.join(" + ");
       box.style.color=ok?"#1b6b45":"#8a6d00";
       btn.disabled=!!listo;
-      btn.textContent="Vincular "+keys.length+" ticket"+(keys.length>1?"s":"");
+      btn.textContent="Vincular";
+      // TK97: si no cuadra, qué SKU/línea hace la diferencia (solo por SKU).
+      if(!ok){
+        var pedido=keys.join(",");
+        difBox._k=pedido;
+        Promise.resolve(api("migo_dif_sku",{factura:fac,tickets:keys})).then(function(x){
+          if(difBox._k!==pedido||!x||!x.ok||!(x.dif||[]).length) return;
+          difBox.innerHTML=x.dif.map(function(d){ return "• "+_migoEsc(d); }).join("<br>");
+          difBox.style.display="block";
+        }).catch(function(){});
+      }
     }
     function setPick(clave, nombre, total, on){
       if(!clave) return;
@@ -18687,6 +18702,13 @@ function _migoVincularBorrador(fac){
     wrap.addEventListener("click",function(ev){ if(ev.target===wrap) close(); });
     function mostrarVinculado(claves, yaEstaba){
       listo=true;
+      // TK97: al vincular se cierra solo, toast «Vinculado ✓» y se refresca la lista.
+      if(typeof toast==="function") toast(yaEstaba?"Ya estaba vinculado ✓":"Vinculado ✓","var(--green)");
+      close();
+      if(typeof _migoPintarBandeja==="function") _migoPintarBandeja(true);
+      else if(typeof _histActualizarRes==="function") _histActualizarRes(!!window._histEsStaff);
+      if(typeof window._mbRefrescar==="function") window._mbRefrescar();
+      return;
       var ok=wrap.querySelector("#migo-vinc-ok");
       ok.style.display="block";
       var tit=yaEstaba?"Ya estaba vinculada a ":"Vinculada a ";
@@ -18868,12 +18890,15 @@ function _migoPoblarTDesdeFac(b){
     var sec=String(l.seccion||l.tipo||'producto');
     if(!l.enCatalogo) revisa.push('Revisa: el SKU '+(l.skuFactura||l.sku||'—')+' ('+(l.nombre||'')+') no está en el catálogo; se copió con el precio de la factura.');
     if(sec==='gift'){
-      T.gcVenta={activo:true,tipo:'digital',valor:pu*q,codigo:'',nota:'Factura Migo '+(T.factura||''),cortesia:false};
-      revisa.push('Revisa: Gift card $'+(pu*q).toFixed(2)+' de la factura: asigna su código en «Venta Gift Card» para que el total sea $'+Number(b.total||0).toFixed(2)+'.');
+      // TK97: la gift card de la factura SIEMPRE suma al total; el código pendiente es solo una nota amarilla.
+      T.gcVenta={activo:true,tipo:'digital',valor:pu*q,codigo:'',nota:'Factura Migo '+(T.factura||''),cortesia:false,deFactura:true};
+      revisa.push('Falta código: gift card $'+(pu*q).toFixed(2)+' de la factura (ya suma al total); asígnalo en «Venta Gift Card».');
       return;
     }
     if(sec==='facial'&&T.facial){ sec='extra'; }
-    P.push({sec:sec, sku:l.sku||l.skuFactura, skuFE:l.skuFactura||l.sku, n:l.nombre||l.sku, p:pu, q:q, pack:l.pack});
+    // TK97: alias (SUNSU-35 a $3 → INV-123 caja de gift card): en el formulario va con el SKU beta.
+    var skuFE=(l.skuFactura&&l.sku&&_migoSkuKey(l.skuFactura)!==_migoSkuKey(l.sku))?l.sku:(l.skuFactura||l.sku);
+    P.push({sec:sec, sku:l.sku||l.skuFactura, skuFE:skuFE, n:l.nombre||l.sku, p:pu, q:q, pack:l.pack});
   });
   window._migoPrecios=P;
   _migoAplicarPrecios();

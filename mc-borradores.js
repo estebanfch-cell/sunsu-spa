@@ -100,6 +100,8 @@
     root.addEventListener("input", function (ev) { if (ev.target.id === "mcfb-q") { K.q = ev.target.value || ""; pintar(main); } });
     try { K.d = await api("mb_facturas_borrador", {}); } catch (x) { K.d = { error: (x && x.message) || "No se pudo cargar" }; }
     pintar(main);
+    // TK97: tras vincular desde el modal, la lista se refresca sola.
+    window._mbRefrescar = function () { if (!document.body.contains(main)) return; api("mb_facturas_borrador", {}).then(function (d) { K.d = d; pintar(main); }).catch(function () {}); };
   }
   window.MCBorradores = { render: render, wire: wire, _k: K };
 })();

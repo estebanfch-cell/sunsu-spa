@@ -5,6 +5,7 @@
 // Si el SKU no está en ningún catálogo, la línea igual se copia y es el ÚNICO aviso.
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
+import { aliasMigo, CAJA_GIFT } from "./alias_migo.ts";
 
 export type SeccionBorrador = "facial" | "paquete" | "extra" | "producto" | "gift";
 export type LineaBorrador = {
@@ -36,17 +37,17 @@ export function lineasBorradorDeFactura(lineasFac: Row[], catalogo: Row[]): { li
   const lineas: LineaBorrador[] = [], avisos: string[] = [];
   for (const l of lineasFac || []) {
     const raw = s(l.sku || l.codigo);
-    const code = skuCode(raw);
     const q = n(l.cantidad) || 1;
     const tot = totalLineaFactura(l);
-    const c = code ? porCode.get(code) : undefined;
+    const code = raw ? aliasMigo(raw, tot / q) : "";
+    const c = code ? (porCode.get(code) || (code === CAJA_GIFT.sku ? { ...CAJA_GIFT } : undefined)) : undefined;
     const nombre = s(l.producto || l.nombre) || s(c?.nombre) || raw;
     if (!code) { avisos.push("Revisa: «" + nombre + "» viene sin código en la factura; se copió como producto."); }
     else if (!c) { avisos.push("Revisa: el SKU " + raw + " («" + nombre + "») no está en el catálogo; se copió con el precio de la factura."); }
     const seccion = seccionDeTipo(s(c?.tipo) || "producto");
     const pack = seccion === "paquete" ? (/\(\s*6\s*\)|x\s*6\b/i.test(s(c?.nombre) + " " + nombre) ? 6 : 3) : undefined;
     lineas.push({
-      seccion, tipo: seccion, sku: code || raw, skuFactura: raw, nombre: s(c?.nombre) || nombre,
+      seccion, tipo: seccion, sku: code || raw, skuFactura: raw, nombre: code === CAJA_GIFT.sku ? CAJA_GIFT.nombre : (s(c?.nombre) || nombre),
       cantidad: q, precio_unit: round2(tot / q), total: tot, enCatalogo: !!c, ...(pack ? { pack } : {}),
     });
   }

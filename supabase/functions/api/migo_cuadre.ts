@@ -2,6 +2,7 @@
 import { b, n, s, type Row } from "./domain.ts";
 
 import { compararFacturaYTickets } from "./migo_lineas.ts";
+import { difPorSku } from "./cuadre_sku.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
 export const FALTA_CUADRE_DESDE = "2026-11-01";
@@ -117,6 +118,13 @@ export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "mont
 
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
+}
+/** TK97: « Qué SKU hace la diferencia: Falta en ticket: SUNSU-35 GIFT CARD $3.00.» (solo por SKU). */
+function difSkuDeLink(L: { factura: string }, facturas: FacturaVivo[], hermanos: Row[], t: Row): string {
+  const f = facturas.find((x) => x.factura === L.factura);
+  if (!f || !Array.isArray(f.lineas) || !f.lineas.length) return "";
+  const d = difPorSku(f.lineas as Row[], hermanos.length ? hermanos : [t]);
+  return d.length ? " " + d.join(" · ") + "." : "";
 }
 /** TK90: cancelado/anulado (beta o sistema anterior). */
 export function ticketCancelado(t: Row): boolean {
@@ -248,7 +256,7 @@ export function flagsDeseadas(p: {
         out.push({
           ticket_id: id, ticket_clave: clave, kind: "monto",
           motivo: "Diferencia de monto",
-          detalle: "Ticket $" + L.total_tickets.toFixed(2) + " vs factura " + L.factura + " $" + L.total_factura.toFixed(2) + " (" + signo + L.diferencia_monto.toFixed(2) + ")." + (L.motivo ? " " + L.motivo + "." : ""),
+          detalle: "Ticket $" + L.total_tickets.toFixed(2) + " vs factura " + L.factura + " $" + L.total_factura.toFixed(2) + " (" + signo + L.diferencia_monto.toFixed(2) + ")." + (L.motivo ? " " + L.motivo + "." : "") + difSkuDeLink(L, p.facturas, (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[], t),
           factura: L.factura,
         });
       }

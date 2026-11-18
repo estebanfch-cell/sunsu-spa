@@ -18,6 +18,7 @@ import {
   type CambioSku, type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
+import { difPorSku } from "./cuadre_sku.ts";
 import { catalogoBorradores, lineasBorradorDeFactura, lineasTicketDeBorrador, type LineaBorrador } from "./borrador_lineas.ts";
 import { contactoDeFactura } from "./clientes_contacto.ts";
 import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
@@ -594,6 +595,14 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
     : [];
   const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
   const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
+  // TK97: en los que no cuadran, qué SKU/línea hace la diferencia.
+  const facL = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0.lineas) ? b0.lineas : [])) as Row[];
+  for (const c of cands as (Row & { claves: string[]; cuadra: boolean })[]) {
+    if (c.cuadra || !facL.length) continue;
+    const tks = c.claves.map((k) => tickets.find((t) => s(t.clave) === k || s(t.so_num) === k)).filter(Boolean) as Row[];
+    const dif = difPorSku(facL, tks);
+    if (dif.length) { c.dif_sku = dif; c.motivo = (s(c.motivo) ? s(c.motivo) + " " : "") + dif.join(" · "); }
+  }
   if (cands.length) pub.candidatos = cands;
   return { ok: true, borrador: pub };
 });
@@ -704,6 +713,19 @@ extend("migo_borrador_vincular", ADMIN, async (p, ctx, ses) => {
   await correrCuadre(ctx, actor);
   await logSafe(ctx, actor, "MIGO BORRADOR", "vinculó " + fac + " → " + claves.join(" + "));
   return { ok: true, vinculado: true, factura: fac, ticket_clave: claves[0], tickets: claves };
+});
+
+// TK97: diferencia por SKU de la combinación marcada en «Vincular ticket».
+extend("migo_dif_sku", ADMIN, async (p, ctx) => {
+  const fac = facturaNorm(p.factura);
+  const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
+  const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
+  const facL = (vivo && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0?.lineas) ? b0!.lineas : [])) as Row[];
+  if (!facL.length) return { ok: true, dif: [] };
+  const want = (Array.isArray(p.tickets) ? p.tickets as unknown[] : []).map((x) => s(x)).filter(Boolean);
+  const todos = await ticketsParaCuadre(ctx);
+  const tks = want.map((k) => todos.find((t) => s(t.clave) === k || s(t.so_num) === k)).filter(Boolean) as Row[];
+  return { ok: true, dif: difPorSku(facL, tks) };
 });
 
 extend("migo_borrador_descartar", ADMIN, async (p, ctx, ses) => {
