@@ -13,7 +13,7 @@ import { claveDe } from "./ticket_beta.ts";
 import { canonDeClave, clavesDe } from "./clientes_alias.ts";
 import { docsDe } from "./tickets_beta_api.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
-import { esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vistaDoc } from "./documentos_beta.ts";
+import { agruparDocumentos, agruparSinAsignar, esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vistaDoc } from "./documentos_beta.ts";
 
 const FALTA = "Falta aplicar 0049_clientes_beta.sql";
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -226,7 +226,7 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   resumen.sesionesPendientes = paquetes.reduce((a, p) => a + n(p.pendientes), 0);
   return {
     ok: true, admin, key, unidas: ov?._filas || undefined, codigo, datos: sinPrivados(datos, ses), campos: CAMPOS_CLIENTE.filter(([k]) => conTelefono(ses) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
-    corregidos: Object.keys(corr), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))),
+    corregidos: Object.keys(corr), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))), grupos: agruparDocumentos(documentos),
     bitacora: (ov?.historial || []) as Row[], borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
     puedeEditar: admin, puedePedir: !admin,
   };
@@ -294,20 +294,24 @@ extend("doc_sin_asignar", "any", async (p, ctx, ses) => {
     ...vistaDoc(d), archivo: nombreDeArchivo(d.cliente_nombre_archivo), confianza: s(d.match_confianza) || "none",
     sugerencias: cl.filter((c) => mismoNombre(s(d.cliente_nombre_archivo), normNombre(c.nombre))).slice(0, 6),
   }));
-  return { ok: true, total: docs.length, items };
+  const grupos = agruparSinAsignar(items);
+  return { ok: true, total: docs.length, items, grupos, gruposTotal: grupos.length };
 });
 extend("doc_asignar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin" };
-  const id = s(p.id), key = s(p.key);
-  if (!id) return { error: "Falta el documento" };
-  const d = await docPorId(ctx, id);
-  if (!d) return { error: "No encontré ese documento" };
+  const ids = (Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => s(x)).filter(Boolean);
+  const key = s(p.key);
+  if (!ids.length) return { error: "Falta el documento" };
   if (key && !/^(c|n|t):/.test(key)) return { error: "Clienta inválida" };
-  const antes = s(d.cliente_id);
-  await ctx.db.write(actorOf(ses), "beta_cliente_documentos", "update", { id }, { cliente_id: key || null, match_confianza: key ? "manual" : "none" });
-  await logAccion(ctx.db, actorOf(ses), key ? "DOCUMENTO ASIGNAR" : "DOCUMENTO DESASIGNAR",
-    `${s(d.tipo)} «${s(d.cliente_nombre_archivo)}» ${localEc(d.fecha).slice(0, 16)} · ${antes || "sin asignar"} → ${key || "sin asignar"} · ${id}`);
-  return { ok: true, id, key: key || null };
+  for (const id of ids) {
+    const d = await docPorId(ctx, id);
+    if (!d) return { error: "No encontré ese documento" };
+    const antes = s(d.cliente_id);
+    await ctx.db.write(actorOf(ses), "beta_cliente_documentos", "update", { id }, { cliente_id: key || null, match_confianza: key ? "manual" : "none" });
+    await logAccion(ctx.db, actorOf(ses), key ? "DOCUMENTO ASIGNAR" : "DOCUMENTO DESASIGNAR",
+      `${s(d.tipo)} «${s(d.cliente_nombre_archivo)}» ${localEc(d.fecha).slice(0, 16)} · ${antes || "sin asignar"} → ${key || "sin asignar"} · ${id}`);
+  }
+  return { ok: true, id: ids[0], ids, key: key || null, n: ids.length };
 });
 
 extend("cl_get", "any", async (p, ctx, ses) => {

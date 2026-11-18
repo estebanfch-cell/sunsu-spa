@@ -24,8 +24,111 @@
       ".mcpv-b.pdf{flex-direction:column;align-items:stretch;justify-content:flex-start}.mcpv-acc{display:flex;gap:8px;justify-content:flex-end;padding:8px 12px;background:#fff;border-bottom:1px solid var(--cream-d)}.mcpv-b.pdf iframe{flex:1;min-height:0}.mcpv-h .mctk-x{background:none;border:0;font-size:1.5rem;line-height:1;color:var(--navy);cursor:pointer;padding:0 4px}",
       ".mcpv{position:fixed;inset:0;background:rgba(20,30,50,.6);display:flex;align-items:center;justify-content:center;z-index:10000}.mcpv-box{background:#fff;border-radius:12px;width:min(980px,96vw);height:min(90vh,900px);display:flex;flex-direction:column;overflow:hidden}.mcpv-h{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--cream-d);font-size:.86rem;font-weight:700}.mcpv-b{flex:1;display:flex;align-items:center;justify-content:center;background:#f4f4f6;overflow:auto}.mcpv-b img{max-width:100%;max-height:100%;object-fit:contain}.mcpv-b iframe{width:100%;height:100%;border:0}",
       ".mccl-ses{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--navy);margin-right:3px;vertical-align:middle}.mccl-ses.u{background:var(--navy)}",
+      ".mcd-g{border:1px solid var(--cream-d);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--white,#fff)}.mcd-gh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}.mcd-gh b{color:var(--navy-d)}.mcd-rep{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--cream-d)}.mcd-g>.mcd-rep:first-of-type{border-top:0}",
+      ".mcd-fotos,.mcd-fold{margin:6px 0 0;border:1px solid var(--cream-d);border-radius:10px;background:#fafaf8}.mcd-fotos>summary,.mcd-fold>summary{cursor:pointer;list-style:none;padding:8px 12px;font-weight:700;font-size:.84rem;color:var(--navy-d)}.mcd-fotos>summary::-webkit-details-marker,.mcd-fold>summary::-webkit-details-marker{display:none}.mcd-fotos>summary:before,.mcd-fold>summary:before{content:'▸ ';display:inline-block;transition:transform .15s}.mcd-fotos[open]>summary:before,.mcd-fold[open]>summary:before{transform:rotate(90deg)}.mcd-fold{margin:6px 10px 8px;background:#fff}.mcd-fold .mccl-ph{padding:0 10px 10px}",
     ].join("");
     document.head.appendChild(s);
+  }
+
+  // ---------- Documentos: una entrada por día / ticket; informe PDF primero; fotos del ticket en Antes / Después; zips K-Lift ocultos ----------
+  function esZipOculto(d) { return !!(d && (d.zip === true || d.tipo === "zip" || /\.zip$/i.test(d.storage_path || ""))); }
+  function visibleDoc(d) { return !!(d && !esZipOculto(d) && d.tipo !== "analisis"); }
+  function carpetaFoto(d) {
+    var n = norm(d && d.nombre);
+    if (/(^|[^a-z])(despues|after|post)([^a-z]|$)/.test(n)) return "despues";
+    if (/(^|[^a-z])(antes|before|pre)([^a-z]|$)/.test(n)) return "antes";
+    return "fotos";
+  }
+  function esInforme(d) {
+    if (!visibleDoc(d) || d.tipo === "foto") return false;
+    if (d.sub === "skin_analisis" || d.sub === "klift") return d.tipo === "pdf";
+    return d.tipo === "pdf" && /acta|informe|focus\s*skin|k-?lift/.test(norm([d.nombre, d.sub, d.tipo].join(" ")));
+  }
+  function minsH(h) { var m = String(h || "").match(/(\d{1,2}):(\d{2})/); return m ? (+m[1] * 60 + +m[2]) : NaN; }
+  function armaGrupo(b) {
+    var fotos = { antes: [], despues: [], fotos: [] }, informes = [], otros = [];
+    (b.items || []).forEach(function (d) {
+      if (d.tipo === "foto") fotos[carpetaFoto(d)].push(d);
+      else if (esInforme(d)) informes.push(d);
+      else otros.push(d);
+    });
+    var nFotos = fotos.antes.length + fotos.despues.length + fotos.fotos.length;
+    var tipos = [];
+    informes.forEach(function (d) {
+      var lab = d.sub === "klift" ? "K-Lift" : d.sub === "skin_analisis" ? "Focus Skin" : /acta/i.test(d.nombre || "") ? "Acta" : "Informe";
+      if (tipos.indexOf(lab) < 0) tipos.push(lab);
+    });
+    var titulo = [b.clave, tipos.join(" · ")].filter(Boolean).join(" · ") || (nFotos ? "Fotos del ticket" : "Documentos");
+    return { fecha: b.fecha, hora: b.hora || "", clave: b.clave || "", titulo: titulo, informes: informes, otros: otros, fotos: fotos, nFotos: nFotos, ids: (b.items || []).map(function (d) { return d.docId; }).filter(Boolean) };
+  }
+  function agruparDocs(docs) {
+    var raw = {}, i, d, k, b, dia, L, con, sin, merged = [];
+    (docs || []).filter(visibleDoc).forEach(function (d) {
+      var fecha = String(d.fecha || "").slice(0, 10), clave = d.clave ? String(d.clave) : "";
+      k = clave ? fecha + "|" + clave : fecha;
+      b = raw[k] || { fecha: fecha, clave: clave, hora: d.hora || "", items: [] };
+      b.items.push(d);
+      if (!b.hora && d.hora) b.hora = d.hora;
+      raw[k] = b;
+    });
+    var porDia = {};
+    Object.keys(raw).forEach(function (k) { b = raw[k]; (porDia[b.fecha] = porDia[b.fecha] || []).push(b); });
+    function cerca(grupos, hora) {
+      var t = minsH(hora), best = null, bestD = Infinity, u, dist;
+      if (!isFinite(t)) return null;
+      grupos.forEach(function (g) { u = minsH(g.hora); if (!isFinite(u)) return; dist = Math.abs(u - t); if (dist < bestD) { bestD = dist; best = g; } });
+      return best;
+    }
+    Object.keys(porDia).forEach(function (dia) {
+      L = porDia[dia]; con = L.filter(function (x) { return x.clave; }); sin = L.filter(function (x) { return !x.clave; });
+      if (con.length === 1 && sin.length) { con[0].items = con[0].items.concat(sin.reduce(function (a, x) { return a.concat(x.items); }, [])); if (!con[0].hora) con[0].hora = sin[0].hora; merged.push(con[0]); }
+      else if (con.length > 1 && sin.length) {
+        sin.forEach(function (x) { x.items.forEach(function (d) { (cerca(con, d.hora || x.hora) || con[0]).items.push(d); }); });
+        merged = merged.concat(con);
+      } else merged = merged.concat(L);
+    });
+    return merged.map(armaGrupo).sort(function (a, b) { return (b.fecha + (b.hora || "")).localeCompare(a.fecha + (a.hora || "")); });
+  }
+  function agruparSinAsignarJs(items) {
+    var cubos = {};
+    (items || []).forEach(function (d) {
+      var dia = String(d.fecha || "").slice(0, 10), nom = norm(d.archivo || d.nombre || "");
+      var k = dia + "|" + nom; (cubos[k] = cubos[k] || []).push(d);
+    });
+    return Object.keys(cubos).map(function (k) {
+      var L = cubos[k], vis = L.filter(function (d) { return !esZipOculto(d); });
+      if (!vis.length) return null;
+      var informes = vis.filter(esInforme), otros = vis.filter(function (d) { return !esInforme(d) && d.tipo !== "foto"; }), first = informes[0] || vis[0];
+      return { fecha: first.fecha, hora: first.hora, archivo: first.archivo, confianza: first.confianza, sub: first.sub,
+        titulo: (first.sub === "klift" ? "K-Lift" : "Focus Skin") + (first.archivo ? " · " + first.archivo : ""),
+        informes: informes, otros: otros, fotos: { antes: [], despues: [], fotos: [] }, nFotos: 0,
+        ids: L.map(function (d) { return d.docId; }).filter(Boolean), sugerencias: first.sugerencias, docId: first.docId, zip: false };
+    }).filter(Boolean).sort(function (a, b) { return (String(b.fecha) + (b.hora || "")).localeCompare(String(a.fecha) + (a.hora || "")); });
+  }
+  function accDoc(x) {
+    if (x.docId) return (x.zip ? "" : '<button class="btn ghost small" type="button" data-pvd="' + e(x.docId) + '" data-pvn="' + e(x.nombre) + '">Ver</button> ') + '<button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '" title="Descargar">⬇️</button>';
+    if (x.url) return '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>';
+    if (x.tipo === "tarjeta" && x.sheetRow) return '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>';
+    return "";
+  }
+  function carpetaHtml(titulo, fotos) {
+    if (!fotos || !fotos.length) return "";
+    return '<details class="mcd-fold"><summary>' + e(titulo) + " (" + fotos.length + ")</summary><div class=\"mccl-ph\">" +
+      fotos.map(function (x) { return '<img data-mini="' + e(x.url) + '" src="' + e(VACIA) + '" alt="' + e(x.nombre) + '" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">'; }).join("") + "</div></details>";
+  }
+  function fotosBlock(g) {
+    var fo = g.fotos || {}, n = g.nFotos || ((fo.antes || []).length + (fo.despues || []).length + (fo.fotos || []).length);
+    if (!n) return "";
+    return '<details class="mcd-fotos"><summary>Fotos' + (n ? " (" + n + ")" : "") + "</summary>" +
+      carpetaHtml("Antes", fo.antes) + carpetaHtml("Después", fo.despues) + carpetaHtml("Fotos", fo.fotos) + "</details>";
+  }
+  function grupoHtml(g) {
+    var ico = { pdf: "📑", tarjeta: "📄", comprobante: "🧾", consentimiento: "✍️", foto: "🖼️" };
+    var informes = (g.informes || []).map(function (x) { return '<div class="mcd-rep"><span>📑 ' + e(x.nombre) + "</span><span>" + accDoc(x) + "</span></div>"; }).join("");
+    var otros = (g.otros || []).map(function (x) { return '<div class="mcd-rep"><span>' + (ico[x.tipo] || "📄") + " " + e(x.nombre) + "</span><span>" + accDoc(x) + "</span></div>"; }).join("");
+    var tk = g.clave ? '<button class="btn ghost small" type="button" data-tk="' + e(g.clave) + '">Abrir ticket</button>' : "";
+    return '<div class="mcd-g"><div class="mcd-gh"><b>' + e(f(g.fecha)) + (g.hora ? " " + e(g.hora) : "") + "</b>" +
+      (g.titulo ? '<span class="mccf-sub"> · ' + e(g.titulo) + "</span>" : "") + tk + "</div>" + informes + otros + fotosBlock(g) + "</div>";
   }
 
   // ---------- lista ----------
@@ -190,13 +293,18 @@
   // ---------- Documentos sin asignar (admin) ----------
   var SA = { q: "", items: null, total: 0, busca: {} };
   function saFila(x) {
-    var b = SA.busca[x.docId] || "";
+    var id = x.docId || (x.ids && x.ids[0]) || "";
+    var ids = (x.ids && x.ids.length) ? x.ids : (id ? [id] : []);
+    var b = SA.busca[id] || "";
     var cands = b.length >= 2 ? (K.L || []).filter(function (c) { var t = norm(c.nombre + " " + (c.cedula || "") + " " + (c.codigo || "")); return norm(b).split(/\s+/).every(function (w) { return t.indexOf(w) >= 0; }); }).slice(0, 8) : [];
-    var opt = function (c) { return '<button class="btn ghost small" type="button" data-sa-as="' + e(x.docId) + '" data-sa-k="' + e(c.key) + '" data-sa-n="' + e(c.nombre) + '">' + e(c.nombre) + (c.codigo ? " · " + e(c.codigo) : "") + (c.cedula ? " · " + e(c.cedula) : "") + "</button>"; };
-    return '<tr data-sa="' + e(x.docId) + '"><td>' + e(f(x.fecha)) + (x.hora ? " " + e(x.hora) : "") + "</td><td>" + (x.zip ? "🗂️" : "📑") + " " + e(x.sub === "klift" ? "K-Lift" : "Focus Skin") + "</td><td><b>" + e(x.archivo || "—") + '</b><div class="mccf-sub">' + e(x.confianza === "ambiguous" ? "Nombre ambiguo (varias clientas)" : "Sin coincidencia") + "</div></td>" +
-      '<td><button class="btn ghost small" type="button" data-sa-ver="' + e(x.docId) + '" data-sa-z="' + (x.zip ? 1 : 0) + '" data-pvn="' + e(x.nombre) + '">' + (x.zip ? "⬇️ Zip" : "Ver") + "</button></td>" +
+    var opt = function (c) { return '<button class="btn ghost small" type="button" data-sa-as="' + e(id) + '" data-sa-ids="' + e(ids.join(",")) + '" data-sa-k="' + e(c.key) + '" data-sa-n="' + e(c.nombre) + '">' + e(c.nombre) + (c.codigo ? " · " + e(c.codigo) : "") + (c.cedula ? " · " + e(c.cedula) : "") + "</button>"; };
+    var informes = (x.informes && x.informes.length) ? x.informes : (id && !x.zip ? [x] : []);
+    var ver = informes.map(function (d) { return '<button class="btn ghost small" type="button" data-sa-ver="' + e(d.docId) + '" data-sa-z="0" data-pvn="' + e(d.nombre || x.titulo || "") + '">Ver</button>'; }).join(" ");
+    var det = informes.map(function (d) { return e(d.nombre); }).join(" · ");
+    return '<tr data-sa="' + e(id) + '" data-sa-ids="' + e(ids.join(",")) + '"><td>' + e(f(x.fecha)) + (x.hora ? " " + e(x.hora) : "") + "</td><td>📑 " + e(x.sub === "klift" ? "K-Lift" : "Focus Skin") + "</td><td><b>" + e(x.archivo || "—") + '</b><div class="mccf-sub">' + e(det || x.titulo || "") + (x.confianza === "ambiguous" ? " · Nombre ambiguo (varias clientas)" : " · Sin coincidencia") + "</div></td>" +
+      "<td>" + (ver || "—") + "</td>" +
       '<td style="min-width:240px">' + (x.sugerencias && x.sugerencias.length ? '<div class="mccf-sub">Sugeridas:</div>' + x.sugerencias.map(opt).join(" ") : "") +
-      '<div style="margin-top:4px"><input type="search" placeholder="Buscar clienta (nombre, cédula, código)" data-sa-q="' + e(x.docId) + '" value="' + e(b) + '" style="width:100%"></div><div data-sa-c="' + e(x.docId) + '">' + cands.map(opt).join(" ") + "</div></td></tr>";
+      '<div style="margin-top:4px"><input type="search" placeholder="Buscar clienta (nombre, cédula, código)" data-sa-q="' + e(id) + '" value="' + e(b) + '" style="width:100%"></div><div data-sa-c="' + e(id) + '">' + cands.map(opt).join(" ") + "</div></td></tr>";
   }
   function norm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
   async function renderSinAsignar() {
@@ -204,12 +312,14 @@
     if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; K.t = Date.now(); } }
     var r = await api("doc_sin_asignar", { q: SA.q, limit: 300 });
     if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver</button>';
-    SA.items = r.items || []; SA.total = r.total || 0;
+    SA.items = r.items || [];
+    SA.grupos = r.grupos || agruparSinAsignarJs(SA.items);
+    SA.total = r.gruposTotal != null ? r.gruposTotal : SA.grupos.length;
     return '<div class="mccf"><p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button></p><h2>📑 Documentos sin asignar</h2>' +
-      '<p class="mccf-sub">Análisis Focus Skin y K-Lift que no se pudieron emparejar solos (nombre ambiguo o sin coincidencia). Elige la clienta y queda en su pestaña Documentos; cada asignación queda en el registro.</p>' +
+      '<p class="mccf-sub">Análisis Focus Skin y K-Lift (PDF final) que no se pudieron emparejar solos. Los zips de fotos no se listan. Elige la clienta y queda en su pestaña Documentos; al asignar también se ata el zip oculto del mismo día.</p>' +
       '<div class="mccf-bar"><input type="search" id="sa-q" placeholder="Filtrar por nombre del archivo" value="' + e(SA.q) + '"></div>' +
-      '<p class="mccf-sub" id="sa-n">' + SA.total + " documento" + (SA.total === 1 ? "" : "s") + " sin asignar" + (SA.total > SA.items.length ? " · mostrando " + SA.items.length : "") + "</p>" +
-      '<div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Nombre en el archivo</th><th></th><th>Asignar a</th></tr></thead><tbody id="sa-body">' + SA.items.map(saFila).join("") + "</tbody></table></div></div>";
+      '<p class="mccf-sub" id="sa-n">' + SA.total + " documento" + (SA.total === 1 ? "" : "s") + " sin asignar" + "</p>" +
+      '<div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Nombre en el archivo</th><th></th><th>Asignar a</th></tr></thead><tbody id="sa-body">' + SA.grupos.map(saFila).join("") + "</tbody></table></div></div>";
   }
   function wireSinAsignar(main) {
     var q = main.querySelector("#sa-q"), tmr;
@@ -218,18 +328,22 @@
     body.oninput = function (ev) {
       var i = ev.target.closest("[data-sa-q]"); if (!i) return;
       var id = i.getAttribute("data-sa-q"); SA.busca[id] = i.value; clearTimeout(tmr);
-      tmr = setTimeout(function () { var x = SA.items.filter(function (y) { return y.docId === id; })[0]; var box = body.querySelector('[data-sa-c="' + id + '"]'); if (x && box) { var tmp = document.createElement("tbody"); tmp.innerHTML = saFila(x); var nb = tmp.querySelector('[data-sa-c="' + id + '"]'); box.innerHTML = nb ? nb.innerHTML : ""; } }, 150);
+      tmr = setTimeout(function () { var x = (SA.grupos || SA.items || []).filter(function (y) { return y.docId === id || (y.ids || []).indexOf(id) >= 0; })[0]; var box = body.querySelector('[data-sa-c="' + id + '"]'); if (x && box) { var tmp = document.createElement("tbody"); tmp.innerHTML = saFila(x); var nb = tmp.querySelector('[data-sa-c="' + id + '"]'); box.innerHTML = nb ? nb.innerHTML : ""; } }, 150);
     };
     body.onclick = async function (ev) {
       var v = ev.target.closest("[data-sa-ver]");
       if (v) { var id0 = v.getAttribute("data-sa-ver"); if (v.getAttribute("data-sa-z") === "1") descargarDoc(id0, ""); else { previaBucket(id0, v.getAttribute("data-pvn")); } return; }
       var a = ev.target.closest("[data-sa-as]"); if (!a) return;
       var id = a.getAttribute("data-sa-as"), key = a.getAttribute("data-sa-k"), nom = a.getAttribute("data-sa-n");
+      var ids = (a.getAttribute("data-sa-ids") || id).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
       if (!confirm("¿Asignar este documento a " + nom + "?")) return;
       a.disabled = true;
-      var r = await api("doc_asignar", { id: id, key: key });
+      var r = await api("doc_asignar", { id: ids[0] || id, ids: ids, key: key });
       if (!r || !r.ok) { a.disabled = false; alert((r && r.error) || "No se pudo asignar"); return; }
-      SA.items = SA.items.filter(function (y) { return y.docId !== id; }); SA.total = Math.max(0, SA.total - 1);
+      var toma = function (y) { return y.docId === id || (y.ids || []).some(function (z) { return ids.indexOf(z) >= 0; }); };
+      SA.items = (SA.items || []).filter(function (y) { return !toma(y); });
+      SA.grupos = (SA.grupos || []).filter(function (y) { return !toma(y); });
+      SA.total = Math.max(0, (SA.grupos || []).length);
       var tr = body.querySelector('tr[data-sa="' + id + '"]'); if (tr) tr.remove();
       var n = main.querySelector("#sa-n"); if (n) n.textContent = SA.total + " documento" + (SA.total === 1 ? "" : "s") + " sin asignar · ✓ asignado a " + nom;
     };
@@ -281,12 +395,9 @@
         d.giftcards.map(function (g) { return '<tr><td class="mccl-cod">' + e(g.codigo) + "</td><td>" + e(f(g.fecha)) + "</td><td>" + e(g.comprador) + "</td><td>" + e(g.valor) + "</td>" + (d.admin ? '<td class="num">' + e($m(g.saldo)) + "</td>" : "") + "<td>" + (g.usado ? "Usada " + e(f(g.fechaUso)) + (g.usadoPor ? " · " + e(g.usadoPor) : "") : "Disponible") + "</td></tr>"; }).join("") + "</tbody></table>";
     }
     if (t === "docs") {
-      if (!d.documentos.length) return '<p class="mccf-sub">Sin documentos.</p>';
-      var ico = { pdf: "📑", zip: "🗂️", tarjeta: "📄", foto: "🖼️", comprobante: "🧾", consentimiento: "✍️", analisis: "🔬" };
-      return '<table class="mccf-t mccl-t"><thead><tr><th>Fecha</th><th>Documento</th><th></th></tr></thead><tbody>' + d.documentos.map(function (x) {
-        var acc = x.docId ? (x.zip ? '<button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '">⬇️ Descargar zip</button>' : '<button class="btn ghost small" type="button" data-pvd="' + e(x.docId) + '" data-pvn="' + e(x.nombre) + '">Ver</button> <button class="btn ghost small" type="button" data-dzip="' + e(x.docId) + '" title="Descargar">⬇️</button>') : x.url ? '<button class="btn ghost small" type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : x.tipo === "tarjeta" && x.sheetRow ? '<button class="btn ghost small" type="button" data-pvt="' + e(x.sheetRow) + '" data-pvn="' + e(x.nombre) + '">Ver</button>' : "";
-        return "<tr><td>" + e(f(x.fecha)) + "</td><td>" + (ico[x.tipo] || "•") + " " + e(x.nombre) + (x.texto ? '<div class="mccf-sub">' + e(x.texto) + "</div>" : "") + "</td><td>" + acc + "</td></tr>";
-      }).join("") + "</tbody></table>";
+      var grupos = d.grupos || agruparDocs(d.documentos || []);
+      if (!grupos.length) return '<p class="mccf-sub">Sin documentos.</p>';
+      return '<div class="mcd-list">' + grupos.map(grupoHtml).join("") + "</div>";
     }
     if (t === "bitacora") return d.bitacora.length ? '<ul class="mc-hist">' + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios hechos en la beta.</p>';
     return "";
@@ -311,7 +422,7 @@
   }
   function htmlFicha() {
     var d = K.d, r = d.resumen, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
-    var tabs = [["historial", "Historial (" + d.historial.length + ")"], ["paquetes", "Paquetes (" + d.paquetes.length + ")"], ["gift", "Gift cards (" + d.giftcards.length + ")"], ["docs", "Documentos (" + d.documentos.length + ")"]];
+    var tabs = [["historial", "Historial (" + d.historial.length + ")"], ["paquetes", "Paquetes (" + d.paquetes.length + ")"], ["gift", "Gift cards (" + d.giftcards.length + ")"], ["docs", "Documentos (" + (d.grupos || agruparDocs(d.documentos || [])).length + ")"]];
     if (d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
     return '<div id="mccl-root"><p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button></p>' +
       (d.borrado ? '<p class="err">Clienta eliminada en la beta' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
@@ -353,6 +464,7 @@
       sessionStorage.setItem("mctk.volver", location.hash); go("#/m/tickets/t/" + encodeURIComponent(tr.getAttribute("data-tk")));
     };
     wireReg(main); wireAcciones(main);
+    if (K.tab === "docs") cargarMinis(main.querySelector("#mccl-tab") || main);
   }
   function wireReg(main) {
     var d = K.d, box = main.querySelector("#mccl-regbox"); if (!box) return;
