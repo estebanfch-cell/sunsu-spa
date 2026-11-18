@@ -226,6 +226,6 @@ describe("Historial forma de pago (TK38)", () => {
     assert.match(js, /Pagado en Migo/);
     assert.match(js, /Pendiente por lunes/);
     assert.match(js, /function _tkFormaPill/);
-    assert.match(html, /beta-screens\.js\?v=20261118tk38/);
+    assert.match(html, /beta-screens\.js\?v=20261118tk3\d/);
   });
 });

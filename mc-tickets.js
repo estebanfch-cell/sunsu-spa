@@ -6,6 +6,10 @@
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v); }
   function r2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
   function $m(v) { return "$" + r2(v).toFixed(2); }
+  // TK39 (Emilia 18/11): en pantalla los precios de línea van SIN IVA (como Migo); internamente se guardan con IVA
+  // (como el PVP del catálogo y lo cobrado), así los totales viejos, comisiones y el cruce con Migo no cambian.
+  var IVA = 1.15;
+  function net(v) { return r2((Number(v) || 0) / IVA); }
   function q2(v) { return r2(v) + ""; }
   function opt(v, t, sel) { return '<option value="' + e(v) + '"' + (String(v) === String(sel == null ? "" : sel) ? " selected" : "") + ">" + e(t) + "</option>"; }
   function fecha(f, h) { return f ? f.split("-").reverse().join("/") + (h ? " " + h : "") : ""; }
@@ -107,7 +111,7 @@
     (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
   }
-  function descTxt(tp, v) { v = Number(v) || 0; if (!(v > 0) || !tp) return ""; return tp === "$" ? "$" + q2(v) : q2(v) + "%"; }
+  function descTxt(tp, v) { v = Number(v) || 0; if (!(v > 0) || !tp) return ""; return tp === "$" ? "$" + q2(net(v)) : q2(v) + "%"; }
   /** «10%», «10», «$5», «5$» → {tipo, valor}; vacío = sin descuento; null = no se entiende. */
   function descParse(txt) {
     var t = String(txt || "").replace(/\s+/g, "").replace(",", ".");
@@ -133,15 +137,18 @@
     return K.L.map(function (l, i) {
       return '<tr data-i="' + i + '" class="mctk-ln"><td class="mccf-sub">' + (i + 1) + '</td><td><div class="mctk-lnw">' + fotoLinea(l) + '<div><div class="mctk-pn">' + e(l.nombre) + (l.promo && l.descuento_valor > 0 ? '<div class="mccf-sub" style="color:#8A6D1F;font-weight:700">🏷️ ' + e(l.promo) + "</div>" : "") + (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + "</div></div></div></td>" +
         '<td class="num"><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></td>' +
-        '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(r2(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
+        '<td class="num">' + (l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : '<span class="mctk-money"><span>$</span><input class="p" type="number" inputmode="decimal" min="0" step="0.01" data-f="precio_unit" value="' + e(net(l.precio_unit).toFixed(2)) + '"></span>') + "</td>" +
         '<td class="num"><input class="dv" type="text" inputmode="decimal" data-f="desc" placeholder="—" title="10% o $5" value="' + e(descTxt(l.descuento_tipo, l.descuento_valor)) + '"></td>' +
-        '<td class="num" data-tl>' + (l.cortesia && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(l.total_linea))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
+        '<td class="num" data-tl>' + (l.cortesia && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? '$0.00 <span class="mctk-canje">Canje</span>' : e($m(net(l.total_linea)))) + "</td>" + '<td><button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea">×</button></td></tr>';
     }).join("");
   }
   function totHtml() {
     var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc), pag = r2((pg.cobrado ? Math.min(c.total, pg.pagado || c.total) : 0) + (K.pagoBeta || 0));
     var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
-    return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(c.suma / 1.15) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(desc / 1.15) + "</b>" : "") +
+    // Como Migo: Σ líneas sin IVA, descuento, subtotal gravado 15 %, subtotal 0 %, IVA 15 % y total con IVA.
+    var sumNet = r2(K.L.reduce(function (a, l) { return a + net(l.total_linea); }, 0));
+    return '<div class="mctk-tot"><span>Subtotal (sin IVA)</span><b>' + $m(sumNet) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(net(desc)) + "</b>" : "") +
+      "<span>Subtotal gravado 15%</span><b>" + $m(c.subtotal) + "</b><span>Subtotal 0%</span><b>$0.00</b>" +
       "<span>IVA 15%</span><b>" + $m(c.iva) + '</b><span class="big">Total</span><b class="big">' + $m(c.total) + "</b>" +
       "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (c.total - pag > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(Math.max(0, c.total - pag)) + "</b>" +
       (met ? '<span class="mccf-sub">Forma de pago</span><span style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
@@ -207,7 +214,7 @@
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
-      '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
+      '<div class="mccf-card"><b>Líneas</b><div class="sheet-scroll" style="margin-top:6px"><table class="mccf-t mctk-t mctk-lt"><thead><tr><th>#</th><th>Producto</th><th class="num">Cant</th><th class="num">Precio sin IVA</th><th class="num">Desc</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="mctk-lin">' + lineasHtml() + "</tbody></table></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos" style="border-color:#C9A227;color:#7a5c12;background:#fbf4e4">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento del ticket <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '" style="width:84px"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
@@ -300,7 +307,7 @@
       '<p class="mccf-sub">Marca las líneas que no pagan comisión, o toda la comisión de la cosmetóloga. Queda en el historial.</p>' +
       '<label class="mctk-xtog"><input type="checkbox" id="mctk-xall"' + (K.exclC ? " checked" : "") + '><span>Excluir toda la comisión de <b>' + e(t.cosmetologa || "la cosmetóloga") + "</b> en este ticket</span></label>" +
       '<table class="mctk-xt"><thead><tr><th>Producto / servicio</th><th class="num">Subtotal</th><th class="c">Excluir</th></tr></thead><tbody>' +
-      K.L.map(function (l, i) { return '<tr><td><div class="mctk-pn">' + e(l.nombre) + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + " ×" + e(q2(l.cantidad)) + '</div></td><td class="num">' + $m(l.total_linea != null ? l.total_linea : l.precio_unit * l.cantidad) + '</td><td class="c"><input type="checkbox" data-x="' + i + '"' + (l.excluir_comision ? " checked" : "") + "></td></tr>"; }).join("") +
+      K.L.map(function (l, i) { return '<tr><td><div class="mctk-pn">' + e(l.nombre) + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + " ×" + e(q2(l.cantidad)) + '</div></td><td class="num">' + $m(net(l.total_linea != null ? l.total_linea : l.precio_unit * l.cantidad)) + '</td><td class="c"><input type="checkbox" data-x="' + i + '"' + (l.excluir_comision ? " checked" : "") + "></td></tr>"; }).join("") +
       '</tbody></table><label class="mctk-xlbl">Motivo<input type="text" id="mctk-xn" value="' + e(K.exclN) + '" placeholder="Ej. producto de cortesía, ticket de prueba"></label>' +
       '<p class="err" id="mctk-xerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn small" type="button" id="mctk-xok">' + (d.puedeEditar ? "Guardar" : "Aplicar") + "</button></div></div>";
     document.body.appendChild(box);
@@ -608,10 +615,11 @@
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("tr[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
       var l = K.L[+tr.getAttribute("data-i")];
-      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.valor; l.promo = ""; }
+      if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.tipo === "$" ? x.valor * IVA : x.valor; l.promo = ""; }
+      else if (f === "precio_unit") l.precio_unit = (Number(ev.target.value) || 0) * IVA; // se escribe sin IVA
       else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
-      calc(); tr.querySelector("[data-tl]").textContent = $m(l.total_linea); pintarTot(); marcar();
+      calc(); tr.querySelector("[data-tl]").textContent = $m(net(l.total_linea)); pintarTot(); marcar();
     });
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
