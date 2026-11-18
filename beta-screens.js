@@ -1929,7 +1929,7 @@ function _ldAplicar(){
     var m=_ldMonto(l.k,l.g); if(!(m>0)) return;
     out[l.b]+=m; out.total+=m; out.by[l.k]=m;
     var d=T.lineDesc[l.k];
-    out.lineas.push({sku:l.k,nombre:l.n,modo:d.m,valor:d.v,bruto:Math.round(l.g*100)/100,monto:m});
+    out.lineas.push({sku:l.k,nombre:l.n,modo:d.m,valor:d.v,bruto:Math.round(l.g*100)/100,monto:m,promo:d.promo||''});
   });
   // Si quitaron la línea, el descuento se va con ella.
   Object.keys(T.lineDesc||{}).forEach(function(k){ if(!vivas[k]) delete T.lineDesc[k]; });
@@ -1937,6 +1937,22 @@ function _ldAplicar(){
   return out;
 }
 var _ldSig='';
+// 🏷️ Promociones de la beta (TK31): el panel calcula en el servidor y deja cada descuento como descuento por línea con su etiqueta.
+function _promoBetaLineas(){
+  var B={f:'facial',e:'extra',pack:'paquete',prod:'producto'};
+  return _ldLineas().map(function(l){ var q=l.b==='prod'?(T.productos[l.k]||1):1; return {k:l.k,sku:l.k,nombre:l.n,tipo:B[l.b]||'producto',cantidad:q,bruto:Math.round(l.g*100)/100}; });
+}
+function _promoSigNow(){ return _promoBetaLineas().map(function(l){return l.k+':'+l.cantidad+':'+l.bruto;}).join('|'); }
+function _promoBeta(){
+  if(T.esSunsu){ toast('Consumo interno: sin promociones','#C9A227'); return; }
+  if(!window.MCPromociones){ toast('Recarga la página para ver las promociones','#C9A227'); return; }
+  window.MCPromociones.panel({lineas:_promoBetaLineas, aplicadas:T._promoIds||[], aplicar:function(res,ids){
+    T.lineDesc=T.lineDesc||{};
+    Object.keys(T.lineDesc).forEach(function(k){ if(T.lineDesc[k]&&T.lineDesc[k].promo) delete T.lineDesc[k]; });
+    (res.lineas||[]).forEach(function(l){ if(l.monto>0) T.lineDesc[l.k]={m:'$',v:l.monto,promo:l.etiqueta}; });
+    T._promoIds=ids; T._promoSig=_promoSigNow(); _ldSig=''; updatePreview();
+  }});
+}
 function _ldRender(){
   var box=document.getElementById('ld-card'); if(!box) return;
   var L=T.esSunsu?[]:_ldLineas();
@@ -1946,9 +1962,10 @@ function _ldRender(){
   var sig=L.map(function(l){return l.k+':'+l.g;}).join('|');
   if(sig!==_ldSig){
     _ldSig=sig;
-    box.innerHTML='<div class="ld-h">🏷️ Descuento por línea <small>opcional · escribe 10% o 5 ($)</small></div>'+
+    box.innerHTML='<div class="ld-h" style="display:flow-root">🏷️ Descuento por línea <small>opcional · escribe 10% o 5 ($)</small> <button type="button" onclick="_promoBeta()" style="float:right;border:1.5px solid #C9A227;background:#fbf4e4;color:#7a5c12;border-radius:9px;padding:4px 10px;font:inherit;font-size:.72rem;font-weight:800;cursor:pointer">🏷️ Promociones</button></div>'+
       L.map(function(l){
-        return '<div class="ld-row" data-k="'+_tkEsc(l.k)+'"><span class="ld-n">'+l.e+' '+_tkEsc(l.n)+'</span><span class="ld-g">'+$(l.g)+'</span>'+
+        var _pmL=T.lineDesc[l.k]&&T.lineDesc[l.k].promo;
+        return '<div class="ld-row" data-k="'+_tkEsc(l.k)+'"><span class="ld-n">'+l.e+' '+_tkEsc(l.n)+(_pmL?'<br><small style="color:#8A6D1F;font-weight:700" title="'+_tkEsc(_pmL)+'">🏷️ '+_tkEsc(String(_pmL).split(' · ')[0])+'</small>':'')+'</span><span class="ld-g">'+$(l.g)+'</span>'+
           '<span class="ld-in"><input type="text" inputmode="decimal" placeholder="—" value="'+_tkEsc(_ldTxt(T.lineDesc[l.k]))+'" data-ld="'+_tkEsc(l.k)+'"></span><span class="ld-net" data-net="'+_tkEsc(l.k)+'"></span></div>';
       }).join('');
     box.querySelectorAll('[data-ld]').forEach(function(inp){
@@ -2139,7 +2156,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      ${(function(){var vs=(window._promosVig||[]);if(!vs.length)return '';var uu=_promoUnits();var chips=vs.map(function(p,i){var coded=p.codigos&&p.codigos.length;if(coded){if(!_promoArmada(p,uu))return '';var cc0=_promoCalc(p,uu);if(!cc0||cc0.monto<=0)return '';}var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">'+(coded?'🎉 Aplicar promoción: ':'🎉 ')+p.nombre+' '+_pmMechTxt(p)+(on?' ✓':'')+'</button>';}).filter(Boolean);return chips.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+chips.join('')+'</div>':'';})()}
+      <button onclick="_promoBeta()" style="width:100%;padding:9px 10px;margin-bottom:6px;border-radius:10px;border:1.5px solid #E8C07A;background:${(T._promoIds&&T._promoIds.length)?'rgba(232,192,122,0.22)':'transparent'};color:#E8C07A;font-size:0.72rem;font-weight:800;cursor:pointer;text-align:left">🏷️ Promociones${(T._promoIds&&T._promoIds.length)?(T._promoSig&&T._promoSig!==_promoSigNow()?' · ⚠️ cambió el ticket: toca para recalcular':' · '+T._promoIds.length+' aplicada'+(T._promoIds.length===1?'':'s')+' ✓'):' · ver cuáles aplican'}</button>
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>

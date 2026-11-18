@@ -48,7 +48,7 @@ export async function catalogoTicket(ctx: Ctx, ses: Ses): Promise<Row[]> {
     out.push({
       sku: code, skuVisible: s(r.sku), nombre: s(r.producto_servicio) || s(p?.nombre), tipo: tipoCatalogo(s(r.tipo)), pvp: round2(tot),
       activo: p ? p.activo !== false : r.activo !== false, barras: p ? p.barras || [] : [], productoId: p ? s(p.id) : "", foto: p ? s(p.foto_thumb) : "",
-      stock: p ? p.stock : null,
+      stock: p ? p.stock : null, marca: p ? s(p.marca) : "", categoria: p ? s(p.categoria) : "",
     });
   }
   for (const p of prods) {
@@ -104,7 +104,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
     return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
-      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}) }));
+      .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}) , promo: s(l.promo) || undefined}));
   }
   const porCode = new Map(cat.map((c) => [s(c.sku), c]));
   const pvpDe = (c: string) => n(porCode.get(skuCode(c))?.pvp);
@@ -132,7 +132,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
     const dx = dl.get(skuCode(l.codigo));
     if (dx && !(canjeF && l.tipo === "facial")) {
       const unitL = qty > 0 ? n(dx.bruto) / qty : n(dx.bruto);
-      out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unitL), descuento_tipo: s(dx.modo) === "%" ? "%" : "$", descuento_valor: s(dx.modo) === "%" ? n(dx.valor) : n(dx.monto), excluir_comision: false, estimado: false });
+      out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unitL), descuento_tipo: s(dx.modo) === "%" ? "%" : "$", descuento_valor: s(dx.modo) === "%" ? n(dx.valor) : n(dx.monto), excluir_comision: false, estimado: false, ...(s(dx.promo) ? { promo: s(dx.promo) } : {}) });
       continue;
     }
     const pr = precioLineaTicket(L, l.codigo, Math.max(0, round2(cobradoResto)));
@@ -241,7 +241,7 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
     const dt = s(x.descuento_tipo);
     if (dt && dt !== "%" && dt !== "$") return { error: "Descuento inválido" };
     if (dt === "%" && n(x.descuento_valor) > 100) return { error: "El descuento no puede pasar de 100%" };
-    L.push({ tipo, sku: code, nombre: s(x.nombre) || s(c?.nombre) || code, cantidad: round2(q), precio_unit: round2(pu), descuento_tipo: dt || null, descuento_valor: n(x.descuento_valor), excluir_comision: x.excluir_comision === true, estimado: x.estimado === true && !nueva && n(x.precio_unit) === n(actuales.find((a) => skuCode(a.sku) === code)?.precio_unit) });
+    L.push({ tipo, sku: code, nombre: s(x.nombre) || s(c?.nombre) || code, cantidad: round2(q), precio_unit: round2(pu), descuento_tipo: dt || null, descuento_valor: n(x.descuento_valor), excluir_comision: x.excluir_comision === true, estimado: x.estimado === true && !nueva && n(x.precio_unit) === n(actuales.find((a) => skuCode(a.sku) === code)?.precio_unit) , ...(s(x.promo).trim() && dt && n(x.descuento_valor) > 0 ? { promo: s(x.promo).trim().slice(0, 120) } : {}) });
   }
   const dTipo = p.descuento && typeof p.descuento === "object" ? s((p.descuento as Row).tipo) : s(cab?.descuento_tipo);
   const dVal = p.descuento && typeof p.descuento === "object" ? n((p.descuento as Row).valor) : n(cab?.descuento_valor);
@@ -278,6 +278,7 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
     await ctx.db.write(actor, "beta_ticket_lineas", "insert", {}, {
       id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit,
       descuento_tipo: l.descuento_tipo || null, descuento_valor: l.descuento_valor, descuento_monto: l.descuento_monto, total_linea: l.total_linea, excluir_comision: l.excluir_comision === true, estimado: l.estimado === true,
+      ...(l.promo && l.descuento_monto > 0 ? { promo: l.promo } : {}),
     });
   }
   return { ok: true, clave, total: calc.total };

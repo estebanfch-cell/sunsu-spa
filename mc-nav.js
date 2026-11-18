@@ -119,7 +119,7 @@
     }
     if (ok("bitacora")) spa.push(["bitacora", "Bitácora de esterilización", "#/m/bitacora"]);
     // «Cabina» fuera del menú (Emilia 17/11): solo se oculta; la ruta #/m/cabina y los datos siguen.
-    if (adm()) spa.push(["promos", "Promos", "#/s/promos"]);
+    if (adm()) spa.push(["promos", "Promociones", "#/m/promociones"]);
     spa.push(["tarjetas", "Tarjetas", "#/s/tarjetas"]);
     out.push({ id: "spa", label: "Spa", items: spa });
     return out;
@@ -135,7 +135,7 @@
     ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
     ["#/m/mc/upermisos", "🔐"], ["#/m/mc/pronto/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],
     ["#/m/personal/comisiones", "💰"], ["#/m/personal/rol", "🧾"], ["#/m/personal/asistencia", "⏰"], ["#/m/personal/permisos", "🏖️"], ["#/m/personal/multas", "⚠️"], ["#/m/personal/horarios", "🗓️"],
-    ["#/m/gift/cards", "🎁"], ["#/m/gift/paquetes", "🎴"], ["#/s/seguimiento", "📋"], ["#/s/recepcion", "🛎️"], ["#/m/bitacora", "🧼"], ["#/s/promos", "🏷️"], ["#/s/tarjetas", "📤"],
+    ["#/m/gift/cards", "🎁"], ["#/m/gift/paquetes", "🎴"], ["#/s/seguimiento", "📋"], ["#/s/recepcion", "🛎️"], ["#/m/bitacora", "🧼"], ["#/m/promociones", "🏷️"], ["#/s/promos", "🏷️"], ["#/s/tarjetas", "📤"],
     ["#/m/inicio", "📊"], ["#/s/historial", "🎫"], ["#/m/mc", "📦"],
   ];
   function emojiRuta(h) { h = String(h || ""); for (var i = 0; i < EMO_RUTA.length; i++) if (h === EMO_RUTA[i][0] || h.indexOf(EMO_RUTA[i][0] + "/") === 0) return EMO_RUTA[i][1]; return ""; }

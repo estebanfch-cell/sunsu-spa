@@ -4,7 +4,7 @@
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 
 export const IVA_TK = 1.15;
-export interface LineaTk { id?: string; tipo: string; sku: string; nombre?: string; cantidad: number; precio_unit: number; descuento_tipo?: string | null; descuento_valor?: number; excluir_comision?: boolean; estimado?: boolean; canje?: boolean; cortesia?: boolean }
+export interface LineaTk { id?: string; tipo: string; sku: string; nombre?: string; cantidad: number; precio_unit: number; descuento_tipo?: string | null; descuento_valor?: number; excluir_comision?: boolean; estimado?: boolean; canje?: boolean; cortesia?: boolean; promo?: string }
 export interface Promo { nombre: string; tipo: string; valor: number; valor2?: number; codigos: string[] }
 
 export function descuentoDe(base: number, tipo: string | null | undefined, valor: number): number {
