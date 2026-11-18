@@ -729,6 +729,7 @@
     render: function (route) { return render(String(route.id)); },
     wire: wire,
     claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); },
+    isDirty: function () { return !!K.dirty; },
     _k: K, _calc: calc,
   };
 })();
