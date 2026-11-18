@@ -355,84 +355,101 @@
  ],
  "pendientes": [
   {
-   "sku": "AS-001",
-   "nombre": "Aceite Limpiador - Eyenlip",
-   "motivo": "eyeNlip vende 3 aceites (Eggplant Pore / PH Cica / VC Control); no se sabe cuál"
-  },
-  {
-   "sku": "AS-002",
-   "nombre": "Jabón Limpiador Ceramide Foam - Eyenlip",
-   "motivo": "5 variantes (Tomato/Lemon/Apple/Rice/Cica); no se sabe cuál"
-  },
-  {
-   "sku": "INV-054",
-   "nombre": "PEELING ENZIMATICO PAPAYA Y PINA (Arôms Natur)",
-   "motivo": "No se encontró la ficha oficial en formato profesional 500 g"
-  },
-  {
    "sku": "INV-055",
    "nombre": "PROBIOTIC SKIN BALANCING MASK (Arôms Natur)",
    "motivo": "Solo aparece en INCI Beauty, sin foto de tienda fiable"
   },
   {
-   "sku": "INV-056",
-   "nombre": "A.VEG. PEPITA DE UVA (Arôms Natur) 1000 ml",
-   "motivo": "Formato profesional 1 L; solo listado de otra marca (Esential Arôms)"
-  },
-  {
-   "sku": "INV-057",
-   "nombre": "POLVO DE ARROZ (Arôms Natur) 400 g",
-   "motivo": "Solo se encuentra el de 100 g"
-  },
-  {
    "sku": "INV-058",
    "nombre": "ESSENCEBALM (Arôms Natur) 200 g",
    "motivo": "No se encontró el producto en la tienda de la marca"
+  }
+ ],
+ "puestas_2": [
+  {
+   "sku": "AS-001",
+   "archivo": "a9cf1c9003dd49298f0b",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-cleansing-oil-3-types-vc-control/info.html/pid.1118468034",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   },
   {
-   "sku": "INV-061",
-   "nombre": "Winner Soft Face Towels",
-   "motivo": "Solo en Amazon; Amazon bloquea la descarga de imágenes desde la caja"
-  },
-  {
-   "sku": "INV-093",
-   "nombre": "Guante Quirúrgico",
-   "motivo": "Genérico (Kywi), sin marca ni modelo"
-  },
-  {
-   "sku": "INV-100",
-   "nombre": "Daleaf Chlorella Better Root Hair Tonic 50 ml",
-   "motivo": "No se encontró la presentación de 50 ml (sí la de 100 ml, INV-028)"
-  },
-  {
-   "sku": "INV-120",
-   "nombre": "Bioderma Sensibo H2O 125 ml",
-   "motivo": "125 ml es el formato «Sensibio H2O Eye» bifásico; la micelar clásica es 100/250 ml. Confirmar cuál es"
-  },
-  {
-   "sku": "INV-122",
-   "nombre": "Lanceta Estéril",
-   "motivo": "Genérico (Ultra Limpio), sin marca ni modelo"
+   "sku": "AS-002",
+   "archivo": "3b856807d9d24cc68c0d",
+   "fuente": "https://www.yesstyle.com/en/eyenlip-ceramide-cleansing-foam-5-types-cica/info.html/pid.1118468028",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   },
   {
    "sku": "JN-006",
-   "nombre": "PDRN Ampoule - Dermaline",
-   "motivo": "Dermaline tiene 2 ampollas PDRN (Bio Activing 75 ml / PDRN Solution Salmon 35 ml); no se sabe cuál"
+   "archivo": "e2c987e4788747409434",
+   "fuente": "https://www.dodoskin.com/products/dermaline-pdrn-exo-solution-salmon-ampoule-35ml-1",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   },
   {
    "sku": "ML-004",
-   "nombre": "Skin Laser Toner - Dr.esthe",
-   "motivo": "Existe en 30 ml, 200 ml y Mist 100 ml; no se sabe el tamaño"
+   "archivo": "f5f82cb18e5f40098772",
+   "fuente": "https://dresthe.ca/products/skin-laser-toner-30ml",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   },
   {
    "sku": "ML-012",
-   "nombre": "PEEL-N-GLOW Pearl Program - Dr.esthe",
-   "motivo": "Kit profesional; solo se encuentran piezas sueltas (máscara, gel crema)"
+   "archivo": "3e166744f29c4860a3cd",
+   "fuente": "https://drestheeurope.com/en/products/peel-n-glow-cooling-pearl-mask-25g-x-5ea",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   },
   {
    "sku": "ML-014",
-   "nombre": "Mummy Mask - Esthemax",
-   "motivo": "Esthemax tiene varias (Thermal, Collagen, Vitamin); no se sabe cuál"
+   "archivo": "30aceb9ca97b4b469d0f",
+   "fuente": "https://www.esthemax.com/ProductDetails.php?ProductCode=762",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-120",
+   "archivo": "9588d7dc7a664b01840a",
+   "fuente": "https://www.amazon.com/dp/B002XZLAWM (captura de pantalla)",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-100",
+   "archivo": "807c3b0f9dec44cabc4d",
+   "fuente": "https://shopseoulia.com/en-us/products/daleaf-chlorella-better-root-hair-tonic-100ml (misma foto que INV-028)",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-054",
+   "archivo": "b540be7c0eae49239147",
+   "fuente": "https://anadiaprofesional.com/producto/peeling-enzimatico/",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-056",
+   "archivo": "29f75b5e40f1480a88c6",
+   "fuente": "https://saberyvida.es/corporales/15314-aceite-vegetal-de-pepita-de-uva-1lt-esential-aroms-8413568007152.html",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-057",
+   "archivo": "e2da64ad19414b35a5dd",
+   "fuente": "https://www.esteticacarmenseijo.com/aroms-natur-polvo-de-arroz_pr105906",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-061",
+   "archivo": "0aa8c8a7ebde43e9824e",
+   "fuente": "https://www.amazon.com/dp/B084X68G38 (captura de pantalla)",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-093",
+   "archivo": "1f9647ca7f364eb5a796",
+   "fuente": "https://commons.wikimedia.org/wiki/File:Latex_gloves-pair.jpg",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
+  },
+  {
+   "sku": "INV-122",
+   "archivo": "e70f754ef805406f8e05",
+   "fuente": "https://commons.wikimedia.org/wiki/File:Einweglanzette_nahaufnahme.jpg",
+   "nota": "representativa (Emilia: tamaño/variante no importa)"
   }
- ]
+ ],
+ "respaldo_2": "beta_productos_backup_20261118_fotos2 (16 filas)"
 }
