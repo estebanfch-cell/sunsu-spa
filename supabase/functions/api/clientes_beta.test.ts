@@ -22,7 +22,7 @@ function semilla() {
   ]);
   db.tables.set("clientas_registro", [
     { id: 1, sheet_row: 5, timestamp: "2025-01-10T15:00:00Z", cedula: "1700000001", nombre: "María", apellido: "Banda", tipo_de_piel: "Mixta", alergias: "", apruebo_consentimiento_individual: "SI — 10/01/2025" },
-    { id: 2, sheet_row: 90, timestamp: "2026-03-02T15:00:00Z", cedula: "1700000001.0", nombre: "María", apellido: "Banda", tipo_de_piel: "", alergias: "Nueces", telefono: "0991111111" },
+    { id: 2, sheet_row: 90, timestamp: "2026-03-02T15:00:00Z", cedula: "1700000001.0", nombre: "María", apellido: "Banda", tipo_de_piel: "", alergias: "Nueces", telefono: "0991111111", email: "maria@test.com", sector_donde_vive: "Cumbayá" },
     { id: 3, sheet_row: 91, timestamp: "2026-03-02T15:00:00Z", cedula: "1700000002", nombre: "Lucía", apellido: "Mora" },
   ]);
   db.tables.set("tickets", [
@@ -58,12 +58,31 @@ describe("clientes de la beta", () => {
     const tipos = (f.documentos as Row[]).map((d) => d.tipo).sort();
     assert.deepEqual(tipos, ["analisis", "consentimiento", "foto", "tarjeta", "tarjeta"]);
   });
-  it("cosmetóloga: solo sus tickets, sin dinero ni teléfono, pide cambio/eliminación; admin aplica", async () => {
+  it("cosmetóloga: ve todas las clientas y todo el historial, sin teléfono, correo, sector ni dinero; pide cambio/eliminación; admin aplica", async () => {
     const { h, db } = semilla();
+    const l = await h("cl_list", "cos");
+    assert.equal(l.ok, true, String(l.error));
+    const keys = ((l.clientes || []) as Row[]).map((c) => c.key).sort();
+    assert.deepEqual(keys, ["c:1700000001", "c:1700000002"]);
+    const m = ((l.clientes || []) as Row[]).find((c) => c.key === "c:1700000001")!;
+    assert.equal("telefono" in m, false);
+    assert.equal("email" in m, false);
+    assert.equal("sector" in m, false);
+    assert.deepEqual(l.sectores, []);
+    assert.equal(l.puedeDescargar, false);
+    assert.doesNotMatch(JSON.stringify(l), /0991111111|maria@test|Cumbayá/);
     const f = await h("cl_get", "cos", { key: "c:1700000001" });
-    assert.equal((f.historial as Row[]).length, 1);
+    assert.equal(f.ok, true, String(f.error));
+    assert.equal((f.historial as Row[]).length, 2);
+    assert.equal((f.resumen as Row).tickets, 2);
     assert.equal((f.resumen as Row).total, undefined);
     assert.equal((f.datos as Row).telefono, undefined);
+    assert.equal((f.datos as Row).email, undefined);
+    assert.equal((f.datos as Row).sector, undefined);
+    assert.equal(f.puedeDescargar, false);
+    assert.doesNotMatch(JSON.stringify(f), /0991111111|maria@test|Cumbayá/);
+    const down = await h("cl_doc_url", "cos", { id: "x", key: "c:1700000001", descargar: "1" });
+    assert.match(String(down.error), /no puede descargar/i);
     assert.match(String((await h("cl_guardar", "cos", { key: "c:1700000001", cambios: { alergias: "x" } })).error), /Solicitar/);
     assert.match(String((await h("cl_borrar", "cos", { key: "c:1700000001", motivo: "x" })).error), /Solicitar/);
     const s1 = await h("solicitud_crear", "cos", { tabla: "cliente_beta", fila: "c:1700000001", tipo: "cambio", motivo: "dato nuevo", propuestos: { alergias: "Nueces, látex" } });

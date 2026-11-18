@@ -726,7 +726,7 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
   return out;
 }
 
-export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string): Promise<Row> {
+export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string, verTodos = admin): Promise<Row> {
   // En paralelo y liviano: tickets de la clienta, catálogo, productos (sin fotos) y su registro.
   let [rows, cats, prods, regs] = await Promise.all([
     ticketsDeClave(db, key),
@@ -734,7 +734,7 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
     consultar(db, "erp_productos", { cols: ["id", "sku", "nombre", "clase", "uso", "precio_venta", "beta_pvp", "costo_promedio", "activo"] }).then((x) => x.rows).catch(() => db.all("erp_productos").catch(() => [] as Row[])),
     registrosDeClave(db, key),
   ]);
-  if (!admin) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
+  if (!verTodos) rows = rows.filter((r) => esPropio(s(r.atendido_por), ses));
   const ficha = regs.find((r) => !r.borrado_at && claveRegistro(r) === key) || {};
   if (!s(ficha.cedula) && !s(ficha.nombre) && regs.some((r) => r.borrado_at && claveRegistro(r) === key)) {
     return { error: "Esa clienta está eliminada" };
@@ -742,7 +742,7 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   if (!rows.length && !s(ficha.nombre) && !s(ficha.apellido) && !normCedula(ficha.cedula)) {
     return { error: "No hay visitas de esa clienta en tus tickets" };
   }
-  if (!admin && !rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
+  if (!verTodos && !rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
   const primero = rows.length ? [...rows].sort((a, b) => ymdUtc(b.timestamp).localeCompare(ymdUtc(a.timestamp)))[0] : null;
   const ced = normCedula(primero?.id_3 || ficha.cedula);
   const nom = normNombre(((primero ? s(primero.nombre) : s(ficha.nombre)) + " " + (primero ? s(primero.apellido) : s(ficha.apellido))).trim());
