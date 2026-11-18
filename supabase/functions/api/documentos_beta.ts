@@ -56,3 +56,138 @@ export function vistaDoc(d: Row): Row {
     fecha: localEc(d.fecha || d.created_at).slice(0, 10), hora: localEc(d.fecha).slice(11, 16),
   };
 }
+
+/** ZIP de fotos K-Lift: queda en el bucket, no se lista en Documentos (solo el PDF final / informe). */
+export function esZipOculto(d: Row): boolean {
+  return d.zip === true || s(d.tipo) === "zip" || /\.zip$/i.test(s(d.storage_path));
+}
+
+/** Stubs sin archivo (el «Análisis de piel / …» del ticket) y zips no se muestran. */
+export function visibleEnDocumentos(d: Row): boolean {
+  if (esZipOculto(d)) return false;
+  if (s(d.tipo) === "analisis") return false;
+  return true;
+}
+
+/** Fotos del ticket (Antes/Después 1-3) o pistas en el nombre (antes/despues/pre/post). */
+export function carpetaFoto(d: Row): "antes" | "despues" | "fotos" {
+  const n = s(d.nombre).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/(^|[^a-z])(despues|after|post)([^a-z]|$)/.test(n)) return "despues";
+  if (/(^|[^a-z])(antes|before|pre)([^a-z]|$)/.test(n)) return "antes";
+  return "fotos";
+}
+
+/** Acta, informe K-Lift o análisis Focus Skin (PDF). */
+export function esInformePrincipal(d: Row): boolean {
+  if (!visibleEnDocumentos(d) || s(d.tipo) === "foto") return false;
+  if (s(d.sub) === "skin_analisis" || s(d.sub) === "klift") return s(d.tipo) === "pdf";
+  const blob = [d.nombre, d.sub, d.tipo].map(s).join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return s(d.tipo) === "pdf" && /acta|informe|focus\s*skin|k-?lift/.test(blob);
+}
+
+function mins(h: string): number {
+  const m = s(h).match(/(\d{1,2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+}
+
+type Cubo = { fecha: string; clave: string; hora: string; items: Row[] };
+
+function masCercano(grupos: Cubo[], hora: string): Cubo | null {
+  const t = mins(hora);
+  if (!Number.isFinite(t)) return null;
+  let best: Cubo | null = null, bestD = Infinity;
+  for (const g of grupos) {
+    const u = mins(g.hora);
+    if (!Number.isFinite(u)) continue;
+    const d = Math.abs(u - t);
+    if (d < bestD) { bestD = d; best = g; }
+  }
+  return best;
+}
+
+function armaGrupo(b: Cubo): Row {
+  const fotos: { antes: Row[]; despues: Row[]; fotos: Row[] } = { antes: [], despues: [], fotos: [] };
+  const informes: Row[] = [], otros: Row[] = [];
+  for (const d of b.items) {
+    if (s(d.tipo) === "foto") fotos[carpetaFoto(d)].push(d);
+    else if (esInformePrincipal(d)) informes.push(d);
+    else otros.push(d);
+  }
+  const nFotos = fotos.antes.length + fotos.despues.length + fotos.fotos.length;
+  const tipos = [...new Set(informes.map((d) => s(d.sub) === "klift" ? "K-Lift" : s(d.sub) === "skin_analisis" ? "Focus Skin" : /acta/i.test(s(d.nombre)) ? "Acta" : "Informe"))];
+  const titulo = [b.clave, tipos.join(" · ")].filter(Boolean).join(" · ") || (nFotos ? "Fotos del ticket" : "Documentos");
+  return {
+    fecha: b.fecha, hora: b.hora || "", clave: b.clave || "", titulo,
+    informes, otros, fotos, nFotos,
+    ids: b.items.map((d) => s(d.docId)).filter(Boolean),
+  };
+}
+
+/** Una entrada por día / ticket: informe PDF primero, fotos del ticket en Antes / Después. Los zip no entran. */
+export function agruparDocumentos(docs: Row[]): Row[] {
+  const raw = new Map<string, Cubo>();
+  for (const d of docs.filter(visibleEnDocumentos)) {
+    const fecha = s(d.fecha).slice(0, 10);
+    const clave = s(d.clave);
+    const k = clave ? fecha + "|" + clave : fecha;
+    const b = raw.get(k) || { fecha, clave, hora: s(d.hora), items: [] };
+    b.items.push(d);
+    if (!b.hora && d.hora) b.hora = s(d.hora);
+    raw.set(k, b);
+  }
+  const porDia = new Map<string, Cubo[]>();
+  for (const b of raw.values()) {
+    const L = porDia.get(b.fecha) || [];
+    L.push(b);
+    porDia.set(b.fecha, L);
+  }
+  const merged: Cubo[] = [];
+  for (const L of porDia.values()) {
+    const conTk = L.filter((b) => b.clave), sinTk = L.filter((b) => !b.clave);
+    if (conTk.length === 1 && sinTk.length) {
+      conTk[0].items.push(...sinTk.flatMap((b) => b.items));
+      if (!conTk[0].hora) conTk[0].hora = sinTk[0].hora;
+      merged.push(conTk[0]);
+    } else if (conTk.length > 1 && sinTk.length) {
+      for (const b of sinTk) {
+        for (const d of b.items) {
+          (masCercano(conTk, s(d.hora) || b.hora) || conTk[0]).items.push(d);
+        }
+      }
+      merged.push(...conTk);
+    } else {
+      merged.push(...L);
+    }
+  }
+  return merged.map(armaGrupo).sort((a, b) => (s(b.fecha) + s(b.hora)).localeCompare(s(a.fecha) + s(a.hora)));
+}
+
+/** Misma agrupación para Documentos sin asignar: por día y nombre, solo PDFs visibles; ids incluye zips ocultos para asignarlos juntos. */
+export function agruparSinAsignar(items: Row[]): Row[] {
+  const cubos = new Map<string, Row[]>();
+  for (const d of items) {
+    const dia = s(d.fecha).slice(0, 10);
+    const nom = normNombre(s(d.archivo) || nombreDeArchivo(d.cliente_nombre_archivo) || d.nombre);
+    const k = dia + "|" + nom;
+    const L = cubos.get(k) || [];
+    L.push(d);
+    cubos.set(k, L);
+  }
+  const out: Row[] = [];
+  for (const L of cubos.values()) {
+    const vis = L.filter((d) => !esZipOculto(d));
+    if (!vis.length) continue;
+    const informes = vis.filter(esInformePrincipal);
+    const otros = vis.filter((d) => !esInformePrincipal(d) && s(d.tipo) !== "foto");
+    const first = informes[0] || vis[0];
+    const sub = s(first.sub);
+    out.push({
+      fecha: first.fecha, hora: first.hora, archivo: first.archivo, confianza: first.confianza, sub,
+      titulo: (sub === "klift" ? "K-Lift" : "Focus Skin") + (first.archivo ? " · " + s(first.archivo) : ""),
+      informes, otros, fotos: { antes: [], despues: [], fotos: [] }, nFotos: 0,
+      ids: L.map((d) => s(d.docId)).filter(Boolean),
+      sugerencias: first.sugerencias, docId: first.docId, zip: false,
+    });
+  }
+  return out.sort((a, b) => (s(b.fecha) + s(b.hora)).localeCompare(s(a.fecha) + s(a.hora)));
+}
