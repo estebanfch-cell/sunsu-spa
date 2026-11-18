@@ -643,6 +643,16 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 }
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
+  if (!p.ignorar_borrador && !s(p.vincular_borrador)) {
+    const { ofrecerBorradorMigo } = await import("./migo_cuadre_api.ts");
+    const of = await ofrecerBorradorMigo(ctx, p);
+    if (of) {
+      return {
+        ok: false, requiere: "vincular_borrador", borrador: of,
+        error: "Ya hay un borrador de la factura " + s(of.factura) + " para «" + s(of.cliente) + "». Vincúlalo en vez de crear otro ticket.",
+      };
+    }
+  }
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
@@ -734,13 +744,19 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   let inventario = 0;
   try { inventario = await descontarVentaTicket(ctx.db, actor, ticket, base, ctx.now); }
   catch { inventario = 0; }
-  return {
+  const out: R = {
     ok: true, fila: null, ticket, beta_num: ident.beta_num, so_num: soNum, origin: ident.origin, id: saved?.id,
     inventario: inventario || undefined,
     paqueteFila,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
   };
+  if (s(p.vincular_borrador) && saved) {
+    const { vincularBorradorATicket } = await import("./migo_cuadre_api.ts");
+    const v = await vincularBorradorATicket(ctx, ses, s(p.vincular_borrador), saved);
+    out.vinculado = v;
+  }
+  return out;
 }
 
 async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R[]) {
@@ -912,7 +928,11 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 }
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
-  const real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  let real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  if (!real) {
+    const { MIGO_CRON_ACCIONES, sesionCronMigo } = await import("./migo_cuadre.ts");
+    if (MIGO_CRON_ACCIONES.has(action)) real = sesionCronMigo(p, ctx.env);
+  }
   if (real) await cargarAlias(ctx.db).catch(() => null); // 🔗 clientas unidas (clientes_alias)
   if (action === "ver_como") {
     if (!real || !esAdmin(real.rol)) return { error: "Solo un admin puede ver como otra persona" };
@@ -963,7 +983,7 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
     return { ok: true, modo_prueba: on };
   }
   try {
-    const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db });
+    const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db, ses: ses0 });
     const red = redactar(action, out, ses0, matriz);
     return ses0 ? redactarFlags(red, ses0.rol, ovUsuario) : red;
   } catch (e) {
