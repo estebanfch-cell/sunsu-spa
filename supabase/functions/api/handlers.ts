@@ -127,6 +127,7 @@ export function descLineas(v: unknown): R[] {
   return (v as R[]).slice(0, 60).map((x) => ({
     sku: s(x.sku).slice(0, 40), nombre: s(x.nombre).slice(0, 120), modo: s(x.modo) === "%" ? "%" : "$",
     valor: Math.max(0, n(x.valor)), bruto: Math.max(0, round2(n(x.bruto))), monto: Math.max(0, round2(n(x.monto))),
+    ...(s(x.promo).trim() ? { promo: s(x.promo).trim().slice(0, 120) } : {}),
   })).filter((x) => x.sku && x.monto > 0 && x.monto <= x.bruto + 0.01);
 }
 async function tickets(ctx: Ctx) {
