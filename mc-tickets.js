@@ -14,7 +14,7 @@
   function opt(v, t, sel) { return '<option value="' + e(v) + '"' + (String(v) === String(sel == null ? "" : sel) ? " selected" : "") + ">" + e(t) + "</option>"; }
   function fecha(f, h) { return f ? f.split("-").reverse().join("/") + (h ? " " + h : "") : ""; }
   function fechaIso(v) { var d = new Date(v); if (isNaN(d)) return String(v || ""); var z = new Date(d.getTime() - 5 * 3600000).toISOString(); return z.slice(8, 10) + "/" + z.slice(5, 7) + "/" + z.slice(0, 4) + " " + z.slice(11, 16); }
-  var TIPO = { producto: "Producto", facial: "Facial", extra: "Servicio", paquete: "Paquete", gift: "Gift card", servicio: "Servicio", diferencia_mejora: "Diferencia por mejora" };
+  var TIPO = { producto: "Producto", facial: "Facial", extra: "Servicio", paquete: "Paquete", gift: "Gift card", servicio: "Servicio", diferencia_mejora: "Diferencia por mejora", diferencia: "Por revisar" };
   var NOMBRE_MEJORA = "Diferencia por mejora de paquete";
   function esMejora(l) { return !!(l && (l.mejoraPaquete || l.tipo === "diferencia_mejora" || /diferencia por mejora/i.test(l.nombre || l.promo || ""))); }
   function hayMejoraDe(sku) { return (K.L || []).some(function (x) { return esMejora(x) && String(x.sku) === String(sku); }); }
@@ -174,7 +174,8 @@
         ' <span class="mctk-sku">' + e(codigoVisible(l)) + (l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "") + "</span>" + irProdBtn(l) +
         (l.canje ? ' <span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") + (esMejora(l) ? ' <span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
         (l.canje && !hayMejoraDe(l.sku) && (K.d.puedeEditar || K.d.puedePedir) ? ' <button type="button" class="mctk-link mctk-mej" data-mejora="' + i + '">+ Diferencia por mejora</button>' : "") +
-        (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
+        (l.cortesia ? ' <span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
+        (l.tipo === "diferencia" ? ' <span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
         (l.promo && l.descuento_valor > 0 ? ' <span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "") + "</div></div>" +
         '<span class="mctk-nums">' +
         '<label><small>Cant</small><input class="q" type="number" inputmode="decimal" min="0" step="any" data-f="cantidad" value="' + e(q2(l.cantidad)) + '"></label>' +
