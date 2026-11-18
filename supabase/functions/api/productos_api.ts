@@ -91,6 +91,13 @@ async function cargarBase(ctx: Ctx, ses: Ses): Promise<Base> {
   } catch { /* sin el cálculo viejo se usa erp_stock VENTA */ }
   const minimos = new Map<string, number>();
   for (const b of bases) minimos.set(skuCode(s(b.sku)), n(b.minimo));
+  // TK49 (Emilia t495u, recodificación BV): el código nuevo hereda lo que la hoja guarda con el código viejo
+  // (catálogo, cabina_inventario, stock/compra del sistema viejo, mínimos). La hoja no se toca.
+  for (const [nuevo, viejos] of antes) for (const v of viejos) {
+    const o = skuCode(v);
+    if (!o || o === nuevo) continue;
+    for (const M of [catalogo, cabina, ventaLegacy, compraBase, minimos] as Map<string, unknown>[]) if (!M.has(nuevo) && M.has(o)) M.set(nuevo, M.get(o));
+  }
   // Movimientos de la beta (transferencias / ajustes, 0046): se suman al stock del sistema.
   const movs = new Map<string, Row[]>();
   for (const m of await safeAll(ctx, "beta_stock_movimientos")) { const k = s(m.producto_id); movs.set(k, [...(movs.get(k) || []), m]); }
