@@ -37,7 +37,7 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
     recepciones: T,
   },
   recepcion: {
-    inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
+    inicio: T, tickets: T, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: T, inventario: T, cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, agenda: T,
   },
   gerente: {
@@ -100,7 +100,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   getCodigoGC: "gift_cards", getCodigosGC: "gift_cards", buscarGiftCards: "gift_cards", getGCDigitales: "gift_cards",
   gc_list: "gift_cards", gc_detalle: "gift_cards", gcb_lista: "gift_cards", gcb_get: "gift_cards", gcb_vender: "gift_cards", gcb_usar: "gift_cards", gcb_pdf_guardar: "gift_cards", gcb_doc_url: "gift_cards", gc_emitir: "gift_cards", gc_editar: "gift_cards",
   paq_list: "paquetes", paq_detalle: "paquetes", paq_emitir: "paquetes", paq_editar: "paquetes",
-  getMultas: "asistencia", personal_personas: "inicio", citas_proximas: "inicio", staff_home: "inicio",
+  getMultas: "asistencia", personal_personas: "inicio", citas_proximas: "inicio", staff_home: "inicio", tk_historial: "tickets", tk_reagendadas: "tickets",
   getCajaV2: "caja", cajaV2Mov: "caja", cajaV2Iniciar: "caja", cajaGasto: "caja", cajaDeposito: "caja",
   getBitacora: "bitacora", bitacoraCrear: "bitacora", bitacoraAnular: "bitacora",
   getCabina: "cabina", cabinaAbrirRapido: "cabina",
@@ -323,7 +323,7 @@ const LECTURA_VISTA = new Set([
   "whoami", "version", "getVersion", "home", "erp_home",
   "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso",
   "horarios_list", "push_clave",
-  "staff_home", "citas_proximas", "getCitas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle",
+  "staff_home", "tk_historial", "tk_reagendadas", "citas_proximas", "getCitas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle",
   "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs",
   "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "getRegistro",
   "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos",
