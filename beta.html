@@ -223,8 +223,52 @@
   .ix-lines, .ix-nuevo { margin-top: 8px; }
   .ix-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 0.72rem; padding: 3px 0; }
   .ix-trash, .ix-pedir, .ix-mas { padding: 4px 10px; border-radius: 8px; font-size: 0.65rem; font-weight: 700; cursor: pointer; }
-  .ix-trash { background: white; color: var(--red); border: 1.5px solid var(--red); }
+  .ix-trash { background: transparent; color: var(--red); border: none; padding: 2px 5px; font-size: 0.95rem; line-height: 1; min-width: 28px; min-height: 28px; }
+  .ix-trash:hover, .ix-trash:focus { background: #fdecec; border-radius: 6px; }
   .ix-pedir, .ix-mas { display: block; width: 100%; margin-top: 8px; background: white; color: var(--navy); border: 1.5px dashed var(--navy); }
+  /* Configuración general: lockdown mínimo */
+  #cfg-page { min-width: 0; max-width: 100%; overflow-x: hidden; }
+  .cfg-jump { position: sticky; top: 0; z-index: 13; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--cream, #F7F1E6); border: 1px solid var(--cream-d, #EDE6D8); border-radius: 10px; padding: 6px 10px; margin: 0 0 12px; }
+  .cfg-jump label { margin: 0; font-size: 0.68rem; font-weight: 800; color: var(--navy-d, #3D5A7A); text-transform: none; letter-spacing: 0; }
+  .cfg-jump select { flex: 1 1 200px; min-width: 0; font-size: 0.8rem; padding: 5px 8px; height: 34px; }
+  #cfg-page h2 { font-size: 0.95rem; margin: 16px 0 8px; }
+  #cfg-page .card { padding: 10px 12px; }
+  #cfg-page .ix-lines { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; }
+  #cfg-page .ix-line { padding: 0; gap: 4px; font-size: 0.68rem; flex: 0 1 auto; }
+  #cfg-page .ix-line > span { color: var(--gray); font-size: 0.58rem; font-weight: 700; white-space: nowrap; }
+  #cfg-page .ix-cell { font-size: 0.78rem; padding: 2px 4px; min-width: 3.5rem; }
+  #cfg-page .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 5px 0; border-bottom: 1px solid var(--cream-d, #EDE6D8); }
+  #cfg-page .row .name { font-size: 0.78rem; font-weight: 700; min-width: 7rem; flex: 1 1 7rem; }
+  #cfg-page .ix-mas { display: inline-block; width: auto; padding: 3px 10px; margin: 6px 0 0; font-size: 0.68rem; min-height: 28px; }
+  .cfg-geo { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: flex-end; }
+  .cfg-geo label { margin: 0; font-size: 0.58rem; font-weight: 700; color: var(--gray); display: flex; flex-direction: column; gap: 2px; text-transform: none; letter-spacing: 0; }
+  .cfg-geo input { width: 7.2rem; max-width: 42vw; font-size: 0.78rem; padding: 4px 6px; height: 30px; }
+  .cfg-geo input[name="lugar_nombre"] { width: 10rem; }
+  .cfg-geo .btn { height: 30px; padding: 4px 10px; font-size: 0.7rem; min-height: 30px; }
+  .fer-cal { margin-top: 8px; }
+  .fer-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .fer-nav b { font-size: 0.85rem; color: var(--navy-d, #3D5A7A); }
+  .fer-nav .btn { padding: 2px 8px; min-height: 28px; font-size: 0.7rem; }
+  .fer-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .fer-dow { font-size: 0.58rem; font-weight: 800; color: var(--gray); text-align: center; padding: 2px 0; }
+  .fer-dia, .fer-vacio { min-height: 52px; border-radius: 8px; padding: 3px 4px; background: #fff; border: 1px solid var(--cream-d, #EDE6D8); min-width: 0; }
+  .fer-vacio { background: transparent; border-color: transparent; }
+  .fer-dia { cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+  .fer-n { font-size: 0.68rem; font-weight: 800; color: var(--navy-d, #3D5A7A); }
+  .fer-nom { font-size: 0.55rem; line-height: 1.15; color: var(--navy); overflow-wrap: anywhere; }
+  .fer-on { background: #FBF3E3; border-color: #E8C07A; }
+  .fer-quito { background: #Eef5f1; border-color: #9ad7b6; }
+  .fer-hoy { outline: 2px solid var(--navy, #3D5A7A); }
+  .fer-x { align-self: flex-end; padding: 0 2px; min-width: 22px; min-height: 22px; font-size: 0.75rem; }
+  .fer-add { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: flex-end; margin-top: 8px; }
+  .fer-add label { margin: 0; font-size: 0.58rem; font-weight: 700; color: var(--gray); display: flex; flex-direction: column; gap: 2px; text-transform: none; letter-spacing: 0; }
+  .fer-add input, .fer-add select { font-size: 0.78rem; padding: 4px 6px; height: 30px; width: auto; max-width: 42vw; }
+  .fer-add .btn { height: 30px; padding: 4px 10px; font-size: 0.7rem; min-height: 30px; }
+  @media (max-width: 640px) {
+    .fer-dia, .fer-vacio { min-height: 46px; padding: 2px; }
+    .fer-nom { font-size: 0.5rem; }
+    .cfg-geo input { width: 6.2rem; }
+  }
   #ix-bar {
     position: fixed; z-index: 90; left: 12px; right: 12px; bottom: 76px;
     background: var(--navy); color: white; border-radius: 14px; padding: 10px 14px;
@@ -3715,13 +3759,13 @@ async function renderConfiguracion() {
   const tramos = (data.tramos || []).map((r) => cfgLinea("com_tramo", r.fila, [["desde", "Desde", r.desde], ["hasta", "Hasta", r.hasta], ["modo", "Modo", r.modo], ["valor", "Valor", r.valor], ["vigente", "Vigente desde", r.vigente]], r.fabrica)).join("");
   const productos = (data.productos || []).map((r) => cfgLinea("com_producto", r.fila, [["sku", "SKU", r.sku], ["pct", "% del margen", r.pct], ["fijo", "Fijo por unidad", r.fijo], ["vigente", "Vigente desde", r.vigente]], r.fabrica, r.nombre)).join("");
   const pago = await htmlPagoConfig();
-  return `<p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso.</p>
-    <p class="note"><a href="#cfg-permisos">Permisos</a> · <a href="#cfg-roles">Roles</a> · <a href="#cfg-comisiones">Comisiones</a></p>
+  return `<div id="cfg-page">${htmlCfgJump()}
+    <p class="note">Una vigencia nueva no cambia los ciclos anteriores. Si dejas la fecha vacía, vale desde el ciclo en curso.</p>
     <h2 id="cfg-permisos">Permisos por rol y usuario</h2>
     <div id="cfg-permisos-box">${htmlCfgPriv(priv)}</div>
     <h2 id="cfg-roles">Roles</h2>
     <div class="card"><div class="card-title">Sueldo fijo, bono fijo y otros valores del rol</div>${pago}</div>
-    <h2 id="cfg-asistencia">Asistencia, geocerca y feriados</h2>
+    <h2 id="cfg-geocerca">Asistencia y geocerca</h2>
     ${await htmlAsisConfig()}
     <h2 id="cfg-comisiones">Comisiones</h2>
     <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. Desde el 2026-10-26 cada paquete, x3 o x6, cuenta como 1 y el % se redondea hacia abajo.</p>
@@ -3729,13 +3773,13 @@ async function renderConfiguracion() {
     <div class="card" id="cfg-general"><div class="card-title">Resto de productos, extras y recepción</div>
       <p class="note">El % de productos aplica a los que no tienen fila propia. La recepción suma dólares por facial del día cuando se llega al mínimo. El lunes usa el otro mínimo.</p>
       <div class="list">${base}${extra}${recep}</div></div>
-    <div class="card"><div class="card-title">Por producto</div>
+    <div class="card" id="cfg-productos"><div class="card-title">Por producto / márgenes</div>
       <p class="note">% del margen, un fijo por unidad, o los dos. Vacío usa el % general.</p>
       <div class="list" id="cfg-prod">${productos || `<p class="note">Sin productos en el catálogo. Agrega el SKU.</p>`}</div>
       ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
-    <div class="card"><div class="card-title">Tramos de paquete</div>
+    <div class="card" id="cfg-tramos"><div class="card-title">Tramos de paquete</div>
       <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto de ese paquete. x3 y x6 cuentan como 1. El ciclo que cierra el 2026-10-25 no cambia. Guardar un tramo copia el resto de esa vigencia.</p>
-      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>`;
+      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div></div>`;
 }
 async function renderComisiones() {
   const ciclos = opcionesCiclo();
@@ -3778,29 +3822,94 @@ function mismaPersonaCfg(a, b) {
   const bf = nb.split(" ")[0];
   return (af.length >= 3 && (nb === af || nb.startsWith(af + " "))) || (bf.length >= 3 && (na === bf || na.startsWith(bf + " ")));
 }
+function htmlCfgJump() {
+  const items = [
+    ["#cfg-permisos", "Permisos"],
+    ["#/m/usuarios", "Usuarios"],
+    ["#cfg-roles", "Roles"],
+    ["#cfg-comisiones", "Comisiones"],
+    ["#cfg-productos", "Productos / márgenes"],
+    ["#cfg-tramos", "Tramos"],
+    ["#cfg-geocerca", "Asistencia / geocerca"],
+    ["#cfg-feriados", "Feriados"],
+    ["#/m/mc/pronto/aprobaciones", "Aprobaciones"],
+  ];
+  const opts = items.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+  return `<div class="cfg-jump" id="cfg-jump"><label for="cfg-jump-sel">Ir a</label><select id="cfg-jump-sel"><option value="">Secciones…</option>${opts}</select></div>`;
+}
+
+function ymdGuayaquil(d) {
+  return (d || new Date()).toLocaleDateString("en-CA", { timeZone: "America/Guayaquil" });
+}
+
+function htmlFeriadosCalendario(feriados, ymdVista) {
+  const hoy = ymdGuayaquil();
+  const ymd = ymdVista || hoy;
+  const Y = Number(ymd.slice(0, 4));
+  const M = Number(ymd.slice(5, 7));
+  const meses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const first = new Date(Date.UTC(Y, M - 1, 1));
+  const start = (first.getUTCDay() + 6) % 7;
+  const daysIn = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+  const byFecha = {};
+  (feriados || []).forEach((f) => { byFecha[String(f.fecha || "").slice(0, 10)] = f; });
+  const prev = new Date(Date.UTC(Y, M - 2, 1));
+  const next = new Date(Date.UTC(Y, M, 1));
+  const prevYmd = prev.toISOString().slice(0, 7) + "-01";
+  const nextYmd = next.toISOString().slice(0, 7) + "-01";
+  const dow = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map((d) => `<div class="fer-dow">${d}</div>`).join("");
+  let cells = "";
+  for (let i = 0; i < start; i++) cells += '<div class="fer-vacio"></div>';
+  for (let d = 1; d <= daysIn; d++) {
+    const fecha = Y + "-" + String(M).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    const f = byFecha[fecha];
+    const cls = ["fer-dia", f ? "fer-on" : "", f && f.ambito === "quito" ? "fer-quito" : "", fecha === hoy ? "fer-hoy" : ""].filter(Boolean).join(" ");
+    const tip = f ? (esc(f.nombre) + (f.fuente ? " · " + esc(f.fuente) : "") + (f.ambito === "quito" ? " · Quito" : "")) : fecha;
+    const trash = `<button type="button" class="ix-trash fer-x" data-fer-del="${fecha}" title="Quitar" aria-label="Quitar feriado">🗑</button>`;
+    const nom = f ? `<span class="fer-nom">${esc(f.nombre)}</span>${trash}` : "";
+    cells += `<div class="${cls}" title="${tip}" data-fer-dia="${fecha}"><span class="fer-n">${d}</span>${nom}</div>`;
+  }
+  const nota = `<p class="note">Calendario oficial 2026: Viceministerio de Turismo (2025–2030) y Decreto 354 (Batalla de Pichincha al 25 de mayo). El viernes 20 de noviembre es suspensión de jornada nacional no recuperable (Decreto Ejecutivo 507, R.O. 8vo Supl. 380, 30 sep 2026). Fundación de Quito: 6 de diciembre (domingo) con traslado laboral al lunes 7, solo para el Distrito Metropolitano de Quito (Cumbayá incluido).</p>`;
+  return `${nota}
+    <div class="fer-cal" id="cfg-feriados" data-fer-vista="${esc(ymd)}">
+      <div class="fer-nav">
+        <button type="button" class="btn small" data-fer-mes="${prevYmd}" aria-label="Mes anterior">‹</button>
+        <b>${meses[M - 1]} ${Y}</b>
+        <button type="button" class="btn small" data-fer-mes="${nextYmd}" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="fer-grid">${dow}${cells}</div>
+      <form id="f-asis-fer" class="fer-add">
+        <label>Fecha <input name="fecha" type="date" required></label>
+        <label>Nombre <input name="nombre" required placeholder="Nombre del feriado"></label>
+        <label>Ámbito <select name="ambito"><option value="nacional">Nacional</option><option value="quito">Quito / DMQ</option></select></label>
+        <label>Fuente <input name="fuente" placeholder="Decreto o calendario"></label>
+        <button class="btn" type="submit">Agregar</button>
+        <p class="err" id="f-err-fer"></p>
+      </form>
+    </div>`;
+}
+
 async function htmlAsisConfig() {
   const data = await api("asis_hoy");
   if (data.error) return fail(data);
   const cfg = data.config || {};
-  const fer = (data.feriados || []).map((f) => `<div class="row"><div class="sku">${esc(f.fecha)}</div><div class="name">${esc(f.nombre || "Feriado")}</div></div>`).join("");
+  const vista = (typeof state !== "undefined" && state.ferVista) || (ymdGuayaquil().slice(0, 8) + "01");
   return `<div class="card"><div class="card-title">Local y geocerca</div>
-    <p class="note">Cada marca exige selfie y estar dentro del radio. Si no, no se registra. El punto actual es C.C. La Esquina (configurable).</p>
-    <form id="f-asis-cfg">
-      <label>Nombre del local</label><input name="lugar_nombre" value="${esc(cfg.lugar_nombre || "C.C. La Esquina")}">
-      <label>Latitud</label><input name="lat" value="${esc(cfg.lat ?? "")}" inputmode="decimal">
-      <label>Longitud</label><input name="lng" value="${esc(cfg.lng ?? "")}" inputmode="decimal">
-      <label>Radio (metros)</label><input name="radio_m" value="${esc(cfg.radio_m ?? 150)}">
-      <label>Entrada por defecto</label><input name="hora_entrada" value="${esc(cfg.hora_entrada || "09:00")}">
-      <label>Salida por defecto</label><input name="hora_salida" value="${esc(cfg.hora_salida || "18:00")}">
-      <label>Gracia (minutos)</label><input name="gracia_min" value="${esc(cfg.gracia_min ?? 10)}">
-      <button class="btn" type="submit">Guardar geocerca</button><p class="err" id="f-err-cfg"></p>
+    <p class="note">Cada marca exige selfie y estar dentro del radio. El punto, el radio y los horarios se editan solo aquí. Los horarios de cada persona están en <a href="#/m/personal/horarios">Horarios</a>. En Asistencia se ven las horas, no esta configuración.</p>
+    <form id="f-asis-cfg" class="cfg-geo">
+      <label>Lugar <input name="lugar_nombre" value="${esc(cfg.lugar_nombre || "C.C. La Esquina")}"></label>
+      <label>Lat. <input name="lat" value="${esc(cfg.lat ?? "")}" inputmode="decimal"></label>
+      <label>Lng. <input name="lng" value="${esc(cfg.lng ?? "")}" inputmode="decimal"></label>
+      <label>Radio m <input name="radio_m" type="number" min="20" step="5" value="${esc(cfg.radio_m ?? 150)}"></label>
+      <label>Entrada <input name="hora_entrada" type="time" value="${esc(cfg.hora_entrada || "09:00")}"></label>
+      <label>Salida <input name="hora_salida" type="time" value="${esc(cfg.hora_salida || "18:00")}"></label>
+      <label>Gracia <input name="gracia_min" type="number" min="0" step="1" value="${esc(cfg.gracia_min ?? 10)}"></label>
+      <button class="btn" type="submit">Guardar</button>
+      <p class="err" id="f-err-cfg"></p>
     </form>
-    <p class="note"><a href="#/m/personal/horarios">Horarios de cada persona</a> (días de descanso y hora de salida, para extraordinarias y la salida automática).</p>
   </div>
-  <div class="card"><div class="card-title">Feriados Ecuador 2026</div>
-    <p class="note">Cargados del calendario oficial del Viceministerio de Turismo (2025–2030) y del Decreto Ejecutivo 354 (30 de abril de 2026). Puedes agregar o quitar fechas. El 24 de mayo (domingo) se trasladó al 25.</p>
-    <form id="f-asis-fer"><label>Fecha</label><input name="fecha" type="date" required><label>Nombre</label><input name="nombre" placeholder="Feriado"><button class="btn" type="submit">Agregar feriado</button><p class="err" id="f-err-fer"></p></form>
-    <div class="list">${fer || `<p class="note">Sin feriados cargados todavía.</p>`}</div>
+  <div class="card"><div class="card-title">Feriados Ecuador y Quito</div>
+    ${htmlFeriadosCalendario(data.feriados || [], vista)}
   </div>`;
 }
 async function htmlPagoConfig() {
@@ -3886,17 +3995,7 @@ async function renderAsistencia() {
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v" style="font-size:22px">${esc(v)}</div></div>`).join("");
   const audit = (hoy.auditoria || []).map((a) => `<div class="row"><div class="sku">${esc(a.accion)}</div><div><div class="name">${esc(a.actor)}</div><div class="note">${esc(a.motivo || "")}</div></div><div class="meta">${esc(horaEc(a.ts))}</div></div>`).join("");
   const admin = state.admin ? `
-    <h2>Reglas</h2>
-    <form id="f-asis-cfg">
-      <label>Latitud del spa</label><input name="lat" value="${esc(cfg.lat ?? "")}" inputmode="decimal">
-      <label>Longitud del spa</label><input name="lng" value="${esc(cfg.lng ?? "")}" inputmode="decimal">
-      <label>Radio (metros)</label><input name="radio_m" value="${esc(cfg.radio_m ?? 150)}">
-      <label>Entrada</label><input name="hora_entrada" value="${esc(cfg.hora_entrada || "09:00")}">
-      <label>Salida</label><input name="hora_salida" value="${esc(cfg.hora_salida || "18:00")}">
-      <label>Gracia (minutos)</label><input name="gracia_min" value="${esc(cfg.gracia_min ?? 10)}">
-      <p class="note">Cada marca exige selfie y estar dentro de este radio. Eso no se apaga.</p>
-      <button class="btn" type="submit">Guardar reglas</button><p class="err" id="f-err-cfg"></p>
-    </form>
+    <p class="note">La geocerca, los feriados y los horarios del local se editan en <a href="#/m/configuracion">Configuración general</a>. Los horarios de cada persona están en <a href="#/m/personal/horarios">Horarios</a> y en <a href="#/m/personal/empleados">Empleados</a>.</p>
     <h2>Marcas de hoy</h2>
     <div class="list" id="asis-equipo">${(hoy.equipo || []).map((m) => marcaFila(m, false)).join("") || `<p class="note">Nadie ha marcado hoy.</p>`}</div>
     <div id="asis-nuevo">${ixAs && ixAs.edita() ? ixAs.mas("asistencia") : ""}</div>
@@ -3921,17 +4020,6 @@ async function renderAsistencia() {
       <button class="btn ghost" type="button" id="asis-anular">Anular marca</button>
       <p class="err" id="f-err-corr"></p>
     </form>
-    <h2>Feriados</h2>
-    <form id="f-asis-fer">
-      <label>Fecha</label><input name="fecha" type="date" required>
-      <label>Nombre</label><input name="nombre" placeholder="Navidad">
-      <button class="btn" type="submit">Guardar feriado</button><p class="err" id="f-err-fer"></p>
-    </form>
-    <div id="fer-nuevo">${ixAs && ixAs.edita() ? ixAs.mas("feriados") : ""}</div>
-    <div class="list">${(hoy.feriados || []).map((f) => {
-      if (ixAs && ixAs.edita()) return `<div class="row">${ixAs.lineas("feriados", f.fecha, [["fecha", "Fecha", f.fecha], ["nombre", "Nombre", f.nombre || ""]])} ${ixAs.borrar("feriados", f.fecha)}</div>`;
-      return `<div class="row"><div class="sku">${esc(f.fecha)}</div><div class="name">${esc(f.nombre || "Feriado")}</div></div>`;
-    }).join("") || `<p class="note">Sin feriados. Sábado y domingo ya se pagan como descanso.</p>`}</div>
     <h2>Reporte del mes</h2>
     <form id="f-asis-mes"><label>Mes</label><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver horas</button></form>
     <div id="asis-mes"></div>` : `
@@ -5472,6 +5560,7 @@ function bindCfgPriv(main) {
 
 function bind(main) {
   bindCfgPriv(main);
+  bindCfgJump(main);
   main.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => {
       const shell = document.getElementById("shell");
@@ -6017,8 +6106,34 @@ function wireAsistencia(main) {
     ev.preventDefault();
     const data = await api("asis_feriado", Object.fromEntries(new FormData(fer).entries()));
     const err = main.querySelector("#f-err-fer");
-    if (data.error) { err.textContent = data.error; return; }
+    if (data.error) { if (err) err.textContent = data.error; return; }
     recargarAsis();
+  });
+  main.querySelectorAll("[data-fer-mes]").forEach((b) => {
+    b.onclick = () => {
+      state.ferVista = b.getAttribute("data-fer-mes");
+      recargarAsis();
+    };
+  });
+  main.querySelectorAll("[data-fer-del]").forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const fecha = b.getAttribute("data-fer-del");
+      if (!fecha || !confirm("¿Quitar el feriado del " + fecha + "?")) return;
+      const data = await api("asis_feriado", { fecha, borrar: "1" });
+      const err = main.querySelector("#f-err-fer");
+      if (data.error) { if (err) err.textContent = data.error; return; }
+      recargarAsis();
+    };
+  });
+  main.querySelectorAll("[data-fer-dia]").forEach((el) => {
+    el.onclick = (ev) => {
+      if (ev.target.closest("[data-fer-del]")) return;
+      const fecha = el.getAttribute("data-fer-dia");
+      const inp = fer && fer.elements.namedItem("fecha");
+      if (inp && fecha) { inp.value = fecha; inp.focus(); }
+    };
   });
   const mes = main.querySelector("#f-asis-mes");
   if (mes) mes.addEventListener("submit", async (ev) => {
@@ -6048,8 +6163,24 @@ async function corregirMarca(form, anular) {
 
 function recargarAsis() {
   const h = location.hash || "";
+  if (h.indexOf("/configuracion") >= 0) { go(h); return; }
   if (h.indexOf("/personal/") >= 0 || h.indexOf("/m/asistencia") >= 0) go(h);
   else go("#/m/personal/asistencia");
+}
+
+function bindCfgJump(main) {
+  const sel = main.querySelector("#cfg-jump-sel");
+  if (!sel) return;
+  sel.onchange = () => {
+    const v = sel.value;
+    if (!v) return;
+    if (v.indexOf("#/") === 0) go(v);
+    else {
+      const el = document.querySelector(v);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    sel.value = "";
+  };
 }
 
 async function marcarAsistencia(tipo, foto) {
@@ -6244,39 +6375,39 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk82"></script>
-<script src="beta-screens.js?v=20261118tk82"></script>
-<script src="beta-inline.js?v=20261118tk82"></script>
-<script src="mc-productos.js?v=20261118tk82"></script>
-<script src="mc-nav.js?v=20261118tk82"></script>
-<script src="mc-permisos.js?v=20261118tk82"></script>
-<script src="mc-protocolos.js?v=20261118tk82"></script>
-<script src="mc-conteo.js?v=20261118tk82"></script>
-<script src="mc-transferencias.js?v=20261118tk82"></script>
-<script src="mc-ajustes.js?v=20261118tk82"></script>
-<script src="vendor-qrcode.js?v=20261118tk82"></script>
-<script src="mc-tickets.js?v=20261118tk82"></script>
-<script src="mc-maestro.js?v=20261118tk82"></script>
-<script src="mc-empleados.js?v=20261118tk82"></script>
-<script src="mc-edit.js?v=20261118tk82"></script>
-<script src="mc-paquetes.js?v=20261118tk82"></script>
-<script src="mc-aperturas.js?v=20261118tk82"></script>
-<script src="mc-acceso.js?v=20261118tk82"></script>
-<script src="mc-barras.js?v=20261118tk82"></script>
-<script src="mc-caja.js?v=20261118tk82"></script>
-<script src="mc-giftcards.js?v=20261118tk82"></script>
-<script src="mc-multas.js?v=20261118tk82"></script>
-<script src="mc-clientes.js?v=20261118tk82"></script>
-<script src="mc-clientes-dup.js?v=20261118tk82"></script>
-<script src="mc-docpdf.js?v=20261118tk82"></script>
-<script src="mc-compras.js?v=20261118tk82"></script>
-<script src="mc-consignacion.js?v=20261118tk82"></script>
-<script src="mc-proveedores.js?v=20261118tk82"></script>
-<script src="mc-recepciones.js?v=20261118tk82"></script>
-<script src="mc-movil.js?v=20261118tk82"></script>
-<script src="mc-promociones.js?v=20261118tk82"></script>
-<script src="mc-agenda.js?v=20261118tk82"></script>
-<script src="mc-staff-home.js?v=20261118tk82"></script>
+<script src="mc-buscar.js?v=20261118tk83"></script>
+<script src="beta-screens.js?v=20261118tk83"></script>
+<script src="beta-inline.js?v=20261118tk83"></script>
+<script src="mc-productos.js?v=20261118tk83"></script>
+<script src="mc-nav.js?v=20261118tk83"></script>
+<script src="mc-permisos.js?v=20261118tk83"></script>
+<script src="mc-protocolos.js?v=20261118tk83"></script>
+<script src="mc-conteo.js?v=20261118tk83"></script>
+<script src="mc-transferencias.js?v=20261118tk83"></script>
+<script src="mc-ajustes.js?v=20261118tk83"></script>
+<script src="vendor-qrcode.js?v=20261118tk83"></script>
+<script src="mc-tickets.js?v=20261118tk83"></script>
+<script src="mc-maestro.js?v=20261118tk83"></script>
+<script src="mc-empleados.js?v=20261118tk83"></script>
+<script src="mc-edit.js?v=20261118tk83"></script>
+<script src="mc-paquetes.js?v=20261118tk83"></script>
+<script src="mc-aperturas.js?v=20261118tk83"></script>
+<script src="mc-acceso.js?v=20261118tk83"></script>
+<script src="mc-barras.js?v=20261118tk83"></script>
+<script src="mc-caja.js?v=20261118tk83"></script>
+<script src="mc-giftcards.js?v=20261118tk83"></script>
+<script src="mc-multas.js?v=20261118tk83"></script>
+<script src="mc-clientes.js?v=20261118tk83"></script>
+<script src="mc-clientes-dup.js?v=20261118tk83"></script>
+<script src="mc-docpdf.js?v=20261118tk83"></script>
+<script src="mc-compras.js?v=20261118tk83"></script>
+<script src="mc-consignacion.js?v=20261118tk83"></script>
+<script src="mc-proveedores.js?v=20261118tk83"></script>
+<script src="mc-recepciones.js?v=20261118tk83"></script>
+<script src="mc-movil.js?v=20261118tk83"></script>
+<script src="mc-promociones.js?v=20261118tk83"></script>
+<script src="mc-agenda.js?v=20261118tk83"></script>
+<script src="mc-staff-home.js?v=20261118tk83"></script>
 <script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
