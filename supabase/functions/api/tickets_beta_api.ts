@@ -20,6 +20,7 @@ import { facturaTxt } from "./ticket_total.ts";
 import { estadoCobro, esMetodoPago, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
 export { metodosPago } from "./pagos_caja.ts";
 import { lineasTicket, precioLineaTicket } from "./productos.ts";
+import { ETQ_SIN_COBRO, giftCortesia, nombreLineaGift, tipoSinCobro, valorNominalGift } from "./sin_cobro.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
@@ -104,7 +105,25 @@ export async function facturaMigoDe(ctx: Ctx, fac: string): Promise<{ total: num
   } catch { /* sin tabla */ }
   return null;
 }
+/** TK98: cortesía de gift card y consumo interno: líneas a $0 con su píldora (nunca «Sin líneas»). */
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
+  const L = await lineasDe0(ctx, r, cab, cat);
+  const sc = tipoSinCobro(r);
+  if (!sc) return L;
+  const out = L.filter((l) => l.tipo !== "diferencia").map((l) => {
+    if (sc === "interno") return { ...l, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, estimado: false, consumoInterno: true } as LineaTk;
+    return !(n(l.precio_unit) > 0) ? { ...l, cortesia: true, estimado: false } as LineaTk : l;
+  });
+  const g = sc === "cortesia" ? giftCortesia(r.venta_gift) : null;
+  const nominal = g ? valorNominalGift(g, cat) : 0;
+  // Línea de gift card ya materializada (TK98): conserva su valor nominal para mostrarlo.
+  if (g) for (const l of out) if (l.tipo === "gift" && s(l.nombre).includes(g.codigo)) { l.valorNominal = nominal; l.gcCodigo = g.codigo; l.cortesia = true; }
+  if (g && !out.some((l) => l.tipo === "gift" && s(l.nombre).includes(g.codigo))) {
+    out.push({ tipo: "gift", sku: "35", nombre: nombreLineaGift(g, nominal), cantidad: 1, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, cortesia: true, valorNominal: nominal, gcCodigo: g.codigo } as LineaTk);
+  }
+  return out;
+}
+async function lineasDe0(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
     return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
@@ -477,6 +496,7 @@ export function estaCobrado(r: Row, datosFac?: unknown, linkFac?: unknown): bool
   if (s(r.origin) === "test" || /^TEST-/i.test(s(r.so_num) || s(r.beta_num))) return b(r.cob);
   if (b(r.cob)) return true;
   if (metodosPago(r.comp).some((m) => esMetodoPago(m.metodo))) return true;
+  if (tipoSinCobro(r)) return true; // TK98: $0 de cortesía / consumo interno: no hay nada por cobrar
   return hayFactura(r.fac_7, datosFac, linkFac);
 }
 /** El facial del ticket se canjeó (sesión de paquete o gift card de facial, sin monto aplicado). */
@@ -614,11 +634,15 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
   const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura), cobrado = estaCobrado(r, d.factura);
-  const fac = facReal || b(r.fac);
+  const sinCobro = tipoSinCobro(r);
+  const fac = facReal || b(r.fac) || !!sinCobro;
   const chips: Row[] = [
     { k: "estado", t: anulado ? "Cancelado" : cobrado && fac ? "Cerrado" : "Abierto", c: anulado ? "anulado" : cobrado && fac ? "cerrado" : "abierto" },
-    { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
-    { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },
+    // TK98: cortesía / consumo interno en gris; ni «Por cobrar» ni «Sin factura».
+    ...(sinCobro ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
+      { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
+      { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },
+    ]),
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
     { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },

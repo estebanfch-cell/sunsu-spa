@@ -106,7 +106,7 @@
 
   // ---------- pintar ----------
   // ---------- detalle v2 (como la orden de MineCore) ----------
-  var CHIP = { abierto: "#3E7CB1", cerrado: "#56627A", porcobrar: "#C98A00", pagado: "#2E8B57", sinfactura: "#D2603A", facturado: "#2A8C8C", anulado: "#C0392B", ok: "#2E8B57", pend: "#8A93A6", info: "#7C6BB0" };
+  var CHIP = { abierto: "#3E7CB1", cerrado: "#56627A", porcobrar: "#C98A00", pagado: "#2E8B57", sinfactura: "#D2603A", facturado: "#2A8C8C", anulado: "#C0392B", ok: "#2E8B57", pend: "#8A93A6", info: "#7C6BB0", neutro: "#8A93A6" };
   function pill(c, t, tip) { var col = CHIP[c] || "#8A93A6"; return '<span class="mctk-pill" style="color:' + col + ";border-color:" + col + '"' + (tip ? ' title="' + e(tip) + '"' : "") + ">" + e(t) + "</span>"; }
   function val(k) { var d = K.d, v = K.datos && K.datos[k] != null ? K.datos[k] : (d.info || {})[k]; return v == null ? "" : String(v); }
   function campo(k, lbl, opts) {
@@ -163,7 +163,7 @@
   }
   /** Por línea: subtotal sin IVA, IVA y total con IVA. */
   function montos(l) { var tot = r2(Number(l.total_linea) || 0), sub = net(tot); return { sub: sub, iva: r2(tot - sub), tot: tot }; }
-  function etqLinea(l) { return l.cortesia && !(l.total_linea > 0) ? ' <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? ' <span class="mctk-canje">Canje</span>' : ""; }
+  function etqLinea(l) { return l.consumoInterno && !(l.total_linea > 0) ? ' <span class="mctk-canje" style="color:#56627A">Consumo interno</span>' : l.cortesia && !(l.total_linea > 0) ? ' <span class="mctk-canje" style="color:#2E8B57">Cortesía</span>' : l.canje && !(l.total_linea > 0) ? ' <span class="mctk-canje">Canje</span>' : ""; }
   function pintarMontos(tr, l) {
     var m = montos(l), q = function (x) { return tr.querySelector(x); };
     if (q("[data-tl]")) q("[data-tl]").textContent = $m(m.sub);
@@ -181,12 +181,15 @@
       return '<span class="mctk-c' + (extra || "") + '" data-c="' + c + '"' + (le && ed ? ' data-le="' + le + '" tabindex="0" title="Clic para editar"' : "") + "><small>" + lbl + '</small><span class="mctk-cv">' + html + "</span></span>";
     }
     return hd + K.L.map(function (l, i) {
-      var fijo = (l.cortesia || l.canje) && !(l.precio_unit > 0);
-      var precio = l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(net(l.precio_unit)));
+      var fijo = (l.cortesia || l.canje || l.consumoInterno) && !(l.precio_unit > 0);
+      // TK98: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
+      var precio = l.consumoInterno && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#56627A" title="Producto sacado para uso interno (no se cobra ni se factura)">Consumo interno</span>' : l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(net(l.precio_unit)));
       var m = montos(l), tipoTxt = l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
       var pills = (l.canje ? '<span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") +
         (esMejora(l) ? '<span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
         (l.cortesia ? '<span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
+        (l.consumoInterno ? '<span class="mctk-pill" style="color:#56627A;border-color:#56627A">Consumo interno</span>' : "") +
+        (l.valorNominal > 0 && l.tipo === "gift" ? ' <span style="color:#56627A;font-size:.72rem">valor nominal ' + e($m(l.valorNominal)) + "</span>" : "") +
         (l.tipo === "diferencia" ? '<span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
         (l.promo && l.descuento_valor > 0 ? '<span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "");
       // TK81: la «Diferencia por mejora» solo se ve si existe; agregarla es un botoncito discreto en las acciones de la fila
@@ -292,7 +295,7 @@
       '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !t.cancelado ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>" +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">Sin factura</span>') + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Sin factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
       '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
@@ -420,7 +423,7 @@
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
-    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
+    K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, consumoInterno: !!l.consumoInterno, valorNominal: Number(l.valorNominal) || 0, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
     K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
