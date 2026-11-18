@@ -195,10 +195,9 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
     assert.match(home, /Por completar/);
     assert.match(home, /data-borrador/);
     assert.match(screens, /pendiente_aprobar/);
-    assert.match(beta, /mc-staff-home\.js\?v=20261118tk100/);
+    assert.match(beta, /mc-staff-home\.js\?v=20261118tk101/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-18-TK100/);
-  });
+    assert.match(sw, /sunsu-beta-2026-11-18-TK101/);  });
 });
 
 describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {

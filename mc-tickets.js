@@ -183,7 +183,8 @@
     return hd + K.L.map(function (l, i) {
       var fijo = (l.cortesia || l.canje || l.consumoInterno) && !(l.precio_unit > 0);
       // TK98: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
-      var precio = l.consumoInterno && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#56627A" title="Producto sacado para uso interno (no se cobra ni se factura)">Consumo interno</span>' : l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(net(l.precio_unit)));
+      var esGift = l.tipo === "gift" && !(l.cortesia || l.canje);
+      var precio = l.consumoInterno && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#56627A" title="Producto sacado para uso interno (no se cobra ni se factura)">Consumo interno</span>' : l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(esGift ? l.precio_unit : net(l.precio_unit)));
       var m = montos(l), tipoTxt = l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
       var pills = (l.canje ? '<span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") +
         (esMejora(l) ? '<span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
@@ -200,7 +201,7 @@
         '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span></div></div>" +
         '<span class="mctk-nums">' +
         celda("q", "Cant", e(q2(l.cantidad)), "cantidad") +
-        celda("u", "P. sin IVA", precio, fijo ? "" : "precio_unit") +
+        celda("u", esGift ? "P. con IVA" : "P. sin IVA", precio, fijo ? "" : "precio_unit") +
         celda("d", "Desc", e(descTxt(l.descuento_tipo, l.descuento_valor)), "desc") +
         celda("s", "Subtotal", "<span data-tl>" + e($m(m.sub)) + "</span>", "", " mctk-c3") +
         celda("v", "IVA", "<span data-iva>" + e($m(m.iva)) + "</span>", "", " mctk-c3") +
@@ -302,7 +303,7 @@
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
-      '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div></div>' +
+      '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
@@ -726,6 +727,7 @@
       var l = K.L[+tr.getAttribute("data-i")];
       if (f === "desc" && !String(ev.target.value).trim()) { l.descuento_tipo = null; l.descuento_valor = 0; l.promo = ""; ev.target.classList.remove("bad"); }
       else if (f === "desc") { var x = descParse(ev.target.value); ev.target.classList.toggle("bad", !x); if (!x) return; l.descuento_tipo = x.tipo; l.descuento_valor = x.tipo === "$" ? x.valor * IVA : x.valor; l.promo = ""; }
+      else if (f === "precio_unit" && l.tipo === "gift") l.precio_unit = (Number(ev.target.value) || 0); // gift: el valor se escribe CON IVA
       else if (f === "precio_unit") l.precio_unit = (Number(ev.target.value) || 0) * IVA; // se escribe sin IVA
       else l[f] = Number(ev.target.value) || 0;
       if (f === "precio_unit") l.estimado = false;
@@ -735,7 +737,7 @@
     function editarCelda(c) {
       if (!c || c.querySelector("input")) return;
       var tr = c.closest("[data-i]"), l = K.L[+tr.getAttribute("data-i")], f = c.getAttribute("data-le"); if (!l || !f) return;
-      var antes = JSON.stringify(l), v = f === "cantidad" ? q2(l.cantidad) : f === "precio_unit" ? net(l.precio_unit).toFixed(2) : descTxt(l.descuento_tipo, l.descuento_valor);
+      var antes = JSON.stringify(l), v = f === "cantidad" ? q2(l.cantidad) : f === "precio_unit" ? (l.tipo === "gift" ? r2(l.precio_unit).toFixed(2) : net(l.precio_unit).toFixed(2)) : descTxt(l.descuento_tipo, l.descuento_valor);
       var cv = c.querySelector(".mctk-cv");
       cv.innerHTML = '<input class="mctk-cin" data-f="' + (f === "desc" ? "desc" : f) + '" ' + (f === "desc" ? 'type="text" inputmode="decimal" placeholder="10% o $5"' : 'type="number" inputmode="decimal" min="0" step="any"') + ' value="' + e(v) + '" aria-label="' + e(c.querySelector("small").textContent) + '">';
       var inp = cv.querySelector("input"), fin = false; inp.focus(); inp.select();
@@ -764,6 +766,26 @@
       marcar(); pintarLin();
     });
     main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
+    function gcIvaTxt(v) { v = Number(v) || 0; if (!(v > 0)) return "Escribe el valor con IVA. Subtotal = valor / 1.15."; var sub = r2(v / IVA), iva = r2(v - sub); return "Subtotal $" + sub.toFixed(2) + " · IVA $" + iva.toFixed(2) + " · Total $" + r2(v).toFixed(2) + " con IVA"; }
+    function pintarGcIva() { var el = main.querySelector("#mctk-gciva"), inp = main.querySelector("#mctk-gcval"); if (el) el.textContent = gcIvaTxt(inp && inp.value); }
+    function addGiftValor(v) {
+      v = r2(Number(v) || 0); if (!(v > 0)) { toast2("Indica el valor con IVA", true); return; }
+      var l = K.L.find(function (x) { return x.tipo === "gift" && !(x.cortesia || x.canje); });
+      if (l) { l.precio_unit = v; l.estimado = false; }
+      else K.L.push({ tipo: "gift", sku: "SUNSU-35", nombre: "GIFT CARD", cantidad: 1, precio_unit: v, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false });
+      marcar(); pintarLin(); beep(true);
+    }
+    function addCajaGift() {
+      var p = (K.cat || []).find(function (x) { return String(x.sku || "").toUpperCase().replace(/^SUNSU-/, "") === "INV-123"; })
+        || { tipo: "producto", sku: "INV-123", nombre: "Caja de gift card", pvp: 3 };
+      agregar(p, function () {});
+    }
+    var gcVal = main.querySelector("#mctk-gcval");
+    if (gcVal) gcVal.oninput = pintarGcIva;
+    var b65 = main.querySelector("#mctk-gc65"); if (b65) b65.onclick = function () { var inp = main.querySelector("#mctk-gcval"); if (inp) inp.value = "65"; pintarGcIva(); addGiftValor(65); };
+    var badd = main.querySelector("#mctk-gcadd"); if (badd) badd.onclick = function () { addGiftValor(main.querySelector("#mctk-gcval") && main.querySelector("#mctk-gcval").value); };
+    var bcaja = main.querySelector("#mctk-caja"); if (bcaja) bcaja.onclick = function () { addCajaGift(); };
+
     var _pS = main.querySelector("#mctk-promo"); if (_pS) _pS.onchange = function () { K.promo = this.value; marcar(); pintarTot(); };
     var _pB = main.querySelector("#mctk-promos");
     if (_pB) _pB.onclick = function () {

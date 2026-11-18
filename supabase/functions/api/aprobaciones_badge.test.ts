@@ -25,8 +25,7 @@ describe("TK85 badge de Aprobaciones en el dashboard", () => {
     assert.match(html, /async function renderAprobaciones\(/);
     assert.match(html, /data-go="#\/m\/aprobaciones"/);
     assert.match(nav, /#\/m\/aprobaciones/);
-    assert.match(sw, /sunsu-beta-2026-11-18-TK100/);
-  });
+    assert.match(sw, /sunsu-beta-2026-11-18-TK101/);  });
 
   it("suma solicitudes, borradores, permisos y ajustes, y no expone cédulas ni teléfonos", async () => {
     const db = new MemoryDb();

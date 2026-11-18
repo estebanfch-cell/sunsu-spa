@@ -476,20 +476,29 @@ async function cfgMap(ctx: Ctx): Promise<Map<string, string>> {
 function productosPatch(productos: R | undefined, replace: boolean, prev: R): R {
   const orig: R = { ...(prev.orig && typeof prev.orig === "object" ? prev.orig as R : {}) };
   const patch: R = {};
+  const esSkuProd = (k: string) => /^[A-Z]{2,3}-\d+$/.test(skuCode(k));
   if (replace) {
     for (const c of PROD_COLS) {
       patch[c.col] = null;
       delete orig[c.sku];
       delete orig["SUNSU-" + c.sku];
     }
+    // TK101: SKUs sin columna de hoja (INV-123 caja de gift card, etc.) viven en orig.
+    for (const k of Object.keys(orig)) if (esSkuProd(k)) delete orig[k];
   }
   for (const [sku, qty] of Object.entries(productos || {})) {
     const col = prodCol(String(sku));
     const q = n(qty);
-    if (!col) continue;
-    patch[col.col] = q > 0 ? (col.typ === "text" ? String(q) : q) : null;
-    if (q > 0) orig[col.sku] = q;
-    else delete orig[col.sku];
+    if (col) {
+      patch[col.col] = q > 0 ? (col.typ === "text" ? String(q) : q) : null;
+      if (q > 0) orig[col.sku] = q;
+      else { delete orig[col.sku]; delete orig["SUNSU-" + col.sku]; }
+      continue;
+    }
+    const code = skuCode(String(sku));
+    if (!code || !esSkuProd(code)) continue;
+    if (q > 0) orig[code] = q;
+    else { delete orig[code]; delete orig["SUNSU-" + code]; }
   }
   patch.orig = orig;
   return patch;
