@@ -6,12 +6,11 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { esAdmin, matrizDe, verCostos } from "./permisos.ts";
-import { esCancelado, facialSku, n, normNombre, round2, s, skuCode, type Row } from "./domain.ts";
+import { n, normNombre, round2, s, skuCode, type Row } from "./domain.ts";
 import { consultar } from "./query.ts";
-import { claveDe } from "./ticket_beta.ts";
-import { leerSerie } from "./series.ts";
 import { runErp, usoCompatible } from "./erp.ts";
-import { aPared, DESTINOS, destinoDeCabina, nombreDestino, promedioProducto, rendimiento, type Facial } from "./aperturas_beta.ts";
+import { facialesHechos, productoAProtocolos } from "./protocolo_auto.ts";
+import { aPared, DESTINOS, nombreDestino, promedioProducto, rendimiento } from "./aperturas_beta.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const arr = (v: unknown): unknown[] => Array.isArray(v) ? v : typeof v === "string" && v.trim().startsWith("[") ? (() => { try { return JSON.parse(v as string); } catch { return []; } })() : [];
@@ -145,28 +144,14 @@ extend("ap_aplica_guardar", "any", async (p, ctx, ses) => {
   const L = [...new Set(arr(p.faciales).map((x) => s(x).toUpperCase()).filter((x) => validos.has(x)))];
   const prod = (await todas(ctx, "erp_productos")).find((x) => s(x.id) === pid);
   if (!prod) return { error: "Producto no encontrado" };
+  const previos = arr(prod.beta_aplica_faciales).map((x) => s(x).toUpperCase());
   await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: pid }, { beta_aplica_faciales: L, beta_editado_por: s(ses.name), beta_editado_at: ctx.now.toISOString() });
   await logAccion(ctx.db, actorOf(ses), "PRODUCTO APLICA FACIALES", `${skuCode(s(prod.sku))} ${s(prod.nombre)} → ${L.join(", ") || "ninguno"}`);
-  return { ok: true, aplica: L };
+  // TK36: el producto entra (o sale) solo del protocolo de cada facial.
+  const nombres = new Map((await facialesCatalogo(ctx)).map((f) => [f.code, f.nombre]));
+  const protocolos = await productoAProtocolos(ctx, ses, prod, L, previos, nombres);
+  return { ok: true, aplica: L, protocolos };
 });
-
-/** Faciales hechos (tickets) en escala de pared, sin cancelados ni borrados. */
-async function facialesHechos(ctx: Ctx, desdeIso: string): Promise<Facial[]> {
-  let rows: Row[] = [];
-  try { rows = (await consultar(ctx.db, "tickets", { cols: ["id", "timestamp", "facial_hecho", "borrado_at", "orig", "so_num", "beta_num", "sheet_row"], filtros: [{ col: "timestamp", op: "gte", val: desdeIso }] })).rows; }
-  catch { rows = (await todas(ctx, "tickets")).filter((r) => s(r.timestamp) >= desdeIso); }
-  // Cabina del ticket (beta_tickets.datos.cabina, opcional).
-  const cab = new Map<string, string>();
-  try { for (const c of await todas(ctx, "beta_tickets")) { const d = c.datos && typeof c.datos === "object" ? c.datos as Row : {}; const k = destinoDeCabina(d.cabina); if (k) cab.set(s(c.clave), k); } } catch { /* sin tabla: sin cabina */ }
-  const out: Facial[] = [];
-  for (const r of rows) {
-    if (r.borrado_at || esCancelado(r)) continue;
-    const code = facialSku(r.facial_hecho); const t = Date.parse(s(r.timestamp));
-    const cb = cab.size ? cab.get(claveDe(r, leerSerie(r, "so_num"))) : undefined;
-    if (code && Number.isFinite(t)) out.push(cb ? { t, code, cabina: cb } : { t, code });
-  }
-  return out;
-}
 
 /** Historial de aperturas + rendimiento; y el costo por facial por producto y por protocolo. */
 extend("ap_lista", "any", async (p, ctx, ses) => {

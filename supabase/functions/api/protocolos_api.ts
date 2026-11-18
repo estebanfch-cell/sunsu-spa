@@ -8,6 +8,7 @@ import { actorOf } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { codigoCabina, skuVisible, tipoDe } from "./productos.ts";
+import { costearPasos, protocoloAProductos, usoReal } from "./protocolo_auto.ts";
 
 async function safeAll(ctx: Ctx, t: string): Promise<Row[] | null> {
   try { return await ctx.db.all(t); } catch { return null; }
@@ -48,6 +49,18 @@ function pasosDe(v: unknown): Paso[] {
   if (Array.isArray(v)) return v as Paso[];
   if (typeof v === "string") { try { const x = JSON.parse(v); return Array.isArray(x) ? x : []; } catch { return []; } }
   return [];
+}
+
+/** TK36: costo automático de cada paso y del protocolo (solo para quien ve costos). */
+async function costeador(ctx: Ctx) {
+  const erp = ((await safeAll(ctx, "erp_productos")) || []).filter((p) => !s(p.beta_eliminado_at));
+  const porCod = new Map(erp.map((p) => [skuCode(s(p.sku)), p]));
+  const real = await usoReal(ctx, erp);
+  return (r: Row): Row => {
+    const c = costearPasos(r.pasos as Row[], porCod, real);
+    const mo = r.mano_de_obra == null ? 0 : n(r.mano_de_obra);
+    return { ...r, pasos: c.pasos, costoProductos: c.costoProductos, sinCosto: c.sinCosto, costoTotal: round2(c.costoProductos + mo) };
+  };
 }
 
 async function catalogos(ctx: Ctx) {
@@ -110,7 +123,8 @@ extend("proto_list", "any", async (_p, ctx, ses) => {
   const cats = await catalogos(ctx);
   const nombres = new Map(cats.productos.map((x) => [s(x.codigo), x]));
   const svc = new Map(cats.servicios.map((x) => [s(x.sku), x]));
-  const protocolos: Row[] = filas.map((r): Row => ({ ...publico(r, pr.costos, nombres), servicio: svc.get(s(r.sku).toUpperCase()) || null }))
+  const cost = pr.costos ? await costeador(ctx) : (r: Row) => r;
+  const protocolos: Row[] = filas.map((r): Row => cost({ ...publico(r, pr.costos, nombres), servicio: svc.get(s(r.sku).toUpperCase()) || null }))
     .sort((a, b) => s(a.sku).localeCompare(s(b.sku), "es", { numeric: true }));
   return { ok: true, editable: beta && pr.editar, beta, protocolos, servicios: cats.servicios, productos: cats.productos, verCostos: pr.costos };
 });
@@ -122,7 +136,8 @@ extend("proto_get", "any", async (p, ctx, ses) => {
   const r = filas.find((x) => s(x.id) === s(p.id) || s(x.sku).toUpperCase() === s(p.sku).toUpperCase());
   if (!r) return { error: "Protocolo no encontrado" };
   const cats = await catalogos(ctx);
-  return { ok: true, protocolo: publico(r, pr.costos, new Map(cats.productos.map((x) => [s(x.codigo), x]))) };
+  const cost = pr.costos ? await costeador(ctx) : (x: Row) => x;
+  return { ok: true, protocolo: cost(publico(r, pr.costos, new Map(cats.productos.map((x) => [s(x.codigo), x])))) };
 });
 
 extend("proto_guardar", "any", async (p, ctx, ses) => {
@@ -143,7 +158,8 @@ extend("proto_guardar", "any", async (p, ctx, ses) => {
   if (otro) return { error: sku + " ya tiene protocolo («" + s(otro.nombre) + "»). Edita ese." };
   const { pasos, error } = limpiarPasos(p.pasos, new Set(cats.productos.map((x) => s(x.codigo))));
   if (error) return { error };
-  if (!pasos.length) return { error: "Agrega al menos un paso" };
+  // TK36: un protocolo existente puede quedar sin pasos (se llena solo con los productos que aplican al facial).
+  if (!pasos.length && !actual) return { error: "Agrega al menos un paso" };
   let mano: number | null = null;
   if (p.mano_de_obra != null && p.mano_de_obra !== "") {
     mano = Number(String(p.mano_de_obra).replace(",", "."));
@@ -156,7 +172,9 @@ extend("proto_guardar", "any", async (p, ctx, ses) => {
   const row: Row = { sku, nombre, vigente: p.vigente !== false, mano_de_obra: mano, notas: s(p.notas).slice(0, 500), pasos, origen: actual ? s(actual.origen) || "beta" : "beta", borrar: p.borrar === true };
   const out = await ctx.db.rpc("app_protocolo_guardar", { p_id: nuevoId, p_row: row, p_actor: actorOf(ses) });
   if (out == null) return { error: "Falta aplicar 0042_protocolos_beta.sql" };
-  return { ok: true, id: nuevoId, version: n((out as Row).version) || 1 };
+  // TK36: los productos del protocolo quedan marcados «Aplica a» este facial (y los que salieron, desmarcados).
+  const productos = p.borrar === true ? 0 : await protocoloAProductos(ctx, ses, sku, pasos as unknown as Row[], actual ? pasosDe(actual.pasos) as unknown as Row[] : []);
+  return { ok: true, id: nuevoId, version: n((out as Row).version) || 1, productosMarcados: productos };
 });
 
 extend("proto_historial", "any", async (p, ctx, ses) => {
