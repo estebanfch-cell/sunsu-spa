@@ -59,6 +59,11 @@ extend("prov_ficha", "any", async (p, ctx, ses) => {
   for (const r of rsts) if (erpId && s(r.proveedor_id) === erpId) hist.push({ tipo: "restock", emo: "🔁", id: s(r.id), numero: s(r.numero), fecha: s(r.created_at || r.desde).slice(0, 10), estado: s(r.estado), detalle: s(r.desde) + " → " + s(r.hasta), go: "#/m/compras/consignacion" });
   for (const a of actas) if ((erpId && s(a.proveedor_id) === erpId) || ocIds.has(s(a.oc_id))) hist.push({ tipo: "acta", emo: "📝", id: s(a.id), numero: s(a.numero), fecha: s(a.created_at).slice(0, 10), estado: s(a.firmado_at) ? "Firmada" : "Sin firmar" });
   for (const g of pagos) if (ocIds.has(s(g.oc_id))) hist.push({ tipo: "pago", emo: "💳", id: s(g.id), numero: "Pago OC " + s(numOc.get(s(g.oc_id))), fecha: s(g.fecha).slice(0, 10), total: round2(n(g.monto)), detalle: s(g.beta_banco || g.nota), go: "#/m/compras/" + s(g.oc_id) });
+  // TK44: consumo interno de consignación (📦 Abrir producto / transferencia a cabina): se le paga al proveedor a costo.
+  const nomProd = new Map(mios.map((x) => [skuCode(s(x.sku)), s(x.nombre)]));
+  const consumos = cod ? (await todas(ctx, "erp_consignacion_consumo")).filter((c) => s(c.familia).toUpperCase() === cod)
+    .sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))).slice(0, 200)
+    .map((c) => ({ fecha: s(c.fecha), producto: nomProd.get(skuCode(s(c.sku))) || skuCode(s(c.sku)), cantidad: n(c.cantidad), costo: adm ? round2(n(c.costo_unit)) : null, total: adm ? round2(n(c.cantidad) * n(c.costo_unit)) : null, periodo: s(c.quincena_ini).slice(0, 10) + " → " + s(c.quincena_fin).slice(0, 10), origen: /apertura:/.test(s(c.nota)) ? "📦 Abrir producto" : s(c.transferencia_id) ? "🔁 Transferencia a cabina" : "Consumo", detalle: s(c.nota).replace(/\s*·?\s*apertura:[0-9a-f-]+/i, ""), por: s(c.creado_por) })) : [];
   hist.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
   const movimientos = movs.filter((m) => idsProd.has(s(m.producto_id))).sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))).slice(0, 150)
     .map((m) => ({ fecha: s(m.fecha), sku: idsProd.get(s(m.producto_id)), bodega: bodN.get(s(m.bodega_id)) || "", delta: round2(n(m.delta)), tipo: s(m.tipo), doc: s(m.doc_tipo), nota: s(m.nota) }));
@@ -67,7 +72,7 @@ extend("prov_ficha", "any", async (p, ctx, ses) => {
     ok: true, admin: adm, codigo: cod, falta: (await fichasProv(ctx)) ? "" : FALTA,
     consignacion: provOn, datos: (ficha?.datos || {}) as Row, notas: (Array.isArray(ficha?.notas) ? ficha!.notas as Row[] : []).slice().reverse(),
     cambios: (Array.isArray(ficha?.historial) ? ficha!.historial as Row[] : []).slice().reverse().slice(0, 50),
-    productos, historial: hist, movimientos,
+    productos, historial: hist, movimientos, consumos,
     kpis: { ocs: compras.length, comprado: round2(compras.reduce((a, o) => a + n(o.total), 0)), saldo: round2(compras.reduce((a, o) => a + n(o.saldo), 0)), productos: productos.length, enConsig: productos.filter((x) => x.consig).length, ultima: s(hist.find((h) => h.tipo === "oc" || h.tipo === "consignacion")?.fecha) },
   };
 });

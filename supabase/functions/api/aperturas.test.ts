@@ -4,6 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./erp_api.ts";
 import "./aperturas_api.ts";
+import { borradorConsig } from "./ventas.ts";
 import { destinoDeCabina, promedioProducto, rendimiento } from "./aperturas_beta.ts";
 import type { Row } from "./domain.ts";
 
@@ -102,5 +103,37 @@ describe("📦 Abrir producto", () => {
     assert.equal(v.saleDe, "Local");
     assert.equal(db.tables.get("erp_movimientos")!.filter((m) => m.producto_id === "p2").at(-1)!.bodega_id, "bv");
     assert.equal(db.tables.get("beta_aperturas")!.find((a) => a.id === v.id)!.destino, "CAB2");
+  });
+  it("TK44: producto en 🤝 consignación sale de la bodega Consignación y queda como consumo a costo en la liquidación", async () => {
+    const { db, h } = semilla();
+    db.tables.set("erp_bodegas", [...db.tables.get("erp_bodegas")!, { id: "bc", codigo: "CONSIGNACION", nombre: "Consignación", tipo: "consignacion" }]);
+    db.tables.set("erp_proveedores", [{ id: "prov-ml", nombre: "Hebetronic", activo: true }]);
+    db.tables.set("beta_proveedores_ficha", [{ familia: "ML", consignacion: true }, { familia: "HT", consignacion: false }]);
+    db.tables.set("erp_consignacion_consumo", []);
+    db.tables.set("erp_stock", [{ producto_id: "p2", bodega_id: "bc", cantidad: 3 }]);
+    db.tables.get("erp_movimientos")!.push({ id: "m1", producto_id: "p2", bodega_id: "bc", delta: 3, tipo: "recepcion" });
+    const pr = await h("ap_producto", "cos", { producto_id: "p2" });
+    assert.equal((pr.producto as Row).consignacion, true);
+    assert.equal(((pr.destinos as Row[]).find((d) => d.codigo === "CABINA") as Row).consig, true);
+    assert.equal(((pr.destinos as Row[]).find((d) => d.codigo === "CABINA") as Row).saleDe, "Consignación");
+    const a = await h("ap_abrir", "cos", { producto_id: "p2", destino: "CABINA", firma: FIRMA });
+    assert.equal(a.ok, true, JSON.stringify(a));
+    assert.equal(a.consignacion, true);
+    assert.equal(a.saleDe, "Consignación");
+    assert.equal(db.tables.get("erp_movimientos")!.filter((m) => m.producto_id === "p2").at(-1)!.bodega_id, "bc");
+    const C = db.tables.get("erp_consignacion_consumo")!;
+    assert.equal(C.length, 1);
+    assert.equal(C[0].familia, "ML"); assert.equal(C[0].cantidad, 1); assert.ok(Number(C[0].costo_unit) >= 0);
+    // Entra a la liquidación del proveedor como consumido (se le paga a costo).
+    const liq = await borradorConsig(db as never, new Date("2026-11-01T14:00:00Z"), { proveedor_id: "prov-ml", familia: "ML", anio: 2026, mes: 11, quincena: 1 });
+    const it = ((liq.items || []) as Row[]).find((x) => x.sku === "ML-001")!;
+    assert.equal(it.consumido, 1);
+    // HT con consignación OFF: no genera consumo.
+    await h("ap_abrir", "cos", { producto_id: "p1", destino: "CABINA", firma: FIRMA });
+    assert.equal(db.tables.get("erp_consignacion_consumo")!.length, 1);
+    // Anular la apertura compensa el consumo (−1), sin borrar nada.
+    await h("ap_anular", "adm", { id: a.id, motivo: "me equivoqué" });
+    const C2 = db.tables.get("erp_consignacion_consumo")!;
+    assert.equal(C2.length, 2); assert.equal(C2.reduce((x, c) => x + Number(c.cantidad), 0), 0);
   });
 });

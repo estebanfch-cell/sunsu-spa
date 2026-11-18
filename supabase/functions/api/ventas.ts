@@ -894,7 +894,7 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   try { consumos = await db.all("erp_consignacion_consumo"); } catch { consumos = []; }
   for (const c of consumos) {
     if (s(c.familia) !== familia) continue;
-    if (s(c.quincena_ini) !== q.ini || s(c.quincena_fin) !== q.fin) continue;
+    if (s(c.quincena_ini).slice(0, 10) !== q.ini || s(c.quincena_fin).slice(0, 10) !== q.fin) continue;
     const sku = skuCode(c.sku);
     if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     consumido.set(sku, (consumido.get(sku) || 0) + n(c.cantidad));
