@@ -6093,10 +6093,10 @@ function promoOff(fila,btn){
   })
   .catch(function(){ btn.disabled=false; toast('❌ Sin conexión','#B86B6B'); });
 }
-// ── Dashboard estilo MineCore (Hoy / Semana / Mes / Año / Rango exacto vs periodo anterior) ──
-// Solo rango exacto desde — hasta (Emilia 17/11 22:13: sin Hoy/Semana/Mes/Año ni 12 meses/Migo/Todo). Por defecto: hoy.
-var _dashSt=window._dashSt||(function(){ var h=new Date(), y=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); return {periodo:'rango',desde:y,hasta:y,prodTab:'val'}; })();
-if(_dashSt.periodo!=='rango'){ _dashSt.periodo='rango'; _dashSt.desde=''; _dashSt.hasta=''; }
+// ── Dashboard estilo MineCore (Día / Semana / Mes / Año + rango desde–hasta; los botones rellenan el rango).
+// TK90: se restauran los botones (Emilia 18/11). Por defecto: Día. Sin comisiones.
+var _dashSt=window._dashSt||(function(){ var h=new Date(), y=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); return {periodo:'hoy',desde:y,hasta:y,prodTab:'val'}; })();
+if(!_dashSt.periodo) _dashSt.periodo='hoy';
 window._dashSt=_dashSt;
 function _dE(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function _dM(v){var x=Number(v)||0;var neg=x<0;return (neg?'-$':'$')+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -6279,10 +6279,11 @@ function renderInicio(c){
     window._dashData=d; st._labelPrev=d.labelPrev;
     if(!st.desde) st.desde=d.desde; if(!st.hasta) st.hasta=d.hasta;
     var a=d.actual||{}, p=d.anterior||{}, pg=a.pagos||{}, inv=d.inventario||{}, cp=d.compras||{}, hist=d.historia||[];
-    var tabs=[['hoy','Hoy'],['semana','Semana'],['mes','Mes'],['ano','Año']].map(function(x){return '<button class="dsh-tab'+(d.periodo===x[0]?' on':'')+'" onclick="dashPeriodo(\''+x[0]+'\')">'+x[1]+'</button>';}).join('');
+    var tabs=[['hoy','Día'],['semana','Semana'],['mes','Mes'],['ano','Año']].map(function(x){return '<button class="dsh-tab'+(d.periodo===x[0]?' on':'')+'" onclick="dashPeriodo(\''+x[0]+'\')">'+x[1]+'</button>';}).join('');
     var head='<div style="display:flex;justify-content:space-between;align-items:center">'
       +'<div style="font-size:1.02rem;font-weight:800;color:var(--navy-d);letter-spacing:1px">DASHBOARD</div>'
       +'<button onclick="renderInicio(document.getElementById(\'content\'))" style="background:white;border:1.5px solid var(--navy);color:var(--navy);border-radius:8px;padding:5px 11px;font-size:0.62rem;font-weight:800;cursor:pointer">↻ '+_dE(d.actualizado||'')+'</button></div>'
+      +'<div class="dsh-tabs">'+tabs+'</div>'
       +'<div class="dsh-rango"><label>Desde<input type="date" id="dsh-desde" value="'+_dE(d.desde)+'" onchange="dashRango(1)"></label><label>Hasta<input type="date" id="dsh-hasta" value="'+_dE(d.hasta)+'" onchange="dashRango(1)"></label>'
       +'<button class="on" onclick="dashRango()">Aplicar</button></div>'
       +'<div class="dsh-rlbl">'+_dE(d.label)+' · vs '+_dE(d.labelPrev)+'</div>';

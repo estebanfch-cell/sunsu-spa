@@ -3,7 +3,8 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { esAdmin, acceso, matrizDe } from "./permisos.ts";
-import { n, normNombre, s, ymdUtc, type Row } from "./domain.ts";
+import { addDays, n, normNombre, s, ymdUtc, type Row } from "./domain.ts";
+import { calcularDashboard } from "./dashboard_api.ts";
 import { citasRango, fechaCita } from "./acuity.ts";
 import { fichaDeCita, misCalendarios } from "./agenda_api.ts";
 import { claveRegistro } from "./ventas.ts";
@@ -28,7 +29,7 @@ function limpio(v: unknown): boolean {
   return !/telefono|celular|whatsapp|"email"|correo|direccion|sector|precio|estimado|costo|margen/i.test(j);
 }
 
-extend("staff_home", "any", async (_p, ctx, ses) => {
+extend("staff_home", "any", async (p, ctx, ses) => {
   const hoy = hoyEc(ctx);
   const nombre = s(ses.short) || s(ses.name).split(" ")[0] || "";
   const admin = esAdmin(ses.rol);
@@ -51,10 +52,22 @@ extend("staff_home", "any", async (_p, ctx, ses) => {
     return early;
   }
 
-  const L = await citasRango(ctx, hoy, hoy, {});
+  const periodo = (["hoy", "semana", "mes", "ano"].includes(s(p.periodo)) ? s(p.periodo) : "hoy");
+  let L = await citasRango(ctx, hoy, hoy, {});
   if (!Array.isArray(L)) return { error: L.error, hoy, nombre, citas: [] };
-
-  const vis = L.filter((a) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID))));
+  let vis = L.filter((a) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID))));
+  let citasFecha = hoy;
+  if (!vis.length) {
+    const L2 = await citasRango(ctx, addDays(hoy, 1), addDays(hoy, 14), {});
+    if (Array.isArray(L2)) {
+      const prox = L2.filter((a) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID))))
+        .sort((a, b) => s(a.datetime).localeCompare(s(b.datetime)));
+      if (prox.length) {
+        citasFecha = fechaCita(prox[0]) || s(prox[0].datetime).slice(0, 10);
+        vis = prox.filter((a) => (fechaCita(a) || s(a.datetime).slice(0, 10)) === citasFecha);
+      }
+    }
+  }
   const links = await todas(ctx, "beta_citas_ticket");
   const tks = await todas(ctx, "tickets");
   const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
@@ -100,7 +113,14 @@ extend("staff_home", "any", async (_p, ctx, ses) => {
     return out;
   }).sort((x, y) => s(x.datetime).localeCompare(s(y.datetime)));
 
-  const payload = { ok: true, hoy, nombre, citas, puede: { ticket: true, noLlego: true, mover: verTodos }, borradores: borHome };
+  let kpis: Row = { productos: 0, paquetes: 0, faciales: 0, periodo, desde: hoy, hasta: hoy };
+  try {
+    const dash = await calcularDashboard(ctx.db, ctx.now, { periodo, cosm: s(ses.name) || s(ses.short) });
+    const a = (dash.actual && typeof dash.actual === "object") ? dash.actual as Row : {};
+    kpis = { productos: n(a.productosN), paquetes: n(a.paquetes), faciales: n(a.faciales), periodo: s(dash.periodo) || periodo, desde: s(dash.desde) || hoy, hasta: s(dash.hasta) || hoy };
+  } catch { /* sin kpis no se cae el home */ }
+
+  const payload = { ok: true, hoy, citasFecha, nombre, citas, kpis, puede: { ticket: true, noLlego: true, mover: verTodos }, borradores: borHome };
   if (!limpio(payload)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
   return payload;
 });

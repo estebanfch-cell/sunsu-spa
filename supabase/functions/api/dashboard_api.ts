@@ -5,7 +5,7 @@ import type { Ctx } from "./lib.ts";
 import { kvGet } from "./lib.ts";
 import {
   ADMIN, IVA, addDays, cantAmpollas, ecuadorParts, esCanje, esInterno, facialSku, n, normCedula,
-  productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado } from "./domain.ts";
+  productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado, normNombre } from "./domain.ts";
 import { montoGcAplicado } from "./ventas.ts";
 import { runErp } from "./erp.ts";
 import type { Db } from "./db.ts";
@@ -16,6 +16,16 @@ const MES_LARGO = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "j
 const META_MARGEN_DEF = 50;
 /** Hasta abril 2026 la venta real está en Migo (facturas importadas); desde mayo 2026, en los tickets del sistema. */
 export const CORTE_MIGO = "2026-05-01";
+
+/** Misma cosmetóloga: «Andrea» y «Andrea Robles» cuentan como una. */
+export function mismaCosmetologa(a: unknown, b: unknown): boolean {
+  const x = normNombre(a), y = normNombre(b);
+  if (!y) return true;
+  if (!x) return false;
+  if (x === y) return true;
+  return x.split(" ")[0] === y.split(" ")[0];
+}
+
 
 const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
 function diasEntre(a: string, b: string): number {
@@ -344,7 +354,9 @@ export async function calcularDashboard(db: Db, now: Date, p: Row): Promise<Row>
   const per = (["hoy", "semana", "mes", "ano", "rango"].includes(s(p.periodo)) ? s(p.periodo) : "hoy") as Periodo;
   const R = rangos(per, ec.ymd, s(p.desde), s(p.hasta));
   const pr = await precios(db);
-  const hechos = await hechosTodos(db, pr);
+  const cosm = s(p.cosm || p.cosmetologa);
+  const hechos0 = await hechosTodos(db, pr);
+  const hechos = cosm ? hechos0.filter((h) => mismaCosmetologa(h.cosm, cosm)) : hechos0;
   const ocs = (await db.all("erp_oc").catch(() => [] as Row[]))
     .filter((o) => !["cancelada", "anulada", "borrador", "rechazada"].includes(s(o.estado).toLowerCase()))
     .map((o) => ({ k: fechaOc(o), val: totalOc(o) })).filter((o) => o.k);

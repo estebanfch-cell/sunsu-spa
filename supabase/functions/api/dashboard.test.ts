@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import { calcularDashboard, rangos } from "./dashboard_api.ts";
@@ -76,5 +77,20 @@ describe("dashboard MineCore", () => {
     const ok = await handle("getDashboard", { token: c2.token, periodo: "mes" }, c2) as Row;
     assert.equal(ok.ok, true);
     assert.equal(ok.periodo, "mes");
+  });
+});
+
+
+describe("TK90 botones de periodo en el dashboard admin", () => {
+  it("tiene Día / Semana / Mes / Año y el rango desde–hasta; no fuerza solo rango", () => {
+    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(js, /dsh-tabs/);
+    assert.match(js, /\['hoy','Día'\]/);
+    assert.match(js, /function dashPeriodo\(/);
+    assert.match(js, /dsh-rango/);
+    assert.match(js, /id="dsh-desde"/);
+    assert.match(js, /id="dsh-hasta"/);
+    assert.doesNotMatch(js, /if\(_dashSt\.periodo!=='rango'\)/);
+    assert.match(js, /periodo:'hoy'/);
   });
 });
