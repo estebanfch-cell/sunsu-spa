@@ -26,13 +26,13 @@ const T = "todos" as const;
 export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   cosmetologa: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
-    clientes: P, inventario: T, transferencias: T, paquetes: P, bitacora: T, cabina: T,
+    clientes: T, inventario: T, transferencias: T, paquetes: P, bitacora: T, cabina: T,
     compras: P, agenda: P,
     recepciones: T,
   },
   asistente_cosmetologia: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
-    inventario: T, transferencias: T, conteos: T, bitacora: T, cabina: T,
+    clientes: T, inventario: T, transferencias: T, conteos: T, bitacora: T, cabina: T,
     compras: P,
     recepciones: T,
   },
@@ -283,7 +283,9 @@ function filtrar(v: unknown, ses: SesLite, f: { ticketsPropio: boolean; rolPropi
   if (Array.isArray(v)) {
     let arr = v.map((x) => filtrar(x, ses, f));
     // Las sesiones de un paquete (pq_*) no son tickets: se ven todas para saber cuántas quedan (TK55).
-    if (f.ticketsPropio && !f.action.startsWith("pq_") && arr.length && arr.every((x) => x && typeof x === "object" && ("cosmetologa" in (x as Row) || "cosm" in (x as Row)))) {
+    // cl_* / clientes_*: el personal ve a todas las clientas y todo el historial (sin teléfono/correo/sector).
+    const accClientes = f.action.startsWith("cl_") || f.action.startsWith("clientes_") || f.action === "cliente_detalle" || f.action === "buscarCliente";
+    if (f.ticketsPropio && !f.action.startsWith("pq_") && !accClientes && arr.length && arr.every((x) => x && typeof x === "object" && ("cosmetologa" in (x as Row) || "cosm" in (x as Row)))) {
       arr = arr.filter((x) => esPropio((x as Row).cosmetologa ?? (x as Row).cosm, ses));
     }
     return arr;
@@ -327,6 +329,7 @@ const LECTURA_VISTA = new Set([
   "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs",
   "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "getRegistro",
   "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos",
+  "cl_doc_url", "cl_buscar",
 ]);
 
 /** Módulo que habilita una acción (para el nivel por usuario). */
