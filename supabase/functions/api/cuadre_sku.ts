@@ -1,4 +1,4 @@
-// TK97 (Emilia 18/11): cuando ticket(s) y factura no cuadran, decir QUÉ SKU/línea hace la diferencia.
+// TK98 (Emilia 18/11): cuando ticket(s) y factura no cuadran, decir QUÉ SKU/línea hace la diferencia.
 // Se compara solo por SKU (nunca por nombre), con el total con IVA de cada línea.
 import { round2, s, type Row } from "./domain.ts";
 import { lineasDeTicket, normalizarLineaFactura, type LineaNorm } from "./migo_lineas.ts";

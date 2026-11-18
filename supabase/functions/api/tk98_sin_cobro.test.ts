@@ -1,4 +1,4 @@
-// TK97 (Emilia 18/11): gift card de cortesía y consumo interno en $0 → se ven como líneas, estado gris, sin «Por cobrar» ni «Sin factura».
+// TK98 (Emilia 18/11): gift card de cortesía y consumo interno en $0 → se ven como líneas, estado gris, sin «Por cobrar» ni «Sin factura».
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
@@ -18,7 +18,7 @@ const CAT = [
   { sku: "ML-011", producto_servicio: "Moisture Cleansing Gel", tipo: "PRODUCTO", total_con_iva: 80, subtotal: 69.57, activo: true },
 ];
 
-describe("TK97 · helpers", () => {
+describe("TK98 · helpers", () => {
   it("lee la cortesía de gift card y su valor nominal", () => {
     const g = giftCortesia("CORTESIA, 26-173, PREMIUM. De: Emilia. Para: Mónica Ribadeneira.")!;
     assert.equal(g.codigo, "26-173"); assert.equal(g.tipo, "PREMIUM"); assert.equal(g.para, "Mónica Ribadeneira");
@@ -53,7 +53,7 @@ function semilla(beta = false) {
   return { db, h };
 }
 
-describe("TK97 · detalle del ticket", () => {
+describe("TK98 · detalle del ticket", () => {
   it("gift card de cortesía: una línea en $0 con código, tipo, beneficiaria y valor nominal; chip gris Cortesía", async () => {
     const { h } = semilla();
     const r = await h("tk_get", { clave: "TK-SO-9910" });
@@ -81,7 +81,7 @@ describe("TK97 · detalle del ticket", () => {
   });
 });
 
-describe("TK97 · pantallas", () => {
+describe("TK98 · pantallas", () => {
   const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
   const mt = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
   it("lista: pill gris y sin «Sin factura»/«Por cobrar» para sin_cobro", () => {
@@ -99,7 +99,7 @@ import { aliasMigo } from "./alias_migo.ts";
 import { difPorSku } from "./cuadre_sku.ts";
 import { lineasBorradorDeFactura } from "./borrador_lineas.ts";
 
-describe("TK97 · SUNSU-35 a $3 = Caja de gift card (INV-123)", () => {
+describe("TK98 · SUNSU-35 a $3 = Caja de gift card (INV-123)", () => {
   it("alias solo cuando la línea vale $3.00 con IVA; las gift cards reales siguen como SUNSU-35", () => {
     assert.equal(aliasMigo("SUNSU-35", 3), "INV-123");
     assert.equal(aliasMigo("SUNSU-35", 65), "35");
@@ -113,7 +113,7 @@ describe("TK97 · SUNSU-35 a $3 = Caja de gift card (INV-123)", () => {
   });
 });
 
-describe("TK97 · «No cuadra» dice qué SKU", () => {
+describe("TK98 · «No cuadra» dice qué SKU", () => {
   const FAC = [
     { codigo: "SUNSU-18", producto: "PAQUETE (3) FACIAL REPARACIÓN", cantidad: 1, precio_unit: 152.61, total: 175.5 },
     { codigo: "SUNSU-35", producto: "GIFT CARD", cantidad: 1, precio_unit: 2.61, total: 3 },
@@ -133,7 +133,7 @@ describe("TK97 · «No cuadra» dice qué SKU", () => {
   });
 });
 
-describe("TK97 · pantallas: gift card de factura y modal Vincular", () => {
+describe("TK98 · pantallas: gift card de factura y modal Vincular", () => {
   const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
   it("la gift card de la factura suma al total aunque falte el código (nota amarilla «Falta código»)", () => {
     assert.match(js, /deFactura:true/);

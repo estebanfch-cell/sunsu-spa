@@ -119,7 +119,7 @@ export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "mont
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
 }
-/** TK97: « Qué SKU hace la diferencia: Falta en ticket: SUNSU-35 GIFT CARD $3.00.» (solo por SKU). */
+/** TK98: « Qué SKU hace la diferencia: Falta en ticket: SUNSU-35 GIFT CARD $3.00.» (solo por SKU). */
 function difSkuDeLink(L: { factura: string }, facturas: FacturaVivo[], hermanos: Row[], t: Row): string {
   const f = facturas.find((x) => x.factura === L.factura);
   if (!f || !Array.isArray(f.lineas) || !f.lineas.length) return "";

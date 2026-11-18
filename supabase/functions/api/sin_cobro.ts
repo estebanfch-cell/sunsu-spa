@@ -1,4 +1,4 @@
-// TK97 (Emilia 18/11): tickets en $0 que no se cobran ni se facturan.
+// TK98 (Emilia 18/11): tickets en $0 que no se cobran ni se facturan.
 //  · Gift card de cortesía («CORTESIA, 26-173, PREMIUM. De: Emilia. Para: Mónica Ribadeneira.»)
 //  · Consumo interno (clienta «Sunsu Spa» o RUC de Sunsu): productos sacados para cabina/carrito.
 // Se muestran con sus líneas a $0 y estado gris «Cortesía» / «Consumo interno»; nunca «Por cobrar» ni «Sin factura».

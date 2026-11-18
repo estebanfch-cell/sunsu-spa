@@ -82,7 +82,7 @@ export function normalizarLineaFactura(l: Row): LineaNorm | null {
   if (!tot && sub) tot = Math.round((sub + (iva || Math.round(sub * 0.15 * 100) / 100)) * 100) / 100;
   const unitSin = unit || (qty ? Math.round((sub / qty) * 10000) / 10000 : 0);
   return {
-    // TK97: SUNSU-35 a $3.00 es la caja de gift card (INV-123), no una gift card.
+    // TK98: SUNSU-35 a $3.00 es la caja de gift card (INV-123), no una gift card.
     sku: codigo ? aliasMigo(codigo, qty ? tot / qty : tot) : skuMigoABeta(nombre),
     codigo,
     nombre: nombre || codigo,

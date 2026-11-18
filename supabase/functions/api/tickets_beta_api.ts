@@ -105,7 +105,7 @@ export async function facturaMigoDe(ctx: Ctx, fac: string): Promise<{ total: num
   } catch { /* sin tabla */ }
   return null;
 }
-/** TK97: cortesía de gift card y consumo interno: líneas a $0 con su píldora (nunca «Sin líneas»). */
+/** TK98: cortesía de gift card y consumo interno: líneas a $0 con su píldora (nunca «Sin líneas»). */
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   const L = await lineasDe0(ctx, r, cab, cat);
   const sc = tipoSinCobro(r);
@@ -116,7 +116,7 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   });
   const g = sc === "cortesia" ? giftCortesia(r.venta_gift) : null;
   const nominal = g ? valorNominalGift(g, cat) : 0;
-  // Línea de gift card ya materializada (TK97): conserva su valor nominal para mostrarlo.
+  // Línea de gift card ya materializada (TK98): conserva su valor nominal para mostrarlo.
   if (g) for (const l of out) if (l.tipo === "gift" && s(l.nombre).includes(g.codigo)) { l.valorNominal = nominal; l.gcCodigo = g.codigo; l.cortesia = true; }
   if (g && !out.some((l) => l.tipo === "gift" && s(l.nombre).includes(g.codigo))) {
     out.push({ tipo: "gift", sku: "35", nombre: nombreLineaGift(g, nominal), cantidad: 1, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: false, cortesia: true, valorNominal: nominal, gcCodigo: g.codigo } as LineaTk);
@@ -421,7 +421,7 @@ export function estaCobrado(r: Row, datosFac?: unknown, linkFac?: unknown): bool
   if (s(r.origin) === "test" || /^TEST-/i.test(s(r.so_num) || s(r.beta_num))) return b(r.cob);
   if (b(r.cob)) return true;
   if (metodosPago(r.comp).some((m) => esMetodoPago(m.metodo))) return true;
-  if (tipoSinCobro(r)) return true; // TK97: $0 de cortesía / consumo interno: no hay nada por cobrar
+  if (tipoSinCobro(r)) return true; // TK98: $0 de cortesía / consumo interno: no hay nada por cobrar
   return hayFactura(r.fac_7, datosFac, linkFac);
 }
 /** El facial del ticket se canjeó (sesión de paquete o gift card de facial, sin monto aplicado). */
@@ -563,7 +563,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const fac = facReal || b(r.fac) || !!sinCobro;
   const chips: Row[] = [
     { k: "estado", t: anulado ? "Cancelado" : cobrado && fac ? "Cerrado" : "Abierto", c: anulado ? "anulado" : cobrado && fac ? "cerrado" : "abierto" },
-    // TK97: cortesía / consumo interno en gris; ni «Por cobrar» ni «Sin factura».
+    // TK98: cortesía / consumo interno en gris; ni «Por cobrar» ni «Sin factura».
     ...(sinCobro ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
       { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
       { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },

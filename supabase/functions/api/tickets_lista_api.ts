@@ -66,7 +66,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const factByFac = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [s(f.factura), f]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
-  // TK97: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
+  // TK98: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
   const facDe = (r: Row) => !!tipoSinCobro(r) || hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
   const cobDe = (r: Row) => estaCobrado(r, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
   const cerradoDe = (r: Row) => {

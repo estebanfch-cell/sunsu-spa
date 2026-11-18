@@ -182,7 +182,7 @@
     }
     return hd + K.L.map(function (l, i) {
       var fijo = (l.cortesia || l.canje || l.consumoInterno) && !(l.precio_unit > 0);
-      // TK97: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
+      // TK98: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
       var precio = l.consumoInterno && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#56627A" title="Producto sacado para uso interno (no se cobra ni se factura)">Consumo interno</span>' : l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(net(l.precio_unit)));
       var m = montos(l), tipoTxt = l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
       var pills = (l.canje ? '<span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") +

@@ -5526,7 +5526,7 @@ function _tkFacPdf(t){
 }
 function _tkPagoPill(t){
   if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
-  if(t&&t.sin_cobro) return _tkPill('gris',t.sin_cobro==='interno'?'Consumo interno':'Cortesía'); // TK97
+  if(t&&t.sin_cobro) return _tkPill('gris',t.sin_cobro==='interno'?'Consumo interno':'Cortesía'); // TK98
   if(t&&t.cob) return _tkPill('pagado','Pagado');
   if(_tkPagoMigo(t)){
     var tip=(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'))?'cobro confirmado en Migo':'';
@@ -5546,7 +5546,7 @@ function _tkEstados(t){
   var orig=(t&&t.orig)||{};
   if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
-  // TK97: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
+  // TK98: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
   if(t.sin_cobro){ out.push({c:'gris',t:t.sin_cobro==='interno'?'Consumo interno':'Cortesía'}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=(window._tkLeds||{})[String(t.tkRow)];
@@ -18679,7 +18679,7 @@ function _migoVincularBorrador(fac){
       box.style.color=ok?"#1b6b45":"#8a6d00";
       btn.disabled=!!listo;
       btn.textContent="Vincular";
-      // TK97: si no cuadra, qué SKU/línea hace la diferencia (solo por SKU).
+      // TK98: si no cuadra, qué SKU/línea hace la diferencia (solo por SKU).
       if(!ok){
         var pedido=keys.join(",");
         difBox._k=pedido;
@@ -18702,7 +18702,7 @@ function _migoVincularBorrador(fac){
     wrap.addEventListener("click",function(ev){ if(ev.target===wrap) close(); });
     function mostrarVinculado(claves, yaEstaba){
       listo=true;
-      // TK97: al vincular se cierra solo, toast «Vinculado ✓» y se refresca la lista.
+      // TK98: al vincular se cierra solo, toast «Vinculado ✓» y se refresca la lista.
       if(typeof toast==="function") toast(yaEstaba?"Ya estaba vinculado ✓":"Vinculado ✓","var(--green)");
       close();
       if(typeof _migoPintarBandeja==="function") _migoPintarBandeja(true);
@@ -18890,13 +18890,13 @@ function _migoPoblarTDesdeFac(b){
     var sec=String(l.seccion||l.tipo||'producto');
     if(!l.enCatalogo) revisa.push('Revisa: el SKU '+(l.skuFactura||l.sku||'—')+' ('+(l.nombre||'')+') no está en el catálogo; se copió con el precio de la factura.');
     if(sec==='gift'){
-      // TK97: la gift card de la factura SIEMPRE suma al total; el código pendiente es solo una nota amarilla.
+      // TK98: la gift card de la factura SIEMPRE suma al total; el código pendiente es solo una nota amarilla.
       T.gcVenta={activo:true,tipo:'digital',valor:pu*q,codigo:'',nota:'Factura Migo '+(T.factura||''),cortesia:false,deFactura:true};
       revisa.push('Falta código: gift card $'+(pu*q).toFixed(2)+' de la factura (ya suma al total); asígnalo en «Venta Gift Card».');
       return;
     }
     if(sec==='facial'&&T.facial){ sec='extra'; }
-    // TK97: alias (SUNSU-35 a $3 → INV-123 caja de gift card): en el formulario va con el SKU beta.
+    // TK98: alias (SUNSU-35 a $3 → INV-123 caja de gift card): en el formulario va con el SKU beta.
     var skuFE=(l.skuFactura&&l.sku&&_migoSkuKey(l.skuFactura)!==_migoSkuKey(l.sku))?l.sku:(l.skuFactura||l.sku);
     P.push({sec:sec, sku:l.sku||l.skuFactura, skuFE:skuFE, n:l.nombre||l.sku, p:pu, q:q, pack:l.pack});
   });

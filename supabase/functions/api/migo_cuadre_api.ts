@@ -595,7 +595,7 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
     : [];
   const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
   const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
-  // TK97: en los que no cuadran, qué SKU/línea hace la diferencia.
+  // TK98: en los que no cuadran, qué SKU/línea hace la diferencia.
   const facL = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0.lineas) ? b0.lineas : [])) as Row[];
   for (const c of cands as (Row & { claves: string[]; cuadra: boolean })[]) {
     if (c.cuadra || !facL.length) continue;
@@ -715,7 +715,7 @@ extend("migo_borrador_vincular", ADMIN, async (p, ctx, ses) => {
   return { ok: true, vinculado: true, factura: fac, ticket_clave: claves[0], tickets: claves };
 });
 
-// TK97: diferencia por SKU de la combinación marcada en «Vincular ticket».
+// TK98: diferencia por SKU de la combinación marcada en «Vincular ticket».
 extend("migo_dif_sku", ADMIN, async (p, ctx) => {
   const fac = facturaNorm(p.factura);
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);

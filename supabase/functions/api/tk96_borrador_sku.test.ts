@@ -62,7 +62,7 @@ describe("TK96 · borrador Migo solo por SKU, con precio de la factura", () => {
     const by = new Map(r.lineas.map((l) => [l.sku, l]));
     assert.equal(by.get("18")!.seccion, "paquete"); assert.equal(by.get("18")!.precio_unit, 175.5); assert.equal(by.get("18")!.pack, 3);
     assert.equal(by.get("31")!.seccion, "extra"); assert.equal(by.get("31")!.precio_unit, 15);
-    // TK97: SUNSU-35 a $3.00 = caja de gift card (producto INV-123), no venta de gift card.
+    // TK98: SUNSU-35 a $3.00 = caja de gift card (producto INV-123), no venta de gift card.
     assert.equal(by.get("INV-123")!.seccion, "producto"); assert.equal(by.get("INV-123")!.precio_unit, 3); assert.equal(by.get("INV-123")!.nombre, "Caja de gift card");
     for (const k of ["AS-005", "VK-010", "AS-010", "JN-008"]) assert.equal(by.get(k)!.seccion, "producto", k);
     assert.equal(by.get("AS-010")!.precio_unit, 39.67);
