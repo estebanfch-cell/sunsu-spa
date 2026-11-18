@@ -29,26 +29,34 @@
   function calcHtml() {
     var c = K.c; if (!c) return K.prov ? '<p class="mccf-sub">Calculando…</p>' : '<p class="note">Elige el proveedor y el periodo.</p>';
     var fact = c.fact || [];
-    var tf = fact.map(function (it) { return "<tr><td>" + e(it.sku) + "</td><td>" + e(it.nombre) + '</td><td class="num">' + e(it.vendido) + '</td><td class="num">' + e(it.consumido || 0) + '</td><td class="num">' + $m(it.compra) + '</td><td class="num">' + $m(it.subtotal) + "</td></tr>"; }).join("") || '<tr><td colspan="6" class="mccf-sub">Sin ventas de productos en consignación en este periodo</td></tr>';
+    var tf = fact.map(function (it) {
+      var src = it.precioFuente === "manual" ? "editado" : it.ocNumero ? e(it.ocNumero) : (it.precioFuente === "costo" ? "costo ficha" : "");
+      return "<tr><td>" + e(it.sku) + "</td><td>" + e(it.nombre) + '</td><td class="num">' + e(it.vendido) + '</td><td class="num">' + e(it.consumido || 0) + '</td><td class="num"><input class="mcoc-in q" data-pc="' + e(it.sku) + '" data-orig="' + e(it.compra) + '" type="text" inputmode="decimal" value="' + e(it.compra) + '" style="max-width:88px;text-align:right"' + (it.compra ? "" : "") + ">" + (src ? '<div class="mccf-sub">' + src + "</div>" : "") + '</td><td class="num">' + $m(it.subtotal) + "</td></tr>";
+    }).join("") || '<tr><td colspan="6" class="mccf-sub">Sin ventas de productos en consignación en este periodo</td></tr>';
     var stk = {}; (c.stock || []).forEach(function (s) { stk[s.producto_id] = s; });
     var rq = c.restock && c.restock.lineas ? c.restock.lineas.reduce(function (a, l) { a[l.producto_id] = l.cantidad; return a; }, {}) : null;
     var filasR = (c.items || []).filter(function (it) { return it.producto_id; }).map(function (it) {
       var v = K.rq[it.producto_id] != null ? K.rq[it.producto_id] : rq ? (rq[it.producto_id] || "") : (it.sugerido || "");
       var s = stk[it.producto_id] || {};
-      return "<tr><td>" + e(it.sku) + "</td><td>" + e(it.nombre) + '</td><td class="num">' + e(s.consignacion != null ? s.consignacion : it.stock) + (s.fuera > 0 ? '<div class="mccf-sub">+' + e(s.fuera) + " fuera</div>" : "") + '</td><td class="num">' + e(Number(it.vendido || 0) + Number(it.consumido || 0)) + '</td><td class="num">' + e(it.sugerido || 0) + '</td><td class="num"><input class="mcoc-in q" data-rq="' + e(it.producto_id) + '" type="text" inputmode="decimal" value="' + e(v) + '"></td></tr>';
+      var en = s.enSunsu != null ? s.enSunsu : (s.consignacion != null ? Number(s.consignacion) + Number(s.venta || 0) : it.stock);
+      var det = [];
+      if (s.consignacion > 0 && s.venta > 0) det.push(e(s.consignacion) + " en bodega · " + e(s.venta) + " en Venta");
+      else if (s.consignacion === 0 && s.venta > 0) det.push("en Venta (sistema viejo)");
+      if (s.fuera > 0) det.push("+" + e(s.fuera) + " cabina/casa");
+      return "<tr><td>" + e(it.sku) + "</td><td>" + e(it.nombre) + '</td><td class="num">' + e(en) + (det.length ? '<div class="mccf-sub">' + det.join(" · ") + "</div>" : "") + '</td><td class="num">' + e(Number(it.vendido || 0) + Number(it.consumido || 0)) + '</td><td class="num">' + e(it.sugerido || 0) + '</td><td class="num"><input class="mcoc-in q" data-rq="' + e(it.producto_id) + '" type="text" inputmode="decimal" value="' + e(v) + '"></td></tr>';
     }).join("");
     var restAb = !c.restock || c.restock.estado === "abierta";
     return '<div class="mccf-card"><div class="mcoc-top"><div><b>1 · Vendido en consignación</b><div class="mccf-sub">' + e(c.proveedor.nombre) + " · " + e(c.label) + " (" + e(f(c.desde)) + " → " + e(f(c.hasta)) + ')</div></div><div class="mcoc-pills">' + (c.oc ? '<a class="btn ghost small" href="#/m/compras/oc/' + encodeURIComponent(c.oc.id) + '">' + e(c.oc.numero) + " →</a>" : "") + "</div></div>" +
       '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Vendido</th><th class="num" title="📦 Abrir producto o pasado a cabina: se paga a costo como vendido">Consumo interno</th><th class="num">Precio compra</th><th class="num">Subtotal</th></tr></thead><tbody>' + tf + "</tbody></table></div>" + consumosHtml(c) +
       '<div class="mcoc-foot"><dl class="mcoc-tot"><dt>Subtotal</dt><dd>' + $m(c.totales.subtotal) + "</dd><dt>IVA</dt><dd>" + $m(c.totales.iva) + '</dd><dt class="big">Total</dt><dd class="big">' + $m(c.totales.total) + "</dd></dl></div>" +
-      '<div class="mcoc-acts">' + (c.oc ? '<span class="mccf-sub">OC del periodo: ' + e(c.oc.numero) + "</span>" : '<button class="btn small" type="button" id="cn-oc"' + (fact.length ? "" : " disabled") + ">Crear OC de consignación</button>") + "</div></div>" +
+      '<div class="mcoc-acts">' + (c.oc ? '<span class="mccf-sub">OC del periodo: ' + e(c.oc.numero) + "</span>" : c.ocLegacy ? '<span class="mccf-sub">Ya enviada: ' + e(c.ocLegacy.numero) + (c.ocLegacy.fecha ? " · " + e(c.ocLegacy.fecha) : "") + " · " + $m(c.ocLegacy.total) + "</span>" : '<button class="btn small" type="button" id="cn-oc"' + (fact.length ? "" : " disabled") + ">Crear OC de consignación</button>") + ' <button class="btn ghost small" type="button" id="cn-psave">Guardar precios de consignación</button></div></div>' +
       '<div class="mccf-card"><div class="mcoc-top"><div><b>2 · Pedido de restock</b><div class="mccf-sub">Pon cuánto pedir de cada producto. ' + (c.restock ? e(c.restock.numero) + " · " + e(c.restock.estado) : "Sin guardar") + "</div></div></div>" +
       '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">En consignación</th><th class="num">Vendido</th><th class="num">Sugerido</th><th class="num">Restock</th></tr></thead><tbody>' + filasR + "</tbody></table></div>" +
       '<p class="err" id="cn-err"></p><div class="mcoc-acts">' + (c.restock && restAb ? '<button class="btn ghost small mcoc-cancel" type="button" id="cn-ranular">Anular pedido</button>' : "") + (restAb ? '<button class="btn small" type="button" id="cn-rsave">' + (c.restock ? "Actualizar pedido" : "Guardar pedido de restock") + "</button>" : "") + "</div>" +
       '<p class="mcoc-sub" style="margin-top:6px">El pedido aparece en 📥 Recepciones; lo que se recibe entra a la bodega Consignación.</p></div>' +
-      '<div class="mccf-card"><div class="mcoc-top"><div><b>3 · Stock en la bodega Consignación</b>' + (c.stockNota ? '<div class="mccf-sub" style="color:#9a6a00">⚠️ ' + e(c.stockNota) + "</div>" : "") + '</div><div class="mcoc-pills"><button class="btn small" type="button" id="cn-pdf">📄 PDF (3 páginas)</button></div></div>' +
-      '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">Consignación</th><th class="num" title="Todavía fuera de la bodega Consignación">Venta</th><th class="num">Cabinas</th><th class="num">Casa</th></tr></thead><tbody>' +
-      ((c.stock || []).map(function (s) { return "<tr><td>" + e(s.sku) + "</td><td>" + e(s.nombre) + '</td><td class="num"><b>' + e(s.consignacion) + '</b></td><td class="num mccf-sub">' + e(s.venta) + '</td><td class="num mccf-sub">' + e(s.cabina) + '</td><td class="num mccf-sub">' + e(s.casa) + "</td></tr>"; }).join("") || '<tr><td colspan="6" class="mccf-sub">Sin productos</td></tr>') + "</tbody></table></div></div>" +
+      '<div class="mccf-card"><div class="mcoc-top"><div><b>3 · Stock en Sunsu (consignación)</b>' + (c.stockNota ? '<div class="mccf-sub" style="color:#9a6a00">⚠️ ' + e(c.stockNota) + "</div>" : "") + '</div><div class="mcoc-pills"><button class="btn small" type="button" id="cn-pdf">📄 PDF (3 páginas)</button></div></div>' +
+      '<div class="sheet-scroll" style="margin-top:8px"><table class="mcoc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="num">En Sunsu</th><th class="num" title="Bodega Consignación (kardex nuevo)">Bodega</th><th class="num" title="Stock de Venta del sistema viejo, todavía no pasado a la bodega Consignación">Venta</th><th class="num">Cabinas</th><th class="num">Casa</th></tr></thead><tbody>' +
+      ((c.stock || []).map(function (s) { return "<tr><td>" + e(s.sku) + "</td><td>" + e(s.nombre) + '</td><td class="num"><b>' + e(s.enSunsu != null ? s.enSunsu : Number(s.consignacion || 0) + Number(s.venta || 0)) + '</b></td><td class="num mccf-sub">' + e(s.consignacion) + '</td><td class="num mccf-sub">' + e(s.venta) + '</td><td class="num mccf-sub">' + e(s.cabina) + '</td><td class="num mccf-sub">' + e(s.casa) + "</td></tr>"; }).join("") || '<tr><td colspan="7" class="mccf-sub">Sin productos</td></tr>') + "</tbody></table></div></div>" +
       conteoHtml() +
       (c.historial && c.historial.length ? '<div class="mccf-card"><b>OC de consignación anteriores</b><ul class="mcoc-log">' + c.historial.map(function (h) { return '<li><a href="#/m/compras/oc/' + encodeURIComponent(h.id) + '">' + e(h.numero) + "</a> · " + e(f(h.desde)) + " → " + e(f(h.hasta)) + " · " + $m(h.total) + "</li>"; }).join("") + "</ul></div>" : "");
   }
@@ -93,17 +101,29 @@
     var p2 = { titulo: "Pedido de restock", numero: (c.restock && c.restock.numero) || "(sin guardar)", subt: "Consignación · " + c.label, info: info,
       tabla: { cols: [{ t: "#", w: 0.4 }, { t: "SKU", w: 1.2 }, { t: "Producto", w: 4 }, { t: "Cantidad", w: 1, al: "r" }], filas: lineasR.map(function (l, i) { var it = nombres[l.producto_id] || {}; return [i + 1, it.sku || l.sku || "", it.nombre || l.nombre || "", l.cantidad]; }), vacio: "Sin productos para reponer" },
       notas: ["Productos entregados en modalidad de consignación."] };
-    var p3 = { titulo: "Stock actual en consignación", numero: "al " + f(new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10)), subt: P.nombre, info: [["Proveedor", P.nombre], ["Periodo", c.label], ["Bodega", "Consignación"]],
-      tabla: { cols: [{ t: "SKU", w: 1.2 }, { t: "Producto", w: 4 }, { t: "Unidades", w: 1, al: "r" }], filas: (c.stock || []).filter(function (s) { return Number(s.consignacion) !== 0; }).map(function (s) { return [s.sku, s.nombre, s.consignacion]; }), vacio: "Sin stock en la bodega Consignación" } };
+    var p3 = { titulo: "Stock en Sunsu", numero: "al " + f(new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10)), subt: P.nombre, info: [["Proveedor", P.nombre], ["Periodo", c.label], ["Bodega", "Consignación + Venta"]],
+      tabla: { cols: [{ t: "SKU", w: 1.2 }, { t: "Producto", w: 4 }, { t: "Unidades", w: 1, al: "r" }], filas: (c.stock || []).filter(function (s) { var n = Number(s.enSunsu != null ? s.enSunsu : Number(s.consignacion || 0) + Number(s.venta || 0)); return n !== 0; }).map(function (s) { return [s.sku, s.nombre, s.enSunsu != null ? s.enSunsu : Number(s.consignacion || 0) + Number(s.venta || 0)]; }), vacio: "Sin stock de consignación en Sunsu" } };
     return { nombre: "Consignación " + P.nombre + " " + c.label, paginas: [p1, p2, p3] };
   }
   function wireRes(main) {
     var c = K.c; if (!c) return;
     main.querySelectorAll("[data-rq]").forEach(function (i) { i.addEventListener("input", function () { K.rq[i.getAttribute("data-rq")] = i.value; }); });
+    main.querySelectorAll("[data-pc]").forEach(function (i) { i.addEventListener("input", function () { i.setAttribute("data-dirty", "1"); }); });
     var err = main.querySelector("#cn-err");
     var bo = main.querySelector("#cn-oc"); if (bo) bo.onclick = async function () {
       var p = per(); if (!confirm("¿Crear la OC de consignación de " + c.label + " por " + $m(c.totales.total) + "?")) return; bo.disabled = true;
       try { var r = await A("cns_crear_oc", { proveedor_id: K.prov, anio: p.anio, mes: p.mes, quincena: p.quincena }); toast2(r.numero + " creada"); await calcular(main); } catch (x) { bo.disabled = false; toast2(x.message || x, true); }
+    };
+    var bps = main.querySelector("#cn-psave"); if (bps) bps.onclick = async function () {
+      var L = [];
+      main.querySelectorAll("[data-pc]").forEach(function (i) {
+        if (i.getAttribute("data-dirty") !== "1") return;
+        var q = num(i.value);
+        if (q > 0) L.push({ sku: i.getAttribute("data-pc"), precio: q });
+      });
+      if (!L.length) { toast2("Cambia al menos un precio para guardarlo", true); return; }
+      bps.disabled = true;
+      try { var r = await A("cns_precios_guardar", { proveedor_id: K.prov, precios: L }); toast2("Precios guardados (" + r.n + ")"); await calcular(main); } catch (x) { bps.disabled = false; toast2(x.message || x, true); }
     };
     var bs = main.querySelector("#cn-rsave"); if (bs) bs.onclick = async function () {
       bs.disabled = true;
