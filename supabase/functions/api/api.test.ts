@@ -4223,6 +4223,53 @@ describe("maestro-detalle en todo el sistema", () => {
   });
 });
 
+describe("TK46 maestro-detalle tickets estilo MineCore", () => {
+  it("componente reutilizable, panel Filtrar… de 250px y tickets en split en escritorio", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const js = readFileSync(join(root, "mc-maestro.js"), "utf8");
+    const beta = readFileSync(join(root, "beta.html"), "utf8");
+    const sw = readFileSync(join(root, "sw.js"), "utf8");
+    const tk = readFileSync(join(root, "mc-tickets.js"), "utf8");
+    assert.match(js, /window\.MCMaestro/);
+    assert.match(js, /placeholder="Filtrar…"/);
+    assert.match(js, /ss-md-item/);
+    assert.match(js, /min-width: 861px/);
+    assert.match(js, /#\/m\/tickets\/t\//);
+    assert.match(js, /interceptDraw/);
+    assert.match(js, /renderTickets/);
+    assert.match(beta, /mc-maestro\.js\?v=20261118tk48/);
+    assert.match(beta, /\.ss-md-list \{[^}]*width: 250px/);
+    assert.match(beta, /@media \(max-width: 860px\)[\s\S]*\.ss-md-list \{ display: none/);
+    assert.match(beta, /MCMaestro\.interceptDraw/);
+    assert.match(beta, /MCMaestro\.renderTickets/);
+    assert.match(sw, /\/mc-maestro\.js/);
+    assert.match(sw, /sunsu-beta-2026-11-18-TK48/);
+    assert.match(tk, /isDirty:\s*function/);
+    const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
+    g.window = g.window || g;
+    g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
+    assert.doesNotThrow(() => new Function("window", "document", js)(g.window, g.document));
+    const w = g.window as { MCMaestro: { listRowsHTML: (sel: string) => string; wide: () => boolean; shellHTML: (id: string, l: string, d: string) => string }; _histData?: Record<string, unknown>[]; _histVisibles?: Record<string, unknown>[] | null };
+    const M = w.MCMaestro;
+    const demo = [
+      { tkRow: 1861, so_num: "TK-SO-1861", nombre: "Ana", apellido: "Paz", estimado: "107.99" },
+    ];
+    w._histVisibles = demo;
+    w._histData = demo;
+    const rows = M.listRowsHTML("TK-SO-1861");
+    assert.match(rows, /ss-md-item on/);
+    assert.match(rows, /TK-SO-1861/);
+    assert.match(rows, /Ana Paz/);
+    assert.match(rows, /\$107\.99/);
+    const shell = M.shellHTML("tickets", rows, "<div id=\"mctk-root\">detalle</div>");
+    assert.match(shell, /id="ss-md-tickets"/);
+    assert.match(shell, /placeholder="Filtrar…"/);
+    assert.match(shell, /data-ss-md-full="tickets"/);
+    assert.match(shell, /id="ss-md-tickets-r"/);
+    assert.match(shell, /mctk-root/);
+  });
+});
+
 describe("ticket como orden de venta", () => {
   it("una fila por ítem con cantidad y precio unitario sin IVA, y cuadra con el total guardado", () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
