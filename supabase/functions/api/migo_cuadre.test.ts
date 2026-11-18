@@ -31,7 +31,7 @@ describe("cruce Migo (solo lectura)", () => {
     assert.equal(esConsumidorFinal("CONSUMIDOR FINAL"), true);
     assert.equal(fechaGye("2026-11-17T16:00:00Z"), "2026-11-17"); // 11:00 GYE
     assert.equal(exentoCuadre({ fac_7: "SIN FACTURA", cob: true, comp: "Canje" }), true);
-    assert.equal(exentoCuadre({ fac_7: "", cob: true, comp: "Tarje:953", paquete: "SI, 1/3" }), false);
+    assert.equal(exentoCuadre({ fac_7: "", cob: true, comp: "Tarje:953", paquete: "SI, 1/3", estimado: 80 }), false);
   });
   it("une por número (varios tickets en una factura) y por nombre+fecha+monto", () => {
     const facs: FacturaVivo[] = [

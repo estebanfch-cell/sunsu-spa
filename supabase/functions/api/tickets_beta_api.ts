@@ -20,7 +20,7 @@ import { facturaTxt } from "./ticket_total.ts";
 import { estadoCobro, esMetodoPago, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
 export { metodosPago } from "./pagos_caja.ts";
 import { lineasTicket, precioLineaTicket } from "./productos.ts";
-import { ETQ_SIN_COBRO, giftCortesia, nombreLineaGift, tipoSinCobro, valorNominalGift } from "./sin_cobro.ts";
+import { ETQ_SIN_COBRO, giftCortesia, nombreLineaGift, paqueteDeCanje, sesionPaquete, textoCanje, tipoSinCobro, valorNominalGift } from "./sin_cobro.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
@@ -110,6 +110,19 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
   const L = await lineasDe0(ctx, r, cab, cat);
   const sc = tipoSinCobro(r);
   if (!sc) return L;
+  if (sc === "canje") {
+    // TK99: canje de sesión de paquete en $0: todo a $0 como canje; la línea dice el paquete y la sesión n/N.
+    const ses = sesionPaquete(r)!;
+    let pq: Row | null = null;
+    try { pq = paqueteDeCanje(await paquetesDe(ctx.db, normCedula(s(r.id_3 || r.cedula)), normNombre(s(r.nombre) + " " + s(r.apellido))), ymdUtc(r.timestamp), ses); } catch { pq = null; }
+    const txt = textoCanje(pq, ses);
+    const outC = L.filter((l) => l.tipo !== "diferencia").map((l) => ({ ...l, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, estimado: false, canje: true, cortesia: false }) as LineaTk);
+    if (outC.some((l) => /sesi[oó]n \d+\/\d+/i.test(s(l.nombre)))) return outC.map((l) => ({ ...l, paqueteSesion: txt }) as LineaTk);
+    const i = outC.findIndex((l) => l.tipo === "facial");
+    if (i >= 0) outC[i] = { ...outC[i], nombre: s(outC[i].nombre) + " · " + txt, paqueteSesion: txt } as LineaTk;
+    else outC.unshift({ tipo: "paquete", sku: s(pq?.sku) || "PAQ", nombre: txt + (pq ? " · " + s(pq.nombre) : ""), cantidad: 1, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, excluir_comision: true, estimado: false, canje: true, paqueteSesion: txt } as LineaTk);
+    return outC;
+  }
   const out = L.filter((l) => l.tipo !== "diferencia").map((l) => {
     if (sc === "interno") return { ...l, precio_unit: 0, descuento_tipo: null, descuento_valor: 0, estimado: false, consumoInterno: true } as LineaTk;
     return !(n(l.precio_unit) > 0) ? { ...l, cortesia: true, estimado: false } as LineaTk : l;
