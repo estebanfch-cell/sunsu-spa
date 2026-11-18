@@ -228,11 +228,16 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     equipo = (await ctx.db.all("asistencia_marcajes"))
       .filter((r) => ymdDeTs(s(r.ts)) === fecha)
       .map(marcaPub);
-    feriados = (await feriadosDe(ctx)).map((fechaFer) => ({ fecha: fechaFer }));
     try {
-      const nombres = new Map((await ctx.db.all("asistencia_feriados")).map((r) => [s(r.fecha).slice(0, 10), s(r.nombre)]));
-      feriados = feriados.map((f) => ({ ...f, nombre: nombres.get(s(f.fecha)) || "" }));
-    } catch { /* la lista de fechas alcanza */ }
+      feriados = (await ctx.db.all("asistencia_feriados")).map((r) => ({
+        fecha: s(r.fecha).slice(0, 10), nombre: s(r.nombre),
+        fuente: s(r.fuente) || "", ambito: s(r.ambito) || "nacional",
+        traslado_de: r.traslado_de ? s(r.traslado_de).slice(0, 10) : "",
+        no_recuperable: r.no_recuperable === true,
+      })).filter((f) => f.fecha).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    } catch {
+      feriados = (await feriadosDe(ctx)).map((fechaFer) => ({ fecha: fechaFer, nombre: "", fuente: "", ambito: "nacional" }));
+    }
   }
   const propia = await empleadaDe(ctx, ses.name);
   return {
@@ -455,8 +460,11 @@ extend("asis_feriado", "any", async (p, ctx, ses) => {
     }
     return { ok: true };
   }
-  if (hit) await ctx.db.write(actorOf(ses), "asistencia_feriados", "update", { fecha: hit.fecha }, { nombre: s(p.nombre) });
-  else await ctx.db.write(actorOf(ses), "asistencia_feriados", "insert", {}, { fecha, nombre: s(p.nombre) });
+  const fila: Record<string, unknown> = { fecha, nombre: s(p.nombre) };
+  if (s(p.ambito)) fila.ambito = s(p.ambito);
+  if (s(p.fuente)) fila.fuente = s(p.fuente);
+  if (hit) await ctx.db.write(actorOf(ses), "asistencia_feriados", "update", { fecha: hit.fecha }, fila);
+  else await ctx.db.write(actorOf(ses), "asistencia_feriados", "insert", {}, fila);
   await auditar(ctx, ses, "feriado", { nombre: "", antes: hit ? { fecha, nombre: s(hit.nombre) } : null, despues: { fecha, nombre: s(p.nombre) }, motivo: s(p.motivo) || "feriado" });
   return { ok: true };
 });
