@@ -1693,6 +1693,20 @@ async function aplicarAprobado(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
 
 extend("solicitud_crear", "any", async (p, ctx, ses) => {
   if (esAdmin(ses.rol)) return { error: "Un admin guarda el cambio directo" };
+  return await crearSolicitud(p, ctx, ses, null);
+});
+
+/**
+ * «Modo prueba» dentro de «Ver como» (Emilia 18/11, TK59): la admin simula a alguien del personal y manda una
+ * solicitud. Se lee como esa persona (ctx de solo lectura), pero la solicitud se guarda marcada PRUEBA, solo
+ * para esa admin (prueba_para) y solo le avisa a ella. Aprobarla o rechazarla nunca cambia datos reales.
+ */
+export async function solicitudPrueba(p: Row, ctxVista: Ctx, vista: Ses, real: Ses, dbReal: Ctx["db"]): Promise<Row> {
+  if (esAdmin(vista.rol)) return { error: "Elige a alguien del personal para probar solicitudes" };
+  return await crearSolicitud(p, ctxVista, vista, { real, dbReal });
+}
+
+async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; dbReal: Ctx["db"] } | null): Promise<Row> {
   const tabla = s(p.tabla);
   const fila = s(p.fila);
   const tipo = s(p.tipo);
@@ -1708,21 +1722,29 @@ extend("solicitud_crear", "any", async (p, ctx, ses) => {
     tabla, fila, tipo, propuestos, antes: hecho.antes, motivo, estado: "pendiente",
     ...(hecho.etiqueta ? { etiqueta: hecho.etiqueta } : {}), ...(hecho.enlace ? { enlace: hecho.enlace } : {}),
   } as Row;
+  if (prueba) {
+    Object.assign(rec, { prueba: true, prueba_para: prueba.real.uid });
+    const ctxR = { ...ctx, db: prueba.dbReal, ses: prueba.real };
+    await prueba.dbReal.write(actorOf(prueba.real), "solicitudes_cambio", "insert", {}, rec);
+    const cosaP = hecho.etiqueta ? "«" + hecho.etiqueta + "»" : tabla;
+    try { await pushAPersonas(ctxR, prueba.real, [prueba.real.name], "🧪 PRUEBA · " + ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosaP, "solicitud"); } catch { /* la bandeja igual la muestra */ }
+    return { ok: true, id, prueba: true };
+  }
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
   const cosa = hecho.etiqueta ? "«" + hecho.etiqueta + "»" : tabla === "clientes" || tabla === "cliente_beta" ? "una clienta" : tabla === "ticket_detalle" ? "un ticket" : tabla === "paquete_beta" ? "un paquete" : tabla === "gift_beta" ? "una gift card" : tabla === "producto_beta" ? "un producto" : tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : tabla === "usuarios" ? "un usuario" : tabla === "acceso" ? "un acceso" : tabla === "lugares" ? "un lugar" : "un ticket";
   await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
   return { ok: true, id };
-});
+}
 
 extend("getSolicitudes", "any", async (_p, ctx, ses) => {
   let rows: Row[] = [];
   try { rows = await ctx.db.all("solicitudes_cambio"); } catch { rows = []; }
   const admin = esAdmin(ses.rol);
   const items = rows
-    .filter((r) => admin || s(r.solicitante_uid) === ses.uid || normNombre(s(r.solicitante)) === normNombre(ses.name))
+    .filter((r) => r.prueba === true ? admin && s(r.prueba_para) === ses.uid : admin || s(r.solicitante_uid) === ses.uid || normNombre(s(r.solicitante)) === normNombre(ses.name))
     .sort((a, b) => s(b.creado).localeCompare(s(a.creado)));
-  return { ok: true, items, pendientes: items.filter((r) => s(r.estado) === "pendiente").length };
+  return { ok: true, items, pendientes: items.filter((r) => s(r.estado) === "pendiente").length, pendientesPrueba: items.filter((r) => s(r.estado) === "pendiente" && r.prueba === true).length };
 });
 
 extend("solicitud_resolver", "any", async (p, ctx, ses) => {
@@ -1732,7 +1754,8 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
   if (!row) return { error: "Solicitud no encontrada" };
   if (s(row.estado) !== "pendiente") return { error: "Esa solicitud ya está cerrada" };
   const aprobar = p.aprobar === true || s(p.aprobar) === "true" || s(p.aprobar) === "aprobar";
-  if (aprobar) {
+  // Solicitud PRUEBA (Ver como → Modo prueba): se cierra, pero nunca toca datos reales.
+  if (aprobar && row.prueba !== true) {
     const hecho = await aplicarAprobado(ctx, ses, row);
     if (hecho.error) return hecho;
   }
@@ -1744,5 +1767,5 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "update", { id: row.id }, patch);
   await anotar(ctx, ses, "solicitudes_cambio", s(row.id), "UPDATE", { estado: "pendiente" }, patch);
-  return { ok: true, estado: patch.estado };
+  return { ok: true, estado: patch.estado, ...(row.prueba === true ? { prueba: true, aviso: "Solicitud de prueba: no se cambió ningún dato real" } : {}) };
 });

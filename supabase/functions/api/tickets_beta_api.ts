@@ -313,6 +313,11 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
     if (!r) return { error: "Ticket no encontrado" };
     return await guardarTodo(ctx, ses, r, { ...propuestos, _via: "solicitud aprobada" });
   },
+  // «Solicitar eliminación» (TK59): al aprobar, la admin cancela el ticket (no se borra; queda Cancelado).
+  borrar: async (ctx, ses, fila, motivo, sol) => {
+    const { cancelarTicket } = await import("./tickets_cancelar_api.ts");
+    return await cancelarTicket({ clave: fila, motivo: (motivo || "solicitud aprobada") + (sol && s(sol.solicitante) ? " (pedido por " + s(sol.solicitante) + ")" : "") }, ctx, ses);
+  },
 };
 
 // ───────────── Detalle v2 (Emilia 17/11, como la orden de venta de MineCore) ─────────────

@@ -188,6 +188,10 @@
     background: var(--gold-l); color: var(--navy-d); padding: 8px 14px;
     border-bottom: 1px solid var(--gold-m); font-weight: 800; font-size: 0.84rem;
   }
+  .vista-bar.prueba { background: #EFE7FA; border-bottom-color: #9B8EC4; }
+  .vista-bar .vista-acts { display: flex; gap: 6px; }
+  .vista-bar #vista-prueba { background: #7A5FA0; }
+  .vista-bar #vista-prueba.on { background: white; color: #7A5FA0; border: 1.5px solid #7A5FA0; }
   .vista-bar button {
     background: var(--navy); color: var(--white); border: 0; border-radius: 999px;
     padding: 6px 14px; font-weight: 800; font-size: 0.75rem; min-height: 32px;
@@ -1045,6 +1049,8 @@ window.state = state;
 let reloj = { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada.", _t0: Date.now() };
 let relojTick = 0;
 try { state.vista = JSON.parse(sessionStorage.getItem("sunsu.beta.vista") || "null"); } catch { state.vista = null; }
+// «Modo prueba» dentro de «Ver como» (TK59): simula el flujo del personal; las solicitudes quedan marcadas PRUEBA en tu bandeja.
+state.vistaPrueba = !!state.vista && sessionStorage.getItem("sunsu.beta.vista.prueba") === "1";
 var IVA_DASH = 0.15;
 const PCT_COM_PROD = 0.30;
 let grupoAbierto = "";
@@ -1514,7 +1520,7 @@ function previewApi(accion, body) {
 function lecturaEnVista(accion) {
   if (!accion) return false;
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
-  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "staff_home", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
+  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "horarios_list", "push_clave", "staff_home", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "pq_lista", "gcb_lista", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos"].includes(accion);
 }
 // Formato único de identificaciones y celulares (Emilia 17/11): lo usan todas las pantallas y cada respuesta de la api.
 // Cédula/RUC/pasaporte sin «.0», puntos ni espacios (con el 0 de provincia); celular +593 99 999 9999. Solo lectura.
@@ -1560,11 +1566,13 @@ window.MCFmt = (function () {
   return { id: id, tel: tel, resp: resp };
 })();
 async function api(accion, body = {}) {
-  if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion)) {
+  const solPrueba = !!state.vista && accion === "solicitud_crear" && !!state.vistaPrueba;
+  if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion) && !solPrueba) {
+    if (accion === "solicitud_crear") return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Activa «🧪 Modo prueba» en la barra de arriba para probar solicitudes." };
     return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
   }
   if (previewOn()) { const pv = await previewApi(accion, body); return window.MCFmt ? window.MCFmt.resp(pv) : pv; }
-  const payload = { accion, _fmt: 1, ...body, ...(state.vista ? { preview_uid: state.vista.uid, preview: true } : {}) };
+  const payload = { accion, _fmt: 1, ...body, ...(state.vista ? { preview_uid: state.vista.uid, preview: true } : {}), ...(solPrueba ? { prueba_vista: true } : {}) };
   if (state.token) payload.token = state.token;
   let res;
   try {
@@ -1955,7 +1963,7 @@ function paintShell(title) {
             <a class="btn ghost small top-salir" href="#/m/acceso" title="Mi acceso">🔑</a>
             <button class="btn ghost small salir top-salir" type="button">Salir</button>
           </header>
-          ${state.vista ? `<div class="vista-bar" id="vista-bar">Viendo como ${esc(state.vista.name || state.vista.short || "…")} — <button type="button" id="vista-salir">Salir</button></div>` : ""}
+          ${state.vista ? `<div class="vista-bar${state.vistaPrueba ? " prueba" : ""}" id="vista-bar"><span>Viendo como ${esc(state.vista.name || state.vista.short || "…")}${state.vistaPrueba ? ` · <b>🧪 Modo prueba</b>: puedes enviar solicitudes como ${esc(state.vista.short || state.vista.name || "ella")}; llegan a tu bandeja marcadas PRUEBA y aprobarlas o rechazarlas no cambia nada.` : " — solo lectura"}</span><span class="vista-acts"><button type="button" id="vista-prueba" class="${state.vistaPrueba ? "on" : ""}">${state.vistaPrueba ? "Salir de Modo prueba" : "🧪 Modo prueba"}</button> <button type="button" id="vista-salir">Salir</button></span></div>` : ""}
           <div class="aviso-reloj" id="aviso-reloj" hidden></div>
           <div class="modo-prueba" id="modo-bar" ${state.prueba ? "" : "hidden"}>
             <div>
@@ -1992,12 +2000,21 @@ function paintShell(title) {
       grupoAbierto = "";
       localStorage.removeItem("sunsu.beta.token");
       sessionStorage.removeItem("sunsu.beta.vista");
+      sessionStorage.removeItem("sunsu.beta.vista.prueba");
+      state.vistaPrueba = false;
       paintLogin();
     };
   });
   const btnVista = document.getElementById("btn-ver-como");
   if (btnVista) btnVista.onclick = () => abrirVerComo();
   if (window.SunsuInline) SunsuInline.contar();
+  const btnVistaPrueba = document.getElementById("vista-prueba");
+  if (btnVistaPrueba) btnVistaPrueba.onclick = () => {
+    state.vistaPrueba = !state.vistaPrueba;
+    if (state.vistaPrueba) sessionStorage.setItem("sunsu.beta.vista.prueba", "1"); else sessionStorage.removeItem("sunsu.beta.vista.prueba");
+    toast(state.vistaPrueba ? "🧪 Modo prueba: las solicitudes que envíes llegan a tu bandeja como PRUEBA" : "Modo prueba apagado: la vista vuelve a ser solo lectura");
+    draw();
+  };
   const btnVistaSalir = document.getElementById("vista-salir");
   if (btnVistaSalir) btnVistaSalir.onclick = () => salirVista();
   const btnVistaClose = document.getElementById("vista-close");
@@ -4355,6 +4372,8 @@ async function entrarVista(user) {
 }
 function salirVista() {
   state.vista = null;
+  state.vistaPrueba = false;
+  sessionStorage.removeItem("sunsu.beta.vista.prueba");
   state.user = null;
   state.acceso = {};
   state.previewDentro = false;
@@ -5906,38 +5925,38 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk59"></script>
-<script src="beta-screens.js?v=20261118tk59"></script>
-<script src="beta-inline.js?v=20261118tk59"></script>
-<script src="mc-productos.js?v=20261118tk59"></script>
-<script src="mc-nav.js?v=20261118tk59"></script>
-<script src="mc-permisos.js?v=20261118tk59"></script>
-<script src="mc-protocolos.js?v=20261118tk59"></script>
-<script src="mc-conteo.js?v=20261118tk59"></script>
-<script src="mc-transferencias.js?v=20261118tk59"></script>
-<script src="mc-ajustes.js?v=20261118tk59"></script>
-<script src="vendor-qrcode.js?v=20261118tk59"></script>
-<script src="mc-tickets.js?v=20261118tk59"></script>
-<script src="mc-maestro.js?v=20261118tk59"></script>
-<script src="mc-edit.js?v=20261118tk59"></script>
-<script src="mc-paquetes.js?v=20261118tk59"></script>
-<script src="mc-aperturas.js?v=20261118tk59"></script>
-<script src="mc-acceso.js?v=20261118tk59"></script>
-<script src="mc-barras.js?v=20261118tk59"></script>
-<script src="mc-caja.js?v=20261118tk59"></script>
-<script src="mc-giftcards.js?v=20261118tk59"></script>
-<script src="mc-multas.js?v=20261118tk59"></script>
-<script src="mc-clientes.js?v=20261118tk59"></script>
-<script src="mc-clientes-dup.js?v=20261118tk59"></script>
-<script src="mc-docpdf.js?v=20261118tk59"></script>
-<script src="mc-compras.js?v=20261118tk59"></script>
-<script src="mc-consignacion.js?v=20261118tk59"></script>
-<script src="mc-proveedores.js?v=20261118tk59"></script>
-<script src="mc-recepciones.js?v=20261118tk59"></script>
-<script src="mc-movil.js?v=20261118tk59"></script>
-<script src="mc-promociones.js?v=20261118tk59"></script>
-<script src="mc-agenda.js?v=20261118tk59"></script>
-<script src="mc-staff-home.js?v=20261118tk59"></script>
+<script src="mc-buscar.js?v=20261118tk60"></script>
+<script src="beta-screens.js?v=20261118tk60"></script>
+<script src="beta-inline.js?v=20261118tk60"></script>
+<script src="mc-productos.js?v=20261118tk60"></script>
+<script src="mc-nav.js?v=20261118tk60"></script>
+<script src="mc-permisos.js?v=20261118tk60"></script>
+<script src="mc-protocolos.js?v=20261118tk60"></script>
+<script src="mc-conteo.js?v=20261118tk60"></script>
+<script src="mc-transferencias.js?v=20261118tk60"></script>
+<script src="mc-ajustes.js?v=20261118tk60"></script>
+<script src="vendor-qrcode.js?v=20261118tk60"></script>
+<script src="mc-tickets.js?v=20261118tk60"></script>
+<script src="mc-maestro.js?v=20261118tk60"></script>
+<script src="mc-edit.js?v=20261118tk60"></script>
+<script src="mc-paquetes.js?v=20261118tk60"></script>
+<script src="mc-aperturas.js?v=20261118tk60"></script>
+<script src="mc-acceso.js?v=20261118tk60"></script>
+<script src="mc-barras.js?v=20261118tk60"></script>
+<script src="mc-caja.js?v=20261118tk60"></script>
+<script src="mc-giftcards.js?v=20261118tk60"></script>
+<script src="mc-multas.js?v=20261118tk60"></script>
+<script src="mc-clientes.js?v=20261118tk60"></script>
+<script src="mc-clientes-dup.js?v=20261118tk60"></script>
+<script src="mc-docpdf.js?v=20261118tk60"></script>
+<script src="mc-compras.js?v=20261118tk60"></script>
+<script src="mc-consignacion.js?v=20261118tk60"></script>
+<script src="mc-proveedores.js?v=20261118tk60"></script>
+<script src="mc-recepciones.js?v=20261118tk60"></script>
+<script src="mc-movil.js?v=20261118tk60"></script>
+<script src="mc-promociones.js?v=20261118tk60"></script>
+<script src="mc-agenda.js?v=20261118tk60"></script>
+<script src="mc-staff-home.js?v=20261118tk60"></script>
 <script>draw();</script>
 </body>
 </html>
