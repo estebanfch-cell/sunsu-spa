@@ -70,17 +70,21 @@
       var r = await api("pg_ticket", { clave: clave, total: total });
       if (!r || !r.ok) { host.innerHTML = ""; return; }
       if (onPagado) onPagado(r.pagadoBeta || 0);
-      var met = {}; (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
-      var filas = (r.beta || []).map(function (p) {
-        return "<tr><td>" + e(fh(p.fecha)) + "</td><td>" + e(met[p.metodo] || p.metodo) + (p.ref ? ' <span class="mccj-sub">' + e(p.ref) + "</span>" : "") + '</td><td class="num">' + $m(p.monto) + '</td><td class="mccj-sub">' + e(p.registrado_por || "") + "</td>" +
-          (r.admin ? '<td class="num"><button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button></td>' : "") + "</tr>";
-      }).join("");
-      var legado = r.legado > 0 ? '<p class="mccj-sub">Cobrado en el sistema anterior: ' + $m(r.legado) + ((r.legadoMetodos || []).length ? " · " + e(r.legadoMetodos.map(function (m) { return m.metodo + (m.ref ? " " + m.ref : ""); }).join(", ")) : "") + "</p>" : "";
-      var saldo = Math.round((total - (r.legado || 0) - (r.pagadoBeta || 0)) * 100) / 100; if (!(saldo > 0.05)) saldo = 0; // TK81: redondeo ≤ $0.05 no es saldo
-      host.innerHTML = '<div class="mccf-card mccj-card"><b>💵 Pagos</b> <span class="mccj-sub">· saldo ' + $m(saldo) + "</span>" + legado +
+      var met = { canje: "Canje (paquete/gift)", mixto: "Varios métodos", otro: "Otro", "gift card": "Gift card", "cortesía": "Cortesía", sin: "Sin método" };
+      (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
+      var filaPago = function (p, puedeAnular) {
+        return "<tr><td>" + e(fh(p.fecha)) + "</td><td>" + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? ' <span class="mccj-sub">' + e(p.ref) + "</span>" : "") + '</td><td class="num">' + $m(p.monto) + '</td><td class="mccj-sub">' + e(p.registrado_por || p.por || "") + "</td>" +
+          (r.admin ? (puedeAnular ? '<td class="num"><button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button></td>' : "<td></td>") : "") + "</tr>";
+      };
+      var filas = (r.pagosLegado || []).map(function (p) { return filaPago(p, false); }).join("") + (r.beta || []).map(function (p) { return filaPago(p, true); }).join("");
+      // TK82: el saldo lo manda la API (ya aplica redondeo ≤ $0.05 y anulado). No recomputar con el total de líneas.
+      var saldo = Math.max(0, Math.round((r.saldo != null ? r.saldo : (total - (r.legado || 0) - (r.pagadoBeta || 0))) * 100) / 100);
+      var prefill = saldo > 0.05 ? saldo.toFixed(2) : "";
+      var opts = '<option value="">Elige…</option>' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("");
+      host.innerHTML = '<div class="mccf-card mccj-card"><b>💵 Pagos</b> <span class="mccj-sub">· saldo ' + $m(saldo) + "</span>" +
         (filas ? '<table class="mccj-t"><thead><tr><th>Fecha</th><th>Forma</th><th class="num">Monto</th><th>Registró</th>' + (r.admin ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table>" : "") +
-        (saldo > 0.009 ? '<div class="mccj-f" style="margin-top:8px"><label>Forma de pago<select id="pg-met">' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("") + "</select></label>" +
-          '<label>Monto<input id="pg-monto" inputmode="decimal" value="' + saldo.toFixed(2) + '"></label><label>Voucher / comprobante<input id="pg-ref" placeholder="N.º (tarjeta, transferencia)"></label>' +
+        (saldo > 0.009 ? '<div class="mccj-f" style="margin-top:8px"><label>Forma de pago<select id="pg-met">' + opts + "</select></label>" +
+          '<label>Monto<input id="pg-monto" inputmode="decimal" value="' + prefill + '" placeholder="0.00"></label><label>Voucher / comprobante<input id="pg-ref" placeholder="N.º (tarjeta, transferencia)"></label>' +
           '<div id="pg-foto" style="display:none;grid-column:1/-1;flex-basis:100%"><div style="font-size:0.66rem;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:4px">📷 Foto del comprobante / voucher</div><div style="display:flex;gap:6px">' +
           '<label style="padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer;flex:1">📷 Tomar foto<input id="pg-cam" type="file" accept="image/*" capture="environment" style="display:none"></label>' +
           '<label style="padding:9px;background:#F4F5F8;border:1.5px dashed #C9CFDD;border-radius:9px;font-size:0.72rem;font-weight:700;color:#1A2744;text-align:center;cursor:pointer;flex:1">🖼️ Galería<input id="pg-gal" type="file" accept="image/*,application/pdf" style="display:none"></label></div><div id="pg-prev" class="mccj-sub" style="margin-top:6px"></div></div>' +

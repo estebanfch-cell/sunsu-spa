@@ -7,7 +7,7 @@ import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
-import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, saldoPendiente, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { conTelefono } from "./lib.ts";
@@ -15,6 +15,8 @@ import { claveCliente, paquetesDe, parseGcCanje, recetaDe, saldoGift } from "./v
 import { normCedula, normNombre } from "./domain.ts";
 import { acceso, esPropio, matrizDe } from "./permisos.ts";
 import { facturaTxt } from "./ticket_total.ts";
+import { estadoCobro, filasPagoLegado, metodosPago } from "./pagos_caja.ts";
+export { metodosPago } from "./pagos_caja.ts";
 import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
@@ -228,7 +230,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
       cancelado: anulado ? { motivo: s(orig.cancelado_motivo), por: s(orig.cancelado_por), ts: s(orig.cancelado_ts) } : null,
       leds: [
         { k: "estado", t: anulado ? "Cancelado" : fac && cob ? "Cerrado" : "Abierto", c: anulado ? "x" : fac && cob ? "ok" : "c" },
-        { k: "fac", t: fac ? "Facturado" + (facturaTxt(r.fac_7) ? " " + facturaTxt(r.fac_7) : "") : "Sin factura", c: fac ? "ok" : "off" },
+        { k: "fac", t: hayFactura(r.fac_7) ? "Facturado" + (facturaTxt(r.fac_7) && !/sin/i.test(facturaTxt(r.fac_7)) ? " " + facturaTxt(r.fac_7) : "") : "Sin factura", c: hayFactura(r.fac_7) ? "ok" : "off" },
         { k: "cob", t: cob ? "Cobrado" : "Por cobrar", c: cob ? "ok" : "r" },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
         ...(exclBeta || Object.values(exclSistema).some(Boolean) ? [{ k: "com", t: "Comisión excluida", c: "r" }] : []),
@@ -399,13 +401,11 @@ export function facturaCompleta(v: unknown): string {
   const d = facturaTxt(t).replace(/\D/g, "");
   return d ? "001-001-" + d.slice(-9).padStart(9, "0") : t;
 }
-const METODO: [RegExp, string][] = [[/^efec/i, "efectivo"], [/^tarj/i, "tarjeta"], [/^tran/i, "transferencia"], [/^canj/i, "canje"], [/^cort/i, "cortesía"], [/^gift|^gc/i, "gift card"]];
-export function metodosPago(comp: unknown): Row[] {
-  return s(comp).split(/\s*[,;|]\s*/).map((x) => x.trim()).filter(Boolean).map((x) => {
-    const [m, ref] = x.split(":");
-    const met = METODO.find(([re]) => re.test(m.trim()))?.[1] || m.trim().toLowerCase();
-    return { metodo: met, ref: s(ref).trim() };
-  });
+/** Hay una factura real (no el texto «SIN FACTURA» ni el flag fac solo). */
+export function hayFactura(fac7: unknown, datosFac?: unknown): boolean {
+  const nro = s(datosFac).trim();
+  if (nro && !/sin/i.test(nro)) return true;
+  return !!facturaCompleta(fac7);
 }
 /** El facial del ticket se canjeó (sesión de paquete o gift card de facial, sin monto aplicado). */
 export function canjeFacial(r: Row): boolean {
@@ -497,9 +497,9 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
   if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
-  const pagadoSis = b(r.cob) ? round2(n(r.estimado)) : 0;
+  const stCob = estadoCobro({ cobrado: b(r.cob), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
   const metodos = metodosPago(r.comp);
-  const pagos = { metodos, pagado: pagadoSis, saldo: saldoPendiente(total, pagadoSis), cobrado: b(r.cob) };
+  const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: b(r.cob), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
   const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];
@@ -522,11 +522,11 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-  const anulado = orig.anulado === true, fac = b(r.fac) || !!s(d.factura);
+  const anulado = orig.anulado === true, fac = b(r.fac) || !!s(d.factura), facReal = hayFactura(r.fac_7, d.factura);
   const chips: Row[] = [
     { k: "estado", t: anulado ? "Cancelado" : fac && b(r.cob) ? "Cerrado" : "Abierto", c: anulado ? "anulado" : fac && b(r.cob) ? "cerrado" : "abierto" },
     { k: "cobro", t: b(r.cob) ? "Pagado" : "Por cobrar", c: b(r.cob) ? "pagado" : "porcobrar" },
-    { k: "fac", t: fac ? "Facturado" : "Sin factura", c: fac ? "facturado" : "sinfactura" },
+    { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
     { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },

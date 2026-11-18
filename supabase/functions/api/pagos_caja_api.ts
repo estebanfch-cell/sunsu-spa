@@ -5,11 +5,11 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { b, n, round2, s, saldoPendiente, ymdUtc, type Row } from "./domain.ts";
-import { ticketPorClave, metodosPago, agregarComprobante } from "./tickets_beta_api.ts";
+import { ticketPorClave, agregarComprobante } from "./tickets_beta_api.ts";
 import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
-import { CATEGORIAS_GASTO, ENTRAN, ETQ_CAJA, ETQ_METODO, METODOS, SALEN, metodoLegado, montoDe, pagosDe, saldoDe } from "./pagos_caja.ts";
+import { CATEGORIAS_GASTO, ENTRAN, ETQ_CAJA, ETQ_METODO, METODOS, SALEN, estadoCobro, filasPagoLegado, metodosPago, montoDe, pagosDe, saldoDe } from "./pagos_caja.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_caja_movimientos"); return true; } catch { return false; } }
@@ -28,9 +28,11 @@ async function movCaja(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {
 async function estadoTicket(ctx: Ctx, r: Row, total: number): Promise<Row> {
   const clave = claveDe(r, leerSerie(r, "so_num"));
   const beta = pagosDe(await todas(ctx, "beta_pagos"), clave);
-  const legado = b(r.cob) ? round2(n(r.estimado)) : 0;
   const pagadoBeta = round2(beta.reduce((a, p) => a + n(p.monto), 0));
-  return { clave, beta, legado, pagadoBeta, saldo: saldoPendiente(total, legado + pagadoBeta) };
+  const anulado = r.orig && typeof r.orig === "object" && (r.orig as Row).anulado === true;
+  const st = estadoCobro({ cobrado: b(r.cob), cobradoMonto: n(r.estimado), totalLineas: total, pagadoBeta, anulado });
+  const pagosLegado = st.pagadoSis > 0 ? filasPagoLegado(r.comp, st.pagadoSis, s(r.timestamp)) : [];
+  return { clave, beta, legado: st.pagadoSis, pagadoBeta, saldo: st.saldo, total: st.total, redondeo: st.redondeo, dif: st.dif, pagosLegado, anulado };
 }
 
 // ---------- Pagos de tickets ----------
@@ -53,6 +55,8 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   if (!(monto > 0)) return { error: "Escribe el monto" };
   const total = n(p.total);
   const e = await estadoTicket(ctx, r, total);
+  if (e.anulado) return { error: "El ticket está cancelado: no se registra pago" };
+  if (!(n(e.saldo) > 0.009)) return { error: e.redondeo ? "Este ticket ya está pagado (la diferencia de centavos es redondeo del sistema anterior)" : "Este ticket ya está pagado", mayor: true };
   if (total > 0 && monto > n(e.saldo) + 0.009 && p.forzar !== true) return { error: "El pago ($" + monto.toFixed(2) + ") es mayor que el saldo ($" + n(e.saldo).toFixed(2) + ")", mayor: true };
   const ref = s(p.ref).trim().slice(0, 80);
   if ((metodo === "tarjeta" || metodo === "transferencia" || metodo === "deuna") && !ref) return { error: "Escribe el número de voucher / comprobante" };
@@ -96,15 +100,15 @@ extend("pg_lista", "any", async (p, ctx, ses) => {
   const desde = /^\d{4}-\d{2}-\d{2}$/.test(s(p.desde)) ? s(p.desde) : hoy, hasta = /^\d{4}-\d{2}-\d{2}$/.test(s(p.hasta)) ? s(p.hasta) : hoy;
   const beta = (await todas(ctx, "beta_pagos")).filter((x) => { const d = diaEc(x.fecha); return d >= desde && d <= hasta; })
     .map((x) => ({ id: s(x.id), fuente: "beta", fecha: s(x.fecha), clave: s(x.ticket_clave), metodo: s(x.metodo), monto: n(x.monto), ref: s(x.ref), por: s(x.registrado_por), anulado: x.anulado === true, motivo: s(x.anulado_motivo) }));
-  const conBeta = new Set(beta.map((x) => x.clave));
   const legado: Row[] = [];
   for (const t of await todas(ctx, "tickets")) {
     if (t.borrado_at || !b(t.cob)) continue;
     const d = ymdUtc(t.timestamp); if (d < desde || d > hasta) continue;
     const clave = claveDe(t, leerSerie(t, "so_num"));
-    if (conBeta.has(clave)) continue;
-    const ms = metodosPago(t.comp);
-    legado.push({ fuente: "sistema", fecha: s(t.timestamp), clave, metodo: metodoLegado(ms), monto: round2(n(t.estimado)), ref: ms.map((m) => s(m.ref)).filter(Boolean).join(", "), por: s(t.atendido_por), cliente: [s(t.nombre), s(t.apellido)].filter(Boolean).join(" ") });
+    const cliente = [s(t.nombre), s(t.apellido)].filter(Boolean).join(" ");
+    for (const f of filasPagoLegado(t.comp, n(t.estimado), s(t.timestamp))) {
+      legado.push({ id: "", fuente: "sistema", fecha: s(f.fecha), clave, metodo: s(f.metodo), monto: n(f.monto), ref: s(f.ref), por: s(t.atendido_por), cliente });
+    }
   }
   const items = [...beta, ...legado].sort((a, b0) => s(b0.fecha).localeCompare(s(a.fecha)));
   const tot = new Map<string, number>();
