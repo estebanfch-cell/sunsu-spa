@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v2026.11.17.01 restock con todos los activos -->
+<!-- v2026.11.17.02 botón Promociones en el ticket -->
 <title>순수 Sunsu Spa</title>
 <script>
 // Versión del frontend (este archivo) y sello de motor que este build espera.
 // APP_VERSION del Apps Script hoy: '2026-10-26-ESC (escalones por paquete)'.
 // Al publicar: subir SUNSU_APP_VERSION (vYYYY.MM.DD.NN) y el ?v= de abajo juntos.
-var SUNSU_APP_VERSION='v2026.11.17.01';
+var SUNSU_APP_VERSION='v2026.11.17.02';
 var SUNSU_MOTOR_ESPERADO='2026-10-26-ESC';
 // Máscaras ya pagadas: el stock de percha en 0 no las esconde ni las marca sin stock.
 var SKUS_VENTA_CABINA={'ML-009':1,'ML-010':1,'ML-011':1,'ML-012':1,'ML-013':1,'ML-014':1};
@@ -23,7 +23,7 @@ function _esVentaCabinaSku(sku){
 // Cache bust: versión calculada desde la fecha de última modificación del HTML
 // Para actualizar forzadamente: incrementar el número al final (ej: .01 → .02)
 (function(){
-  var v='20261117.01';
+  var v='20261117.02';
   var url=new URL(window.location.href);
   if(url.searchParams.get('v')!==v){
     url.searchParams.set('v',v);
@@ -2128,11 +2128,10 @@ function updatePreview(){
       dscLabel='🏷️ Descuento personalizado';
     }
   } else if(T.descuento && T.descuento.tipo === 'promo'){
-    var _puUP=_promoUnits();
-    var _pcUP=(T.descuento.promoObj&&_promoArmada(T.descuento.promoObj,_puUP))?_promoCalc(T.descuento.promoObj,_puUP):null;
-    if(_pcUP && _pcUP.monto>0){
-      dscMonto=_pcUP.monto;
-      dscLabel='🎉 '+T.descuento.promo+' '+_pcUP.mech;
+    var _ptUP=_promoTotal();
+    if(_ptUP.items.length){
+      dscMonto=Math.min(_ptUP.monto,totE);
+      dscLabel=_ptUP.items.map(function(x){return '🎉 '+x.p.nombre+' '+x.mech;}).join(' + ');
     } else {
       // Sacaron del ticket los códigos (o el descuento cayó a $0): se desarma sola
       T.descuento={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
@@ -2224,7 +2223,7 @@ function updatePreview(){
           💼 Pago Directo
         </button>
       </div>
-      ${(function(){var vs=(window._promosVig||[]);if(!vs.length)return '';var uu=_promoUnits();var chips=vs.map(function(p,i){var coded=p.codigos&&p.codigos.length;if(coded){if(!_promoArmada(p,uu))return '';var cc0=_promoCalc(p,uu);if(!cc0||cc0.monto<=0)return '';}var on=T.descuento&&T.descuento.promo===p.nombre;return '<button onclick="aplicarPromo('+i+')" style="padding:7px 10px;border-radius:9px;border:1.5px solid '+(on?'#E8C07A':'rgba(255,255,255,0.25)')+';background:'+(on?'rgba(232,192,122,0.25)':'transparent')+';color:#E8C07A;font-size:0.66rem;font-weight:800;cursor:pointer">'+(coded?'🎉 Aplicar promoción: ':'🎉 ')+p.nombre+' '+_pmMechTxt(p)+(on?' ✓':'')+'</button>';}).filter(Boolean);return chips.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+chips.join('')+'</div>':'';})()}
+      ${_promoPanelHTML(totE,dscMonto)}
       ${customActive?`<div style="margin-top:6px">
         <div style="display:flex;gap:5px;margin-bottom:7px">
           <button onclick="T.descuento.customMode='valor';updatePreview()" style="flex:1;padding:5px;border-radius:8px;border:1.5px solid ${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.2)'};background:${(!T.descuento.customMode||T.descuento.customMode==='valor')?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.68rem;font-weight:700;cursor:pointer">$ Valor</button>
@@ -2336,17 +2335,81 @@ function _promoCalc(p,units){
   else { monto=sum*((parseFloat(p.valor)||0)/100); }
   return {monto:Math.round(monto*100)/100, mech:_pmMechTxt(p)};
 }
+// ── BOTÓN PROMOCIONES (Emilia 17/11) ── Lista TODAS las promos vigentes, dice cuáles
+// aplican a este ticket y por qué no las otras; se pueden aplicar VARIAS a la vez
+// (cada una cae solo sobre sus códigos; dos promos sobre el mismo código no se suman).
+// Se guarda igual que antes: total a cobrar (estimado) + texto del descuento en notas.
+function _promoLista(){
+  var d=T.descuento; if(!d||d.tipo!=='promo') return [];
+  return (d.promoObjs&&d.promoObjs.length)?d.promoObjs:(d.promoObj?[d.promoObj]:[]);
+}
+function _promoTotal(units){
+  var u=units||_promoUnits(), items=[], sum=0;
+  _promoLista().forEach(function(p){
+    if(!_promoArmada(p,u)) return;
+    var c=_promoCalc(p,u); if(c.monto>0){ items.push({p:p,monto:c.monto,mech:c.mech}); sum+=c.monto; }
+  });
+  return {monto:Math.round(sum*100)/100, items:items};
+}
+function _promoNomSku(sku){
+  var f=function(arr){var x=(arr||[]).find(function(y){return y.sku===sku;});return x?x.n:'';};
+  var n=f(FACIALES)||f(EXTRAS)||f(PAQ3)||f(PAQ6);
+  if(!n) PROVS.forEach(function(pv){pv.prods.forEach(function(pr){if(!n&&pr.sku===sku)n=pr.n;});});
+  return n||sku;
+}
+function _promoPanelToggle(){ T._promoPanel=!T._promoPanel; updatePreview(); }
+function _promoPanelHTML(totE,dscMonto){
+  var vs=(window._promosVig||[]); if(!vs.length) return '';
+  var uu=_promoUnits(), lista=_promoLista();
+  var on=function(p){ return lista.some(function(x){return x.nombre===p.nombre&&x.fila===p.fila;}) || (T.descuento&&T.descuento.tipo==='custom'&&T.descuento.promo===p.nombre); };
+  var nAplic=vs.filter(function(p){ if(!(p.codigos&&p.codigos.length)) return true; if(!_promoArmada(p,uu)) return false; var c=_promoCalc(p,uu); return c&&c.monto>0; }).length;
+  var nOn=vs.filter(on).length;
+  var h='<button onclick="_promoPanelToggle()" style="width:100%;padding:9px 10px;margin-bottom:6px;border-radius:10px;border:1.5px solid #E8C07A;background:'+(T._promoPanel||nOn?'rgba(232,192,122,0.22)':'transparent')+';color:#E8C07A;font-size:0.72rem;font-weight:800;cursor:pointer;text-align:left">🎉 Promociones · '+vs.length+' vigente'+(vs.length===1?'':'s')+(nAplic?' · '+nAplic+' aplica'+(nAplic===1?'':'n')+' a este ticket':'')+(nOn?' · '+nOn+' aplicada'+(nOn===1?'':'s')+' ✓':'')+'<span style="float:right">'+(T._promoPanel?'▲':'▼')+'</span></button>';
+  if(!T._promoPanel) return h;
+  h+='<div style="border:1px solid rgba(232,192,122,0.45);border-radius:10px;padding:8px;margin-bottom:8px">';
+  vs.forEach(function(p,i){
+    var coded=p.codigos&&p.codigos.length, est='', ok=true, monto=0;
+    if(coded){
+      if(!_promoArmada(p,uu)){ ok=false; est='No aplica: el ticket no lleva '+p.codigos.map(function(c){return _promoNomSku(c);}).join(' / '); }
+      else { var c=_promoCalc(p,uu); monto=c?c.monto:0; if(monto<=0){ ok=false; est='Faltan unidades para que descuente algo'; } else est='Descuenta −$'+monto.toFixed(2); }
+    } else est='Sobre el total del ticket (−'+p.valor+'%)';
+    var activa=on(p);
+    h+='<div style="display:flex;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,0.1)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:0.68rem;font-weight:800;color:'+(ok?'#E8C07A':'rgba(255,255,255,0.55)')+'">'+p.nombre+' <span style="font-weight:700">'+_pmMechTxt(p)+'</span></div>'
+      +'<div style="font-size:0.58rem;opacity:0.75;overflow-wrap:anywhere">'+(coded?p.codigos.map(function(c){return _promoNomSku(c);}).join(', ')+' · ':'')+est+'</div></div>'
+      +(ok?'<button onclick="aplicarPromo('+i+')" style="flex:0 0 auto;padding:6px 10px;border-radius:8px;border:1.5px solid #E8C07A;background:'+(activa?'#E8C07A':'transparent')+';color:'+(activa?'#1A2744':'#E8C07A')+';font-size:0.62rem;font-weight:800;cursor:pointer">'+(activa?'✓ Quitar':'Aplicar')+'</button>':'')
+      +'</div>';
+  });
+  var tf=(T.descuento&&T.descuento.tipo==='directo')?0:Math.max(0,totE-(dscMonto||0));
+  h+='<div style="display:flex;justify-content:space-between;font-size:0.64rem;padding-top:6px;opacity:0.8"><span>Total sin promos</span><span>$'+totE.toFixed(2)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.64rem;color:var(--green)"><span>Descuento aplicado</span><span>−$'+(dscMonto||0).toFixed(2)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:0.8rem;font-weight:800;color:#E8C07A"><span>Total final cliente</span><span>$'+tf.toFixed(2)+'</span></div>'
+    +'<div style="font-size:0.54rem;opacity:0.6;margin-top:3px">Se pueden aplicar varias. Cada una descuenta solo sus productos; una promo que se cruza con otra en el mismo producto la reemplaza.</div>'
+    +'</div>';
+  return h;
+}
 function aplicarPromo(i){
   var p=(window._promosVig||[])[i]; if(!p) return;
   var vacio={tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
-  if(T.descuento&&T.descuento.promo===p.nombre){ T.descuento=vacio; }
-  else if(p.codigos&&p.codigos.length){
+  if(!(p.codigos&&p.codigos.length)){
+    // Promo v1 sobre el total: va sola (no se mezcla con otras)
+    if(T.descuento&&T.descuento.tipo==='custom'&&T.descuento.promo===p.nombre) T.descuento=vacio;
+    else T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre};
+    updatePreview(); return;
+  }
+  var lista=_promoLista().slice();
+  var ya=lista.findIndex(function(x){return x.nombre===p.nombre&&x.fila===p.fila;});
+  if(ya>=0){ lista.splice(ya,1); }
+  else {
     if(!_promoArmada(p)){ toast('⚠️ El ticket no lleva ningún producto de esta promo','#C9A227'); return; }
     var _pcAp=_promoCalc(p);
     if(!_pcAp||_pcAp.monto<=0){ toast('⚠️ Faltan unidades para que la promo descuente algo','#C9A227'); return; }
-    T.descuento={tipo:'promo',promo:p.nombre,promoObj:p,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'};
+    var antes=lista.length;
+    lista=lista.filter(function(x){return !x.codigos.some(function(c){return p.codigos.indexOf(c)>=0;});});
+    if(lista.length<antes) toast('ℹ️ Reemplacé la promo que caía sobre el mismo producto','#C9A227');
+    lista.push(p);
   }
-  else { T.descuento={tipo:'custom',customMode:'pct',customPct:p.valor,customTarget:'Total',custom:0,pct:0,promo:p.nombre}; }
+  T.descuento=lista.length?{tipo:'promo',promo:lista.map(function(x){return x.nombre;}).join(' + '),promoObj:lista[0],promoObjs:lista,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}:vacio;
   updatePreview();
 }
 function toggleDescuento(tipo){
@@ -2568,13 +2631,10 @@ function enviarTicket(){
     } else if(T.descuento.custom>0){_dscMonto=Math.min(T.descuento.custom,_totBruto);_dscLabel='Desc$'+_dscMonto.toFixed(2);}
   }
   else if(T.descuento&&T.descuento.tipo==='promo'){
-    var _puE=_promoUnits();
-    if(T.descuento.promoObj&&_promoArmada(T.descuento.promoObj,_puE)){
-      var _pcE=_promoCalc(T.descuento.promoObj,_puE);
-      if(_pcE.monto>0){
-        _dscMonto=_pcE.monto;
-        _dscLabel='Promo '+T.descuento.promo+' ('+_pcE.mech+') −$'+_pcE.monto.toFixed(2);
-      }
+    var _ptE=_promoTotal();
+    if(_ptE.items.length){
+      _dscMonto=Math.min(_ptE.monto,_totBruto);
+      _dscLabel=_ptE.items.map(function(x){return 'Promo '+x.p.nombre+' ('+x.mech+') −$'+x.monto.toFixed(2);}).join(' + ');
     }
   }
   else if(T.descuento&&T.descuento.tipo==='directo'){_dscMonto=_totBruto;_dscLabel='Directo';}
@@ -2583,13 +2643,14 @@ function enviarTicket(){
   var _cajasGC=(T.paq2gcSlots||[]).filter(function(s){return s&&s.tipo==='fisica';}).length;
   const estTotalFinal = T.descuento&&T.descuento.tipo==='directo' ? 0 : Math.max(0, estTotal+(_cajasGC*3));
   // Paquete reducido: el control de sesiones registra las que dice la promo (ej: paquete de 3 vendido como de 2)
-  if(T.descuento&&T.descuento.tipo==='promo'&&T.descuento.promoObj&&T.descuento.promoObj.tipo==='PACK'&&_promoArmada(T.descuento.promoObj)){
-    var _sesPR=Math.round(T.descuento.promoObj.valor2)||0;
+  _promoLista().forEach(function(_pPR){
+    if(!_pPR||_pPR.tipo!=='PACK'||!_promoArmada(_pPR)) return;
+    var _sesPR=Math.round(_pPR.valor2)||0;
     if(_sesPR>=1&&_sesPR<=6){
-      if(pack3Txt&&T.descuento.promoObj.codigos.indexOf(T.pack3)>=0) pack3Txt+=' [PROMO '+_sesPR+' SESIONES]';
-      if(pack6Txt&&T.descuento.promoObj.codigos.indexOf(T.pack6)>=0) pack6Txt+=' [PROMO '+_sesPR+' SESIONES]';
+      if(pack3Txt&&_pPR.codigos.indexOf(T.pack3)>=0&&pack3Txt.indexOf('[PROMO ')<0) pack3Txt+=' [PROMO '+_sesPR+' SESIONES]';
+      if(pack6Txt&&_pPR.codigos.indexOf(T.pack6)>=0&&pack6Txt.indexOf('[PROMO ')<0) pack6Txt+=' [PROMO '+_sesPR+' SESIONES]';
     }
-  }
+  });
 
   // Fix fecha retorno format: input gives yyyy-MM-dd, sheet needs MM/dd/yyyy
   var _retRaw=(retEl?.value||'').trim();
