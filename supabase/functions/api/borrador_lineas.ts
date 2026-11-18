@@ -5,7 +5,7 @@
 // Si el SKU no está en ningún catálogo, la línea igual se copia y es el ÚNICO aviso.
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
-import { aliasMigo, CAJA_GIFT } from "./alias_migo.ts";
+import { aliasMigo, CAJA_GIFT, expandirLineasGiftCaja } from "./alias_migo.ts";
 
 export type SeccionBorrador = "facial" | "paquete" | "extra" | "producto" | "gift";
 export type LineaBorrador = {
@@ -18,7 +18,7 @@ export function seccionDeTipo(tipo: string): SeccionBorrador {
   if (t === "facial") return "facial";
   if (t === "paquete") return "paquete";
   if (t === "extra" || t === "servicio") return "extra";
-  if (t === "gift") return "gift";
+  if (t === "gift" || t.startsWith("gift")) return "gift";
   return "producto";
 }
 
@@ -35,7 +35,7 @@ export function lineasBorradorDeFactura(lineasFac: Row[], catalogo: Row[]): { li
   const porCode = new Map<string, Row>();
   for (const c of catalogo || []) { const k = skuCode(s(c.sku)); if (k && !porCode.has(k)) porCode.set(k, c); }
   const lineas: LineaBorrador[] = [], avisos: string[] = [];
-  for (const l of lineasFac || []) {
+  for (const l of expandirLineasGiftCaja(lineasFac)) {
     const raw = s(l.sku || l.codigo);
     const q = n(l.cantidad) || 1;
     const tot = totalLineaFactura(l);

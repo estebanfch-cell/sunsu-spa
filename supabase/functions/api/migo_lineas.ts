@@ -1,7 +1,7 @@
 /** Ítems de factura Migo (Ventas Detalladas o RIDE) y cuadre línea a línea con el ticket. */
-import { n, s, skuCode, type Row } from "./domain.ts";
+import { n, round2, s, skuCode, type Row } from "./domain.ts";
 
-import { aliasMigo } from "./alias_migo.ts";
+import { aliasMigo, partirLineaGiftCaja, GIFT_PREMIUM_IVA, GIFT_SKU } from "./alias_migo.ts";
 export const NOMBRE_DIFERENCIA_MEJORA = "Diferencia por mejora de paquete";
 
 export type LineaNorm = {
@@ -98,6 +98,52 @@ function money(v: number): string {
   return "$" + Number(v || 0).toFixed(2);
 }
 
+
+/** Si el ticket vendió una gift (col S) y aún no hay línea SUNSU-35, se reconstruye con el restante del estimado (o $65). */
+function lineasDesdeVentaGift(t: Row, already: LineaNorm[]): LineaNorm[] {
+  const vg = s(t.venta_gift);
+  if (!/^SI\b/i.test(vg)) return [];
+  if (already.some((l) => skuCode(l.sku) === GIFT_SKU)) return [];
+  const otras = already.reduce((a, l) => a + (l.canje ? 0 : (l.totalCon || 0)), 0);
+  const est = n(t.estimado);
+  const tot = est > otras + 0.05 ? round2(est - otras) : GIFT_PREMIUM_IVA;
+  if (!(tot > 0)) return [];
+  const sub = round2(tot / 1.15);
+  return [{ sku: GIFT_SKU, codigo: "SUNSU-35", nombre: "GIFT CARD", cantidad: 1, unitSin: sub, descuento: 0, subtotalSin: sub, totalCon: tot }];
+}
+
+function expandirNormGiftCaja(L: LineaNorm[]): LineaNorm[] {
+  const out: LineaNorm[] = [];
+  for (const l of L) {
+    const parts = partirLineaGiftCaja({
+      codigo: l.codigo || l.sku, sku: l.sku, producto: l.nombre, nombre: l.nombre,
+      cantidad: l.cantidad, precio_unit: l.unitSin, subtotal: l.subtotalSin, total: l.totalCon,
+    });
+    if (parts.length === 1) { out.push(l); continue; }
+    for (const p of parts) {
+      const q = n(p.cantidad) || 1;
+      const tot = n(p.total);
+      const sub = n(p.subtotal);
+      out.push({
+        sku: aliasMigo(p.sku || p.codigo, q ? tot / q : tot),
+        codigo: s(p.codigo || p.sku),
+        nombre: s(p.nombre || p.producto),
+        cantidad: q,
+        unitSin: n(p.precio_unit) || sub,
+        descuento: 0,
+        subtotalSin: sub,
+        totalCon: tot,
+        ticketId: l.ticketId,
+      });
+    }
+  }
+  return out;
+}
+
+function cerrarLineasDeTicket(out: LineaNorm[], t: Row): LineaNorm[] {
+  return expandirNormGiftCaja(out.concat(lineasDesdeVentaGift(t, out)));
+}
+
 /** Líneas de un ticket: beta_ticket_lineas, o reconstrucción desde orig / facial / extras. */
 export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): LineaNorm[] {
   const out: LineaNorm[] = [];
@@ -120,7 +166,7 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
       if (esDiferenciaMejora(l)) { nrm.mejoraPaquete = true; nrm.canje = false; }
       out.push(nrm);
     }
-    if (out.length) return out;
+    if (out.length) return cerrarLineasDeTicket(out, t);
   }
   const orig = (t.orig && typeof t.orig === "object" ? t.orig : {}) as Row;
   const paq = s(t.paquete || orig["Paquete?"] || orig.paquete);
@@ -171,7 +217,7 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
     const qty = n(v);
     if (qty > 0) pushSku(key, qty, key);
   }
-  return out;
+  return cerrarLineasDeTicket(out, t);
 }
 
 function etq(l: LineaNorm): string {
@@ -190,8 +236,8 @@ function pvpCatalogo(sku: string, catalogo?: Map<string, { nombre?: string; pvpC
 }
 
 export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>, catPrecios?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
-  const fac = factura.filter(Boolean);
-  const tks = tickets.filter(Boolean);
+  const fac = expandirNormGiftCaja(factura.filter(Boolean));
+  const tks = expandirNormGiftCaja(tickets.filter(Boolean));
   const usedT = new Set<number>();
   const avisos: AvisoLinea[] = [];
 
