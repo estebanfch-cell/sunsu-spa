@@ -5151,10 +5151,11 @@ var _HIST_COLS=[
   {k:'ced',t:'Cédula',v:function(t){var d=String(t.cedula||'').replace(/\D/g,'');return d?+d:-1;}},
   {k:'fecha',t:'Fecha',v:function(t){return String(t.fecha||'')+' '+String(t.hora||'');}},
   {k:'cos',t:'Cosmetóloga',v:function(t){return String(t.cosmetologa||'').toLowerCase();}},
+  {k:'fpago',t:'💳 Forma de pago',v:function(t){return _tkForma(t)||'~';}},
   {k:'sub',t:'Subtotal',num:1,v:function(t){return _histMontos(t).sub;}},
   {k:'iva',t:'IVA',num:1,v:function(t){return _histMontos(t).iva;}},
   {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}},
-  {k:'pago',t:'Pago',v:function(t){return t.anulado?-1:(t.cob?1:0);}},
+  {k:'pago',t:'Pago',v:function(t){return t.anulado?-1:(t.cob?2:(_tkPagoMigo(t)?1:0));}},
   {k:'fac',t:'Factura',v:function(t){return _tkFacFull(t)||'~';}},
   {k:'reag',t:'Reagendada',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.g?1:0):-1;}},
   {k:'sal',t:'Saldo',num:1,v:function(t){return _histSaldo(t);}}
@@ -5182,11 +5183,12 @@ function _histCelda(t, c, showPrices){
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
   if(c.k==='cos') return '<td>'+(window.MCColor?window.MCColor.pill(t.cosmetologa||''):_histEsc(t.cosmetologa||''))+'</td>';
+  if(c.k==='fpago') return '<td>'+(_tkFormaPill(_tkForma(t))||'<span class="tk-muted">—</span>')+'</td>';
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
-  if(c.k==='pago') return '<td>'+(t.anulado===true?_tkPill('anulado','Cancelado'):t.cob?_tkPill('pagado','Pagado'):_tkPill('porcobrar','Por cobrar'))+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>':_tkPill('sinfactura','Sin factura'))+'</td>'; }
+  if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
+  if(c.k==='fac'){ var ff=_tkFacFull(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>':(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
@@ -5232,10 +5234,12 @@ function _histCardHTML(t, i, showPrices){
   if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
   if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+'</span>');
   if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
+  var fp=_tkForma(t);
   var pills=[];
   if(!anul){
-    pills.push(t.cob?'<span class="tk-pill" style="color:#2E8B57;border-color:#2E8B57">Pagado</span>':'<span class="tk-pill" style="color:#3E7CB1;border-color:#3E7CB1">Por cobrar</span>');
-    if(!ff) pills.push(_tkPill('sinfactura','Sin factura'));
+    pills.push(_tkPagoPill(t));
+    if(fp) pills.push(_tkFormaPill(fp));
+    if(!ff) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
   }
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
@@ -5284,7 +5288,51 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',sinfactura:'#D2603A',anulado:'#C0392B'};
+var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B'};
+var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A'};
+var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía'};
+function _tkFormaNorm(v){
+  var m=String(v||'').trim().toLowerCase();
+  if(/^efec/.test(m)) return 'efectivo';
+  if(/^tarj/.test(m)) return 'tarjeta';
+  if(/^tran/.test(m)) return 'transferencia';
+  if(/^canj/.test(m)) return 'canje';
+  if(/^cort/.test(m)) return 'cortesia';
+  if(/^mix/.test(m)) return 'mixto';
+  return m;
+}
+function _tkFormaDeComp(comp){
+  var parts=String(comp||'').split(/\s*[,;|]\s*/).map(function(x){return _tkFormaNorm(x.split(':')[0]);}).filter(Boolean);
+  var u=[]; parts.forEach(function(p){ if(u.indexOf(p)<0) u.push(p); });
+  if(!u.length) return '';
+  return u.length===1?u[0]:'mixto';
+}
+function _tkForma(t){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  if(L&&L.forma) return String(L.forma);
+  return _tkFormaDeComp(t&&t.comp);
+}
+function _tkFormaPill(forma){
+  if(!forma) return '';
+  var col=_TK_FORMA[forma]||'#8A93A6';
+  var txt=_TK_FORMA_TXT[forma]||forma;
+  return '<span class="tk-pill tk-fpago" style="color:'+col+';border-color:'+col+'">'+_histEsc(txt)+'</span>';
+}
+function _tkPagoMigo(t){
+  if(t&&t.cob) return false;
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  return !!(L&&L.pagoMigo);
+}
+function _tkPendienteLunes(t){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  return !!(L&&L.pendienteLunes);
+}
+function _tkPagoPill(t){
+  if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
+  if(t&&t.cob) return _tkPill('pagado','Pagado');
+  if(_tkPagoMigo(t)) return _tkPill('pagomigo','Pagado en Migo');
+  return _tkPill('porcobrar','Por cobrar');
+}
 // Factura completa 001-001-000002956: la corregida en la beta, si no la del sistema (fac_7).
 function _tkFacFull(t){
   var L=(window._tkLeds||{})[String(t&&t.tkRow)]; if(L&&L.factura) return L.factura;
@@ -5297,9 +5345,9 @@ function _tkEstados(t){
   var orig=(t&&t.orig)||{};
   if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
-  out.push(t.cob?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
+  out.push(t.cob?{c:'pagado',t:'Pagado'}:(_tkPagoMigo(t)?{c:'pagomigo',t:'Pagado en Migo'}:{c:'porcobrar',t:'Por cobrar'}));
   var Lx=(window._tkLeds||{})[String(t.tkRow)];
-  if(!t.fac&&!(Lx&&Lx.factura)) out.push({c:'sinfactura',t:'Sin factura'});
+  if(!t.fac&&!(Lx&&Lx.factura)) out.push(_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
   return out;
 }
 var _TK_LEDS=[['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];

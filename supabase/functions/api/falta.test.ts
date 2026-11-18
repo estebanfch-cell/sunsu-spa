@@ -16,6 +16,11 @@ describe("faltaDe (fila amarilla)", () => {
   it("historia anterior a noviembre no se marca", () => {
     assert.deepEqual(faltaDe({ timestamp: "2026-10-10T15:00:00Z", comp: "Transferencia $20" }, {}), []);
   });
+  it("hasta el 16-Nov, transferencia pagada sin foto sigue en amarillo", () => {
+    const r = { timestamp: "2026-11-16T20:00:00Z", comp: "Trans:43959839", comprobante: "", cob: true, fac: true, fac_7: "2914.0" };
+    assert.deepEqual(faltaDe(r, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
+    assert.deepEqual(faltaDe({ ...r, timestamp: "2026-11-01T15:00:00Z" }, {}), ["Foto del comprobante de pago (transferencia o voucher de tarjeta)"]);
+  });
 });
 import { colTicket, telefonoEc } from "./domain.ts";
 describe("telefonoEc", () => {

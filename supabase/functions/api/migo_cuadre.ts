@@ -74,6 +74,29 @@ export function estaPagado(t: Row): boolean {
   return b(t.cob);
 }
 
+export function formaNorm(v: unknown): string {
+  const m = s(v).trim().toLowerCase();
+  if (!m) return "";
+  if (/^efec/.test(m)) return "efectivo";
+  if (/^tarj/.test(m)) return "tarjeta";
+  if (/^tran/.test(m)) return "transferencia";
+  if (/^canj/.test(m)) return "canje";
+  if (/^cort/.test(m)) return "cortesia";
+  if (/^mix/.test(m)) return "mixto";
+  return m;
+}
+
+/** Forma visible: primero el ticket (comp), si no la beta, si no Migo. Varios métodos → mixto. */
+export function formaDeTicket(t: Row, datos?: Row, formaMigo?: string): string {
+  const fromComp = [...new Set(metodosTicket(t.comp).map(formaNorm).filter(Boolean))];
+  if (fromComp.length === 1) return fromComp[0];
+  if (fromComp.length > 1) return "mixto";
+  const d = formaNorm(datos?.forma_pago);
+  if (d) return d;
+  return formaNorm(formaMigo || (datos?.pago_migo && typeof datos.pago_migo === "object" ? (datos.pago_migo as Row).forma : ""));
+}
+
+
 export type LineaFactura = { codigo?: string; sku?: string; producto?: string; tipo?: string; cantidad?: number; precio_unit?: number; subtotal?: number; iva?: number; total?: number };
 
 export type FacturaVivo = {
@@ -131,7 +154,9 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
     pushGroup(inv, ts, "numero", "alta");
   }
   const unmatchedInv = facturas.filter((f) => !usedInv.has(f.seq));
-  const unmatchedTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t) && estaPagado(t));
+  // También tickets aún no cobrados en la hoja: el cobro puede existir solo en Migo.
+  // namesMatch >= 2 (subconjunto o 2+ tokens); un solo apellido compartido no basta (p.ej. Prado).
+  const unmatchedTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t));
   type Cand = { sc: number; tokens: number; days: number; ad: number; t: Row; inv: FacturaVivo };
   const cands: Cand[] = [];
   for (const t of unmatchedTk) {
@@ -141,7 +166,6 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
       const days = t.fecha && inv.fecha ? Math.abs(Math.round((Date.parse(s(t.fecha) + "T12:00:00Z") - Date.parse(inv.fecha + "T12:00:00Z")) / 86400000)) : 99;
       let sc = 0;
       if (tokens >= 2 && ad <= TOL_MONTO && days <= 1) sc = 3;
-      else if (tokens >= 1 && ad <= TOL_MONTO && days <= 2) sc = 2;
       if (sc) cands.push({ sc, tokens, days, ad, t, inv });
     }
   }
@@ -154,6 +178,26 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
     pushGroup(c.inv, [c.t], "nombre_fecha_monto", "media");
   }
   return links;
+}
+
+
+/** Día de la semana de un YMD (0=domingo … 1=lunes), mediodía UTC para no cruzar fecha. */
+export function dowYmd(ymd: string): number {
+  return new Date(s(ymd).slice(0, 10) + "T12:00:00Z").getUTCDay();
+}
+
+/**
+ * La persona de facturación no trabaja los lunes.
+ * Un ticket del lunes, cobrado y aún sin factura en Migo, no se marca rojo
+ * «sin factura» hasta que cierre el martes. Mientras tanto es «Pendiente por lunes».
+ */
+export function esperandoFacturaLunes(fecha: string, hoyGye: string): boolean {
+  const f = s(fecha).slice(0, 10), h = s(hoyGye).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !/^\d{4}-\d{2}-\d{2}$/.test(h)) return false;
+  if (dowYmd(f) !== 1) return false;
+  const martes = new Date(f + "T12:00:00Z");
+  martes.setUTCDate(martes.getUTCDate() + 1);
+  return h <= martes.toISOString().slice(0, 10);
 }
 
 export function flagsDeseadas(p: {
@@ -211,6 +255,7 @@ export function flagsDeseadas(p: {
     if (seq && maxSeq && seq > maxSeq) continue; // el reporte importado aún no llega a este número
     if (p.hoyGye <= s(t.fecha)) continue; // el día del ticket no ha cerrado
     if (p.importadoGye <= s(t.fecha)) continue; // falta un import posterior al cierre del día
+    if (esperandoFacturaLunes(s(t.fecha), p.hoyGye)) continue; // facturación no está el lunes: esperar al cierre del martes
     out.push({
       ticket_id: id, ticket_clave: clave, kind: "sinfac",
       motivo: "Sin factura en Migo",
