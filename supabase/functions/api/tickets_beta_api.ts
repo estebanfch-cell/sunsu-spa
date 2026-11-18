@@ -7,10 +7,12 @@ import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
-import { b, colTicket, telefonoEc, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { b, colTicket, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
+import { contactoParaMostrar } from "./clientes_contacto.ts";
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
-import { conTelefono } from "./lib.ts";
+import { conEmail, conTelefono } from "./lib.ts";
 import { claveCliente, paquetesDe, parseGcCanje, recetaDe, saldoGift } from "./ventas.ts";
 import { normCedula, normNombre } from "./domain.ts";
 import { acceso, esPropio, matrizDe } from "./permisos.ts";
@@ -29,38 +31,12 @@ const TIPOS = new Set(["producto", "facial", "extra", "paquete", "gift", "servic
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_tickets"); return true; } catch { return false; } }
 
-export function tipoCatalogo(t: string): string {
-  const x = s(t).toUpperCase();
-  if (x.startsWith("FACIAL")) return "facial";
-  if (x.includes("ADD-ON") || x.includes("SERVICIO")) return "extra";
-  if (x.startsWith("PAQUETE")) return "paquete";
-  if (x.startsWith("GIFT")) return "gift";
-  return "producto";
-}
-/** Catálogo para el buscador del ticket: productos, faciales/servicios y paquetes, con códigos de barras. */
+export { tipoCatalogo } from "./catalogo_ticket.ts";
+/** Catálogo para el buscador del ticket: hoja, ERP y todo producto facturado en Migo (TK95). */
 export async function catalogoTicket(ctx: Ctx, ses: Ses): Promise<Row[]> {
   const prods = await listaProductos(ctx, ses);
-  const porCode = new Map(prods.map((p) => [skuCode(s(p.sku)), p]));
-  const out: Row[] = [], ya = new Set<string>();
-  for (const r of await todas(ctx, "catalogo")) {
-    const code = skuCode(s(r.sku));
-    if (!code || ya.has(code)) continue;
-    ya.add(code);
-    const p = porCode.get(code);
-    const tot = n(r.total_con_iva) || round2(n(r.subtotal) * 1.15);
-    out.push({
-      sku: code, skuVisible: s(r.sku), nombre: s(r.producto_servicio) || s(p?.nombre), tipo: tipoCatalogo(s(r.tipo)), pvp: round2(tot),
-      activo: p ? p.activo !== false : r.activo !== false, barras: p ? p.barras || [] : [], productoId: p ? s(p.id) : "", foto: p ? s(p.foto_thumb) : "",
-      stock: p ? p.stock : null, marca: p ? s(p.marca) : "", categoria: p ? s(p.categoria) : "",
-    });
-  }
-  for (const p of prods) {
-    const code = skuCode(s(p.sku));
-    if (ya.has(code) || p.tipo === "servicio" || !(n(p.pvp) > 0)) continue;
-    ya.add(code);
-    out.push({ sku: code, skuVisible: s(p.skuVisible || p.sku), nombre: s(p.nombre), tipo: "producto", pvp: round2(n(p.pvp)), activo: p.activo !== false, barras: p.barras || [], productoId: s(p.id), foto: s(p.foto_thumb), stock: p.stock });
-  }
-  return out;
+  const migo = preciosMigoDeTablas(await todas(ctx, "beta_migo_lineas"), await todas(ctx, "beta_migo_facturas_vivo"));
+  return armarCatalogoTicket(await todas(ctx, "catalogo"), prods, migo);
 }
 async function promosVigentes(ctx: Ctx): Promise<Promo[]> {
   const hoy = new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
@@ -307,7 +283,7 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
     const c = porCode.get(code);
     const nueva = !actuales.some((a) => skuCode(a.sku) === code && a.tipo === tipo);
     if (!code) return { error: "Línea sin código" };
-    if (nueva && tipo !== "gift" && (!c || c.activo === false)) return { error: (c ? s(c.nombre) : code) + (c ? " está inactivo: no se puede vender" : " no está en el catálogo") };
+    if (nueva && tipo !== "gift" && (!c || (c.activo === false && !c.enMigo))) return { error: (c ? s(c.nombre) : code) + (c ? " está inactivo: no se puede vender" : " no está en el catálogo") };
     const q = n(x.cantidad);
     if (!(q > 0)) return { error: code + ": la cantidad tiene que ser mayor a 0" };
     const pu = x.precio_unit != null && x.precio_unit !== "" ? n(x.precio_unit) : n(c?.pvp);
@@ -507,17 +483,36 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const reg = (ced ? await registroDe(ctx, [ced], []) : []).filter((x) => !x.borrado_at && normCedula(x.cedula) === normCedula(ced)).sort((a, b0) => s(b0.timestamp).localeCompare(s(a.timestamp)))[0];
   // Ficha de la clienta (beta_clientes): manda sobre la fila vieja del ticket y el registro.
   let fc: Row = {};
-  try { const k = claveCliente(r); if (k) { const fr = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "datos", "codigo"], filtros: [{ col: "key", op: "eq", val: k }], limite: 1 })).rows[0]; fc = { ...((fr?.datos || {}) as Row), _codigo: s(fr?.codigo) }; } } catch { fc = {}; }
+  try { const k = claveCliente(r); if (k) { const fr = (await consultar(ctx.db, "beta_clientes", { cols: ["key", "datos", "codigo", "telefono"], filtros: [{ col: "key", op: "eq", val: k }], limite: 1 })).rows[0]; fc = { ...((fr?.datos || {}) as Row), _codigo: s(fr?.codigo), _telCol: s(fr?.telefono) }; } } catch { fc = {}; }
   const vf = (x: unknown) => (s(x) ? s(x) : undefined);
+  let antigua: Row = {};
+  try {
+    const ants = await todas(ctx, "clientas_antiguas");
+    const porCed = ced ? ants.filter((x) => normCedula(x.cedula) === normCedula(ced)) : [];
+    if (porCed.length === 1) antigua = porCed[0];
+    else if (!porCed.length) {
+      const nom = normNombre([s(d.nombre ?? vf(fc.nombres) ?? r.nombre), s(d.apellido ?? vf(fc.apellido) ?? r.apellido)].filter(Boolean).join(" "));
+      const porNom = nom ? ants.filter((x) => normNombre(x.nombre) === nom) : [];
+      if (porNom.length === 1) antigua = porNom[0];
+    }
+  } catch { antigua = {}; }
+  const ct = contactoParaMostrar([
+    { telefono: d.telefono, email: d.email },
+    { telefono: fc.telefono, email: fc.email },
+    { telefono: (fc as Row)._telCol, email: "" },
+    { telefono: reg?.telefono, email: reg?.email },
+    { telefono: antigua.telefono || antigua.tel_acuity, email: antigua.email },
+  ]);
   const info: Row = {
     factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? vf(fc.nombres) ?? r.nombre), apellido: s(d.apellido ?? vf(fc.apellido) ?? r.apellido), cedula: s(d.cedula ?? ced),
-    email: s(d.email ?? vf(fc.email) ?? reg?.email), telefono: telefonoEc(d.telefono ?? vf(fc.telefono) ?? reg?.telefono), cosmetologa: s(d.cosmetologa ?? r.atendido_por),
+    email: ct.email, telefono: ct.telefono, cosmetologa: s(d.cosmetologa ?? r.atendido_por),
     notas: s(d.notas ?? r.notas_generales), recomendaciones: s(d.recomendaciones ?? r.recomendaciones), retorno: s(d.retorno ?? s(r.fecha_retorno).slice(0, 10)),
     clienteCodigo: s(fc._codigo) || s((r.orig as Row | undefined)?.cliente_codigo),
     cabina: s(d.cabina),
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
-  if (!conTelefono(ses)) { delete info.email; delete info.telefono; }
+  if (!conTelefono(ses)) delete info.telefono;
+  if (!conEmail(ses) && !conTelefono(ses)) delete info.email;
   const stCob = estadoCobro({ cobrado: estaCobrado(r, d.factura), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
   const metodos = metodosPago(r.comp);
   const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: estaCobrado(r, d.factura), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
@@ -556,7 +551,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
-  return { info, campos: DATOS_TK.filter(([k]) => conTelefono(ses) || (k !== "email" && k !== "telefono")), corregidos: Object.keys(d), pagos, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+  return { info, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
 }
 

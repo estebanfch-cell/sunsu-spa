@@ -18,6 +18,8 @@ import {
   type CambioSku, type FacturaVivo, type FlagDeseada, type LinkCuadre,
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
+import { contactoDeFactura } from "./clientes_contacto.ts";
+import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 function fechasDias(ymd: string, d: number): string {
@@ -497,14 +499,24 @@ async function importarFacturas(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
     pdfs = await adjuntarPdfsMigo(ctx, actor, p.pdfs);
   }
   await logSafe(ctx, actor, "MIGO IMPORTAR", parsed.length + " facturas, +" + nNuevas + " nuevas, máx " + maxSeq);
-  return { ok: true, importadas: parsed.length, nuevas: nNuevas, actualizadas: nAct, max_seq: maxSeq, cuadre, pdfs };
+  let contactos: Row | null = null;
+  try {
+    const extras = raw.map((f) => contactoDeFactura(f)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (extras.length) contactos = await rellenarContactosDeFuentes(ctx, actor, extras);
+  } catch { /* el import no depende del relleno de contactos */ }
+  return { ok: true, importadas: parsed.length, nuevas: nNuevas, actualizadas: nAct, max_seq: maxSeq, cuadre, pdfs, contactos };
 }
 
 extend("migo_importar", ADMIN, (p, ctx, ses) => importarFacturas(ctx, ses, p));
 extend("migo_adjuntar_pdfs", ADMIN, (p, ctx, ses) => adjuntarPdfsMigo(ctx, actorOf(ses), p.pdfs));
 extend("migo_cuadre_hora", ADMIN, async (_p, ctx, ses) => {
-  const out = await correrCuadre(ctx, actorOf(ses));
-  await logSafe(ctx, actorOf(ses), "MIGO CUADRE", "links " + n(out.links) + ", flags " + n(out.flags_abiertas));
+  const actor = actorOf(ses);
+  const out = await correrCuadre(ctx, actor);
+  await logSafe(ctx, actor, "MIGO CUADRE", "links " + n(out.links) + ", flags " + n(out.flags_abiertas));
+  try {
+    const extras = (await todas(ctx, "beta_migo_facturas_vivo")).map((f) => contactoDeFactura(f)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (extras.length) (out as Row).contactos = await rellenarContactosDeFuentes(ctx, actor, extras);
+  } catch { /* el cuadre ya quedó */ }
   return out;
 });
 extend("migo_cuadre_estado", ADMIN, async (_p, ctx) => {
