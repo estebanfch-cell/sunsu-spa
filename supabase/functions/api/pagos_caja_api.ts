@@ -5,7 +5,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { b, n, round2, s, ymdUtc, type Row } from "./domain.ts";
-import { ticketPorClave, metodosPago } from "./tickets_beta_api.ts";
+import { ticketPorClave, metodosPago, agregarComprobante } from "./tickets_beta_api.ts";
 import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
@@ -56,6 +56,14 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   if (total > 0 && monto > n(e.saldo) + 0.009 && p.forzar !== true) return { error: "El pago ($" + monto.toFixed(2) + ") es mayor que el saldo ($" + n(e.saldo).toFixed(2) + ")", mayor: true };
   const ref = s(p.ref).trim().slice(0, 80);
   if ((metodo === "tarjeta" || metodo === "transferencia" || metodo === "deuna") && !ref) return { error: "Escribe el número de voucher / comprobante" };
+  // TK42: tarjeta y transferencia piden también la foto del voucher / comprobante (misma bodega que tk_subir_doc).
+  let fotoUrl = "";
+  if (metodo === "tarjeta" || metodo === "transferencia") {
+    if (!/^data:(image\/|application\/pdf)/.test(s(p.imagen))) return { error: metodo === "tarjeta" ? "Toma la foto del voucher de la tarjeta" : "Toma la foto del comprobante de la transferencia", foto: true };
+    const f = await agregarComprobante(ctx, ses, r, p.imagen, e.clave + " · " + (ETQ_METODO[metodo] || metodo) + " " + ref, "subió comprobante (cobro en Caja)");
+    if (f.error) return f;
+    fotoUrl = s(f.url);
+  }
   const id = crypto.randomUUID();
   const actor = actorOf(ses), quien = s(ses.name) || actor;
   const cliente = [s(r.nombre), s(r.apellido)].filter(Boolean).join(" ");
@@ -64,7 +72,7 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
     const m = await movCaja(ctx, ses, { tipo: "efectivo_ticket", entrada: monto, salida: 0, detalle: "Ticket " + e.clave + (cliente ? " · " + cliente : ""), quien: s(r.atendido_por) || quien, ref: "PAGO:" + id });
     caja_mov_id = s(m.id);
   }
-  await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: s(p.nota).trim().slice(0, 300) || null, registrado_por: quien, caja_mov_id });
+  await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: (s(p.nota).trim().slice(0, 300) || (fotoUrl ? "foto " + fotoUrl : "")) || null, registrado_por: quien, caja_mov_id });
   await logAccion(ctx.db, actor, "PAGO REGISTRAR", e.clave + " · " + ETQ_METODO[metodo] + " $" + monto.toFixed(2) + (ref ? " · " + ref : ""));
   return { ok: true, id, saldo: round2(Math.max(0, n(e.saldo) - monto)) };
 });
