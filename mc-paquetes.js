@@ -166,5 +166,5 @@
     } catch (x) { return '<p class="err">' + e(x.message || x) + '</p><button class="btn ghost small" type="button" data-go="#/m/gift/paquetes">← Paquetes</button>'; }
   }
   function wire(main, route) { if (route.id) { if (K.d) wireDet(main); } else wireLista(main); }
-  window.MCPaquetes = { render: render, wire: wire, marcarSesion: marcarSesion, _k: K };
+  window.MCPaquetes = { render: render, wire: wire, marcarSesion: marcarSesion, ensureList: async function () { if ((K.items || []).length) return true; await cargarLista(false); return true; }, _k: K };
 })();

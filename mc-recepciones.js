@@ -36,7 +36,7 @@
     var rows = K.items.map(function (o) {
       return '<tr class="tk-row" data-oc="' + e(o.id) + '"><td class="mcoc-num" style="font-weight:800">' + e(o.numero) + (o.tipo === "restock" ? " " + pill("Restock", "consignacion") : "") + "</td><td>" + e(o.proveedor || "—") + "</td><td>" + e(f(o.fecha)) + "</td><td>" + e(f(o.fecha_esperada) || "—") + '</td><td class="num">' + e(o.productos) + '</td><td class="num">' + e(o.pendiente) + "</td><td>" + pill(o.estado) + "</td></tr>";
     }).join("") || '<tr><td colspan="7" class="mccf-sub">No hay nada por recibir 🎉</td></tr>';
-    return '<div class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Esperada</th><th class="num">Productos</th><th class="num">Unid. pendientes</th><th>Estado</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+    return '<div id="mcrc-lista" class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Esperada</th><th class="num">Productos</th><th class="num">Unid. pendientes</th><th>Estado</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
       '<p class="note">Elige la orden que llegó. Por cada producto marca Recibido (con la cantidad que llegó) o No recibido.</p>';
   }
   function bodSel(g) {
@@ -102,5 +102,5 @@
     if (route.sub && K.d) { wireDet(main); return; }
     main.addEventListener("click", function (ev) { var tr = ev.target.closest && ev.target.closest("tr[data-oc]"); if (tr) go("#/m/recepciones/" + encodeURIComponent(tr.getAttribute("data-oc"))); });
   }
-  window.MCRecepciones = { render: render, wire: wire, _k: K };
+  window.MCRecepciones = { render: render, wire: wire, ensureList: async function () { if ((K.items || []).length) return true; K.items = (await A("rcp_lista")).items || []; return true; }, _k: K };
 })();

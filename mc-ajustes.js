@@ -207,6 +207,12 @@
   }
 
   window.MCAjustes = {
+    ensureList: async function () {
+      if ((A.list || []).length) return true;
+      var d = await api("aj_list", {});
+      if (d && !d.error) { A.list = d.items || []; return true; }
+      return false;
+    },
     render: async function (r) {
       css();
       if (r.sub === "a" && r.id) return renderDetalle(String(r.id));

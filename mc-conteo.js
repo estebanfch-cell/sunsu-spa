@@ -279,6 +279,12 @@
   });
 
   window.MCConteo = {
+    ensureList: async function () {
+      if ((C.list || []).length) return true;
+      var d = await api("cf_list", {});
+      if (d && !d.error) { C.list = d.items || []; return true; }
+      return false;
+    },
     render: async function (route) {
       css();
       if (route.sub === "cf" && route.id) return renderDetalle(String(route.id));
