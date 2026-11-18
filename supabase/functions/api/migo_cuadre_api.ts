@@ -6,7 +6,10 @@ import { actorOf, guardarArchivo, logAccion, type Ctx, type Ses } from "./lib.ts
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
 import { esAdmin } from "./permisos.ts";
-import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
+import {
+  abiertoSinTicket, asignarBorradoresAbiertos, cosmDeCita,
+  listoBorrador, puedeGestionarBorradores, puedeVerBorrador as puedeVerBorradorAsig,
+} from "./borradores_asig.ts";
 import {
   borradorSePuedeVincular, clavesDeBorrador, cruzar, exentoCuadre, estadoBorrador, facSeq, facturaNorm, flagsDeseadas, formaAComp, formaDeTicket, FALTA_CUADRE_DESDE,
   mensajeNoVincula,
@@ -34,7 +37,8 @@ function pubBorrador(b0: Row, vivo?: FacturaVivo | null, tickets?: Row[]): Row {
     sin_items: !lineas.length,
     avisos_lineas: avisos,
     estado: s(b0.estado), estado_txt: borradorSePuedeVincular(b0.estado) ? "Pendiente de aprobar" : s(b0.estado),
-    asignado_a: s(b0.asignado_a) || null, bandeja: s(b0.estado) === "pendiente",
+    asignado_a: s(b0.asignado_a) || null, bandeja: s(b0.estado) === "pendiente" && !s(b0.asignado_a),
+    listo: listoBorrador(b0), por_completar: abiertoSinTicket(b0) && !listoBorrador(b0),
     ticket_id: n(b0.ticket_id) || null, ticket_clave: s(b0.ticket_clave) || null,
     ticket_claves: clavesDeBorrador(b0),
     datos: (b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row,
@@ -53,14 +57,7 @@ function ticketsDeBorrador(b0: Row, tickets: Row[], candidatos?: { clave?: strin
   return tickets.filter((t) => claves.has(s(t.clave)) || ids.has(n(t.id)));
 }
 
-function puedeVerBorrador(ses: Ses, b0: Row): boolean {
-  if (esAdmin(ses.rol)) return true;
-  const a = s(b0.asignado_a).toLowerCase();
-  if (!a) return false;
-  const yo = ses.name.toLowerCase();
-  const short = s(ses.short).toLowerCase();
-  return a === yo || (short && (a === short || a.startsWith(short + " ") || yo.startsWith(a)));
-}
+function puedeVerBorrador(ses: Ses, b0: Row): boolean { return puedeVerBorradorAsig(ses, b0); }
 
 async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
   const tickets = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at);
@@ -163,23 +160,6 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
   return { creadas, resueltas, nuevas };
 }
 
-async function cosmDeCita(ctx: Ctx, cliente: string, fecha: string): Promise<{ persona: string; appointment_id: string } | null> {
-  const parts = splitCliente(cliente);
-  if (!parts.nombre) return null;
-  let citas: Row[] | { error: string };
-  try { citas = await citasRango(ctx, fecha, fecha, { ms: 120000 }); }
-  catch { return null; }
-  if (!Array.isArray(citas) || !citas.length) return null;
-  const hit = citaDeNombre(citas.filter((a) => fechaCita(a) === fecha), parts.nombre, parts.apellido)
-    || citaDeNombre(citas, parts.nombre, parts.apellido);
-  if (!hit) return null;
-  const cals = await todas(ctx, "beta_acuity_calendars");
-  const cal = cals.find((c) => String(c.calendar_id) === String(hit.calendarID) && c.activo !== false);
-  const persona = s(cal?.persona) || s(hit.calendar) || s(hit.calendarName);
-  if (!persona) return null;
-  return { persona, appointment_id: s(hit.id) };
-}
-
 async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], links: LinkCuadre[]): Promise<{ nuevos: number; vinculados: number; creados: Row[] }> {
   const existentes = await todas(ctx, "beta_migo_borradores");
   const byFac = new Map(existentes.map((b) => [s(b.factura), b]));
@@ -228,6 +208,7 @@ async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], 
       lineas: f.lineas, updated_at: now,
     });
   }
+  await asignarBorradoresAbiertos(ctx, actor);
   return { nuevos, vinculados, creados };
 }
 
@@ -427,11 +408,12 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const rows = await todas(ctx, "beta_migo_borradores");
   const vivas = rows.filter((b0) => borradorSePuedeVincular(b0.estado));
   const sinTicket = (b0: Row) => !s(b0.ticket_clave) && !n(b0.ticket_id);
-  const mias = vivas.filter((b0) => puedeVerBorrador(ses, b0) && s(b0.estado) === "asignado" && (esAdmin(ses.rol) ? !sinTicket(b0) : true));
-  // Admin: siguen en «Facturas sin ticket» las pendientes y las asignadas que aún no tienen ticket (para no “perderlas”).
-  const bandeja = esAdmin(ses.rol) ? vivas.filter((b0) => sinTicket(b0)) : [];
+  const gestiona = puedeGestionarBorradores(ses);
+  const mias = vivas.filter((b0) => puedeVerBorrador(ses, b0) && s(b0.estado) === "asignado" && (gestiona ? !sinTicket(b0) : true));
+  // Admin/recepción: siguen en «Facturas sin ticket» las pendientes y las asignadas que aún no tienen ticket (para no “perderlas”).
+  const bandeja = gestiona ? vivas.filter((b0) => sinTicket(b0)) : [];
   const hoy = ecuadorParts(ctx.now).ymd;
-  const vinculados = (esAdmin(ses.rol) ? rows : rows.filter((b0) => puedeVerBorrador(ses, b0)))
+  const vinculados = (gestiona ? rows : rows.filter((b0) => puedeVerBorrador(ses, b0)))
     .filter((b0) => ["vinculado", "aprobado"].includes(s(b0.estado)) && s(b0.ticket_clave) && s(b0.updated_at || b0.aprobado_at || b0.assigned_at).slice(0, 10) >= fechasDias(hoy, -14))
     .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)))
     .slice(0, 30);
@@ -449,7 +431,7 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
     mias: mias.map((b0) => conPub(b0)),
     bandeja: bandeja.map((b0) => conPub(b0, true)),
     vinculados: vinculados.map((b0) => conPub(b0)),
-    pendientes: (esAdmin(ses.rol) ? vivas : mias).map((b0) => conPub(b0)),
+    pendientes: (gestiona ? vivas : mias).map((b0) => conPub(b0)),
   };
 });
 
@@ -458,7 +440,7 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
   if (!puedeVerBorrador(ses, b0) && s(b0.estado) !== "pendiente") return { error: "No tienes permiso" };
-  if (s(b0.estado) === "pendiente" && !esAdmin(ses.rol)) return { error: "Esta factura está en la bandeja de admin" };
+  if (s(b0.estado) === "pendiente" && !s(b0.asignado_a) && !puedeGestionarBorradores(ses)) return { error: "Esta factura está en la bandeja de admin o recepción" };
   const tickets = await ticketsParaCuadre(ctx);
   const cands = (!s(b0.ticket_clave) && !n(b0.ticket_id))
     ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets)
@@ -484,7 +466,8 @@ extend("migo_borrador_guardar", "any", async (p, ctx, ses) => {
   return { ok: true };
 });
 
-extend("migo_borrador_asignar", ADMIN, async (p, ctx, ses) => {
+extend("migo_borrador_asignar", "any", async (p, ctx, ses) => {
+  if (!puedeGestionarBorradores(ses)) return { error: "No tienes permiso" };
   const fac = facturaNorm(p.factura);
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
@@ -594,7 +577,7 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   if (!b0) return { error: "No encontré ese borrador" };
   if (!borradorSePuedeVincular(b0.estado)) return { error: "Ese borrador ya no se aprueba" };
-  if (!puedeVerBorrador(ses, b0) && !esAdmin(ses.rol)) return { error: "No tienes permiso" };
+  if (!esAdmin(ses.rol)) return { error: "Solo una administradora puede aprobar el ticket. Tu completar queda pendiente de aprobar." };
   const d = { ...((b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row), ...((p.datos && typeof p.datos === "object" ? p.datos : {}) as Row) };
   const nom = splitCliente(s(d.nombre) && s(d.apellido) ? s(d.nombre) + " " + s(d.apellido) : b0.cliente);
   const cosm = s(p.cosmetologa) || s(d.cosmetologa) || s(b0.asignado_a);
@@ -633,6 +616,11 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
   await correrCuadre(ctx, actor);
   await logSafe(ctx, actor, "MIGO BORRADOR", "aprobó " + fac + " → " + clave);
   return { ok: true, ticket: creado.beta_num || clave, so_num: creado.so_num, id: tid, factura: fac };
+});
+
+extend("migo_borradores_reasignar", ADMIN, async (_p, ctx, ses) => {
+  const r = await asignarBorradoresAbiertos(ctx, actorOf(ses));
+  return { ok: true, ...r };
 });
 
 export async function ofrecerBorradorMigo(ctx: Ctx, p: Row): Promise<Row | null> {

@@ -9,6 +9,7 @@ import { fichaDeCita, misCalendarios } from "./agenda_api.ts";
 import { claveRegistro } from "./ventas.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
+import { itemBorradorHome, listarBorradoresVisibles } from "./borradores_asig.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const hoyEc = (ctx: Ctx) => new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
@@ -38,11 +39,16 @@ extend("staff_home", "any", async (_p, ctx, ses) => {
   const mios = misCalendarios(cals, ses);
   const verTodos = nivAgenda === "todos";
 
+  const borHome = (await listarBorradoresVisibles(ctx, ses)).map(itemBorradorHome);
   if (nivAgenda === "no") {
-    return { ok: true, hoy, nombre, citas: [], aviso: "" };
+    const early = { ok: true, hoy, nombre, citas: [], aviso: "", borradores: borHome };
+    if (!limpio(early)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
+    return early;
   }
   if (!verTodos && !mios.length) {
-    return { ok: true, hoy, nombre, citas: [], aviso: "No tienes un calendario de Acuity asignado. Pide a un admin que lo enlace en Agenda → Calendarios." };
+    const early = { ok: true, hoy, nombre, citas: [], aviso: "No tienes un calendario de Acuity asignado. Pide a un admin que lo enlace en Agenda → Calendarios.", borradores: borHome };
+    if (!limpio(early)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
+    return early;
   }
 
   const L = await citasRango(ctx, hoy, hoy, {});
@@ -94,7 +100,7 @@ extend("staff_home", "any", async (_p, ctx, ses) => {
     return out;
   }).sort((x, y) => s(x.datetime).localeCompare(s(y.datetime)));
 
-  const payload = { ok: true, hoy, nombre, citas, puede: { ticket: true, noLlego: true, mover: verTodos } };
+  const payload = { ok: true, hoy, nombre, citas, puede: { ticket: true, noLlego: true, mover: verTodos }, borradores: borHome };
   if (!limpio(payload)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
   return payload;
 });
