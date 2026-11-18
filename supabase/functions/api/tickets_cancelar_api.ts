@@ -144,7 +144,9 @@ export async function liberarSesionesDe(ctx: Ctx, actor: string, quien: string, 
   return out;
 }
 
-extend("tk_cancelar", "any", async (p, ctx, ses) => {
+extend("tk_cancelar", "any", async (p, ctx, ses) => cancelarTicket(p, ctx, ses));
+
+export async function cancelarTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin puede cancelar un ticket" };
   const motivo = s(p.motivo).trim().slice(0, 300);
   if (!motivo) return { error: "Escribe el motivo de la cancelación" };
@@ -186,4 +188,4 @@ extend("tk_cancelar", "any", async (p, ctx, ses) => {
   await ctx.db.write(actor, "tickets", "update", { id: r.id }, { orig: { ...o, anulado: true, cancelado: true, cancelado_motivo: motivo, cancelado_por: quien, cancelado_ts: ts } });
   await logAccion(ctx.db, actor, "TICKET CANCELADO", so + " · " + motivo + (moves.length ? " · stock devuelto: " + moves.length : "") + (paqs.length ? " · paquetes anulados: " + paqs.map((x) => x.codigo || x.paquete).join(", ") : "") + (liberadas.length ? " · sesiones liberadas: " + liberadas.map((x) => (x.codigo || x.paquete) + " #" + x.slot).join(", ") : ""));
   return { ok: true, so, stock: moves.length, unidades: moves.reduce((a, m) => a + n(m.delta), 0), paquetes: paqs, liberadas };
-});
+}

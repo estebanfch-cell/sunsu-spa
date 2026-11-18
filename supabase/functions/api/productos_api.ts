@@ -2,6 +2,7 @@
 // Escritura solo admin: mcprod_save (columnas de erp_productos, nunca catalogo ni la hoja),
 // mcprod_foto y mcprod_nuevo. Cada cambio queda en audit_log por el trigger trg_audit.
 import { extend, FNS } from "./handlers.ts";
+import { SOLICITUD_HOOKS } from "./inline_api.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
@@ -343,7 +344,7 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
   } else if (foto.startsWith("data:") || foto.startsWith("http")) foto_data = foto;
 
   let out: Row = {
-    ok: true, admin: pr.admin, verCostos: pr.costos,
+    ok: true, admin: pr.admin, verCostos: pr.costos, puedePedir: !pr.admin,
     producto: {
       ...base, foto_data,
       sku_proveedor: s(prod.sku_proveedor), codigo_barras: s(prod.codigo_barras) || s(cab?.codigo_barras), unidad: s(prod.unidad) || s(cab?.unidad),
@@ -375,7 +376,37 @@ extend("mcprod_get", "any", async (p, ctx, ses) => {
 });
 
 extend("mcprod_save", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin edita productos" };
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin guarda directo: envía una solicitud" };
+  return await guardarProducto(ctx, ses, p, "");
+});
+
+const ETQ_PROD: Record<string, string> = {
+  nombre: "Nombre", marca: "Marca", categoria: "Categoría", linea: "Línea", unidad: "Unidad", codigo_barras: "Código de barras", sku_proveedor: "SKU proveedor",
+  observaciones: "Observaciones", producto_base: "Producto base", bodega_def: "Bodega", sububicacion_def: "Sububicación", beta_descripcion: "Descripción",
+  beta_stock_minimo: "Stock mínimo", beta_punto_reorden: "Punto de reorden", beta_contenido: "Contenido", beta_contenido_unidad: "Unidad de contenido",
+  beta_envase: "Envase", beta_unidades_empaque: "Unidades por empaque", activo: "Activo", beta_pvp: "PVP", beta_compra_real: "Compra real", beta_compra_comision: "Compra para comisión",
+};
+// Personal (TK59): pide el cambio o la eliminación de un producto; una admin lo aprueba en Solicitudes.
+SOLICITUD_HOOKS["producto_beta"] = {
+  fila: async (ctx, ses, fila) => {
+    const pr = await permisos(ctx, ses);
+    if (!pr.puede) return { error: "No tienes permiso" };
+    const prod = (await safeAll(ctx, "erp_productos")).find((x) => s(x.id) === fila);
+    if (!prod || s(prod.beta_eliminado_at)) return { error: "Producto no encontrado" };
+    const antes: Row = { _campos: ETQ_PROD };
+    for (const k of Object.keys(ETQ_PROD)) if (!PRECIO_KEYS.includes(k) || pr.costos) antes[k] = prod[k] ?? "";
+    return { row: prod, antes, etiqueta: "Producto " + s(prod.sku) + " · " + s(prod.nombre), enlace: "#/m/productos/p/" + encodeURIComponent(fila) };
+  },
+  aplicar: async (ctx, ses, fila, propuestos, sol) =>
+    await guardarProducto(ctx, ses, { id: fila, cambios: propuestos, motivo: s(sol?.motivo) }, sol ? "solicitud de " + s(sol.solicitante) + " aprobada" : "solicitud aprobada"),
+  borrar: async (ctx, ses, fila, _motivo, sol) => {
+    const now = ctx.now.toISOString();
+    const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: fila }, { beta_eliminado_at: now, beta_eliminado_por: actorOf(ses) + (sol ? " (solicitud de " + s(sol.solicitante) + ")" : "") });
+    return saved ? { ok: true } : { error: "Producto no encontrado" };
+  },
+};
+
+async function guardarProducto(ctx: Ctx, ses: Ses, p: Row, via: string): Promise<Row> {
   const id = s(p.id);
   if (!id) return { error: "Falta el producto" };
   const { row, error } = limpiarCambios((p.cambios || {}) as Row);
@@ -397,12 +428,12 @@ extend("mcprod_save", "any", async (p, ctx, ses) => {
     }
     row.codigo_barras = c;
   }
-  row.beta_editado_por = actorOf(ses);
+  row.beta_editado_por = actorOf(ses) + (via ? " (" + via + ")" : "");
   row.beta_editado_at = ctx.now.toISOString();
   const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id }, row);
   if (!saved) return { error: "Producto no encontrado" };
   return { ok: true, id };
-});
+}
 
 extend("mcprod_foto", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin cambia fotos" };
