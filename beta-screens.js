@@ -9601,92 +9601,10 @@ function _cabScanBuscar(){
   });
 }
 // ── ESCANER DE CODIGO DE BARRAS ──
-// Usa la camara del navegador con ZXing (cargado del CDN solo al primer uso).
-// Funciona en Safari de iPhone: video en vivo, HTTPS ya lo tenemos. Al leer un
-// codigo llama al callback y cierra. Boton Cancelar siempre visible.
+// TK128: la implementación vive en mc-scan.js (BarcodeDetector + ZXing vendido, sin CDN).
 function _scanAbrir(cb){
-  var overlay=function(){
-    var ov=document.createElement('div');
-    ov.id='scan-ov';
-    ov.style.cssText='position:fixed;inset:0;background:rgba(10,16,30,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="color:white;font-size:0.78rem;font-weight:800;margin-bottom:10px">📷 Apunta al código de barras</div>'
-      +'<video id="scan-vid" playsinline style="width:100%;max-width:420px;border-radius:14px;background:black"></video>'
-      +'<button id="scan-cancel" style="margin-top:14px;padding:11px 22px;background:white;color:var(--navy);border:none;border-radius:11px;font-size:0.76rem;font-weight:800;cursor:pointer">Cancelar</button>';
-    document.body.appendChild(ov);
-    return ov;
-  };
-  var arrancarZXing=function(){
-    var ov=overlay();
-    var reader=new ZXing.BrowserMultiFormatReader();
-    var cerrar=function(){
-      try{ reader.reset(); }catch(eR){}
-      var o2=document.getElementById('scan-ov'); if(o2) o2.remove();
-    };
-    document.getElementById('scan-cancel').onclick=cerrar;
-    reader.decodeFromConstraints({video:{facingMode:'environment'}}, document.getElementById('scan-vid'), function(result, err){
-      if(result){
-        var txt=result.getText();
-        cerrar();
-        if(navigator.vibrate) navigator.vibrate(60);
-        cb(txt);
-      }
-    }).catch(function(){
-      cerrar();
-      toast('❌ No se pudo abrir la cámara — revisa el permiso en Safari','#B86B6B');
-    });
-  };
-  var arrancarDetector=function(){
-    var ov=overlay();
-    var video=document.getElementById('scan-vid');
-    var stream=null, vivo=true;
-    var cerrar=function(){
-      vivo=false;
-      try{ if(stream) stream.getTracks().forEach(function(t){ t.stop(); }); }catch(eS){}
-      var o2=document.getElementById('scan-ov'); if(o2) o2.remove();
-    };
-    document.getElementById('scan-cancel').onclick=cerrar;
-    var formats=['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code','itf','codabar'];
-    var det;
-    try{ det=new BarcodeDetector({formats:formats}); }catch(eD){ det=null; }
-    if(!det){ cerrar(); arrancarZXingCargar(); return; }
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(st){
-      stream=st;
-      video.srcObject=st;
-      video.setAttribute('playsinline','');
-      video.muted=true;
-      var play=video.play();
-      if(play&&play.catch) play.catch(function(){});
-      var tick=function(){
-        if(!vivo) return;
-        det.detect(video).then(function(codes){
-          if(!vivo) return;
-          if(codes&&codes.length&&codes[0].rawValue){
-            var txt=codes[0].rawValue;
-            cerrar();
-            if(navigator.vibrate) navigator.vibrate(60);
-            cb(txt);
-            return;
-          }
-          requestAnimationFrame(tick);
-        }).catch(function(){ if(vivo) requestAnimationFrame(tick); });
-      };
-      requestAnimationFrame(tick);
-    }).catch(function(){
-      cerrar();
-      arrancarZXingCargar();
-    });
-  };
-  var arrancarZXingCargar=function(){
-    if(window.ZXing){ arrancarZXing(); return; }
-    toast('⏳ Cargando escáner...','var(--navy)');
-    var sc=document.createElement('script');
-    sc.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
-    sc.onload=arrancarZXing;
-    sc.onerror=function(){ toast('❌ Sin conexión para cargar el escáner','#B86B6B'); };
-    document.head.appendChild(sc);
-  };
-  if(typeof window.BarcodeDetector==='function'){ arrancarDetector(); return; }
-  arrancarZXingCargar();
+  if (window.MCScan && typeof window.MCScan.abrir === "function") return window.MCScan.abrir(cb);
+  if (typeof toast === "function") toast("❌ No se pudo abrir el escáner","#B86B6B");
 }
 // ── TRASPASOS: mover envases entre Bodega Central y Local Sunsu ──
 // Mismos codigos, solo cambian de lado. El servidor valida el stock del origen

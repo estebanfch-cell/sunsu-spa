@@ -102,26 +102,11 @@
       main.querySelector("#mcap-res").innerHTML = '<p class="mcap-pill" style="display:inline-block">✓ ' + e(nombre) + " abierto en " + e(r.destino) + (r.consignacion ? " · 🤝 consumo de consignación (va a la liquidación del proveedor)" : "") + "</p>";
     };
   }
-  /** Cámara: BarcodeDetector del navegador (Chrome/Android, Safari reciente). Si no hay, se escribe el código. */
-  async function escanear(cb) {
-    if (!("BarcodeDetector" in window) || !navigator.mediaDevices) { toast2("Este navegador no lee códigos con la cámara; escribe el código", 1); return; }
-    var ov = document.createElement("div"); ov.className = "mcap-cam";
-    ov.innerHTML = '<video playsinline muted></video><div style="color:#fff;font-weight:700">Apunta al código de barras</div><button class="btn" type="button">Cancelar</button>';
-    document.body.appendChild(ov);
-    var vid = ov.querySelector("video"), stream = null, vivo = true;
-    var fin = function () { vivo = false; if (stream && window.SunsuMedia) SunsuMedia.pausar(stream); else if (stream) stream.getVideoTracks().forEach(function (tr) { tr.enabled = false; }); vid.srcObject = null; ov.remove(); };
-    var _el = ov.querySelector("button"); if (_el) _el.onclick = fin;
-    try {
-      stream = window.SunsuMedia ? await SunsuMedia.camara("environment") : await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
-      vid.srcObject = stream; await vid.play();
-      var det = new window.BarcodeDetector();
-      var loop = async function () {
-        if (!vivo) return;
-        try { var c = await det.detect(vid); if (c && c.length) { var v = c[0].rawValue; fin(); cb(v); return; } } catch (x) { /* siguiente cuadro */ }
-        setTimeout(loop, 250);
-      };
-      loop();
-    } catch (x) { fin(); toast2("No se pudo abrir la cámara", 1); }
+  /** Cámara: el módulo compartido MCScan (sirve en iPhone, con ZXing vendido si hace falta). */
+  function escanear(cb) {
+    var run = window.MCScan && window.MCScan.abrir || window._scanAbrir;
+    if (typeof run === "function") return run(cb);
+    toast2("Este navegador no lee códigos con la cámara; escribe el código", 1);
   }
 
   // ---------- Costo por facial / protocolo automático ----------

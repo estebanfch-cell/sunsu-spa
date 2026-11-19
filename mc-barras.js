@@ -158,7 +158,11 @@
     var sc = main.querySelector("#mcbr-scan");
     if (sc) { sc.focus(); sc.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); buscarCodigo(main, sc.value); } }; }
     var cam = main.querySelector("#mcbr-cam");
-    if (cam) cam.onclick = function () { if (window.MCAperturas && window.MCAperturas.escanear) window.MCAperturas.escanear(function (c) { buscarCodigo(main, c); }); else toast2("Cámara no disponible; usa el lector o escribe el código", 1); };
+    if (cam) cam.onclick = function () {
+      var run = window.MCScan && window.MCScan.abrir || window._scanAbrir;
+      if (typeof run === "function") run(function (c) { buscarCodigo(main, c); });
+      else toast2("Este navegador no lee códigos con la cámara; escribe el código", 1);
+    };
     wireScan(main); wireTabla(main);
   }
   window.MCBarras = {
