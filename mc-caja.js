@@ -21,6 +21,22 @@
       ".mccj-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.mccj-f label{font-size:.72rem;color:var(--gray,#8a93a6);display:flex;flex-direction:column;gap:3px}.mccj-f input,.mccj-f select,.mccj-f textarea{padding:9px 10px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:10px;font:inherit}",
       ".pg-vrow{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;width:100%}.pg-vrow input{flex:1 1 140px;min-width:0}.pg-vbtn{flex:0 0 auto;white-space:nowrap!important;align-self:stretch;display:inline-flex;align-items:center;margin:0;cursor:pointer;font-size:.72rem;padding:8px 10px}",
       ".pg-thumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.pg-th{position:relative;display:inline-block;flex:none}.pg-th-open{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--cream-d,#e6dccb);padding:0;background:#f4f5f8;cursor:pointer;display:block}.pg-th-x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#1A2744;color:#fff;font-size:12px;line-height:20px;cursor:pointer;padding:0}",
+
+      ".mccj-card.mccj-pay{padding:8px 10px;margin:8px 0;overflow:hidden;max-width:100%;box-sizing:border-box}",
+      ".mccj-pay-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:.8rem;font-weight:800;color:var(--navy-d,#3D5A7A);padding:0;margin:0;min-width:0;line-height:1.2}",
+      ".mccj-pay-h .mccj-sub{font-weight:700;font-size:.78rem}",
+      ".mccj-pay-item{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;font-size:.7rem;padding:4px 0;border-bottom:1px solid var(--cream-d,#f1ede6);line-height:1.25}",
+      ".mccj-pay-item-t{flex:1;min-width:0;overflow-wrap:anywhere}",
+      ".mccj-pay-item-m{flex:none;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}",
+      ".mccj-pay-item .btn{flex:none;padding:3px 8px;font-size:.66rem}",
+      ".mccj-pay-f{display:flex;flex-direction:column;gap:6px;margin-top:6px;min-width:0;max-width:100%}",
+      ".mccj-pay-row{display:flex;align-items:stretch;gap:6px;min-width:0;max-width:100%}",
+      ".mccj-pay-row select,.mccj-pay-row input:not([type=file]){flex:1 1 0;min-width:0;padding:7px 8px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:9px;font:inherit;font-size:.76rem;background:#fff}",
+      ".mccj-pay-cam,.mccj-pay .pg-vbtn{flex:0 0 auto;white-space:nowrap!important;display:inline-flex;align-items:center;justify-content:center;margin:0;padding:7px 9px;border-radius:9px;font-size:.84rem;cursor:pointer;min-width:36px}",
+      ".mccj-pay-cam.on,.mccj-pay .pg-vbtn.on{background:var(--green-l,#EDF5F1);border-color:var(--green,#7A9E8A)}",
+      ".mccj-pay-ok,#pg-ok.mccj-pay-ok{flex:0 0 auto;white-space:nowrap;padding:7px 12px;border-radius:9px;font-size:.76rem;font-weight:800}",
+      ".mccj-pay-add{border:0;background:none;color:var(--navy,#5B7FA6);font:inherit;font-size:.76rem;font-weight:700;padding:4px 0;cursor:pointer}",
+      ".mccj-pay .pg-thumbs{margin-top:4px}.mccj-pay .pg-th-open{width:36px;height:36px}",
       ".mccj-ov{position:fixed;inset:0;background:rgba(40,50,70,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}.mccj-ov>div{background:#fff;border-radius:16px;padding:18px;max-width:520px;width:100%;max-height:92vh;overflow:auto}",
       ".mccj-tot{display:flex;gap:8px;flex-wrap:wrap}.mccj-tot span{background:var(--blue-l,#eef3fb);border-radius:10px;padding:6px 10px;font-size:.78rem}.mccj-tot b{display:block;font-size:.95rem}",
       ".mccj-in{color:#2e7d52;font-weight:700}.mccj-out{color:#b03a2e;font-weight:700}.mccj-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#eef0f4;color:#6b7280;font-weight:800}",
@@ -145,22 +161,28 @@
       (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
       var filaPago = function (p, puedeAnular) {
         var th = p.foto ? thumbHtml(p.foto, "Voucher", true) : "";
-        return "<tr><td>" + e(fh(p.fecha)) + "</td><td>" + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? ' <span class="mccj-sub">' + e(p.ref) + "</span>" : "") + th + '</td><td class="num">' + $m(p.monto) + '</td><td class="mccj-sub">' + e(p.registrado_por || p.por || "") + "</td>" +
-          (r.admin ? (puedeAnular ? '<td class="num"><button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button></td>' : "<td></td>") : "") + "</tr>";
+        var quien = p.registrado_por || p.por || "";
+        return '<div class="mccj-pay-item"><span class="mccj-pay-item-t">' + e(fh(p.fecha)) + " · " + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? " · " + e(p.ref) : "") + (quien ? ' <span class="mccj-sub">' + e(quien) + "</span>" : "") + "</span>" + th + '<span class="mccj-pay-item-m">' + $m(p.monto) + "</span>" +
+          (r.admin && puedeAnular ? '<button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button>' : "") + "</div>";
       };
       var filas = (r.pagosLegado || []).map(function (p) { return filaPago(p, false); }).join("") + (r.beta || []).map(function (p) { return filaPago(p, true); }).join("");
       // TK82: el saldo lo manda la API (ya aplica redondeo ≤ $0.05 y anulado). No recomputar con el total de líneas.
       var saldo = Math.max(0, Math.round((r.saldo != null ? r.saldo : (total - (r.legado || 0) - (r.pagadoBeta || 0))) * 100) / 100);
       var prefill = saldo > 0.05 ? saldo.toFixed(2) : "";
-      var opts = '<option value="">Elige…</option>' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("");
-      host.innerHTML = '<div class="mccf-card mccj-card"><b>💵 Pagos</b> <span class="mccj-sub">· saldo ' + $m(saldo) + "</span>" +
-        (filas ? '<table class="mccj-t"><thead><tr><th>Fecha</th><th>Forma</th><th class="num">Monto</th><th>Registró</th>' + (r.admin ? "<th></th>" : "") + "</tr></thead><tbody>" + filas + "</tbody></table>" : "") +
-        (saldo > 0.009 ? '<div class="mccj-f" style="margin-top:8px"><label>Forma de pago<select id="pg-met">' + opts + "</select></label>" +
-          '<label>Monto<input id="pg-monto" inputmode="decimal" value="' + prefill + '" placeholder="0.00"></label>' +
-          '<label style="grid-column:1/-1">Voucher / comprobante<span class="pg-vrow"><input id="pg-ref" placeholder="N.º (tarjeta, transferencia)"><label class="btn ghost small pg-vbtn">📷 Voucher<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></span></label>' +
-          '<div id="pg-prev" class="pg-thumbs" style="grid-column:1/-1"></div>' +
-          '<label style="justify-content:flex-end"><button class="btn" type="button" id="pg-ok">Registrar pago</button></label></div><p class="mccj-sub">El efectivo entra solo a la caja chica. 📷 Voucher abre el menú del iPhone (Tomar foto, Fototeca o Archivos; también PDF).</p>'
-          : '<p class="mccj-sub">✓ Pagado completo.</p>' + pagosFaltanBtnsHtml(r) + '<div id="pg-prev" class="pg-thumbs"></div>') + "</div>";
+      var opts = '<option value="">Forma de pago</option>' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("");
+      var formHtml = '<div class="mccj-pay-f" id="pg-form">' +
+        '<div class="mccj-pay-row"><select id="pg-met" aria-label="Forma de pago" title="Forma de pago">' + opts + "</select>" +
+        '<input id="pg-monto" inputmode="decimal" value="' + prefill + '" placeholder="Monto" aria-label="Monto" title="Monto">' +
+        '<label class="btn ghost small pg-vbtn mccj-pay-cam" title="Voucher: tomar foto, fototeca, archivos o PDF" aria-label="Adjuntar voucher">📷<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></div>' +
+        '<div class="mccj-pay-row"><input id="pg-ref" placeholder="N.° ref. / voucher" aria-label="N.° ref. / voucher" title="N.° de referencia o voucher. El efectivo entra solo a la caja chica.">' +
+        '<button class="btn mccj-pay-ok" type="button" id="pg-ok">Registrar</button></div>' +
+        '<div id="pg-prev" class="pg-thumbs"></div></div>';
+      var formVisible = saldo > 0.009;
+      host.innerHTML = '<div class="mccf-card mccj-card mccj-pay"><div class="mccj-pay-h"><span>💵 Pagos · saldo ' + $m(saldo) + "</span></div>" +
+        (filas || "") +
+        (formVisible ? formHtml : (filas ? '<button type="button" class="mccj-pay-add" id="pg-add">+ Pago</button>' + '<div hidden id="pg-form-wrap">' + formHtml + "</div>" : formHtml)) +
+        (!formVisible ? pagosFaltanBtnsHtml(r) : "") +
+        "</div>";
       // TK97: un solo botón 📷 Voucher (sin capture) junto al campo. Sube al instante al ticket y se enlaza al registrar el pago.
       var foto = "", fotoListo = false, selM = host.querySelector("#pg-met"), prevF = host.querySelector("#pg-prev");
       var pideFoto = function () { var m = selM && selM.value; return m === "tarjeta" || m === "transferencia"; };
@@ -177,12 +199,23 @@
         });
       };
       pintThumbs();
+      var addBtn = host.querySelector("#pg-add");
+      if (addBtn) addBtn.onclick = function () {
+        var wrap = host.querySelector("#pg-form-wrap");
+        if (wrap) wrap.hidden = false;
+        addBtn.hidden = true;
+      };
+      var markCam = function () {
+        var hay = !!(foto || fotoListo || (r.fotos && r.fotos.some(function (f) { return f && f.url; })));
+        host.querySelectorAll(".pg-vbtn").forEach(function (b) { b.classList.toggle("on", hay); });
+      };
+      markCam();
       var inpV = host.querySelector("#pg-voucher");
       if (inpV) inpV.onchange = async function () {
         var f = inpV.files && inpV.files[0]; inpV.value = ""; if (!f) return;
         try { foto = await comprimirFoto(f); } catch (x) { foto = ""; toast2((x && x.message) || "No se pudo leer", 1); return; }
         fotoListo = false;
-        pintThumbs();
+        pintThumbs(); markCam();
         toast2("⏳ Subiendo voucher…");
         try {
           var up = await api("tk_subir_doc", { clave: clave, imagen: foto });
@@ -192,7 +225,7 @@
           if (onFoto) onFoto();
           var rec = await api("pg_ticket", { clave: clave, total: totalFn() });
           if (rec && rec.ok) { r.fotos = rec.fotos; r.beta = rec.beta; r.admin = rec.admin; }
-          pintThumbs();
+          pintThumbs(); markCam();
         } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
       };
       host.querySelectorAll(".pg-voucher-faltan").forEach(function (inp) {

@@ -158,6 +158,22 @@ async function consultarSafe(db: Parameters<typeof consultar>[0], table: string,
   }
 }
 
+
+/** Línea compacta para precargar el detalle desde tk_historial (TK152). */
+export function lineaHistorial(l: Row): Row {
+  return {
+    tipo: l.tipo, sku: l.sku, nombre: l.nombre,
+    cantidad: l.cantidad, precio_unit: l.precio_unit, total_linea: l.total_linea,
+    canje: l.canje === true || s(l.canje).toLowerCase() === "true",
+    cortesia: l.cortesia === true || s(l.cortesia).toLowerCase() === "true",
+    consumoInterno: l.consumoInterno === true || l.consumo_interno === true,
+    descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0,
+    excluir_comision: l.excluir_comision === true, estimado: l.estimado === true,
+    promo: l.promo || "", paqueteSesion: l.paqueteSesion || l.paquete_sesion || "",
+    valorNominal: l.valorNominal || l.valor_nominal || 0,
+  };
+}
+
 export async function enriquecerItemsLista(
   db: Parameters<typeof consultar>[0],
   filas: Row[],
@@ -167,7 +183,7 @@ export async function enriquecerItemsLista(
   if (!filas.length || !items.length) return;
   const claves = filas.map((r) => claveDe(r, leerSerie(r, "so_num")));
   let lineas = await consultarSafe(db, "beta_ticket_lineas", {
-    cols: ["ticket_clave", "tipo", "sku", "nombre", "cantidad", "precio_unit", "total_linea", "canje"],
+    cols: ["ticket_clave", "tipo", "sku", "nombre", "cantidad", "precio_unit", "total_linea", "canje", "descuento_tipo", "descuento_valor", "excluir_comision", "estimado", "promo", "cortesia", "paquete_sesion", "valor_nominal"],
     filtros: [{ col: "ticket_clave", op: "in", val: claves }],
   });
   if (!lineas.length && claves.length) {
@@ -232,6 +248,7 @@ export async function enriquecerItemsLista(
     const L = lineasPor.get(clave) || [];
     const res = L.length ? resumenDeLineas(L) : resumenDeHoja(r, d);
     it.resumen = res;
+    if (L.length) it.lineas = L.map((l) => lineaHistorial(l));
     it.resumenTxt = textoResumen(res);
     const fotos: FotoCard[] = [];
     const seen = new Set<string>();
