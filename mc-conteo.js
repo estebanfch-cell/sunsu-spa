@@ -45,6 +45,8 @@
       "#cc .cc-kb.on,#mccf-root .cc-kb.on{background:var(--gold);border-color:var(--gold);color:var(--navy-d)}",
       "#cc .cc-list,#mccf-root .cc-list{background:var(--white);border:1px solid var(--cream-d);border-radius:12px;overflow:hidden}",
       "#cc .cc-ln,#mccf-root .cc-ln{display:flex;align-items:center;gap:8px;padding:5px 8px;min-height:48px;box-sizing:border-box;border-bottom:1px solid var(--cream-d)}",
+      "#cc .cc-ln.cc-ya,#mccf-root .cc-ln.cc-ya{outline:2px solid var(--gold);background:var(--gold-l);border-radius:8px}",
+      "#cc .cc-hits button[disabled],#mccf-root .cc-hits button[disabled]{opacity:.55;pointer-events:none}",
       "#cc .cc-nm,#mccf-root .cc-nm{font-weight:700;font-size:13px;color:var(--text);line-height:1.22;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}",
       "#cc .cc-cd,#mccf-root .cc-cd{font-size:11.5px;color:var(--gray);white-space:normal;line-height:1.3}",
       "#cc .cc-sub,#mccf-root .cc-sub{flex:0 0 auto;text-align:right;font-size:12.5px;color:var(--navy-d);white-space:nowrap;line-height:1.25}",
@@ -642,8 +644,30 @@
   }
   function yaEnConteo() {
     var ya = {};
-    ((C.sec && C.sec.lineas) || (C.cur && C.cur.lineas) || []).forEach(function (l) { ya[l.productoId || l.producto_id] = 1; });
+    ((C.sec && C.sec.lineas) || (C.cur && C.cur.lineas) || []).forEach(function (l) { ya[l.productoId || l.producto_id] = l.id; });
     return ya;
+  }
+  /** Si el producto ya está en el conteo, baja a esa línea y la destaca (no se agrega otra). */
+  function irALineaExistente(id) {
+    if (!id) return;
+    C.addOpen = false;
+    var hits = document.getElementById("mccf-hits");
+    if (hits) { hits.hidden = true; hits.innerHTML = ""; }
+    var el = document.getElementById("cc-l" + id);
+    if (!el) {
+      C.filtro = "";
+      var inp = document.getElementById("mccf-f");
+      if (inp) inp.value = "";
+      pintarLista();
+      el = document.getElementById("cc-l" + id);
+    }
+    if (el) {
+      el.classList.add("cc-ya");
+      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (x) {}
+      setTimeout(function () { el.classList.remove("cc-ya"); }, 2500);
+      var c = document.getElementById("cc-c" + id);
+      if (c) { try { c.focus(); c.select(); } catch (x) {} }
+    }
   }
   function pintarProg() {
     var d = C.sec; if (!d) return;
@@ -657,7 +681,8 @@
   function aplicarProductoAgregado(lin) {
     var d = C.sec; if (!d || !lin || !lin.id) return;
     d.lineas = d.lineas || [];
-    if (!d.lineas.some(function (x) { return x.id === lin.id; })) d.lineas.push(lin);
+    if (d.lineas.some(function (x) { return x.id === lin.id; })) { irALineaExistente(lin.id); return; }
+    d.lineas.push(lin);
     C.filtro = "";
     C.addOpen = false;
     C.otra = lin.id;
@@ -679,18 +704,29 @@
     if (!qv && !C.addOpen) { hits.hidden = true; hits.innerHTML = ""; return; }
     var ps = await cargarProds(!!C.addOpen);
     var ya = yaEnConteo();
-    var H = (window.MCBuscar
+    var all = (window.MCBuscar
       ? window.MCBuscar.filtrar(ps, qv, keysProd)
       : ps.filter(function (p) { return ((p.sku || "") + " " + (p.skuVisible || "") + " " + (p.nombre || "") + " " + (p.marca || "") + " " + (p.barras || []).join(" ")).toLowerCase().indexOf(qv.toLowerCase()) >= 0; })
-    ).filter(function (p) { return !ya[p.id]; }).slice(0, 12);
+    );
+    var Hya = qv ? all.filter(function (p) { return ya[p.id]; }).slice(0, 8) : [];
+    var H = all.filter(function (p) { return !ya[p.id]; }).slice(0, 12);
     hits.hidden = false;
-    if (!H.length) {
+    if (!H.length && !Hya.length) {
       hits.innerHTML = '<div class="cc-hits-tit">' + (qv ? "No está en el catálogo de Productos. Solo se pueden agregar productos que ya existen." : "Busca por nombre, SKU, código, código de barras o marca. El catálogo completo aparece aquí debajo de las líneas del conteo.") + "</div>";
       return;
     }
-    hits.innerHTML = '<div class="cc-hits-tit">En el catálogo — Agregar al conteo (esperado 0)</div>' + H.map(function (p) {
-      return '<button type="button" data-cf-add="' + e(p.id) + '"><span class="cc-hit-txt"><span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + (p.marca ? '<span class="cc-hit-marca"> · ' + e(p.marca) + "</span>" : "") + '</span><span class="cc-add">Agregar</span></button>';
-    }).join("");
+    var html = "";
+    if (Hya.length) {
+      html += '<div class="cc-hits-tit">Ya está en el conteo</div>' + Hya.map(function (p) {
+        return '<button type="button" data-cf-add="' + e(p.id) + '"><span class="cc-hit-txt"><span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + (p.marca ? '<span class="cc-hit-marca"> · ' + e(p.marca) + "</span>" : "") + '</span><span class="cc-add">Agregar</span></button>';
+      }).join("");
+    }
+    if (H.length) {
+      html += '<div class="cc-hits-tit">En el catálogo — Agregar al conteo (esperado 0)</div>' + H.map(function (p) {
+        return '<button type="button" data-cf-add="' + e(p.id) + '"><span class="cc-hit-txt"><span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + (p.marca ? '<span class="cc-hit-marca"> · ' + e(p.marca) + "</span>" : "") + '</span><span class="cc-add">Agregar</span></button>';
+      }).join("");
+    }
+    hits.innerHTML = html;
   }
   function lineaDeAgregada(r, pid) {
     var lin = r && r.linea;
@@ -907,13 +943,25 @@
     if (hits) hits.onclick = async function (ev) {
       var b = ev.target.closest("[data-cf-add]"); if (!b) return;
       if (!d.puedeOperar) return;
+      if (C.addBusy) return;
       var pid = b.getAttribute("data-cf-add");
-      await flushDirty();
-      var ep = d.modo === "bodega" ? "cf_guardar" : "cf_sec_guardar";
-      var ident = d.modo === "bodega" ? d.conteo.id : d.seccion.id;
-      var r = await api(ep, { id: ident, agregar: { producto_id: pid } });
-      if (!r || r.error) return alert((r && r.error) || "No se pudo agregar");
-      aplicarProductoAgregado(lineaDeAgregada(r, pid));
+      var existe = yaEnConteo()[pid];
+      if (existe) { irALineaExistente(existe); return; }
+      C.addBusy = true;
+      var btns = hits.querySelectorAll("[data-cf-add]");
+      for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
+      try {
+        await flushDirty();
+        var ep = d.modo === "bodega" ? "cf_guardar" : "cf_sec_guardar";
+        var ident = d.modo === "bodega" ? d.conteo.id : d.seccion.id;
+        var r = await api(ep, { id: ident, agregar: { producto_id: pid } });
+        if (!r || r.error) return alert((r && r.error) || "No se pudo agregar");
+        if (r.ya) { irALineaExistente((r.linea && r.linea.id) || r.agregada); return; }
+        aplicarProductoAgregado(lineaDeAgregada(r, pid));
+      } finally {
+        C.addBusy = false;
+        for (var j = 0; j < btns.length; j++) btns[j].disabled = false;
+      }
     };
     var term = main.querySelector("#mccf-terminar");
     if (term) term.onclick = async function () {

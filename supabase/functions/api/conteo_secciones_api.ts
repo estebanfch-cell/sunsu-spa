@@ -471,8 +471,22 @@ extend("cf_sec_guardar", "any", async (p, ctx, ses) => {
       || (code ? prods.find((x) => skuCode(s(x.sku)) === code || skuCode(s(x.skuVisible)) === code) : undefined)
       || (barra ? prods.find((x) => (Array.isArray(x.barras) ? x.barras : []).some((b) => s(b) === barra)) : undefined);
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
-    const ya = L.find((l) => s(l.producto_id) === s(pr.id) && s(l.sububicacion) === s(a.sububicacion));
-    if (ya) return { error: s(pr.skuVisible || pr.sku) + " ya está en la lista", lineaId: ya.id };
+    const delConteo = (await todas(ctx, "beta_conteo_lineas")).filter((l) => s(l.conteo_id) === s(r.c.id));
+    const ya = delConteo.find((l) => s(l.producto_id) === s(pr.id)) || L.find((l) => s(l.producto_id) === s(pr.id));
+    if (ya) {
+      const sub = s(ya.sub_contada) || s(ya.sububicacion);
+      return {
+        ok: true, cambiadas, agregada: s(ya.id), ya: true,
+        linea: {
+          id: s(ya.id), orden: n(ya.orden), productoId: s(ya.producto_id), sku: s(ya.sku), nombre: s(ya.nombre),
+          sububicacion: s(ya.sububicacion), fromSub: sub || bodegaNombre(s(r.s.bodega), s(r.s.sububicacion)), subCodigo: sub,
+          sistema: esAdmin(ses.rol) ? n(ya.sistema) : null, mov: 0, esperado: n(ya.esperado ?? ya.sistema),
+          contado: ya.contado == null || ya.contado === "" ? null : n(ya.contado), estado: s(ya.estado),
+          subContada: sub, buscar: ya.buscar === true, otraSub: s(ya.otra_sub), otraQty: ya.otra_qty == null || ya.otra_qty === "" ? null : n(ya.otra_qty),
+          agregado: ya.agregado === true, ya: true,
+        },
+      };
+    }
     const sistema = sistemaDe(pr, s(r.s.bodega), s(r.s.sububicacion));
     const cont = a.contado == null || a.contado === "" ? null : n(a.contado);
     const row = {
@@ -483,8 +497,22 @@ extend("cf_sec_guardar", "any", async (p, ctx, ses) => {
       sistema: round2(sistema), esperado: round2(sistema), contado: cont, estado: cont == null ? "pendiente" : "contado",
       agregado: true, buscar: false, contado_por: cont == null ? null : actor, contado_at: cont == null ? null : now,
     };
-    await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, row);
-    agregada = row.id;
+    try {
+      await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, row);
+      agregada = row.id;
+    } catch (err) {
+      const otra = (await todas(ctx, "beta_conteo_lineas")).find((l) => s(l.conteo_id) === s(r.c.id) && s(l.producto_id) === s(pr.id));
+      if (!otra) throw err;
+      return { ok: true, cambiadas, agregada: s(otra.id), ya: true, linea: {
+        id: s(otra.id), orden: n(otra.orden), productoId: s(otra.producto_id), sku: s(otra.sku), nombre: s(otra.nombre),
+        sububicacion: s(otra.sububicacion), fromSub: s(otra.sub_contada) || s(otra.sububicacion) || bodegaNombre(s(r.s.bodega), s(r.s.sububicacion)),
+        subCodigo: s(otra.sub_contada) || s(otra.sububicacion), sistema: esAdmin(ses.rol) ? n(otra.sistema) : null, mov: 0,
+        esperado: n(otra.esperado ?? otra.sistema), contado: otra.contado == null || otra.contado === "" ? null : n(otra.contado),
+        estado: s(otra.estado), subContada: s(otra.sub_contada) || s(otra.sububicacion), buscar: otra.buscar === true,
+        otraSub: s(otra.otra_sub), otraQty: otra.otra_qty == null || otra.otra_qty === "" ? null : n(otra.otra_qty),
+        agregado: otra.agregado === true, ya: true,
+      } };
+    }
     const linea = {
       id: row.id, orden: row.orden, productoId: s(row.producto_id), sku: s(row.sku), nombre: s(row.nombre),
       sububicacion: s(row.sububicacion), fromSub: s(row.sububicacion) || bodegaNombre(s(r.s.bodega), s(r.s.sububicacion)), subCodigo: s(row.sububicacion),
