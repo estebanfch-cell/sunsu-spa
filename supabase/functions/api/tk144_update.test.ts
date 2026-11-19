@@ -19,7 +19,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.equal(first.primera, true);
     assert.equal(first.localEngine, "e2");
     assert.equal(hayActualizacion("c", "c", first.localEngine, first.remoteEngine), null);
-    assert.equal(parseCacheSw('const CACHE = "sunsu-beta-2026-11-19-TK149";'), "sunsu-beta-2026-11-19-TK149");
+    assert.equal(parseCacheSw('const CACHE = "sunsu-beta-2026-11-19-TK150";'), "sunsu-beta-2026-11-19-TK150");
     assert.equal(claveOcultarBanner("c2", "e2"), "sunsu.banner.hide.c2|e2");
   });
 
@@ -27,7 +27,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(index, /Access-Control-Expose-Headers": ENGINE_HEADER/);
     assert.match(index, /\[ENGINE_HEADER\]: SUNSU_ENGINE/);
     assert.equal(ENGINE_HEADER, "X-Sunsu-Engine-Version");
-    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK149$/);
+    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK150$/);
     assert.match(sw, /event\.data\.type === "SKIP_WAITING"/);
     assert.match(sw, /!self\.registration \|\| !self\.registration\.active/);
   });

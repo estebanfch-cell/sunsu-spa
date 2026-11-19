@@ -651,6 +651,8 @@ export const CFG_DEF: ComCfg = {
   recepPor: 0.50, recepMin: 10, recepMinLunes: 5, niveles: NIVELES,
 };
 
+export interface FacialLinea { sku: string; cantidad: number }
+export interface PaqueteLinea { tipo: "pack3" | "pack6"; texto: string; neto?: number }
 export interface TicketIn {
   fecha: string; cosm: string; cedula: string; facial: string;
   pack3: string; pack6: string; extras: string;
@@ -660,6 +662,10 @@ export interface TicketIn {
   netoPack?: number;
   /** Precio neto de catálogo del paquete x6. Si falta, se usa netoPack. */
   netoPack6?: number;
+  /** Todas las líneas faciales no excluidas (cantidad incluida). Si está presente, manda sobre `facial`. */
+  faciales?: FacialLinea[];
+  /** Todos los paquetes no excluidos del ticket. Si está presente, manda sobre pack3/pack6. */
+  paquetes?: PaqueteLinea[];
 }
 export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
 /** Desde el ciclo que abre el 2026-10-26. pct guarda la fracción (0.05 = 5% del neto), redondeada hacia abajo. */
@@ -737,6 +743,50 @@ export function pagaComisionFacial(mark: Pick<CosmMark, "comFac" | "comFacDesde"
   const dia = s(fecha).slice(0, 10);
   if (desde && dia && dia < desde) return false;
   return true;
+}
+
+/** SKU de facial o paquete de spa: «40» o «SUNSU-40 …» → SUNSU-40. No toca productos tipo ML-002. */
+export function skuSunsu(sku: unknown, nombre?: unknown): string {
+  const from = facialSku(nombre) || facialSku(sku);
+  if (from) return from;
+  const raw = s(sku).toUpperCase().trim();
+  const digits = raw.replace(/\D/g, "");
+  if (/^\d{1,3}$/.test(digits) && !/[A-Z]{2,3}-/.test(raw)) return "SUNSU-" + digits.padStart(2, "0");
+  return skuCode(raw) || raw;
+}
+
+/** Líneas faciales que cuentan: el arreglo de la beta, o el facial legado. */
+export function facialesDeTicket(t: Pick<TicketIn, "facial" | "faciales" | "exclFacial">): FacialLinea[] {
+  if (t.exclFacial) return [];
+  if (t.faciales != null) {
+    const out: FacialLinea[] = [];
+    for (const f of t.faciales) {
+      const sku = facialSku(f.sku) || skuSunsu(f.sku);
+      const cantidad = Math.max(1, Math.round(n(f.cantidad) || 1));
+      if (sku) out.push({ sku, cantidad });
+    }
+    return out;
+  }
+  const sku = facialSku(t.facial);
+  return sku ? [{ sku, cantidad: 1 }] : [];
+}
+
+/** Paquetes que cuentan: el arreglo de la beta, o pack3/pack6 legados. */
+export function paquetesDeTicket(t: Pick<TicketIn, "pack3" | "pack6" | "netoPack" | "netoPack6" | "paquetes" | "exclPaquete">): PaqueteLinea[] {
+  if (t.exclPaquete) return [];
+  if (t.paquetes != null) {
+    return t.paquetes.map((p) => ({
+      tipo: p.tipo === "pack6" ? "pack6" as const : "pack3" as const,
+      texto: s(p.texto),
+      neto: Number(p.neto) || 0,
+    }));
+  }
+  const out: PaqueteLinea[] = [];
+  if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") out.push({ tipo: "pack3", texto: s(t.pack3), neto: Number(t.netoPack) || 0 });
+  if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") {
+    out.push({ tipo: "pack6", texto: s(t.pack6), neto: t.netoPack6 != null ? Number(t.netoPack6) || 0 : Number(t.netoPack) || 0 });
+  }
+  return out;
 }
 
 export function usaNivelesPaquete(ciclo: string): boolean {
@@ -950,7 +1000,7 @@ export function calcularCiclo(
   const admin = (nombre: string) => nombreEsAdmin(nombre, admins);
   const marksLimpios = marks.map((k) => (admin(k.nombre) || admin(k.id) || admin(k.patron) ? { ...k, es: false } : k));
   const propios = tickets.filter((t) => t.fecha >= ciclo && t.fecha <= fin && !esInterno(t.cosm, t.cedula) && !admin(t.cosm));
-  const totalClientas = propios.filter((t) => facialSku(t.facial)).length;
+  const totalClientas = propios.filter((t) => facialesDeTicket(t).length > 0).length;
   const n = Math.max(1, nCosmetologas(marksLimpios, ciclo, fin, overrideN));
   const bono = totalClientas >= cfg.minClientas;
   const regimen = usaNivelesPaquete(ciclo) ? "nivel" as const : "tramo" as const;
@@ -973,23 +1023,21 @@ export function calcularCiclo(
   };
   for (const t of propios) {
     const r = ensure(t.cosm);
-    const sku = facialSku(t.facial);
-    const overFacial = sku && cfg.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
-    if (sku && !t.exclFacial && (FACIALES_2.includes(sku) || FACIALES_3.includes(sku) || overFacial != null)) {
-      r.faciales++;
-      if (FACIALES_2.includes(sku)) r.faciales2++;
-      else if (FACIALES_3.includes(sku)) r.faciales3++;
-      if (pagaComisionFacial(marcaDePersona(marksLimpios, t.cosm), t.fecha)) {
-        r.comFaciales += tarifaFacial(sku, cfg);
-      }
+    const cobraFacial = pagaComisionFacial(marcaDePersona(marksLimpios, t.cosm), t.fecha);
+    for (const f of facialesDeTicket(t)) {
+      const sku = f.sku;
+      const overFacial = cfg.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
+      if (!(FACIALES_2.includes(sku) || FACIALES_3.includes(sku) || overFacial != null)) continue;
+      r.faciales += f.cantidad;
+      if (FACIALES_2.includes(sku)) r.faciales2 += f.cantidad;
+      else if (FACIALES_3.includes(sku)) r.faciales3 += f.cantidad;
+      if (cobraFacial) r.comFaciales += tarifaFacial(sku, cfg) * f.cantidad;
     }
     if (!t.exclPaquete) {
-      const neto = Number(t.netoPack) || 0;
-      const neto6 = t.netoPack6 != null ? Number(t.netoPack6) || 0 : neto;
-      if (s(t.pack3) && s(t.pack3).toLowerCase() !== "false") { r.paquetes += 1; r.netos.push(neto); }
-      if (s(t.pack6) && s(t.pack6).toLowerCase() !== "false") {
-        if (regimen === "tramo") { r.paquetes += 1; r.netos.push(neto6); }
-        else { r.paquetes += 2; r.netos.push(neto6, neto6); }
+      for (const pk of paquetesDeTicket(t)) {
+        const neto = Number(pk.neto) || 0;
+        if (pk.tipo === "pack6" && regimen === "nivel") { r.paquetes += 2; r.netos.push(neto, neto); }
+        else { r.paquetes += 1; r.netos.push(neto); }
       }
     }
     if (!t.exclExtras) {
