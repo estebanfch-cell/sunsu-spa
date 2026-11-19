@@ -720,11 +720,21 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
     const corte = v.sesiones as Row[];
     out.push({
       id: r0.id, fila: r0.sheet_row, codigo: s(v.codigo), sku: s(r.sku), nombre: s(r.paquete) || s(r.sku) || "Paquete",
-      usados: v.usados, pendientes: v.pendientes, total: v.total,
+      usados: v.usados, pendientes: v.pendientes, total: v.total, estado: s(v.estado), fechaCompra: s(v.fechaCompra), factura: s(v.factura), ticketOrigen: s(v.ticketOrigen),
       usos: corte.map((u) => ({ slot: u.slot, usado: u.usado, fecha: u.fecha || (u.texto ? s(u.texto) : ""), cosmetologa: u.cosmetologa })),
     });
   }
   return out;
+}
+
+/** TK111: paquetes de la clienta ligados a un ticket (vendido en él, misma factura o sesión usada ese día), completos incluidos. */
+export function paquetesDelTicket(paqs: Row[], t: Row, clave = ""): Row[] {
+  const dia = s(t.timestamp).slice(0, 10), fac = s(t.fac_7).replace(/\.0+$/, "").replace(/^0+/, "");
+  const facSeq = (x: unknown) => { const m = s(x).replace(/\.0+$/, "").match(/(\d+)$/); return m ? String(Number(m[1])) : ""; };
+  const claves = [clave, s(t.so_num), s(t.beta_num)].filter(Boolean);
+  return paqs.filter((p) => (s(p.ticketOrigen) && claves.includes(s(p.ticketOrigen))) ||
+    (fac && /^\d+$/.test(fac) && facSeq(p.factura) === String(Number(fac))) ||
+    (dia && (s(p.fechaCompra) === dia || ((p.usos as Row[]) || []).some((u) => u.usado && s(u.fecha) === dia))));
 }
 
 export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: string, verTodos = admin): Promise<Row> {

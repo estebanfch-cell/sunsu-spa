@@ -13,7 +13,7 @@ import { contactoParaMostrar } from "./clientes_contacto.ts";
 import { leerSerie } from "./series.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { conEmail, conTelefono } from "./lib.ts";
-import { claveCliente, paquetesDe, parseGcCanje, recetaDe, saldoGift } from "./ventas.ts";
+import { claveCliente, paquetesDe, paquetesDelTicket, parseGcCanje, recetaDe, saldoGift } from "./ventas.ts";
 import { normCedula, normNombre } from "./domain.ts";
 import { acceso, esPropio, matrizDe } from "./permisos.ts";
 import { facturaTxt } from "./ticket_total.ts";
@@ -701,7 +701,9 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const paquete = {
     uso: /^\s*SI\b/i.test(s(r.paquete)) ? s(r.paquete).replace(/^\s*SI,?\s*/i, "") : "",
     compra: [s(r.compra_pack_3), s(r.compra_pack_6)].filter((x) => x && x !== "-").join(" · "),
-    vigentes: paqs.filter((p) => n(p.pendientes) > 0).map((p) => ({ codigo: p.codigo, nombre: p.nombre, usados: p.usados, total: p.total, pendientes: p.pendientes })),
+    vigentes: paqs.filter((p) => n(p.pendientes) > 0).map((p) => ({ id: p.id, codigo: p.codigo, nombre: p.nombre, usados: p.usados, total: p.total, pendientes: p.pendientes, estado: p.estado })),
+    // TK111: el paquete comprado o usado en ESTE ticket se ve aunque esté completo.
+    delTicket: paquetesDelTicket(paqs, r, clave).map((p) => ({ id: p.id, codigo: p.codigo, nombre: p.nombre, usados: p.usados, total: p.total, pendientes: p.pendientes, estado: p.estado })),
   };
   const envios = await enviosDe(ctx, r, clave);
   let flagsSrc: Row[] = [];
