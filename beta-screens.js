@@ -18910,7 +18910,7 @@ function _migoVincularBorrador(fac){
       pintarSuma();
     }
     var close=function(){ wrap.remove(); };
-    wrap.querySelector("[data-close]").onclick=close;
+    var _el = wrap.querySelector("[data-close]"); if (_el) _el.onclick = close;
     wrap.addEventListener("click",function(ev){ if(ev.target===wrap) close(); });
     function mostrarVinculado(claves, yaEstaba){
       listo=true;
@@ -18943,7 +18943,7 @@ function _migoVincularBorrador(fac){
       if(!el) return;
       setPick(el.getAttribute("data-clave"), el.getAttribute("data-nombre"), el.getAttribute("data-total"), el.checked);
     });
-    wrap.querySelector("#migo-vinc-cands").addEventListener("click",function(ev){
+    var _el = wrap.querySelector("#migo-vinc-cands"); if (_el) _el.addEventListener("click",function(ev){
       var mark=ev.target.closest("[data-marcar]");
       if(mark){
         String(mark.getAttribute("data-marcar")||"").split(",").filter(Boolean).forEach(function(k){
@@ -18959,7 +18959,7 @@ function _migoVincularBorrador(fac){
       if(!confirm("¿Vincular la factura "+fac+" a "+(tickets.join(" + "))+"?")) return;
       vincular(tickets);
     });
-    wrap.querySelector("#migo-vinc-buscar").onclick=function(){
+    var _el = wrap.querySelector("#migo-vinc-buscar"); if (_el) _el.onclick = function(){
       var q=(wrap.querySelector("#migo-vinc-q").value||"").trim();
       var dest=wrap.querySelector("#migo-vinc-manual");
       if(q.length<2){ dest.innerHTML='<div class="mccf-sub">Escribe al menos 2 letras.</div>'; return; }
@@ -18974,13 +18974,13 @@ function _migoVincularBorrador(fac){
         }).join("");
       }).catch(function(){ dest.innerHTML='<div class="mccf-sub">No pude buscar ahora. Intenta de nuevo.</div>'; });
     };
-    wrap.querySelector("#migo-vinc-sel").onclick=function(){
+    var _el = wrap.querySelector("#migo-vinc-sel"); if (_el) _el.onclick = function(){
       var tickets=listPicked();
       if(!tickets.length) return;
       if(!confirm("¿Vincular la factura "+fac+" a "+(tickets.join(" + "))+"?")) return;
       vincular(tickets);
     };
-    wrap.querySelector("#migo-vinc-crear").onclick=function(){ wrap.remove(); _migoAbrirEnTicket(fac); };
+    var _el = wrap.querySelector("#migo-vinc-crear"); if (_el) _el.onclick = function(){ wrap.remove(); _migoAbrirEnTicket(fac); };
     var best=(cands||[]).find(function(c){ return c.cuadra; });
     if(best&&best.claves) best.claves.forEach(function(k,i){ setPick(k, (best.nombres&&best.nombres[i])||"", (best.totales&&best.totales[i])||0, true); });
     else pintarSuma();

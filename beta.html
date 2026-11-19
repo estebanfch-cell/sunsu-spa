@@ -3184,7 +3184,7 @@ function wireCatalogo(main) {
       host.innerHTML = htmlNuevoProducto();
       pintarSkuNuevo(host);
       host.querySelectorAll("select, input").forEach((el) => el.addEventListener("input", () => pintarSkuNuevo(host)));
-      host.querySelector("#f-cat-nuevo").addEventListener("submit", async (ev) => {
+      var _el = host.querySelector("#f-cat-nuevo"); if (_el) _el.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         const form = ev.target;
         const body = Object.fromEntries(new FormData(form).entries());
@@ -6831,7 +6831,7 @@ function wireAsistencia(main) {
       ev.preventDefault();
       await corregirMarca(corr, false);
     });
-    main.querySelector("#asis-anular").onclick = () => corregirMarca(corr, true);
+    var _el = main.querySelector("#asis-anular"); if (_el) _el.onclick = () => corregirMarca(corr, true);
   }
   const fer = main.querySelector("#f-asis-fer");
   if (fer) fer.addEventListener("submit", async (ev) => {
@@ -6956,7 +6956,7 @@ async function abrirNotificaciones() {
   document.body.appendChild(overlay);
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
-  overlay.querySelector("#notif-x").onclick = cerrar;
+  var _el = overlay.querySelector("#notif-x"); if (_el) _el.onclick = cerrar;
   const mias = overlay.querySelector("#notif-mias");
   if (mias) mias.onclick = () => { cerrar(); go("#/m/solicitudes"); };
   overlay.querySelectorAll("[data-notif]").forEach((b) => {
@@ -7289,40 +7289,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk112"></script>
-<script src="beta-screens.js?v=20261118tk112"></script>
-<script src="beta-inline.js?v=20261118tk112"></script>
-<script src="mc-productos.js?v=20261118tk112"></script>
-<script src="mc-nav.js?v=20261118tk112"></script>
-<script src="mc-permisos.js?v=20261118tk112"></script>
-<script src="mc-protocolos.js?v=20261118tk112"></script>
-<script src="mc-conteo.js?v=20261118tk112"></script>
-<script src="mc-transferencias.js?v=20261118tk112"></script>
-<script src="mc-ajustes.js?v=20261118tk112"></script>
-<script src="vendor-qrcode.js?v=20261118tk112"></script>
-<script src="mc-tickets.js?v=20261118tk112"></script>
-<script src="mc-maestro.js?v=20261118tk112"></script>
-<script src="mc-empleados.js?v=20261118tk112"></script>
-<script src="mc-edit.js?v=20261118tk112"></script>
-<script src="mc-paquetes.js?v=20261118tk112"></script>
-<script src="mc-aperturas.js?v=20261118tk112"></script>
-<script src="mc-acceso.js?v=20261118tk112"></script>
-<script src="mc-barras.js?v=20261118tk112"></script>
-<script src="mc-caja.js?v=20261118tk112"></script>
-<script src="mc-giftcards.js?v=20261118tk112"></script>
-<script src="mc-multas.js?v=20261118tk112"></script>
-<script src="mc-clientes.js?v=20261118tk112"></script>
-<script src="mc-clientes-dup.js?v=20261118tk112"></script>
-<script src="mc-docpdf.js?v=20261118tk112"></script>
-<script src="mc-compras.js?v=20261118tk112"></script>
-<script src="mc-consignacion.js?v=20261118tk112"></script>
-<script src="mc-proveedores.js?v=20261118tk112"></script>
-<script src="mc-recepciones.js?v=20261118tk112"></script>
-<script src="mc-movil.js?v=20261118tk112"></script>
-<script src="mc-promociones.js?v=20261118tk112"></script>
-<script src="mc-agenda.js?v=20261118tk112"></script>
-<script src="mc-staff-home.js?v=20261118tk112"></script>
-<script src="mc-borradores.js?v=20261118tk112"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk113"></script>
+<script src="beta-screens.js?v=20261118tk113"></script>
+<script src="beta-inline.js?v=20261118tk113"></script>
+<script src="mc-productos.js?v=20261118tk113"></script>
+<script src="mc-nav.js?v=20261118tk113"></script>
+<script src="mc-permisos.js?v=20261118tk113"></script>
+<script src="mc-protocolos.js?v=20261118tk113"></script>
+<script src="mc-conteo.js?v=20261118tk113"></script>
+<script src="mc-transferencias.js?v=20261118tk113"></script>
+<script src="mc-ajustes.js?v=20261118tk113"></script>
+<script src="vendor-qrcode.js?v=20261118tk113"></script>
+<script src="mc-tickets.js?v=20261118tk113"></script>
+<script src="mc-maestro.js?v=20261118tk113"></script>
+<script src="mc-empleados.js?v=20261118tk113"></script>
+<script src="mc-edit.js?v=20261118tk113"></script>
+<script src="mc-paquetes.js?v=20261118tk113"></script>
+<script src="mc-aperturas.js?v=20261118tk113"></script>
+<script src="mc-acceso.js?v=20261118tk113"></script>
+<script src="mc-barras.js?v=20261118tk113"></script>
+<script src="mc-caja.js?v=20261118tk113"></script>
+<script src="mc-giftcards.js?v=20261118tk113"></script>
+<script src="mc-multas.js?v=20261118tk113"></script>
+<script src="mc-clientes.js?v=20261118tk113"></script>
+<script src="mc-clientes-dup.js?v=20261118tk113"></script>
+<script src="mc-docpdf.js?v=20261118tk113"></script>
+<script src="mc-compras.js?v=20261118tk113"></script>
+<script src="mc-consignacion.js?v=20261118tk113"></script>
+<script src="mc-proveedores.js?v=20261118tk113"></script>
+<script src="mc-recepciones.js?v=20261118tk113"></script>
+<script src="mc-movil.js?v=20261118tk113"></script>
+<script src="mc-promociones.js?v=20261118tk113"></script>
+<script src="mc-agenda.js?v=20261118tk113"></script>
+<script src="mc-staff-home.js?v=20261118tk113"></script>
+<script src="mc-borradores.js?v=20261118tk113"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).

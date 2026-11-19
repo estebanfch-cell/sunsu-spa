@@ -106,8 +106,8 @@
       bar.id = "ix-bar";
       bar.innerHTML = "Hiciste cambios — <button type=\"button\" id=\"ix-guardar\">Guardar</button> <button type=\"button\" id=\"ix-descartar\">Descartar</button>";
       document.body.appendChild(bar);
-      bar.querySelector("#ix-guardar").onclick = guardar;
-      bar.querySelector("#ix-descartar").onclick = function () { descartar(); };
+      var _el = bar.querySelector("#ix-guardar"); if (_el) _el.onclick = guardar;
+      var _el = bar.querySelector("#ix-descartar"); if (_el) _el.onclick = function () { descartar(); };
     }
     bar.hidden = !sucio();
   }
@@ -342,12 +342,12 @@
       + '<label>Motivo<textarea id="ix-motivo" required placeholder="Por qué"></textarea></label>'
       + '<p class="ix-err" id="ix-err"></p><button type="button" class="ix-send" id="ix-send">Enviar solicitud</button></div>';
     document.body.appendChild(overlay);
-    overlay.querySelector("#ix-x").onclick = function () { overlay.remove(); };
+    var _el = overlay.querySelector("#ix-x"); if (_el) _el.onclick = function () { overlay.remove(); };
     overlay.querySelectorAll("[data-ix-abrir]").forEach(function (a) { a.addEventListener("click", function () { overlay.remove(); }); });
-    overlay.querySelector("#ix-tipo").onchange = function (ev) {
+    var _el = overlay.querySelector("#ix-tipo"); if (_el) _el.onchange = function (ev) {
       overlay.querySelector("#ix-props").hidden = ev.target.value === "eliminacion";
     };
-    overlay.querySelector("#ix-send").onclick = async function () {
+    var _el = overlay.querySelector("#ix-send"); if (_el) _el.onclick = async function () {
       var motivo = overlay.querySelector("#ix-motivo").value.trim();
       var tipo = overlay.querySelector("#ix-tipo").value;
       if (!motivo) { overlay.querySelector("#ix-err").textContent = "El motivo es obligatorio"; return; }
@@ -395,7 +395,7 @@
     }).join("") || '<p>No hay solicitudes.</p>';
     overlay.innerHTML = '<div class="ix-sheet"><div class="ix-line"><b>Solicitudes</b><button type="button" id="ix-x">×</button></div>' + items + "</div>";
     document.body.appendChild(overlay);
-    overlay.querySelector("#ix-x").onclick = function () { overlay.remove(); };
+    var _el = overlay.querySelector("#ix-x"); if (_el) _el.onclick = function () { overlay.remove(); };
     overlay.querySelectorAll("[data-ix-abrir]").forEach(function (a) { a.addEventListener("click", function () { overlay.remove(); }); });
     overlay.querySelectorAll("[data-ok],[data-no]").forEach(function (btn) {
       btn.onclick = async function () {

@@ -506,6 +506,7 @@
   }
   function wireBuscar(main) {
     var q = main.querySelector("#mctk-q"), hits = main.querySelector("#mctk-hits");
+    if (!q || !hits) return;
     function bad() { q.classList.remove("mctk-flash-bad"); void q.offsetWidth; q.classList.add("mctk-flash-bad"); }
     function lista() {
       var v = q.value.trim(); if (!v) { hits.hidden = true; return; }
@@ -551,9 +552,9 @@
       '<p class="err" id="mctk-cerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost small" type="button" data-cerrar2>Volver</button><button class="btn small mctk-cancel" type="button" id="mctk-cok">Cancelar ticket</button></div></div>';
     document.body.appendChild(box);
     var cerrar = function () { box.remove(); };
-    box.querySelector("[data-cerrar]").onclick = cerrar; box.querySelector("[data-cerrar2]").onclick = cerrar;
+    on(box, "[data-cerrar]", "onclick", cerrar); on(box, "[data-cerrar2]", "onclick", cerrar);
     box.onclick = function (ev) { if (ev.target === box) cerrar(); };
-    box.querySelector("#mctk-cok").onclick = async function () {
+    on(box, "#mctk-cok", "onclick", async function () {
       var m = box.querySelector("#mctk-cm").value.trim(), err = box.querySelector("#mctk-cerr");
       if (m.length < 3) { err.textContent = "Escribe el motivo"; return; }
       this.disabled = true; this.textContent = "Cancelando…";
@@ -564,7 +565,7 @@
         if (window.toast) toast("Ticket cancelado" + (r.unidades ? " · " + r.unidades + " u. devueltas a bodega" : "") + (r.paquetes && r.paquetes.length ? " · paquete anulado" : "") + (r.liberadas && r.liberadas.length ? " · " + r.liberadas.length + " sesión(es) de paquete liberada(s)" : ""), "var(--green)");
         var nd = await api("tk_get", { clave: d.clave }); if (nd && nd.ok) { cargarEstado(nd); repintar(document.getElementById("main")); }
       } catch (x) { err.textContent = x.message || String(x); this.disabled = false; this.textContent = "Cancelar ticket"; }
-    };
+    });
   }
   function dlgExcluir() {
     var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg mctk-xdlg";
@@ -577,11 +578,11 @@
       '<p class="err" id="mctk-xerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn small" type="button" id="mctk-xok">' + (d.puedeEditar ? "Guardar" : "Aplicar") + "</button></div></div>";
     document.body.appendChild(box);
     var cerrar = function () { box.remove(); };
-    box.querySelector("[data-cerrar]").onclick = cerrar;
+    on(box, "[data-cerrar]", "onclick", cerrar);
     box.onclick = function (ev) { if (ev.target === box) cerrar(); };
     var tog = function () { var all = box.querySelector("#mctk-xall").checked; box.querySelectorAll("[data-x]").forEach(function (c) { c.disabled = all; }); };
-    box.querySelector("#mctk-xall").onchange = tog; tog();
-    box.querySelector("#mctk-xok").onclick = function () {
+    on(box, "#mctk-xall", "onchange", tog); tog();
+    on(box, "#mctk-xok", "onclick", function () {
       var all = box.querySelector("#mctk-xall").checked, nota = box.querySelector("#mctk-xn").value.trim();
       var marcadas = [].slice.call(box.querySelectorAll("[data-x]")).filter(function (c) { return c.checked; }).length;
       if ((all || marcadas) && nota.length < 3) { box.querySelector("#mctk-xerr").textContent = "Escribe el motivo"; return; }
@@ -590,7 +591,7 @@
       box.remove(); marcar(); pintarLin();
       var g = document.getElementById("mctk-guardar");
       if (K.d.puedeEditar && g) g.click(); else document.getElementById("mctk-err").textContent = "Comisión: envía la solicitud para aplicarla.";
-    };
+    });
   }
 
   // ---------- guardar / pedir ----------
@@ -769,8 +770,8 @@
       var box = document.createElement("div"); box.className = "mctk-dlg";
       box.innerHTML = '<div class="mctk-box"><h3 style="margin:0 0 6px">Adjuntar el PDF</h3><p class="mccf-sub">Ya se abrió el chat. Toca para compartir ' + (files.length > 1 ? "los PDFs" : "el PDF") + ' en WhatsApp.</p><div class="mctk-acts" style="justify-content:flex-end"><button class="btn ghost small" type="button" data-x>Cerrar</button><button class="btn small" type="button" data-s>📎 Compartir</button></div></div>';
       document.body.appendChild(box);
-      box.querySelector("[data-x]").onclick = function () { box.remove(); };
-      box.querySelector("[data-s]").onclick = function () { navigator.share({ files: files }).catch(function () {}); box.remove(); };
+      on(box, "[data-x]", "onclick", function () { box.remove(); });
+      on(box, "[data-s]", "onclick", function () { navigator.share({ files: files }).catch(function () {}); box.remove(); });
     } else docs.forEach(function (x, i) { setTimeout(function () { try { x.doc.save(x.nom); } catch (e5) {} }, i * 700); });
   }
   async function enviarReporte(tipo) {
@@ -800,16 +801,16 @@
     main.innerHTML = '<div style="padding:12px 16px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" type="button" id="mctk-gcv">← Volver al ticket</button><button class="btn small" type="button" id="mctk-gcd">⬇️ Descargar PDF ' + e(cod) + '</button></div><div id="content"></div>';
     try { if (typeof cuSunsu === "function") CU = cuSunsu(); } catch (e6) {}
     renderGiftCardDigital({ codigo: g.codigo, para: g.para, de: g.de || g.comprador, facial: g.facial || undefined, mensaje: g.mensaje, valido: g.valido || undefined });
-    main.querySelector("#mctk-gcv").onclick = function () { if (typeof draw === "function") draw(); else go(volver); };
-    main.querySelector("#mctk-gcd").onclick = function () {
+    on(main, "#mctk-gcv", "onclick", function () { if (typeof draw === "function") draw(); else go(volver); });
+    on(main, "#mctk-gcd", "onclick", function () {
       if (typeof _gcdPDF !== "function") return;
       _gcdPDF(function (blob, nom) { if (!blob) { toast2("No se pudo generar el PDF", true); return; } var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nom; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000); });
-    };
+    });
   }
   async function dlgCostos() {
     var box = document.createElement("div"); box.className = "mctk-dlg"; box.innerHTML = '<div class="mctk-box"><p class="mccf-sub">Calculando…</p></div>'; document.body.appendChild(box);
     var r = await api("tk_costos", { clave: K.d.clave });
-    if (!r || r.error) { box.innerHTML = '<div class="mctk-box"><p class="err">' + e((r && r.error) || "No se pudo") + '</p><button class="btn ghost small" type="button" data-x>Cerrar</button></div>'; box.querySelector("[data-x]").onclick = function () { box.remove(); }; return; }
+    if (!r || r.error) { box.innerHTML = '<div class="mctk-box"><p class="err">' + e((r && r.error) || "No se pudo") + '</p><button class="btn ghost small" type="button" data-x>Cerrar</button></div>'; on(box, "[data-x]", "onclick", function () { box.remove(); }); return; }
     var c = r.costos, pintar = function () {
       var nc = c.costos_no_cliente_tipo === "%" ? r2(c.subtotal * (Number(c.costos_no_cliente_valor) || 0) / 100) : r2(Number(c.costos_no_cliente_valor) || 0);
       var gan = r2(c.subtotal - nc - c.cogs), mg = c.subtotal > 0 ? Math.round(gan / c.subtotal * 1000) / 10 : null;
@@ -823,13 +824,13 @@
         c.lineas.map(function (l) { return "<tr><td>" + e(l.descripcion) + '<div class="mctk-sku">' + e(l.sku) + '</div></td><td class="num">' + e(q2(l.cantidad)) + '</td><td class="num">' + $m(l.costo_unit) + '</td><td class="num">' + $m(l.costo_total) + "</td></tr>"; }).join("") + "</tbody></table>" +
         '<p class="err" id="mctk-cerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:8px"><button class="btn ghost small" type="button" data-x>Cerrar</button><button class="btn small" type="button" id="mctk-cok">Guardar costos no relacionados</button></div></div>';
       box.querySelectorAll("[data-x]").forEach(function (b) { b.onclick = function () { box.remove(); }; });
-      box.querySelector("#mctk-nct").onchange = function () { c.costos_no_cliente_tipo = this.value; pintar(); };
-      box.querySelector("#mctk-ncv").onchange = function () { c.costos_no_cliente_valor = Number(this.value) || 0; pintar(); };
-      box.querySelector("#mctk-cok").onclick = async function () {
+      on(box, "#mctk-nct", "onchange", function () { c.costos_no_cliente_tipo = this.value; pintar(); });
+      on(box, "#mctk-ncv", "onchange", function () { c.costos_no_cliente_valor = Number(this.value) || 0; pintar(); });
+      on(box, "#mctk-cok", "onclick", async function () {
         var g = await api("tk_costos_guardar", { clave: K.d.clave, tipo: c.costos_no_cliente_tipo, valor: Number(c.costos_no_cliente_valor) || 0 });
         if (!g || g.error) { box.querySelector("#mctk-cerr").textContent = (g && g.error) || "No se pudo guardar"; return; }
         toast2("Costos guardados"); box.remove();
-      };
+      });
     };
     pintar();
   }
@@ -869,45 +870,60 @@
   function wire(main) {
     // Si el ticket no cargó (error) no hay nada que conectar: antes reventaba con «null is not an object».
     if (!K.d || !main || !main.querySelector("#mctk-root")) return;
-    try { wire2(main); } catch (x) { try { console.error(x); } catch (y) {} var er = main.querySelector("#mctk-err"); if (er) er.textContent = "Error en la pantalla: " + ((x && x.message) || x); }
+    try { wire2(main); } catch (x) { try { console.error(x); } catch (y) {} var er = main.querySelector("#mctk-err"); if (er) er.textContent = "No se pudo mostrar esta pantalla. Recarga e inténtalo de nuevo."; }
   }
   function on(main, sel, ev, fn) { var el = main.querySelector(sel); if (el) el[ev] = fn; return el; }
   function wire2(main) {
-    main.querySelector("#mctk-volver").onclick = function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); };
+    on(main, "#mctk-volver", "onclick", function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); });
     main.querySelectorAll("[data-menu]").forEach(function (b) {
-      b.onclick = function (ev) { ev.stopPropagation(); var id = b.getAttribute("data-menu"); main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; }); var dd = main.querySelector("#" + id); dd.hidden = !dd.hidden; };
+      b.onclick = function (ev) {
+        ev.stopPropagation();
+        var id = b.getAttribute("data-menu");
+        main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; });
+        var dd = id ? main.querySelector("#" + id) : null;
+        if (dd) dd.hidden = !dd.hidden;
+      };
     });
     if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { if (!ev.target.closest(".mctk-menu")) document.querySelectorAll(".mctk-dd").forEach(function (x) { x.hidden = true; }); }); }
     var facBtn = main.querySelector(".mctk-fac [data-pv]");
     if (facBtn) facBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(facBtn.getAttribute("data-pv"), facBtn.getAttribute("data-pvn")); };
-    main.querySelector("#mctk-dd").onclick = async function (ev) {
+    function cerrarMenuDe(el) { var dd = el && el.closest && el.closest(".mctk-dd"); if (dd) dd.hidden = true; }
+    async function onDocs(ev) {
       var pv = ev.target.closest("[data-pv]");
-      if (pv && window.MCPrevia) { this.hidden = true; window.MCPrevia.abrir(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
+      if (pv && window.MCPrevia) { cerrarMenuDe(pv); window.MCPrevia.abrir(pv.getAttribute("data-pv"), pv.getAttribute("data-pvn")); return; }
       var b = ev.target.closest("[data-doc]"); if (!b) return;
-      this.hidden = true;
+      cerrarMenuDe(b);
       if (b.getAttribute("data-doc") === "tarjeta" && window.MCPrevia) { var hh = await cardDelTicket(); if (!hh) { toast2("No encontré la tarjeta de este ticket", true); return; } window.MCPrevia.tarjeta(claveCard(), "Tarjeta del tratamiento"); return; }
       if (b.getAttribute("data-doc") === "paquete" && window.MCPrevia && window.MCPrevia.pdf) { window.MCPrevia.pdf("Reporte del paquete", function () { return pdfPaquete().then(function (x) { if (!x.x) throw new Error("No encontré el paquete de este ticket"); return x; }); }); return; }
       if (b.getAttribute("data-doc") === "gc") { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; abrirGiftCard(b.getAttribute("data-cod")); return; }
       var h = await cardDelTicket();
       if (!h || typeof tarjetaTicket !== "function") { toast2("No encontré la tarjeta de este ticket", true); return; }
       tarjetaTicket(claveCard());
-    };
-    main.querySelector("#mctk-wa").onclick = function (ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; this.hidden = true; enviarReporte(b.getAttribute("data-wa")); };
-    main.querySelector("#mctk-print").onclick = function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); };
-    main.querySelector("#mctk-excl").onclick = dlgExcluir;
-    if (main.querySelector("#mctk-cancelar")) main.querySelector("#mctk-cancelar").onclick = dlgCancelar;
-    if (main.querySelector("#mctk-solcancel")) main.querySelector("#mctk-solcancel").onclick = async function () {
+    }
+    function onWa(ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; cerrarMenuDe(b); enviarReporte(b.getAttribute("data-wa")); }
+    // En celular Documentos/WhatsApp viven en Acciones (#mctk-acc); en escritorio siguen #mctk-dd y #mctk-wa.
+    on(main, "#mctk-dd", "onclick", onDocs);
+    on(main, "#mctk-wa", "onclick", onWa);
+    var acc = main.querySelector("#mctk-acc");
+    if (acc) acc.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-doc], [data-pv]")) { void onDocs(ev); return; }
+      if (ev.target.closest("[data-wa]")) onWa(ev);
+    });
+    on(main, "#mctk-print", "onclick", function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); });
+    on(main, "#mctk-excl", "onclick", dlgExcluir);
+    on(main, "#mctk-cancelar", "onclick", dlgCancelar);
+    on(main, "#mctk-solcancel", "onclick", async function () {
       var mo = prompt("¿Por qué hay que eliminar (cancelar) este ticket? Lo aprueba un admin.");
       if (mo == null) return;
       if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
       var rr = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "eliminacion", motivo: String(mo).trim() });
       if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
       if (window.toast) toast(rr.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
-    };
-    if (main.querySelector("#mctk-multa")) main.querySelector("#mctk-multa").onclick = function () {
+    });
+    on(main, "#mctk-multa", "onclick", function () {
       var t = K.d.ticket, inf = K.d.info || {};
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });
-    };
+    });
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
     function subirVoucherDe(inp) {
       inp.onchange = async function () {
@@ -945,6 +961,7 @@
       };
     });
     var lin = main.querySelector("#mctk-lin");
+    if (lin) {
     lin.addEventListener("input", function (ev) {
       var tr = ev.target.closest("[data-i]"), f = ev.target.getAttribute("data-f"); if (!tr || !f) return;
       var l = K.L[+tr.getAttribute("data-i")];
@@ -988,7 +1005,8 @@
       });
       marcar(); pintarLin();
     });
-    main.querySelector("#mctk-addlink").onclick = function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); bx.hidden = !bx.hidden; if (!bx.hidden) main.querySelector("#mctk-q").focus(); };
+    }
+    on(main, "#mctk-addlink", "onclick", function (ev) { ev.preventDefault(); var bx = main.querySelector("#mctk-addbox"); if (!bx) return; bx.hidden = !bx.hidden; var qq = main.querySelector("#mctk-q"); if (!bx.hidden && qq) qq.focus(); });
     function gcIvaTxt(v) { v = Number(v) || 0; if (!(v > 0)) return "Escribe el valor con IVA. Subtotal = valor / 1.15."; var sub = r2(v / IVA), iva = r2(v - sub); return "Subtotal $" + sub.toFixed(2) + " · IVA $" + iva.toFixed(2) + " · Total $" + r2(v).toFixed(2) + " con IVA"; }
     function pintarGcIva() { var el = main.querySelector("#mctk-gciva"), inp = main.querySelector("#mctk-gcval"); if (el) el.textContent = gcIvaTxt(inp && inp.value); }
     function addGiftValor(v) {
@@ -1024,7 +1042,7 @@
         },
       });
     };
-    main.querySelector("#mctk-dv").oninput = function () { var x = descParse(this.value); this.classList.toggle("bad", !x); if (!x) return; K.desc.tipo = x.tipo; K.desc.valor = x.valor; marcar(); pintarTot(); };
+    on(main, "#mctk-dv", "oninput", function () { var x = descParse(this.value); this.classList.toggle("bad", !x); if (!x) return; K.desc.tipo = x.tipo; K.desc.valor = x.valor; marcar(); pintarTot(); });
     wireCostos();
     // 💵 Pagos de la beta (TK19): lista, registrar y anular; el efectivo entra solo a la caja chica.
     var hp = main.querySelector("#mctk-pagos");
@@ -1048,7 +1066,7 @@
       toast2("Solicitud enviada: un admin la revisa");
       var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
     };
-    main.querySelector("#mctk-descartar").onclick = async function () { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); } };
+    on(main, "#mctk-descartar", "onclick", async function () { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); } });
   }
 
   // Lector en la pantalla «Nuevo ticket» (la de siempre): un escaneo suma +1 al producto de la lista.

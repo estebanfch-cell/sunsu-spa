@@ -48,9 +48,9 @@
       function dif() { var x = (Number(inp.value) || 0) - (Number(o.actual) || 0); dd.innerHTML = "Diferencia: <b>" + e(sg(x)) + "</b>"; }
       inp.oninput = dif; dif(); inp.focus(); inp.select();
       function cerrar(v) { d.remove(); resolve(v); }
-      d.querySelector("#mcaj-x").onclick = function () { cerrar(null); };
+      var _el = d.querySelector("#mcaj-x"); if (_el) _el.onclick = function () { cerrar(null); };
       d.onclick = function (ev) { if (ev.target === d) cerrar(null); };
-      d.querySelector("#mcaj-ok").onclick = async function () {
+      var _el = d.querySelector("#mcaj-ok"); if (_el) _el.onclick = async function () {
         var err = d.querySelector("#mcaj-err"); err.textContent = "";
         if (inp.value === "" || Number(inp.value) < 0) { err.textContent = "Escribe la cantidad"; return; }
         var r = await api("aj_crear", { origen: "ficha", bodega: o.bodega, sububicacion: o.sub || "", motivo: d.querySelector("#mcaj-m").value, nota: d.querySelector("#mcaj-nt").value, lineas: [{ producto_id: o.productoId, nuevo: Number(inp.value) }] });
@@ -121,7 +121,7 @@
   }
   function wireForm(main) {
     var F = A.form;
-    main.querySelector("#mcaj-volver").onclick = function () { go("#/m/ajustes"); };
+    var _el = main.querySelector("#mcaj-volver"); if (_el) _el.onclick = function () { go("#/m/ajustes"); };
     var b = main.querySelector("#mcaj-b"), sw = main.querySelector("#mcaj-sw"), sb = main.querySelector("#mcaj-s"), lin = main.querySelector("#mcaj-lin");
     function lado() { F.bodega = b.value; sw.hidden = F.bodega !== "CABINA"; F.sub = F.bodega === "CABINA" ? sb.value : ""; lin.innerHTML = lineasHtml(); }
     b.onchange = lado; sb.onchange = lado;
@@ -150,7 +150,7 @@
       tr.classList.toggle("dif", !!dif);
     });
     lin.addEventListener("click", function (ev) { var x = ev.target.closest("[data-aj-del]"); if (x) { F.lineas.splice(+x.getAttribute("data-aj-del"), 1); lin.innerHTML = lineasHtml(); } });
-    main.querySelector("#mcaj-guardar").onclick = async function () {
+    var _el = main.querySelector("#mcaj-guardar"); if (_el) _el.onclick = async function () {
       var err = main.querySelector("#mcaj-err"); err.textContent = "";
       var r = await api("aj_crear", { bodega: F.bodega, sububicacion: F.sub, motivo: main.querySelector("#mcaj-m").value, nota: main.querySelector("#mcaj-nt").value, lineas: F.lineas.map(function (l) { return { producto_id: l.producto_id, nuevo: l.nuevo === "" ? null : Number(l.nuevo) }; }) });
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; return; }
@@ -189,8 +189,8 @@
   }
   function wireDetalle(main) {
     var d = A.cur; if (!d) return;
-    main.querySelector("#mcaj-volver").onclick = function () { go("#/m/ajustes"); };
-    main.querySelector("#mcaj-pdf").onclick = function () { pdf(d); };
+    var _el = main.querySelector("#mcaj-volver"); if (_el) _el.onclick = function () { go("#/m/ajustes"); };
+    var _el = main.querySelector("#mcaj-pdf"); if (_el) _el.onclick = function () { pdf(d); };
     main.querySelectorAll("[data-aj-est]").forEach(function (b) {
       b.onclick = async function () {
         var que = b.getAttribute("data-aj-est"), extra = {};

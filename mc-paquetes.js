@@ -105,7 +105,7 @@
     var cerrar = function () { box.remove(); };
     box.querySelectorAll("[data-no],.mcpq-x").forEach(function (b) { b.onclick = cerrar; });
     box.onclick = function (ev) { if (ev.target === box) cerrar(); };
-    box.querySelector("[data-ok]").onclick = async function () {
+    var _el = box.querySelector("[data-ok]"); if (_el) _el.onclick = async function () {
       var b = this; b.disabled = true;
       try { await onOk(box); cerrar(); } catch (x) { box.querySelector("[data-err]").textContent = (x && x.message) || String(x); b.disabled = false; }
     };
