@@ -49,6 +49,18 @@
       ".mctk-xc{color:#b2452a;font-size:.68rem;font-weight:800}",
       ".mctk-lnw{display:flex;gap:8px;align-items:center}.mctk-ph{width:38px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--cream-d);flex:none}",
       ".mctk-falta{background:#fff6d6;border:1.5px solid #e8cf7a;color:#6b4e00;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
+      ".mctk-cuadre{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px 8px;border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:800;margin:0 0 10px;max-width:100%;line-height:1.3}",
+      ".mctk-cuadre.ok{background:#e8f6ee;color:#1b6b45;border:1.5px solid #9ad7b6}",
+      ".mctk-cuadre.bad{background:#fdecea;color:#7a2318;border:1.5px solid #e6a39b}",
+      ".mctk-ln.ok{background:#f3faf6;border-left:3px solid #2e9e4f;border-radius:0 8px 8px 0}",
+      ".mctk-ln.diff,.mctk-ln.sobra,.mctk-ln.falta{background:#fff5f0;border-left:3px solid #d9534f;border-radius:0 8px 8px 0}",
+      ".mctk-ln.canje_ok{background:#f7faf8;border-left:3px solid #9ad7b6;border-radius:0 8px 8px 0}",
+      ".mctk-cuadre-razon{font-size:.68rem;font-weight:700;color:#8a2216;margin-top:2px;line-height:1.3;overflow-wrap:anywhere}",
+      ".mctk-ln.canje_ok .mctk-cuadre-razon{color:#1b6b45}",
+      ".mctk-just{margin:8px 0 0;display:flex;flex-direction:column;gap:4px;max-width:100%}",
+      ".mctk-just label{font-size:.78rem;font-weight:700;color:var(--navy-d)}",
+      ".mctk-just textarea{width:100%;box-sizing:border-box;min-height:56px;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.8rem}",
+      ".mctk-flag{display:none}",
       ".mctk-ed{cursor:text;border-radius:5px;padding:1px 4px;margin:-1px -4px;display:inline-block;min-width:40px}.mctk-ed:hover,.mctk-ed:focus{background:var(--cream);outline:1px dashed var(--cream-d)}.mctk-t .dv{width:64px}.mctk-t input.bad{border-color:#d9534f}.mctk-canje{font-size:.7rem;font-weight:800;color:#7C6BB0}",
       ".mctk-voucher{flex:0 0 auto;white-space:nowrap!important;cursor:pointer}.mctk-vthumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}.mctk2 .mctk-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mctk-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}.mctk-num{margin:0;font-size:1.6rem;color:var(--navy-d);letter-spacing:.3px}.mctk-fac{color:var(--gray);font-size:.86rem;margin-top:2px}",
       ".mctk-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:460px}.mctk-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;background:transparent;white-space:nowrap;line-height:1.5}",
@@ -275,7 +287,7 @@
     window._tkVista = window._tkVista || {};
     window._tkVista[d.clave] = d;
     try {
-      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan };
+      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento };
       sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
     } catch (x) {}
   }
@@ -348,7 +360,7 @@
     function celda(c, lbl, html, le, extra) {
       return '<span class="mctk-c' + (extra || "") + '" data-c="' + c + '"' + (le && ed ? ' data-le="' + le + '" tabindex="0" title="Clic para editar"' : "") + "><small>" + lbl + '</small><span class="mctk-cv">' + html + "</span></span>";
     }
-    return hd + K.L.map(function (l, i) {
+    var mapped = hd + K.L.map(function (l, i) {
       var fijo = (l.cortesia || l.canje || l.consumoInterno) && !(l.precio_unit > 0);
       // TK98: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
       var esGift = l.tipo === "gift" && !(l.cortesia || l.canje);
@@ -364,9 +376,12 @@
         (l.promo && l.descuento_valor > 0 ? '<span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "");
       // TK81: la «Diferencia por mejora» solo se ve si existe; agregarla es un botoncito discreto en las acciones de la fila
       var mej = l.canje && !hayMejoraDe(l.sku) && ed ? '<button type="button" class="mctk-mej" data-mejora="' + i + '" title="Agregar diferencia por mejora (el facial vale más que el paquete)" aria-label="Agregar diferencia por mejora">＋$</button>' : "";
-      return '<div data-i="' + i + '" class="mctk-ln"><span class="mctk-li">' + (i + 1) + "</span>" +
+      var cu = ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return x.ticket_i === i; }) || ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return String(x.sku || "") && String(x.sku) === String(l.sku || "").replace(/^SUNSU-/i, ""); });
+      var st = cu && cu.estado ? " " + cu.estado : "";
+      var razon = cu && cu.razon ? '<div class="mctk-cuadre-razon">' + e(cu.razon) + "</div>" : "";
+      return '<div data-i="' + i + '" class="mctk-ln' + st + '"><span class="mctk-li">' + (i + 1) + "</span>" +
         '<div class="mctk-lp">' + fotoLinea(l) + '<div class="mctk-lpt"><span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + "</span>" +
-        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span>" + stockTxt(l) + "</div></div>" +
+        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span>" + razon + stockTxt(l) + "</div></div>" +
         '<span class="mctk-nums">' +
         celda("q", "Cant", e(q2(l.cantidad)), "cantidad") +
         celda("u", esGift ? "P. con IVA" : "P. sin IVA", precio, fijo ? "" : "precio_unit") +
@@ -379,6 +394,25 @@
         '<div class="mctk-mini"><span class="mctk-qx">' + e(q2(l.cantidad)) + " × " + precio + ' <span class="mctk-ok">✓</span></span><b class="mctk-ltot" data-tot-m>' + e($m(m.tot)) + "</b></div>" +
         '<div class="mctk-lacts">' + (ed ? '<button class="mctk-del" type="button" data-del="' + i + '">Eliminar</button>' : "") + mej + "</div></div>";
     }).join("");
+    var fantasmas = ((K.d && K.d.cuadre_lineas) || []).filter(function (x) { return x.estado === "falta"; }).map(function (x) {
+      return '<div class="mctk-ln falta" data-falta="1"><span class="mctk-li">+</span>' +
+        '<div class="mctk-lp"><div class="mctk-lpt"><span class="mctk-pn">' + e(x.nombre || x.codigo || x.sku) + "</span>" +
+        '<span class="mctk-sku">' + e(x.codigo || x.sku) + '</span><div class="mctk-cuadre-razon">' + e(x.razon || "Falta en ticket") + "</div></div></div></div>";
+    }).join("");
+    return mapped + fantasmas;
+  }
+  function hayDescTicket() {
+    var tot = 0;
+    (K.L || []).forEach(function (l) { tot += Number(l.descuento_monto || 0) || (l.descuento_valor > 0 ? 1 : 0); });
+    if (K.desc && Number(K.desc.valor) > 0) tot += 1;
+    if (K.d && Number((K.d.totales && K.d.totales.descuentoTotal) || (K.d.totales && K.d.totales.descuento) || 0) > 0.004) tot += 1;
+    return tot > 0;
+  }
+  function justHtml() {
+    if (!hayDescTicket()) return "";
+    var v = (K.justif != null ? K.justif : (K.d && K.d.justificacion_descuento)) || "";
+    return '<div class="mctk-just"><label for="mctk-just">¿Por qué se aplicó este descuento?</label>' +
+      '<textarea id="mctk-just" required placeholder="Gift card, promo, F&amp;F, cortesía…">' + e(v) + "</textarea></div>";
   }
   function totHtml() {
     var c = calc(), d = K.d, pg = d.pagos || {}, desc = r2(c.promo + c.desc);
@@ -410,12 +444,21 @@
       (!redondeo && Math.abs((c.total || total) - cobrado) > 0.009 ? '<span class="mccf-sub mctk-hide-m">Cobrado en el sistema</span><b class="mccf-sub mctk-hide-m">' + $m(cobrado) + "</b>" : "") + "</div>" +
       (d.costosVisibles ? '<p style="text-align:right;margin:6px 0 0"><a href="#" id="mctk-costos" class="mctk-link">Detalle de costos</a></p>' : "");
   }
+  function cuadreDe() {
+    return K.d.cuadre || null;
+  }
   function flagsHtml() {
-    var F = K.d.flags || []; if (!F.length) return "";
-    return '<div class="mctk-flag">' + F.map(function (f) {
-      return '<div><b>⚠ Por corregir: ' + e(f.motivo) + "</b>" + (f.factura ? ' <span class="mccf-sub">· factura ' + e(f.factura) + "</span>" : "") + (f.detalle ? "<div>" + e(f.detalle) + "</div>" : "") +
-        (K.d.puedeEditar ? ' <button type="button" class="btn ghost small" data-flag="' + e(f.id) + '">Marcar resuelto</button>' : '<div class="mccf-sub">Corrige con «Solicitar cambio»; un admin lo revisa.</div>') + "</div>";
-    }).join("") + "</div>";
+    var C = cuadreDe(), F = K.d.flags || [], fac = (C && C.factura) || (F[0] && F[0].factura) || "";
+    if (C && C.texto) {
+      var btn = "";
+      if (F.length && K.d.puedeEditar) btn = F.map(function (f) { return ' <button type="button" class="btn ghost small" data-flag="' + e(f.id) + '">Marcar resuelto</button>'; }).join("");
+      else if (F.length && !K.d.puedeEditar) btn = ' <span class="mccf-sub">Corrige con «Solicitar cambio»</span>';
+      return '<div class="mctk-cuadre ' + (C.ok ? "ok" : "bad") + '">' + e(C.texto) + btn + "</div>";
+    }
+    if (!F.length) return "";
+    var n = F.length, txt = n + (n === 1 ? " marca por corregir" : " marcas por corregir") + (fac ? " · fac. " + String(fac).replace(/^001-001-0+/, "") : "");
+    var btn2 = F.length && K.d.puedeEditar ? F.map(function (f) { return ' <button type="button" class="btn ghost small" data-flag="' + e(f.id) + '">Marcar resuelto</button>'; }).join("") : "";
+    return '<div class="mctk-cuadre bad">' + e(txt) + btn2 + "</div>";
   }
   function faltaHtml() {
     var F = K.d.faltan || []; if (!F.length || (K.d.flags || []).length) return "";
@@ -482,7 +525,7 @@
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
-      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label></div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
+      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -612,8 +655,11 @@
   function propuesta() {
     var dat = K.datos && Object.keys(K.datos).length ? { datos: K.datos } : {};
     if (!K.dirtyL) return dat;
+    var justEl = document.getElementById("mctk-just");
+    if (justEl) K.justif = justEl.value || "";
     return Object.assign(dat, { lineas: K.L.map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit, descuento_tipo: l.descuento_tipo || "", descuento_valor: l.descuento_valor || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, promo: l.promo || "" }; }),
-      descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN });
+      descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN,
+      justificacion_descuento: K.justif || "", datos: Object.assign({}, dat.datos || {}, { justificacion_descuento: K.justif || "" }) });
   }
   function cargarEstado(d) {
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
@@ -621,6 +667,7 @@
     K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
+    K.justif = d.justificacion_descuento || "";
   }
   function render(clave) {
     css();
