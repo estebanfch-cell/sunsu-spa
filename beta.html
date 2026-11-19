@@ -436,6 +436,12 @@
   .card { background: var(--white); border-radius: 16px; box-shadow: var(--shadow-sm); padding: 16px; margin-bottom: 11px; border: none; }
   .card .k { color: var(--gray); font-size: 0.63rem; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
   .card .v { font-size: 1.7rem; font-weight: 800; color: var(--navy); margin-top: 2px; font-family: inherit; }
+  .com-hoy { background: var(--white); border-radius: 16px; box-shadow: var(--shadow-sm); padding: 12px 14px; margin-bottom: 11px; }
+  .com-hoy-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .com-hoy-h { font-size: 0.72rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.4px; }
+  .com-hoy-mon { font-size: 1.25rem; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .com-hoy-row { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 0.78rem; color: var(--navy); }
+  .com-hoy-row span { white-space: nowrap; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .row {
     display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: 14px; align-items: center;
@@ -1906,7 +1912,7 @@ function previewApi(accion, body) {
       permisos: [], vacaciones: { diasDisponibles: 5, diasPendientes: 0 }, hayDatos: true };
   }
   if (accion === "asis_cierre_automatico") return { ok: true, cerrados: 0, detalle: [] };
-  if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4 };
+  if (accion === "getDashCosm") return { ok: true, periodoLabel: "Oct — Nov 2026", cicloLabel: "26/10–25/11", faciales: 12, comFaciales: 36, paquetes: 4, comPaquetes: 20, comProductos: 18, comExtras: 6, comRecepcion: 0, nCosmetologas: 4, hoy: { fecha: "2026-11-19", faciales: 2, paquetes: 0, extras: 2, productos: 0, comFaciales: 6, comPaquetes: 0, comExtras: 2, comProductos: 0, total: 8 } };
   if (accion === "getRolIndividual") return { ok: true, data: { nombre: body.cedula || "Emilia", cedula: "1711", cargo: "Cosmetóloga", sueldo: 460, bono: 20, comFaciales: 36, comPaquetes: 20, comProductos: 18, vacaciones: 0, fondoReserva: 0, totalIngresos: 554, iess: 48, totalRecibir: 506, fuenteHoras: "asistencia", hrsSupl: 0, atrasoMin: 0, faltas: 0 } };
   if (accion === "roles_lista") {
     const admin = !!state.admin;
@@ -5169,11 +5175,31 @@ async function renderPersonal(route) {
   }
   return renderAsistencia();
 }
+function fmtDiaCorto(ymd) {
+  const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const p = String(ymd || "").split("-");
+  const d = Number(p[2]), m = Number(p[1]);
+  if (!d || !m) return ymd || "";
+  return d + " " + meses[m - 1];
+}
 async function renderPersonalComisiones() {
   const sel = await htmlSelectorPersona();
   const nombre = state.admin ? (state.persona || (state.user && state.user.name) || "") : (state.user && state.user.name) || "";
   const data = await api("getDashCosm", { cosmetologa: nombre });
   if (data.error) return sel + fail(data);
+  const hoy = data.hoy || {};
+  const hoyBlock = `<div class="com-hoy">
+    <div class="com-hoy-top">
+      <div class="com-hoy-h">Hoy${hoy.fecha ? " · " + esc(fmtDiaCorto(hoy.fecha)) : ""}</div>
+      <div class="com-hoy-mon">${money(hoy.total || 0)}</div>
+    </div>
+    <div class="com-hoy-row">
+      <span>Faciales ${esc(hoy.faciales || 0)}</span>
+      <span>Paquetes ${esc(hoy.paquetes || 0)}</span>
+      <span>Extras ${esc(hoy.extras || 0)}</span>
+      <span>Productos ${esc(hoy.productos || 0)}</span>
+    </div>
+  </div>`;
   const cards = [
     ["Faciales", data.faciales], ["Comisión faciales", data.comFacialesOn === false ? "— (aprendiz)" : money(data.comFaciales)],
     ["Paquetes", data.paquetes], ["Escalón", data.nivelAlcanzado || "—"],
@@ -5182,7 +5208,8 @@ async function renderPersonalComisiones() {
     ["Recepción", money(data.comRecepcion)], ["N del ciclo", data.nCosmetologas],
   ].map(([k, v]) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v ?? 0)}</div></div>`).join("");
   const nota = state.admin ? "Elige a quién ves. Cada cosmetóloga, en su cuenta, solo ve lo suyo." : "Ves solo tu comisión.";
-  return `${sel}<p class="note">${esc(data.periodoLabel || "")}. ${nota}</p><div class="grid">${cards}</div>`;
+  const ciclo = data.cicloLabel || data.periodoLabel || "";
+  return `${sel}${hoyBlock}<p class="note">Acumulado del ciclo ${esc(ciclo)}. ${nota}</p><div class="grid">${cards}</div>`;
 }
 
 function clavePeriodoActual() {
