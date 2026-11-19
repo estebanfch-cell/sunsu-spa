@@ -4,6 +4,7 @@ import { actorOf, guardarArchivo } from "./lib.ts";
 import { ErpError, runErp } from "./erp.ts";
 import { acceso, esAdmin, matrizDe, type Acceso } from "./permisos.ts";
 import { s, type Row } from "./domain.ts";
+import { credencialActiva } from "./credenciales.ts";
 
 const MOD: Record<string, string> = {
   home: "inicio", erp_home: "inicio",
@@ -58,9 +59,16 @@ extend("whoami", "any", async (_p, ctx, ses) => {
   const m = marks.find((x) => x.id === ses.uid || s(x.nombre).toLowerCase().startsWith(ses.name.toLowerCase().split(" ")[0] || "—"));
   esCosm = !!m && m.es_cosmetologa === true;
   const { modulosVisibles } = await import("./permisos.ts");
+  let cred = null as { pass_hash?: unknown; debe_cambiar_pass?: unknown; usuario?: unknown } | null;
+  try { cred = (await ctx.db.all("beta_credenciales")).find((x) => String(x.usuario_id) === String(ses.uid)) || null; } catch { cred = null; }
+  const tiene = credencialActiva(cred);
   return {
     ok: true,
-    user: { id: ses.uid, name: ses.name, short: ses.short, role: ses.rol, es_cosmetologa: esCosm },
+    user: { id: ses.uid, name: ses.name, short: ses.short, role: ses.rol, es_cosmetologa: esCosm, color: ses.color, tiene_usuario: tiene },
+    usuario: cred && tiene ? String(cred.usuario || "") : "",
+    email: cred ? String((cred as { email?: unknown }).email || "") : "",
+    tiene_usuario: tiene,
+    debe_cambiar: !!(cred && cred.debe_cambiar_pass === true),
     modulos: modulosVisibles(ses.rol, matriz),
     ver_costos: acceso(ses.rol, "ver_costos", matriz) === "todos",
     modo_prueba: !!ses.prueba,
