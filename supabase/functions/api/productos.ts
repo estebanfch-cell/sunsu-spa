@@ -41,7 +41,7 @@ export function grupoDeBodega(b: Row | undefined, sub = ""): { grupo: Grupo; sub
   if (id === BOD_CAB2 || cod === "CAB2") return { grupo: "CABINA", sub: "CABINA_2" };
   if (id === BOD_CAB3 || cod === "CAB3") return { grupo: "CABINA", sub: "CABINA_3" };
   if (id === BOD_CABINA || cod === "CABINA" || tipo === "cabina") {
-    const m = sb.match(/^CABINA_?([123])$/);
+    const m = sb.match(/^CABINA_?(\d+)$/);
     return { grupo: "CABINA", sub: m ? "CABINA_" + m[1] : "" };
   }
   return { grupo: "OTRA", sub: "" };
@@ -266,7 +266,11 @@ export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock
   out.push({ grupo: "BCONSIG", nombre: GRUPO_NOMBRE.BCONSIG, cantidad: round2(erp.BCONSIG), subs: [], nota: "bodega CONSIGNACION" });
   const cab = opts.cab;
   const cabTotal = cab ? n(cab.envases_cerrados) : erp.CABINA;
-  const subs: StockSub[] = SUBS_CABINA.map((x) => ({ codigo: x.codigo, nombre: x.nombre, cantidad: round2(subQ[x.codigo] || 0) }));
+  const cabinas = SUBS_CABINA.map((x) => ({ codigo: x.codigo, nombre: x.nombre as string }));
+  for (const k of Object.keys(subQ)) {
+    if (!cabinas.some((x) => x.codigo === k)) cabinas.push({ codigo: k, nombre: k.replace(/^CABINA_/, "Cabina ") });
+  }
+  const subs: StockSub[] = cabinas.map((x) => ({ codigo: x.codigo, nombre: x.nombre, cantidad: round2(subQ[x.codigo] || 0) }));
   const asignado = subs.reduce((a, x) => a + x.cantidad, 0);
   subs.push({ codigo: "", nombre: "Sin cabina asignada", cantidad: round2(Math.max(0, cabTotal - asignado)) });
   out.push({
