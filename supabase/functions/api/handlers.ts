@@ -9,7 +9,8 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo } from "./domain.ts";
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq } from "./domain.ts";
+import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
@@ -808,14 +809,16 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;
   let paqueteFila: number | null = null;
-  if ((s(p.pack3) || s(p.pack6)) && s(p.cedula)) {
+  // TK110: la venta de paquete crea su paquete aunque falte la cédula (basta el nombre).
+  if ((s(p.pack3) || s(p.pack6)) && (s(p.cedula) || s(p.nombre))) {
     const paqRow = await nextSheet(ctx.db, "paquetes");
+    const paqCodigo = siguienteCodigoPaq(await ctx.db.all("paquetes").catch(() => [] as R[]), (ctx.db as { prueba?: boolean }).prueba === true);
     const txt = s(p.pack3) || s(p.pack6);
     const skuM = txt.match(/SUNSU-\d+/);
     const paqSaved = await ctx.db.write(actor, "paquetes", "insert", {}, {
       sheet_row: paqRow, dia: ec.d, mes: ec.m, ano: ec.y, cedula: s(p.cedula),
       nombres: s(p.nombre), apellidos: s(p.apellido), sku: skuM ? skuM[0] : txt, paquete: txt,
-      vendido_por: s(p.cosmetologa), notas: "", orig: { ticket, ts: ec.isoWall },
+      vendido_por: s(p.cosmetologa), notas: "", orig: { ticket, so_num: soNum, ts: ec.isoWall, codigo: paqCodigo }, ...(paqCodigo.startsWith("PQ-") ? { beta_codigo: paqCodigo } : {}),
     });
     // En Modo prueba la fila se guarda con sheet_row negativo: usar la fila REAL guardada,
     // si no la marca de la 1ª sesión apuntaba a otra fila y el paquete quedaba 0/3.
@@ -854,16 +857,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
 async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R[]) {
   const row = await rowBySheet(ctx.db, "paquetes", sheetRow);
   if (!row) return;
-  const patch: R = {};
-  let i = 0;
-  for (const [u, f] of USO_FIELDS) {
-    if (i >= slots.length) break;
-    if (!b(row[u]) && !s(row[f])) {
-      patch[u] = true;
-      patch[f] = "Gift Card, " + s(slots[i].codigo);
-      i++;
-    }
-  }
+  const patch = patchSlotsGC(row, slots);
   if (Object.keys(patch).length) await ctx.db.write(actor, "paquetes", "update", { sheet_row: sheetRow }, patch);
 }
 

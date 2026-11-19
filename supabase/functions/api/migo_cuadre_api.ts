@@ -19,6 +19,7 @@ import {
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
 import { difPorSku } from "./cuadre_sku.ts";
+import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { catalogoBorradores, lineasBorradorDeFactura, lineasTicketDeBorrador, type LineaBorrador } from "./borrador_lineas.ts";
 import { contactoDeFactura } from "./clientes_contacto.ts";
 import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
@@ -833,6 +834,8 @@ export async function lineasDeFacturaATicket(ctx: Ctx, actor: string, factura: s
     await ctx.db.write(actor, "beta_ticket_lineas", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, ...l });
   }
   await logSafe(ctx, actor, "MIGO BORRADOR LINEAS", clave + " ← " + fac + " · " + armado.lineas.length + " líneas · $" + total.toFixed(2));
+  // TK110: la venta de paquete de la factura crea su paquete si falta (idempotente).
+  try { const pq = await asegurarPaquetesVenta(ctx, actor, ticket, lineasTicketDeBorrador(armado.lineas), fac); if (pq.length) await logSafe(ctx, actor, "PAQUETE VENTA", clave + " → " + pq.join(", ")); } catch { /* sin paquete no frena el ticket */ }
   return { ok: true, total, lineas: armado.lineas.length };
 }
 
