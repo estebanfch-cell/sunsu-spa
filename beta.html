@@ -1166,9 +1166,25 @@ ul.mc-hist li:first-child, ul.mctr-log li:first-child { border-top: 0; }
 p.mcpq-hist { margin: 0; padding: 7px 4px; border-top: 1px solid var(--cream-d, #e6dccb); font-size: .78rem; }
 b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
 
-  .roles-anio { margin: 0 0 22px; }
+  .roles-anio { margin: 0 0 22px; max-width: 100%; overflow-x: hidden; }
   .roles-anio h2 { margin: 0 0 12px; font-size: 1.15rem; }
   .roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .rol-staff, .rol-historial { max-width: 100%; overflow-x: hidden; box-sizing: border-box; }
+  #rol-historial-btn { width: 100%; max-width: 100%; box-sizing: border-box; margin: 12px 0; }
+  .rol-anio-btn, .rol-mes-btn {
+    display: flex; width: 100%; max-width: 100%; box-sizing: border-box;
+    justify-content: space-between; align-items: center; gap: 8px;
+    text-align: left; margin: 0 0 8px; padding: 12px 14px;
+    border: 1.5px solid var(--cream-d, #E6DCCB); border-radius: 12px;
+    background: #fff; color: inherit; font: inherit; cursor: pointer;
+  }
+  .rol-anio-btn { font-weight: 700; font-size: 1.05rem; }
+  .rol-anio-btn .note, .rol-mes-btn .note { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .rol-anio-btn[aria-expanded="true"] { border-color: var(--navy, #3D5A7A); }
+  .rol-mes-btn { font-weight: 600; }
+  .rol-mes-btn .monto { flex-shrink: 0; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .roles-meses { padding: 0 0 8px; max-width: 100%; overflow-x: hidden; }
+  .rol-hist-vacio { margin: 8px 0 0; }
   .rol-card { height: 200px; margin: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 16px; }
   .rol-card .k { margin-top: 0; }
   .rol-card .v { font-size: 1.35rem; margin: 6px 0 8px; }
@@ -1194,7 +1210,8 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rol-crear-box { display:grid; gap:8px; margin:8px 0 14px; }
   .rol-crear-box .tools { margin:0; }
   @media (max-width: 375px) {
-    #rol-preview, .rol-oficial, .roles-grid { overflow-x: hidden; }
+    #rol-preview, .rol-oficial, .roles-grid, .rol-staff, .rol-historial, .rol-anio-btn, .rol-mes-btn { overflow-x: hidden; max-width: 100%; }
+    .roles-grid { grid-template-columns: minmax(0, 1fr); }
     .rol-card { height: auto; min-height: 160px; padding: 12px; }
   }
   .asis-tabs { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
@@ -4667,6 +4684,38 @@ async function renderPersonalComisiones() {
   return `${sel}<p class="note">${esc(data.periodoLabel || "")}. ${nota}</p><div class="grid">${cards}</div>`;
 }
 
+function clavePeriodoActual() {
+  const meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+  const d = new Date();
+  return meses[d.getMonth()] + "_" + d.getFullYear();
+}
+function htmlRolHistorial(items, admin) {
+  if (!items.length) {
+    return `<div id="rol-historial" class="rol-historial" hidden><p class="note rol-hist-vacio">Todavía no tienes roles en el historial.</p></div>`;
+  }
+  const porAnio = {};
+  items.forEach((it) => {
+    const a = it.anio || 2026;
+    if (!porAnio[a]) porAnio[a] = [];
+    porAnio[a].push(it);
+  });
+  const anios = Object.keys(porAnio).map(Number).sort((a, b) => b - a);
+  const bloques = anios.map((anio) => {
+    const filas = (porAnio[anio] || []).slice().sort((a, b) => String(a.periodo || "").localeCompare(String(b.periodo || "")));
+    const meses = filas.map((it) => {
+      const ver = it.id
+        ? `data-rol-ab="${esc(it.id)}"`
+        : `data-rol-ver="${esc(it.sheet || it.periodo)}" data-cedula="${esc(it.cedula || "")}" data-persona="${esc(it.persona || "")}"`;
+      const monto = money(it.neto != null ? it.neto : it.totalIngresos);
+      return `<button class="rol-mes-btn" type="button" ${ver}><span class="note">${esc(it.etiqueta || it.periodo)}</span><span class="monto">${monto}</span></button>`;
+    }).join("");
+    return `<section class="roles-anio">
+      <button class="rol-anio-btn" type="button" data-rol-anio="${esc(anio)}" aria-expanded="false">${esc(anio)} <span class="note">${filas.length} ${filas.length === 1 ? "rol" : "roles"}</span></button>
+      <div class="roles-meses" hidden>${meses}</div>
+    </section>`;
+  }).join("");
+  return `<div id="rol-historial" class="rol-historial" hidden>${bloques}</div>`;
+}
 async function renderPersonalRol() {
   const sel = await htmlSelectorPersona();
   const lista = await api("roles_lista", state.admin && state.persona ? { persona: state.persona } : {});
@@ -4674,7 +4723,15 @@ async function renderPersonalRol() {
   const items = lista.items || [];
   const anios = (lista.anios || []).length ? lista.anios : [...new Set(items.map((x) => x.anio).filter(Boolean))].sort((a, b) => b - a);
   const crear = state.admin ? await htmlRolCrear() : "";
-  const vacio = !items.length ? `<h2>Roles</h2><p class="note">${state.admin ? "Todavía no hay roles. Usa «Crear rol» para armar el del mes." : "Cuando administración apruebe tu rol, aparece aquí."}</p>` : "";
+  if (!state.admin) {
+    const actualClave = clavePeriodoActual();
+    const actual = items.filter((it) => String(it.periodo || it.sheet || "").toUpperCase() === actualClave && (it.estado === "aprobado" || it.fuente === "historial"));
+    const top = actual.length
+      ? `<h2>Este mes</h2>` + actual.map((it) => htmlRolCard(it, false)).join("")
+      : `<h2>Este mes</h2><p class="note">Cuando administración apruebe tu rol, aparece aquí.</p>`;
+    return sel + `<div class="rol-staff">${top}<button class="btn" type="button" id="rol-historial-btn" aria-expanded="false">Historial</button>${htmlRolHistorial(items, false)}<div id="rol-preview"></div></div>`;
+  }
+  const vacio = !items.length ? `<h2>Roles</h2><p class="note">Todavía no hay roles. Usa «Crear rol» para armar el del mes.</p>` : "";
   const porAnio = {};
   items.forEach((it) => {
     const a = it.anio || 2026;
@@ -4738,7 +4795,7 @@ function htmlRolOficial(pack) {
   const canAct = admin && pack.estado !== "aprobado" && !state.prueba && !state.vista;
   const acciones = canAct
     ? `<div class="rol-acciones"><button class="btn" type="button" data-rol-ok="${esc(pack.id || "")}">Aprobar rol</button><button class="btn ghost" type="button" data-rol-no="${esc(pack.id || "")}">No aprobar</button><button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button></div>`
-    : `<div class="rol-acciones">${admin ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : (pack.estado === "aprobado" ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : "")}${state.prueba || state.vista ? `<p class="note">En «Ver como» o en simulación no se aprueban roles reales.</p>` : ""}</div>`;
+    : `<div class="rol-acciones">${admin ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : ((pack.estado === "aprobado" || (pack.data && pack.data.fuente === "historial") || pack.fuente === "historial") ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : "")}${state.prueba || state.vista ? `<p class="note">En «Ver como» o en simulación no se aprueban roles reales.</p>` : ""}</div>`;
   return `<div class="card rol-oficial" data-rol-id="${esc(pack.id || "")}">
     <div class="card-title">Rol de pagos ${rolPill(pack.estado)} · ${esc(d.etiqueta || pack.etiqueta || pack.periodo || "")}</div>
     <p class="note">${esc(d.nombre || pack.persona || "")}${d.cargo ? " · " + esc(d.cargo) : ""}${d.cedula ? " · " + esc(d.cedula) : ""}<br>
@@ -4749,6 +4806,8 @@ function htmlRolOficial(pack) {
     ${campo("sueldoBase", d.sueldoBase, "Sueldo base")}
     ${linea("Sueldo (después de faltas)", d.sueldo)}
     ${campo("bono", d.bono, "Bono")}
+    ${d.comisiones ? linea("Comisiones", d.comisiones) : ""}
+    ${d.extras ? linea("Horas extras", d.extras) : ""}
     ${campo("comFacialesSolo", d.comFacialesSolo, "Com. faciales")}
     ${campo("comExtras", d.comExtras, "Com. extras")}
     ${campo("comRecepcion", d.comRecepcion, "Com. recepción")}
@@ -4764,6 +4823,7 @@ function htmlRolOficial(pack) {
     ${linea("Décimo tercero", d.dec13)}
     ${linea("Décimo cuarto", d.dec14)}
     ${linea("Fondo de reserva", d.fondoReserva)}
+    ${d.decimosFondo ? linea("Décimos y fondo de reserva", d.decimosFondo) : ""}
     <div class="rol-line rol-total"><span class="concepto">Total ingresos</span><span class="monto">${money(d.totalIngresos)}</span></div>
     <h3>Descuentos</h3>
     ${linea("Aporte IESS (9.45%)", d.iess)}
@@ -4786,8 +4846,14 @@ function htmlRolOficial(pack) {
 }
 function mostrarRolOficial(pack) {
   window._rolOficial = pack;
-  const box = document.getElementById("rol-preview");
-  if (!box) return;
+  let box = document.getElementById("rol-preview");
+  if (!box) {
+    const host = document.getElementById("main");
+    if (!host) return;
+    box = document.createElement("div");
+    box.id = "rol-preview";
+    host.prepend(box);
+  }
   box.classList.remove("is-dirty");
   box.innerHTML = htmlRolOficial(pack);
   box.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -6977,20 +7043,41 @@ function wirePersonal(main) {
       if ((location.hash || "").indexOf("/personal/rol") >= 0) go(location.hash);
     };
   });
+  const histBtn = main.querySelector("#rol-historial-btn");
+  const histBox = main.querySelector("#rol-historial");
+  if (histBtn && histBox) {
+    histBtn.onclick = () => {
+      const open = histBox.hidden;
+      histBox.hidden = !open;
+      histBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+  }
+  main.querySelectorAll("[data-rol-anio]").forEach((b) => {
+    b.onclick = () => {
+      const meses = b.parentElement && b.parentElement.querySelector(".roles-meses");
+      if (!meses) return;
+      const open = meses.hidden;
+      meses.hidden = !open;
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+  });
   main.querySelectorAll("[data-rol-ver]").forEach((b) => {
     b.onclick = async () => {
       const sheet = b.getAttribute("data-rol-ver");
       const cedula = b.getAttribute("data-cedula") || state.personaCedula || "";
       const data = await api("getRolIndividual", { sheet, cedula, persona: b.getAttribute("data-persona") || "" });
       if (data.error) { toast(data.error); return; }
-      window._rol = data.data ? { ...data, ...data.data, persona: (data.data && data.data.nombre) || b.getAttribute("data-persona"), ingresos: data.data && data.data.ingresos, descuentos: data.data && data.data.descuentos, totalIngresos: data.data && (data.data.totalIngresos), neto: data.data && (data.data.totalRecibir || data.data.neto) } : data;
-      const host = document.getElementById("main") || main;
-      const box = document.createElement("div");
-      box.innerHTML = (typeof htmlRol === "function" && (window._rol.ingresos || window._rol.descuentos))
-        ? htmlRol(window._rol)
-        : `<div class="card"><div class="card-title">${esc((data.data && data.data.nombre) || "")} · ${esc(sheet)}</div><p class="note">Total ingresos ${money((data.data && data.data.totalIngresos) || 0)} · A recibir ${money((data.data && (data.data.totalRecibir || data.data.neto)) || 0)}</p></div>`;
-      host.prepend(box);
-      host.scrollTop = 0;
+      const pack = {
+        ok: true,
+        data: data.data || data,
+        estado: data.estado || (data.data && data.data.estado) || "aprobado",
+        periodo: data.periodo || sheet,
+        etiqueta: data.etiqueta || (data.data && data.data.etiqueta) || sheet,
+        fuente: data.fuente || (data.data && data.data.fuente) || "",
+        admin: false,
+        persona: (data.data && data.data.nombre) || b.getAttribute("data-persona") || "",
+      };
+      mostrarRolOficial(pack);
     };
   });
   const pubCiclo = main.querySelector("#rol-pub-ciclo, #rol-oculta-ciclo");
@@ -7119,40 +7206,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk108"></script>
-<script src="beta-screens.js?v=20261118tk108"></script>
-<script src="beta-inline.js?v=20261118tk108"></script>
-<script src="mc-productos.js?v=20261118tk108"></script>
-<script src="mc-nav.js?v=20261118tk108"></script>
-<script src="mc-permisos.js?v=20261118tk108"></script>
-<script src="mc-protocolos.js?v=20261118tk108"></script>
-<script src="mc-conteo.js?v=20261118tk108"></script>
-<script src="mc-transferencias.js?v=20261118tk108"></script>
-<script src="mc-ajustes.js?v=20261118tk108"></script>
-<script src="vendor-qrcode.js?v=20261118tk108"></script>
-<script src="mc-tickets.js?v=20261118tk108"></script>
-<script src="mc-maestro.js?v=20261118tk108"></script>
-<script src="mc-empleados.js?v=20261118tk108"></script>
-<script src="mc-edit.js?v=20261118tk108"></script>
-<script src="mc-paquetes.js?v=20261118tk108"></script>
-<script src="mc-aperturas.js?v=20261118tk108"></script>
-<script src="mc-acceso.js?v=20261118tk108"></script>
-<script src="mc-barras.js?v=20261118tk108"></script>
-<script src="mc-caja.js?v=20261118tk108"></script>
-<script src="mc-giftcards.js?v=20261118tk108"></script>
-<script src="mc-multas.js?v=20261118tk108"></script>
-<script src="mc-clientes.js?v=20261118tk108"></script>
-<script src="mc-clientes-dup.js?v=20261118tk108"></script>
-<script src="mc-docpdf.js?v=20261118tk108"></script>
-<script src="mc-compras.js?v=20261118tk108"></script>
-<script src="mc-consignacion.js?v=20261118tk108"></script>
-<script src="mc-proveedores.js?v=20261118tk108"></script>
-<script src="mc-recepciones.js?v=20261118tk108"></script>
-<script src="mc-movil.js?v=20261118tk108"></script>
-<script src="mc-promociones.js?v=20261118tk108"></script>
-<script src="mc-agenda.js?v=20261118tk108"></script>
-<script src="mc-staff-home.js?v=20261118tk108"></script>
-<script src="mc-borradores.js?v=20261118tk108"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk106"></script>
+<script src="beta-screens.js?v=20261118tk106"></script>
+<script src="beta-inline.js?v=20261118tk106"></script>
+<script src="mc-productos.js?v=20261118tk106"></script>
+<script src="mc-nav.js?v=20261118tk106"></script>
+<script src="mc-permisos.js?v=20261118tk106"></script>
+<script src="mc-protocolos.js?v=20261118tk106"></script>
+<script src="mc-conteo.js?v=20261118tk106"></script>
+<script src="mc-transferencias.js?v=20261118tk106"></script>
+<script src="mc-ajustes.js?v=20261118tk106"></script>
+<script src="vendor-qrcode.js?v=20261118tk106"></script>
+<script src="mc-tickets.js?v=20261118tk106"></script>
+<script src="mc-maestro.js?v=20261118tk106"></script>
+<script src="mc-empleados.js?v=20261118tk106"></script>
+<script src="mc-edit.js?v=20261118tk106"></script>
+<script src="mc-paquetes.js?v=20261118tk106"></script>
+<script src="mc-aperturas.js?v=20261118tk106"></script>
+<script src="mc-acceso.js?v=20261118tk106"></script>
+<script src="mc-barras.js?v=20261118tk106"></script>
+<script src="mc-caja.js?v=20261118tk106"></script>
+<script src="mc-giftcards.js?v=20261118tk106"></script>
+<script src="mc-multas.js?v=20261118tk106"></script>
+<script src="mc-clientes.js?v=20261118tk106"></script>
+<script src="mc-clientes-dup.js?v=20261118tk106"></script>
+<script src="mc-docpdf.js?v=20261118tk106"></script>
+<script src="mc-compras.js?v=20261118tk106"></script>
+<script src="mc-consignacion.js?v=20261118tk106"></script>
+<script src="mc-proveedores.js?v=20261118tk106"></script>
+<script src="mc-recepciones.js?v=20261118tk106"></script>
+<script src="mc-movil.js?v=20261118tk106"></script>
+<script src="mc-promociones.js?v=20261118tk106"></script>
+<script src="mc-agenda.js?v=20261118tk106"></script>
+<script src="mc-staff-home.js?v=20261118tk106"></script>
+<script src="mc-borradores.js?v=20261118tk106"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).

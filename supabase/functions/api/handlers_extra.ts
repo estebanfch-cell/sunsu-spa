@@ -319,26 +319,50 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   const mes = n(meses[partes[0]] || 0);
   const emps = await ctx.db.all("rrhh_empleadas");
   const ced = s(p.cedula).replace(".", "");
-  const e = emps.find((r) => s(r.cedula).replace(".", "") === ced || normCedula(r.cedula) === normCedula(ced));
-  if (!e || !mes) return { ok: false, error: "Empleada o periodo no encontrado" };
+  const mismaCedula = (rowCed: unknown) => {
+    if (!ced) return false;
+    if (s(rowCed).replace(".", "") === ced) return true;
+    const a = normCedula(rowCed), b = normCedula(ced);
+    return !!(a && b && a === b);
+  };
+  const e = emps.find((r) => mismaCedula(r.cedula)
+    || (s(p.persona) && (s(r.nombre_app) === s(p.persona) || s(r.apellidos_y_nombres) === s(p.persona))));
+  const { clavePeriodo, exigirRolPublicado, rolDesdeHistorial, histClave, mismaPersonaRol, etiquetaPeriodo } = await import("./roles_api.ts");
+  const periodo = sheet || clavePeriodo(partes[0], anio);
+  const histAll = await ctx.db.all("rrhh_historial").catch(() => [] as R[]);
+  const histRow = histAll.find((r) => {
+    if (clavePeriodo(histClave(r)) !== clavePeriodo(periodo)) return false;
+    if (mismaCedula(r.cedula)) return true;
+    if (s(p.persona) && mismaPersonaRol(s(r.empleada), s(p.persona))) return true;
+    if (ced || s(p.persona)) return false;
+    if (esPropio(s(r.empleada), ses) || mismaPersonaRol(s(r.empleada), ses.name || "") || mismaPersonaRol(s(r.empleada), ses.short || "")) return true;
+    if (e && (mismaPersonaRol(s(r.empleada), s(e.nombre_app)) || mismaPersonaRol(s(r.empleada), s(e.apellidos_y_nombres)))) return true;
+    return false;
+  });
+  const nombreVista = s(e && e.nombre_app) || s(e && e.apellidos_y_nombres) || s(histRow && histRow.empleada) || s(p.persona);
+  if (!e && !histRow) return { ok: false, error: "Empleada o periodo no encontrado" };
   if (acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos") {
-    if (!esPropio(s(e.nombre_app), ses) && !esPropio(s(e.apellidos_y_nombres), ses)) {
+    if (!esPropio(s(e && e.nombre_app), ses) && !esPropio(s(e && e.apellidos_y_nombres), ses) && !esPropio(s(histRow && histRow.empleada), ses) && !mismaPersonaRol(nombreVista, ses.name || "") && !mismaPersonaRol(nombreVista, ses.short || "")) {
       return { ok: false, error: "No tienes permiso para ver el rol de otra persona" };
     }
   }
-  const { clavePeriodo, exigirRolPublicado } = await import("./roles_api.ts");
-  const noPub = await exigirRolPublicado(ctx, ses, sheet || clavePeriodo(partes[0], anio), s(e.nombre_app) || s(e.apellidos_y_nombres));
+  const { rolAprobadoDe } = await import("./roles_crear_api.ts");
+  const aprobado = await rolAprobadoDe(ctx, periodo, nombreVista);
+  if (aprobado) {
+    const snap = (aprobado.snapshot && typeof aprobado.snapshot === "object") ? aprobado.snapshot as R : {};
+    return { ok: true, data: { ...snap, fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
+  }
+  if (histRow && acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos") {
+    const data = rolDesdeHistorial(histRow, periodo);
+    return { ok: true, data, fuente: "historial", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
+  }
+  if (!e || !mes) return { ok: false, error: "Empleada o periodo no encontrado" };
+  const noPub = await exigirRolPublicado(ctx, ses, periodo, s(e.nombre_app) || s(e.apellidos_y_nombres));
   if (noPub) return { ok: false, error: noPub };
   const { fichaIessDe } = await import("./empleados_api.ts");
   const iessFicha = await fichaIessDe(ctx, s(e.nombre_app) || s(e.apellidos_y_nombres), `${anio}-${String(mes).padStart(2, "0")}-25`);
   if (!iessFicha.afiliada) {
     return { ok: false, error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: s(e.nombre_app) || s(e.apellidos_y_nombres) };
-  }
-  const { rolAprobadoDe } = await import("./roles_crear_api.ts");
-  const aprobado = await rolAprobadoDe(ctx, sheet || clavePeriodo(partes[0], anio), s(e.nombre_app) || s(e.apellidos_y_nombres));
-  if (aprobado) {
-    const snap = (aprobado.snapshot && typeof aprobado.snapshot === "object") ? aprobado.snapshot as R : {};
-    return { ok: true, data: { ...snap, fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado" };
   }
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
