@@ -305,9 +305,39 @@ async function cuadreVista(ctx: Ctx, r: Row, lineas: Row[], cab: Row | undefined
     const lineasFac = vivos.flatMap((f) => (Array.isArray(f.lineas) ? f.lineas as Row[] : []));
     const aliases = mapaAliases(await todas(ctx, "beta_sku_alias").catch(() => [] as Row[]));
     const tk = { ...r, lineas, lineasDetalle: lineas };
-    const cuadre_lineas = compararLineasVisual([tk], lineasFac, undefined, aliases);
-    const cuadre = resumenCuadre(cuadre_lineas, facs[0] || facTxt);
-    return { cuadre_lineas, cuadre, justificacion_descuento: just || "", facturas_cuadre: facs };
+    // TK143: comparar contra la SUMA de todos los tickets vinculados a la misma factura.
+    const linksGrupo = facs.length
+      ? (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "factura", op: "in", val: facs }], limite: 40 })).rows
+      : links;
+    const hermanos: Row[] = [];
+    const visto = new Set<number>([n(r.id)]);
+    for (const L of linksGrupo) {
+      const id = n(L.ticket_id);
+      if (!id || visto.has(id)) continue;
+      visto.add(id);
+      const h = (await consultar(ctx.db, "tickets", { filtros: [{ col: "id", op: "eq", val: id }], limite: 1 })).rows[0];
+      if (!h || h.borrado_at) continue;
+      const claveH = claveDe(h, leerSerie(h, "so_num"));
+      const cabH = await cabDe(ctx, claveH);
+      if (cabH && cabH.lineas_beta === true) {
+        const bl = (await consultar(ctx.db, "beta_ticket_lineas", { filtros: [{ col: "ticket_clave", op: "eq", val: claveH }], limite: 80 })).rows
+          .slice().sort((a, b0) => n(a.orden) - n(b0.orden))
+          .map((l) => ({
+            sku: s(l.sku), codigo: s(l.sku), producto: s(l.nombre), nombre: s(l.nombre), tipo: s(l.tipo),
+            cantidad: n(l.cantidad) || 1, precio_unit: n(l.precio_unit), descuento: n(l.descuento_monto),
+            total: n(l.total_linea), total_linea: n(l.total_linea),
+            canje: l.canje === true, cortesia: l.cortesia === true,
+          }));
+        hermanos.push({ ...h, clave: claveH, lineas: bl, lineasDetalle: bl });
+      } else {
+        hermanos.push({ ...h, clave: claveH });
+      }
+    }
+    const tks = [tk, ...hermanos];
+    const cuadre_lineas = compararLineasVisual(tks, lineasFac, undefined, aliases, { focus: 0 });
+    const hermanosClaves = hermanos.map((h) => s(h.clave || h.so_num)).filter(Boolean);
+    const cuadre = resumenCuadre(cuadre_lineas, facs[0] || facTxt, { hermanos: hermanosClaves });
+    return { cuadre_lineas, cuadre, justificacion_descuento: just || "", facturas_cuadre: facs, cuadre_hermanos: hermanosClaves };
   } catch {
     return { cuadre_lineas: [], cuadre: null, justificacion_descuento: just || "" };
   }

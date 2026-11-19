@@ -144,6 +144,25 @@ function cerrarLineasDeTicket(out: LineaNorm[], t: Row): LineaNorm[] {
   return expandirNormGiftCaja(out.concat(lineasDesdeVentaGift(t, out)));
 }
 
+/** TK143: cortesía [CORTESIA:…] o flag cortesia — no se cobra ni se compara contra la factura. */
+export function esLineaCortesia(l: { nombre?: unknown; producto?: unknown; tipo?: unknown; cortesia?: unknown; notas?: unknown } | string): boolean {
+  if (l && typeof l === "object") {
+    if ((l as { cortesia?: unknown }).cortesia === true) return true;
+    const txt = s((l as { nombre?: unknown }).nombre) + " " + s((l as { producto?: unknown }).producto) + " " + s((l as { tipo?: unknown }).tipo) + " " + s((l as { notas?: unknown }).notas);
+    return /\[CORTESIA[^\]]*\]/i.test(txt);
+  }
+  return /\[CORTESIA[^\]]*\]/i.test(s(l));
+}
+
+function marcarCanjeCero(l: LineaNorm): LineaNorm {
+  l.canje = true;
+  l.unitSin = 0;
+  l.subtotalSin = 0;
+  l.totalCon = 0;
+  l.descuento = 0;
+  return l;
+}
+
 /** Líneas de un ticket: beta_ticket_lineas, o reconstrucción desde orig / facial / extras. */
 export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): LineaNorm[] {
   const out: LineaNorm[] = [];
@@ -162,11 +181,17 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
         total: tot,
       });
       if (!nrm) continue;
-      if (l.canje === true || (s(l.tipo) === "facial" && !(nrm.totalCon > 0) && !(nrm.unitSin > 0))) nrm.canje = true;
+      if (l.canje === true || (s(l.tipo) === "facial" && !(nrm.totalCon > 0) && !(nrm.unitSin > 0)) || esLineaCortesia(l)) {
+        if (esLineaCortesia(l) || l.canje === true && !(nrm.totalCon > 0.004)) marcarCanjeCero(nrm);
+        else nrm.canje = true;
+      }
       if (esDiferenciaMejora(l)) { nrm.mejoraPaquete = true; nrm.canje = false; }
       out.push(nrm);
     }
-    if (out.length) return cerrarLineasDeTicket(out, t);
+    if (out.length) {
+      aplicarSesionPack(out, t);
+      return cerrarLineasDeTicket(out, t);
+    }
   }
   const orig = (t.orig && typeof t.orig === "object" ? t.orig : {}) as Row;
   const paq = s(t.paquete || orig["Paquete?"] || orig.paquete);
@@ -201,7 +226,7 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
   if (extras) {
     for (const part of extras.split(/\s*[|,;]\s*/).filter(Boolean)) {
       const m = part.match(/^(SUNSU-?[A-Z0-9-]+|[A-Z]{2,}-?\d+)\s*(.*)$/i);
-      if (m) pushSku(m[1], 1, m[2].replace(/^[·\-–]\s*/, "").trim() || m[1]);
+      if (m) pushSku(m[1], 1, m[2].replace(/^[·\-–]\s*/, "").trim() || m[1], esLineaCortesia(part));
     }
   }
   // TK81: la compra de paquete (compra_pack_3/6) también es una línea del ticket (como en el detalle del ticket).
@@ -210,6 +235,7 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
     const m = pk.match(/SUNSU-?\d+/i);
     if (m) pushSku(m[0], 1, pk.replace(m[0], "").replace(/^[·\-–\s]+/, "").trim() || m[0]);
   }
+  aplicarSesionPack(out, t);
   const skip = new Set(["id", "estado", "nombre", "apellido", "so_num", "timestamp", "paquete?", "paquete", "facial hecho", "fotos antes", "fotos despues", "fecha retorno", "atendido por:", "atendido por", "notas generales", "recomendaciónes", "recomendaciones", "servicios adicionales", "servicios adicionales ", "$$ estimado"]);
   for (const [k, v] of Object.entries(orig)) {
     const key = s(k);
@@ -237,9 +263,53 @@ function pvpCatalogo(sku: string, catalogo?: Map<string, { nombre?: string; pvpC
   return Number(cat.pvpConIva || 0) || (cat.pvpSinIva ? Math.round(cat.pvpSinIva * 1.15 * 100) / 100 : 0);
 }
 
+/** TK143: la sesión (facial) del paquete comprado en el mismo ticket no se cobra aparte. */
+function hayCompraPack(t: Row): boolean {
+  const orig = (t.orig && typeof t.orig === "object" ? t.orig : {}) as Row;
+  const vals = [s(t.compra_pack_3), s(t.compra_pack_6), s(orig["Compra pack (3)"]), s(orig["Compra pack (6)"]), s(orig.compra_pack_3), s(orig.compra_pack_6)];
+  return vals.some((v) => v && !/^(false|no|-|—)$/i.test(v));
+}
+
+function aplicarSesionPack(out: LineaNorm[], t: Row): void {
+  if (!hayCompraPack(t) || !out.length) return;
+  const facialHecho = s(t.facial_hecho || t.facial || ((t.orig && typeof t.orig === "object" ? t.orig as Row : {})["Facial hecho"]));
+  const m = facialHecho.match(/^(SUNSU-?\d+|[A-Z]{2,}-?\d+)/i);
+  const facialSku = m ? (skuMigoABeta(m[1]) || m[1]) : "";
+  const packSkus = new Set(out.filter((l) => /paquete|pack|x3|x6/i.test(l.nombre) || /^SUNSU-1[0-9]$/i.test(l.sku || l.codigo)).map((l) => l.sku || l.codigo));
+  if (!packSkus.size && !hayCompraPack(t)) return;
+  for (const l of out) {
+    if (l.canje) continue;
+    const sku = l.sku || l.codigo;
+    if (packSkus.has(sku)) continue;
+    const esFacial = /facial/i.test(l.nombre) || (facialSku && sku === facialSku);
+    if (esFacial) marcarCanjeCero(l);
+  }
+}
+
+/** TK143: suma cantidades y montos del mismo SKU (2+ tickets o 2+ líneas) antes de comparar contra la factura. */
+export function agruparPagadasPorSku(lineas: LineaNorm[]): LineaNorm[] {
+  const paid = new Map<string, LineaNorm>();
+  const otros: LineaNorm[] = [];
+  for (const l of lineas) {
+    if (l.canje || l.mejoraPaquete) { otros.push({ ...l }); continue; }
+    const k = s(l.sku || l.codigo);
+    if (!k) { otros.push({ ...l }); continue; }
+    const prev = paid.get(k);
+    if (!prev) {
+      paid.set(k, { ...l, cantidad: l.cantidad || 0, totalCon: l.totalCon || 0, subtotalSin: l.subtotalSin || 0 });
+      continue;
+    }
+    prev.cantidad = (prev.cantidad || 0) + (l.cantidad || 0);
+    prev.totalCon = Math.round(((prev.totalCon || 0) + (l.totalCon || 0)) * 100) / 100;
+    prev.subtotalSin = Math.round(((prev.subtotalSin || 0) + (l.subtotalSin || 0)) * 100) / 100;
+    if (prev.ticketId !== l.ticketId) prev.ticketId = undefined;
+  }
+  return [...paid.values(), ...otros];
+}
+
 export function compararLineas(factura: LineaNorm[], tickets: LineaNorm[], tol = TOL, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>, catPrecios?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): AvisoLinea[] {
-  const fac = expandirNormGiftCaja(factura.filter(Boolean));
-  const tks = expandirNormGiftCaja(tickets.filter(Boolean));
+  const fac = agruparPagadasPorSku(expandirNormGiftCaja(factura.filter(Boolean)));
+  const tks = agruparPagadasPorSku(expandirNormGiftCaja(tickets.filter(Boolean)));
   const usedT = new Set<number>();
   const avisos: AvisoLinea[] = [];
 
