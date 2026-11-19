@@ -1767,5 +1767,19 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "update", { id: row.id }, patch);
   await anotar(ctx, ses, "solicitudes_cambio", s(row.id), "UPDATE", { estado: "pendiente" }, patch);
+  const uid = s(row.solicitante_uid);
+  if (uid && row.prueba !== true) {
+    const cosa = s(row.etiqueta) || (s(row.tipo) === "eliminacion" ? "eliminación" : "cambio");
+    const titulo = aprobar ? "Solicitud aprobada" : "Solicitud rechazada";
+    const cuerpo = aprobar
+      ? ("Aprobaron tu solicitud: " + cosa + ".")
+      : ("Rechazaron tu solicitud: " + cosa + "." + (s(p.comentario) ? " " + s(p.comentario) : ""));
+    try {
+      await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
+        id: crypto.randomUUID(), usuario: uid, tipo: aprobar ? "solicitud_aprobada" : "solicitud_rechazada",
+        titulo, cuerpo, link: s(row.enlace) || "#/m/solicitudes", ref_id: s(row.id), created_at: ctx.now.toISOString(),
+      });
+    } catch { /* el aviso no frena la resolución */ }
+  }
   return { ok: true, estado: patch.estado, ...(row.prueba === true ? { prueba: true, aviso: "Solicitud de simulación: no se cambió ningún dato real" } : {}) };
 });

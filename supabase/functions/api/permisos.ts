@@ -90,7 +90,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   lugares_list: "inventario", lugar_guardar: "inventario", lugar_elegir: "inicio",
   ajuste_save: "inventario",
   getHistorial: "tickets", getTicketsDia: "tickets", editarTicket: "tickets", eliminarTicket: "tickets",
-  inline_guardar: "tickets", inline_borrar: "tickets", solicitud_crear: "tickets", getSolicitudes: "tickets", solicitud_resolver: "tickets",
+  inline_guardar: "tickets", inline_borrar: "tickets", solicitud_crear: "tickets", getSolicitudes: "inicio", solicitud_resolver: "tickets",
   clientes_resumen: "clientes", cliente_detalle: "clientes", ticket_editar: "tickets",
   reporte_consumos: "ver_costos", periodo_consignacion: "compras", oc_consignacion: "compras",
   rcp_lista: "recepciones", rcp_get: "recepciones", rcp_recibir: "recepciones", rcp_no_recibido_undo: "recepciones", rcp_producto_attr: "productos",

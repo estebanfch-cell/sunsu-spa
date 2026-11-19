@@ -71,12 +71,11 @@ describe("la app no dice que es una beta ni un modo prueba", () => {
     assert.doesNotMatch(html, /El radio permitido es/);
   });
 
-  it("el encabezado en pantalla chica se parte en dos filas y no fuerza nowrap", () => {
+  it("el encabezado en pantalla chica no tiene el reloj y no se desborda", () => {
     const html = readFileSync(join(root, "beta.html"), "utf8");
     assert.match(html, /class="top-actions"/);
     const media = html.split("@media (max-width: 860px)")[1] || "";
-    assert.match(media, /\.top\s*\{[^}]*flex-wrap:\s*wrap/);
-    assert.doesNotMatch(media, /\.top\s*\{[^}]*flex-wrap:\s*nowrap/);
-    assert.match(media, /\.top-actions\s*\{[^}]*flex:\s*1 1 100%/);
+    assert.match(media, /\.reloj-head\s*\{\s*display:\s*none/);
+    assert.match(media, /\.top\s*\{[^}]*overflow-x:\s*hidden/);
   });
 });
