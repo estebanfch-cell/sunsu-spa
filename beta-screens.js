@@ -11198,7 +11198,8 @@ function renderInventario(c){
     // OJO: el catálogo usa 'HT-101' y el inventario 'SUNSU-HT-101' → normalizamos
     // quitando el prefijo en ambos lados para que el filtro de verdad funcione.
     var activoCat={}, compraRealCat={};
-    var esAdmInv=CU&&(CU.role==='admin'||CU.role==='admin_master');
+    var esAdmInv=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
+    var veCostoInv=!!(typeof state!=='undefined'&&state.mega)||(CU&&(CU.role==='super_admin'||CU.role==='admin_master'));
     if(Array.isArray(cat)) cat.forEach(function(it){
       var cod=(it.sku||'').toString().trim().replace(/^SUNSU-/,'');
       if(cod){ activoCat[cod]=it.activo===true; compraRealCat[cod]=parseFloat(it.compraReal)||0; }
@@ -11235,7 +11236,7 @@ function renderInventario(c){
         +'<div style="flex:1;background:#FFF9E6;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#C4943A">'+bajo+'</div><div style="font-size:0.6rem;color:#C4943A;font-weight:700">STOCK BAJO</div></div>'
         +'<div style="flex:1;background:#E8F8EE;border-radius:10px;padding:10px;text-align:center"><div style="font-size:1.2rem;font-weight:900;color:#2E7D52">'+ok+'</div><div style="font-size:0.6rem;color:#2E7D52;font-weight:700">OK</div></div>'
         +'</div>'
-        +(esAdmInv?(function(){
+        +(veCostoInv?(function(){
           var vT=0, sinP=0;
           items.forEach(function(it){
             var cr=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;
@@ -11267,7 +11268,7 @@ function renderInventario(c){
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:left;color:var(--gray);font-weight:700">PRODUCTO</th>'
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">STOCK</th>'
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">MÍN</th>'
-          +(esAdmInv?'<th style="padding:7px 10px;font-size:0.6rem;text-align:right;color:var(--gray);font-weight:700">COMPRA REAL</th>':'')
+          +(veCostoInv?'<th style="padding:7px 10px;font-size:0.6rem;text-align:right;color:var(--gray);font-weight:700">COMPRA REAL</th>':'')
           +'<th style="padding:7px 10px;font-size:0.6rem;text-align:center;color:var(--gray);font-weight:700">ALERTA</th>'
           +'</tr></thead><tbody>';
         gItems.forEach(function(it,i){
@@ -11285,7 +11286,7 @@ function renderInventario(c){
             +'<td style="padding:7px 10px;font-size:0.7rem;color:var(--navy)">'+nomInv+(pedirInv?'<div>'+pedirInv+'</div>':'')+'</td>'
             +'<td style="padding:7px 10px;text-align:center;font-size:0.88rem;font-weight:900;color:'+(it.stock===0?'#C00':it.stock<=it.minimo?'#C4943A':'var(--navy)')+'">'+it.stock+'</td>'
             +'<td style="padding:7px 10px;text-align:center;font-size:0.72rem;color:var(--gray)">'+minInv+'</td>'
-            +(esAdmInv?(function(){var crI=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;var crHtml=editaInv?ixInv.campo("inventario", it.sku, "compra", crI>0?crI:""):(crI>0?'$'+crI.toFixed(2):'—');return '<td style="padding:7px 10px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--navy)">'+crHtml+'</td>';})():'')
+            +(veCostoInv?(function(){var crI=compraRealCat[(it.sku||'').toString().trim().replace(/^SUNSU-/,'')]||0;var crHtml=editaInv?ixInv.campo("inventario", it.sku, "compra", crI>0?crI:""):(crI>0?'$'+crI.toFixed(2):'—');return '<td style="padding:7px 10px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--navy)">'+crHtml+'</td>';})():'')
             +'<td style="padding:7px 6px;text-align:center"><span style="font-size:0.58rem;font-weight:700;color:'+ac+';background:'+ab+';padding:2px 6px;border-radius:5px">'+ai+' '+it.alerta+'</span>'+(editaInv?ixInv.borrar("inventario", it.sku):"")+'</td>'
             +'</tr>';
         });

@@ -8,8 +8,8 @@ import { estadoOc, estadoPago, siguienteAnual, totales } from "./compras_beta.ts
 
 function semilla() {
   const db = new MemoryDb();
-  db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
-  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+  db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "super_admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "super_admin" }]);
   db.tables.set("erp_proveedores", [{ id: "p1", nombre: "Judith Trinidad Ayala Narvaez", ruc: "1712345678001", activo: true, legacy_sheet_row: 6 }]);
   db.tables.set("proveedores", [{ sheet_row: 6, nombre: "Judith Trinidad Ayala Narvaez", familia: "JN" }]);
   db.tables.set("erp_productos", [

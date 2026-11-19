@@ -62,8 +62,7 @@ describe("TK69 productos del personal", () => {
     assert.match(js, /pvpSinIva/);
     assert.match(js, /Va en protocolo/);
     assert.match(js, /MC\.admin \? "Buscar producto, SKU, marca o código"/);
-    assert.match(beta, /mc-productos\.js\?v=20261119tk116/);  });
-
+    assert.match(beta, /mc-productos\.js\?v=20261119tk115/);  });
   it("lista y ficha: todo el catálogo, solo PVP con/sin IVA, último consumo y protocolo, sin descargar", async () => {
     const db = semilla();
     const staff = ctx(db, "cosmetologa");
@@ -84,8 +83,15 @@ describe("TK69 productos del personal", () => {
 
     const listaAdm = await handle("mcprod_list", { token: admin.token }, admin) as Row;
     assert.equal(listaAdm.puedeDescargar, true);
+    assert.equal(listaAdm.verCostos, false);
     const mlA = (listaAdm.items as Row[]).find((i) => i.sku === "ML-009")!;
-    assert.equal(mlA.comision, 1.57);
+    assert.equal("comision" in mlA, false);
+    assert.equal("compraReal" in mlA, false);
+    const mega = ctx(db, "super_admin");
+    const listaMega = await handle("mcprod_list", { token: mega.token }, mega) as Row;
+    assert.equal(listaMega.verCostos, true);
+    const mlM = (listaMega.items as Row[]).find((i) => i.sku === "ML-009")!;
+    assert.equal(mlM.comision, 1.57);
 
     const ficha = await handle("mcprod_get", { token: staff.token, id: "p1" }, staff) as Row;
     assert.equal(ficha.ok, true);

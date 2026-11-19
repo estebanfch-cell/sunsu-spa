@@ -9,7 +9,7 @@
 // admin y super_admin siempre tienen todo (igual que MineCore: admin → nivel máximo).
 import type { Db } from "./db.ts";
 import type { Row } from "./domain.ts";
-import { DEFAULT_MATRIZ, MODULOS, acceso, esAdmin, lecturaEnVista, matrizDe, moduloDeAccion, normalizarRol, type Acceso } from "./permisos.ts";
+import { DEFAULT_MATRIZ, MODULOS, acceso, esAdmin, esSuperAdmin, lecturaEnVista, matrizDe, moduloDeAccion, normalizarRol, type Acceso } from "./permisos.ts";
 
 export type Nivel = 0 | 1 | 2 | 3;
 export type Override = { uid: string; perfil?: string; niveles: Record<string, number>; alcance: Record<string, string>; flags: Record<string, boolean>; personas?: string[]; crud?: Record<string, string> };
@@ -187,6 +187,11 @@ export function filasEfectivas(rol: string, matriz: Record<string, Partial<Recor
     if (mod === "permisos" || mod === "configuracion") continue;
     const base = acceso(rol, mod, matriz);
     let v: Acceso = base;
+    if (mod === "ver_costos") {
+      v = esSuperAdmin(rol) ? "todos" : "no";
+      out.push({ rol, modulo: mod, acceso: v });
+      continue;
+    }
     const flagPriv = Object.entries(FLAG_PRIV).find(([, m]) => m === mod);
     if (flagPriv && o.flags[flagPriv[0]] !== undefined) v = o.flags[flagPriv[0]] ? "todos" : "no";
     else if (mod === "tickets" && o.flags.tickets_todos !== undefined) {

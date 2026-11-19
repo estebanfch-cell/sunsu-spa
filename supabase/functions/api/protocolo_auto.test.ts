@@ -9,8 +9,8 @@ import { costearPasos, costoPorCantidad } from "./protocolo_auto.ts";
 import type { Row } from "./domain.ts";
 
 function ctx(db: MemoryDb) {
-  db.tables.set("sesiones", [{ token: "t", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
-  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+  db.tables.set("sesiones", [{ token: "t", uid: "admin", rol: "super_admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "super_admin" }]);
   return { db, now: new Date("2026-11-18T15:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}), token: "t" };
 }
 function semilla() {

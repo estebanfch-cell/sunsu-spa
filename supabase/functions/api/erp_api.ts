@@ -70,7 +70,7 @@ extend("whoami", "any", async (_p, ctx, ses) => {
 extend("permisos_get", "any", async (_p, ctx, ses) => {
   if (!ses) return { error: "Inicia sesión" };
   const matriz = await matrizDe(ctx.db);
-  return { ok: true, roles: ["cosmetologa", "asistente_cosmetologia", "recepcion", "gerente"], modulos: (await import("./permisos.ts")).MODULOS, matriz, nota: "admin y super_admin siempre ven todo. La bandera es_cosmetologa no se edita aquí: vive en cosmetologas y es la que usa el cálculo de paquetes." };
+  return { ok: true, roles: ["cosmetologa", "asistente_cosmetologia", "recepcion", "gerente"], modulos: (await import("./permisos.ts")).MODULOS, matriz, nota: "admin y super_admin ven la operación; los costos, utilidad y margen solo los ve Super Admin. La bandera es_cosmetologa no se edita aquí: vive en cosmetologas y es la que usa el cálculo de paquetes." };
 });
 
 extend("permisos_guardar", "any", async (p, ctx, ses) => {
@@ -81,7 +81,7 @@ extend("permisos_guardar", "any", async (p, ctx, ses) => {
   if (rol === "admin" || rol === "super_admin" || modulo === "permisos") return { error: "Ese permiso no se puede delegar" };
   if (!["cosmetologa", "asistente_cosmetologia", "recepcion", "gerente"].includes(rol)) return { error: "Rol no editable" };
   if (!["no", "propio", "todos"].includes(acc)) return { error: "Acceso inválido" };
-  if (modulo === "ver_costos" && acc !== "no") return { error: "Los costos solo los ven admin y super_admin" };
+  if (modulo === "ver_costos" && acc !== "no") return { error: "Los costos solo los ve Super Admin" };
   const rows = await ctx.db.all("app_modulos");
   const hit = rows.find((r) => r.rol === rol && r.modulo === modulo);
   if (hit) await ctx.db.write(actorOf(ses), "app_modulos", "update", { rol, modulo }, { acceso: acc });

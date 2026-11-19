@@ -151,7 +151,7 @@ describe("productos MineCore: adaptador api", () => {
 
   it("lista única: une catalogo + cabina + erp, sin activos AC-, servicios sin stock", async () => {
     const db = semilla();
-    const c = ctx(db);
+    const c = ctx(db, "super_admin");
     const r = await handle("mcprod_list", { token: c.token }, c) as Row;
     assert.equal(r.ok, true);
     const items = r.items as Row[];
