@@ -34,4 +34,19 @@ describe("buscador común (mc-buscar.js)", () => {
     assert.equal(B.filtrar(L, "zzz", f).length, 0);
     assert.deepEqual(JSON.parse(JSON.stringify(B.partes("ML-009 · Mask"))), [["ML-009"], ["ML-009 · Mask"]]);
   });
+
+  it("palabras en cualquier orden, sin tildes, y el catálogo real de Emilia", () => {
+    const cat = [
+      { sku: "INV-131", nombre: "AC Serum - Dr.esthe", marca: "Dr.esthe", barras: "2000000000022" },
+      { sku: "ML-008", nombre: "AC Solution Swab - Dr.esthe", marca: "" },
+      { sku: "INV-078", nombre: "AC Soothing Cream - Dr.esthe", marca: "" },
+      { sku: "AS-009", nombre: "AC CLEAR Clensing foam - eyenlip", marca: "" },
+    ];
+    const g = (p: Record<string, string>) => [[p.sku, p.barras], [p.nombre, p.marca]];
+    assert.equal(B.filtrar(cat, "ac serum", g)[0].sku, "INV-131");
+    assert.deepEqual(B.filtrar(cat, "ac so", g).map((x: { sku: string }) => x.sku), ["ML-008", "INV-078"]);
+    assert.equal(B.filtrar(cat, "AC Solutions Fab", g)[0].sku, "ML-008");
+    assert.equal(B.filtrar(cat, "serum ac", g)[0].sku, "INV-131");
+    assert.equal(B.filtrar(cat, "2000000000022", g)[0].sku, "INV-131");
+  });
 });

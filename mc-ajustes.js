@@ -23,7 +23,7 @@
     document.head.appendChild(s);
   }
   async function meta() { if (!A.meta) { var m = await api("aj_meta", {}); if (m && m.ok) A.meta = m; } return A.meta; }
-  async function prods() { if (A.prods) return A.prods; var d = await api("mcprod_list", {}); A.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; }); return A.prods; }
+  async function prods(force) { var now = Date.now(); if (!force && A.prods && A.prodsAt && now - A.prodsAt < 2500) return A.prods; var d = await api("mcprod_list", {}); A.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; }); A.prodsAt = Date.now(); return A.prods; }
   function disp(p, bod, sub) {
     if (!p) return 0;
     if (bod === "CABINA") return Number((p.porSubCabina || {})[sub || "SIN"]) || 0;

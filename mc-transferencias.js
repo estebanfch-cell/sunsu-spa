@@ -20,7 +20,7 @@
     document.head.appendChild(s);
   }
   async function meta() { if (!T.meta) { var d = await api("trfb_list", {}); if (d && d.ok) { T.meta = d; T.list = d.items; } return d; } return T.meta; }
-  async function prods() { if (T.prods) return T.prods; var d = await api("mcprod_list", {}); T.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; }); return T.prods; }
+  async function prods(force) { var now = Date.now(); if (!force && T.prods && T.prodsAt && now - T.prodsAt < 2500) return T.prods; var d = await api("mcprod_list", {}); T.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; }); T.prodsAt = Date.now(); return T.prods; }
   function disp(p, bod, sub) {
     if (!p) return 0;
     if (bod === "CABINA") return Number((p.porSubCabina || {})[sub || "SIN"]) || 0;

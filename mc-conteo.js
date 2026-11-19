@@ -73,8 +73,12 @@
       "#cc .cc-numpad,#mccf-root .cc-numpad{display:none;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;padding:8px;background:var(--white);border:1px solid var(--cream-d);border-radius:12px}",
       "#cc .cc-numpad.on,#mccf-root .cc-numpad.on{display:grid}",
       "#cc .cc-numpad button,#mccf-root .cc-numpad button{height:44px;background:var(--cream);border:1px solid var(--cream-d);color:var(--navy-d);border-radius:8px;font-weight:700;font-size:16px}",
-      "#cc .cc-hits,#mccf-root .cc-hits{border:1px solid var(--cream-d);border-radius:10px;background:var(--white);margin:0 0 8px;max-height:240px;overflow:auto}",
-      "#cc .cc-hits button,#mccf-root .cc-hits button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--gray-l);background:none;padding:10px 12px;cursor:pointer;font:inherit;font-size:13px;color:var(--text)}",
+      "#cc .cc-hits,#mccf-root .cc-hits{border:1px solid var(--cream-d);border-radius:10px;background:var(--white);margin:8px 0;max-height:260px;overflow:auto}",
+      "#cc .cc-hits-tit,#mccf-root .cc-hits-tit{padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy-d);background:var(--cream)}",
+      "#cc .cc-hits button,#mccf-root .cc-hits button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--gray-l);background:none;padding:10px 12px;cursor:pointer;font:inherit;font-size:13px;color:var(--text)}",
+      "#cc .cc-hit-txt,#mccf-root .cc-hit-txt{flex:1;min-width:0;overflow-wrap:anywhere}",
+      "#cc .cc-hit-marca,#mccf-root .cc-hit-marca{color:var(--gray);font-weight:500}",
+      "#cc .cc-hits .cc-add,#mccf-root .cc-hits .cc-add{flex:0 0 auto;background:var(--navy);color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700}",
       "#mccf-root .err{color:#b2452a}",
       "@media(max-width:430px){#cc .cc-top,#mccf-root .cc-top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center}#cc .cc-qwrap,#mccf-root .cc-qwrap{grid-column:1;grid-row:1;width:100%;min-width:0}#cc .cc-top input,#mccf-root .cc-top input{width:100%}#cc .cc-kb,#mccf-root .cc-kb{grid-column:2;grid-row:1}#cc .cc-prog,#mccf-root .cc-prog{grid-column:3;grid-row:1}#cc .cc-top .cc-addbtn,#mccf-root .cc-top .cc-addbtn{grid-column:1/-1;grid-row:2;width:100%;min-height:44px;font-size:15px;font-weight:800}}",
       "html body #cc input.cc-q,html body #mccf-root input.cc-q{flex:0 0 58px!important;width:58px!important;min-width:58px!important;height:40px!important;box-sizing:border-box!important;text-align:center!important;font-size:17px!important;font-weight:700!important;color:var(--navy-d)!important;-webkit-text-fill-color:var(--navy-d)!important;background:var(--white)!important;border:1.5px solid var(--gold)!important;border-radius:9px!important;padding:0!important;box-shadow:none!important;caret-color:var(--gold)!important}",
@@ -239,7 +243,15 @@
       var err = main.querySelector("#mccf-err"); if (err) err.textContent = r && r.error ? r.error : "";
     }, 450);
   }
-  async function cargarProds() { if (C.prods) return C.prods; var d = await api("mcprod_list", {}); C.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio" && p.activo !== false; }); return C.prods; }
+  async function cargarProds(force) {
+    var now = Date.now();
+    if (!force && C.prods && C.prodsAt && now - C.prodsAt < 2500) return C.prods;
+    var d = await api("mcprod_list", {});
+    // Catálogo completo (también inactivos): un producto recién creado o marcado inactivo en el sistema viejo igual se cuenta.
+    C.prods = (d && d.items || []).filter(function (p) { return p.tipo !== "servicio"; });
+    C.prodsAt = Date.now();
+    return C.prods;
+  }
   function wireDetalle(main) {
     var d = C.cur; if (!d) return;
     var root = main.querySelector("#mccf-root"); if (!root) return;
@@ -610,9 +622,11 @@
   }
   function valLinea(l) { return C.dirty[l.id] !== undefined ? C.dirty[l.id] : (l.contado == null ? "" : String(l.contado)); }
   function lineasFiltradas() {
-    var L = (C.sec && C.sec.lineas) || [], q = String(C.filtro || "").trim().toLowerCase();
+    var L = (C.sec && C.sec.lineas) || [], q = String(C.filtro || "").trim();
     if (!q) return L;
-    return L.filter(function (l) { return (l.sku + " " + l.nombre + " " + (l.fromSub || "")).toLowerCase().indexOf(q) >= 0; });
+    if (window.MCBuscar) return window.MCBuscar.filtrar(L, q, function (l) { return [[l.sku, l.skuVisible, l.codigo, l.codigoBarras].concat(l.barras || []), [l.nombre, l.marca, l.fromSub, l.sububicacion, l.subContada]]; });
+    var n = q.toLowerCase();
+    return L.filter(function (l) { return (l.sku + " " + l.nombre + " " + (l.fromSub || "")).toLowerCase().indexOf(n) >= 0; });
   }
   function barraConteoHtml(can, nOk, nLin) {
     return '<div class="cc-top"><div class="cc-qwrap"><input id="mccf-f" type="search" placeholder="🔍 Escanea o busca código / nombre" value="' + e(C.filtro) + '" autocomplete="off" aria-label="Buscar o escanear">' +
@@ -622,7 +636,9 @@
       (can ? '<button class="cbz-btn cc-addbtn" type="button" id="mccf-agregar">＋ Agregar producto</button>' : "") + "</div>";
   }
   function keysProd(p) {
-    return [[p.sku, p.skuVisible, p.skuAlias, p.skuProveedor, p.codigoCabina].concat(p.barras || []), [p.nombre, p.marca]];
+    var pres = [].concat(p.presentaciones || p.subcodigos || []).map(function (x) { return typeof x === "string" ? x : (x && (x.sku || x.skuVisible || x.codigo || x.nombre)); });
+    var antes = [].concat(p.skuAntes || []);
+    return [[p.sku, p.skuVisible, p.skuAlias, p.skuProveedor, p.codigoCabina, p.codigo_barras].concat(p.barras || []).concat(pres).concat(antes), [p.nombre, p.marca, p.categoria]];
   }
   function yaEnConteo() {
     var ya = {};
@@ -660,22 +676,20 @@
     var hits = main.querySelector("#mccf-hits");
     if (!hits) return;
     qv = String(qv || "").trim();
-    var enLista = qv && lineasFiltradas().length;
     if (!qv && !C.addOpen) { hits.hidden = true; hits.innerHTML = ""; return; }
-    if (enLista && !C.addOpen) { hits.hidden = true; hits.innerHTML = ""; return; }
-    var ps = await cargarProds();
+    var ps = await cargarProds(!!C.addOpen);
     var ya = yaEnConteo();
     var H = (window.MCBuscar
       ? window.MCBuscar.filtrar(ps, qv, keysProd)
-      : ps.filter(function (p) { return ((p.sku || "") + " " + (p.skuVisible || "") + " " + (p.nombre || "") + " " + (p.barras || []).join(" ")).toLowerCase().indexOf(qv.toLowerCase()) >= 0; })
+      : ps.filter(function (p) { return ((p.sku || "") + " " + (p.skuVisible || "") + " " + (p.nombre || "") + " " + (p.marca || "") + " " + (p.barras || []).join(" ")).toLowerCase().indexOf(qv.toLowerCase()) >= 0; })
     ).filter(function (p) { return !ya[p.id]; }).slice(0, 12);
     hits.hidden = false;
     if (!H.length) {
-      hits.innerHTML = '<div class="mccf-sub" style="padding:10px 12px">' + (qv ? "No está en el catálogo de Productos. Solo se pueden agregar productos que ya existen." : "Busca por nombre, SKU, código o código de barras y toca el producto para sumarlo al conteo.") + "</div>";
+      hits.innerHTML = '<div class="cc-hits-tit">' + (qv ? "No está en el catálogo de Productos. Solo se pueden agregar productos que ya existen." : "Busca por nombre, SKU, código, código de barras o marca. El catálogo completo aparece aquí debajo de las líneas del conteo.") + "</div>";
       return;
     }
-    hits.innerHTML = '<div class="mccf-sub" style="padding:6px 10px">No está en esta lista. Toca para agregarlo (esperado 0):</div>' + H.map(function (p) {
-      return '<button type="button" data-cf-add="' + e(p.id) + '"><span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + "</button>";
+    hits.innerHTML = '<div class="cc-hits-tit">En el catálogo — Agregar al conteo (esperado 0)</div>' + H.map(function (p) {
+      return '<button type="button" data-cf-add="' + e(p.id) + '"><span class="cc-hit-txt"><span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + (p.marca ? '<span class="cc-hit-marca"> · ' + e(p.marca) + "</span>" : "") + '</span><span class="cc-add">Agregar</span></button>';
     }).join("");
   }
   function lineaDeAgregada(r, pid) {
@@ -744,8 +758,8 @@
       '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
       barraConteoHtml(can, nOk, s.lineas) +
       recHtml(d.movimientos) +
-      '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
+      '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
       [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +
       (can || d.puedeTerminar ? '<div class="cc-bar">' + (C.saved ? '<span class="cc-pend" style="color:var(--navy)" id="mccf-saved">✓ Guardado</span>' : '<span class="cc-pend" id="mccf-saved">sin guardar</span>') +
@@ -856,6 +870,7 @@
     var ag = main.querySelector("#mccf-agregar");
     if (ag) ag.onclick = function () {
       C.addOpen = true;
+      C.prodsAt = 0;
       var inp = main.querySelector("#mccf-f");
       if (inp) { inp.focus(); inp.select(); }
       void pintarHitsAgregar(main, inp ? inp.value : "");
@@ -969,8 +984,8 @@
       '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
       barraConteoHtml(can, s.contadas, s.lineas) +
       recHtml(C.sec.movimientos) +
-      '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
+      '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
       [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +
       (can || C.sec.puedeTerminar ? '<div class="cc-bar">' + (C.saved ? '<span class="cc-pend" style="color:var(--navy)" id="mccf-saved">✓ Guardado</span>' : '<span class="cc-pend" id="mccf-saved">sin guardar</span>') +

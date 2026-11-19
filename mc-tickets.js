@@ -504,17 +504,26 @@
     if (tr) { tr.classList.remove("mctk-flash"); void tr.offsetWidth; tr.classList.add("mctk-flash"); }
     return true;
   }
+  async function cargarCat(force) {
+    var now = Date.now();
+    if (!force && K.cat && K.catAt && now - K.catAt < 2500) return K.cat;
+    var r = await api("tk_catalogo", {});
+    if (r && r.items) { K.cat = r.items; K.catAt = Date.now(); }
+    else if (!K.cat) K.cat = [];
+    return K.cat;
+  }
   function wireBuscar(main) {
     var q = main.querySelector("#mctk-q"), hits = main.querySelector("#mctk-hits");
     if (!q || !hits) return;
     function bad() { q.classList.remove("mctk-flash-bad"); void q.offsetWidth; q.classList.add("mctk-flash-bad"); }
-    function lista() {
+    async function lista() {
       var v = q.value.trim(); if (!v) { hits.hidden = true; return; }
-      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible].concat(p.barras || []), [p.nombre]]; }) : []).filter(function (p) { return p.activo !== false || p.enMigo; }).slice(0, 10);
+      await cargarCat();
+      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible].concat(p.barras || []), [p.nombre, p.marca]]; }) : []).slice(0, 10);
       hits.hidden = false;
       hits.innerHTML = H.length ? H.map(function (p) { return '<button type="button" data-add="' + e(p.tipo + "|" + p.sku) + '"><span class="mccf-chip">' + e(TIPO[p.tipo] || p.tipo) + '</span> <span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + ' <span class="mccf-sub">· ' + e($m(p.pvp)) + (p.stock != null ? " · stock " + e(q2(p.stock)) : "") + "</span></button>"; }).join("") : '<div class="mccf-sub" style="padding:8px">Sin resultados</div>';
     }
-    q.oninput = lista;
+    q.oninput = function () { void lista(); };
     q.onkeydown = function (ev) {
       if (ev.key !== "Enter") return;
       ev.preventDefault();
@@ -656,7 +665,7 @@
     if (!K.cat) {
       api("tk_catalogo", {}).then(function (c) {
         if (c && c.items) {
-          K.cat = c.items;
+          K.cat = c.items; K.catAt = Date.now();
           var lin = document.getElementById("mctk-lin");
           if (lin && K.d && K.d.clave === clave && !K.dirty) pintarLin();
         }
@@ -1082,7 +1091,7 @@
     });
   }
   async function escaneoCrear(code) {
-    try { if (!K.cat) { var r = await api("tk_catalogo", {}); K.cat = (r && r.items) || []; } } catch (x) { toast2("No se pudo leer el catálogo: " + ((x && x.message) || x), true); return; }
+    try { await cargarCat(); } catch (x) { toast2("No se pudo leer el catálogo: " + ((x && x.message) || x), true); return; }
     var p = porBarras(code);
     if (!p) { beep(false); toast2("Código " + norm(code) + " no encontrado", true); return; }
     if (p.activo === false && !p.enMigo) { beep(false); toast2("«" + p.nombre + "» está inactivo: no se puede vender", true); return; }

@@ -444,6 +444,9 @@ describe("TK120 conteo por bodega y allowlist", () => {
     assert.match(block, /agregar: \{ producto_id: pid \}/);
     assert.match(block, /_scanAbrir/);
     assert.match(js, /MCBuscar/);
+    assert.match(js, /En el catálogo — Agregar al conteo/);
+    assert.match(js, /C\.prodsAt/);
+    assert.doesNotMatch(js, /p\.tipo !== "servicio" && p\.activo !== false/);
     assert.doesNotMatch(block, /\bgo\s*\(/);
     assert.doesNotMatch(block, /C\.dirty\s*=\s*\{\}/);
     assert.doesNotMatch(block, /prompt\(/);
