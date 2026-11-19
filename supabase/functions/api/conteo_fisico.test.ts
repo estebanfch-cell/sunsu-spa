@@ -30,7 +30,7 @@ function semilla() {
     { producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 5 },
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
   ]);
-  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos"]) db.tables.set(t, []);
+  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones"]) db.tables.set(t, []);
   const c = { db, now: new Date("2026-11-17T17:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
@@ -173,6 +173,68 @@ describe("TK116 conteo general vivo como MineCore", () => {
     assert.match(js, /Agregar ubicación/);
     assert.match(js, /✓ Guardado/);
     assert.match(js, />Terminar</);
+    assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
+  });
+});
+
+describe("TK117 secciones y sububicaciones (admin, como MineCore)", () => {
+  it("el personal no puede crear ni editar; el admin agrega, renombra, reordena, desactiva si ya hubo conteo y crea una sububicación", async () => {
+    const { db, h } = semilla();
+    assert.match(String((await h("cf_zona_save", "cos", { nombre: "Cabina 4", bodega: "CABINA", sububicacion: "CABINA_4" })).error), /admin/i);
+    const z0 = await h("cf_zonas", "adm", {});
+    assert.equal(z0.admin, true);
+    assert.equal((z0.zonas as Row[]).length, 5);
+    const cr = await h("cf_zona_save", "adm", { nombre: "Cabina 4", bodega: "CABINA", sububicacion: "CABINA_4", frecuencia_dias: 15 });
+    assert.equal(cr.ok, true);
+    const ren = await h("cf_zona_save", "adm", { id: cr.id, nombre: "Cabina cuatro", bodega: "CABINA", sububicacion: "CABINA_4", frecuencia_dias: 15 });
+    assert.equal(ren.ok, true);
+    const z1 = await h("cf_zonas", "adm", {});
+    const c4 = (z1.zonas as Row[]).find((x) => x.id === cr.id)!;
+    assert.equal(c4.nombre, "Cabina cuatro");
+    const ids = (z1.zonas as Row[]).map((x) => x.id);
+    const reord = ids.slice();
+    const last = reord.pop()!;
+    reord.unshift(last);
+    assert.equal((await h("cf_zona_orden", "adm", { ids: reord })).ok, true);
+    const z2 = await h("cf_zonas", "adm", {});
+    assert.equal((z2.zonas as Row[])[0].id, cr.id);
+    const gen = await h("cf_crear_general", "adm", { asignado_a: "u-ana" });
+    assert.equal(gen.ok, true);
+    const g = await h("cf_get_general", "adm", { id: gen.id });
+    assert.ok((g.secciones as Row[]).some((s) => s.nombre === "Cabina cuatro"));
+    assert.equal((g.secciones as Row[]).length, 6);
+    const delUsada = await h("cf_zona_borrar", "adm", { id: cr.id });
+    assert.equal(delUsada.desactivada, true);
+    const venta = (z2.zonas as Row[]).find((x) => x.nombre === "Venta")!;
+    // Venta aún no se usó... actually the general count copied all 6 including Venta, so delete should deactivate.
+    const delVenta = await h("cf_zona_borrar", "adm", { id: venta.id });
+    assert.equal(delVenta.desactivada, true);
+    const sub = await h("cf_sub_save", "adm", { bodega: "CABINA", codigo: "CABINA_5", nombre: "Cabina 5", como_seccion: true });
+    assert.equal(sub.ok, true);
+    const z3 = await h("cf_zonas", "adm", {});
+    assert.ok((z3.zonas as Row[]).some((x) => x.sububicacion === "CABINA_5" && x.nombre === "Cabina 5"));
+  });
+
+  it("no se puede desactivar ni mover de bodega una sububicación con stock", async () => {
+    const { db, h } = semilla();
+    db.tables.get("erp_sububicaciones")!.push({ id: "s1", bodega_id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA_1", nombre: "Cabina 1", orden: 1, activo: true });
+    // stock of p1 is on VENTA (CONSIGNACION), not cabina — put cabina stock
+    db.tables.get("erp_bodegas")!.push({ id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA", nombre: "Cabina", tipo: "cabina" });
+    db.tables.get("erp_stock")!.push({ producto_id: "p1", bodega_id: "22222222-2222-4222-8222-222222222222", sububicacion: "CABINA_1", cantidad: 3 });
+    const bad = await h("cf_sub_save", "adm", { id: "s1", bodega: "CABINA", codigo: "CABINA_1", nombre: "Cabina 1", mover_a: "OFICINA", activo: true });
+    assert.match(String(bad.error || ""), /stock/i);
+    const bad2 = await h("cf_sub_save", "adm", { bodega: "CABINA", codigo: "CABINA_1", nombre: "Cabina 1", activo: false });
+    assert.match(String(bad2.error || ""), /stock/i);
+  });
+
+  it("el editor de Secciones está en el front, solo con acciones de admin", () => {
+    const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
+    assert.match(js, /Secciones del local/);
+    assert.match(js, /cf_zona_save/);
+    assert.match(js, /cf_zona_borrar/);
+    assert.match(js, /cf_zona_orden/);
+    assert.match(js, /Nueva sububicación/);
+    assert.match(js, /Solo un admin puede agregar o cambiar/);
     assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
   });
 });

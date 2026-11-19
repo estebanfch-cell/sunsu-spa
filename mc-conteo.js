@@ -1,7 +1,7 @@
 // Conteo físico estilo MineCore (beta, 0045). Lista + crear + contar (asignada) + revisar (admin).
 // Aprobar no mueve stock: el conteo queda como inventario físico inicial hasta que Emilia confirme.
 (function () {
-  var C = { meta: null, list: null, cur: null, general: null, sec: null, q: "", est: "", soloDif: false, filtro: "", timers: {}, prods: null, dirty: {}, menu: null, otra: null, pad: false, focus: null, saved: true, hits: null };
+  var C = { meta: null, list: null, cur: null, general: null, sec: null, q: "", est: "", soloDif: false, filtro: "", timers: {}, prods: null, dirty: {}, menu: null, otra: null, pad: false, focus: null, saved: true, hits: null, zonas: null, zEdit: {}, zNew: false };
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v); }
   function q2(v) { var x = Number(v) || 0; return Math.round(x * 100) / 100 + ""; }
   function fecha(v) {
@@ -64,7 +64,7 @@
       ".mccf-foot .ok{color:var(--gray);font-size:.8rem}.mccf-foot .ok.pend{color:var(--navy-d);font-weight:700}",
       ".mccf-numpad{display:none;position:sticky;bottom:calc(var(--tab-h,62px) + 52px + env(safe-area-inset-bottom,0px));background:#fff;border:1px solid var(--cream-d);border-radius:12px 12px 0 0;padding:8px;z-index:6;box-shadow:0 -4px 16px rgba(61,90,122,.1);grid-template-columns:repeat(3,1fr);gap:6px}",
       ".mccf-numpad.on{display:grid}.mccf-numpad button{padding:12px 0;border:0;border-radius:8px;background:var(--cream);font-weight:800;font-size:1.05rem;color:var(--navy-d)}",
-      "@media(max-width:640px){.mccf-gcard,.mccf-st{min-width:0}.mccf-topbtns .btn:first-child{flex:1 1 100%}.mccf-st .btn{margin-top:4px}}",
+      ".mccf-zwarn{margin:0 0 10px;padding:10px 12px;border:1.5px solid var(--gold);border-radius:12px;background:var(--gold-l);color:var(--navy-d);font-size:.78rem;overflow-wrap:anywhere}.mccf-zcard{background:var(--white);border:1px solid var(--cream-d);border-radius:14px;padding:12px;margin-bottom:10px}.mccf-zcard.dirty{border-color:var(--gold);background:var(--gold-l)}.mccf-zcard.off{opacity:.72}.mccf-zrow{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.mccf-zrow label{display:flex;flex-direction:column;gap:3px;font-size:.66rem;font-weight:700;color:var(--navy-d);min-width:0}.mccf-zrow label.nm{flex:1 1 140px}.mccf-zrow label.lugar{flex:1 1 150px}.mccf-zrow label.dias{flex:0 0 72px}.mccf-zrow input,.mccf-zrow select{padding:8px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.84rem;min-width:0;width:100%;background:#fff}.mccf-zact{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}.mccf-zord{display:flex;flex-direction:column;gap:2px;flex:none}.mccf-zord button{border:1px solid var(--cream-d);background:#fff;border-radius:8px;width:32px;height:28px;font-weight:800;color:var(--navy-d)}.mccf-zchk{display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;color:var(--navy-d);margin-top:18px;white-space:nowrap}@media(max-width:640px){.mccf-zrow label.nm,.mccf-zrow label.lugar{flex:1 1 100%}}@media(max-width:640px){.mccf-gcard,.mccf-st{min-width:0}.mccf-topbtns .btn:first-child{flex:1 1 100%}.mccf-st .btn{margin-top:4px}}",
       "@media(max-width:820px){.mccf-hide{display:none}.mccf-in{width:64px}}",
     ].join("");
     document.head.appendChild(s);
@@ -423,13 +423,122 @@
       };
     });
   }
+
+  function zVal(z, f, d) { var e = C.zEdit[z.id] || {}; return e[f] !== undefined ? e[f] : (d !== undefined ? d : z[f]); }
+  function lugarOpts(z) {
+    var L = (C.zonas && C.zonas.lugares) || [], cur = zVal(z, "bodega", z.bodega) + ":" + zVal(z, "sububicacion", z.sububicacion || "");
+    var h = L.map(function (l) {
+      var v = l.bodega + ":" + (l.sububicacion || "");
+      return '<option value="' + e(v) + '"' + (v === cur ? " selected" : "") + ">" + e(l.nombre) + "</option>";
+    }).join("");
+    if (z.id === "_new" && !L.some(function (l) { return (l.bodega + ":" + (l.sububicacion || "")) === cur; }) && cur !== ":") h += '<option value="' + e(cur) + '" selected>Nueva…</option>';
+    return h;
+  }
   async function renderSeccionesCfg() {
-    var d = await api("cf_secciones_meta", {});
-    var L = (d && d.secciones) || [];
-    return '<div id="mccf-root"><p><button class="btn ghost small" type="button" data-go="#/m/conteos">← Conteos</button></p>' +
-      '<div class="mccf-gcard"><b>Secciones</b><p class="mccf-help">En Sunsu cada sección es una sububicación del local (Venta, Oficina, Cabina 1/2/3). Un conteo general las cubre todas.</p><table class="mccf-st"><thead><tr><th>Sección</th><th>Bodega</th></tr></thead><tbody>' +
-      L.map(function (s) { return "<tr><td><b>" + e(s.nombre) + "</b></td><td>" + e(s.bodega === "CONSIGNACION" ? "Venta" : s.bodega === "OFICINA" ? "Bodega Oficina" : s.nombre) + "</td></tr>"; }).join("") +
-      "</tbody></table></div></div>";
+    var d = await api("cf_zonas", {});
+    if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
+    C.zonas = d;
+    var adm = !!d.admin, Z = d.zonas || [], E = C.zEdit;
+    if (C.zNew && !Z.some(function (x) { return x.id === "_new"; })) Z = Z.concat([{ id: "_new", nombre: "", bodega: "CABINA", sububicacion: "", frecuenciaDias: 30, activo: true, unidades: 0, subs: 0 }]);
+    var warn = (d.sinZona && d.sinZona.length) ? '<div class="mccf-zwarn"><b>⚠ Sububicaciones con stock que no están en ninguna sección:</b> ' + d.sinZona.map(function (x) { return e(x.nombre) + " (" + e(x.unidades) + " u)"; }).join(", ") + "</div>" : "";
+    var h = '<div id="mccf-root"><div class="mccf-secbar"><button class="back" type="button" data-go="#/m/conteos">←</button><h2>Secciones del local</h2>' +
+      (adm ? '<button class="btn small" type="button" id="mccf-z-nueva">＋ Sección</button>' : "") + "</div>" +
+      '<p class="mccf-help">Cada sección es una sububicación del local. El inventario se cuenta por sección. ' + (adm ? "Puedes agregar, renombrar, reordenar, cambiar de lugar o desactivar. Los cambios quedan registrados." : "Solo un admin puede agregar o cambiar sububicaciones.") + "</p>" + warn;
+    h += Z.map(function (z, i) {
+      var dt = !!E[z.id], off = zVal(z, "activo", z.activo) === false;
+      var body = '<div class="mccf-zrow">' +
+        (adm ? '<div class="mccf-zord"><button type="button" data-cf-zup="' + e(z.id) + '" ' + (i === 0 || z.id === "_new" ? "disabled" : "") + '>↑</button><button type="button" data-cf-zdn="' + e(z.id) + '" ' + (i === Z.length - 1 || z.id === "_new" ? "disabled" : "") + '>↓</button></div>' : "") +
+        '<label class="nm">Nombre<input ' + (adm ? "" : "disabled ") + 'data-zf="nombre" data-zid="' + e(z.id) + '" value="' + e(zVal(z, "nombre", z.nombre || "")) + '"></label>' +
+        '<label class="lugar">Sububicación<select ' + (adm ? "" : "disabled ") + 'data-zf="lugar" data-zid="' + e(z.id) + '">' + lugarOpts(z) + "</select></label>" +
+        '<label class="dias">Cada (días)<input ' + (adm ? "" : "disabled ") + 'type="number" min="1" data-zf="frecuenciaDias" data-zid="' + e(z.id) + '" value="' + e(zVal(z, "frecuenciaDias", z.frecuenciaDias || 30)) + '"></label>' +
+        '<label class="mccf-zchk"><input type="checkbox" ' + (adm ? "" : "disabled ") + 'data-zf="activo" data-zid="' + e(z.id) + '"' + (off ? "" : " checked") + "> Activa</label></div>" +
+        '<div class="mccf-zact"><span class="mccf-sub">Stock: ' + e(z.unidades || 0) + " u</span>" +
+        (adm && dt ? '<button class="btn ghost small" type="button" data-cf-zdesc="' + e(z.id) + '">Descartar</button><button class="btn small" type="button" data-cf-zsave="' + e(z.id) + '">Guardar</button>' : "") +
+        (adm && !dt && z.id !== "_new" ? '<button class="btn ghost small" type="button" data-cf-zdel="' + e(z.id) + '" style="color:#b2452a;margin-left:auto">🗑 Quitar</button>' : "") +
+        "</div>";
+      return '<div class="mccf-zcard' + (dt ? " dirty" : "") + (off ? " off" : "") + '" data-zid="' + e(z.id) + '">' + body + "</div>";
+    }).join("");
+    if (adm) h += '<p style="margin-top:8px"><button class="btn ghost small" type="button" id="mccf-z-sub">＋ Nueva sububicación</button></p>';
+    if (d.falta) h += '<p class="err">' + e(d.falta) + "</p>";
+    return h + "</div>";
+  }
+  function wireSecciones(main) {
+    main.querySelectorAll("[data-go]").forEach(function (b) { b.onclick = function () { go(b.getAttribute("data-go")); }; });
+    if (!C.zonas || !C.zonas.admin) return;
+    function set(id, f, v) { C.zEdit[id] = C.zEdit[id] || {}; C.zEdit[id][f] = v; }
+    main.querySelectorAll("[data-zf]").forEach(function (inp) {
+      inp.onchange = inp.oninput = function () {
+        var id = inp.getAttribute("data-zid"), f = inp.getAttribute("data-zf");
+        if (f === "lugar") {
+          var p = String(inp.value || "").split(":");
+          set(id, "bodega", p[0] || ""); set(id, "sububicacion", p.slice(1).join(":") || "");
+        } else if (f === "activo") set(id, "activo", inp.checked);
+        else set(id, f, inp.type === "number" ? Number(inp.value) : inp.value);
+        var card = inp.closest(".mccf-zcard"); if (card) card.classList.add("dirty");
+        var act = card && card.querySelector(".mccf-zact");
+        if (act && !act.querySelector("[data-cf-zsave]")) {
+          act.insertAdjacentHTML("beforeend", '<button class="btn ghost small" type="button" data-cf-zdesc="' + id + '">Descartar</button><button class="btn small" type="button" data-cf-zsave="' + id + '">Guardar</button>');
+          wireSecciones(main);
+        }
+      };
+    });
+    var nv = main.querySelector("#mccf-z-nueva");
+    if (nv) nv.onclick = function () { C.zNew = true; C.zEdit._new = { nombre: "", bodega: "CABINA", sububicacion: "", frecuenciaDias: 30, activo: true }; void MCConteo.render({ mod: "conteos", sub: "secciones" }).then(function (h) { main.innerHTML = h; MCConteo.wire(main, { mod: "conteos", sub: "secciones" }); }); };
+    main.querySelectorAll("[data-cf-zdesc]").forEach(function (b) {
+      b.onclick = function () { delete C.zEdit[b.getAttribute("data-cf-zdesc")]; if (b.getAttribute("data-cf-zdesc") === "_new") C.zNew = false; go("#/m/conteos/secciones"); };
+    });
+    main.querySelectorAll("[data-cf-zsave]").forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.getAttribute("data-cf-zsave");
+        var z = ((C.zonas && C.zonas.zonas) || []).find(function (x) { return x.id === id; }) || { id: id === "_new" ? "" : id };
+        var ed = C.zEdit[id] || {};
+        var lugar = (ed.bodega || z.bodega || "") + ":" + (ed.sububicacion != null ? ed.sububicacion : (z.sububicacion || ""));
+        var p = lugar.split(":");
+        b.disabled = true;
+        var r = await api("cf_zona_save", {
+          id: id === "_new" ? "" : id,
+          nombre: ed.nombre !== undefined ? ed.nombre : z.nombre,
+          bodega: ed.bodega || p[0] || z.bodega,
+          sububicacion: ed.sububicacion !== undefined ? ed.sububicacion : (p.slice(1).join(":") || z.sububicacion || ""),
+          frecuencia_dias: ed.frecuenciaDias !== undefined ? ed.frecuenciaDias : z.frecuenciaDias,
+          activo: ed.activo !== undefined ? ed.activo : z.activo
+        });
+        b.disabled = false;
+        if (!r || r.error) return alert((r && r.error) || "No se pudo guardar");
+        delete C.zEdit[id]; C.zNew = false; go("#/m/conteos/secciones");
+      };
+    });
+    main.querySelectorAll("[data-cf-zdel]").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("¿Quitar esta sección? Si ya tiene conteos, solo se desactiva.")) return;
+        var r = await api("cf_zona_borrar", { id: b.getAttribute("data-cf-zdel") });
+        if (!r || r.error) return alert((r && r.error) || "No se pudo quitar");
+        go("#/m/conteos/secciones");
+      };
+    });
+    function reordenar(id, dir) {
+      var ids = ((C.zonas && C.zonas.zonas) || []).map(function (x) { return x.id; });
+      var i = ids.indexOf(id); if (i < 0) return;
+      var j = i + dir; if (j < 0 || j >= ids.length) return;
+      var t = ids[i]; ids[i] = ids[j]; ids[j] = t;
+      void api("cf_zona_orden", { ids: ids }).then(function (r) { if (!r || r.error) return alert((r && r.error) || "No se pudo reordenar"); go("#/m/conteos/secciones"); });
+    }
+    main.querySelectorAll("[data-cf-zup]").forEach(function (b) { b.onclick = function () { reordenar(b.getAttribute("data-cf-zup"), -1); }; });
+    main.querySelectorAll("[data-cf-zdn]").forEach(function (b) { b.onclick = function () { reordenar(b.getAttribute("data-cf-zdn"), 1); }; });
+    var sub = main.querySelector("#mccf-z-sub");
+    if (sub) sub.onclick = async function () {
+      var bod = prompt("Bodega de la nueva sububicación (Cabina, Oficina o Venta):", "Cabina");
+      if (bod == null) return;
+      var g = /oficina/i.test(bod) ? "OFICINA" : /venta/i.test(bod) ? "CONSIGNACION" : "CABINA";
+      if (g !== "CABINA") return alert("Una sección nueva de Venta u Oficina se crea con «＋ Sección». Las sububicaciones extra (Cabina 4, etc.) van en Bodega Cabina.");
+      var cod = prompt("Código (ej. CABINA_4):", "CABINA_4");
+      if (!cod) return;
+      var nom = prompt("Nombre:", cod.replace(/^CABINA_?/i, "Cabina "));
+      if (nom == null) return;
+      var r = await api("cf_sub_save", { bodega: "CABINA", codigo: cod, nombre: nom, como_seccion: true });
+      if (!r || r.error) return alert((r && r.error) || "No se pudo crear");
+      go("#/m/conteos/secciones");
+    };
   }
   function recHtml(movs) {
     if (!movs || !movs.length) return "";
@@ -654,10 +763,7 @@
       if (route.sub === "s") return wireSeccion(main);
       if (route.sub === "cf" && route.id && C.general) return wireLista(main);
       if (route.sub === "cf" && route.id) return wireDetalle(main);
-      if (route.sub === "secciones") {
-        main.querySelectorAll("[data-go]").forEach(function (b) { b.onclick = function () { go(b.getAttribute("data-go")); }; });
-        return;
-      }
+      if (route.sub === "secciones") return wireSecciones(main);
       return wireLista(main);
     },
     tarjetaInicio: tarjetaInicio,
