@@ -25,7 +25,8 @@ describe("TK85 badge de Aprobaciones en el dashboard", () => {
     assert.match(html, /async function renderAprobaciones\(/);
     assert.match(html, /data-go="#\/m\/aprobaciones"/);
     assert.match(nav, /#\/m\/aprobaciones/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK133/);  });
+    assert.match(sw, /sunsu-beta-2026-11-19-TK134/);
+    assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK133/);  });
   it("suma solicitudes, borradores, permisos y ajustes, y no expone cédulas ni teléfonos", async () => {
     const db = new MemoryDb();
     db.tables.set("sesiones", [
@@ -69,5 +70,8 @@ describe("TK85 badge de Aprobaciones en el dashboard", () => {
     assert.doesNotMatch(blob, /cedula|cédula|telefono|teléfono|email|correo/i);
     assert.match(String(por.solicitudes?.items[0]?.titulo), /Andrea Robles/);
     assert.match(String(por.borradores?.items[0]?.titulo), /por aprobar|Por completar|Sin asignar/i);
+    assert.equal(por.borradores?.href, "#/m/borradores");
+    assert.equal(por.borradores?.items[0]?.href, "#/m/borradores");
+    assert.doesNotMatch(JSON.stringify(por.borradores), /#\/m\/tickets/);
   });
 });

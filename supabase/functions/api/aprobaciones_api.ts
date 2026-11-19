@@ -61,7 +61,7 @@ export async function recaudarAprobaciones(ctx: Ctx, ses: Ses): Promise<{ total:
       titulo: "Ticket por aprobar · fac. " + s(b.factura),
       detalle: [s(b.cliente) || s((b.datos as Row | undefined)?.cliente), s(b.asignado_a) ? "asignado a " + s(b.asignado_a) : "sin asignar"].filter(Boolean).join(" · "),
       cuando: ymd(b.fecha) || s(b.completado_at),
-      href: "#/m/tickets",
+      href: "#/m/borradores",
     })),
     ...otros.map((b) => ({
       tipo: "borrador",
@@ -69,14 +69,14 @@ export async function recaudarAprobaciones(ctx: Ctx, ses: Ses): Promise<{ total:
       titulo: (s(b.asignado_a) ? "Por completar" : "Sin asignar") + " · fac. " + s(b.factura),
       detalle: [s(b.cliente), s(b.asignado_a) ? "asignado a " + s(b.asignado_a) : "falta asignar"].filter(Boolean).join(" · "),
       cuando: ymd(b.fecha),
-      href: "#/m/tickets",
+      href: "#/m/borradores",
     })),
   ];
   grupos.push({
     id: "borradores",
     titulo: "Borradores / tickets por aprobar",
     n: itemsBor.length,
-    href: "#/m/tickets",
+    href: "#/m/borradores",
     items: itemsBor.slice(0, 40),
   });
 
