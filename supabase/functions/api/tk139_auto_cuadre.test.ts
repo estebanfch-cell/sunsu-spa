@@ -139,9 +139,9 @@ describe("TK139 visibilidad + auto-cuadre al crear ticket", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     const beta = readFileSync(join(root, "beta.html"), "utf8");
     const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK147"/);
-    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK147"/);
-    assert.match(beta, /20261119tk147/);
+    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK148"/);
+    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK148"/);
+    assert.match(beta, /20261119tk148/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK138/);
     assert.match(screens, /CU\.role==='super_admin'/);
     assert.match(screens, /ROLES_OK=\['admin','admin_master','super_admin'/);

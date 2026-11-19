@@ -11,7 +11,7 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { estaCobrado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto } from "./tickets_beta_api.ts";
+import { estaPagado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
@@ -51,7 +51,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   }
   if (todos && s(p.cosm) && !q) F.push({ col: "atendido_por", op: "eq", val: s(p.cosm) });
   const est = s(p.est), seg = s(p.seg);
-  // TK83: pagado / porcobrar / sinfactura / cerrado / abierto se filtran después con hayFactura + estaCobrado
+  // TK83: pagado / porcobrar / sinfactura / cerrado / abierto se filtran después con hayFactura + estaPagado
   // (el flag fac y el texto «SIN FACTURA» no definen si hay factura; un ticket con método o factura real se trata cobrado).
   if (est === "anulado") F.push({ col: "orig->>anulado", op: "eq", val: "true" });
   if (seg === "pago_no") F.push({ col: "cob", op: "not_true" });
@@ -71,9 +71,19 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const factByFac = new Map((await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [s(f.factura), f]));
   const datosDe = (r: Row) => ((cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.datos || {}) as Row);
+  const claveDeR = (r: Row) => claveDe(r, leerSerie(r, "so_num"));
+  const pagosPorClaveAll = new Map<string, Row[]>();
+  for (const x of (await todas(ctx, "beta_pagos")).filter((p) => p.anulado !== true)) {
+    const k = s(x.ticket_clave);
+    const L0 = pagosPorClaveAll.get(k) || [];
+    L0.push(x);
+    pagosPorClaveAll.set(k, L0);
+  }
+  const pagadoBetaDe = (r: Row) => sumaPagosBeta(pagosPorClaveAll.get(claveDeR(r)));
+  const totalDe = (r: Row) => n(cabMap.get(claveDeR(r))?.total) || n(r.estimado);
   // TK98: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
   const facDe = (r: Row) => !!tipoSinCobro(r) || hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
-  const cobDe = (r: Row) => estaCobrado(r, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  const cobDe = (r: Row) => estaPagado(r, { factura: datosDe(r).factura, linkFac: linkByTk.get(n(r.id))?.factura, pagadoBeta: pagadoBetaDe(r), total: totalDe(r) });
   const cerradoDe = (r: Row) => {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
     return orig.anulado === true || (cobDe(r) && (facDe(r) || r.fac === true || s(r.fac).toLowerCase() === "true"));
@@ -167,7 +177,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const inv = Lnk ? factByFac.get(s(Lnk.factura)) : undefined;
     const facTxt = s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(Lnk?.factura);
     const formaMigo = s(inv?.forma) || (d.pago_migo && typeof d.pago_migo === "object" ? s((d.pago_migo as Row).forma) : "");
-    const cobrado = estaCobrado(r, d.factura, Lnk?.factura);
+    const cobrado = estaPagado(r, { factura: d.factura, linkFac: Lnk?.factura, pagadoBeta: sumaPagosBeta(pagosPorClave.get(clave) || pagosPorClaveAll.get(clave)), total: n(cabMap.get(clave)?.total) || n(r.estimado) });
     const facReal = hayFactura(r.fac_7, d.factura, Lnk?.factura);
     it.cob = cobrado;
     it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";

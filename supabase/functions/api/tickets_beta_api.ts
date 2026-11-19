@@ -622,6 +622,22 @@ export function hayFactura(fac7: unknown, datosFac?: unknown, linkFac?: unknown)
   return !!facturaCompleta(fac7);
 }
 
+/** Suma de pagos vivos de la beta (no anulados). */
+export function sumaPagosBeta(pagos: Row[] | undefined): number {
+  return round2((pagos || []).filter((p) => p && p.anulado !== true).reduce((a, p) => a + n(p.monto), 0));
+}
+
+/** Pagado de verdad: cobrado en el sistema, o los pagos de beta_pagos cubren el total (saldo ≤ $0.05). */
+export function estaPagado(r: Row, opts?: { factura?: unknown; linkFac?: unknown; pagadoBeta?: number; total?: number }): boolean {
+  if (estaCobrado(r, opts?.factura, opts?.linkFac)) return true;
+  const pagadoBeta = n(opts?.pagadoBeta);
+  if (!(pagadoBeta > 0)) return false;
+  const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  if (orig.anulado === true) return false;
+  const st = estadoCobro({ cobrado: false, cobradoMonto: 0, totalLineas: n(opts?.total) || n(r.estimado), pagadoBeta, anulado: false });
+  return st.saldo <= 0;
+}
+
 /** Cobrado en el sistema anterior: flag cob, o (si no está anulado ni es de prueba) tiene método de pago o factura real. */
 export function estaCobrado(r: Row, datosFac?: unknown, linkFac?: unknown): boolean {
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
@@ -779,12 +795,13 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   };
   if (!conTelefono(ses)) delete info.telefono;
   if (!conEmail(ses) && !conTelefono(ses)) delete info.email;
-  const stCob = estadoCobro({ cobrado: estaCobrado(r, d.factura), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
-  const metodos = metodosPago(r.comp);
-  const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: estaCobrado(r, d.factura), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
   let betaPagos: Row[] = [];
   try { betaPagos = (await consultar(ctx.db, "beta_pagos", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows.filter((x) => x.anulado !== true); }
   catch { betaPagos = []; }
+  const pagadoBeta = sumaPagosBeta(betaPagos);
+  const stCob = estadoCobro({ cobrado: estaCobrado(r, d.factura), cobradoMonto: n(r.estimado), totalLineas: total, pagadoBeta, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
+  const metodos = metodosPago(r.comp);
+  const pagos = { metodos, pagado: stCob.pagado, saldo: stCob.saldo, cobrado: stCob.saldo <= 0 && !((r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false)), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagadoBeta: stCob.pagadoBeta, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
   const pagosFaltan = pagosFaltanFoto({ beta: betaPagos, legado: pagos.pagosLegado, comps: compsVivos(d), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) });
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
@@ -815,7 +832,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-  const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura), cobrado = estaCobrado(r, d.factura);
+  const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura), cobrado = estaPagado(r, { factura: d.factura, pagadoBeta, total });
   const sinCobro = tipoSinCobro(r);
   const fac = facReal || b(r.fac) || !!sinCobro;
   const chips: Row[] = [
