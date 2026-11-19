@@ -61,8 +61,8 @@ describe("TK109 más rápido y menú siempre visible", () => {
     assert.match(html, /api\("ping"\)/);
     assert.match(home, /apiSWR/);
     assert.match(home, /MCStaffHome = \{[\s\S]*html: html/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK127/);
-    assert.match(html, /20261119tk127/);  });
+    assert.match(sw, /sunsu-beta-2026-11-19-TK132/);
+    assert.match(html, /20261119tk132/);  });
 
   it("staff_home no baja el dashboard admin completo y el ping / bootstrap responden", async () => {
     const src = readFileSync(join(root, "supabase/functions/api/staff_home_api.ts"), "utf8");
