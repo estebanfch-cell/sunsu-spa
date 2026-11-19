@@ -772,12 +772,31 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   }
   const soNum = await tomarNumero(ctx.db, "TK-SO", enPrueba(ctx.db) ? await ctx.db.all("tickets") : await filasSerie(ctx.db), "so_num");
   const notas = s(p.notas) + (p.descuento ? " · 🏷 Descuento: " + s(p.descuento) : "");
+  let cosm = s(p.cosmetologa);
+  try {
+    const { listaStaffActivo, cosmParaAltaTicket } = await import("./tickets_staff.ts");
+    let borrador: R | null = null;
+    if (s(p.vincular_borrador)) {
+      const { facturaNorm } = await import("./migo_cuadre.ts");
+      const fac = facturaNorm(p.vincular_borrador);
+      const rows = await ctx.db.all("beta_migo_borradores").catch(() => [] as R[]);
+      borrador = rows.find((x) => s(x.factura) === fac) || null;
+    }
+    cosm = cosmParaAltaTicket({
+      payload: s(p.cosmetologa),
+      sesNombre: actorOf(ses),
+      rol: ses.rol,
+      elegida: p.cosmetologa_elegida === true || p.cosmetologa_elegida === "true",
+      borrador,
+      staff: await listaStaffActivo(ctx),
+    });
+  } catch { /* se usa el payload */ }
   const base: R = {
     sheet_row: null,
     origin: ident.origin,
     beta_num: ident.beta_num,
     timestamp: ec.isoWall,
-    atendido_por: s(p.cosmetologa),
+    atendido_por: cosm,
     id_3: s(p.cedula),
     nombre: s(p.nombre),
     apellido: s(p.apellido),

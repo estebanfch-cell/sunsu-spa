@@ -53,7 +53,41 @@
 // Se toca el dato y se edita ahí. Guardar/Descartar aparecen solo cuando algo cambió. El personal (no admin)
 // ve «📨 Enviar solicitud»: la misma acción viaja como solicitud y Emilia o Emi la aprueban en Solicitudes.
 window._lgAccionTabla={cabinaSaveProducto:'cabina_inventario', cabinaSaveActivo:'cabina_activos', cabinaSaveProtocolo:'cabina_protocolo', saveRegistroCliente:'registro_cliente'};
-function _lgEsAdmin(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='super_admin')); }
+function _lgEsAdmin(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin')); }
+function _tkEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }
+function _staffActivos(){
+  var L=[], seen={}, src=[];
+  function add(u){
+    if(!u||u.bloqueado) return;
+    var nom=u.nombre||u.name||'';
+    if(!nom) return;
+    var key=nom.toLowerCase();
+    if(seen[key]) return;
+    seen[key]=1;
+    L.push({id:u.id||'', nombre:nom, short:u.short||u.etiqueta||nom, rol:u.rol||u.role||'', etiqueta:u.etiqueta||u.nombre_mostrar||u.short||nom});
+  }
+  try{ src=JSON.parse(localStorage.getItem('sunsu_users')||'[]')||[]; }catch(eS){ src=[]; }
+  (window._tkStaff||[]).concat(src).forEach(add);
+  L.sort(function(a,b){ return String(a.etiqueta).localeCompare(String(b.etiqueta),'es'); });
+  return L;
+}
+function _tkAtendidoDefault(){
+  var c=(T&&(T.atendidoPor||T._migoAsignado||T.cosmetologa))||'';
+  if(c) return c;
+  return (typeof CU!=='undefined'&&CU&&CU.name)||'';
+}
+function _tkAtendidoSelectHtml(){
+  if(!_lgEsAdmin()) return '';
+  var cur=_tkAtendidoDefault(), L=_staffActivos(), hay=false;
+  var opts=L.map(function(u){
+    var on=u.nombre===cur||u.short===cur||u.id===cur||u.etiqueta===cur;
+    if(on) hay=true;
+    return '<option value="'+_tkEsc(u.nombre)+'"'+(on?' selected':'')+'>'+_tkEsc(u.etiqueta)+'</option>';
+  }).join('');
+  if(cur&&!hay) opts='<option value="'+_tkEsc(cur)+'" selected>'+_tkEsc(cur)+'</option>'+opts;
+  if(!opts) opts='<option value="'+_tkEsc(cur)+'" selected>'+_tkEsc(cur||'—')+'</option>';
+  return '<div class="field" id="tk-atendido-wrap"><label>Atendido por</label><select id="tk-atendido-por" onchange="T.atendidoPor=this.value">'+opts+'</select></div>';
+}
 function _lgPide(){ return !!(typeof CU!=='undefined'&&CU)&&!_lgEsAdmin(); }
 function _lgPuedeTocar(){ return !!(typeof CU!=='undefined'&&CU); }
 function _lgTxtGuardar(){ return _lgPide()?'📨 Enviar solicitud':'💾 Guardar'; }
@@ -1543,6 +1577,7 @@ function renderTicket(c){
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" value="${(T.nombre||'').replace(/"/g,'&quot;')}" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
           <div class="field"><label>Apellido</label><input type="text" id="inp-ape" placeholder="Apellido" autocomplete="off" value="${(T.apellido||'').replace(/"/g,'&quot;')}" oninput="T.apellido=this.value;_lookupNombreTicket()"></div>
         </div>
+        ${_tkAtendidoSelectHtml()}
 
         <div class="field"><label>Fecha de retorno</label><input type="date" id="inp-ret"></div>
       </div>
@@ -2985,7 +3020,8 @@ function enviarTicket(){
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
 
   const payload={
-    cosmetologa:    CU.name, // siempre la usuaria real — el consumo interno se identifica por el cliente
+    cosmetologa:    (function(){ var el=document.getElementById('tk-atendido-por'); if(el&&el.value) return el.value; return T.atendidoPor||T._migoAsignado||CU.name; })(),
+    cosmetologa_elegida: !!(document.getElementById('tk-atendido-por')),
     esSunsu:        T.esSunsu,
     cedula:         T.esSunsu?'1793219469001':(cedEl?.value||'').trim(),
     nombre:         T.esSunsu?'Sunsu':(nomEl?.value||'').trim(),
@@ -5534,7 +5570,7 @@ function _histMasterHTML(tickets, showPrices){
   var abierto=!!elegido;
   var cols=abierto
     ? [{k:'num',t:'Nº'},{k:'cli',t:'Clienta'},{k:'tot',t:'Total',num:1}]
-    : _HIST_COLS;
+    : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; });
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
     var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
@@ -19084,7 +19120,8 @@ function _migoPoblarTDesdeFac(b){
   T.recom=(b.datos&&b.datos.recomendaciones)||'';
   var forma=String(b.forma||'');
   T.cobro=/cortes[ií]a|canje/i.test(forma)?'cortesia':'cobrado';
-  if(b.asignado_a) T._migoAsignado=b.asignado_a;
+  var cosmB=(b.datos&&(b.datos.cosmetologa||b.datos.completado_por||b.datos.atendido_por))||b.asignado_a||b.completado_por||'';
+  if(cosmB){ T.atendidoPor=cosmB; T._migoAsignado=cosmB; }
   T.lineDesc={};
   T.extras=T.extras||{}; T.productos=T.productos||{};
   var L=_migoPartirGiftCaja(_migoLineasTicket(b)), revisa=[], sinItems=!L.length, P=[], tot=0;
