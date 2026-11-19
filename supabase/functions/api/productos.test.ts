@@ -233,7 +233,7 @@ describe("productos MineCore: familias de SKU", () => {
     const db = new MemoryDb();
     db.tables.set("erp_bodegas", BODEGAS);
     db.tables.set("erp_productos", [
-      { id: "p1", sku: "ML-009", nombre: "Mask", clase: "producto", uso: "venta", activo: true },
+      { id: "p1", sku: "ML-009", nombre: "Mask", clase: "producto", uso: "venta", activo: true, marca: "Dr.esthe", categoria: "Producto" },
       { id: "p2", sku: "02", nombre: "Facial", clase: "servicio", uso: "cabina", activo: true },
     ]);
     db.tables.set("catalogo", [{ sku: "SUNSU-ML-010", producto_servicio: "Otra", activo: true }]);
@@ -242,6 +242,8 @@ describe("productos MineCore: familias de SKU", () => {
     const c = ctx(db);
     const fam = await handle("mcprod_familias", { token: c.token }, c) as Row;
     assert.equal((fam.familias as Row[]).find((x) => x.prefijo === "ML-")!.siguiente, "ML-012");
+    assert.deepEqual(fam.marcas, ["Dr.esthe"]);
+    assert.deepEqual(fam.categorias, ["Producto"]);
     const r = await handle("mcprod_nuevo", { token: c.token, familia: "ML-", sku: "ML-009", nombre: "Nuevo", uso: "venta" }, c) as Row;
     assert.equal(r.ok, true, String(r.error));
     assert.equal(r.sku, "ML-012");
@@ -305,9 +307,31 @@ describe("TK123 Productos: filtros, escáner y sin-costo físico", () => {
     assert.match(scan, /vendor-zxing\.js/);
     assert.doesNotMatch(scan, /cdn\.jsdelivr\.net/);
     assert.doesNotMatch(screens, /cdn\.jsdelivr\.net\/npm\/@zxing/);
-    assert.match(html, /mc-scan\.js\?v=20261119tk128/);
-    assert.match(html, /vendor-zxing\.js\?v=20261119tk128/);
+    assert.match(html, /mc-scan\.js\?v=20261119tk131/);
+    assert.match(html, /vendor-zxing\.js\?v=20261119tk131/);
     const start = screens.indexOf("function _scanAbrir");
     assert.match(screens.slice(start, start + 500), /MCScan\.abrir/);
+  });
+});
+
+describe("TK131 Nuevo producto: listas y sin bloque de familias", () => {
+  it("Categoría, Marca y Unidad son desplegables con + Crear nueva en línea; el bloque Familias de SKU no se muestra", () => {
+    const js = readFileSync(new URL("../../../mc-productos.js", import.meta.url), "utf8");
+    const start = js.indexOf("async function nuevoHtml");
+    assert.ok(start >= 0);
+    const block = js.slice(start, js.indexOf("function wireNuevo", start));
+    assert.match(block, /selConCrear\("marca", "Marca"/);
+    assert.match(block, /selConCrear\("categoria", "Categoría"/);
+    assert.match(block, /selConCrear\("unidad", "Unidad"/);
+    assert.match(js, /function selConCrear/);
+    assert.match(js, /\+ Crear nueva/);
+    assert.doesNotMatch(block, /Familias de SKU detectadas/);
+    assert.doesNotMatch(block, /<input name="marca">/);
+    assert.doesNotMatch(block, /<input name="categoria">/);
+    const wire = js.slice(js.indexOf("function wireNuevo"), js.indexOf("window.MCProductos"));
+    assert.match(wire, /wireCrear\("marca"\)/);
+    assert.match(wire, /wireCrear\("categoria"\)/);
+    assert.doesNotMatch(wire, /prompt\(/);
+    assert.match(js, /minmax\(0,1fr\)/);
   });
 });
