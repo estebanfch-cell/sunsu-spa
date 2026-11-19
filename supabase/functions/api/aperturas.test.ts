@@ -145,4 +145,20 @@ describe("📦 Abrir producto", () => {
     assert.equal(r.exacto, "pbv");
     assert.equal(((r.items as Row[])[0]).sku, "BV-002");
   });
+  it("TK136: guardar un subset de faciales y recargar devuelve exactamente esa selección", async () => {
+    const { db, h } = semilla();
+    const save = await h("ap_aplica_guardar", "adm", { producto_id: "p1", faciales: ["sunsu-01"] }) as Row;
+    assert.deepEqual(save.aplica, ["SUNSU-01"]);
+    const get1 = await h("ap_aplica_get", "cos", { producto_id: "p1" }) as Row;
+    assert.deepEqual(get1.aplica, ["SUNSU-01"]);
+    assert.deepEqual(db.tables.get("erp_productos")!.find((x) => x.id === "p1")!.beta_aplica_faciales, ["SUNSU-01"]);
+    const empty = await h("ap_aplica_guardar", "adm", { producto_id: "p1", faciales: [] }) as Row;
+    assert.deepEqual(empty.aplica, []);
+    assert.deepEqual((await h("ap_aplica_get", "adm", { producto_id: "p1" }) as Row).aplica, []);
+    const all = await h("ap_aplica_guardar", "adm", { producto_id: "p1", faciales: ["SUNSU-02", "SUNSU-01"] }) as Row;
+    assert.deepEqual((all.aplica as string[]).slice().sort(), ["SUNSU-01", "SUNSU-02"]);
+    assert.deepEqual(((await h("ap_aplica_get", "adm", { producto_id: "p1" }) as Row).aplica as string[]).slice().sort(), ["SUNSU-01", "SUNSU-02"]);
+    db.tables.get("erp_productos")!.find((x) => x.id === "p1")!.beta_aplica_faciales = ["sunsu-02"];
+    assert.deepEqual((await h("ap_aplica_get", "adm", { producto_id: "p1" }) as Row).aplica, ["SUNSU-02"]);
+  });
 });

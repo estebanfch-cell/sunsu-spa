@@ -100,13 +100,13 @@
       ".mcp #mcp-f-nuevo,.mcp .mcp-card{max-width:100%;min-width:0;box-sizing:border-box}",
       ".mcp-sort{cursor:pointer;user-select:none;white-space:nowrap}.mcp-ck{width:34px}.mcp-ck input{width:18px;height:18px;margin:0}",
       ".mcp-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.mcp-acc{display:flex;gap:6px;flex-wrap:wrap;align-items:center}",
-      ".mcp-md{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}.mcp-side{position:sticky;top:8px;background:#fff;border-radius:14px;padding:8px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08));max-height:calc(100vh - 110px);display:flex;flex-direction:column}",
+      ".mcp-md{display:block;min-width:0}.mcp-side,.ss-md .mcp-side{display:none!important}",
       ".mcp-side input{padding:8px 10px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:10px;font:inherit;font-size:.8rem;margin-bottom:6px}#mcp-side-list{overflow:auto;flex:1;position:relative}",
       ".mcp-side-it{display:flex;flex-direction:column;padding:6px 8px;border-radius:8px;text-decoration:none;color:var(--navy,#2c3e66);font-size:.76rem;border-left:3px solid transparent}.mcp-side-it:hover{background:var(--blue-l,#eef3fb)}.mcp-side-it.on{background:var(--blue-l,#eef3fb);border-left-color:var(--navy,#2c3e66);font-weight:700}.mcp-side-it small{color:var(--gray,#8a93a6)}",
       ".mcp-rev{display:inline-block;background:#fdecea;color:#b03a2e;border:1px solid #f3b8b1;border-radius:999px;font-size:.62rem;font-weight:800;padding:1px 7px;margin-left:6px;vertical-align:middle;white-space:nowrap}",
       ".mcp-revbox{background:#fdecea;border:1px solid #f3b8b1;color:#8f2d22;border-radius:10px;padding:6px 10px;font-size:.76rem;margin:6px 0}.mcp-sug{background:#eef6ff;border:1px solid #cfe2fb;border-radius:10px;padding:6px 10px;font-size:.76rem;margin:6px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}",
       ".mcp-auto{font-size:.68rem;color:#2e7d52;font-weight:700}.mcp-l .mcp-sub,.mcp-l .mcp-auto{text-transform:none;letter-spacing:0}",
-      ".mcp-nav{display:inline-flex;gap:4px}@media(max-width:1150px){.mcp-md{display:block}.mcp-side{display:none}}",
+      ".mcp-nav{display:inline-flex;gap:4px}",
       ".mcp-danger{color:var(--red)!important;border-color:var(--red)!important}",
       ".mcp-af{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--gray-l)}.mcp-afb{border:0;background:none;color:var(--navy);font:inherit;cursor:pointer;text-align:left}",
       ".mcp-bars svg{display:block;margin-top:4px}.mcp-bars rect{fill:#1f2d3d}",
@@ -714,7 +714,7 @@
         (serv ? "" : '<div class="mcp-kv"><span class="mcp-l">Stock total</span><span class="mcp-v mcp-idn"><b>' + q2(tot) + " u</b>" + (est === "agotado" ? '<span class="mcp-tag agot">Agotado</span>' : est === "bajo" ? '<span class="mcp-tag bajo">Bajo</span>' : "") + "</span></div>") +
         "</div>" + estadoHtml();
     }
-    var n = Object.keys(MC.ch).length;
+    var n = nCambios();
     h += pide()
       ? '<div class="mcp-save" id="mcp-savebar"' + (n ? "" : " hidden") + "><span>Cambios para pedir (" + n + ")</span>" +
         '<input id="mcp-motivo" placeholder="Motivo del cambio (obligatorio)" value="' + e(MC.motivo) + '">' +
@@ -1175,15 +1175,15 @@
     return '<span class="mcp-nav"><button class="btn ghost small" type="button" data-side-id="' + e(v.prev ? v.prev.id : "") + '"' + (v.prev ? ' title="' + e(v.prev.nombre) + '"' : " disabled") + '>‹</button><button class="btn ghost small" type="button" data-side-id="' + e(v.next ? v.next.id : "") + '"' + (v.next ? ' title="' + e(v.next.nombre) + '"' : " disabled") + ">›</button></span>";
   }
   function fichaHtml() {
-    return '<div class="mcp-md"><aside class="mcp-side"><input id="mcp-side-q" type="search" placeholder="Filtrar la lista" value="' + e(MC.sideQ || "") + '" autocomplete="off"><div id="mcp-side-list">' + sideList() + "</div></aside>" +
-      '<div class="mcp mcp-ficha"><div class="mcp-top"><span style="display:flex;gap:6px;align-items:center"><button class="btn ghost small" type="button" id="mcp-volver">← Productos</button>' + navHtml() +
+    return '<div class="mcp mcp-ficha"><div class="mcp-top"><span style="display:flex;gap:6px;align-items:center"><button class="btn ghost small" type="button" id="mcp-volver">← Productos</button>' + navHtml() +
       (puedeVender() ? '<button class="btn small" type="button" id="mcp-vender">+ Vender</button>' : "") + '</span><span class="mcp-acc" id="mcp-acc">' + acciones() + "</span></div>" +
-      '<div id="mcp-head">' + head() + "</div>" + tabs() + '<div id="mcp-cuerpo">' + cuerpo() + "</div></div></div>";
+      '<div id="mcp-head">' + head() + "</div>" + tabs() + '<div id="mcp-cuerpo">' + cuerpo() + "</div></div>";
   }
   /** «+ Vender»: abre Nuevo ticket y suma 1 de este producto cuando la pantalla esté lista. */
   function vender() {
-    if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return;
+    if (hayCambios() && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return;
     MC.ch = {};
+    if (window.MCAperturas && window.MCAperturas.aplicaReset) window.MCAperturas.aplicaReset();
     var p = MC.cur.producto, skus = [p.skuVisible, "SUNSU-" + p.sku, p.sku].filter(Boolean);
     go("#/doc/ov");
     var t0 = Date.now();
@@ -1199,9 +1199,24 @@
       if (typeof toast === "function") toast("✓ " + p.nombre + " +1 en el ticket", "var(--green)");
     }, 250);
   }
-  /** «Aplica a faciales» (📦 Abrir producto → costo por facial) en la pestaña Protocolo. */
+  /** «Aplica a faciales» (📦 Abrir producto → costo por facial) en la pestaña «Se usa en». */
+  function aplicaDirty() {
+    return !!(window.MCAperturas && window.MCAperturas.aplicaDirty && window.MCAperturas.aplicaDirty());
+  }
+  function nCambios() { return Object.keys(MC.ch).length + (aplicaDirty() ? 1 : 0); }
+  function hayCambios() { return nCambios() > 0; }
+  function syncSavebar() {
+    var n = nCambios(), sb = document.getElementById("mcp-savebar");
+    if (!sb) return;
+    sb.hidden = !n;
+    var lab = sb.querySelector("span");
+    if (lab && /Cambios/.test(lab.textContent || "")) {
+      lab.textContent = (pide() ? "Cambios para pedir (" : "Cambios sin guardar (") + n + ")";
+    }
+  }
   function montarAplica() {
     var h = document.getElementById("mcp-aplica");
+    if (window.MCAperturas && window.MCAperturas.onAplicaChange) window.MCAperturas.onAplicaChange(syncSavebar);
     if (h && window.MCAperturas && MC.cur && MC.cur.producto) window.MCAperturas.aplicaCard(h, MC.cur.producto.id, !!(MC.admin || (typeof state !== "undefined" && state.admin)));
   }
   function repintar(foco) {
@@ -1258,6 +1273,7 @@
   }
   async function renderFicha(id) {
     MC.ch = {}; MC.ed = null; MC.motivo = ""; MC.escalas = null; MC.provs = null; MC.codigos = null;
+    if (window.MCAperturas && window.MCAperturas.aplicaReset) window.MCAperturas.aplicaReset();
     if (!MC.list) { try { await cargarLista(false); } catch (x) { /* el picker de presentaciones queda vacío */ } }
     var d = await api("mcprod_get", { id: id });
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/productos">← Productos</button>';
@@ -1278,12 +1294,15 @@
     });
   }
   async function guardar() {
+    var apDirty = aplicaDirty();
     var cambios = {}, ch = MC.ch;
     Object.keys(ch).forEach(function (k) { cambios[k] = ch[k]; });
+    var tieneCampos = Object.keys(cambios).length > 0;
+    if (!tieneCampos && !apDirty) return;
     var mot = document.getElementById("mcp-motivo");
     if (mot) MC.motivo = mot.value;
-    if (hayPrecio() && String(MC.motivo || "").trim().length < 3) { alert("Escribe el motivo del cambio de precio o costo."); if (mot) mot.focus(); return; }
-    if (pide()) {
+    if (tieneCampos && hayPrecio() && String(MC.motivo || "").trim().length < 3) { alert("Escribe el motivo del cambio de precio o costo."); if (mot) mot.focus(); return; }
+    if (pide() && tieneCampos) {
       if (String(MC.motivo || "").trim().length < 3) { alert("Escribe el motivo del cambio"); if (mot) mot.focus(); return; }
       var bs = document.getElementById("mcp-guardar"); if (bs) { bs.disabled = true; bs.textContent = "Enviando…"; }
       var rs = await api("solicitud_crear", { tabla: "producto_beta", fila: String(MC.cur.producto.id), tipo: "cambio", motivo: String(MC.motivo).trim(), propuestos: cambios });
@@ -1293,27 +1312,36 @@
       return;
     }
     var bt = document.getElementById("mcp-guardar"); if (bt) { bt.disabled = true; bt.textContent = "Guardando…"; }
-    var r = await api("mcprod_save", { id: MC.cur.producto.id, cambios: cambios, motivo: MC.motivo });
-    if (!r || r.error) { if (bt) { bt.disabled = false; bt.textContent = "Guardar"; } alert((r && r.error) || "No se pudo guardar"); return; }
-    MC.listAt = 0;
-    var d = await api("mcprod_get", { id: MC.cur.producto.id });
-    if (d && d.ok) MC.cur = d;
+    if (apDirty && window.MCAperturas && window.MCAperturas.aplicaGuardar) {
+      var ax = await window.MCAperturas.aplicaGuardar({});
+      if (!ax || !ax.ok) {
+        if (bt) { bt.disabled = false; bt.textContent = "Guardar"; }
+        alert((ax && ax.error) || "No se pudo guardar «Aplica a faciales»");
+        return;
+      }
+    }
+    if (tieneCampos) {
+      var r = await api("mcprod_save", { id: MC.cur.producto.id, cambios: cambios, motivo: MC.motivo });
+      if (!r || r.error) { if (bt) { bt.disabled = false; bt.textContent = "Guardar"; } alert((r && r.error) || "No se pudo guardar"); return; }
+      MC.listAt = 0;
+      var d = await api("mcprod_get", { id: MC.cur.producto.id });
+      if (d && d.ok) MC.cur = d;
+    }
     MC.ch = {}; MC.ed = null; MC.motivo = "";
+    if (typeof toast === "function") toast("✓ Guardado", "var(--green)");
     repintar();
   }
   function wireFicha(main) {
     setTimeout(montarAplica, 0);
-    var side = main.querySelector(".mcp-md");
-    if (side) {
-      var irA = function (id) { if (!id) return; if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; MC.ch = {}; go("#/m/productos/p/" + id); };
-      side.addEventListener("click", function (ev) { var a = ev.target.closest("[data-side-id]"); if (a) { ev.preventDefault(); irA(a.getAttribute("data-side-id")); } if (ev.target.closest("#mcp-vender")) vender(); });
-      var sq = main.querySelector("#mcp-side-q");
-      if (sq) sq.addEventListener("input", function () { MC.sideQ = sq.value; var l = main.querySelector("#mcp-side-list"); if (l) l.innerHTML = sideList(); var nv = main.querySelector(".mcp-nav"); if (nv) nv.outerHTML = navHtml(); });
-      var on = main.querySelector(".mcp-side-it.on"), lst = main.querySelector("#mcp-side-list");
-      if (on && lst) lst.scrollTop = Math.max(0, on.offsetTop - lst.clientHeight / 2);
-    }
     var host = main.querySelector(".mcp-ficha");
     if (!host) return;
+    var irA = function (id) {
+      if (!id) return;
+      if (hayCambios() && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return;
+      MC.ch = {};
+      if (window.MCAperturas && window.MCAperturas.aplicaReset) window.MCAperturas.aplicaReset();
+      go("#/m/productos/p/" + id);
+    };
     host.addEventListener("toggle", function (ev) {
       var d = ev.target; if (!d || !d.getAttribute || !d.getAttribute("data-mcp-sec")) return;
       secAbiertas()[d.getAttribute("data-mcp-sec")] = d.open;
@@ -1321,7 +1349,9 @@
     }, true);
     host.addEventListener("click", function (ev) {
       var t = ev.target;
-      if (t.closest("#mcp-volver")) { if (Object.keys(MC.ch).length && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; go("#/m/productos"); return; }
+      var nav = t.closest("[data-side-id]"); if (nav) { ev.preventDefault(); irA(nav.getAttribute("data-side-id")); return; }
+      if (t.closest("#mcp-vender")) { vender(); return; }
+      if (t.closest("#mcp-volver")) { if (hayCambios() && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; if (window.MCAperturas && window.MCAperturas.aplicaReset) window.MCAperturas.aplicaReset(); go("#/m/productos"); return; }
       var tb = t.closest("[data-mcp-tab]"); if (tb) { var nt = tb.getAttribute("data-mcp-tab"); MC.tab = MC.tab === nt && tb.classList.contains("mcp-tab") ? "resumen" : nt; repintar(); if (!tb.classList.contains("mcp-tab")) { var tc = document.getElementById("mcp-cuerpo"); if (tc) try { tc.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (x) { /* scroll */ } } return; }
       var ed = t.closest("[data-mcp-ed]"); if (ed && puedeCampo()) { MC.ed = ed.getAttribute("data-mcp-ed"); repintar(true); return; }
       if (t.closest("#mcp-guardar")) { void guardar(); return; }
@@ -1338,7 +1368,7 @@
       if (t.closest("[data-mcp-acc],#mcp-pdf,#mcp-dup,#mcp-es-add,[data-mcp-es-del],#mcp-es-save,#mcp-pv-add,[data-mcp-pv-del],#mcp-pv-save,#mcp-cb-add,#mcp-cb-gen,[data-mcp-cb-del],#mcp-cb-save,#mcp-up-btn,[data-mcp-ver],[data-mcp-quitar],[data-mcp-princ],#mcp-bar-gen,#mcp-etq,#mcp-pres-add,[data-mcp-pres-del],#mcp-activo,[data-mcp-aj]")) { void accionFicha(t); return; }
       if (t.closest("#mcp-sug-ok")) {
         var sg = sugeridos(); Object.keys(sg).forEach(function (k) { setVal(k, sg[k]); });
-        repintar(); var sb = document.getElementById("mcp-savebar"); if (sb) sb.hidden = !Object.keys(MC.ch).length;
+        repintar(); var sb = document.getElementById("mcp-savebar"); if (sb) syncSavebar();
         if (typeof toast === "function") toast("Revisa y toca Guardar", "var(--green)");
         return;
       }
@@ -1350,7 +1380,7 @@
         else if (typeof toast === "function") toast("Este navegador no lee códigos con la cámara; escribe el código");
         return;
       }
-      if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar(); return; }
+      if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; if (window.MCAperturas && window.MCAperturas.aplicaDescartar) window.MCAperturas.aplicaDescartar(); repintar(); return; }
       if (t.closest("#mcp-foto")) {
         if (puede()) { var f = document.getElementById("mcp-file"); if (f) f.click(); }
         else { var im = host.querySelector("#mcp-foto img"); if (im) window.open(im.src, "_blank"); }
@@ -1369,7 +1399,7 @@
       if (ev.target.id === "mcp-motivo") { MC.motivo = ev.target.value; return; }
       if (!k || ev.target.tagName === "SELECT") return;
       setVal(k, ev.target.value);
-      var bar = document.getElementById("mcp-savebar"); if (bar) bar.hidden = !Object.keys(MC.ch).length;
+      var bar = document.getElementById("mcp-savebar"); if (bar) syncSavebar();
       if (PRECIO[k] || k === "beta_contenido") pintarCalc();
     });
     host.addEventListener("change", function (ev) {
@@ -1378,7 +1408,7 @@
         var nv = ev.target.value;
         if (nv === "__otra") { nv = prompt("Escribe " + (CAMPOS[k] || k).toLowerCase() + ":", "") || ""; nv = nv.trim(); if (!nv) { MC.ed = null; repintar(); return; } }
         setVal(k, nv); MC.ed = null; repintar();
-        var bar0 = document.getElementById("mcp-savebar"); if (bar0) bar0.hidden = !Object.keys(MC.ch).length;
+        var bar0 = document.getElementById("mcp-savebar"); if (bar0) syncSavebar();
       }
       var pv = ev.target.getAttribute && ev.target.getAttribute("data-mcp-pv");
       if (pv === "proveedor_id" && MC.provs) { var y = MC.provs[+ev.target.getAttribute("data-i")]; if (y) { y.proveedor_id = ev.target.value; y.proveedor = ev.target.value ? ev.target.options[ev.target.selectedIndex].text : y.proveedor; } }
@@ -1523,7 +1553,7 @@
   window.MCProductos = {
     items: function () { return filtrar(); },
     ensureList: async function () { var r = await cargarLista(false); return !!(r && r.ok); },
-    isDirty: function () { return Object.keys(MC.ch).length > 0; },
+    isDirty: function () { return hayCambios(); },
     render: async function (route) {
       css();
       if (route.sub === "p" && route.id) return renderFicha(route.id);
@@ -1536,7 +1566,7 @@
       if (route.sub === "nuevo") return wireNuevo(main);
       return wireLista(main);
     },
-    dirty: function () { return Object.keys(MC.ch).length > 0; },
+    dirty: function () { return hayCambios(); },
     barras: barras, code128: code128,
     _mc: MC,
   };
