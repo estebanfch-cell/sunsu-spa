@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 describe("TK71 menú del personal", () => {
   it("la barra de abajo quita Bodega, pone Spa y deja Inventario sin las pantallas de stock viejas", () => {
-    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const nav = readFileSync(new URL("../../../mc-nav.js", import.meta.url), "utf8");
     const beta = html;
     assert.match(html, /tabButton\("spa", "Spa"\)/);

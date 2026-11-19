@@ -468,7 +468,7 @@ import { readFileSync } from "node:fs";
 describe("Historial forma de pago (TK38)", () => {
   it("columna entre Cosmetóloga y Subtotal, pill Pagado (Migo en tooltip), acordeón de bandeja", () => {
     const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
-    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(js, /k:'fpago',t:'💳 Forma de pago'/);
     assert.match(js, /k:'cos'[\s\S]{0,180}k:'fpago'[\s\S]{0,180}k:'sub'/);
     assert.match(js, /cobro confirmado en Migo/);

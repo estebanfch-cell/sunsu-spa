@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const nav = readFileSync(join(root, "mc-nav.js"), "utf8");
 
 function fmtFromApp() {

@@ -69,7 +69,7 @@ function extractFunction(src: string, name: string): string {
 
 describe("TK78 Configuración general no se corta por </script>", () => {
   it("ningún HTML de la beta deja un </script> crudo dentro de un template JS", () => {
-    const files = ["beta.html", ...readdirSync(root).filter((f) => f.endsWith(".html") && f !== "sunsu.html" && f !== "beta.html")];
+    const files = ["index.html", ...readdirSync(root).filter((f) => f.endsWith(".html") && f !== "sunsu.html" && f !== "beta.html" && f !== "index.html")];
     const hits: string[] = [];
     for (const f of files) {
       const p = join(root, f);
@@ -92,7 +92,7 @@ describe("TK78 Configuración general no se corta por </script>", () => {
   });
 
   it("el parser HTML del navegador deja entero el script con renderConfiguracion, Comisiones y Rol", () => {
-    const html = readFileSync(join(root, "beta.html"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
     const scripts = inlineScripts(html);
     const main = scripts.find((s) => s.body.includes("async function renderConfiguracion"));
     assert.ok(main, "el </script> de cfg-priv-json no debe cortar el script principal");
@@ -103,7 +103,7 @@ describe("TK78 Configuración general no se corta por </script>", () => {
   });
 
   it("renderConfiguracion devuelve HTML de permisos, no el fuente", async () => {
-    const html = readFileSync(join(root, "beta.html"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
     const main = inlineScripts(html).find((s) => s.body.includes("async function renderConfiguracion"));
     assert.ok(main);
     const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));

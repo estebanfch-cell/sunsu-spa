@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = new URL("../../../", import.meta.url);
-const html = readFileSync(new URL("beta.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const sw = readFileSync(new URL("sw.js", root), "utf8");
 
 function scriptsInline(src: string): string[] {
@@ -57,8 +57,8 @@ describe("TK149 arranque: script principal parsea y no deja la pantalla vacía",
   });
 
   it("el SW cubre mc-borradores.js y comparte pin de caché con beta.html", () => {
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK151"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK151"/);
     assert.match(html, /20261119tk149/);
     assert.match(sw, /"\/mc-borradores\.js"/);
     const files = [...sw.matchAll(/"\/([^"]+\.js)"/g)].map((m) => m[1]);

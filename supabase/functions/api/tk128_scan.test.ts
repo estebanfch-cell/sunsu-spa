@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const root = new URL("../../../", import.meta.url);
 const scan = readFileSync(new URL("mc-scan.js", root), "utf8");
-const html = readFileSync(new URL("beta.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const sw = readFileSync(new URL("sw.js", root), "utf8");
 const prod = readFileSync(new URL("mc-productos.js", root), "utf8");
 const aperturas = readFileSync(new URL("mc-aperturas.js", root), "utf8");

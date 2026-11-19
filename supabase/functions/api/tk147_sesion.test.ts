@@ -13,7 +13,7 @@ import { enlaceReset, proveedorCorreo } from "./correo.ts";
 import type { Row } from "./domain.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const acc = readFileSync(join(root, "mc-acceso.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
 const sql = readFileSync(join(root, "docs/supabase/pending/0069_tk147_pin_desactivado.sql"), "utf8");
@@ -47,8 +47,8 @@ describe("TK147 sesión persistente, encabezado, PIN y reseteo", () => {
     assert.match(html, /api\("logout"/);
     assert.match(html, /localStorage\.removeItem\("sunsu\.beta\.sesion"\)/);
     assert.doesNotMatch(html, /if \(!who\.ok\) \{ state\.token = ""; localStorage\.removeItem\("sunsu\.beta\.token"\); paintLogin\(who\.error\); return; \}/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
-    assert.match(html, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
+    assert.match(html, /sunsu-2026-11-19-TK151/);
     assert.doesNotMatch(html, /sunsu-beta-2026-11-19-TK146/);
   });
 
@@ -105,7 +105,7 @@ describe("TK147 sesión persistente, encabezado, PIN y reseteo", () => {
     assert.equal(validarEmail("", false), null);
     assert.equal(proveedorCorreo({}), null);
     assert.equal(proveedorCorreo({ RESEND_API_KEY: "rk" }), "resend");
-    assert.match(enlaceReset({}, "abc"), /beta\.html#\/reset\/abc$/);
+    assert.equal(enlaceReset({}, "abc"), "https://app.sunsuspa.com/#/reset/abc");
   });
 
   it("la sesión en el servidor dura 90 días y se renueva al acercarse el vencimiento", () => {

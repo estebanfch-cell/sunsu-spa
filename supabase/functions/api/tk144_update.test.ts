@@ -5,7 +5,7 @@ import { claveOcultarBanner, hayActualizacion, notarMotor, parseCacheSw } from "
 import { ENGINE_HEADER, SUNSU_ENGINE } from "./sunsu_version.ts";
 
 const root = new URL("../../../", import.meta.url);
-const html = readFileSync(new URL("beta.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const sw = readFileSync(new URL("sw.js", root), "utf8");
 const index = readFileSync(new URL("supabase/functions/api/index.ts", root), "utf8");
 
@@ -19,7 +19,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.equal(first.primera, true);
     assert.equal(first.localEngine, "e2");
     assert.equal(hayActualizacion("c", "c", first.localEngine, first.remoteEngine), null);
-    assert.equal(parseCacheSw('const CACHE = "sunsu-beta-2026-11-19-TK150";'), "sunsu-beta-2026-11-19-TK150");
+    assert.equal(parseCacheSw('const CACHE = "sunsu-2026-11-19-TK151";'), "sunsu-2026-11-19-TK151");
     assert.equal(claveOcultarBanner("c2", "e2"), "sunsu.banner.hide.c2|e2");
   });
 
@@ -27,7 +27,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(index, /Access-Control-Expose-Headers": ENGINE_HEADER/);
     assert.match(index, /\[ENGINE_HEADER\]: SUNSU_ENGINE/);
     assert.equal(ENGINE_HEADER, "X-Sunsu-Engine-Version");
-    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK150$/);
+    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK151$/);
     assert.match(sw, /event\.data\.type === "SKIP_WAITING"/);
     assert.match(sw, /!self\.registration \|\| !self\.registration\.active/);
   });

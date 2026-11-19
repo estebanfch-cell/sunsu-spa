@@ -123,7 +123,7 @@ describe("TK97 UI: un botón Voucher y ticket en blanco", () => {
     assert.match(screens, /sunsu\.form\.purga/);
     assert.match(screens, /_ticketAlAbrirFormulario\(\)/);
     assert.match(screens, /_ticketNuevoEnBlanco\(\)/);
-    const html = src("beta.html");
+    const html = src("index.html");
     assert.match(html, /_ticketAntesDeIr/);
     assert.match(html, /raw\.split\("\?"\)\[0\]/);
   });

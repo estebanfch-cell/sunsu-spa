@@ -108,7 +108,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     }
     const ed = readFileSync(join(root, "mc-edit.js"), "utf8");
     assert.match(ed, /Enviar solicitud/); assert.match(ed, /Solicitar eliminación/); assert.match(ed, /Descartar/);
-    const beta = readFileSync(join(root, "beta.html"), "utf8");
+    const beta = readFileSync(join(root, "index.html"), "utf8");
     assert.match(beta, /mc-edit\.js\?v=20261119tk149/);    assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
   });
 
@@ -119,7 +119,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     assert.doesNotMatch(tr, /id="mctr-editar"/); assert.match(tr, /data-tr-tocar/); assert.match(tr, /id="mctr-descartar" hidden/);
     const pm = readFileSync(join(root, "mc-promociones.js"), "utf8");
     assert.doesNotMatch(pm, /"Importar y editar" : "Editar"/); assert.match(pm, /mcpm-toca/); assert.match(pm, /id="mcpm-desc"/);
-    assert.match(readFileSync(join(root, "beta.html"), "utf8"), /\.btn\[hidden\] \{ display: none !important; \}/);
+    assert.match(readFileSync(join(root, "index.html"), "utf8"), /\.btn\[hidden\] \{ display: none !important; \}/);
   });
 
   it("Paquete: botón «Descargar ficha» arma el PDF Sunsu con clienta, producto, sesiones, quedan y vendió", () => {
@@ -208,7 +208,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
   });
 
   it("UI: Modo prueba en la barra de Ver como; productos y tickets con solicitud", () => {
-    const b = readFileSync(join(root, "beta.html"), "utf8");
+    const b = readFileSync(join(root, "index.html"), "utf8");
     assert.match(b, /id="vista-prueba"/); assert.match(b, /prueba_vista: true/);
     const pr = readFileSync(join(root, "mc-productos.js"), "utf8");
     assert.match(pr, /📨 Enviar solicitud/); assert.match(pr, /🗑️ Solicitar eliminación/); assert.match(pr, /tabla: "producto_beta"/);

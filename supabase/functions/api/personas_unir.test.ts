@@ -16,7 +16,7 @@ function ctx(db: MemoryDb): Ctx {
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 
 describe("TK87 personas únicas y Evelyn Toapanta", () => {
   it("Usuarios edita la ficha en línea y reusa los interruptores de permisos", () => {

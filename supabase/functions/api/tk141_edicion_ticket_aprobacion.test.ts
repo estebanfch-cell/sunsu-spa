@@ -193,9 +193,9 @@ describe("TK141 edición de ticket con aprobación", () => {
     const mc = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
     assert.match(mc, /mctk-editar-form/);
     assert.match(mc, /Aprobar edición/);
-    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(html, /_tkPintarDiffEdicion/);
-    assert.match(html, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(html, /sunsu-2026-11-19-TK151/);
   });
 });
 

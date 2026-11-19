@@ -33,7 +33,7 @@ function uiFiles(): string[] {
   const names = readdirSync(root);
   const out: string[] = [];
   for (const n of names) {
-    if (n === "beta.html" || n === "sunsu.html" || n === "manifest.webmanifest" || n === "sw.js") out.push(join(root, n));
+    if (n === "index.html" || n === "beta.html" || n === "sunsu.html" || n === "manifest.webmanifest" || n === "sw.js") out.push(join(root, n));
     if (/^(mc-|beta-).+\.js$/.test(n)) out.push(join(root, n));
   }
   return out;
@@ -65,14 +65,14 @@ describe("la app no dice que es una beta ni un modo prueba", () => {
     assert.match(asis, /radio_m:\s*20/);
     assert.match(asis, /Estás a \$\{Math\.round\(distancia\)\} m de \$\{local\}\./);
     assert.doesNotMatch(asis, /El radio permitido es/);
-    const html = readFileSync(join(root, "beta.html"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
     assert.match(html, /radio_m:\s*20/);
     assert.match(html, /cfg\.radio_m \?\? 20/);
     assert.doesNotMatch(html, /El radio permitido es/);
   });
 
   it("el encabezado en pantalla chica no tiene el reloj y no se desborda", () => {
-    const html = readFileSync(join(root, "beta.html"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
     assert.match(html, /class="top-actions"/);
     const media = html.split("@media (max-width: 860px)")[1] || "";
     assert.match(media, /\.reloj-head\s*\{\s*display:\s*none/);
