@@ -6,7 +6,8 @@ import "./erp_api.ts";
 import "./productos_api.ts";
 import "./conteo_fisico_api.ts";
 import type { Row } from "./domain.ts";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 function semilla() {
   const db = new MemoryDb();
@@ -60,7 +61,7 @@ describe("conteo físico beta", () => {
     assert.match(String((await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-bea" })).error), /Ya hay un conteo abierto/);
     const nt = await h("notif_mias", "cos");
     assert.equal(nt.sinLeer, 1); assert.match(String((nt.items as Row[])[0].link), /#\/m\/conteos\//);
-    assert.equal(((await h("cf_list", "otra")).items as Row[]).length, 0);
+    assert.equal(((await h("cf_list", "otra")).items as Row[]).length, 1); // TK120: el equipo con acceso puede retomar
     assert.equal(((await h("cf_list", "cos", { mios: true })).items as Row[]).length, 1);
     assert.match(String((await h("cf_iniciar", "otra", { id: cr.id })).error), /no está asignado/);
     assert.equal((await h("cf_iniciar", "cos", { id: cr.id })).lineas, 2);
@@ -179,17 +180,20 @@ describe("TK116 conteo general vivo como MineCore", () => {
 
   it("el front tiene Guardado, Terminar, esp. visible, banner de movimientos y el menú de la fila", () => {
     const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
-    assert.match(js, /Nuevo conteo general/);
-    assert.match(js, /Hojas sueltas \(antes\)/);
+    assert.match(js, /\+ Nuevo conteo/);
+    assert.match(js, /Hojas sueltas/);
     assert.match(js, /inventario sigue vivo/);
     assert.match(js, /cc-topbtns/);
-    assert.match(js, /Plan del mes/);
-    assert.match(js, /Reasignar/);
-    assert.match(js, /Cancelar/);
+    assert.match(js, /data-cf-bod="OFICINA"/);
+    assert.match(js, /Bodega Oficina/);
+    assert.match(js, /Bodega Cabina/);
     assert.match(js, /por revisar/);
     assert.match(js, /🔍 Escanea o busca código \/ nombre/);
-    assert.match(js, /body:has\(#cc\) \.tabbar/);
+    assert.doesNotMatch(js, /#0b1219|body:has\(#cc\) \.tabbar/);
     assert.match(js, /guardar, salir y volver/);
+    assert.match(js, /var\(--navy\)/);
+    assert.match(js, /var\(--gold\)/);
+    assert.match(js, /var\(--cream\)/);
     assert.match(js, /esp\. /);
     assert.match(js, /Recontar: hubo movimientos durante el conteo/);
     assert.match(js, /Está en otro lugar/);
@@ -208,9 +212,18 @@ describe("TK117/TK118 secciones y sububicaciones (admin, catálogo vacío)", () 
     const z0 = await h("cf_zonas", "adm", {});
     assert.equal(z0.admin, true);
     assert.equal((z0.zonas as Row[]).length, 0);
-    assert.equal((z0.subs as Row[]).length, 0);
-    assert.equal((z0.lugares as Row[]).length, 5);
+    assert.equal((z0.sinZona as Row[]).length, 0);
+    assert.equal((z0.lugares as Row[]).length, 3);
     assert.ok((z0.lugares as Row[]).some((x) => x.nombre === "Venta"));
+    assert.ok((z0.lugares as Row[]).some((x) => x.nombre === "Bodega Cabina"));
+    assert.ok((z0.lugares as Row[]).some((x) => x.nombre === "Bodega Oficina"));
+    assert.ok((z0.subs as Row[]).some((x) => x.codigo === "CABINA_1"));
+    assert.ok((z0.subs as Row[]).some((x) => x.codigo === "CABINA_2"));
+    assert.ok((z0.subs as Row[]).some((x) => x.codigo === "CABINA_3"));
+    assert.ok(!(z0.subs as Row[]).some((x) => x.bodega === "OFICINA"));
+    // El conteo de una bodega ya no exige un catálogo de secciones.
+    const ofi = await h("cf_crear", "adm", { bodega: "OFICINA", iniciar: true });
+    assert.equal(ofi.ok, true);
     assert.match(String((await h("cf_crear_general", "cos", {})).error || ""), /secciones/i);
     const cr = await h("cf_zona_save", "adm", { nombre: "Sección 8", bodega: "CONSIGNACION", prefijos: "8-, =", frecuencia_dias: 15 });
     assert.equal(cr.ok, true);
@@ -273,12 +286,100 @@ describe("TK117/TK118 secciones y sububicaciones (admin, catálogo vacío)", () 
 
   it("el editor de Secciones está en el front, solo con acciones de admin", () => {
     const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
-    assert.match(js, /Secciones de/);
-    assert.match(js, /cf_zona_save/);
-    assert.match(js, /cf_zona_borrar/);
-    assert.match(js, /cf_zona_orden/);
+    assert.match(js, /Sububicaciones/);
     assert.match(js, /Crear sububicación/);
-    assert.match(js, /Solo un admin puede agregar o cambiar/);
+    assert.match(js, /Hay tres bodegas/);
+    assert.match(js, /Cabina 1, 2 y 3 ya existen/);
+    assert.doesNotMatch(js, /Sububicaciones con stock que no están en ninguna sección/);
     assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
+  });
+});
+
+
+describe("TK120 conteo por bodega y allowlist", () => {
+  it("un admin cuenta Oficina, crea una sububicación al vuelo, guarda, retoma y termina", async () => {
+    const { db, h } = semilla();
+    db.tables.get("erp_bodegas")!.push({ id: "44444444-4444-4444-8444-444444444444", codigo: "CASA", nombre: "Oficina", tipo: "casa" });
+    db.tables.get("erp_stock")!.push(
+      { producto_id: "p1", bodega_id: "44444444-4444-4444-8444-444444444444", cantidad: 4 },
+      { producto_id: "p3", bodega_id: "44444444-4444-4444-8444-444444444444", cantidad: 1 },
+    );
+    db.tables.set("erp_sububicaciones", [
+      { id: "sub-c1", bodega_id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA_1", nombre: "Cabina 1", activo: true },
+      { id: "sub-c2", bodega_id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA_2", nombre: "Cabina 2", activo: true },
+      { id: "sub-c3", bodega_id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA_3", nombre: "Cabina 3", activo: true },
+    ]);
+    const meta = await h("cf_meta", "adm", {});
+    assert.equal((meta.bodegas as Row[]).length, 3);
+    assert.equal(((meta.subs as Record<string, Row[]>).OFICINA || []).length, 0);
+    assert.equal(((meta.subs as Record<string, Row[]>).CABINA || []).length, 3);
+
+    const cr = await h("cf_crear", "adm", { bodega: "OFICINA", iniciar: true });
+    assert.equal(cr.ok, true);
+    assert.equal(cr.numero, "CF-001");
+    const ini = await h("cf_iniciar", "adm", { id: cr.id });
+    assert.ok(Number(ini.lineas) >= 2, "debe listar el stock esperado de Oficina");
+    let g = await h("cf_get", "adm", { id: cr.id });
+    assert.equal((g.conteo as Row).bodega, "OFICINA");
+    const L = g.lineas as Row[];
+    const amp = L.find((l) => l.sku === "ML-001")!;
+    assert.ok(Number(amp.esperado) === 4 || Number(amp.sistema) === 4);
+    const sub = await h("cf_sub_save", "adm", { bodega: "OFICINA", codigo: "OF-A-1", nombre: "Estante A-1" });
+    assert.equal(sub.ok, true);
+    assert.equal(sub.codigo, "OF-A-1");
+    const erp = db.tables.get("erp_sububicaciones")!;
+    assert.equal(erp.filter((x) => x.codigo === "CABINA_1").length, 1);
+    assert.ok(erp.some((x) => x.codigo === "OF-A-1"));
+    await h("cf_guardar", "adm", { id: cr.id, lineas: [{ id: amp.id, contado: 4, sub_contada: "OF-A-1" }] });
+    g = await h("cf_get", "adm", { id: cr.id });
+    const amp2 = (g.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    assert.equal(amp2.subContada, "OF-A-1");
+    const list = await h("cf_list", "adm", {});
+    assert.ok((list.items as Row[]).some((c) => c.id === cr.id && c.estado === "en_conteo"));
+    const g2 = await h("cf_get", "adm", { id: cr.id });
+    assert.equal((g2.conteo as Row).estado, "en_conteo");
+    await h("cf_guardar", "adm", { id: cr.id, lineas: (g2.lineas as Row[]).map((l) => ({ id: l.id, contado: l.contado ?? 0, sub_contada: l.subContada || l.sububicacion })) });
+    const fin = await h("cf_enviar", "adm", { id: cr.id, forzar: true });
+    assert.equal(fin.ok, true);
+    const g3 = await h("cf_get", "adm", { id: cr.id });
+    assert.equal((g3.conteo as Row).estado, "en_revision");
+    const amp3 = (g3.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    assert.ok(amp3.esperado != null);
+  });
+
+  it("BETA_TABLAS cubre cada tabla beta_/erp_sububicaciones que escribe la API y está en el SQL", () => {
+    const dbSrc = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
+    const m = dbSrc.match(/export const BETA_TABLAS = new Set\(\[([\s\S]*?)\]\);/);
+    assert.ok(m, "BETA_TABLAS no encontrado");
+    const beta = new Set([...m![1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
+    const sql = readFileSync(new URL("../../../docs/supabase/20261119_tk120_conteo_bodega.sql", import.meta.url), "utf8");
+    const sm = sql.match(/array\[([\s\S]*?)\]/);
+    assert.ok(sm, "allowlist SQL no encontrado");
+    const allowed = new Set([...sm![1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
+    const missingSql = [...beta].filter((t) => !allowed.has(t));
+    assert.equal(missingSql.join(","), "", "en BETA_TABLAS pero no en app_beta_write: " + missingSql.join(", "));
+    const dir = new URL(".", import.meta.url).pathname;
+    const files: string[] = [];
+    const walk = (d: string) => {
+      for (const f of readdirSync(d)) {
+        const pth = join(d, f);
+        if (statSync(pth).isDirectory()) { if (f !== "node_modules") walk(pth); }
+        else if (f.endsWith(".ts") && !f.endsWith(".test.ts")) files.push(pth);
+      }
+    };
+    walk(dir);
+    const used = new Set<string>();
+    const re = /\.write\s*\([^,]+,\s*["']([A-Za-z0-9_]+)["']/g;
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      let x: RegExpExecArray | null;
+      const local = new RegExp(re);
+      while ((x = local.exec(src))) used.add(x[1]);
+    }
+    const need = [...used].filter((t) => t.startsWith("beta_") || t === "erp_sububicaciones");
+    const missingTs = need.filter((t) => !beta.has(t));
+    assert.equal(missingTs.join(","), "", "la API escribe tablas fuera de BETA_TABLAS: " + missingTs.join(", "));
+    assert.ok(beta.has("beta_sububicaciones"));
+    assert.ok(beta.has("erp_sububicaciones"));
   });
 });
