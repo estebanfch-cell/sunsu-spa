@@ -76,9 +76,9 @@ describe("TK73 empleados e IESS", () => {
     assert.match(js, /Los horarios se guardan al cambiar el dato, sin lápiz/);
     assert.doesNotMatch(js, /✏️|ix-pencil|data-edit="pencil"/);
     assert.match(nav, /#\/m\/personal\/empleados/);
-    assert.match(beta, /mc-empleados\.js\?v=20261118tk103/);
+    assert.match(beta, /mc-empleados\.js\?v=20261118tk104/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-18-TK103/);  });
+    assert.match(sw, /sunsu-beta-2026-11-18-TK104/);  });
 
   it("omite la fila de notas de RRHH y no deja ver el módulo al personal", async () => {
     assert.equal(esFilaNotasRrhh({ nombre_app: "", nombre_jibble: "ℹ️ Solo modificar esta hoja en el sistema central" }), true);

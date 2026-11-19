@@ -103,6 +103,37 @@
     });
   }
   // ---------- Pagos dentro del ticket ----------
+
+  function tipoFotoPago(metodo) {
+    var m = String(metodo || "").toLowerCase().replace(/é/g, "e");
+    if (m === "transferencia" || m === "deuna") return "transferencia";
+    if (m === "tarjeta") return "tarjeta";
+    if (m === "voucher") return "voucher";
+    return "";
+  }
+  function pagosFaltanDe(r) {
+    var seen = {}, out = [], L = [].concat((r && r.beta) || [], (r && r.pagosLegado) || []), i, p, tipo, ok;
+    for (i = 0; i < L.length; i++) {
+      p = L[i];
+      if (!p || p.anulado === true) continue;
+      tipo = tipoFotoPago(p.metodo);
+      if (!tipo || seen[tipo]) continue;
+      ok = !!(p.comprobante_id || p.foto);
+      if (ok) continue;
+      seen[tipo] = 1;
+      out.push({ id: p.id || "", tipo: tipo, etiqueta: tipo === "transferencia" ? "Transferencia" : tipo === "tarjeta" ? "Tarjeta" : "Voucher" });
+    }
+    return out;
+  }
+  function pagosFaltanBtnsHtml(r) {
+    var F = pagosFaltanDe(r), i, h = "";
+    if (!F.length) return "";
+    h = '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">';
+    for (i = 0; i < F.length; i++) {
+      h += '<label class="btn ghost small pg-vbtn mctk-voucher" title="' + e(F[i].etiqueta) + '" aria-label="' + e(F[i].etiqueta) + '"><span class="mctk-cam" aria-hidden="true">📷</span><span class="mctk-vlab">' + e(F[i].etiqueta) + '</span><input type="file" class="pg-voucher-faltan" accept="image/*,application/pdf" hidden data-pago-id="' + e(F[i].id || "") + '"></label>';
+    }
+    return h + "</div>";
+  }
   var MCPagos = {
     montar: async function (host, clave, totalFn, onPagado, onFoto) {
       css();
@@ -129,7 +160,7 @@
           '<label style="grid-column:1/-1">Voucher / comprobante<span class="pg-vrow"><input id="pg-ref" placeholder="N.º (tarjeta, transferencia)"><label class="btn ghost small pg-vbtn">📷 Voucher<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></span></label>' +
           '<div id="pg-prev" class="pg-thumbs" style="grid-column:1/-1"></div>' +
           '<label style="justify-content:flex-end"><button class="btn" type="button" id="pg-ok">Registrar pago</button></label></div><p class="mccj-sub">El efectivo entra solo a la caja chica. 📷 Voucher abre el menú del iPhone (Tomar foto, Fototeca o Archivos; también PDF).</p>'
-          : '<p class="mccj-sub">✓ Pagado completo.</p><div style="margin-top:8px"><label class="btn ghost small pg-vbtn">📷 Voucher<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></div><div id="pg-prev" class="pg-thumbs"></div>') + "</div>";
+          : '<p class="mccj-sub">✓ Pagado completo.</p>' + pagosFaltanBtnsHtml(r) + '<div id="pg-prev" class="pg-thumbs"></div>') + "</div>";
       // TK97: un solo botón 📷 Voucher (sin capture) junto al campo. Sube al instante al ticket y se enlaza al registrar el pago.
       var foto = "", fotoListo = false, selM = host.querySelector("#pg-met"), prevF = host.querySelector("#pg-prev");
       var pideFoto = function () { var m = selM && selM.value; return m === "tarjeta" || m === "transferencia"; };
@@ -164,6 +195,22 @@
           pintThumbs();
         } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
       };
+      host.querySelectorAll(".pg-voucher-faltan").forEach(function (inp) {
+        inp.onchange = async function () {
+          var f = inp.files && inp.files[0]; inp.value = ""; if (!f) return;
+          toast2("⏳ Subiendo voucher…");
+          try {
+            var data = await comprimirFoto(f);
+            var body = { clave: clave, imagen: data }, pagoId = inp.getAttribute("data-pago-id");
+            if (pagoId) body.pago_id = pagoId;
+            var up = await api("tk_subir_doc", body);
+            if (!up || up.error) { toast2((up && up.error) || "No se pudo subir", 1); return; }
+            toast2("✓ Voucher subido");
+            if (onFoto) onFoto();
+            MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
+          } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
+        };
+      });
       var ok = host.querySelector("#pg-ok");
       if (ok) ok.onclick = async function () {
         var hayFoto = fotoListo || !!(r.fotos && r.fotos.some(function (f) { return f && f.url && !f.pago_id; })) || !!foto;
