@@ -266,6 +266,18 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
   return { ok: true, lineas: i };
 });
 
+function lineaConteoOut(row: Row, c: Row, ses: Ses, ya: boolean): Row {
+  const sub = s(row.sub_contada) || s(row.sububicacion);
+  return {
+    id: s(row.id), orden: n(row.orden), productoId: s(row.producto_id), sku: s(row.sku), nombre: s(row.nombre),
+    sububicacion: s(row.sububicacion), fromSub: sub || bodegaNombre(s(c.bodega), s(c.sububicacion)), subCodigo: sub,
+    sistema: esAdmin(ses.rol) ? n(row.sistema) : null, mov: 0, esperado: n(row.esperado ?? row.sistema),
+    contado: row.contado == null || row.contado === "" ? null : n(row.contado), estado: s(row.estado),
+    subContada: sub, buscar: row.buscar === true, otraSub: s(row.otra_sub), otraQty: row.otra_qty == null || row.otra_qty === "" ? null : n(row.otra_qty),
+    agregado: row.agregado === true, ya,
+  };
+}
+
 extend("cf_guardar", "any", async (p, ctx, ses) => {
   const r = await cargar(ctx, s(p.id));
   if (!r) return { error: "Conteo no encontrado" };
@@ -300,7 +312,10 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
       || (barra ? prods.find((x) => (Array.isArray(x.barras) ? x.barras : []).some((b) => s(b) === barra)) : undefined);
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
     const ya = r.L.find((l) => s(l.producto_id) === s(pr.id));
-    if (ya) return { error: s(pr.skuVisible || pr.sku) + " ya está en la lista del conteo", lineaId: ya.id };
+    // Un producto, una sola línea por conteo. Si ya está, devolvemos esa línea (idempotente; un doble toque no inserta otra).
+    if (ya) {
+      return { ok: true, cambiadas, agregada: ya.id, ya: true, linea: lineaConteoOut(ya, r.c, ses, true) };
+    }
     // Producto que no estaba en la foto inicial de la bodega: el esperado es 0 (o el stock real si lo hubiera).
     const sistema = sistemaDe(pr, s(r.c.bodega), s(r.c.sububicacion));
     const cont = a.contado == null || a.contado === "" ? null : n(a.contado);
@@ -310,16 +325,16 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
       contado: cont, estado: cont == null ? "pendiente" : "contado",
       agregado: true, contado_por: cont == null ? null : actor, contado_at: cont == null ? null : now,
     };
-    await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, agregada);
+    try {
+      await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, agregada);
+    } catch (err) {
+      const otra = (await cargar(ctx, s(r.c.id)))?.L.find((l) => s(l.producto_id) === s(pr.id));
+      if (otra) return { ok: true, cambiadas, agregada: otra.id, ya: true, linea: lineaConteoOut(otra, r.c, ses, true) };
+      throw err;
+    }
   }
-  const linea = agregada ? {
-    id: agregada.id, orden: n(agregada.orden), productoId: s(agregada.producto_id), sku: s(agregada.sku), nombre: s(agregada.nombre),
-    sububicacion: s(agregada.sububicacion), fromSub: bodegaNombre(s(r.c.bodega), s(r.c.sububicacion)), subCodigo: s(agregada.sububicacion),
-    sistema: esAdmin(ses.rol) ? n(agregada.sistema) : null, mov: 0, esperado: n(agregada.esperado ?? agregada.sistema),
-    contado: agregada.contado == null ? null : n(agregada.contado), estado: s(agregada.estado),
-    subContada: "", buscar: false, otraSub: "", otraQty: null, agregado: true,
-  } : null;
-  return { ok: true, cambiadas, agregada: agregada ? agregada.id : null, linea };
+  const linea = agregada ? lineaConteoOut(agregada, r.c, ses, false) : null;
+  return { ok: true, cambiadas, agregada: agregada ? agregada.id : null, ya: false, linea };
 });
 
 extend("cf_enviar", "any", async (p, ctx, ses) => {

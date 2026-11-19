@@ -426,6 +426,14 @@ describe("TK120 conteo por bodega y allowlist", () => {
     const neu = L.find((l) => l.sku === "ML-002")!;
     assert.equal(neu.esperado, 0);
     assert.equal(neu.agregado, true);
+
+    const otraVez = await h("cf_guardar", "adm", { id: cr.id, agregar: { producto_id: "p2" } });
+    assert.equal(otraVez.ok, true);
+    assert.equal(otraVez.ya, true);
+    assert.equal((otraVez.linea as Row).id, neu.id);
+    assert.equal(otraVez.agregada, neu.id);
+    const L2 = ((await h("cf_get", "adm", { id: cr.id })).lineas as Row[]).filter((l) => l.sku === "ML-002");
+    assert.equal(L2.length, 1, "un producto no puede aparecer dos veces en el mismo conteo");
   });
 
   it("el front abre Agregar producto, busca en el catálogo y suma la fila al instante sin recargar ni borrar cantidades", () => {
@@ -442,6 +450,12 @@ describe("TK120 conteo por bodega y allowlist", () => {
     assert.match(block, /aplicarProductoAgregado/);
     assert.match(block, /cf_guardar/);
     assert.match(block, /agregar: \{ producto_id: pid \}/);
+    assert.match(block, /C\.addBusy/);
+    assert.match(block, /irALineaExistente/);
+    assert.match(block, /btns\[i\]\.disabled = true/);
+    assert.match(js, /function irALineaExistente/);
+    assert.match(js, /scrollIntoView/);
+    assert.match(js, /cc-ya/);
     assert.match(block, /_scanAbrir/);
     assert.match(js, /MCBuscar/);
     assert.match(js, /En el catálogo — Agregar al conteo/);
