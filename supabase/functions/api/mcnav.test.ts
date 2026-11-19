@@ -27,6 +27,11 @@ describe("menú MineCore (mc-nav.js)", () => {
     // Una sola Agenda (en Spa).
     assert.equal(g.flatMap((x) => x.items).filter((i) => i[2] === "#/m/agenda").length <= 1, true);
   });
+  it("admin Inventario: Productos, Conteo, Transferencias, Ajustes y Costo por facial; sin stock viejo ni códigos sueltos", () => {
+    const nav = cargar("admin", TODO);
+    const inv = nav.grupos().find((x) => x.id === "inventario")!.items.map((i) => i[2]);
+    assert.deepEqual([...inv], ["#/m/productos", "#/m/conteos", "#/m/transferencias", "#/m/ajustes", "#/m/aperturas/costo"]);
+  });
   it("«+»: los cuatro de Emilia, con emoji", () => {
     const nav = cargar("admin", TODO);
     assert.deepEqual([...nav.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "🧾 Nueva orden de compra", "💵 Ingreso / gasto de caja chica", "📦 Abrir producto"]);

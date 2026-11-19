@@ -51,9 +51,8 @@
       { id: "inventario", label: "Inventario", items: [
         ["productos", "Productos", "#/m/productos"],
         // TK108 (Emilia 18/11): el personal solo ve Productos y Conteo físico.
-        ["admin", "Stock Venta", "#/m/inventario/venta"],
-        ["admin", "Stock Cabina", "#/m/inventario/cabina"],
-        ["admin", "Códigos de barras", "#/m/barras"],
+        // TK123 (Emilia 19/11): Stock Venta, Stock Cabina y Códigos de barras salen del menú
+        // (todos los roles). Si se abre la ruta, va a Productos. El escáner sigue en Productos y Conteo.
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
         ["productos|conteos", "Conteo físico", "#/m/conteos"],
         ["admin", "Transferencias", "#/m/transferencias"],
