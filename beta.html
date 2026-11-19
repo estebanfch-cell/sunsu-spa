@@ -906,11 +906,11 @@
   .tk-table th.num, .tk-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 800; }
   .tk-row { cursor: pointer; }
   .tk-row.on { background: var(--blue-l); }
-  .tk-row.tk-flagged td { background: #fdecea; color: #8a2216; }
-  .tk-row.tk-flagged:hover td { background: #f9d8d3; }
+  .tk-row.tk-flagged td { background: #FECACA; color: #7f1d1d; }
+  .tk-row.tk-flagged:hover td { background: #FCA5A5; }
   .cli-sug{position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--cream-d);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:300px;overflow:auto}.cli-sug-i{display:block;width:100%;text-align:left;padding:8px 12px;border:0;background:none;border-bottom:1px solid #f0ece4;font:inherit;font-size:.85rem;cursor:pointer}.cli-sug-i:hover{background:var(--cream)}.cli-sug-i.nada{color:var(--gray);cursor:default}.cli-cod{font-family:ui-monospace,monospace;color:var(--navy);font-weight:700}.cli-sub{display:block;font-size:.74rem;color:var(--gray)}
-.tk-row.tk-falta td { background: #fff6d6; color: #6b4e00; }
-  .tk-row.tk-falta:hover td { background: #ffefb8; }
+.tk-row.tk-falta td { background: #FDE68A; color: #78350f; }
+  .tk-row.tk-falta:hover td { background: #FACC15; }
   .tk-fac { font-family: ui-monospace, monospace; font-size: 0.74rem; white-space: nowrap; }
   .tk-pills { white-space: nowrap; }
   .tk-pill { display: inline-block; border: 1.5px solid; border-radius: 999px; padding: 1px 8px; font-size: 0.64rem; font-weight: 700; margin-right: 3px; background: transparent; line-height: 1.5; }
@@ -929,8 +929,10 @@
   .mob-only { display: none !important; }
   .mob-card { background: #fff; border: 1px solid var(--cream-d); border-left: 4px solid transparent; border-radius: 12px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(43,63,92,.06); cursor: pointer; -webkit-tap-highlight-color: transparent; box-sizing: border-box; max-width: 100%; overflow: hidden; }
   .mob-card:active { background: var(--cream); }
-  .mob-card.tk-flagged { border-left-color: #d9534f; background: #fff8f7; }
-  .mob-card.tk-falta { border-left-color: #e0b100; background: #fffcf0; }
+  .mob-card.tk-flagged { background: #FECACA; border-color: #F87171; border-left: 4px solid #DC2626; }
+  .mob-card.tk-flagged:active { background: #FCA5A5; }
+  .mob-card.tk-falta { background: #FDE68A; border-color: #EAB308; border-left: 4px solid #D97706; }
+  .mob-card.tk-falta:active { background: #FACC15; }
   .mob-l1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
   .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.86rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mob-l1 .tk-pill { flex: none; font-size: 0.62rem; padding: 1px 7px; margin: 0; }
@@ -7377,7 +7379,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK146";
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK148";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

@@ -95,27 +95,49 @@ export function nombreCorto(nom: string): string {
   return t.split(/\s+/)[0];
 }
 
+/** Solo URLs que el <img> puede pintar (http o data:image). No archivo: ni placeholders. */
 export function urlsFoto(v: unknown): string[] {
+  return refsFoto(v).filter((u) => u.startsWith("http") || u.startsWith("data:image"));
+}
+
+/** Fotos reales: http, data:image o archivo:<id> de app_archivos. Nunca placeholders. */
+export function refsFoto(v: unknown): string[] {
   if (v == null || v === "") return [];
-  if (Array.isArray(v)) return v.flatMap(urlsFoto);
+  if (Array.isArray(v)) return v.flatMap(refsFoto);
   if (typeof v === "object") {
     const o = v as Row;
     const out: string[] = [];
     for (const k of ["url", "foto", "foto_url", "foto_thumb", "src", "imagen", "avatar"]) {
-      out.push(...urlsFoto(o[k]));
+      out.push(...refsFoto(o[k]));
     }
     return out;
   }
   const raw = s(v).trim();
-  if (!raw || raw.startsWith("archivo:")) return [];
-  if (raw.includes("|")) {
-    return raw.split("|").map((x) => x.trim()).filter((x) => x.startsWith("http") || x.startsWith("data:image"));
-  }
+  if (!raw) return [];
+  if (raw.includes("|")) return raw.split("|").map((x) => x.trim()).flatMap(refsFoto);
   if (raw.startsWith("http") || raw.startsWith("data:image")) return [raw];
-  if ((raw.startsWith("{") || raw.startsWith("["))) {
-    try { return urlsFoto(JSON.parse(raw)); } catch { /* no era JSON */ }
+  const arch = raw.match(/^archivo:([\w-]+)$/);
+  if (arch) return ["archivo:" + arch[1]];
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try { return refsFoto(JSON.parse(raw)); } catch { /* no era JSON */ }
   }
   return [];
+}
+
+export type FotoCard = { url?: string; archivo?: string; k: string };
+
+export function aFotoCard(ref: string, k: string): FotoCard | null {
+  const u = s(ref).trim();
+  if (!u) return null;
+  if (u.startsWith("http") || u.startsWith("data:image")) return { url: u, k };
+  const m = u.match(/^archivo:([\w-]+)$/);
+  return m ? { archivo: m[1], k } : null;
+}
+
+/** Hasta 4 miniaturas reales; si hay 5 o más, el +N es total-4. */
+export function topeFotosCard(fotos: FotoCard[]): { fotosCard: FotoCard[]; fotosMore: number } {
+  const L = (fotos || []).filter((f) => f && (s(f.url) || s(f.archivo)));
+  return { fotosCard: L.slice(0, 4), fotosMore: Math.max(0, L.length - 4) };
 }
 
 export function fotoDeDatos(datos: unknown): string {
@@ -211,18 +233,28 @@ export async function enriquecerItemsLista(
     const res = L.length ? resumenDeLineas(L) : resumenDeHoja(r, d);
     it.resumen = res;
     it.resumenTxt = textoResumen(res);
-    const fotos: { url: string; k: string }[] = [];
+    const fotos: FotoCard[] = [];
     const seen = new Set<string>();
-    const add = (url: string, k: string) => {
-      if (!url || seen.has(url) || fotos.length >= 12) return;
-      seen.add(url);
-      fotos.push({ url, k });
+    const addRef = (ref: string, k: string) => {
+      const card = aFotoCard(ref, k);
+      if (!card) return;
+      const key = card.url || ("archivo:" + s(card.archivo));
+      if (!key || seen.has(key) || fotos.length >= 12) return;
+      seen.add(key);
+      fotos.push(card);
     };
     const ced = normCedula(r.id_3 || r.cedula);
-    add(fotoCli.get(ced) || urlsFoto(r.fotos_antes)[0] || urlsFoto(d.fotos_antes)[0] || urlsFoto(r.fotos)[0] || "", "c");
+    const antes = refsFoto(r.fotos_antes)[0] || refsFoto(d.fotos_antes)[0] || "";
+    const despues = refsFoto(r.fotos_despues)[0] || refsFoto(d.fotos_despues)[0] || "";
+    if (antes) addRef(antes, "a");
+    if (despues) addRef(despues, "d");
+    if (!antes && !despues) {
+      const perfil = fotoCli.get(ced) || refsFoto(r.fotos)[0] || refsFoto(d.fotos)[0] || refsFoto(d.foto)[0] || "";
+      if (perfil) addRef(perfil, "c");
+    }
     const addSku = (sku: string) => {
       const u = fotoProd.get(s(sku).toUpperCase());
-      if (u) add(u, "p");
+      if (u) addRef(u, "p");
     };
     if (L.length) {
       for (const l of L) {
@@ -232,7 +264,8 @@ export async function enriquecerItemsLista(
     } else {
       for (const p of productQtys(r)) addSku(p.sku);
     }
-    it.fotosCard = fotos.slice(0, 5);
-    it.fotosMore = Math.max(0, fotos.length - 5);
+    const tope = topeFotosCard(fotos);
+    it.fotosCard = tope.fotosCard;
+    it.fotosMore = tope.fotosMore;
   }
 }

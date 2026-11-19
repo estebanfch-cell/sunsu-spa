@@ -301,7 +301,7 @@ describe("TK113 · ticket móvil sin error en Documentos", () => {
     const beta = readFileSync(join(root, "beta.html"), "utf8");
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(beta, /20261119tk146/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK146/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK112/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK148/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK112/);
   });
 
   it("abre un ticket a ancho de celular sin errores de JS y Documentos vive en Acciones", () => {
