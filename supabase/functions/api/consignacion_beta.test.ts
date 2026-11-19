@@ -13,8 +13,8 @@ import { resolverPrecio, preciosDesdeOrdenes, ocLegacyDelPeriodo } from "./consi
 
 function semilla() {
   const db = new MemoryDb();
-  db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
-  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+  db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "super_admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+  db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "super_admin" }]);
   db.tables.set("erp_bodegas", [{ id: "11111111-1111-4111-8111-111111111111", codigo: "VENTA", nombre: "Venta", tipo: "venta", activa: true }]);
   db.tables.set("erp_proveedores", [{ id: "p1", nombre: "Hebetronic S.A", activo: true, legacy_sheet_row: 3 }]);
   db.tables.set("proveedores", [{ sheet_row: 3, nombre: "Hebetronic S.A", familia: "HT" }]);
@@ -186,8 +186,8 @@ describe("precio de consignación (TK70)", () => {
   });
   it("cns_calc de 1-15 Nov usa el precio de OC-2026-087 (no el costo_promedio) y llega a $891.80", async () => {
     const db = new MemoryDb();
-    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
-    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "admin" }]);
+    db.tables.set("sesiones", [{ token: "adm", uid: "admin", rol: "super_admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" }]);
+    db.tables.set("usuarios", [{ id: "admin", nombre: "Emilia", rol: "super_admin" }]);
     db.tables.set("erp_bodegas", [
       { id: "11111111-1111-4111-8111-111111111111", codigo: "VENTA", nombre: "Venta", tipo: "venta", activa: true },
       { id: "66666666-6666-4666-8666-666666666666", codigo: "CONSIGNACION", nombre: "Consignación", tipo: "consignacion", activa: true },

@@ -3,7 +3,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { s, type Row } from "./domain.ts";
-import { acceso, esAdmin, matrizDe, normalizarRol } from "./permisos.ts";
+import { acceso, esAdmin, esSuperAdmin, matrizDe, normalizarRol } from "./permisos.ts";
 import { FINOS, FLAGS, ROLES_EDITABLES, accesoEfectivo, crudDeNivel, limpiarOverride, nivelDeRol, perfilDeRol, vacio, type Override } from "./usuario_permisos.ts";
 
 async function safeAll(ctx: Ctx, t: string): Promise<Row[]> {
@@ -42,7 +42,7 @@ function efectivo(rol: string, matriz: Record<string, Partial<Record<string, "no
     alcance[m.id] = a;
   }
   const flags: Record<string, boolean> = {
-    costos: admin || (o?.flags.costos ?? acceso(rol, "ver_costos", matriz) === "todos"),
+    costos: esSuperAdmin(rol),
     precios: admin || (o?.flags.precios ?? true),
     saldos: admin || (o?.flags.saldos ?? true),
     comisiones: admin || (o?.flags.comisiones ?? acceso(rol, "comisiones", matriz) !== "no"),

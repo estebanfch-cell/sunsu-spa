@@ -88,7 +88,8 @@ describe("inventario corte", () => {
 
 describe("permisos", () => {
   it("admin ve costos y la cosmetóloga no", () => {
-    assert.equal(acceso("admin", "ver_costos"), "todos");
+    assert.equal(acceso("admin", "ver_costos"), "no");
+    assert.equal(acceso("super_admin", "ver_costos"), "todos");
     assert.equal(acceso("super_admin", "compras"), "todos");
     assert.equal(acceso("cosmetologa", "ver_costos"), "no");
     assert.equal(acceso("gerente", "ver_costos"), "no");
@@ -142,7 +143,9 @@ describe("permisos", () => {
     assert.equal(emps[0].sueldo, 500);
     const ajeno = redactar("getRolIndividual", { ok: true, data: { nombre: "Daniela Mora", sueldo: 1 } }, andrea);
     assert.equal((ajeno as Row).error?.toString().includes("permiso"), true);
-    assert.equal((redactar("getCatalogo", [{ compra: 1 }], admin) as Row[])[0].compra, 1);
+    assert.equal((redactar("getCatalogo", [{ compra: 1 }], admin) as Row[])[0].compra, undefined);
+    const mega: SesLite = { rol: "super_admin", name: "EFCH", short: "EFCH", uid: "efch" };
+    assert.equal((redactar("getCatalogo", [{ compra: 1 }], mega) as Row[])[0].compra, 1);
     const tel = redactar("cli_list", { items: [{ nombre: "Ana", telefono: "099", email: "a@b.c" }] }, andrea) as Row;
     assert.equal(((tel.items as Row[])[0]).telefono, undefined);
     assert.equal(((tel.items as Row[])[0]).email, undefined);
@@ -908,7 +911,11 @@ describe("api", () => {
     assert.equal(hoy.valPaq, 80);
     assert.equal(hoy.productosN, 3);
     assert.equal(hoy.valProd, 25);
-    assert.equal(hoy.costoProd, 14);
+    assert.equal(hoy.costoProd, undefined);
+    assert.equal((hoy as Row).utilidadProd, undefined);
+    const megaC = ctx(db, "super_admin", "efch", "EFCH");
+    const dashMega = await handle("getDashboardHoy", { token: megaC.token }, megaC) as Row;
+    assert.equal((dashMega.hoy as Row).costoProd, 14);
     assert.equal(hoy.extrasN, 2);
     assert.equal(hoy.valExtras, 12);
     assert.equal(hoy.extrasCort, 1);
@@ -1338,7 +1345,7 @@ describe("clientes, reportes, consignación y gift card", () => {
       { id: 1, timestamp: "2026-10-21T15:00:00Z", ht_002: 2, facial_hecho: "SUNSU-01 Limpieza", atendido_por: "Andrea" },
       { id: 2, timestamp: "2026-09-01T15:00:00Z", ht_002: 9, facial_hecho: "SUNSU-02", atendido_por: "Andrea" },
     ]);
-    const c = ctx(db);
+    const c = ctx(db, "super_admin", "efch", "EFCH");
     const rep = await handle("reporte_consumos", { token: c.token, desde: "2026-10-01", hasta: "2026-10-31" }, c) as Row;
     const venta = (rep.venta as Row[]).find((r) => r.sku === "HT-002");
     const cabina = (rep.cabina as Row[]).find((r) => r.sku === "CB-001");
@@ -2293,8 +2300,12 @@ describe("series, comisiones y rol", () => {
     db.tables.set("inventario_base", [{ id: 3, sku: "SUNSU-HT-002", compra: 0, stock_inicial: 0 }]);
     const tablaCat = await handle("getCatalogoTabla", { token: c.token }, c) as Row;
     const serum = (tablaCat.items as Row[]).find((r) => String(r.sku).includes("HT-002"));
-    assert.equal(serum?.compraReal, 8);
+    assert.equal(serum?.compraReal, undefined);
     assert.equal((await db.all("inventario_base"))[0].compra, 8);
+    const megaCat = ctx(db, "super_admin", "efch", "EFCH");
+    const tablaMega = await handle("getCatalogoTabla", { token: megaCat.token }, megaCat) as Row;
+    const serumMega = (tablaMega.items as Row[]).find((r) => String(r.sku).includes("HT-002"));
+    assert.equal(serumMega?.compraReal, 8);
     assert.equal(cat.ok, true);
   });
 
@@ -3307,9 +3318,8 @@ describe("escalón en el app en vivo", () => {
     assert.match(html, /nivel\.indexOf\('%'\)/);
     assert.match(screens, /nivel\.indexOf\('%'\)/);
     assert.match(beta, /Escalón/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /2026-10-26-ESC/);
   });
 
   it("Andrea y Daniela en la tabla de la API coinciden con el escalón del app", async () => {
@@ -3416,9 +3426,8 @@ describe("tickets de venta", () => {
     assert.match(src, /\['todos','Todos'\],\['hoy','Hoy'\]/);
     assert.match(src, /_histFiltroBtns\('sf-','aplicarFiltroStaff'/);
     assert.match(beta, /\.tk-split/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.doesNotMatch(readFileSync(join(root, "supabase/functions/api/domain.ts"), "utf8"), /_histMasterHTML/);
     assert.doesNotThrow(() => new Function(src));
   });
 
@@ -3498,9 +3507,8 @@ describe("gift cards lista", () => {
     assert.match(src, /id="bgc-inp"/);
     assert.match(src, /Clienta \/ beneficiaria/);
     assert.match(beta, /\.gc-table/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.doesNotThrow(() => new Function(src));
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.doesNotThrow(() => new Function(src));
     const g = globalThis as { window?: Record<string, unknown>; _gcVencimiento?: (g: unknown) => { cad: boolean; sinCad: boolean; str: string } };
     g.window = g.window || {};
     g._gcVencimiento = () => ({ cad: false, sinCad: false, str: "14/01/2027" });
@@ -3549,9 +3557,8 @@ describe("paquetes en columnas", () => {
     assert.match(src, /onclick="paqDesplegar\(/);
     assert.match(src, /de '\+x\.total\+' · queda/);
     assert.match(beta, /grid-template-columns: minmax\(0, 1\.7fr\) 11\.5rem 6\.4rem 2\.8rem 2\.4rem/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.doesNotThrow(() => new Function(src));
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.doesNotThrow(() => new Function(src));
     const fila = src.slice(src.indexOf("var wa=telQ"), src.indexOf("html+='<div class=\"card paq-row\""));
     assert.match(fila, /paq-wa-vacio/);
     assert.match(fila, /paq-wa"/);
@@ -3583,9 +3590,8 @@ describe("cotizaciones visor", () => {
     assert.match(beta, /id="cot-pdf"/);
     assert.match(beta, /Descargar PDF/);
     assert.doesNotMatch(beta, /<th>TK-SQ<\/th>/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.doesNotThrow(() => new Function(src));
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.doesNotThrow(() => new Function(src));
     const build = new Function(
       "T", "FACIALES", "EXTRAS", "PAQ3", "PAQ6", "PROVS",
       src.slice(src.indexOf("function _lineasCotizacionTicket("), src.indexOf("function _enviarCotizacionTicket("))
@@ -3630,9 +3636,8 @@ describe("clientes en columnas", () => {
     assert.match(beta, /id="cli-registro"/);
     assert.match(beta, /data-cli-sort/);
     assert.match(beta, /hasOwnProperty.call\(c, "telefono"\)/);
-    assert.match(beta, /beta-screens\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);  });
-});
+    assert.match(beta, /beta-screens\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);  });});
 
 describe("tickets v2 y código de clienta", () => {
   it("C-00001 sale de la fila del registro y es estable", async () => {
@@ -3678,7 +3683,7 @@ describe("compras flujo", () => {
       { id: "t-viejo", beta_num: "TK-VIEJO", timestamp: "2026-10-02T15:00:00Z", ht_002: 1 },
       { id: "t-nuevo", beta_num: "TK-NUEVO", timestamp: "2026-10-20T15:00:00Z", ht_002: 1 },
     ]);
-    const c = ctx(db);
+    const c = ctx(db, "super_admin", "efch", "EFCH");
     const per = await handle("compras_periodo", {
       token: c.token, proveedor_id: SEED_IDS.prov, desde: "2026-10-01", hasta: "2026-10-31",
     }, c) as Row;
@@ -3761,7 +3766,7 @@ describe("compras flujo", () => {
       { id: "fuera", beta_num: "TK-FUERA", timestamp: "2026-10-20T15:00:00Z", ht_002: 1 },
     );
     db.tables.set("tickets", tickets);
-    const c = ctx(db);
+    const c = ctx(db, "super_admin", "efch", "EFCH");
     const draft = await handle("compras_guardar", {
       token: c.token, proveedor_id: SEED_IDS.prov, desde: "2026-10-01", hasta: "2026-10-15",
       lineas: [{ sku: "HT-002", cantidad: 2, precio: 8 }],
@@ -3848,7 +3853,7 @@ describe("compras flujo", () => {
 
   it("guardar escribe la cabecera antes que las líneas y la base falsa exige esa FK", async () => {
     const db = new OcFkDb(erpSeed());
-    const c = ctx(db);
+    const c = ctx(db, "super_admin", "efch", "EFCH");
     await assert.rejects(
       () => db.write("emi", "erp_oc_lineas", "insert", {}, { id: "huerfana", oc_id: "oc-ausente", cantidad: 1, precio: 8 }),
       /erp_oc_lineas_oc_id_fkey/,
@@ -3955,7 +3960,7 @@ describe("compras flujo", () => {
       numorden: "OC-2026-0079", proveedor: "Hebetronic S.A.", fecha: "2026-10-02",
       json: { fact: [{ sku: "HT-002", nombre: "Crema", vendido: 2, compra: 10 }] },
     }]);
-    const c = ctx(db);
+    const c = ctx(db, "super_admin", "efch", "EFCH");
     const lista = await handle("compras_lista", { token: c.token }, c) as Row;
     const oc = (lista.items as Row[]).find((r) => r.numero === "OC-2026-0079");
     assert.equal(oc?.subtotal, 20);
@@ -4239,14 +4244,12 @@ describe("TK46 maestro-detalle tickets estilo MineCore", () => {
     assert.match(js, /#\/m\/tickets\/t\//);
     assert.match(js, /interceptDraw/);
     assert.match(js, /renderTickets/);
-    assert.match(beta, /mc-maestro\.js\?v=20261119tk116/);
-    assert.match(beta, /\.ss-md-list \{[^}]*width: 250px/);
+    assert.match(beta, /mc-maestro\.js\?v=20261119tk115/);    assert.match(beta, /\.ss-md-list \{[^}]*width: 250px/);
     assert.match(beta, /@media \(max-width: 860px\)[\s\S]*\.ss-md-list \{ display: none/);
     assert.match(beta, /MCMaestro\.interceptDraw/);
     assert.match(beta, /MCMaestro\.render\("tickets"/);
     assert.match(sw, /\/mc-maestro\.js/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.match(tk, /isDirty:\s*function/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.match(tk, /isDirty:\s*function/);
     const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
     g.window = g.window || g;
     g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
@@ -4307,9 +4310,8 @@ describe("TK50 maestro-detalle clientas y proveedores", () => {
     assert.match(beta, /function wireProveedoresDetalle/);
     assert.match(cli, /ensureList/);
     assert.match(cli, /isDirty:/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.match(beta, /mc-maestro\.js\?v=20261119tk116/);    const g = globalThis as { window?: Record<string, unknown>; document?: unknown };
-    g.window = g.window || g;
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);
+    assert.match(beta, /mc-maestro\.js\?v=20261119tk115/);    const g = globalThis as { window?: Record<string, unknown>; document?: unknown };    g.window = g.window || g;
     g.document = g.document || { getElementById() { return null; }, querySelector() { return null; } };
     assert.doesNotThrow(() => new Function("window", "document", js)(g.window, g.document));
     const w = g.window as {
@@ -4369,9 +4371,8 @@ describe("TK51 maestro-detalle en listas con búsqueda", () => {
     assert.match(beta, /MCMaestro\.which\(route\)/);
     assert.match(beta, /#\/m\/cotizaciones_cliente\/c\//);
     assert.match(beta, /soloFicha/);
-    assert.match(beta, /mc-maestro\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
-    assert.match(prod, /ensureList/);
+    assert.match(beta, /mc-maestro\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    assert.match(prod, /ensureList/);
     assert.match(prod, /isDirty:/);
     assert.match(oc, /mcoc-cot-body/);
     assert.match(oc, /ensureList/);
@@ -4434,9 +4435,8 @@ describe("TK54 agenda horas 12h y vistas Lista / Día / Semana / Mes", () => {
     assert.match(js, /mcag-bl/);
     assert.match(js, /hora12/);
     assert.match(js, /function hora\(iso\) \{ return hora12\(hm24\(iso\)\); \}/);
-    assert.match(beta, /mc-agenda\.js\?v=20261119tk116/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);    const g = globalThis as { window?: Record<string, unknown>; document?: unknown; localStorage?: { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void }; addEventListener?: () => void };
-    const store: Record<string, string> = {};
+    assert.match(beta, /mc-agenda\.js\?v=20261119tk115/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK115/);    const g = globalThis as { window?: Record<string, unknown>; document?: unknown; localStorage?: { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void }; addEventListener?: () => void };    const store: Record<string, string> = {};
     const ls = { getItem(k: string) { return store[k] || null; }, setItem(k: string, v: string) { store[k] = v; } };
     const doc = {
       getElementById() { return null; },

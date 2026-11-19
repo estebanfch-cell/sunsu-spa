@@ -108,6 +108,10 @@ describe("TK114 utilidad con costo real y precios congelados", () => {
     const vivo = await h("getCatalogoTabla");
     const serum = ((vivo.items as Row[]) || []).find((r) => String(r.sku).includes("HT-002"));
     assert.equal(Number(serum?.subtotal), 40);
-    assert.equal(Number(serum?.compraReal), 1);
+    assert.equal(serum?.compraReal, undefined);
+    const mega = ctx(db, "super_admin", "efch", "EFCH");
+    const vivoMega = await handle("getCatalogoTabla", { token: mega.token }, mega) as Row;
+    const serumMega = ((vivoMega.items as Row[]) || []).find((r) => String(r.sku).includes("HT-002"));
+    assert.equal(Number(serumMega?.compraReal), 1);
   });
 });

@@ -77,7 +77,7 @@ describe("permisos por usuario (MineCore perm.ts)", () => {
     const m = await matrizDe(conPermisosUsuario(db, "recepcion", o));
     assert.equal(acceso("recepcion", "caja", m), "no");
     assert.equal(acceso("recepcion", "compras", m), "propio");
-    assert.equal(acceso("recepcion", "ver_costos", m), "todos");
+    assert.equal(acceso("recepcion", "ver_costos", m), "no"); // TK115: ni el flag costos otorga ver_costos
     assert.equal(acceso("cosmetologa", "tickets", m), "propio");
   });
   it("uperm: solo admin edita; el cambio llega a whoami, al candado y al login; admin no lleva override", async () => {

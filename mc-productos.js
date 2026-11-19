@@ -297,7 +297,7 @@
       (MC.admin ? colsPanelHtml() : "") +
       (MC.admin && (MC.eliminadosN || MC.verElim) ? '<p><button class="btn ghost small" type="button" id="mcp-elim">' + (MC.verElim ? "← Volver a productos" : "Eliminados (" + MC.eliminadosN + ")") + "</button>" + (MC.verElim ? ' <span class="mcp-sub">Productos eliminados: elige y restaura.</span>' : "") + "</p>" : "") +
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
-      ((MC.verCostos || MC.admin) && (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length ? '<p class="falta-costo-banner">' + (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length + ' productos sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>' : '') +
+      (MC.verCostos && (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length ? '<p class="falta-costo-banner">' + (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length + ' productos sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>' : '') +
       '<div class="mcp-count" id="mcp-count"></div>' +
       '<div class="sheet-scroll"><table class="mcp-tbl mob-no"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
       '<p class="note">Una sola lista: catálogo, Cabina y productos unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
@@ -685,7 +685,7 @@
           '<div class="mcp-pr"><span>Compra para comisiones' + badge("compraComision") + '<br><span class="mcp-ref">entra solo a la comisión' + (pr.compraComisionCatalogo != null && ed.indexOf("compraComision") >= 0 ? " · sistema " + $m(pr.compraComisionCatalogo) : "") + "</span></span>" + V("beta_compra_comision") + "</div>";
       }
       var cv = calcVivo();
-      if (MC.admin) right += '<div class="mcp-pr"><span>Comisión por unidad<br><span class="mcp-ref">30 % × (precio sin IVA − compra para comisiones; si no hay, compra real)</span></span><b id="mcp-cv-com">' + (cv.com != null ? $m(cv.com) : "—") + "</b></div>";
+      if (MC.verCostos) right += '<div class="mcp-pr"><span>Comisión por unidad<br><span class="mcp-ref">30 % × (precio sin IVA − compra para comisiones; si no hay, compra real)</span></span><b id="mcp-cv-com">' + (cv.com != null ? $m(cv.com) : "—") + "</b></div>";
       if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad<br><span class="mcp-ref">venta s/IVA − costo real − comisión</span></span><b id="mcp-cv-util">' + (cv.faltaCosto ? '<span class="falta-costo">Falta costo</span>' : (cv.util != null ? $m(cv.util) + ' <span class="mcp-ref">' + q2(cv.margen) + " %</span>" : "—")) + "</b></div>";
       if (MC.verCostos) right += '<div class="mcp-pr"><span>Costo promedio<br><span class="mcp-ref">ponderado de las compras registradas; sin compras, la compra real' + (r.costoPromedio != null ? " · ERP " + $m(r.costoPromedio) : "") + "</span></span><b id=\"mcp-cv-prom\">" + (cv.prom != null ? $m(cv.prom) : "—") + "</b></div>";
     } else {
