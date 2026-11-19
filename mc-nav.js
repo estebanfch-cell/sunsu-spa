@@ -50,13 +50,14 @@
       ] },
       { id: "inventario", label: "Inventario", items: [
         ["productos", "Productos", "#/m/productos"],
-        ["inventario", "Stock Venta", "#/m/inventario/venta"],
-        ["inventario", "Stock Cabina", "#/m/inventario/cabina"],
-        ["productos", "Códigos de barras", "#/m/barras"],
+        // TK108 (Emilia 18/11): el personal solo ve Productos y Conteo físico.
+        ["admin", "Stock Venta", "#/m/inventario/venta"],
+        ["admin", "Stock Cabina", "#/m/inventario/cabina"],
+        ["admin", "Códigos de barras", "#/m/barras"],
         // Reorden y Stock actual fuera del menú (Emilia 17/11); las rutas siguen existiendo.
-        ["conteos", "Conteos físicos", "#/m/conteos"],
-        ["transferencias", "Transferencias", "#/m/transferencias"],
-        ["ajuste", "Ajustes de stock", "#/m/ajustes"],
+        ["productos|conteos", "Conteo físico", "#/m/conteos"],
+        ["admin", "Transferencias", "#/m/transferencias"],
+        ["admin", "Ajustes de stock", "#/m/ajustes"],
         ["ver_costos", "Costo por facial", "#/m/aperturas/costo"],
         // Kardex, Locales y cabinas y Catálogo anterior fuera del menú (Emilia 17/11); el historial y los
         // movimientos están en la ficha de cada producto. Las rutas siguen existiendo.

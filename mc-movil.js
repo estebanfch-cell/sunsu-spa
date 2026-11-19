@@ -35,7 +35,7 @@
     if (!movil()) { for (var i = 0; i < T.length; i++) T[i].classList.remove("mob-stack"); return; }
     for (var k = 0; k < T.length; k++) {
       var t = T[k];
-      if (t.classList.contains("mob-no") || t.closest(".mob-table,.doc-print,#mcpv")) continue;
+      if (t.classList.contains("mob-no") || t.classList.contains("mcp-tbl") || t.closest(".mob-table,.doc-print,#mcpv")) continue;
       if (t.offsetParent === null && !t.classList.contains("mob-stack")) continue;
       if (t.classList.contains("mob-stack")) { apilar(t); continue; } // filas nuevas: ponerles etiqueta
       if (!cabe(t)) apilar(t);

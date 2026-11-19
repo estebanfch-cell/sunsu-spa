@@ -82,9 +82,9 @@ describe("transferencias beta", () => {
     const { db, h } = semilla();
     assert.match(String((await h("trfb_list", "rec")).error), /permiso/);
     const r = await h("trfb_save", "cos", { origen: "OFICINA", destino: "CABINA", lineas: [{ producto_id: "p2", cantidad: 1 }] });
-    assert.match(String(r.error), /Solo un admin/);
+    assert.match(String(r.error), /permiso|admin/i);
     const ok = await h("trfb_save", "cos", { origen: "OFICINA", destino: "CONSIGNACION", lineas: [{ producto_id: "p2", cantidad: 1 }] });
-    assert.equal(ok.numero, "TR-001");
+    assert.match(String(ok.error), /permiso|admin/i); // TK108: el personal no transfiere stock
     const a = await h("trfb_save", "adm", { origen: "OFICINA", destino: "CABINA", lineas: [{ producto_id: "p2", cantidad: 1 }], enviar: true });
     assert.equal(a.estado, "enviada");
     assert.equal((await h("trfb_estado", "adm", { id: a.id, que: "cancelar", motivo: "error" })).ok, true);
