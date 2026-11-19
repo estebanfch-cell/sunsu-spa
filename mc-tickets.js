@@ -87,15 +87,15 @@
       ".mctk-ln.canje_ok{background:#f7faf8;border-left:3px solid #b7d9c6;border-radius:0}" +
       ".mctk-ln .mctk-li,.mctk-ln .mctk-nums,.mctk-ln .mctk-lx,.mctk-lacts{display:none!important}" +
       ".mctk-ln>.mctk-ph,.mctk-ln>.mctk-ini,.mctk-ln>.mctk-badge{grid-column:1;grid-row:1 / span 3;align-self:start;margin-top:1px}" +
-      ".mctk-r1{grid-column:2;grid-row:1;display:flex;align-items:baseline;gap:3px;min-width:0;padding-right:16px}" +
+      ".mctk-r1{grid-column:2;grid-row:1;display:flex;align-items:flex-start;gap:3px;min-width:0;padding-right:16px}" +
       ".mctk-ph,.mctk-ini,.mctk-badge{width:28px;height:28px;border-radius:6px;flex:none;object-fit:cover;border:1px solid var(--cream-d);box-sizing:border-box}" +
       ".mctk-ini,.mctk-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#F5F0E8);color:var(--navy-d);font-weight:800;font-size:.68rem}" +
       ".mctk-badge-F{background:#e8f0f8;color:#3D5A7A}.mctk-badge-E{background:#f3eee4;color:#7A5C12}.mctk-badge-P{background:#ece8f6;color:#5A4A8A}.mctk-badge-G{background:#f6efe0;color:#8A6D1F}" +
-      ".mctk-pn{display:block;flex:1;min-width:0;font-weight:700;font-size:.8rem;color:var(--navy-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}" +
+      ".mctk-pn{display:block;flex:1;min-width:0;font-weight:700;font-size:.8rem;color:var(--navy-d);white-space:normal;overflow:visible;overflow-wrap:break-word;word-break:break-word;line-height:1.3}" +
       ".mctk-irp{display:inline!important;margin-left:3px!important;padding:0!important;border:0!important;background:none!important;line-height:inherit!important;font-size:.78rem;color:var(--gold,#C4943A);text-decoration:none;font-weight:700;white-space:nowrap;vertical-align:baseline;border-radius:0}" +
-      ".mctk-x{position:absolute;top:4px;right:4px;border:0;background:none;color:#9a9488;font-size:.78rem;line-height:1;padding:2px 5px;cursor:pointer;border-radius:4px;font-weight:500}" +
+      ".mctk-x{position:absolute;top:4px;right:4px;border:0;background:none;color:#9a9488;font-size:.78rem;line-height:1;padding:2px 5px;cursor:pointer;border-radius:4px;font-weight:500;flex-shrink:0;align-self:flex-start}" +
       ".mctk-x:hover{color:#B2452A;background:var(--cream)}" +
-      ".mctk-meta,.mctk-sku,.mctk-stk{grid-column:2;font-size:11px;color:var(--gray);padding-left:0;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      ".mctk-meta,.mctk-sku,.mctk-stk{grid-column:2;font-size:11px;color:var(--gray);padding-left:0;line-height:1.3;white-space:normal;overflow:visible;overflow-wrap:break-word;min-width:0}" +
       ".mctk-stk-ok{color:#2e9e4f;font-weight:700}.mctk-stk-0{color:#d9534f;font-weight:700}" +
       ".mctk-r4{grid-column:2;grid-row:3;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-left:0;padding-top:0;margin-top:1px;width:100%;box-sizing:border-box;min-width:0;line-height:1.2}" +
       ".mctk-qx{font-size:.78rem;color:var(--navy-d);overflow-wrap:anywhere;min-width:0;line-height:1.2}" +
@@ -280,6 +280,24 @@
     return null;
   }
   function claveDeFila(t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }
+  function cacheLineasClave(clave, lineas) {
+    var k = String(clave || "");
+    if (!k || !lineas || !lineas.length) return;
+    window._tkLineasCache = window._tkLineasCache || {};
+    window._tkLineasCache[k] = lineas;
+  }
+  function cacheLineasLista(items) {
+    (items || []).forEach(function (it) {
+      cacheLineasClave(claveDeFila(it) || it.clave, it.lineas);
+    });
+  }
+  function lineasCacheDe(clave) {
+    var k = String(clave || "");
+    if (window._tkLineasCache && window._tkLineasCache[k] && window._tkLineasCache[k].length) return window._tkLineasCache[k];
+    var t = filaDeLista(k);
+    if (t && t.lineas && t.lineas.length) return t.lineas;
+    return null;
+  }
   function chipsDesdeLista(t) {
     var out = [], L = (window._tkLeds || {})[String(t && t.tkRow)] || {}, orig = (t && t.orig) || {};
     try { if (typeof _tkEstados === "function") out = _tkEstados(t).map(function (c) { return { k: (c.t || "").toLowerCase(), t: c.t, c: c.c }; }); } catch (x) { out = []; }
@@ -302,9 +320,11 @@
   function previewDe(clave) {
     var k = String(clave || ""), d, raw, t;
     if (window._tkVista && window._tkVista[k] && window._tkVista[k].ok) {
-      try { return JSON.parse(JSON.stringify(window._tkVista[k])); } catch (x) { return window._tkVista[k]; }
+      try { d = JSON.parse(JSON.stringify(window._tkVista[k])); } catch (x) { d = window._tkVista[k]; }
+      if (d && !(d.lineas && d.lineas.length)) { var c0 = lineasCacheDe(k); if (c0) d.lineas = c0; }
+      return d;
     }
-    try { raw = sessionStorage.getItem("sunsu.tk." + k); if (raw) { d = JSON.parse(raw); if (d && d.ok) return d; } } catch (x) {}
+    try { raw = sessionStorage.getItem("sunsu.tk." + k); if (raw) { d = JSON.parse(raw); if (d && d.ok) { if (!(d.lineas && d.lineas.length)) { var c1 = lineasCacheDe(k); if (c1) d.lineas = c1; } return d; } } } catch (x) {}
     t = filaDeLista(k);
     return t ? sintetizar(t, k) : null;
   }
@@ -318,7 +338,7 @@
       ok: true, clave: clave, hidratando: true, admin: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin")),
       ticket: { clave: clave, id: t.id || null, soNum: t.so_num || "", betaNum: t.beta_num || "", sheetRow: t.tkRow || t.sheet_row || null, fecha: t.fecha || "", hora: t.hora || "", nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", cobradoSistema: tot, factura: fac, notas: t.notas || t.notas_generales || "", cancelado: (t.anulado || (t.orig && t.orig.anulado)) ? { motivo: (t.orig && t.orig.cancelado_motivo) || "", por: (t.orig && t.orig.cancelado_por) || "", ts: (t.orig && t.orig.cancelado_ts) || "" } : null },
       info: { factura: fac, nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", notas: t.notas || t.notas_generales || "", local: t.local || "Sunsu Spa", fecha: t.fecha || "", hora: t.hora || "", orden: t.id || null, cabina: t.cabina || "", retorno: t.retorno || t.fecha_retorno || "", recomendaciones: t.recomendaciones || "" },
-      lineas: [], totales: { subtotal: tot / 1.15, iva: tot - tot / 1.15, total: tot },
+      lineas: lineasCacheDe(clave) || t.lineas || [], totales: { subtotal: tot / 1.15, iva: tot - tot / 1.15, total: tot },
       descuento: { tipo: null, valor: 0 }, promo: "", pagos: { metodos: forma ? [{ metodo: forma }] : [], cobrado: pagado, total: tot, pagado: pagado ? tot : 0, saldo: pagado ? 0 : tot },
       chips: chipsDesdeLista(t), documentos: [], faltan: (L.falta && L.falta.length) ? L.falta : [], flags: L.flag ? [{ id: "", motivo: L.flag }] : [], reagendada: { si: !!L.g, cita: "", fuente: "" },
       puedeEditar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado), puedePedir: !(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin")), puedeCancelar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado),
@@ -330,6 +350,7 @@
     if (!d || !d.ok || !d.clave) return;
     window._tkVista = window._tkVista || {};
     window._tkVista[d.clave] = d;
+    if (d.lineas && d.lineas.length) cacheLineasClave(d.clave, d.lineas);
     try {
       var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento, edicion: d.edicion };
       sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
@@ -725,7 +746,7 @@
       accionesHtml() + edicionHtml() +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
-      (d.hidratando ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
+      (d.hidratando && !(K.L && K.L.length) ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
       '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Sin factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + estadosHtml() + "</div>" +
       '<details class="mctk-det"' + (esMovilTk() ? "" : " open") + '><summary>Detalles</summary><div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
@@ -1438,7 +1459,7 @@
   window.MCTickets = {
     render: function (route) { return render(String(route.id)); },
     wire: wire,
-    claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); },
+    claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }, cacheLineasLista: cacheLineasLista, lineasCacheDe: lineasCacheDe,
     isDirty: function () { return !!K.dirty; },
     _k: K, _calc: calc,
   };

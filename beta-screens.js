@@ -5514,6 +5514,7 @@ function _tkPedir(q, mas){
     var items=r.items||[];
     window._tkLeds=window._tkLeds||{};
     items.forEach(function(it){ if(it.led) window._tkLeds[String(it.tkRow)]=it.led; });
+    if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function') window.MCTickets.cacheLineasLista(items);
     _histData=mas?(window._histData||[]).concat(items):items; window._histData=_histData;
     window._tkTot={total:r.total, suma:r.suma, hayMas:r.hayMas};
     window._tkLim=_histData.length;
