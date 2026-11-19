@@ -179,6 +179,16 @@
     padding: 8px 14px; font-weight: 800; font-size: 0.84rem; color: var(--navy-d);
   }
   .aviso-reloj[hidden] { display: none !important; }
+  #sunsu-nueva-ver {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 10000;
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    background: var(--navy, #153A5F); color: #fff; font-weight: 800; font-size: 0.86rem;
+    padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
+    box-sizing: border-box;
+  }
+  #sunsu-nueva-ver[hidden] { display: none !important; }
+  #sunsu-nueva-ver button { min-height: 32px; padding: 4px 12px; border: 0; border-radius: 8px;
+    background: #E8B84A; color: var(--navy, #153A5F); font-weight: 800; cursor: pointer; }
   .aviso-reloj.entrada { background: #E7F6EE; }
   .aviso-reloj.salida { background: #FDECEC; }
   .hor-dia { display: grid; grid-template-columns: 70px 22px 1fr 1fr; gap: 4px; align-items: center; margin: 0 0 4px; font-size: 0.82rem; }
@@ -1958,6 +1968,13 @@ function applySession(data) {
   state.prueba = !!data.modo_prueba;
 }
 
+function rutaRetiradaAProductos(route) {
+  // TK123: Stock Venta, Stock Cabina y la pantalla suelta de códigos ya no están en el menú.
+  if (!route || route.kind !== "mod") return false;
+  if (route.mod === "barras") return true;
+  if (route.mod === "inventario" && (route.sub === "venta" || route.sub === "cabina")) return true;
+  return false;
+}
 function parseRoute() {
   const raw = (location.hash.replace(/^#/, "") || "/m/inicio");
   const path = raw.split("?")[0];
@@ -2739,6 +2756,10 @@ async function draw() {
   }
   await asegurarLugares();
   const route = parseRoute();
+  if (rutaRetiradaAProductos(route)) {
+    if ((location.hash || "").split("?")[0] !== "#/m/productos") location.replace("#/m/productos");
+    return;
+  }
   window._esCotizacion = route.kind === "doc" && route.doc === "cot" && !route.id;
   const tab = pantallaSunsu(route);
   const title0 = tituloRuta(route, tab);
@@ -3288,9 +3309,8 @@ function stockTotal(p) {
   return Object.keys(b).reduce((a, k) => a + (Number(b[k]) || 0), 0);
 }
 function inventarioSubtabs(activa) {
-  const btn = (id, hash, label) => `<button class="btn ${activa === id ? "" : "ghost"} small" type="button" data-go="${hash}">${label}</button>`;
-  if (!state.admin) return "";
-  return `<div class="inv-subs" role="tablist">${btn("lista", "#/m/inventario", "Inventario")}${btn("venta", "#/m/inventario/venta", "Stock Venta")}${btn("cabina", "#/m/inventario/cabina", "Stock Cabina")}</div>`;
+  // TK123: las pestañas de stock por bodega salieron del menú; las rutas van a Productos.
+  return "";
 }
 async function renderInventarioLista() {
   const data = await api("prod_list");
@@ -4717,7 +4737,7 @@ async function activarPush() {
   if (perm !== "granted") return;
   const clave = await api("push_clave");
   if (!clave || !clave.publicKey) return;
-  const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => null);
+  const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => null);
   if (!reg || !reg.pushManager) return;
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(clave.publicKey) });
   const json = sub.toJSON();
@@ -7285,16 +7305,49 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK123";
+function mostrarNuevaVersion() {
+  var el = document.getElementById("sunsu-nueva-ver");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "sunsu-nueva-ver";
+    el.setAttribute("role", "status");
+    el.innerHTML = "<span>Nueva versión</span><button type=\"button\" id=\"sunsu-nueva-ver-btn\">Actualizar</button>";
+    document.body.appendChild(el);
+    el.querySelector("button").onclick = function () {
+      try { sessionStorage.setItem("sunsu.reload." + (window.SUNSU_CACHE || ""), "1"); } catch (e) {}
+      location.reload();
+    };
+  }
+  el.hidden = false;
+}
+function revisarVersionServidor() {
+  var local = window.SUNSU_CACHE || "";
+  fetch("/sw.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (txt) {
+    var m = txt.match(/const CACHE = "([^"]+)"/);
+    if (!m || !local || m[1] === local) return;
+    var clave = "sunsu.reload." + m[1];
+    try {
+      if (!sessionStorage.getItem(clave)) {
+        sessionStorage.setItem(clave, "1");
+        location.reload();
+        return;
+      }
+    } catch (e) {}
+    mostrarNuevaVersion();
+  }).catch(function () {});
+}
 if ("serviceWorker" in navigator && !local) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    for (const reg of regs) {
-      let path = "/";
-      try { path = new URL(reg.scope).pathname || "/"; } catch { path = "/"; }
-      const script = (reg.active && reg.active.scriptURL) || (reg.waiting && reg.waiting.scriptURL) || (reg.installing && reg.installing.scriptURL) || "";
-      if ((path === "/" || path === "") && script.indexOf("/sw.js") >= 0) reg.unregister();
-    }
-  }).catch(() => {});
-  navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
+  navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(function (reg) {
+    try { reg.update(); } catch (e) {}
+    setInterval(function () { try { reg.update(); } catch (e) {} }, 60000);
+  }).catch(function () {});
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (window._sunsuSwReloaded) return;
+    window._sunsuSwReloaded = true;
+    location.reload();
+  });
+  revisarVersionServidor();
 }
 </script>
 <script src="mc-buscar.js?v=20261119tk123"></script>

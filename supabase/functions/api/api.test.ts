@@ -1402,8 +1402,9 @@ describe("beta shell", () => {
     assert.match(html, /max-width:\s*none/);
     assert.match(html, /class="tabbar"/);
     assert.match(html, /tabButton\("spa", "Spa"\)/);
-    assert.match(html, /Stock Venta/);
-    assert.match(html, /Stock Cabina/);
+    assert.match(html, /rutaRetiradaAProductos/);
+    assert.doesNotMatch(html, /data-go="#\/m\/inventario\/venta"/);
+    assert.doesNotMatch(html, /data-go="#\/m\/inventario\/cabina"/);
     assert.match(html, /La Esquina/);
     assert.match(html, /Cabina 1/);
     assert.match(html, /id="local-sel"/);

@@ -2,31 +2,13 @@ const CACHE = "sunsu-beta-2026-11-19-TK123";
 const FILES = ["/beta.html", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
   "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
 
-function scopePath() {
-  try { return new URL(self.registration.scope).pathname || "/"; } catch { return "/"; }
-}
-
-function rootScope() {
-  const path = scopePath();
-  return path === "/" || path === "";
-}
-
 self.addEventListener("install", (event) => {
-  if (rootScope()) {
-    event.waitUntil(self.skipWaiting());
-    return;
-  }
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    if (rootScope()) {
-      await Promise.all(keys.filter((key) => key.startsWith("sunsu-beta")).map((key) => caches.delete(key)));
-      await self.registration.unregister();
-      return;
-    }
     await Promise.all(keys.filter((key) => key.startsWith("sunsu-beta") && key !== CACHE).map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
@@ -55,7 +37,6 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (rootScope()) return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   if (url.pathname.startsWith("/functions/") || url.pathname === "/sw.js") return;
