@@ -251,7 +251,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
         { k: "cob", t: estaCobrado(r) ? "Cobrado" : "Por cobrar", c: estaCobrado(r) ? "ok" : "r" },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
         ...(exclBeta || Object.values(exclSistema).some(Boolean) ? [{ k: "com", t: "Comisión excluida", c: "r" }] : []),
-        ...(cab ? [{ k: "beta", t: "Editado en la beta", c: "a" }] : []),
+        ...(cab ? [{ k: "beta", t: "Editado", c: "a" }] : []),
       ],
     },
     lineas: calc.lineas, totales: { sumaLineas: calc.sumaLineas, promo: calc.promoMonto, descuento: calc.descuentoMonto, descuentoTotal: calc.descuentoTotal, subtotal: calc.subtotal, iva: calc.iva, total: calc.total },

@@ -205,7 +205,7 @@
     if (d.error) return '<p class="err">' + e(d.error) + "</p>";
     var h = '<div class="mccj"><h2>💵 Caja chica</h2><p class="mccj-sub">Efectivo de la oficina: ingresos, gastos, propinas, depósitos y cuadre. El efectivo de los tickets entra solo cuando se registra el pago. <a href="#/m/caja/pagos">Ver pagos recibidos →</a></p>';
     if (!d.iniciada) {
-      return h + '<div class="mccj-card"><b>La caja de la beta todavía no está abierta.</b>' + (d.hoja ? '<p class="mccj-sub">La caja de la hoja tiene ' + $m(d.hoja.saldo) + " (último movimiento " + e(d.hoja.fecha) + ").</p>" : "") +
+      return h + '<div class="mccj-card"><b>La caja todavía no está abierta.</b>' + (d.hoja ? '<p class="mccj-sub">La caja de la hoja tiene ' + $m(d.hoja.saldo) + " (último movimiento " + e(d.hoja.fecha) + ").</p>" : "") +
         (d.admin ? '<div class="mccj-acts">' + (d.hoja ? '<button class="btn" type="button" id="cj-abrir-hoja">Abrir con el saldo de la hoja (' + $m(d.hoja.saldo) + ")</button>" : "") + '<button class="btn ghost" type="button" id="cj-abrir">Abrir con otro monto</button></div>' : '<p class="mccj-sub">Pídele a un admin que la abra.</p>') + "</div></div>";
     }
     var tot = (d.porTipo || []).map(function (x) { return "<span>" + e(x.etiqueta) + "<b>" + (x.entrada ? '<span class="mccj-in">+' + $m(x.entrada) + "</span> " : "") + (x.salida ? '<span class="mccj-out">−' + $m(x.salida) + "</span>" : "") + "</b></span>"; }).join("");
@@ -244,7 +244,7 @@
   function wireCaja(main) {
     wireRango(main, repCaja);
     var ah = main.querySelector("#cj-abrir-hoja");
-    if (ah) ah.onclick = async function () { if (!confirm("¿Abrir la caja de la beta con " + $m(K.d.hoja.saldo) + "?")) return; var r = await api("cj_iniciar", { desdeHoja: true }); if (!r || !r.ok) { toast2((r && r.error) || "No se pudo", 1); return; } toast2("Caja abierta"); repCaja(main); };
+    if (ah) ah.onclick = async function () { if (!confirm("¿Abrir la caja con " + $m(K.d.hoja.saldo) + "?")) return; var r = await api("cj_iniciar", { desdeHoja: true }); if (!r || !r.ok) { toast2((r && r.error) || "No se pudo", 1); return; } toast2("Caja abierta"); repCaja(main); };
     var ab = main.querySelector("#cj-abrir");
     if (ab) ab.onclick = function () {
       modal("<h3 style='margin:0 0 8px'>Abrir caja</h3><div class='mccj-f'><label>Monto inicial<input id='ca-m' inputmode='decimal'></label><label>Detalle<input id='ca-d' placeholder='Conteo físico de hoy'></label></div>", async function (ov) {
@@ -286,11 +286,11 @@
     if (!d) return '<p class="mccj-sub">Cargando…</p>';
     if (d.error) return '<p class="err">' + e(d.error) + "</p>";
     var E = d.etiquetas || {};
-    return '<div class="mccj"><h2>💳 Pagos recibidos</h2><p class="mccj-sub">Cobros de tickets por forma de pago: los registrados en la beta y los cobrados en el sistema anterior. <a href="#/m/caja">← Caja chica</a></p>' +
+    return '<div class="mccj"><h2>💳 Pagos recibidos</h2><p class="mccj-sub">Cobros de tickets por forma de pago: los registrados en la app y los cobrados en el sistema anterior. <a href="#/m/caja">← Caja chica</a></p>' +
       '<div class="mccj-card">' + chipsHtml() + '<div class="mccj-tot">' + (d.totales || []).map(function (x) { return "<span>" + e(x.nombre) + "<b>" + $m(x.total) + "</b></span>"; }).join("") + "<span>Total<b>" + $m(d.total) + "</b></span></div>" +
       ((d.items || []).length ? '<table class="mccj-t" style="margin-top:8px"><thead><tr><th>Fecha</th><th>Ticket</th><th>Forma</th><th class="num">Monto</th><th>Quién</th><th></th></tr></thead><tbody>' +
         d.items.map(function (x) {
-          return '<tr class="' + (x.anulado ? "anul" : "") + '"><td>' + e(fh(x.fecha)) + '</td><td><a href="#/m/tickets/t/' + encodeURIComponent(x.clave) + '">' + e(x.clave) + "</a>" + (x.cliente ? '<br><span class="mccj-sub">' + e(x.cliente) + "</span>" : "") + "</td><td>" + e(E[x.metodo] || x.metodo) + (x.ref ? '<br><span class="mccj-sub">' + e(x.ref) + "</span>" : "") + '</td><td class="num">' + $m(x.monto) + "</td><td>" + e(x.por) + '</td><td class="mccj-keep"><span class="mccj-pill">' + (x.fuente === "beta" ? "beta" : "sistema anterior") + "</span>" + (x.anulado ? ' <span class="mccj-pill">anulado</span>' : "") + "</td></tr>";
+          return '<tr class="' + (x.anulado ? "anul" : "") + '"><td>' + e(fh(x.fecha)) + '</td><td><a href="#/m/tickets/t/' + encodeURIComponent(x.clave) + '">' + e(x.clave) + "</a>" + (x.cliente ? '<br><span class="mccj-sub">' + e(x.cliente) + "</span>" : "") + "</td><td>" + e(E[x.metodo] || x.metodo) + (x.ref ? '<br><span class="mccj-sub">' + e(x.ref) + "</span>" : "") + '</td><td class="num">' + $m(x.monto) + "</td><td>" + e(x.por) + '</td><td class="mccj-keep"><span class="mccj-pill">' + (x.fuente === "beta" ? "app" : "sistema anterior") + "</span>" + (x.anulado ? ' <span class="mccj-pill">anulado</span>' : "") + "</td></tr>";
         }).join("") + "</tbody></table>" : '<p class="mccj-sub">Sin pagos en estas fechas.</p>') + "</div></div>";
   }
   async function repPagos(main) { K.p = await api("pg_lista", { desde: K.desde, hasta: K.hasta }); var r = main.querySelector("#mccj-root"); if (r) { r.innerHTML = pagosHtml(); wireRango(main, repPagos); } }

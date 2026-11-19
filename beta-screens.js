@@ -112,7 +112,7 @@ function _lgPedirBaja(tabla,row,nombre){
   if(String(motivo).trim().length<3){ toast('Escribe el motivo','#B86B6B'); return; }
   Promise.resolve(window.api('solicitud_crear',{tabla:tabla,fila:String(row),tipo:'eliminacion',motivo:String(motivo).trim()})).then(function(r){
     if(!r||r.error){ toast('❌ '+((r&&r.error)||'No se pudo enviar'),'#B86B6B'); return; }
-    toast(r.prueba?'🧪 Solicitud de PRUEBA enviada a tu bandeja':'📨 Solicitud de eliminación enviada','var(--green)');
+    toast(r.prueba?'Solicitud de simulación enviada a tu bandeja':'📨 Solicitud de eliminación enviada','var(--green)');
   });
 }
 // ══════ USERS ══════

@@ -958,7 +958,7 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (action === "crearTicket" || action === "") return crearTicket(p, ctx, ses!);
 
   const fn = FNS[action];
-  if (!fn) return { error: "Acción no implementada en la beta: " + action, beta: true };
+  if (!fn) return { error: "Acción no implementada: " + action, beta: true };
   return fn(p, ctx, ses);
 }
 
@@ -1025,14 +1025,14 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   if (gate) return gate;
   if (action === "modo_prueba" || action === "prueba_borrar") {
     if (!ses0) return { error: "Inicia sesión" };
-    if (!esAdmin(ses0.rol)) return { error: "Solo un admin puede usar el modo prueba" };
+    if (!esAdmin(ses0.rol)) return { error: "Solo un admin puede usar la simulación" };
     const actor = actorOf(ses0);
     if (action === "prueba_borrar") return purgarPrueba(ctx.db, actor);
     const on = p.on === true || p.on === "true" || p.on === 1;
     const saved = await ctx.db.write(actor, "sesiones", "update", { token: ses0.token }, { modo_prueba: on });
     if (!saved) return { error: "Sesión no encontrada" };
-    if (on && saved.modo_prueba !== true) return { error: "Aplica 0016_modo_prueba.sql antes de usar el modo prueba" };
-    await logAccion(ctx.db, actor, on ? "MODO PRUEBA ON" : "MODO PRUEBA OFF", ses0.name);
+    if (on && saved.modo_prueba !== true) return { error: "Falta aplicar la migración 0016 antes de usar la simulación" };
+    await logAccion(ctx.db, actor, on ? "SIMULACIÓN ON" : "SIMULACIÓN OFF", ses0.name);
     return { ok: true, modo_prueba: on };
   }
   try {

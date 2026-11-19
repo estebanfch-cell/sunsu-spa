@@ -120,7 +120,7 @@ describe("TK73 empleados e IESS", () => {
     assert.equal(d.afiliada_iess, false);
 
     const doc = await handle("emp_doc_subir", { token: "t-prueba", nombre: "Daniela Mora", archivo: "data:text/plain;base64,Zg==", filename: "x.txt" }, c) as Row;
-    assert.match(String(doc.error), /Modo prueba/);
+    assert.match(String(doc.error), /simulación/i);
     assert.equal((db.tables.get("beta_empleado_docs") || []).length, 0);
   });
 

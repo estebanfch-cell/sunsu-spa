@@ -77,7 +77,7 @@ function clonarTramos(vigente: string, reglas: ReglaCom[]): ReglaCom[] {
 }
 
 function bloqueoConfig(ses: Ses): Row | null {
-  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
+  if (ses.prueba) return { error: "La simulación no cambia la configuración real" };
   return null;
 }
 
