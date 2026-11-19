@@ -37,6 +37,15 @@
       "#cc .st-pill.r,#mccf-root .st-pill.r{border-color:#5cc8ff;color:#5cc8ff}",
       "#cc .st-pill.ok,#mccf-root .st-pill.ok{border-color:#6fd68f;color:#6fd68f}",
       "#cc .cc-row,#mccf-root .cc-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}",
+      "#cc .cc-topbtns,#mccf-root .cc-topbtns{display:flex;gap:6px;align-items:stretch;margin:0 0 8px;flex-wrap:nowrap}",
+      "#cc .cc-topbtns .cbz-btn,#cc .cc-topbtns .chip,#mccf-root .cc-topbtns .cbz-btn,#mccf-root .cc-topbtns .chip{flex:1 1 0;min-width:0;white-space:normal;text-align:center;line-height:1.2;padding:7px 8px;font-size:12px;height:auto;min-height:40px;display:inline-flex;align-items:center;justify-content:center}",
+      /* Barra de abajo oscura en pantallas de conteo, como MineCore. */
+      "body:has(#cc) .tabbar,body:has(#mccf-root) .tabbar{background:#0d1722;border-top-color:#26405c;box-shadow:0 -4px 16px rgba(0,0,0,.35)}",
+      "body:has(#cc) .tab,body:has(#mccf-root) .tab{color:#8fa3b8}",
+      "body:has(#cc) .tab.on,body:has(#mccf-root) .tab.on,body:has(#cc) .tab.on span,body:has(#mccf-root) .tab.on span{color:#dce6f0}",
+      "body:has(#cc) .tab-plus,body:has(#mccf-root) .tab-plus{border-color:#0d1722}",
+      "body:has(#cc) .tab-more,body:has(#mccf-root) .tab-more{color:#8fa3b8}",
+      "body:has(#cc) .tab-more.on,body:has(#mccf-root) .tab-more.on{color:#b7f34a}",
       "#cc .cc-top,#mccf-root .cc-top{position:sticky;top:0;z-index:6;display:flex;gap:8px;align-items:center;background:#0b131c;padding:6px 0}",
       "#cc .cc-top input,#mccf-root .cc-top input{flex:1;min-width:0;height:40px;font-size:15px;background:#0b1219;border:1.5px solid #f0c040;color:#f2f6fa;border-radius:8px;padding:0 10px;box-sizing:border-box}",
       "#cc .cc-prog,#mccf-root .cc-prog{font-size:13px;white-space:nowrap;color:#c9d6e3}",
@@ -340,10 +349,10 @@
     return '<span class="st-pill ' + cls + '">' + e(nombre || est) + "</span>";
   }
   function topBtns() {
-    return '<div class="cc-row" style="margin-bottom:8px">' +
+    return '<div class="cc-topbtns">' +
       '<button class="cbz-btn" type="button" id="mccf-nuevo-g">＋ Nuevo conteo general</button>' +
       '<button class="chip" type="button" data-go="#/m/conteos/secciones">⚙ Secciones</button>' +
-      '<button class="chip" type="button" data-go="#/m/conteos/hojas">Hojas sueltas (antes)</button></div>';
+      '<button class="chip" type="button" data-go="#/m/conteos/hojas">📋 Hojas sueltas (antes)</button></div>';
   }
   async function renderLista() {
     var m = await meta();
@@ -362,10 +371,9 @@
     if (!g || g.error) return h + '<p class="err">' + e((g && g.error) || "No se pudo abrir el conteo") + "</p></div>";
     C.general = g;
     var c = g.conteo, SS = g.secciones || [], ap = Number(c.aprobadas) || 0, tot = Number(c.total) || SS.length;
-    h += '<div class="cbz-card"><div style="min-width:0"><b>' + e(c.numero) + '</b><div class="cc-gmeta">· Local · 👤 ' + e(c.asignadoNombre || "—") + "</div></div>" +
-      '<div class="cc-gstats"><span>Aprobadas <b>' + ap + "/" + tot + "</b>" + (c.porRevisar ? ' <span style="color:#5cc8ff">' + e(c.porRevisar) + " por revisar</span>" : "") + "</span>" +
-      (adm ? '<button class="chip" type="button" id="mccf-plan">📅 Plan del mes</button>' : "") + "</div>" +
-      (adm ? '<p class="cc-row" style="margin:8px 0 0"><button class="chip" type="button" id="mccf-reasig">👤 Reasignar</button><button class="chip" type="button" id="mccf-cancelar-g" style="color:#e05c5c">✕ Cancelar</button></p>' : "") +
+    h += '<div class="cbz-card"><div style="min-width:0"><b style="font-size:15px;white-space:nowrap">' + e(c.numero) + '</b><div class="cc-gmeta">· Local · 👤 ' + e(c.asignadoNombre || "—") + "</div></div>" +
+      '<div class="cc-row"><span style="white-space:nowrap;font-size:12.5px">Aprobadas <b>' + ap + "/" + tot + "</b>" + (c.porRevisar ? ' · <b style="color:#5cc8ff">' + e(c.porRevisar) + " por revisar</b>" : "") + "</span>" +
+      (adm ? '<button class="chip" type="button" id="mccf-plan">🗓 Plan del mes</button><button class="chip" type="button" id="mccf-reasig">👤 Reasignar</button><button class="chip" type="button" id="mccf-cancelar-g" style="color:#e05c5c">✕ Cancelar</button>' : "") + "</div>" +
       '<div class="cc-progbar"><i style="width:' + Math.round(100 * ap / Math.max(1, tot)) + '%"></i></div>' +
       (c.hoyToca ? '<div class="cc-hoy">📅 Hoy toca: <b>' + e(c.hoyToca) + "</b></div>" : "") +
       '<div class="cc-help">Toca una sección para abrirla (si está pendiente, se inicia sola). El inventario sigue vivo: el sistema toma el stock al iniciar la sección. Puedes guardar, salir y volver.</div></div>';
@@ -616,7 +624,7 @@
     return '<div id="cc"><div id="mccf-root"><div class="cc-secbar"><button class="chip" type="button" data-go="#/m/conteos/cf/' + e(d.conteo.id) + '">←</button>' +
       "<h2>" + e(s.nombre) + " " + pill(s.estado, s.estadoNombre) + "</h2>" +
       '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
-      '<div class="cc-top"><input id="mccf-f" type="search" placeholder="Escanea o busca código / nombre" value="' + e(C.filtro) + '">' +
+      '<div class="cc-top"><input id="mccf-f" type="search" placeholder="🔍 Escanea o busca código / nombre" value="' + e(C.filtro) + '">' +
       '<button class="cc-kb' + (C.pad ? " on" : "") + '" type="button" id="mccf-pad">123</button>' +
       '<span class="cc-prog"><b>' + e(nOk) + "</b>/" + e(s.lineas) + "</span>" +
       (can ? '<button class="cbz-btn cc-addbtn" type="button" id="mccf-agregar">＋ Agregar producto</button>' : "") + "</div>" +

@@ -182,6 +182,13 @@ describe("TK116 conteo general vivo como MineCore", () => {
     assert.match(js, /Nuevo conteo general/);
     assert.match(js, /Hojas sueltas \(antes\)/);
     assert.match(js, /inventario sigue vivo/);
+    assert.match(js, /cc-topbtns/);
+    assert.match(js, /Plan del mes/);
+    assert.match(js, /Reasignar/);
+    assert.match(js, /Cancelar/);
+    assert.match(js, /por revisar/);
+    assert.match(js, /🔍 Escanea o busca código \/ nombre/);
+    assert.match(js, /body:has\(#cc\) \.tabbar/);
     assert.match(js, /guardar, salir y volver/);
     assert.match(js, /esp\. /);
     assert.match(js, /Recontar: hubo movimientos durante el conteo/);
