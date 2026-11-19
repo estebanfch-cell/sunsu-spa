@@ -103,7 +103,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   conteo_plan: "conteos", conteo_crear: "conteos", conteo_asignar: "conteos", conteo_panel: "conteos", conteo_aprobar: "conteos",
   conteo_mios: "inicio", conteo_seccion: "inicio", conteo_guardar_sec: "inicio", conteo_cerrar_sec: "inicio", conteo_usuarios: "conteos",
   crearTicket: "tickets", ov_save: "tickets", ov_anular: "tickets", ov_list: "tickets", ov_get: "tickets",
-  getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones",
+  getDashCosm: "comisiones", getComisionesRol: "comisiones", getComisionRecepcion: "comisiones", comision_recepcion: "comisiones",
   getPeriodoComision: "comisiones", getReporteAdmin: "comisiones", getReporte: "comisiones",
   getComisionesTabla: "comisiones", getTramos: "comisiones", tramos_guardar: "comisiones",
   getRendimientoProductos: "ver_costos",
@@ -161,7 +161,7 @@ function esAccionCompras(action: string): boolean {
   return /^(oc_|compras_|cmpb_|rcp_|cns_|acta_|getEntradas|periodo_consignacion|oc_consignacion)/.test(action);
 }
 function esAccionNomina(action: string): boolean {
-  return /^(getComisiones|getDashCosm|getRol|getRoles|aprobarRol|getPeriodoComision|getComisionRecepcion|rol_)/.test(action);
+  return /^(getComisiones|getDashCosm|getRol|getRoles|aprobarRol|getPeriodoComision|getComisionRecepcion|comision_recepcion|rol_)/.test(action);
 }
 export function esClaveCosto(k: string, action = ""): boolean {
   const n = k.toLowerCase().replace(/[\s-]+/g, "_");
@@ -284,7 +284,7 @@ export function clampPersonal(action: string, p: Row, ses: SesLite | null, matri
     const x = String(p.nombre ?? p.cosmetologa ?? p.persona ?? "").trim();
     return x && enAlcancePersonas(x, ses) ? x : ses.name;
   };
-  if (propio("comisiones") && ["getDashCosm", "getComisionesRol", "getPeriodoComision", "getComisionRecepcion", "getComisionesTabla"].includes(action)) {
+  if (propio("comisiones") && ["getDashCosm", "getComisionesRol", "getPeriodoComision", "getComisionRecepcion", "comision_recepcion", "getComisionesTabla"].includes(action)) {
     const n = pedido();
     out.cosmetologa = n;
     out.nombre = n;
