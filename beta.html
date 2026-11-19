@@ -1472,7 +1472,7 @@ function previewApi(accion, body) {
       const propios = ["inicio", "tickets", "comisiones", "rol_pagos", "asistencia", "productos", "clientes", "inventario", "transferencias", "paquetes", "bitacora", "cabina", "conteos", "gift_cards", "caja"];
       return { ok: true, token: "preview", ver_costos: false, modo_prueba: false, modulos: propios.map((modulo) => ({ modulo, acceso: "propio" })), user: state.vista };
     }
-    return { ok: true, token: "preview", ver_costos: true, modo_prueba: !!state.prueba, modulos, user: { id: "emi", name: "Emilia", short: "Emi", role: "admin" } };
+    return { ok: true, token: "preview", ver_costos: false, modo_prueba: !!state.prueba, modulos, user: { id: "emi", name: "Emilia", short: "Emi", role: "admin" } };
   }
   if (accion === "modo_prueba") {
     state.prueba = !!body.on;
@@ -1949,12 +1949,12 @@ function applySession(data) {
   if (state.user && data.usuario) state.user.usuario = data.usuario;
   state.debe_cambiar = !!data.debe_cambiar;
   if (Object.prototype.hasOwnProperty.call(data, "debe_cambiar")) state.passOk = !data.debe_cambiar;
-  state.verCostos = !!data.ver_costos;
   state.acceso = {};
   for (const m of data.modulos || []) state.acceso[m.modulo] = m.acceso;
   const rol = state.user && state.user.role;
   state.admin = rol === "admin" || rol === "super_admin";
   state.mega = rol === "super_admin";
+  state.verCostos = state.mega && !!data.ver_costos;
   state.prueba = !!data.modo_prueba;
 }
 
@@ -2141,7 +2141,7 @@ function gruposVisibles() {
   const usados = new Set(["inicio", "comisiones", "rol_pagos", "asistencia", "paquetes", "gift_cards", "caja", "bitacora", "cabina", "usuarios", "permisos", "kardex", "transferencias", "configuracion"]);
   const out = [];
   for (const [id, label, items] of GRUPOS) {
-    let vis = items.filter(([mod]) => mod === "ver_costos" ? (state.admin || state.verCostos) : acceso(mod) !== "no");
+    let vis = items.filter(([mod]) => mod === "ver_costos" ? (state.mega) : acceso(mod) !== "no");
     if (id === "inventario") {
       if (state.admin) {
         vis = vis.concat([
@@ -2762,7 +2762,7 @@ async function draw() {
     if (document.getElementById("citas-dash")) void cargarCitasDash();
   };
   const gate = moduloDeRuta(route);
-  const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
+  const reporteOk = route.mod === "reportes" && (state.mega);
   // Un conteo asignado se abre aunque la persona no tenga el módulo Conteos (el servidor valida la asignación).
   const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "aprobaciones" || route.mod === "mc" || (route.mod === "promociones" && state.admin) || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
   if (rutaInventarioAdmin(route) && !state.admin) {
@@ -2861,7 +2861,7 @@ async function renderMod(route) {
   if (route.mod === "mc" && window.MCNav) return window.MCNav.render(route);
   if (route.mod === "promociones" && window.MCPromociones) return state.admin ? window.MCPromociones.render(route) : `<p class="err">Solo administradores.</p>`;
   const gate = moduloDeRuta(route);
-  const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
+  const reporteOk = route.mod === "reportes" && (state.mega);
   if (rutaInventarioAdmin(route) && !state.admin) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && route.mod !== "aprobaciones" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (window.MCMaestro && window.MCMaestro.wide()) {
@@ -3107,7 +3107,7 @@ function vivosCatalogo(sub, real, comision) {
   return { com, util, faltaCosto };
 }
 function filaCatalogo(p) {
-  const ver = state.admin || state.verCostos;
+  const ver = state.mega;
   const vivo = vivosCatalogo(p.subtotal, p.compraReal, p.compraComision);
   return `<tr data-cat="${esc(p.sku)}">
       <td><button class="link" type="button" data-go="#/doc/cat/${encodeURIComponent(p.sku)}">${esc(p.sku)}</button></td>
@@ -3174,7 +3174,7 @@ async function renderProductos() {
   const filas = window._catRows.map(filaCatalogo).join("");
   const nuevo = state.admin ? `<button class="btn small" type="button" id="cat-mas">+ Nuevo producto</button>` : "";
   const nSin = data.sinCosto != null ? data.sinCosto : window._catRows.filter((x) => x.faltaCosto && /PRODUCTO/i.test(String(x.tipo || ""))).length;
-  const aviso = (state.admin || state.verCostos) && nSin ? `<p class="falta-costo-banner">${nSin} producto${nSin === 1 ? "" : "s"} sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>` : "";
+  const aviso = (state.mega) && nSin ? `<p class="falta-costo-banner">${nSin} producto${nSin === 1 ? "" : "s"} sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>` : "";
   return `<div class="tools">${nuevo}</div>
     <div id="cat-nuevo" hidden></div>
     ${aviso}
@@ -3403,7 +3403,7 @@ async function renderInventarioFicha(route, soloFicha) {
   const img = foto ? `<img src="${esc(foto)}" alt="">` : `<span class="prod-ph" aria-hidden="true"></span>`;
   const off = state.admin ? "" : "disabled";
   const uso = (v, label) => `<label class="desk-check"><input type="radio" name="uso" value="${v}" ${(p.uso || "venta") === v ? "checked" : ""} ${off}> ${label}</label>`;
-  const costo = state.admin || state.verCostos
+  const costo = state.mega
     ? `<label>Costo</label><input name="costo_promedio" inputmode="decimal" value="${esc(p.costo_promedio ?? "")}" ${state.admin ? "" : "disabled"}>`
     : "";
   const porBod = {};
@@ -3413,7 +3413,7 @@ async function renderInventarioFicha(route, soloFicha) {
     const lug = lugares.find((b) => b.id === id);
     return `<tr><td>${esc(lug ? etiquetaLugar(lug) : id)}</td><td class="num">${esc(porBod[id])}</td></tr>`;
   }).join("");
-  const dinero = state.admin || state.verCostos;
+  const dinero = state.mega;
   const ocRows = ocs.map(({ o, ln }) => `<tr><td>${esc(o.numero || "Borrador")}</td><td>${esc(o.flujo || "")}</td><td class="num">${esc(ln.pedido)}</td><td class="num">${esc(ln.recibido)}</td>${dinero ? `<td class="num">${money(ln.subtotal || 0)}</td>` : ""}</tr>`).join("");
   const movs = kardex.map((m) => `<tr><td>${esc(m.tipo || "")}</td><td class="num">${esc(m.delta)}</td><td class="num">${esc(m.saldo ?? "")}</td><td>${esc(m.nota || m.ticket_ref || "")}</td></tr>`).join("");
   const ficha = `<div id="inv-ficha"><div class="desk-actions"><button class="btn ghost small" type="button" data-go="#/m/inventario">← Inventario</button></div>
@@ -3521,7 +3521,7 @@ async function renderComprasLista(sub) {
   const ordenes = (oc.items || []).map((o) => {
     const tipo = o.tipo === "consignacion" || (String(o.nota || "").includes('"consignacion"')) ? "Consignación" : "Compra";
     const ico = tipo === "Consignación" ? "📋" : "🛒";
-    const dinero = state.verCostos || state.admin ? money(o.total) : "";
+    const dinero = state.mega ? money(o.total) : "";
     return `<button class="doc-row" type="button" data-go="#/doc/oc/${encodeURIComponent(o.id)}"><span class="sku-badge">${esc(o.numero)}</span><span class="pname">${ico} ${esc(tipo)} · ${esc(o.estado)}${o.q_label ? " · " + esc(o.q_label) : ""}</span><span class="money-col">${dinero}</span></button>`;
   }).join("");
   const cot = (rfq.items || []).map((r) => `<div class="doc-row"><span class="sku-badge">${esc(r.numero)}</span><span class="pname">📄 ${esc(r.estado)}</span><span class="money-col">${esc(r.fecha || "")}</span></div>`).join("");
@@ -5031,7 +5031,7 @@ function cuandoCita(iso) {
   return d.toLocaleString("es-EC", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" });
 }
 function htmlCita(c, destacada) {
-  const verPrecio = state.admin || state.verCostos;
+  const verPrecio = state.mega;
   const precio = verPrecio && c.precio != null ? `<div class="meta">${money(c.precio)}</div>` : "";
   const ant = c.anterior
     ? `<p class="note">Visita anterior ${esc(c.anterior.fecha)} · ${esc(c.anterior.resumen)}${c.anterior.ref ? " · " + esc(c.anterior.ref) : ""}${verPrecio && c.anterior.precio != null ? " · " + money(c.anterior.precio) : ""}</p><button class="btn ghost small" type="button" data-go="#/m/clientes">Historial de la clienta</button>`
@@ -5739,7 +5739,7 @@ async function renderCatalogoFicha(sku) {
   const p = (data.items || []).find((r) => String(r.sku).toUpperCase() === String(sku).toUpperCase() || String(r.sku).toUpperCase().endsWith(String(sku).toUpperCase()));
   if (!p) return `<p class="err">SKU no encontrado.</p>`;
   const lug = p.lugares || {};
-  const costo = state.admin || state.verCostos ? `<label>Compra real</label><input name="compraReal" inputmode="decimal" value="${esc(p.compraReal ?? "")}">
+  const costo = state.mega ? `<label>Compra real</label><input name="compraReal" inputmode="decimal" value="${esc(p.compraReal ?? "")}">
     <label>Compra comisión</label><input name="compraComision" inputmode="decimal" value="${esc(p.compraComision ?? "")}">
     <p class="note" id="cat-vivo"></p>` : "";
   return `<form id="f-cat">
@@ -7299,41 +7299,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261119tk116"></script>
-<script src="beta-screens.js?v=20261119tk116"></script>
-<script src="beta-inline.js?v=20261119tk116"></script>
-<script src="mc-productos.js?v=20261119tk116"></script>
-<script src="mc-nav.js?v=20261119tk116"></script>
-<script src="mc-permisos.js?v=20261119tk116"></script>
-<script src="mc-protocolos.js?v=20261119tk116"></script>
-<script src="mc-conteo.js?v=20261119tk116"></script>
-<script src="mc-transferencias.js?v=20261119tk116"></script>
-<script src="mc-ajustes.js?v=20261119tk116"></script>
-<script src="vendor-qrcode.js?v=20261119tk116"></script>
-<script src="mc-tickets.js?v=20261119tk116"></script>
-<script src="mc-maestro.js?v=20261119tk116"></script>
-<script src="mc-empleados.js?v=20261119tk116"></script>
-<script src="mc-edit.js?v=20261119tk116"></script>
-<script src="mc-paquetes.js?v=20261119tk116"></script>
-<script src="mc-aperturas.js?v=20261119tk116"></script>
-<script src="mc-acceso.js?v=20261119tk116"></script>
-<script src="mc-barras.js?v=20261119tk116"></script>
-<script src="mc-caja.js?v=20261119tk116"></script>
-<script src="mc-giftcards.js?v=20261119tk116"></script>
-<script src="mc-multas.js?v=20261119tk116"></script>
-<script src="mc-clientes.js?v=20261119tk116"></script>
-<script src="mc-clientes-dup.js?v=20261119tk116"></script>
-<script src="mc-docpdf.js?v=20261119tk116"></script>
-<script src="mc-compras.js?v=20261119tk116"></script>
-<script src="mc-consignacion.js?v=20261119tk116"></script>
-<script src="mc-proveedores.js?v=20261119tk116"></script>
-<script src="mc-recepciones.js?v=20261119tk116"></script>
-<script src="mc-movil.js?v=20261119tk116"></script>
-<script src="mc-promociones.js?v=20261119tk116"></script>
-<script src="mc-agenda.js?v=20261119tk116"></script>
-<script src="mc-staff-home.js?v=20261119tk116"></script>
-<script src="mc-borradores.js?v=20261119tk116"></script><script>draw();</script>
-<script>
+<script src="mc-buscar.js?v=20261119tk115"></script>
+<script src="beta-screens.js?v=20261119tk115"></script>
+<script src="beta-inline.js?v=20261119tk115"></script>
+<script src="mc-productos.js?v=20261119tk115"></script>
+<script src="mc-nav.js?v=20261119tk115"></script>
+<script src="mc-permisos.js?v=20261119tk115"></script>
+<script src="mc-protocolos.js?v=20261119tk115"></script>
+<script src="mc-conteo.js?v=20261119tk115"></script>
+<script src="mc-transferencias.js?v=20261119tk115"></script>
+<script src="mc-ajustes.js?v=20261119tk115"></script>
+<script src="vendor-qrcode.js?v=20261119tk115"></script>
+<script src="mc-tickets.js?v=20261119tk115"></script>
+<script src="mc-maestro.js?v=20261119tk115"></script>
+<script src="mc-empleados.js?v=20261119tk115"></script>
+<script src="mc-edit.js?v=20261119tk115"></script>
+<script src="mc-paquetes.js?v=20261119tk115"></script>
+<script src="mc-aperturas.js?v=20261119tk115"></script>
+<script src="mc-acceso.js?v=20261119tk115"></script>
+<script src="mc-barras.js?v=20261119tk115"></script>
+<script src="mc-caja.js?v=20261119tk115"></script>
+<script src="mc-giftcards.js?v=20261119tk115"></script>
+<script src="mc-multas.js?v=20261119tk115"></script>
+<script src="mc-clientes.js?v=20261119tk115"></script>
+<script src="mc-clientes-dup.js?v=20261119tk115"></script>
+<script src="mc-docpdf.js?v=20261119tk115"></script>
+<script src="mc-compras.js?v=20261119tk115"></script>
+<script src="mc-consignacion.js?v=20261119tk115"></script>
+<script src="mc-proveedores.js?v=20261119tk115"></script>
+<script src="mc-recepciones.js?v=20261119tk115"></script>
+<script src="mc-movil.js?v=20261119tk115"></script>
+<script src="mc-promociones.js?v=20261119tk115"></script>
+<script src="mc-agenda.js?v=20261119tk115"></script>
+<script src="mc-staff-home.js?v=20261119tk115"></script>
+<script src="mc-borradores.js?v=20261119tk115"></script><script>draw();</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {

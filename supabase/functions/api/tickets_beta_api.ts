@@ -6,7 +6,7 @@ import { extend, registroDe } from "./handlers.ts";
 import { consultar, type Filtro } from "./query.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, copiarAStorage, guardarArchivo, logAccion } from "./lib.ts";
-import { esAdmin } from "./permisos.ts";
+import { esAdmin, esSuperAdmin } from "./permisos.ts";
 import { b, colTicket, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
 import { contactoParaMostrar } from "./clientes_contacto.ts";
@@ -813,7 +813,7 @@ async function costosDe(ctx: Ctx, r: Row, cab: Row | undefined, lineas: Row[], s
 }
 
 extend("tk_costos", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
+  if (!esSuperAdmin(ses.rol)) return { error: "Solo Super Admin ve los costos" };
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   const v = await vistaTicket(ctx, ses, r);
@@ -821,7 +821,7 @@ extend("tk_costos", "any", async (p, ctx, ses) => {
   return { ok: true, costos: { numero: (v.ticket as Row).soNum, ...(await costosDe(ctx, r, cab, v.lineas as Row[], n((v.totales as Row).subtotal))) } };
 });
 extend("tk_costos_guardar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
+  if (!esSuperAdmin(ses.rol)) return { error: "Solo Super Admin ve los costos" };
   if (!(await hay(ctx))) return { error: FALTA };
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };

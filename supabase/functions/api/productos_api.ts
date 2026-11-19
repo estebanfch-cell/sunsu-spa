@@ -5,7 +5,7 @@ import { extend, FNS } from "./handlers.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, guardarArchivo } from "./lib.ts";
-import { acceso, esAdmin, matrizDe } from "./permisos.ts";
+import { acceso, esAdmin, esSuperAdmin, matrizDe } from "./permisos.ts";
 import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domain.ts";
 import { runErp } from "./erp.ts";
 import {
@@ -37,13 +37,13 @@ async function permisos(ctx: Ctx, ses: Ses) {
   return {
     puede: admin || acceso(ses.rol, "productos", matriz) !== "no",
     admin,
-    costos: admin || acceso(ses.rol, "ver_costos", matriz) === "todos",
+    costos: esSuperAdmin(ses.rol),
     puedeDescargar: admin || acceso(ses.rol, "descargas", matriz) !== "no",
   };
 }
 
 const PRECIO_KEYS = ["beta_pvp", "beta_compra_real", "beta_compra_comision"];
-const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "comision", "beta_compra_real", "beta_compra_comision", "costo_promedio", "faltaCosto"];
+const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "comision", "beta_compra_real", "beta_compra_comision", "costo_promedio", "faltaCosto", "falta_costo", "costo_real", "costoReal", "sinCosto", "compra", "precio_compra", "utilidadProd", "cogs", "ganancia", "compraRealSistema", "compraComisionCatalogo"];
 function sinCostos<T extends Row>(o: T): T {
   const x: Row = { ...o };
   for (const k of SIN_COSTO) delete x[k];

@@ -18,7 +18,7 @@ La estructura nueva sigue el esquema de Minecore, con las reglas de Sunsu encima
 6. Conteos, transferencias, reorden y kardex. Un movimiento no se borra: deshacer escribe el inverso.
 7. Comisiones, paquetes, gift cards, rol de pagos, asistencia, bitácora y cabina siguen las reglas de `REGLAS_NEGOCIO.md`. La bandera `es_cosmetologa` es el N de paquetes y no se deduce del nombre del rol.
 
-La matriz de menú está en [PERMISOS.md](supabase/PERMISOS.md). Resumen: cosmetóloga, asistente, recepción y gerencia ven solo sus tickets, sus comisiones, su rol y su asistencia. No ven costos. Admin y super_admin ven todo. Solo super_admin edita la matriz, y no puede soltar `ver_costos` ni el módulo Permisos. Recepción y gerencia arrancan con tickets en **propio**; si el mostrador debe ver el día completo, se cambia esa celda a **todos** sin otro deploy.
+La matriz de menú está en [PERMISOS.md](supabase/PERMISOS.md). Resumen: cosmetóloga, asistente, recepción y gerencia ven solo sus tickets, sus comisiones, su rol y su asistencia. No ven costos. Admin ve la operación (ventas, tickets, inventario) pero no costos, utilidad, margen ni precios de compra: eso queda solo para Super Admin (TK115). Solo super_admin edita la matriz, y no puede otorgar `ver_costos` a nadie más ni soltar el módulo Permisos. Recepción y gerencia arrancan con tickets en **propio**; si el mostrador debe ver el día completo, se cambia esa celda a **todos** sin otro deploy.
 
 ## Publicar
 
