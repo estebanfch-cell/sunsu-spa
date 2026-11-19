@@ -181,14 +181,23 @@
   .aviso-reloj[hidden] { display: none !important; }
   #sunsu-nueva-ver {
     position: fixed; left: 0; right: 0; top: 0; z-index: 10000;
-    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
-    background: var(--navy, #153A5F); color: #fff; font-weight: 800; font-size: 0.86rem;
-    padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
-    box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: nowrap;
+    background: var(--navy, #153A5F); color: #fff; font-weight: 700; font-size: 0.78rem;
+    padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top));
+    box-sizing: border-box; max-width: 100vw; overflow: hidden;
   }
   #sunsu-nueva-ver[hidden] { display: none !important; }
+  #sunsu-nueva-ver > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   #sunsu-nueva-ver button { min-height: 32px; padding: 4px 12px; border: 0; border-radius: 8px;
-    background: #E8B84A; color: var(--navy, #153A5F); font-weight: 800; cursor: pointer; }
+    background: #E8B84A; color: var(--navy, #153A5F); font-weight: 800; cursor: pointer; flex: none; white-space: nowrap; }
+  #sunsu-nueva-ver #sunsu-nueva-ver-x {
+    background: transparent; color: #fff; min-width: 32px; min-height: 32px; padding: 0 6px;
+    font-size: 1.15rem; font-weight: 500; line-height: 1;
+  }
+  body.sunsu-has-update .top { top: 44px; }
+  @media (max-width: 860px) {
+    body.sunsu-has-update .tk-detail.tk-open { top: 44px; }
+  }
   .aviso-reloj.entrada { background: #E7F6EE; }
   .aviso-reloj.salida { background: #FDECEC; }
   .hor-dia { display: grid; grid-template-columns: 70px 22px 1fr 1fr; gap: 4px; align-items: center; margin: 0 0 4px; font-size: 0.82rem; }
@@ -425,7 +434,13 @@
   .paq-ses-btn.on { background: #E8F5EC; border-color: var(--green); color: var(--green); }
   .paq-alt { margin-top: 8px; border-style: dashed; }
   .tk-pill-edicionpend, .tk-pill.edicionpend { background: #EEF3FB; color: #3E7CB1; border: 1px solid #3E7CB1; }
-  .mctk-edit-big { width: 100%; margin: 8px 0 10px; padding: 12px 14px; font-size: 0.92rem; font-weight: 800; background: #3E7CB1; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
+  .mctk-edit-big { display: none !important; }
+  .mctk-edit-mini {
+    margin: 0; padding: 3px 9px; min-height: 28px; font-size: 0.68rem; font-weight: 700;
+    color: var(--navy-d, #3D5A7A); background: transparent; border: 1px solid var(--cream-d, #EDE6D8);
+    border-radius: 999px; cursor: pointer; flex: none; white-space: nowrap;
+  }
+  .mctk-bar .mctk-edit-mini { margin-right: 6px; }
   .mctk-edicion { background: #F7F9FC; border: 1.5px solid #3E7CB1; border-radius: 14px; padding: 12px; margin: 0 0 12px; }
   .mctk-edicion .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .tk-diff { font-size: 0.74rem; color: var(--navy); display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -678,7 +693,7 @@
     .scrim { left: 0; z-index: 40; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); }
     .tabbar {
       display: grid;
-      grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+      grid-template-columns: 1fr 1fr 60px 1fr 1fr;
       align-items: end;
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
       height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
@@ -704,11 +719,11 @@
     .tab.on span { color: var(--navy-d); }
     .tab-crear { position: relative; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
     .tab-plus {
-      position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
-      width: 66px; height: 66px; margin: 0; border: 4px solid var(--white);
+      position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+      width: 48px; height: 48px; min-width: 48px; min-height: 48px; margin: 0; border: 3px solid var(--white);
       background: linear-gradient(160deg, var(--gold-m), var(--gold));
-      color: var(--navy-d); font-size: 2.15rem; font-weight: 500; line-height: 1;
-      box-shadow: 0 8px 18px rgba(196,148,58,0.38);
+      color: var(--navy-d); font-size: 1.7rem; font-weight: 500; line-height: 1;
+      box-shadow: 0 6px 14px rgba(196,148,58,0.38);
     }
     .tab-more {
       background: transparent; border: 0; color: var(--navy); font-weight: 900;
@@ -910,22 +925,33 @@
   .tk-reag { color: #C98A00; font-weight: 900; font-size: 0.8rem; margin-left: 2px; }
   .tk-sum { font-size: 0.78rem; color: var(--navy); margin: 2px 2px 8px; }
   /* Lista en tarjetas para iPhone (≤640px), Tickets y Compras (Emilia 17/11). Escritorio: tabla de siempre. */
-  .mob-cards { display: none; flex-direction: column; gap: 10px; }
+  .mob-cards { display: none; flex-direction: column; gap: 8px; }
   .mob-only { display: none !important; }
-  .mob-card { background: #fff; border: 1px solid var(--cream-d); border-left: 4px solid transparent; border-radius: 16px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(43,63,92,.06); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mob-card { background: #fff; border: 1px solid var(--cream-d); border-left: 4px solid transparent; border-radius: 12px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(43,63,92,.06); cursor: pointer; -webkit-tap-highlight-color: transparent; box-sizing: border-box; max-width: 100%; overflow: hidden; }
   .mob-card:active { background: var(--cream); }
   .mob-card.tk-flagged { border-left-color: #d9534f; background: #fff8f7; }
   .mob-card.tk-falta { border-left-color: #e0b100; background: #fffcf0; }
-  .mob-l1 { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.98rem; }
-  .mob-l2 { color: var(--navy); font-size: 0.92rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mob-l3 { color: var(--gray); font-size: 0.8rem; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
-  .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 0.9rem; }
+  .mob-l1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+  .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.86rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mob-l1 .tk-pill { flex: none; font-size: 0.62rem; padding: 1px 7px; margin: 0; }
+  .mob-l2 { display: flex; align-items: baseline; gap: 8px; color: var(--navy); font-size: 0.86rem; margin-top: 2px; min-width: 0; }
+  .mob-cli { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mob-who { flex: none; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .mob-l3 { color: var(--gray); font-size: 12px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .mob-l3t { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 12px; }
+  .mob-cam { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 1px solid #e6ded0; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
+  .mob-cam.ok { color: #2e9e4f; border-color: #b7d9c6; background: #f3faf6; font-size: 11px; }
+  .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
+  .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
+  .mob-thmore { display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5a6577; background: var(--cream); }
+  .mob-res { font-size: 11.5px; color: #5a6577; margin-top: 0; margin-left: 2px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .mob-tip { font-size: 11px; margin-top: 3px; color: #8a2216; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mob-saldo { color: #B8901F; font-weight: 800; }
   .mob-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .mob-voucher { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .mob-voucher .btn, .mob-voucher label.btn { font-size: 0.72rem; padding: 7px 10px; white-space: nowrap !important; flex: 0 0 auto; margin: 0; cursor: pointer; }
-  .mob-pills .tk-pill, .mob-l1 .tk-pill { font-size: 0.7rem; padding: 2px 10px; margin: 0; }
+  .mob-voucher { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .mob-voucher .btn, .mob-voucher label.btn { font-size: 0.68rem; padding: 5px 8px; white-space: nowrap !important; flex: 0 0 auto; margin: 0; cursor: pointer; }
+  .mob-pills .tk-pill, .mob-l1 .tk-pill { font-size: 0.62rem; padding: 1px 7px; margin: 0; }
   @media (max-width: 640px) {
     .mob-cards { display: flex; }
     .mob-hide { display: none !important; }
@@ -1083,6 +1109,7 @@
     .tk-detail.tk-open {
       display: block; position: fixed; z-index: 80; inset: 0 0 var(--tab-h) 0;
       overflow: auto; border-radius: 18px 18px 0 0; box-shadow: var(--shadow); margin: 0;
+      padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
     }
   }
   .desk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -1941,6 +1968,10 @@ async function api(accion, body = {}) {
   }
   let data;
   try { data = await res.json(); } catch { return { error: "La función no devolvió JSON." }; }
+  try {
+    var engHdr = res.headers.get("X-Sunsu-Engine-Version") || res.headers.get("x-sunsu-engine-version");
+    if (engHdr && window.SunsuUpdate && window.SunsuUpdate.notarMotor) window.SunsuUpdate.notarMotor(engHdr);
+  } catch (eHdr) {}
   if (window.MCFmt) data = window.MCFmt.resp(data);
   if (data && data.requiere_aprobacion && !body.aprobar_negativo) {
     const ok = window.confirm(data.error || "El stock quedaría negativo. ¿Aprobar y dejar constancia de quién lo autorizó?");
@@ -7000,6 +7031,12 @@ async function pintarBadgeNotif() {
       badge.dataset.n = "0";
       badge.textContent = "";
     }
+    try {
+      if (navigator.setAppBadge) {
+        if (n > 0) navigator.setAppBadge(n);
+        else if (navigator.clearAppBadge) navigator.clearAppBadge();
+      }
+    } catch (eBadge) { /* iOS / desktop sin badge */ }
   } catch { /* sin avisos */ }
 }
 function fmtNotifFecha(iso) {
@@ -7340,88 +7377,160 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK145";
-function mostrarNuevaVersion() {
-  var el = document.getElementById("sunsu-nueva-ver");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "sunsu-nueva-ver";
-    el.setAttribute("role", "status");
-    el.innerHTML = "<span>Nueva versión</span><button type=\"button\" id=\"sunsu-nueva-ver-btn\">Actualizar</button>";
-    document.body.appendChild(el);
-    el.querySelector("button").onclick = function () {
-      try { sessionStorage.setItem("sunsu.reload." + (window.SUNSU_CACHE || ""), "1"); } catch (e) {}
-      location.reload();
-    };
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK146";
+window.SunsuUpdate = (function () {
+  var POLL_MS = 180000, FOCUS_MS = 30000;
+  var lastFocus = 0, clicked = false, updating = false;
+  var localCache = window.SUNSU_CACHE || "";
+  var localEngine = "";
+  var remoteCache = "", remoteEngine = "";
+  function hideKey() { return "sunsu.banner.hide." + (remoteCache || "") + "|" + (remoteEngine || ""); }
+  function dismissed() { try { return sessionStorage.getItem(hideKey()) === "1"; } catch (e) { return false; } }
+  function hay() {
+    if (remoteCache && localCache && remoteCache !== localCache) return "app";
+    if (remoteEngine && localEngine && remoteEngine !== localEngine) return "motor";
+    return null;
   }
-  el.hidden = false;
-}
-function revisarVersionServidor() {
-  var local = window.SUNSU_CACHE || "";
-  fetch("/sw.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (txt) {
-    var m = txt.match(/const CACHE = "([^"]+)"/);
-    if (!m || !local || m[1] === local) return;
-    var clave = "sunsu.reload." + m[1];
-    try {
-      if (!sessionStorage.getItem(clave)) {
-        sessionStorage.setItem(clave, "1");
-        location.reload();
-        return;
-      }
-    } catch (e) {}
-    mostrarNuevaVersion();
-  }).catch(function () {});
-}
-if ("serviceWorker" in navigator && !local) {
-  navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(function (reg) {
-    try { reg.update(); } catch (e) {}
-    setInterval(function () { try { reg.update(); } catch (e) {} }, 60000);
-  }).catch(function () {});
-  navigator.serviceWorker.addEventListener("controllerchange", function () {
-    if (window._sunsuSwReloaded) return;
-    window._sunsuSwReloaded = true;
-    location.reload();
-  });
-  revisarVersionServidor();
-}
+  function pintar() {
+    if (!hay() || dismissed()) {
+      var cur = document.getElementById("sunsu-nueva-ver");
+      if (cur) cur.hidden = true;
+      document.body.classList.remove("sunsu-has-update");
+      return;
+    }
+    var el = document.getElementById("sunsu-nueva-ver");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sunsu-nueva-ver";
+      el.setAttribute("role", "status");
+      el.innerHTML = "<span>Nueva actualización disponible</span><button type=\"button\" id=\"sunsu-nueva-ver-btn\">Actualizar</button><button type=\"button\" id=\"sunsu-nueva-ver-x\" aria-label=\"Cerrar\">×</button>";
+      document.body.appendChild(el);
+      el.querySelector("#sunsu-nueva-ver-btn").onclick = actualizar;
+      el.querySelector("#sunsu-nueva-ver-x").onclick = function () {
+        try { sessionStorage.setItem(hideKey(), "1"); } catch (e) {}
+        el.hidden = true;
+        document.body.classList.remove("sunsu-has-update");
+      };
+    }
+    el.hidden = false;
+    document.body.classList.add("sunsu-has-update");
+  }
+  function notarMotor(eng) {
+    if (!eng) return;
+    if (!localEngine) { localEngine = eng; window.SUNSU_ENGINE = eng; return; }
+    remoteEngine = eng;
+    pintar();
+  }
+  function notarCache(c) {
+    if (!c) return;
+    remoteCache = c;
+    pintar();
+  }
+  function parseCache(txt) {
+    var m = String(txt || "").match(/const CACHE = "([^"]+)"/);
+    return m ? m[1] : "";
+  }
+  function revisarSw() {
+    fetch("/sw.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (txt) {
+      var c = parseCache(txt);
+      if (c) notarCache(c);
+    }).catch(function () {});
+  }
+  function actualizar() {
+    if (updating) return;
+    updating = true; clicked = true;
+    var btn = document.getElementById("sunsu-nueva-ver-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
+    var go = function () {
+      var u = new URL(location.href);
+      u.searchParams.set("sv", String(Date.now()));
+      location.replace(u.toString());
+    };
+    var limpia = Promise.resolve();
+    try { limpia = caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }); } catch (e) {}
+    Promise.resolve(limpia).then(function () {
+      if (!navigator.serviceWorker) return;
+      return navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (!reg) return;
+        if (reg.waiting) try { reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
+        try { return reg.update().then(function () { if (reg.waiting) try { reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e2) {} }); } catch (e) {}
+      });
+    }).then(function () { go(); }, function () { go(); });
+  }
+  function onFocus() {
+    var n = Date.now();
+    if (n - lastFocus < FOCUS_MS) return;
+    lastFocus = n;
+    revisarSw();
+    try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); }); } catch (e) {}
+  }
+  function init() {
+    if (typeof local !== "undefined" && local) return;
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(function (reg) {
+      try { reg.update(); } catch (e) {}
+      reg.addEventListener("updatefound", function () {
+        var w = reg.installing;
+        if (!w) return;
+        w.addEventListener("statechange", function () {
+          if (w.state === "installed" && navigator.serviceWorker.controller) revisarSw();
+        });
+      });
+      setInterval(function () { try { reg.update(); } catch (e) {} revisarSw(); }, POLL_MS);
+    }).catch(function () {});
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (window._sunsuSwReloaded) return;
+      if (!clicked) return;
+      window._sunsuSwReloaded = true;
+      location.reload();
+    });
+    revisarSw();
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") onFocus(); });
+    window.addEventListener("focus", onFocus);
+  }
+  return { init: init, notarMotor: notarMotor, actualizar: actualizar, hay: hay, pintar: pintar, parseCache: parseCache, revisarVersionServidor: revisarSw };
+})();
+function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pintar(); }
+function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
+window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk145"></script>
-<script src="mc-scan.js?v=20261119tk145"></script>
-<script src="mc-buscar.js?v=20261119tk145"></script>
-<script src="descuento_justif.js?v=20261119tk145"></script>
-<script src="beta-screens.js?v=20261119tk145"></script>
-<script src="beta-inline.js?v=20261119tk145"></script>
-<script src="mc-productos.js?v=20261119tk145"></script>
-<script src="mc-nav.js?v=20261119tk145"></script>
-<script src="mc-permisos.js?v=20261119tk145"></script>
-<script src="mc-protocolos.js?v=20261119tk145"></script>
-<script src="mc-conteo.js?v=20261119tk145"></script>
-<script src="mc-transferencias.js?v=20261119tk145"></script>
-<script src="mc-ajustes.js?v=20261119tk145"></script>
-<script src="vendor-qrcode.js?v=20261119tk145"></script>
-<script src="mc-tickets.js?v=20261119tk145"></script>
-<script src="mc-maestro.js?v=20261119tk145"></script>
-<script src="mc-empleados.js?v=20261119tk145"></script>
-<script src="mc-edit.js?v=20261119tk145"></script>
-<script src="mc-paquetes.js?v=20261119tk145"></script>
-<script src="mc-aperturas.js?v=20261119tk145"></script>
-<script src="mc-acceso.js?v=20261119tk145"></script>
-<script src="mc-barras.js?v=20261119tk145"></script>
-<script src="mc-caja.js?v=20261119tk145"></script>
-<script src="mc-giftcards.js?v=20261119tk145"></script>
-<script src="mc-multas.js?v=20261119tk145"></script>
-<script src="mc-clientes.js?v=20261119tk145"></script>
-<script src="mc-clientes-dup.js?v=20261119tk145"></script>
-<script src="mc-docpdf.js?v=20261119tk145"></script>
-<script src="mc-compras.js?v=20261119tk145"></script>
-<script src="mc-consignacion.js?v=20261119tk145"></script>
-<script src="mc-proveedores.js?v=20261119tk145"></script>
-<script src="mc-recepciones.js?v=20261119tk145"></script>
-<script src="mc-movil.js?v=20261119tk145"></script>
-<script src="mc-promociones.js?v=20261119tk145"></script>
-<script src="mc-agenda.js?v=20261119tk145"></script>
-<script src="mc-staff-home.js?v=20261119tk145"></script>
-<script src="mc-borradores.js?v=20261119tk145"></script><script>draw();</script><script>
+<script src="vendor-zxing.js?v=20261119tk146"></script>
+<script src="mc-scan.js?v=20261119tk146"></script>
+<script src="mc-buscar.js?v=20261119tk146"></script>
+<script src="descuento_justif.js?v=20261119tk146"></script>
+<script src="beta-screens.js?v=20261119tk146"></script>
+<script src="beta-inline.js?v=20261119tk146"></script>
+<script src="mc-productos.js?v=20261119tk146"></script>
+<script src="mc-nav.js?v=20261119tk146"></script>
+<script src="mc-permisos.js?v=20261119tk146"></script>
+<script src="mc-protocolos.js?v=20261119tk146"></script>
+<script src="mc-conteo.js?v=20261119tk146"></script>
+<script src="mc-transferencias.js?v=20261119tk146"></script>
+<script src="mc-ajustes.js?v=20261119tk146"></script>
+<script src="vendor-qrcode.js?v=20261119tk146"></script>
+<script src="mc-tickets.js?v=20261119tk146"></script>
+<script src="mc-maestro.js?v=20261119tk146"></script>
+<script src="mc-empleados.js?v=20261119tk146"></script>
+<script src="mc-edit.js?v=20261119tk146"></script>
+<script src="mc-paquetes.js?v=20261119tk146"></script>
+<script src="mc-aperturas.js?v=20261119tk146"></script>
+<script src="mc-acceso.js?v=20261119tk146"></script>
+<script src="mc-barras.js?v=20261119tk146"></script>
+<script src="mc-caja.js?v=20261119tk146"></script>
+<script src="mc-giftcards.js?v=20261119tk146"></script>
+<script src="mc-multas.js?v=20261119tk146"></script>
+<script src="mc-clientes.js?v=20261119tk146"></script>
+<script src="mc-clientes-dup.js?v=20261119tk146"></script>
+<script src="mc-docpdf.js?v=20261119tk146"></script>
+<script src="mc-compras.js?v=20261119tk146"></script>
+<script src="mc-consignacion.js?v=20261119tk146"></script>
+<script src="mc-proveedores.js?v=20261119tk146"></script>
+<script src="mc-recepciones.js?v=20261119tk146"></script>
+<script src="mc-movil.js?v=20261119tk146"></script>
+<script src="mc-promociones.js?v=20261119tk146"></script>
+<script src="mc-agenda.js?v=20261119tk146"></script>
+<script src="mc-staff-home.js?v=20261119tk146"></script>
+<script src="mc-borradores.js?v=20261119tk146"></script><script>draw();</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {

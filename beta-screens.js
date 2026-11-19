@@ -5738,33 +5738,107 @@ function _histMasterHTML(tickets, showPrices){
 }
 // Tarjeta para iPhone (≤640px), como Órdenes de venta de MineCore pero en colores Sunsu y sin fotos.
 // Rojo/amarillo de cuadre como borde izquierdo; sin cédula.
+function _histNombreCorto(n){
+  var t=String(n||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+  return t?t.split(/\s+/)[0]:'';
+}
+function _histCreador(t){
+  var orig=t&&t.orig&&typeof t.orig==='object'?t.orig:{};
+  return _histNombreCorto(orig.creado_por||t.creado_por||t.usuario_creador||t.atendido_por||t.cosmetologa||'');
+}
+function _histFacCorta(t){
+  var n=_histFacNum(t);
+  return n?('Fac. '+n):'';
+}
+function _histFacNum(t){
+  var ff=_tkFacFull(t); if(!ff) return '';
+  var m=String(ff).trim().match(/^(\d{3})-(\d{3})-(\d{6,12})$/);
+  if(m) return m[1]+'-'+m[2]+'-'+String(Number(m[3]));
+  var nOnly=String(ff).trim().match(/(\d{6,12})$/);
+  if(nOnly) return String(Number(nOnly[1]));
+  return String(ff).replace(/\.0+$/,'');
+}
+function _histColorQuien(nombre){
+  var raw=String(nombre||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+  if(!raw) return '';
+  var low=raw.toLowerCase();
+  var users=[];
+  try{ if(typeof getUsers==='function') users=getUsers()||[]; }catch(e0){ users=[]; }
+  if(typeof DEFAULT_USERS!=='undefined' && DEFAULT_USERS && DEFAULT_USERS.length) users=users.concat(DEFAULT_USERS);
+  for(var i=0;i<users.length;i++){
+    var u=users[i]; if(!u||!u.color) continue;
+    var nm=String(u.name||u.nombre||''), sh=String(u.short||'');
+    if(!nm&&!sh) continue;
+    if(low===nm.toLowerCase()||low===sh.toLowerCase()||nm.toLowerCase().indexOf(low)===0||(sh&&low.indexOf(sh.toLowerCase())===0)) return u.color;
+  }
+  if(/andrea/i.test(raw)) return '#5B7FA6';
+  if(/daniela/i.test(raw)) return '#C4943A';
+  if(/dejaneira/i.test(raw)) return '#7A9E8A';
+  if(/alejandra/i.test(raw)) return '#D4956A';
+  if(/^emi\b/i.test(raw)||low==='emi') return '#8FA8C8';
+  if(/efch/i.test(raw)) return '#3D5A7A';
+  return '#8A90A0';
+}
+function _histPuedeCamara(){
+  try{ if(typeof state!=='undefined' && state && state.vista) return false; }catch(e1){}
+  var r=(typeof CU!=='undefined' && CU && (CU.role||CU.rol))||'';
+  r=String(r).toLowerCase();
+  return !r||r==='admin'||r==='admin_master'||r==='super_admin'||r==='reception'||r==='recepcion'||r==='staff';
+}
+function _histCamHTML(t,i){
+  if(!_histPuedeCamara()) return '';
+  var F=_tkPagosFaltanCard(t);
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  var falta=F&&F.length;
+  var ok=!!(L.fotoPago||t.fotoPago||t.tieneComprobante);
+  if(!falta && !ok) return '';
+  var pid=falta&&F[0]&&F[0].id?String(F[0].id):'';
+  var listo=ok&&!falta;
+  var lab=listo?'Comprobante listo':'Tomar foto de voucher o transferencia';
+  return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()"><span aria-hidden="true">'+(listo?'📷✓':'📷')+'</span><input type="file" accept="image/*,application/pdf" capture="environment" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+}
+function _histResumenTxt(t){
+  if(t&&t.resumenTxt) return String(t.resumenTxt);
+  var r=t&&t.resumen; if(!r) return '';
+  var parts=[], add=function(n,uno,muchos){ n=Number(n)||0; if(n>0) parts.push(n===1?'1 '+uno:n+' '+muchos); };
+  add(r.faciales,'facial','faciales'); add(r.paquetes,'paquete','paquetes');
+  add(r.canjes,'canje','canjes'); add(r.extras,'extra','extras');
+  add(r.productos,'producto','productos'); add(r.gifts,'gift card','gift cards');
+  return parts.join(' · ');
+}
+function _histThumbsHTML(t, res){
+  var fotos=Array.isArray(t&&t.fotosCard)?t.fotosCard:[];
+  var more=Number(t.fotosMore)||0;
+  if(!fotos.length && !res) return '';
+  var h='<div class="mob-thumbs">';
+  fotos.slice(0,5).forEach(function(f){
+    var u=typeof f==='string'?f:(f&&f.url)||'';
+    if(!u) return;
+    h+='<img class="mob-th" src="'+_histEsc(u)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+  });
+  if(more>0) h+='<span class="mob-thmore">+'+more+'</span>';
+  if(res) h+='<span class="mob-res">'+_histEsc(res)+'</span>';
+  return h+'</div>';
+}
 function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
-  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
-  var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
-  var l3=[_histEsc(_histFechaFmt(t.fecha))];
-  if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
-  if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+( _tkFacPdf(t)?' 📄':'')+'</span>');
-  if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
-  var fp=_tkForma(t);
-  var pills=[];
-  if(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num){
-    pills.push(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar'));
-  } else if(!anul){
-    pills.push(_tkPagoPill(t));
-    if(fp) pills.push(_tkFormaPill(fp));
-    if(!ff&&!t.sin_cobro) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
-  }
+  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
+  var facn=_histFacNum(t);
+  var l1=(_histNum(t)||'—')+(facn?(' - '+facn):'');
+  var l3=[_histFechaFmt(t.fecha)];
+  if(showPrices) l3.push('$'+_histMontos(t).tot.toFixed(2));
+  var who=_histCreador(t);
+  var colWho=_histColorQuien((t.orig&&t.orig.creado_por)||t.creado_por||t.atendido_por||t.cosmetologa||who);
+  var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(_histNum(t)||'—')+'</span>'+est+'</div>'
-    +'<div class="mob-l2">'+_histEsc(nombre)+'</div>'
-    +'<div class="mob-l3">'+l3.join('<span>·</span>')+'</div>'
-    +(pills.length?'<div class="mob-pills">'+pills.join('')+'</div>':'')
-    +(tip?'<div style="font-size:.72rem;margin-top:6px;color:'+(fl?'#8a2216':'#6b4e00')+'">'+_histEsc(tip)+'</div>':'')
-    +_tkVoucherCardBtns(t, i)
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span>'+est+'</div>'
+    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
+    +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histCamHTML(t,i)+'</div>'
+    +_histThumbsHTML(t, res)
+    +(tip?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
     +'</div>';
 }
 function _tkFotoTipo(metodo){
@@ -5832,7 +5906,7 @@ function _tkVoucherCard(ev, i){
       var Leds=window._tkLeds=window._tkLeds||{};
       var led=Leds[String(t.tkRow)]||{};
       var queda=(led.pagosFaltan||[]).filter(function(x){ return pagoId ? String(x.id||"")!==String(pagoId) : false; });
-      led.pagosFaltan=queda; Leds[String(t.tkRow)]=led;
+      led.pagosFaltan=queda; if(!queda.length) led.fotoPago=1; Leds[String(t.tkRow)]=led;
     } catch (e1) {}
     if (typeof _tkCargarLeds === "function") _tkCargarLeds(true);
     if (typeof _histActualizarRes === "function") _histActualizarRes(!!window._histEsStaff);

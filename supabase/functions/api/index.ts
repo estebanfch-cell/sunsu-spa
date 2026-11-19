@@ -54,6 +54,7 @@ import "./ticket_edicion_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
+import { ENGINE_HEADER, SUNSU_ENGINE } from "./sunsu_version.ts";
 
 declare const Deno: {
   serve: (h: (req: Request) => Promise<Response> | Response) => void;
@@ -64,6 +65,8 @@ const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type, authorization, apikey, x-client-info",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Expose-Headers": ENGINE_HEADER,
+  [ENGINE_HEADER]: SUNSU_ENGINE,
 };
 
 function json(data: unknown, status = 200): Response {
