@@ -9,7 +9,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
   compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, marcaDePersona, n, nombreEsAdmin, normCedula, normNombre, toCosmMark,
-  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn, esCancelado } from "./domain.ts";
+  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn, esCancelado, personaEsRecepcionista } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 type R = Record<string, unknown>;
 
@@ -267,7 +267,8 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
     return { venta: subtotalCatalogo(row), compra: compraParaComision(row), qty: pr.qty, excluido: false, sku: pr.sku };
   }));
   let comRecepcion = 0;
-  if (key.startsWith("alejandra")) {
+  const esRecep = personaEsRecepcionista(nombreApp, users);
+  if (esRecep) {
     const dias = new Map<string, number>();
     for (const t of tks) {
       if (t.fecha < ciclo || t.fecha > fin || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
@@ -285,7 +286,7 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
     multas += n(r.monto);
   }
   return {
-    comFaciales: persona?.comFaciales || 0,
+    comFaciales: esRecep ? 0 : (persona?.comFaciales || 0),
     comExtras: persona?.comExtras || 0,
     comPaquetes: persona?.comPaquetes || 0,
     comProductos: comisionProductos(items, aplicado.cfg.pctProd, aplicado.cfg.productoSku),
@@ -558,9 +559,11 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
     const b = normNombre(persona);
     return a === b || a.startsWith(b.split(" ")[0] || "—") || b.startsWith(a.split(" ")[0] || "—");
   });
-  const recep = normNombre(persona).startsWith("alejandra") ? pack.comRecep : 0;
+  const usersRol = await ctx.db.all("usuarios");
+  const esRecep = personaEsRecepcionista(persona, usersRol);
+  const recep = esRecep ? pack.comRecep : 0;
   const com = {
-    comFaciales: montos?.comFaciales || 0,
+    comFaciales: esRecep ? 0 : (montos?.comFaciales || 0),
     comPaquetes: montos?.comPaquetes || 0,
     comProductos: montos?.comProductos || 0,
     comExtras: montos?.comExtras || 0,
@@ -612,8 +615,10 @@ extend("getRolCiclo", "any", async (p, ctx, ses) => {
   });
   const ingresos = [
     ["Sueldo", local.sueldo], ["Bono", local.bono], ["Horas extra", local.horasExtra],
-    ["Faciales", local.comFaciales], ["Paquetes", local.comPaquetes], ["Productos", local.comProductos],
-    ["Recepción", com.comRecepcion], ["Extras", com.comExtras],
+    ...(!esRecep ? [["Faciales", local.comFaciales] as const] : []),
+    ["Paquetes", local.comPaquetes], ["Productos", local.comProductos],
+    ["Extras", com.comExtras],
+    ...(esRecep ? [["Recepción", com.comRecepcion] as const] : []),
     ["Décimo tercero", local.dec13], ["Décimo cuarto", local.dec14],
     ["Fondo de reserva", local.fondoReserva], ["Vacaciones", local.vacaciones],
   ].map(([concepto, monto]) => ({ concepto, monto }));
