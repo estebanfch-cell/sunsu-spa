@@ -593,9 +593,9 @@
     .menu-btn { display: none; }
     .top .logo-hit {
       display: flex; align-items: center; justify-content: center;
-      background: var(--white); border-radius: 8px; padding: 3px 7px; line-height: 0;
+      background: transparent; border-radius: 0; padding: 0; line-height: 0;
     }
-    .top .logo-hit img { height: 22px; max-width: 78px; }
+    .top .logo-hit img { height: 18px; max-width: 56px; }
     .top-salir { display: inline-flex; background: rgba(255,255,255,0.16); color: var(--white); border-color: transparent; }
     .content { padding-bottom: var(--tab-clear); }
     .toast { bottom: var(--tab-clear); }
@@ -648,13 +648,14 @@
       padding: 3px 8px 6px; margin-top: -2px;
     }
     .tab-more.on { color: var(--gold); }
-    .reloj-head { display: inline-flex; margin-right: auto; }
-    .reloj-btn { font-size: 0.64rem; min-height: 30px; padding: 4px 8px; max-width: 100%; }
-    .top { flex-wrap: wrap; gap: 6px; padding: 8px 8px; overflow-x: hidden; max-width: 100%; }
+    .reloj-head { display: none !important; }
+    .top-sol-desk { display: none !important; }
+    .top-bell { display: inline-flex; }
+    .top { flex-wrap: nowrap; gap: 6px; padding: 6px 8px; overflow-x: hidden; max-width: 100%; }
     .top-stack { overflow-x: hidden; max-width: 100%; }
-    .top-actions { flex: 1 1 100%; width: 100%; justify-content: flex-end; gap: 4px; margin-left: 0; }
-    .top h1 { min-width: 0; font-size: 0.82rem; }
-    .top-icon, .top-salir { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; padding: 0; background: rgba(255,255,255,0.16); color: var(--white); border-color: transparent; border-radius: 8px; font-size: 0.95rem; line-height: 1; text-decoration: none; }
+    .top-actions { flex: 0 0 auto; width: auto; justify-content: flex-end; gap: 4px; margin-left: auto; }
+    .top h1 { min-width: 0; font-size: 0.78rem; }
+    .top-icon, .top-salir { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-width: 30px; padding: 0; background: rgba(255,255,255,0.16); color: var(--white); border-color: transparent; border-radius: 8px; font-size: 0.9rem; line-height: 1; text-decoration: none; }
     .top-icon .top-ico-txt { display: none; }
     .top-icon .top-ico { display: inline; }
     .local-sel { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
@@ -666,6 +667,39 @@
   }
   @media (min-width: 861px) {
     .top-salir { display: none; }
+    .top-bell { display: none !important; }
+  }
+  .top-bell { position: relative; }
+  .top-bell-ico { font-size: 1rem; line-height: 1; }
+  .top-bell-badge {
+    display: none; position: absolute; top: -3px; right: -3px;
+    min-width: 16px; height: 16px; padding: 0 4px;
+    background: #C62828; color: #fff; border: 2px solid var(--navy-d, #3D5A7A);
+    border-radius: 999px; font-size: 0.58rem; font-weight: 800; line-height: 12px;
+    text-align: center; box-sizing: border-box;
+  }
+  .top-bell-badge[data-n]:not([data-n="0"]) { display: inline-flex; align-items: center; justify-content: center; }
+  .notif-overlay {
+    position: fixed; inset: 0; background: rgba(58,53,48,0.32); z-index: 80;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .notif-sheet {
+    background: var(--white); width: 100%; max-width: 520px; max-height: min(78vh, 640px);
+    border-radius: 18px 18px 0 0; overflow: auto; padding: 8px 14px 24px;
+    box-shadow: 0 -10px 32px rgba(61,90,122,0.18);
+  }
+  .notif-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0 10px; }
+  .notif-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--cream-d); padding: 10px 0; color: var(--navy); cursor: pointer; }
+  .notif-item.nueva { background: var(--gold-l, #F7F1E6); margin: 0 -14px; padding: 10px 14px; }
+  .notif-item b { display: block; font-size: 0.86rem; }
+  .notif-item span { display: block; font-size: 0.75rem; color: var(--gray); margin-top: 2px; }
+  .notif-item em { display: block; font-size: 0.68rem; color: var(--gray); font-style: normal; margin-top: 4px; }
+  .sol-estado { font-size: 0.72rem; font-weight: 800; text-transform: capitalize; }
+  .sol-estado.pendiente { color: #C9761F; }
+  .sol-estado.aprobado { color: #1F8A4C; }
+  .sol-estado.rechazado { color: #C62828; }
+  @media (max-width: 860px) {
+    .notif-overlay { align-items: flex-end; }
   }
   .cli-layout { display: grid; gap: 16px; }
   .cli-sheet tbody tr { cursor: pointer; }
@@ -1844,6 +1878,7 @@ function moduloDeRuta(route) {
   if (route.mod === "aperturas") return route.sub === "costo" ? "inventario" : "inicio";
   // 🔑 Mi acceso: cada quien el suyo (la lista del equipo la decide el servidor: solo admin).
   if (route.mod === "acceso") return "inicio";
+  if (route.mod === "solicitudes") return "inicio";
   // 🏷️ Códigos de barras: mismo permiso que Productos (generar/asignar es solo admin en el servidor).
   if (route.mod === "barras") return "productos";
   return route.mod;
@@ -1855,6 +1890,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "agenda") return "Agenda";
   if (route.mod === "aperturas") return route.sub === "costo" ? "Costo por facial" : "Abrir producto";
   if (route.mod === "acceso") return "Mi acceso";
+  if (route.mod === "solicitudes") return "Mis solicitudes";
   if (route.mod === "barras") return "Códigos de barras";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : route.sub === "duplicados" ? "Clientas duplicadas" : "Clientes") : "Registro de clientas";
   if (route.mod === "caja") return route.sub === "pagos" ? "Pagos recibidos" : "Caja chica";
@@ -2211,7 +2247,8 @@ function paintShell(title) {
             ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj()}</div>` : ""}
             ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Simulación</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
-            ${!state.vista ? `<button class="btn ghost small top-icon" type="button" id="btn-solicitudes" title="Solicitudes" aria-label="Solicitudes"><span class="top-ico-txt">Solicitudes</span><span class="top-ico" aria-hidden="true">📋</span></button>` : ""}
+            ${!state.vista ? `<button class="btn ghost small top-icon top-bell" type="button" id="btn-notificaciones" title="Avisos" aria-label="Avisos"><span class="top-bell-ico" aria-hidden="true">🔔</span><span class="top-bell-badge" id="notif-badge" hidden></span></button>` : ""}
+            ${!state.vista ? `<button class="btn ghost small top-icon top-sol-desk" type="button" id="btn-solicitudes" title="Solicitudes" aria-label="Solicitudes"><span class="top-ico-txt">Solicitudes</span><span class="top-ico" aria-hidden="true">📋</span></button>` : ""}
             <a class="btn ghost small top-salir top-icon" href="#/m/acceso" title="Mi acceso" aria-label="Mi acceso">🔑</a>
             <button class="btn ghost small salir top-salir top-icon" type="button" title="Salir" aria-label="Salir"><span class="top-ico-txt">Salir</span><span class="top-ico" aria-hidden="true">⎋</span></button>
             </div>
@@ -2255,12 +2292,19 @@ function paintShell(title) {
       sessionStorage.removeItem("sunsu.beta.vista");
       sessionStorage.removeItem("sunsu.beta.vista.prueba");
       state.vistaPrueba = false;
+      if (window.SunsuMedia) SunsuMedia.reset();
       paintLogin();
     };
   });
   const btnVista = document.getElementById("btn-ver-como");
   if (btnVista) btnVista.onclick = () => abrirVerComo();
   if (window.SunsuInline) SunsuInline.contar();
+  void pintarBadgeNotif();
+  const btnNotif = document.getElementById("btn-notificaciones");
+  if (btnNotif && btnNotif.dataset.wired !== "1") {
+    btnNotif.dataset.wired = "1";
+    btnNotif.onclick = () => abrirNotificaciones();
+  }
   const btnVistaPrueba = document.getElementById("vista-prueba");
   if (btnVistaPrueba) btnVistaPrueba.onclick = () => {
     state.vistaPrueba = !state.vistaPrueba;
@@ -2730,6 +2774,7 @@ async function renderMod(route) {
   if (route.mod === "rol_pagos") return renderRol();
   if (route.mod === "asistencia") return renderAsistencia();
   if (route.mod === "aperturas" && window.MCAperturas) return window.MCAperturas.render(route);
+  if (route.mod === "solicitudes") return renderMisSolicitudes();
   if (route.mod === "acceso" && window.MCAcceso) return window.MCAcceso.render(route);
   if (route.mod === "barras" && window.MCBarras) return window.MCBarras.render(route);
   if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
@@ -4871,11 +4916,69 @@ async function renderPaqDetalle(codigo) {
 let relojTipo = "entrada";
 let camStream = null;
 let fotoReloj = "";
+const SunsuMedia = window.SunsuMedia = {
+  cams: Object.create(null),
+  geo: null,
+  watchId: null,
+  async camara(facing) {
+    const key = facing === "environment" ? "environment" : "user";
+    const cur = this.cams[key];
+    if (cur && cur.active && cur.getVideoTracks().some((tr) => tr.readyState === "live")) {
+      cur.getVideoTracks().forEach((tr) => { tr.enabled = true; });
+      return cur;
+    }
+    if (cur) cur.getTracks().forEach((tr) => { try { tr.stop(); } catch { /* ya cortada */ } });
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("sin cámara");
+    const video = key === "environment" ? { facingMode: "environment" } : { facingMode: "user" };
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+    this.cams[key] = stream;
+    return stream;
+  },
+  pausar(stream) {
+    if (stream) stream.getVideoTracks().forEach((tr) => { tr.enabled = false; });
+  },
+  iniciarGeo() {
+    if (!navigator.geolocation || this.watchId != null) return;
+    const opts = { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 };
+    this.watchId = navigator.geolocation.watchPosition((pos) => {
+      this.geo = { lat: pos.coords.latitude, lng: pos.coords.longitude, precision_m: pos.coords.accuracy, at: Date.now() };
+    }, () => {}, opts);
+  },
+  async posicion() {
+    this.iniciarGeo();
+    if (this.geo && Date.now() - this.geo.at < 90000) return this.geo;
+    const espera = await new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      const tick = setInterval(() => {
+        if (this.geo && Date.now() - this.geo.at < 90000) { clearInterval(tick); resolve(this.geo); return; }
+        if (Date.now() - t0 < 8000) return;
+        clearInterval(tick);
+        if (!navigator.geolocation) { reject(new Error("sin geo")); return; }
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const v = { lat: pos.coords.latitude, lng: pos.coords.longitude, precision_m: pos.coords.accuracy, at: Date.now() };
+          this.geo = v;
+          resolve(v);
+        }, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+      }, 200);
+    });
+    return espera;
+  },
+  reset() {
+    Object.keys(this.cams).forEach((k) => {
+      const s = this.cams[k];
+      if (s) s.getTracks().forEach((tr) => { try { tr.stop(); } catch { /* nada */ } });
+      this.cams[k] = null;
+    });
+    if (this.watchId != null && navigator.geolocation) {
+      try { navigator.geolocation.clearWatch(this.watchId); } catch { /* nada */ }
+    }
+    this.watchId = null;
+    this.geo = null;
+  },
+};
 function pararCamara() {
-  if (camStream) {
-    camStream.getTracks().forEach((t) => t.stop());
-    camStream = null;
-  }
+  // No se detienen las pistas: en iOS (PWA incluida) volver a pedir getUserMedia pregunta otra vez.
+  if (camStream) SunsuMedia.pausar(camStream);
   const video = document.getElementById("reloj-video");
   if (video) video.srcObject = null;
 }
@@ -4889,7 +4992,7 @@ function mostrarFoto(dataUrl) {
   if (fotoReloj) {
     if (img) { img.src = fotoReloj; img.hidden = false; }
     if (video) video.hidden = true;
-    pararCamara();
+    if (camStream) SunsuMedia.pausar(camStream);
     if (tomar) tomar.hidden = true;
     if (reg) reg.hidden = false;
     if (repetir) repetir.hidden = false;
@@ -4904,10 +5007,12 @@ async function iniciarCamara() {
   const video = document.getElementById("reloj-video");
   const err = document.getElementById("reloj-err");
   mostrarFoto("");
-  pararCamara();
+  const prev = video && video.srcObject;
+  if (prev) prev.getVideoTracks().forEach((tr) => { tr.enabled = true; });
+  SunsuMedia.iniciarGeo();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fallbackCamara(); return; }
   try {
-    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user" } });
+    camStream = await SunsuMedia.camara("user");
     if (video) {
       video.srcObject = camStream;
       video.hidden = false;
@@ -6588,6 +6693,75 @@ function bindCfgJump(main) {
   };
 }
 
+
+async function pintarBadgeNotif() {
+  const badge = document.getElementById("notif-badge");
+  if (!badge || !state.token || state.vista) return;
+  try {
+    const data = await api("notif_mias", {});
+    const n = (data && data.sinLeer) || 0;
+    if (n) {
+      badge.hidden = false;
+      badge.dataset.n = String(n);
+      badge.textContent = n > 9 ? "9+" : String(n);
+    } else {
+      badge.hidden = true;
+      badge.dataset.n = "0";
+      badge.textContent = "";
+    }
+  } catch { /* sin avisos */ }
+}
+function fmtNotifFecha(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+async function abrirNotificaciones() {
+  const data = await api("notif_mias", {});
+  const items = (data && data.items) || [];
+  const overlay = document.createElement("div");
+  overlay.className = "notif-overlay";
+  overlay.innerHTML = `<div class="notif-sheet"><div class="notif-line"><b>Avisos</b><button type="button" class="btn ghost small" id="notif-x">×</button></div>` +
+    (items.length ? items.map((it) => `<button type="button" class="notif-item${it.leida ? "" : " nueva"}" data-notif="${esc(it.id)}" data-link="${esc(it.link || "#/m/solicitudes")}"><b>${esc(it.titulo || "Aviso")}</b><span>${esc(it.cuerpo || "")}</span><em>${esc(fmtNotifFecha(it.fecha))}</em></button>`).join("") : `<p class="note">No tienes avisos.</p>`) +
+    `<p class="note" style="margin-top:12px"><button class="btn ghost small" type="button" id="notif-mias">Ver mis solicitudes</button></p></div>`;
+  document.body.appendChild(overlay);
+  const cerrar = () => overlay.remove();
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
+  overlay.querySelector("#notif-x").onclick = cerrar;
+  const mias = overlay.querySelector("#notif-mias");
+  if (mias) mias.onclick = () => { cerrar(); go("#/m/solicitudes"); };
+  overlay.querySelectorAll("[data-notif]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.getAttribute("data-notif");
+      const link = b.getAttribute("data-link") || "#/m/solicitudes";
+      try { await api("notif_leer", { id }); } catch { /* ok */ }
+      cerrar();
+      void pintarBadgeNotif();
+      if (link && link !== "#") go(link);
+    };
+  });
+  const ids = items.filter((it) => !it.leida).map((it) => it.id);
+  if (ids.length) {
+    try { await api("notif_leer", { ids, todas: false }); } catch { /* ok */ }
+    void pintarBadgeNotif();
+  }
+}
+async function renderMisSolicitudes() {
+  const data = await api("getSolicitudes", {});
+  if (data.error) return fail(data);
+  const items = data.items || [];
+  const filas = items.map((s) => {
+    const cosa = s.etiqueta || ((s.tabla || "") + " " + (s.fila || ""));
+    const cuando = fmtNotifFecha(s.creado);
+    const res = s.resuelto_at ? fmtNotifFecha(s.resuelto_at) : "";
+    const tipo = s.tipo === "eliminacion" ? "Eliminación" : "Cambio";
+    const est = esc(s.estado || "");
+    return `<div class="card"><div class="name">${esc(tipo)} · ${esc(cosa)}</div><div class="note">${esc(cuando)}${s.motivo ? " · " + esc(s.motivo) : ""}</div><div class="meta"><span class="sol-estado ${est}">${est}</span>${s.comentario ? " · " + esc(s.comentario) : ""}${res ? " · " + esc(res) : ""}${s.resuelto_por ? " · " + esc(s.resuelto_por) : ""}</div></div>`;
+  }).join("") || `<p class="note">Todavía no has enviado solicitudes.</p>`;
+  return `<p class="note">Aquí ves el estado de lo que pediste: pendiente, aprobado o rechazado.</p><div class="list">${filas}</div>`;
+}
+
 async function marcarAsistencia(tipo, foto) {
   const err = document.getElementById("reloj-err");
   if (err) err.textContent = "";
@@ -6600,12 +6774,10 @@ async function marcarAsistencia(tipo, foto) {
   if (!foto) { if (err) err.textContent = "Falta la selfie."; return; }
   const body = { tipo, origen: window.innerWidth > 860 ? "recepcion" : "telefono", foto };
   try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
-    });
-    body.lat = pos.coords.latitude;
-    body.lng = pos.coords.longitude;
-    body.precision_m = pos.coords.accuracy;
+    const pos = await SunsuMedia.posicion();
+    body.lat = pos.lat;
+    body.lng = pos.lng;
+    body.precision_m = pos.precision_m;
   } catch {
     if (err) err.textContent = "Sin la ubicación del teléfono no se puede marcar.";
     return;
@@ -6862,40 +7034,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk102"></script>
-<script src="beta-screens.js?v=20261118tk102"></script>
-<script src="beta-inline.js?v=20261118tk102"></script>
-<script src="mc-productos.js?v=20261118tk102"></script>
-<script src="mc-nav.js?v=20261118tk102"></script>
-<script src="mc-permisos.js?v=20261118tk102"></script>
-<script src="mc-protocolos.js?v=20261118tk102"></script>
-<script src="mc-conteo.js?v=20261118tk102"></script>
-<script src="mc-transferencias.js?v=20261118tk102"></script>
-<script src="mc-ajustes.js?v=20261118tk102"></script>
-<script src="vendor-qrcode.js?v=20261118tk102"></script>
-<script src="mc-tickets.js?v=20261118tk102"></script>
-<script src="mc-maestro.js?v=20261118tk102"></script>
-<script src="mc-empleados.js?v=20261118tk102"></script>
-<script src="mc-edit.js?v=20261118tk102"></script>
-<script src="mc-paquetes.js?v=20261118tk102"></script>
-<script src="mc-aperturas.js?v=20261118tk102"></script>
-<script src="mc-acceso.js?v=20261118tk102"></script>
-<script src="mc-barras.js?v=20261118tk102"></script>
-<script src="mc-caja.js?v=20261118tk102"></script>
-<script src="mc-giftcards.js?v=20261118tk102"></script>
-<script src="mc-multas.js?v=20261118tk102"></script>
-<script src="mc-clientes.js?v=20261118tk102"></script>
-<script src="mc-clientes-dup.js?v=20261118tk102"></script>
-<script src="mc-docpdf.js?v=20261118tk102"></script>
-<script src="mc-compras.js?v=20261118tk102"></script>
-<script src="mc-consignacion.js?v=20261118tk102"></script>
-<script src="mc-proveedores.js?v=20261118tk102"></script>
-<script src="mc-recepciones.js?v=20261118tk102"></script>
-<script src="mc-movil.js?v=20261118tk102"></script>
-<script src="mc-promociones.js?v=20261118tk102"></script>
-<script src="mc-agenda.js?v=20261118tk102"></script>
-<script src="mc-staff-home.js?v=20261118tk102"></script>
-<script src="mc-borradores.js?v=20261118tk102"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk103"></script>
+<script src="beta-screens.js?v=20261118tk103"></script>
+<script src="beta-inline.js?v=20261118tk103"></script>
+<script src="mc-productos.js?v=20261118tk103"></script>
+<script src="mc-nav.js?v=20261118tk103"></script>
+<script src="mc-permisos.js?v=20261118tk103"></script>
+<script src="mc-protocolos.js?v=20261118tk103"></script>
+<script src="mc-conteo.js?v=20261118tk103"></script>
+<script src="mc-transferencias.js?v=20261118tk103"></script>
+<script src="mc-ajustes.js?v=20261118tk103"></script>
+<script src="vendor-qrcode.js?v=20261118tk103"></script>
+<script src="mc-tickets.js?v=20261118tk103"></script>
+<script src="mc-maestro.js?v=20261118tk103"></script>
+<script src="mc-empleados.js?v=20261118tk103"></script>
+<script src="mc-edit.js?v=20261118tk103"></script>
+<script src="mc-paquetes.js?v=20261118tk103"></script>
+<script src="mc-aperturas.js?v=20261118tk103"></script>
+<script src="mc-acceso.js?v=20261118tk103"></script>
+<script src="mc-barras.js?v=20261118tk103"></script>
+<script src="mc-caja.js?v=20261118tk103"></script>
+<script src="mc-giftcards.js?v=20261118tk103"></script>
+<script src="mc-multas.js?v=20261118tk103"></script>
+<script src="mc-clientes.js?v=20261118tk103"></script>
+<script src="mc-clientes-dup.js?v=20261118tk103"></script>
+<script src="mc-docpdf.js?v=20261118tk103"></script>
+<script src="mc-compras.js?v=20261118tk103"></script>
+<script src="mc-consignacion.js?v=20261118tk103"></script>
+<script src="mc-proveedores.js?v=20261118tk103"></script>
+<script src="mc-recepciones.js?v=20261118tk103"></script>
+<script src="mc-movil.js?v=20261118tk103"></script>
+<script src="mc-promociones.js?v=20261118tk103"></script>
+<script src="mc-agenda.js?v=20261118tk103"></script>
+<script src="mc-staff-home.js?v=20261118tk103"></script>
+<script src="mc-borradores.js?v=20261118tk103"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
