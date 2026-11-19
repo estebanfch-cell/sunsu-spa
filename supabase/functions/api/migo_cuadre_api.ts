@@ -561,9 +561,14 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const vivas = rows.filter((b0) => borradorSePuedeVincular(b0.estado));
   const sinTicket = (b0: Row) => !s(b0.ticket_clave) && !n(b0.ticket_id);
   const gestiona = puedeGestionarBorradores(ses);
-  const mias = vivas.filter((b0) => puedeVerBorrador(ses, b0) && s(b0.estado) === "asignado" && (gestiona ? !sinTicket(b0) : true));
-  // Admin/recepción: siguen en «Facturas sin ticket» las pendientes y las asignadas que aún no tienen ticket (para no “perderlas”).
-  const bandeja = gestiona ? vivas.filter((b0) => sinTicket(b0)) : [];
+  // Admin: «mias» = ya completadas, pendientes de aprobar (sin ticket).
+  // El personal ve las suyas asignadas que aún no tienen ticket.
+  // «Facturas sin ticket» (bandeja) queda para las que todavía no se completaron.
+  const mias = vivas.filter((b0) => {
+    if (!puedeVerBorrador(ses, b0) || !sinTicket(b0)) return false;
+    return gestiona ? listoBorrador(b0) : s(b0.estado) === "asignado";
+  });
+  const bandeja = gestiona ? vivas.filter((b0) => sinTicket(b0) && !listoBorrador(b0)) : [];
   const hoy = ecuadorParts(ctx.now).ymd;
   const vinculados = (gestiona ? rows : rows.filter((b0) => puedeVerBorrador(ses, b0)))
     .filter((b0) => ["vinculado", "aprobado"].includes(s(b0.estado)) && s(b0.ticket_clave) && s(b0.vinculado_at || b0.aprobado_at || b0.updated_at || b0.assigned_at).slice(0, 10) >= fechasDias(hoy, -2)) // TK94: «Vinculadas» solo 2 días; después se ocultan (no se borran)

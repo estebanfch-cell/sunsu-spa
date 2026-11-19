@@ -1126,7 +1126,7 @@
     return Promise.resolve(orig(accion, body)).then(function(r){
       if (accion === "crearTicket" && r && r.requiere === "vincular_borrador" && r.borrador && !(body && (body.vincular_borrador || body.ignorar_borrador))) {
         var b = r.borrador;
-        var ok = confirm("Ya hay un borrador de la factura " + (b.factura || "") + " (" + (b.cliente || "") + ", $" + Number(b.total || 0).toFixed(2) + ").\n\n¿Vincular este ticket al borrador en vez de crear otro?");
+        var ok = confirm("Ya hay un borrador de la factura " + (b.factura || "") + " (" + (b.cliente || "") + ", $" + Number(b.total || 0).toFixed(2) + ").\n\n¿Vincular el ticket a esa factura? El ticket sí se crea.");
         return orig("crearTicket", Object.assign({}, body || {}, ok ? { vincular_borrador: b.factura } : { ignorar_borrador: true }));
       }
       return r;
