@@ -5,6 +5,7 @@ import { handle } from "./handlers.ts";
 import "./erp_api.ts";
 import "./productos_api.ts";
 import type { Row } from "./domain.ts";
+import { readFileSync } from "node:fs";
 import {
   BOD_CAB2, BOD_CAB3, BOD_CABINA, BOD_CASA, BOD_VENTA, comisionUnidad, grupoDeBodega, limpiarCambios,
   lineasOcLegacy, marcaDe, preciosDe, stockDe, stockTotal, tipoDe, utilidadProducto, snapProducto, fechaIso, cargarOcJson, costoRealElegido,
@@ -83,6 +84,12 @@ describe("productos MineCore: reglas puras", () => {
     assert.equal(tipoDe({ tipo: "GIFT CARD" }, {}).tipo, "servicio");
     assert.equal(tipoDe({ tipo: "PRODUCTO" }, {}).tipo, "inventariable");
     assert.equal(tipoDe(undefined, { legacy_tabla: "cabina_inventario" }).subtipo, "Insumo cabina");
+    // TK123: faciales/servicios sin tipo de catálogo no cuentan como producto físico (sin costo).
+    assert.equal(tipoDe(undefined, { categoria: "Facial", nombre: "FACIAL GOLD-AGING" }).tipo, "servicio");
+    assert.equal(tipoDe(undefined, { categoria: "Facial", nombre: "FACIAL GOLD-AGING" }).subtipo, "Facial");
+    assert.equal(tipoDe({}, { nombre: "FACIAL PURUIFICACIÓN S.O.S" }).tipo, "servicio");
+    assert.equal(tipoDe({ tipo: "" }, { categoria: "Paquete", nombre: "Pack glow" }).tipo, "servicio");
+    assert.equal(tipoDe(undefined, { nombre: "Crema hidratante facial", categoria: "Cuidado de la piel" }).tipo, "inventariable");
   });
   it("marca: de la ficha o deducida del nombre", () => {
     assert.deepEqual(marcaDe({ marca: "Dr.esthe" }, undefined, "x"), { marca: "Dr.esthe", deducida: false });
@@ -260,5 +267,41 @@ describe("productos MineCore: familias de SKU", () => {
     assert.deepEqual(skuVisible("60", "servicio", undefined), { sku: "60", alias: "" });
     assert.deepEqual(skuVisible("07", "servicio", { sku: "SUNSU-08" }), { sku: "07", alias: "" });
     assert.deepEqual(skuVisible("ML-001", "inventariable", { sku: "SUNSU-ML-001" }), { sku: "ML-001", alias: "" });
+  });
+});
+
+describe("TK123 Productos: filtros, escáner y sin-costo físico", () => {
+  it("la lista tiene búsqueda con escáner, Filtros/Columnas/+Nuevo en menús y el aviso de costo dentro de Filtros", () => {
+    const js = readFileSync(new URL("../../../mc-productos.js", import.meta.url), "utf8");
+    assert.match(js, /id="mcp-scan"/);
+    assert.match(js, /_scanAbrir/);
+    assert.match(js, /class="mcp-tools"/);
+    assert.match(js, /id="mcp-filt-btn"/);
+    assert.match(js, /id="mcp-cols-btn"/);
+    assert.match(js, /id="mcp-nuevo"/);
+    assert.match(js, /id="mcp-cost-pill"/);
+    assert.match(js, /function anclarMenu/);
+    assert.match(js, /function nSinCostoFisico/);
+    assert.match(js, /x\.faltaCosto && x\.tipo === "inventariable"/);
+    assert.match(js, /subtipo !== "Insumo cabina"/);
+    // El banner grande ya no va en el cuerpo de la lista (solo el píldora dentro de Filtros).
+    const render = js.slice(js.indexOf("async function renderLista"), js.indexOf("function wireLista"));
+    assert.doesNotMatch(render, /falta-costo-banner/);
+    assert.match(render, /mcp-cost-pill/);
+    assert.match(js, /mcp-bulk:not\(\[hidden\]\)\{display:flex\}/);
+    assert.match(js, /mcp-bulk\[hidden\]\{display:none!important\}/);
+  });
+  it("Simulación y Ver como no aparecen en la cabecera", () => {
+    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    assert.equal(html.includes('id="btn-prueba"'), false);
+    assert.equal(html.includes('id="btn-ver-como"'), false);
+  });
+  it("el escáner usa BarcodeDetector y cae a ZXing en Safari", () => {
+    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const start = js.indexOf("function _scanAbrir");
+    const block = js.slice(start, start + 3500);
+    assert.match(block, /BarcodeDetector/);
+    assert.match(block, /BrowserMultiFormatReader/);
+    assert.match(block, /cdn\.jsdelivr\.net\/npm\/@zxing\/library@0\.21\.3/);
   });
 });

@@ -22,7 +22,7 @@ import { enPrueba, type Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
 import { cargarAlias } from "./clientes_alias.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
-import { preciosDe, utilidadProducto } from "./productos.ts";
+import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
 
@@ -1353,7 +1353,7 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
     });
   }
   items.sort((a, b) => String(a.sku).localeCompare(String(b.sku)));
-  const esProd = (it: { tipo?: string }) => /PRODUCTO/i.test(s(it.tipo));
+  const esProd = (it: { tipo?: string; categoria?: string; nombre?: string }) => tipoDe({ tipo: it.tipo, categoria: it.categoria, nombre: it.nombre, producto_servicio: it.nombre }, { categoria: it.categoria, nombre: it.nombre }).tipo === "inventariable";
   const sinCosto = items.filter((it) => it.faltaCosto && esProd(it)).length;
   return { ok: true, items, sinCosto, productos: items.filter(esProd).length };
 });

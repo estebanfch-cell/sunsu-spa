@@ -52,14 +52,27 @@ export function grupoDeBodega(b: Row | undefined, sub = ""): { grupo: Grupo; sub
 
 export type Tipo = "servicio" | "inventariable";
 /** Servicio = faciales, add-ons, paquetes y gift cards. Inventariable = productos e insumos. */
+/** ¿Esta etiqueta (tipo, clase o categoría) nombra un servicio, no un producto físico? */
+function etiquetaServicio(raw: string): string {
+  const u = s(raw).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!u) return "";
+  if (/(^|\b)GIFT(\b|$)/.test(u)) return "Gift card";
+  if (/(^|\b)(PAQ|PACK|PAQUETE|PAQUETES)(\b|$)/.test(u)) return "Paquete";
+  if (/(^|\b)ADD[- ]?ON(\b|$)/.test(u) || /(^|\b)ADD(\b|$)/.test(u)) return "Add-on";
+  if (/(^|\b)FACIAL(ES)?(\b|$)/.test(u) && /ESPECIAL/.test(u)) return "Facial especial";
+  if (/(^|\b)FACIAL(ES)?(\b|$)/.test(u)) return "Facial";
+  if (/(^|\b)SERV(ICIO|ICIOS)?(\b|$)/.test(u)) return "Servicio";
+  return "";
+}
+
 export function tipoDe(cat: Row | undefined, erp: Row | undefined): { tipo: Tipo; subtipo: string } {
   const t = s(cat?.tipo).toUpperCase();
   const clase = s(erp?.clase).toLowerCase();
-  if (t.includes("GIFT") || clase === "gift") return { tipo: "servicio", subtipo: "Gift card" };
-  if (t.includes("PAQ") || t.includes("PACK") || clase === "paquete") return { tipo: "servicio", subtipo: "Paquete" };
-  if (t.includes("ADD")) return { tipo: "servicio", subtipo: "Add-on" };
-  if (t.includes("FACIAL")) return { tipo: "servicio", subtipo: t.includes("ESPECIAL") ? "Facial especial" : "Facial" };
-  if (t.includes("SERV") || clase === "servicio") return { tipo: "servicio", subtipo: "Servicio" };
+  const sub = etiquetaServicio(t) || etiquetaServicio(clase) || etiquetaServicio(s(erp?.categoria)) || etiquetaServicio(s(cat?.categoria)) || etiquetaServicio(s(erp?.tipo));
+  if (sub) return { tipo: "servicio", subtipo: sub };
+  const nombre = s(erp?.nombre) || s(cat?.producto_servicio) || s(cat?.nombre);
+  const porNombre = etiquetaServicio((nombre.match(/^\s*(FACIAL(?:\s+ESPECIAL)?|PAQUETE|GIFT(?:\s*CARD)?|SERVICIO|ADD[- ]?ON)\b/i) || [""])[0]);
+  if (porNombre) return { tipo: "servicio", subtipo: porNombre };
   if (!cat && s(erp?.legacy_tabla) === "cabina_inventario") return { tipo: "inventariable", subtipo: "Insumo cabina" };
   return { tipo: "inventariable", subtipo: "Producto" };
 }
