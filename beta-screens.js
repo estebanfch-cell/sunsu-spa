@@ -2057,6 +2057,50 @@ function _renderP2GCSlots(n){
   box.innerHTML = html;
 }
 
+
+/** TK149: la GC de una conversión nace con el facial y el valor real del paquete (Reset $95, no $65). */
+function facialDePackTxt(packTxt){
+  var txt=String(packTxt||'');
+  var sku=(txt.match(/SUNSU-\d+/i)||[''])[0].toUpperCase();
+  var map={
+    'SUNSU-17':'SUNSU-01','SUNSU-23':'SUNSU-01',
+    'SUNSU-18':'SUNSU-02','SUNSU-24':'SUNSU-02',
+    'SUNSU-19':'SUNSU-03','SUNSU-25':'SUNSU-03',
+    'SUNSU-20':'SUNSU-04','SUNSU-26':'SUNSU-04',
+    'SUNSU-21':'SUNSU-05','SUNSU-27':'SUNSU-05',
+    'SUNSU-22':'SUNSU-06','SUNSU-28':'SUNSU-06',
+    'SUNSU-44':'SUNSU-40','SUNSU-48':'SUNSU-40',
+    'SUNSU-45':'SUNSU-41','SUNSU-49':'SUNSU-41',
+    'SUNSU-46':'SUNSU-42','SUNSU-50':'SUNSU-42',
+    'SUNSU-47':'SUNSU-43','SUNSU-51':'SUNSU-43',
+    'SUNSU-53':'SUNSU-52','SUNSU-54':'SUNSU-52',
+    'SUNSU-58':'SUNSU-57','SUNSU-59':'SUNSU-57'
+  };
+  var facSku=map[sku]||'';
+  var fac=null;
+  var list=(typeof FACIALES!=='undefined'&&FACIALES)||[];
+  if(facSku) for(var i=0;i<list.length;i++) if(list[i].sku===facSku){fac=list[i];break;}
+  if(!fac){
+    var blob=txt.toLowerCase();
+    for(var j=0;j<list.length;j++){
+      var n=String(list[j].n||'').toLowerCase().replace(/^facial\s+/,'').replace(/\s*\(.*$/,'').trim();
+      var key=n.split(/\s+/)[0];
+      if(key && key.length>=4 && blob.indexOf(key)!==-1){fac=list[j];break;}
+    }
+  }
+  return {sku:sku, facSku:fac&&fac.sku||facSku, nombre:fac&&fac.n||'', precio:fac&&Number(fac.p)||0};
+}
+function notasConvPaqueteGC(s){
+  var info=facialDePackTxt((typeof T!=='undefined' && (T.pack3||T.pack6))||'');
+  var tipo=(s&&s.tipo==='fisica')?'Física':'Digital';
+  var parts=[];
+  if(info.nombre) parts.push(info.nombre);
+  if(info.precio>0) parts.push('$'+info.precio);
+  parts.push('Conv. paquete'+(info.sku?' '+info.sku:'')+'→GC');
+  parts.push(tipo);
+  return parts.join(' · ');
+}
+
 function selPaqGCTipo(idx, tipo, n){
   n = n || T.paq2gcN || (T.pack3?3:6);
   var slotKey = n===3?'paq2gcSlots3':'paq2gcSlots6';
@@ -3240,7 +3284,7 @@ function enviarTicket(){
         +'&cedula='+encodeURIComponent((payload.cedula||''))
         +'&nombre='+encodeURIComponent((payload.nombre||''))
         +'&apellido='+encodeURIComponent((payload.apellido||''))
-        +'&notas='+encodeURIComponent('Conv. paquete→GC · '+(s.tipo==='fisica'?'Física':'Digital'))
+        +'&notas='+encodeURIComponent(notasConvPaqueteGC(s))+'&valor='+encodeURIComponent((function(){var i=facialDePackTxt((T&&(T.pack3||T.pack6))||'');return i.nombre&&i.precio?(i.nombre+' $'+i.precio):(i.nombre||'');})())+'&pack='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').sku))+'&facial='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').nombre))+'&precio='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').precio||''))
       ).catch(function(){return null;});
   });
 
