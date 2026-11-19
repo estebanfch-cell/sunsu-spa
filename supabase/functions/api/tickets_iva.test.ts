@@ -21,10 +21,12 @@ describe("ticket sin IVA (TK39, TK-SO-1861)", () => {
     // TK68: totales solo Subtotal, IVA 15 %, Total, Pagado, Saldo.
     assert.doesNotMatch(src, /Subtotal gravado 15%|<span>Subtotal 0%|Subtotal \(sin IVA\)/);
     for (const t of ["<span>Subtotal</span>", "<span>IVA 15%</span>", ">Total</span>", "<span>Pagado</span>", "<span>Saldo</span>"]) assert.ok(src.includes(t), t);
-    // Líneas en 1–2 filas con container query (sin tabla con scroll horizontal).
+    // TK142: líneas compactas (sin tabla, sin botón gigante Eliminar).
     assert.match(src, /container-type:inline-size/);
     assert.match(src, /@container mctkl \(min-width:700px\)/); // TK81: grilla fija desde 700px
     assert.doesNotMatch(src, /mctk-lt"><thead>/);
+    assert.doesNotMatch(src, />Eliminar<\/button>/);
+    assert.match(src, /data-tog/);
     assert.match(src, /l\.precio_unit = \(Number\(ev\.target\.value\) \|\| 0\) \* IVA/);
     assert.doesNotThrow(() => new Function(src));
   });

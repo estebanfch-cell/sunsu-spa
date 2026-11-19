@@ -133,11 +133,13 @@ describe("TK81 · pill «Diferencia por mejora» solo con una línea real", () =
   it("la línea de diferencia con monto sí", () => {
     assert.equal(esMejora({ precio_unit: 37.82, nombre: "Diferencia por mejora de paquete", mejoraPaquete: true }), true);
   });
-  it("las líneas: grilla fija con #, código bajo el nombre y sin cajas de texto", () => {
+  it("las líneas: bloque compacto TK142, P. sin IVA al editar, sin cajas de texto ni botón grande de mejora", () => {
     const li = fe.slice(fe.indexOf("function lineasHtml()"), fe.indexOf("function totHtml()"));
-    assert.match(li, /<span>#<\/span><span>Producto<\/span><span>Cant<\/span><span>P\. sin IVA<\/span><span>Desc<\/span>/);
-    assert.match(li, /class="mctk-li">' \+ \(i \+ 1\)/);
+    assert.match(li, /P\. sin IVA/);
+    assert.match(li, /data-tog/);
+    assert.match(li, /class="mctk-x"/);
     assert.doesNotMatch(li, /<input/);
+    assert.doesNotMatch(li, />Eliminar<\/button>/);
     assert.doesNotMatch(li, /\+ Diferencia por mejora</);
   });
 });
