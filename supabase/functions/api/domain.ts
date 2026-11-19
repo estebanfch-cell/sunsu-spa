@@ -698,6 +698,21 @@ export function marcaDePersona(marks: CosmMark[], cosm: string): CosmMark | unde
   return marks.find((k) => nombre.includes(normNombre(k.patron.replace(/%/g, "")).split(" ")[0]) || nombre.startsWith(normNombre(k.id)));
 }
 
+/** TK121: tarifa fija de comisión del facial hecho (la misma de calcularCiclo y del sistema viejo).
+ *  No depende del precio cobrado: un canje de paquete, una cortesía o un facial con gift card pagan la tarifa completa. */
+export function tarifaFacial(sku: unknown, cfg: Pick<ComCfg, "facial2" | "facial3" | "facialSku"> = CFG_DEF): number {
+  const k = facialSku(sku);
+  if (!k) return 0;
+  const over = cfg.facialSku && cfg.facialSku[k] != null ? cfg.facialSku[k] : null;
+  if (over != null) return n(over);
+  return FACIALES_2.includes(k) ? cfg.facial2 : FACIALES_3.includes(k) ? cfg.facial3 : 0;
+}
+/** TK121: comisión congelada de una línea facial (snapshot TK114). Paga la tarifa aunque la línea sea canje en $0. */
+export function comisionFacialLinea(l: { sku?: unknown; nombre?: unknown; cantidad?: unknown; excluir?: boolean }, cfg: Pick<ComCfg, "facial2" | "facial3" | "facialSku">, paga: boolean): number {
+  if (!paga || l.excluir) return 0;
+  const t = tarifaFacial(facialSku(l.sku) || facialSku(l.nombre) || ("SUNSU-" + s(l.sku).replace(/\D/g, "").padStart(2, "0")), cfg);
+  return round2(t * Math.max(1, Math.round(n(l.cantidad) || 1)));
+}
 /** $0 de facial si la marca está apagada o el ticket es anterior a comFacDesde. Sin marca, cobra. */
 export function pagaComisionFacial(mark: Pick<CosmMark, "comFac" | "comFacDesde"> | undefined, fecha: string): boolean {
   if (!mark) return true;
@@ -949,7 +964,7 @@ export function calcularCiclo(
       if (FACIALES_2.includes(sku)) r.faciales2++;
       else if (FACIALES_3.includes(sku)) r.faciales3++;
       if (pagaComisionFacial(marcaDePersona(marksLimpios, t.cosm), t.fecha)) {
-        r.comFaciales += overFacial != null ? overFacial : (FACIALES_2.includes(sku) ? cfg.facial2 : cfg.facial3);
+        r.comFaciales += tarifaFacial(sku, cfg);
       }
     }
     if (!t.exclPaquete) {

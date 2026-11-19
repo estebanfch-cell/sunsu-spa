@@ -377,7 +377,8 @@ export function recalcular(lineas: LineaVenta[], descuento: number, cfg?: ComCfg
       const overF = sku && cfg?.facialSku && cfg.facialSku[sku] != null ? cfg.facialSku[sku] : null;
       const tarifa = overF != null ? overF : (FACIALES_2.includes(sku) ? (cfg?.facial2 ?? 2) : FACIALES_3.includes(sku) ? (cfg?.facial3 ?? 3) : 0);
       const base = ln.precio > 0 ? ln.precio * ln.cantidad : 0;
-      const ratio = base > 0 ? Math.min(1, neto / base) : (neto > 0 ? 1 : 0);
+      // TK121: facial en $0 (canje de paquete / cortesía) paga la tarifa completa; no sale del precio $0.
+      const ratio = base > 0 ? Math.min(1, neto / base) : 1;
       comF += tarifa * ratio * ln.cantidad;
     }
   }

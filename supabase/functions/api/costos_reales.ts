@@ -1,6 +1,7 @@
 // Costo real de compra (última OC, ficha beta o inventario_base) y snapshots de
 // precios en el ticket. Nunca usa precio_compra, compra_comision ni costo_promedio.
-import { compraParaComision, n, productQtys, round2, s, skuCode, type Row, type TicketIn } from "./domain.ts";
+import { cicloInicio, comisionFacialLinea, compraParaComision, marcaDePersona, n, pagaComisionFacial, productQtys, round2, s, skuCode, toCosmMark, ymdUtc, type Row, type TicketIn } from "./domain.ts";
+import { cfgAplicada } from "./comision_cfg.ts";
 import { cargarOcJson, costoRealElegido, ponerPrecioOc, snapProducto, ventaNetaLineas } from "./productos.ts";
 import { IVA_TK } from "./ticket_beta.ts";
 import type { Db } from "./db.ts";
@@ -121,6 +122,11 @@ export async function asegurarSnapshots(
   const snaps = await db.all("beta_ticket_snaps").catch(() => [] as Row[]);
   const snapSet = new Set(snaps.map((x) => s(x.ticket_clave) + "\t" + skuCode(s(x.sku)) + "\t" + (x.es_paquete === true ? "1" : "0")));
 
+  // TK121: datos para congelar la comisión de las líneas faciales (canje incluido).
+  const tkPorClave = new Map(tickets.map((r) => [claveDe(r), r]));
+  const marcas = (await db.all("cosmetologas").catch(() => [] as Row[])).map(toCosmMark);
+  const cfgCache = new Map<string, Awaited<ReturnType<typeof cfgAplicada>>["cfg"]>();
+  const cfgDe = async (ciclo: string) => { if (!cfgCache.has(ciclo)) { try { cfgCache.set(ciclo, (await cfgAplicada(db, ciclo)).cfg); } catch { return null; } } return cfgCache.get(ciclo)!; };
   for (const l of lineas) {
     if (l.snapshot_at != null && l.snapshot_at !== "") continue;
     const cab = porClave.get(s(l.ticket_clave));
@@ -141,6 +147,15 @@ export async function asegurarSnapshots(
     });
     const id = s(l.id);
     if (!id) continue;
+    if (s(l.tipo) === "facial") {
+      const tk = tkPorClave.get(s(l.ticket_clave));
+      const fecha = tk ? ymdUtc(tk.timestamp) : "";
+      const cfg = fecha ? await cfgDe(cicloInicio(fecha)) : null;
+      if (tk && cfg) {
+        const paga = cab?.excluir_cosmetologa !== true && pagaComisionFacial(marcaDePersona(marcas, s(tk.atendido_por)), fecha);
+        snap.comision = comisionFacialLinea({ sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, excluir: l.excluir_comision === true }, cfg, paga);
+      }
+    }
     try {
       await db.write(actor, "beta_ticket_lineas", "update", { id }, { ...snap, snapshot_at: new Date().toISOString() });
     } catch { /* columna aún no aplicada */ }
