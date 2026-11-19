@@ -18,6 +18,7 @@ import "./productos_api.ts";
 import "./productos_paridad_api.ts";
 import "./protocolos_api.ts";
 import "./conteo_fisico_api.ts";
+import "./conteo_secciones_api.ts";
 import "./transferencias_beta_api.ts";
 import "./ajustes_beta_api.ts";
 import "./tickets_beta_api.ts";

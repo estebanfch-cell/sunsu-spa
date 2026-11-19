@@ -6,6 +6,7 @@ import "./erp_api.ts";
 import "./productos_api.ts";
 import "./conteo_fisico_api.ts";
 import type { Row } from "./domain.ts";
+import { readFileSync } from "node:fs";
 
 function semilla() {
   const db = new MemoryDb();
@@ -29,7 +30,7 @@ function semilla() {
     { producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 5 },
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
   ]);
-  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones"]) db.tables.set(t, []);
+  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos"]) db.tables.set(t, []);
   const c = { db, now: new Date("2026-11-17T17:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
@@ -97,5 +98,81 @@ describe("conteo físico beta", () => {
     const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
     assert.equal(ap.stockAplicado, false);
     assert.equal(JSON.stringify(db.tables.get("erp_stock")), stockAntes);
+  });
+});
+
+describe("TK116 conteo general vivo como MineCore", () => {
+  it("se guarda a medias, otra persona lo retoma, y el esperado se actualiza con ventas durante el conteo", async () => {
+    const { db, h } = semilla();
+    const cr = await h("cf_crear_general", "cos", {});
+    assert.equal(cr.ok, true);
+    assert.equal(cr.numero, "CF-001");
+    const g0 = await h("cf_get_general", "cos", { id: cr.id });
+    assert.equal((g0.secciones as Row[]).length, 5);
+    const venta = (g0.secciones as Row[]).find((s) => s.nombre === "Venta")!;
+    const ini = await h("cf_sec_iniciar", "cos", { id: venta.id });
+    assert.ok(Number(ini.lineas) >= 2);
+    const get1 = await h("cf_sec_get", "cos", { id: venta.id });
+    const L = get1.lineas as Row[];
+    const amp = L.find((l) => l.sku === "ML-001")!;
+    assert.equal(amp.sistema, 5);
+    assert.equal(amp.esperado, 5);
+    const stock = db.tables.get("erp_stock")!.find((r) => r.producto_id === "p1")!;
+    stock.cantidad = 4;
+    db.tables.get("erp_movimientos")!.push({
+      id: "m-vta", fecha: "2026-11-17T17:05:00.000Z", actor: "Ana", producto_id: "p1",
+      bodega_id: "11111111-1111-4111-8111-111111111111", sububicacion: "", delta: -1, tipo: "venta", ticket_ref: "TK-1",
+    });
+    const get2 = await h("cf_sec_get", "cos", { id: venta.id });
+    const amp2 = (get2.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    assert.equal(amp2.esperado, 4);
+    assert.equal(amp2.mov, -1);
+    assert.ok(((get2.movimientos as Row[]) || []).some((m) => m.label === "Venta" && m.delta === -1 && (m.sku === "ML-001" || !m.sku)));
+    const sav = await h("cf_sec_guardar", "cos", { id: venta.id, lineas: [{ id: amp.id, contado: 4 }] });
+    assert.equal(sav.ok, true);
+    const sav2 = await h("cf_sec_guardar", "otra", { id: venta.id, lineas: L.filter((l) => l.sku !== "ML-001").map((l) => ({ id: l.id, contado: l.esperado })) });
+    assert.equal(sav2.ok, true);
+    const cerrar = await h("cf_sec_cerrar", "otra", { id: venta.id });
+    assert.equal(cerrar.ok, true);
+    const get3 = await h("cf_sec_get", "adm", { id: venta.id });
+    assert.equal((get3.seccion as Row).estado, "en_revision");
+    const amp3 = (get3.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    assert.equal(amp3.esperado, 4);
+    const stockAntes = JSON.stringify(db.tables.get("erp_stock"));
+    const ap = await h("cf_sec_aprobar", "adm", { id: venta.id });
+    assert.equal(ap.stockAplicado, false);
+    assert.equal(JSON.stringify(db.tables.get("erp_stock")), stockAntes);
+  });
+
+  it("buscar después impide terminar hasta que se quite", async () => {
+    const { h } = semilla();
+    const cr = await h("cf_crear_general", "cos", {});
+    const g0 = await h("cf_get_general", "cos", { id: cr.id });
+    const venta = (g0.secciones as Row[]).find((s) => s.nombre === "Venta")!;
+    await h("cf_sec_iniciar", "cos", { id: venta.id });
+    const get1 = await h("cf_sec_get", "cos", { id: venta.id });
+    const L = get1.lineas as Row[];
+    await h("cf_sec_guardar", "cos", { id: venta.id, lineas: L.map((l, i) => ({ id: l.id, contado: l.esperado, buscar: i === 0 })) });
+    const blocked = await h("cf_sec_cerrar", "cos", { id: venta.id });
+    assert.match(String(blocked.error || ""), /buscar/i);
+    await h("cf_sec_guardar", "cos", { id: venta.id, lineas: L.map((l) => ({ id: l.id, contado: l.esperado, buscar: false })) });
+    const ok = await h("cf_sec_cerrar", "cos", { id: venta.id });
+    assert.equal(ok.ok, true);
+  });
+
+  it("el front tiene Guardado, Terminar, esp. visible, banner de movimientos y el menú de la fila", () => {
+    const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
+    assert.match(js, /Nuevo conteo general/);
+    assert.match(js, /Hojas sueltas \(antes\)/);
+    assert.match(js, /inventario sigue vivo/);
+    assert.match(js, /guardar, salir y volver/);
+    assert.match(js, /esp\. /);
+    assert.match(js, /Recontar: hubo movimientos durante el conteo/);
+    assert.match(js, /Está en otro lugar/);
+    assert.match(js, /Buscar después/);
+    assert.match(js, /Agregar ubicación/);
+    assert.match(js, /✓ Guardado/);
+    assert.match(js, />Terminar</);
+    assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
   });
 });

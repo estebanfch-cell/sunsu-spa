@@ -300,8 +300,8 @@ describe("TK113 · ticket móvil sin error en Documentos", () => {
   it("sube el cache a TK113", () => {
     const beta = readFileSync(join(root, "beta.html"), "utf8");
     const sw = readFileSync(join(root, "sw.js"), "utf8");
-    assert.match(beta, /20261119tk114/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK114/);
+    assert.match(beta, /20261119tk116/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK116/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK112/);
   });
 
