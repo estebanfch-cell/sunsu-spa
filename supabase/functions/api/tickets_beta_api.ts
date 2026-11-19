@@ -26,7 +26,8 @@ import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { alertaCanje } from "./canje_linea.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
-import { compraParaComision } from "./domain.ts";
+import { cicloInicio, comisionFacialLinea, compraParaComision, marcaDePersona, pagaComisionFacial, toCosmMark } from "./domain.ts";
+import { cfgAplicada } from "./comision_cfg.ts";
 import { snapProducto, ventaNetaLineas } from "./productos.ts";
 import { mapaCostoReal } from "./costos_reales.ts";
 import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
@@ -447,6 +448,14 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
     compraComisionUnit: compraParaComision(cats.get(skuCode(l.sku))),
     excluir: l.excluir_comision === true,
   }));
+  // TK121: la línea facial (también el canje de paquete en $0) congela la tarifa fija de la cosmetóloga que lo hizo.
+  try {
+    const fechaTk = ymdUtc(r.timestamp) || ymdUtc(ctx.now);
+    const cfgTk = (await cfgAplicada(ctx.db, cicloInicio(fechaTk))).cfg;
+    const marcasTk = (await ctx.db.all("cosmetologas").catch(() => [] as Row[])).map(toCosmMark);
+    const paga = !exclC && pagaComisionFacial(marcaDePersona(marcasTk, s(r.atendido_por)), fechaTk);
+    calc.lineas.forEach((l, i) => { if (l.tipo === "facial") snaps[i] = { ...snaps[i], comision: comisionFacialLinea({ sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, excluir: l.excluir_comision === true }, cfgTk, paga) }; });
+  } catch { /* sin config: queda en 0 como antes */ }
   const packSnap = calc.lineas.map((l, i) => ({ l, s: snaps[i] })).filter((x) => x.l.tipo === "paquete");
   const netoPackVenta = packSnap.filter((x) => n(x.l.precio_unit) > 0).map((x) => x.s.venta_neta);
   const fila: Row = {

@@ -109,7 +109,7 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
     const ed = readFileSync(join(root, "mc-edit.js"), "utf8");
     assert.match(ed, /Enviar solicitud/); assert.match(ed, /Solicitar eliminación/); assert.match(ed, /Descartar/);
     const beta = readFileSync(join(root, "beta.html"), "utf8");
-    assert.match(beta, /mc-edit\.js\?v=20261119tk120/);    assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
+    assert.match(beta, /mc-edit\.js\?v=20261119tk121/);    assert.match(readFileSync(join(root, "sw.js"), "utf8"), /"\/mc-edit\.js"/);
   });
 
   it("Multas, Transferencias y Promociones: sin botón Editar; Guardar solo con cambios", () => {

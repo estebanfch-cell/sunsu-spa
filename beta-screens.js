@@ -2299,6 +2299,10 @@ function updatePreview(){
         comF=f.com;
         T._gcUsado=tope; T._gcDif=facialP;
       } else if(!esCanje){ comF=f.com; facialP=f.p; }
+      // TK121: canje de paquete / cortesía: la clienta paga $0 pero la cosmetóloga que hace la sesión
+      // cobra la tarifa fija del facial (misma regla que Comisiones y el sistema viejo). Nunca sale del precio $0.
+      else { comF=f.com; }
+      if(typeof CU!=='undefined'&&CU&&_sinComFaciales_(CU.name)) comF=0;
     }
   }
   var _gcDifEl=document.getElementById('gc-dif');
