@@ -65,10 +65,12 @@ describe("TK95 · catálogo del ticket incluye productos Migo", () => {
     assert.equal(hit!.enMigo, true);
   });
 
-  it("un producto ERP sin PVP y que no está en Migo no aparece (no hay precio)", () => {
+  it("un producto ERP recién creado, aunque no tenga PVP ni esté en Migo, sí aparece en la búsqueda", () => {
     const items = armarCatalogoTicket([], [{
-      sku: "INV-001", nombre: "Insumo interno", tipo: "producto", pvp: 0, activo: true, barras: [], id: "x",
+      sku: "INV-131", skuVisible: "INV-131", nombre: "AC Serum - Dr.esthe", tipo: "producto", pvp: 0, activo: true, barras: [], id: "x",
     }], new Map());
-    assert.equal(items.length, 0);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].sku, "INV-131");
+    assert.equal(items[0].pvp, 0);
   });
 });
