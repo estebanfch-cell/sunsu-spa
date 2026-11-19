@@ -852,6 +852,8 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   (base.orig as R).timestamp = ec.stamp;
   (base.orig as R).beta = true;
   (base.orig as R).so_num = soNum;
+  (base.orig as R).creado_por = s(ses && (ses as { name?: string; nombre?: string }).name) || s(ses && (ses as { name?: string; nombre?: string }).nombre) || s(p.cosmetologa) || actor;
+  if (ses && (ses as { uid?: string }).uid) (base.orig as R).creado_por_uid = s((ses as { uid?: string }).uid);
   base.so_num = soNum;
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;

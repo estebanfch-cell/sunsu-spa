@@ -20,6 +20,7 @@ import { tipoSinCobro } from "./sin_cobro.ts";
 import { alertaCanje } from "./canje_linea.ts";
 import { FALTA_DESDE } from "./tickets_beta_api.ts";
 import { parseGcCanje } from "./ventas.ts";
+import { enriquecerItemsLista } from "./ticket_lista_card.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
@@ -183,7 +184,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       ...(faltaTodo(r, d).length ? { falta: faltaTodo(r, d) } : {}),
-      ...((() => { const pf = pagosFaltanFoto({ beta: pagosPorClave.get(clave) || [], legado: metodosPago(r.comp), comps: (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) }); return pf.length ? { pagosFaltan: pf } : {}; })()),
+      ...((() => {
+        const comps = (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true);
+        const beta = pagosPorClave.get(clave) || [];
+        const pf = pagosFaltanFoto({ beta, legado: metodosPago(r.comp), comps, comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) });
+        const fotoPago = comps.length > 0 || beta.some((p) => !!s((p as Row).comprobante_id)) || !!s(colTicket(r, "comprobante"));
+        return { ...(pf.length ? { pagosFaltan: pf } : {}), ...(fotoPago ? { fotoPago: 1 } : {}) };
+      })()),
     };
     return it;
   });
@@ -199,6 +206,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   }
   if (est && est !== "abierto" && est !== "pagado") borr = [];
   // TK94 (Emilia 18/11): los borradores Migo NO van en Tickets; viven en Ventas › Facturas borrador.
+  await enriquecerItemsLista(ctx.db, filas, items, cabMap);
   const itemsOut = items;
   return { ok: true, items: itemsOut, total, suma, offset: desde, limit: lim, hayMas: desde + items.length < total, ms: Date.now() - t0, borradores: borr.length };
 });

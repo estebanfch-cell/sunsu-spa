@@ -49,10 +49,10 @@ describe("TK136 Aplica a faciales compacto + una sola lista", () => {
   });
 
   it("el cache de la beta apunta a TK138", () => {
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK145"/);
-    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK145"/);
-    assert.match(beta, /mc-productos\.js\?v=20261119tk145/);
-    assert.match(beta, /mc-aperturas\.js\?v=20261119tk145/);
+    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK146"/);
+    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK146"/);
+    assert.match(beta, /mc-productos\.js\?v=20261119tk146/);
+    assert.match(beta, /mc-aperturas\.js\?v=20261119tk146/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK135/);
     assert.doesNotMatch(beta, /20261119tk135/);
   });

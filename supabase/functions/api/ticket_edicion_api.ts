@@ -322,12 +322,56 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
   if (hay) {
     await ctx.db.write(actorOf(ses), "solicitudes_cambio", "update", { id: hay.id }, { ...recBase, id: hay.id });
     try { await logAccion(ctx.db, actorOf(ses), "SOLICITUD EDICIÓN", clave + " · actualizada"); } catch { /* */ }
+    try { await avisarEdicionTicket(ctx, ses, clave, s(hay.id), true); } catch { /* el aviso no frena */ }
     return { ok: true, id: hay.id, actualizada: true, diff, clave };
   }
   const id = crypto.randomUUID();
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, { ...recBase, id });
   try { await logAccion(ctx.db, actorOf(ses), "SOLICITUD EDICIÓN", clave); } catch { /* */ }
+  try { await avisarEdicionTicket(ctx, ses, clave, id, false); } catch { /* el aviso no frena */ }
   return { ok: true, id, actualizada: false, diff, clave };
+}
+
+export async function avisarEdicionTicket(ctx: Ctx, ses: Ses, clave: string, solId: string, actualizada: boolean): Promise<void> {
+  const titulo = actualizada ? "Solicitud de edición actualizada" : "Solicitud de edición de ticket";
+  const cuerpo = s(ses.name) + (actualizada ? " actualizó la edición de " : " pidió editar ") + clave;
+  const link = "#/m/tickets/t/" + encodeURIComponent(clave);
+  const users = await ctx.db.all("usuarios").catch(() => [] as Row[]);
+  const { esAdmin } = await import("./permisos.ts");
+  for (const u of users) {
+    if (!esAdmin(s(u.rol))) continue;
+    const uid = s(u.uid) || s(u.id);
+    if (!uid || uid === s(ses.uid)) continue;
+    try {
+      await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
+        id: crypto.randomUUID(), usuario: uid, tipo: "edicion_ticket",
+        titulo, cuerpo, link, ref_id: solId, created_at: ctx.now.toISOString(),
+      });
+    } catch { /* sigue con el resto */ }
+  }
+  try {
+    const { pushAPersonas } = await import("./horarios_api.ts");
+    const nombres = users.filter((u) => esAdmin(s(u.rol)) && s(u.nombre) !== s(ses.name)).map((u) => s(u.nombre));
+    await pushAPersonas(ctx, ses, nombres, cuerpo, "edicion_ticket");
+  } catch { /* push opcional */ }
+}
+
+export function avisosVirtualesEdicion(sols: Row[], existentes: Row[], ses: Ses, esAdminRol: boolean): Row[] {
+  if (!esAdminRol) return [];
+  const out: Row[] = [];
+  for (const r of sols) {
+    if (s(r.tabla) !== "ticket_detalle" || s(r.estado) !== "pendiente" || r.prueba === true) continue;
+    const link = s(r.enlace) || ("#/m/tickets/t/" + encodeURIComponent(s(r.fila)));
+    const sid = s(r.id);
+    if (existentes.some((x) => s(x.tipo) === "edicion_ticket" && (s(x.ref_id) === sid || s(x.id) === "sol:" + sid || s(x.id) === sid || (s(x.link) === link && !s((x as Row).leida_at || x.leida))))) continue;
+    out.push({
+      id: "sol:" + s(r.id), tipo: "edicion_ticket",
+      titulo: "Solicitud de edición de ticket",
+      cuerpo: (s(r.solicitante) || "Alguien") + " pidió editar " + s(r.fila),
+      link, leida: false, fecha: s(r.creado),
+    });
+  }
+  return out;
 }
 
 export async function aplicarEdicionTicket(ctx: Ctx, ses: Ses, fila: string, propuestos: Row, sol?: Row): Promise<Row> {
@@ -371,7 +415,7 @@ export async function aplicarEdicionTicket(ctx: Ctx, ses: Ses, fila: string, pro
   try {
     const { cuadreTrasTicket, reevaluarFlags } = await import("./migo_cuadre_api.ts");
     await cuadreTrasTicket(ctx, actor);
-    await reevaluarFlags(ctx, actor);
+    void reevaluarFlags(ctx, actor).catch(() => { /* no frena la aprobación */ });
   } catch { /* el ticket ya quedó */ }
   try { await logAccion(ctx.db, actor, "APROBAR EDICIÓN", (s(r.so_num) || fila) + " · pedido por " + s(sol?.solicitante) + " · atendió " + cosm); } catch { /* */ }
   return { ok: true, clave: s(r.so_num) || fila, uso, atendido_por: cosm, total: g.total };

@@ -41,7 +41,7 @@
       ".mctk-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mctk-acts[hidden],.mctk-dd[hidden]{display:none}.mctk-menu{position:relative}.mctk-dd{position:absolute;right:0;top:100%;margin-top:4px;background:var(--white,#fff);border:1px solid var(--cream-d);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:50;padding:4px}",
       ".mctk-dd a,.mctk-dd button{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:none;font:inherit;font-size:.8rem;color:var(--navy-d);text-decoration:none;cursor:pointer;border-radius:7px}.mctk-dd a:hover,.mctk-dd button:hover{background:var(--cream)}",
       ".mctk-t input,.mctk-t select{padding:5px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.8rem}.mctk-t .q{width:58px;text-align:right}.mctk-t .p{width:80px;text-align:right}.mctk-t .dv{width:58px;text-align:right}",
-      ".mctk-tot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 18px;max-width:min(360px,100%);width:100%;margin-left:auto;font-size:.88rem;overflow:visible;box-sizing:border-box}.mctk-tot b{text-align:right}.mctk-tot .big{font-size:1.2rem;color:var(--navy-d)}",
+      ".mctk-tot{display:grid;grid-template-columns:auto auto;gap:3px 14px;width:max-content;max-width:100%;margin-left:auto;justify-content:end;font-size:.88rem;overflow:visible;box-sizing:border-box;text-align:right}.mctk-tot b{text-align:right}.mctk-tot .big{font-size:1.2rem;color:var(--navy-d)}",
       ".mctk-flash{animation:mctkf .6s}@keyframes mctkf{0%{background:#c9f2d3}100%{background:transparent}}.mctk-flash-bad{animation:mctkb .6s}@keyframes mctkb{0%{background:#f9d0cc}100%{background:transparent}}",
       ".mctk-scan{display:flex;gap:8px;align-items:center}.mctk-scan input{flex:1;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit}.mctk-est{font-size:.62rem;background:#fff3d6;color:#9a6b00;border-radius:6px;padding:1px 5px;margin-left:4px}",
       ".mctk-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mctk-box{background:var(--white,#fff);border-radius:14px;padding:16px;width:min(520px,94vw);max-height:88vh;overflow:auto}",
@@ -67,7 +67,7 @@
       ".mctk-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:14px}@media(max-width:720px){.mctk-grid{grid-template-columns:1fr}}.mctk-grid dl,.mctk-grid1{margin:0}.mctk-f{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-d);font-size:.84rem}.mctk-f dt{color:var(--gray);font-size:.76rem}.mctk-f dd{margin:0;word-break:break-word}.mctk-f .v.mod{background:#fff3d6;border-radius:4px;padding:0 3px}",
       ".mctk-pen{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.85rem;padding:0 3px}.mctk-pen:hover{color:var(--navy-d)}.mctk-in{padding:5px 7px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.82rem;width:min(100%,260px)}textarea.mctk-in{width:100%}",
       ".mctk-lt .mctk-c3m{display:none}.mctk-lt th small{font-weight:600;opacity:.75}.mctk-lt.mob-stack td.mctk-c3{display:none!important}.mctk-lt.mob-stack td.mctk-c3m{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px;padding:6px 8px!important;background:var(--cream,#faf6ef);border-radius:9px}.mctk-c3m span{display:flex;flex-direction:column;align-items:flex-end;min-width:0}.mctk-c3m small{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--gray)}.mctk-c3m b{font-size:.86rem;white-space:nowrap}" +
-      ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-irp{display:inline-block;margin-left:4px;padding:0 6px;line-height:16px;border:1px solid #d9cfbd;border-radius:7px;font-size:.68rem;color:#8A6D1F;text-decoration:none;white-space:nowrap;vertical-align:baseline}.mctk-irp:active{background:#f4ecdc}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
+      ".mctk-lt td{padding:6px 8px;vertical-align:middle}.mctk-pn{font-weight:600}.mctk-sku{color:var(--gray);font-size:.68rem;margin-top:1px}.mctk-irp{display:inline;margin-left:3px;padding:0;line-height:inherit;border:0;border-radius:0;font-size:.78rem;color:var(--gold,#C4943A);text-decoration:none;white-space:nowrap;vertical-align:baseline;font-weight:700}.mctk-irp:active{background:#f4ecdc}.mctk-x{border:none;background:none;color:#b2452a;font-size:1.1rem;cursor:pointer}.mctk-link{display:inline-block;margin-top:8px;color:var(--pink-d,#b85c7a);font-size:.82rem;font-weight:700;text-decoration:none}.mctk-link:hover{text-decoration:underline}",
       ".mctk-foot{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-top:12px}.mctk-adj{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--gray)}.mctk-adj select,.mctk-adj input{padding:4px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.78rem}#mctk-tot{min-width:0;max-width:100%}",
       ".mctk-flag{background:#fdecea;border:1.5px solid #e6a39b;color:#7a2318;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:.84rem;display:flex;flex-direction:column;gap:8px}",
       ".mctk-cost{width:min(620px,94vw)}.mctk-cd{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:.86rem;margin:12px 0}.mctk-cd dt{color:var(--gray)}.mctk-cd dd{margin:0;text-align:right}",
@@ -80,32 +80,33 @@
       ".mctk-lcard>b{display:block;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy-d);padding:0 0 8px}" +
       ".mctk-ls{display:flex;flex-direction:column;gap:0;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);overflow:hidden}" +
       ".mctk-lh{display:none!important}" +
-      ".mctk-ln{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin:0;padding:9px 28px 9px 12px;border:0;border-bottom:1px solid var(--cream-d);border-radius:0;background:transparent;position:relative;grid-template-columns:none;grid-template-areas:none;box-sizing:border-box;min-width:0;max-width:100%}" +
+      ".mctk-ln{display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:auto auto auto;column-gap:8px;row-gap:0;align-items:start;margin:0;padding:7px 22px 7px 10px;border:0;border-bottom:1px solid var(--cream-d);border-radius:0;background:transparent;position:relative;box-sizing:border-box;min-width:0;max-width:100%;min-height:0}" +
       ".mctk-ln:last-child{border-bottom:0}" +
       ".mctk-ln.ok{background:#f3faf6;border-left:3px solid #2e9e4f;border-radius:0}" +
       ".mctk-ln.diff,.mctk-ln.sobra,.mctk-ln.falta{background:#fff5f0;border-left:3px solid #d9534f;border-radius:0}" +
       ".mctk-ln.canje_ok{background:#f7faf8;border-left:3px solid #b7d9c6;border-radius:0}" +
       ".mctk-ln .mctk-li,.mctk-ln .mctk-nums,.mctk-ln .mctk-lx,.mctk-lacts{display:none!important}" +
-      ".mctk-r1{display:flex;align-items:flex-start;gap:8px;min-width:0}" +
-      ".mctk-ph,.mctk-ini,.mctk-badge{width:32px;height:32px;border-radius:8px;flex:none;object-fit:cover;border:1px solid var(--cream-d);box-sizing:border-box}" +
-      ".mctk-ini,.mctk-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#F5F0E8);color:var(--navy-d);font-weight:800;font-size:.72rem}" +
+      ".mctk-ln>.mctk-ph,.mctk-ln>.mctk-ini,.mctk-ln>.mctk-badge{grid-column:1;grid-row:1 / span 3;align-self:start;margin-top:1px}" +
+      ".mctk-r1{grid-column:2;grid-row:1;display:flex;align-items:baseline;gap:3px;min-width:0;padding-right:16px}" +
+      ".mctk-ph,.mctk-ini,.mctk-badge{width:28px;height:28px;border-radius:6px;flex:none;object-fit:cover;border:1px solid var(--cream-d);box-sizing:border-box}" +
+      ".mctk-ini,.mctk-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#F5F0E8);color:var(--navy-d);font-weight:800;font-size:.68rem}" +
       ".mctk-badge-F{background:#e8f0f8;color:#3D5A7A}.mctk-badge-E{background:#f3eee4;color:#7A5C12}.mctk-badge-P{background:#ece8f6;color:#5A4A8A}.mctk-badge-G{background:#f6efe0;color:#8A6D1F}" +
-      ".mctk-pn{font-weight:700;font-size:.88rem;color:var(--navy-d);overflow-wrap:anywhere;line-height:1.25}" +
-      ".mctk-irp{display:inline;margin-left:4px;font-size:.78rem;color:var(--gold,#C4943A);text-decoration:none;font-weight:700}" +
+      ".mctk-pn{display:block;flex:1;min-width:0;font-weight:700;font-size:.8rem;color:var(--navy-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}" +
+      ".mctk-irp{display:inline!important;margin-left:3px!important;padding:0!important;border:0!important;background:none!important;line-height:inherit!important;font-size:.78rem;color:var(--gold,#C4943A);text-decoration:none;font-weight:700;white-space:nowrap;vertical-align:baseline;border-radius:0}" +
       ".mctk-x{position:absolute;top:4px;right:4px;border:0;background:none;color:#9a9488;font-size:.78rem;line-height:1;padding:2px 5px;cursor:pointer;border-radius:4px;font-weight:500}" +
       ".mctk-x:hover{color:#B2452A;background:var(--cream)}" +
-      ".mctk-sku,.mctk-stk{font-size:.7rem;color:var(--gray);padding-left:40px;overflow-wrap:anywhere;line-height:1.35}" +
+      ".mctk-meta,.mctk-sku,.mctk-stk{grid-column:2;font-size:11px;color:var(--gray);padding-left:0;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".mctk-stk-ok{color:#2e9e4f;font-weight:700}.mctk-stk-0{color:#d9534f;font-weight:700}" +
-      ".mctk-r4{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-left:40px;padding-top:2px;width:100%;box-sizing:border-box;min-width:0}" +
-      ".mctk-qx{font-size:.8rem;color:var(--navy-d);overflow-wrap:anywhere;min-width:0}" +
+      ".mctk-r4{grid-column:2;grid-row:3;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-left:0;padding-top:0;margin-top:1px;width:100%;box-sizing:border-box;min-width:0;line-height:1.2}" +
+      ".mctk-qx{font-size:.78rem;color:var(--navy-d);overflow-wrap:anywhere;min-width:0;line-height:1.2}" +
       ".mctk-desc{color:#C4943A;font-weight:800;margin-left:4px;font-variant-numeric:tabular-nums}" +
       ".mctk-qx .mctk-ok,.mctk-ok{color:#2e9e4f;font-weight:700;margin-left:4px;white-space:nowrap}.mctk-desc,.mctk-bad{white-space:nowrap}@container mctkl (max-width:420px){.mctk-ok-txt{display:none}}" +
       ".mctk-bad{color:#d9534f;font-weight:700;margin-left:4px;font-size:.7rem}" +
       ".mctk-tog{margin-left:auto;border:0;background:none;display:inline-flex;align-items:baseline;gap:3px;cursor:pointer;font:inherit;color:var(--navy-d);padding:0;flex:none}" +
-      ".mctk-ltot{font-weight:800;font-size:.92rem;font-variant-numeric:tabular-nums}" +
+      ".mctk-ltot{font-weight:800;font-size:.88rem;font-variant-numeric:tabular-nums;line-height:1.2}" +
       ".mctk-arr{font-size:.7rem;color:var(--gray);line-height:1}" +
-      ".mctk-drop{margin:8px 0 2px;padding:6px 10px;border-radius:10px;background:var(--cream,#F5F0E8);border:1px solid var(--cream-d)}" +
-      ".mctk-dr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:5px 0;font-size:.76rem;border-bottom:1px solid var(--cream-d)}" +
+      ".mctk-drop{grid-column:1 / -1;margin:6px 0 0;padding:4px 8px;border-radius:8px;background:var(--cream,#F5F0E8);border:1px solid var(--cream-d)}" +
+      ".mctk-dr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:3px 0;font-size:.72rem;border-bottom:1px solid var(--cream-d)}" +
       ".mctk-dr:last-child{border-bottom:0}" +
       ".mctk-dr>span:first-child{color:var(--gray);font-weight:700;flex:none}" +
       ".mctk-dr>span:last-child{text-align:right;color:var(--navy-d);overflow-wrap:anywhere;min-width:0}" +
@@ -116,17 +117,17 @@
       ".mctk-mej{border:0;background:none;color:var(--gray);cursor:pointer;font-size:.78rem;font-weight:800;padding:0 4px;border-radius:6px;margin-left:4px}.mctk-mej:hover{background:var(--cream);color:var(--navy-d)}" +
       ".mctk-addbtn,#mctk-addlink.mctk-addbtn{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--cream-d);background:var(--white,#fff);color:var(--navy-d);border-radius:999px;padding:5px 12px;font-size:.78rem;font-weight:700;cursor:pointer;margin:10px 0 4px;text-decoration:none}" +
       /* TK81 leftover hook: container 700px only tweaks type size — no spreadsheet grid. */
-      "@container mctkl (min-width:700px){.mctk-pn{font-size:.92rem}.mctk-ltot{font-size:1rem}.mctk-ph,.mctk-ini,.mctk-badge{width:36px;height:36px}}",
+      "@container mctkl (min-width:700px){.mctk-pn{font-size:.88rem}.mctk-ltot{font-size:.95rem}}",
 
       ".mctk-foot{display:flex;gap:10px 16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;margin-top:10px}.mctk-adj{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.76rem;color:var(--gray)}.mctk-adj label{display:flex;gap:6px;align-items:center;margin:0}#mctk-dv{width:96px}#mctk-promos{border-color:#C9A227;color:#7a5c12;background:#fbf4e4;padding:5px 10px}" +
-      ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:300px!important;line-height:1.35}#mctk-tot{min-width:min(260px,100%)!important;flex:1 1 240px;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:100%;margin-left:auto}",
+      ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:100%!important;width:max-content!important;line-height:1.35}#mctk-tot{min-width:0!important;width:max-content;max-width:100%;flex:0 0 auto;margin-left:auto;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:max-content;max-width:100%;margin-left:auto}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
       /* TK104: ticket abierto en iPhone — tarjetas tipo MineCore, sin scroll horizontal. */
       "@media(max-width:860px){#mctk-root,.mctk2{overflow-x:hidden;max-width:100%;box-sizing:border-box}#mctk-root *,.mctk2 *{box-sizing:border-box;min-width:0;max-width:100%}",
       ".mctk2 .mctk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}.mctk2 .mctk-bar-sp{display:none}",
       ".mctk2 .mctk-bar #mctk-volver{width:auto;min-height:32px;padding:4px 2px;border:0;background:none;box-shadow:none;font-size:.86rem;color:var(--navy)}",
-      ".mctk2 .mctk-bar .mctk-acc-wrap{margin-left:auto;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
+      ".mctk-edit-big{display:none!important}.mctk-edit-mini{margin:0 6px 0 auto;padding:3px 9px;min-height:28px;font-size:.68rem;font-weight:700;color:var(--navy-d,#3D5A7A);background:transparent;border:1px solid var(--cream-d,#EDE6D8);border-radius:999px;cursor:pointer;flex:none;white-space:nowrap}.mctk2 .mctk-bar .mctk-acc-wrap{margin-left:0;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
       ".mctk2 .mctk-bar .mctk-dd{left:auto;right:0;min-width:min(280px,92vw);width:max-content;max-width:92vw;z-index:60}",
       ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:normal!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
@@ -136,7 +137,7 @@
       ".mctk-det{border:1.5px solid var(--cream-d);border-radius:12px;padding:0;margin-top:12px;background:var(--white,#fff)}.mctk-det>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-d);font-size:.88rem;display:flex;align-items:center;justify-content:space-between}.mctk-det>summary::-webkit-details-marker{display:none}.mctk-det>summary:after{content:'▾';color:var(--gray);font-weight:400}.mctk-det[open]>summary{border-bottom:1px solid var(--cream-d)}.mctk-det .mctk-grid{margin:0;padding:8px 12px 10px}.mctk-det .mctk-f{grid-template-columns:minmax(90px,34%) 1fr;gap:6px}",
       ".mctk-load{margin:0 0 8px;font-size:.76rem;color:var(--gray)}",
       ".mctk-lcard>b{display:block}.mctk-ln{padding:9px 26px 9px 12px}",
-      ".mctk-foot{flex-direction:column;align-items:stretch}#mctk-tot{flex:0 0 auto!important}.mctk-tot{margin-left:auto;max-width:100%!important;width:min(280px,100%);font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
+      ".mctk-foot{flex-direction:column;align-items:stretch}#mctk-tot{flex:0 0 auto!important;margin-left:auto;width:max-content;max-width:100%}.mctk-tot{margin-left:auto;max-width:100%!important;width:max-content;font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
       "#mctk-addlink{display:inline-flex;margin:8px 0 4px;font-weight:700}}",
       "@media(min-width:861px){.mctk-estados,.mctk-load{display:none}.mctk-ini,.mctk-badge{display:inline-flex}}",
 
@@ -259,10 +260,10 @@
     var d = K.d, t = d.ticket;
     var back = '<button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button>";
     if (esMovilTk()) {
-      return '<div class="mctk-bar mctk-bar-m">' + back +
+      return '<div class="mctk-bar mctk-bar-m">' + back + editarMiniHtml() +
         '<div class="mctk-menu mctk-acc-wrap"><button class="btn ghost small mctk-acc-btn" type="button" data-menu="mctk-acc">Acciones ▾</button><div class="mctk-dd" id="mctk-acc" hidden>' + accionesItemsHtml() + "</div></div></div>";
     }
-    return '<div class="mctk-bar">' + back + '<span class="mctk-bar-sp" style="flex:1"></span>' +
+    return '<div class="mctk-bar">' + back + '<span class="mctk-bar-sp" style="flex:1"></span>' + editarMiniHtml() +
       voucherBtnsHtml() +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
@@ -372,12 +373,34 @@
     var ini = String((l && l.nombre) || (l && l.sku) || "?").trim().charAt(0).toUpperCase() || "?";
     return '<span class="mctk-ph mctk-ini" aria-hidden="true">' + e(ini) + "</span>";
   }
+  function textoCanje(l) {
+    var pq = String((l && l.paqueteSesion) || "").trim();
+    var code = "";
+    try { code = String(codigoVisible(l) || "").trim(); } catch (e0) { code = String((l && (l.sku || l.codigo)) || "").trim(); }
+    var bits = [];
+    if (code && !/^canje\b/i.test(code) && code.toLowerCase() !== pq.toLowerCase()) bits.push(code);
+    if (pq && !/^canje$/i.test(pq)) {
+      bits.push(/^canje\b/i.test(pq) ? pq : (/^PQ[- ]?/i.test(pq) ? ("Canje paquete " + pq) : ("Canje paquete " + pq)));
+    } else {
+      bits.push("Canje");
+    }
+    bits.push("OK sin factura");
+    var clean = [];
+    bits.forEach(function (p) {
+      var cur = String(p || "").trim();
+      if (!cur) return;
+      var prev = clean[clean.length - 1] || "";
+      if (prev && prev.toLowerCase() === cur.toLowerCase()) return;
+      if (prev && /^canje$/i.test(prev) && /^canje\b/i.test(cur)) { clean[clean.length - 1] = cur; return; }
+      if (prev && /^canje\b/i.test(prev) && /^canje$/i.test(cur)) return;
+      clean.push(cur);
+    });
+    return clean.join(" · ");
+  }
   function stockTxt(l) {
     if (l.canje || l.paqueteSesion || (l.tipo === "facial" && !(Number(l.precio_unit) > 0))) {
-      var pq = l.paqueteSesion ? String(l.paqueteSesion) : (l.canje ? "Canje" : "Facial");
-      var ok = (l.canje || l.paqueteSesion) ? " · OK sin factura" : "";
-      var pref = l.paqueteSesion ? "Canje paquete " : (l.canje ? "Canje " : "");
-      return '<div class="mctk-stk">' + e(pref + pq + ok) + "</div>";
+      if (l.canje || l.paqueteSesion) return '<div class="mctk-stk">' + e(textoCanje(l)) + "</div>";
+      return '<div class="mctk-stk">Facial</div>';
     }
     if (l.consumoInterno && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Consumo interno</div>';
     if (l.cortesia && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Cortesía</div>';
@@ -392,6 +415,38 @@
     var cls = n > 0 ? " mctk-stk-ok" : " mctk-stk-0";
     return '<div class="mctk-stk' + cls + '">📦 BODEGA VENTA: Stock ' + e(q2(st)) + "</div>";
   }
+  function metaLineaHtml(l) {
+    var parts = [];
+    var code = codigoVisible(l);
+    var tipo = "";
+    if (l.tipo === "extra" || l.tipo === "servicio") tipo = "Extra";
+    else if (l.tipo === "facial") tipo = "Facial";
+    else if (l.tipo === "paquete") tipo = "Paquete";
+    else if (l.tipo === "gift") tipo = "Gift card";
+    else if (typeof esMejora === "function" && esMejora(l)) tipo = "Diferencia por mejora";
+    if (l.canje || l.paqueteSesion) {
+      return '<div class="mctk-meta">' + e(textoCanje(l)) + "</div>";
+    } else {
+      if (code) parts.push(code);
+      if (tipo && l.tipo !== "producto") parts.push(tipo);
+    }
+    if (l.consumoInterno && !(l.total_linea > 0) && parts.indexOf("Consumo interno") < 0) parts.push("Consumo interno");
+    else if (l.cortesia && !(l.total_linea > 0) && parts.indexOf("Cortesía") < 0) parts.push("Cortesía");
+    if (l.valorNominal > 0 && l.tipo === "gift") parts.push("valor nominal " + $m(l.valorNominal));
+    if (l.excluir_comision) parts.push("sin comisión");
+    if (l.promo && l.descuento_valor > 0) parts.push(String(l.promo));
+    var html = e(parts.filter(Boolean).join(" · "));
+    if (l.tipo === "producto" && !(l.canje || l.paqueteSesion)) {
+      var c = catDe(l);
+      var st = c && (c.stockVenta != null && c.stockVenta !== "" ? c.stockVenta : c.stock);
+      if (st != null && st !== "") {
+        var nSt = Number(st);
+        var cls = nSt > 0 ? " mctk-stk-ok" : " mctk-stk-0";
+        html += (html ? " · " : "") + '<span class="mctk-stk' + cls + '">Stock Venta: ' + e(q2(st)) + "</span>";
+      }
+    }
+    return '<div class="mctk-meta">' + html + "</div>";
+  }
   /** TK43 (Emilia t486u, como MineCore mcIrBtn): botoncito sutil ↗ que abre la ficha del producto de la línea. */
   function prodIdLinea(l) {
     var c = catDe(l);
@@ -399,7 +454,7 @@
   }
   function irProdBtn(l) {
     var id = prodIdLinea(l);
-    return id ? ' <a href="#/m/productos/p/' + e(id) + '" class="mctk-irp" data-irp="' + e(id) + '" title="Ir al producto" aria-label="Ir a la ficha del producto">↗</a>' : "";
+    return id ? '<a href="#/m/productos/p/' + e(id) + '" class="mctk-irp" data-irp="' + e(id) + '" title="Ir al producto" aria-label="Ir a la ficha del producto">↗</a>' : "";
   }
   function codigoVisible(l) {
     var c = catDe(l);
@@ -515,18 +570,19 @@
         costoUtilHtml(l) + "</div>";
       var xbtn = ed ? '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button>' : "";
       return '<div data-i="' + i + '" class="mctk-ln' + st + (open ? " open" : "") + '">' + xbtn +
-        '<div class="mctk-r1">' + fotoLinea(l) + '<span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + mej + "</span></div>" +
-        '<div class="mctk-sku">' + e(skuLineaTxt(l)) + "</div>" +
-        stockTxt(l) +
+        fotoLinea(l) +
+        '<div class="mctk-r1"><span class="mctk-pn">' + e(l.nombre) + "</span>" + irProdBtn(l) + mej + "</div>" +
+        metaLineaHtml(l) +
         '<div class="mctk-r4"><span class="mctk-qx">' + e(q2(l.cantidad)) + " × " + precio + descH + " " + cuadreCorto(cu) + "</span>" +
         '<button type="button" class="mctk-tog" data-tog="' + i + '" aria-expanded="' + (open ? "true" : "false") + '" aria-label="Ver detalle de la línea"><b class="mctk-ltot" data-tot-m>' + e($m(m.tot)) + '</b><span class="mctk-arr">' + (open ? "▴" : "▾") + "</span></button></div>" +
         drop + "</div>";
     }).join("");
     var fantasmas = ((K.d && K.d.cuadre_lineas) || []).filter(function (x) { return x.estado === "falta"; }).map(function (x) {
       return '<div class="mctk-ln falta" data-falta="1">' +
-        '<div class="mctk-r1"><span class="mctk-ph mctk-badge" aria-hidden="true">!</span><span class="mctk-pn">' + e(x.nombre || x.codigo || x.sku) + "</span></div>" +
-        '<div class="mctk-sku">' + e(x.codigo || x.sku) + '</div>' +
-        '<div class="mctk-cuadre-razon" style="padding-left:40px">' + e(x.razon || "Falta en ticket") + "</div></div>";
+        '<span class="mctk-ph mctk-badge" aria-hidden="true">!</span>' +
+        '<div class="mctk-r1"><span class="mctk-pn">' + e(x.nombre || x.codigo || x.sku) + "</span></div>" +
+        '<div class="mctk-meta">' + e(x.codigo || x.sku) + '</div>' +
+        '<div class="mctk-r4"><span class="mctk-qx mctk-cuadre-razon">' + e(x.razon || "Falta en ticket") + "</span></div></div>";
     }).join("");
     return mapped + fantasmas;
   }
@@ -637,6 +693,12 @@
     return h;
   }
 
+  function editarMiniHtml() {
+    var d = K.d || {}, t = d.ticket || {};
+    if (t.cancelado || (d.edicion && d.edicion.id)) return "";
+    if (!(d.puedePedir || d.puedeEditar)) return "";
+    return '<button type="button" class="mctk-edit-mini" id="mctk-editar-form">Editar</button>';
+  }
   function edicionHtml() {
     var d = K.d || {}, ed = d.edicion, t = d.ticket || {}, anul = t.cancelado;
     var h = "";
@@ -651,9 +713,6 @@
       }
       h += "</div>";
       return h;
-    }
-    if (!anul && (d.puedePedir || d.puedeEditar)) {
-      h += '<button type="button" class="mctk-edit-big" id="mctk-editar-form">✏️ Editar ticket</button>';
     }
     return h;
   }
@@ -673,9 +732,9 @@
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
-      '<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
-      '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
-      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
+      (K.editandoLineas ? ('<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>') : "") +
+      '<div class="mctk-foot">' + (K.editandoLineas ? ('<div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
+      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div>') : "") + '<div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -1312,22 +1371,33 @@
       if (K.d && K.d.ok && K.d.lineas) abrir(K.d);
       else Promise.resolve(api("tk_get", { clave: clave })).then(abrir).catch(function () { toast2("No se pudo cargar el ticket", true); });
     });
-    function resolverEdicion(aprobar) {
+    function resolverEdicion(aprobar, btn) {
       var ed = K.d && K.d.edicion;
       if (!ed || !ed.id) return;
+      if (btn && btn.disabled) return;
       var comentario = aprobar ? "" : (prompt("Motivo del rechazo (opcional)") || "");
+      if (!aprobar && comentario == null) return;
+      var txt = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = aprobar ? "Aprobando…" : "Rechazando…"; }
       Promise.resolve(api("solicitud_resolver", { id: ed.id, aprobar: aprobar, comentario: comentario }))
         .then(function (r) {
-          if (r && r.error) { toast2(r.error, true); return; }
+          if (r && r.error) {
+            if (btn) { btn.disabled = false; btn.textContent = txt; }
+            toast2(r.error, true); return;
+          }
           toast2(aprobar ? "Edición aprobada" : "Edición rechazada");
+          if (r && r.ticket) { K.d = r.ticket; if (K.d) K.d.edicion = null; try { cargarEstado(K.d); repintar(main); } catch (e0) {} }
           return api("tk_get", { clave: K.d.clave }).then(function (d) { if (d && d.ok) { cargarEstado(d); repintar(main); } });
         })
-        .catch(function (e) { toast2((e && e.message) || "No se pudo resolver", true); });
+        .catch(function (e) {
+          if (btn) { btn.disabled = false; btn.textContent = txt; }
+          toast2((e && e.message) || "No se pudo resolver", true);
+        });
     }
     var okb = main.querySelector("#mctk-edicion-ok");
     var nob = main.querySelector("#mctk-edicion-no");
-    if (okb) okb.addEventListener("click", function () { resolverEdicion(true); });
-    if (nob) nob.addEventListener("click", function () { resolverEdicion(false); });
+    if (okb) okb.addEventListener("click", function () { resolverEdicion(true, okb); });
+    if (nob) nob.addEventListener("click", function () { resolverEdicion(false, nob); });
 
     if (pd) pd.onclick = async function () {
       var mot = prompt("¿Por qué se cambia el ticket? (lo aprueba un admin)"); if (!mot || !mot.trim()) return;
