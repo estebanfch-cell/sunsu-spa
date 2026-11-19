@@ -1,5 +1,6 @@
 // Clientes, edición de tickets, consumos, quincena de consignación y saldo de gift card.
-// El saldo vive en gift_cards.notas (SALDO:n), en orig.usos y, si 0015 ya corrió, en saldo.
+// El saldo, si ya se usó en parte, vive en gift_cards.saldo, en notas (SALDO:n) y en orig.usos.
+// Si nunca se usó, la columna valor suele decir «Gift Card» (no el monto): el monto está en el catálogo (SUNSU-35 = $65).
 // La quincena de proveedores es 1–15 y 16–fin. No es el ciclo de comisiones 26–25.
 
 import { consultar } from "./query.ts";
@@ -152,7 +153,19 @@ export function montoGcAplicado(colR: unknown): number {
   return parseGcCanje(colR)?.aplica || 0;
 }
 
-export function saldoGift(row: Row): number {
+export function precioGiftCatalogo(sku: string, catalogo: Row[] = []): number {
+  const k = s(sku).toUpperCase();
+  if (!k) return 0;
+  const c = catalogo.find((x) => s(x.sku).toUpperCase() === k);
+  if (!c) return 0;
+  const p = n(c.total_con_iva) || n(c.total) || n(c.subtotal);
+  return p > 0 ? round2(p) : 0;
+}
+
+/** Monto disponible de una gift card. Si ya hay un saldo anotado (columna, SALDO:n u orig), gana ese.
+ *  Si no (el caso típico: valor = «Gift Card», saldo null, nunca usada), se usa el precio del SKU en el catálogo
+ *  (SUNSU-35 = $65) o un monto escrito como $30 en valor/notas. */
+export function saldoGift(row: Row, catalogo: Row[] = []): number {
   if (row.usado === true || row.usado === "true" || row.usado === "SI") return 0;
   if (row.saldo != null && s(row.saldo) !== "" && Number.isFinite(Number(row.saldo))) return round2(n(row.saldo));
   const notas = s(row.notas);
@@ -165,7 +178,12 @@ export function saldoGift(row: Row): number {
   if (Number.isFinite(v) && v > 0 && !/[a-z]/i.test(valor)) return round2(v);
   const ape = parseFloat(s(row.apellido_comprador));
   if (Number.isFinite(ape) && ape > 0) return round2(ape);
-  return 0;
+  const dolar = (valor + " " + notas).match(/\$\s*([\d.,]+)/);
+  if (dolar) {
+    const x = parseFloat(dolar[1].replace(",", "."));
+    if (Number.isFinite(x) && x > 0) return round2(x);
+  }
+  return precioGiftCatalogo(s(row.sku), catalogo);
 }
 
 function notasConSaldo(prev: string, saldo: number): string {
@@ -179,19 +197,20 @@ export async function aplicarGiftCard(db: Db, actor: string, p: {
 }): Promise<Row> {
   const codigo = s(p.codigo).trim();
   if (!codigo) return { error: "Falta el código de la gift card" };
+  const cats = await db.all("catalogo").catch(() => [] as Row[]);
   const rows = (await db.all("gift_cards")).filter((r) => !r.borrado_at);
-  const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r) > 0)
+  const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r, cats) > 0)
     || rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase());
   if (!row) return { error: "Gift card no encontrada" };
   const logs = await db.all("log_acciones");
   const ya = logs.find((r) => s(r.accion) === "GIFT CARD" && s(r.detalle).includes("ticket=" + p.ticket) && s(r.detalle).includes("codigo=" + codigo));
   if (ya) {
-    const saldo = saldoGift(row);
+    const saldo = saldoGift(row, cats);
     const aplicado = n((s(ya.detalle).match(/monto=([\d.]+)/) || [])[1]);
     const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
     return { ok: true, codigo, aplicado, saldo, facialCobro, ya: true };
   }
-  const saldo = saldoGift(row);
+  const saldo = saldoGift(row, cats);
   if (!(saldo > 0)) return { error: "Esa gift card no tiene saldo" };
   let aplicado = p.aplica == null ? saldo : round2(p.aplica);
   if (p.facialPrecio > 0) aplicado = Math.min(aplicado, round2(p.facialPrecio));

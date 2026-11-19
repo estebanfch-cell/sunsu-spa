@@ -1767,15 +1767,17 @@ function onGcCodigo(v){
   clearTimeout(window._gcBusca);
   window._gcBusca=setTimeout(function(){
     var q=(v||'').trim();
-    if(q.length<3){ updatePreview(); return; }
+    if(q.length<3){ T._gcLookup=false; updatePreview(); return; }
     fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent(q))
       .then(function(r){return r.json();})
       .then(function(d){
         var lista=(d&&d.resultados)||[];
         var hit=lista.find(function(x){return String(x.codigo).toLowerCase()===q.toLowerCase();})||lista[0];
-        if(!hit){ updatePreview(); return; }
-        var saldo=hit.usado?0:(hit.saldo!=null?Number(hit.saldo):(parseFloat(hit.valor)||0));
+        if(!hit){ T._gcLookup=false; T.gcSaldo=0; updatePreview(); return; }
+        var saldo=hit.usado?0:(hit.saldo!=null&&String(hit.saldo)!==''?Number(hit.saldo):0);
+        if(!isFinite(saldo)||saldo<0) saldo=0;
         T.gcSaldo=saldo;
+        T._gcLookup=true;
         var f=FACIALES.find(function(x){return x.sku===T.facial;});
         if(!(Number(T.gcAplica)>0)) T.gcAplica=Math.min(saldo, f?f.p:saldo);
         var inp=document.getElementById('gc-aplica');
@@ -2334,7 +2336,8 @@ function updatePreview(){
       facialNombre=f.n;
       if(T.cobro==='giftcard'){
         const pedido=Number(T.gcAplica)||0;
-        const tope=Math.min(pedido>0?pedido:(Number(T.gcSaldo)||0), f.p);
+        const saldo=Number(T.gcSaldo)||0;
+        const tope=Math.min(pedido>0?pedido:saldo, T._gcLookup?saldo:(pedido||saldo), f.p);
         facialP=Math.max(0, Math.round((f.p-tope)*100)/100);
         comF=f.com;
         T._gcUsado=tope; T._gcDif=facialP;

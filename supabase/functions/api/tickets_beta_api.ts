@@ -754,9 +754,10 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
   const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];
   const dig = codsGc.length ? (await consultar(ctx.db, "gift_cards_digitales", { filtros: [{ col: "codigo", op: "in", val: codsGc }] })).rows : [];
+  const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
   const gc = (cod: string, uso: string) => {
     const g = gcs.find((x) => !x.borrado_at && s(x.codigo_gc) === cod), dg = dig.find((x) => s(x.codigo) === cod);
-    return { codigo: cod, uso, valor: s(g?.valor), saldo: g && admin ? saldoGift(g) : undefined, usado: g?.usado === true,
+    return { codigo: cod, uso, valor: s(g?.valor), saldo: g && admin ? saldoGift(g, cats) : undefined, usado: g?.usado === true,
       comprador: g ? (s(g.nombre_comprador) + " " + s(g.apellido_comprador)).trim() : "", para: s(dg?.para), de: s(dg?.de), facial: s(dg?.facial), mensaje: s(dg?.mensaje), valido: s(dg?.valido), digital: !!dg };
   };
   const giftcards = [...codigosGc(r.venta_gift).map((c) => gc(c, "vendida")), ...codigosGc(r.gift_card).map((c) => gc(c, "canjeada"))];
