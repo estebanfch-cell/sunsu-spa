@@ -135,6 +135,7 @@
       "</div>";
   }
   function html(d) {
+    css();
     var nombre = (d && d.nombre) || "";
     var citas = (d && d.citas) || [];
     var puede = (d && d.puede) || { ticket: true, noLlego: true, mover: false };
@@ -185,7 +186,8 @@
   async function render(opts) {
     css();
     var per = (opts && opts.periodo) || (render._last && render._last.kpis && render._last.kpis.periodo) || "hoy";
-    var d = await api("staff_home", { periodo: per });
+    var call = (typeof window.apiSWR === "function") ? window.apiSWR : api;
+    var d = await call("staff_home", { periodo: per }, { maxAge: 60000, force: !!(opts && opts.force) });
     if (d && d.error) return '<p class="err">' + e(d.error) + "</p>";
     render._last = d;
     return html(d);
@@ -252,5 +254,5 @@
       }
     };
   }
-  window.MCStaffHome = { render: render, wire: wire, hora: hora, hora12: hora12 };
+  window.MCStaffHome = { render: render, wire: wire, hora: hora, hora12: hora12, html: html };
 })();
