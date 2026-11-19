@@ -233,8 +233,8 @@ describe("TK127 SQL aditivo y bandera de conteo", () => {
   it("el cache de esta entrega es TK133, distinto al de TK132", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK146/);
-    assert.match(beta, /20261119tk146/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK147/);
+    assert.match(beta, /20261119tk147/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK132/);
   });
 });
