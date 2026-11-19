@@ -399,9 +399,11 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   const actuales = await lineasDe(ctx, r, cab, cat);
   const L: LineaTk[] = [];
   for (const x of (entrada || actuales).slice(0, 200)) {
-    const code = skuCode(s(x.sku));
+    const raw = skuCode(s(x.sku));
     const tipo = TIPOS.has(s(x.tipo)) ? s(x.tipo) : "producto";
-    const c = porCode.get(code);
+    let c = porCode.get(raw);
+    if (!c) c = cat.find((r) => skuCode(s(r.sku)) === raw || skuCode(s(r.skuVisible)) === raw || skuCode(s(r.codigoInterno)) === raw || (Array.isArray(r.aliases) && r.aliases.some((a) => skuCode(s(a)) === raw)) || (Array.isArray(r.barras) && r.barras.some((a) => skuCode(s(a)) === raw)));
+    const code = tipo === "producto" && c ? skuCode(s(c.sku) || raw) : raw;
     const nueva = !actuales.some((a) => skuCode(a.sku) === code && a.tipo === tipo);
     if (!code) return { error: "Línea sin código" };
     if (nueva && tipo !== "gift" && (!c || (c.activo === false && !c.enMigo))) return { error: (c ? s(c.nombre) : code) + (c ? " está inactivo: no se puede vender" : " no está en el catálogo") };

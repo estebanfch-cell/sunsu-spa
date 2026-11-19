@@ -202,7 +202,7 @@
     if (qq) {
       var m6 = qq.match(/^(?:sunsu-)?inv-?(\d{4,})$/), q2b = m6 ? "inv-" + String(Number(m6[1])).padStart(3, "0") : f.q;
       rows = window.MCBuscar.filtrar(rows, q2b, function (p) {
-        return [[p.sku, p.skuVisible, p.skuAlias, p.codigoCabina, p.skuProveedor].concat(p.skuAntes || [], p.barras || []), [p.nombre, p.marca, p.categoria, p.subtipo]];
+        return [[p.sku, p.skuVisible, p.skuAlias, p.codigoCabina, p.skuProveedor, p.codigoInterno, p.skuVenta, p.skuCabina].concat(p.skuAntes || [], p.barras || []), [p.nombre, p.marca, p.categoria, p.subtipo, p.pendienteConteoTxt]];
       });
     }
     if (MC.orden && MC.orden.col) {
@@ -240,7 +240,14 @@
     var cls = (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "") + extra;
     var v;
     if (c.id === "estado") v = p.activo === false ? '<span class="mcp-dot off" title="Inactivo"></span><span class="mcp-sub">Inactivo</span>' : '<span class="mcp-dot on" title="Activo"></span><span class="mcp-sub">Activo</span>';
-    else if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
+    else if (c.id === "sku") {
+      var venta = p.skuVenta || p.skuProveedor || p.skuVisible || p.sku;
+      var interno = p.codigoInterno || p.skuCabina || "";
+      v = '<span class="mcp-sku">' + e(venta) + "</span>";
+      if (interno && interno !== venta) v += '<span class="mcp-sub" style="display:block">Cabina/Oficina ' + e(interno) + "</span>";
+      else if (p.skuAlias) v += '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>";
+      if (p.pendienteConteoTxt) v += '<span class="mcp-sub" style="display:block">' + e(p.pendienteConteoTxt) + "</span>";
+    }
     else if (c.id === "tipo") v = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
     else if (c.id === "stock") v = stockHtml(p);
     else if (c.id === "estStock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : p.estado === "agotado" ? '<span class="mcp-tag agot">Agotado</span>' : p.estado === "bajo" ? '<span class="mcp-tag bajo">Bajo</span>' : '<span class="mcp-tag ok">OK</span>';
@@ -700,7 +707,9 @@
       var est = p.estado || (tot <= 0 ? "agotado" : "");
       var pvpTxt = cv.pvp != null ? $m(cv.pvp) : (pr.pvp != null ? $m(pr.pvp) : "—");
       var subTxt = cv.sub != null ? $m(cv.sub) : (pr.subtotal != null ? $m(pr.subtotal) : "");
-      return '<div class="mcp-idg">' + '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(p.skuVisible || p.sku) + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina && p.codigoCabina !== p.sku ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + (p.skuAntes && p.skuAntes.length ? ' <span class="mcp-sub">· antes ' + e(p.skuAntes.join(", ")) + "</span>" : "") + "</span></div>" + kv("marca") + kv("categoria") +
+      var ventaS = p.skuVenta || p.skuProveedor || p.skuVisible || p.sku;
+      var intS = p.codigoInterno || p.skuCabina || "";
+      return '<div class="mcp-idg">' + '<div class="mcp-kv"><span class="mcp-l">SKU</span><span class="mcp-v mcp-sku">' + e(ventaS) + (intS && intS !== ventaS ? ' <span class="mcp-sub">· Cabina/Oficina ' + e(intS) + "</span>" : "") + (p.skuAlias ? ' <span class="mcp-sub">· alias interno ' + e(p.skuAlias) + " (tickets y paquetes)</span>" : p.sku_catalogo && p.sku_catalogo.toUpperCase() !== p.sku ? ' <span class="mcp-sub">(' + e(p.sku_catalogo) + ")</span>" : "") + (p.codigoCabina && p.codigoCabina !== p.sku && p.codigoCabina !== intS ? ' <span class="mcp-sub">· Cabina ' + e(p.codigoCabina) + "</span>" : "") + (p.pendienteConteoTxt ? ' <span class="mcp-sub">· ' + e(p.pendienteConteoTxt) + "</span>" : "") + (p.skuAntes && p.skuAntes.length ? ' <span class="mcp-sub">· antes ' + e(p.skuAntes.join(", ")) + "</span>" : "") + "</span></div>" + kv("marca") + kv("categoria") +
         '<div class="mcp-kv"><span class="mcp-l">PVP</span><span class="mcp-v mcp-idn"><b class="mcp-pvpv" id="mcp-id-pvp">' + (MC.admin ? pvpTxt : V("beta_pvp")) + '</b><span class="mcp-sub">con IVA' + (subTxt ? " · sin IVA " + subTxt : "") + "</span></span></div>" +
         (serv ? "" : '<div class="mcp-kv"><span class="mcp-l">Stock total</span><span class="mcp-v mcp-idn"><b>' + q2(tot) + " u</b>" + (est === "agotado" ? '<span class="mcp-tag agot">Agotado</span>' : est === "bajo" ? '<span class="mcp-tag bajo">Bajo</span>' : "") + "</span></div>") +
         "</div>" + estadoHtml();

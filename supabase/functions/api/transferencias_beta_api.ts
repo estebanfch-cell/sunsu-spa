@@ -9,6 +9,7 @@ import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, round2, s, type Row } from "./domain.ts";
 import { GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
+import { PROP_SUNSU, esBodegaInterna, propietarioDe, skuPorBodega } from "./inventario_modelo.ts";
 import { BODEGAS_CONTEO, bodegaNombre, sistemaDe } from "./conteo_fisico_api.ts";
 
 const FALTA = "Falta aplicar 0046_transferencias_beta.sql";
@@ -169,11 +170,23 @@ extend("trfb_estado", "any", async (p, ctx, ses) => {
     // Se vuelve a validar el stock del origen al recibir (no se deja el origen en negativo).
     const v = await validarLineas(ctx, ses, s(r.t.origen), s(r.t.origen_sub), r.L.map((l) => ({ producto_id: l.producto_id, cantidad: l.cantidad })));
     if ("error" in v) return v;
+    const prods = await listaProductos(ctx, ses);
+    let stocks: Row[] = [];
+    try { stocks = await ctx.db.all("erp_stock"); } catch { stocks = []; }
     for (const l of r.L) {
+      const prod = prods.find((x) => s(x.id) === s(l.producto_id));
+      // El dueño viaja con la unidad. Cabina/Oficina → sunsu por defecto;
+      // en Venta/consignación se toma el dueño del lote de origen (si hay).
+      const rowOri = stocks.find((x) => s(x.producto_id) === s(l.producto_id) && n(x.cantidad) > 0);
+      const due = s((l as Row).propietario) || (esBodegaInterna(s(r.t.origen)) ? PROP_SUNSU : propietarioDe(rowOri || l, esBodegaInterna(s(r.t.origen)) ? PROP_SUNSU : "consignacion"));
       for (const [bod, sub, d] of [[s(r.t.origen), s(r.t.origen_sub), -n(l.cantidad)], [s(r.t.destino), s(r.t.destino_sub), n(l.cantidad)]] as [string, string, number][]) {
         await ctx.db.write(actor, "beta_stock_movimientos", "insert", {}, {
-          id: crypto.randomUUID(), fecha: now, producto_id: s(l.producto_id), sku: s(l.sku), bodega: bod, sububicacion: sub || null, delta: round2(d),
-          tipo: "transferencia", doc_id: s(r.t.id), doc_numero: s(r.t.numero), actor, nota: bodegaNombre(s(r.t.origen), s(r.t.origen_sub)) + " → " + bodegaNombre(s(r.t.destino), s(r.t.destino_sub)),
+          id: crypto.randomUUID(), fecha: now, producto_id: s(l.producto_id),
+          sku: skuPorBodega(prod, bod),
+          bodega: bod, sububicacion: sub || null, delta: round2(d),
+          tipo: "transferencia", doc_id: s(r.t.id), doc_numero: s(r.t.numero), actor,
+          nota: bodegaNombre(s(r.t.origen), s(r.t.origen_sub)) + " → " + bodegaNombre(s(r.t.destino), s(r.t.destino_sub)),
+          propietario: due,
         });
       }
     }

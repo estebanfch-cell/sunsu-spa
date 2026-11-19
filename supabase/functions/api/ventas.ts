@@ -13,6 +13,7 @@ import { claveIdentidad, clavesDe } from "./clientes_alias.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 import { cargarPreciosConsig, resolverPrecio } from "./consig_precios.ts";
+import { NOTA_LIQUIDACION_TK127, mapaAliases, qtyPagableProveedor, resolverSku } from "./inventario_modelo.ts";
 
 export const BUFFER_RESTOCK = 0.2;
 
@@ -891,15 +892,46 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
   // TK27: lo que está en la bodega CONSIGNACION también es stock en consignación (Venta + Consignación).
   const consigId = "66666666-6666-4666-8666-666666666666";
   const items: Row[] = [];
+  const aliases = mapaAliases(await (async () => { try { return await db.all("beta_sku_alias"); } catch { return []; } })());
+  const bods = await (async () => { try { return await db.all("erp_bodegas"); } catch { return []; } })();
+  const bodDe = new Map(bods.map((b) => [String(b.id), b]));
+  const canonDe = (code: string) => resolverSku(code, aliases, prods);
+  const skuPagoDe = (pid: string, fallback: string) => {
+    const pr = prods.find((r) => s(r.id) === pid);
+    return pr ? skuCode(s(pr.sku_proveedor) || s(pr.sku)) || fallback : fallback;
+  };
   const vendido = new Map<string, number>();
+  const vistosMov = new Set<string>();
+  try {
+    for (const m of await db.all("erp_movimientos")) {
+      const fecha = ymdUtc(m.fecha) || s(m.fecha).slice(0, 10);
+      if (!fecha || fecha < q.ini || fecha > q.fin) continue;
+      const pr = prods.find((r) => s(r.id) === s(m.producto_id));
+      const sku = skuPagoDe(s(m.producto_id), skuCode(s(pr?.sku) || s(m.sku)));
+      const fam = sku.startsWith(familia + "-") || skuCode(s(pr?.sku)).startsWith(familia + "-") || skuCode(s(pr?.sku_proveedor)).startsWith(familia + "-");
+      if (!fam) continue;
+      if (vendeDesdeCabina(pr || porSkuProd.get(sku), sku)) continue;
+      const qPag = qtyPagableProveedor(m, bodDe.get(String(m.bodega_id)));
+      if (!qPag && s(m.tipo) !== "venta" && s(m.tipo) !== "anulacion") continue;
+      if (s(m.tipo) === "venta" || s(m.tipo) === "anulacion") {
+        vistosMov.add(s(m.producto_id) || sku);
+        if (qPag) vendido.set(sku, round2((vendido.get(sku) || 0) + qPag));
+      }
+    }
+  } catch { /* sin kardex se usa el fallback de tickets */ }
   for (const t of await db.all("tickets")) {
     const fecha = ymdUtc(t.timestamp);
     if (!fecha || fecha < q.ini || fecha > q.fin) continue;
     for (const pr of productQtys(t)) {
-      const sku = skuCode(pr.sku);
-      if (!sku.startsWith(familia + "-")) continue;
-      if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
-      vendido.set(sku, (vendido.get(sku) || 0) + pr.qty);
+      const raw = skuCode(pr.sku);
+      const sku = canonDe(raw);
+      const prod = porSkuProd.get(sku) || prods.find((r) => skuCode(s(r.sku_proveedor)) === raw || skuCode(s(r.codigo_interno)) === raw);
+      const skuPago = skuCode(s(prod?.sku_proveedor) || sku || raw);
+      if (!skuPago.startsWith(familia + "-") && !sku.startsWith(familia + "-") && !raw.startsWith(familia + "-")) continue;
+      if (vendeDesdeCabina(prod || porSkuProd.get(sku), skuPago)) continue;
+      // Si ya hay movimientos de este producto en el periodo, el kardex (con dueño) manda.
+      if (prod && vistosMov.has(s(prod.id))) continue;
+      vendido.set(skuPago, (vendido.get(skuPago) || 0) + pr.qty);
     }
   }
   const consumido = new Map<string, number>();
@@ -923,12 +955,12 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     const hay = stock.filter((r) => r.producto_id === pr.id && (String(r.bodega_id) === ventaId || String(r.bodega_id) === consigId)).reduce((a, r) => a + n(r.cantidad), 0);
     const v = vendido.get(sku) || 0;
     const cns = consumido.get(sku) || 0;
-    const paga = v + cns;
+    const paga = v;
     const res = precios.get(sku) || resolverPrecio(sku, { costo: n(pr.costo_promedio) });
     const compra = n(res.precio);
     items.push({
-      sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, consumido: cns, compra,
-      precioFuente: res.fuente, ocNumero: res.oc_numero || "",
+      sku, nombre: s(pr.nombre), stock: round2(hay), vendido: v, consumido: cns, paga,
+      compra, precioFuente: res.fuente, ocNumero: res.oc_numero || "",
       sugerido: paga > 0 ? Math.ceil(paga * (1 + buffer)) : 0,
       subtotal: round2(paga * compra),
     });
@@ -937,19 +969,19 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     if (vistos.has(sku)) continue;
     const cns = consumido.get(sku) || 0;
-    const paga = v + cns;
+    const paga = v;
     const res = precios.get(sku) || resolverPrecio(sku, { costo: 0 });
-    items.push({ sku, nombre: sku, stock: 0, vendido: v, consumido: cns, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: Math.ceil(paga * (1 + buffer)), subtotal: round2(paga * n(res.precio)) });
+    items.push({ sku, nombre: sku, stock: 0, vendido: v, consumido: cns, paga, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: Math.ceil(paga * (1 + buffer)), subtotal: round2(paga * n(res.precio)) });
     vistos.add(sku);
   }
   for (const [sku, cns] of consumido) {
     if (vendeDesdeCabina(porSkuProd.get(sku), sku)) continue;
     if (vistos.has(sku)) continue;
     const res = precios.get(sku) || resolverPrecio(sku, { costo: 0 });
-    items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: Math.ceil(cns * (1 + buffer)), subtotal: round2(cns * n(res.precio)) });
+    items.push({ sku, nombre: sku, stock: 0, vendido: 0, consumido: cns, paga: 0, compra: n(res.precio), precioFuente: res.fuente, ocNumero: res.oc_numero || "", sugerido: 0, subtotal: 0 });
   }
   items.sort((a, b) => s(a.sku).localeCompare(s(b.sku)));
-  const fact = items.filter((it) => n(it.vendido) + n(it.consumido) > 0);
+  const fact = items.filter((it) => n(it.vendido) > 0);
   const restock = items.filter((it) => n(it.sugerido) > 0);
   const sub = round2(fact.reduce((a, it) => a + n(it.subtotal), 0));
   const iva = round2(sub * 0.15);
@@ -959,6 +991,6 @@ export async function borradorConsig(db: Db, now: Date, p: Row): Promise<Row> {
     familia, buffer, ...q,
     items, fact, restock,
     totales: { subtotal: sub, iva, total: round2(sub + iva) },
-    nota: "Los productos son entregados en modalidad de CONSIGNACIÓN. Sunsu Spa pagará lo vendido y lo pasado a cabina en la quincena, a precio de compra + IVA.",
+    nota: NOTA_LIQUIDACION_TK127,
   };
 }
