@@ -33,8 +33,10 @@ insert into public.tk115_viewdef_bak_20261119 (nombre, def)
 values ('v_ticket_productos', pg_get_viewdef('public.v_ticket_productos'::regclass, true))
 on conflict (nombre) do nothing;
 
--- Vista pública sin precio de compra. La versión con costo queda solo para sunsu_admin.
-create or replace view public.v_ticket_productos as
+-- Vista pública sin precio de compra. CREATE OR REPLACE no puede quitar columnas:
+-- se reemplaza con DROP + CREATE. La versión con costo queda solo para sunsu_admin.
+drop view if exists public.v_ticket_productos;
+create view public.v_ticket_productos as
   select
     v.id as ticket_id,
     v.ciclo,
