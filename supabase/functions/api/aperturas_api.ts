@@ -188,7 +188,8 @@ extend("ap_anular", "any", async (p, ctx, ses) => {
 extend("ap_aplica_get", "any", async (p, ctx) => {
   const prod = (await todas(ctx, "erp_productos")).find((x) => s(x.id) === s(p.producto_id));
   if (!prod) return { error: "Producto no encontrado" };
-  return { ok: true, aplica: arr(prod.beta_aplica_faciales).map(s), faciales: await facialesCatalogo(ctx) };
+  const aplica = [...new Set(arr(prod.beta_aplica_faciales).map((x) => s(x).toUpperCase()).filter(Boolean))];
+  return { ok: true, aplica, faciales: await facialesCatalogo(ctx) };
 });
 extend("ap_aplica_guardar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin" };
@@ -198,7 +199,9 @@ extend("ap_aplica_guardar", "any", async (p, ctx, ses) => {
   const prod = (await todas(ctx, "erp_productos")).find((x) => s(x.id) === pid);
   if (!prod) return { error: "Producto no encontrado" };
   const previos = arr(prod.beta_aplica_faciales).map((x) => s(x).toUpperCase());
-  await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: pid }, { beta_aplica_faciales: L, beta_editado_por: s(ses.name), beta_editado_at: ctx.now.toISOString() });
+  const saved = await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: pid }, { beta_aplica_faciales: L, beta_editado_por: s(ses.name), beta_editado_at: ctx.now.toISOString() });
+  const got = [...new Set(arr((saved || prod).beta_aplica_faciales).map((x) => s(x).toUpperCase()).filter(Boolean))].sort();
+  if (got.join("|") !== [...L].sort().join("|")) return { error: "No se pudo guardar la selección de faciales" };
   await logAccion(ctx.db, actorOf(ses), "PRODUCTO APLICA FACIALES", `${skuCode(s(prod.sku))} ${s(prod.nombre)} → ${L.join(", ") || "ninguno"}`);
   // TK36: el producto entra (o sale) solo del protocolo de cada facial.
   const nombres = new Map((await facialesCatalogo(ctx)).map((f) => [f.code, f.nombre]));
