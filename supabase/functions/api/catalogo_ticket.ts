@@ -51,6 +51,25 @@ export function preciosMigoDeTablas(hist: Row[], vivo: Row[]): Map<string, Preci
   return m;
 }
 
+
+/** TK142: stock de Bodega Venta, sububicación y comisión unitaria para el detalle compacto de líneas. */
+export function extrasCatalogoProd(p: Row | undefined): { stockVenta: number | null; sububicacion: string; comision: number } {
+  if (!p) return { stockVenta: null, sububicacion: "", comision: 0 };
+  const pg = (p.porGrupo && typeof p.porGrupo === "object") ? p.porGrupo as Row : {};
+  const stockVenta = pg.CONSIGNACION != null && pg.CONSIGNACION !== "" ? n(pg.CONSIGNACION) : (p.stock != null && p.stock !== "" ? n(p.stock) : null);
+  let sub = s((p as Row).sububicacion_def || (p as Row).sububicacionDef || "");
+  const pe = (p.porEstante && typeof p.porEstante === "object") ? p.porEstante as Row : {};
+  const keys = Object.keys(pe);
+  const venta = keys.find((k) => /^CONSIGNACION\|/i.test(k) && n(pe[k]) > 0);
+  const any = keys.find((k) => n(pe[k]) > 0 && String(k).includes("|"));
+  const pick = venta || any;
+  if (pick) {
+    const loc = pick.split("|").slice(1).join("|");
+    if (loc) sub = loc;
+  }
+  return { stockVenta, sububicacion: sub, comision: n(p.comision) };
+}
+
 /** Arma la lista del buscador: catálogo de la hoja + productos ERP + todo lo facturado en Migo. */
 export function armarCatalogoTicket(catalogo: Row[], productos: Row[], migo: Map<string, PrecioMigo>): Row[] {
   const porCode = new Map(productos.map((p) => [skuCode(s(p.sku)), p]));
@@ -73,7 +92,7 @@ export function armarCatalogoTicket(catalogo: Row[], productos: Row[], migo: Map
       activo: (p ? p.activo !== false : r.activo !== false) || enMigo,
       enMigo, barras: [...new Set([...(p ? (p.barras || []) : []), ...aliases])], productoId: p ? s(p.id) : "", foto: p ? s(p.foto_thumb) : "",
       stock: p ? p.stock : null, marca: p ? s(p.marca) : "", categoria: p ? s(p.categoria) : "",
-      codigoInterno: p ? s(p.codigoInterno || p.codigo_interno) : "", aliases,
+      codigoInterno: p ? s(p.codigoInterno || p.codigo_interno) : "", aliases, ...extrasCatalogoProd(p),
     });
   }
   for (const p of productos || []) {
@@ -89,7 +108,7 @@ export function armarCatalogoTicket(catalogo: Row[], productos: Row[], migo: Map
       sku: code, skuVisible: code, nombre: s(p.nombre) || s(m?.nombre), tipo: "producto",
       pvp: round2(pvp), activo: p.activo !== false || enMigo, enMigo,
       barras: [...new Set([...(Array.isArray(p.barras) ? p.barras : []), ...aliases])], productoId: s(p.id), foto: s(p.foto_thumb), stock: p.stock,
-      marca: s(p.marca), categoria: s(p.categoria), codigoInterno: s(p.codigoInterno || p.codigo_interno), aliases,
+      marca: s(p.marca), categoria: s(p.categoria), codigoInterno: s(p.codigoInterno || p.codigo_interno), aliases, ...extrasCatalogoProd(p),
     });
   }
   for (const [code, m] of migo) {
