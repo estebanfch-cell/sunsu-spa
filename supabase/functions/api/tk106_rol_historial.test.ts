@@ -27,7 +27,7 @@ describe("TK106 · historial de roles del personal", () => {
   it("sube el cache a TK106", () => {
     const html = beta();
     const sw = readFileSync(join(root, "sw.js"), "utf8");
-    assert.match(html, /20261119tk139/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK139/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
+    assert.match(html, /20261119tk140/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK140/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
   });
 });
