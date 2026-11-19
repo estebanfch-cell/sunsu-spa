@@ -615,32 +615,42 @@ async function asegurarZonas(_ctx: Ctx, _actor: string): Promise<void> {
 
 extend("cf_zonas", "any", async (_p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
-  const lugares = lugaresBodega();
-  if (!(await hayZonas(ctx))) return { ok: true, listo: false, falta: "Falta aplicar 20261119_tk117_conteo_zonas.sql", admin, zonas: [], sinZona: [], lugares, subs: [] };
-  const stock = await stockPorLugar(ctx, ses);
-  const catalogo = (await haySubs(ctx)) ? (await todas(ctx, "beta_sububicaciones")).filter((x) => x.activo !== false) : [];
-  const zonasRaw = (await todas(ctx, "beta_conteo_zonas")).sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre), "es"));
-  const zonas = zonasRaw.map((z) => {
-    const prefs = Array.isArray(z.prefijos) ? z.prefijos.map((x) => s(x)) : [];
-    const nSubs = catalogo.filter((su) => s(su.bodega) === s(z.bodega) && coincidePrefijo(s(su.codigo), prefs)).length;
-    return vistaZona(z, stock, nSubs);
-  });
-  const cubiertos = (k: string) => {
-    const i = k.indexOf("|");
-    const g = i < 0 ? k : k.slice(0, i), sb = i < 0 ? "" : k.slice(i + 1);
-    return zonas.some((z) => z.activo !== false && s(z.bodega) === g && coincidePrefijo(sb, (z.prefijos as string[]) || []));
+  const lugares = [
+    { bodega: "CONSIGNACION", sububicacion: "", nombre: "Venta" },
+    { bodega: "CABINA", sububicacion: "", nombre: "Bodega Cabina" },
+    { bodega: "OFICINA", sububicacion: "", nombre: "Bodega Oficina" },
+  ];
+  const erp = await todas(ctx, "erp_sububicaciones");
+  const catalogo = (await haySubs(ctx)) ? await todas(ctx, "beta_sububicaciones") : [];
+  const subs = [];
+  const visto = new Set<string>();
+  const add = (bodega: string, codigo: string, nombre: string, id?: string, padre?: string) => {
+    const k = bodega + ":" + codigo;
+    if (!codigo || visto.has(k)) return;
+    visto.add(k);
+    subs.push({ id: id || k, bodega, padre: padre || "", codigo, nombre: nombre || codigo, activo: true, lugar: bodegaNombre(bodega) });
   };
-  const sinZona = Object.keys(stock).filter((k) => stock[k] > 0 && !cubiertos(k)).map((k) => {
-    const i = k.indexOf("|");
-    const bod = i < 0 ? k : k.slice(0, i), sub = i < 0 ? "" : k.slice(i + 1);
-    return { bodega: bod, sububicacion: sub, nombre: sub && !esCodigoCabina(sub) ? sub : bodegaNombre(bod, sub), unidades: round2(stock[k]) };
-  });
-  const subs = catalogo.map((su) => ({
-    id: s(su.id), bodega: s(su.bodega), padre: s(su.padre), codigo: s(su.codigo),
-    nombre: s(su.nombre) || s(su.codigo), activo: su.activo !== false,
-    lugar: bodegaNombre(s(su.bodega), s(su.padre)),
-  }));
-  return { ok: true, listo: true, admin, zonas, sinZona, lugares, subs };
+  // Cabina 1/2/3 ya existen (erp_sububicaciones); no se duplican ni se tratan como bodegas.
+  for (const x of erp) {
+    if (x.activo === false) continue;
+    const codigo = s(x.codigo);
+    const bod = esCodigoCabina(codigo) ? "CABINA" : (s(x.bodega) || (s(x.bodega_id) === BOD_IDS.OFICINA || s(x.bodega_id) === "CASA" ? "OFICINA" : s(x.bodega_id) === BOD_IDS.CONSIGNACION ? "CONSIGNACION" : "CABINA"));
+    add(bod, codigo, s(x.nombre) || codigo, s(x.id));
+  }
+  for (const x of [{ codigo: "CABINA_1", nombre: "Cabina 1" }, { codigo: "CABINA_2", nombre: "Cabina 2" }, { codigo: "CABINA_3", nombre: "Cabina 3" }]) {
+    add("CABINA", x.codigo, x.nombre);
+  }
+  for (const su of catalogo) {
+    if (su.activo === false) continue;
+    add(s(su.bodega), s(su.codigo), s(su.nombre) || s(su.codigo), s(su.id), s(su.padre));
+  }
+  let zonas: Row[] = [];
+  try {
+    zonas = (await todas(ctx, "beta_conteo_zonas")).sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre), "es"))
+      .map((z) => ({ id: z.id, nombre: s(z.nombre), bodega: s(z.bodega), sububicacion: s(z.sububicacion), prefijos: z.prefijos, frecuenciaDias: n(z.frecuencia_dias || z.frecuenciaDias) || 30, activo: z.activo !== false, orden: n(z.orden) }));
+  } catch { /* sin tabla de zonas */ }
+  return { ok: true, listo: true, admin, zonas, sinZona: [], lugares, subs };
+
 });
 
 extend("cf_zona_save", "any", async (p, ctx, ses) => {
@@ -707,40 +717,43 @@ extend("cf_sub_save", "any", async (p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
   const bodega = s(p.bodega).toUpperCase();
   if (!BOD_OK.includes(bodega as (typeof BOD_OK)[number])) return { error: "Bodega inválida" };
-  // Conservar guiones (8-A-1). Solo se limpian espacios.
   const codigo = s(p.codigo).trim().toUpperCase().replace(/\s+/g, "");
   if (!codigo) return { error: "El código es obligatorio" };
-  if (esCodigoCabina(codigo)) return { error: "Ese código es una cabina, no un estante" };
-  if (!(await haySubs(ctx))) return { error: "Falta aplicar 20261119_tk118_conteo_fidelity.sql" };
-  const nombre = s(p.nombre).trim() || codigo;
-  const padre = bodega === "CABINA" ? (esCodigoCabina(s(p.padre || p.sububicacion)) ? normSub(s(p.padre || p.sububicacion)) : s(p.padre || p.sububicacion)) : "";
+  const nombre = s(p.nombre).trim() || (esCodigoCabina(codigo) ? codigo.replace(/^CABINA_?/, "Cabina ") : codigo);
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const activo = p.activo !== false && p.activo !== "false";
   const destBodega = s(p.mover_a || p.moverA).toUpperCase() || bodega;
   if (destBodega && !BOD_OK.includes(destBodega as (typeof BOD_OK)[number])) return { error: "Bodega destino inválida" };
-  const rows = await todas(ctx, "beta_sububicaciones");
-  const id = s(p.id);
-  const ya = rows.find((x) => s(x.id) === id) || rows.find((x) => s(x.bodega) === bodega && s(x.codigo).toUpperCase() === codigo);
   const stock = await stockPorLugar(ctx, ses);
-  const q = n(stock[claveLugar(s(ya ? ya.bodega : bodega), s(ya ? ya.codigo : codigo))]);
+  const q = n(stock[claveLugar(bodega, codigo)]);
+  const erp = await todas(ctx, "erp_sububicaciones");
+  const id = s(p.id);
+  const ya = erp.find((x) => s(x.id) === id) || erp.find((x) => s(x.codigo).toUpperCase() === codigo);
 
   if (ya) {
     if (!admin) return { error: "Solo un admin cambia o desactiva una sububicación" };
-    const prevCod = s(ya.codigo), prevBod = s(ya.bodega);
-    if (q > 0.0001 && (prevCod.toUpperCase() !== codigo || destBodega !== prevBod || !activo)) {
+    if (q > 0.0001 && (s(ya.codigo).toUpperCase() !== codigo || destBodega !== bodega || !activo)) {
       return { error: "La sububicación tiene stock (" + round2(q) + "); muévelo antes de renombrarla, cambiarla de bodega o desactivarla" };
     }
-    await ctx.db.write(actor, "beta_sububicaciones", "update", { id: ya.id }, {
-      codigo, nombre, bodega: destBodega, padre: padre || null, activo, updated_por: actor, updated_at: now,
+    await ctx.db.write(actor, "erp_sububicaciones", "update", { id: ya.id }, {
+      codigo, nombre, bodega_id: BOD_IDS[destBodega] || ya.bodega_id, activo, updated_at: now,
     });
-    return { ok: true, id: ya.id, codigo };
+    return { ok: true, id: ya.id, codigo, bodega: destBodega, nombre };
   }
 
-  // El personal puede crear un estante en el momento del conteo («＋ Crear ubicación»).
+  // El personal puede crear un estante al momento del conteo. No se crea una sección ni una bodega.
   const nid = id || crypto.randomUUID();
-  await ctx.db.write(actor, "beta_sububicaciones", "insert", {}, {
-    id: nid, bodega, padre: padre || null, codigo, nombre, activo: true,
-    created_por: actor, created_at: now, updated_por: actor, updated_at: now,
+  const orden = erp.filter((x) => s(x.bodega_id) === (BOD_IDS[bodega] || "")).reduce((a, x) => Math.max(a, n(x.orden)), 0) + 1;
+  await ctx.db.write(actor, "erp_sububicaciones", "insert", {}, {
+    id: nid, bodega_id: BOD_IDS[bodega], codigo, nombre, orden, activo: true, created_at: now, updated_at: now,
   });
-  return { ok: true, id: nid, codigo, bodega, padre, nombre };
+  if (await haySubs(ctx)) {
+    try {
+      await ctx.db.write(actor, "beta_sububicaciones", "insert", {}, {
+        id: nid, bodega, padre: s(p.padre) || null, codigo, nombre, activo: true,
+        created_por: actor, created_at: now, updated_por: actor, updated_at: now,
+      });
+    } catch { /* el catálogo erp basta */ }
+  }
+  return { ok: true, id: nid, codigo, bodega, nombre };
 });
