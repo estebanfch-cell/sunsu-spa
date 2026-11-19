@@ -1,5 +1,5 @@
 // Conteo físico estilo MineCore (beta, 0045). Lista + crear + contar (asignada) + revisar (admin).
-// Aprobar no mueve stock: el conteo queda como inventario físico inicial hasta que Emilia confirme.
+// TK135: al aprobar, el stock real de Productos de esa bodega se actualiza con lo contado.
 (function () {
   var C = { meta: null, list: null, cur: null, general: null, sec: null, q: "", est: "", soloDif: false, filtro: "", timers: {}, prods: null, dirty: {}, menu: null, otra: null, pad: false, focus: null, saved: true, hits: null, zonas: null, zEdit: {}, zNew: false };
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v); }
@@ -115,7 +115,7 @@
   function formNuevo(m, adm) {
     var txt = adm
       ? "Se cuenta una bodega (o una cabina). La persona asignada lo ve en su inicio con un aviso. Al empezar se toma la foto del stock del sistema; aprobar no mueve stock."
-      : "Elige la bodega o cabina y cuenta lo que ves. Al terminar, un admin lo revisa. Aprobar no mueve el stock hasta que Emilia lo confirme.";
+      : "Elige la bodega o cabina y cuenta lo que ves. Al terminar, un admin lo revisa. Al aprobar, el stock real de Productos de esa bodega se actualiza con lo contado.";
     return '<div class="mccf-card" id="mccf-nuevo" hidden><b>Nuevo conteo</b><p class="mccf-sub" style="margin:4px 0 10px">' + txt + '</p><div class="mccf-form">' +
       '<label>Bodega<select id="mccf-bod">' + (m.bodegas || []).map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
       '<label id="mccf-subw" hidden>Sububicación<select id="mccf-sub">' + opt("", "Toda la Bodega Cabina") + (m.subsCabina || []).map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
@@ -136,7 +136,7 @@
       (m ? '<button class="btn small" type="button" id="mccf-mas">+ Nuevo conteo</button>' : "") + "</div>" +
       (m ? formNuevo(m, adm) : "") +
       '<div class="mccf-card" style="padding:0"><div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Número</th><th>Bodega</th><th>Asignado a</th><th>Estado</th><th class="num">Contados</th><th class="num mccf-hide">Diferencias</th><th class="mccf-hide">Nota</th></tr></thead><tbody id="mccf-body">' + filasHtml() + "</tbody></table></div></div>" +
-      '<p class="mccf-sub">' + (adm ? "Ves todos los conteos, a quién están asignados y su estado." : "Ves los conteos asignados a ti.") + " Aprobar un conteo no mueve stock: queda como inventario físico inicial.</p></div>";
+      '<p class="mccf-sub">' + (adm ? "Ves todos los conteos, a quién están asignados y su estado." : "Ves los conteos asignados a ti.") + " Al aprobar, el stock real de esa bodega queda actualizado en Productos.</p></div>";
   }
   function wireHojas(main) {
     var q = main.querySelector("#mccf-q"), b = main.querySelector("#mccf-body");
@@ -208,7 +208,7 @@
     if (c.estado === "asignado") aviso = '<div class="mccf-note">' + (ciego() ? "Conteo a ciegas: cuenta lo que ves en " + e(c.bodegaNombre) + " producto por producto (o búscalo / escanéalo). No se muestra la cantidad del sistema." : "Al tocar <b>Empezar conteo</b> se toma la foto del stock del sistema en " + e(c.bodegaNombre) + ". Luego cuenta cada producto (o búscalo / escanéalo).") + "</div>";
     if (c.estado === "en_conteo" && c.revisionNota) aviso = '<div class="mccf-note"><b>Devuelto por revisión:</b> ' + e(c.revisionNota) + "</div>";
     if (c.estado === "en_revision") aviso = '<div class="mccf-note">Enviado a revisión ' + e(fecha(c.enviadoAt)) + ". " + (d.admin ? "Revisa las diferencias y aprueba o devuelve." : "Un admin lo revisará.") + "</div>";
-    if (c.estado === "aprobado") aviso = '<div class="mccf-note">Aprobado por ' + e(c.aprobadoPor) + " · " + e(fecha(c.aprobadoAt)) + ". <b>No movió stock</b>: queda como inventario físico inicial hasta que se confirme el ajuste.</div>";
+    if (c.estado === "aprobado") aviso = '<div class="mccf-note">Aprobado por ' + e(c.aprobadoPor) + " · " + e(fecha(c.aprobadoAt)) + (c.stockAplicado ? ". El stock real de Productos de esta bodega ya quedó actualizado." : ". El stock de Productos de esta bodega aún no se había aplicado.") + "</div>";
     var buscar = (d.puedeContar || (d.lineas || []).length) ? '<div class="mccf-bar"><input type="search" id="mccf-f" placeholder="' + (d.puedeContar ? "Buscar o escanear (código, SKU, nombre). Enter = ir al producto" : "Buscar en el conteo") + '" value="' + e(C.filtro) + '" autocomplete="off">' +
       (ciego() ? "" : '<label class="mccf-sub"><input type="checkbox" id="mccf-solodif"' + (C.soloDif ? " checked" : "") + "> Solo diferencias</label>") + "</div>" + (d.puedeContar ? '<div class="mccf-hits" id="mccf-hits" hidden></div>' : "") : "";
     return '<div id="mccf-root"><p><button class="btn ghost small" type="button" data-go="#/m/conteos">← Volver a la lista</button></p>' +
@@ -262,7 +262,7 @@
     btn("#mccf-empezar", async function () { var r = await api("cf_iniciar", { id: d.conteo.id }); if (!r || r.error) return err((r && r.error) || "No se pudo empezar"); await cargarCur(d.conteo.id); repintar(main); });
     btn("#mccf-enviar", async function () { await new Promise(function (ok) { setTimeout(ok, 500); }); var r = await api("cf_enviar", { id: d.conteo.id }); if (!r || r.error) return err((r && r.error) || "No se pudo enviar"); await cargarCur(d.conteo.id); repintar(main); });
     btn("#mccf-aprobar", async function () {
-      if (!confirm("¿Aprobar " + d.conteo.numero + "?\nNo mueve stock: queda como inventario físico inicial.")) return;
+      if (!confirm("¿Aprobar " + d.conteo.numero + "?\nEl stock real de Productos de esta bodega se actualizará con lo que se contó.")) return;
       var r = await api("cf_revisar", { id: d.conteo.id, que: "aprobar" }); if (!r || r.error) return err((r && r.error) || "No se pudo aprobar"); await cargarCur(d.conteo.id); repintar(main);
     });
     btn("#mccf-devolver", async function () { var n = prompt("¿Qué hay que revisar o volver a contar?", ""); if (n === null) return; var r = await api("cf_revisar", { id: d.conteo.id, que: "devolver", nota: n }); if (!r || r.error) return err((r && r.error) || "No se pudo devolver"); await cargarCur(d.conteo.id); repintar(main); });

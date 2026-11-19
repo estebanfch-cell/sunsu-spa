@@ -11,14 +11,15 @@ import { n, round2, s, type Row } from "./domain.ts";
 import { GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { BODEGAS_CONTEO, bodegaNombre, difLinea, notificar } from "./conteo_fisico_api.ts";
+import { aplicarConteoAStock } from "./conteo_aplica_stock.ts";
 import { disponibleEn } from "./transferencias_beta_api.ts";
 
 const FALTA = "Falta aplicar 0047_ajustes_beta.sql";
 /** Motivos de ajuste (lista de MineCore: app.adjustment_reasons). */
 export const MOTIVOS_AJUSTE = ["Conteo físico", "Corrección", "Daño", "Vencido", "Pérdida / robo", "Uso interno", "Muestra / obsequio", "Devolución", "Otro"];
 export const ESTADOS_AJ: Record<string, string> = { pendiente: "Pendiente de aprobación", aplicado: "Aplicado", rechazado: "Rechazado", cancelado: "Cancelado" };
-/** Un conteo aprobado NO pasa a stock hasta que Emilia lo confirme (17/11). Cambiar a true cuando lo confirme. */
-export const CONTEO_A_STOCK = false;
+/** TK135 (Emilia 19/11 14:18): al aprobar el conteo, el stock real se actualiza solo. */
+export const CONTEO_A_STOCK = true;
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_ajustes"); return true; } catch { return false; } }
@@ -157,15 +158,11 @@ extend("aj_revisar", "any", async (p, ctx, ses) => {
   }
   return { error: "Acción inválida" };
 });
-/** Conteo aprobado → ajuste por las diferencias. Bloqueado hasta que Emilia confirme (CONTEO_A_STOCK). */
+/** Conteo aprobado → aplica el stock real (idempotente). */
 extend("aj_desde_conteo", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin" };
-  if (!CONTEO_A_STOCK) return { error: "Todavía no: un conteo aprobado pasa a stock cuando Emilia lo confirme." };
-  const c = (await todas(ctx, "beta_conteos")).find((x) => s(x.id) === s(p.id));
+  const c = (await todas(ctx, "beta_conteos")).find((x) => s(x.id) === s(p.id) || s(x.numero) === s(p.id));
   if (!c || s(c.estado) !== "aprobado") return { error: "El conteo tiene que estar aprobado" };
-  if (c.stock_aplicado === true) return { error: "Este conteo ya pasó a stock" };
   const L = (await todas(ctx, "beta_conteo_lineas")).filter((l) => s(l.conteo_id) === s(c.id));
-  const r = await crear(ctx, ses, { bodega: c.bodega, sububicacion: c.sububicacion, motivo: "Conteo físico", nota: "Conteo " + s(c.numero), lineas: L.map((l) => ({ producto_id: l.producto_id, delta: difLinea(l) })) }, "conteo", s(c.id));
-  if (r.ok) await ctx.db.write(actorOf(ses), "beta_conteos", "update", { id: c.id }, { stock_aplicado: true, updated_at: ctx.now.toISOString() });
-  return r;
+  return await aplicarConteoAStock(ctx, ses, c, L);
 });

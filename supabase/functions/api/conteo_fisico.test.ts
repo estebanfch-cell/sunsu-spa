@@ -31,7 +31,7 @@ function semilla() {
     { producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 5 },
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
   ]);
-  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones", "beta_sububicaciones"]) db.tables.set(t, []);
+  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones", "beta_sububicaciones", "beta_ajustes", "beta_ajuste_lineas"]) db.tables.set(t, []);
   const c = { db, now: new Date("2026-11-17T17:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
@@ -53,7 +53,7 @@ async function sembrarZonas(h: (a: string, u: string, p?: Row) => Promise<Row>) 
 }
 
 describe("conteo físico beta", () => {
-  it("flujo completo: crear → aviso → empezar (foto del sistema) → contar → enviar → devolver → aprobar sin mover stock", async () => {
+  it("flujo completo: crear → aviso → empezar (foto del sistema) → contar → enviar → devolver → aprobar y actualizar stock", async () => {
     const { db, h } = semilla();
     assert.match(String((await h("cf_crear", "cos", { bodega: "CONSIGNACION", asignado_a: "u-bea" })).error), /para ti/);
     const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", nota: "Inventario inicial" });
@@ -91,14 +91,17 @@ describe("conteo físico beta", () => {
     await h("cf_enviar", "cos", { id: cr.id });
     const stockAntes = JSON.stringify(db.tables.get("erp_stock"));
     const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
-    assert.equal(ap.stockAplicado, false);
+    assert.equal(ap.stockAplicado, true, JSON.stringify(ap));
+    // El kardex del sistema (erp_stock) no se pisa: Productos suma los movimientos beta.
     assert.equal(JSON.stringify(db.tables.get("erp_stock")), stockAntes);
-    assert.equal(db.tables.get("erp_movimientos")!.length, 0);
+    const movs = db.tables.get("beta_stock_movimientos")!;
+    assert.ok(movs.some((m) => m.tipo === "conteo" && m.doc_numero === "CF-001"));
     assert.equal(((await h("cf_get", "adm", { id: cr.id })).conteo as Row).estado, "aprobado");
+    assert.equal(((await h("cf_get", "adm", { id: cr.id })).conteo as Row).stockAplicado, true);
     await h("notif_leer", "cos", { todas: true });
     assert.equal((await h("notif_mias", "cos")).sinLeer, 0);
   });
-  it("TK108: el personal crea un conteo para sí, lo envía y el admin lo aprueba sin mover stock", async () => {
+  it("TK108: el personal crea un conteo para sí, lo envía y el admin lo aprueba (el stock sí se actualiza)", async () => {
     const { db, h } = semilla();
     const cr = await h("cf_crear", "cos", { bodega: "CONSIGNACION" });
     assert.equal(cr.ok, true);
@@ -110,10 +113,9 @@ describe("conteo físico beta", () => {
     const L = g.lineas as Row[];
     await h("cf_guardar", "cos", { id: cr.id, lineas: L.map((l) => ({ id: l.id, contado: 1 })) });
     assert.equal((await h("cf_enviar", "cos", { id: cr.id })).ok, true);
-    const stockAntes = JSON.stringify(db.tables.get("erp_stock"));
     const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
-    assert.equal(ap.stockAplicado, false);
-    assert.equal(JSON.stringify(db.tables.get("erp_stock")), stockAntes);
+    assert.equal(ap.stockAplicado, true, JSON.stringify(ap));
+    assert.ok((db.tables.get("beta_stock_movimientos") || []).some((m) => m.tipo === "conteo"));
   });
 });
 

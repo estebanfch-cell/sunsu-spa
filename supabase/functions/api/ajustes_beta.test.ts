@@ -68,9 +68,9 @@ describe("ajustes de stock beta", () => {
     assert.equal((await stock(h, "p1")).CONSIGNACION, 4);
     assert.match(String((await h("aj_revisar", "cos", { id: r2.id, que: "aprobar" })).error), /ya está|admin/i);
   });
-  it("un conteo aprobado NO pasa a stock hasta que Emilia confirme", async () => {
+  it("TK135: un conteo aprobado sí puede pasar a stock (aj_desde_conteo es idempotente)", async () => {
     const { h } = semilla();
-    assert.equal(CONTEO_A_STOCK, false);
-    assert.match(String((await h("aj_desde_conteo", "adm", { id: "x" })).error), /Emilia/);
+    assert.equal(CONTEO_A_STOCK, true);
+    assert.match(String((await h("aj_desde_conteo", "adm", { id: "x" })).error), /aprobado/);
   });
 });
