@@ -383,7 +383,7 @@ window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,_gcFacial:'',_gcEtiqueta:'',justificacionDescuento:'',justificacionMotivo:'',justificacionOtra:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,caja:false,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -1351,7 +1351,8 @@ function renderTicket(c){
       '<div class="gc-box" id="gc-box" style="display:'+(T.cobro==='giftcard'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--pink-d)">Detalle del canje de gift card</span>'+
         '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Código GC: 26-050..." oninput="onGcCodigo(this.value)">'+
-        '<input id="gc-aplica" type="number" min="0" step="0.01" inputmode="decimal" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Monto a aplicar, ej. 65" oninput="T.gcAplica=parseFloat(this.value)||0;updatePreview()">'+
+        '<div id="gc-saldo-hint" style="display:none;margin:-4px 0 8px;padding:6px 10px;border-radius:8px;background:#F4F0FA;color:var(--navy);font-size:0.78rem;font-weight:700"></div>'+
+        '<input id="gc-aplica" type="number" min="0" step="0.01" inputmode="decimal" style="width:100%;padding:9px 11px;border:1.5px solid var(--pink-m);border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Monto a aplicar, ej. 95" oninput="T.gcAplica=parseFloat(this.value)||0;updatePreview()">'+
         '<div id="gc-dif" class="gc-lines" style="color:var(--navy)">Si el facial cuesta más que la gift card, se cobra y se factura solo la diferencia.</div>'+
         '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--pink-d);cursor:pointer">'+
           '<input type="checkbox" onchange="toggleGCOtro(this.checked)" style="width:14px;height:14px">Es gift card de otro cliente'+
@@ -1805,17 +1806,21 @@ function onGcCodigo(v){
   clearTimeout(window._gcBusca);
   window._gcBusca=setTimeout(function(){
     var q=(v||'').trim();
-    if(q.length<3){ T._gcLookup=false; updatePreview(); return; }
+    if(q.length<3){ T._gcLookup=false; T._gcFacial=''; T._gcEtiqueta=''; var h0=document.getElementById('gc-saldo-hint'); if(h0){h0.textContent='';h0.style.display='none';} updatePreview(); return; }
     fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent(q))
       .then(function(r){return r.json();})
       .then(function(d){
         var lista=(d&&d.resultados)||[];
         var hit=lista.find(function(x){return String(x.codigo).toLowerCase()===q.toLowerCase();})||lista[0];
-        if(!hit){ T._gcLookup=false; T.gcSaldo=0; updatePreview(); return; }
+        if(!hit){ T._gcLookup=false; T.gcSaldo=0; T._gcFacial=''; T._gcEtiqueta=''; var h0=document.getElementById('gc-saldo-hint'); if(h0){h0.textContent='';h0.style.display='none';} updatePreview(); return; }
         var saldo=hit.usado?0:(hit.saldo!=null&&String(hit.saldo)!==''?Number(hit.saldo):0);
         if(!isFinite(saldo)||saldo<0) saldo=0;
         T.gcSaldo=saldo;
         T._gcLookup=true;
+        T._gcFacial=hit.facial||'';
+        T._gcEtiqueta=hit.etiqueta||(hit.codigo? (hit.codigo+' · $'+saldo.toFixed(saldo%1?2:0)+(hit.facial?(' ('+hit.facial+')'):'')) : '');
+        var hint=document.getElementById('gc-saldo-hint');
+        if(hint){ hint.textContent=T._gcEtiqueta||('Saldo $'+saldo.toFixed(2)); hint.style.display=T._gcEtiqueta||saldo?'block':'none'; }
         var f=FACIALES.find(function(x){return x.sku===T.facial;});
         if(!(Number(T.gcAplica)>0)) T.gcAplica=Math.min(saldo, f?f.p:saldo);
         var inp=document.getElementById('gc-aplica');
@@ -2362,7 +2367,48 @@ function _ldRender(){
     el.innerHTML=m>0?'<s>'+$(l.g)+'</s> <b>'+$(l.g-m)+'</b>':'';
   });
 }
+
+function _dscJustifHTML(dscMonto){
+  var J=window.SunsuDescJustif;
+  if(!J) return '';
+  J.aplicarAutoMotivo(T);
+  if(!J.pideJustificacion(T, dscMonto)) return '';
+  var cur=T.justificacionMotivo||'';
+  var opts=['<option value="">Elige un motivo…</option>'].concat(J.OPS.map(function(o){
+    return '<option value="'+o.id+'"'+(cur===o.id?' selected':'')+'>'+o.label+'</option>';
+  })).join('');
+  var showOtra=cur==='otra';
+  return '<div id="dsc-justif" style="margin-top:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.35)">'+
+    '<label for="dsc-justif-sel" style="display:block;font-size:0.62rem;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#fff;margin-bottom:6px">Motivo del descuento</label>'+
+    '<select id="dsc-justif-sel" onchange="_dscJustifChange(this.value)" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1.5px solid #D8D0EE;background:#fff;color:var(--navy);font-size:0.82rem;font-weight:700;outline:none">'+opts+'</select>'+
+    '<input id="dsc-justif-otra" type="text" value="'+(T.justificacionOtra||'').replace(/"/g,'&quot;')+'" placeholder="Escribe el motivo…" oninput="_dscJustifOtra(this.value)" style="display:'+(showOtra?'block':'none')+';width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border-radius:8px;border:1.5px solid #D8D0EE;background:#fff;color:var(--navy);font-size:0.82rem;font-weight:600;outline:none">'+
+    '</div>';
+}
+function _dscJustifChange(val){
+  T.justificacionMotivo=val||'';
+  var J=window.SunsuDescJustif;
+  if(val==='otra'){
+    T.justificacionDescuento=String(T.justificacionOtra||'').trim();
+  } else if(J){
+    T.justificacionDescuento=J.textoJustificacion(T);
+  } else {
+    T.justificacionDescuento=val||'';
+  }
+  var otra=document.getElementById('dsc-justif-otra');
+  if(otra){
+    otra.style.display=val==='otra'?'block':'none';
+    if(val==='otra') setTimeout(function(){ otra.focus(); }, 30);
+  }
+}
+function _dscJustifOtra(v){
+  T.justificacionOtra=v;
+  T.justificacionDescuento=v;
+}
+
 function updatePreview(){
+  var _aeFocus=document.activeElement;
+  var _aeId=_aeFocus&&_aeFocus.id;
+  var _aePos=(_aeFocus&&typeof _aeFocus.selectionStart==='number')?_aeFocus.selectionStart:null;
   let comF=0,comP=0;
   const esCanje=T.cobro==='paquete'||T.cobro==='giftcard'||T.cobro==='cortesia';
 
@@ -2556,7 +2602,7 @@ function updatePreview(){
           <input type="number" id="dsc-custom-inp" min="0" step="${T.descuento.customMode==='pct'?'1':'0.01'}" max="${T.descuento.customMode==='pct'?'100':''}" value="${T.descuento.customMode==='pct'?(T.descuento.customPct||''):(T.descuento.custom||'')}" placeholder="${T.descuento.customMode==='pct'?'0 %':'0.00'}"
             oninput="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}_dscLive()"
             onchange="if(T.descuento.customMode==='pct'){T.descuento.customPct=parseFloat(this.value)||0;}else{T.descuento.custom=parseFloat(this.value)||0;}_dscLive()"
-            style="flex:1;padding:6px 9px;border:1.5px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:0.82rem;outline:none">
+            style="flex:1;padding:6px 9px;border:1.5px solid #D8D0EE;border-radius:8px;background:#fff;color:var(--navy);font-size:0.82rem;font-weight:700;outline:none">
           <span style="font-size:0.65rem;opacity:0.6">${T.descuento.customMode==='pct'?'sobre':'del total'}</span>
         </div>
         ${T.descuento.customMode==='pct'?`<div style="display:flex;gap:5px;flex-wrap:wrap">
@@ -2564,6 +2610,7 @@ function updatePreview(){
         </div>`:''}
       </div>`:''}
       ${directoActive?`<div style="font-size:0.68rem;color:#E8C07A;margin-top:4px;opacity:0.85">💼 Pago directo — $0.00 para Sunsu</div>`:''}
+      ${_dscJustifHTML(dscMonto)}
     </div>`;
 
   box.innerHTML=`<div class="preview">
@@ -2582,6 +2629,10 @@ function updatePreview(){
     ${esCanje?`<div class="pnote">* Facial va como ${T.cobro==='cortesia'?'cortesía — sin cobro':T.cobro==='paquete'?'canje de paquete':'canje de gift card'}</div>`:''}
     ${discountUI}
   </div>`;
+  if(_aeId==='dsc-custom-inp'||_aeId==='dsc-justif-sel'||_aeId==='dsc-justif-otra'){
+    var _elR=document.getElementById(_aeId);
+    if(_elR){ _elR.focus(); if(_aePos!=null&&typeof _elR.setSelectionRange==='function') try{_elR.setSelectionRange(_aePos,_aePos);}catch(e){} }
+  }
 }
 // ── DESCUENTO EN VIVO ── Mientras se teclea en dsc-custom-inp NO se puede
 // re-renderizar el preview (el input se destruye y el teclado iOS se cierra:
@@ -3060,6 +3111,12 @@ function enviarTicket(){
   const productosPayload={};
   Object.entries(T.productos).forEach(([sku,qty])=>{if(qty>0)productosPayload[sku]=qty;});
 
+  var _J=window.SunsuDescJustif;
+  if(_J){
+    _J.aplicarAutoMotivo(T);
+    T.justificacionDescuento=_J.textoJustificacion(T);
+  }
+
   const payload={
     cosmetologa:    (function(){ var el=document.getElementById('tk-atendido-por'); if(el&&el.value) return el.value; return T.atendidoPor||T._migoAsignado||CU.name; })(),
     cosmetologa_elegida: !!(document.getElementById('tk-atendido-por')),
@@ -3114,10 +3171,17 @@ function enviarTicket(){
     else if(/efec/.test(_mf)) payload.cobTipo='Efectivo';
   }
 
-  var _hayDescEnvio=!!(_dscMonto>0.004 || (T.lineDesc&&Object.keys(T.lineDesc).some(function(k){ return T.lineDesc[k]&&Number(T.lineDesc[k].v||T.lineDesc[k].monto||0)>0; })) || T._migoHayDescuento);
-  if(_hayDescEnvio && !(T.justificacionDescuento||'').trim()){
-    var justEl=document.getElementById('migo-just-desc');
-    if(justEl){ justEl.focus(); }
+  var _Jok=window.SunsuDescJustif;
+  var _faltaJust=_Jok? !_Jok.justificacionOk(T, _dscMonto) : (function(){
+    var _hayDescEnvio=!!(_dscMonto>0.004 || (T.lineDesc&&Object.keys(T.lineDesc).some(function(k){ return T.lineDesc[k]&&Number(T.lineDesc[k].v||T.lineDesc[k].monto||0)>0; })) || T._migoHayDescuento);
+    return _hayDescEnvio && !(T.justificacionDescuento||'').trim();
+  })();
+  if(_faltaJust){
+    var justEl=document.getElementById('dsc-justif-otra')||document.getElementById('dsc-justif-sel')||document.getElementById('dsc-justif')||document.getElementById('migo-just-desc');
+    if(justEl){
+      if(justEl.scrollIntoView) justEl.scrollIntoView({behavior:'smooth',block:'center'});
+      if(justEl.focus) justEl.focus();
+    }
     if(typeof toast==='function') toast('Indica por qué se aplicó este descuento (gift card, promo, F&F, cortesía…).','#B86B6B');
     else alert('Indica por qué se aplicó este descuento.');
     return;
@@ -14403,6 +14467,20 @@ function _gcEsc(v){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
 }
+function _gcMontoTxt(g){
+  if(!g) return '—';
+  if(g.etiqueta && /\$/.test(g.etiqueta)){
+    var parts=String(g.etiqueta).split(' · ');
+    return parts.length>1?parts.slice(1).join(' · '):g.etiqueta;
+  }
+  var saldo=parseFloat(g.saldo);
+  var fac=g.facial||'';
+  if(Number.isFinite(saldo)&&saldo>0){
+    var mon='$'+saldo.toFixed(saldo%1?2:0);
+    return mon+(fac?(' ('+fac+')'):'');
+  }
+  return g.valor||'—';
+}
 function _gcCerrada(g){
   if(!g||g.usado) return true;
   var saldo=parseFloat(g.saldo);
@@ -14444,7 +14522,7 @@ function _gcTablaHTML(lista){
     return '<tr class="gc-row" onclick="_gcAbrir('+i+',this)">'
       +'<td>'+_gcEsc(g.codigo||'')+(g.prueba?' <span class="paq-prueba">🧪 PRUEBA</span>':'')+'</td>'
       +'<td>'+_gcEsc(quien)+'</td>'
-      +'<td class="num">'+_gcEsc(g.valor||'—')+'</td>'
+      +'<td class="num">'+_gcEsc(_gcMontoTxt(g))+'</td>'
       +'<td class="num md-x">'+_gcEsc(saldoTxt)+'</td>'
       +'<td class="md-x">'+_gcEsc(_gcFechaEmision(g))+'</td>'
       +'<td class="md-x">'+_gcEsc(_gcVencTxt(g))+'</td>'

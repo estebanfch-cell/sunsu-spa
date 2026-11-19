@@ -15,7 +15,7 @@ import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./se
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
-import { familiaDe, montoGcAplicado, saldoGift } from "./ventas.ts";
+import { etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
@@ -1807,11 +1807,13 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
     const nom = s(r.nombre_comprador), ape = s(r.apellido_comprador);
     const blob = [codigo, s(r.cedula_comprador), nom, ape, nom + " " + ape, s(r.usado_por), s(r.notas)].join(" ").toLowerCase();
     if (!todas && !blob.includes(q)) continue;
+    const info = infoSaldoGift(r, cats);
     resultados.push({
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
-      saldo: saldoGift(r, cats), prueba: s(r.origin) === "test",
+      saldo: info.saldo, facial: info.facial, saldoOrigen: info.origen,
+      etiqueta: etiquetaGift(r, cats), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };

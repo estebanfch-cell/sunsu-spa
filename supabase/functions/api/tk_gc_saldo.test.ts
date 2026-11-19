@@ -5,12 +5,21 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { MemoryDb } from "./db.ts";
-import { aplicarGiftCard, saldoGift } from "./ventas.ts";
+import { aplicarGiftCard, etiquetaGift, infoSaldoGift, saldoGift } from "./ventas.ts";
 import type { Row } from "./domain.ts";
 
 const CAT: Row[] = [
   { sku: "SUNSU-35", producto_servicio: "GIFT CARD", tipo: "GIFT CARD", total_con_iva: 65, subtotal: 56.52, activo: true },
   { sku: "SUNSU-34", producto_servicio: "GIFT CARD $30", tipo: "GIFT CARD", total_con_iva: 34.5, subtotal: 30, activo: false },
+  { sku: "SUNSU-01", producto_servicio: "FACIAL PURUFICACIÓN S.O.S", tipo: "FACIAL", total_con_iva: 75, subtotal: 65.22, activo: true },
+  { sku: "SUNSU-15", producto_servicio: "Ampolla Especial", tipo: "SERVICIO ADD-ON", total_con_iva: 14.996, subtotal: 13.04, activo: true },
+  { sku: "SUNSU-40", producto_servicio: "FACIAL RESET 3x1", tipo: "FACIAL ESPECIAL", total_con_iva: 95, subtotal: 82.61, activo: true },
+  { sku: "SUNSU-57", producto_servicio: "FACIAL K-LIFT", tipo: "FACIAL ESPECIAL", total_con_iva: 95, subtotal: 82.61, activo: true },
+  { sku: "SUNSU-42", producto_servicio: "FACIAL PEELING MARINO DE PERLA", tipo: "FACIAL ESPECIAL", total_con_iva: 145, subtotal: 126.09, activo: true },
+  { sku: "SUNSU-43", producto_servicio: "FACIAL DE GEISHA", tipo: "FACIAL ESPECIAL", total_con_iva: 145, subtotal: 126.09, activo: true },
+  { sku: "SUNSU-04", producto_servicio: "FACIAL GOLD-AGING", tipo: "FACIAL", total_con_iva: 65, subtotal: 56.52, activo: true },
+  { sku: "SUNSU-47", producto_servicio: "PAQUETE (3) FACIALES DE GEISHA", tipo: "PAQUETE", total_con_iva: 391.5, subtotal: 340.43, activo: true },
+  { sku: "SUNSU-PH-005", producto_servicio: "Reset Balance (Purifying Balance) - APHLORA", tipo: "PRODUCTO", total_con_iva: 20.7, subtotal: 18, activo: true },
 ];
 
 const virgen: Row = {
@@ -96,5 +105,47 @@ describe("front · desglose no aplica $65 si la búsqueda dijo saldo 0", () => {
     const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     assert.match(js, /T\._gcLookup\s*=\s*true/);
     assert.match(js, /T\._gcLookup\s*\?\s*saldo/);
+  });
+});
+
+describe("saldoGift · facial en notas/valor (TK145 Andrea)", () => {
+  const base: Row = { sku: "SUNSU-35", valor: "Gift Card", saldo: null, usado: false };
+
+  it("Reset en notas vale $95 aunque el SKU sea SUNSU-35", () => {
+    assert.equal(saldoGift({ ...base, codigo_gc: "26-069", notas: "SKIN RESET" }, CAT), 95);
+    assert.equal(saldoGift({ ...base, codigo_gc: "P", valor: "FACIAL RESET 3x1", notas: "SKIN RESET PRE PAGADO", sku: "SUNSU-40" }, CAT), 95);
+  });
+  it("Geisha y Peeling Marino valen $145", () => {
+    assert.equal(saldoGift({ ...base, codigo_gc: "26-166", notas: "1 GEISHA. De: Ana. Para: Bea." }, CAT), 145);
+    assert.equal(saldoGift({ ...base, notas: "Facial Peeling Marino" }, CAT), 145);
+  });
+  it("un $95 escrito en notas gana y la etiqueta lleva Reset", () => {
+    const row: Row = { ...base, codigo_gc: "26-080", notas: "Facial Skin Reset $95" };
+    assert.equal(saldoGift(row, CAT), 95);
+    assert.equal(infoSaldoGift(row, CAT).facial, "Reset");
+    assert.equal(etiquetaGift(row, CAT), "26-080 · $95 (Reset)");
+  });
+  it("saldo numérico explícito sigue ganando sobre el facial", () => {
+    assert.equal(saldoGift({ ...base, saldo: 40, notas: "1 GEISHA" }, CAT), 40);
+    assert.equal(saldoGift({ ...base, saldo: 0, notas: "SKIN RESET" }, CAT), 0);
+  });
+  it("«PREMIUM» solo no se interpreta como facial de $145 (se factura como Gift Card $65)", () => {
+    assert.equal(saldoGift({ ...base, codigo_gc: "26-163", notas: "PREMIUM" }, CAT), 65);
+    assert.equal(infoSaldoGift({ ...base, notas: "FACIAL PREMIUM" }, CAT).origen, "catalogo");
+  });
+  it("Conv. paquete→GC sin facial sigue en el fallback SUNSU-35 $65", () => {
+    assert.equal(saldoGift(virgen, CAT), 65);
+  });
+  it("un paquete «VER PAQUETE» no se lee como un solo Geisha de $145; usa el SKU del paquete si está", () => {
+    assert.equal(saldoGift({ codigo_gc: "26-068", sku: "SUNSU-47", valor: "PAQUETE (3) FACIALES DE GEISHA", notas: "3 FACIALES GEISHA VER PAQUETE", saldo: null, usado: false }, CAT), 391.5);
+    assert.equal(saldoGift({ ...base, valor: "PAQUETE (3) FACIALES DE GEISHA", notas: "3 FACIALES GEISHA VER PAQUETE" }, CAT), 65);
+  });
+  it("no confunde Reset con el producto «Reset Balance»", () => {
+    assert.equal(saldoGift({ ...base, notas: "SKIN RESET" }, CAT), 95);
+  });
+  it("Purificación SOS y K-Lift toman el precio del facial; una ampolla «Purificación» no", () => {
+    assert.equal(saldoGift({ ...base, codigo_gc: "26-168", notas: "PURIFICACION SOS" }, CAT), 75);
+    assert.equal(saldoGift({ ...base, codigo_gc: "26-172", notas: "KLIFT" }, CAT), 95);
+    assert.equal(saldoGift({ codigo_gc: "ANTIGUA 3", sku: "SUNSU-15", valor: "AMPOLLA ESPECIAL PURIFICACIÓN", notas: "COMPRADO", saldo: null, usado: false }, CAT), 15);
   });
 });
