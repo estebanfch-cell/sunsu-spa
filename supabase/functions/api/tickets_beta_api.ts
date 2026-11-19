@@ -24,6 +24,7 @@ import { ETQ_SIN_COBRO, giftCortesia, nombreLineaGift, paqueteDeCanje, sesionPaq
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
+import { alertaCanje } from "./canje_linea.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
 import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
@@ -275,7 +276,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(calc.lineas.some((l) => l.tipo === "diferencia") ? ["revisar la «Diferencia sin explicar» (lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada)"] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(calc.lineas.some((l) => l.tipo === "diferencia") ? ["revisar la «Diferencia sin explicar» (lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada)"] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
   };
