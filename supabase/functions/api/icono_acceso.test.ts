@@ -23,7 +23,7 @@ describe("TK100 icono oficial y primer ingreso", () => {
     assert.match(html, /apple-touch-icon" href="\/icon-sunsu-180\.png"/);
     assert.match(html, /icon-sunsu-192\.png/);
     assert.doesNotMatch(html, /data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHe/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK130/);    assert.match(sw, /icon-sunsu-180\.png/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK128/);    assert.match(sw, /icon-sunsu-180\.png/);
   });
 
   it("el primer ingreso con clave temporal obliga a elegir una nueva", () => {

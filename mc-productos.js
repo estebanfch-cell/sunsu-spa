@@ -955,6 +955,30 @@
   function leerArchivo(file) {
     return new Promise(function (ok, bad) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.onerror = function () { bad(new Error("No se pudo leer " + file.name)); }; fr.readAsDataURL(file); });
   }
+  async function agregarCodigoEscaneado(c) {
+    var v = String(c || "").trim();
+    if (!v) return;
+    var inp = document.getElementById("mcp-cb-new");
+    if (inp) inp.value = v;
+    var p = MC.cur && MC.cur.producto;
+    if (!p) return;
+    if ((MC.codigos || []).some(function (x) { return String(x.codigo || "").trim() === v; })) {
+      if (typeof toast === "function") toast("Ese código ya está en este producto");
+      else alert("Ese código ya está en este producto");
+      return;
+    }
+    if (!confirm("¿Agregar el código " + v + " a este producto?")) return;
+    MC.codigos = MC.codigos || [];
+    MC.codigos.push({ codigo: v, tipo: /^\d{13}$/.test(v) ? "ean13" : "otro", principal: !MC.codigos.length });
+    var s3 = await api("mcprod_codigos_save", { id: p.id, codigos: MC.codigos });
+    if (!s3 || s3.error) {
+      MC.codigos.pop();
+      alert((s3 && s3.error) || "No se pudo guardar el código");
+      return;
+    }
+    if (typeof toast === "function") toast("Código " + v + " agregado");
+    await recargarFicha();
+  }
   async function recargarFicha() {
     var d = await api("mcprod_get", { id: MC.cur.producto.id });
     if (d && d.ok) { var keep = MC.ch; MC.cur = d; MC.ch = keep; }
@@ -1309,7 +1333,9 @@
       if (t.closest("#mcp-pres-nueva")) { MC.presForm = !MC.presForm; repintar(); return; }
       if (t.closest("#mcp-pres-crear")) { void crearPresentacion(); return; }
       if (t.closest("#mcp-cb-cam")) {
-        if (window.MCAperturas && window.MCAperturas.escanear) window.MCAperturas.escanear(function (c) { var i = document.getElementById("mcp-cb-new"); if (i) { i.value = c; var b = document.getElementById("mcp-cb-add"); if (b) b.click(); } });
+        var run = window.MCScan && window.MCScan.abrir || window._scanAbrir;
+        if (typeof run === "function") run(function (c) { void agregarCodigoEscaneado(c); });
+        else if (typeof toast === "function") toast("Este navegador no lee códigos con la cámara; escribe el código");
         return;
       }
       if (t.closest("#mcp-descartar")) { MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar(); return; }
