@@ -732,9 +732,16 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
 }
 
 export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
+  // Staff Enviar (Agenda o Nuevo ticket) crea el ticket. Si hay factura Migo,
+  // se vincula; no se traga el alta dejándola solo «pendiente de aprobar».
   if (s(p.vincular_borrador) && !esAdmin(ses.rol)) {
-    const { completarBorradorStaff } = await import("./borradores_asig.ts");
-    return completarBorradorStaff(ctx, ses, p) as Promise<R>;
+    const { facturaNorm } = await import("./migo_cuadre.ts");
+    const { puedeVerBorrador } = await import("./borradores_asig.ts");
+    const fac = facturaNorm(p.vincular_borrador);
+    const rows = await ctx.db.all("beta_migo_borradores").catch(() => [] as R[]);
+    const b0 = rows.find((x) => s(x.factura) === fac);
+    if (!b0) return { error: "No encontré ese borrador" };
+    if (!puedeVerBorrador(ses, b0, ecuadorParts(ctx.now).ymd)) return { error: "No tienes permiso" };
   }
   if (!p.ignorar_borrador && !s(p.vincular_borrador)) {
     const { ofrecerBorradorMigo } = await import("./migo_cuadre_api.ts");

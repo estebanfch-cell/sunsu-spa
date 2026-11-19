@@ -161,7 +161,7 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
     assert.equal(db.tables.get("beta_migo_borradores")![0].asignado_a, "Andrea Robles");
   });
 
-  it("Andrea completa el borrador y queda Pendiente de aprobar (no se crea ticket); solo admin aprueba", async () => {
+  it("Andrea envía el ticket (Agenda o Nuevo ticket) con la factura Migo: se crea el ticket y se vincula", async () => {
     const { db, h } = semilla({ cita: false });
     db.tables.set("beta_migo_borradores", [
       { factura: "001-001-000002988", fecha: "2026-11-18", cliente: "LUCIA VEGA", total: 90, estado: "asignado", asignado_a: "Andrea Robles", datos: {}, lineas: [] },
@@ -172,20 +172,39 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
       vincular_borrador: "001-001-000002988", facial: "Hidrafacial",
     });
     assert.equal(staff.ok, true, String(staff.error));
-    assert.equal(staff.pendiente_aprobar, true);
-    assert.equal(staff.factura, "001-001-000002988");
-    assert.equal(db.tables.get("tickets")!.length, nTk);
+    assert.equal(staff.pendiente_aprobar, undefined);
+    assert.ok(staff.ticket || staff.beta_num || staff.so_num, "debe devolver el número del ticket");
+    assert.equal(db.tables.get("tickets")!.length, nTk + 1);
     const b0 = db.tables.get("beta_migo_borradores")![0];
-    assert.equal(b0.estado, "asignado");
-    assert.ok((b0.datos as Row).completado_at);
-    const noApr = await h("and", "migo_borrador_aprobar", { factura: "2988" });
-    assert.match(String(noApr.error), /administradora|aprobar/i);
-    assert.equal(db.tables.get("tickets")!.length, nTk);
-
+    assert.equal(b0.estado, "vinculado");
+    assert.equal(b0.ticket_clave, staff.so_num || staff.ticket);
     const fb = await h("and", "mb_facturas_borrador", {});
-    const mio = (fb.items as Row[]).find((x) => x.factura === "001-001-000002988");
-    assert.equal(mio?.listo, true);
-    assert.equal(mio?.estado, "pendiente_aprobar");
+    assert.equal((fb.items as Row[]).find((x) => x.factura === "001-001-000002988"), undefined);
+    const noApr = await h("and", "migo_borrador_aprobar", { factura: "2988" });
+    assert.match(String(noApr.error), /ya no se aprueba|vinculado|administradora|aprobar/i);
+  });
+
+  it("Crear ticket desde la Agenda: si hay factura Migo del cliente, Enviar crea el ticket y lo vincula", async () => {
+    const { db, h } = semilla({ cita: false });
+    if (!db.tables.get("beta_tickets")) db.tables.set("beta_tickets", []);
+    db.tables.set("beta_migo_borradores", [
+      { factura: "001-001-000002977", fecha: "2026-11-18", cliente: "ANDRES TRUJILLO", total: 33.99, estado: "asignado", asignado_a: "Andrea Robles", datos: {}, lineas: [] },
+    ]);
+    const r = await h("and", "crearTicket", {
+      nombre: "Andres", apellido: "Trujillo", estimado: 33.99, cosmetologa: "Andrea Robles",
+      vincular_borrador: "001-001-000002977", facial: "Hidrafacial",
+    });
+    assert.equal(r.ok, true, String(r.error));
+    assert.ok(r.so_num || r.ticket);
+    const tk = db.tables.get("tickets")!.find((x) => x.so_num === r.so_num || x.beta_num === r.ticket);
+    assert.ok(tk, "el ticket quedó en la tabla tickets");
+    assert.equal(String(tk!.nombre).toLowerCase(), "andres");
+    const bor = db.tables.get("beta_migo_borradores")![0];
+    assert.equal(bor.estado, "vinculado");
+    assert.equal(bor.ticket_clave, r.so_num || r.ticket);
+    const hist = await h("adm", "tk_historial", { desde: "2026-11-18", hasta: "2026-11-18", limit: 50 });
+    const items = (hist.items || []) as Row[];
+    assert.ok(items.some((x) => x.so_num === r.so_num || x.beta_num === r.ticket), "Emilia lo ve en Tickets");
   });
 
   it("el front muestra la pill Por completar en Ventas y en el home", () => {
@@ -225,7 +244,7 @@ describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
     assert.equal("total" in (and.items as Row[])[0], false);
   });
 
-  it("el personal abre y completa una sin asignar de su día → Pendiente de aprobar; la de ayer no", async () => {
+  it("el personal abre y envía una sin asignar de su día: se crea el ticket; la de ayer no", async () => {
     const { db, h } = semilla({ cita: false });
     db.tables.set("beta_migo_borradores", filas());
     const g = await h("and", "migo_borrador_get", { factura: "3002" });
@@ -235,12 +254,12 @@ describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
     const nTk = db.tables.get("tickets")!.length;
     const r = await h("and", "crearTicket", { nombre: "Hoy", apellido: "Sinasignar", estimado: 40, cosmetologa: "Andrea Robles", vincular_borrador: "001-001-000003002", facial: "Hidrafacial" });
     assert.equal(r.ok, true, String(r.error));
-    assert.equal(r.pendiente_aprobar, true);
-    assert.equal(db.tables.get("tickets")!.length, nTk);
+    assert.ok(r.ticket || r.so_num);
+    assert.equal(db.tables.get("tickets")!.length, nTk + 1);
     const b0 = db.tables.get("beta_migo_borradores")!.find((x) => x.factura === "001-001-000003002")!;
-    assert.equal(b0.asignado_a, "Andrea Robles");
+    assert.equal(b0.estado, "vinculado");
     const l = await h("and", "mb_facturas_borrador", {});
-    assert.equal((l.items as Row[]).find((x) => x.factura === "001-001-000003002")!.estado, "pendiente_aprobar");
+    assert.equal((l.items as Row[]).find((x) => x.factura === "001-001-000003002"), undefined);
     const ayer = await h("and", "crearTicket", { nombre: "Ayer", apellido: "X", estimado: 30, cosmetologa: "Andrea Robles", vincular_borrador: "001-001-000003003" });
     assert.match(String(ayer.error), /permiso/i);
   });
@@ -248,7 +267,7 @@ describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
   it("el admin ve la factura completada pendiente de aprobar (no mezclada con las que faltan completar) y Aprobaciones abre Facturas borrador", async () => {
     const { db, h } = semilla({ cita: false });
     db.tables.set("beta_migo_borradores", [
-      { factura: "001-001-000002977", fecha: "2026-11-19", cliente: "ANDRES TRUJILLO", total: 33.99, estado: "asignado", asignado_a: "Andrea Robles", datos: { completado_at: "2026-11-19T17:06:00Z", completado_por: "Andrea Robles (andrea)" }, lineas: [] },
+      { factura: "001-001-000002977", fecha: "2026-11-18", cliente: "ANDRES TRUJILLO", total: 33.99, estado: "asignado", asignado_a: "Andrea Robles", datos: { completado_at: "2026-11-19T17:06:00Z", completado_por: "Andrea Robles (andrea)" }, lineas: [] },
       { factura: "001-001-000002976", fecha: "2026-11-19", cliente: "PENDIENTE", total: 175, estado: "pendiente", datos: {}, lineas: [] },
     ]);
     const l = await h("adm", "migo_borradores_lista", {});
