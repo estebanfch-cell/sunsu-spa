@@ -855,7 +855,7 @@
   .dirty-bar[hidden] { display: none; }
   .tk-split { display: grid; gap: 12px; align-items: start; }
   .tk-list { min-width: 0; }
-  .tk-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 640px; }
+  .tk-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 0; table-layout: fixed; }
   .tk-table th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray); padding: 6px 8px; border-bottom: 1px solid var(--cream-d); position: sticky; top: 0; background: white; }
   .tk-table td { padding: 8px; border-bottom: 1px solid var(--cream-d); vertical-align: middle; color: var(--navy); }
   .tk-table th.num, .tk-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 800; }
@@ -950,6 +950,9 @@
   .tk-orden tfoot td { border-bottom: 0; color: var(--gray); }
   .tk-orden tfoot .tk-orden-tot td { color: var(--navy); font-weight: 900; border-top: 1px solid var(--cream-d); }
   .nowrap-table th, .nowrap-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .tk-table.nowrap-table th, .tk-table.nowrap-table td { max-width: none; }
+  .tk-table th.num, .tk-table td.num, .tk-table th:last-child, .tk-table td:last-child { overflow: visible; text-overflow: clip; }
+  #tk-atendido-por { width: 100%; max-width: 100%; box-sizing: border-box; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--navy); }
   .nowrap-table .ix-cell, .nowrap-table td > * { white-space: nowrap; }
@@ -1086,7 +1089,7 @@
   .desk-bar-mini { flex-wrap: nowrap; }
   .desk-bar-mini .desk-q { flex: 1 1 auto; min-width: 0; }
   .desk-split.desk-open .desk-list .sheet-scroll,
-  .tk-split.tk-side .tk-list { overflow-x: hidden; }
+  .tk-list, .tk-split.tk-side .tk-list { overflow-x: hidden; }
   .desk-split.desk-open .desk-list .sheet-scroll table,
   .tk-split.tk-side .tk-table {
     min-width: 0; width: 100%; table-layout: fixed;
@@ -1161,6 +1164,7 @@
   }
   .sheet-scroll { overflow: auto; border-radius: 14px; background: var(--white); box-shadow: var(--shadow-sm); }
   .sheet-scroll table { min-width: 640px; }
+  .tk-list .sheet-scroll, .tk-list .sheet-scroll table { min-width: 0; overflow-x: hidden; }
   .sheet-scroll button.link { background: none; border: 0; padding: 0; color: var(--navy-d); font: inherit; font-weight: 800; cursor: pointer; text-align: left; }
   .chooser-actions { display: flex; flex-direction: column; gap: 8px; }
   .cmp-bar { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
@@ -7305,7 +7309,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK139";
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK140";
 function mostrarNuevaVersion() {
   var el = document.getElementById("sunsu-nueva-ver");
   if (!el) {
@@ -7350,42 +7354,42 @@ if ("serviceWorker" in navigator && !local) {
   revisarVersionServidor();
 }
 </script>
-<script src="vendor-zxing.js?v=20261119tk139"></script>
-<script src="mc-scan.js?v=20261119tk139"></script>
-<script src="mc-buscar.js?v=20261119tk139"></script>
-<script src="beta-screens.js?v=20261119tk139"></script>
-<script src="beta-inline.js?v=20261119tk139"></script>
-<script src="mc-productos.js?v=20261119tk139"></script>
-<script src="mc-nav.js?v=20261119tk139"></script>
-<script src="mc-permisos.js?v=20261119tk139"></script>
-<script src="mc-protocolos.js?v=20261119tk139"></script>
-<script src="mc-conteo.js?v=20261119tk139"></script>
-<script src="mc-transferencias.js?v=20261119tk139"></script>
-<script src="mc-ajustes.js?v=20261119tk139"></script>
-<script src="vendor-qrcode.js?v=20261119tk139"></script>
-<script src="mc-tickets.js?v=20261119tk139"></script>
-<script src="mc-maestro.js?v=20261119tk139"></script>
-<script src="mc-empleados.js?v=20261119tk139"></script>
-<script src="mc-edit.js?v=20261119tk139"></script>
-<script src="mc-paquetes.js?v=20261119tk139"></script>
-<script src="mc-aperturas.js?v=20261119tk139"></script>
-<script src="mc-acceso.js?v=20261119tk139"></script>
-<script src="mc-barras.js?v=20261119tk139"></script>
-<script src="mc-caja.js?v=20261119tk139"></script>
-<script src="mc-giftcards.js?v=20261119tk139"></script>
-<script src="mc-multas.js?v=20261119tk139"></script>
-<script src="mc-clientes.js?v=20261119tk139"></script>
-<script src="mc-clientes-dup.js?v=20261119tk139"></script>
-<script src="mc-docpdf.js?v=20261119tk139"></script>
-<script src="mc-compras.js?v=20261119tk139"></script>
-<script src="mc-consignacion.js?v=20261119tk139"></script>
-<script src="mc-proveedores.js?v=20261119tk139"></script>
-<script src="mc-recepciones.js?v=20261119tk139"></script>
-<script src="mc-movil.js?v=20261119tk139"></script>
-<script src="mc-promociones.js?v=20261119tk139"></script>
-<script src="mc-agenda.js?v=20261119tk139"></script>
-<script src="mc-staff-home.js?v=20261119tk139"></script>
-<script src="mc-borradores.js?v=20261119tk139"></script><script>draw();</script><script>
+<script src="vendor-zxing.js?v=20261119tk140"></script>
+<script src="mc-scan.js?v=20261119tk140"></script>
+<script src="mc-buscar.js?v=20261119tk140"></script>
+<script src="beta-screens.js?v=20261119tk140"></script>
+<script src="beta-inline.js?v=20261119tk140"></script>
+<script src="mc-productos.js?v=20261119tk140"></script>
+<script src="mc-nav.js?v=20261119tk140"></script>
+<script src="mc-permisos.js?v=20261119tk140"></script>
+<script src="mc-protocolos.js?v=20261119tk140"></script>
+<script src="mc-conteo.js?v=20261119tk140"></script>
+<script src="mc-transferencias.js?v=20261119tk140"></script>
+<script src="mc-ajustes.js?v=20261119tk140"></script>
+<script src="vendor-qrcode.js?v=20261119tk140"></script>
+<script src="mc-tickets.js?v=20261119tk140"></script>
+<script src="mc-maestro.js?v=20261119tk140"></script>
+<script src="mc-empleados.js?v=20261119tk140"></script>
+<script src="mc-edit.js?v=20261119tk140"></script>
+<script src="mc-paquetes.js?v=20261119tk140"></script>
+<script src="mc-aperturas.js?v=20261119tk140"></script>
+<script src="mc-acceso.js?v=20261119tk140"></script>
+<script src="mc-barras.js?v=20261119tk140"></script>
+<script src="mc-caja.js?v=20261119tk140"></script>
+<script src="mc-giftcards.js?v=20261119tk140"></script>
+<script src="mc-multas.js?v=20261119tk140"></script>
+<script src="mc-clientes.js?v=20261119tk140"></script>
+<script src="mc-clientes-dup.js?v=20261119tk140"></script>
+<script src="mc-docpdf.js?v=20261119tk140"></script>
+<script src="mc-compras.js?v=20261119tk140"></script>
+<script src="mc-consignacion.js?v=20261119tk140"></script>
+<script src="mc-proveedores.js?v=20261119tk140"></script>
+<script src="mc-recepciones.js?v=20261119tk140"></script>
+<script src="mc-movil.js?v=20261119tk140"></script>
+<script src="mc-promociones.js?v=20261119tk140"></script>
+<script src="mc-agenda.js?v=20261119tk140"></script>
+<script src="mc-staff-home.js?v=20261119tk140"></script>
+<script src="mc-borradores.js?v=20261119tk140"></script><script>draw();</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {

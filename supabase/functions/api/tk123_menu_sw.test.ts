@@ -32,13 +32,13 @@ describe("TK123 menú Inventario y recarga de versión", () => {
     assert.match(conteo, /_scanAbrir/);
   });
   it("el service worker cubre beta.html, es network-first y reclama clientes; hay aviso de nueva versión", () => {
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK139"/);
+    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK140"/);
     assert.doesNotMatch(sw, /rootScope\(\)/);
     assert.match(sw, /self\.skipWaiting\(\)/);
     assert.match(sw, /self\.clients\.claim\(\)/);
     assert.match(sw, /pathname === "\/beta\.html"/);
     assert.match(sw, /fetch\(event\.request\)/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK139"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK140"/);
     assert.match(html, /Nueva versión/);
     assert.match(html, /Actualizar/);
     assert.match(html, /scope: "\/", updateViaCache: "none"/);

@@ -29,6 +29,7 @@ import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { alertaCanje } from "./canje_linea.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
 import { cicloInicio, comisionFacialLinea, compraParaComision, marcaDePersona, pagaComisionFacial, toCosmMark } from "./domain.ts";
+import { canonStaff, esNombreAdmin, listaStaffActivo } from "./tickets_staff.ts";
 import { cfgAplicada } from "./comision_cfg.ts";
 import { snapProducto, ventaNetaLineas } from "./productos.ts";
 import { mapaCostoReal } from "./costos_reales.ts";
@@ -286,6 +287,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),
+    staff: await listaStaffActivo(ctx),
   };
 }
 
@@ -484,6 +486,8 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
     const marcasTk = (await ctx.db.all("cosmetologas").catch(() => [] as Row[])).map(toCosmMark);
     const paga = !exclC && pagaComisionFacial(marcaDePersona(marcasTk, s(r.atendido_por)), fechaTk);
     calc.lineas.forEach((l, i) => { if (l.tipo === "facial") snaps[i] = { ...snaps[i], comision: comisionFacialLinea({ sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, excluir: l.excluir_comision === true }, cfgTk, paga) }; });
+    const staffTk = await listaStaffActivo(ctx);
+    if (esNombreAdmin(s(r.atendido_por), staffTk)) snaps.forEach((sn, i) => { snaps[i] = { ...sn, comision: 0 }; });
   } catch { /* sin config: queda en 0 como antes */ }
   const packSnap = calc.lineas.map((l, i) => ({ l, s: snaps[i] })).filter((x) => x.l.tipo === "paquete");
   const netoPackVenta = packSnap.filter((x) => n(x.l.precio_unit) > 0).map((x) => x.s.venta_neta);
@@ -811,18 +815,41 @@ async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string)
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const nuevo = { ...((cab?.datos || {}) as Row), ...limpio };
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: via, detalle: "datos: " + Object.keys(limpio).join(", ") }].slice(-100);
+  let cosmCambio: { de: string; a: string } | null = null;
+  if (limpio.cosmetologa != null) {
+    const staff = await listaStaffActivo(ctx);
+    const canon = canonStaff(s(limpio.cosmetologa), staff);
+    if (!canon) return { error: "Elige una cosmetóloga de la lista" };
+    limpio.cosmetologa = canon;
+    nuevo.cosmetologa = canon;
+    const prev = s(r.atendido_por);
+    if (canon && canon !== prev) {
+      const match = r.id != null ? { id: r.id } : { sheet_row: r.sheet_row };
+      await ctx.db.write(actor, "tickets", "update", match, { atendido_por: canon });
+      r.atendido_por = canon;
+      cosmCambio = { de: prev, a: canon };
+      hist[hist.length - 1] = { ...hist[hist.length - 1], detalle: "Atendido por: " + (prev || "—") + " → " + canon };
+      try { await logAccion(ctx.db, actor, "EDITAR TICKET", (so || clave) + " · atendido por " + (prev || "—") + " → " + canon); } catch { /* log opcional */ }
+    }
+  }
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos: nuevo, historial: hist, actualizado_por: actor, updated_at: now });
   // Lo de la clienta (nombre, apellido, CI, email, teléfono) también va a su ficha.
   let ficha: Row = {};
   try { const { propagarDesdeTicket } = await import("./clientes_beta_api.ts"); ficha = await propagarDesdeTicket(ctx, ses, claveCliente(r), limpio, so || clave); } catch (e) { ficha = { error: String((e as Error)?.message || e) }; }
-  return { ok: true, clave, ficha: ficha.error ? { error: ficha.error } : { ok: true, cambios: ficha.cambios || [] } };
+  return { ok: true, clave, cosmCambio, ficha: ficha.error ? { error: ficha.error } : { ok: true, cambios: ficha.cambios || [] } };
 }
 const SOLO_DATOS = (p: Row) => p.datos && typeof p.datos === "object" && p.lineas == null && p.descuento == null && p.promo == null && p.excluir_cosmetologa == null;
 export async function guardarTodo(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   if (p.datos && typeof p.datos === "object" && Object.keys(p.datos as Row).length) {
     const g = await guardarDatos(ctx, ses, r, p.datos as Row, s(p._via) || "edición");
-    if (g.error || SOLO_DATOS(p)) return g;
+    if (g.error) return g;
+    if (g.cosmCambio) {
+      const pRecalc = SOLO_DATOS(p) ? { _via: s(p._via) || "cambio de cosmetóloga" } : { ...p, _via: s(p._via) || "cambio de cosmetóloga" };
+      const out = await guardar(ctx, ses, r, pRecalc);
+      return out.error ? out : { ...out, cosmCambio: g.cosmCambio, ficha: g.ficha };
+    }
+    if (SOLO_DATOS(p)) return g;
   }
   return guardar(ctx, ses, r, p);
 }
