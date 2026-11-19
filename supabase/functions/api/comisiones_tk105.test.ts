@@ -126,8 +126,8 @@ describe("TK105 Mis comisiones recepción y vendido", () => {
   it("la UI alinea Categoría | Vendido | Comisión y el desglose Código | Producto | Cant. | Comisión", () => {
     const beta = readFileSync(join(root, "beta.html"), "utf8");
     const sw = readFileSync(join(root, "sw.js"), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK126/);
-    assert.match(beta, /20261119tk126/);    assert.match(beta, /com-sum-hd/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK130/);
+    assert.match(beta, /20261119tk130/);    assert.match(beta, /com-sum-hd/);
     assert.match(beta, />Categoría<\/span><span>Vendido<\/span><span>Comisión<\/span>/);
     assert.match(beta, /function htmlComGrid/);
     assert.match(beta, />Código<\/div><div class="cel hd">Producto<\/div><div class="cel hd num">Cant\.<\/div><div class="cel hd num">Comisión</);
