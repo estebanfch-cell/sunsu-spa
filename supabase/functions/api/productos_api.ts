@@ -43,7 +43,7 @@ async function permisos(ctx: Ctx, ses: Ses) {
 }
 
 const PRECIO_KEYS = ["beta_pvp", "beta_compra_real", "beta_compra_comision"];
-const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "comision", "beta_compra_real", "beta_compra_comision", "costo_promedio"];
+const SIN_COSTO = ["compraReal", "compraComision", "utilidad", "margenPct", "comision", "beta_compra_real", "beta_compra_comision", "costo_promedio", "faltaCosto"];
 function sinCostos<T extends Row>(o: T): T {
   const x: Row = { ...o };
   for (const k of SIN_COSTO) delete x[k];
@@ -165,7 +165,7 @@ function fila(p: Row, b: Base): Row {
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
     minimoAuto: auto.minimo, reordenAuto: auto.reorden, salidas90, revisar,
     pvp: precios.pvp, pvpSinIva: precios.subtotal, comision: precios.comision,
-    compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct,
+    compraReal: precios.compraReal, compraComision: precios.compraComision, utilidad: precios.utilidad, margenPct: precios.margenPct, faltaCosto: precios.faltaCosto,
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
     codigoCabina: cab ? s(cab.codigo) : "",
     // Para el buscador: SKU proveedor y códigos de barras.

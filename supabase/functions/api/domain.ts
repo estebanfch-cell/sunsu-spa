@@ -639,7 +639,7 @@ export interface TicketIn {
   fecha: string; cosm: string; cedula: string; facial: string;
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
-  productos: { sku: string; qty: number }[];
+  productos: { sku: string; qty: number; ventaNeta?: number; compraComision?: number }[];
   /** Precio neto de catálogo del paquete x3. */
   netoPack?: number;
   /** Precio neto de catálogo del paquete x6. Si falta, se usa netoPack. */

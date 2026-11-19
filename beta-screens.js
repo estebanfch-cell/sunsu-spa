@@ -6195,7 +6195,7 @@ function _pmChipsRender(){
   }).join('');
 }
 // Calculadora de utilidad en vivo: canasta mínima que dispara la promo (1 unidad por código;
-// N×M se completa a N repitiendo el código más barato). Utilidad = precio/1.15 − compra real.
+// N×M se completa a N repitiendo el código más barato). Utilidad = precio/1.15 − costo real − comisión.
 function _pmCalcRender(){
   var el=document.getElementById('pm-calc'); if(!el) return;
   var v=window._pmV2, cat=window._pmCat||{};
@@ -6220,18 +6220,27 @@ function _pmCalcRender(){
   }
   else if(v.mech==='PACK') precioPromo=val;
   precioPromo=Math.round(precioPromo*100)/100; precioCat=Math.round(precioCat*100)/100;
-  var utilCat=Math.round((precioCat/1.15-costo)*100)/100;
-  var utilPromo=Math.round((precioPromo/1.15-costo)*100)/100;
+  var comEst=0;
+  unidades.forEach(function(u){
+    var subU=(u.total||0)/1.15;
+    var cc=u.compraComision!=null?u.compraComision:(u.compra_comision!=null?u.compra_comision:null);
+    if(cc!=null) comEst+=Math.max(0,subU-cc)*0.30;
+  });
+  comEst=Math.round(comEst*100)/100;
+  var faltaCosto=!(costo>0);
+  var utilCat=faltaCosto?0:Math.round((precioCat/1.15-costo-comEst)*100)/100;
+  var utilPromo=faltaCosto?0:Math.round((precioPromo/1.15-costo-comEst)*100)/100;
   var pctRest=utilCat>0?Math.round(utilPromo/utilCat*1000)/10:null;
-  var mal=utilPromo<=0;
+  var mal=!faltaCosto&&utilPromo<=0;
   var row='display:flex;justify-content:space-between;font-size:0.64rem;padding:2px 0';
   el.innerHTML='<div style="background:'+(mal?'#FBEAE8':'var(--cream,#F6F1E7)')+';border:1px solid '+(mal?'#B84A3F':'var(--cream-d)')+';border-radius:9px;padding:9px 11px">'
     +'<div style="font-size:0.56rem;font-weight:800;color:var(--navy);margin-bottom:3px">📐 Utilidad de la promo'+(v.mech==='NXM'?' (por cada '+Math.round(val)+' unidades)':'')+'</div>'
     +'<div style="'+row+'"><span>Precio catálogo</span><span>$'+precioCat.toFixed(2)+'</span></div>'
     +'<div style="'+row+';font-weight:800"><span>Precio con promo</span><span>$'+precioPromo.toFixed(2)+'</span></div>'
-    +'<div style="'+row+'"><span>Costo de compra (real)</span><span>$'+costo.toFixed(2)+'</span></div>'
-    +'<div style="'+row+';font-weight:800;color:'+(mal?'#B84A3F':'var(--green)')+'"><span>Utilidad</span><span>$'+utilPromo.toFixed(2)+(pctRest!==null?' ('+pctRest.toFixed(1)+'% de la normal)':'')+'</span></div>'
-    +(mal?'<div style="font-size:0.6rem;font-weight:800;color:#B84A3F;margin-top:3px">⚠️ Con esta promo se pierde plata</div>':'')
+    +'<div style="'+row+'"><span>Costo de compra (real)</span><span>'+(faltaCosto?'<span class="falta-costo">Falta costo</span>':'$'+costo.toFixed(2))+'</span></div>'
+    +(comEst?'<div style="'+row+'"><span>Comisión</span><span>$'+comEst.toFixed(2)+'</span></div>':'')
+    +'<div style="'+row+';font-weight:800;color:'+(mal?'#B84A3F':'var(--green)')+'"><span>Utilidad</span><span>'+(faltaCosto?'<span class="falta-costo">Falta costo</span>':'$'+utilPromo.toFixed(2)+(pctRest!==null?' ('+pctRest.toFixed(1)+'% de la normal)':''))+'</span></div>'
+    +(mal&&!faltaCosto?'<div style="font-size:0.6rem;font-weight:800;color:#B84A3F;margin-top:3px">⚠️ Con esta promo se pierde plata</div>':'')
     +'</div>';
 }
 function renderPromos(c){
@@ -6514,7 +6523,8 @@ function renderInicio(c){
       '<div class="dsh-sub">IVA '+_dM(a.iva)+' · Total c/IVA '+_dM(a.ventaConIva)+' · '+_dN(a.tickets)+' ticket'+(a.tickets===1?'':'s')+'</div>'+spark);
     var kUtil=_dKpi('Utilidad · solo productos',_dM(a.utilidadProd),a.utilidadProd,p.utilidadProd,_dM(p.utilidadProd)+' · margen '+_dP(p.margenProd),
       _dGauge(a.margenProd,d.metaMargen)+'<div class="dsh-sub" style="text-align:center">venta de productos '+_dM(a.valProd)+' − costo '+_dM(a.costoProd)+' · meta '+_dP(d.metaMargen)+'</div>'
-      +'<div class="dsh-sub" style="text-align:center;color:#C9761F">Nota: solo productos tienen costo cargado. Faciales, paquetes y servicios todavía no restan costo, por eso no entran en la utilidad.</div>');
+      +(a.faltaCostoN||a.faltaCostoSkus?'<div class="dsh-sub falta-costo-banner" style="text-align:center">Falta costo en '+(a.faltaCostoSkus||a.faltaCostoN)+' SKU: no se inventa un costo ni se usa el precio de comisiones.</div>':'')
+      +'<div class="dsh-sub" style="text-align:center;color:#C9761F">Utilidad de productos = venta neta − costo real de compra − comisión. Faciales, paquetes y servicios todavía no restan costo.</div>');
     var kFac=_dKpi('Faciales vendidos',_dN(a.faciales),a.faciales,p.faciales,_dN(p.faciales)+' · '+_dM(p.valFac),
       '<div class="dsh-sub">'+_dM(a.valFac)+' sin IVA · '+_dN(a.facCanjes)+' canje'+(a.facCanjes===1?'':'s')+' de paquete/GC en $0.00</div>','<div class="dsh-sub dsh-dd" data-dd="faciales" data-ddk="" data-ddn="Faciales" style="cursor:pointer;color:var(--navy);text-align:right">🔎 Ver comprobantes</div>');
     var kProd=_dKpi('Productos vendidos',_dN(a.productosN)+' <span style="font-size:0.7rem;color:var(--gray)">u</span>',a.productosN,p.productosN,_dN(p.productosN)+' u · '+_dM(p.valProd),
@@ -11485,11 +11495,13 @@ function _catCalc(){
   }
   // Utilidad REAL por producto vendido: venta s/IVA − compra REAL al proveedor − comisión
   if(sub>0){
-    var compBase=compReal>0?compReal:comp;
-    var utilReal=sub-compBase-comEst;
-    html+='<br>💰 <b>Utilidad REAL por unidad vendida:</b> <b style="font-size:0.78rem;color:'+(utilReal>0?'#2E7D52':'#C00')+'">$'+utilReal.toFixed(2)+'</b>'
-      +' <span style="font-size:0.56rem">= $'+sub.toFixed(2)+' venta − $'+compBase.toFixed(2)+' compra '+(compReal>0?'real':'catálogo*')+' − $'+comEst.toFixed(2)+' comisión</span>'
-      +(compReal>0?'':'<br><span style="font-size:0.54rem;color:#C4943A">* Pon la compra REAL del proveedor para el cálculo exacto</span>');
+    if(compReal>0){
+      var utilReal=sub-compReal-comEst;
+      html+='<br>💰 <b>Utilidad REAL por unidad vendida:</b> <b style="font-size:0.78rem;color:'+(utilReal>0?'#2E7D52':'#C00')+'">$'+utilReal.toFixed(2)+'</b>'
+        +' <span style="font-size:0.56rem">= $'+sub.toFixed(2)+' venta − $'+compReal.toFixed(2)+' costo real − $'+comEst.toFixed(2)+' comisión</span>';
+    } else {
+      html+='<br><span class="falta-costo">Falta costo</span> <span style="font-size:0.54rem;color:#8a6d00">Pon la compra REAL del proveedor. No se usa el precio de comisiones como costo.</span>';
+    }
   }
   el.innerHTML=html;
 }

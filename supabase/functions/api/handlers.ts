@@ -22,6 +22,9 @@ import { enPrueba, type Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
 import { cargarAlias } from "./clientes_alias.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
+import { preciosDe, utilidadProducto } from "./productos.ts";
+import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
+import { claveDe } from "./ticket_beta.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
 
@@ -365,7 +368,11 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const cfg = aplicado.cfg;
   const cmap = await catMap(ctx);
   const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
-  const tks = (await tickets(ctx)).filter((r) => r.timestamp && !esCancelado(r)).map((r) => ovb(r, toIn(r, cmap)));
+  const rowsTk = (await tickets(ctx)).filter((r) => r.timestamp && !esCancelado(r));
+  const claveTk = (r: R) => claveDe(r, leerSerie(r, "so_num"));
+  try { const { asegurarSnapshots } = await import("./costos_reales.ts"); await asegurarSnapshots(ctx.db, "sistema-tk114", false, rowsTk, claveTk); } catch { /* columnas o tabla aún no aplicadas */ }
+  const snaps = await snapsPorClave(ctx.db);
+  const tks = rowsTk.map((r) => aplicarSnapsATicket(ovb(r, toIn(r, cmap)), snaps.get(claveTk(r))));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
   const marcas = await marks(ctx);
@@ -375,13 +382,15 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   for (const p of calc.personas) {
     const enCiclo = (t: TicketIn) => t.fecha >= ciclo && t.fecha <= finCiclo && t.cosm === p.cosm;
     const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto);
-    const items = propios.flatMap((t) => t.productos.map((pr) => ({
-      venta: subtotalDe(cmap, pr.sku),
-      compra: compraParaComision(cmap.get(skuCode(pr.sku))),
-      qty: pr.qty, excluido: false, sku: pr.sku,
-    })));
+    const items = propios.flatMap((t) => t.productos.map((pr) => {
+      if (pr.ventaNeta == null) {
+        return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku };
+      }
+      const qty = pr.qty || 1;
+      return { venta: round2(n(pr.ventaNeta) / qty), compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku };
+    }));
     p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
-    p.totalProductos = items.reduce((a, it) => a + it.qty, 0);
+    p.totalProductos = propios.reduce((a, t) => a + t.productos.reduce((b, pr) => b + pr.qty, 0), 0);
     const nombres: string[] = [];
     const facMap = new Map<string, LineaCom>();
     const packsRaw: { sku: string; nombre: string; neto: number }[] = [];
@@ -1263,30 +1272,7 @@ reg("getCatalogo", "any", async (_p, ctx) => {
   return items;
 });
 async function preciosOc(ctx: Ctx): Promise<Map<string, { precio: number; fecha: string }>> {
-  const precios = new Map<string, { precio: number; fecha: string }>();
-  const poner = (sku: string, precio: number, fecha: string) => {
-    const code = skuCode(sku);
-    if (!code || !(precio > 0)) return;
-    const prev = precios.get(code);
-    if (!prev || fecha >= prev.fecha) precios.set(code, { precio, fecha });
-  };
-  try {
-    const prods = await ctx.db.all("erp_productos");
-    const porId = new Map(prods.map((p) => [String(p.id), skuCode(s(p.sku))]));
-    const ocs = await ctx.db.all("erp_oc");
-    const fechaOc = new Map(ocs.map((o) => [String(o.id), s(o.fecha)]));
-    for (const ln of await ctx.db.all("erp_oc_lineas")) {
-      poner(porId.get(String(ln.producto_id)) || "", n(ln.precio), fechaOc.get(String(ln.oc_id)) || "");
-    }
-  } catch { /* sin tablas ERP */ }
-  try {
-    for (const oc of await ctx.db.all("ordenes_compra")) {
-      const json = oc.json && typeof oc.json === "object" ? oc.json as R : {};
-      const fact = Array.isArray(json.fact) ? json.fact as R[] : [];
-      for (const ln of fact) poner(s(ln.sku), n(ln.compra || ln.precio), s(oc.fecha));
-    }
-  } catch { /* sin órdenes de hoja */ }
-  return precios;
+  return cargarPreciosOc(ctx.db);
 }
 async function asegurarCompra(ctx: Ctx, ses: Ses, preview: boolean) {
   const precios = await preciosOc(ctx);
@@ -1330,6 +1316,13 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
       stockErp.set(code, bag);
     }
   } catch { /* sin ERP el stock de venta sale del corte */ }
+  const erpPorSku = new Map<string, R>();
+  try {
+    for (const pr of await ctx.db.all("erp_productos")) {
+      const c = skuCode(s(pr.sku));
+      if (c) erpPorSku.set(c, pr);
+    }
+  } catch { /* sin ERP */ }
   const items = [];
   for (const r of map.values()) {
     const sku = s(r.sku);
@@ -1340,16 +1333,18 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
     const tot = n(r.total_con_iva);
     const deHoja = ventaDe.get(code);
     const erp = stockErp.get(code) || {};
-    const real = n(compra.get(code)) || precios.get(code)?.precio || 0;
+    const prc = preciosDe(r, erpPorSku.get(code), n(compra.get(code)) || precios.get(code)?.precio || 0);
     items.push({
       sku, nombre: s(r.producto_servicio), tipo: s(r.tipo),
       marca: s(r.marca) || s(r.proveedor) || s(orig.marca) || s(orig.proveedor),
       proveedor: s(r.proveedor) || s(orig.proveedor),
       activo: activoVenta(est, sku, r.activo), pvp: tot > 0 ? tot : sub, subtotal: sub,
-      compra: n(r.precio_compra), compraReal: real,
-      compraComision: compraParaComision(r),
-      comision: round2(Math.max(0, sub - compraParaComision(r)) * PCT_COMISION_PRODUCTO),
-      utilidad: round2(sub - real),
+      compra: n(r.precio_compra), compraReal: prc.compraReal,
+      compraComision: prc.compraComision,
+      comision: prc.comision,
+      utilidad: prc.utilidad,
+      faltaCosto: prc.faltaCosto,
+      margenPct: prc.margenPct,
       stock: deHoja ? n(deHoja.stock) : n(erp.venta),
       lugares: {
         venta: deHoja ? n(deHoja.stock) : n(erp.venta),
@@ -1358,7 +1353,9 @@ reg("getCatalogoTabla", "any", async (p, ctx, ses) => {
     });
   }
   items.sort((a, b) => String(a.sku).localeCompare(String(b.sku)));
-  return { ok: true, items };
+  const esProd = (it: { tipo?: string }) => /PRODUCTO/i.test(s(it.tipo));
+  const sinCosto = items.filter((it) => it.faltaCosto && esProd(it)).length;
+  return { ok: true, items, sinCosto, productos: items.filter(esProd).length };
 });
 
 reg("getProdColMap", "any", async () => {
@@ -2717,7 +2714,9 @@ reg("editarProductoCatalogo", ADMIN, async (p, ctx, ses) => {
     const bases = await ctx.db.all("inventario_base");
     const base = bases.find((b0) => skuCode(s(b0.sku)) === skuCode(s(row.sku)));
     const compraReal = n(p.compraReal);
-    patch.utilidad = round2(sub - compraReal);
+    const comisionLinea = patch.comi_producto_30 != null ? n(patch.comi_producto_30) : round2(Math.max(0, sub - compraParaComision({ ...row, ...patch })) * PCT_COMISION_PRODUCTO);
+    const uEdit = utilidadProducto(sub, compraReal > 0 ? compraReal : null, comisionLinea);
+    patch.utilidad = uEdit.faltaCosto ? null : uEdit.utilidad;
     if (base) {
       const match = base.id != null && base.id !== "" ? { id: base.id } : base.sheet_row != null ? { sheet_row: base.sheet_row } : { sku: base.sku };
       await ctx.db.write(actorOf(ses), "inventario_base", "update", match, { compra: compraReal });
@@ -2748,7 +2747,8 @@ reg("crearProductoApp", ADMIN, async (p, ctx, ses) => {
     sheet_row, sku, producto_servicio: s(p.nombre), tipo: s(p.tipo) || "PRODUCTO",
     subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA),
     precio_compra: comisionCosto, compra_comision: comisionCosto,
-    utilidad: round2(sub - real), comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
+    comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
+    utilidad: utilidadProducto(sub, real > 0 ? real : null, round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO)).faltaCosto ? null : utilidadProducto(sub, real > 0 ? real : null, round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO)).utilidad,
     activo: true, orig: { sku },
   });
   await ctx.db.write(actorOf(ses), "inventario_base", "insert", {}, { sku, stock_inicial: 0, minimo: n(p.minimo), compra: real });

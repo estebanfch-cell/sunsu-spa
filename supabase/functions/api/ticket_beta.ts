@@ -58,13 +58,18 @@ export function claveDe(r: Row, so: string): string {
 }
 
 /** Comisiones: aplica sobre el ticket del sistema las exclusiones y las líneas editadas en la beta. */
-export function overlayComision<T extends { productos: { sku: string; qty: number }[]; exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean; extras?: string; facial?: string }>(t: T, cab: Row | undefined, lineas: Row[] | undefined): T {
+export function overlayComision<T extends { productos: { sku: string; qty: number; ventaNeta?: number; compraComision?: number }[]; exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean; extras?: string; facial?: string; netoPack?: number; netoPack6?: number }>(t: T, cab: Row | undefined, lineas: Row[] | undefined): T {
   if (!cab) return t;
   const out = { ...t };
+  if (cab.neto_pack != null && cab.neto_pack !== "") out.netoPack = n(cab.neto_pack);
+  if (cab.neto_pack6 != null && cab.neto_pack6 !== "") out.netoPack6 = n(cab.neto_pack6);
   if (cab.excluir_cosmetologa === true) { out.exclFacial = true; out.exclPaquete = true; out.exclProducto = true; out.exclExtras = true; return out; }
   const L = lineas || [];
   if (cab.lineas_beta === true) {
-    out.productos = L.filter((l) => s(l.tipo) === "producto" && l.excluir_comision !== true).map((l) => ({ sku: s(l.sku), qty: n(l.cantidad) }));
+    out.productos = L.filter((l) => s(l.tipo) === "producto" && l.excluir_comision !== true).map((l) => ({
+      sku: s(l.sku), qty: n(l.cantidad),
+      ...(l.snapshot_at != null && l.snapshot_at !== "" ? { ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision) } : {}),
+    }));
     // Extras: los de la beta (sin los excluidos), en el formato «SKU nombre | …» que leen las comisiones.
     const ex: string[] = [];
     for (const l of L.filter((x) => s(x.tipo) === "extra" && x.excluir_comision !== true)) for (let i = 0; i < Math.max(1, Math.round(n(l.cantidad))); i++) ex.push((s(l.sku) + " " + s(l.nombre)).trim());
