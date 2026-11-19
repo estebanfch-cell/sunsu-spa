@@ -23,6 +23,9 @@ export type AprItem = {
   cuando: string;
   href: string;
   prueba?: boolean;
+  diff?: Row;
+  tabla?: string;
+  fila?: string;
 };
 
 export type AprGrupo = { id: string; titulo: string; n: number; href: string; items: AprItem[] };
@@ -39,15 +42,21 @@ export async function recaudarAprobaciones(ctx: Ctx, ses: Ses): Promise<{ total:
     titulo: "Solicitudes de cambio",
     n: sols.length,
     href: "#/m/aprobaciones",
-    items: sols.slice(0, 40).map((r) => ({
-      tipo: "solicitud",
-      id: s(r.id),
-      titulo: (s(r.solicitante) || "Alguien") + (r.prueba === true ? " · PRUEBA" : ""),
-      detalle: s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : ""),
-      cuando: s(r.creado),
-      href: s(r.enlace) || "#/m/aprobaciones",
-      prueba: r.prueba === true,
-    })),
+    items: sols.slice(0, 40).map((r) => {
+      const prop = (r.propuestos && typeof r.propuestos === "object" ? r.propuestos as Row : {});
+      return {
+        tipo: "solicitud",
+        id: s(r.id),
+        titulo: (s(r.solicitante) || "Alguien") + (r.prueba === true ? " · PRUEBA" : ""),
+        detalle: s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : ""),
+        cuando: s(r.creado),
+        href: s(r.enlace) || "#/m/aprobaciones",
+        prueba: r.prueba === true,
+        tabla: s(r.tabla),
+        fila: s(r.fila),
+        diff: prop.diff,
+      };
+    }),
   });
 
   let borr: Row[] = [];
@@ -124,6 +133,9 @@ function pubItem(it: AprItem): Row {
   return {
     tipo: it.tipo, id: it.id, titulo: it.titulo, detalle: it.detalle,
     cuando: it.cuando, href: it.href, ...(it.prueba ? { prueba: true } : {}),
+    ...(it.diff ? { diff: it.diff } : {}),
+    ...(it.tabla ? { tabla: it.tabla } : {}),
+    ...(it.fila ? { fila: it.fila } : {}),
   };
 }
 
