@@ -402,6 +402,7 @@ function _ticketHayCitaPrefill(){
   try{ return !!sessionStorage.getItem('ag.tk'); }catch(e){ return false; }
 }
 function _ticketAlAbrirFormulario(){
+  if(window._ticketOrigen==='edicion'||window._tkEdicion){ return; }
   if(window._ticketOrigen==='migo'||window._ticketOrigen==='cita'||window._ticketOrigen==='clienta'){ window._ticketOrigen=''; return; }
   var cita=_ticketHayCitaPrefill();
   if(typeof newT==='function') T=newT();
@@ -416,7 +417,7 @@ function _ticketAntesDeIr(hash){
   var path=h.split('?')[0];
   if(path!=='#/doc/ov' && path!=='#/s/ticket') return;
   if(/[?&]fac=/.test(h)) return;
-  if(window._ticketOrigen==='migo'||window._ticketOrigen==='cita'||window._ticketOrigen==='clienta') return;
+  if(window._ticketOrigen==='migo'||window._ticketOrigen==='cita'||window._ticketOrigen==='clienta'||window._ticketOrigen==='edicion'||window._tkEdicion) return;
   if(_ticketHayCitaPrefill()) return;
   window._ticketOrigen='';
   _ticketNuevoEnBlanco();
@@ -1334,12 +1335,14 @@ function renderTicket(c){
       '</div>'+
       (T.cobro==='cortesia'?'<div id="cortesia-banner" style="background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>':'<div id="cortesia-banner" style="display:none;background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>')+
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
-        '<span class="box-lbl" style="color:var(--lavender)">Detalle del canje de paquete</span>'+
-        '<select id="paq-pick" onchange="_paqElegir(this.value)" style="width:100%;padding:9px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.82rem;background:white;color:var(--text);font-family:inherit;margin-bottom:8px"><option value="">Elige el paquete de la clienta…</option></select>'+
-        '<div id="paq-conf" style="margin-bottom:8px"></div>'+
-        '<input type="text" style="width:100%;padding:9px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.84rem;outline:none;background:white;color:var(--text);font-family:inherit;margin-bottom:8px" placeholder="Nº de sesión: 1/3, 2/6, 3/3..." oninput="T.usoPaq=this.value">'+
-        '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--lavender);cursor:pointer">'+
-          '<input type="checkbox" onchange="toggleOtro(this.checked)" style="width:14px;height:14px">Es canje del paquete de otro cliente'+
+        '<span class="box-lbl" style="color:var(--lavender)">Canje de paquete — elige paquete y sesión</span>'+
+        '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. No se marca solo.</p>'+
+        '<div id="paq-lista" class="paq-lista"></div>'+
+        '<select id="paq-pick" hidden onchange="_paqElegir(this.value)"></select>'+
+        '<div id="paq-conf" style="margin:8px 0"></div>'+
+        ((T.pack3||T.pack6)?'<button type="button" class="paq-alt" onclick="_paqElegirSesionNuevo()">Descargar sesión #1 del paquete nuevo de este ticket</button>':'')+
+        '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--lavender);cursor:pointer;margin-top:8px">'+
+          '<input type="checkbox" onchange="toggleOtro(this.checked)" '+(T.canjeOtro?'checked':'')+' style="width:14px;height:14px">Es canje del paquete de otro cliente'+
         '</label>'+
         '<div id="otro-box" style="display:none;margin-top:8px">'+
           '<textarea style="width:100%;padding:9px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.82rem;outline:none;background:white;font-family:inherit;resize:none;height:62px" placeholder="Ej: usando paquete de María García..." oninput="T.notaCanje=this.value"></textarea>'+
@@ -1531,6 +1534,9 @@ function renderTicket(c){
 
   const _cotMode=!!window._esCotizacion;
   const _cotBanner=_cotMode?'<div class="card" id="cot-banner" style="background:#FBF3E3;border:1.5px solid var(--gold);margin-bottom:12px"><div style="font-weight:800;color:var(--gold);letter-spacing:0.2px">Esto es una COTIZACIÓN</div><div style="font-size:0.72rem;margin-top:4px">Se guarda como COT y se descarga el PDF. No mueve stock, comisiones ni gift cards.</div></div>':'';
+  const _editClave=window._tkEdicion&&window._tkEdicion.clave;
+  const _editBanner=_editClave?'<div class="card" id="tk-edit-banner" style="background:#EEF3FB;border:1.5px solid #3E7CB1;margin-bottom:12px"><div style="font-weight:800;color:#1A2744">Editando ticket '+_tkEsc(_editClave)+'</div><div style="font-size:0.74rem;margin-top:4px;color:var(--navy)">Está todo prellenado. Haz los cambios (por ejemplo el facial y el canje de paquete) y pulsa «Solicitar aprobación para la edición». No se guarda hasta que Emilia o Emi lo aprueben.</div></div>':'';
+  const _etiqEnviar=_cotMode?'✓ Guardar cotización':(_editClave?'📨 Solicitar aprobación para la edición':'✓ Enviar Ticket');
   const _notasCard=_cotMode?'':`
     <div class="card">
       <div class="card-title">📝 Notas</div>
@@ -1556,7 +1562,7 @@ function renderTicket(c){
       <div id="fotos-despues-prev" class="fc-prev"></div>
     </div>`;
   c.innerHTML=`
-    ${_cotBanner}
+    ${_cotBanner}${_editBanner}
     <div class="stoggle" onclick="toggleSunsu()">
       <div class="tsw" id="tsw"></div>
       <span class="ttext">🏪 Consumo interno Sunsu</span>
@@ -1598,11 +1604,12 @@ function renderTicket(c){
 
     <div id="ld-card" class="ld-card" style="display:none"></div>
     <div id="preview-box" style="display:none"></div>
-    <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">${_cotMode?'✓ Guardar cotización':'✓ Enviar Ticket'}</button>
+    <button class="submit-btn" id="btn-env-tk" onclick="enviarTicket()">${_etiqEnviar}</button>
     <div style="height:28px"></div>
   `;
   updateSunsuUI(); updatePreview();
   if(T.paq2gc && T.paq2gcSlots && T.paq2gcSlots.length) _renderP2GCSlots(T.paq2gcN||(T.pack3?3:6));
+  if(T.cobro==='paquete'&&typeof _paqCargarPicker==='function') _paqCargarPicker();
   if(typeof _migoPintarPrefillAviso==='function') _migoPintarPrefillAviso(c);
   if(typeof _lookupNombreTicket==='function' && (T.nombre||T.apellido||T.cedula)) setTimeout(function(){ _lookupNombreTicket(); if(T.cedula&&typeof buscarEnRegistroSheet==='function') buscarEnRegistroSheet('ced', String(T.cedula).replace(/\D/g,'')); else if((T.nombre||T.apellido)&&typeof buscarEnRegistroSheet==='function') buscarEnRegistroSheet('q', (T.nombre+' '+T.apellido).trim(), true); }, 80);
 }
@@ -1629,6 +1636,15 @@ function selFacial(sku){
 // Emilia 18/11 (TK58): se sugiere el paquete que calza (queda preseleccionado) pero SIEMPRE hay que
 // confirmar cuál es con «✓ Confirmo este paquete». Si la clienta tiene paquetes que parecen duplicados
 // (mismo producto y fecha de compra, o el mismo ticket de origen) se avisa y se muestran lado a lado.
+function _cedCompat(a,b){
+  function dig(v){ return String(v||'').replace(/\.0+$/,'').replace(/\D/g,''); }
+  var da=dig(a), db=dig(b);
+  if(!da||!db) return false;
+  if(da===db) return true;
+  var lo=da.length<=db.length?da:db, hi=da.length<=db.length?db:da;
+  if(lo.length>=10 && hi.indexOf(lo)===0 && (hi.length===lo.length+1 || (hi.length===lo.length+3 && hi.slice(-3)==='001'))) return true;
+  return false;
+}
 function _paqFecha(p){ return (p.dia&&p.mes)?(String(Math.round(p.dia)).padStart(2,'0')+'/'+String(Math.round(p.mes)).padStart(2,'0')+'/'+String(Math.round(p.ano)||'').slice(-2)):''; }
 function _paqUsadas(p){ return (p.usos||[]).filter(function(u){return u&&(u.usado||u.fecha);}).length; }
 function _paqSugerido(act){
@@ -1662,9 +1678,35 @@ function _paqTarjeta(p, sel){
     +_tkEsc(p.paquete||p.sku||'')+'<br>Compra: '+_tkEsc(_paqFecha(p)||'—')+'<br>Usadas: <b>'+us+'/'+tot+'</b>'+(p.completo||us>=tot?' · completo':'')+'<br>'
     +'Vendió: '+_tkEsc(p.vendidoPor||'—')+(p.factura?'<br>Factura: '+_tkEsc(String(p.factura).replace(/\.0+$/,'')):'')+(p.ticketOrigen?'<br>Ticket: '+_tkEsc(p.ticketOrigen):'')+'</div>';
 }
+function _paqPintarLista(){
+  var box=document.getElementById('paq-lista'); if(!box) return;
+  var act=window._paqActivos||[], rec=window._paqSugeridoI, h='';
+  if(!act.length){
+    box.innerHTML='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px">No encontré paquetes activos para esta cédula. Revisa el número o márcalo como «paquete de otro cliente».</div>';
+    return;
+  }
+  h+=act.map(function(p,i){
+    var tot=Number(p.total)||3, us=_paqUsadas(p), quedan=Math.max(0,tot-us);
+    var sel=T.paqPick&&String(T.paqPick.fila)===String(p.fila);
+    var recBadge=(rec===i)?'<span class="paq-rec">Recomendado</span>':'';
+    var ses='';
+    for(var k=0;k<tot;k++){
+      var u=(p.usos||[])[k]||{};
+      var usada=!!(u.usado||u.u||u.fecha||u.f);
+      var on=sel&&T.paqConfirmado&&Number(T.paqPick.idx)===k;
+      if(usada) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+' · usada '+_tkEsc(u.fecha||u.f||'')+'</div>';
+      else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" onclick="event.preventDefault();event.stopPropagation();_paqElegirSesion('+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
+    }
+    return '<div class="paq-card'+(sel?' sel':'')+(rec===i?' rec':'')+'">'
+      +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+'</div>'
+      +'<div class="paq-nom">'+_tkEsc(p.paquete||p.sku||'Paquete')+'</div>'
+      +'<div class="paq-meta">'+us+'/'+tot+' usadas, quedan '+quedan+'</div>'
+      +'<div class="paq-sesiones">'+ses+'</div></div>';
+  }).join('');
+  box.innerHTML=h;
+}
 function _paqPintarConfirm(){
   var box=document.getElementById('paq-conf'); if(!box) return;
-  var sel=document.getElementById('paq-pick'), v=sel?sel.value:'';
   var act=window._paqActivos||[], todos=window._paqTodos||[];
   var dup=_paqDuplicados(todos.filter(function(p){return !p.anulado;}));
   var h='';
@@ -1673,67 +1715,63 @@ function _paqPintarConfirm(){
       +dup.map(function(G){return '<div style="margin-top:6px;font-weight:700">'+_tkEsc(G.por)+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'+G.items.map(function(p){return _paqTarjeta(p, T.paqPick&&String(T.paqPick.fila)===String(p.fila));}).join('')+'</div>';}).join('')+'</div>';
   }
   if(T.paqPick&&T.paqConfirmado){
-    var etq=T.paqPick.fila==='nuevo'?'Paquete nuevo de este ticket (sesión 1)':T.paqPick.fila==='luego'?'Lo marco después en Paquetes':(T.paqPick.nombre+' · sesión '+(T.paqPick.idx+1)+'/'+T.paqPick.total);
-    h+='<div style="background:#E8F5EC;border:1.5px solid var(--green);border-radius:10px;padding:8px 10px;font-size:0.76rem;color:var(--green);font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>✓ Confirmado: '+_tkEsc(etq)+'</span><button type="button" onclick="_paqDesconfirmar()" style="background:white;border:1.5px solid var(--green);color:var(--green);border-radius:8px;padding:4px 9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cambiar</button></div>';
-  } else if(v!==''){
-    var p=act[Number(v)], tx=v==='nuevo'?'el paquete nuevo de este ticket':v==='luego'?'marcarlo después en Paquetes':(p?(p.codigo||'')+' · '+(p.paquete||p.sku||''):'');
-    h+=(window._paqSugeridoI!=null&&String(window._paqSugeridoI)===v?'<div style="font-size:0.7rem;color:var(--lavender);font-weight:700;margin-bottom:4px">💡 Sugerido por el sistema — confírmalo</div>':'')
-      +(p?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'+_paqTarjeta(p,true)+'</div>':'')
-      +'<button type="button" id="paq-ok" onclick="_paqConfirmar()" style="width:100%;padding:10px;background:var(--lavender);color:white;border:none;border-radius:10px;font-size:0.8rem;font-weight:800;cursor:pointer">✓ Confirmo: canjear de '+_tkEsc(tx)+'</button>';
-  } else {
-    h+='<div style="font-size:0.72rem;color:#B86B6B;font-weight:700">Elige el paquete y confírmalo (obligatorio para guardar el ticket).</div>';
+    var etq=T.paqPick.fila==='nuevo'?'Paquete nuevo de este ticket (sesión 1)':T.paqPick.fila==='luego'?'Lo marco después en Paquetes':((T.paqPick.codigo||T.paqPick.nombre||'Paquete')+' · sesión '+(Number(T.paqPick.idx)+1)+'/'+T.paqPick.total);
+    h+='<div style="background:#E8F5EC;border:1.5px solid var(--green);border-radius:10px;padding:8px 10px;font-size:0.76rem;color:var(--green);font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><span>✓ Confirmado: se descargará '+_tkEsc(etq)+'</span><button type="button" onclick="_paqDesconfirmar()" style="background:white;border:1.5px solid var(--green);color:var(--green);border-radius:8px;padding:4px 9px;font-size:0.68rem;font-weight:800;cursor:pointer">Cambiar</button></div>';
+  } else if(!T.canjeOtro){
+    h+='<div style="font-size:0.72rem;color:#B86B6B;font-weight:700">Marca el paquete y pulsa «Descargar sesión #…». El recomendado es solo una guía; no se elige solo.</div>';
   }
   box.innerHTML=h;
+  _paqPintarLista();
 }
 function _paqCargarPicker(){
-  var sel=document.getElementById('paq-pick'); if(!sel) return;
+  var sel=document.getElementById('paq-pick');
   var ced=String(T.cedula||'').replace(/\D/g,'');
-  var base='<option value="">Elige el paquete de la clienta…</option>'
-    +((T.pack3||T.pack6)?'<option value="nuevo">Paquete nuevo de este ticket (sesión 1)</option>':'');
-  var fin='<option value="luego">No está en la lista — lo marco después en Paquetes</option>';
   window._paqSugeridoI=null;
-  if(T.paqPick&&T.paqPickCed!==ced){ T.paqPick=null; T.paqConfirmado=false; }
-  if(!ced){ sel.innerHTML=base+fin+'<option value="" disabled>Escribe la cédula para ver sus paquetes</option>'; _paqPintarConfirm(); return; }
-  sel.innerHTML=base+'<option value="" disabled>Buscando paquetes…</option>';
+  if(T.paqPick&&T.paqPickCed&&T.paqPickCed!==ced){ T.paqPick=null; T.paqConfirmado=false; }
+  if(!ced){ window._paqActivos=[]; window._paqTodos=[]; _paqPintarConfirm(); return; }
+  var lista=document.getElementById('paq-lista');
+  if(lista) lista.innerHTML='<div style="font-size:0.74rem;color:var(--gray)">Buscando paquetes…</div>';
   fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)+'&_t='+Date.now())
     .then(function(r){return r.json();})
     .then(function(d){
-      var mios=((d&&d.resultados)||[]).filter(function(p){ return String(p.cedula||'').replace(/\D/g,'')===ced; });
+      var mios=((d&&d.resultados)||[]).filter(function(p){ return _cedCompat(p.cedula, ced); });
       var act=mios.filter(function(p){
         var tot=Number(p.total)||3, us=_paqUsadas(p);
         return !p.anulado && !p.completo && us<tot;
       });
       window._paqActivos=act; window._paqTodos=mios;
-      sel.innerHTML=base+(act.length?act.map(function(p,i){
-        var tot=Number(p.total)||3, us=_paqUsadas(p), f=_paqFecha(p);
-        return '<option value="'+i+'">'+_tkEsc((p.codigo?p.codigo+' · ':'')+(p.sku||'')+' '+(p.paquete||''))+' · '+us+'/'+tot+' usadas'+(f?' · '+f:'')+'</option>';
-      }).join(''):'<option value="" disabled>Sin paquetes activos para esta cédula</option>')+fin;
-      if(T.paqPick&&T.paqPick.i!=null&&act[T.paqPick.i]) sel.value=String(T.paqPick.i);
-      else if(!T.paqPick){ var sg=_paqSugerido(act); if(sg>=0){ window._paqSugeridoI=sg; sel.value=String(sg); } }
+      window._paqSugeridoI=act.length?_paqSugerido(act):-1;
+      if(sel){
+        sel.innerHTML='<option value=""></option>'+act.map(function(p,i){ return '<option value="'+i+'">'+_tkEsc((p.codigo||'')+' '+(p.paquete||''))+'</option>'; }).join('');
+        if(T.paqPick&&T.paqPick.i!=null&&act[T.paqPick.i]) sel.value=String(T.paqPick.i);
+      }
       _paqPintarConfirm();
     })
-    .catch(function(){ sel.innerHTML=base+fin+'<option value="" disabled>No se pudieron cargar los paquetes</option>'; _paqPintarConfirm(); });
+    .catch(function(){ window._paqActivos=[]; _paqPintarConfirm(); });
 }
 function _paqElegir(v){
-  // Cambiar la elección siempre pide confirmar de nuevo.
   T.paqPick=null; T.paqConfirmado=false;
   _paqPintarConfirm();
 }
-function _paqConfirmar(){
-  var sel=document.getElementById('paq-pick'), v=sel?sel.value:'';
-  var inp=document.querySelector('#paq-box input[type=text]');
-  if(v===''){ T.paqPick=null; T.paqConfirmado=false; _paqPintarConfirm(); return; }
-  if(v==='nuevo'){ T.paqPick={fila:'nuevo'}; T.usoPaq='1/'+(T.pack6?6:3); if(inp) inp.value=T.usoPaq; }
-  else if(v==='luego'){ T.paqPick={fila:'luego'}; }
-  else {
-    var p=(window._paqActivos||[])[Number(v)]; if(!p) return;
-    var tot=Number(p.total)||3, usos=p.usos||[], idx=0;
-    for(var k=0;k<tot;k++){ if(!(usos[k]&&(usos[k].usado||usos[k].fecha))){ idx=k; break; } }
-    T.paqPick={i:Number(v), fila:p.fila, idx:idx, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete'))};
-    T.usoPaq=(idx+1)+'/'+tot;
-    if(inp) inp.value=T.usoPaq;
-  }
+function _paqElegirSesion(i,k){
+  var p=(window._paqActivos||[])[Number(i)]; if(!p) return;
+  var tot=Number(p.total)||3, u=(p.usos||[])[k]||{};
+  if(u&&(u.usado||u.u||u.fecha||u.f)) return;
+  T.paqPick={i:Number(i), fila:p.fila, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||''};
+  T.usoPaq=(k+1)+'/'+tot;
   T.paqConfirmado=true; T.paqPickCed=String(T.cedula||'').replace(/\D/g,'');
+  var sel=document.getElementById('paq-pick'); if(sel) sel.value=String(i);
+  _paqPintarConfirm();
+}
+function _paqElegirSesionNuevo(){
+  T.paqPick={fila:'nuevo', idx:0, total:T.pack6?6:3, nombre:'Paquete nuevo de este ticket'};
+  T.usoPaq='1/'+(T.pack6?6:3);
+  T.paqConfirmado=true; T.paqPickCed=String(T.cedula||'').replace(/\D/g,'');
+  _paqPintarConfirm();
+}
+function _paqConfirmar(){
+  // Compatibilidad: ya no se confirma «el siguiente libre»; hay que pulsar la sesión.
+  if(!(T.paqPick&&T.paqConfirmado)) { toast('Pulsa «Descargar sesión #…» en el paquete','#B86B6B'); return; }
   _paqPintarConfirm();
 }
 function _paqDesconfirmar(){ T.paqConfirmado=false; T.paqPick=null; _paqPintarConfirm(); }
@@ -3056,7 +3094,13 @@ function enviarTicket(){
     pack6:          pack6Txt,
     extras:         extrasTexto,
     productos:      productosPayload,
-
+    paqPick:        (T.paqConfirmado&&T.paqPick&&T.paqPick.fila&&T.paqPick.fila!=='luego')?{fila:T.paqPick.fila,idx:T.paqPick.idx,total:T.paqPick.total,codigo:T.paqPick.codigo||'',nombre:T.paqPick.nombre||'',sku:T.paqPick.sku||''}:null,
+    cobro:          T.cobro||'',
+    pack3_sku:      T.pack3||'',
+    pack6_sku:      T.pack6||'',
+    lineDesc:       T.lineDesc||{},
+    precios_extra:  (function(){ var o={}; (typeof EXTRAS!=='undefined'?EXTRAS:[]).forEach(function(e){ var k=e.sku; if((T.extras[k]||0)>0){ var pr=T._precioLinea&&T._precioLinea[k]; o[k]=(pr!=null&&pr!=='')?Number(pr):e.p; } }); return o; })(),
+    precios_producto:(function(){ var o={}; Object.keys(T.productos||{}).forEach(function(k){ if((T.productos[k]||0)>0){ var pr=T._precioLinea&&T._precioLinea[k]; if(pr!=null&&pr!=='') o[k]=Number(pr); } }); return o; })(),
     prodColMap:     PROD_COL_MAP,
   };
   if(window._migoVincularFac){
@@ -3089,7 +3133,20 @@ function enviarTicket(){
     });
     return;
   }
-  if(btn){btn.disabled=true;btn.textContent='⏳ Enviando...';}
+  if(btn){btn.disabled=true;btn.textContent=window._tkEdicion?'⏳ Enviando solicitud...':'⏳ Enviando...';}
+  if(window._tkEdicion&&window._tkEdicion.clave){
+    Promise.resolve(window.api('tk_edicion_pedir',{clave:window._tkEdicion.clave,form:payload,motivo:'Edición del ticket'}))
+      .then(function(d){
+        if(d&&d.error){ toast(d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Solicitar aprobación para la edición';} return; }
+        var clave=window._tkEdicion.clave;
+        toast((d&&d.mensaje)||'Listo, tu solicitud de edición se envió a administración para aprobación','#6A9E7A');
+        window._tkEdicion=null; window._ticketOrigen='';
+        if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco();
+        if(typeof go==='function') go('#/m/tickets/t/'+encodeURIComponent(clave));
+      })
+      .catch(function(e){ toast((e&&e.message)||'No se pudo enviar la solicitud','#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Solicitar aprobación para la edición';} });
+    return;
+  }
 
   // Generar número de ticket local para mostrar (el definitivo lo genera el script)
   const _now=new Date();
@@ -3247,19 +3304,21 @@ function enviarTicket(){
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
     var _cosmeT=payload.cosmetologa||(CU?CU.name:'');
-    if(_packsNuevos.length) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'', _cliNom, _cosmeT);
+    if(_packsNuevos.length && !(_cobro==='paquete'&&_paqPick&&_paqPick.fila&&_paqPick.fila!=='nuevo')) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'', _cliNom, _cosmeT);
     // Canje contra un paquete ELEGIDO en el ticket: se marca su siguiente sesión sola.
     if(_cobro==='paquete'&&_paqPick&&_paqPick.fila==='luego'){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill', toastMsg:'📋 Marca la sesión usada en el paquete correcto de '+(_cliNom||'la clienta'), color:'#7A5FA0'};
     } else if(_cobro==='paquete'&&_paqPick&&_paqPick.fila!=='nuevo'){
-      _marcarSesionPaqueteUnaVez({fila:_paqPick.fila, idx:_paqPick.idx, total:_paqPick.total, nota:_notaSesionPaquete(_facialNombre,_cosmeT), ticket:(d&&(d.ticket||d.beta_num))||''}).then(function(res){
-        if(res&&res.ok) toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' marcada en '+_paqPick.nombre,'var(--green)');
-        else toast('⚠️ '+((res&&res.error)||'No se marcó la sesión')+' — márcala en Paquetes','#C9A227');
-      });
+      if(d&&d.uso_paquete&&d.uso_paquete.ok){
+        toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' descargada en '+(_paqPick.nombre||'el paquete'),'var(--green)');
+      } else {
+        _marcarSesionPaqueteUnaVez({fila:_paqPick.fila, idx:_paqPick.idx, total:_paqPick.total, nota:_notaSesionPaquete(_facialNombre,_cosmeT), ticket:(d&&(d.ticket||d.beta_num))||''}).then(function(res){
+          if(res&&res.ok) toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' marcada en '+_paqPick.nombre,'var(--green)');
+          else toast('⚠️ '+((res&&res.error)||'No se marcó la sesión')+' — márcala en Paquetes','#C9A227');
+        });
+      }
     }
-    if(_cobro==='paquete'&&!_paqPick&&!_packsNuevos.length&&_cedCli){
-      _canjeMarcarAuto(_cedCli, _cliNom, _facialNombre, _cosmeT, (d&&(d.ticket||d.beta_num))||'');
-    } else if(_cobro==='paquete'&&!_paqPick&&!_packsNuevos.length){
+    if(_cobro==='paquete'&&!_paqPick&&!_packsNuevos.length){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill',
         toastMsg:'📋 Marca la sesión usada en el paquete de '+(_cliNom||'la clienta'),
         color:'#7A5FA0'};
@@ -5345,6 +5404,7 @@ function _tkPedir(q, mas){
     window._tkTot={total:r.total, suma:r.suma, hayMas:r.hayMas};
     window._tkLim=_histData.length;
     _tkReagendadas(items);
+    _tkCargarEdiciones();
     return true;
   }).catch(function(){ window._tkCargandoLista=false; return false; });
 }
@@ -5497,6 +5557,25 @@ function _histDetalleHTML(t, showPrices){
   return '<div class="tk-detail-bar"><button type="button" onclick="_histCerrarTicket()" style="padding:6px 12px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:9px;font-size:0.72rem;font-weight:800;cursor:pointer">Cerrar</button></div>'+_buildTicketCard(t, showPrices);
 }
 function _histNum(t){ if(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num) return 'Borrador'; return (t&&t.so_num)||''; }
+function _tkEdicionPendienteDe(t){
+  var m=window._tkEdiciones||{};
+  var k=String((t&&(t.so_num||t.clave))||'');
+  return (k&&m[k])||null;
+}
+function _tkPillEdicion(t){
+  return _tkEdicionPendienteDe(t)?_tkPill('edicionpend','Edición pendiente'):'';
+}
+function _tkCargarEdiciones(){
+  if(typeof api!=='function' && typeof window.api!=='function') return;
+  var fn=typeof api==='function'?api:window.api;
+  Promise.resolve(fn('tk_ediciones_pendientes',{})).then(function(r){
+    var m={}, items=(r&&r.items)||[];
+    items.forEach(function(it){ if(it&&it.clave) m[String(it.clave)]=it; });
+    window._tkEdiciones=m;
+    if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff, true);
+  }).catch(function(){});
+}
+
 function _histMontos(t){
   var tot=parseFloat(t&&t.estimado)||0, sub=Math.round(tot/1.15*100)/100;
   return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
@@ -5549,7 +5628,7 @@ function _histCelda(t, c, showPrices){
   var m=_histMontos(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
   var $=function(v){return showPrices?('$'+Number(v||0).toFixed(2)):'—';};
-  if(c.k==='num'){ var extra=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?' '+(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):''; return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+extra+'</td>'; }
+  if(c.k==='num'){ var extra=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?' '+(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):''; var ed=_tkPillEdicion(t); return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+extra+(ed?' '+ed:'')+'</td>'; }
   if(c.k==='cli') return '<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td>';
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
@@ -5599,7 +5678,7 @@ function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
-  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'));
+  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
   var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
   var l3=[_histEsc(_histFechaFmt(t.fecha))];
   if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
@@ -5739,7 +5818,7 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00'};
+var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};
 var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía',no_registrado:'Método no registrado',corte:'Método no registrado'};
 function _tkFormaNorm(v){
@@ -19247,3 +19326,106 @@ function _migoAsignarBorrador(fac){
   var sel=box&&box.querySelector('select[data-fac="'+fac+'"]');
   if(sel) sel.focus();
 }
+
+
+function _tkSkuForm(sku, tipo){
+  var s0=String(sku||'').trim().toUpperCase();
+  if(!s0) return '';
+  if(s0.indexOf('SUNSU-')===0) return s0;
+  if((tipo==='facial'||tipo==='extra'||tipo==='servicio'||tipo==='paquete') && /^\d+$/.test(s0)) return 'SUNSU-'+s0;
+  return 'SUNSU-'+s0.replace(/^SUNSU-?/, '');
+}
+function _tkCargarEdicion(d, clave){
+  if(!d||d.error){ toast((d&&d.error)||'No se pudo abrir el ticket','#B86B6B'); return; }
+  var t=d.ticket||{}, info=d.info||{};
+  T=newT();
+  T._precioLinea={};
+  T.nombre=info.nombre||t.nombre||'';
+  T.apellido=info.apellido||t.apellido||'';
+  T.cedula=String(info.cedula||t.cedula||'').replace(/\.0+$/,'');
+  T.factura=info.factura||t.factura||'';
+  T.notas=info.notas||t.notas||'';
+  T.recom=info.recomendaciones||t.recomendaciones||'';
+  T.fechaRet=info.retorno||t.retorno||'';
+  T.atendidoPor=info.cosmetologa||t.cosmetologa||'';
+  T.clienteCodigo=info.clienteCodigo||d.clienteCodigo||'';
+  T.clienteKey=d.clienteKey||'';
+  (d.lineas||[]).forEach(function(l){
+    var tipo=l.tipo||'';
+    var sku=_tkSkuForm(l.sku||'', tipo);
+    var cant=Number(l.cantidad)||1;
+    var prec=Number(l.precio_unit);
+    if(!(prec>=0)) prec=0;
+    if(sku) T._precioLinea[sku]=prec;
+    if(l.sku) T._precioLinea[String(l.sku)]=prec;
+    if(tipo==='facial'||tipo==='servicio'){
+      T.facial=sku;
+      if(l.canje || (prec===0 && /canje/i.test(String(l.nombre||'')))) T.cobro='paquete';
+      else if(!T.cobro) T.cobro='cobrado';
+    } else if(tipo==='extra'){
+      T.extras[sku]=cant;
+    } else if(tipo==='producto'){
+      T.productos[sku]=cant;
+    } else if(tipo==='paquete'){
+      var tot=/\bx6\b/i.test(String(l.nombre||sku))?6:3;
+      if(tot===6) T.pack6=sku; else T.pack3=sku;
+    }
+    if(l.descuento_tipo&&Number(l.descuento_valor)>0){
+      T.lineDesc=T.lineDesc||{};
+      T.lineDesc[sku]={t:l.descuento_tipo,v:Number(l.descuento_valor)};
+    }
+  });
+  if(!T.cobro && /^\s*SI\b/i.test(String(t.paquete||d.paquete||''))) T.cobro='paquete';
+  window._tkEdicion={clave:clave||t.clave||t.soNum||d.clave, vista:d};
+  window._ticketOrigen='edicion';
+  if(typeof go==='function') go('#/doc/ov');
+  else if(typeof showTab==='function'){ showTab('ticket'); if(typeof renderTicket==='function') renderTicket(document.getElementById('content')); }
+}
+window._tkCargarEdicion=_tkCargarEdicion;
+
+function _tkMoneyDiff(v){
+  var n=Number(v); if(!isFinite(n)) n=0;
+  return '$'+n.toFixed(2);
+}
+function _tkPintarDiffEdicion(diff){
+  if(!diff) return '<p class="note">Sin detalle de cambios.</p>';
+  var h='<div class="tk-diff">';
+  h+='<div class="tk-diff-h">Resumen de la edición · Antes → Después</div>';
+  (diff.cabecera||[]).forEach(function(c){
+    h+='<div class="tk-diff-cab"><b>'+_tkEsc(c.campo||'')+':</b> <span class="antes">Antes: '+_tkEsc(c.antes||'—')+'</span> <span class="flecha">→</span> <span class="despues">Ahora: '+_tkEsc(c.despues||'—')+'</span></div>';
+  });
+  var L=diff.lineas||[];
+  if(L.length){
+    h+='<div class="tk-diff-lh">Líneas</div>';
+    L.forEach(function(l){
+      var st=l.estado||'igual';
+      var sku=_tkEsc(l.sku||'');
+      var nom=_tkEsc(l.nombre||'');
+      var desc='';
+      if(l.descuento_tipo&&Number(l.descuento_valor)>0) desc=' · desc '+_tkEsc(l.descuento_tipo)+' '+l.descuento_valor;
+      var ahora=sku+' · '+nom+' · cant '+_tkEsc(l.cantidad)+' · '+_tkMoneyDiff(l.precio_unit)+desc;
+      var cuerpo;
+      if(st==='agregada') cuerpo='<span class="despues">Agregada: '+ahora+'</span>';
+      else if(st==='eliminada') cuerpo='<span class="antes">Eliminada: '+ahora+'</span>';
+      else if(st==='modificada') cuerpo='<span class="antes">Antes: '+sku+' · cant '+_tkEsc(l.antes_cantidad)+' · '+_tkMoneyDiff(l.antes_precio_unit)+'</span> <span class="flecha">→</span> <span class="despues">Ahora: cant '+_tkEsc(l.cantidad)+' · '+_tkMoneyDiff(l.precio_unit)+desc+'</span>';
+      else cuerpo='<span class="igual">Sin cambio: '+ahora+'</span>';
+      h+='<div class="tk-diff-ln '+st+'">'+cuerpo+'</div>';
+    });
+  }
+  var ta=(diff.totales&&diff.totales.antes)||{}, td=(diff.totales&&diff.totales.despues)||{};
+  function fila(lbl, a, b){
+    var ch=Number(a)!==Number(b);
+    return '<div class="tk-diff-tot'+(ch?' ch':'')+'"><b>'+lbl+'</b> <span class="antes">'+_tkMoneyDiff(a)+'</span> <span class="flecha">→</span> <span class="despues">'+_tkMoneyDiff(b)+'</span></div>';
+  }
+  h+='<div class="tk-diff-lh">Totales</div>';
+  h+=fila('Subtotal', ta.subtotal, td.subtotal);
+  h+=fila('IVA 15%', ta.iva, td.iva);
+  h+=fila('Total', ta.total, td.total);
+  h+=fila('Pagado', ta.pagado, td.pagado);
+  h+=fila('Saldo', ta.saldo, td.saldo);
+  var ca=(diff.comision&&diff.comision.antes), cd=(diff.comision&&diff.comision.despues);
+  h+='<div class="tk-diff-tot ch"><b>Comisión estimada</b> <span class="antes">'+_tkMoneyDiff(ca)+'</span> <span class="flecha">→</span> <span class="despues">'+_tkMoneyDiff(cd)+'</span></div>';
+  h+='</div>';
+  return h;
+}
+window._tkPintarDiffEdicion=_tkPintarDiffEdicion;

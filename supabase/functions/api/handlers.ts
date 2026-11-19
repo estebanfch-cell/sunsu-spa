@@ -901,6 +901,17 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       } catch { /* el ticket ya quedó */ }
     }
   }
+  // TK141: si la chica eligió paquete + sesión en el formulario, se descarga exactamente esa sesión (no la «siguiente libre»).
+  try {
+    const pick = p.paqPick && typeof p.paqPick === "object" ? p.paqPick as R : null;
+    if (pick && pick.fila && pick.fila !== "luego" && pick.fila !== "nuevo" && (pick.idx != null && pick.idx !== "")) {
+      const { aplicarUsoExplicit } = await import("./ticket_edicion_api.ts");
+      const cosm = s(base.atendido_por) || actor;
+      const facial = s(p.facial);
+      const nota = ecuadorParts(ctx.now).ymd.split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
+      out.uso_paquete = await aplicarUsoExplicit(ctx, actor, { fila: pick.fila, idx: pick.idx, ticket: soNum || ticket, nota, cosm });
+    }
+  } catch { /* el ticket ya quedó */ }
   // TK139: «¡plac!» — cuadre al instante y la factura sale de Borradores.
   try {
     const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");

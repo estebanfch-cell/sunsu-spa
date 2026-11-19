@@ -243,7 +243,7 @@ async function otroNombre(ctx: Ctx, r: Row): Promise<boolean> {
     return facturadoAOtroNombre(s(r.nombre) + " " + s(r.apellido), L.cliente_migo);
   } catch { return false; }
 }
-async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
+export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
   const cab = await cabDe(ctx, clave);
   const [promos, cat] = await Promise.all([
@@ -288,6 +288,7 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),
     staff: await listaStaffActivo(ctx),
+    edicion: await (await import("./ticket_edicion_api.ts")).edicionPendienteDe(ctx, claveDe(r, leerSerie(r, "so_num"))),
   };
 }
 
@@ -538,9 +539,14 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
     if (!r) return { error: "Ticket no encontrado" };
     if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para pedir un cambio de ese ticket" };
     const v = await vistaTicket(ctx, ses, r);
-    return { row: r, antes: { total: (v.totales as Row).total, lineas: (v.lineas as Row[]).map((l) => s(l.sku) + " ×" + n(l.cantidad) + " $" + n(l.total_linea)).join(", ") } };
+    const clave = claveDe(r, leerSerie(r, "so_num"));
+    return { row: r, antes: { total: (v.totales as Row).total, lineas: (v.lineas as Row[]).map((l) => s(l.sku) + " ×" + n(l.cantidad) + " $" + n(l.total_linea)).join(", ") }, etiqueta: "Edición de " + clave, enlace: "#/m/tickets/t/" + encodeURIComponent(clave) };
   },
-  aplicar: async (ctx, ses, fila, propuestos) => {
+  aplicar: async (ctx, ses, fila, propuestos, sol) => {
+    if (propuestos && (propuestos as Row).edicion_form) {
+      const { aplicarEdicionTicket } = await import("./ticket_edicion_api.ts");
+      return await aplicarEdicionTicket(ctx, ses, fila, propuestos as Row, sol);
+    }
     const r = await ticketPorClave(ctx, fila);
     if (!r) return { error: "Ticket no encontrado" };
     const qurl = s((propuestos as Row).quitar_comprobante);

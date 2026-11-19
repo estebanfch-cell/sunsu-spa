@@ -9,7 +9,7 @@ import type { Db } from "./db.ts";
 import {
   FACIALES_2, FACIALES_3, IVA, PROD_COLS, USO_FIELDS, cantAmpollas, ecuadorParts, facialSku, n, normCedula, normNombre,
   packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
-  codigoPaquete, esCancelado, normCedulaVieja } from "./domain.ts";
+  codigoPaquete, esCancelado, normCedulaVieja, cedulasCompatibles } from "./domain.ts";
 import { claveIdentidad, clavesDe } from "./clientes_alias.ts";
 import { conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
@@ -721,7 +721,7 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
     const idx = (await consultar(db, "paquetes", { cols: ["id", "cedula", "nombres", "apellidos", "borrado_at"] })).rows.filter((r0) => {
       const r = aplicarAjuste(r0, AJ.get(String(r0.id)) || null);
       const pc = normCedula(r.cedula), pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
-      return (ced && pc === ced) || (nom && pn === nom && (!ced || !pc));
+      return (ced && (pc === ced || cedulasCompatibles(r.cedula, ced))) || (nom && pn === nom && (!ced || !pc));
     });
     if (idx.some((r) => r.id == null)) throw new Error("sin id");
     for (let i = 0; i < idx.length; i += 150) rows.push(...(await consultar(db, "paquetes", { filtros: [{ col: "id", op: "in", val: idx.slice(i, i + 150).map((r) => r.id as string | number) }] })).rows);
@@ -736,7 +736,7 @@ export async function paquetesDe(db: Db, ced: string, nom: string): Promise<Row[
     if (r.__borrado === true) continue;
     const pc = normCedula(r.cedula);
     const pn = normNombre((s(r.nombres) + " " + s(r.apellidos)).trim());
-    if (!(ced && pc === ced) && !(nom && pn === nom && (!ced || !pc))) continue;
+    if (!(ced && (pc === ced || cedulasCompatibles(r.cedula, ced))) && !(nom && pn === nom && (!ced || !pc))) continue;
     const v = vistaPaquete(r0, aj);
     const corte = v.sesiones as Row[];
     out.push({
