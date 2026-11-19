@@ -398,4 +398,54 @@ describe("TK120 conteo por bodega y allowlist", () => {
     assert.doesNotMatch(block, /\bgo\s*\(/);
     assert.doesNotMatch(block, /C\.dirty\s*=\s*\{\}/);
   });
+
+  it("se puede agregar al conteo de bodega un producto del catálogo que no estaba en la foto, con esperado 0; uno de fuera no entra", async () => {
+    const { db, h } = semilla();
+    db.tables.get("erp_bodegas")!.push({ id: "44444444-4444-4444-8444-444444444444", codigo: "CASA", nombre: "Oficina", tipo: "casa" });
+    db.tables.get("erp_stock")!.push({ producto_id: "p1", bodega_id: "44444444-4444-4444-8444-444444444444", cantidad: 4 });
+    const cr = await h("cf_crear", "adm", { bodega: "OFICINA", iniciar: true });
+    await h("cf_iniciar", "adm", { id: cr.id });
+    const g0 = await h("cf_get", "adm", { id: cr.id });
+    const skus0 = (g0.lineas as Row[]).map((l) => l.sku);
+    assert.ok(skus0.includes("ML-001"));
+    assert.ok(!skus0.includes("ML-002"), "ML-002 no tiene stock en Oficina, no va en la foto inicial");
+    const amp = (g0.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    await h("cf_guardar", "adm", { id: cr.id, lineas: [{ id: amp.id, contado: 4 }] });
+    const add = await h("cf_guardar", "adm", { id: cr.id, agregar: { producto_id: "p2" } });
+    assert.equal(add.ok, true);
+    const lin = add.linea as Row;
+    assert.equal(lin.sku, "ML-002");
+    assert.equal(lin.esperado, 0);
+    assert.equal(lin.agregado, true);
+    assert.equal(lin.estado, "pendiente");
+    const bad = await h("cf_guardar", "adm", { id: cr.id, agregar: { sku: "NO-EXISTE" } });
+    assert.match(String(bad.error), /no está en Productos/i);
+    const g = await h("cf_get", "adm", { id: cr.id });
+    const L = g.lineas as Row[];
+    assert.equal(L.find((l) => l.sku === "ML-001")!.contado, 4);
+    const neu = L.find((l) => l.sku === "ML-002")!;
+    assert.equal(neu.esperado, 0);
+    assert.equal(neu.agregado, true);
+  });
+
+  it("el front abre Agregar producto, busca en el catálogo y suma la fila al instante sin recargar ni borrar cantidades", () => {
+    const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
+    assert.match(js, /function aplicarProductoAgregado/);
+    assert.match(js, /function pintarHitsAgregar/);
+    assert.match(js, /id="mccf-agregar"/);
+    assert.match(js, /id="mccf-scan"/);
+    assert.doesNotMatch(js, /Busca o escanea arriba y, si no está en la lista/);
+    const start = js.indexOf('var ag = main.querySelector("#mccf-agregar")');
+    assert.ok(start >= 0);
+    const block = js.slice(start, js.indexOf("var term = main.querySelector", start));
+    assert.match(block, /pintarHitsAgregar/);
+    assert.match(block, /aplicarProductoAgregado/);
+    assert.match(block, /cf_guardar/);
+    assert.match(block, /agregar: \{ producto_id: pid \}/);
+    assert.match(block, /_scanAbrir/);
+    assert.match(js, /MCBuscar/);
+    assert.doesNotMatch(block, /\bgo\s*\(/);
+    assert.doesNotMatch(block, /C\.dirty\s*=\s*\{\}/);
+    assert.doesNotMatch(block, /prompt\(/);
+  });
 });

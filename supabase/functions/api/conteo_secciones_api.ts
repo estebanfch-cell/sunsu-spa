@@ -465,7 +465,11 @@ extend("cf_sec_guardar", "any", async (p, ctx, ses) => {
   if (p.agregar && typeof p.agregar === "object") {
     const a = p.agregar as Row;
     const prods = await listaProductos(ctx, ses);
-    const pr = prods.find((x) => s(x.id) === s(a.producto_id)) || prods.find((x) => skuCode(s(x.sku)) === skuCode(s(a.sku)));
+    const code = skuCode(s(a.sku || a.codigo || a.barcode));
+    const barra = s(a.barcode || a.codigo || a.sku);
+    const pr = prods.find((x) => s(x.id) === s(a.producto_id))
+      || (code ? prods.find((x) => skuCode(s(x.sku)) === code || skuCode(s(x.skuVisible)) === code) : undefined)
+      || (barra ? prods.find((x) => (Array.isArray(x.barras) ? x.barras : []).some((b) => s(b) === barra)) : undefined);
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
     const ya = L.find((l) => s(l.producto_id) === s(pr.id) && s(l.sububicacion) === s(a.sububicacion));
     if (ya) return { error: s(pr.skuVisible || pr.sku) + " ya está en la lista", lineaId: ya.id };
@@ -476,11 +480,18 @@ extend("cf_sec_guardar", "any", async (p, ctx, ses) => {
       orden: L.reduce((m, l) => Math.max(m, n(l.orden)), 0) + 1,
       producto_id: s(pr.id), sku: s(pr.skuVisible || pr.sku), nombre: s(pr.nombre),
       sububicacion: s(a.sububicacion) || s(r.s.sububicacion) || s(r.s.nombre),
-      sistema: round2(sistema), contado: cont, estado: cont == null ? "pendiente" : "contado",
+      sistema: round2(sistema), esperado: round2(sistema), contado: cont, estado: cont == null ? "pendiente" : "contado",
       agregado: true, buscar: false, contado_por: cont == null ? null : actor, contado_at: cont == null ? null : now,
     };
     await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, row);
     agregada = row.id;
+    const linea = {
+      id: row.id, orden: row.orden, productoId: s(row.producto_id), sku: s(row.sku), nombre: s(row.nombre),
+      sububicacion: s(row.sububicacion), fromSub: s(row.sububicacion) || bodegaNombre(s(r.s.bodega), s(r.s.sububicacion)), subCodigo: s(row.sububicacion),
+      sistema: esAdmin(ses.rol) ? n(row.sistema) : null, mov: 0, esperado: n(row.esperado),
+      contado: cont, estado: s(row.estado), subContada: "", buscar: false, otraSub: "", otraQty: null, agregado: true,
+    };
+    return { ok: true, cambiadas, agregada, linea };
   }
   return { ok: true, cambiadas, agregada };
 });

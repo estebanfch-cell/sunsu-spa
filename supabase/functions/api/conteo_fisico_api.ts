@@ -293,20 +293,33 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
   if (p.agregar && typeof p.agregar === "object") {
     const a = p.agregar as Row;
     const prods = await listaProductos(ctx, ses);
-    const pr = prods.find((x) => s(x.id) === s(a.producto_id)) || prods.find((x) => skuCode(s(x.sku)) === skuCode(s(a.sku)));
+    const code = skuCode(s(a.sku || a.codigo || a.barcode));
+    const barra = s(a.barcode || a.codigo || a.sku);
+    const pr = prods.find((x) => s(x.id) === s(a.producto_id))
+      || (code ? prods.find((x) => skuCode(s(x.sku)) === code || skuCode(s(x.skuVisible)) === code) : undefined)
+      || (barra ? prods.find((x) => (Array.isArray(x.barras) ? x.barras : []).some((b) => s(b) === barra)) : undefined);
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
     const ya = r.L.find((l) => s(l.producto_id) === s(pr.id));
     if (ya) return { error: s(pr.skuVisible || pr.sku) + " ya está en la lista del conteo", lineaId: ya.id };
+    // Producto que no estaba en la foto inicial de la bodega: el esperado es 0 (o el stock real si lo hubiera).
     const sistema = sistemaDe(pr, s(r.c.bodega), s(r.c.sububicacion));
     const cont = a.contado == null || a.contado === "" ? null : n(a.contado);
     agregada = {
       id: crypto.randomUUID(), conteo_id: r.c.id, orden: r.L.reduce((m, l) => Math.max(m, n(l.orden)), 0) + 1, producto_id: s(pr.id), sku: s(pr.skuVisible || pr.sku),
-      nombre: s(pr.nombre), sububicacion: s(r.c.sububicacion) || null, sistema: round2(sistema), contado: cont, estado: cont == null ? "pendiente" : "contado",
+      nombre: s(pr.nombre), sububicacion: s(r.c.sububicacion) || null, sistema: round2(sistema), esperado: round2(sistema),
+      contado: cont, estado: cont == null ? "pendiente" : "contado",
       agregado: true, contado_por: cont == null ? null : actor, contado_at: cont == null ? null : now,
     };
     await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, agregada);
   }
-  return { ok: true, cambiadas, agregada: agregada ? agregada.id : null };
+  const linea = agregada ? {
+    id: agregada.id, orden: n(agregada.orden), productoId: s(agregada.producto_id), sku: s(agregada.sku), nombre: s(agregada.nombre),
+    sububicacion: s(agregada.sububicacion), fromSub: bodegaNombre(s(r.c.bodega), s(r.c.sububicacion)), subCodigo: s(agregada.sububicacion),
+    sistema: esAdmin(ses.rol) ? n(agregada.sistema) : null, mov: 0, esperado: n(agregada.esperado ?? agregada.sistema),
+    contado: agregada.contado == null ? null : n(agregada.contado), estado: s(agregada.estado),
+    subContada: "", buscar: false, otraSub: "", otraQty: null, agregado: true,
+  } : null;
+  return { ok: true, cambiadas, agregada: agregada ? agregada.id : null, linea };
 });
 
 extend("cf_enviar", "any", async (p, ctx, ses) => {
