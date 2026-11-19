@@ -882,6 +882,11 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       } catch { /* el ticket ya quedó */ }
     }
   }
+  // TK139: «¡plac!» — cuadre al instante y la factura sale de Borradores.
+  try {
+    const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");
+    out.cuadre = await cuadreTrasTicket(ctx, actor);
+  } catch { /* el ticket ya quedó */ }
   return out;
 }
 
@@ -1589,7 +1594,12 @@ reg("editarTicket", "any", async (p, ctx, ses) => {
   const saved = await ctx.db.write(actorOf(ses), "tickets", "update", matchTicket(row), patch);
   if (!saved) return { error: "No se pudo guardar el ticket" };
   await logAccion(ctx.db, actorOf(ses), "EDITAR TICKET", leerSerie(row, "so_num") || s(row.beta_num) || ("fila " + row.sheet_row));
-  return { ok: true, estimado: patch.estimado, iva: orig.iva, so_num: leerSerie(row, "so_num") };
+  let cuadre: R | undefined;
+  try {
+    const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");
+    cuadre = await cuadreTrasTicket(ctx, actorOf(ses));
+  } catch { /* el ticket ya quedó */ }
+  return { ok: true, estimado: patch.estimado, iva: orig.iva, so_num: leerSerie(row, "so_num"), cuadre };
 });
 
 reg("eliminarTicket", "any", async (p, ctx, ses) => {

@@ -196,6 +196,16 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
   return { creadas, resueltas, nuevas };
 }
 
+async function facturasYaVinculadas(ctx: Ctx): Promise<Set<string>> {
+  const set = new Set<string>();
+  for (const L of await todas(ctx, "beta_cuadre_link")) {
+    if (s(L.factura)) set.add(s(L.factura));
+    const arr = Array.isArray(L.facturas) ? L.facturas as unknown[] : [];
+    for (const f of arr) if (s(f)) set.add(s(f));
+  }
+  return set;
+}
+
 async function syncBorradores(ctx: Ctx, actor: string, facturas: FacturaVivo[], links: LinkCuadre[]): Promise<{ nuevos: number; vinculados: number; creados: Row[] }> {
   const existentes = await todas(ctx, "beta_migo_borradores");
   const byFac = new Map(existentes.map((b) => [s(b.factura), b]));
@@ -442,6 +452,12 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   };
 }
 
+/** TK139: al crear o editar un ticket se corre el motor al instante (vínculo + sale de Borradores). */
+export async function cuadreTrasTicket(ctx: Ctx, actor: string): Promise<Row> {
+  try { return await correrCuadre(ctx, actor); }
+  catch { return { ok: false, omitido: "cuadre" }; }
+}
+
 
 async function adjuntarPdfsMigo(ctx: Ctx, actor: string, raw: unknown): Promise<Row> {
   const items = Array.isArray(raw) ? raw as Row[] : [];
@@ -578,7 +594,8 @@ extend("migo_cuadre_estado", ADMIN, async (_p, ctx) => {
 extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const rows = await todas(ctx, "beta_migo_borradores");
   const vivas = rows.filter((b0) => borradorSePuedeVincular(b0.estado));
-  const sinTicket = (b0: Row) => !s(b0.ticket_clave) && !n(b0.ticket_id);
+  const linkedFac = await facturasYaVinculadas(ctx);
+  const sinTicket = (b0: Row) => !s(b0.ticket_clave) && !n(b0.ticket_id) && !linkedFac.has(s(b0.factura));
   const gestiona = puedeGestionarBorradores(ses);
   // Admin: «mias» = ya completadas, pendientes de aprobar (sin ticket).
   // El personal ve las suyas asignadas que aún no tienen ticket.
@@ -608,7 +625,7 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
     mias: mias.map((b0) => conPub(b0)),
     bandeja: bandeja.map((b0) => conPub(b0, true)),
     vinculados: vinculados.map((b0) => conPub(b0)),
-    pendientes: (gestiona ? vivas : mias).map((b0) => conPub(b0)),
+    pendientes: (gestiona ? vivas.filter(sinTicket) : mias).map((b0) => conPub(b0)),
   };
 });
 

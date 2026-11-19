@@ -37,9 +37,22 @@ export function listoBorrador(b0: Row): boolean {
   return !!(d.completado_at || d.listo_at);
 }
 
-export function abiertoSinTicket(b0: Row): boolean {
+export function abiertoSinTicket(b0: Row, vinculadas?: Set<string>): boolean {
   if (!borradorSePuedeVincular(b0.estado)) return false;
+  if (vinculadas instanceof Set && vinculadas.has(s(b0.factura))) return false;
   return !s(b0.ticket_clave) && !n(b0.ticket_id);
+}
+
+async function facturasVinculadasEnLinks(ctx: Ctx): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    for (const L of await todas(ctx, "beta_cuadre_link")) {
+      if (s(L.factura)) set.add(s(L.factura));
+      const arr = Array.isArray(L.facturas) ? L.facturas as unknown[] : [];
+      for (const f of arr) if (s(f)) set.add(s(f));
+    }
+  } catch { /* sin tabla de links */ }
+  return set;
 }
 
 function cosmYaEnBorrador(b0: Row): string {
@@ -158,7 +171,8 @@ export function itemBorradorHome(b0: Row): Row {
 
 export async function listarBorradoresVisibles(ctx: Ctx, ses: Ses): Promise<Row[]> {
   const rows = await todas(ctx, "beta_migo_borradores");
-  return rows.filter((b0) => abiertoSinTicket(b0) && puedeVerBorrador(ses, b0));
+  const vinculadas = await facturasVinculadasEnLinks(ctx);
+  return rows.filter((b0) => abiertoSinTicket(b0, vinculadas) && puedeVerBorrador(ses, b0));
 }
 
 export async function completarBorradorStaff(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
@@ -209,7 +223,8 @@ export async function completarBorradorStaff(ctx: Ctx, ses: Ses, p: Row): Promis
  */
 export async function listaFacturasBorrador(ctx: Ctx, ses: Ses, hoy: string): Promise<Row[]> {
   const gestiona = puedeGestionarBorradores(ses);
-  const rows = (await todas(ctx, "beta_migo_borradores")).filter((b0) => abiertoSinTicket(b0) && puedeVerBorrador(ses, b0, hoy));
+  const vinculadas = await facturasVinculadasEnLinks(ctx);
+  const rows = (await todas(ctx, "beta_migo_borradores")).filter((b0) => abiertoSinTicket(b0, vinculadas) && puedeVerBorrador(ses, b0, hoy));
   return rows.sort((a, b0) => s(b0.fecha).localeCompare(s(a.fecha)) || s(b0.factura).localeCompare(s(a.factura))).map((b0) => {
     const p = partesCliente(b0), listo = listoBorrador(b0);
     return {

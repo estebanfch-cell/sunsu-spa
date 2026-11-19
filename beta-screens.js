@@ -53,7 +53,7 @@
 // Se toca el dato y se edita ahí. Guardar/Descartar aparecen solo cuando algo cambió. El personal (no admin)
 // ve «📨 Enviar solicitud»: la misma acción viaja como solicitud y Emilia o Emi la aprueban en Solicitudes.
 window._lgAccionTabla={cabinaSaveProducto:'cabina_inventario', cabinaSaveActivo:'cabina_activos', cabinaSaveProtocolo:'cabina_protocolo', saveRegistroCliente:'registro_cliente'};
-function _lgEsAdmin(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master')); }
+function _lgEsAdmin(){ return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='super_admin')); }
 function _lgPide(){ return !!(typeof CU!=='undefined'&&CU)&&!_lgEsAdmin(); }
 function _lgPuedeTocar(){ return !!(typeof CU!=='undefined'&&CU); }
 function _lgTxtGuardar(){ return _lgPide()?'📨 Enviar solicitud':'💾 Guardar'; }
@@ -678,7 +678,7 @@ function _ofrecerBiometria(u){
 // ── Banner: rol de pagos pendiente de aprobar (solo chicas con cédula en el sistema) ──
 function _checkRolPendiente(){
   try{
-    if(!CU||CU.role==='admin'||CU.role==='admin_master') return;
+    if(!CU||CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin') return;
     var ced=(window.CEDULAS_MAP||{})[CU.id]||'';
     if(!ced) return;
     fetch(APPS_SCRIPT_URL+'?action=getRoles&_t='+Date.now())
@@ -772,7 +772,7 @@ function _entrarComo(u){
   // Se limpia la copia local y se pide entrar de nuevo: el login trae el rol.
   // Rol ausente O con un valor viejo que los candados no reconocen: ambas son
   // copias antiguas de la lista de usuarios en este navegador.
-  var ROLES_OK=['admin','admin_master','staff','reception'];
+  var ROLES_OK=['admin','admin_master','super_admin','staff','reception'];
   if(!u||ROLES_OK.indexOf(u.role)<0){
     try{ localStorage.removeItem('sunsu_users'); localStorage.removeItem('sunsu_sesion'); }catch(eSR){}
     toast('🔐 Sesión antigua — vuelve a entrar con tu PIN','#C9761F');
@@ -805,7 +805,8 @@ function _entrarComo(u){
       var uSrv=lU.find(function(x){return x.id===u.id;});
       if(!uSrv||uSrv.bloqueado){ _accesoDeshabilitado_(); return; }
       if(CU&&CU.id===u.id&&uSrv.role!==CU.role){
-        CU.role=uSrv.role; CU.name=uSrv.name||CU.name; CU.short=uSrv.short||CU.short;
+        var rolUi=uSrv.role==='super_admin'?'admin_master':uSrv.role;
+        CU.role=rolUi; CU.name=uSrv.name||CU.name; CU.short=uSrv.short||CU.short;
         toast('🔄 Permisos actualizados','var(--green)');
         if(window._tabActual) showTab(window._tabActual);
       }
@@ -997,7 +998,7 @@ function initApp(){
   document.getElementById('t-av').textContent=CU.short.charAt(0);
   document.getElementById('t-av').style.background=CU.color;
   document.getElementById('t-name').textContent=CU.short;
-  const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||isMaster;
+  const isMaster=CU.role==='admin_master', isAdmin=CU.role==='admin'||CU.role==='super_admin'||isMaster;
   const allTabs=isAdmin
     ?[['inicio','🏠 Dashboard'],['promos','🎉 Promos'],['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['bitacora','📒 Bitácora'],['citas','🗓 Citas'],['historial','📋 Historial'],['catalogo','🏷️ Catálogo'],['dash-admin','📊 Comisiones'],['recepcion','📅 Recepción'],['seguimiento','📞 Seguimiento'],['multas','⚠️ Multas'],['kpis','📈 KPIs'],['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos'],isMaster?['admin','⚙ Usuarios']:null].filter(Boolean)
     :[['ticket','🎫 Ticket'],['tarjetas','📤 Tarjetas'],['registro-cliente','📝 Registro'],['buscar-paquetes','📦 Paquetes'],['buscar-gc','🎁 Gift Cards'],['facturacion','🧾 Facturación'],['entradas','📥 Entradas'],['inventario','📊 Inventario'],['cabina','🧪 Cabina'],['bitacora','📒 Bitácora'],['citas','🗓 Citas'],['historial','📋 Historial'],['dash-cosm','📊 Mi Avance'],...(CU.role==='reception'?[['recepcion','📅 Mi Agenda'],['seguimiento','📞 Seguimiento']]:[]),['caja','💵 Caja'],['roles','📄 Roles'],['permisos','🏖️ Permisos']];
@@ -2247,7 +2248,7 @@ function _promoBetaAuto(){
 function _promoBeta(){
   if(T.esSunsu){ toast('Consumo interno: sin promociones','#C9A227'); return; }
   if(!window.MCPromociones){ toast('Recarga la página para ver las promociones','#C9A227'); return; }
-  var adm=!!(window.state&&state.admin)||(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  var adm=!!(window.state&&state.admin)||(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   window.MCPromociones.panel({auto:true, admin:adm, lineas:function(){ return _promoBetaLineas().filter(function(l){ var d=T.lineDesc&&T.lineDesc[l.k]; return !(d&&!d.promo); }); }, aplicadas:T._promoIds||[], aplicar:function(res,ids,promos){
     // Solo se excluye lo que el admin desmarcó (estaba aplicada o ya excluida); las demás siguen automáticas.
     var prev=(T._promoIds||[]).concat(T._promoQuit||[]);
@@ -3133,6 +3134,9 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+((d&&(d.ticket||d.beta_num))||_tkNum)+' registrado'+_gcMsg,'#6A9E7A');
+    if(d&&d.cuadre&&(Number(d.cuadre.borradores_vinculados||0)>0||Number(d.cuadre.links||0)>0)){
+      toast('Factura aplicada al ticket · salió de Borradores','var(--green)');
+    }
     if(window._migoVincularFac){
       var _vk=(d&&(d.so_num||d.ticket||d.beta_num))||'';
       if(_vk) toast('Vinculada a factura '+window._migoVincularFac+' → ticket '+_vk,'var(--green)');
@@ -3983,7 +3987,7 @@ function enviarGC(){
 // ══════ DASH COSM ══════
 // ══════ SEGUIMIENTO DE RETORNO DE CLIENTAS (reagendamiento) ══════
 function renderSeguimiento(c, seccion){
-  var esPermitidoSeg=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  var esPermitidoSeg=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception');
   if(!esPermitidoSeg){toast('Sin acceso','#B86B6B');return;}
   window._segSecc=seccion||window._segSecc||'facial';
   if(window._segSecc==='paquetes'){ renderSegPaquetes(c); return; }
@@ -4481,7 +4485,7 @@ function _paqWaEnviar(iGlobal){
   .catch(function(){});
 }
 function _renderSeguimientoFacial(c){
-  var esPermitido=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  var esPermitido=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception');
   if(!esPermitido){toast('Sin acceso','#B86B6B');return;}
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📞 Seguimiento de Clientas</div>'
     +_segToggleHTML()
@@ -4885,7 +4889,7 @@ function mostrarDashCosmData(c,d){
   const col=CU.color;
   const neto=Math.max(0,(d.comFaciales||0)+(d.comPaquetes||0)+(d.comProductos||0)+(d.comExtras||0)+(d.comRecepcion||0)-(d.multas||0)-(d.descuentos||0));
   const facialOff=d.comFacialesOn===false||(CU&&CU.comFaciales===false);
-  const isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  const isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   c.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div style="font-size:0.76rem;font-weight:700;color:var(--navy)">📊 Mi Avance</div>
@@ -5064,7 +5068,7 @@ async function _tkGuardarLineas(fila){
   if(t){ ['facial','extras','pack3','pack6','estimado'].forEach(function(k){ if(nv[k]!=null) t[k]=String(nv[k]); });
     if(t.saldo!=null&&Number(t.saldo)>0) t.saldo=parseFloat(t.estimado)||0; }
   if(window.toast) toast('Líneas guardadas · total $'+(parseFloat(nv.estimado)||0).toFixed(2));
-  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   if(typeof _histActualizarRes==='function') _histActualizarRes(esStaff);
 }
 // ── Ticket como orden de venta formal ── Una fila por ítem: Código | Descripción |
@@ -5169,7 +5173,7 @@ function _buildTicketCard(t, showPrices){
   var breakdown=_tkTablaHTML(t, showPrices);
   var fechaFmt=_histFechaFmt(t.fecha);
 
-  var isAdminView=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var isAdminView=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var card='<div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border-left:4px solid '+cosCol+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">';
   card+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
     +'<div style="flex:1">'
@@ -5270,7 +5274,7 @@ function _buildTicketCard(t, showPrices){
 
 // ══════ HISTORIAL ══════
 function renderHistorial(c){
-  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
   window._histCosmFiltro='';
   window._tkServer=true;
@@ -5499,7 +5503,7 @@ function _histOrdenar(list){
 function _histSortBy(k){
   var st=window._histSort||{k:'fecha',d:-1};
   window._histSort= st.k===k ? {k:k,d:-st.d} : {k:k,d:(k==='fecha'||k==='num'||k==='sub'||k==='iva'||k==='tot'||k==='sal')?-1:1};
-  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   _histActualizarRes(esStaff);
 }
 function _histCelda(t, c, showPrices){
@@ -5664,7 +5668,7 @@ function _histAbrirTicket(i){
   // Beta: el detalle es la orden de venta estilo MineCore (mc-tickets.js).
   if(window.MCTickets&&typeof go==='function'){ var kk=window.MCTickets.claveDe(t); if(kk){ go('#/m/tickets/t/'+encodeURIComponent(kk)); return; } }
   window._histTkSel=_histClave(t);
-  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   if(typeof _histActualizarRes==='function' && _histActualizarRes(esStaff)) return;
   var pane=document.getElementById('tk-detail');
   if(!pane) return;
@@ -5686,7 +5690,7 @@ function _histAbrirTicket(i){
 }
 function _histCerrarTicket(){
   window._histTkSel=null;
-  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'));
+  var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   if(typeof _histActualizarRes==='function' && _histActualizarRes(esStaff)) return;
   var pane=document.getElementById('tk-detail');
   if(!pane) return;
@@ -5750,7 +5754,7 @@ function _tkPagoPill(t){
   if(t&&t.sin_cobro) return _tkPill('gris',_tkEtqSinCobro(t.sin_cobro)); // TK98
   if(t&&t.cob) return _tkPill('pagado','Pagado');
   if(_tkPagoMigo(t)){
-    var tip=(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'))?'cobro confirmado en Migo':'';
+    var tip=(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))?'cobro confirmado en Migo':'';
     return _tkPill('pagado','Pagado',tip);
   }
   return _tkPill('porcobrar','Por cobrar');
@@ -7628,7 +7632,7 @@ async function buscarEnRegistroSheet(tipo, valor, avisarNueva) {
 function renderCitas(c){
   const hoy=new Date();
   const fecha=hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
-  const isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
+  const isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception';
 
   // Filter by current user if staff
   let citas=DEMO_CITAS;
@@ -7696,7 +7700,7 @@ function mostrarErrorCitas(c, msg) {
     '<div style="font-size:0.78rem;color:#666;word-break:break-all;margin-bottom:12px">' + msg + '</div>' +
     '<div style="font-size:0.75rem;color:#999;margin-bottom:8px">Mostrando datos demo:</div>' +
     '</div>';
-  const isAdmin = CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
+  const isAdmin = CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception';
   const hoy = new Date();
   const fecha = hoy.toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
   mostrarCitas(c, DEMO_CITAS, isAdmin, fecha, false, true);
@@ -8250,7 +8254,7 @@ function _swrGuarda(k,d){
 function renderCabina(c,fresh){
   var aplicarCb=function(d){
     if(d.sinEstructura){
-      var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
       c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🧪 Cabina</div>'
         +(esAdmin
           ?'<div class="card" style="padding:16px"><div style="font-size:0.78rem;font-weight:800;color:var(--navy);margin-bottom:8px">🚀 Crear la estructura SUNSU CABINA</div>'
@@ -8511,7 +8515,7 @@ function _cabFijoInfo(p){
   var tarifaH=fm/(nf*avg/60);
   return {fijo:tarifaH*mins/60, mins:mins, tarifaH:tarifaH, avg:avg};
 }
-function _cabEsAdmin(){ return CU&&(CU.role==='admin'||CU.role==='admin_master'); }
+function _cabEsAdmin(){ return CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'); }
 function _cabProdDe(cod){
   return (window._cab.inv||[]).find(function(p){return p.codigo===cod;})||null;
 }
@@ -10347,7 +10351,7 @@ function renderRegistroCliente(c){
 }
 function _pintarRegDir(c){
   var items=window._regDirItems||[];
-  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px">'
     +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📇 Registro de Clientas ('+items.length+')</div>'
     +'<button onclick="renderRegistroForm(document.getElementById(\'content\'))" style="padding:8px 13px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer;white-space:nowrap">➕ Crear nuevo registro</button>'
@@ -10387,7 +10391,7 @@ function _regDirToggle(i){
 function _regDirCuerpo(i,editando){
   var it=(window._regDirItems||[])[i]; var b=document.getElementById('regdir-b-'+i);
   if(!it||!b) return;
-  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var fila=function(ic,lbl,v){ return v?'<div style="font-size:0.68rem;margin:3px 0"><b style="color:var(--navy)">'+ic+' '+lbl+':</b> <span style="color:#4A5568">'+v+'</span></div>':''; };
   if(!editando){
     b.innerHTML=fila('🎂','Nacimiento',it.nacimiento)
@@ -10564,7 +10568,7 @@ function _renderCitasList(bd, data, diaNom){
         bd.innerHTML='<div style="padding:20px;color:var(--gray);text-align:center">Sin citas disponibles</div>';
         return;
       }
-      var isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception';
+      var isAdmin=CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception';
       var citas=data
         .filter(function(a){return !a.canceled;})
         .sort(function(a,b){return new Date(a.datetime)-new Date(b.datetime);});
@@ -10621,7 +10625,7 @@ function _renderCitasList(bd, data, diaNom){
 
 // ══════ ELIMINAR TICKET (admin) — borra la fila completa en TICKET_FICHA ══════
 function eliminarTicket(tkRow){
-  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))){toast('Solo administradores','#B86B6B');return;}
   var t=_histData?_histData.find(function(x){return x.tkRow===tkRow;}):null;
   var nombreT=t?((t.nombre||'')+' '+(t.apellido||'')).trim():'';
   if(!confirm('🗑️ ¿Eliminar el ticket #'+tkRow+(nombreT?' de '+nombreT:'')+'?\n\nSe borra TODA la fila en el sheet: facial, productos, extras y comisiones de ese ticket.\nEsta acción no se puede deshacer desde el app.')) return;
@@ -11139,7 +11143,7 @@ function renderInvFisicoDetalle(id){
     if(!pend.length){
       html+='<div class="card" style="text-align:center;padding:22px;color:#2E7D52;font-weight:800">✅ ¡Inventario completo! Todo lo contado cuadra con el sistema actual.</div>';
     } else {
-      var esAdminIF=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      var esAdminIF=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
       pend.forEach(function(f){
         var falta=f.difAhora<0;
         html+='<div class="card" style="padding:12px;margin-bottom:9px;border-left:4px solid '+(falta?'#B86B6B':'#C4943A')+'">'
@@ -11181,7 +11185,7 @@ function renderInventario(c){
     // OJO: el catálogo usa 'HT-101' y el inventario 'SUNSU-HT-101' → normalizamos
     // quitando el prefijo en ambos lados para que el filtro de verdad funcione.
     var activoCat={}, compraRealCat={};
-    var esAdmInv=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
+    var esAdmInv=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='super_admin');
     var veCostoInv=!!(typeof state!=='undefined'&&state.mega)||(CU&&(CU.role==='super_admin'||CU.role==='admin_master'));
     if(Array.isArray(cat)) cat.forEach(function(it){
       var cod=(it.sku||'').toString().trim().replace(/^SUNSU-/,'');
@@ -11294,7 +11298,7 @@ function toggleInvGrupo(gid){
 // ══════ CATÁLOGO (administración completa desde el app — solo admin) ══════
 function renderCatalogoAdmin(c){
   var ixCat=window.SunsuInline;
-  var adminCat=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var adminCat=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   if(!(adminCat||(ixCat&&ixCat.pide()))){c.innerHTML='<div class="card">Solo administradores</div>';return;}
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">🏷️ Catálogo</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando catálogo...</div>';
@@ -11917,7 +11921,7 @@ function _telDeTicket(t){
 }
 function _pintarTarjetasPend(){
   var c=document.getElementById('content');
-  var esAdminT=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='reception');
+  var esAdminT=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'||CU.role==='reception');
   var dia=window._tarjDia||0;
   var f=new Date(); f.setDate(f.getDate()-dia);
   var fStr=f.getFullYear()+'-'+('0'+(f.getMonth()+1)).slice(-2)+'-'+('0'+f.getDate()).slice(-2);
@@ -13214,7 +13218,7 @@ function renderEntradas(c){
         var allDone=grupos[g].items.every(function(it){return it.recibida!==''&&it.recibida!==null&&it.recibida!==undefined;});
         if(!allDone) gruposActivos[g]=grupos[g];
       });
-      var isAdminEnt=CU&&(CU.role==='admin'||CU.role==='admin_master');
+      var isAdminEnt=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
       var ixEnt=window.SunsuInline;
       var editaEnt=ixEnt&&ixEnt.edita();
       var pideEnt=ixEnt&&ixEnt.pide();
@@ -13318,7 +13322,7 @@ function toggleGrupoEntrada(gid){
 
 // ── EDITAR una orden existente: reabre el snapshot en el editor ──
 function editarOrdenApp(numOrden){
-  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))){toast('Solo administradores','#B86B6B');return;}
   toast('⏳ Abriendo la orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL+'?action=getOCDataApp&orden='+encodeURIComponent(numOrden))
   .then(function(r){return r.json();})
@@ -13353,7 +13357,7 @@ function editarOrdenApp(numOrden){
 
 // ── Re-descargar el PDF exacto de una orden generada desde el app (solo admins) ──
 function descargarPDFOrdenApp(numOrden){
-  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'))){toast('Solo administradores','#B86B6B');return;}
+  if(!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))){toast('Solo administradores','#B86B6B');return;}
   toast('⏳ Buscando la orden...','var(--blue)');
   fetch(APPS_SCRIPT_URL+'?action=getOCDataApp&orden='+encodeURIComponent(numOrden))
   .then(function(r){return r.json();})
@@ -13650,7 +13654,7 @@ function _ocEliminarApp(num){
 }
 function renderHistorialOC(){
   var c=document.getElementById('content');
-  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   if(!isAdmin){toast('Solo administradores','#B86B6B');return;}
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📜 Historial de Órdenes de Compra</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
@@ -13730,7 +13734,7 @@ function renderHistorialOC(){
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:0.62rem;font-weight:700;color:#FFD580">'+resumen.trim()+'</span>'
-          +((CU&&(CU.role==='admin'||CU.role==='admin_master'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Reabre la orden como borrador para agregar o quitar productos (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🧾 Reabrir borrador</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
+          +((CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))&&g.orden?'<button onclick="descargarPDFOrdenApp(\''+g.orden+'\')" title="PDF de la orden (solo admin)" style="padding:4px 9px;background:#C9A227;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Orden</button>'+'<button onclick="editarOrdenApp(\''+g.orden+'\')" title="Reabre la orden como borrador para agregar o quitar productos (solo admin)" style="padding:4px 9px;background:#C9761F;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🧾 Reabrir borrador</button>'+'<button onclick="_ocEliminarApp(\''+g.orden+'\')" title="Eliminar la orden completa (solo admin)" style="padding:4px 9px;background:#B86B6B;color:white;border:none;border-radius:8px;font-size:0.62rem;font-weight:700;cursor:pointer">🗑</button>':'')
           +(g.soloFact?'':'<button data-gname="'+key+'" data-orden="'+(g.orden||'—')+'" data-prov="'+g.prov+'" data-src="hist" onclick="generarActaEntrega(this)" style="padding:4px 9px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:7px;font-size:0.62rem;font-weight:700;cursor:pointer">📄 Acta</button>')
           +'<span id="arrow-'+gid+'" onclick="toggleGrupoEntrada(\''+gid+'\')" style="color:white;font-size:0.75rem;cursor:pointer">▶</span>'
           +'</div></div>'
@@ -14923,7 +14927,7 @@ function _buildPaqueteCard(p, enDetalle){
 }
 
 function renderMultas(c){
-  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   if(!isAdmin){c.innerHTML='<div class="card">Sin acceso</div>';return;}
   var cosmsOpts=_nombresMulta_().map(function(n){
     return '<option>'+n+'</option>';
@@ -15050,7 +15054,7 @@ function mostrarBuscarCliente(c){
 
 function ejecutarBusqueda(){
   if(!_histData) return;
-  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var q=((document.getElementById('buscar-q')||{}).value||'').trim().toLowerCase();
   var res=document.getElementById('buscar-res');
   if(!res) return;
@@ -15128,7 +15132,7 @@ function _propPanel(){
 }
 function _propPintar(d){
   var p=document.getElementById('prop-panel'); if(!p) return;
-  var esAdm=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdm=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var staff=(d.staff||[]);
   var h='<div class="card" style="padding:12px;margin-bottom:10px;border:1.5px solid #B0578D">'
     +'<div style="font-size:0.72rem;font-weight:800;color:#B0578D;margin-bottom:6px">💝 Propinas</div>'
@@ -15205,7 +15209,7 @@ function _propPagar(cos,btn){
 }
 function _pintarCajaV2(c){
   var d=window._cajaV2||{};
-  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   if(!d.iniciada){
     c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">💵 Caja Chica</div>'
       +(esAdmin
@@ -15230,7 +15234,7 @@ function _pintarCajaV2(c){
     +'<button onclick="_cajaV2Form(\'descarga\')" style="flex:1;padding:11px;background:#B86B6B;color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">💸 Descarga</button>'
     +'<button onclick="_cajaV2Form(\'deposito\')" style="flex:1;padding:11px;background:var(--navy);color:white;border:none;border-radius:11px;font-size:0.74rem;font-weight:800;cursor:pointer">🏦 Depósito</button>'
     +'</div>'
-    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-bottom:10px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer">⚖️ Cuadrar caja — escribe el conteo físico</button>':'')
+    +((CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-bottom:10px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.68rem;font-weight:800;cursor:pointer">⚖️ Cuadrar caja — escribe el conteo físico</button>':'')
     +'<div id="cv2-form"></div>'
     +'<div style="font-size:0.74rem;font-weight:800;color:var(--navy);margin:6px 0 8px">📒 Movimientos</div>'
     +'<div id="cv2-movs"></div>';
@@ -15377,7 +15381,7 @@ function _cajaRenderForms(){
     // ── REGISTRAR DEPÓSITO ──
     +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--navy)">🏦 Registrar Depósito</div>'    +'<div class="field"><label>Monto a depositar ($)</label>'    +'<input id="cd-monto" type="number" step="0.01" min="0" placeholder="0.00"></div>'    +'<div class="field"><label>¿Quién deposita? (nombre de quien va al banco)</label>'    +'<input id="cd-deposita" type="text" placeholder="Nombre..."></div>'    +'<div class="field"><label>Banco / Referencia</label>'    +'<input id="cd-banco" type="text" placeholder="Ej: Banco Pichincha, ref #123..."></div>'    +'<button onclick="_cajaEnviarDeposito()" style="width:100%;padding:12px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🏦 Registrar Depósito</button>'    +'</div>'
     // ── SINCRONIZAR EFECTIVO ──
-    +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--green)">🔄 Sincronizar Efectivo</div>'    +'<div style="font-size:0.73rem;color:var(--gray);margin-bottom:12px">Actualiza los ingresos en efectivo del día desde los tickets ya registrados.</div>'    +'<button onclick="_cajaSincronizar()" style="width:100%;padding:12px;background:var(--green);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🔄 Sincronizar efectivo ahora</button>'    +((CU&&(CU.role==='admin'||CU.role==='admin_master'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-top:7px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">⚖️ Ajuste de entrada (cuadrar con conteo físico)</button>':'')    +'</div>'
+    +'<div class="card" style="margin-bottom:12px">'    +'<div class="card-title" style="color:var(--green)">🔄 Sincronizar Efectivo</div>'    +'<div style="font-size:0.73rem;color:var(--gray);margin-bottom:12px">Actualiza los ingresos en efectivo del día desde los tickets ya registrados.</div>'    +'<button onclick="_cajaSincronizar()" style="width:100%;padding:12px;background:var(--green);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:700;cursor:pointer">🔄 Sincronizar efectivo ahora</button>'    +((CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'))?'<button onclick="_cajaAjusteEntrada()" style="width:100%;margin-top:7px;padding:9px;background:white;color:var(--navy);border:1.5px solid var(--cream-d);border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer">⚖️ Ajuste de entrada (cuadrar con conteo físico)</button>':'')    +'</div>'
     // ── MOVIMIENTOS HOY ──
     +'<div class="card" style="margin-bottom:12px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'    +'<div class="card-title" style="margin-bottom:0">📋 Movimientos de hoy</div>'    +'<button onclick="_cajaCargarMovimientos()" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:4px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer">🔄</button>'    +'</div>'    +'<div id="caja-movs"><div class="loading"><div class="spinner"></div>Cargando...</div></div>'    +'</div>';
 }
@@ -15672,7 +15676,7 @@ async function descargarRol(sheetName, cedula, btnEl) {
     fin(); alert('No se encontró el rol. Verifica que el rol fue generado y el Sistema Central redesplegado.'); return;
   }
   // Regla: las chicas solo pueden DESCARGAR su rol después de APROBARLO (los admins sí pueden siempre)
-  var esAdminRol=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdminRol=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   if(!esAdminRol && !apro){
     fin();
     toast('👁 Primero visualiza y aprueba tu rol para poder descargarlo','#C9A227');
@@ -15922,7 +15926,7 @@ async function visualizarRol(sheetName, cedula, btnEl){
     modal.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:14px;box-sizing:border-box';
     document.body.appendChild(modal);
   }
-  var esAdminV=CU&&(CU.role==='admin'||CU.role==='admin_master');
+  var esAdminV=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
   var footBtns=function(aprobado){
     return '<div style="display:flex;gap:8px;padding:12px;background:#F6F3EA">'
       +(!aprobado&&!esAdminV?'<button onclick="_aprobarDesdeVista(\''+sheetName+'\',\''+cedula+'\')" style="flex:1;padding:13px;background:#6A9E7A;color:white;border:none;border-radius:11px;font-size:0.85rem;font-weight:800;cursor:pointer">✅ Aprobar mi rol</button>':'')
@@ -16951,7 +16955,7 @@ function _bePdfLayout(doc, ctx){
 function _puedeCotizar(){
   if(!CU) return false;
   var rol=(CU.role||'').toString();
-  if(rol==='admin'||rol==='admin_master') return true;
+  if(rol==='admin'||rol==='admin_master'||rol==='super_admin') return true;
   var uid=(CU.id||'').toString().trim().toLowerCase();
   if(uid==='alejandra') return true;
   var corto=(CU.short||'').toString().trim().toLowerCase();
