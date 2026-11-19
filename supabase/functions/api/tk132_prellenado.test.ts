@@ -61,14 +61,11 @@ describe("TK132 prellenado desde factura", () => {
     assert.equal(cds.telefono, undefined); assert.equal(cds.email, undefined);
   });
 
-  it("staff completa → admin aprueba: el ticket queda con cédula y la ficha se crea con correo, celular y dirección", async () => {
+  it("staff envía el ticket (TK134): queda con cédula y la ficha se crea con correo, celular y dirección", async () => {
     const { db, h } = semilla();
     await h("adm", "migo_clientes_ride", { clientes: [{ factura: FAC, ruc: CED, email: "andres@example.com", telefono: "0991234567", direccion: "Tumbaco" }] });
     const st = await h("and", "crearTicket", { nombre: "Andres", apellido: "Trujillo", estimado: 33.99, cosmetologa: "Andrea Robles", vincular_borrador: FAC });
     assert.equal(st.ok, true, String(st.error));
-    assert.equal((db.tables.get("beta_migo_borradores")![0].datos as Row).cedula, CED, "Pendiente de aprobar guarda la cédula");
-    const ap = await h("adm", "migo_borrador_aprobar", { factura: FAC });
-    assert.equal(ap.ok, true, String(ap.error));
     const tk = db.tables.get("tickets")!.at(-1)!;
     assert.equal(tk.id_3, CED);
     const fic = (db.tables.get("beta_clientes") || []).find((x) => String(x.key).includes(CED));

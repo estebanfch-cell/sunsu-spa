@@ -758,6 +758,12 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   if (facCli && !s(p.cedula)) {
     try { const { clienteDeFactura } = await import("./cliente_factura.ts"); const c = await clienteDeFactura(ctx, facCli); if (c && c.cedula) p = { ...p, cedula: c.cedula }; } catch { /* sin datos del RIDE */ }
   }
+  const { exigeJustificacionDescuento } = await import("./cuadre_lineas.ts");
+  const lineDesc = Array.isArray(p.lineDescuentos) ? p.lineDescuentos as { monto?: unknown; v?: unknown; valor?: unknown }[] : [];
+  const montoDesc = lineDesc.reduce((a, x) => a + n(x.monto ?? x.v ?? x.valor), 0) + (typeof p.descuento === "number" ? n(p.descuento) : 0);
+  const hayDescLbl = typeof p.descuento === "string" && !!s(p.descuento).trim();
+  const errJ = exigeJustificacionDescuento((montoDesc > 0.004 || hayDescLbl) ? Math.max(montoDesc, hayDescLbl ? 1 : 0) : 0, p.justificacion_descuento);
+  if (errJ) return { error: errJ };
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
@@ -791,6 +797,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     orig: {
       ...(s(p.clienteCodigo) || s(p.clienteKey) ? { cliente_codigo: s(p.clienteCodigo), cliente_key: s(p.clienteKey) } : {}),
       ...(descLineas(p.lineDescuentos).length ? { desc_lineas: descLineas(p.lineDescuentos) } : {}),
+      ...(s(p.justificacion_descuento).trim() ? { justificacion_descuento: s(p.justificacion_descuento).trim().slice(0, 400) } : {}),
     },
   };
   const prod = productosPatch((p.productos || {}) as R, false, base);
