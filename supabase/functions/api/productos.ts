@@ -34,15 +34,18 @@ export function grupoDeBodega(b: Row | undefined, sub = ""): { grupo: Grupo; sub
   const id = s(b?.id);
   const cod = s(b?.codigo).toUpperCase();
   const tipo = s(b?.tipo).toLowerCase();
-  const sb = s(sub).toUpperCase().replace(/\s+/g, "_");
-  if (id === BOD_CONSIG || cod === "CONSIGNACION" || tipo === "consignacion") return { grupo: "BCONSIG", sub: "" };
-  if (id === BOD_VENTA || cod === "VENTA" || tipo === "venta") return { grupo: "CONSIGNACION", sub: "" };
-  if (id === BOD_CASA || cod === "CASA" || tipo === "casa") return { grupo: "OFICINA", sub: "" };
-  if (id === BOD_CAB2 || cod === "CAB2") return { grupo: "CABINA", sub: "CABINA_2" };
-  if (id === BOD_CAB3 || cod === "CAB3") return { grupo: "CABINA", sub: "CABINA_3" };
+  const raw = s(sub).trim();
+  const sb = raw.toUpperCase().replace(/\s+/g, "_");
+  const esCab = /^CABINA_?\d+$/.test(sb) || sb === "SIN";
+  const estante = raw && !esCab ? raw : "";
+  if (id === BOD_CONSIG || cod === "CONSIGNACION" || tipo === "consignacion") return { grupo: "BCONSIG", sub: estante };
+  if (id === BOD_VENTA || cod === "VENTA" || tipo === "venta") return { grupo: "CONSIGNACION", sub: estante };
+  if (id === BOD_CASA || cod === "CASA" || tipo === "casa") return { grupo: "OFICINA", sub: estante };
+  if (id === BOD_CAB2 || cod === "CAB2") return { grupo: "CABINA", sub: estante || "CABINA_2" };
+  if (id === BOD_CAB3 || cod === "CAB3") return { grupo: "CABINA", sub: estante || "CABINA_3" };
   if (id === BOD_CABINA || cod === "CABINA" || tipo === "cabina") {
     const m = sb.match(/^CABINA_?(\d+)$/);
-    return { grupo: "CABINA", sub: m ? "CABINA_" + m[1] : "" };
+    return { grupo: "CABINA", sub: m ? "CABINA_" + m[1] : (estante || "") };
   }
   return { grupo: "OTRA", sub: "" };
 }
@@ -258,7 +261,8 @@ export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock
   for (const r of opts.erpStock) {
     const g = grupoDeBodega(bod.get(s(r.bodega_id)), s(r.sububicacion));
     erp[g.grupo] += n(r.cantidad);
-    if (g.grupo === "CABINA" && g.sub) subQ[g.sub] = (subQ[g.sub] || 0) + n(r.cantidad);
+    if (g.grupo === "CABINA" && g.sub && /^CABINA_\d+$/i.test(g.sub)) subQ[g.sub] = (subQ[g.sub] || 0) + n(r.cantidad);
+    else if (g.grupo === "CABINA" && g.sub) { /* estante: el total de cabina ya suma erp.CABINA */ }
   }
   const out: StockGrupo[] = [];
   const consig = opts.ventaLegacy != null ? n(opts.ventaLegacy) + n(opts.consigVendido) : erp.CONSIGNACION;
@@ -281,6 +285,32 @@ export function stockDe(opts: { ventaLegacy?: number | null; cab?: Row; erpStock
   const ofi = (cab ? n(cab.bodega_cerrados) : 0) + erp.OFICINA;
   out.push({ grupo: "OFICINA", nombre: GRUPO_NOMBRE.OFICINA, cantidad: round2(ofi), subs: [], nota: "bodega CASA" });
   if (erp.OTRA) out.push({ grupo: "OTRA", nombre: GRUPO_NOMBRE.OTRA, cantidad: round2(erp.OTRA), subs: [] });
+  return out;
+}
+
+
+/** Stock por estante (grupo|codigo). CABINA_n y vacío = sin estante en esa bodega/cabina. */
+export function claveEstante(grupo: string, sub: string): string {
+  return s(grupo).toUpperCase() + "|" + s(sub);
+}
+export function porEstanteDe(opts: { erpStock: Row[]; bodegas: Row[]; movs?: Row[] }): Record<string, number> {
+  const bod = new Map(opts.bodegas.map((b) => [s(b.id), b]));
+  const out: Record<string, number> = {};
+  const add = (grupo: string, sub: string, q: number) => {
+    if (!q) return;
+    const k = claveEstante(grupo, sub);
+    out[k] = round2((out[k] || 0) + q);
+  };
+  for (const r of opts.erpStock) {
+    const g = grupoDeBodega(bod.get(s(r.bodega_id)), s(r.sububicacion));
+    if (g.grupo === "BCONSIG" || g.grupo === "OTRA") continue;
+    add(g.grupo, g.sub, n(r.cantidad));
+  }
+  for (const m of opts.movs || []) {
+    const gr = s(m.bodega).toUpperCase();
+    if (gr !== "CONSIGNACION" && gr !== "OFICINA" && gr !== "CABINA") continue;
+    add(gr, s(m.sububicacion), n(m.delta));
+  }
   return out;
 }
 

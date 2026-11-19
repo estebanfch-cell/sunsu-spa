@@ -30,10 +30,25 @@ function semilla() {
     { producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 5 },
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
   ]);
-  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones"]) db.tables.set(t, []);
+  for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones", "beta_sububicaciones"]) db.tables.set(t, []);
   const c = { db, now: new Date("2026-11-17T17:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
+}
+
+
+async function sembrarZonas(h: (a: string, u: string, p?: Row) => Promise<Row>) {
+  const zonas = [
+    { nombre: "Venta", bodega: "CONSIGNACION", sububicacion: "", prefijos: "" },
+    { nombre: "Bodega Oficina", bodega: "OFICINA", sububicacion: "", prefijos: "" },
+    { nombre: "Cabina 1", bodega: "CABINA", sububicacion: "CABINA_1", prefijos: "" },
+    { nombre: "Cabina 2", bodega: "CABINA", sububicacion: "CABINA_2", prefijos: "" },
+    { nombre: "Cabina 3", bodega: "CABINA", sububicacion: "CABINA_3", prefijos: "" },
+  ];
+  for (const z of zonas) {
+    const r = await h("cf_zona_save", "adm", z);
+    if (r.error) throw new Error(String(r.error));
+  }
 }
 
 describe("conteo físico beta", () => {
@@ -104,6 +119,7 @@ describe("conteo físico beta", () => {
 describe("TK116 conteo general vivo como MineCore", () => {
   it("se guarda a medias, otra persona lo retoma, y el esperado se actualiza con ventas durante el conteo", async () => {
     const { db, h } = semilla();
+    await sembrarZonas(h);
     const cr = await h("cf_crear_general", "cos", {});
     assert.equal(cr.ok, true);
     assert.equal(cr.numero, "CF-001");
@@ -146,6 +162,7 @@ describe("TK116 conteo general vivo como MineCore", () => {
 
   it("buscar después impide terminar hasta que se quite", async () => {
     const { h } = semilla();
+    await sembrarZonas(h);
     const cr = await h("cf_crear_general", "cos", {});
     const g0 = await h("cf_get_general", "cos", { id: cr.id });
     const venta = (g0.secciones as Row[]).find((s) => s.nombre === "Venta")!;
@@ -177,63 +194,83 @@ describe("TK116 conteo general vivo como MineCore", () => {
   });
 });
 
-describe("TK117 secciones y sububicaciones (admin, como MineCore)", () => {
-  it("el personal no puede crear ni editar; el admin agrega, renombra, reordena, desactiva si ya hubo conteo y crea una sububicación", async () => {
-    const { db, h } = semilla();
-    assert.match(String((await h("cf_zona_save", "cos", { nombre: "Cabina 4", bodega: "CABINA", sububicacion: "CABINA_4" })).error), /admin/i);
+describe("TK117/TK118 secciones y sububicaciones (admin, catálogo vacío)", () => {
+  it("el catálogo empieza vacío; el personal no edita secciones; el admin agrega, renombra, reordena y desactiva; crear un estante no siembra una sección", async () => {
+    const { h } = semilla();
+    assert.match(String((await h("cf_zona_save", "cos", { nombre: "Sección 8", bodega: "CONSIGNACION", prefijos: "8-" })).error), /admin/i);
     const z0 = await h("cf_zonas", "adm", {});
     assert.equal(z0.admin, true);
-    assert.equal((z0.zonas as Row[]).length, 5);
-    const cr = await h("cf_zona_save", "adm", { nombre: "Cabina 4", bodega: "CABINA", sububicacion: "CABINA_4", frecuencia_dias: 15 });
+    assert.equal((z0.zonas as Row[]).length, 0);
+    assert.equal((z0.subs as Row[]).length, 0);
+    assert.equal((z0.lugares as Row[]).length, 5);
+    assert.ok((z0.lugares as Row[]).some((x) => x.nombre === "Venta"));
+    assert.match(String((await h("cf_crear_general", "cos", {})).error || ""), /secciones/i);
+    const cr = await h("cf_zona_save", "adm", { nombre: "Sección 8", bodega: "CONSIGNACION", prefijos: "8-, =", frecuencia_dias: 15 });
     assert.equal(cr.ok, true);
-    const ren = await h("cf_zona_save", "adm", { id: cr.id, nombre: "Cabina cuatro", bodega: "CABINA", sububicacion: "CABINA_4", frecuencia_dias: 15 });
+    const ren = await h("cf_zona_save", "adm", { id: cr.id, nombre: "Sección ocho", bodega: "CONSIGNACION", prefijos: "8-, =", frecuencia_dias: 15 });
     assert.equal(ren.ok, true);
     const z1 = await h("cf_zonas", "adm", {});
     const c4 = (z1.zonas as Row[]).find((x) => x.id === cr.id)!;
-    assert.equal(c4.nombre, "Cabina cuatro");
-    const ids = (z1.zonas as Row[]).map((x) => x.id);
+    assert.equal(c4.nombre, "Sección ocho");
+    const otra = await h("cf_zona_save", "adm", { nombre: "Sección 1", bodega: "OFICINA", prefijos: "1-" });
+    assert.equal(otra.ok, true);
+    const z2pre = await h("cf_zonas", "adm", {});
+    const ids = (z2pre.zonas as Row[]).map((x) => x.id);
     const reord = ids.slice();
     const last = reord.pop()!;
     reord.unshift(last);
     assert.equal((await h("cf_zona_orden", "adm", { ids: reord })).ok, true);
     const z2 = await h("cf_zonas", "adm", {});
-    assert.equal((z2.zonas as Row[])[0].id, cr.id);
+    assert.equal((z2.zonas as Row[])[0].id, otra.id);
     const gen = await h("cf_crear_general", "adm", { asignado_a: "u-ana" });
     assert.equal(gen.ok, true);
     const g = await h("cf_get_general", "adm", { id: gen.id });
-    assert.ok((g.secciones as Row[]).some((s) => s.nombre === "Cabina cuatro"));
-    assert.equal((g.secciones as Row[]).length, 6);
+    assert.ok((g.secciones as Row[]).some((s) => s.nombre === "Sección ocho"));
+    assert.equal((g.secciones as Row[]).length, 2);
     const delUsada = await h("cf_zona_borrar", "adm", { id: cr.id });
     assert.equal(delUsada.desactivada, true);
-    const venta = (z2.zonas as Row[]).find((x) => x.nombre === "Venta")!;
-    // Venta aún no se usó... actually the general count copied all 6 including Venta, so delete should deactivate.
-    const delVenta = await h("cf_zona_borrar", "adm", { id: venta.id });
-    assert.equal(delVenta.desactivada, true);
-    const sub = await h("cf_sub_save", "adm", { bodega: "CABINA", codigo: "CABINA_5", nombre: "Cabina 5", como_seccion: true });
+    const delOtra = await h("cf_zona_borrar", "adm", { id: otra.id });
+    assert.equal(delOtra.desactivada, true);
+    const sub = await h("cf_sub_save", "adm", { bodega: "CONSIGNACION", codigo: "8-A-1", nombre: "Estante 8-A-1" });
     assert.equal(sub.ok, true);
     const z3 = await h("cf_zonas", "adm", {});
-    assert.ok((z3.zonas as Row[]).some((x) => x.sububicacion === "CABINA_5" && x.nombre === "Cabina 5"));
+    assert.ok((z3.subs as Row[]).some((x) => x.codigo === "8-A-1" && x.nombre === "Estante 8-A-1"));
+    assert.ok(!(z3.zonas as Row[]).some((x) => x.sububicacion === "8-A-1"));
   });
 
   it("no se puede desactivar ni mover de bodega una sububicación con stock", async () => {
     const { db, h } = semilla();
-    db.tables.get("erp_sububicaciones")!.push({ id: "s1", bodega_id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA_1", nombre: "Cabina 1", orden: 1, activo: true });
-    // stock of p1 is on VENTA (CONSIGNACION), not cabina — put cabina stock
-    db.tables.get("erp_bodegas")!.push({ id: "22222222-2222-4222-8222-222222222222", codigo: "CABINA", nombre: "Cabina", tipo: "cabina" });
-    db.tables.get("erp_stock")!.push({ producto_id: "p1", bodega_id: "22222222-2222-4222-8222-222222222222", sububicacion: "CABINA_1", cantidad: 3 });
-    const bad = await h("cf_sub_save", "adm", { id: "s1", bodega: "CABINA", codigo: "CABINA_1", nombre: "Cabina 1", mover_a: "OFICINA", activo: true });
+    const sub = await h("cf_sub_save", "adm", { bodega: "CONSIGNACION", codigo: "8-A-1", nombre: "8-A-1" });
+    assert.equal(sub.ok, true);
+    db.tables.get("erp_stock")!.push({ producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", sububicacion: "8-A-1", cantidad: 3 });
+    const bad = await h("cf_sub_save", "adm", { id: sub.id, bodega: "CONSIGNACION", codigo: "8-A-1", nombre: "8-A-1", mover_a: "OFICINA", activo: true });
     assert.match(String(bad.error || ""), /stock/i);
-    const bad2 = await h("cf_sub_save", "adm", { bodega: "CABINA", codigo: "CABINA_1", nombre: "Cabina 1", activo: false });
+    const bad2 = await h("cf_sub_save", "adm", { id: sub.id, bodega: "CONSIGNACION", codigo: "8-A-1", nombre: "8-A-1", activo: false });
     assert.match(String(bad2.error || ""), /stock/i);
+  });
+
+  it("el personal puede crear un estante en el conteo; el producto sin sububicación muestra la bodega", async () => {
+    const { h } = semilla();
+    await sembrarZonas(h);
+    const cr = await h("cf_crear_general", "cos", {});
+    const g0 = await h("cf_get_general", "cos", { id: cr.id });
+    const venta = (g0.secciones as Row[]).find((s) => s.nombre === "Venta")!;
+    await h("cf_sec_iniciar", "cos", { id: venta.id });
+    const get1 = await h("cf_sec_get", "cos", { id: venta.id });
+    const amp = (get1.lineas as Row[]).find((l) => l.sku === "ML-001")!;
+    assert.equal(amp.fromSub, "Venta");
+    const sub = await h("cf_sub_save", "cos", { bodega: "CONSIGNACION", codigo: "8-A-1", nombre: "8-A-1" });
+    assert.equal(sub.ok, true);
+    assert.equal(sub.codigo, "8-A-1");
   });
 
   it("el editor de Secciones está en el front, solo con acciones de admin", () => {
     const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
-    assert.match(js, /Secciones del local/);
+    assert.match(js, /Secciones de/);
     assert.match(js, /cf_zona_save/);
     assert.match(js, /cf_zona_borrar/);
     assert.match(js, /cf_zona_orden/);
-    assert.match(js, /Nueva sububicación/);
+    assert.match(js, /Crear sububicación/);
     assert.match(js, /Solo un admin puede agregar o cambiar/);
     assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
   });

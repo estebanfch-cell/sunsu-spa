@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const src = readFileSync(join(root, "mc-giftcards.js"), "utf8");
 const beta = readFileSync(join(root, "beta.html"), "utf8");
-const CACHE = "20261119tk117"; // TK34 (proveedores) subió la versión después de TK35 giftfunction loadPlan() {
+const CACHE = "20261119tk118"; // TK34 (proveedores) subió la versión después de TK35 giftfunction loadPlan() {
   const m = src.match(/function planEntregaGift\(o\) \{[\s\S]*?return "download-pdf";\n  \}/);
   assert.ok(m, "planEntregaGift debe estar en mc-giftcards.js");
   return new Function(m[0] + "\nreturn planEntregaGift;")() as (o: Record<string, unknown>) => string;
