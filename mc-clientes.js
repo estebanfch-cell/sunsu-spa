@@ -416,7 +416,7 @@
           var det = (h.detalle || []).length ? "<ul>" + h.detalle.map(function (l) { return "<li>" + e(l.nombre) + (l.cantidad > 1 ? " ×" + e(l.cantidad) : "") + "</li>"; }).join("") + "</ul>" : (h.facial && h.facial !== "-" ? "<ul><li>" + e(h.facial) + "</li></ul>" : '<div class="mccf-sub">Sin detalle.</div>');
           var fotos = (h.fotos || []).length ? '<div class="mccl-ph">' + h.fotos.map(function (x) { return '<img data-mini="' + e(x.url) + '" src="' + e(VACIA) + '" alt="' + e(x.nombre) + '" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre + " · " + h.ref) + '">'; }).join("") + "</div>" : "";
           var nota = h.notas ? '<div class="mccf-sub"><b>Notas:</b> ' + e(h.notas) + "</div>" : "";
-          return '<tr data-hx="' + i + '"' + (open ? ' class="open"' : "") + '><td><span class="mccl-car">▸</span> ' + e(f(h.fecha)) + " " + e(h.hora || "") + '</td><td class="mccl-cod">' + e(h.ref) + (h.editadoBeta ? ' <span class="mccl-pend">beta</span>' : "") + "</td><td>" + (window.MCColor ? window.MCColor.pill(h.cosmetologa) : e(h.cosmetologa)) + "</td>" + (d.admin ? '<td class="num">' + e($m(h.total)) + "</td>" : "") + "</tr>" +
+          return '<tr data-hx="' + i + '"' + (open ? ' class="open"' : "") + '><td><span class="mccl-car">▸</span> ' + e(f(h.fecha)) + " " + e(h.hora || "") + '</td><td class="mccl-cod">' + e(h.ref) + (h.editadoBeta ? ' <span class="mccl-pend">editado</span>' : "") + "</td><td>" + (window.MCColor ? window.MCColor.pill(h.cosmetologa) : e(h.cosmetologa)) + "</td>" + (d.admin ? '<td class="num">' + e($m(h.total)) + "</td>" : "") + "</tr>" +
             (open ? '<tr class="mccl-hx"><td colspan="' + nc + '">' + det + nota + fotos + (h.clave ? '<button class="btn ghost small" type="button" data-tk="' + e(h.clave) + '">Abrir ticket</button>' : "") + "</td></tr>" : "");
         }).join("") + "</tbody></table>";
     }
@@ -436,7 +436,7 @@
       if (!grupos.length) return '<p class="mccf-sub">Sin documentos.</p>';
       return '<div class="mcd-list">' + grupos.map(grupoHtml).join("") + "</div>";
     }
-    if (t === "bitacora") return d.bitacora.length ? '<ul class="mc-hist">' + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios hechos en la beta.</p>';
+    if (t === "bitacora") return d.bitacora.length ? '<ul class="mc-hist">' + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios registrados.</p>';
     return "";
   }
   function regHtml() {
@@ -444,7 +444,7 @@
     var val = function (k) { return P[k] != null ? P[k] : d.datos[k] || ""; };
     return '<div class="mccl-reg">' + d.campos.map(function (c) {
       var v = val(c[0]), sh = c[0] === "nacimiento" && v ? f(v) : v;
-      return "<div><b>" + e(lblE(c[1])) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>";
+      return "<div><b>" + e(lblE(c[1])) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>";
     }).join("") + (d.lectura || []).filter(function (c) { return d.datos[c[0]]; }).map(function (c) { return '<div class="ro"><b>' + e(lblE(c[1])) + ":</b> " + e(f(d.datos[c[0]])) + "</div>"; }).join("") + "</div>" +
       (n ? (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
         '<p class="err" id="mccl-err"></p><div class="mccl-acts" style="margin-top:8px"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + " (" + n + ')</button><button class="btn ghost small" type="button" id="mccl-no">Descartar</button></div>' : "");
@@ -455,14 +455,14 @@
       (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
       '<p class="err" id="mccl-err"></p><div class="mccl-acts"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + '</button><button class="btn ghost small" type="button" id="mccl-no">Cancelar</button></div>';
     var v = d.campos.filter(function (c) { return d.datos[c[0]]; });
-    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : d.datos[c[0]]) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido en la beta">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
+    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : d.datos[c[0]]) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
   }
   function htmlFicha() {
     var d = K.d, r = d.resumen, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
     var tabs = [["historial", "Historial (" + d.historial.length + ")"], ["paquetes", "Paquetes (" + d.paquetes.length + ")"], ["gift", "Gift cards (" + d.giftcards.length + ")"], ["docs", "Documentos (" + (d.grupos || agruparDocs(d.documentos || [])).length + ")"]];
     if (d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
     return '<div id="mccl-root"><p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button></p>' +
-      (d.borrado ? '<p class="err">Clienta eliminada en la beta' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
+      (d.borrado ? '<p class="err">Clienta eliminada' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
       '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · CI " + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
       '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
       (d.borrado ? (d.puedeEditar ? '<button class="btn ghost small" type="button" id="mccl-rest">Restaurar</button>' : "") :
@@ -545,7 +545,7 @@
     var d = K.d;
     var del = main.querySelector("#mccl-del");
     if (del) del.onclick = async function () {
-      var mot = prompt(d.puedeEditar ? "¿Eliminar a esta clienta de la beta? Escribe el motivo (queda en el registro; sus tickets no se borran):" : "Motivo para pedir la eliminación:");
+      var mot = prompt(d.puedeEditar ? "¿Eliminar a esta clienta? Escribe el motivo (queda en el registro; sus tickets no se borran):" : "Motivo para pedir la eliminación:");
       if (!mot || !mot.trim()) return;
       var r = d.puedeEditar ? await api("cl_borrar", { key: d.key, motivo: mot }) : await api("solicitud_crear", { tabla: "cliente_beta", fila: d.key, tipo: "eliminacion", motivo: mot });
       if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; }

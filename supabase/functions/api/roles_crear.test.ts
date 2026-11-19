@@ -132,7 +132,7 @@ describe("TK88 rol oficial", () => {
     assert.ok(vista.error, "Ver como no debe aprobar");
 
     const prueba = await handle("rol_aprobar", { token: "t-prueba", id: creado.id }, c) as Row;
-    assert.match(String(prueba.error), /Modo prueba/);
+    assert.match(String(prueba.error), /simulación/i);
 
     const ok = await handle("rol_aprobar", { token: "t-emi", id: creado.id }, c) as Row;
     assert.equal(ok.ok, true, String(ok.error || JSON.stringify(ok)));

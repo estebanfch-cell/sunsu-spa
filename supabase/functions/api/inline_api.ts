@@ -43,7 +43,7 @@ async function anotar(ctx: Ctx, ses: Ses, tabla: string, fila: string, accion: "
 }
 
 function bloqueoPrueba(ses: Ses, row: Row): string | null {
-  if (ses.prueba && s(row.origin) !== "test") return "Modo prueba no cambia datos reales";
+  if (ses.prueba && s(row.origin) !== "test") return "La simulación no cambia datos reales";
   return null;
 }
 
@@ -1144,7 +1144,7 @@ async function guardarPagoFila(ctx: Ctx, ses: Ses, row: Row, prev: Row | null) {
 
 export async function guardarPagoCampos(ctx: Ctx, ses: Ses, fila: string, campos: Row): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin edita directo" };
-  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
+  if (ses.prueba) return { error: "La simulación no cambia la configuración real" };
   const rows = await pagosDe(ctx);
   if (!fila || fila === "nuevo") {
     const row = pagoRow(campos, null);
@@ -1165,7 +1165,7 @@ export async function guardarPagoCampos(ctx: Ctx, ses: Ses, fila: string, campos
 
 export async function borrarPago(ctx: Ctx, ses: Ses, fila: string): Promise<Row> {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina" };
-  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
+  if (ses.prueba) return { error: "La simulación no cambia la configuración real" };
   const rows = await pagosDe(ctx);
   const prev = rows.find((r) => pagoClave(r) === fila || s(r.id) === fila);
   if (!prev) return { error: "Configuración no encontrada" };
@@ -1727,7 +1727,7 @@ async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; d
     const ctxR = { ...ctx, db: prueba.dbReal, ses: prueba.real };
     await prueba.dbReal.write(actorOf(prueba.real), "solicitudes_cambio", "insert", {}, rec);
     const cosaP = hecho.etiqueta ? "«" + hecho.etiqueta + "»" : tabla;
-    try { await pushAPersonas(ctxR, prueba.real, [prueba.real.name], "🧪 PRUEBA · " + ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosaP, "solicitud"); } catch { /* la bandeja igual la muestra */ }
+    try { await pushAPersonas(ctxR, prueba.real, [prueba.real.name], "SIMULACIÓN · " + ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosaP, "solicitud"); } catch { /* la bandeja igual la muestra */ }
     return { ok: true, id, prueba: true };
   }
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
@@ -1767,5 +1767,5 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
   };
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "update", { id: row.id }, patch);
   await anotar(ctx, ses, "solicitudes_cambio", s(row.id), "UPDATE", { estado: "pendiente" }, patch);
-  return { ok: true, estado: patch.estado, ...(row.prueba === true ? { prueba: true, aviso: "Solicitud de prueba: no se cambió ningún dato real" } : {}) };
+  return { ok: true, estado: patch.estado, ...(row.prueba === true ? { prueba: true, aviso: "Solicitud de simulación: no se cambió ningún dato real" } : {}) };
 });

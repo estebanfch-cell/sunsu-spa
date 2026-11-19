@@ -331,7 +331,7 @@ extend("rol_ajustar", "any", async (p, ctx, ses) => {
   if (esTest(ses)) {
     const rows0 = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
     const cur0 = rows0.find((r) => s(r.id) === s(p.id));
-    if (cur0 && s(cur0.origin) !== "test") return { error: "Modo prueba no cambia un rol real." };
+    if (cur0 && s(cur0.origin) !== "test") return { error: "La simulación no cambia un rol real." };
   }
   const rows = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
   const row = rows.find((r) => s(r.id) === s(p.id));
@@ -350,11 +350,11 @@ extend("rol_ajustar", "any", async (p, ctx, ses) => {
 
 extend("rol_aprobar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración aprueba un rol." };
-  if (esTest(ses)) return { error: "Modo prueba no aprueba roles reales." };
+  if (esTest(ses)) return { error: "La simulación no aprueba roles reales." };
   const rows = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
   const row = rows.find((r) => s(r.id) === s(p.id));
   if (!row) return { error: "No encuentro ese rol." };
-  if (s(row.origin) === "test") return { error: "Modo prueba no aprueba roles reales." };
+  if (s(row.origin) === "test") return { error: "La simulación no aprueba roles reales." };
   if (s(row.estado) === "aprobado") return { error: "Ese rol ya está aprobado.", id: row.id, estado: "aprobado" };
   const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
   const now = ctx.now.toISOString();
@@ -369,13 +369,13 @@ extend("rol_aprobar", "any", async (p, ctx, ses) => {
 
 extend("rol_rechazar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración rechaza un rol." };
-  if (esTest(ses)) return { error: "Modo prueba no rechaza roles reales." };
+  if (esTest(ses)) return { error: "La simulación no rechaza roles reales." };
   const motivo = s(p.motivo || p.razon);
   if (!motivo) return { error: "Escribe el motivo para no aprobarlo." };
   const rows = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
   const row = rows.find((r) => s(r.id) === s(p.id));
   if (!row) return { error: "No encuentro ese rol." };
-  if (s(row.origin) === "test") return { error: "Modo prueba no rechaza roles reales." };
+  if (s(row.origin) === "test") return { error: "La simulación no rechaza roles reales." };
   if (s(row.estado) === "aprobado") return { error: "Ese rol ya está aprobado." };
   const now = ctx.now.toISOString();
   await ctx.db.write(actorOf(ses), "beta_roles", "update", { id: row.id }, {

@@ -390,8 +390,8 @@
         : '<div class="ix-estado">' + esc(s.estado) + (s.comentario ? " · " + esc(s.comentario) : "") + "</div>";
       var cuando = s.creado ? new Date(s.creado).toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
       var abrir = s.enlace ? ' <a href="' + esc(s.enlace) + '" data-ix-abrir>Abrir →</a>' : "";
-      var prueba = s.prueba ? '<span class="ix-prueba">PRUEBA</span> ' : "";
-      return '<article class="ix-sol' + (s.prueba ? " prueba" : "") + '"><div>' + prueba + "<b>" + esc(s.solicitante) + "</b> · " + (s.tipo === "eliminacion" ? "pide eliminar" : "pide un cambio") + " · " + cosa + abrir + (cuando ? ' <span class="ix-cuando">' + esc(cuando) + "</span>" : "") + "</div><div><i>Motivo:</i> " + esc(s.motivo) + "</div>" + cuerpo + (s.prueba ? '<div class="ix-nota">Solicitud de prueba: aprobar o rechazar no cambia datos reales.</div>' : "") + acciones + "</article>";
+      var prueba = s.prueba ? '<span class="ix-prueba">SIMULACIÓN</span> ' : "";
+      return '<article class="ix-sol' + (s.prueba ? " prueba" : "") + '"><div>' + prueba + "<b>" + esc(s.solicitante) + "</b> · " + (s.tipo === "eliminacion" ? "pide eliminar" : "pide un cambio") + " · " + cosa + abrir + (cuando ? ' <span class="ix-cuando">' + esc(cuando) + "</span>" : "") + "</div><div><i>Motivo:</i> " + esc(s.motivo) + "</div>" + cuerpo + (s.prueba ? '<div class="ix-nota">Solicitud de simulación: aprobar o rechazar no cambia datos reales.</div>' : "") + acciones + "</article>";
     }).join("") || '<p>No hay solicitudes.</p>';
     overlay.innerHTML = '<div class="ix-sheet"><div class="ix-line"><b>Solicitudes</b><button type="button" id="ix-x">×</button></div>' + items + "</div>";
     document.body.appendChild(overlay);

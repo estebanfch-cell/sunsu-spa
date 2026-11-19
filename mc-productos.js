@@ -282,7 +282,7 @@
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
       '<div class="mcp-count" id="mcp-count"></div>' +
       '<div class="sheet-scroll"><table class="mcp-tbl"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
-      '<p class="note">Una sola lista: catálogo, Cabina y productos de la beta unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
+      '<p class="note">Una sola lista: catálogo, Cabina y productos unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
       "</div>";
   }
   function wireLista(main) {
@@ -605,7 +605,7 @@
       identificacion() +
       (r.archivado ? '<p class="note"><span class="mcp-tag bajo">Archivado</span> por ' + e(r.archivadoPor) + " · " + e(fecha(r.archivadoAt)) + ". No aparece en la lista activa ni en buscadores.</p>" : "") +
       "</div></div>" + secciones() +
-      (p.beta_editado_por ? '<p class="note" style="margin-top:8px">Última edición en la beta: ' + e(p.beta_editado_por) + " · " + e(fecha(p.beta_editado_at)) + "</p>" : "") +
+      (p.beta_editado_por ? '<p class="note" style="margin-top:8px">Última edición: ' + e(p.beta_editado_por) + " · " + e(fecha(p.beta_editado_at)) + "</p>" : "") +
       "</div>";
     function identificacion() {
       var serv = p.tipo === "servicio", pr = r.precios || {}, cv = calcVivo();
@@ -657,7 +657,7 @@
         '<p class="note">' + (puedeAjustar() ? "Toca ✎ para corregir un número: se crea un ajuste de stock con motivo (Inventario → Ajustes de stock). " : "") + "Lo que no tiene cabina asignada queda en «Sin cabina asignada».</p></div>";
     }
     var ed = pr.editadoBeta || [];
-    var badge = function (k) { return ed.indexOf(k) >= 0 ? ' <span class="mcp-tag beta">editado en beta</span>' : ""; };
+    var badge = function (k) { return ed.indexOf(k) >= 0 ? ' <span class="mcp-tag beta">editado</span>' : ""; };
     var right = '<div class="mcp-card"><div class="card-title">' + (MC.admin ? "Precios y costo" : "Precio de venta") + "</div>" +
       '<div class="mcp-sub">Precio PVP (con IVA)' + badge("pvp") + '</div><div class="mcp-pvp">' + V("beta_pvp") + "</div>" +
       '<div class="mcp-ref"><span id="mcp-cv-sub">' + (calcVivo().sub != null ? "Sin IVA " + $m(calcVivo().sub) : "Sin IVA —") + "</span>" + (pr.pvpCatalogo && ed.indexOf("pvp") >= 0 ? " · sistema actual " + $m(pr.pvpCatalogo) : "") + "</div>";
@@ -736,7 +736,7 @@
       [function (r) { return r.tipo === "Ticket" && r.totalLinea != null ? $m(r.totalLinea) : ""; }, "Total línea", 1]];
     if (MC.verCostos) cols.push([function (r) { return r.precio ? $m(r.precio) : ""; }, "Costo compra", 1]);
     cols.push(["estado", "Estado"]);
-    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150). Precio cobrado por línea: los tickets anteriores no guardaban precio por línea; si el ticket tenía solo este producto el precio es el real (total ÷ cantidad); si tenía más cosas se reparte el total cobrado según el precio de lista y se marca «estimado». Un facial usado de paquete no suma. Los tickets nuevos de la beta guardarán cantidad, precio, descuento y total por línea.</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
+    return '<div class="mcp-card"><div class="mcp-sub" style="margin-bottom:6px">Tickets, órdenes de compra y cotizaciones (últimos 150). Precio cobrado por línea: los tickets anteriores no guardaban precio por línea; si el ticket tenía solo este producto el precio es el real (total ÷ cantidad); si tenía más cosas se reparte el total cobrado según el precio de lista y se marca «estimado». Un facial usado de paquete no suma. Los tickets nuevos guardan cantidad, precio, descuento y total por línea.</div>' + mini(cols, MC.cur.historial || [], "Sin tickets, órdenes ni cotizaciones con este producto.") + "</div>";
   }
   function tabMov() {
     var k = MC.cur.kardex || [];
@@ -745,7 +745,7 @@
     var ccols = [[function (r) { return e(fecha(r.fecha)); }, "Fecha"], ["actor", "Quién"], [function (r) {
       return Object.keys(r.cambios || {}).map(function (f) { var d = r.cambios[f] || {}; return "<b>" + e(CAMPOS[f] || f) + "</b>: " + e(d.antes == null ? "—" : d.antes) + " → " + e(d.despues == null ? "—" : d.despues); }).join("<br>");
     }, "Cambio"], ["motivo", "Motivo"]];
-    return '<div class="mcp-card"><div class="card-title">Kardex (beta)</div>' + mini(kcols, k, "Sin movimientos en el kardex de la beta.") +
+    return '<div class="mcp-card"><div class="card-title">Kardex</div>' + mini(kcols, k, "Sin movimientos en el kardex.") +
       '<div class="card-title" style="margin-top:14px">Cambios de la ficha</div>' + mini(ccols, c, "Sin cambios registrados.") + "</div>";
   }
   // ---------- Paridad MineCore: acciones, precios, proveedores, códigos, archivos, protocolo ----------
@@ -1169,7 +1169,7 @@
       var bs = document.getElementById("mcp-guardar"); if (bs) { bs.disabled = true; bs.textContent = "Enviando…"; }
       var rs = await api("solicitud_crear", { tabla: "producto_beta", fila: String(MC.cur.producto.id), tipo: "cambio", motivo: String(MC.motivo).trim(), propuestos: cambios });
       if (!rs || rs.error) { if (bs) { bs.disabled = false; bs.textContent = "📨 Enviar solicitud"; } alert((rs && rs.error) || "No se pudo enviar"); return; }
-      if (typeof toast === "function") toast(rs.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud enviada: un admin la revisa", "var(--green)");
+      if (typeof toast === "function") toast(rs.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Solicitud enviada: un admin la revisa", "var(--green)");
       MC.ch = {}; MC.ed = null; MC.motivo = ""; repintar();
       return;
     }
@@ -1212,7 +1212,7 @@
         if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
         void api("solicitud_crear", { tabla: "producto_beta", fila: String(MC.cur.producto.id), tipo: "eliminacion", motivo: String(mo).trim() }).then(function (rr) {
           if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
-          if (typeof toast === "function") toast(rr.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
+          if (typeof toast === "function") toast(rr.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
         });
         return;
       }
@@ -1316,7 +1316,7 @@
       '<label>Categoría<input name="categoria"></label>' +
       '<label>Uso<select name="uso"><option value="venta">Venta (Consignación)</option><option value="cabina">Cabina</option><option value="ambos">Ambos</option></select></label>' +
       '<label>PVP con IVA (opcional)<input name="pvp" inputmode="decimal" placeholder="Lo puedes poner después en la ficha"></label>' +
-      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre después del mayor de la familia, revisado contra productos, catálogo e inventario de cabina. Los SKU que ya existen no cambian. Se crea en la beta; el catálogo del sistema actual no cambia.</p><p class="err" id="mcp-f-err"></p>' +
+      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre después del mayor de la familia, revisado contra productos, catálogo e inventario de cabina. Los SKU que ya existen no cambian. Se crea aquí.</p><p class="err" id="mcp-f-err"></p>' +
       '<button class="btn" type="submit">Crear producto</button></form>' +
       '<div class="mcp-card"><div class="card-title">Familias de SKU detectadas</div><table class="mcp-mini"><thead><tr><th>Familia</th><th>SKU</th><th>Último</th><th>Siguiente</th></tr></thead><tbody>' + filas + "</tbody></table></div></div>";
   }

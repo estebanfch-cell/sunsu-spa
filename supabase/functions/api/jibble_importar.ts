@@ -109,7 +109,7 @@ export async function importarJibbleRango(ctx: Ctx, ses: Ses, desde: string): Pr
 
 extend("jibble_importar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración importa el historial de Jibble." };
-  if (ses.prueba) return { error: "Modo prueba no escribe el historial real de Jibble." };
+  if (ses.prueba) return { error: "La simulación no escribe el historial real de Jibble." };
   const rows = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
   const max = rows.reduce((m, r) => {
     const f = s(r.fecha).slice(0, 10);

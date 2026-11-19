@@ -35,7 +35,7 @@
     --tab-clear: calc(118px + env(safe-area-inset-bottom, 0px));
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { min-height: 100%; }
+  html, body { min-height: 100%; max-width: 100%; overflow-x: hidden; }
   body {
     background: var(--cream);
     color: var(--text);
@@ -161,6 +161,7 @@
     padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px;
   }
   .reloj-head { display: inline-flex; align-items: center; flex: 0 0 auto; }
+  .top-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; min-width: 0; margin-left: auto; }
   .reloj-btn {
     border: 0; border-radius: 999px; min-height: 32px; padding: 5px 12px;
     font-weight: 800; font-size: 0.72rem; line-height: 1.1; color: #fff; cursor: pointer;
@@ -647,9 +648,11 @@
       padding: 3px 8px 6px; margin-top: -2px;
     }
     .tab-more.on { color: var(--gold); }
-    .reloj-head { display: inline-flex; }
-    .reloj-btn { font-size: 0.68rem; min-height: 30px; padding: 4px 10px; }
-    .top { flex-wrap: nowrap; gap: 6px; padding: 8px 8px; }
+    .reloj-head { display: inline-flex; margin-right: auto; }
+    .reloj-btn { font-size: 0.64rem; min-height: 30px; padding: 4px 8px; max-width: 100%; }
+    .top { flex-wrap: wrap; gap: 6px; padding: 8px 8px; overflow-x: hidden; max-width: 100%; }
+    .top-stack { overflow-x: hidden; max-width: 100%; }
+    .top-actions { flex: 1 1 100%; width: 100%; justify-content: flex-end; gap: 4px; margin-left: 0; }
     .top h1 { min-width: 0; font-size: 0.82rem; }
     .top-icon, .top-salir { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; padding: 0; background: rgba(255,255,255,0.16); color: var(--white); border-color: transparent; border-radius: 8px; font-size: 0.95rem; line-height: 1; text-decoration: none; }
     .top-icon .top-ico-txt { display: none; }
@@ -1599,7 +1602,7 @@ function previewApi(accion, body) {
     const dentro = !!state.previewDentro;
     return {
       ok: true, fecha: ymdEc(), esAdmin: !!state.admin, puedeAprobar: !!state.admin,
-      config: { radio_m: 150, hora_entrada: "09:00", hora_salida: "18:00", gracia_min: 10, punto_listo: true, lat: -0.18, lng: -78.48 },
+      config: { radio_m: 20, hora_entrada: "09:00", hora_salida: "18:00", gracia_min: 10, punto_listo: true, lat: -0.18, lng: -78.48 },
       dia: { atrasoMin: 0, ordinaryMin: dentro ? 90 : 0, suplMin: 0, abierto: dentro, diaContado: false, almuerzoPendiente: false },
       marcajes: dentro ? [{ id: "m1", tipo: "entrada", ts: new Date().toISOString(), anulado: false, tieneFoto: false }] : [],
       empleada: !state.admin,
@@ -1775,7 +1778,7 @@ window.MCFmt = (function () {
 async function api(accion, body = {}) {
   const solPrueba = !!state.vista && accion === "solicitud_crear" && !!state.vistaPrueba;
   if (state.vista && accion !== "ver_como" && !lecturaEnVista(accion) && !solPrueba) {
-    if (accion === "solicitud_crear") return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Activa «🧪 Modo prueba» en la barra de arriba para probar solicitudes." };
+    if (accion === "solicitud_crear") return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Es una vista de solo lectura. Activa «Simular solicitudes» en la barra de arriba para enviar solicitudes que no cambian nada." };
     return { error: "Estás viendo como " + (state.vista.name || "otra persona") + ". Sal de la vista para guardar." };
   }
   if (previewOn()) { const pv = await previewApi(accion, body); return window.MCFmt ? window.MCFmt.resp(pv) : pv; }
@@ -1913,7 +1916,7 @@ function paintLogin(msg) {
       <form class="login-card" id="login-form">
         <div class="lg-tabs" role="tablist"><button type="button" role="tab" class="lg-tab${modo === "pin" ? " on" : ""}" data-modo="pin">PIN</button><button type="button" role="tab" class="lg-tab${modo === "usuario" ? " on" : ""}" data-modo="usuario">Usuario y contraseña</button></div>
         <h2>${modo === "usuario" ? "Entra con tu usuario" : "Entra con tu PIN"}</h2>
-        <p class="lede">Sistema central en prueba. La app de todos los días no cambia.</p>
+        <p class="lede">Sistema central de Sunsu Spa.</p>
         ${campos}
         <p class="err" id="login-err">${esc(msg || "")}</p>
         <button class="btn wide" id="login-btn" type="submit">Entrar</button>
@@ -2161,7 +2164,7 @@ function paintShell(title) {
           <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
         </button>
         ${plus}
-        <span class="beta-tag">BETA</span>
+        
         <nav>${nav}</nav>
         <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a> · <button class="salir" type="button">Salir</button></div>
       </aside>
@@ -2204,23 +2207,25 @@ function paintShell(title) {
             </button>
             <h1>${esc(title || "Dashboard")}</h1>
             ${htmlLocalSel()}
+            <div class="top-actions">
             ${muestraReloj() ? `<div data-reloj-host class="reloj-head">${htmlReloj()}</div>` : ""}
-            ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Modo prueba</button>` : ""}
+            ${state.admin && !state.vista && !state.prueba ? `<button class="btn-prueba" type="button" id="btn-prueba">Simulación</button>` : ""}
             ${state.admin && !state.vista ? `<button class="btn-vista" type="button" id="btn-ver-como">Ver como…</button>` : ""}
             ${!state.vista ? `<button class="btn ghost small top-icon" type="button" id="btn-solicitudes" title="Solicitudes" aria-label="Solicitudes"><span class="top-ico-txt">Solicitudes</span><span class="top-ico" aria-hidden="true">📋</span></button>` : ""}
             <a class="btn ghost small top-salir top-icon" href="#/m/acceso" title="Mi acceso" aria-label="Mi acceso">🔑</a>
             <button class="btn ghost small salir top-salir top-icon" type="button" title="Salir" aria-label="Salir"><span class="top-ico-txt">Salir</span><span class="top-ico" aria-hidden="true">⎋</span></button>
+            </div>
           </header>
-          ${state.vista ? `<div class="vista-bar${state.vistaPrueba ? " prueba" : ""}" id="vista-bar"><span>Viendo como ${esc(state.vista.name || state.vista.short || "…")}${state.vistaPrueba ? ` · <b>🧪 Modo prueba</b>: puedes enviar solicitudes como ${esc(state.vista.short || state.vista.name || "ella")}; llegan a tu bandeja marcadas PRUEBA y aprobarlas o rechazarlas no cambia nada.` : " — solo lectura"}</span><span class="vista-acts"><button type="button" id="vista-prueba" class="${state.vistaPrueba ? "on" : ""}">${state.vistaPrueba ? "Salir de Modo prueba" : "🧪 Modo prueba"}</button> <button type="button" id="vista-salir">Salir</button></span></div>` : ""}
+          ${state.vista ? `<div class="vista-bar${state.vistaPrueba ? " prueba" : ""}" id="vista-bar"><span>Viendo como ${esc(state.vista.name || state.vista.short || "…")}${state.vistaPrueba ? ` · <b>Simulación</b>: puedes enviar solicitudes como ${esc(state.vista.short || state.vista.name || "ella")}; llegan a tu bandeja marcadas como simulación y aprobarlas o rechazarlas no cambia nada.` : " — Vista de solo lectura"}</span><span class="vista-acts"><button type="button" id="vista-prueba" class="${state.vistaPrueba ? "on" : ""}">${state.vistaPrueba ? "Salir de simulación" : "Simular solicitudes"}</button> <button type="button" id="vista-salir">Salir</button></span></div>` : ""}
           <div class="aviso-reloj" id="aviso-reloj" hidden></div>
           <div class="modo-prueba" id="modo-bar" ${state.prueba ? "" : "hidden"}>
             <div>
-              <strong>MODO PRUEBA</strong>
-              <span class="modo-note">Los cambios quedan en el juego de prueba. El stock y los números reales no se mueven.</span>
+              <strong>SIMULACIÓN</strong>
+              <span class="modo-note">Los cambios no afectan los datos reales ni los números de la operación.</span>
             </div>
             <div class="modo-actions">
-              ${state.admin ? `<button class="btn small" type="button" id="btn-purga">Borrar datos de prueba</button>` : ""}
-              <button class="btn small" type="button" id="btn-prueba-off">Salir de prueba</button>
+              ${state.admin ? `<button class="btn small" type="button" id="btn-purga">Borrar datos de simulación</button>` : ""}
+              <button class="btn small" type="button" id="btn-prueba-off">Salir de la simulación</button>
             </div>
           </div>
         </div>
@@ -2260,7 +2265,7 @@ function paintShell(title) {
   if (btnVistaPrueba) btnVistaPrueba.onclick = () => {
     state.vistaPrueba = !state.vistaPrueba;
     if (state.vistaPrueba) sessionStorage.setItem("sunsu.beta.vista.prueba", "1"); else sessionStorage.removeItem("sunsu.beta.vista.prueba");
-    toast(state.vistaPrueba ? "🧪 Modo prueba: las solicitudes que envíes llegan a tu bandeja como PRUEBA" : "Modo prueba apagado: la vista vuelve a ser solo lectura");
+    toast(state.vistaPrueba ? "Simulación: las solicitudes que envíes llegan a tu bandeja y no cambian datos reales" : "Simulación apagada: la vista vuelve a ser de solo lectura");
     draw();
   };
   const btnVistaSalir = document.getElementById("vista-salir");
@@ -2301,10 +2306,10 @@ function paintShell(title) {
   if (btnOff) btnOff.onclick = () => alternarPrueba(false);
   const btnPurga = document.getElementById("btn-purga");
   if (btnPurga) btnPurga.onclick = async () => {
-    if (!window.confirm("¿Borrar todos los datos de prueba? Los datos reales se quedan.")) return;
+    if (!window.confirm("¿Borrar todos los datos de simulación? Los datos reales se quedan.")) return;
     const data = await api("prueba_borrar");
     if (!data || data.error) { toast((data && data.error) || "No se pudo borrar"); return; }
-    toast("Datos de prueba borrados (" + (data.borradas || 0) + ")");
+    toast("Datos de simulación borrados (" + (data.borradas || 0) + ")");
     draw();
   };
   root.querySelectorAll(".logo-hit").forEach((b) => {
@@ -2326,7 +2331,7 @@ function paintShell(title) {
 
 async function alternarPrueba(on) {
   const data = await api("modo_prueba", { on: !!on });
-  if (!data || data.error) { toast((data && data.error) || "No se pudo cambiar el modo prueba"); return; }
+  if (!data || data.error) { toast((data && data.error) || "No se pudo cambiar la simulación"); return; }
   state.prueba = !!data.modo_prueba;
   draw();
 }
@@ -2368,7 +2373,7 @@ function pintarFly() {
 }
 
 function banner() {
-  return `<div class="banner">Esta es la beta. sunsu.html sigue siendo la operación. Lo que guardes aquí vive en Supabase.</div>`;
+  return "";
 }
 function fail(data) {
   return `<p class="err">${esc((data && data.error) || "No se pudo cargar.")}</p>`;
@@ -2830,7 +2835,7 @@ async function renderAprobaciones() {
       const acc = it.tipo === "solicitud" && it.id
         ? `<button class="btn small" type="button" data-apr-ok="${esc(it.id)}">Aprobar</button><button class="btn ghost small" type="button" data-apr-no="${esc(it.id)}">Rechazar</button>`
         : `<button class="btn ghost small" type="button" data-go="${esc(it.href || g.href || "#/m/inicio")}">Abrir</button>`;
-      return `<div class="apr-fila"><div class="name">${esc(it.titulo || "")}${it.prueba ? ' <span class="ix-prueba">PRUEBA</span>' : ""}</div><div class="note">${esc(it.detalle || "")}</div><div class="meta">${acc}</div></div>`;
+      return `<div class="apr-fila"><div class="name">${esc(it.titulo || "")}${it.prueba ? ' <span class="ix-prueba">SIMULACIÓN</span>' : ""}</div><div class="note">${esc(it.detalle || "")}</div><div class="meta">${acc}</div></div>`;
     }).join("") || `<p class="note">Nada pendiente aquí.</p>`;
     return `<div class="card apr-grupo"><div class="card-title">${esc(g.titulo)} <span class="apr-n">${esc(g.n || 0)}</span></div>${filas}${g.href && g.id !== "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" data-go="${esc(g.href)}">Ver todos</button></p>` : (g.id === "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" id="apr-panel-sol">Panel de solicitudes</button></p>` : "")}</div>`;
   }).join("");
@@ -4107,7 +4112,7 @@ async function htmlAsisConfig() {
       <label>Lugar <input name="lugar_nombre" value="${esc(cfg.lugar_nombre || "C.C. La Esquina")}"></label>
       <label>Lat. <input name="lat" value="${esc(cfg.lat ?? "")}" inputmode="decimal"></label>
       <label>Lng. <input name="lng" value="${esc(cfg.lng ?? "")}" inputmode="decimal"></label>
-      <label>Radio m <input name="radio_m" type="number" min="20" step="5" value="${esc(cfg.radio_m ?? 150)}"></label>
+      <label>Radio m <input name="radio_m" type="number" min="20" step="5" value="${esc(cfg.radio_m ?? 20)}"></label>
       <label>Entrada <input name="hora_entrada" type="time" value="${esc(cfg.hora_entrada || "09:00")}"></label>
       <label>Salida <input name="hora_salida" type="time" value="${esc(cfg.hora_salida || "18:00")}"></label>
       <label>Gracia <input name="gracia_min" type="number" min="0" step="1" value="${esc(cfg.gracia_min ?? 10)}"></label>
@@ -4312,7 +4317,7 @@ async function renderAsistencia() {
     <form id="f-asis-mes"><label>Mes</label><input name="mes" type="month" value="${esc((hoy.fecha || "").slice(0, 7))}"><button class="btn" type="submit">Ver horas</button></form>
     <div id="asis-mes"></div>` : "";
   return sel + `
-    <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 150)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
+    <p class="note">Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 20)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
     ${htmlAsisCalendario(cal, vistaAsis, fechaAsis)}
     ${chipHoy}
     ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
@@ -4633,7 +4638,7 @@ function htmlRolOficial(pack) {
   const canAct = admin && pack.estado !== "aprobado" && !state.prueba && !state.vista;
   const acciones = canAct
     ? `<div class="rol-acciones"><button class="btn" type="button" data-rol-ok="${esc(pack.id || "")}">Aprobar rol</button><button class="btn ghost" type="button" data-rol-no="${esc(pack.id || "")}">No aprobar</button><button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button></div>`
-    : `<div class="rol-acciones">${admin ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : (pack.estado === "aprobado" ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : "")}${state.prueba || state.vista ? `<p class="note">En «Ver como» o modo prueba no se aprueban roles reales.</p>` : ""}</div>`;
+    : `<div class="rol-acciones">${admin ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : (pack.estado === "aprobado" ? `<button class="btn ghost small" type="button" data-rol-pdf="${esc(pack.id || "")}">Descargar PDF</button>` : "")}${state.prueba || state.vista ? `<p class="note">En «Ver como» o en simulación no se aprueban roles reales.</p>` : ""}</div>`;
   return `<div class="card rol-oficial" data-rol-id="${esc(pack.id || "")}">
     <div class="card-title">Rol de pagos ${rolPill(pack.estado)} · ${esc(d.etiqueta || pack.etiqueta || pack.periodo || "")}</div>
     <p class="note">${esc(d.nombre || pack.persona || "")}${d.cargo ? " · " + esc(d.cargo) : ""}${d.cedula ? " · " + esc(d.cedula) : ""}<br>
@@ -4816,7 +4821,7 @@ async function renderGcLista() {
   const data = await api("gc_list", { q: state.giftQ || "*" });
   if (data.error) return fail(data);
   const items = (data.items || []).map((g) => `<button class="row" type="button" data-go="#/m/gift/cards/${encodeURIComponent(g.codigo)}"><div class="sku">${esc(g.codigo)}</div><div><div class="name">${esc(((g.nombre || "") + " " + (g.apellido || "")).trim() || "Sin nombre")}</div><div class="note">${g.usado ? "Usada" : "Disponible"}</div></div><div class="meta">${money(g.saldo)}</div></button>`).join("");
-  const emitir = state.admin ? `<form id="f-gc-emitir" class="card"><div class="card-title">Nueva gift card</div><p class="note">El código sigue la serie del año (26-065, 26-066). En modo prueba sale TEST- y no gasta el número real.</p>
+  const emitir = state.admin ? `<form id="f-gc-emitir" class="card"><div class="card-title">Nueva gift card</div><p class="note">El código sigue la serie del año (26-065, 26-066). En simulación el código no gasta el número real.</p>
       <div class="field"><label>Valor</label><input name="valor" value="65" inputmode="decimal"></div>
       <div class="two-col"><div class="field"><label>Nombre</label><input name="nombre"></div><div class="field"><label>Apellido</label><input name="apellido"></div></div>
       <div class="field"><label>Cédula</label><input name="cedula"></div>
@@ -4846,7 +4851,7 @@ async function renderPaqLista() {
   const data = await api("paq_list", { q: state.giftQ || "*" });
   if (data.error) return fail(data);
   const items = (data.items || []).map((p) => `<button class="row" type="button" data-go="#/m/gift/paquetes/${encodeURIComponent(p.codigo || p.fila)}"><div class="sku">${esc(p.codigo || p.cedula)}</div><div><div class="name">${esc(((p.nombre || "") + " " + (p.apellido || "")).trim() || "Sin nombre")}</div><div class="note">${esc(p.paquete || p.sku)}</div></div><div class="meta">${esc(p.usados)}/${esc((p.usos || []).length || "")}</div></button>`).join("");
-  const emitir = state.admin ? `<form id="f-paq-emitir" class="card"><div class="card-title">Nuevo paquete</div><p class="note">La serie propia es PQ-0001, PQ-0002. En modo prueba sale TEST-PQ- y no gasta el número real.</p>
+  const emitir = state.admin ? `<form id="f-paq-emitir" class="card"><div class="card-title">Nuevo paquete</div><p class="note">La serie propia es PQ-0001, PQ-0002. En simulación el código no gasta el número real.</p>
       <div class="two-col"><div class="field"><label>Nombre</label><input name="nombre" required></div><div class="field"><label>Apellido</label><input name="apellido"></div></div>
       <div class="field"><label>Cédula</label><input name="cedula"></div>
       <div class="field"><label>Paquete</label><input name="paquete" placeholder="Glow x3"></div>
@@ -6660,7 +6665,7 @@ function wirePersonal(main) {
         return;
       }
       if (t.hasAttribute("data-rol-ok")) {
-        if (state.prueba || state.vista) { toast("En «Ver como» o modo prueba no se aprueban roles reales."); return; }
+        if (state.prueba || state.vista) { toast("En «Ver como» o en simulación no se aprueban roles reales."); return; }
         const data = await api("rol_aprobar", { id });
         if (data.error) { toast(data.error); return; }
         toast("Rol aprobado y publicado");
@@ -6669,7 +6674,7 @@ function wirePersonal(main) {
         return;
       }
       if (t.hasAttribute("data-rol-no")) {
-        if (state.prueba || state.vista) { toast("En «Ver como» o modo prueba no se rechazan roles reales."); return; }
+        if (state.prueba || state.vista) { toast("En «Ver como» o en simulación no se rechazan roles reales."); return; }
         const motivo = window.prompt("¿Por qué no se aprueba este rol?");
         if (!motivo) return;
         const data = await api("rol_rechazar", { id, motivo });
@@ -6857,40 +6862,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk101"></script>
-<script src="beta-screens.js?v=20261118tk101"></script>
-<script src="beta-inline.js?v=20261118tk101"></script>
-<script src="mc-productos.js?v=20261118tk101"></script>
-<script src="mc-nav.js?v=20261118tk101"></script>
-<script src="mc-permisos.js?v=20261118tk101"></script>
-<script src="mc-protocolos.js?v=20261118tk101"></script>
-<script src="mc-conteo.js?v=20261118tk101"></script>
-<script src="mc-transferencias.js?v=20261118tk101"></script>
-<script src="mc-ajustes.js?v=20261118tk101"></script>
-<script src="vendor-qrcode.js?v=20261118tk101"></script>
-<script src="mc-tickets.js?v=20261118tk101"></script>
-<script src="mc-maestro.js?v=20261118tk101"></script>
-<script src="mc-empleados.js?v=20261118tk101"></script>
-<script src="mc-edit.js?v=20261118tk101"></script>
-<script src="mc-paquetes.js?v=20261118tk101"></script>
-<script src="mc-aperturas.js?v=20261118tk101"></script>
-<script src="mc-acceso.js?v=20261118tk101"></script>
-<script src="mc-barras.js?v=20261118tk101"></script>
-<script src="mc-caja.js?v=20261118tk101"></script>
-<script src="mc-giftcards.js?v=20261118tk101"></script>
-<script src="mc-multas.js?v=20261118tk101"></script>
-<script src="mc-clientes.js?v=20261118tk101"></script>
-<script src="mc-clientes-dup.js?v=20261118tk101"></script>
-<script src="mc-docpdf.js?v=20261118tk101"></script>
-<script src="mc-compras.js?v=20261118tk101"></script>
-<script src="mc-consignacion.js?v=20261118tk101"></script>
-<script src="mc-proveedores.js?v=20261118tk101"></script>
-<script src="mc-recepciones.js?v=20261118tk101"></script>
-<script src="mc-movil.js?v=20261118tk101"></script>
-<script src="mc-promociones.js?v=20261118tk101"></script>
-<script src="mc-agenda.js?v=20261118tk101"></script>
-<script src="mc-staff-home.js?v=20261118tk101"></script>
-<script src="mc-borradores.js?v=20261118tk101"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk102"></script>
+<script src="beta-screens.js?v=20261118tk102"></script>
+<script src="beta-inline.js?v=20261118tk102"></script>
+<script src="mc-productos.js?v=20261118tk102"></script>
+<script src="mc-nav.js?v=20261118tk102"></script>
+<script src="mc-permisos.js?v=20261118tk102"></script>
+<script src="mc-protocolos.js?v=20261118tk102"></script>
+<script src="mc-conteo.js?v=20261118tk102"></script>
+<script src="mc-transferencias.js?v=20261118tk102"></script>
+<script src="mc-ajustes.js?v=20261118tk102"></script>
+<script src="vendor-qrcode.js?v=20261118tk102"></script>
+<script src="mc-tickets.js?v=20261118tk102"></script>
+<script src="mc-maestro.js?v=20261118tk102"></script>
+<script src="mc-empleados.js?v=20261118tk102"></script>
+<script src="mc-edit.js?v=20261118tk102"></script>
+<script src="mc-paquetes.js?v=20261118tk102"></script>
+<script src="mc-aperturas.js?v=20261118tk102"></script>
+<script src="mc-acceso.js?v=20261118tk102"></script>
+<script src="mc-barras.js?v=20261118tk102"></script>
+<script src="mc-caja.js?v=20261118tk102"></script>
+<script src="mc-giftcards.js?v=20261118tk102"></script>
+<script src="mc-multas.js?v=20261118tk102"></script>
+<script src="mc-clientes.js?v=20261118tk102"></script>
+<script src="mc-clientes-dup.js?v=20261118tk102"></script>
+<script src="mc-docpdf.js?v=20261118tk102"></script>
+<script src="mc-compras.js?v=20261118tk102"></script>
+<script src="mc-consignacion.js?v=20261118tk102"></script>
+<script src="mc-proveedores.js?v=20261118tk102"></script>
+<script src="mc-recepciones.js?v=20261118tk102"></script>
+<script src="mc-movil.js?v=20261118tk102"></script>
+<script src="mc-promociones.js?v=20261118tk102"></script>
+<script src="mc-agenda.js?v=20261118tk102"></script>
+<script src="mc-staff-home.js?v=20261118tk102"></script>
+<script src="mc-borradores.js?v=20261118tk102"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
