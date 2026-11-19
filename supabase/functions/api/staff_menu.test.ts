@@ -19,5 +19,8 @@ describe("TK71 menú del personal", () => {
     assert.match(nav, /g\.id === "protocolos" \|\| g\.id === "reportes"/);
     assert.match(nav, /Compras solo Recepciones/);
     assert.match(nav, /rol === "recepcion"/);
-    assert.match(beta, /mc-nav\.js\?v=20261118tk107/);  });
+    assert.match(nav, /productos\|conteos.*Conteo físico/);
+    assert.match(html, /function rutaInventarioAdmin/);
+    assert.match(html, /if \(!state\.admin\) return ""/);
+    assert.match(beta, /mc-nav\.js\?v=20261118tk108/);  });
 });

@@ -44,7 +44,7 @@ describe("menú MineCore (mc-nav.js)", () => {
     assert.deepEqual([...rec.crearItems().map((x) => x[1])], ["🎫 Nuevo ticket", "📝 Nueva cotización", "💵 Ingreso / gasto de caja chica", "📦 Abrir producto"]);
   });
 
-  it("personal: sin Bodega ni Reportes ni Protocolos; Compras solo Recepciones; Venta/Cabina en Inventario; Recepción solo recepcionista", () => {
+  it("personal: sin Bodega ni Reportes ni Protocolos; Compras solo Recepciones; Inventario solo Productos y Conteo físico; Recepción solo recepcionista", () => {
     const staffAcc = { ...TODO, clientes: "todos", recepciones: "todos", agenda: "todos" };
     const cos = cargar("cosmetologa", staffAcc);
     const ids = cos.grupos().filter((x) => !x.soloMovil).map((x) => x.id);
@@ -55,8 +55,12 @@ describe("menú MineCore (mc-nav.js)", () => {
     const compras = cos.grupos().find((x) => x.id === "compras")!.items.map((i) => i[2]);
     assert.deepEqual([...compras], ["#/m/recepciones"]);
     const inv = cos.grupos().find((x) => x.id === "inventario")!.items.map((i) => i[2]);
-    assert.ok(inv.includes("#/m/inventario/venta") && inv.includes("#/m/inventario/cabina"));
+    assert.deepEqual([...inv], ["#/m/productos", "#/m/conteos"]);
+    assert.ok(!inv.includes("#/m/inventario/venta") && !inv.includes("#/m/inventario/cabina"));
+    assert.ok(!inv.includes("#/m/barras") && !inv.includes("#/m/transferencias") && !inv.includes("#/m/ajustes"));
     assert.ok(!inv.includes("#/m/aperturas/costo"));
+    const invTxt = cos.grupos().find((x) => x.id === "inventario")!.items.map((i) => i[1]).join("|");
+    assert.match(invTxt, /Conteo físico/);
     const spa = cos.grupos().find((x) => x.id === "spa")!.items;
     const spaHash = spa.map((i) => i[2]);
     assert.ok(spaHash.includes("#/m/gift/cards") && spaHash.includes("#/m/gift/paquetes") && spaHash.includes("#/m/bitacora"));

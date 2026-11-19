@@ -38,7 +38,7 @@ function semilla() {
 describe("conteo físico beta", () => {
   it("flujo completo: crear → aviso → empezar (foto del sistema) → contar → enviar → devolver → aprobar sin mover stock", async () => {
     const { db, h } = semilla();
-    assert.match(String((await h("cf_crear", "cos", { bodega: "CONSIGNACION", asignado_a: "u-ana" })).error), /admin/);
+    assert.match(String((await h("cf_crear", "cos", { bodega: "CONSIGNACION", asignado_a: "u-bea" })).error), /para ti/);
     const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", nota: "Inventario inicial" });
     assert.equal(cr.numero, "CF-001");
     assert.match(String((await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-bea" })).error), /Ya hay un conteo abierto/);
@@ -80,5 +80,22 @@ describe("conteo físico beta", () => {
     assert.equal(((await h("cf_get", "adm", { id: cr.id })).conteo as Row).estado, "aprobado");
     await h("notif_leer", "cos", { todas: true });
     assert.equal((await h("notif_mias", "cos")).sinLeer, 0);
+  });
+  it("TK108: el personal crea un conteo para sí, lo envía y el admin lo aprueba sin mover stock", async () => {
+    const { db, h } = semilla();
+    const cr = await h("cf_crear", "cos", { bodega: "CONSIGNACION" });
+    assert.equal(cr.ok, true);
+    assert.equal(cr.numero, "CF-001");
+    const ini = await h("cf_iniciar", "cos", { id: cr.id });
+    assert.ok(Number(ini.lineas) >= 1);
+    const g = await h("cf_get", "cos", { id: cr.id });
+    assert.equal(g.ciego, true);
+    const L = g.lineas as Row[];
+    await h("cf_guardar", "cos", { id: cr.id, lineas: L.map((l) => ({ id: l.id, contado: 1 })) });
+    assert.equal((await h("cf_enviar", "cos", { id: cr.id })).ok, true);
+    const stockAntes = JSON.stringify(db.tables.get("erp_stock"));
+    const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
+    assert.equal(ap.stockAplicado, false);
+    assert.equal(JSON.stringify(db.tables.get("erp_stock")), stockAntes);
   });
 });

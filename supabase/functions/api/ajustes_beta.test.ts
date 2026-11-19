@@ -56,22 +56,17 @@ describe("ajustes de stock beta", () => {
     const f = await h("mcprod_get", "adm", { id: "p1" });
     assert.ok((f.kardex as Row[]).some((k) => k.doc === "AJ-001" && k.delta === -2));
   });
-  it("no admin: queda pendiente hasta que un admin apruebe; rechazar no mueve stock; sin permiso no ve", async () => {
-    const { db, h } = semilla();
-    assert.equal((await h("aj_list", "rec")).ok, true); // recepción tiene inventario completo por defecto: puede pedir ajustes
-    const r = await h("aj_crear", "cos", { bodega: "CONSIGNACION", motivo: "Vencido", lineas: [{ producto_id: "p2", nuevo: 1 }] });
-    assert.equal(r.estado, "pendiente");
-    assert.equal(db.tables.get("beta_stock_movimientos")!.length, 0);
-    assert.equal((await h("notif_mias", "adm")).sinLeer, 1);
-    assert.match(String((await h("aj_revisar", "cos", { id: r.id, que: "aprobar" })).error), /admin/);
-    assert.equal((await h("aj_revisar", "adm", { id: r.id, que: "aprobar" })).estado, "aplicado");
+  it("TK108: el personal no lista ni crea ajustes; un admin los aplica al crear", async () => {
+    const { h } = semilla();
+    assert.match(String((await h("aj_list", "rec")).error), /permiso/);
+    assert.match(String((await h("aj_crear", "cos", { bodega: "CONSIGNACION", motivo: "Vencido", lineas: [{ producto_id: "p2", nuevo: 1 }] })).error), /permiso/);
+    const r = await h("aj_crear", "adm", { origen: "ficha", bodega: "CONSIGNACION", motivo: "Vencido", lineas: [{ producto_id: "p2", nuevo: 1 }] });
+    assert.equal(r.estado, "aplicado");
     assert.equal((await stock(h, "p2")).CONSIGNACION, 1);
-    const r2 = await h("aj_crear", "cos", { bodega: "CONSIGNACION", motivo: "Pérdida / robo", lineas: [{ producto_id: "p1", delta: -1 }] });
-    assert.match(String((await h("aj_revisar", "adm", { id: r2.id, que: "rechazar" })).error), /por qué/);
-    await h("aj_revisar", "adm", { id: r2.id, que: "rechazar", motivo: "No cuadra" });
-    assert.equal((await stock(h, "p1")).CONSIGNACION, 5);
-    const ls = (await h("aj_list", "adm")).items as Row[];
-    assert.deepEqual(ls.map((a) => [a.numero, a.estado]).sort(), [["AJ-001", "aplicado"], ["AJ-002", "rechazado"]]);
+    const r2 = await h("aj_crear", "adm", { bodega: "CONSIGNACION", motivo: "Pérdida / robo", lineas: [{ producto_id: "p1", delta: -1 }] });
+    assert.equal(r2.estado, "aplicado");
+    assert.equal((await stock(h, "p1")).CONSIGNACION, 4);
+    assert.match(String((await h("aj_revisar", "cos", { id: r2.id, que: "aprobar" })).error), /ya está|admin/i);
   });
   it("un conteo aprobado NO pasa a stock hasta que Emilia confirme", async () => {
     const { h } = semilla();

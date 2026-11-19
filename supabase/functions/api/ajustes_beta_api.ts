@@ -23,9 +23,8 @@ export const CONTEO_A_STOCK = false;
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_ajustes"); return true; } catch { return false; } }
 async function puede(ctx: Ctx, ses: Ses): Promise<boolean> {
-  if (esAdmin(ses.rol)) return true;
-  const m = await matrizDe(ctx.db);
-  return acceso(ses.rol, "inventario", m) === "todos" || acceso(ses.rol, "conteos", m) === "todos";
+  // TK108: el personal no ajusta stock (ni lo pide desde este módulo). Lo hace un admin.
+  return esAdmin(ses.rol);
 }
 function sigNumero(rows: Row[]): string {
   let max = 0;

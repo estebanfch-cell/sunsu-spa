@@ -118,6 +118,11 @@
       ".mcp-sb .mcp-card{box-shadow:none;padding:0;background:none;border-radius:0}.mcp-sb .mcp-card>.mcp-sub:first-child,.mcp-sb .mcp-big,.mcp-sb .mcp-card>.card-title{display:none}.mcp-sb .mcp-grp:first-of-type{margin-top:0}",
       ".mcp-sbc{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:4px 26px}@container mcpsec (max-width:620px){.mcp-sbc{grid-template-columns:1fr}}.mcp-secs{container-type:inline-size;container-name:mcpsec}",
       ".mcp-sb .mcp-pres>div[style*='display:flex']{flex-wrap:wrap}#mcp-pres-q{flex:1 1 100%!important}",
+      ".mcp-stock{font-variant-numeric:tabular-nums;font-weight:800}.mcp-stock.ok{color:#2e9e5b}.mcp-stock.zero{color:var(--gray,#8A93A6)}.mcp-stock.svc{color:var(--gray,#8A93A6);font-weight:700}",
+      ".mcp-th{position:relative}.mcp-th .mcp-dot{position:absolute;right:-2px;bottom:-2px;margin:0;border:2px solid #fff;width:9px;height:9px}",
+      ".mcp-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.mcp-tools select{flex:1 1 140px;min-width:0;max-width:none}",
+      ".mcp-pn b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}",
+      "@media(max-width:640px){.mcp-bar{flex-direction:column;align-items:stretch;gap:8px;margin-bottom:8px}.mcp-bar .mcp-q{flex:none;width:100%;min-width:0;box-sizing:border-box}.mcp-desk-filt{display:none!important}.mcp-tools{flex-wrap:nowrap}.mcp-tools select,.mcp-tools .mcp-filt{flex:1 1 auto;min-width:0}.mcp-count{margin:4px 2px 8px;font-size:.8rem}.mcp-tbl,.mcp-tbl tbody{display:block;width:100%;min-width:0!important;box-shadow:none;background:transparent;border-radius:0;overflow:visible}.mcp-tbl thead,.mcp-tbl .mcp-extra,.mcp-tbl .mcp-ck{display:none!important}.mcp-tbl tr.mcp-row{display:flex;align-items:center;gap:10px;padding:10px 2px;margin:0;border:0;border-bottom:1px solid var(--cream-d,#EDE6D8);border-radius:0;box-shadow:none;background:transparent;cursor:pointer}.mcp-tbl td,.mcp-tbl td.num{border:0!important;padding:0!important;background:transparent!important;text-align:left!important}.mcp-tbl td.mcp-main{flex:1;min-width:0}.mcp-tbl td.mcp-stk{flex:none;margin-left:auto;padding-left:8px!important}.mcp-pn{min-width:0;align-items:flex-start;gap:8px}.mcp-th{width:36px;height:36px;border-radius:8px;font-size:.7rem}.mcp .sheet-scroll{overflow:visible!important}.mcp .note{display:none}}",
       "@media(max-width:820px){.mcp-head .mcp-ph{height:150px}.mcp-sb{padding-left:6px}.mcp-ss{font-size:.7rem;max-width:45%}}",
       "@media(max-width:820px){.mcp-head{flex-direction:column}.mcp-ph{flex:none;width:100%;height:210px}.mcp-cols{grid-template-columns:1fr}.mcp-tbl .mcp-hide{display:none}.mcp-g{grid-template-columns:1fr}}",
     ].join("");
@@ -207,15 +212,30 @@
   var REV = { sin_precio: "sin precio", sin_costo: "sin costo", sin_contenido: "sin contenido", sin_envase: "sin envase", sin_reorden: "sin punto de reorden", sin_foto: "sin foto" };
   function revTxt(L) { return (L || []).map(function (x) { return REV[x] || x; }).join(", "); }
   function revBadge(L) { return L && L.length ? ' <span class="mcp-rev" title="Falta: ' + e(revTxt(L)) + '">Por revisar</span>' : ""; }
-  function thumb(p) { return '<div class="mcp-th">' + (p.foto_thumb ? '<img src="' + e(p.foto_thumb) + '" alt="">' : iniciales(p.nombre)) + "</div>"; }
+  function thumb(p) {
+    var dot = '<span class="mcp-dot ' + (p.activo === false ? "off" : "on") + '" title="' + (p.activo === false ? "Inactivo" : "Activo") + '"></span>';
+    return '<div class="mcp-th">' + (p.foto_thumb ? '<img src="' + e(p.foto_thumb) + '" alt="">' : iniciales(p.nombre)) + dot + "</div>";
+  }
+  function filaMeta(p) {
+    var sku = sTrim(p.skuVisible || p.sku), cat = sTrim(p.categoria), marca = sTrim(p.marca);
+    var bajo = [cat, marca].filter(Boolean).join(" · ");
+    return sku + (bajo ? " · " + bajo : "");
+  }
+  function sTrim(v) { return String(v == null ? "" : v).trim(); }
+  function stockHtml(p) {
+    if (p.tipo === "servicio") return '<span class="mcp-stock svc">—</span>';
+    var n = Number(p.stock) || 0;
+    return '<span class="mcp-stock ' + (n > 0 ? "ok" : "zero") + '">' + q2(n) + "</span>";
+  }
   function money(v) { return v == null || v === "" ? "—" : "$" + (Number(v) || 0).toFixed(2); }
   function celda(p, c) {
-    var cls = (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "");
+    var extra = c.id === "stock" ? " mcp-stk" : " mcp-extra";
+    var cls = (c.num ? "num" : "") + (c.hide ? " mcp-hide" : "") + extra;
     var v;
     if (c.id === "estado") v = p.activo === false ? '<span class="mcp-dot off" title="Inactivo"></span><span class="mcp-sub">Inactivo</span>' : '<span class="mcp-dot on" title="Activo"></span><span class="mcp-sub">Activo</span>';
     else if (c.id === "sku") v = '<span class="mcp-sku">' + e(p.skuVisible || p.sku) + "</span>" + (p.skuAlias ? '<span class="mcp-sub" style="display:block" title="Código interno (tickets, paquetes)">alias ' + e(p.skuAlias) + "</span>" : "");
     else if (c.id === "tipo") v = p.tipo === "servicio" ? '<span class="mcp-tag serv">Servicio</span>' : '<span class="mcp-tag">Inventariable</span>';
-    else if (c.id === "stock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : "<b>" + q2(p.stock) + "</b>";
+    else if (c.id === "stock") v = stockHtml(p);
     else if (c.id === "estStock") v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : p.estado === "agotado" ? '<span class="mcp-tag agot">Agotado</span>' : p.estado === "bajo" ? '<span class="mcp-tag bajo">Bajo</span>' : '<span class="mcp-tag ok">OK</span>';
     else if (c.id === "pvp") v = money(p.pvp);
     else if (c.id === "pvpSinIva") v = money(p.pvpSinIva != null ? p.pvpSinIva : p.subtotal);
@@ -228,11 +248,11 @@
   function filasHtml() {
     var rows = filtrar(), cols = colsVis();
     var cnt = document.getElementById("mcp-count");
-    if (cnt) cnt.textContent = rows.length + " de " + (MC.list || []).length + " productos";
+    if (cnt) cnt.textContent = rows.length + " producto" + (rows.length === 1 ? "" : "s");
     MC.vis = rows.map(function (p) { return p.id; });
     if (!rows.length) return '<tr><td colspan="' + (cols.length + 2) + '" class="mcp-sub" style="padding:18px">Sin productos con ese filtro.</td></tr>';
     return rows.map(function (p) {
-      return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '">' + (MC.admin ? '<td class="mcp-ck"><input type="checkbox" data-mcp-sel="' + e(p.id) + '"' + (MC.sel && MC.sel[p.id] ? " checked" : "") + ' aria-label="Elegir"></td>' : "") + '<td><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + "</b>" + revBadge(p.revisar) + '<span class="mcp-sub">' + e(p.subtipo) + "</span></div></div></td>" +
+      return '<tr class="mcp-row" data-mcp-id="' + e(p.id) + '">' + (MC.admin ? '<td class="mcp-ck"><input type="checkbox" data-mcp-sel="' + e(p.id) + '"' + (MC.sel && MC.sel[p.id] ? " checked" : "") + ' aria-label="Elegir"></td>' : "") + '<td class="mcp-main"><div class="mcp-pn">' + thumb(p) + "<div><b>" + e(p.nombre) + "</b>" + revBadge(p.revisar) + '<span class="mcp-sub">' + e(filaMeta(p)) + "</span></div></div></td>" +
         cols.map(function (c) { return celda(p, c); }).join("") + "</tr>";
     }).join("");
   }
@@ -267,21 +287,18 @@
     var selEst = '<select id="mcp-f-estado" aria-label="Stock">' + opt("", "Todo el stock", f.estado) + opt("con", "Con stock", f.estado) + opt("bajo", "Stock bajo", f.estado) + opt("agotado", "Agotado", f.estado) + opt("revisar", "🔴 Por revisar", f.estado) + "</select>";
     var selAct = '<select id="mcp-f-activo" aria-label="Activo">' + opt("", "Estado: activos", f.activo) + opt("inactivos", "Estado: inactivos", f.activo) + opt("todos", "Estado: todos", f.activo) + "</select>";
     var onFilt = !!(f.tipo || f.sub || f.bodega || f.marca || f.estado || f.activo);
-    var barraFilt = MC.admin
-      ? '<div class="mcp-bar">' + arbolSel(f) + selBod + selMarca + selCat + selEst + selAct +
-        '<button class="btn ghost small" type="button" id="mcp-cols">Columnas</button>' +
-        '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div>' + colsPanelHtml()
-      : '<div class="mcp-bar">' + selCat +
-        '<div class="mcp-filt"><button type="button" class="mcp-filt-btn' + (onFilt ? " on" : "") + '" id="mcp-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (onFilt ? " •" : "") + " ▾</button>" +
-        '<div class="mcp-filt-menu" id="mcp-filt-menu">' + arbolSel(f) + selBod + selMarca + selEst + selAct +
-        '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div></div></div>';
+    var menuFilt = '<div class="mcp-filt"><button type="button" class="mcp-filt-btn' + (onFilt ? " on" : "") + '" id="mcp-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (onFilt ? " •" : "") + " ▾</button>" +
+      '<div class="mcp-filt-menu" id="mcp-filt-menu">' + arbolSel(f) + selBod + selMarca + selEst + selAct +
+      (MC.admin ? '<button class="btn ghost small" type="button" id="mcp-cols">Columnas</button>' : "") +
+      '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div></div>';
     return '<div class="mcp">' +
       '<div class="mcp-bar"><input class="mcp-q" id="mcp-q" type="search" placeholder="' + qph + '" aria-label="' + qph + '" value="' + e(f.q) + '">' + nuevo + "</div>" +
-      barraFilt +
+      '<div class="mcp-tools">' + menuFilt + selCat + "</div>" +
+      (MC.admin ? colsPanelHtml() : "") +
       (MC.admin && (MC.eliminadosN || MC.verElim) ? '<p><button class="btn ghost small" type="button" id="mcp-elim">' + (MC.verElim ? "← Volver a productos" : "Eliminados (" + MC.eliminadosN + ")") + "</button>" + (MC.verElim ? ' <span class="mcp-sub">Productos eliminados: elige y restaura.</span>' : "") + "</p>" : "") +
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
       '<div class="mcp-count" id="mcp-count"></div>' +
-      '<div class="sheet-scroll"><table class="mcp-tbl"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
+      '<div class="sheet-scroll"><table class="mcp-tbl mob-no"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
       '<p class="note">Una sola lista: catálogo, Cabina y productos unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
       "</div>";
   }

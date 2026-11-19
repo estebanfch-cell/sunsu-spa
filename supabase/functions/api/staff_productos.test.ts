@@ -62,7 +62,15 @@ describe("TK69 productos del personal", () => {
     assert.match(js, /pvpSinIva/);
     assert.match(js, /Va en protocolo/);
     assert.match(js, /MC\.admin \? "Buscar producto, SKU, marca o código"/);
-    assert.match(beta, /mc-productos\.js\?v=20261118tk107/);  });
+    assert.match(js, /mcp-tbl mob-no/);
+    assert.match(js, /mcp-stock/);
+    assert.match(js, /function filaMeta/);
+    assert.match(js, /mcp-tools/);
+    assert.match(js, /max-width:640px/);
+    assert.match(js, /producto" \+ \(rows\.length === 1 \? "" : "s"\)/);
+    const movil = readFileSync(new URL("../../../mc-movil.js", import.meta.url), "utf8");
+    assert.match(movil, /classList\.contains\("mcp-tbl"\)/);
+    assert.match(beta, /mc-productos\.js\?v=20261118tk108/);  });
 
   it("lista y ficha: todo el catálogo, solo PVP con/sin IVA, último consumo y protocolo, sin descargar", async () => {
     const db = semilla();

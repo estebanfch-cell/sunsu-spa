@@ -26,7 +26,9 @@ async function tablaLista(ctx: Ctx): Promise<boolean> {
 }
 function yo(ses: Ses): string { return s(ses.uid); }
 async function puedeVerModulo(ctx: Ctx, ses: Ses): Promise<boolean> {
-  return esAdmin(ses.rol) || acceso(ses.rol, "conteos", await matrizDe(ctx.db)) !== "no";
+  if (esAdmin(ses.rol)) return true;
+  const m = await matrizDe(ctx.db);
+  return acceso(ses.rol, "conteos", m) !== "no" || acceso(ses.rol, "productos", m) !== "no";
 }
 function esAsignada(c: Row, ses: Ses): boolean { return !!s(c.asignado_a) && s(c.asignado_a) === yo(ses); }
 function subNombre(code: string): string { return SUBS_CABINA.find((x) => x.codigo === code)?.nombre || (code === "SIN" ? "Sin cabina asignada" : code); }
@@ -115,15 +117,20 @@ extend("cf_list", "any", async (p, ctx, ses) => {
 });
 
 extend("cf_crear", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin crea conteos" };
+  if (!(await puedeVerModulo(ctx, ses))) return { error: "No tienes permiso" };
   if (!(await tablaLista(ctx))) return { error: FALTA };
   const bodega = s(p.bodega).toUpperCase();
   if (!(BODEGAS_CONTEO as readonly string[]).includes(bodega)) return { error: "Elige la bodega" };
   const sub = bodega === "CABINA" ? s(p.sububicacion) : "";
   if (sub && !SUBS_CABINA.some((x) => x.codigo === sub)) return { error: "Sububicación inválida" };
-  const asignado = s(p.asignado_a);
-  const u = (await todas(ctx, "usuarios")).find((x) => s(x.id) === asignado);
-  if (!u) return { error: "Asigna a quién cuenta" };
+  // TK108: el personal crea un conteo para sí mismo; un admin puede asignarlo a otra persona.
+  let asignado = s(p.asignado_a);
+  if (!esAdmin(ses.rol)) {
+    if (asignado && asignado !== yo(ses)) return { error: "Solo puedes crear un conteo para ti" };
+    asignado = yo(ses);
+  }
+  const u = (await todas(ctx, "usuarios")).find((x) => s(x.id) === asignado) || (await todas(ctx, "app_usuarios")).find((x) => s(x.id ?? x.usuario) === asignado);
+  if (!u) return { error: esAdmin(ses.rol) ? "Asigna a quién cuenta" : "No se encontró tu usuario" };
   const familias = (Array.isArray(p.familias) ? p.familias : s(p.familias).split(",")).map((x) => s(x).trim().toUpperCase()).filter((x) => /^[A-Z0-9]{2,6}$/.test(x)).slice(0, 20);
   const rows = await todas(ctx, "beta_conteos");
   const abierto = rows.find((c) => s(c.bodega) === bodega && s(c.sububicacion) === sub && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado)));

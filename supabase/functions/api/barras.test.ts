@@ -41,8 +41,9 @@ describe("🏷️ Códigos de barras", () => {
 
   it("resumen, generar internos en lote (sin pisar) y asignar un código escaneado", async () => {
     const { db, h } = semilla();
-    const r = await h("barras_resumen", "cos");
-    assert.equal(r.ok, true); assert.equal(r.admin, false);
+    assert.match(String((await h("barras_resumen", "cos")).error), /admin/); // TK108
+    const r = await h("barras_resumen", "adm");
+    assert.equal(r.ok, true); assert.equal(r.admin, true);
     assert.equal(r.sinCodigo, 2);
     assert.deepEqual((r.items as Row[]).find((i) => i.id === "p1")!.barras, ["8809937360834"]);
     assert.equal((await h("barras_generar_lote", "cos", { ids: ["p2"] })).error, "Solo un admin genera códigos");

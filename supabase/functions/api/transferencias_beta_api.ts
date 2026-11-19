@@ -16,7 +16,7 @@ export const ESTADOS_TRF: Record<string, string> = { borrador: "Borrador", envia
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function lista(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_transferencias"); return true; } catch { return false; } }
-async function nivel(ctx: Ctx, ses: Ses): Promise<string> { return esAdmin(ses.rol) ? "todos" : acceso(ses.rol, "transferencias", await matrizDe(ctx.db)); }
+async function nivel(ctx: Ctx, ses: Ses): Promise<string> { return esAdmin(ses.rol) ? "todos" : "no"; }
 export function soloAdmin(origen: string, destino: string): boolean {
   const par = [origen, destino].sort().join("|");
   return par === "CABINA|OFICINA";
