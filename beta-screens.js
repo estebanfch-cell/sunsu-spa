@@ -5807,18 +5807,47 @@ function _histResumenTxt(t){
   return parts.join(' · ');
 }
 function _histThumbsHTML(t, res){
-  var fotos=Array.isArray(t&&t.fotosCard)?t.fotosCard:[];
-  var more=Number(t.fotosMore)||0;
+  var raw=Array.isArray(t&&t.fotosCard)?t.fotosCard:[];
+  var fotos=[];
+  raw.forEach(function(f){
+    if(!f) return;
+    if(typeof f==='string'){
+      if(f.indexOf('http')===0||f.indexOf('data:image')===0) fotos.push({url:f});
+      else if(f.indexOf('archivo:')===0) fotos.push({archivo:f.slice(8)});
+      return;
+    }
+    var u=String(f.url||'');
+    var a=String(f.archivo||'');
+    if(u.indexOf('archivo:')===0){ a=u.slice(8); u=''; }
+    if((u&&(u.indexOf('http')===0||u.indexOf('data:image')===0))||a) fotos.push({url:u,archivo:a});
+  });
+  var more=Number(t.fotosMore);
+  if(!(more>0)) more=Math.max(0, fotos.length-4);
+  fotos=fotos.slice(0,4);
   if(!fotos.length && !res) return '';
   var h='<div class="mob-thumbs">';
-  fotos.slice(0,5).forEach(function(f){
-    var u=typeof f==='string'?f:(f&&f.url)||'';
-    if(!u) return;
-    h+='<img class="mob-th" src="'+_histEsc(u)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+  fotos.forEach(function(f){
+    if(f.url) h+='<img class="mob-th" src="'+_histEsc(f.url)+'" alt="" loading="lazy" onerror="this.remove()">';
+    else if(f.archivo) h+='<img class="mob-th" data-arch="'+_histEsc(f.archivo)+'" alt="" hidden>';
   });
   if(more>0) h+='<span class="mob-thmore">+'+more+'</span>';
   if(res) h+='<span class="mob-res">'+_histEsc(res)+'</span>';
   return h+'</div>';
+}
+function _histCargarThumbs(root){
+  var imgs=(root||document).querySelectorAll('.mob-th[data-arch]');
+  if(!imgs.length) return;
+  Array.prototype.forEach.call(imgs, function(im){
+    var id=im.getAttribute('data-arch');
+    if(!id){ im.remove(); return; }
+    var pedir=(typeof api==='function')?Promise.resolve(api('fotoB64',{id:id})):Promise.reject();
+    pedir.then(function(d){
+      if(!d||!d.ok||!d.b64){ im.remove(); return; }
+      im.src='data:'+(d.mime||'image/jpeg')+';base64,'+d.b64;
+      im.removeAttribute('hidden');
+      im.onerror=function(){ im.remove(); };
+    }).catch(function(){ im.remove(); });
+  });
 }
 function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
@@ -5954,7 +5983,7 @@ function _histCerrarTicket(){
   pane.innerHTML='<p class="note">Elige un ticket para ver el detalle.</p>';
   document.querySelectorAll('#tk-body .tk-row.on').forEach(function(tr){ tr.classList.remove('on'); });
 }
-function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); }
+function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
 var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};

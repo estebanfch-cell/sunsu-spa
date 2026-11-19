@@ -118,8 +118,8 @@ describe("TK137 siguiente SKU y candado al crear", () => {
   it("el cache de esta entrega es TK137", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK147/);
-    assert.match(beta, /20261119tk147/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK148/);
+    assert.match(beta, /20261119tk148/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK135/);
   });
 });
