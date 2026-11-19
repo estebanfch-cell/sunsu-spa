@@ -75,18 +75,49 @@
       ".mctk-cli{font-size:.9rem;font-weight:700;color:var(--navy-d);margin:-2px 0 2px}.mctk-cod{font-family:ui-monospace,monospace;color:var(--navy);text-decoration:none;border-bottom:1px dashed}",
       ".mctk-cancel{color:#C0392B!important;border-color:#E6B0AA!important}.btn.small.mctk-cancel:not(.ghost){background:#C0392B!important;color:#fff!important}.mctk-canc{background:#FDECEA;border:1px solid #E6B0AA;color:#922B21;border-radius:10px;padding:10px 12px;margin:8px 0;font-size:.85rem}" +
       ".mctk-xdlg .mctk-box{width:min(620px,94vw);max-height:88vh;overflow:auto}.mctk-xh{display:flex;justify-content:space-between;align-items:center}.mctk-xh h3{margin:0}.mctk-xx{background:none;border:0;font-size:1.6rem;line-height:1;cursor:pointer;color:var(--navy)}.mctk-xtog{display:flex!important;align-items:center;gap:10px;padding:10px 12px;margin:8px 0;background:var(--cream);border-radius:10px;font-size:.86rem;cursor:pointer}.mctk-xdlg input[type=checkbox]{width:18px!important;height:18px;margin:0;flex:none;accent-color:var(--navy)}.mctk-xt{width:100%;border-collapse:collapse;font-size:.84rem;margin:4px 0 10px}.mctk-xt th{font-size:.68rem;text-transform:uppercase;color:var(--gray);text-align:left;padding:6px 8px;border-bottom:1px solid var(--cream-d)}.mctk-xt td{padding:8px;border-bottom:1px solid #f0ece4;vertical-align:middle}.mctk-xt .num{text-align:right;white-space:nowrap}.mctk-xt .c{text-align:center;width:70px}.mctk-xlbl{display:block;font-size:.8rem;font-weight:700}.mctk-xlbl input{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-weight:400}",
-      // TK81 (Emilia pt523u): líneas en grilla fija — # · Producto (código debajo) · Cant · P. sin IVA · Desc · Subtotal · IVA · Total; texto plano, se edita con clic.
-      ".mctk-lwrap{container-type:inline-size;container-name:mctkl}.mctk-ls{display:flex;flex-direction:column}" +
-      ".mctk-ln{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:'i p x' '. n n';gap:4px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--cream-d)}.mctk-ln:last-child{border-bottom:0}" +
-      ".mctk-li{grid-area:i;align-self:start;padding-top:2px;text-align:center;font-size:.74rem;font-weight:800;color:var(--gray);font-variant-numeric:tabular-nums}" +
-      ".mctk-lp{grid-area:p;display:flex;gap:8px;align-items:center;min-width:0}.mctk-lpt{min-width:0;line-height:1.3;overflow-wrap:anywhere}.mctk-lpt .mctk-pn{display:block;font-weight:700;font-size:.86rem}.mctk-lpt .mctk-sku{display:block;margin:1px 0 0;font-size:.68rem;color:var(--gray);font-weight:500}.mctk-lpt .mctk-pill{font-size:.6rem;padding:0 7px;margin-left:4px;vertical-align:1px}.mctk-promo{font-size:.66rem;color:#8A6D1F;font-weight:700;margin-left:4px}.mctk-ln .mctk-ph{width:30px;height:30px}" +
-      ".mctk-lx{grid-area:x;align-self:start;display:flex;gap:2px;align-items:center;justify-content:flex-end}.mctk-lx .mctk-x,.mctk-mej{border:none;background:none;color:var(--gray);cursor:pointer;font-size:.95rem;line-height:1;padding:2px 4px;border-radius:6px}.mctk-mej{font-size:.78rem;font-weight:800;white-space:nowrap}.mctk-lx .mctk-x:hover,.mctk-mej:hover{background:var(--cream);color:var(--navy-d)}" +
-      ".mctk-nums{grid-area:n;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;min-width:0}.mctk-c{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;min-width:0;font-size:.84rem;font-variant-numeric:tabular-nums;white-space:nowrap}.mctk-c small{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);line-height:1.2}.mctk-c b{font-weight:700}.mctk-c3{display:none}" +
-      ".mctk-cv{display:block;min-height:1.35em;min-width:100%;padding:1px 2px;border-radius:5px;box-sizing:border-box}.mctk-c[data-le] .mctk-cv{cursor:text}.mctk-c[data-le]:hover .mctk-cv{background:var(--cream);outline:1px dashed var(--cream-d)}" +
-      ".mctk-cin{width:100%;max-width:96px;box-sizing:border-box;border:0;border-bottom:1.5px solid var(--navy);background:transparent;font:inherit;font-size:.84rem;text-align:center;padding:1px 2px;outline:none;-moz-appearance:textfield;appearance:textfield}.mctk-cin::-webkit-outer-spin-button,.mctk-cin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-cin.bad{border-bottom-color:#C0392B}.mctk-lh{display:none}" +
-      "@container mctkl (min-width:480px){.mctk-nums{grid-template-columns:repeat(6,minmax(0,1fr))}.mctk-c3{display:flex}}" +
-      "@container mctkl (min-width:700px){.mctk-ln,.mctk-lh{grid-template-columns:24px minmax(180px,1fr) 48px 80px 56px 76px 64px 80px 44px;grid-template-areas:'i p q u d s v t x';gap:0 4px;padding:7px 0}.mctk-lh{display:grid;align-items:end;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--gray);padding:2px 0 5px;border-bottom:1px solid var(--cream-d)}.mctk-lh>span{text-align:center}.mctk-lh>span:nth-child(2){text-align:left}" +
-      ".mctk-ln .mctk-nums{display:contents}.mctk-ln .mctk-c small{display:none}.mctk-li{align-self:center;padding:0}.mctk-lx{align-self:center}.mctk-c[data-c=q]{grid-area:q}.mctk-c[data-c=u]{grid-area:u}.mctk-c[data-c=d]{grid-area:d}.mctk-c[data-c=s]{grid-area:s}.mctk-c[data-c=v]{grid-area:v}.mctk-c[data-c=t]{grid-area:t}}",
+      // TK142 (Emilia pt621u–pt624u): líneas compactas tipo MineCore, paleta clara Sunsu (nunca fondo oscuro).
+      ".mctk-lwrap{container-type:inline-size;container-name:mctkl}" +
+      ".mctk-lcard>b{display:block;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy-d);padding:0 0 8px}" +
+      ".mctk-ls{display:flex;flex-direction:column;gap:0;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);overflow:hidden}" +
+      ".mctk-lh{display:none!important}" +
+      ".mctk-ln{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin:0;padding:9px 28px 9px 12px;border:0;border-bottom:1px solid var(--cream-d);border-radius:0;background:transparent;position:relative;grid-template-columns:none;grid-template-areas:none;box-sizing:border-box;min-width:0;max-width:100%}" +
+      ".mctk-ln:last-child{border-bottom:0}" +
+      ".mctk-ln.ok{background:#f3faf6;border-left:3px solid #2e9e4f;border-radius:0}" +
+      ".mctk-ln.diff,.mctk-ln.sobra,.mctk-ln.falta{background:#fff5f0;border-left:3px solid #d9534f;border-radius:0}" +
+      ".mctk-ln.canje_ok{background:#f7faf8;border-left:3px solid #b7d9c6;border-radius:0}" +
+      ".mctk-ln .mctk-li,.mctk-ln .mctk-nums,.mctk-ln .mctk-lx,.mctk-lacts{display:none!important}" +
+      ".mctk-r1{display:flex;align-items:flex-start;gap:8px;min-width:0}" +
+      ".mctk-ph,.mctk-ini,.mctk-badge{width:32px;height:32px;border-radius:8px;flex:none;object-fit:cover;border:1px solid var(--cream-d);box-sizing:border-box}" +
+      ".mctk-ini,.mctk-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#F5F0E8);color:var(--navy-d);font-weight:800;font-size:.72rem}" +
+      ".mctk-badge-F{background:#e8f0f8;color:#3D5A7A}.mctk-badge-E{background:#f3eee4;color:#7A5C12}.mctk-badge-P{background:#ece8f6;color:#5A4A8A}.mctk-badge-G{background:#f6efe0;color:#8A6D1F}" +
+      ".mctk-pn{font-weight:700;font-size:.88rem;color:var(--navy-d);overflow-wrap:anywhere;line-height:1.25}" +
+      ".mctk-irp{display:inline;margin-left:4px;font-size:.78rem;color:var(--gold,#C4943A);text-decoration:none;font-weight:700}" +
+      ".mctk-x{position:absolute;top:4px;right:4px;border:0;background:none;color:#9a9488;font-size:.78rem;line-height:1;padding:2px 5px;cursor:pointer;border-radius:4px;font-weight:500}" +
+      ".mctk-x:hover{color:#B2452A;background:var(--cream)}" +
+      ".mctk-sku,.mctk-stk{font-size:.7rem;color:var(--gray);padding-left:40px;overflow-wrap:anywhere;line-height:1.35}" +
+      ".mctk-stk-ok{color:#2e9e4f;font-weight:700}.mctk-stk-0{color:#d9534f;font-weight:700}" +
+      ".mctk-r4{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-left:40px;padding-top:2px;width:100%;box-sizing:border-box;min-width:0}" +
+      ".mctk-qx{font-size:.8rem;color:var(--navy-d);overflow-wrap:anywhere;min-width:0}" +
+      ".mctk-desc{color:#C4943A;font-weight:800;margin-left:4px;font-variant-numeric:tabular-nums}" +
+      ".mctk-qx .mctk-ok,.mctk-ok{color:#2e9e4f;font-weight:700;margin-left:4px;white-space:nowrap}.mctk-desc,.mctk-bad{white-space:nowrap}@container mctkl (max-width:420px){.mctk-ok-txt{display:none}}" +
+      ".mctk-bad{color:#d9534f;font-weight:700;margin-left:4px;font-size:.7rem}" +
+      ".mctk-tog{margin-left:auto;border:0;background:none;display:inline-flex;align-items:baseline;gap:3px;cursor:pointer;font:inherit;color:var(--navy-d);padding:0;flex:none}" +
+      ".mctk-ltot{font-weight:800;font-size:.92rem;font-variant-numeric:tabular-nums}" +
+      ".mctk-arr{font-size:.7rem;color:var(--gray);line-height:1}" +
+      ".mctk-drop{margin:8px 0 2px;padding:6px 10px;border-radius:10px;background:var(--cream,#F5F0E8);border:1px solid var(--cream-d)}" +
+      ".mctk-dr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:5px 0;font-size:.76rem;border-bottom:1px solid var(--cream-d)}" +
+      ".mctk-dr:last-child{border-bottom:0}" +
+      ".mctk-dr>span:first-child{color:var(--gray);font-weight:700;flex:none}" +
+      ".mctk-dr>span:last-child{text-align:right;color:var(--navy-d);overflow-wrap:anywhere;min-width:0}" +
+      ".mctk-dot{border-bottom:1px dotted var(--navy-d);cursor:text;padding:0 1px}.mctk-dot:hover{background:#fff}" +
+      ".mctk-cv{display:inline;min-height:1em;padding:0}" +
+      ".mctk-cin{width:4.5em;max-width:96px;box-sizing:border-box;border:0;border-bottom:1.5px solid var(--navy-d);background:#fff;font:inherit;font-size:.76rem;text-align:right;padding:1px 2px;outline:none;-moz-appearance:textfield;appearance:textfield}" +
+      ".mctk-cin::-webkit-outer-spin-button,.mctk-cin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.mctk-cin.bad{border-bottom-color:#C0392B}" +
+      ".mctk-mej{border:0;background:none;color:var(--gray);cursor:pointer;font-size:.78rem;font-weight:800;padding:0 4px;border-radius:6px;margin-left:4px}.mctk-mej:hover{background:var(--cream);color:var(--navy-d)}" +
+      ".mctk-addbtn,#mctk-addlink.mctk-addbtn{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--cream-d);background:var(--white,#fff);color:var(--navy-d);border-radius:999px;padding:5px 12px;font-size:.78rem;font-weight:700;cursor:pointer;margin:10px 0 4px;text-decoration:none}" +
+      /* TK81 leftover hook: container 700px only tweaks type size — no spreadsheet grid. */
+      "@container mctkl (min-width:700px){.mctk-pn{font-size:.92rem}.mctk-ltot{font-size:1rem}.mctk-ph,.mctk-ini,.mctk-badge{width:36px;height:36px}}",
+
       ".mctk-foot{display:flex;gap:10px 16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;margin-top:10px}.mctk-adj{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.76rem;color:var(--gray)}.mctk-adj label{display:flex;gap:6px;align-items:center;margin:0}#mctk-dv{width:96px}#mctk-promos{border-color:#C9A227;color:#7a5c12;background:#fbf4e4;padding:5px 10px}" +
       ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:300px!important;line-height:1.35}#mctk-tot{min-width:min(260px,100%)!important;flex:1 1 240px;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:100%;margin-left:auto}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
@@ -104,14 +135,10 @@
       ".mctk-estados .mctk-pills{display:flex;flex-direction:column;align-items:stretch;gap:6px;position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:200px;max-width:min(280px,90vw);padding:8px;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12)}.mctk-estados .mctk-pill{text-align:center}",
       ".mctk-det{border:1.5px solid var(--cream-d);border-radius:12px;padding:0;margin-top:12px;background:var(--white,#fff)}.mctk-det>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-d);font-size:.88rem;display:flex;align-items:center;justify-content:space-between}.mctk-det>summary::-webkit-details-marker{display:none}.mctk-det>summary:after{content:'▾';color:var(--gray);font-weight:400}.mctk-det[open]>summary{border-bottom:1px solid var(--cream-d)}.mctk-det .mctk-grid{margin:0;padding:8px 12px 10px}.mctk-det .mctk-f{grid-template-columns:minmax(90px,34%) 1fr;gap:6px}",
       ".mctk-load{margin:0 0 8px;font-size:.76rem;color:var(--gray)}",
-      ".mctk-lcard>b{display:none}.mctk-ls{gap:8px}.mctk-lh{display:none!important}.mctk-ln{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;padding:10px;border:1.5px solid var(--cream-d);border-radius:14px;background:var(--white,#fff);grid-template-columns:none;grid-template-areas:none}.mctk-ln .mctk-li{display:none}.mctk-ln .mctk-lp{display:flex;gap:10px;align-items:flex-start;min-width:0;width:100%}",
-      ".mctk-ph,.mctk-ini{width:44px;height:44px;border-radius:10px;flex:none;object-fit:cover;border:1px solid var(--cream-d)}.mctk-ini{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#f4efe6);color:var(--navy-d);font-weight:800;font-size:1rem}",
-      ".mctk-lpt{min-width:0;flex:1}.mctk-lpt .mctk-pn{display:block;font-weight:800;font-size:.92rem;color:var(--navy-d);overflow-wrap:anywhere}.mctk-lpt .mctk-sku{display:block;color:var(--gray);font-size:.72rem;font-weight:400}.mctk-stk{margin-top:2px;font-size:.72rem;color:var(--gray)}",
-      ".mctk-ln .mctk-nums,.mctk-ln .mctk-lx{display:none!important}.mctk-mini{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;padding-top:2px}.mctk-qx{font-size:.84rem;color:var(--navy-d);overflow-wrap:anywhere}.mctk-qx .mctk-ok{color:#2e9e4f;font-weight:700}.mctk-ltot{margin-left:auto;text-align:right;font-size:.92rem;color:var(--navy-d)}",
-      ".mctk-lacts{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:2px}.mctk-lacts>button{flex:1 1 auto;min-width:calc(50% - 6px);border-radius:10px;padding:7px 8px;font-size:.74rem;font-weight:700;line-height:1.2;white-space:normal;overflow-wrap:anywhere}.mctk-del{background:#fff;color:#B2452A;border:1.5px solid #E8B4AB}.mctk-mej{border:1.5px solid var(--cream-d);background:#fff;color:var(--navy-d)}",
-      ".mctk-foot{flex-direction:column;align-items:stretch}.mctk-tot{margin-left:auto;max-width:100%!important;width:min(280px,100%);font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
-      "#mctk-addlink{display:inline-block;margin:8px 0 4px;font-weight:700}}",
-      "@media(min-width:861px){.mctk-estados,.mctk-mini,.mctk-lacts,.mctk-load{display:none}.mctk-ini{display:inline-flex}}",
+      ".mctk-lcard>b{display:block}.mctk-ln{padding:9px 26px 9px 12px}",
+      ".mctk-foot{flex-direction:column;align-items:stretch}#mctk-tot{flex:0 0 auto!important}.mctk-tot{margin-left:auto;max-width:100%!important;width:min(280px,100%);font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
+      "#mctk-addlink{display:inline-flex;margin:8px 0 4px;font-weight:700}}",
+      "@media(min-width:861px){.mctk-estados,.mctk-load{display:none}.mctk-ini,.mctk-badge{display:inline-flex}}",
 
     ].join("");
     document.head.appendChild(s);
@@ -330,20 +357,44 @@
     var tp = m[1] || m[3] === "$" ? "$" : "%"; if (tp === "%" && v > 100) return null;
     return { tipo: tp, valor: v };
   }
+  function catDe(l) {
+    var C = K.cat || [];
+    return C.find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; }) || C.find(function (p) { return p.sku === l.sku; }) || null;
+  }
+  function esSuperAdminCu() {
+    return !!(typeof CU !== "undefined" && CU && CU.role === "super_admin");
+  }
   function fotoLinea(l) {
-    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
+    var c = catDe(l);
     if (c && c.foto) return '<img class="mctk-ph" src="' + e(c.foto) + '" alt="" loading="lazy">';
+    var badge = l.tipo === "facial" ? "F" : (l.tipo === "extra" || l.tipo === "servicio") ? "E" : l.tipo === "paquete" ? "P" : l.tipo === "gift" ? "G" : "";
+    if (badge) return '<span class="mctk-ph mctk-badge mctk-badge-' + badge + '" aria-hidden="true">' + badge + "</span>";
     var ini = String((l && l.nombre) || (l && l.sku) || "?").trim().charAt(0).toUpperCase() || "?";
     return '<span class="mctk-ph mctk-ini" aria-hidden="true">' + e(ini) + "</span>";
   }
   function stockTxt(l) {
-    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; }) || (K.cat || []).find(function (p) { return p.sku === l.sku; });
-    if (!c || c.stock == null || c.stock === "") return "";
-    return '<div class="mctk-stk">Stock: ' + e(q2(c.stock)) + "</div>";
+    if (l.canje || l.paqueteSesion || (l.tipo === "facial" && !(Number(l.precio_unit) > 0))) {
+      var pq = l.paqueteSesion ? String(l.paqueteSesion) : (l.canje ? "Canje" : "Facial");
+      var ok = (l.canje || l.paqueteSesion) ? " · OK sin factura" : "";
+      var pref = l.paqueteSesion ? "Canje paquete " : (l.canje ? "Canje " : "");
+      return '<div class="mctk-stk">' + e(pref + pq + ok) + "</div>";
+    }
+    if (l.consumoInterno && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Consumo interno</div>';
+    if (l.cortesia && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Cortesía</div>';
+    if (l.tipo === "facial") return '<div class="mctk-stk">Facial</div>';
+    if (l.tipo === "extra" || l.tipo === "servicio") return '<div class="mctk-stk">Extra</div>';
+    if (l.tipo === "paquete") return '<div class="mctk-stk">Paquete</div>';
+    if (l.tipo !== "producto") return "";
+    var c = catDe(l);
+    var st = c && (c.stockVenta != null && c.stockVenta !== "" ? c.stockVenta : c.stock);
+    if (st == null || st === "") return "";
+    var n = Number(st);
+    var cls = n > 0 ? " mctk-stk-ok" : " mctk-stk-0";
+    return '<div class="mctk-stk' + cls + '">📦 BODEGA VENTA: Stock ' + e(q2(st)) + "</div>";
   }
   /** TK43 (Emilia t486u, como MineCore mcIrBtn): botoncito sutil ↗ que abre la ficha del producto de la línea. */
   function prodIdLinea(l) {
-    var C = K.cat || [], c = C.find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; }) || C.find(function (p) { return p.sku === l.sku; });
+    var c = catDe(l);
     return c && c.productoId ? String(c.productoId) : "";
   }
   function irProdBtn(l) {
@@ -351,10 +402,25 @@
     return id ? ' <a href="#/m/productos/p/' + e(id) + '" class="mctk-irp" data-irp="' + e(id) + '" title="Ir al producto" aria-label="Ir a la ficha del producto">↗</a>' : "";
   }
   function codigoVisible(l) {
-    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
-    if (c && c.skuVisible) return c.skuVisible;
+    var c = catDe(l);
+    if (c && c.skuVisible) {
+      var vis = String(c.skuVisible);
+      if (c.codigoInterno && String(c.codigoInterno) !== vis) vis += " · " + c.codigoInterno;
+      return vis;
+    }
     var s0 = String(l.sku || "");
     return (l.tipo === "facial" || l.tipo === "extra" || l.tipo === "servicio" || l.tipo === "paquete") && /^\d+$/.test(s0) ? "SUNSU-" + s0 : s0;
+  }
+  function skuLineaTxt(l) {
+    var code = codigoVisible(l);
+    var tipo = l.tipo && l.tipo !== "producto" ? " · " + (esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
+    var extra = "";
+    if (l.consumoInterno && !(l.total_linea > 0)) extra += " · Consumo interno";
+    else if (l.cortesia && !(l.total_linea > 0)) extra += " · Cortesía";
+    if (l.valorNominal > 0 && l.tipo === "gift") extra += " · valor nominal " + $m(l.valorNominal);
+    if (l.excluir_comision) extra += " · sin comisión";
+    if (l.promo && l.descuento_valor > 0) extra += " · " + l.promo;
+    return code + tipo + extra;
   }
   /** Por línea: subtotal sin IVA, IVA y total con IVA. */
   function montos(l) { var tot = r2(Number(l.total_linea) || 0), sub = net(tot); return { sub: sub, iva: r2(tot - sub), tot: tot }; }
@@ -367,53 +433,100 @@
     if (q("[data-tot-m]")) q("[data-tot-m]").textContent = $m(m.tot);
     if (q("[data-mini]")) q("[data-mini]").textContent = "sub " + $m(m.sub) + " · IVA " + $m(m.iva);
   }
+  function comisionDe(l) {
+    if (l.excluir_comision) return 0;
+    if (l.comision != null && l.comision !== "") return r2(Number(l.comision) || 0);
+    var c = catDe(l);
+    if (c && c.comision != null && c.comision !== "") return r2((Number(c.comision) || 0) * (Number(l.cantidad) || 0));
+    return 0;
+  }
+  function subUbiDe(l) {
+    if (l.canje || l.paqueteSesion || l.tipo === "paquete") return { lbl: "Paquete", val: l.paqueteSesion || "—" };
+    if (l.tipo !== "producto") return { lbl: "Sububicación", val: "—" };
+    var c = catDe(l);
+    return { lbl: "Sububicación", val: (c && c.sububicacion) || "—" };
+  }
+  function cuadreCorto(cu) {
+    if (!cu) return "";
+    if (cu.estado === "ok" || cu.estado === "canje_ok") return '<span class="mctk-ok">✓<span class="mctk-ok-txt"> cuadrado</span></span>';
+    if (cu.razon) return '<span class="mctk-bad">' + e(String(cu.razon).slice(0, 48)) + "</span>";
+    return '<span class="mctk-bad">difiere</span>';
+  }
+  function cuadreDetalle(cu, l) {
+    var just = (K.justif != null ? K.justif : (K.d && K.d.justificacion_descuento)) || "";
+    if (cu && (cu.estado === "ok") && cu.factura) return "✓ Coincide con Fac. " + e(cu.factura);
+    if (cu && cu.estado === "ok") return "✓ Coincide con Fac." + (K.d && K.d.cuadre && K.d.cuadre.factura ? " " + e(K.d.cuadre.factura) : "");
+    if (l.canje || l.paqueteSesion || (cu && cu.estado === "canje_ok")) return "Canje · OK sin factura";
+    var mot = (cu && cu.razon) ? cu.razon : (cu ? "No coincide con la factura" : "Sin cruce de factura");
+    var html = '<span class="mctk-bad">' + e(mot) + "</span>";
+    if (just && (l.descuento_valor > 0 || hayDescTicket())) html += " · " + e(just);
+    return html;
+  }
+  function costoUtilHtml(l) {
+    if (!esSuperAdminCu()) return "";
+    var rows = (K.costos && K.costos.lineas) || [];
+    var c = rows.find(function (x) { return String(x.sku) === String(l.sku); });
+    if (!c) return '<div class="mctk-dr"><span>Costo / Util.</span><span class="mccf-sub">…</span></div>';
+    var sub = net(l.total_linea);
+    var util = r2(sub - (Number(c.costo_total) || 0));
+    var pct = sub > 0 ? r2((util / sub) * 100) : 0;
+    return '<div class="mctk-dr"><span>Costo / Util.</span><span>' + e($m(c.costo_total)) + " · Util. " + e($m(util)) + " (" + e(q2(pct)) + "%)</span></div>";
+  }
+  function leHtml(ed, campo, html, lbl) {
+    if (!ed) return '<span class="mctk-cv">' + html + "</span>";
+    return '<span class="mctk-dot" data-le="' + campo + '" tabindex="0" title="Clic para editar" aria-label="' + e(lbl) + '"><small hidden>' + e(lbl) + '</small><span class="mctk-cv">' + html + "</span></span>";
+  }
+  function asegurarCostos() {
+    if (!esSuperAdminCu() || K.costos || K._costosPend || !(K.d && K.d.clave)) return;
+    K._costosPend = api("tk_costos", { clave: K.d.clave }).then(function (r) {
+      K.costos = (r && r.costos) || { lineas: [] };
+      K._costosPend = null;
+      pintarLin();
+    }).catch(function () { K._costosPend = null; K.costos = { lineas: [] }; });
+  }
   function lineasHtml() {
     calc();
     if (!K.L.length) return '<div class="mccf-sub" style="padding:12px">' + ((K.d && K.d.hidratando) ? "Cargando líneas…" : "Sin líneas.") + "</div>";
     var ed = !!(K.d.puedeEditar || K.d.puedePedir);
-    var hd = '<div class="mctk-lh"><span>#</span><span>Producto</span><span>Cant</span><span>P. sin IVA</span><span>Desc</span><span>Subtotal</span><span>IVA</span><span>Total</span><span></span></div>';
-    // celda: data-le="campo" = editable con clic (admin edita, recepción solicita); vacío = en blanco
-    function celda(c, lbl, html, le, extra) {
-      return '<span class="mctk-c' + (extra || "") + '" data-c="' + c + '"' + (le && ed ? ' data-le="' + le + '" tabindex="0" title="Clic para editar"' : "") + "><small>" + lbl + '</small><span class="mctk-cv">' + html + "</span></span>";
-    }
-    var mapped = hd + K.L.map(function (l, i) {
+    K.open = K.open || {};
+    var mapped = K.L.map(function (l, i) {
       var fijo = (l.cortesia || l.canje || l.consumoInterno) && !(l.precio_unit > 0);
-      // TK98: consumo interno y gift card de cortesía en $0 (la gift card muestra su valor nominal).
       var esGift = l.tipo === "gift" && !(l.cortesia || l.canje);
-      var precio = l.consumoInterno && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#56627A" title="Producto sacado para uso interno (no se cobra ni se factura)">Consumo interno</span>' : l.cortesia && !(l.precio_unit > 0) ? '<span class="mctk-canje" style="color:#2E8B57" title="Cortesía (marcada al crear el ticket)">Cortesía</span>' : l.canje && !(l.precio_unit > 0) ? '<span class="mctk-canje" title="Canjeado de paquete o gift card">Canje</span>' : e($m(esGift ? l.precio_unit : net(l.precio_unit)));
-      var m = montos(l), tipoTxt = l.tipo !== "producto" ? " · " + e(esMejora(l) ? "Diferencia por mejora" : (TIPO[l.tipo] || l.tipo)) : "";
-      var pills = (l.canje ? '<span class="mctk-pill" style="color:#7C6BB0;border-color:#7C6BB0">Canje</span>' : "") +
-        (esMejora(l) ? '<span class="mctk-pill" style="color:#1A6B8A;border-color:#1A6B8A">Diferencia por mejora</span>' : "") +
-        (l.cortesia ? '<span class="mctk-pill" style="color:#2E8B57;border-color:#2E8B57">Cortesía</span>' : "") +
-        (l.consumoInterno ? '<span class="mctk-pill" style="color:#56627A;border-color:#56627A">Consumo interno</span>' : "") +
-        (l.paqueteSesion ? '<span class="mctk-pill" style="color:#56627A;border-color:#56627A">Canje de paquete</span>' : "") +
-        (l.valorNominal > 0 && l.tipo === "gift" ? ' <span style="color:#56627A;font-size:.72rem">valor nominal ' + e($m(l.valorNominal)) + "</span>" : "") +
-        (l.tipo === "diferencia" ? '<span class="mctk-pill" style="color:#B2452A;border-color:#B2452A" title="Lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada">⚠ revisar</span>' : "") + (l.excluir_comision ? ' <span class="mctk-xc">sin comisión</span>' : "") +
-        (l.promo && l.descuento_valor > 0 ? '<span class="mctk-promo">🏷️ ' + e(l.promo) + "</span>" : "");
-      // TK81: la «Diferencia por mejora» solo se ve si existe; agregarla es un botoncito discreto en las acciones de la fila
+      var precioNum = esGift ? l.precio_unit : net(l.precio_unit);
+      var precio = e($m(precioNum));
+      var m = montos(l);
       var mej = l.canje && !hayMejoraDe(l.sku) && ed ? '<button type="button" class="mctk-mej" data-mejora="' + i + '" title="Agregar diferencia por mejora (el facial vale más que el paquete)" aria-label="Agregar diferencia por mejora">＋$</button>' : "";
       var cu = ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return x.ticket_i === i; }) || ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return String(x.sku || "") && String(x.sku) === String(l.sku || "").replace(/^SUNSU-/i, ""); });
       var st = cu && cu.estado ? " " + cu.estado : "";
-      var razon = cu && cu.razon ? '<div class="mctk-cuadre-razon">' + e(cu.razon) + "</div>" : "";
-      return '<div data-i="' + i + '" class="mctk-ln' + st + '"><span class="mctk-li">' + (i + 1) + "</span>" +
-        '<div class="mctk-lp">' + fotoLinea(l) + '<div class="mctk-lpt"><span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + "</span>" +
-        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span>" + razon + stockTxt(l) + "</div></div>" +
-        '<span class="mctk-nums">' +
-        celda("q", "Cant", e(q2(l.cantidad)), "cantidad") +
-        celda("u", esGift ? "P. con IVA" : "P. sin IVA", precio, fijo ? "" : "precio_unit") +
-        celda("d", "Desc", e(descTxt(l.descuento_tipo, l.descuento_valor)), "desc") +
-        celda("s", "Subtotal", "<span data-tl>" + e($m(m.sub)) + "</span>", "", " mctk-c3") +
-        celda("v", "IVA", "<span data-iva>" + e($m(m.iva)) + "</span>", "", " mctk-c3") +
-        celda("t", "Total", "<b data-tot>" + e($m(m.tot)) + "</b>", "") +
-        "</span>" +
-        '<span class="mctk-lx">' + mej + '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button></span>' +
-        '<div class="mctk-mini"><span class="mctk-qx">' + e(q2(l.cantidad)) + " × " + precio + ' <span class="mctk-ok">✓</span></span><b class="mctk-ltot" data-tot-m>' + e($m(m.tot)) + "</b></div>" +
-        '<div class="mctk-lacts">' + (ed ? '<button class="mctk-del" type="button" data-del="' + i + '">Eliminar</button>' : "") + mej + "</div></div>";
+      if (!cu && (l.canje || l.paqueteSesion) && !(Number(l.total_linea) > 0)) st = " canje_ok";
+      var dtxt = descTxt(l.descuento_tipo, l.descuento_valor);
+      var descH = dtxt ? ' <span class="mctk-desc">−' + e(dtxt.charAt(0) === "$" ? dtxt : dtxt) + "</span>" : "";
+      var open = !!K.open[i];
+      var sub = subUbiDe(l);
+      var precioLbl = esGift ? "P. con IVA" : "P. sin IVA";
+      var editarVal = "Cant. " + leHtml(ed, "cantidad", e(q2(l.cantidad)), "Cant") +
+        " · Precio " + leHtml(ed && !fijo, "precio_unit", precio, precioLbl) +
+        " · Desc. " + leHtml(ed, "desc", e(dtxt || "0"), "Desc");
+      var drop = '<div class="mctk-drop"' + (open ? "" : " hidden") + '>' +
+        '<div class="mctk-dr"><span>Editar</span><span>' + editarVal + "</span></div>" +
+        '<div class="mctk-dr"><span>' + e(sub.lbl) + "</span><span>" + e(sub.val) + "</span></div>" +
+        '<div class="mctk-dr"><span>Comisión</span><span>' + e($m(comisionDe(l))) + "</span></div>" +
+        '<div class="mctk-dr"><span>Cuadre</span><span>' + cuadreDetalle(cu, l) + "</span></div>" +
+        costoUtilHtml(l) + "</div>";
+      var xbtn = ed ? '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button>' : "";
+      return '<div data-i="' + i + '" class="mctk-ln' + st + (open ? " open" : "") + '">' + xbtn +
+        '<div class="mctk-r1">' + fotoLinea(l) + '<span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + mej + "</span></div>" +
+        '<div class="mctk-sku">' + e(skuLineaTxt(l)) + "</div>" +
+        stockTxt(l) +
+        '<div class="mctk-r4"><span class="mctk-qx">' + e(q2(l.cantidad)) + " × " + precio + descH + " " + cuadreCorto(cu) + "</span>" +
+        '<button type="button" class="mctk-tog" data-tog="' + i + '" aria-expanded="' + (open ? "true" : "false") + '" aria-label="Ver detalle de la línea"><b class="mctk-ltot" data-tot-m>' + e($m(m.tot)) + '</b><span class="mctk-arr">' + (open ? "▴" : "▾") + "</span></button></div>" +
+        drop + "</div>";
     }).join("");
     var fantasmas = ((K.d && K.d.cuadre_lineas) || []).filter(function (x) { return x.estado === "falta"; }).map(function (x) {
-      return '<div class="mctk-ln falta" data-falta="1"><span class="mctk-li">+</span>' +
-        '<div class="mctk-lp"><div class="mctk-lpt"><span class="mctk-pn">' + e(x.nombre || x.codigo || x.sku) + "</span>" +
-        '<span class="mctk-sku">' + e(x.codigo || x.sku) + '</span><div class="mctk-cuadre-razon">' + e(x.razon || "Falta en ticket") + "</div></div></div></div>";
+      return '<div class="mctk-ln falta" data-falta="1">' +
+        '<div class="mctk-r1"><span class="mctk-ph mctk-badge" aria-hidden="true">!</span><span class="mctk-pn">' + e(x.nombre || x.codigo || x.sku) + "</span></div>" +
+        '<div class="mctk-sku">' + e(x.codigo || x.sku) + '</div>' +
+        '<div class="mctk-cuadre-razon" style="padding-left:40px">' + e(x.razon || "Falta en ticket") + "</div></div>";
     }).join("");
     return mapped + fantasmas;
   }
@@ -560,7 +673,7 @@
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
-      '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
+      '<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
       '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
@@ -699,7 +812,7 @@
       justificacion_descuento: K.justif || "", datos: Object.assign({}, dat.datos || {}, { justificacion_descuento: K.justif || "" }) });
   }
   function cargarEstado(d) {
-    K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {};
+    K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {}; K.open = {}; K.costos = null; K._costosPend = null;
     K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, consumoInterno: !!l.consumoInterno, paqueteSesion: l.paqueteSesion || "", valorNominal: Number(l.valorNominal) || 0, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
     K.promoIds = [];
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
@@ -1084,8 +1197,10 @@
       if (!c || c.querySelector("input")) return;
       var tr = c.closest("[data-i]"), l = K.L[+tr.getAttribute("data-i")], f = c.getAttribute("data-le"); if (!l || !f) return;
       var antes = JSON.stringify(l), v = f === "cantidad" ? q2(l.cantidad) : f === "precio_unit" ? (l.tipo === "gift" ? r2(l.precio_unit).toFixed(2) : net(l.precio_unit).toFixed(2)) : descTxt(l.descuento_tipo, l.descuento_valor);
-      var cv = c.querySelector(".mctk-cv");
-      cv.innerHTML = '<input class="mctk-cin" data-f="' + (f === "desc" ? "desc" : f) + '" ' + (f === "desc" ? 'type="text" inputmode="decimal" placeholder="10% o $5"' : 'type="number" inputmode="decimal" min="0" step="any"') + ' value="' + e(v) + '" aria-label="' + e(c.querySelector("small").textContent) + '">';
+      var cv = c.querySelector(".mctk-cv") || c;
+      var sm = c.querySelector("small");
+      var lbl = (sm && sm.textContent) || c.getAttribute("aria-label") || f;
+      cv.innerHTML = '<input class="mctk-cin" data-f="' + (f === "desc" ? "desc" : f) + '" ' + (f === "desc" ? 'type="text" inputmode="decimal" placeholder="10% o $5"' : 'type="number" inputmode="decimal" min="0" step="any"') + ' value="' + e(v) + '" aria-label="' + e(lbl) + '">';
       var inp = cv.querySelector("input"), fin = false; inp.focus(); inp.select();
       function cerrar(deshacer) { if (fin) return; fin = true; if (deshacer) { Object.assign(l, JSON.parse(antes)); calc(); } pintarLin(); }
       inp.addEventListener("keydown", function (k) { if (k.key === "Enter") { k.preventDefault(); cerrar(false); } else if (k.key === "Escape") { k.preventDefault(); cerrar(true); } });
@@ -1094,6 +1209,26 @@
     lin.addEventListener("click", function (ev) { var c = ev.target.closest("[data-le]"); if (c && !ev.target.closest("input")) editarCelda(c); });
     lin.addEventListener("keydown", function (ev) { if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches("[data-le]")) { ev.preventDefault(); editarCelda(ev.target); } });
     lin.addEventListener("click", function (ev) { var ir = ev.target.closest("[data-irp]"); if (ir) { ev.preventDefault(); ev.stopPropagation(); go("#/m/productos/p/" + encodeURIComponent(ir.getAttribute("data-irp"))); return; } });
+    lin.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-le], input, a, [data-del], [data-irp], [data-mejora]")) return;
+      var b = ev.target.closest("[data-tog]");
+      if (!b) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var i = +b.getAttribute("data-tog");
+      K.open = K.open || {};
+      K.open[i] = !K.open[i];
+      if (K.open[i]) asegurarCostos();
+      var tr = b.closest("[data-i]");
+      if (!tr) return;
+      tr.classList.toggle("open", !!K.open[i]);
+      var drop = tr.querySelector(".mctk-drop");
+      if (drop) drop.hidden = !K.open[i];
+      var arr = tr.querySelector(".mctk-arr");
+      if (arr) arr.textContent = K.open[i] ? "▴" : "▾";
+      b.setAttribute("aria-expanded", K.open[i] ? "true" : "false");
+    });
+
     lin.addEventListener("click", function (ev) { var b = ev.target.closest("[data-del]"); if (!b) return; K.L.splice(+b.getAttribute("data-del"), 1); marcar(); pintarLin(); });
     lin.addEventListener("click", function (ev) {
       var b = ev.target.closest("[data-mejora]"); if (!b) return;
