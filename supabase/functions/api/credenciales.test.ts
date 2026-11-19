@@ -37,8 +37,8 @@ describe("🔑 Usuario y contraseña", () => {
 
   it("cada quien crea su acceso y entra con él; nunca se guarda la contraseña en claro", async () => {
     const { db, h } = semilla();
-    assert.equal((await h("cred_mia_guardar", "cos", { usuario: "Ana", password: "Facial2026", password2: "otra" })).error, "Las dos contraseñas no coinciden");
-    const r = await h("cred_mia_guardar", "cos", { usuario: "Ana", password: "Facial2026", password2: "Facial2026" });
+    assert.equal((await h("cred_mia_guardar", "cos", { usuario: "Ana", email: "ana@sunsu.test", password: "Facial2026", password2: "otra" })).error, "Las dos contraseñas no coinciden");
+    const r = await h("cred_mia_guardar", "cos", { usuario: "Ana", email: "ana@sunsu.test", password: "Facial2026", password2: "Facial2026" });
     assert.equal(r.usuario, "ana");
     const c = db.tables.get("beta_credenciales")![0];
     assert.equal(c.usuario_id, "u-ana");
@@ -54,7 +54,7 @@ describe("🔑 Usuario y contraseña", () => {
 
   it("bloquea 15 minutos tras 5 intentos fallidos y el admin puede desbloquear", async () => {
     const { h, avanza } = semilla();
-    await h("cred_mia_guardar", "cos", { usuario: "ana", password: "Facial2026", password2: "Facial2026" });
+    await h("cred_mia_guardar", "cos", { usuario: "ana", email: "ana@sunsu.test", password: "Facial2026", password2: "Facial2026" });
     for (let i = 0; i < 5; i++) await h("login_pass", "", { usuario: "ana", password: "mala12345" });
     assert.match(String((await h("login_pass", "", { usuario: "ana", password: "Facial2026" })).error), /Demasiados intentos/);
     assert.equal(((await h("cred_lista", "adm")).items as Row[]).find((x) => x.id === "u-ana")!.bloqueada, true);
@@ -74,10 +74,10 @@ describe("🔑 Usuario y contraseña", () => {
   it("solo admin administra el equipo; usuario único; inactivos no entran", async () => {
     const { db, h } = semilla();
     assert.equal((await h("cred_lista", "cos")).error, "Solo admin");
-    assert.equal((await h("cred_guardar", "cos", { usuario_id: "admin", usuario: "emi", password: "Clave2026x" })).error, "Solo admin");
-    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-ana", usuario: "ana", password: "Clave2026x" })).ok, true);
-    assert.equal((await h("cred_mia_guardar", "adm", { usuario: "ana", password: "Clave2026y", password2: "Clave2026y" })).error, "Ese usuario ya lo tiene otra persona");
-    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-old", usuario: "ex1", password: "Clave2026x" })).error, "Esa persona no está en el equipo");
+    assert.equal((await h("cred_guardar", "cos", { usuario_id: "admin", usuario: "emi", email: "emi@sunsu.test", password: "Clave2026x" })).error, "Solo admin");
+    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-ana", usuario: "ana", email: "ana@sunsu.test", password: "Clave2026x" })).ok, true);
+    assert.equal((await h("cred_mia_guardar", "adm", { usuario: "ana", email: "emi2@sunsu.test", password: "Clave2026y", password2: "Clave2026y" })).error, "Ese usuario ya lo tiene otra persona");
+    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-old", usuario: "ex1", email: "ex@sunsu.test", password: "Clave2026x" })).error, "Esa persona no está en el equipo");
     const items = (await h("cred_lista", "adm")).items as Row[];
     assert.equal(items.length, 2);
     assert.ok(!JSON.stringify(items).includes("pass"));
@@ -90,14 +90,14 @@ describe("🔑 Usuario y contraseña", () => {
 
   it("una clave que pone el admin es temporal: obliga a cambiarla y no se puede repetir", async () => {
     const { h } = semilla();
-    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-ana", usuario: "ana", password: "Temporal1x" })).ok, true);
+    assert.equal((await h("cred_guardar", "adm", { usuario_id: "u-ana", usuario: "ana", email: "ana@sunsu.test", password: "Temporal1x" })).ok, true);
     const L = await h("login_pass", "", { usuario: "ana", password: "Temporal1x" });
     assert.equal(L.ok, true);
     assert.equal(L.debe_cambiar, true);
     assert.equal(L.usuario, "ana");
-    const same = await h("cred_mia_guardar", "cos", { usuario: "ana", password: "Temporal1x", password2: "Temporal1x" });
+    const same = await h("cred_mia_guardar", "cos", { usuario: "ana", email: "ana@sunsu.test", password: "Temporal1x", password2: "Temporal1x" });
     assert.match(String(same.error), /distinta a la temporal/);
-    const own = await h("cred_mia_guardar", "cos", { usuario: "ana", password: "LaMia2026", password2: "LaMia2026" });
+    const own = await h("cred_mia_guardar", "cos", { usuario: "ana", email: "ana@sunsu.test", password: "LaMia2026", password2: "LaMia2026" });
     assert.equal(own.ok, true);
     assert.equal(own.debe_cambiar, false);
     const L2 = await h("login_pass", "", { usuario: "ana", password: "LaMia2026" });

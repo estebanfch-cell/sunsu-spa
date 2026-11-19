@@ -64,7 +64,7 @@ describe("TK142 líneas compactas (MineCore claro)", () => {
     assert.doesNotMatch(src, /Subtotal gravado 15%|<span>Subtotal 0%|Subtotal \(sin IVA\)|Subtotal sin IVA/);
     assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK148"/);
     assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK148"/);
-    assert.match(html, /20261119tk146/);
+    assert.match(html, /20261119tk148/);
     assert.doesNotThrow(() => new Function(src));
   });
 

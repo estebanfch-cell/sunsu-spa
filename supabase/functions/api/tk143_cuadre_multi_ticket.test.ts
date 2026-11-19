@@ -227,7 +227,7 @@ describe("TK143 · no rompe regresiones TK138–TK142 ni Gift Cards", () => {
     const pkg = readFileSync(new URL("../../../package.json", import.meta.url), "utf8");
     assert.match(pkg, /tk143_cuadre_multi_ticket\.test\.ts/);
     const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(beta, /20261119tk146/);
+    assert.match(beta, /20261119tk148/);
     assert.doesNotMatch(beta, /20261119tk142/);
   });
 });

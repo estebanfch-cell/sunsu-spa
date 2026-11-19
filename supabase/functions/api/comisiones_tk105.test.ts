@@ -127,7 +127,7 @@ describe("TK105 Mis comisiones recepción y vendido", () => {
     const beta = readFileSync(join(root, "beta.html"), "utf8");
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(sw, /sunsu-beta-2026-11-19-TK148/);
-    assert.match(beta, /20261119tk146/);    assert.match(beta, /com-sum-hd/);
+    assert.match(beta, /20261119tk148/);    assert.match(beta, /com-sum-hd/);
     assert.match(beta, />Categoría<\/span><span>Vendido<\/span><span>Comisión<\/span>/);
     assert.match(beta, /function htmlComGrid/);
     assert.match(beta, />Código<\/div><div class="cel hd">Producto<\/div><div class="cel hd num">Cant\.<\/div><div class="cel hd num">Comisión</);

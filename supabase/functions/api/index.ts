@@ -103,6 +103,9 @@ Deno.serve(async (req) => {
       SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
       SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
       MIGO_CRON_KEY: Deno.env.get("MIGO_CRON_KEY"),
+      RESEND_API_KEY: Deno.env.get("RESEND_API_KEY"),
+      RESEND_FROM: Deno.env.get("RESEND_FROM"),
+      SUNSU_APP_URL: Deno.env.get("SUNSU_APP_URL"),
     },
     fetchImpl: fetch,
     legacyLogin: async (pin: string) => {
@@ -122,7 +125,8 @@ Deno.serve(async (req) => {
     if (cb && /^[$A-Z_a-z][0-9A-Z_$a-z]*$/.test(cb)) {
       return new Response(`${cb}(${JSON.stringify(data)})`, { headers: { "content-type": "application/javascript", ...CORS } });
     }
-    return json(data);
+    const auth = !!(data && typeof data === "object" && ((data as Row).auth_error === true || (data as Row).error === "Inicia sesión"));
+    return json(data, auth ? 401 : 200);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) });
   }

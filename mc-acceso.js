@@ -1,11 +1,11 @@
-// 🔑 Mi acceso (Emilia 17/11): entrar con usuario y contraseña además del PIN.
-// Cada persona crea o cambia el suyo; el admin ve el equipo, pone/quita usuarios y desbloquea.
+// 🔑 Mi acceso (Emilia 17/11 + TK147): usuario, contraseña y correo.
+// Al crear el acceso se desactiva el PIN. El admin puede enviar o copiar un enlace de reseteo.
 (function () {
   "use strict";
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function toast2(msg, bad) { if (typeof toast === "function") toast(msg, bad ? "var(--red, #c0392b)" : "var(--green)"); }
   function fh(iso) { if (!iso) return ""; try { return new Date(iso).toLocaleDateString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", year: "numeric" }); } catch (_) { return ""; } }
-  var REGLA = "Usuario: minúsculas, 3 a 30 letras o números (. _ -). Contraseña: mínimo 8, con letras y números.";
+  var REGLA = "Usuario: minúsculas, 3 a 30 letras o números (. _ -). Contraseña: mínimo 8, con letras y números. El correo sirve para resetear tu clave.";
   function css() {
     if (document.getElementById("mcac-css")) return;
     var s = document.createElement("style"); s.id = "mcac-css";
@@ -18,69 +18,116 @@
       ".mcac-t{width:100%;border-collapse:collapse;font-size:.8rem}.mcac-t th{text-align:left;color:var(--gray,#8a93a6);font-size:.7rem;padding:5px;border-bottom:1.2px solid var(--cream-d,#e6dccb)}.mcac-t td{padding:6px 5px;border-bottom:1px solid #f1ede6;vertical-align:middle}",
       ".mcac-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#e8f5ee;color:#2e7d52;font-weight:800}.mcac-pill.g{background:#eef0f4;color:#6b7280}.mcac-pill.r{background:#fdecea;color:#b03a2e}",
       ".mcac-ov{position:fixed;inset:0;background:rgba(40,50,70,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}.mcac-ov>div{background:#fff;border-radius:16px;padding:18px;max-width:420px;width:100%}",
+      ".mcac-aviso-mail{background:#FFF8EE;border:1px solid #E8D4B0;color:#6A4A16;border-radius:10px;padding:8px 10px;font-size:.78rem;margin:8px 0}",
+      ".mcac-enlace{word-break:break-all;font-size:.72rem;background:#f7f4ee;border-radius:8px;padding:8px;margin:8px 0}",
       "@media(max-width:560px){.mcac-f{grid-template-columns:1fr}}",
     ].join("\n");
     document.head.appendChild(s);
   }
-  function formHtml(pref, usuario, conConfirm) {
-    return '<div class="mcac-f"><label>Usuario<input id="' + pref + '-u" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" value="' + e(usuario || "") + '"></label><span></span>' +
-      '<label>Contraseña nueva<input id="' + pref + '-p" type="password" autocomplete="new-password" maxlength="128"></label>' +
+  function formHtml(pref, usuario, email, conConfirm, passOpcional) {
+    return '<div class="mcac-f"><label>Usuario<input id="' + pref + '-u" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" value="' + e(usuario || "") + '"></label>' +
+      '<label>Correo electrónico<input id="' + pref + '-e" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="160" value="' + e(email || "") + '" placeholder="tucorreo@ejemplo.com"></label>' +
+      '<label>Contraseña nueva<input id="' + pref + '-p" type="password" autocomplete="new-password" maxlength="128" ' + (passOpcional ? "" : "") + "></label>" +
       (conConfirm ? '<label>Repítela<input id="' + pref + '-p2" type="password" autocomplete="new-password" maxlength="128"></label>' : "<span></span>") +
-      '</div><p class="mcac-sub">' + e(REGLA) + "</p>";
+      '</div><p class="mcac-sub">' + e(REGLA) + (passOpcional ? " Si solo quieres registrar o cambiar el correo, deja la contraseña en blanco." : "") + "</p>";
+  }
+  function trasCrear() {
+    if (window.state) {
+      state.tiene_usuarioReal = true;
+      if (state.user) state.user.tiene_usuario = true;
+      if (state.userReal) state.userReal.tiene_usuario = true;
+    }
+    if (typeof window.sunsuTrasCrearUsuario === "function") window.sunsuTrasCrearUsuario();
   }
   async function render() {
     css();
     var mia = await api("cred_mia_get", {});
     var adm = !!(window.state && state.admin);
     var lista = adm ? await api("cred_lista", {}) : null;
-    var h = '<div class="mcac" id="mcac-root"><h2>🔑 Mi acceso</h2><p class="mcac-sub">Puedes entrar con tu PIN o con usuario y contraseña. Tu PIN sigue funcionando igual.</p>' +
+    var tiene = !!(mia && mia.tiene_usuario);
+    var faltaMail = !!(tiene && !(mia.email || "").trim());
+    var sub = tiene
+      ? "Entras con tu usuario y contraseña. Tu PIN quedó desactivado. Puedes cambiar la clave o el correo cuando quieras."
+      : "Crea tu usuario, contraseña y correo. A partir del martes 24 de noviembre de 2026 el PIN se suspende. Al registrarte, tu PIN se desactiva.";
+    var h = '<div class="mcac" id="mcac-root"><h2>🔑 Mi acceso</h2><p class="mcac-sub">' + e(sub) + "</p>" +
+      (faltaMail ? '<div class="mcac-aviso-mail">Todavía no tenemos tu correo. Agrégalo para poder enviarte un reseteo de clave si la olvidas.</div>' : "") +
       '<div class="mcac-card"><b>' + (mia && mia.usuario ? "Tu usuario: " + e(mia.usuario) : "Todavía no tienes usuario") + "</b>" +
+      (mia && mia.email ? ' <span class="mcac-sub">· ' + e(mia.email) + "</span>" : "") +
       (mia && mia.desde ? ' <span class="mcac-sub">· cambiado ' + e(fh(mia.desde)) + "</span>" : "") +
-      '<div style="margin-top:8px">' + formHtml("mcac-mia", mia && mia.usuario, true) + '</div><div class="mcac-acts"><button class="btn" id="mcac-mia-ok" type="button">Guardar</button></div></div>';
+      '<div style="margin-top:8px">' + formHtml("mcac-mia", mia && mia.usuario, mia && mia.email, true, !!tiene) + '</div><div class="mcac-acts"><button class="btn" id="mcac-mia-ok" type="button">' + (tiene ? "Guardar" : "Crear mi usuario y contraseña") + "</button></div></div>";
     if (adm) {
       var it = (lista && lista.items) || [];
-      h += '<div class="mcac-card"><b>Accesos del equipo</b> <span class="mcac-sub">· solo admin. Nunca se muestra la contraseña; si alguien la olvida, pon una nueva.</span>' +
-        '<table class="mcac-t"><thead><tr><th>Persona</th><th>Rol</th><th>Usuario</th><th></th></tr></thead><tbody>' +
+      h += '<div class="mcac-card"><b>Accesos del equipo</b> <span class="mcac-sub">· solo admin. Nunca se muestra la contraseña. Si alguien la olvida, envía o copia un enlace de reseteo.</span>' +
+        '<div style="overflow-x:auto"><table class="mcac-t"><thead><tr><th>Persona</th><th>Rol</th><th>Usuario / correo</th><th></th></tr></thead><tbody>' +
         it.map(function (u) {
-          return "<tr><td>" + e(u.nombre) + "</td><td>" + e(u.rol) + "</td><td>" + (u.usuario ? '<span class="mcac-pill">' + e(u.usuario) + "</span>" + (u.debe_cambiar ? ' <span class="mcac-pill r">debe cambiar clave</span>' : "") + (u.bloqueada ? ' <span class="mcac-pill r">bloqueado 15 min</span>' : "") : '<span class="mcac-pill g">solo PIN</span>') + "</td>" +
-            '<td style="text-align:right;white-space:nowrap"><button class="btn ghost small" data-cpon="' + e(u.id) + '" data-n="' + e(u.nombre) + '" data-u="' + e(u.usuario || "") + '">' + (u.usuario ? "Cambiar" : "Crear") + "</button>" +
+          var mail = u.email ? '<div class="mcac-sub">' + e(u.email) + "</div>" : (u.usuario ? '<div class="mcac-sub">sin correo</div>' : "");
+          return "<tr><td>" + e(u.nombre) + "</td><td>" + e(u.rol) + "</td><td>" + (u.usuario ? '<span class="mcac-pill">' + e(u.usuario) + "</span>" + (u.debe_cambiar ? ' <span class="mcac-pill r">debe cambiar clave</span>' : "") + (u.bloqueada ? ' <span class="mcac-pill r">bloqueado 15 min</span>' : "") + mail : '<span class="mcac-pill g">solo PIN</span>') + "</td>" +
+            '<td style="text-align:right;white-space:nowrap"><button class="btn ghost small" data-cpon="' + e(u.id) + '" data-n="' + e(u.nombre) + '" data-u="' + e(u.usuario || "") + '" data-e="' + e(u.email || "") + '">' + (u.usuario ? "Cambiar" : "Crear") + "</button>" +
+            (u.usuario ? ' <button class="btn ghost small" data-creset="' + e(u.id) + '" data-n="' + e(u.nombre) + '">Enviar reseteo de clave</button>' : "") +
             (u.bloqueada ? ' <button class="btn ghost small" data-cdes="' + e(u.id) + '">Desbloquear</button>' : "") +
             (u.usuario ? ' <button class="btn ghost small" data-cqui="' + e(u.id) + '" data-n="' + e(u.nombre) + '">Quitar</button>' : "") + "</td></tr>";
-        }).join("") + "</tbody></table></div>";
+        }).join("") + "</tbody></table></div></div>";
     }
     return h + "</div>";
   }
   async function repintar(main) { var r = document.getElementById("mcac-root"); if (!r) return; r.outerHTML = await render(); wire(main); }
+  function mostrarEnlace(titulo, texto, enlace, enviado, motivo) {
+    var ov = document.createElement("div"); ov.className = "mcac-ov";
+    var msg = enviado ? "El correo de reseteo se envió" + (texto ? " a " + texto : "") + "." : ("No se pudo enviar el correo" + (motivo ? " (" + motivo + ")" : "") + ". Copia el enlace y entrégaselo en persona. Vale 45 minutos.");
+    ov.innerHTML = "<div><b>" + e(titulo) + "</b><p class='mcac-sub'>" + e(msg) + "</p>" +
+      (enlace ? "<div class='mcac-enlace' id='mcac-enlace-txt'></div><div class='mcac-acts'><button class='btn' type='button' data-copy>Copiar enlace de reseteo</button><button class='btn ghost' type='button' data-x>Cerrar</button></div>" : "<div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cerrar</button></div>") +
+      "</div>";
+    document.body.appendChild(ov);
+    var box = ov.querySelector("#mcac-enlace-txt");
+    if (box) box.textContent = enlace || "";
+    var cx = ov.querySelector("[data-x]"); if (cx) cx.onclick = function () { ov.remove(); };
+    var cp = ov.querySelector("[data-copy]");
+    if (cp) cp.onclick = async function () {
+      try { await navigator.clipboard.writeText(enlace); toast2("Enlace copiado"); }
+      catch (_) { toast2("Copia el enlace a mano", 1); }
+    };
+  }
   function wire(main) {
     var ok = document.getElementById("mcac-mia-ok");
     if (ok) ok.onclick = async function () {
-      var u = document.getElementById("mcac-mia-u").value.trim().toLowerCase(), p = document.getElementById("mcac-mia-p").value, p2 = document.getElementById("mcac-mia-p2").value;
-      if (p !== p2) { toast2("Las dos contraseñas no coinciden", 1); return; }
+      var u = document.getElementById("mcac-mia-u").value.trim().toLowerCase();
+      var em = document.getElementById("mcac-mia-e").value.trim();
+      var p = document.getElementById("mcac-mia-p").value, p2 = document.getElementById("mcac-mia-p2").value;
+      if (p || p2) { if (p !== p2) { toast2("Las dos contraseñas no coinciden", 1); return; } }
       ok.disabled = true;
-      var r = await api("cred_mia_guardar", { usuario: u, password: p, password2: p2 });
+      var r = await api("cred_mia_guardar", { usuario: u, email: em, password: p, password2: p2 });
       ok.disabled = false;
       if (!r || !r.ok) { toast2((r && r.error) || "No se pudo guardar", 1); return; }
-      toast2("🔑 Listo: ya puedes entrar con «" + r.usuario + "»"); repintar(main);
+      if (p) { toast2("Listo: ya puedes entrar con «" + r.usuario + "». Tu PIN quedó desactivado."); trasCrear(); }
+      else { toast2("Correo guardado"); if (window.state && state.user) state.user.email = em; }
+      repintar(main);
     };
     document.querySelectorAll("[data-cpon]").forEach(function (b) {
       b.onclick = function () {
         var ov = document.createElement("div"); ov.className = "mcac-ov";
-        ov.innerHTML = "<div><b>Acceso de " + e(b.dataset.n) + "</b><div style='margin-top:8px'>" + formHtml("mcac-adm", b.dataset.u, false) + "</div><p class='mcac-sub'>Pon una contraseña temporal y dásela en persona. En el primer ingreso tendrá que elegir la suya (no puede repetir la temporal).</p><div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
+        ov.innerHTML = "<div><b>Acceso de " + e(b.dataset.n) + "</b><div style='margin-top:8px'>" + formHtml("mcac-adm", b.dataset.u, b.dataset.e, false, false) + "</div><p class='mcac-sub'>Pon una contraseña temporal y dásela en persona. En el primer ingreso tendrá que elegir la suya (no puede repetir la temporal). El PIN se desactiva cuando ella confirme su propia clave, no antes.</p><div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
         document.body.appendChild(ov);
         var _el = ov.querySelector("[data-x]"); if (_el) _el.onclick = function () { ov.remove(); };
-        var _el = ov.querySelector("[data-ok]"); if (_el) _el.onclick = async function () {
-          var r = await api("cred_guardar", { usuario_id: b.dataset.cpon, usuario: document.getElementById("mcac-adm-u").value.trim().toLowerCase(), password: document.getElementById("mcac-adm-p").value });
+        var _ok = ov.querySelector("[data-ok]"); if (_ok) _ok.onclick = async function () {
+          var r = await api("cred_guardar", { usuario_id: b.dataset.cpon, usuario: document.getElementById("mcac-adm-u").value.trim().toLowerCase(), email: document.getElementById("mcac-adm-e").value.trim(), password: document.getElementById("mcac-adm-p").value });
           if (!r || !r.ok) { toast2((r && r.error) || "No se pudo guardar", 1); return; }
           ov.remove(); toast2("Acceso guardado para " + b.dataset.n); repintar(main);
         };
       };
     });
+    document.querySelectorAll("[data-creset]").forEach(function (b) {
+      b.onclick = async function () {
+        var r = await api("cred_enviar_reset", { usuario_id: b.dataset.creset });
+        if (!r || !r.ok) { toast2((r && r.error) || "No se pudo generar el reseteo", 1); return; }
+        mostrarEnlace("Reseteo de clave · " + b.dataset.n, r.email || "", r.enlace || "", !!r.enviado, r.motivo || "");
+      };
+    });
     document.querySelectorAll("[data-cqui]").forEach(function (b) {
       b.onclick = async function () {
-        if (!confirm("¿Quitar el usuario de " + b.dataset.n + "? Podrá seguir entrando con su PIN.")) return;
+        if (!confirm("¿Quitar el usuario de " + b.dataset.n + "? Podrá volver a entrar con su PIN.")) return;
         var r = await api("cred_quitar", { usuario_id: b.dataset.cqui });
         if (!r || !r.ok) { toast2((r && r.error) || "No se pudo quitar", 1); return; }
-        toast2("Usuario quitado"); repintar(main);
+        toast2("Usuario quitado. El PIN vuelve a servir."); repintar(main);
       };
     });
     document.querySelectorAll("[data-cdes]").forEach(function (b) {

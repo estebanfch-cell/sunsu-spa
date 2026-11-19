@@ -183,6 +183,6 @@ describe("TK140 cosmetóloga editable y default del borrador", () => {
     assert.match(html, /th:last-child, \.tk-table td:last-child \{ overflow: visible/);
     assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK148"/);
     assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK148"/);
-    assert.match(html, /20261119tk146/);
+    assert.match(html, /20261119tk148/);
   });
 });

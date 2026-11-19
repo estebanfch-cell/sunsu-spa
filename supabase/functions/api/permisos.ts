@@ -261,7 +261,7 @@ export async function matrizDe(db: Db): Promise<Record<string, Partial<Record<st
 }
 
 export function gateAccion(action: string, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>>): { error: string } | null {
-  const pub = new Set(["", "version", "getVersion", "login", "login_pass", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami"]);
+  const pub = new Set(["", "version", "getVersion", "login", "login_pass", "logout", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami", "reset_pedir", "reset_validar", "reset_aplicar"]);
   if (pub.has(action)) return null;
   if (!ses) return { error: "Inicia sesión" };
   // Consumos (unidades): lo ve admin y Super Admin. Los $ de costo los quita redactar si no es Super Admin.
@@ -341,7 +341,10 @@ export function redactar(action: string, data: unknown, ses: SesLite | null, mat
   }
   let out = quitarCostos(structuredClone(data), puedeCostos, action);
   if (esAdmin(ses.rol)) return out;
-  out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));
+  // TK147: el correo del propio acceso (whoami / Mi acceso / reseteo) no es el email de una clienta.
+  const emailPropio = action === "whoami" || action.startsWith("cred_") || action.startsWith("reset_");
+  if (!emailPropio) out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));
+  else if (!puedePriv(ses.rol, "telefonos", matriz)) out = quitarContacto(out, false, true);
   const ticketsPropio = acceso(ses.rol, "tickets", matriz) === "propio";
   const rolPropio = acceso(ses.rol, "rol_pagos", matriz) !== "todos";
   const comPropio = acceso(ses.rol, "comisiones", matriz) === "propio";
