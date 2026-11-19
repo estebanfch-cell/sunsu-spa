@@ -1,4 +1,5 @@
 import { cicloDe, extend } from "./handlers.ts";
+import { recepcionDeCiclo } from "./comision_recepcion.ts";
 import { actorOf, asignarTicketBeta, conTelefono, espejo, guardarArchivo, kvGet, kvSet, logAccion, nextSheet, rowBySheet } from "./lib.ts";
 import {
   BODEGA_CABINA_APERTURA, DESTINOS_CABINA, conDiasDesdeApertura, escribirAbiertos, etiquetaDestino,
@@ -276,12 +277,8 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
   let comRecepcion = 0;
   const esRecep = personaEsRecepcionista(nombreApp, users);
   if (esRecep) {
-    const dias = new Map<string, number>();
-    for (const t of tks) {
-      if (t.fecha < ciclo || t.fecha > fin || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
-      dias.set(t.fecha, (dias.get(t.fecha) || 0) + 1);
-    }
-    for (const [f, c] of dias) comRecepcion += comisionRecepcionDia(f, c, aplicado.cfg);
+    const rec = await recepcionDeCiclo(ctx, rowsTk, { ciclo, fin, cfg: aplicado.cfg });
+    comRecepcion = rec.total;
   }
   let multas = 0;
   for (const r of await ctx.db.all("multas_descuentos")) {

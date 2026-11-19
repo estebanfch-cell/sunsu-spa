@@ -1,0 +1,1451 @@
+{
+  "tickets": [
+    {
+      "so": "TK-SO-1830",
+      "timestamp": "2026-11-10T11:52:59+00:00",
+      "nombre": "María Sol",
+      "apellido": "Caraicoa",
+      "cedula": "1702448448",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-04 Facial Gold-Aging",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1831",
+      "timestamp": "2026-11-10T14:52:25+00:00",
+      "nombre": "Nataly",
+      "apellido": "Alava",
+      "cedula": "1726412354",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1833",
+      "timestamp": "2026-11-10T16:18:18+00:00",
+      "nombre": "Susana",
+      "apellido": "Guerrero",
+      "cedula": "1705817334",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1834",
+      "timestamp": "2026-11-10T16:46:35+00:00",
+      "nombre": "Paula",
+      "apellido": "Castells",
+      "cedula": "1720473238",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1836",
+      "timestamp": "2026-11-10T18:33:33+00:00",
+      "nombre": "Maria Belen",
+      "apellido": "Morales",
+      "cedula": "1703856789",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1838",
+      "timestamp": "2026-11-10T18:44:29+00:00",
+      "nombre": "Jose Ignacio",
+      "apellido": "Miño",
+      "cedula": "1715067110",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1839",
+      "timestamp": "2026-11-10T18:46:09+00:00",
+      "nombre": "Estefania",
+      "apellido": "Jervis",
+      "cedula": "1714558333",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1841",
+      "timestamp": "2026-11-11T11:50:17+00:00",
+      "nombre": "Gabriela",
+      "apellido": "Sandoval",
+      "cedula": "1721036646",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1842",
+      "timestamp": "2026-11-11T13:39:48+00:00",
+      "nombre": "Diandra",
+      "apellido": "Dreyer",
+      "cedula": "1713196630",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1843",
+      "timestamp": "2026-11-11T13:49:06+00:00",
+      "nombre": "Denisse",
+      "apellido": "Constante",
+      "cedula": "926572942",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1847",
+      "timestamp": "2026-11-11T15:55:52+00:00",
+      "nombre": "Ana Maria",
+      "apellido": "Ramirez",
+      "cedula": "1725839862",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1849",
+      "timestamp": "2026-11-11T16:56:13+00:00",
+      "nombre": "Fernanda",
+      "apellido": "Betancourt",
+      "cedula": "1722554084",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1850",
+      "timestamp": "2026-11-11T17:00:33+00:00",
+      "nombre": "Maria Emilia",
+      "apellido": "Zapata",
+      "cedula": "1707787618",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-04 Facial Gold-Aging",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1851",
+      "timestamp": "2026-11-11T18:25:20+00:00",
+      "nombre": "Luis Fernando",
+      "apellido": "Bastidas",
+      "cedula": "1725746356",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-43 Facial de Geisha",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1853",
+      "timestamp": "2026-11-12T11:20:24+00:00",
+      "nombre": "Annie",
+      "apellido": "Tao",
+      "cedula": "667288874",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-05 Facial Porcelana",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1855",
+      "timestamp": "2026-11-12T13:18:02+00:00",
+      "nombre": "Melissa",
+      "apellido": "Villalba",
+      "cedula": "1715954457",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-57 Facial K-Lift",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1856",
+      "timestamp": "2026-11-12T13:56:36+00:00",
+      "nombre": "Daniela",
+      "apellido": "Moncayo",
+      "cedula": "1712167483",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-43 Facial de Geisha",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1858",
+      "timestamp": "2026-11-12T17:45:12+00:00",
+      "nombre": "Roberto",
+      "apellido": "Montaluisa",
+      "cedula": "1720088606",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-05 Facial Porcelana",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1859",
+      "timestamp": "2026-11-12T18:11:09+00:00",
+      "nombre": "Djorkaeff",
+      "apellido": "Reasco",
+      "cedula": "1418867649",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1860",
+      "timestamp": "2026-11-12T18:53:14+00:00",
+      "nombre": "Camila",
+      "apellido": "Borja",
+      "cedula": "1312862517",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1861",
+      "timestamp": "2026-11-12T19:05:43+00:00",
+      "nombre": "Tania",
+      "apellido": "Zabala",
+      "cedula": "604224865",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1862",
+      "timestamp": "2026-11-12T23:13:41+00:00",
+      "nombre": "Fernanda",
+      "apellido": "Cruz",
+      "cedula": "1724354798",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1863",
+      "timestamp": "2026-11-12T23:16:24+00:00",
+      "nombre": "Nancy",
+      "apellido": "Proaño",
+      "cedula": "1702769686",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-03 7 Pieles (Arroz+H₂O)",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1864",
+      "timestamp": "2026-11-12T23:19:37+00:00",
+      "nombre": "Soledad",
+      "apellido": "Carrera",
+      "cedula": "1715968648",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1865",
+      "timestamp": "2026-11-12T23:23:01+00:00",
+      "nombre": "Kerly",
+      "apellido": "Galeth",
+      "cedula": "1720909769",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1866",
+      "timestamp": "2026-11-13T12:03:30+00:00",
+      "nombre": "Maria Emilia",
+      "apellido": "Uribe",
+      "cedula": "1712731130001",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1867",
+      "timestamp": "2026-11-13T12:06:34+00:00",
+      "nombre": "Francisca",
+      "apellido": "Gabela",
+      "cedula": "1717050254",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1868",
+      "timestamp": "2026-11-13T16:40:47+00:00",
+      "nombre": "Gabriela",
+      "apellido": "Oleas",
+      "cedula": "1714115803",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1869",
+      "timestamp": "2026-11-13T16:53:04+00:00",
+      "nombre": "Sara",
+      "apellido": "Alvarez",
+      "cedula": "1718362260",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-03 7 Pieles (Arroz+H₂O)",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1870",
+      "timestamp": "2026-11-13T16:57:03+00:00",
+      "nombre": "Paula",
+      "apellido": "Narvaez",
+      "cedula": "1803321437",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1871",
+      "timestamp": "2026-11-13T17:19:50+00:00",
+      "nombre": "Elizabeth",
+      "apellido": "Godines",
+      "cedula": "1762650438",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1872",
+      "timestamp": "2026-11-13T18:40:34+00:00",
+      "nombre": "Laura",
+      "apellido": "Gonzalez",
+      "cedula": "1760920072",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1873",
+      "timestamp": "2026-11-13T18:46:29+00:00",
+      "nombre": "Iker",
+      "apellido": "Sáenz",
+      "cedula": "1728033620",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1874",
+      "timestamp": "2026-11-14T11:02:52+00:00",
+      "nombre": "Luciana",
+      "apellido": "Moreira",
+      "cedula": "1752096584",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-05 Facial Porcelana",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1875",
+      "timestamp": "2026-11-14T11:22:11+00:00",
+      "nombre": "Josué Paul",
+      "apellido": "Moreira Garzon",
+      "cedula": "1757366578",
+      "cosm": "Evelyn Anabel Toapanta Quishpe",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1877",
+      "timestamp": "2026-11-14T12:55:03+00:00",
+      "nombre": "Isabel",
+      "apellido": "Rojas",
+      "cedula": "1724054950",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-03 7 Pieles (Arroz+H₂O)",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1881",
+      "timestamp": "2026-11-14T16:04:32+00:00",
+      "nombre": "Nicole",
+      "apellido": "Jacome",
+      "cedula": "1725211526",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1882",
+      "timestamp": "2026-11-14T16:16:03+00:00",
+      "nombre": "Gabriela",
+      "apellido": "Llumiquinga",
+      "cedula": "1721406211",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1883",
+      "timestamp": "2026-11-14T16:27:11+00:00",
+      "nombre": "Catalina",
+      "apellido": "Moncayo",
+      "cedula": "1718814419",
+      "cosm": "Evelyn Anabel Toapanta Quishpe",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1885",
+      "timestamp": "2026-11-14T17:02:07+00:00",
+      "nombre": "Liseth",
+      "apellido": "Montenegro",
+      "cedula": "401495536",
+      "cosm": "Evelyn Anabel Toapanta Quishpe",
+      "facial": "SUNSU-03 7 Pieles (Arroz+H₂O)",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1886",
+      "timestamp": "2026-11-14T17:02:47+00:00",
+      "nombre": "Elena",
+      "apellido": "Oña",
+      "cedula": "1715162150",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1887",
+      "timestamp": "2026-11-16T11:20:40+00:00",
+      "nombre": "Nancy",
+      "apellido": "Dávila",
+      "cedula": "1707278386",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-05 Facial Porcelana",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1888",
+      "timestamp": "2026-11-16T13:28:50+00:00",
+      "nombre": "Sandra",
+      "apellido": "Arciniegas",
+      "cedula": "1705179354",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1889",
+      "timestamp": "2026-11-16T17:17:56+00:00",
+      "nombre": "Marisol",
+      "apellido": "Pazmiño",
+      "cedula": "1802464444",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-57 Facial K-Lift",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1890",
+      "timestamp": "2026-11-16T18:42:08+00:00",
+      "nombre": "Maria Lorena",
+      "apellido": "Pasquel",
+      "cedula": "1703858694",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1891",
+      "timestamp": "2026-11-16T18:49:42+00:00",
+      "nombre": "Karina",
+      "apellido": "Lino",
+      "cedula": "1204627960",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1892",
+      "timestamp": "2026-11-16T21:21:37+00:00",
+      "nombre": "Valeria",
+      "apellido": "Perez Montoya",
+      "cedula": "1725150880",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-42 Facial Peeling Marino de Perla",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1895",
+      "timestamp": "2026-11-17T15:34:40+00:00",
+      "nombre": "Sarah",
+      "apellido": "Erazo",
+      "cedula": "1714884267",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1896",
+      "timestamp": "2026-11-17T16:23:12+00:00",
+      "nombre": "Nayeli",
+      "apellido": "Rodríguez",
+      "cedula": "1721034245",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1897",
+      "timestamp": "2026-11-17T16:40:56+00:00",
+      "nombre": "Carolina",
+      "apellido": "Cadena",
+      "cedula": "1713721601",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1898",
+      "timestamp": "2026-11-17T17:36:31+00:00",
+      "nombre": "María Gracia",
+      "apellido": "Arellano",
+      "cedula": "1710008812",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1899",
+      "timestamp": "2026-11-17T17:51:34+00:00",
+      "nombre": "Isabella",
+      "apellido": "Reina",
+      "cedula": "1754189247",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1903",
+      "timestamp": "2026-11-17T18:05:17+00:00",
+      "nombre": "Marcela",
+      "apellido": "Basantes",
+      "cedula": "1712829975",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-42 Facial Peeling Marino de Perla",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1905",
+      "timestamp": "2026-11-17T18:23:34+00:00",
+      "nombre": "Juan Martín",
+      "apellido": "Hajj Prado",
+      "cedula": "1754585337",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1907",
+      "timestamp": "2026-11-18T12:31:56+00:00",
+      "nombre": "Daniela",
+      "apellido": "Ribadeneira",
+      "cedula": "1720847589",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1908",
+      "timestamp": "2026-11-18T13:26:20+00:00",
+      "nombre": "Monique",
+      "apellido": "Baus",
+      "cedula": "1713718771",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1911",
+      "timestamp": "2026-11-18T14:26:29+00:00",
+      "nombre": "Manuela",
+      "apellido": "Hinojosa",
+      "cedula": "1725509804",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-01 Facial S.O.S",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1912",
+      "timestamp": "2026-11-18T14:29:43+00:00",
+      "nombre": "Joanna",
+      "apellido": "Manvik",
+      "cedula": "914770896",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-40 Facial Reset 3x1",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1914",
+      "timestamp": "2026-11-18T15:21:06+00:00",
+      "nombre": "Youssef",
+      "apellido": "Tazi",
+      "cedula": "3051528",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1915",
+      "timestamp": "2026-11-18T15:25:30+00:00",
+      "nombre": "CAROLINA",
+      "apellido": "CHACON",
+      "cedula": "1718862954",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": [
+        {
+          "tipo": "facial"
+        }
+      ]
+    },
+    {
+      "so": "TK-SO-1916",
+      "timestamp": "2026-11-18T17:37:18+00:00",
+      "nombre": "Carolina",
+      "apellido": "Ortega",
+      "cedula": "1713170924",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1920",
+      "timestamp": "2026-11-18T18:09:15+00:00",
+      "nombre": "David",
+      "apellido": "Amores",
+      "cedula": "1712337557",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1921",
+      "timestamp": "2026-11-18T18:20:32+00:00",
+      "nombre": "Consuelo",
+      "apellido": "Perez",
+      "cedula": "1707744338",
+      "cosm": "Andrea Robles",
+      "facial": "SUNSU-02 Facial Reparación",
+      "lineas": []
+    },
+    {
+      "so": "TK-SO-1923",
+      "timestamp": "2026-11-18T18:34:51+00:00",
+      "nombre": "Corina",
+      "apellido": "Cepeda",
+      "cedula": "1726025636",
+      "cosm": "Daniela Mora",
+      "facial": "SUNSU-01 Facial S.O.S",
+      "lineas": []
+    }
+  ],
+  "citas": [
+    {
+      "id": 1809332845,
+      "firstName": "Corina",
+      "lastName": "Cepeda",
+      "datetime": "2026-11-18T17:00:00-0500",
+      "date": "2026-11-18",
+      "time": "5:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1800574021,
+      "firstName": "Consuelo",
+      "lastName": "Pérez",
+      "datetime": "2026-11-18T16:30:00-0500",
+      "date": "2026-11-18",
+      "time": "4:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1802954679,
+      "firstName": "David",
+      "lastName": "Amores",
+      "datetime": "2026-11-18T15:30:00-0500",
+      "date": "2026-11-18",
+      "time": "3:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1802954542,
+      "firstName": "Carolina",
+      "lastName": "Ortega",
+      "datetime": "2026-11-18T15:00:00-0500",
+      "date": "2026-11-18",
+      "time": "3:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1804125747,
+      "firstName": "CAROLINA",
+      "lastName": "CHACON",
+      "datetime": "2026-11-18T13:30:00-0500",
+      "date": "2026-11-18",
+      "time": "1:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1803154845,
+      "firstName": "Youssef",
+      "lastName": "Tazi",
+      "datetime": "2026-11-18T13:00:00-0500",
+      "date": "2026-11-18",
+      "time": "1:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1806783390,
+      "firstName": "Monique",
+      "lastName": "Baus",
+      "datetime": "2026-11-18T11:30:00-0500",
+      "date": "2026-11-18",
+      "time": "11:30am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1808999049,
+      "firstName": "Joanna",
+      "lastName": "Manvik",
+      "datetime": "2026-11-18T11:00:00-0500",
+      "date": "2026-11-18",
+      "time": "11:00am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1809881575,
+      "firstName": "Daniela",
+      "lastName": "Ribadeneira Muñoz",
+      "datetime": "2026-11-18T10:00:00-0500",
+      "date": "2026-11-18",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1800613779,
+      "firstName": "Manuela",
+      "lastName": "Hinojosa",
+      "datetime": "2026-11-18T09:30:00-0500",
+      "date": "2026-11-18",
+      "time": "9:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801236509,
+      "firstName": "Aglay",
+      "lastName": "Terán",
+      "datetime": "2026-11-17T17:30:00-0500",
+      "date": "2026-11-17",
+      "time": "5:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1793930819,
+      "firstName": "Juan Martín",
+      "lastName": "Hajj Prado",
+      "datetime": "2026-11-17T17:00:00-0500",
+      "date": "2026-11-17",
+      "time": "5:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1785947807,
+      "firstName": "María Gracia",
+      "lastName": "Arellano",
+      "datetime": "2026-11-17T16:00:00-0500",
+      "date": "2026-11-17",
+      "time": "4:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1775774778,
+      "firstName": "Carolina",
+      "lastName": "Cadena",
+      "datetime": "2026-11-17T15:00:00-0500",
+      "date": "2026-11-17",
+      "time": "3:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1802686067,
+      "firstName": "Marcela",
+      "lastName": "Basantes",
+      "datetime": "2026-11-17T14:30:00-0500",
+      "date": "2026-11-17",
+      "time": "2:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1793714473,
+      "firstName": "Nayeli",
+      "lastName": "Rodríguez",
+      "datetime": "2026-11-17T13:00:00-0500",
+      "date": "2026-11-17",
+      "time": "1:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1797557610,
+      "firstName": "Sarah",
+      "lastName": "Erazo",
+      "datetime": "2026-11-17T10:00:00-0500",
+      "date": "2026-11-17",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1808625099,
+      "firstName": "Isabella",
+      "lastName": "Reina",
+      "datetime": "2026-11-17T09:30:00-0500",
+      "date": "2026-11-17",
+      "time": "9:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1807550949,
+      "firstName": "María Lorena",
+      "lastName": "Pasquel",
+      "datetime": "2026-11-16T16:30:00-0500",
+      "date": "2026-11-16",
+      "time": "4:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1798629409,
+      "firstName": "Marisol",
+      "lastName": "Pazmiño",
+      "datetime": "2026-11-16T15:00:00-0500",
+      "date": "2026-11-16",
+      "time": "3:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1800431165,
+      "firstName": "Valeria",
+      "lastName": "Perez Montoya",
+      "datetime": "2026-11-16T13:30:00-0500",
+      "date": "2026-11-16",
+      "time": "1:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1809241866,
+      "firstName": "Karina",
+      "lastName": "Lino",
+      "datetime": "2026-11-16T13:30:00-0500",
+      "date": "2026-11-16",
+      "time": "1:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1789971177,
+      "firstName": "Sandra",
+      "lastName": "Arciniegas",
+      "datetime": "2026-11-16T11:30:00-0500",
+      "date": "2026-11-16",
+      "time": "11:30am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1789911410,
+      "firstName": "Nancy",
+      "lastName": "Dávila",
+      "datetime": "2026-11-16T10:00:00-0500",
+      "date": "2026-11-16",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1774212022,
+      "firstName": "Elena",
+      "lastName": "Oña",
+      "datetime": "2026-11-14T16:00:00-0500",
+      "date": "2026-11-14",
+      "time": "4:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1790524548,
+      "firstName": "Liseth",
+      "lastName": "Montenegro",
+      "datetime": "2026-11-14T14:30:00-0500",
+      "date": "2026-11-14",
+      "time": "2:30pm",
+      "calendar": "Vacante",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1796699420,
+      "firstName": "Gabriela",
+      "lastName": "Llumiquinga",
+      "datetime": "2026-11-14T14:30:00-0500",
+      "date": "2026-11-14",
+      "time": "2:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1790554444,
+      "firstName": "Nicole",
+      "lastName": "Jacome",
+      "datetime": "2026-11-14T13:00:00-0500",
+      "date": "2026-11-14",
+      "time": "1:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805608779,
+      "firstName": "Catalina",
+      "lastName": "Moncayo",
+      "datetime": "2026-11-14T11:30:00-0500",
+      "date": "2026-11-14",
+      "time": "11:30am",
+      "calendar": "Vacante",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1786168658,
+      "firstName": "Isabel",
+      "lastName": "Rojas",
+      "datetime": "2026-11-14T11:00:00-0500",
+      "date": "2026-11-14",
+      "time": "11:00am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1782096194,
+      "firstName": "Josue",
+      "lastName": "Moreira",
+      "datetime": "2026-11-14T10:00:00-0500",
+      "date": "2026-11-14",
+      "time": "10:00am",
+      "calendar": "Vacante",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1806920052,
+      "firstName": "Luciana",
+      "lastName": "Moreira",
+      "datetime": "2026-11-14T09:30:00-0500",
+      "date": "2026-11-14",
+      "time": "9:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801007367,
+      "firstName": "Iker",
+      "lastName": "Sáenz",
+      "datetime": "2026-11-13T17:00:00-0500",
+      "date": "2026-11-13",
+      "time": "5:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1796891065,
+      "firstName": "Laura",
+      "lastName": "Gonzalez",
+      "datetime": "2026-11-13T15:30:00-0500",
+      "date": "2026-11-13",
+      "time": "3:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801138727,
+      "firstName": "Paula",
+      "lastName": "Narváez",
+      "datetime": "2026-11-13T15:00:00-0500",
+      "date": "2026-11-13",
+      "time": "3:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801908114,
+      "firstName": "Elizabeth",
+      "lastName": "Godines",
+      "datetime": "2026-11-13T15:00:00-0500",
+      "date": "2026-11-13",
+      "time": "3:00pm",
+      "calendar": "Vacante",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805384822,
+      "firstName": "Sara",
+      "lastName": "Alvarez",
+      "datetime": "2026-11-13T13:30:00-0500",
+      "date": "2026-11-13",
+      "time": "1:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1797306027,
+      "firstName": "Gabriela",
+      "lastName": "Oleas",
+      "datetime": "2026-11-13T13:00:00-0500",
+      "date": "2026-11-13",
+      "time": "1:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1806350658,
+      "firstName": "Francisca",
+      "lastName": "Gabela",
+      "datetime": "2026-11-13T10:45:00-0500",
+      "date": "2026-11-13",
+      "time": "10:45am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1802366912,
+      "firstName": "Maria Emilia",
+      "lastName": "Uribe",
+      "datetime": "2026-11-13T09:30:00-0500",
+      "date": "2026-11-13",
+      "time": "9:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805266419,
+      "firstName": "Camila",
+      "lastName": "Borja",
+      "datetime": "2026-11-12T17:00:00-0500",
+      "date": "2026-11-12",
+      "time": "5:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805347892,
+      "firstName": "Tania",
+      "lastName": "Zabala",
+      "datetime": "2026-11-12T17:00:00-0500",
+      "date": "2026-11-12",
+      "time": "5:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805448110,
+      "firstName": "Djorkaeff",
+      "lastName": "Reasco",
+      "datetime": "2026-11-12T15:30:00-0500",
+      "date": "2026-11-12",
+      "time": "3:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805447812,
+      "firstName": "Kerly",
+      "lastName": "Galeth",
+      "datetime": "2026-11-12T15:00:00-0500",
+      "date": "2026-11-12",
+      "time": "3:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1804655252,
+      "firstName": "Roberto",
+      "lastName": "Montaluisa",
+      "datetime": "2026-11-12T14:00:00-0500",
+      "date": "2026-11-12",
+      "time": "2:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801788598,
+      "firstName": "Soledad",
+      "lastName": "Carrera",
+      "datetime": "2026-11-12T13:00:00-0500",
+      "date": "2026-11-12",
+      "time": "1:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801241263,
+      "firstName": "Daniela",
+      "lastName": "Moncayo",
+      "datetime": "2026-11-12T11:30:00-0500",
+      "date": "2026-11-12",
+      "time": "11:30am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805283471,
+      "firstName": "Nancy",
+      "lastName": "Proaño",
+      "datetime": "2026-11-12T11:30:00-0500",
+      "date": "2026-11-12",
+      "time": "11:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1796334087,
+      "firstName": "Melissa",
+      "lastName": "Villalba",
+      "datetime": "2026-11-12T10:00:00-0500",
+      "date": "2026-11-12",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1804463689,
+      "firstName": "Fernanda",
+      "lastName": "Cruz",
+      "datetime": "2026-11-12T10:00:00-0500",
+      "date": "2026-11-12",
+      "time": "10:00am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1799990914,
+      "firstName": "Luis Fernando",
+      "lastName": "Bastidas",
+      "datetime": "2026-11-11T17:00:00-0500",
+      "date": "2026-11-11",
+      "time": "5:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1800543415,
+      "firstName": "Annie",
+      "lastName": "Tao",
+      "datetime": "2026-11-11T17:00:00-0500",
+      "date": "2026-11-11",
+      "time": "5:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801057599,
+      "firstName": "Maria Emilia",
+      "lastName": "Zapata",
+      "datetime": "2026-11-11T15:30:00-0500",
+      "date": "2026-11-11",
+      "time": "3:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1803903058,
+      "firstName": "Ana Maria",
+      "lastName": "Ramirez",
+      "datetime": "2026-11-11T14:30:00-0500",
+      "date": "2026-11-11",
+      "time": "2:30pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1801230864,
+      "firstName": "Fernanda",
+      "lastName": "Betancourt",
+      "datetime": "2026-11-11T13:00:00-0500",
+      "date": "2026-11-11",
+      "time": "1:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1805250362,
+      "firstName": "Denisse",
+      "lastName": "Constante",
+      "datetime": "2026-11-11T11:30:00-0500",
+      "date": "2026-11-11",
+      "time": "11:30am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1804552624,
+      "firstName": "Diandra",
+      "lastName": "Dreyer",
+      "datetime": "2026-11-11T10:00:00-0500",
+      "date": "2026-11-11",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1800993332,
+      "firstName": "Gabriela",
+      "lastName": "Sandoval",
+      "datetime": "2026-11-11T09:30:00-0500",
+      "date": "2026-11-11",
+      "time": "9:30am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1792519978,
+      "firstName": "Jose Ignacio",
+      "lastName": "Miño",
+      "datetime": "2026-11-10T17:00:00-0500",
+      "date": "2026-11-10",
+      "time": "5:00pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1792520110,
+      "firstName": "Estefanía",
+      "lastName": "Jervis",
+      "datetime": "2026-11-10T17:00:00-0500",
+      "date": "2026-11-10",
+      "time": "5:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1803964672,
+      "firstName": "Maria Belen",
+      "lastName": "Morales",
+      "datetime": "2026-11-10T15:30:00-0500",
+      "date": "2026-11-10",
+      "time": "3:30pm",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1785187652,
+      "firstName": "Paula",
+      "lastName": "Castells",
+      "datetime": "2026-11-10T15:00:00-0500",
+      "date": "2026-11-10",
+      "time": "3:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1802235799,
+      "firstName": "Nataly",
+      "lastName": "Alava",
+      "datetime": "2026-11-10T13:00:00-0500",
+      "date": "2026-11-10",
+      "time": "1:00pm",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1784374827,
+      "firstName": "Susana",
+      "lastName": "Guerrero",
+      "datetime": "2026-11-10T11:00:00-0500",
+      "date": "2026-11-10",
+      "time": "11:00am",
+      "calendar": "Daniela",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1788144588,
+      "firstName": "María Sol",
+      "lastName": "Garaicoa",
+      "datetime": "2026-11-10T10:00:00-0500",
+      "date": "2026-11-10",
+      "time": "10:00am",
+      "calendar": "Andrea",
+      "canceled": false,
+      "noShow": false
+    },
+    {
+      "id": 1792517679,
+      "firstName": "Elvira",
+      "lastName": "Brugues",
+      "datetime": "2026-11-17T13:30:00-0500",
+      "date": "2026-11-17",
+      "time": "1:30pm",
+      "calendar": "Andrea",
+      "canceled": true,
+      "noShow": false
+    },
+    {
+      "id": 1808606260,
+      "firstName": "Karina",
+      "lastName": "Lino",
+      "datetime": "2026-11-17T13:30:00-0500",
+      "date": "2026-11-17",
+      "time": "1:30pm",
+      "calendar": "Andrea",
+      "canceled": true,
+      "noShow": false
+    }
+  ]
+}

@@ -25,6 +25,7 @@ import { cedVariantes, consultar, type Filtro } from "./query.ts";
 import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { lineasRecepDe, periodoLabel as periodoRecepLabel, recepcionDeCiclo } from "./comision_recepcion.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
 
@@ -446,25 +447,14 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
       },
     });
   }
-  const recepDias = new Map<string, { n: number; vendido: number }>();
-  for (const t of tks) {
-    if (t.fecha < ciclo || t.fecha > finCiclo || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
-    const prev = recepDias.get(t.fecha) || { n: 0, vendido: 0 };
-    prev.n += 1;
-    prev.vendido = round2(prev.vendido + subtotalDe(cmap, facialSku(t.facial) || t.facial));
-    recepDias.set(t.fecha, prev);
-  }
-  let comRecep = 0, diasRecep = 0, vendidoRecep = 0;
-  const lineasRecep: LineaCom[] = [];
-  for (const f of [...recepDias.keys()].sort()) {
-    const d = recepDias.get(f)!;
-    const v = comisionRecepcionDia(f, d.n, cfg);
-    if (v > 0) { comRecep += v; diasRecep++; }
-    vendidoRecep = round2(vendidoRecep + d.vendido);
-    lineasRecep.push({ sku: "", nombre: etiquetaDiaRecep(f), qty: d.n, monto: v, vendido: d.vendido });
-  }
+  const rec = await recepcionDeCiclo(ctx, rowsTk, {
+    ciclo, fin: finCiclo, cfg,
+    vendidoDe: (r) => subtotalDe(cmap, facialSku(r.facial_hecho) || s(r.facial_hecho)),
+  });
+  const comRecep = rec.total, diasRecep = rec.diasCumplidos, vendidoRecep = rec.vendido;
+  const lineasRecep: LineaCom[] = lineasRecepDe(rec);
   const multas = await ctx.db.all("multas_descuentos");
-  return { calc, comRecep: round2(comRecep), diasRecep, vendidoRecep, lineasRecep, multas, ciclo, fin: finCiclo, admins, tramos, lineas };
+  return { calc, comRecep: round2(comRecep), diasRecep, vendidoRecep, lineasRecep, recepcion: rec, multas, ciclo, fin: finCiclo, admins, tramos, lineas };
 }
 type LineaCom = { sku: string; nombre: string; qty: number; monto: number; vendido: number };
 type LineasPersona = {
@@ -2227,10 +2217,27 @@ reg("getReporteAdmin", ADMIN, async (_p, ctx) => {
 });
 reg("getReporte", ADMIN, async (p, ctx, ses) => FNS.getReporteAdmin(p, ctx, ses));
 reg("getComisionesRol", "any", async (p, ctx, ses) => FNS.getDashCosm(p, ctx, ses));
-reg("getComisionRecepcion", "any", async (_p, ctx) => {
-  const { comRecep, diasRecep, ciclo, fin } = await cicloDe(ctx, hoy(ctx));
-  return { comision: comRecep, dias: diasRecep, ciclo, fin };
-});
+async function payloadComisionRecepcion(ctx: Ctx) {
+  const pack = await cicloDe(ctx, hoy(ctx));
+  const rec = pack.recepcion;
+  return {
+    ok: true,
+    comision: pack.comRecep,
+    total: rec?.total ?? pack.comRecep,
+    dias: rec?.dias ?? [],
+    diasCumplidos: rec?.diasCumplidos ?? pack.diasRecep,
+    porClienta: 0.50,
+    meta: 10,
+    metaLunes: 5,
+    periodoLabel: periodoRecepLabel(pack.ciclo, pack.fin),
+    ciclo: pack.ciclo,
+    fin: pack.fin,
+    acuityOk: rec?.acuityOk !== false,
+    acuityError: rec?.acuityError,
+  };
+}
+reg("getComisionRecepcion", "any", async (_p, ctx) => payloadComisionRecepcion(ctx));
+reg("comision_recepcion", "any", async (_p, ctx) => payloadComisionRecepcion(ctx));
 type MontosFila = { com: number; vendido: number };
 function montosPersona(nombre: string, pack: Awaited<ReturnType<typeof cicloDe>>, esRecep: boolean): Record<string, MontosFila> {
   const key = normNombre(nombre);
