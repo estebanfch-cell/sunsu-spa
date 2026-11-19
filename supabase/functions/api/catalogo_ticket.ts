@@ -76,7 +76,6 @@ export function armarCatalogoTicket(catalogo: Row[], productos: Row[], migo: Map
     if (!code || ya.has(code) || p.tipo === "servicio") continue;
     const m = migo.get(code);
     const pvp = n(p.pvp) > 0 ? n(p.pvp) : n(m?.pvp);
-    if (!(pvp > 0) && !m) continue;
     ya.add(code);
     const enMigo = !!m;
     out.push({

@@ -22,7 +22,38 @@
     if (best) return best;
     var hay = norm(C.concat(T).join(" "));
     var ws = qn.split(/\s+/).filter(Boolean);
-    if (ws.every(function (w) { return hay.indexOf(w) >= 0; })) return 40 + (norm(T[0] || "").indexOf(ws[0]) === 0 ? 5 : 0);
+    var toks = hay.split(/[^a-z0-9]+/).filter(Boolean);
+    function palabraOk(w) {
+      if (!w) return true;
+      if (hay.indexOf(w) >= 0) return true;
+      if (w.length > 3 && w.charAt(w.length - 1) === "s" && hay.indexOf(w.slice(0, -1)) >= 0) return true;
+      for (var i = 0; i < toks.length; i++) {
+        var t = toks[i];
+        if (t.indexOf(w) === 0) return true;
+        if (w.length >= 4 && t.length >= 4 && w.indexOf(t) === 0) return true;
+      }
+      return false;
+    }
+    function dist(a, b) {
+      if (a === b) return 0;
+      if (Math.abs(a.length - b.length) > 1) return 99;
+      var i, j, prev = [], cur;
+      for (j = 0; j <= b.length; j++) prev[j] = j;
+      for (i = 1; i <= a.length; i++) {
+        cur = [i];
+        for (j = 1; j <= b.length; j++) {
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+        }
+        prev = cur;
+      }
+      return prev[b.length];
+    }
+    var miss = ws.filter(function (w) { return !palabraOk(w); });
+    var ok = ws.filter(function (w) { return palabraOk(w); });
+    if (ws.length && !miss.length) return 40 + (norm(T[0] || "").indexOf(ws[0]) === 0 ? 5 : 0);
+    if (miss.length === 1 && miss[0].length >= 3 && toks.some(function (t) { return t.length >= 3 && dist(miss[0], t) <= 1; })) return 35;
+    // Una palabra puede fallar si las demás ya identifican el producto (p. ej. «AC Solutions Fab» → AC Solution Swab).
+    if (miss.length === 1 && ok.some(function (w) { return w.length >= 4; })) return 28;
     if (qc.length >= 2 && T.some(function (t) { return compacto(t).indexOf(qc) >= 0; })) return 30;
     return 0;
   }
