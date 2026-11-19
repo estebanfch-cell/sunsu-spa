@@ -70,7 +70,8 @@ extend("pq_lista", "any", async (p, ctx, ses) => {
   let L = rows.map((r) => vistaPaquete(r, AJ.get(String(r.id)))).filter((v) => !v.borrado && (v.cedula || v.nombre));
   if (perm === "propio") L = L.filter((v) => esPropio(s(v.vendidoPor), ses));
   const cuenta = { todos: L.length, activos: L.filter((v) => v.estado !== "completo" && v.estado !== "anulado").length, completos: L.filter((v) => v.estado === "completo").length, anulados: L.filter((v) => v.estado === "anulado").length };
-  const est = s(p.estado) || "activos";
+  // TK110: al buscar (nombre, código, cédula) se ven también los completos: un paquete ya usado no «desaparece».
+  const est = q && q !== "*" && (!s(p.estado) || s(p.estado) === "activos") ? "todos" : s(p.estado) || "activos";
   if (est === "activos") L = L.filter((v) => v.estado !== "completo" && v.estado !== "anulado");
   if (est === "completos") L = L.filter((v) => v.estado === "completo");
   if (est === "anulados") L = L.filter((v) => v.estado === "anulado");

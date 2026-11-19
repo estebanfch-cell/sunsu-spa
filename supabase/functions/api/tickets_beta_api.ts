@@ -23,6 +23,7 @@ import { lineasTicket, precioLineaTicket } from "./productos.ts";
 import { ETQ_SIN_COBRO, giftCortesia, nombreLineaGift, paqueteDeCanje, sesionPaquete, textoCanje, tipoSinCobro, valorNominalGift } from "./sin_cobro.ts";
 import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
+import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
 import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
@@ -446,7 +447,10 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
       ...(l.promo && l.descuento_monto > 0 ? { promo: l.promo } : {}),
     });
   }
-  return { ok: true, clave, total: calc.total };
+  // TK110: una línea de venta de paquete siempre deja su paquete en Spa › Paquetes (idempotente).
+  let paquetesCreados: string[] = [];
+  if (entrada) { try { paquetesCreados = await asegurarPaquetesVenta(ctx, actor, r, calc.lineas as unknown as Row[]); } catch { paquetesCreados = []; } }
+  return { ok: true, clave, total: calc.total, ...(paquetesCreados.length ? { paquetes_creados: paquetesCreados } : {}) };
 }
 
 extend("tk_guardar", "any", async (p, ctx, ses) => {
