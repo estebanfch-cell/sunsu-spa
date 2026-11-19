@@ -6,6 +6,7 @@ import { handle } from "./handlers.ts";
 import "./tickets_lista_api.ts";
 import "./staff_home_api.ts";
 import "./migo_cuadre_api.ts";
+import "./aprobaciones_api.ts";
 import { limpiarCacheAcuity } from "./acuity.ts";
 import type { Row } from "./domain.ts";
 
@@ -242,6 +243,26 @@ describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
     assert.equal((l.items as Row[]).find((x) => x.factura === "001-001-000003002")!.estado, "pendiente_aprobar");
     const ayer = await h("and", "crearTicket", { nombre: "Ayer", apellido: "X", estimado: 30, cosmetologa: "Andrea Robles", vincular_borrador: "001-001-000003003" });
     assert.match(String(ayer.error), /permiso/i);
+  });
+
+  it("el admin ve la factura completada pendiente de aprobar (no mezclada con las que faltan completar) y Aprobaciones abre Facturas borrador", async () => {
+    const { db, h } = semilla({ cita: false });
+    db.tables.set("beta_migo_borradores", [
+      { factura: "001-001-000002977", fecha: "2026-11-19", cliente: "ANDRES TRUJILLO", total: 33.99, estado: "asignado", asignado_a: "Andrea Robles", datos: { completado_at: "2026-11-19T17:06:00Z", completado_por: "Andrea Robles (andrea)" }, lineas: [] },
+      { factura: "001-001-000002976", fecha: "2026-11-19", cliente: "PENDIENTE", total: 175, estado: "pendiente", datos: {}, lineas: [] },
+    ]);
+    const l = await h("adm", "migo_borradores_lista", {});
+    const mias = (l.mias as Row[]).map((x) => x.factura);
+    const bandeja = (l.bandeja as Row[]).map((x) => x.factura);
+    assert.deepEqual(mias, ["001-001-000002977"]);
+    assert.deepEqual(bandeja, ["001-001-000002976"]);
+    const apr = await h("adm", "aprobaciones_pendientes", {}) as Row;
+    const bor = ((apr.grupos || []) as Row[]).find((g) => g.id === "borradores") as Row;
+    assert.equal(bor?.href, "#/m/borradores");
+    const item = ((bor?.items || []) as Row[]).find((x) => String(x.id).includes("2977"));
+    assert.ok(item, "2977 sale en Aprobaciones");
+    assert.match(String(item?.titulo), /por aprobar/i);
+    assert.equal(item?.href, "#/m/borradores");
   });
 
   it("los borradores no salen en Tickets; «Vinculadas» solo 2 días después de vincular (no se borran)", async () => {
