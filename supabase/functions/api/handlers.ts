@@ -746,6 +746,11 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       };
     }
   }
+  // TK132: ticket desde una factura Migo: la cédula/RUC del RIDE si el formulario no la trajo.
+  const facCli = s(p.vincular_borrador) || s(p._factura_cliente);
+  if (facCli && !s(p.cedula)) {
+    try { const { clienteDeFactura } = await import("./cliente_factura.ts"); const c = await clienteDeFactura(ctx, facCli); if (c && c.cedula) p = { ...p, cedula: c.cedula }; } catch { /* sin datos del RIDE */ }
+  }
   const ec = ecuadorParts(ctx.now);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
@@ -836,6 +841,9 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     if (slots.length) await marcarSlotsGC(ctx, actor, paqueteFila, slots);
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
+  if (facCli && saved) {
+    try { const { completarClienteDeFactura } = await import("./cliente_factura.ts"); await completarClienteDeFactura(ctx, ses, facCli, saved, s(p.nombre), s(p.apellido)); } catch { /* el ticket ya quedó */ }
+  }
   let inventario = 0;
   try { inventario = await descontarVentaTicket(ctx.db, actor, ticket, base, ctx.now); }
   catch { inventario = 0; }
@@ -1266,7 +1274,10 @@ reg("getCatalogo", "any", async (_p, ctx) => {
     items.push({
       sku, nombre: s(r.producto_servicio), tipo: s(r.tipo), subtotal: sub,
       total: tot > 0 ? tot : sub, compra: n(r.precio_compra),
-      compraReal: compra.get(skuCode(sku)) || 0, com: n(r.comi_producto_30), activo: activoVenta(est, sku, r.activo),
+      compraReal: compra.get(skuCode(sku)) || 0, com: n(r.comi_producto_30),
+      // TK132: comisión de venta por unidad (lo que gana la vendedora). No es un costo: Comisión estimada del ticket
+      // la necesita para todos los roles (TK115 quitó «com» a quien no es Super Admin y Productos salía $0).
+      comVta: n(r.comi_producto_30), activo: activoVenta(est, sku, r.activo),
     });
   }
   return items;

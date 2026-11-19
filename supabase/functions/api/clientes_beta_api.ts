@@ -372,7 +372,7 @@ extend("cl_get", "any", async (p, ctx, ses) => {
 
 /** Datos de la clienta editados en un ticket → ficha (beta_clientes), con historial «desde ticket». */
 export async function propagarDesdeTicket(ctx: Ctx, ses: Ses, key: string, datosTk: Row, so: string): Promise<Row> {
-  const MAPA: Record<string, string> = { nombre: "nombres", apellido: "apellido", cedula: "cedula", email: "email", telefono: "telefono" };
+  const MAPA: Record<string, string> = { nombre: "nombres", apellido: "apellido", cedula: "cedula", email: "email", telefono: "telefono", direccion: "sector" };
   const cambios: Row = {};
   for (const [k, v] of Object.entries(datosTk || {})) if (MAPA[k] && s(v)) cambios[MAPA[k]] = k === "telefono" ? s(v).replace(/[^\d+]/g, "") : s(v);
   if (!key || !Object.keys(cambios).length) return { ok: true, sinCambios: true };

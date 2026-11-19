@@ -176,6 +176,7 @@ export async function completarBorradorStaff(ctx: Ctx, ses: Ses, p: Row): Promis
     ...prev,
     nombre: s(p.nombre) || prev.nombre,
     apellido: s(p.apellido) || prev.apellido,
+    cedula: s(p.cedula) || prev.cedula || (await (await import("./cliente_factura.ts")).clienteDeFactura(ctx, fac).catch(() => null))?.cedula || "",
     cosmetologa: s(p.cosmetologa) || prev.cosmetologa || s(b0.asignado_a),
     notas: s(p.notas) || prev.notas,
     recomendaciones: s(p.recomendaciones) || prev.recomendaciones,

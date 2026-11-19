@@ -608,6 +608,8 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
     if (dif.length) { c.dif_sku = dif; c.motivo = (s(c.motivo) ? s(c.motivo) + " " : "") + dif.join(" · "); }
   }
   if (cands.length) pub.candidatos = cands;
+  // TK132: todo lo que trae el RIDE (el contacto sale solo para quien puede verlo: redactar).
+  try { const { clienteDeFactura } = await import("./cliente_factura.ts"); const c = await clienteDeFactura(ctx, fac); if (c) pub.cliente_datos = c; } catch { /* sin datos */ }
   return { ok: true, borrador: pub };
 });
 
@@ -757,7 +759,7 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
   if (!cosm) return { error: "Asigna una cosmetóloga antes de aprobar" };
   const creado = await crearTicket({
     token: ses.token,
-    nombre: nom.nombre, apellido: nom.apellido,
+    nombre: nom.nombre, apellido: nom.apellido, cedula: s(d.cedula), _factura_cliente: fac,
     cosmetologa: cosm, estimado: n(b0.total),
     notas: s(d.notas) || s(d.notas_generales) || s(p.notas) || s(b0.nota),
     recomendaciones: s(d.recomendaciones),
