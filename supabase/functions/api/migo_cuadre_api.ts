@@ -19,6 +19,7 @@ import {
 } from "./migo_cuadre.ts";
 import { compararFacturaYTickets } from "./migo_lineas.ts";
 import { difPorSku } from "./cuadre_sku.ts";
+import { mapaAliases, type AliasMap } from "./inventario_modelo.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { lineaCanjeFaltante } from "./canje_linea.ts";
 import { paquetesDe } from "./ventas.ts";
@@ -348,6 +349,13 @@ async function catalogoPrecios(ctx: Ctx): Promise<Map<string, { nombre?: string;
   } catch { /* sin catálogo */ }
   return m;
 }
+async function aliasesCuadre(ctx: Ctx): Promise<AliasMap> {
+  try { return mapaAliases(await todas(ctx, "beta_sku_alias")); } catch { return new Map(); }
+}
+async function datosCuadre(ctx: Ctx): Promise<{ catalogo: Map<string, { nombre?: string; pvpConIva?: number }>; aliases: AliasMap }> {
+  const [catalogo, aliases] = await Promise.all([catalogoPrecios(ctx), aliasesCuadre(ctx)]);
+  return { catalogo, aliases };
+}
 /** TK81: línea del ticket con otro SKU del mismo servicio (mismo precio y cantidad) → manda la factura. Se registra una vez y queda en el log. */
 async function registrarCambiosSku(ctx: Ctx, actor: string, cambios: CambioSku[]): Promise<number> {
   if (!cambios.length) return 0;
@@ -377,7 +385,7 @@ export async function reevaluarFlags(ctx: Ctx, actor: string): Promise<Row> {
   let importadoGye = "";
   for (const r of await todas(ctx, "beta_migo_importes")) { const g = fechaGye(r.imported_at); if (g > importadoGye) importadoGye = g; }
   const cambios: CambioSku[] = [];
-  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye: ecuadorParts(ctx.now).ymd, importadoGye, cambios, catalogo: await catalogoPrecios(ctx) });
+  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye: ecuadorParts(ctx.now).ymd, importadoGye, cambios, ...await datosCuadre(ctx) });
   const fl = await syncFlags(ctx, actor, flags);
   const cs = await registrarCambiosSku(ctx, actor, cambios);
   return { ok: true, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs };
@@ -398,7 +406,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
     if (g > importadoGye) importadoGye = g;
   }
   const cambios: CambioSku[] = [];
-  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye, importadoGye, cambios, catalogo: await catalogoPrecios(ctx) });
+  const flags = flagsDeseadas({ tickets, links, facturas, hoyGye, importadoGye, cambios, ...await datosCuadre(ctx) });
   const fl = await syncFlags(ctx, actor, flags);
   const cs = await registrarCambiosSku(ctx, actor, cambios);
   const br = await syncBorradores(ctx, actor, facturas, links);
@@ -601,10 +609,11 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
   // TK98: en los que no cuadran, qué SKU/línea hace la diferencia.
   const facL = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0.lineas) ? b0.lineas : [])) as Row[];
+  const { catalogo: catC, aliases: alC } = await datosCuadre(ctx);
   for (const c of cands as (Row & { claves: string[]; cuadra: boolean })[]) {
     if (c.cuadra || !facL.length) continue;
     const tks = c.claves.map((k) => tickets.find((t) => s(t.clave) === k || s(t.so_num) === k)).filter(Boolean) as Row[];
-    const dif = difPorSku(facL, tks);
+    const dif = difPorSku(facL, tks, catC, alC);
     if (dif.length) { c.dif_sku = dif; c.motivo = (s(c.motivo) ? s(c.motivo) + " " : "") + dif.join(" · "); }
   }
   if (cands.length) pub.candidatos = cands;
@@ -731,7 +740,8 @@ extend("migo_dif_sku", ADMIN, async (p, ctx) => {
   const want = (Array.isArray(p.tickets) ? p.tickets as unknown[] : []).map((x) => s(x)).filter(Boolean);
   const todos = await ticketsParaCuadre(ctx);
   const tks = want.map((k) => todos.find((t) => s(t.clave) === k || s(t.so_num) === k)).filter(Boolean) as Row[];
-  return { ok: true, dif: difPorSku(facL, tks) };
+  const { catalogo: catD, aliases: alD } = await datosCuadre(ctx);
+  return { ok: true, dif: difPorSku(facL, tks, catD, alD) };
 });
 
 extend("migo_borrador_descartar", ADMIN, async (p, ctx, ses) => {
