@@ -17,11 +17,14 @@ import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { listarBorradoresVisibles } from "./borradores_asig.ts";
 import { tipoSinCobro } from "./sin_cobro.ts";
+import { alertaCanje } from "./canje_linea.ts";
+import { FALTA_DESDE } from "./tickets_beta_api.ts";
+import { parseGcCanje } from "./ventas.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift"];
+const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift", "paquete", "facial_hecho", "gift_card"];
 
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
@@ -86,7 +89,23 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const om = new Map(oo.rows.map((x) => [n(x.id), x.orig]));
     for (const r of L) if (om.has(n(r.id))) r.comprobante = colTicket({ comprobante: r.comprobante, orig: om.get(n(r.id)) }, "comprobante");
   }
-  if (seg === "faltadoc") L = L.filter((r) => faltaDe(r, datosDe(r)).length > 0);
+  // TK112: amarillo del cuadre si hay uso de paquete sin línea de canje en $0 (o línea de canje sin uso). Solo tickets con líneas beta.
+  const conLB = L.filter((r) => cabMap.get(claveDe(r, leerSerie(r, "so_num")))?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE);
+  const facLin = new Map<string, Row[]>();
+  if (conLB.length) {
+    try {
+      for (const l of (await consultar(ctx.db, "beta_ticket_lineas", { cols: ["ticket_clave", "tipo", "nombre", "precio_unit", "total_linea"], filtros: [{ col: "tipo", op: "eq", val: "facial" }] })).rows) {
+        const k = s(l.ticket_clave); const a = facLin.get(k) || []; a.push(l); facLin.set(k, a);
+      }
+    } catch { /* sin líneas */ }
+  }
+  const canjeAlerta = new Map<number, string[]>();
+  for (const r of conLB) {
+    const al = alertaCanje(r, facLin.get(claveDe(r, leerSerie(r, "so_num"))) || [], [], !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete)));
+    if (al.length) canjeAlerta.set(n(r.id), al);
+  }
+  const faltaTodo = (r: Row, d: Row) => [...faltaDe(r, d), ...(canjeAlerta.get(n(r.id)) || [])];
+  if (seg === "faltadoc") L = L.filter((r) => faltaTodo(r, datosDe(r)).length > 0);
   let envB: Set<string> | null = null;
   const envClaves = async (filas: Row[]) => {
     envB ||= new Set((await todas(ctx, "beta_ticket_envios")).map((e) => s(e.ticket_clave)));
@@ -163,7 +182,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
-      ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),
+      ...(faltaTodo(r, d).length ? { falta: faltaTodo(r, d) } : {}),
       ...((() => { const pf = pagosFaltanFoto({ beta: pagosPorClave.get(clave) || [], legado: metodosPago(r.comp), comps: (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) }); return pf.length ? { pagosFaltan: pf } : {}; })()),
     };
     return it;

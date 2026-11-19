@@ -20,6 +20,9 @@ import {
 import { compararFacturaYTickets } from "./migo_lineas.ts";
 import { difPorSku } from "./cuadre_sku.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
+import { lineaCanjeFaltante } from "./canje_linea.ts";
+import { paquetesDe } from "./ventas.ts";
+import { normCedula, normNombre } from "./domain.ts";
 import { catalogoBorradores, lineasBorradorDeFactura, lineasTicketDeBorrador, type LineaBorrador } from "./borrador_lineas.ts";
 import { contactoDeFactura } from "./clientes_contacto.ts";
 import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
@@ -830,6 +833,17 @@ export async function lineasDeFacturaATicket(ctx: Ctx, actor: string, factura: s
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: ticket.sheet_row ?? null, ...fila });
   for (const l of await todas(ctx, "beta_ticket_lineas")) if (s(l.ticket_clave) === clave) await ctx.db.write(actor, "beta_ticket_lineas", "delete", { id: l.id }, null);
   let i = 0;
+  // TK112: si el ticket usa una sesión de paquete, su línea de canje en $0 va aunque las demás salgan de la factura.
+  try {
+    const full = n(ticket.id) ? ((await todas(ctx, "tickets")).find((x) => n(x.id) === n(ticket.id)) || ticket) : ticket;
+    const tk = { ...full, ...ticket, paquete: s(ticket.paquete) || s(full.paquete), facial_hecho: s(ticket.facial_hecho) || s(full.facial_hecho), timestamp: s(ticket.timestamp) || s(full.timestamp) };
+    const paqs = await paquetesDe(ctx.db, normCedula(s(tk.id_3 || tk.cedula)), normNombre(s(tk.nombre) + " " + s(tk.apellido)));
+    const cj = lineaCanjeFaltante(tk, lineasTicketDeBorrador(armado.lineas) as unknown as Row[], paqs);
+    if (cj) {
+      await ctx.db.write(actor, "beta_ticket_lineas", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, ...cj });
+      await logSafe(ctx, actor, "LINEA CANJE PAQUETE", clave + " · " + s(cj.nombre) + " · $0");
+    }
+  } catch { /* sin paquete: el cuadre lo marca en amarillo */ }
   for (const l of lineasTicketDeBorrador(armado.lineas)) {
     await ctx.db.write(actor, "beta_ticket_lineas", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, ...l });
   }
