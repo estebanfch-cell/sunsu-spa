@@ -25,6 +25,7 @@ import "./clientes_beta_api.ts";
 import "./clientes_contacto_api.ts";
 import "./agenda_api.ts";
 import "./staff_home_api.ts";
+import "./tk109_api.ts";
 import "./tickets_lista_api.ts";
 import "./usuario_permisos_api.ts";
 import "./priv_permisos_api.ts";
