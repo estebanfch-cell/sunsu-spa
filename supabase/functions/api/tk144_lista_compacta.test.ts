@@ -13,7 +13,7 @@ import {
 import { avisosVirtualesEdicion } from "./ticket_edicion_api.ts";
 
 const root = new URL("../../../", import.meta.url);
-const html = readFileSync(new URL("beta.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const screens = readFileSync(new URL("beta-screens.js", root), "utf8");
 const tickets = readFileSync(new URL("mc-tickets.js", root), "utf8");
 const lista = readFileSync(new URL("supabase/functions/api/tickets_lista_api.ts", root), "utf8");
@@ -101,7 +101,7 @@ describe("TK144 tarjetas compactas de la lista", () => {
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK151"/);
   });
 
   it("fila 1 es ticket-factura, el creador va de su color y la cámara queda bajo la chica", () => {

@@ -1,5 +1,5 @@
-const CACHE = "sunsu-beta-2026-11-19-TK150";
-const FILES = ["/beta.html", "/descuento_justif.js", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
+const CACHE = "sunsu-2026-11-19-TK151";
+const FILES = ["/", "/index.html", "/descuento_justif.js", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
   "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/mc-borradores.js", "/mc-scan.js", "/vendor-zxing.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
 
 self.addEventListener("install", (event) => {
@@ -14,7 +14,7 @@ self.addEventListener("message", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key.startsWith("sunsu-beta") && key !== CACHE).map((key) => caches.delete(key)));
+    await Promise.all(keys.filter((key) => key.startsWith("sunsu-") && key !== CACHE).map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
 });
@@ -26,16 +26,16 @@ self.addEventListener("push", (event) => {
     body: payload.body || "Recuerda marcar entrada",
     icon: "/icon-sunsu-192.png",
     tag: payload.tag || "sunsu-reloj",
-    data: { url: "/beta.html#/m/inicio" },
+    data: { url: "/#/m/inicio" },
   }));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/beta.html#/m/inicio";
+  const url = (event.notification.data && event.notification.data.url) || "/#/m/inicio";
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
     for (const client of clients) {
-      if (client.url.indexOf("/beta.html") >= 0 && "focus" in client) return client.focus();
+      if (new URL(client.url).origin === self.location.origin && "focus" in client) return client.focus();
     }
     if (self.clients.openWindow) return self.clients.openWindow(url);
   }));
@@ -45,7 +45,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   if (url.pathname.startsWith("/functions/") || url.pathname === "/sw.js") return;
-  const betaAsset = url.pathname === "/beta.html" || url.pathname.startsWith("/beta/") || FILES.includes(url.pathname);
+  const esApp = url.pathname === "/" || url.pathname === "/index.html";
+  const betaAsset = esApp || url.pathname.startsWith("/beta/") || FILES.includes(url.pathname);
   if (!betaAsset) return;
   event.respondWith(
     fetch(event.request)
@@ -57,8 +58,8 @@ self.addEventListener("fetch", (event) => {
       .catch(async () => {
         const hit = await caches.match(event.request);
         if (hit) return hit;
-        if (url.pathname === "/beta.html") {
-          const page = await caches.match("/beta.html");
+        if (esApp) {
+          const page = (await caches.match("/")) || (await caches.match("/index.html"));
           if (page) return page;
         }
         return Response.error();

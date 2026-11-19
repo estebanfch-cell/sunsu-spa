@@ -8,7 +8,7 @@ describe("TK65 clientas del personal", () => {
     assert.equal(acceso("cosmetologa", "clientes", DEFAULT_MATRIZ), "todos");
     assert.equal(acceso("asistente_cosmetologia", "clientes", DEFAULT_MATRIZ), "todos");
     const js = readFileSync(new URL("../../../mc-clientes.js", import.meta.url), "utf8");
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(js, /Buscar por nombre/);
     assert.match(js, /mccl-filt-btn/);
     assert.match(js, /Filtros/);

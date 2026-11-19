@@ -113,7 +113,7 @@ describe("TK59 dashboard del personal", () => {
 
   it("staff_home es lectura en «Ver como» y el front no pinta el dashboard admin", () => {
     assert.equal(lecturaEnVista("staff_home"), true);
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const js = readFileSync(new URL("../../../mc-staff-home.js", import.meta.url), "utf8");
     assert.match(beta, /MCStaffHome/);
     assert.match(beta, /staff_home/);

@@ -10,7 +10,7 @@ import "./inline_api.ts";
 import "./aprobaciones_api.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const nav = readFileSync(join(root, "mc-nav.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
 
@@ -25,7 +25,7 @@ describe("TK85 badge de Aprobaciones en el dashboard", () => {
     assert.match(html, /async function renderAprobaciones\(/);
     assert.match(html, /data-go="#\/m\/aprobaciones"/);
     assert.match(nav, /#\/m\/aprobaciones/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK133/);  });
   it("suma solicitudes, borradores, permisos y ajustes, y no expone cédulas ni teléfonos", async () => {
     const db = new MemoryDb();

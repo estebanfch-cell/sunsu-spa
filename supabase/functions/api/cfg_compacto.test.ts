@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
 const sql = readFileSync(join(root, "docs/supabase/pending/0056_feriados_2026_nov20.sql"), "utf8");
 
@@ -57,7 +57,7 @@ describe("TK83 config compacto y feriados 2026", () => {
   });
 
   it("la caché de la app pasa a TK93", () => {
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK86/);
     const vers = [...html.matchAll(/\?v=([a-z0-9]+)/g)].map((m) => m[1]);
     assert.ok(vers.length >= 20, "faltan scripts en beta.html");

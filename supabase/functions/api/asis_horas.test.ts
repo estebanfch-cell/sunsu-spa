@@ -8,7 +8,7 @@ import "./asistencia_api.ts";
 import { hmDeMinutos, lunesADomingo, bloqueDeHoras } from "./asistencia_api.ts";
 import type { NominaHoras } from "./asistencia.ts";
 
-const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
 const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../../../docs/supabase/pending/0059_asistencia_horas_mes.sql", import.meta.url), "utf8");
 
@@ -53,7 +53,7 @@ describe("TK89 dashboard de horas de Asistencia", () => {
     assert.doesNotMatch(beta, /S50 /);
     assert.doesNotMatch(beta, /N100 /);
     assert.doesNotMatch(beta, /N \$\{hHrs/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.match(beta, /20261119tk149/);  });
   it("el SQL 0059 crea el historial y no recorta app_beta_write", () => {
     assert.match(sql, /beta_asistencia_horas_mes/);

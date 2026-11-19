@@ -204,7 +204,7 @@ describe("TK150: comisiones multi-facial y resumen de Hoy", () => {
   });
 
   it("Mis comisiones (beta.html) muestra el bloque compacto de Hoy junto al ciclo", () => {
-    const src = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const i = src.indexOf("async function renderPersonalComisiones()");
     assert.ok(i > 0);
     const bloque = src.slice(i, src.indexOf("function clavePeriodoActual", i));

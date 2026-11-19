@@ -124,7 +124,7 @@ describe("TK73 permisos por rol/usuario (privacidad)", () => {
   });
 
   it("la pantalla vive en Configuración general y el menú admin la nombra", () => {
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const nav = readFileSync(new URL("../../../mc-nav.js", import.meta.url), "utf8");
     assert.match(beta, /id="cfg-permisos"/);
     assert.match(beta, /Permisos por rol y usuario/);

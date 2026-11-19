@@ -12,7 +12,7 @@ const tickets = readFileSync(join(root, "mc-tickets.js"), "utf8");
 const clientes = readFileSync(join(root, "mc-clientes.js"), "utf8");
 const prov = readFileSync(join(root, "mc-proveedores.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
-const beta = readFileSync(join(root, "beta.html"), "utf8");
+const beta = readFileSync(join(root, "index.html"), "utf8");
 const api = readFileSync(join(root, "supabase/functions/api/aperturas_api.ts"), "utf8");
 
 describe("TK136 Aplica a faciales compacto + una sola lista", () => {
@@ -49,8 +49,8 @@ describe("TK136 Aplica a faciales compacto + una sola lista", () => {
   });
 
   it("el cache de la beta apunta a TK138", () => {
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
-    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK151"/);
+    assert.match(beta, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK151"/);
     assert.match(beta, /mc-productos\.js\?v=20261119tk149/);
     assert.match(beta, /mc-aperturas\.js\?v=20261119tk149/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK135/);

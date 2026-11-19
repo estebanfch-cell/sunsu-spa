@@ -187,7 +187,7 @@ describe("TK135 · pantalla: sin cajas feas, badge corto, justificación", () =>
   const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
   const tk = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
   const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-  const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+  const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
 
   it("Tickets ya no trae las dos cajas de facturas; hay una pastilla compacta a Borradores", () => {
     assert.equal(js.includes("<b>Facturas sin ticket</b>"), false);
@@ -211,7 +211,7 @@ describe("TK135 · pantalla: sin cajas feas, badge corto, justificación", () =>
   });
 
   it("cache TK138", () => {
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.match(beta, /20261119tk149/);
     assert.doesNotMatch(sw, /TK137"/);
   });

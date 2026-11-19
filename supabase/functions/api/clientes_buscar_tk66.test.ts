@@ -53,6 +53,6 @@ describe("TK66 · buscador de clientas del ticket", () => {
   it("el ticket muestra el error en vez de «Sin resultados» y en «Ver como» se puede buscar", () => {
     const root = join(import.meta.dirname, "../../..");
     assert.match(readFileSync(join(root, "beta-screens.js"), "utf8"), /if\(r&&r\.error\)\{box\.innerHTML/);
-    assert.match(readFileSync(join(root, "beta.html"), "utf8"), /"cl_buscar"/);
+    assert.match(readFileSync(join(root, "index.html"), "utf8"), /"cl_buscar"/);
   });
 });

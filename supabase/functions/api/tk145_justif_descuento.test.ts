@@ -54,7 +54,7 @@ describe("SunsuDescJustif · cuándo pedir motivo", () => {
 
 describe("front TK145 · dropdown en DESCUENTOS, contraste y toast que envuelve", () => {
   const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
-  const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
   it("el formulario pinta el select de motivo y no bloquea gift / $0", () => {
     assert.match(js, /dsc-justif-sel/);
     assert.match(js, /SunsuDescJustif/);

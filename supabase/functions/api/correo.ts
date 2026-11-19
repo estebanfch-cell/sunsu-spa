@@ -16,7 +16,7 @@ export function appUrl(env: Record<string, string | undefined> | undefined): str
 }
 
 export function enlaceReset(env: Record<string, string | undefined> | undefined, token: string): string {
-  return appUrl(env) + "/beta.html#/reset/" + encodeURIComponent(token);
+  return appUrl(env) + "/#/reset/" + encodeURIComponent(token);
 }
 
 /** Envía un correo. Si no hay proveedor, {ok:true, enviado:false, motivo}. Nunca incluye el token en el motivo. */
