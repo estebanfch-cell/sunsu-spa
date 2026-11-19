@@ -170,7 +170,9 @@ export function lineasDeTicket(t: Row, catalogo?: Map<string, { nombre?: string;
   }
   const orig = (t.orig && typeof t.orig === "object" ? t.orig : {}) as Row;
   const paq = s(t.paquete || orig["Paquete?"] || orig.paquete);
-  const canje = /^si\b/i.test(paq);
+  const gc = s(t.gift_card || orig["Gift Card"] || orig.gift_card);
+  // TK133: canje de facial también con gift card «SI, código» sin monto «aplica $X» (igual que canjeFacial).
+  const canje = /^si\b/i.test(paq) || (/^si\b/i.test(gc) && !/aplica\s*\$?\s*[\d.]/i.test(gc)) || /\[F\]/.test(gc);
 
   const pushSku = (raw: string, qty: number, nombre: string, canjeLinea = false) => {
     const codigo = s(raw).split(/\s+/)[0];

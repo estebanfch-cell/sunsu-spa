@@ -202,10 +202,11 @@ describe("TK127 CUADRE / Migo", () => {
     assert.equal(kFac, kTk);
     assert.equal(kInv, kTk);
     const diffs = difPorSku(
-      [{ sku: "ML-008", codigo: "ML-008", nombre: "AC Solution Swab", cantidad: 1, total: 10 }],
-      [{ lineas: [{ sku: "ML-008", nombre: "AC Solution Swab", cantidad: 1, totalCon: 10, total: 10 }] } as Row],
+      [{ sku: "SUNSU-ML-008", codigo: "SUNSU-ML-008", nombre: "AC Solution Swab", cantidad: 1, total: 10 }],
+      [{ lineas: [{ sku: "INV-110", nombre: "AC Solution Swab", cantidad: 1, totalCon: 10, total: 10 }] } as Row],
+      undefined,
+      al,
     );
-    // Sin alias aún en difPorSku, mismos SKU ya cuadran.
     assert.equal(diffs.length, 0);
   });
 });
@@ -229,11 +230,11 @@ describe("TK127 SQL aditivo y bandera de conteo", () => {
     assert.equal(FLAG_PENDIENTE_CONTEO.includes("lotes"), true);
   });
 
-  it("el cache de esta entrega es TK132, distinto al de TK127", () => {
+  it("el cache de esta entrega es TK133, distinto al de TK132", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK132/);
-    assert.match(beta, /20261119tk132/);
-    assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK127/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK133/);
+    assert.match(beta, /20261119tk133/);
+    assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK132/);
   });
 });

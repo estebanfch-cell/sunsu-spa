@@ -1,8 +1,9 @@
 // Cruce de tickets con facturas vivas de Migo (solo lectura). No emite ni anula facturas.
-import { b, n, s, type Row } from "./domain.ts";
+import { b, n, s, type Row, round2 } from "./domain.ts";
 
 import { compararFacturaYTickets } from "./migo_lineas.ts";
-import { difPorSku } from "./cuadre_sku.ts";
+import { difPorSku, totalTicketCuadre } from "./cuadre_sku.ts";
+import type { AliasMap } from "./inventario_modelo.ts";
 import { tipoSinCobro } from "./sin_cobro.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
@@ -123,10 +124,10 @@ function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
 }
 /** TK98: « Qué SKU hace la diferencia: Falta en ticket: SUNSU-35 GIFT CARD $3.00.» (solo por SKU). */
-function difSkuDeLink(L: { factura: string }, facturas: FacturaVivo[], hermanos: Row[], t: Row): string {
+function difSkuDeLink(L: { factura: string }, facturas: FacturaVivo[], hermanos: Row[], t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number }>, aliases?: AliasMap): string {
   const f = facturas.find((x) => x.factura === L.factura);
   if (!f || !Array.isArray(f.lineas) || !f.lineas.length) return "";
-  const d = difPorSku(f.lineas as Row[], hermanos.length ? hermanos : [t]);
+  const d = difPorSku(f.lineas as Row[], hermanos.length ? hermanos : [t], catalogo, aliases);
   return d.length ? " " + d.join(" · ") + "." : "";
 }
 /** TK90: cancelado/anulado (beta o sistema anterior). */
@@ -230,8 +231,10 @@ export function flagsDeseadas(p: {
   importadoGye: string;
   /** TK81: aquí se juntan las líneas corregidas con la factura (mismo servicio, otro SKU). */
   cambios?: CambioSku[];
-  /** TK81: precios de catálogo (con IVA) por código, solo para reconocer el mismo servicio con otro SKU. */
+  /** TK81 + TK133: precios de catálogo (con IVA) por código; también para armar el total y las líneas de la hoja. */
   catalogo?: Map<string, { nombre?: string; pvpConIva?: number }>;
+  /** TK127/TK133: alias canónicos (INV-110 → ML-008) para comparar solo por SKU. */
+  aliases?: AliasMap;
 }): FlagDeseada[] {
   const cambios = p.cambios || [];
   const maxSeq = p.facturas.reduce((a, f) => Math.max(a, f.seq || 0), 0);
@@ -254,25 +257,38 @@ export function flagsDeseadas(p: {
     const Ls = linksByTk.get(id) || [];
     if (Ls.length) {
       const L = Ls[0];
-      if (L.estado === "diferencia") {
-        const signo = L.diferencia_monto > 0 ? "+" : "";
-        out.push({
-          ticket_id: id, ticket_clave: clave, kind: "monto",
-          motivo: "Diferencia de monto",
-          detalle: "Ticket $" + L.total_tickets.toFixed(2) + " vs factura " + L.factura + " $" + L.total_factura.toFixed(2) + " (" + signo + L.diferencia_monto.toFixed(2) + ")." + (L.motivo ? " " + L.motivo + "." : "") + difSkuDeLink(L, p.facturas, (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[], t),
-          factura: L.factura,
-        });
+      const hermanos0 = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
+      const ts0 = hermanos0.length ? hermanos0 : [t];
+      const facV0 = p.facturas.find((f) => f.factura === L.factura);
+      const sinBeta0 = (x: Row) => !(Array.isArray(x.lineasDetalle) && (x.lineasDetalle as Row[]).length);
+      // TK80: ticket migrado sin líneas beta, lo cobrado = total de la factura (±$1): la vista usa las líneas de la factura (TK72).
+      const desdeFactura0 = !!(facV0 && ts0.length <= 1 && sinBeta0(t) && n(facV0.total) > 0 && Math.abs(n(facV0.total) - n(t.estimado)) <= 1);
+      if (!desdeFactura0) {
+        const ts = ts0;
+        // TK133: el letrero compara el total de las líneas (catálogo o beta), no el «Pagado» / estimado de la hoja.
+        const totalTk = round2(ts.reduce((a, x) => a + totalTicketCuadre(x, p.catalogo), 0));
+        const diffLineas = round2(totalTk - L.total_factura);
+        if (Math.abs(diffLineas) > 0.05) {
+          const signo = diffLineas > 0 ? "+" : "";
+          const extra = ts.length > 1 ? " una factura cubre " + ts.length + " tickets." : "";
+          out.push({
+            ticket_id: id, ticket_clave: clave, kind: "monto",
+            motivo: "Diferencia de monto",
+            detalle: "Ticket $" + totalTk.toFixed(2) + " vs factura " + L.factura + " $" + L.total_factura.toFixed(2) + " (" + signo + diffLineas.toFixed(2) + "). diferencia de monto $" + diffLineas.toFixed(2) + "." + extra + difSkuDeLink(L, p.facturas, ts, t, p.catalogo, p.aliases),
+            factura: L.factura,
+          });
+        }
       }
       // TK84 (Emilia 18/11): una factura a otro nombre (p. ej. la mamá de la clienta) NO es un error ni bloquea el cuadre:
       // nunca se crea flag «Clienta no cuadra». El detalle muestra solo una nota gris «Facturado a otro nombre».
-      const facV = p.facturas.find((f) => f.factura === L.factura);
+      const facV = facV0;
       if (facV && facV.lineas && facV.lineas.length) {
-        const hermanos = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
+        const hermanos = ts0;
         // TK80: un ticket migrado sin líneas beta, solo en su factura y con lo cobrado = total de la factura (±$1)
         // ya se muestra con las líneas de esa factura (TK72): no hay nada que revisar entre ticket y factura.
-        const sinBeta = (x: Row) => !(Array.isArray(x.lineasDetalle) && (x.lineasDetalle as Row[]).length);
-        const desdeFactura = hermanos.length <= 1 && sinBeta(t) && n(facV.total) > 0 && Math.abs(n(facV.total) - n(t.estimado)) <= 1;
-        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t], undefined, p.catalogo);
+        const sinBeta = sinBeta0;
+        const desdeFactura = desdeFactura0;
+        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t], p.catalogo, p.catalogo);
         const rojos = avisos.filter((a) => a.tipo !== "sugerencia" && a.tipo !== "cambio_sku");
         for (const a of avisos) if (a.tipo === "cambio_sku" && a.ticketId === id) cambios.push({ ticket_id: id, ticket_clave: clave, factura: L.factura, desde: s(a.desde), hacia: s(a.hacia), texto: a.texto });
         if (rojos.length) {
