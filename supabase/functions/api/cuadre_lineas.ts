@@ -140,6 +140,7 @@ export function compararLineasVisual(
   facLineas: Row[] | undefined,
   catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>,
   aliases?: AliasMap,
+  opts?: { focus?: number },
 ): CuadreLinea[] {
   const F = agruparFac(facLineas, aliases);
   const out: CuadreLinea[] = [];
@@ -159,9 +160,13 @@ export function compararLineasVisual(
   });
 
   // Recorre las líneas del ticket en orden para poder pintar cada fila.
+  // TK143: con focus, solo se pintan las líneas de ESE ticket (el agregado del grupo ya está en tkAgg).
   let idx = 0;
-  for (const t of tickets) {
+  for (let ti = 0; ti < tickets.length; ti++) {
+    const t = tickets[ti];
+    const paint = opts?.focus == null || ti === opts.focus;
     for (const l of lineasDeTicket(t, catalogo)) {
+      if (!paint) continue;
       const i = idx++;
       const k = claveCuadre(l.sku || l.codigo, aliases);
       const codigo = visible(k, l.codigo);
@@ -205,9 +210,8 @@ export function compararLineasVisual(
   for (const [k, fac] of F) {
     if (used.has(k)) continue;
     const tk = tkAgg.get(k);
-    if (tk && (tk.q > 0 || tk.canjeQ > 0) && used.has(k)) continue;
-    // Si solo había canje en el ticket para este SKU, no es «falta».
-    if (tk && tk.canjeQ > 0 && !(tk.q > 0)) continue;
+    // TK143: si el SKU está en un ticket hermano (o en este, pintado como ok/diff), no crear fila fantasma.
+    if (tk && (tk.q > 0 || tk.canjeQ > 0)) continue;
     out.push({
       sku: k, codigo: visible(k, fac.codigo), nombre: fac.nombre, estado: "falta",
       razon: "Falta en ticket · en factura: " + visible(k, fac.codigo) + (fac.nombre ? " " + fac.nombre : "") + " " + $(fac.tot),
@@ -217,13 +221,21 @@ export function compararLineasVisual(
   return out;
 }
 
-export function resumenCuadre(lineas: CuadreLinea[], factura?: string): { ok: boolean; nDiff: number; texto: string; factura: string } {
+export function resumenCuadre(lineas: CuadreLinea[], factura?: string, extra?: { hermanos?: string[] }): { ok: boolean; nDiff: number; texto: string; factura: string; hermanos?: string[] } {
   const nDiff = lineas.filter((l) => l.estado === "diff" || l.estado === "falta" || l.estado === "sobra").length;
-  const fac = s(factura).replace(/^001-001-0+/, "") || s(factura);
-  if (!fac && !lineas.length) return { ok: true, nDiff: 0, texto: "", factura: "" };
-  if (!nDiff) return { ok: true, nDiff: 0, texto: fac ? "Cuadrado con fac. " + fac : "Cuadrado", factura: fac };
+  const facFull = s(factura);
+  const fac = facFull.replace(/^001-001-0+/, "") || facFull;
+  const hermanos = (extra?.hermanos || []).map((h) => s(h)).filter(Boolean);
+  const junto = hermanos.length ? "junto con " + hermanos.join(", ") : "";
+  if (!fac && !lineas.length) return { ok: true, nDiff: 0, texto: "", factura: "", hermanos };
+  if (!nDiff) {
+    if (junto && facFull) return { ok: true, nDiff: 0, texto: "✓ Cuadra (" + junto + " · Fac. " + facFull + ")", factura: fac, hermanos };
+    if (junto) return { ok: true, nDiff: 0, texto: "✓ Cuadra (" + junto + ")", factura: fac, hermanos };
+    return { ok: true, nDiff: 0, texto: fac ? "Cuadrado con fac. " + fac : "Cuadrado", factura: fac, hermanos };
+  }
   const n = nDiff;
-  return { ok: false, nDiff: n, texto: n + " línea" + (n === 1 ? "" : "s") + " por corregir" + (fac ? " · fac. " + fac : ""), factura: fac };
+  const extraTxt = junto ? " (" + junto + ")" : "";
+  return { ok: false, nDiff: n, texto: n + " línea" + (n === 1 ? "" : "s") + " por corregir" + (fac ? " · fac. " + fac : "") + extraTxt, factura: fac, hermanos };
 }
 
 /** Perfil de SKU (sin canjes $0) para el motor de best-match. */

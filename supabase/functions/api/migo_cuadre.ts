@@ -253,19 +253,20 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadr
     if (r.mismaCantidad) return { sc: 7, conf: "media" }; // mismos ítems, distinto valor (descuento)
     return null;
   };
+  // TK143: 1..N tickets (hasta 6) contra 1 factura, o 1 ticket contra N facturas, mismo día.
   const combosDe = <T,>(arr: T[], max: number): T[][] => {
+    const a = arr.slice(0, 12);
     const out: T[][] = [];
-    const n0 = Math.min(arr.length, 12);
-    const a = arr.slice(0, n0);
-    for (let i = 0; i < a.length; i++) {
-      out.push([a[i]]);
-      if (max < 2) continue;
-      for (let j = i + 1; j < a.length; j++) {
-        out.push([a[i], a[j]]);
-        if (max < 3) continue;
-        for (let k = j + 1; k < a.length; k++) out.push([a[i], a[j], a[k]]);
+    const rec = (start: number, acc: T[]) => {
+      if (acc.length && acc.length <= max) out.push(acc.slice());
+      if (acc.length >= max) return;
+      for (let i = start; i < a.length; i++) {
+        acc.push(a[i]);
+        rec(i + 1, acc);
+        acc.pop();
       }
-    }
+    };
+    rec(0, []);
     return out;
   };
   const stillTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t, catalogo) && !ticketSoloCero(t, catalogo) && !ticketCancelado(t));
@@ -275,7 +276,7 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadr
     if (!pool.length) continue;
     const pf = perfilFac(inv);
     if (!pf.size) continue;
-    for (const ts of combosDe(pool, 3)) {
+    for (const ts of combosDe(pool, 6)) {
       const r = scoreSku(perfilTks(ts), pf);
       if (!r) continue;
       skuCands.push({ sc: r.sc + (ts.length === 1 ? 0.2 : 0), invs: [inv], ts, tipo: ts.length > 1 ? "sku_fecha_suma" : "sku_fecha", conf: r.conf });
@@ -286,7 +287,7 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadr
     if (pool.length < 2) continue;
     const pt = perfilTks([t]);
     if (!pt.size) continue;
-    for (const invs of combosDe(pool, 3)) {
+    for (const invs of combosDe(pool, 6)) {
       if (invs.length < 2) continue;
       const pf = new Map<string, { q: number; tot: number }>();
       for (const inv of invs) {
@@ -376,10 +377,14 @@ export function flagsDeseadas(p: {
       const desdeFactura0 = !!(facV0 && ts0.length <= 1 && sinBeta0(t) && n(L.total_factura) > 0 && Math.abs(n(L.total_factura) - n(t.estimado)) <= 1);
       if (!desdeFactura0) {
         const ts = ts0;
-        // TK133: el letrero compara el total de las líneas (catálogo o beta), no el «Pagado» / estimado de la hoja.
-        const totalTk = round2(ts.reduce((a, x) => a + totalTicketCuadre(x, p.catalogo), 0));
+        // TK143: si la SUMA de los tickets (estimado / total ya vinculado) cuadra con la factura, no hay flag de monto.
+        const totalEst = round2(ts.reduce((a, x) => a + n(x.estimado), 0));
+        const linkCuadra = (L.estado === "cuadra" || L.estado === "redondeo") && Math.abs(n(L.diferencia_monto)) <= 0.05;
+        const estimadoCuadra = Math.abs(totalEst - L.total_factura) <= 0.05;
+        // TK133: si el estimado no cuadra, el letrero compara el total de las líneas (catálogo o beta).
+        const totalTk = estimadoCuadra ? totalEst : round2(ts.reduce((a, x) => a + totalTicketCuadre(x, p.catalogo), 0));
         const diffLineas = round2(totalTk - L.total_factura);
-        if (Math.abs(diffLineas) > 0.05) {
+        if (!linkCuadra && !estimadoCuadra && Math.abs(diffLineas) > 0.05) {
           const signo = diffLineas > 0 ? "+" : "";
           const extra = ts.length > 1 ? " una factura cubre " + ts.length + " tickets." : "";
           out.push({
