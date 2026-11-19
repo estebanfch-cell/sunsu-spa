@@ -110,7 +110,7 @@
     document.body.appendChild(ov);
     var vid = ov.querySelector("video"), stream = null, vivo = true;
     var fin = function () { vivo = false; if (stream && window.SunsuMedia) SunsuMedia.pausar(stream); else if (stream) stream.getVideoTracks().forEach(function (tr) { tr.enabled = false; }); vid.srcObject = null; ov.remove(); };
-    ov.querySelector("button").onclick = fin;
+    var _el = ov.querySelector("button"); if (_el) _el.onclick = fin;
     try {
       stream = window.SunsuMedia ? await SunsuMedia.camara("environment") : await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
       vid.srcObject = stream; await vid.play();

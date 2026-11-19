@@ -288,9 +288,9 @@
       '<label style="display:flex;gap:6px;align-items:center;color:var(--navy-d)"><input type="checkbox" id="ag-avisar" style="width:auto"> Enviar correo de Acuity a la clienta</label>' +
       '<p class="err" id="ag-err"></p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost small" data-x>Cancelar</button><button class="btn small" type="button" id="ag-ok">' + (editar ? "Mover" : "Agendar") + "</button></div>");
     var box = b.querySelector(".mcag-box");
-    ["#ag-tipo", "#ag-fecha", "#ag-calsel"].forEach(function (q) { box.querySelector(q).onchange = function () { sel.v = ""; horasUI(box, sel); }; });
+    ["#ag-tipo", "#ag-fecha", "#ag-calsel"].forEach(function (q) { var _el = box.querySelector(q); if (_el) _el.onchange = function () { sel.v = ""; horasUI(box, sel); }; });
     horasUI(box, sel);
-    box.querySelector("#ag-ok").onclick = async function () {
+    var _el = box.querySelector("#ag-ok"); if (_el) _el.onclick = async function () {
       var err = box.querySelector("#ag-err"), when = horaFinal(box, sel); err.textContent = "";
       if (!when) { err.textContent = "Elige la hora"; return; }
       var r;
@@ -305,7 +305,7 @@
     var b = dlg('<div style="display:flex;justify-content:space-between"><h3 style="margin:0">Calendarios de Acuity</h3><button class="btn ghost small" data-x>×</button></div><p class="mccf-sub">Enlaza cada calendario con la persona del spa (nombre completo como en Usuarios). La cosmetóloga ve solo el suyo.</p>' +
       (M.calendarios || []).map(function (c) { return '<div class="mccf-card" style="padding:8px;margin:6px 0" data-cal="' + e(c.id) + '"><b>' + e(c.nombre) + '</b> <span class="mccf-sub">#' + e(c.id) + (c.enAcuity ? "" : " · ya no está en Acuity") + '</span><label>Persona</label><input data-f="persona" value="' + e(c.persona) + '"><label style="display:flex;gap:6px;align-items:center;color:var(--navy-d)"><input type="checkbox" data-f="activo" style="width:auto"' + (c.activo ? " checked" : "") + "> Activo para agendar</label></div>"; }).join("") +
       '<p class="err" id="ag-cerr"></p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost small" data-x>Cerrar</button><button class="btn small" type="button" id="ag-cok">Guardar</button></div>');
-    b.querySelector("#ag-cok").onclick = async function () {
+    var _el = b.querySelector("#ag-cok"); if (_el) _el.onclick = async function () {
       var cards = b.querySelectorAll("[data-cal]");
       for (var i = 0; i < cards.length; i++) {
         var x = cards[i], r = await api("ag_calendario_guardar", { calendarID: x.getAttribute("data-cal"), nombre: (M.calendarios.find(function (c) { return String(c.id) === x.getAttribute("data-cal"); }) || {}).nombre, persona: x.querySelector('[data-f="persona"]').value, activo: x.querySelector('[data-f="activo"]').checked });

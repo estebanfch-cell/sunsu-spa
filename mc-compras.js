@@ -165,8 +165,8 @@
     cv.addEventListener("pointerdown", function (ev) { dib = true; hay = true; var p = pt(ev); cx.beginPath(); cx.moveTo(p[0], p[1]); cv.setPointerCapture(ev.pointerId); });
     cv.addEventListener("pointermove", function (ev) { if (!dib) return; var p = pt(ev); cx.lineTo(p[0], p[1]); cx.stroke(); });
     cv.addEventListener("pointerup", function () { dib = false; });
-    d.querySelector("#fa-b").onclick = function () { cx.clearRect(0, 0, cv.width, cv.height); hay = false; };
-    d.querySelector("#fa-ok").onclick = async function () {
+    var _el = d.querySelector("#fa-b"); if (_el) _el.onclick = function () { cx.clearRect(0, 0, cv.width, cv.height); hay = false; };
+    var _el = d.querySelector("#fa-ok"); if (_el) _el.onclick = async function () {
       if (!hay) { d.querySelector("#fa-err").textContent = "Dibuja la firma"; return; }
       try { await A("acta_firmar", { id: a.id, firma: cv.toDataURL("image/png"), nombre: d.querySelector("#fa-n").value }); d.remove(); toast2("Acta firmada"); listo(); } catch (x) { d.querySelector("#fa-err").textContent = x.message || x; }
     };
@@ -230,7 +230,7 @@
     wireActas(main, o);
     var bc = main.querySelector("#mcoc-cancelar"); if (bc) bc.onclick = function () {
       var d = dlg('<h3>Cancelar ' + e(o.numero) + '<button class="mcoc-xx" data-x>×</button></h3><p class="mcoc-sub">Solo se puede cancelar si no se ha recibido nada.</p><label>Motivo</label><textarea class="mcoc-in" id="mcoc-mot" rows="3"></textarea><p class="err" id="mcoc-err"></p><div class="mcoc-acts"><button class="btn ghost small" data-x type="button">Volver</button><button class="btn small mcoc-cancel" type="button" id="mcoc-okc">Cancelar OC</button></div>');
-      d.querySelector("#mcoc-okc").onclick = async function () {
+      var _el = d.querySelector("#mcoc-okc"); if (_el) _el.onclick = async function () {
         try { await A("cmpb_cancelar", { id: o.id, motivo: d.querySelector("#mcoc-mot").value }); d.remove(); toast2("OC cancelada"); render2(main, { sub: "oc", id: o.id }); }
         catch (x) { d.querySelector("#mcoc-err").textContent = x.message || x; }
       };
@@ -239,7 +239,7 @@
       var d = dlg('<h3>💵 Registrar pago · ' + e(o.numero) + '<button class="mcoc-xx" data-x>×</button></h3><p class="mcoc-sub">Saldo pendiente ' + $m(o.saldo) + '</p>' +
         '<label>Fecha</label><input class="mcoc-in" type="date" id="pg-f" value="' + hoy() + '"><label>Banco / cuenta</label><input class="mcoc-in" id="pg-b" placeholder="Pichincha cta. corriente"><label>Monto</label><input class="mcoc-in" id="pg-m" inputmode="decimal" value="' + r2(o.saldo) + '"><label>Referencia</label><input class="mcoc-in" id="pg-r" placeholder="Nº de transferencia o cheque"><label>Comprobante (opcional)</label><input type="file" id="pg-c" accept="image/*,application/pdf">' +
         '<p class="err" id="mcoc-err"></p><div class="mcoc-acts"><button class="btn ghost small" data-x type="button">Cancelar</button><button class="btn small" type="button" id="pg-ok">Registrar pago</button></div>');
-      d.querySelector("#pg-ok").onclick = async function () {
+      var _el = d.querySelector("#pg-ok"); if (_el) _el.onclick = async function () {
         var b = this; b.disabled = true;
         try {
           var c = await leerArchivo(d.querySelector("#pg-c"));
@@ -296,14 +296,14 @@
       if (ya) { ya.cantidad = r2(Number(ya.cantidad) + c); ya.precio = pr; } else F.lineas.push({ producto_id: p.id, sku: p.sku, nombre: p.nombre, cantidad: c, precio: pr });
       d.remove(); pintarForm(main); var s = main.querySelector("#nf-q"); if (s) s.focus();
     };
-    d.querySelector("#pk-ok").onclick = ok;
+    var _el = d.querySelector("#pk-ok"); if (_el) _el.onclick = ok;
     d.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); ok(); } if (ev.key === "Escape") d.remove(); });
   }
   function pintarForm(main) { main.innerHTML = formHtml(); wireForm(main); }
   function wireForm(main) {
     var F = K.form, M = K.meta;
     pintaTot(main);
-    main.querySelector("#nf-prov").onchange = function () { capturar(main); F.todos = false; pintarForm(main); };
+    var _el = main.querySelector("#nf-prov"); if (_el) _el.onchange = function () { capturar(main); F.todos = false; pintarForm(main); };
     var iv = main.querySelector("#nf-iva"); if (iv) iv.onchange = function () { F.con_iva = iv.checked; pintaTot(main); };
     var td = main.querySelector("#nf-todos"); if (td) td.onchange = function () { F.todos = td.checked; buscar(); };
     main.querySelectorAll("[data-q],[data-p]").forEach(function (inp) {
@@ -333,7 +333,7 @@
     });
     hits.addEventListener("click", function (ev) { var h = ev.target.closest("[data-h]"); if (h) picker(H[Number(h.getAttribute("data-h"))], main); });
     var err = main.querySelector("#nf-err");
-    main.querySelector("#nf-save").onclick = async function () {
+    var _el = main.querySelector("#nf-save"); if (_el) _el.onclick = async function () {
       var b = this; capturar(main); err.textContent = ""; b.disabled = true;
       var L = F.lineas.map(function (l) { return { producto_id: l.producto_id, cantidad: l.cantidad, precio: l.precio }; });
       try {

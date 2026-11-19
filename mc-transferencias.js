@@ -110,9 +110,9 @@
       av.hidden = !msg; av.textContent = msg;
       main.querySelector("#mctr-lin").innerHTML = lineasFormHtml();
     }
-    ["#mctr-ob", "#mctr-db", "#mctr-os", "#mctr-ds"].forEach(function (s) { main.querySelector(s).onchange = leer; });
-    main.querySelector("#mctr-nota").oninput = function () { F.nota = this.value; };
-    main.querySelector("#mctr-volver").onclick = function () { go(F.id ? "#/m/transferencias/t/" + encodeURIComponent(F.id) : "#/m/transferencias"); };
+    ["#mctr-ob", "#mctr-db", "#mctr-os", "#mctr-ds"].forEach(function (s) { var _el = main.querySelector(s); if (_el) _el.onchange = leer; });
+    var _el = main.querySelector("#mctr-nota"); if (_el) _el.oninput = function () { F.nota = this.value; };
+    var _el = main.querySelector("#mctr-volver"); if (_el) _el.onclick = function () { go(F.id ? "#/m/transferencias/t/" + encodeURIComponent(F.id) : "#/m/transferencias"); };
     var bq = main.querySelector("#mctr-buscar"), hits = main.querySelector("#mctr-hits");
     function buscar() {
       var qv = bq.value.trim(); if (!qv) { hits.hidden = true; return; }
@@ -146,7 +146,7 @@
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo guardar"; return; }
       go("#/m/transferencias/t/" + encodeURIComponent(r.id));
     }
-    main.querySelector("#mctr-guardar").onclick = function () { void guardar(false); };
+    var _el = main.querySelector("#mctr-guardar"); if (_el) _el.onclick = function () { void guardar(false); };
     // Editando un borrador: Guardar / Descartar aparecen solo si algo cambió de verdad.
     if (F.id) {
       var foto = function () { return JSON.stringify([F.origen, F.origen_sub, F.destino, F.destino_sub, F.nota || "", F.lineas.map(function (l) { return [l.producto_id, Number(l.cantidad) || 0]; })]); };
@@ -156,7 +156,7 @@
       main._mctrMirar = mirar;
       var ds = main.querySelector("#mctr-descartar"); if (ds) ds.onclick = function () { go("#/m/transferencias/t/" + encodeURIComponent(F.id)); };
     }
-    main.querySelector("#mctr-enviar").onclick = function () { void guardar(true); };
+    var _el = main.querySelector("#mctr-enviar"); if (_el) _el.onclick = function () { void guardar(true); };
   }
 
   // ---------- Detalle ----------

@@ -126,7 +126,7 @@
     var cerrar = function () { box.remove(); };
     box.querySelectorAll("[data-no],.mcmu-x").forEach(function (x) { x.onclick = cerrar; });
     box.onclick = function (ev) { if (ev.target === box) cerrar(); };
-    box.querySelector("[data-ok]").onclick = async function () { var b = this; b.disabled = true; try { await onOk(box); cerrar(); } catch (x) { box.querySelector("[data-err]").textContent = x.message || String(x); b.disabled = false; } };
+    var _el = box.querySelector("[data-ok]"); if (_el) _el.onclick = async function () { var b = this; b.disabled = true; try { await onOk(box); cerrar(); } catch (x) { box.querySelector("[data-err]").textContent = x.message || String(x); b.disabled = false; } };
     return box;
   }
   /** «⚠️ Aplicar multa» desde un ticket: persona (la del ticket), tipo, monto editable y motivo. */

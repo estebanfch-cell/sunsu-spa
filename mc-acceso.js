@@ -67,8 +67,8 @@
         var ov = document.createElement("div"); ov.className = "mcac-ov";
         ov.innerHTML = "<div><b>Acceso de " + e(b.dataset.n) + "</b><div style='margin-top:8px'>" + formHtml("mcac-adm", b.dataset.u, false) + "</div><p class='mcac-sub'>Pon una contraseña temporal y dásela en persona. En el primer ingreso tendrá que elegir la suya (no puede repetir la temporal).</p><div class='mcac-acts'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
         document.body.appendChild(ov);
-        ov.querySelector("[data-x]").onclick = function () { ov.remove(); };
-        ov.querySelector("[data-ok]").onclick = async function () {
+        var _el = ov.querySelector("[data-x]"); if (_el) _el.onclick = function () { ov.remove(); };
+        var _el = ov.querySelector("[data-ok]"); if (_el) _el.onclick = async function () {
           var r = await api("cred_guardar", { usuario_id: b.dataset.cpon, usuario: document.getElementById("mcac-adm-u").value.trim().toLowerCase(), password: document.getElementById("mcac-adm-p").value });
           if (!r || !r.ok) { toast2((r && r.error) || "No se pudo guardar", 1); return; }
           ov.remove(); toast2("Acceso guardado para " + b.dataset.n); repintar(main);
