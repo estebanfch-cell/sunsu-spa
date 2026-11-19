@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { MemoryDb } from "./db.ts";
-import { aplicarGiftCard, etiquetaGift, infoSaldoGift, saldoGift } from "./ventas.ts";
+import { aplicarGiftCard, datosGiftConvPaquete, etiquetaGift, facialDePaquete, infoSaldoGift, notasConvPaqueteGC, saldoGift } from "./ventas.ts";
 import type { Row } from "./domain.ts";
 
 const CAT: Row[] = [
@@ -19,6 +19,9 @@ const CAT: Row[] = [
   { sku: "SUNSU-43", producto_servicio: "FACIAL DE GEISHA", tipo: "FACIAL ESPECIAL", total_con_iva: 145, subtotal: 126.09, activo: true },
   { sku: "SUNSU-04", producto_servicio: "FACIAL GOLD-AGING", tipo: "FACIAL", total_con_iva: 65, subtotal: 56.52, activo: true },
   { sku: "SUNSU-47", producto_servicio: "PAQUETE (3) FACIALES DE GEISHA", tipo: "PAQUETE", total_con_iva: 391.5, subtotal: 340.43, activo: true },
+  { sku: "SUNSU-44", producto_servicio: "PAQUETE (3) FACIALES RESET 3x1", tipo: "PAQUETE", total_con_iva: 256.5, subtotal: 223.04, activo: true },
+  { sku: "SUNSU-18", producto_servicio: "PAQUETE (3) FACIAL REPARACIÓN", tipo: "PAQUETE", total_con_iva: 175.5, subtotal: 152.61, activo: true },
+  { sku: "SUNSU-02", producto_servicio: "FACIAL REPARACIÓN", tipo: "FACIAL", total_con_iva: 65, subtotal: 56.52, activo: true },
   { sku: "SUNSU-PH-005", producto_servicio: "Reset Balance (Purifying Balance) - APHLORA", tipo: "PRODUCTO", total_con_iva: 20.7, subtotal: 18, activo: true },
 ];
 
@@ -133,8 +136,9 @@ describe("saldoGift · facial en notas/valor (TK145 Andrea)", () => {
     assert.equal(saldoGift({ ...base, codigo_gc: "26-163", notas: "PREMIUM" }, CAT), 65);
     assert.equal(infoSaldoGift({ ...base, notas: "FACIAL PREMIUM" }, CAT).origen, "catalogo");
   });
-  it("Conv. paquete→GC sin facial sigue en el fallback SUNSU-35 $65", () => {
+  it("Conv. paquete→GC sin facial ni paquete ligado sigue en el fallback SUNSU-35 $65", () => {
     assert.equal(saldoGift(virgen, CAT), 65);
+    assert.equal(infoSaldoGift(virgen, CAT).origen, "catalogo");
   });
   it("un paquete «VER PAQUETE» no se lee como un solo Geisha de $145; usa el SKU del paquete si está", () => {
     assert.equal(saldoGift({ codigo_gc: "26-068", sku: "SUNSU-47", valor: "PAQUETE (3) FACIALES DE GEISHA", notas: "3 FACIALES GEISHA VER PAQUETE", saldo: null, usado: false }, CAT), 391.5);
@@ -147,5 +151,74 @@ describe("saldoGift · facial en notas/valor (TK145 Andrea)", () => {
     assert.equal(saldoGift({ ...base, codigo_gc: "26-168", notas: "PURIFICACION SOS" }, CAT), 75);
     assert.equal(saldoGift({ ...base, codigo_gc: "26-172", notas: "KLIFT" }, CAT), 95);
     assert.equal(saldoGift({ codigo_gc: "ANTIGUA 3", sku: "SUNSU-15", valor: "AMPOLLA ESPECIAL PURIFICACIÓN", notas: "COMPRADO", saldo: null, usado: false }, CAT), 15);
+  });
+});
+
+
+describe("TK149 · conversión paquete→GC hereda el facial del paquete", () => {
+  const packReset: Row = {
+    id: 674, codigo: "PACK-674", sku: "SUNSU-44", paquete: "SUNSU-44 x3 Facial Reset 3x1",
+    factura: "2815.0", uso_1: true, fecha_1: "Gift Card, 26-157",
+  };
+  const historica: Row = {
+    sheet_row: 157, codigo_gc: "26-157", sku: "SUNSU-35", valor: "Gift Card",
+    saldo: null, usado: null, notas: "Conv. paquete→GC · Digital", factura: "2815.0",
+  };
+
+  it("notasConvPaqueteGC / datosGiftConvPaquete guardan facial + valor real (SUNSU-44 → $95)", () => {
+    assert.equal(
+      notasConvPaqueteGC({ facial: "Facial Reset 3x1", precio: 95, pack: "PACK-674", tipo: "digital" }),
+      "Facial Reset 3x1 · $95 · Conv. paquete PACK-674→GC · Digital",
+    );
+    const d = datosGiftConvPaquete(packReset, CAT, "digital");
+    assert.equal(d.precio, 95);
+    assert.equal(d.facialSku, "SUNSU-40");
+    assert.match(d.notas, /Facial Reset 3x1/);
+    assert.match(d.notas, /\$95/);
+    assert.match(d.notas, /PACK-674/);
+    assert.match(d.valor, /\$95/);
+    assert.equal(facialDePaquete("SUNSU-44 x3 Facial Reset 3x1", CAT)?.precio, 95);
+    assert.equal(facialDePaquete("SUNSU-18 x3 Facial Reparación", CAT)?.precio, 65);
+  });
+
+  it("saldoGift de una GC histórica Conv. paquete→GC sin texto de facial hereda $95, no $65", () => {
+    assert.equal(saldoGift(historica, CAT), 65, "sin paquete ligado sigue el fallback");
+    const info = infoSaldoGift(historica, CAT, [packReset]);
+    assert.equal(info.saldo, 95);
+    assert.equal(info.origen, "paquete");
+    assert.match(info.facial, /Reset/i);
+    assert.equal(saldoGift(historica, CAT, [packReset]), 95);
+    assert.match(etiquetaGift(historica, CAT, [packReset]), /\$95/);
+  });
+
+  it("buscarGiftCards / infoSaldoGift sobre la misma histórica no cae a $65", () => {
+    const info = infoSaldoGift(historica, CAT, [packReset]);
+    assert.equal(info.saldo, 95);
+    assert.notEqual(info.origen, "catalogo");
+  });
+
+  it("aplicarGiftCard con el paquete ligado cubre el Reset completo ($95)", async () => {
+    const db = new MemoryDb({
+      catalogo: CAT,
+      paquetes: [packReset],
+      gift_cards: [{ ...historica }],
+      log_acciones: [],
+      gift_card_movimientos: [],
+    });
+    const r = await aplicarGiftCard(db, "Andrea Robles", {
+      codigo: "26-157", aplica: 95, ticket: "TK-SO-1937", usadoPor: "Andrea Robles", facialPrecio: 95,
+    });
+    assert.equal(r.error, undefined, String(r.error || ""));
+    assert.equal(r.aplicado, 95);
+    assert.equal(r.facialCobro, 0);
+    assert.equal(r.saldo, 0);
+  });
+
+  it("el front de conversión escribe facial + valor + pack en las notas", () => {
+    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(js, /function notasConvPaqueteGC/);
+    assert.match(js, /function facialDePackTxt/);
+    assert.match(js, /SUNSU-44':'SUNSU-40/);
+    assert.match(js, /encodeURIComponent\(notasConvPaqueteGC\(s\)\)/);
   });
 });
