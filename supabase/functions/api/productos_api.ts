@@ -9,7 +9,7 @@ import { acceso, esAdmin, esSuperAdmin, matrizDe } from "./permisos.ts";
 import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domain.ts";
 import { runErp } from "./erp.ts";
 import {
-  CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
+  CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, codigosDeFuentes, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
   marcaDe, preciosDe, stockDe, stockTotal, porEstanteDe, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
   autoMinimos, deducirDelNombre, faltantesDe, BOD_CONSIG,
@@ -571,15 +571,11 @@ async function extrasFicha(ctx: Ctx, prod: Row, base: Row, cat: Row | undefined,
 
 /** Todos los códigos que ya existen: erp_productos + catalogo + cabina_inventario. */
 async function codigosExistentes(ctx: Ctx): Promise<{ codigo: string; clase: string }[]> {
-  const [erp, cat, cab] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario")]);
-  const out: { codigo: string; clase: string }[] = [];
-  const claseDe = new Map<string, string>();
-  for (const r of erp) { const c = codigoNorm(r.sku); if (c) { claseDe.set(c, s(r.clase) || "producto"); out.push({ codigo: c, clase: s(r.clase) || "producto" }); } }
-  for (const r of cat) { const c = codigoNorm(r.sku); if (c) out.push({ codigo: c, clase: claseDe.get(c) || "catalogo" }); }
-  for (const r of cab) {
-    for (const v of [r.codigo, r.sku_catalogo]) { const c = codigoNorm(v); if (c) out.push({ codigo: c, clase: claseDe.get(c) || "insumo cabina" }); }
-  }
-  return out;
+  const [erp, cat, cab, alias, base] = await Promise.all([
+    safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario"),
+    safeAll(ctx, "beta_sku_alias"), safeAll(ctx, "inventario_base"),
+  ]);
+  return codigosDeFuentes({ productos: erp, catalogo: cat, cabina: cab, alias, inventarioBase: base });
 }
 
 extend("mcprod_familias", "any", async (_p, ctx, ses) => {
@@ -612,7 +608,7 @@ extend("mcprod_nuevo", "any", async (p, ctx, ses) => {
   if (!s(p.nombre)) return { error: "El nombre es obligatorio" };
   const out = await runErp("prod_save", {
     sku, nombre: s(p.nombre), marca: s(p.marca), categoria: s(p.categoria), clase: tipo,
-    unidad: s(p.unidad) || "u", uso, _rol: ses.rol,
+    unidad: s(p.unidad) || "u", uso, _rol: ses.rol, crear: true,
   }, ctx.db, actorOf(ses), ctx.now);
   if (out.error) return out;
   if (p.pvp != null && p.pvp !== "") await ctx.db.write(actorOf(ses), "erp_productos", "update", { id: s(out.id) }, { beta_pvp: round2(n(p.pvp)), beta_editado_por: actorOf(ses), beta_editado_at: ctx.now.toISOString() });

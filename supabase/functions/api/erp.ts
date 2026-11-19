@@ -504,7 +504,17 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const sku = s(body.sku).toUpperCase().replace(/^SUNSU-/, "");
     const code = skuCode(sku);
     const esMascaraCabina = (SKUS_VENTA_CABINA as readonly string[]).includes(code);
-    const prev = porSku.get(code);
+    const prevExacto = productos.find((x) => skuCode(s(x.sku)) === code);
+    const prevPorCodigo = porSku.get(code);
+    // TK137: crear un producto NUNCA pisa otro, aunque el código coincida con
+    // un codigo_interno o un alias (así se sobreescribió JN-009 / VK-009).
+    if (body.crear === true) {
+      const choque = prevExacto || prevPorCodigo;
+      if (choque) return { error: "El código " + sku + " ya lo tiene " + s(choque.sku) + " · " + s(choque.nombre), status: 409 };
+    } else if (prevPorCodigo && !prevExacto) {
+      return { error: "El código " + sku + " ya lo tiene " + s(prevPorCodigo.sku) + " · " + s(prevPorCodigo.nombre), status: 409 };
+    }
+    const prev = prevExacto;
     const pid = prev ? String(prev.id) : id();
     // vender() rechaza uso cabina, y Cabina rechaza uso venta. Estas máscaras quedan en ambos.
     const usoFinal = esMascaraCabina ? "ambos" : uso;

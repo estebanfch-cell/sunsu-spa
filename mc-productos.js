@@ -1479,7 +1479,7 @@
       selConCrear("unidad", "Unidad", UNIDADES, "Unidad (ej. ml)", "u") +
       '<label>Uso<select name="uso"><option value="venta">Venta (Consignación)</option><option value="cabina">Cabina</option><option value="ambos">Ambos</option></select></label>' +
       '<label>PVP con IVA (opcional)<input name="pvp" inputmode="decimal" placeholder="Lo puedes poner después en la ficha"></label>' +
-      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre de la familia, revisado contra productos, catálogo e inventario de cabina. Las familias se calculan atrás; no se editan aquí. Se crea en Productos.</p><p class="err" id="mcp-f-err"></p>' +
+      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre de la familia, revisado contra sku, código interno, alias, catálogo, cabina e inventario. Las familias se calculan atrás; no se editan aquí. Se crea en Productos.</p><p class="err" id="mcp-f-err"></p>' +
       '<button class="btn" type="submit">Crear producto</button></form></div>';
   }
   function wireNuevo(main) {
