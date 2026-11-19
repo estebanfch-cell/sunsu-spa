@@ -19,7 +19,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.equal(first.primera, true);
     assert.equal(first.localEngine, "e2");
     assert.equal(hayActualizacion("c", "c", first.localEngine, first.remoteEngine), null);
-    assert.equal(parseCacheSw('const CACHE = "sunsu-beta-2026-11-19-TK148";'), "sunsu-beta-2026-11-19-TK148");
+    assert.equal(parseCacheSw('const CACHE = "sunsu-beta-2026-11-19-BOOT";'), "sunsu-beta-2026-11-19-BOOT");
     assert.equal(claveOcultarBanner("c2", "e2"), "sunsu.banner.hide.c2|e2");
   });
 
