@@ -31,6 +31,7 @@ export const PRIV_FLAGS = [
 export type PrivFlag = (typeof PRIV_FLAGS)[number]["id"];
 
 export function puedePriv(rol: string, id: PrivFlag, matriz?: Record<string, Partial<Record<string, Acceso>>>): boolean {
+  if (id === "costos") return esSuperAdmin(rol);
   if (esAdmin(rol)) return true;
   const f = PRIV_FLAGS.find((x) => x.id === id);
   if (!f) return false;
@@ -138,15 +139,40 @@ const ACCION_MODULO: Record<string, Modulo> = {
   cfg_priv_get: "configuracion", cfg_priv_guardar: "configuracion",
   home: "inicio",
   aprobaciones_pendientes: "inicio",
-  getDashboardHoy: "ver_costos",
-  getDashboard: "ver_costos",
+  getDashboardHoy: "inicio",
+  getDashboard: "inicio",
 };
 
 const COSTO = new Set([
-  "precio_compra", "compra", "comprareal", "costo", "costoprod", "costo_promedio", "costo_unit", "costo_unitario",
-  "costo_envase", "costo_por_unidad", "utilidad", "margen", "comi_producto_30", "com",
+  "precio_compra", "compra", "comprareal", "compra_real", "compracomision", "compra_comision",
+  "costo", "costoprod", "costo_promedio", "costopromedio", "costo_unit", "costo_unitario",
+  "costo_envase", "costo_por_unidad", "costo_real", "costoreal", "costo_total", "costototal",
+  "utilidad", "utilidadprod", "utilidad_prod", "margen", "margenpct", "margen_pct", "margenprod",
+  "comi_producto_30", "com", "falta_costo", "faltacosto", "faltacoston", "faltacostoskus",
+  "sincosto", "sin_costo", "cogs", "cogs_nota", "ganancia",
+  "beta_compra_real", "beta_compra_comision", "comprarealsistema", "compracomisioncatalogo",
   "iesspatronal", "iess_patronal_11_15", "costoempresa", "costo_empresa",
 ]);
+const COSTO_COMPRAS = new Set([
+  "precio", "subtotal", "total", "importe", "valor", "iva", "flete", "pagado", "saldo",
+  "descuento", "descuento_pct", "p_unit", "pu", "unit_price",
+]);
+function esAccionCompras(action: string): boolean {
+  return /^(oc_|compras_|cmpb_|rcp_|cns_|acta_|getEntradas|periodo_consignacion|oc_consignacion)/.test(action);
+}
+function esAccionNomina(action: string): boolean {
+  return /^(getComisiones|getDashCosm|getRol|getRoles|aprobarRol|getPeriodoComision|getComisionRecepcion|rol_)/.test(action);
+}
+export function esClaveCosto(k: string, action = ""): boolean {
+  const n = k.toLowerCase().replace(/[\s-]+/g, "_");
+  if (n === "ver_costos" || n === "vercostos") return false;
+  if (n.startsWith("compra_pack")) return false;
+  if (COSTO.has(n) || COSTO.has(n.replace(/_/g, ""))) return true;
+  if (/costo|utilidad|margen|compra_comision|compracomision|compra_real|comprareal|precio_compra|falta_costo|faltacosto|sin_costo|sincosto|cogs|^ganancia$|beta_compra|comi_producto/.test(n)) return true;
+  if (esAccionCompras(action) && COSTO_COMPRAS.has(n)) return true;
+  if (!esAccionNomina(action) && (n === "comision" || n === "comisiones")) return true;
+  return false;
+}
 const CONTACTO = new Set(["telefono", "tel", "celular", "whatsapp", "email", "correo"]);
 
 /** @deprecated Preferir puedePriv(rol, "telefonos", matriz). Sin matriz, solo admin (TK73). */
@@ -185,8 +211,13 @@ export function esAdmin(rol: string): boolean {
   return r === "admin" || r === "super_admin";
 }
 
+/** Solo Super Admin ve costos, utilidad, margen y precios de compra. admin no. */
+export function esSuperAdmin(rol: string): boolean {
+  return normalizarRol(rol) === "super_admin";
+}
+
 export function acceso(rol: string, modulo: string, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): Acceso {
-  if (modulo === "permisos") return normalizarRol(rol) === "super_admin" ? "todos" : "no";
+  if (modulo === "permisos" || modulo === "ver_costos") return esSuperAdmin(rol) ? "todos" : "no";
   if (esAdmin(rol)) return "todos";
   const r = normalizarRol(rol);
   const v = matriz[r]?.[modulo as Modulo] ?? DEFAULT_MATRIZ[r]?.[modulo as Modulo];
@@ -233,6 +264,8 @@ export function gateAccion(action: string, ses: SesLite | null, matriz: Record<s
   const pub = new Set(["", "version", "getVersion", "login", "login_pass", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami"]);
   if (pub.has(action)) return null;
   if (!ses) return { error: "Inicia sesión" };
+  // Consumos (unidades): lo ve admin y Super Admin. Los $ de costo los quita redactar si no es Super Admin.
+  if (action === "reporte_consumos") return esAdmin(ses.rol) ? null : { error: "No tienes permiso" };
   const mod = ACCION_MODULO[action];
   if (!mod) return null;
   if (acceso(ses.rol, mod, matriz) === "no") {
@@ -287,25 +320,27 @@ function quitarContacto(v: unknown, tel: boolean, mail: boolean): unknown {
   return o;
 }
 
-function quitarCostos(v: unknown, puede: boolean): unknown {
+function quitarCostos(v: unknown, puede: boolean, action = ""): unknown {
   if (puede || v == null) return v;
-  if (Array.isArray(v)) return v.map((x) => quitarCostos(x, false));
+  if (Array.isArray(v)) return v.map((x) => quitarCostos(x, false, action));
   if (typeof v !== "object") return v;
   const o: Row = {};
   for (const [k, val] of Object.entries(v as Row)) {
-    if (COSTO.has(k.toLowerCase())) continue;
-    o[k] = quitarCostos(val, false);
+    if (esClaveCosto(k, action)) continue;
+    o[k] = quitarCostos(val, false, action);
   }
   return o;
 }
 
 export function redactar(action: string, data: unknown, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): unknown {
-  if (!ses || esAdmin(ses.rol)) return data;
-  if (action === "getRolIndividual" && data && typeof data === "object") {
+  const puedeCostos = !!(ses && esSuperAdmin(ses.rol));
+  if (!ses) return quitarCostos(structuredClone(data), false, action);
+  if (!esAdmin(ses.rol) && action === "getRolIndividual" && data && typeof data === "object") {
     const nombre = String(((data as Row).data as Row | undefined)?.nombre || (data as Row).nombre || "");
     if (nombre && !esPropio(nombre, ses)) return { error: "No tienes permiso para ver el rol de otra persona" };
   }
-  let out = quitarCostos(structuredClone(data), verCostos(ses.rol, matriz));
+  let out = quitarCostos(structuredClone(data), puedeCostos, action);
+  if (esAdmin(ses.rol)) return out;
   out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));
   const ticketsPropio = acceso(ses.rol, "tickets", matriz) === "propio";
   const rolPropio = acceso(ses.rol, "rol_pagos", matriz) !== "todos";

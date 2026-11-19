@@ -79,6 +79,12 @@ describe("dashboard MineCore", () => {
     const ok = await handle("getDashboard", { token: c2.token, periodo: "mes" }, c2) as Row;
     assert.equal(ok.ok, true);
     assert.equal(ok.periodo, "mes");
+    assert.equal((ok.actual as Row | undefined)?.costoProd, undefined);
+    assert.equal((ok.actual as Row | undefined)?.utilidadProd, undefined);
+    const c3 = ctx(db, "super_admin");
+    const mega = await handle("getDashboard", { token: c3.token, periodo: "mes" }, c3) as Row;
+    assert.equal(mega.ok, true);
+    assert.ok("costoProd" in ((mega.actual as Row) || {}));
   });
 });
 

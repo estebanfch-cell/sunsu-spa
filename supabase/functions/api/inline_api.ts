@@ -1403,7 +1403,7 @@ export async function guardarAccesoCampos(ctx: Ctx, ses: Ses, fila: string, camp
   if (!ROLES_ACCESO.includes(rol)) return { error: "Rol no editable" };
   if (!MODULOS.includes(modulo as typeof MODULOS[number]) || modulo === "permisos") return { error: "Ese permiso no se puede delegar" };
   if (!["no", "propio", "todos"].includes(acc)) return { error: "Acceso inválido" };
-  if (modulo === "ver_costos" && acc !== "no") return { error: "Los costos solo los ven admin y super_admin" };
+  if (modulo === "ver_costos" && acc !== "no") return { error: "Los costos solo los ve Super Admin" };
   const clave = rol + "|" + modulo;
   const rows = await ctx.db.all("app_modulos").catch(() => [] as Row[]);
   const hit = rows.find((r) => normalizarRol(s(r.rol)) === rol && s(r.modulo) === modulo);
