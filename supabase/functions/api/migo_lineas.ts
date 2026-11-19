@@ -75,11 +75,15 @@ export function normalizarLineaFactura(l: Row): LineaNorm | null {
   if (!(qty > 0)) return null;
   const unit = n(l.precio_unit ?? l.precio);
   const desc = n(l.descuento);
-  let sub = n(l.subtotal);
-  if (!sub && unit) sub = Math.round((unit * qty - desc) * 100) / 100;
   const iva = n(l.iva);
-  let tot = n(l.total);
-  if (!tot && sub) tot = Math.round((sub + (iva || Math.round(sub * 0.15 * 100) / 100)) * 100) / 100;
+  const hasTot = l.total != null && s(l.total) !== "" && Number.isFinite(Number(l.total));
+  let sub = n(l.subtotal);
+  let tot = hasTot ? n(l.total) : 0;
+  // Total explícito 0 (promo, muestra, cortesía, desc 100%): no reconstruir desde unit/sub × IVA.
+  if (!(hasTot && !(tot > 0.004))) {
+    if (!sub && unit) sub = Math.round((unit * qty - desc) * 100) / 100;
+    if (!hasTot && sub) tot = Math.round((sub + (iva || Math.round(sub * 0.15 * 100) / 100)) * 100) / 100;
+  }
   const unitSin = unit || (qty ? Math.round((sub / qty) * 10000) / 10000 : 0);
   return {
     // TK98: SUNSU-35 a $3.00 es la caja de gift card (INV-123), no una gift card.
@@ -252,8 +256,12 @@ function etq(l: LineaNorm): string {
   return (l.nombre ? l.nombre : l.codigo) + (l.codigo ? " (" + l.codigo + ")" : (l.sku ? " (" + l.sku + ")" : ""));
 }
 
-function montoLinea(l: LineaNorm): number {
-  return l.totalCon || Math.round((l.subtotalSin || l.unitSin * l.cantidad) * 1.15 * 100) / 100;
+/** Total con IVA de la línea. Un total explícito de 0 (promo, muestra, cortesía, desc 100%) gana: no se reconstruye unitSin × 1.15. */
+export function montoLinea(l: LineaNorm): number {
+  if (l.totalCon != null && l.totalCon !== ("" as unknown) && Number.isFinite(Number(l.totalCon))) {
+    return Math.round(Number(l.totalCon) * 100) / 100;
+  }
+  return Math.round((l.subtotalSin || l.unitSin * l.cantidad) * 1.15 * 100) / 100;
 }
 
 function pvpCatalogo(sku: string, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): number {
@@ -291,7 +299,8 @@ export function agruparPagadasPorSku(lineas: LineaNorm[]): LineaNorm[] {
   const paid = new Map<string, LineaNorm>();
   const otros: LineaNorm[] = [];
   for (const l of lineas) {
-    if (l.canje || l.mejoraPaquete) { otros.push({ ...l }); continue; }
+    const cero = !(montoLinea(l) > 0.004) && !l.mejoraPaquete;
+    if (l.canje || l.mejoraPaquete || cero) { otros.push({ ...l }); continue; }
     const k = s(l.sku || l.codigo);
     if (!k) { otros.push({ ...l }); continue; }
     const prev = paid.get(k);

@@ -34,6 +34,9 @@ export function tipoSinCobro(t: Row): SinCobro | null {
   if (n(t.estimado) > 0.004) return null;
   if (esConsumoInterno(t)) return "interno";
   if (giftCortesia(t.venta_gift)) return "cortesia";
+  if (/^cortes[ií]a\b/i.test(s(t.paquete)) || /^cortes[ií]a\b/i.test(s(t.comp))) return "cortesia";
+  const notas = s(t.notas_generales) + " " + s(t.notas);
+  if (/\[CORTESIA\]/i.test(notas)) return "cortesia";
   if (sesionPaquete(t)) return "canje";
   return null;
 }

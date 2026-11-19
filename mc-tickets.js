@@ -456,7 +456,8 @@
     var just = (K.justif != null ? K.justif : (K.d && K.d.justificacion_descuento)) || "";
     if (cu && (cu.estado === "ok") && cu.factura) return "✓ Coincide con Fac. " + e(cu.factura);
     if (cu && cu.estado === "ok") return "✓ Coincide con Fac." + (K.d && K.d.cuadre && K.d.cuadre.factura ? " " + e(K.d.cuadre.factura) : "");
-    if (l.canje || l.paqueteSesion || (cu && cu.estado === "canje_ok")) return "Canje · OK sin factura";
+    if (l.canje || l.paqueteSesion || (cu && cu.estado === "canje_ok" && (l.canje || l.paqueteSesion))) return "Canje · OK sin factura";
+    if ((cu && cu.estado === "canje_ok") || (!(Number(l.total_linea) > 0) && !l.mejoraPaquete && !(typeof esMejora === "function" && esMejora(l)))) return "OK sin factura ($0)";
     var mot = (cu && cu.razon) ? cu.razon : (cu ? "No coincide con la factura" : "Sin cruce de factura");
     var html = '<span class="mctk-bad">' + e(mot) + "</span>";
     if (just && (l.descuento_valor > 0 || hayDescTicket())) html += " · " + e(just);
@@ -498,7 +499,7 @@
       var mej = l.canje && !hayMejoraDe(l.sku) && ed ? '<button type="button" class="mctk-mej" data-mejora="' + i + '" title="Agregar diferencia por mejora (el facial vale más que el paquete)" aria-label="Agregar diferencia por mejora">＋$</button>' : "";
       var cu = ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return x.ticket_i === i; }) || ((K.d && K.d.cuadre_lineas) || []).find(function (x) { return String(x.sku || "") && String(x.sku) === String(l.sku || "").replace(/^SUNSU-/i, ""); });
       var st = cu && cu.estado ? " " + cu.estado : "";
-      if (!cu && (l.canje || l.paqueteSesion) && !(Number(l.total_linea) > 0)) st = " canje_ok";
+      if (!cu && !(Number(l.total_linea) > 0) && !l.mejoraPaquete && !(typeof esMejora === "function" && esMejora(l))) st = " canje_ok";
       var dtxt = descTxt(l.descuento_tipo, l.descuento_valor);
       var descH = dtxt ? ' <span class="mctk-desc">−' + e(dtxt.charAt(0) === "$" ? dtxt : dtxt) + "</span>" : "";
       var open = !!K.open[i];
