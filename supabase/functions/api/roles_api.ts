@@ -50,6 +50,59 @@ function mismoNombre(a: string, b: string): boolean {
   return esPropio(a, { rol: "", name: b, short: b, uid: "" }) || esPropio(b, { rol: "", name: a, short: a, uid: "" });
 }
 
+
+function tokensNom(v: string): string[] {
+  return s(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+    .replace(/[^A-Z ]/g, " ").split(/\s+/)
+    .filter((w) => w.length >= 3 && !["DEL", "LAS", "LOS", "SAN", "SANTA"].includes(w));
+}
+
+/** Cruza "Andrea Robles" con el nombre legal de la hoja ("ROBLES POGO ANDREA DEL CISNE"). */
+export function mismaPersonaRol(a: string, b: string): boolean {
+  if (!a || !b || a === "*" || b === "*") return false;
+  if (mismoNombre(a, b)) return true;
+  const ta = new Set(tokensNom(a)), tb = new Set(tokensNom(b));
+  const inter = [...ta].filter((x) => tb.has(x));
+  if (inter.length >= 2) return true;
+  if (inter.length === 1 && (ta.size === 1 || tb.size === 1)) return true;
+  return false;
+}
+
+/** Arma el preview oficial a partir de una fila de rrhh_historial (lo pagado en la hoja). */
+export function rolDesdeHistorial(r: Row, periodo?: string): Row {
+  const clave = clavePeriodo(periodo || r.mes, periodo ? undefined : r.ano);
+  const sueldo = n(r.sueldo);
+  const bono = n(r.bono);
+  const comisiones = n(r.comisiones);
+  const extras = n(r.extras_m_o_q);
+  const decimosFondo = n(r.c_13_14_fr_r_s_t);
+  const totalIngresos = n(r.total_ingresos_u) || (sueldo + bono + comisiones + extras + decimosFondo);
+  const iessPatronal = n(r.iess_patronal_11_15);
+  const costoEmpresa = n(r.costo_empresa);
+  return {
+    nombre: s(r.empleada),
+    cedula: s(r.cedula),
+    etiqueta: etiquetaPeriodo(clave),
+    periodo: clave,
+    sueldoBase: sueldo,
+    sueldo,
+    bono,
+    comisiones,
+    extras,
+    decimosFondo,
+    totalIngresos,
+    iess: 0,
+    totalEgresos: 0,
+    aportesPatronal: { iess: iessPatronal, secap: 0, iece: 0, total: iessPatronal, costoEmpresa },
+    fuente: "historial",
+    fuenteHoras: "Historial RRHH",
+  };
+}
+
+export function histClave(r: Row): string {
+  return clavePeriodo(r.mes, r.ano);
+}
+
 export function estaPublicado(pubs: Row[], periodo: string, persona: string): boolean {
   const clave = clavePeriodo(periodo);
   const rows = pubs.filter((r) => clavePeriodo(r.periodo) === clave);
@@ -79,9 +132,6 @@ async function upsertPub(ctx: Ctx, ses: Ses, periodo: string, persona: string, p
   else await ctx.db.write(actorOf(ses), "beta_rol_publicaciones", "insert", {}, row);
 }
 
-function histClave(r: Row): string {
-  return clavePeriodo(r.mes, r.ano);
-}
 
 extend("roles_lista", "any", async (p, ctx, ses) => {
   const pubs = await pubsDe(ctx);
@@ -106,15 +156,17 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
     for (const r of filas) {
       const persona = s(r.empleada);
       const pub = estaPublicado(pubs, periodo, persona);
-      if (!admin && !pub) continue;
-      if (!admin && !esPropio(persona, ses) && !esPropio(s(r.nombre_app), ses)) continue;
-      if (admin && s(p.persona) && !mismoNombre(persona, s(p.persona))) continue;
-      if (!afiliadaSegunOverlay(overlays, persona)) continue;
+      // El historial de la hoja ya fue pagado: el personal ve el suyo aunque no haya publicación beta.
+      if (!admin && !esPropio(persona, ses) && !esPropio(s(r.nombre_app), ses) && !mismaPersonaRol(persona, ses.name || "") && !mismaPersonaRol(persona, ses.short || "")) continue;
+      if (admin && s(p.persona) && !mismaPersonaRol(persona, s(p.persona))) continue;
+      if (admin && !afiliadaSegunOverlay(overlays, persona)) continue;
       items.push({
         periodo, etiqueta: etiquetaPeriodo(periodo), anio,
         persona, cedula: s(r.cedula),
         totalIngresos: n(r.total_ingresos_u),
+        neto: n(r.total_ingresos_u),
         publicado: pub,
+        estado: "aprobado",
         fuente: "historial",
         sheet: periodo,
       });
@@ -127,9 +179,9 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
     const periodo = clavePeriodo(r.periodo);
     const snap = (r.snapshot && typeof r.snapshot === "object") ? r.snapshot as Row : {};
     const pub = s(r.estado) === "aprobado" || estaPublicado(pubs, periodo, persona);
-    if (!admin && (s(r.estado) !== "aprobado" || !pub)) continue;
-    if (!admin && !esPropio(persona, ses)) continue;
-    if (admin && s(p.persona) && !mismoNombre(persona, s(p.persona))) continue;
+    if (!admin && s(r.estado) !== "aprobado") continue;
+    if (!admin && !esPropio(persona, ses) && !mismaPersonaRol(persona, ses.name || "") && !mismaPersonaRol(persona, ses.short || "")) continue;
+    if (admin && s(p.persona) && !mismaPersonaRol(persona, s(p.persona))) continue;
     const anio = anioDeClave(periodo) || n(r.anio);
     if (anioFiltro && anio !== anioFiltro) continue;
     const ix = items.findIndex((x) => clavePeriodo(x.periodo) === periodo && mismoNombre(s(x.persona), persona));
@@ -189,9 +241,8 @@ extend("getRoles", "any", async (_p, ctx, ses) => {
     if (!s(r.mes) || !s(r.empleada)) continue;
     const periodo = histClave(r);
     const pub = estaPublicado(pubs, periodo, s(r.empleada));
-    if (!admin && !pub) continue;
-    if (!admin && !esPropio(s(r.empleada), ses)) continue;
-    if (!afiliadaSegunOverlay(overlaysGet || [], s(r.empleada))) continue;
+    if (!admin && !esPropio(s(r.empleada), ses) && !mismaPersonaRol(s(r.empleada), ses.name || "") && !mismaPersonaRol(s(r.empleada), ses.short || "")) continue;
+    if (admin && !afiliadaSegunOverlay(overlaysGet || [], s(r.empleada))) continue;
     const g = meses.get(periodo) || { mes: s(r.mes), anio: r.ano, empleadas: [], sheetName: periodo, publicado: pub };
     (g.empleadas as Row[]).push({
       nombre: s(r.empleada), cedula: s(r.cedula), sueldo: n(r.sueldo), bono: n(r.bono), comisiones: n(r.comisiones),

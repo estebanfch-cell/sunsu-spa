@@ -4,7 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./handlers_extra.ts";
 import "./roles_api.ts";
-import { clavePeriodo, estaPublicado, etiquetaPeriodo } from "./roles_api.ts";
+import { clavePeriodo, estaPublicado, etiquetaPeriodo, mismaPersonaRol, rolDesdeHistorial } from "./roles_api.ts";
 import type { Ctx } from "./lib.ts";
 import type { Row } from "./domain.ts";
 
@@ -55,25 +55,47 @@ describe("roles publicados", () => {
     assert.equal(estaPublicado([], "AGOSTO_2026", "Andrea Robles"), false);
   });
 
-  it("staff solo ve roles publicados y solo los suyos", async () => {
+  it("staff ve su historial (aunque no esté publicado) y solo el suyo", async () => {
     const db = seed();
     const c = ctx(db);
-    const vacio = await handle("roles_lista", { token: "t-andrea" }, c) as Row;
-    assert.equal((vacio.items as Row[]).length, 0);
-    const no = await handle("rol_publicar", { token: "t-andrea", periodo: "AGOSTO_2026", publicado: true }, c) as Row;
-    assert.match(String(no.error), /Solo un admin/);
-    const ok = await handle("rol_publicar", { token: "t-emi", periodo: "AGOSTO_2026", todos: true, publicado: true }, c) as Row;
-    assert.equal(ok.ok, true, String(ok.error || ok.ok));
     const lista = await handle("roles_lista", { token: "t-andrea", anio: 2026 }, c) as Row;
     const items = lista.items as Row[];
-    assert.equal(items.length, 1);
-    assert.equal(items[0].periodo, "AGOSTO_2026");
-    assert.equal(items[0].persona, "Andrea Robles");
-    const sept = await handle("roles_lista", { token: "t-andrea" }, c) as Row;
-    assert.equal((sept.items as Row[]).some((x) => x.periodo === "SEPTIEMBRE_2026"), false);
+    assert.equal(items.length, 2, JSON.stringify(items));
+    assert.ok(items.every((x) => x.persona === "Andrea Robles"));
+    assert.ok(items.some((x) => x.periodo === "AGOSTO_2026"));
+    assert.ok(items.some((x) => x.periodo === "SEPTIEMBRE_2026"));
+    assert.ok(items.every((x) => x.fuente === "historial" && x.estado === "aprobado"));
+    const no = await handle("rol_publicar", { token: "t-andrea", periodo: "AGOSTO_2026", publicado: true }, c) as Row;
+    assert.match(String(no.error), /Solo un admin/);
   });
 
-  it("admin puede publicar o ocultar un periodo completo", async () => {
+  it("staff no abre el historial de otra persona", async () => {
+    const db = seed();
+    const c = ctx(db);
+    const no = await handle("getRolIndividual", { token: "t-andrea", sheet: "AGOSTO_2026", cedula: "y", persona: "Daniela Mora" }, c) as Row;
+    // clampPersonal reescribe la persona a la de la sesión: no puede ver el de Daniela.
+    assert.equal(no.ok, true, String(no.error || JSON.stringify(no)));
+    assert.equal((no.data as Row).nombre, "Andrea Robles");
+    assert.notEqual((no.data as Row).totalIngresos, 480);
+    const ok = await handle("getRolIndividual", { token: "t-andrea", sheet: "AGOSTO_2026", cedula: "x", persona: "Andrea Robles" }, c) as Row;
+    assert.equal(ok.ok, true, String(ok.error || ""));
+    assert.equal((ok.data as Row).fuente, "historial");
+    assert.equal(ok.estado, "aprobado");
+    assert.equal((ok.data as Row).totalIngresos, 500);
+  });
+
+  it("mismaPersonaRol cruza el nombre de la app con el legal de la hoja", () => {
+    assert.equal(mismaPersonaRol("Andrea Robles", "ROBLES POGO ANDREA DEL CISNE"), true);
+    assert.equal(mismaPersonaRol("Andrea", "ROBLES POGO ANDREA DEL CISNE"), true);
+    assert.equal(mismaPersonaRol("Daniela Mora", "ROBLES POGO ANDREA DEL CISNE"), false);
+    const d = rolDesdeHistorial({ empleada: "Andrea Robles", cedula: "x", sueldo: 400, bono: 50, comisiones: 30, extras_m_o_q: 10, c_13_14_fr_r_s_t: 20, total_ingresos_u: 510, iess_patronal_11_15: 44, costo_empresa: 554 }, "AGOSTO_2026");
+    assert.equal(d.fuente, "historial");
+    assert.equal(d.totalIngresos, 510);
+    assert.equal(d.comisiones, 30);
+    assert.equal(d.periodo, "AGOSTO_2026");
+  });
+
+  it("admin puede publicar o ocultar un periodo completo; el historial del staff sigue visible", async () => {
     const db = seed();
     const c = ctx(db);
     await handle("rol_publicar", { token: "t-emi", periodo: "AGOSTO_2026", publicado: true, todos: true }, c);
@@ -83,6 +105,9 @@ describe("roles publicados", () => {
     assert.ok(ago.every((x) => x.publicado === true));
     await handle("rol_publicar", { token: "t-emi", periodo: "AGOSTO_2026", publicado: false, todos: true }, c);
     const staff = await handle("roles_lista", { token: "t-andrea" }, c) as Row;
-    assert.equal((staff.items as Row[]).length, 0);
+    const items = staff.items as Row[];
+    assert.equal(items.length, 2);
+    const agoStaff = items.find((x) => x.periodo === "AGOSTO_2026");
+    assert.equal(agoStaff && agoStaff.publicado, false);
   });
 });
