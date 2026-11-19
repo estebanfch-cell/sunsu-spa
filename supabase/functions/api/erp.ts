@@ -9,6 +9,7 @@ import { asignarTicketBeta } from "./lib.ts";
 import { backfillSO, tomarNumero } from "./series.ts";
 import { famDe, famsConsigDb, consigEfectiva } from "./consig_config.ts";
 import { familiaDeFila, quincenaActual, vendeDesdeCabina, SKUS_VENTA_CABINA } from "./ventas.ts";
+import { mapaAliases, propietarioDe, PROP_CONSIG, PROP_SUNSU, repartirSalidaVenta, skuVentaDe, type LoteStock } from "./inventario_modelo.ts";
 
 export const BODEGA_VENTA = "11111111-1111-4111-8111-111111111111";
 export const BODEGA_CABINA = "22222222-2222-4222-8222-222222222222";
@@ -25,9 +26,10 @@ export function usoCompatible(uso: string, tipoBodega: string): boolean {
   return uso === tipoBodega;
 }
 
-/** TK27: una venta que sale de Venta toma primero lo que el producto tenga en la bodega CONSIGNACION
- *  (solo lo que hay: nunca la deja en negativo; el resto sigue saliendo de Venta como antes).
- *  Una devolución por edición de ticket («edit:…») vuelve a CONSIGNACION hasta lo que ese ticket sacó de ahí. */
+/** TK27 + TK127: una venta que sale de Venta toma primero el stock de consignación
+ *  del proveedor (bodega CONSIGNACION, luego lotes de proveedor en Venta), nunca en
+ *  negativo; el resto sale del stock propio. El dueño viaja en el movimiento.
+ *  Una devolución por edición («edit:…») vuelve a los mismos lotes que el ticket sacó. */
 export async function ventasDesdeConsignacion(db: Db, steps: Step[], bodegas: Row[]): Promise<Step[]> {
   const cons = bodegas.find((b) => s(b.codigo).toUpperCase() === "CONSIGNACION" || s(b.tipo) === "consignacion");
   const ven = bodegas.find((b) => s(b.codigo).toUpperCase() === "VENTA");
@@ -35,32 +37,66 @@ export async function ventasDesdeConsignacion(db: Db, steps: Step[], bodegas: Ro
   const cid = String(cons.id), vid = String(ven.id);
   const toca = steps.some((x) => x.op === "move" && String(x.bodega_id) === vid && (s(x.tipo) === "venta" || s(x.tipo) === "anulacion"));
   if (!toca) return steps;
-  const saldo = new Map<string, number>();
-  for (const r of await db.all("erp_stock")) if (String(r.bodega_id) === cid) saldo.set(String(r.producto_id), (saldo.get(String(r.producto_id)) || 0) + n(r.cantidad));
-  if (!saldo.size) return steps;
+  const rows = (await db.all("erp_stock")).filter((r) => String(r.bodega_id) === cid || String(r.bodega_id) === vid);
+  type K = string;
+  const key = (pid: string, l: Pick<LoteStock, "bodega_id" | "lote" | "sububicacion">) => [pid, l.bodega_id, l.sububicacion, l.lote].join("|");
+  const saldoLotes = new Map<K, LoteStock>();
+  for (const r of rows) {
+    const l: LoteStock = {
+      bodega_id: String(r.bodega_id), lote: s(r.lote), sububicacion: s(r.sububicacion),
+      cantidad: n(r.cantidad),
+      propietario: propietarioDe(r, String(r.bodega_id) === cid ? PROP_CONSIG : PROP_SUNSU),
+    };
+    saldoLotes.set(key(String(r.producto_id), l), l);
+  }
+  const deProducto = (pid: string) => [...saldoLotes.entries()].filter(([k]) => k.startsWith(pid + "|")).map(([, v]) => v);
   let movsC: Row[] | null = null;
   const out: Step[] = [];
   for (const st of steps) {
     if (st.op !== "move" || String(st.bodega_id) !== vid) { out.push(st); continue; }
     const pid = String(st.producto_id), d = n(st.delta);
-    if (!saldo.has(pid)) { out.push(st); continue; }
     if (s(st.tipo) === "venta" && d < 0) {
-      const hay = Math.max(0, saldo.get(pid) || 0);
-      const toma = round4(Math.min(hay, -d));
-      if (toma <= 0) { out.push(st); continue; }
-      saldo.set(pid, round4(hay - toma));
-      out.push({ ...st, bodega_id: cid, delta: -toma, legacy_ref: st.legacy_ref ? st.legacy_ref + (toma < -d ? ":consig" : "") : undefined });
-      if (toma < -d) out.push({ ...st, delta: round4(d + toma) });
+      const { tomas, resto } = repartirSalidaVenta(-d, deProducto(pid), cid, vid);
+      if (!tomas.length) { out.push(st); continue; }
+      // Si todo sale de un solo lote de Venta (el de la petición), un solo paso
+      // como antes: permite el negativo con aprobación. No partir 5+4.
+      const mismoVenta = tomas.length === 1 && tomas[0].bodega_id === vid && s(tomas[0].lote) === s(st.lote) && s(tomas[0].sububicacion) === s(st.sububicacion || "");
+      if (mismoVenta) {
+        const t = tomas[0];
+        const k = key(pid, t);
+        const cur = saldoLotes.get(k);
+        if (cur) cur.cantidad = round4(n(cur.cantidad) + d);
+        out.push({ ...st, propietario: st.propietario || t.propietario });
+        continue;
+      }
+      for (const t of tomas) {
+        const k = key(pid, t);
+        const cur = saldoLotes.get(k);
+        if (cur) cur.cantidad = t.queda;
+        const split = tomas.length > 1 || resto > 0;
+        out.push({
+          ...st, bodega_id: t.bodega_id, delta: -t.toma, lote: t.lote, sububicacion: t.sububicacion,
+          propietario: t.propietario,
+          legacy_ref: st.legacy_ref ? st.legacy_ref + (t.bodega_id === cid && split ? ":consig" : "") : undefined,
+        });
+      }
+      if (resto > 0) out.push({ ...st, delta: -resto, propietario: st.propietario || PROP_SUNSU });
       continue;
     }
     if (s(st.tipo) === "anulacion" && d > 0 && s(st.legacy_ref).startsWith("edit:") && s(st.ticket_ref)) {
-      if (!movsC) movsC = (await db.all("erp_movimientos")).filter((m) => String(m.bodega_id) === cid);
-      const sacado = -movsC.filter((m) => String(m.producto_id) === pid && s(m.ticket_ref) === s(st.ticket_ref)).reduce((a, m) => a + n(m.delta), 0);
-      const vuelve = round4(Math.min(Math.max(0, sacado), d));
-      if (vuelve <= 0) { out.push(st); continue; }
-      movsC.push({ producto_id: pid, bodega_id: cid, ticket_ref: s(st.ticket_ref), delta: vuelve });
-      out.push({ ...st, bodega_id: cid, delta: vuelve });
-      if (vuelve < d) out.push({ ...st, delta: round4(d - vuelve), legacy_ref: st.legacy_ref + ":venta" });
+      if (!movsC) movsC = await db.all("erp_movimientos");
+      const sacados = movsC.filter((m) => String(m.producto_id) === pid && s(m.ticket_ref) === s(st.ticket_ref) && n(m.delta) < 0 && (s(m.tipo) === "venta" || s(m.tipo) === "anulacion"));
+      let queda = d;
+      for (const m of sacados) {
+        if (queda <= 0) break;
+        const puede = round4(Math.min(-n(m.delta), queda));
+        if (puede <= 0) continue;
+        queda = round4(queda - puede);
+        const prop = propietarioDe(m, String(m.bodega_id) === cid ? PROP_CONSIG : PROP_SUNSU);
+        movsC.push({ producto_id: pid, bodega_id: String(m.bodega_id), ticket_ref: s(st.ticket_ref), delta: puede, lote: s(m.lote), propietario: prop });
+        out.push({ ...st, bodega_id: String(m.bodega_id), delta: puede, lote: s(m.lote), sububicacion: s(m.sububicacion), propietario: prop });
+      }
+      if (queda > 0) out.push({ ...st, delta: queda, legacy_ref: st.legacy_ref + ":venta", propietario: st.propietario || PROP_SUNSU });
       continue;
     }
     out.push(st);
@@ -102,7 +138,7 @@ export class ErpError extends Error {
 type Step =
   | { op: "upsert"; table: string; match: Row; row: Row }
   | { op: "delete"; table: string; match: Row }
-  | { op: "move"; producto_id: string; bodega_id: string; delta: number; tipo: string; doc_tipo?: string; doc_id?: string; ticket_ref?: string; costo_unit?: number; lote?: string; sububicacion?: string; nota?: string; aprobar_negativo?: boolean; legacy_ref?: string };
+  | { op: "move"; producto_id: string; bodega_id: string; delta: number; tipo: string; doc_tipo?: string; doc_id?: string; ticket_ref?: string; costo_unit?: number; lote?: string; sububicacion?: string; nota?: string; aprobar_negativo?: boolean; legacy_ref?: string; propietario?: string };
 
 function id(): string { return crypto.randomUUID(); }
 async function numeroDoc(db: Db, rpcName: string, rows: Row[], prefix: string): Promise<string> {
@@ -254,8 +290,13 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
         let cur = 0;
         for (const [k, q] of saldo) if (k.startsWith(pid + "|" + vid + "|")) cur += q;
         if (dbMap || cur < applied.saldo - 1e-9) {
-          for (const k of [...saldo.keys()]) if (k.startsWith(pid + "|" + vid + "|")) saldo.delete(k);
-          saldo.set(keyOf(pid, vid), applied.saldo);
+          const lotKeys = [...saldo.keys()].filter((k) => k.startsWith(pid + "|" + vid + "|"));
+          // TK127: lotes con dueño o revisión (SUNSU, CONSIG, REV:…) son la fuente de verdad; no se aplastan con el corte.
+          const conNombre = lotKeys.some((k) => k.slice((pid + "|" + vid + "|").length).split("|").slice(1).join("|"));
+          if (!conNombre) {
+            for (const k of lotKeys) saldo.delete(k);
+            saldo.set(keyOf(pid, vid), applied.saldo);
+          }
         }
       }
     }
@@ -325,8 +366,9 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
     const queda = quedaDe.get(step) ?? (saldo.get(k) || 0);
     const rows = await db.all("erp_stock");
     const hit = rows.find((r) => keyOf(String(r.producto_id), String(r.bodega_id), s(r.sububicacion), s(r.lote)) === k);
-    const stockRow = { producto_id: step.producto_id, bodega_id: step.bodega_id, sububicacion: step.sububicacion || "", lote: step.lote || "", cantidad: queda, caducidad: null };
-    if (hit) await db.write(actor, "erp_stock", "update", { id: hit.id }, { cantidad: queda });
+    const prop = step.propietario || propietarioDe({ propietario: hit?.propietario, lote: step.lote || hit?.lote }, "");
+    const stockRow = { producto_id: step.producto_id, bodega_id: step.bodega_id, sububicacion: step.sububicacion || "", lote: step.lote || "", cantidad: queda, caducidad: null, ...(prop ? { propietario: prop } : {}) };
+    if (hit) await db.write(actor, "erp_stock", "update", { id: hit.id }, { cantidad: queda, ...(prop ? { propietario: prop } : {}) });
     else await db.write(actor, "erp_stock", "insert", {}, stockRow);
     const aprobado = queda < -1e-6 && step.aprobar_negativo ? actor : null;
     await db.write(actor, "erp_movimientos", "insert", {}, {
@@ -334,6 +376,7 @@ export async function applyPlan(db: Db, actor: string, steps: Step[], now = new 
       sububicacion: step.sububicacion || "", lote: step.lote || "", delta: step.delta, saldo: queda,
       costo_unit: step.costo_unit ?? null, tipo: step.tipo, doc_tipo: step.doc_tipo || null, doc_id: step.doc_id || null,
       ticket_ref: step.ticket_ref || null, aprobado_negativo_por: aprobado, nota: step.nota || null, legacy_ref: step.legacy_ref || null,
+      ...(prop ? { propietario: prop } : {}),
     });
     if (step.legacy_ref) legacy.add(step.legacy_ref);
     const nuevo = costos.get(step.producto_id);
@@ -391,6 +434,17 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
   const productos = await db.all("erp_productos");
   const porId = new Map(productos.map((p) => [String(p.id), p]));
   const porSku = new Map(productos.map((p) => [skuCode(s(p.sku)), p]));
+  for (const p of productos) {
+    const ci = skuCode(s(p.codigo_interno)), sp = skuCode(s(p.sku_proveedor));
+    if (ci && !porSku.has(ci)) porSku.set(ci, p);
+    if (sp && !porSku.has(sp)) porSku.set(sp, p);
+  }
+  try {
+    for (const [alias, sku] of mapaAliases(await db.all("beta_sku_alias"))) {
+      const p = porSku.get(sku);
+      if (p && !porSku.has(alias)) porSku.set(alias, p);
+    }
+  } catch { /* tabla de alias aún no cargada en tests viejos */ }
   const bod = new Map(bodegas.map((b) => [String(b.id), b]));
   const venta = bodegas.find((b) => s(b.codigo) === "VENTA");
   const cabina = bodegas.find((b) => s(b.codigo) === "CABINA");
@@ -1101,7 +1155,7 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
     const desdeCab = !!(p && clase !== "servicio" && vendeDesdeCabina(p));
     const bodegaLinea = clase === "servicio" ? cabina?.id : (desdeCab ? cabina?.id : venta.id);
     steps.push({ op: "upsert", table: "erp_ov_lineas", match: { id: lid }, row: {
-      ov_id: ovId, producto_id: p?.id || null, sku: s(ln.sku || p?.sku), nombre: s(ln.nombre || p?.nombre),
+      ov_id: ovId, producto_id: p?.id || null, sku: s((p && s(p.clase) !== 'servicio' ? skuVentaDe(p, s(ln.sku || p?.sku)) : s(ln.sku || p?.sku))), nombre: s(ln.nombre || p?.nombre),
       cantidad: cant, precio, descuento_pct: n(ln.descuento_pct), subtotal: neto, clase, bodega_id: bodegaLinea,
     } });
     const lineaRef = s(ln.linea_ref) || s(ln.sku || p?.sku) || lid;

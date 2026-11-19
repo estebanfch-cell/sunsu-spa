@@ -133,8 +133,8 @@ extend("cns_crear_oc", "any", async (p, ctx, ses) => {
   if (!fact.length) return { error: "No hay ventas de productos en consignación en este periodo" };
   const out = await crearOc(ctx, ses, {
     proveedor_id: prov.id, tipo: "consignacion", desde: r.ini, hasta: r.fin, q_label: `Consignación ${r.qLabel} · ${r.ini} al ${r.fin}`,
-    nota: `Vendido en consignación, periodo ${r.qLabel} (${r.ini} al ${r.fin})`,
-    lineas: fact.map((it) => ({ sku: it.sku, cantidad: n(it.vendido) + n(it.consumido), precio: n(it.compra) })),
+    nota: `Vendido desde stock de consignación del proveedor, periodo ${r.qLabel} (${r.ini} al ${r.fin})`,
+    lineas: fact.map((it) => ({ sku: it.sku, cantidad: n(it.vendido), precio: n(it.compra) })),
     snap: { periodo: r.qLabel, familia: prov.familia },
   });
   if (out.ok) {

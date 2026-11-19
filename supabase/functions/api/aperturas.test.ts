@@ -124,10 +124,11 @@ describe("📦 Abrir producto", () => {
     const C = db.tables.get("erp_consignacion_consumo")!;
     assert.equal(C.length, 1);
     assert.equal(C[0].familia, "ML"); assert.equal(C[0].cantidad, 1); assert.ok(Number(C[0].costo_unit) >= 0);
-    // Entra a la liquidación del proveedor como consumido (se le paga a costo).
+    // TK127: el consumo se informa en la liquidación, pero no se paga (solo lo vendido de stock del proveedor).
     const liq = await borradorConsig(db as never, new Date("2026-11-01T14:00:00Z"), { proveedor_id: "prov-ml", familia: "ML", anio: 2026, mes: 11, quincena: 1 });
     const it = ((liq.items || []) as Row[]).find((x) => x.sku === "ML-001")!;
     assert.equal(it.consumido, 1);
+    assert.equal(it.subtotal, 0);
     // HT con consignación OFF: no genera consumo.
     await h("ap_abrir", "cos", { producto_id: "p1", destino: "CABINA", firma: FIRMA });
     assert.equal(db.tables.get("erp_consignacion_consumo")!.length, 1);
