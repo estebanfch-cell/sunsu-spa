@@ -45,27 +45,89 @@ export function plantillaSecciones(): { bodega: string; sub: string; nombre: str
 }
 
 
-export type PlantillaSec = { id?: string; bodega: string; sub: string; nombre: string; orden: number };
+export type PlantillaSec = { id?: string; bodega: string; sub: string; nombre: string; orden: number; prefijos?: string[] };
+
+/** Bodegas y cabinas del local (no son secciones de conteo). Sirven para «Crear sububicación». */
+export function lugaresBodega(): { bodega: string; sububicacion: string; nombre: string }[] {
+  return plantillaSecciones().map((x) => ({ bodega: x.bodega, sububicacion: x.sub, nombre: x.nombre }));
+}
 
 async function hayZonas(ctx: Ctx): Promise<boolean> {
   try { await ctx.db.all("beta_conteo_zonas"); return true; } catch { return false; }
 }
+async function haySubs(ctx: Ctx): Promise<boolean> {
+  try { await ctx.db.all("beta_sububicaciones"); return true; } catch { return false; }
+}
 
-/** Secciones activas del catálogo (⚙ Secciones). Si aún no hay filas, usa la plantilla de 5 del local. */
+/** Secciones activas del catálogo (⚙ Secciones). Vacío si el admin aún no creó ninguna. */
 export async function plantillaViva(ctx: Ctx): Promise<PlantillaSec[]> {
-  if (!(await hayZonas(ctx))) return plantillaSecciones();
+  if (!(await hayZonas(ctx))) return [];
   const Z = (await todas(ctx, "beta_conteo_zonas")).filter((z) => z.activo !== false)
     .sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre), "es"));
-  if (!Z.length) return plantillaSecciones();
-  return Z.map((z) => ({ id: s(z.id), bodega: s(z.bodega), sub: s(z.sububicacion), nombre: s(z.nombre), orden: n(z.orden) }));
+  return Z.map((z) => ({ id: s(z.id), bodega: s(z.bodega), sub: s(z.sububicacion), nombre: s(z.nombre), orden: n(z.orden), prefijos: Array.isArray(z.prefijos) ? z.prefijos.map((x) => s(x)) : [] }));
+}
+
+function esCodigoCabina(sub: string): boolean {
+  return /^CABINA_?\d+$/i.test(s(sub).trim());
+}
+function normSub(sub: string): string {
+  const u = s(sub).trim();
+  const m = u.toUpperCase().replace(/\s+/g, "_").match(/^CABINA_?(\d+)$/);
+  return m ? "CABINA_" + m[1] : u;
+}
+export function coincidePrefijo(sub: string, prefijos: string[]): boolean {
+  if (!prefijos.length) return true;
+  const code = normSub(sub);
+  const vacio = !code || esCodigoCabina(code);
+  for (const p of prefijos) {
+    const pr = s(p).trim().toUpperCase();
+    if (!pr) continue;
+    if (pr === "=") { if (vacio) return true; continue; }
+    if (!vacio && code.toUpperCase().startsWith(pr)) return true;
+  }
+  return false;
+}
+export function sistemaEstante(p: Row, bodega: string, sub: string): number {
+  const est = p.porEstante as Row | undefined;
+  if (est) return n(est[s(bodega).toUpperCase() + "|" + normSub(sub)]);
+  return sistemaDe(p, bodega, sub);
+}
+function etiquetaFromSub(sub: string, bodega: string, nombreSec: string): string {
+  const code = normSub(sub);
+  if (code && !esCodigoCabina(code)) return code;
+  return bodegaNombre(bodega, esCodigoCabina(code) ? code : "") || nombreSec;
+}
+function levelsDe(p: Row, bodega: string, padre: string): { sub: string; q: number }[] {
+  const est = (p.porEstante || {}) as Row;
+  const out: { sub: string; q: number }[] = [];
+  const keys = Object.keys(est);
+  for (const k of keys) {
+    const i = k.indexOf("|");
+    if (i < 0) continue;
+    const g = k.slice(0, i), sub = k.slice(i + 1);
+    if (g !== bodega) continue;
+    if (padre) {
+      if (normSub(sub) !== normSub(padre) && sub !== "") {
+        // estante: se filtra luego por catálogo padre en el iniciador
+        out.push({ sub, q: n(est[k]) });
+        continue;
+      }
+      if (normSub(sub) === normSub(padre) || sub === "") out.push({ sub: padre, q: n(est[k]) });
+      continue;
+    }
+    out.push({ sub, q: n(est[k]) });
+  }
+  if (!out.length) {
+    const q = sistemaDe(p, bodega, padre);
+    if (Math.abs(q) > 1e-9) out.push({ sub: padre || "", q });
+  }
+  return out.filter((x) => Math.abs(x.q) > 1e-9);
 }
 
 
 export function mismoLugar(bodega: string, sub: string, bod: string, sb: string): boolean {
   if (s(bodega).toUpperCase() !== s(bod).toUpperCase()) return false;
-  const a = s(sub).toUpperCase(), b = s(sb).toUpperCase();
-  if (s(bodega).toUpperCase() === "CABINA") return a === b;
-  return true;
+  return normSub(sub) === normSub(sb);
 }
 
 /** El personal (con acceso al módulo) o un admin pueden retomar un conteo general abierto. */
@@ -162,6 +224,8 @@ extend("cf_secciones_meta", "any", async (_p, ctx, ses) => {
 
 extend("cf_crear_general", "any", async (p, ctx, ses) => {
   if (!(await haySecciones(ctx))) return { error: FALTA_SEC };
+  const plantilla = await plantillaViva(ctx);
+  if (!plantilla.length) return { error: "Primero crea secciones en ⚙ Secciones." };
   const rows = await todas(ctx, "beta_conteos");
   const abierto = rows.find((c) => s(c.tipo) === "general" && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado)));
   if (abierto && p.forzar !== true) return { error: "Ya hay un conteo general abierto (" + s(abierto.numero) + "). Termínalo o cancélalo antes." };
@@ -181,7 +245,7 @@ extend("cf_crear_general", "any", async (p, ctx, ses) => {
     asignado_a: asignado, asignado_nombre: nombre, estado: "en_conteo",
     nota: s(p.nota).slice(0, 500) || null, creado_por: actor, creado_at: now,
   });
-  for (const pl of await plantillaViva(ctx)) {
+  for (const pl of plantilla) {
     await ctx.db.write(actor, "beta_conteo_secciones", "insert", {}, {
       id: crypto.randomUUID(), conteo_id: id, bodega: pl.bodega, sububicacion: pl.sub || null,
       nombre: pl.nombre, orden: pl.orden, estado: "pendiente", zona_id: pl.id || null, updated_at: now,
@@ -273,31 +337,36 @@ extend("cf_sec_get", "any", async (p, ctx, ses) => {
   const lineas = [];
   const recs: Row[] = [];
   const otros: Row[] = [];
-  for (const pl of await plantillaViva(ctx)) {
-    if (mismoLugar(s(r.s.bodega), s(r.s.sububicacion), pl.bodega, pl.sub)) continue;
-    // stock vivo en otras subs (sin costos) para el desplegable «Está en otro lugar»
-    otros.push({ id: pl.bodega + ":" + pl.sub, bodega: pl.bodega, sub: pl.sub, nombre: pl.nombre });
+  const catalogoSubs = (await haySubs(ctx)) ? await todas(ctx, "beta_sububicaciones") : [];
+  for (const lg of lugaresBodega()) {
+    otros.push({ id: lg.bodega + ":" + lg.sububicacion, bodega: lg.bodega, sub: lg.sububicacion, nombre: lg.nombre, crear: false });
+  }
+  for (const su of catalogoSubs) {
+    if (su.activo === false) continue;
+    otros.push({ id: s(su.bodega) + ":" + s(su.codigo), bodega: s(su.bodega), sub: s(su.codigo), nombre: s(su.nombre) || s(su.codigo), padre: s(su.padre), crear: false });
   }
   for (const l of L) {
-    const movs = desde ? await movimientosDurante(ctx, s(l.producto_id), s(r.s.bodega), s(r.s.sububicacion), desde, hasta) : [];
+    const subLin = s(l.sububicacion);
+    const movs = desde ? await movimientosDurante(ctx, s(l.producto_id), s(r.s.bodega), subLin, desde, hasta) : [];
     if (!s(movs[0] ? movs[0].sku : "") && movs.length) {
       for (const m of movs) if (!m.sku) m.sku = s(l.sku);
     }
     const pr = porId.get(s(l.producto_id));
-    const vivo = pr ? sistemaDe(pr, s(r.s.bodega), s(r.s.sububicacion)) : n(l.sistema) + movs.reduce((a, m) => a + n(m.delta), 0);
+    const vivo = pr ? sistemaEstante(pr, s(r.s.bodega), subLin) : n(l.sistema) + movs.reduce((a, m) => a + n(m.delta), 0);
     // MineCore: esperado abierto = snapshot + mov (= stock vivo). Si hay foto de cierre, se usa esa.
     const esp = cerrado ? esperadoVivo(n(l.sistema), movs, l.esperado, true) : round2(vivo);
     const mov = movs.reduce((a, m) => a + n(m.delta), 0);
     for (const m of movs) recs.push({ ...m, sku: s(m.sku) || s(l.sku), lineaId: l.id });
     const otrasUnids: Row[] = [];
-    for (const pl of await plantillaViva(ctx)) {
-      if (mismoLugar(s(r.s.bodega), s(r.s.sububicacion), pl.bodega, pl.sub)) continue;
-      const q = pr ? sistemaDe(pr, pl.bodega, pl.sub) : 0;
-      otrasUnids.push({ bodega: pl.bodega, sub: pl.sub, nombre: pl.nombre, unidades: round2(q) });
+    for (const o of otros) {
+      if (mismoLugar(s(r.s.bodega), subLin, s(o.bodega), s(o.sub))) continue;
+      const q = pr ? sistemaEstante(pr, s(o.bodega), s(o.sub)) : 0;
+      otrasUnids.push({ bodega: o.bodega, sub: o.sub, nombre: o.nombre, unidades: round2(q) });
     }
     lineas.push({
       id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre),
-      fromSub: s(l.sububicacion) || s(r.s.nombre),
+      fromSub: etiquetaFromSub(s(l.sububicacion), s(r.s.bodega), s(r.s.nombre)),
+      subCodigo: s(l.sububicacion),
       sistema: n(l.sistema), mov: round2(mov), esperado: esp, contado: l.contado == null || l.contado === "" ? null : n(l.contado),
       estado: s(l.estado), buscar: l.buscar === true, otraSub: s(l.otra_sub), otraQty: l.otra_qty == null || l.otra_qty === "" ? null : n(l.otra_qty),
       extras: Array.isArray(l.extras) ? l.extras : (l.extras && typeof l.extras === "object" ? l.extras : []),
@@ -330,17 +399,31 @@ extend("cf_sec_iniciar", "any", async (p, ctx, ses) => {
   if (!puedeOperarGeneral(r.c, ses, true)) return { error: "No puedes iniciar esta sección" };
   if (["aprobado", "cancelado"].includes(s(r.c.estado))) return { error: "El conteo ya está " + s(r.c.estado) };
   if (s(r.s.estado) !== "pendiente") return { ok: true, ya: true };
-  const bodega = s(r.s.bodega), sub = s(r.s.sububicacion);
-  const prods = (await listaProductos(ctx, ses)).filter((x) => x.tipo !== "servicio" && x.activo !== false)
-    .map((x) => ({ x, q: sistemaDe(x, bodega, sub) })).filter((o) => Math.abs(o.q) > 1e-9)
-    .sort((a, b) => s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true }));
+  const bodega = s(r.s.bodega), padre = s(r.s.sububicacion);
+  let prefs: string[] = [];
+  if (s(r.s.zona_id) && await hayZonas(ctx)) {
+    const z = (await todas(ctx, "beta_conteo_zonas")).find((x) => s(x.id) === s(r.s.zona_id));
+    if (z && Array.isArray(z.prefijos)) prefs = z.prefijos.map((x) => s(x));
+  }
+  const padres = (await haySubs(ctx) ? await todas(ctx, "beta_sububicaciones") : [])
+    .filter((x) => x.activo !== false)
+    .reduce((m, x) => { m[s(x.codigo).toUpperCase()] = s(x.padre); return m; }, {} as Record<string, string>);
+  const lines: { x: Row; sub: string; q: number }[] = [];
+  for (const x of (await listaProductos(ctx, ses)).filter((it) => it.tipo !== "servicio" && it.activo !== false)) {
+    for (const lv of levelsDe(x, bodega, padre)) {
+      if (padre && lv.sub && !esCodigoCabina(lv.sub) && padres[lv.sub.toUpperCase()] && padres[lv.sub.toUpperCase()] !== padre) continue;
+      if (!coincidePrefijo(lv.sub, prefs)) continue;
+      lines.push({ x, sub: lv.sub, q: lv.q });
+    }
+  }
+  lines.sort((a, b) => s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true }) || s(a.sub).localeCompare(s(b.sub), "es"));
   const actor = actorOf(ses), now = ctx.now.toISOString();
   let i = 0;
-  for (const o of prods.slice(0, 1500)) {
+  for (const o of lines.slice(0, 1500)) {
     await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, {
       id: crypto.randomUUID(), conteo_id: r.c.id, seccion_id: r.s.id, orden: ++i,
       producto_id: s(o.x.id), sku: s(o.x.skuVisible || o.x.sku), nombre: s(o.x.nombre),
-      sububicacion: sub || s(r.s.nombre), sistema: round2(o.q), estado: "pendiente", buscar: false,
+      sububicacion: o.sub, sistema: round2(o.q), estado: "pendiente", buscar: false,
     });
   }
   await ctx.db.write(actor, "beta_conteo_secciones", "update", { id: r.s.id }, { estado: "en_conteo", iniciado_at: now, iniciado_por: actor, updated_at: now });
@@ -384,7 +467,7 @@ extend("cf_sec_guardar", "any", async (p, ctx, ses) => {
     const prods = await listaProductos(ctx, ses);
     const pr = prods.find((x) => s(x.id) === s(a.producto_id)) || prods.find((x) => skuCode(s(x.sku)) === skuCode(s(a.sku)));
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
-    const ya = L.find((l) => s(l.producto_id) === s(pr.id) && s(l.sububicacion) === (s(a.sububicacion) || s(r.s.sububicacion) || s(r.s.nombre)));
+    const ya = L.find((l) => s(l.producto_id) === s(pr.id) && s(l.sububicacion) === s(a.sububicacion));
     if (ya) return { error: s(pr.skuVisible || pr.sku) + " ya está en la lista", lineaId: ya.id };
     const sistema = sistemaDe(pr, s(r.s.bodega), s(r.s.sububicacion));
     const cont = a.contado == null || a.contado === "" ? null : n(a.contado);
@@ -418,7 +501,7 @@ extend("cf_sec_cerrar", "any", async (p, ctx, ses) => {
   // Fijar esperado = stock vivo al cierre (snapshot + movimientos = stock actual), como MineCore.
   for (const l of L) {
     const pr = porId.get(s(l.producto_id));
-    const vivo = pr ? sistemaDe(pr, s(r.s.bodega), s(r.s.sububicacion)) : n(l.sistema);
+    const vivo = pr ? sistemaEstante(pr, s(r.s.bodega), s(l.sububicacion)) : n(l.sistema);
     await ctx.db.write(actor, "beta_conteo_lineas", "update", { id: l.id }, { esperado: round2(vivo), updated_at: now });
   }
   await ctx.db.write(actor, "beta_conteo_secciones", "update", { id: r.s.id }, { estado: "en_revision", cerrado_at: now, cerrado_por: actor, revision_nota: null, updated_at: now });
@@ -470,6 +553,14 @@ async function stockPorLugar(ctx: Ctx, ses: Ses): Promise<Record<string, number>
   const out: Record<string, number> = {};
   const prods = await listaProductos(ctx, ses);
   for (const p of prods) {
+    const est = p.porEstante as Row | undefined;
+    if (est && Object.keys(est).length) {
+      for (const [k, q] of Object.entries(est)) {
+        if (!n(q)) continue;
+        out[k] = (out[k] || 0) + n(q);
+      }
+      continue;
+    }
     const g = p.porGrupo as Row | undefined;
     const sub = p.porSubCabina as Row | undefined;
     if (g) {
@@ -493,63 +584,63 @@ async function usadoEnConteo(ctx: Ctx, z: Row): Promise<boolean> {
   return secs.some((x) => s(x.zona_id) === s(z.id) || (s(x.bodega) === s(z.bodega) && s(x.sububicacion) === s(z.sububicacion) && s(x.nombre) === s(z.nombre)));
 }
 
-function vistaZona(z: Row, stock: Record<string, number>): Row {
+function vistaZona(z: Row, stock: Record<string, number>, nSubs: number): Row {
   const bod = s(z.bodega), sub = s(z.sububicacion);
-  const unidades = round2(stock[claveLugar(bod, sub)] || 0);
+  const prefs = Array.isArray(z.prefijos) ? z.prefijos.map((x) => s(x)) : [];
+  let unidades = 0, cubiertos = 0;
+  for (const [k, q] of Object.entries(stock)) {
+    const i = k.indexOf("|");
+    const g = i < 0 ? k : k.slice(0, i), sb = i < 0 ? "" : k.slice(i + 1);
+    if (g !== bod) continue;
+    if (sub && esCodigoCabina(sb) && normSub(sb) !== normSub(sub)) continue;
+    if (sub && sb && !esCodigoCabina(sb) && !coincidePrefijo(sb, prefs.length ? prefs : [])) {
+      // still count if no prefs (all in lugar)
+    }
+    if (!coincidePrefijo(sb, prefs)) continue;
+    unidades += n(q);
+    cubiertos++;
+  }
   return {
     id: z.id, nombre: s(z.nombre), bodega: bod, sububicacion: sub,
-    prefijos: Array.isArray(z.prefijos) ? z.prefijos : (sub ? [sub] : [bod]),
+    prefijos: prefs,
     orden: n(z.orden), frecuenciaDias: n(z.frecuencia_dias) || 30,
-    activo: z.activo !== false, unidades, subs: unidades > 0 ? 1 : 0,
+    activo: z.activo !== false, unidades: round2(unidades), subs: nSubs,
     lugar: bodegaNombre(bod, sub),
   };
 }
 
-async function asegurarZonas(ctx: Ctx, actor: string): Promise<void> {
-  if (!(await hayZonas(ctx))) return;
-  const rows = await todas(ctx, "beta_conteo_zonas");
-  if (rows.length) return;
-  const now = ctx.now.toISOString();
-  for (const pl of plantillaSecciones()) {
-    await ctx.db.write(actor, "beta_conteo_zonas", "insert", {}, {
-      id: "zona-" + pl.orden + "-" + (pl.sub || pl.bodega).toLowerCase(),
-      nombre: pl.nombre, bodega: pl.bodega, sububicacion: pl.sub || null,
-      prefijos: pl.sub ? [pl.sub] : [pl.bodega], orden: pl.orden,
-      frecuencia_dias: 30, activo: true, created_por: actor, created_at: now, updated_at: now,
-    });
-  }
+async function asegurarZonas(_ctx: Ctx, _actor: string): Promise<void> {
+  // TK118: no se siembran secciones ni sububicaciones. Quedan vacías hasta que las cree un admin.
 }
 
 extend("cf_zonas", "any", async (_p, ctx, ses) => {
   const admin = esAdmin(ses.rol);
-  if (!(await hayZonas(ctx))) return { ok: true, listo: false, falta: "Falta aplicar 20261119_tk117_conteo_zonas.sql", admin, zonas: [], sinZona: [], lugares: [] };
-  await asegurarZonas(ctx, actorOf(ses));
+  const lugares = lugaresBodega();
+  if (!(await hayZonas(ctx))) return { ok: true, listo: false, falta: "Falta aplicar 20261119_tk117_conteo_zonas.sql", admin, zonas: [], sinZona: [], lugares, subs: [] };
   const stock = await stockPorLugar(ctx, ses);
-  const zonas = (await todas(ctx, "beta_conteo_zonas")).sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre), "es")).map((z) => vistaZona(z, stock));
-  const cubiertos = new Set(zonas.filter((z) => z.activo !== false).map((z) => claveLugar(s(z.bodega), s(z.sububicacion))));
-  const sinZona = Object.keys(stock).filter((k) => stock[k] > 0 && !cubiertos.has(k)).map((k) => {
-    const [bod, sub] = k.split("|");
-    return { bodega: bod, sububicacion: sub, nombre: bodegaNombre(bod, sub), unidades: round2(stock[k]) };
+  const catalogo = (await haySubs(ctx)) ? (await todas(ctx, "beta_sububicaciones")).filter((x) => x.activo !== false) : [];
+  const zonasRaw = (await todas(ctx, "beta_conteo_zonas")).sort((a, b) => n(a.orden) - n(b.orden) || s(a.nombre).localeCompare(s(b.nombre), "es"));
+  const zonas = zonasRaw.map((z) => {
+    const prefs = Array.isArray(z.prefijos) ? z.prefijos.map((x) => s(x)) : [];
+    const nSubs = catalogo.filter((su) => s(su.bodega) === s(z.bodega) && coincidePrefijo(s(su.codigo), prefs)).length;
+    return vistaZona(z, stock, nSubs);
   });
-  const lugares = [
-    { bodega: "CONSIGNACION", sububicacion: "", nombre: "Venta" },
-    { bodega: "OFICINA", sububicacion: "", nombre: "Bodega Oficina" },
-  ];
-  const vistos = new Set(["CONSIGNACION|", "OFICINA|"]);
-  for (const z of zonas) {
-    const k = claveLugar(s(z.bodega), s(z.sububicacion));
-    if (vistos.has(k)) continue;
-    vistos.add(k);
-    lugares.push({ bodega: s(z.bodega), sububicacion: s(z.sububicacion), nombre: s(z.lugar) || s(z.nombre) });
-  }
-  for (const sub of await todas(ctx, "erp_sububicaciones")) {
-    if (sub.activo === false) continue;
-    const k = claveLugar("CABINA", s(sub.codigo));
-    if (vistos.has(k)) continue;
-    vistos.add(k);
-    lugares.push({ bodega: "CABINA", sububicacion: s(sub.codigo), nombre: s(sub.nombre) || s(sub.codigo) });
-  }
-  return { ok: true, listo: true, admin, zonas, sinZona, lugares };
+  const cubiertos = (k: string) => {
+    const i = k.indexOf("|");
+    const g = i < 0 ? k : k.slice(0, i), sb = i < 0 ? "" : k.slice(i + 1);
+    return zonas.some((z) => z.activo !== false && s(z.bodega) === g && coincidePrefijo(sb, (z.prefijos as string[]) || []));
+  };
+  const sinZona = Object.keys(stock).filter((k) => stock[k] > 0 && !cubiertos(k)).map((k) => {
+    const i = k.indexOf("|");
+    const bod = i < 0 ? k : k.slice(0, i), sub = i < 0 ? "" : k.slice(i + 1);
+    return { bodega: bod, sububicacion: sub, nombre: sub && !esCodigoCabina(sub) ? sub : bodegaNombre(bod, sub), unidades: round2(stock[k]) };
+  });
+  const subs = catalogo.map((su) => ({
+    id: s(su.id), bodega: s(su.bodega), padre: s(su.padre), codigo: s(su.codigo),
+    nombre: s(su.nombre) || s(su.codigo), activo: su.activo !== false,
+    lugar: bodegaNombre(s(su.bodega), s(su.padre)),
+  }));
+  return { ok: true, listo: true, admin, zonas, sinZona, lugares, subs };
 });
 
 extend("cf_zona_save", "any", async (p, ctx, ses) => {
@@ -560,8 +651,8 @@ extend("cf_zona_save", "any", async (p, ctx, ses) => {
   const bodega = s(p.bodega).toUpperCase();
   if (!BOD_OK.includes(bodega as (typeof BOD_OK)[number])) return { error: "Bodega inválida" };
   let sub = s(p.sububicacion).toUpperCase().replace(/\s+/g, "_");
-  if (bodega === "CABINA" && !sub) return { error: "Indica la sububicación (por ejemplo CABINA_1)" };
-  if (bodega !== "CABINA") sub = "";
+  if (bodega !== "CABINA") sub = esCodigoCabina(sub) ? "" : sub;
+  if (sub && esCodigoCabina(sub)) sub = normSub(sub);
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const freq = Math.max(1, Math.round(n(p.frecuencia_dias) || n(p.frecuenciaDias) || 30));
   const activo = p.activo !== false && p.activo !== "false";
@@ -569,7 +660,7 @@ extend("cf_zona_save", "any", async (p, ctx, ses) => {
   const id = s(p.id);
   const row = {
     nombre, bodega, sububicacion: sub || null,
-    prefijos: prefijos.length ? prefijos : (sub ? [sub] : [bodega]),
+    prefijos,
     frecuencia_dias: freq, activo, updated_por: actor, updated_at: now,
   };
   if (id) {
@@ -613,49 +704,43 @@ extend("cf_zona_orden", "any", async (p, ctx, ses) => {
 });
 
 extend("cf_sub_save", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin configura las sububicaciones" };
+  const admin = esAdmin(ses.rol);
   const bodega = s(p.bodega).toUpperCase();
   if (!BOD_OK.includes(bodega as (typeof BOD_OK)[number])) return { error: "Bodega inválida" };
-  const codigo = s(p.codigo).trim().toUpperCase().replace(/\s+/g, "_");
+  // Conservar guiones (8-A-1). Solo se limpian espacios.
+  const codigo = s(p.codigo).trim().toUpperCase().replace(/\s+/g, "");
   if (!codigo) return { error: "El código es obligatorio" };
-  const nombre = s(p.nombre).trim() || codigo.replace(/^CABINA_/, "Cabina ");
+  if (esCodigoCabina(codigo)) return { error: "Ese código es una cabina, no un estante" };
+  if (!(await haySubs(ctx))) return { error: "Falta aplicar 20261119_tk118_conteo_fidelity.sql" };
+  const nombre = s(p.nombre).trim() || codigo;
+  const padre = bodega === "CABINA" ? (esCodigoCabina(s(p.padre || p.sububicacion)) ? normSub(s(p.padre || p.sububicacion)) : s(p.padre || p.sububicacion)) : "";
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const activo = p.activo !== false && p.activo !== "false";
   const destBodega = s(p.mover_a || p.moverA).toUpperCase() || bodega;
-  if (!BOD_OK.includes((destBodega || bodega) as (typeof BOD_OK)[number])) return { error: "Bodega destino inválida" };
-
+  if (destBodega && !BOD_OK.includes(destBodega as (typeof BOD_OK)[number])) return { error: "Bodega destino inválida" };
+  const rows = await todas(ctx, "beta_sububicaciones");
+  const id = s(p.id);
+  const ya = rows.find((x) => s(x.id) === id) || rows.find((x) => s(x.bodega) === bodega && s(x.codigo).toUpperCase() === codigo);
   const stock = await stockPorLugar(ctx, ses);
-  const q = n(stock[claveLugar(bodega, bodega === "CABINA" ? codigo : "")]);
-  const subs = await todas(ctx, "erp_sububicaciones");
-  const ya = subs.find((x) => s(x.codigo).toUpperCase() === codigo);
+  const q = n(stock[claveLugar(s(ya ? ya.bodega : bodega), s(ya ? ya.codigo : codigo))]);
 
   if (ya) {
-    const prevCod = s(ya.codigo);
-    if (q > 0.0001 && (prevCod.toUpperCase() !== codigo || destBodega !== bodega || !activo)) {
+    if (!admin) return { error: "Solo un admin cambia o desactiva una sububicación" };
+    const prevCod = s(ya.codigo), prevBod = s(ya.bodega);
+    if (q > 0.0001 && (prevCod.toUpperCase() !== codigo || destBodega !== prevBod || !activo)) {
       return { error: "La sububicación tiene stock (" + round2(q) + "); muévelo antes de renombrarla, cambiarla de bodega o desactivarla" };
     }
-    await ctx.db.write(actor, "erp_sububicaciones", "update", { id: ya.id }, {
-      codigo, nombre, bodega_id: BOD_IDS[destBodega] || ya.bodega_id, activo, updated_at: now,
+    await ctx.db.write(actor, "beta_sububicaciones", "update", { id: ya.id }, {
+      codigo, nombre, bodega: destBodega, padre: padre || null, activo, updated_por: actor, updated_at: now,
     });
-    return { ok: true, id: ya.id };
+    return { ok: true, id: ya.id, codigo };
   }
 
-  if (bodega !== "CABINA") return { error: "Las sububicaciones nuevas de Venta u Oficina se crean como sección (＋ Sección)" };
-  const nid = crypto.randomUUID();
-  const orden = subs.filter((x) => s(x.bodega_id) === BOD_CABINA).reduce((a, x) => Math.max(a, n(x.orden)), 0) + 1;
-  await ctx.db.write(actor, "erp_sububicaciones", "insert", {}, {
-    id: nid, bodega_id: BOD_CABINA, codigo, nombre, orden, activo: true, created_at: now,
+  // El personal puede crear un estante en el momento del conteo («＋ Crear ubicación»).
+  const nid = id || crypto.randomUUID();
+  await ctx.db.write(actor, "beta_sububicaciones", "insert", {}, {
+    id: nid, bodega, padre: padre || null, codigo, nombre, activo: true,
+    created_por: actor, created_at: now, updated_por: actor, updated_at: now,
   });
-  // Si pidieron también dejarla como sección activa, la creamos.
-  if (p.como_seccion !== false && await hayZonas(ctx)) {
-    const zonas = await todas(ctx, "beta_conteo_zonas");
-    if (!zonas.some((z) => s(z.bodega) === "CABINA" && s(z.sububicacion) === codigo && z.activo !== false)) {
-      await ctx.db.write(actor, "beta_conteo_zonas", "insert", {}, {
-        id: crypto.randomUUID(), nombre, bodega: "CABINA", sububicacion: codigo,
-        prefijos: [codigo], orden: zonas.reduce((a, x) => Math.max(a, n(x.orden)), 0) + 1,
-        frecuencia_dias: 30, activo: true, created_por: actor, created_at: now, updated_at: now,
-      });
-    }
-  }
-  return { ok: true, id: nid, codigo };
+  return { ok: true, id: nid, codigo, bodega, padre, nombre };
 });

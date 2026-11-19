@@ -10,7 +10,7 @@ import { facialSku, n, productQtys, round2, s, skuCode, type Row } from "./domai
 import { runErp } from "./erp.ts";
 import {
   CAMPOS_COSTO, FAMILIA_NUMERICA, GRUPO_NOMBRE, codigoNorm, familiasDe, prefijoNormal, siguienteCodigo, SUBS_CABINA, codigoCabina, estadoStock, limpiarCambios, lineasOcLegacy,
-  marcaDe, preciosDe, stockDe, stockTotal, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
+  marcaDe, preciosDe, stockDe, stockTotal, porEstanteDe, tipoDe, skuVisible, lineasTicket, precioLineaTicket, aplicarMovimientos,
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
   autoMinimos, deducirDelNombre, faltantesDe, BOD_CONSIG,
 } from "./productos.ts";
@@ -161,6 +161,7 @@ function fila(p: Row, b: Base): Row {
     // TK27: de dónde sale lo que se muestra (hoja/sistema viejo o kardex), para el conteo inicial de consignación.
     stockFuente: { venta: b.ventaLegacy.has(code) ? "hoja" : "erp", cabina: cab ? "hoja" : "erp" },
     porSubCabina: Object.fromEntries((stock.find((g) => g.grupo === "CABINA")?.subs || []).map((x) => [x.codigo || "SIN", x.cantidad])),
+    porEstante: tipo === "servicio" ? {} : porEstanteDe({ erpStock: b.stock.filter((r) => s(r.producto_id) === s(p.id)), bodegas: b.bodegas, movs: b.movs?.get(s(p.id)) || [] }),
     estado: tipo === "servicio" ? "servicio" : estadoStock(total, Math.max(minimo, reorden || 0)),
     archivado, eliminado: !!s(p.beta_eliminado_at), minimo, reorden,
     minimoAuto: auto.minimo, reordenAuto: auto.reorden, salidas90, revisar,
