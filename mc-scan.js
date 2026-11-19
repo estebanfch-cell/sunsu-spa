@@ -36,7 +36,7 @@
   function cargarZXing(ok, fail) {
     if (window.ZXing && window.ZXing.BrowserMultiFormatReader) { ok(); return; }
     var sc = document.createElement("script");
-    sc.src = "vendor-zxing.js?v=20261119tk143";
+    sc.src = "vendor-zxing.js?v=20261119tk145";
     sc.onload = function () { if (window.ZXing && window.ZXing.BrowserMultiFormatReader) ok(); else fail(new Error("zxing")); };
     sc.onerror = function () { fail(new Error("zxing")); };
     document.head.appendChild(sc);

@@ -57,8 +57,8 @@ describe("TK83 config compacto y feriados 2026", () => {
   });
 
   it("la caché de la app pasa a TK93", () => {
-    assert.match(sw, /sunsu-beta-2026-11-19-TK143/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK145/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK86/);
     const vers = [...html.matchAll(/\?v=([a-z0-9]+)/g)].map((m) => m[1]);
     assert.ok(vers.length >= 20, "faltan scripts en beta.html");
-    assert.ok(vers.every((v) => v === "20261119tk143"), "scripts con versión vieja: " + [...new Set(vers)].join(","));  });});
+    assert.ok(vers.every((v) => v === "20261119tk145"), "scripts con versión vieja: " + [...new Set(vers)].join(","));  });});

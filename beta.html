@@ -524,7 +524,7 @@
   .ttext { font-size: 0.76rem; color: var(--navy); font-weight: 700; flex: 1; }
   .preview { border-radius: 14px; padding: 15px; margin-bottom: 11px; background: linear-gradient(135deg, var(--navy-d), var(--navy)); color: white; }
   .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--navy-d), var(--navy)); color: var(--white); border: none; border-radius: 13px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 11px; font-weight: 600; font-size: 0.8rem; box-shadow: var(--shadow); opacity: 0; transition: opacity 0.25s; z-index: 999999; pointer-events: none; color: var(--white); white-space: nowrap; max-width: calc(100vw - 24px); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 11px; font-weight: 600; font-size: 0.8rem; box-shadow: var(--shadow); opacity: 0; transition: opacity 0.25s; z-index: 999999; pointer-events: none; color: var(--white); white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: center; max-width: calc(100vw - 24px); box-sizing: border-box; }
   .tabbar { display: none; }
   .sk { padding: 8px 0 16px; }
   .sk-line, .sk-card, .sk-kpi { background: linear-gradient(90deg, #EDE6D8 0%, #F7F1E6 50%, #EDE6D8 100%); background-size: 200% 100%; animation: sk-shimmer 1.2s ease-in-out infinite; border-radius: 10px; }
@@ -7340,7 +7340,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK143";
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK145";
 function mostrarNuevaVersion() {
   var el = document.getElementById("sunsu-nueva-ver");
   if (!el) {
@@ -7385,42 +7385,43 @@ if ("serviceWorker" in navigator && !local) {
   revisarVersionServidor();
 }
 </script>
-<script src="vendor-zxing.js?v=20261119tk143"></script>
-<script src="mc-scan.js?v=20261119tk143"></script>
-<script src="mc-buscar.js?v=20261119tk143"></script>
-<script src="beta-screens.js?v=20261119tk143"></script>
-<script src="beta-inline.js?v=20261119tk143"></script>
-<script src="mc-productos.js?v=20261119tk143"></script>
-<script src="mc-nav.js?v=20261119tk143"></script>
-<script src="mc-permisos.js?v=20261119tk143"></script>
-<script src="mc-protocolos.js?v=20261119tk143"></script>
-<script src="mc-conteo.js?v=20261119tk143"></script>
-<script src="mc-transferencias.js?v=20261119tk143"></script>
-<script src="mc-ajustes.js?v=20261119tk143"></script>
-<script src="vendor-qrcode.js?v=20261119tk143"></script>
-<script src="mc-tickets.js?v=20261119tk143"></script>
-<script src="mc-maestro.js?v=20261119tk143"></script>
-<script src="mc-empleados.js?v=20261119tk143"></script>
-<script src="mc-edit.js?v=20261119tk143"></script>
-<script src="mc-paquetes.js?v=20261119tk143"></script>
-<script src="mc-aperturas.js?v=20261119tk143"></script>
-<script src="mc-acceso.js?v=20261119tk143"></script>
-<script src="mc-barras.js?v=20261119tk143"></script>
-<script src="mc-caja.js?v=20261119tk143"></script>
-<script src="mc-giftcards.js?v=20261119tk143"></script>
-<script src="mc-multas.js?v=20261119tk143"></script>
-<script src="mc-clientes.js?v=20261119tk143"></script>
-<script src="mc-clientes-dup.js?v=20261119tk143"></script>
-<script src="mc-docpdf.js?v=20261119tk143"></script>
-<script src="mc-compras.js?v=20261119tk143"></script>
-<script src="mc-consignacion.js?v=20261119tk143"></script>
-<script src="mc-proveedores.js?v=20261119tk143"></script>
-<script src="mc-recepciones.js?v=20261119tk143"></script>
-<script src="mc-movil.js?v=20261119tk143"></script>
-<script src="mc-promociones.js?v=20261119tk143"></script>
-<script src="mc-agenda.js?v=20261119tk143"></script>
-<script src="mc-staff-home.js?v=20261119tk143"></script>
-<script src="mc-borradores.js?v=20261119tk143"></script><script>draw();</script><script>
+<script src="vendor-zxing.js?v=20261119tk145"></script>
+<script src="mc-scan.js?v=20261119tk145"></script>
+<script src="mc-buscar.js?v=20261119tk145"></script>
+<script src="descuento_justif.js?v=20261119tk145"></script>
+<script src="beta-screens.js?v=20261119tk145"></script>
+<script src="beta-inline.js?v=20261119tk145"></script>
+<script src="mc-productos.js?v=20261119tk145"></script>
+<script src="mc-nav.js?v=20261119tk145"></script>
+<script src="mc-permisos.js?v=20261119tk145"></script>
+<script src="mc-protocolos.js?v=20261119tk145"></script>
+<script src="mc-conteo.js?v=20261119tk145"></script>
+<script src="mc-transferencias.js?v=20261119tk145"></script>
+<script src="mc-ajustes.js?v=20261119tk145"></script>
+<script src="vendor-qrcode.js?v=20261119tk145"></script>
+<script src="mc-tickets.js?v=20261119tk145"></script>
+<script src="mc-maestro.js?v=20261119tk145"></script>
+<script src="mc-empleados.js?v=20261119tk145"></script>
+<script src="mc-edit.js?v=20261119tk145"></script>
+<script src="mc-paquetes.js?v=20261119tk145"></script>
+<script src="mc-aperturas.js?v=20261119tk145"></script>
+<script src="mc-acceso.js?v=20261119tk145"></script>
+<script src="mc-barras.js?v=20261119tk145"></script>
+<script src="mc-caja.js?v=20261119tk145"></script>
+<script src="mc-giftcards.js?v=20261119tk145"></script>
+<script src="mc-multas.js?v=20261119tk145"></script>
+<script src="mc-clientes.js?v=20261119tk145"></script>
+<script src="mc-clientes-dup.js?v=20261119tk145"></script>
+<script src="mc-docpdf.js?v=20261119tk145"></script>
+<script src="mc-compras.js?v=20261119tk145"></script>
+<script src="mc-consignacion.js?v=20261119tk145"></script>
+<script src="mc-proveedores.js?v=20261119tk145"></script>
+<script src="mc-recepciones.js?v=20261119tk145"></script>
+<script src="mc-movil.js?v=20261119tk145"></script>
+<script src="mc-promociones.js?v=20261119tk145"></script>
+<script src="mc-agenda.js?v=20261119tk145"></script>
+<script src="mc-staff-home.js?v=20261119tk145"></script>
+<script src="mc-borradores.js?v=20261119tk145"></script><script>draw();</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {
