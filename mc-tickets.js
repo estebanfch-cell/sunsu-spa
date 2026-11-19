@@ -79,6 +79,28 @@
       ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:300px!important;line-height:1.35}#mctk-tot{min-width:min(260px,100%)!important;flex:1 1 240px;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:100%;margin-left:auto}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
+      /* TK104: ticket abierto en iPhone — tarjetas tipo MineCore, sin scroll horizontal. */
+      "@media(max-width:860px){#mctk-root,.mctk2{overflow-x:hidden;max-width:100%;box-sizing:border-box}#mctk-root *,.mctk2 *{box-sizing:border-box;min-width:0;max-width:100%}",
+      ".mctk2 .mctk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}.mctk2 .mctk-bar-sp{display:none}",
+      ".mctk2 .mctk-bar #mctk-volver{width:auto;min-height:32px;padding:4px 2px;border:0;background:none;box-shadow:none;font-size:.86rem;color:var(--navy)}",
+      ".mctk2 .mctk-bar .mctk-acc-wrap{margin-left:auto;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
+      ".mctk2 .mctk-bar .mctk-dd{left:auto;right:0;min-width:min(280px,92vw);width:max-content;max-width:92vw;z-index:60}",
+      ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:normal!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
+      ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
+      ".mctk-pills-desk{display:none}.mctk-estados{position:relative;flex:0 1 auto;max-width:100%;margin-left:auto}.mctk-estados>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--cream-d);border-radius:999px;padding:5px 12px;font-size:.74rem;font-weight:700;color:var(--navy-d);background:var(--white,#fff);max-width:100%;white-space:normal;overflow-wrap:anywhere}.mctk-estados>summary::-webkit-details-marker{display:none}.mctk-estados>summary:after{content:'▾';font-size:.7rem;color:var(--gray);flex:none}",
+      ".mctk-estados.mctk-est-rojo>summary{color:#8B2E2E;border-color:#E6A39B;background:#FDECEA}.mctk-estados.mctk-est-amarillo>summary{color:#7A5C12;border-color:#E8CF7A;background:#FFF6D6}",
+      ".mctk-estados .mctk-pills{display:flex;flex-direction:column;align-items:stretch;gap:6px;position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:200px;max-width:min(280px,90vw);padding:8px;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12)}.mctk-estados .mctk-pill{text-align:center}",
+      ".mctk-det{border:1.5px solid var(--cream-d);border-radius:12px;padding:0;margin-top:12px;background:var(--white,#fff)}.mctk-det>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-d);font-size:.88rem;display:flex;align-items:center;justify-content:space-between}.mctk-det>summary::-webkit-details-marker{display:none}.mctk-det>summary:after{content:'▾';color:var(--gray);font-weight:400}.mctk-det[open]>summary{border-bottom:1px solid var(--cream-d)}.mctk-det .mctk-grid{margin:0;padding:8px 12px 10px}.mctk-det .mctk-f{grid-template-columns:minmax(90px,34%) 1fr;gap:6px}",
+      ".mctk-load{margin:0 0 8px;font-size:.76rem;color:var(--gray)}",
+      ".mctk-lcard>b{display:none}.mctk-ls{gap:8px}.mctk-lh{display:none!important}.mctk-ln{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;padding:10px;border:1.5px solid var(--cream-d);border-radius:14px;background:var(--white,#fff);grid-template-columns:none;grid-template-areas:none}.mctk-ln .mctk-li{display:none}.mctk-ln .mctk-lp{display:flex;gap:10px;align-items:flex-start;min-width:0;width:100%}",
+      ".mctk-ph,.mctk-ini{width:44px;height:44px;border-radius:10px;flex:none;object-fit:cover;border:1px solid var(--cream-d)}.mctk-ini{display:inline-flex;align-items:center;justify-content:center;background:var(--cream,#f4efe6);color:var(--navy-d);font-weight:800;font-size:1rem}",
+      ".mctk-lpt{min-width:0;flex:1}.mctk-lpt .mctk-pn{display:block;font-weight:800;font-size:.92rem;color:var(--navy-d);overflow-wrap:anywhere}.mctk-lpt .mctk-sku{display:block;color:var(--gray);font-size:.72rem;font-weight:400}.mctk-stk{margin-top:2px;font-size:.72rem;color:var(--gray)}",
+      ".mctk-ln .mctk-nums,.mctk-ln .mctk-lx{display:none!important}.mctk-mini{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;padding-top:2px}.mctk-qx{font-size:.84rem;color:var(--navy-d);overflow-wrap:anywhere}.mctk-qx .mctk-ok{color:#2e9e4f;font-weight:700}.mctk-ltot{margin-left:auto;text-align:right;font-size:.92rem;color:var(--navy-d)}",
+      ".mctk-lacts{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:2px}.mctk-lacts>button{flex:1 1 auto;min-width:calc(50% - 6px);border-radius:10px;padding:7px 8px;font-size:.74rem;font-weight:700;line-height:1.2;white-space:normal;overflow-wrap:anywhere}.mctk-del{background:#fff;color:#B2452A;border:1.5px solid #E8B4AB}.mctk-mej{border:1.5px solid var(--cream-d);background:#fff;color:var(--navy-d)}",
+      ".mctk-foot{flex-direction:column;align-items:stretch}.mctk-tot{margin-left:auto;max-width:100%!important;width:min(280px,100%);font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
+      "#mctk-addlink{display:inline-block;margin:8px 0 4px;font-weight:700}}",
+      "@media(min-width:861px){.mctk-estados,.mctk-mini,.mctk-lacts,.mctk-load{display:none}.mctk-ini{display:inline-flex}}",
+
     ].join("");
     document.head.appendChild(s);
   }
@@ -118,7 +140,145 @@
     return '<div class="mctk-f"><dt>' + e((window.MCEmojiCampo ? window.MCEmojiCampo(lbl) : lbl)) + '</dt><dd data-k="' + e(k) + '"><span class="v' + (mod ? " mod" : "") + (edit ? ' mctk-ed" data-ed="' + e(k) + '" tabindex="0" title="Clic para editar' : "") + '">' + (html0 || (shown ? e(shown) : '<span class="mccf-sub">—</span>')) + "</span></dd></div>";
   }
   function ro(lbl, v) { return '<div class="mctk-f"><dt>' + e((window.MCEmojiCampo ? window.MCEmojiCampo(lbl) : lbl)) + "</dt><dd>" + (v ? v : '<span class="mccf-sub">—</span>') + "</dd></div>"; }
+  function esMovilTk() { return !(window.matchMedia && window.matchMedia("(min-width: 861px)").matches); }
+  function pagosFaltanVista() {
+    if (K.d && K.d.pagosFaltan && K.d.pagosFaltan.length) return K.d.pagosFaltan;
+    var t = filaDeLista(K.d && K.d.clave), L, i;
+    try { L = t && (window._tkLeds || {})[String(t.tkRow)]; } catch (x) { L = null; }
+    return (L && L.pagosFaltan) || [];
+  }
+  function voucherBtnHtml(item) {
+    var lab = (item && item.etiqueta) || "Voucher";
+    var id = item && item.id ? String(item.id) : "";
+    return '<label class="btn ghost small mctk-voucher" title="' + e(lab) + '" aria-label="' + e(lab) + '"><span class="mctk-cam" aria-hidden="true">📷</span><span class="mctk-vlab">' + e(lab) + '</span><input type="file" class="mctk-voucher-inp" accept="image/*,application/pdf" hidden' + (id ? ' data-pago-id="' + e(id) + '"' : "") + "></label>";
+  }
+  function voucherBtnsHtml() {
+    var F = pagosFaltanVista(), i, h = "";
+    if (!F.length) return "";
+    for (i = 0; i < F.length; i++) h += voucherBtnHtml(F[i]);
+    return h;
+  }
   function chipsHtml() { return (K.d.chips || []).map(function (c) { return pill(c.c, c.t); }).join(""); }
+  function chipDe(kOrTxt) {
+    var C = K.d.chips || [], i, c, k = String(kOrTxt || "").toLowerCase();
+    for (i = 0; i < C.length; i++) {
+      c = C[i];
+      if (c && (String(c.k || "").toLowerCase() === k || String(c.t || "").toLowerCase() === k || String(c.c || "").toLowerCase() === k)) return c;
+    }
+    return null;
+  }
+  function estadoResumen() {
+    var C = K.d.chips || [], F = K.d.flags || [], falta = K.d.faltan || [], c;
+    if ((F && F.length) || chipDe("flag") || chipDe("por corregir")) return { t: "Por corregir", tone: "rojo" };
+    c = chipDe("anulado") || chipDe("cancelado");
+    if (c) return { t: c.t, tone: "rojo" };
+    if (falta && falta.length) return { t: "Falta documento", tone: "amarillo" };
+    c = chipDe("porcobrar") || chipDe("por cobrar");
+    if (c) return { t: c.t, tone: "amarillo" };
+    c = chipDe("sinfactura") || chipDe("sin factura");
+    if (c) return { t: c.t, tone: "amarillo" };
+    c = chipDe("estado") || C[0];
+    return { t: c ? c.t : "", tone: "" };
+  }
+  function estadosHtml() {
+    var pills = chipsHtml(), r, sum;
+    if (!pills) return "";
+    r = estadoResumen();
+    sum = "Estado" + (r.t ? " · " + r.t : "");
+    return '<div class="mctk-pills mctk-pills-desk">' + pills + "</div>" +
+      '<details class="mctk-estados' + (r.tone ? " mctk-est-" + r.tone : "") + '"><summary>' + e(sum) + "</summary><div class=\"mctk-pills\">" + pills + "</div></details>";
+  }
+  function accionesItemsHtml() {
+    var d = K.d, t = d.ticket;
+    return (voucherBtnsHtml() ? '<div class="mctk-acc-sec">Comprobante</div>' + voucherBtnsHtml() : '') +
+      '<div class="mctk-acc-sec">Documentos</div>' + docsHtml2() +
+      '<div class="mctk-acc-sec">WhatsApp</div>' + waHtml() +
+      '<div class="mctk-acc-sec">Ticket</div>' +
+      '<button type="button" id="mctk-print">Imprimir</button>' +
+      '<button type="button" id="mctk-excl">Excluir comisión</button>' +
+      (d.admin && window.MCMultas ? '<button type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") +
+      (d.puedeCancelar ? '<button type="button" class="mctk-cancel" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") +
+      (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) ? '<button type="button" class="mctk-cancel" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "");
+  }
+  function accionesHtml() {
+    var d = K.d, t = d.ticket;
+    var back = '<button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button>";
+    if (esMovilTk()) {
+      return '<div class="mctk-bar mctk-bar-m">' + back +
+        '<div class="mctk-menu mctk-acc-wrap"><button class="btn ghost small mctk-acc-btn" type="button" data-menu="mctk-acc">Acciones ▾</button><div class="mctk-dd" id="mctk-acc" hidden>' + accionesItemsHtml() + "</div></div></div>";
+    }
+    return '<div class="mctk-bar">' + back + '<span class="mctk-bar-sp" style="flex:1"></span>' +
+      voucherBtnsHtml() +
+      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
+      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
+      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>";
+  }
+  function filaDeLista(clave) {
+    var k = String(clave || ""), list = window._histVisibles || window._histData || [], i, t, cards, id;
+    for (i = 0; i < list.length; i++) {
+      t = list[i];
+      if (claveDeFila(t) === k) return t;
+    }
+    cards = window._tkCards || {};
+    for (id in cards) if (Object.prototype.hasOwnProperty.call(cards, id) && claveDeFila(cards[id]) === k) return cards[id];
+    return null;
+  }
+  function claveDeFila(t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }
+  function chipsDesdeLista(t) {
+    var out = [], L = (window._tkLeds || {})[String(t && t.tkRow)] || {}, orig = (t && t.orig) || {};
+    try { if (typeof _tkEstados === "function") out = _tkEstados(t).map(function (c) { return { k: (c.t || "").toLowerCase(), t: c.t, c: c.c }; }); } catch (x) { out = []; }
+    if (!out.length) {
+      var an = !!(t && (t.anulado === true || orig.anulado === true));
+      var cer = an || (t && t.fac && t.cob) || (t && t.estado_doc === "cerrado");
+      out.push({ k: "estado", t: an ? "Cancelado" : cer ? "Cerrado" : "Abierto", c: an ? "anulado" : cer ? "cerrado" : "abierto" });
+      if (t && t.sin_cobro) out.push({ k: "sincobro", t: t.sin_cobro === "interno" ? "Consumo interno" : t.sin_cobro === "canje" ? "Canje de paquete" : "Cortesía", c: "neutro" });
+      else {
+        out.push({ k: "cobro", t: (t && (t.cob || (L && L.p))) ? "Pagado" : "Por cobrar", c: (t && (t.cob || (L && L.p))) ? "pagado" : "porcobrar" });
+        out.push({ k: "fac", t: (t && (t.fac || (L && L.factura))) ? "Facturado" : "Sin factura", c: (t && (t.fac || (L && L.factura))) ? "facturado" : "sinfactura" });
+      }
+    }
+    if (L.r) out.push({ k: "rep", t: "Reporte enviado", c: "ok" });
+    if (L.g) out.push({ k: "reag", t: "Reagendada", c: "ok" });
+    if (t && /^\s*SI\b/i.test(String(t.paquete || ""))) out.push({ k: "paq", t: "Paquete " + String(t.paquete).replace(/^\s*SI,?\s*/i, ""), c: "info" });
+    if (L.flag) out.push({ k: "flag", t: "Por corregir", c: "anulado" });
+    return out;
+  }
+  function previewDe(clave) {
+    var k = String(clave || ""), d, raw, t;
+    if (window._tkVista && window._tkVista[k] && window._tkVista[k].ok) {
+      try { return JSON.parse(JSON.stringify(window._tkVista[k])); } catch (x) { return window._tkVista[k]; }
+    }
+    try { raw = sessionStorage.getItem("sunsu.tk." + k); if (raw) { d = JSON.parse(raw); if (d && d.ok) return d; } } catch (x) {}
+    t = filaDeLista(k);
+    return t ? sintetizar(t, k) : null;
+  }
+  function sintetizar(t, clave) {
+    var tot = 0, fac = "", forma = "", pagado = false, L = (window._tkLeds || {})[String(t.tkRow)] || {};
+    try { tot = typeof _histMontos === "function" ? _histMontos(t).tot : (parseFloat(t.estimado != null ? t.estimado : t.total) || 0); } catch (x) { tot = parseFloat(t.estimado || t.total) || 0; }
+    try { fac = typeof _tkFacFull === "function" ? (_tkFacFull(t) || "") : String(t.factura || t.fac_7 || ""); } catch (x) { fac = String(t.factura || t.fac_7 || ""); }
+    try { forma = typeof _tkForma === "function" ? (_tkForma(t) || "") : ""; } catch (x2) {}
+    pagado = !!(t.cob || L.p || (typeof _tkPagoMigo === "function" && _tkPagoMigo(t)));
+    return {
+      ok: true, clave: clave, hidratando: true, admin: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master")),
+      ticket: { clave: clave, id: t.id || null, soNum: t.so_num || "", betaNum: t.beta_num || "", sheetRow: t.tkRow || t.sheet_row || null, fecha: t.fecha || "", hora: t.hora || "", nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", cobradoSistema: tot, factura: fac, notas: t.notas || t.notas_generales || "", cancelado: (t.anulado || (t.orig && t.orig.anulado)) ? { motivo: (t.orig && t.orig.cancelado_motivo) || "", por: (t.orig && t.orig.cancelado_por) || "", ts: (t.orig && t.orig.cancelado_ts) || "" } : null },
+      info: { factura: fac, nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", notas: t.notas || t.notas_generales || "", local: t.local || "Sunsu Spa", fecha: t.fecha || "", hora: t.hora || "", orden: t.id || null, cabina: t.cabina || "", retorno: t.retorno || t.fecha_retorno || "", recomendaciones: t.recomendaciones || "" },
+      lineas: [], totales: { subtotal: tot / 1.15, iva: tot - tot / 1.15, total: tot },
+      descuento: { tipo: null, valor: 0 }, promo: "", pagos: { metodos: forma ? [{ metodo: forma }] : [], cobrado: pagado, total: tot, pagado: pagado ? tot : 0, saldo: pagado ? 0 : tot },
+      chips: chipsDesdeLista(t), documentos: [], faltan: (L.falta && L.falta.length) ? L.falta : [], flags: L.flag ? [{ id: "", motivo: L.flag }] : [], reagendada: { si: !!L.g, cita: "", fuente: "" },
+      puedeEditar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master") && !t.anulado), puedePedir: !(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master")), puedeCancelar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master") && !t.anulado),
+      clienteKey: t.clienteKey || t.cliente_key || "",
+      pagosFaltan: (L && L.pagosFaltan) || []
+    };
+  }
+  function guardarVista(d) {
+    if (!d || !d.ok || !d.clave) return;
+    window._tkVista = window._tkVista || {};
+    window._tkVista[d.clave] = d;
+    try {
+      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan };
+      sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
+    } catch (x) {}
+  }
   function waHtml() {
     var d = K.d, p = d.paquete || {}, conPaq = !!(p.vigentes && p.vigentes.length) || !!p.uso;
     return '<button type="button" data-wa="facial">💬 Enviar reporte facial</button>' + (conPaq ? '<button type="button" data-wa="paquete">🎴 Enviar reporte de paquete</button>' : "") + '<button type="button" data-wa="chat">Abrir chat</button>';
@@ -144,7 +304,14 @@
   }
   function fotoLinea(l) {
     var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; });
-    return c && c.foto ? '<img class="mctk-ph" src="' + e(c.foto) + '" alt="" loading="lazy">' : "";
+    if (c && c.foto) return '<img class="mctk-ph" src="' + e(c.foto) + '" alt="" loading="lazy">';
+    var ini = String((l && l.nombre) || (l && l.sku) || "?").trim().charAt(0).toUpperCase() || "?";
+    return '<span class="mctk-ph mctk-ini" aria-hidden="true">' + e(ini) + "</span>";
+  }
+  function stockTxt(l) {
+    var c = (K.cat || []).find(function (p) { return p.tipo === l.tipo && p.sku === l.sku; }) || (K.cat || []).find(function (p) { return p.sku === l.sku; });
+    if (!c || c.stock == null || c.stock === "") return "";
+    return '<div class="mctk-stk">Stock: ' + e(q2(c.stock)) + "</div>";
   }
   /** TK43 (Emilia t486u, como MineCore mcIrBtn): botoncito sutil ↗ que abre la ficha del producto de la línea. */
   function prodIdLinea(l) {
@@ -169,11 +336,12 @@
     if (q("[data-tl]")) q("[data-tl]").textContent = $m(m.sub);
     if (q("[data-iva]")) q("[data-iva]").textContent = $m(m.iva);
     if (q("[data-tot]")) q("[data-tot]").textContent = $m(m.tot);
+    if (q("[data-tot-m]")) q("[data-tot-m]").textContent = $m(m.tot);
     if (q("[data-mini]")) q("[data-mini]").textContent = "sub " + $m(m.sub) + " · IVA " + $m(m.iva);
   }
   function lineasHtml() {
     calc();
-    if (!K.L.length) return '<div class="mccf-sub" style="padding:12px">Sin líneas.</div>';
+    if (!K.L.length) return '<div class="mccf-sub" style="padding:12px">' + ((K.d && K.d.hidratando) ? "Cargando líneas…" : "Sin líneas.") + "</div>";
     var ed = !!(K.d.puedeEditar || K.d.puedePedir);
     var hd = '<div class="mctk-lh"><span>#</span><span>Producto</span><span>Cant</span><span>P. sin IVA</span><span>Desc</span><span>Subtotal</span><span>IVA</span><span>Total</span><span></span></div>';
     // celda: data-le="campo" = editable con clic (admin edita, recepción solicita); vacío = en blanco
@@ -198,7 +366,7 @@
       var mej = l.canje && !hayMejoraDe(l.sku) && ed ? '<button type="button" class="mctk-mej" data-mejora="' + i + '" title="Agregar diferencia por mejora (el facial vale más que el paquete)" aria-label="Agregar diferencia por mejora">＋$</button>' : "";
       return '<div data-i="' + i + '" class="mctk-ln"><span class="mctk-li">' + (i + 1) + "</span>" +
         '<div class="mctk-lp">' + fotoLinea(l) + '<div class="mctk-lpt"><span class="mctk-pn">' + e(l.nombre) + irProdBtn(l) + "</span>" +
-        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span></div></div>" +
+        '<span class="mctk-sku">' + e(codigoVisible(l)) + tipoTxt + pills + "</span>" + stockTxt(l) + "</div></div>" +
         '<span class="mctk-nums">' +
         celda("q", "Cant", e(q2(l.cantidad)), "cantidad") +
         celda("u", esGift ? "P. con IVA" : "P. sin IVA", precio, fijo ? "" : "precio_unit") +
@@ -207,7 +375,9 @@
         celda("v", "IVA", "<span data-iva>" + e($m(m.iva)) + "</span>", "", " mctk-c3") +
         celda("t", "Total", "<b data-tot>" + e($m(m.tot)) + "</b>", "") +
         "</span>" +
-        '<span class="mctk-lx">' + mej + '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button></span></div>';
+        '<span class="mctk-lx">' + mej + '<button class="mctk-x" type="button" data-del="' + i + '" title="Quitar línea" aria-label="Quitar línea">×</button></span>' +
+        '<div class="mctk-mini"><span class="mctk-qx">' + e(q2(l.cantidad)) + " × " + precio + ' <span class="mctk-ok">✓</span></span><b class="mctk-ltot" data-tot-m>' + e($m(m.tot)) + "</b></div>" +
+        '<div class="mctk-lacts">' + (ed ? '<button class="mctk-del" type="button" data-del="' + i + '">Eliminar</button>' : "") + mej + "</div></div>";
     }).join("");
   }
   function totHtml() {
@@ -217,19 +387,27 @@
     var difRnd = pg.cobrado && cobrado > 0 ? r2(c.total - cobrado) : 0;
     var redondeo = pg.cobrado && Math.abs(difRnd) > 0 && Math.abs(difRnd) <= 0.05;
     var total = redondeo ? cobrado : c.total;
+    var iva = c.iva, sumNet = r2((K.L || []).reduce(function (a, l) { return a + net(l.total_linea); }, 0));
+    // Primera pintura (lista/caché): si aún no hay líneas, usa los totales ya conocidos.
+    if ((!K.L || !K.L.length) && d.totales && Number(d.totales.total) > 0) {
+      total = r2(d.totales.total);
+      iva = r2(d.totales.iva != null ? d.totales.iva : (total - net(total)));
+      sumNet = r2(d.totales.subtotal != null ? d.totales.subtotal : net(total));
+      cobrado = cobrado || total;
+    }
     var pag = r2((pg.cobrado ? cobrado : 0) + (K.pagoBeta || 0));
     var saldo = anulado ? 0 : saldoPend(total, pag);
     var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
-    var sumNet = r2(K.L.reduce(function (a, l) { return a + net(l.total_linea); }, 0));
     // TK68: todo lo de Sunsu es gravado 15 %: Subtotal, IVA 15 %, Total, Pagado, Saldo (sin «Subtotal 0 %» ni duplicados).
     // TK82: tickets migrados, el cobrado del sistema anterior es la verdad si |líneas − cobrado| ≤ $0.05: Total = cobrado, sin saldo amarillo.
+    // TK104: en el celular no va «Pagado · Tarjeta…» ni forma de pago en el resumen; los pagos siguen abajo.
     return '<div class="mctk-tot"><span>Subtotal</span><b>' + $m(sumNet) + "</b>" + (desc ? "<span>Descuento" + (c.promo ? " (" + e(K.promo) + ")" : "") + "</span><b>−" + $m(net(desc)) + "</b>" : "") +
-      "<span>IVA 15%</span><b>" + $m(c.iva) + "</b>" +
+      "<span>IVA 15%</span><b>" + $m(iva) + "</b>" +
       (redondeo ? "<span>Ajuste por redondeo</span><b>" + (difRnd > 0 ? "−" : "+") + $m(Math.abs(difRnd)) + "</b>" : "") +
       '<span class="big">Total</span><b class="big">' + $m(total) + "</b>" +
-      "<span>Pagado</span><b>" + $m(pag) + "</b><span>Saldo</span><b" + (saldo > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(saldo) + "</b>" +
-      (met ? '<span class="mccf-sub">Forma de pago</span><span style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
-      (!redondeo && Math.abs(c.total - cobrado) > 0.009 ? '<span class="mccf-sub">Cobrado en el sistema</span><b class="mccf-sub">' + $m(cobrado) + "</b>" : "") + "</div>" +
+      "<span>Pagado</span><b>" + $m(pag) + '</b><span>Saldo</span><b class="mctk-saldo"' + (saldo > 0.009 ? ' style="color:#C98A00"' : "") + ">" + $m(saldo) + "</b>" +
+      (met ? '<span class="mccf-sub mctk-hide-m">Forma de pago</span><span class="mctk-hide-m" style="text-align:right;font-size:.8rem">' + met + "</span>" : "") +
+      (!redondeo && Math.abs((c.total || total) - cobrado) > 0.009 ? '<span class="mccf-sub mctk-hide-m">Cobrado en el sistema</span><b class="mccf-sub mctk-hide-m">' + $m(cobrado) + "</b>" : "") + "</div>" +
       (d.costosVisibles ? '<p style="text-align:right;margin:6px 0 0"><a href="#" id="mctk-costos" class="mctk-link">Detalle de costos</a></p>' : "");
   }
   function flagsHtml() {
@@ -241,9 +419,9 @@
   }
   function faltaHtml() {
     var F = K.d.faltan || []; if (!F.length || (K.d.flags || []).length) return "";
-    var comp = F.some(function (x) { return /comprobante/i.test(x); });
+    var compBtns = voucherBtnsHtml();
     return '<div class="mctk-falta"><b>Falta: ' + e(F.join(" · ")) + "</b>" +
-      (comp ? '<div><label class="btn small mctk-voucher" style="cursor:pointer">📷 Voucher<input type="file" class="mctk-voucher-inp" accept="image/*,application/pdf" hidden></label> <span class="mccf-sub">En el iPhone se abre el menú: Tomar foto, Fototeca o Archivos (también PDF). Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
+      (compBtns ? '<div>' + compBtns + ' <span class="mccf-sub">En el iPhone se abre el menú: Tomar foto, Fototeca o Archivos (también PDF). Cualquiera que vea el ticket puede subirla.</span></div>' : "") + "</div>";
   }
   function voucherThumbsHtml() {
     var docs = (K.d.documentos || []).filter(function (x) { return x.tipo === "comprobante" && x.url; });
@@ -290,17 +468,14 @@
     var facPdf = (d.documentos || []).filter(function (x) { return x.tipo === "factura" && x.url; })[0];
     var reag = rg.si ? (rg.cita ? "Sí · " + fechaIso(rg.cita) : "Sí") : "No";
     return '<div id="mctk-root" class="mctk2">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
-      '<div class="mctk-bar"><button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button><span style=\"flex:1\"></span>" +
-      '<label class="btn ghost small mctk-voucher">📷 Voucher<input type="file" class="mctk-voucher-inp" accept="image/*,application/pdf" hidden></label>' +
-      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
-      '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
-      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !t.cancelado ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>" +
+      accionesHtml() +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Sin factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + '<div class="mctk-pills">' + chipsHtml() + "</div></div>" +
-      '<div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
+      (d.hidratando ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Sin factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + estadosHtml() + "</div>" +
+      '<details class="mctk-det"' + (esMovilTk() ? "" : " open") + '><summary>Detalles</summary><div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + ro("Reagendada", e(reag)) +
-      (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div>" +
+      (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
       '<a href="#" class="mctk-link" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
@@ -430,17 +605,61 @@
     K.desc = { tipo: (d.descuento && d.descuento.tipo) || null, valor: (d.descuento && d.descuento.valor) || 0 };
     K.promo = d.promo || ""; K.exclC = !!d.excluirCosmetologa; K.exclN = d.excluirNota || "";
   }
-  async function render(clave) {
+  function render(clave) {
     css();
-    K.d = null;
-    var r;
-    try { r = await Promise.all([api("tk_get", { clave: clave }), K.cat ? Promise.resolve(null) : api("tk_catalogo", {}).catch(function () { return null; })]); }
-    catch (x) { r = [{ error: (x && x.message) || String(x) }, null]; }
-    var d = r[0];
-    if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/tickets">← Volver a la lista</button>';
-    if (r[1] && r[1].items) K.cat = r[1].items;
-    cargarEstado(d);
+    K.hidGen = (K.hidGen || 0) + 1;
+    var prev = previewDe(clave);
+    if (prev) cargarEstado(prev);
+    else {
+      K.d = { ok: true, clave: clave, hidratando: true, ticket: { clave: clave, soNum: /^r\d+$/.test(String(clave)) ? "" : String(clave), sheetRow: /^r\d+$/.test(String(clave)) ? String(clave).slice(1) : null, cobradoSistema: 0, cancelado: null }, info: {}, lineas: [], totales: {}, descuento: { tipo: null, valor: 0 }, pagos: {}, chips: [], documentos: [], faltan: [], flags: [], reagendada: {}, puedeEditar: false, puedePedir: true, puedeCancelar: false };
+      cargarEstado(K.d);
+    }
+    hidratar(clave, K.hidGen);
     return html();
+  }
+  async function hidratar(clave, gen) {
+    var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    var r, d, main, detAbierta, err;
+    try { r = await api("tk_get", { clave: clave }); }
+    catch (x) { r = { error: (x && x.message) || String(x) }; }
+    if (gen !== K.hidGen) return;
+    if (K.dirty && K.d && K.d.clave === clave) return;
+    d = r;
+    if (!d || d.error) {
+      err = e((d && d.error) || "No se pudo cargar");
+      if (K.d && K.d.ticket && !K.d.hidratando) {
+        var load = document.getElementById("mctk-load");
+        if (load) { load.className = "err"; load.textContent = err; }
+        else toast2(err, true);
+        return;
+      }
+      K.d = { error: err };
+      main = document.getElementById("mctk-root");
+      if (main) main.outerHTML = '<p class="err">' + err + '</p><button class="btn ghost small" type="button" data-go="#/m/tickets">← Volver a la lista</button>';
+      return;
+    }
+    d.hidratando = false;
+    guardarVista(d);
+    cargarEstado(d);
+    main = document.getElementById("mctk-root");
+    detAbierta = !!(main && main.querySelector(".mctk-det[open]"));
+    if (main) {
+      var host = document.getElementById("app") || main.parentNode || document.body;
+      main.outerHTML = html();
+      wire(host);
+      if (detAbierta) { var det = document.querySelector("#mctk-root .mctk-det"); if (det) det.open = true; }
+    }
+    // Catálogo en segundo plano (no bloquea la apertura). Sirve para fotos, stock y «Agregar producto».
+    if (!K.cat) {
+      api("tk_catalogo", {}).then(function (c) {
+        if (c && c.items) {
+          K.cat = c.items;
+          var lin = document.getElementById("mctk-lin");
+          if (lin && K.d && K.d.clave === clave && !K.dirty) pintarLin();
+        }
+      }).catch(function () {});
+    }
+    try { if (typeof console !== "undefined" && console.debug) console.debug("tk104 tk_get", clave, Math.round(((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()) - t0), "ms"); } catch (x2) {}
   }
   function repintar(main) { var root = main.querySelector("#mctk-root"); if (root) { root.outerHTML = html(); wire(main); } }
   function marcar(soloDatos) { K.dirty = true; if (!soloDatos) K.dirtyL = true; var s = document.getElementById("mctk-save"); if (s) s.hidden = false; }
@@ -694,7 +913,9 @@
         toast2("⏳ Subiendo voucher…");
         try {
           var data = await (window.MCVoucher && window.MCVoucher.comprimir ? window.MCVoucher.comprimir(f) : comprimir(f));
-          var r = await api("tk_subir_doc", { clave: K.d.clave, imagen: data });
+          var body = { clave: K.d.clave, imagen: data }, pagoId = inp.getAttribute("data-pago-id");
+          if (pagoId) body.pago_id = pagoId;
+          var r = await api("tk_subir_doc", body);
           if (!r || r.error) { toast2((r && r.error) || "No se pudo subir", true); return; }
           toast2("✓ Voucher subido");
           var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); }

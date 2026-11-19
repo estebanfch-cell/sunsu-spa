@@ -30,7 +30,17 @@ import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
 const TIPOS = new Set(["producto", "facial", "extra", "paquete", "gift", "servicio"]);
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
-async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_tickets"); return true; } catch { return false; } }
+async function hay(ctx: Ctx): Promise<boolean> {
+  try { await consultar(ctx.db, "beta_tickets", { limite: 1 }); return true; }
+  catch { try { await ctx.db.all("beta_tickets"); return true; } catch { return false; } }
+}
+async function cabDe(ctx: Ctx, clave: string): Promise<Row | undefined> {
+  try {
+    const hit = (await consultar(ctx.db, "beta_tickets", { filtros: [{ col: "clave", op: "eq", val: clave }], limite: 1 })).rows[0];
+    if (hit) return hit;
+  } catch { /* cae a la tabla completa */ }
+  return (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+}
 
 export { tipoCatalogo } from "./catalogo_ticket.ts";
 /** Catálogo para el buscador del ticket: hoja, ERP y todo producto facturado en Migo (TK95). */
@@ -139,7 +149,10 @@ async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pro
 async function lineasDe0(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   const cort = cortesiasDe(r);
   if (cab && cab.lineas_beta === true) {
-    return (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)).sort((a, b0) => n(a.orden) - n(b0.orden))
+    let rows: Row[] = [];
+    try { rows = (await consultar(ctx.db, "beta_ticket_lineas", { filtros: [{ col: "ticket_clave", op: "eq", val: s(cab.clave) }] })).rows; }
+    catch { rows = (await todas(ctx, "beta_ticket_lineas")).filter((l) => s(l.ticket_clave) === s(cab.clave)); }
+    return rows.sort((a, b0) => n(a.orden) - n(b0.orden))
       .map((l) => ({ id: s(l.id), tipo: s(l.tipo), sku: s(l.sku), nombre: s(l.nombre), cantidad: n(l.cantidad), precio_unit: n(l.precio_unit), descuento_tipo: s(l.descuento_tipo) || null, descuento_valor: n(l.descuento_valor), excluir_comision: l.excluir_comision === true, estimado: l.estimado === true, ...(s(l.tipo) === "facial" && !(n(l.precio_unit) > 0) && canjeFacial(r) ? { canje: true } : {}), ...(!(n(l.precio_unit) > 0) && cort.has(skuCode(s(l.sku))) ? { cortesia: true } : {}), ...(esDiferenciaMejora(l) ? { mejoraPaquete: true } : {}), promo: s(l.promo) || undefined, total_linea: n(l.total_linea) }));
   }
   const porCode = new Map(cat.map((c) => [s(c.sku), c]));
@@ -223,9 +236,12 @@ async function otroNombre(ctx: Ctx, r: Row): Promise<boolean> {
 }
 async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
-  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
-  const cat = await catalogoTicket(ctx, ses);
-  const promos = await promosVigentes(ctx);
+  const cab = await cabDe(ctx, clave);
+  const [promos, cat] = await Promise.all([
+    promosVigentes(ctx),
+    // Si las líneas ya están en la beta, no hace falta bajar el catálogo entero (el cliente lo pide en segundo plano).
+    (cab && cab.lineas_beta === true) ? Promise.resolve([] as Row[]) : catalogoTicket(ctx, ses),
+  ]);
   const L = await lineasDe(ctx, r, cab, cat);
   const promo = cab && s(cab.promo_nombre) ? (promoDe(cab, promos) || { nombre: s(cab.promo_nombre), tipo: "$", valor: n(cab.promo_monto), codigos: [] }) : null;
   const calc = calcularTicket(L, { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo);
@@ -524,6 +540,41 @@ export const FALTA_DESDE = "2026-11-01";
 /** Desde cuándo un ticket con tarjeta pide la foto del voucher (hora de pared, como el timestamp del ticket). */
 export const VOUCHER_FOTO_DESDE = "2026-11-18T10:30:00";
 const tieneUrl = (v: unknown) => /https?:|archivo:/.test(s(v));
+/** Tipo de botón de foto: efectivo, canje y gift no piden comprobante. */
+export function tipoFotoPago(metodo: unknown): "tarjeta" | "voucher" | "transferencia" | "" {
+  const m = s(metodo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (m === "transferencia" || m === "deuna") return "transferencia";
+  if (m === "tarjeta") return "tarjeta";
+  if (m === "voucher") return "voucher";
+  return "";
+}
+export function etiquetaFotoPago(tipo: string): string {
+  return tipo === "transferencia" ? "Transferencia" : tipo === "tarjeta" ? "Tarjeta" : "Voucher";
+}
+function pagoTieneFoto(p: Row, comps: Row[]): boolean {
+  if (s(p.comprobante_id) || s(p.foto)) return true;
+  const id = s(p.id);
+  if (id && comps.some((c) => s(c.pago_id) === id)) return true;
+  return /foto\s+(archivo:[\w-]+|https?:\S+)/i.test(s(p.nota));
+}
+/** Un botón por tipo de pago que aún no tiene foto. El efectivo no aparece. */
+export function pagosFaltanFoto(opts: { beta?: Row[]; legado?: Row[]; comps?: Row[]; comprobanteTicket?: unknown; fecha?: string }): Row[] {
+  const comps = opts.comps || [], fecha = s(opts.fecha).replace(" ", "T").slice(0, 19);
+  const hayFotoTicket = comps.length > 0 || tieneUrl(opts.comprobanteTicket);
+  const seen = new Set<string>(), out: Row[] = [];
+  const add = (p: Row, legado: boolean) => {
+    if (!p || p.anulado === true) return;
+    const tipo = tipoFotoPago(p.metodo);
+    if (!tipo || seen.has(tipo)) return;
+    if (tipo === "tarjeta" && fecha && fecha < VOUCHER_FOTO_DESDE && /\d/.test(s(p.ref))) return;
+    if (legado) { if (hayFotoTicket) return; } else if (pagoTieneFoto(p, comps)) return;
+    seen.add(tipo);
+    out.push({ id: s(p.id) || null, metodo: s(p.metodo), tipo, etiqueta: etiquetaFotoPago(tipo) });
+  };
+  for (const p of opts.beta || []) add(p, false);
+  for (const p of opts.legado || []) add(p, true);
+  return out;
+}
 /** Lo que falta en un ticket que sí cuadra (fila amarilla): foto de transferencia o voucher de tarjeta. El efectivo no pide foto. La factura que no cuadra va en rojo (flags), no aquí. */
 export function faltaDe(r: Row, d: Row): string[] {
   if (ymdUtc(r.timestamp) < FALTA_DESDE) return [];
@@ -563,7 +614,10 @@ function claveTarjeta(r: Row): string { return "tk_" + ymdUtc(r.timestamp) + "_"
 
 async function enviosDe(ctx: Ctx, r: Row, clave: string): Promise<Row[]> {
   const out: Row[] = [];
-  for (const e of await todas(ctx, "beta_ticket_envios")) if (s(e.ticket_clave) === clave) out.push({ tipo: s(e.tipo), fecha: s(e.created_at), por: s(e.por), fuente: "beta" });
+  let envBeta: Row[] = [];
+  try { envBeta = (await consultar(ctx.db, "beta_ticket_envios", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows; }
+  catch { envBeta = (await todas(ctx, "beta_ticket_envios")).filter((e) => s(e.ticket_clave) === clave); }
+  for (const e of envBeta) out.push({ tipo: s(e.tipo), fecha: s(e.created_at), por: s(e.por), fuente: "beta" });
   const ck = claveTarjeta(r), ced = s(r.id_3).split(".")[0], f = ymdUtc(r.timestamp);
   for (const e of await todas(ctx, "envios_tarjetas")) {
     if (s(e.clave) === ck || (ced && s(e.cedula).split(".")[0] === ced && ymdUtc(e.fecha_del_ticket) === f)) {
@@ -624,6 +678,10 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   const stCob = estadoCobro({ cobrado: estaCobrado(r, d.factura), cobradoMonto: n(r.estimado), totalLineas: total, anulado: (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado === true : false) });
   const metodos = metodosPago(r.comp);
   const pagos = { metodos, pagado: stCob.pagadoSis, saldo: stCob.saldo, cobrado: estaCobrado(r, d.factura), total: stCob.total, redondeo: stCob.redondeo, dif: stCob.dif, pagosLegado: stCob.pagadoSis > 0 ? filasPagoLegado(r.comp, stCob.pagadoSis, s(r.timestamp)) : [] };
+  let betaPagos: Row[] = [];
+  try { betaPagos = (await consultar(ctx.db, "beta_pagos", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows.filter((x) => x.anulado !== true); }
+  catch { betaPagos = []; }
+  const pagosFaltan = pagosFaltanFoto({ beta: betaPagos, legado: pagos.pagosLegado, comps: compsVivos(d), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) });
   // Gift cards: vendidas en el ticket y canjeadas en el ticket.
   const codsGc = [...codigosGc(r.venta_gift), ...codigosGc(r.gift_card)];
   const gcs = codsGc.length ? (await consultar(ctx.db, "gift_cards", { filtros: [{ col: "codigo_gc", op: "in", val: codsGc }] })).rows : [];
@@ -642,7 +700,11 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     vigentes: paqs.filter((p) => n(p.pendientes) > 0).map((p) => ({ codigo: p.codigo, nombre: p.nombre, usados: p.usados, total: p.total, pendientes: p.pendientes })),
   };
   const envios = await enviosDe(ctx, r, clave);
-  const flags = (await todas(ctx, "beta_ticket_flags")).filter((f) => !f.resuelto && (n(f.ticket_id) === n(r.id) || s(f.ticket_clave) === clave))
+  let flagsSrc: Row[] = [];
+  try {
+    flagsSrc = (await consultar(ctx.db, "beta_ticket_flags", { filtros: [{ op: "or", de: [{ col: "ticket_clave", op: "eq", val: clave }, { col: "ticket_id", op: "eq", val: n(r.id) }] }] })).rows;
+  } catch { flagsSrc = await todas(ctx, "beta_ticket_flags"); }
+  const flags = flagsSrc.filter((f) => !f.resuelto && (n(f.ticket_id) === n(r.id) || s(f.ticket_clave) === clave))
     .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
@@ -663,7 +725,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
-  return { info, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+  return { info, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
 }
 
@@ -779,6 +841,14 @@ extend("tk_estados", "any", async (_p, ctx, ses) => {
   const envS = new Set<string>(), envCF = new Set<string>();
   for (const e of await todas(ctx, "envios_tarjetas")) { envS.add(s(e.clave)); envCF.add(s(e.cedula).split(".")[0] + "|" + ymdUtc(e.fecha_del_ticket)); }
   const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const pagosPorClave = new Map<string, Row[]>();
+  for (const x of await todas(ctx, "beta_pagos")) {
+    if (x.anulado === true) continue;
+    const k = s(x.ticket_clave);
+    const L0 = pagosPorClave.get(k) || [];
+    L0.push(x);
+    pagosPorClave.set(k, L0);
+  }
   const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
   const hoy = new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
   const citas = await citasRango(ctx, addDaysYmd(hoy, -30), addDaysYmd(hoy, 90), { ms: 600000 });
@@ -800,6 +870,7 @@ extend("tk_estados", "any", async (_p, ctx, ses) => {
       ...((s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(linkByTk.get(n(r.id))?.factura))
         ? { factura: facturaCompleta(s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(linkByTk.get(n(r.id))?.factura)) }
         : {}),
+      ...((() => { const pf = pagosFaltanFoto({ beta: pagosPorClave.get(clave) || [], legado: metodosPago(r.comp), comps: compsVivos(d), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) }); return pf.length ? { pagosFaltan: pf } : {}; })()),
     };
   }
   return { ok: true, items, acuity: conAcuity, hoy };
