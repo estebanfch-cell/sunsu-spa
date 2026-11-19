@@ -31,8 +31,8 @@
     var ov = document.createElement("div"); ov.className = "mccj-ov";
     ov.innerHTML = "<div>" + html + "<div class='mccj-acts' style='justify-content:flex-end'><button class='btn ghost' type='button' data-x>Cancelar</button><button class='btn' type='button' data-ok>Guardar</button></div></div>";
     document.body.appendChild(ov);
-    ov.querySelector("[data-x]").onclick = function () { ov.remove(); };
-    ov.querySelector("[data-ok]").onclick = async function () { var b = this; b.disabled = true; var ok = await onOk(ov); b.disabled = false; if (ok) ov.remove(); };
+    var _el = ov.querySelector("[data-x]"); if (_el) _el.onclick = function () { ov.remove(); };
+    var _el = ov.querySelector("[data-ok]"); if (_el) _el.onclick = async function () { var b = this; b.disabled = true; var ok = await onOk(ov); b.disabled = false; if (ok) ov.remove(); };
     var f = ov.querySelector("input,select,textarea"); if (f) f.focus();
     return ov;
   }

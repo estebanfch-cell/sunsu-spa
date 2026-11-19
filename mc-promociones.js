@@ -135,7 +135,7 @@
   }
   function wireForm(main) {
     var root = main.querySelector("#mcpm-root");
-    root.querySelector("#mcpm-cancel").onclick = function () { K.edit = null; K.ini = null; pintar(main); };
+    var _el = root.querySelector("#mcpm-cancel"); if (_el) _el.onclick = function () { K.edit = null; K.ini = null; pintar(main); };
     // Sin botón «Editar» (TK55): Guardar / Descartar aparecen solo si algo cambió.
     if (K.ini && !K.iniNorm) { leerForm(main); K.ini = JSON.stringify(K.edit); K.iniNorm = true; }
     if (K.ini) {
@@ -144,7 +144,7 @@
       mirar();
       var dsc = root.querySelector("#mcpm-desc"); if (dsc) dsc.onclick = function () { K.edit = JSON.parse(K.ini); pintar(main); };
     }
-    root.querySelector("#mcpm-addr").onclick = function () { leerForm(main); K.edit.reglas.push({ tipo: "pct", alcance: "codigos", codigos: [], valor: "", min: 1 }); pintar(main); };
+    var _el = root.querySelector("#mcpm-addr"); if (_el) _el.onclick = function () { leerForm(main); K.edit.reglas.push({ tipo: "pct", alcance: "codigos", codigos: [], valor: "", min: 1 }); pintar(main); };
     root.querySelectorAll("[data-rdel]").forEach(function (b) { b.onclick = function () { leerForm(main); K.edit.reglas.splice(+b.getAttribute("data-rdel"), 1); pintar(main); }; });
     root.querySelectorAll('select[data-rf="tipo"],select[data-rf="alcance"]').forEach(function (s) { s.onchange = function () { leerForm(main); pintar(main); }; });
     root.querySelectorAll("[data-rc]").forEach(function (b) { b.onclick = function () {
@@ -160,7 +160,7 @@
         hits.querySelectorAll("[data-add]").forEach(function (b) { b.onclick = function () { leerForm(main); r.codigos = (r.codigos || []).concat([b.getAttribute("data-add")]); pintar(main); var n = main.querySelector('[data-r="' + box.getAttribute("data-r") + '"] [data-rq]'); if (n) n.focus(); }; });
       };
     });
-    root.querySelector("#mcpm-save").onclick = async function () {
+    var _el = root.querySelector("#mcpm-save"); if (_el) _el.onclick = async function () {
       leerForm(main); var p = K.edit, err = root.querySelector("#mcpm-err"); err.textContent = "";
       var b = this; b.disabled = true;
       var r = await api("promo_guardar", { id: p.id, nombre: p.nombre, desde: p.desde, hasta: p.hasta, activa: p.activa, notas: p.notas, reglas: p.reglas.map(function (x) { return { tipo: x.tipo, alcance: x.alcance, codigos: x.codigos || [], marca: x.marca, categoria: x.categoria, tipoLinea: x.tipoLinea, valor: Number(x.valor) || 0, valor2: Number(x.valor2) || 0, min: Number(x.min) || 1, por: x.por, etiqueta: x.etiqueta }; }) });
@@ -180,7 +180,7 @@
     dlg.innerHTML = '<div class="mcpm-box"><h3>🏷️ Promociones <button class="mcpm-x" type="button">×</button></h3><div id="mcpm-pb"><p class="note">Buscando promociones…</p></div></div>';
     document.body.appendChild(dlg);
     var cerrar = function () { dlg.remove(); };
-    dlg.querySelector(".mcpm-x").onclick = cerrar; dlg.onclick = function (ev) { if (ev.target === dlg) cerrar(); };
+    var _el = dlg.querySelector(".mcpm-x"); if (_el) _el.onclick = cerrar; dlg.onclick = function (ev) { if (ev.target === dlg) cerrar(); };
     var body = dlg.querySelector("#mcpm-pb");
     if (!L.length) { body.innerHTML = '<p class="note">Agrega primero lo que se cobra en el ticket.</p>'; return; }
     var sel = (opts.aplicadas || []).slice(), first = true, last = null;
@@ -205,8 +205,8 @@
           : '<div class="mcpm-acts" style="justify-content:flex-end"><button class="btn ghost small" type="button" id="mcpm-quitar">Quitar promociones</button><button class="btn small" type="button" id="mcpm-ok">' + (opts.auto ? "Guardar elección" : "Aplicar al ticket") + "</button></div>");
       body.querySelectorAll("[data-pid]").forEach(function (c) { c.onchange = function () { var id = c.getAttribute("data-pid"); sel = sel.filter(function (x) { return x !== id; }); if (c.checked) sel.push(id); calcular(); }; });
       var bc = body.querySelector("#mcpm-cerrar"); if (bc) { bc.onclick = cerrar; return; }
-      body.querySelector("#mcpm-ok").onclick = function () { opts.aplicar(last.resultado, sel.slice(), last.promos); cerrar(); toast2(last.resultado.descuento > 0 ? "🏷️ Promociones: −" + $m(last.resultado.descuento) : "Sin promociones"); };
-      body.querySelector("#mcpm-quitar").onclick = function () { opts.aplicar({ lineas: [], descuento: 0 }, [], last.promos); cerrar(); };
+      var _el = body.querySelector("#mcpm-ok"); if (_el) _el.onclick = function () { opts.aplicar(last.resultado, sel.slice(), last.promos); cerrar(); toast2(last.resultado.descuento > 0 ? "🏷️ Promociones: −" + $m(last.resultado.descuento) : "Sin promociones"); };
+      var _el = body.querySelector("#mcpm-quitar"); if (_el) _el.onclick = function () { opts.aplicar({ lineas: [], descuento: 0 }, [], last.promos); cerrar(); };
     }
     calcular();
   }

@@ -247,8 +247,8 @@
         });
       }
     }
-    main.querySelector("#mccl-head").onclick = function (ev) { var b = ev.target.closest("[data-sort]"); if (!b) return; var k = b.getAttribute("data-sort"); K.dir = K.sort === k ? -K.dir : (/ultima|total|visitas|paquetes/.test(k) ? -1 : 1); K.sort = k; repintarLista(main); };
-    main.querySelector("#mccl-body").onclick = function (ev) { var tr = ev.target.closest("tr[data-k]"); if (tr) go("#/m/clientes/c/" + encodeURIComponent(tr.getAttribute("data-k"))); };
+    var _el = main.querySelector("#mccl-head"); if (_el) _el.onclick = function (ev) { var b = ev.target.closest("[data-sort]"); if (!b) return; var k = b.getAttribute("data-sort"); K.dir = K.sort === k ? -K.dir : (/ultima|total|visitas|paquetes/.test(k) ? -1 : 1); K.sort = k; repintarLista(main); };
+    var _el = main.querySelector("#mccl-body"); if (_el) _el.onclick = function (ev) { var tr = ev.target.closest("tr[data-k]"); if (tr) go("#/m/clientes/c/" + encodeURIComponent(tr.getAttribute("data-k"))); };
     var m = main.querySelector("#mccl-mas"); if (m) m.onclick = function () { K.max += 500; repintarLista(main); };
     if (!K.q) q.focus();
   }
@@ -485,7 +485,7 @@
   function wireFicha(main) {
     var d = K.d; if (!d || !main.querySelector("#mccl-root")) return;
     main.querySelectorAll("[data-tab]").forEach(function (b) { b.onclick = function () { K.tab = b.getAttribute("data-tab"); repintarFicha(main); }; });
-    main.querySelector("#mccl-tab").onclick = function (ev) {
+    var _el = main.querySelector("#mccl-tab"); if (_el) _el.onclick = function (ev) {
       var pm = ev.target.closest("[data-pqm]");
       if (pm && window.MCPaquetes) {
         var pq = (K._paqs || [])[+pm.getAttribute("data-pqm")];
