@@ -69,6 +69,8 @@ extend("pq_lista", "any", async (p, ctx, ses) => {
   const AJ = await ajustes(ctx);
   let L = rows.map((r) => vistaPaquete(r, AJ.get(String(r.id)))).filter((v) => !v.borrado && (v.cedula || v.nombre));
   if (perm === "propio") L = L.filter((v) => esPropio(s(v.vendidoPor), ses));
+  // TK111: más recientes primero por fecha de compra (las filas beta tienen sheet_row negativo y quedaban al final).
+  L.sort((x, y) => s(y.fechaCompra).localeCompare(s(x.fechaCompra)) || Math.abs(n(y.fila)) - Math.abs(n(x.fila)));
   const cuenta = { todos: L.length, activos: L.filter((v) => v.estado !== "completo" && v.estado !== "anulado").length, completos: L.filter((v) => v.estado === "completo").length, anulados: L.filter((v) => v.estado === "anulado").length };
   // TK110: al buscar (nombre, código, cédula) se ven también los completos: un paquete ya usado no «desaparece».
   const est = q && q !== "*" && (!s(p.estado) || s(p.estado) === "activos") ? "todos" : s(p.estado) || "activos";

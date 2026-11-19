@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  var K = { q: "", estado: "activos", items: [], total: 0, cuenta: null, d: null, st: null };
+  var K = { q: "", estado: "todos", items: [], total: 0, cuenta: null, d: null, st: null };
   function f(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (ymd || ""); }
   function pill(nombre) { return nombre ? (window.MCColor ? window.MCColor.pill(nombre) : e(nombre)) : '<span class="mccf-sub">—</span>'; }
   function prog(v) {
