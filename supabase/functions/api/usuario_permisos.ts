@@ -89,8 +89,8 @@ const MOD_EXTRA: Record<string, string> = {
   mcprod_archivo_quitar: "productos", mcprod_archivo_principal: "productos", mcprod_codigos_save: "productos",
   gcb_lista: "gift_cards", gcb_get: "gift_cards", gcb_siguiente: "gift_cards", gcb_doc_url: "gift_cards", gcb_vender: "gift_cards", gcb_usar: "gift_cards", gcb_guardar: "gift_cards", gcb_borrar: "gift_cards", gcb_pdf_guardar: "gift_cards", mcprod_codigo_interno: "productos", pg_ticket: "tickets", pg_registrar: "tickets", pg_anular: "tickets", pg_lista: "caja", cj_resumen: "caja", cj_iniciar: "caja", cj_mov: "caja", cj_cuadre: "caja", cj_anular: "caja", cj_comprobante: "caja", barras_resumen: "productos", barras_generar_lote: "productos", barras_asignar: "productos", mcprod_barras_generar: "productos", mcprod_presentaciones_save: "productos", mcprod_presentacion_nueva: "productos", mcprod_escalas_save: "productos", mcprod_proveedores_save: "productos",
   proto_list: "cabina", proto_get: "cabina", proto_guardar: "cabina", proto_historial: "cabina",
-  // Conteo físico (0045): crear/revisar es de admin; contar lo hace la asignada aunque no tenga el módulo.
-  cf_meta: "conteos", cf_list: "inicio", cf_crear: "conteos", cf_revisar: "conteos",
+  // Conteo físico (TK108): el personal abre y crea el suyo (el handler limita a sí mismo); revisar sigue siendo admin.
+  cf_meta: "inicio", cf_list: "inicio", cf_crear: "inicio", cf_revisar: "conteos",
   cf_get: "inicio", cf_iniciar: "inicio", cf_guardar: "inicio", cf_enviar: "inicio", notif_mias: "inicio", notif_leer: "inicio",
   trfb_list: "transferencias", trfb_get: "transferencias", trfb_save: "transferencias", trfb_estado: "transferencias",
   aj_meta: "inicio", aj_list: "inventario", aj_get: "inventario", aj_crear: "inventario", aj_revisar: "inventario", aj_desde_conteo: "conteos",

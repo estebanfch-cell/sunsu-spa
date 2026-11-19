@@ -18,6 +18,7 @@ function todosLosCodigos(prods: Row[]): string[] {
 }
 
 extend("barras_resumen", "any", async (_p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo un admin ve códigos de barras" };
   if (!(await puede(ctx, ses))) return { error: "No tienes permiso" };
   const prods = (await listaProductos(ctx, ses)).filter((p) => p.tipo !== "servicio");
   const prob = revisarBarras(prods);

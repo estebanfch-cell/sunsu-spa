@@ -1311,7 +1311,7 @@ const GRUPOS = [
   ]],
   ["inventario", "Inventario", [
     ["productos", "Productos", "#/m/productos"],
-    ["conteos", "Conteos físicos", "#/m/conteos"],
+    ["conteos", "Conteo físico", "#/m/conteos"],
     ["ver_costos", "Consumos / reportes", "#/m/reportes"],
   ]],
   ["compras", "Compras", [
@@ -1897,6 +1897,12 @@ function parseRoute() {
   if (parts[0] === "s") return { kind: "sunsu", tab: parts[1] || "ticket", doc: "", id: "", mod: "", sub: "" };
   return { kind: "mod", mod: parts[1] || "inicio", sub: parts[2] || "", doc: "", id: decodeURIComponent(parts[3] || ""), tab: "" };
 }
+function rutaInventarioAdmin(route) {
+  if (!route || route.kind !== "mod") return false;
+  if (route.mod === "barras" || route.mod === "transferencias" || route.mod === "ajustes" || route.mod === "lugares" || route.mod === "kardex") return true;
+  if (route.mod === "inventario") return true; // el personal usa #/m/productos
+  return false;
+}
 function moduloDeRuta(route) {
   if (!route || route.kind !== "mod") return route && route.mod || "";
   if (route.mod === "personal") {
@@ -1908,7 +1914,7 @@ function moduloDeRuta(route) {
   if (route.mod === "citas" || route.mod === "inicio") return "inicio";
   if (route.mod === "borradores") return "tickets"; // TK94: Facturas borrador vive en Ventas con el permiso de Tickets
   if (route.mod === "lugares") return "inventario";
-  if (route.mod === "conteos" && route.sub === "hacer") return "inicio";
+  if (route.mod === "conteos") return "inicio"; // TK108: el personal abre el conteo físico (el servidor limita)
   if (route.mod === "ajustes") return "inventario";
   // 📦 Abrir producto: cualquiera del equipo; el costo por facial va por inventario (y los $ por ver_costos en el servidor).
   if (route.mod === "aperturas") return route.sub === "costo" ? "inventario" : "inicio";
@@ -1936,7 +1942,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "lugares") return "Locales y cabinas";
   if (route.mod === "ajustes") return route.sub === "nueva" ? "Nuevo ajuste" : route.sub === "a" ? "Ajuste de stock" : "Ajustes de stock";
   if (route.mod === "transferencias") return route.sub === "nueva" ? "Nueva transferencia" : route.sub === "editar" ? "Editar transferencia" : route.sub === "t" ? "Transferencia" : "Transferencias";
-  if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : (route.sub ? "Conteo físico" : "Conteos físicos");
+  if (route.mod === "conteos") return route.sub === "hacer" ? "Hacer conteo" : "Conteo físico";
   if (route.mod === "recepciones") return route.sub ? "Recibir orden" : "📥 Recepciones";
   if (route.mod === "compras" && route.sub === "nueva") return "Nueva OC";
   if (route.mod === "compras" && route.sub === "nueva-cot") return "Nueva cotización de proveedor";
@@ -2680,6 +2686,11 @@ async function draw() {
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
   // Un conteo asignado se abre aunque la persona no tenga el módulo Conteos (el servidor valida la asignación).
   const adminVista = route.mod === "usuarios" || route.mod === "permisos" || route.mod === "aprobaciones" || route.mod === "mc" || (route.mod === "promociones" && state.admin) || (route.mod === "configuracion" && state.admin) || (route.mod === "conteos" && route.sub === "cf");
+  if (rutaInventarioAdmin(route) && !state.admin) {
+    main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
+    listo();
+    return;
+  }
   if (route.kind === "mod" && route.mod !== "inicio" && route.mod !== "citas" && acceso(gate) === "no" && !reporteOk && !adminVista) {
     main.innerHTML = `<p class="err">Este módulo no está en tu menú.</p>`;
     listo();
@@ -2766,6 +2777,7 @@ async function renderMod(route) {
   if (route.mod === "promociones" && window.MCPromociones) return state.admin ? window.MCPromociones.render(route) : `<p class="err">Solo administradores.</p>`;
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.admin || state.verCostos);
+  if (rutaInventarioAdmin(route) && !state.admin) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (route.mod !== "inicio" && route.mod !== "citas" && route.mod !== "usuarios" && route.mod !== "permisos" && route.mod !== "aprobaciones" && !(route.mod === "configuracion" && state.admin) && !(route.mod === "conteos" && route.sub === "cf") && acceso(gate) === "no" && !reporteOk) return `<p class="err">Este módulo no está en tu menú.</p>`;
   if (window.MCMaestro && window.MCMaestro.wide()) {
     const md = window.MCMaestro.which(route);
@@ -3173,6 +3185,7 @@ function stockTotal(p) {
 }
 function inventarioSubtabs(activa) {
   const btn = (id, hash, label) => `<button class="btn ${activa === id ? "" : "ghost"} small" type="button" data-go="${hash}">${label}</button>`;
+  if (!state.admin) return "";
   return `<div class="inv-subs" role="tablist">${btn("lista", "#/m/inventario", "Inventario")}${btn("venta", "#/m/inventario/venta", "Stock Venta")}${btn("cabina", "#/m/inventario/cabina", "Stock Cabina")}</div>`;
 }
 async function renderInventarioLista() {
@@ -7106,40 +7119,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk107"></script>
-<script src="beta-screens.js?v=20261118tk107"></script>
-<script src="beta-inline.js?v=20261118tk107"></script>
-<script src="mc-productos.js?v=20261118tk107"></script>
-<script src="mc-nav.js?v=20261118tk107"></script>
-<script src="mc-permisos.js?v=20261118tk107"></script>
-<script src="mc-protocolos.js?v=20261118tk107"></script>
-<script src="mc-conteo.js?v=20261118tk107"></script>
-<script src="mc-transferencias.js?v=20261118tk107"></script>
-<script src="mc-ajustes.js?v=20261118tk107"></script>
-<script src="vendor-qrcode.js?v=20261118tk107"></script>
-<script src="mc-tickets.js?v=20261118tk107"></script>
-<script src="mc-maestro.js?v=20261118tk107"></script>
-<script src="mc-empleados.js?v=20261118tk107"></script>
-<script src="mc-edit.js?v=20261118tk107"></script>
-<script src="mc-paquetes.js?v=20261118tk107"></script>
-<script src="mc-aperturas.js?v=20261118tk107"></script>
-<script src="mc-acceso.js?v=20261118tk107"></script>
-<script src="mc-barras.js?v=20261118tk107"></script>
-<script src="mc-caja.js?v=20261118tk107"></script>
-<script src="mc-giftcards.js?v=20261118tk107"></script>
-<script src="mc-multas.js?v=20261118tk107"></script>
-<script src="mc-clientes.js?v=20261118tk107"></script>
-<script src="mc-clientes-dup.js?v=20261118tk107"></script>
-<script src="mc-docpdf.js?v=20261118tk107"></script>
-<script src="mc-compras.js?v=20261118tk107"></script>
-<script src="mc-consignacion.js?v=20261118tk107"></script>
-<script src="mc-proveedores.js?v=20261118tk107"></script>
-<script src="mc-recepciones.js?v=20261118tk107"></script>
-<script src="mc-movil.js?v=20261118tk107"></script>
-<script src="mc-promociones.js?v=20261118tk107"></script>
-<script src="mc-agenda.js?v=20261118tk107"></script>
-<script src="mc-staff-home.js?v=20261118tk107"></script>
-<script src="mc-borradores.js?v=20261118tk107"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk108"></script>
+<script src="beta-screens.js?v=20261118tk108"></script>
+<script src="beta-inline.js?v=20261118tk108"></script>
+<script src="mc-productos.js?v=20261118tk108"></script>
+<script src="mc-nav.js?v=20261118tk108"></script>
+<script src="mc-permisos.js?v=20261118tk108"></script>
+<script src="mc-protocolos.js?v=20261118tk108"></script>
+<script src="mc-conteo.js?v=20261118tk108"></script>
+<script src="mc-transferencias.js?v=20261118tk108"></script>
+<script src="mc-ajustes.js?v=20261118tk108"></script>
+<script src="vendor-qrcode.js?v=20261118tk108"></script>
+<script src="mc-tickets.js?v=20261118tk108"></script>
+<script src="mc-maestro.js?v=20261118tk108"></script>
+<script src="mc-empleados.js?v=20261118tk108"></script>
+<script src="mc-edit.js?v=20261118tk108"></script>
+<script src="mc-paquetes.js?v=20261118tk108"></script>
+<script src="mc-aperturas.js?v=20261118tk108"></script>
+<script src="mc-acceso.js?v=20261118tk108"></script>
+<script src="mc-barras.js?v=20261118tk108"></script>
+<script src="mc-caja.js?v=20261118tk108"></script>
+<script src="mc-giftcards.js?v=20261118tk108"></script>
+<script src="mc-multas.js?v=20261118tk108"></script>
+<script src="mc-clientes.js?v=20261118tk108"></script>
+<script src="mc-clientes-dup.js?v=20261118tk108"></script>
+<script src="mc-docpdf.js?v=20261118tk108"></script>
+<script src="mc-compras.js?v=20261118tk108"></script>
+<script src="mc-consignacion.js?v=20261118tk108"></script>
+<script src="mc-proveedores.js?v=20261118tk108"></script>
+<script src="mc-recepciones.js?v=20261118tk108"></script>
+<script src="mc-movil.js?v=20261118tk108"></script>
+<script src="mc-promociones.js?v=20261118tk108"></script>
+<script src="mc-agenda.js?v=20261118tk108"></script>
+<script src="mc-staff-home.js?v=20261118tk108"></script>
+<script src="mc-borradores.js?v=20261118tk108"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).

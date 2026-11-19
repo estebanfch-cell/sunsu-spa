@@ -1,4 +1,4 @@
-// Conteo físico estilo MineCore (beta, 0045). Lista + crear (admin) + contar (asignada) + revisar (admin).
+// Conteo físico estilo MineCore (beta, 0045). Lista + crear + contar (asignada) + revisar (admin).
 // Aprobar no mueve stock: el conteo queda como inventario físico inicial hasta que Emilia confirme.
 (function () {
   var C = { meta: null, list: null, cur: null, q: "", est: "", soloDif: false, filtro: "", timers: {}, prods: null };
@@ -21,7 +21,7 @@
       ".mccf-chip{display:inline-block;border-radius:999px;padding:3px 9px;font-size:.66rem;font-weight:800;background:var(--gray-l);color:var(--navy-d)}.mccf-chip.a{background:#e8eefb;color:#3b5b9a}.mccf-chip.c{background:#fff3d6;color:#9a6b00}.mccf-chip.r{background:#fde7e1;color:#b2452a}.mccf-chip.ok{background:#e6f4ea;color:#2e7d32}.mccf-chip.x{background:#eee;color:#888}",
       ".mccf-card{background:var(--white);border:1px solid var(--cream-d);border-radius:14px;padding:14px;margin-bottom:12px}.mccf-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.mccf-h h2{margin:0;font-size:1.15rem}",
       ".mccf-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.mccf-kpi{background:var(--cream);border-radius:10px;padding:7px 11px;font-size:.74rem}.mccf-kpi b{display:block;font-size:1rem}",
-      ".mccf-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.mccf-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d)}.mccf-form input,.mccf-form select,.mccf-form textarea{padding:8px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.84rem}",
+      ".mccf-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(0,1fr));gap:10px}@media(max-width:640px){.mccf-bar input[type=search]{min-width:0;flex:1 1 100%;width:100%;box-sizing:border-box}.mccf-form{grid-template-columns:1fr}.mccf-t{min-width:0}}.mccf-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d)}.mccf-form input,.mccf-form select,.mccf-form textarea{padding:8px 9px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.84rem}",
       ".mccf-in{width:78px;padding:7px;border:1.5px solid var(--cream-d);border-radius:8px;font:inherit;text-align:right}.mccf-in:focus{border-color:var(--navy)}.mccf-ne{border:1.5px solid var(--cream-d);background:var(--white);border-radius:8px;padding:6px 8px;cursor:pointer;font:inherit;font-size:.72rem;white-space:nowrap}.mccf-ne.on{background:#fde7e1;border-color:#e3a593;color:#b2452a;font-weight:800}",
       ".mccf-dif-n{color:#b2452a;font-weight:800}.mccf-dif-p{color:#2e7d32;font-weight:800}.mccf-ln.ok td{background:#f6fbf7}.mccf-ln.dif td{background:#fff8f5}.mccf-ln.hit td{outline:2px solid var(--gold-m)}",
       ".mccf-sel{padding:6px;border:1.5px solid var(--cream-d);border-radius:8px;font:inherit;font-size:.74rem}.mccf-note{background:var(--gold-l);border:1px solid var(--gold-m);border-radius:10px;padding:8px 10px;font-size:.8rem;margin:8px 0}",
@@ -51,14 +51,17 @@
         '<td class="num">' + (c.lineas ? e(c.contadas) + "/" + e(c.lineas) : "—") + '</td><td class="num mccf-hide">' + (c.conDiferencia == null ? "—" : c.conDiferencia ? '<span class="mccf-dif-n">' + e(c.conDiferencia) + "</span>" : "—") + '</td><td class="mccf-hide mccf-sub">' + e(c.nota || "") + "</td></tr>";
     }).join("");
   }
-  function formNuevo(m) {
-    return '<div class="mccf-card" id="mccf-nuevo" hidden><b>Nuevo conteo</b><p class="mccf-sub" style="margin:4px 0 10px">Se cuenta una bodega (o una cabina). La persona asignada lo ve en su inicio con un aviso. Al empezar se toma la foto del stock del sistema; aprobar no mueve stock.</p><div class="mccf-form">' +
-      '<label>Bodega<select id="mccf-bod">' + m.bodegas.map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
-      '<label id="mccf-subw" hidden>Sububicación<select id="mccf-sub">' + opt("", "Toda la Bodega Cabina") + m.subsCabina.map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
-      '<label>Asignar a<select id="mccf-asg">' + opt("", "Elige quién cuenta…") + m.usuarios.map(function (u) { return opt(u.id, u.nombre); }).join("") + "</select></label>" +
+  function formNuevo(m, adm) {
+    var txt = adm
+      ? "Se cuenta una bodega (o una cabina). La persona asignada lo ve en su inicio con un aviso. Al empezar se toma la foto del stock del sistema; aprobar no mueve stock."
+      : "Elige la bodega o cabina y cuenta lo que ves. Al terminar, un admin lo revisa. Aprobar no mueve el stock hasta que Emilia lo confirme.";
+    return '<div class="mccf-card" id="mccf-nuevo" hidden><b>Nuevo conteo</b><p class="mccf-sub" style="margin:4px 0 10px">' + txt + '</p><div class="mccf-form">' +
+      '<label>Bodega<select id="mccf-bod">' + (m.bodegas || []).map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
+      '<label id="mccf-subw" hidden>Sububicación<select id="mccf-sub">' + opt("", "Toda la Bodega Cabina") + (m.subsCabina || []).map(function (b) { return opt(b.id, b.nombre); }).join("") + "</select></label>" +
+      (adm ? '<label>Asignar a<select id="mccf-asg">' + opt("", "Elige quién cuenta…") + (m.usuarios || []).map(function (u) { return opt(u.id, u.nombre); }).join("") + "</select></label>" : "") +
       '<label>Familias (opcional)<input id="mccf-fam" placeholder="Ej. ML, HT (vacío = todo)"></label>' +
       '<label style="grid-column:1/-1">Nota<input id="mccf-nota" placeholder="Ej. Inventario físico inicial"></label></div>' +
-      '<p class="err" id="mccf-err"></p><p><button class="btn small" type="button" id="mccf-crear">Crear y asignar</button> <button class="btn ghost small" type="button" id="mccf-cerrar">Cancelar</button></p></div>';
+      '<p class="err" id="mccf-err"></p><p><button class="btn small" type="button" id="mccf-crear">' + (adm ? "Crear y asignar" : "Crear conteo") + '</button> <button class="btn ghost small" type="button" id="mccf-cerrar">Cancelar</button></p></div>';
   }
   async function renderLista() {
     var m = await meta();
@@ -69,8 +72,8 @@
     return '<div id="mccf-root">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
       '<div class="mccf-bar"><input type="search" id="mccf-q" placeholder="Buscar número, bodega o persona" value="' + e(C.q) + '">' +
       '<select id="mccf-est">' + opt("", "Todos los estados", C.est) + Object.keys((m && m.estados) || {}).map(function (k) { return opt(k, m.estados[k], C.est); }).join("") + "</select>" +
-      (adm ? '<button class="btn small" type="button" id="mccf-mas">+ Nuevo conteo</button>' : "") + "</div>" +
-      (adm && m ? formNuevo(m) : "") +
+      (m ? '<button class="btn small" type="button" id="mccf-mas">+ Nuevo conteo</button>' : "") + "</div>" +
+      (m ? formNuevo(m, adm) : "") +
       '<div class="mccf-card" style="padding:0"><div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Número</th><th>Bodega</th><th>Asignado a</th><th>Estado</th><th class="num">Contados</th><th class="num mccf-hide">Diferencias</th><th class="mccf-hide">Nota</th></tr></thead><tbody id="mccf-body">' + filasHtml() + "</tbody></table></div></div>" +
       '<p class="mccf-sub">' + (adm ? "Ves todos los conteos, a quién están asignados y su estado." : "Ves los conteos asignados a ti.") + " Aprobar un conteo no mueve stock: queda como inventario físico inicial.</p></div>";
   }
@@ -87,7 +90,8 @@
     if (cr) cr.onclick = async function () {
       var err = main.querySelector("#mccf-err"); err.textContent = "";
       cr.disabled = true;
-      var r = await api("cf_crear", { bodega: bod.value, sububicacion: bod.value === "CABINA" ? main.querySelector("#mccf-sub").value : "", asignado_a: main.querySelector("#mccf-asg").value, familias: main.querySelector("#mccf-fam").value, nota: main.querySelector("#mccf-nota").value });
+      var asg = main.querySelector("#mccf-asg");
+      var r = await api("cf_crear", { bodega: bod.value, sububicacion: bod.value === "CABINA" ? main.querySelector("#mccf-sub").value : "", asignado_a: asg ? asg.value : "", familias: main.querySelector("#mccf-fam").value, nota: main.querySelector("#mccf-nota").value });
       cr.disabled = false;
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo crear"; return; }
       go("#/m/conteos/cf/" + encodeURIComponent(r.id));
