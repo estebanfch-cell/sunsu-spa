@@ -10,7 +10,7 @@ import { esAdmin } from "./permisos.ts";
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { BOD_CABINA, BOD_CASA, BOD_VENTA, grupoDeBodega } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
-import { bodegaNombre, notificar, sistemaDe, ESTADOS_CONTEO } from "./conteo_fisico_api.ts";
+import { bodegaNombre, notificar, sistemaDe, ESTADOS_CONTEO, subsDe } from "./conteo_fisico_api.ts";
 
 export const ESTADOS_SECCION: Record<string, string> = {
   pendiente: "Pendiente", en_conteo: "Contando", en_revision: "En revisión", aprobada: "Aprobada", cancelada: "Cancelada",
@@ -736,16 +736,16 @@ extend("cf_sub_save", "any", async (p, ctx, ses) => {
       return { error: "La sububicación tiene stock (" + round2(q) + "); muévelo antes de renombrarla, cambiarla de bodega o desactivarla" };
     }
     await ctx.db.write(actor, "erp_sububicaciones", "update", { id: ya.id }, {
-      codigo, nombre, bodega_id: BOD_IDS[destBodega] || ya.bodega_id, activo, updated_at: now,
+      codigo, nombre, bodega_id: BOD_IDS[destBodega] || ya.bodega_id, activo,
     });
-    return { ok: true, id: ya.id, codigo, bodega: destBodega, nombre };
+    return { ok: true, id: ya.id, codigo, bodega: destBodega, nombre, subs: await subsDe(ctx, destBodega) };
   }
 
   // El personal puede crear un estante al momento del conteo. No se crea una sección ni una bodega.
   const nid = id || crypto.randomUUID();
   const orden = erp.filter((x) => s(x.bodega_id) === (BOD_IDS[bodega] || "")).reduce((a, x) => Math.max(a, n(x.orden)), 0) + 1;
   await ctx.db.write(actor, "erp_sububicaciones", "insert", {}, {
-    id: nid, bodega_id: BOD_IDS[bodega], codigo, nombre, orden, activo: true, created_at: now, updated_at: now,
+    id: nid, bodega_id: BOD_IDS[bodega], codigo, nombre, orden, activo: true, created_at: now,
   });
   if (await haySubs(ctx)) {
     try {
@@ -755,5 +755,5 @@ extend("cf_sub_save", "any", async (p, ctx, ses) => {
       });
     } catch { /* el catálogo erp basta */ }
   }
-  return { ok: true, id: nid, codigo, bodega, nombre };
+  return { ok: true, id: nid, codigo, bodega, nombre, subs: await subsDe(ctx, bodega) };
 });
