@@ -434,7 +434,13 @@
   .paq-ses-btn.on { background: #E8F5EC; border-color: var(--green); color: var(--green); }
   .paq-alt { margin-top: 8px; border-style: dashed; }
   .tk-pill-edicionpend, .tk-pill.edicionpend { background: #EEF3FB; color: #3E7CB1; border: 1px solid #3E7CB1; }
-  .mctk-edit-big { width: 100%; margin: 8px 0 10px; padding: 12px 14px; font-size: 0.92rem; font-weight: 800; background: #3E7CB1; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
+  .mctk-edit-big { display: none !important; }
+  .mctk-edit-mini {
+    margin: 0; padding: 3px 9px; min-height: 28px; font-size: 0.68rem; font-weight: 700;
+    color: var(--navy-d, #3D5A7A); background: transparent; border: 1px solid var(--cream-d, #EDE6D8);
+    border-radius: 999px; cursor: pointer; flex: none; white-space: nowrap;
+  }
+  .mctk-bar .mctk-edit-mini { margin-right: 6px; }
   .mctk-edicion { background: #F7F9FC; border: 1.5px solid #3E7CB1; border-radius: 14px; padding: 12px; margin: 0 0 12px; }
   .mctk-edicion .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .tk-diff { font-size: 0.74rem; color: var(--navy); display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -930,12 +936,15 @@
   .mob-l1 .tk-pill { flex: none; font-size: 0.62rem; padding: 1px 7px; margin: 0; }
   .mob-l2 { display: flex; align-items: baseline; gap: 8px; color: var(--navy); font-size: 0.86rem; margin-top: 2px; min-width: 0; }
   .mob-cli { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mob-who { flex: none; font-size: 11.5px; color: #5a6577; font-weight: 600; white-space: nowrap; }
-  .mob-l3 { color: var(--gray); font-size: 12px; margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .mob-who { flex: none; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .mob-l3 { color: var(--gray); font-size: 12px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .mob-l3t { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 12px; }
+  .mob-cam { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 1px solid #e6ded0; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
+  .mob-cam.ok { color: #2e9e4f; border-color: #b7d9c6; background: #f3faf6; font-size: 11px; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
-  .mob-th { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; flex: none; }
-  .mob-thmore { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5a6577; background: var(--cream); border: 1px solid #e6ded0; flex: none; }
+  .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
+  .mob-thmore { display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5a6577; background: var(--cream); }
   .mob-res { font-size: 11.5px; color: #5a6577; margin-top: 0; margin-left: 2px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
   .mob-tip { font-size: 11px; margin-top: 3px; color: #8a2216; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mob-saldo { color: #B8901F; font-weight: 800; }
@@ -7022,6 +7031,12 @@ async function pintarBadgeNotif() {
       badge.dataset.n = "0";
       badge.textContent = "";
     }
+    try {
+      if (navigator.setAppBadge) {
+        if (n > 0) navigator.setAppBadge(n);
+        else if (navigator.clearAppBadge) navigator.clearAppBadge();
+      }
+    } catch (eBadge) { /* iOS / desktop sin badge */ }
   } catch { /* sin avisos */ }
 }
 function fmtNotifFecha(iso) {

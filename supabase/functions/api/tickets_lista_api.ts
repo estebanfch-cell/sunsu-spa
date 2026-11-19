@@ -184,7 +184,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       ...(faltaTodo(r, d).length ? { falta: faltaTodo(r, d) } : {}),
-      ...((() => { const pf = pagosFaltanFoto({ beta: pagosPorClave.get(clave) || [], legado: metodosPago(r.comp), comps: (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) }); return pf.length ? { pagosFaltan: pf } : {}; })()),
+      ...((() => {
+        const comps = (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true);
+        const beta = pagosPorClave.get(clave) || [];
+        const pf = pagosFaltanFoto({ beta, legado: metodosPago(r.comp), comps, comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) });
+        const fotoPago = comps.length > 0 || beta.some((p) => !!s((p as Row).comprobante_id)) || !!s(colTicket(r, "comprobante"));
+        return { ...(pf.length ? { pagosFaltan: pf } : {}), ...(fotoPago ? { fotoPago: 1 } : {}) };
+      })()),
     };
     return it;
   });

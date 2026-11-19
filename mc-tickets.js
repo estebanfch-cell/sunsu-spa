@@ -41,7 +41,7 @@
       ".mctk-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mctk-acts[hidden],.mctk-dd[hidden]{display:none}.mctk-menu{position:relative}.mctk-dd{position:absolute;right:0;top:100%;margin-top:4px;background:var(--white,#fff);border:1px solid var(--cream-d);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:50;padding:4px}",
       ".mctk-dd a,.mctk-dd button{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:none;font:inherit;font-size:.8rem;color:var(--navy-d);text-decoration:none;cursor:pointer;border-radius:7px}.mctk-dd a:hover,.mctk-dd button:hover{background:var(--cream)}",
       ".mctk-t input,.mctk-t select{padding:5px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.8rem}.mctk-t .q{width:58px;text-align:right}.mctk-t .p{width:80px;text-align:right}.mctk-t .dv{width:58px;text-align:right}",
-      ".mctk-tot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 18px;max-width:min(360px,100%);width:100%;margin-left:auto;font-size:.88rem;overflow:visible;box-sizing:border-box}.mctk-tot b{text-align:right}.mctk-tot .big{font-size:1.2rem;color:var(--navy-d)}",
+      ".mctk-tot{display:grid;grid-template-columns:auto auto;gap:3px 14px;width:max-content;max-width:100%;margin-left:auto;justify-content:end;font-size:.88rem;overflow:visible;box-sizing:border-box;text-align:right}.mctk-tot b{text-align:right}.mctk-tot .big{font-size:1.2rem;color:var(--navy-d)}",
       ".mctk-flash{animation:mctkf .6s}@keyframes mctkf{0%{background:#c9f2d3}100%{background:transparent}}.mctk-flash-bad{animation:mctkb .6s}@keyframes mctkb{0%{background:#f9d0cc}100%{background:transparent}}",
       ".mctk-scan{display:flex;gap:8px;align-items:center}.mctk-scan input{flex:1;padding:9px 11px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit}.mctk-est{font-size:.62rem;background:#fff3d6;color:#9a6b00;border-radius:6px;padding:1px 5px;margin-left:4px}",
       ".mctk-dlg{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;z-index:9999}.mctk-box{background:var(--white,#fff);border-radius:14px;padding:16px;width:min(520px,94vw);max-height:88vh;overflow:auto}",
@@ -120,14 +120,14 @@
       "@container mctkl (min-width:700px){.mctk-pn{font-size:.88rem}.mctk-ltot{font-size:.95rem}}",
 
       ".mctk-foot{display:flex;gap:10px 16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;margin-top:10px}.mctk-adj{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.76rem;color:var(--gray)}.mctk-adj label{display:flex;gap:6px;align-items:center;margin:0}#mctk-dv{width:96px}#mctk-promos{border-color:#C9A227;color:#7a5c12;background:#fbf4e4;padding:5px 10px}" +
-      ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:300px!important;line-height:1.35}#mctk-tot{min-width:min(260px,100%)!important;flex:1 1 240px;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:100%;margin-left:auto}",
+      ".mctk-tot{gap:2px 14px!important;font-size:.84rem!important;max-width:100%!important;width:max-content!important;line-height:1.35}#mctk-tot{min-width:0!important;width:max-content;max-width:100%;flex:0 0 auto;margin-left:auto;display:flex;justify-content:flex-end;flex-direction:column;align-items:flex-end}#mctk-tot .mctk-tot{width:max-content;max-width:100%;margin-left:auto}",
       "@media print{body.mctk-printing .mctk-bar,body.mctk-printing #mctk-save,body.mctk-printing .mctk-pen,body.mctk-printing #mctk-addlink,body.mctk-printing #mctk-addbox,body.mctk-printing nav,body.mctk-printing header,body.mctk-printing .mctk-x{display:none!important}}",
 
       /* TK104: ticket abierto en iPhone — tarjetas tipo MineCore, sin scroll horizontal. */
       "@media(max-width:860px){#mctk-root,.mctk2{overflow-x:hidden;max-width:100%;box-sizing:border-box}#mctk-root *,.mctk2 *{box-sizing:border-box;min-width:0;max-width:100%}",
       ".mctk2 .mctk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}.mctk2 .mctk-bar-sp{display:none}",
       ".mctk2 .mctk-bar #mctk-volver{width:auto;min-height:32px;padding:4px 2px;border:0;background:none;box-shadow:none;font-size:.86rem;color:var(--navy)}",
-      ".mctk2 .mctk-bar .mctk-acc-wrap{margin-left:auto;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
+      ".mctk-edit-big{display:none!important}.mctk-edit-mini{margin:0 6px 0 auto;padding:3px 9px;min-height:28px;font-size:.68rem;font-weight:700;color:var(--navy-d,#3D5A7A);background:transparent;border:1px solid var(--cream-d,#EDE6D8);border-radius:999px;cursor:pointer;flex:none;white-space:nowrap}.mctk2 .mctk-bar .mctk-acc-wrap{margin-left:0;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
       ".mctk2 .mctk-bar .mctk-dd{left:auto;right:0;min-width:min(280px,92vw);width:max-content;max-width:92vw;z-index:60}",
       ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:normal!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
@@ -137,7 +137,7 @@
       ".mctk-det{border:1.5px solid var(--cream-d);border-radius:12px;padding:0;margin-top:12px;background:var(--white,#fff)}.mctk-det>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-d);font-size:.88rem;display:flex;align-items:center;justify-content:space-between}.mctk-det>summary::-webkit-details-marker{display:none}.mctk-det>summary:after{content:'▾';color:var(--gray);font-weight:400}.mctk-det[open]>summary{border-bottom:1px solid var(--cream-d)}.mctk-det .mctk-grid{margin:0;padding:8px 12px 10px}.mctk-det .mctk-f{grid-template-columns:minmax(90px,34%) 1fr;gap:6px}",
       ".mctk-load{margin:0 0 8px;font-size:.76rem;color:var(--gray)}",
       ".mctk-lcard>b{display:block}.mctk-ln{padding:9px 26px 9px 12px}",
-      ".mctk-foot{flex-direction:column;align-items:stretch}#mctk-tot{flex:0 0 auto!important}.mctk-tot{margin-left:auto;max-width:100%!important;width:min(280px,100%);font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
+      ".mctk-foot{flex-direction:column;align-items:stretch}#mctk-tot{flex:0 0 auto!important;margin-left:auto;width:max-content;max-width:100%}.mctk-tot{margin-left:auto;max-width:100%!important;width:max-content;font-size:.8rem!important;color:var(--gray);gap:2px 12px!important}.mctk-tot b{font-weight:600;color:var(--navy-d)}.mctk-tot .big{font-size:1rem!important;color:var(--navy-d)}.mctk-tot .mctk-saldo{color:#C98A00;font-weight:800;font-size:.95rem}.mctk-tot .mctk-hide-m{display:none}",
       "#mctk-addlink{display:inline-flex;margin:8px 0 4px;font-weight:700}}",
       "@media(min-width:861px){.mctk-estados,.mctk-load{display:none}.mctk-ini,.mctk-badge{display:inline-flex}}",
 
@@ -260,10 +260,10 @@
     var d = K.d, t = d.ticket;
     var back = '<button class="btn ghost small" type="button" id="mctk-volver">' + (sessionStorage.getItem("mctk.volver") ? "← Clienta" : "← Lista") + "</button>";
     if (esMovilTk()) {
-      return '<div class="mctk-bar mctk-bar-m">' + back +
+      return '<div class="mctk-bar mctk-bar-m">' + back + editarMiniHtml() +
         '<div class="mctk-menu mctk-acc-wrap"><button class="btn ghost small mctk-acc-btn" type="button" data-menu="mctk-acc">Acciones ▾</button><div class="mctk-dd" id="mctk-acc" hidden>' + accionesItemsHtml() + "</div></div></div>";
     }
-    return '<div class="mctk-bar">' + back + '<span class="mctk-bar-sp" style="flex:1"></span>' +
+    return '<div class="mctk-bar">' + back + '<span class="mctk-bar-sp" style="flex:1"></span>' + editarMiniHtml() +
       voucherBtnsHtml() +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
@@ -373,12 +373,34 @@
     var ini = String((l && l.nombre) || (l && l.sku) || "?").trim().charAt(0).toUpperCase() || "?";
     return '<span class="mctk-ph mctk-ini" aria-hidden="true">' + e(ini) + "</span>";
   }
+  function textoCanje(l) {
+    var pq = String((l && l.paqueteSesion) || "").trim();
+    var code = "";
+    try { code = String(codigoVisible(l) || "").trim(); } catch (e0) { code = String((l && (l.sku || l.codigo)) || "").trim(); }
+    var bits = [];
+    if (code && !/^canje\b/i.test(code) && code.toLowerCase() !== pq.toLowerCase()) bits.push(code);
+    if (pq && !/^canje$/i.test(pq)) {
+      bits.push(/^canje\b/i.test(pq) ? pq : (/^PQ[- ]?/i.test(pq) ? ("Canje paquete " + pq) : ("Canje paquete " + pq)));
+    } else {
+      bits.push("Canje");
+    }
+    bits.push("OK sin factura");
+    var clean = [];
+    bits.forEach(function (p) {
+      var cur = String(p || "").trim();
+      if (!cur) return;
+      var prev = clean[clean.length - 1] || "";
+      if (prev && prev.toLowerCase() === cur.toLowerCase()) return;
+      if (prev && /^canje$/i.test(prev) && /^canje\b/i.test(cur)) { clean[clean.length - 1] = cur; return; }
+      if (prev && /^canje\b/i.test(prev) && /^canje$/i.test(cur)) return;
+      clean.push(cur);
+    });
+    return clean.join(" · ");
+  }
   function stockTxt(l) {
     if (l.canje || l.paqueteSesion || (l.tipo === "facial" && !(Number(l.precio_unit) > 0))) {
-      var pq = l.paqueteSesion ? String(l.paqueteSesion) : (l.canje ? "Canje" : "Facial");
-      var ok = (l.canje || l.paqueteSesion) ? " · OK sin factura" : "";
-      var pref = l.paqueteSesion ? "Canje paquete " : (l.canje ? "Canje " : "");
-      return '<div class="mctk-stk">' + e(pref + pq + ok) + "</div>";
+      if (l.canje || l.paqueteSesion) return '<div class="mctk-stk">' + e(textoCanje(l)) + "</div>";
+      return '<div class="mctk-stk">Facial</div>';
     }
     if (l.consumoInterno && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Consumo interno</div>';
     if (l.cortesia && !(Number(l.precio_unit) > 0)) return '<div class="mctk-stk">Cortesía</div>';
@@ -403,9 +425,7 @@
     else if (l.tipo === "gift") tipo = "Gift card";
     else if (typeof esMejora === "function" && esMejora(l)) tipo = "Diferencia por mejora";
     if (l.canje || l.paqueteSesion) {
-      if (code) parts.push(code);
-      parts.push(l.paqueteSesion ? ("Canje paquete " + String(l.paqueteSesion)) : (l.canje ? "Canje" : "Facial"));
-      if (l.canje || l.paqueteSesion) parts.push("OK sin factura");
+      return '<div class="mctk-meta">' + e(textoCanje(l)) + "</div>";
     } else {
       if (code) parts.push(code);
       if (tipo && l.tipo !== "producto") parts.push(tipo);
@@ -673,6 +693,12 @@
     return h;
   }
 
+  function editarMiniHtml() {
+    var d = K.d || {}, t = d.ticket || {};
+    if (t.cancelado || (d.edicion && d.edicion.id)) return "";
+    if (!(d.puedePedir || d.puedeEditar)) return "";
+    return '<button type="button" class="mctk-edit-mini" id="mctk-editar-form">Editar</button>';
+  }
   function edicionHtml() {
     var d = K.d || {}, ed = d.edicion, t = d.ticket || {}, anul = t.cancelado;
     var h = "";
@@ -687,9 +713,6 @@
       }
       h += "</div>";
       return h;
-    }
-    if (!anul && (d.puedePedir || d.puedeEditar)) {
-      h += '<button type="button" class="mctk-edit-big" id="mctk-editar-form">✏️ Editar ticket</button>';
     }
     return h;
   }
@@ -709,9 +732,9 @@
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
       (d.excluirCosmetologa ? '<p class="mccf-note">Comisión excluida para ' + e(t.cosmetologa) + (d.excluirNota ? ": " + e(d.excluirNota) : "") + "</p>" : "") + "</div>" +
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
-      '<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>' +
-      '<div class="mctk-foot"><div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
-      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div><div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
+      (K.editandoLineas ? ('<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>') : "") +
+      '<div class="mctk-foot">' + (K.editandoLineas ? ('<div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
+      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div>') : "") + '<div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -1348,22 +1371,33 @@
       if (K.d && K.d.ok && K.d.lineas) abrir(K.d);
       else Promise.resolve(api("tk_get", { clave: clave })).then(abrir).catch(function () { toast2("No se pudo cargar el ticket", true); });
     });
-    function resolverEdicion(aprobar) {
+    function resolverEdicion(aprobar, btn) {
       var ed = K.d && K.d.edicion;
       if (!ed || !ed.id) return;
+      if (btn && btn.disabled) return;
       var comentario = aprobar ? "" : (prompt("Motivo del rechazo (opcional)") || "");
+      if (!aprobar && comentario == null) return;
+      var txt = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = aprobar ? "Aprobando…" : "Rechazando…"; }
       Promise.resolve(api("solicitud_resolver", { id: ed.id, aprobar: aprobar, comentario: comentario }))
         .then(function (r) {
-          if (r && r.error) { toast2(r.error, true); return; }
+          if (r && r.error) {
+            if (btn) { btn.disabled = false; btn.textContent = txt; }
+            toast2(r.error, true); return;
+          }
           toast2(aprobar ? "Edición aprobada" : "Edición rechazada");
+          if (r && r.ticket) { K.d = r.ticket; if (K.d) K.d.edicion = null; try { cargarEstado(K.d); repintar(main); } catch (e0) {} }
           return api("tk_get", { clave: K.d.clave }).then(function (d) { if (d && d.ok) { cargarEstado(d); repintar(main); } });
         })
-        .catch(function (e) { toast2((e && e.message) || "No se pudo resolver", true); });
+        .catch(function (e) {
+          if (btn) { btn.disabled = false; btn.textContent = txt; }
+          toast2((e && e.message) || "No se pudo resolver", true);
+        });
     }
     var okb = main.querySelector("#mctk-edicion-ok");
     var nob = main.querySelector("#mctk-edicion-no");
-    if (okb) okb.addEventListener("click", function () { resolverEdicion(true); });
-    if (nob) nob.addEventListener("click", function () { resolverEdicion(false); });
+    if (okb) okb.addEventListener("click", function () { resolverEdicion(true, okb); });
+    if (nob) nob.addEventListener("click", function () { resolverEdicion(false, nob); });
 
     if (pd) pd.onclick = async function () {
       var mot = prompt("¿Por qué se cambia el ticket? (lo aprueba un admin)"); if (!mot || !mot.trim()) return;

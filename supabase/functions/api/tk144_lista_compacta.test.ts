@@ -10,6 +10,7 @@ import {
   textoResumen,
   urlsFoto,
 } from "./ticket_lista_card.ts";
+import { avisosVirtualesEdicion } from "./ticket_edicion_api.ts";
 
 const root = new URL("../../../", import.meta.url);
 const html = readFileSync(new URL("beta.html", root), "utf8");
@@ -77,23 +78,43 @@ describe("TK144 tarjetas compactas de la lista", () => {
   it("la tarjeta es compacta: sin saldo/pagado/sin factura, con creador, miniaturas y + chico", () => {
     assert.match(screens, /function _histCardHTML/);
     assert.match(screens, /mob-who/);
-    assert.match(screens, /👤 /);
     assert.match(screens, /_histFacCorta/);
+    assert.match(screens, /_histFacNum/);
+    assert.match(screens, /_histColorQuien/);
+    assert.match(screens, /_histCamHTML/);
     assert.match(screens, /_histThumbsHTML/);
     assert.match(screens, /mob-res/);
     const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
     assert.match(card, /mob-who/);
+    assert.match(card, /_histFacNum\(t\)/);
+    assert.match(card, /_histCamHTML\(t,i\)/);
+    assert.match(card, /style="color:'\+_histEsc\(colWho\)/);
+    assert.doesNotMatch(card, /👤 /);
     assert.doesNotMatch(card, /mob-saldo/);
     assert.doesNotMatch(card, /_tkPagoPill\(t\)/);
     assert.doesNotMatch(card, /_tkPill\('sinfactura'/);
     assert.doesNotMatch(card, /Canje de paquete/);
+    assert.doesNotMatch(card, /_tkVoucherCardBtns/);
     assert.match(html, /\.mob-card \{[^}]*padding: 8px 12px/);
     assert.match(html, /\.mob-cards \{[^}]*gap: 8px/);
-    assert.match(html, /\.mob-th \{ width: 28px; height: 28px/);
+    assert.match(html, /\.mob-th, \.mob-thmore \{ width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px/);
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
     assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK144"/);
+  });
+
+  it("fila 1 es ticket-factura, el creador va de su color y la cámara queda bajo la chica", () => {
+    const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
+    assert.match(card, /\(facn\?\(' - '\+facn\):''\)/);
+    assert.match(card, /mob-l3t/);
+    assert.match(screens, /📷✓/);
+    assert.match(screens, /Tomar foto de voucher o transferencia/);
+    assert.match(screens, /onclick="event.stopPropagation\(\)"/);
+    assert.match(screens, /capture="environment"/);
+    assert.match(screens, /onchange="_tkVoucherCard\(event,'\+i\+'\)"/);
+    assert.match(html, /\.mob-cam\.ok/);
+    assert.match(lista, /fotoPago: 1/);
   });
 });
 
@@ -115,5 +136,45 @@ describe("TK144 líneas del detalle realmente compactas", () => {
   it("el scroll del detalle deja ver Total / Pagado / Saldo detrás del +", () => {
     assert.match(html, /tk-detail\.tk-open \{/);
     assert.match(html, /padding-bottom: calc\(108px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  });
+
+  it("Editar es un pill discreto, sin agregar/promo/descuento en el detalle y totales pegados a la derecha", () => {
+    assert.match(tickets, /function editarMiniHtml/);
+    assert.match(tickets, /class="mctk-edit-mini"/);
+    assert.doesNotMatch(tickets, /✏️ Editar ticket/);
+    assert.match(tickets, /K\.editandoLineas \? \('<a href="#" class="mctk-link mctk-addbtn"/);
+    assert.match(tickets, /K\.editandoLineas \? \('<div class="mctk-adj"/);
+    assert.match(tickets, /grid-template-columns:auto auto/);
+    assert.match(tickets, /function textoCanje/);
+    assert.doesNotMatch(tickets, /var pref = l\.paqueteSesion \? "Canje paquete "/);
+    assert.match(tickets, /Aprobando…/);
+    assert.match(html, /navigator\.setAppBadge/);
+  });
+});
+
+describe("TK144 alertas de edición y cámara de voucher", () => {
+  it("las solicitudes de edición entran al centro de avisos y al badge", () => {
+    const edicion = readFileSync(new URL("supabase/functions/api/ticket_edicion_api.ts", root), "utf8");
+    const conteo = readFileSync(new URL("supabase/functions/api/conteo_fisico_api.ts", root), "utf8");
+    assert.match(edicion, /export async function avisarEdicionTicket/);
+    assert.match(edicion, /tipo: "edicion_ticket"/);
+    assert.match(edicion, /#\/m\/tickets\/t\//);
+    assert.match(edicion, /void reevaluarFlags/);
+    assert.match(conteo, /avisosVirtualesEdicion/);
+    assert.match(html, /navigator.setAppBadge/);
+  });
+});
+
+describe("TK144 avisos virtuales de edición", () => {
+  it("un admin ve la solicitud pendiente y al tocarla abre el ticket", () => {
+    const extra = avisosVirtualesEdicion([
+      { id: "s1", tabla: "ticket_detalle", fila: "TK-SO-1925", estado: "pendiente", solicitante: "Andrea", creado: "2026-11-19T20:00:00Z", enlace: "#/m/tickets/t/TK-SO-1925" },
+    ], [], { name: "Emilia", uid: "emi", rol: "super_admin" } as never, true);
+    assert.equal(extra.length, 1);
+    assert.equal(extra[0].link, "#/m/tickets/t/TK-SO-1925");
+    assert.equal(extra[0].leida, false);
+    assert.match(String(extra[0].cuerpo), /Andrea/);
+    assert.equal(avisosVirtualesEdicion([{ id: "s1", tabla: "ticket_detalle", fila: "TK-SO-1925", estado: "pendiente", enlace: "#/m/tickets/t/TK-SO-1925" }], extra, { name: "Emilia" } as never, true).length, 0);
+    assert.equal(avisosVirtualesEdicion([{ id: "s1", tabla: "ticket_detalle", fila: "TK-SO-1925", estado: "pendiente" }], [], { name: "Andrea" } as never, false).length, 0);
   });
 });

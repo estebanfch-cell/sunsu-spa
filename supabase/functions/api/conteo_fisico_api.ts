@@ -402,7 +402,17 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
 // Avisos dentro de la app (tarjeta «Asignado a ti» del inicio y campana).
 extend("notif_mias", "any", async (_p, ctx, ses) => {
   const rows = (await todas(ctx, "beta_notificaciones")).filter((x) => s(x.usuario) === yo(ses)).sort((a, b) => s(b.created_at).localeCompare(s(a.created_at))).slice(0, 30);
-  return { ok: true, items: rows.map((x) => ({ id: x.id, tipo: s(x.tipo), titulo: s(x.titulo), cuerpo: s(x.cuerpo || x.texto), link: s(x.link || x.ruta), leida: !!s(x.leida_at), fecha: s(x.created_at) })), sinLeer: rows.filter((x) => !s(x.leida_at)).length };
+  const items = rows.map((x) => ({ id: x.id, tipo: s(x.tipo), titulo: s(x.titulo), cuerpo: s(x.cuerpo || x.texto), link: s(x.link || x.ruta), leida: !!s(x.leida_at), fecha: s(x.created_at) }));
+  if (esAdmin(ses.rol)) {
+    try {
+      const { avisosVirtualesEdicion } = await import("./ticket_edicion_api.ts");
+      const sols = await ctx.db.all("solicitudes_cambio").catch(() => [] as Row[]);
+      const extra = avisosVirtualesEdicion(sols, items as Row[], ses, true);
+      for (const it of extra) items.unshift(it);
+    } catch { /* sin solicitudes */ }
+  }
+  items.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
+  return { ok: true, items: items.slice(0, 30), sinLeer: items.filter((x) => !x.leida).length };
 });
 extend("notif_leer", "any", async (p, ctx, ses) => {
   const ids = new Set((Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => s(x)));
