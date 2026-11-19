@@ -214,6 +214,140 @@ export function facialDesdeTexto(texto: string, catalogo: Row[] = []): { precio:
   return best ? { precio: best.precio, sku: best.sku, etiqueta: best.etiqueta } : null;
 }
 
+
+/** true si la gift nació de una conversión de sesión de paquete (notas u orig). */
+export function esConvPaqueteGc(row: Row): boolean {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  const blob = [s(row.notas), s(row.valor), s(orig.NOTAS), s(orig.pack), s(orig.pack_sku)].join(" ");
+  return /conv\.?\s*paquete/i.test(blob) || !!s(orig.pack) || !!s(orig.pack_sku) || !!s(orig.facial_sku);
+}
+
+function packRefsDe(row: Row): string[] {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  const blob = s(row.notas) + " " + s(row.valor) + " " + s(orig.pack) + " " + s(orig.pack_sku) + " " + s(orig.codigo);
+  const out: string[] = [];
+  for (const m of blob.matchAll(/\b(?:PACK-?\d+|PQ-\d+|TEST-PQ-\d+)\b/gi)) out.push(m[0].toUpperCase().replace(/PACK(?!-)/, "PACK-"));
+  if (s(orig.pack)) out.push(s(orig.pack).toUpperCase());
+  return [...new Set(out.filter(Boolean))];
+}
+
+function facSeqGift(v: unknown): number {
+  const m = /(\d{1,9})(?:\.0+)?$/.exec(s(v).replace(/\s/g, ""));
+  return m ? Number(m[1]) : 0;
+}
+
+function codigoEnFechaGc(fecha: unknown, codigo: string): boolean {
+  const t = s(fecha), c = s(codigo).trim();
+  if (!t || !c) return false;
+  const hit = (t.match(/\b\d{2}-\d{3}\b/g) || []).some((x) => x === c);
+  return hit && /gift\s*card/i.test(t);
+}
+
+/** Paquete del que salió esta gift (PACK-XXX / PQ-XXX, «Gift Card, 26-XXX» en un uso, o factura si es conv.). */
+export function paqueteDeGift(row: Row, paquetes: Row[] = []): Row | null {
+  const libres = (paquetes || []).filter((p) => !p.borrado_at);
+  if (!libres.length) return null;
+  const refs = packRefsDe(row);
+  if (refs.length) {
+    const hit = libres.find((p) => {
+      const cods = [codigoPaquete(p), s(p.codigo), s(p.beta_codigo), p.id != null ? "PACK-" + p.id : ""].map((x) => s(x).toUpperCase());
+      return refs.some((r) => cods.includes(r) || cods.includes(r.replace(/PACK(?!-)/, "PACK-")));
+    });
+    if (hit) return hit;
+  }
+  const codigo = s(row.codigo_gc);
+  if (codigo) {
+    const hit = libres.find((p) => USO_FIELDS.some(([, f]) => codigoEnFechaGc(p[f], codigo)));
+    if (hit) return hit;
+  }
+  if (esConvPaqueteGc(row)) {
+    const fs = facSeqGift(row.factura);
+    if (fs) {
+      const hits = libres.filter((p) => facSeqGift(p.factura) === fs);
+      if (hits.length === 1) return hits[0];
+    }
+  }
+  return null;
+}
+
+/** Precio de lista del facial que representa un paquete (SUNSU-44 → Reset $95), no el paquete/3. */
+export function facialDePaquete(texto: string, catalogo: Row[] = []): { precio: number; sku: string; etiqueta: string } | null {
+  const raw = s(texto);
+  if (!raw.trim()) return null;
+  const skuM = raw.match(/SUNSU-\d+/i);
+  let blob = raw;
+  if (skuM) {
+    const c = catalogo.find((x) => s(x.sku).toUpperCase() === skuM[0].toUpperCase());
+    if (c) blob = raw + " " + s(c.producto_servicio);
+  }
+  const limpio = blob
+    .replace(/\bver\s+paquete\b/ig, " ")
+    .replace(/\bpaquete\s*\(\s*[36]\s*\)\s*facial(?:es)?/ig, " ")
+    .replace(/\bpaquete\s*\(\s*[36]\s*\)/ig, " ")
+    .replace(/\bx\s*[36]\b/ig, " ");
+  return facialDesdeTexto(limpio, catalogo);
+}
+
+function nombreFacialBonito(raw: string, fallback = ""): string {
+  const t = s(raw).trim();
+  if (!t) return fallback;
+  return t.toLowerCase()
+    .replace(/(^|[\s/()+-]+)\S/g, (c) => c.toUpperCase())
+    .replace(/3X1/g, "3x1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Notas al nacer una gift de conversión: «Facial Reset 3x1 · $95 · Conv. paquete PACK-674→GC · Digital». */
+export function notasConvPaqueteGC(opts: { facial?: string; precio?: number; pack?: string; tipo?: string }): string {
+  const tipo = /fisic/i.test(s(opts.tipo)) ? "Física" : "Digital";
+  const bits: string[] = [];
+  if (s(opts.facial).trim()) bits.push(s(opts.facial).trim());
+  const p = n(opts.precio);
+  if (p > 0) bits.push("$" + (p % 1 ? String(round2(p)) : String(p)));
+  const pack = s(opts.pack).trim();
+  bits.push("Conv. paquete" + (pack ? " " + pack : "") + "→GC");
+  bits.push(tipo);
+  return bits.join(" · ");
+}
+
+export function datosGiftConvPaquete(pack: Row, catalogo: Row[] = [], tipo?: string): {
+  notas: string; valor: string; pack: string; facialNombre: string; facialSku: string; precio: number; orig: Row;
+} {
+  const packCod = codigoPaquete(pack) || (pack.id != null ? "PACK-" + pack.id : s(pack.sku));
+  const fac = facialDePaquete((s(pack.sku) + " " + s(pack.paquete)).trim(), catalogo);
+  const catNom = fac ? s(catalogo.find((c) => s(c.sku) === fac.sku)?.producto_servicio) : "";
+  const facialNombre = nombreFacialBonito(catNom, fac?.etiqueta ? ( /facial/i.test(fac.etiqueta) ? fac.etiqueta : "Facial " + fac.etiqueta ) : "");
+  const precio = fac?.precio || 0;
+  const notas = notasConvPaqueteGC({ facial: facialNombre, precio, pack: packCod, tipo });
+  const valor = facialNombre && precio ? facialNombre + " $" + (precio % 1 ? String(round2(precio)) : String(precio)) : (facialNombre || "Gift Card");
+  return {
+    notas, valor, pack: packCod, facialNombre, facialSku: fac?.sku || "", precio,
+    orig: {
+      pack: packCod, pack_sku: s(pack.sku), facial: facialNombre, facial_sku: fac?.sku || "", facial_precio: precio,
+    },
+  };
+}
+
+/** Facial/precio de una conv. paquete→GC: orig, texto, o el paquete ligado. */
+export function facialDeConvPaquete(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): { precio: number; sku: string; etiqueta: string } | null {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  if (n(orig.facial_precio) > 0) {
+    const etq = s(orig.facial) || facialDesdeTexto(s(orig.facial) + " " + s(orig.facial_sku), catalogo)?.etiqueta || "";
+    return { precio: round2(n(orig.facial_precio)), sku: s(orig.facial_sku), etiqueta: etq };
+  }
+  const pack = paqueteDeGift(row, paquetes);
+  if (pack) {
+    const fac = facialDePaquete((s(pack.sku) + " " + s(pack.paquete)).trim(), catalogo);
+    if (fac) return fac;
+  }
+  if (s(orig.pack_sku) || s(orig.facial)) {
+    const fac = facialDePaquete((s(orig.pack_sku) + " " + s(orig.facial)).trim(), catalogo) || facialDesdeTexto(s(orig.facial), catalogo);
+    if (fac) return fac;
+  }
+  return null;
+}
+
 export type InfoSaldoGift = { saldo: number; origen: string; facial: string; sku: string };
 
 /** Monto disponible de una gift card.
@@ -221,7 +355,7 @@ export type InfoSaldoGift = { saldo: number; origen: string; facial: string; sku
  *  2) valor numérico (p. ej. «95» o «$95» sin letras)
  *  3) monto explícito en notas/valor (p. ej. «$95») o facial de catálogo nombrado en notas/valor
  *  4) recién entonces, precio del SKU de la fila (SUNSU-35 = $65). */
-export function infoSaldoGift(row: Row, catalogo: Row[] = []): InfoSaldoGift {
+export function infoSaldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): InfoSaldoGift {
   const skuRow = s(row.sku);
   if (row.usado === true || row.usado === "true" || row.usado === "SI") {
     return { saldo: 0, origen: "usado", facial: "", sku: skuRow };
@@ -253,16 +387,21 @@ export function infoSaldoGift(row: Row, catalogo: Row[] = []): InfoSaldoGift {
   if (facHint && facHint.precio > 0) {
     return { saldo: facHint.precio, origen: "facial", facial: facHint.etiqueta, sku: facHint.sku };
   }
+  // TK149: una Conv. paquete→GC (o ligada a un paquete) hereda el facial de lista, no el fallback SUNSU-35 $65.
+  const packFac = (esConvPaqueteGc(row) || !!paqueteDeGift(row, paquetes)) ? facialDeConvPaquete(row, catalogo, paquetes) : null;
+  if (packFac && packFac.precio > 0) {
+    return { saldo: packFac.precio, origen: "paquete", facial: packFac.etiqueta, sku: packFac.sku || skuRow };
+  }
   const cat = precioGiftCatalogo(skuRow, catalogo);
   return { saldo: cat, origen: cat > 0 ? "catalogo" : "ninguno", facial: "", sku: skuRow };
 }
 
-export function saldoGift(row: Row, catalogo: Row[] = []): number {
-  return infoSaldoGift(row, catalogo).saldo;
+export function saldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): number {
+  return infoSaldoGift(row, catalogo, paquetes).saldo;
 }
 
-export function etiquetaGift(row: Row, catalogo: Row[] = []): string {
-  const info = infoSaldoGift(row, catalogo);
+export function etiquetaGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): string {
+  const info = infoSaldoGift(row, catalogo, paquetes);
   const codigo = s(row.codigo_gc);
   const mon = "$" + info.saldo.toFixed(info.saldo % 1 ? 2 : 0);
   return (codigo ? codigo + " · " : "") + mon + (info.facial ? " (" + info.facial + ")" : "");
@@ -280,19 +419,20 @@ export async function aplicarGiftCard(db: Db, actor: string, p: {
   const codigo = s(p.codigo).trim();
   if (!codigo) return { error: "Falta el código de la gift card" };
   const cats = await db.all("catalogo").catch(() => [] as Row[]);
+  const packs = await db.all("paquetes").catch(() => [] as Row[]);
   const rows = (await db.all("gift_cards")).filter((r) => !r.borrado_at);
-  const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r, cats) > 0)
+  const row = rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase() && !bUsado(r) && saldoGift(r, cats, packs) > 0)
     || rows.find((r) => s(r.codigo_gc).toLowerCase() === codigo.toLowerCase());
   if (!row) return { error: "Gift card no encontrada" };
   const logs = await db.all("log_acciones");
   const ya = logs.find((r) => s(r.accion) === "GIFT CARD" && s(r.detalle).includes("ticket=" + p.ticket) && s(r.detalle).includes("codigo=" + codigo));
   if (ya) {
-    const saldo = saldoGift(row, cats);
+    const saldo = saldoGift(row, cats, packs);
     const aplicado = n((s(ya.detalle).match(/monto=([\d.]+)/) || [])[1]);
     const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
     return { ok: true, codigo, aplicado, saldo, facialCobro, ya: true };
   }
-  const saldo = saldoGift(row, cats);
+  const saldo = saldoGift(row, cats, packs);
   if (!(saldo > 0)) return { error: "Esa gift card no tiene saldo" };
   let aplicado = p.aplica == null ? saldo : round2(p.aplica);
   if (p.facialPrecio > 0) aplicado = Math.min(aplicado, round2(p.facialPrecio));

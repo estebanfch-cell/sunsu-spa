@@ -44,9 +44,9 @@ extend("personal_personas", "any", async (_p, ctx, ses) => {
   return { ok: true, personas };
 });
 
-function gcPub(r: Row, cats: Row[] = []) {
+function gcPub(r: Row, cats: Row[] = [], packs: Row[] = []) {
   return {
-    fila: r.sheet_row, codigo: s(r.codigo_gc), valor: s(r.valor), saldo: saldoGift(r, cats),
+    fila: r.sheet_row, codigo: s(r.codigo_gc), valor: s(r.valor), saldo: saldoGift(r, cats, packs),
     usado: r.usado === true, fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por),
     nombre: s(r.nombre_comprador), apellido: s(r.apellido_comprador), cedula: s(r.cedula_comprador),
     notas: s(r.notas), dia: r.dia, mes: r.mes, ano: r.ano,
@@ -57,9 +57,10 @@ extend("gc_list", "any", async (p, ctx) => {
   const q = s(p.q).toLowerCase();
   const items = [];
   const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
+  const packs = await ctx.db.all("paquetes").catch(() => [] as Row[]);
   for (const r of await ctx.db.all("gift_cards")) {
     if (r.borrado_at || !s(r.codigo_gc)) continue;
-    const pub = gcPub(r, cats);
+    const pub = gcPub(r, cats, packs);
     const blob = [pub.codigo, pub.nombre, pub.apellido, pub.cedula, pub.notas, pub.usadoPor].join(" ").toLowerCase();
     if (q && q !== "*" && !blob.includes(q)) continue;
     items.push(pub);
@@ -72,7 +73,8 @@ extend("gc_detalle", "any", async (p, ctx) => {
   const row = (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase());
   if (!row) return { error: "Gift card no encontrada" };
   const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
-  return { ok: true, item: gcPub(row, cats) };
+  const packs = await ctx.db.all("paquetes").catch(() => [] as Row[]);
+  return { ok: true, item: gcPub(row, cats, packs) };
 });
 
 extend("gc_emitir", "any", async (p, ctx, ses) => {
@@ -93,7 +95,8 @@ extend("gc_editar", "any", async (p, ctx, ses) => {
   const row = (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && (s(r.codigo_gc).toLowerCase() === s(p.codigo).toLowerCase() || String(r.sheet_row) === s(p.fila)));
   if (!row) return { error: "Gift card no encontrada" };
   const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
-  const antes = { saldo: saldoGift(row, cats), usado: row.usado === true, valor: s(row.valor), notas: s(row.notas) };
+  const packs = await ctx.db.all("paquetes").catch(() => [] as Row[]);
+  const antes = { saldo: saldoGift(row, cats, packs), usado: row.usado === true, valor: s(row.valor), notas: s(row.notas) };
   const patch: R = {};
   if (p.saldo != null && p.saldo !== "") patch.saldo = n(p.saldo);
   if (p.valor != null && p.valor !== "") patch.valor = s(p.valor);

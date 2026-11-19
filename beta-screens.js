@@ -2057,6 +2057,50 @@ function _renderP2GCSlots(n){
   box.innerHTML = html;
 }
 
+
+/** TK149: la GC de una conversión nace con el facial y el valor real del paquete (Reset $95, no $65). */
+function facialDePackTxt(packTxt){
+  var txt=String(packTxt||'');
+  var sku=(txt.match(/SUNSU-\d+/i)||[''])[0].toUpperCase();
+  var map={
+    'SUNSU-17':'SUNSU-01','SUNSU-23':'SUNSU-01',
+    'SUNSU-18':'SUNSU-02','SUNSU-24':'SUNSU-02',
+    'SUNSU-19':'SUNSU-03','SUNSU-25':'SUNSU-03',
+    'SUNSU-20':'SUNSU-04','SUNSU-26':'SUNSU-04',
+    'SUNSU-21':'SUNSU-05','SUNSU-27':'SUNSU-05',
+    'SUNSU-22':'SUNSU-06','SUNSU-28':'SUNSU-06',
+    'SUNSU-44':'SUNSU-40','SUNSU-48':'SUNSU-40',
+    'SUNSU-45':'SUNSU-41','SUNSU-49':'SUNSU-41',
+    'SUNSU-46':'SUNSU-42','SUNSU-50':'SUNSU-42',
+    'SUNSU-47':'SUNSU-43','SUNSU-51':'SUNSU-43',
+    'SUNSU-53':'SUNSU-52','SUNSU-54':'SUNSU-52',
+    'SUNSU-58':'SUNSU-57','SUNSU-59':'SUNSU-57'
+  };
+  var facSku=map[sku]||'';
+  var fac=null;
+  var list=(typeof FACIALES!=='undefined'&&FACIALES)||[];
+  if(facSku) for(var i=0;i<list.length;i++) if(list[i].sku===facSku){fac=list[i];break;}
+  if(!fac){
+    var blob=txt.toLowerCase();
+    for(var j=0;j<list.length;j++){
+      var n=String(list[j].n||'').toLowerCase().replace(/^facial\s+/,'').replace(/\s*\(.*$/,'').trim();
+      var key=n.split(/\s+/)[0];
+      if(key && key.length>=4 && blob.indexOf(key)!==-1){fac=list[j];break;}
+    }
+  }
+  return {sku:sku, facSku:fac&&fac.sku||facSku, nombre:fac&&fac.n||'', precio:fac&&Number(fac.p)||0};
+}
+function notasConvPaqueteGC(s){
+  var info=facialDePackTxt((typeof T!=='undefined' && (T.pack3||T.pack6))||'');
+  var tipo=(s&&s.tipo==='fisica')?'Física':'Digital';
+  var parts=[];
+  if(info.nombre) parts.push(info.nombre);
+  if(info.precio>0) parts.push('$'+info.precio);
+  parts.push('Conv. paquete'+(info.sku?' '+info.sku:'')+'→GC');
+  parts.push(tipo);
+  return parts.join(' · ');
+}
+
 function selPaqGCTipo(idx, tipo, n){
   n = n || T.paq2gcN || (T.pack3?3:6);
   var slotKey = n===3?'paq2gcSlots3':'paq2gcSlots6';
@@ -3240,7 +3284,7 @@ function enviarTicket(){
         +'&cedula='+encodeURIComponent((payload.cedula||''))
         +'&nombre='+encodeURIComponent((payload.nombre||''))
         +'&apellido='+encodeURIComponent((payload.apellido||''))
-        +'&notas='+encodeURIComponent('Conv. paquete→GC · '+(s.tipo==='fisica'?'Física':'Digital'))
+        +'&notas='+encodeURIComponent(notasConvPaqueteGC(s))+'&valor='+encodeURIComponent((function(){var i=facialDePackTxt((T&&(T.pack3||T.pack6))||'');return i.nombre&&i.precio?(i.nombre+' $'+i.precio):(i.nombre||'');})())+'&pack='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').sku))+'&facial='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').nombre))+'&precio='+encodeURIComponent((facialDePackTxt((T&&(T.pack3||T.pack6))||'').precio||''))
       ).catch(function(){return null;});
   });
 
@@ -4983,46 +5027,52 @@ function resultadoSeguimiento(tkRow, cedula, nombre, apellido, tipo){
 function renderRecepcion(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:12px">📅 Control de Agenda</div>'
     +'<div class="loading"><div class="spinner"></div>Cargando control...</div>';
-  fetch(APPS_SCRIPT_URL+'?action=getComisionRecepcion')
-    .then(function(r){return r.text();})
-    .then(function(txt){
-      var d; try{d=JSON.parse(txt);}catch(e){d={error:txt.slice(0,100)};}
-      if(d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+d.error+'</div>';return;}
-      var dias=(d.dias||[]).slice().reverse(); // más reciente primero
-      var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
-        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy)">📅 Control de Agenda</div>'
-        +'<button onclick="renderRecepcion(document.getElementById(\'content\'))" style="background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 12px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
+  var esc = (typeof _histEsc==='function') ? _histEsc : function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  (typeof api==='function' ? api('getComisionRecepcion') : Promise.reject(new Error('API no disponible'))).then(function(d){
+      if(!d || d.error){c.innerHTML='<div class="card" style="color:var(--red)">❌ '+esc((d&&d.error)||'No se pudo cargar')+'</div>';return;}
+      var dias=(d.dias||[]).slice().reverse();
+      var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;min-width:0">'
+        +'<div style="font-size:0.88rem;font-weight:800;color:var(--navy);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📅 Control de Agenda</div>'
+        +'<button type="button" onclick="renderRecepcion(document.getElementById(\'content\'))" style="flex:0 0 auto;background:var(--blue-l);color:var(--blue);border:1.5px solid var(--blue);padding:5px 10px;border-radius:9px;font-size:0.7rem;font-weight:700;cursor:pointer">🔄 Actualizar</button>'
         +'</div>'
-        +'<div style="font-size:0.65rem;color:var(--gray);margin-bottom:11px">📅 '+(d.periodoLabel||'Período actual')+'</div>'
-        // Resumen
-        +'<div class="cosm-card"><div class="cosm-hdr" style="background:#D4956A"><span>💰 Comisión acumulada</span><span>$'+(d.total||0).toFixed(2)+'</span></div>'
+        +'<div style="font-size:0.65rem;color:var(--gray);margin-bottom:11px">📅 '+esc(d.periodoLabel||'Período actual')+'</div>'
+        +'<div class="cosm-card"><div class="cosm-hdr" style="background:#D4956A"><span>💰 Comisión acumulada</span><span>$'+(Number(d.total||d.comision||0)).toFixed(2)+'</span></div>'
         +'<div class="cosm-body">'
         +'<div class="crow"><span>Días con meta cumplida</span><span class="v" style="color:var(--navy);font-weight:700">'+(d.diasCumplidos||0)+'</span></div>'
-        +'<div style="font-size:0.62rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll)">'
-        +'🎯 $'+(d.porClienta||0.5).toFixed(2)+' por clienta <b>con facial hecho</b> cuando el día llega a <b>'+(d.meta||10)+'+ faciales</b> (lunes: '+(d.metaLunes||5)+'+)</div>'
+        +'<div style="font-size:0.62rem;color:var(--gray);margin-top:6px;padding-top:6px;border-top:1px solid var(--gray-ll);line-height:1.4">'
+        +'🎯 $'+(Number(d.porClienta||0.5)).toFixed(2)+' por persona con <b>facial hecho</b> (1 por día) si llega a <b>'+(d.meta||10)+'+</b> (lunes: '+(d.metaLunes||5)+'+). Fecha = cita en Acuity, o si no hay, el día de atención.</div>'
+        +(d.acuityOk===false?'<div style="font-size:0.6rem;color:var(--gray);margin-top:6px">Acuity no respondió: se usó la fecha del ticket.</div>':'')
         +'</div></div>';
-      // Tabla por día
       if(!dias.length){
         html+='<div class="card" style="text-align:center;padding:22px;color:var(--gray)">Aún no hay días registrados en este período</div>';
       } else {
-        html+='<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'
-          +'<div style="display:flex;background:var(--navy);padding:9px 14px;font-size:0.6rem;font-weight:700;color:white;text-transform:uppercase">'
-          +'<span style="flex:2">Fecha</span><span style="flex:1;text-align:center">Faciales</span><span style="flex:1;text-align:center">Meta</span><span style="flex:1;text-align:right">Comisión</span></div>';
+        html+='<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm);max-width:100%;overflow-x:hidden">'
+          +'<div style="display:flex;background:var(--navy);padding:9px 12px;font-size:0.58rem;font-weight:700;color:white;text-transform:uppercase;gap:4px;box-sizing:border-box">'
+          +'<span style="flex:2 1 0;min-width:0">Fecha</span><span style="flex:1 1 0;min-width:0;text-align:center">Faciales</span><span style="flex:1 1 0;min-width:0;text-align:center">Meta</span><span style="flex:1 1 0;min-width:0;text-align:right">Comisión</span></div>';
         dias.forEach(function(dd){
-          var fp=dd.fecha.split('-');
-          var fLabel=fp[2]+'/'+fp[1];
-          html+='<div style="display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--cream-d);'+(dd.cumple?'background:#F2F8F4':'')+'">'
-            +'<span style="flex:2;font-size:0.74rem;font-weight:700;color:var(--navy)">'+fLabel+' <span style="font-weight:400;color:var(--gray);font-size:0.62rem">'+dd.dia+'</span></span>'
-            +'<span style="flex:1;text-align:center;font-size:0.78rem;font-weight:800;color:'+(dd.cumple?'var(--green)':'var(--navy)')+'">'+dd.clientas+'</span>'
-            +'<span style="flex:1;text-align:center;font-size:0.66rem;color:var(--gray)">'+(dd.cumple?'✅':'—')+' ≥'+dd.umbral+'</span>'
-            +'<span style="flex:1;text-align:right;font-size:0.76rem;font-weight:700;color:'+(dd.cumple?'var(--green)':'var(--gray)')+'">'+(dd.cumple?'$'+dd.comision.toFixed(2):'—')+'</span>'
+          var fp=String(dd.fecha||'').split('-');
+          var fLabel=(fp[2]&&fp[1])?(fp[2]+'/'+fp[1]):esc(dd.fecha||'');
+          var ok=!!dd.cumple;
+          html+='<div style="padding:9px 12px;border-bottom:1px solid var(--cream-d);box-sizing:border-box;max-width:100%;'+(ok?'background:#F2F8F4':'')+'">'
+            +'<div style="display:flex;align-items:center;gap:4px;min-width:0">'
+            +'<span style="flex:2 1 0;min-width:0;font-size:0.74rem;font-weight:700;color:var(--navy)">'+fLabel+' <span style="font-weight:400;color:var(--gray);font-size:0.62rem">'+esc(dd.dia||'')+'</span></span>'
+            +'<span style="flex:1 1 0;min-width:0;text-align:center;font-size:0.78rem;font-weight:800;color:'+(ok?'var(--green)':'var(--navy)')+'">'+Number(dd.clientas||0)+'</span>'
+            +'<span style="flex:1 1 0;min-width:0;text-align:center;font-size:0.66rem;color:var(--gray)">'+(ok?'✓':'—')+' ≥'+Number(dd.umbral||0)+'</span>'
+            +'<span style="flex:1 1 0;min-width:0;text-align:right;font-size:0.76rem;font-weight:700;color:'+(ok?'var(--green)':'var(--gray)')+'">'+(ok?('$'+Number(dd.comision||0).toFixed(2)):'—')+'</span>'
             +'</div>';
+          var notas=[];
+          (dd.notas||[]).forEach(function(n){ if(n) notas.push(n); });
+          (dd.sinTicket||[]).forEach(function(n){ if(n) notas.push(n.indexOf('sin ticket')>=0?n:(n+' — Acuity, sin ticket')); });
+          if(notas.length){
+            html+='<div style="margin-top:3px;font-size:0.58rem;color:var(--gray);line-height:1.35;word-break:break-word;overflow-wrap:anywhere">'+notas.map(esc).join(' · ')+'</div>';
+          }
+          html+='</div>';
         });
         html+='</div>';
       }
       c.innerHTML=html;
     })
-    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+e.message+'</div>';});
+    .catch(function(e){c.innerHTML='<div class="card" style="color:var(--red)">❌ Error: '+esc(e&&e.message||e)+'</div>';});
 }
 
 function renderDashCosm(c){

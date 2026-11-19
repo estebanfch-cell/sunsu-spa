@@ -15,7 +15,7 @@ import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./se
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
-import { etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, saldoGift } from "./ventas.ts";
+import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConvPaqueteGC, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
@@ -25,6 +25,7 @@ import { cedVariantes, consultar, type Filtro } from "./query.ts";
 import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { lineasRecepDe, periodoLabel as periodoRecepLabel, recepcionDeCiclo } from "./comision_recepcion.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
 
@@ -446,25 +447,14 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
       },
     });
   }
-  const recepDias = new Map<string, { n: number; vendido: number }>();
-  for (const t of tks) {
-    if (t.fecha < ciclo || t.fecha > finCiclo || !facialSku(t.facial) || esInterno(t.cosm, t.cedula)) continue;
-    const prev = recepDias.get(t.fecha) || { n: 0, vendido: 0 };
-    prev.n += 1;
-    prev.vendido = round2(prev.vendido + subtotalDe(cmap, facialSku(t.facial) || t.facial));
-    recepDias.set(t.fecha, prev);
-  }
-  let comRecep = 0, diasRecep = 0, vendidoRecep = 0;
-  const lineasRecep: LineaCom[] = [];
-  for (const f of [...recepDias.keys()].sort()) {
-    const d = recepDias.get(f)!;
-    const v = comisionRecepcionDia(f, d.n, cfg);
-    if (v > 0) { comRecep += v; diasRecep++; }
-    vendidoRecep = round2(vendidoRecep + d.vendido);
-    lineasRecep.push({ sku: "", nombre: etiquetaDiaRecep(f), qty: d.n, monto: v, vendido: d.vendido });
-  }
+  const rec = await recepcionDeCiclo(ctx, rowsTk, {
+    ciclo, fin: finCiclo, cfg,
+    vendidoDe: (r) => subtotalDe(cmap, facialSku(r.facial_hecho) || s(r.facial_hecho)),
+  });
+  const comRecep = rec.total, diasRecep = rec.diasCumplidos, vendidoRecep = rec.vendido;
+  const lineasRecep: LineaCom[] = lineasRecepDe(rec);
   const multas = await ctx.db.all("multas_descuentos");
-  return { calc, comRecep: round2(comRecep), diasRecep, vendidoRecep, lineasRecep, multas, ciclo, fin: finCiclo, admins, tramos, lineas };
+  return { calc, comRecep: round2(comRecep), diasRecep, vendidoRecep, lineasRecep, recepcion: rec, multas, ciclo, fin: finCiclo, admins, tramos, lineas };
 }
 type LineaCom = { sku: string; nombre: string; qty: number; monto: number; vendido: number };
 type LineasPersona = {
@@ -882,7 +872,10 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     // si no la marca de la 1ª sesión apuntaba a otra fila y el paquete quedaba 0/3.
     paqueteFila = paqSaved && paqSaved.sheet_row != null && paqSaved.sheet_row !== "" ? n(paqSaved.sheet_row) : paqRow;
     const slots = ([] as R[]).concat((p.paq2gcSlots3 as R[]) || [], (p.paq2gcSlots6 as R[]) || []).filter((x) => x && x.codigo);
-    if (slots.length) await marcarSlotsGC(ctx, actor, paqueteFila, slots);
+    if (slots.length) {
+      await marcarSlotsGC(ctx, actor, paqueteFila, slots);
+      await enriquecerGiftsDePaquete(ctx, actor, slots, paqSaved);
+    }
   }
   await logAccion(ctx.db, actor, "TICKET", ticket);
   if (facCli && saved) {
@@ -936,6 +929,24 @@ async function marcarSlotsGC(ctx: Ctx, actor: string, sheetRow: number, slots: R
   if (!row) return;
   const patch = patchSlotsGC(row, slots);
   if (Object.keys(patch).length) await ctx.db.write(actor, "paquetes", "update", { sheet_row: sheetRow }, patch);
+}
+
+/** TK149: la gift de una conversión nace con el facial y el valor real del paquete (Reset $95, no $65). */
+async function enriquecerGiftsDePaquete(ctx: Ctx, actor: string, slots: R[], pack: R | null) {
+  if (!pack || !slots.length) return;
+  const cats = await ctx.db.all("catalogo").catch(() => [] as R[]);
+  const cards = await ctx.db.all("gift_cards").catch(() => [] as R[]);
+  for (const sl of slots) {
+    const codigo = s(sl.codigo);
+    if (!codigo) continue;
+    const row = cards.find((r) => !r.borrado_at && s(r.codigo_gc) === codigo);
+    if (!row) continue;
+    const d = datosGiftConvPaquete(pack, cats, s(sl.tipo));
+    const orig = { ...(row.orig && typeof row.orig === "object" ? row.orig as R : {}), ...d.orig };
+    await ctx.db.write(actor, "gift_cards", "update", { sheet_row: row.sheet_row }, {
+      notas: d.notas, valor: d.valor, orig,
+    });
+  }
 }
 
 async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
@@ -1788,15 +1799,38 @@ async function unoGC(p: R, ctx: Ctx, ses?: Ses) {
   if (!libres.length) return { error: "Sin códigos GC disponibles" };
   return libres[0];
 }
+
+function notasYValorConv(p: R): { notas: string; valor: string; orig: R } {
+  const notas0 = s(p.notas);
+  const valor0 = s(p.valor || p.monto);
+  const pack = s(p.pack || p.pack_codigo || p.pack_sku);
+  const facial = s(p.facial);
+  const precio = n(p.precio || p.facial_precio) || (valor0 && !/[a-z]/i.test(valor0) ? n(valor0) : 0);
+  const esConv = /conv\.\s*paquete/i.test(notas0) || !!pack || !!s(p.pack_sku);
+  if (!esConv && !facial) return { notas: notas0, valor: valor0, orig: {} };
+  if (!facial && !precio && !pack) return { notas: notas0, valor: valor0, orig: {} };
+  const notas = (facial || precio || pack)
+    ? notasConvPaqueteGC({ facial, precio, pack, tipo: s(p.tipo) || notas0 })
+    : notas0;
+  const valor = facial && precio ? facial + " $" + (precio % 1 ? String(precio) : String(precio)) : (valor0 || facial);
+  const orig: R = {};
+  if (pack) orig.pack = pack;
+  if (s(p.pack_sku)) orig.pack_sku = s(p.pack_sku);
+  if (facial) orig.facial = facial;
+  if (precio) orig.facial_precio = precio;
+  return { notas, valor, orig };
+}
+
 reg("registrarGC", "any", async (p, ctx, ses) => {
   if (ctx.db.prueba) {
     // GC de prueba: fila propia origin=test con código TEST-…, visible en la lista con 🧪
     let codigo = s(p.codigo);
     if (!codigo.startsWith("TEST-")) codigo = s((await codigosPruebaGC(ctx, 1))[0].codigo);
     const ec0 = ecuadorParts(ctx.now);
+    const convT = notasYValorConv(p);
     const saved = await ctx.db.write(actorOf(ses), "gift_cards", "insert", {}, {
       sheet_row: 1, codigo_gc: codigo, dia: ec0.d, mes: ec0.m, ano: ec0.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre),
-      apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: s(p.notas), valor: s(p.valor || p.monto) || "Gift Card", orig: { prueba: true, ts: ec0.isoWall },
+      apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: convT.notas, valor: convT.valor || "Gift Card", orig: { prueba: true, ts: ec0.isoWall, ...convT.orig },
     });
     return { ok: true, codigo, fila: saved ? saved.sheet_row : null, prueba: true };
   }
@@ -1805,9 +1839,11 @@ reg("registrarGC", "any", async (p, ctx, ses) => {
   if (!row || row.borrado_at) return { error: "Código no encontrado" };
   if (!blankDia(row.dia)) return { error: "Ese código ya está vendido" };
   const ec = ecuadorParts(ctx.now);
+  const conv = notasYValorConv(p);
   await ctx.db.write(actorOf(ses), "gift_cards", "update", { sheet_row: row.sheet_row }, {
     dia: ec.d, mes: ec.m, ano: ec.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre),
-    apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: s(p.notas), valor: s(p.valor || p.monto),
+    apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: conv.notas, valor: conv.valor,
+    orig: { ...(row.orig && typeof row.orig === "object" ? row.orig as R : {}), ...conv.orig },
   });
   return { ok: true, codigo: s(row.codigo_gc), fila: row.sheet_row };
 });
@@ -1817,6 +1853,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
   const todas = q === "*";
   const resultados = [];
   const cats = await ctx.db.all("catalogo").catch(() => [] as R[]);
+  const packs = await ctx.db.all("paquetes").catch(() => [] as R[]);
   for (const r of await ctx.db.all("gift_cards")) {
     const codigo = s(r.codigo_gc);
     if (!codigo) continue;
@@ -1824,13 +1861,13 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
     const nom = s(r.nombre_comprador), ape = s(r.apellido_comprador);
     const blob = [codigo, s(r.cedula_comprador), nom, ape, nom + " " + ape, s(r.usado_por), s(r.notas)].join(" ").toLowerCase();
     if (!todas && !blob.includes(q)) continue;
-    const info = infoSaldoGift(r, cats);
+    const info = infoSaldoGift(r, cats, packs);
     resultados.push({
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
       saldo: info.saldo, facial: info.facial, saldoOrigen: info.origen,
-      etiqueta: etiquetaGift(r, cats), prueba: s(r.origin) === "test",
+      etiqueta: etiquetaGift(r, cats, packs), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
@@ -2227,10 +2264,27 @@ reg("getReporteAdmin", ADMIN, async (_p, ctx) => {
 });
 reg("getReporte", ADMIN, async (p, ctx, ses) => FNS.getReporteAdmin(p, ctx, ses));
 reg("getComisionesRol", "any", async (p, ctx, ses) => FNS.getDashCosm(p, ctx, ses));
-reg("getComisionRecepcion", "any", async (_p, ctx) => {
-  const { comRecep, diasRecep, ciclo, fin } = await cicloDe(ctx, hoy(ctx));
-  return { comision: comRecep, dias: diasRecep, ciclo, fin };
-});
+async function payloadComisionRecepcion(ctx: Ctx) {
+  const pack = await cicloDe(ctx, hoy(ctx));
+  const rec = pack.recepcion;
+  return {
+    ok: true,
+    comision: pack.comRecep,
+    total: rec?.total ?? pack.comRecep,
+    dias: rec?.dias ?? [],
+    diasCumplidos: rec?.diasCumplidos ?? pack.diasRecep,
+    porClienta: 0.50,
+    meta: 10,
+    metaLunes: 5,
+    periodoLabel: periodoRecepLabel(pack.ciclo, pack.fin),
+    ciclo: pack.ciclo,
+    fin: pack.fin,
+    acuityOk: rec?.acuityOk !== false,
+    acuityError: rec?.acuityError,
+  };
+}
+reg("getComisionRecepcion", "any", async (_p, ctx) => payloadComisionRecepcion(ctx));
+reg("comision_recepcion", "any", async (_p, ctx) => payloadComisionRecepcion(ctx));
 type MontosFila = { com: number; vendido: number };
 function montosPersona(nombre: string, pack: Awaited<ReturnType<typeof cicloDe>>, esRecep: boolean): Record<string, MontosFila> {
   const key = normNombre(nombre);
