@@ -5,10 +5,11 @@ import type { Ctx } from "./lib.ts";
 import { kvGet } from "./lib.ts";
 import {
   ADMIN, IVA, addDays, cantAmpollas, ecuadorParts, esCanje, esInterno, facialSku, n, normCedula,
-  productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado, normNombre } from "./domain.ts";
+  PROD_COLS, productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado, normNombre } from "./domain.ts";
 import { montoGcAplicado } from "./ventas.ts";
 import { runErp } from "./erp.ts";
 import type { Db } from "./db.ts";
+import { consultar } from "./query.ts";
 
 type Periodo = "hoy" | "semana" | "mes" | "ano" | "rango";
 const MES_CORTO = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -547,3 +548,37 @@ export async function detalleDashboard(db: Db, p: Row): Promise<Row> {
 extend("getDashboardDetalle", ADMIN, async (p, ctx: Ctx) => detalleDashboard(ctx.db, p));
 
 extend("getDashboard", ADMIN, async (p, ctx: Ctx) => calcularDashboard(ctx.db, ctx.now, p));
+
+
+/** KPIs del personal (productos / paquetes / faciales) sin bajar todo el dashboard admin. */
+export async function calcularKpisStaff(db: Db, now: Date, p: Row): Promise<Row> {
+  const ec = ecuadorParts(now);
+  const per = (["hoy", "semana", "mes", "ano"].includes(s(p.periodo)) ? s(p.periodo) : "hoy") as Periodo;
+  const R = rangos(per, ec.ymd);
+  const pr = await precios(db);
+  const cols = [
+    "id", "timestamp", "estimado", "atendido_por", "id_3", "nombre", "apellido",
+    "servicios_adicionales", "facial_hecho", "gift_card", "paquete",
+    "compra_pack_3", "compra_pack_6", "venta_gift", "orig", "borrado_at",
+    ...PROD_COLS.map((c) => c.col),
+  ];
+  const q = await consultar(db, "tickets", {
+    cols,
+    filtros: [
+      { col: "borrado_at", op: "is_null" },
+      { col: "timestamp", op: "gte", val: R.desde + "T00:00:00" },
+      { col: "timestamp", op: "lt", val: addDays(R.hasta, 1) + "T00:00:00" },
+    ],
+  });
+  const cosm = s(p.cosm || p.cosmetologa);
+  const agg = nuevoAgg();
+  for (const t of q.rows) {
+    if (esCancelado(t)) continue;
+    const h = hechoDe(t, pr);
+    if (!h) continue;
+    if (cosm && !mismaCosmetologa(h.cosm, cosm)) continue;
+    sumar(agg, h);
+  }
+  const c = cerrar(agg);
+  return { productos: c.productosN, paquetes: c.paquetes, faciales: c.faciales, periodo: per, desde: R.desde, hasta: R.hasta };
+}

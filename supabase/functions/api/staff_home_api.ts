@@ -4,7 +4,8 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { esAdmin, acceso, matrizDe } from "./permisos.ts";
 import { addDays, n, normNombre, s, ymdUtc, type Row } from "./domain.ts";
-import { calcularDashboard } from "./dashboard_api.ts";
+import { calcularKpisStaff } from "./dashboard_api.ts";
+import { consultar } from "./query.ts";
 import { citasRango, fechaCita } from "./acuity.ts";
 import { fichaDeCita, misCalendarios } from "./agenda_api.ts";
 import { claveRegistro } from "./ventas.ts";
@@ -33,14 +34,16 @@ extend("staff_home", "any", async (p, ctx, ses) => {
   const hoy = hoyEc(ctx);
   const nombre = s(ses.short) || s(ses.name).split(" ")[0] || "";
   const admin = esAdmin(ses.rol);
-  const nivAgenda = admin ? "todos" : acceso(ses.rol, "agenda", await matrizDe(ctx.db));
-
-  const beta = await todas(ctx, "beta_acuity_calendars");
+  const [matriz, beta, borRows] = await Promise.all([
+    admin ? Promise.resolve(null) : matrizDe(ctx.db),
+    todas(ctx, "beta_acuity_calendars"),
+    listarBorradoresVisibles(ctx, ses),
+  ]);
+  const nivAgenda = admin ? "todos" : acceso(ses.rol, "agenda", matriz || {});
   const cals = beta.map((b) => ({ id: Number(b.calendar_id), nombre: s(b.nombre), persona: s(b.persona) }));
   const mios = misCalendarios(cals, ses);
   const verTodos = nivAgenda === "todos";
-
-  const borHome = (await listarBorradoresVisibles(ctx, ses)).map(itemBorradorHome);
+  const borHome = borRows.map(itemBorradorHome);
   if (nivAgenda === "no") {
     const early = { ok: true, hoy, nombre, citas: [], aviso: "", borradores: borHome };
     if (!limpio(early)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
@@ -53,25 +56,30 @@ extend("staff_home", "any", async (p, ctx, ses) => {
   }
 
   const periodo = (["hoy", "semana", "mes", "ano"].includes(s(p.periodo)) ? s(p.periodo) : "hoy");
-  let L = await citasRango(ctx, hoy, hoy, {});
+  // Un solo viaje a Acuity (hoy + 14 días). Si hoy no hay citas, se muestra el siguiente día completo.
+  const L = await citasRango(ctx, hoy, addDays(hoy, 14), {});
   if (!Array.isArray(L)) return { error: L.error, hoy, nombre, citas: [] };
-  let vis = L.filter((a) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID))));
+  const mine = (a: Row) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID)));
+  let vis = L.filter((a) => mine(a) && (fechaCita(a) || s(a.datetime).slice(0, 10)) === hoy);
   let citasFecha = hoy;
   if (!vis.length) {
-    const L2 = await citasRango(ctx, addDays(hoy, 1), addDays(hoy, 14), {});
-    if (Array.isArray(L2)) {
-      const prox = L2.filter((a) => a.canceled !== true && (verTodos || mios.includes(Number(a.calendarID))))
-        .sort((a, b) => s(a.datetime).localeCompare(s(b.datetime)));
-      if (prox.length) {
-        citasFecha = fechaCita(prox[0]) || s(prox[0].datetime).slice(0, 10);
-        vis = prox.filter((a) => (fechaCita(a) || s(a.datetime).slice(0, 10)) === citasFecha);
-      }
+    const prox = L.filter(mine).sort((a, b) => s(a.datetime).localeCompare(s(b.datetime)));
+    if (prox.length) {
+      citasFecha = fechaCita(prox[0]) || s(prox[0].datetime).slice(0, 10);
+      vis = prox.filter((a) => (fechaCita(a) || s(a.datetime).slice(0, 10)) === citasFecha);
     }
   }
-  const links = await todas(ctx, "beta_citas_ticket");
-  const tks = await todas(ctx, "tickets");
-  const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
 
+  const TK_SLIM = ["id", "timestamp", "nombre", "apellido", "facial_hecho", "notas", "notas_generales", "so_num", "beta_num", "sheet_row", "borrado_at"];
+  const REG_SLIM = ["id", "cedula", "nombre", "apellido", "sheet_row", "borrado_at"];
+  const [links, tksRes, regsRes, kpisDash] = await Promise.all([
+    consultar(ctx.db, "beta_citas_ticket", { cols: ["appointment_id", "ticket_clave"] }).then((r) => r.rows).catch(() => [] as Row[]),
+    consultar(ctx.db, "tickets", { cols: TK_SLIM }).then((r) => r.rows).catch(() => [] as Row[]),
+    consultar(ctx.db, "clientas_registro", { cols: REG_SLIM, filtros: [{ col: "borrado_at", op: "is_null" }] }).then((r) => r.rows).catch(() => [] as Row[]),
+    calcularKpisStaff(ctx.db, ctx.now, { periodo, cosm: s(ses.name) || s(ses.short) }).catch(() => null),
+  ]);
+  const tks = tksRes;
+  const regs = regsRes;
   const citas = vis.map((a) => {
     const f = fechaCita(a);
     const ln = links.find((x) => s(x.appointment_id) === s(a.id));
@@ -113,12 +121,9 @@ extend("staff_home", "any", async (p, ctx, ses) => {
     return out;
   }).sort((x, y) => s(x.datetime).localeCompare(s(y.datetime)));
 
-  let kpis: Row = { productos: 0, paquetes: 0, faciales: 0, periodo, desde: hoy, hasta: hoy };
-  try {
-    const dash = await calcularDashboard(ctx.db, ctx.now, { periodo, cosm: s(ses.name) || s(ses.short) });
-    const a = (dash.actual && typeof dash.actual === "object") ? dash.actual as Row : {};
-    kpis = { productos: n(a.productosN), paquetes: n(a.paquetes), faciales: n(a.faciales), periodo: s(dash.periodo) || periodo, desde: s(dash.desde) || hoy, hasta: s(dash.hasta) || hoy };
-  } catch { /* sin kpis no se cae el home */ }
+  const kpis: Row = kpisDash && typeof kpisDash === "object"
+    ? { productos: n((kpisDash as Row).productos), paquetes: n((kpisDash as Row).paquetes), faciales: n((kpisDash as Row).faciales), periodo: s((kpisDash as Row).periodo) || periodo, desde: s((kpisDash as Row).desde) || hoy, hasta: s((kpisDash as Row).hasta) || hoy }
+    : { productos: 0, paquetes: 0, faciales: 0, periodo, desde: hoy, hasta: hoy };
 
   const payload = { ok: true, hoy, citasFecha, nombre, citas, kpis, puede: { ticket: true, noLlego: true, mover: verTodos }, borradores: borHome };
   if (!limpio(payload)) return { error: "Respuesta de staff_home con datos que el personal no debe ver" };
