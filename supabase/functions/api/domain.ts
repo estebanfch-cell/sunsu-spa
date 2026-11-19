@@ -876,6 +876,32 @@ export function cfgDesdeReglas(reglas: ReglaCom[], ciclo: string, tramosKv: unkn
   return { cfg, tramos };
 }
 
+/** Rol de recepcionista (comisión de recepción). No incluye admin ni gerencia. */
+export function esRolRecepcionista(rol: unknown): boolean {
+  const r = s(rol).trim().toLowerCase();
+  return r === "recepcion" || r === "reception";
+}
+
+/** Cruza nombre/id/corto con usuarios que tienen rol de recepcionista. */
+export function personaEsRecepcionista(
+  nombre: string,
+  users: { id?: unknown; nombre?: unknown; short?: unknown; rol?: unknown; bloqueado?: unknown }[] = [],
+): boolean {
+  const key = normNombre(nombre);
+  if (!key) return false;
+  const first = key.split(" ")[0] || key;
+  for (const u of users) {
+    if (b(u.bloqueado) || !esRolRecepcionista(u.rol)) continue;
+    const nomb = normNombre(u.nombre);
+    const sh = normNombre(u.short);
+    const id = normNombre(u.id);
+    if (nomb === key || sh === key || id === key) return true;
+    if (first.length >= 3 && (nomb === first || sh === first || id === first || nomb.startsWith(first + " ") || sh.startsWith(first + " "))) return true;
+    if (nomb && (key === nomb || key.startsWith(nomb + " "))) return true;
+  }
+  return false;
+}
+
 export function comisionRecepcionDia(fecha: string, ticketsConFacial: number, cfg: ComCfg = CFG_DEF): number {
   const [y, m, d] = fecha.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
