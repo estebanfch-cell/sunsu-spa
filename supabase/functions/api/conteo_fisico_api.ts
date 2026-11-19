@@ -2,8 +2,9 @@
 // bodega (Consignación / Bodega Cabina [Cabina 1/2/3] / Oficina) y lo asigna a una usuaria; ella lo
 // empieza (se toma la foto del stock del sistema), cuenta (lista, buscar o escanear), marca «no está»,
 // cambia la sububicación real y lo envía a revisión; el admin lo devuelve o lo aprueba.
-// Aprobar NO mueve stock: queda como inventario físico inicial (stock_aplicado = false) hasta que
-// Emilia confirme. Todo vive en beta_conteos / beta_conteo_lineas / beta_notificaciones (0045).
+// TK135: al aprobar, el stock real de esa bodega se actualiza con las líneas contadas
+// (stock_aplicado = true). Re-aprobar no vuelve a mover. Todo vive en beta_conteos /
+// beta_conteo_lineas / beta_notificaciones (0045) y los movimientos de stock (0046).
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
@@ -11,6 +12,7 @@ import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { BOD_CABINA, BOD_CASA, BOD_VENTA, GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
+import { aplicarConteoAStock } from "./conteo_aplica_stock.ts";
 
 export const BODEGAS_CONTEO = ["CONSIGNACION", "CABINA", "OFICINA"] as const;
 export const ESTADOS_CONTEO: Record<string, string> = {
@@ -121,7 +123,7 @@ function vista(c: Row, L: Row[], ses: Ses): Row {
     familias: s(c.familias), asignadoA: s(c.asignado_a), asignadoNombre: s(c.asignado_nombre), estado: s(c.estado), estadoNombre: ESTADOS_CONTEO[s(c.estado)] || s(c.estado),
     nota: s(c.nota), revisionNota: s(c.revision_nota), creadoPor: s(c.creado_por), creadoAt: s(c.creado_at),
     iniciadoAt: s(c.iniciado_at), enviadoAt: s(c.enviado_at), aprobadoAt: s(c.aprobado_at), aprobadoPor: s(c.aprobado_por),
-    stockAplicado: c.stock_aplicado === true, mia: esAsignada(c, ses), ...ciego(resumenLineas(L), ses),
+    stockAplicado: c.stock_aplicado === true, stockAplicadoAt: s(c.stock_aplicado_at), mia: esAsignada(c, ses), ...ciego(resumenLineas(L), ses),
   };
 }
 /** Conteo CIEGO (Emilia 17/11): quien no es admin nunca recibe el stock del sistema ni las diferencias. */
@@ -364,7 +366,7 @@ extend("cf_enviar", "any", async (p, ctx, ses) => {
 
 extend("cf_revisar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin revisa conteos" };
-  const r = await cargar(ctx, s(p.id));
+  let r = await cargar(ctx, s(p.id));
   if (!r) return { error: "Conteo no encontrado" };
   const que = s(p.que), now = ctx.now.toISOString(), actor = actorOf(ses);
   if (que === "cancelar") {
@@ -372,19 +374,27 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
     await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "cancelado", cancelado_at: now, cancelado_por: actor, revision_nota: s(p.nota) || null, updated_at: now });
     return { ok: true };
   }
-  if (s(r.c.estado) !== "en_revision") return { error: "El conteo no está en revisión" };
   if (que === "devolver") {
+    if (s(r.c.estado) !== "en_revision") return { error: "El conteo no está en revisión" };
     const nota = s(p.nota).trim();
     if (nota.length < 3) return { error: "Escribe qué hay que revisar" };
     await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "en_conteo", revision_nota: nota.slice(0, 500), enviado_at: null, updated_at: now });
     await notificar(ctx, ses, s(r.c.asignado_a), "Conteo devuelto: " + s(r.c.numero), nota, "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_devuelto");
     return { ok: true };
   }
-  if (que === "aprobar") {
-    // No mueve stock (Emilia confirma después). Queda como inventario físico inicial.
-    await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "aprobado", aprobado_at: now, aprobado_por: actor, revision_nota: s(p.nota) || null, stock_aplicado: false, updated_at: now });
-    await notificar(ctx, ses, s(r.c.asignado_a), "Conteo aprobado: " + s(r.c.numero), "Gracias. El conteo quedó aprobado.", "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_aprobado");
-    return { ok: true, stockAplicado: false };
+  if (que === "aprobar" || que === "aplicar") {
+    // TK135: aprobar actualiza el stock real de la bodega. Si ya estaba aprobado
+    // y el stock no se había aplicado (p. ej. CF-001), se aplica ahora. Re-aplicar no duplica.
+    if (s(r.c.estado) === "en_revision") {
+      await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "aprobado", aprobado_at: now, aprobado_por: actor, revision_nota: s(p.nota) || null, updated_at: now });
+      await notificar(ctx, ses, s(r.c.asignado_a), "Conteo aprobado: " + s(r.c.numero), "Gracias. El inventario de " + bodegaNombre(s(r.c.bodega), s(r.c.sububicacion)) + " quedó actualizado.", "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_aprobado");
+      const rec = await cargar(ctx, s(r.c.id));
+      if (rec) r = rec;
+    } else if (s(r.c.estado) !== "aprobado") {
+      return { error: "El conteo no está en revisión" };
+    }
+    const apl = await aplicarConteoAStock(ctx, ses, r.c, r.L);
+    return { ok: true, stockAplicado: apl.stockAplicado !== false, ...apl };
   }
   return { error: "Acción inválida" };
 });

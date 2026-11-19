@@ -2,7 +2,7 @@
 // Al INICIAR se toma el snapshot (sistema). Mientras está abierta, el esperado
 // se recalcula en vivo (snapshot + movimientos de venta/traslado/recepción/ajuste
 // durante el conteo = stock vivo). Al TERMINAR se fija ese esperado.
-// Aprobar no mueve stock. Nunca se exponen costos.
+// TK135: al aprobar el conteo completo, el stock real de cada bodega se actualiza. Nunca se exponen costos.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
@@ -11,6 +11,7 @@ import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { BOD_CABINA, BOD_CASA, BOD_VENTA, grupoDeBodega } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { bodegaNombre, notificar, sistemaDe, ESTADOS_CONTEO, subsDe } from "./conteo_fisico_api.ts";
+import { aplicarConteoAStock } from "./conteo_aplica_stock.ts";
 
 export const ESTADOS_SECCION: Record<string, string> = {
   pendiente: "Pendiente", en_conteo: "Contando", en_revision: "En revisión", aprobada: "Aprobada", cancelada: "Cancelada",
@@ -574,10 +575,14 @@ extend("cf_sec_aprobar", "any", async (p, ctx, ses) => {
   await ctx.db.write(actor, "beta_conteo_secciones", "update", { id: r.s.id }, { estado: "aprobada", aprobado_at: now, aprobado_por: actor, updated_at: now });
   const secs = await secsDe(ctx, s(r.c.id));
   const todasOk = secs.every((x) => s(x.id) === s(r.s.id) || s(x.estado) === "aprobada");
+  let apl: Row = { stockAplicado: false };
   if (todasOk) {
-    await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "aprobado", aprobado_at: now, aprobado_por: actor, stock_aplicado: false, updated_at: now });
+    await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "aprobado", aprobado_at: now, aprobado_por: actor, updated_at: now });
+    const L = (await todas(ctx, "beta_conteo_lineas")).filter((l) => s(l.conteo_id) === s(r.c.id));
+    const rec = { ...r.c, estado: "aprobado", aprobado_at: now, aprobado_por: actor };
+    apl = await aplicarConteoAStock(ctx, ses, rec, L);
   }
-  return { ok: true, stockAplicado: false, conteoAprobado: todasOk };
+  return { ok: true, stockAplicado: apl.stockAplicado === true, conteoAprobado: todasOk, ...apl };
 });
 
 
