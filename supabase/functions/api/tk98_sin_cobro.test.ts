@@ -87,7 +87,10 @@ describe("TK98 · pantallas", () => {
   it("lista: pill gris y sin «Sin factura»/«Por cobrar» para sin_cobro", () => {
     assert.match(js, /if\(t&&t\.sin_cobro\) return _tkPill\('gris'/);
     assert.match(js, /if\(t\.sin_cobro\)\{ out\.push\(\{c:'gris'/);
-    assert.match(js, /!ff&&!t\.sin_cobro/);
+    const card = js.slice(js.indexOf("function _histCardHTML"), js.indexOf("function _tkFotoTipo"));
+    assert.doesNotMatch(card, /sinfactura/);
+    assert.doesNotMatch(card, /Por cobrar/);
+
   });
   it("detalle: pill Consumo interno y valor nominal de la gift card", () => {
     assert.match(mt, /consumoInterno: !!l\.consumoInterno/);

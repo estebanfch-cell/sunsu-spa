@@ -5738,32 +5738,63 @@ function _histMasterHTML(tickets, showPrices){
 }
 // Tarjeta para iPhone (≤640px), como Órdenes de venta de MineCore pero en colores Sunsu y sin fotos.
 // Rojo/amarillo de cuadre como borde izquierdo; sin cédula.
+function _histNombreCorto(n){
+  var t=String(n||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+  return t?t.split(/\s+/)[0]:'';
+}
+function _histCreador(t){
+  var orig=t&&t.orig&&typeof t.orig==='object'?t.orig:{};
+  return _histNombreCorto(orig.creado_por||t.creado_por||t.usuario_creador||t.atendido_por||t.cosmetologa||'');
+}
+function _histFacCorta(t){
+  var ff=_tkFacFull(t); if(!ff) return '';
+  var m=String(ff).trim().match(/^(\d{3})-(\d{3})-(\d{6,12})$/);
+  if(m) return 'Fac. '+m[1]+'-'+m[2]+'-'+String(Number(m[3]));
+  var nOnly=String(ff).trim().match(/(\d{6,12})$/);
+  if(nOnly) return 'Fac. '+String(Number(nOnly[1]));
+  return 'Fac. '+String(ff).replace(/\.0+$/,'');
+}
+function _histResumenTxt(t){
+  if(t&&t.resumenTxt) return String(t.resumenTxt);
+  var r=t&&t.resumen; if(!r) return '';
+  var parts=[], add=function(n,uno,muchos){ n=Number(n)||0; if(n>0) parts.push(n===1?'1 '+uno:n+' '+muchos); };
+  add(r.faciales,'facial','faciales'); add(r.paquetes,'paquete','paquetes');
+  add(r.canjes,'canje','canjes'); add(r.extras,'extra','extras');
+  add(r.productos,'producto','productos'); add(r.gifts,'gift card','gift cards');
+  return parts.join(' · ');
+}
+function _histThumbsHTML(t, res){
+  var fotos=Array.isArray(t&&t.fotosCard)?t.fotosCard:[];
+  var more=Number(t.fotosMore)||0;
+  if(!fotos.length && !res) return '';
+  var h='<div class="mob-thumbs">';
+  fotos.slice(0,5).forEach(function(f){
+    var u=typeof f==='string'?f:(f&&f.url)||'';
+    if(!u) return;
+    h+='<img class="mob-th" src="'+_histEsc(u)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+  });
+  if(more>0) h+='<span class="mob-thmore">+'+more+'</span>';
+  if(res) h+='<span class="mob-res">'+_histEsc(res)+'</span>';
+  return h+'</div>';
+}
 function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
-  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
-  var ff=_tkFacFull(t), sal=_histSaldo(t)||0;
-  var l3=[_histEsc(_histFechaFmt(t.fecha))];
-  if(showPrices) l3.push('<b>$'+_histMontos(t).tot.toFixed(2)+'</b>');
-  if(ff) l3.push('<span class="tk-fac">Fac. '+_histEsc(ff)+( _tkFacPdf(t)?' 📄':'')+'</span>');
-  if(showPrices&&!anul&&sal>0.004) l3.push('<span class="mob-saldo">saldo $'+sal.toFixed(2)+'</span>');
-  var fp=_tkForma(t);
-  var pills=[];
-  if(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num){
-    pills.push(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar'));
-  } else if(!anul){
-    pills.push(_tkPagoPill(t));
-    if(fp) pills.push(_tkFormaPill(fp));
-    if(!ff&&!t.sin_cobro) pills.push(_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura'));
-  }
+  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
+  var fac=_histFacCorta(t);
+  var l3=[_histFechaFmt(t.fecha)];
+  if(showPrices) l3.push('$'+_histMontos(t).tot.toFixed(2));
+  if(fac) l3.push(fac);
+  var who=_histCreador(t);
+  var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
     +'<div class="mob-l1"><span class="mob-num">'+_histEsc(_histNum(t)||'—')+'</span>'+est+'</div>'
-    +'<div class="mob-l2">'+_histEsc(nombre)+'</div>'
-    +'<div class="mob-l3">'+l3.join('<span>·</span>')+'</div>'
-    +(pills.length?'<div class="mob-pills">'+pills.join('')+'</div>':'')
-    +(tip?'<div style="font-size:.72rem;margin-top:6px;color:'+(fl?'#8a2216':'#6b4e00')+'">'+_histEsc(tip)+'</div>':'')
+    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" title="Creado por '+_histEsc(who)+'">👤 '+_histEsc(who)+'</span>':'')+'</div>'
+    +'<div class="mob-l3">'+_histEsc(l3.join(' · '))+'</div>'
+    +_histThumbsHTML(t, res)
+    +(tip?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
     +_tkVoucherCardBtns(t, i)
     +'</div>';
 }
