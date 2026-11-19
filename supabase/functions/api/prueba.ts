@@ -71,6 +71,7 @@ async function stockVirtual(inner: Db): Promise<Row[]> {
 
 async function giftVirtual(inner: Db): Promise<Row[]> {
   const cards = await inner.all("gift_cards");
+  const cats = await inner.all("catalogo").catch(() => [] as Row[]);
   let movs: Row[] = [];
   try { movs = await inner.all("gift_card_movimientos"); } catch { movs = []; }
   const gastado = new Map<string, number>();
@@ -84,7 +85,7 @@ async function giftVirtual(inner: Db): Promise<Row[]> {
     if (s(card.origin) === "test") return card;
     const g = gastado.get(s(card.codigo_gc).toLowerCase()) || 0;
     if (!(g > 0)) return card;
-    const nuevo = round2(Math.max(0, saldoGift(card) - g));
+    const nuevo = round2(Math.max(0, saldoGift(card, cats) - g));
     return { ...card, saldo: nuevo, usado: nuevo <= 0.009 };
   });
 }

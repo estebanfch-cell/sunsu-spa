@@ -901,6 +901,17 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       } catch { /* el ticket ya quedó */ }
     }
   }
+  // TK141: si la chica eligió paquete + sesión en el formulario, se descarga exactamente esa sesión (no la «siguiente libre»).
+  try {
+    const pick = p.paqPick && typeof p.paqPick === "object" ? p.paqPick as R : null;
+    if (pick && pick.fila && pick.fila !== "luego" && pick.fila !== "nuevo" && (pick.idx != null && pick.idx !== "")) {
+      const { aplicarUsoExplicit } = await import("./ticket_edicion_api.ts");
+      const cosm = s(base.atendido_por) || actor;
+      const facial = s(p.facial);
+      const nota = ecuadorParts(ctx.now).ymd.split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
+      out.uso_paquete = await aplicarUsoExplicit(ctx, actor, { fila: pick.fila, idx: pick.idx, ticket: soNum || ticket, nota, cosm });
+    }
+  } catch { /* el ticket ya quedó */ }
   // TK139: «¡plac!» — cuadre al instante y la factura sale de Borradores.
   try {
     const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");
@@ -1788,6 +1799,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
   if (!q) return { resultados: [] };
   const todas = q === "*";
   const resultados = [];
+  const cats = await ctx.db.all("catalogo").catch(() => [] as R[]);
   for (const r of await ctx.db.all("gift_cards")) {
     const codigo = s(r.codigo_gc);
     if (!codigo) continue;
@@ -1799,7 +1811,7 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
-      saldo: saldoGift(r), prueba: s(r.origin) === "test",
+      saldo: saldoGift(r, cats), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };

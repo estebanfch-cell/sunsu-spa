@@ -304,6 +304,22 @@ export function normCedula(v: unknown): string {
 export function normCedulaVieja(v: unknown): string {
   return s(v).split(".")[0].replace(/[^0-9]/g, "").replace(/^0+/, "");
 }
+
+/** Dígitos crudos de cédula/RUC, sin quitar ceros a la izquierda. */
+export function digitosCed(v: unknown): string {
+  return s(v).split(".")[0].replace(/[^0-9]/g, "");
+}
+/** Misma persona: cédula igual, o RUC (13=cédula+001) / typo de 11 dígitos que empieza por la cédula de 10. */
+export function cedulasCompatibles(a: unknown, b: unknown): boolean {
+  const na = normCedula(a), nb = normCedula(b);
+  if (na && nb && na === nb) return true;
+  const da = digitosCed(a), db = digitosCed(b);
+  if (!da || !db) return false;
+  if (da === db) return true;
+  const [lo, hi] = da.length <= db.length ? [da, db] : [db, da];
+  if (lo.length >= 10 && hi.startsWith(lo) && (hi.length === lo.length + 1 || (hi.length === lo.length + 3 && hi.endsWith("001")))) return true;
+  return false;
+}
 /** Para mostrar: la cédula de 10 dígitos (con el 0 de provincia), o el pasaporte limpio. Nunca «.0» ni puntos. */
 export function cedulaVer(v: unknown): string {
   const c = normCedula(v);

@@ -411,6 +411,36 @@
   .apr-fila .name { font-size: 0.8rem; font-weight: 700; flex: 1 1 10rem; min-width: 0; }
   .apr-fila .note { font-size: 0.7rem; color: var(--gray); flex: 1 1 8rem; min-width: 0; overflow-wrap: anywhere; }
   .apr-fila .meta { font-size: 0.65rem; color: var(--gray); }
+  .apr-fila { flex-direction: column; align-items: stretch; }
+  .paq-lista { display: flex; flex-direction: column; gap: 8px; }
+  .paq-card { border: 1.5px solid #C8C0E0; border-radius: 12px; padding: 10px; background: #fff; }
+  .paq-card.rec { border-color: #3E7CB1; background: #F4F8FC; }
+  .paq-card.sel { border-color: #6A9E7A; box-shadow: 0 0 0 2px rgba(106,158,122,0.25); }
+  .paq-hd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.82rem; color: var(--navy); }
+  .paq-rec { background: #3E7CB1; color: #fff; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.3px; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; }
+  .paq-nom, .paq-meta { font-size: 0.74rem; color: var(--gray); margin-top: 2px; font-weight: 600; }
+  .paq-sesiones { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .paq-ses { font-size: 0.7rem; color: var(--gray); background: #F3F0EA; border-radius: 8px; padding: 6px 8px; }
+  .paq-ses-btn, .paq-alt { width: 100%; text-align: left; background: #fff; border: 1.5px solid #3E7CB1; color: #1A2744; border-radius: 9px; padding: 8px 10px; font-size: 0.76rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .paq-ses-btn.on { background: #E8F5EC; border-color: var(--green); color: var(--green); }
+  .paq-alt { margin-top: 8px; border-style: dashed; }
+  .tk-pill-edicionpend, .tk-pill.edicionpend { background: #EEF3FB; color: #3E7CB1; border: 1px solid #3E7CB1; }
+  .mctk-edit-big { width: 100%; margin: 8px 0 10px; padding: 12px 14px; font-size: 0.92rem; font-weight: 800; background: #3E7CB1; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
+  .mctk-edicion { background: #F7F9FC; border: 1.5px solid #3E7CB1; border-radius: 14px; padding: 12px; margin: 0 0 12px; }
+  .mctk-edicion .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tk-diff { font-size: 0.74rem; color: var(--navy); display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .tk-diff-h, .tk-diff-lh { font-weight: 800; color: var(--navy); margin-top: 4px; }
+  .tk-diff-cab, .tk-diff-ln, .tk-diff-tot { overflow-wrap: anywhere; line-height: 1.4; padding: 6px 8px; border-radius: 8px; background: #fff; border: 1px solid #EDE6D8; }
+  .tk-diff-ln.agregada, .tk-diff .despues { background: #E8F5EC; }
+  .tk-diff-ln.eliminada, .tk-diff .antes { background: #FCECEC; }
+  .tk-diff-ln.modificada { background: #FFF8E8; }
+  .tk-diff-ln.igual { background: #F7F5F0; color: var(--gray); }
+  .tk-diff .antes, .tk-diff .despues { display: inline; padding: 0 3px; border-radius: 4px; }
+  .tk-diff .flecha { font-weight: 800; margin: 0 4px; }
+  @media (max-width: 375px) {
+    .paq-ses-btn, .mctk-edit-big, .paq-alt { font-size: 0.78rem; }
+    .tk-diff { font-size: 0.7rem; }
+  }
   @media (max-width: 375px) {
     .apr-btn { font-size: 0.7rem; padding: 5px 10px; }
     .dash-head { align-items: flex-start; }
@@ -3036,7 +3066,8 @@ async function renderAprobaciones() {
       const acc = it.tipo === "solicitud" && it.id
         ? `<button class="btn small" type="button" data-apr-ok="${esc(it.id)}">Aprobar</button><button class="btn ghost small" type="button" data-apr-no="${esc(it.id)}">Rechazar</button>`
         : `<button class="btn ghost small" type="button" data-go="${esc(it.href || g.href || "#/m/inicio")}">Abrir</button>`;
-      return `<div class="apr-fila"><div class="name">${esc(it.titulo || "")}${it.prueba ? ' <span class="ix-prueba">SIMULACIÓN</span>' : ""}</div><div class="note">${esc(it.detalle || "")}</div><div class="meta">${acc}</div></div>`;
+      const diff = it.diff && typeof window._tkPintarDiffEdicion === "function" ? window._tkPintarDiffEdicion(it.diff) : "";
+      return `<div class="apr-fila"><div class="name">${esc(it.titulo || "")}${it.prueba ? ' <span class="ix-prueba">SIMULACIÓN</span>' : ""}</div><div class="note">${esc(it.detalle || "")}</div>${diff}<div class="meta">${acc}</div></div>`;
     }).join("") || `<p class="note">Nada pendiente aquí.</p>`;
     return `<div class="card apr-grupo"><div class="card-title">${esc(g.titulo)} <span class="apr-n">${esc(g.n || 0)}</span></div>${filas}${g.href && g.id !== "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" data-go="${esc(g.href)}">Ver todos</button></p>` : (g.id === "solicitudes" ? `<p class="note"><button class="btn ghost small" type="button" id="apr-panel-sol">Panel de solicitudes</button></p>` : "")}</div>`;
   }).join("");
@@ -7309,7 +7340,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK140";
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK141";
 function mostrarNuevaVersion() {
   var el = document.getElementById("sunsu-nueva-ver");
   if (!el) {
@@ -7354,42 +7385,42 @@ if ("serviceWorker" in navigator && !local) {
   revisarVersionServidor();
 }
 </script>
-<script src="vendor-zxing.js?v=20261119tk140"></script>
-<script src="mc-scan.js?v=20261119tk140"></script>
-<script src="mc-buscar.js?v=20261119tk140"></script>
-<script src="beta-screens.js?v=20261119tk140"></script>
-<script src="beta-inline.js?v=20261119tk140"></script>
-<script src="mc-productos.js?v=20261119tk140"></script>
-<script src="mc-nav.js?v=20261119tk140"></script>
-<script src="mc-permisos.js?v=20261119tk140"></script>
-<script src="mc-protocolos.js?v=20261119tk140"></script>
-<script src="mc-conteo.js?v=20261119tk140"></script>
-<script src="mc-transferencias.js?v=20261119tk140"></script>
-<script src="mc-ajustes.js?v=20261119tk140"></script>
-<script src="vendor-qrcode.js?v=20261119tk140"></script>
-<script src="mc-tickets.js?v=20261119tk140"></script>
-<script src="mc-maestro.js?v=20261119tk140"></script>
-<script src="mc-empleados.js?v=20261119tk140"></script>
-<script src="mc-edit.js?v=20261119tk140"></script>
-<script src="mc-paquetes.js?v=20261119tk140"></script>
-<script src="mc-aperturas.js?v=20261119tk140"></script>
-<script src="mc-acceso.js?v=20261119tk140"></script>
-<script src="mc-barras.js?v=20261119tk140"></script>
-<script src="mc-caja.js?v=20261119tk140"></script>
-<script src="mc-giftcards.js?v=20261119tk140"></script>
-<script src="mc-multas.js?v=20261119tk140"></script>
-<script src="mc-clientes.js?v=20261119tk140"></script>
-<script src="mc-clientes-dup.js?v=20261119tk140"></script>
-<script src="mc-docpdf.js?v=20261119tk140"></script>
-<script src="mc-compras.js?v=20261119tk140"></script>
-<script src="mc-consignacion.js?v=20261119tk140"></script>
-<script src="mc-proveedores.js?v=20261119tk140"></script>
-<script src="mc-recepciones.js?v=20261119tk140"></script>
-<script src="mc-movil.js?v=20261119tk140"></script>
-<script src="mc-promociones.js?v=20261119tk140"></script>
-<script src="mc-agenda.js?v=20261119tk140"></script>
-<script src="mc-staff-home.js?v=20261119tk140"></script>
-<script src="mc-borradores.js?v=20261119tk140"></script><script>draw();</script><script>
+<script src="vendor-zxing.js?v=20261119tk141"></script>
+<script src="mc-scan.js?v=20261119tk141"></script>
+<script src="mc-buscar.js?v=20261119tk141"></script>
+<script src="beta-screens.js?v=20261119tk141"></script>
+<script src="beta-inline.js?v=20261119tk141"></script>
+<script src="mc-productos.js?v=20261119tk141"></script>
+<script src="mc-nav.js?v=20261119tk141"></script>
+<script src="mc-permisos.js?v=20261119tk141"></script>
+<script src="mc-protocolos.js?v=20261119tk141"></script>
+<script src="mc-conteo.js?v=20261119tk141"></script>
+<script src="mc-transferencias.js?v=20261119tk141"></script>
+<script src="mc-ajustes.js?v=20261119tk141"></script>
+<script src="vendor-qrcode.js?v=20261119tk141"></script>
+<script src="mc-tickets.js?v=20261119tk141"></script>
+<script src="mc-maestro.js?v=20261119tk141"></script>
+<script src="mc-empleados.js?v=20261119tk141"></script>
+<script src="mc-edit.js?v=20261119tk141"></script>
+<script src="mc-paquetes.js?v=20261119tk141"></script>
+<script src="mc-aperturas.js?v=20261119tk141"></script>
+<script src="mc-acceso.js?v=20261119tk141"></script>
+<script src="mc-barras.js?v=20261119tk141"></script>
+<script src="mc-caja.js?v=20261119tk141"></script>
+<script src="mc-giftcards.js?v=20261119tk141"></script>
+<script src="mc-multas.js?v=20261119tk141"></script>
+<script src="mc-clientes.js?v=20261119tk141"></script>
+<script src="mc-clientes-dup.js?v=20261119tk141"></script>
+<script src="mc-docpdf.js?v=20261119tk141"></script>
+<script src="mc-compras.js?v=20261119tk141"></script>
+<script src="mc-consignacion.js?v=20261119tk141"></script>
+<script src="mc-proveedores.js?v=20261119tk141"></script>
+<script src="mc-recepciones.js?v=20261119tk141"></script>
+<script src="mc-movil.js?v=20261119tk141"></script>
+<script src="mc-promociones.js?v=20261119tk141"></script>
+<script src="mc-agenda.js?v=20261119tk141"></script>
+<script src="mc-staff-home.js?v=20261119tk141"></script>
+<script src="mc-borradores.js?v=20261119tk141"></script><script>draw();</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {

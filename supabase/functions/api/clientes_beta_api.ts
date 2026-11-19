@@ -134,11 +134,12 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
   const veSec = verPrivados(ses, matriz, "sector");
   const veMail = verPrivados(ses, matriz, "email");
   // Todo en paralelo y con columnas livianas (la lista tardaba por bajar tablas enteras en serie).
-  const [res, ov, paqs0, gcs0] = await Promise.all([
+  const [res, ov, paqs0, gcs0, cats] = await Promise.all([
     verTodos(ctx, ses).then((vt) => clientesResumen(ctx.db, lite(ses), admin, vt)),
     overlays(ctx),
     consultar(ctx.db, "paquetes", { cols: ["id", "cedula", "nombres", "apellidos", "completo", "borrado_at"] }).then((x) => x.rows).catch(() => todas(ctx, "paquetes")),
     todas(ctx, "gift_cards"),
+    ctx.db.all("catalogo").catch(() => [] as Row[]),
   ]);
   const paqs = paqs0.filter((r) => !r.borrado_at);
   const gcs = gcs0.filter((r) => !r.borrado_at && s(r.codigo_gc));
@@ -151,7 +152,7 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     if (c) porCedP.set(c, (porCedP.get(c) || 0) + 1); else if (nm) porNomP.set(nm, (porNomP.get(nm) || 0) + 1);
   }
   for (const r of gcs) {
-    const sal = saldoGift(r); if (!(sal > 0)) continue;
+    const sal = saldoGift(r, cats as Row[]); if (!(sal > 0)) continue;
     const c = normCedula(r.cedula_comprador), nm = normNombre((s(r.nombre_comprador) + " " + s(r.apellido_comprador)).trim());
     const kk = c ? canonDeClave("c:" + c) : nm ? canonDeClave("n:" + nm) : "";
     if (kk) porKeyG.set(kk, round2((porKeyG.get(kk) || 0) + sal));
@@ -259,8 +260,9 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
     try { gdocs = (await consultar(ctx.db, "beta_gift_documentos", { filtros: [{ col: "gift_id", op: "in", val: [...ids].map(Number) }] })).rows; } catch { gdocs = []; }
     for (const d of gdocs) if (ids.has(String(d.gift_id))) documentos.push({ tipo: "pdf", sub: "gift_card", docId: "gc:" + s(d.id), nombre: "Gift card " + s(d.codigo) + " · certificado PDF", fecha: localEc(d.created_at).slice(0, 10), hora: localEc(d.created_at).slice(11, 16), giftId: d.gift_id });
   }
+  const cats = await ctx.db.all("catalogo").catch(() => [] as Row[]);
   const gifts = giftsCli
-    .map((r) => ({ codigo: s(r.codigo_gc), valor: s(r.valor), saldo: admin ? saldoGift(r) : undefined, usado: r.usado === true, fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por),
+    .map((r) => ({ codigo: s(r.codigo_gc), valor: s(r.valor), saldo: admin ? saldoGift(r, cats) : undefined, usado: r.usado === true, fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por),
       comprador: (s(r.nombre_comprador) + " " + s(r.apellido_comprador)).trim(), fecha: [r.dia, r.mes, r.ano].every((x) => x != null && s(x) !== "") ? `${s(r.ano).split(".")[0]}-${String(n(r.mes)).padStart(2, "0")}-${String(n(r.dia)).padStart(2, "0")}` : "" }));
   const total = historial.reduce((a, t) => a + n(t.total), 0);
   const fechas = historial.map((t) => s(t.fecha)).filter(Boolean).sort();

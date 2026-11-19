@@ -303,7 +303,7 @@
     window._tkVista = window._tkVista || {};
     window._tkVista[d.clave] = d;
     try {
-      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento };
+      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento, edicion: d.edicion };
       sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
     } catch (x) {}
   }
@@ -523,13 +523,34 @@
     h += '<div class="mccf-card"><b>Historial</b>' + ((d.historial || []).length ? '<ul class="mctr-log">' + d.historial.slice().reverse().map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · <b>" + e(x.accion) + "</b> · " + e(x.detalle) + " · " + e(x.actor) + (x.total != null ? " · total " + $m(x.total) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios registrados. ' + (d.lineasBeta ? "" : "Las líneas salen del sistema; si el ticket tiene varias, el precio por línea es un estimado del total cobrado.") + "</p>") + "</div>";
     return h;
   }
+
+  function edicionHtml() {
+    var d = K.d || {}, ed = d.edicion, t = d.ticket || {}, anul = t.cancelado;
+    var h = "";
+    if (ed && ed.id) {
+      h += '<div class="mccf-card mctk-edicion" id="mctk-edicion"><div style="font-weight:800;color:#1A2744">Solicitud de edición pendiente' + (ed.solicitante ? " · " + e(ed.solicitante) : "") + "</div>";
+      if (ed.motivo) h += '<div class="mccf-sub">' + e(ed.motivo) + "</div>";
+      if (ed.diff && typeof window._tkPintarDiffEdicion === "function") h += window._tkPintarDiffEdicion(ed.diff);
+      if (d.admin) {
+        h += '<div class="acts"><button type="button" class="btn small" id="mctk-edicion-ok">Aprobar edición</button><button type="button" class="btn ghost small" id="mctk-edicion-no">Rechazar</button></div>';
+      } else {
+        h += '<p class="mccf-sub">Esperando que Emilia o Emi aprueben. El ticket todavía no cambia.</p>';
+      }
+      h += "</div>";
+      return h;
+    }
+    if (!anul && (d.puedePedir || d.puedeEditar)) {
+      h += '<button type="button" class="mctk-edit-big" id="mctk-editar-form">✏️ Editar ticket</button>';
+    }
+    return h;
+  }
   function html() {
     var d = K.d, t = d.ticket, inf = d.info || {}, rg = d.reagendada || {};
     var num = t.soNum || t.betaNum || ("#" + t.sheetRow), fac = val("factura");
     var facPdf = (d.documentos || []).filter(function (x) { return x.tipo === "factura" && x.url; })[0];
     var reag = rg.si ? (rg.cita ? "Sí · " + fechaIso(rg.cita) : "Sí") : "No";
     return '<div id="mctk-root" class="mctk2">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") +
-      accionesHtml() +
+      accionesHtml() + edicionHtml() +
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
       (d.hidratando ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
@@ -1144,6 +1165,35 @@
       var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
     };
     var pd = main.querySelector("#mctk-pedir");
+    var edBtn = main.querySelector("#mctk-editar-form");
+    if (edBtn) edBtn.addEventListener("click", function () {
+      var clave = (K.d && (K.d.clave || (K.d.ticket && (K.d.ticket.clave || K.d.ticket.soNum)))) || "";
+      if (!clave) { toast2("No encuentro el ticket", true); return; }
+      if (K.d && K.d.edicion && K.d.edicion.id && !K.d.admin) { toast2("Ya hay una edición pendiente de aprobación", true); return; }
+      var abrir = function (d) {
+        if (typeof window._tkCargarEdicion === "function") window._tkCargarEdicion(d, clave);
+        else toast2("No se pudo abrir el formulario", true);
+      };
+      if (K.d && K.d.ok && K.d.lineas) abrir(K.d);
+      else Promise.resolve(api("tk_get", { clave: clave })).then(abrir).catch(function () { toast2("No se pudo cargar el ticket", true); });
+    });
+    function resolverEdicion(aprobar) {
+      var ed = K.d && K.d.edicion;
+      if (!ed || !ed.id) return;
+      var comentario = aprobar ? "" : (prompt("Motivo del rechazo (opcional)") || "");
+      Promise.resolve(api("solicitud_resolver", { id: ed.id, aprobar: aprobar, comentario: comentario }))
+        .then(function (r) {
+          if (r && r.error) { toast2(r.error, true); return; }
+          toast2(aprobar ? "Edición aprobada" : "Edición rechazada");
+          return api("tk_get", { clave: K.d.clave }).then(function (d) { if (d && d.ok) { cargarEstado(d); repintar(main); } });
+        })
+        .catch(function (e) { toast2((e && e.message) || "No se pudo resolver", true); });
+    }
+    var okb = main.querySelector("#mctk-edicion-ok");
+    var nob = main.querySelector("#mctk-edicion-no");
+    if (okb) okb.addEventListener("click", function () { resolverEdicion(true); });
+    if (nob) nob.addEventListener("click", function () { resolverEdicion(false); });
+
     if (pd) pd.onclick = async function () {
       var mot = prompt("¿Por qué se cambia el ticket? (lo aprueba un admin)"); if (!mot || !mot.trim()) return;
       var r = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "cambio", motivo: mot.trim(), propuestos: propuesta() });
