@@ -1,4 +1,6 @@
 // Detalle de ticket de la beta (Emilia 17/11, como la orden de venta de MineCore).
+import { compararLineasVisual, exigeJustificacionDescuento, resumenCuadre } from "./cuadre_lineas.ts";
+import { mapaAliases } from "./inventario_modelo.ts";
 // Lee el ticket del sistema (tabla tickets, que llena la hoja) y guarda lo editado SOLO en beta_tickets /
 // beta_ticket_lineas (0048): cantidad, precio unitario, descuento y total por línea; descuento del ticket
 // (% o $), promoción y exclusión de comisión. Admin edita directo; los demás piden el cambio (solicitudes).
@@ -283,7 +285,29 @@ async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(calc.lineas.some((l) => l.tipo === "diferencia") ? ["revisar la «Diferencia sin explicar» (lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada)"] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
+    ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),
   };
+}
+
+async function cuadreVista(ctx: Ctx, r: Row, lineas: Row[], cab: Row | undefined): Promise<Row> {
+  const d = (cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row;
+  const just = s(d.justificacion_descuento);
+  try {
+    const links = (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "ticket_id", op: "eq", val: n(r.id) }], limite: 5 })).rows;
+    const facs = [...new Set(links.flatMap((L) => [s(L.factura), ...((Array.isArray(L.facturas) ? L.facturas as string[] : []))] ).filter(Boolean))];
+    const facTxt = s(d.factura) || facturaTxt(r.fac_7);
+    if (!facs.length && facTxt) facs.push(facTxt);
+    if (!facs.length) return { cuadre_lineas: [], cuadre: null, justificacion_descuento: just || "" };
+    const vivos = (await todas(ctx, "beta_migo_facturas_vivo")).filter((f) => facs.includes(s(f.factura)));
+    const lineasFac = vivos.flatMap((f) => (Array.isArray(f.lineas) ? f.lineas as Row[] : []));
+    const aliases = mapaAliases(await todas(ctx, "beta_sku_alias").catch(() => [] as Row[]));
+    const tk = { ...r, lineas, lineasDetalle: lineas };
+    const cuadre_lineas = compararLineasVisual([tk], lineasFac, undefined, aliases);
+    const cuadre = resumenCuadre(cuadre_lineas, facs[0] || facTxt);
+    return { cuadre_lineas, cuadre, justificacion_descuento: just || "", facturas_cuadre: facs };
+  } catch {
+    return { cuadre_lineas: [], cuadre: null, justificacion_descuento: just || "" };
+  }
 }
 
 extend("tk_get", "any", async (p, ctx, ses) => {
@@ -425,6 +449,9 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   const promo = promoNom ? promos.find((x) => x.nombre === promoNom) || null : null;
   if (promoNom && !promo && promoNom !== s(cab?.promo_nombre)) return { error: "Esa promoción no está vigente" };
   const calc = calcularTicket(L, { tipo: dTipo || null, valor: dVal }, promo || (promoNom ? { nombre: promoNom, tipo: "$", valor: n(cab?.promo_monto), codigos: [] } : null));
+  const just = s(p.justificacion_descuento) || s((p.datos && typeof p.datos === "object" ? (p.datos as Row).justificacion_descuento : "")) || s((cab?.datos && typeof cab.datos === "object" ? (cab.datos as Row).justificacion_descuento : ""));
+  const errJust = exigeJustificacionDescuento(calc.descuentoTotal, just);
+  if (errJust) return { error: errJust };
   if (entrada) {
     // Quitar un producto devuelve a su bodega lo que el ticket sacó; agregar uno lo descuenta (kardex).
     try { await ajustarStockLineas(ctx, ses, r, actuales, L); }
@@ -460,8 +487,9 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   } catch { /* sin config: queda en 0 como antes */ }
   const packSnap = calc.lineas.map((l, i) => ({ l, s: snaps[i] })).filter((x) => x.l.tipo === "paquete");
   const netoPackVenta = packSnap.filter((x) => n(x.l.precio_unit) > 0).map((x) => x.s.venta_neta);
+  const datosJ = { ...((cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row), ...(just.trim() ? { justificacion_descuento: just.trim().slice(0, 400) } : {}) };
   const fila: Row = {
-    sheet_row: r.sheet_row ?? null, descuento_tipo: dTipo || null, descuento_valor: dVal, descuento_monto: calc.descuentoMonto, promo_nombre: promoNom || null, promo_monto: calc.promoMonto,
+    sheet_row: r.sheet_row ?? null, descuento_tipo: dTipo || null, descuento_valor: dVal, descuento_monto: calc.descuentoMonto, promo_nombre: promoNom || null, promo_monto: calc.promoMonto, datos: datosJ,
     excluir_cosmetologa: exclC, excluir_nota: exclN || null, lineas_beta: true, subtotal: calc.subtotal, iva: calc.iva, total: calc.total, actualizado_por: actor, updated_at: now, historial: hist,
     neto_pack: netoPackVenta[0] != null ? netoPackVenta[0] : null,
     neto_pack6: netoPackVenta[1] != null ? netoPackVenta[1] : null,

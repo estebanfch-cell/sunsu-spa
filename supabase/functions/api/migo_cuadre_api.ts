@@ -42,10 +42,15 @@ function pubBorrador(b0: Row, vivo?: FacturaVivo | null, tickets?: Row[], catalo
   // TK96: la factura viva manda (si está cargada); el borrador es su copia.
   const lineas = lineasVivo.length ? lineasVivo : lineas0;
   const avisos = tickets && tickets.length ? compararFacturaYTickets(lineas, tickets).map((a) => a.texto) : [];
-  const armado = catalogo ? lineasBorradorDeFactura(lineas, catalogo) : null;
+  const descCab = n(vivo?.descuento ?? b0.descuento);
+  const armado = catalogo ? lineasBorradorDeFactura(lineas, catalogo, { descuento: descCab, lineas }) : null;
+  const hayDesc = !!(armado && ((armado.lineas || []).some((l) => n(l.descuento_con) > 0.004) || n(armado.descuento_cabecera_con) > 0.004 || descCab > 0.004));
   return {
     factura: s(b0.factura), fecha: s(b0.fecha).slice(0, 10), cliente: s(b0.cliente),
-    total: n(b0.total), forma: s(b0.forma), lineas,
+    total: n(b0.total), forma: s(b0.forma), lineas, descuento: descCab || null,
+    descuento_cabecera_con: armado ? n(armado.descuento_cabecera_con) : 0,
+    hay_descuento: hayDesc,
+    pide_justificacion: hayDesc,
     sin_items: !lineas.length,
     avisos_lineas: armado ? armado.avisos.concat(avisos) : avisos,
     ...(armado ? { lineas_ticket: armado.lineas, total_lineas: armado.total } : {}),
@@ -122,16 +127,30 @@ function facturasDeFilas(rows: Row[]): FacturaVivo[] {
 
 async function guardarLinks(ctx: Ctx, actor: string, links: LinkCuadre[]): Promise<void> {
   const prev = await todas(ctx, "beta_cuadre_link");
-  const nextIds = new Set(links.map((L) => L.ticket_id));
-  for (const p of prev) {
-    if (!nextIds.has(n(p.ticket_id))) await ctx.db.write(actor, "beta_cuadre_link", "delete", { ticket_id: p.ticket_id }, null);
-  }
-  const byId = new Map(prev.map((p) => [n(p.ticket_id), p]));
-  const now = ctx.now.toISOString();
+  const packed = new Map<number, LinkCuadre>();
   for (const L of links) {
-    const row = { ...L, updated_at: now };
-    if (byId.has(L.ticket_id)) await ctx.db.write(actor, "beta_cuadre_link", "update", { ticket_id: L.ticket_id }, row);
-    else await ctx.db.write(actor, "beta_cuadre_link", "insert", {}, row);
+    const cur = packed.get(L.ticket_id);
+    if (!cur) { packed.set(L.ticket_id, { ...L, facturas: L.facturas || [L.factura] }); continue; }
+    const facs = [...new Set([...(cur.facturas || [cur.factura]), L.factura, ...(L.facturas || [])])];
+    packed.set(L.ticket_id, { ...cur, facturas: facs, total_factura: L.total_factura || cur.total_factura, motivo: [cur.motivo, L.motivo].filter(Boolean).join("; ") });
+  }
+  const nextIds = new Set(packed.keys());
+  for (const p0 of prev) {
+    if (!nextIds.has(n(p0.ticket_id))) await ctx.db.write(actor, "beta_cuadre_link", "delete", { ticket_id: p0.ticket_id }, null);
+  }
+  const byId = new Map(prev.map((p0) => [n(p0.ticket_id), p0]));
+  const now = ctx.now.toISOString();
+  for (const L of packed.values()) {
+    const row: Row = { ...L, updated_at: now };
+    if ((L.facturas || []).length <= 1) delete (row as { facturas?: string[] }).facturas;
+    try {
+      if (byId.has(L.ticket_id)) await ctx.db.write(actor, "beta_cuadre_link", "update", { ticket_id: L.ticket_id }, row);
+      else await ctx.db.write(actor, "beta_cuadre_link", "insert", {}, row);
+    } catch {
+      const { facturas: _f, ...rest } = row as Row & { facturas?: string[] };
+      if (byId.has(L.ticket_id)) await ctx.db.write(actor, "beta_cuadre_link", "update", { ticket_id: L.ticket_id }, rest);
+      else await ctx.db.write(actor, "beta_cuadre_link", "insert", {}, rest);
+    }
   }
 }
 
@@ -381,7 +400,7 @@ export async function reevaluarFlags(ctx: Ctx, actor: string): Promise<Row> {
   const tickets = await ticketsParaCuadre(ctx);
   const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
   if (!facturas.length) return { ok: true, omitido: "sin facturas" };
-  const links = cruzar(facturas, tickets);
+  const links = cruzar(facturas, tickets, await datosCuadre(ctx));
   let importadoGye = "";
   for (const r of await todas(ctx, "beta_migo_importes")) { const g = fechaGye(r.imported_at); if (g > importadoGye) importadoGye = g; }
   const cambios: CambioSku[] = [];
@@ -394,7 +413,7 @@ export async function reevaluarFlags(ctx: Ctx, actor: string): Promise<Row> {
 async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const tickets = await ticketsParaCuadre(ctx);
   const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
-  const links = cruzar(facturas, tickets);
+  const links = cruzar(facturas, tickets, await datosCuadre(ctx));
   await guardarLinks(ctx, actor, links);
   const datosMigo = await aplicarDatosMigo(ctx, actor, tickets, links, facturas);
   const pagosMigo = await aplicarPagosMigo(ctx, actor, tickets, links, facturas);
@@ -578,7 +597,7 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const vivos = new Map(facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [f.factura, f]));
   const catB = await catalogoBorradores(ctx);
   const conPub = (b0: Row, conCand = false) => {
-    const cands = conCand ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets) : [];
+    const cands = conCand ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []) }, tickets) : [];
     const tks = ticketsDeBorrador(b0, tickets, cands);
     const pub = pubBorrador(b0, vivos.get(s(b0.factura)) || null, tks, catB);
     if (conCand) pub.candidatos = cands;
@@ -608,7 +627,7 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   if (s(b0.estado) === "pendiente" && !s(b0.asignado_a) && !puedeGestionarBorradores(ses) && !sinAsignarDelDia(b0, hoyB)) return { error: "Esta factura está en la bandeja de admin o recepción" };
   const tickets = await ticketsParaCuadre(ctx);
   const cands = (!s(b0.ticket_clave) && !n(b0.ticket_id))
-    ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total) }, tickets)
+    ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []) }, tickets)
     : [];
   const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
   const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
@@ -769,6 +788,12 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
   if (!borradorSePuedeVincular(b0.estado)) return { error: "Ese borrador ya no se aprueba" };
   if (!esAdmin(ses.rol)) return { error: "Solo una administradora puede aprobar el ticket. Tu completar queda pendiente de aprobar." };
   const d = { ...((b0.datos && typeof b0.datos === "object" ? b0.datos : {}) as Row), ...((p.datos && typeof p.datos === "object" ? p.datos : {}) as Row) };
+  const { exigeJustificacionDescuento, descuentosDeFactura } = await import("./cuadre_lineas.ts");
+  const just = s(p.justificacion_descuento) || s(d.justificacion_descuento);
+  const descFac = descuentosDeFactura({ descuento: n(b0.descuento), lineas: Array.isArray(b0.lineas) ? b0.lineas as Row[] : [] });
+  const errJ = exigeJustificacionDescuento(descFac.hayDescuento ? Math.max(descFac.descuentoLineasCon, descFac.descuentoCabeceraSin, 1) : 0, just);
+  if (errJ) return { error: errJ };
+  if (just.trim()) d.justificacion_descuento = just.trim().slice(0, 400);
   const nom = splitCliente(s(d.nombre) && s(d.apellido) ? s(d.nombre) + " " + s(d.apellido) : b0.cliente);
   const cosm = s(p.cosmetologa) || s(d.cosmetologa) || s(b0.asignado_a);
   if (!cosm) return { error: "Asigna una cosmetóloga antes de aprobar" };
@@ -777,6 +802,7 @@ extend("migo_borrador_aprobar", "any", async (p, ctx, ses) => {
     nombre: nom.nombre, apellido: nom.apellido, cedula: s(d.cedula), _factura_cliente: fac,
     cosmetologa: cosm, estimado: n(b0.total),
     notas: s(d.notas) || s(d.notas_generales) || s(p.notas) || s(b0.nota),
+    justificacion_descuento: just,
     recomendaciones: s(d.recomendaciones),
     facial: s(d.facial) || s(d.facial_hecho),
     extras: s(d.extras) || s(d.servicios_adicionales) || s(d.cabina),
@@ -834,16 +860,18 @@ export async function lineasDeFacturaATicket(ctx: Ctx, actor: string, factura: s
   const b0 = (await todas(ctx, "beta_migo_borradores")).find((x) => s(x.factura) === fac);
   const fuente = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0?.lineas) ? b0!.lineas : [])) as Row[];
   if (!fuente.length) return { ok: false };
-  const armado = lineasBorradorDeFactura(fuente, await catalogoBorradores(ctx));
+  const armado = lineasBorradorDeFactura(fuente, await catalogoBorradores(ctx), { descuento: n(vivo?.descuento ?? b0?.descuento), lineas: fuente });
   const clave = s(ticket.clave) || claveDe(ticket, leerSerie(ticket, "so_num"));
   if (!clave) return { ok: false };
   const now = ctx.now.toISOString();
-  const total = armado.total, subtotal = Math.round((total / 1.15) * 100) / 100;
+  const descCab = n(armado.descuento_cabecera_con);
+  const total = armado.total;
+  const subtotal = Math.round((total / 1.15) * 100) / 100;
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "factura Migo", detalle: "líneas de la factura " + fac, total }].slice(-100);
   const fila: Row = {
     lineas_beta: true, subtotal, iva: Math.round((total - subtotal) * 100) / 100, total,
-    descuento_tipo: null, descuento_valor: 0, descuento_monto: 0, promo_nombre: null, promo_monto: 0,
+    descuento_tipo: descCab > 0.004 ? "$" : null, descuento_valor: descCab > 0.004 ? descCab : 0, descuento_monto: descCab, promo_nombre: null, promo_monto: 0,
     datos: { ...((cab?.datos || {}) as Row), factura: fac }, historial: hist, actualizado_por: actor, updated_at: now,
   };
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, fila);

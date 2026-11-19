@@ -473,9 +473,10 @@ describe("Historial forma de pago (TK38)", () => {
     assert.match(js, /k:'cos'[\s\S]{0,180}k:'fpago'[\s\S]{0,180}k:'sub'/);
     assert.match(js, /cobro confirmado en Migo/);
     assert.equal(js.includes("Pagado en Migo"), false);
-    assert.match(js, /migo-acc-alerta/);
-    assert.match(js, /migo-acc-badge/);
-    assert.match(js, /sin ticket/);
+    assert.match(js, /_migoBorradoresPill/);
+    assert.match(js, /Borradores/);
+    assert.equal(js.includes("<b>Facturas sin ticket</b>"), false);
+    assert.equal(js.includes("<b>Facturas vinculadas</b>"), false);
 
     assert.match(js, /Pendiente por lunes/);
     assert.match(js, /function _tkFormaPill/);

@@ -307,8 +307,8 @@ describe("TK123 Productos: filtros, escáner y sin-costo físico", () => {
     assert.match(scan, /vendor-zxing\.js/);
     assert.doesNotMatch(scan, /cdn\.jsdelivr\.net/);
     assert.doesNotMatch(screens, /cdn\.jsdelivr\.net\/npm\/@zxing/);
-    assert.match(html, /mc-scan\.js\?v=20261119tk137/);
-    assert.match(html, /vendor-zxing\.js\?v=20261119tk137/);
+    assert.match(html, /mc-scan\.js\?v=20261119tk138/);
+    assert.match(html, /vendor-zxing\.js\?v=20261119tk138/);
     const start = screens.indexOf("function _scanAbrir");
     assert.match(screens.slice(start, start + 500), /MCScan\.abrir/);
   });

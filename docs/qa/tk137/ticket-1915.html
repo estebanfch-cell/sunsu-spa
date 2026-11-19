@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-SO-1915 · cuadre</title>
+<style>
+  :root{--navy:#1A2744;--navy-d:#0f1a30;--cream:#F7F4EE;--gray:#6b7280}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.35 system-ui,Segoe UI,sans-serif;background:#fff;color:var(--navy);max-width:720px;padding:12px}
+  h1{margin:0;font-size:1.35rem}
+  .fac{color:var(--gray);font-size:.86rem;margin:2px 0 8px}
+  .mctk-cuadre{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px 8px;border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:800;margin:0 0 10px;max-width:100%;line-height:1.3}
+  .mctk-cuadre.bad{background:#fdecea;color:#7a2318;border:1.5px solid #e6a39b}
+  .mctk-cuadre button{border:0;background:#fff;color:#7a2318;border:1px solid #e6a39b;border-radius:999px;padding:1px 8px;font:inherit;font-size:.68rem;font-weight:800}
+  h2{font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;color:var(--gray);margin:14px 0 6px}
+  .mctk-ln{padding:8px 8px 8px 10px;margin:0 0 6px;border:1px solid #ECEEF4;border-radius:8px}
+  .mctk-ln.ok{background:#f3faf6;border-left:3px solid #2f9e6b;border-radius:0 8px 8px 0}
+  .mctk-ln.diff,.mctk-ln.sobra,.mctk-ln.falta{background:#fff5f0;border-left:3px solid #d9534f;border-radius:0 8px 8px 0}
+  .mctk-ln.canje_ok{background:#f3faf6;border-left:3px solid #9ad7b6;border-radius:0 8px 8px 0}
+  .mctk-cuadre-razon{font-size:.68rem;font-weight:700;color:#8a2216;margin-top:2px;line-height:1.3;overflow-wrap:anywhere}
+  .mctk-ln.canje_ok .mctk-cuadre-razon{color:#1b6b45}
+  .top{display:flex;justify-content:space-between;gap:8px;font-size:.82rem}
+  .sku{color:var(--gray);font-size:.72rem}
+</style>
+<h1>TK-SO-1915</h1>
+<div class="fac">Carolina C. · Fac. 2972</div>
+<div class="mctk-cuadre bad">1 línea por corregir · fac. 2972 <button type="button">Marcar resuelto</button></div>
+<h2>Líneas</h2>
+<div class="mctk-ln ok"><div class="top"><b>C.Tox Eye Cream</b><b>$100.00</b></div><div class="sku">SUNSU-ML-002 · 1</div></div>
+<div class="mctk-ln canje_ok"><div class="top"><b>Facial Reparación</b><b>$0.00</b></div><div class="sku">SUNSU-02 · 1</div><div class="mctk-cuadre-razon">Canje · OK sin factura</div></div>
+<div class="mctk-ln diff"><div class="top"><b>Paquete x3 Facial Reparación</b><b>$175.50</b></div><div class="sku">SUNSU-18 · 1</div><div class="mctk-cuadre-razon">En factura: $111.96 (descuento $55.25 sin IVA)</div></div>
+</html>

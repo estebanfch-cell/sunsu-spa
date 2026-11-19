@@ -117,11 +117,11 @@ describe("TK96 · cuadre ticket↔factura nunca por nombre", () => {
 describe("TK96 · front del borrador", () => {
   const fe = fs.readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
   const pob = fe.slice(fe.indexOf("function _migoMatchLinea("), fe.indexOf("function _migoAplicarPrefillAT("));
-  it("empareja solo por SKU (sin nombre) y no pone descuentos de lista ni promos", () => {
+  it("empareja solo por SKU (sin nombre); copia descuentos de la factura, nunca de lista ni promos", () => {
     assert.match(pob, /_migoSkuKey/);
     assert.doesNotMatch(pob, /x\.n\|\|x\.nombre/);
     assert.doesNotMatch(pob, /lista \$/);
-    assert.doesNotMatch(pob, /T\.lineDesc\[[^\]]+\]=\{/);
+    assert.match(pob, /descuento_con/);
     assert.match(fe, /if\(T&&T\._migoFac\)\{[^\n]*return; \}/);
     assert.match(pob, /lineas_ticket/);
     assert.match(pob, /sec==='gift'/);

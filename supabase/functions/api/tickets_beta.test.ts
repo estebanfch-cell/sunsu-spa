@@ -59,11 +59,12 @@ describe("detalle de ticket beta", () => {
     assert.ok(((g.ticket as Row).leds as Row[]).some((x) => x.t === "Abierto"));
     // Inactivo no se puede agregar.
     assert.match(String((await h("tk_guardar", "adm", { clave: "TK-SO-1", lineas: [...L, { tipo: "producto", sku: "ML-009", cantidad: 1 }] })).error), /inactivo/);
-    const sv = await h("tk_guardar", "adm", { clave: "TK-SO-1", lineas: [...L, { tipo: "producto", sku: "ML-001", cantidad: 1, descuento_tipo: "%", descuento_valor: 10 }], descuento: { tipo: "$", valor: 4 } });
-    assert.equal(sv.ok, true);
+    const sv = await h("tk_guardar", "adm", { clave: "TK-SO-1", lineas: [...L, { tipo: "producto", sku: "ML-001", cantidad: 1, descuento_tipo: "%", descuento_valor: 10 }], descuento: { tipo: "$", valor: 4 }, justificacion_descuento: "Promo de prueba TK135" });
+    assert.equal(sv.ok, true, String(sv.error));
     assert.equal(sv.total, round(69 + 103.5 - 4));
     const g2 = await h("tk_get", "adm", { clave: "TK-SO-1" });
     assert.equal(g2.lineasBeta, true);
+    assert.equal(g2.justificacion_descuento, "Promo de prueba TK135");
     const ml1 = (g2.lineas as Row[]).find((l) => l.sku === "ML-001")!;
     assert.deepEqual([ml1.cantidad, ml1.precio_unit, ml1.descuento_monto, ml1.total_linea], [1, 115, 11.5, 103.5]);
     assert.equal((g2.historial as Row[]).length, 1);
@@ -131,12 +132,9 @@ describe("detalle de ticket v2", () => {
     assert.equal((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { cabina: "cabina 2" } })).ok, true);
     assert.equal(((await h("tk_get", "adm", { clave: "TK-SO-1" })).info as Row).cabina, "Cabina 2");
     assert.match(String((await h("tk_guardar", "adm", { clave: "TK-SO-1", datos: { cabina: "Cabina 9" } })).error), /Cabina/);
-    // Costos: admin solamente; producto a costo promedio.
-    assert.match(String((await h("tk_costos", "cos", { clave: "TK-SO-1" })).error), /administradores/);
-    assert.equal((await h("tk_costos_guardar", "adm", { clave: "TK-SO-1", tipo: "%", valor: 10 })).ok, true);
-    const c = (await h("tk_costos", "adm", { clave: "TK-SO-1" })).costos as Row;
-    assert.equal(c.cogs, 8);
-    assert.equal(c.costos_no_cliente, Math.round(n6(c.subtotal) * 10) / 100);
+    // Costos: solo Super Admin (TK115).
+    assert.match(String((await h("tk_costos", "cos", { clave: "TK-SO-1" })).error), /Super Admin/);
+    assert.match(String((await h("tk_costos_guardar", "adm", { clave: "TK-SO-1", tipo: "%", valor: 10 })).error), /Super Admin/);
     // Envío de reporte (cosmetóloga, su ticket) y estados de la lista.
     assert.equal((await h("tk_envio", "cos", { clave: "TK-SO-1", tipo: "facial", telefono: "593999111222" })).ok, true);
     assert.equal((db.tables.get("beta_ticket_envios") as Row[])[0].telefono_fin, "1222");

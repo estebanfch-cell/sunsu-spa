@@ -2996,6 +2996,7 @@ function enviarTicket(){
     fechaRetorno:   _retFmt,
     estimado:       _finalEstimado,
     descuento:      _dscLabel||'',
+    justificacion_descuento: (T.justificacionDescuento||'').trim(),
     paq2gcSlots3:   (T.paq2gcSlots3||[]).filter(function(s){return s&&s.codigo;}),
     paq2gcSlots6:   (T.paq2gcSlots6||[]).filter(function(s){return s&&s.codigo;}),
     cobrado:        cobrado,
@@ -3029,6 +3030,14 @@ function enviarTicket(){
     else if(/efec/.test(_mf)) payload.cobTipo='Efectivo';
   }
 
+  var _hayDescEnvio=!!(_dscMonto>0.004 || (T.lineDesc&&Object.keys(T.lineDesc).some(function(k){ return T.lineDesc[k]&&Number(T.lineDesc[k].v||T.lineDesc[k].monto||0)>0; })) || T._migoHayDescuento);
+  if(_hayDescEnvio && !(T.justificacionDescuento||'').trim()){
+    var justEl=document.getElementById('migo-just-desc');
+    if(justEl){ justEl.focus(); }
+    if(typeof toast==='function') toast('Indica por qué se aplicó este descuento (gift card, promo, F&F, cortesía…).','#B86B6B');
+    else alert('Indica por qué se aplicó este descuento.');
+    return;
+  }
   const btn=document.querySelector('.submit-btn');
   if(window._esCotizacion){
     if(btn){btn.disabled=true;btn.textContent='⏳ Guardando...';}
@@ -5825,7 +5834,7 @@ function _tkResumenLinea(tickets, conPrecio){
 function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
   tickets=_tkFiltrar(tickets);
   var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'" (las fechas y filtros no aplican)</div>':'');
-  html+='<div id="migo-borradores-banner"></div>';
+  html+='';
   html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':(cosmFiltro?' de '+cosmFiltro:''))+'</div>';
@@ -5838,7 +5847,7 @@ function _histResAdminHTML(tickets, cosmFiltro, fechaDesde, fechaHasta, busq){
 function _histResStaffHTML(tickets, busq){
   tickets=_tkFiltrar(tickets);
   var html=(busq?'<div style="font-size:0.62rem;color:#C9A227;font-weight:700;margin-bottom:8px">🔍 Mostrando TODO el historial de "'+busq+'"</div>':'');
-  html+='<div id="migo-borradores-banner"></div>';
+  html+='';
   html+=_tkResumenLinea(tickets, true);
   if(tickets.length===0){
     html+='<div class="card" style="text-align:center;color:var(--gray);font-size:0.82rem;padding:24px">Sin tickets'+(busq?' de "'+busq+'"':' en este rango')+'</div>';
@@ -5909,9 +5918,10 @@ function mostrarHistorialStaff(c, fechaDesde, fechaHasta){
   var pad=function(n){return String(n).padStart(2,'0');};
   var fechaHoy=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
 
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;gap:8px;flex-wrap:wrap">'
     +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Mis tickets</div>'
-    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">'+_migoBorradoresPill()
+    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span></div>'
     +'</div>';
 
   // Same date filters as admin but calls staff version
@@ -5980,9 +5990,10 @@ function mostrarHistorialAdmin(c, fechaDesde, fechaHasta, cosmFiltro){
   // Get unique cosmetologas from data
   var cosms=['Todas'].concat([...new Set(_histData.map(function(t){return t.cosmetologa;}).filter(Boolean))].sort());
 
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">'
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;gap:8px;flex-wrap:wrap">'
     +'<div style="font-size:0.82rem;font-weight:700;color:var(--navy)">📋 Historial</div>'
-    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">'+_migoBorradoresPill()
+    +'<span class="note" style="font-size:0.66rem" title="La lista se actualiza sola desde la base de datos">● Al día</span></div>'
     +'</div>';
 
   // Filters card
@@ -18673,71 +18684,32 @@ function _migoAsignarSel(sel){
     else { alert((x&&x.error)||'No se pudo asignar'); sel.value=''; }
   });
 }
+
+function _migoBorradoresPill(){
+  var n=Number(window._migoBandejaN||0)||0;
+  var st='display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:800;text-decoration:none;white-space:nowrap;max-width:100%;';
+  if(n>0) st+='background:#fff8e6;color:#8a6d00;border:1.5px solid #e8cf7a;';
+  else st+='background:#fff;color:var(--navy,#1A2744);border:1.5px solid #ECEEF4;';
+  return '<a id="migo-borradores-pill" href="#/m/borradores" style="'+st+'">📄 Borradores'+(n?' ('+n+')':'')+'</a>';
+}
 function _migoPintarBandeja(forzar){
-  var box=document.getElementById('migo-borradores-banner');
-  if(!box) return;
-  if(window._migoBandejaHtml!=null && box.innerHTML!==window._migoBandejaHtml) box.innerHTML=window._migoBandejaHtml;
-  if(!forzar && window._migoBandejaT && Date.now()-window._migoBandejaT<30000 && window._migoBandejaHtml!=null) return;
+  // TK135: las cajas grandes salen de Tickets. Solo se actualiza la pastilla compacta «Borradores (N)».
+  var pill=document.getElementById('migo-borradores-pill');
+  if(!forzar && window._migoBandejaT && Date.now()-window._migoBandejaT<30000 && window._migoBandejaN!=null){
+    if(pill && typeof _migoBorradoresPill==='function'){ var tmp=document.createElement('div'); tmp.innerHTML=_migoBorradoresPill(); if(pill.parentNode) pill.parentNode.replaceChild(tmp.firstChild, pill); }
+    return;
+  }
   if(typeof api!=='function') return;
   if(window._migoBandejaCargando) return;
   window._migoBandejaCargando=true;
   Promise.resolve(api('migo_borradores_lista',{})).then(function(r){
     window._migoBandejaCargando=false;
-    var dest=document.getElementById('migo-borradores-banner');
-    if(!dest||!dest.isConnected) return;
     if(!r||!r.ok) return;
-    var mias=r.mias||[], bandeja=r.bandeja||[], vinculados=r.vinculados||[];
-    if(!mias.length&&!bandeja.length&&!vinculados.length){
-      window._migoBandejaHtml=''; window._migoBandejaT=Date.now();
-      if(dest.innerHTML) dest.innerHTML='';
-      return;
-    }
-    var filas=function(L, modo){
-      return L.map(function(b){
-        var claves=b.ticket_claves&&b.ticket_claves.length?b.ticket_claves:(b.ticket_clave?[b.ticket_clave]:[]);
-        var linked=claves.length>0;
-        var acciones='';
-        if(modo==='bandeja'&&!linked){
-          acciones='<button type="button" class="btn small" onclick="_migoVincularBorrador(\''+_migoEsc(b.factura)+'\')">Vincular ticket</button>'
-            +_migoSelectAsignar(b.factura,b.asignado_a)
-            +'<button type="button" class="btn ghost small" onclick="_migoAbrirEnTicket(\''+_migoEsc(b.factura)+'\')">Crear ticket</button>';
-        } else if(modo==='mias'&&!linked){
-          acciones='<button type="button" class="btn small" onclick="_migoAbrirEnTicket(\''+_migoEsc(b.factura)+'\')">Abrir ticket</button>';
-        } else {
-          acciones='<button type="button" class="btn ghost small" onclick="_migoAbrirBorrador(\''+_migoEsc(b.factura)+'\')">Ver</button>';
-        }
-        var pill=linked
-          ? '<span class="tk-pill" style="color:#1b6b45;border:1px solid #9ad7b6">Vinculada a '+_migoTicketLinks(claves)+'</span>'
-          : (modo==='mias'&&!b.listo
-            ? '<span class="tk-pill" style="color:#C98A00;border:1px solid #e8cf7a">Por completar</span>'
-            : '<span class="tk-pill" style="color:#8a6d00;border:1px solid #e8cf7a">Pendiente de aprobar</span>');
-        var cand=(!linked&&b.candidatos&&b.candidatos.length)?_migoSugInline(b.candidatos,b.total):'';
-        var avisos=_migoAvisosHtml(b);
-        return '<div class="migo-bandeja-item">'
-          +'<div class="migo-bandeja-fila"><b>'+_migoEsc(_migoTitleCase(b.cliente||'—'))+'</b>'
-          +'<div class="mccf-sub" style="font-size:.72rem">Fac. '+_migoEsc(b.factura)+' · '+_migoEsc(b.fecha)+' · $'+Number(b.total||0).toFixed(2)+(b.forma?' · '+_migoEsc(b.forma):'')+(b.asignado_a?' · '+_migoEsc(b.asignado_a):'')+'</div>'
-          +cand+avisos
-          +(linked?'<div class="mccf-sub" style="font-size:.78rem;margin-top:2px">Ticket: '+_migoTicketLinks(claves)+'</div>':'')
-          +'</div><div class="migo-bandeja-acciones">'+pill+acciones+'</div></div>';
-      }).join('');
-    };
-    var html='';
-    if(mias.length) html+='<div class="card" style="background:#fff8e6;border:1.5px solid #e8cf7a;margin-bottom:10px;padding:12px 14px"><b>Tienes '+mias.length+' factura'+(mias.length>1?'s':'')+' pendiente'+(mias.length>1?'s':'')+' por aprobar</b><div class="mccf-sub">Llegaron a Migo antes del ticket. Ábrela en el ticket completo (cliente, ítems, precios y forma de pago ya vienen de la factura). Puedes agregar o corregir — las facturas a veces no traen cortesías u otros ítems. No cuenta en comisiones ni inventario hasta que lo envíes.</div>'+filas(mias,'mias')+'</div>';
-    if(bandeja.length){
-      var nSin=bandeja.length;
-      html+='<details class="card migo-acc migo-acc-alerta"><summary><b>Facturas sin ticket</b><span class="migo-acc-badge">⚠️ '+nSin+' factura'+(nSin===1?'':'s')+' sin ticket</span></summary>'
-        +'<div class="mccf-sub">Elige el ticket a vincular, o asígnala a una cosmetóloga; si el día anterior es lunes, también se sugieren esos.</div>'
-        +filas(bandeja,'bandeja')+'</details>';
-    }
-    if(vinculados.length){
-      var nOk=vinculados.length;
-      html+='<details class="card migo-acc migo-acc-ok"><summary><b>Facturas vinculadas</b><span class="migo-acc-count">'+nOk+' reciente'+(nOk===1?'':'s')+'</span></summary>'
-        +'<div class="mccf-sub">Entra al ticket desde el enlace.</div>'
-        +filas(vinculados,'ok')+'</details>';
-    }
-    _migoVincEnsureCss();
-    window._migoBandejaHtml=html; window._migoBandejaT=Date.now();
-    if(dest.innerHTML!==html) dest.innerHTML=html;
+    var mias=r.mias||[], bandeja=r.bandeja||[];
+    window._migoBandejaN=(mias.length+bandeja.length);
+    window._migoBandejaT=Date.now();
+    var p2=document.getElementById('migo-borradores-pill');
+    if(p2 && typeof _migoBorradoresPill==='function'){ var tmp=document.createElement('div'); tmp.innerHTML=_migoBorradoresPill(); if(p2.parentNode) p2.parentNode.replaceChild(tmp.firstChild, p2); }
   }).catch(function(){ window._migoBandejaCargando=false; });
 }
 function _migoMoney(v){ return "$"+Number(v||0).toFixed(2); }
@@ -18780,7 +18752,7 @@ function _migoVincEnsureCss(){
     +".migo-sug-inline{margin-top:6px;min-width:0}"
     +".migo-sug-line{font-size:.74rem;margin-top:3px;line-height:1.4;min-width:0;overflow-wrap:break-word}"
     +".migo-bandeja-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;align-items:start;padding:8px 0;border-top:1px solid #f0e6c8}"+".migo-bandeja-fila{min-width:0}"+".migo-bandeja-acciones{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}"+"@media(max-width:640px){.migo-bandeja-item{grid-template-columns:1fr}.migo-bandeja-acciones{justify-content:flex-start}}"
-    +"#migo-vinc-form label.migo-pick-row{display:flex}"+".migo-acc{margin-bottom:10px;padding:12px 14px}"+".migo-acc>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap}"+".migo-acc>summary::-webkit-details-marker,.migo-acc>summary::marker{display:none}"+".migo-acc>summary::before{content:\"▸\";color:#6b7280;font-size:.9rem;flex:0 0 auto}"+".migo-acc[open]>summary::before{content:\"▾\"}"+".migo-acc-alerta{background:#fff5f0;border:1.5px solid #e8a090}"+".migo-acc-alerta>summary{color:#8a2216}"+".migo-acc-badge{display:inline-flex;align-items:center;background:#fde8e4;color:#8a2216;border:1px solid #e8a090;border-radius:999px;padding:2px 9px;font-size:.75rem;font-weight:800}"+".migo-acc-ok{background:#f3faf6;border:1.5px solid #9ad7b6}"+".migo-acc-count{color:#3d6b54;font-size:.78rem;font-weight:650}";
+    +"#migo-vinc-form label.migo-pick-row{display:flex}";
   document.head.appendChild(st);
 }
 function _migoPickRow(it){
@@ -19127,7 +19099,16 @@ function _migoPoblarTDesdeFac(b){
     // TK98: alias (SUNSU-35 a $3 → INV-123 caja de gift card): en el formulario va con el SKU beta.
     var skuFE=(l.skuFactura&&l.sku&&_migoSkuKey(l.skuFactura)!==_migoSkuKey(l.sku))?l.sku:(l.skuFactura||l.sku);
     P.push({sec:sec, sku:l.sku||l.skuFactura, skuFE:skuFE, n:l.nombre||l.sku, p:pu, q:q, pack:l.pack});
+    if(Number(l.descuento_con||0)>0.004){
+      var kDesc=String(l.sku||l.skuFactura||'');
+      T.lineDesc[kDesc]={m:'$',v:Number(l.descuento_con)};
+    }
   });
+  if(Number(b.descuento_cabecera_con||0)>0.004){
+    T.descuento={tipo:'custom',pct:0,custom:Number(b.descuento_cabecera_con),customMode:'valor',customPct:0,customTarget:'Total'};
+  }
+  T._migoHayDescuento=!!(b.hay_descuento||b.pide_justificacion);
+  T.justificacionDescuento=T.justificacionDescuento||'';
   window._migoPrecios=P;
   _migoAplicarPrecios();
   P.forEach(function(x){
@@ -19163,6 +19144,15 @@ function _migoPintarPrefillAviso(c){
   box.style.cssText='margin:0 0 12px;padding:10px 12px;background:#eef7f1;border:1.5px solid #9ad7b6;border-radius:10px;font-size:.78rem;color:#1b6b45;line-height:1.4';
   if(/Faltan los productos|Revisa/.test(msg)) box.style.cssText='margin:0 0 12px;padding:10px 12px;background:#fff8e6;border:1.5px solid #e8cf7a;border-radius:10px;font-size:.78rem;color:#6b4a00;line-height:1.4';
   box.textContent=msg;
+  if(T&& (T._migoHayDescuento || (T.lineDesc&&Object.keys(T.lineDesc).length))){
+    var wrap=document.createElement('div');
+    wrap.style.cssText='margin-top:8px';
+    wrap.innerHTML='<label style="display:block;font-weight:800;font-size:.78rem;margin-bottom:4px">¿Por qué se aplicó este descuento?</label>'
+      +'<textarea id="migo-just-desc" required placeholder="Gift card, promo, F&amp;F, cortesía…" style="width:100%;box-sizing:border-box;min-height:56px;padding:8px;border:1.5px solid #cfc4ee;border-radius:9px;font:inherit;font-size:.8rem">'+(T.justificacionDescuento||'').replace(/</g,'&lt;')+'</textarea>';
+    box.appendChild(wrap);
+    var ta=wrap.querySelector('#migo-just-desc');
+    if(ta) ta.addEventListener('input', function(){ T.justificacionDescuento=ta.value; });
+  }
   var card=host.querySelector('#sec-cli .card')||host.firstElementChild;
   if(card&&card.parentNode) card.parentNode.insertBefore(box, card);
   else host.insertBefore(box, host.firstChild);

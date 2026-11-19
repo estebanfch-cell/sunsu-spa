@@ -1,10 +1,11 @@
 // Cruce de tickets con facturas vivas de Migo (solo lectura). No emite ni anula facturas.
 import { b, n, s, type Row, round2 } from "./domain.ts";
 
-import { compararFacturaYTickets } from "./migo_lineas.ts";
+import { compararFacturaYTickets, lineasDeTicket, normalizarLineaFactura, type LineaNorm } from "./migo_lineas.ts";
 import { difPorSku, totalTicketCuadre } from "./cuadre_sku.ts";
 import type { AliasMap } from "./inventario_modelo.ts";
 import { tipoSinCobro } from "./sin_cobro.ts";
+import { cruzarPerfilesSku, esCanjeCero, perfilSku } from "./cuadre_lineas.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
 export const FALTA_CUADRE_DESDE = "2026-11-01";
@@ -66,14 +67,25 @@ export function metodosTicket(comp: unknown): string[] {
   });
 }
 
-export function exentoCuadre(t: Row): boolean {
+export function exentoCuadre(t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): boolean {
   const fac = s(t.facturaBeta || t.fac_7);
   if (/sin\s*factura|s\/f/i.test(fac)) return true;
   const mets = metodosTicket(t.comp);
   if (mets.includes("canje") || mets.includes("cortesia") || mets.includes("cortesía")) return true;
   // TK99: en $0 por cortesía, consumo interno o canje de paquete: no se cruza con Migo.
   if (tipoSinCobro(t)) return true;
+  // TK135: un ticket solo en $0 (canje puro, sin compra) no se cruza ni se marca «sin factura».
+  if (ticketSoloCero(t, catalogo)) return true;
   return false;
+}
+
+/** TK135: ticket sin compra (total $0 / solo canjes). No se vincula a facturas pagadas ni se marca «sin factura». */
+export function ticketSoloCero(t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>): boolean {
+  const L = lineasDeTicket(t, catalogo);
+  if (L.some((l) => !esCanjeCero(l) && n(l.totalCon) > 0.004)) return false;
+  // Líneas de compra a $0 suelen ser catálogo ausente: si el estimado es > $0, no es canje puro.
+  if (L.some((l) => !esCanjeCero(l))) return !(n(t.estimado) > 0.004);
+  return !(n(t.estimado) > 0.004);
 }
 
 export function estaPagado(t: Row): boolean {
@@ -114,20 +126,31 @@ export type FacturaVivo = {
   lineas?: LineaFactura[];
 };
 export type LinkCuadre = {
-  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto"; confianza: "alta" | "media";
+  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto" | "sku_fecha" | "sku_fecha_suma" | "facturas_suma"; confianza: "alta" | "media";
   diferencia_monto: number; diferencia_fecha: number; estado: "cuadra" | "redondeo" | "diferencia";
   motivo: string; cliente_migo: string; total_factura: number; total_tickets: number;
+  /** TK135: todas las facturas cuando un ticket cuadra con varias del mismo día. */
+  facturas?: string[];
 };
+export type OptsCuadre = { catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>; aliases?: AliasMap };
 export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac" | "lineas"; motivo: string; detalle: string; factura: string | null };
 
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
 }
+function facturasDeLink(L: { factura: string; facturas?: string[] }, facturas: FacturaVivo[]): FacturaVivo[] {
+  const nums = [...new Set([L.factura, ...(L.facturas || [])].filter(Boolean))];
+  return nums.map((f) => facturas.find((x) => x.factura === f)).filter((x): x is FacturaVivo => !!x);
+}
+function lineasDeFacturas(FF: FacturaVivo[]): Row[] {
+  return FF.flatMap((f) => (Array.isArray(f.lineas) ? f.lineas as Row[] : []));
+}
 /** TK98: « Qué SKU hace la diferencia: Falta en ticket: SUNSU-35 GIFT CARD $3.00.» (solo por SKU). */
-function difSkuDeLink(L: { factura: string }, facturas: FacturaVivo[], hermanos: Row[], t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number }>, aliases?: AliasMap): string {
-  const f = facturas.find((x) => x.factura === L.factura);
-  if (!f || !Array.isArray(f.lineas) || !f.lineas.length) return "";
-  const d = difPorSku(f.lineas as Row[], hermanos.length ? hermanos : [t], catalogo, aliases);
+function difSkuDeLink(L: { factura: string; facturas?: string[] }, facturas: FacturaVivo[], hermanos: Row[], t: Row, catalogo?: Map<string, { nombre?: string; pvpConIva?: number }>, aliases?: AliasMap): string {
+  const FF = facturasDeLink(L, facturas);
+  const lineas = lineasDeFacturas(FF);
+  if (!lineas.length) return "";
+  const d = difPorSku(lineas, hermanos.length ? hermanos : [t], catalogo, aliases);
   return d.length ? " " + d.join(" · ") + "." : "";
 }
 /** TK90: cancelado/anulado (beta o sistema anterior). */
@@ -139,13 +162,16 @@ function totalTicket(t: Row): number {
   return n(t.estimado);
 }
 
-/** Cruce: primero por número de factura (fac_7 o factura de la beta); si no, nombre + fecha ±1 día + monto (±$0.05). Una factura puede cubrir varios tickets. */
-export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
+/** Cruce: por número de factura; si no, mismo día + SKU (1-a-varios / varios-a-1) o nombre+monto. Los tickets de $0 no entran. El nombre distinto no impide el cruce si los SKU cuadran. */
+export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadre): LinkCuadre[] {
+  const catalogo = opts?.catalogo;
+  const aliases = opts?.aliases;
   const bySeq = new Map<number, FacturaVivo>();
   for (const f of facturas) if (f.seq) bySeq.set(f.seq, f);
   const usedT = new Set<number>(), usedInv = new Set<number>();
   const groups = new Map<number, Row[]>();
   for (const t of tickets) {
+    if (ticketSoloCero(t, catalogo)) continue;
     const seq = facSeq(t.facturaBeta || t.fac_7);
     if (!seq || !bySeq.has(seq)) continue;
     const L = groups.get(seq) || [];
@@ -153,31 +179,36 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
     usedT.add(n(t.id)); usedInv.add(seq);
   }
   const links: LinkCuadre[] = [];
-  const pushGroup = (inv: FacturaVivo, ts: Row[], tipo: LinkCuadre["tipo"], confianza: LinkCuadre["confianza"]) => {
+  const pushGroup = (invs: FacturaVivo[], ts: Row[], tipo: LinkCuadre["tipo"], confianza: LinkCuadre["confianza"]) => {
+    const invList = invs;
     const tsum = ts.reduce((a, t) => a + totalTicket(t), 0);
-    const diff = Math.round((tsum - inv.total) * 100) / 100;
+    const invTotal = invList.reduce((a, inv) => a + inv.total, 0);
+    const diff = Math.round((tsum - invTotal) * 100) / 100;
     const estado: LinkCuadre["estado"] = Math.abs(diff) <= 0 ? "cuadra" : Math.abs(diff) <= TOL_MONTO ? "redondeo" : "diferencia";
     const motivos: string[] = [];
     if (ts.length > 1) motivos.push("una factura cubre " + ts.length + " tickets");
+    if (invList.length > 1) motivos.push(invList.length + " facturas cubren un ticket");
     if (estado === "diferencia") motivos.push("diferencia de monto $" + diff.toFixed(2));
     else if (estado === "redondeo") motivos.push("redondeo");
+    const facs = invList.map((x) => x.factura);
     for (const t of ts) {
-      const fd = t.fecha && inv.fecha ? Math.round((Date.parse(s(t.fecha) + "T12:00:00Z") - Date.parse(inv.fecha + "T12:00:00Z")) / 86400000) : 0;
+      const inv0 = invList[0];
+      const fd = t.fecha && inv0.fecha ? Math.round((Date.parse(s(t.fecha) + "T12:00:00Z") - Date.parse(inv0.fecha + "T12:00:00Z")) / 86400000) : 0;
       links.push({
-        ticket_id: n(t.id), factura: inv.factura, tipo, confianza,
+        ticket_id: n(t.id), factura: inv0.factura, tipo, confianza,
         diferencia_monto: diff, diferencia_fecha: fd, estado,
-        motivo: motivos.join("; "), cliente_migo: inv.cliente, total_factura: inv.total, total_tickets: tsum,
+        motivo: motivos.join("; "), cliente_migo: invList.map((x) => x.cliente).filter(Boolean).join(" · "),
+        total_factura: invTotal, total_tickets: tsum,
+        ...(facs.length > 1 ? { facturas: facs } : {}),
       });
     }
   };
   for (const [seq, ts] of groups) {
     const inv = bySeq.get(seq)!;
-    pushGroup(inv, ts, "numero", "alta");
+    pushGroup([inv], ts, "numero", "alta");
   }
   const unmatchedInv = facturas.filter((f) => !usedInv.has(f.seq));
-  // También tickets aún no cobrados en la hoja: el cobro puede existir solo en Migo.
-  // namesMatch >= 2 (subconjunto o 2+ tokens); un solo apellido compartido no basta (p.ej. Prado).
-  const unmatchedTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t));
+  const unmatchedTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t, catalogo) && !ticketSoloCero(t, catalogo));
   type Cand = { sc: number; tokens: number; days: number; ad: number; t: Row; inv: FacturaVivo };
   const cands: Cand[] = [];
   for (const t of unmatchedTk) {
@@ -196,11 +227,89 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[]): LinkCuadre[] {
     const tid = n(c.t.id);
     if (seenT.has(tid) || seenI.has(c.inv.seq)) continue;
     seenT.add(tid); seenI.add(c.inv.seq);
-    pushGroup(c.inv, [c.t], "nombre_fecha_monto", "media");
+    usedT.add(tid); usedInv.add(c.inv.seq);
+    pushGroup([c.inv], [c.t], "nombre_fecha_monto", "media");
+  }
+
+  // TK135: mismo día (da igual la hora), por SKU canónico. El nombre no es requisito.
+  // 1 factura ↔ 1..3 tickets, o 2..3 facturas ↔ 1 ticket. Si los ítems cuadran y el valor no (descuento), igual se vincula.
+  type SkuCand = { sc: number; invs: FacturaVivo[]; ts: Row[]; tipo: LinkCuadre["tipo"]; conf: LinkCuadre["confianza"] };
+  const skuCands: SkuCand[] = [];
+  const perfilFac = (f: FacturaVivo) => perfilSku((f.lineas || []).map(normalizarLineaFactura).filter((x): x is LineaNorm => !!x), aliases);
+  const perfilTks = (ts: Row[]) => {
+    const m = new Map<string, { q: number; tot: number }>();
+    for (const t of ts) {
+      for (const [k, v] of perfilSku(lineasDeTicket(t, catalogo), aliases)) {
+        const a = m.get(k) || { q: 0, tot: 0 };
+        a.q += v.q; a.tot = Math.round((a.tot + v.tot) * 100) / 100;
+        m.set(k, a);
+      }
+    }
+    return m;
+  };
+  const scoreSku = (pa: Map<string, { q: number; tot: number }>, pb: Map<string, { q: number; tot: number }>): { sc: number; conf: LinkCuadre["confianza"] } | null => {
+    const r = cruzarPerfilesSku(pa, pb);
+    if (r.mismoPrecio) return { sc: 8, conf: "alta" };
+    if (r.mismaCantidad) return { sc: 7, conf: "media" }; // mismos ítems, distinto valor (descuento)
+    return null;
+  };
+  const combosDe = <T,>(arr: T[], max: number): T[][] => {
+    const out: T[][] = [];
+    const n0 = Math.min(arr.length, 12);
+    const a = arr.slice(0, n0);
+    for (let i = 0; i < a.length; i++) {
+      out.push([a[i]]);
+      if (max < 2) continue;
+      for (let j = i + 1; j < a.length; j++) {
+        out.push([a[i], a[j]]);
+        if (max < 3) continue;
+        for (let k = j + 1; k < a.length; k++) out.push([a[i], a[j], a[k]]);
+      }
+    }
+    return out;
+  };
+  const stillTk = tickets.filter((t) => !usedT.has(n(t.id)) && !exentoCuadre(t, catalogo) && !ticketSoloCero(t, catalogo) && !ticketCancelado(t));
+  const stillInv = facturas.filter((f) => !usedInv.has(f.seq));
+  for (const inv of stillInv) {
+    const pool = stillTk.filter((t) => fechaGye(t.fecha) === inv.fecha);
+    if (!pool.length) continue;
+    const pf = perfilFac(inv);
+    if (!pf.size) continue;
+    for (const ts of combosDe(pool, 3)) {
+      const r = scoreSku(perfilTks(ts), pf);
+      if (!r) continue;
+      skuCands.push({ sc: r.sc + (ts.length === 1 ? 0.2 : 0), invs: [inv], ts, tipo: ts.length > 1 ? "sku_fecha_suma" : "sku_fecha", conf: r.conf });
+    }
+  }
+  for (const t of stillTk) {
+    const pool = stillInv.filter((f) => f.fecha === fechaGye(t.fecha) && perfilFac(f).size);
+    if (pool.length < 2) continue;
+    const pt = perfilTks([t]);
+    if (!pt.size) continue;
+    for (const invs of combosDe(pool, 3)) {
+      if (invs.length < 2) continue;
+      const pf = new Map<string, { q: number; tot: number }>();
+      for (const inv of invs) {
+        for (const [k, v] of perfilFac(inv)) {
+          const a = pf.get(k) || { q: 0, tot: 0 };
+          a.q += v.q; a.tot = Math.round((a.tot + v.tot) * 100) / 100;
+          pf.set(k, a);
+        }
+      }
+      const r = scoreSku(pt, pf);
+      if (!r) continue;
+      skuCands.push({ sc: r.sc, invs, ts: [t], tipo: "facturas_suma", conf: r.conf });
+    }
+  }
+  skuCands.sort((a, b) => b.sc - a.sc);
+  for (const c of skuCands) {
+    if (c.ts.some((t) => usedT.has(n(t.id))) || c.invs.some((inv) => usedInv.has(inv.seq))) continue;
+    for (const t of c.ts) usedT.add(n(t.id));
+    for (const inv of c.invs) usedInv.add(inv.seq);
+    pushGroup(c.invs, c.ts, c.tipo, c.conf);
   }
   return links;
 }
-
 
 /** Día de la semana de un YMD (0=domingo … 1=lunes), mediodía UTC para no cruzar fecha. */
 export function dowYmd(ymd: string): number {
@@ -252,17 +361,19 @@ export function flagsDeseadas(p: {
     const id = n(t.id);
     if (id === NUNCA_TICKET_ID) continue;
     if (s(t.fecha) < FALTA_CUADRE_DESDE) continue;
-    if (exentoCuadre(t) || !estaPagado(t)) continue;
+    if (exentoCuadre(t, p.catalogo) || !estaPagado(t)) continue;
     const clave = s(t.clave || t.so_num);
     const Ls = linksByTk.get(id) || [];
     if (Ls.length) {
       const L = Ls[0];
       const hermanos0 = (tksByInv.get(L.factura) || []).map((i) => byId.get(i)).filter(Boolean) as Row[];
       const ts0 = hermanos0.length ? hermanos0 : [t];
-      const facV0 = p.facturas.find((f) => f.factura === L.factura);
+      const FF0 = facturasDeLink(L, p.facturas);
+      const facV0 = FF0[0];
+      const lineasFac0 = lineasDeFacturas(FF0);
       const sinBeta0 = (x: Row) => !(Array.isArray(x.lineasDetalle) && (x.lineasDetalle as Row[]).length);
       // TK80: ticket migrado sin líneas beta, lo cobrado = total de la factura (±$1): la vista usa las líneas de la factura (TK72).
-      const desdeFactura0 = !!(facV0 && ts0.length <= 1 && sinBeta0(t) && n(facV0.total) > 0 && Math.abs(n(facV0.total) - n(t.estimado)) <= 1);
+      const desdeFactura0 = !!(facV0 && ts0.length <= 1 && sinBeta0(t) && n(L.total_factura) > 0 && Math.abs(n(L.total_factura) - n(t.estimado)) <= 1);
       if (!desdeFactura0) {
         const ts = ts0;
         // TK133: el letrero compara el total de las líneas (catálogo o beta), no el «Pagado» / estimado de la hoja.
@@ -282,13 +393,13 @@ export function flagsDeseadas(p: {
       // TK84 (Emilia 18/11): una factura a otro nombre (p. ej. la mamá de la clienta) NO es un error ni bloquea el cuadre:
       // nunca se crea flag «Clienta no cuadra». El detalle muestra solo una nota gris «Facturado a otro nombre».
       const facV = facV0;
-      if (facV && facV.lineas && facV.lineas.length) {
+      if (lineasFac0.length) {
         const hermanos = ts0;
         // TK80: un ticket migrado sin líneas beta, solo en su factura y con lo cobrado = total de la factura (±$1)
         // ya se muestra con las líneas de esa factura (TK72): no hay nada que revisar entre ticket y factura.
         const sinBeta = sinBeta0;
         const desdeFactura = desdeFactura0;
-        const avisos = desdeFactura ? [] : compararFacturaYTickets(facV.lineas as Row[], hermanos.length ? hermanos : [t], p.catalogo, p.catalogo);
+        const avisos = desdeFactura ? [] : compararFacturaYTickets(lineasFac0, hermanos.length ? hermanos : [t], p.catalogo, p.catalogo);
         const rojos = avisos.filter((a) => a.tipo !== "sugerencia" && a.tipo !== "cambio_sku");
         for (const a of avisos) if (a.tipo === "cambio_sku" && a.ticketId === id) cambios.push({ ticket_id: id, ticket_clave: clave, factura: L.factura, desde: s(a.desde), hacia: s(a.hacia), texto: a.texto });
         if (rojos.length) {
@@ -490,11 +601,11 @@ function etiquetaNoCuadra(sum: number, invTotal: number): string {
  * Combos de 2 o 3 que cuadran (±$0.05) van primero, marcados ✅ Cuadra.
  * Misma familia (apellido) suma puntos. No vincula solo: la admin elige.
  */
-export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number }, tickets: Row[]): CandidatoBorrador[] {
+export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number; lineas?: Row[] }, tickets: Row[], opts?: OptsCuadre): CandidatoBorrador[] {
   const dias = new Set(fechasCandidatasBorrador(inv.fecha));
   const pool = tickets.filter((t) => {
     if (!ticketClaveValida(t)) return false;
-    if (exentoCuadre(t)) return false;
+    if (exentoCuadre(t, opts?.catalogo)) return false;
     if (!dias.has(s(t.fecha).slice(0, 10))) return false;
     const fac = s(t.facturaBeta || t.fac_7);
     if (fac && !/sin/i.test(fac)) return false;
@@ -534,12 +645,19 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     };
   };
 
+  const pfInv = inv.lineas && inv.lineas.length
+    ? perfilSku((inv.lineas || []).map(normalizarLineaFactura).filter((x): x is LineaNorm => !!x), opts?.aliases)
+    : null;
+  const skuDe = (t: Row) => pfInv && pfInv.size ? cruzarPerfilesSku(perfilSku(lineasDeTicket(t, opts?.catalogo), opts?.aliases), pfInv) : null;
   const singles: CandidatoBorrador[] = [];
   for (const t of pool) {
     const x = pub(t);
     const tokens = namesMatch(x.nombre, inv.cliente);
     const exact = montoCerca(x.total, inv.total);
-    if (tokens < 1 && !exact) continue;
+    const sku = skuDe(t);
+    const itemsOk = !!(sku && (sku.mismoPrecio || sku.mismaCantidad));
+    // TK135: el nombre distinto no descarta si los SKU del mismo día cuadran (también si el valor difiere por un descuento).
+    if (tokens < 1 && !exact && !itemsOk) continue;
     const tipo: CandidatoBorrador["tipo"] = exact && tokens >= 1 ? "nombre_monto" : exact ? "monto" : "nombre";
     singles.push(item([x], tipo));
   }
