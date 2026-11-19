@@ -162,28 +162,110 @@ export function precioGiftCatalogo(sku: string, catalogo: Row[] = []): number {
   return p > 0 ? round2(p) : 0;
 }
 
-/** Monto disponible de una gift card. Si ya hay un saldo anotado (columna, SALDO:n u orig), gana ese.
- *  Si no (el caso típico: valor = «Gift Card», saldo null, nunca usada), se usa el precio del SKU en el catálogo
- *  (SUNSU-35 = $65) o un monto escrito como $30 en valor/notas. */
-export function saldoGift(row: Row, catalogo: Row[] = []): number {
-  if (row.usado === true || row.usado === "true" || row.usado === "SI") return 0;
-  if (row.saldo != null && s(row.saldo) !== "" && Number.isFinite(Number(row.saldo))) return round2(n(row.saldo));
+/** Nombre corto y precio de catálogo si valor/notas nombran un facial (Reset, Geisha, etc.).
+ *  No interpreta «PREMIUM» (en facturas suele ser una Gift Card SUNSU-35 de $65/$68)
+ *  ni un paquete («VER PAQUETE» / «PAQUETE (3|6)») como un facial suelto. */
+export function facialDesdeTexto(texto: string, catalogo: Row[] = []): { precio: number; sku: string; etiqueta: string } | null {
+  const blob = s(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!blob.trim()) return null;
+  if (/\bver\s+paquete\b/.test(blob) || /\bpaquete\s*\(?\s*[36]\b/.test(blob)) return null;
+  const aliases: { re: RegExp; sku: string; etiqueta: string }[] = [
+    { re: /\bpeeling\s*marino\b/, sku: "SUNSU-42", etiqueta: "Peeling Marino" },
+    { re: /\bgeisha\b/, sku: "SUNSU-43", etiqueta: "Geisha" },
+    { re: /\b(skin\s*)?reset(\s*3\s*x\s*1)?\b/, sku: "SUNSU-40", etiqueta: "Reset" },
+    { re: /\bdomo(\s*de\s*oxigeno)?\b/, sku: "SUNSU-41", etiqueta: "Domo de Oxígeno" },
+    { re: /\bginseng\b/, sku: "SUNSU-52", etiqueta: "Ginseng" },
+    { re: /\bk\s*-?\s*lift\b/, sku: "SUNSU-57", etiqueta: "K-Lift" },
+    { re: /\bgold\s*-?\s*aging\b/, sku: "SUNSU-04", etiqueta: "Gold-Aging" },
+    { re: /\bporcelana\b/, sku: "SUNSU-05", etiqueta: "Porcelana" },
+    { re: /\b7\s*pieles\b/, sku: "SUNSU-03", etiqueta: "7 Pieles" },
+    { re: /\brice\s*flow\b/, sku: "SUNSU-06", etiqueta: "Rice Flow" },
+    { re: /(?:\bfacial\s+)?(?:puruficacion|purificacion)(?:\s+s\.?o\.?s\.?\b)?|\bs\.?o\.?s\.?\b/, sku: "SUNSU-01", etiqueta: "S.O.S" },
+    { re: /\breparacion\b/, sku: "SUNSU-02", etiqueta: "Reparación" },
+    { re: /\bbio\s*-?\s*glow\b/, sku: "", etiqueta: "Bio-Glow" },
+    { re: /\blimpieza\b/, sku: "", etiqueta: "Limpieza" },
+  ];
+  const precioDe = (sku: string): number => (sku ? precioGiftCatalogo(sku, catalogo) : 0);
+  for (const a of aliases) {
+    if (!a.re.test(blob)) continue;
+    // «AMPOLLA ESPECIAL PURIFICACIÓN» no es el Facial S.O.S.
+    if (a.sku === "SUNSU-01" && /\bampolla\b/.test(blob) && !/\bs\.?o\.?s\.?\b/.test(blob)) continue;
+    const precio = precioDe(a.sku);
+    if (precio > 0) return { precio, sku: a.sku, etiqueta: a.etiqueta };
+    // Alias conocido pero sin precio en este catálogo: sigue buscando por nombre.
+    if (a.sku) continue;
+  }
+  let best: { precio: number; sku: string; etiqueta: string; score: number } | null = null;
+  for (const c of catalogo) {
+    const tipo = s(c.tipo).toUpperCase();
+    if (!/FACIAL/.test(tipo) || /PAQUETE/.test(tipo) || /PRODUCTO|ADD-?ON|GIFT/.test(tipo)) continue;
+    const nombre = s(c.producto_servicio).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const toks = nombre.replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/)
+      .filter((w) => w.length >= 4 && !/^(facial|sunsu|pieles)$/.test(w));
+    if (!toks.length || !toks.every((w) => blob.includes(w))) continue;
+    const precio = n(c.total_con_iva) || n(c.total) || n(c.subtotal);
+    if (!(precio > 0)) continue;
+    const score = toks.join(" ").length;
+    if (!best || score > best.score) {
+      const etiqueta = s(c.producto_servicio).replace(/^FACIAL(?:ES)?\s+(?:DE\s+)?/i, "").replace(/\s+3x1$/i, "").trim();
+      best = { precio: round2(precio), sku: s(c.sku), etiqueta: etiqueta || s(c.sku), score };
+    }
+  }
+  return best ? { precio: best.precio, sku: best.sku, etiqueta: best.etiqueta } : null;
+}
+
+export type InfoSaldoGift = { saldo: number; origen: string; facial: string; sku: string };
+
+/** Monto disponible de una gift card.
+ *  1) saldo numérico (incl. 0) / tag SALDO:n / orig.saldo
+ *  2) valor numérico (p. ej. «95» o «$95» sin letras)
+ *  3) monto explícito en notas/valor (p. ej. «$95») o facial de catálogo nombrado en notas/valor
+ *  4) recién entonces, precio del SKU de la fila (SUNSU-35 = $65). */
+export function infoSaldoGift(row: Row, catalogo: Row[] = []): InfoSaldoGift {
+  const skuRow = s(row.sku);
+  if (row.usado === true || row.usado === "true" || row.usado === "SI") {
+    return { saldo: 0, origen: "usado", facial: "", sku: skuRow };
+  }
+  const facHint = facialDesdeTexto(s(row.valor) + " " + s(row.notas), catalogo);
+  const conFac = (saldo: number, origen: string): InfoSaldoGift => ({
+    saldo, origen, facial: facHint?.etiqueta || "", sku: facHint?.sku || skuRow,
+  });
+  if (row.saldo != null && s(row.saldo) !== "" && Number.isFinite(Number(row.saldo))) {
+    return conFac(round2(n(row.saldo)), "saldo");
+  }
   const notas = s(row.notas);
   const m = notas.match(/SALDO:([\d.]+)/);
-  if (m) return round2(Number(m[1]));
+  if (m) return conFac(round2(Number(m[1])), "saldo");
   const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : null;
-  if (orig && orig.saldo != null && s(orig.saldo) !== "") return round2(n(orig.saldo));
+  if (orig && orig.saldo != null && s(orig.saldo) !== "" && Number.isFinite(Number(orig.saldo))) {
+    return conFac(round2(n(orig.saldo)), "saldo");
+  }
   const valor = s(row.valor);
   const v = parseFloat(valor.replace(",", "."));
-  if (Number.isFinite(v) && v > 0 && !/[a-z]/i.test(valor)) return round2(v);
+  if (Number.isFinite(v) && v > 0 && !/[a-z]/i.test(valor)) return conFac(round2(v), "valor");
   const ape = parseFloat(s(row.apellido_comprador));
-  if (Number.isFinite(ape) && ape > 0) return round2(ape);
+  if (Number.isFinite(ape) && ape > 0) return conFac(round2(ape), "valor");
   const dolar = (valor + " " + notas).match(/\$\s*([\d.,]+)/);
   if (dolar) {
     const x = parseFloat(dolar[1].replace(",", "."));
-    if (Number.isFinite(x) && x > 0) return round2(x);
+    if (Number.isFinite(x) && x > 0) return conFac(round2(x), "notas");
   }
-  return precioGiftCatalogo(s(row.sku), catalogo);
+  if (facHint && facHint.precio > 0) {
+    return { saldo: facHint.precio, origen: "facial", facial: facHint.etiqueta, sku: facHint.sku };
+  }
+  const cat = precioGiftCatalogo(skuRow, catalogo);
+  return { saldo: cat, origen: cat > 0 ? "catalogo" : "ninguno", facial: "", sku: skuRow };
+}
+
+export function saldoGift(row: Row, catalogo: Row[] = []): number {
+  return infoSaldoGift(row, catalogo).saldo;
+}
+
+export function etiquetaGift(row: Row, catalogo: Row[] = []): string {
+  const info = infoSaldoGift(row, catalogo);
+  const codigo = s(row.codigo_gc);
+  const mon = "$" + info.saldo.toFixed(info.saldo % 1 ? 2 : 0);
+  return (codigo ? codigo + " · " : "") + mon + (info.facial ? " (" + info.facial + ")" : "");
 }
 
 function notasConSaldo(prev: string, saldo: number): string {
