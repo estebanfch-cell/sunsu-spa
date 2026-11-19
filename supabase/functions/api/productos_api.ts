@@ -14,6 +14,7 @@ import {
   arr, codigoBarrasNorm, ean13Valido, limpiarCodigos, limpiarEscalas, limpiarProveedores, precioEscala, type CodigoBarras,
   autoMinimos, deducirDelNombre, faltantesDe, BOD_CONSIG,
 } from "./productos.ts";
+import { FLAG_PENDIENTE_CONTEO, skuInternoDe, skuVentaDe } from "./inventario_modelo.ts";
 import { consultar } from "./query.ts";
 
 /** Del diff del audit_log quita lo que no se muestra (miniatura base64, sellos de edición). */
@@ -170,7 +171,12 @@ function fila(p: Row, b: Base): Row {
     fuentes: [cat ? "catalogo" : "", cab ? "cabina" : "", "erp"].filter(Boolean),
     codigoCabina: cab ? s(cab.codigo) : "",
     // Para el buscador: SKU proveedor y códigos de barras.
-    skuProveedor: s(p.sku_proveedor),
+    skuProveedor: s(p.sku_proveedor) || skuVentaDe(p, code),
+    codigoInterno: s(p.codigo_interno) || (cab ? s(cab.codigo) : ""),
+    skuVenta: skuVentaDe(p, code),
+    skuCabina: skuInternoDe(p, s(p.codigo_interno) || s(cab?.codigo) || code),
+    pendienteConteo: p.beta_pendiente_conteo === true,
+    pendienteConteoTxt: p.beta_pendiente_conteo === true ? FLAG_PENDIENTE_CONTEO : "",
     // Incluye el código de la hoja de cabina (cabina_inventario) si el producto aún no tiene uno propio.
     barras: [...new Set([s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo)), s(p.codigo_barras) || arr(p.beta_codigos).length ? "" : s(cab?.codigo_barras).replace(/\.0+$/, "")].filter(Boolean))],
   };
@@ -179,14 +185,14 @@ function fila(p: Row, b: Base): Row {
 /** Lista de productos de la beta (misma fila que Productos) para otros módulos: conteo, transferencias, ajustes. */
 export async function listaProductos(ctx: Ctx, ses: Ses): Promise<Row[]> {
   const b = await cargarBase(ctx, ses);
-  return b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))) && !s(p.beta_eliminado_at)).map((p) => fila(p, b));
+  return b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))) && !s(p.beta_eliminado_at) && !s(p.beta_canonico_id)).map((p) => fila(p, b));
 }
 
 extend("mcprod_list", "any", async (p0, ctx, ses) => {
   const pr = await permisos(ctx, ses);
   if (!pr.puede) return { error: "No tienes permiso" };
   const b = await cargarBase(ctx, ses);
-  const todos = b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))));
+  const todos = b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))) && !s(p.beta_canonico_id));
   const eliminados = todos.filter((p) => s(p.beta_eliminado_at)).length;
   // Eliminados (borrado suave) no salen; solo un admin los ve para restaurarlos.
   const verElim = pr.admin && p0.eliminados === true;

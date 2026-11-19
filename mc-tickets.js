@@ -519,7 +519,7 @@
     async function lista() {
       var v = q.value.trim(); if (!v) { hits.hidden = true; return; }
       await cargarCat();
-      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible].concat(p.barras || []), [p.nombre, p.marca]]; }) : []).slice(0, 10);
+      var H = (window.MCBuscar ? window.MCBuscar.filtrar(K.cat || [], v, function (p) { return [[p.sku, p.skuVisible, p.codigoInterno].concat(p.aliases || [], p.barras || []), [p.nombre, p.marca]]; }) : []).slice(0, 10);
       hits.hidden = false;
       hits.innerHTML = H.length ? H.map(function (p) { return '<button type="button" data-add="' + e(p.tipo + "|" + p.sku) + '"><span class="mccf-chip">' + e(TIPO[p.tipo] || p.tipo) + '</span> <span class="mccf-sku">' + e(p.skuVisible || p.sku) + "</span> " + e(p.nombre) + ' <span class="mccf-sub">· ' + e($m(p.pvp)) + (p.stock != null ? " · stock " + e(q2(p.stock)) : "") + "</span></button>"; }).join("") : '<div class="mccf-sub" style="padding:8px">Sin resultados</div>';
     }

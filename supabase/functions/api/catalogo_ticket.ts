@@ -3,6 +3,7 @@
 // o esté inactivo en el sistema viejo. El precio de lista, si falta, es el último
 // total con IVA de Migo.
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
+import { skuVentaDe } from "./inventario_modelo.ts";
 
 export function tipoCatalogo(t: string): string {
   const x = s(t).toUpperCase();
@@ -63,26 +64,32 @@ export function armarCatalogoTicket(catalogo: Row[], productos: Row[], migo: Map
     const m = migo.get(code);
     const pvp = tot > 0 ? round2(tot) : (n(p?.pvp) > 0 ? round2(n(p!.pvp)) : n(m?.pvp));
     const enMigo = !!m;
+    const venta = p && tipoCatalogo(s(r.tipo)) === "producto" ? skuVentaDe(p, code) : code;
+    const aliases = p ? [...new Set([s(p.codigoInterno), s(p.skuCabina), code, ...(Array.isArray(p.skuAntes) ? p.skuAntes.map((x) => s(x)) : [])].filter((x) => x && x !== venta))] : [];
+    ya.add(venta);
     out.push({
-      sku: code, skuVisible: s(r.sku), nombre: s(r.producto_servicio) || s(p?.nombre) || s(m?.nombre),
+      sku: venta, skuVisible: venta, nombre: s(r.producto_servicio) || s(p?.nombre) || s(m?.nombre),
       tipo: tipoCatalogo(s(r.tipo)), pvp: round2(pvp),
       activo: (p ? p.activo !== false : r.activo !== false) || enMigo,
-      enMigo, barras: p ? p.barras || [] : [], productoId: p ? s(p.id) : "", foto: p ? s(p.foto_thumb) : "",
+      enMigo, barras: [...new Set([...(p ? (p.barras || []) : []), ...aliases])], productoId: p ? s(p.id) : "", foto: p ? s(p.foto_thumb) : "",
       stock: p ? p.stock : null, marca: p ? s(p.marca) : "", categoria: p ? s(p.categoria) : "",
+      codigoInterno: p ? s(p.codigoInterno || p.codigo_interno) : "", aliases,
     });
   }
   for (const p of productos || []) {
-    const code = skuCode(s(p.sku));
+    const raw = skuCode(s(p.sku));
+    const code = p.tipo === "servicio" ? raw : skuVentaDe(p, raw);
     if (!code || ya.has(code) || p.tipo === "servicio") continue;
-    const m = migo.get(code);
+    const m = migo.get(code) || migo.get(raw);
     const pvp = n(p.pvp) > 0 ? n(p.pvp) : n(m?.pvp);
-    ya.add(code);
+    ya.add(code); ya.add(raw);
     const enMigo = !!m;
+    const aliases = [...new Set([s(p.codigoInterno), s(p.skuCabina), raw, ...(Array.isArray(p.skuAntes) ? p.skuAntes.map((x) => s(x)) : []), ...(Array.isArray(p.barras) ? p.barras.map((x) => s(x)) : [])].filter((x) => x && x !== code))];
     out.push({
-      sku: code, skuVisible: s(p.skuVisible || p.sku), nombre: s(p.nombre) || s(m?.nombre), tipo: "producto",
+      sku: code, skuVisible: code, nombre: s(p.nombre) || s(m?.nombre), tipo: "producto",
       pvp: round2(pvp), activo: p.activo !== false || enMigo, enMigo,
-      barras: p.barras || [], productoId: s(p.id), foto: s(p.foto_thumb), stock: p.stock,
-      marca: s(p.marca), categoria: s(p.categoria),
+      barras: [...new Set([...(Array.isArray(p.barras) ? p.barras : []), ...aliases])], productoId: s(p.id), foto: s(p.foto_thumb), stock: p.stock,
+      marca: s(p.marca), categoria: s(p.categoria), codigoInterno: s(p.codigoInterno || p.codigo_interno), aliases,
     });
   }
   for (const [code, m] of migo) {
