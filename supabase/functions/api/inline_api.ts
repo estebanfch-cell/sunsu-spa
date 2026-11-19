@@ -7,6 +7,7 @@ import { actorOf, kvGet, kvSet, logAccion, nextSheet } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe, MODULOS, normalizarRol, puedeVerContacto, ROLES } from "./permisos.ts";
 import { runErp } from "./erp.ts";
 import { compraParaComision, ecuadorParts, IVA, n, normCedula, normNombre, PCT_COMISION_PRODUCTO, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
+import { utilidadProducto } from "./productos.ts";
 import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } from "./horarios_api.ts";
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
 import { saldoDe } from "./asistencia_api.ts";
@@ -257,7 +258,8 @@ export async function guardarCatalogoCampos(ctx: Ctx, ses: Ses, fila: string, ca
       sheet_row, sku, producto_servicio: s(campos.nombre), tipo: s(campos.tipo) || "PRODUCTO",
       subtotal: sub, iva: round2(sub * 0.15), total_con_iva: round2(sub * IVA),
       precio_compra: comisionCosto, compra_comision: comisionCosto,
-      utilidad: round2(sub - real), comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO), activo: true,
+      comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
+      utilidad: (function(){ const c = round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO); const u = utilidadProducto(sub, real > 0 ? real : null, c); return u.faltaCosto ? null : u.utilidad; })(), activo: true,
       orig: { sku },
     };
     const saved = await ctx.db.write(actorOf(ses), "catalogo", "insert", {}, rec);
@@ -279,8 +281,12 @@ export async function guardarCatalogoCampos(ctx: Ctx, ses: Ses, fila: string, ca
     compra_comision: comisionCosto,
     comi_producto_30: round2(Math.max(0, sub - comisionCosto) * PCT_COMISION_PRODUCTO),
   };
-  if (campos.compraReal != null && campos.compraReal !== "") patch.utilidad = round2(sub - n(campos.compraReal));
   if (campos.com != null && campos.com !== "") patch.comi_producto_30 = n(campos.com);
+  if (campos.compraReal != null && campos.compraReal !== "") {
+    const real = n(campos.compraReal);
+    const u = utilidadProducto(sub, real > 0 ? real : null, n(patch.comi_producto_30));
+    patch.utilidad = u.faltaCosto ? null : u.utilidad;
+  }
   const antes = vistaCatalogo(row);
   const saved = await ctx.db.write(actorOf(ses), "catalogo", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, patch);
   if (!saved) return { error: "No se pudo guardar el producto" };

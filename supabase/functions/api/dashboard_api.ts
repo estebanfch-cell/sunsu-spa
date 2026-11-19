@@ -4,12 +4,16 @@ import { extend } from "./handlers.ts";
 import type { Ctx } from "./lib.ts";
 import { kvGet } from "./lib.ts";
 import {
-  ADMIN, IVA, addDays, cantAmpollas, ecuadorParts, esCanje, esInterno, facialSku, n, normCedula,
+  ADMIN, IVA, addDays, cantAmpollas, compraParaComision, ecuadorParts, esCanje, esInterno, facialSku, n, normCedula,
   PROD_COLS, productQtys, repartirPagos, round2, s, skuCode, ymdUtc, type Row, esCancelado, normNombre } from "./domain.ts";
 import { montoGcAplicado } from "./ventas.ts";
 import { runErp } from "./erp.ts";
 import type { Db } from "./db.ts";
 import { consultar } from "./query.ts";
+import { comisionUnidad, utilidadProducto } from "./productos.ts";
+import { asegurarSnapshots, mapaCostoReal, snapsPorClave, type SnapLeido } from "./costos_reales.ts";
+import { claveDe } from "./ticket_beta.ts";
+import { leerSerie } from "./series.ts";
 
 type Periodo = "hoy" | "semana" | "mes" | "ano" | "rango";
 const MES_CORTO = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -73,7 +77,7 @@ export function rangos(periodo: Periodo, hoy: string, desde = "", hasta = ""): {
   return { periodo: "hoy", desde: hoy, hasta: hoy, pDesde: addDays(hoy, -1), pHasta: addDays(hoy, -1) };
 }
 
-interface ProdLinea { sku: string; nombre: string; qty: number; val: number; costo: number }
+interface ProdLinea { sku: string; nombre: string; qty: number; val: number; costo: number; comision?: number; faltaCosto?: boolean; utilidad?: number }
 interface Hecho {
   k: string; venta: number; cosm: string; clientaKey: string; clienta: string;
   facial: { code: string; nombre: string; canje: boolean; val: number } | null;
@@ -106,43 +110,48 @@ function primerNombre(v: string): string {
   return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
 }
 
-interface Precios { sub: Map<string, number>; costo: Map<string, number>; nombre: Map<string, string> }
+interface Precios {
+  sub: Map<string, number>;
+  costo: Map<string, number>;
+  /** Solo para hechos Migo (corte previo a mayo 2026): no se toca el criterio histórico. */
+  costoMigo: Map<string, number>;
+  nombre: Map<string, string>;
+  compraComision: Map<string, number>;
+}
 
 async function precios(db: Db): Promise<Precios> {
-  const sub = new Map<string, number>(), costo = new Map<string, number>(), nombre = new Map<string, string>();
+  const sub = new Map<string, number>(), costoMigo = new Map<string, number>(), nombre = new Map<string, string>(), compraComision = new Map<string, number>();
   for (const r of await db.all("catalogo")) {
     const code = skuCode(s(r.sku));
     if (!code) continue;
     const st = n(r.subtotal), tot = n(r.total_con_iva);
     sub.set(code, st > 0 ? st : tot > 0 ? tot / IVA : 0);
-    if (n(r.precio_compra) > 0) costo.set(code, n(r.precio_compra));
+    if (n(r.precio_compra) > 0) costoMigo.set(code, n(r.precio_compra));
+    compraComision.set(code, compraParaComision(r));
     if (s(r.producto_servicio)) nombre.set(code, s(r.producto_servicio));
   }
-  // Costo: compra del catálogo (lo mismo que usan comisiones); si falta, costo promedio del ERP.
   for (const p of await db.all("erp_productos").catch(() => [] as Row[])) {
     const code = skuCode(s(p.sku));
     if (!code) continue;
-    if (!costo.has(code) && n(p.costo_promedio) > 0) costo.set(code, n(p.costo_promedio));
+    if (!costoMigo.has(code) && n(p.costo_promedio) > 0) costoMigo.set(code, n(p.costo_promedio));
     if (!nombre.has(code) && s(p.nombre)) nombre.set(code, s(p.nombre));
     if (!sub.has(code) && n(p.precio_venta) > 0) sub.set(code, n(p.precio_venta) / (p.iva === false ? 1 : IVA));
+    if (p.beta_compra_comision != null && p.beta_compra_comision !== "") compraComision.set(code, n(p.beta_compra_comision));
   }
   for (const b of await db.all("inventario_base").catch(() => [] as Row[])) {
     const code = skuCode(s(b.sku));
-    if (code && n(b.compra) > 0) costo.set(code, n(b.compra));
+    if (code && n(b.compra) > 0) costoMigo.set(code, n(b.compra));
   }
-  return { sub, costo, nombre };
+  const costo = new Map<string, number>();
+  for (const [code, c] of await mapaCostoReal(db)) costo.set(code, c.costo);
+  return { sub, costo, costoMigo, nombre, compraComision };
 }
 async function costoErp(db: Db, pr: Precios): Promise<Map<string, number>> {
-  const m = new Map<string, number>();
-  for (const p of await db.all("erp_productos").catch(() => [] as Row[])) {
-    const code = skuCode(s(p.sku));
-    if (code && n(p.costo_promedio) > 0) m.set(code, n(p.costo_promedio));
-  }
-  for (const [k, v] of pr.costo) if (!m.has(k)) m.set(k, v);
+  const m = new Map<string, number>(pr.costo);
   return m;
 }
 
-export function hechoDe(t: Row, pr: Precios): Hecho | null {
+export function hechoDe(t: Row, pr: Precios, snaps?: SnapLeido[]): Hecho | null {
   const k = ymdUtc(t.timestamp); // el timestamp guarda la hora de Ecuador (pared) con Z
   if (!k || !ymdRe.test(k)) return null;
   const tot = n(t.estimado);
@@ -187,14 +196,37 @@ export function hechoDe(t: Row, pr: Precios): Hecho | null {
     }
     h.facial = { code: code || fac, nombre, canje: esCj, val };
   }
-  for (const pack of [texto(t.compra_pack_3), texto(t.compra_pack_6)]) {
-    if (!pack) continue;
+  const packSnaps = (snaps || []).filter((x) => x.esPaquete);
+  const packVals = [texto(t.compra_pack_3), texto(t.compra_pack_6)];
+  packVals.forEach((pack, i) => {
+    if (!pack) return;
     const code = codInicio(pack);
-    h.paquetes.push({ code, nombre: (code && pr.nombre.get(code)) || pack.replace(/^SUNSU-\S+\s*/i, ""), val: pr.sub.get(code) || 0 });
-  }
-  for (const q of productQtys(t)) {
-    const code = skuCode(q.sku);
-    h.productos.push({ sku: code, nombre: pr.nombre.get(code) || code, qty: q.qty, val: q.qty * (pr.sub.get(code) || 0), costo: q.qty * (pr.costo.get(code) || 0) });
+    const snap = packSnaps[i];
+    h.paquetes.push({ code, nombre: (code && pr.nombre.get(code)) || pack.replace(/^SUNSU-\S+\s*/i, ""), val: snap ? snap.ventaNeta : (pr.sub.get(code) || 0) });
+  });
+  const prodSnaps = (snaps || []).filter((x) => !x.esPaquete);
+  if (prodSnaps.length) {
+    for (const q of prodSnaps) {
+      const code = skuCode(q.sku);
+      h.productos.push({
+        sku: code, nombre: pr.nombre.get(code) || code, qty: q.qty,
+        val: q.ventaNeta, costo: q.faltaCosto ? 0 : q.costoReal,
+        comision: q.comision, faltaCosto: q.faltaCosto, utilidad: q.utilidad,
+      });
+    }
+  } else {
+    for (const q of productQtys(t)) {
+      const code = skuCode(q.sku);
+      const val = q.qty * (pr.sub.get(code) || 0);
+      const costoU = pr.costo.get(code);
+      const com = comisionUnidad(val, (pr.compraComision.get(code) || 0) * q.qty);
+      const u = utilidadProducto(val, costoU, com);
+      h.productos.push({
+        sku: code, nombre: pr.nombre.get(code) || code, qty: q.qty, val,
+        costo: u.faltaCosto ? 0 : q.qty * (costoU || 0),
+        comision: com, faltaCosto: u.faltaCosto, utilidad: u.utilidad,
+      });
+    }
   }
   // Venta de gift card (col S "SI, 26-077, 26-078"): el valor es lo que queda del ticket sin IVA.
   const vg = texto(t.venta_gift);
@@ -261,14 +293,14 @@ interface Agg {
   tickets: number; ventaTickets: number; venta: number; costo: number;
   faciales: number; facCanjes: number; valFac: number;
   paquetes: number; valPaq: number;
-  productosN: number; valProd: number; costoProd: number;
+  productosN: number; valProd: number; costoProd: number; comisionProd: number; utilidadProd: number; faltaCostoN: number; faltaCostoSkus: Set<string>;
   extrasN: number; valExtras: number; extrasCort: number; gcN: number; gcVal: number;
   pagos: Record<string, number>;
 }
 function nuevoAgg(): Agg {
   return {
     tickets: 0, ventaTickets: 0, venta: 0, costo: 0, faciales: 0, facCanjes: 0, valFac: 0, paquetes: 0, valPaq: 0,
-    productosN: 0, valProd: 0, costoProd: 0, extrasN: 0, valExtras: 0, extrasCort: 0, gcN: 0, gcVal: 0,
+    productosN: 0, valProd: 0, costoProd: 0, comisionProd: 0, utilidadProd: 0, faltaCostoN: 0, faltaCostoSkus: new Set<string>(), extrasN: 0, valExtras: 0, extrasCort: 0, gcN: 0, gcVal: 0,
     pagos: { efectivo: 0, transferencia: 0, tarjeta: 0, mixto: 0, otros: 0 },
   };
 }
@@ -278,7 +310,15 @@ function sumar(a: Agg, h: Hecho) {
   a.venta += h.venta;
   for (const f of h.facial ? [h.facial, ...(h.masFaciales || [])] : []) { a.faciales++; if (f.canje) a.facCanjes++; a.valFac += f.val; }
   for (const p of h.paquetes) { a.paquetes++; a.valPaq += p.val; }
-  for (const p of h.productos) { a.productosN += p.qty; a.valProd += p.val; a.costoProd += p.costo; }
+  for (const p of h.productos) {
+    a.productosN += p.qty; a.valProd += p.val;
+    a.comisionProd += p.comision || 0;
+    if (p.faltaCosto) { a.faltaCostoN += p.qty; a.faltaCostoSkus.add(p.sku); }
+    else {
+      a.costoProd += p.costo;
+      a.utilidadProd += p.utilidad != null ? p.utilidad : (p.val - p.costo - (p.comision || 0));
+    }
+  }
   a.extrasN += h.extrasN; a.valExtras += h.extrasVal; a.extrasCort += h.extrasCort;
   a.gcN += h.gcN; a.gcVal += h.gcVal;
   a.costo += h.extrasCosto;
@@ -287,19 +327,22 @@ function sumar(a: Agg, h: Hecho) {
 function cerrar(a: Agg): Row {
   const sinIva = a.venta / IVA;
   const costo = a.costoProd + a.costo;
-  const util = sinIva - costo;
+  const util = sinIva - costo - a.comisionProd;
   const r2 = (x: number) => round2(x);
   return {
     tickets: a.tickets, ticketsConVenta: a.ventaTickets,
     ventaConIva: r2(a.venta), ventaSinIva: r2(sinIva), iva: r2(a.venta - sinIva),
     costo: r2(costo), utilidad: r2(util), margen: sinIva > 0 ? Math.round(util / sinIva * 1000) / 10 : 0,
-    // Utilidad real solo de productos (es lo único con costo cargado): venta de productos − su costo.
-    utilidadProd: r2(a.valProd - a.costoProd),
+    // Utilidad de productos: venta neta − costo real − comisión. No incluye SKU sin costo real.
+    utilidadProd: r2(a.utilidadProd),
+    comisionProd: r2(a.comisionProd),
+    faltaCostoN: a.faltaCostoN,
+    faltaCostoSkus: a.faltaCostoSkus.size,
     ticketPromedio: a.ventaTickets ? r2(sinIva / a.ventaTickets) : 0,
     faciales: a.faciales, facCanjes: a.facCanjes, valFac: r2(a.valFac),
     paquetes: a.paquetes, valPaq: r2(a.valPaq),
     productosN: a.productosN, valProd: r2(a.valProd), costoProd: r2(a.costoProd),
-    margenProd: a.valProd > 0 ? Math.round((a.valProd - a.costoProd) / a.valProd * 1000) / 10 : 0,
+    margenProd: a.valProd > 0 ? Math.round(a.utilidadProd / a.valProd * 1000) / 10 : 0,
     extrasN: a.extrasN, valExtras: r2(a.valExtras), extrasCort: a.extrasCort,
     gcN: a.gcN, gcVal: r2(a.gcVal),
     pagos: Object.fromEntries(Object.entries(a.pagos).map(([k, v]) => [k, r2(v / IVA)])),
@@ -337,16 +380,19 @@ async function hechosTodos(db: Db, pr: Precios): Promise<Hecho[]> {
     db.all("beta_migo_facturas").catch(() => [] as Row[]),
     db.all("beta_migo_lineas").catch(() => [] as Row[]),
   ]);
+  try { await asegurarSnapshots(db, "sistema-tk114", false, rows.filter((r) => !r.borrado_at), (r) => claveDe(r, leerSerie(r, "so_num"))); } catch { /* columnas aún no aplicadas */ }
+  const snaps = await snapsPorClave(db);
   const hechos: Hecho[] = [];
   const hayMigo = facs.length > 0;
   for (const t of rows) {
     if (t.borrado_at || esCancelado(t)) continue;
-    const h = hechoDe(t, pr);
+    const clave = claveDe(t, leerSerie(t, "so_num"));
+    const h = hechoDe(t, pr, snaps.get(clave));
     if (!h || (hayMigo && h.k < CORTE_MIGO)) continue;
     h.fuente = "sistema"; h.ref = s(t.beta_num || t.sheet_row || t.id);
     hechos.push(h);
   }
-  if (hayMigo) hechos.push(...hechosMigo(facs, lins, pr));
+  if (hayMigo) hechos.push(...hechosMigo(facs, lins, { ...pr, costo: pr.costoMigo }));
   return hechos;
 }
 
@@ -378,8 +424,11 @@ export async function calcularDashboard(db: Db, now: Date, p: Row): Promise<Row>
       topFac.set(hf.code, f);
     }
     for (const pl of h.productos) {
-      const x = topProd.get(pl.sku) || { sku: pl.sku, nombre: pl.nombre, qty: 0, val: 0, costo: 0 };
+      const x = topProd.get(pl.sku) || { sku: pl.sku, nombre: pl.nombre, qty: 0, val: 0, costo: 0, comision: 0, utilidad: 0, faltaCosto: 0 };
       x.qty = n(x.qty) + pl.qty; x.val = n(x.val) + pl.val; x.costo = n(x.costo) + pl.costo;
+      x.comision = n(x.comision) + (pl.comision || 0);
+      x.utilidad = n(x.utilidad) + (pl.faltaCosto ? 0 : (pl.utilidad != null ? pl.utilidad : pl.val - pl.costo - (pl.comision || 0)));
+      if (pl.faltaCosto) x.faltaCosto = n(x.faltaCosto) + pl.qty;
       topProd.set(pl.sku, x);
     }
     if (h.clientaKey) {
@@ -480,8 +529,9 @@ export async function calcularDashboard(db: Db, now: Date, p: Row): Promise<Row>
   const sumVal = (m: Map<string, Row>) => [...m.values()].reduce((a, x) => a + n(x.val), 0);
   const totProdVal = sumVal(topProd), totCli = sumVal(topCli), totCosm = sumVal(porCosm);
   const prods = [...topProd.values()].map((x) => ({
-    sku: x.sku, nombre: x.nombre, qty: n(x.qty), val: r2(x.val), margen: r2(n(x.val) - n(x.costo)),
-    margenPct: n(x.val) > 0 ? Math.round((n(x.val) - n(x.costo)) / n(x.val) * 1000) / 10 : 0,
+    sku: x.sku, nombre: x.nombre, qty: n(x.qty), val: r2(x.val), margen: r2(n(x.utilidad)),
+    margenPct: n(x.val) > 0 ? Math.round(n(x.utilidad) / n(x.val) * 1000) / 10 : 0,
+    faltaCosto: n(x.faltaCosto) > 0,
     pct: totProdVal > 0 ? Math.round(n(x.val) / totProdVal * 1000) / 10 : 0,
   }));
   const labelPrev = per === "hoy" ? etiquetaDia(R.pDesde) : etiquetaRango(R.pDesde, R.pHasta);

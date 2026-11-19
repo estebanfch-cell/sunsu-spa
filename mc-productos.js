@@ -65,7 +65,7 @@
       ".mcp-sku{font-family:ui-monospace,Menlo,monospace;font-size:.8rem;color:var(--navy-d)}",
       ".mcp-top{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}",
       ".mcp-card{background:var(--white);border-radius:16px;box-shadow:var(--shadow);padding:16px}",
-      ".mcp-head{display:flex;gap:18px}.mcp-ph{flex:0 0 190px;height:190px;border-radius:14px;background:var(--cream);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;color:var(--navy);font-size:2rem}",
+      ".falta-costo{color:#8a6d00;background:#fff8e6;border:1px solid #e8cf7a;border-radius:8px;padding:1px 8px;font-weight:700;white-space:nowrap}.falta-costo-banner{color:#8a6d00;background:#fff8e6;border:1px solid #e8cf7a;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem;margin:8px 0}.mcp-head{display:flex;gap:18px}.mcp-ph{flex:0 0 190px;height:190px;border-radius:14px;background:var(--cream);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;color:var(--navy);font-size:2rem}",
       ".mcp-ph img{width:100%;height:100%;object-fit:contain;background:#fff}.mcp-ph.can{cursor:pointer}.mcp-ph .mcp-phh{position:absolute;bottom:6px;right:6px;background:rgba(255,255,255,.9);border-radius:8px;padding:2px 8px;font-size:.7rem;color:var(--navy)}",
       ".mcp-tt{font-size:1.35rem;font-weight:700;color:var(--navy);margin:0 0 6px;line-height:1.2}",
       ".mcp-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 26px;margin-top:8px}",
@@ -240,7 +240,7 @@
     else if (c.id === "pvp") v = money(p.pvp);
     else if (c.id === "pvpSinIva") v = money(p.pvpSinIva != null ? p.pvpSinIva : p.subtotal);
     else if (c.id === "costo") v = money(p.compraReal);
-    else if (c.id === "margen") v = p.margenPct == null ? "—" : q2(Math.round(Number(p.margenPct) * 10) / 10) + "%";
+    else if (c.id === "margen") v = p.faltaCosto ? '<span class="falta-costo">Falta costo</span>' : (p.margenPct == null ? "—" : q2(Math.round(Number(p.margenPct) * 10) / 10) + "%");
     else if (c.id.indexOf("g_") === 0) v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : q2((p.porGrupo || {})[c.id.slice(2)] || 0);
     else v = e(p[c.id] || "—");
     return '<td class="' + cls + '">' + v + "</td>";
@@ -297,6 +297,7 @@
       (MC.admin ? colsPanelHtml() : "") +
       (MC.admin && (MC.eliminadosN || MC.verElim) ? '<p><button class="btn ghost small" type="button" id="mcp-elim">' + (MC.verElim ? "← Volver a productos" : "Eliminados (" + MC.eliminadosN + ")") + "</button>" + (MC.verElim ? ' <span class="mcp-sub">Productos eliminados: elige y restaura.</span>' : "") + "</p>" : "") +
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
+      ((MC.verCostos || MC.admin) && (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length ? '<p class="falta-costo-banner">' + (MC.list || []).filter(function (x) { return x.faltaCosto && x.tipo === "inventariable"; }).length + ' productos sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>' : '') +
       '<div class="mcp-count" id="mcp-count"></div>' +
       '<div class="sheet-scroll"><table class="mcp-tbl mob-no"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
       '<p class="note">Una sola lista: catálogo, Cabina y productos unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
@@ -561,11 +562,12 @@
     var cr = num(val("beta_compra_real")), cc = num(val("beta_compra_comision"));
     var ccEf = cc != null ? cc : cr;
     var com = sub != null && ccEf != null ? r2(Math.max(0, sub - ccEf) * 0.30) : null;
-    var util = sub != null && cr != null ? r2(sub - cr) : null;
-    var neta = util != null && com != null ? r2(util - com) : null;
+    var faltaCosto = !(cr > 0);
+    var util = sub != null && !faltaCosto && com != null ? r2(sub - cr - com) : (sub != null && !faltaCosto ? r2(sub - cr) : null);
+    var neta = util;
     var cambiaCompra = Object.prototype.hasOwnProperty.call(MC.ch, "beta_compra_real");
     var prom = r.costoProm != null && !cambiaCompra ? r.costoProm : cr;
-    return { pvp: pvp, sub: sub, com: com, util: util, neta: neta, margen: util != null && sub ? r2(util / sub * 100) : null, prom: prom, promHist: r.costoProm, costoCont: cr != null ? costoCont(cr) : (r.costoProm != null ? costoCont(r.costoProm) : null), costoContDe: cr != null ? "compra real" : (r.costoProm != null ? "costo promedio" : ""), pr: pr };
+    return { pvp: pvp, sub: sub, com: com, util: util, neta: neta, faltaCosto: faltaCosto, margen: util != null && sub ? r2(util / sub * 100) : null, prom: prom, promHist: r.costoProm, costoCont: cr != null ? costoCont(cr) : (r.costoProm != null ? costoCont(r.costoProm) : null), costoContDe: cr != null ? "compra real" : (r.costoProm != null ? "costo promedio" : ""), pr: pr };
   }
   function costoCont(cr) {
     var q = num(val("beta_contenido"));
@@ -576,8 +578,7 @@
     set("mcp-cv-sub", c.sub != null ? "Sin IVA " + $m(c.sub) : "Sin IVA —");
     if (MC.admin) set("mcp-id-pvp", c.pvp != null ? $m(c.pvp) : "—");
     set("mcp-cv-com", c.com != null ? $m(c.com) : "—");
-    set("mcp-cv-util", c.util != null ? $m(c.util) + ' <span class="mcp-ref">' + q2(c.margen) + " %</span>" : "—");
-    set("mcp-cv-neta", c.neta != null ? $m(c.neta) : "—");
+    set("mcp-cv-util", c.faltaCosto ? '<span class="falta-costo">Falta costo</span>' : (c.util != null ? $m(c.util) + ' <span class="mcp-ref">' + q2(c.margen) + " %</span>" : "—"));
     set("mcp-cv-prom", c.prom != null ? $m(c.prom) : "—");
     var u = val("beta_contenido_unidad") || "";
     set("mcp-cv-cont", c.costoCont != null ? "$" + c.costoCont.toFixed(4) : '<span class="mcp-sub">pon compra real y contenido</span>');
@@ -685,8 +686,7 @@
       }
       var cv = calcVivo();
       if (MC.admin) right += '<div class="mcp-pr"><span>Comisión por unidad<br><span class="mcp-ref">30 % × (precio sin IVA − compra para comisiones; si no hay, compra real)</span></span><b id="mcp-cv-com">' + (cv.com != null ? $m(cv.com) : "—") + "</b></div>";
-      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad por unidad<br><span class="mcp-ref">precio sin IVA − compra real</span></span><b id="mcp-cv-util">' + (cv.util != null ? $m(cv.util) + ' <span class="mcp-ref">' + q2(cv.margen) + " %</span>" : "—") + "</b></div>";
-      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad neta<br><span class="mcp-ref">utilidad − comisión</span></span><b id="mcp-cv-neta">' + (cv.neta != null ? $m(cv.neta) : "—") + "</b></div>";
+      if (MC.verCostos) right += '<div class="mcp-pr"><span>Utilidad<br><span class="mcp-ref">venta s/IVA − costo real − comisión</span></span><b id="mcp-cv-util">' + (cv.faltaCosto ? '<span class="falta-costo">Falta costo</span>' : (cv.util != null ? $m(cv.util) + ' <span class="mcp-ref">' + q2(cv.margen) + " %</span>" : "—")) + "</b></div>";
       if (MC.verCostos) right += '<div class="mcp-pr"><span>Costo promedio<br><span class="mcp-ref">ponderado de las compras registradas; sin compras, la compra real' + (r.costoPromedio != null ? " · ERP " + $m(r.costoPromedio) : "") + "</span></span><b id=\"mcp-cv-prom\">" + (cv.prom != null ? $m(cv.prom) : "—") + "</b></div>";
     } else {
       right += '<p class="note" style="margin-top:8px">Servicio: sin stock. La comisión de faciales y paquetes sale de Configuración general.</p>';

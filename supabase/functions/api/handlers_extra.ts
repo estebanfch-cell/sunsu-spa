@@ -248,7 +248,14 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
   const cat0 = await ctx.db.all("catalogo").catch(() => [] as R[]);
   const cmap0 = new Map(cat0.map((r) => [skuCode(s(r.sku)), r]));
   const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
-  const tks = (await ctx.db.all("tickets")).filter((r) => r.timestamp && !esCancelado(r)).map((r) => ovb(r, ticketIn(r, cmap0)));
+  const { aplicarSnapsATicket, snapsPorClave, asegurarSnapshots } = await import("./costos_reales.ts");
+  const { claveDe } = await import("./ticket_beta.ts");
+  const { leerSerie } = await import("./series.ts");
+  const rowsTk = (await ctx.db.all("tickets")).filter((r) => r.timestamp && !esCancelado(r));
+  const claveTk = (r: R) => claveDe(r, leerSerie(r, "so_num"));
+  try { await asegurarSnapshots(ctx.db, "sistema-tk114", false, rowsTk, claveTk); } catch { /* ok */ }
+  const snaps = await snapsPorClave(ctx.db);
+  const tks = rowsTk.map((r) => aplicarSnapsATicket(ovb(r, ticketIn(r, cmap0)), snaps.get(claveTk(r))));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));

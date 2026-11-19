@@ -26,6 +26,9 @@ import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { alertaCanje } from "./canje_linea.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
+import { compraParaComision } from "./domain.ts";
+import { snapProducto, ventaNetaLineas } from "./productos.ts";
+import { mapaCostoReal } from "./costos_reales.ts";
 import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
@@ -433,9 +436,25 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
   if (p.promo != null) cambios.push(promoNom ? "promo " + promoNom : "sin promo");
   if (p.excluir_cosmetologa != null || L.some((l) => l.excluir_comision) !== actuales.some((l) => l.excluir_comision)) cambios.push("comisión " + (exclC || L.some((l) => l.excluir_comision) ? "excluida" : "incluida") + (exclN ? " (" + exclN + ")" : ""));
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: s(p._via) || "edición", detalle: cambios.join(", ") || "guardado", total: calc.total }].slice(-100);
+  const costos = await mapaCostoReal(ctx.db);
+  const cats = new Map((await ctx.db.all("catalogo").catch(() => [] as Row[])).map((x) => [skuCode(s(x.sku)), x]));
+  const nets = ventaNetaLineas(calc.lineas.map((l) => ({ total_linea: l.total_linea })), calc.total);
+  const snaps = calc.lineas.map((l, i) => snapProducto({
+    tipo: l.tipo,
+    ventaNeta: nets[i] || 0,
+    qty: l.cantidad,
+    costoRealUnit: costos.get(skuCode(l.sku))?.costo ?? null,
+    compraComisionUnit: compraParaComision(cats.get(skuCode(l.sku))),
+    excluir: l.excluir_comision === true,
+  }));
+  const packSnap = calc.lineas.map((l, i) => ({ l, s: snaps[i] })).filter((x) => x.l.tipo === "paquete");
+  const netoPackVenta = packSnap.filter((x) => n(x.l.precio_unit) > 0).map((x) => x.s.venta_neta);
   const fila: Row = {
     sheet_row: r.sheet_row ?? null, descuento_tipo: dTipo || null, descuento_valor: dVal, descuento_monto: calc.descuentoMonto, promo_nombre: promoNom || null, promo_monto: calc.promoMonto,
     excluir_cosmetologa: exclC, excluir_nota: exclN || null, lineas_beta: true, subtotal: calc.subtotal, iva: calc.iva, total: calc.total, actualizado_por: actor, updated_at: now, historial: hist,
+    neto_pack: netoPackVenta[0] != null ? netoPackVenta[0] : null,
+    neto_pack6: netoPackVenta[1] != null ? netoPackVenta[1] : null,
+    precios_snapshot_at: now,
   };
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, fila);
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, ...fila });
@@ -446,6 +465,7 @@ async function guardar(ctx: Ctx, ses: Ses, r: Row, p: Row): Promise<Row> {
       id: crypto.randomUUID(), ticket_clave: clave, orden: ++i, tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: l.cantidad, precio_unit: l.precio_unit,
       descuento_tipo: l.descuento_tipo || null, descuento_valor: l.descuento_valor, descuento_monto: l.descuento_monto, total_linea: l.total_linea, excluir_comision: l.excluir_comision === true, estimado: l.estimado === true,
       ...(l.promo && l.descuento_monto > 0 ? { promo: l.promo } : {}),
+      ...snaps[i - 1], snapshot_at: now,
     });
   }
   // TK110: una línea de venta de paquete siempre deja su paquete en Spa › Paquetes (idempotente).
