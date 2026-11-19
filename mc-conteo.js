@@ -561,6 +561,43 @@
       };
     });
   }
+  function pintarLista() {
+    var box = document.getElementById("mccf-lista");
+    if (box) box.innerHTML = lineasFiltradas().map(lineaSecHtml).join("");
+  }
+  /** Suma la sububicación a todos los desplegables del conteo, la deja elegida en esa fila y no recarga ni borra cantidades. */
+  function aplicarSubCreada(codigo, nombre, lineaId) {
+    var d = C.sec; if (!d) return;
+    codigo = String(codigo || "").trim();
+    if (!codigo) return;
+    nombre = String(nombre || codigo).trim() || codigo;
+    d.subs = d.subs || [];
+    if (!d.subs.some(function (x) { return String(x.codigo) === codigo; })) d.subs.push({ codigo: codigo, nombre: nombre });
+    else d.subs = d.subs.map(function (x) { return String(x.codigo) === codigo ? { codigo: codigo, nombre: nombre || x.nombre } : x; });
+    if (lineaId) {
+      var l = (d.lineas || []).find(function (x) { return x.id === lineaId; });
+      if (l) {
+        l.subContada = codigo; l.subCodigo = codigo; l.sububicacion = codigo; l.fromSub = nombre;
+        C.dirty[lineaId] = valLinea(l);
+      }
+      C.otra = lineaId;
+    }
+    pintarLista();
+  }
+  function quitarSubCreada(codigo, lineaId) {
+    var d = C.sec; if (!d) return;
+    d.subs = (d.subs || []).filter(function (x) { return String(x.codigo) !== codigo; });
+    if (lineaId) {
+      var l = (d.lineas || []).find(function (x) { return x.id === lineaId; });
+      if (l && String(l.subContada || l.subCodigo || "") === String(codigo)) {
+        l.subContada = ""; l.subCodigo = ""; l.sububicacion = "";
+        l.fromSub = (d.seccion && (d.seccion.nombre || d.seccion.bodega)) || "—";
+        C.dirty[lineaId] = valLinea(l);
+      }
+    }
+    pintarLista();
+  }
+
   function recHtml(movs) {
     if (!movs || !movs.length) return "";
     return '<div class="cc-rved"><b>Recontar: hubo movimientos durante el conteo</b>' +
@@ -703,16 +740,17 @@
           if (!cod) return;
           var nom = prompt("Nombre (opcional):", cod);
           if (nom == null) return;
-          void api("cf_sub_save", { bodega: sec.bodega, padre: sec.sububicacion || "", sububicacion: sec.sububicacion || "", codigo: cod, nombre: nom }).then(function (r) {
-            if (!r || r.error) return alert((r && r.error) || "No se pudo crear");
-            var codigo = r.codigo || cod;
-            d.subs = (d.subs || []).concat([{ codigo: codigo, nombre: r.nombre || nom || codigo }]);
-            if (l) {
-              l.subContada = codigo; l.subCodigo = codigo; l.fromSub = r.nombre || nom || codigo; l.sububicacion = codigo;
-              C.dirty[id] = valLinea(l); markSaved(false); void flushDirty();
-            }
-            var box2 = main.querySelector("#mccf-lista"); if (box2) box2.innerHTML = lineasFiltradas().map(lineaSecHtml).join("");
-          });
+          // Misma normalización que cf_sub_save. Se pinta YA en el desplegable (sin recargar, sin perder cantidades).
+          var codigo = String(cod).trim().toUpperCase().replace(/\s+/g, "");
+          var nombre = String(nom || codigo).trim() || codigo;
+          aplicarSubCreada(codigo, nombre, id);
+          markSaved(false);
+          void api("cf_sub_save", { bodega: sec.bodega, padre: sec.sububicacion || "", sububicacion: sec.sububicacion || "", codigo: codigo, nombre: nombre }).then(function (r) {
+            if (!r || r.error) { quitarSubCreada(codigo, id); return alert((r && r.error) || "No se pudo crear"); }
+            if (C.sec && Array.isArray(r.subs)) C.sec.subs = r.subs;
+            aplicarSubCreada(r.codigo || codigo, r.nombre || nombre, id);
+            markSaved(false); void flushDirty();
+          }).catch(function () { quitarSubCreada(codigo, id); alert("No se pudo crear la sububicación"); });
           return;
         }
         if (que === "asig-sub" && l) {
@@ -881,5 +919,7 @@
     tarjetaInicio: tarjetaInicio,
     _css: css,
     _c: C,
+    _aplicarSubCreada: aplicarSubCreada,
+    _quitarSubCreada: quitarSubCreada,
   };
 })();
