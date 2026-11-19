@@ -155,6 +155,18 @@ async function guardarLinks(ctx: Ctx, actor: string, links: LinkCuadre[]): Promi
 }
 
 const KIND_ID = /^(monto|clienta|sinfac|lineas)$/;
+const LEGACY_FAC = /^migo:(\d+):(\d+)$/;
+
+/** Flags viejas `migo:<ticket_id>:<num_fac>` que hay que cerrar cuando el ticket ya no tiene diferencia de monto/líneas. */
+export function flagsLegacyACerrar(prev: Row[], wantIds: Set<string>): Row[] {
+  return prev.filter((f) => {
+    if (f.resuelto === true) return false;
+    const m = LEGACY_FAC.exec(s(f.id));
+    if (!m) return false;
+    const tid = m[1];
+    return !wantIds.has("migo:" + tid + ":monto") && !wantIds.has("migo:" + tid + ":lineas");
+  });
+}
 
 async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Promise<{ creadas: number; resueltas: number; nuevas: Row[] }> {
   const prev = await todas(ctx, "beta_ticket_flags");
@@ -172,6 +184,14 @@ async function syncFlags(ctx: Ctx, actor: string, deseadas: FlagDeseada[]): Prom
     if (f.resuelto === true) continue;
     await ctx.db.write(actor, "beta_ticket_flags", "update", { id }, {
       resuelto: true, resuelto_por: actor, resuelto_at: now, nota: m[2] === "lineas" ? "cuadró automáticamente: las líneas del ticket ya coinciden con la factura" : m[2] === "clienta" ? "facturado a otro nombre: no es un error (regla 18/11)" : "cuadró automáticamente", updated_at: now,
+    });
+    resueltas++;
+    try { await logAccion(ctx.db, actor, "FLAG AUTO-RESUELTO", `${s(f.ticket_clave)} · ${s(f.motivo)}${f.factura ? " · " + s(f.factura) : ""}`); } catch { /* log opcional */ }
+  }
+  for (const f of flagsLegacyACerrar(prev, new Set(want.keys()))) {
+    const id = s(f.id);
+    await ctx.db.write(actor, "beta_ticket_flags", "update", { id }, {
+      resuelto: true, resuelto_por: actor, resuelto_at: now, nota: "cuadró automáticamente", updated_at: now,
     });
     resueltas++;
     try { await logAccion(ctx.db, actor, "FLAG AUTO-RESUELTO", `${s(f.ticket_clave)} · ${s(f.motivo)}${f.factura ? " · " + s(f.factura) : ""}`); } catch { /* log opcional */ }

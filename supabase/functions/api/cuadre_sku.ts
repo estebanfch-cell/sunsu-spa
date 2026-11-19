@@ -5,6 +5,7 @@
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { expandirLineasGiftCaja } from "./alias_migo.ts";
 import { lineasDeTicket, normalizarLineaFactura, type LineaNorm } from "./migo_lineas.ts";
+import { descuentoDeTicket, esCanjeCero } from "./cuadre_lineas.ts";
 import { resolverSku, type AliasMap } from "./inventario_modelo.ts";
 
 type Acum = { sku: string; codigo: string; nombre: string; q: number; tot: number };
@@ -37,8 +38,9 @@ export type CatCuadre = Map<string, { nombre?: string; pvpConIva?: number; pvpSi
 /** Total del ticket para el letrero de cuadre: suma de líneas (canje $0 no cuenta). Si no hay precios, el estimado de la hoja. */
 export function totalTicketCuadre(t: Row, catalogo?: CatCuadre): number {
   const L = lineasDeTicket(t, catalogo);
-  const sum = round2(L.filter((l) => !l.canje).reduce((a, l) => a + (l.totalCon || 0), 0));
-  return sum > 0 ? sum : round2(n(t.estimado));
+  const sum = round2(L.filter((l) => !esCanjeCero(l)).reduce((a, l) => a + (l.totalCon || 0), 0));
+  if (sum > 0) return round2(Math.max(0, sum - descuentoDeTicket(t)));
+  return round2(n(t.estimado));
 }
 
 /** Diferencias por SKU entre la factura y el/los ticket(s): «Falta en ticket: SUNSU-35 GIFT CARD $3.00». */

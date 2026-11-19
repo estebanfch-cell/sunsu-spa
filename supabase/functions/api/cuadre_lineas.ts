@@ -34,8 +34,24 @@ export type CuadreLinea = {
 };
 
 export function esCanjeCero(l: LineaNorm): boolean {
-  if (l.canje && !(n(l.totalCon) > 0.004) && !(n(l.unitSin) > 0.004)) return true;
-  return !!(l.canje && !(n(l.totalCon) > 0.004));
+  // Diferencia por mejora con monto > 0 no es un ítem a $0.
+  if (l.mejoraPaquete && n(l.totalCon) > 0.004) return false;
+  if (l.canje && !(n(l.totalCon) > 0.004)) return true;
+  // Promo, muestra, cortesía o desc 100%: total explícito 0, aunque no diga canje ni [CORTESIA].
+  if (l.totalCon != null && s(l.totalCon) !== "" && Number.isFinite(Number(l.totalCon)) && !(n(l.totalCon) > 0.004)) return true;
+  return false;
+}
+
+/** Descuento de cabecera del ticket (beta.descuento_monto o «🏷 Descuento: Desc$57.18» en notas). */
+export function descuentoDeTicket(t: Row): number {
+  const directo = n(t.descuento_monto);
+  if (directo > 0.004) return round2(directo);
+  const orig = t.orig && typeof t.orig === "object" ? t.orig as Row : {};
+  const blob = [s(t.notas_generales), s(t.notas), s(orig["NOTAS GENERALES"])].join(" ");
+  const m = blob.match(/Desc\$\s*([\d]+(?:[.,]\d+)?)/i) || blob.match(/descuento[:\s]+(?:Desc\$)?\s*([\d]+(?:[.,]\d+)?)/i);
+  if (!m) return 0;
+  const v = Number(String(m[1]).replace(",", "."));
+  return Number.isFinite(v) && v > 0.004 ? round2(v) : 0;
 }
 
 /** Precio unitario con IVA y descuento con IVA, a partir de una línea Migo (unit/desc suelen ir sin IVA). */
@@ -161,6 +177,7 @@ export function compararLineasVisual(
 
   // Recorre las líneas del ticket en orden para poder pintar cada fila.
   // TK143: con focus, solo se pintan las líneas de ESE ticket (el agregado del grupo ya está en tkAgg).
+  let descRestante = round2(tickets.reduce((a, t) => a + descuentoDeTicket(t), 0));
   let idx = 0;
   for (let ti = 0; ti < tickets.length; ti++) {
     const t = tickets[ti];
@@ -172,9 +189,10 @@ export function compararLineasVisual(
       const codigo = visible(k, l.codigo);
       if (esCanjeCero(l)) {
         const fac = F.get(k);
+        const etqCero = l.canje ? (fac ? "Canje · OK" : "Canje · OK sin factura") : "OK sin factura ($0)";
         out.push({
           sku: k, codigo, nombre: l.nombre, estado: "canje_ok",
-          razon: fac ? "Canje · OK" : "Canje · OK sin factura",
+          razon: etqCero,
           ticket_i: i, qty_tk: l.cantidad, tot_tk: 0,
           qty_fac: fac?.q, tot_fac: fac?.tot,
         });
@@ -191,7 +209,12 @@ export function compararLineasVisual(
       }
       used.add(k);
       const agg = tkAgg.get(k)!;
-      if (cerca(agg.q, fac.q, 0.001) && cerca(agg.tot, fac.tot, 0.05)) {
+      let totTk = agg.tot;
+      if (descRestante > 0.004 && !cerca(totTk, fac.tot, 0.05) && cerca(round2(totTk - descRestante), fac.tot, 0.05)) {
+        totTk = round2(totTk - descRestante);
+        descRestante = 0;
+      }
+      if (cerca(agg.q, fac.q, 0.001) && cerca(totTk, fac.tot, 0.05)) {
         out.push({
           sku: k, codigo, nombre: l.nombre, estado: "ok", razon: "",
           ticket_i: i, qty_tk: l.cantidad, tot_tk: round2(l.totalCon || 0),
