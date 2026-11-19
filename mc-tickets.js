@@ -271,13 +271,13 @@
     try { forma = typeof _tkForma === "function" ? (_tkForma(t) || "") : ""; } catch (x2) {}
     pagado = !!(t.cob || L.p || (typeof _tkPagoMigo === "function" && _tkPagoMigo(t)));
     return {
-      ok: true, clave: clave, hidratando: true, admin: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master")),
+      ok: true, clave: clave, hidratando: true, admin: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin")),
       ticket: { clave: clave, id: t.id || null, soNum: t.so_num || "", betaNum: t.beta_num || "", sheetRow: t.tkRow || t.sheet_row || null, fecha: t.fecha || "", hora: t.hora || "", nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", cobradoSistema: tot, factura: fac, notas: t.notas || t.notas_generales || "", cancelado: (t.anulado || (t.orig && t.orig.anulado)) ? { motivo: (t.orig && t.orig.cancelado_motivo) || "", por: (t.orig && t.orig.cancelado_por) || "", ts: (t.orig && t.orig.cancelado_ts) || "" } : null },
       info: { factura: fac, nombre: t.nombre || "", apellido: t.apellido || "", cedula: t.cedula || t.id_3 || "", cosmetologa: t.cosmetologa || t.atendido_por || "", notas: t.notas || t.notas_generales || "", local: t.local || "Sunsu Spa", fecha: t.fecha || "", hora: t.hora || "", orden: t.id || null, cabina: t.cabina || "", retorno: t.retorno || t.fecha_retorno || "", recomendaciones: t.recomendaciones || "" },
       lineas: [], totales: { subtotal: tot / 1.15, iva: tot - tot / 1.15, total: tot },
       descuento: { tipo: null, valor: 0 }, promo: "", pagos: { metodos: forma ? [{ metodo: forma }] : [], cobrado: pagado, total: tot, pagado: pagado ? tot : 0, saldo: pagado ? 0 : tot },
       chips: chipsDesdeLista(t), documentos: [], faltan: (L.falta && L.falta.length) ? L.falta : [], flags: L.flag ? [{ id: "", motivo: L.flag }] : [], reagendada: { si: !!L.g, cita: "", fuente: "" },
-      puedeEditar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master") && !t.anulado), puedePedir: !(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master")), puedeCancelar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master") && !t.anulado),
+      puedeEditar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado), puedePedir: !(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin")), puedeCancelar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado),
       clienteKey: t.clienteKey || t.cliente_key || "",
       pagosFaltan: (L && L.pagosFaltan) || []
     };

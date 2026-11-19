@@ -668,7 +668,12 @@ export async function guardarTicketCampos(ctx: Ctx, ses: Ses, fila: string, camp
   }
   if (!saved) return { error: "No se pudo guardar el ticket" };
   await anotar(ctx, ses, "tickets", filaDe(row), "UPDATE", antes, vistaDe(saved));
-  return { ok: true, fila: filaDe(row), ticket: vistaDe(saved) };
+  let cuadre: Row | undefined;
+  try {
+    const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");
+    cuadre = await cuadreTrasTicket(ctx, actorOf(ses));
+  } catch { /* el ticket ya quedó */ }
+  return { ok: true, fila: filaDe(row), ticket: vistaDe(saved), cuadre };
 }
 
 export async function borrarTicketSuave(ctx: Ctx, ses: Ses, row: Row): Promise<Row> {

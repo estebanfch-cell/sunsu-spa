@@ -16,8 +16,8 @@ const zxing = readFileSync(new URL("vendor-zxing.js", root), "utf8");
 
 describe("TK128 escáner compartido", () => {
   it("un solo módulo, ZXing en el repo, sin CDN, y todos los botones de cámara lo usan", () => {
-    assert.match(html, /mc-scan\.js\?v=20261119tk138/);
-    assert.match(html, /vendor-zxing\.js\?v=20261119tk138/);
+    assert.match(html, /mc-scan\.js\?v=20261119tk139/);
+    assert.match(html, /vendor-zxing\.js\?v=20261119tk139/);
     assert.match(sw, /\/mc-scan\.js/);
     assert.match(sw, /\/vendor-zxing\.js/);
     assert.match(zxing, /BrowserMultiFormatReader/);
