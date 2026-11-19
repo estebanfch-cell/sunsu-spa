@@ -19,12 +19,22 @@
       ".mcap-dest{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}.mcap-dest button{border:1.5px solid var(--cream-d,#e6dccb);background:#fff;border-radius:12px;padding:10px 6px;font:inherit;cursor:pointer;text-align:center}",
       ".mcap-dest button.on{border-color:var(--navy,#2c3e66);background:var(--blue-l,#eef3fb);font-weight:800}.mcap-dest small{display:block;color:var(--gray,#8a93a6);font-size:.66rem;margin-top:3px}",
       ".mcap-firma{border:1.5px dashed var(--navy,#2c3e66);border-radius:12px;background:#fff;touch-action:none;width:100%;height:180px;display:block}",
-      ".mcap-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}.mcap-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}",
+      ".mcap-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}.mcap-acts [hidden]{display:none!important}.mcap-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}",
       ".mcap-cam{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}.mcap-cam video{max-width:94vw;max-height:70vh;border-radius:12px}",
       ".mcap-tabs{display:flex;gap:6px;margin:6px 0 10px;flex-wrap:wrap}.mcap-tabs button{border:1.5px solid var(--cream-d,#e6dccb);background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:.8rem;cursor:pointer}.mcap-tabs button.on{background:var(--navy,#2c3e66);color:#fff;border-color:var(--navy,#2c3e66)}",
       ".mcap-t{width:100%;border-collapse:collapse;font-size:.8rem}.mcap-t th{text-align:left;color:var(--gray,#8a93a6);font-size:.7rem;padding:5px;border-bottom:1.2px solid var(--cream-d,#e6dccb)}.mcap-t td{padding:6px 5px;border-bottom:1px solid #f1ece2;vertical-align:top}.mcap-t .num{text-align:right}.mcap-t tr.an td{opacity:.5;text-decoration:line-through}",
       ".mcap-consig{margin-top:8px;padding:9px 11px;border-radius:10px;background:#fbf4e4;border:1px solid #e6cf9a;color:#6b5217;font-size:.78rem;line-height:1.35}.mcap-dest small.mcap-cg{color:#8A6D1F;font-weight:800}" +
-      ".mcap-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#e8f5ee;color:#2e7d52;font-weight:800}.mcap-pill.g{background:#eef0f4;color:#6b7280}.mcap-chips{display:flex;flex-wrap:wrap;gap:6px}.mcap-chips label{border:1.5px solid var(--cream-d,#e6dccb);border-radius:999px;padding:4px 10px;font-size:.78rem;cursor:pointer}.mcap-chips label.on{border-color:var(--navy,#2c3e66);background:var(--blue-l,#eef3fb)}",
+      ".mcap-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#e8f5ee;color:#2e7d52;font-weight:800}.mcap-pill.g{background:#eef0f4;color:#6b7280}",
+      ".mcap-aplica-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}",
+      ".mcap-aplica-all{margin-left:auto;display:inline-flex;gap:8px}",
+      ".mcap-aplica-all button{border:0;background:none;padding:0;font:inherit;font-size:.72rem;font-weight:700;color:var(--navy,#2c3e66);cursor:pointer;text-decoration:underline;text-underline-offset:2px}",
+      ".mcap-aplica-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px;border-top:1px solid var(--cream-d,#e6dccb);border-left:1px solid var(--cream-d,#e6dccb)}",
+      ".mcap-aplica-row{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;margin:0!important;padding:5px 8px!important;border:0!important;border-right:1px solid var(--cream-d,#e6dccb)!important;border-bottom:1px solid var(--cream-d,#e6dccb)!important;border-radius:0!important;background:transparent;font-size:.78rem!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;color:var(--navy,#2c3e66)!important;cursor:pointer;min-width:0;line-height:1.25}",
+      ".mcap-aplica-row.on{background:var(--blue-l,#eef3fb)}",
+      ".mcap-aplica-row input[type=checkbox]{width:16px!important;height:16px!important;min-width:16px!important;min-height:0!important;margin:0!important;padding:0!important;flex:0 0 16px;border-radius:3px!important;accent-color:var(--navy,#2c3e66);background:var(--white,#fff)}",
+      ".mcap-aplica-row span{min-width:0;overflow-wrap:anywhere}",
+      "@media(max-width:860px){.mcap-aplica-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}",
+      "@media(max-width:400px){.mcap-aplica-grid{grid-template-columns:1fr}}",
       "@media(max-width:560px){.mcap-dest{grid-template-columns:repeat(2,1fr)}}",
     ].join("\n");
     document.head.appendChild(s);
@@ -153,27 +163,114 @@
   }
 
   // ---------- Ficha de producto: «Aplica a faciales» ----------
+  // TK136: tabla compacta (no burbujas); la selección exacta (0 / subset / todos)
+  // se guarda en erp_productos.beta_aplica_faciales y se recarga igual.
+  // Vacío = ninguno (nunca «todos marcados»). Comparación sin importar mayúsculas.
+  var aplicaSt = { pid: "", saved: [], sel: [], faciales: [], host: null, puede: false, req: 0 };
+  function normCodes(a) {
+    return (a || []).map(function (x) { return String(x || "").toUpperCase(); }).filter(Boolean).sort();
+  }
+  function codesEq(a, b) { return normCodes(a).join("\n") === normCodes(b).join("\n"); }
+  function hasCode(sel, k) {
+    var u = String(k || "").toUpperCase();
+    return (sel || []).some(function (x) { return String(x || "").toUpperCase() === u; });
+  }
+  function aplicaDirty() { return !!(aplicaSt.pid && !codesEq(aplicaSt.sel, aplicaSt.saved)); }
+  function aplicaReset() { var on = aplicaSt.onChange, req = aplicaSt.req; aplicaSt = { pid: "", saved: [], sel: [], faciales: [], host: null, puede: false, req: req, onChange: on }; }
+  function fireAplicaChange() {
+    if (typeof aplicaSt.onChange === "function") aplicaSt.onChange();
+  }
+  function setSelFromBox(k, on) {
+    k = String(k || "").toUpperCase();
+    if (on) { if (!hasCode(aplicaSt.sel, k)) aplicaSt.sel.push(k); }
+    else aplicaSt.sel = aplicaSt.sel.filter(function (x) { return String(x || "").toUpperCase() !== k; });
+  }
+  function paintAplicaActs(host) {
+    if (!host) return;
+    var dirty = aplicaDirty();
+    var ok = host.querySelector("#mcap-apok");
+    var dx = host.querySelector("#mcap-apx");
+    if (ok) { ok.disabled = !dirty; ok.setAttribute("aria-disabled", dirty ? "false" : "true"); }
+    if (dx) dx.hidden = !dirty;
+  }
+  function drawAplica() {
+    var host = aplicaSt.host;
+    if (!host) return;
+    var puede = aplicaSt.puede, sel = aplicaSt.sel;
+    host.innerHTML = '<div class="mcap-card mcap-aplica"><div class="mcap-aplica-h"><b>Aplica a faciales</b> <span class="mcap-sub">· para el costo por facial (📦 Abrir producto)</span>' +
+      (puede ? '<span class="mcap-aplica-all"><button type="button" id="mcap-todos">Todos</button><button type="button" id="mcap-ninguno">Ninguno</button></span>' : "") +
+      "</div><div class=\"mcap-aplica-grid\">" + aplicaSt.faciales.map(function (f) {
+        var on = hasCode(sel, f.code);
+        return '<label class="mcap-aplica-row' + (on ? " on" : "") + '"><input type="checkbox" data-apf="' + e(f.code) + '"' + (on ? " checked" : "") + (puede ? "" : " disabled") + '><span>' + e(f.nombre) + "</span></label>";
+      }).join("") + "</div>" +
+      (puede ? '<div class="mcap-acts"><button class="btn ghost small" type="button" id="mcap-apx" hidden>Descartar</button><button class="btn small" type="button" id="mcap-apok">Guardar</button></div>' : "") +
+      "</div>";
+    host.querySelectorAll("[data-apf]").forEach(function (c) {
+      c.onchange = function () {
+        setSelFromBox(c.getAttribute("data-apf"), c.checked);
+        if (c.parentNode) c.parentNode.classList.toggle("on", c.checked);
+        paintAplicaActs(host);
+        fireAplicaChange();
+      };
+    });
+    var todos = host.querySelector("#mcap-todos");
+    if (todos) todos.onclick = function () {
+      aplicaSt.sel = aplicaSt.faciales.map(function (f) { return String(f.code || "").toUpperCase(); });
+      drawAplica(); fireAplicaChange();
+    };
+    var ninguno = host.querySelector("#mcap-ninguno");
+    if (ninguno) ninguno.onclick = function () {
+      aplicaSt.sel = [];
+      drawAplica(); fireAplicaChange();
+    };
+    var ok = host.querySelector("#mcap-apok");
+    if (ok) ok.onclick = function () { void aplicaGuardar({ toast: true }); };
+    var dx = host.querySelector("#mcap-apx");
+    if (dx) dx.onclick = function () { aplicaDescartar(); fireAplicaChange(); };
+    paintAplicaActs(host);
+  }
+  function aplicaDescartar() {
+    aplicaSt.sel = aplicaSt.saved.slice();
+    drawAplica();
+  }
+  async function aplicaGuardar(opts) {
+    opts = opts || {};
+    if (!aplicaSt.pid) return { error: "Sin producto" };
+    var x = await api("ap_aplica_guardar", { producto_id: aplicaSt.pid, faciales: aplicaSt.sel.slice() });
+    if (!x || !x.ok) {
+      if (opts.toast) toast2((x && x.error) || "No se pudo guardar", 1);
+      return x || { error: "No se pudo guardar" };
+    }
+    aplicaSt.sel = (x.aplica || []).map(function (c) { return String(c || "").toUpperCase(); });
+    aplicaSt.saved = aplicaSt.sel.slice();
+    drawAplica();
+    if (opts.toast) toast2("✓ Guardado");
+    fireAplicaChange();
+    return x;
+  }
   async function aplicaCard(host, pid, puedeEditar) {
     if (!host || !pid) return;
     css();
+    var same = aplicaSt.pid === String(pid) && aplicaDirty();
+    aplicaSt.host = host;
+    aplicaSt.puede = !!puedeEditar;
+    if (same) { drawAplica(); return; }
+    var req = ++aplicaSt.req;
     var r = await api("ap_aplica_get", { producto_id: pid });
+    if (req !== aplicaSt.req) return;
     if (!r || r.error) { host.innerHTML = ""; return; }
-    var sel = r.aplica.slice();
-    var draw = function () {
-      host.innerHTML = '<div class="mcap-card"><b>Aplica a faciales</b> <span class="mcap-sub">· para el costo por facial (📦 Abrir producto)</span><div class="mcap-chips" style="margin-top:8px">' + r.faciales.map(function (f) {
-        var on = sel.indexOf(f.code) >= 0;
-        return '<label class="' + (on ? "on" : "") + '"><input type="checkbox" data-apf="' + e(f.code) + '"' + (on ? " checked" : "") + (puedeEditar ? "" : " disabled") + ' style="margin-right:4px">' + e(f.nombre) + "</label>";
-      }).join("") + "</div>" + (puedeEditar ? '<div class="mcap-acts"><button class="btn small" type="button" id="mcap-apok">Guardar</button></div>' : "") + "</div>";
-      host.querySelectorAll("[data-apf]").forEach(function (c) { c.onchange = function () { var k = c.getAttribute("data-apf"); if (c.checked) { if (sel.indexOf(k) < 0) sel.push(k); } else sel = sel.filter(function (x) { return x !== k; }); c.parentNode.classList.toggle("on", c.checked); }; });
-      var ok = host.querySelector("#mcap-apok");
-      if (ok) ok.onclick = async function () { var x = await api("ap_aplica_guardar", { producto_id: pid, faciales: sel }); if (!x || !x.ok) { toast2((x && x.error) || "No se pudo guardar", 1); return; } sel = x.aplica; toast2("✓ Guardado"); draw(); };
-    };
-    draw();
+    aplicaSt.pid = String(pid);
+    aplicaSt.faciales = r.faciales || [];
+    aplicaSt.saved = normCodes(r.aplica);
+    aplicaSt.sel = aplicaSt.saved.slice();
+    drawAplica();
   }
 
   window.MCAperturas = {
     render: async function (route) { css(); return '<div id="mcap-root">' + (route.sub === "costo" ? await htmlCosto() : htmlAbrir()) + "</div>"; },
     wire: function (main, route) { if (route.sub === "costo") wireCosto(main); else wireAbrir(main); },
     aplicaCard: aplicaCard, escanear: escanear,
+    aplicaDirty: aplicaDirty, aplicaGuardar: aplicaGuardar, aplicaDescartar: aplicaDescartar, aplicaReset: aplicaReset,
+    onAplicaChange: function (fn) { aplicaSt.onChange = fn; },
   };
 })();
