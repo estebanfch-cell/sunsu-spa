@@ -486,6 +486,15 @@
   .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--navy-d), var(--navy)); color: var(--white); border: none; border-radius: 13px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 11px; font-weight: 600; font-size: 0.8rem; box-shadow: var(--shadow); opacity: 0; transition: opacity 0.25s; z-index: 999999; pointer-events: none; color: var(--white); white-space: nowrap; max-width: calc(100vw - 24px); }
   .tabbar { display: none; }
+  .sk { padding: 8px 0 16px; }
+  .sk-line, .sk-card, .sk-kpi { background: linear-gradient(90deg, #EDE6D8 0%, #F7F1E6 50%, #EDE6D8 100%); background-size: 200% 100%; animation: sk-shimmer 1.2s ease-in-out infinite; border-radius: 10px; }
+  .sk-line { height: 14px; margin: 8px 0; max-width: 70%; }
+  .sk-line.w { max-width: 40%; height: 22px; }
+  .sk-kpis { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin: 10px 0; }
+  .sk-kpi { height: 58px; }
+  .sk-card { height: 52px; margin: 6px 0; }
+  @keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
   .tab-emo { font-size: 1.25rem; line-height: 1; display: block; }
   .sheet-grab { display: none; }
   .fly-empty { padding: 8px 12px 16px; }
@@ -642,6 +651,8 @@
     body.kb-open .tabbar, body.kb-open [data-oculta-teclado] { display: none !important; }
     body.kb-open { --tab-h: 0px; }
     body.kb-open .scrim { bottom: 0; }
+    /* TK109: la barra de abajo permanece en cualquier ruta del celular, salvo teclado real. */
+    body.app-on .tabbar { display: grid; }
     .tab {
       background: transparent; border: 0; color: var(--gray);
       display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
@@ -1892,6 +1903,44 @@ async function api(accion, body = {}) {
   return data;
 }
 
+const SWR_ACCIONES = new Set(["staff_home", "lugares_list", "bootstrap", "tk_historial", "tk_get", "mcprod_list", "prod_list", "getDashCosm", "asis_hoy", "asis_calendario", "whoami"]);
+function swrKey(accion, body) {
+  const b = { ...(body || {}) };
+  delete b.token;
+  return "sunsu.swr." + accion + ":" + JSON.stringify(b);
+}
+function swrGet(accion, body) {
+  try {
+    const j = JSON.parse(localStorage.getItem(swrKey(accion, body)) || "");
+    if (j && j.d && typeof j.d === "object") return j;
+  } catch {}
+  return null;
+}
+function swrSet(accion, body, d) {
+  if (!d || d.error) return;
+  try { localStorage.setItem(swrKey(accion, body), JSON.stringify({ t: Date.now(), d })); } catch {}
+}
+async function apiSWR(accion, body = {}, opts = {}) {
+  const hit = swrGet(accion, body);
+  const max = opts.maxAge != null ? opts.maxAge : 60000;
+  if (hit && !opts.force && Date.now() - hit.t < max) {
+    if (!opts.noRefresh) {
+      api(accion, body).then((fresh) => { if (fresh && !fresh.error) swrSet(accion, body, fresh); }).catch(() => {});
+    }
+    return hit.d;
+  }
+  const fresh = await api(accion, body);
+  if (fresh && !fresh.error) swrSet(accion, body, fresh);
+  return fresh;
+}
+window.apiSWR = apiSWR;
+window.sunsuSwrGet = swrGet;
+window.sunsuSwrSet = swrSet;
+
+function htmlEsqueleto() {
+  return `<div class="sk" aria-hidden="true"><div class="sk-line w"></div><div class="sk-kpis"><div class="sk-kpi"></div><div class="sk-kpi"></div><div class="sk-kpi"></div></div><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div></div>`;
+}
+
 function applySession(data) {
   state.user = data.user || null;
   if (state.user && data.usuario) state.user.usuario = data.usuario;
@@ -1997,6 +2046,7 @@ function autosize(root) {
 }
 
 function paintLogin(msg) {
+  document.body.classList.remove("app-on", "kb-open");
   const modo = localStorage.getItem("sunsu.beta.loginModo") === "usuario" ? "usuario" : "pin";
   const campos = modo === "usuario" ? `
         <label for="lg-usuario">Usuario</label>
@@ -2235,6 +2285,8 @@ function tabButton(id, label) {
 }
 
 function paintShell(title) {
+  document.body.classList.add("app-on");
+  document.body.classList.remove("kb-open");
   if (previewOn() && new URLSearchParams(location.search).has("grupo")) {
     grupoAbierto = new URLSearchParams(location.search).get("grupo") || "";
   }
@@ -2653,6 +2705,12 @@ async function montarSunsu(tab) {
     c.appendChild(extra);
   }
 }
+function keepApiWarm() {
+  if (window._apiWarm || !state.token || previewOn()) return;
+  window._apiWarm = setInterval(() => { if (state.token && !previewOn()) void api("ping"); }, 120000);
+  void api("ping");
+}
+
 async function draw() {
   if (previewOn() && !state.user) {
     state.token = "preview";
@@ -2694,6 +2752,7 @@ async function draw() {
   paintShell(title);
   const main = document.getElementById("main");
   const listo = () => {
+    void keepApiWarm();
     void cargarReloj();
     void pintarAviso();
     if (!window._avisoT) window._avisoT = setInterval(() => { if (state.user) void pintarAviso(); }, 60000);
@@ -2730,7 +2789,13 @@ async function draw() {
     listo();
     return;
   }
-  main.innerHTML = banner() + `<p class="note">Cargando…</p>`;
+  const cachedMod = (route.kind === "mod" && route.mod === "inicio" && !state.admin) ? (typeof sunsuSwrGet === "function" ? sunsuSwrGet("staff_home", { periodo: "hoy" }) : null) : null;
+  if (cachedMod && cachedMod.d && cachedMod.d.ok && window.MCStaffHome) {
+    main.innerHTML = banner() + (window.MCStaffHome.html ? window.MCStaffHome.html(cachedMod.d) : htmlEsqueleto());
+  } else {
+    main.innerHTML = banner() + htmlEsqueleto();
+  }
+
   try {
     const html = route.kind === "doc" ? await renderDoc(route) : await renderMod(route);
     main.innerHTML = banner() + html;
@@ -3151,9 +3216,23 @@ function htmlLocalSel() {
   return `<label class="local-sel" id="local-wrap" ${state.unLocal ? "hidden" : ""}><span>Local</span><select id="local-sel" aria-label="Local en el que trabajas">${opts}</select></label>`;
 }
 async function asegurarLugares() {
-  const data = await api("lugares_list", { local_id: state.localId || "" });
+  const ttl = 10 * 60 * 1000;
+  if (state.lugares && state.lugares.locales && state._lugaresAt && Date.now() - state._lugaresAt < ttl) return;
+  const hit = swrGet("lugares_list", { local_id: state.localId || "" });
+  if (hit && hit.d && hit.d.locales && Date.now() - hit.t < ttl) {
+    state.lugares = hit.d;
+    state._lugaresAt = hit.t;
+    const activosHit = (hit.d.locales || []).filter((l) => l.activo !== false);
+    state.unLocal = activosHit.length < 2;
+    if (!state.localId || !activosHit.some((l) => l.id === state.localId)) {
+      state.localId = hit.d.local_id || (activosHit[0] && activosHit[0].id) || state.localId;
+    }
+    return;
+  }
+  const data = await apiSWR("lugares_list", { local_id: state.localId || "" }, { maxAge: ttl, noRefresh: true });
   if (!data || data.error || !data.locales) return;
   state.lugares = data;
+  state._lugaresAt = Date.now();
   const activos = (data.locales || []).filter((l) => l.activo !== false);
   state.unLocal = activos.length < 2;
   if (!state.localId || !activos.some((l) => l.id === state.localId)) {
@@ -7193,7 +7272,11 @@ async function saveCnt(form) {
   else setMsg(form, data, data.numero ? "Abierto " + data.numero : "Listo");
 }
 
-window.addEventListener("hashchange", draw);
+window.addEventListener("hashchange", () => {
+  const ed = window.SunsuTeclado && window.SunsuTeclado.editable;
+  if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
+  draw();
+});
 if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.getRegistrations().then((regs) => {
     for (const reg of regs) {
@@ -7206,40 +7289,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk106"></script>
-<script src="beta-screens.js?v=20261118tk106"></script>
-<script src="beta-inline.js?v=20261118tk106"></script>
-<script src="mc-productos.js?v=20261118tk106"></script>
-<script src="mc-nav.js?v=20261118tk106"></script>
-<script src="mc-permisos.js?v=20261118tk106"></script>
-<script src="mc-protocolos.js?v=20261118tk106"></script>
-<script src="mc-conteo.js?v=20261118tk106"></script>
-<script src="mc-transferencias.js?v=20261118tk106"></script>
-<script src="mc-ajustes.js?v=20261118tk106"></script>
-<script src="vendor-qrcode.js?v=20261118tk106"></script>
-<script src="mc-tickets.js?v=20261118tk106"></script>
-<script src="mc-maestro.js?v=20261118tk106"></script>
-<script src="mc-empleados.js?v=20261118tk106"></script>
-<script src="mc-edit.js?v=20261118tk106"></script>
-<script src="mc-paquetes.js?v=20261118tk106"></script>
-<script src="mc-aperturas.js?v=20261118tk106"></script>
-<script src="mc-acceso.js?v=20261118tk106"></script>
-<script src="mc-barras.js?v=20261118tk106"></script>
-<script src="mc-caja.js?v=20261118tk106"></script>
-<script src="mc-giftcards.js?v=20261118tk106"></script>
-<script src="mc-multas.js?v=20261118tk106"></script>
-<script src="mc-clientes.js?v=20261118tk106"></script>
-<script src="mc-clientes-dup.js?v=20261118tk106"></script>
-<script src="mc-docpdf.js?v=20261118tk106"></script>
-<script src="mc-compras.js?v=20261118tk106"></script>
-<script src="mc-consignacion.js?v=20261118tk106"></script>
-<script src="mc-proveedores.js?v=20261118tk106"></script>
-<script src="mc-recepciones.js?v=20261118tk106"></script>
-<script src="mc-movil.js?v=20261118tk106"></script>
-<script src="mc-promociones.js?v=20261118tk106"></script>
-<script src="mc-agenda.js?v=20261118tk106"></script>
-<script src="mc-staff-home.js?v=20261118tk106"></script>
-<script src="mc-borradores.js?v=20261118tk106"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk109"></script>
+<script src="beta-screens.js?v=20261118tk109"></script>
+<script src="beta-inline.js?v=20261118tk109"></script>
+<script src="mc-productos.js?v=20261118tk109"></script>
+<script src="mc-nav.js?v=20261118tk109"></script>
+<script src="mc-permisos.js?v=20261118tk109"></script>
+<script src="mc-protocolos.js?v=20261118tk109"></script>
+<script src="mc-conteo.js?v=20261118tk109"></script>
+<script src="mc-transferencias.js?v=20261118tk109"></script>
+<script src="mc-ajustes.js?v=20261118tk109"></script>
+<script src="vendor-qrcode.js?v=20261118tk109"></script>
+<script src="mc-tickets.js?v=20261118tk109"></script>
+<script src="mc-maestro.js?v=20261118tk109"></script>
+<script src="mc-empleados.js?v=20261118tk109"></script>
+<script src="mc-edit.js?v=20261118tk109"></script>
+<script src="mc-paquetes.js?v=20261118tk109"></script>
+<script src="mc-aperturas.js?v=20261118tk109"></script>
+<script src="mc-acceso.js?v=20261118tk109"></script>
+<script src="mc-barras.js?v=20261118tk109"></script>
+<script src="mc-caja.js?v=20261118tk109"></script>
+<script src="mc-giftcards.js?v=20261118tk109"></script>
+<script src="mc-multas.js?v=20261118tk109"></script>
+<script src="mc-clientes.js?v=20261118tk109"></script>
+<script src="mc-clientes-dup.js?v=20261118tk109"></script>
+<script src="mc-docpdf.js?v=20261118tk109"></script>
+<script src="mc-compras.js?v=20261118tk109"></script>
+<script src="mc-consignacion.js?v=20261118tk109"></script>
+<script src="mc-proveedores.js?v=20261118tk109"></script>
+<script src="mc-recepciones.js?v=20261118tk109"></script>
+<script src="mc-movil.js?v=20261118tk109"></script>
+<script src="mc-promociones.js?v=20261118tk109"></script>
+<script src="mc-agenda.js?v=20261118tk109"></script>
+<script src="mc-staff-home.js?v=20261118tk109"></script>
+<script src="mc-borradores.js?v=20261118tk109"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
@@ -7262,7 +7345,9 @@ if ("serviceWorker" in navigator && !local) {
   }
   var t0 = null;
   function pinta() {
-    var abierto = editable(document.activeElement) || tecladoPorAltura();
+    // TK109: solo si hay un campo con foco. La altura del viewport cambia al ir al dashboard
+    // (barra de Safari) y escondía la tabbar con un falso «teclado abierto».
+    var abierto = editable(document.activeElement);
     document.body.classList.toggle("kb-open", abierto);
   }
   function luego() { clearTimeout(t0); t0 = setTimeout(pinta, 120); }
