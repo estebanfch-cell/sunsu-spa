@@ -264,8 +264,8 @@ describe("TK149 Control de Agenda en el frontend", () => {
   it("cache TK149", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     const html = readFileSync(join(root, "beta.html"), "utf8");
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK149"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK149"/);
-    assert.match(readFileSync(join(root, "supabase/functions/api/sunsu_version.ts"), "utf8"), /sunsu-engine-2026-11-19-TK149/);
+    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(readFileSync(join(root, "supabase/functions/api/sunsu_version.ts"), "utf8"), /sunsu-engine-2026-11-19-TK150/);
   });
 });
