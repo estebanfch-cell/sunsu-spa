@@ -21,7 +21,7 @@ export interface AsistenciaConfig {
 }
 
 export const CONFIG_DEF: AsistenciaConfig = {
-  lat: null, lng: null, radio_m: 150,
+  lat: null, lng: null, radio_m: 20,
   hora_entrada: "09:00", hora_salida: "18:00", jornada_horas: 8, gracia_min: 10, cuenta_antes: false,
   lugar_nombre: "C.C. La Esquina",
 };
@@ -255,7 +255,7 @@ export function evaluarUbicacion(config: AsistenciaConfig, lat: number | null, l
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return { ok: false, error: "Activa la ubicación del teléfono. Sin eso no se puede marcar." };
   if (accuracy != null && accuracy > config.radio_m * 2) return { ok: false, error: "La ubicación es muy imprecisa. Acércate a una ventana o marca desde el local." };
   const distancia = distanciaMetros(lat, lng, config.lat, config.lng);
-  if (distancia > config.radio_m) return { ok: false, error: `Estás a ${Math.round(distancia)} m de ${local}. El radio permitido es ${config.radio_m} m. Acércate al local para registrar.`, distancia };
+  if (distancia > config.radio_m) return { ok: false, error: `Estás a ${Math.round(distancia)} m de ${local}.`, distancia };
   return { ok: true, distancia };
 }
 

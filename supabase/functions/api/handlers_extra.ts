@@ -216,7 +216,7 @@ async function extendKpi(p: R, ctx: Ctx) {
   const { handle } = await import("./handlers.ts");
   return handle("getKPIsMes", p, ctx);
 }
-extend("getKPIsHistoricos", "any", async () => ({ items: [], parcial: true, nota: "Los KPI históricos salían de los .xls de Mi Negocio. En la beta el mes en curso se calcula en vivo (getKPIsMes)." }));
+extend("getKPIsHistoricos", "any", async () => ({ items: [], parcial: true, nota: "Los KPI históricos salían de los .xls de Mi Negocio. El mes en curso se calcula en vivo (getKPIsMes)." }));
 
 function ticketIn(r: R, cats?: Map<string, R>): TicketIn {
   const pack3 = s(r.compra_pack_3);
@@ -457,7 +457,7 @@ extend("getPagoConfig", "any", async (_p, ctx, ses) => {
 });
 extend("pago_config_guardar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin configura los pagos" };
-  if (ses.prueba) return { error: "Modo prueba no cambia la configuración real" };
+  if (ses.prueba) return { error: "La simulación no cambia la configuración real" };
   if (!s(p.nombre) || !/^\d{4}-\d{2}-\d{2}$/.test(s(p.vigente_desde))) return { error: "Falta la persona o la fecha de vigencia" };
   const row: R = {
     nombre: s(p.nombre),
@@ -999,7 +999,7 @@ extend("cabinaSaveProtocolo", ADMIN, async (p, ctx, ses) => {
 extend("cabinaBorrarFila", ADMIN, async (p, ctx, ses) => {
   const hoja = s(p.hoja);
   const table = hoja.includes("PASO") ? "cabina_protocolo_pasos" : hoja.includes("PROTO") ? "cabina_protocolos" : "";
-  if (!table) return { error: "Hoja no borrable desde la beta" };
+  if (!table) return { error: "Hoja no borrable desde la app" };
   const row = await rowBySheet(ctx.db, table, n(p.row));
   if (!row) return { error: "Fila no encontrada" };
   await ctx.db.write(actorOf(ses), table, "delete", { sheet_row: row.sheet_row }, null);
@@ -1072,9 +1072,9 @@ extend("cabinaManoObraSugerida", "any", async (_p, ctx) => {
 extend("cabinaCrearEstructura", ADMIN, async (_p, ctx) => {
   const nInv = (await ctx.db.all("cabina_inventario")).length;
   if (nInv) return { error: "La estructura ya existe" };
-  return { ok: true, beta: true, nota: "En la beta las tablas de cabina ya están creadas. No se crea un Google Sheet." };
+  return { ok: true, beta: true, nota: "Las tablas de cabina ya están creadas. No se crea un Google Sheet." };
 });
-extend("cabinaResembrar", ADMIN, async () => ({ error: "Resembrar desde el Excel no está en la beta.", parcial: true }));
+extend("cabinaResembrar", ADMIN, async () => ({ error: "Resembrar desde el Excel no está disponible.", parcial: true }));
 extend("cabinaConvertir", ADMIN, async (p, ctx, ses) => {
   const row = (await ctx.db.all("cabina_inventario")).find((r) => s(r.codigo) === s(p.codigo));
   if (!row) return { error: "No encontrado" };
@@ -1165,7 +1165,7 @@ extend("bitacoraMarcarEsterilizable", ADMIN, async (p, ctx, ses) => {
 
 async function acuity(ctx: Ctx, path: string, init: RequestInit = {}): Promise<{ ok: true; data: unknown } | { error: string }> {
   const uid = ctx.env.ACUITY_UID, key = ctx.env.ACUITY_KEY;
-  if (!uid || !key) return { error: "Acuity no está configurado en la beta (secretos ACUITY_UID y ACUITY_KEY)." };
+  if (!uid || !key) return { error: "Acuity no está configurado (secretos ACUITY_UID y ACUITY_KEY)." };
   const res = await ctx.fetchImpl("https://acuityscheduling.com/api/v1/" + path, {
     ...init,
     headers: { Authorization: "Basic " + btoa(uid + ":" + key), "Content-Type": "application/json", ...(init.headers || {}) },
@@ -1250,7 +1250,7 @@ extend("marcarTarjetaEnviada", "any", async (p, ctx, ses) => {
 extend("betaTablas", ADMIN, async () => ({ tablas: BETA_TABLES }));
 extend("betaFilas", ADMIN, async (p, ctx) => {
   const table = s(p.tabla);
-  if (!(BETA_TABLES as readonly string[]).includes(table)) return { error: "Tabla no editable desde la beta" };
+  if (!(BETA_TABLES as readonly string[]).includes(table)) return { error: "Tabla no editable desde la app" };
   const q = s(p.q).toLowerCase();
   let rows = await ctx.db.all(table);
   rows.sort((a, b) => n(b.sheet_row) - n(a.sheet_row));
@@ -1274,7 +1274,7 @@ extend("betaGuardar", ADMIN, async (p, ctx, ses) => {
   delete campos.id; delete campos.orig;
   if (n(p.sheet_row)) {
     await ctx.db.write(actorOf(ses), table, "update", { sheet_row: n(p.sheet_row) }, campos);
-    await logAccion(ctx.db, actorOf(ses), "BETA EDITAR", table + " fila " + n(p.sheet_row));
+    await logAccion(ctx.db, actorOf(ses), "EDITAR", table + " fila " + n(p.sheet_row));
     return { ok: true };
   }
   if (table === "tickets") {
@@ -1290,7 +1290,7 @@ extend("betaEliminar", ADMIN, async (p, ctx, ses) => {
   const table = s(p.tabla);
   if (!(BETA_TABLES as readonly string[]).includes(table)) return { error: "Tabla no editable" };
   await ctx.db.write(actorOf(ses), table, "delete", { sheet_row: n(p.sheet_row) }, null);
-  await logAccion(ctx.db, actorOf(ses), "BETA ELIMINAR", table + " fila " + n(p.sheet_row));
+  await logAccion(ctx.db, actorOf(ses), "ELIMINAR", table + " fila " + n(p.sheet_row));
   return { ok: true };
 });
 extend("betaMover", ADMIN, async (p, ctx, ses) => {
@@ -1309,6 +1309,6 @@ extend("betaMover", ADMIN, async (p, ctx, ses) => {
   } else {
     await ctx.db.write(actor, table, "update", { sheet_row: from }, { sheet_row: to });
   }
-  await logAccion(ctx.db, actor, "BETA MOVER", table + " " + from + " → " + to);
+  await logAccion(ctx.db, actor, "MOVER", table + " " + from + " → " + to);
   return { ok: true, sheet_row: to };
 });

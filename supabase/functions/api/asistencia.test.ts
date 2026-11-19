@@ -198,11 +198,11 @@ describe("asistencia", () => {
       { id: "dani", nombre: "Daniela Mora", short: "Daniela", rol: "cosmetologa", bloqueado: false },
     );
     const conf = await handle("asis_config_guardar", {
-      token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 150, motivo: "punto del spa",
+      token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 20, motivo: "punto del spa",
     }, ctx);
     assert.equal((conf as { ok?: boolean }).ok, true);
     const lejos = await handle("asis_marcar", { token, tipo: "entrada", lat: 0, lng: 0, precision_m: 10, foto: selfie }, ctx);
-    assert.match(String((lejos as { error?: string }).error), /radio permitido/);
+    assert.match(String((lejos as { error?: string }).error), /Estás a .* m de/);
     assert.equal(uploads.length, 0);
     const ok = await handle("asis_marcar", { token, tipo: "entrada", origen: "telefono", lat: -0.18, lng: -78.47, precision_m: 20, foto: selfie }, ctx);
     assert.equal((ok as { ok?: boolean }).ok, true);
@@ -369,7 +369,7 @@ describe("asistencia", () => {
       }) as typeof fetch,
       legacyLogin: async () => ({ ok: false }),
     };
-    const conf = await handle("asis_config_guardar", { token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 150, motivo: "punto del spa" }, ctx);
+    const conf = await handle("asis_config_guardar", { token: "t-emi", lat: -0.18, lng: -78.47, radio_m: 20, motivo: "punto del spa" }, ctx);
     assert.equal((conf as { ok?: boolean }).ok, true);
 
     assert.equal(lecturaEnVista("asis_marcar"), false);

@@ -1437,9 +1437,9 @@ describe("beta shell", () => {
     assert.match(html, /OC-0080/);
     assert.match(screens, /gc-line/);
     assert.match(screens, /diferencia a cobrar/);
-    assert.match(html, /MODO PRUEBA/);
+    assert.match(html, /SIMULACIÓN/);
     assert.match(html, /id="btn-prueba"/);
-    assert.match(html, /Borrar datos de prueba/);
+    assert.match(html, /Borrar datos de simulación/);
     assert.match(html, /modo-prueba/);
     assert.match(html, /fly-sec/);
     assert.match(html, /Personal/);
@@ -1821,7 +1821,7 @@ describe("modo prueba", () => {
     const ocRealFin = (await db.all("erp_oc")).find((r) => r.numero === "OC-0001");
     assert.ok(ocRealFin);
     assert.notEqual(ocRealFin?.origin, "test");
-    const log = (await db.all("log_acciones")).find((r) => r.accion === "PURGA PRUEBA");
+    const log = (await db.all("log_acciones")).find((r) => r.accion === "PURGA SIMULACIÓN");
     assert.ok(log);
     assert.notEqual(log?.origin, "test");
     const cliDespues = await handle("clientes_resumen", { token: real.token }, real) as Row;
@@ -2450,7 +2450,7 @@ describe("series, comisiones y rol", () => {
     assert.match(String(det.error), /eliminada/i);
     db.tables.get("sesiones")!.find((r) => r.token === adminC.token)!.modo_prueba = true;
     const prueba = await handle("inline_guardar", { token: adminC.token, tabla: "clientes", fila: String(nuevo.fila), campos: { nombre: "Rosita" } }, adminC) as Row;
-    assert.match(String(prueba.error), /prueba/i);
+    assert.match(String(prueba.error), /simulación/i);
     const vista = await handle("inline_guardar", { token: adminC.token, preview: true, preview_uid: "andrea", tabla: "clientes", fila: String(nuevo.fila), campos: { nombre: "X" } }, adminC) as Row;
     assert.match(String(vista.error), /vista/i);
   });
@@ -2953,7 +2953,7 @@ describe("series, comisiones y rol", () => {
     assert.equal(bajaH.ok, true);
     assert.ok((await db.all("horarios")).find((r) => r.id === hor.fila)?.borrado_at);
     const real = await handle("inline_borrar", { token: adminC.token, tabla: "horarios", fila: "real-h" }, adminC) as Row;
-    assert.match(String(real.error), /prueba/i);
+    assert.match(String(real.error), /simulación/i);
     assert.equal((await db.all("horarios")).find((r) => r.id === "real-h")?.borrado_at, undefined);
   });
 
@@ -3100,28 +3100,28 @@ describe("series, comisiones y rol", () => {
     const facial = await handle("inline_guardar", {
       token: c.token, tabla: "com_facial", fila: "def|facial|SUNSU-01", campos: { monto: "9", vigente: "2026-10-26" },
     }, c) as Row;
-    assert.match(String(facial.error), /prueba/i);
+    assert.match(String(facial.error), /simulación/i);
     const borrar = await handle("inline_borrar", {
       token: c.token, tabla: "com_facial", fila: "facial|SUNSU-01|2026-10-26",
     }, c) as Row;
-    assert.match(String(borrar.error), /prueba/i);
+    assert.match(String(borrar.error), /simulación/i);
     const pago = await handle("inline_guardar", {
       token: c.token, tabla: "pago_config", fila: "nuevo",
       campos: { nombre: "Andrea Robles", vigente: "2026-10-26", sueldo: "999", bono: "1" },
     }, c) as Row;
-    assert.match(String(pago.error), /prueba/i);
+    assert.match(String(pago.error), /simulación/i);
     const quitar = await handle("inline_borrar", {
       token: c.token, tabla: "pago_config", fila: "1",
     }, c) as Row;
-    assert.match(String(quitar.error), /prueba/i);
+    assert.match(String(quitar.error), /simulación/i);
     const viejo = await handle("pago_config_guardar", {
       token: c.token, nombre: "Andrea Robles", vigente_desde: "2026-10-26", sueldo: 999, bono: 1,
     }, c) as Row;
-    assert.match(String(viejo.error), /prueba/i);
+    assert.match(String(viejo.error), /simulación/i);
     const tramos = await handle("tramos_guardar", {
       token: c.token, tramos: [{ desde: 1, hasta: 10, modo: "pct", valor: 50 }],
     }, c) as Row;
-    assert.match(String(tramos.error), /prueba/i);
+    assert.match(String(tramos.error), /simulación/i);
     const kv = await db.all("app_kv");
     const reglas = kv.find((r) => r.clave === "comision_reglas")!.valor as Row;
     assert.equal((reglas.filas as Row[])[0].monto, 2);

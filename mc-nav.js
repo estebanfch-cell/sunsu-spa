@@ -242,7 +242,7 @@
     var p = PRONTO[key];
     if (!p) return '<p class="note">Esta pantalla no existe.</p>';
     return '<div class="card"><div class="card-title">' + e(p[0]) + '</div><p><span class="mcn-pronto">Próximamente</span></p><p class="note">' + e(p[1]) +
-      " Esta pantalla todavía no está en la beta.</p>" +
+      " Esta pantalla todavía no está disponible.</p>" +
       (p[2] ? '<button class="btn ghost small" type="button" data-go="' + e(p[2]) + '">Mientras tanto: ' + e(p[3]) + "</button>" : "") + "</div>";
   }
 
@@ -308,7 +308,7 @@
       '<label>Cantidad (+ suma, − resta)</label><input name="delta" inputmode="decimal" required placeholder="-2">' +
       '<label>Motivo</label><select name="motivo" required><option value="merma">Merma</option><option value="vencido">Vencido</option><option value="dañado">Dañado</option><option value="muestra">Muestra</option><option value="conteo">Conteo</option><option value="otro">Otro</option></select>' +
       '<label>Nota</label><textarea name="nota"></textarea>' +
-      '<p class="note">Escribe el movimiento en el kardex de la beta (ajuste_save) y queda con número AJU. No toca la hoja ni el sistema actual.</p>' +
+      '<p class="note">Escribe el movimiento en el kardex (ajuste_save) y queda con número AJU.</p>' +
       '<p class="err" id="mcn-aj-err"></p><button class="btn" type="submit">Registrar ajuste</button></form>';
   }
   function wireAjuste(main) {

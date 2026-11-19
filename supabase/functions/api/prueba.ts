@@ -128,9 +128,9 @@ export class VistaDb implements Db {
     // Tablas sin columna 'origin': una escritura de prueba quedaría como REAL. No se tocan.
     if (SIN_ORIGIN.has(table)) return { ...(row || {}), origin: "test" };
     // La mayoría de beta_* se bloqueaban porque no tenían origin. Las que sí están en TABLAS (p. ej. ficha de empleadas) se escriben con origin=test.
-    if (table.startsWith("beta_") && !TABLAS.includes(table)) throw new Error("Estás en Modo prueba: este cambio no se guarda. Sal de Modo prueba y vuelve a intentarlo.");
+    if (table.startsWith("beta_") && !TABLAS.includes(table)) throw new Error("Estás en simulación: este cambio no se guarda. Sal de la simulación y vuelve a intentarlo.");
     if (table === "erp_stock") {
-      if (op === "delete") throw new Error("Modo prueba no borra datos reales");
+      if (op === "delete") throw new Error("La simulación no borra datos reales");
       return { ...(row || {}), origin: "test" };
     }
     if (op === "insert") {
@@ -149,7 +149,7 @@ export class VistaDb implements Db {
     const hit = rows.find((r) => coincide(r, match));
     if (!hit) return null;
     if (s(hit.origin) !== "test") {
-      if (op === "delete") throw new Error("Modo prueba no borra datos reales");
+      if (op === "delete") throw new Error("La simulación no borra datos reales");
       return { ...hit };
     }
     if (op === "delete") return this.inner.write(actor, table, "delete", match, null);
@@ -158,7 +158,7 @@ export class VistaDb implements Db {
   async rpc(name: string, args: Row): Promise<unknown> {
     if (this.on) {
       if (name === "erp_tx") return null;
-      if (name.startsWith("next_")) throw new Error("Modo prueba no usa la secuencia real");
+      if (name.startsWith("next_")) throw new Error("La simulación no usa la secuencia real");
     }
     return this.inner.rpc(name, args);
   }
@@ -208,7 +208,7 @@ export async function purgarPrueba(db: Db, actor: string): Promise<Row> {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/kardex no se borra|no se borra/i.test(msg)) {
-          throw new Error("Aplica 0016_modo_prueba.sql para borrar datos de prueba");
+          throw new Error("Falta aplicar la migración 0016 para borrar datos de simulación");
         }
         throw e;
       }
@@ -216,7 +216,7 @@ export async function purgarPrueba(db: Db, actor: string): Promise<Row> {
     if (nDel) counts[table] = nDel;
     total += nDel;
   }
-  await logAccion(base, actor, "PURGA PRUEBA", JSON.stringify(counts));
+  await logAccion(base, actor, "PURGA SIMULACIÓN", JSON.stringify(counts));
   return { ok: true, borradas: total, tablas: counts };
 }
 

@@ -57,7 +57,7 @@ async function guardarAjuste(ctx: Ctx, ses: Ses, r: Row, patch: Row, accion: str
   else await ctx.db.write(actorOf(ses), "beta_gift_ajustes", "insert", {}, { gift_id: Number(r.id), ...row });
   await logAccion(ctx.db, actorOf(ses), "GC " + accion, s(r.codigo_gc) + (detalle ? " · " + detalle : ""));
 }
-function bloqueo(ses: Ses, r: Row): string | null { return ses.prueba && s(r.origin) !== "test" ? "Modo prueba no cambia gift cards reales" : null; }
+function bloqueo(ses: Ses, r: Row): string | null { return ses.prueba && s(r.origin) !== "test" ? "La simulación no cambia gift cards reales" : null; }
 
 extend("gcb_lista", "any", async (p, ctx, ses) => {
   if (await nivel(ctx, ses) === "no") return { error: "No tienes permiso" };
@@ -115,7 +115,7 @@ extend("gcb_siguiente", "any", async (_p, ctx, ses) => {
 
 extend("gcb_vender", "any", async (p, ctx, ses) => {
   if (await nivel(ctx, ses) === "no") return { error: "No tienes permiso" };
-  if (ses.prueba || ctx.db.prueba) return { error: "En modo prueba vende la gift card desde el ticket de prueba" };
+  if (ses.prueba || ctx.db.prueba) return { error: "En simulación vende la gift card desde el ticket de simulación" };
   const nombre = s(p.nombre).trim(), apellido = s(p.apellido).trim(), cedula = s(p.cedula).trim();
   if (!nombre) return { error: "Escribe el nombre de quien compra" };
   const servicio = s(p.servicio).trim();
@@ -256,7 +256,7 @@ extend("gcb_pdf_guardar", "any", async (p, ctx, ses) => {
   if (await nivel(ctx, ses) === "no") return { error: "No tienes permiso" };
   const r = await filaGift(ctx, p.id);
   if (!r || r.borrado_at) return { error: "Gift card no encontrada" };
-  if (ses.prueba && s(r.origin) !== "test") return { error: "Modo prueba no guarda documentos reales" };
+  if (ses.prueba && s(r.origin) !== "test") return { error: "La simulación no guarda documentos reales" };
   const pdf = bytesDe(s(p.pdf));
   if (!pdf || pdf.length < 200) return { error: "El PDF no llegó bien" };
   if (pdf.length > MAX_PDF) return { error: "El PDF pesa más de 8 MB" };

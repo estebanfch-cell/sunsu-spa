@@ -61,7 +61,7 @@ const enc = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 extend("acta_pdf_guardar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administradores" };
   const a = await acta(ctx, s(p.id)); if (!a) return { error: "Acta no encontrada" };
-  if (ses.prueba) return { error: "Modo prueba no guarda documentos reales" };
+  if (ses.prueba) return { error: "La simulación no guarda documentos reales" };
   const pdf = bytesDe(s(p.pdf));
   if (!pdf || pdf.length < 200) return { error: "El PDF no llegó bien" };
   if (pdf.length > MAX_PDF) return { error: "El PDF pesa más de 8 MB" };

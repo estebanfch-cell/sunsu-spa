@@ -295,7 +295,7 @@ extend("emp_iess_borrar", "any", async (p, ctx, ses) => {
 
 extend("emp_doc_subir", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración sube documentos de una empleada." };
-  if (enPrueba(ctx.db)) return { error: "Modo prueba no guarda documentos reales de empleadas." };
+  if (enPrueba(ctx.db)) return { error: "La simulación no guarda documentos reales de empleadas." };
   const nombre = s(p.nombre);
   if (!nombre) return { error: "Falta la empleada." };
   const archivo = s(p.archivo || p.data);

@@ -281,7 +281,7 @@
     if (p.uso || p.compra || (p.vigentes || []).length) h += '<div class="mccf-card"><b>Paquete</b><div class="mctk-grid1">' + (p.uso ? ro("Sesión en este ticket", e(p.uso)) : "") + (p.compra ? ro("Compra", e(p.compra)) : "") +
       (p.vigentes || []).map(function (v) { return ro(v.nombre || v.codigo, e(v.usados + "/" + v.total + " usadas · quedan " + v.pendientes)); }).join("") + "</div></div>";
     h += '<div class="mccf-card"><b>Reportes enviados</b>' + (E.length ? '<ul class="mctr-log">' + E.map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · " + e(x.tipo) + " · " + e(x.por || "—") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Todavía no se envía el reporte a la clienta.</p>') + "</div>";
-    h += '<div class="mccf-card"><b>Historial</b>' + ((d.historial || []).length ? '<ul class="mctr-log">' + d.historial.slice().reverse().map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · <b>" + e(x.accion) + "</b> · " + e(x.detalle) + " · " + e(x.actor) + (x.total != null ? " · total " + $m(x.total) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios en la beta. ' + (d.lineasBeta ? "" : "Las líneas salen del sistema; si el ticket tiene varias, el precio por línea es un estimado del total cobrado.") + "</p>") + "</div>";
+    h += '<div class="mccf-card"><b>Historial</b>' + ((d.historial || []).length ? '<ul class="mctr-log">' + d.historial.slice().reverse().map(function (x) { return "<li>" + e(fechaIso(x.fecha)) + " · <b>" + e(x.accion) + "</b> · " + e(x.detalle) + " · " + e(x.actor) + (x.total != null ? " · total " + $m(x.total) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios registrados. ' + (d.lineasBeta ? "" : "Las líneas salen del sistema; si el ticket tiene varias, el precio por línea es un estimado del total cobrado.") + "</p>") + "</div>";
     return h;
   }
   function html() {
@@ -396,7 +396,7 @@
       '<label class="mctk-xtog"><input type="checkbox" id="mctk-xall"' + (K.exclC ? " checked" : "") + '><span>Excluir toda la comisión de <b>' + e(t.cosmetologa || "la cosmetóloga") + "</b> en este ticket</span></label>" +
       '<table class="mctk-xt"><thead><tr><th>Producto / servicio</th><th class="num">Subtotal</th><th class="c">Excluir</th></tr></thead><tbody>' +
       K.L.map(function (l, i) { return '<tr><td><div class="mctk-pn">' + e(l.nombre) + '</div><div class="mctk-sku">' + e(codigoVisible(l)) + " · " + e(TIPO[l.tipo] || l.tipo) + " ×" + e(q2(l.cantidad)) + '</div></td><td class="num">' + $m(net(l.total_linea != null ? l.total_linea : l.precio_unit * l.cantidad)) + '</td><td class="c"><input type="checkbox" data-x="' + i + '"' + (l.excluir_comision ? " checked" : "") + "></td></tr>"; }).join("") +
-      '</tbody></table><label class="mctk-xlbl">Motivo<input type="text" id="mctk-xn" value="' + e(K.exclN) + '" placeholder="Ej. producto de cortesía, ticket de prueba"></label>' +
+      '</tbody></table><label class="mctk-xlbl">Motivo<input type="text" id="mctk-xn" value="' + e(K.exclN) + '" placeholder="Ej. producto de cortesía"></label>' +
       '<p class="err" id="mctk-xerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn small" type="button" id="mctk-xok">' + (d.puedeEditar ? "Guardar" : "Aplicar") + "</button></div></div>";
     document.body.appendChild(box);
     var cerrar = function () { box.remove(); };
@@ -681,7 +681,7 @@
       if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
       var rr = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "eliminacion", motivo: String(mo).trim() });
       if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
-      if (window.toast) toast(rr.prueba ? "🧪 Solicitud de PRUEBA enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
+      if (window.toast) toast(rr.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
     };
     if (main.querySelector("#mctk-multa")) main.querySelector("#mctk-multa").onclick = function () {
       var t = K.d.ticket, inf = K.d.info || {};
