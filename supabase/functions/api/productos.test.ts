@@ -296,12 +296,18 @@ describe("TK123 Productos: filtros, escáner y sin-costo físico", () => {
     assert.equal(html.includes('id="btn-prueba"'), false);
     assert.equal(html.includes('id="btn-ver-como"'), false);
   });
-  it("el escáner usa BarcodeDetector y cae a ZXing en Safari", () => {
-    const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
-    const start = js.indexOf("function _scanAbrir");
-    const block = js.slice(start, start + 3500);
-    assert.match(block, /BarcodeDetector/);
-    assert.match(block, /BrowserMultiFormatReader/);
-    assert.match(block, /cdn\.jsdelivr\.net\/npm\/@zxing\/library@0\.21\.3/);
+  it("el escáner compartido usa BarcodeDetector y cae a ZXing vendido, sin CDN", () => {
+    const scan = readFileSync(new URL("../../../mc-scan.js", import.meta.url), "utf8");
+    const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    assert.match(scan, /BarcodeDetector/);
+    assert.match(scan, /BrowserMultiFormatReader/);
+    assert.match(scan, /vendor-zxing\.js/);
+    assert.doesNotMatch(scan, /cdn\.jsdelivr\.net/);
+    assert.doesNotMatch(screens, /cdn\.jsdelivr\.net\/npm\/@zxing/);
+    assert.match(html, /mc-scan\.js\?v=20261119tk128/);
+    assert.match(html, /vendor-zxing\.js\?v=20261119tk128/);
+    const start = screens.indexOf("function _scanAbrir");
+    assert.match(screens.slice(start, start + 500), /MCScan\.abrir/);
   });
 });

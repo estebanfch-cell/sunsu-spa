@@ -9,6 +9,7 @@ const html = readFileSync(join(root, "beta.html"), "utf8");
 const media = html.split("@media (max-width: 860px)")[1] || "";
 const nav = readFileSync(join(root, "mc-nav.js"), "utf8");
 const ap = readFileSync(join(root, "mc-aperturas.js"), "utf8");
+const scan = readFileSync(join(root, "mc-scan.js"), "utf8");
 const inline = readFileSync(join(root, "supabase/functions/api/inline_api.ts"), "utf8");
 const asis = readFileSync(join(root, "supabase/functions/api/asistencia_api.ts"), "utf8");
 
@@ -21,7 +22,8 @@ describe("TK103 vista de celular", () => {
     assert.doesNotMatch(html, /maximumAge:\s*0\b/);
     const parar = html.split("function pararCamara()")[1].split("\n}")[0];
     assert.doesNotMatch(parar, /\.stop\(\)/, "pararCamara no corta las pistas (iOS volvería a preguntar)");
-    assert.match(ap, /SunsuMedia\.camara\("environment"\)/);
+    assert.match(scan, /SunsuMedia\.camara\("environment"\)/);
+    assert.match(ap, /MCScan\.abrir/);
     const getUM = (html.match(/getUserMedia\(/g) || []).length;
     assert.equal(getUM, 1, "un solo getUserMedia en beta.html (dentro de SunsuMedia)");
     assert.match(html, /SunsuMedia\.reset\(\)/);
