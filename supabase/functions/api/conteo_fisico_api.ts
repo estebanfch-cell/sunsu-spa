@@ -25,7 +25,7 @@ async function tablaLista(ctx: Ctx): Promise<boolean> {
   try { await ctx.db.all("beta_conteos"); return true; } catch { return false; }
 }
 function yo(ses: Ses): string { return s(ses.uid); }
-async function puedeVerModulo(ctx: Ctx, ses: Ses): Promise<boolean> {
+export async function puedeVerModulo(ctx: Ctx, ses: Ses): Promise<boolean> {
   if (esAdmin(ses.rol)) return true;
   const m = await matrizDe(ctx.db);
   return acceso(ses.rol, "conteos", m) !== "no" || acceso(ses.rol, "productos", m) !== "no";
@@ -76,7 +76,7 @@ async function cargar(ctx: Ctx, id: string): Promise<{ c: Row; L: Row[] } | null
 }
 function vista(c: Row, L: Row[], ses: Ses): Row {
   return {
-    id: c.id, numero: c.numero, bodega: c.bodega, sububicacion: s(c.sububicacion), bodegaNombre: bodegaNombre(s(c.bodega), s(c.sububicacion)),
+    id: c.id, numero: c.numero, tipo: s(c.tipo) || "hoja", bodega: c.bodega, sububicacion: s(c.sububicacion), bodegaNombre: bodegaNombre(s(c.bodega), s(c.sububicacion)),
     familias: s(c.familias), asignadoA: s(c.asignado_a), asignadoNombre: s(c.asignado_nombre), estado: s(c.estado), estadoNombre: ESTADOS_CONTEO[s(c.estado)] || s(c.estado),
     nota: s(c.nota), revisionNota: s(c.revision_nota), creadoPor: s(c.creado_por), creadoAt: s(c.creado_at),
     iniciadoAt: s(c.iniciado_at), enviadoAt: s(c.enviado_at), aprobadoAt: s(c.aprobado_at), aprobadoPor: s(c.aprobado_por),
@@ -108,9 +108,10 @@ extend("cf_list", "any", async (p, ctx, ses) => {
   const porC = new Map<string, Row[]>();
   for (const l of lineas) { const k = s(l.conteo_id); porC.set(k, [...(porC.get(k) || []), l]); }
   let rows = (await todas(ctx, "beta_conteos"));
-  // Admin (y quien tiene Conteos en todos) ve todo; el resto solo lo asignado a su usuario.
+  // Admin (y quien tiene Conteos en todos) ve todo.
+  // TK116: un conteo general abierto lo puede retomar cualquiera del equipo con acceso (guardar y terminar después).
   const todo = admin || (verMod && acceso(ses.rol, "conteos", await matrizDe(ctx.db)) === "todos");
-  if (!todo) rows = rows.filter((c) => esAsignada(c, ses));
+  if (!todo) rows = rows.filter((c) => esAsignada(c, ses) || (verMod && s(c.tipo) === "general" && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado))));
   if (p.mios === true) rows = rows.filter((c) => esAsignada(c, ses) && ["asignado", "en_conteo"].includes(s(c.estado)));
   const items = rows.map((c) => vista(c, porC.get(s(c.id)) || [], ses)).sort((a, b) => s(b.creadoAt).localeCompare(s(a.creadoAt)));
   return { ok: true, items, admin };
@@ -277,3 +278,5 @@ extend("notif_leer", "any", async (p, ctx, ses) => {
   }
   return { ok: true };
 });
+
+import "./conteo_secciones_api.ts";
