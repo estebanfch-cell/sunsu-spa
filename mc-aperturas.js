@@ -109,10 +109,10 @@
     ov.innerHTML = '<video playsinline muted></video><div style="color:#fff;font-weight:700">Apunta al código de barras</div><button class="btn" type="button">Cancelar</button>';
     document.body.appendChild(ov);
     var vid = ov.querySelector("video"), stream = null, vivo = true;
-    var fin = function () { vivo = false; if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); ov.remove(); };
+    var fin = function () { vivo = false; if (stream && window.SunsuMedia) SunsuMedia.pausar(stream); else if (stream) stream.getVideoTracks().forEach(function (tr) { tr.enabled = false; }); vid.srcObject = null; ov.remove(); };
     ov.querySelector("button").onclick = fin;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      stream = window.SunsuMedia ? await SunsuMedia.camara("environment") : await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
       vid.srcObject = stream; await vid.play();
       var det = new window.BarcodeDetector();
       var loop = async function () {

@@ -103,6 +103,7 @@
     var out = [];
     var mia = typeof etiquetaMia === "function" ? etiquetaMia : function (x) { return x; };
     var personal = [];
+    personal.push(["*", "Mis solicitudes", "#/m/solicitudes"]);
     if (ok("comisiones")) personal.push(["comisiones", mia("Mis comisiones"), "#/m/personal/comisiones"]);
     if (ok("rol_pagos")) personal.push(["rol_pagos", mia("Mi rol de pagos"), "#/m/personal/rol"]);
     if (ok("asistencia")) {
@@ -140,7 +141,7 @@
     ["#/m/reportes", "📈"], ["#/s/kpis", "🎯"], ["#/m/mc/pronto/rep_ventas", "💹"], ["#/m/mc/pronto/rep_stock", "📦"], ["#/m/mc/pronto/rep_compras", "🛒"], ["#/m/mc/pronto/auditoria", "🔍"],
     ["#/m/mc/pronto/consignacion", "🤝"], ["#/m/caja", "💵"], ["#/m/mc/pronto/sri", "🧾"], ["#/m/mc/pronto/cobranza", "💳"], ["#/m/mc/pronto/edc", "📄"], ["#/m/mc/pronto/banco", "🏦"],
     ["#/m/mc/upermisos", "🔐"], ["#/m/aprobaciones", "✅"], ["#/m/configuracion", "⚙️"], ["#/m/lugares", "🏬"],
-    ["#/m/personal/comisiones", "💰"], ["#/m/personal/rol", "🧾"], ["#/m/personal/asistencia", "⏰"], ["#/m/personal/permisos", "🏖️"], ["#/m/personal/multas", "⚠️"], ["#/m/personal/horarios", "🗓️"], ["#/m/personal/empleados", "👥"],
+    ["#/m/solicitudes", "🔔"], ["#/m/personal/comisiones", "💰"], ["#/m/personal/rol", "🧾"], ["#/m/personal/asistencia", "⏰"], ["#/m/personal/permisos", "🏖️"], ["#/m/personal/multas", "⚠️"], ["#/m/personal/horarios", "🗓️"], ["#/m/personal/empleados", "👥"],
     ["#/m/gift/cards", "🎁"], ["#/m/gift/paquetes", "🎴"], ["#/s/seguimiento", "📋"], ["#/s/recepcion", "🛎️"], ["#/m/bitacora", "🧼"], ["#/m/promociones", "🏷️"], ["#/s/promos", "🏷️"], ["#/s/tarjetas", "📤"],
     ["#/m/inicio", "📊"], ["#/s/historial", "🎫"], ["#/m/mc", "📦"],
   ];

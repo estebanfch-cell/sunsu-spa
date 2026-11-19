@@ -448,8 +448,8 @@ extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
       await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
         id: crypto.randomUUID(), usuario: uid,
         titulo: "Solicitud de permiso",
-        texto: `${nombre} pidió ${tipo.toLowerCase()} del ${desde} al ${hasta}.`,
-        tipo: "permiso", ruta: "#/m/personal/permisos", created_at: ctx.now.toISOString(),
+        cuerpo: `${nombre} pidió ${tipo.toLowerCase()} del ${desde} al ${hasta}.`,
+        tipo: "permiso", link: "#/m/personal/permisos", created_at: ctx.now.toISOString(),
       });
     }
   } catch { /* la notificación no debe tumbar la solicitud */ }
@@ -501,6 +501,22 @@ extend("asis_permiso_resolver", "any", async (p, ctx, ses) => {
     estado, aprobado_por: ses.name, resuelto_por: ses.name, resuelto_ts: ctx.now.toISOString(), motivo_resolucion: s(p.motivo),
   });
   await auditar(ctx, ses, "permiso", { nombre: s(row.empleada), antes, despues: { estado }, motivo: s(p.motivo) || estado, permiso_sheet_row: row.sheet_row });
+  try {
+    const gente = (await ctx.db.all("app_usuarios").catch(() => [] as Row[])).concat(await ctx.db.all("usuarios").catch(() => [] as Row[]));
+    const hit = gente.find((u) => normNombre(s(u.nombre || u.name || u.short)) === normNombre(s(row.empleada)) || s(u.id) === s(row.empleada));
+    const uid = s(hit?.id);
+    if (uid) {
+      await ctx.db.write(actorOf(ses), "beta_notificaciones", "insert", {}, {
+        id: crypto.randomUUID(), usuario: uid,
+        tipo: estado === "APROBADO" ? "permiso_aprobado" : "permiso_rechazado",
+        titulo: estado === "APROBADO" ? "Permiso aprobado" : "Permiso rechazado",
+        cuerpo: estado === "APROBADO"
+          ? ("Aprobaron tu " + s(row.tipo).toLowerCase() + ".")
+          : ("Rechazaron tu " + s(row.tipo).toLowerCase() + "." + (s(p.motivo) ? " " + s(p.motivo) : "")),
+        link: "#/m/personal/permisos", ref_id: s(row.id_1) || String(row.sheet_row), created_at: ctx.now.toISOString(),
+      });
+    }
+  } catch { /* el aviso no frena la resolución */ }
   return { ok: true, estado };
 });
 
