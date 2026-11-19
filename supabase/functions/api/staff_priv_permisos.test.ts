@@ -131,4 +131,4 @@ describe("TK73 permisos por rol/usuario (privacidad)", () => {
     assert.match(beta, /cfg_priv_get/);
     assert.match(beta, /cfg_priv_guardar/);
     assert.match(nav, /Permisos por rol\/usuario/);
-    assert.match(beta, /20261119tk146/);  });});
+    assert.match(beta, /20261119tk147/);  });});

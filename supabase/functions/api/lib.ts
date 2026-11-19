@@ -33,13 +33,21 @@ export function actorOf(ses: Ses | null, fallback = ""): string {
   return fallback || "beta";
 }
 
+/** Duración de una sesión: 90 días, con renovación deslizante si queda menos de 45. */
+export const SESION_MS = 90 * 24 * 3600 * 1000;
+export const SESION_RENOVAR_SI_QUEDA_MS = 45 * 24 * 3600 * 1000;
+export function expSesion(now: Date, ms = SESION_MS): string {
+  return new Date(now.getTime() + ms).toISOString();
+}
+
 export async function loadSes(ctx: Ctx, token: unknown): Promise<Ses | null> {
   const tk = s(token);
   if (!tk) return null;
   const rows = await ctx.db.all("sesiones");
   const ses = rows.find((r) => r.token === tk);
   if (!ses) return null;
-  if (new Date(String(ses.exp)).getTime() < ctx.now.getTime()) return null;
+  const expMs = new Date(String(ses.exp)).getTime();
+  if (!(expMs > ctx.now.getTime())) return null;
   const app = await ctx.db.all("app_usuarios");
   const a = app.find((x) => String(x.id ?? x.usuario) === String(ses.uid));
   let u: Row | undefined = a
@@ -55,6 +63,10 @@ export async function loadSes(ctx: Ctx, token: unknown): Promise<Ses | null> {
     const marks = await ctx.db.all("cosmetologas");
     const m = marks.find((x) => x.id === u.id);
     rol = m && m.es_cosmetologa === true ? "cosmetologa" : "asistente_cosmetologia";
+  }
+  const queda = expMs - ctx.now.getTime();
+  if (queda < SESION_RENOVAR_SI_QUEDA_MS) {
+    await ctx.db.write(s(u.nombre) || "sesion", "sesiones", "update", { token: tk }, { exp: expSesion(ctx.now) }).catch(() => null);
   }
   return {
     uid: String(u.id), rol, name: String(u.nombre),

@@ -195,7 +195,7 @@ describe("TK141 edición de ticket con aprobación", () => {
     assert.match(mc, /Aprobar edición/);
     const html = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
     assert.match(html, /_tkPintarDiffEdicion/);
-    assert.match(html, /sunsu-beta-2026-11-19-TK146/);
+    assert.match(html, /sunsu-beta-2026-11-19-TK147/);
   });
 });
 

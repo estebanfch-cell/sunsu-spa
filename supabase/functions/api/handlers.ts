@@ -2,7 +2,7 @@ import { bloqueada, ESPERA_MIN, hashPass, igualSeguro, ITER, MAX_INTENTOS, normU
 import type { Ctx, Ses } from "./lib.ts";
 import { cargarOverride, conPermisosUsuario, gateNivel, redactarFlags } from "./usuario_permisos.ts";
 import { acceso, clampPersonal, esAdmin, esPropio, flagsDeRol, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
-import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
+import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, expSesion, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cantAmpollas, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
@@ -614,7 +614,15 @@ export async function doLogin(p: R, ctx: Ctx): Promise<R> {
     const via = await ctx.db.rpc("login_pin", { p_pin: pin, p_ip: s(p.ip) }) as R | null;
     if (via && typeof via === "object") {
       if (via.error && !via.ok) return { error: s(via.error) };
-      if (via.ok) return abrirSesion(ctx, (via.user as R) || via);
+      if (via.ok) {
+        const u0 = (via.user as R) || via;
+        const id0 = s(u0.id || u0.usuario);
+        try {
+          const app = (await ctx.db.all("app_usuarios")).find((x) => s(x.id) === id0);
+          if (app && app.pin_desactivado === true) return { error: "Este PIN ya no está activo. Entra con tu usuario y contraseña." };
+        } catch { /* columna nueva */ }
+        return abrirSesion(ctx, u0);
+      }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -651,9 +659,10 @@ export async function doLogin(p: R, ctx: Ctx): Promise<R> {
     }
     found = u;
   }
+  if (found.pin_desactivado === true) return { error: "Este PIN ya no está activo. Entra con tu usuario y contraseña." };
   if (found.bloqueado === true) return { error: "⚙️ Sistema en actualización — si requieres información adicional, comunícate con el administrador" };
   const token = crypto.randomUUID();
-  const exp = new Date(ctx.now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
+  const exp = expSesion(ctx.now);
   await ctx.db.write(s(found.nombre), "sesiones", "insert", {}, { token, uid: found.id, rol: found.rol, exp });
   await logAccion(ctx.db, s(found.nombre), "LOGIN", s(found.nombre));
   const pub = publico(found);
@@ -713,7 +722,7 @@ async function abrirSesion(ctx: Ctx, u: R): Promise<R> {
   const rol = normalizarRol(s(u.rol || u.role));
   if (u.bloqueado === true) return { error: "⚙️ Sistema en actualización — si requieres información adicional, comunícate con el administrador" };
   const token = crypto.randomUUID();
-  const exp = new Date(ctx.now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
+  const exp = expSesion(ctx.now);
   await ctx.db.write(nombre, "sesiones", "insert", {}, { token, uid: id, rol, exp });
   await logAccion(ctx.db, nombre, "LOGIN", nombre);
   const matriz = await matrizDe(conPermisosUsuario(ctx.db, rol, esAdmin(rol) ? null : await cargarOverride(ctx.db, id)));
@@ -1068,7 +1077,7 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
     return { ok: true };
   }
 
-  const sessionActions = new Set(["version", "getVersion", "login", "login_pass", "usuarioCambiarPin", "getUsuarios", "usuarioBloqueado"]);
+  const sessionActions = new Set(["version", "getVersion", "login", "login_pass", "logout", "usuarioCambiarPin", "getUsuarios", "usuarioBloqueado", "reset_pedir", "reset_validar", "reset_aplicar"]);
   if (!sessionActions.has(action)) {
     const openReads = new Set(["getCatalogo", "getPromos", "getCodigoGC", "getCodigosGC", "getProdColMap", "getMensajes", "getPlantillaGC", "existeCedula", "getRegistro"]);
     if (!ses && !openReads.has(action)) return { error: "Inicia sesión" };
@@ -1090,7 +1099,12 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 }
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
-  let real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" ? null : await loadSes(ctx, p.token);
+  if (action === "logout") {
+    const tk = s(p.token);
+    if (tk) await ctx.db.write("logout", "sesiones", "delete", { token: tk }, null).catch(() => null);
+    return { ok: true };
+  }
+  let real = action === "login" || action === "login_pass" || action === "version" || action === "getVersion" || action === "logout" || action === "reset_pedir" || action === "reset_validar" || action === "reset_aplicar" ? null : await loadSes(ctx, p.token);
   if (!real) {
     const { MIGO_CRON_ACCIONES, sesionCronMigo } = await import("./migo_cuadre.ts");
     if (MIGO_CRON_ACCIONES.has(action)) real = sesionCronMigo(p, ctx.env);
@@ -1301,8 +1315,9 @@ async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise
 
 const FNS: Record<string, (p: R, ctx: Ctx, ses: Ses | null) => Promise<unknown>> = {};
 
-function reg(name: string, roles: string[] | "any", fn: (p: R, ctx: Ctx, ses: Ses) => Promise<unknown>) {
+function reg(name: string, roles: string[] | "any" | "public", fn: (p: R, ctx: Ctx, ses: Ses) => Promise<unknown>) {
   FNS[name] = async (p, ctx, ses) => {
+    if (roles === "public") return fn(p, ctx, ses as Ses);
     if (roles !== "any") {
       const d = deny(ses, roles);
       if (d) return d;
@@ -2920,7 +2935,7 @@ reg("getRendimientoProductos", ADMIN, async (p, ctx) => {
   return { items };
 });
 
-export function extend(name: string, roles: string[] | "any", fn: (p: R, ctx: Ctx, ses: Ses) => Promise<unknown>) {
+export function extend(name: string, roles: string[] | "any" | "public", fn: (p: R, ctx: Ctx, ses: Ses) => Promise<unknown>) {
   reg(name, roles, fn);
 }
 export { FNS };
