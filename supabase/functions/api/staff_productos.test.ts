@@ -54,7 +54,7 @@ function semilla(): MemoryDb {
 describe("TK69 productos del personal", () => {
   it("el front busca por nombre o SKU, esconde filtros en un menú y bloquea descargas", () => {
     const js = readFileSync(new URL("../../../mc-productos.js", import.meta.url), "utf8");
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(js, /Buscar por nombre o SKU/);
     assert.match(js, /mcp-filt-btn/);
     assert.match(js, /Filtros/);

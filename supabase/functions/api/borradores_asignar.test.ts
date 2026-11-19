@@ -208,7 +208,7 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
   });
 
   it("el front muestra la pill Por completar en Ventas y en el home", () => {
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     const home = readFileSync(new URL("../../../mc-staff-home.js", import.meta.url), "utf8");
     assert.match(screens, /Por completar/);
@@ -217,7 +217,7 @@ describe("TK79 borradores asignados a la cosmetóloga", () => {
     assert.match(screens, /pendiente_aprobar/);
     assert.match(beta, /mc-staff-home\.js\?v=20261119tk149/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);  });});
+    assert.match(sw, /sunsu-2026-11-19-TK151/);  });});
 
 describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
   const filas = () => [
@@ -303,7 +303,7 @@ describe("TK94 Facturas borrador (Ventas › #/m/borradores)", () => {
 
   it("el front tiene el submódulo en Ventas, la ruta y filas compactas con container query", () => {
     const nav = readFileSync(new URL("../../../mc-nav.js", import.meta.url), "utf8");
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const mod = readFileSync(new URL("../../../mc-borradores.js", import.meta.url), "utf8");
     assert.match(nav, /\["tickets", "Facturas borrador", "#\/m\/borradores"\]/);
     assert.match(beta, /mc-borradores\.js\?v=/);

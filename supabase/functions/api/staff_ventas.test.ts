@@ -87,7 +87,7 @@ describe("TK61 ventas del personal", () => {
     assert.match(String(no.error), /permiso/i);
     const si = await h(and, "getTicket", { so_num: "TK-SO-11" });
     assert.equal(si.ok, true, String(si.error));
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(beta, /"tk_historial"/);
     assert.match(beta, /"tk_reagendadas"/);
   });

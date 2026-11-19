@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
 const man = readFileSync(join(root, "manifest.webmanifest"), "utf8");
 const sql = readFileSync(join(root, "docs/supabase/pending/0060_credenciales_debe_cambiar.sql"), "utf8");
@@ -23,7 +23,7 @@ describe("TK100 icono oficial y primer ingreso", () => {
     assert.match(html, /apple-touch-icon" href="\/icon-sunsu-180\.png"/);
     assert.match(html, /icon-sunsu-192\.png/);
     assert.doesNotMatch(html, /data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHe/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);    assert.match(sw, /icon-sunsu-180\.png/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);    assert.match(sw, /icon-sunsu-180\.png/);
   });
 
   it("el primer ingreso con clave temporal obliga a elegir una nueva", () => {

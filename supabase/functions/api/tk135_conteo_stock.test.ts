@@ -164,8 +164,8 @@ describe("TK135 aprobar conteo actualiza el stock real", () => {
 
   it("el cache de esta entrega es TK135, distinto al de TK134", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.match(beta, /20261119tk149/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK134/);
   });

@@ -181,7 +181,7 @@ describe("TK88 rol oficial", () => {
     assert.equal(aj.ok, true, String(aj.error || ""));
     assert.equal(n((aj.data as Row).anticipo), 40);
     assert.ok(n((aj.data as Row).totalRecibir) < antes);
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(beta, /Crear rol/);
     assert.match(beta, /Aporte patronal a pagar/);
     assert.match(beta, /data-rol-guardar/);
@@ -189,7 +189,7 @@ describe("TK88 rol oficial", () => {
   });
 
   it("el front no hace scroll horizontal a 375 y tiene pastillas de estado", () => {
-    const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
+    const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(beta, /rol-pill/);
     assert.match(beta, /Borrador|Aprobado|Rechazado/);
     assert.match(beta, /max-width:375px[\s\S]{0,200}overflow-x:\s*hidden|#rol-preview[\s\S]{0,400}overflow-x:\s*hidden|rol-preview[\s\S]{0,200}overflow-x:\s*auto/);

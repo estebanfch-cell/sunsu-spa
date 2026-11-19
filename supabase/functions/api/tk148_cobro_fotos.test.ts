@@ -5,7 +5,7 @@ import { estaCobrado, estaPagado, sumaPagosBeta } from "./tickets_beta_api.ts";
 import { refsFoto, topeFotosCard, urlsFoto, type FotoCard } from "./ticket_lista_card.ts";
 
 const root = new URL("../../../", import.meta.url);
-const html = readFileSync(new URL("beta.html", root), "utf8");
+const html = readFileSync(new URL("index.html", root), "utf8");
 const screens = readFileSync(new URL("beta-screens.js", root), "utf8");
 const lista = readFileSync(new URL("supabase/functions/api/tickets_lista_api.ts", root), "utf8");
 const getApi = readFileSync(new URL("supabase/functions/api/tickets_beta_api.ts", root), "utf8");
@@ -100,6 +100,6 @@ describe("TK148 colores más visibles en iPhone", () => {
   });
 
   it("cache TK148", () => {
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK151"/);
   });
 });

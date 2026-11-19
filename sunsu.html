@@ -10,19 +10,19 @@
 <link rel="icon" href="/icon-sunsu-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
 <meta name="apple-mobile-web-app-title" content="Sunsu">
-<meta http-equiv="refresh" content="0;url=/beta.html">
+<noscript><meta http-equiv="refresh" content="0;url=/"></noscript>
 <script>
 /* Corte 21:00 America/Guayaquil, 18 nov 2026.
    El icono guardado en el iPhone abre /sunsu.html (con o sin ?v= de la app vieja).
-   Desde este commit esa misma URL entra a la beta. No se toca el arreglo de login 5692c8f
+   Desde este commit esa misma URL entra a la app (TK151: la raíz https://app.sunsuspa.com/). No se toca el arreglo de login 5692c8f
    en el histórico: este archivo lo sustituye solo en el corte, cuando Sheets ya no entra. */
 (function () {
   var hash = location.hash || "";
-  location.replace("/beta.html" + hash);
+  location.replace("/" + hash);
 })();
 </script>
 </head>
 <body style="font-family:system-ui,sans-serif;background:#F5F0E8;color:#3A3530;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0">
-  <p><a href="/beta.html" style="color:#5B7FA6;font-weight:700">Abrir Sunsu</a></p>
+  <p><a href="/" style="color:#5B7FA6;font-weight:700">Abrir Sunsu</a></p>
 </body>
 </html>

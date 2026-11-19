@@ -171,7 +171,7 @@ describe("TK140 cosmetóloga editable y default del borrador", () => {
   it("el detalle y el formulario de envío tienen el dropdown, la tabla no recorta Saldo, y el caché es TK140", () => {
     const mc = readFileSync(join(root, "mc-tickets.js"), "utf8");
     const sc = readFileSync(join(root, "beta-screens.js"), "utf8");
-    const html = readFileSync(join(root, "beta.html"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(mc, /select class="mctk-in mctk-cosm"/);
     assert.match(mc, /K\.datos\.cosmetologa = nv/);
@@ -181,8 +181,8 @@ describe("TK140 cosmetóloga editable y default del borrador", () => {
     assert.match(html, /\.tk-table \{[^}]*min-width: 0/);
     assert.match(html, /tk-list, \.tk-split\.tk-side \.tk-list \{ overflow-x: hidden/);
     assert.match(html, /th:last-child, \.tk-table td:last-child \{ overflow: visible/);
-    assert.match(sw, /const CACHE = "sunsu-beta-2026-11-19-TK150"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK150"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK151"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK151"/);
     assert.match(html, /20261119tk149/);
   });
 });

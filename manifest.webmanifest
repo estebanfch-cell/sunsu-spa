@@ -1,8 +1,8 @@
 {
   "name": "순수 Sunsu Spa",
   "short_name": "Sunsu",
-  "start_url": "/beta.html",
-  "scope": "/beta.html",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F5F0E8",
   "theme_color": "#5B7FA6",

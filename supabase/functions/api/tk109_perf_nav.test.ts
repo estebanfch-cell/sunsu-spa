@@ -13,7 +13,7 @@ import { calcularKpisStaff } from "./dashboard_api.ts";
 import type { Row } from "./domain.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const html = readFileSync(join(root, "beta.html"), "utf8");
+const html = readFileSync(join(root, "index.html"), "utf8");
 const nav = readFileSync(join(root, "mc-nav.js"), "utf8");
 const home = readFileSync(join(root, "mc-staff-home.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
@@ -61,7 +61,7 @@ describe("TK109 más rápido y menú siempre visible", () => {
     assert.match(html, /api\("ping"\)/);
     assert.match(home, /apiSWR/);
     assert.match(home, /MCStaffHome = \{[\s\S]*html: html/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);
     assert.match(html, /20261119tk149/);  });
 
   it("staff_home no baja el dashboard admin completo y el ping / bootstrap responden", async () => {

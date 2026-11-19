@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const beta = () => readFileSync(join(root, "beta.html"), "utf8");
+const beta = () => readFileSync(join(root, "index.html"), "utf8");
 
 describe("TK106 · historial de roles del personal", () => {
   it("tiene botón Historial, años que se abren y meses tappeables", () => {
@@ -28,6 +28,6 @@ describe("TK106 · historial de roles del personal", () => {
     const html = beta();
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(html, /20261119tk149/);
-    assert.match(sw, /sunsu-beta-2026-11-19-TK150/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
+    assert.match(sw, /sunsu-2026-11-19-TK151/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
   });
 });
