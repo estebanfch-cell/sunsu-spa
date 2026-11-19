@@ -13,7 +13,7 @@ import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { s, type Row } from "./domain.ts";
 import { runErp } from "./erp.ts";
 import {
-  FAMILIA_NUMERICA, arr, codigoBarrasNorm, codigoNorm, familiaDeCodigo, familiasDe, limpiarCodigos, limpiarEscalas,
+  FAMILIA_NUMERICA, arr, codigoBarrasNorm, codigoNorm, codigosDeFuentes, familiaDeCodigo, familiasDe, limpiarCodigos, limpiarEscalas,
   limpiarProveedores, siguienteCodigo, siguienteInterno,
 } from "./productos.ts";
 
@@ -65,11 +65,11 @@ extend("mcprod_duplicar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin copia productos" };
   const src = await producto(ctx, s(p.id));
   if (!src) return { error: "Producto no encontrado" };
-  const [erp, cat, cab] = await Promise.all([safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario")]);
-  const existentes: { codigo: string; clase: string }[] = [];
-  for (const r of erp) { const c = codigoNorm(r.sku); if (c) existentes.push({ codigo: c, clase: s(r.clase) }); }
-  for (const r of cat) { const c = codigoNorm(r.sku); if (c) existentes.push({ codigo: c, clase: "catalogo" }); }
-  for (const r of cab) for (const v of [r.codigo, r.sku_catalogo]) { const c = codigoNorm(v); if (c) existentes.push({ codigo: c, clase: "cabina" }); }
+  const [erp, cat, cab, alias, base] = await Promise.all([
+    safeAll(ctx, "erp_productos"), safeAll(ctx, "catalogo"), safeAll(ctx, "cabina_inventario"),
+    safeAll(ctx, "beta_sku_alias"), safeAll(ctx, "inventario_base"),
+  ]);
+  const existentes = codigosDeFuentes({ productos: erp, catalogo: cat, cabina: cab, alias, inventarioBase: base });
   const fam0 = familiaDeCodigo(src.sku);
   if (!fam0) return { error: "Este SKU no tiene familia; créalo con «Nuevo producto»" };
   const fam = familiasDe(existentes).find((f) => f.prefijo === fam0.prefijo);
@@ -81,7 +81,7 @@ extend("mcprod_duplicar", "any", async (p, ctx, ses) => {
     sku, nombre, marca: s(src.marca), categoria: s(src.categoria), clase: s(src.clase) || "producto",
     unidad: s(src.unidad) || "u", uso: ["cabina", "venta", "ambos"].includes(s(src.uso)) ? s(src.uso) : "venta",
     unidad_consumo: s(src.unidad_consumo), factor_consumo: src.factor_consumo, linea: s(src.linea), observaciones: s(src.observaciones),
-    sku_proveedor: s(src.sku_proveedor), precio_venta: src.precio_venta ?? null, _rol: ses.rol,
+    sku_proveedor: s(src.sku_proveedor), precio_venta: src.precio_venta ?? null, _rol: ses.rol, crear: true,
   }, ctx.db, actorOf(ses), ctx.now);
   if (out.error) return out;
   const extra: Row = {};

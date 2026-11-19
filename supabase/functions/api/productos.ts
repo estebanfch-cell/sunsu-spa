@@ -448,6 +448,33 @@ export function siguienteCodigo(prefijo: string, codigos: Iterable<string>, anch
   return armar(x);
 }
 
+/** Todos los códigos que ocupan una familia: sku, codigo_interno, alias, cabina, inventario_base. */
+export function codigosDeFuentes(opts: {
+  productos?: { sku?: unknown; codigo_interno?: unknown; clase?: unknown }[];
+  catalogo?: { sku?: unknown }[];
+  cabina?: { codigo?: unknown; sku_catalogo?: unknown }[];
+  alias?: { alias?: unknown }[];
+  inventarioBase?: { sku?: unknown }[];
+}): { codigo: string; clase: string }[] {
+  const out: { codigo: string; clase: string }[] = [];
+  const add = (v: unknown, clase: string) => {
+    const c = codigoNorm(v);
+    if (c) out.push({ codigo: c, clase });
+  };
+  for (const r of opts.productos || []) {
+    add(r.sku, String(r.clase || "producto"));
+    add(r.codigo_interno, String(r.clase || "codigo_interno"));
+  }
+  for (const r of opts.catalogo || []) add(r.sku, "catalogo");
+  for (const r of opts.cabina || []) {
+    add(r.codigo, "insumo cabina");
+    add(r.sku_catalogo, "insumo cabina");
+  }
+  for (const r of opts.alias || []) add(r.alias, "alias");
+  for (const r of opts.inventarioBase || []) add(r.sku, "inventario");
+  return out;
+}
+
 /** Familias detectadas en los códigos existentes, con cuántos SKU tiene cada una. */
 export function familiasDe(items: { codigo: unknown; clase?: unknown }[]): Familia[] {
   const map = new Map<string, { codigos: Set<string>; max: number; ancho: number; clases: Record<string, number> }>();
