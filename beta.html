@@ -556,14 +556,31 @@
   .crow { display: flex; justify-content: space-between; font-size: 0.76rem; padding: 3px 0; color: var(--gray); }
   .crow .v { font-weight: 700; color: var(--navy); }
   .ctotal { display: flex; justify-content: space-between; font-size: 0.92rem; font-weight: 800; padding-top: 9px; margin-top: 5px; border-top: 1px solid var(--gray-ll); }
+  .com-sum { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem 4.6rem; column-gap: 6px; width: 100%; max-width: 100%; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .com-sum-hd { font-size: 0.58rem; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.03em; color: var(--gray); padding: 0 0 5px; border-bottom: 1px solid var(--gray-ll); }
+  .com-sum-hd span:nth-child(2), .com-sum-hd span:nth-child(3), .com-sum .num { text-align: right; }
   .com-row { border-bottom: 1px solid var(--gray-ll); }
-  .com-row summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 0.76rem; color: var(--gray); }
+  .com-row summary { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem 4.6rem; column-gap: 6px; align-items: center; min-height: 36px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 0.74rem; color: var(--gray); overflow: hidden; }
   .com-row summary::-webkit-details-marker { display: none; }
-  .com-row summary::before { content: "▸"; margin-right: 6px; color: var(--gray); }
-  .com-row[open] summary::before { content: "▾"; }
-  .com-row summary .v { font-weight: 700; color: var(--navy); margin-left: auto; }
-  .com-det { padding: 0 0 8px 18px; font-size: 0.74rem; color: var(--navy); }
-  .com-det .rowline { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .com-row summary .cat { display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .com-row summary .cat::before { content: "▸"; margin-right: 5px; color: var(--gray); flex-shrink: 0; }
+  .com-row[open] summary .cat::before { content: "▾"; }
+  .com-row summary .cat-txt { overflow: hidden; text-overflow: ellipsis; }
+  .com-row summary .num { font-weight: 700; color: var(--navy); }
+  .ctotal.com-sum { font-size: 0.82rem; font-weight: 800; color: var(--navy); padding-top: 9px; margin-top: 5px; border-top: 1px solid var(--gray-ll); border-bottom: 0; }
+  .ctotal.com-sum .num { font-weight: 800; }
+  .com-det { padding: 2px 0 8px; font-size: 0.68rem; color: var(--navy); min-width: 0; max-width: 100%; overflow: hidden; }
+  .com-det .com-sumario { font-size: 0.68rem; color: var(--gray); padding: 0 0 4px; }
+  .com-grid { display: grid; grid-template-columns: 2.85rem minmax(0, 1fr) 2.15rem 3.55rem; column-gap: 4px; width: 100%; max-width: 100%; overflow: hidden; }
+  .com-grid .hd { font-size: 0.55rem; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.02em; color: var(--gray); padding: 2px 0 3px; }
+  .com-grid .cel { display: flex; align-items: center; min-width: 0; min-height: 1.5em; padding: 2px 0; }
+  .com-grid .sku { font-variant-numeric: tabular-nums; color: var(--gray); font-size: 0.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .com-grid .nom { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; word-break: break-word; line-height: 1.25; align-self: center; }
+  .com-grid .num { text-align: right; justify-content: flex-end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 420px) {
+    .com-det { overflow-x: hidden; }
+    .cosm-body { padding-left: 12px; padding-right: 12px; }
+  }
   .ua-card { background: var(--white); border-radius: 13px; box-shadow: var(--shadow-sm); padding: 13px; margin-bottom: 9px; display: flex; align-items: center; gap: 11px; }
   .ua-av { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--white); font-size: 0.88rem; flex-shrink: 0; }
   .ua-name { font-size: 0.82rem; font-weight: 700; color: var(--navy); }
@@ -1719,30 +1736,37 @@ function previewApi(accion, body) {
   if (accion === "cfg_priv_get") return { ok: true, flags: [], roles: [], usuarios: [], nota: "" };
   if (accion === "getPagoConfig") return { ok: true, configs: [], personas: [] };
   if (accion === "getComisionesTabla") {
-    const card = (nombre, fac, paq, prodN, prod, ext, rec) => {
-      const filas = [
-        { concepto: "Faciales", total: fac * 2, porCiclo: [fac * 2] },
-        { concepto: "Paquetes", total: paq >= 11 ? 10 * 5 + (paq - 10) * 8 : paq * 5, porCiclo: [paq >= 11 ? 10 * 5 + (paq - 10) * 8 : paq * 5] },
-        { concepto: "Productos", total: prod, porCiclo: [prod] },
-        { concepto: "Recepción", total: rec, porCiclo: [rec] },
-        { concepto: "Extras", total: ext, porCiclo: [ext] },
-      ];
+    const card = (nombre, fac, paq, prodN, prod, ext, rec, rol) => {
+      const comFac = fac * 2;
+      const comPaq = paq >= 11 ? 10 * 5 + (paq - 10) * 8 : paq * 5;
+      const recep = rol === "recepcion";
+      const filas = [];
+      const fila = (concepto, total, vendido) => filas.push({ concepto, total, porCiclo: [total], vendido, vendidoPorCiclo: [vendido] });
+      if (!recep) fila("Faciales", comFac, fac * 30);
+      fila("Paquetes", comPaq, paq * 100);
+      fila("Productos", prod, prodN ? 60 : 0);
+      fila("Extras", ext, 0);
+      if (recep) fila("Recepción", rec, rec ? 400 : 0);
       const total = filas.reduce((a, f) => a + f.total, 0);
-      filas.push({ concepto: "Total", total, porCiclo: [total] });
+      const vendidoTot = filas.reduce((a, f) => a + f.vendido, 0);
+      filas.push({ concepto: "Total", total, porCiclo: [total], vendido: vendidoTot, vendidoPorCiclo: [vendidoTot] });
       return {
         persona: nombre, filas, total,
         detalle: {
-          faciales: fac, paquetes: paq, regimen: "tramo", nivel: "—",
+          faciales: recep ? 0 : fac, paquetes: paq, regimen: "tramo", nivel: "—", comFac: !recep, esRecepcionista: recep,
           tramos: paq ? [{ etiqueta: "1–10", pct: "5%", n: Math.min(paq, 10), monto: Math.min(paq, 10) * 5 }].concat(paq > 10 ? [{ etiqueta: "11–20", pct: "8%", n: paq - 10, monto: (paq - 10) * 8 }] : []) : [],
-          productosN: prodN, productos: prodN ? [{ nombre: "Niacinamide 10%+TXA 4% Serum 30ml", qty: prodN, monto: prod }] : [],
-          extrasN: ext, extras: ext ? [{ nombre: "Dermaplaning", qty: ext, monto: ext }] : [],
+          facialesDet: !recep && fac ? [{ sku: "SUNSU-01", nombre: "Facial S.O.S", qty: fac, monto: comFac, vendido: fac * 30 }] : [],
+          paquetesDet: paq ? [{ sku: "SUNSU-18", nombre: "Facial Reparación x3", qty: paq, monto: comPaq, vendido: paq * 100 }] : [],
+          productosN: prodN, productos: prodN ? [{ sku: "SUNSU-HT-009", nombre: "Jabón Limpiador Ceramide Foam - Eyenlip", qty: prodN, monto: prod, vendido: 60 }] : [],
+          extrasN: ext, extras: ext ? [{ sku: "", nombre: "Dermaplaning", qty: ext, monto: ext, vendido: 0 }] : [],
+          recepcion: recep && rec ? [{ sku: "", nombre: "27 oct", qty: 12, monto: rec, vendido: 400 }] : [],
         },
       };
     };
     const equipo = [
-      card("Andrea Robles", 12, 12, 2, 18, 3, 0),
-      card("Daniela Mora", 8, 4, 0, 0, 1, 0),
-      card("Alejandra Rodriguez", 0, 0, 0, 0, 0, 15),
+      card("Andrea Robles", 12, 12, 9, 14.18, 3, 0, "cosmetologa"),
+      card("Daniela Mora", 8, 4, 0, 0, 1, 0, "cosmetologa"),
+      card("Alejandra Rodriguez", 0, 0, 0, 0, 0, 15, "recepcion"),
     ];
     const ciclos = [{ inicio: "2026-10-26", fin: "2026-11-25", regimen: "tramo", n: 2 }];
     if (body.persona === "Todas") {
@@ -5929,24 +5953,46 @@ function pintarTickets() {
     </tr>`).join("") || `<tr><td colspan="6">Sin tickets.</td></tr>`;
   body.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => go(b.getAttribute("data-go")); });
 }
+function codigoCom(sku) {
+  const raw = String(sku || "").trim();
+  if (!raw || raw === "—") return "—";
+  return codigoDe(raw) || raw;
+}
+function htmlComGrid(lineas, vacio) {
+  const filas = (lineas || []).filter((p) => p && (p.qty || p.monto || p.nombre));
+  if (!filas.length) return `<div class="note">${esc(vacio || "Sin movimientos en el ciclo.")}</div>`;
+  const rows = filas.map((p) => `<div class="cel sku">${esc(codigoCom(p.sku))}</div><div class="cel nom">${esc(p.nombre || "—")}</div><div class="cel num">${esc(p.qty == null ? "—" : String(p.qty))}</div><div class="cel num">${money(p.monto)}</div>`).join("");
+  return `<div class="com-grid"><div class="cel hd">Código</div><div class="cel hd">Producto</div><div class="cel hd num">Cant.</div><div class="cel hd num">Comisión</div>${rows}</div>`;
+}
 function htmlComDet(concepto, d, total) {
   const nFacial = Number(d.faciales) || 0;
   const nPaq = Number(d.paquetes) || 0;
   const nProd = Number(d.productosN) || 0;
   const nExt = Number(d.extrasN) || 0;
-  if (concepto === "Faciales") return `<div class="com-det">${nFacial} ${nFacial === 1 ? "facial" : "faciales"} · ${d.comFac === false ? "— (aprendiz)" : money(total)}</div>`;
+  if (concepto === "Faciales") {
+    const nota = d.comFac === false ? "— (aprendiz)" : "";
+    const items = d.facialesDet && d.facialesDet.length ? d.facialesDet : (nFacial ? [{ sku: "", nombre: nFacial === 1 ? "Facial" : "Faciales", qty: nFacial, monto: total }] : []);
+    return `<div class="com-det"><div class="com-sumario">${nFacial} ${nFacial === 1 ? "facial" : "faciales"}${nota ? " · " + nota : ""}</div>${htmlComGrid(items, "Sin faciales en el ciclo.")}</div>`;
+  }
   if (concepto === "Paquetes") {
-    const tiers = (d.tramos || []).map((t) => `<div class="rowline"><span>${esc(t.etiqueta)} al ${esc(t.pct)} · ${esc(t.n)}</span><span>${money(t.monto)}</span></div>`).join("");
-    const nivel = d.regimen === "nivel" ? `<div class="rowline"><span>Nivel ${esc(d.nivel || "—")}</span><span>${money(total)}</span></div>` : "";
-    return `<div class="com-det"><div class="rowline"><span>${nPaq} ${nPaq === 1 ? "paquete" : "paquetes"}</span><span>${money(total)}</span></div>${tiers || nivel}</div>`;
+    let items = d.paquetesDet || [];
+    if (!items.length && (d.tramos || []).length) {
+      items = (d.tramos || []).map((t) => ({ sku: "", nombre: (t.etiqueta || "") + (t.pct ? " al " + t.pct : ""), qty: t.n, monto: t.monto }));
+    } else if (!items.length && d.regimen === "nivel") {
+      items = [{ sku: "", nombre: "Nivel " + (d.nivel || "—"), qty: nPaq, monto: total }];
+    }
+    return `<div class="com-det"><div class="com-sumario">${nPaq} ${nPaq === 1 ? "paquete" : "paquetes"}</div>${htmlComGrid(items, "Sin paquetes en el ciclo.")}</div>`;
   }
   if (concepto === "Productos") {
-    const lines = (d.productos || []).map((p) => `<div class="rowline"><span>${esc(p.nombre)} · ${esc(p.qty)}</span><span>${money(p.monto)}</span></div>`).join("") || `<div class="note">Sin productos en el ciclo.</div>`;
-    return `<div class="com-det"><div class="rowline"><span>${nProd} ${nProd === 1 ? "unidad" : "unidades"}</span></div>${lines}</div>`;
+    return `<div class="com-det"><div class="com-sumario">${nProd} ${nProd === 1 ? "unidad" : "unidades"}</div>${htmlComGrid(d.productos, "Sin productos en el ciclo.")}</div>`;
   }
   if (concepto === "Extras") {
-    const lines = (d.extras || []).map((p) => `<div class="rowline"><span>${esc(p.nombre)} · ${esc(p.qty)}</span><span>${money(p.monto)}</span></div>`).join("") || `<div class="note">Sin extras en el ciclo.</div>`;
-    return `<div class="com-det"><div class="rowline"><span>${nExt} ${nExt === 1 ? "extra" : "extras"}</span></div>${lines}</div>`;
+    return `<div class="com-det"><div class="com-sumario">${nExt} ${nExt === 1 ? "extra" : "extras"}</div>${htmlComGrid(d.extras, "Sin extras en el ciclo.")}</div>`;
+  }
+  if (concepto === "Recepción") {
+    const nDias = (d.recepcion || []).length;
+    const sumario = nDias ? `${nDias} ${nDias === 1 ? "día" : "días"}` : "";
+    return `<div class="com-det">${sumario ? `<div class="com-sumario">${sumario}</div>` : ""}${htmlComGrid(d.recepcion, "Sin comisión de recepción en el ciclo.")}</div>`;
   }
   return "";
 }
@@ -5956,13 +6002,16 @@ function emoCom(concepto) {
 }
 function htmlComCard(persona, filas, detalle) {
   const d = detalle || {};
+  const cabeza = `<div class="com-sum com-sum-hd" aria-hidden="true"><span>Categoría</span><span>Vendido</span><span>Comisión</span></div>`;
   const cuerpo = (filas || []).map((f) => {
-    if (f.concepto === "Total") return `<div class="ctotal"><span>${emoCom("Total")}</span><span>${money(f.total)}</span></div>`;
-    if (f.concepto === "Recepción") return `<div class="crow"><span>${emoCom("Recepción")}</span><span class="v">${money(f.total)}</span></div>`;
-    const valor = f.concepto === "Faciales" && d.comFac === false ? "— (aprendiz)" : money(f.total);
-    return `<details class="com-row"><summary><span>${esc(emoCom(f.concepto))}</span><span class="v">${valor}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
+    const vendido = money(f.vendido == null ? 0 : f.vendido);
+    if (f.concepto === "Total") {
+      return `<div class="ctotal com-sum"><span>${emoCom("Total")}</span><span class="num">${vendido}</span><span class="num">${money(f.total)}</span></div>`;
+    }
+    const valor = f.concepto === "Faciales" && d.comFac === false ? "—" : money(f.total);
+    return `<details class="com-row"><summary><span class="cat"><span class="cat-txt">${esc(emoCom(f.concepto))}</span></span><span class="num">${vendido}</span><span class="num">${valor}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
   }).join("");
-  return `<div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>💰 ${esc(persona || "")}</span></div><div class="cosm-body">${cuerpo}</div></div>`;
+  return `<div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>💰 ${esc(persona || "")}</span></div><div class="cosm-body">${cabeza}${cuerpo}</div></div>`;
 }
 function htmlComTabla(data) {
   const ciclos = data.ciclos || [];
@@ -7034,40 +7083,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk104"></script>
-<script src="beta-screens.js?v=20261118tk104"></script>
-<script src="beta-inline.js?v=20261118tk104"></script>
-<script src="mc-productos.js?v=20261118tk104"></script>
-<script src="mc-nav.js?v=20261118tk104"></script>
-<script src="mc-permisos.js?v=20261118tk104"></script>
-<script src="mc-protocolos.js?v=20261118tk104"></script>
-<script src="mc-conteo.js?v=20261118tk104"></script>
-<script src="mc-transferencias.js?v=20261118tk104"></script>
-<script src="mc-ajustes.js?v=20261118tk104"></script>
-<script src="vendor-qrcode.js?v=20261118tk104"></script>
-<script src="mc-tickets.js?v=20261118tk104"></script>
-<script src="mc-maestro.js?v=20261118tk104"></script>
-<script src="mc-empleados.js?v=20261118tk104"></script>
-<script src="mc-edit.js?v=20261118tk104"></script>
-<script src="mc-paquetes.js?v=20261118tk104"></script>
-<script src="mc-aperturas.js?v=20261118tk104"></script>
-<script src="mc-acceso.js?v=20261118tk104"></script>
-<script src="mc-barras.js?v=20261118tk104"></script>
-<script src="mc-caja.js?v=20261118tk104"></script>
-<script src="mc-giftcards.js?v=20261118tk104"></script>
-<script src="mc-multas.js?v=20261118tk104"></script>
-<script src="mc-clientes.js?v=20261118tk104"></script>
-<script src="mc-clientes-dup.js?v=20261118tk104"></script>
-<script src="mc-docpdf.js?v=20261118tk104"></script>
-<script src="mc-compras.js?v=20261118tk104"></script>
-<script src="mc-consignacion.js?v=20261118tk104"></script>
-<script src="mc-proveedores.js?v=20261118tk104"></script>
-<script src="mc-recepciones.js?v=20261118tk104"></script>
-<script src="mc-movil.js?v=20261118tk104"></script>
-<script src="mc-promociones.js?v=20261118tk104"></script>
-<script src="mc-agenda.js?v=20261118tk104"></script>
-<script src="mc-staff-home.js?v=20261118tk104"></script>
-<script src="mc-borradores.js?v=20261118tk104"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261118tk105"></script>
+<script src="beta-screens.js?v=20261118tk105"></script>
+<script src="beta-inline.js?v=20261118tk105"></script>
+<script src="mc-productos.js?v=20261118tk105"></script>
+<script src="mc-nav.js?v=20261118tk105"></script>
+<script src="mc-permisos.js?v=20261118tk105"></script>
+<script src="mc-protocolos.js?v=20261118tk105"></script>
+<script src="mc-conteo.js?v=20261118tk105"></script>
+<script src="mc-transferencias.js?v=20261118tk105"></script>
+<script src="mc-ajustes.js?v=20261118tk105"></script>
+<script src="vendor-qrcode.js?v=20261118tk105"></script>
+<script src="mc-tickets.js?v=20261118tk105"></script>
+<script src="mc-maestro.js?v=20261118tk105"></script>
+<script src="mc-empleados.js?v=20261118tk105"></script>
+<script src="mc-edit.js?v=20261118tk105"></script>
+<script src="mc-paquetes.js?v=20261118tk105"></script>
+<script src="mc-aperturas.js?v=20261118tk105"></script>
+<script src="mc-acceso.js?v=20261118tk105"></script>
+<script src="mc-barras.js?v=20261118tk105"></script>
+<script src="mc-caja.js?v=20261118tk105"></script>
+<script src="mc-giftcards.js?v=20261118tk105"></script>
+<script src="mc-multas.js?v=20261118tk105"></script>
+<script src="mc-clientes.js?v=20261118tk105"></script>
+<script src="mc-clientes-dup.js?v=20261118tk105"></script>
+<script src="mc-docpdf.js?v=20261118tk105"></script>
+<script src="mc-compras.js?v=20261118tk105"></script>
+<script src="mc-consignacion.js?v=20261118tk105"></script>
+<script src="mc-proveedores.js?v=20261118tk105"></script>
+<script src="mc-recepciones.js?v=20261118tk105"></script>
+<script src="mc-movil.js?v=20261118tk105"></script>
+<script src="mc-promociones.js?v=20261118tk105"></script>
+<script src="mc-agenda.js?v=20261118tk105"></script>
+<script src="mc-staff-home.js?v=20261118tk105"></script>
+<script src="mc-borradores.js?v=20261118tk105"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
