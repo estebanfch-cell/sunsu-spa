@@ -5561,8 +5561,32 @@ function _histCardHTML(t, i, showPrices){
     +'<div class="mob-l3">'+l3.join('<span>·</span>')+'</div>'
     +(pills.length?'<div class="mob-pills">'+pills.join('')+'</div>':'')
     +(tip?'<div style="font-size:.72rem;margin-top:6px;color:'+(fl?'#8a2216':'#6b4e00')+'">'+_histEsc(tip)+'</div>':'')
-    +'<div class="mob-voucher" onclick="event.stopPropagation()"><label class="btn ghost small">📷 Voucher<input type="file" accept="image/*,application/pdf" hidden onchange="_tkVoucherCard(event,'+i+')"></label></div>'
+    +_tkVoucherCardBtns(t, i)
     +'</div>';
+}
+function _tkFotoTipo(metodo){
+  var m=String(metodo||'').toLowerCase().replace(/é/g,'e');
+  if(m==='transferencia'||m==='deuna') return 'transferencia';
+  if(m==='tarjeta') return 'tarjeta';
+  if(m==='voucher') return 'voucher';
+  return '';
+}
+function _tkFotoEtiqueta(tipo){ return tipo==='transferencia'?'Transferencia':tipo==='tarjeta'?'Tarjeta':'Voucher'; }
+function _tkPagosFaltanCard(t){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  if(L.pagosFaltan&&L.pagosFaltan.length) return L.pagosFaltan;
+  return [];
+}
+function _tkVoucherCardBtns(t, i){
+  var F=_tkPagosFaltanCard(t);
+  if(!F.length) return '';
+  var h='<div class="mob-voucher" onclick="event.stopPropagation()">';
+  F.forEach(function(x, j){
+    var lab=_histEsc(x.etiqueta||_tkFotoEtiqueta(x.tipo||_tkFotoTipo(x.metodo)));
+    var pid=x.id?String(x.id):'';
+    h+='<label class="btn ghost small mctk-voucher" title="'+lab+'" aria-label="'+lab+'"><span class="mctk-cam" aria-hidden="true">📷</span><span class="mctk-vlab">'+lab+'</span><input type="file" accept="image/*,application/pdf" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+  });
+  return h+'</div>';
 }
 function _tkVoucherCard(ev, i){
   ev.stopPropagation();
@@ -5571,6 +5595,7 @@ function _tkVoucherCard(ev, i){
   if (!f) return;
   var list = window._histVisibles || [], t = list[i];
   var clave = (t && window.MCTickets && typeof window.MCTickets.claveDe === "function") ? window.MCTickets.claveDe(t) : "";
+  var pagoId = inp && inp.getAttribute && inp.getAttribute("data-pago-id");
   if (!clave) { if (typeof toast === "function") toast("No pude identificar el ticket", "#B86B6B"); return; }
   var comprimir = (window.MCVoucher && window.MCVoucher.comprimir) || function (file) {
     return new Promise(function (res, rej) {
@@ -5594,11 +5619,20 @@ function _tkVoucherCard(ev, i){
   };
   if (typeof toast === "function") toast("⏳ Subiendo voucher…");
   Promise.resolve(comprimir(f)).then(function (data) {
-    return api("tk_subir_doc", { clave: clave, imagen: data });
+    var body = { clave: clave, imagen: data };
+    if (pagoId) body.pago_id = pagoId;
+    return api("tk_subir_doc", body);
   }).then(function (r) {
     if (!r || r.error) { if (typeof toast === "function") toast((r && r.error) || "No se pudo subir", "#B86B6B"); return; }
     if (typeof toast === "function") toast("✓ Voucher subido");
-    if (typeof _tkCargarLeds === "function") _tkCargarLeds();
+    try {
+      var Leds=window._tkLeds=window._tkLeds||{};
+      var led=Leds[String(t.tkRow)]||{};
+      var queda=(led.pagosFaltan||[]).filter(function(x){ return pagoId ? String(x.id||"")!==String(pagoId) : false; });
+      led.pagosFaltan=queda; Leds[String(t.tkRow)]=led;
+    } catch (e1) {}
+    if (typeof _tkCargarLeds === "function") _tkCargarLeds(true);
+    if (typeof _histActualizarRes === "function") _histActualizarRes(!!window._histEsStaff);
   }).catch(function (x) {
     if (typeof toast === "function") toast((x && x.message) || "No se pudo subir", "#B86B6B");
   });
@@ -5737,7 +5771,16 @@ function _tkCargarLeds(forzar){
   Promise.resolve(api('tk_estados',{})).then(function(r){
     window._tkLedsCargando=false;
     if(!r||!r.ok) return;
-    var antes=!!window._tkLeds; window._tkLeds=r.items||{}; window._tkLedsT=Date.now(); window._tkAcuity=r.acuity;
+    var antes=!!window._tkLeds, prev=window._tkLeds||{}, items=r.items||{}, k, keep;
+    window._tkLeds={}; window._tkLedsT=Date.now(); window._tkAcuity=r.acuity;
+    Object.keys(items).forEach(function(k){
+      keep=prev[k]||{};
+      window._tkLeds[k]=Object.assign({}, keep, items[k]);
+      if(keep.pagosFaltan&&!(items[k]&&items[k].pagosFaltan)) window._tkLeds[k].pagosFaltan=keep.pagosFaltan;
+      if(keep.falta&&!(items[k]&&items[k].falta)) window._tkLeds[k].falta=keep.falta;
+      if(keep.forma&&!(items[k]&&items[k].forma)) window._tkLeds[k].forma=keep.forma;
+    });
+    Object.keys(prev).forEach(function(k){ if(!window._tkLeds[k]) window._tkLeds[k]=prev[k]; });
     if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff);
   }).catch(function(){window._tkLedsCargando=false;});
 }

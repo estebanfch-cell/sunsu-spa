@@ -11,8 +11,9 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { estaCobrado, faltaDe, faseA, facturaCompleta, hayFactura } from "./tickets_beta_api.ts";
+import { estaCobrado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
+import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
 import { listarBorradoresVisibles } from "./borradores_asig.ts";
 import { tipoSinCobro } from "./sin_cobro.ts";
@@ -121,6 +122,20 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   ]);
   const porCed = new Map<string, string>();
   for (const r of regs.sort((a, b) => s(a.timestamp).localeCompare(s(b.timestamp)))) if (s(r.telefono)) porCed.set(normCedula(r.cedula), s(r.telefono));
+  const clavesPag = filas.map((r) => claveDe(r, leerSerie(r, "so_num")));
+  let pagosPag: Row[] = [];
+  try {
+    pagosPag = clavesPag.length
+      ? (await consultar(ctx.db, "beta_pagos", { filtros: [{ col: "ticket_clave", op: "in", val: clavesPag }] })).rows.filter((x) => x.anulado !== true)
+      : [];
+  } catch { pagosPag = []; }
+  const pagosPorClave = new Map<string, Row[]>();
+  for (const x of pagosPag) {
+    const k = s(x.ticket_clave);
+    const L0 = pagosPorClave.get(k) || [];
+    L0.push(x);
+    pagosPorClave.set(k, L0);
+  }
   const items = filas.map((r) => {
     const it = itemHistorial(r, map, hoy, telOk, porCed);
     const clave = claveDe(r, leerSerie(r, "so_num")), d = ((cabMap.get(clave)?.datos || {}) as Row);
@@ -149,6 +164,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       ...(faltaDe(r, d).length ? { falta: faltaDe(r, d) } : {}),
+      ...((() => { const pf = pagosFaltanFoto({ beta: pagosPorClave.get(clave) || [], legado: metodosPago(r.comp), comps: (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true), comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) }); return pf.length ? { pagosFaltan: pf } : {}; })()),
     };
     return it;
   });
