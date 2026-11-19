@@ -12,6 +12,59 @@
 <link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
 <meta name="apple-mobile-web-app-title" content="Sunsu">
 <meta name="application-name" content="순수 Sunsu Spa">
+<script>
+(function () {
+  function pintarRecuperacion(err) {
+    if (window.__sunsuRecuperacion) return;
+    window.__sunsuRecuperacion = true;
+    var msg = "La app no pudo arrancar.";
+    try {
+      if (err && (err.message || err)) msg = String(err.message || err);
+      else if (window.__sunsuBootErrs && window.__sunsuBootErrs.length) msg = String(window.__sunsuBootErrs[0]);
+    } catch (e0) {}
+    var box = document.getElementById("app") || document.body;
+    if (!box) return;
+    box.innerHTML = '<div style="min-height:100vh;background:#F5F0E8;color:#3A3530;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif">' +
+      '<div style="max-width:22rem;background:#fff;border-radius:16px;padding:22px 18px;box-shadow:0 10px 30px rgba(61,90,122,.12)">' +
+      "<h1 style=\"margin:0 0 8px;font-size:1.15rem;color:#3D5A7A\">No se pudo abrir la app</h1>" +
+      '<p style="margin:0 0 16px;font-size:.9rem;line-height:1.45">Hubo un error al cargar. Recarga la página. Si vuelve a pasar, entra de nuevo.</p>' +
+      '<p id="sunsu-boot-err" style="margin:0 0 16px;font-size:.75rem;color:#8A90A0;word-break:break-word"></p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button type="button" id="sunsu-boot-reload" style="background:#3D5A7A;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Recargar</button>' +
+      '<button type="button" id="sunsu-boot-reset" style="background:#fff;color:#3D5A7A;border:1.5px solid #3D5A7A;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Entrar de nuevo</button>' +
+      "</div></div></div>";
+    var p = document.getElementById("sunsu-boot-err");
+    if (p) p.textContent = msg;
+    var a = document.getElementById("sunsu-boot-reload");
+    if (a) a.onclick = function () { location.reload(); };
+    var b = document.getElementById("sunsu-boot-reset");
+    if (b) b.onclick = function () {
+      try {
+        localStorage.removeItem("sunsu.beta.token");
+        localStorage.removeItem("sunsu.beta.sesion");
+        sessionStorage.clear();
+      } catch (e1) {}
+      location.reload();
+    };
+  }
+  window.sunsuPantallaRecuperacion = pintarRecuperacion;
+  window.__sunsuBootErrs = [];
+  window.addEventListener("error", function (ev) {
+    window.__sunsuBootErrs.push((ev && ev.error) ? String(ev.error) : String((ev && ev.message) || "error"));
+  });
+  window.addEventListener("unhandledrejection", function (ev) {
+    window.__sunsuBootErrs.push(String((ev && ev.reason) || "promesa"));
+  });
+  function revisarBoot() {
+    if (window.__sunsuRecuperacion) return;
+    if (typeof window.draw !== "function") {
+      pintarRecuperacion(window.__sunsuBootErrs[0] || "El script principal no cargó");
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(revisarBoot, 0); });
+  else setTimeout(revisarBoot, 0);
+})();
+</script>
 <style>
   :root {
     /* Misma paleta que sunsu.html */
@@ -2120,6 +2173,7 @@ function tokenResetHash() {
   const pref = "#/reset/";
   if (h.indexOf(pref) === 0) return decodeURIComponent(h.slice(pref.length).split("?")[0].split("&")[0]);
   return "";
+}
 
 function nombreHeader() {
   const real = state.userReal || (!state.vista ? state.user : null) || {};
@@ -7653,7 +7707,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-beta-2026-11-19-TK148";
+window.SUNSU_CACHE = "sunsu-beta-2026-11-19-BOOT";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -7770,43 +7824,54 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk148"></script>
-<script src="mc-scan.js?v=20261119tk148"></script>
-<script src="mc-buscar.js?v=20261119tk148"></script>
-<script src="descuento_justif.js?v=20261119tk148"></script>
-<script src="beta-screens.js?v=20261119tk148"></script>
-<script src="beta-inline.js?v=20261119tk148"></script>
-<script src="mc-productos.js?v=20261119tk148"></script>
-<script src="mc-nav.js?v=20261119tk148"></script>
-<script src="mc-permisos.js?v=20261119tk148"></script>
-<script src="mc-protocolos.js?v=20261119tk148"></script>
-<script src="mc-conteo.js?v=20261119tk148"></script>
-<script src="mc-transferencias.js?v=20261119tk148"></script>
-<script src="mc-ajustes.js?v=20261119tk148"></script>
-<script src="vendor-qrcode.js?v=20261119tk148"></script>
-<script src="mc-tickets.js?v=20261119tk148"></script>
-<script src="mc-maestro.js?v=20261119tk148"></script>
-<script src="mc-empleados.js?v=20261119tk148"></script>
-<script src="mc-edit.js?v=20261119tk148"></script>
-<script src="mc-paquetes.js?v=20261119tk148"></script>
-<script src="mc-aperturas.js?v=20261119tk148"></script>
-<script src="mc-acceso.js?v=20261119tk148"></script>
-<script src="mc-barras.js?v=20261119tk148"></script>
-<script src="mc-caja.js?v=20261119tk148"></script>
-<script src="mc-giftcards.js?v=20261119tk148"></script>
-<script src="mc-multas.js?v=20261119tk148"></script>
-<script src="mc-clientes.js?v=20261119tk148"></script>
-<script src="mc-clientes-dup.js?v=20261119tk148"></script>
-<script src="mc-docpdf.js?v=20261119tk148"></script>
-<script src="mc-compras.js?v=20261119tk148"></script>
-<script src="mc-consignacion.js?v=20261119tk148"></script>
-<script src="mc-proveedores.js?v=20261119tk148"></script>
-<script src="mc-recepciones.js?v=20261119tk148"></script>
-<script src="mc-movil.js?v=20261119tk148"></script>
-<script src="mc-promociones.js?v=20261119tk148"></script>
-<script src="mc-agenda.js?v=20261119tk148"></script>
-<script src="mc-staff-home.js?v=20261119tk148"></script>
-<script src="mc-borradores.js?v=20261119tk148"></script><script>draw();</script><script>
+<script src="vendor-zxing.js?v=20261119boot"></script>
+<script src="mc-scan.js?v=20261119boot"></script>
+<script src="mc-buscar.js?v=20261119boot"></script>
+<script src="descuento_justif.js?v=20261119boot"></script>
+<script src="beta-screens.js?v=20261119boot"></script>
+<script src="beta-inline.js?v=20261119boot"></script>
+<script src="mc-productos.js?v=20261119boot"></script>
+<script src="mc-nav.js?v=20261119boot"></script>
+<script src="mc-permisos.js?v=20261119boot"></script>
+<script src="mc-protocolos.js?v=20261119boot"></script>
+<script src="mc-conteo.js?v=20261119boot"></script>
+<script src="mc-transferencias.js?v=20261119boot"></script>
+<script src="mc-ajustes.js?v=20261119boot"></script>
+<script src="vendor-qrcode.js?v=20261119boot"></script>
+<script src="mc-tickets.js?v=20261119boot"></script>
+<script src="mc-maestro.js?v=20261119boot"></script>
+<script src="mc-empleados.js?v=20261119boot"></script>
+<script src="mc-edit.js?v=20261119boot"></script>
+<script src="mc-paquetes.js?v=20261119boot"></script>
+<script src="mc-aperturas.js?v=20261119boot"></script>
+<script src="mc-acceso.js?v=20261119boot"></script>
+<script src="mc-barras.js?v=20261119boot"></script>
+<script src="mc-caja.js?v=20261119boot"></script>
+<script src="mc-giftcards.js?v=20261119boot"></script>
+<script src="mc-multas.js?v=20261119boot"></script>
+<script src="mc-clientes.js?v=20261119boot"></script>
+<script src="mc-clientes-dup.js?v=20261119boot"></script>
+<script src="mc-docpdf.js?v=20261119boot"></script>
+<script src="mc-compras.js?v=20261119boot"></script>
+<script src="mc-consignacion.js?v=20261119boot"></script>
+<script src="mc-proveedores.js?v=20261119boot"></script>
+<script src="mc-recepciones.js?v=20261119boot"></script>
+<script src="mc-movil.js?v=20261119boot"></script>
+<script src="mc-promociones.js?v=20261119boot"></script>
+<script src="mc-agenda.js?v=20261119boot"></script>
+<script src="mc-staff-home.js?v=20261119boot"></script>
+<script src="mc-borradores.js?v=20261119boot"></script><script>
+try {
+  var _sunsuDraw = draw();
+  if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
+    _sunsuDraw.catch(function (e) {
+      if (window.sunsuPantallaRecuperacion) window.sunsuPantallaRecuperacion(e);
+    });
+  }
+} catch (eDraw) {
+  if (window.sunsuPantallaRecuperacion) window.sunsuPantallaRecuperacion(eDraw);
+}
+</script><script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).
 (function () {
