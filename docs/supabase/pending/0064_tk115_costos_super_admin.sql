@@ -33,53 +33,10 @@ insert into public.tk115_viewdef_bak_20261119 (nombre, def)
 values ('v_ticket_productos', pg_get_viewdef('public.v_ticket_productos'::regclass, true))
 on conflict (nombre) do nothing;
 
--- Vista pública sin precio de compra. CREATE OR REPLACE no puede quitar columnas:
--- se reemplaza con DROP + CREATE. La versión con costo queda solo para sunsu_admin.
-drop view if exists public.v_ticket_productos;
-create view public.v_ticket_productos as
-  select
-    v.id as ticket_id,
-    v.ciclo,
-    v.cosm,
-    v.excl_producto,
-    k.key as codigo,
-    (k.value #>> '{}'::text[])::numeric as qty,
-    c.subtotal as venta
-  from v_tickets v
-  join tickets t on t.id = v.id
-  cross join lateral jsonb_each(t.orig) k(key, value)
-  left join catalogo c
-    on upper(regexp_replace(c.sku, '^SUNSU-'::text, ''::text, 'g'))
-     = upper(regexp_replace(k.key, '^SUNSU-'::text, ''::text, 'g'))
-  where k.key ~ '^(SUNSU-)?[A-Z]{2,3}-[0-9]{3}$'::text
-    and jsonb_typeof(k.value) = 'number'
-    and ((k.value #>> '{}'::text[])::numeric) > 0::numeric;
-
-create or replace view public.v_ticket_productos_costos as
-  select
-    v.id as ticket_id,
-    v.ciclo,
-    v.cosm,
-    v.excl_producto,
-    k.key as codigo,
-    (k.value #>> '{}'::text[])::numeric as qty,
-    c.subtotal as venta,
-    nullif(regexp_replace(c.precio_compra, '[^0-9.]'::text, ''::text, 'g'), ''::text)::numeric as compra
-  from v_tickets v
-  join tickets t on t.id = v.id
-  cross join lateral jsonb_each(t.orig) k(key, value)
-  left join catalogo c
-    on upper(regexp_replace(c.sku, '^SUNSU-'::text, ''::text, 'g'))
-     = upper(regexp_replace(k.key, '^SUNSU-'::text, ''::text, 'g'))
-  where k.key ~ '^(SUNSU-)?[A-Z]{2,3}-[0-9]{3}$'::text
-    and jsonb_typeof(k.value) = 'number'
-    and ((k.value #>> '{}'::text[])::numeric) > 0::numeric;
-
-revoke all on table public.v_ticket_productos from anon, authenticated, public;
-grant select on public.v_ticket_productos to sunsu_rls, sunsu_admin;
-
-revoke all on table public.v_ticket_productos_costos from anon, authenticated, public, sunsu_rls;
-grant select on public.v_ticket_productos_costos to sunsu_admin;
+-- v_ticket_productos.compra alimenta v_comisiones_total: no se altera la vista.
+-- Se revoca el SELECT a anon / authenticated / sunsu_rls; sunsu_admin y service_role siguen leyéndola.
+revoke all on table public.v_ticket_productos from anon, authenticated, public, sunsu_rls;
+grant select on public.v_ticket_productos to sunsu_admin;
 
 -- Quitar DML amplio de anon/authenticated sobre tablas con costos.
 revoke all on table
