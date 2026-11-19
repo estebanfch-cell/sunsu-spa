@@ -923,6 +923,9 @@ function _asegurarGrupoProv(fam){
   return pv;
 }
 // Aplica getCatalogo al Ticket: precios, activo, y productos de familias NUEVAS (VK, …).
+// TK132: comisión por unidad del catálogo (comVta; «com» solo llega a Super Admin desde TK115). Por SKU, nunca por nombre.
+window._catCom=window._catCom||{};
+function _comVta(item){ var c=Number(item&&item.comVta!=null?item.comVta:item&&item.com)||0; return c; }
 function _aplicarCatalogoATicket(items){
   if(items&&items.length>5) window._catAplicado=true;
   if(!Array.isArray(items)||!items.length) return;
@@ -956,6 +959,7 @@ function _aplicarCatalogoATicket(items){
 
     var retail=_skuRetail(item.sku);
     var skuCanon=retail?retail.sku:String(item.sku||'').trim();
+    if(typeof _migoSkuKey==='function'&&item.sku) window._catCom[_migoSkuKey(item.sku)]={com:_comVta(item),p:Number(item.total)||0};
     var enProvs=false;
     PROVS.forEach(function(pv){
       var pi=pv.prods.findIndex(function(p){
@@ -967,7 +971,7 @@ function _aplicarCatalogoATicket(items){
         enProvs=true;
         if(item.total>0) pv.prods[pi].p=item.total;
         pv.prods[pi]._activo=activo;
-        pv.prods[pi]._com=item.com||0;
+        pv.prods[pi]._com=_comVta(item);
         pv.prods[pi].sku=skuCanon;
       }
     });
@@ -975,7 +979,7 @@ function _aplicarCatalogoATicket(items){
     // PROVS ya tuviera la familia y el producto se descartaba en silencio.
     if(!enProvs && retail && _esProductoRetail(item)){
       var pvFam=_asegurarGrupoProv(retail.fam);
-      pvFam.prods.push({sku:skuCanon,n:item.nombre||skuCanon,p:item.total||0,_activo:activo,_com:item.com||0});
+      pvFam.prods.push({sku:skuCanon,n:item.nombre||skuCanon,p:item.total||0,_activo:activo,_com:_comVta(item)});
     }
   });
 
@@ -19002,6 +19006,7 @@ function _migoRestaurarPrecios(){
       [FACIALES,EXTRAS,PAQ3,PAQ6].forEach(function(L){ var i=L.indexOf(it); if(i>=0) L.splice(i,1); });
       (PROVS||[]).forEach(function(pv){ var i=pv.prods.indexOf(it); if(i>=0) pv.prods.splice(i,1); });
     } else if(it._pOrig!==undefined){ it[x.campo]=it._pOrig; delete it._pOrig; }
+    if(it&&!it._migo&&it._comOrig!==undefined){ it._com=it._comOrig; delete it._comOrig; }
   });
   window.FACIALES=FACIALES;
 }
@@ -19019,6 +19024,15 @@ function _migoAplicarPrecios(){
     if(!it) return;
     x.it=it; x.campo=campo; x.skuFE=it.sku;
     if(!it._migo && it._pOrig===undefined) it._pOrig=it[campo];
+    if(x.sec==='producto'){
+      // TK132: la comisión de la línea prellenada sale del catálogo por SKU exacto, igual que una línea agregada a mano;
+      // si la factura trae otro precio, se ajusta 30 % de la diferencia sin IVA (misma regla 30 % × (venta − base)).
+      var cc=window._catCom&&window._catCom[key];
+      if(it._comOrig===undefined) it._comOrig=it._com;
+      var base=cc?cc.com:(Number(it._comOrig)||0), pCat=cc&&cc.p>0?cc.p:Number(it._pOrig!=null?it._pOrig:x.p)||0;
+      it._com=Math.max(0, Math.round((base+0.3*((Number(x.p)||0)-pCat)/1.15)*100)/100);
+      if(!cc&&!(Number(it._comOrig)>0)) it._com=0;
+    }
     it[campo]=x.p;
   });
 }
@@ -19084,6 +19098,12 @@ function _migoPoblarTDesdeFac(b){
   T.nombre=parts[0]||''; T.apellido=parts.slice(1).join(' ')||'';
   T.factura=b.factura||'';
   T._migoFac=b.factura||'';
+  // TK132: todo lo que trae el RIDE: cédula/RUC, correo, celular (+593) y dirección; la clienta se liga por cédula.
+  var cd=b.cliente_datos||{};
+  if(cd.cedula) T.cedula=String(cd.cedula);
+  else if(b.datos&&b.datos.cedula) T.cedula=String(b.datos.cedula);
+  if(cd.email) T.email=cd.email; if(cd.telefono) T.telefono=cd.telefono; if(cd.direccion) T.direccion=cd.direccion;
+  T._migoCliente=cd;
   T.notas=(b.datos&&(b.datos.notas||b.datos.cabina))||'';
   T.recom=(b.datos&&b.datos.recomendaciones)||'';
   var forma=String(b.forma||'');
@@ -19168,8 +19188,24 @@ function _migoAbrirEnTicket(fac){
     } else if(typeof showTab==='function'){
       showTab('ticket');
     }
+    if(T.cedula) _migoLigarClienta(T.cedula);
     if(typeof toast==='function') toast(info.sinItems?'Cliente y pago listos. Faltan los productos de la factura.':'Ticket prellenado desde Fac. '+(b.factura||fac)+'. Revisa ítems y envía.','var(--green)');
   });
+}
+/** TK132: liga el ticket prellenado a la clienta existente con esa cédula (exacta); si no hay, queda como nueva y se crea al enviar. */
+function _migoLigarClienta(ced){
+  var c0=String(ced||'').replace(/\D/g,''); if(!c0||typeof window.api!=='function') return;
+  var cEl=document.getElementById('inp-ced'); if(cEl&&!cEl.value) cEl.value=ced;
+  Promise.resolve(window.api('cl_buscar',{q:c0})).then(function(r){
+    var L=(r&&r.items)||[];
+    var nuc=function(v){ v=String(v||'').replace(/\D/g,''); if(v.length===13&&/001$/.test(v)) v=v.slice(0,10); return v; };
+    var hit=L.filter(function(x){ return nuc(x.cedula)&&nuc(x.cedula)===nuc(c0); });
+    if(hit.length===1){
+      T.clienteCodigo=hit[0].codigo||''; T.clienteKey=hit[0].key||''; T._clienteNuevo=false;
+      var sel=document.getElementById('cli-sel'); if(sel) sel.innerHTML='✓ <b>'+_histEsc(hit[0].nombre)+'</b> · '+_histEsc(hit[0].codigo||'');
+      _cliMsgTicket('Cliente: '+hit[0].nombre+(hit[0].codigo?' · '+hit[0].codigo:''),'ok');
+    } else { T._clienteNuevo=true; _cliMsgTicket('Cliente nueva: se crea con los datos de la factura al enviar','nueva'); }
+  }).catch(function(){});
 }
 function _migoAbrirBorrador(fac){ _migoAbrirEnTicket(fac); }
 function _migoAsignarBorrador(fac){

@@ -584,7 +584,7 @@ export function ofertaBorrador(borradores: Row[], p: { nombre?: unknown; apellid
   return best ? best.b : null;
 }
 
-export const MIGO_CRON_ACCIONES = new Set(["migo_importar", "migo_cuadre_hora", "migo_adjuntar_pdfs"]);
+export const MIGO_CRON_ACCIONES = new Set(["migo_importar", "migo_cuadre_hora", "migo_adjuntar_pdfs", "migo_clientes_ride"]);
 
 export function sesionCronMigo(p: Row, env: Record<string, string | undefined>): { uid: string; rol: string; name: string; short: string; color: string; token: string } | null {
   const key = s(env.MIGO_CRON_KEY);

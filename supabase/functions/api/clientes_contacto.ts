@@ -192,7 +192,7 @@ export function contactoDeFactura(f: Row): ContactoFuente | null {
   const tel = telOk(f.cliente_telefono || f.telefono || (f.cliente && typeof f.cliente === "object" ? (f.cliente as Row).telefono : ""));
   const email = emailOk(f.cliente_email || f.email || (f.cliente && typeof f.cliente === "object" ? (f.cliente as Row).email : ""));
   if (!tel && !email) return null;
-  const ced = s(f.cliente_cedula || f.cedula || f.identificacion || (f.cliente && typeof f.cliente === "object" ? (f.cliente as Row).cedula : ""));
+  const ced = s(f.cliente_ruc || f.cliente_cedula || f.cedula || f.identificacion || (f.cliente && typeof f.cliente === "object" ? (f.cliente as Row).cedula : ""));
   const nombre = s(f.cliente_nombre || (typeof f.cliente === "string" ? f.cliente : "") || (f.cliente && typeof f.cliente === "object" ? (f.cliente as Row).nombre : ""));
   return { cedula: ced || undefined, nombre: nombre || undefined, telefono: tel || undefined, email: email || undefined, fuente: "migo" };
 }

@@ -229,11 +229,11 @@ describe("TK127 SQL aditivo y bandera de conteo", () => {
     assert.equal(FLAG_PENDIENTE_CONTEO.includes("lotes"), true);
   });
 
-  it("el cache de esta entrega es TK127, distinto al de TK131", () => {
+  it("el cache de esta entrega es TK132, distinto al de TK127", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const beta = readFileSync(new URL("../../../beta.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-beta-2026-11-19-TK127/);
-    assert.match(beta, /20261119tk127/);
-    assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK131/);
+    assert.match(sw, /sunsu-beta-2026-11-19-TK132/);
+    assert.match(beta, /20261119tk132/);
+    assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK127/);
   });
 });

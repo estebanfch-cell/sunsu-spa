@@ -339,6 +339,52 @@ def pdfs_de_dir(folder: Path) -> list[dict]:
         })
     return out
 
+
+def cliente_de_ride(texto: str) -> dict:
+    """TK132: datos de la clienta del RIDE (solo lectura): RUC/CI, e-mail, teléfono (+593) y dirección.
+    Nunca se imprimen."""
+    t = texto or ""
+    out: dict = {}
+    m = re.search(r"RUC\s*/\s*CI\s*:\s*([0-9A-Z-]{5,20})", t)
+    if m:
+        if not re.fullmatch(r"9{10,13}", m.group(1).strip()):  # consumidor final
+            out["ruc"] = m.group(1).strip()
+    m = re.search(r"E-?MAIL\s*:\s*([\w.+-]+@[\w.-]+\.\w+)", t, re.I)
+    if m:
+        out["email"] = m.group(1).strip().lower()
+    m = re.search(r"Tel[eé]fono\s*:\s*(\+?[\d\s()-]{7,20})", t, re.I)
+    if m:
+        out["telefono"] = telefono_ec(m.group(1))
+    m = re.search(r"Direcci[oó]n\s*:\s*([^\n]+?)(?:\s{2,}|\n|$)", t)
+    if m and m.group(1).strip() not in ("", "-"):
+        out["direccion"] = m.group(1).strip()[:200]
+    return {k: v for k, v in out.items() if v}
+
+def telefono_ec(v: str) -> str:
+    d = re.sub(r"\D", "", v or "")
+    if d.startswith("593"):
+        d = d[3:]
+    d = d.lstrip("0")
+    return ("+593" + d) if len(d) in (8, 9) else ""
+
+def clientes_de_pdfs(folder: Path) -> list[dict]:
+    import subprocess
+    out = []
+    if not folder.is_dir():
+        return out
+    for path in sorted(folder.glob("*.pdf")):
+        fac = fac_norm(path.stem.split("_")[0])
+        if not fac:
+            continue
+        try:
+            txt = subprocess.run(["pdftotext", "-layout", str(path), "-"], capture_output=True, text=True, timeout=30).stdout
+        except Exception:
+            continue
+        c = cliente_de_ride(txt)
+        if c:
+            out.append({"factura": fac, **c})
+    return out
+
 def post_accion(url: str, accion: str, payload: dict, token: str | None, cron_key: str | None) -> dict:
     body = dict(payload)
     body["accion"] = accion
@@ -521,6 +567,14 @@ def main():
             pendientes += int(r.get("pendientes") or 0)
             omitidos += int(r.get("omitidos") or 0)
         print("PDFs ok:", adjuntos, "adjuntos,", tickets, "tickets,", pendientes, "sin ticket,", omitidos, "omitidos")
+        # TK132: cédula/RUC, correo, teléfono y dirección de la clienta del RIDE → la beta (no se imprimen).
+        clis = clientes_de_pdfs(Path(args.pdf_dir))
+        if clis:
+            r = post_accion(args.url, "migo_clientes_ride", {"clientes": clis}, token, cron)
+            if not r.get("ok"):
+                sys.stderr.write("Error clientes RIDE: " + texto_seguro(r.get("error") or r) + "\n")
+                sys.exit(1)
+            print("Clientes RIDE ok:", r.get("actualizadas"), "facturas")
     # El resumen de novedades va al final, por defecto (también con --resumen).
     imprimir_resumen(resumen)
 
