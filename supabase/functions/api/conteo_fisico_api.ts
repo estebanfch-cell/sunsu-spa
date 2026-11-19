@@ -9,7 +9,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { acceso, esAdmin, matrizDe } from "./permisos.ts";
 import { n, round2, s, skuCode, type Row } from "./domain.ts";
-import { GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
+import { BOD_CABINA, BOD_CASA, BOD_VENTA, GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 
 export const BODEGAS_CONTEO = ["CONSIGNACION", "CABINA", "OFICINA"] as const;
@@ -32,9 +32,50 @@ export async function puedeVerModulo(ctx: Ctx, ses: Ses): Promise<boolean> {
 }
 function esAsignada(c: Row, ses: Ses): boolean { return !!s(c.asignado_a) && s(c.asignado_a) === yo(ses); }
 function subNombre(code: string): string { return SUBS_CABINA.find((x) => x.codigo === code)?.nombre || (code === "SIN" ? "Sin cabina asignada" : code); }
+
+async function movsDurante(ctx: Ctx, productoId: string, bodega: string, desde: string, hasta: string): Promise<Row[]> {
+  if (!desde) return [];
+  const out: Row[] = [];
+  for (const m of await todas(ctx, "beta_stock_movimientos")) {
+    if (s(m.producto_id) !== productoId) continue;
+    if (s(m.bodega) && s(m.bodega) !== bodega) continue;
+    const at = s(m.fecha || m.created_at || m.at);
+    if (at && at < desde) continue;
+    if (hasta && at && at > hasta) continue;
+    out.push({ sku: s(m.sku), sub: s(m.sububicacion) || "", kind: s(m.tipo), label: s(m.tipo), delta: n(m.delta), at, actor: s(m.actor) });
+  }
+  return out;
+}
+async function subsDe(ctx: Ctx, bodega: string): Promise<Row[]> {
+  const out: Row[] = [], seen = new Set<string>();
+  const add = (codigo: string, nombre: string) => { const c = s(codigo); if (!c || seen.has(c)) return; seen.add(c); out.push({ codigo: c, nombre: nombre || c }); };
+  if (bodega === "CABINA") for (const x of SUBS_CABINA) add(x.codigo, x.nombre);
+  for (const x of await todas(ctx, "erp_sububicaciones")) {
+    if (x.activo === false) continue;
+    const codigo = s(x.codigo);
+    const id = s(x.bodega_id);
+    const bod = /^CABINA_?\d+$/i.test(codigo) ? "CABINA"
+      : (id === BOD_CASA || id === "CASA" ? "OFICINA" : id === BOD_VENTA ? "CONSIGNACION" : id === BOD_CABINA ? "CABINA" : s(x.bodega));
+    if (bod === bodega) add(codigo, s(x.nombre) || codigo);
+  }
+  return out;
+}
+
 export function bodegaNombre(b: string, sub?: string): string {
   const g = GRUPO_NOMBRE[b as keyof typeof GRUPO_NOMBRE] || b;
   return sub ? g + " · " + subNombre(sub) : g;
+}
+
+
+function subUnica(p: Row, bodega: string): string {
+  if (bodega === "CABINA") {
+    const sub = p.porSubCabina as Row | undefined;
+    const keys = Object.entries(sub || {}).filter(([k, q]) => k && k !== "SIN" && Math.abs(n(q)) > 1e-9).map(([k]) => k);
+    return keys.length === 1 ? keys[0] : "";
+  }
+  const est = (p.porEstante || {}) as Row;
+  const keys = Object.entries(est).filter(([k, q]) => k.startsWith(bodega + "|") && k.slice(bodega.length + 1) && Math.abs(n(q)) > 1e-9).map(([k]) => k.slice(bodega.length + 1));
+  return keys.length === 1 ? keys[0] : "";
 }
 
 /** Stock del sistema de un producto en la bodega/sububicación del conteo (lo mismo que muestra Productos). */
@@ -97,6 +138,11 @@ extend("cf_meta", "any", async (_p, ctx, ses) => {
     ok: true, admin: esAdmin(ses.rol), listo: await tablaLista(ctx), usuarios: esAdmin(ses.rol) ? usuarios : [],
     bodegas: BODEGAS_CONTEO.map((b) => ({ id: b, nombre: GRUPO_NOMBRE[b] })), subsCabina: SUBS_CABINA.map((x) => ({ id: x.codigo, nombre: x.nombre })),
     estados: ESTADOS_CONTEO,
+    subs: {
+      CONSIGNACION: await subsDe(ctx, "CONSIGNACION"),
+      CABINA: await subsDe(ctx, "CABINA"),
+      OFICINA: await subsDe(ctx, "OFICINA"),
+    },
   };
 });
 
@@ -111,7 +157,7 @@ extend("cf_list", "any", async (p, ctx, ses) => {
   // Admin (y quien tiene Conteos en todos) ve todo.
   // TK116: un conteo general abierto lo puede retomar cualquiera del equipo con acceso (guardar y terminar después).
   const todo = admin || (verMod && acceso(ses.rol, "conteos", await matrizDe(ctx.db)) === "todos");
-  if (!todo) rows = rows.filter((c) => esAsignada(c, ses) || (verMod && s(c.tipo) === "general" && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado))));
+  if (!todo) rows = rows.filter((c) => esAsignada(c, ses) || (verMod && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado))));
   if (p.mios === true) rows = rows.filter((c) => esAsignada(c, ses) && ["asignado", "en_conteo"].includes(s(c.estado)));
   const items = rows.map((c) => vista(c, porC.get(s(c.id)) || [], ses)).sort((a, b) => s(b.creadoAt).localeCompare(s(a.creadoAt)));
   return { ok: true, items, admin };
@@ -129,21 +175,28 @@ extend("cf_crear", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) {
     if (asignado && asignado !== yo(ses)) return { error: "Solo puedes crear un conteo para ti" };
     asignado = yo(ses);
+  } else if (!asignado) {
+    asignado = yo(ses);
   }
   const u = (await todas(ctx, "usuarios")).find((x) => s(x.id) === asignado) || (await todas(ctx, "app_usuarios")).find((x) => s(x.id ?? x.usuario) === asignado);
   if (!u) return { error: esAdmin(ses.rol) ? "Asigna a quién cuenta" : "No se encontró tu usuario" };
   const familias = (Array.isArray(p.familias) ? p.familias : s(p.familias).split(",")).map((x) => s(x).trim().toUpperCase()).filter((x) => /^[A-Z0-9]{2,6}$/.test(x)).slice(0, 20);
   const rows = await todas(ctx, "beta_conteos");
   const abierto = rows.find((c) => s(c.bodega) === bodega && s(c.sububicacion) === sub && ["asignado", "en_conteo", "en_revision"].includes(s(c.estado)));
-  if (abierto && p.forzar !== true) return { error: "Ya hay un conteo abierto en " + bodegaNombre(bodega, sub) + " (" + s(abierto.numero) + "). Termínalo o cancélalo antes." };
+  if (abierto && p.forzar !== true) {
+    if (p.iniciar === true || p.reanudar === true) {
+      return { ok: true, id: s(abierto.id), numero: s(abierto.numero), reanudar: true, iniciado: s(abierto.estado) !== "asignado", estado: s(abierto.estado) };
+    }
+    return { error: "Ya hay un conteo abierto en " + bodegaNombre(bodega, sub) + " (" + s(abierto.numero) + "). Termínalo o cancélalo antes.", id: s(abierto.id), numero: s(abierto.numero) };
+  }
   const id = crypto.randomUUID(), numero = siguienteNumero(rows);
   const nombre = s(u.short) || s(u.nombre);
   await ctx.db.write(actorOf(ses), "beta_conteos", "insert", {}, {
-    id, numero, bodega, sububicacion: sub || null, familias: familias.join(",") || null, asignado_a: asignado, asignado_nombre: nombre,
+    id, numero, tipo: "hoja", bodega, sububicacion: sub || null, familias: familias.join(",") || null, asignado_a: asignado, asignado_nombre: nombre,
     estado: "asignado", nota: s(p.nota).slice(0, 500) || null, creado_por: actorOf(ses), creado_at: ctx.now.toISOString(),
   });
   await notificar(ctx, ses, asignado, "Conteo asignado: " + numero, "Te asignaron el conteo físico de " + bodegaNombre(bodega, sub) + ".", "#/m/conteos/cf/" + id, id);
-  return { ok: true, id, numero };
+  return { ok: true, id, numero, estado: "asignado" };
 });
 
 extend("cf_get", "any", async (p, ctx, ses) => {
@@ -151,14 +204,43 @@ extend("cf_get", "any", async (p, ctx, ses) => {
   if (!r) return { error: (await tablaLista(ctx)) ? "Conteo no encontrado" : FALTA };
   const admin = esAdmin(ses.rol);
   if (!admin && !esAsignada(r.c, ses) && !(await puedeVerModulo(ctx, ses))) return { error: "No tienes permiso" };
-  const lineas = r.L.map((l) => ({
-    id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre), sububicacion: s(l.sububicacion),
-    sistema: admin ? n(l.sistema) : null, contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado), subContada: s(l.sub_contada),
-    agregado: l.agregado === true, nota: s(l.nota), contadoPor: s(l.contado_por), contadoAt: s(l.contado_at), diferencia: admin ? difLinea(l) : null,
-  }));
+  const cerrado = ["en_revision", "aprobado", "cancelado"].includes(s(r.c.estado));
+  const desde = s(r.c.iniciado_at), hasta = s(r.c.enviado_at) || s(r.c.cerrado_at);
+  const prods = s(r.c.estado) === "asignado" ? [] : await listaProductos(ctx, ses);
+  const porId = new Map(prods.map((x) => [s(x.id), x]));
+  const bod = s(r.c.bodega);
+  const recs: Row[] = [];
+  const lineas = [];
+  for (const l of r.L) {
+    const subLin = s(l.sub_contada) || s(l.sububicacion) || s(r.c.sububicacion);
+    const movs = desde ? await movsDurante(ctx, s(l.producto_id), bod, desde, hasta) : [];
+    const pr = porId.get(s(l.producto_id));
+    const vivo = pr ? (subLin && bod === "CABINA" ? (Math.abs(sistemaDe(pr, bod, subLin)) > 1e-9 ? sistemaDe(pr, bod, subLin) : sistemaDe(pr, bod, "")) : sistemaDe(pr, bod, subLin) || sistemaDe(pr, bod, "")) : n(l.sistema);
+    const esp = cerrado ? (l.esperado != null && l.esperado !== "" ? n(l.esperado) : n(l.sistema)) : round2(vivo);
+    const mov = movs.reduce((a, m) => a + n(m.delta), 0);
+    for (const m of movs) recs.push({ ...m, sku: s(m.sku) || s(l.sku), lineaId: l.id });
+    const fromSub = subLin && !/^CABINA_?\d+$/i.test(subLin) && subLin !== "SIN" ? subLin : (subLin ? (subLin.replace(/^CABINA_?/, "Cabina ") ) : bodegaNombre(bod));
+    lineas.push({
+      id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre),
+      sububicacion: s(l.sububicacion), fromSub, subCodigo: subLin,
+      sistema: admin ? n(l.sistema) : null, mov: round2(mov), esperado: esp,
+      contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado),
+      subContada: s(l.sub_contada), buscar: l.buscar === true, otraSub: s(l.otra_sub),
+      otraQty: l.otra_qty == null || l.otra_qty === "" ? null : n(l.otra_qty),
+      agregado: l.agregado === true, nota: s(l.nota), contadoPor: s(l.contado_por), contadoAt: s(l.contado_at),
+      diferencia: admin ? ((l.contado == null || l.contado === "") && s(l.estado) !== "no_encontrado" ? null : round2((s(l.estado) === "no_encontrado" ? 0 : n(l.contado)) - esp)) : null,
+    });
+  }
   const c = vista(r.c, r.L, ses);
+  const operar = (admin || esAsignada(r.c, ses) || (await puedeVerModulo(ctx, ses))) && s(r.c.estado) === "en_conteo";
   const puedeContar = (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "en_conteo";
-  return { ok: true, conteo: c, lineas, admin, ciego: !admin, puedeContar, puedeEmpezar: (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "asignado", puedeRevisar: admin && s(r.c.estado) === "en_revision" };
+  return {
+    ok: true, conteo: c, lineas, movimientos: recs, admin, ciego: !admin,
+    puedeContar, puedeOperar: operar, puedeTerminar: operar,
+    puedeEmpezar: (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "asignado",
+    puedeRevisar: admin && s(r.c.estado) === "en_revision",
+    subs: await subsDe(ctx, bod),
+  };
 });
 
 extend("cf_iniciar", "any", async (p, ctx, ses) => {
@@ -177,7 +259,7 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
   for (const o of prods.slice(0, 1500)) {
     await ctx.db.write(actorOf(ses), "beta_conteo_lineas", "insert", {}, {
       id: crypto.randomUUID(), conteo_id: r.c.id, orden: ++i, producto_id: s(o.x.id), sku: s(o.x.skuVisible || o.x.sku), nombre: s(o.x.nombre),
-      sububicacion: sub || null, sistema: round2(o.q), estado: "pendiente",
+      sububicacion: sub || subUnica(o.x, bodega) || null, sistema: round2(o.q), estado: "pendiente",
     });
   }
   await ctx.db.write(actorOf(ses), "beta_conteos", "update", { id: r.c.id }, { estado: "en_conteo", iniciado_at: ctx.now.toISOString(), iniciado_por: actorOf(ses), updated_at: ctx.now.toISOString() });
@@ -187,7 +269,7 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
 extend("cf_guardar", "any", async (p, ctx, ses) => {
   const r = await cargar(ctx, s(p.id));
   if (!r) return { error: "Conteo no encontrado" };
-  if (!esAdmin(ses.rol) && !esAsignada(r.c, ses)) return { error: "Este conteo no está asignado a ti" };
+  if (!esAdmin(ses.rol) && !esAsignada(r.c, ses) && !(await puedeVerModulo(ctx, ses))) return { error: "Este conteo no está asignado a ti" };
   if (s(r.c.estado) !== "en_conteo") return { error: "El conteo no está abierto para contar" };
   const now = ctx.now.toISOString(), actor = actorOf(ses);
   const porId = new Map(r.L.map((l) => [s(l.id), l]));
@@ -198,10 +280,12 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
     const estado = s(x.estado) === "no_encontrado" ? "no_encontrado" : x.contado == null || x.contado === "" ? "pendiente" : "contado";
     const contado = estado === "contado" ? n(x.contado) : null;
     if (contado != null && (contado < 0 || !Number.isFinite(contado))) return { error: s(l.sku) + ": cantidad inválida" };
-    const subC = s(x.sub_contada ?? x.subContada);
-    if (subC && !SUBS_CABINA.some((z) => z.codigo === subC) && subC !== "SIN") return { error: s(l.sku) + ": sububicación inválida" };
+    const subC = s(x.sub_contada ?? x.subContada ?? x.sububicacion);
     await ctx.db.write(actor, "beta_conteo_lineas", "update", { id: l.id }, {
-      contado, estado, sub_contada: subC || null, nota: s(x.nota).slice(0, 300) || null, contado_por: estado === "pendiente" ? null : actor, contado_at: estado === "pendiente" ? null : now, updated_at: now,
+      contado, estado, sub_contada: subC || null, sububicacion: subC || l.sububicacion || null,
+      buscar: x.buscar === true, otra_sub: s(x.otra_sub ?? x.otraSub) || null,
+      otra_qty: x.otra_qty == null || x.otra_qty === "" ? (x.otraQty == null || x.otraQty === "" ? null : n(x.otraQty)) : n(x.otra_qty),
+      nota: s(x.nota).slice(0, 300) || null, contado_por: estado === "pendiente" ? null : actor, contado_at: estado === "pendiente" ? null : now, updated_at: now,
     });
     cambiadas++;
   }
@@ -228,11 +312,22 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
 extend("cf_enviar", "any", async (p, ctx, ses) => {
   const r = await cargar(ctx, s(p.id));
   if (!r) return { error: "Conteo no encontrado" };
-  if (!esAdmin(ses.rol) && !esAsignada(r.c, ses)) return { error: "Este conteo no está asignado a ti" };
+  if (!esAdmin(ses.rol) && !esAsignada(r.c, ses) && !(await puedeVerModulo(ctx, ses))) return { error: "Este conteo no está asignado a ti" };
   if (s(r.c.estado) !== "en_conteo") return { error: "El conteo no está en conteo" };
-  const pend = r.L.filter((l) => s(l.estado) === "pendiente").length;
-  if (pend) return { error: "Faltan " + pend + " productos por contar (cuenta o marca «No está»)" };
-  await ctx.db.write(actorOf(ses), "beta_conteos", "update", { id: r.c.id }, { estado: "en_revision", enviado_at: ctx.now.toISOString(), enviado_por: actorOf(ses), updated_at: ctx.now.toISOString() });
+  const buscar = r.L.filter((l) => l.buscar === true).length;
+  if (buscar) return { error: buscar + " producto(s) en «Buscar después»: encuéntralos antes de terminar" };
+  const pend = r.L.filter((l) => s(l.estado) === "pendiente" && (l.contado == null || l.contado === "") && !s(l.otra_sub)).length;
+  if (pend && p.forzar !== true) return { ok: false, error: "Faltan " + pend + " productos por contar (cuenta o marca «No está»)", faltan: pend, pregunta: "Quedan " + pend + " producto(s) sin contar; no se ajustarán. ¿Terminar y enviar a revisión?" };
+  const actor = actorOf(ses), now = ctx.now.toISOString();
+  const prods = await listaProductos(ctx, ses);
+  const porId = new Map(prods.map((x) => [s(x.id), x]));
+  for (const l of r.L) {
+    const pr = porId.get(s(l.producto_id));
+    const subLin = s(l.sub_contada) || s(l.sububicacion) || s(r.c.sububicacion);
+    const vivo = pr ? (sistemaDe(pr, s(r.c.bodega), subLin) || sistemaDe(pr, s(r.c.bodega), "")) : n(l.sistema);
+    await ctx.db.write(actor, "beta_conteo_lineas", "update", { id: l.id }, { esperado: round2(vivo), updated_at: now });
+  }
+  await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "en_revision", enviado_at: now, enviado_por: actor, updated_at: now });
   for (const u of (await todas(ctx, "usuarios")).filter((x) => esAdmin(s(x.rol)) && !x.bloqueado)) {
     await notificar(ctx, ses, s(u.id), "Conteo para revisar: " + s(r.c.numero), s(r.c.asignado_nombre) + " terminó el conteo de " + bodegaNombre(s(r.c.bodega), s(r.c.sububicacion)) + ".", "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_revision");
   }

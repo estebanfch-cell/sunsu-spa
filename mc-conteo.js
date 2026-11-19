@@ -15,82 +15,74 @@
     if (document.getElementById("mccf-css")) return;
     var s = document.createElement("style"); s.id = "mccf-css";
     s.textContent = [
-      /* Dark MineCore theme, scoped to conteo. Logo and Sunsu nav stay. */
-      "body:has(#cc) .app,body:has(#mccf-root) .app{background:#0b1219}",
-      "body:has(#cc) #content,body:has(#mccf-root) #content{background:#0b1219;color:#dce6f0}",
-      "body:has(#cc) .top,body:has(#mccf-root) .top{background:#0b131c;border-color:#1c2a3a}",
-      "body:has(#cc) .top h1,body:has(#mccf-root) .top h1{color:#f2f6fa;text-transform:uppercase;letter-spacing:.06em;font-size:17px;font-weight:800}",
-      "#cc,#mccf-root{color:#dce6f0;font-size:13px}",
-      "#cc .chip,#mccf-root .chip{background:#0f1720;border:1px solid #223142;color:#dce6f0;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}",
-      "#cc .cbz-btn,#mccf-root .cbz-btn{background:#1e4976;border:0;color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}",
-      "#cc .cbz-card,#mccf-root .cbz-card{background:#0f1720;border:1px solid #223142;border-radius:12px;padding:12px 14px}",
-      "#cc .cbz-muted,#mccf-root .cbz-muted{color:#8fa3b8}",
-      "#cc .uinput,#mccf-root .uinput{background:#0b1219;border:1px solid #33506e;color:#dce6f0;border-radius:8px;padding:8px 10px;font-size:14px;height:40px;box-sizing:border-box}",
+      /* Layout y densidad de MineCore, colores de Sunsu (sin tema oscuro). */
+      "#cc,#mccf-root{color:var(--text);font-size:13px}",
+      "#cc .chip,#mccf-root .chip{background:var(--white);border:1.5px solid var(--cream-d);color:var(--navy-d);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}",
+      "#cc .cbz-btn,#mccf-root .cbz-btn{background:var(--navy);border:0;color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}",
+      "#cc .cbz-card,#mccf-root .cbz-card{background:var(--white);border:1px solid var(--cream-d);border-radius:12px;padding:12px 14px}",
+      "#cc .cbz-muted,#mccf-root .cbz-muted{color:var(--gray)}",
+      "#cc .uinput,#mccf-root .uinput{background:var(--white);border:1.5px solid var(--cream-d);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px;height:40px;box-sizing:border-box}",
       "#cc .cc-t,#mccf-root .cc-t{width:100%;border-collapse:collapse;font-size:12.5px}",
-      "#cc .cc-t th,#mccf-root .cc-t th{text-align:left;font-size:11px;color:#8fa3b8;padding:6px 7px;border-bottom:1px solid #26405c;font-weight:600}",
-      "#cc .cc-t td,#mccf-root .cc-t td{padding:6px 7px;border-bottom:1px solid #1c2a3a;vertical-align:middle;color:#dce6f0}",
+      "#cc .cc-t th,#mccf-root .cc-t th{text-align:left;font-size:11px;color:var(--navy-d);padding:6px 7px;border-bottom:1px solid var(--cream-d);font-weight:600}",
+      "#cc .cc-t td,#mccf-root .cc-t td{padding:6px 7px;border-bottom:1px solid var(--gray-l);vertical-align:middle;color:var(--text)}",
       "#cc .cc-t .r,#mccf-root .cc-t .r{text-align:right}",
-      "#cc .cc-t tr[data-cf-sec],#mccf-root .cc-t tr[data-cf-sec]{cursor:pointer}",
-      "#cc .st-pill,#mccf-root .st-pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;border:1px solid;background:transparent;white-space:nowrap}",
-      "#cc .st-pill.pend,#mccf-root .st-pill.pend{border-color:#8fa3b8;color:#8fa3b8}",
-      "#cc .st-pill.c,#mccf-root .st-pill.c{border-color:#f0c040;color:#f0c040}",
-      "#cc .st-pill.r,#mccf-root .st-pill.r{border-color:#5cc8ff;color:#5cc8ff}",
-      "#cc .st-pill.ok,#mccf-root .st-pill.ok{border-color:#6fd68f;color:#6fd68f}",
+      "#cc .cc-t tr[data-cf-sec],#mccf-root .cc-t tr[data-cf-go],#mccf-root .cc-t tr[data-cf-sec]{cursor:pointer}",
+      "#cc .st-pill,#mccf-root .st-pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;border:1.5px solid var(--gray);color:var(--gray);background:transparent;white-space:nowrap}",
+      "#cc .st-pill.pend,#mccf-root .st-pill.pend{border-color:var(--gray);color:var(--gray)}",
+      "#cc .st-pill.c,#mccf-root .st-pill.c{border-color:var(--gold);color:#9a6b00;background:var(--gold-l)}",
+      "#cc .st-pill.r,#mccf-root .st-pill.r{border-color:#5B7FA6;color:#3D5A7A;background:#EEF3FA}",
+      "#cc .st-pill.ok,#mccf-root .st-pill.ok{border-color:#2e9e5b;color:#2e7d32;background:#e6f4ea}",
       "#cc .cc-row,#mccf-root .cc-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}",
       "#cc .cc-topbtns,#mccf-root .cc-topbtns{display:flex;gap:6px;align-items:stretch;margin:0 0 8px;flex-wrap:nowrap}",
       "#cc .cc-topbtns .cbz-btn,#cc .cc-topbtns .chip,#mccf-root .cc-topbtns .cbz-btn,#mccf-root .cc-topbtns .chip{flex:1 1 0;min-width:0;white-space:normal;text-align:center;line-height:1.2;padding:7px 8px;font-size:12px;height:auto;min-height:40px;display:inline-flex;align-items:center;justify-content:center}",
-      /* Barra de abajo oscura en pantallas de conteo, como MineCore. */
-      "body:has(#cc) .tabbar,body:has(#mccf-root) .tabbar{background:#0d1722;border-top-color:#26405c;box-shadow:0 -4px 16px rgba(0,0,0,.35)}",
-      "body:has(#cc) .tab,body:has(#mccf-root) .tab{color:#8fa3b8}",
-      "body:has(#cc) .tab.on,body:has(#mccf-root) .tab.on,body:has(#cc) .tab.on span,body:has(#mccf-root) .tab.on span{color:#dce6f0}",
-      "body:has(#cc) .tab-plus,body:has(#mccf-root) .tab-plus{border-color:#0d1722}",
-      "body:has(#cc) .tab-more,body:has(#mccf-root) .tab-more{color:#8fa3b8}",
-      "body:has(#cc) .tab-more.on,body:has(#mccf-root) .tab-more.on{color:#b7f34a}",
-      "#cc .cc-top,#mccf-root .cc-top{position:sticky;top:0;z-index:6;display:flex;gap:8px;align-items:center;background:#0b131c;padding:6px 0}",
-      "#cc .cc-top input,#mccf-root .cc-top input{flex:1;min-width:0;height:40px;font-size:15px;background:#0b1219;border:1.5px solid #f0c040;color:#f2f6fa;border-radius:8px;padding:0 10px;box-sizing:border-box}",
-      "#cc .cc-prog,#mccf-root .cc-prog{font-size:13px;white-space:nowrap;color:#c9d6e3}",
-      "#cc .cc-prog b,#mccf-root .cc-prog b{color:#b7f34a;font-size:15px}",
-      "#cc .cc-kb,#mccf-root .cc-kb{flex:0 0 auto;min-width:44px;height:40px;padding:0 8px;border-radius:8px;border:1px solid #33506e;background:#102018;color:#b7f34a;font-weight:700;font-size:12px}",
-      "#cc .cc-kb.on,#mccf-root .cc-kb.on{background:#1a3a20;border-color:#b7f34a}",
-      "#cc .cc-list,#mccf-root .cc-list{background:#0f1a26;border:1px solid #1f3247;border-radius:12px;overflow:hidden}",
-      "#cc .cc-ln,#mccf-root .cc-ln{display:flex;align-items:center;gap:8px;padding:5px 8px;min-height:48px;box-sizing:border-box;border-bottom:1px solid #1c2a3a}",
-      "#cc .cc-nm,#mccf-root .cc-nm{font-weight:700;font-size:13px;color:#f2f6fa;line-height:1.22;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}",
-      "#cc .cc-cd,#mccf-root .cc-cd{font-size:11.5px;color:#8fa3b8;white-space:normal;line-height:1.3}",
-      "#cc .cc-sub,#mccf-root .cc-sub{flex:0 0 auto;text-align:right;font-size:12.5px;color:#dbe6f0;white-space:nowrap;line-height:1.25}",
-      "#cc .cc-mn,#mccf-root .cc-mn{flex:0 0 24px;height:40px;background:none;border:none;color:#8fa3b8;font-size:20px;padding:0;cursor:pointer}",
-      "#cc .cc-mpop,#mccf-root .cc-mpop{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:#13202e;border-bottom:1px solid #1c2a3a}",
-      "#cc .cc-bq,#mccf-root .cc-bq{font-size:12.5px;margin:0 0 6px;padding:6px 8px;border:1px solid #f0c040;border-radius:10px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}",
-      "#cc .cc-rved,#mccf-root .cc-rved{margin:0 0 8px;padding:8px 10px;border:1px solid #f0c040;border-radius:10px;background:#2a2208;color:#f6e7b2;font-size:12px}",
-      "#cc .cc-pend,#mccf-root .cc-pend{margin-right:auto;font-size:12.5px;color:#f0c040;align-self:center;white-space:nowrap}",
+      "#cc .cc-top,#mccf-root .cc-top{position:sticky;top:0;z-index:6;display:flex;gap:8px;align-items:center;background:var(--cream);padding:6px 0}",
+      "#cc .cc-top input,#mccf-root .cc-top input{flex:1;min-width:0;height:40px;font-size:15px;background:var(--white);border:1.5px solid var(--gold);color:var(--text);border-radius:8px;padding:0 10px;box-sizing:border-box}",
+      "#cc .cc-prog,#mccf-root .cc-prog{font-size:13px;white-space:nowrap;color:var(--navy-d)}",
+      "#cc .cc-prog b,#mccf-root .cc-prog b{color:var(--navy);font-size:15px}",
+      "#cc .cc-kb,#mccf-root .cc-kb{flex:0 0 auto;min-width:44px;height:40px;padding:0 8px;border-radius:8px;border:1.5px solid var(--navy-d);background:var(--navy-d);color:#fff;font-weight:700;font-size:12px}",
+      "#cc .cc-kb.on,#mccf-root .cc-kb.on{background:var(--gold);border-color:var(--gold);color:var(--navy-d)}",
+      "#cc .cc-list,#mccf-root .cc-list{background:var(--white);border:1px solid var(--cream-d);border-radius:12px;overflow:hidden}",
+      "#cc .cc-ln,#mccf-root .cc-ln{display:flex;align-items:center;gap:8px;padding:5px 8px;min-height:48px;box-sizing:border-box;border-bottom:1px solid var(--cream-d)}",
+      "#cc .cc-nm,#mccf-root .cc-nm{font-weight:700;font-size:13px;color:var(--text);line-height:1.22;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}",
+      "#cc .cc-cd,#mccf-root .cc-cd{font-size:11.5px;color:var(--gray);white-space:normal;line-height:1.3}",
+      "#cc .cc-sub,#mccf-root .cc-sub{flex:0 0 auto;text-align:right;font-size:12.5px;color:var(--navy-d);white-space:nowrap;line-height:1.25}",
+      "#cc .cc-mn,#mccf-root .cc-mn{flex:0 0 24px;height:40px;background:none;border:none;color:var(--gray);font-size:20px;padding:0;cursor:pointer}",
+      "#cc .cc-mpop,#mccf-root .cc-mpop{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--blue-ll,#F5F8FC);border-bottom:1px solid var(--cream-d)}",
+      "#cc .cc-bq,#mccf-root .cc-bq{font-size:12.5px;margin:0 0 6px;padding:6px 8px;border:1px solid var(--gold);border-radius:10px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:var(--gold-l)}",
+      "#cc .cc-rved,#mccf-root .cc-rved{margin:0 0 8px;padding:8px 10px;border:1px solid var(--gold);border-radius:10px;background:var(--gold-l);color:var(--navy-d);font-size:12px}",
+      "#cc .cc-pend,#mccf-root .cc-pend{margin-right:auto;font-size:12.5px;color:var(--gold);align-self:center;white-space:nowrap}",
       "#cc .cc-addbtn,#mccf-root .cc-addbtn{white-space:nowrap;min-height:40px;flex:0 0 auto}",
-      "#cc .cc-bar,#mccf-root .cc-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#0d1722;border-top:1px solid #26405c;padding:8px;position:sticky;bottom:0;z-index:5}",
-      "#cc .cc-k,#mccf-root .cc-k{color:#8fa3b8;font-size:11px}",
+      "#cc .cc-bar,#mccf-root .cc-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--white);border-top:1px solid var(--cream-d);padding:8px;position:sticky;bottom:0;z-index:5}",
+      "#cc .cc-k,#mccf-root .cc-k{color:var(--gray);font-size:11px}",
       "#cc .cc-secbar,#mccf-root .cc-secbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}",
-      "#cc .cc-secbar h2,#mccf-root .cc-secbar h2{margin:0;font-size:16px;font-weight:800;color:#f2f6fa;display:flex;align-items:center;gap:8px;flex:1;min-width:0}",
-      "#cc .cc-when,#mccf-root .cc-when{color:#8fa3b8;font-size:11px;white-space:nowrap}",
-      "#cc .cc-help,#mccf-root .cc-help{color:#8fa3b8;font-size:12px;margin:6px 0;line-height:1.4}",
-      "#cc .cc-gmeta,#mccf-root .cc-gmeta{color:#8fa3b8;font-size:12px;margin-top:2px}",
+      "#cc .cc-secbar h2,#mccf-root .cc-secbar h2{margin:0;font-size:16px;font-weight:800;color:var(--navy-d);display:flex;align-items:center;gap:8px;flex:1;min-width:0}",
+      "#cc .cc-when,#mccf-root .cc-when{color:var(--gray);font-size:11px;white-space:nowrap}",
+      "#cc .cc-help,#mccf-root .cc-help{color:var(--gray);font-size:12px;margin:6px 0;line-height:1.4}",
+      "#cc .cc-gmeta,#mccf-root .cc-gmeta{color:var(--gray);font-size:12px;margin-top:2px}",
       "#cc .cc-gstats,#mccf-root .cc-gstats{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:13px}",
-      "#cc .cc-progbar,#mccf-root .cc-progbar{height:6px;background:#1c2a3a;border-radius:4px;margin-top:8px;overflow:hidden}",
-      "#cc .cc-progbar>i,#mccf-root .cc-progbar>i{display:block;height:100%;background:#6fd68f;border-radius:4px}",
+      "#cc .cc-progbar,#mccf-root .cc-progbar{height:6px;background:var(--cream-d);border-radius:4px;margin-top:8px;overflow:hidden}",
+      "#cc .cc-progbar>i,#mccf-root .cc-progbar>i{display:block;height:100%;background:#6fbf88;border-radius:4px}",
       "#cc .cc-hoy,#mccf-root .cc-hoy{margin-top:8px;font-size:13px}",
-      "#cc .cc-lug,#mccf-root .cc-lug{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #1c2a3a}",
+      "#cc .cc-lug,#mccf-root .cc-lug{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--cream-d)}",
       "#cc .cc-lug:first-of-type,#mccf-root .cc-lug:first-of-type{border-top:0}",
-      "#cc .cc-numpad,#mccf-root .cc-numpad{display:none;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;padding:8px;background:#0f1720;border:1px solid #223142;border-radius:12px}",
+      "#cc .cc-pick,#mccf-root .cc-pick{display:flex;flex-direction:column;gap:10px;margin-top:8px}",
+      "#cc .cc-pick button,#mccf-root .cc-pick button{display:block;width:100%;text-align:left;padding:14px 16px;border-radius:12px;border:1.5px solid var(--cream-d);background:var(--white);color:var(--navy-d);font-weight:700;font-size:15px}",
+      "#cc .cc-pick button small,#mccf-root .cc-pick button small{display:block;font-weight:500;font-size:12px;color:var(--gray);margin-top:2px}",
+      "#cc .cc-numpad,#mccf-root .cc-numpad{display:none;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;padding:8px;background:var(--white);border:1px solid var(--cream-d);border-radius:12px}",
       "#cc .cc-numpad.on,#mccf-root .cc-numpad.on{display:grid}",
-      "#cc .cc-numpad button,#mccf-root .cc-numpad button{height:44px;background:#16273a;border:1px solid #33506e;color:#f2f6fa;border-radius:8px;font-weight:700;font-size:16px}",
-      "#cc .cc-hits,#mccf-root .cc-hits{border:1px solid #33506e;border-radius:10px;background:#0f1a26;margin:0 0 8px;max-height:240px;overflow:auto}",
-      "#cc .cc-hits button,#mccf-root .cc-hits button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #1c2a3a;background:none;padding:10px 12px;cursor:pointer;font:inherit;font-size:13px;color:#e8eef6}",
-      "#mccf-root .err{color:#ff8a8a}",
+      "#cc .cc-numpad button,#mccf-root .cc-numpad button{height:44px;background:var(--cream);border:1px solid var(--cream-d);color:var(--navy-d);border-radius:8px;font-weight:700;font-size:16px}",
+      "#cc .cc-hits,#mccf-root .cc-hits{border:1px solid var(--cream-d);border-radius:10px;background:var(--white);margin:0 0 8px;max-height:240px;overflow:auto}",
+      "#cc .cc-hits button,#mccf-root .cc-hits button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--gray-l);background:none;padding:10px 12px;cursor:pointer;font:inherit;font-size:13px;color:var(--text)}",
+      "#mccf-root .err{color:#b2452a}",
       "@media(max-width:430px){#cc .cc-top,#mccf-root .cc-top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center}#cc .cc-top input,#mccf-root .cc-top input{grid-column:1;grid-row:1;width:100%}#cc .cc-kb,#mccf-root .cc-kb{grid-column:2;grid-row:1}#cc .cc-prog,#mccf-root .cc-prog{grid-column:3;grid-row:1}#cc .cc-top .cc-addbtn,#mccf-root .cc-top .cc-addbtn{grid-column:1/-1;grid-row:2;width:100%}}",
-      "@media(max-width:1199px){#cc .cc-hm,#mccf-root .cc-hm{display:none}}",
-      "html body #cc input.cc-q,html body #mccf-root input.cc-q{flex:0 0 58px!important;width:58px!important;min-width:58px!important;height:40px!important;box-sizing:border-box!important;text-align:center!important;font-size:17px!important;font-weight:700!important;color:#f4ffe4!important;-webkit-text-fill-color:#f4ffe4!important;background:#102018!important;border:1px solid rgba(183,243,74,.55)!important;border-radius:9px!important;padding:0!important;box-shadow:none!important;caret-color:#b7f34a!important}",
-      "html body #cc input.cc-q.cc-vacio,html body #mccf-root input.cc-q.cc-vacio{background:rgba(183,243,74,.16)!important;border:2px solid #b7f34a!important}",
-      "html body #cc input.cc-q.cc-dirty,html body #mccf-root input.cc-q.cc-dirty{border-color:#f0c040!important;background:#2a2410!important}",
-      "html body #cc input.cc-q:focus,html body #mccf-root input.cc-q:focus{border:2px solid #d8ff6a!important;box-shadow:0 0 0 3px rgba(183,243,74,.45)!important;background:rgba(183,243,74,.24)!important;outline:none!important}"
+      "html body #cc input.cc-q,html body #mccf-root input.cc-q{flex:0 0 58px!important;width:58px!important;min-width:58px!important;height:40px!important;box-sizing:border-box!important;text-align:center!important;font-size:17px!important;font-weight:700!important;color:var(--navy-d)!important;-webkit-text-fill-color:var(--navy-d)!important;background:var(--white)!important;border:1.5px solid var(--gold)!important;border-radius:9px!important;padding:0!important;box-shadow:none!important;caret-color:var(--gold)!important}",
+      "html body #cc input.cc-q.cc-vacio,html body #mccf-root input.cc-q.cc-vacio{background:var(--gold-l)!important;border:2px solid var(--gold)!important}",
+      "html body #cc input.cc-q.cc-dirty,html body #mccf-root input.cc-q.cc-dirty{border-color:#9a6b00!important;background:var(--gold-l)!important}",
+      "html body #cc input.cc-q:focus,html body #mccf-root input.cc-q:focus{border:2px solid var(--gold)!important;box-shadow:0 0 0 3px rgba(196,148,58,.25)!important;background:var(--gold-l)!important;outline:none!important}"
     ].join("");
     document.head.appendChild(s);
   }
+
 
   async function meta() { if (!C.meta) { var m = await api("cf_meta", {}); if (m && m.ok) C.meta = m; } return C.meta; }
   function opt(v, t, sel) { return '<option value="' + e(v) + '"' + (String(v) === String(sel) ? " selected" : "") + ">" + e(t) + "</option>"; }
@@ -350,49 +342,66 @@
   }
   function topBtns() {
     return '<div class="cc-topbtns">' +
-      '<button class="cbz-btn" type="button" id="mccf-nuevo-g">＋ Nuevo conteo general</button>' +
-      '<button class="chip" type="button" data-go="#/m/conteos/secciones">⚙ Secciones</button>' +
-      '<button class="chip" type="button" data-go="#/m/conteos/hojas">📋 Hojas sueltas (antes)</button></div>';
+      '<button class="cbz-btn" type="button" id="mccf-nuevo-g">＋ Nuevo conteo</button>' +
+      '<button class="chip" type="button" data-go="#/m/conteos/secciones">⚙ Sububicaciones</button>' +
+      '<button class="chip" type="button" data-go="#/m/conteos/hojas">📋 Hojas sueltas</button></div>';
+  }
+  function pickerHtml() {
+    return '<div class="cbz-card"><p class="cc-help">Elige la bodega. Se cargan todos los productos que deberían estar ahora ahí. Las sububicaciones se asignan o se crean mientras cuentas, producto por producto.</p>' +
+      '<div class="cc-pick">' +
+      '<button type="button" data-cf-bod="CONSIGNACION">Venta<small>Bodega de consignación</small></button>' +
+      '<button type="button" data-cf-bod="CABINA">Bodega Cabina<small>Del local. Cabina 1, 2 y 3 ya existen como sububicaciones.</small></button>' +
+      '<button type="button" data-cf-bod="OFICINA">Bodega Oficina<small>Las sububicaciones se van creando al contar.</small></button>' +
+      "</div></div>";
   }
   async function renderLista() {
     var m = await meta();
     var d = await api("cf_list", {});
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
     C.list = d.items || [];
-    var adm = !!(d.admin || (m && m.admin));
-    var abiertos = C.list.filter(function (c) { return c.tipo === "general" && c.estado !== "cancelado" && c.estado !== "aprobado"; });
-    var activo = abiertos[0];
     var h = '<div id="cc"><div id="mccf-root">' + (d.falta ? '<p class="err">' + e(d.falta) + "</p>" : "") + topBtns();
-    if (!activo) {
-      h += '<div class="cbz-card"><p class="cc-help">No hay un conteo general abierto. Si aún no hay secciones, créalas en ⚙ Secciones (el catálogo empieza vacío). El inventario sigue vivo: el sistema toma el stock al iniciar cada sección. Puedes guardar, salir y volver.</p></div>';
+    h += '<p class="cc-help">El conteo es por bodega (Venta, Cabina u Oficina). La sububicación es un dato de cada producto y se asigna al contar. No hace falta crear sububicaciones antes.</p>';
+    if (C.pick) {
+      h += pickerHtml();
       return h + "</div></div>";
     }
-    var g = await api("cf_get_general", { id: activo.id });
-    if (!g || g.error) return h + '<p class="err">' + e((g && g.error) || "No se pudo abrir el conteo") + "</p></div>";
-    C.general = g;
-    var c = g.conteo, SS = g.secciones || [], ap = Number(c.aprobadas) || 0, tot = Number(c.total) || SS.length;
-    h += '<div class="cbz-card"><div style="min-width:0"><b style="font-size:15px;white-space:nowrap">' + e(c.numero) + '</b><div class="cc-gmeta">· Local · 👤 ' + e(c.asignadoNombre || "—") + "</div></div>" +
-      '<div class="cc-row"><span style="white-space:nowrap;font-size:12.5px">Aprobadas <b>' + ap + "/" + tot + "</b>" + (c.porRevisar ? ' · <b style="color:#5cc8ff">' + e(c.porRevisar) + " por revisar</b>" : "") + "</span>" +
-      (adm ? '<button class="chip" type="button" id="mccf-plan">🗓 Plan del mes</button><button class="chip" type="button" id="mccf-reasig">👤 Reasignar</button><button class="chip" type="button" id="mccf-cancelar-g" style="color:#e05c5c">✕ Cancelar</button>' : "") + "</div>" +
-      '<div class="cc-progbar"><i style="width:' + Math.round(100 * ap / Math.max(1, tot)) + '%"></i></div>' +
-      (c.hoyToca ? '<div class="cc-hoy">📅 Hoy toca: <b>' + e(c.hoyToca) + "</b></div>" : "") +
-      '<div class="cc-help">Toca una sección para abrirla (si está pendiente, se inicia sola). El inventario sigue vivo: el sistema toma el stock al iniciar la sección. Puedes guardar, salir y volver.</div></div>';
-    h += '<div class="cbz-card" style="padding:4px 6px;overflow-x:auto;margin-top:10px"><table class="cc-t"><thead><tr><th>Sección</th><th>Estado</th><th class="r">Cont.</th></tr></thead><tbody>' +
-      SS.map(function (s) {
-        return '<tr data-cf-sec="' + e(s.id) + '" data-cf-est="' + e(s.estado) + '"><td><b>' + e(s.nombre) + "</b></td><td>" + pill(s.estado, s.estadoNombre) + '</td><td class="r">' + e(s.contLabel || "—") + "</td></tr>";
-      }).join("") + "</tbody></table></div></div></div>";
-    return h;
+    var abiertos = C.list.filter(function (c) { return c.tipo !== "general" && c.estado !== "cancelado" && c.estado !== "aprobado"; });
+    if (!abiertos.length) {
+      h += '<div class="cbz-card"><p class="cc-help">No hay un conteo abierto. Pulsa ＋ Nuevo conteo, elige la bodega y empieza. El inventario sigue vivo; puedes guardar, salir y volver.</p></div>';
+      return h + "</div></div>";
+    }
+    h += abiertos.map(function (c) {
+      var ap = Number(c.contadas) || 0, tot = Number(c.lineas) || 0;
+      var rev = Number(c.porRevisar) || (c.estado === "en_revision" ? 1 : 0);
+      return '<div class="cbz-card" style="margin-bottom:10px;cursor:pointer" data-cf-abrir="' + e(c.id) + '"><div style="min-width:0"><b style="font-size:15px;white-space:nowrap">' + e(c.numero) + " · " + e(c.bodegaNombre || c.bodega) + "</b>" +
+        '<div class="cc-gmeta">👤 ' + e(c.asignadoNombre || "—") + " · " + pill(c.estado, c.estadoNombre) + "</div></div>" +
+        '<div class="cc-row"><span style="white-space:nowrap;font-size:12.5px">Contadas <b>' + ap + "/" + tot + "</b>" + (rev ? ' · <b style="color:var(--navy)">' + e(rev) + " por revisar</b>" : "") + "</span></div>" +
+        '<div class="cc-progbar"><i style="width:' + Math.round(100 * ap / Math.max(1, tot)) + '%"></i></div></div>';
+    }).join("");
+    return h + "</div></div>";
   }
   function wireLista(main) {
     var nv = main.querySelector("#mccf-nuevo-g");
-    if (nv) nv.onclick = async function () {
-      nv.disabled = true;
-      var r = await api("cf_crear_general", {});
-      nv.disabled = false;
-      if (!r || r.error) return alert((r && r.error) || "No se pudo crear");
-      go("#/m/conteos/cf/" + encodeURIComponent(r.id));
-    };
-    main.querySelectorAll("[data-go]").forEach(function (b) { b.onclick = function () { go(b.getAttribute("data-go")); }; });
+    if (nv) nv.onclick = function () { C.pick = true; go("#/m/conteos/nuevo"); };
+    main.querySelectorAll("[data-go]").forEach(function (b) { b.onclick = function () { C.pick = false; go(b.getAttribute("data-go")); }; });
+    main.querySelectorAll("[data-cf-bod]").forEach(function (b) {
+      b.onclick = async function () {
+        var bod = b.getAttribute("data-cf-bod");
+        b.disabled = true;
+        var r = await api("cf_crear", { bodega: bod, iniciar: true });
+        if (!r || r.error) { b.disabled = false; return alert((r && r.error) || "No se pudo crear"); }
+        C.pick = false;
+        var goDet = function (id) { go("#/m/conteos/cf/" + encodeURIComponent(id)); };
+        if (r.iniciado || r.reanudar && r.estado !== "asignado") return goDet(r.id);
+        var r2 = await api("cf_iniciar", { id: r.id });
+        b.disabled = false;
+        if (!r2 || r2.error) { alert((r2 && r2.error) || "No se pudo empezar"); }
+        goDet(r.id);
+      };
+    });
+    main.querySelectorAll("[data-cf-abrir]").forEach(function (card) {
+      card.onclick = function () { C.pick = false; go("#/m/conteos/cf/" + encodeURIComponent(card.getAttribute("data-cf-abrir"))); };
+    });
     var g = C.general, c = g && g.conteo;
     var re = main.querySelector("#mccf-reasig");
     if (re && c) re.onclick = async function () {
@@ -460,36 +469,17 @@
     var d = await api("cf_zonas", {});
     if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
     C.zonas = d;
-    var adm = !!d.admin, Z = d.zonas || [], E = C.zEdit;
-    if (C.zNew && !Z.some(function (x) { return x.id === "_new"; })) Z = Z.concat([{ id: "_new", nombre: "", bodega: "CONSIGNACION", sububicacion: "", prefijos: [], frecuenciaDias: 30, activo: true, unidades: 0, subs: 0 }]);
-    var warn = (d.sinZona && d.sinZona.length) ? '<div class="cbz-card" style="border-color:#f0c040;font-size:12.5px;margin-bottom:8px">⚠ Sububicaciones con stock que no están en ninguna sección: <b>' + d.sinZona.map(function (x) { return e(x.nombre); }).join(", ") + "</b></div>" : "";
-    var h = '<div id="cc"><div id="mccf-root"><div class="cc-row" style="margin-bottom:8px"><button class="chip" type="button" data-go="#/m/conteos">← Conteos</button><b>Secciones de Sunsu Spa</b>' +
-      (adm ? '<button class="chip" type="button" id="mccf-z-nueva">＋ Sección</button>' : "") + "</div>" +
-      '<p class="cc-help">' + (adm ? "Cada sección agrupa estantes por prefijo (ej. 8-, = sin sub.). El catálogo empieza vacío. Solo un admin puede agregar o cambiar secciones." : "Solo un admin puede agregar o cambiar secciones y sububicaciones.") + "</p>" + warn;
-    h += '<div class="cbz-card" style="padding:4px 6px;overflow-x:auto"><table class="cc-t"><thead><tr><th>Nombre</th><th>Sububicaciones (prefijo, «=» sin sub.)</th><th class="r">Cada (días)</th><th class="r">Subs</th><th>Activa</th><th></th></tr></thead><tbody>';
-    h += Z.map(function (z) {
-      var dt = !!E[z.id], off = zVal(z, "activo", z.activo) === false;
-      var prefs = zVal(z, "prefijos", Array.isArray(z.prefijos) ? z.prefijos.join(", ") : (z.prefijos || ""));
-      var act = (adm && dt ? '<button class="chip" type="button" data-cf-zdesc="' + e(z.id) + '">Descartar</button> <button class="cbz-btn" type="button" style="padding:4px 10px" data-cf-zsave="' + e(z.id) + '">Guardar</button>' : "") +
-        (adm && !dt && z.id !== "_new" ? '<button class="chip" type="button" data-cf-zdel="' + e(z.id) + '" style="color:#e05c5c;padding:3px 8px">🗑</button>' : "");
-      return '<tr data-zid="' + e(z.id) + '"' + (dt ? ' style="background:#1a2a1a"' : "") + (off ? ' style="opacity:.55"' : "") + '><td class="nm"><input class="uinput" ' + (adm ? "" : "disabled ") + 'style="width:100%;min-width:120px" data-zf="nombre" data-zid="' + e(z.id) + '" value="' + e(zVal(z, "nombre", z.nombre || "")) + '"></td>' +
-        '<td><input class="uinput" ' + (adm ? "" : "disabled ") + 'style="width:150px;text-transform:uppercase" placeholder="ej. 7-, =" data-zf="prefijos" data-zid="' + e(z.id) + '" value="' + e(prefs) + '"></td>' +
-        '<td class="r"><input class="uinput" ' + (adm ? "" : "disabled ") + 'type="number" min="1" style="width:56px;text-align:right" data-zf="frecuenciaDias" data-zid="' + e(z.id) + '" value="' + e(zVal(z, "frecuenciaDias", z.frecuenciaDias || 30)) + '"></td>' +
-        '<td class="r">' + e(z.subs == null ? "" : z.subs) + "</td>" +
-        '<td><input type="checkbox" ' + (adm ? "" : "disabled ") + 'data-zf="activo" data-zid="' + e(z.id) + '"' + (off ? "" : " checked") + "></td>" +
-        '<td class="mccf-zact">' + act + "</td></tr>";
-    }).join("");
-    h += "</tbody></table></div>";
+    var adm = !!d.admin;
     var lugares = d.lugares || [], subs = d.subs || [];
-    h += '<div class="cbz-card" style="margin-top:10px"><b>Sububicaciones</b><p class="cbz-muted" style="margin:4px 0 8px">Se crean una a una, dentro de cada bodega o cabina. El catálogo empieza vacío.</p>';
+    var h = '<div id="cc"><div id="mccf-root"><div class="cc-row" style="margin-bottom:8px"><button class="chip" type="button" data-go="#/m/conteos">← Conteos</button><b>Sububicaciones</b></div>' +
+      '<p class="cc-help">Hay tres bodegas. Cabina 1, 2 y 3 ya existen dentro de Bodega Cabina. Oficina y Venta se van llenando al contar: no hace falta crearlas antes para empezar un conteo.</p>';
     h += lugares.map(function (lg) {
       var key = lg.bodega + ":" + (lg.sububicacion || "");
-      var list = subs.filter(function (s) { return s.bodega === lg.bodega && (s.padre || "") === (lg.sububicacion || ""); });
-      return '<div class="cc-lug"><div><b>' + e(lg.nombre) + "</b>" +
-        (list.length ? '<div class="cbz-muted">' + list.map(function (s) { return e(s.codigo); }).join(", ") + "</div>" : '<div class="cbz-muted">Ninguna aún.</div>') +
-        "</div>" + (adm ? '<button class="cbz-btn" type="button" data-cf-crear-sub="' + e(key) + '">＋ Crear sububicación</button>' : "") + "</div>";
+      var list = subs.filter(function (s) { return s.bodega === lg.bodega; });
+      return '<div class="cbz-card" style="margin-bottom:10px"><div class="cc-lug"><div><b>' + e(lg.nombre) + "</b>" +
+        (list.length ? '<div class="cbz-muted">' + list.map(function (s) { return e(s.nombre || s.codigo); }).join(", ") + "</div>" : '<div class="cbz-muted">Ninguna aún. Se pueden crear al contar.</div>') +
+        "</div>" + (adm ? '<button class="cbz-btn" type="button" data-cf-crear-sub="' + e(key) + '">＋ Crear sububicación</button>' : "") + "</div></div>";
     }).join("");
-    h += "</div>";
     if (d.falta) h += '<p class="err">' + e(d.falta) + "</p>";
     return h + "</div></div>";
   }
@@ -505,7 +495,7 @@
           set(id, "bodega", p[0] || ""); set(id, "sububicacion", p.slice(1).join(":") || "");
         } else if (f === "activo") set(id, "activo", inp.checked);
         else set(id, f, inp.type === "number" ? Number(inp.value) : inp.value);
-        var card = inp.closest("tr"); if (card) card.style.background = "#1a2a1a";
+        var card = inp.closest("tr"); if (card) card.style.background = "var(--gold-l)";
         var act = card && card.querySelector(".mccf-zact");
         if (act && !act.querySelector("[data-cf-zsave]")) {
           act.insertAdjacentHTML("beforeend", '<button class="chip" type="button" data-cf-zdesc="' + id + '">Descartar</button> <button class="cbz-btn" type="button" style="padding:4px 10px" data-cf-zsave="' + id + '">Guardar</button>');
@@ -587,7 +577,7 @@
   }
   function lineaSecHtml(l) {
     var v = valLinea(l), op = C.menu === l.id, otra = C.otra === l.id;
-    var badge = (l.buscar ? ' <span class="cc-skb">🔎 buscar después</span>' : "") + (l.otraSub ? ' <span style="color:#5cc8ff">📍 ' + e(l.otraSub) + (l.otraQty != null ? " · " + e(l.otraQty) : "") + "</span>" : "");
+    var badge = (l.buscar ? ' <span class="cc-skb">🔎 buscar después</span>' : "") + (l.otraSub ? ' <span style="color:var(--navy)">📍 ' + e(l.otraSub) + (l.otraQty != null ? " · " + e(l.otraQty) : "") + "</span>" : "");
     var h = '<div class="cc-ln' + (l.buscar ? " cc-skip" : "") + '" id="cc-l' + e(l.id) + '">' +
       '<div style="flex:1;min-width:0"><div class="cc-nm">' + e(l.nombre) + "</div>" + badge + '<div class="cc-cd">' + e(l.sku) + "</div></div>" +
       '<div class="cc-sub">' + e(l.fromSub || "—") + "<div>esp. " + e(l.esperado) + "</div></div>" +
@@ -600,14 +590,25 @@
         '<button class="chip" type="button" data-cf-op="buscar" data-id="' + e(l.id) + '">🔎 Buscar después</button></div>';
     }
     if (otra) {
-      var opts = (l.otrasUnids || []).map(function (o) {
+      var subs = ((C.sec && C.sec.subs) || []);
+      var cur = l.subContada || l.subCodigo || l.sububicacion || "";
+      var optsAsig = subs.map(function (o) {
+        return '<option value="' + e(o.codigo) + '"' + (o.codigo === cur ? " selected" : "") + ">" + e(o.nombre || o.codigo) + "</option>";
+      }).join("");
+      var optsOtra = (l.otrasUnids || []).map(function (o) {
         return '<option value="' + e(o.bodega + ":" + (o.sub || "")) + '">' + e(o.nombre) + (o.unidades ? " · " + o.unidades + " u" : "") + "</option>";
       }).join("");
-      h += '<div class="cc-bq">' + e(l.fromSub || "—") + " (principal): — · otras sububicaciones:" +
-        '<div class="cc-row" style="width:100%"><select class="uinput" data-cf-osub="' + e(l.id) + '" style="flex:1;min-width:0;height:40px"><option value="">Buscar sububicación…</option>' + opts + "</select>" +
-        '<input class="cc-q" data-cf-oqty="' + e(l.id) + '" inputmode="decimal" value="' + e(l.otraQty == null ? "" : l.otraQty) + '">' +
+      h += '<div class="cc-bq">Sububicación de este producto en esta bodega:' +
+        '<div class="cc-row" style="width:100%"><select class="uinput" data-cf-asub="' + e(l.id) + '" style="flex:1;min-width:0;height:40px"><option value="">Elige o crea…</option>' + optsAsig + "</select>" +
+        '<button class="cbz-btn" type="button" data-cf-op="asig-sub" data-id="' + e(l.id) + '">Asignar</button>' +
         '<button class="chip" type="button" data-cf-op="cerrar-otra" data-id="' + e(l.id) + '">×</button></div>' +
-        '<button class="chip" type="button" data-cf-op="crear-sub" data-id="' + e(l.id) + '" style="color:#b7f34a">＋ Crear nueva sububicación</button></div>';
+        '<button class="chip" type="button" data-cf-op="crear-sub" data-id="' + e(l.id) + '">＋ Crear nueva sububicación</button>';
+      if (optsOtra) {
+        h += '<div style="margin-top:6px;color:var(--gray);font-size:12px">Está en otro lugar:</div>' +
+          '<div class="cc-row" style="width:100%"><select class="uinput" data-cf-osub="' + e(l.id) + '" style="flex:1;min-width:0;height:40px"><option value="">Buscar sububicación…</option>' + optsOtra + "</select>" +
+          '<input class="cc-q" data-cf-oqty="' + e(l.id) + '" inputmode="decimal" value="' + e(l.otraQty == null ? "" : l.otraQty) + '"></div>';
+      }
+      h += "</div>";
     }
     return h;
   }
@@ -633,15 +634,15 @@
       '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
       '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
       [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +
-      (can || d.puedeTerminar ? '<div class="cc-bar">' + (C.saved ? '<span class="cc-pend" style="color:#8fa3b8" id="mccf-saved">✓ Guardado</span>' : '<span class="cc-pend" id="mccf-saved">sin guardar</span>') +
-        (d.puedeTerminar ? '<button class="cbz-btn" type="button" id="mccf-terminar" style="background:#1e4976">Terminar</button>' : "") + "</div>" : "") +
+      (can || d.puedeTerminar ? '<div class="cc-bar">' + (C.saved ? '<span class="cc-pend" style="color:var(--navy)" id="mccf-saved">✓ Guardado</span>' : '<span class="cc-pend" id="mccf-saved">sin guardar</span>') +
+        (d.puedeTerminar ? '<button class="cbz-btn" type="button" id="mccf-terminar" >Terminar</button>' : "") + "</div>" : "") +
       (d.puedeRevisar ? '<p class="cc-row" style="margin-top:10px"><button class="cbz-btn" type="button" id="mccf-sec-ok">Aprobar sección</button><button class="chip" type="button" id="mccf-sec-back">Devolver</button></p>' : "") +
       "</div></div>";
   }
   function markSaved(ok) {
     C.saved = !!ok;
     var el = document.getElementById("mccf-saved");
-    if (el) { el.textContent = ok ? "✓ Guardado" : "sin guardar"; el.style.color = ok ? "#8fa3b8" : "#f0c040"; }
+    if (el) { el.textContent = ok ? "✓ Guardado" : "sin guardar"; el.style.color = ok ? "var(--navy)" : "var(--gold)"; }
   }
   async function flushDirty() {
     var d = C.sec; if (!d || !d.puedeOperar) return;
@@ -650,9 +651,11 @@
     var lineas = ids.map(function (id) {
       var l = (d.lineas || []).find(function (x) { return x.id === id; }) || { id: id };
       var v = C.dirty[id];
-      return { id: id, contado: v === "" || v == null ? null : Number(String(v).replace(",", ".")), estado: l.estado, buscar: l.buscar, otra_sub: l.otraSub, otra_qty: l.otraQty, extras: l.extras };
+      return { id: id, contado: v === "" || v == null ? null : Number(String(v).replace(",", ".")), estado: l.estado, buscar: l.buscar, otra_sub: l.otraSub, otra_qty: l.otraQty, extras: l.extras, sub_contada: l.subContada || l.subCodigo || l.sububicacion, sububicacion: l.subContada || l.subCodigo || l.sububicacion };
     });
-    var r = await api("cf_sec_guardar", { id: d.seccion.id, lineas: lineas });
+    var ep = d.modo === "bodega" ? "cf_guardar" : "cf_sec_guardar";
+    var ident = d.modo === "bodega" ? (d.conteo && d.conteo.id) : d.seccion.id;
+    var r = await api(ep, { id: ident, lineas: lineas });
     if (!r || r.error) return;
     C.dirty = {}; markSaved(true);
   }
@@ -696,16 +699,31 @@
         if (que === "cerrar-otra") { C.otra = null; }
         if (que === "crear-sub") {
           var sec = d.seccion || {};
-          var cod = prompt("Código de la nueva sububicación (ej. 8-A-1):", "");
+          var cod = prompt("Código de la nueva sububicación:", "");
           if (!cod) return;
           var nom = prompt("Nombre (opcional):", cod);
           if (nom == null) return;
           void api("cf_sub_save", { bodega: sec.bodega, padre: sec.sububicacion || "", sububicacion: sec.sububicacion || "", codigo: cod, nombre: nom }).then(function (r) {
             if (!r || r.error) return alert((r && r.error) || "No se pudo crear");
-            if (l) { l.otraSub = r.codigo || cod; C.dirty[id] = valLinea(l); markSaved(false); void flushDirty(); }
+            var codigo = r.codigo || cod;
+            d.subs = (d.subs || []).concat([{ codigo: codigo, nombre: r.nombre || nom || codigo }]);
+            if (l) {
+              l.subContada = codigo; l.subCodigo = codigo; l.fromSub = r.nombre || nom || codigo; l.sububicacion = codigo;
+              C.dirty[id] = valLinea(l); markSaved(false); void flushDirty();
+            }
             var box2 = main.querySelector("#mccf-lista"); if (box2) box2.innerHTML = lineasFiltradas().map(lineaSecHtml).join("");
           });
           return;
+        }
+        if (que === "asig-sub" && l) {
+          var sel = main.querySelector('[data-cf-asub="' + id + '"]');
+          var codigo = sel ? sel.value : "";
+          if (!codigo) return;
+          l.subContada = codigo; l.subCodigo = codigo; l.sububicacion = codigo;
+          var found = (d.subs || []).find(function (x) { return x.codigo === codigo; });
+          l.fromSub = (found && found.nombre) || codigo;
+          C.otra = null; C.menu = null;
+          C.dirty[id] = valLinea(l); markSaved(false); void flushDirty();
         }
         var box = main.querySelector("#mccf-lista"); if (box) box.innerHTML = lineasFiltradas().map(lineaSecHtml).join("");
         return;
@@ -745,46 +763,93 @@
       var b = ev.target.closest("[data-cf-add]"); if (!b) return;
       var cant = prompt("¿Cuántas unidades encontraste?", "1"); if (cant === null) return;
       await flushDirty();
-      var r = await api("cf_sec_guardar", { id: d.seccion.id, agregar: { producto_id: b.getAttribute("data-cf-add"), contado: cant } });
+      var ep = d.modo === "bodega" ? "cf_guardar" : "cf_sec_guardar";
+      var ident = d.modo === "bodega" ? d.conteo.id : d.seccion.id;
+      var r = await api(ep, { id: ident, agregar: { producto_id: b.getAttribute("data-cf-add"), contado: cant } });
       if (!r || r.error) return alert((r && r.error) || "No se pudo agregar");
-      C.filtro = ""; C.dirty = {}; go("#/m/conteos/s/" + encodeURIComponent(d.seccion.id));
+      C.filtro = ""; C.dirty = {};
+      go(d.modo === "bodega" ? "#/m/conteos/cf/" + encodeURIComponent(d.conteo.id) : "#/m/conteos/s/" + encodeURIComponent(d.seccion.id));
     };
     var term = main.querySelector("#mccf-terminar");
     if (term) term.onclick = async function () {
       await flushDirty();
-      var r = await api("cf_sec_cerrar", { id: d.seccion.id });
+      var ep = d.modo === "bodega" ? "cf_enviar" : "cf_sec_cerrar";
+      var ident = d.modo === "bodega" ? d.conteo.id : d.seccion.id;
+      var r = await api(ep, { id: ident });
       if (r && r.faltan) {
         if (!confirm(r.pregunta || ("Quedan " + r.faltan + " sin contar. ¿Terminar y enviar a revisión?"))) return;
-        r = await api("cf_sec_cerrar", { id: d.seccion.id, forzar: true });
+        r = await api(ep, { id: ident, forzar: true });
       }
       if (!r || r.error) return alert((r && r.error) || "No se pudo terminar");
-      go("#/m/conteos/cf/" + encodeURIComponent(d.conteo.id));
+      go(d.modo === "bodega" ? "#/m/conteos" : "#/m/conteos/cf/" + encodeURIComponent(d.conteo.id));
     };
     var okb = main.querySelector("#mccf-sec-ok");
     if (okb) okb.onclick = async function () {
-      var r = await api("cf_sec_aprobar", { id: d.seccion.id });
+      var r = d.modo === "bodega" ? await api("cf_revisar", { id: d.conteo.id, que: "aprobar" }) : await api("cf_sec_aprobar", { id: d.seccion.id });
       if (!r || r.error) return alert((r && r.error) || "No se pudo aprobar");
-      go("#/m/conteos/cf/" + encodeURIComponent(d.conteo.id));
+      go("#/m/conteos");
     };
     var back = main.querySelector("#mccf-sec-back");
     if (back) back.onclick = async function () {
       var n = prompt("¿Qué hay que revisar?", "");
       if (n == null) return;
-      var r = await api("cf_sec_devolver", { id: d.seccion.id, nota: n });
+      var r = d.modo === "bodega" ? await api("cf_revisar", { id: d.conteo.id, que: "devolver", nota: n }) : await api("cf_sec_devolver", { id: d.seccion.id, nota: n });
       if (!r || r.error) return alert((r && r.error) || "No se pudo devolver");
-      go("#/m/conteos/s/" + encodeURIComponent(d.seccion.id));
+      go(d.modo === "bodega" ? "#/m/conteos/cf/" + encodeURIComponent(d.conteo.id) : "#/m/conteos/s/" + encodeURIComponent(d.seccion.id));
     };
   }
-  async function renderGeneral(id) {
+  async function renderBodegaOGeneral(id) {
+    var d = await api("cf_get", { id: id });
+    if (d && d.ok && d.conteo && d.conteo.tipo !== "general") return renderBodega(id, d);
     var g = await api("cf_get_general", { id: id });
-    if (!g || g.error) return renderDetalle(id); // hoja suelta
+    if (!g || g.error) return renderDetalle(id);
     C.general = g;
-    // Reuse the list card focused on this count
     var hold = C.list;
     C.list = [{ tipo: "general", id: g.conteo.id, estado: g.conteo.estado }];
     var html = await renderLista();
     C.list = hold;
     return html;
+  }
+  async function renderBodega(id, d) {
+    if (!d) d = await api("cf_get", { id: id });
+    if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo abrir el conteo") + "</p>";
+    if (d.puedeEmpezar) {
+      var ini = await api("cf_iniciar", { id: id });
+      if (ini && !ini.error) return renderBodega(id);
+    }
+    var c = d.conteo || {};
+    var nOk = (d.lineas || []).filter(function (l) { return l.estado && l.estado !== "pendiente"; }).length;
+    C.sec = {
+      modo: "bodega",
+      seccion: {
+        id: c.id, nombre: c.bodegaNombre || c.bodega, estado: c.estado, estadoNombre: c.estadoNombre,
+        iniciadoAt: c.iniciadoAt, lineas: (d.lineas || []).length, contadas: nOk,
+        bodega: c.bodega, sububicacion: c.sububicacion || ""
+      },
+      conteo: c, lineas: d.lineas || [], movimientos: d.movimientos || [],
+      puedeOperar: !!(d.puedeOperar || d.puedeContar),
+      puedeTerminar: !!(d.puedeTerminar || d.puedeContar || d.puedeOperar),
+      puedeRevisar: !!d.puedeRevisar,
+      subs: d.subs || []
+    };
+    C.cur = d; C.filtro = C.filtro || "";
+    var s = C.sec.seccion, L = lineasFiltradas(), can = !!C.sec.puedeOperar;
+    return '<div id="cc"><div id="mccf-root"><div class="cc-secbar"><button class="chip" type="button" data-go="#/m/conteos">←</button>' +
+      "<h2>" + e(s.nombre) + " " + pill(s.estado, s.estadoNombre) + "</h2>" +
+      '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
+      '<div class="cc-top"><input id="mccf-f" type="search" placeholder="🔍 Escanea o busca código / nombre" value="' + e(C.filtro) + '">' +
+      '<button class="cc-kb' + (C.pad ? " on" : "") + '" type="button" id="mccf-pad">123</button>' +
+      '<span class="cc-prog"><b>' + e(s.contadas) + "</b>/" + e(s.lineas) + "</span>" +
+      (can ? '<button class="cbz-btn cc-addbtn" type="button" id="mccf-agregar">＋ Agregar producto</button>' : "") + "</div>" +
+      recHtml(C.sec.movimientos) +
+      '<div id="mccf-hits" class="cc-hits" hidden></div>' +
+      '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
+      '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
+      [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +
+      (can || C.sec.puedeTerminar ? '<div class="cc-bar">' + (C.saved ? '<span class="cc-pend" style="color:var(--navy)" id="mccf-saved">✓ Guardado</span>' : '<span class="cc-pend" id="mccf-saved">sin guardar</span>') +
+        (C.sec.puedeTerminar ? '<button class="cbz-btn" type="button" id="mccf-terminar">Terminar</button>' : "") + "</div>" : "") +
+      (C.sec.puedeRevisar ? '<p class="cc-row" style="margin-top:10px"><button class="cbz-btn" type="button" id="mccf-sec-ok">Aprobar</button><button class="chip" type="button" id="mccf-sec-back">Devolver</button></p>' : "") +
+      "</div></div>";
   }
 
   window.MCConteo = {
@@ -798,14 +863,16 @@
       css();
       if (route.sub === "hojas") return renderHojas();
       if (route.sub === "secciones") return renderSeccionesCfg();
+      if (route.sub === "nuevo") { C.pick = true; return renderLista(); }
       if (route.sub === "s" && route.id) return renderSeccion(String(route.id));
-      if (route.sub === "cf" && route.id) return renderGeneral(String(route.id));
-      C.cur = null;
+      if (route.sub === "cf" && route.id) return renderBodegaOGeneral(String(route.id));
+      C.cur = null; C.pick = false;
       return renderLista();
     },
     wire: function (main, route) {
       if (route.sub === "hojas") return wireHojas(main);
       if (route.sub === "s") return wireSeccion(main);
+      if (route.sub === "cf" && route.id && C.sec && C.sec.modo === "bodega") return wireSeccion(main);
       if (route.sub === "cf" && route.id && C.general) return wireLista(main);
       if (route.sub === "cf" && route.id) return wireDetalle(main);
       if (route.sub === "secciones") return wireSecciones(main);
