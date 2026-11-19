@@ -93,8 +93,11 @@
       ".mcp-pr{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--gray-l);gap:10px}",
       ".mcp-pvp{font-size:1.7rem;font-weight:700;color:var(--green)}.mcp-ref{color:var(--gray);font-size:.72rem}",
       ".mcp-mini{width:100%;border-collapse:collapse;font-size:.8rem}.mcp-mini th{text-align:left;color:var(--navy-d);font-size:.68rem;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--cream-d)}.mcp-mini td{padding:6px;border-bottom:1px solid var(--gray-l)}.mcp-mini td.num{text-align:right}",
-      ".mcp-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.mcp-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d)}",
-      ".mcp-form input,.mcp-form select{padding:9px 10px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit}",
+      ".mcp-form{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0;max-width:100%;box-sizing:border-box}.mcp-form label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:700;color:var(--navy-d);min-width:0;max-width:100%}",
+      ".mcp-form input,.mcp-form select{padding:9px 10px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit;width:100%;max-width:100%;box-sizing:border-box;min-height:40px}",
+      "@media(min-width:720px){.mcp-form{grid-template-columns:repeat(2,minmax(0,1fr))}}",
+      ".mcp-form .mcp-crear{margin-top:6px}",
+      ".mcp #mcp-f-nuevo,.mcp .mcp-card{max-width:100%;min-width:0;box-sizing:border-box}",
       ".mcp-sort{cursor:pointer;user-select:none;white-space:nowrap}.mcp-ck{width:34px}.mcp-ck input{width:18px;height:18px;margin:0}",
       ".mcp-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.mcp-acc{display:flex;gap:6px;flex-wrap:wrap;align-items:center}",
       ".mcp-md{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}.mcp-side{position:sticky;top:8px;background:#fff;border-radius:14px;padding:8px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08));max-height:calc(100vh - 110px);display:flex;flex-direction:column}",
@@ -1402,17 +1405,28 @@
   }
 
   // ---------- Nuevo ----------
+  function selConCrear(name, label, values, placeholder, elegido) {
+    var ele = String(elegido || "");
+    var opts = '<option value="">Elige…</option>' + (values || []).map(function (x) {
+      return '<option value="' + e(x) + '"' + (x === ele ? " selected" : "") + ">" + e(x) + "</option>";
+    }).join("") + '<option value="__nueva">+ Crear nueva</option>';
+    return '<label>' + e(label) + '<select name="' + name + '_sel" id="mcp-' + name + '">' + opts + "</select>" +
+      '<input name="' + name + '_nueva" id="mcp-' + name + '-nueva" class="mcp-crear" style="display:none" placeholder="' + e(placeholder) + '" autocomplete="off"></label>';
+  }
   async function nuevoHtml() {
     if (!(typeof state !== "undefined" && state.admin)) return '<p class="err">Solo un admin crea productos.</p>';
     var r = await api("mcprod_familias", {});
     if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudieron leer las familias de SKU") + "</p>";
     MC.familias = r.familias || [];
+    var marcas = r.marcas, categorias = r.categorias;
+    if (!marcas || !categorias) {
+      if (!MC.list) try { await cargarLista(false); } catch (x) {}
+    }
+    if (!marcas) marcas = (MC.filtrosData && MC.filtrosData.marcas) || distintos("marca");
+    if (!categorias) categorias = (MC.filtrosData && MC.filtrosData.categorias) || distintos("categoria");
     var opts = MC.familias.map(function (f) {
       var cl = Object.keys(f.clases || {}).sort(function (a, b) { return f.clases[b] - f.clases[a]; })[0] || "";
       return '<option value="' + e(f.prefijo) + '">' + e(f.etiqueta) + " · " + f.total + " SKU · último " + e(f.ejemplo) + (cl ? " · " + e(cl) : "") + "</option>";
-    }).join("");
-    var filas = MC.familias.map(function (f) {
-      return "<tr><td><b>" + e(f.prefijo === "#" ? "SUNSU-01, 02… (servicios)" : f.prefijo) + "</b></td><td>" + f.total + "</td><td>" + e(f.ejemplo) + '</td><td class="mcp-sku">' + e(f.siguiente) + "</td></tr>";
     }).join("");
     return '<div class="mcp"><div class="mcp-top"><button class="btn ghost small" type="button" data-go="#/m/productos">← Productos</button></div>' +
       '<form class="mcp-card" id="mcp-f-nuevo"><div class="card-title">Nuevo producto</div><div class="mcp-form">' +
@@ -1420,14 +1434,14 @@
       '<label>Familia de SKU<select name="familia" id="mcp-fam" required><option value="">Elige la familia…</option>' + opts + '<option value="__nueva">+ Nueva familia…</option></select></label>' +
       '<label id="mcp-fam-nueva-l" style="display:none">Prefijo nuevo (2 a 5 letras)<input name="prefijo_nuevo" id="mcp-fam-nueva" maxlength="6" placeholder="KR-"></label>' +
       '<label>SKU asignado<input id="mcp-sku-prev" readonly class="mcp-sku"></label>' +
-      '<label>Nombre<input name="nombre" required></label>' +
-      '<label>Marca<input name="marca"></label>' +
-      '<label>Categoría<input name="categoria"></label>' +
+      '<label>Nombre<input name="nombre" required autocomplete="off"></label>' +
+      selConCrear("marca", "Marca", marcas, "Nombre de la marca") +
+      selConCrear("categoria", "Categoría", categorias, "Nombre de la categoría") +
+      selConCrear("unidad", "Unidad", UNIDADES, "Unidad (ej. ml)", "u") +
       '<label>Uso<select name="uso"><option value="venta">Venta (Consignación)</option><option value="cabina">Cabina</option><option value="ambos">Ambos</option></select></label>' +
       '<label>PVP con IVA (opcional)<input name="pvp" inputmode="decimal" placeholder="Lo puedes poner después en la ficha"></label>' +
-      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre después del mayor de la familia, revisado contra productos, catálogo e inventario de cabina. Los SKU que ya existen no cambian. Se crea aquí.</p><p class="err" id="mcp-f-err"></p>' +
-      '<button class="btn" type="submit">Crear producto</button></form>' +
-      '<div class="mcp-card"><div class="card-title">Familias de SKU detectadas</div><table class="mcp-mini"><thead><tr><th>Familia</th><th>SKU</th><th>Último</th><th>Siguiente</th></tr></thead><tbody>' + filas + "</tbody></table></div></div>";
+      '</div><p class="note">El SKU lo asigna el servidor: el siguiente libre de la familia, revisado contra productos, catálogo e inventario de cabina. Las familias se calculan atrás; no se editan aquí. Se crea en Productos.</p><p class="err" id="mcp-f-err"></p>' +
+      '<button class="btn" type="submit">Crear producto</button></form></div>';
   }
   function wireNuevo(main) {
     var f = main.querySelector("#mcp-f-nuevo");
@@ -1457,10 +1471,32 @@
       if (tipo.value === "servicio" && (MC.familias || []).some(function (x) { return x.prefijo === "#"; })) { sel.value = "#"; pinta(); }
     });
     pinta();
+    function wireCrear(name) {
+      var sel0 = f.querySelector("#mcp-" + name), inp0 = f.querySelector("#mcp-" + name + "-nueva");
+      if (!sel0 || !inp0) return;
+      function tog() {
+        var on = sel0.value === "__nueva";
+        inp0.style.display = on ? "" : "none";
+        if (on) { inp0.required = false; setTimeout(function () { try { inp0.focus(); } catch (x) {} }, 0); }
+        else inp0.value = "";
+      }
+      sel0.addEventListener("change", tog);
+      tog();
+    }
+    wireCrear("marca"); wireCrear("categoria"); wireCrear("unidad");
     f.addEventListener("submit", async function (ev) {
       ev.preventDefault();
       var body = Object.fromEntries(new FormData(f).entries());
       var er = f.querySelector("#mcp-f-err");
+      function valorCrear(name, etiqueta) {
+        if (body[name + "_sel"] === "__nueva") {
+          body[name] = String(body[name + "_nueva"] || "").trim();
+          if (!body[name]) { er.textContent = "Escribe " + etiqueta + " nueva"; return false; }
+        } else body[name] = String(body[name + "_sel"] || "").trim();
+        delete body[name + "_sel"]; delete body[name + "_nueva"];
+        return true;
+      }
+      if (!valorCrear("marca", "la marca") || !valorCrear("categoria", "la categoría") || !valorCrear("unidad", "la unidad")) return;
       if (body.familia === "__nueva") {
         var p = prefijoNuevo();
         if (!p) { er.textContent = "El prefijo nuevo va con 2 a 5 letras, por ejemplo KR-"; return; }

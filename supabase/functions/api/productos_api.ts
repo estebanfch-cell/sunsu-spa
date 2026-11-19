@@ -580,7 +580,10 @@ extend("mcprod_familias", "any", async (_p, ctx, ses) => {
   const pr = await permisos(ctx, ses);
   if (!pr.puede) return { error: "Productos no está en tu menú" };
   const fams = familiasDe(await codigosExistentes(ctx));
-  return { ok: true, admin: pr.admin, familias: fams };
+  const b = await cargarBase(ctx, ses);
+  const items = b.productos.filter((p) => !/^AC-/.test(skuCode(s(p.sku))) && !s(p.beta_eliminado_at)).map((p) => fila(p, b));
+  const uniq = (k: string) => [...new Set(items.map((i) => s(i[k])).filter(Boolean))].sort((a, c) => a.localeCompare(c, "es"));
+  return { ok: true, admin: pr.admin, familias: fams, marcas: uniq("marca"), categorias: uniq("categoria") };
 });
 
 extend("mcprod_nuevo", "any", async (p, ctx, ses) => {
