@@ -46,7 +46,7 @@ async function movsDurante(ctx: Ctx, productoId: string, bodega: string, desde: 
   }
   return out;
 }
-async function subsDe(ctx: Ctx, bodega: string): Promise<Row[]> {
+export async function subsDe(ctx: Ctx, bodega: string): Promise<Row[]> {
   const out: Row[] = [], seen = new Set<string>();
   const add = (codigo: string, nombre: string) => { const c = s(codigo); if (!c || seen.has(c)) return; seen.add(c); out.push({ codigo: c, nombre: nombre || c }); };
   if (bodega === "CABINA") for (const x of SUBS_CABINA) add(x.codigo, x.nombre);

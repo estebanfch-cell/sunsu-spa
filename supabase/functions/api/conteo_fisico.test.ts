@@ -327,6 +327,7 @@ describe("TK120 conteo por bodega y allowlist", () => {
     const sub = await h("cf_sub_save", "adm", { bodega: "OFICINA", codigo: "OF-A-1", nombre: "Estante A-1" });
     assert.equal(sub.ok, true);
     assert.equal(sub.codigo, "OF-A-1");
+    assert.ok(Array.isArray(sub.subs) && (sub.subs as Row[]).some((x) => x.codigo === "OF-A-1"), "cf_sub_save debe devolver la sub en la lista de la bodega");
     const erp = db.tables.get("erp_sububicaciones")!;
     assert.equal(erp.filter((x) => x.codigo === "CABINA_1").length, 1);
     assert.ok(erp.some((x) => x.codigo === "OF-A-1"));
@@ -334,6 +335,7 @@ describe("TK120 conteo por bodega y allowlist", () => {
     g = await h("cf_get", "adm", { id: cr.id });
     const amp2 = (g.lineas as Row[]).find((l) => l.sku === "ML-001")!;
     assert.equal(amp2.subContada, "OF-A-1");
+    assert.ok(((g.subs as Row[]) || []).some((x) => x.codigo === "OF-A-1"));
     const list = await h("cf_list", "adm", {});
     assert.ok((list.items as Row[]).some((c) => c.id === cr.id && c.estado === "en_conteo"));
     const g2 = await h("cf_get", "adm", { id: cr.id });
@@ -381,5 +383,19 @@ describe("TK120 conteo por bodega y allowlist", () => {
     assert.equal(missingTs.join(","), "", "la API escribe tablas fuera de BETA_TABLAS: " + missingTs.join(", "));
     assert.ok(beta.has("beta_sububicaciones"));
     assert.ok(beta.has("erp_sububicaciones"));
+  });
+
+  it("el front agrega la sububicación al desplegable al instante, la deja elegida y no recarga ni borra cantidades", () => {
+    const js = readFileSync(new URL("../../../mc-conteo.js", import.meta.url), "utf8");
+    assert.match(js, /function aplicarSubCreada/);
+    assert.match(js, /function quitarSubCreada/);
+    assert.match(js, /C\.otra = lineaId/);
+    const start = js.indexOf('if (que === "crear-sub")');
+    assert.ok(start >= 0);
+    const block = js.slice(start, js.indexOf('if (que === "asig-sub"', start));
+    assert.match(block, /aplicarSubCreada\(codigo, nombre, id\)/);
+    assert.match(block, /cf_sub_save/);
+    assert.doesNotMatch(block, /\bgo\s*\(/);
+    assert.doesNotMatch(block, /C\.dirty\s*=\s*\{\}/);
   });
 });
