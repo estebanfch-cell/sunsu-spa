@@ -130,7 +130,7 @@ describe("TK59 dashboard del personal", () => {
     assert.match(js, /Paquetes vendidos/);
     assert.match(js, /Faciales hechos/);
     assert.match(js, /data-periodo=/);
-    assert.match(beta, /mc-staff-home\.js\?v=20261118tk113/);
+    assert.match(beta, /mc-staff-home\.js\?v=20261119tk114/);
     assert.doesNotMatch(beta, /Buen día\. Tus módulos están en el menú/);
     assert.doesNotMatch(beta, /return state\.admin \? "inicio" : "staff-home"/);
     assert.match(beta, /return state\.admin \? "inicio" : ""/);

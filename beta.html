@@ -1278,6 +1278,9 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
     .asis-dia .hm { grid-column: 1 / -1; }
   }
 
+
+    .falta-costo { color:#8a6d00; background:#fff8e6; border:1px solid #e8cf7a; border-radius:8px; padding:1px 8px; font-weight:700; white-space:nowrap; }
+    .falta-costo-banner { color:#8a6d00; background:#fff8e6; border:1px solid #e8cf7a; border-radius:10px; padding:8px 12px; font-weight:700; font-size:0.85rem; margin:8px 0; }
 </style>
 </head>
 <body>
@@ -1817,7 +1820,7 @@ function previewApi(accion, body) {
   }
   if (accion === "getCatalogoTabla") {
     return { ok: true, items: [
-      { sku: "SUNSU-VK-017", nombre: "Sérum VK", tipo: "PRODUCTO", subtotal: 20, compraReal: 8, compraComision: 6, comision: 4.2, utilidad: 12, activo: true, stock: 3, pvp: 23 },
+      { sku: "SUNSU-VK-017", nombre: "Sérum VK", tipo: "PRODUCTO", subtotal: 20, compraReal: 8, compraComision: 6, comision: 4.2, utilidad: 7.8, faltaCosto: false, activo: true, stock: 3, pvp: 23 },
       { sku: "SUNSU-17", nombre: "Facial S.O.S", tipo: "FACIAL", subtotal: 40, compraReal: 0, compraComision: 0, comision: 12, utilidad: 40, activo: true, stock: 0, pvp: 46 },
     ] };
   }
@@ -3097,9 +3100,11 @@ function skuNuevoDe(rows, tipo, prefijo) {
 }
 function vivosCatalogo(sub, real, comision) {
   const venta = Number(sub) || 0;
+  const costo = Number(real) || 0;
   const com = Math.round(Math.max(0, venta - (Number(comision) || 0)) * PCT_COM_PROD * 100) / 100;
-  const util = Math.round((venta - (Number(real) || 0)) * 100) / 100;
-  return { com, util };
+  const faltaCosto = !(costo > 0);
+  const util = faltaCosto ? 0 : Math.round((venta - costo - com) * 100) / 100;
+  return { com, util, faltaCosto };
 }
 function filaCatalogo(p) {
   const ver = state.admin || state.verCostos;
@@ -3114,7 +3119,7 @@ function filaCatalogo(p) {
       <td class="num">${ver ? money(p.compraReal || 0) : ""}</td>
       <td class="num">${ver ? money(p.compraComision || 0) : ""}</td>
       <td class="num">${ver ? money(p.comision != null ? p.comision : vivo.com) : ""}</td>
-      <td class="num">${ver ? money(p.utilidad != null ? p.utilidad : vivo.util) : ""}</td>
+      <td class="num">${ver ? ((p.faltaCosto || vivo.faltaCosto) ? '<span class="falta-costo">Falta costo</span>' : money(p.utilidad != null ? p.utilidad : vivo.util)) : ""}</td>
       <td class="num">${esc(p.stock ?? 0)}</td>
     </tr>`;
 }
@@ -3157,7 +3162,9 @@ function pintarSkuNuevo(root) {
     const real = root.querySelector("[name=compraReal]");
     const com = root.querySelector("[name=compraComision]");
     const v = vivosCatalogo(sub && sub.value, real && real.value, com && com.value);
-    vivo.textContent = "Comisión por producto " + money(v.com) + " = " + Math.round(PCT_COM_PROD * 100) + "% × (Venta s/IVA − Compra comisión). Utilidad " + money(v.util) + " usa Compra real.";
+    vivo.textContent = v.faltaCosto
+      ? "Falta costo real: la utilidad no se calcula (no se usa el precio de comisiones)."
+      : "Comisión por producto " + money(v.com) + " = " + Math.round(PCT_COM_PROD * 100) + "% × (Venta s/IVA − Compra comisión). Utilidad " + money(v.util) + " = venta − costo real − comisión.";
   }
 }
 async function renderProductos() {
@@ -3166,14 +3173,17 @@ async function renderProductos() {
   window._catRows = data.items || [];
   const filas = window._catRows.map(filaCatalogo).join("");
   const nuevo = state.admin ? `<button class="btn small" type="button" id="cat-mas">+ Nuevo producto</button>` : "";
+  const nSin = data.sinCosto != null ? data.sinCosto : window._catRows.filter((x) => x.faltaCosto && /PRODUCTO/i.test(String(x.tipo || ""))).length;
+  const aviso = (state.admin || state.verCostos) && nSin ? `<p class="falta-costo-banner">${nSin} producto${nSin === 1 ? "" : "s"} sin costo real (Falta costo). No se inventa un costo ni se usa el precio de comisiones.</p>` : "";
   return `<div class="tools">${nuevo}</div>
     <div id="cat-nuevo" hidden></div>
+    ${aviso}
     <input id="filtro-cat" placeholder="Buscar SKU, nombre o marca" aria-label="Buscar en el catálogo">
     <div class="sheet-scroll"><table class="nowrap-table">
       <thead><tr><th>SKU</th><th>Tipo</th><th>Nombre</th><th>Marca / proveedor</th><th>Activo</th><th class="num">Venta s/IVA</th><th class="num">Compra real</th><th class="num">Compra comisión</th><th class="num">Comisión</th><th class="num">Utilidad</th><th class="num">Stock</th></tr></thead>
       <tbody id="lista">${filas || `<tr><td colspan="11">El catálogo está vacío.</td></tr>`}</tbody>
     </table></div>
-    <p class="note">Compra real entra a la utilidad. Compra comisión entra solo a la comisión (${Math.round(PCT_COM_PROD * 100)}% del margen). La compra real vacía se completa con la última orden.</p>`;
+    <p class="note">Utilidad = venta s/IVA − costo real de compra − comisión. El precio de comisiones no entra a la utilidad. Si no hay costo real (última orden, ficha o inventario), se muestra «Falta costo».</p>`;
 }
 function wireCatalogo(main) {
   const mas = main.querySelector("#cat-mas");
@@ -7289,40 +7299,40 @@ if ("serviceWorker" in navigator && !local) {
   navigator.serviceWorker.register("/sw.js", { scope: "/beta" }).catch(() => {});
 }
 </script>
-<script src="mc-buscar.js?v=20261118tk113"></script>
-<script src="beta-screens.js?v=20261118tk113"></script>
-<script src="beta-inline.js?v=20261118tk113"></script>
-<script src="mc-productos.js?v=20261118tk113"></script>
-<script src="mc-nav.js?v=20261118tk113"></script>
-<script src="mc-permisos.js?v=20261118tk113"></script>
-<script src="mc-protocolos.js?v=20261118tk113"></script>
-<script src="mc-conteo.js?v=20261118tk113"></script>
-<script src="mc-transferencias.js?v=20261118tk113"></script>
-<script src="mc-ajustes.js?v=20261118tk113"></script>
-<script src="vendor-qrcode.js?v=20261118tk113"></script>
-<script src="mc-tickets.js?v=20261118tk113"></script>
-<script src="mc-maestro.js?v=20261118tk113"></script>
-<script src="mc-empleados.js?v=20261118tk113"></script>
-<script src="mc-edit.js?v=20261118tk113"></script>
-<script src="mc-paquetes.js?v=20261118tk113"></script>
-<script src="mc-aperturas.js?v=20261118tk113"></script>
-<script src="mc-acceso.js?v=20261118tk113"></script>
-<script src="mc-barras.js?v=20261118tk113"></script>
-<script src="mc-caja.js?v=20261118tk113"></script>
-<script src="mc-giftcards.js?v=20261118tk113"></script>
-<script src="mc-multas.js?v=20261118tk113"></script>
-<script src="mc-clientes.js?v=20261118tk113"></script>
-<script src="mc-clientes-dup.js?v=20261118tk113"></script>
-<script src="mc-docpdf.js?v=20261118tk113"></script>
-<script src="mc-compras.js?v=20261118tk113"></script>
-<script src="mc-consignacion.js?v=20261118tk113"></script>
-<script src="mc-proveedores.js?v=20261118tk113"></script>
-<script src="mc-recepciones.js?v=20261118tk113"></script>
-<script src="mc-movil.js?v=20261118tk113"></script>
-<script src="mc-promociones.js?v=20261118tk113"></script>
-<script src="mc-agenda.js?v=20261118tk113"></script>
-<script src="mc-staff-home.js?v=20261118tk113"></script>
-<script src="mc-borradores.js?v=20261118tk113"></script><script>draw();</script>
+<script src="mc-buscar.js?v=20261119tk114"></script>
+<script src="beta-screens.js?v=20261119tk114"></script>
+<script src="beta-inline.js?v=20261119tk114"></script>
+<script src="mc-productos.js?v=20261119tk114"></script>
+<script src="mc-nav.js?v=20261119tk114"></script>
+<script src="mc-permisos.js?v=20261119tk114"></script>
+<script src="mc-protocolos.js?v=20261119tk114"></script>
+<script src="mc-conteo.js?v=20261119tk114"></script>
+<script src="mc-transferencias.js?v=20261119tk114"></script>
+<script src="mc-ajustes.js?v=20261119tk114"></script>
+<script src="vendor-qrcode.js?v=20261119tk114"></script>
+<script src="mc-tickets.js?v=20261119tk114"></script>
+<script src="mc-maestro.js?v=20261119tk114"></script>
+<script src="mc-empleados.js?v=20261119tk114"></script>
+<script src="mc-edit.js?v=20261119tk114"></script>
+<script src="mc-paquetes.js?v=20261119tk114"></script>
+<script src="mc-aperturas.js?v=20261119tk114"></script>
+<script src="mc-acceso.js?v=20261119tk114"></script>
+<script src="mc-barras.js?v=20261119tk114"></script>
+<script src="mc-caja.js?v=20261119tk114"></script>
+<script src="mc-giftcards.js?v=20261119tk114"></script>
+<script src="mc-multas.js?v=20261119tk114"></script>
+<script src="mc-clientes.js?v=20261119tk114"></script>
+<script src="mc-clientes-dup.js?v=20261119tk114"></script>
+<script src="mc-docpdf.js?v=20261119tk114"></script>
+<script src="mc-compras.js?v=20261119tk114"></script>
+<script src="mc-consignacion.js?v=20261119tk114"></script>
+<script src="mc-proveedores.js?v=20261119tk114"></script>
+<script src="mc-recepciones.js?v=20261119tk114"></script>
+<script src="mc-movil.js?v=20261119tk114"></script>
+<script src="mc-promociones.js?v=20261119tk114"></script>
+<script src="mc-agenda.js?v=20261119tk114"></script>
+<script src="mc-staff-home.js?v=20261119tk114"></script>
+<script src="mc-borradores.js?v=20261119tk114"></script><script>draw();</script>
 <script>
 // TK67 (Emilia 18/11): la barra de abajo (Ventas/Inventario/+/Spa/Compras) nunca queda encima del teclado.
 // Se esconde mientras hay un campo de texto enfocado o el visualViewport se achica (teclado abierto).

@@ -7,7 +7,7 @@ import "./productos_api.ts";
 import type { Row } from "./domain.ts";
 import {
   BOD_CAB2, BOD_CAB3, BOD_CABINA, BOD_CASA, BOD_VENTA, comisionUnidad, grupoDeBodega, limpiarCambios,
-  lineasOcLegacy, marcaDe, preciosDe, stockDe, stockTotal, tipoDe,
+  lineasOcLegacy, marcaDe, preciosDe, stockDe, stockTotal, tipoDe, utilidadProducto, snapProducto, fechaIso, cargarOcJson, costoRealElegido,
   codigoNorm, skuVisible, familiaDeCodigo, familiasDe, prefijoNormal, siguienteCodigo,
 } from "./productos.ts";
 
@@ -37,14 +37,45 @@ describe("productos MineCore: reglas puras", () => {
     assert.equal(p0.compraComision, 82.61);
     assert.equal(p0.comision, 3.91);
     assert.equal(p0.compraReal, 70);
-    assert.equal(p0.utilidad, 25.65);
+    assert.equal(p0.utilidad, 21.74); // 95.65 − 70 − 3.91; no es 25.65 (sin restar comisión) ni 12.13 (costo = precio de comisión)
+    assert.equal(p0.faltaCosto, false);
     const p1 = preciosDe({ ...cat, compra_comision: 50 }, {}, 0);
     assert.equal(p1.comision, 13.7);
+    assert.equal(p1.faltaCosto, true);
+    assert.equal(p1.utilidad, 0);
     const p2 = preciosDe(cat, { beta_pvp: 115, beta_compra_comision: 60, beta_compra_real: 55 }, 70);
     assert.equal(p2.subtotal, 100);
     assert.equal(p2.comision, 12);
-    assert.equal(p2.utilidad, 45);
+    assert.equal(p2.utilidad, 33); // 100 − 55 − 12
+    assert.equal(p2.faltaCosto, false);
     assert.deepEqual(p2.editadoBeta.sort(), ["compraComision", "compraReal", "pvp"]);
+  });
+  it("utilidad = venta − costo real − comisión; no usa el precio de comisiones como costo ni lo inventa", () => {
+    const cat = { sku: "SUNSU-VK-017", subtotal: 20, precio_compra: 6, compra_comision: 6 };
+    const p = preciosDe(cat, {}, 8);
+    assert.equal(p.comision, 4.2);
+    assert.equal(p.compraReal, 8);
+    assert.equal(p.utilidad, 7.8);
+    assert.notEqual(p.utilidad, 14); // 20 − 6, usando el precio de comisión como costo
+    assert.notEqual(p.utilidad, 12); // 20 − 8, sin restar la comisión
+    const u = utilidadProducto(20, 8, 4.2);
+    assert.equal(u.utilidad, 7.8);
+    assert.equal(u.faltaCosto, false);
+    const sin = preciosDe(cat, {}, 0);
+    assert.equal(sin.faltaCosto, true);
+    assert.equal(sin.utilidad, 0);
+    assert.equal(utilidadProducto(20, null, 4.2).faltaCosto, true);
+    assert.equal(costoRealElegido({ beta: 0, oc: null, inventario: 0 }).costo, null);
+    assert.equal(costoRealElegido({ oc: { precio: 17.51 }, inventario: 11.26 }).costo, 17.51);
+    assert.equal(fechaIso("16/07/2026 12:23"), "2026-07-16");
+    assert.equal(fechaIso("2026-11-08T13:39:00"), "2026-11-08");
+    const m = new Map();
+    cargarOcJson(m, { fact: [], items: [{ sku: "SUNSU-AS-001", compra: 17.51 }], directa: [] }, "08/11/2026");
+    assert.equal(m.get("AS-001")!.precio, 17.51);
+    assert.equal(m.get("AS-001")!.fecha, "2026-11-08");
+    const snap = snapProducto({ tipo: "producto", ventaNeta: 20, qty: 1, costoRealUnit: 8, compraComisionUnit: 6 });
+    assert.equal(snap.utilidad, 7.8);
+    assert.equal(snap.comision, 4.2);
   });
   it("tipoDe: faciales, paquetes y gift = servicio; productos e insumos = inventariable", () => {
     assert.equal(tipoDe({ tipo: "FACIAL" }, {}).tipo, "servicio");

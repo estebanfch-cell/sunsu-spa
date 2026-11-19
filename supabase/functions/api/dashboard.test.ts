@@ -37,6 +37,7 @@ describe("dashboard MineCore", () => {
   it("suma venta sin IVA, canjes en $0, productos con margen y compara con ayer", async () => {
     const db = new MemoryDb({
       catalogo: cat,
+      inventario_base: [{ sku: "SUNSU-ML-001", compra: 70 }],
       tickets: [
         tk("2026-11-16T10:00:00+00:00", { estimado: 69, facial_hecho: "SUNSU-02 Facial Reparación" }),
         tk("2026-11-16T18:30:00+00:00", { estimado: 0, facial_hecho: "SUNSU-02 Facial Reparación", paquete: "SI, 2/3", comp: "Canje" }),
@@ -55,16 +56,17 @@ describe("dashboard MineCore", () => {
     assert.equal(a.valFac, 60);
     assert.equal(a.productosN, 2);
     assert.equal(a.valProd, 200);
-    assert.equal(a.costoProd, 160);
-    assert.equal(a.utilidad, 100);
-    assert.equal(a.margen, 38.5);
+    assert.equal(a.costoProd, 140);
+    assert.equal(a.utilidadProd, 48);
+    assert.equal(a.utilidad, 108);
+    assert.equal(a.margen, 41.5);
     assert.equal((a.pagos as Row).efectivo, 60);
     assert.equal((a.pagos as Row).tarjeta, 200);
     assert.equal(p.ventaSinIva, 100);
     assert.equal(d.labelPrev, "15 nov");
     const prods = d.productos as Row[];
     assert.equal(prods[0].sku, "ML-001");
-    assert.equal(prods[0].margenPct, 20);
+    assert.equal(prods[0].margenPct, 24);
     assert.equal((d.historia as Row[]).length, 30);
   });
 

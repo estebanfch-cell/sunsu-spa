@@ -87,19 +87,133 @@ export function marcaDe(erp: Row | undefined, cat: Row | undefined, nombre: stri
 export interface Precios {
   pvp: number;            // con IVA
   subtotal: number;       // sin IVA
-  compraReal: number;     // entra a la utilidad
+  compraReal: number;     // entra a la utilidad (costo real; 0 si falta)
   compraComision: number; // entra solo a la comisión
   comision: number;       // por unidad
-  utilidad: number;       // por unidad, sin IVA
+  utilidad: number;       // venta neta − costo real − comisión (por unidad, sin IVA)
   margenPct: number;
+  faltaCosto: boolean;    // no hay costo real: no se inventa; la UI muestra «Falta costo»
   editadoBeta: string[];  // campos que vienen de la beta y no del sistema viejo
 }
 
+/** Utilidad de producto: subtotal de venta (sin IVA, con descuentos) − costo real − comisión pagada.
+ *  Si no hay costo real (> 0) no se inventa uno: faltaCosto y utilidad 0. */
+export function utilidadProducto(ventaNeta: number, costoReal: number | null | undefined, comision: number): { utilidad: number; faltaCosto: boolean; margenPct: number } {
+  const venta = n(ventaNeta);
+  const com = n(comision);
+  if (costoReal == null || !(n(costoReal) > 0)) {
+    return { utilidad: 0, faltaCosto: true, margenPct: 0 };
+  }
+  const utilidad = round2(venta - n(costoReal) - com);
+  return { utilidad, faltaCosto: false, margenPct: venta > 0 ? round2(utilidad / venta * 100) : 0 };
+}
+
+export type FuenteCosto = "beta" | "oc" | "inventario";
+
+/** Prioridad del costo real: override de ficha (beta_compra_real), luego última orden de compra, luego inventario_base.compra.
+ *  Nunca usa precio_compra, compra_comision ni costo_promedio (ese último en producción copia el precio de comisión). */
+export function costoRealElegido(opts: {
+  beta?: unknown;
+  oc?: { precio: number; fecha?: string } | null;
+  inventario?: unknown;
+}): { costo: number; fuente: FuenteCosto } | { costo: null; fuente: null } {
+  if (opts.beta != null && opts.beta !== "" && n(opts.beta) > 0) return { costo: round2(n(opts.beta)), fuente: "beta" };
+  if (opts.oc && n(opts.oc.precio) > 0) return { costo: round2(n(opts.oc.precio)), fuente: "oc" };
+  if (opts.inventario != null && opts.inventario !== "" && n(opts.inventario) > 0) return { costo: round2(n(opts.inventario)), fuente: "inventario" };
+  return { costo: null, fuente: null };
+}
+
+/** Fecha comparable YYYY-MM-DD; acepta ISO y DD/MM/YYYY de las OC de hoja. */
+export function fechaIso(v: unknown): string {
+  const t = s(v).trim();
+  const iso = t.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const dmy = t.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  return t.slice(0, 10);
+}
+
+export function ponerPrecioOc(
+  precios: Map<string, { precio: number; fecha: string }>,
+  sku: string, precio: number, fecha: string,
+): void {
+  const code = skuCode(sku);
+  const f = fechaIso(fecha);
+  if (!code || !(n(precio) > 0)) return;
+  const prev = precios.get(code);
+  if (!prev || f >= prev.fecha) precios.set(code, { precio: n(precio), fecha: f });
+}
+
+/** Líneas de costo de una OC de hoja: fact, items y directa (no stock sugerido). */
+export function cargarOcJson(precios: Map<string, { precio: number; fecha: string }>, json: unknown, fecha: unknown): void {
+  let obj: unknown = json;
+  if (typeof json === "string") { try { obj = JSON.parse(json); } catch { return; } }
+  if (!obj || typeof obj !== "object") return;
+  const r = obj as Row;
+  for (const key of ["fact", "items", "directa"]) {
+    const arr = r[key];
+    if (!Array.isArray(arr)) continue;
+    for (const ln of arr) {
+      if (!ln || typeof ln !== "object") continue;
+      const L = ln as Row;
+      ponerPrecioOc(precios, s(L.sku), n(L.compra ?? L.precio ?? L.costo), s(fecha));
+    }
+  }
+}
+
+export interface SnapLinea {
+  venta_neta: number;
+  costo_real: number;
+  compra_comision: number;
+  comision: number;
+  utilidad: number;
+  falta_costo: boolean;
+}
+
+/** Snapshot de una línea al vender. ventaNeta ya viene sin IVA y con descuentos del ticket. */
+export function snapProducto(opts: {
+  tipo: string;
+  ventaNeta: number;
+  qty: number;
+  costoRealUnit: number | null | undefined;
+  compraComisionUnit: number;
+  excluir?: boolean;
+}): SnapLinea {
+  const venta = round2(n(opts.ventaNeta));
+  if (s(opts.tipo) !== "producto") {
+    return { venta_neta: venta, costo_real: 0, compra_comision: 0, comision: 0, utilidad: 0, falta_costo: false };
+  }
+  const qty = n(opts.qty) || 1;
+  const compraLinea = round2(n(opts.compraComisionUnit) * qty);
+  const comision = opts.excluir ? 0 : comisionUnidad(venta, compraLinea);
+  const costoLinea = opts.costoRealUnit != null && n(opts.costoRealUnit) > 0 ? round2(n(opts.costoRealUnit) * qty) : null;
+  const u = utilidadProducto(venta, costoLinea, comision);
+  return {
+    venta_neta: venta,
+    costo_real: costoLinea ?? 0,
+    compra_comision: compraLinea,
+    comision,
+    utilidad: u.utilidad,
+    falta_costo: u.faltaCosto,
+  };
+}
+
+/** Reparte el total del ticket (con IVA, ya con promo y descuento de cabecera) a cada línea y lo pasa a neto sin IVA. */
+export function ventaNetaLineas(lineas: { total_linea: number }[], totalConIva: number, iva = IVA): number[] {
+  const suma = lineas.reduce((a, l) => a + n(l.total_linea), 0);
+  const tot = n(totalConIva);
+  const factor = iva > 0 ? iva : 1.15;
+  return lineas.map((l) => {
+    if (!(suma > 0)) return 0;
+    return round2((n(l.total_linea) / suma) * tot / factor);
+  });
+}
+
 /**
- * Regla actual del código (handlers.ts editarProductoCatalogo / getCatalogoTabla):
- *   comisión = 30 % × max(0, subtotal sin IVA − compra para comisiones)
- *   compra para comisiones = catalogo.compra_comision, o catalogo.precio_compra si está vacía.
- * REGLAS_NEGOCIO.md §441 dice "subtotal − compra"; la diferencia queda anotada en el reporte.
+ * Comisión = 30 % × max(0, subtotal sin IVA − compra para comisiones).
+ * compra para comisiones = catalogo.compra_comision, o catalogo.precio_compra si está vacía.
+ * Utilidad = subtotal − costo real − comisión. compraBase es el costo real (OC / inventario);
+ * no se usa precio_compra ni costo_promedio como costo real. Sin costo real → faltaCosto.
  */
 export function preciosDe(cat: Row | undefined, erp: Row | undefined, compraBase: number): Precios {
   const editado: string[] = [];
@@ -109,13 +223,15 @@ export function preciosDe(cat: Row | undefined, erp: Row | undefined, compraBase
   if (erp?.beta_pvp != null && erp.beta_pvp !== "") {
     pvp = n(erp.beta_pvp); subtotal = round2(pvp / IVA); editado.push("pvp");
   }
-  let compraComision = cat ? (cat.compra_comision != null && cat.compra_comision !== "" ? n(cat.compra_comision) : n(cat.precio_compra)) : n(erp?.costo_promedio);
+  let compraComision = cat ? (cat.compra_comision != null && cat.compra_comision !== "" ? n(cat.compra_comision) : n(cat.precio_compra)) : 0;
   if (erp?.beta_compra_comision != null && erp.beta_compra_comision !== "") { compraComision = n(erp.beta_compra_comision); editado.push("compraComision"); }
-  let compraReal = compraBase || n(erp?.costo_promedio) || (cat ? n(cat.precio_compra) : 0);
-  if (erp?.beta_compra_real != null && erp.beta_compra_real !== "") { compraReal = n(erp.beta_compra_real); editado.push("compraReal"); }
+  let compraReal = n(compraBase) > 0 ? n(compraBase) : 0;
+  if (erp?.beta_compra_real != null && erp.beta_compra_real !== "" && n(erp.beta_compra_real) > 0) {
+    compraReal = n(erp.beta_compra_real); editado.push("compraReal");
+  }
   const comision = comisionUnidad(subtotal, compraComision);
-  const utilidad = round2(subtotal - compraReal);
-  return { pvp: round2(pvp), subtotal: round2(subtotal), compraReal: round2(compraReal), compraComision: round2(compraComision), comision, utilidad, margenPct: subtotal > 0 ? round2(utilidad / subtotal * 100) : 0, editadoBeta: editado };
+  const u = utilidadProducto(subtotal, compraReal > 0 ? compraReal : null, comision);
+  return { pvp: round2(pvp), subtotal: round2(subtotal), compraReal: round2(compraReal), compraComision: round2(compraComision), comision, utilidad: u.utilidad, margenPct: u.margenPct, faltaCosto: u.faltaCosto, editadoBeta: editado };
 }
 
 export function comisionUnidad(subtotal: number, compraComision: number, pct = PCT_COMISION_PRODUCTO): number {
