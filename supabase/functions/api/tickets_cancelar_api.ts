@@ -236,6 +236,20 @@ export async function revertirExtrasTicket(ctx: Ctx, actor: string, quien: strin
     // Vendida en este ticket → eliminada.
     const vendidaAqui = (cod && vendidas.has(cod)) || claves.has(s(aj?.ticket_venta)) || claves.has(s(go.ticket_venta));
     if (vendidaAqui && !g.borrado_at && go.anulado_por_ticket == null) {
+      const usada = g.usado === true || s(g.usado).toUpperCase() === "SI" || s(g.usado) === "true";
+      if (!usada) {
+        // TK189 (Emilia): la tarjeta física ya tiene el código → NO se entierra. Vuelve a «Disponible» con el mismo código
+        // (respaldo de la venta en orig.historial_anulado) y el ticket correcto la vuelve a vender con ese código.
+        const antes: Row = {};
+        for (const k of ["dia", "mes", "ano", "cedula_comprador", "nombre_comprador", "apellido_comprador", "factura", "notas", "valor", "sku"]) antes[k] = g[k] ?? null;
+        const hist = Array.isArray(go.historial_anulado) ? go.historial_anulado as Row[] : [];
+        const o2: Row = { ...go, historial_anulado: [...hist, { ticket: so, motivo, ts, por: actor, antes, ticket_venta: s(go.ticket_venta) || s(aj?.ticket_venta) || null }] };
+        delete o2.ticket_venta;
+        await ctx.db.write(actor, "gift_cards", "update", match, { dia: null, mes: null, ano: null, cedula_comprador: "", nombre_comprador: "", apellido_comprador: "", factura: "", notas: "", valor: "", orig: o2 });
+        if (aj) { try { await ctx.db.write(actor, "beta_gift_ajustes", "update", { gift_id: Number(g.id) }, { ticket_venta: null, para: null, de: null, servicio: null, mensaje: null, valido_hasta: null, updated_at: ts }); } catch { /* sin ajustes */ } }
+        out.gifts_anuladas.push({ id: g.id, codigo: cod, liberada: true });
+        continue;
+      }
       await ctx.db.write(actor, "gift_cards", "update", match, { borrado_at: ts, borrado_por: actor, orig: { ...go, anulado: true, anulado_por_ticket: so, anulado_motivo: motivo, anulado_ts: ts } });
       out.gifts_anuladas.push({ id: g.id, codigo: cod });
       continue;

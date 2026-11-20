@@ -96,9 +96,21 @@ extend("gcb_get", "any", async (p, ctx, ses) => {
   v.historial = Array.isArray(aj?.historial) ? aj!.historial : [];
   // Tickets donde se vendió / se usó (columnas venta_gift / gift_card del ticket).
   const cod = s(r.codigo_gc).trim();
+  // TK189: un ticket CANCELADO no es «ticket de venta/uso» (p. ej. 26-176: TK-SO-1943 cancelado → TK-SO-1946).
+  const cancelado = (t: Row) => { const o = t.orig && typeof t.orig === "object" ? t.orig as Row : {}; return o.cancelado === true || o.anulado === true; };
+  const clave = (t: Row) => s(t.so_num) || s(t.beta_num) || (t.sheet_row != null ? "TK-" + t.sheet_row : "");
+  let tksCod: Row[] | null = null;
+  const tksDe = async () => tksCod ||= (await todas(ctx, "tickets")).filter((t) => !t.borrado_at && (s(t.venta_gift).includes(cod) || s(t.gift_card).includes(cod)))
+    .sort((a, b) => s(b.timestamp).localeCompare(s(a.timestamp)));
+  if (cod && (v.ticketVenta || v.ticketUso)) {
+    const tk = await tksDe();
+    for (const k of ["ticketVenta", "ticketUso"] as const) {
+      const t = v[k] ? tk.find((x) => clave(x) === s(v[k]) || s(x.so_num) === s(v[k])) : null;
+      if (t && cancelado(t)) v[k] = "";
+    }
+  }
   if (cod && (!v.ticketVenta || !v.ticketUso)) {
-    const tks = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at && (s(t.venta_gift).includes(cod) || s(t.gift_card).includes(cod)));
-    const clave = (t: Row) => s(t.so_num) || s(t.beta_num) || (t.sheet_row != null ? "TK-" + t.sheet_row : "");
+    const tks = (await tksDe()).filter((t) => !cancelado(t));
     if (!v.ticketVenta) { const t = tks.find((t) => s(t.venta_gift).includes(cod)); if (t) v.ticketVenta = clave(t); }
     if (!v.ticketUso) { const t = tks.find((t) => s(t.gift_card).includes(cod)); if (t) v.ticketUso = clave(t); }
   }

@@ -26,6 +26,7 @@ import { cedVariantes, consultar, type Filtro } from "./query.ts";
 import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { blancosGift, giftReactivable, normCod as normCodGc, vendidaGift as vendidaGc } from "./gift_beta.ts";
 import { lineasRecepDe, periodoLabel as periodoRecepLabel, recepcionDeCiclo } from "./comision_recepcion.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
@@ -940,8 +941,15 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   (base.orig as R).creado_por = s(ses && (ses as { name?: string; nombre?: string }).name) || s(ses && (ses as { name?: string; nombre?: string }).nombre) || s(p.cosmetologa) || actor;
   if (ses && (ses as { uid?: string }).uid) (base.orig as R).creado_por_uid = s((ses as { uid?: string }).uid);
   base.so_num = soNum;
+  const errGc = await validarVentaGift(ctx, p);
+  if (errGc) return { error: errGc };
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;
+  let ventaGc: { hechos: R[]; errores: string[] } = { hechos: [], errores: [] };
+  if (saved) {
+    try { ventaGc = await registrarVentaGiftTicket(ctx, ses, p, soNum || ticket); }
+    catch (e) { ventaGc.errores.push(e instanceof Error ? e.message : String(e)); }
+  }
   let paqueteFila: number | null = null;
   // TK110: la venta de paquete crea su paquete aunque falte la cédula (basta el nombre).
   if ((s(p.pack3) || s(p.pack6)) && (s(p.cedula) || s(p.nombre))) {
@@ -975,6 +983,8 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     inventario: inventario || undefined,
     paqueteFila,
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
+    gc_venta: ventaGc.hechos.length ? ventaGc.hechos : undefined,
+    gc_error: ventaGc.errores.length ? "Gift card sin registrar: " + ventaGc.errores.join(" · ") + ". Avisa a administración." : undefined,
     fotosPendientes: fotosWarn.length ? "La beta guardó el ticket. Alguna foto no cupo (límite 1.5 MB) y no se subió a Drive." : undefined,
   };
   if (s(p.vincular_borrador) && saved) {
@@ -1855,13 +1865,12 @@ export function siguienteCodigoGC(codigos: string[], yy: string): string {
 async function libresGC(ctx: Ctx, exclude: R, ses?: Ses, nNeed = 1) {
   const yy = String(ecuadorParts(ctx.now).y).slice(-2);
   const todas = await ctx.db.all("gift_cards");
-  const rows = todas.slice().sort((a, b) => n(a.sheet_row) - n(b.sheet_row));
+  // TK188: mismo orden que «Siguiente código» (gcb_siguiente / gcb_vender): por número de código, sin repetidos.
   const out: R[] = [];
-  for (const r of rows) {
+  for (const r of blancosGift(todas, yy)) {
     if (exclude[String(r.sheet_row)]) continue;
-    if (r.borrado_at) continue;
-    if (s(r.origin) === "test") continue;
-    if (s(r.codigo_gc).startsWith(yy + "-") && blankDia(r.dia)) out.push({ codigo: s(r.codigo_gc), fila: r.sheet_row });
+    if (!blankDia(r.dia)) continue;
+    out.push({ codigo: s(r.codigo_gc).trim(), fila: r.sheet_row });
   }
   if (out.length < nNeed && ses && !ctx.db.prueba) {
     const usados = todas.map((r) => s(r.codigo_gc));
@@ -1925,6 +1934,87 @@ function notasYValorConv(p: R): { notas: string; valor: string; orig: R } {
   return { notas, valor, orig };
 }
 
+// TK189: venta de gift card registrada en el SERVIDOR al crear el ticket (antes dependía de un registrarGC del
+// navegador que podía fallar en silencio y dejar el ticket con un código colgado, p. ej. 26-176 / TK-SO-1946).
+const GC_COD_TK = /\b\d{2}-\d{3,}\b/g;
+export function codigosVentaGift(colS: unknown): string[] {
+  const t = s(colS).trim();
+  if (!/^SI\b/i.test(t)) return [];
+  return [...new Set((t.match(GC_COD_TK) || []).map((x) => x.toUpperCase()))];
+}
+function mismoComprador(g: R, cedula: string, nombre: string, apellido: string): boolean {
+  const c1 = normCedula(s(g.cedula_comprador)), c2 = normCedula(cedula);
+  if (c1 && c2 && c1 === c2) return true;
+  const n1 = normNombre(s(g.nombre_comprador) + " " + s(g.apellido_comprador)), n2 = normNombre(nombre + " " + apellido);
+  if (n1 && n2 && n1 === n2) return true;
+  return !c1 && !n1;
+}
+/** Antes de guardar: el código no puede estar vendido a OTRA persona. */
+export async function validarVentaGift(ctx: Ctx, p: R): Promise<string | null> {
+  const cods = codigosVentaGift(p.colS);
+  if (!cods.length || ctx.db.prueba) return null;
+  const rows = await ctx.db.all("gift_cards");
+  for (const c of cods) {
+    const vivas = rows.filter((r) => !r.borrado_at && s(r.origin) !== "test" && normCodGc(r.codigo_gc) === c);
+    const otra = vivas.find((r) => vendidaGc(r) && !mismoComprador(r, s(p.cedula), s(p.nombre), s(p.apellido)));
+    if (otra) return "La gift card " + c + " ya está vendida a " + (s(otra.nombre_comprador) + " " + s(otra.apellido_comprador)).trim() + ". Revisa el código de la tarjeta física.";
+  }
+  return null;
+}
+async function ajusteTicketVenta(ctx: Ctx, actor: string, g: R, ticket: string, accion: string) {
+  try {
+    const prev = (await consultar(ctx.db, "beta_gift_ajustes", { filtros: [{ col: "gift_id", op: "eq", val: Number(g.id) }] })).rows[0];
+    const hist = Array.isArray(prev?.historial) ? (prev!.historial as R[]).slice(-60) : [];
+    hist.push({ fecha: ecuadorParts(ctx.now).isoWall, actor, accion, detalle: s(g.codigo_gc) + " · ticket " + ticket });
+    const row = { ticket_venta: ticket, codigo: s(g.codigo_gc).trim(), historial: hist, updated_at: ctx.now.toISOString() };
+    if (prev) await ctx.db.write(actor, "beta_gift_ajustes", "update", { gift_id: Number(g.id) }, row);
+    else await ctx.db.write(actor, "beta_gift_ajustes", "insert", {}, { gift_id: Number(g.id), ...row });
+  } catch { /* sin ajustes: el ticket_venta queda en orig */ }
+}
+/** Después de guardar: cada código vendido queda vendido en gift_cards (fila en blanco, fila reactivada o nueva). */
+export async function registrarVentaGiftTicket(ctx: Ctx, ses: Ses, p: R, ticket: string): Promise<{ hechos: R[]; errores: string[] }> {
+  const out = { hechos: [] as R[], errores: [] as string[] };
+  const cods = codigosVentaGift(p.colS);
+  if (!cods.length || ctx.db.prueba) return out;
+  const actor = actorOf(ses), ec = ecuadorParts(ctx.now);
+  const venta: R = { dia: ec.d, mes: ec.m, ano: ec.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre), apellido_comprador: s(p.apellido), sku: "SUNSU-35" };
+  for (const c of cods) {
+    try {
+      const rows = await ctx.db.all("gift_cards");
+      const vivas = rows.filter((r) => !r.borrado_at && s(r.origin) !== "test" && normCodGc(r.codigo_gc) === c);
+      const g = vivas.find((r) => vendidaGc(r) && mismoComprador(r, s(p.cedula), s(p.nombre), s(p.apellido))) || vivas.find((r) => !vendidaGc(r)) || null;
+      if (g) {
+        const go = g.orig && typeof g.orig === "object" ? g.orig as R : {};
+        const patch: R = { orig: { ...go, ticket_venta: ticket } };
+        if (!vendidaGc(g)) Object.assign(patch, venta);
+        await ctx.db.write(actor, "gift_cards", "update", g.id != null ? { id: g.id } : { sheet_row: g.sheet_row }, patch);
+        await ajusteTicketVenta(ctx, actor, g, ticket, vendidaGc(g) ? "VENTA (ticket)" : "VENTA");
+        out.hechos.push({ codigo: c, accion: vendidaGc(g) ? "vinculada" : "vendida" });
+        continue;
+      }
+      if (vivas.length) { out.errores.push(c + " ya está vendida a otra persona"); continue; }
+      const re = giftReactivable(rows, c);
+      if (re) {
+        const go = re.orig && typeof re.orig === "object" ? re.orig as R : {};
+        const hist = Array.isArray(go.reactivaciones) ? go.reactivaciones as R[] : [];
+        await ctx.db.write(actor, "gift_cards", "update", re.id != null ? { id: re.id } : { sheet_row: re.sheet_row }, {
+          ...venta, usado: false, fecha_uso: "", usado_por: "", borrado_at: null, borrado_por: null,
+          orig: { ...go, anulado: false, anulado_por_ticket: null, ticket_venta: ticket, reactivaciones: [...hist, { ts: ctx.now.toISOString(), por: actor, ticket, antes: go.anulado_por_ticket }] },
+        });
+        await ajusteTicketVenta(ctx, actor, re, ticket, "REACTIVADA");
+        out.hechos.push({ codigo: c, accion: "reactivada" });
+        continue;
+      }
+      if (rows.some((r) => normCodGc(r.codigo_gc) === c)) { out.errores.push(c + " está eliminada; pide a administración que la restaure"); continue; }
+      const sheet_row = await nextSheet(ctx.db, "gift_cards");
+      const nueva = await ctx.db.write(actor, "gift_cards", "insert", {}, { sheet_row, codigo_gc: c, ...venta, usado: false, origin: "beta", orig: { codigo: c, beta: true, ts: ec.isoWall, ticket_venta: ticket } });
+      if (nueva) { await ajusteTicketVenta(ctx, actor, nueva, ticket, "VENTA"); out.hechos.push({ codigo: c, accion: "creada" }); }
+      else out.errores.push(c + " no se pudo guardar");
+    } catch (e) { out.errores.push(c + ": " + (e instanceof Error ? e.message : String(e))); }
+  }
+  return out;
+}
+
 reg("registrarGC", "any", async (p, ctx, ses) => {
   if (ctx.db.prueba) {
     // GC de prueba: fila propia origin=test con código TEST-…, visible en la lista con 🧪
@@ -1939,16 +2029,27 @@ reg("registrarGC", "any", async (p, ctx, ses) => {
     return { ok: true, codigo, fila: saved ? saved.sheet_row : null, prueba: true };
   }
   const fila = n(p.fila);
-  const row = fila ? await rowBySheet(ctx.db, "gift_cards", fila) : (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc) === s(p.codigo));
-  if (!row || row.borrado_at) return { error: "Código no encontrado" };
-  if (!blankDia(row.dia)) return { error: "Ese código ya está vendido" };
+  const todasGc = await ctx.db.all("gift_cards");
+  let row: R | null | undefined = fila ? await rowBySheet(ctx.db, "gift_cards", fila) : todasGc.find((r) => !r.borrado_at && normCodGc(r.codigo_gc) === normCodGc(p.codigo));
+  // TK189: el código de un ticket cancelado (gift anulada) se reactiva con el MISMO código cuando un ticket nuevo lo usa.
+  let reactivar = false;
+  if (!row || row.borrado_at) {
+    const re = giftReactivable(todasGc, s(p.codigo) || s(row?.codigo_gc));
+    if (re) { row = re; reactivar = true; }
+  }
+  if (!row || (row.borrado_at && !reactivar)) return { error: "Código no encontrado" };
+  if (!reactivar && !blankDia(row.dia)) return { error: "Ese código ya está vendido" };
   const ec = ecuadorParts(ctx.now);
   const conv = notasYValorConv(p);
-  await ctx.db.write(actorOf(ses), "gift_cards", "update", { sheet_row: row.sheet_row }, {
+  const go = row.orig && typeof row.orig === "object" ? row.orig as R : {};
+  const reac: R = reactivar ? { usado: false, fecha_uso: "", usado_por: "", borrado_at: null, borrado_por: null } : {};
+  const origRe: R = reactivar ? { anulado: false, anulado_por_ticket: null, reactivaciones: [...(Array.isArray(go.reactivaciones) ? go.reactivaciones as R[] : []), { ts: ctx.now.toISOString(), por: actorOf(ses), antes: go.anulado_por_ticket }] } : {};
+  await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null && reactivar ? { id: row.id } : { sheet_row: row.sheet_row }, {
     dia: ec.d, mes: ec.m, ano: ec.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre),
-    apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: conv.notas, valor: conv.valor,
-    orig: { ...(row.orig && typeof row.orig === "object" ? row.orig as R : {}), ...conv.orig },
+    apellido_comprador: s(p.apellido), sku: "SUNSU-35", notas: conv.notas, valor: conv.valor, ...reac,
+    orig: { ...go, ...conv.orig, ...origRe },
   });
+  if (reactivar) await logAccion(ctx.db, actorOf(ses), "GC REACTIVADA", s(row.codigo_gc) + " (antes anulada por " + s(go.anulado_por_ticket) + ")");
   return { ok: true, codigo: s(row.codigo_gc), fila: row.sheet_row };
 });
 reg("buscarGiftCards", "any", async (p, ctx) => {
