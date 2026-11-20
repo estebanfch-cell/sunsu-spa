@@ -145,12 +145,19 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   // 3) en lote: catálogo, teléfonos, envíos, datos beta, marcas
   const telOk = conTelefono(ses);
   const ceds = [...new Set(filas.map((r) => normCedula(r.id_3)).filter(Boolean))];
-  const [map, regs, env] = await Promise.all([
+  const cedCrudas = [...new Set(filas.map((r) => s(r.id_3)).filter(Boolean))];
+  const [map, regs, betaCli, env] = await Promise.all([
     catMap(ctx),
-    telOk && ceds.length ? consultar(ctx.db, "clientas_registro", { cols: ["cedula", "telefono", "timestamp"], filtros: [{ col: "cedula", op: "in", val: [...new Set(filas.map((r) => s(r.id_3)).filter(Boolean))] }] }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
+    ceds.length ? consultar(ctx.db, "clientas_registro", { cols: ["cedula", "telefono", "timestamp"], filtros: [{ col: "cedula", op: "in", val: cedCrudas }] }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
+    ceds.length ? consultar(ctx.db, "beta_clientes", { cols: ["cedula", "telefono", "datos"], limite: 4000 }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
     envClaves(filas),
   ]);
   const porCed = new Map<string, string>();
+  for (const r of (betaCli || [])) {
+    const k = normCedula(r.cedula) || normCedula((r.datos as Row | undefined)?.cedula);
+    const tel = s(r.telefono) || s((r.datos as Row | undefined)?.telefono);
+    if (k && tel) porCed.set(k, tel);
+  }
   for (const r of regs.sort((a, b) => s(a.timestamp).localeCompare(s(b.timestamp)))) if (s(r.telefono)) porCed.set(normCedula(r.cedula), s(r.telefono));
   const clavesPag = filas.map((r) => claveDe(r, leerSerie(r, "so_num")));
   let pagosPag: Row[] = [];

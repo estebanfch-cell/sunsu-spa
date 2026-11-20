@@ -774,9 +774,14 @@ function _msg(clave, vars){
 }
 function _cargarMsgs(cb){
   if(window._msgs){ if(cb)cb(); return; }
+  var done=function(d){ window._msgs=(d&&d.msgs)||{}; if(cb)cb(); };
+  if(typeof api==='function'){
+    Promise.resolve(api('getMensajes',{})).then(done).catch(function(){ window._msgs={}; if(cb)cb(); });
+    return;
+  }
   fetch(APPS_SCRIPT_URL+'?action=getMensajes&_t='+Date.now())
     .then(function(r){return r.json();})
-    .then(function(d){ window._msgs=d.msgs||{}; if(cb)cb(); })
+    .then(done)
     .catch(function(){ window._msgs={}; if(cb)cb(); });
 }
 // Expulsión total: borra sesión, Face ID, usuarios y token de ESTE dispositivo
@@ -4938,6 +4943,13 @@ function _segConfirmarTodas(){
 }
 // Abre WhatsApp con la plantilla y anota "enviado" en el servidor (fecha+quien).
 function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
+  if(window.SunsuWa&&typeof SunsuWa.flujo==='function'){
+    var list=window._histData||window._histVisibles||[];
+    var t=list.filter(function(x){return String(x.tkRow)===String(tkRow);})[0];
+    var clave=t&&window.MCTickets&&MCTickets.claveDe?MCTickets.claveDe(t):(t&&t.so_num)||'';
+    SunsuWa.flujo({ ticket_clave:clave, tipo:'recordatorio', ticket:t });
+    return;
+  }
   var _uWa=_waURL(tel,waMsg);
   var v=window.open(_uWa,'_blank');
   if(!v) window.location.href=_uWa;
@@ -5842,11 +5854,35 @@ function _histCamHTML(t,i){
   var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
   var falta=F&&F.length;
   var ok=!!(L.fotoPago||t.fotoPago||t.tieneComprobante);
-  if(!falta && !ok) return '';
   var pid=falta&&F[0]&&F[0].id?String(F[0].id):'';
   var listo=ok&&!falta;
   var lab=listo?'Comprobante listo':'Tomar foto de voucher o transferencia';
-  return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()"><span aria-hidden="true">'+(listo?'📷✓':'📷')+'</span><input type="file" accept="image/*,application/pdf" capture="environment" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+  return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()"><span aria-hidden="true">📷</span><input type="file" accept="image/*,application/pdf" capture="environment" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+}
+function _histWaHTML(t,i){
+  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  var ok=!!(L.r || t.envio_ok || (t.envios&&t.envios.length) || t.tiene_envio);
+  var ico=(typeof WA_ICON_SVG!=='undefined'&&WA_ICON_SVG)?WA_ICON_SVG:'WA';
+  var lab=ok?'Reporte enviado por WhatsApp':'Enviar reporte por WhatsApp';
+  return '<button type="button" class="mob-wa'+(ok?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation();_histWaEnviar('+i+')">' + ico + '</button>';
+}
+function _histActsHTML(t,i){
+  return '<span class="mob-acts">' + _histCamHTML(t,i) + _histWaHTML(t,i) + '</span>';
+}
+function _histWaEnviar(i){
+  event&&event.stopPropagation&&event.stopPropagation();
+  var list=window._histVisibles||[], t=list[i];
+  if(!t) return;
+  var clave=(window.MCTickets&&typeof MCTickets.claveDe==='function')?MCTickets.claveDe(t):(t.so_num||t.clave||'');
+  if(window.SunsuWa&&typeof SunsuWa.flujo==='function'){
+    SunsuWa.flujo({
+      ticket_clave:clave,
+      ticket:t,
+      tipos_fallback:SunsuWa.tiposDeLista(t)
+    });
+    return;
+  }
+  if(typeof toast==='function') toast('No se pudo preparar el WhatsApp','#B86B6B');
 }
 function _histResumenTxt(t){
   if(t&&t.resumenTxt) return String(t.resumenTxt);
@@ -5916,7 +5952,7 @@ function _histCardHTML(t, i, showPrices){
   return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
     +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
-    +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histCamHTML(t,i)+'</div>'
+    +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
     +_histThumbsHTML(t, res)
     +(tip?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
     +'</div>';

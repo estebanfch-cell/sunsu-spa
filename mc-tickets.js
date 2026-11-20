@@ -38,8 +38,8 @@
       ".mctk-h{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}.mctk-h h2{margin:0;font-size:1.25rem}.mctk-meta{color:var(--gray);font-size:.8rem;margin-top:3px}",
       ".mctk-leds{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.mctk-led{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:.7rem;font-weight:800;background:var(--gray-l);color:var(--navy-d)}",
       ".mctk-led:before{content:'';width:8px;height:8px;border-radius:50%;background:#aaa}.mctk-led.ok:before{background:#2e9e4f}.mctk-led.r:before{background:#d9534f}.mctk-led.c:before{background:#e0a800}.mctk-led.a:before{background:#4a74c9}.mctk-led.x:before{background:#666}.mctk-led.off:before{background:#ccc}",
-      ".mctk-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mctk-acts[hidden],.mctk-dd[hidden]{display:none}.mctk-menu{position:relative}.mctk-dd{position:absolute;right:0;top:100%;margin-top:4px;background:var(--white,#fff);border:1px solid var(--cream-d);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:50;padding:4px}",
-      ".mctk-dd a,.mctk-dd button{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:none;font:inherit;font-size:.8rem;color:var(--navy-d);text-decoration:none;cursor:pointer;border-radius:7px}.mctk-dd a:hover,.mctk-dd button:hover{background:var(--cream)}",
+      ".mctk-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mctk-acts[hidden],.mctk-dd[hidden]{display:none}.mctk-menu,.mctk-acc-wrap,.mctk2 .mctk-bar{position:relative;overflow:visible}.mctk-dd{position:absolute;right:0;left:auto;top:100%;margin-top:4px;background:var(--white,#fff);border:1px solid var(--cream-d);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:250px;width:max-content;max-width:calc(100vw - 24px);z-index:80;padding:4px}",
+      ".mctk-dd a,.mctk-dd button,.mctk2 .mctk-dd a,.mctk2 .mctk-dd button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:none;background:none;font:inherit;font-size:.8rem;color:var(--navy-d);text-decoration:none;cursor:pointer;border-radius:7px;white-space:nowrap;box-sizing:border-box}.mctk-dd a:hover,.mctk-dd button:hover{background:var(--cream)}.mctk-dd .wa-icon,.mctk-wa-go .wa-icon{flex:none;width:16px;height:16px;display:block}",
       ".mctk-t input,.mctk-t select{padding:5px 6px;border:1.5px solid var(--cream-d);border-radius:7px;font:inherit;font-size:.8rem}.mctk-t .q{width:58px;text-align:right}.mctk-t .p{width:80px;text-align:right}.mctk-t .dv{width:58px;text-align:right}",
       ".mctk-tot{display:grid;grid-template-columns:auto auto;gap:3px 14px;width:max-content;max-width:100%;margin-left:auto;justify-content:end;font-size:.88rem;overflow:visible;box-sizing:border-box;text-align:right}.mctk-tot b{text-align:right}.mctk-tot .big{font-size:1.2rem;color:var(--navy-d)}",
       ".mctk-flash{animation:mctkf .6s}@keyframes mctkf{0%{background:#c9f2d3}100%{background:transparent}}.mctk-flash-bad{animation:mctkb .6s}@keyframes mctkb{0%{background:#f9d0cc}100%{background:transparent}}",
@@ -128,9 +128,10 @@
       ".mctk2 .mctk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}.mctk2 .mctk-bar-sp{display:none}",
       ".mctk2 .mctk-bar #mctk-volver{width:auto;min-height:32px;padding:4px 2px;border:0;background:none;box-shadow:none;font-size:.86rem;color:var(--navy)}",
       ".mctk-edit-big{display:none!important}.mctk-edit-mini{margin:0 6px 0 auto;padding:3px 9px;min-height:28px;font-size:.68rem;font-weight:700;color:var(--navy-d,#3D5A7A);background:transparent;border:1px solid var(--cream-d,#EDE6D8);border-radius:999px;cursor:pointer;flex:none;white-space:nowrap}.mctk2 .mctk-bar .mctk-acc-wrap{margin-left:0;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
-      ".mctk2 .mctk-bar .mctk-dd{left:auto;right:0;min-width:min(280px,92vw);width:max-content;max-width:92vw;z-index:60}",
-      ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:normal!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
+      ".mctk2 .mctk-bar .mctk-dd,.mctk-acc-wrap .mctk-dd{left:auto;right:0;min-width:250px;width:max-content;max-width:calc(100vw - 24px);z-index:80}",
+      ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:nowrap!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
+      ".mctk-wa-sel{position:fixed;inset:0;background:rgba(20,30,50,.4);z-index:10000;display:flex;align-items:flex-end;justify-content:center;padding:16px}.mctk-wa-box{background:#fff;border-radius:16px 16px 0 0;padding:16px 16px 20px;width:min(420px,100%);box-sizing:border-box}.mctk-wa-box h3{margin:0 0 4px;font-size:1rem}.mctk-wa-box p{margin:0 0 12px;color:var(--gray);font-size:.8rem}.mctk-wa-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.mctk-wa-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid #DC2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap}.mctk-wa-chip.on{border-color:#16A34A;background:#f3faf6}.mctk-wa-dot{width:10px;height:10px;border-radius:50%;background:#DC2626}.mctk-wa-chip.on .mctk-wa-dot{background:#16A34A}.mctk-wa-acts{display:flex;justify-content:flex-end;gap:8px;align-items:center}.mctk-wa-go{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap!important}",
       ".mctk-pills-desk{display:none}.mctk-estados{position:relative;flex:0 1 auto;max-width:100%;margin-left:auto}.mctk-estados>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--cream-d);border-radius:999px;padding:5px 12px;font-size:.74rem;font-weight:700;color:var(--navy-d);background:var(--white,#fff);max-width:100%;white-space:normal;overflow-wrap:anywhere}.mctk-estados>summary::-webkit-details-marker{display:none}.mctk-estados>summary:after{content:'▾';font-size:.7rem;color:var(--gray);flex:none}",
       ".mctk-estados.mctk-est-rojo>summary{color:#8B2E2E;border-color:#E6A39B;background:#FDECEA}.mctk-estados.mctk-est-amarillo>summary{color:#7A5C12;border-color:#E8CF7A;background:#FFF6D6}",
       ".mctk-estados .mctk-pills{display:flex;flex-direction:column;align-items:stretch;gap:6px;position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:200px;max-width:min(280px,90vw);padding:8px;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12)}.mctk-estados .mctk-pill{text-align:center}",
@@ -356,15 +357,21 @@
       sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
     } catch (x) {}
   }
+  function waIco() { return (typeof WA_ICON_SVG !== "undefined" && WA_ICON_SVG) || ""; }
   function waHtml() {
-    var d = K.d, p = d.paquete || {}, conPaq = !!(p.vigentes && p.vigentes.length) || !!p.uso;
-    return '<button type="button" data-wa="facial">💬 Enviar reporte facial</button>' + (conPaq ? '<button type="button" data-wa="paquete">🎴 Enviar reporte de paquete</button>' : "") + '<button type="button" data-wa="chat">Abrir chat</button>';
+    var d = K.d, p = d.paquete || {}, G = d.giftcards || [], ico = waIco();
+    var conPaq = (window.SunsuWa && SunsuWa.conPaq(p)) || !!(p.vigentes && p.vigentes.length) || !!p.uso || !!p.compra || !!(p.delTicket && p.delTicket.length);
+    var conGc = (G || []).some(function (g) { return g.uso === "vendida"; });
+    return '<button type="button" data-wa="facial">' + ico + ' Enviar reporte facial</button>' +
+      (conPaq ? '<button type="button" data-wa="paquete">' + ico + ' Enviar reporte de paquete</button>' : "") +
+      (conGc ? '<button type="button" data-wa="giftcard">' + ico + ' Enviar gift card</button>' : "") +
+      '<button type="button" data-wa="chat">' + ico + ' Abrir chat</button>';
   }
   function docsHtml2() {
     var d = K.d, t = d.ticket, h = "";
     // Siempre que el ticket tenga facial/servicio (o datos del tratamiento), aunque no tenga fila en la hoja ni tarjeta enviada.
     if (t.sheetRow || conTratamiento()) h += '<button type="button" data-doc="tarjeta">📄 Tarjeta del tratamiento (PDF)</button>';
-    var pq0 = d.paquete || {}; if ((pq0.vigentes && pq0.vigentes.length) || pq0.uso) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
+    var pq0 = d.paquete || {}; if ((window.SunsuWa && SunsuWa.conPaq(pq0)) || (pq0.vigentes && pq0.vigentes.length) || pq0.uso || pq0.compra || (pq0.delTicket && pq0.delTicket.length)) h += '<button type="button" data-doc="paquete">🎴 Reporte del paquete (PDF)</button>';
     (d.giftcards || []).filter(function (g) { return g.uso === "vendida"; }).forEach(function (g) { h += '<button type="button" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁 Gift card ' + e(g.codigo) + " (PDF)</button>"; });
     (d.documentos || []).filter(function (x) { return x.tipo !== "foto"; }).forEach(function (x) { h += '<button type="button" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre) + '">' + (x.tipo === "factura" ? "📄 " : x.tipo === "foto" ? "🖼️ " : "🧾 ") + e(x.nombre) + "</button>"; });
     return h || '<div class="mccf-sub" style="padding:8px">Sin documentos.</div>';
@@ -1067,24 +1074,37 @@
     } else docs.forEach(function (x, i) { setTimeout(function () { try { x.doc.save(x.nom); } catch (e5) {} }, i * 700); });
   }
   async function enviarReporte(tipo) {
-    var tel = telWa();
-    if (!tel) { tel = (prompt("No hay teléfono en la ficha. Escribe el celular de la clienta:") || "").replace(/\D/g, ""); if (tel.length === 10 && tel.charAt(0) === "0") tel = "593" + tel.slice(1); if (!tel) return; }
-    var nombre = String(val("nombre") || "").split(" ")[0];
-    if (tipo === "chat") { abrirWa(tel, msgT("MENSAJE TARJETA SALUDO", { nombre: nombre })); return; }
-    var docs = [], txt = msgT("MENSAJE TARJETA SALUDO", { nombre: nombre });
-    if (tipo === "facial") {
-      if (!(await cardDelTicket())) { toast2("No encontré la tarjeta de este ticket", true); return; }
-      txt += "\n\n" + msgT("MENSAJE TARJETA TRATAMIENTO", {});
+    if (window.SunsuWa && typeof SunsuWa.flujo === "function") {
+      return SunsuWa.flujo({
+        ticket_clave: K.d.clave,
+        tipo: tipo === "combo" ? "" : tipo,
+        detalle: K.d,
+        ticket: (K.d && K.d.ticket) || null,
+        tipos_fallback: SunsuWa.tiposDeVista(K.d),
+        pdfs: async function (sel) {
+          var docs = [], i, x;
+          for (i = 0; i < sel.length; i++) {
+            if (sel[i] === "facial") {
+              if (!(await cardDelTicket())) { toast2("No encontré la tarjeta de este ticket", true); continue; }
+              x = await pdfTarjeta(); if (x && x.doc) docs.push(x);
+            } else if (sel[i] === "paquete") {
+              x = await pdfPaquete(); if (x && x.doc) docs.push(x);
+              else toast2("No encontré el paquete de la clienta", true);
+            } else if (sel[i] === "giftcard") {
+              var g = ((K.d && K.d.giftcards) || []).filter(function (y) { return y.uso === "vendida"; })[0];
+              if (g && typeof _gcdPDF === "function") {
+                await new Promise(function (res) {
+                  try { _gcdPDF(function (blob, nom) { if (blob) docs.push({ blob: blob, nom: nom || "gift-card.pdf" }); res(); }); }
+                  catch (eGc) { res(); }
+                });
+              }
+            }
+          }
+          return docs;
+        }
+      });
     }
-    abrirWa(tel, txt);
-    toast2("⏳ Preparando el PDF…");
-    if (tipo === "facial") docs.push(await pdfTarjeta());
-    var pq = await pdfPaquete();
-    if (pq.x && (tipo === "paquete" || confirm("Paquete " + (pq.x.codigo ? pq.x.codigo + " " : "") + "(" + (pq.x.sesion ? "sesión " + pq.x.sesion + " de " + pq.x.total + " en este ticket, quedan " + pq.x.pend : pq.x.usados + "/" + pq.x.total) + "). ¿Adjuntar también el control de paquete?"))) docs.push(pq);
-    if (tipo === "paquete" && !pq.x) { toast2("No encontré el paquete de la clienta", true); return; }
-    entregarPdfs(docs);
-    var r = await api("tk_envio", { clave: K.d.clave, tipo: tipo === "paquete" || docs.length > 1 ? "paquete" : "facial", telefono: tel });
-    if (r && r.ok) { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { var keep = K.dirty ? null : d; if (keep) { cargarEstado(keep); repintar(document.getElementById("main")); } } toast2("Reporte registrado como enviado"); }
+    toast2("No se pudo preparar el WhatsApp", true);
   }
   function abrirGiftCard(cod) {
     var g = (K.d.giftcards || []).find(function (x) { return x.codigo === cod; }) || { codigo: cod };

@@ -34,7 +34,7 @@
       ".mcgc-cv{width:100%;max-width:480px;height:auto;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.08);display:block;margin:8px auto 0;background:#90A7CA}",
       ".mcgc-prev{text-align:center;margin-top:12px}.mcgc-share{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}.mcgc-share .mcgc-hint{width:100%;margin:0}",
       ".mcgc-rowacts{white-space:nowrap;text-align:right}.mcgc-rowacts button{margin:0 0 0 4px}",
-      ".mcgc-wa{background:#25D366!important;color:#fff!important;border-color:#1da851!important}",
+      ".mcgc-wa{background:#25D366!important;color:#fff!important;border-color:#1da851!important;display:inline-flex!important;align-items:center;gap:6px;white-space:nowrap}.mcgc-wa .wa-icon{flex:none;filter:brightness(10)}",
     ].join("\n");
     document.head.appendChild(s);
   }
@@ -98,7 +98,7 @@
   function pintarLienzo(campos) { llenarLienzo(campos); return esperarPlantilla(); }
   function shareHtml(id, recien) {
     return '<div class="mcgc-share">' +
-      '<button class="btn small mcgc-wa" type="button" data-gc-wa="' + e(id) + '">💬 WhatsApp</button>' +
+      '<button class="btn small mcgc-wa" type="button" data-gc-wa="' + e(id) + '">' + ((typeof WA_ICON_SVG!=="undefined"&&WA_ICON_SVG)||"") + ' WhatsApp</button>' +
       '<button class="btn ghost small" type="button" data-gc-dl="' + e(id) + '">⬇️ Descargar</button>' +
       (recien ? '<p class="mcgc-sub mcgc-hint">En el celular se abre la hoja de compartir con el PDF. En la computadora se descarga para arrastrarlo a WhatsApp.</p>' : "") +
       "</div>";
@@ -113,7 +113,7 @@
   }
   function filaHtml(v) {
     var uso = v.usado ? e(f(v.fechaUso)) + (v.usadoPor ? '<div class="mcgc-sub">' + e(v.usadoPor) + "</div>" : "") : '<span class="mcgc-sub">—</span>';
-    var enviar = sePuedeEnviar(v) ? '<td class="mcgc-rowacts"><button class="btn ghost small mcgc-wa" type="button" data-gc-wa="' + e(v.id) + '" title="Enviar por WhatsApp">💬</button> <button class="btn ghost small" type="button" data-gc-dl="' + e(v.id) + '" title="Descargar PDF">⬇️</button></td>' : '<td></td>';
+    var enviar = sePuedeEnviar(v) ? '<td class="mcgc-rowacts"><button class="btn ghost small mcgc-wa" type="button" data-gc-wa="' + e(v.id) + '" title="Enviar por WhatsApp">' + ((typeof WA_ICON_SVG!=='undefined'&&WA_ICON_SVG)||'') + '</button> <button class="btn ghost small" type="button" data-gc-dl="' + e(v.id) + '" title="Descargar PDF">⬇️</button></td>' : '<td></td>';
     return '<tr data-gc="' + e(v.id) + '"><td class="mcgc-cod">' + e(v.codigo) + (v.repetido ? '<span class="mcgc-rep" title="Código repetido en la hoja (se deja como está)">repetido</span>' : "") + (v.prueba ? " 🧪" : "") + "</td>" +
       "<td>" + e(f(v.fechaVenta)) + "</td><td><b>" + e(v.comprador || "—") + "</b>" + (v.cedula ? '<div class="mcgc-sub">' + e(v.cedula) + "</div>" : "") + "</td>" +
       "<td>" + e(v.para || "—") + "</td><td>" + e(v.servicio || v.valor || "—") + "</td><td>" + e(v.factura || "—") + "</td><td>" + estHtml(v) + "</td><td>" + uso + "</td>" + enviar + "</tr>";
@@ -305,6 +305,14 @@
       if (modo === "dl") {
         descargar(pdf.blob, pdf.nombre);
         toast2("⬇️ PDF de la Gift Card descargado");
+        guardarPdfFondo(v, pdf);
+        return;
+      }
+      if (window.SunsuWa && typeof SunsuWa.preparar === "function") {
+        var prep = await SunsuWa.preparar({ gc_codigo: v.codigo, tipo: "giftcard" });
+        if (!prep || prep.error) { toast2((prep && prep.error) || "No se pudo preparar el WhatsApp", true); return; }
+        if (!prep.tiene_tel) { toast2("Esta clienta no tiene WhatsApp registrado. Pídele a una administradora que lo complete en la ficha.", true); return; }
+        await SunsuWa.compartir(prep, [{ blob: pdf.blob, nom: pdf.nombre }], "", ["giftcard"]);
         guardarPdfFondo(v, pdf);
         return;
       }

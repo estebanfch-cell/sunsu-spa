@@ -1,6 +1,6 @@
-const CACHE = "sunsu-2026-11-19-TK152";
+const CACHE = "sunsu-2026-11-19-TK153";
 const FILES = ["/", "/index.html", "/descuento_justif.js", "/beta-screens.js", "/beta-inline.js", "/mc-productos.js",
-  "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/mc-borradores.js", "/mc-scan.js", "/vendor-zxing.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
+  "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-wa.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/mc-borradores.js", "/mc-scan.js", "/vendor-zxing.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => {
@@ -45,11 +45,22 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   if (url.pathname.startsWith("/functions/") || url.pathname === "/sw.js") return;
+  /* TK153 (Emilia t670u): el icono viejo del Home Screen abre /beta.html o /sunsu.html. Si
+     redirigimos a "/", iOS sale del modo pantalla completa y muestra la barra de Safari.
+     Servimos el HTML de la app en la MISMA ruta (sin redirect), así el icono sigue en standalone. */
+  const esAlias = url.pathname === "/beta.html" || url.pathname === "/sunsu.html";
+  if (esAlias && event.request.mode === "navigate") {
+    event.respondWith(appEnMismaRuta());
+    return;
+  }
   const esApp = url.pathname === "/" || url.pathname === "/index.html";
   const betaAsset = esApp || url.pathname.startsWith("/beta/") || FILES.includes(url.pathname);
   if (!betaAsset) return;
+  const pedir = esApp && event.request.mode === "navigate"
+    ? fetch(url.href, { cache: "no-cache", credentials: "same-origin" })
+    : fetch(event.request);
   event.respondWith(
-    fetch(event.request)
+    pedir
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));
@@ -66,3 +77,20 @@ self.addEventListener("fetch", (event) => {
       }),
   );
 });
+
+// TK153: HTML de la app (red primero, caché si no hay red) sin redirect, para /beta.html y /sunsu.html.
+async function appEnMismaRuta() {
+  let res = null;
+  try {
+    res = await fetch("/", { cache: "no-cache", credentials: "same-origin" });
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((cache) => cache.put("/", copy)).catch(() => {});
+    } else res = null;
+  } catch { res = null; }
+  if (!res) res = (await caches.match("/")) || (await caches.match("/index.html"));
+  if (!res) return Response.redirect("/", 302);
+  const headers = new Headers(res.headers);
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  return new Response(await res.blob(), { status: 200, statusText: "OK", headers });
+}
