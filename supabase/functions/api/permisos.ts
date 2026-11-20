@@ -66,6 +66,8 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
   recepcion: {
     inicio: T, tickets: T, comisiones: P, rol_pagos: P, asistencia: P, productos: T,
     clientes: T, inventario: T, cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, agenda: T,
+    // TK164 (Emilia t756u): recepción (Alejandra) recibe mercadería (📥 Recepciones), sin costos.
+    recepciones: T,
   },
   gerente: {
     inicio: T, tickets: P, comisiones: P, rol_pagos: P, asistencia: P, productos: T,

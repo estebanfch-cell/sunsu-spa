@@ -400,7 +400,7 @@
     }
     var tot = (d.porTipo || []).map(function (x) { return "<span>" + e(x.etiqueta) + "<b>" + (x.entrada ? '<span class="mccj-in">+' + $m(x.entrada) + "</span> " : "") + (x.salida ? '<span class="mccj-out">−' + $m(x.salida) + "</span>" : "") + "</b></span>"; }).join("");
     h += '<div class="mccj-card"><div class="mccj-sub">Saldo en caja</div><div class="mccj-saldo">' + $m(d.saldo) + "</div>" +
-      '<div class="mccj-acts"><button class="btn" type="button" data-mov="gasto">💸 Gasto</button><button class="btn ghost" type="button" data-mov="ingreso">➕ Ingreso</button><button class="btn ghost" type="button" data-mov="deposito">🏦 Depósito al banco</button><button class="btn ghost" type="button" data-mov="propina_entrada">💝 Propina recibida</button><button class="btn ghost" type="button" data-mov="propina_pago">💝 Pago de propinas</button><button class="btn ghost" type="button" id="cj-cuadre">⚖️ Cuadre / cierre</button></div></div>';
+      '<div class="mccj-acts"><button class="btn" type="button" data-mov="gasto">💸 Gasto</button><button class="btn ghost" type="button" data-mov="consumo">🧾 Consumo</button>' + (d.admin ? '<button class="btn ghost" type="button" data-mov="ingreso">➕ Ingreso</button>' : "") + '<button class="btn ghost" type="button" data-mov="deposito">🏦 Entrega para depósito</button>' + (d.admin ? '<button class="btn ghost" type="button" data-mov="propina_entrada">💝 Propina recibida</button><button class="btn ghost" type="button" data-mov="propina_pago">💝 Pago de propinas</button>' : "") + '<button class="btn ghost" type="button" id="cj-cuadre">⚖️ Cuadre / cierre</button></div></div>';
     h += '<div class="mccj-card">' + chipsHtml() + (tot ? '<div class="mccj-tot">' + tot + "</div>" : "") +
       ((d.movimientos || []).length ? '<table class="mccj-t" style="margin-top:8px"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Saldo</th><th></th></tr></thead><tbody>' +
         d.movimientos.map(function (m) {
@@ -413,7 +413,7 @@
       d.cierres.map(function (c) { return "<tr><td>" + e(fh(c.fecha)) + '<br><span class="mccj-sub">' + e(c.por) + '</span></td><td class="num">' + $m(c.saldo_sistema) + '</td><td class="num">' + $m(c.contado) + '</td><td class="num ' + (Math.abs(c.diferencia) >= 0.01 ? "mccj-out" : "") + '">' + $m(c.diferencia) + "</td><td>" + e(c.nota) + "</td></tr>"; }).join("") + "</tbody></table></div>";
     return h + "</div>";
   }
-  var ETQ = { gasto: "💸 Gasto", ingreso: "➕ Ingreso", deposito: "🏦 Depósito al banco", propina_entrada: "💝 Propina recibida", propina_pago: "💝 Pago de propinas" };
+  var ETQ = { gasto: "💸 Gasto", consumo: "🧾 Consumo", ingreso: "➕ Ingreso", deposito: "🏦 Entrega de dinero para depósito", propina_entrada: "💝 Propina recibida", propina_pago: "💝 Pago de propinas" };
   function formMov(tipo) {
     var d = K.d;
     return "<h3 style='margin:0 0 8px'>" + e(ETQ[tipo]) + "</h3><div class='mccj-f'><label>Monto<input id='cm-monto' inputmode='decimal' placeholder='0.00'></label>" +
@@ -421,7 +421,7 @@
       "<label>Quién<input id='cm-quien' value='" + e((window.state && state.user && (state.user.short || state.user.name)) || "") + "'></label>" +
       "<label style='grid-column:1/-1'>" + (tipo === "deposito" ? "Banco / referencia del depósito" : "Detalle / justificativo") + "<textarea id='cm-det' rows='2'></textarea></label>" +
       "<label style='grid-column:1/-1'>Comprobante (foto o PDF, opcional)<input id='cm-comp' type='file' accept='image/*,application/pdf'></label></div>" +
-      (tipo === "gasto" || tipo === "deposito" || tipo === "propina_pago" ? "<p class='mccj-sub'>Sale de la caja (saldo " + $m(d.saldo) + ").</p>" : "<p class='mccj-sub'>Entra a la caja.</p>");
+      (tipo === "gasto" || tipo === "consumo" || tipo === "deposito" || tipo === "propina_pago" ? "<p class='mccj-sub'>Sale de la caja (saldo " + $m(d.saldo) + ").</p>" : "<p class='mccj-sub'>Entra a la caja.</p>");
   }
   async function cargarCaja() { K.d = await api("cj_resumen", { desde: K.desde, hasta: K.hasta }); }
   async function repCaja(main) { await cargarCaja(); var r = main.querySelector("#mccj-root"); if (r) { r.innerHTML = cajaHtml(); wireCaja(main); } }

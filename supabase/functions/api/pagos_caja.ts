@@ -6,10 +6,12 @@ import { n, repartirPagos, round2, s, saldoPendiente, type Row } from "./domain.
 export const METODOS = ["efectivo", "tarjeta", "transferencia", "deuna", "gift_card", "otro"] as const;
 export const ETQ_METODO: Record<string, string> = { efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia", deuna: "DeUna", gift_card: "Gift card", otro: "Método no registrado", canje: "Canje (paquete/gift)", cortesía: "Cortesía", corte: "Método no registrado", "gift card": "Gift card", mixto: "Varios métodos", sin: "Método no registrado", no_registrado: "Método no registrado" };
 /** Tipos de movimiento: los que sacan plata de la caja (salida) y los que la meten (entrada). */
-export const SALEN = new Set(["gasto", "deposito", "propina_pago"]);
+export const SALEN = new Set(["gasto", "consumo", "deposito", "propina_pago"]);
+/** TK164 (Emilia t757u): lo que recepción/personal puede registrar. Ingresos y propinas solo admin (los ingresos entran solos). */
+export const MOV_PERSONAL = new Set(["gasto", "consumo", "deposito"]);
 export const ENTRAN = new Set(["ingreso", "propina_entrada"]);
 export const ETQ_CAJA: Record<string, string> = {
-  apertura: "⚖️ Apertura", ingreso: "➕ Ingreso", gasto: "💸 Gasto", deposito: "🏦 Depósito al banco", propina_entrada: "💝 Propina (entrada)",
+  apertura: "⚖️ Apertura", ingreso: "➕ Ingreso", gasto: "💸 Gasto", consumo: "🧾 Consumo", deposito: "🏦 Entrega para depósito", propina_entrada: "💝 Propina (entrada)",
   propina_pago: "💝 Pago de propinas", efectivo_ticket: "🎫 Efectivo de ticket", ajuste: "⚖️ Ajuste", cuadre: "⚖️ Cuadre",
 };
 export const CATEGORIAS_GASTO = ["Insumos de cabina", "Limpieza", "Transporte / envíos", "Alimentación", "Mantenimiento", "Papelería", "Servicios básicos", "Otros"];

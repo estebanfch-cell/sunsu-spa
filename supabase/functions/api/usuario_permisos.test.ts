@@ -46,7 +46,7 @@ describe("permisos por usuario (MineCore perm.ts)", () => {
     const r = await handle("whoami", { token: "t-rec" }, C(db, "t-rec")) as Row;
     const mods = (r.modulos as Row[]).map((m) => m.modulo + ":" + m.acceso).sort();
     const m = await matrizDe(db);
-    const esperado = (["inicio", "tickets", "productos", "clientes", "caja", "gift_cards", "paquetes", "cotizaciones_cliente", "inventario", "comisiones", "rol_pagos", "asistencia", "agenda"]).map((x) => x + ":" + acceso("recepcion", x, m)).sort();
+    const esperado = (["inicio", "tickets", "productos", "clientes", "caja", "gift_cards", "paquetes", "cotizaciones_cliente", "inventario", "comisiones", "rol_pagos", "asistencia", "agenda", "recepciones"]).map((x) => x + ":" + acceso("recepcion", x, m)).sort();
     assert.deepEqual(mods, esperado);
   });
   it("nivel 0 quita el módulo; nivel explícito manda; alcance cambia a «todo»", () => {
