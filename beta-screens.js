@@ -5960,9 +5960,9 @@ function _histMasterHTML(tickets, showPrices){
     : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; });
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
-    var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+    var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&_tkFaltaVoucher(t)?['Foto del voucher o transferencia']:null;
     var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
-    return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
+    return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(_tkWaPendiente(t)?' tk-wapend':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
@@ -6040,12 +6040,10 @@ function _histColorQuienPerfil(nombre){
   if(/efch/i.test(raw)) return '#3D5A7A';
   return '#8A90A0';
 }
-function _histPuedeCamara(){
-  try{ if(typeof state!=='undefined' && state && state.vista) return false; }catch(e1){}
-  var r=(typeof CU!=='undefined' && CU && (CU.role||CU.rol))||'';
-  r=String(r).toLowerCase();
-  return !r||r==='admin'||r==='admin_master'||r==='super_admin'||r==='reception'||r==='recepcion'||r==='staff';
-}
+/* TK163 (Emilia t751u/t754u): la cámara del voucher/transferencia se ve para TODOS los roles (admin, recepción,
+   cosmetólogas) y también en «Ver como». En «Ver como» (solo lectura) se muestra pero no sube nada. */
+function _histPuedeCamara(){ return true; }
+function _histVistaLectura(){ try{ return !!(typeof state!=='undefined' && state && state.vista); }catch(e){ return false; } }
 function _histCamHTML(t,i){
   if(!_histPuedeCamara()) return '';
   var F=_tkPagosFaltanCard(t);
@@ -6058,6 +6056,7 @@ function _histCamHTML(t,i){
   var listo=ok&&!falta;
   var lab=listo?'Comprobante listo':'Tomar foto de voucher o transferencia';
   /* TK155 (t680u): sin capture → iOS ofrece Fototeca / Tomar foto / Seleccionar archivo. */
+  if(_histVistaLectura()) return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+' (vista de solo lectura)" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation();event.preventDefault();if(typeof toast===\'function\')toast(\'Vista de solo lectura\')">'+CAM_ICON_SVG+'</label>';
   return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()">'+CAM_ICON_SVG+'<input type="file" accept="image/*,application/pdf" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
 }
 var CAM_ICON_SVG='<svg class="cam-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9.4 4a1.5 1.5 0 0 0-1.27.7L7.1 6.3H4.5A2.5 2.5 0 0 0 2 8.8v9.7A2.5 2.5 0 0 0 4.5 21h15a2.5 2.5 0 0 0 2.5-2.5V8.8a2.5 2.5 0 0 0-2.5-2.5h-2.6l-1.03-1.6A1.5 1.5 0 0 0 14.6 4H9.4zM12 9a4.25 4.25 0 1 1 0 8.5A4.25 4.25 0 0 1 12 9zm0 2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5z"/></svg>';
@@ -6203,8 +6202,24 @@ function _histCargarThumbs(root){
   }
   lote(ids);
 }
+/* TK163 (Emilia t755u): amarillo SOLO si falta el voucher/transferencia; franja aparte si falta el WhatsApp. */
+function _tkFaltaVoucher(t){
+  var L=_tkLedOf(t)||{};
+  if(L.pagosFaltan&&L.pagosFaltan.length) return true;
+  return !!(L.falta&&L.falta.some(function(x){ return /comprobante|voucher|transferencia/i.test(String(x)); }));
+}
+function _tkWaPendiente(t){
+  if(!t) return false;
+  var o=t.orig||{};
+  if(t.anulado===true||o.anulado===true) return false;
+  if((t.borrador||t.por_completar)&&!t.so_num) return false;
+  var L=_tkLedOf(t)||{};
+  return !(L.r || t.envio_ok || (t.envios&&t.envios.length) || t.tiene_envio);
+}
 function _histCardHTML(t, i, showPrices){
-  var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+  var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&_tkFaltaVoucher(t)?((Lf.falta&&Lf.falta.filter(function(x){return /comprobante|voucher|transferencia/i.test(String(x));}))||[]):null;
+  if(fa&&!fa.length) fa=['Foto del voucher o transferencia'];
+  var waP=_tkWaPendiente(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
   var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
@@ -6216,7 +6231,7 @@ function _histCardHTML(t, i, showPrices){
   var colWho=_histColorQuien((t.orig&&t.orig.creado_por)||t.creado_por||t.atendido_por||t.cosmetologa||who);
   var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
-  return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
+  return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(waP?' tk-wapend':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
     +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
     +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
