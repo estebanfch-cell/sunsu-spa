@@ -1,6 +1,6 @@
 // Agenda de la beta (Emilia 17/11 y 18/11): réplica de Acuity por la edge «api» (la llave nunca llega al navegador).
 // Cosmetóloga: su calendario, ficha al tocar la clienta, «Crear ticket» desde la cita (la cita pasa a COMPLETADO).
-// Vistas: Lista (por defecto, las tarjetas de siempre), Día y Semana en grilla de horas (como Acuity), Mes con conteo.
+// Vistas: Lista (Hoy / Mañana / Pasado mañana, TK181), Día (‹ › y «Por confirmar» con WhatsApp) y Semana en grilla de horas (como Acuity), Mes con conteo.
 // Las horas se muestran en formato 12 h con AM/PM. La vista queda en localStorage.
 (function () {
   var LS = "sunsu.agenda.vista";
@@ -12,6 +12,8 @@
   function dt(s) { var p = String(s).split("-"); return new Date(+p[0], +p[1] - 1, +p[2], 12); }
   function add(s, n) { var d = dt(s); d.setDate(d.getDate() + n); return ymd(d); }
   var DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"], MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  var DIASL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  var WA_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2c0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>';
   function hm24(iso) { var m = /T(\d{2}):(\d{2})/.exec(String(iso || "")); return m ? m[1] + ":" + m[2] : ""; }
   function minutos(iso) { var x = hm24(iso), m = /^(\d{1,2}):(\d{2})/.exec(x); return m ? (+m[1]) * 60 + (+m[2]) : 0; }
   function hora12(hm) {
@@ -57,7 +59,8 @@
     var r = rango(), d = dt(K.fecha);
     if (K.vista === "mes") return MESES[d.getMonth()] + " " + d.getFullYear();
     if (K.vista === "semana") { var a = dt(r[0]), b = dt(r[1]); return a.getDate() + " " + MESES[a.getMonth()].slice(0, 3) + " – " + b.getDate() + " " + MESES[b.getMonth()].slice(0, 3) + " " + b.getFullYear(); }
-    return DIAS[d.getDay()] + " " + d.getDate() + " de " + MESES[d.getMonth()] + " " + d.getFullYear();
+    var hoy = (K.meta && K.meta.hoy) || ymd(new Date()), rel = K.fecha === hoy ? "Hoy · " : K.fecha === add(hoy, 1) ? "Mañana · " : K.fecha === add(hoy, 2) ? "Pasado mañana · " : "";
+    return rel + DIASL[d.getDay()] + " " + d.getDate() + " de " + MESES[d.getMonth()];
   }
   function calNom(id) { var c = ((K.meta && K.meta.calendarios) || []).find(function (x) { return String(x.id) === String(id); }); return c ? (c.persona || c.nombre) : ""; }
   function etqPill(nom) {
@@ -72,8 +75,8 @@
     s.textContent = [
       ".mcag-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcag-bar h2{margin:0 8px 0 0;font-size:1.15rem}.mcag-seg{display:inline-flex;border:1.5px solid var(--cream-d);border-radius:10px;overflow:hidden}.mcag-seg button{border:none;background:#fff;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer;color:var(--navy-d)}.mcag-seg button.on{background:var(--navy);color:#fff}",
       ".mcag-tit{font-weight:800;color:var(--navy-d);min-width:180px;text-transform:capitalize}.mcag-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:1px 8px;font-size:.66rem;font-weight:700;white-space:nowrap}",
-      ".mcag-list{display:flex;flex-direction:column;gap:8px}.mcag-c{display:grid;grid-template-columns:108px 1fr auto;gap:10px;align-items:start;background:#fff;border:1px solid var(--cream-d);border-left:4px solid var(--navy);border-radius:12px;padding:10px 12px}.mcag-c.ok{opacity:.62}.mcag-h{font-weight:800;color:var(--navy-d)}.mcag-h small{display:block;color:var(--gray);font-weight:500}",
-      ".mcag-n{font-weight:700;color:var(--navy-d);cursor:pointer;text-decoration:underline dotted}.mcag-sub{color:var(--gray);font-size:.74rem;margin-top:2px}.mcag-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mcag-tag{font-size:.62rem;font-weight:800;border-radius:6px;padding:1px 6px;background:#efe9fb;color:#5d4a9c;margin-left:4px}.mcag-tag.ant{background:#e8f1f8;color:#2f5f86}.mcag-wa{background:#C0392B!important;color:#fff!important;border-color:#C0392B!important}.mcag-wa.ok{background:#25D366!important;border-color:#1da851!important;color:#fff!important}",
+      ".mcag-list{display:flex;flex-direction:column;gap:6px}.mcag-c{display:grid;grid-template-columns:96px 1fr auto;gap:8px;align-items:start;background:#fff;border:1px solid var(--cream-d);border-left:4px solid var(--navy);border-radius:10px;padding:7px 10px}.mcag-acts .btn{padding:4px 9px;font-size:.74rem}.mcag-c.ok{opacity:.62}.mcag-h{font-weight:800;color:var(--navy-d)}.mcag-h small{display:block;color:var(--gray);font-weight:500}",
+      ".mcag-n{font-weight:700;color:var(--navy-d);cursor:pointer;text-decoration:underline dotted}.mcag-sub{color:var(--gray);font-size:.74rem;margin-top:2px}.mcag-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mcag-tag{font-size:.62rem;font-weight:800;border-radius:6px;padding:1px 6px;background:#efe9fb;color:#5d4a9c;margin-left:4px}.mcag-tag.ant{background:#e8f1f8;color:#2f5f86}.mcag-wa{background:#25D366!important;color:#fff!important;border-color:#1da851!important;font-weight:800!important}.mcag-wa.ok{background:#fff!important;color:#1a8f47!important;border-color:#25D366!important}.mcag-wa.re{background:#e9f9ef!important;color:#1a8f47!important;border-color:#25D366!important}.mcag-dias{display:inline-flex;gap:4px;flex-wrap:wrap}.mcag-dias button{border:1.5px solid var(--cream-d);background:#fff;border-radius:999px;padding:5px 11px;font:inherit;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--navy-d)}.mcag-dias button.on{background:var(--navy);color:#fff;border-color:var(--navy)}.mcag-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px}.mcag-pend{margin-top:10px}.mcag-pend h4{margin:0 0 6px;font-size:.82rem;color:var(--navy-d)}.mcag-wab{position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.5px #fff}.mcag-wab svg{margin:0!important}",
       ".mcag-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.mcag-dh{font-size:.68rem;color:var(--gray);text-align:center;font-weight:700;text-transform:uppercase}.mcag-d{background:#fff;border:1px solid var(--cream-d);border-radius:10px;min-height:76px;padding:6px;cursor:pointer;font-size:.72rem}.mcag-d:hover{border-color:var(--navy)}.mcag-d.fuera{opacity:.4}.mcag-d.hoy{border:2px solid var(--pink,#d88aa3)}",
       ".mcag-d b{font-size:.8rem;color:var(--navy-d)}.mcag-cnt{float:right;background:var(--navy);color:#fff;border-radius:999px;padding:0 7px;font-weight:800;font-size:.7rem}.mcag-pc{display:block;color:var(--gray);font-size:.64rem;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
       ".mcag-wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;overflow-x:auto;max-width:100%}.mcag-wd{background:#fff;border:1px solid var(--cream-d);border-radius:10px;padding:6px;min-height:120px}.mcag-wd h4{margin:0 0 6px;font-size:.74rem;color:var(--navy-d);cursor:pointer;display:flex;justify-content:space-between}.mcag-wi{font-size:.7rem;padding:4px 5px;border-radius:7px;background:var(--cream);margin-bottom:4px;cursor:pointer;border-left:3px solid var(--navy)}.mcag-wi.ok{opacity:.55}",
@@ -84,7 +87,7 @@
       ".mcag-col{flex:1 1 0;min-width:96px;border-left:1px solid var(--cream-d);position:relative}.mcag-ch{height:28px;display:flex;align-items:center;justify-content:center;padding:0 4px;font-size:.68rem;font-weight:700;color:var(--navy-d);border-bottom:1px solid var(--cream-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mcag-track{position:relative;background:repeating-linear-gradient(to bottom,#fff 0,#fff calc(var(--mcag-px,52px) - 1px),var(--cream-d) calc(var(--mcag-px,52px) - 1px),var(--cream-d) var(--mcag-px,52px))}",
       ".mcag-bl{position:absolute;left:3px;right:3px;box-sizing:border-box;border:0;border-radius:7px;padding:2px 5px;text-align:left;color:#fff;font:inherit;font-size:.66rem;line-height:1.2;cursor:pointer;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.18)}.mcag-bl b{display:block;font-size:.66rem;font-weight:800}.mcag-bl span{display:block;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mcag-bl.ok{opacity:.55}.mcag-now{position:absolute;left:0;right:0;height:2px;background:#d35a6a;z-index:2;pointer-events:none}",
       ".mcag-wkg{display:flex;max-width:100%;overflow-x:auto;overflow-y:auto;border:1px solid var(--cream-d);border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch}.mcag-wkg .mcag-col{min-width:72px}.mcag-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:1px 1px 0 0;vertical-align:middle}.mcag-dots{margin-top:3px;line-height:1;clear:both}.mcag-more{font-size:.58rem;color:var(--gray);font-weight:700}",
-      "@media (max-width:860px){.mcag-c{grid-template-columns:88px 1fr;}.mcag-acts{grid-column:1/-1;justify-content:flex-start}.mcag-seg button{padding:6px 8px;font-size:.72rem}.mcag-tit{min-width:0;flex:1 1 140px}.mcag-grid{gap:2px}.mcag-d{min-height:54px;padding:4px;border-radius:8px}.mcag-pc{display:none}.mcag-tg .mcag-col{min-width:0;flex:1 1 100%}.mcag-wkg .mcag-col{min-width:46px}.mcag-wkg .mcag-bl b{font-size:.58rem}.mcag-wkg .mcag-ch{font-size:.6rem;padding:0 2px}.mcag-gutter{flex:0 0 36px;min-width:36px}.mcag-hh{font-size:.58rem;padding:1px 2px}}",
+      "@media (max-width:860px){.mcag-c{grid-template-columns:72px 1fr;gap:6px;padding:6px 8px}.mcag-dias button{padding:5px 9px;font-size:.74rem}.mcag-acts{grid-column:1/-1;justify-content:flex-start}.mcag-seg button{padding:6px 8px;font-size:.72rem}.mcag-tit{min-width:0;flex:1 1 140px}.mcag-grid{gap:2px}.mcag-d{min-height:54px;padding:4px;border-radius:8px}.mcag-pc{display:none}.mcag-tg .mcag-col{min-width:0;flex:1 1 100%}.mcag-wkg .mcag-col{min-width:46px}.mcag-wkg .mcag-bl b{font-size:.58rem}.mcag-wkg .mcag-ch{font-size:.6rem;padding:0 2px}.mcag-gutter{flex:0 0 36px;min-width:36px}.mcag-hh{font-size:.58rem;padding:1px 2px}}",
     ].join("");
     document.head.appendChild(s);
   }
@@ -109,10 +112,12 @@
     else if (puedeTk) acts.push('<button class="btn small" type="button" data-crear="' + e(c.id) + '">Crear ticket</button>');
     if (!c.atendida && c.fecha <= hoy && c.etiqueta !== "NO LLEGO") acts.push('<button class="btn ghost small" type="button" data-etq="NO LLEGO" data-id="' + e(c.id) + '">No llegó</button>');
     if (M.puede.mover && !c.atendida && c.fecha >= hoy) {
-      if ((M.puede.whatsapp !== false) && !etqCerrada(c.etiqueta)) {
-        acts.push('<button class="btn small mcag-wa' + (c.wa_enviado ? " ok" : "") + '" type="button" data-wa="' + e(c.id) + '">' + (c.wa_enviado ? "WhatsApp ✓" : "WhatsApp") + "</button>");
+      var conf = c.etiqueta === "CONFIRMADA", cerrada = etqCerrada(c.etiqueta) && !conf;
+      if ((M.puede.whatsapp !== false) && !cerrada) {
+        if (conf) acts.push('<button class="btn small mcag-wa re" type="button" data-wa="' + e(c.id) + '" data-re="1">' + WA_SVG + "Reconfirmar</button>");
+        else acts.push('<button class="btn small mcag-wa' + (c.wa_enviado ? " ok" : "") + '" type="button" data-wa="' + e(c.id) + '">' + WA_SVG + (c.wa_enviado ? "Enviado ✓" : "WhatsApp") + "</button>");
       }
-      if (c.etiqueta !== "CONFIRMADA") acts.push('<button class="btn ghost small" type="button" data-etq="CONFIRMADA" data-id="' + e(c.id) + '">Confirmó</button>');
+      if (!conf && !cerrada) acts.push('<button class="btn ghost small" type="button" data-etq="CONFIRMADA" data-id="' + e(c.id) + '">Confirmó</button>');
       acts.push('<button class="btn ghost small" type="button" data-mover="' + e(c.id) + '">Mover</button>');
       acts.push('<button class="btn ghost small" type="button" data-cancel="' + e(c.id) + '" style="color:#b2452a">Cancelar</button>');
     }
@@ -122,7 +127,7 @@
       '<div class="mcag-acts">' + acts.join("") + "</div></div>";
   }
   function vistaLista() {
-    if (!K.citas.length) return '<div class="mccf-card mccf-sub" style="text-align:center;padding:24px">Sin citas este día.</div>';
+    if (!K.citas.length) return '<div class="mccf-card mccf-sub" style="text-align:center;padding:24px">Sin citas para ' + e(titulo().replace(/^(Hoy|Mañana|Pasado mañana) · /, "")) + '.</div>';
     return '<div class="mcag-list">' + K.citas.map(citaCard).join("") + "</div>";
   }
   function esMovil() { return !!(window.matchMedia && window.matchMedia("(max-width: 860px)").matches); }
@@ -165,7 +170,8 @@
     var top = ((s - h0 * 60) / 60) * px, ht = Math.max(16, (dur / 60) * px - 2);
     var col = colorCal(c.calendarID), ink = inkDe(col);
     var nom = (c.nombre + " " + ((c.apellido || "").split(" ")[0] || "")).trim() || "Sin nombre";
-    return '<button type="button" class="mcag-bl' + (c.atendida ? " ok" : "") + '" data-ver="' + e(c.id) + '" style="top:' + top + "px;height:" + ht + "px;background:" + col + ";color:" + ink + ";" + (extra || "") + '" title="' + e(hora(c.datetime) + " · " + nom + " · " + (tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) || "") + (c.duracion ? " · " + c.duracion + " min" : "")) + '"><b>' + e(hora(c.datetime)) + "</b>" + (ht >= 28 ? "<span>" + e(nom) + "</span>" : "") + (ht >= 42 && tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) ? "<span>" + e(tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo)) + "</span>" : "") + "</button>";
+    var wab = puedeWa(c) && !c.wa_enviado ? '<span class="mcag-wab" role="button" title="WhatsApp de confirmación" data-wa="' + e(c.id) + '">' + WA_SVG.replace('width="14" height="14"', 'width="11" height="11"') + "</span>" : "";
+    return '<button type="button" class="mcag-bl' + (c.atendida ? " ok" : "") + '" data-ver="' + e(c.id) + '" style="top:' + top + "px;height:" + ht + "px;background:" + col + ";color:" + ink + ";" + (extra || "") + '" title="' + e(hora(c.datetime) + " · " + nom + " · " + (tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) || "") + (c.duracion ? " · " + c.duracion + " min" : "")) + '"><b>' + e(hora(c.datetime)) + "</b>" + (ht >= 28 ? "<span>" + e(nom) + "</span>" : "") + (ht >= 42 && tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) ? "<span>" + e(tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo)) + "</span>" : "") + wab + "</button>";
   }
   function lineaAhora(h0, h1, px, fecha) {
     var hoy = (K.meta && K.meta.hoy) || ymd(new Date());
@@ -196,9 +202,16 @@
       return '<div class="mcag-col"><div class="mcag-ch">' + (window.MCColor ? window.MCColor.pill(cal.persona || cal.nombre || "") : e(cal.persona || cal.nombre || "—")) + "</div>" +
         '<div class="mcag-track" style="height:' + alto + "px;--mcag-px:" + px + 'px">' + bl + lineaAhora(h0, h1, px, K.fecha) + "</div></div>";
     }).join("");
-    return selectorCals(todas, K.col) + '<div class="mcag-tg" style="--mcag-px:' + px + 'px"><div class="mcag-gutter"><div class="mcag-ch"></div>' + ejes + "</div>" + cols + "</div>";
+    var pend = porConfirmar(citas);
+    return selectorCals(todas, K.col) + '<div class="mcag-tg" style="--mcag-px:' + px + 'px"><div class="mcag-gutter"><div class="mcag-ch"></div>' + ejes + "</div>" + cols + "</div>" +
+      (pend.length ? '<div class="mcag-pend"><h4>Por confirmar · ' + pend.length + '</h4><div class="mcag-list">' + pend.map(citaCard).join("") + "</div></div>" : "");
   }
 
+  function puedeWa(c) {
+    var M = K.meta || {};
+    return !!(M.puede && M.puede.mover && M.puede.whatsapp !== false && !c.atendida && c.fecha >= M.hoy && !etqCerrada(c.etiqueta));
+  }
+  function porConfirmar(citas) { return (citas || []).filter(puedeWa).sort(function (a, b) { return minutos(a.datetime) - minutos(b.datetime); }); }
   function porCal(d) {
     var cnt = K.porDia[d] || {}, cals = (K.meta.calendarios || []).filter(function (c) { return cnt[String(c.id)]; });
     return cals.map(function (c) { return '<span class="mcag-pc">' + e(c.nombre) + ": " + cnt[String(c.id)] + "</span>"; }).join("");
@@ -246,18 +259,26 @@
     }
     return '<div class="mcag-grid">' + h + "</div>";
   }
+  function navDias() {
+    if (K.vista !== "lista" && K.vista !== "dia") return "";
+    var hoy = K.meta.hoy;
+    return '<div class="mcag-nav"><button class="btn ghost small" type="button" data-mov="-1" aria-label="Día anterior">‹</button>' +
+      '<div class="mcag-dias">' + [[0, "Hoy"], [1, "Mañana"], [2, "Pasado mañana"]].map(function (x) { return '<button type="button" data-rel="' + x[0] + '" class="' + (K.fecha === add(hoy, x[0]) ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>" +
+      '<button class="btn ghost small" type="button" data-mov="1" aria-label="Día siguiente">›</button>' +
+      '<span class="mcag-tit">' + e(titulo().replace(/^(Hoy|Mañana|Pasado mañana) · /, "")) + "</span></div>";
+  }
   function html() {
     var M = K.meta, todos = M.nivel === "todos", tot = K.citas.length;
     return '<div id="mcag-root"><div class="mcag-bar"><h2>Agenda</h2>' +
       '<div class="mcag-seg">' + [["lista", "Lista"], ["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(function (v) { return '<button type="button" data-vista="' + v[0] + '" class="' + (K.vista === v[0] ? "on" : "") + '">' + v[1] + "</button>"; }).join("") + "</div>" +
-      '<button class="btn ghost small" type="button" data-mov="-1">‹</button><button class="btn ghost small" type="button" data-mov="0">Hoy</button><button class="btn ghost small" type="button" data-mov="1">›</button>' +
-      '<span class="mcag-tit">' + e(titulo()) + "</span>" + '<span class="mccf-sub">' + tot + " cita" + (tot !== 1 ? "s" : "") + "</span><span style=\"flex:1\"></span>" +
+      (K.vista === "lista" || K.vista === "dia" ? "" : '<button class="btn ghost small" type="button" data-mov="-1">‹</button><button class="btn ghost small" type="button" data-mov="0">Hoy</button><button class="btn ghost small" type="button" data-mov="1">›</button><span class="mcag-tit">' + e(titulo()) + "</span>") +
+      '<span class="mccf-sub">' + tot + " cita" + (tot !== 1 ? "s" : "") + "</span><span style=\"flex:1\"></span>" +
       (todos && (M.calendarios || []).length > 1 ? '<select id="mcag-cal" style="padding:6px 8px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.8rem"><option value="">Todas las cosmetólogas</option>' + M.calendarios.map(function (c) { return '<option value="' + e(c.id) + '"' + (String(K.cal) === String(c.id) ? " selected" : "") + ">" + e(c.persona || c.nombre) + (c.activo ? "" : " (inactivo)") + "</option>"; }).join("") + "</select>" : "") +
       (M.puede.agendar ? '<button class="btn small" type="button" id="mcag-nueva">+ Agendar</button>' : "") +
       (M.admin ? '<button class="btn ghost small" type="button" id="mcag-ing" title="Pone INGRESADO Y COMP en las citas de tickets conciliados (como la conciliación vieja)">Marcar ingresados</button><button class="btn ghost small" type="button" id="mcag-cals">Calendarios</button>' : "") + "</div>" +
+      navDias() +
       (K.err ? '<p class="err">' + e(K.err) + "</p>" : "") + (K.aviso ? '<p class="mccf-note">' + e(K.aviso) + "</p>" : "") +
-      (K.vista === "mes" ? vistaMes() : K.vista === "semana" ? vistaSemana() : K.vista === "dia" ? vistaDia() : vistaLista()) +
-      '<p class="mccf-sub" style="margin-top:12px">Acuity sigue siendo el calendario oficial; aquí se ve y se opera lo mismo. ' + e(M.nota || "") + "</p></div>";
+      (K.vista === "mes" ? vistaMes() : K.vista === "semana" ? vistaSemana() : K.vista === "dia" ? vistaDia() : vistaLista()) + "</div>";
   }
   function dlg(inner) { var b = document.createElement("div"); b.className = "mcag-dlg"; b.innerHTML = '<div class="mcag-box">' + inner + "</div>"; document.body.appendChild(b); b.addEventListener("click", function (ev) { if (ev.target === b || ev.target.closest("[data-x]")) b.remove(); }); return b; }
   async function refrescar(main) { await cargar(); var r = main.querySelector("#mcag-root"); if (r) { r.outerHTML = html(); wire(main); } }
@@ -344,6 +365,7 @@
         refrescar(main);
       };
     });
+    root.querySelectorAll("[data-rel]").forEach(function (x) { x.onclick = function () { K.fecha = add(K.meta.hoy, +x.getAttribute("data-rel")); refrescar(main); }; });
     var cs = root.querySelector("#mcag-cal"); if (cs) cs.onchange = function () { K.cal = this.value; refrescar(main); };
     var nv = root.querySelector("#mcag-nueva"); if (nv) nv.onclick = function () { dlgAgendar(main, null); };
     var cl = root.querySelector("#mcag-cals"); if (cl) cl.onclick = function () { dlgCalendarios(main); };
@@ -359,24 +381,26 @@
     root.onclick = async function (ev) {
       var t;
       if ((t = ev.target.closest("[data-dia]"))) { K.fecha = t.getAttribute("data-dia"); K.vista = "dia"; guardarVista(); refrescar(main); return; }
-      if ((t = ev.target.closest("[data-ver]"))) { verCita(main, t.getAttribute("data-ver")); return; }
-      if ((t = ev.target.closest("[data-tk]"))) { sessionStorage.setItem("mctk.volver", "#/m/agenda"); go("#/m/tickets/t/" + encodeURIComponent(t.getAttribute("data-tk"))); return; }
       var cita = function (id) { return K.citas.find(function (c) { return String(c.id) === String(id); }); };
-      if ((t = ev.target.closest("[data-crear]"))) { var c0 = cita(t.getAttribute("data-crear")), fi = await api("ag_cita", { id: c0.id }); crearTicket(c0, fi && fi.cita && fi.cita.ficha); return; }
-      if ((t = ev.target.closest("[data-mover]"))) { dlgAgendar(main, cita(t.getAttribute("data-mover"))); return; }
       if ((t = ev.target.closest("[data-wa]"))) {
-        var idWa = t.getAttribute("data-wa"); t.disabled = true;
-        var rwa = await api("ag_wa", { id: idWa });
+        ev.preventDefault(); ev.stopPropagation();
+        var idWa = t.getAttribute("data-wa"), re = t.getAttribute("data-re") === "1"; if (t.disabled) return; t.disabled = true;
+        var rwa = await api("ag_wa", re ? { id: idWa, reconfirmar: true } : { id: idWa });
         t.disabled = false;
         if (!rwa || rwa.error) { toast2((rwa && rwa.error) || "No se pudo armar el WhatsApp", true); return; }
-        if (!rwa.tiene_tel) { toast2("Esta cita no tiene teléfono en Acuity", true); return; }
+        if (!rwa.tiene_tel) { toast2("Esta cita no tiene teléfono registrado", true); return; }
         abrirWaUrl(rwa);
         var cwa = cita(idWa); if (cwa) cwa.wa_enviado = true;
-        t.classList.add("ok"); t.textContent = "WhatsApp ✓";
+        toast2(re ? "WhatsApp de reconfirmación abierto" : "WhatsApp abierto. Cuando la clienta responda, toca «Confirmó».");
+        var r9 = main.querySelector("#mcag-root"); if (r9) { r9.outerHTML = html(); wire(main); }
         return;
       }
+      if ((t = ev.target.closest("[data-ver]"))) { verCita(main, t.getAttribute("data-ver")); return; }
+      if ((t = ev.target.closest("[data-tk]"))) { sessionStorage.setItem("mctk.volver", "#/m/agenda"); go("#/m/tickets/t/" + encodeURIComponent(t.getAttribute("data-tk"))); return; }
+      if ((t = ev.target.closest("[data-crear]"))) { var c0 = cita(t.getAttribute("data-crear")), fi = await api("ag_cita", { id: c0.id }); crearTicket(c0, fi && fi.cita && fi.cita.ficha); return; }
+      if ((t = ev.target.closest("[data-mover]"))) { dlgAgendar(main, cita(t.getAttribute("data-mover"))); return; }
       if ((t = ev.target.closest("[data-cancel]"))) {
-        var c1 = cita(t.getAttribute("data-cancel")), mot = prompt("¿Cancelar la cita de " + c1.nombre + " (" + hora(c1.datetime) + ")? Se libera el horario en Acuity.\nMotivo:"); if (mot === null) return;
+        var c1 = cita(t.getAttribute("data-cancel")), mot = prompt("¿Cancelar la cita de " + c1.nombre + " (" + hora(c1.datetime) + ")? Se libera el horario.\nMotivo:"); if (mot === null) return;
         var r = await api("ag_cancelar", { id: c1.id, motivo: mot }); if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; }
         toast2("Cita cancelada"); refrescar(main); return;
       }
