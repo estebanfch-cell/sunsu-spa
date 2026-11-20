@@ -22,6 +22,22 @@
     return h + ":" + min + " " + ap;
   }
   function hora(iso) { return hora12(hm24(iso)); }
+  function tipoVisible(t) { t = String(t || ""); return /primera\s*vez|gracias por regresar/i.test(t) ? "" : t; }
+  function etqCerrada(nom) { return /CONFIRMADA|COMPLETADO|INGRESADO|NO LLEGO/i.test(String(nom || "")); }
+  function subCita(c) {
+    var cal = window.MCColor ? window.MCColor.pill(calNom(c.calendarID) || c.calendario) : e(calNom(c.calendarID) || c.calendario);
+    var tip = tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo);
+    return cal + (tip ? " · " + e(tip) : "");
+  }
+  function abrirWaUrl(prep) {
+    if (window.MCWa && typeof window.MCWa.abrirUrl === "function") { window.MCWa.abrirUrl(prep); return; }
+    var mov = !!(window.matchMedia && window.matchMedia("(max-width: 860px)").matches) || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    var u = mov ? (prep.wa_url || "") : (prep.wa_url_web || prep.wa_url || "");
+    if (!u) return;
+    var v = window.open(u, "_blank");
+    if (!v) window.location.href = u;
+    if (v) setTimeout(function () { try { v.close(); } catch (e0) {} }, 2800);
+  }
   function horaEje(h) { var ap = h >= 12 ? "PM" : "AM", x = h % 12; if (!x) x = 12; return x + " " + ap; }
   function leerVista() {
     try {
@@ -57,7 +73,7 @@
       ".mcag-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcag-bar h2{margin:0 8px 0 0;font-size:1.15rem}.mcag-seg{display:inline-flex;border:1.5px solid var(--cream-d);border-radius:10px;overflow:hidden}.mcag-seg button{border:none;background:#fff;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer;color:var(--navy-d)}.mcag-seg button.on{background:var(--navy);color:#fff}",
       ".mcag-tit{font-weight:800;color:var(--navy-d);min-width:180px;text-transform:capitalize}.mcag-pill{display:inline-block;border:1.5px solid;border-radius:999px;padding:1px 8px;font-size:.66rem;font-weight:700;white-space:nowrap}",
       ".mcag-list{display:flex;flex-direction:column;gap:8px}.mcag-c{display:grid;grid-template-columns:108px 1fr auto;gap:10px;align-items:start;background:#fff;border:1px solid var(--cream-d);border-left:4px solid var(--navy);border-radius:12px;padding:10px 12px}.mcag-c.ok{opacity:.62}.mcag-h{font-weight:800;color:var(--navy-d)}.mcag-h small{display:block;color:var(--gray);font-weight:500}",
-      ".mcag-n{font-weight:700;color:var(--navy-d);cursor:pointer;text-decoration:underline dotted}.mcag-sub{color:var(--gray);font-size:.74rem;margin-top:2px}.mcag-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mcag-tag{font-size:.62rem;font-weight:800;border-radius:6px;padding:1px 6px;background:#efe9fb;color:#5d4a9c;margin-left:4px}.mcag-tag.ant{background:#e8f1f8;color:#2f5f86}",
+      ".mcag-n{font-weight:700;color:var(--navy-d);cursor:pointer;text-decoration:underline dotted}.mcag-sub{color:var(--gray);font-size:.74rem;margin-top:2px}.mcag-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mcag-tag{font-size:.62rem;font-weight:800;border-radius:6px;padding:1px 6px;background:#efe9fb;color:#5d4a9c;margin-left:4px}.mcag-tag.ant{background:#e8f1f8;color:#2f5f86}.mcag-wa{background:#C0392B!important;color:#fff!important;border-color:#C0392B!important}.mcag-wa.ok{background:#25D366!important;border-color:#1da851!important;color:#fff!important}",
       ".mcag-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.mcag-dh{font-size:.68rem;color:var(--gray);text-align:center;font-weight:700;text-transform:uppercase}.mcag-d{background:#fff;border:1px solid var(--cream-d);border-radius:10px;min-height:76px;padding:6px;cursor:pointer;font-size:.72rem}.mcag-d:hover{border-color:var(--navy)}.mcag-d.fuera{opacity:.4}.mcag-d.hoy{border:2px solid var(--pink,#d88aa3)}",
       ".mcag-d b{font-size:.8rem;color:var(--navy-d)}.mcag-cnt{float:right;background:var(--navy);color:#fff;border-radius:999px;padding:0 7px;font-weight:800;font-size:.7rem}.mcag-pc{display:block;color:var(--gray);font-size:.64rem;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
       ".mcag-wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;overflow-x:auto;max-width:100%}.mcag-wd{background:#fff;border:1px solid var(--cream-d);border-radius:10px;padding:6px;min-height:120px}.mcag-wd h4{margin:0 0 6px;font-size:.74rem;color:var(--navy-d);cursor:pointer;display:flex;justify-content:space-between}.mcag-wi{font-size:.7rem;padding:4px 5px;border-radius:7px;background:var(--cream);margin-bottom:4px;cursor:pointer;border-left:3px solid var(--navy)}.mcag-wi.ok{opacity:.55}",
@@ -93,13 +109,16 @@
     else if (puedeTk) acts.push('<button class="btn small" type="button" data-crear="' + e(c.id) + '">Crear ticket</button>');
     if (!c.atendida && c.fecha <= hoy && c.etiqueta !== "NO LLEGO") acts.push('<button class="btn ghost small" type="button" data-etq="NO LLEGO" data-id="' + e(c.id) + '">No llegó</button>');
     if (M.puede.mover && !c.atendida && c.fecha >= hoy) {
+      if ((M.puede.whatsapp !== false) && !etqCerrada(c.etiqueta)) {
+        acts.push('<button class="btn small mcag-wa' + (c.wa_enviado ? " ok" : "") + '" type="button" data-wa="' + e(c.id) + '">' + (c.wa_enviado ? "WhatsApp ✓" : "WhatsApp") + "</button>");
+      }
       if (c.etiqueta !== "CONFIRMADA") acts.push('<button class="btn ghost small" type="button" data-etq="CONFIRMADA" data-id="' + e(c.id) + '">Confirmó</button>');
       acts.push('<button class="btn ghost small" type="button" data-mover="' + e(c.id) + '">Mover</button>');
       acts.push('<button class="btn ghost small" type="button" data-cancel="' + e(c.id) + '" style="color:#b2452a">Cancelar</button>');
     }
     return '<div class="mcag-c' + (c.atendida ? " ok" : "") + '" style="border-left-color:' + (c.nueva ? "#7C6BB0" : "#3E7CB1") + '"><div class="mcag-h">' + e(hora(c.datetime)) + "<small>" + e(c.duracion ? c.duracion + " min" : "") + "</small></div>" +
-      '<div><span class="mcag-n" data-ver="' + e(c.id) + '">' + e((c.nombre + " " + c.apellido).trim() || "Sin nombre") + "</span>" + '<span class="mcag-tag' + (c.nueva ? "" : " ant") + '">' + (c.nueva ? "Nueva" : "Antigua") + "</span> " + etqPill(c.etiqueta) +
-      '<div class="mcag-sub">' + (window.MCColor ? window.MCColor.pill(calNom(c.calendarID) || c.calendario) : e(calNom(c.calendarID) || c.calendario)) + " · " + e(c.tipo) + "</div>" + (c.notas ? '<div class="mcag-sub">📝 ' + e(c.notas) + "</div>" : "") + "</div>" +
+      '<div><span class="mcag-n" data-ver="' + e(c.id) + '">' + e((c.nombre + " " + c.apellido).trim() || "Sin nombre") + "</span>" + (c.nueva ? '<span class="mcag-tag">Nueva</span> ' : "") + etqPill(c.etiqueta) +
+      '<div class="mcag-sub">' + subCita(c) + "</div>" + (c.notas ? '<div class="mcag-sub">📝 ' + e(c.notas) + "</div>" : "") + "</div>" +
       '<div class="mcag-acts">' + acts.join("") + "</div></div>";
   }
   function vistaLista() {
@@ -146,7 +165,7 @@
     var top = ((s - h0 * 60) / 60) * px, ht = Math.max(16, (dur / 60) * px - 2);
     var col = colorCal(c.calendarID), ink = inkDe(col);
     var nom = (c.nombre + " " + ((c.apellido || "").split(" ")[0] || "")).trim() || "Sin nombre";
-    return '<button type="button" class="mcag-bl' + (c.atendida ? " ok" : "") + '" data-ver="' + e(c.id) + '" style="top:' + top + "px;height:" + ht + "px;background:" + col + ";color:" + ink + ";" + (extra || "") + '" title="' + e(hora(c.datetime) + " · " + nom + " · " + (c.tipo || "") + (c.duracion ? " · " + c.duracion + " min" : "")) + '"><b>' + e(hora(c.datetime)) + "</b>" + (ht >= 28 ? "<span>" + e(nom) + "</span>" : "") + (ht >= 42 && c.tipo ? "<span>" + e(c.tipo) + "</span>" : "") + "</button>";
+    return '<button type="button" class="mcag-bl' + (c.atendida ? " ok" : "") + '" data-ver="' + e(c.id) + '" style="top:' + top + "px;height:" + ht + "px;background:" + col + ";color:" + ink + ";" + (extra || "") + '" title="' + e(hora(c.datetime) + " · " + nom + " · " + (tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) || "") + (c.duracion ? " · " + c.duracion + " min" : "")) + '"><b>' + e(hora(c.datetime)) + "</b>" + (ht >= 28 ? "<span>" + e(nom) + "</span>" : "") + (ht >= 42 && tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo) ? "<span>" + e(tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo)) + "</span>" : "") + "</button>";
   }
   function lineaAhora(h0, h1, px, fecha) {
     var hoy = (K.meta && K.meta.hoy) || ymd(new Date());
@@ -253,7 +272,7 @@
     var c = r.cita, f = c.ficha;
     var kv = function (k, v) { return v ? "<dt>" + e(k) + "</dt><dd>" + e(v) + "</dd>" : ""; };
     b.querySelector(".mcag-box").innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px"><h3 style="margin:0">' + e(c.nombre + " " + c.apellido) + '</h3><button class="btn ghost small" data-x>×</button></div>' +
-      '<div class="mcag-sub">' + e(hora(c.datetime)) + " · " + e(c.duracion + " min") + " · " + (window.MCColor ? window.MCColor.pill(calNom(c.calendarID) || c.calendario) : e(calNom(c.calendarID) || c.calendario)) + " · " + e(c.tipo) + " " + etqPill(c.etiqueta) + "</div>" +
+      '<div class="mcag-sub">' + e(hora(c.datetime)) + " · " + e(c.duracion + " min") + " · " + subCita(c) + " " + etqPill(c.etiqueta) + "</div>" +
       '<dl class="mcag-kv">' + kv("Teléfono", c.telefono) + kv("Email", c.email) + kv("Notas", c.notas) + (c.forms || []).map(function (x) { return kv(x.campo, x.valor); }).join("") + "</dl>" +
       (f ? '<b style="font-size:.84rem">Ficha de registro</b><dl class="mcag-kv">' + kv("CI", f.cedula) + kv("Tipo de piel", f.tipoPiel) + kv("Alergias", f.alergias) + kv("Medicación", f.medicacion) + kv("Autoriza fotos", f.autorizaFotos) + "</dl>" : '<p class="mccf-note">No encontré una ficha de registro única para este nombre (no se usa el teléfono como cédula).</p>') +
       '<div class="mccf-acts" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:10px">' + (f ? '<button class="btn ghost small" type="button" data-ficha="' + e(f.clienteKey) + '">Abrir ficha</button>' : "") +
@@ -345,6 +364,17 @@
       var cita = function (id) { return K.citas.find(function (c) { return String(c.id) === String(id); }); };
       if ((t = ev.target.closest("[data-crear]"))) { var c0 = cita(t.getAttribute("data-crear")), fi = await api("ag_cita", { id: c0.id }); crearTicket(c0, fi && fi.cita && fi.cita.ficha); return; }
       if ((t = ev.target.closest("[data-mover]"))) { dlgAgendar(main, cita(t.getAttribute("data-mover"))); return; }
+      if ((t = ev.target.closest("[data-wa]"))) {
+        var idWa = t.getAttribute("data-wa"); t.disabled = true;
+        var rwa = await api("ag_wa", { id: idWa });
+        t.disabled = false;
+        if (!rwa || rwa.error) { toast2((rwa && rwa.error) || "No se pudo armar el WhatsApp", true); return; }
+        if (!rwa.tiene_tel) { toast2("Esta cita no tiene teléfono en Acuity", true); return; }
+        abrirWaUrl(rwa);
+        var cwa = cita(idWa); if (cwa) cwa.wa_enviado = true;
+        t.classList.add("ok"); t.textContent = "WhatsApp ✓";
+        return;
+      }
       if ((t = ev.target.closest("[data-cancel]"))) {
         var c1 = cita(t.getAttribute("data-cancel")), mot = prompt("¿Cancelar la cita de " + c1.nombre + " (" + hora(c1.datetime) + ")? Se libera el horario en Acuity.\nMotivo:"); if (mot === null) return;
         var r = await api("ag_cancelar", { id: c1.id, motivo: mot }); if (!r || r.error) { toast2((r && r.error) || "No se pudo", true); return; }
