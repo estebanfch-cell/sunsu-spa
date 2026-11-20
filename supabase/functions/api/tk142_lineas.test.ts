@@ -62,9 +62,9 @@ describe("TK142 líneas compactas (MineCore claro)", () => {
     assert.ok(src.includes("<span>Pagado</span>"));
     assert.ok(src.includes("<span>Saldo</span>"));
     assert.doesNotMatch(src, /Subtotal gravado 15%|<span>Subtotal 0%|Subtotal \(sin IVA\)|Subtotal sin IVA/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK167"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK167"/);
-    assert.match(html, /20261120tk167/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK168"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK168"/);
+    assert.match(html, /20261120tk168/);
     assert.doesNotThrow(() => new Function(src));
   });
 
