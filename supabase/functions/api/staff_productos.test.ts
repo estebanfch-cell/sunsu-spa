@@ -62,7 +62,7 @@ describe("TK69 productos del personal", () => {
     assert.match(js, /pvpSinIva/);
     assert.match(js, /Va en protocolo/);
     assert.match(js, /MC\.admin \? "Buscar producto, SKU, marca o código"/);
-    assert.match(beta, /mc-productos\.js\?v=20261119tk160/);  });
+    assert.match(beta, /mc-productos\.js\?v=20261120tk163/);  });
   it("lista y ficha: todo el catálogo, solo PVP con/sin IVA, último consumo y protocolo, sin descargar", async () => {
     const db = semilla();
     const staff = ctx(db, "cosmetologa");

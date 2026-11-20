@@ -121,7 +121,7 @@ extend("prov_nota", "any", async (p, ctx, ses) => {
 });
 
 /** Códigos ya usados: familias de proveedores, prefijos de productos y fichas. */
-async function codigosUsados(ctx: Ctx): Promise<Set<string>> {
+export async function codigosUsados(ctx: Ctx): Promise<Set<string>> {
   const [hojas, prods, f] = await Promise.all([todas(ctx, "proveedores"), todas(ctx, "erp_productos"), fichasProv(ctx)]);
   const u = new Set<string>();
   for (const h of hojas) if (s(h.familia)) u.add(s(h.familia).toUpperCase());

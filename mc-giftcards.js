@@ -418,5 +418,5 @@ function listaHtml() {
   }
   function wire(main, route) { if (route.id === "nueva") wireNueva(main); else if (route.id) { if (K.d) wireDet(main); } else wireLista(main); }
   window.MCGiftShare = { planEntrega: planEntregaGift, puedeShareArchivo: puedeShareArchivo, esMovil: esMovilGift };
-  window.MCGiftCards = { render: render, wire: wire, ensureList: async function () { if ((K.items || []).length) return true; await cargarLista(false); return true; }, _k: K };
+  window.MCGiftCards = { render: render, wire: wire, ensureList: async function () { if ((K.items || []).length) return true; await cargarLista(false); return true; }, _k: K, pdf: function (v) { return armarPdf(v); } };
 })();
