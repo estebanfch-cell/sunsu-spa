@@ -254,8 +254,8 @@
       '<button type="button" id="mctk-print">Imprimir</button>' +
       '<button type="button" id="mctk-excl">Excluir comisión</button>' +
       (d.admin && window.MCMultas ? '<button type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") +
-      (d.puedeCancelar ? '<button type="button" class="mctk-cancel" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") +
-      (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) ? '<button type="button" class="mctk-cancel" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "");
+      (d.puedeCancelar ? '<button type="button" class="mctk-cancel" id="mctk-cancelar">🗑️ Eliminar ticket</button>' : "") +
+      (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) && !(d.edicion && d.edicion.id) ? '<button type="button" class="mctk-cancel" id="mctk-solcancel">🗑️ Eliminar ticket</button>' : "");
   }
   function accionesHtml() {
     var d = K.d, t = d.ticket;
@@ -268,7 +268,7 @@
       voucherBtnsHtml() +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-dd">Documentos ▾</button><div class="mctk-dd" id="mctk-dd" hidden>' + docsHtml2() + "</div></div>" +
       '<div class="mctk-menu"><button class="btn ghost small" type="button" data-menu="mctk-wa">WhatsApp ▾</button><div class="mctk-dd" id="mctk-wa" hidden>' + waHtml() + "</div></div>" +
-      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🚫 Cancelar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Solicitar eliminación</button>' : "") + "</div>";
+      '<button class="btn ghost small" type="button" id="mctk-print">Imprimir</button><button class="btn ghost small" type="button" id="mctk-excl">Excluir comisión</button>' + (d.admin && window.MCMultas ? '<button class="btn ghost small" type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") + (d.puedeCancelar ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-cancelar">🗑️ Eliminar ticket</button>' : "") + (!d.puedeCancelar && d.puedePedir && !(t && t.cancelado) && !(d.edicion && d.edicion.id) ? '<button class="btn ghost small mctk-cancel" type="button" id="mctk-solcancel">🗑️ Eliminar ticket</button>' : "") + "</div>";
   }
   function filaDeLista(clave) {
     var k = String(clave || ""), list = window._histVisibles || window._histData || [], i, t, cards, id;
@@ -727,22 +727,50 @@
     if (!(d.puedePedir || d.puedeEditar)) return "";
     return '<button type="button" class="mctk-edit-mini" id="mctk-editar-form">Editar</button>';
   }
+  // TK154 (Emilia t671u/t675u): la admin ve EXACTAMENTE qué se pide (Antes → Después o eliminar) y aprueba;
+  // el ticket real no cambia hasta aprobar y después sigue bloqueado (lockdown) para el personal.
   function edicionHtml() {
-    var d = K.d || {}, ed = d.edicion, t = d.ticket || {}, anul = t.cancelado;
-    var h = "";
-    if (ed && ed.id) {
-      h += '<div class="mccf-card mctk-edicion" id="mctk-edicion"><div style="font-weight:800;color:#1A2744">Solicitud de edición pendiente' + (ed.solicitante ? " · " + e(ed.solicitante) : "") + "</div>";
-      if (ed.motivo) h += '<div class="mccf-sub">' + e(ed.motivo) + "</div>";
-      if (ed.diff && typeof window._tkPintarDiffEdicion === "function") h += window._tkPintarDiffEdicion(ed.diff);
-      if (d.admin) {
-        h += '<div class="acts"><button type="button" class="btn small" id="mctk-edicion-ok">Aprobar edición</button><button type="button" class="btn ghost small" id="mctk-edicion-no">Rechazar</button></div>';
-      } else {
-        h += '<p class="mccf-sub">Esperando que Emilia o Emi aprueben. El ticket todavía no cambia.</p>';
-      }
-      h += "</div>";
-      return h;
+    var d = K.d || {}, ed = d.edicion;
+    if (!(ed && ed.id)) return "";
+    var anular = ed.tipo === "anular", legacy = ed.tipo === "legacy" || ed.legacy;
+    var titulo = anular ? "🚫 SOLICITUD PARA ELIMINAR TICKET" : legacy ? "Solicitud de edición (anterior)" : "✏️ Propuesta de edición · revisa los cambios";
+    var h = '<div class="mccf-card mctk-edicion mctk-sol' + (anular ? " mctk-sol-anular" : "") + '" id="mctk-edicion">';
+    h += '<div class="mctk-sol-h">' + titulo + "</div>";
+    h += '<div class="mctk-sol-meta">Pedido por <b>' + e(ed.solicitante || "—") + "</b>" + (ed.creado ? " · " + e(fechaIso(ed.creado)) : "") + "</div>";
+    if (ed.motivo) h += '<div class="mctk-sol-mot"><b>Motivo:</b> ' + e(ed.motivo) + "</div>";
+    if (typeof window._tkPintarDiffEdicion === "function") h += window._tkPintarDiffEdicion(ed);
+    if (d.admin) {
+      h += '<p class="mctk-sol-lock">🔒 ' + (anular ? "Al aprobar, el ticket se elimina (queda Cancelado: sale de totales y comisiones)." : legacy ? "Esta solicitud no trae los cambios: al aprobar se cierra y tú editas el ticket a mano." : "Al aprobar se aplican exactamente estos cambios y el ticket sigue bloqueado.") + "</p>";
+      h += '<div class="acts"><button type="button" class="btn small" id="mctk-edicion-ok">' + (anular ? "Aprobar y eliminar" : "Aprobar y aplicar") + '</button><button type="button" class="btn ghost small" id="mctk-edicion-no">Rechazar</button></div>';
+    } else {
+      h += '<p class="mccf-sub">🔒 Esperando que un admin apruebe. El ticket todavía no cambia.</p>';
     }
-    return h;
+    return h + "</div>";
+  }
+  // TK154 (Emilia t675u): «Eliminar ticket» de las chicas pide aprobación; la admin elimina directo.
+  function dlgSolicitarEliminar() {
+    var d = K.d, t = d.ticket, box = document.createElement("div"); box.className = "mctk-dlg mctk-xdlg";
+    box.innerHTML = '<div class="mctk-box"><div class="mctk-xh"><h3>🗑️ Eliminar ' + e(t.soNum || t.betaNum || "ticket") + '</h3><button type="button" class="mctk-xx" data-cerrar title="Cerrar">×</button></div>' +
+      '<p class="mctk-sol-aviso">Se le solicitará al administrador eliminar este ticket.</p>' +
+      '<p class="mccf-sub">El ticket no se borra ahora: queda igual (bloqueado) hasta que un admin lo apruebe.</p>' +
+      '<label class="mctk-xlbl">Motivo (obligatorio)<input type="text" id="mctk-sem" maxlength="300" placeholder="Ej. Ticket ya realizado anteriormente / duplicado"></label>' +
+      '<p class="err" id="mctk-seerr"></p><div class="mctk-acts" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost small" type="button" data-cerrar2>Volver</button><button class="btn small mctk-cancel" type="button" id="mctk-seok">Solicitar eliminación</button></div></div>';
+    document.body.appendChild(box);
+    var cerrar = function () { box.remove(); };
+    on(box, "[data-cerrar]", "onclick", cerrar); on(box, "[data-cerrar2]", "onclick", cerrar);
+    box.onclick = function (ev) { if (ev.target === box) cerrar(); };
+    on(box, "#mctk-seok", "onclick", async function () {
+      var m = box.querySelector("#mctk-sem").value.trim(), err = box.querySelector("#mctk-seerr"), b = this;
+      if (m.length < 3) { err.textContent = "Escribe el motivo"; return; }
+      b.disabled = true; b.textContent = "Enviando…";
+      try {
+        var rr = await api("solicitud_crear", { tabla: "ticket_detalle", fila: d.clave, tipo: "eliminacion", motivo: m });
+        if (!rr || rr.error) throw new Error((rr && rr.error) || "No se pudo enviar");
+        box.remove();
+        toast2(rr.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Se le solicitó al administrador eliminar este ticket");
+        var nd = await api("tk_get", { clave: d.clave }); if (nd && nd.ok) { cargarEstado(nd); repintar(document.getElementById("main")); }
+      } catch (x) { err.textContent = (x && x.message) || String(x); b.disabled = false; b.textContent = "Solicitar eliminación"; }
+    });
   }
   function html() {
     var d = K.d, t = d.ticket, inf = d.info || {}, rg = d.reagendada || {};
@@ -763,7 +791,7 @@
       (K.editandoLineas ? ('<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>') : "") +
       '<div class="mctk-foot">' + (K.editandoLineas ? ('<div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
       '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div>') : "") + '<div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
-      '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<button class="btn small" type="button" id="mctk-pedir">Solicitar cambio</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
+      '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<span class="mctk-prop-note">Propuesta de edición — los cambios se aplicarán solo cuando un admin apruebe</span><button class="btn small" type="button" id="mctk-pedir">📨 Enviar propuesta para aprobación</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
 
@@ -924,7 +952,10 @@
     try { r = await api("tk_get", { clave: clave }); }
     catch (x) { r = { error: (x && x.message) || String(x) }; }
     if (gen !== K.hidGen) return;
-    if (K.dirty && K.d && K.d.clave === clave) return;
+    // TK154: si lo que se estaba editando eran líneas «previa» (armadas desde la lista), se cambian por las reales.
+    var eraPrevia = !!(K.d && (K.d.lineas || []).some(function (l) { return l && l.previa; }));
+    if (K.dirty && K.d && K.d.clave === clave && !(eraPrevia && r && r.ok)) return;
+    if (K.dirty && eraPrevia) { K.dirty = false; toast2("Se cargaron las líneas reales del ticket: vuelve a hacer tu cambio", true); }
     d = r;
     if (!d || d.error) {
       err = e((d && d.error) || "No se pudo cargar");
@@ -1224,14 +1255,7 @@
     on(main, "#mctk-print", "onclick", function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); });
     on(main, "#mctk-excl", "onclick", dlgExcluir);
     on(main, "#mctk-cancelar", "onclick", dlgCancelar);
-    on(main, "#mctk-solcancel", "onclick", async function () {
-      var mo = prompt("¿Por qué hay que eliminar (cancelar) este ticket? Lo aprueba un admin.");
-      if (mo == null) return;
-      if (String(mo).trim().length < 3) { alert("Escribe el motivo"); return; }
-      var rr = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "eliminacion", motivo: String(mo).trim() });
-      if (!rr || rr.error) { alert((rr && rr.error) || "No se pudo enviar"); return; }
-      if (window.toast) toast(rr.prueba ? "Solicitud de simulación enviada a tu bandeja" : "📨 Solicitud de eliminación enviada", "var(--green)");
-    });
+    on(main, "#mctk-solcancel", "onclick", function (ev) { cerrarMenuDe(ev && ev.target); dlgSolicitarEliminar(); });
     on(main, "#mctk-multa", "onclick", function () {
       var t = K.d.ticket, inf = K.d.info || {};
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });
@@ -1426,7 +1450,7 @@
             if (btn) { btn.disabled = false; btn.textContent = txt; }
             toast2(r.error, true); return;
           }
-          toast2(aprobar ? "Edición aprobada" : "Edición rechazada");
+          toast2(aprobar ? (ed.tipo === "anular" ? "Ticket eliminado (queda Cancelado)" : "✓ Cambios aplicados · ticket bloqueado") : "Solicitud rechazada: el ticket queda igual");
           if (r && r.ticket) { K.d = r.ticket; if (K.d) K.d.edicion = null; try { cargarEstado(K.d); repintar(main); } catch (e0) {} }
           return api("tk_get", { clave: K.d.clave }).then(function (d) { if (d && d.ok) { cargarEstado(d); repintar(main); } });
         })
@@ -1441,10 +1465,10 @@
     if (nob) nob.addEventListener("click", function () { resolverEdicion(false, nob); });
 
     if (pd) pd.onclick = async function () {
-      var mot = prompt("¿Por qué se cambia el ticket? (lo aprueba un admin)"); if (!mot || !mot.trim()) return;
+      var mot = prompt("Propuesta de edición — los cambios se aplicarán solo cuando un admin apruebe.\n\nMotivo (obligatorio):"); if (!mot || mot.trim().length < 3) { if (mot != null) err.textContent = "Escribe el motivo"; return; }
       var r = await api("solicitud_crear", { tabla: "ticket_detalle", fila: K.d.clave, tipo: "cambio", motivo: mot.trim(), propuestos: propuesta() });
       if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo enviar"; return; }
-      toast2("Solicitud enviada: un admin la revisa");
+      toast2("📨 Propuesta enviada para aprobación: el ticket no cambia hasta que un admin apruebe");
       var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); }
     };
     on(main, "#mctk-descartar", "onclick", async function () { var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok) { cargarEstado(d); repintar(main); } });
@@ -1479,6 +1503,11 @@
   window.MCTickets = {
     render: function (route) { return render(String(route.id)); },
     wire: wire,
+    precargar: function (clave) {
+      // TK154: precalienta tk_get (ej. tickets con solicitud pendiente) para que abran sin esperar.
+      var k = String(clave || ""); if (!k || (window._tkVista && window._tkVista[k])) return Promise.resolve(null);
+      return Promise.resolve(api("tk_get", { clave: k })).then(function (d) { if (d && d.ok) guardarVista(d); return d; }).catch(function () { return null; });
+    },
     claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }, cacheLineasLista: cacheLineasLista, lineasCacheDe: lineasCacheDe,
     isDirty: function () { return !!K.dirty; },
     _k: K, _calc: calc,

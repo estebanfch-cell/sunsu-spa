@@ -184,7 +184,7 @@ describe("TK141 edición de ticket con aprobación", () => {
 
   it("Aprobaciones expone el diff línea por línea y el formulario no marca el paquete solo", () => {
     const screens = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
-    assert.match(screens, /Solicitar aprobación para la edición/);
+    assert.match(screens, /Enviar propuesta para aprobación/); // TK154: modo «Proponer cambios»
     assert.match(screens, /_paqElegirSesion/);
     assert.match(screens, /Recomendado/);
     assert.match(screens, /NUNCA|no se elige solo|No se marca solo|no se marca solo/i);
@@ -192,10 +192,10 @@ describe("TK141 edición de ticket con aprobación", () => {
     assert.match(screens, /_tkPintarDiffEdicion/);
     const mc = readFileSync(new URL("../../../mc-tickets.js", import.meta.url), "utf8");
     assert.match(mc, /mctk-editar-form/);
-    assert.match(mc, /Aprobar edición/);
+    assert.match(mc, /Aprobar y aplicar/); // TK154
     const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(html, /_tkPintarDiffEdicion/);
-    assert.match(html, /sunsu-2026-11-19-TK153/);
+    assert.match(html, /sunsu-2026-11-19-TK154/);
   });
 });
 

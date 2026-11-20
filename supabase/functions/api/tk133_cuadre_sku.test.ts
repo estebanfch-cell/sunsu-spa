@@ -93,8 +93,8 @@ describe("TK133 cuadre: ticket $0.00 falso y total de líneas", () => {
   it("cache TK133", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-2026-11-19-TK153/);
-    assert.match(beta, /20261119tk153/);
+    assert.match(sw, /sunsu-2026-11-19-TK154/);
+    assert.match(beta, /20261119tk154/);
     assert.doesNotMatch(sw, /sunsu-beta-2026-11-19-TK132/);
   });
 });
