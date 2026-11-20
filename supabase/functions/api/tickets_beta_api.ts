@@ -619,7 +619,7 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
 // marcas «por corregir» (cruce con Migo), detalle de costos y estados para la lista (LED).
 export const DATOS_TK: [string, string][] = [
   ["factura", "Factura"], ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "CI"], ["email", "Email"], ["telefono", "Teléfono"],
-  ["cosmetologa", "Atendió"], ["notas", "Notas"], ["recomendaciones", "Recomendaciones"], ["retorno", "Fecha de regreso"], ["local", "Local"], ["cabina", "Cabina"],
+  ["cosmetologa", "Atendió"], ["notas", "Notas"], ["recomendaciones", "Recomendaciones"], ["retorno", "Fecha de regreso"], ["retornoTrat", "Tratamiento recomendado"], ["local", "Local"], ["cabina", "Cabina"],
 ];
 /** Dónde se hizo el servicio (opcional): para repartir el consumo de cabina por cabina en el costo por facial. */
 export const CABINAS_TK = ["Cabina 1", "Cabina 2", "Cabina 3", "Local"];
@@ -815,6 +815,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     factura: s(d.factura) || facturaCompleta(r.fac_7), nombre: s(d.nombre ?? vf(fc.nombres) ?? r.nombre), apellido: s(d.apellido ?? vf(fc.apellido) ?? r.apellido), cedula: s(d.cedula ?? ced),
     email: ct.email, telefono: ct.telefono, cosmetologa: s(d.cosmetologa ?? r.atendido_por),
     notas: s(d.notas ?? r.notas_generales), recomendaciones: s(d.recomendaciones ?? r.recomendaciones), retorno: s(d.retorno ?? s(r.fecha_retorno).slice(0, 10)),
+    retornoTrat: s(d.retornoTrat),
     clienteCodigo: s(fc._codigo) || s((r.orig as Row | undefined)?.cliente_codigo),
     cabina: s(d.cabina),
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,

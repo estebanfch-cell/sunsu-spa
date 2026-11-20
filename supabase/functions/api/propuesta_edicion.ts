@@ -9,7 +9,7 @@ export type TipoPropuesta = "editar" | "anular";
 export const CAMPOS_DIFF: [string, string][] = [
   ["nombre", "Nombre"], ["apellido", "Apellido"], ["cedula", "CI"], ["factura", "Factura"],
   ["cosmetologa", "Atendió"], ["notas", "Notas"], ["recomendaciones", "Recomendaciones"],
-  ["retorno", "Fecha de regreso"], ["cabina", "Cabina"], ["local", "Local"],
+  ["retorno", "Fecha de regreso"], ["retornoTrat", "Tratamiento recomendado"], ["cabina", "Cabina"], ["local", "Local"],
   ["justificacion_descuento", "Motivo del descuento"],
 ];
 const PRIVADOS = new Set(["telefono", "email", "celular", "whatsapp"]);

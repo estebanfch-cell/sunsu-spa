@@ -43,7 +43,7 @@ async function provsConsig(ctx: Ctx): Promise<Row[]> {
 /** TK27: stock de los productos en consignación de la familia, como se ve en 📦 Productos:
  *  consignacion = bodega CONSIGNACION (real); venta / cabina / casa = lo que todavía está fuera
  *  (se pasa con «Conteo inicial consignación»). */
-async function stockConsig(ctx: Ctx, ses: Ses, familia: string): Promise<Row[]> {
+export async function stockConsig(ctx: Ctx, ses: Ses, familia: string): Promise<Row[]> {
   const [prods, lista, on] = await Promise.all([todas(ctx, "erp_productos"), listaProductos(ctx, ses), famsConsig(ctx)]);
   const fila = new Map(lista.map((r) => [s(r.id), r]));
   const out: Row[] = [];
