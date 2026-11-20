@@ -2954,7 +2954,7 @@ function iconoReloj(salida) {
 }
 function htmlReloj() {
   const abierto = !!reloj.abierto;
-  const texto = abierto ? "Marcar salida" : "Marcar entrada";
+  const texto = abierto ? (reloj.almuerzo === "fin" ? "Fin almuerzo" : "Marcar salida") : "Marcar entrada";
   let crono = "";
   if (abierto) {
     const base = Number(reloj.transcurridoMin || 0) * 60000 + Math.max(0, Date.now() - (reloj._t0 || Date.now()));
@@ -3147,6 +3147,8 @@ function paintShell(title) {
       pintarFly();
       const menu = document.getElementById("crear-menu");
       if (menu) menu.hidden = false;
+      pintarReloj();
+      void cargarReloj().catch(() => null);
     };
   });
   const crearClose = document.getElementById("crear-close");
@@ -6518,9 +6520,11 @@ function wireReloj(root) {
     b.onclick = () => {
       const menu = document.getElementById("crear-menu");
       if (menu) menu.hidden = true;
+      // TK196 (Andrea 20/11): nunca confiar en un botón dibujado antes de cargar el estado. Se pide el
+      // estado real de hoy y se abre la marca que toca: entrada, fin de almuerzo o salida.
       const raw = b.getAttribute("data-reloj-open");
-      const tipo = (raw === "entrada" || raw === "salida") ? raw : (reloj.accion || "entrada");
-      abrirCamara(tipo);
+      if (raw === "almuerzo_inicio" || raw === "almuerzo_fin") { abrirCamara(raw); return; }
+      void cargarReloj().catch(() => null).then(() => abrirCamara(siguienteMarcaReloj()));
     };
   });
   const tomar = document.getElementById("reloj-tomar");
@@ -6541,8 +6545,23 @@ function wireReloj(root) {
     };
   }
 }
+function siguienteMarcaReloj() {
+  if (!reloj || !reloj.abierto) return "entrada";
+  return reloj.almuerzo === "fin" ? "almuerzo_fin" : "salida";
+}
+// TK196: el menú «Crear» se dibujaba con el estado por defecto (sin entrada) y nunca se actualizaba.
+function pintarCrearMenu() {
+  const menu = document.getElementById("crear-menu");
+  const box = menu && menu.querySelector(".chooser-actions");
+  if (!box || !window.MCNav || !window.MCNav.crearHtml) return;
+  box.innerHTML = window.MCNav.crearHtml();
+  box.querySelectorAll("[data-go]").forEach((b) => {
+    b.onclick = () => { menu.hidden = true; go(b.getAttribute("data-go")); };
+  });
+}
 function pintarReloj() {
   document.querySelectorAll("[data-reloj-host]").forEach((el) => { el.innerHTML = htmlReloj(); });
+  pintarCrearMenu();
   wireReloj(document.getElementById("app"));
 }
 async function cargarReloj() {
@@ -8281,6 +8300,7 @@ async function marcarAsistencia(tipo, foto) {
     const msg = "No se registró la marca: " + ((data && data.error) || "error desconocido");
     if (err) err.textContent = msg;
     toast(msg);
+    void cargarReloj().catch(() => null);
     return;
   }
   cerrarCamara();
@@ -8566,7 +8586,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK195"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK196"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
