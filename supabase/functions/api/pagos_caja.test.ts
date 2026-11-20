@@ -43,7 +43,10 @@ describe("💵 Pagos + caja chica", () => {
     assert.match(String((await h("cj_mov", "rec", { tipo: "gasto", monto: 999, detalle: "x" })).error), /Fondos insuficientes/);
     const g = await h("cj_mov", "rec", { tipo: "gasto", monto: "16.57", categoria: "Limpieza", detalle: "Desinfectante" });
     assert.equal(g.saldo, 220);
-    assert.equal((await h("cj_mov", "rec", { tipo: "propina_entrada", monto: 10, detalle: "Propina Ana" })).saldo, 230);
+    // TK164: recepción no registra ingresos/propinas (solo gasto, consumo, entrega para depósito).
+    assert.match(String((await h("cj_mov", "rec", { tipo: "ingreso", monto: 10, detalle: "x" })).error), /Solo puedes registrar/);
+    assert.match(String((await h("cj_mov", "rec", { tipo: "propina_entrada", monto: 10, detalle: "x" })).error), /Solo puedes registrar/);
+    assert.equal((await h("cj_mov", "adm", { tipo: "propina_entrada", monto: 10, detalle: "Propina Ana" })).saldo, 230);
     assert.match(String((await h("cj_cuadre", "rec", { contado: 228 })).error), /escribe una nota/);
     const c = await h("cj_cuadre", "rec", { contado: 228, nota: "faltan 2" });
     assert.equal(c.diferencia, -2);
