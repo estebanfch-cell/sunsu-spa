@@ -13,6 +13,7 @@ import { claveDe } from "./ticket_beta.ts";
 import { canonDeClave, clavesDe } from "./clientes_alias.ts";
 import { docsDe } from "./tickets_beta_api.ts";
 import { SOLICITUD_HOOKS } from "./inline_api.ts";
+import { siNo } from "./consent_override.ts";
 import { agruparDocumentos, agruparSinAsignar, esDeClienta, localEc, mismoNombre, nombreDeArchivo, nombreDescarga, vistaDoc } from "./documentos_beta.ts";
 
 const FALTA = "Falta aplicar 0049_clientes_beta.sql";
@@ -30,8 +31,13 @@ export const CAMPOS_CLIENTE: [string, string][] = [
   // TK163: lo que la clienta escribe en «Mi perfil» de la app (el equipo lo ve en la ficha).
   ["preferencias", "Preferencias (de la clienta)"], ["notaClienta", "Nota de la clienta"],
 ];
+/** TK183 (Emilia t797u/t799u): el personal corrige directo (con historial quién/cuándo/antes/después) todo lo que NO
+ *  sea dato de contacto/identidad ni una autorización. Estos van SIEMPRE por solicitud a administración. */
+export const CAMPOS_CON_SOLICITUD = new Set(["nombres", "apellido", "cedula", "telefono", "email", "sector", "autorizaFotos", "consentimiento"]);
+export const CAMPOS_DIRECTOS_STAFF = CAMPOS_CLIENTE.map(([k]) => k).filter((k) => !CAMPOS_CON_SOLICITUD.has(k));
 /** Solo lectura en la ficha (vienen del formulario de registro). */
 export const CAMPOS_LECTURA: [string, string][] = [["registrada", "Fecha de registro"], ["ultimoRegistro", "Último registro"]];
+const SYS_ADMIN = { rol: "admin", uid: "sistema", short: "sistema", priv: {} };
 const PRIVADOS = new Set(["telefono", "email", "sector"]);
 const CAMPO_FLAG: Record<string, PrivFlag> = { telefono: "telefonos", email: "emails", sector: "sector" };
 /** Teléfono, correo y sector/dirección: por defecto solo admin. Un admin puede soltarlos por rol o usuario (TK73). */
@@ -301,6 +307,8 @@ export async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
     corregidos: Object.keys(corr).filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))), grupos: agruparDocumentos(documentos),
     bitacora: admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[], ses, matriz), borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
     puedeEditar: admin, puedePedir: !admin, puedeDescargar: puedeDescargarDe(ses, matriz),
+    // TK183: qué guarda directo el personal y qué va por solicitud (el admin guarda todo directo).
+    directos: admin ? CAMPOS_CLIENTE.map(([k]) => k) : CAMPOS_DIRECTOS_STAFF, conSolicitud: admin ? [] : [...CAMPOS_CON_SOLICITUD].filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)),
   };
   if (!limpioStaff(payload, ses, matriz)) return { error: "Respuesta de cl_get con datos que el personal no debe ver" };
   return payload;
@@ -416,6 +424,7 @@ export async function guardarCliente(ctx: Ctx, ses: Ses, key0: string, cambios: 
   if (limpio.cedula && !/^\d{10}(\d{3})?$|^[A-Z0-9-]{5,20}$/i.test(String(limpio.cedula))) return { error: "Cédula inválida" };
   if (limpio.nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(String(limpio.nacimiento))) return { error: "Nacimiento: usa AAAA-MM-DD" };
   if (limpio.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(limpio.email))) return { error: "Email inválido" };
+  if ("autorizaFotos" in limpio) { const v = siNo(limpio.autorizaFotos); if (!v) return { error: "Autoriza fotos: SI o NO" }; limpio.autorizaFotos = v; }
   const actual = await ficha(ctx, { ...ses, rol: "admin" } as Ses, key);
   if (actual.error) return actual;
   const antes = actual.datos as Row;
@@ -443,8 +452,14 @@ async function borrarCliente(ctx: Ctx, ses: Ses, key0: string, motivo: string, v
 }
 
 extend("cl_guardar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo un admin guarda directo; usa «Solicitar cambio»" };
-  return guardarCliente(ctx, ses, s(p.key), (p.cambios || {}) as Row, "edición");
+  const cambios = (p.cambios || {}) as Row;
+  if (esAdmin(ses.rol)) return guardarCliente(ctx, ses, s(p.key), cambios, "edición");
+  // TK183: el personal guarda directo solo los campos no sensibles; contacto/identidad y autorizaciones → solicitud.
+  const etq = new Map(CAMPOS_CLIENTE);
+  const bloqueados = Object.keys(cambios).filter((k) => !CAMPOS_DIRECTOS_STAFF.includes(k));
+  if (bloqueados.length) return { error: bloqueados.map((k) => "«" + (etq.get(k) || k) + "»").join(", ") + " necesita solicitud a administración (con motivo)", requiereSolicitud: bloqueados };
+  if (acceso(ses.rol, "clientes", await matrizDe(ctx.db)) === "no") return { error: "No tienes acceso a Clientes" };
+  return guardarCliente(ctx, ses, s(p.key), cambios, "edición directa (personal)");
 });
 extend("cl_borrar", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin elimina; usa «Solicitar eliminación»" };
@@ -463,7 +478,25 @@ SOLICITUD_HOOKS["cliente_beta"] = {
   fila: async (ctx, ses, key) => {
     const f = await ficha(ctx, ses, key);
     if (f.error) return { error: s(f.error) };
-    return { row: { key }, antes: f.datos as Row };
+    const d = f.datos as Row, nom = (s(d.nombres) + " " + s(d.apellido)).trim() || s(f.codigo) || "clienta";
+    return { row: { key }, antes: d, etiqueta: nom, enlace: "#/m/clientes/c/" + encodeURIComponent(s(f.key) || key) };
+  },
+  /* TK183 (Emilia t800u): la solicitud dice QUÉ cambia (campo: antes → después); la admin solo revisa y aprueba. */
+  preparar: async (ctx, _ses, key, tipo, propuestos, _motivo, hecho) => {
+    if (tipo !== "cambio") return null;
+    const f = await ficha(ctx, { ...SYS_ADMIN, name: "sistema" } as Ses, key);
+    const antes = (f && !f.error ? f.datos : (hecho as Row).antes) as Row || {};
+    const etq = new Map(CAMPOS_CLIENTE), cambios: Row[] = [];
+    const limpio: Row = {};
+    for (const [k, v] of Object.entries(propuestos || {})) {
+      if (!etq.has(k)) continue;
+      const nv = k === "autorizaFotos" ? (siNo(v) || s(v).trim()) : s(v).trim();
+      if (nv === s(antes[k]).trim()) continue;
+      limpio[k] = nv; cambios.push({ campo: k, etiqueta: etq.get(k), antes: s(antes[k]), despues: nv });
+    }
+    const nom = (s(antes.nombres) + " " + s(antes.apellido)).trim() || "clienta";
+    const txt = cambios.map((c) => s(c.etiqueta) + ": " + (s(c.antes) || "—") + " → " + (s(c.despues) || "—")).join("; ");
+    return { propuestos: { ...limpio, _cambios: cambios }, etiqueta: nom + (txt ? " · " + txt : "") };
   },
   aplicar: (ctx, ses, key, propuestos) => guardarCliente(ctx, ses, key, propuestos, "solicitud aprobada"),
   borrar: (ctx, ses, key, motivo) => borrarCliente(ctx, ses, key, motivo || "solicitud aprobada", "eliminación por solicitud"),

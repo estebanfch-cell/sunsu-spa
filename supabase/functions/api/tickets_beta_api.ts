@@ -359,6 +359,31 @@ extend("tk_subir_doc", "any", async (p, ctx, ses) => {
   if (x.error) return x;
   return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row), ...(x.ocr ? { ocr: x.ocr, cruce: x.cruce } : {}) };
 });
+/** TK183 (Emilia t797u): «Agregar fotos (Antes / Después)» en un ticket ya hecho (también cerrado). Quien ve el ticket
+ *  puede agregarlas; quedan en la columna del ticket, así salen en el ticket y en la ficha → Documentos → Fotos con la
+ *  fecha del ticket. Nunca reemplaza ni borra fotos anteriores. */
+extend("tk_agregar_fotos", "any", async (p, ctx, ses) => {
+  const r = await ticketPorClave(ctx, s(p.clave));
+  if (!r) return { error: "Ticket no encontrado" };
+  if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
+  const momento = s(p.momento) === "despues" ? "despues" : s(p.momento) === "antes" ? "antes" : "";
+  if (!momento) return { error: "Elige Antes o Después" };
+  const imgs = (Array.isArray(p.imagenes) ? p.imagenes : [p.imagen]).map(s).filter(Boolean).slice(0, 6);
+  if (!imgs.length || imgs.some((x) => !/^data:image\//.test(x))) return { error: "Sube una foto" };
+  const col = momento === "antes" ? "fotos_antes" : "fotos_despues";
+  const actor = actorOf(ses), nuevos: string[] = [];
+  for (const img of imgs) {
+    const id = await guardarArchivo(ctx.db, actor, momento === "antes" ? "fotosAntes" : "fotosDespues", "ticket " + s(p.clave), img);
+    if (!id) return { error: "La foto pesa más de 1.5 MB" + (nuevos.length ? " (se guardaron " + nuevos.length + ")" : "") };
+    nuevos.push("archivo:" + id);
+  }
+  const prev = colTicket(r, col).split(/\s*\|\s*/).map((x) => x.trim()).filter((x) => /^(https?:|archivo:)/.test(x));
+  const valor = [...prev, ...nuevos].join(" | ");
+  const match = r.id != null ? { id: r.id } : { sheet_row: r.sheet_row };
+  await ctx.db.write(actor, "tickets", "update", match, { [col]: valor });
+  try { await logAccion(ctx.db, actor, "FOTOS AGREGAR", s(p.clave) + " · " + momento + " · " + nuevos.length); } catch { /* el log no tumba la subida */ }
+  return { ok: true, momento, agregadas: nuevos.length, total: prev.length + nuevos.length };
+});
 /** Comprobantes vivos (no borrados) en beta_tickets.datos.comprobantes. */
 export function compsVivos(d: Row | undefined): Row[] {
   const L = Array.isArray(d?.comprobantes) ? d!.comprobantes as Row[] : [];

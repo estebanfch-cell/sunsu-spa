@@ -83,7 +83,7 @@ describe("clientes de la beta", () => {
     assert.doesNotMatch(JSON.stringify(f), /0991111111|maria@test|Cumbayá/);
     const down = await h("cl_doc_url", "cos", { id: "x", key: "c:1700000001", descargar: "1" });
     assert.match(String(down.error), /no puede descargar/i);
-    assert.match(String((await h("cl_guardar", "cos", { key: "c:1700000001", cambios: { alergias: "x" } })).error), /Solicitar/);
+    assert.match(String((await h("cl_guardar", "cos", { key: "c:1700000001", cambios: { cedula: "1700000009" } })).error), /necesita solicitud/); // TK183
     assert.match(String((await h("cl_borrar", "cos", { key: "c:1700000001", motivo: "x" })).error), /Solicitar/);
     const s1 = await h("solicitud_crear", "cos", { tabla: "cliente_beta", fila: "c:1700000001", tipo: "cambio", motivo: "dato nuevo", propuestos: { alergias: "Nueces, látex" } });
     assert.equal(s1.ok, true, String(s1.error));

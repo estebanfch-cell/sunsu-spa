@@ -21,6 +21,7 @@ import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
 import { facturaTxt } from "./ticket_total.ts";
 import { cargarAlias } from "./clientes_alias.ts";
+import { autorizaDe, autorizaFotosCorregidas, siNo } from "./consent_override.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
 import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
@@ -1386,10 +1387,12 @@ async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise
   const dirigida = Array.isArray(_p.cedulas) || Array.isArray(_p.apellidos);
   const rows = (dirigida ? await registroDe(ctx, _p.cedulas as unknown[] || [], _p.apellidos as unknown[] || []) : await ctx.db.all("clientas_registro")).filter((r) => !r.borrado_at);
   const tel = conTelefono(ses);
+  // TK183: «Autoriza fotos» corregido en la ficha (beta_clientes) manda sobre el formulario.
+  const corrAF = await autorizaFotosCorregidas(ctx.db).catch(() => new Map<string, string>());
   if (action === "getAutorizaFotos") {
     const noAutoriza: R = {}, noAutorizaNom: R = {};
     for (const r of rows) {
-      if (s(r.autoriza_fotos).toUpperCase() !== "NO") continue;
+      if (siNo(autorizaDe(corrAF, r)) !== "NO") continue;
       const c = s(r.cedula).split(".")[0];
       const nom = normNombre(s(r.nombre) + " " + s(r.apellido));
       if (c) noAutoriza[c] = true;
@@ -1401,6 +1404,7 @@ async function fichas(action: string, _p: R, ctx: Ctx, ses: Ses | null): Promise
     const porCedula: R = {}, porNombre: R = {};
     for (const r of rows) {
       const f = fichaDe(r, tel);
+      f.autorizaFotos = autorizaDe(corrAF, r);
       if (!tel) delete f.telefono;
       const c = s(f.cedula);
       const nom = normNombre(s(r.nombre) + " " + s(r.apellido));
