@@ -1110,6 +1110,9 @@
   .mob-cam, .mob-wa, #content label.mob-cam, #content .mob-wa { color: #DC2626 !important; border-color: #DC2626 !important; }
   .mob-cam.ok, .mob-wa.ok, #content label.mob-cam.ok, #content .mob-wa.ok { color: #16A34A !important; border-color: #16A34A !important; }
   .mob-cam svg, .mob-cam svg *, .mob-wa svg, .mob-wa svg * { fill: currentColor !important; stroke: none !important; color: inherit !important; }
+  /* TK182 (Emilia t794u): en la tabla de la computadora van lado a lado (cámara, luego WhatsApp), columna compacta al final. */
+  .tk-table th.tk-acc-h, .tk-table td.tk-acc { width: 78px; padding: 4px 8px 4px 4px; text-align: right; white-space: nowrap; }
+  .mob-acts.tk-acts-row { flex-direction: row; gap: 8px; justify-content: flex-end; vertical-align: middle; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
   /* TK154: la fotito que todavía llega reserva su espacio (sin saltos) con un tono suave. */
@@ -8493,7 +8496,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK181b"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK182"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8674,7 +8677,7 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk179"></script>
-<script src="beta-screens.js?v=20261120tk179"></script>
+<script src="beta-screens.js?v=20261120tk182"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261120tk179"></script>

@@ -5929,7 +5929,7 @@ function _histSortBy(k){
   var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   _histActualizarRes(esStaff);
 }
-function _histCelda(t, c, showPrices){
+function _histCelda(t, c, showPrices, i){
   var m=_histMontos(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
   var $=function(v){return showPrices?('$'+Number(v||0).toFixed(2)):'—';};
@@ -5946,6 +5946,9 @@ function _histCelda(t, c, showPrices){
   if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
+  /* TK182 (Emilia t794u): en la computadora, cámara y WhatsApp de la tarjeta móvil, HORIZONTALES al final de la fila
+     (mismos botones, mismo estado rojo/verde por ticket y mismos handlers que en el celular). */
+  if(c.k==='acc') return '<td class="tk-acc" onclick="event.stopPropagation()"><span class="mob-acts tk-acts-row">'+_histCamHTML(t,i)+_histWaHTML(t,i)+'</span></td>';
   return '<td></td>';
 }
 function _histMasterHTML(tickets, showPrices){
@@ -5957,14 +5960,15 @@ function _histMasterHTML(tickets, showPrices){
   var abierto=!!elegido;
   var cols=abierto
     ? [{k:'num',t:'Nº'},{k:'cli',t:'Clienta'},{k:'tot',t:'Total',num:1}]
-    : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; });
+    : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; }).concat([{k:'acc',t:'',acc:1}]);
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
     var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&_tkFaltaVoucher(t)?['Foto del voucher o transferencia']:null;
     var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
-    return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(_tkWaPendiente(t)?' tk-wapend':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
+    return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(_tkWaPendiente(t)?' tk-wapend':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices,i); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
+    if(c.acc) return '<th class="tk-acc-h" aria-label="Voucher y WhatsApp"></th>';
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
     return '<th class="sortable'+(c.num?' num':'')+'" onclick="_histSortBy(\''+c.k+'\')">'+c.t+ar+'</th>';
   }).join('');
