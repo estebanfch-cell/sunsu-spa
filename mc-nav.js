@@ -69,23 +69,15 @@
         ["proveedores", "Proveedores", "#/m/proveedores"],
         // Órdenes pendientes, Actas de recepción y Pagos a proveedores fuera (Emilia 17/11): los pagos van dentro de cada OC.
       ] },
-      { id: "reportes", label: "Reportes", items: [
-        ["*", "Dashboard", "#/m/inicio"],
-        ["ver_costos", "Consumos y márgenes", "#/m/reportes"],
-        ["admin", "KPIs", "#/s/kpis"],
-        ["admin", "Ventas", "#/m/mc/pronto/rep_ventas"],
-        ["ver_costos", "Niveles de stock", "#/m/mc/pronto/rep_stock"],
-        ["ver_costos", "Compras", "#/m/mc/pronto/rep_compras"],
-        ["admin", "Registro de auditoría", "#/m/mc/pronto/auditoria"],
-      ] },
+      // TK168 (Emilia 20/11, t765u): la sección 📊 Reportes sale del menú para todos los roles
+      // (Dashboard, Consumos y márgenes, KPIs, Ventas, Niveles de stock, Compras, Registro de auditoría).
+      // El Dashboard de inicio, la barra de abajo y las rutas (p. ej. «Mientras tanto: Dashboard») siguen.
       // Consignación vive dentro de Compras (pestaña 🤝 Consignación, Emilia 17/11).
       { id: "finanzas", label: "Finanzas", items: [
         ["caja", "Caja chica", "#/m/caja"],
         ["caja", "Pagos recibidos", "#/m/caja/pagos"],
-        ["admin", "Facturas SRI y retenciones", "#/m/mc/pronto/sri"],
-        ["admin", "Cobranza", "#/m/mc/pronto/cobranza"],
-        ["admin", "Estado de cuenta", "#/m/mc/pronto/edc"],
-        ["admin", "Banco", "#/m/mc/pronto/banco"],
+        // TK168 (Emilia 20/11, t767u): Facturas SRI y retenciones, Cobranza, Estado de cuenta y Banco
+        // salen del menú. Las rutas «Próximamente» siguen existiendo.
       ] },
       { id: "admin", label: "Admin", items: [
         ["usuarios|admin", "Usuarios", "#/m/usuarios"],
@@ -201,7 +193,7 @@
     todos.forEach(function (g) {
       var items = g.items;
       if (!adm()) {
-        // Personal: sin Protocolos, Reportes ni dashboard admin; Compras solo Recepciones.
+        // Personal: sin Protocolos ni dashboard admin; Compras solo Recepciones.
         if (g.id === "protocolos" || g.id === "reportes") return;
         if (g.id === "compras") items = items.filter(function (it) { return it[0] === "recepciones" || String(it[2]) === "#/m/recepciones"; });
       }

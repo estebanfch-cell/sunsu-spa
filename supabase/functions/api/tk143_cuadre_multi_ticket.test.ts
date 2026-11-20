@@ -223,11 +223,11 @@ describe("TK143 · no rompe regresiones TK138–TK142 ni Gift Cards", () => {
 
   it("el cache live es TK143 y el archivo de pruebas queda en el paquete", () => {
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-2026-11-20-TK167/);
+    assert.match(sw, /sunsu-2026-11-20-TK168/);
     const pkg = readFileSync(new URL("../../../package.json", import.meta.url), "utf8");
     assert.match(pkg, /tk143_cuadre_multi_ticket\.test\.ts/);
     const beta = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
-    assert.match(beta, /20261120tk167/);
+    assert.match(beta, /20261120tk168/);
     assert.doesNotMatch(beta, /20261119tk142/);
   });
 });

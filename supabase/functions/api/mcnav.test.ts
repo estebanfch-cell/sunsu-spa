@@ -10,7 +10,7 @@ function cargar(rol: string, accesos: Record<string, string>) {
   g.acceso = (m: string) => accesos[m] || "no";
   g.esc = (v: unknown) => String(v ?? "");
   vm.runInNewContext(fs.readFileSync(new URL("../../../mc-nav.js", import.meta.url), "utf8"), g);
-  return g.MCNav as { grupos: () => { id: string; label: string; items: string[][]; soloMovil?: boolean }[]; crearItems: () => unknown[][]; _pronto: Record<string, string[]> };
+  return g.MCNav as { grupos: () => { id: string; label: string; items: string[][]; soloMovil?: boolean; sections?: { title: string; items: string[][] }[] }[]; crearItems: () => unknown[][]; _pronto: Record<string, string[]> };
 }
 const TODO = Object.fromEntries(["tickets", "cotizaciones_cliente", "clientes", "productos", "inventario", "conteos", "transferencias", "compras", "proveedores", "caja", "cabina", "usuarios", "permisos", "gift_cards", "paquetes", "bitacora", "comisiones", "rol_pagos", "asistencia"].map((m) => [m, "todos"]));
 
@@ -18,7 +18,8 @@ describe("menú MineCore (mc-nav.js)", () => {
   it("admin: grupos en el orden de MineCore, sin lo que Emilia sacó", () => {
     const nav = cargar("admin", TODO);
     const g = nav.grupos().filter((x) => !x.soloMovil);
-    assert.deepEqual([...g.map((x) => x.label.replace(/^\S+ /, "")).slice(0, 8)], ["Ventas", "Spa", "Protocolos", "Inventario", "Compras", "Reportes", "Finanzas", "Admin"]);
+    assert.deepEqual([...g.map((x) => x.label.replace(/^\S+ /, "")).slice(0, 7)], ["Ventas", "Spa", "Protocolos", "Inventario", "Compras", "Finanzas", "Admin"]);
+    assert.ok(!g.some((x) => x.id === "reportes" || /Reportes/.test(x.label)));
     // Consignación vive dentro de Compras (TK26).
     assert.ok(g.find((x) => x.label.includes("Compras"))!.items.some((i) => i[2] === "#/m/compras/consignacion"));
     const textos = g.flatMap((x) => x.items.map((i) => i[1])).join("|");
@@ -73,5 +74,31 @@ describe("menú MineCore (mc-nav.js)", () => {
     const rec = cargar("recepcion", { ...staffAcc, tickets: "todos" });
     const recSpa = rec.grupos().find((x) => x.id === "spa")!.items.map((i) => i[2]);
     assert.ok(recSpa.includes("#/s/recepcion") && recSpa.includes("#/s/seguimiento"));
+  });
+
+  it("TK168: sin sección Reportes ni ítems SRI/Cobranza/EDC/Banco; Caja chica, Pagos recibidos y Admin siguen", () => {
+    const rutasNo = ["#/m/inicio", "#/m/reportes", "#/s/kpis", "#/m/mc/pronto/rep_ventas", "#/m/mc/pronto/rep_stock", "#/m/mc/pronto/rep_compras", "#/m/mc/pronto/auditoria", "#/m/mc/pronto/sri", "#/m/mc/pronto/cobranza", "#/m/mc/pronto/edc", "#/m/mc/pronto/banco"];
+    const textosNo = ["Consumos y márgenes", "Niveles de stock", "Registro de auditoría", "Facturas SRI y retenciones", "Cobranza", "Estado de cuenta"];
+    for (const rol of ["admin", "cosmetologa", "recepcion"]) {
+      const nav = cargar(rol, TODO);
+      const g = nav.grupos();
+      assert.ok(!g.some((x) => x.id === "reportes" || /Reportes/.test(x.label)), rol + " grupo reportes");
+      const items = g.flatMap((x) => x.items);
+      const titulos = g.flatMap((x) => (x.sections || []).map((s) => s.title)).join("|");
+      assert.ok(!/Reportes/.test(titulos), rol + " sección móvil Reportes");
+      const rutas = items.map((i) => i[2]);
+      const textos = items.map((i) => i[1]).join("|");
+      for (const r of rutasNo) assert.ok(!rutas.includes(r), rol + " " + r);
+      for (const t of textosNo) assert.ok(!textos.includes(t), rol + " " + t);
+    }
+    const admin = cargar("admin", TODO);
+    const labels = admin.grupos().filter((x) => !x.soloMovil).map((x) => x.label.replace(/^\S+ /, ""));
+    assert.ok(labels.includes("Protocolos") && labels.includes("Finanzas") && labels.includes("Ventas") && labels.includes("Admin"));
+    const fin = admin.grupos().find((x) => x.id === "finanzas")!.items.map((i) => i[2]);
+    assert.deepEqual([...fin], ["#/m/caja", "#/m/caja/pagos"]);
+    const admG = admin.grupos().find((x) => x.id === "admin")!;
+    assert.ok(admG.items.some((i) => i[2] === "#/m/usuarios") && admG.items.some((i) => i[2] === "#/m/mc/upermisos"));
+    assert.ok(admin._pronto.rep_ventas && admin._pronto.rep_stock && admin._pronto.rep_compras && admin._pronto.auditoria);
+    assert.ok(admin._pronto.sri && admin._pronto.cobranza && admin._pronto.edc && admin._pronto.banco);
   });
 });
