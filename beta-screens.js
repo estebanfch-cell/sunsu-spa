@@ -16360,43 +16360,77 @@ async function descargarRol(sheetName, cedula, btnEl) {
   img.src=GCD_PAG3_URL;
 }
 
-// ── Conceptos del rol: UNA sola lista para el PDF del admin y la vista de la empleada ──
-// Cualquier concepto nuevo se agrega aquí y aparece en los dos. Los totales salen
-// de los mismos campos que ya trae getRolIndividual (no se recalculan).
+// ── Conceptos del rol: UNA sola lista para el PDF y la vista en pantalla (TK166, Emilia t758u/t760u) ──
+// · Cada tipo de comisión, de hora extra, 13°, 14° y fondo de reserva en su propia línea.
+// · Nada sale en $NaN: lo que no viene vale 0, y las líneas en $0.00 NO se muestran.
+// · Los totales salen de los mismos campos del rol (no se recalculan aquí).
+function _rolNum(v){ var x=parseFloat(v); return isFinite(x)?x:0; }
+function _rolHrs(h){ var x=_rolNum(h); return (Math.round(x*100)/100).toString().replace('.',','); }
 function _lineasRol(d){
   d=d||{};
-  var multas=(d.multasDetalle||[]).filter(function(m){return (parseFloat(m.monto)||0)>0;});
-  var egresos=[
-    ['Aporte IESS (9.45%)', d.iess],
-    ['Anticipo de sueldo', d.anticipo],
-    ['Préstamo hipotecario', d.prestHip],
-    ['Préstamo quirografario', d.prestQuir],
-    ['Otros descuentos IESS', d.prestOtro || d.sandalo]
-  ];
-  multas.forEach(function(m){
-    egresos.push([((m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:'')), m.monto]);
-  });
+  var N=_rolNum, ing=[], egr=[], notas=[];
+  var add=function(arr,l,v){ var m=Math.round(N(v)*100)/100; if(m!==0) arr.push([l,m]); };
+  var normales=N(d.hrsOrdinarias), dias=N(d.diasTrabajados)||N(d.diasJibble);
+  var lblSueldo='Sueldo'+(normales?(' ('+_rolHrs(normales)+' h normales'+(dias?(' · '+dias+' días'):'')+')'):(dias?(' ('+dias+' días)'):''));
+  add(ing,lblSueldo,d.sueldo);
+  add(ing,'Bono',d.bono);
+  var tieneSplit=(d.comFacialesSolo!=null||d.comExtras!=null||d.comRecepcion!=null);
+  if(tieneSplit){
+    add(ing,'Comisión faciales',d.comFacialesSolo);
+    add(ing,'Comisión extras',d.comExtras);
+    add(ing,'Comisión recepción',d.comRecepcion);
+  } else add(ing,'Comisión faciales/extras/recepción',d.comFaciales);
+  var paq='Comisión paquetes'+(d.paquetes&&d.nivelPaquete?(' ('+d.paquetes+' · '+d.nivelPaquete+')'):'');
+  add(ing,paq,d.comPaquetes);
+  add(ing,'Comisión productos',d.comProductos);
+  if(!tieneSplit && d.comPaquetes==null && d.comProductos==null && d.comFaciales==null) add(ing,'Comisiones',d.comisiones);
+  var horasDet=(d.valSupl!=null||d.valExtr!=null||d.valDesc!=null);
+  add(ing,'Horas suplementarias 50% ('+_rolHrs(d.hrsSupl)+' h)',d.valSupl);
+  add(ing,'Horas extraordinarias 100% ('+_rolHrs(d.hrsExtr)+' h)',d.valExtr);
+  add(ing,'Horas descanso/feriado 100% ('+_rolHrs(d.hrsDesc)+' h)',d.valDesc);
+  if(!horasDet) add(ing,'Horas extras',d.extras);
+  var decDet=(d.dec13!=null||d.dec14!=null||d.fondoReserva!=null);
+  add(ing,'Décimo tercero',d.dec13);
+  add(ing,'Décimo cuarto',d.dec14);
+  add(ing,'Fondo de reserva',d.fondoReserva);
+  add(ing,'Vacaciones',d.vacaciones);
+  if(!decDet) add(ing,'Décimos y fondo de reserva',d.decimosFondo);
+  if(N(d.dec13Acumulado)) notas.push('Décimo tercero acumulado este mes: $'+N(d.dec13Acumulado).toFixed(2)+' (se paga hasta el 20 de diciembre).');
+  if(N(d.dec14Acumulado)) notas.push('Décimo cuarto acumulado este mes: $'+N(d.dec14Acumulado).toFixed(2)+' (se paga hasta el 15 de agosto).');
+  if(N(d.fondoReservaIess)) notas.push('Fondo de reserva depositado en el IESS: $'+N(d.fondoReservaIess).toFixed(2)+'.');
+  add(egr,'Aporte IESS personal (9,45%)',d.iess);
+  add(egr,'Anticipo de sueldo',d.anticipo);
+  add(egr,'Préstamo IESS hipotecario',d.prestHip);
+  add(egr,'Préstamo IESS quirografario',d.prestQuir);
+  add(egr,'Otros descuentos IESS',d.prestOtro!=null?d.prestOtro:d.sandalo);
+  var multas=(d.multasDetalle||[]).filter(function(m){return N(m.monto)>0;});
+  var sumM=multas.reduce(function(a,m){return a+N(m.monto);},0);
+  if(multas.length && Math.abs(sumM-N(d.multas))<0.02){
+    multas.forEach(function(m){ add(egr,(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:''),m.monto); });
+  } else add(egr,'Multas y descuentos',d.multas);
+  var totalIng=d.totalIngresos!=null?N(d.totalIngresos):ing.reduce(function(a,x){return a+x[1];},0);
+  var totalEgr=d.totalEgresos!=null?N(d.totalEgresos):(N(d.iess)+N(d.egresos));
+  var neto=d.totalRecibir!=null?N(d.totalRecibir):(d.neto!=null?N(d.neto):totalIng-totalEgr);
   return {
-    dias: d.diasJibble?d.diasJibble+' días (según registro Jibble)':'—',
-    ingresos:[
-      ['Sueldo', d.sueldo],
-      ['Bono', d.bono],
-      ['Com. faciales/extras/recep.', d.comFaciales],
-      ['Comisión paquetes'+(d.paquetes&&d.nivelPaquete?(' ('+d.paquetes+' · '+d.nivelPaquete+')'):(d.nivelPaquete&&String(d.nivelPaquete).indexOf('%')>=0?(' ('+d.nivelPaquete+')'):'')), d.comPaquetes],
-      ['Comisión productos', d.comProductos],
-      ['Horas suplementarias 50% ('+(d.hrsSupl||0)+' hrs)', d.valSupl],
-      ['Horas extraordinarias 100% ('+(d.hrsExtr||0)+' hrs)', d.valExtr],
-      ['Horas descanso 100% ('+(d.hrsDesc||0)+' hrs)', d.valDesc],
-      ['Décimo tercero', d.dec13],
-      ['Décimo cuarto', d.dec14],
-      ['Fondo de reserva', d.fondoReserva]
-    ],
-    egresos: egresos,
-    multas: multas,
-    totalIngresos: d.totalIngresos,
-    totalEgresos: (parseFloat(d.iess)||0)+(parseFloat(d.egresos)||0),
-    neto: d.totalRecibir
+    dias: dias?dias+' días':'—',
+    ingresos: ing, egresos: egr, multas: multas, notas: notas,
+    totalIngresos: totalIng, totalEgresos: totalEgr, neto: neto
   };
+}
+// TK166: el PDF del rol siempre con la plantilla oficial (fondo crema, logo SUNSU y el arte de las aves).
+// Carga el fondo (local en la app de iOS, si no el de app.sunsuspa.com) y la aprobación digital si existe.
+function _pdfRol(d, periodo, apro){
+  var go=function(img){ _pdfRolFondo(d, periodo, apro, img); };
+  var urls=['giftcard_pag3_fondo.jpg', GCD_PAG3_URL], i=0;
+  var tryNext=function(){
+    if(i>=urls.length){ go(null); return; }
+    var img=new Image(); img.crossOrigin='anonymous';
+    img.onload=function(){ go(img); };
+    img.onerror=function(){ i++; tryNext(); };
+    img.src=urls[i];
+  };
+  if(window._fondoA4Cache){ go({cached:true}); return; }
+  tryNext();
 }
 // ── Rol de pagos en PDF con la identidad SUNSU (mismo fondo que OC y actas) ──
 // OJO tipografía: jsPDF (helvetica estándar) solo codifica latin-1 — nada de ✔ ni −
@@ -16409,7 +16443,7 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     var bg=fondo?_fondoA4Sunsu(fondo):null;
     var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); };
     pintar();
-    var mesLabel=(sheetName||'').replace('_',' ');
+    var mesLabel=(d.etiqueta||(sheetName||'').replace('_',' ')).toString().toUpperCase();
     var y=150;
     doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
     doc.text('ROL DE PAGOS',W/2,y,{align:'center'}); y+=17;
@@ -16462,13 +16496,15 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     // ── INGRESOS / EGRESOS: la misma lista que la vista de la empleada (_lineasRol) ──
     barra('INGRESOS',[46,125,82]);
     var iIdx=0;
-    rol.ingresos.forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx,true)) iIdx++; });
+    rol.ingresos.forEach(function(par){ if(linea(par[0],par[1],NAVY,iIdx,false)) iIdx++; });
     totalLinea('TOTAL INGRESOS',rol.totalIngresos,VERDE);
-    barra('EGRESOS',[184,64,64]);
-    var eIdx=0;
     var multas=rol.multas;
-    rol.egresos.forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx,true)) eIdx++; });
-    totalLinea('TOTAL EGRESOS',rol.totalEgresos,ROJO);
+    if(rol.egresos.length){
+      barra('EGRESOS',[184,64,64]);
+      var eIdx=0;
+      rol.egresos.forEach(function(par){ if(linea(par[0],par[1],ROJO,eIdx,false)) eIdx++; });
+      totalLinea('TOTAL EGRESOS',rol.totalEgresos,ROJO);
+    }
     // ── NETO ──
     salto(40); y+=4;
     doc.setFillColor(253,247,230);
@@ -16477,6 +16513,11 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     doc.text('NETO A RECIBIR:',xI+12,y+21);
     doc.text(n2(rol.neto),xD-12,y+21,{align:'right'});
     y+=46;
+    // Notas de décimos acumulados / fondo al IESS (informativas, no suman)
+    (rol.notas||[]).forEach(function(nt){
+      salto(14); doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
+      doc.text(doc.splitTextToSize(nt, ANCHO), xI, y); y+=12;
+    });
     // ── Cuadro de multas y descuentos: el contenido SIEMPRE cabe en el marco ──
     // 1) Limpieza por LISTA BLANCA: solo caracteres imprimibles + acentos —
     //    backticks, viñetas raras y saltos de línea desaparecen de raíz.
