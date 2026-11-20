@@ -61,7 +61,7 @@ describe("TK109 más rápido y menú siempre visible", () => {
     assert.match(html, /api\("ping"\)/);
     assert.match(home, /apiSWR/);
     assert.match(home, /MCStaffHome = \{[\s\S]*html: html/);
-    assert.match(sw, /sunsu-2026-11-19-TK155/);
+    assert.match(sw, /sunsu-2026-11-19-TK156/);
     assert.match(html, /20261119tk154/);  });
 
   it("staff_home no baja el dashboard admin completo y el ping / bootstrap responden", async () => {

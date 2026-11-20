@@ -54,10 +54,34 @@ async function estadoTicket(ctx: Ctx, r: Row, total: number): Promise<Row> {
   const beta = pagosDe(await todas(ctx, "beta_pagos"), clave);
   const pagadoBeta = round2(beta.reduce((a, p) => a + n(p.monto), 0));
   const anulado = r.orig && typeof r.orig === "object" && (r.orig as Row).anulado === true;
-  const st = estadoCobro({ cobrado: estaCobrado(r), cobradoMonto: n(r.estimado), totalLineas: total, pagadoBeta, anulado });
-  const migo = st.pagadoSis > 0 ? await formasPagoMigo(ctx, r.fac_7) : undefined;
-  const pagosLegado = st.pagadoSis > 0 ? filasPagoLegado(r.comp, st.pagadoSis, s(r.timestamp), migo) : [];
-  return { clave, beta, legado: st.pagadoSis, pagadoBeta, saldo: st.saldo, total: st.total, redondeo: st.redondeo, dif: st.dif, pagosLegado, anulado };
+  // TK156 (Emilia t687u): ticket cobrado por una factura Migo ligada (datos.pago_migo / cuadre «cuadra»).
+  // Antes la caja Pagos solo miraba la hoja (cob/fac_7) y beta_pagos → «saldo $175» aunque arriba dijera Pagado.
+  const cobradoSis = estaCobrado(r);
+  const pm = cobradoSis || anulado ? null : await pagoMigoDe(ctx, r, clave);
+  const st = estadoCobro({ cobrado: cobradoSis || !!pm, cobradoMonto: cobradoSis ? n(r.estimado) : n(pm?.total), totalLineas: total, pagadoBeta, anulado });
+  let migo = st.pagadoSis > 0 ? await formasPagoMigo(ctx, cobradoSis ? r.fac_7 : pm!.factura) : undefined;
+  if (pm && !(migo && migo.length) && s(pm.forma) && s(pm.forma) !== "no_registrado") migo = [{ forma: s(pm.forma), valor: n(pm.total) }];
+  let pagosLegado = st.pagadoSis > 0 ? filasPagoLegado(cobradoSis ? r.comp : "", st.pagadoSis, s(r.timestamp), migo) : [];
+  const migoSinForma = !!pm && !(migo && migo.length);
+  if (pm) {
+    const facCorta = (s(pm.factura).split("-").pop() || "").replace(/^0+/, "") || s(pm.factura);
+    pagosLegado = pagosLegado.map((x) => ({ ...x, fuente: "migo", registrado_por: "Factura Migo " + facCorta, factura_migo: s(pm.factura) }));
+  }
+  return { clave, beta, legado: st.pagadoSis, pagadoBeta, saldo: st.saldo, total: st.total, redondeo: st.redondeo, dif: st.dif, pagosLegado, anulado,
+    ...(pm ? { factura_migo: s(pm.factura), forma_migo: migo && migo.length ? migo.map((f) => s(f.forma)).join(" + ") : "", migo_sin_forma: migoSinForma } : {}) };
+}
+
+/** TK156: cobro por factura Migo ligada al ticket (sin marca en la hoja). */
+async function pagoMigoDe(ctx: Ctx, r: Row, clave: string): Promise<{ factura: string; total: number; forma: string } | null> {
+  const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === clave);
+  const d = (cab?.datos || {}) as Row;
+  const pm = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
+  if (pm && s(pm.factura) && n(pm.total) > 0) return { factura: s(pm.factura), total: n(pm.total), forma: s(pm.forma) };
+  try {
+    const L = (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "ticket_id", op: "eq", val: r.id }] })).rows.find((x) => s(x.estado) === "cuadra" && s(x.factura));
+    if (L && n(L.total_factura) > 0) return { factura: s(L.factura), total: n(L.total_factura), forma: s(d.forma_pago) };
+  } catch { /* sin cuadre */ }
+  return null;
 }
 
 // ---------- Pagos de tickets ----------

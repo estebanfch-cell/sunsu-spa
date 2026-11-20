@@ -728,7 +728,15 @@ export function faltaDe(r: Row, d: Row): string[] {
 }
 /** Documentos subidos en la beta (comprobantes que faltaban). */
 export function docsBeta(cab: Row | undefined): Row[] {
-  const d = (cab?.datos || {}) as Row, L = compsVivos(d);
+  const d = (cab?.datos || {}) as Row;
+  // TK156 (TK-SO-1927): la misma foto subida como voucher del ticket y, segundos después, enlazada al pago quedaba 2 veces.
+  const L0 = compsVivos(d), vistos = new Set<string>();
+  const L = L0.filter((x) => {
+    const u = s(x.url); if (vistos.has(u)) return false; vistos.add(u);
+    if (s(x.pago_id)) return true;
+    const t = Date.parse(s(x.fecha));
+    return !L0.some((y) => y !== x && s(y.pago_id) && s(y.por) === s(x.por) && Number.isFinite(t) && Math.abs(Date.parse(s(y.fecha)) - t) <= 15000);
+  });
   const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
   const pdfs = Array.isArray(d.factura_pdfs) ? d.factura_pdfs as Row[] : (d.factura_pdf && typeof d.factura_pdf === "object" ? [d.factura_pdf as Row] : []);
   for (const x of pdfs) {
