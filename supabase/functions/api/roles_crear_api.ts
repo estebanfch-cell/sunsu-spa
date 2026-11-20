@@ -220,17 +220,15 @@ export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: n
   for (const d0 of (nomina.dias || []) as Row[]) {
     if (s(d0.fuente) === "permiso" || d0.fuente === "permiso") permisos.push(s(d0.fecha).slice(0, 10));
   }
-  // TK170 (Emilia t768u): lo que todavía no tiene datos NO es falta. Desde el día siguiente al último dato
-  // (marca de la app o Jibble) se asume la jornada del horario, igual que los días que faltan del mes. Un mes sin
-  // ningún dato (persona sin Jibble ni marcas) se asume completo desde su ingreso.
+  // TK171 (Emilia t771u): un día PASADO sin marcas (ni app ni Jibble) es falta: marcar es obligación de la
+  // empleada. Solo desde HOY hasta fin de mes se asume la jornada del horario. Los días antes del ingreso no
+  // son faltas (clasificarHorasRol los salta).
   const hoyReal = ecuadorParts(ctx.now).ymd;
-  const ini = `${anio}-${String(mes).padStart(2, "0")}-01`;
   const conDato = Object.values(dias).filter((d) => d && d.nomMin > 0 && d.fecha <= hoyReal).map((d) => d!.fecha).sort();
   const ultimo = conDato.length ? conDato[conDato.length - 1] : "";
-  const sig = ultimo ? new Date(Date.parse(ultimo + "T12:00:00Z") + 86400000).toISOString().slice(0, 10) : ini;
-  let hoy = sig < hoyReal ? sig : hoyReal;
+  let hoy = hoyReal;
   const ingreso = s(opts.ingreso).slice(0, 10);
-  if (ingreso && hoy < ingreso && ingreso <= hoyReal) hoy = ingreso;
+  if (ingreso && hoy < ingreso) hoy = ingreso;
   const horas = clasificarHorasRol({
     anio: anio, mes: mes, hoy,
     horario: horarioRrhhDe(persona),
@@ -454,7 +452,7 @@ extend("rol_prerol", "any", async (p, ctx, ses) => {
   const hoy = ecuadorParts(ctx.now).ymd;
   const anio = Number(hoy.slice(0, 4)), mes = Number(hoy.slice(5, 7));
   const periodo = periodoDe(anio, mes);
-  const convencion = "Las horas son del mes calendario (1 al último día) y las comisiones y multas del ciclo 26→25. Los roles se publicaron entre el 28 y el 30 (jul 31, ago 28, sep 29–30, oct 29–30): los días que faltan hasta fin de mes se asumen trabajados según el horario.";
+  const convencion = "Las horas son del mes calendario (1 al último día) y las comisiones y multas del ciclo 26→25. Los roles se publicaron entre el 28 y el 30 (jul 31, ago 28, sep 29–30, oct 29–30): desde hoy hasta fin de mes se asume la jornada del horario; un día pasado sin marcas (app ni Jibble) es falta.";
   if (!s(p.nombre)) {
     const items = emps.map((e) => {
       const nombre = s(e.nombre_app) || s(e.apellidos_y_nombres);
@@ -483,8 +481,8 @@ extend("rol_prerol", "any", async (p, ctx, ses) => {
         trabajadoMin: sum("workedMin"), normalesMin: sum("ordinaryMin"), suplMin: sum("suplMin"), extrMin: sum("extrMin"), descMin: sum("descMin"),
         diasConMarca: dias.filter((d) => s(d.fuente) === "marcaje" && n(d.workedMin) > 0).length,
         diasJibble: dias.filter((d) => s(d.fuente) === "jibble").length,
-        faltas: dias.filter((d) => d.falta === true && !!ultimo && s(d.fecha) <= ultimo).length,
-        sinDatos: dias.filter((d) => !!ultimo ? s(d.fecha) > ultimo : true).length,
+        // TK171: los días pasados sin marcas son faltas (Emilia t771u).
+        faltas: dias.filter((d) => d.falta === true).length,
       };
     } catch { hastaHoy = null; }
   }
