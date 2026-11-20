@@ -301,3 +301,63 @@ describe("TK156 voucher duplicado (TK-SO-1927)", () => {
     assert.deepEqual(L.map((x: Row) => x.url), ["archivo:5192", "archivo:otra"]);
   });
 });
+
+describe("TK156 factura completa SRI en la tarjeta (t699u)", () => {
+  it("001-001-000002976 conserva todos los ceros y va más chica y clara", () => {
+    const ini = screens.indexOf("function _histFacNum("), fin = screens.indexOf("function _histColorQuien(");
+    const fac = new Function("_tkFacFull", screens.slice(ini, fin) + "; return _histFacNum;")((t: Row) => t.f) as (t: Row) => string;
+    assert.equal(fac({ f: "001-001-000002976" }), "001-001-000002976");
+    assert.equal(fac({ f: "001-001-2976" .replace("2976", "002976") }), "001-001-000002976");
+    assert.equal(fac({ f: "001-001-000002980" }), "001-001-000002980");
+    assert.equal(fac({ f: "000002982" }), "000002982");
+    assert.match(screens, /<span class="mob-fac"> - '\+_histEsc\(facn\)/);
+    assert.match(screens, /Canje · sin factura/); assert.match(screens, /mob-fac mob-fac-no"> · Sin factura/);
+    assert.match(html, /\.mob-fac \{ font-weight: 500; color: var\(--gray\); font-size: 11\.5px;/);
+    assert.match(html, /\.mob-l3 \{ color: var\(--gray\); font-size: 12px;/);
+  });
+});
+
+describe("TK156 cero fugas de fotos/vouchers entre tickets nativos (sheet_row null)", () => {
+  it("tk_historial: cada ticket trae SOLO sus fotos aunque sheet_row sea null", async () => {
+    const mk = (id: number, so: string, a: string, d: string) => ({ id, sheet_row: null, so_num: so, timestamp: "2026-11-19T20:0" + (id % 10) + ":00Z", nombre: so, apellido: "", id_3: "17" + id, estimado: 15, fotos_antes: "archivo:" + a, fotos_despues: "archivo:" + d, orig: {} });
+    const { h } = semilla({}, { tickets: [mk(1924, "TK-SO-1924", "a1924", "d1924"), mk(1927, "TK-SO-1927", "a1927", "d1927"), mk(1933, "TK-SO-1933", "a1933", "d1933")], beta_tickets: [], beta_clientes: [], beta_ticket_flags: [] });
+    const r = await h("tk_historial", { limit: 50 });
+    const por: Record<string, string[]> = {};
+    for (const it of r.items as Row[]) por[String(it.so_num)] = ((it.fotosCard || []) as Row[]).map((f) => String(f.archivo));
+    assert.deepEqual(por["TK-SO-1924"], ["a1924", "d1924"]);
+    assert.deepEqual(por["TK-SO-1927"], ["a1927", "d1927"]);
+    assert.deepEqual(por["TK-SO-1933"], ["a1933", "d1933"]);
+  });
+  it("fotos_batch devuelve cada archivo por SU id (sin mezclar)", async () => {
+    const { h } = semilla({}, { app_archivos: [{ id: "a1924", mime: "image/jpeg", data_b64: "AAA" }, { id: "a1927", mime: "image/jpeg", data_b64: "BBB" }] });
+    const r = await h("fotos_batch", { ids: ["a1927", "a1924", "", "null"] });
+    assert.equal((r.items as Row).a1924.b64, "AAA");
+    assert.equal((r.items as Row).a1927.b64, "BBB");
+    assert.equal(Object.keys(r.items as Row).length, 2);
+  });
+  it("comprobantes: docsBeta solo lee los del propio ticket", async () => {
+    const { docsBeta } = await import("./tickets_beta_api.ts");
+    assert.deepEqual(docsBeta({ datos: { comprobantes: [{ url: "archivo:v1924", pago_id: "p1", por: "A", fecha: "2026-11-19T21:11:00Z" }] } }).map((x: Row) => x.url), ["archivo:v1924"]);
+    assert.deepEqual(docsBeta(undefined), []);
+  });
+  it("_histCargarThumbs pinta cada <img> con la foto de SU data-arch", () => {
+    const ini = screens.indexOf("var _FOTO_SS="), fin = screens.indexOf("function _histCardHTML(");
+    const win: Row = {}, ss = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    const mkImg = (id: string) => { const at: Record<string, string> = { "data-arch": id }; return { src: "", classList: { remove: () => {} }, getAttribute: (k: string) => at[k] ?? null, removeAttribute: (k: string) => { delete at[k]; }, remove: () => {} } as Row; };
+    const imgs = [mkImg("a1924"), mkImg("a1927"), mkImg("a1933")];
+    let resolver: (v: Row) => void = () => {};
+    const api = (_a: string, p: Row) => new Promise<Row>((r) => { resolver = r; void p; });
+    const f = new Function("window", "sessionStorage", "api", screens.slice(ini, fin) + "; return _histCargarThumbs;")(win, ss, api) as (r: Row) => void;
+    f({ querySelectorAll: () => imgs });
+    resolver({ ok: true, items: { a1924: { b64: "X1924" }, a1927: { b64: "X1927" }, a1933: { b64: "X1933" } }, faltan: [] });
+    return new Promise<void>((done) => setTimeout(() => {
+      assert.deepEqual(imgs.map((i) => String(i.src).split(",")[1]), ["X1924", "X1927", "X1933"]);
+      done();
+    }, 5));
+  });
+  it("vistas previas del detalle usan solo documentos del ticket abierto (deduplicados)", () => {
+    const tk = file("mc-tickets.js");
+    assert.match(tk, /var d = K\.d \|\| \{\}, docs = d\.documentos \|\| \[\]/);
+    assert.match(tk, /if \(d && Array\.isArray\(d\.documentos\)\) d\.documentos = docsUnicos\(d\.documentos\);/);
+  });
+});

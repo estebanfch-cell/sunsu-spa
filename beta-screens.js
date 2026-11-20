@@ -5994,10 +5994,19 @@ function _histFacCorta(t){
 function _histFacNum(t){
   var ff=_tkFacFull(t); if(!ff) return '';
   var m=String(ff).trim().match(/^(\d{3})-(\d{3})-(\d{6,12})$/);
-  if(m) return m[1]+'-'+m[2]+'-'+String(Number(m[3]));
+  /* TK156 (Emilia t699u): formato SRI completo 001-001-000002976 (9 dígitos), sin recortar ceros. */
+  if(m) return m[1]+'-'+m[2]+'-'+String(Number(m[3])).padStart(9,'0');
   var nOnly=String(ff).trim().match(/(\d{6,12})$/);
-  if(nOnly) return String(Number(nOnly[1]));
+  if(nOnly) return String(Number(nOnly[1])).padStart(9,'0');
   return String(ff).replace(/\.0+$/,'');
+}
+/* TK156 (Emilia t699u–t701u): junto al Nº, la factura completa (mismo gris de fecha/valor, un pelín más chica);
+   sin factura: «Canje · sin factura» ($0, gris) o «Sin factura» (ámbar suave) para ver rápido qué falta facturar. */
+function _histFacTag(t,facn,anul){
+  if(facn) return '<span class="mob-fac"> - '+_histEsc(facn)+'</span>';
+  if(anul||(t&&(t.borrador||t.por_completar))) return '';
+  var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
+  return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
 }
 function _histColorQuien(nombre){
   var raw=String(nombre||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
@@ -6189,7 +6198,7 @@ function _histCardHTML(t, i, showPrices){
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
   var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
   var facn=_histFacNum(t);
-  var l1=(_histNum(t)||'—')+(facn?(' - '+facn):'');
+  var l1=(_histNum(t)||'—');
   var l3=[_histFechaFmt(t.fecha)];
   if(showPrices) l3.push('$'+_histMontos(t).tot.toFixed(2));
   var who=_histCreador(t);
@@ -6197,7 +6206,7 @@ function _histCardHTML(t, i, showPrices){
   var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span>'+est+'</div>'
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
     +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
     +_histThumbsHTML(t, res)
