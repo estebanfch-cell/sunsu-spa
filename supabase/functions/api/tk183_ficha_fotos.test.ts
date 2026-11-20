@@ -118,3 +118,11 @@ describe("TK183 ficha: personal edita lo no sensible; contacto y autorizaciones 
     assert.match(html, /apr-camb/);
   });
 });
+
+describe("TK183b aprobaciones móvil sin huecos", () => {
+  it("en columna, nombre y nota no usan flex-basis como alto", async () => {
+    const { readFileSync } = await import("node:fs");
+    const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
+    assert.match(html, /\.apr-fila \.name, \.apr-fila \.note \{ flex: 0 0 auto; \}/);
+  });
+});
