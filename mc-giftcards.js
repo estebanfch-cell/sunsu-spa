@@ -16,6 +16,7 @@
     if (document.getElementById("mcgc-css")) return;
     var s = document.createElement("style"); s.id = "mcgc-css";
     s.textContent = [
+      "@media(max-width:640px){.mcgc-sheet{display:none!important}}",
       ".mcgc-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mcgc-h h2{margin:0;font-size:1.2rem;flex:1}",
       ".mcgc-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcgc-tools input[type=search]{flex:1;min-width:220px;padding:9px 11px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:9px;font:inherit}",
       ".mcgc-chip{border:1.5px solid var(--cream-d,#e6dccb);background:var(--white,#fff);border-radius:999px;padding:5px 12px;font:inherit;font-size:.78rem;font-weight:700;color:var(--navy-d,#2b3f5c);cursor:pointer}.mcgc-chip.on{background:var(--navy-d,#2b3f5c);color:#fff;border-color:var(--navy-d,#2b3f5c)}",
@@ -118,13 +119,20 @@
       "<td>" + e(f(v.fechaVenta)) + "</td><td><b>" + e(v.comprador || "—") + "</b>" + (v.cedula ? '<div class="mcgc-sub">' + e(v.cedula) + "</div>" : "") + "</td>" +
       "<td>" + e(v.para || "—") + "</td><td>" + e(v.servicio || v.valor || "—") + "</td><td>" + e(v.factura || "—") + "</td><td>" + estHtml(v) + "</td><td>" + uso + "</td>" + enviar + "</tr>";
   }
-  function listaHtml() {
+  
+  function cardGc(v) {
+    var l2 = [e(v.para ? "Para " + v.para : ""), e(v.servicio || v.valor || ""), v.fechaVenta ? e(f(v.fechaVenta)) : ""].filter(Boolean);
+    var acts = sePuedeEnviar(v) ? '<div class="mob-l3" style="justify-content:flex-end"><button class="btn ghost small mcgc-wa" type="button" data-gc-wa="' + e(v.id) + '" title="Enviar por WhatsApp">WA</button> <button class="btn ghost small" type="button" data-gc-dl="' + e(v.id) + '" title="Descargar PDF">⬇️</button></div>' : "";
+    return '<div class="mob-card ss-card" role="button" tabindex="0" data-gc="' + e(v.id) + '"><div class="mob-l1"><span class="mob-num">' + e(v.comprador || "—") + (v.codigo ? ' <span class="ss-code">' + e(v.codigo) + "</span>" : "") + "</span>" + estHtml(v) + '</div><div class="mob-l2 ss-meta">' + l2.join(" · ") + "</div>" + acts + "</div>";
+  }
+function listaHtml() {
     var c = K.cuenta || {};
     var chip = function (k, t, nn) { return '<button type="button" class="mcgc-chip' + (K.estado === k ? " on" : "") + '" data-est="' + k + '">' + t + (nn != null ? " (" + nn + ")" : "") + "</button>"; };
     return '<div id="mcgc-root"><div class="mcgc-h"><h2>🎁 Gift cards</h2><button class="btn small" type="button" data-go="#/m/gift/cards/nueva">＋ Vender gift card</button></div>' +
-      '<div class="mcgc-tools"><input type="search" id="mcgc-q" placeholder="🔎 Código, comprador, cédula, para, factura o ticket" value="' + e(K.q) + '">' +
-      chip("vigentes", "Vigentes", c.vigentes) + chip("usadas", "Usadas", c.usadas) + chip("vencidas", "Vencidas", c.vencidas) + chip("todas", "Todas", c.todas) + chip("disponibles", "Códigos libres", c.disponibles) + "</div>" +
-      '<div class="mccf-card"><div class="sheet-scroll"><table class="mccf-t mcgc-t"><thead><tr><th>Código</th><th>Venta</th><th>Comprador</th><th>Para</th><th>Servicio</th><th>Factura</th><th>Estado</th><th>Uso</th><th>Enviar</th></tr></thead><tbody id="mcgc-body">' +
+      '<div class="mcgc-tools ss-bar"><input type="search" id="mcgc-q" placeholder="🔎 Código, comprador, cédula, para, factura o ticket" value="' + e(K.q) + '"></div>' +
+      '<div class="ss-chip-row">' + chip("vigentes", "Vigentes", c.vigentes) + chip("usadas", "Usadas", c.usadas) + chip("vencidas", "Vencidas", c.vencidas) + chip("todas", "Todas", c.todas) + chip("disponibles", "Códigos libres", c.disponibles) + "</div>" +
+      '<div class="mob-cards ss-cards" id="mcgc-cards">' + (K.items.length ? K.items.map(cardGc).join("") : '<p class="mccf-sub">Sin gift cards.</p>') + "</div>" +
+      '<div class="mccf-card mcgc-sheet"><div class="sheet-scroll"><table class="mccf-t mcgc-t"><thead><tr><th>Código</th><th>Venta</th><th>Comprador</th><th>Para</th><th>Servicio</th><th>Factura</th><th>Estado</th><th>Uso</th><th>Enviar</th></tr></thead><tbody id="mcgc-body">' +
       (K.items.length ? K.items.map(filaHtml).join("") : '<tr><td colspan="9" class="mccf-sub">Sin gift cards.</td></tr>') + "</tbody></table></div>" +
       '<div class="mcgc-acts" style="justify-content:space-between"><span class="mccf-sub">' + e(K.items.length) + " de " + e(K.total) + (K.siguiente ? " · siguiente código: <b>" + e(K.siguiente) + "</b>" : "") + "</span>" + (K.items.length < K.total ? '<button class="btn ghost small" type="button" id="mcgc-mas">Cargar más</button>' : "") + "</div></div></div>";
   }
@@ -133,11 +141,13 @@
     if (q) q.oninput = function () { clearTimeout(t); t = setTimeout(async function () { K.q = q.value.trim(); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }, 300); };
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = async function () { K.estado = b.getAttribute("data-est"); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }; });
     var mas = main.querySelector("#mcgc-mas"); if (mas) mas.onclick = async function () { mas.disabled = true; try { await cargarLista(true); repLista(main); } catch (x) { toast2(x.message, true); } };
-    var body = main.querySelector("#mcgc-body"); if (body) body.onclick = function (ev) {
+    var irGc = function (ev) {
       var wa = ev.target.closest("[data-gc-wa]"), dl = ev.target.closest("[data-gc-dl]");
       if (wa || dl) { ev.preventDefault(); ev.stopPropagation(); enviarGift(wa ? wa.getAttribute("data-gc-wa") : dl.getAttribute("data-gc-dl"), wa ? "wa" : "dl", wa || dl); return; }
       var tr = ev.target.closest("[data-gc]"); if (tr) location.hash = "#/m/gift/cards/" + encodeURIComponent(tr.getAttribute("data-gc"));
     };
+    var body = main.querySelector("#mcgc-body"); if (body) body.onclick = irGc;
+    var cards = main.querySelector("#mcgc-cards"); if (cards) cards.onclick = irGc;
   }
   function repLista(main) { var root = main.querySelector("#mcgc-root"); if (!root) return; var foco = document.activeElement && document.activeElement.id === "mcgc-q"; root.outerHTML = listaHtml(); wireLista(main); if (foco) { var q = main.querySelector("#mcgc-q"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
 
