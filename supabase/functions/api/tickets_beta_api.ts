@@ -243,6 +243,21 @@ async function otroNombre(ctx: Ctx, r: Row): Promise<boolean> {
     return facturadoAOtroNombre(s(r.nombre) + " " + s(r.apellido), L.cliente_migo);
   } catch { return false; }
 }
+/** TK184 (Emilia t801u): líneas de producto que llegaron solo con el código (factura de Migo: «SUNSU-AS-002»)
+ *  → nombre del catálogo, para que la tarjeta de tratamiento no salga con la compra vacía. */
+export async function nombresDeSku(ctx: Ctx, lineas: Row[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const codigos = [...new Set(lineas.filter((l) => s(l.tipo) === "producto").map((l) => {
+    const sku = s(l.sku).trim().toUpperCase(), nom = s(l.nombre).trim();
+    return !nom || /^(SUNSU-)?[A-Z]{2,3}-\d{3}$/i.test(nom) || nom.toUpperCase() === sku ? (sku || nom.replace(/^SUNSU-/i, "").toUpperCase()) : "";
+  }).filter(Boolean))];
+  if (!codigos.length) return out;
+  try {
+    const rows = (await consultar(ctx.db, "erp_productos", { cols: ["sku", "nombre"], filtros: [{ col: "sku", op: "in", val: codigos }], limite: 50 })).rows;
+    for (const r of rows) if (s(r.sku) && s(r.nombre)) out[s(r.sku).toUpperCase()] = s(r.nombre);
+  } catch { /* sin catálogo: la tarjeta usa el código */ }
+  return out;
+}
 export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const so = leerSerie(r, "so_num"), clave = claveDe(r, so);
   const cab = await cabDe(ctx, clave);
@@ -261,8 +276,9 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const exclSistema = { facial: b(r.excluir_facial), paquete: b(r.excluir_paquete), producto: b(r.excluir_producto), extras: b(r.excluir_extras) };
   const exclBeta = cab?.excluir_cosmetologa === true || calc.lineas.some((l) => l.excluir_comision);
   const admin = esAdmin(ses.rol);
+  const nombresSku = await nombresDeSku(ctx, calc.lineas as unknown as Row[]);
   return {
-    ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA,
+    ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA, nombresSku,
     ticket: {
       clave, id: r.id ?? null, soNum: so, betaNum: s(r.beta_num), sheetRow: r.sheet_row ?? null, fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp),
       nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3), cosmetologa: s(r.atendido_por),

@@ -178,29 +178,23 @@
     };
   }
 
-  async function pdfsDe(t, d, tipos) {
+  async function pdfsDe(t, d, tipos, clave) {
+    clave = clave || (d && d.clave) || (t && (t.so_num || t.clave)) || "";
     var out = [], i;
     for (i = 0; i < tipos.length; i++) {
       var k = tipos[i];
       try {
         if (k === "facial") {
-          if (d && w.MCTickets && typeof tarjetaTicket === "function") {
-            var cardFn = null;
-            try { /* detalle abierto */ } catch (eA) {}
-          }
+          /* TK184 (Emilia t801u): la tarjeta se arma SIEMPRE con el ticket recién leído (tk_get): notas, recomendaciones,
+             próxima cita, líneas (compra/paquete/extras) y fotos actuales. Nunca la fila de la lista ni una tarjeta guardada. */
           if (typeof tarjetaTicket === "function") {
-            var row = (d && d.ticket && d.ticket.sheetRow) || (t && (t.tkRow || t.sheet_row));
-            if (row && typeof cardDelTicketFallback === "function") { /* no */ }
-            await new Promise(function (res) {
-              if (row && w._tkCards && w._tkCards[row]) {
-                tarjetaTicket(row, function (doc, nom) { if (doc) out.push({ doc: doc, nom: nom, tipo: "facial" }); res(); });
-                return;
-              }
-              if (t && !w._tkCards) w._tkCards = w._tkCards || {};
-              if (t && row) w._tkCards[row] = t;
-              if (row) tarjetaTicket(row, function (doc, nom) { if (doc) out.push({ doc: doc, nom: nom, tipo: "facial" }); res(); });
-              else res();
-            });
+            var key = null;
+            if (clave && w.MCTickets && typeof w.MCTickets.tarjetaFresca === "function") key = await w.MCTickets.tarjetaFresca(clave);
+            if (!key) {
+              var row = (d && d.ticket && d.ticket.sheetRow) || (t && (t.tkRow || t.sheet_row));
+              if (row && t) { w._tkCards = w._tkCards || {}; w._tkCards[row] = t; key = row; }
+            }
+            if (key) await new Promise(function (res) { tarjetaTicket(key, function (doc, nom) { if (doc) out.push({ doc: doc, nom: nom, tipo: "facial" }); res(); }); });
           }
         } else if (k === "paquete" && typeof _pdfTarjetaPaquete === "function") {
           var ced = String((d && d.info && d.info.cedula) || (t && t.cedula) || "").split(".")[0];
@@ -264,7 +258,7 @@
     }
     if (!prep || prep.error) { toast((prep && prep.error) || "No se pudo preparar el WhatsApp", true); return; }
     if (!prep.tiene_tel) {
-      toast("Esta clienta no tiene WhatsApp registrado. Pídele a una administradora que lo complete en la ficha.", true);
+      toast("Esta clienta no tiene WhatsApp registrado. Pide el cambio desde la ficha: Teléfono 🔒 (lo aprueba administración).", true);
       return;
     }
     if (tipo === "chat" || tipo === "recordatorio") {
@@ -288,7 +282,7 @@
       if (typeof opts.pdfs === "function") {
         try { docs = (await opts.pdfs(sel)) || []; } catch (eG) { docs = []; }
       } else {
-        docs = await pdfsDe(opts.ticket, opts.detalle, sel);
+        docs = await pdfsDe(opts.ticket, opts.detalle, sel, clave);
       }
       return compartir(prep, docs, clave, sel);
     };
