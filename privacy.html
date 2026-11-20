@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#5B7FA6">
+<title>Política de privacidad · Sunsu Spa</title>
+<meta name="description" content="Política de privacidad de la app Sunsu Spa (uso interno del equipo de Sunsu Spa, Cumbayá, Quito, Ecuador).">
+<link rel="icon" href="/icon-sunsu-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
+<style>
+  :root { --navy:#5B7FA6; --navy-d:#3D5A7A; --cream:#F5F0E8; --cream-d:#EDE6D8; --text:#3A3530; --gray:#6F7585; --blue-l:#EEF3FA; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--cream); color: var(--text); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  header { background: linear-gradient(135deg, var(--navy-d), var(--navy)); color: #fff; padding: calc(18px + env(safe-area-inset-top, 0px)) 20px 18px; }
+  header .in { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  header img { height: 44px; width: auto; background: #fff; border-radius: 10px; padding: 6px 8px; }
+  header h1 { font-size: 1.15rem; margin: 0; line-height: 1.25; }
+  header p { margin: 2px 0 0; font-size: .82rem; opacity: .85; }
+  main { max-width: 760px; margin: 0 auto; padding: 22px 20px calc(40px + env(safe-area-inset-bottom, 0px)); }
+  section { background: #fff; border-radius: 16px; padding: 18px 20px; margin: 0 0 14px; box-shadow: 0 2px 14px rgba(91,127,166,.10); }
+  h2 { color: var(--navy-d); font-size: 1rem; margin: 0 0 8px; }
+  h3 { color: var(--navy-d); font-size: .92rem; margin: 14px 0 6px; }
+  p, li { font-size: .94rem; }
+  ul { padding-left: 1.2rem; margin: 6px 0; }
+  a { color: var(--navy-d); font-weight: 700; }
+  .meta { color: var(--gray); font-size: .82rem; }
+  .en { border-left: 4px solid var(--navy); background: var(--blue-l); }
+  nav.pie { text-align: center; font-size: .85rem; color: var(--gray); margin-top: 18px; }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <img src="assets/sunsu-logo-celeste.png" alt="순수 Sunsu">
+  <div><h1>Política de privacidad</h1><p>App «Sunsu Spa» · iPhone y web (app.sunsuspa.com)</p></div>
+</div></header>
+<main>
+  <p class="meta">Última actualización: 19 de noviembre de 2026</p>
+
+  <section>
+    <h2>1. Quiénes somos</h2>
+    <p><b>SUNSU S.A.</b> (RUC 1793219469001), que opera <b>Sunsu Spa</b>, spa de cuidado facial ubicado en el Centro Comercial La Esquina, Av. Pampite y Chimborazo, Local 8B, Cumbayá, Quito, Ecuador. Sitio web: <a href="https://www.sunsuspa.com">www.sunsuspa.com</a>. Contacto de privacidad: <a href="mailto:sunsu@sunsuspa.com">sunsu@sunsuspa.com</a>.</p>
+    <p>La app Sunsu Spa es una <b>herramienta interna de trabajo</b> para el equipo de Sunsu Spa (administración, recepción y cosmetólogas). No está dirigida al público general ni a menores de edad. Solo pueden entrar personas a quienes Sunsu Spa les creó una cuenta.</p>
+  </section>
+
+  <section>
+    <h2>2. Qué datos se tratan y para qué</h2>
+    <ul>
+      <li><b>Cuenta del personal:</b> nombre, rol, usuario, PIN y contraseña (la contraseña se guarda con cifrado de una vía, nunca en texto plano), permisos y registro de actividad, para iniciar sesión y controlar qué puede ver cada persona.</li>
+      <li><b>Clientas del spa:</b> datos de contacto y de facturación, historial de tratamientos, tickets, pagos, paquetes y gift cards, para atenderlas y llevar la operación diaria.</li>
+      <li><b>Cámara y fotos:</b> se usan <b>solo</b> cuando la persona usuaria lo decide, para documentar tratamientos faciales (fotos antes/después), escanear comprobantes de pago, leer códigos de barras de productos y para la foto del reloj de asistencia. La app no accede a la galería en segundo plano.</li>
+      <li><b>Ubicación:</b> solo al marcar entrada o salida en el reloj de asistencia, para confirmar que la persona está en el spa. No se rastrea la ubicación en ningún otro momento.</li>
+      <li><b>Datos de operación:</b> inventario, compras, comisiones y asistencia del equipo.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Dónde se guardan y quién los procesa</h2>
+    <p>Los datos se guardan en servidores de <b>Supabase</b> (base de datos y almacenamiento), con conexión cifrada (HTTPS/TLS) y acceso restringido por sesión y permisos. Para funciones concretas usamos proveedores que actúan por cuenta de Sunsu Spa:</p>
+    <ul>
+      <li><b>Acuity Scheduling</b> — agenda de citas.</li>
+      <li><b>Jibble</b> — registro de asistencia del personal.</li>
+      <li><b>Resend</b> — correos de la app (por ejemplo, recuperar contraseña).</li>
+      <li><b>Anthropic</b> (servicio de inteligencia artificial) — cuando se adjunta un comprobante de pago, la imagen se envía para leer automáticamente el monto y la referencia; el resultado siempre lo revisa una persona del equipo.</li>
+      <li><b>Google Drive</b> — documentos internos del spa.</li>
+      <li><b>WhatsApp</b> — solo cuando una persona del equipo decide enviar un mensaje o PDF a una clienta desde su propio teléfono.</li>
+    </ul>
+    <p><b>No vendemos datos, no mostramos publicidad y no usamos rastreo publicitario</b> (no hay seguimiento entre apps o sitios de terceros). La app no incluye herramientas de analítica ni de publicidad.</p>
+  </section>
+
+  <section>
+    <h2>4. En el iPhone</h2>
+    <p>La app guarda en el dispositivo solo la sesión iniciada (para no pedir el PIN cada vez) y archivos temporales que se crean al compartir un PDF; estos se borran automáticamente. Los permisos de cámara, fotos y ubicación se pueden revocar en cualquier momento en <b>Ajustes › Sunsu Spa</b>.</p>
+  </section>
+
+  <section>
+    <h2>5. Conservación, tus derechos y eliminación de cuenta</h2>
+    <p>Conservamos los datos mientras sean necesarios para la operación del spa y para cumplir obligaciones contables y tributarias en Ecuador. De acuerdo con la Ley Orgánica de Protección de Datos Personales del Ecuador, puedes solicitar acceso, rectificación, actualización, eliminación u oposición al tratamiento de tus datos.</p>
+    <ul>
+      <li><b>Personal de Sunsu:</b> para desactivar o eliminar tu cuenta, pídelo a la administración de Sunsu Spa o escribe a <a href="mailto:sunsu@sunsuspa.com?subject=Eliminar%20mi%20cuenta%20de%20la%20app%20Sunsu%20Spa">sunsu@sunsuspa.com</a> con el asunto «Eliminar mi cuenta». La cuenta se desactiva y los datos personales se eliminan o anonimizan, salvo los que la ley obligue a conservar.</li>
+      <li><b>Clientas del spa:</b> escribe a <a href="mailto:sunsu@sunsuspa.com">sunsu@sunsuspa.com</a> o acércate al spa.</li>
+    </ul>
+    <p>Respondemos en un plazo máximo de 15 días.</p>
+  </section>
+
+  <section>
+    <h2>6. Cambios</h2>
+    <p>Si cambiamos esta política, publicaremos la nueva versión en esta misma página con su fecha de actualización.</p>
+  </section>
+
+  <section class="en" lang="en">
+    <h2>English summary (for App Review)</h2>
+    <p><b>Sunsu Spa</b> is an internal business app used only by the staff of Sunsu Spa (SUNSU S.A., Cumbayá, Quito, Ecuador) to run daily operations: tickets and payments, client records, treatment photos, inventory, attendance and staff commissions. Accounts are created by the spa's administration; there is no public sign-up.</p>
+    <ul>
+      <li>Camera and photo library are used only when the user chooses to, to document facial treatments (before/after photos), scan payment receipts and product barcodes, and for the attendance clock photo.</li>
+      <li>Location is used only at clock-in/clock-out to confirm the staff member is at the spa.</li>
+      <li>Data is stored on Supabase over encrypted connections (HTTPS/TLS) with session-based access control. Service providers: Acuity Scheduling (appointments), Jibble (attendance), Resend (app emails), Anthropic (AI reading of payment receipts, always reviewed by a person), Google Drive (internal documents).</li>
+      <li><b>No tracking, no advertising, no analytics SDKs, no data selling.</b></li>
+      <li>Account deletion: email <a href="mailto:sunsu@sunsuspa.com">sunsu@sunsuspa.com</a> (subject “Delete my account”) or ask the spa's administration; the account is deactivated and personal data is deleted or anonymized except where the law requires retention.</li>
+    </ul>
+  </section>
+
+  <nav class="pie"><a href="support.html">Soporte</a> · <a href="./">Abrir Sunsu</a></nav>
+</main>
+</body>
+</html>

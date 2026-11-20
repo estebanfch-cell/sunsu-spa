@@ -1,0 +1,256 @@
+# Sunsu Spa · App iOS (Capacitor 8 + Swift Package Manager)
+#  1) ios-simulator-build: compila el proyecto Xcode real (Release, simulador, sin firma) → prueba de 0 errores.
+#  2) ios-testflight-upload: firma, archiva y sube el .ipa a TestFlight / App Store Connect (solo manual).
+# La web (raíz del repo) se copia DENTRO del .ipa con mobile/scripts/sync-web.mjs. GitHub Pages no se toca.
+name: iOS App Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_testflight:
+        description: "Firmar y subir a TestFlight (requiere los secretos de Apple)"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios-appstore.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios-appstore.yml"
+
+concurrency:
+  group: ios-appstore-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator-build:
+    name: Xcode build (simulador, Release)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Seleccionar Xcode más reciente (26.x)
+        run: |
+          set -euo pipefail
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$X" ]; then X=$(ls -d /Applications/Xcode*.app | sort -V | tail -1); fi
+          echo "Usando $X"
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+          xcrun simctl list runtimes | tail -5 || true
+
+      - name: npm ci + pruebas del empaquetado web
+        working-directory: mobile
+        run: |
+          npm ci
+          npm test
+
+      - name: Copiar web al proyecto iOS (sync-web + cap sync)
+        working-directory: mobile
+        run: npm run sync:ios
+
+      - name: Validar plists, privacy manifest e icono
+        working-directory: mobile/ios/App
+        run: |
+          set -euo pipefail
+          plutil -lint App/Info.plist App/PrivacyInfo.xcprivacy
+          grep -q "PrivacyInfo.xcprivacy in Resources" App.xcodeproj/project.pbxproj
+          sips -g pixelWidth -g pixelHeight -g hasAlpha App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+          sips -g hasAlpha App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png | grep -q "hasAlpha: no"
+          test -f App/public/index.html
+          grep -q "native-ios-bridge.js" App/public/index.html
+
+      - name: Resolver paquetes Swift
+        working-directory: mobile/ios/App
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
+
+      - name: xcodebuild (Release · iphonesimulator · sin firma)
+        working-directory: mobile/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: .*Sunsu|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+          ERR=$(grep -c " error: " build/xcodebuild.log || true)
+          echo "Errores de compilación: $ERR"
+          test "$ERR" = "0"
+
+      - name: Revisar el .app generado
+        working-directory: mobile/ios/App
+        run: |
+          set -euo pipefail
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "App.app" -type d | head -1)
+          echo "App: $APP"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/Assets.car"
+          test -f "$APP/public/index.html"
+          test -f "$APP/public/native-ios-bridge.js"
+          plutil -p "$APP/Info.plist" | grep -E "CFBundleIdentifier|CFBundleShortVersionString|CFBundleVersion|CFBundleDisplayName|MinimumOSVersion|ITSAppUsesNonExemptEncryption"
+          ditto -c -k --keepParent "$APP" build/SunsuSpa-simulator.app.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sunsu-ios-simulator
+          path: |
+            mobile/ios/App/build/SunsuSpa-simulator.app.zip
+            mobile/ios/App/build/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  ios-testflight-upload:
+    name: Firmar y subir a TestFlight
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_testflight
+    needs: ios-simulator-build
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: app-store
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Verificar secretos
+        run: |
+          faltan=""
+          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64; do [ -n "${!v}" ] || faltan="$faltan $v"; done
+          if [ -n "$faltan" ]; then echo "::error::Faltan secretos:$faltan"; exit 1; fi
+          if [ -n "$IOS_DIST_CERT_P12_BASE64" ] && [ -n "$IOS_PROVISIONING_PROFILE_BASE64" ]; then echo "FIRMA=manual" >> "$GITHUB_ENV"; else echo "FIRMA=automatica" >> "$GITHUB_ENV"; fi
+
+      - name: Seleccionar Xcode más reciente (26.x)
+        run: |
+          set -euo pipefail
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$X" ]; then X=$(ls -d /Applications/Xcode*.app | sort -V | tail -1); fi
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+
+      - name: Preparar web + proyecto
+        working-directory: mobile
+        run: |
+          npm ci
+          npm run sync:ios
+
+      - name: Llave de App Store Connect
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys ~/private_keys
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          cp ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 ~/private_keys/
+          echo "ASC_KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      - name: Certificado y perfil (firma manual)
+        if: env.FIRMA == 'manual'
+        run: |
+          set -euo pipefail
+          KC=$RUNNER_TEMP/sunsu.keychain-db
+          KC_PASS=$(uuidgen)
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > $RUNNER_TEMP/dist.p12
+          security import $RUNNER_TEMP/dist.p12 -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PASS" "$KC" >/dev/null
+          security list-keychain -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > $RUNNER_TEMP/sunsu.mobileprovision
+          security cms -D -i $RUNNER_TEMP/sunsu.mobileprovision > $RUNNER_TEMP/profile.plist
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" $RUNNER_TEMP/profile.plist)
+          NAME=$(/usr/libexec/PlistBuddy -c "Print Name" $RUNNER_TEMP/profile.plist)
+          cp $RUNNER_TEMP/sunsu.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          echo "PROFILE_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "Perfil: $NAME ($UUID)"
+
+      - name: Archivar (.xcarchive)
+        working-directory: mobile/ios/App
+        run: |
+          set -euo pipefail
+          BUILD_NUM=${{ github.run_number }}
+          if [ "$FIRMA" = "manual" ]; then
+            xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+              -destination 'generic/platform=iOS' -archivePath build/SunsuSpa.xcarchive \
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+              CURRENT_PROJECT_VERSION="$BUILD_NUM" archive
+          else
+            xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+              -destination 'generic/platform=iOS' -archivePath build/SunsuSpa.xcarchive \
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+              CURRENT_PROJECT_VERSION="$BUILD_NUM" -allowProvisioningUpdates \
+              -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" archive
+          fi
+
+      - name: Exportar .ipa (App Store Connect)
+        working-directory: mobile/ios/App
+        run: |
+          set -euo pipefail
+          if [ "$FIRMA" = "manual" ]; then
+            cat > build/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict><key>com.sunsuspa.app</key><string>${PROFILE_NAME}</string></dict>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+            xcodebuild -exportArchive -archivePath build/SunsuSpa.xcarchive -exportPath build/ipa -exportOptionsPlist build/ExportOptions.plist
+          else
+            cat > build/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+            xcodebuild -exportArchive -archivePath build/SunsuSpa.xcarchive -exportPath build/ipa -exportOptionsPlist build/ExportOptions.plist \
+              -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          fi
+          ls -la build/ipa
+
+      - name: Subir a TestFlight
+        working-directory: mobile/ios/App
+        run: |
+          set -euo pipefail
+          IPA=$(ls build/ipa/*.ipa | head -1)
+          xcrun altool --validate-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "Build ${{ github.run_number }} subido. En App Store Connect › TestFlight aparece en 5–30 min (procesando)."
+
+      - name: Limpiar llaves
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/sunsu.keychain-db 2>/dev/null || true
+          rm -f $RUNNER_TEMP/dist.p12 $RUNNER_TEMP/sunsu.mobileprovision ~/.appstoreconnect/private_keys/*.p8 ~/private_keys/*.p8
