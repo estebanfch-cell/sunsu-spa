@@ -6,7 +6,7 @@ import { ecuadorParts, n, s, normNombre, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
   diasDeVacacion, saldoVacaciones, validarSolicitudVacacion,
-  calcularDia, calcularNomina, configDesde, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia,
+  calcularDia, calcularNomina, configDesde, estadoReloj, evaluarUbicacion, instanteEcuador, validarSecuencia, hmToMin,
   type JibbleIn, type MarcajeIn, type NominaHoras, type PermisoIn,
 } from "./asistencia.ts";
 import { enPrueba } from "./db.ts";
@@ -867,3 +867,86 @@ extend("asis_cierre_automatico", "any", async (_p, ctx, ses) => {
 
 export { instanteEcuador };
 
+
+/**
+ * TK170 (Emilia t768u): recalcula cada día de Jibble desde sus horas crudas (primera entrada / última salida /
+ * pausas) con las MISMAS reglas que la marca de la app: horario de la persona, almuerzo del horario si en Jibble
+ * no marcó pausa, extra 50 % después de la salida o pasadas 8 h, 100 % de noche, descanso o feriado.
+ * Devuelve las diferencias contra lo guardado (payroll / suplementarias / extraordinarias / descanso).
+ * No cambia nada: el rol sigue usando Jibble tal cual hasta que Emilia confirme.
+ */
+export function recalcularDiaJibble(raw: Row, fecha: string, config: ReturnType<typeof configDesde>, feriados: string[], jornada: { trabaja: boolean; desde: string | null; hasta: string | null } | null, almuerzo: { desde: string | null; hasta: string | null; duracionMin: number } | null): { abierto: boolean; workedMin: number; suplMin: number; extrMin: number; descMin: number; almuerzoMin: number } | null {
+  const ini = s(raw?.firstInTimestamp) || s(raw?.startTime);
+  const fin = s(raw?.lastOutTimestamp) || s(raw?.endTime);
+  if (!ini) return null;
+  if (!fin) return { abierto: true, workedMin: 0, suplMin: 0, extrMin: 0, descMin: 0, almuerzoMin: 0 };
+  const marcas: { tipo: string; ts: string; anulado?: boolean }[] = [{ tipo: "entrada", ts: new Date(ini).toISOString() }];
+  const pausas = (Array.isArray((raw?.trackedHours as Row)?.breaks) ? (raw.trackedHours as Row).breaks as Row[] : [])
+    .filter((b) => s(b.type).toLowerCase() !== "paid" && s(b.start) && s(b.end));
+  const pausa = pausas.sort((a, b) => (Date.parse(s(b.end)) - Date.parse(s(b.start))) - (Date.parse(s(a.end)) - Date.parse(s(a.start))))[0];
+  let li: string | null = null, lf: string | null = null;
+  if (pausa && Date.parse(s(pausa.end)) - Date.parse(s(pausa.start)) >= 10 * 60000) {
+    li = new Date(s(pausa.start)).toISOString(); lf = new Date(s(pausa.end)).toISOString();
+  } else if (almuerzo) {
+    // Sin pausa en Jibble: se descuenta el almuerzo del horario (impago) si la jornada lo cubre.
+    const d0 = almuerzo.desde || "13:00";
+    // franja 12:00–15:00 con 60 min: se toma la duración (no toda la franja)
+    const dur = almuerzo.duracionMin || (almuerzo.hasta ? Math.max(0, hmToMin(almuerzo.hasta) - hmToMin(d0)) : 60);
+    const a = Date.parse(instanteEcuador(fecha, d0)), b = a + dur * 60000;
+    if (Date.parse(ini) < a && Date.parse(fin) > b) { li = new Date(a).toISOString(); lf = new Date(b).toISOString(); }
+  }
+  if (li && lf) { marcas.push({ tipo: "almuerzo_inicio", ts: li }, { tipo: "almuerzo_fin", ts: lf }); }
+  marcas.push({ tipo: "salida", ts: new Date(fin).toISOString() });
+  const d = calcularDia(fecha, marcas as never, config, feriados, [], null, jornada as never);
+  const alm = li && lf ? Math.round((Date.parse(lf) - Date.parse(li)) / 60000) : 0;
+  return { abierto: false, workedMin: n(d.workedMin), suplMin: n(d.suplMin), extrMin: n(d.extrMin), descMin: n(d.descMin), almuerzoMin: alm };
+}
+
+export async function correccionesJibble(ctx: Ctx, nombre: string, desde: string, hasta: string): Promise<{ dias: Row[]; resumen: Row; importadoHasta: string | null }> {
+  const [jib, feriados, config] = await Promise.all([
+    ctx.db.all("jibble_historial").catch(() => [] as Row[]),
+    feriadosDe(ctx),
+    configDe(ctx).catch(() => configDesde(undefined)),
+  ]);
+  let jornadaFn: ((f: string) => { trabaja: boolean; desde: string | null; hasta: string | null }) | null = null;
+  let almuerzo: { desde: string | null; hasta: string | null; duracionMin: number } | null = { desde: "13:00", hasta: "14:00", duracionMin: 60 };
+  try {
+    const { cargarHorarios } = await import("./horarios_api.ts");
+    const { horarioAsignado, jornadaDe } = await import("./horarios.ts");
+    const pack = await cargarHorarios(ctx);
+    const emp = await empleadaDe(ctx, nombre);
+    const h = horarioAsignado(pack.horarios, pack.asignaciones, [nombre, s(emp?.nombre_app), s(emp?.apellidos_y_nombres), s(emp?.nombre_jibble)])
+      || pack.horarios.find((x) => x.esDefault) || null;
+    if (h) {
+      jornadaFn = (f) => jornadaDe(h, f);
+      const dz = (h.descansos || [])[0];
+      // La jornada de 9 h del horario incluye 1 h de almuerzo: el tope legal es 8 h, así que el almuerzo se
+      // descuenta siempre que Jibble no tenga pausa (igual que Jibble, que cuenta extra pasada la jornada del horario).
+      almuerzo = dz ? { desde: dz.desde, hasta: dz.hasta, duracionMin: dz.duracionMin || 60 } : almuerzo;
+    }
+  } catch { /* horario por defecto */ }
+  const propias = jib.filter((r) => mismo(personaJibble(r), nombre));
+  const importadoHasta = propias.map((r) => s(r.fecha).slice(0, 10)).sort().pop() || null;
+  const dias: Row[] = [];
+  const tot = { guardado: { payroll: 0, supl: 0, extr: 0, desc: 0 }, recalculado: { payroll: 0, supl: 0, extr: 0, desc: 0 }, abiertos: 0 };
+  for (const r of propias) {
+    const fecha = s(r.fecha).slice(0, 10);
+    if (fecha < desde || fecha > hasta) continue;
+    const g = { payroll: Math.round(n(r.payroll_minutes)), supl: Math.round(n(r.supplementary_minutes)), extr: Math.round(n(r.extraordinary_minutes)), desc: Math.round(n(r.rest_day_minutes)) };
+    const rc = recalcularDiaJibble((r.raw || {}) as Row, fecha, config, feriados, jornadaFn ? jornadaFn(fecha) : null, almuerzo);
+    if (!rc) continue;
+    tot.guardado.payroll += g.payroll; tot.guardado.supl += g.supl; tot.guardado.extr += g.extr; tot.guardado.desc += g.desc;
+    if (rc.abierto) {
+      tot.abiertos++;
+      dias.push({ fecha, abierto: true, guardado: g, nota: "Sin salida en Jibble: lo guardado es parcial (se importó con la jornada abierta)." });
+      continue;
+    }
+    // payroll de Jibble = presencia (incluye el almuerzo pagado del horario): se compara igual.
+    const nv = { payroll: rc.workedMin + rc.almuerzoMin, supl: rc.suplMin, extr: rc.extrMin, desc: rc.descMin };
+    tot.recalculado.payroll += nv.payroll; tot.recalculado.supl += nv.supl; tot.recalculado.extr += nv.extr; tot.recalculado.desc += nv.desc;
+    // extraordinarias y descanso/feriado se pagan igual (100 %): se comparan juntas.
+    const dif = Math.abs(nv.payroll - g.payroll) >= 15 || Math.abs(nv.supl - g.supl) >= 15 || Math.abs((nv.extr + nv.desc) - (g.extr + g.desc)) >= 15;
+    if (dif) dias.push({ fecha, abierto: false, guardado: g, recalculado: nv, almuerzoMin: rc.almuerzoMin });
+  }
+  return { dias: dias.sort((a, b) => s(a.fecha).localeCompare(s(b.fecha))), resumen: tot, importadoHasta };
+}

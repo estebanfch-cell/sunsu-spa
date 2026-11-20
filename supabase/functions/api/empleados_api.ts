@@ -380,7 +380,6 @@ extend("emp_oc_servicios", "any", async (p, ctx, ses) => {
   if (ov0 && ov0.afiliada_iess !== false) return { error: "Esta persona está afiliada al IESS: se le hace rol de pagos, no una orden de compra." };
   const ov = await asegurarOverlay(ctx, ses, nombre, { afiliada_iess: false });
   const sums = await comisionesMenosMultas(ctx, nombre, anio, mes);
-  if (!(sums.neto > 0) && p.forzar !== true && p.forzar !== "1") return { error: "No hay comisiones netas en ese periodo.", ...sums, periodo: ymd };
   let provId = s(ov.proveedor_id);
   const provs = await ctx.db.all("erp_proveedores").catch(() => [] as Row[]);
   let prov = provId ? provs.find((x) => s(x.id) === provId) : undefined;
@@ -400,16 +399,26 @@ extend("emp_oc_servicios", "any", async (p, ctx, ses) => {
   const dup = ocs.find((o) => s(o.proveedor_id) === provId && s((o.snap as Row)?.periodo) === ymd && s(o.estado) !== "cancelada" && s((o.snap as Row)?.tipo) === "servicios_empleado");
   if (dup && p.reemplazar !== true && p.reemplazar !== "1") return { ok: true, id: s(dup.id), numero: s(dup.numero), total: n(dup.total), periodo: ymd, existente: true, ...sums };
   const IVA = 0.15;
-  const total = sums.neto;
+  // TK170: la OC es por lo mismo que dice su rol: sueldo + bonos + comisiones + horas − multas (sin IESS).
+  let total = sums.neto, rolFacturar: number | null = null;
+  try {
+    const { armarEntrada, periodoDe } = await import("./roles_crear_api.ts");
+    const arm = await armarEntrada(ctx, nombre, periodoDe(anio, mes), anio, mes);
+    const sn = (arm && !arm.error ? arm.snap : null) as Row | null;
+    if (sn && n(sn.facturar) > 0) { rolFacturar = n(sn.facturar); total = rolFacturar; }
+  } catch { /* sin rol: solo comisiones − multas */ }
+  if (!(total > 0) && p.forzar !== true && p.forzar !== "1") return { error: "No hay nada que facturar en ese periodo.", ...sums, periodo: ymd };
   const subtotal = round2(total / (1 + IVA));
   const iva = round2(total - subtotal);
   const numero = siguienteAnual(ocs, "OC", anio);
   const id = uid();
-  const lineaNombre = `Servicios profesionales · comisiones ${ymd} (menos multas)`;
-  const nota = `Por favor emite una factura por tus servicios profesionales de ${ymd} (comisiones $${sums.comisiones.toFixed(2)} menos multas $${sums.multas.toFixed(2)}). Incluye el número ${numero} en la factura.`;
+  const lineaNombre = rolFacturar != null ? `Servicios profesionales · ${ymd} (según su rol)` : `Servicios profesionales · comisiones ${ymd} (menos multas)`;
+  const nota = rolFacturar != null
+    ? `Debes facturarnos $${total.toFixed(2)} por tus servicios profesionales de ${ymd} (según tu rol del mes). Incluye el número ${numero} en la factura.`
+    : `Por favor emite una factura por tus servicios profesionales de ${ymd} (comisiones $${sums.comisiones.toFixed(2)} menos multas $${sums.multas.toFixed(2)}). Incluye el número ${numero} en la factura.`;
   const snap = {
     tipo: "servicios_empleado", periodo: ymd, persona: nombre,
-    comisiones: sums.comisiones, multas: sums.multas, neto: sums.neto,
+    comisiones: sums.comisiones, multas: sums.multas, neto: sums.neto, facturarRol: rolFacturar,
     conIva: true,
     lineas: [{ sku: "SERV-PROF", nombre: lineaNombre, pedido: 1, precio: subtotal, subtotal }],
     prov: { id: provId, nombre },

@@ -18,11 +18,17 @@
   }
   var DIAS = [["Monday", "Lun"], ["Tuesday", "Mar"], ["Wednesday", "Mié"], ["Thursday", "Jue"], ["Friday", "Vie"], ["Saturday", "Sáb"], ["Sunday", "Dom"]];
 
+  // TK170 (Emilia t768u): desplegables en lugar de botones sí/no.
   function siNo(field, on, si, no) {
-    return '<div class="emp-si-no" data-emp-field="' + esc(field) + '">'
-      + '<button type="button" class="emp-chip' + (on ? " on" : "") + '" data-v="1">' + esc(si) + "</button>"
-      + '<button type="button" class="emp-chip' + (!on ? " on" : "") + '" data-v="0">' + esc(no) + "</button></div>";
+    return '<select class="emp-in emp-sel" data-emp-sel="' + esc(field) + '">'
+      + '<option value="1"' + (on ? " selected" : "") + ">" + esc(si) + "</option>"
+      + '<option value="0"' + (!on ? " selected" : "") + ">" + esc(no) + "</option></select>";
   }
+  function selHora(attrs, val, vacio) {
+    if (typeof window.htmlSelHora === "function") return window.htmlSelHora(attrs, val, vacio);
+    return '<input ' + attrs + ' type="time" value="' + esc(val || "") + '">';
+  }
+  var CARGOS = ["COSMETOLOGA", "RECEPCION", "ASISTENTE DE COSMETOLOGIA", "ADMINISTRACION"];
 
   async function ensureItems() {
     var data = await A("emp_list");
@@ -55,8 +61,8 @@
         var lab = (DIAS.find(function (x) { return x[0] === d.dia; }) || ["", d.dia === String(d.dia) && +d.dia ? "Día " + d.dia : d.dia])[1] || d.dia;
         return '<div class="hor-dia emp-hor-row" data-dia="' + esc(d.dia) + '"><span>' + esc(lab) + '</span>'
           + '<input type="checkbox" data-trabaja' + (d.trabaja ? " checked" : "") + ">"
-          + '<input data-desde type="time" value="' + esc(d.desde || "") + '">'
-          + '<input data-hasta type="time" value="' + esc(d.hasta || "") + '"></div>';
+          + selHora("data-desde", d.desde, true)
+          + selHora("data-hasta", d.hasta, true) + "</div>";
       }).join("");
     }
     var desc = (h && h.descansos && h.descansos[0]) || {};
@@ -65,10 +71,10 @@
       + '<div class="emp-hor-asig"><label>Plantilla</label><select class="emp-in" id="emp-hor-sel">' + opts + "</select></div>"
       + (filas ? '<div class="emp-week" id="emp-hor-dias">' + filas
         + '<div class="hor-dia emp-hor-row"><span>Almuerzo</span><span></span>'
-        + '<input name="desc_desde" id="emp-desc-desde" type="time" value="' + esc(desc.desde || "13:00") + '">'
-        + '<input name="desc_hasta" id="emp-desc-hasta" type="time" value="' + esc(desc.hasta || "14:00") + '"></div></div>'
+        + selHora('name="desc_desde" id="emp-desc-desde"', desc.desde || "13:00")
+        + selHora('name="desc_hasta" id="emp-desc-hasta"', desc.hasta || "14:00") + "</div></div>"
         + '<p class="note emp-save-hint">Los horarios se guardan al cambiar el dato, sin lápiz.</p>'
-        : '<p class="note">Elige una plantilla o créala abajo en Plantillas de horario.</p>')
+        : '<p class="note">Elige una plantilla. Las plantillas se crean y editan en <button class="btn ghost small" type="button" data-go="#/m/personal/horarios">Horarios</button>.</p>')
       + "</section>";
   }
 
@@ -80,10 +86,12 @@
       + "<h2>Datos</h2>"
       + '<div class="emp-grid">'
       + '<div class="emp-field"><span class="emp-k">Nombre</span><b>' + esc(it.nombre) + "</b></div>"
-      + '<div class="emp-field"><span class="emp-k">Cargo</span><span>' + esc(it.cargo || "—") + "</span></div>"
-      + '<div class="emp-field"><span class="emp-k">Ingreso</span><span>' + esc(it.fechaIngreso || "—") + "</span></div>"
-      + (it.sueldo ? '<div class="emp-field"><span class="emp-k">Sueldo base</span><span>' + money(it.sueldo) + "</span></div>" : "")
-      + (it.bono ? '<div class="emp-field"><span class="emp-k">Bono</span><span>' + money(it.bono) + "</span></div>" : "")
+      + '<div class="emp-field"><span class="emp-k">Cargo</span><select class="emp-in" data-emp-dato="cargo">'
+      + (CARGOS.indexOf(String(it.cargo || "").toUpperCase()) < 0 ? '<option value="' + esc(it.cargo || "") + '" selected>' + esc(it.cargo || "—") + "</option>" : "")
+      + CARGOS.map(function (c) { return '<option value="' + c + '"' + (String(it.cargo || "").toUpperCase() === c ? " selected" : "") + ">" + c.charAt(0) + c.slice(1).toLowerCase() + "</option>"; }).join("") + "</select></div>"
+      + '<div class="emp-field"><span class="emp-k">Ingreso</span><input class="emp-in" type="date" data-emp-dato="fecha_ingreso" value="' + esc(it.fechaIngreso || "") + '"></div>'
+      + '<div class="emp-field"><span class="emp-k">Sueldo base</span><input class="emp-in" inputmode="decimal" data-emp-dato="sueldo" value="' + esc(it.sueldo || "") + '" placeholder="482.00"></div>'
+      + '<div class="emp-field"><span class="emp-k">Bono fijo</span><input class="emp-in" inputmode="decimal" data-emp-dato="bono" value="' + esc(it.bono || "") + '" placeholder="0.00"></div>'
       + "</div>"
       + '<div class="emp-field"><span class="emp-k">¿Tiene usuario?</span>' + siNo("tiene_usuario", !!it.tieneUsuario, "Sí", "No") + "</div>"
       + '<div class="emp-field" id="emp-user-wrap"' + (it.tieneUsuario ? "" : " hidden") + '><span class="emp-k">Usuario vinculado</span>'
@@ -106,30 +114,32 @@
       }).join("") || '<p class="note">Todavía no hay una orden de este mes.</p>';
       return '<section class="emp-sec" id="emp-oc">'
         + "<h2>Orden de compra de servicios</h2>"
-        + '<p class="note">Como no está afiliada al IESS, no se le hace rol de pagos. Cada mes se genera una OC por sus comisiones menos las multas, pidiéndole que emita una factura con el número de la orden.</p>'
+        + '<p class="note">Sin afiliación al IESS: su rol muestra sueldo, bonos y comisiones, sin aporte IESS ni décimos/fondo, y el total que debe facturar a Sunsu. La OC del mes sirve para recibir esa factura.</p>'
         + '<div class="emp-oc-bar"><label>Periodo</label><input class="emp-in" id="emp-oc-periodo" type="month">'
         + '<button class="btn small" type="button" id="emp-oc-gen">Generar OC del mes</button></div>'
         + '<p class="err" id="emp-oc-err"></p>'
         + '<div id="emp-oc-lista">' + ocs + "</div></section>";
     }
-    var filas = (d.descuentos || []).map(function (x) {
-      var tipo = x.tipo === "quirografario" ? "Quirografario" : x.tipo === "hipotecario" ? "Hipotecario" : (x.descripcion || "Otro");
+    // TK170: el aporte personal 9,45 % lo calcula el rol solo (no se ingresa a mano). Aquí solo los préstamos IESS
+    // (quirografario / hipotecario), que se ven cuando hay alguno. No hay conexión con el portal del IESS.
+    var filas = (d.descuentos || []).filter(function (x) { return Number(x.monto) > 0; }).map(function (x) {
+      var tipo = x.tipo === "quirografario" ? "Préstamo quirografario" : x.tipo === "hipotecario" ? "Préstamo hipotecario" : (x.descripcion || "Otro descuento IESS");
       var vig = [x.vigente_desde, x.vigente_hasta].filter(Boolean).join(" → ") || "Vigente";
-      return '<div class="emp-desc-row" data-desc="' + esc(x.id) + '"><div><b>' + esc(tipo) + "</b> · " + money(x.monto) + '<div class="note">' + esc(vig) + (x.descripcion && x.tipo !== "otro" ? " · " + esc(x.descripcion) : "") + "</div></div>"
+      return '<div class="emp-desc-row" data-desc="' + esc(x.id) + '"><div><b>' + esc(tipo) + "</b> · " + money(x.monto) + '<div class="note">' + esc(vig) + "</div></div>"
         + '<button class="btn ghost small" type="button" data-emp-desc-del="' + esc(x.id) + '">Quitar</button></div>';
-    }).join("") || '<p class="note">Sin descuentos IESS cargados. Se ingresan a mano (préstamos y otras retenciones). No se consulta el portal del IESS.</p>';
+    }).join("");
     return '<section class="emp-sec" id="emp-iess">'
-      + "<h2>Descuentos IESS</h2>"
-      + '<p class="note">Préstamos quirografarios, hipotecarios y otras retenciones. Entran al rol de pagos del mes en que estén vigentes.</p>'
-      + '<div id="emp-iess-lista">' + filas + "</div>"
+      + "<h2>IESS</h2>"
+      + '<p class="note">Aporte personal 9,45 %: automático en el rol. Los préstamos del IESS se ingresan a mano (no hay conexión con el portal del IESS).</p>'
+      + (filas ? '<div id="emp-iess-lista">' + filas + "</div>" : "")
+      + '<details class="emp-iess-mas"' + (filas ? "" : "") + '><summary class="btn ghost small">+ Préstamo IESS</summary>'
       + '<form class="emp-iess-form" id="f-emp-iess">'
-      + '<select name="tipo" class="emp-in" aria-label="Tipo"><option value="quirografario">Quirografario</option><option value="hipotecario">Hipotecario</option><option value="otro">Otro</option></select>'
-      + '<input class="emp-in" name="descripcion" placeholder="Descripción (si es otro)">'
-      + '<input class="emp-in" name="monto" inputmode="decimal" placeholder="Monto mensual">'
-      + '<input class="emp-in" name="vigente_desde" type="date" title="Vigente desde">'
-      + '<input class="emp-in" name="vigente_hasta" type="date" title="Vigente hasta">'
+      + '<select name="tipo" class="emp-in" aria-label="Tipo"><option value="quirografario">Quirografario</option><option value="hipotecario">Hipotecario</option></select>'
+      + '<input class="emp-in" name="monto" inputmode="decimal" placeholder="Cuota mensual" required>'
+      + '<input class="emp-in" name="vigente_desde" type="date" title="Desde">'
+      + '<input class="emp-in" name="vigente_hasta" type="date" title="Hasta">'
       + '<button class="btn small" type="submit">Añadir</button>'
-      + "</form>"
+      + "</form></details>"
       + '<p class="err" id="emp-iess-err"></p>'
       + "</section>";
   }
@@ -148,21 +158,6 @@
       + "</section>";
   }
 
-  function htmlPlantillas() {
-    var lista = (K.horarios || []).map(function (h) {
-      var arr = (typeof etiquetaArreglo === "function" ? etiquetaArreglo(h.arreglo) : (h.arreglo || ""));
-      return '<button class="emp-plantilla" type="button" data-hor="' + esc(h.id) + '"><b>' + esc(h.nombre) + '</b><span class="note">' + esc(arr) + (h.esDefault ? " · por defecto" : "") + "</span></button>";
-    }).join("") || '<p class="note">Todavía no hay plantillas de horario.</p>';
-    return '<section class="emp-sec" id="emp-plantillas">'
-      + "<h2>Plantillas de horario</h2>"
-      + '<div class="emp-plantillas-tools"><button class="btn ghost small" type="button" id="hor-nuevo">Nueva plantilla</button>'
-      + '<button class="btn ghost small" type="button" id="hor-jibble">Traer de Jibble</button></div>'
-      + '<p class="err" id="hor-err"></p>'
-      + '<div class="emp-plantillas-lista" id="hor-lista">' + lista + "</div>"
-      + '<div id="hor-editor" class="hor-editor-compact"></div>'
-      + "</section>";
-  }
-
   function htmlDetalle(d) {
     var it = d.item || {};
     return '<div class="emp-ficha" data-emp-id="' + esc(it.id) + '" data-emp-nombre="' + esc(it.nombre) + '">'
@@ -178,11 +173,11 @@
     var id = route && route.id ? String(route.id) : "";
     await cargarHorarios();
     if (!id) {
-      return '<div class="emp-vacio"><p class="note">Elige una empleada para ver su ficha, el horario, la afiliación al IESS y los documentos.</p>' + htmlPlantillas() + "</div>";
+      return '<div class="emp-vacio"><p class="note">Elige una empleada para ver su ficha, el horario, la afiliación al IESS y los documentos. Las plantillas de horas están en <button class="btn ghost small" type="button" data-go="#/m/personal/horarios">Horarios</button>.</p></div>';
     }
     var found = (K.items || []).find(function (x) { return String(x.id) === id; });
     var data = await A("emp_get", found && found.nombre ? { id: id, nombre: found.nombre } : { id: id });
-    if (data && data.error) return '<p class="err">' + esc(data.error) + "</p>" + htmlPlantillas();
+    if (data && data.error) return '<p class="err">' + esc(data.error) + "</p>";
     K.detalle = data;
     return htmlDetalle(data);
   }
@@ -198,7 +193,7 @@
         var sub = (it.cargo || "") + (it.afiliadaIess === false ? " · sin IESS" : "") + (it.tieneUsuario ? "" : " · sin usuario");
         return '<button type="button" class="emp-li" data-go="#/m/personal/empleados/' + encodeURIComponent(it.id) + '"><b>' + esc(it.nombre) + '</b><span class="note">' + esc(sub) + "</span></button>";
       }).join("") || '<p class="note">No hay empleadas en la lista.</p>';
-      return '<div id="emp-lista" class="emp-lista-movil"><h1>Empleados</h1>' + filas + htmlPlantillas() + "</div>";
+      return '<div id="emp-lista" class="emp-lista-movil"><h1>Empleados</h1>' + filas + '<p class="note">Plantillas de horas: <button class="btn ghost small" type="button" data-go="#/m/personal/horarios">Horarios</button>.</p></div>';
     }
     var det = await renderDetail(route);
     return '<p><button class="btn ghost small" type="button" data-go="#/m/personal/empleados">← Empleados</button></p>' + det;
@@ -239,6 +234,33 @@
     var ficha = main.querySelector(".emp-ficha");
     var nombre = ficha ? ficha.getAttribute("data-emp-nombre") : "";
 
+    main.querySelectorAll("[data-emp-sel]").forEach(function (sel) {
+      sel.onchange = async function () {
+        if (!nombre) return;
+        var field = sel.getAttribute("data-emp-sel");
+        var on = sel.value === "1";
+        var patch = {};
+        patch[field] = on;
+        if (field === "tiene_usuario" && !on) patch.usuario_id = "";
+        if (field === "tiene_usuario" && on) {
+          var us0 = main.querySelector("#emp-usuario");
+          if (us0) patch.usuario_id = us0.value || "";
+        }
+        if (!(await guardarFicha(nombre, patch))) return;
+        recargar();
+      };
+    });
+    main.querySelectorAll("[data-emp-dato]").forEach(function (inp) {
+      inp.onchange = async function () {
+        if (!nombre) return;
+        var k = inp.getAttribute("data-emp-dato");
+        var v = String(inp.value || "").trim();
+        if ((k === "sueldo" || k === "bono") && v !== "" && !(parseFloat(v.replace(",", ".")) >= 0)) { toast2("Monto no válido", true); return; }
+        var patch = {};
+        patch[k] = (k === "sueldo" || k === "bono") ? v.replace(",", ".") : v;
+        if (await guardarFicha(nombre, patch)) toast2("Guardado");
+      };
+    });
     main.querySelectorAll(".emp-si-no").forEach(function (box) {
       box.querySelectorAll("button").forEach(function (b) {
         b.onclick = async function () {
@@ -287,7 +309,7 @@
         if (data && data.error) toast2(data.error, true);
         else toast2("Horario actualizado");
       };
-      week.querySelectorAll("input").forEach(function (inp) { inp.addEventListener("change", saveHor); });
+      week.querySelectorAll("input,select").forEach(function (inp) { inp.addEventListener("change", saveHor); });
     }
 
     var fi = main.querySelector("#f-emp-iess");

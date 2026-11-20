@@ -44,6 +44,8 @@ export type HorasRolOut = {
   diasFest: number;
   diasDesc: number;
   diasPermiso: number;
+  /** TK170: días del mes antes de la fecha de ingreso (no se pagan ni son faltas). */
+  diasNoContratada?: number;
   minsNomina: number;
   hrsNomina: number;
   hrsSupl: number;
@@ -74,6 +76,8 @@ export function clasificarHorasRol(opts: {
   feriados: string[];
   dias: Record<string, DiaHorasRol | undefined>;
   permisos?: string[];
+  /** TK170: fecha de ingreso; los días anteriores del mes no cuentan. */
+  ingreso?: string | null;
 }): HorasRolOut {
   const fer = new Set((opts.feriados || []).map((f) => String(f).slice(0, 10)));
   const perm = new Set((opts.permisos || []).map((f) => String(f).slice(0, 10)));
@@ -86,8 +90,11 @@ export function clasificarHorasRol(opts: {
   let diasTrabajados = 0, diasAsumidos = 0, diasFalta = 0, diasFest = 0, diasDesc = 0, diasPermiso = 0;
   const fechasFalta: string[] = [];
 
+  const ingreso = String(opts.ingreso || "").slice(0, 10);
+  let diasNoContratada = 0;
   for (let d = 1; d <= last; d++) {
     const fecha = ymdUtc(opts.anio, opts.mes, d);
+    if (ingreso && fecha < ingreso) { diasNoContratada++; continue; }
     const dow = new Date(Date.UTC(opts.anio, opts.mes - 1, d)).getUTCDay();
     const esDesc = descanso.has(dow);
     const esFest = fer.has(fecha);
@@ -135,7 +142,7 @@ export function clasificarHorasRol(opts: {
   const festR = recorte15(minsFest);
   const descR = recorte15(minsDesc);
   return {
-    diasTrabajados, diasAsumidos, diasFalta, fechasFalta, diasFest, diasDesc, diasPermiso,
+    diasTrabajados, diasAsumidos, diasFalta, fechasFalta, diasFest, diasDesc, diasPermiso, diasNoContratada,
     minsNomina,
     hrsNomina: round2(minsNomina / 60),
     hrsSupl: round2(suplR / 60),

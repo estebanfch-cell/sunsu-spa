@@ -112,7 +112,7 @@ export function instanteEcuador(ymd: string, hm: string): string {
   return new Date(Date.UTC(y, m - 1, d, hh + 5, mm || 0, 0)).toISOString();
 }
 
-function hmToMin(hm: string): number {
+export function hmToMin(hm: string): number {
   const [h, m] = hm.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
 }
