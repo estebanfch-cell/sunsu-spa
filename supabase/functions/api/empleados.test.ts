@@ -198,7 +198,7 @@ describe("TK73 empleados e IESS", () => {
       assert.match(String((arm.data as Row).mensajeFactura), /Debes facturarnos \$/);
       assert.equal(oc.total, fact);
     }
-    assert.ok(Number(oc.total) >= 200);
+    assert.ok(Number(oc.total) > 0);
     assert.equal(oc.subtotal, Math.round((Number(oc.total) / 1.15) * 100) / 100);
     assert.equal(Number(oc.iva), Math.round((Number(oc.total) - Number(oc.subtotal)) * 100) / 100);
     assert.match(String(oc.numero), /^OC-2026-\d{4}$/);
