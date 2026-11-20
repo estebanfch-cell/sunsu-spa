@@ -11,6 +11,7 @@ import { acuityCache, acuityReq, citaDeNombre, citasRango, fechaCita, limpiarCac
 import { contactoDeAcuity } from "./clientes_contacto.ts";
 import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
 import { claveRegistro } from "./ventas.ts";
+import { autorizaDe, autorizaFotosCorregidas } from "./consent_override.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { aplicarPlantilla, digitosWa, mezclarPlantillas, plantillasDefault, respuestaWa, telefonoDeFuentes } from "./wa_lib.ts";
@@ -207,7 +208,7 @@ extend("ag_cita", "any", async (p, ctx, ses) => {
   const forms = (Array.isArray(a.forms) ? a.forms as Row[] : []).flatMap((fm) => (Array.isArray(fm.values) ? fm.values as Row[] : []).filter((v) => s(v.value)).map((v) => ({ campo: s(v.name), valor: s(v.value) })));
   const out = vistaCita(a, {
     forms, ticket: ln ? s(ln.ticket_clave) : "",
-    ficha: f ? { clienteKey: claveRegistro(f), cedula: normCedula(f.cedula), nombre: s(f.nombre), apellido: s(f.apellido), tipoPiel: s(f.tipo_de_piel), alergias: s(f.alergias), medicacion: s(f.medicacion), autorizaFotos: s(f.autoriza_fotos) } : null,
+    ficha: f ? { clienteKey: claveRegistro(f), cedula: normCedula(f.cedula), nombre: s(f.nombre), apellido: s(f.apellido), tipoPiel: s(f.tipo_de_piel), alergias: s(f.alergias), medicacion: s(f.medicacion), autorizaFotos: autorizaDe(await autorizaFotosCorregidas(ctx.db).catch(() => new Map<string, string>()), f) } : null,
   });
   if (conTelefono(ses)) { out.telefono = telefonoEc(a.phone); out.email = s(a.email); }
   return { ok: true, cita: out };

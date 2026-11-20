@@ -1,4 +1,6 @@
 import { extend } from "./handlers.ts";
+import { autorizaFotosCorregidas } from "./consent_override.ts";
+import { canonDeClave } from "./clientes_alias.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
@@ -35,7 +37,13 @@ extend("cliente_detalle", "any", async (p, ctx, ses) => {
   const key = s(p.key || p.cedula || p.id);
   if (!key) return { error: "Falta la clienta" };
   const k = key.startsWith("c:") || key.startsWith("n:") || key.startsWith("t:") ? key : "c:" + key.replace(/\D/g, "").replace(/^0+/, "");
-  return clienteDetalle(ctx.db, { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid }, esAdmin(ses.rol), k);
+  const det = await clienteDetalle(ctx.db, { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid }, esAdmin(ses.rol), k);
+  // TK183: «Autoriza fotos» corregido en la ficha manda sobre el formulario de registro.
+  try {
+    const cli = det && (det as Row).cliente as Row | undefined;
+    if (cli && cli.key) { const v = (await autorizaFotosCorregidas(ctx.db)).get(canonDeClave(s(cli.key))); if (v) cli.autorizaFotos = v; }
+  } catch { /* se queda el del registro */ }
+  return det;
 });
 
 extend("ticket_editar", "any", async (p, ctx, ses) => {
