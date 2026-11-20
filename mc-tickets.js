@@ -201,7 +201,7 @@
   function pagosFaltanVista() {
     if (K.d && K.d.pagosFaltan && K.d.pagosFaltan.length) return K.d.pagosFaltan;
     var t = filaDeLista(K.d && K.d.clave), L, i;
-    try { L = t && (window._tkLeds || {})[String(t.tkRow)]; } catch (x) { L = null; }
+    try { L = t && (typeof window._tkLedOf === "function" ? window._tkLedOf(t) : null); } catch (x) { L = null; }
     return (L && L.pagosFaltan) || [];
   }
   function voucherBtnHtml(item) {
@@ -300,7 +300,7 @@
     return null;
   }
   function chipsDesdeLista(t) {
-    var out = [], L = (window._tkLeds || {})[String(t && t.tkRow)] || {}, orig = (t && t.orig) || {};
+    var out = [], L = (typeof window._tkLedOf === "function" ? window._tkLedOf(t) : null) || {}, orig = (t && t.orig) || {};
     try { if (typeof _tkEstados === "function") out = _tkEstados(t).map(function (c) { return { k: (c.t || "").toLowerCase(), t: c.t, c: c.c }; }); } catch (x) { out = []; }
     if (!out.length) {
       var an = !!(t && (t.anulado === true || orig.anulado === true));
@@ -330,7 +330,7 @@
     return t ? sintetizar(t, k) : null;
   }
   function sintetizar(t, clave) {
-    var tot = 0, fac = "", forma = "", pagado = false, L = (window._tkLeds || {})[String(t.tkRow)] || {};
+    var tot = 0, fac = "", forma = "", pagado = false, L = (typeof window._tkLedOf === "function" ? window._tkLedOf(t) : null) || {};
     try { tot = typeof _histMontos === "function" ? _histMontos(t).tot : (parseFloat(t.estimado != null ? t.estimado : t.total) || 0); } catch (x) { tot = parseFloat(t.estimado || t.total) || 0; }
     try { fac = typeof _tkFacFull === "function" ? (_tkFacFull(t) || "") : String(t.factura || t.fac_7 || ""); } catch (x) { fac = String(t.factura || t.fac_7 || ""); }
     try { forma = typeof _tkForma === "function" ? (_tkForma(t) || "") : ""; } catch (x2) {}

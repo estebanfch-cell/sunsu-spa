@@ -310,7 +310,7 @@
       (tipo === "gasto" ? "<label>Categoría<select id='cm-cat'>" + (d.categorias || []).map(function (c) { return "<option>" + e(c) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>Quién<input id='cm-quien' value='" + e((window.state && state.user && (state.user.short || state.user.name)) || "") + "'></label>" +
       "<label style='grid-column:1/-1'>" + (tipo === "deposito" ? "Banco / referencia del depósito" : "Detalle / justificativo") + "<textarea id='cm-det' rows='2'></textarea></label>" +
-      "<label style='grid-column:1/-1'>Comprobante (foto o PDF, opcional)<input id='cm-comp' type='file' accept='image/*,application/pdf' capture='environment'></label></div>" +
+      "<label style='grid-column:1/-1'>Comprobante (foto o PDF, opcional)<input id='cm-comp' type='file' accept='image/*,application/pdf'></label></div>" +
       (tipo === "gasto" || tipo === "deposito" || tipo === "propina_pago" ? "<p class='mccj-sub'>Sale de la caja (saldo " + $m(d.saldo) + ").</p>" : "<p class='mccj-sub'>Entra a la caja.</p>");
   }
   async function cargarCaja() { K.d = await api("cj_resumen", { desde: K.desde, hasta: K.hasta }); }

@@ -54,7 +54,9 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const est = s(p.est), seg = s(p.seg);
   // TK83: pagado / porcobrar / sinfactura / cerrado / abierto se filtran después con hayFactura + estaPagado
   // (el flag fac y el texto «SIN FACTURA» no definen si hay factura; un ticket con método o factura real se trata cobrado).
-  if (est === "anulado") F.push({ col: "orig->>anulado", op: "eq", val: "true" });
+  // TK155 (Emilia t679u): cancelados ocultos por defecto; solo con filtro «Cancelados» o buscando el número exacto.
+  const verCanc = est === "anulado" || est === "cancelado";
+  const qExacto = /^(tk-?)?(so|b)-?\d+$/i.test(q.replace(/\s+/g, ""));
   if (seg === "pago_no") F.push({ col: "cob", op: "not_true" });
   if (seg === "reag_no") F.push({ col: "agendado", op: "not_true" });
   if (seg === "porreag") F.push({ col: "agendado", op: "not_true" }, { col: "fecha_retorno", op: "gte", val: addD(hoy, -60) }, { col: "fecha_retorno", op: "lte", val: addD(hoy, 7) + "T23:59:59" });
@@ -65,6 +67,14 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const idx = await consultar(ctx.db, "tickets", { cols: [...IDX, ...extra], filtros: F, orden: [{ col: "timestamp", desc: true }, { col: "sheet_row", desc: true }] });
   let L = idx.rows;
   if (!todos) L = L.filter((r) => esPropio(s(r.atendido_por), ses));
+  const canc = new Set((await todas(ctx, "beta_ticket_cancelados")).filter((c) => c.revertido !== true).map((c) => n(c.ticket_id)));
+  let anulIds = new Set<number>();
+  try {
+    anulIds = new Set((await consultar(ctx.db, "tickets", { cols: ["id"], filtros: [{ col: "orig->>anulado", op: "eq", val: "true" }] })).rows.map((x) => n(x.id)));
+  } catch { /* sin orig */ }
+  const esCancelado = (r: Row) => anulIds.has(n(r.id)) || canc.has(n(r.id));
+  if (verCanc) L = L.filter(esCancelado);
+  else if (!qExacto) L = L.filter((r) => !esCancelado(r));
   if (seg === "faseA_no") L = L.filter((r) => !faseA(r));
   // Datos de la beta de todos los tickets (tabla chica): factura corregida y comprobantes subidos.
   const cabsAll = await todas(ctx, "beta_tickets");
@@ -129,14 +139,17 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     }
     return out;
   };
+  // TK155: el respaldo «misma cédula + misma fecha» solo vale para tickets viejos de la hoja (sheet_row).
+  // Un ticket nuevo de Supabase (sheet_row null) se marca enviado solo por SU clave (no por otro ticket de la clienta ese día).
   const enviado = (r: Row, env: Set<string>) => {
-    const ced = s(r.id_3).split(".")[0], f = ymdUtc(r.timestamp);
-    return envB!.has(claveDe(r, leerSerie(r, "so_num"))) || env.has("tk_" + f + "_" + hhmm(r.timestamp) + "_" + ced) || (!!ced && env.has(ced + "|" + f));
+    const ced = s(r.id_3).split(".")[0], f = ymdUtc(r.timestamp), clave = claveDe(r, leerSerie(r, "so_num"));
+    if (envB!.has(clave) || (!!clave && env.has(clave))) return true;
+    if (r.sheet_row == null || s(r.sheet_row) === "") return false;
+    return env.has("tk_" + f + "_" + hhmm(r.timestamp) + "_" + ced) || (!!ced && env.has(ced + "|" + f));
   };
   if (seg === "rep_no") { const env = await envClaves(L); L = L.filter((r) => !enviado(r, env)); }
-  // Cancelados (beta_ticket_cancelados) no suman al total de la lista.
-  const canc = new Set((await todas(ctx, "beta_ticket_cancelados")).filter((c) => c.revertido !== true).map((c) => n(c.ticket_id)));
-  const total = L.length, suma = round2(L.reduce((a, r) => a + (canc.has(n(r.id)) ? 0 : n(r.estimado)), 0));
+  // Cancelados no suman al total de la lista (ni con el filtro «Cancelados»).
+  const total = L.length, suma = round2(L.reduce((a, r) => a + (esCancelado(r) ? 0 : n(r.estimado)), 0));
   const desde = Math.max(0, n(p.offset)), lim = Math.min(200, Math.max(1, n(p.limit) || 50));
   const pagIds = L.slice(desde, desde + lim).map((r) => n(r.id));
   // 2) página completa
@@ -178,6 +191,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const solPend = pendientesPorClave(await todas(ctx, "solicitudes_cambio"));
   const items = filas.map((r) => {
     const it = itemHistorial(r, map, hoy, telOk, porCed);
+    if (esCancelado(r)) { it.anulado = true; it.cancelado = true; it.estado_doc = "cerrado"; it.saldo = 0; }
     const clave = claveDe(r, leerSerie(r, "so_num")), d = ((cabMap.get(clave)?.datos || {}) as Row);
     const sp = solPend.get(clave) || solPend.get(s(r.so_num));
     if (sp) { it.solicitud_pendiente = true; it.solicitud_edicion_pendiente = { id: sp.id, tipo: sp.tipo, solicitante: sp.solicitante, creado: sp.creado }; }

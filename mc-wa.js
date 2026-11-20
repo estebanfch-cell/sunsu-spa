@@ -94,8 +94,13 @@
     try {
       var Leds = w._tkLeds = w._tkLeds || {};
       var t = filaDe(clave);
-      var k = t && t.tkRow != null ? String(t.tkRow) : "";
-      if (k) { Leds[k] = Object.assign({}, Leds[k] || {}, { r: 1 }); }
+      if (t) {
+        /* TK155: marcar SOLO este ticket (clave única; nunca _tkLeds["null"]). */
+        var cur = (typeof w._tkLedOf === "function" ? w._tkLedOf(t) : null) || {};
+        cur.r = 1; t.led = cur;
+        if (typeof w._tkLedGuardar === "function") w._tkLedGuardar(t);
+        else if (t.so_num) Leds[String(t.so_num)] = cur;
+      }
       if (typeof _histActualizarRes === "function") _histActualizarRes(!!w._histEsStaff);
     } catch (e8) {}
   }
