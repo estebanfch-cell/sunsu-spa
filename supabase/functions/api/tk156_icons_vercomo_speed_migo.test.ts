@@ -70,6 +70,39 @@ describe("TK156 Pagos con factura Migo ligada (TK-SO-1939 / fac. 2976)", () => {
   });
 });
 
+describe("TK156 Pagos instantáneo sin flash falso de saldo (t691u)", () => {
+  it("tk_historial trae pagos_resumen con saldo 0 para el ticket cobrado por factura Migo", async () => {
+    const { h } = semilla({ factura: "001-001-000002976", forma_pago: "tarjeta", pago_migo: { forma: "tarjeta", total: 175, factura: "001-001-000002976" } });
+    const r = await h("tk_historial", { offset: 0, limit: 50 });
+    const pr = (r.items as Row[])[0].pagos_resumen as Row;
+    assert.equal(pr.saldo, 0);
+    assert.equal(pr.forma, "tarjeta");
+    assert.equal(pr.factura_migo, "001-001-000002976");
+    assert.equal(pr.migo_sin_forma, false);
+  });
+  it("mc-caja: pinta al instante lo pagado; nunca un saldo pendiente de caché; descarta respuestas viejas", () => {
+    const ini = caja.indexOf("  var PG_MEM = {};"), fin = caja.indexOf("  var MCPagos = {");
+    const store = new Map<string, string>();
+    const ss = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); }, key: (i: number) => [...store.keys()][i] ?? null, get length() { return store.size; } };
+    const win: Row = { _histData: [{ so_num: "TK-SO-1939", fecha: "2026-11-19", pagos_resumen: { saldo: 0, legado: 175, forma: "tarjeta", factura_migo: "001-001-000002976", pagos: [] } }, { so_num: "TK-SO-2", pagos_resumen: { saldo: 40 } }] };
+    const f = new Function("window", "sessionStorage", caja.slice(ini, fin) + "; return { prev: pagosPrevios, guardar: guardarPagos, limpiar: limpiarPagosCache };")(win, ss) as Row;
+    const prev = f.prev as (c: string) => Row | null;
+    const p1 = prev("TK-SO-1939")!;
+    assert.equal(p1.saldo, 0);
+    assert.equal((p1.pagosLegado as Row[])[0].registrado_por, "Factura Migo 2976");
+    assert.equal(prev("TK-SO-2"), null, "saldo pendiente: no se adivina, espera al servidor");
+    (f.guardar as (c: string, r: Row) => void)("TK-SO-3", { ok: true, saldo: 25 });
+    assert.equal(prev("TK-SO-3"), null);
+    (f.guardar as (c: string, r: Row) => void)("TK-SO-4", { ok: true, saldo: 0 });
+    assert.equal(prev("TK-SO-4")!.saldo, 0);
+    (f.limpiar as () => void)();
+    assert.equal(store.size, 0);
+    assert.match(caja, /var seq = host\._pgSeq = \(host\._pgSeq \|\| 0\) \+ 1;/);
+    assert.match(caja, /if \(seq !== host\._pgSeq\) return;/);
+    assert.match(caja, /if \(pre\) pintarPagos\(pre\); else host\.innerHTML = '<div class="mccf-card mccj-card mccj-pay mccj-pay-cargando"><div class="mccj-pay-h"><span>💵 Pagos<\/span><\/div><\/div>';/);
+  });
+});
+
 describe("TK156 íconos 100% rojos o 100% verdes", () => {
   it("borde y dibujo heredan el color; sin verde fijo en WhatsApp", () => {
     assert.match(html, /\.mob-cam, \.mob-wa, #content label\.mob-cam, #content \.mob-wa \{ color: #DC2626 !important; border-color: #DC2626 !important; \}/);

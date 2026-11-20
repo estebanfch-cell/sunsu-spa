@@ -2411,6 +2411,7 @@ function autosize(root) {
 
 function paintLogin(msg) {
   try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
+  try { if (window.MCPagos && window.MCPagos.limpiarCache) window.MCPagos.limpiarCache(); } catch (eP) {}
   document.body.classList.remove("app-on", "kb-open");
   const modo = localStorage.getItem("sunsu.beta.loginModo") === "usuario" ? "usuario" : "pin";
   const campos = modo === "usuario" ? `
