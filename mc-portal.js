@@ -303,8 +303,8 @@
     if (!$("ag-cal")) return;
     var libres = (r && r.fechas) || [];
     if (fechaPre && !S.fecha) { var cerca = libres.filter(function (f) { return f >= fechaPre; })[0]; if (cerca) S.fecha = cerca; }
-    var y = +S.mes.slice(0, 4), m = +S.mes.slice(5, 7), first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), dias = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px"><button class="pt-btn sm ghost" id="ag-prev"' + (S.mes <= A.hoy.slice(0, 7) ? " disabled" : "") + '>‹</button><b>' + MESL[m - 1] + " " + y + '</b><button class="pt-btn sm ghost" id="ag-next">›</button></div><div class="pt-cal">' + ["D", "L", "M", "M", "J", "V", "S"].map(function (x) { return "<i>" + x + "</i>"; }).join("");
+    var y = +S.mes.slice(0, 4), m = +S.mes.slice(5, 7), first = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, dias = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px"><button class="pt-btn sm ghost" id="ag-prev"' + (S.mes <= A.hoy.slice(0, 7) ? " disabled" : "") + '>‹</button><b>' + MESL[m - 1] + " " + y + '</b><button class="pt-btn sm ghost" id="ag-next">›</button></div><div class="pt-cal">' + ["L", "M", "M", "J", "V", "S", "D"].map(function (x) { return "<i>" + x + "</i>"; }).join("");
     for (var i = 0; i < first; i++) h += "<span></span>";
     for (var d = 1; d <= dias; d++) { var ymd = S.mes + "-" + (d < 10 ? "0" : "") + d, ok = libres.indexOf(ymd) >= 0; h += '<button type="button" class="pt-chip' + (S.fecha === ymd ? " on" : "") + '" data-f="' + ymd + '"' + (ok ? "" : " disabled") + ">" + d + "</button>"; }
     h += "</div>" + (r && r.error ? '<p class="err">' + e(r.error) + "</p>" : !libres.length ? '<p class="pt-muted">No hay horarios este mes. Prueba el siguiente.</p>' : "");
