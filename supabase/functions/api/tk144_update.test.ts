@@ -40,7 +40,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(html, /SKIP_WAITING/);
     assert.match(html, /caches\.keys\(\)/);
     assert.match(html, /caches\.delete/);
-    assert.match(html, /location\.replace/);
+    assert.match(html, /location\.reload\(\);/); // TK153 (t670u): Actualizar recarga en la misma ruta, sin location.replace
     assert.match(html, /POLL_MS = 180000/);
     assert.match(html, /FOCUS_MS = 30000/);
     assert.match(html, /visibilitychange/);
@@ -55,6 +55,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(upd, /if \(!clicked\) return;/);
     assert.doesNotMatch(upd, /localStorage\.removeItem/);
     assert.doesNotMatch(upd, /localStorage\.clear/);
-    assert.match(upd, /location\.replace/);
+    assert.match(upd, /location\.reload\(\)/); // TK153 (t670u): misma ruta, sin location.replace
+    assert.doesNotMatch(upd, /searchParams\.set\("sv"/);
   });
 });

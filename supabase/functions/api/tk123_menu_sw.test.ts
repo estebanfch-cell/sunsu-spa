@@ -38,7 +38,7 @@ describe("TK123 menú Inventario y recarga de versión", () => {
     assert.match(sw, /self\.clients\.claim\(\)/);
     assert.match(sw, /pathname === "\/" \|\| url\.pathname === "\/index\.html"/);
     assert.match(sw, /const FILES = \["\/", "\/index\.html",/);
-    assert.doesNotMatch(sw, /beta\.html/);
+    assert.doesNotMatch(sw.slice(0, sw.indexOf("];")), /beta\.html/); // TK153: /beta.html solo como alias de navegación, no en FILES
     assert.match(sw, /fetch\(event\.request\)/);
     assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK153"/);
     assert.match(html, /Nueva actualización disponible/);

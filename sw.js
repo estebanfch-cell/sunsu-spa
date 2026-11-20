@@ -45,11 +45,22 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   if (url.pathname.startsWith("/functions/") || url.pathname === "/sw.js") return;
+  /* TK153 (Emilia t670u): el icono viejo del Home Screen abre /beta.html o /sunsu.html. Si
+     redirigimos a "/", iOS sale del modo pantalla completa y muestra la barra de Safari.
+     Servimos el HTML de la app en la MISMA ruta (sin redirect), así el icono sigue en standalone. */
+  const esAlias = url.pathname === "/beta.html" || url.pathname === "/sunsu.html";
+  if (esAlias && event.request.mode === "navigate") {
+    event.respondWith(appEnMismaRuta());
+    return;
+  }
   const esApp = url.pathname === "/" || url.pathname === "/index.html";
   const betaAsset = esApp || url.pathname.startsWith("/beta/") || FILES.includes(url.pathname);
   if (!betaAsset) return;
+  const pedir = esApp && event.request.mode === "navigate"
+    ? fetch(url.href, { cache: "no-cache", credentials: "same-origin" })
+    : fetch(event.request);
   event.respondWith(
-    fetch(event.request)
+    pedir
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));
@@ -66,3 +77,20 @@ self.addEventListener("fetch", (event) => {
       }),
   );
 });
+
+// TK153: HTML de la app (red primero, caché si no hay red) sin redirect, para /beta.html y /sunsu.html.
+async function appEnMismaRuta() {
+  let res = null;
+  try {
+    res = await fetch("/", { cache: "no-cache", credentials: "same-origin" });
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((cache) => cache.put("/", copy)).catch(() => {});
+    } else res = null;
+  } catch { res = null; }
+  if (!res) res = (await caches.match("/")) || (await caches.match("/index.html"));
+  if (!res) return Response.redirect("/", 302);
+  const headers = new Headers(res.headers);
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  return new Response(await res.blob(), { status: 200, statusText: "OK", headers });
+}

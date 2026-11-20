@@ -7848,10 +7848,16 @@ window.SunsuUpdate = (function () {
     updating = true; clicked = true;
     var btn = document.getElementById("sunsu-nueva-ver-btn");
     if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
+    /* TK153 (Emilia t670u): recargar SIEMPRE en la misma ruta (location.pathname). Cambiar de URL
+       (?sv=, /beta.html → /) hace que iOS saque el icono del Home Screen del modo pantalla completa. */
     var go = function () {
-      var u = new URL(location.href);
-      u.searchParams.set("sv", String(Date.now()));
-      location.replace(u.toString());
+      try {
+        if (/[?&]sv=/.test(location.search)) {
+          var q = location.search.replace(/([?&])sv=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+          history.replaceState(history.state, "", location.pathname + q + location.hash);
+        }
+      } catch (eH) {}
+      location.reload();
     };
     var limpia = Promise.resolve();
     try { limpia = caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }); } catch (e) {}
