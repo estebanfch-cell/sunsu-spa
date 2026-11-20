@@ -1641,6 +1641,7 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
     input[type=search] { font-size: 16px !important; }
     .prov-sheet { display: none !important; }
   }
+.prerol-marcas{margin-top:12px}.mk-tools{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.mk-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0;border-bottom:1px solid #eee}.mk-row.mk-anulada{opacity:.55}.mk-sel,.mk-in{font-size:14px;padding:4px 6px;max-width:150px}.mk-hora{width:96px}
 </style>
 </head>
 <body>
@@ -5693,7 +5694,95 @@ function htmlPreRol(r) {
       <p class="note">El rol usa Jibble tal cual; esto es solo para revisar. Jibble importado hasta ${esc(r.jibble.importadoHasta ? fmtDiaCorto(r.jibble.importadoHasta) : "—")}.</p></details>` : "";
   return `<div class="prerol-ficha"><h2>${esc(r.persona)} · lo que recibiría al día de hoy: ${money(d.totalRecibir)}</h2>
     ${horas}${supuesto}
-    <h3>Pre-rol de ${esc(r.etiqueta || "")}</h3>${htmlRolLineas(d)}${jb}</div>`;
+    <h3>Pre-rol de ${esc(r.etiqueta || "")}</h3>${htmlRolLineas(d)}${jb}${htmlMarcasAdminBox(r)}</div>`;
+}
+// TK172 (Emilia t774u): admin corrige las marcas de la app (Entrar, Inicio/Fin almuerzo, Salir) del período abierto.
+const MK_TIPOS = [["entrada", "Entrar"], ["almuerzo_inicio", "Inicio almuerzo"], ["almuerzo_fin", "Fin almuerzo"], ["salida", "Salir"]];
+function mkHoraLocal(ts) {
+  const d = new Date(ts || "");
+  if (!ts || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Guayaquil" });
+}
+function mkSelTipo(attr, val) {
+  return `<select class="mk-sel" ${attr}>${MK_TIPOS.map(([v, l]) => `<option value="${v}"${v === val ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+}
+function htmlMarcasAdminBox(r) {
+  const hoy = String(r.hoy || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(hoy)) return "";
+  const dias = [];
+  for (let d = Number(hoy.slice(8, 10)); d >= 1; d--) {
+    const f = hoy.slice(0, 8) + String(d).padStart(2, "0");
+    dias.push(`<option value="${f}">${esc(fmtDiaCorto(f))}${f === hoy ? " (hoy)" : ""}</option>`);
+  }
+  return `<details class="prerol-marcas" data-mk-de="${esc(r.persona)}"><summary>Editar marcas de la app (admin)</summary>
+    <div class="mk-tools"><label>Día <select class="mk-sel" data-mk-fecha>${dias.join("")}</select></label>
+    <label>Motivo <input class="mk-in" data-mk-motivo value="Corrección de marca" maxlength="120"></label></div>
+    <div data-mk-box><p class="note">Elige el día.</p></div>
+    <p class="note">Cada cambio queda registrado (quién, antes/después, cuándo) y el pre-rol se recalcula al guardar. Antes del 20/11 manda Jibble cuando ese día tiene dato.</p></details>`;
+}
+function htmlMarcasAdminDia(data) {
+  const filas = (data.marcas || []).map((m) => `<div class="mk-row${m.anulado ? " mk-anulada" : ""}" data-mk-id="${esc(m.id)}">
+      ${mkSelTipo("data-mk-tipo", m.tipo)}<input class="mk-in mk-hora" type="time" step="60" data-mk-hora value="${esc(mkHoraLocal(m.ts))}">
+      ${m.anulado ? `<span class="note">borrada</span><button class="btn ghost small" type="button" data-mk-restaurar>Restaurar</button>`
+        : `<button class="btn small" type="button" data-mk-guardar>Guardar</button><button class="btn ghost small" type="button" data-mk-borrar>Borrar</button>`}
+      <span class="note">${esc(m.origen === "manual" ? "manual" : m.origen || "")}</span></div>`).join("") || `<p class="note">Sin marcas de la app ese día.</p>`;
+  const nueva = `<div class="mk-row mk-nueva">${mkSelTipo("data-mk-ntipo", "entrada")}<input class="mk-in mk-hora" type="time" step="60" data-mk-nhora>
+      <button class="btn small" type="button" data-mk-agregar>+ Agregar</button></div>`;
+  const d = data.dia || {};
+  const resumen = `<p class="note">Ese día: ${esc(hHm(d.workedMin || 0))} trabajadas${d.almuerzoMin ? " · almuerzo " + esc(d.almuerzoMin) + " min" : ""}${data.jibble ? " · tiene dato de Jibble" : ""}${d.falta ? " · falta" : ""}.</p>`;
+  const nom = { marca_manual: "agregó", correccion: "cambió" };
+  const fmt = (x) => x ? [x.tipo ? etiquetaMarca(x.tipo) : "", x.ts ? mkHoraLocal(x.ts) : "", x.anulado === true ? "borrada" : x.anulado === false && x.ts == null ? "restaurada" : ""].filter(Boolean).join(" ") : "";
+  const hist = (data.historial || []).length ? `<details class="mk-hist"><summary>Historial de cambios (${esc(data.historial.length)})</summary>${data.historial.map((a) =>
+      `<div class="note">${esc(horaEc(a.ts))} · ${esc(a.actor)} ${esc(nom[a.accion] || a.accion)}${a.antes ? ": " + esc(fmt(a.antes)) + " →" : ""} ${esc(fmt(a.despues))}${a.motivo ? " · " + esc(a.motivo) : ""}</div>`).join("")}</details>` : "";
+  return filas + nueva + `<p class="err" data-mk-err></p>` + resumen + hist;
+}
+function wireMarcasAdmin(cont, onCambio, fechaIni, abierto) {
+  const det = cont.querySelector("[data-mk-de]");
+  if (!det) return;
+  const nombre = det.getAttribute("data-mk-de");
+  const selF = det.querySelector("[data-mk-fecha]");
+  const box = det.querySelector("[data-mk-box]");
+  const motivo = () => (det.querySelector("[data-mk-motivo]").value || "").trim() || "Corrección de marca";
+  if (fechaIni) selF.value = fechaIni;
+  const ts = (hora) => selF.value + "T" + String(hora).slice(0, 5) + ":00-05:00";
+  const cargar = async () => {
+    box.innerHTML = `<p class="note">Cargando…</p>`;
+    const data = await api("asis_marcas_admin", { nombre, fecha: selF.value });
+    if (data.error) { box.innerHTML = `<p class="err">${esc(data.error)}</p>`; return; }
+    box.innerHTML = htmlMarcasAdminDia(data);
+    const err = (m) => { const e = box.querySelector("[data-mk-err]"); if (e) e.textContent = m || ""; };
+    const hecho = async (res) => { if (res && res.error) { err(res.error); return; } await onCambio(selF.value); };
+    box.querySelectorAll("[data-mk-id]").forEach((row) => {
+      const id = row.getAttribute("data-mk-id");
+      const g = row.querySelector("[data-mk-guardar]");
+      if (g) g.onclick = async () => {
+        const hora = row.querySelector("[data-mk-hora]").value;
+        if (!hora) { err("Elige la hora."); return; }
+        await hecho(await api("asis_corregir", { id, tipo: row.querySelector("[data-mk-tipo]").value, ts: ts(hora), motivo: motivo() }));
+      };
+      const b = row.querySelector("[data-mk-borrar]");
+      if (b) b.onclick = async () => {
+        if (!confirm("¿Borrar esta marca? Queda en el historial y se puede restaurar.")) return;
+        await hecho(await api("asis_corregir", { id, anulado: true, motivo: motivo() }));
+      };
+      const rs = row.querySelector("[data-mk-restaurar]");
+      if (rs) rs.onclick = async () => hecho(await api("asis_corregir", { id, anulado: false, motivo: motivo() }));
+    });
+    const add = box.querySelector("[data-mk-agregar]");
+    if (add) add.onclick = async () => {
+      const hora = box.querySelector("[data-mk-nhora]").value;
+      if (!hora) { err("Elige la hora."); return; }
+      await hecho(await api("asis_marca_manual", { nombre, tipo: box.querySelector("[data-mk-ntipo]").value, ts: ts(hora), motivo: motivo() }));
+    };
+  };
+  selF.onchange = cargar;
+  det.addEventListener("toggle", () => { if (det.open && !box.querySelector(".mk-row")) cargar(); });
+  if (abierto) { det.open = true; cargar(); }
+}
+async function abrirPreRol(box, nombre, fechaMk) {
+  const r = await api("rol_prerol", { nombre });
+  box.innerHTML = r && !r.error ? htmlPreRol(r) : `<p class="err">${esc((r && r.error) || "No se pudo calcular")}</p>`;
+  if (r && !r.error) wireMarcasAdmin(box, (f) => abrirPreRol(box, nombre, f), fechaMk, !!fechaMk);
 }
 async function htmlRolCrear() {
   const op = await api("rol_opciones");
@@ -7947,8 +8036,7 @@ function wirePersonal(main) {
       if (!box) return;
       main.querySelectorAll("[data-prerol]").forEach((x) => x.classList.toggle("ghost", x !== b));
       box.innerHTML = `<p class="note">Calculando el pre-rol de ${esc(b.getAttribute("data-prerol"))}…</p>`;
-      const r = await api("rol_prerol", { nombre: b.getAttribute("data-prerol") });
-      box.innerHTML = r && !r.error ? htmlPreRol(r) : `<p class="err">${esc((r && r.error) || "No se pudo calcular")}</p>`;
+      await abrirPreRol(box, b.getAttribute("data-prerol"));
     };
   });
   main.querySelectorAll("[data-rol-ab]").forEach((b) => {
@@ -8201,7 +8289,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK170";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK172";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8324,46 +8412,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261120tk170"></script>
-<script src="mc-scan.js?v=20261120tk170"></script>
-<script src="mc-buscar.js?v=20261120tk170"></script>
-<script src="descuento_justif.js?v=20261120tk170"></script>
-<script src="beta-screens.js?v=20261120tk170"></script>
-<script src="beta-inline.js?v=20261120tk170"></script>
-<script src="mc-productos.js?v=20261120tk170"></script>
-<script src="mc-nav.js?v=20261120tk170"></script>
-<script src="mc-permisos.js?v=20261120tk170"></script>
-<script src="mc-protocolos.js?v=20261120tk170"></script>
-<script src="mc-conteo.js?v=20261120tk170"></script>
-<script src="mc-transferencias.js?v=20261120tk170"></script>
-<script src="mc-ajustes.js?v=20261120tk170"></script>
-<script src="vendor-qrcode.js?v=20261120tk170"></script>
-<script src="mc-wa.js?v=20261120tk170"></script>
-<script src="mc-tickets.js?v=20261120tk170"></script>
-<script src="mc-maestro.js?v=20261120tk170"></script>
-<script src="mc-empleados.js?v=20261120tk170"></script>
-<script src="mc-edit.js?v=20261120tk170"></script>
-<script src="mc-paquetes.js?v=20261120tk170"></script>
-<script src="mc-aperturas.js?v=20261120tk170"></script>
-<script src="mc-acceso.js?v=20261120tk170"></script>
-<script src="mc-barras.js?v=20261120tk170"></script>
-<script src="mc-caja.js?v=20261120tk170"></script>
-<script src="mc-giftcards.js?v=20261120tk170"></script>
-<script src="mc-multas.js?v=20261120tk170"></script>
-<script src="mc-clientes.js?v=20261120tk170"></script>
-<script src="mc-clientes-dup.js?v=20261120tk170"></script>
-<script src="mc-docpdf.js?v=20261120tk170"></script>
-<script src="mc-compras.js?v=20261120tk170"></script>
-<script src="mc-consignacion.js?v=20261120tk170"></script>
-<script src="mc-proveedores.js?v=20261120tk170"></script>
-<script src="mc-recepciones.js?v=20261120tk170"></script>
-<script src="mc-movil.js?v=20261120tk170"></script>
-<script src="mc-promociones.js?v=20261120tk170"></script>
-<script src="mc-agenda.js?v=20261120tk170"></script>
-<script src="mc-staff-home.js?v=20261120tk170"></script>
-<script src="mc-borradores.js?v=20261120tk170"></script>
-<script src="mc-portal.js?v=20261120tk170"></script>
-<script src="mc-portal-admin.js?v=20261120tk170"></script><script>
+<script src="vendor-zxing.js?v=20261120tk172"></script>
+<script src="mc-scan.js?v=20261120tk172"></script>
+<script src="mc-buscar.js?v=20261120tk172"></script>
+<script src="descuento_justif.js?v=20261120tk172"></script>
+<script src="beta-screens.js?v=20261120tk172"></script>
+<script src="beta-inline.js?v=20261120tk172"></script>
+<script src="mc-productos.js?v=20261120tk172"></script>
+<script src="mc-nav.js?v=20261120tk172"></script>
+<script src="mc-permisos.js?v=20261120tk172"></script>
+<script src="mc-protocolos.js?v=20261120tk172"></script>
+<script src="mc-conteo.js?v=20261120tk172"></script>
+<script src="mc-transferencias.js?v=20261120tk172"></script>
+<script src="mc-ajustes.js?v=20261120tk172"></script>
+<script src="vendor-qrcode.js?v=20261120tk172"></script>
+<script src="mc-wa.js?v=20261120tk172"></script>
+<script src="mc-tickets.js?v=20261120tk172"></script>
+<script src="mc-maestro.js?v=20261120tk172"></script>
+<script src="mc-empleados.js?v=20261120tk172"></script>
+<script src="mc-edit.js?v=20261120tk172"></script>
+<script src="mc-paquetes.js?v=20261120tk172"></script>
+<script src="mc-aperturas.js?v=20261120tk172"></script>
+<script src="mc-acceso.js?v=20261120tk172"></script>
+<script src="mc-barras.js?v=20261120tk172"></script>
+<script src="mc-caja.js?v=20261120tk172"></script>
+<script src="mc-giftcards.js?v=20261120tk172"></script>
+<script src="mc-multas.js?v=20261120tk172"></script>
+<script src="mc-clientes.js?v=20261120tk172"></script>
+<script src="mc-clientes-dup.js?v=20261120tk172"></script>
+<script src="mc-docpdf.js?v=20261120tk172"></script>
+<script src="mc-compras.js?v=20261120tk172"></script>
+<script src="mc-consignacion.js?v=20261120tk172"></script>
+<script src="mc-proveedores.js?v=20261120tk172"></script>
+<script src="mc-recepciones.js?v=20261120tk172"></script>
+<script src="mc-movil.js?v=20261120tk172"></script>
+<script src="mc-promociones.js?v=20261120tk172"></script>
+<script src="mc-agenda.js?v=20261120tk172"></script>
+<script src="mc-staff-home.js?v=20261120tk172"></script>
+<script src="mc-borradores.js?v=20261120tk172"></script>
+<script src="mc-portal.js?v=20261120tk172"></script>
+<script src="mc-portal-admin.js?v=20261120tk172"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
