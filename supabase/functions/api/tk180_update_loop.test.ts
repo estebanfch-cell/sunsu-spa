@@ -13,7 +13,7 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.ok(enSw && enHtml);
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-20-TK181b");
+    assert.equal(enSw, "sunsu-2026-11-20-TK182");
   });
   it("en la app nativa (TestFlight) no hay banner ni chequeo de SW", () => {
     assert.match(upd, /Capacitor\.isNativePlatform\(\)/);
@@ -33,5 +33,16 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
   });
   it("el script del banner es JavaScript válido", () => {
     assert.doesNotThrow(() => new Function(upd));
+  });
+});
+
+describe("TK182 cámara y WhatsApp en la tabla de Tickets de la computadora", () => {
+  const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
+  it("columna de acciones al final con los mismos botones, horizontal", () => {
+    assert.match(bs, /concat\(\[\{k:'acc',t:'',acc:1\}\]\)/);
+    assert.match(bs, /c\.k==='acc'\) return '<td class="tk-acc"[^\n]*mob-acts tk-acts-row[^\n]*_histCamHTML\(t,i\)\+_histWaHTML\(t,i\)/);
+    assert.match(bs, /_histCelda\(t,c,showPrices,i\)/);
+    assert.match(html, /\.mob-acts\.tk-acts-row \{ flex-direction: row;/);
+    assert.match(html, /\.mob-acts \{ display: inline-flex; flex-direction: column;/); // celular sigue vertical
   });
 });
