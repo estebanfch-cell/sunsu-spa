@@ -297,7 +297,9 @@ extend("ag_wa", "any", async (p, ctx, ses) => {
   if (!puedeCal(c, a.calendarID)) return { error: "Esa cita no es de tu calendario" };
   if (a.canceled === true) return { error: "La cita está cancelada" };
   const et = etiquetaDe(a).toUpperCase();
-  if (etiquetaCerrada(et)) return { error: "Esta cita ya está " + et.toLowerCase() };
+  // TK181: «Reconfirmar» vuelve a mandar el mismo mensaje a una cita ya CONFIRMADA (no a completadas/no llegó).
+  const reconf = p.reconfirmar === true && et === "CONFIRMADA";
+  if (etiquetaCerrada(et) && !reconf) return { error: "Esta cita ya está " + et.toLowerCase() };
   const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
   const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
   const ced = ficha ? normCedula(ficha.cedula) : "";

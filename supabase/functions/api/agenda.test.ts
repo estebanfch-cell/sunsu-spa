@@ -142,6 +142,9 @@ describe("agenda (Acuity por la edge)", () => {
     const { h } = semilla();
     assert.match(String((await h("ag_wa", "and", { id: 502 })).error), /recepción o admin/i);
     assert.match(String((await h("ag_wa", "ale", { id: 501 })).error), /confirmada/i);
+    const re = await h("ag_wa", "ale", { id: 501, reconfirmar: true });
+    assert.doesNotMatch(String(re.error || ""), /confirmada/i);
+    assert.equal(re.telefono, undefined);
     const w = await h("ag_wa", "ale", { id: 502 });
     assert.equal(w.ok, true, String(w.error));
     assert.equal(w.tiene_tel, true);
