@@ -2195,7 +2195,7 @@ function previewApi(accion, body) {
 function lecturaEnVista(accion) {
   if (!accion) return false;
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
-  return ["whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "asis_calendario", "roles_lista", "horarios_list", "push_clave", "staff_home", "tk_historial", "tk_reagendadas", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "pq_lista", "gcb_lista", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos", "cl_doc_url", "cl_buscar"].includes(accion);
+  return ["ag_meta", "ag_citas", "ag_cita", "whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "asis_calendario", "roles_lista", "horarios_list", "push_clave", "staff_home", "tk_historial", "tk_reagendadas", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "pq_lista", "gcb_lista", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos", "cl_doc_url", "cl_buscar"].includes(accion);
 }
 // Formato único de identificaciones y celulares (Emilia 17/11): lo usan todas las pantallas y cada respuesta de la api.
 // Cédula/RUC/pasaporte sin «.0», puntos ni espacios (con el 0 de provincia); celular +593 99 999 9999. Solo lectura.
@@ -8493,7 +8493,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK181"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK181b"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
