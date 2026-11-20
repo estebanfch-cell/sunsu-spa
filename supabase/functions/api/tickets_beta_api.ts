@@ -805,7 +805,7 @@ async function enviosDe(ctx: Ctx, r: Row, clave: string): Promise<Row[]> {
   let envBeta: Row[] = [];
   try { envBeta = (await consultar(ctx.db, "beta_ticket_envios", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows; }
   catch { envBeta = (await todas(ctx, "beta_ticket_envios")).filter((e) => s(e.ticket_clave) === clave); }
-  for (const e of envBeta) out.push({ tipo: s(e.tipo), fecha: s(e.created_at), por: s(e.por), fuente: "beta" });
+  for (const e of envBeta) out.push({ tipo: s(e.tipo) + (s(e.telefono_fin) === "manual" ? " (manual)" : ""), fecha: s(e.created_at), por: s(e.por), fuente: "beta", manual: s(e.telefono_fin) === "manual" });
   const ck = claveTarjeta(r), ced = s(r.id_3).split(".")[0], f = ymdUtc(r.timestamp);
   for (const e of await todas(ctx, "envios_tarjetas")) {
     if (s(e.clave) === ck || (ced && s(e.cedula).split(".")[0] === ced && ymdUtc(e.fecha_del_ticket) === f)) {
@@ -1030,16 +1030,19 @@ extend("tk_envio", "any", async (p, ctx, ses) => {
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
   const raw = Array.isArray(p.tipos) ? (p.tipos as unknown[]).map((x) => s(x)) : [s(p.tipo)];
-  const tipos = [...new Set(raw.map((x) => x.toLowerCase()).filter((x) => x === "facial" || x === "paquete" || x === "giftcard"))];
+  // TK187: «Marcar como enviado (manual)»: mismo registro (quién = ses.name, cuándo = created_at) con telefono_fin «manual».
+  const manual = p.manual === true || p.manual === 1 || s(p.manual) === "1" || s(p.manual) === "true";
+  let tipos = [...new Set(raw.map((x) => x.toLowerCase()).filter((x) => x === "facial" || x === "paquete" || x === "giftcard"))];
+  if (manual) { tipos = tipos.filter((x) => x !== "giftcard"); if (!tipos.length) tipos = ["facial"]; }
   if (!tipos.length) return { error: "Indica el tipo de reporte (facial, paquete o giftcard)" };
   const clave = claveDe(r, leerSerie(r, "so_num"));
-  const fin = s(p.telefono).replace(/\D/g, "").slice(-4);
+  const fin = manual ? "manual" : s(p.telefono).replace(/\D/g, "").slice(-4);
   try {
     for (const tipo of tipos) {
       await ctx.db.write(actorOf(ses), "beta_ticket_envios", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, tipo, telefono_fin: fin, por: ses.name, created_at: ctx.now.toISOString() });
     }
   } catch { return { error: "Falta aplicar 0050_agenda_beta.sql" }; }
-  return { ok: true, tipos };
+  return { ok: true, tipos, manual, por: ses.name, fecha: ctx.now.toISOString() };
 });
 extend("tk_flag_resolver", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin marca resuelto; pide la corrección con «Solicitar cambio»" };

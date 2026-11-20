@@ -15,7 +15,7 @@
     if (!txt) return;
     try { if (typeof w._copiarTexto_ === "function") { w._copiarTexto_(txt); return; } } catch (e1) {}
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) { var pr = navigator.clipboard.writeText(txt); if (pr && pr.catch) pr.catch(function () {}); return; }
     } catch (e2) {}
     try {
       var ta = document.createElement("textarea");
@@ -23,13 +23,21 @@
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
     } catch (e3) {}
   }
+  function urlDe(prep) {
+    if (!prep || !prep.tiene_tel) return "";
+    return esMovil() ? (prep.wa_url || "") : (prep.wa_url_web || prep.wa_url || "");
+  }
+  /* TK187: nunca sacamos a la app de su pestaña (antes, si el navegador bloqueaba la ventana emergente porque
+     los PDFs tardaron >5 s, se hacía location.href = WhatsApp: la app se iba, el 2º PDF y el registro del envío
+     se perdían y el ícono quedaba rojo). Devuelve true solo si de verdad se abrió el chat. */
   function abrirUrl(prep) {
-    if (!prep || !prep.tiene_tel) return;
-    var u = esMovil() ? (prep.wa_url || "") : (prep.wa_url_web || prep.wa_url || "");
-    if (!u) return;
-    var vent = window.open(u, "_blank");
-    if (!vent) window.location.href = u;
-    if (vent) setTimeout(function () { try { vent.close(); } catch (e4) {} }, 2800);
+    var u = urlDe(prep);
+    if (!u) return false;
+    var vent = null;
+    try { vent = window.open(u, "_blank"); } catch (e4) { vent = null; }
+    if (!vent) return false;
+    if (/^https:\/\/wa\.me\//.test(u)) setTimeout(function () { try { vent.close(); } catch (e4b) {} }, 2800);
+    return true;
   }
   function conPaq(p) {
     p = p || {};
@@ -88,21 +96,67 @@
     return files;
   }
 
-  async function marcarEnvio(clave, tipos, prep) {
-    if (!clave || !tipos || !tipos.length || typeof api !== "function") return;
-    try { await api("tk_envio", { clave: clave, tipos: tipos }); } catch (e7) {}
+  async function marcarEnvio(clave, tipos, prep, manual) {
+    if (!clave || !tipos || !tipos.length || typeof api !== "function") return false;
+    var okSrv = false;
+    try {
+      var j = await api("tk_envio", { clave: clave, tipos: tipos, manual: manual ? 1 : 0 });
+      okSrv = !!(j && j.ok);
+      if (!okSrv && manual) { toast((j && j.error) || "No se pudo marcar como enviado", true); return false; }
+    } catch (e7) { if (manual) { toast("No se pudo marcar como enviado (sin conexión)", true); return false; } }
     try {
       var Leds = w._tkLeds = w._tkLeds || {};
       var t = filaDe(clave);
       if (t) {
         /* TK155: marcar SOLO este ticket (clave única; nunca _tkLeds["null"]). */
         var cur = (typeof w._tkLedOf === "function" ? w._tkLedOf(t) : null) || {};
-        cur.r = 1; t.led = cur;
+        cur.r = 1; t.led = cur; t.tiene_envio = true;
         if (typeof w._tkLedGuardar === "function") w._tkLedGuardar(t);
         else if (t.so_num) Leds[String(t.so_num)] = cur;
       }
       if (typeof _histActualizarRes === "function") _histActualizarRes(!!w._histEsStaff);
     } catch (e8) {}
+    return okSrv;
+  }
+  /* TK187: «Marcar como enviado (manual)» — queda registrado quién y cuándo (beta_ticket_envios, por + fecha). */
+  async function marcarManual(clave, tipos) {
+    if (!clave) { toast("Este envío no tiene ticket para marcar", true); return false; }
+    tipos = (tipos || []).filter(function (x) { return x === "facial" || x === "paquete"; });
+    if (!tipos.length) tipos = ["facial"];
+    var ok = await marcarEnvio(clave, tipos, null, true);
+    if (ok) toast("✅ Marcado como enviado (manual)");
+    return ok;
+  }
+  /* TK187: si el navegador bloqueó la ventana (o no hay teléfono), nunca fallamos en silencio:
+     aviso claro con «Abrir WhatsApp» (un clic nuevo sí abre) y «Marcar como enviado (manual)». */
+  function aviso(opts) {
+    cerrarSel(); cssWa();
+    var box = document.createElement("div");
+    box.id = "mctk-wa-sel";
+    box.className = "mctk-wa-sel";
+    var abrir = opts.prep && urlDe(opts.prep);
+    box.innerHTML = '<div class="mctk-wa-box" role="dialog" aria-label="WhatsApp">' +
+      "<h3>" + (opts.titulo || "WhatsApp") + "</h3>" +
+      "<p>" + (opts.texto || "") + "</p>" +
+      '<div class="mctk-wa-acts" style="flex-wrap:wrap">' +
+      '<button type="button" class="btn ghost small" data-x>Cerrar</button>' +
+      (opts.clave ? '<button type="button" class="btn ghost small mctk-wa-man" data-m>✓ Marcar como enviado (manual)</button>' : "") +
+      (abrir ? '<button type="button" class="btn small mctk-wa-go" data-a>' + WA_ICON_SVG + " Abrir WhatsApp</button>" : "") +
+      "</div></div>";
+    document.body.appendChild(box);
+    box.addEventListener("click", function (ev) { if (ev.target === box) cerrarSel(); });
+    box.querySelector("[data-x]").onclick = function () { cerrarSel(); };
+    var bm = box.querySelector("[data-m]");
+    if (bm) bm.onclick = async function () { bm.disabled = true; if (await marcarManual(opts.clave, opts.tipos)) cerrarSel(); else bm.disabled = false; };
+    var ba = box.querySelector("[data-a]");
+    if (ba) ba.onclick = async function () {
+      copiar(opts.prep && opts.prep.texto);
+      if (abrirUrl(opts.prep)) {
+        cerrarSel();
+        if (opts.clave) await marcarEnvio(opts.clave, opts.tipos, opts.prep);
+      } else toast("El navegador bloqueó WhatsApp. Permite ventanas emergentes para app.sunsuspa.com o márcalo como enviado (manual).", true);
+    };
+    return box;
   }
   function filaDe(clave) {
     var L = w._histVisibles || w._histData || [];
@@ -128,20 +182,39 @@
       }
     }
     if (files.length) descargarDocs(docs);
-    abrirUrl(prep);
+    var abierto = abrirUrl(prep);
+    var adj = files.length ? "📄 PDF" + (files.length > 1 ? "s" : "") + " descargado" + (files.length > 1 ? "s" : "") + " — adjúntalo" + (files.length > 1 ? "s" : "") + " en el chat" : "";
+    if (!abierto) {
+      aviso({
+        titulo: "Abre el chat de WhatsApp",
+        texto: (adj ? adj + ". " : "") + "El navegador no dejó abrir WhatsApp solo. Toca «Abrir WhatsApp» (el mensaje ya está copiado). Si lo enviaste a mano, márcalo como enviado.",
+        prep: prep, clave: clave, tipos: tipos
+      });
+      return false;
+    }
     await marcarEnvio(clave, tipos, prep);
-    if (files.length && !movil) toast("📄 PDF" + (files.length > 1 ? "s" : "") + " descargado" + (files.length > 1 ? "s" : "") + " — adjúntalo" + (files.length > 1 ? "s" : "") + " en el chat");
+    if (adj && !movil) toast(adj);
     else if (!files.length) toast("Se abrió el chat de la clienta");
     return true;
   }
 
+  /* TK187: el cuadro de WhatsApp trae su propio CSS. Antes dependía de mc-tickets.js (solo al abrir un ticket):
+     en la LISTA de escritorio el cuadro salía sin estilo al final de la página, invisible → «no pasa nada»
+     (justo en tickets con 2 PDFs, p. ej. facial + paquete como TK-SO-1941). */
+  function cssWa() {
+    if (document.getElementById("mc-wa-css")) return;
+    var st = document.createElement("style");
+    st.id = "mc-wa-css";
+    st.textContent = "@media(min-width:861px){.mctk-wa-sel{align-items:center!important}.mctk-wa-box{border-radius:16px!important;width:min(460px,100%)!important}}.mctk-wa-sel{position:fixed;inset:0;background:rgba(20,30,50,.4);z-index:10000;display:flex;align-items:flex-end;justify-content:center;padding:16px}.mctk-wa-box{background:#fff;border-radius:16px 16px 0 0;padding:16px 16px 20px;width:min(420px,100%);box-sizing:border-box}.mctk-wa-box h3{margin:0 0 4px;font-size:1rem}.mctk-wa-box p{margin:0 0 12px;color:var(--gray);font-size:.8rem}.mctk-wa-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.mctk-wa-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid #DC2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap}.mctk-wa-chip.on{border-color:#16A34A;background:#f3faf6}.mctk-wa-dot{width:10px;height:10px;border-radius:50%;background:#DC2626}.mctk-wa-chip.on .mctk-wa-dot{background:#16A34A}.mctk-wa-acts{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap}.mctk-wa-man{white-space:nowrap!important;color:var(--navy-d,#3D5A7A)}.mctk-wa-go{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap!important}";
+    document.head.appendChild(st);
+  }
   function cerrarSel() {
     var el = document.getElementById("mctk-wa-sel");
     if (el) el.remove();
   }
 
-  function selector(tipos, onSend) {
-    cerrarSel();
+  function selector(tipos, onSend, onManual) {
+    cerrarSel(); cssWa();
     var LAB = { facial: "Facial", paquete: "Paquete", giftcard: "Gift card" };
     var box = document.createElement("div");
     box.id = "mctk-wa-sel";
@@ -156,6 +229,7 @@
       '<div class="mctk-wa-chips">' + chips + "</div>" +
       '<div class="mctk-wa-acts">' +
       '<button type="button" class="btn ghost small" data-x>Cancelar</button>' +
+      (onManual ? '<button type="button" class="btn ghost small mctk-wa-man" data-m title="Si ya la enviaste a mano: queda registrado quién y cuándo">✓ Marcar como enviado (manual)</button>' : "") +
       '<button type="button" class="btn small mctk-wa-go" data-s>' + WA_ICON_SVG + " Enviar por WhatsApp</button>" +
       "</div></div>";
     document.body.appendChild(box);
@@ -169,6 +243,13 @@
         b.setAttribute("aria-pressed", b.classList.contains("on") ? "true" : "false");
       };
     });
+    var bm = box.querySelector("[data-m]");
+    if (bm && onManual) bm.onclick = async function () {
+      var sel = [];
+      box.querySelectorAll(".mctk-wa-chip.on").forEach(function (b) { sel.push(b.getAttribute("data-tipo")); });
+      bm.disabled = true;
+      if (await onManual(sel.length ? sel : tipos)) cerrarSel(); else bm.disabled = false;
+    };
     box.querySelector("[data-s]").onclick = function () {
       var sel = [];
       box.querySelectorAll(".mctk-wa-chip.on").forEach(function (b) { sel.push(b.getAttribute("data-tipo")); });
@@ -256,14 +337,21 @@
       toast((eE && eE.message) || "No se pudo preparar el WhatsApp", true);
       return;
     }
-    if (!prep || prep.error) { toast((prep && prep.error) || "No se pudo preparar el WhatsApp", true); return; }
+    var tiposMan = (opts.tipos_fallback || ["facial"]).filter(function (x) { return x === "facial" || x === "paquete"; });
+    if (!prep || prep.error) {
+      toast((prep && prep.error) || "No se pudo preparar el WhatsApp", true);
+      if (clave && tipo !== "chat" && tipo !== "recordatorio") aviso({ titulo: "No se pudo preparar el WhatsApp", texto: String((prep && prep.error) || "Intenta de nuevo.") + " Si ya la enviaste a mano, márcalo como enviado.", clave: clave, tipos: tiposMan });
+      return;
+    }
     if (!prep.tiene_tel) {
-      toast("Esta clienta no tiene WhatsApp registrado. Pide el cambio desde la ficha: Teléfono 🔒 (lo aprueba administración).", true);
+      var sinTel = "Esta clienta no tiene WhatsApp registrado. Pide el cambio desde la ficha: Teléfono 🔒 (lo aprueba administración).";
+      toast(sinTel, true);
+      if (clave && tipo !== "chat" && tipo !== "recordatorio") aviso({ titulo: "Sin WhatsApp registrado", texto: sinTel + " Si ya la enviaste a mano, márcalo como enviado.", clave: clave, tipos: (prep.tipos_disponibles && prep.tipos_disponibles.length ? prep.tipos_disponibles : tiposMan) });
       return;
     }
     if (tipo === "chat" || tipo === "recordatorio") {
       copiar(prep.texto);
-      abrirUrl(prep);
+      if (!abrirUrl(prep)) aviso({ titulo: "Abre el chat de WhatsApp", texto: "El navegador no dejó abrir WhatsApp solo. Toca «Abrir WhatsApp» (el mensaje ya está copiado).", prep: prep });
       return;
     }
     var disponibles = prep.tipos_disponibles && prep.tipos_disponibles.length ? prep.tipos_disponibles.slice() : (opts.tipos_fallback || ["facial"]);
@@ -287,8 +375,9 @@
       return compartir(prep, docs, clave, sel);
     };
 
-    if (disponibles.length <= 1) return seguir(disponibles);
-    selector(disponibles, function (sel) { seguir(sel); });
+    /* TK187: siempre el cuadro (también con un solo PDF) para ofrecer «Marcar como enviado (manual)». */
+    if (!clave) { if (disponibles.length <= 1) return seguir(disponibles); return selector(disponibles, function (sel) { seguir(sel); }); }
+    selector(disponibles, function (sel) { seguir(sel); }, function (sel) { return marcarManual(clave, sel); });
   }
 
   w.WA_ICON_SVG = WA_ICON_SVG;
@@ -301,6 +390,8 @@
     flujo: flujo,
     compartir: compartir,
     abrirUrl: abrirUrl,
+    marcarManual: marcarManual,
+    aviso: aviso,
     copiar: copiar,
     pdfsDe: pdfsDe
   };
