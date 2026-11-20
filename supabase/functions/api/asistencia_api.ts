@@ -354,8 +354,18 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
     }
   }
   const propia = await empleadaDe(ctx, ses.name);
+  // TK197 (Emilia): el panel rápido de «Crear» muestra el horario de hoy de la persona.
+  let horarioHoy: { trabaja: boolean; desde: string | null; hasta: string | null } | null = null;
+  try {
+    const { cargarHorarios } = await import("./horarios_api.ts");
+    const { horarioAsignado, jornadaDe } = await import("./horarios.ts");
+    const pack = await cargarHorarios(ctx);
+    const emp = await empleadaDe(ctx, nombre);
+    const h = horarioAsignado(pack.horarios, pack.asignaciones, [nombre, s(emp?.nombre_app), s(emp?.apellidos_y_nombres), s(emp?.nombre_jibble)]);
+    if (h) horarioHoy = jornadaDe(h, fecha);
+  } catch { horarioHoy = null; }
   return {
-    ok: true, fecha, dia, reloj, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), empleada: !!propia, equipo, feriados, auditoria: auditoria.map(audPub),
+    ok: true, fecha, dia, reloj, horarioHoy, marcajes: crudos.map(marcaPub), permisos, pendientes, vacaciones, puedeAprobar: puedeAprobar(ses.rol), esAdmin: esAdmin(ses.rol), empleada: !!propia, equipo, feriados, auditoria: auditoria.map(audPub),
     config: {
       radio_m: cfg.radio_m, punto_listo: cfg.lat != null && cfg.lng != null,
       hora_entrada: cfg.hora_entrada, hora_salida: cfg.hora_salida, gracia_min: cfg.gracia_min,
