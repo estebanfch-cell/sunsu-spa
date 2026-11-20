@@ -55,6 +55,8 @@ spa,facial,tickets,clientas,comisiones,inventario,cosmetología,asistencia,gift 
 | `04-ficha.png` | Ficha de clienta ficticia con carpetas de Skin Analysis, K-Lift y tratamientos |
 | `05-agenda.png` | Agenda del día (citas y tratamientos, sin montos) |
 
+Los nombres y el PVP de la carta (`03-catalogo.png`) salen del catálogo en vivo (`public.catalogo.total_con_iva`, que coincide con `erp_productos.precio_venta`; no hay `beta_pvp` de override). No se inventan faciales ni precios.
+
 App Store Connect reutiliza las de 6.9" para los demás tamaños de iPhone.
 
 ---

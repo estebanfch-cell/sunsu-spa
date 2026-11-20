@@ -21,17 +21,21 @@ const INIT = () => {
     ["Antonella", "Moscoso"], ["Carolina", "Benalcázar"], ["Valentina", "Cordero"], ["Emilia", "Zambrano"], ["Martina", "Escobar"], ["Fernanda", "Lasso"],
   ].map(([n, a]) => [n === "Daniela" ? "Victoria" : n === "Emilia" ? "Amelia" : n, a]);
   window.__CLIENTAS = CLIENTAS;
+  /* Faciales activos y PVP real (2026-11-20), de public.catalogo.total_con_iva
+   * (= erp_productos.precio_venta; beta_pvp es null). Solo tipo FACIAL / FACIAL ESPECIAL y activo=true.
+   * Nombres en mayúsculas iniciales para la carta; el de SUNSU-01 se muestra «Purificación»
+   * (en catálogo está escrito PURUFICACIÓN). */
   const FACIALES = [
-    { id: "s1", sku: "01", nombre: "Facial S.O.S", pvp: 55, minutos: 60 },
-    { id: "s2", sku: "02", nombre: "Facial Reparación", pvp: 80, minutos: 75 },
-    { id: "s3", sku: "03", nombre: "Facial Glow", pvp: 75, minutos: 60 },
-    { id: "s4", sku: "04", nombre: "Facial Hidratación", pvp: 65, minutos: 60 },
-    { id: "s5", sku: "05", nombre: "Facial Reset", pvp: 70, minutos: 60 },
-    { id: "s6", sku: "06", nombre: "Facial Calmante", pvp: 45, minutos: 45 },
-    { id: "s7", sku: "07", nombre: "K-Lift", pvp: 120, minutos: 90 },
-    { id: "s8", sku: "08", nombre: "Limpieza Facial", pvp: 40, minutos: 45 },
-    { id: "s9", sku: "09", nombre: "Peeling Enzimático", pvp: 50, minutos: 45 },
-    { id: "s10", sku: "10", nombre: "Terapia LED", pvp: 35, minutos: 30 },
+    { id: "s1", sku: "01", nombre: "Facial Purificación S.O.S", pvp: 75, minutos: 60, categoria: "Facial" },
+    { id: "s2", sku: "02", nombre: "Facial Reparación", pvp: 65, minutos: 75, categoria: "Facial" },
+    { id: "s3", sku: "03", nombre: "Facial 7 Pieles (Arroz+H2O)", pvp: 65, minutos: 60, categoria: "Facial" },
+    { id: "s4", sku: "04", nombre: "Facial Gold-Aging", pvp: 65, minutos: 60, categoria: "Facial" },
+    { id: "s5", sku: "05", nombre: "Facial Porcelana", pvp: 65, minutos: 60, categoria: "Facial" },
+    { id: "s6", sku: "40", nombre: "Facial Reset 3x1", pvp: 95, minutos: 60, categoria: "Facial especial" },
+    { id: "s10", sku: "57", nombre: "Facial K-Lift", pvp: 95, minutos: 90, categoria: "Facial especial" },
+    { id: "s7", sku: "42", nombre: "Facial Peeling Marino de Perla", pvp: 145, minutos: 75, categoria: "Facial especial" },
+    { id: "s8", sku: "43", nombre: "Facial de Geisha", pvp: 145, minutos: 75, categoria: "Facial especial" },
+    { id: "s9", sku: "52", nombre: "Facial de Ginseng (Facial capilar)", pvp: 95, minutos: 60, categoria: "Facial especial" },
   ];
   window.__FACIALES = FACIALES;
   const hoy = '2026-11-20';
@@ -68,12 +72,12 @@ const INIT = () => {
   };
   const citasHoy = () => {
     const rows = [
-      ['a1', '09:00', 'Amelia', 'Zambrano', 'Limpieza Facial', 'cal1', 45, '', 1, 0],
-      ['a2', '10:30', 'Gabriela', 'Vinueza', 'Facial S.O.S', 'cal2', 75, 'CONFIRMADA', 0, 0],
-      ['a3', '12:00', 'Victoria', 'Arteaga', 'Facial Glow', 'cal1', 60, 'CONFIRMADA', 0, 0],
-      ['a4', '14:00', 'Paula', 'Granda', 'K-Lift', 'cal3', 90, '', 0, 1],
+      ['a1', '09:00', 'Amelia', 'Zambrano', 'Facial Porcelana', 'cal1', 60, '', 1, 0],
+      ['a2', '10:30', 'Gabriela', 'Vinueza', 'Facial Purificación S.O.S', 'cal2', 75, 'CONFIRMADA', 0, 0],
+      ['a3', '12:00', 'Victoria', 'Arteaga', 'Facial 7 Pieles (Arroz+H2O)', 'cal1', 60, 'CONFIRMADA', 0, 0],
+      ['a4', '14:00', 'Paula', 'Granda', 'Facial K-Lift', 'cal3', 90, '', 0, 1],
       ['a5', '16:00', 'Renata', 'Íñiguez', 'Facial Reparación', 'cal2', 75, 'CONFIRMADA', 0, 0],
-      ['a6', '17:30', 'Josefina', 'Albornoz', 'Facial Hidratación', 'cal1', 60, '', 0, 1],
+      ['a6', '17:30', 'Josefina', 'Albornoz', 'Facial Reset 3x1', 'cal1', 60, '', 0, 1],
     ];
     const cals = { cal1: 'Valeria Ríos', cal2: 'Camila Ordóñez', cal3: 'Isabel Vega' };
     return rows.map((r) => ({
@@ -88,15 +92,16 @@ const INIT = () => {
     const w = function (a, body) {
       body = body || {};
       if (a === 'prod_list') {
-        return { ok: true, items: FACIALES.map((f) => ({ id: f.id, sku: f.sku, nombre: f.nombre, uso: 'cabina', categoria: 'Facial', marca: 'Sunsu' })) };
+        return { ok: true, items: FACIALES.map((f) => ({ id: f.id, sku: f.sku, nombre: f.nombre, uso: f.categoria, categoria: f.categoria, marca: 'Sunsu' })) };
       }
       if (a === 'mcprod_list') {
+        const cats = [...new Set(FACIALES.map((f) => f.categoria))];
         return {
           ok: true, admin: false, verCostos: false, puedeDescargar: false, eliminados: 0,
-          filtros: { marcas: ['Sunsu'], categorias: ['Facial'] },
+          filtros: { marcas: [], categorias: cats },
           items: FACIALES.map((f) => ({
             id: f.id, sku: f.sku, skuVisible: f.sku, nombre: f.nombre,
-            tipo: 'servicio', subtipo: 'Facial', categoria: 'Facial', marca: 'Sunsu',
+            tipo: 'servicio', subtipo: f.categoria, categoria: f.categoria, marca: 'Sunsu',
             pvp: f.pvp, activo: true,
           })),
         };
@@ -211,6 +216,11 @@ const CSS = `
       await p.waitForTimeout(2600);
       await ready();
       await p.waitForSelector('#inv-root, #inv-body, .desk-table', { timeout: 8000 }).catch(() => {});
+      await p.evaluate(() => {
+        window._invSort = 'sku';
+        window._invDir = 1;
+        if (typeof pintarInventario === 'function') pintarInventario();
+      });
       await p.waitForTimeout(700);
     },
     catalogo: async () => {
@@ -218,6 +228,7 @@ const CSS = `
       await p.waitForTimeout(2800);
       await ready();
       await p.waitForSelector('.mcp, .mcp-card-row, .ss-card', { timeout: 8000 }).catch(() => {});
+      await p.addStyleTag({ content: '.mcp-card-row,.ss-card.mcp-card-row{padding-top:7px!important;padding-bottom:7px!important;margin-bottom:6px!important}.ss-micro{margin:4px 0!important}' });
       await p.evaluate(() => {
         document.querySelectorAll('.mcp-cost-pill, #mcp-cost-pill, #mcp-cols-wrap, #mcp-nuevo').forEach((el) => el.remove());
       });
