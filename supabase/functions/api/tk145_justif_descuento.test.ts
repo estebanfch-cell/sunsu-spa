@@ -45,10 +45,16 @@ describe("SunsuDescJustif · cuándo pedir motivo", () => {
     assert.equal(J.justificacionOk(t, 30), true);
     assert.equal(J.textoJustificacion(t), "Cortesía de Emilia");
   });
-  it("el helper exporta las 6 opciones del dropdown", () => {
+  it("el helper exporta las opciones del dropdown, incl. facial prepagado", () => {
     assert.deepEqual(J.OPS.map((o) => o.label), [
-      "Gift card", "Promoción", "Cortesía", "Friends & Family", "Pago directo", "Otra (especificar)",
+      "Facial prepagado / paquete", "Gift card", "Promoción", "Cortesía", "Friends & Family", "Pago directo", "Otra (especificar)",
     ]);
+  });
+  it("Personalizado $95 queda ok con motivo Facial prepagado / paquete", () => {
+    const t = { descuento: { tipo: "custom", custom: 95, customMode: "valor" }, lineDesc: {}, justificacionMotivo: "prepagado" };
+    assert.equal(J.pideJustificacion(t, 95), true);
+    assert.equal(J.justificacionOk(t, 95), true);
+    assert.equal(J.textoJustificacion(t), "Facial prepagado / paquete");
   });
 });
 
@@ -65,6 +71,9 @@ describe("front TK145 · dropdown en DESCUENTOS, contraste y toast que envuelve"
     assert.match(js, /id="dsc-custom-inp"/);
     assert.match(js, /id="dsc-custom-inp"[\s\S]{0,1800}background:#fff/);
     assert.match(js, /id="dsc-custom-inp"[\s\S]{0,1800}color:var\(--navy\)/);
+    assert.match(js, /dsc-justif-slot/);
+    assert.match(js, /function _dscJustifEnsure/);
+    assert.match(js, /Facial prepagado \/ paquete|prepagado/);
   });
   it("el toast deja de usar nowrap para no cortarse en móvil", () => {
     assert.match(html, /\.toast\s*\{[^}]*white-space:\s*normal/);
