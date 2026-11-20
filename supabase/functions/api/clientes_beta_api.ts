@@ -116,10 +116,24 @@ export function fusionarFilas(k: string, L: Row[]): Row {
   const hist = L.flatMap((r) => Array.isArray(r.historial) ? r.historial as Row[] : []).sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
   return { ...prin, datos, codigo: cods[0] || s(prin.codigo), historial: hist, borrado: s(prin.key) === k ? prin.borrado === true : L.every((r) => r.borrado === true), _filas: L.map((r) => s(r.key)), _key: s(prin.key) };
 }
-/** Claves con las que puede estar guardada esta clienta (documentos, filas viejas c:…001, uniones a mano). */
-function clavesGuardadas(key: string): string[] {
+/** Claves con las que puede estar guardada esta clienta (documentos, filas viejas c:…001, uniones a mano, código C- y nombre n:). */
+function clavesGuardadas(key: string, extra?: { ced?: string; nom?: string; codigo?: string }): string[] {
   const out = new Set(clavesDe(key));
-  for (const k of [...out]) if (/^c:\d{9,10}$/.test(k)) out.add(k + "001");
+  const add = (v: string) => { const x = String(v || "").trim(); if (x) out.add(x); };
+  const addCed = (raw: string) => {
+    const ced = normCedula(raw.replace(/^c:/i, ""));
+    if (!ced) return;
+    add("c:" + ced); add(ced);
+    if (/^\d{9,10}$/.test(ced)) { add("c:" + ced + "001"); add(ced + "001"); }
+    if (/^\d{12,13}$/.test(ced) && ced.endsWith("001")) { add("c:" + ced.slice(0, -3)); add(ced.slice(0, -3)); }
+  };
+  for (const k of [...out]) {
+    if (/^c:/i.test(k)) addCed(k);
+    else if (/^\d{9,13}$/.test(k)) addCed(k);
+  }
+  if (extra?.ced) addCed(extra.ced);
+  if (extra?.nom) add("n:" + extra.nom);
+  if (extra?.codigo) { add(extra.codigo); add(extra.codigo.toUpperCase()); add(extra.codigo.toLowerCase()); }
   return [...out];
 }
 function mismaPersona(ced: string, nom: string, c2: unknown, n2: string): boolean {
@@ -198,7 +212,7 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   const ov = (await overlays(ctx)).get(key);
   if (ov?.borrado === true && !admin) return { error: "Esa clienta está eliminada" };
   const vt = admin || await verTodos(ctx, ses);
-  const [det, regs0, filas0, cabs0, gifts0, pdfs0] = await Promise.all([
+  const [det, regs0, filas0, cabs0, gifts0, pdfsIn] = await Promise.all([
     clienteDetalle(ctx.db, lite(ses), admin, key, vt),
     registrosDeClave(ctx.db, key),
     ticketsDeClave(ctx.db, key),
@@ -207,6 +221,7 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
     consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "in", val: claves }] }).then((x) => x.rows).catch(() => [] as Row[]),
   ]);
   if (det.error) return det;
+  let pdfs0 = pdfsIn;
   const cli = det.cliente as Row;
   const regs = regs0.filter((r) => !r.borrado_at && claveRegistro(r) === key);
   const reg = registroUnico(regs);
@@ -221,6 +236,14 @@ async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   if (datos.telefono) datos.telefono = telefonoEc(datos.telefono);
   if (datos.cedula) datos.cedula = cedulaVer(datos.cedula) || s(datos.cedula);
   const ced = normCedula(datos.cedula || cli.cedula), nom = normNombre((s(datos.nombres) + " " + s(datos.apellido)).trim() || s(cli.nombre));
+  const claves2 = clavesGuardadas(key, { ced, nom, codigo });
+  const faltan = claves2.filter((k) => !claves.includes(k));
+  if (faltan.length) {
+    try {
+      const more = (await consultar(ctx.db, "beta_cliente_documentos", { filtros: [{ col: "cliente_id", op: "in", val: faltan }] })).rows;
+      if (more.length) pdfs0 = pdfs0.concat(more);
+    } catch { /* sin tabla o sin filas nuevas */ }
+  }
   // Historial: cada ticket con la clave que abre el detalle de ticket de la beta.
   const filas = filas0.filter((r) => !r.borrado_at && claveCliente(r) === key);
   const porNum = new Map(filas.map((r) => [numeroTicket(r), r]));

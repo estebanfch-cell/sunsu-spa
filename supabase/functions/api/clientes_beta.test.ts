@@ -97,6 +97,21 @@ describe("clientes de la beta", () => {
     assert.equal(((await h("cl_list", "adm")).clientes as Row[]).some((c) => c.key === "c:1700000001"), false);
     assert.equal((await h("cl_restaurar", "adm", { key: "c:1700000001" })).ok, true);
   });
+  it("cl_get encuentra PDFs guardados con variantes viejas de cliente_id", async () => {
+    const { h, db } = semilla();
+    const f0 = await h("cl_get", "adm", { key: "c:1700000001" });
+    const codigo = String(f0.codigo || "C-00004");
+    db.tables.set("beta_cliente_documentos", [
+      { id: "d-skin", cliente_id: "1700000001", tipo: "skin_analisis", storage_path: "skin/a.pdf", fecha: "2026-11-10T15:00:00-05:00", cliente_nombre_archivo: "María Banda" },
+      { id: "d-klift", cliente_id: codigo, tipo: "klift", storage_path: "klift/b.pdf", fecha: "2026-11-12T15:00:00-05:00", cliente_nombre_archivo: "María Banda" },
+    ]);
+    const f = await h("cl_get", "adm", { key: "c:1700000001" });
+    assert.equal(f.ok, true, String(f.error));
+    const docs = (f.documentos as Row[]) || [];
+    const subs = docs.map((d) => String(d.sub || d.tipo));
+    assert.ok(subs.includes("skin_analisis") || docs.some((d) => /Focus Skin|skin_analisis/i.test(String(d.nombre) + String(d.sub))), "falta Skin Analysis: " + JSON.stringify(docs.map((d) => d.sub || d.tipo || d.nombre)));
+    assert.ok(subs.includes("klift") || docs.some((d) => /K-Lift|klift/i.test(String(d.nombre) + String(d.sub))), "falta K-Lift: " + JSON.stringify(docs.map((d) => d.sub || d.tipo || d.nombre)));
+  });
   it("admin edita directo y elimina con motivo", async () => {
     const { h } = semilla();
     assert.equal((await h("cl_guardar", "adm", { key: "c:1700000002", cambios: { telefono: "0992222222", cedula: "abc" } })).error, "Cédula inválida");

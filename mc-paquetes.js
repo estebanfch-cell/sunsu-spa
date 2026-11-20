@@ -20,6 +20,7 @@
     if (document.getElementById("mcpq-css")) return;
     var s = document.createElement("style"); s.id = "mcpq-css";
     s.textContent = [
+      "@media(max-width:640px){.mcpq-sheet{display:none!important}.mcpq-cards{display:flex}}",
       ".mcpq-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mcpq-h h2{margin:0;font-size:1.2rem;flex:1}",
       ".mcpq-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcpq-tools input[type=search]{flex:1;min-width:220px;padding:9px 11px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:9px;font:inherit}",
       ".mcpq-chip{border:1.5px solid var(--cream-d,#e6dccb);background:var(--white,#fff);border-radius:999px;padding:5px 12px;font:inherit;font-size:.78rem;font-weight:700;color:var(--navy-d,#2b3f5c);cursor:pointer}.mcpq-chip.on{background:var(--navy-d,#2b3f5c);color:#fff;border-color:var(--navy-d,#2b3f5c)}",
@@ -45,12 +46,19 @@
     var cli = ((v.nombre || "") + " " + (v.apellido || "")).trim() || "Sin nombre";
     return '<tr data-pq="' + e(v.id) + '"><td class="mcpq-cod">' + e(v.codigo) + "</td><td><b>" + e(cli) + "</b>" + (v.clienteCodigo ? ' <span class="mcpq-cc">· ' + e(v.clienteCodigo) + "</span>" : "") + '<div class="mcpq-cc">' + e(v.cedula || "") + "</div></td><td>" + e(v.paquete) + "</td><td>" + prog(v) + "</td><td>" + pill(v.vendidoPor) + "</td><td>" + e(f(v.fechaCompra)) + "</td></tr>";
   }
+  function cardPq(v) {
+    var cli = ((v.nombre || "") + " " + (v.apellido || "")).trim() || "Sin nombre";
+    var l2 = [e(v.paquete || ""), prog(v), v.fechaCompra ? e(f(v.fechaCompra)) : ""].filter(Boolean);
+    return '<div class="mob-card ss-card" role="button" tabindex="0" data-pq="' + e(v.id) + '"><div class="mob-l1"><span class="mob-num">' + e(cli) + (v.codigo ? ' <span class="ss-code">' + e(v.codigo) + "</span>" : "") + "</span>" + (v.vendidoPor ? pill(v.vendidoPor) : "") + '</div><div class="mob-l2 ss-meta">' + l2.join(" · ") + "</div></div>";
+  }
   function listaHtml() {
     var c = K.cuenta || {};
     var chip = function (k, t, nn) { return '<button type="button" class="mcpq-chip' + (K.estado === k ? " on" : "") + '" data-est="' + k + '">' + t + (nn != null ? " (" + nn + ")" : "") + "</button>"; };
     return '<div id="mcpq-root"><div class="mcpq-h"><h2>🎴 Paquetes</h2></div>' +
-      '<div class="mcpq-tools"><input type="search" id="mcpq-q" placeholder="🔎 Código PQ, clienta, cédula o paquete" value="' + e(K.q) + '">' + chip("activos", "Activos", c.activos) + chip("completos", "Completos", c.completos) + (c.anulados ? chip("anulados", "Anulados", c.anulados) : "") + chip("todos", "Todos", c.todos) + "</div>" +
-      '<div class="mccf-card"><div class="sheet-scroll"><table class="mccf-t mcpq-t"><thead><tr><th>Código</th><th>Clienta</th><th>Paquete</th><th>Progreso</th><th>Vendió</th><th>Compra</th></tr></thead><tbody id="mcpq-body">' +
+      '<div class="mcpq-tools ss-bar"><input type="search" id="mcpq-q" placeholder="🔎 Código PQ, clienta, cédula o paquete" value="' + e(K.q) + '"></div>' +
+      '<div class="ss-chip-row">' + chip("activos", "Activos", c.activos) + chip("completos", "Completos", c.completos) + (c.anulados ? chip("anulados", "Anulados", c.anulados) : "") + chip("todos", "Todos", c.todos) + "</div>" +
+      '<div class="mob-cards ss-cards" id="mcpq-cards">' + (K.items.length ? K.items.map(cardPq).join("") : '<p class="mccf-sub">Sin paquetes.</p>') + "</div>" +
+      '<div class="mccf-card mcpq-sheet"><div class="sheet-scroll"><table class="mccf-t mcpq-t"><thead><tr><th>Código</th><th>Clienta</th><th>Paquete</th><th>Progreso</th><th>Vendió</th><th>Compra</th></tr></thead><tbody id="mcpq-body">' +
       (K.items.length ? K.items.map(filaHtml).join("") : '<tr><td colspan="6" class="mccf-sub">Sin paquetes.</td></tr>') + "</tbody></table></div>" +
       '<div class="mcpq-acts" style="justify-content:space-between"><span class="mccf-sub">' + e(K.items.length) + " de " + e(K.total) + "</span>" + (K.items.length < K.total ? '<button class="btn ghost small" type="button" id="mcpq-mas">Cargar más</button>' : "") + "</div></div></div>";
   }
@@ -59,7 +67,9 @@
     if (q) q.oninput = function () { clearTimeout(t); t = setTimeout(async function () { K.q = q.value.trim(); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }, 300); };
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = async function () { K.estado = b.getAttribute("data-est"); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }; });
     var mas = main.querySelector("#mcpq-mas"); if (mas) mas.onclick = async function () { mas.disabled = true; try { await cargarLista(true); repLista(main); } catch (x) { toast2(x.message, true); } };
-    var body = main.querySelector("#mcpq-body"); if (body) body.onclick = function (ev) { var tr = ev.target.closest("[data-pq]"); if (tr) location.hash = "#/m/gift/paquetes/" + encodeURIComponent(tr.getAttribute("data-pq")); };
+    var ir = function (ev) { var tr = ev.target.closest("[data-pq]"); if (tr) location.hash = "#/m/gift/paquetes/" + encodeURIComponent(tr.getAttribute("data-pq")); };
+    var body = main.querySelector("#mcpq-body"); if (body) body.onclick = ir;
+    var cards = main.querySelector("#mcpq-cards"); if (cards) cards.onclick = ir;
   }
   function repLista(main) { var root = main.querySelector("#mcpq-root"); if (!root) return; var foco = document.activeElement && document.activeElement.id === "mcpq-q"; root.outerHTML = listaHtml(); wireLista(main); if (foco) { var q = main.querySelector("#mcpq-q"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
 
