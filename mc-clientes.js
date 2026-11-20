@@ -1,7 +1,7 @@
 // Clientes de la beta estilo MineCore (Emilia 17/11): lista larga con código, búsqueda y filtros (sin papelera en
 // las filas) y ficha con registro único, resumen y pestañas. Admin edita/elimina; los demás piden el cambio.
 (function () {
-  var K = { L: null, q: "", f: { cosm: "", sector: "", paq: false, gift: false, visita: "" }, sort: "ultima", dir: -1, max: 300, tab: "historial", d: null, edit: false };
+  var K = { L: null, q: "", f: { cosm: "", sector: "", paq: false, gift: false, visita: "" }, sort: "nombre", dir: 1, max: 300, tab: "historial", d: null, edit: false };
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v); }
   function $m(v) { return "$" + (Math.round((Number(v) || 0) * 100) / 100).toFixed(2); }
   function f(v) { return v ? String(v).slice(0, 10).split("-").reverse().join("/") : "—"; }
@@ -156,9 +156,16 @@
       var blob = norm((K.admin ? [c.codigo, c.nombre, c.cedula, c.telefono, c.sector] : [c.codigo, c.nombre]).join(" "));
       return q.split(/\s+/).every(function (w) { return blob.indexOf(w) >= 0 || blob.replace(/\D/g, "").indexOf(w.replace(/\D/g, "") || "~") >= 0; });
     });
-    var k = K.sort, dir = K.dir;
+    var k = K.sort || "nombre", dir = K.dir || 1;
+    var nombreCmp = function (a, b) { return String((a && a.nombre) || "").localeCompare(String((b && b.nombre) || ""), "es", { sensitivity: "base" }); };
     var val = function (c) { if (k === "visitas" || k === "total" || k === "paquetesActivos") return Number(c[k]) || 0; if (k === "codigo") { var m = /(\d+)$/.exec(c.codigo || ""); return m ? Number(m[1]) + (String(c.codigo).indexOf("C-B") === 0 ? 1e6 : 0) : 1e9; } return norm(c[k]); };
-    return rows.slice().sort(function (a, b) { var x = val(a), y = val(b); return x < y ? -dir : x > y ? dir : norm(a.nombre).localeCompare(norm(b.nombre)); });
+    return rows.slice().sort(function (a, b) {
+      if (k === "nombre") return nombreCmp(a, b) * dir;
+      var x = val(a), y = val(b);
+      if (x < y) return -dir;
+      if (x > y) return dir;
+      return nombreCmp(a, b);
+    });
   }
   function cols() {
     var c = [["nombre", "Clienta"], ["codigo", "Código"], ["cedula", "Cédula"], ["visitas", "Visitas", 1], ["ultima", "Última visita"]];
@@ -298,6 +305,7 @@
     var body = main.querySelector("#mccl-body"); if (body) body.onclick = ir;
     var cards = main.querySelector("#mccl-cards"); if (cards) { cards.onclick = ir; cards.onkeydown = function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ir(ev); } }; }
     var m = main.querySelector("#mccl-mas"); if (m) m.onclick = function () { K.max += 500; repintarLista(main); };
+    if (typeof bindDataGo === "function") bindDataGo(main);
     if (!K.q) q.focus();
   }
 
@@ -407,6 +415,7 @@
       '<div class="sheet-scroll"><table class="mccf-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Nombre en el archivo</th><th></th><th>Asignar a</th></tr></thead><tbody id="sa-body">' + SA.grupos.map(saFila).join("") + "</tbody></table></div></div>";
   }
   function wireSinAsignar(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var q = main.querySelector("#sa-q"), tmr;
     if (q) q.onchange = function () { SA.q = q.value; renderSinAsignar().then(function (h) { main.innerHTML = h; wireSinAsignar(main); }); };
     var body = main.querySelector("#sa-body"); if (!body) return;
@@ -590,7 +599,7 @@
     var nDocs = docsPlanos(d).length;
     var tabs = [["historial", "Historial (" + d.historial.length + ")"], ["paquetes", "Paquetes (" + d.paquetes.length + ")"], ["gift", "Gift cards (" + d.giftcards.length + ")"], ["docs", "Documentos (" + nDocs + ")"]];
     if (d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
-    return '<div id="mccl-root"><p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver a la lista</button></p>' +
+    return '<div id="mccl-root"><p><button class="btn ghost small" type="button" id="mccl-volver" data-go="#/m/clientes">← Volver a la lista</button></p>' +
       (d.borrado ? '<p class="err">Clienta eliminada' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
       '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · CI " + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
       '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
@@ -611,8 +620,15 @@
     return htmlFicha();
   }
   function repintarFicha(main) { var root = main.querySelector("#mccl-root"); if (root) { root.outerHTML = htmlFicha(); wireFicha(main); } }
+  function bindGoCl(root) {
+    if (typeof bindDataGo === "function") bindDataGo(root);
+    else if (root) root.querySelectorAll("[data-go]").forEach(function (b) {
+      b.onclick = function (ev) { if (ev && ev.preventDefault) ev.preventDefault(); if (typeof go === "function") go(b.getAttribute("data-go")); };
+    });
+  }
   function wireFicha(main) {
     var d = K.d; if (!d || !main.querySelector("#mccl-root")) return;
+    bindGoCl(main);
     main.querySelectorAll("[data-tab]").forEach(function (b) { b.onclick = function () { K.tab = b.getAttribute("data-tab"); repintarFicha(main); }; });
     var _el = main.querySelector("#mccl-tab"); if (_el) _el.onclick = function (ev) {
       var pm = ev.target.closest("[data-pqm]");

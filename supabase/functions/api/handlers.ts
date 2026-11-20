@@ -2476,6 +2476,42 @@ function detallePersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe
   out.tramos = [...tramos.values()];
   return out;
 }
+
+function sanitizarVendidoComisiones(data: R, admin: boolean): R {
+  if (admin) return data;
+  const limpiaFila = (f: R) => {
+    const o = { ...f } as R;
+    delete o.vendido;
+    delete o.vendidoPorCiclo;
+    return o;
+  };
+  const limpiaLinea = (l: R) => {
+    const o = { ...l } as R;
+    delete o.vendido;
+    return o;
+  };
+  const limpiaDet = (d: R | undefined) => {
+    if (!d) return d;
+    const o = { ...d } as R;
+    delete o.vendido;
+    for (const k of ["productos", "extras", "recepcion", "facialesDet", "paquetesDet"]) {
+      if (Array.isArray(o[k])) o[k] = (o[k] as R[]).map(limpiaLinea);
+    }
+    return o;
+  };
+  const out = { ...data } as R;
+  if (Array.isArray(out.filas)) out.filas = (out.filas as R[]).map(limpiaFila);
+  if (out.detalle) out.detalle = limpiaDet(out.detalle as R);
+  if (Array.isArray(out.equipo)) {
+    out.equipo = (out.equipo as R[]).map((e) => ({
+      ...e,
+      filas: Array.isArray(e.filas) ? (e.filas as R[]).map(limpiaFila) : e.filas,
+      detalle: limpiaDet(e.detalle as R),
+    }));
+  }
+  return out;
+}
+
 reg("getComisionesTabla", "any", async (p, ctx, ses) => {
   const desde = s(p.desde) || cicloInicio(hoy(ctx));
   const hasta = s(p.hasta) || desde;
@@ -2515,23 +2551,23 @@ reg("getComisionesTabla", "any", async (p, ctx, ses) => {
       const filas = filasPersona(nombre, packs, esRecepDe(nombre));
       return { persona: nombre, filas, detalle: detalleDe(nombre), total: filas.find((f) => f.concepto === "Total")?.total || 0 };
     });
-    return {
+    return sanitizarVendidoComisiones({
       ok: true, todas: true, persona: "Todas", personas: lista, equipo,
       totalEquipo: round2(equipo.reduce((a, e) => a + e.total, 0)),
       ciclos, tramos: packs[0]?.tramos || [], admin: true,
       hoy: hoyVacio(packs[0]?.ymdHoy || ""), cicloLabel: packs[0] ? cicloLabelDe(packs[0].ciclo, packs[0].fin) : "",
-    };
+    } as R, true);
   }
   let persona = s(p.persona || p.cosmetologa || p.nombre);
   if (!esAdmin(ses.rol)) persona = ses.name;
   if (!persona || nombreEsAdmin(persona, admins)) persona = lista[0] || "";
   const filas = filasPersona(persona, packs, esRecepDe(persona));
   const packHoy = packs.find((x) => x.ciclo <= (x.ymdHoy || "") && (x.ymdHoy || "") <= x.fin) || packs[0];
-  return {
+  return sanitizarVendidoComisiones({
     ok: true, persona, personas: lista, adminExcluido: nombreEsAdmin(s(p.persona), admins),
     ciclos, filas, detalle: detalleDe(persona), tramos: packs[0]?.tramos || [], admin: esAdmin(ses.rol),
     hoy: packHoy ? pickHoy(packHoy, persona) : hoyVacio(""), cicloLabel: packHoy ? cicloLabelDe(packHoy.ciclo, packHoy.fin) : "",
-  };
+  } as R, esAdmin(ses.rol));
 });
 reg("getTramos", "any", async (_p, ctx) => {
   const ciclo = cicloInicio(hoy(ctx));

@@ -63,6 +63,7 @@
       '<div class="mcpq-acts" style="justify-content:space-between"><span class="mccf-sub">' + e(K.items.length) + " de " + e(K.total) + "</span>" + (K.items.length < K.total ? '<button class="btn ghost small" type="button" id="mcpq-mas">Cargar más</button>' : "") + "</div></div></div>";
   }
   function wireLista(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var t = null, q = main.querySelector("#mcpq-q");
     if (q) q.oninput = function () { clearTimeout(t); t = setTimeout(async function () { K.q = q.value.trim(); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }, 300); };
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = async function () { K.estado = b.getAttribute("data-est"); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }; });
@@ -140,6 +141,7 @@
   }
   async function repDet(main) { var root = main.querySelector("#mcpq-root"); if (root) { root.outerHTML = detHtml(); wireDet(main); } }
   function wireDet(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var v = K.d.item, recargar = async function () { await cargarDet(String(v.id)); repDet(main); };
     main.querySelectorAll("[data-marcar]").forEach(function (b) { b.onclick = function () { marcarSesion(v, +b.getAttribute("data-marcar"), recargar); }; });
     main.querySelectorAll("[data-desmarcar]").forEach(function (b) {
