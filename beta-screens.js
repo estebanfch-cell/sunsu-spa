@@ -1339,14 +1339,15 @@ function renderTicket(c){
         '<div class="cbtn '+(T.cobro==='cortesia'?'sel-green':'c-cobrado')+'" id="cb-cortesia" onclick="selCobro(\'cortesia\')" style="border-color:'+(T.cobro==='cortesia'?'var(--green)':'var(--cream-d)')+';background:'+(T.cobro==='cortesia'?'var(--green-l)':'white')+';color:'+(T.cobro==='cortesia'?'var(--green)':'var(--gray)')+'"><span class="ci">🎀</span>Cortesía</div>'+
       '</div>'+
       (T.cobro==='cortesia'?'<div id="cortesia-banner" style="background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>':'<div id="cortesia-banner" style="display:none;background:var(--green-l);border:1.5px solid var(--green);border-radius:9px;padding:9px 12px;margin-top:8px;font-size:0.78rem;color:var(--green);font-weight:600">🎀 Facial de cortesía — $0.00 para el cliente</div>')+
+      '<div id="cobro-pack-hint"></div>'+
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--lavender)">Canje de paquete — elige paquete y sesión</span>'+
-        '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. No se marca solo.</p>'+
+        '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. Si vendes un paquete hoy, ese aparece primero; si la clienta ya tiene uno activo, también lo ves y puedes elegir ese.</p>'+
         _paqBuscaHtml()+
         '<div id="paq-lista" class="paq-lista"></div>'+
         '<select id="paq-pick" hidden onchange="_paqElegir(this.value)"></select>'+
         '<div id="paq-conf" style="margin:8px 0"></div>'+
-        ((T.pack3||T.pack6)?'<button type="button" class="paq-alt" onclick="_paqElegirSesionNuevo()">Descargar sesión #1 del paquete nuevo de este ticket</button>':'')+
+        '<div id="paq-nuevo-slot"></div>'+
         '<label style="display:flex;align-items:center;gap:7px;font-size:0.74rem;font-weight:600;color:var(--lavender);cursor:pointer;margin-top:8px">'+
           '<input type="checkbox" onchange="toggleOtro(this.checked)" '+(T.canjeOtro?'checked':'')+' style="width:14px;height:14px">Es canje del paquete de otro cliente'+
         '</label>'+
@@ -1618,7 +1619,8 @@ function renderTicket(c){
   `;
   updateSunsuUI(); updatePreview();
   if(T.paq2gc && T.paq2gcSlots && T.paq2gcSlots.length) _renderP2GCSlots(T.paq2gcN||(T.pack3?3:6));
-  if(T.cobro==='paquete'&&typeof _paqCargarPicker==='function') _paqCargarPicker();
+  if(typeof _paqRefrescarTrasVenta==='function') _paqRefrescarTrasVenta();
+  else if(T.cobro==='paquete'&&typeof _paqCargarPicker==='function') _paqCargarPicker();
   if(typeof _migoPintarPrefillAviso==='function') _migoPintarPrefillAviso(c);
   if(typeof _lookupNombreTicket==='function' && (T.nombre||T.apellido||T.cedula)) setTimeout(function(){ _lookupNombreTicket(); if(T.cedula&&typeof buscarEnRegistroSheet==='function') buscarEnRegistroSheet('ced', String(T.cedula).replace(/\D/g,'')); else if((T.nombre||T.apellido)&&typeof buscarEnRegistroSheet==='function') buscarEnRegistroSheet('q', (T.nombre+' '+T.apellido).trim(), true); }, 80);
 }
@@ -1639,6 +1641,7 @@ function selFacial(sku){
   // Update accordion subtitle
   const sub=document.getElementById('as-facial');
   if(sub) sub.innerHTML=T.facial?`<span style="color:var(--pink-d);font-weight:600">${FACIALES.find(f=>f.sku===T.facial)?.n}</span>`:'Ninguno seleccionado';
+  if(typeof _paqRefrescarTrasVenta==='function') _paqRefrescarTrasVenta();
   updatePreview();
 }
 // ── Picker: contra qué paquete ACTIVO de la clienta se canjea el facial ──
@@ -1715,6 +1718,123 @@ function _paqTarjeta(p, sel){
     +_tkEsc(p.paquete||p.sku||'')+'<br>Compra: '+_tkEsc(_paqFecha(p)||'—')+'<br>Usadas: <b>'+us+'/'+tot+'</b>'+(p.completo||us>=tot?' · completo':'')+'<br>'
     +'Vendió: '+_tkEsc(p.vendidoPor||'—')+(p.factura?'<br>Factura: '+_tkEsc(String(p.factura).replace(/\.0+$/,'')):'')+(p.ticketOrigen?'<br>Ticket: '+_tkEsc(p.ticketOrigen):'')+'</div>';
 }
+
+/** TK194: venta de pack x3 / x6 / membresía en «Paquete vendido» de este ticket. */
+function _paqHayVenta(){ return !!(T && (T.pack3 || T.pack6)); }
+function _paqVentaMeta(){
+  if(!_paqHayVenta()) return null;
+  if(T.pack6){
+    var p6=(typeof PAQ6!=='undefined'?PAQ6:[]).find(function(p){return p.sku===T.pack6;})||{sku:T.pack6,n:T.pack6,p:0};
+    return {sku:p6.sku,n:p6.n,total:6,p:p6.p};
+  }
+  var p3=(typeof PAQ3!=='undefined'?PAQ3:[]).find(function(p){return p.sku===T.pack3;})||{sku:T.pack3,n:T.pack3,p:0};
+  return {sku:p3.sku,n:p3.n,total:3,p:p3.p};
+}
+function _paqPrefijarNuevo(){
+  if(!_paqHayVenta()){
+    if(T.paqPick&&T.paqPick.fila==='nuevo'){ T.paqPick=null; T.paqConfirmado=false; }
+    return false;
+  }
+  if(T.paqPick&&T.paqConfirmado&&T.paqPick.fila&&T.paqPick.fila!=='nuevo') return false;
+  if(T._paqOmitirNuevo) return false;
+  var m=_paqVentaMeta();
+  T.paqPick={fila:'nuevo', idx:0, total:m.total, nombre:'Paquete nuevo de este ticket', sku:m.sku||''};
+  T.usoPaq='1/'+m.total;
+  T.paqConfirmado=true;
+  T.paqPickCed=(typeof _cedQuery==='function'?_cedQuery(T.cedula):String(T.cedula||'').replace(/\D/g,''));
+  return true;
+}
+function _paqHtmlCardNuevo(){
+  var m=_paqVentaMeta(); if(!m) return '';
+  var sel=T.paqPick&&T.paqPick.fila==='nuevo';
+  var on=sel&&T.paqConfirmado;
+  return '<div class="paq-card paq-card-nuevo'+(sel?' sel':'')+' rec" id="paq-card-nuevo">'+
+    '<div class="paq-hd"><b>Paquete nuevo de este ticket</b> <span class="paq-rec">Sugerido</span></div>'+
+    '<div class="paq-nom">'+_tkEsc((m.sku||'')+' · '+(m.n||'Paquete'))+'</div>'+
+    '<div class="paq-meta">Se crea al enviar · sesión 1/'+m.total+' · puedes elegir un paquete activo anterior si es esa la sesión de hoy</div>'+
+    '<div class="paq-sesiones"><button type="button" class="paq-ses-btn paq-ses-nuevo'+(on?' on':'')+'" onclick="event.preventDefault();event.stopPropagation();(window._paqElegirSesionNuevo||_paqElegirSesionNuevo)()">Descargar sesión #1 del paquete nuevo de este ticket</button></div>'+
+    '</div>';
+}
+function _paqAsegurarBtnNuevo(){
+  var slot=document.getElementById('paq-nuevo-slot'); if(!slot) return;
+  if(!_paqHayVenta()){ slot.innerHTML=''; return; }
+  var on=T.paqPick&&T.paqPick.fila==='nuevo'&&T.paqConfirmado;
+  slot.innerHTML='<button type="button" class="paq-alt paq-ses-nuevo'+(on?' on':'')+'" onclick="_paqElegirSesionNuevo()">Descargar sesión #1 del paquete nuevo de este ticket</button>';
+}
+function _paqPintarHintCobro(){
+  var box=document.getElementById('cobro-pack-hint'); if(!box) return;
+  if(!_paqHayVenta()){ box.innerHTML=''; box.style.display='none'; return; }
+  var html='';
+  if(T.facial && T.cobro==='paquete'){
+    html='<div class="cobro-pack-hint ok">Vendiste un paquete en este ticket. El facial queda en $0 como canje (sesión 1 del paquete nuevo), para no cobrar el facial y el paquete a la vez. Si la clienta ya tiene un paquete activo, puedes elegir ese abajo.</div>';
+  } else if(T.facial && T.cobro==='cobrado'){
+    html='<div class="cobro-pack-hint warn">⚠️ El facial está en «Se cobra» y también vendes un paquete: el total suma los dos y puede no cuadrar con la factura de Migo. <button type="button" class="cobro-pack-switch" onclick="T._cobroPackManual=false;if(typeof _paqSetCobroPaquete===\'function\')_paqSetCobroPaquete();">Tocar «Paquete» — facial $0, sesión 1</button></div>';
+  } else if(!T.facial){
+    html='<div class="cobro-pack-hint info">Si hoy usas la 1.ª sesión del paquete que vendes, elige el facial y cobra como «Paquete» (facial $0). Si dejas «Se cobra», se sumaría el facial al paquete.</div>';
+  }
+  box.innerHTML=html;
+  box.style.display=html?'block':'none';
+}
+function _paqPintarCobroUI(){
+  ['cobrado','paquete','gc','cortesia'].forEach(function(t){
+    var el=document.getElementById('cb-'+t);
+    if(!el) return;
+    var active=T.cobro===(t==='gc'?'giftcard':t);
+    if(t==='cortesia'){
+      el.style.borderColor=active?'var(--green)':'var(--cream-d)';
+      el.style.background=active?'var(--green-l)':'white';
+      el.style.color=active?'var(--green)':'var(--gray)';
+    } else {
+      el.classList.toggle('sel',active);
+    }
+  });
+  var pb=document.getElementById('paq-box'), gb=document.getElementById('gc-box');
+  if(pb) pb.style.display=T.cobro==='paquete'?'block':'none';
+  if(gb) gb.style.display=T.cobro==='giftcard'?'block':'none';
+  var cb=document.getElementById('cortesia-banner');
+  if(cb) cb.style.display=T.cobro==='cortesia'?'block':'none';
+}
+function _paqSetCobroPaquete(){
+  T.cobro='paquete';
+  T._cobroPackManual=false;
+  T._cobroPackAuto=true;
+  _paqPintarCobroUI();
+  _paqPrefijarNuevo();
+  _paqPintarHintCobro();
+  if(typeof _paqCargarPicker==='function') _paqCargarPicker();
+  if(typeof updatePreview==='function') updatePreview();
+}
+function _paqAjustarCobroPorVenta(){
+  if(!_paqHayVenta()){ _paqPintarHintCobro(); return; }
+  if(T.facial && T.cobro==='cobrado' && !T._cobroPackManual){
+    T.cobro='paquete';
+    T._cobroPackAuto=true;
+    _paqPintarCobroUI();
+  } else if(T.facial && !T.cobro && !T._cobroPackManual){
+    T.cobro='paquete';
+    T._cobroPackAuto=true;
+    _paqPintarCobroUI();
+  }
+  if(T.cobro==='paquete' && !T._paqOmitirNuevo) _paqPrefijarNuevo();
+  _paqPintarHintCobro();
+}
+function _paqRefrescarTrasVenta(){
+  _paqAjustarCobroPorVenta();
+  if(typeof _paqAsegurarBusca==='function') _paqAsegurarBusca();
+  _paqAsegurarBtnNuevo();
+  if(T.cobro==='paquete' && typeof _paqCargarPicker==='function') _paqCargarPicker();
+  else {
+    _paqAsegurarBtnNuevo();
+    if(typeof _paqPintarConfirm==='function') _paqPintarConfirm();
+    else if(typeof _paqPintarLista==='function') _paqPintarLista();
+  }
+}
+window._paqHayVenta=_paqHayVenta;
+window._paqVentaMeta=_paqVentaMeta;
+window._paqRefrescarTrasVenta=_paqRefrescarTrasVenta;
+window._paqSetCobroPaquete=_paqSetCobroPaquete;
+window._paqHtmlCardNuevo=_paqHtmlCardNuevo;
+
 function _paqPintarLista(){
   if(typeof _paqAsegurarBusca==='function') _paqAsegurarBusca();
   var box=document.getElementById('paq-lista'); if(!box) return;
@@ -1745,17 +1865,25 @@ function _paqPintarLista(){
     }).join('');
   }
   var h='';
+  if(typeof _paqHayVenta==='function'&&_paqHayVenta()) h+=_paqHtmlCardNuevo();
+  if(typeof _paqAsegurarBtnNuevo==='function') _paqAsegurarBtnNuevo();
   if(qb){
     if(window._paqBuscaCargando) h+='<div style="font-size:0.74rem;color:var(--gray);margin-bottom:8px">Buscando «'+_tkEsc(qb)+'»…</div>';
     else if(!busca.length) h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para «'+_tkEsc(qb)+'».</div>';
-    else h+='<div style="font-size:0.72rem;font-weight:700;color:var(--lavender);margin:0 0 6px">Resultados de «'+_tkEsc(qb)+'»</div>'+cards(busca,'busca','');
+    else h+='<div class="paq-lista-lbl">Resultados de «'+_tkEsc(qb)+'»</div>'+cards(busca,'busca','');
   } else if(act.length){
-    h+=cards(act,'activos','');
+    h+='<div class="paq-lista-lbl">Paquetes activos de esta clienta</div>'+cards(act,'activos','');
+    var agoAct=window._paqAgotados||[];
+    if(agoAct.length) h+='<div class="paq-lista-lbl">Paquetes completos</div>'+cards(agoAct,'agotados','');
   } else {
-    h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para esta cédula. Revisa el número, elige una sugerencia o busca por nombre / PACK / PQ.</div>';
+    if(typeof _paqHayVenta==='function'&&_paqHayVenta()){
+      h+='<div style="font-size:0.72rem;color:var(--navy);background:#F4F0FA;border:1.5px solid #C8C0E0;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-weight:600">No hay otro paquete activo de esta clienta. La sesión de hoy se sugiere en el paquete nuevo de este ticket; si es de un familiar, búscalo por nombre o código.</div>';
+    } else {
+      h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para esta cédula. Revisa el número, elige una sugerencia o busca por nombre / PACK / PQ.</div>';
+    }
     var ago=window._paqAgotados||[];
     if(ago.length){
-      h+='<div style="font-size:0.72rem;color:var(--navy);background:#F4F0FA;border:1.5px solid #C8C0E0;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-weight:600">Esta cédula sí tiene paquete, pero ya está completo: '+ago.map(function(p){ var tot=Number(p.total)||3, us=_paqUsadas(p); return _tkEsc((p.codigo||('PACK-'+p.fila))+' · '+(p.paquete||p.sku||'')+' · '+us+'/'+tot); }).join('; ')+'. Si es canje de un familiar, búscalo por nombre o código.</div>';
+      h+='<div class="paq-lista-lbl">Paquetes completos</div>'+cards(ago,'agotados','');
     }
     if(sug.length){
       h+='<div style="font-size:0.72rem;font-weight:700;color:var(--lavender);margin:8px 0 6px">Sugerencias por el nombre de la clienta</div>'+cards(sug,'sugerencias','Sugerido');
@@ -1795,7 +1923,7 @@ function _paqCargarPicker(){
   var ced=_cedQuery(T.cedula);
   window._paqSugeridoI=null;
   if(T.paqPick&&T.paqPickCed&&T.paqPickCed!==ced){ T.paqPick=null; T.paqConfirmado=false; }
-  if(!ced && !(T.nombre||T.apellido)){ window._paqActivos=[]; window._paqTodos=[]; window._paqSugeridos=[]; window._paqAgotados=[]; _paqPintarConfirm(); return; }
+  if(!ced && !(T.nombre||T.apellido)){ window._paqActivos=[]; window._paqTodos=[]; window._paqSugeridos=[]; window._paqAgotados=[]; if(typeof _paqPrefijarNuevo==='function') _paqPrefijarNuevo(); _paqPintarConfirm(); return; }
   var lista=document.getElementById('paq-lista');
   if(lista) lista.innerHTML='<div style="font-size:0.74rem;color:var(--gray)">Buscando paquetes…</div>';
   var url=APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)
@@ -1811,9 +1939,10 @@ function _paqCargarPicker(){
         return !p.anulado && !p.completo && us<tot;
       });
       window._paqActivos=act; window._paqTodos=mios;
-      window._paqAgotados=act.length?[]:((d&&d.agotados)||[]);
+      window._paqAgotados=((d&&d.agotados)||[]).filter(function(p){ return !ced || (typeof _cedCompat==='function'?_cedCompat(p.cedula, ced):true); });
       window._paqSugeridos=act.length?[]:((d&&d.sugerencias)||[]);
-      window._paqSugeridoI=act.length?_paqSugerido(act):-1;
+      window._paqSugeridoI=(typeof _paqHayVenta==='function'&&_paqHayVenta())?-1:(act.length?_paqSugerido(act):-1);
+      if(typeof _paqPrefijarNuevo==='function') _paqPrefijarNuevo();
       if(sel){
         sel.innerHTML='<option value=""></option>'+act.map(function(p,i){ return '<option value="'+i+'">'+_tkEsc((p.codigo||'')+' '+(p.paquete||''))+'</option>'; }).join('');
         if(T.paqPick&&T.paqPick.i!=null&&act[T.paqPick.i]) sel.value=String(T.paqPick.i);
@@ -1868,6 +1997,7 @@ function _paqElegirSesionDe(origen,i,k){
   if(u&&(u.usado||u.u||u.fecha||u.f)) return;
   if(origen==='busca'||origen==='sugerencias') _paqMarcarOtroCanje(p);
   var filaPick=(p.fila!=null&&String(p.fila)!=='')?p.fila:(p.id!=null?p.id:p.codigo);
+  T._paqOmitirNuevo=false;
   T.paqPick={i:Number(i), fila:filaPick, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||'', origen:origen};
   T.usoPaq=(k+1)+'/'+tot;
   T.paqConfirmado=true; T.paqPickCed=_cedQuery(T.cedula);
@@ -1879,8 +2009,11 @@ window._paqElegirSesion=_paqElegirSesion;
 window._paqElegirSesionNuevo=_paqElegirSesionNuevo;
 function _paqElegirSesion(i,k){ _paqElegirSesionDe('activos',i,k); }
 function _paqElegirSesionNuevo(){
-  T.paqPick={fila:'nuevo', idx:0, total:T.pack6?6:3, nombre:'Paquete nuevo de este ticket'};
-  T.usoPaq='1/'+(T.pack6?6:3);
+  if(!_paqHayVenta()) return;
+  T._paqOmitirNuevo=false;
+  var m=_paqVentaMeta();
+  T.paqPick={fila:'nuevo', idx:0, total:m.total, nombre:'Paquete nuevo de este ticket', sku:m.sku||''};
+  T.usoPaq='1/'+m.total;
   T.paqConfirmado=true; T.paqPickCed=(typeof _cedQuery==='function'?_cedQuery(T.cedula):String(T.cedula||'').replace(/\D/g,''));
   _paqPintarConfirm();
 }
@@ -1889,28 +2022,36 @@ function _paqConfirmar(){
   if(!(T.paqPick&&T.paqConfirmado)) { toast('Pulsa «Descargar sesión #…» en el paquete','#B86B6B'); return; }
   _paqPintarConfirm();
 }
-function _paqDesconfirmar(){ T.paqConfirmado=false; T.paqPick=null; _paqPintarConfirm(); }
+function _paqDesconfirmar(){ T.paqConfirmado=false; T.paqPick=null; T._paqOmitirNuevo=!!_paqHayVenta(); _paqPintarConfirm(); }
 function selCobro(tipo){
   T.cobro=T.cobro===tipo?null:tipo;
-  ['cobrado','paquete','gc','cortesia'].forEach(t=>{
-    const el=document.getElementById('cb-'+t);
-    if(!el) return;
-    const active=T.cobro===(t==='gc'?'giftcard':t);
-    if(t==='cortesia'){
-      el.style.borderColor=active?'var(--green)':'var(--cream-d)';
-      el.style.background=active?'var(--green-l)':'white';
-      el.style.color=active?'var(--green)':'var(--gray)';
-    } else {
-      el.classList.toggle('sel',active);
-    }
-  });
-  const pb=document.getElementById('paq-box'), gb=document.getElementById('gc-box');
-  if(pb) pb.style.display=T.cobro==='paquete'?'block':'none';
-  if(T.cobro==='paquete') _paqCargarPicker();
-  if(gb) gb.style.display=T.cobro==='giftcard'?'block':'none';
-  // Show/hide cortesia banner
-  var cb=document.getElementById('cortesia-banner');
-  if(cb) cb.style.display=T.cobro==='cortesia'?'block':'none';
+  if(T.cobro==='cobrado' && typeof _paqHayVenta==='function' && _paqHayVenta() && T.facial) T._cobroPackManual=true;
+  if(T.cobro==='paquete') T._cobroPackManual=false;
+  if(typeof _paqPintarCobroUI==='function') _paqPintarCobroUI();
+  else {
+    ['cobrado','paquete','gc','cortesia'].forEach(t=>{
+      const el=document.getElementById('cb-'+t);
+      if(!el) return;
+      const active=T.cobro===(t==='gc'?'giftcard':t);
+      if(t==='cortesia'){
+        el.style.borderColor=active?'var(--green)':'var(--cream-d)';
+        el.style.background=active?'var(--green-l)':'white';
+        el.style.color=active?'var(--green)':'var(--gray)';
+      } else {
+        el.classList.toggle('sel',active);
+      }
+    });
+    const pb=document.getElementById('paq-box'), gb=document.getElementById('gc-box');
+    if(pb) pb.style.display=T.cobro==='paquete'?'block':'none';
+    if(gb) gb.style.display=T.cobro==='giftcard'?'block':'none';
+    var cb=document.getElementById('cortesia-banner');
+    if(cb) cb.style.display=T.cobro==='cortesia'?'block':'none';
+  }
+  if(typeof _paqPintarHintCobro==='function') _paqPintarHintCobro();
+  if(T.cobro==='paquete'){
+    if(typeof _paqPrefijarNuevo==='function') _paqPrefijarNuevo();
+    _paqCargarPicker();
+  }
   updatePreview();
 }
 function toggleOtro(v){T.canjeOtro=v;const b=document.getElementById('otro-box');if(b)b.style.display=v?'block':'none';}
@@ -1968,6 +2109,7 @@ function selP3(sku){
       sbody3.appendChild(div);
     }
   }
+  if(typeof _paqRefrescarTrasVenta==='function') _paqRefrescarTrasVenta();
   updatePreview();
 }
 function selP6(sku){
@@ -1994,6 +2136,7 @@ function selP6(sku){
       sbody6.appendChild(div6);
     }
   }
+  if(typeof _paqRefrescarTrasVenta==='function') _paqRefrescarTrasVenta();
   updatePreview();
 }
 function selEx(sku){
@@ -3153,7 +3296,17 @@ function enviarTicket(){
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica cómo se cobra el facial','#B86B6B');return;}
   // Canje con paquete: hay que confirmar SIEMPRE de qué paquete sale la sesión (TK58).
-  if(T.facial&&T.cobro==='paquete'&&!T.canjeOtro&&!(T.paqPick&&T.paqConfirmado)&&!window._esCotizacion){toast('Confirma de qué paquete se canjea la sesión («✓ Confirmo»)','#B86B6B');var _pb=document.getElementById('paq-box');if(_pb&&_pb.scrollIntoView)_pb.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  if(T.facial&&T.cobro==='paquete'&&!T.canjeOtro&&!(T.paqPick&&T.paqConfirmado)&&!window._esCotizacion){
+    if(typeof _paqHayVenta==='function'&&_paqHayVenta()){
+      T._paqOmitirNuevo=false;
+      if(typeof _paqElegirSesionNuevo==='function') _paqElegirSesionNuevo();
+    } else {
+      toast('Confirma de qué paquete se canjea la sesión («✓ Confirmo»)','#B86B6B');
+      var _pb=document.getElementById('paq-box');
+      if(_pb&&_pb.scrollIntoView)_pb.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+  }
 
   // ── CANDADO ANTI-TAP FANTASMA ── El preview (justo arriba del boton) se
   // re-renderiza con debounce y CAMBIA DE ALTO: el boton se mueve bajo el dedo
