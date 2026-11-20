@@ -1065,11 +1065,17 @@
   .mob-l3 { color: var(--gray); font-size: 12px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .mob-l3t { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 12px; }
-  .mob-acts { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  /* TK155 (Emilia t679u): cámara ARRIBA y WhatsApp ABAJO, en columna y centrados. */
+  .mob-acts { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto; }
   .mob-cam, .mob-wa { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 2px solid #DC2626; border-radius: 50%; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
   .mob-cam.ok, .mob-wa.ok { color: #16A34A; border-color: #16A34A; background: #f3faf6; }
   .mob-wa { color: #25D366; }
   .mob-wa .wa-icon { width: 15px; height: 15px; display: block; }
+  /* TK155: #content label { display: revert } ganaba por especificidad y corría la cámara a la esquina. */
+  #content label.mob-cam, .mob-cam, .mob-wa { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important; margin: 0 !important; line-height: 1 !important; }
+  .mob-cam .cam-icon { width: 15px; height: 15px; display: block; }
+  #content label.mob-cam, .mob-cam { color: #DC2626; }
+  #content label.mob-cam.ok, .mob-cam.ok { color: #16A34A; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
   /* TK154: la fotito que todavía llega reserva su espacio (sin saltos) con un tono suave. */
@@ -1094,6 +1100,8 @@
     .btn, button { white-space: normal; }
     .mob-voucher .btn, label.mctk-voucher, label.pg-vbtn { white-space: nowrap !important; }
     .mctk-dd a, .mctk-dd button, .mctk-wa-chip, .mctk-wa-go, .mob-wa { white-space: nowrap !important; }
+    /* TK155 (t683u): menú de Acciones ancho en el celular; los textos se leen completos. */
+    .mctk-dd.mctk-dd-movil a, .mctk-dd.mctk-dd-movil button, .mctk-dd.mctk-dd-movil .mctk-voucher { overflow: visible !important; text-overflow: clip !important; font-size: .86rem !important; padding: 10px 12px !important; }
     table.mob-stack { display: block; width: 100% !important; min-width: 0 !important; max-width: 100% !important; border: 0 !important; box-shadow: none !important; background: transparent !important; }
     table.mob-stack > thead, table.mob-stack > colgroup { display: none !important; }
     table.mob-stack > tbody, table.mob-stack > tfoot { display: block; width: 100%; }
@@ -7817,7 +7825,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK154";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK155";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
