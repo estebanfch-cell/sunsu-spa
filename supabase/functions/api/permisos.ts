@@ -139,6 +139,7 @@ const ACCION_MODULO: Record<string, Modulo> = {
   cfg_priv_get: "configuracion", cfg_priv_guardar: "configuracion",
   home: "inicio",
   aprobaciones_pendientes: "inicio",
+  voucher_alertas: "inicio", tk_leer_voucher: "tickets",
   getDashboardHoy: "inicio",
   getDashboard: "inicio",
 };

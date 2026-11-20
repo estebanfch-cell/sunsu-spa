@@ -355,9 +355,9 @@ extend("tk_subir_doc", "any", async (p, ctx, ses) => {
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
-  const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante", s(p.pago_id) || undefined);
+  const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante", s(p.pago_id) || undefined, { total: n(p.total) });
   if (x.error) return x;
-  return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row) };
+  return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row), ...(x.ocr ? { ocr: x.ocr, cruce: x.cruce } : {}) };
 });
 /** Comprobantes vivos (no borrados) en beta_tickets.datos.comprobantes. */
 export function compsVivos(d: Row | undefined): Row[] {
@@ -372,8 +372,10 @@ export function archivoIdDe(url: unknown): string {
 export function fotoPendienteDe(d: Row | undefined): Row | undefined {
   return [...compsVivos(d)].reverse().find((x) => !s(x.pago_id));
 }
+/** TK157: lectura Claude Vision al subir (lo llena voucher_ocr_api.ts). Muta el item con ocr + cruce; nunca tumba la subida. */
+export const OCR_HOOK: { leer?: (ctx: Ctx, r: Row, cab: Row | undefined, datos: Row, item: Row, img: string, extra?: { montoPago?: number; total?: number }) => Promise<void> } = {};
 /** Guarda la foto (app_archivos + copia en Storage si se puede) y la agrega a beta_tickets.datos.comprobantes. */
-export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string, pagoId?: string): Promise<Row> {
+export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string, pagoId?: string, extra?: { montoPago?: number; total?: number }): Promise<Row> {
   const img = s(imagen);
   if (!/^data:(image\/|application\/pdf)/.test(img)) return { error: "Sube una foto o PDF" };
   const actor = actorOf(ses), now = ctx.now.toISOString();
@@ -385,6 +387,7 @@ export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unk
   const datos = { ...((cab?.datos || {}) as Row) };
   const item: Row = { url: "archivo:" + id, por: ses.name, fecha: now, pago_id: pagoId || null };
   datos.comprobantes = [...(Array.isArray(datos.comprobantes) ? datos.comprobantes as Row[] : []), item].slice(-10);
+  if (OCR_HOOK.leer && /^data:image\/(jpeg|png|webp);/.test(img)) { try { await OCR_HOOK.leer(ctx, r, cab, datos, item, img, extra); } catch { /* la foto se guarda igual */ } }
   const hist = [...(Array.isArray(cab?.historial) ? cab!.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle }].slice(-100);
   if (cab) await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
   else await ctx.db.write(actor, "beta_tickets", "insert", {}, { clave, sheet_row: r.sheet_row ?? null, datos, historial: hist, actualizado_por: actor, updated_at: now });
@@ -392,7 +395,7 @@ export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unk
     try { await ctx.db.write(actor, "beta_pagos", "update", { id: pagoId }, { comprobante_id: id }); } catch { /* columna aún no aplicada */ }
   }
   try { await logAccion(ctx.db, actor, "COMPROBANTE SUBIR", clave + (pagoId ? " · pago " + pagoId : "") + " · archivo:" + id); } catch { /* el log no tumba la subida */ }
-  return { ok: true, url: "archivo:" + id, datos, archivo_id: id };
+  return { ok: true, url: "archivo:" + id, datos, archivo_id: id, ...(item.ocr ? { ocr: item.ocr, cruce: item.cruce } : {}) };
 }
 /** Enlaza una foto del ticket (la indicada, o la última pendiente) a un pago de la beta. */
 export async function vincularComprobante(ctx: Ctx, ses: Ses, r: Row, pagoId: string, url?: string): Promise<Row> {
@@ -737,7 +740,7 @@ export function docsBeta(cab: Row | undefined): Row[] {
     const t = Date.parse(s(x.fecha));
     return !L0.some((y) => y !== x && s(y.pago_id) && s(y.por) === s(x.por) && Number.isFinite(t) && Math.abs(Date.parse(s(y.fecha)) - t) <= 15000);
   });
-  const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url) }));
+  const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url), ...(x.ocr ? { ocr: x.ocr } : {}), ...(x.cruce ? { cruce: x.cruce } : {}), ...(s(x.pago_id) ? { pago_id: s(x.pago_id) } : {}) }));
   const pdfs = Array.isArray(d.factura_pdfs) ? d.factura_pdfs as Row[] : (d.factura_pdf && typeof d.factura_pdf === "object" ? [d.factura_pdf as Row] : []);
   for (const x of pdfs) {
     if (!s(x.url)) continue;

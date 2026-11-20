@@ -98,7 +98,7 @@ extend("pg_ticket", "any", async (p, ctx, ses) => {
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ver ese ticket" };
   const e = await estadoTicket(ctx, r, n(p.total));
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === s(e.clave));
-  const fotos = compsVivos((cab?.datos || {}) as Row).map((x) => ({ url: s(x.url), por: s(x.por), fecha: s(x.fecha), pago_id: s(x.pago_id) }));
+  const fotos = compsVivos((cab?.datos || {}) as Row).map((x) => ({ url: s(x.url), por: s(x.por), fecha: s(x.fecha), pago_id: s(x.pago_id), ...(x.ocr ? { ocr: x.ocr } : {}), ...(x.cruce ? { cruce: x.cruce } : {}) }));
   const beta = (e.beta as Row[]).map((x) => ({ ...x, foto: fotoDePago(x, fotos) }));
   return { ok: true, ...e, beta, fotos, metodos: METODOS.map((m) => ({ id: m, nombre: ETQ_METODO[m] })), legadoMetodos: metodosPago(r.comp), admin: esAdmin(ses.rol) };
 });
@@ -121,12 +121,14 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   if ((metodo === "tarjeta" || metodo === "transferencia" || metodo === "deuna") && !ref) return { error: "Escribe el número de voucher / comprobante" };
   // TK42/TK97: tarjeta y transferencia piden la foto del voucher. Si ya se subió al ticket (botón Voucher), se enlaza al pago.
   let fotoUrl = "";
+  let ocrSubida: Row | null = null;
   const cab = (await todas(ctx, "beta_tickets")).find((c) => s(c.clave) === s(e.clave));
   const pendiente = fotoPendienteDe((cab?.datos || {}) as Row);
   if (/^data:(image\/|application\/pdf)/.test(s(p.imagen))) {
-    const f = await agregarComprobante(ctx, ses, r, p.imagen, e.clave + " · " + (ETQ_METODO[metodo] || metodo) + " " + ref, "subió comprobante (cobro en Caja)");
+    const f = await agregarComprobante(ctx, ses, r, p.imagen, e.clave + " · " + (ETQ_METODO[metodo] || metodo) + " " + ref, "subió comprobante (cobro en Caja)", undefined, { montoPago: monto, total });
     if (f.error) return f;
     fotoUrl = s(f.url);
+    if (f.ocr) ocrSubida = { ocr: f.ocr, cruce: f.cruce };
   } else if (pendiente) {
     fotoUrl = s(pendiente.url);
   }
@@ -145,7 +147,7 @@ extend("pg_registrar", "any", async (p, ctx, ses) => {
   await ctx.db.write(actor, "beta_pagos", "insert", {}, { id, ticket_clave: e.clave, ticket_id: r.id ?? null, fecha: ctx.now.toISOString(), metodo, monto, ref: ref || null, nota: (s(p.nota).trim().slice(0, 300) || (fotoUrl ? "foto " + fotoUrl : "")) || null, registrado_por: quien, caja_mov_id, comprobante_id: compId });
   if (fotoUrl) await vincularComprobante(ctx, ses, r, id, fotoUrl);
   await logAccion(ctx.db, actor, "PAGO REGISTRAR", e.clave + " · " + ETQ_METODO[metodo] + " $" + monto.toFixed(2) + (ref ? " · " + ref : "") + (fotoUrl ? " · " + fotoUrl : ""));
-  return { ok: true, id, saldo: saldoPendiente(n(e.saldo), monto), foto: fotoUrl || undefined };
+  return { ok: true, id, saldo: saldoPendiente(n(e.saldo), monto), foto: fotoUrl || undefined, ...(ocrSubida || {}) };
 });
 extend("pg_anular", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin anula pagos" };

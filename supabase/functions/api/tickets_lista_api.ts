@@ -3,6 +3,7 @@
 // 2) la página (50) con todas las columnas, 3) LED y marcas de esa página en lote.
 // La «reagendada» por Acuity va aparte (tk_reagendadas), después de pintar, y queda en caché 10 min.
 import { extend } from "./handlers.ts";
+import { resumenOcr } from "./voucher_ocr.ts";
 import { catMap, itemHistorial } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { conTelefono } from "./lib.ts";
@@ -245,7 +246,11 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
         const beta = pagosPorClave.get(clave) || [];
         const pf = pagosFaltanFoto({ beta, legado: metodosPago(r.comp), comps, comprobanteTicket: colTicket(r, "comprobante"), fecha: s(r.timestamp) });
         const fotoPago = comps.length > 0 || beta.some((p) => !!s((p as Row).comprobante_id)) || !!s(colTicket(r, "comprobante"));
-        return { ...(pf.length ? { pagosFaltan: pf } : {}), ...(fotoPago ? { fotoPago: 1 } : {}) };
+        // TK157: resumen liviano de la lectura del voucher (sin llamadas extra).
+        const ocrs = comps.map((x) => resumenOcr(x)).filter(Boolean) as Row[];
+        const desc = ocrs.find((o) => s(o.estado) === "descuadre");
+        const vo = desc || ocrs[ocrs.length - 1];
+        return { ...(pf.length ? { pagosFaltan: pf } : {}), ...(fotoPago ? { fotoPago: 1 } : {}), ...(vo ? { voucher_ocr: vo } : {}), ...(desc ? { voucher_descuadre: s(desc.mensaje) || 1 } : {}) };
       })()),
     };
     return it;
