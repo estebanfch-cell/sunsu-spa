@@ -18,6 +18,29 @@ export const HORARIOS_RRHH: Record<string, HorarioRol> = {
   "Dejaneira Espinoza": { diasDescanso: [0, 1], jornadaMins: 540, etiqueta: "Mar-Sáb 9h" },
 };
 
+/** ¿La persona está en el mapa histórico del script RRHH? (esas siguen igual que lo pagado). */
+export function enMapaRrhh(nombre: string): boolean {
+  const n = String(nombre || "").trim();
+  return !!(HORARIOS_RRHH[n] || HORARIOS_RRHH[n.split(/\s+/)[0] || ""]);
+}
+
+const DOW: Record<string, number> = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+const hm = (x: string | null | undefined) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : 0; };
+
+/** TK173: horario fijo de la tabla `horarios` → descansos y jornada del rol (jornada = la más común entre
+ *  los días que trabaja; con almuerzo pagado es el tramo completo, igual que el mapa Mar-Sáb 9h). */
+export function horarioRolDeTabla(h: { nombre?: string; arreglo?: string; descansosTipo?: string; dias: { dia: string; trabaja: boolean; desde: string | null; hasta: string | null }[]; descansos?: { duracionMin: number }[] }): HorarioRol | null {
+  if (!h || (h.arreglo && h.arreglo !== "fijo")) return null;
+  const trabaja = h.dias.filter((d) => d.trabaja && DOW[d.dia] != null);
+  if (!trabaja.length) return null;
+  const set = new Set(trabaja.map((d) => DOW[d.dia]));
+  const impago = h.descansosTipo === "pago" ? 0 : (h.descansos || []).reduce((a, d) => a + (Number(d.duracionMin) || 0), 0);
+  const cuenta: Record<number, number> = {};
+  for (const d of trabaja) { const m = Math.max(0, hm(d.hasta) - hm(d.desde) - impago); if (m > 0) cuenta[m] = (cuenta[m] || 0) + 1; }
+  const jornada = Number(Object.entries(cuenta).sort((a, b) => b[1] - a[1] || Number(b[0]) - Number(a[0]))[0]?.[0] || 480);
+  return { diasDescanso: [0, 1, 2, 3, 4, 5, 6].filter((x) => !set.has(x)), jornadaMins: jornada, etiqueta: h.nombre || "Horario asignado" };
+}
+
 export function horarioRrhhDe(nombre: string): HorarioRol {
   const n = String(nombre || "").trim();
   if (HORARIOS_RRHH[n]) return HORARIOS_RRHH[n];

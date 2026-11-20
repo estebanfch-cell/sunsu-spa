@@ -99,3 +99,16 @@ describe("TK172 marcas de la app editadas por admin", () => {
     assert.match(html, /Inicio almuerzo/);
   });
 });
+
+describe("TK173 horario asignado en el rol", () => {
+  it("quien no está en el mapa RRHH usa su horario de Horarios (descanso dom/mar)", async () => {
+    const { horarioRolDeTabla, enMapaRrhh } = await import("./horas_rol.ts");
+    const dia = (d: string, hasta = "18:30") => ({ dia: d, trabaja: true, desde: "09:30", hasta });
+    const h = horarioRolDeTabla({ nombre: "Cosmetóloga – descanso dom/mar", arreglo: "fijo", descansosTipo: "pago",
+      dias: [dia("Monday"), dia("Wednesday"), dia("Thursday"), dia("Friday"), dia("Saturday", "18:00")], descansos: [{ duracionMin: 60 }] })!;
+    assert.deepEqual(h.diasDescanso, [0, 2]);
+    assert.equal(h.jornadaMins, 540);
+    assert.equal(enMapaRrhh("Daniela Mora"), true);
+    assert.equal(enMapaRrhh("Evelyn"), false);
+  });
+});
