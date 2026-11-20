@@ -146,14 +146,19 @@ describe("TK88 rol oficial", () => {
     assert.equal((ind.data as Row).fuente, "beta-aprobado");
   });
 
-  it("si no está afiliada apunta a la OC del mes y no crea rol", async () => {
+  it("TK170: sin afiliación sale un rol sin IESS ni décimos/fondo y con el total a facturar", async () => {
     const db = seed();
     const c = ctx(db);
     await handle("emp_guardar", { token: "t-emi", nombre: "Daniela Mora", afiliada_iess: false }, c);
     const rol = await handle("rol_crear", { token: "t-emi", persona: "Daniela Mora", periodo: "NOVIEMBRE_2026" }, c) as Row;
-    assert.match(String(rol.error), /no está afiliada al IESS/);
-    assert.equal(rol.ocServicios, true);
-    assert.equal((db.tables.get("beta_roles") || []).length, 0);
+    assert.equal(rol.ok, true, String(rol.error || JSON.stringify(rol)));
+    const fila = (db.tables.get("beta_roles") || [])[0];
+    const snap = (fila?.snapshot || {}) as Row;
+    assert.equal(snap.afiliada, false);
+    assert.equal(Number(snap.iess), 0);
+    assert.equal(Number(snap.dec13) + Number(snap.dec14) + Number(snap.fondoReserva), 0);
+    assert.equal(Number(snap.facturar), Number(snap.totalRecibir));
+    assert.match(String(snap.mensajeFactura), /Debes facturarnos \$\d+\.\d{2} por este período/);
   });
 
   it("No aprobar pide motivo, deja el rol en rechazado y se puede volver a generar", async () => {

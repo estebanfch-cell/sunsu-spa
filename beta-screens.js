@@ -16398,6 +16398,8 @@ function _lineasRol(d){
   if(N(d.dec13Acumulado)) notas.push('Décimo tercero acumulado este mes: $'+N(d.dec13Acumulado).toFixed(2)+' (se paga hasta el 20 de diciembre).');
   if(N(d.dec14Acumulado)) notas.push('Décimo cuarto acumulado este mes: $'+N(d.dec14Acumulado).toFixed(2)+' (se paga hasta el 15 de agosto).');
   if(N(d.fondoReservaIess)) notas.push('Fondo de reserva depositado en el IESS: $'+N(d.fondoReservaIess).toFixed(2)+'.');
+  // TK170: sin afiliación IESS no hay aporte, décimos ni fondo; se indica cuánto debe facturar a Sunsu.
+  if(d.afiliada===false){ notas.unshift(d.mensajeFactura||('Debes facturarnos $'+N(d.facturar!=null?d.facturar:d.totalRecibir).toFixed(2)+' por este período.')); notas.push('Sin afiliación al IESS: sin aporte personal, décimos ni fondo de reserva.'); }
   add(egr,'Aporte IESS personal (9,45%)',d.iess);
   add(egr,'Anticipo de sueldo',d.anticipo);
   add(egr,'Préstamo IESS hipotecario',d.prestHip);

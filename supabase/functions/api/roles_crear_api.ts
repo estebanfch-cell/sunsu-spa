@@ -97,9 +97,12 @@ export function snapshotDe(opts: {
   anticipo?: number; multasDetalle?: Row[];
   fuenteHoras: string;
   mensual?: { dec13?: boolean; dec14?: boolean; fondo?: boolean };
+  /** TK170: false = sin afiliación IESS (factura sus servicios). */
+  afiliada?: boolean;
 }): Row {
-  const calc = rolCalcularOficial({
-    sueldoBase: opts.sueldoBase, bono: opts.bono, faltas: opts.horas.diasFalta,
+  const afiliada = opts.afiliada !== false;
+  const calc0 = rolCalcularOficial({
+    sueldoBase: opts.sueldoBase, bono: opts.bono, faltas: opts.horas.diasFalta + (opts.horas.diasNoContratada || 0),
     hrsSupl: opts.horas.hrsSupl, hrsExtr: opts.horas.hrsExtr, hrsDesc: opts.horas.hrsDesc,
     comFaciales: opts.com.comFaciales, comExtras: opts.com.comExtras, comRecepcion: opts.com.comRecepcion,
     comProductos: opts.com.comProductos, comPaquetes: opts.com.comPaquetes, multas: opts.com.multas,
@@ -108,6 +111,18 @@ export function snapshotDe(opts: {
     fondoReserva: opts.fondo, fechaIngreso: opts.fechaIngreso, anio: opts.anio, mes: opts.mes,
     dec13Mensual: opts.mensual?.dec13, dec14Mensual: opts.mensual?.dec14, fondoMensual: opts.mensual?.fondo,
   });
+  // Sin afiliación: no hay aporte IESS, préstamos IESS, décimos ni fondo; ingresos = sueldo + bono + comisiones + horas.
+  const calc = afiliada ? calc0 : (() => {
+    const ing = round2(calc0.ingresoAportable);
+    const egr = round2(calc0.anticipo + calc0.multas);
+    return {
+      ...calc0, dec13: 0, dec14: 0, fondoReserva: 0, dec13Acumulado: 0, dec14Acumulado: 0, fondoReservaIess: 0,
+      iess: 0, prestHip: 0, prestQuir: 0, prestOtro: 0,
+      totalIngresos: ing, egresos: egr, totalEgresos: egr, totalRecibir: round2(ing - egr),
+      iessPatronal: 0, secap: 0, iece: 0, aportePatronal: 0, costoEmpresa: round2(ing - egr),
+    };
+  })();
+  const ingR = round2(calc.totalIngresos), egrR = round2(calc.totalEgresos), netoR = round2(ingR - egrR);
   const diasVis = (opts.horas.diasTrabajados + opts.horas.diasAsumidos);
   return {
     ...calc,
@@ -124,7 +139,11 @@ export function snapshotDe(opts: {
     comFaciales: calc.comFacialesExtrasRecep,
     comFacialesSolo: calc.comFaciales, comExtras: calc.comExtras, comRecepcion: calc.comRecepcion,
     anticipo: calc.anticipo, prestHip: calc.prestHip, prestQuir: calc.prestQuir, prestOtro: calc.prestOtro,
-    totalEgresos: calc.totalEgresos, neto: calc.totalRecibir, totalRecibir: calc.totalRecibir,
+    dec13: round2(calc.dec13), dec14: round2(calc.dec14), fondoReserva: round2(calc.fondoReserva), iess: round2(calc.iess),
+    totalIngresos: ingR, totalEgresos: egrR, neto: netoR, totalRecibir: netoR,
+    afiliada, diasNoContratada: opts.horas.diasNoContratada || 0,
+    facturar: afiliada ? 0 : netoR,
+    mensajeFactura: afiliada ? "" : `Debes facturarnos $${netoR.toFixed(2)} por este período.`,
     multasDetalle: opts.multasDetalle || [],
     fuenteHoras: opts.fuenteHoras,
     aportesPatronal: {
@@ -144,7 +163,7 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
     hrsDesc: aj.hrsDesc != null ? n(aj.hrsDesc) : n(base.hrsDesc),
     diasTrabajados: n(base.diasTrabajados), diasAsumidos: n(base.diasAsumidos),
     fechasFalta: (base.fechasFalta as string[]) || [], diasFest: n(base.diasFest),
-    diasDesc: n(base.diasDesc), diasPermiso: n(base.diasPermiso),
+    diasDesc: n(base.diasDesc), diasPermiso: n(base.diasPermiso), diasNoContratada: n(base.diasNoContratada),
     minsNomina: n(base.minsNomina), hrsNomina: n(base.hrsNomina),
     hrsOrdinarias: n(base.hrsOrdinarias), hrsNoct: n(base.hrsNoct),
     jornadaMins: n(base.jornadaMins), regla: s(base.reglaHoras),
@@ -173,6 +192,7 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
     multasDetalle: (base.multasDetalle as Row[]) || [],
     fuenteHoras: s(base.fuenteHoras),
     mensual: { dec13: base.dec13Mensual !== false, dec14: base.dec14Mensual !== false, fondo: base.fondoMensual !== false },
+    afiliada: base.afiliada !== false,
   });
 }
 
@@ -181,7 +201,7 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
  * tiene marcas, Jibble; clasificadas en normales / suplementarias 50 % / extraordinarias 100 % / descanso 100 %,
  * con el recorte del rol RRHH: el total del mes de cada tipo se trunca a bloques de 15 min (recorte15).
  */
-export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number) {
+export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number, opts: { ingreso?: string | null } = {}) {
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let nomina = { hayDatos: false, dias: [] as Row[], hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, diasJibble: 0, diasPropios: 0, faltas: 0 };
   try { nomina = await horasDeEmpleada(ctx, persona, anio, mes) as unknown as typeof nomina; } catch { /* sin asistencia */ }
@@ -200,14 +220,24 @@ export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: n
   for (const d0 of (nomina.dias || []) as Row[]) {
     if (s(d0.fuente) === "permiso" || d0.fuente === "permiso") permisos.push(s(d0.fecha).slice(0, 10));
   }
-  const hoy = ecuadorParts(ctx.now).ymd;
+  // TK170 (Emilia t768u): lo que todavía no tiene datos NO es falta. Desde el día siguiente al último dato
+  // (marca de la app o Jibble) se asume la jornada del horario, igual que los días que faltan del mes. Un mes sin
+  // ningún dato (persona sin Jibble ni marcas) se asume completo desde su ingreso.
+  const hoyReal = ecuadorParts(ctx.now).ymd;
+  const ini = `${anio}-${String(mes).padStart(2, "0")}-01`;
+  const conDato = Object.values(dias).filter((d) => d && d.nomMin > 0 && d.fecha <= hoyReal).map((d) => d!.fecha).sort();
+  const ultimo = conDato.length ? conDato[conDato.length - 1] : "";
+  const sig = ultimo ? new Date(Date.parse(ultimo + "T12:00:00Z") + 86400000).toISOString().slice(0, 10) : ini;
+  let hoy = sig < hoyReal ? sig : hoyReal;
+  const ingreso = s(opts.ingreso).slice(0, 10);
+  if (ingreso && hoy < ingreso && ingreso <= hoyReal) hoy = ingreso;
   const horas = clasificarHorasRol({
     anio: anio, mes: mes, hoy,
     horario: horarioRrhhDe(persona),
     feriados: await feriadosDe(ctx),
-    dias, permisos,
+    dias, permisos, ingreso: ingreso || null,
   });
-  return { nomina, horas };
+  return { nomina, horas, asumidoDesde: hoy, ultimoDato: ultimo || null };
 }
 
 /** TK166: décimos y fondo mensualizados o acumulados según la ficha (beta_empleados). Sin dato = mensualizado. */
@@ -224,11 +254,10 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
   const { fichaIessDe, afiliadaSegunOverlay } = await import("./empleados_api.ts");
   const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
-  if (!afiliadaSegunOverlay(overlays, persona)) {
-    return { error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: persona };
-  }
+  // TK170: sin afiliación también sale rol (sueldo + bonos + comisiones, sin IESS ni décimos/fondo) con el total a facturar.
+  const afiliada = afiliadaSegunOverlay(overlays, persona);
   const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
-  const { nomina, horas } = await horasRolDe(ctx, persona, per.anio, per.mes);
+  const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: s(emp.fecha_ingreso).slice(0, 10) || null });
   const { comisionesDeTablas } = await import("./handlers_extra.ts");
   const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
   const { multasBetaRol } = await import("./multas_beta_api.ts");
@@ -250,7 +279,9 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
     anticipo: 0, multasDetalle: mBeta.detalle || [], fuenteHoras,
     mensual: mensualDe(overlays, persona),
+    afiliada,
   });
+  snap.asumidoDesde = asumidoDesde; snap.ultimoDato = ultimoDato;
   return { ok: true, ...per, persona, snap };
 }
 
@@ -283,9 +314,11 @@ extend("rol_opciones", "any", async (_p, ctx, ses) => {
   const sinIess: Row[] = [];
   for (const e of emps) {
     const nombre = s(e.nombre_app) || s(e.apellidos_y_nombres);
-    const item = { nombre, cedula: s(e.cedula), cargo: s(e.cargo) };
-    if (afiliadaSegunOverlay(overlays, nombre)) afiliadas.push(item);
-    else sinIess.push(item);
+    const afi = afiliadaSegunOverlay(overlays, nombre);
+    const item = { nombre, cedula: s(e.cedula), cargo: s(e.cargo), afiliada: afi };
+    // TK170: sin afiliación también se crea su rol (sin IESS, con el total a facturar).
+    afiliadas.push(item);
+    if (!afi) sinIess.push(item);
   }
   const now = ecuadorParts(ctx.now);
   const y = Number(now.ymd.slice(0, 4));
@@ -406,4 +439,51 @@ extend("rol_rechazar", "any", async (p, ctx, ses) => {
   const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
   await logRol(ctx, ses, s(row.id), "rechazar", row, saved, motivo);
   return vista(saved, snap, true);
+});
+
+/**
+ * TK170 (Emilia t768u) · Pre-rol al día de hoy (admin). Sin «nombre»: la lista de empleadas. Con «nombre»: el rol
+ * del mes en curso con el MISMO motor que «Crear rol» (horas de la app y, si no hay marcas, Jibble; lo que aún no
+ * tiene datos se asume según el horario), más las horas trabajadas hasta ayer y la revisión de Jibble.
+ */
+extend("rol_prerol", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administración ve el pre-rol." };
+  const { afiliadaSegunOverlay, esFilaNotasRrhh } = await import("./empleados_api.ts");
+  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
+  const emps = (await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[])).filter((r) => !esFilaNotasRrhh(r) && (s(r.nombre_app) || s(r.apellidos_y_nombres)));
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const anio = Number(hoy.slice(0, 4)), mes = Number(hoy.slice(5, 7));
+  const periodo = periodoDe(anio, mes);
+  const convencion = "Las horas son del mes calendario (1 al último día) y las comisiones y multas del ciclo 26→25. Los roles se publicaron entre el 28 y el 30 (jul 31, ago 28, sep 29–30, oct 29–30): los días que faltan hasta fin de mes se asumen trabajados según el horario.";
+  if (!s(p.nombre)) {
+    const items = emps.map((e) => {
+      const nombre = s(e.nombre_app) || s(e.apellidos_y_nombres);
+      return { nombre, nombreCompleto: s(e.apellidos_y_nombres), cargo: s(e.cargo), afiliada: afiliadaSegunOverlay(overlays, nombre) };
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return { ok: true, items, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, convencion };
+  }
+  const armado = await armarEntrada(ctx, s(p.nombre), periodo, anio, mes);
+  if (armado.error) return armado;
+  const snap = armado.snap as Row;
+  const ini = `${anio}-${String(mes).padStart(2, "0")}-01`;
+  const ayer = new Date(Date.parse(hoy + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+  const { horasEnRango, correccionesJibble } = await import("./asistencia_api.ts");
+  let hastaHoy: Row | null = null;
+  if (ayer >= ini) {
+    try {
+      const h = await horasEnRango(ctx, s(armado.persona), ini, ayer) as unknown as Row;
+      const dias = (h.dias as Row[]) || [];
+      const sum = (k: string) => dias.reduce((a, d) => a + n(d[k]), 0);
+      hastaHoy = {
+        desde: ini, hasta: ayer,
+        trabajadoMin: sum("workedMin"), normalesMin: sum("ordinaryMin"), suplMin: sum("suplMin"), extrMin: sum("extrMin"), descMin: sum("descMin"),
+        diasConMarca: dias.filter((d) => s(d.fuente) === "marcaje" && n(d.workedMin) > 0).length,
+        diasJibble: dias.filter((d) => s(d.fuente) === "jibble").length,
+        faltas: dias.filter((d) => d.falta === true).length,
+      };
+    } catch { hastaHoy = null; }
+  }
+  let jibble: Row | null = null;
+  try { jibble = await correccionesJibble(ctx, s(armado.persona), ini, hoy) as unknown as Row; } catch { jibble = null; }
+  return { ok: true, persona: armado.persona, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, convencion, snap, hastaHoy, jibble };
 });

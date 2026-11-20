@@ -2783,6 +2783,7 @@ function gruposVisibles() {
     personal.push(["asistencia", "Permisos y vacaciones", "#/m/personal/permisos"]);
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
     if (state.admin) personal.push(["asistencia", "Empleados", "#/m/personal/empleados"]);
+    if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
   }
   if (personal.length) out.push({ id: "personal", label: "👤 Personal", items: personal });
   const gift = [];
@@ -5364,6 +5365,15 @@ const DIAS_HOR = [["Monday", "Lunes"], ["Tuesday", "Martes"], ["Wednesday", "Mi�
 function etiquetaArreglo(a) {
   return { fijo: "Fijo", flexible: "Flexible", semanal: "Semanal", rotativo: "Rotativo" }[a] || a || "";
 }
+// TK170 (Emilia t768u): horas del horario como desplegable cada media hora (9:30, 10:00 … 18:30), no a mano.
+function htmlSelHora(attrs, val, vacio) {
+  const v = String(val || "").slice(0, 5);
+  const ops = [];
+  for (let m = 6 * 60; m <= 22 * 60; m += 30) ops.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"));
+  if (v && ops.indexOf(v) < 0) { ops.push(v); ops.sort(); }
+  return `<select ${attrs} class="hor-sel">${vacio ? `<option value="">—</option>` : ""}${ops.map((o) => `<option value="${o}"${o === v ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+}
+window.htmlSelHora = htmlSelHora;
 function htmlEditorHorario(h) {
   h = h || { nombre: "", arreglo: "fijo", esDefault: false, descansosTipo: "impago", horasSemana: "", cicloDias: 2, ancla: "", dias: [], descansos: [] };
   const arreglo = h.arreglo || "fijo";
@@ -5372,7 +5382,7 @@ function htmlEditorHorario(h) {
     : DIAS_HOR.map(([dia]) => (h.dias || []).find((d) => d.dia === dia) || { dia, trabaja: false, desde: "09:00", hasta: "18:00" });
   const filas = base.map((d) => {
     const label = arreglo === "rotativo" ? "Día " + d.dia : (DIAS_HOR.find((x) => x[0] === d.dia) || ["", d.dia])[1];
-    return `<div class="hor-dia" data-dia="${esc(d.dia)}"><span>${esc(label)}</span><input type="checkbox" data-trabaja ${d.trabaja ? "checked" : ""}><input data-desde type="time" value="${esc(d.desde || "")}"><input data-hasta type="time" value="${esc(d.hasta || "")}"></div>`;
+    return `<div class="hor-dia" data-dia="${esc(d.dia)}"><span>${esc(label)}</span><input type="checkbox" data-trabaja ${d.trabaja ? "checked" : ""}>${htmlSelHora("data-desde", d.desde, true)}${htmlSelHora("data-hasta", d.hasta, true)}</div>`;
   }).join("");
   const descanso = (h.descansos || [])[0] || {};
   return `<form id="f-horario" class="hor-editor-compact" data-id="${esc(h.id || "")}">
@@ -5394,7 +5404,7 @@ function htmlEditorHorario(h) {
     <p class="note">Cada fila es un día. En rotativo el ciclo se repite desde la fecha de inicio. Día por medio es un ciclo de 2.</p>
     <div id="hor-dias">${filas}</div>
     <h2>Descanso</h2>
-    <div class="hor-dia"><span>Almuerzo</span><span></span><input name="desc_desde" type="time" value="${esc(descanso.desde || "13:00")}"><input name="desc_hasta" type="time" value="${esc(descanso.hasta || "14:00")}"></div>
+    <div class="hor-dia"><span>Almuerzo</span><span></span>${htmlSelHora('name="desc_desde"', descanso.desde || "13:00")}${htmlSelHora('name="desc_hasta"', descanso.hasta || "14:00")}</div>
     <button class="btn" type="submit">Guardar horario</button>
     <p class="err" id="f-err-hor"></p>
   </form>`;
@@ -5426,7 +5436,6 @@ async function renderHorarios() {
     return `<div class="row"><div class="name">${esc(p.nombre)}</div><div class="meta"><select data-asig="${esc(p.nombre)}">${opts}</select></div></div>`;
   }).join("") || `<p class="note">No hay personas en el equipo.</p>`;
   return `<div class="emp-plantillas-tools"><button class="btn ghost small" type="button" id="hor-nuevo">Nueva plantilla</button><button class="btn ghost small" type="button" id="hor-jibble">Traer de Jibble</button></div>
-    <p class="note">La asignación de cada persona se hace en su ficha de <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Empleados</button>. Aquí solo se editan las plantillas, en línea y compactas.</p>
     <p class="err" id="hor-err"></p>
     <div class="emp-plantillas-lista" id="hor-lista">${lista}</div>
     <div id="hor-editor" class="hor-editor-compact"></div>`;
@@ -5553,7 +5562,7 @@ async function renderPersonal(route) {
     return window.MCEmpleados ? window.MCEmpleados.render(route) : `<p class="err">No se cargó el módulo de empleados.</p>`;
   }
   if (route.sub === "horarios") {
-    if (state.admin) return `<p class="note">Los horarios viven ahora en la ficha de cada persona, en <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Personal › Empleados</button>. Ahí se asignan y se editan en línea, sin lápiz.</p>` + (await renderHorarios());
+    if (state.admin) return `<h1>Horarios</h1><p class="note">Plantillas de horas de todo el equipo. Cada persona se asigna a una plantilla desde su ficha en <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Empleados</button>.</p>` + (await renderHorarios());
     return renderHorarios();
   }
   return renderAsistencia();
@@ -5642,6 +5651,7 @@ async function renderPersonalRol() {
       : `<h2>Este mes</h2><p class="note">Cuando administración apruebe tu rol, aparece aquí.</p>`;
     return sel + `<div class="rol-staff">${top}<button class="btn" type="button" id="rol-historial-btn" aria-expanded="false">Historial</button>${htmlRolHistorial(items, false)}<div id="rol-preview"></div></div>`;
   }
+  const prerol = await htmlPreRolLista();
   const vacio = !items.length ? `<h2>Roles</h2><p class="note">Todavía no hay roles. Usa «Crear rol» para armar el del mes.</p>` : "";
   const porAnio = {};
   items.forEach((it) => {
@@ -5653,15 +5663,45 @@ async function renderPersonalRol() {
     const cards = (porAnio[anio] || []).map((it) => htmlRolCard(it, !!lista.admin)).join("");
     return `<section class="roles-anio"><h2>Roles ${esc(anio)}</h2><div class="roles-grid">${cards}</div></section>`;
   }).join("") : "";
-  return sel + crear + `<div id="rol-preview"></div>` + vacio + bloques;
+  return sel + prerol + crear + `<div id="rol-preview"></div>` + vacio + bloques;
+}
+// TK170 (Emilia t768u): lista de todas las empleadas; al tocar una se abre su PRE-ROL al día de hoy.
+async function htmlPreRolLista() {
+  const r = await api("rol_prerol", {});
+  if (!r || r.error) return "";
+  const btns = (r.items || []).map((x) => `<button class="btn ghost small prerol-btn" type="button" data-prerol="${esc(x.nombre)}">${esc(x.nombre)}${x.afiliada === false ? " · sin IESS" : ""}</button>`).join("");
+  return `<div class="card prerol-box"><div class="card-title">Pre-rol de ${esc(r.etiqueta || "")} al ${esc(fmtDiaCorto(r.hoy))}</div>
+    <div class="tools prerol-lista">${btns || `<p class="note">No hay empleadas.</p>`}</div>
+    <div id="prerol-detalle"></div>
+    <p class="note">${esc(r.convencion || "")}</p></div>`;
+}
+function htmlPreRol(r) {
+  const d = r.snap || {};
+  const h = r.hastaHoy;
+  const hm = (m) => hHm(m);
+  const horas = h ? `<h3>Horas trabajadas del ${esc(fmtDiaCorto(h.desde))} al ${esc(fmtDiaCorto(h.hasta))}</h3>
+    <div class="rol-line"><span class="concepto">Total trabajado</span><span class="monto">${esc(hm(h.trabajadoMin))}</span></div>
+    <div class="rol-line"><span class="concepto">Normales</span><span class="monto">${esc(hm(h.normalesMin))}</span></div>
+    ${h.suplMin ? `<div class="rol-line"><span class="concepto">Suplementarias 50%</span><span class="monto">${esc(hm(h.suplMin))}</span></div>` : ""}
+    ${h.extrMin ? `<div class="rol-line"><span class="concepto">Extraordinarias 100% (noche/feriado)</span><span class="monto">${esc(hm(h.extrMin))}</span></div>` : ""}
+    ${h.descMin ? `<div class="rol-line"><span class="concepto">Descanso 100%</span><span class="monto">${esc(hm(h.descMin))}</span></div>` : ""}
+    <p class="note">${h.diasConMarca ? esc(h.diasConMarca) + " día(s) con marca de la app · " : ""}${esc(h.diasJibble)} día(s) de Jibble${h.faltas ? " · " + esc(h.faltas) + " falta(s)" : ""}.</p>` : "";
+  const supuesto = d.asumidoDesde ? `<p class="note">Desde el ${esc(fmtDiaCorto(d.asumidoDesde))} hasta fin de mes se asume la jornada del horario${d.ultimoDato ? " (último dato: " + esc(fmtDiaCorto(d.ultimoDato)) + ")" : " (sin marcas ni Jibble este mes)"}.</p>` : "";
+  const jb = r.jibble && (r.jibble.dias || []).length ? `<details class="prerol-jibble"><summary>Revisión de Jibble: ${esc(r.jibble.dias.length)} día(s) con diferencia</summary>${r.jibble.dias.map((x) => x.abierto
+      ? `<div class="rol-line"><span class="concepto">${esc(fmtDiaCorto(x.fecha))} · sin salida</span><span class="monto">${esc(hm(x.guardado.payroll))} guardado (parcial)</span></div>`
+      : `<div class="rol-line"><span class="concepto">${esc(fmtDiaCorto(x.fecha))}</span><span class="monto">Jibble ${esc(hm(x.guardado.payroll))} · 50% ${esc(hm(x.guardado.supl))} · 100% ${esc(hm(x.guardado.extr + x.guardado.desc))} → recalculado ${esc(hm(x.recalculado.payroll))} · 50% ${esc(hm(x.recalculado.supl))} · 100% ${esc(hm(x.recalculado.extr + x.recalculado.desc))}</span></div>`).join("")}
+      <p class="note">El rol usa Jibble tal cual; esto es solo para revisar. Jibble importado hasta ${esc(r.jibble.importadoHasta ? fmtDiaCorto(r.jibble.importadoHasta) : "—")}.</p></details>` : "";
+  return `<div class="prerol-ficha"><h2>${esc(r.persona)} · lo que recibiría al día de hoy: ${money(d.totalRecibir)}</h2>
+    ${horas}${supuesto}
+    <h3>Pre-rol de ${esc(r.etiqueta || "")}</h3>${htmlRolLineas(d)}${jb}</div>`;
 }
 async function htmlRolCrear() {
   const op = await api("rol_opciones");
   if (op.error) return `<p class="note">${esc(op.error)}</p>`;
-  const personas = (op.afiliadas || []).map((p) => `<option value="${esc(p.nombre)}" data-cedula="${esc(p.cedula || "")}">${esc(p.nombre)}</option>`).join("");
+  const personas = (op.afiliadas || []).map((p) => `<option value="${esc(p.nombre)}" data-cedula="${esc(p.cedula || "")}">${esc(p.nombre)}${p.afiliada === false ? " · sin IESS (factura)" : ""}</option>`).join("");
   const meses = (op.meses || []).map((m) => `<option value="${esc(m.periodo)}">${esc(m.etiqueta)}</option>`).join("");
   const oc = (op.sinIess || []).length
-    ? `<p class="note">Sin afiliación IESS (${(op.sinIess || []).map((x) => esc(x.nombre)).join(", ")}): no sale rol. <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Generar OC del mes</button> en su ficha de Empleados.</p>`
+    ? `<p class="note">Sin afiliación IESS (${(op.sinIess || []).map((x) => esc(x.nombre)).join(", ")}): su rol sale sin aporte IESS ni décimos/fondo y dice cuánto debe facturar. La OC para su factura se genera en su ficha de <button class="btn ghost small" type="button" data-go="#/m/personal/empleados">Empleados</button>.</p>`
     : "";
   return `<div class="card rol-crear-box"><div class="card-title">Crear rol</div>
     <div class="tools">
@@ -7901,6 +7941,16 @@ function wirePersonal(main) {
     if ((location.hash || "").indexOf("/personal/rol") >= 0) await draw();
     else go("#/m/personal/rol");
   };
+  main.querySelectorAll("[data-prerol]").forEach((b) => {
+    b.onclick = async () => {
+      const box = main.querySelector("#prerol-detalle");
+      if (!box) return;
+      main.querySelectorAll("[data-prerol]").forEach((x) => x.classList.toggle("ghost", x !== b));
+      box.innerHTML = `<p class="note">Calculando el pre-rol de ${esc(b.getAttribute("data-prerol"))}…</p>`;
+      const r = await api("rol_prerol", { nombre: b.getAttribute("data-prerol") });
+      box.innerHTML = r && !r.error ? htmlPreRol(r) : `<p class="err">${esc((r && r.error) || "No se pudo calcular")}</p>`;
+    };
+  });
   main.querySelectorAll("[data-rol-ab]").forEach((b) => {
     b.onclick = async () => {
       const data = await api("rol_get", { id: b.getAttribute("data-rol-ab") });
@@ -8151,7 +8201,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK169";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK170";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8274,46 +8324,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261120tk169"></script>
-<script src="mc-scan.js?v=20261120tk169"></script>
-<script src="mc-buscar.js?v=20261120tk169"></script>
-<script src="descuento_justif.js?v=20261120tk169"></script>
-<script src="beta-screens.js?v=20261120tk169"></script>
-<script src="beta-inline.js?v=20261120tk169"></script>
-<script src="mc-productos.js?v=20261120tk169"></script>
-<script src="mc-nav.js?v=20261120tk169"></script>
-<script src="mc-permisos.js?v=20261120tk169"></script>
-<script src="mc-protocolos.js?v=20261120tk169"></script>
-<script src="mc-conteo.js?v=20261120tk169"></script>
-<script src="mc-transferencias.js?v=20261120tk169"></script>
-<script src="mc-ajustes.js?v=20261120tk169"></script>
-<script src="vendor-qrcode.js?v=20261120tk169"></script>
-<script src="mc-wa.js?v=20261120tk169"></script>
-<script src="mc-tickets.js?v=20261120tk169"></script>
-<script src="mc-maestro.js?v=20261120tk169"></script>
-<script src="mc-empleados.js?v=20261120tk169"></script>
-<script src="mc-edit.js?v=20261120tk169"></script>
-<script src="mc-paquetes.js?v=20261120tk169"></script>
-<script src="mc-aperturas.js?v=20261120tk169"></script>
-<script src="mc-acceso.js?v=20261120tk169"></script>
-<script src="mc-barras.js?v=20261120tk169"></script>
-<script src="mc-caja.js?v=20261120tk169"></script>
-<script src="mc-giftcards.js?v=20261120tk169"></script>
-<script src="mc-multas.js?v=20261120tk169"></script>
-<script src="mc-clientes.js?v=20261120tk169"></script>
-<script src="mc-clientes-dup.js?v=20261120tk169"></script>
-<script src="mc-docpdf.js?v=20261120tk169"></script>
-<script src="mc-compras.js?v=20261120tk169"></script>
-<script src="mc-consignacion.js?v=20261120tk169"></script>
-<script src="mc-proveedores.js?v=20261120tk169"></script>
-<script src="mc-recepciones.js?v=20261120tk169"></script>
-<script src="mc-movil.js?v=20261120tk169"></script>
-<script src="mc-promociones.js?v=20261120tk169"></script>
-<script src="mc-agenda.js?v=20261120tk169"></script>
-<script src="mc-staff-home.js?v=20261120tk169"></script>
-<script src="mc-borradores.js?v=20261120tk169"></script>
-<script src="mc-portal.js?v=20261120tk169"></script>
-<script src="mc-portal-admin.js?v=20261120tk169"></script><script>
+<script src="vendor-zxing.js?v=20261120tk170"></script>
+<script src="mc-scan.js?v=20261120tk170"></script>
+<script src="mc-buscar.js?v=20261120tk170"></script>
+<script src="descuento_justif.js?v=20261120tk170"></script>
+<script src="beta-screens.js?v=20261120tk170"></script>
+<script src="beta-inline.js?v=20261120tk170"></script>
+<script src="mc-productos.js?v=20261120tk170"></script>
+<script src="mc-nav.js?v=20261120tk170"></script>
+<script src="mc-permisos.js?v=20261120tk170"></script>
+<script src="mc-protocolos.js?v=20261120tk170"></script>
+<script src="mc-conteo.js?v=20261120tk170"></script>
+<script src="mc-transferencias.js?v=20261120tk170"></script>
+<script src="mc-ajustes.js?v=20261120tk170"></script>
+<script src="vendor-qrcode.js?v=20261120tk170"></script>
+<script src="mc-wa.js?v=20261120tk170"></script>
+<script src="mc-tickets.js?v=20261120tk170"></script>
+<script src="mc-maestro.js?v=20261120tk170"></script>
+<script src="mc-empleados.js?v=20261120tk170"></script>
+<script src="mc-edit.js?v=20261120tk170"></script>
+<script src="mc-paquetes.js?v=20261120tk170"></script>
+<script src="mc-aperturas.js?v=20261120tk170"></script>
+<script src="mc-acceso.js?v=20261120tk170"></script>
+<script src="mc-barras.js?v=20261120tk170"></script>
+<script src="mc-caja.js?v=20261120tk170"></script>
+<script src="mc-giftcards.js?v=20261120tk170"></script>
+<script src="mc-multas.js?v=20261120tk170"></script>
+<script src="mc-clientes.js?v=20261120tk170"></script>
+<script src="mc-clientes-dup.js?v=20261120tk170"></script>
+<script src="mc-docpdf.js?v=20261120tk170"></script>
+<script src="mc-compras.js?v=20261120tk170"></script>
+<script src="mc-consignacion.js?v=20261120tk170"></script>
+<script src="mc-proveedores.js?v=20261120tk170"></script>
+<script src="mc-recepciones.js?v=20261120tk170"></script>
+<script src="mc-movil.js?v=20261120tk170"></script>
+<script src="mc-promociones.js?v=20261120tk170"></script>
+<script src="mc-agenda.js?v=20261120tk170"></script>
+<script src="mc-staff-home.js?v=20261120tk170"></script>
+<script src="mc-borradores.js?v=20261120tk170"></script>
+<script src="mc-portal.js?v=20261120tk170"></script>
+<script src="mc-portal-admin.js?v=20261120tk170"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
