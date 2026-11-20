@@ -131,6 +131,7 @@
       ".mctk2 .mctk-bar .mctk-dd,.mctk-acc-wrap .mctk-dd{left:auto;right:0;min-width:250px;width:max-content;max-width:calc(100vw - 24px);z-index:80}",
       ".mctk-prev{padding:10px 12px;margin-top:10px}.mctk-pv-h{font-weight:800;font-size:.86rem;color:var(--navy-d);margin-bottom:6px}.mctk-pv-sec{margin-top:6px}.mctk-pv-t{font-size:.66rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}.mctk-pv-row{display:flex;flex-wrap:wrap;gap:8px}.mctk-pv-th{display:flex;flex-direction:column;align-items:center;gap:3px;width:64px;padding:0;border:0;background:none;cursor:pointer;font:inherit}.mctk-pv-th img,.mctk-pv-ico{width:60px;height:60px;border-radius:9px;object-fit:cover;border:1px solid var(--cream-d);background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.5rem;max-width:60px!important;max-height:60px!important;min-width:60px;min-height:60px}.mctk-pv-l{font-size:.64rem;color:var(--navy-d);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mctk-pv-pdf{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--cream-d);border-radius:10px;background:#fff;font:inherit;font-size:.78rem;color:var(--navy-d);cursor:pointer}.mctk-pv-falta{font-size:.74rem;color:#B45309;font-weight:700}.mctk-pv-ocr{margin-top:6px}",
       ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:nowrap!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
+      ".mctk-addfotos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mctk-addfotos .mctk-addf{display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap!important;font-size:.74rem}",
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
       ".mctk-wa-sel{position:fixed;inset:0;background:rgba(20,30,50,.4);z-index:10000;display:flex;align-items:flex-end;justify-content:center;padding:16px}.mctk-wa-box{background:#fff;border-radius:16px 16px 0 0;padding:16px 16px 20px;width:min(420px,100%);box-sizing:border-box}.mctk-wa-box h3{margin:0 0 4px;font-size:1rem}.mctk-wa-box p{margin:0 0 12px;color:var(--gray);font-size:.8rem}.mctk-wa-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.mctk-wa-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid #DC2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap}.mctk-wa-chip.on{border-color:#16A34A;background:#f3faf6}.mctk-wa-dot{width:10px;height:10px;border-radius:50%;background:#DC2626}.mctk-wa-chip.on .mctk-wa-dot{background:#16A34A}.mctk-wa-acts{display:flex;justify-content:flex-end;gap:8px;align-items:center}.mctk-wa-go{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap!important}",
       ".mctk-pills-desk{display:none}.mctk-estados{position:relative;flex:0 1 auto;max-width:100%;margin-left:auto}.mctk-estados>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--cream-d);border-radius:999px;padding:5px 12px;font-size:.74rem;font-weight:700;color:var(--navy-d);background:var(--white,#fff);max-width:100%;white-space:normal;overflow-wrap:anywhere}.mctk-estados>summary::-webkit-details-marker{display:none}.mctk-estados>summary:after{content:'▾';font-size:.7rem;color:var(--gray);flex:none}",
@@ -389,7 +390,11 @@
     var comps = docs.filter(function (x) { return x.tipo === "comprobante"; }), facs = docs.filter(function (x) { return x.tipo === "factura"; });
     var fh = antes.map(function (x) { return thPrev(x, "Antes"); }).join("") + despues.map(function (x) { return thPrev(x, "Después"); }).join("");
     if (!fh && conTratamiento()) fh = '<span class="mctk-pv-falta">📷 Sin fotos de la clienta</span>';
-    if (fh) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Fotos de la clienta</div><div class="mctk-pv-row">' + fh + "</div></div>";
+    /* TK183 (Emilia t797u): agregar fotos Antes / Después a un ticket ya hecho (también cerrado). Quedan en el ticket y
+       en la ficha de la clienta → Documentos → Fotos con la fecha del ticket. Sin capture: iPhone ofrece cámara o fototeca. */
+    var vista = !!(window.state && window.state.vista);
+    var add = (d.clave && !vista) ? '<div class="mctk-addfotos"><label class="btn ghost small mctk-addf" title="Agregar fotos de ANTES">📷 Agregar fotos Antes<input type="file" accept="image/*" multiple hidden class="mctk-fotos-inp" data-mom="antes"></label><label class="btn ghost small mctk-addf" title="Agregar fotos de DESPUÉS">📷 Agregar fotos Después<input type="file" accept="image/*" multiple hidden class="mctk-fotos-inp" data-mom="despues"></label></div>' : "";
+    if (fh || add) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Fotos de la clienta</div>' + (fh ? '<div class="mctk-pv-row">' + fh + "</div>" : "") + add + "</div>";
     var vh = comps.map(function (x, i) { return thPrev(x, "Voucher " + (i + 1)); }).join("") + facs.map(function (x) { return thPrev(x, x.factura ? "Fac. " + String(x.factura).split("-").pop().replace(/^0+/, "") : "Factura"); }).join("");
     // TK157: lectura Claude Vision de cada voucher (verde cuadra / rojo descuadre / botón «🔍 Leer voucher»).
     var clv = (d.ticket && d.ticket.clave) || d.clave || "";
@@ -1366,6 +1371,25 @@
       };
     }
     main.querySelectorAll(".mctk-voucher-inp").forEach(subirVoucherDe);
+    main.querySelectorAll(".mctk-fotos-inp").forEach(function (inp) {
+      inp.onchange = async function () {
+        var fs = Array.prototype.slice.call(inp.files || [], 0, 6), mom = inp.getAttribute("data-mom") === "despues" ? "despues" : "antes";
+        inp.value = ""; if (!fs.length) return;
+        toast2("⏳ Subiendo " + fs.length + (fs.length === 1 ? " foto" : " fotos") + "…");
+        try {
+          var ok = 0, r = null;
+          for (var i = 0; i < fs.length; i++) {
+            var img = await (window.MCVoucher && window.MCVoucher.comprimir ? window.MCVoucher.comprimir(fs[i]) : comprimir(fs[i]));
+            r = await api("tk_agregar_fotos", { clave: K.d.clave, momento: mom, imagenes: [img] });
+            if (!r || r.error) break;
+            ok++;
+          }
+          if (!ok) { toast2((r && r.error) || "No se pudo subir", true); return; }
+          toast2("✓ " + ok + (ok === 1 ? " foto agregada" : " fotos agregadas") + " (" + (mom === "antes" ? "Antes" : "Después") + ")" + (ok < fs.length ? " · " + ((r && r.error) || "faltaron algunas") : ""), ok < fs.length);
+          var d = await api("tk_get", { clave: K.d.clave }); if (d && d.ok && !K.dirty) { cargarEstado(d); repintar(main); }
+        } catch (x) { toast2((x && x.message) || "No se pudo subir", true); }
+      };
+    });
     var vth = main.querySelector("#mctk-vthumbs");
     if (vth) {
       if (window.MCVoucher && window.MCVoucher.cargarThumbs) window.MCVoucher.cargarThumbs(vth);

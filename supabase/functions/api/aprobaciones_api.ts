@@ -27,6 +27,8 @@ export type AprItem = {
   diff?: Row;
   tabla?: string;
   fila?: string;
+  cambios?: { etiqueta: string; antes: string; despues: string }[];
+  motivo?: string;
 };
 
 export type AprGrupo = { id: string; titulo: string; n: number; href: string; items: AprItem[] };
@@ -48,8 +50,11 @@ export async function recaudarAprobaciones(ctx: Ctx, ses: Ses): Promise<{ total:
       return {
         tipo: "solicitud",
         id: s(r.id),
-        titulo: (s(r.solicitante) || "Alguien") + (r.prueba === true ? " · PRUEBA" : ""),
-        detalle: (s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : "")) + (s(r.tabla) === "ticket_detalle" && s(r.motivo) ? " · Motivo: " + s(r.motivo) : ""),
+        titulo: (s(r.solicitante) || "Alguien") + (s(r.tabla) === "cliente_beta" ? (s(r.tipo) === "eliminacion" ? " pide eliminar una clienta" : " pide cambiar la ficha de una clienta") : "") + (r.prueba === true ? " · PRUEBA" : ""),
+        detalle: (s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : "")) + ((s(r.tabla) === "ticket_detalle" || s(r.tabla) === "cliente_beta") && s(r.motivo) ? " · Motivo: " + s(r.motivo) : ""),
+        // TK183 (Emilia t800u): ficha de clienta → campo, antes → después, quién y por qué.
+        cambios: s(r.tabla) === "cliente_beta" && Array.isArray(prop._cambios) ? (prop._cambios as Row[]).map((c) => ({ etiqueta: s(c.etiqueta || c.campo), antes: s(c.antes), despues: s(c.despues) })) : undefined,
+        motivo: s(r.motivo) || undefined,
         cuando: s(r.creado),
         href: s(r.enlace) || "#/m/aprobaciones",
         prueba: r.prueba === true,
@@ -138,6 +143,8 @@ function pubItem(it: AprItem): Row {
     ...(it.diff ? { diff: it.diff } : {}),
     ...(it.tabla ? { tabla: it.tabla } : {}),
     ...(it.fila ? { fila: it.fila } : {}),
+    ...(it.cambios && it.cambios.length ? { cambios: it.cambios } : {}),
+    ...(it.motivo ? { motivo: it.motivo } : {}),
   };
 }
 
