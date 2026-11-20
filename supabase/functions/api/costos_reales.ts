@@ -203,7 +203,7 @@ export function aplicarSnapsATicket<T extends TicketIn>(t: T, snaps: SnapLeido[]
   const out = { ...t };
   if (prods.length) {
     out.productos = prods.map((p) => ({
-      sku: p.sku, qty: p.qty, ventaNeta: p.ventaNeta, compraComision: p.compraComision,
+      sku: p.sku, qty: p.qty, ventaNeta: p.ventaNeta, compraComision: p.compraComision, comision: p.comision,
     }));
   }
   if (packs[0] && !(n(out.netoPack) > 0)) out.netoPack = packs[0].ventaNeta;

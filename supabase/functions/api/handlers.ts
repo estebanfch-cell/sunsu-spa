@@ -388,7 +388,8 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
         return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku };
       }
       const qty = pr.qty || 1;
-      return { venta: round2(n(pr.ventaNeta) / qty), compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku };
+      const venta = round2(n(pr.ventaNeta) / qty);
+      return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision) };
     }));
     p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
     p.totalProductos = propios.reduce((a, t) => a + t.productos.reduce((b, pr) => b + pr.qty, 0), 0);
@@ -518,7 +519,8 @@ function armarResumenHoy(
       return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku };
     }
     const qty = pr.qty || 1;
-    return { venta: round2(n(pr.ventaNeta) / qty), compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku };
+    const venta = round2(n(pr.ventaNeta) / qty);
+    return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision) };
   }));
   out.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
   const packsRaw: { neto: number; fecha: string }[] = [];

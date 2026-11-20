@@ -657,7 +657,7 @@ export interface TicketIn {
   fecha: string; cosm: string; cedula: string; facial: string;
   pack3: string; pack6: string; extras: string;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
-  productos: { sku: string; qty: number; ventaNeta?: number; compraComision?: number }[];
+  productos: { sku: string; qty: number; ventaNeta?: number; compraComision?: number; comision?: number }[];
   /** Precio neto de catálogo del paquete x3. */
   netoPack?: number;
   /** Precio neto de catálogo del paquete x6. Si falta, se usa netoPack. */
@@ -901,13 +901,18 @@ export function compraParaComision(row: { compra_comision?: unknown; precio_comp
 }
 
 export function comisionProductos(
-  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string }[],
+  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string; comisionFija?: number }[],
   pct = PCT_COMISION_PRODUCTO,
   porSku?: ComCfg["productoSku"],
 ): number {
   let t = 0;
   for (const it of items) {
-    if (it.excluido || !(it.venta > 0)) continue;
+    if (it.excluido) continue;
+    // Canje / venta 0: no genera margen. Si el snapshot trae comisión fija (ciclo abierto, detalle sin ceros), se respeta.
+    if (!(it.venta > 0)) {
+      if (n(it.comisionFija) > 0) t += n(it.comisionFija);
+      continue;
+    }
     const over = it.sku && porSku ? porSku[skuCode(it.sku)] : undefined;
     // TK161: piso 0, igual que comisionUnidad. Una venta descontada bajo el costo de comisión no genera comisión negativa.
     const margen = Math.max(0, (it.venta - (it.compra || 0)) * it.qty);
