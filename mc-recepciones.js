@@ -74,6 +74,7 @@
   }
   function pintar(main) { main.innerHTML = detHtml(); wireDet(main); }
   function wireDet(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var d = K.d;
     main.querySelectorAll("[data-q]").forEach(function (i) { i.addEventListener("input", function () { var k = i.getAttribute("data-q"); K.sel[k] = K.sel[k] || {}; K.sel[k].cantidad = i.value; if (!K.sel[k].accion && num(i.value) > 0) { K.sel[k].accion = "recibido"; pintar(main); var j = main.querySelector('[data-q="' + k + '"]'); if (j) { j.focus(); j.setSelectionRange(j.value.length, j.value.length); } } }); });
     main.querySelectorAll("[data-b]").forEach(function (b) { b.onchange = function () { var k = b.getAttribute("data-b"); K.sel[k] = K.sel[k] || {}; K.sel[k].bodega_id = b.value; }; });

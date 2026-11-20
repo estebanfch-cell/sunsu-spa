@@ -57,9 +57,9 @@ describe("TK149 arranque: script principal parsea y no deja la pantalla vacía",
   });
 
   it("el SW cubre mc-borradores.js y comparte pin de caché con beta.html", () => {
-    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK158"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK158"/);
-    assert.match(html, /20261119tk158/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK160"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK160"/);
+    assert.match(html, /20261119tk160/);
     assert.match(sw, /"\/mc-borradores\.js"/);
     const files = [...sw.matchAll(/"\/([^"]+\.js)"/g)].map((m) => m[1]);
     for (const s of srcs(html)) {

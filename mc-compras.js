@@ -98,6 +98,7 @@
       '</tbody></table></div><p class="note">La cotización del proveedor es lo que antes era «Borrador»: no compromete nada hasta convertirla en OC (toma el siguiente número OC del año).</p>';
   }
   function wireLista(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var q = main.querySelector("#mcoc-q");
     if (q) q.addEventListener("input", function () { K.q = q.value; var b = main.querySelector("#mcoc-body"); if (b) { b.innerHTML = filasOc(); var cd = main.querySelector("#mcoc-cards"); if (cd) cd.innerHTML = tarjetasOc(); } else { var pos = q.selectionStart; main.innerHTML = listaCot(); wireLista(main); var q2 = main.querySelector("#mcoc-q"); q2.focus(); q2.setSelectionRange(pos, pos); } });
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = function () { K.estado = b.getAttribute("data-est"); main.innerHTML = listaOc(); wireLista(main); }; });
@@ -213,6 +214,7 @@
   }
   function leerArchivo(input) { return new Promise(function (ok) { var fl = input && input.files && input.files[0]; if (!fl) { ok(null); return; } var r = new FileReader(); r.onload = function () { ok({ b64: String(r.result || ""), nombre: fl.name }); }; r.onerror = function () { ok(null); }; r.readAsDataURL(fl); }); }
   function wireDet(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var o = K.d;
     var dd = main.querySelector("#mcoc-dd"), bd = main.querySelector("#mcoc-docs");
     if (bd) bd.onclick = function (ev) { ev.stopPropagation(); dd.hidden = !dd.hidden; };
