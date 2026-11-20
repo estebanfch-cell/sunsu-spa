@@ -591,6 +591,36 @@ extend("asis_marcas_admin", "any", async (p, ctx, ses) => {
   return { ok: true, nombre, fecha, hoy, desde: ini, marcas: delDia.map(marcaPub), dia, historial, jibble: !!j };
 });
 
+extend("asis_tablero", "any", async (_p, ctx, ses) => {
+  // TK176 (Emilia t782u): tablero en vivo del equipo para admin: estado de hoy y marcas de cada empleada activa.
+  if (!esAdmin(ses.rol)) return { error: "Solo admin ve el tablero del equipo" };
+  const fecha = ecuadorParts(ctx.now).ymd;
+  const [marc, emps] = await Promise.all([ctx.db.all("asistencia_marcajes"), ctx.db.all("rrhh_empleadas")]);
+  const baja = await bajasDe(ctx.db);
+  let esFila: (r: Row) => boolean = () => false;
+  try { esFila = (await import("./empleados_api.ts")).esFilaNotasRrhh; } catch { /* sin filtro */ }
+  let jornadaDeNombre: ((nombre: string) => { trabaja: boolean; desde: string | null; hasta: string | null } | null) = () => null;
+  try {
+    const { cargarHorarios } = await import("./horarios_api.ts");
+    const { horarioAsignado, jornadaDe } = await import("./horarios.ts");
+    const pack = await cargarHorarios(ctx);
+    jornadaDeNombre = (nombre) => {
+      const e = emps.find((r) => mismo(s(r.nombre_app), nombre));
+      const h = horarioAsignado(pack.horarios, pack.asignaciones, [nombre, s(e?.apellidos_y_nombres), s(e?.nombre_jibble)]);
+      return h && !h.esDefault ? jornadaDe(h, fecha) : null;
+    };
+  } catch { /* sin horarios */ }
+  const activas = emps.filter((r) => s(r.nombre_app) && !esFila(r) && !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble)));
+  const personas = activas.map((e) => {
+    const nombre = s(e.nombre_app);
+    const marcas = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha && r.anulado !== true)
+      .sort((a, b) => s(a.ts).localeCompare(s(b.ts))).map(marcaPub);
+    const j = jornadaDeNombre(nombre);
+    return { nombre, nombreCompleto: s(e.apellidos_y_nombres), marcas, jornada: j };
+  }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  return { ok: true, fecha, ahora: ctx.now.toISOString(), personas };
+});
+
 extend("asis_dia", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin ve la asistencia del equipo" };
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(s(p.fecha)) ? s(p.fecha) : ecuadorParts(ctx.now).ymd;

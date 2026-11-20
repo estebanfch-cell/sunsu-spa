@@ -1643,6 +1643,7 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   }
 .prerol-marcas{margin-top:12px}.mk-tools{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.mk-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0;border-bottom:1px solid #eee}.mk-row.mk-anulada{opacity:.55}.mk-sel,.mk-in{font-size:14px;padding:4px 6px;max-width:150px}.mk-hora{width:96px}
 .asis-botones{display:flex;gap:10px;align-items:stretch;margin:4px 0 8px}.asis-btn{flex:1;border:0;border-radius:16px;padding:18px 12px;font-size:20px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:84px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}.asis-verde{background:#2e9e4f;color:#fff}.asis-amarillo{background:#f5c518;color:#3b2f00;cursor:default;flex:1.4}.asis-rojo{background:#d93636;color:#fff;flex:1}.asis-listo{background:#e8f5ec;color:#1d5e33;cursor:default}.asis-crono{font-size:30px;font-variant-numeric:tabular-nums;letter-spacing:1px}.asis-k{font-size:13px;font-weight:600;opacity:.9}.asis-pausa .asis-crono{opacity:.6}.asis-mini{display:flex;justify-content:flex-end;margin:-2px 0 6px}.asis-btn:active{transform:scale(.98)}
+.asis-tablero{padding:10px 12px}.tab-fila{display:flex;align-items:center;gap:10px;width:100%;border:0;border-left:6px solid #ccc;background:#fafafa;border-radius:10px;padding:8px 10px;margin:5px 0;text-align:left;font:inherit;cursor:pointer}.tab-dot{width:14px;height:14px;border-radius:50%;flex:none;background:#ccc}.tab-nom{flex:1;font-weight:700;display:flex;flex-direction:column}.tab-nom small{font-weight:500;color:#555;font-size:12px}.tab-crono{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px}.tab-verde{border-left-color:#2e9e4f}.tab-verde .tab-dot{background:#2e9e4f}.tab-amarillo{border-left-color:#f5c518;background:#fff9e0}.tab-amarillo .tab-dot{background:#f5c518}.tab-azul{border-left-color:#3d7bd9;background:#eef4ff}.tab-azul .tab-dot{background:#3d7bd9}.tab-rojo{border-left-color:#d93636;background:#fdeeee}.tab-rojo .tab-dot{background:#d93636}.tab-gris{border-left-color:#9aa0a6;opacity:.75}.tab-gris .tab-dot{background:#9aa0a6}
 </style>
 </head>
 <body>
@@ -5325,7 +5326,8 @@ async function renderAsistencia() {
   // TK166 (Emilia t763u): botones de marca y el estado de hoy ARRIBA de todo, antes del calendario.
   const trabajadoHoy = (cal && cal.bloques && cal.bloques.hoy && cal.bloques.hoy.total && cal.bloques.hoy.total.texto) || "0 min";
   const botones = !state.admin || hoy.empleada ? htmlBotonesAsis(hoy.marcajes || []) : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`;
-  return sel + `
+  const tablero = state.admin ? `<div class="card asis-tablero" id="asis-tablero"><div class="card-title">Equipo hoy <span class="note" data-tab-hora></span></div><div data-tab-lista><p class="note">Cargando…</p></div><div id="asis-tablero-editor"></div></div>` : "";
+  return tablero + sel + `
     <div class="card asis-hoy-top">
       ${botones}
       <p class="note">Hoy: <b>${esc(estadoHoy)}</b> · trabajado hoy <b>${esc(trabajadoHoy)}</b>${(dia.atrasoMin || 0) > 0 ? " · atraso " + esc(dia.atrasoMin) + " min" : ""}.</p>
@@ -5386,6 +5388,67 @@ function htmlBotonesAsis(marcajes) {
     </div>`;
   }
   return `<div class="asis-botones" data-asis-estado="terminado"><div class="asis-btn asis-listo" role="status"><span class="asis-k">Jornada terminada ✓</span><span class="asis-crono">${fmtCrono(trab)}</span><span class="asis-k">trabajado hoy</span></div></div>`;
+}
+// TK176 (Emilia t782u): tablero en vivo del equipo (solo admin). Verde por entrar, amarillo trabajando,
+// azul en almuerzo, rojo fuera; cronómetro por persona; se refresca cada 45 s y el reloj avanza cada segundo.
+function htmlTableroAsis(data) {
+  const ahora = Date.now();
+  const filas = (data.personas || []).map((p) => {
+    const e = estadoAsisHoy(p.marcas || []);
+    const entrada = (p.marcas || []).find((m) => m.tipo === "entrada");
+    const descanso = e.estado === "fuera" && p.jornada && p.jornada.trabaja === false;
+    const cls = descanso ? "tab-gris" : { fuera: "tab-verde", trabajando: "tab-amarillo", almuerzo: "tab-azul", terminado: "tab-rojo" }[e.estado];
+    const lbl = descanso ? "Descanso hoy" : { fuera: "Por entrar", trabajando: "Trabajando", almuerzo: "En almuerzo", terminado: "Fuera" }[e.estado];
+    const trab = e.trabajadoMs + (e.desde != null ? ahora - e.desde : 0);
+    const prog = p.jornada && p.jornada.trabaja && p.jornada.desde ? " · entra " + esc(p.jornada.desde) : "";
+    return `<button type="button" class="tab-fila ${cls}" data-tab-persona="${esc(p.nombre)}" data-crono-base="${e.trabajadoMs}" data-crono-desde="${e.desde ?? ""}">
+      <span class="tab-dot"></span><span class="tab-nom">${esc(p.nombre)}<small>${esc(lbl)}${entrada ? " · entró " + esc(mkHoraLocal(entrada.ts)) : prog}</small></span>
+      <span class="tab-crono" data-tab-crono>${e.estado === "fuera" ? "—" : fmtCrono(trab)}</span></button>`;
+  }).join("");
+  return filas || `<p class="note">Sin empleadas activas.</p>`;
+}
+async function cargarTableroAsis(main) {
+  const box = main.querySelector("#asis-tablero");
+  if (!box) return false;
+  const lista = box.querySelector("[data-tab-lista]");
+  const data = await api("asis_tablero");
+  if (!document.body.contains(box)) return false;
+  if (data.error) { lista.innerHTML = `<p class="err">${esc(data.error)}</p>`; return true; }
+  lista.innerHTML = htmlTableroAsis(data);
+  const hora = box.querySelector("[data-tab-hora]");
+  if (hora) hora.textContent = "· actualizado " + new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" });
+  lista.querySelectorAll("[data-tab-persona]").forEach((b) => {
+    b.onclick = () => abrirEditorTablero(main, b.getAttribute("data-tab-persona"), data.fecha);
+  });
+  return true;
+}
+function abrirEditorTablero(main, nombre, fecha, fechaMk) {
+  const cont = main.querySelector("#asis-tablero-editor");
+  if (!cont) return;
+  cont.innerHTML = htmlMarcasAdminBox({ persona: nombre, hoy: fecha });
+  wireMarcasAdmin(cont, async (f) => { await cargarTableroAsis(main); abrirEditorTablero(main, nombre, fecha, f); }, fechaMk || fecha, true);
+  cont.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function wireTableroAsis(main) {
+  if (window._tabTick) { clearInterval(window._tabTick); window._tabTick = null; }
+  if (window._tabRefresh) { clearInterval(window._tabRefresh); window._tabRefresh = null; }
+  const box = main.querySelector("#asis-tablero");
+  if (!box) return;
+  void cargarTableroAsis(main);
+  window._tabTick = setInterval(() => {
+    if (!document.body.contains(box)) { clearInterval(window._tabTick); window._tabTick = null; return; }
+    box.querySelectorAll("[data-tab-persona]").forEach((f) => {
+      const desde = Number(f.getAttribute("data-crono-desde") || 0);
+      if (!desde) return;
+      const c = f.querySelector("[data-tab-crono]");
+      if (c) c.textContent = fmtCrono(Number(f.getAttribute("data-crono-base") || 0) + Date.now() - desde);
+    });
+  }, 1000);
+  window._tabRefresh = setInterval(async () => {
+    if (!document.body.contains(box)) { clearInterval(window._tabRefresh); window._tabRefresh = null; return; }
+    if (document.hidden) return;
+    await cargarTableroAsis(main);
+  }, 45000);
 }
 function wireCronoAsis(main) {
   if (window._asisTick) { clearInterval(window._asisTick); window._asisTick = null; }
@@ -7817,6 +7880,7 @@ function wireAsistencia(main) {
     b.onclick = () => abrirCamara(b.getAttribute("data-marca"));
   });
   wireCronoAsis(main);
+  wireTableroAsis(main);
   const perm = main.querySelector("#f-asis-perm");
   if (perm) perm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -8394,7 +8458,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK174";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK176";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8517,46 +8581,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261120tk174"></script>
-<script src="mc-scan.js?v=20261120tk174"></script>
-<script src="mc-buscar.js?v=20261120tk174"></script>
-<script src="descuento_justif.js?v=20261120tk174"></script>
-<script src="beta-screens.js?v=20261120tk174"></script>
-<script src="beta-inline.js?v=20261120tk174"></script>
-<script src="mc-productos.js?v=20261120tk174"></script>
-<script src="mc-nav.js?v=20261120tk174"></script>
-<script src="mc-permisos.js?v=20261120tk174"></script>
-<script src="mc-protocolos.js?v=20261120tk174"></script>
-<script src="mc-conteo.js?v=20261120tk174"></script>
-<script src="mc-transferencias.js?v=20261120tk174"></script>
-<script src="mc-ajustes.js?v=20261120tk174"></script>
-<script src="vendor-qrcode.js?v=20261120tk174"></script>
-<script src="mc-wa.js?v=20261120tk174"></script>
-<script src="mc-tickets.js?v=20261120tk174"></script>
-<script src="mc-maestro.js?v=20261120tk174"></script>
-<script src="mc-empleados.js?v=20261120tk174"></script>
-<script src="mc-edit.js?v=20261120tk174"></script>
-<script src="mc-paquetes.js?v=20261120tk174"></script>
-<script src="mc-aperturas.js?v=20261120tk174"></script>
-<script src="mc-acceso.js?v=20261120tk174"></script>
-<script src="mc-barras.js?v=20261120tk174"></script>
-<script src="mc-caja.js?v=20261120tk174"></script>
-<script src="mc-giftcards.js?v=20261120tk174"></script>
-<script src="mc-multas.js?v=20261120tk174"></script>
-<script src="mc-clientes.js?v=20261120tk174"></script>
-<script src="mc-clientes-dup.js?v=20261120tk174"></script>
-<script src="mc-docpdf.js?v=20261120tk174"></script>
-<script src="mc-compras.js?v=20261120tk174"></script>
-<script src="mc-consignacion.js?v=20261120tk174"></script>
-<script src="mc-proveedores.js?v=20261120tk174"></script>
-<script src="mc-recepciones.js?v=20261120tk174"></script>
-<script src="mc-movil.js?v=20261120tk174"></script>
-<script src="mc-promociones.js?v=20261120tk174"></script>
-<script src="mc-agenda.js?v=20261120tk174"></script>
-<script src="mc-staff-home.js?v=20261120tk174"></script>
-<script src="mc-borradores.js?v=20261120tk174"></script>
-<script src="mc-portal.js?v=20261120tk174"></script>
-<script src="mc-portal-admin.js?v=20261120tk174"></script><script>
+<script src="vendor-zxing.js?v=20261120tk176"></script>
+<script src="mc-scan.js?v=20261120tk176"></script>
+<script src="mc-buscar.js?v=20261120tk176"></script>
+<script src="descuento_justif.js?v=20261120tk176"></script>
+<script src="beta-screens.js?v=20261120tk176"></script>
+<script src="beta-inline.js?v=20261120tk176"></script>
+<script src="mc-productos.js?v=20261120tk176"></script>
+<script src="mc-nav.js?v=20261120tk176"></script>
+<script src="mc-permisos.js?v=20261120tk176"></script>
+<script src="mc-protocolos.js?v=20261120tk176"></script>
+<script src="mc-conteo.js?v=20261120tk176"></script>
+<script src="mc-transferencias.js?v=20261120tk176"></script>
+<script src="mc-ajustes.js?v=20261120tk176"></script>
+<script src="vendor-qrcode.js?v=20261120tk176"></script>
+<script src="mc-wa.js?v=20261120tk176"></script>
+<script src="mc-tickets.js?v=20261120tk176"></script>
+<script src="mc-maestro.js?v=20261120tk176"></script>
+<script src="mc-empleados.js?v=20261120tk176"></script>
+<script src="mc-edit.js?v=20261120tk176"></script>
+<script src="mc-paquetes.js?v=20261120tk176"></script>
+<script src="mc-aperturas.js?v=20261120tk176"></script>
+<script src="mc-acceso.js?v=20261120tk176"></script>
+<script src="mc-barras.js?v=20261120tk176"></script>
+<script src="mc-caja.js?v=20261120tk176"></script>
+<script src="mc-giftcards.js?v=20261120tk176"></script>
+<script src="mc-multas.js?v=20261120tk176"></script>
+<script src="mc-clientes.js?v=20261120tk176"></script>
+<script src="mc-clientes-dup.js?v=20261120tk176"></script>
+<script src="mc-docpdf.js?v=20261120tk176"></script>
+<script src="mc-compras.js?v=20261120tk176"></script>
+<script src="mc-consignacion.js?v=20261120tk176"></script>
+<script src="mc-proveedores.js?v=20261120tk176"></script>
+<script src="mc-recepciones.js?v=20261120tk176"></script>
+<script src="mc-movil.js?v=20261120tk176"></script>
+<script src="mc-promociones.js?v=20261120tk176"></script>
+<script src="mc-agenda.js?v=20261120tk176"></script>
+<script src="mc-staff-home.js?v=20261120tk176"></script>
+<script src="mc-borradores.js?v=20261120tk176"></script>
+<script src="mc-portal.js?v=20261120tk176"></script>
+<script src="mc-portal-admin.js?v=20261120tk176"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
