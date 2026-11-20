@@ -1,7 +1,9 @@
 /* Sunsu Spa · capturas App Store (100% datos sintéticos, modo ?preview=1 de la web, sin llamadas a la API real).
  * Uso: (1) en la raíz del repo: python3 -m http.server 8124 --bind 127.0.0.1
  *      (2) npm i playwright && node docs/app-store/tools/capture-screens.cjs && node docs/app-store/tools/frame-screens.cjs /tmp/appstore_out
- *      (3) convertir a RGB sin alfa (PIL) y copiar a docs/app-store/screenshots/iphone-6.9/ (1320x2868). */
+ *      (3) convertir a RGB sin alfa (PIL) y copiar a docs/app-store/screenshots/iphone-6.9/ (1320x2868).
+ * Pantallas: login, inventario de faciales (sin costos), carta de tratamientos (solo PVP),
+ * ficha de clienta con carpetas de documentos, agenda del día. Sin márgenes, ingresos, comisiones ni totales de venta. */
 const { chromium } = require('playwright');
 const fs = require('fs');
 const OUT = '/tmp/appstore_raw';
@@ -9,6 +11,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const W = 402, H = 874 - 54; // iPhone 16 Pro: pantalla útil bajo la barra de estado
 const INIT = () => {
   sessionStorage.setItem('sunsu.beta.avisoPin', '1');
+  try { localStorage.setItem('sunsu.agenda.vista', 'lista'); } catch (e) {}
   const MAP = [["Andrea Robles","Valeria Ríos"],["Daniela Mora","Camila Ordóñez"],["Dejaneira Espinoza","Sofía Paredes"],["Alejandra Rodriguez","Isabel Vega"],["Alejandra Rodríguez","Isabel Vega"],["Evelyn Toapanta","Paula Mena"],
     ["Andrea","Valeria"],["Daniela","Camila"],["Dejaneira","Sofía"],["Alejandra","Isabel"],["Evelyn","Paula"],["Emilia","Admin"],["Emi","Admin"]];
   const swap = (s) => { let o = String(s); for (const [a, b] of MAP) o = o.replace(new RegExp('\\b' + a + '\\b', 'g'), b); return o; };
@@ -18,30 +21,118 @@ const INIT = () => {
     ["Antonella", "Moscoso"], ["Carolina", "Benalcázar"], ["Valentina", "Cordero"], ["Emilia", "Zambrano"], ["Martina", "Escobar"], ["Fernanda", "Lasso"],
   ].map(([n, a]) => [n === "Daniela" ? "Victoria" : n === "Emilia" ? "Amelia" : n, a]);
   window.__CLIENTAS = CLIENTAS;
-  const hoy = '2026-11-19';
-  const tickets = () => {
-    const quien = ["Valeria Ríos", "Camila Ordóñez", "Isabel Vega", "Valeria Ríos", "Camila Ordóñez", "Isabel Vega", "Valeria Ríos", "Camila Ordóñez"];
-    const res = [{ faciales: 1, productos: 2 }, { paquetes: 1 }, { faciales: 1, extras: 1 }, { canjes: 1 }, { faciales: 1, productos: 1 }, { productos: 3 }, { faciales: 2 }, { gifts: 1 }];
-    const tot = [96.6, 276, 48.3, 0, 71.3, 112.7, 92, 50];
-    return CLIENTAS.slice(0, 8).map((c, i) => ({
-      so_num: 'TK-' + (2041 - i), sheetRow: 9000 + i, tkRow: 9000 + i, clave: 'demo' + i, nombre: c[0], apellido: c[1], fecha: i < 5 ? hoy : '2026-11-18', hora: '1' + (i % 8) + ':30',
-      estimado: String(tot[i]), creado_por: quien[i], cosmetologa: quien[i], resumen: res[i], estado_doc: i === 2 || i === 4 ? 'abierto' : 'cerrado', fac: true, cob: i !== 2 && i !== 4,
-      factura: tot[i] ? '001-001-00000' + (4120 - i) : '', sin_cobro: !tot[i], saldo: i === 2 || i === 4 ? tot[i] : 0,
-    }));
-  };
+  const FACIALES = [
+    { id: "s1", sku: "01", nombre: "Facial S.O.S", pvp: 55, minutos: 60 },
+    { id: "s2", sku: "02", nombre: "Facial Reparación", pvp: 80, minutos: 75 },
+    { id: "s3", sku: "03", nombre: "Facial Glow", pvp: 75, minutos: 60 },
+    { id: "s4", sku: "04", nombre: "Facial Hidratación", pvp: 65, minutos: 60 },
+    { id: "s5", sku: "05", nombre: "Facial Reset", pvp: 70, minutos: 60 },
+    { id: "s6", sku: "06", nombre: "Facial Calmante", pvp: 45, minutos: 45 },
+    { id: "s7", sku: "07", nombre: "K-Lift", pvp: 120, minutos: 90 },
+    { id: "s8", sku: "08", nombre: "Limpieza Facial", pvp: 40, minutos: 45 },
+    { id: "s9", sku: "09", nombre: "Peeling Enzimático", pvp: 50, minutos: 45 },
+    { id: "s10", sku: "10", nombre: "Terapia LED", pvp: 35, minutos: 30 },
+  ];
+  window.__FACIALES = FACIALES;
+  const hoy = '2026-11-20';
   const clientes = () => CLIENTAS.map((c, i) => ({
     key: 'k' + i, nombre: c[0] + ' ' + c[1], codigo: 'C-' + String(1200 + i * 7), visitas: [14, 9, 6, 11, 3, 8, 5, 2, 7, 12, 4, 1][i], ultima: ['2026-11-19', '2026-11-18', '2026-11-15', '2026-11-12', '2026-11-08', '2026-11-03', '2026-10-30', '2026-10-21', '2026-10-17', '2026-10-09', '2026-09-28', '2026-09-14'][i],
-    total: [1260, 845, 410, 990, 180, 640, 325, 96, 515, 1120, 240, 48][i], paquetesActivos: [1, 0, 1, 2, 0, 1, 0, 0, 1, 1, 0, 0][i], giftSaldo: i === 3 ? 25 : 0,
+    total: 0, paquetesActivos: [1, 0, 1, 2, 0, 1, 0, 0, 1, 1, 0, 0][i], giftSaldo: 0,
     cosmetologa: ["Valeria Ríos", "Camila Ordóñez"][i % 2], sector: ["Cumbayá", "Tumbaco", "Quito"][i % 3],
   }));
+  const ficha = (key) => {
+    const k = String(key || 'k0');
+    const idx = Math.max(0, CLIENTAS.findIndex((_, i) => k === ('k' + i)));
+    const c = CLIENTAS[idx] || CLIENTAS[0];
+    return {
+      ok: true, admin: false, key: k, codigo: 'C-' + String(1200 + idx * 7),
+      datos: { nombres: c[0], apellido: c[1], cedula: '', telefono: '', tipoPiel: 'Mixta', alergias: 'Ninguna', sector: 'Cumbayá' },
+      campos: [['tipoPiel', 'Tipo de piel'], ['alergias', 'Alergias'], ['sector', 'Sector']],
+      lectura: [], corregidos: [], puedeEditar: false, puedePedir: false, borrado: false,
+      historial: [
+        { fecha: '2026-11-12', hora: '11:20', ref: 'TK-2041', clave: 'demo-h1', cosmetologa: 'Valeria Ríos', facial: 'Facial S.O.S', detalle: [{ nombre: 'Facial S.O.S', cantidad: 1 }] },
+        { fecha: '2026-10-28', hora: '16:00', ref: 'TK-2030', clave: 'demo-h2', cosmetologa: 'Camila Ordóñez', facial: 'K-Lift', detalle: [{ nombre: 'K-Lift', cantidad: 1 }] },
+        { fecha: '2026-10-15', hora: '10:00', ref: 'TK-2018', clave: 'demo-h3', cosmetologa: 'Valeria Ríos', facial: 'Facial Reparación', detalle: [{ nombre: 'Facial Reparación', cantidad: 1 }] },
+      ],
+      paquetes: [{ id: 'pq1', codigo: 'PQ-0104', nombre: 'Facial Reparación x3', usados: 1, pendientes: 2, total: 3, usos: [{ slot: 1, usado: true, fecha: '2026-10-15' }, { slot: 2, usado: false, fecha: '' }, { slot: 3, usado: false, fecha: '' }] }],
+      giftcards: [],
+      documentos: [
+        { tipo: 'pdf', sub: 'skin_analisis', nombre: 'Focus Skin Analysis.pdf', fecha: '2026-11-12', hora: '11:20', docId: 'd1' },
+        { tipo: 'pdf', sub: 'skin_analisis', nombre: 'Focus Skin Analysis.pdf', fecha: '2026-10-15', hora: '10:05', docId: 'd2' },
+        { tipo: 'pdf', sub: 'klift', nombre: 'K-Lift · simetría.pdf', fecha: '2026-10-28', hora: '16:10', docId: 'd3' },
+        { tipo: 'pdf', nombre: 'Control de paquete Facial Reparación.pdf', fecha: '2026-10-15', hora: '10:10', docId: 'd4' },
+      ],
+      bitacora: [],
+      resumen: { tickets: 3, ultima: '2026-11-12', primera: '2026-10-15', sesionesPendientes: 2, total: 0, promedio: 0, registros: 1 },
+    };
+  };
+  const citasHoy = () => {
+    const rows = [
+      ['a1', '09:00', 'Amelia', 'Zambrano', 'Limpieza Facial', 'cal1', 45, '', 1, 0],
+      ['a2', '10:30', 'Gabriela', 'Vinueza', 'Facial S.O.S', 'cal2', 75, 'CONFIRMADA', 0, 0],
+      ['a3', '12:00', 'Victoria', 'Arteaga', 'Facial Glow', 'cal1', 60, 'CONFIRMADA', 0, 0],
+      ['a4', '14:00', 'Paula', 'Granda', 'K-Lift', 'cal3', 90, '', 0, 1],
+      ['a5', '16:00', 'Renata', 'Íñiguez', 'Facial Reparación', 'cal2', 75, 'CONFIRMADA', 0, 0],
+      ['a6', '17:30', 'Josefina', 'Albornoz', 'Facial Hidratación', 'cal1', 60, '', 0, 1],
+    ];
+    const cals = { cal1: 'Valeria Ríos', cal2: 'Camila Ordóñez', cal3: 'Isabel Vega' };
+    return rows.map((r) => ({
+      id: r[0], fecha: hoy, datetime: hoy + 'T' + r[1] + ':00-05:00',
+      nombre: r[2], apellido: r[3], tipo: r[4], calendarID: r[5], calendario: cals[r[5]],
+      duracion: r[6], etiqueta: r[7], atendida: !!r[8], nueva: !!r[9], ticket: r[8] ? 'TK-2039' : '',
+    }));
+  };
   const wrap = () => {
     const orig = window.previewApi;
     if (!orig || orig.__w) return;
     const w = function (a, body) {
-      if (a === 'tk_historial') { const it = tickets(); return { ok: true, items: it, total: it.length, suma: it.reduce((x, t) => x + Number(t.estimado), 0), hayMas: false }; }
-      if (a === 'cl_list') return { ok: true, clientes: clientes(), admin: true, puedeDescargar: false, cosmetologas: ["Valeria Ríos", "Camila Ordóñez"], sectores: ["Cumbayá", "Tumbaco", "Quito"] };
+      body = body || {};
+      if (a === 'prod_list') {
+        return { ok: true, items: FACIALES.map((f) => ({ id: f.id, sku: f.sku, nombre: f.nombre, uso: 'cabina', categoria: 'Facial', marca: 'Sunsu' })) };
+      }
+      if (a === 'mcprod_list') {
+        return {
+          ok: true, admin: false, verCostos: false, puedeDescargar: false, eliminados: 0,
+          filtros: { marcas: ['Sunsu'], categorias: ['Facial'] },
+          items: FACIALES.map((f) => ({
+            id: f.id, sku: f.sku, skuVisible: f.sku, nombre: f.nombre,
+            tipo: 'servicio', subtipo: 'Facial', categoria: 'Facial', marca: 'Sunsu',
+            pvp: f.pvp, activo: true,
+          })),
+        };
+      }
+      if (a === 'proto_list') {
+        return { ok: true, verCostos: false, items: FACIALES.map((f) => ({ id: f.id, sku: 'SUNSU-' + f.sku, nombre: f.nombre, vigente: true, pasos: new Array(4), productos: 4, minutos: f.minutos, version: 1 })) };
+      }
+      if (a === 'cl_list') return { ok: true, clientes: clientes(), admin: false, puedeDescargar: false, cosmetologas: ['Valeria Ríos', 'Camila Ordóñez'], sectores: ['Cumbayá', 'Tumbaco', 'Quito'] };
+      if (a === 'cl_get' || a === 'cliente_detalle') return ficha(body.key);
+      if (a === 'ag_meta') {
+        return {
+          ok: true, hoy,
+          calendarios: [
+            { id: 'cal1', nombre: 'Valeria Ríos', persona: 'Valeria Ríos' },
+            { id: 'cal2', nombre: 'Camila Ordóñez', persona: 'Camila Ordóñez' },
+            { id: 'cal3', nombre: 'Isabel Vega', persona: 'Isabel Vega' },
+          ],
+          etiquetas: [{ nombre: 'CONFIRMADA', color: 'green' }, { nombre: 'NO LLEGO', color: 'red' }],
+          puede: { mover: false, agendar: false, crear: false },
+        };
+      }
+      if (a === 'ag_citas') {
+        let L = citasHoy();
+        if (body.calendarID) L = L.filter((c) => String(c.calendarID) === String(body.calendarID));
+        return { ok: true, citas: L, porDia: { [hoy]: L.length } };
+      }
+      if (a === 'tk_historial') return { ok: true, items: [], total: 0, suma: 0, hayMas: false };
       let r = orig.apply(this, arguments);
       try { r = JSON.parse(swap(JSON.stringify(r))); } catch (e) {}
+      if (a === 'whoami' || a === 'login' || a === 'login_pass') {
+        r = r || {};
+        r.ver_costos = false;
+        const mods = r.modulos || [];
+        if (!mods.some((m) => (m.modulo || m) === 'agenda')) mods.push({ modulo: 'agenda', acceso: 'todos' });
+        r.modulos = mods;
+      }
       return r;
     };
     w.__w = true;
@@ -59,8 +150,11 @@ const SCRUB = () => {
     if (el.title) el.title = swap(el.title);
     const al = el.getAttribute('aria-label'); if (al) el.setAttribute('aria-label', swap(al));
   });
-  const txt = document.body.innerText;
-  return { vendido: /vendido/i.test(txt), real: ["Andrea", "Daniela Mora", "Dejaneira", "Alejandra", "Emilia", "Evelyn"].filter((x) => txt.includes(x)) };
+  const txt = document.body.innerText || '';
+  const money = (txt.match(/\$[\s]*[0-9]+([.,][0-9]+)?/g) || []);
+  const real = ["Andrea", "Daniela Mora", "Dejaneira", "Alejandra", "Emilia", "Evelyn"].filter((x) => txt.includes(x));
+  const sensitive = ["margen", "comisi", "utilidad", "venta sin iva", "total gastado", "ticket promedio", "costo", "compra", "ingreso", "cedula", "cédula"].filter((x) => txt.toLowerCase().includes(x));
+  return { money, real, sensitive, vendido: /vendido/i.test(txt) };
 };
 const CSS = `
   html{ }
@@ -69,6 +163,11 @@ const CSS = `
   .toast{ display:none !important; }
   #sunsu-nueva-ver{ display:none !important; }
   ::-webkit-scrollbar{ display:none; }
+  /* Inventario: sin stock, marca ni costos; se ven nombre, código y categoría de faciales. */
+  #inv-root .desk-table th:nth-child(1), #inv-root .desk-table td:nth-child(1),
+  #inv-root .desk-table th:nth-child(6), #inv-root .desk-table td:nth-child(6),
+  #inv-root .desk-table th:nth-child(7), #inv-root .desk-table td:nth-child(7) { display:none !important; }
+  #inv-root .desk-bar .btn, #inv-root [data-go="#/m/inventario/nuevo"] { display:none !important; }
 `;
 (async () => {
   const b = await chromium.launch();
@@ -79,35 +178,95 @@ const CSS = `
   p.on('pageerror', (e) => console.log('ERR', e.message));
   const net = [];
   p.on('request', (r) => { if (/supabase\.co/.test(r.url())) net.push(r.url()); });
-  const plan = (process.argv[2] || 'login,inicio,tickets,clientes,comisiones').split(',');
-  // 1) login (sin preview, pantalla real de entrada)
+  const plan = (process.argv[2] || 'login,inventario,catalogo,ficha,agenda').split(',');
+
+  const ready = async () => {
+    await p.addStyleTag({ content: CSS });
+    await p.evaluate(() => {
+      const m = document.getElementById('aviso-pin-modal'); if (m) m.remove();
+      const b = document.getElementById('aviso-pin-5d'); if (b) b.remove();
+      window.scrollTo(0, 0);
+      document.activeElement && document.activeElement.blur();
+    });
+  };
+
   if (plan.includes('login')) {
-    await p.goto('http://localhost:8124/', { waitUntil: 'load' });
+    await p.goto('http://127.0.0.1:8124/', { waitUntil: 'load' });
     await p.waitForSelector('#login-form');
     await p.addStyleTag({ content: CSS });
     await p.evaluate(() => { document.activeElement && document.activeElement.blur(); });
     await p.waitForTimeout(600);
+    const s = await p.evaluate(SCRUB);
     await p.screenshot({ path: OUT + '/login.png' });
-    console.log('login', JSON.stringify(await p.evaluate(SCRUB)));
+    console.log('login', JSON.stringify(s));
   }
-  await p.goto('http://localhost:8124/?preview=1', { waitUntil: 'load' });
+
+  await p.goto('http://127.0.0.1:8124/?preview=1', { waitUntil: 'load' });
   await p.waitForTimeout(2500);
   if (await p.$('#login-form')) { await p.fill('#pin', '1234'); await p.click('#login-btn'); await p.waitForTimeout(2500); }
-  const rutas = { inicio: '#/m/inicio', tickets: '#/m/tickets', clientes: '#/m/clientes', comisiones: '#/m/comisiones' };
-  for (const k of plan.filter((x) => rutas[x])) {
-    await p.evaluate((h) => { location.hash = h; }, rutas[k]);
-    await p.waitForTimeout(2600);
-    await p.addStyleTag({ content: CSS });
-    await p.evaluate(() => { const m = document.getElementById('aviso-pin-modal'); if (m) m.remove(); const b = document.getElementById('aviso-pin-5d'); if (b) b.remove(); window.scrollTo(0, 0); document.activeElement && document.activeElement.blur(); });
-    if (k === 'inicio') await p.evaluate(() => { document.querySelectorAll('.card, .dash-card, section, div').forEach((el) => { const t = (el.firstElementChild && el.firstElementChild.innerText) || ''; if (/^UTILIDAD/i.test(t.trim()) && el.offsetHeight < 600) el.remove(); }); });
-    await p.waitForTimeout(700);
-    if (k === 'comisiones') { for (const t of ['Faciales', 'Paquetes', 'Productos']) { const el = await p.$('text=' + t); if (el) { await el.click().catch(() => {}); await p.waitForTimeout(250); } } }
-    if (k === 'comisiones') await p.evaluate(() => {
-      const all = [...document.querySelectorAll('main *, .content *')];
-      const hit = all.filter((el) => /Editar tarifas|Hasta el ciclo que cierra/.test(el.innerText || '') && el.offsetHeight < 400);
-      const top = hit.filter((el) => !hit.some((o) => o !== el && o.contains(el) === false && el.contains(o) === false ? false : o !== el && o.contains(el)));
-      (top.length ? top : hit).forEach((el) => el.remove());
-    });
+
+  const shots = {
+    inventario: async () => {
+      await p.evaluate(() => { location.hash = '#/m/inventario'; });
+      await p.waitForTimeout(2600);
+      await ready();
+      await p.waitForSelector('#inv-root, #inv-body, .desk-table', { timeout: 8000 }).catch(() => {});
+      await p.waitForTimeout(700);
+    },
+    catalogo: async () => {
+      await p.evaluate(() => { location.hash = '#/m/productos'; });
+      await p.waitForTimeout(2800);
+      await ready();
+      await p.waitForSelector('.mcp, .mcp-card-row, .ss-card', { timeout: 8000 }).catch(() => {});
+      await p.evaluate(() => {
+        document.querySelectorAll('.mcp-cost-pill, #mcp-cost-pill, #mcp-cols-wrap, #mcp-nuevo').forEach((el) => el.remove());
+      });
+      await p.waitForTimeout(700);
+    },
+    ficha: async () => {
+      await p.evaluate(() => { location.hash = '#/m/clientes/c/k0'; });
+      await p.waitForTimeout(2800);
+      await ready();
+      await p.waitForSelector('#mccl-root, .mccl-h', { timeout: 8000 }).catch(() => {});
+      const tab = await p.$('[data-tab="docs"]');
+      if (tab) { await tab.click(); await p.waitForTimeout(600); }
+      await p.evaluate(() => {
+        document.querySelectorAll('.mccl-meta').forEach((el) => {
+          el.innerHTML = el.innerHTML.replace(/\s*·\s*CI\s[^·<]*/gi, '').replace(/\s*·\s*☎\s[^·<]*/g, '');
+        });
+        const box = document.getElementById('mccl-regbox');
+        if (box) {
+          const title = box.previousElementSibling;
+          if (title && /Datos de registro/i.test(title.textContent || '')) title.remove();
+          box.remove();
+        }
+        document.querySelectorAll('#mccl-del, .mccl-del').forEach((el) => el.remove());
+        document.querySelectorAll('.mccl-kpi').forEach((el) => {
+          const t = (el.innerText || '').toLowerCase();
+          if (/total|gastado|promedio|\$/.test(t)) el.remove();
+        });
+      });
+      await p.waitForTimeout(500);
+    },
+    agenda: async () => {
+      await p.evaluate(() => {
+        try { localStorage.setItem('sunsu.agenda.vista', 'lista'); } catch (e) {}
+        if (window.state) { window.state.acceso = window.state.acceso || {}; window.state.acceso.agenda = 'todos'; }
+        location.hash = '#/m/agenda';
+      });
+      await p.waitForTimeout(2800);
+      await ready();
+      await p.waitForSelector('.mcag-list, .mcag-c, .mcag-bar', { timeout: 8000 }).catch(() => {});
+      await p.evaluate(() => {
+        document.querySelectorAll('[data-crear], [data-tk], [data-etq], [data-mover], [data-cancel], #mcag-nueva').forEach((el) => el.remove());
+      });
+      await p.waitForTimeout(600);
+    },
+  };
+
+  for (const k of plan) {
+    if (!shots[k]) continue;
+    await shots[k]();
     const s = await p.evaluate(SCRUB);
     await p.screenshot({ path: OUT + '/' + k + '.png' });
     console.log(k, JSON.stringify(s));
