@@ -106,8 +106,10 @@ async function fichaSys(ctx: Ctx, key: string): Promise<Row | null> {
   const f = await ficha(ctx, SYS, key).catch(() => ({ error: "x" } as Row));
   return f && !f.error ? f : null;
 }
-async function limiteIp(ctx: Ctx, ip: string, max = 8): Promise<boolean> {
-  if (!ip) return false;
+async function limiteIp(ctx: Ctx, ip0: string, max = 20): Promise<boolean> {
+  // Registros aparte («alta:ip»): no cuentan para el bloqueo de login del equipo (la recepción comparte la IP del spa).
+  if (!ip0) return false;
+  const ip = "alta:" + ip0;
   try {
     const desde = new Date(ctx.now.getTime() - 60 * 60000).toISOString();
     const L = (await consultar(ctx.db, "login_intentos", { filtros: [{ col: "ip", op: "eq", val: ip }, { col: "ts", op: "gte", val: desde }] })).rows;
