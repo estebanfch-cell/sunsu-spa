@@ -19,6 +19,7 @@
     if (document.getElementById("mcrc-css")) return;
     var s = document.createElement("style"); s.id = "mcrc-css";
     s.textContent = [
+      "@media(max-width:640px){.mcrc-sheet{display:none!important}}",
       ".mcrc-t{width:100%;border-collapse:collapse;font-size:.85rem}.mcrc-t th{font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;color:var(--gray,#8a93a6);text-align:left;padding:7px 8px;border-bottom:1px solid var(--cream-d,#e6dccb)}.mcrc-t td{padding:9px 8px;border-bottom:1px solid #f0ece4;vertical-align:middle}.mcrc-t .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}",
       ".mcrc-t tr.ok td{background:#eef8f1}.mcrc-t tr.no td{background:#fdf0ee}.mcrc-t tr.listo td{opacity:.6}",
       ".mcrc-pn{font-weight:700;color:var(--navy-d,#2b3f5c)}.mcrc-sku{color:var(--gray,#8a93a6);font-size:.7rem}.mcrc-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}.mcrc-chips select{width:auto!important;min-width:0!important;font:inherit;font-size:.68rem;padding:1px 4px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:999px;color:var(--navy-d,#2b3f5c);background:#fff}",
@@ -36,7 +37,12 @@
     var rows = K.items.map(function (o) {
       return '<tr class="tk-row" data-oc="' + e(o.id) + '"><td class="mcoc-num" style="font-weight:800">' + e(o.numero) + (o.tipo === "restock" ? " " + pill("Restock", "consignacion") : "") + "</td><td>" + e(o.proveedor || "—") + "</td><td>" + e(f(o.fecha)) + "</td><td>" + e(f(o.fecha_esperada) || "—") + '</td><td class="num">' + e(o.productos) + '</td><td class="num">' + e(o.pendiente) + "</td><td>" + pill(o.estado) + "</td></tr>";
     }).join("") || '<tr><td colspan="7" class="mccf-sub">No hay nada por recibir 🎉</td></tr>';
-    return '<div id="mcrc-lista" class="sheet-scroll"><table class="tk-table nowrap-table"><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Esperada</th><th class="num">Productos</th><th class="num">Unid. pendientes</th><th>Estado</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+    var cards = K.items.map(function (o) {
+      var l2 = [e(o.proveedor || "—"), e(o.productos) + " prod.", (o.pendiente ? e(o.pendiente) + " pend." : "")].filter(Boolean);
+      return '<div class="mob-card ss-card" role="button" tabindex="0" data-oc="' + e(o.id) + '"><div class="mob-l1"><span class="mob-num">' + e(o.numero) + (o.fecha ? ' <span class="ss-code">' + e(f(o.fecha)) + "</span>" : "") + "</span>" + pill(o.estado) + '</div><div class="mob-l2 ss-meta">' + l2.join(" · ") + "</div></div>";
+    }).join("") || '<p class="mccf-sub">No hay nada por recibir 🎉</p>';
+    return '<div class="mob-cards ss-cards" id="mcrc-cards">' + cards + "</div>" +
+      '<div id="mcrc-lista" class="sheet-scroll mcrc-sheet"><table class="tk-table nowrap-table"><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Esperada</th><th class="num">Productos</th><th class="num">Unid. pendientes</th><th>Estado</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
       '<p class="note">Elige la orden que llegó. Por cada producto marca Recibido (con la cantidad que llegó) o No recibido.</p>';
   }
   function bodSel(g) {
@@ -100,7 +106,7 @@
   }
   function wire(main, route) {
     if (route.sub && K.d) { wireDet(main); return; }
-    main.addEventListener("click", function (ev) { var tr = ev.target.closest && ev.target.closest("tr[data-oc]"); if (tr) go("#/m/recepciones/" + encodeURIComponent(tr.getAttribute("data-oc"))); });
+    main.addEventListener("click", function (ev) { var tr = ev.target.closest && ev.target.closest("[data-oc]"); if (tr) go("#/m/recepciones/" + encodeURIComponent(tr.getAttribute("data-oc"))); });
   }
   window.MCRecepciones = { render: render, wire: wire, ensureList: async function () { if ((K.items || []).length) return true; K.items = (await A("rcp_lista")).items || []; return true; }, _k: K };
 })();

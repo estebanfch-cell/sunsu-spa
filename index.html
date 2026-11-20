@@ -157,7 +157,7 @@
   }
   .btn.wide { width: 100%; }
   .btn.ghost { background: var(--white); color: var(--navy); border: 1.5px solid var(--navy); }
-  .btn.small { padding: 8px 12px; font-size: 0.75rem; border-radius: 10px; }
+  .btn.small { padding: 5px 10px; font-size: 12px; border-radius: 8px; font-weight: 650; }
   .btn:disabled { opacity: 0.6; }
   .err { color: var(--red); min-height: 1.2em; margin: 0 0 12px; font-weight: 700; font-size: 0.8rem; }
   .app { min-height: 100vh; display: grid; grid-template-columns: var(--side-w) 1fr; background: var(--cream); }
@@ -451,7 +451,7 @@
   .row .sku { font-variant-numeric: tabular-nums; color: var(--gray); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
   .row .name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.35; font-weight: 700; color: var(--navy); font-size: 0.9rem; }
   .row .meta { color: var(--gray); font-size: 0.78rem; white-space: nowrap; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; align-items: center; }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .note { color: var(--gray); font-size: 0.75rem; }
   .ok { color: var(--green); font-weight: 700; }
@@ -1254,10 +1254,11 @@
   }
   .tk-num { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; }
   .hist-filtrar { margin-top: 2px; }
-  .hist-filtrar > summary { cursor: pointer; list-style: none; display: inline-block; padding: 7px 12px; border: 1.5px solid var(--cream-d); border-radius: 9px; font-size: 0.74rem; font-weight: 800; color: var(--navy); background: white; }
+  .hist-filtrar > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid var(--cream-d); border-radius: 8px; font-size: 0.72rem; font-weight: 650; color: var(--navy); background: white; }
   .hist-filtrar > summary::-webkit-details-marker { display: none; }
   .hist-filtrar[open] > summary { background: var(--blue-l); }
-  .hist-filtrar-body { margin-top: 10px; }
+  .hist-filtrar-body { margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 6px 8px; align-items: end; }
+  .hist-filtrar-body select, .hist-filtrar-body input:not([type=checkbox]):not([type=radio]) { height: 32px; padding: 0 8px; box-sizing: border-box; width: 100%; max-width: 100%; border-radius: 8px; }
   .tk-detail { background: var(--white); border: 1px solid var(--cream-d); border-radius: 16px; padding: 12px; min-height: 120px; }
   .tk-detail-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
   .tk-detail .note { color: var(--gray); font-size: 0.82rem; margin: 24px 8px; }
@@ -1516,6 +1517,120 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
 
     .falta-costo { color:#8a6d00; background:#fff8e6; border:1px solid #e8cf7a; border-radius:8px; padding:1px 8px; font-weight:700; white-space:nowrap; }
     .falta-costo-banner { color:#8a6d00; background:#fff8e6; border:1px solid #e8cf7a; border-radius:10px; padding:8px 12px; font-weight:700; font-size:0.85rem; margin:8px 0; }
+
+  /* TK158 — chrome compacto, sutil y elegante (Emilia t718u/t719u/t720u) */
+  .ss-bar, .mccf-bar, .mcp-bar, .mcoc-tools, .mcpq-tools, .mcgc-tools, .mcpr-bar, .desk-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px;
+  }
+  .ss-bar { flex-wrap: nowrap; }
+  .ss-bar .btn, .mcoc-tools .btn, .mcpq-tools .btn, .mcgc-tools .btn { white-space: nowrap; flex: 0 0 auto; }
+  .ss-bar input[type=search],
+  .mccf-bar input[type=search],
+  .mcp-bar .mcp-q,
+  .mcoc-tools input[type=search],
+  .mcpq-tools input[type=search],
+  .mcgc-tools input[type=search],
+  .mcpr-bar input[type=search],
+  .desk-bar input[type=search],
+  #prov-q {
+    flex: 1 1 auto; min-width: 0; height: 36px; padding: 0 10px; box-sizing: border-box;
+    border: 1px solid var(--cream-d, #EDE6D8); border-radius: 8px; background: #fff; font: inherit;
+  }
+  .ss-filt, .mccl-filt { position: relative; flex: 0 0 auto; }
+  .ss-filt-btn, .mccl-filt-btn, .mcp-filt-btn {
+    appearance: none; height: 36px; width: auto !important; max-width: none;
+    padding: 0 10px; border: 1px solid var(--cream-d, #EDE6D8); border-radius: 8px;
+    background: #fff; color: var(--navy-d, #3D5A7A); font: inherit; font-size: 12px; font-weight: 650;
+    cursor: pointer; opacity: .9; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .ss-filt-btn:hover, .ss-filt-btn.on, .mccl-filt-btn:hover, .mccl-filt-btn.on,
+  .mcp-filt-btn:hover, .mcp-filt-btn.on { opacity: 1; border-color: var(--navy, #5B7FA6); background: var(--blue-l, #EEF3FA); }
+  .ss-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+    padding: 0 4px; margin-left: 1px; border-radius: 999px; background: var(--navy, #3D5A7A); color: #fff;
+    font-size: 10px; font-weight: 800; line-height: 1; }
+  .ss-badge[hidden] { display: none !important; }
+  .ss-filt-menu, .mccl-filt-menu, .mcp-filt-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+    min-width: 240px; width: min(320px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
+    background: #fff; border: 1px solid var(--cream-d, #EDE6D8); border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(20,30,50,.12); padding: 10px;
+    grid-template-columns: 1fr 1fr; gap: 6px 8px; box-sizing: border-box; max-height: 70vh; overflow: auto;
+  }
+  .ss-filt-menu.open, .mccl-filt-menu.open { display: grid; }
+  .ss-filt-menu select, .mccl-filt-menu select, .mcp-filt-menu select,
+  .ss-filt-menu input:not([type=checkbox]), .mccl-filt-menu input:not([type=checkbox]) {
+    width: 100%; max-width: none; height: 32px; padding: 0 8px; box-sizing: border-box;
+    border: 1px solid var(--cream-d, #EDE6D8); border-radius: 8px; font: inherit; font-size: 16px; background: #fff;
+  }
+  .ss-filt-menu .ss-span2, .mccl-filt-menu .ss-span2 { grid-column: 1 / -1; }
+  .ss-chk, .ss-filt-menu label, .mccl-filt-menu label {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--navy-d, #3D5A7A);
+    font-weight: 600; margin: 0; white-space: nowrap;
+  }
+  .ss-chk input, .ss-filt-menu input[type=checkbox], .mccl-filt-menu input[type=checkbox] { width: auto; margin: 0; accent-color: var(--navy, #3D5A7A); }
+  .ss-micro { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; min-height: 20px; }
+  .ss-micro .mccf-sub, .ss-count, #mccl-n, .mcp-count { margin: 0; font-size: 12px; color: var(--gray, #8A93A6); flex: 1 1 auto; }
+  .ss-micro .btn, .ss-micro .btn.small { padding: 4px 8px; font-size: 11.5px; border-radius: 7px; font-weight: 650; }
+  .ss-card.mob-card, .mob-card.ss-card { padding: 9px 12px; margin: 0; border-radius: 10px; box-shadow: 0 1px 2px rgba(43,63,92,.05); }
+  .ss-code, .mob-fac { font-weight: 500; color: var(--gray, #8A93A6); font-size: 11.5px; letter-spacing: 0; font-variant-numeric: tabular-nums; font-family: ui-monospace, monospace; }
+  .ss-amt { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--navy-d, #2b3f5c); font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
+  .ss-meta, .ss-card .mob-l2 { font-size: 12px; color: var(--gray, #8A93A6); margin-top: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ss-card .mob-l1 { gap: 8px; }
+  .ss-card .mob-num { font-size: 13.5px; font-weight: 800; }
+  .ss-card .mob-l3 { margin-top: 3px; font-size: 11.5px; gap: 6px; flex-wrap: wrap; }
+  .ss-ult { display: inline-flex; align-items: center; gap: 4px; color: var(--gray, #8A93A6); font-size: 11.5px; }
+  .ss-ult .mc-cos, .ss-card .mc-cos { font-size: 10px; padding: 0 6px; line-height: 1.4; max-width: 120px; }
+  .ss-pill { display: inline-block; border: 1px solid var(--cream-d, #EDE6D8); border-radius: 999px; padding: 0 7px; font-size: 10.5px; font-weight: 700; color: var(--navy-d, #3D5A7A); background: #fafaf8; line-height: 1.6; }
+  .mob-cards.ss-cards { gap: 6px; }
+  .ss-chip-row { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 8px; scrollbar-width: none; }
+  .ss-chip-row::-webkit-scrollbar { display: none; }
+  .mcoc-chip, .mcpq-chip, .mcgc-chip { flex: 0 0 auto; padding: 4px 10px !important; font-size: 11.5px !important; border-radius: 999px; }
+  /* Documentos de la ficha: carpetas colapsables (t720u) */
+  .mcd-folders { display: flex; flex-direction: column; gap: 6px; }
+  .mcd-folder { border: 1px solid var(--cream-d, #EDE6D8); border-radius: 10px; background: #fff; overflow: hidden; }
+  .mcd-folder > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; font-weight: 700; font-size: 13px; color: var(--navy-d, #2b3f5c); }
+  .mcd-folder > summary::-webkit-details-marker { display: none; }
+  .mcd-folder > summary:before { content: "▸"; display: inline-block; width: 12px; color: var(--gray, #8A93A6); font-size: 11px; transition: transform .15s; }
+  .mcd-folder[open] > summary:before { transform: rotate(90deg); }
+  .mcd-folder.is-empty { opacity: .55; }
+  .mcd-folder.is-empty > summary { cursor: default; padding: 6px 10px; font-weight: 650; font-size: 12px; }
+  .mcd-folder.is-empty > summary:before { visibility: hidden; }
+  .mcd-ico { font-size: 14px; flex: 0 0 auto; }
+  .mcd-fn { flex: 1 1 auto; min-width: 0; }
+  .mcd-fn-n { color: var(--gray, #8A93A6); font-weight: 650; font-size: 12px; }
+  .mcd-fn-d { color: var(--gray, #8A93A6); font-weight: 500; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .mcd-files { padding: 0 10px 8px; }
+  .mcd-day { font-size: 11px; font-weight: 700; color: var(--gray, #8A93A6); text-transform: uppercase; letter-spacing: .03em; margin: 8px 0 4px; }
+  .mcd-day:first-child { margin-top: 2px; }
+  .mcd-file { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--cream, #f4efe6); font-size: 12.5px; color: var(--navy-d, #2b3f5c); }
+  .mcd-file:first-of-type, .mcd-day + .mcd-file { border-top: 0; }
+  .mcd-file > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mcd-file .btn, .mcd-file .btn.small { padding: 3px 7px; font-size: 11px; }
+  .mcd-ph { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
+  .mcd-ph img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; cursor: zoom-in; border: 1px solid var(--cream-d, #EDE6D8); background: #fafaf8; }
+  .mcd-subtag { font-size: 10.5px; color: var(--gray, #8A93A6); font-weight: 700; margin: 4px 0 2px; }
+  @media (max-width: 640px) {
+    .ss-bar { flex-wrap: nowrap; }
+    .mcp-bar { flex-direction: row !important; flex-wrap: nowrap; align-items: center !important; gap: 6px !important; }
+    .mcp-qwrap { position: relative; flex: 1 1 auto !important; width: auto !important; min-width: 0 !important; height: 36px; padding: 0; }
+    .mcp-bar .mcp-q { flex: 1 1 auto !important; width: 100% !important; min-width: 0 !important; height: 36px; padding: 0 40px 0 10px; }
+    .mcp-tools { display: contents; }
+    .mcp-filt { flex: 0 0 auto !important; width: auto; }
+    .mcp-filt-btn, .mcp-tools #mcp-nuevo { flex: 0 0 auto !important; width: auto !important; height: 36px !important; min-height: 0 !important; }
+    table.mob-stack tr { padding: 8px 10px; margin: 0 0 6px; border-radius: 10px; }
+    table.mob-stack td, table.mob-stack tbody th { padding: 2px 0 !important; font-size: 13px; }
+    table.mob-stack td::before, table.mob-stack tbody th::before { font-size: .62rem; margin: 1px 8px 0 0; }
+    table.mob-stack tr > td:first-child { font-size: .86rem; }
+    .mccl-kpis { gap: 6px; margin: 8px 0; }
+    .mccl-kpi { padding: 7px 9px; border-radius: 10px; }
+    .mccl-kpi b { font-size: 1rem; }
+    .mccl-tabs { margin: 8px 0 8px; gap: 0; }
+    .mccl-tabs button { padding: 6px 10px; font-size: .78rem; }
+    .mcoc-tabs a { padding: 6px 10px; font-size: .78rem; }
+    input[type=search] { font-size: 16px !important; }
+    .prov-sheet { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -4478,26 +4593,33 @@ function pintarProveedores() {
     });
   }
   const body = document.getElementById("prov-body-rows");
-  if (!body) return;
+  const cards = document.getElementById("prov-cards");
+  if (!body && !cards) return;
   const rows = filasProveedorVisibles();
-  body.innerHTML = rows.length ? rows.map((p) => {
-    const celdas = cols.map((col) => {
-      const k = col[0];
-      if (k === "codigo") return `<td class="prov-cod" title="${esc(p.codigo || "")}">${esc(p.codigo || "—")}</td>`;
-      if (k === "ordenes") return `<td class="num">${esc(p.ordenes || 0)}</td>`;
-      if (k === "total" || k === "saldo") return `<td class="num">${money(p[k] || 0)}</td>`;
-      return `<td title="${esc(p[k] || "")}">${esc(p[k] || "")}</td>`;
-    }).join("");
-    const on = String(window._provFila || "") === String(p.fila) ? " on" : "";
-    return `<tr class="desk-row${on}" data-prov="${esc(p.fila)}" tabindex="0">${celdas}</tr>`;
-  }).join("") : `<tr><td colspan="${cols.length}">${window._provQ ? "Nada coincide con la búsqueda." : "Sin proveedores."}</td></tr>`;
-  body.querySelectorAll("[data-prov]").forEach((tr) => {
-    tr.onclick = () => {
-      const fila = tr.getAttribute("data-prov") || "";
-      window._provFila = fila;
-      go("#/m/proveedores/" + encodeURIComponent(fila));
-    };
-  });
+  const irProv = (fila) => { window._provFila = fila; go("#/m/proveedores/" + encodeURIComponent(fila)); };
+  if (body) {
+    body.innerHTML = rows.length ? rows.map((p) => {
+      const celdas = cols.map((col) => {
+        const k = col[0];
+        if (k === "codigo") return `<td class="prov-cod" title="${esc(p.codigo || "")}">${esc(p.codigo || "—")}</td>`;
+        if (k === "ordenes") return `<td class="num">${esc(p.ordenes || 0)}</td>`;
+        if (k === "total" || k === "saldo") return `<td class="num">${money(p[k] || 0)}</td>`;
+        return `<td title="${esc(p[k] || "")}">${esc(p[k] || "")}</td>`;
+      }).join("");
+      const on = String(window._provFila || "") === String(p.fila) ? " on" : "";
+      return `<tr class="desk-row${on}" data-prov="${esc(p.fila)}" tabindex="0">${celdas}</tr>`;
+    }).join("") : `<tr><td colspan="${cols.length}">${window._provQ ? "Nada coincide con la búsqueda." : "Sin proveedores."}</td></tr>`;
+    body.querySelectorAll("[data-prov]").forEach((tr) => { tr.onclick = () => irProv(tr.getAttribute("data-prov") || ""); });
+  }
+  if (cards) {
+    cards.innerHTML = rows.length ? rows.map((p) => {
+      const on = String(window._provFila || "") === String(p.fila) ? " on" : "";
+      const l2 = [p.ruc ? "RUC " + p.ruc : "", p.telefono || "", p.email || ""].filter(Boolean).join(" · ");
+      const right = (p.ordenes ? p.ordenes + " OC" : "") + (p.total ? (p.ordenes ? " · " : "") + money(p.total) : "");
+      return `<div class="mob-card ss-card${on}" role="button" tabindex="0" data-prov="${esc(p.fila)}"><div class="mob-l1"><span class="mob-num">${esc(p.nombre || "—")}${p.codigo ? ` <span class="ss-code">${esc(p.codigo)}</span>` : ""}</span><span class="ss-amt">${esc(right)}</span></div>${l2 ? `<div class="mob-l2 ss-meta">${esc(l2)}</div>` : ""}</div>`;
+    }).join("") : `<p class="mccf-sub">${window._provQ ? "Nada coincide con la búsqueda." : "Sin proveedores."}</p>`;
+    cards.querySelectorAll("[data-prov]").forEach((el) => { el.onclick = () => irProv(el.getAttribute("data-prov") || ""); });
+  }
 }
 function htmlProvDetalle(p) {
   // TK34: ficha completa del proveedor (mc-proveedores.js). Sin el módulo, la ficha clásica de abajo.
@@ -4544,9 +4666,12 @@ async function renderProveedoresDesk(route) {
   const agregar = state.admin && !state.vista ? `<button class="btn small" type="button" data-ix-mas="proveedores">+ Agregar proveedor</button>` : "";
   return `<div class="prov-layout${sel ? " prov-open" : ""}" id="prov-layout">
     <div class="prov-list">
-      <div class="tools">${agregar}</div>
-      <div id="prov-form"></div>
+      <div class="ss-bar tools">
       <input id="prov-q" type="search" placeholder="Buscar código, nombre, RUC o teléfono" aria-label="Buscar proveedor" autocomplete="off" value="${esc(window._provQ || "")}">
+      ${agregar || ""}
+      </div>
+      <div id="prov-form"></div>
+      <div class="mob-cards ss-cards" id="prov-cards"></div>
       <div class="sheet-scroll prov-sheet"><table class="nowrap-table desk-table">
         <thead id="prov-head"></thead>
         <tbody id="prov-body-rows"></tbody>
@@ -7931,7 +8056,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK157";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK158";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8054,44 +8179,44 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk157"></script>
-<script src="mc-scan.js?v=20261119tk157"></script>
-<script src="mc-buscar.js?v=20261119tk157"></script>
-<script src="descuento_justif.js?v=20261119tk157"></script>
-<script src="beta-screens.js?v=20261119tk157"></script>
-<script src="beta-inline.js?v=20261119tk157"></script>
-<script src="mc-productos.js?v=20261119tk157"></script>
-<script src="mc-nav.js?v=20261119tk157"></script>
-<script src="mc-permisos.js?v=20261119tk157"></script>
-<script src="mc-protocolos.js?v=20261119tk157"></script>
-<script src="mc-conteo.js?v=20261119tk157"></script>
-<script src="mc-transferencias.js?v=20261119tk157"></script>
-<script src="mc-ajustes.js?v=20261119tk157"></script>
-<script src="vendor-qrcode.js?v=20261119tk157"></script>
-<script src="mc-wa.js?v=20261119tk157"></script>
-<script src="mc-tickets.js?v=20261119tk157"></script>
-<script src="mc-maestro.js?v=20261119tk157"></script>
-<script src="mc-empleados.js?v=20261119tk157"></script>
-<script src="mc-edit.js?v=20261119tk157"></script>
-<script src="mc-paquetes.js?v=20261119tk157"></script>
-<script src="mc-aperturas.js?v=20261119tk157"></script>
-<script src="mc-acceso.js?v=20261119tk157"></script>
-<script src="mc-barras.js?v=20261119tk157"></script>
-<script src="mc-caja.js?v=20261119tk157"></script>
-<script src="mc-giftcards.js?v=20261119tk157"></script>
-<script src="mc-multas.js?v=20261119tk157"></script>
-<script src="mc-clientes.js?v=20261119tk157"></script>
-<script src="mc-clientes-dup.js?v=20261119tk157"></script>
-<script src="mc-docpdf.js?v=20261119tk157"></script>
-<script src="mc-compras.js?v=20261119tk157"></script>
-<script src="mc-consignacion.js?v=20261119tk157"></script>
-<script src="mc-proveedores.js?v=20261119tk157"></script>
-<script src="mc-recepciones.js?v=20261119tk157"></script>
-<script src="mc-movil.js?v=20261119tk157"></script>
-<script src="mc-promociones.js?v=20261119tk157"></script>
-<script src="mc-agenda.js?v=20261119tk157"></script>
-<script src="mc-staff-home.js?v=20261119tk157"></script>
-<script src="mc-borradores.js?v=20261119tk157"></script><script>
+<script src="vendor-zxing.js?v=20261119tk158"></script>
+<script src="mc-scan.js?v=20261119tk158"></script>
+<script src="mc-buscar.js?v=20261119tk158"></script>
+<script src="descuento_justif.js?v=20261119tk158"></script>
+<script src="beta-screens.js?v=20261119tk158"></script>
+<script src="beta-inline.js?v=20261119tk158"></script>
+<script src="mc-productos.js?v=20261119tk158"></script>
+<script src="mc-nav.js?v=20261119tk158"></script>
+<script src="mc-permisos.js?v=20261119tk158"></script>
+<script src="mc-protocolos.js?v=20261119tk158"></script>
+<script src="mc-conteo.js?v=20261119tk158"></script>
+<script src="mc-transferencias.js?v=20261119tk158"></script>
+<script src="mc-ajustes.js?v=20261119tk158"></script>
+<script src="vendor-qrcode.js?v=20261119tk158"></script>
+<script src="mc-wa.js?v=20261119tk158"></script>
+<script src="mc-tickets.js?v=20261119tk158"></script>
+<script src="mc-maestro.js?v=20261119tk158"></script>
+<script src="mc-empleados.js?v=20261119tk158"></script>
+<script src="mc-edit.js?v=20261119tk158"></script>
+<script src="mc-paquetes.js?v=20261119tk158"></script>
+<script src="mc-aperturas.js?v=20261119tk158"></script>
+<script src="mc-acceso.js?v=20261119tk158"></script>
+<script src="mc-barras.js?v=20261119tk158"></script>
+<script src="mc-caja.js?v=20261119tk158"></script>
+<script src="mc-giftcards.js?v=20261119tk158"></script>
+<script src="mc-multas.js?v=20261119tk158"></script>
+<script src="mc-clientes.js?v=20261119tk158"></script>
+<script src="mc-clientes-dup.js?v=20261119tk158"></script>
+<script src="mc-docpdf.js?v=20261119tk158"></script>
+<script src="mc-compras.js?v=20261119tk158"></script>
+<script src="mc-consignacion.js?v=20261119tk158"></script>
+<script src="mc-proveedores.js?v=20261119tk158"></script>
+<script src="mc-recepciones.js?v=20261119tk158"></script>
+<script src="mc-movil.js?v=20261119tk158"></script>
+<script src="mc-promociones.js?v=20261119tk158"></script>
+<script src="mc-agenda.js?v=20261119tk158"></script>
+<script src="mc-staff-home.js?v=20261119tk158"></script>
+<script src="mc-borradores.js?v=20261119tk158"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {

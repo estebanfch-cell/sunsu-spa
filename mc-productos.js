@@ -41,6 +41,7 @@
     s.id = "mcp-css";
     s.textContent = [
       ".mcp{overflow-x:hidden;max-width:100%;box-sizing:border-box}",
+      ".mcp-cards{display:none;flex-direction:column;gap:6px}@media(max-width:640px){.mcp-cards{display:flex}.mcp-sheet{display:none!important}.mcp-bar,.mcp-bar.ss-bar{flex-direction:row!important;flex-wrap:nowrap;align-items:center!important}.mcp-qwrap{flex:1 1 auto!important;width:auto!important}.mcp-filt-btn{width:auto!important;height:36px!important}}",
       ".mcp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}",
       ".mcp-qwrap{flex:1 1 280px;min-width:0;position:relative;display:flex;align-items:center}",
       ".mcp-bar .mcp-q{flex:1;width:100%;min-width:0;padding:10px 44px 10px 12px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit;background:var(--white);box-sizing:border-box}",
@@ -270,6 +271,35 @@
         cols.map(function (c) { return celda(p, c); }).join("") + "</tr>";
     }).join("");
   }
+  function stockBodegas(p) {
+    if (p.tipo === "servicio") return "";
+    var G = [["CONSIGNACION", "Venta"], ["CABINA", "Cabina"], ["OFICINA", "Oficina"]];
+    return G.map(function (g) {
+      var n = Number((p.porGrupo || {})[g[0]]) || 0;
+      return n ? g[1] + " " + q2(n) : "";
+    }).filter(Boolean).join(" · ");
+  }
+  function cardProd(p) {
+    var sku = sTrim(p.skuVisible || p.sku);
+    var l2 = [sTrim(p.categoria) || sTrim(p.subtipo), stockBodegas(p)].filter(Boolean);
+    if (MC.verCostos && p.tipo !== "servicio") {
+      if (p.faltaCosto) l2.push("Falta costo");
+      else {
+        if (p.compraReal != null && p.compraReal !== "") l2.push("costo " + money(p.compraReal));
+        if (p.margenPct != null) l2.push(q2(Math.round(Number(p.margenPct) * 10) / 10) + "%");
+      }
+    }
+    var right = p.tipo === "servicio" ? money(p.pvp) : (money(p.pvp) + (p.stock != null ? " · " + q2(p.stock) : ""));
+    return '<div class="mob-card ss-card mcp-card-row" role="button" tabindex="0" data-mcp-id="' + e(p.id) + '">' +
+      '<div class="mob-l1"><span class="mob-num">' + e(p.nombre || "—") + (sku ? ' <span class="ss-code">' + e(sku) + "</span>" : "") + revBadge(p.revisar) + "</span>" +
+      '<span class="ss-amt">' + right + "</span></div>" +
+      (l2.length ? '<div class="mob-l2 ss-meta">' + e(l2.join(" · ")) + "</div>" : "") + "</div>";
+  }
+  function cardsHtml() {
+    var rows = filtrar();
+    if (!rows.length) return '<p class="mcp-sub" style="padding:10px 2px">Sin productos con ese filtro.</p>';
+    return rows.map(cardProd).join("");
+  }
   function cabeceraHtml() {
     var o = MC.orden || {};
     var th = function (id, t, cls) { return '<th class="' + (cls || "") + ' mcp-sort" data-mcp-sort="' + id + '">' + e(t) + (o.col === id ? (o.dir === "desc" ? " ▾" : " ▴") : "") + "</th>"; };
@@ -355,14 +385,20 @@
       '<div class="mcp-filt-menu" id="mcp-filt-menu" hidden>' + arbolSel(f) + selBod + selMarca + selCat + selEst + selAct +
       pill +
       '<button class="btn ghost small" type="button" id="mcp-limpiar">Limpiar</button></div></div>';
+    var nF = [f.tipo, f.sub, f.bodega, f.marca, f.categoria, f.estado, f.activo].filter(Boolean).length;
+    var badge = nF ? '<span class="ss-badge" id="mcp-filt-n">' + nF + "</span>" : '<span class="ss-badge" id="mcp-filt-n" hidden></span>';
+    menuFilt = '<div class="mcp-filt"><button type="button" class="ss-filt-btn mcp-filt-btn' + (onFilt ? " on" : "") + '" id="mcp-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + badge + " ▾</button>" +
+      '<div class="mcp-filt-menu ss-filt-menu" id="mcp-filt-menu" hidden>' + arbolSel(f) + selBod + selMarca + selCat + selEst + selAct +
+      pill +
+      '<button class="btn ghost small ss-span2" type="button" id="mcp-limpiar">Limpiar</button></div></div>';
     return '<div class="mcp">' +
-      '<div class="mcp-bar"><div class="mcp-qwrap"><input class="mcp-q" id="mcp-q" type="search" placeholder="' + qph + '" aria-label="' + qph + '" value="' + e(f.q) + '">' +
-      '<button class="mcp-scan" type="button" id="mcp-scan" title="Escanear código de barras" aria-label="Escanear código de barras">📷</button></div></div>' +
-      '<div class="mcp-tools">' + menuFilt + (MC.admin ? colsPanelHtml() : "") + nuevo + "</div>" +
+      '<div class="mcp-bar ss-bar"><div class="mcp-qwrap"><input class="mcp-q" id="mcp-q" type="search" placeholder="' + qph + '" aria-label="' + qph + '" value="' + e(f.q) + '">' +
+      '<button class="mcp-scan" type="button" id="mcp-scan" title="Escanear código de barras" aria-label="Escanear código de barras">📷</button></div>' + menuFilt + "</div>" +
+      '<div class="ss-micro"><div class="mcp-count" id="mcp-count"></div>' + (MC.admin ? colsPanelHtml() : "") + nuevo + "</div>" +
       (MC.admin && (MC.eliminadosN || MC.verElim) ? '<p><button class="btn ghost small" type="button" id="mcp-elim">' + (MC.verElim ? "← Volver a productos" : "Eliminados (" + MC.eliminadosN + ")") + "</button>" + (MC.verElim ? ' <span class="mcp-sub">Productos eliminados: elige y restaura.</span>' : "") + "</p>" : "") +
       '<div class="mcp-bulk" id="mcp-bulk" hidden></div>' +
-      '<div class="mcp-count" id="mcp-count"></div>' +
-      '<div class="sheet-scroll"><table class="mcp-tbl mob-no"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
+      '<div class="mob-cards ss-cards mcp-cards" id="mcp-cards"></div>' +
+      '<div class="sheet-scroll mcp-sheet"><table class="mcp-tbl mob-no"><thead id="mcp-head">' + cabeceraHtml() + '</thead><tbody id="mcp-body"></tbody></table></div>' +
       '<p class="note">Una sola lista: catálogo, Cabina y productos unidos por código. Consignación = bodega VENTA · Bodega Cabina = Cabina 1/2/3 · Bodega Oficina = CASA. Toca un encabezado para ordenar. </p>' +
       "</div>";
   }
@@ -370,7 +406,14 @@
     var body = main.querySelector("#mcp-body");
     if (!body) return;
     var head = main.querySelector("#mcp-head");
-    var pintar = function () { body.innerHTML = filasHtml(); if (head) head.innerHTML = cabeceraHtml(); };
+    var cards = main.querySelector("#mcp-cards");
+    var syncFilt = function () {
+      var f = MC.f, nF = [f.tipo, f.sub, f.bodega, f.marca, f.categoria, f.estado, f.activo].filter(Boolean).length;
+      var badge = main.querySelector("#mcp-filt-n"), fb = main.querySelector("#mcp-filt-btn"), fm = main.querySelector("#mcp-filt-menu");
+      if (badge) { badge.hidden = !nF; badge.textContent = nF ? String(nF) : ""; }
+      if (fb) fb.classList.toggle("on", !!(nF || (fm && fm.classList.contains("open"))));
+    };
+    var pintar = function () { body.innerHTML = filasHtml(); if (head) head.innerHTML = cabeceraHtml(); if (cards) cards.innerHTML = cardsHtml(); syncFilt(); };
     pintar();
     var q = main.querySelector("#mcp-q");
     if (q) q.addEventListener("input", function () { MC.f.q = q.value; pintar(); });
@@ -481,6 +524,10 @@
       if (ev.target.closest(".mcp-ck")) return;
       var tr = ev.target.closest("tr[data-mcp-id]");
       if (tr) go("#/m/productos/p/" + encodeURIComponent(tr.getAttribute("data-mcp-id")));
+    });
+    if (cards) cards.addEventListener("click", function (ev) {
+      var el = ev.target.closest("[data-mcp-id]");
+      if (el) go("#/m/productos/p/" + encodeURIComponent(el.getAttribute("data-mcp-id")));
     });
     var nv = main.querySelector("#mcp-nuevo");
     if (nv) nv.onclick = function () { go("#/m/productos/nuevo"); };
