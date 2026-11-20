@@ -143,11 +143,12 @@ describe("TK55 · sin botón Editar: admin guarda en línea, personal pide", () 
 
   it("Ticket con canje de paquete: sugiere el paquete pero exige confirmarlo y avisa duplicados lado a lado", () => {
     const src = readFileSync(join(root, "beta-screens.js"), "utf8");
-    assert.match(src, /✓ Confirmo: canjear de/);
+    assert.match(src, /✓ Confirmado: se descargará/);
+    assert.match(src, /paq-busca/);
     assert.match(src, /T\.cobro==='paquete'&&!T\.canjeOtro&&!\(T\.paqPick&&T\.paqConfirmado\)/);
     assert.match(src, /parecen duplicados/);
     assert.match(src, /mismo ticket de origen/); assert.match(src, /mismo producto y fecha de compra/);
-    assert.match(src, /No está en la lista — lo marco después en Paquetes/);
+    assert.match(src, /_paqPick.fila==='luego'/);
     assert.match(src, /!p\.anulado && !p\.completo/);
   });
 

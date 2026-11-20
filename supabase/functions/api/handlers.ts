@@ -27,6 +27,7 @@ import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { blancosGift, giftReactivable, normCod as normCodGc, vendidaGift as vendidaGc } from "./gift_beta.ts";
+import { buscarPaquetesEn } from "./paq_buscar.ts";
 import { lineasRecepDe, periodoLabel as periodoRecepLabel, recepcionDeCiclo } from "./comision_recepcion.ts";
 
 const VISTA_MSG = "Estás viendo como otra persona. Sal de la vista para guardar.";
@@ -2094,27 +2095,15 @@ reg("marcarGCUsada", "any", async (p, ctx, ses) => {
 });
 
 reg("buscarPaquetes", "any", async (p, ctx) => {
-  const q = s(p.q).toLowerCase();
-  if (!q) return { resultados: [] };
-  const resultados = [];
-  for (const r of await ctx.db.all("paquetes")) {
-    const ced = s(r.cedula).replace(/\.0+$/, ""), nom = s(r.nombres), ape = s(r.apellidos);
-    if (!ced && !nom) continue;
-    if (r.borrado_at) continue;
-    const blob = [ced, nom, ape, nom + " " + ape, s(r.notas)].join(" ").toLowerCase();
-    if (!blob.includes(q)) continue;
-    const usos = usosDe(r);
-    const total = packSesiones(s(r.sku), s(r.paquete), usos.map((u) => ({ usado: u.usado, fecha: u.fecha })));
-    resultados.push({
-      fila: r.sheet_row, dia: r.dia, mes: r.mes, ano: r.ano, cedula: ced, nombre: nom, apellido: ape,
-      factura: s(r.factura), sku: s(r.sku), paquete: s(r.paquete), vendidoPor: s(r.vendido_por), notas: s(r.notas),
-      usos: usos.slice(0, total), usados: usos.slice(0, total).filter((u) => u.usado).length,
-      total, completo: b(r.completo),
-      codigo: codigoPaquete(r), prueba: s(r.origin) === "test", id: r.id,
-      ticketOrigen: s((r.orig as R | undefined)?.ticket), anulado: (r.orig as R | undefined)?.anulado === true,
-    });
-  }
-  return { resultados };
+  // TK190: cruce de cédula tolerante (.0, cero de provincia, typo 6040707060) + sugerencias por nombre.
+  // db.all ya pagina de a 1000, así que no se cortan paquetes. Nunca se devuelve teléfono.
+  const q = s(p.q).trim(), nombre = s(p.nombre).trim(), apellido = s(p.apellido).trim();
+  if (!q && !nombre && !apellido) return { resultados: [], sugerencias: [] };
+  const rows = await ctx.db.all("paquetes");
+  return buscarPaquetesEn(rows, {
+    q, nombre, apellido,
+    soloActivos: p.activos === true || p.activos === "1" || p.activos === 1 || p.soloActivos === true,
+  });
 });
 export async function registroDe(ctx: Ctx, cedulas: unknown[], apellidos: unknown[]): Promise<R[]> {
   const cv = cedVariantes(cedulas).slice(0, 600), ap = [...new Set(apellidos.map((x) => s(x).trim()).filter(Boolean))].slice(0, 200);
