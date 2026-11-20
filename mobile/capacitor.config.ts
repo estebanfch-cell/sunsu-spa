@@ -8,7 +8,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.sunsuspa.app',
-  appName: 'Sunsu Spa',
+  appName: 'Sunsu',
   webDir: 'www',
   loggingBehavior: 'debug',
   ios: {

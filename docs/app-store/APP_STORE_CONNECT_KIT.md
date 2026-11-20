@@ -1,6 +1,6 @@
-# Sunsu Spa · Kit para App Store Connect (iOS)
+# Sunsu · Kit para App Store Connect (iOS)
 
-Todo lo necesario para publicar la app nativa **Sunsu Spa** (`com.sunsuspa.app`) con tu cuenta de Apple Developer.
+Todo lo necesario para publicar la app nativa **Sunsu** (`com.sunsuspa.app`) con tu cuenta de Apple Developer.
 Proyecto Xcode: `mobile/ios/App` · Workflow: `.github/workflows/ios-appstore.yml` · Capturas: `docs/app-store/screenshots/iphone-6.9/`.
 
 ---
@@ -9,7 +9,7 @@ Proyecto Xcode: `mobile/ios/App` · Workflow: `.github/workflows/ios-appstore.ym
 
 | Campo | Valor |
 |---|---|
-| **Nombre** (máx. 30) | `Sunsu Spa` |
+| **Nombre** (máx. 30) | `Sunsu` |
 | **Subtítulo** (máx. 30) | `Gestión interna del spa` |
 | **Bundle ID** | `com.sunsuspa.app` |
 | **SKU** | `sunsuspa-ios-001` |
@@ -28,7 +28,7 @@ Proyecto Xcode: `mobile/ios/App` · Workflow: `.github/workflows/ios-appstore.ym
 > La app del equipo de Sunsu Spa: tickets, pagos con comprobante por cámara, fichas de clientas, inventario, asistencia y comisiones, todo desde el iPhone.
 
 **Descripción**
-> Sunsu Spa es la herramienta interna del equipo de Sunsu Spa, spa de cuidado facial en Cumbayá, Quito. Reúne en el iPhone la operación diaria del spa:
+> Sunsu es la herramienta interna del equipo de Sunsu Spa, spa de cuidado facial en Cumbayá, Quito. Reúne en el iPhone la operación diaria del spa:
 >
 > • Tickets de venta y pagos: registra faciales, paquetes, productos y gift cards; adjunta el comprobante de pago con la cámara.
 > • Fichas de clientas: historial de visitas, paquetes activos, fotos antes/después de cada tratamiento y documentos.
@@ -45,8 +45,16 @@ Proyecto Xcode: `mobile/ios/App` · Workflow: `.github/workflows/ios-appstore.ym
 spa,facial,tickets,clientas,comisiones,inventario,cosmetología,asistencia,gift card,Quito
 ```
 
-**Capturas iPhone 6.9"** (1320 × 2868, RGB sin alfa, datos 100 % ficticios), en este orden:
-`01-login.png`, `02-dashboard.png`, `03-tickets.png`, `04-clientes.png`, `05-comisiones.png`.
+**Capturas iPhone 6.9"** (1320 × 2868, RGB sin alfa, datos 100 % ficticios; sin márgenes, ingresos, comisiones, costos ni totales de venta), en este orden:
+
+| Archivo | Pantalla |
+|---|---|
+| `01-login.png` | Acceso con PIN |
+| `02-inventario.png` | Inventario de faciales (nombres y categoría, sin costos) |
+| `03-catalogo.png` | Carta de tratamientos con PVP de menú |
+| `04-ficha.png` | Ficha de clienta ficticia con carpetas de Skin Analysis, K-Lift y tratamientos |
+| `05-agenda.png` | Agenda del día (citas y tratamientos, sin montos) |
+
 App Store Connect reutiliza las de 6.9" para los demás tamaños de iPhone.
 
 ---
@@ -94,14 +102,14 @@ No marcar: Salud, Finanzas (no se guardan tarjetas), Navegación, Búsquedas, Di
 ## 4. Notas para App Review
 
 **English (pegar en «Notas»):**
-> Sunsu Spa is the internal operations app for the staff of Sunsu Spa, a facial-care spa in Cumbayá, Quito, Ecuador (SUNSU S.A.). Accounts are created by the spa's administration; there is no public sign-up. We plan to distribute it as an Unlisted App.
+> Sunsu is the internal operations app for the staff of Sunsu Spa, a facial-care spa in Cumbayá, Quito, Ecuador (SUNSU S.A.). Accounts are created by the spa's administration; there is no public sign-up. We plan to distribute it as an Unlisted App.
 > Demo account (restricted demo role, contains no real client data): **User:** `<<usuario demo>>` · **Password:** `<<contraseña demo>>` — on the login screen tap «Usuario y contraseña».
 > Native features: camera / photo library sheet for treatment photos and payment receipts, native iOS Share Sheet for generated PDFs (client record, package control, gift cards), AirPrint for reports, haptic feedback, offline banner, location only at clock-in/clock-out.
 > Camera, Photos and Location are requested only when the user starts those actions. No tracking, no ads, no analytics SDKs.
 > Privacy: https://app.sunsuspa.com/privacy.html · Support: https://app.sunsuspa.com/support.html
 
 **Español:**
-> Sunsu Spa es la app interna del personal de Sunsu Spa (Cumbayá, Quito). Las cuentas las crea la administración; no hay registro público. Cuenta de demostración con rol restringido y sin datos reales de clientas: usuario `<<usuario demo>>`, contraseña `<<contraseña demo>>` (pestaña «Usuario y contraseña»).
+> Sunsu es la app interna del personal de Sunsu Spa (Cumbayá, Quito). Las cuentas las crea la administración; no hay registro público. Cuenta de demostración con rol restringido y sin datos reales de clientas: usuario `<<usuario demo>>`, contraseña `<<contraseña demo>>` (pestaña «Usuario y contraseña»).
 
 **Cómo preparar la cuenta demo segura (hacerlo antes de enviar a revisión):**
 1. En la app (web) › Usuarios: crear la persona «Apple Review» con usuario y contraseña propios (nada de PIN de una persona real).
@@ -114,8 +122,8 @@ No marcar: Salud, Finanzas (no se guardan tarjetas), Navegación, Búsquedas, Di
 ## 5. Primer build en TestFlight — 5 pasos
 
 ### Opción A · Sin Mac (GitHub Actions, recomendado)
-1. **Identificador:** [developer.apple.com › Certificates, IDs & Profiles › Identifiers](https://developer.apple.com/account/resources/identifiers/list) › **+** › App IDs › App › Bundle ID explícito `com.sunsuspa.app`, descripción «Sunsu Spa» (sin capacidades extra).
-2. **App en App Store Connect:** [appstoreconnect.apple.com](https://appstoreconnect.apple.com) › Apps › **+ Nueva app** › iOS · Nombre `Sunsu Spa` · Español (México) · Bundle ID `com.sunsuspa.app` · SKU `sunsuspa-ios-001` · Acceso completo.
+1. **Identificador:** [developer.apple.com › Certificates, IDs & Profiles › Identifiers](https://developer.apple.com/account/resources/identifiers/list) › **+** › App IDs › App › Bundle ID explícito `com.sunsuspa.app`, descripción «Sunsu» (sin capacidades extra).
+2. **App en App Store Connect:** [appstoreconnect.apple.com](https://appstoreconnect.apple.com) › Apps › **+ Nueva app** › iOS · Nombre `Sunsu` · Español (México) · Bundle ID `com.sunsuspa.app` · SKU `sunsuspa-ios-001` · Acceso completo.
 3. **Llave API:** App Store Connect › Usuarios y acceso › Integraciones › App Store Connect API › **Generar llave** con rol **Admin** (permite la firma automática en la nube sin Mac). Descarga el `.p8` (solo se puede bajar una vez) y anota **Key ID** e **Issuer ID**. El **Team ID** está en developer.apple.com › Membership.
 4. **Secretos en GitHub** (repo › Settings › Secrets and variables › Actions), mínimo 4:
    - `APPLE_TEAM_ID`
