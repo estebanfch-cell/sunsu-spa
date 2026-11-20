@@ -52,6 +52,7 @@ import "./cliente_factura.ts";
 import "./legacy_solicitudes_api.ts";
 import "./aprobaciones_api.ts";
 import "./ticket_edicion_api.ts";
+import "./voucher_ocr_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";
@@ -107,6 +108,8 @@ Deno.serve(async (req) => {
       RESEND_API_KEY: Deno.env.get("RESEND_API_KEY"),
       RESEND_FROM: Deno.env.get("RESEND_FROM"),
       SUNSU_APP_URL: Deno.env.get("SUNSU_APP_URL"),
+      ANTHROPIC_API_KEY: Deno.env.get("ANTHROPIC_API_KEY"),
+      ANTHROPIC_MODEL: Deno.env.get("ANTHROPIC_MODEL"),
     },
     fetchImpl: fetch,
     legacyLogin: async (pin: string) => {

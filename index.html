@@ -3552,10 +3552,15 @@ function alertasOcultas() {
   try { const v = JSON.parse(localStorage.getItem(alertasKeyLS()) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
 }
 /** Une solicitudes pendientes + avisos sin leer en una lista corta, sin las que ya se descartaron con ×. */
-function alertasDashboard(apr, notif, ocultas) {
+function alertasDashboard(apr, notif, ocultas, vouchers) {
   const fuera = new Set((ocultas || []).map(String));
   const out = [], vistos = new Set();
   const add = (x) => { if (!x.key || fuera.has(x.key) || vistos.has(x.key)) return; vistos.add(x.key); out.push(x); };
+  // TK157: descuadres de voucher leídos con Claude Vision (voucher vs ticket / factura Migo). × los descarta igual.
+  ((vouchers && !vouchers.error && vouchers.items) || []).forEach((v) => {
+    if (!v || !v.key) return;
+    add({ key: String(v.key), icono: "🧾", texto: "⚠️ " + String(v.texto || ("Descuadre voucher " + (v.clave || ""))), detalle: String(v.detalle || v.mensaje || ""), href: v.href || ("#/m/tickets/t/" + encodeURIComponent(v.clave || "")) });
+  });
   ((apr && !apr.error && apr.grupos) || []).forEach((g) => (g.items || []).forEach((it) => {
     if (it && it.prueba) return;
     add({ key: "apr:" + (it.tipo || g.id || "") + ":" + (it.id || it.fila || it.titulo || ""), icono: "🟣", texto: String(it.titulo || g.titulo || "Solicitud pendiente"), detalle: String(it.detalle || ""), href: it.href || g.href || "#/m/aprobaciones" });
@@ -3608,11 +3613,11 @@ async function renderInicioBeta() {
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
   let pulso = htmlStaffHome();
   if (state.admin) {
-    const [dash, apr, notif] = await Promise.all([api("getDashboardHoy", {}), api("aprobaciones_pendientes", {}), api("notif_mias", {}).catch(() => null)]);
+    const [dash, apr, notif, vch] = await Promise.all([api("getDashboardHoy", {}), api("aprobaciones_pendientes", {}), api("notif_mias", {}).catch(() => null), Promise.resolve(api("voucher_alertas", {})).catch(() => null)]);
     if (dash.error || !dash.hoy) pulso = fail(dash);
     else pulso = htmlDashboard(Object.assign({}, dash, { aprobaciones: apr && !apr.error ? apr : { total: 0, grupos: [] } }));
     // TK156 (Emilia t693u): arriba en el Dashboard «👁 Ver como…» y «⚠️ Alertas (N) ▾» con × para descartar.
-    pulso = htmlDashTop(alertasDashboard(apr, notif, alertasOcultas())) + pulso;
+    pulso = htmlDashTop(alertasDashboard(apr, notif, alertasOcultas(), vch)) + pulso;
   }
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
@@ -7926,7 +7931,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK156";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK157";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8049,44 +8054,44 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk154"></script>
-<script src="mc-scan.js?v=20261119tk154"></script>
-<script src="mc-buscar.js?v=20261119tk154"></script>
-<script src="descuento_justif.js?v=20261119tk154"></script>
-<script src="beta-screens.js?v=20261119tk154"></script>
-<script src="beta-inline.js?v=20261119tk154"></script>
-<script src="mc-productos.js?v=20261119tk154"></script>
-<script src="mc-nav.js?v=20261119tk154"></script>
-<script src="mc-permisos.js?v=20261119tk154"></script>
-<script src="mc-protocolos.js?v=20261119tk154"></script>
-<script src="mc-conteo.js?v=20261119tk154"></script>
-<script src="mc-transferencias.js?v=20261119tk154"></script>
-<script src="mc-ajustes.js?v=20261119tk154"></script>
-<script src="vendor-qrcode.js?v=20261119tk154"></script>
-<script src="mc-wa.js?v=20261119tk154"></script>
-<script src="mc-tickets.js?v=20261119tk154"></script>
-<script src="mc-maestro.js?v=20261119tk154"></script>
-<script src="mc-empleados.js?v=20261119tk154"></script>
-<script src="mc-edit.js?v=20261119tk154"></script>
-<script src="mc-paquetes.js?v=20261119tk154"></script>
-<script src="mc-aperturas.js?v=20261119tk154"></script>
-<script src="mc-acceso.js?v=20261119tk154"></script>
-<script src="mc-barras.js?v=20261119tk154"></script>
-<script src="mc-caja.js?v=20261119tk154"></script>
-<script src="mc-giftcards.js?v=20261119tk154"></script>
-<script src="mc-multas.js?v=20261119tk154"></script>
-<script src="mc-clientes.js?v=20261119tk154"></script>
-<script src="mc-clientes-dup.js?v=20261119tk154"></script>
-<script src="mc-docpdf.js?v=20261119tk154"></script>
-<script src="mc-compras.js?v=20261119tk154"></script>
-<script src="mc-consignacion.js?v=20261119tk154"></script>
-<script src="mc-proveedores.js?v=20261119tk154"></script>
-<script src="mc-recepciones.js?v=20261119tk154"></script>
-<script src="mc-movil.js?v=20261119tk154"></script>
-<script src="mc-promociones.js?v=20261119tk154"></script>
-<script src="mc-agenda.js?v=20261119tk154"></script>
-<script src="mc-staff-home.js?v=20261119tk154"></script>
-<script src="mc-borradores.js?v=20261119tk154"></script><script>
+<script src="vendor-zxing.js?v=20261119tk157"></script>
+<script src="mc-scan.js?v=20261119tk157"></script>
+<script src="mc-buscar.js?v=20261119tk157"></script>
+<script src="descuento_justif.js?v=20261119tk157"></script>
+<script src="beta-screens.js?v=20261119tk157"></script>
+<script src="beta-inline.js?v=20261119tk157"></script>
+<script src="mc-productos.js?v=20261119tk157"></script>
+<script src="mc-nav.js?v=20261119tk157"></script>
+<script src="mc-permisos.js?v=20261119tk157"></script>
+<script src="mc-protocolos.js?v=20261119tk157"></script>
+<script src="mc-conteo.js?v=20261119tk157"></script>
+<script src="mc-transferencias.js?v=20261119tk157"></script>
+<script src="mc-ajustes.js?v=20261119tk157"></script>
+<script src="vendor-qrcode.js?v=20261119tk157"></script>
+<script src="mc-wa.js?v=20261119tk157"></script>
+<script src="mc-tickets.js?v=20261119tk157"></script>
+<script src="mc-maestro.js?v=20261119tk157"></script>
+<script src="mc-empleados.js?v=20261119tk157"></script>
+<script src="mc-edit.js?v=20261119tk157"></script>
+<script src="mc-paquetes.js?v=20261119tk157"></script>
+<script src="mc-aperturas.js?v=20261119tk157"></script>
+<script src="mc-acceso.js?v=20261119tk157"></script>
+<script src="mc-barras.js?v=20261119tk157"></script>
+<script src="mc-caja.js?v=20261119tk157"></script>
+<script src="mc-giftcards.js?v=20261119tk157"></script>
+<script src="mc-multas.js?v=20261119tk157"></script>
+<script src="mc-clientes.js?v=20261119tk157"></script>
+<script src="mc-clientes-dup.js?v=20261119tk157"></script>
+<script src="mc-docpdf.js?v=20261119tk157"></script>
+<script src="mc-compras.js?v=20261119tk157"></script>
+<script src="mc-consignacion.js?v=20261119tk157"></script>
+<script src="mc-proveedores.js?v=20261119tk157"></script>
+<script src="mc-recepciones.js?v=20261119tk157"></script>
+<script src="mc-movil.js?v=20261119tk157"></script>
+<script src="mc-promociones.js?v=20261119tk157"></script>
+<script src="mc-agenda.js?v=20261119tk157"></script>
+<script src="mc-staff-home.js?v=20261119tk157"></script>
+<script src="mc-borradores.js?v=20261119tk157"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {

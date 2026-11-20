@@ -211,8 +211,8 @@ describe("TK135 · pantalla: sin cajas feas, badge corto, justificación", () =>
   });
 
   it("cache TK138", () => {
-    assert.match(sw, /sunsu-2026-11-19-TK156/);
-    assert.match(beta, /20261119tk154/);
+    assert.match(sw, /sunsu-2026-11-19-TK157/);
+    assert.match(beta, /20261119tk157/);
     assert.doesNotMatch(sw, /TK137"/);
   });
 });

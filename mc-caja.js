@@ -13,6 +13,7 @@
     var s = document.createElement("style"); s.id = "mccj-css";
     s.textContent = [
       ".mccj-migo-alerta{margin:6px 0;padding:8px 10px;border-radius:9px;background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800;font-size:.8rem}.mccj-migo-ok{margin:6px 0;padding:6px 10px;border-radius:9px;background:#F0FDF4;border:1px solid #16A34A;color:#166534;font-weight:700;font-size:.78rem}",
+      ".ocr-chip{display:block;margin:4px 0;padding:5px 9px;border-radius:9px;font-size:.74rem;font-weight:700;line-height:1.3}.ocr-ok{background:#F0FDF4;border:1px solid #16A34A;color:#166534}.ocr-mal{background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800}.ocr-par{background:#FFFBEB;border:1px solid #D97706;color:#92400E}.ocr-gris{background:#F8FAFC;border:1px solid #CBD5E1;color:#475569}.ocr-leer{display:inline-flex;align-items:center;gap:4px;margin:4px 0;padding:4px 9px;border:1px solid var(--cream-d,#e5dccf);border-radius:9px;background:#fff;font:inherit;font-size:.74rem;font-weight:700;color:var(--navy-d,#1e2a44);cursor:pointer}.ocr-nota{font-size:.66rem;color:#16A34A;font-weight:700;margin-left:4px}",
       ".mccj{max-width:980px}.mccj h2{margin:0 0 6px;font-size:1.2rem}.mccj-sub{font-size:.76rem;color:var(--gray,#8a93a6)}",
       ".mccj-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08))}",
       ".mccj-saldo{font-size:2rem;font-weight:800;color:var(--navy,#2c3e66)}.mccj-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}",
@@ -177,6 +178,50 @@
     PG_MEM = {};
     try { for (var i = sessionStorage.length - 1; i >= 0; i--) { var k = sessionStorage.key(i); if (k && k.indexOf("sunsu.pgcache.") === 0) sessionStorage.removeItem(k); } } catch (x) {}
   }
+
+  /* TK157 (Emilia t696u): lectura Claude Vision del voucher → ficha verde (cuadra) / roja (descuadre) / botón «Leer voucher». */
+  var MCOcr = {
+    dm: function (f) { var m = String(f || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + "/" + m[2] : ""; },
+    chip: function (x, clave) {
+      var o = x && x.ocr, c = (x && x.cruce) || {}, url = (x && x.url) || "";
+      if (!o) return /^archivo:/.test(url) && clave ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Leer voucher</button>' : "";
+      if (o.estado !== "ok") return '<span class="ocr-chip ocr-gris">⚠️ No se pudo leer' + (o.error ? " (" + e(o.error) + ")" : "") + '</span>' + (clave && /^archivo:/.test(url) ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Reintentar</button>' : "");
+      var monto = o.monto != null ? "$" + Number(o.monto).toFixed(2) : "";
+      var info = [monto, o.referencia ? "Ref " + o.referencia : "", o.banco_red || "", MCOcr.dm(o.fecha)].filter(Boolean).map(e).join(" · ");
+      if (c.estado === "descuadre") {
+        var vs = [];
+        if (c.descuadre_ticket && c.objetivo_ticket) vs.push("vs " + (x.pago_id ? "pago" : "ticket") + " $" + Number(c.objetivo_ticket).toFixed(2));
+        if (c.descuadre_factura && c.total_factura) vs.push("vs factura Migo $" + Number(c.total_factura).toFixed(2));
+        return '<span class="ocr-chip ocr-mal" role="alert" title="' + e(c.mensaje || "") + '">⚠️ Descuadre voucher: leído ' + e(monto) + " " + e(vs.join(" · ")) + (o.referencia ? " · Ref " + e(o.referencia) : "") + "</span>";
+      }
+      if (c.estado === "parcial") return '<span class="ocr-chip ocr-par" title="' + e(c.mensaje || "") + '">◐ ' + e(c.mensaje || ("Leído: " + info)) + "</span>";
+      if (c.estado === "ilegible") return '<span class="ocr-chip ocr-gris">⚠️ Voucher ilegible: no se ve el monto</span>';
+      if (c.estado === "cuadra") return '<span class="ocr-chip ocr-ok" title="' + e(c.mensaje || "") + '">✓ Leído: ' + info + "</span>";
+      return '<span class="ocr-chip ocr-gris">🔍 Leído: ' + info + "</span>";
+    },
+    leer: async function (clave, url, total) {
+      var b = { clave: clave, url: url }; if (total) b.total = total;
+      return await api("tk_leer_voucher", b);
+    },
+    wire: function (root, total, onDone) {
+      (root || document).querySelectorAll("[data-ocr-leer]").forEach(function (b) {
+        if (b._ocrW) return; b._ocrW = 1;
+        b.onclick = async function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          b.disabled = true; b.textContent = "⏳ Leyendo…";
+          try {
+            var r = await MCOcr.leer(b.getAttribute("data-ocr-clave"), b.getAttribute("data-ocr-leer"), typeof total === "function" ? total() : total);
+            if (!r || r.error || !r.ocr) { b.disabled = false; b.textContent = "🔍 Leer voucher"; toast2((r && r.error) || "No se pudo leer", 1); return; }
+            var tmp = document.createElement("span");
+            tmp.innerHTML = MCOcr.chip({ url: r.url, ocr: r.ocr, cruce: r.cruce, pago_id: (r.items && r.items[0] && r.items[0].pago_id) || "" }, b.getAttribute("data-ocr-clave"));
+            b.replaceWith.apply(b, Array.prototype.slice.call(tmp.childNodes));
+            if (onDone) onDone(r);
+          } catch (x) { b.disabled = false; b.textContent = "🔍 Leer voucher"; toast2((x && x.message) || "No se pudo leer", 1); }
+        };
+      });
+    },
+  };
+  window.MCOcr = MCOcr;
   var MCPagos = {
     montar: async function (host, clave, totalFn, onPagado, onFoto) {
       css();
@@ -195,11 +240,20 @@
         if (onPagado) onPagado(r.pagadoBeta || 0);
         var met = { canje: "Canje (paquete/gift)", mixto: "Varios métodos", otro: "Otro", "gift card": "Gift card", "cortesía": "Cortesía", sin: "Sin método" };
         (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
+        // TK157: la ficha de lectura del voucher va debajo de su pago (verde cuadra / rojo descuadre / 🔍 Leer).
+        var ocrUsadas = {};
+        var ocrDePago = function (p) {
+          if (!p.foto) return "";
+          var f = (r.fotos || []).filter(function (x) { return x && x.url === p.foto; })[0];
+          if (!f || ocrUsadas[f.url]) return "";
+          ocrUsadas[f.url] = 1;
+          return '<div class="ocr-box">' + MCOcr.chip(f, clave) + "</div>";
+        };
         var filaPago = function (p, puedeAnular) {
           var th = p.foto ? thumbHtml(p.foto, "Voucher", true) : "";
           var quien = p.registrado_por || p.por || "";
           return '<div class="mccj-pay-item"><span class="mccj-pay-item-t">' + e(fh(p.fecha)) + " · " + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? " · " + e(p.ref) : "") + (quien ? ' <span class="mccj-sub">' + e(quien) + "</span>" : "") + "</span>" + th + '<span class="mccj-pay-item-m">' + $m(p.monto) + "</span>" +
-            (r.admin && puedeAnular ? '<button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button>' : "") + "</div>";
+            (r.admin && puedeAnular ? '<button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button>' : "") + "</div>" + ocrDePago(p);
         };
         var filas = (r.pagosLegado || []).map(function (p) { return filaPago(p, false); }).join("") + (r.beta || []).map(function (p) { return filaPago(p, true); }).join("");
         // TK82: el saldo lo manda la API (ya aplica redondeo ≤ $0.05 y anulado). No recomputar con el total de líneas.
@@ -232,15 +286,19 @@
           if (!prevF) return;
           var h = "";
           (r.fotos || []).forEach(function (f) { if (f && f.url) h += thumbHtml(f.url, "Voucher", true); });
+          var chips = (r.fotos || []).filter(function (f) { return f && f.url && !ocrUsadas[f.url]; }).map(function (f) { return MCOcr.chip(f, clave); }).join("");
+          if (chips) h += '<div class="ocr-box">' + chips + "</div>";
           if (foto && !fotoListo) h += (/^data:image\//.test(foto) ? '<span class="pg-th"><img class="pg-th-open" src="' + foto + '" alt="Voucher"></span>' : "<span class=\"mccj-sub\">📄 Listo</span>");
           prevF.innerHTML = h || (fotoListo ? "" : "");
           cargarThumbs(host);
           wireQuitar(host, clave, function () { MCPagos.montar(host, clave, totalFn, onPagado, onFoto); });
+          MCOcr.wire(host, totalFn);
           host.querySelectorAll("[data-pv]").forEach(function (b) {
             b.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(b.getAttribute("data-pv"), b.getAttribute("data-pvn") || "Voucher"); };
           });
         };
         pintThumbs();
+        (function () { var inM0 = host.querySelector("#pg-monto"); if (inM0 && inM0.value) { inM0._auto = 1; inM0.addEventListener("input", function () { inM0._auto = 0; }); } })();
         var addBtn = host.querySelector("#pg-add");
         if (addBtn) addBtn.onclick = function () {
           var wrap = host.querySelector("#pg-form-wrap");
@@ -260,10 +318,19 @@
           pintThumbs(); markCam();
           toast2("⏳ Subiendo voucher…");
           try {
-            var up = await api("tk_subir_doc", { clave: clave, imagen: foto });
+            var up = await api("tk_subir_doc", { clave: clave, imagen: foto, total: totalFn() });
             if (!up || up.error) { toast2((up && up.error) || "No se pudo subir", 1); return; }
             fotoListo = true;
-            toast2("✓ Voucher subido");
+            // TK157: si Claude leyó el voucher, rellena monto / referencia vacíos (nota «Leído del voucher»).
+            var oc = up.ocr, llenado = false;
+            if (oc && oc.estado === "ok") {
+              var inM = host.querySelector("#pg-monto"), inR = host.querySelector("#pg-ref"), selMet = host.querySelector("#pg-met");
+              if (inM && oc.monto != null && (!inM.value || inM._auto)) { inM.value = Number(oc.monto).toFixed(2); inM._auto = 1; llenado = true; }
+              if (inR && oc.referencia && !inR.value) { inR.value = oc.referencia; llenado = true; }
+              if (selMet && !selMet.value) { var mm = { voucher_tarjeta: "tarjeta", transferencia: "transferencia", deuna: "deuna" }[oc.tipo]; if (mm && selMet.querySelector('option[value="' + mm + '"]')) { selMet.value = mm; llenado = true; } }
+              if (llenado && prevF && !host.querySelector(".ocr-nota")) { var nt = document.createElement("span"); nt.className = "ocr-nota"; nt.textContent = "✓ Leído del voucher"; var rowR = inR && inR.parentNode; if (rowR) rowR.appendChild(nt); }
+            }
+            toast2(oc && oc.estado === "ok" ? (up.cruce && up.cruce.estado === "descuadre" ? "⚠️ Voucher subido · " + (up.cruce.mensaje || "descuadre") : "✓ Voucher subido y leído") : "✓ Voucher subido");
             if (onFoto) onFoto();
             var rec = await api("pg_ticket", { clave: clave, total: totalFn() });
             if (rec && rec.ok) { r.fotos = rec.fotos; r.beta = rec.beta; r.admin = rec.admin; }
