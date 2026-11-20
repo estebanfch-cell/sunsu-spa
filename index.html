@@ -8493,13 +8493,23 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK178";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK180"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
   var localCache = window.SUNSU_CACHE || "";
   var localEngine = "";
   var remoteCache = "", remoteEngine = "";
+  var TRY_KEY = "sunsu.upd.try";
+  /* TK180 (Emilia t790u): dentro de la app nativa (TestFlight/Capacitor) la web va empaquetada:
+     no hay service worker ni versión nueva que bajar, así que el banner nunca se muestra ahí. */
+  function esNativa() {
+    try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (e) { return false; }
+  }
+  function leerIntento() {
+    try { var o = JSON.parse(sessionStorage.getItem(TRY_KEY) || "null"); return o && o.t ? o : null; } catch (e) { return null; }
+  }
+  function guardarIntento(o) { try { if (o) sessionStorage.setItem(TRY_KEY, JSON.stringify(o)); else sessionStorage.removeItem(TRY_KEY); } catch (e) {} }
   function hideKey() { return "sunsu.banner.hide." + (remoteCache || "") + "|" + (remoteEngine || ""); }
   function dismissed() { try { return sessionStorage.getItem(hideKey()) === "1"; } catch (e) { return false; } }
   function hay() {
@@ -8507,12 +8517,25 @@ window.SunsuUpdate = (function () {
     if (remoteEngine && localEngine && remoteEngine !== localEngine) return "motor";
     return null;
   }
+  /* TK180: si ya se recargó (incluso con limpieza total) y la página sigue diciendo otra versión,
+     el problema no está en el teléfono: no insistir con el banner para esa versión (sin bucle). */
+  function agotado() {
+    var t = leerIntento();
+    return !!(t && t.n >= 2 && t.t === (remoteCache + "|" + remoteEngine));
+  }
+  function ocultar() {
+    var cur = document.getElementById("sunsu-nueva-ver");
+    if (cur) cur.hidden = true;
+    document.body.classList.remove("sunsu-has-update");
+  }
   function pintar() {
-    if (!hay() || dismissed()) {
-      var cur = document.getElementById("sunsu-nueva-ver");
-      if (cur) cur.hidden = true;
-      document.body.classList.remove("sunsu-has-update");
-      return;
+    var h = hay();
+    if (!h) { if (remoteCache || remoteEngine) guardarIntento(null); ocultar(); return; }
+    if (esNativa() || dismissed() || agotado()) { ocultar(); return; }
+    var t = leerIntento();
+    if (t && t.n === 1 && t.t === (remoteCache + "|" + remoteEngine) && !updating) {
+      /* Ya se tocó Actualizar y la recarga normal no alcanzó: limpieza total automática una sola vez. */
+      actualizar(); return;
     }
     var el = document.getElementById("sunsu-nueva-ver");
     if (!el) {
@@ -8524,8 +8547,7 @@ window.SunsuUpdate = (function () {
       el.querySelector("#sunsu-nueva-ver-btn").onclick = actualizar;
       el.querySelector("#sunsu-nueva-ver-x").onclick = function () {
         try { sessionStorage.setItem(hideKey(), "1"); } catch (e) {}
-        el.hidden = true;
-        document.body.classList.remove("sunsu-has-update");
+        ocultar();
       };
     }
     el.hidden = false;
@@ -8547,19 +8569,31 @@ window.SunsuUpdate = (function () {
     return m ? m[1] : "";
   }
   function revisarSw() {
-    fetch("/sw.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (txt) {
+    if (esNativa()) return;
+    fetch("/sw.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (txt) {
       var c = parseCache(txt);
       if (c) notarCache(c);
     }).catch(function () {});
+  }
+  function borrarCaches() {
+    try { return caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }); } catch (e) { return Promise.resolve(); }
   }
   function actualizar() {
     if (updating) return;
     updating = true; clicked = true;
     var btn = document.getElementById("sunsu-nueva-ver-btn");
     if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
+    var objetivo = remoteCache + "|" + remoteEngine;
+    var prev = leerIntento();
+    var n = prev && prev.t === objetivo ? prev.n + 1 : 1;
+    guardarIntento({ t: objetivo, n: n });
+    var total = n >= 2; /* segundo intento: soltar el service worker y todas las cachés */
     /* TK153 (Emilia t670u): recargar SIEMPRE en la misma ruta (location.pathname). Cambiar de URL
        (?sv=, /beta.html → /) hace que iOS saque el icono del Home Screen del modo pantalla completa. */
+    var hecho = false;
     var go = function () {
+      if (hecho) return;
+      hecho = true; window._sunsuSwReloaded = true;
       try {
         if (/[?&]sv=/.test(location.search)) {
           var q = location.search.replace(/([?&])sv=[^&]*&?/g, "$1").replace(/[?&]$/, "");
@@ -8568,16 +8602,35 @@ window.SunsuUpdate = (function () {
       } catch (eH) {}
       location.reload();
     };
-    var limpia = Promise.resolve();
-    try { limpia = caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }); } catch (e) {}
-    Promise.resolve(limpia).then(function () {
-      if (!navigator.serviceWorker) return;
-      return navigator.serviceWorker.getRegistration().then(function (reg) {
-        if (!reg) return;
-        if (reg.waiting) try { reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
-        try { return reg.update().then(function () { if (reg.waiting) try { reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e2) {} }); } catch (e) {}
+    setTimeout(go, 6000); /* pase lo que pase, recarga: el botón nunca se queda colgado */
+    var sw = navigator.serviceWorker;
+    var cadena;
+    if (total) {
+      cadena = Promise.resolve(sw && sw.getRegistrations ? sw.getRegistrations() : []).then(function (regs) {
+        return Promise.all((regs || []).map(function (r) { return r.unregister(); }));
+      }).then(borrarCaches);
+    } else {
+      cadena = borrarCaches().then(function () {
+        if (!sw) return;
+        return sw.getRegistration().then(function (reg) {
+          if (!reg) return;
+          var activar = function () { if (reg.waiting) try { reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e) {} };
+          activar();
+          return Promise.resolve(reg.update()).catch(function () {}).then(function () {
+            activar();
+            if (!reg.waiting && !reg.installing) return;
+            /* esperar a que el SW nuevo tome control (controllerchange) hasta 2.5 s */
+            return new Promise(function (ok) {
+              var listo = function () { ok(); };
+              try { sw.addEventListener("controllerchange", listo, { once: true }); } catch (e) {}
+              if (reg.installing) reg.installing.addEventListener("statechange", activar);
+              setTimeout(listo, 2500);
+            });
+          });
+        });
       });
-    }).then(function () { go(); }, function () { go(); });
+    }
+    cadena.then(go, go);
   }
   function onFocus() {
     var n = Date.now();
@@ -8588,6 +8641,7 @@ window.SunsuUpdate = (function () {
   }
   function init() {
     if (typeof local !== "undefined" && local) return;
+    if (esNativa()) return;
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(function (reg) {
       try { reg.update(); } catch (e) {}
@@ -8610,7 +8664,7 @@ window.SunsuUpdate = (function () {
     document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") onFocus(); });
     window.addEventListener("focus", onFocus);
   }
-  return { init: init, notarMotor: notarMotor, actualizar: actualizar, hay: hay, pintar: pintar, parseCache: parseCache, revisarVersionServidor: revisarSw };
+  return { init: init, notarMotor: notarMotor, actualizar: actualizar, hay: hay, pintar: pintar, parseCache: parseCache, revisarVersionServidor: revisarSw, esNativa: esNativa };
 })();
 function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pintar(); }
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
