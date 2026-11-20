@@ -167,4 +167,9 @@ describe("agenda (Acuity por la edge)", () => {
     assert.doesNotMatch(JSON.stringify(ana), /593991234567/);
   });
 
+  it("TK181: la Agenda se puede leer en «Ver como» (ag_meta/ag_citas/ag_cita), no escribir", async () => {
+    const { lecturaEnVista } = await import("./permisos.ts");
+    for (const a of ["ag_meta", "ag_citas", "ag_cita"]) assert.equal(lecturaEnVista(a), true, a);
+    for (const a of ["ag_wa", "ag_etiqueta", "ag_cancelar", "ag_agendar"]) assert.equal(lecturaEnVista(a), false, a);
+  });
 });
