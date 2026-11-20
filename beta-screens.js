@@ -5718,21 +5718,76 @@ function _histBuscarGo(esStaff){
   var f0=window._histFiltroActual||{};fh=null;
   if(esStaff) mostrarHistorialStaff(c,f0.desde||'',f0.hasta||''); else mostrarHistorialAdmin(c,f0.desde||'',f0.hasta||'',window._histCosmFiltro);
 }
-// Búsqueda EN VIVO: re-filtra sola 350ms después de dejar de teclear (mín. 2 caracteres)
+// TK156 (Emilia t694u): búsqueda EN VIVO letra por letra en 0 ms — filtra en memoria la lista ya cargada,
+// repinta SOLO #hist-res (el <input> no se toca: no se pierde el foco ni el teclado del iPhone) y, con ≥2 letras,
+// pide en silencio (300 ms, con secuencia) tickets más antiguos para anexarlos sin parpadeo.
+function _tkNorm(v){ return String(v==null?'':v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function _histTextoBusq(t){
+  if(t&&t._busqTxt) return t._busqTxt;
+  var lin=[].concat(t.lineas||[], t.items||[], t.detalle||[]).map(function(l){ return l&&(l.nombre||l.desc||l.descripcion||l.producto||l.servicio)||''; }).join(' ');
+  var est=''; try{ est=_histEstadoDoc(t); }catch(_e){}
+  var fac=''; try{ fac=_histFactura(t)||''; }catch(_e2){}
+  var h=_tkNorm([t.so_num,t.beta_num,t.clave,t.nombre,t.apellido,t.cliente,t.cedula,fac,t.factura,t.cosmetologa,est,t.estado,t.estado_doc,t.servicios,t.facial,t.tratamiento,lin].join(' | '));
+  try{ Object.defineProperty(t,'_busqTxt',{value:h,enumerable:false,writable:true,configurable:true}); }catch(_e3){}
+  return h;
+}
+function _histMatchRapido(t, qn){
+  if(!qn) return true;
+  var h=_histTextoBusq(t);
+  return qn.split(/\s+/).every(function(w){ return !w||h.indexOf(w)>=0; });
+}
+function _histListaLocal(qn){
+  var base=window._histBase||window._histData||_histData||[], vistos={}, out=[];
+  base.concat(window._histData||[]).forEach(function(t){
+    var k=String(t.so_num||t.clave||(t.tkRow!=null?'r'+t.tkRow:'')||JSON.stringify([t.fecha,t.nombre,t.estimado]));
+    if(vistos[k]) return; vistos[k]=1;
+    if(_histMatchRapido(t,qn)) out.push(t);
+  });
+  return out;
+}
+function _histPintarLocal(esStaff){
+  var res=document.getElementById('hist-res'); if(!res) return false;
+  var q=(window._histBusqueda||'').trim(), qn=_tkNorm(q), f=window._histFiltroActual||{};
+  var L=_histListaLocal(qn), tot0=window._tkTot;
+  if(q) window._tkTot=null; /* el resumen cuenta lo filtrado al instante */
+  try{
+  if(esStaff) res.innerHTML=_histResStaffHTML(L, q.toLowerCase());
+  else res.innerHTML=_histResAdminHTML(L, window._histCosmFiltro||'', f.desde||'', f.hasta||'', q.toLowerCase());
+  } finally { if(q) window._tkTot=tot0; }
+  _histTrasPintar();
+  return true;
+}
+function _histBuscarFondo(esStaff, q){
+  if(!window._tkServer||typeof _tkPedir!=='function') return;
+  var f=window._histFiltroActual||{};
+  var qq={desde:f.desde||'',hasta:f.hasta||'',cosm:esStaff?'':(window._histCosmFiltro||''),q:q.toLowerCase()};
+  if(_tkClave(qq)===window._tkKey) return;
+  window._tkKey=_tkClave(qq); window._tkLim=50;
+  _tkPedir(qq,false).then(function(ok){ if(ok&&(window._histBusqueda||'').trim()===q) _histPintarLocal(esStaff); });
+}
+function _histVolverBase(esStaff){
+  window._tkSeq=(window._tkSeq||0)+1; /* respuestas de búsquedas viejas se ignoran */
+  window._tkCargandoLista=false;
+  if(window._histBase){ _histData=window._histBase; window._histData=_histData; window._tkQ=window._histBaseQ||window._tkQ; window._tkKey=window._histBaseKey||window._tkKey; if(window._histBaseTot) window._tkTot=window._histBaseTot; }
+  window._histBase=null;
+  return _histPintarLocal(esStaff);
+}
 function _histBuscarLive(esStaff){
-  clearTimeout(window._histBuscarTimer);
-  window._histBuscarTimer=setTimeout(function(){
-    var el=document.getElementById('hist-buscar');
-    var q=(el?el.value:'').trim();
-    if(q.length===1) return; // 1 letra traería demasiado — espera la segunda
-    if(q===(window._histBusqueda||'')) return; // sin cambios
-    _histBuscarGo(esStaff);
-  },350);
+  clearTimeout(window._histBuscarTimer); clearTimeout(window._tkDeb);
+  var el=document.getElementById('hist-buscar');
+  var q=(el?el.value:'').trim();
+  if(!window._histBase&&q){ window._histBase=(window._histData||_histData||[]).slice(); window._histBaseQ=window._tkQ; window._histBaseKey=window._tkKey; window._histBaseTot=window._tkTot; }
+  window._histBusqueda=q;
+  if(!q){ if(!_histVolverBase(esStaff)) _histBuscarGo(esStaff); return; }
+  if(!_histPintarLocal(esStaff)) return;
+  if(_tkNorm(q).length>=2) window._histBuscarTimer=setTimeout(function(){ if((window._histBusqueda||'').trim()===q) _histBuscarFondo(esStaff,q); },300);
 }
 function _histBuscarClear(esStaff){
   window._histBusqueda='';
   var elC=document.getElementById('hist-buscar');
   if(elC) elC.value='';
+  clearTimeout(window._histBuscarTimer);
+  if(window._histBase&&_histVolverBase(esStaff)) return;
   if(_histActualizarRes(esStaff)) return;
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};

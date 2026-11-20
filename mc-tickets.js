@@ -129,6 +129,7 @@
       ".mctk2 .mctk-bar #mctk-volver{width:auto;min-height:32px;padding:4px 2px;border:0;background:none;box-shadow:none;font-size:.86rem;color:var(--navy)}",
       ".mctk-edit-big{display:none!important}.mctk-edit-mini{margin:0 6px 0 auto;padding:3px 9px;min-height:28px;font-size:.68rem;font-weight:700;color:var(--navy-d,#3D5A7A);background:transparent;border:1px solid var(--cream-d,#EDE6D8);border-radius:999px;cursor:pointer;flex:none;white-space:nowrap}.mctk2 .mctk-bar .mctk-acc-wrap{margin-left:0;flex:0 0 auto}.mctk2 .mctk-bar .mctk-acc-btn{min-height:36px;border-radius:999px;padding:6px 14px;font-size:.8rem;font-weight:700;white-space:nowrap}",
       ".mctk2 .mctk-bar .mctk-dd,.mctk-acc-wrap .mctk-dd{left:auto;right:0;min-width:250px;width:max-content;max-width:calc(100vw - 24px);z-index:80}",
+      ".mctk-prev{padding:10px 12px;margin-top:10px}.mctk-pv-h{font-weight:800;font-size:.86rem;color:var(--navy-d);margin-bottom:6px}.mctk-pv-sec{margin-top:6px}.mctk-pv-t{font-size:.66rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}.mctk-pv-row{display:flex;flex-wrap:wrap;gap:8px}.mctk-pv-th{display:flex;flex-direction:column;align-items:center;gap:3px;width:64px;padding:0;border:0;background:none;cursor:pointer;font:inherit}.mctk-pv-th img,.mctk-pv-ico{width:60px;height:60px;border-radius:9px;object-fit:cover;border:1px solid var(--cream-d);background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.5rem;max-width:60px!important;max-height:60px!important;min-width:60px;min-height:60px}.mctk-pv-l{font-size:.64rem;color:var(--navy-d);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mctk-pv-pdf{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--cream-d);border-radius:10px;background:#fff;font:inherit;font-size:.78rem;color:var(--navy-d);cursor:pointer}.mctk-pv-falta{font-size:.74rem;color:#B45309;font-weight:700}",
       ".mctk-acc-sec{font-size:.66rem;font-weight:800;color:var(--gray);padding:8px 10px 2px;letter-spacing:.04em;text-transform:uppercase}.mctk-dd .mctk-voucher{display:flex;width:100%;align-items:center;gap:8px;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;font:inherit;font-size:.8rem;color:var(--navy-d);cursor:pointer;white-space:nowrap!important}.mctk-dd .mctk-voucher:hover{background:var(--cream)}.mctk-dd .mctk-cancel{color:#B2452A}",
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
       ".mctk-wa-sel{position:fixed;inset:0;background:rgba(20,30,50,.4);z-index:10000;display:flex;align-items:flex-end;justify-content:center;padding:16px}.mctk-wa-box{background:#fff;border-radius:16px 16px 0 0;padding:16px 16px 20px;width:min(420px,100%);box-sizing:border-box}.mctk-wa-box h3{margin:0 0 4px;font-size:1rem}.mctk-wa-box p{margin:0 0 12px;color:var(--gray);font-size:.8rem}.mctk-wa-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.mctk-wa-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid #DC2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap}.mctk-wa-chip.on{border-color:#16A34A;background:#f3faf6}.mctk-wa-dot{width:10px;height:10px;border-radius:50%;background:#DC2626}.mctk-wa-chip.on .mctk-wa-dot{background:#16A34A}.mctk-wa-acts{display:flex;justify-content:flex-end;gap:8px;align-items:center}.mctk-wa-go{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap!important}",
@@ -366,6 +367,37 @@
       (conPaq ? '<button type="button" data-wa="paquete">' + ico + ' Enviar reporte de paquete</button>' : "") +
       (conGc ? '<button type="button" data-wa="giftcard">' + ico + ' Enviar gift card</button>' : "") +
       '<button type="button" data-wa="chat">' + ico + ' Abrir chat</button>';
+  }
+  /* TK156 (Emilia t692u): en el mismo ticket se ve todo — fotos de la clienta, vouchers y PDFs — con vista previa
+     (sin salir de la app). Miniaturas desde la caché de fotos de la lista (0 ms); lo que falte llega en lote. */
+  function idFoto(u) {
+    u = String(u || "");
+    if (/^archivo:/.test(u)) return u.slice(8);
+    var m = u.match(/[-\w]{25,}/); return m ? m[0] : "";
+  }
+  function thPrev(x, etq) {
+    var id = idFoto(x.url), c = (id && typeof window._fotoThumbGet === "function") ? window._fotoThumbGet(id) : "";
+    var esImg = !/\.pdf(\?|$)/i.test(String(x.url || "")) && x.tipo !== "factura";
+    return '<button type="button" class="mctk-pv-th" data-pv="' + e(x.url) + '" data-pvn="' + e(x.nombre || etq) + '" title="' + e(x.nombre || etq) + '">' +
+      (esImg && id ? '<img class="mob-th' + (c ? "" : " mob-th-wait") + '" alt="" ' + (c ? 'src="' + e(c) + '"' : 'data-arch="' + e(id) + '"') + ">" : '<span class="mctk-pv-ico" aria-hidden="true">' + (x.tipo === "factura" ? "📄" : "🧾") + "</span>") +
+      '<span class="mctk-pv-l">' + e(etq) + "</span></button>";
+  }
+  function previasHtml() {
+    var d = K.d || {}, docs = d.documentos || [], h = "";
+    var fotos = docs.filter(function (x) { return x.tipo === "foto"; });
+    var antes = fotos.filter(function (x) { return !/despu/i.test(x.nombre || ""); }), despues = fotos.filter(function (x) { return /despu/i.test(x.nombre || ""); });
+    var comps = docs.filter(function (x) { return x.tipo === "comprobante"; }), facs = docs.filter(function (x) { return x.tipo === "factura"; });
+    var fh = antes.map(function (x) { return thPrev(x, "Antes"); }).join("") + despues.map(function (x) { return thPrev(x, "Después"); }).join("");
+    if (!fh && conTratamiento()) fh = '<span class="mctk-pv-falta">📷 Sin fotos de la clienta</span>';
+    if (fh) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Fotos de la clienta</div><div class="mctk-pv-row">' + fh + "</div></div>";
+    var vh = comps.map(function (x, i) { return thPrev(x, "Voucher " + (i + 1)); }).join("") + facs.map(function (x) { return thPrev(x, x.factura ? "Fac. " + String(x.factura).split("-").pop().replace(/^0+/, "") : "Factura"); }).join("");
+    if (vh) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Voucher y factura</div><div class="mctk-pv-row">' + vh + "</div></div>";
+    var t = d.ticket || {}, pdf = "";
+    if (t.sheetRow || t.cliente || conTratamiento()) pdf += '<button type="button" class="mctk-pv-pdf" data-doc="tarjeta">📄<span>Tarjeta del cliente</span></button>';
+    var pq0 = d.paquete || {}; if ((window.SunsuWa && SunsuWa.conPaq(pq0)) || (pq0.vigentes && pq0.vigentes.length) || pq0.uso || pq0.compra || (pq0.delTicket && pq0.delTicket.length)) pdf += '<button type="button" class="mctk-pv-pdf" data-doc="paquete">🎴<span>Control de paquete</span></button>';
+    (d.giftcards || []).filter(function (g) { return g.uso === "vendida" || g.uso === "usada" || g.uso === "canjeada"; }).forEach(function (g) { pdf += '<button type="button" class="mctk-pv-pdf" data-doc="gc" data-cod="' + e(g.codigo) + '">🎁<span>Gift card ' + e(g.codigo) + "</span></button>"; });
+    if (pdf) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">PDFs</div><div class="mctk-pv-row">' + pdf + "</div></div>";
+    return h ? '<div class="mccf-card mctk-prev" id="mctk-prev"><div class="mctk-pv-h">📎 Fotos, voucher y documentos</div>' + h + "</div>" : "";
   }
   function docsHtml2() {
     var d = K.d, t = d.ticket, h = "";
@@ -642,7 +674,8 @@
       sumNet = r2(d.totales.subtotal != null ? d.totales.subtotal : net(total));
       cobrado = cobrado || total;
     }
-    var pag = r2((pg.cobrado ? cobrado : 0) + (K.pagoBeta || 0));
+    // TK156 (Emilia t695u, TK-SO-1927): nunca suma doble beta_pagos + cobrado del sistema/Migo por el mismo pago.
+    var pag = pagadoTk(pg.cobrado, cobrado, K.pagoBeta);
     var saldo = anulado ? 0 : saldoPend(total, pag);
     var met = (pg.metodos || []).map(function (m) { return e(m.metodo) + (m.ref ? ' <span class="mccf-sub">' + e(m.ref) + "</span>" : ""); }).join(" · ");
     // TK68: todo lo de Sunsu es gravado 15 %: Subtotal, IVA 15 %, Total, Pagado, Saldo (sin «Subtotal 0 %» ni duplicados).
@@ -790,7 +823,7 @@
       '<div class="mccf-card mctk-lcard"><b>Líneas</b><div class="mctk-lwrap"><div id="mctk-lin" class="mctk-ls">' + lineasHtml() + "</div></div>" +
       (K.editandoLineas ? ('<a href="#" class="mctk-link mctk-addbtn" id="mctk-addlink">+ Agregar producto</a><div id="mctk-addbox" hidden><div class="mctk-scan" style="margin-top:6px"><input type="search" id="mctk-q" placeholder="Nombre, SKU o escanea el código" autocomplete="off"><button class="btn ghost small" type="button" id="mctk-cam" title="Leer con la cámara" aria-label="Leer con la cámara">📷</button></div><div class="mccf-hits" id="mctk-hits" hidden></div><div class="mctk-gcq" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 0"><button type="button" class="btn small" id="mctk-gc65">Facial Premium $65.00 con IVA</button><label class="mccf-sub" style="display:flex;align-items:center;gap:4px">Valor con IVA $<input type="number" id="mctk-gcval" step="0.01" min="0" placeholder="150.00" style="width:88px"></label><button type="button" class="btn ghost small" id="mctk-gcadd">Agregar gift</button><button type="button" class="btn ghost small" id="mctk-caja">Agregar caja (+$3)</button></div><div id="mctk-gciva" class="mccf-sub" style="margin-top:4px"></div></div>') : "") +
       '<div class="mctk-foot">' + (K.editandoLineas ? ('<div class="mctk-adj"><button type="button" class="btn ghost small" id="mctk-promos">🏷️ Promociones</button>' + (K.promo ? '<label>Promoción anterior <select id="mctk-promo">' + opt("", "Sin promoción", K.promo) + (d.promos || []).map(function (p) { return opt(p.nombre, p.nombre, K.promo); }).join("") + (K.promo && !(d.promos || []).some(function (p) { return p.nombre === K.promo; }) ? opt(K.promo, K.promo + " (ya no vigente)", K.promo) : "") + "</select></label>" : "") +
-      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div>') : "") + '<div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' +
+      '<label>Descuento <input id="mctk-dv" type="text" inputmode="decimal" placeholder="10% o $5" title="Descuento del ticket: 10% o $5" value="' + e(descTxt(K.desc.tipo, K.desc.valor)) + '"></label>' + justHtml() + '</div>') : "") + '<div id="mctk-tot">' + totHtml() + '</div></div><div id="mctk-pagos"></div>' + previasHtml() +
       '<p class="err" id="mctk-err"></p><div class="mctk-acts" id="mctk-save"' + (K.dirty ? "" : " hidden") + ">" + (d.puedeEditar ? '<button class="btn small" type="button" id="mctk-guardar">Guardar cambios</button>' : '<span class="mctk-prop-note">Propuesta de edición — los cambios se aplicarán solo cuando un admin apruebe</span><button class="btn small" type="button" id="mctk-pedir">📨 Enviar propuesta para aprobación</button>') + '<button class="btn ghost small" type="button" id="mctk-descartar">Descartar</button></div></div>' +
       relHtml() + "</div>";
   }
@@ -926,7 +959,22 @@
       descuento: { tipo: K.desc.tipo || "", valor: Number(K.desc.valor) || 0 }, promo: K.promo || "", excluir_cosmetologa: K.exclC, excluir_nota: K.exclN,
       justificacion_descuento: K.justif || "", datos: Object.assign({}, dat.datos || {}, { justificacion_descuento: K.justif || "" }) });
   }
+  /** Pagado del resumen: si hay pagos reales (beta_pagos) se usan esos; si no, lo cobrado por sistema viejo/Migo. Jamás la suma de ambos. */
+  function pagadoTk(cobradoFlag, cobrado, pagoBeta) {
+    var pb = Number(pagoBeta) || 0, cs = cobradoFlag ? (Number(cobrado) || 0) : 0;
+    return r2(pb > 0 ? Math.max(pb, cs) : cs);
+  }
+  /** Mismo comprobante/foto (misma URL o mismo archivo de Drive/app) una sola vez. */
+  function docsUnicos(L) {
+    var vistos = {};
+    return (L || []).filter(function (x) {
+      if (!x || !x.url) return true;
+      var k = (x.tipo || "") + "|" + (idFoto(x.url) || String(x.url).trim());
+      if (vistos[k]) return false; vistos[k] = 1; return true;
+    });
+  }
   function cargarEstado(d) {
+    if (d && Array.isArray(d.documentos)) d.documentos = docsUnicos(d.documentos);
     K.d = d; K.dirty = false; K.dirtyL = false; K.datos = {}; K.open = {}; K.costos = null; K._costosPend = null;
     K.L = (d.lineas || []).map(function (l) { return { tipo: l.tipo, sku: l.sku, nombre: l.nombre, cantidad: Number(l.cantidad), precio_unit: Number(l.precio_unit), descuento_tipo: l.descuento_tipo || null, descuento_valor: Number(l.descuento_valor) || 0, excluir_comision: !!l.excluir_comision, estimado: !!l.estimado, canje: !!l.canje, cortesia: !!l.cortesia, consumoInterno: !!l.consumoInterno, paqueteSesion: l.paqueteSesion || "", valorNominal: Number(l.valorNominal) || 0, mejoraPaquete: !!l.mejoraPaquete || /diferencia por mejora/i.test(l.nombre || l.promo || ""), total_linea: Number(l.total_linea) || 0, promo: l.promo || "" }; });
     K.promoIds = [];
@@ -1271,6 +1319,9 @@
     function onWa(ev) { var b = ev.target.closest("[data-wa]"); if (!b) return; cerrarMenuDe(b); enviarReporte(b.getAttribute("data-wa")); }
     // En celular Documentos/WhatsApp viven en Acciones (#mctk-acc); en escritorio siguen #mctk-dd y #mctk-wa.
     on(main, "#mctk-dd", "onclick", onDocs);
+    on(main, "#mctk-prev", "onclick", onDocs);
+    var prevBox = main.querySelector("#mctk-prev");
+    if (prevBox && typeof window._histCargarThumbs === "function") { try { window._histCargarThumbs(prevBox); } catch (eT) {} }
     on(main, "#mctk-wa", "onclick", onWa);
     var acc = main.querySelector("#mctk-acc");
     if (acc) acc.addEventListener("click", function (ev) {
@@ -1535,7 +1586,7 @@
     },
     claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }, cacheLineasLista: cacheLineasLista, lineasCacheDe: lineasCacheDe,
     isDirty: function () { return !!K.dirty; },
-    _k: K, _calc: calc,
+    _k: K, _calc: calc, _pagado: pagadoTk, _docsUnicos: docsUnicos,
   };
 })();
 

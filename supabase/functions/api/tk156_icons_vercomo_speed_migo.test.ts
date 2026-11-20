@@ -161,3 +161,143 @@ describe("TK156 versión", () => {
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK156/);
   });
 });
+
+describe("TK156 buscador de Tickets instantáneo letra por letra (t694u)", () => {
+  it("filtra en 0 ms sin red, sin tildes, repinta solo #hist-res y no toca el input", () => {
+    const ini = screens.indexOf("function _tkNorm("), fin = screens.indexOf("function _histBuscarClear(");
+    assert.ok(ini > 0 && fin > ini);
+    const input = { value: "", focused: true };
+    const res = { innerHTML: "" };
+    const doc = { getElementById: (id: string) => (id === "hist-buscar" ? input : id === "hist-res" ? res : null) };
+    const llamadas: string[] = [];
+    const timers: Array<() => void> = [];
+    const win: Row = {
+      _tkServer: false, _histFiltroActual: {},
+      _histData: [
+        { so_num: "TK-SO-1939", nombre: "Paulina", apellido: "Sánchez", cosmetologa: "Andrea", lineas: [{ nombre: "Facial Hidra Glow" }] },
+        { so_num: "TK-SO-1940", nombre: "Bárbara", apellido: "Ruiz", cosmetologa: "Belén", lineas: [{ nombre: "Ampoule" }] },
+        { so_num: "TK-SO-1941", nombre: "Carla", apellido: "Bravo", cosmetologa: "Andrea", lineas: [] },
+      ],
+    };
+    const f = new Function("window", "document", "api", "setTimeout", "clearTimeout", "_histEstadoDoc", "_histFactura", "_histResAdminHTML", "_histResStaffHTML", "_histTrasPintar", "_histBuscarGo", "_tkPedir", "_tkClave",
+      "var _histData=window._histData;" + screens.slice(ini, fin) + "; return { live: _histBuscarLive };")(
+      win, doc, (a: string) => { llamadas.push(a); return Promise.resolve({ ok: true }); },
+      (fn: () => void) => { timers.push(fn); return timers.length; }, () => {},
+      () => "", () => "",
+      (L: Row[]) => "N=" + L.length + ":" + L.map((t) => t.so_num).join(","), (L: Row[]) => "S=" + L.length, () => {}, () => { throw new Error("no debe re-render completo"); },
+      () => { llamadas.push("tk_historial"); return Promise.resolve(true); }, (q: Row) => JSON.stringify(q)) as Row;
+    const live = f.live as (s: boolean) => void;
+    input.value = "b"; live(false);
+    assert.equal(res.innerHTML, "N=2:TK-SO-1940,TK-SO-1941", "«b» → Bárbara (sin tilde) y Bravo al instante");
+    input.value = "ba"; live(false);
+    assert.equal(res.innerHTML, "N=1:TK-SO-1940");
+    input.value = "hidra"; live(false);
+    assert.equal(res.innerHTML, "N=1:TK-SO-1939", "busca en líneas/faciales");
+    input.value = "andrea"; live(false);
+    assert.equal(res.innerHTML, "N=2:TK-SO-1939,TK-SO-1941", "busca por cosmetóloga");
+    input.value = ""; live(false);
+    assert.equal(res.innerHTML, "N=3:TK-SO-1939,TK-SO-1940,TK-SO-1941", "al borrar vuelve a la lista completa en 0 ms");
+    assert.deepEqual(llamadas, [], "ninguna llamada de red al teclear");
+    assert.equal(input.focused, true); assert.equal(doc.getElementById("hist-buscar"), input, "el input es el mismo (no se recrea)");
+  });
+  it("con ≥2 letras pide en segundo plano con debounce y secuencia, sin spinner", () => {
+    const fn = screens.slice(screens.indexOf("function _histBuscarLive("), screens.indexOf("function _histBuscarClear("));
+    assert.match(fn, /setTimeout\(function\(\)\{ if\(\(window\._histBusqueda\|\|''\)\.trim\(\)===q\) _histBuscarFondo\(esStaff,q\); \},300\)/);
+    assert.doesNotMatch(fn, /Buscando…|Cargando/);
+    assert.match(screens, /window\._tkSeq=\(window\._tkSeq\|\|0\)\+1; \/\* respuestas de búsquedas viejas/);
+  });
+});
+
+describe("TK156 Dashboard: «Ver como…» y Alertas con × (t693u)", () => {
+  const ini = html.indexOf("/* ══════ TK156: Alertas del Dashboard"), fin = html.indexOf("async function renderInicioBeta");
+  function montar() {
+    const store: Record<string, string> = {};
+    const ls = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } };
+    const leidas: Row[] = [];
+    const filas: Record<string, { removed: boolean }> = {};
+    const nEl = { textContent: "" }, box = { hidden: false };
+    const doc = {
+      addEventListener: () => {},
+      querySelector: (sel: string) => { const k = sel.match(/data-al-key="(.+)"/)![1]; filas[k] = filas[k] || { removed: false }; return { remove: () => { filas[k].removed = true; } }; },
+      getElementById: (id: string) => id === "dash-al-n" ? nEl : id === "dash-al" ? box : id === "dash-al-dd" ? { querySelectorAll: () => ({ length: Object.values(filas).filter((x) => !x.removed).length }) } : null,
+    };
+    const f = new Function("window", "document", "localStorage", "state", "esc", "api", "CSS", "pintarBadgeNotif",
+      html.slice(ini, fin) + "; return { lista: alertasDashboard, top: htmlDashTop, ocultas: alertasOcultas, x: descartarAlerta };")(
+      {}, doc, ls, { user: { id: "u1" } }, (s: unknown) => String(s ?? ""), (a: string, p: Row) => { leidas.push({ a, ...p }); return Promise.resolve({ ok: true }); }, { escape: (s: string) => s }, () => {}) as Row;
+    return { f, store, leidas, filas, nEl, box };
+  }
+  const APR = { ok: true, grupos: [{ id: "edicion", titulo: "Ediciones", items: [{ tipo: "edicion", id: "41", titulo: "Andrea pide editar TK-SO-1941", href: "#/s/ticket/TK-SO-1941" }] }] };
+  const NOT = { ok: true, items: [{ id: 901, titulo: "Factura Migo sin forma de pago", leida: false }, { id: 902, titulo: "vieja", leida: true }] };
+  it("une solicitudes y avisos sin leer; el HTML trae «👁 Ver como…», contador y botones ×", () => {
+    const { f } = montar();
+    const L = (f.lista as (a: Row, b: Row, c: string[]) => Row[])(APR, NOT, []);
+    assert.deepEqual(L.map((x) => x.key), ["apr:edicion:41", "notif:901"]);
+    const h = (f.top as (l: Row[]) => string)(L);
+    assert.match(h, /id="dash-ver-como" data-ver-como="1">👁 Ver como…/);
+    assert.match(h, /⚠️ Alertas \(<span id="dash-al-n"[^>]*>2<\/span>\) ▾/);
+    assert.equal((h.match(/class="dash-al-x"/g) || []).length, 2);
+    assert.match((f.top as (l: Row[]) => string)([]), /<div class="dash-al" hidden/);
+  });
+  it("tocar × quita la alerta al instante, marca leída la notificación y persiste en localStorage", () => {
+    const m = montar();
+    m.filas["apr:edicion:41"] = { removed: false }; m.filas["notif:901"] = { removed: false };
+    (m.f.x as (k: string, n?: unknown) => void)("notif:901", "901");
+    assert.equal(m.filas["notif:901"].removed, true);
+    assert.equal(m.nEl.textContent, "1"); assert.equal(m.box.hidden, false);
+    assert.deepEqual(m.leidas, [{ a: "notif_leer", id: "901" }]);
+    assert.deepEqual(JSON.parse(m.store["sunsu.alertas.ocultas.u1"]), ["notif:901"]);
+    const tras = (m.f.lista as (a: Row, b: Row, c: string[]) => Row[])(APR, NOT, (m.f.ocultas as () => string[])());
+    assert.deepEqual(tras.map((x) => x.key), ["apr:edicion:41"], "sigue oculta al recargar");
+    (m.f.x as (k: string) => void)("apr:edicion:41");
+    assert.equal(m.nEl.textContent, "0"); assert.equal(m.box.hidden, true, "sin alertas, la barra se oculta");
+  });
+  it("el Dashboard admin antepone la barra y cablea Ver como…", () => {
+    assert.match(html, /pulso = htmlDashTop\(alertasDashboard\(apr, notif, alertasOcultas\(\)\)\) \+ pulso;/);
+    assert.match(html, /closest\("#dash-ver-como"\);\s*if \(vc && typeof abrirVerComo === "function"\)/);
+  });
+});
+
+describe("TK156 Fotos, voucher y documentos en el ticket (t692u)", () => {
+  const tk = file("mc-tickets.js");
+  it("sección 📎 con miniaturas desde caché, voucher y PDFs con vista previa en la app", () => {
+    assert.match(tk, /<div id="mctk-pagos"><\/div>' \+ previasHtml\(\)/);
+    assert.match(tk, /📎 Fotos, voucher y documentos/);
+    assert.match(tk, /window\._fotoThumbGet\(id\)/);
+    assert.match(tk, /on\(main, "#mctk-prev", "onclick", onDocs\)/);
+    for (const d of ['data-doc="tarjeta"', 'data-doc="paquete"', 'data-doc="gc"']) assert.ok(tk.includes(d));
+  });
+});
+
+describe("TK156 Pagado sin doble conteo (TK-SO-1927, t695u)", () => {
+  const tk = file("mc-tickets.js");
+  const ini = tk.indexOf("  function pagadoTk("), fin = tk.indexOf("  function cargarEstado(");
+  const f = new Function("var r2=function(n){return Math.round((Number(n)||0)*100)/100;};var idFoto=function(u){u=String(u||'');var m=u.match(/[-\\w]{25,}/);return m?m[0]:'';};" + tk.slice(ini, fin) + "; return { pagado: pagadoTk, unicos: docsUnicos };")() as Row;
+  const pagado = f.pagado as (a: boolean, b: number, c: number) => number;
+  it("ticket $15 con 1 pago de $15 en beta_pagos y cobrado=true → Pagado 15.00 (no 30.00)", () => {
+    assert.equal(pagado(true, 15, 15), 15);
+    assert.equal(pagado(false, 0, 15), 15);
+    assert.equal(pagado(true, 175, 0), 175, "solo sistema viejo / Migo");
+    assert.equal(pagado(false, 0, 0), 0);
+    assert.doesNotMatch(tk, /\(pg\.cobrado \? cobrado : 0\) \+ \(K\.pagoBeta/);
+  });
+  it("el mismo comprobante (misma URL / mismo archivo) se pinta una sola vez", () => {
+    const L = (f.unicos as (l: Row[]) => Row[])([
+      { tipo: "comprobante", url: "archivo:abc" }, { tipo: "comprobante", url: "archivo:abc" },
+      { tipo: "comprobante", url: "https://drive.google.com/file/d/1VoucherCCCCCCCCCCCCCCCCCCCCCC/view" }, { tipo: "comprobante", url: "https://drive.google.com/open?id=1VoucherCCCCCCCCCCCCCCCCCCCCCC" },
+      { tipo: "comprobante", url: "archivo:otro" },
+    ]);
+    assert.equal(L.length, 3);
+  });
+});
+
+describe("TK156 voucher duplicado (TK-SO-1927)", () => {
+  it("la foto sin pago y la misma enlazada al pago segundos después cuentan una sola vez", async () => {
+    const { docsBeta } = await import("./tickets_beta_api.ts");
+    const L = docsBeta({ datos: { comprobantes: [
+      { por: "Alejandra", url: "archivo:41f2", fecha: "2026-11-19T22:39:11.445Z", pago_id: null },
+      { por: "Alejandra", url: "archivo:5192", fecha: "2026-11-19T22:39:13.008Z", pago_id: "p1" },
+      { por: "Alejandra", url: "archivo:otra", fecha: "2026-11-19T23:10:00.000Z", pago_id: null },
+    ] } });
+    assert.deepEqual(L.map((x: Row) => x.url), ["archivo:5192", "archivo:otra"]);
+  });
+});
