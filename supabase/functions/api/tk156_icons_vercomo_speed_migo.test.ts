@@ -156,9 +156,9 @@ describe("TK156 Tickets instantáneo (stale-while-revalidate)", () => {
 
 describe("TK156 versión", () => {
   it("caché y motor en TK156", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-19-TK156"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK156"/);
-    assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK156/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-19-TK157"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-19-TK157"/);
+    assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });
 
@@ -252,7 +252,7 @@ describe("TK156 Dashboard: «Ver como…» y Alertas con × (t693u)", () => {
     assert.equal(m.nEl.textContent, "0"); assert.equal(m.box.hidden, true, "sin alertas, la barra se oculta");
   });
   it("el Dashboard admin antepone la barra y cablea Ver como…", () => {
-    assert.match(html, /pulso = htmlDashTop\(alertasDashboard\(apr, notif, alertasOcultas\(\)\)\) \+ pulso;/);
+    assert.match(html, /pulso = htmlDashTop\(alertasDashboard\(apr, notif, alertasOcultas\(\)(, vch)?\)\) \+ pulso;/);
     assert.match(html, /closest\("#dash-ver-como"\);\s*if \(vc && typeof abrirVerComo === "function"\)/);
   });
 });
