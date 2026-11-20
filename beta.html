@@ -10,12 +10,25 @@
 <link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
 <meta name="apple-mobile-web-app-title" content="Sunsu">
 <script>
-/* TK151 (Emilia 19/11): la app ya no es beta; la URL oficial es https://app.sunsuspa.com/.
-   Los iconos instalados y los enlaces viejos abren /beta.html: redirigimos al mismo origen
-   (la sesión en localStorage es por origen y no se pierde), con ?query y #hash intactos
-   para que #/reset/<token> y las rutas #/m/... sigan funcionando. */
+/* TK153 (Emilia t670u): el icono instalado en el Home Screen abre esta ruta. En modo standalone
+   NO cambiamos de ruta (iOS mostraría la barra de Safari): el service worker sirve la app aquí
+   mismo, y si aún no controla la página cargamos la app en esta misma ruta. Fuera del icono
+   (navegador normal) sí redirigimos a la URL oficial https://app.sunsuspa.com/ (TK151),
+   conservando ?query y #hash para #/reset/<token> y #/m/... */
 (function () {
-  location.replace("/" + (location.search || "") + (location.hash || ""));
+  var standalone = false;
+  try { standalone = window.navigator.standalone === true || !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches); } catch (e) {}
+  var destino = "./" + (location.search || "") + (location.hash || "");
+  if (!standalone) { location.replace(destino); return; }
+  try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(function () {}); } catch (e) {}
+  fetch("/", { cache: "no-cache", credentials: "same-origin" }).then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  }).then(function (html) {
+    document.open();
+    document.write(html);
+    document.close();
+  }).catch(function () { location.replace(destino); });
 })();
 </script>
 <noscript><meta http-equiv="refresh" content="0;url=/"></noscript>

@@ -19,7 +19,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.equal(first.primera, true);
     assert.equal(first.localEngine, "e2");
     assert.equal(hayActualizacion("c", "c", first.localEngine, first.remoteEngine), null);
-    assert.equal(parseCacheSw('const CACHE = "sunsu-2026-11-19-TK152";'), "sunsu-2026-11-19-TK152");
+    assert.equal(parseCacheSw('const CACHE = "sunsu-2026-11-19-TK153";'), "sunsu-2026-11-19-TK153");
     assert.equal(claveOcultarBanner("c2", "e2"), "sunsu.banner.hide.c2|e2");
   });
 
@@ -27,7 +27,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(index, /Access-Control-Expose-Headers": ENGINE_HEADER/);
     assert.match(index, /\[ENGINE_HEADER\]: SUNSU_ENGINE/);
     assert.equal(ENGINE_HEADER, "X-Sunsu-Engine-Version");
-    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK152$/);
+    assert.match(SUNSU_ENGINE, /^sunsu-engine-2026-11-19-TK153$/);
     assert.match(sw, /event\.data\.type === "SKIP_WAITING"/);
     assert.match(sw, /!self\.registration \|\| !self\.registration\.active/);
   });
@@ -40,7 +40,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(html, /SKIP_WAITING/);
     assert.match(html, /caches\.keys\(\)/);
     assert.match(html, /caches\.delete/);
-    assert.match(html, /location\.replace/);
+    assert.match(html, /location\.reload\(\);/); // TK153 (t670u): Actualizar recarga en la misma ruta, sin location.replace
     assert.match(html, /POLL_MS = 180000/);
     assert.match(html, /FOCUS_MS = 30000/);
     assert.match(html, /visibilitychange/);
@@ -55,6 +55,7 @@ describe("TK144 banner de actualización discreto", () => {
     assert.match(upd, /if \(!clicked\) return;/);
     assert.doesNotMatch(upd, /localStorage\.removeItem/);
     assert.doesNotMatch(upd, /localStorage\.clear/);
-    assert.match(upd, /location\.replace/);
+    assert.match(upd, /location\.reload\(\)/); // TK153 (t670u): misma ruta, sin location.replace
+    assert.doesNotMatch(upd, /searchParams\.set\("sv"/);
   });
 });

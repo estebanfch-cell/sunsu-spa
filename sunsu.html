@@ -10,17 +10,29 @@
 <link rel="icon" href="/icon-sunsu-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icon-sunsu-180.png" sizes="180x180">
 <meta name="apple-mobile-web-app-title" content="Sunsu">
-<noscript><meta http-equiv="refresh" content="0;url=/"></noscript>
 <script>
-/* Corte 21:00 America/Guayaquil, 18 nov 2026.
-   El icono guardado en el iPhone abre /sunsu.html (con o sin ?v= de la app vieja).
-   Desde este commit esa misma URL entra a la app (TK151: la raíz https://app.sunsuspa.com/). No se toca el arreglo de login 5692c8f
-   en el histórico: este archivo lo sustituye solo en el corte, cuando Sheets ya no entra. */
+/* TK153 (Emilia t670u): el icono instalado en el Home Screen abre esta ruta. En modo standalone
+   NO cambiamos de ruta (iOS mostraría la barra de Safari): el service worker sirve la app aquí
+   mismo, y si aún no controla la página cargamos la app en esta misma ruta. Fuera del icono
+   (navegador normal) sí redirigimos a la URL oficial https://app.sunsuspa.com/ (TK151),
+   conservando ?query y #hash para #/reset/<token> y #/m/... */
 (function () {
-  var hash = location.hash || "";
-  location.replace("/" + hash);
+  var standalone = false;
+  try { standalone = window.navigator.standalone === true || !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches); } catch (e) {}
+  var destino = "./" + (location.search || "") + (location.hash || "");
+  if (!standalone) { location.replace(destino); return; }
+  try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(function () {}); } catch (e) {}
+  fetch("/", { cache: "no-cache", credentials: "same-origin" }).then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  }).then(function (html) {
+    document.open();
+    document.write(html);
+    document.close();
+  }).catch(function () { location.replace(destino); });
 })();
 </script>
+<noscript><meta http-equiv="refresh" content="0;url=/"></noscript>
 </head>
 <body style="font-family:system-ui,sans-serif;background:#F5F0E8;color:#3A3530;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0">
   <p><a href="/" style="color:#5B7FA6;font-weight:700">Abrir Sunsu</a></p>

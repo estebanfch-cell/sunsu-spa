@@ -1609,7 +1609,9 @@ export function itemHistorial(r: R, map: Map<string, R>, ec: string, telOk: bool
       fac: b(r.fac), cob: b(r.cob), anulado: !!(r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true), sheetId: r.id ?? null,
       saldo: ((r.orig && typeof r.orig === "object" && (r.orig as R).anulado === true) || (b(r.fac) && b(r.cob))) ? 0 : n(r.estimado),
     };
-    if (telOk) item.telefono = telefonoEc(porCed.get(normCedula(r.id_3)) || "");
+    const telFicha = porCed.get(normCedula(r.id_3)) || "";
+    item.tiene_tel = !!telefonoEc(telFicha) || /\d{7,}/.test(String(telFicha).replace(/\D/g, ""));
+    if (telOk) item.telefono = telefonoEc(telFicha);
     else item.telefono = "";
     return item;
   }
@@ -1621,7 +1623,15 @@ reg("getHistorial", "any", async (p, ctx, ses) => {
   const map = await catMap(ctx);
   const telOk = conTelefono(ses);
   const regs = await ctx.db.all("clientas_registro");
-  const porCed = new Map(regs.map((r) => [normCedula(r.cedula), s(r.telefono)]));
+  const porCed = new Map<string, string>();
+  try {
+    for (const r of await ctx.db.all("beta_clientes")) {
+      const k = normCedula(r.cedula) || normCedula((r.datos as R | undefined)?.cedula);
+      const tel = s(r.telefono) || s((r.datos as R | undefined)?.telefono);
+      if (k && tel) porCed.set(k, tel);
+    }
+  } catch { /* sin beta */ }
+  for (const r of regs) if (s(r.telefono)) porCed.set(normCedula(r.cedula), s(r.telefono));
   const matriz = await matrizDe(ctx.db);
   const todos = esAdmin(ses.rol) || acceso(ses.rol, "tickets", matriz) === "todos";
   const rows = (await tickets(ctx)).filter((r) => r.timestamp).filter((r) => todos || esPropio(s(r.atendido_por), ses));
@@ -2598,18 +2608,9 @@ reg("getCotizacion", RECEP, async (p, ctx, ses) => {
 });
 
 reg("getMensajes", "any", async (_p, ctx) => {
+  const { mezclarPlantillas } = await import("./wa_lib.ts");
   const m = await cfgMap(ctx);
-  const DEF: R = {
-    "LINK REGISTRO": "app.sunsuspa.com/registro.html",
-    "MENSAJE ATRASADAS": "Hola {nombre}, ya pasó tu fecha ({fecha}). ¿Agendamos?",
-    "MENSAJE PRÓXIMAS": "Hola {nombre}, se acerca tu facial ({fecha}). ¿Agendamos?",
-    "MENSAJE CUMPLEAÑOS": "Hola {nombre}, ¡feliz cumpleaños!",
-    "MENSAJE CLIENTAS ANTIGUAS": "Hola {nombre}, te saludamos de Sunsu Spa.",
-    "MENSAJE GIFT CARD": "Hola, tu gift card Sunsu.",
-  };
-  const msgs: R = { ...DEF };
-  for (const [k, v] of m) if (k.startsWith("MENSAJE") || k.startsWith("LINK")) msgs[k] = v;
-  return { msgs };
+  return { msgs: mezclarPlantillas(m) };
 });
 reg("getPlantillaGC", "any", async (_p, ctx) => {
   const m = await cfgMap(ctx);

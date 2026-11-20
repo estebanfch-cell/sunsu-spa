@@ -793,6 +793,8 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     cabina: s(d.cabina),
     local: s(d.local) || "Sunsu Spa", fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp), orden: r.id ?? null,
   };
+  const tiene_tel = !!s(ct.telefono);
+  info.tiene_tel = tiene_tel;
   if (!conTelefono(ses)) delete info.telefono;
   if (!conEmail(ses) && !conTelefono(ses)) delete info.email;
   let betaPagos: Row[] = [];
@@ -850,7 +852,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
-  return { info, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+  return { info, tiene_tel, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
 }
 
@@ -957,11 +959,17 @@ extend("tk_envio", "any", async (p, ctx, ses) => {
   const r = await ticketPorClave(ctx, s(p.clave));
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
-  const tipo = s(p.tipo) === "paquete" ? "paquete" : "facial";
+  const raw = Array.isArray(p.tipos) ? (p.tipos as unknown[]).map((x) => s(x)) : [s(p.tipo)];
+  const tipos = [...new Set(raw.map((x) => x.toLowerCase()).filter((x) => x === "facial" || x === "paquete" || x === "giftcard"))];
+  if (!tipos.length) return { error: "Indica el tipo de reporte (facial, paquete o giftcard)" };
+  const clave = claveDe(r, leerSerie(r, "so_num"));
+  const fin = s(p.telefono).replace(/\D/g, "").slice(-4);
   try {
-    await ctx.db.write(actorOf(ses), "beta_ticket_envios", "insert", {}, { id: crypto.randomUUID(), ticket_clave: claveDe(r, leerSerie(r, "so_num")), tipo, telefono_fin: s(p.telefono).replace(/\D/g, "").slice(-4), por: ses.name, created_at: ctx.now.toISOString() });
+    for (const tipo of tipos) {
+      await ctx.db.write(actorOf(ses), "beta_ticket_envios", "insert", {}, { id: crypto.randomUUID(), ticket_clave: clave, tipo, telefono_fin: fin, por: ses.name, created_at: ctx.now.toISOString() });
+    }
   } catch { return { error: "Falta aplicar 0050_agenda_beta.sql" }; }
-  return { ok: true };
+  return { ok: true, tipos };
 });
 extend("tk_flag_resolver", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo un admin marca resuelto; pide la corrección con «Solicitar cambio»" };

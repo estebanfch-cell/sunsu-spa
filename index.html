@@ -1034,8 +1034,11 @@
   .mob-l3 { color: var(--gray); font-size: 12px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .mob-l3t { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mob-l3 b { color: var(--navy-d, #2b3f5c); font-size: 12px; }
-  .mob-cam { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 1px solid #e6ded0; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
-  .mob-cam.ok { color: #2e9e4f; border-color: #b7d9c6; background: #f3faf6; font-size: 11px; }
+  .mob-acts { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .mob-cam, .mob-wa { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 2px solid #DC2626; border-radius: 50%; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
+  .mob-cam.ok, .mob-wa.ok { color: #16A34A; border-color: #16A34A; background: #f3faf6; }
+  .mob-wa { color: #25D366; }
+  .mob-wa .wa-icon { width: 15px; height: 15px; display: block; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
   .mob-thmore { display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5a6577; background: var(--cream); }
@@ -1057,6 +1060,7 @@
     .sheet-scroll { overflow-x: visible !important; }
     .btn, button { white-space: normal; }
     .mob-voucher .btn, label.mctk-voucher, label.pg-vbtn { white-space: nowrap !important; }
+    .mctk-dd a, .mctk-dd button, .mctk-wa-chip, .mctk-wa-go, .mob-wa { white-space: nowrap !important; }
     table.mob-stack { display: block; width: 100% !important; min-width: 0 !important; max-width: 100% !important; border: 0 !important; box-shadow: none !important; background: transparent !important; }
     table.mob-stack > thead, table.mob-stack > colgroup { display: none !important; }
     table.mob-stack > tbody, table.mob-stack > tfoot { display: block; width: 100%; }
@@ -1153,6 +1157,7 @@
     .ss-md { display: block; overflow-x: hidden; max-width: 100%; }
     .ss-md-list { display: none; }
     .ss-md-r { width: 100%; max-width: 100%; overflow-x: hidden; }
+    .ss-md-r:has(.mctk-dd:not([hidden])) { overflow: visible; }
   }
   /* Maestro-detalle compartido (beta-screens.js _mdAbrir): lista angosta izquierda, detalle derecha */
   .md-split .md-list table { width: 100%; }
@@ -4577,6 +4582,45 @@ function htmlCfgPriv(data) {
     <div id="cfg-priv-json" hidden>${JSON.stringify({ flags, usuarios }).replace(/</g, "\u003c")}</div>`;
 }
 
+
+function htmlCfgWhatsApp() {
+  const campos = [
+    ["MENSAJE TARJETA TRATAMIENTO", "Reporte facial", "wa_tpl_facial", "{cliente} {facial} {fecha}"],
+    ["MENSAJE TARJETA PAQUETE PENDIENTE", "Reporte de paquete", "wa_tpl_paquete", "{cliente} {paquete} {sesiones} {usados} {total} {fecha}"],
+    ["MENSAJE GIFT CARD", "Gift card", "wa_tpl_giftcard", "{cliente} {giftcard} {fecha}"],
+    ["MENSAJE TARJETA AMBAS", "Envío combinado (2 o 3 documentos)", "wa_tpl_combinado", "{cliente} {facial} {paquete} {sesiones} {giftcard} {fecha}"],
+    ["MENSAJE PRÓXIMAS", "Recordatorio de cita / retorno", "wa_tpl_recordatorio", "{cliente} {facial} {fecha}"],
+  ];
+  const filas = campos.map(([k, lab, alias, vars]) => `<label class="cfg-wa-lab">${esc(lab)}
+    <textarea id="cfg-wa-${esc(k)}" data-wa-k="${esc(k)}" rows="4" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1.5px solid var(--cream-d);border-radius:9px;font:inherit;font-size:.86rem"></textarea>
+    <span class="note" style="display:block;margin-top:4px">Variables: ${esc(vars)}</span></label>`).join("");
+  return `<div class="card" id="cfg-whatsapp"><div class="card-title">Mensajes de WhatsApp</div>
+    <p class="note">Textos que se envían con el PDF. Las chicas no ven el número: al tocar WhatsApp se abre directo el chat de la clienta. Solo administración edita estas plantillas.</p>
+    <div id="cfg-wa-form" style="display:flex;flex-direction:column;gap:12px">${filas}</div>
+    <p style="margin-top:12px"><button class="btn small" type="button" id="cfg-wa-save">Guardar mensajes</button></p></div>`;
+}
+async function cargarCfgWhatsApp() {
+  const box = document.getElementById("cfg-wa-form");
+  if (!box) return;
+  try {
+    const d = await api("getMensajes", {});
+    const msgs = (d && d.msgs) || {};
+    box.querySelectorAll("[data-wa-k]").forEach((el) => { el.value = msgs[el.getAttribute("data-wa-k")] || ""; });
+  } catch (e) {}
+}
+async function guardarCfgWhatsApp() {
+  const box = document.getElementById("cfg-wa-form");
+  if (!box) return;
+  const msgs = {};
+  box.querySelectorAll("[data-wa-k]").forEach((el) => { msgs[el.getAttribute("data-wa-k")] = el.value; });
+  const r = await api("wa_plantillas_guardar", { msgs });
+  if (r && r.ok) {
+    window._msgs = r.msgs || Object.assign({}, window._msgs || {}, msgs);
+    if (typeof toast === "function") toast("✅ Mensajes de WhatsApp guardados", "var(--green)");
+    else if (typeof toast2 === "function") toast2("Mensajes de WhatsApp guardados");
+  } else if (typeof toast === "function") toast((r && r.error) || "No se pudieron guardar", "#B86B6B");
+}
+
 async function renderConfiguracion() {
   if (!state.admin) return `<p class="err">Solo administración entra a Configuración general.</p>`;
   const [data, priv] = await Promise.all([api("config_general"), api("cfg_priv_get")]);
@@ -4609,7 +4653,8 @@ async function renderConfiguracion() {
       ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
     <div class="card" id="cfg-tramos"><div class="card-title">Tramos de paquete</div>
       <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto de ese paquete. x3 y x6 cuentan como 1. El ciclo que cierra el 2026-10-25 no cambia. Guardar un tramo copia el resto de esa vigencia.</p>
-      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div></div>`;
+      <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>
+    ${htmlCfgWhatsApp()}</div>`;
 }
 async function renderComisiones() {
   const ciclos = opcionesCiclo();
@@ -4660,6 +4705,7 @@ function htmlCfgJump() {
     ["#cfg-comisiones", "Comisiones"],
     ["#cfg-productos", "Productos / márgenes"],
     ["#cfg-tramos", "Tramos"],
+    ["#cfg-whatsapp", "Mensajes de WhatsApp"],
     ["#cfg-geocerca", "Asistencia / geocerca"],
     ["#cfg-feriados", "Feriados"],
     ["#/m/aprobaciones", "Aprobaciones"],
@@ -7359,8 +7405,7 @@ function recargarAsis() {
 
 function bindCfgJump(main) {
   const sel = main.querySelector("#cfg-jump-sel");
-  if (!sel) return;
-  sel.onchange = () => {
+  if (sel) sel.onchange = () => {
     const v = sel.value;
     if (!v) return;
     if (v.indexOf("#/") === 0) go(v);
@@ -7370,6 +7415,11 @@ function bindCfgJump(main) {
     }
     sel.value = "";
   };
+  if (main.querySelector("#cfg-wa-form")) {
+    cargarCfgWhatsApp();
+    const b = main.querySelector("#cfg-wa-save");
+    if (b) b.onclick = () => guardarCfgWhatsApp();
+  }
 }
 
 
@@ -7734,7 +7784,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK152";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK153";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -7798,10 +7848,16 @@ window.SunsuUpdate = (function () {
     updating = true; clicked = true;
     var btn = document.getElementById("sunsu-nueva-ver-btn");
     if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
+    /* TK153 (Emilia t670u): recargar SIEMPRE en la misma ruta (location.pathname). Cambiar de URL
+       (?sv=, /beta.html → /) hace que iOS saque el icono del Home Screen del modo pantalla completa. */
     var go = function () {
-      var u = new URL(location.href);
-      u.searchParams.set("sv", String(Date.now()));
-      location.replace(u.toString());
+      try {
+        if (/[?&]sv=/.test(location.search)) {
+          var q = location.search.replace(/([?&])sv=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+          history.replaceState(history.state, "", location.pathname + q + location.hash);
+        }
+      } catch (eH) {}
+      location.reload();
     };
     var limpia = Promise.resolve();
     try { limpia = caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }); } catch (e) {}
@@ -7851,43 +7907,44 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk152"></script>
-<script src="mc-scan.js?v=20261119tk152"></script>
-<script src="mc-buscar.js?v=20261119tk152"></script>
-<script src="descuento_justif.js?v=20261119tk152"></script>
-<script src="beta-screens.js?v=20261119tk152"></script>
-<script src="beta-inline.js?v=20261119tk152"></script>
-<script src="mc-productos.js?v=20261119tk152"></script>
-<script src="mc-nav.js?v=20261119tk152"></script>
-<script src="mc-permisos.js?v=20261119tk152"></script>
-<script src="mc-protocolos.js?v=20261119tk152"></script>
-<script src="mc-conteo.js?v=20261119tk152"></script>
-<script src="mc-transferencias.js?v=20261119tk152"></script>
-<script src="mc-ajustes.js?v=20261119tk152"></script>
-<script src="vendor-qrcode.js?v=20261119tk152"></script>
-<script src="mc-tickets.js?v=20261119tk152"></script>
-<script src="mc-maestro.js?v=20261119tk152"></script>
-<script src="mc-empleados.js?v=20261119tk152"></script>
-<script src="mc-edit.js?v=20261119tk152"></script>
-<script src="mc-paquetes.js?v=20261119tk152"></script>
-<script src="mc-aperturas.js?v=20261119tk152"></script>
-<script src="mc-acceso.js?v=20261119tk152"></script>
-<script src="mc-barras.js?v=20261119tk152"></script>
-<script src="mc-caja.js?v=20261119tk152"></script>
-<script src="mc-giftcards.js?v=20261119tk152"></script>
-<script src="mc-multas.js?v=20261119tk152"></script>
-<script src="mc-clientes.js?v=20261119tk152"></script>
-<script src="mc-clientes-dup.js?v=20261119tk152"></script>
-<script src="mc-docpdf.js?v=20261119tk152"></script>
-<script src="mc-compras.js?v=20261119tk152"></script>
-<script src="mc-consignacion.js?v=20261119tk152"></script>
-<script src="mc-proveedores.js?v=20261119tk152"></script>
-<script src="mc-recepciones.js?v=20261119tk152"></script>
-<script src="mc-movil.js?v=20261119tk152"></script>
-<script src="mc-promociones.js?v=20261119tk152"></script>
-<script src="mc-agenda.js?v=20261119tk152"></script>
-<script src="mc-staff-home.js?v=20261119tk152"></script>
-<script src="mc-borradores.js?v=20261119tk152"></script><script>
+<script src="vendor-zxing.js?v=20261119tk153"></script>
+<script src="mc-scan.js?v=20261119tk153"></script>
+<script src="mc-buscar.js?v=20261119tk153"></script>
+<script src="descuento_justif.js?v=20261119tk153"></script>
+<script src="beta-screens.js?v=20261119tk153"></script>
+<script src="beta-inline.js?v=20261119tk153"></script>
+<script src="mc-productos.js?v=20261119tk153"></script>
+<script src="mc-nav.js?v=20261119tk153"></script>
+<script src="mc-permisos.js?v=20261119tk153"></script>
+<script src="mc-protocolos.js?v=20261119tk153"></script>
+<script src="mc-conteo.js?v=20261119tk153"></script>
+<script src="mc-transferencias.js?v=20261119tk153"></script>
+<script src="mc-ajustes.js?v=20261119tk153"></script>
+<script src="vendor-qrcode.js?v=20261119tk153"></script>
+<script src="mc-wa.js?v=20261119tk153"></script>
+<script src="mc-tickets.js?v=20261119tk153"></script>
+<script src="mc-maestro.js?v=20261119tk153"></script>
+<script src="mc-empleados.js?v=20261119tk153"></script>
+<script src="mc-edit.js?v=20261119tk153"></script>
+<script src="mc-paquetes.js?v=20261119tk153"></script>
+<script src="mc-aperturas.js?v=20261119tk153"></script>
+<script src="mc-acceso.js?v=20261119tk153"></script>
+<script src="mc-barras.js?v=20261119tk153"></script>
+<script src="mc-caja.js?v=20261119tk153"></script>
+<script src="mc-giftcards.js?v=20261119tk153"></script>
+<script src="mc-multas.js?v=20261119tk153"></script>
+<script src="mc-clientes.js?v=20261119tk153"></script>
+<script src="mc-clientes-dup.js?v=20261119tk153"></script>
+<script src="mc-docpdf.js?v=20261119tk153"></script>
+<script src="mc-compras.js?v=20261119tk153"></script>
+<script src="mc-consignacion.js?v=20261119tk153"></script>
+<script src="mc-proveedores.js?v=20261119tk153"></script>
+<script src="mc-recepciones.js?v=20261119tk153"></script>
+<script src="mc-movil.js?v=20261119tk153"></script>
+<script src="mc-promociones.js?v=20261119tk153"></script>
+<script src="mc-agenda.js?v=20261119tk153"></script>
+<script src="mc-staff-home.js?v=20261119tk153"></script>
+<script src="mc-borradores.js?v=20261119tk153"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
