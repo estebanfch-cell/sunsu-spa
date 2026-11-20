@@ -469,17 +469,22 @@ extend("rol_prerol", "any", async (p, ctx, ses) => {
   const ayer = new Date(Date.parse(hoy + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
   const { horasEnRango, correccionesJibble } = await import("./asistencia_api.ts");
   let hastaHoy: Row | null = null;
-  if (ayer >= ini) {
+  // Desde el ingreso (si entró este mes); las faltas solo cuentan hasta el último dato importado.
+  const ingreso = s(snap.fechaIngreso).slice(0, 10);
+  const desdeH = ingreso > ini ? ingreso : ini;
+  const ultimo = s(snap.ultimoDato).slice(0, 10);
+  if (ayer >= desdeH) {
     try {
-      const h = await horasEnRango(ctx, s(armado.persona), ini, ayer) as unknown as Row;
+      const h = await horasEnRango(ctx, s(armado.persona), desdeH, ayer) as unknown as Row;
       const dias = (h.dias as Row[]) || [];
       const sum = (k: string) => dias.reduce((a, d) => a + n(d[k]), 0);
       hastaHoy = {
-        desde: ini, hasta: ayer,
+        desde: desdeH, hasta: ayer, ultimoDato: ultimo || null,
         trabajadoMin: sum("workedMin"), normalesMin: sum("ordinaryMin"), suplMin: sum("suplMin"), extrMin: sum("extrMin"), descMin: sum("descMin"),
         diasConMarca: dias.filter((d) => s(d.fuente) === "marcaje" && n(d.workedMin) > 0).length,
         diasJibble: dias.filter((d) => s(d.fuente) === "jibble").length,
-        faltas: dias.filter((d) => d.falta === true).length,
+        faltas: dias.filter((d) => d.falta === true && !!ultimo && s(d.fecha) <= ultimo).length,
+        sinDatos: dias.filter((d) => !!ultimo ? s(d.fecha) > ultimo : true).length,
       };
     } catch { hastaHoy = null; }
   }

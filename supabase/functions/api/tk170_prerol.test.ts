@@ -66,6 +66,9 @@ describe("TK170 pre-rol y empleados", () => {
     assert.ok(Number(snap.diasNoContratada) >= 13);
     assert.ok(Number(snap.sueldo) < 482);
     assert.equal(Number(snap.facturar), Number(snap.totalRecibir));
+    const h = r.hastaHoy as Row;
+    assert.equal(h.desde, "2026-11-14");
+    assert.equal(h.faltas, 0);
     assert.match(String(snap.mensajeFactura), /^Debes facturarnos \$\d+\.\d{2} por este período\.$/);
   });
 
