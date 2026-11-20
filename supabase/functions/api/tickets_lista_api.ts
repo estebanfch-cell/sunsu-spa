@@ -11,7 +11,7 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { estaPagado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
+import { canjeFacial, estaPagado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
@@ -21,6 +21,7 @@ import { alertaCanje } from "./canje_linea.ts";
 import { FALTA_DESDE } from "./tickets_beta_api.ts";
 import { parseGcCanje } from "./ventas.ts";
 import { enriquecerItemsLista } from "./ticket_lista_card.ts";
+import { pendientesPorClave } from "./propuesta_edicion.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
@@ -173,9 +174,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     L0.push(x);
     pagosPorClave.set(k, L0);
   }
+  // TK154 (Emilia t672u): ticket con solicitud de edición/eliminación pendiente → violeta en la lista desde la carga.
+  const solPend = pendientesPorClave(await todas(ctx, "solicitudes_cambio"));
   const items = filas.map((r) => {
     const it = itemHistorial(r, map, hoy, telOk, porCed);
     const clave = claveDe(r, leerSerie(r, "so_num")), d = ((cabMap.get(clave)?.datos || {}) as Row);
+    const sp = solPend.get(clave) || solPend.get(s(r.so_num));
+    if (sp) { it.solicitud_pendiente = true; it.solicitud_edicion_pendiente = { id: sp.id, tipo: sp.tipo, solicitante: sp.solicitante, creado: sp.creado }; }
     const g = r.agendado === true || s(r.agendado).toLowerCase() === "true";
     const ret = s(d.retorno || s(r.fecha_retorno).slice(0, 10));
     const fl = flags.filter((x) => n(x.ticket_id) === n(r.id) || s(x.ticket_clave) === clave);
@@ -223,7 +228,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   }
   if (est && est !== "abierto" && est !== "pagado") borr = [];
   // TK94 (Emilia 18/11): los borradores Migo NO van en Tickets; viven en Ventas › Facturas borrador.
-  await enriquecerItemsLista(ctx.db, filas, items, cabMap);
+  await enriquecerItemsLista(ctx.db, filas, items, cabMap, { map, canje: canjeFacial });
   const itemsOut = items;
   return { ok: true, items: itemsOut, total, suma, offset: desde, limit: lim, hayMas: desde + items.length < total, ms: Date.now() - t0, borradores: borr.length };
 });

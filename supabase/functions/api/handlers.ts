@@ -2673,6 +2673,31 @@ reg("fotoB64", "any", async (p, ctx) => {
   } catch { return { error: "No se pudo leer la foto de Drive", parcial: true }; }
 });
 
+/**
+ * TK154 (Emilia t674u): miniaturas de la lista de tickets en UNA sola consulta (antes 1 fotoB64 por foto).
+ * Máx 60 ids; tope ~4 MB de base64 por respuesta: lo que no entra vuelve en `faltan` para otro lote.
+ */
+export const FOTOS_BATCH_MAX = 60;
+export const FOTOS_BATCH_BYTES = 4_000_000;
+reg("fotos_batch", "any", async (p, ctx) => {
+  const ids = [...new Set((Array.isArray(p.ids) ? p.ids : []).map((x: unknown) => s(x).replace(/^archivo:/, "").replace(/[^-\w]/g, "")).filter(Boolean))].slice(0, FOTOS_BATCH_MAX) as string[];
+  if (!ids.length) return { ok: true, items: {}, faltan: [] };
+  const rows = (await consultar(ctx.db, "app_archivos", { cols: ["id", "mime", "data_b64"], filtros: [{ col: "id", op: "in", val: ids }] }).catch(() => ({ rows: [] as R[] }))).rows;
+  const items: Record<string, { mime: string; b64: string }> = {};
+  const faltan: string[] = [];
+  let bytes = 0;
+  const por = new Map(rows.map((r) => [s(r.id), r]));
+  for (const id of ids) {
+    const f = por.get(id);
+    if (!f || !s(f.data_b64)) continue;
+    const b64 = s(f.data_b64);
+    if (bytes + b64.length > FOTOS_BATCH_BYTES && Object.keys(items).length) { faltan.push(id); continue; }
+    bytes += b64.length;
+    items[id] = { mime: s(f.mime) || "image/jpeg", b64 };
+  }
+  return { ok: true, items, faltan, n: Object.keys(items).length };
+});
+
 reg("getEntradas", "any", async (_p, ctx) => {
   const items = [];
   for (const r of await ctx.db.all("inventario_entradas")) {

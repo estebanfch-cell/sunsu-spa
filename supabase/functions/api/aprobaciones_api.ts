@@ -1,6 +1,7 @@
 // Conteo y lista de lo que un admin tiene que aprobar al entrar al dashboard:
 // solicitudes de cambio, borradores Migo pendientes de aprobar, permisos/vacaciones
 // y ajustes de stock pendientes. Sin cédulas, teléfonos ni correos.
+import { resumenSolicitudTicket } from "./propuesta_edicion.ts";
 import { extend } from "./handlers.ts";
 import { esAdmin } from "./permisos.ts";
 import { s, type Row } from "./domain.ts";
@@ -48,13 +49,14 @@ export async function recaudarAprobaciones(ctx: Ctx, ses: Ses): Promise<{ total:
         tipo: "solicitud",
         id: s(r.id),
         titulo: (s(r.solicitante) || "Alguien") + (r.prueba === true ? " · PRUEBA" : ""),
-        detalle: s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : ""),
+        detalle: (s(r.etiqueta) || (s(r.tipo) === "eliminacion" ? "pide eliminar" : "pide un cambio") + (s(r.tabla) ? " · " + s(r.tabla) : "")) + (s(r.tabla) === "ticket_detalle" && s(r.motivo) ? " · Motivo: " + s(r.motivo) : ""),
         cuando: s(r.creado),
         href: s(r.enlace) || "#/m/aprobaciones",
         prueba: r.prueba === true,
         tabla: s(r.tabla),
         fila: s(r.fila),
-        diff: prop.diff,
+        // TK154: para tickets va el resumen completo (anular / editar / anterior) que pinta el comparativo.
+        diff: s(r.tabla) === "ticket_detalle" ? (({ form: _f, ...rs }) => rs)(resumenSolicitudTicket(r)) as Row : prop.diff as Row | undefined,
       };
     }),
   });

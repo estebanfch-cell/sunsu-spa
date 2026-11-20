@@ -12,6 +12,7 @@ import { textoCanje } from "./sin_cobro.ts";
 import { snapProducto, comisionUnidad, ventaNetaLineas } from "./productos.ts";
 import { calcularTicket } from "./ticket_beta.ts";
 import { compraParaComision } from "./domain.ts";
+import { diffCampos, diffDescuento, propuestaAnulacion, propuestaEdicion, resumenSolicitudTicket } from "./propuesta_edicion.ts";
 import { origConMarca, rechazoSegundaMarca } from "./handlers.ts";
 
 export type LinProp = {
@@ -150,6 +151,13 @@ async function snapshotTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     extras: s(r.servicios_adicionales),
     atendido_por: s(r.atendido_por),
     factura: s(info.factura),
+    // TK154: cabecera editable para el comparativo (nunca teléfono ni email).
+    datos: {
+      nombre: s(info.nombre), apellido: s(info.apellido), cedula: s(info.cedula), factura: s(info.factura),
+      cosmetologa: s(info.cosmetologa || r.atendido_por), notas: s(info.notas), recomendaciones: s(info.recomendaciones),
+      retorno: s(info.retorno), cabina: s(info.cabina), local: s(info.local),
+    },
+    descuento: (v.descuento && typeof v.descuento === "object") ? v.descuento : null,
   };
 }
 
@@ -236,6 +244,12 @@ export function diffEdicion(antes: Row, form: Row, lineas: LinProp[], totDes: Ro
   if (s(antes.paquete) !== q && (s(antes.paquete) || q)) cabecera.push({ campo: "Paquete", antes: s(antes.paquete) || "—", despues: q || "—" });
   const extras = s(form.extras);
   if (s(antes.extras) !== extras) cabecera.push({ campo: "Extras", antes: s(antes.extras) || "—", despues: extras || "—" });
+  // TK154: notas, cosmetóloga, datos y descuento también salen en el comparativo.
+  const datosExp = !!(form.datos && typeof form.datos === "object");
+  const datosDes = (datosExp ? form.datos : { nombre: form.nombre, apellido: form.apellido, cedula: form.cedula, factura: form.factura, notas: form.notas, recomendaciones: form.recomendaciones, retorno: form.fechaRetorno }) as Row;
+  for (const c of diffCampos((antes.datos || {}) as Row, datosDes, datosExp)) cabecera.push(c);
+  const dd = diffDescuento(antes.descuento, form.descuento ?? form._descuento);
+  if (dd) cabecera.push(dd);
   const ta = (antes.totales || {}) as Row;
   return {
     cabecera,
@@ -255,7 +269,40 @@ function calcTotales(lineas: LinProp[], desc?: Row): Row {
   return { subtotal: r.subtotal, iva: r.iva, total: r.total, pagado: 0, saldo: r.total };
 }
 
+/** TK154: «Eliminar ticket» de las chicas → solicitud de anulación con snapshot. El ticket real no se toca. */
+export async function pedirAnulacionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
+  if (esAdmin(ses.rol) && p.forzar_solicitud !== true) return { error: "Un admin elimina el ticket directo (Cancelar ticket)" };
+  const clave = s(p.clave || p.fila);
+  const motivo = s(p.motivo).trim();
+  if (motivo.length < 3) return { error: "Escribe el motivo para eliminar el ticket" };
+  const r = await ticketPorClave(ctx, clave);
+  if (!r) return { error: "Ticket no encontrado" };
+  const { veTicket } = await import("./inline_api.ts");
+  if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para este ticket" };
+  if ((r.orig as Row | undefined)?.anulado === true) return { error: "El ticket ya está cancelado" };
+  const antes = await snapshotTicket(ctx, ses, r);
+  const propuesta = propuestaAnulacion(antes, motivo);
+  const recBase = {
+    solicitante: ses.name, solicitante_uid: ses.uid, creado: ctx.now.toISOString(),
+    tabla: "ticket_detalle", fila: clave, tipo: "eliminacion", motivo, estado: "pendiente",
+    etiqueta: "Eliminar " + clave, enlace: "#/m/tickets/t/" + encodeURIComponent(clave),
+    propuestos: { propuesta, _via: "solicitud de eliminación" }, antes,
+  } as Row;
+  const sols = await ctx.db.all("solicitudes_cambio").catch(() => [] as Row[]);
+  const hay = sols.find((x) => s(x.tabla) === "ticket_detalle" && s(x.fila) === clave && s(x.estado) === "pendiente" && x.prueba !== true);
+  if (hay && s(hay.solicitante_uid) && s(hay.solicitante_uid) !== ses.uid && s(hay.solicitante) !== ses.name) {
+    return { error: "Ya hay una solicitud pendiente de " + (s(hay.solicitante) || "otra persona") + " para este ticket." };
+  }
+  const id = hay ? s(hay.id) : crypto.randomUUID();
+  if (hay) await ctx.db.write(actorOf(ses), "solicitudes_cambio", "update", { id: hay.id }, { ...recBase, id });
+  else await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, { ...recBase, id });
+  try { await logAccion(ctx.db, actorOf(ses), "SOLICITUD ELIMINAR TICKET", clave + " · " + motivo); } catch { /* */ }
+  try { await avisarEdicionTicket(ctx, ses, clave, id, !!hay, true); } catch { /* el aviso no frena */ }
+  return { ok: true, id, clave, tipo: "anular", propuesta, mensaje: "Se le solicitó al administrador eliminar este ticket" };
+}
+
 export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
+  if (p.anular === true || s(p.tipo) === "anular" || s(p.tipo) === "eliminacion") return pedirAnulacionTicket(p, ctx, ses);
   if (esAdmin(ses.rol) && p.forzar_solicitud !== true) return { error: "Un admin guarda el cambio directo o lo aprueba en Aprobaciones" };
   const clave = s(p.clave || p.fila);
   const r = await ticketPorClave(ctx, clave);
@@ -311,7 +358,13 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
     motivo, estado: "pendiente",
     etiqueta: "Edición de " + clave,
     enlace: "#/m/tickets/t/" + encodeURIComponent(clave),
-    propuestos: { edicion_form: true, form, lineas, datos: form.datos || { nombre: form.nombre, apellido: form.apellido, cedula: form.cedula, factura: form.factura, notas: form.notas, recomendaciones: form.recomendaciones, retorno: form.fechaRetorno }, colQ: colQDePick(paqPickDe(form)) || s(form.colQ), facial_hecho: s(form.facial), servicios_adicionales: s(form.extras), paqPick: paqPickDe(form), diff, _via: "edición de ticket" },
+    propuestos: {
+      edicion_form: true, form, lineas, datos: form.datos || { nombre: form.nombre, apellido: form.apellido, cedula: form.cedula, factura: form.factura, notas: form.notas, recomendaciones: form.recomendaciones, retorno: form.fechaRetorno },
+      colQ: colQDePick(paqPickDe(form)) || s(form.colQ), facial_hecho: s(form.facial), servicios_adicionales: s(form.extras), paqPick: paqPickDe(form), diff,
+      // TK154: propuesta estructurada (antes / después / diff legible). Se aplica tal cual al aprobar.
+      propuesta: propuestaEdicion(antes, { lineas, totales: tot, datos: form.datos || null, descuento: p.descuento ?? null }, diff, motivo),
+      _via: "edición de ticket",
+    },
     antes,
   } as Row;
   const sols = await ctx.db.all("solicitudes_cambio").catch(() => [] as Row[]);
@@ -332,9 +385,9 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
   return { ok: true, id, actualizada: false, diff, clave };
 }
 
-export async function avisarEdicionTicket(ctx: Ctx, ses: Ses, clave: string, solId: string, actualizada: boolean): Promise<void> {
-  const titulo = actualizada ? "Solicitud de edición actualizada" : "Solicitud de edición de ticket";
-  const cuerpo = s(ses.name) + (actualizada ? " actualizó la edición de " : " pidió editar ") + clave;
+export async function avisarEdicionTicket(ctx: Ctx, ses: Ses, clave: string, solId: string, actualizada: boolean, anular = false): Promise<void> {
+  const titulo = anular ? "Solicitud para eliminar ticket" : actualizada ? "Solicitud de edición actualizada" : "Solicitud de edición de ticket";
+  const cuerpo = s(ses.name) + (anular ? " pidió eliminar " : actualizada ? " actualizó la edición de " : " pidió editar ") + clave;
   const link = "#/m/tickets/t/" + encodeURIComponent(clave);
   const users = await ctx.db.all("usuarios").catch(() => [] as Row[]);
   const { esAdmin } = await import("./permisos.ts");
@@ -364,10 +417,11 @@ export function avisosVirtualesEdicion(sols: Row[], existentes: Row[], ses: Ses,
     const link = s(r.enlace) || ("#/m/tickets/t/" + encodeURIComponent(s(r.fila)));
     const sid = s(r.id);
     if (existentes.some((x) => s(x.tipo) === "edicion_ticket" && (s(x.ref_id) === sid || s(x.id) === "sol:" + sid || s(x.id) === sid || (s(x.link) === link && !s((x as Row).leida_at || x.leida))))) continue;
+    const anu = s(r.tipo) === "eliminacion";
     out.push({
       id: "sol:" + s(r.id), tipo: "edicion_ticket",
-      titulo: "Solicitud de edición de ticket",
-      cuerpo: (s(r.solicitante) || "Alguien") + " pidió editar " + s(r.fila),
+      titulo: anu ? "Solicitud para eliminar ticket" : "Solicitud de edición de ticket",
+      cuerpo: (s(r.solicitante) || "Alguien") + (anu ? " pidió eliminar " : " pidió editar ") + s(r.fila) + (s(r.motivo) ? " · " + s(r.motivo) : ""),
       link, leida: false, fecha: s(r.creado),
     });
   }
@@ -425,8 +479,39 @@ export async function edicionPendienteDe(ctx: Ctx, clave: string): Promise<Row |
   const sols = await ctx.db.all("solicitudes_cambio").catch(() => [] as Row[]);
   const hay = sols.find((x) => s(x.tabla) === "ticket_detalle" && s(x.fila) === clave && s(x.estado) === "pendiente" && x.prueba !== true);
   if (!hay) return null;
-  const prop = (hay.propuestos && typeof hay.propuestos === "object" ? hay.propuestos : {}) as Row;
-  return { id: hay.id, solicitante: hay.solicitante, creado: hay.creado, motivo: hay.motivo, diff: prop.diff, form: prop.form, edicion_form: prop.edicion_form === true };
+  return resumenSolicitudTicket(hay);
+}
+
+/**
+ * TK154: «Solicitar cambio» del detalle (líneas/datos inline) y «Eliminar ticket» por solicitud_crear también
+ * guardan la propuesta estructurada, así la admin ve exactamente qué cambia. Nunca toca el ticket real.
+ */
+export async function prepararPropuestaTicket(ctx: Ctx, ses: Ses, fila: string, tipo: string, propuestos: Row, motivo: string): Promise<{ propuestos: Row; antes: Row } | null> {
+  const r = await ticketPorClave(ctx, fila);
+  if (!r) return null;
+  const antes = await snapshotTicket(ctx, ses, r);
+  if (tipo === "eliminacion") return { propuestos: { propuesta: propuestaAnulacion(antes, motivo) }, antes };
+  const lineas = (Array.isArray(propuestos.lineas) ? propuestos.lineas : antes.lineas) as LinProp[];
+  const desc = (propuestos.descuento && typeof propuestos.descuento === "object" ? propuestos.descuento : antes.descuento) as Row | undefined;
+  const tot = calcTotales(lineas, desc && s(desc.tipo) ? desc : undefined);
+  const pagadoAntes = n((antes.totales as Row | undefined)?.pagado);
+  tot.pagado = pagadoAntes; tot.saldo = round2(n(tot.total) - pagadoAntes);
+  const cabecera: Row[] = [];
+  const datos = (propuestos.datos && typeof propuestos.datos === "object" ? propuestos.datos : {}) as Row;
+  for (const c of diffCampos((antes.datos || {}) as Row, datos, true)) cabecera.push(c);
+  const dd = Array.isArray(propuestos.lineas) ? diffDescuento(antes.descuento, propuestos.descuento) : null;
+  if (dd) cabecera.push(dd);
+  const ta = (antes.totales || {}) as Row;
+  const diff: Row = {
+    cabecera,
+    lineas: Array.isArray(propuestos.lineas) ? diffLineas((antes.lineas || []) as Row[], lineas as unknown as Row[]) : [],
+    totales: {
+      antes: { subtotal: n(ta.subtotal), iva: n(ta.iva), total: n(ta.total), pagado: n(ta.pagado), saldo: n(ta.saldo) },
+      despues: Array.isArray(propuestos.lineas) ? { subtotal: n(tot.subtotal), iva: n(tot.iva), total: n(tot.total), pagado: n(tot.pagado), saldo: n(tot.saldo) } : { subtotal: n(ta.subtotal), iva: n(ta.iva), total: n(ta.total), pagado: n(ta.pagado), saldo: n(ta.saldo) },
+    },
+  };
+  const despues = { lineas: Array.isArray(propuestos.lineas) ? lineas : null, datos, descuento: propuestos.descuento ?? null, totales: diff.totales && (diff.totales as Row).despues };
+  return { propuestos: { ...propuestos, diff, propuesta: propuestaEdicion(antes, despues, diff, motivo) }, antes };
 }
 
 extend("tk_edicion_pedir", "any", async (p, ctx, ses) => pedirEdicionTicket(p, ctx, ses));
@@ -436,8 +521,8 @@ extend("tk_ediciones_pendientes", "any", async (_p, ctx, ses) => {
   const items = sols.filter((r) => s(r.tabla) === "ticket_detalle" && s(r.estado) === "pendiente" && r.prueba !== true)
     .filter((r) => esAdmin(ses.rol) || s(r.solicitante_uid) === ses.uid || s(r.solicitante) === ses.name)
     .map((r) => {
-      const prop = (r.propuestos && typeof r.propuestos === "object" ? r.propuestos : {}) as Row;
-      return { id: r.id, clave: r.fila, solicitante: r.solicitante, creado: r.creado, motivo: r.motivo, diff: prop.diff, enlace: r.enlace };
+      const rs = resumenSolicitudTicket(r);
+      return { id: r.id, clave: r.fila, solicitante: r.solicitante, creado: r.creado, motivo: r.motivo, diff: rs.diff, tipo: rs.tipo, legible: rs.legible, total: rs.total, enlace: r.enlace };
     });
   return { ok: true, items, pendientes: items.length };
 });

@@ -3,6 +3,8 @@ import { n, normCedula, productQtys, s, type Row } from "./domain.ts";
 import { consultar } from "./query.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
+import { lineasTicket, precioLineaTicket } from "./productos.ts";
+import { round2, skuCode } from "./domain.ts";
 
 export type ResumenTk = {
   faciales: number;
@@ -174,11 +176,45 @@ export function lineaHistorial(l: Row): Row {
   };
 }
 
+/**
+ * TK154 (Emilia t673u): líneas al instante para el 100% de los tickets de la lista. Si el ticket no tiene filas en
+ * beta_ticket_lineas (tickets del formulario/hoja), se arman aquí con el catálogo ya cargado (0 consultas extra),
+ * con la misma base que lineasDe0: canje en $0, nombre completo del catálogo, 1 sola línea = lo cobrado.
+ * Van marcadas `previa`: tk_get las reemplaza en segundo plano sin parpadeo.
+ */
+export function lineasSinteticas(r: Row, map: Map<string, Row> | undefined, canje: boolean): Row[] {
+  const cat = map || new Map<string, Row>();
+  const pvpDe = (c: string) => { const x = cat.get(skuCode(c)); return n(x?.total_con_iva ?? x?.pvp); };
+  const nombreDe = (c: string) => { const x = cat.get(skuCode(c)); return s(x?.producto_servicio || x?.nombre) || c; };
+  const L0 = lineasTicket(r, pvpDe);
+  if (!L0.length) return [];
+  const cobrado = Math.max(0, round2(n(r.estimado)));
+  const cobrables = L0.filter((x) => !(canje && x.tipo === "facial"));
+  const out: Row[] = [];
+  const vistos = new Set<string>();
+  for (const l of L0) {
+    const k = l.tipo + "|" + l.codigo;
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    const qty = L0.filter((x) => x.codigo === l.codigo && x.tipo === l.tipo).reduce((a, x) => a + x.qty, 0);
+    const nombre = l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo);
+    if (canje && l.tipo === "facial") {
+      out.push({ tipo: l.tipo, sku: l.codigo, nombre, cantidad: qty, precio_unit: 0, total_linea: 0, canje: true, estimado: false, previa: true });
+      continue;
+    }
+    const pr = precioLineaTicket(cobrables, l.codigo, cobrado);
+    const unit = !pr.estimado && pr.unit != null ? pr.unit : (l.lista > 0 ? l.lista : (pr.unit ?? 0));
+    out.push({ tipo: l.tipo, sku: l.codigo, nombre, cantidad: qty, precio_unit: round2(unit), total_linea: round2(unit * qty), canje: false, estimado: pr.estimado || !(l.lista > 0), previa: true });
+  }
+  return out;
+}
+
 export async function enriquecerItemsLista(
   db: Parameters<typeof consultar>[0],
   filas: Row[],
   items: Row[],
   cabMap: Map<string, Row>,
+  opts: { map?: Map<string, Row>; canje?: (r: Row) => boolean } = {},
 ): Promise<void> {
   if (!filas.length || !items.length) return;
   const claves = filas.map((r) => claveDe(r, leerSerie(r, "so_num")));
@@ -249,6 +285,10 @@ export async function enriquecerItemsLista(
     const res = L.length ? resumenDeLineas(L) : resumenDeHoja(r, d);
     it.resumen = res;
     if (L.length) it.lineas = L.map((l) => lineaHistorial(l));
+    else {
+      const syn = lineasSinteticas(r, opts.map, opts.canje ? opts.canje(r) : /^\s*SI\b/i.test(s(r.paquete)));
+      if (syn.length) { it.lineas = syn.map((l) => ({ ...lineaHistorial(l), previa: true })); it.lineasPrevia = true; }
+    }
     it.resumenTxt = textoResumen(res);
     const fotos: FotoCard[] = [];
     const seen = new Set<string>();
