@@ -576,15 +576,26 @@
     if (t === "bitacora") return d.bitacora.length ? '<ul class="mc-hist">' + d.bitacora.slice().reverse().map(function (h) { return "<li>" + e(new Date(h.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })) + " · <b>" + e(h.accion) + "</b> · " + e(h.por) + (h.motivo ? " · " + e(h.motivo) : "") + (h.cambios ? " · " + e(Object.keys(h.cambios).map(function (k) { return k + ": " + h.cambios[k].antes + " → " + h.cambios[k].despues; }).join("; ")) : "") + "</li>"; }).join("") + "</ul>" : '<p class="mccf-sub">Sin cambios registrados.</p>';
     return "";
   }
+  /* TK183 (Emilia t797u–t800u): el personal guarda directo lo no sensible (queda en la bitácora: quién, cuándo, antes →
+     después). Contacto/identidad (teléfono, email, cédula, dirección, nombre) y autorizaciones (Autoriza fotos,
+     consentimiento) llevan 🔒 y van como solicitud con motivo OBLIGATORIO; Emilia la ve en Alertas y Aprobaciones. */
+  function conSol(k) { var d = K.d; return !d.puedeEditar && (d.conSolicitud || []).indexOf(k) >= 0; }
+  function partesPend() {
+    var P = K.pend || {}, dir = {}, sol = {};
+    Object.keys(P).forEach(function (k) { if (conSol(k)) sol[k] = P[k]; else dir[k] = P[k]; });
+    return { dir: dir, sol: sol, nDir: Object.keys(dir).length, nSol: Object.keys(sol).length };
+  }
   function regHtml() {
-    var d = K.d, P = K.pend || {}, ed = !d.borrado && (d.puedeEditar || d.puedePedir), n = Object.keys(P).length;
+    var d = K.d, P = K.pend || {}, ed = !d.borrado && (d.puedeEditar || d.puedePedir), n = Object.keys(P).length, pp = partesPend();
     var val = function (k) { return P[k] != null ? P[k] : d.datos[k] || ""; };
+    var lab = d.puedeEditar ? "Guardar (" + n + ")" : pp.nDir && pp.nSol ? "Guardar " + pp.nDir + " y pedir " + pp.nSol : pp.nSol ? "Enviar solicitud (" + pp.nSol + ")" : "Guardar (" + pp.nDir + ")";
     return '<div class="mccl-reg">' + d.campos.map(function (c) {
-      var v = val(c[0]), sh = c[0] === "nacimiento" && v ? f(v) : v;
-      return "<div><b>" + e(lblE(c[1])) + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="Clic para editar"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>";
+      var v = val(c[0]), sh = c[0] === "nacimiento" && v ? f(v) : v, lk = conSol(c[0]);
+      return "<div><b>" + e(lblE(c[1])) + (lk ? ' <span class="mccl-lock" title="Requiere aprobación de administración">🔒</span>' : "") + ':</b> <span class="mccl-v' + (P[c[0]] != null ? " mod" : "") + '"' + (ed ? ' data-rc="' + e(c[0]) + '" tabindex="0" title="' + (lk ? "Clic para pedir el cambio (aprobación de administración)" : "Clic para editar") + '"' : "") + ">" + (sh ? e(sh) : '<span class="mccf-sub">—</span>') + "</span>" + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>";
     }).join("") + (d.lectura || []).filter(function (c) { return d.datos[c[0]]; }).map(function (c) { return '<div class="ro"><b>' + e(lblE(c[1])) + ":</b> " + e(f(d.datos[c[0]])) + "</div>"; }).join("") + "</div>" +
-      (n ? (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
-        '<p class="err" id="mccl-err"></p><div class="mccl-acts" style="margin-top:8px"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + " (" + n + ')</button><button class="btn ghost small" type="button" id="mccl-no">Descartar</button></div>' : "");
+      (!d.puedeEditar && d.puedePedir ? '<p class="mccf-sub" style="margin:6px 0 0">🔒 = cambio con aprobación de administración. Lo demás se guarda directo y queda registrado.</p>' : "") +
+      (n ? (pp.nSol ? '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo de la solicitud (obligatorio)</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. la clienta ahora sí autoriza fotos">' : "") +
+        '<p class="err" id="mccl-err"></p><div class="mccl-acts" style="margin-top:8px"><button class="btn small" type="button" id="mccl-ok">' + e(lab) + '</button><button class="btn ghost small" type="button" id="mccl-no">Descartar</button></div>' : "");
   }
   function regHtmlViejo() {
     var d = K.d;
@@ -655,8 +666,12 @@
       var abrir = function () {
         if (sp.querySelector("input")) return;
         var k = sp.getAttribute("data-rc"), v = K.pend[k] != null ? K.pend[k] : d.datos[k] || "", hecho = false;
-        sp.innerHTML = '<input class="mctk-in" ' + (k === "nacimiento" ? 'type="date"' : 'type="text"') + ' value="' + e(v) + '">';
-        var inp = sp.querySelector("input"); inp.focus();
+        var vSN = String(v || "").trim().toUpperCase().replace("Í", "I");
+        sp.innerHTML = k === "autorizaFotos"
+          ? '<select class="mctk-in"><option value=""' + (!/^(SI|NO)/.test(vSN) ? " selected" : "") + '>—</option><option value="SI"' + (/^SI/.test(vSN) ? " selected" : "") + '>SI</option><option value="NO"' + (/^NO/.test(vSN) ? " selected" : "") + ">NO</option></select>"
+          : '<input class="mctk-in" ' + (k === "nacimiento" ? 'type="date"' : 'type="text"') + ' value="' + e(v) + '">';
+        var inp = sp.querySelector("input,select"); inp.focus();
+        if (inp.tagName === "SELECT") inp.onchange = function () { inp.blur(); };
         var fin = function (guardar) {
           if (hecho) return; hecho = true;
           var nv = inp.value.trim();
@@ -672,17 +687,34 @@
     var ok = box.querySelector("#mccl-ok");
     if (ok) ok.onmousedown = function (ev) { ev.preventDefault(); };
     if (ok) ok.onclick = async function () {
-      var abierto = box.querySelector("[data-rc] input");
+      var abierto = box.querySelector("[data-rc] input,[data-rc] select");
       if (abierto) { var kk = abierto.closest("[data-rc]").getAttribute("data-rc"), vv = abierto.value.trim(); if (vv !== (d.datos[kk] || "")) K.pend[kk] = vv; }
       var cambios = Object.assign({}, K.pend);
       var err = box.querySelector("#mccl-err");
       if (!Object.keys(cambios).length) { err.textContent = "No cambiaste nada"; return; }
+      if (d.puedeEditar) {
+        ok.disabled = true;
+        var ra = await api("cl_guardar", { key: d.key, cambios: cambios });
+        ok.disabled = false;
+        if (!ra || ra.error) { err.textContent = (ra && ra.error) || "No se pudo"; return; }
+        toast2("✓ Datos guardados"); K.t = 0; K.pend = {}; draw(); return;
+      }
+      var pp = partesPend(), mot = String((main.querySelector("#mccl-mot") || {}).value || "").trim();
+      if (pp.nSol && !mot) { err.textContent = "Escribe el motivo: es obligatorio para la solicitud"; var mi = main.querySelector("#mccl-mot"); if (mi) mi.focus(); return; }
       ok.disabled = true;
-      var r = d.puedeEditar ? await api("cl_guardar", { key: d.key, cambios: cambios })
-        : await api("solicitud_crear", { tabla: "cliente_beta", fila: d.key, tipo: "cambio", motivo: (main.querySelector("#mccl-mot") || {}).value || "", propuestos: cambios });
+      var msgs = [];
+      if (pp.nDir) {
+        var r1 = await api("cl_guardar", { key: d.key, cambios: pp.dir });
+        if (!r1 || r1.error) { ok.disabled = false; err.textContent = (r1 && r1.error) || "No se pudo"; return; }
+        msgs.push("✓ Guardado"); pp.dir && Object.keys(pp.dir).forEach(function (k) { delete K.pend[k]; });
+      }
+      if (pp.nSol) {
+        var r2 = await api("solicitud_crear", { tabla: "cliente_beta", fila: d.key, tipo: "cambio", motivo: mot, propuestos: pp.sol });
+        if (!r2 || r2.error) { ok.disabled = false; err.textContent = (r2 && r2.error) || "No se pudo enviar la solicitud"; if (pp.nDir) { K.t = 0; } return; }
+        msgs.push("✓ Solicitud enviada a administración");
+      }
       ok.disabled = false;
-      if (!r || r.error) { err.textContent = (r && r.error) || "No se pudo"; return; }
-      toast2(d.puedeEditar ? "✓ Datos guardados" : "✓ Solicitud enviada a administración");
+      toast2(msgs.join(" · "));
       K.t = 0; K.pend = {}; draw();
     };
   }

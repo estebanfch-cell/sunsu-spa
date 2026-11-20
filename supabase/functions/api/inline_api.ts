@@ -1553,7 +1553,7 @@ export const SOLICITUD_HOOKS: Record<string, {
   aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row, sol?: Row) => Promise<Row>;
   borrar?: (ctx: Ctx, ses: Ses, fila: string, motivo: string, sol?: Row) => Promise<Row>;
   /** TK154: arma la propuesta estructurada (antes / después / diff) sin tocar la fila real. */
-  preparar?: (ctx: Ctx, ses: Ses, fila: string, tipo: string, propuestos: Row, motivo: string, hecho: Row) => Promise<{ propuestos: Row; antes?: Row } | null>;
+  preparar?: (ctx: Ctx, ses: Ses, fila: string, tipo: string, propuestos: Row, motivo: string, hecho: Row) => Promise<{ propuestos: Row; antes?: Row; etiqueta?: string } | null>;
 }> = {};
 async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row; etiqueta?: string; enlace?: string } | { error: string }> {
   if (SOLICITUD_HOOKS[tabla]) return SOLICITUD_HOOKS[tabla].fila(ctx, ses, fila);
@@ -1734,7 +1734,7 @@ async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; d
   if (SOLICITUD_HOOKS[tabla]?.preparar) {
     try {
       const prep = await SOLICITUD_HOOKS[tabla].preparar!(ctx, ses, fila, tipo, propuestos, motivo, hecho as unknown as Row);
-      if (prep) { propuestos = prep.propuestos; if (prep.antes) antesRec = prep.antes; }
+      if (prep) { propuestos = prep.propuestos; if (prep.antes) antesRec = prep.antes; if (prep.etiqueta) (hecho as { etiqueta?: string }).etiqueta = prep.etiqueta; }
     } catch { /* sin comparativo: se guarda como antes */ }
   }
   const rec = {
@@ -1753,7 +1753,7 @@ async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; d
   await ctx.db.write(actorOf(ses), "solicitudes_cambio", "insert", {}, rec);
   await anotar(ctx, ses, "solicitudes_cambio", id, "INSERT", null, rec);
   const cosa = hecho.etiqueta ? "«" + hecho.etiqueta + "»" : tabla === "clientes" || tabla === "cliente_beta" ? "una clienta" : tabla === "ticket_detalle" ? "un ticket" : tabla === "paquete_beta" ? "un paquete" : tabla === "gift_beta" ? "una gift card" : tabla === "producto_beta" ? "un producto" : tabla === "clientes" ? "una clienta" : tabla === "catalogo" || tabla === "inventario" ? "un producto" : tabla === "proveedores" ? "un proveedor" : tabla === "compras" ? "una línea de compra" : tabla === "gift_cards" ? "una gift card" : tabla === "paquetes" ? "un paquete" : tabla === "permisos" ? "un permiso" : tabla === "multas" ? "una multa" : tabla === "horarios" ? "un horario" : tabla === "asistencia" ? "una marca" : tabla === "feriados" ? "un feriado" : tabla === "pago_config" ? "una configuración de pago" : tabla === "usuarios" ? "un usuario" : tabla === "acceso" ? "un acceso" : tabla === "lugares" ? "un lugar" : "un ticket";
-  await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa);
+  await avisarAdmins(ctx, ses, ses.name + " pidió " + (tipo === "eliminacion" ? "eliminar" : "un cambio en") + " " + cosa + (tabla === "cliente_beta" ? " · Motivo: " + motivo : ""));
   return { ok: true, id };
 }
 
