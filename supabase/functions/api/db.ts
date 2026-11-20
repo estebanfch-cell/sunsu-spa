@@ -131,6 +131,19 @@ export class SupabaseDb implements Db {
       }
       return { rows: out, total: q.contar ? (total ?? out.length) : null };
     }
+    // TK184: PostgREST también corta un límite > 1000 (p. ej. limite: 4000 → solo 1000 filas). Clientas más allá de la
+    // fila 1000 «no tenían WhatsApp». Se pide por bloques de 1000 hasta llegar al límite pedido.
+    if (q.limite > 1000) {
+      const out: Row[] = []; let total: number | null = null, d = q.desde || 0;
+      for (let i = 0; out.length < q.limite && i < 100; i++) {
+        const lim = Math.min(1000, q.limite - out.length);
+        const r = await this.consultar1(table, { ...q, desde: d, limite: lim, contar: q.contar && i === 0 });
+        if (i === 0) total = r.total;
+        out.push(...r.rows); d += r.rows.length;
+        if (r.rows.length < lim) break;
+      }
+      return { rows: out, total: q.contar ? (total ?? out.length) : null };
+    }
     return await this.consultar1(table, q);
   }
   private async consultar1(table: string, q: Consulta): Promise<Resultado> {

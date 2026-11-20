@@ -349,6 +349,11 @@
   async function previaTarjeta(sheetRow, titulo) {
     var box = marcoPrevia(titulo, '<p class="mccf-sub">Generando la tarjeta…</p>');
     var cards = window._tkCards = window._tkCards || {};
+    /* TK184: tarjeta con los datos actuales del ticket (correcciones aprobadas, líneas, fotos), no la fila guardada. */
+    if (window.MCTickets && typeof window.MCTickets.tarjetaFresca === "function") {
+      var kf = await window.MCTickets.tarjetaFresca(/^\d+$/.test(String(sheetRow)) ? "r" + sheetRow : String(sheetRow));
+      if (kf && typeof tarjetaTicket === "function") { tarjetaTicket(kf, function (doc, nom) { mostrarPdf(box, doc, nom || "Tarjeta.pdf"); }); return; }
+    }
     if (!cards[sheetRow]) { try { var r = await api("tk_historial", { rows: [sheetRow], limit: 1 }); if (r && r.items && r.items[0]) cards[sheetRow] = r.items[0]; } catch (x) {} }
     if (!cards[sheetRow] || typeof tarjetaTicket !== "function") { box.querySelector(".mcpv-b").innerHTML = '<p class="err">No encontré la tarjeta de este ticket</p>'; return; }
     tarjetaTicket(sheetRow, function (doc, nom) { mostrarPdf(box, doc, nom || "Tarjeta.pdf"); });

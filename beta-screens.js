@@ -12924,11 +12924,16 @@ function _cargarFotoTk(url){
   // El navegador NO puede leer fotos de Drive (CORS) → el SERVIDOR las manda en base64
   return new Promise(function(res){
     try{
-      var m=(url||'').toString().match(/[-\w]{25,}/);
+      var u0=(url||'').toString(), ma=u0.match(/archivo:([-\w]+)/), m=ma?[ma[1]]:u0.match(/[-\w]{25,}/);
       if(!m){res(null);return;}
       var to=setTimeout(function(){res(null);},12000);
-      fetch(APPS_SCRIPT_URL+'?action=fotoB64&id='+m[0]+'&_t='+Date.now())
-      .then(function(r){return r.json();})
+      /* TK184: primero la función api (lee archivo: y Drive); Apps Script solo de respaldo para Drive. */
+      var viaApi=(typeof api==='function')?Promise.resolve(api('fotoB64',{id:m[0]})).catch(function(){return null;}):Promise.resolve(null);
+      viaApi.then(function(d0){
+        if(d0&&d0.ok&&d0.b64) return d0;
+        if(ma) return {ok:false};
+        return fetch(APPS_SCRIPT_URL+'?action=fotoB64&id='+m[0]+'&_t='+Date.now()).then(function(r){return r.json();});
+      })
       .then(function(d){
         clearTimeout(to);
         if(!d.ok||!d.b64){res(null);return;}
@@ -13040,7 +13045,8 @@ function tarjetaTicket(tkRow, cbTk){
   var sinFotos=(window._tarjSinFotos||{})[tkRow];
   toast(sinFotos?'⏳ Generando tarjeta (sin fotos)...':'⏳ Generando tarjeta (cargando fotos)...','var(--blue)');
   // Extraer TODOS los IDs de Drive del texto de la celda (a prueba de cualquier separador)
-  var idsDe=function(s){ return ((s||'').toString().match(/[-\w]{25,}/g)||[]).slice(0,3); };
+  /* TK184: también fotos de la app (archivo:<id>, las de «Agregar fotos» y las nuevas), no solo IDs de Drive. */
+  var idsDe=function(s){ return ((s||'').toString().match(/archivo:[-\w]+|[-\w]{25,}/g)||[]).slice(0,3); };
   // Default: UNA pareja antes/despues (respira mejor en la hoja). 'Todas' es opcional.
   var maxFT=((window._tarjFotosTodas||{})[tkRow])?3:1;
   var urlsA=sinFotos?[]:idsDe(t.fotosAntes).slice(0,maxFT);
@@ -13088,7 +13094,8 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       doc.setFillColor(253,247,230);
       doc.roundedRect(xI,y,ANCHO,24,6,6,'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(9.2); doc.setTextColor(GOLD);
-      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt,W/2,y+16,{align:'center'});
+      var rtT=limpia(t.retornoTrat||''); /* TK184: y el tratamiento recomendado para esa cita, si la cosmetóloga lo puso */
+      doc.text('PROXIMA CITA RECOMENDADA: '+retFmt+(rtT?' - '+(rtT.length>48?rtT.slice(0,46)+'..':rtT):''),W/2,y+16,{align:'center'});
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
       y+=30;
     }
@@ -13130,7 +13137,8 @@ function _pdfTarjetaTicket(t, fondo, fotosA, fotosD, cbTT){
       var m=p.match(/^(.*?)\s*×(\d+)\s*$/);
       var base=m?m[1]:p, cant=m?parseInt(m[2]):1;
       if(/^[A-Z]{2,3}-\d{3}$/.test(base.trim())) base=nomProd(base.trim());
-      filasExp.push({c:cant, d:limpia(base), tp:'Producto'});
+      var dP=limpia(base)||String(base||'').trim(); /* TK184: un código solo (AS-002) no puede quedar en blanco */
+      if(dP) filasExp.push({c:cant, d:dP, tp:'Producto'});
     });
     if(/^\s*SI\b/i.test(t.colS||'')) filasExp.push({c:1, d:'Canje de Gift Card', tp:'Gift card'});
     if(filasExp.length){

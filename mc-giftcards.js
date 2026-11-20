@@ -322,7 +322,7 @@ function listaHtml() {
       if (window.SunsuWa && typeof SunsuWa.preparar === "function") {
         var prep = await SunsuWa.preparar({ gc_codigo: v.codigo, tipo: "giftcard" });
         if (!prep || prep.error) { toast2((prep && prep.error) || "No se pudo preparar el WhatsApp", true); return; }
-        if (!prep.tiene_tel) { toast2("Esta clienta no tiene WhatsApp registrado. Pídele a una administradora que lo complete en la ficha.", true); return; }
+        if (!prep.tiene_tel) { toast2("Esta clienta no tiene WhatsApp registrado. Pide el cambio desde la ficha: Teléfono 🔒 (lo aprueba administración).", true); return; }
         await SunsuWa.compartir(prep, [{ blob: pdf.blob, nom: pdf.nombre }], "", ["giftcard"]);
         guardarPdfFondo(v, pdf);
         return;
