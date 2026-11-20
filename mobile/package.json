@@ -1,0 +1,35 @@
+{
+  "name": "sunsu-spa-ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sunsu Spa - app nativa iOS (Capacitor). Empaqueta la web de la raíz del repo dentro del .ipa.",
+  "type": "module",
+  "scripts": {
+    "sync:web": "node scripts/sync-web.mjs",
+    "sync:ios": "node scripts/sync-web.mjs && cap sync ios",
+    "open:ios": "cap open ios",
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/app-launcher": "^8.0.1",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/camera": "^8.2.6",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/keyboard": "^8.0.6",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

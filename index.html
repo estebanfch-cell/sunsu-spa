@@ -907,6 +907,8 @@
   .aviso-pin-modal h3 { margin: 0 0 8px; font-size: 1.05rem; color: var(--navy-d, #3D5A7A); }
   .aviso-pin-modal p { margin: 0 0 14px; font-size: 0.88rem; color: var(--navy, #4A5E78); }
   .lg-olvido { text-align: center; margin: 8px 0 0; }
+  .lg-legal { margin: 14px 0 0; text-align: center; font-size: 0.72rem; color: var(--gray); }
+  .lg-legal a { color: var(--gray); font-weight: 600; text-decoration: none; padding: 4px 2px; }
   .lg-olvido button { background: none; border: 0; color: var(--navy); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 4px; }
 
   .notif-overlay {
@@ -2582,6 +2584,7 @@ function paintLogin(msg) {
         <p class="lg-olvido"><button type="button" id="lg-olvido">¿Olvidaste tu contraseña?</button></p>
         ${modo === "usuario" ? `<p class="muted lg-nota">¿Todavía no tienes usuario? Entra con tu PIN y créalo en «Mi acceso», o pídeselo a Emilia.</p>` : ""}
       </form>
+      <p class="lg-legal"><a href="https://app.sunsuspa.com/privacy.html" target="_blank" rel="noopener">Privacidad</a> · <a href="https://app.sunsuspa.com/support.html" target="_blank" rel="noopener">Soporte</a></p>
     </main>`;
   document.querySelectorAll(".lg-tab").forEach((b) => b.addEventListener("click", () => { localStorage.setItem("sunsu.beta.loginModo", b.dataset.modo); paintLogin(""); }));
   const olvido = document.getElementById("lg-olvido");
