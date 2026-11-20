@@ -612,13 +612,21 @@ export type LineaTicket = { codigo: string; qty: number; lista: number; tipo: "p
 export function lineasTicket(t: Row, pvpDe: (codigo: string) => number): LineaTicket[] {
   const out: LineaTicket[] = [];
   const sunsu = (v: unknown) => [...s(v).toUpperCase().matchAll(/SUNSU-\d+/g)].map((m) => skuCode(m[0]));
-  for (const x of productQtys(t)) out.push({ codigo: skuCode(x.sku), qty: x.qty, lista: pvpDe(skuCode(x.sku)), tipo: "producto" });
+  for (const x of productQtys(t)) {
+    const code = skuCode(x.sku);
+    let lista = pvpDe(code);
+    // TK195: INV-123 (caja de gift card, $3) a veces no está en el catálogo publicado.
+    if (!(lista > 0) && code === "INV-123") lista = 3;
+    out.push({ codigo: code, qty: x.qty, lista, tipo: "producto" });
+  }
   const usoPaquete = /^\s*SI\b/i.test(s(t.paquete)) && !s(t.compra_pack_3) && !s(t.compra_pack_6);
   const fac = sunsu(t.facial_hecho)[0] || sunsu(t.fac)[0];
   if (fac) out.push({ codigo: fac, qty: 1, lista: usoPaquete ? 0 : pvpDe(fac), tipo: "facial" });
   for (const c of sunsu(t.servicios_adicionales)) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "extra" });
   for (const c of [...sunsu(t.compra_pack_3), ...sunsu(t.compra_pack_6)]) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "paquete" });
-  if (/^\s*SI\b/i.test(s(t.venta_gift))) out.push({ codigo: "GIFT", qty: 1, lista: pvpDe(skuCode("SUNSU-34")) || 65, tipo: "gift" });
+  // TK195: NUNCA usar SUNSU-34 ($34.50, gift de $30 inactiva) como PVP de una venta de gift card.
+  // El valor real sale de la factura Migo o, si es la línea cobrada, de lo cobrado en el ticket.
+  if (/^\s*SI\b/i.test(s(t.venta_gift))) out.push({ codigo: "GIFT", qty: 1, lista: 0, tipo: "gift" });
   return out;
 }
 

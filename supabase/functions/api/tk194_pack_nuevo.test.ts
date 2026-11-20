@@ -75,9 +75,9 @@ describe("TK194 · paquete nuevo + sesión 1 en el mismo ticket", () => {
   });
 
   it("cache TK194 y CSS móvil del hint / botón de 44px", () => {
-    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK194"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK194"/);
-    assert.match(html, /beta-screens\.js\?v=20261120tk194/);
+    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK195"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK195"/);
+    assert.match(html, /beta-screens\.js\?v=20261120tk195/);
     assert.match(html, /#paq-box \.paq-card-nuevo/);
     assert.match(html, /#cobro-pack-hint/);
     assert.match(html, /#paq-box \.paq-ses-nuevo[\s\S]{0,80}min-height: 44px/);
