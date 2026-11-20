@@ -1216,6 +1216,30 @@
     try { wire2(main); } catch (x) { try { console.error(x); } catch (y) {} var er = main.querySelector("#mctk-err"); if (er) er.textContent = "No se pudo mostrar esta pantalla. Recarga e inténtalo de nuevo."; }
   }
   function on(main, sel, ev, fn) { var el = main.querySelector(sel); if (el) el[ev] = fn; return el; }
+  /* TK155 (Emilia t683u): en el celular el menú (Acciones ▾, etc.) sale ancho y completo, anclado a la pantalla
+     (position: fixed) para que ningún padre con overflow lo recorte. Tapa lo de atrás: solo es para tocar. */
+  function anclarMenuMovil(dd, btn) {
+    try {
+      var vw = window.innerWidth || document.documentElement.clientWidth || 390;
+      if (vw > 860) { dd.style.cssText = ""; return; }
+      var r = btn.getBoundingClientRect(), vh = window.innerHeight || 844;
+      var w = Math.min(320, vw - 24);
+      var top = Math.round(r.bottom + 4);
+      dd.style.position = "fixed";
+      dd.style.top = top + "px";
+      dd.style.right = "12px";
+      dd.style.left = "auto";
+      dd.style.width = w + "px";
+      dd.style.minWidth = w + "px";
+      dd.style.maxWidth = (vw - 24) + "px";
+      dd.style.maxHeight = Math.max(200, vh - top - 12) + "px";
+      dd.style.overflowY = "auto";
+      dd.style.zIndex = "1000";
+      dd.classList.add("mctk-dd-movil");
+      if (!K.ddScroll) { K.ddScroll = true; window.addEventListener("scroll", function () { document.querySelectorAll(".mctk-dd-movil").forEach(function (x) { x.hidden = true; }); }, { passive: true }); }
+    } catch (e) {}
+  }
+  try { window._mctkAnclarMenu = anclarMenuMovil; } catch (e0) {}
   function wire2(main) {
     on(main, "#mctk-volver", "onclick", function () { if (K.dirty && !confirm("Hay cambios sin guardar. ¿Salir igual?")) return; var vv = sessionStorage.getItem("mctk.volver"); sessionStorage.removeItem("mctk.volver"); go(vv || "#/m/tickets"); });
     main.querySelectorAll("[data-menu]").forEach(function (b) {
@@ -1225,6 +1249,7 @@
         main.querySelectorAll(".mctk-dd").forEach(function (x) { if (x.id !== id) x.hidden = true; });
         var dd = id ? main.querySelector("#" + id) : null;
         if (dd) dd.hidden = !dd.hidden;
+        if (dd && !dd.hidden) anclarMenuMovil(dd, b);
       };
     });
     if (!K.ddWired) { K.ddWired = true; document.addEventListener("click", function (ev) { if (!ev.target.closest(".mctk-menu")) document.querySelectorAll(".mctk-dd").forEach(function (x) { x.hidden = true; }); }); }

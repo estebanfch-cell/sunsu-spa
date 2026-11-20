@@ -219,6 +219,17 @@ describe("TK155 reversa completa al cancelar", () => {
   });
 });
 
+describe("TK155 menú Acciones ancho en el celular (t683u)", () => {
+  it("se ancla a la pantalla (fixed, right 12px, ancho hasta 320px) y no se recorta", () => {
+    const tk = file("mc-tickets.js");
+    assert.match(tk, /function anclarMenuMovil\(dd, btn\)/);
+    assert.match(tk, /dd\.style\.position = "fixed";/);
+    assert.match(tk, /var w = Math\.min\(320, vw - 24\);/);
+    assert.match(tk, /if \(dd && !dd\.hidden\) anclarMenuMovil\(dd, b\);/);
+    assert.match(html, /\.mctk-dd\.mctk-dd-movil a, \.mctk-dd\.mctk-dd-movil button/);
+  });
+});
+
 describe("TK155 versión", () => {
   it("caché y motor en TK155", () => {
     assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-19-TK155"/);

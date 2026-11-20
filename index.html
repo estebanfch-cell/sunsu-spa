@@ -1100,6 +1100,8 @@
     .btn, button { white-space: normal; }
     .mob-voucher .btn, label.mctk-voucher, label.pg-vbtn { white-space: nowrap !important; }
     .mctk-dd a, .mctk-dd button, .mctk-wa-chip, .mctk-wa-go, .mob-wa { white-space: nowrap !important; }
+    /* TK155 (t683u): menú de Acciones ancho en el celular; los textos se leen completos. */
+    .mctk-dd.mctk-dd-movil a, .mctk-dd.mctk-dd-movil button, .mctk-dd.mctk-dd-movil .mctk-voucher { overflow: visible !important; text-overflow: clip !important; font-size: .86rem !important; padding: 10px 12px !important; }
     table.mob-stack { display: block; width: 100% !important; min-width: 0 !important; max-width: 100% !important; border: 0 !important; box-shadow: none !important; background: transparent !important; }
     table.mob-stack > thead, table.mob-stack > colgroup { display: none !important; }
     table.mob-stack > tbody, table.mob-stack > tfoot { display: block; width: 100%; }
