@@ -5937,7 +5937,8 @@ function _histCelda(t, c, showPrices, i){
   if(c.k==='cli') return '<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td>';
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
-  if(c.k==='cos') return '<td>'+(window.MCColor?window.MCColor.pill(t.cosmetologa||''):_histEsc(t.cosmetologa||''))+'</td>';
+  /* TK186: solo el primer nombre de la cosmetóloga, sin cortar (el nombre completo va en el tooltip). */
+  if(c.k==='cos') return '<td>'+(window.MCColor&&window.MCColor.pillCorto?window.MCColor.pillCorto(t.cosmetologa||''):_histEsc(_histNombreCorto(t.cosmetologa||'')))+'</td>';
   if(c.k==='fpago') return '<td>'+(_tkFormaPill(_tkForma(t))||'<span class="tk-muted">—</span>')+'</td>';
   if(c.k==='sub') return '<td class="num">'+$(m.sub)+'</td>';
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';

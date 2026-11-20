@@ -173,6 +173,17 @@
     },
     color: colorDe,
     datos: function () { return COL; },
+    /* TK186 (Emilia): en tablas y tarjetas, SOLO el primer nombre (Alejandra, Daniela…), nunca cortado; el color sale del nombre completo. */
+    pillCorto: function (nombre) {
+      var full = String(nombre || "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+      if (!full) return "";
+      var partes = full.split(" "), i = 0;
+      while (i < partes.length - 1 && /^(dra?|lic|ing|srta|sra|sr|cosm|cosmetologa|cosmetóloga)\.?$/i.test(partes[i])) i++;
+      var corto = partes[i] || full;
+      var c = colorDe(full) || colorDe(corto);
+      if (!c) return '<span class="mc-cos-t" title="' + escH(full) + '">' + escH(corto) + "</span>";
+      return '<span class="mc-cos" title="' + escH(full) + '" style="background:' + c + ";color:" + oscuro(c) + ";border-color:" + oscuro(c) + '33">' + escH(corto) + "</span>";
+    },
     pill: function (nombre) {
       if (!nombre) return "";
       var c = colorDe(nombre);
@@ -180,7 +191,7 @@
       return '<span class="mc-cos" style="background:' + c + ";color:" + oscuro(c) + ";border-color:" + oscuro(c) + '33">' + escH(nombre) + "</span>";
     },
   };
-  if (typeof document !== "undefined") (function () { var st = document.createElement("style"); st.textContent = ".mc-cos{display:inline-block;padding:1px 9px;border-radius:999px;border:1px solid transparent;font-size:.78rem;font-weight:700;line-height:1.5;white-space:nowrap}"; document.head.appendChild(st); })();
+  if (typeof document !== "undefined") (function () { var st = document.createElement("style"); st.textContent = ".mc-cos{display:inline-block;padding:1px 9px;border-radius:999px;border:1px solid transparent;font-size:.78rem;font-weight:700;line-height:1.5;white-space:nowrap;max-width:none;overflow:visible;text-overflow:clip}"; document.head.appendChild(st); })();
   if (typeof setTimeout === "function" && typeof document !== "undefined") setTimeout(function () { window.MCColor.cargar(); }, 1500);
   var TABS = { ventas: 1, inventario: 1, spa: 1, compras: 1 };
   function grupos() {

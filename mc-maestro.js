@@ -245,6 +245,7 @@
     var nom = String((t && t.cosmetologa) || "").trim();
     if (!nom) return "";
     var corto = nom.split(/\s+/)[0];
+    if (window.MCColor && window.MCColor.pillCorto) { var hc = window.MCColor.pillCorto(nom); if (hc) return hc; }
     if (window.MCColor && window.MCColor.pill) {
       var html = window.MCColor.pill(corto) || window.MCColor.pill(nom);
       if (html) return html;
