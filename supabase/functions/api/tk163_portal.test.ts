@@ -167,3 +167,11 @@ describe("TK163 frontend: inicio, portal y eliminar cuenta", () => {
     assert.match(rd("privacy.html"), /legal, accounting and tax retention/);
   });
 });
+
+describe("TK163 portalLimpio mira claves, no valores", () => {
+  it("una OC tipo «Compra» pasa; una clave costo no", () => {
+    assert.equal(portalLimpio({ ordenes: [{ tipo: "Compra", estado: "notas" }] }), true);
+    assert.equal(portalLimpio({ productos: [{ costo: 3 }] }), false);
+    assert.equal(portalLimpio({ x: { "Comision" : 1 } }), false);
+  });
+});

@@ -152,6 +152,6 @@ export function limpiarPerfil(cambios: Row): { limpio: Row; error?: string } {
 }
 
 /** Claves que nunca salen al portal (costos, comisiones, notas del equipo, otros clientes). Red de seguridad. */
-const PROHIBIDO = /"(costo|costo_promedio|compra|compra_comision|precio_compra|comision|comisiones|margen|utilidad|notas|notas_generales|bitacora|vendido_por|beta_compra_real|beta_compra_comision|total_ventas)"/i;
+const PROHIBIDO = /"(costo|costo_promedio|compra|compra_comision|precio_compra|comision|comisiones|margen|utilidad|notas|notas_generales|bitacora|vendido_por|beta_compra_real|beta_compra_comision|total_ventas)"\s*:/i;
 export function portalLimpio(payload: unknown): boolean { return !PROHIBIDO.test(JSON.stringify(payload ?? {})); }
 export const mismoNombre = (a: unknown, b: unknown) => normNombre(s(a)) === normNombre(s(b));
