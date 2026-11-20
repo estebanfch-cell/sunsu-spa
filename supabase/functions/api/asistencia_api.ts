@@ -772,6 +772,7 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
   if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
   const nombre = (!esAdmin(ses.rol) || propio(ses, matriz)) ? ses.name : (s(p.nombre) || ses.name);
   const hoyYmd = ecuadorParts(ctx.now).ymd;
+  const ingresoCal = s((await empleadaDe(ctx, nombre).catch(() => undefined))?.fecha_ingreso).slice(0, 10);
   const ancla = s(p.fecha) || hoyYmd;
   const vista = s(p.vista || "mes") || "mes";
   let desde = ancla, hasta = ancla;
@@ -867,7 +868,9 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
   return {
     ok: true, vista, fecha: ancla, desde, hasta, nombre, nombreMostrar: mostrar, color, rolMes,
     feriados,
-    dias: horas.dias || [],
+    // TK177: antes del ingreso no hay faltas (el calendario los deja neutros).
+    ingreso: ingresoCal || null,
+    dias: ((horas.dias || []) as Row[]).map((d) => ingresoCal && s(d.fecha).slice(0, 10) < ingresoCal ? { ...d, falta: false, antesIngreso: true } : d),
     resumen: {
       diasAsistidos: horas.diasPropios,
       hrsNormales: horas.hrsOrdinarias,
