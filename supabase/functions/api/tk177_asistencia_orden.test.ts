@@ -18,7 +18,7 @@ describe("TK177 Mi asistencia ordenada", () => {
   });
 
   it("calendario: verde trabajado, rojo falta, celeste descanso, morado feriado, futuro neutro, leyenda", () => {
-    const f = new Function("esc", "ymdGuayaquil", ["hHm", "minDia", "etiquetaDiaAsis", "htmlAsisMesGrid"].map(pick).join("\n") + ";return htmlAsisMesGrid;")(esc, () => "2026-11-20");
+    const f = new Function("esc", "ymdGuayaquil", ["hHm", "minDia", "etiquetaDiaAsis", "celdaAsis", "htmlAsisMesGrid"].map(pick).join("\n") + ";return htmlAsisMesGrid;")(esc, () => "2026-11-20");
     const dias = [
       { fecha: "2026-11-03", workedMin: 584, esFeriado: true, esDescanso: true },
       { fecha: "2026-11-04", workedMin: 560 },

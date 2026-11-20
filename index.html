@@ -5184,6 +5184,50 @@ function etiquetaDiaAsis(d) {
   if ((d.workedMin || d.diaContado)) return "Asistió";
   return "";
 }
+// TK178 (Emilia t785u): una celda del calendario de asistencia (mes o semana; semanas de lunes a domingo).
+function celdaAsis(f, d, dia, ferSet, hoy) {
+  const mins = minDia(dia);
+  // TK177 (Emilia t783u): verde trabajado (con horas), rojo falta, celeste descanso, morado feriado; futuro neutro.
+  const esFer = !!((dia && dia.esFeriado) || ferSet.has(f));
+  const esDesc = !!(dia && dia.esDescanso) && !esFer;
+  const antes = !!(dia && dia.antesIngreso);
+  const futuro = !!hoy && f > hoy;
+  const perm = !!(dia && dia.fuente === "permiso");
+  const estado = mins > 0 ? "c-trab" : perm ? "c-perm" : esFer ? "c-fer" : esDesc ? "c-desc" : antes || futuro ? "" : (dia && dia.falta) ? "c-falta" : "";
+  const marca = mins > 0 && esFer ? '<i class="c-ind c-ind-fer" title="Feriado"></i>' : mins > 0 && esDesc ? '<i class="c-ind c-ind-desc" title="Descanso"></i>' : "";
+  const tag = mins > 0 ? "" : perm ? "Permiso" : esFer ? "Feriado" : esDesc ? "Descanso" : estado === "c-falta" ? "Falta" : "";
+  const cls = ["asis-celda", estado, f === hoy ? "hoy" : ""].filter(Boolean).join(" ");
+  return `<div class="${cls}" title="${esc(f + (mins ? " · " + hHm(mins) : "") + (esFer ? " · Feriado" : esDesc ? " · Descanso" : tag ? " · " + tag : ""))}"><span class="n">${d}${marca}</span>${mins ? `<span class="hm">${esc(hHm(mins))}</span>` : ""}${tag ? `<span class="tag">${esc(tag)}</span>` : ""}</div>`;
+}
+// TK178 (Emilia t785u): la semana va de LUNES a DOMINGO.
+function lunesDeYmd(ymd) {
+  const [y, m, d] = String(ymd).slice(0, 10).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+function sumarDiasYmd(ymd, n) {
+  const [y, m, d] = String(ymd).slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+function textoSemanaAsis(ymd) {
+  const MESC = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const lun = lunesDeYmd(ymd), dom = sumarDiasYmd(lun, 6);
+  const c = (x) => Number(x.slice(8, 10)) + " " + MESC[Number(x.slice(5, 7)) - 1];
+  return "lun " + c(lun) + " – dom " + c(dom);
+}
+function htmlAsisSemanaGrid(cal, fecha) {
+  const lun = lunesDeYmd(fecha || cal.fecha || (typeof ymdGuayaquil === "function" ? ymdGuayaquil() : ""));
+  const byFecha = {};
+  (cal.dias || []).forEach((d) => { byFecha[String(d.fecha || "").slice(0, 10)] = d; });
+  const ferSet = new Set((cal.feriados || []).map((f) => String(f.fecha || f).slice(0, 10)));
+  const hoy = (typeof ymdGuayaquil === "function" ? ymdGuayaquil() : "");
+  const dow = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map((d) => `<div class="asis-dow">${d}</div>`).join("");
+  let cells = "";
+  for (let i = 0; i < 7; i++) { const f = sumarDiasYmd(lun, i); cells += celdaAsis(f, Number(f.slice(8, 10)), byFecha[f], ferSet, hoy); }
+  return `<div class="asis-cal"><div class="asis-cal-nav"><b>Semana ${esc(textoSemanaAsis(lun))}</b></div><div class="asis-grid">${dow}${cells}</div>
+    <div class="asis-leyenda"><span><i class="c-trab"></i>Trabajado</span><span><i class="c-falta"></i>Falta</span><span><i class="c-desc"></i>Descanso</span><span><i class="c-fer"></i>Feriado</span></div></div>`;
+}
 function htmlAsisMesGrid(cal, fecha) {
   const ymd = fecha || cal.fecha || "";
   const Y = Number(String(ymd).slice(0, 4));
@@ -5206,19 +5250,7 @@ function htmlAsisMesGrid(cal, fecha) {
   for (let i = 0; i < start; i++) cells += '<div class="asis-celda vacio"></div>';
   for (let d = 1; d <= daysIn; d++) {
     const f = Y + "-" + String(M).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-    const dia = byFecha[f];
-    const mins = minDia(dia);
-    // TK177 (Emilia t783u): verde trabajado (con horas), rojo falta, celeste descanso, morado feriado; futuro neutro.
-    const esFer = !!((dia && dia.esFeriado) || ferSet.has(f));
-    const esDesc = !!(dia && dia.esDescanso) && !esFer;
-    const antes = !!(dia && dia.antesIngreso);
-    const futuro = !!hoy && f > hoy;
-    const perm = !!(dia && dia.fuente === "permiso");
-    const estado = mins > 0 ? "c-trab" : perm ? "c-perm" : esFer ? "c-fer" : esDesc ? "c-desc" : antes || futuro ? "" : (dia && dia.falta) ? "c-falta" : "";
-    const marca = mins > 0 && esFer ? '<i class="c-ind c-ind-fer" title="Feriado"></i>' : mins > 0 && esDesc ? '<i class="c-ind c-ind-desc" title="Descanso"></i>' : "";
-    const tag = mins > 0 ? "" : perm ? "Permiso" : esFer ? "Feriado" : esDesc ? "Descanso" : estado === "c-falta" ? "Falta" : "";
-    const cls = ["asis-celda", estado, f === hoy ? "hoy" : ""].filter(Boolean).join(" ");
-    cells += `<div class="${cls}" title="${esc(f + (mins ? " · " + hHm(mins) : "") + (esFer ? " · Feriado" : esDesc ? " · Descanso" : tag ? " · " + tag : ""))}"><span class="n">${d}${marca}</span>${mins ? `<span class="hm">${esc(hHm(mins))}</span>` : ""}${tag ? `<span class="tag">${esc(tag)}</span>` : ""}</div>`;
+    cells += celdaAsis(f, d, byFecha[f], ferSet, hoy);
   }
   return `<div class="asis-cal">
     <div class="asis-cal-nav">
@@ -5256,14 +5288,14 @@ function htmlAsisCalendario(cal, vista, fecha) {
     const mins = minDia(d);
     return `<div class="asis-dia"><div>${esc(d.fecha)}</div><div class="note">${esc(marca)}</div><div class="hm">${mins ? esc(hHm(mins)) : "—"}</div></div>`;
   }).join("");
-  const cuerpo = vista === "mes" ? htmlAsisMesGrid(cal, fecha) : `<div class="asis-dias">${listaDias || `<p class="note">Sin marcas en este periodo.</p>`}</div>`;
+  const cuerpo = vista === "mes" ? htmlAsisMesGrid(cal, fecha) : vista === "semana" ? htmlAsisSemanaGrid(cal, fecha) : `<div class="asis-dias">${listaDias || `<p class="note">Sin marcas en este periodo.</p>`}</div>`;
   const histRows = (cal.historial || []).map((h) => {
     const etiqueta = String(h.anio) + "-" + String(h.mes).padStart(2, "0");
     return `<button class="asis-hist-row" type="button" data-asis-mes="${esc(etiqueta + "-01")}"><span>${esc(etiqueta)}${h.cerrado ? " · cerrado" : ""}</span><b>${esc((h.total && h.total.texto) || "0 min")}</b></button>`;
   }).join("");
   return `<div class="card" id="asis-dash" style="--asis-color:${esc(cal.color || "#E7DBFF")};margin-top:14px">
     <div class="card-title">Horas de ${esc(tit)}</div>
-    <div class="asis-totales">${tot("hoy","Hoy", b.hoy)}${tot("semana","Esta semana", b.semana)}${tot("mes","Este mes", b.mes)}</div>
+    <div class="asis-totales">${tot("hoy","Hoy", b.hoy)}${tot("semana","Esta semana (" + textoSemanaAsis(typeof ymdGuayaquil === "function" ? ymdGuayaquil() : (fecha || "")) + ")", b.semana)}${tot("mes","Este mes", b.mes)}</div>
     ${htmlDesgloseHoras(desgloseVista)}
     ${htmlAsisRolMes(cal.rolMes)}
     <div class="asis-tabs">${tabs}</div>
@@ -8461,7 +8493,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK177";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK178";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8584,46 +8616,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261120tk177"></script>
-<script src="mc-scan.js?v=20261120tk177"></script>
-<script src="mc-buscar.js?v=20261120tk177"></script>
-<script src="descuento_justif.js?v=20261120tk177"></script>
-<script src="beta-screens.js?v=20261120tk177"></script>
-<script src="beta-inline.js?v=20261120tk177"></script>
-<script src="mc-productos.js?v=20261120tk177"></script>
-<script src="mc-nav.js?v=20261120tk177"></script>
-<script src="mc-permisos.js?v=20261120tk177"></script>
-<script src="mc-protocolos.js?v=20261120tk177"></script>
-<script src="mc-conteo.js?v=20261120tk177"></script>
-<script src="mc-transferencias.js?v=20261120tk177"></script>
-<script src="mc-ajustes.js?v=20261120tk177"></script>
-<script src="vendor-qrcode.js?v=20261120tk177"></script>
-<script src="mc-wa.js?v=20261120tk177"></script>
-<script src="mc-tickets.js?v=20261120tk177"></script>
-<script src="mc-maestro.js?v=20261120tk177"></script>
-<script src="mc-empleados.js?v=20261120tk177"></script>
-<script src="mc-edit.js?v=20261120tk177"></script>
-<script src="mc-paquetes.js?v=20261120tk177"></script>
-<script src="mc-aperturas.js?v=20261120tk177"></script>
-<script src="mc-acceso.js?v=20261120tk177"></script>
-<script src="mc-barras.js?v=20261120tk177"></script>
-<script src="mc-caja.js?v=20261120tk177"></script>
-<script src="mc-giftcards.js?v=20261120tk177"></script>
-<script src="mc-multas.js?v=20261120tk177"></script>
-<script src="mc-clientes.js?v=20261120tk177"></script>
-<script src="mc-clientes-dup.js?v=20261120tk177"></script>
-<script src="mc-docpdf.js?v=20261120tk177"></script>
-<script src="mc-compras.js?v=20261120tk177"></script>
-<script src="mc-consignacion.js?v=20261120tk177"></script>
-<script src="mc-proveedores.js?v=20261120tk177"></script>
-<script src="mc-recepciones.js?v=20261120tk177"></script>
-<script src="mc-movil.js?v=20261120tk177"></script>
-<script src="mc-promociones.js?v=20261120tk177"></script>
-<script src="mc-agenda.js?v=20261120tk177"></script>
-<script src="mc-staff-home.js?v=20261120tk177"></script>
-<script src="mc-borradores.js?v=20261120tk177"></script>
-<script src="mc-portal.js?v=20261120tk177"></script>
-<script src="mc-portal-admin.js?v=20261120tk177"></script><script>
+<script src="vendor-zxing.js?v=20261120tk178"></script>
+<script src="mc-scan.js?v=20261120tk178"></script>
+<script src="mc-buscar.js?v=20261120tk178"></script>
+<script src="descuento_justif.js?v=20261120tk178"></script>
+<script src="beta-screens.js?v=20261120tk178"></script>
+<script src="beta-inline.js?v=20261120tk178"></script>
+<script src="mc-productos.js?v=20261120tk178"></script>
+<script src="mc-nav.js?v=20261120tk178"></script>
+<script src="mc-permisos.js?v=20261120tk178"></script>
+<script src="mc-protocolos.js?v=20261120tk178"></script>
+<script src="mc-conteo.js?v=20261120tk178"></script>
+<script src="mc-transferencias.js?v=20261120tk178"></script>
+<script src="mc-ajustes.js?v=20261120tk178"></script>
+<script src="vendor-qrcode.js?v=20261120tk178"></script>
+<script src="mc-wa.js?v=20261120tk178"></script>
+<script src="mc-tickets.js?v=20261120tk178"></script>
+<script src="mc-maestro.js?v=20261120tk178"></script>
+<script src="mc-empleados.js?v=20261120tk178"></script>
+<script src="mc-edit.js?v=20261120tk178"></script>
+<script src="mc-paquetes.js?v=20261120tk178"></script>
+<script src="mc-aperturas.js?v=20261120tk178"></script>
+<script src="mc-acceso.js?v=20261120tk178"></script>
+<script src="mc-barras.js?v=20261120tk178"></script>
+<script src="mc-caja.js?v=20261120tk178"></script>
+<script src="mc-giftcards.js?v=20261120tk178"></script>
+<script src="mc-multas.js?v=20261120tk178"></script>
+<script src="mc-clientes.js?v=20261120tk178"></script>
+<script src="mc-clientes-dup.js?v=20261120tk178"></script>
+<script src="mc-docpdf.js?v=20261120tk178"></script>
+<script src="mc-compras.js?v=20261120tk178"></script>
+<script src="mc-consignacion.js?v=20261120tk178"></script>
+<script src="mc-proveedores.js?v=20261120tk178"></script>
+<script src="mc-recepciones.js?v=20261120tk178"></script>
+<script src="mc-movil.js?v=20261120tk178"></script>
+<script src="mc-promociones.js?v=20261120tk178"></script>
+<script src="mc-agenda.js?v=20261120tk178"></script>
+<script src="mc-staff-home.js?v=20261120tk178"></script>
+<script src="mc-borradores.js?v=20261120tk178"></script>
+<script src="mc-portal.js?v=20261120tk178"></script>
+<script src="mc-portal-admin.js?v=20261120tk178"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
