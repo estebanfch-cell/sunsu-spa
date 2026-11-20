@@ -41,16 +41,19 @@ describe("TK170 pre-rol y empleados", () => {
     const items = r.items as Row[];
     assert.deepEqual(items.map((x) => x.nombre), ["Andrea", "Evelyn"]);
     assert.equal(items.find((x) => x.nombre === "Evelyn")!.afiliada, false);
-    assert.match(String(r.convencion), /se asumen trabajados/);
+    assert.match(String(r.convencion), /un día pasado sin marcas .* es falta/);
   });
 
-  it("pre-rol de hoy: los días sin datos después del último import se asumen trabajados (no faltas)", async () => {
+  it("TK171: días pasados sin marcas son faltas; desde hoy hasta fin de mes se asume la jornada", async () => {
     const c = ctx(seed());
     const r = await handle("rol_prerol", { token: "t-emi", nombre: "Andrea" }, c) as Row;
     assert.equal(r.ok, true, String(r.error || ""));
     const snap = r.snap as Row;
-    assert.equal(snap.asumidoDesde, "2026-11-11");
-    assert.equal(Number(snap.faltas || 0) <= 2, true, JSON.stringify({ faltas: snap.faltas }));
+    assert.equal(snap.asumidoDesde, "2026-11-20");
+    assert.equal(snap.ultimoDato, "2026-11-10");
+    // 11–19 nov sin Jibble ni marcas: los laborables son faltas
+    assert.ok(Number(snap.faltas) >= 5, JSON.stringify({ faltas: snap.faltas }));
+    assert.equal(Number((r.hastaHoy as Row).faltas) >= 5, true);
     assert.ok(Number(snap.totalRecibir) > 0);
     assert.ok(r.hastaHoy);
   });
@@ -68,7 +71,9 @@ describe("TK170 pre-rol y empleados", () => {
     assert.equal(Number(snap.facturar), Number(snap.totalRecibir));
     const h = r.hastaHoy as Row;
     assert.equal(h.desde, "2026-11-14");
-    assert.equal(h.faltas, 0);
+    // sin marcas desde su ingreso: esos días pasados son faltas, los anteriores al ingreso no
+    assert.ok(Number(h.faltas) > 0 && Number(h.faltas) <= 6);
+    assert.ok(Number(snap.faltas) > 0);
     assert.match(String(snap.mensajeFactura), /^Debes facturarnos \$\d+\.\d{2} por este período\.$/);
   });
 

@@ -1101,11 +1101,11 @@ describe("api", () => {
     assert.equal(out.ok, true);
     const data = out.data as Row;
     assert.equal(data.comFaciales, 2);
-    // TK170: el mes sin rol creado sale del MISMO motor que «Crear rol». Los días sin datos DESPUÉS del último
-    // dato importado se asumen trabajados según horario (no son faltas); un mes sin ningún dato sale completo.
+    // TK171 (Emilia t771u): el mes sin rol creado sale del MISMO motor que «Crear rol»: los días pasados sin
+    // marcas (1–20 oct, sin app ni Jibble) son faltas y desde hoy hasta fin de mes se asume la jornada.
     assert.equal(data.fuente, "motor-rrhh");
-    assert.equal(data.faltas, 0);
-    assert.equal(data.sueldo, 480);
+    assert.equal(data.faltas, 14);
+    assert.equal(data.sueldo, Math.round(480 / 30 * (30 - 14) * 100) / 100);
     assert.equal(Math.round(((data.iess as number) + (data.egresos as number)) * 100), Math.round(((data.totalIngresos as number) - (data.totalRecibir as number)) * 100));
     assert.equal(String(out.error || "").includes("Sheet"), false);
     const cfg = await handle("pago_config_guardar", {
@@ -1114,7 +1114,7 @@ describe("api", () => {
     assert.equal(cfg.ok, true);
     const con = await handle("getRolIndividual", { token: c.token, sheet: "OCTUBRE_2026", cedula: "1711" }, c) as Row;
     const d2 = con.data as Row;
-    assert.equal(d2.sueldo, 500);
+    assert.equal(d2.sueldo, Math.round(500 / 30 * (30 - 14) * 100) / 100);
     assert.equal(d2.bono, 25);
     assert.equal(Math.round(((d2.iess as number) + (d2.egresos as number)) * 100), Math.round(((d2.totalIngresos as number) - (d2.totalRecibir as number)) * 100));
     const no = await handle("getRolIndividual", { token: c.token, sheet: "MAYO_2026", cedula: "999" }, c) as Row;
