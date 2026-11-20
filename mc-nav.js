@@ -230,8 +230,10 @@
       [puedeOc, "🧾 Nueva orden de compra", "#/m/compras/nueva", ""],
       [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja/nuevo", ""],
       [true, "📦 Abrir producto", "#/m/aperturas", ""],
-      [muestra && !abierta, "📷 Registrar entrada", "", "entrada"],
-      [muestra && abierta, "📷 Registrar salida", "", "salida"],
+      // TK196 (Andrea 20/11): la marca sale del estado real de hoy y se decide otra vez al tocar («auto»).
+      [muestra && !abierta, "📷 Registrar entrada", "", "auto"],
+      [muestra && abierta && reloj.almuerzo === "fin", "📷 Fin almuerzo", "", "auto"],
+      [muestra && abierta && reloj.almuerzo !== "fin", "📷 Registrar salida", "", "auto"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
