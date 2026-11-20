@@ -108,8 +108,8 @@ describe("TK152 nombres de ítems sin truncar y Pagos compacto", () => {
   it("cache TK152", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     const html = readFileSync(join(root, "index.html"), "utf8");
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK181"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK181"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK181b"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK181b"/);
     assert.match(html, /20261120tk178/);
     assert.match(readFileSync(join(root, "supabase/functions/api/sunsu_version.ts"), "utf8"), /sunsu-engine-2026-11-19-TK157/);
   });
