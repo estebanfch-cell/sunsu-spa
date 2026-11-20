@@ -604,6 +604,26 @@
   .cbtn.c-paquete.sel { border-color: var(--blue); background: var(--blue-l); color: var(--navy); }
   .cbtn.c-gc.sel { border-color: var(--gold); background: var(--gold-l); color: var(--navy-d); }
   .canje-box { background: var(--blue-l); border: 1.5px solid var(--blue); border-radius: 10px; padding: 12px 13px; margin-top: 9px; }
+
+  /* TK193: el buscador de canje SIEMPRE visible, también en iPhone */
+  #paq-box .paq-busca-wrap { display: block !important; visibility: visible !important; margin: 8px 0 10px; }
+  #paq-box .paq-busca-lbl { display: block !important; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; color: var(--lavender, #6B5B95); margin: 0 0 6px; }
+  #paq-box #paq-busca {
+    display: block !important; visibility: visible !important; opacity: 1 !important;
+    width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+    min-height: 44px !important; height: 44px !important; box-sizing: border-box;
+    padding: 10px 12px !important; margin: 0 !important;
+    border: 2px solid #6B5B95 !important; border-radius: 10px !important;
+    background: #fff !important; color: var(--navy, #1A2744) !important;
+    font-size: 16px !important; font-weight: 600; font-family: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  #paq-box #paq-busca::placeholder { color: #6B7280; opacity: 1; }
+  #paq-box .paq-card.done { opacity: 0.85; background: #F7F4EE; }
+  @media (max-width: 860px) {
+    #paq-box .paq-busca-wrap, #paq-box #paq-busca { display: block !important; visibility: visible !important; }
+    #paq-box #paq-busca { min-height: 44px !important; font-size: 16px !important; }
+  }
   .gc-box { background: var(--gold-l); border: 1.5px solid var(--gold-m); border-radius: 10px; padding: 12px 13px; margin-top: 9px; }
   .box-lbl { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; display: block; }
   .prov-section { margin-bottom: 10px; }
@@ -8535,7 +8555,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK192"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK193"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8715,8 +8735,8 @@ window.SunsuUpdate.init();
 <script src="vendor-zxing.js?v=20261120tk179"></script>
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
-<script src="descuento_justif.js?v=20261120tk192"></script>
-<script src="beta-screens.js?v=20261120tk192"></script>
+<script src="descuento_justif.js?v=20261120tk193"></script>
+<script src="beta-screens.js?v=20261120tk193"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261120tk186"></script>
