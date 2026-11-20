@@ -35,6 +35,7 @@ import { cfgAplicada } from "./comision_cfg.ts";
 import { snapProducto, ventaNetaLineas } from "./productos.ts";
 import { mapaCostoReal } from "./costos_reales.ts";
 import { esDiferenciaMejora, esServicioSuelto, skuMigoABeta } from "./migo_lineas.ts";
+import { fechaGye, namesMatch } from "./migo_cuadre.ts";
 import { ajustarStockLineas } from "./tickets_cancelar_api.ts";
 
 const FALTA = "Falta aplicar 0048_tickets_beta.sql";
@@ -125,6 +126,54 @@ export async function facturaMigoDe(ctx: Ctx, fac: string): Promise<{ total: num
   } catch { /* sin tabla */ }
   return null;
 }
+/** TK195: factura del ticket por fac_7 o, si falta, cruce estricto clienta+fecha+total (solo lectura; no escribe el vínculo). */
+export async function facturaMigoDeTicket(ctx: Ctx, r: Row): Promise<{ total: number; lineas: { sku: string; nombre: string; cantidad: number; unitCon: number; descCon: number; totalCon: number }[]; factura?: string } | null> {
+  const fac = s(r.fac_7);
+  if (b(r.fac) || fac) {
+    const fm = await facturaMigoDe(ctx, fac);
+    if (fm) return { ...fm, factura: fac };
+  }
+  const cobrado = n(r.estimado);
+  const nom = (s(r.nombre) + " " + s(r.apellido)).trim();
+  if (!(cobrado > 0) || !nom) return null;
+  const fechas = [...new Set([fechaGye(r.timestamp), ymdUtc(r.timestamp), ymdUtc(r.created_at)].filter(Boolean))];
+  for (const ymd of fechas) {
+    try {
+      const rows = (await consultar(ctx.db, "beta_migo_facturas_vivo", { cols: ["factura", "fecha", "cliente", "total", "lineas"], filtros: [{ col: "fecha", op: "eq", val: ymd } as Filtro], limite: 80 })).rows;
+      const hits = rows.filter((x) => Math.abs(n(x.total) - cobrado) <= 1 && namesMatch(nom, x.cliente) >= 2 && Array.isArray(x.lineas) && (x.lineas as Row[]).length);
+      if (hits.length === 1) {
+        // facturaMigoDe identifica por los últimos dígitos (fac_7), no por el 001-001-completo.
+        const fm = await facturaMigoDe(ctx, s(hits[0].factura).replace(/\D/g, "").slice(-9));
+        if (fm) return { ...fm, factura: s(hits[0].factura) };
+      }
+    } catch { /* sin tabla o filtro */ }
+  }
+  return null;
+}
+/** TK195: si la gift no tiene precio (o quedó el PVP muerto de SUNSU-34), usa lo cobrado menos las otras líneas. */
+export function asignarCobradoGift(lineas: LineaTk[], cobrado: number): void {
+  const gifts = lineas.filter((l) => l.tipo === "gift");
+  if (gifts.length !== 1 || !(cobrado > 0)) return;
+  const otros = lineas.filter((l) => l.tipo !== "gift" && l.tipo !== "diferencia");
+  const sumaOtros = round2(otros.reduce((a, l) => {
+    const bruto = round2(n(l.cantidad) * n(l.precio_unit));
+    const desc = l.descuento_tipo === "$" ? n(l.descuento_valor) : l.descuento_tipo === "%" ? round2(bruto * n(l.descuento_valor) / 100) : 0;
+    return a + bruto - desc;
+  }, 0));
+  const resto = round2(cobrado - sumaOtros);
+  if (resto <= 0.05) return;
+  const g = gifts[0];
+  const actual = round2(n(g.cantidad) * n(g.precio_unit));
+  if (!(actual > 0) || (Math.abs(actual - 34.5) <= 0.05 && Math.abs(resto - actual) > 0.05)) {
+    g.precio_unit = n(g.cantidad) ? round2(resto / n(g.cantidad)) : resto;
+    g.estimado = false;
+  }
+}
+export function alertaDescuadreCobrado(cobrado: number, sumaLineas: number): string | null {
+  if (!(cobrado > 0) || Math.abs(round2(cobrado) - round2(sumaLineas)) <= 0.05) return null;
+  const c = round2(cobrado).toFixed(2), s0 = round2(sumaLineas).toFixed(2);
+  return "Lo cobrado ($" + c + ") no cuadra con las líneas ($" + s0 + "). Revisa y vincula la factura de Migo; no se añade una línea «Diferencia sin explicar».";
+}
 /** TK98: cortesía de gift card y consumo interno: líneas a $0 con su píldora (nunca «Sin líneas»). */
 async function lineasDe(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Promise<LineaTk[]> {
   const L = await lineasDe0(ctx, r, cab, cat);
@@ -172,7 +221,7 @@ async function lineasDe0(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pr
   // Facial canjeado (sesión de paquete o gift card de facial): va en $0.
   const canjeF = canjeFacial(r);
   // TK72: si la factura Migo del ticket está cargada y cuadra con lo cobrado, las líneas son las de la factura.
-  const fm = b(r.fac) || s(r.fac_7) ? await facturaMigoDe(ctx, s(r.fac_7)) : null;
+  const fm = await facturaMigoDeTicket(ctx, r);
   if (fm && fm.lineas.length && Math.abs(fm.total - cobrado) <= 1) {
     const nombreCat = (c: string) => s(porCode.get(skuCode(c))?.nombre);
     const tipoCat = (c: string) => s(porCode.get(skuCode(c))?.tipo) || (L0.find((x) => skuCode(x.codigo) === skuCode(c))?.tipo) || "producto";
@@ -207,12 +256,13 @@ async function lineasDe0(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pr
       out.push({ tipo: l.tipo, sku: l.codigo, nombre: nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unitL), descuento_tipo: s(dx.modo) === "%" ? "%" : "$", descuento_valor: s(dx.modo) === "%" ? n(dx.valor) : n(dx.monto), excluir_comision: false, estimado: false, ...(s(dx.promo) ? { promo: s(dx.promo) } : {}) });
       continue;
     }
-    // TK72: nunca se prorratea. Una sola línea cobrada = lo cobrado es su precio; varias = precio de catálogo
-    // y lo que no cuadra va en una línea aparte «Diferencia sin explicar» (para revisar).
+    // TK72: nunca se prorratea. Una sola línea cobrada = lo cobrado es su precio; varias = precio de catálogo.
+    // TK195: lo que no cuadra NO se rellena con una línea DIF; se avisa en faltan y, si hay gift, se le asigna lo cobrado.
     const pr = precioLineaTicket(L, l.codigo, Math.max(0, round2(cobradoResto)));
     const unit = !pr.estimado && pr.unit != null ? pr.unit : (l.lista > 0 ? l.lista : 0);
     out.push({ tipo: l.tipo, sku: l.codigo, nombre: l.tipo === "gift" ? "Gift card" : nombreDe(l.codigo), cantidad: qty, precio_unit: round2(unit), descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: !(l.lista > 0) && (pr.estimado || pr.unit == null) });
   }
+  asignarCobradoGift(out, cobrado);
   // TK81: con factura (aunque la compartan varios tickets), un servicio suelto con otro SKU al mismo precio y cantidad
   // es el de la factura (la factura manda): se muestra con el SKU y nombre de la factura.
   if (fm && fm.lineas.length) {
@@ -226,9 +276,6 @@ async function lineasDe0(ctx: Ctx, r: Row, cab: Row | undefined, cat: Row[]): Pr
       l.sku = skuCode(x.sku); l.nombre = s(porCode.get(skuCode(x.sku))?.nombre) || x.nombre;
     }
   }
-  const suma = round2(out.reduce((a, l) => a + round2(n(l.cantidad) * n(l.precio_unit)) - (l.descuento_tipo === "$" ? n(l.descuento_valor) : l.descuento_tipo === "%" ? round2(n(l.cantidad) * n(l.precio_unit) * n(l.descuento_valor) / 100) : 0), 0));
-  const dif = round2(cobrado - suma);
-  if (cobrado > 0 && Math.abs(dif) > 0.05) out.push({ tipo: "diferencia", sku: "DIF", nombre: "Diferencia sin explicar", cantidad: 1, precio_unit: dif, descuento_tipo: null, descuento_valor: 0, excluir_comision: false, estimado: true });
   return out;
 }
 function promoDe(cab: Row | undefined, promos: Promo[]): Promo | null {
@@ -300,7 +347,7 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(calc.lineas.some((l) => l.tipo === "diferencia") ? ["revisar la «Diferencia sin explicar» (lo cobrado no cuadra con los precios de catálogo y no hay factura Migo cargada)"] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(alertaDescuadreCobrado(n(r.estimado), calc.sumaLineas) ? [alertaDescuadreCobrado(n(r.estimado), calc.sumaLineas)!] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),

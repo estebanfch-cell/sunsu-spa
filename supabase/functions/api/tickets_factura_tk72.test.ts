@@ -1,5 +1,5 @@
-// TK72 (Emilia 18/11): las líneas de un ticket migrado salen de su factura Migo; sin factura, a precio de catálogo
-// y lo que no cuadra va como «Diferencia sin explicar». Nunca se prorratea.
+// TK72 (Emilia 18/11): las líneas de un ticket migrado salen de su factura Migo; sin factura, a precio de catálogo.
+// TK195: lo que no cuadra ya no se rellena con «Diferencia sin explicar»; se avisa en faltan.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
@@ -55,15 +55,14 @@ describe("TK72 · líneas desde la factura Migo, sin prorrateo", () => {
     assert.equal(L.some((l) => l.tipo === "diferencia"), false);
     assert.equal(db.tables.get("beta_ticket_lineas")!.length, 0, "solo se lee: no escribe nada");
   });
-  it("sin factura: precio de catálogo y «Diferencia sin explicar» por lo que no cuadra", async () => {
+  it("sin factura: precio de catálogo, sin línea DIF, aviso en faltan si no cuadra", async () => {
     const { h } = semilla();
     const g = await h("tk_get", { clave: "TK-SO-2" });
     const L = g.lineas as Row[];
-    assert.deepEqual(L.filter((l) => l.tipo !== "diferencia").map((l) => [l.sku, l.precio_unit]).sort(), [["40", 46], ["ML-002", 23]].sort());
-    const d = L.find((l) => l.tipo === "diferencia")!;
-    assert.equal(d.precio_unit, -9); assert.equal(d.nombre, "Diferencia sin explicar");
-    assert.equal((g.totales as Row).total, 60);
-    assert.ok((g.faltan as string[]).some((x) => /Diferencia sin explicar/.test(x)));
+    assert.equal(L.some((l) => l.tipo === "diferencia" || l.sku === "DIF"), false);
+    assert.deepEqual(L.map((l) => [l.sku, l.precio_unit]).sort(), [["40", 46], ["ML-002", 23]].sort());
+    assert.equal((g.totales as Row).sumaLineas, 69);
+    assert.ok((g.faltan as string[]).some((x) => /no cuadra con las líneas/.test(x) && /no se añade una línea/.test(x)));
   });
 });
 
