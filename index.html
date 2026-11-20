@@ -1118,11 +1118,14 @@
   /* TK182b (Emilia): la factura SIEMPRE completa con todos los ceros (001-001-000002976), sin «…».
      Anchos fijos a las columnas cortas; Clienta toma el resto. */
   .tk-table th[data-c="num"] { width: 96px; } .tk-table th[data-c="fecha"] { width: 84px; }
-  .tk-table th[data-c="cos"] { width: 104px; } .tk-table th[data-c="fpago"] { width: 130px; }
+  .tk-table th[data-c="cos"] { width: 112px; } .tk-table th[data-c="fpago"] { width: 130px; }
   .tk-table th[data-c="tot"] { width: 78px; } .tk-table th[data-c="pago"] { width: 92px; }
   .tk-table th[data-c="sal"] { width: 72px; } .tk-table th[data-c="fac"] { width: 172px; }
   .tk-table th[data-c="acc"] { width: 78px; }
   .tk-table td[data-c="fac"] { overflow: visible; text-overflow: clip; white-space: nowrap; }
+  /* TK186: la cosmetóloga va con su primer nombre completo, nunca con «…». */
+  .tk-table td[data-c="cos"] { overflow: visible; text-overflow: clip; white-space: nowrap; }
+  .tk-table td[data-c="cos"] .mc-cos { max-width: none; overflow: visible; text-overflow: clip; }
   .tk-table td[data-c="fac"] .tk-fac { font-size: 0.72rem; letter-spacing: 0; }
   /* TK182c (Emilia t795u): el nombre de la clienta SIEMPRE completo (puede bajar de línea, nunca «…»).
      Si la tabla es angosta (menú lateral), primero se acorta Forma de pago y la factura muestra solo los últimos dígitos. */
@@ -8529,7 +8532,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK185"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK186"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8710,10 +8713,10 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk179"></script>
-<script src="beta-screens.js?v=20261120tk184"></script>
+<script src="beta-screens.js?v=20261120tk186"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
-<script src="mc-nav.js?v=20261120tk179"></script>
+<script src="mc-nav.js?v=20261120tk186"></script>
 <script src="mc-permisos.js?v=20261120tk179"></script>
 <script src="mc-protocolos.js?v=20261120tk179"></script>
 <script src="mc-conteo.js?v=20261120tk179"></script>
@@ -8722,7 +8725,7 @@ window.SunsuUpdate.init();
 <script src="vendor-qrcode.js?v=20261120tk179"></script>
 <script src="mc-wa.js?v=20261120tk184"></script>
 <script src="mc-tickets.js?v=20261120tk184"></script>
-<script src="mc-maestro.js?v=20261120tk179"></script>
+<script src="mc-maestro.js?v=20261120tk186"></script>
 <script src="mc-empleados.js?v=20261120tk179"></script>
 <script src="mc-edit.js?v=20261120tk179"></script>
 <script src="mc-paquetes.js?v=20261120tk179"></script>
