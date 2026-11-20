@@ -1342,7 +1342,7 @@ function renderTicket(c){
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--lavender)">Canje de paquete — elige paquete y sesión</span>'+
         '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. No se marca solo.</p>'+
-        '<input id="paq-busca" type="search" autocomplete="off" placeholder="Buscar paquete activo: nombre, apellido, cédula, PACK- o PQ-…" value="'+_tkEsc(window._paqBuscaQ||'')+'" oninput="_paqBuscarManual(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.8rem;outline:none;background:white;font-family:inherit;margin:0 0 8px;box-sizing:border-box">'+
+        _paqBuscaHtml()+
         '<div id="paq-lista" class="paq-lista"></div>'+
         '<select id="paq-pick" hidden onchange="_paqElegir(this.value)"></select>'+
         '<div id="paq-conf" style="margin:8px 0"></div>'+
@@ -1666,6 +1666,22 @@ function _cedCompat(a,b){
   if(lo.length>=10 && hi.indexOf(lo)===0 && (hi.length===lo.length+1 || (hi.length===lo.length+3 && hi.slice(-3)==='001'))) return true;
   return false;
 }
+function _paqBuscaHtml(){
+  return '<div class="paq-busca-wrap" id="paq-busca-wrap">'+
+    '<label class="paq-busca-lbl" for="paq-busca">Buscar paquete</label>'+
+    '<input id="paq-busca" class="paq-busca" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nombre, apellido, cédula, PACK- o PQ-" value="'+_tkEsc(window._paqBuscaQ||'')+'" oninput="window._paqBuscarManual?window._paqBuscarManual(this.value):_paqBuscarManual(this.value)">'+
+  '</div>';
+}
+function _paqAsegurarBusca(){
+  var box=document.getElementById('paq-box'); if(!box) return;
+  if(document.getElementById('paq-busca')) return;
+  var wrap=document.createElement('div');
+  wrap.innerHTML=_paqBuscaHtml();
+  var el=wrap.firstChild;
+  var lista=document.getElementById('paq-lista');
+  if(lista&&lista.parentNode===box) box.insertBefore(el, lista);
+  else box.insertBefore(el, box.firstChild);
+}
 function _paqFecha(p){ return (p.dia&&p.mes)?(String(Math.round(p.dia)).padStart(2,'0')+'/'+String(Math.round(p.mes)).padStart(2,'0')+'/'+String(Math.round(p.ano)||'').slice(-2)):''; }
 function _paqUsadas(p){ return (p.usos||[]).filter(function(u){return u&&(u.usado||u.fecha);}).length; }
 function _paqSugerido(act){
@@ -1700,6 +1716,7 @@ function _paqTarjeta(p, sel){
     +'Vendió: '+_tkEsc(p.vendidoPor||'—')+(p.factura?'<br>Factura: '+_tkEsc(String(p.factura).replace(/\.0+$/,'')):'')+(p.ticketOrigen?'<br>Ticket: '+_tkEsc(p.ticketOrigen):'')+'</div>';
 }
 function _paqPintarLista(){
+  if(typeof _paqAsegurarBusca==='function') _paqAsegurarBusca();
   var box=document.getElementById('paq-lista'); if(!box) return;
   var act=window._paqActivos||[], rec=window._paqSugeridoI;
   var sug=window._paqSugeridos||[], busca=window._paqBuscaHits||[], qb=window._paqBuscaQ||'';
@@ -1710,18 +1727,20 @@ function _paqPintarLista(){
       var recBadge=(origen==='activos'&&rec===i)?'<span class="paq-rec">Recomendado</span>':'';
       var nom=((p.nombre||'')+' '+(p.apellido||'')).trim();
       var ses='';
+      var fin=!!(p.anulado||p.completo||us>=tot);
       for(var k=0;k<tot;k++){
         var u=(p.usos||[])[k]||{};
         var usada=!!(u.usado||u.u||u.fecha||u.f);
         var on=sel&&T.paqConfirmado&&Number(T.paqPick.idx)===k;
         if(usada) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+' · usada '+_tkEsc(u.fecha||u.f||'')+'</div>';
+        else if(fin) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+'</div>';
         else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" data-origen="'+origen+'" data-i="'+i+'" data-k="'+k+'" onclick="event.preventDefault();event.stopPropagation();(window._paqElegirSesionDe||_paqElegirSesionDe)(\''+origen+'\','+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
       }
-      return '<div class="paq-card'+(sel?' sel':'')+(origen==='activos'&&rec===i?' rec':'')+'">'
-        +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+(badge?(' <span class="paq-rec">'+_tkEsc(badge)+'</span>'):'')+'</div>'
+      return '<div class="paq-card'+(sel?' sel':'')+(origen==='activos'&&rec===i?' rec':'')+(fin?' done':'')+'">'
+        +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+(badge?(' <span class="paq-rec">'+_tkEsc(badge)+'</span>'):'')+(fin?' <span class="paq-rec">Completo</span>':'')+'</div>'
         +(nom?'<div class="paq-nom">'+_tkEsc(nom)+'</div>':'')
         +'<div class="paq-nom">'+_tkEsc(p.paquete||p.sku||'Paquete')+'</div>'
-        +'<div class="paq-meta">'+us+'/'+tot+' usadas, quedan '+quedan+'</div>'
+        +'<div class="paq-meta">'+us+'/'+tot+' usadas, quedan '+(fin?0:quedan)+(fin?' · no se puede canjear':'')+'</div>'
         +'<div class="paq-sesiones">'+ses+'</div></div>';
     }).join('');
   }
@@ -1771,6 +1790,7 @@ function _paqPintarConfirm(){
   _paqPintarLista();
 }
 function _paqCargarPicker(){
+  if(typeof _paqAsegurarBusca==='function') _paqAsegurarBusca();
   var sel=document.getElementById('paq-pick');
   var ced=_cedQuery(T.cedula);
   window._paqSugeridoI=null;
@@ -1809,22 +1829,25 @@ function _paqBuscarManual(v){
   if(q.length<2){ window._paqBuscaHits=[]; window._paqBuscaCargando=false; _paqPintarLista(); return; }
   window._paqBuscaCargando=true; _paqPintarLista();
   window._paqBuscaT=setTimeout(function(){
-    fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(q)+'&activos=1&_t='+Date.now())
+    fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(q)+'&activos=0&_t='+Date.now())
       .then(function(r){return r.json();})
       .then(function(d){
-        var L=((d&&d.resultados)||[]).concat((d&&d.sugerencias)||[]);
-        var seen={}, out=[];
+        var L=((d&&d.resultados)||[]).concat((d&&d.sugerencias)||[]).concat((d&&d.agotados)||[]);
+        var seen={}, activos=[], fin=[];
         L.forEach(function(p){
+          if(p.anulado) return;
           var tot=Number(p.total)||3, us=_paqUsadas(p);
-          if(p.anulado||p.completo||us>=tot) return;
           var k=String(p.fila||p.id||p.codigo);
-          if(seen[k]) return; seen[k]=1; out.push(p);
+          if(seen[k]) return; seen[k]=1;
+          if(p.completo||us>=tot) fin.push(p); else activos.push(p);
         });
-        window._paqBuscaHits=out; window._paqBuscaCargando=false; _paqPintarLista();
+        window._paqBuscaHits=activos.concat(fin); window._paqBuscaCargando=false; _paqPintarLista();
       })
       .catch(function(){ window._paqBuscaHits=[]; window._paqBuscaCargando=false; _paqPintarLista(); });
   }, 280);
 }
+window._paqBuscarManual=_paqBuscarManual;
+window._paqAsegurarBusca=_paqAsegurarBusca;
 function _paqMarcarOtroCanje(p){
   T.canjeOtro=true;
   var nom=((p.nombre||'')+' '+(p.apellido||'')).trim();
@@ -1840,7 +1863,8 @@ function _paqElegir(v){
 function _paqElegirSesionDe(origen,i,k){
   var list=origen==='busca'?(window._paqBuscaHits||[]):origen==='sugerencias'?(window._paqSugeridos||[]):(window._paqActivos||[]);
   var p=list[Number(i)]; if(!p) return;
-  var tot=Number(p.total)||3, u=(p.usos||[])[k]||{};
+  var tot=Number(p.total)||3, us=_paqUsadas(p), u=(p.usos||[])[k]||{};
+  if(p.anulado||p.completo||us>=tot) return;
   if(u&&(u.usado||u.u||u.fecha||u.f)) return;
   if(origen==='busca'||origen==='sugerencias') _paqMarcarOtroCanje(p);
   var filaPick=(p.fila!=null&&String(p.fila)!=='')?p.fila:(p.id!=null?p.id:p.codigo);
