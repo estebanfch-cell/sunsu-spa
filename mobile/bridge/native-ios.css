@@ -1,0 +1,38 @@
+/* Sunsu Spa · estilos SOLO para la app nativa iOS (se inyecta únicamente en mobile/www/index.html).
+   La barra de estado NO se superpone a la web (StatusBar overlaysWebView=false), así el notch /
+   Dynamic Island nunca tapa el encabezado. Abajo, el home indicator se respeta con
+   env(safe-area-inset-bottom), que la app ya usa en la barra de pestañas. */
+html.sunsu-native, html.sunsu-native body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+html.sunsu-native .login { padding-bottom: max(52px, calc(24px + env(safe-area-inset-bottom, 0px))); }
+html.sunsu-native .modal-overlay { padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
+html.sunsu-native .ix-overlay { padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+/* La web avisa «Nueva versión» cuando cambia el service worker; en la app nativa las versiones
+   llegan por TestFlight / App Store, así que el aviso web no aplica. */
+html.sunsu-native #sunsu-nueva-ver { display: none !important; }
+/* Aviso nativo sin conexión */
+#sunsu-offline {
+  position: fixed; left: 12px; right: 12px; top: 8px; z-index: 100000;
+  display: flex; align-items: center; gap: 10px;
+  background: #3D5A7A; color: #fff; border-radius: 12px; padding: 10px 14px;
+  font: 600 0.82rem/1.35 -apple-system, system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(21, 58, 95, 0.28);
+  transform: translateY(-140%); transition: transform .25s ease;
+}
+#sunsu-offline.on { transform: translateY(0); }
+#sunsu-offline .dot { width: 9px; height: 9px; border-radius: 50%; background: #E8B84A; flex: none; }
+/* Vista previa nativa de reportes / impresiones (reemplaza las ventanas emergentes de la web) */
+#sunsu-doc-viewer {
+  position: fixed; inset: 0; z-index: 100001; background: #F5F0E8;
+  display: flex; flex-direction: column;
+}
+#sunsu-doc-viewer .bar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: linear-gradient(135deg, #3D5A7A, #5B7FA6); color: #fff;
+}
+#sunsu-doc-viewer .bar b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 0.95rem -apple-system, system-ui, sans-serif; }
+#sunsu-doc-viewer .bar button {
+  min-height: 36px; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.14); color: #fff; font: 700 0.82rem -apple-system, system-ui, sans-serif;
+}
+#sunsu-doc-viewer iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+#sunsu-doc-viewer .pie { height: env(safe-area-inset-bottom, 0px); background: #fff; }
