@@ -1342,6 +1342,7 @@ function renderTicket(c){
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--lavender)">Canje de paquete — elige paquete y sesión</span>'+
         '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. No se marca solo.</p>'+
+        '<input id="paq-busca" type="search" autocomplete="off" placeholder="Buscar paquete activo: nombre, apellido, cédula o PACK-…" value="'+_tkEsc(window._paqBuscaQ||'')+'" oninput="_paqBuscarManual(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.8rem;outline:none;background:white;font-family:inherit;margin:0 0 8px;box-sizing:border-box">'+
         '<div id="paq-lista" class="paq-lista"></div>'+
         '<select id="paq-pick" hidden onchange="_paqElegir(this.value)"></select>'+
         '<div id="paq-conf" style="margin:8px 0"></div>'+
@@ -1585,7 +1586,7 @@ function renderTicket(c){
           <div id="cli-sel" class="note" style="margin-top:4px"></div>
         </div>
         <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" value="${(T.cedula||'').replace(/"/g,'&quot;')}" oninput="T.cedula=this.value;window._cedAutofill=false;T.clienteCodigo='';T.clienteKey='';var _cv=this.value.replace(/\D/g,'');if(_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
+          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" value="${(T.cedula||'').replace(/"/g,'&quot;')}" oninput="T.cedula=this.value;window._cedAutofill=false;T.clienteCodigo='';T.clienteKey='';var _cv=(typeof _cedQuery==='function'?_cedQuery(this.value):this.value.replace(/\D/g,''));if(_cv.length===9||_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
         </div>
         <div class="two-col">
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" value="${(T.nombre||'').replace(/"/g,'&quot;')}" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
@@ -1644,12 +1645,24 @@ function selFacial(sku){
 // Emilia 18/11 (TK58): se sugiere el paquete que calza (queda preseleccionado) pero SIEMPRE hay que
 // confirmar cuál es con «✓ Confirmo este paquete». Si la clienta tiene paquetes que parecen duplicados
 // (mismo producto y fecha de compra, o el mismo ticket de origen) se avisa y se muestran lado a lado.
+function _cedQuery(v){
+  // TK190: quitar «.0» de Excel ANTES de los no-dígitos, si no 604070706.0 se vuelve 6040707060.
+  return String(v||'').trim().replace(/\.0+$/,'').replace(/\D/g,'');
+}
+function _cedNorm(v){
+  var d=_cedQuery(v).replace(/^0+/,'');
+  if((d.length===13||d.length===14)&&/0010$/.test(d)) d=d.slice(0,-4);
+  else if((d.length===12||d.length===13)&&/001$/.test(d)) d=d.slice(0,-3);
+  return d;
+}
 function _cedCompat(a,b){
-  function dig(v){ return String(v||'').replace(/\.0+$/,'').replace(/\D/g,''); }
-  var da=dig(a), db=dig(b);
+  var da=_cedQuery(a), db=_cedQuery(b);
   if(!da||!db) return false;
   if(da===db) return true;
+  var na=_cedNorm(a), nb=_cedNorm(b);
+  if(na&&nb&&na===nb) return true;
   var lo=da.length<=db.length?da:db, hi=da.length<=db.length?db:da;
+  if(hi===lo+'0' && (lo.length===9||lo.length===10)) return true;
   if(lo.length>=10 && hi.indexOf(lo)===0 && (hi.length===lo.length+1 || (hi.length===lo.length+3 && hi.slice(-3)==='001'))) return true;
   return false;
 }
@@ -1688,34 +1701,48 @@ function _paqTarjeta(p, sel){
 }
 function _paqPintarLista(){
   var box=document.getElementById('paq-lista'); if(!box) return;
-  var act=window._paqActivos||[], rec=window._paqSugeridoI, h='';
-  if(!act.length){
-    box.innerHTML='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px">No encontré paquetes activos para esta cédula. Revisa el número o márcalo como «paquete de otro cliente».</div>';
-    return;
+  var act=window._paqActivos||[], rec=window._paqSugeridoI;
+  var sug=window._paqSugeridos||[], busca=window._paqBuscaHits||[], qb=window._paqBuscaQ||'';
+  function cards(list, origen, badge){
+    return list.map(function(p,i){
+      var tot=Number(p.total)||3, us=_paqUsadas(p), quedan=Math.max(0, tot-us);
+      var sel=T.paqPick&&String(T.paqPick.fila)===String(p.fila);
+      var recBadge=(origen==='activos'&&rec===i)?'<span class="paq-rec">Recomendado</span>':'';
+      var nom=((p.nombre||'')+' '+(p.apellido||'')).trim();
+      var ses='';
+      for(var k=0;k<tot;k++){
+        var u=(p.usos||[])[k]||{};
+        var usada=!!(u.usado||u.u||u.fecha||u.f);
+        var on=sel&&T.paqConfirmado&&Number(T.paqPick.idx)===k;
+        if(usada) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+' · usada '+_tkEsc(u.fecha||u.f||'')+'</div>';
+        else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" onclick="event.preventDefault();event.stopPropagation();_paqElegirSesionDe(\''+origen+'\','+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
+      }
+      return '<div class="paq-card'+(sel?' sel':'')+(origen==='activos'&&rec===i?' rec':'')+'">'
+        +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+(badge?(' <span class="paq-rec">'+_tkEsc(badge)+'</span>'):'')+'</div>'
+        +(nom?'<div class="paq-nom">'+_tkEsc(nom)+'</div>':'')
+        +'<div class="paq-nom">'+_tkEsc(p.paquete||p.sku||'Paquete')+'</div>'
+        +'<div class="paq-meta">'+us+'/'+tot+' usadas, quedan '+quedan+'</div>'
+        +'<div class="paq-sesiones">'+ses+'</div></div>';
+    }).join('');
   }
-  h+=act.map(function(p,i){
-    var tot=Number(p.total)||3, us=_paqUsadas(p), quedan=Math.max(0,tot-us);
-    var sel=T.paqPick&&String(T.paqPick.fila)===String(p.fila);
-    var recBadge=(rec===i)?'<span class="paq-rec">Recomendado</span>':'';
-    var ses='';
-    for(var k=0;k<tot;k++){
-      var u=(p.usos||[])[k]||{};
-      var usada=!!(u.usado||u.u||u.fecha||u.f);
-      var on=sel&&T.paqConfirmado&&Number(T.paqPick.idx)===k;
-      if(usada) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+' · usada '+_tkEsc(u.fecha||u.f||'')+'</div>';
-      else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" onclick="event.preventDefault();event.stopPropagation();_paqElegirSesion('+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
+  var h='';
+  if(qb){
+    if(window._paqBuscaCargando) h+='<div style="font-size:0.74rem;color:var(--gray);margin-bottom:8px">Buscando «'+_tkEsc(qb)+'»…</div>';
+    else if(!busca.length) h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para «'+_tkEsc(qb)+'».</div>';
+    else h+='<div style="font-size:0.72rem;font-weight:700;color:var(--lavender);margin:0 0 6px">Resultados de «'+_tkEsc(qb)+'»</div>'+cards(busca,'busca','');
+  } else if(act.length){
+    h+=cards(act,'activos','');
+  } else {
+    h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para esta cédula. Revisa el número, elige una sugerencia o busca por nombre / PACK.</div>';
+    if(sug.length){
+      h+='<div style="font-size:0.72rem;font-weight:700;color:var(--lavender);margin:8px 0 6px">Sugerencias por el nombre de la clienta</div>'+cards(sug,'sugerencias','Sugerido');
     }
-    return '<div class="paq-card'+(sel?' sel':'')+(rec===i?' rec':'')+'">'
-      +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+'</div>'
-      +'<div class="paq-nom">'+_tkEsc(p.paquete||p.sku||'Paquete')+'</div>'
-      +'<div class="paq-meta">'+us+'/'+tot+' usadas, quedan '+quedan+'</div>'
-      +'<div class="paq-sesiones">'+ses+'</div></div>';
-  }).join('');
+  }
   box.innerHTML=h;
 }
 function _paqPintarConfirm(){
   var box=document.getElementById('paq-conf'); if(!box) return;
-  var act=window._paqActivos||[], todos=window._paqTodos||[];
+  var todos=window._paqTodos||[];
   var dup=_paqDuplicados(todos.filter(function(p){return !p.anulado;}));
   var h='';
   if(dup.length){
@@ -1733,21 +1760,26 @@ function _paqPintarConfirm(){
 }
 function _paqCargarPicker(){
   var sel=document.getElementById('paq-pick');
-  var ced=String(T.cedula||'').replace(/\D/g,'');
+  var ced=_cedQuery(T.cedula);
   window._paqSugeridoI=null;
   if(T.paqPick&&T.paqPickCed&&T.paqPickCed!==ced){ T.paqPick=null; T.paqConfirmado=false; }
-  if(!ced){ window._paqActivos=[]; window._paqTodos=[]; _paqPintarConfirm(); return; }
+  if(!ced && !(T.nombre||T.apellido)){ window._paqActivos=[]; window._paqTodos=[]; window._paqSugeridos=[]; _paqPintarConfirm(); return; }
   var lista=document.getElementById('paq-lista');
   if(lista) lista.innerHTML='<div style="font-size:0.74rem;color:var(--gray)">Buscando paquetes…</div>';
-  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)+'&_t='+Date.now())
+  var url=APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)
+    +'&nombre='+encodeURIComponent(T.nombre||'')+'&apellido='+encodeURIComponent(T.apellido||'')
+    +'&activos=1&_t='+Date.now();
+  fetch(url)
     .then(function(r){return r.json();})
     .then(function(d){
-      var mios=((d&&d.resultados)||[]).filter(function(p){ return _cedCompat(p.cedula, ced); });
+      var todos=((d&&d.resultados)||[]);
+      var mios=todos.filter(function(p){ return !ced || _cedCompat(p.cedula, ced); });
       var act=mios.filter(function(p){
         var tot=Number(p.total)||3, us=_paqUsadas(p);
         return !p.anulado && !p.completo && us<tot;
       });
       window._paqActivos=act; window._paqTodos=mios;
+      window._paqSugeridos=act.length?[]:((d&&d.sugerencias)||[]);
       window._paqSugeridoI=act.length?_paqSugerido(act):-1;
       if(sel){
         sel.innerHTML='<option value=""></option>'+act.map(function(p,i){ return '<option value="'+i+'">'+_tkEsc((p.codigo||'')+' '+(p.paquete||''))+'</option>'; }).join('');
@@ -1755,26 +1787,60 @@ function _paqCargarPicker(){
       }
       _paqPintarConfirm();
     })
-    .catch(function(){ window._paqActivos=[]; _paqPintarConfirm(); });
+    .catch(function(){ window._paqActivos=[]; window._paqSugeridos=[]; _paqPintarConfirm(); });
+}
+function _paqBuscarManual(v){
+  window._paqBuscaQ=v||'';
+  clearTimeout(window._paqBuscaT);
+  var q=String(v||'').trim();
+  if(q.length<2){ window._paqBuscaHits=[]; window._paqBuscaCargando=false; _paqPintarLista(); return; }
+  window._paqBuscaCargando=true; _paqPintarLista();
+  window._paqBuscaT=setTimeout(function(){
+    fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(q)+'&activos=1&_t='+Date.now())
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var L=((d&&d.resultados)||[]).concat((d&&d.sugerencias)||[]);
+        var seen={}, out=[];
+        L.forEach(function(p){
+          var tot=Number(p.total)||3, us=_paqUsadas(p);
+          if(p.anulado||p.completo||us>=tot) return;
+          var k=String(p.fila||p.id||p.codigo);
+          if(seen[k]) return; seen[k]=1; out.push(p);
+        });
+        window._paqBuscaHits=out; window._paqBuscaCargando=false; _paqPintarLista();
+      })
+      .catch(function(){ window._paqBuscaHits=[]; window._paqBuscaCargando=false; _paqPintarLista(); });
+  }, 280);
+}
+function _paqMarcarOtroCanje(p){
+  T.canjeOtro=true;
+  var nom=((p.nombre||'')+' '+(p.apellido||'')).trim();
+  T.notaCanje=(p.codigo||('PACK-'+p.fila))+' · '+nom+(p.cedula?(' · cédula del paquete '+String(p.cedula).replace(/\.0+$/,'')):'')+' (elegido en Canje de paquete)';
+  var cb=document.querySelector('#paq-box input[onchange*="toggleOtro"]');
+  if(cb) cb.checked=true;
+  var b=document.getElementById('otro-box'); if(b){ b.style.display='block'; var ta=b.querySelector('textarea'); if(ta&&!ta.value) ta.value=T.notaCanje; }
 }
 function _paqElegir(v){
   T.paqPick=null; T.paqConfirmado=false;
   _paqPintarConfirm();
 }
-function _paqElegirSesion(i,k){
-  var p=(window._paqActivos||[])[Number(i)]; if(!p) return;
+function _paqElegirSesionDe(origen,i,k){
+  var list=origen==='busca'?(window._paqBuscaHits||[]):origen==='sugerencias'?(window._paqSugeridos||[]):(window._paqActivos||[]);
+  var p=list[Number(i)]; if(!p) return;
   var tot=Number(p.total)||3, u=(p.usos||[])[k]||{};
   if(u&&(u.usado||u.u||u.fecha||u.f)) return;
-  T.paqPick={i:Number(i), fila:p.fila, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||''};
+  if(origen==='busca'||origen==='sugerencias') _paqMarcarOtroCanje(p);
+  T.paqPick={i:Number(i), fila:p.fila, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||'', origen:origen};
   T.usoPaq=(k+1)+'/'+tot;
-  T.paqConfirmado=true; T.paqPickCed=String(T.cedula||'').replace(/\D/g,'');
-  var sel=document.getElementById('paq-pick'); if(sel) sel.value=String(i);
+  T.paqConfirmado=true; T.paqPickCed=_cedQuery(T.cedula);
+  var sel=document.getElementById('paq-pick'); if(sel&&origen==='activos') sel.value=String(i);
   _paqPintarConfirm();
 }
+function _paqElegirSesion(i,k){ _paqElegirSesionDe('activos',i,k); }
 function _paqElegirSesionNuevo(){
   T.paqPick={fila:'nuevo', idx:0, total:T.pack6?6:3, nombre:'Paquete nuevo de este ticket'};
   T.usoPaq='1/'+(T.pack6?6:3);
-  T.paqConfirmado=true; T.paqPickCed=String(T.cedula||'').replace(/\D/g,'');
+  T.paqConfirmado=true; T.paqPickCed=(typeof _cedQuery==='function'?_cedQuery(T.cedula):String(T.cedula||'').replace(/\D/g,''));
   _paqPintarConfirm();
 }
 function _paqConfirmar(){
@@ -2881,7 +2947,7 @@ function _canjeMarcarAuto(ced, cliNom, facialNombre, cosme, ticket){
     window._paqPrefill=ced||cliNom; showTab('buscar-paquetes');
     setTimeout(function(){avisoGrande(msg||('📋 Marca la sesión usada en el paquete de '+(cliNom||'la clienta')),'#7A5FA0');},400);
   };
-  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(String(ced).replace(/\D/g,''))+'&_t='+Date.now())
+  fetch(APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent((typeof _cedQuery==='function'?_cedQuery(ced):String(ced||'').replace(/\D/g,'')))+'&_t='+Date.now())
     .then(function(r){return r.json();})
     .then(function(d){
       var act=((d&&d.resultados)||[]).filter(function(p){
