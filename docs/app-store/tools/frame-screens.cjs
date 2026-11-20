@@ -1,25 +1,27 @@
 /* Sunsu Spa · capturas App Store (100% datos sintéticos, modo ?preview=1 de la web, sin llamadas a la API real).
  * Uso: (1) en la raíz del repo: python3 -m http.server 8124 --bind 127.0.0.1
  *      (2) npm i playwright && node docs/app-store/tools/capture-screens.cjs && node docs/app-store/tools/frame-screens.cjs /tmp/appstore_out
- *      (3) convertir a RGB sin alfa (PIL) y copiar a docs/app-store/screenshots/iphone-6.9/ (1320x2868). */
+ *      (3) convertir a RGB sin alfa (PIL) y copiar a docs/app-store/screenshots/iphone-6.9/ (1320x2868).
+ * 01-login y 06-mi-cuenta salen de capture-portal.cjs (pantalla de inicio y app de la clienta, datos ficticios). */
 const { chromium } = require('playwright');
 const fs = require('fs');
-const RAW = '/tmp/appstore_raw';
+const RAW = process.env.RAW || '/tmp/appstore_raw';
 const OUT = process.argv[2] || '/tmp/appstore_out';
 fs.mkdirSync(OUT, { recursive: true });
 const logo = 'data:image/png;base64,' + fs.readFileSync(require('path').join(__dirname, '../../../assets/sunsu-logo-celeste.png')).toString('base64');
 const SHOTS = [
-  ['01-login', 'login', 'Tu spa, en tu iPhone', 'Acceso seguro con PIN o usuario para todo el equipo de Sunsu.', 'login'],
+  ['01-login', 'login', 'Tu spa, en tu iPhone', 'Inicia sesión o crea tu cuenta: equipo, clientas y proveedores.', 'login'],
   ['02-inventario', 'inventario', 'Inventario de faciales', 'Los tratamientos del spa, organizados por nombre y categoría.', 'app'],
   ['03-catalogo', 'catalogo', 'Carta de tratamientos', 'Faciales y servicios del spa, como en la carta.', 'app'],
   ['04-ficha', 'ficha', 'Ficha de la clienta', 'Historial, documentos y carpetas de Skin Analysis y K-Lift.', 'app'],
   ['05-agenda', 'agenda', 'Agenda del día', 'Citas del equipo, con el tratamiento de cada clienta.', 'app'],
+  ['06-mi-cuenta', 'portal', 'Tu cuenta Sunsu', 'Tu historial, paquetes, gift cards y tu próxima cita.', 'portal'],
 ];
 const icons = (c) => `<svg width="66" height="13" viewBox="0 0 66 13" fill="${c}"><rect x="0" y="8" width="3" height="5" rx="1"/><rect x="5" y="5.5" width="3" height="7.5" rx="1"/><rect x="10" y="3" width="3" height="10" rx="1"/><rect x="15" y="0.5" width="3" height="12.5" rx="1"/>
 <path d="M30.5 3.2a9.5 9.5 0 0 1 6.6 2.7l1.2-1.3a11.3 11.3 0 0 0-15.6 0l1.2 1.3a9.5 9.5 0 0 1 6.6-2.7zm0 3.6a5.9 5.9 0 0 1 4 1.6l1.2-1.3a7.7 7.7 0 0 0-10.4 0l1.2 1.3a5.9 5.9 0 0 1 4-1.6zm0 3.4 1.9 2-1.9 1.9-1.9-1.9z"/>
 <rect x="42" y="1" width="21" height="11" rx="3" fill="none" stroke="${c}" stroke-opacity=".45"/><rect x="44" y="3" width="15" height="7" rx="1.5"/><rect x="64" y="4.5" width="1.6" height="4" rx=".8" fill-opacity=".45"/></svg>`;
 const html = (img, title, sub, modo) => {
-  const sbBg = modo === 'login' ? '#EEF3FA' : '#3D5A7A', sbFg = modo === 'login' ? '#1D2B3A' : '#FFFFFF';
+  const sbBg = modo === 'login' ? '#EEF3FA' : modo === 'portal' ? '#F5F0E8' : '#3D5A7A', sbFg = modo === 'login' || modo === 'portal' ? '#1D2B3A' : '#FFFFFF';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{width:440px;height:956px;overflow:hidden}
