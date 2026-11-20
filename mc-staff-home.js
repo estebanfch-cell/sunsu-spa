@@ -1,6 +1,8 @@
 // Dashboard del personal: Hola + citas de hoy en filas compactas (una o dos líneas).
 // En escritorio, acciones sutiles a la derecha; en iPhone, menú «Acciones ▾».
 // Solo lectura de staff_home. Crear ticket reutiliza el precargado de la Agenda.
+// TK167: sin el saludo de Acuity; «CONFIRMADA» siempre en la misma fila; «Nueva» solo
+// si es primera visita; visita anterior con el facial; paquete y gift card vigentes.
 (function () {
   function e(v) { return String(v ?? "").replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
   function hm24(iso) { var m = /T(\d{2}):(\d{2})/.exec(String(iso || "")); return m ? m[1] + ":" + m[2] : ""; }
@@ -65,14 +67,18 @@
       ".mcsh-c{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-left:4px solid var(--navy);border-radius:10px;padding:7px 8px 7px 10px;position:relative}",
       ".mcsh-c.ok{opacity:.68}",
       ".mcsh-main{flex:1 1 auto;min-width:0}",
-      ".mcsh-l1{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 .35em;min-width:0;line-height:1.25}",
-      ".mcsh-h{font-weight:800;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap}",
-      ".mcsh-dot{color:var(--gray,#8A90A0);font-weight:600}",
-      ".mcsh-n{font-weight:700;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22ch}",
-      ".mcsh-tipo{color:var(--gray,#8A90A0);font-size:.8rem;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22ch}",
+      ".mcsh-l1{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap;line-height:1.25}",
+      ".mcsh-who{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:0 .35em;overflow:hidden}",
+      ".mcsh-h{font-weight:800;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap;flex:0 0 auto}",
+      ".mcsh-dot{color:var(--gray,#8A90A0);font-weight:600;flex:0 0 auto}",
+      ".mcsh-n{font-weight:700;color:var(--navy-d,#3D5A7A);font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}",
+      ".mcsh-status{flex:0 0 auto;display:flex;align-items:center;gap:4px}",
       ".mcsh-etq{display:inline-block;border:1px solid;border-radius:999px;padding:0 6px;font-size:.62rem;font-weight:700;white-space:nowrap;line-height:1.5;vertical-align:middle}",
-      ".mcsh-tag{font-size:.58rem;font-weight:800;border-radius:6px;padding:0 5px;background:#efe9fb;color:#5d4a9c;line-height:1.5}",
-      ".mcsh-prev{display:block;margin-top:1px;font-size:.68rem;color:var(--gray,#8A90A0);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".mcsh-tag{font-size:.58rem;font-weight:800;border-radius:6px;padding:0 5px;background:#efe9fb;color:#5d4a9c;line-height:1.5;flex:0 0 auto}",
+      ".mcsh-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:1px 10px;margin-top:1px;min-width:0}",
+      ".mcsh-prev{display:block;min-width:0;flex:1 1 14rem;font-size:.68rem;color:var(--gray,#8A90A0);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".mcsh-flags{flex:0 0 auto;display:inline-flex;gap:8px;font-size:.68rem;font-weight:600;color:var(--gray,#8A90A0);white-space:nowrap}",
+      ".mcsh-flags .si{color:var(--navy-d,#3D5A7A);font-weight:700}",
       ".mcsh-act{appearance:none;border:0;background:transparent;color:var(--navy-d,#3D5A7A);font:inherit;font-size:.68rem;font-weight:650;padding:3px 6px;border-radius:6px;cursor:pointer;white-space:nowrap;opacity:.8}",
       ".mcsh-act:hover,.mcsh-act:focus{background:var(--blue-l,#EEF3FA);opacity:1}",
       ".mcsh-act.pri{color:var(--navy);font-weight:800}",
@@ -83,7 +89,7 @@
       ".mcsh-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:8;min-width:156px;background:#fff;border:1px solid var(--cream-d,#EDE6D8);border-radius:10px;box-shadow:0 6px 18px rgba(20,30,50,.12);padding:4px;flex-direction:column}",
       ".mcsh-c.open .mcsh-menu{display:flex}",
       ".mcsh-menu .mcsh-act{display:block;width:100%;text-align:left;padding:7px 10px;opacity:1}",
-      "@media (max-width:860px){.mcsh-hola{font-size:1.2rem}.mcsh-acts-wide{display:none}.mcsh-acts-narrow{display:block}.mcsh-n{max-width:16ch}.mcsh-tipo{max-width:18ch}}",
+      "@media (max-width:860px){.mcsh-hola{font-size:1.2rem}.mcsh-acts-wide{display:none}.mcsh-acts-narrow{display:block}}",
     ].join("");
   }
   function botones(c, puede, cls) {
@@ -107,15 +113,20 @@
     var ant = (!c.nueva && c.anterior && c.anterior.fecha)
       ? '<span class="mcsh-prev">Visita anterior: ' + e(fechaCorta(c.anterior.fecha)) + (c.anterior.servicio ? " · " + e(c.anterior.servicio) : "") + "</span>"
       : "";
-    var tipo = (c.tipo || "").replace(/\s+/g, " ").trim();
+    var paq = c.paquete || {};
+    var gift = c.gift || {};
+    var paqTxt = paq.activo
+      ? ("Paquete sí" + (paq.pendientes ? " · " + paq.pendientes + " ses." : ""))
+      : "Paquete no";
+    var giftTxt = gift.activo ? "Gift card sí" : "Gift card no";
+    var flags = '<span class="mcsh-flags"><span' + (paq.activo ? ' class="si"' : "") + ">" + e(paqTxt) + "</span><span" + (gift.activo ? ' class="si"' : "") + ">" + e(giftTxt) + "</span></span>";
     return '<article class="mcsh-c' + (c.atendida ? " ok" : "") + '" style="border-left-color:' + col + '" data-id="' + e(c.id) + '" title="' + e(hora(c.datetime) + (c.duracion ? " · " + c.duracion + " min" : "") + " · " + nom) + '">' +
       '<div class="mcsh-main"><div class="mcsh-l1">' +
-        '<span class="mcsh-h">' + e(hora(c.datetime)) + "</span>" +
+        '<div class="mcsh-who"><span class="mcsh-h">' + e(hora(c.datetime)) + "</span>" +
         '<span class="mcsh-dot">·</span><span class="mcsh-n">' + e(nom) + "</span>" +
-        (tipo ? '<span class="mcsh-dot">·</span><span class="mcsh-tipo">' + e(tipo) + "</span>" : "") +
-        (c.nueva ? '<span class="mcsh-tag">Nueva</span>' : "") +
-        etqPill(c.etiqueta) +
-      "</div>" + ant + "</div>" +
+        (c.nueva ? '<span class="mcsh-tag">Nueva</span>' : "") + "</div>" +
+        '<div class="mcsh-status">' + etqPill(c.etiqueta) + "</div>" +
+      "</div>" + '<div class="mcsh-meta">' + ant + flags + "</div></div>" +
       '<div class="mcsh-acts-wide">' + botones(c, puede) + "</div>" +
       '<div class="mcsh-acts-narrow"><button type="button" class="mcsh-more" data-acts="' + e(c.id) + '" aria-haspopup="true" aria-label="Acciones por hacer">Acciones ▾</button>' +
         '<div class="mcsh-menu" role="menu">' + botones(c, puede) + "</div></div></article>";
