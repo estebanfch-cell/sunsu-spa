@@ -133,7 +133,7 @@ export type LinkCuadre = {
   facturas?: string[];
 };
 export type OptsCuadre = { catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>; aliases?: AliasMap };
-export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac" | "lineas"; motivo: string; detalle: string; factura: string | null };
+export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac" | "lineas" | "forma"; motivo: string; detalle: string; factura: string | null };
 
 function nombreTicket(t: Row): string {
   return (s(t.nombre) + " " + s(t.apellido)).trim();
@@ -391,6 +391,21 @@ export function flagsDeseadas(p: {
             ticket_id: id, ticket_clave: clave, kind: "monto",
             motivo: "Diferencia de monto",
             detalle: "Ticket $" + totalTk.toFixed(2) + " vs factura " + L.factura + " $" + L.total_factura.toFixed(2) + " (" + signo + diffLineas.toFixed(2) + "). diferencia de monto $" + diffLineas.toFixed(2) + "." + extra + difSkuDeLink(L, p.facturas, ts, t, p.catalogo, p.aliases),
+            factura: L.factura,
+          });
+        }
+      }
+      // TK165 (Emilia t762u): forma de pago distinta a la factura (solo 1 ticket ↔ 1 factura y formas conocidas).
+      if (facV0 && ts0.length <= 1 && FF0.length === 1) {
+        const CON = new Set(["efectivo", "tarjeta", "transferencia"]);
+        const fTk = [...new Set(metodosTicket(t.comp).map(formaNorm).filter(Boolean))].sort();
+        const fFacRaw = (facV0.formas_pago && facV0.formas_pago.length ? facV0.formas_pago.map((x) => x.forma) : [facV0.forma || ""]);
+        const fFac = [...new Set(fFacRaw.map(formaNorm).filter(Boolean))].sort();
+        if (fTk.length && fFac.length && fTk.every((x) => CON.has(x)) && fFac.every((x) => CON.has(x)) && fTk.join("+") !== fFac.join("+")) {
+          out.push({
+            ticket_id: id, ticket_clave: clave, kind: "forma",
+            motivo: "Forma de pago no cuadra",
+            detalle: "Ticket: " + fTk.join(" + ") + " · factura " + L.factura + ": " + fFac.join(" + ") + ".",
             factura: L.factura,
           });
         }
