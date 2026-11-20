@@ -4,7 +4,7 @@ import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./inline_api.ts";
 import "./agenda_api.ts";
-import { fichaDeCita, misCalendarios, ticketRevisado } from "./agenda_api.ts";
+import { fichaDeCita, fmtCitaWa, misCalendarios, ticketRevisado, tipoVisible } from "./agenda_api.ts";
 import { limpiarCacheAcuity } from "./acuity.ts";
 import type { Row } from "./domain.ts";
 
@@ -15,18 +15,21 @@ function semilla() {
     { token: "adm", uid: "admin", rol: "admin", name: "Emilia", exp: "2099-01-01T00:00:00.000Z" },
     { token: "and", uid: "u-and", rol: "cosmetologa", name: "Andrea Robles", exp: "2099-01-01T00:00:00.000Z" },
     { token: "asi", uid: "u-asi", rol: "asistente_cosmetologia", name: "Deja", exp: "2099-01-01T00:00:00.000Z" },
+    { token: "ale", uid: "u-ale", rol: "recepcion", name: "Alejandra Rodriguez", exp: "2099-01-01T00:00:00.000Z" },
   ]);
   db.tables.set("usuarios", [
-    { id: "admin", nombre: "Emilia", short: "Emilia", rol: "admin" }, { id: "u-and", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa" }, { id: "u-asi", nombre: "Deja", short: "Deja", rol: "asistente_cosmetologia" },
+    { id: "admin", nombre: "Emilia", short: "Emilia", rol: "admin" }, { id: "u-and", nombre: "Andrea Robles", short: "Andrea", rol: "cosmetologa" }, { id: "u-asi", nombre: "Deja", short: "Deja", rol: "asistente_cosmetologia" }, { id: "u-ale", nombre: "Alejandra Rodriguez", short: "Alejandra", rol: "recepcion" },
   ]);
   db.tables.set("beta_acuity_calendars", [{ calendar_id: 11689550, nombre: "Andrea", persona: "Andrea Robles", activo: true }, { calendar_id: 12796672, nombre: "Daniela", persona: "Daniela Mora", activo: true }]);
   db.tables.set("beta_citas_ticket", []);
   db.tables.set("app_modulos", []);
   db.tables.set("clientas_registro", [{ cedula: "1700000001", nombre: "María", apellido: "Banda Paz", timestamp: "2026-01-01", tipo_de_piel: "Mixta" }]);
-  db.tables.set("tickets", [{ id: 1, sheet_row: 10, so_num: "TK-SO-1", timestamp: "2026-11-17T15:00:00Z", nombre: "María", apellido: "Banda", efch: true, fac_7: "2559.0", estimado: 46 }]);
+  db.tables.set("tickets", [{ id: 1, sheet_row: 10, so_num: "TK-SO-1", timestamp: "2026-11-17T15:00:00Z", nombre: "María", apellido: "Banda", efch: true, fac_7: "2559.0", estimado: 46 }, { id: 2, sheet_row: 11, so_num: "TK-SO-2", timestamp: "2026-10-01T15:00:00Z", nombre: "María", apellido: "Banda", estimado: 40 }]);
+  db.tables.set("wa_enviados", []);
+  db.tables.set("app_kv", []);
   const apts: Row[] = [
     { id: 501, firstName: "María", lastName: "Banda", datetime: "2026-11-17T10:00:00-0500", time: "10:00am", duration: 60, calendarID: 11689550, calendar: "Andrea", type: "!GRACIAS POR REGRESAR!", appointmentTypeID: 77894742, labels: [{ id: 19124872, name: "CONFIRMADA" }], phone: "0999", canceled: false },
-    { id: 502, firstName: "Ana", lastName: "Paz", datetime: "2026-11-18T11:00:00-0500", duration: 90, calendarID: 12796672, calendar: "Daniela", type: "¿ES TU PRIMERA VEZ?", appointmentTypeID: 75346382, labels: null, canceled: false },
+    { id: 502, firstName: "Ana", lastName: "Paz", datetime: "2026-11-18T11:00:00-0500", duration: 90, calendarID: 12796672, calendar: "Daniela", type: "¿ES TU PRIMERA VEZ?", appointmentTypeID: 75346382, labels: null, phone: "0991234567", canceled: false },
   ];
   const llamadas: { url: string; method: string; body?: string }[] = [];
   const fetchImpl = (async (url: string, init: RequestInit = {}) => {
@@ -72,7 +75,10 @@ describe("agenda (Acuity por la edge)", () => {
     const ad = await h("ag_citas", "adm", { desde: "2026-11-17", hasta: "2026-11-18" });
     assert.equal((ad.citas as Row[]).length, 2);
     assert.equal(((ad.porDia as Row)["2026-11-18"] as Row).total, 1);
-    assert.match(String((await h("ag_citas", "asi", {})).error), /acceso/);
+    const asi = await h("ag_citas", "asi", {});
+    assert.equal(asi.ok, true, String(asi.error));
+    assert.equal((asi.citas as Row[]).length, 0);
+    assert.match(String(asi.aviso || ""), /calendario/i);
     const ci = await h("ag_cita", "and", { id: 502 });
     assert.match(String(ci.error), /tu calendario/);
     const mia = await h("ag_cita", "and", { id: 501 });
@@ -103,4 +109,59 @@ describe("agenda (Acuity por la edge)", () => {
     assert.equal((await h("ag_ingresado", "adm", { desde: "2026-11-01", hasta: "2026-11-17" })).yaTenian, 1);
     assert.match(String((await h("ag_ingresado", "and", {})).error), /administradores/);
   });
+
+  it("tipo intake no se muestra; fmtCitaWa sale en es-EC", () => {
+    assert.equal(tipoVisible("!GRACIAS POR REGRESAR!"), "");
+    assert.equal(tipoVisible("¿ES TU PRIMERA VEZ?"), "");
+    assert.equal(tipoVisible("Facial Reset 3x1"), "Facial Reset 3x1");
+    const f = fmtCitaWa("2026-11-18T11:00:00-0500");
+    assert.match(f.dia, /miércoles.*18.*noviembre/i);
+    assert.match(f.hora.replace(/\s/g, ""), /11:00/i);
+  });
+  it("recepción ve todas las agendas; el listado no trae teléfonos ni el texto de intake; Nueva solo si no hay visitas", async () => {
+    const { h } = semilla();
+    const r = await h("ag_citas", "ale", { desde: "2026-11-17", hasta: "2026-11-18" });
+    assert.equal(r.ok, true, String(r.error));
+    const citas = r.citas as Row[];
+    assert.equal(citas.length, 2);
+    const raw = JSON.stringify(citas);
+    assert.doesNotMatch(raw, /0991234567/);
+    assert.doesNotMatch(raw, /593991234567/);
+    assert.ok(citas.every((c) => c.telefono == null && c.phone == null && c.wa_url == null));
+    const maria = citas.find((c) => c.id === 501)!;
+    const ana = citas.find((c) => c.id === 502)!;
+    assert.equal(maria.nueva, false);
+    assert.equal(ana.nueva, true);
+    assert.equal(maria.tipo_visible, "");
+    assert.equal(ana.tipo_visible, "");
+    const meta = await h("ag_meta", "ale", {});
+    assert.equal((meta.puede as Row).mover, true, String(meta.error));
+    assert.equal((meta.calendarios as Row[]).length, 2);
+  });
+  it("ag_wa arma el wa.me con la plantilla vieja, sin devolver el número suelto; confirmada no lleva botón", async () => {
+    const { h } = semilla();
+    assert.match(String((await h("ag_wa", "and", { id: 502 })).error), /recepción o admin/i);
+    assert.match(String((await h("ag_wa", "ale", { id: 501 })).error), /confirmada/i);
+    const w = await h("ag_wa", "ale", { id: 502 });
+    assert.equal(w.ok, true, String(w.error));
+    assert.equal(w.tiene_tel, true);
+    assert.equal(w.telefono, undefined);
+    assert.equal(w.phone, undefined);
+    assert.match(String(w.wa_url), /^https:\/\/wa\.me\/593991234567\?text=/);
+    assert.match(String(w.texto), /Hola Ana/);
+    assert.match(String(w.texto), /confirmar tu cita de mañana/i);
+    assert.match(String(w.texto), /miércoles.*18.*noviembre/i);
+    assert.match(String(w.texto), /primera visita/i);
+    assert.match(String(w.texto), /registro\.html/i);
+    assert.match(String(w.texto), /Nos confirmas tu asistencia/i);
+    const raw = JSON.stringify(w);
+    assert.doesNotMatch(raw, /"telefono"/);
+    assert.doesNotMatch(raw, /0991234567/);
+    const lista = await h("ag_citas", "ale", { desde: "2026-11-18", hasta: "2026-11-18" });
+    const ana = (lista.citas as Row[]).find((c) => c.id === 502)!;
+    assert.equal(ana.wa_enviado, true);
+    assert.equal(ana.wa_url, undefined);
+    assert.doesNotMatch(JSON.stringify(ana), /593991234567/);
+  });
+
 });
