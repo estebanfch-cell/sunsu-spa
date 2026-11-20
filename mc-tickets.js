@@ -1062,53 +1062,81 @@
     return t;
   }
   function conTratamiento() {
-    var d = K.d || {}, t = d.ticket || {};
-    return (d.lineas || []).some(function (l) { return l.tipo === "facial" || l.tipo === "servicio" || l.tipo === "extra" || l.tipo === "paquete"; }) || !!(t.notas || t.recomendaciones || t.retorno);
+    var d = K.d || {}, t = d.ticket || {}, I = d.info || {};
+    return (d.lineas || []).some(function (l) { return l.tipo === "facial" || l.tipo === "servicio" || l.tipo === "extra" || l.tipo === "paquete" || l.tipo === "producto"; }) || !!(I.notas || I.recomendaciones || I.retorno || t.notas || t.recomendaciones || t.retorno);
   }
   /** Clave de la tarjeta en window._tkCards: la fila de la hoja o, si el ticket es de la beta, su id. */
   function claveCard() { var t = K.d.ticket; return t.sheetRow ? t.sheetRow : "tk:" + (t.id || K.d.clave); }
-  /** Tarjeta armada con los datos del ticket que se ve (líneas, notas, recomendaciones, regreso, cosmetóloga, fotos). */
-  function cardDesdeTicket(base) {
-    var d = K.d, t = d.ticket, L = d.lineas || [], out = Object.assign({}, base || {});
-    var nom = function (l) { return String(l.nombre || l.sku || "").trim(); };
+  /** TK184: nombre legible de una línea. «SUNSU-AS-002» / «AS-002» (factura de Migo) → nombre del catálogo. */
+  function nombreLinea(l, mapa) {
+    var n = String(l.nombre || "").trim(), sku = String(l.sku || "").trim().toUpperCase();
+    var soloCodigo = !n || /^(SUNSU-)?[A-Z]{2,3}-\d{3}$/i.test(n) || n.toUpperCase() === sku;
+    if (soloCodigo) {
+      var cod = (sku || n.replace(/^SUNSU-/i, "")).toUpperCase();
+      if (mapa && mapa[cod]) return mapa[cod];
+      var hit = "";
+      (window.PROVS || []).some(function (pv) { return (pv.prods || []).some(function (pr) { if (String(pr.sku || "").toUpperCase() === cod) { hit = pr.n; return true; } return false; }); });
+      return hit || cod;
+    }
+    return n;
+  }
+  /** TK184 (Emilia t801u): la tarjeta SIEMPRE sale de los datos actuales del ticket (tk_get):
+   *  info (correcciones aprobadas en la beta) > ticket (fila del sistema); líneas actuales > columnas viejas;
+   *  fotos del ticket (Drive y archivo:) > fotos de la fila vieja. `base` (fila vieja) solo aporta lo que el ticket no trae. */
+  function armarCard(d, base) {
+    d = d || {};
+    var t = d.ticket || {}, I = d.info || {}, L = d.lineas || [], out = Object.assign({}, base || {}), mapa = d.nombresSku || {};
+    var nom = function (l) { return nombreLinea(l, mapa); };
     var fac = L.filter(function (l) { return l.tipo === "facial" || l.tipo === "servicio"; });
     var ext = L.filter(function (l) { return l.tipo === "extra"; });
     var paq = L.filter(function (l) { return l.tipo === "paquete"; });
     var prod = L.filter(function (l) { return l.tipo === "producto"; });
-    if (L.length && !base) {
+    if (L.length) {
       out.facial = fac.map(nom).join(" + ");
       out.extras = ext.map(function (l) { return nom(l) + (l.cantidad > 1 ? " ×" + l.cantidad : ""); }).join(" | ");
-      var p3 = window._P3S || [], pq = paq[0], es3 = pq && p3.some(function (x) { return String(pq.sku || "").indexOf(x) >= 0; });
+      var p3 = window._P3S || [], pq = paq[0], es3 = pq && (p3.some(function (x) { return String(pq.sku || "").indexOf(x) >= 0; }) || /x\s*3\b|3\s*sesion/i.test(String(pq.nombre || "")));
       out.pack3 = pq && es3 ? nom(pq) : ""; out.pack6 = pq && !es3 ? nom(pq) : "";
       out.productos = prod.map(function (l) { return nom(l) + (l.cantidad > 1 ? " ×" + l.cantidad : ""); });
     }
-    out.nombre = t.nombre || out.nombre; out.apellido = t.apellido || out.apellido;
-    out.cosmetologa = t.cosmetologa || out.cosmetologa; out.fecha = t.fecha || out.fecha;
-    if (t.notas && !out.notas) out.notas = t.notas;
-    if (t.recomendaciones && !out.recomendaciones) out.recomendaciones = t.recomendaciones;
-    var ret = String(t.retorno || "").trim(), mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(ret);
+    var pick = function (k) { var v = I[k] != null && String(I[k]).trim() !== "" ? I[k] : t[k]; return v != null && String(v).trim() !== "" ? String(v) : ""; };
+    out.nombre = pick("nombre") || out.nombre || ""; out.apellido = pick("apellido") || out.apellido || "";
+    out.cosmetologa = pick("cosmetologa") || out.cosmetologa || ""; out.fecha = t.fecha || I.fecha || out.fecha || "";
+    out.notas = pick("notas") || out.notas || "";
+    out.recomendaciones = pick("recomendaciones") || out.recomendaciones || "";
+    var ret = pick("retorno") || String(out.retorno || ""), mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(ret.trim());
     if (mdy) ret = mdy[3] + "-" + ("0" + mdy[1]).slice(-2) + "-" + ("0" + mdy[2]).slice(-2);
-    if (ret && !out.retorno) out.retorno = ret;
+    out.retorno = ret.slice(0, 10);
+    out.retornoTrat = String(I.retornoTrat || out.retornoTrat || "");
     var fotos = (d.documentos || []).filter(function (x) { return x.tipo === "foto"; });
-    if (!out.fotosAntes && !out.fotosDespues && fotos.length) {
+    if (fotos.length) {
       out.fotosAntes = fotos.filter(function (x) { return !/despu/i.test(x.nombre || ""); }).map(function (x) { return x.url; }).join(" | ");
       out.fotosDespues = fotos.filter(function (x) { return /despu/i.test(x.nombre || ""); }).map(function (x) { return x.url; }).join(" | ");
     }
-    if (!out.colS && t.paquete) out.colS = "";
+    if (out.colS == null) out.colS = "";
     return out;
   }
+  function cardDesdeTicket(base) { return armarCard(K.d, base); }
+  /** TK184: trae el ticket recién leído (nunca la lista ni una tarjeta guardada) y arma la tarjeta. Devuelve la clave en _tkCards. */
+  async function tarjetaFresca(clave) {
+    var k = String(clave || ""); if (!k) return null;
+    var d = null;
+    try { d = await api("tk_get", { clave: k }); } catch (x) { d = null; }
+    if (!d || !d.ok) return null;
+    try { guardarVista(d); } catch (x2) {}
+    var t = d.ticket || {}, key = t.sheetRow ? t.sheetRow : "tk:" + (t.id || d.clave || k);
+    var base = null;
+    if (t.sheetRow) base = (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }) || null;
+    (window._tkCards = window._tkCards || {})[key] = armarCard(d, base ? { colS: base.colS || "" } : null);
+    return key;
+  }
   async function cardDelTicket() {
-    var t = K.d.ticket, h = null;
-    if (t.sheetRow) {
-      h = (window._histData || []).find(function (x) { return String(x.tkRow) === String(t.sheetRow); }) || null;
-      // Solo este ticket (antes bajaba todo el historial).
-      if (!h) { try { var r = await api("tk_historial", { rows: [t.sheetRow], limit: 1 }); h = (r && r.items && r.items[0]) || null; } catch (x) {} }
-    }
-    // Sin fila de la hoja (ticket hecho en la beta) o sin tarjeta previa: se arma con los datos del ticket.
-    if (!h && !conTratamiento()) return null;
-    h = cardDesdeTicket(h);
-    (window._tkCards = window._tkCards || {})[claveCard()] = h;
-    return h;
+    var key = await tarjetaFresca(K.d.clave);
+    if (key) { var h = window._tkCards[key]; window._tkCards[claveCard()] = h; return h; }
+    // Sin red: con lo que se ve en pantalla (igual con info/líneas actuales).
+    if (!conTratamiento()) return null;
+    var h2 = cardDesdeTicket(null);
+    (window._tkCards = window._tkCards || {})[claveCard()] = h2;
+    return h2;
   }
   function pdfTarjeta() { return new Promise(function (res) { if (typeof tarjetaTicket !== "function") return res(null); cardDelTicket().then(function (hh) { if (!hh) return res(null); tarjetaTicket(claveCard(), function (doc, nom) { res({ doc: doc, nom: nom }); }); }); }); }
   /** Paquete de ESTE ticket: el que tiene una sesión con la fecha del ticket (o el código del ticket); si no, el vigente. */
@@ -1614,6 +1642,7 @@
       var k = String(clave || ""); if (!k || (window._tkVista && window._tkVista[k])) return Promise.resolve(null);
       return Promise.resolve(api("tk_get", { clave: k })).then(function (d) { if (d && d.ok) guardarVista(d); return d; }).catch(function () { return null; });
     },
+    tarjetaFresca: tarjetaFresca, armarCard: armarCard,
     claveDe: function (t) { return (t && t.so_num) || (t && t.tkRow ? "r" + t.tkRow : ""); }, cacheLineasLista: cacheLineasLista, lineasCacheDe: lineasCacheDe,
     isDirty: function () { return !!K.dirty; },
     _k: K, _calc: calc, _pagado: pagadoTk, _docsUnicos: docsUnicos,
