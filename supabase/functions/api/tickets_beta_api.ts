@@ -6,6 +6,7 @@ import { mapaAliases } from "./inventario_modelo.ts";
 // (% o $), promoción y exclusión de comisión. Admin edita directo; los demás piden el cambio (solicitudes).
 import { extend, registroDe } from "./handlers.ts";
 import { consultar, type Filtro } from "./query.ts";
+import { leerFecha, FECHA_NO_ENTIENDO } from "./fecha_flexible.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, copiarAStorage, guardarArchivo, logAccion } from "./lib.ts";
 import { esAdmin, esSuperAdmin } from "./permisos.ts";
@@ -934,7 +935,8 @@ async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string)
   if (!Object.keys(limpio).length) return { error: "Nada que cambiar" };
   if (limpio.factura && !/^\d{3}-\d{3}-\d{9}$/.test(facturaCompleta(limpio.factura))) return { error: "Factura: usa 001-001-000000000" };
   if (limpio.factura) limpio.factura = facturaCompleta(limpio.factura);
-  if (limpio.retorno && !/^\d{4}-\d{2}-\d{2}$/.test(String(limpio.retorno))) return { error: "Fecha de regreso: AAAA-MM-DD" };
+  // TK185 (Emilia t805u): la fecha en el formato en que la escriben; por dentro AAAA-MM-DD.
+  if (limpio.retorno) { const f = leerFecha(limpio.retorno); if (!f) return { error: FECHA_NO_ENTIENDO }; limpio.retorno = f.iso; }
   if (limpio.cabina) { const c = CABINAS_TK.find((x) => x.toLowerCase() === String(limpio.cabina).toLowerCase()); if (!c) return { error: "Cabina: elige Cabina 1, 2, 3 o Local" }; limpio.cabina = c; }
   if (limpio.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(limpio.email))) return { error: "Email inválido" };
   const actor = actorOf(ses), now = ctx.now.toISOString();
