@@ -38,6 +38,7 @@ function semilla(now = new Date("2026-11-18T16:30:00Z")) {
     { id: 2, sheet_row: 20, so_num: "TK-SO-20", timestamp: "2026-11-18T15:00:00Z", nombre: "Ana", apellido: "Pérez", atendido_por: "Andrea Robles", facial_hecho: "SUNSU-02 Facial Reparación", compra_pack_3: "Glow x3", estimado: 130, orig: { "VK-017": 2 }, comp: "Efect", efch: true, id_3: "1712345678" },
     { id: 3, sheet_row: 21, so_num: "TK-SO-21", timestamp: "2026-11-18T16:00:00Z", nombre: "Lia", apellido: "Cruz", atendido_por: "Daniela Mora", facial_hecho: "SUNSU-02 Facial Reparación", estimado: 65, comp: "Efect", efch: true, id_3: "1712345679" },
     { id: 4, sheet_row: 22, so_num: "TK-SO-22", timestamp: "2026-09-10T15:00:00Z", nombre: "Carla", apellido: "Ruiz", facial_hecho: "SUNSU-02 Facial Reparación", estimado: 65, efch: true },
+    { id: 5, sheet_row: 23, so_num: "TK-SO-23", timestamp: "2026-08-22T15:00:00Z", nombre: "Stephanie Mireya", apellido: "Montenegro Vinueza", facial_hecho: "SUNSU-40 Facial Reset 3x1", estimado: 90, efch: true, id_3: "1710000002" },
   ]);
   db.tables.set("paquetes", [
     { id: 80, sheet_row: 80, cedula: "1700000001", nombres: "María", apellidos: "Banda Paz", sku: "PACK-3", paquete: "Glow x3", completo: false, uso_1: true, fecha_1: "02/10/26 Limpieza facial", uso_2: false, fecha_2: "", ano: 2026, mes: 9, dia: 1 },
@@ -54,6 +55,7 @@ function semilla(now = new Date("2026-11-18T16:30:00Z")) {
     { id: 502, firstName: "Ana", lastName: "Paz", datetime: "2026-11-18T11:00:00-0500", duration: 60, calendarID: 12796672, calendar: "Daniela", type: "¿ES TU PRIMERA VEZ?", appointmentTypeID: 2, labels: null, canceled: false, price: 30 },
     { id: 503, firstName: "Lucía", lastName: "Mora", datetime: "2026-11-19T13:30:00-0500", duration: 60, calendarID: 11689550, calendar: "Andrea", type: "Hidrafacial", appointmentTypeID: 3, labels: null, canceled: false },
     { id: 504, firstName: "Carla", lastName: "Ruiz", datetime: "2026-11-18T12:00:00-0500", duration: 60, calendarID: 11689550, calendar: "Andrea", type: "¿ES TU PRIMERA VEZ?", appointmentTypeID: 2, labels: [{ id: 1, name: "CONFIRMADA" }], canceled: false },
+    { id: 505, firstName: "Stephanie", lastName: "Montenegro Vinueza", datetime: "2026-11-18T13:00:00-0500", duration: 60, calendarID: 11689550, calendar: "Andrea", type: "¿ES TU PRIMERA VEZ?", appointmentTypeID: 2, labels: [{ id: 1, name: "CONFIRMADA" }], canceled: false },
   ];
   const fetchImpl = (async (url: string, init: RequestInit = {}) => {
     const u = new URL(url), path = u.pathname.replace("/api/v1/", "");
@@ -80,7 +82,7 @@ describe("TK59 dashboard del personal", () => {
     assert.equal(r.nombre, "Andrea");
     assert.equal(r.hoy, "2026-11-18");
     const citas = r.citas as Row[];
-    assert.equal(citas.length, 2);
+    assert.equal(citas.length, 3);
     assert.equal(citas[0].id, 501);
     assert.equal(citas[0].nombre, "María");
     assert.equal(citas[0].tipo, "!GRACIAS POR REGRESAR!");
@@ -104,6 +106,10 @@ describe("TK59 dashboard del personal", () => {
     assert.match(String((carla?.anterior as Row).servicio), /SUNSU-02 Facial Reparación/);
     assert.equal((carla?.paquete as Row).activo, false);
     assert.equal((carla?.gift as Row).activo, false);
+    const steph = citas.find((c) => c.id === 505);
+    assert.equal(steph?.nueva, false, "Stephanie con historial no es Nueva aunque el nombre de Acuity sea más corto y el tipo diga primera vez");
+    assert.equal((steph?.anterior as Row).fecha, "2026-08-22");
+    assert.match(String((steph?.anterior as Row).servicio), /Facial Reset/);
     const blob = JSON.stringify(r);
     assert.doesNotMatch(blob, /0991111111|oculta@test\.com|Cumbayá|0999999999|maria@test/);
     assert.equal("precio" in citas[0], false);
@@ -119,7 +125,7 @@ describe("TK59 dashboard del personal", () => {
     assert.equal(r.ok, true, String(r.error));
     assert.equal(r.nombre, "Alejandra");
     const ids = (r.citas as Row[]).map((c) => c.id);
-    assert.deepEqual(ids, [501, 502, 504]);
+    assert.deepEqual(ids, [501, 502, 504, 505]);
     const nueva = (r.citas as Row[]).find((c) => c.id === 502);
     assert.equal(nueva?.nueva, true);
     assert.equal(nueva?.anterior, null);
@@ -133,7 +139,7 @@ describe("TK59 dashboard del personal", () => {
     const r = await h("staff_home", "adm", { preview: true, preview_uid: "u-and" });
     assert.equal(r.ok, true, String(r.error));
     assert.equal(r.nombre, "Andrea");
-    assert.deepEqual((r.citas as Row[]).map((c) => c.id), [501, 504]);
+    assert.deepEqual((r.citas as Row[]).map((c) => c.id), [501, 504, 505]);
     assert.equal("precio" in (r.citas as Row[])[0], false);
   });
 
@@ -190,7 +196,7 @@ describe("TK59 dashboard del personal", () => {
     assert.equal(r.hoy, "2026-11-17");
     assert.equal(r.citasFecha, "2026-11-18");
     const citas = r.citas as Row[];
-    assert.equal(citas.length, 2);
-    assert.deepEqual(citas.map((c) => c.id), [501, 504]);
+    assert.equal(citas.length, 3);
+    assert.deepEqual(citas.map((c) => c.id), [501, 504, 505]);
   });
 });
