@@ -5522,6 +5522,33 @@ function renderHistorial(c){
   });
 }
 // ── Lista paginada desde Supabase (hotfix 17/11): 50 filas + «Mostrar más»; LED en lote; Acuity después ──
+/* TK155 (Emilia t679u): clave única de LEDs por ticket. Los tickets creados en Supabase tienen tkRow=null:
+   antes todos escribían en _tkLeds["null"] y se contagiaban (todos los WhatsApp en verde). */
+function _tkLedKey(t){
+  if(!t) return '';
+  var k=t.so_num||t.beta_num||'';
+  if(k) return String(k);
+  if(t.tkRow!=null&&t.tkRow!==''&&!/^(null|undefined)$/.test(String(t.tkRow))) return 'r'+t.tkRow;
+  if(t.id!=null&&t.id!=='') return 'id'+t.id;
+  return '';
+}
+function _tkRowOk(t){ return !!t&&t.tkRow!=null&&t.tkRow!==''&&!/^(null|undefined)$/.test(String(t.tkRow)); }
+function _tkLedOf(t){
+  if(!t) return null;
+  if(t.led&&typeof t.led==='object') return t.led;
+  var M=window._tkLeds||{}, k=_tkLedKey(t);
+  if(k&&M[k]) return M[k];
+  if(_tkRowOk(t)&&M[String(t.tkRow)]) return M[String(t.tkRow)];
+  return null;
+}
+function _tkLedGuardar(it){
+  if(!it||!it.led) return;
+  var M=window._tkLeds=window._tkLeds||{}, k=_tkLedKey(it);
+  if(k) M[k]=it.led;
+  if(_tkRowOk(it)) M[String(it.tkRow)]=it.led;
+  try{ delete M['null']; delete M['undefined']; }catch(e){}
+}
+window._tkLedKey=_tkLedKey; window._tkLedOf=_tkLedOf; window._tkLedGuardar=_tkLedGuardar;
 function _tkClave(q){ var f=_tkF(); return [q.desde||'',q.hasta||'',q.cosm||'',(q.q||'').toLowerCase(),f.est||'',f.seg||''].join('|'); }
 function _tkPedir(q, mas){
   var f=_tkF(), off=mas?(window._histData||[]).length:0, lim=mas?50:Math.max(50, Math.min(200, window._tkLim||50));
@@ -5533,7 +5560,7 @@ function _tkPedir(q, mas){
     if(!r||!r.ok) { toast((r&&r.error)||'No se pudo cargar la lista','#B86B6B'); return false; }
     var items=r.items||[];
     window._tkLeds=window._tkLeds||{};
-    items.forEach(function(it){ if(it.led) window._tkLeds[String(it.tkRow)]=it.led; });
+    items.forEach(_tkLedGuardar);
     if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function') window.MCTickets.cacheLineasLista(items);
     _histData=mas?(window._histData||[]).concat(items):items; window._histData=_histData;
     window._tkTot={total:r.total, suma:r.suma, hayMas:r.hayMas};
@@ -5545,7 +5572,7 @@ function _tkPedir(q, mas){
 }
 function _tkMas(btn){ if(btn){btn.disabled=true;btn.textContent='Cargando…';} _tkPedir(window._tkQ||{}, true).then(function(){ _histActualizarRes(!!window._histEsStaff, true); }); }
 function _tkReagendadas(items){
-  var rows=items.filter(function(it){return it.led&&!it.led.g;}).map(function(it){return it.tkRow;});
+  var rows=items.filter(function(it){return it.led&&!it.led.g&&it.tkRow!=null&&it.tkRow!=='';}).map(function(it){return it.tkRow;});
   if(!rows.length) return;
   Promise.resolve(api('tk_reagendadas',{rows:rows})).then(function(r){
     if(!r||!r.ok||!r.items) return;
@@ -5754,7 +5781,7 @@ var _HIST_COLS=[
   {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}},
   {k:'pago',t:'Pago',v:function(t){return t.anulado?-1:(t.cob?2:(_tkPagoMigo(t)?1:0));}},
   {k:'fac',t:'Factura',v:function(t){return _tkFacFull(t)||'~';}},
-  {k:'reag',t:'Reagendada',v:function(t){var L=(window._tkLeds||{})[String(t.tkRow)];return L?(L.g?1:0):-1;}},
+  {k:'reag',t:'Reagendada',v:function(t){var L=_tkLedOf(t);return L?(L.g?1:0):-1;}},
   {k:'sal',t:'Saldo',num:1,v:function(t){return _histSaldo(t);}}
 ];
 function _histOrdenar(list){
@@ -5786,7 +5813,7 @@ function _histCelda(t, c, showPrices){
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
   if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); return '<td>'+(ff?'<span class="tk-fac">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
-  if(c.k==='reag'){ var Lr=(window._tkLeds||{})[String(t.tkRow)]; if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
+  if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   return '<td></td>';
 }
@@ -5802,7 +5829,7 @@ function _histMasterHTML(tickets, showPrices){
     : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; });
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
-    var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+    var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
     var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
     return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
   }).join('');
@@ -5871,16 +5898,28 @@ function _histPuedeCamara(){
 function _histCamHTML(t,i){
   if(!_histPuedeCamara()) return '';
   var F=_tkPagosFaltanCard(t);
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  var L=_tkLedOf(t)||{};
   var falta=F&&F.length;
   var ok=!!(L.fotoPago||t.fotoPago||t.tieneComprobante);
+  /* TK155: canje/cortesía $0.00 sin cobro → no hay voucher que tomar (sin alarma roja falsa). */
+  if(!ok&&!falta&&_histSinCobro(t)) return '';
   var pid=falta&&F[0]&&F[0].id?String(F[0].id):'';
   var listo=ok&&!falta;
   var lab=listo?'Comprobante listo':'Tomar foto de voucher o transferencia';
-  return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()"><span aria-hidden="true">📷</span><input type="file" accept="image/*,application/pdf" capture="environment" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+  /* TK155 (t680u): sin capture → iOS ofrece Fototeca / Tomar foto / Seleccionar archivo. */
+  return '<label class="mob-cam'+(listo?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation()">'+CAM_ICON_SVG+'<input type="file" accept="image/*,application/pdf" hidden data-pago-id="'+_histEsc(pid)+'" onchange="_tkVoucherCard(event,'+i+')"></label>';
+}
+var CAM_ICON_SVG='<svg class="cam-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9.4 4a1.5 1.5 0 0 0-1.27.7L7.1 6.3H4.5A2.5 2.5 0 0 0 2 8.8v9.7A2.5 2.5 0 0 0 4.5 21h15a2.5 2.5 0 0 0 2.5-2.5V8.8a2.5 2.5 0 0 0-2.5-2.5h-2.6l-1.03-1.6A1.5 1.5 0 0 0 14.6 4H9.4zM12 9a4.25 4.25 0 1 1 0 8.5A4.25 4.25 0 0 1 12 9zm0 2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5z"/></svg>';
+function _histSinCobro(t){
+  if(!t) return false;
+  if(t.sin_cobro===true||t.sinCobro===true) return true;
+  var tot=NaN;
+  try{ tot=typeof _histMontos==='function'?_histMontos(t).tot:NaN; }catch(e){}
+  if(!isFinite(tot)) tot=parseFloat(t.estimado!=null?t.estimado:t.total);
+  return isFinite(tot)&&tot<=0;
 }
 function _histWaHTML(t,i){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  var L=_tkLedOf(t)||{};
   var ok=!!(L.r || t.envio_ok || (t.envios&&t.envios.length) || t.tiene_envio);
   var ico=(typeof WA_ICON_SVG!=='undefined'&&WA_ICON_SVG)?WA_ICON_SVG:'WA';
   var lab=ok?'Reporte enviado por WhatsApp':'Enviar reporte por WhatsApp';
@@ -6014,7 +6053,7 @@ function _histCargarThumbs(root){
   lote(ids);
 }
 function _histCardHTML(t, i, showPrices){
-  var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
+  var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
   var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
@@ -6043,7 +6082,7 @@ function _tkFotoTipo(metodo){
 }
 function _tkFotoEtiqueta(tipo){ return tipo==='transferencia'?'Transferencia':tipo==='tarjeta'?'Tarjeta':'Voucher'; }
 function _tkPagosFaltanCard(t){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)]||{};
+  var L=_tkLedOf(t)||{};
   if(L.pagosFaltan&&L.pagosFaltan.length) return L.pagosFaltan;
   return [];
 }
@@ -6096,10 +6135,9 @@ function _tkVoucherCard(ev, i){
     if (!r || r.error) { if (typeof toast === "function") toast((r && r.error) || "No se pudo subir", "#B86B6B"); return; }
     if (typeof toast === "function") toast("✓ Voucher subido");
     try {
-      var Leds=window._tkLeds=window._tkLeds||{};
-      var led=Leds[String(t.tkRow)]||{};
+      var led=_tkLedOf(t)||{};
       var queda=(led.pagosFaltan||[]).filter(function(x){ return pagoId ? String(x.id||"")!==String(pagoId) : false; });
-      led.pagosFaltan=queda; if(!queda.length) led.fotoPago=1; Leds[String(t.tkRow)]=led;
+      led.pagosFaltan=queda; if(!queda.length) led.fotoPago=1; t.led=led; _tkLedGuardar(t);
     } catch (e1) {}
     if (typeof _tkCargarLeds === "function") _tkCargarLeds(true);
     if (typeof _histActualizarRes === "function") _histActualizarRes(!!window._histEsStaff);
@@ -6173,7 +6211,7 @@ function _tkFormaDeComp(comp){
   return u.length===1?u[0]:'mixto';
 }
 function _tkForma(t){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  var L=_tkLedOf(t);
   if(L&&L.forma) return String(L.forma);
   return _tkFormaDeComp(t&&t.comp);
 }
@@ -6185,15 +6223,15 @@ function _tkFormaPill(forma){
 }
 function _tkPagoMigo(t){
   if(t&&t.cob) return false;
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  var L=_tkLedOf(t);
   return !!(L&&L.pagoMigo);
 }
 function _tkPendienteLunes(t){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  var L=_tkLedOf(t);
   return !!(L&&L.pendienteLunes);
 }
 function _tkFacPdf(t){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)];
+  var L=_tkLedOf(t);
   return !!(L&&L.facturaPdf);
 }
 // TK99: etiqueta gris de tickets en $0 (cortesía, consumo interno, canje de paquete).
@@ -6210,7 +6248,7 @@ function _tkPagoPill(t){
 }
 // Factura completa 001-001-000002956: la corregida en la beta, si no la del sistema (fac_7).
 function _tkFacFull(t){
-  var L=(window._tkLeds||{})[String(t&&t.tkRow)]; if(L&&L.factura) return L.factura;
+  var L=_tkLedOf(t); if(L&&L.factura) return L.factura;
   var v=String(_histFactura(t)||'').trim(); if(!v||/sin/i.test(v)) return '';
   var m=/^(\d{3})-(\d{3})-(\d{1,9})$/.exec(v); if(m) return m[1]+'-'+m[2]+'-'+('000000000'+m[3]).slice(-9);
   var d=v.replace(/\D/g,''); return d&&Number(d)>0?'001-001-'+('000000000'+d).slice(-9):'';
@@ -6223,13 +6261,13 @@ function _tkEstados(t){
   // TK98: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
   if(t.sin_cobro){ out.push({c:'gris',t:_tkEtqSinCobro(t.sin_cobro)}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
-  var Lx=(window._tkLeds||{})[String(t.tkRow)];
+  var Lx=_tkLedOf(t);
   if(!_tkFacFull(t)) out.push(_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
   return out;
 }
 var _TK_LEDS=[['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
 function _tkLedsHTML(t){
-  var L=(window._tkLeds||{})[String(t.tkRow)];
+  var L=_tkLedOf(t);
   if(!L) return '<td class="tk-leds" title="Cargando estados…">'+_TK_LEDS.map(function(){return '<span class="tk-led q"></span>';}).join('')+'</td>';
   return '<td class="tk-leds">'+_TK_LEDS.map(function(x){var on=!!L[x[0]];return '<span class="tk-led '+(on?'on':'off')+'" title="'+(on?x[1]:x[2])+(x[0]==='g'&&L.ret?' · regreso '+_histFechaFmt(L.ret):'')+'"></span>';}).join('')+(L.pr?'<span class="tk-reag" title="Por reagendar: regreso '+_histFechaFmt(L.ret)+'">↻</span>':'')+'</td>';
 }
@@ -6255,7 +6293,7 @@ function _tkCargarLeds(forzar){
   }).catch(function(){window._tkLedsCargando=false;});
 }
 var _TK_SEG=[['','Todos'],['pago_no','No pagados'],['rep_no','Reporte no enviado'],['reag_no','No reagendadas'],['porreag','Por reagendar'],['corregir','No cuadra (rojo)'],['faltadoc','Falta documento (amarillo)']];
-var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Cancelado']];
+var _TK_EST=[['','Todos'],['abierto','Abierto'],['cerrado','Cerrado'],['porcobrar','Por cobrar'],['pagado','Pagado'],['sinfactura','Sin factura'],['anulado','Cancelados']];
 function _tkF(){ return window._tkFiltro||(window._tkFiltro={est:'',seg:''}); }
 function _tkSetF(k,v){ _tkF()[k]=v; window._tkKey=''; _histActualizarRes(!!window._histEsStaff); var s=document.getElementById('tk-fsum'); if(s) s.textContent=_tkFiltroTxt(); }
 function _tkFiltroTxt(){ var f=_tkF(), o=[]; if(f.est) o.push(_TK_EST.filter(function(x){return x[0]===f.est;})[0][1]); if(f.seg) o.push(_TK_SEG.filter(function(x){return x[0]===f.seg;})[0][1]); return o.join(' · '); }
@@ -6265,12 +6303,15 @@ function _tkFiltrosUI(){
     +'<div><div style="font-size:0.66rem;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:4px">Seguimiento</div>'+sel('tk-fseg','seg',_TK_SEG)+'</div></div>';
 }
 function _tkFiltrar(tickets){
-  var f=_tkF(); if(window._tkServer||(!f.est&&!f.seg)) return tickets;
+  var f=_tkF(); if(window._tkServer) return tickets;
+  /* TK155: sin servidor también se esconden los cancelados salvo con filtro «Cancelados». */
+  if(f.est!=='anulado') tickets=tickets.filter(function(t){ return !(t&&(t.anulado===true||t.cancelado===true||(t.orig&&t.orig.anulado===true))); });
+  if(!f.est&&!f.seg) return tickets;
   var LL=window._tkLeds||{};
   return tickets.filter(function(t){
     if(f.est&&!_tkEstados(t).some(function(x){return x.c===f.est;})) return false;
     if(!f.seg) return true;
-    var L=LL[String(t.tkRow)]; if(!L) return false;
+    var L=_tkLedOf(t); if(!L) return false;
     if(f.seg==='faseA_no') return !L.a; if(f.seg==='pago_no') return !L.p; if(f.seg==='rep_no') return !L.r; if(f.seg==='reag_no') return !L.g;
     if(f.seg==='porreag') return !!L.pr; if(f.seg==='corregir') return !!L.flag;
     return true;

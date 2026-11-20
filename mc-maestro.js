@@ -256,7 +256,7 @@
     return '<span class="ss-md-fac">' + esc(tkFacCorta(t)) + "</span>" + tkCosmPill(t);
   }
   function tkStatusClass(t) {
-    var Lf = (window._tkLeds || {})[String(t && t.tkRow)];
+    var Lf = (typeof window._tkLedOf === "function" ? window._tkLedOf(t) : null);
     var fl = Lf && Lf.flag;
     var fa = !fl && Lf && Lf.falta && Lf.falta.length;
     if (fl) return " ss-md-flag";
@@ -264,7 +264,7 @@
     return "";
   }
   function tkStatusTip(t) {
-    var Lf = (window._tkLeds || {})[String(t && t.tkRow)];
+    var Lf = (typeof window._tkLedOf === "function" ? window._tkLedOf(t) : null);
     var fl = Lf && Lf.flag;
     var fa = !fl && Lf && Lf.falta && Lf.falta.length ? Lf.falta : null;
     return fl ? "No cuadra: " + fl : fa ? "Falta: " + fa.join(" · ") : "";
@@ -302,7 +302,7 @@
           window._histData = r.items || [];
           window._histVisibles = window._histData;
           window._tkLeds = window._tkLeds || {};
-          (r.items || []).forEach(function (it) { if (it.led) window._tkLeds[String(it.tkRow)] = it.led; });
+          (r.items || []).forEach(function (it) { if (typeof window._tkLedGuardar === "function") window._tkLedGuardar(it); else if (it.led && it.so_num) window._tkLeds[String(it.so_num)] = it.led; });
           window._tkTot = { total: r.total, suma: r.suma, hayMas: r.hayMas };
           window._tkServer = true;
           return true;

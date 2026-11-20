@@ -7,7 +7,7 @@ import { extend } from "./handlers.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { leerSerie } from "./series.ts";
 import {
-  WA_TPL_ALIAS, WA_TPL_DEFS, filtrarTipos, mensajeDe, mezclarPlantillas,
+  WA_TPL_ALIAS, WA_TPL_DEFS, digitosWa, filtrarTipos, mensajeDe, mezclarPlantillas,
   respuestaWa, telefonoDeFuentes, tiposDeTicket,
 } from "./wa_lib.ts";
 
@@ -78,17 +78,7 @@ async function ticketPorRef(ctx: Ctx, p: Row): Promise<Row | null> {
   }) || null;
 }
 
-export function respuestaWa(opts: {
-  digitos: string;
-  texto: string;
-  tipos: string[];
-  tipoMensaje: string;
-}): Row {
-  const tel = digitosWa(opts.digitos);
-  if (!tel) return { ok: true, tiene_tel: false, tipos_disponibles: opts.tipos, texto: opts.texto, tipo_mensaje: opts.tipoMensaje };
-  const urls = waUrls(tel, opts.texto);
-  return { ok: true, tiene_tel: true, ...urls, texto: opts.texto, tipos_disponibles: opts.tipos, tipo_mensaje: opts.tipoMensaje };
-}
+// TK155: respuestaWa vive en wa_lib.ts (la copia local usaba digitosWa sin importar → «digitosWa is not defined»).
 
 extend("wa_preparar", "any", async (p, ctx, ses) => {
   const modo = s(p.tipo).toLowerCase();
