@@ -763,8 +763,27 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
     const sal = await saldoDe(ctx, nombre);
     vacaciones = { diasDisponibles: sal.diasDisponibles, diasPendientes: sal.diasPendientes };
   } catch { vacaciones = null; }
+  // TK166: las horas del mes tal como entran al rol de pagos (mismo cálculo que «Crear rol» y el rol del mes).
+  let rolMes: Row | null = null;
+  try {
+    const { horasRolDe } = await import("./roles_crear_api.ts");
+    const { floorCent } = await import("./domain.ts");
+    const { horas: hr } = await horasRolDe(ctx, nombre, y, m);
+    const emp = await empleadaDe(ctx, nombre);
+    const base = n(emp?.sueldo_base) || 482;
+    const val = (h: number, f: number) => floorCent(h * base / 240 * f);
+    rolMes = {
+      anio: y, mes: m,
+      hrsNormales: hr.hrsOrdinarias, hrsSupl: hr.hrsSupl, hrsExtr: hr.hrsExtr, hrsDesc: hr.hrsDesc,
+      valSupl: val(hr.hrsSupl, 1.5), valExtr: val(hr.hrsExtr, 2), valDesc: val(hr.hrsDesc, 2),
+      diasTrabajados: hr.diasTrabajados, diasAsumidos: hr.diasAsumidos, diasFalta: hr.diasFalta,
+      diasFeriado: hr.diasFest, diasDescanso: hr.diasDesc, diasPermiso: hr.diasPermiso,
+      regla: "Cada tipo de hora extra se suma en el mes y se redondea hacia abajo a bloques de 15 minutos (regla del rol RRHH). Valor: sueldo base / 240 × horas × 1,5 (suplementarias) o × 2 (extraordinarias, descanso y feriado).",
+      appDesde: (await import("./asistencia.ts")).APP_PRIORIDAD_DESDE,
+    };
+  } catch { rolMes = null; }
   return {
-    ok: true, vista, fecha: ancla, desde, hasta, nombre, nombreMostrar: mostrar, color,
+    ok: true, vista, fecha: ancla, desde, hasta, nombre, nombreMostrar: mostrar, color, rolMes,
     feriados,
     dias: horas.dias || [],
     resumen: {

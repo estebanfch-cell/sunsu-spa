@@ -96,6 +96,7 @@ export function snapshotDe(opts: {
   iess: { quir: number; hip: number; otros: number };
   anticipo?: number; multasDetalle?: Row[];
   fuenteHoras: string;
+  mensual?: { dec13?: boolean; dec14?: boolean; fondo?: boolean };
 }): Row {
   const calc = rolCalcularOficial({
     sueldoBase: opts.sueldoBase, bono: opts.bono, faltas: opts.horas.diasFalta,
@@ -105,6 +106,7 @@ export function snapshotDe(opts: {
     hip: opts.iess.hip, quir: opts.iess.quir, sandalo: opts.iess.otros,
     anticipo: opts.anticipo || 0,
     fondoReserva: opts.fondo, fechaIngreso: opts.fechaIngreso, anio: opts.anio, mes: opts.mes,
+    dec13Mensual: opts.mensual?.dec13, dec14Mensual: opts.mensual?.dec14, fondoMensual: opts.mensual?.fondo,
   });
   const diasVis = (opts.horas.diasTrabajados + opts.horas.diasAsumidos);
   return {
@@ -170,23 +172,19 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
     anticipo: aj.anticipo != null ? n(aj.anticipo) : n(base.anticipo),
     multasDetalle: (base.multasDetalle as Row[]) || [],
     fuenteHoras: s(base.fuenteHoras),
+    mensual: { dec13: base.dec13Mensual !== false, dec14: base.dec14Mensual !== false, fondo: base.fondoMensual !== false },
   });
 }
 
-async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number): Promise<Row> {
-  const per = parsePeriodo(periodoRaw, anio, mes);
-  const emp = await empleadaDe(ctx, nombre);
-  if (!emp) return { error: "No encuentro a esa persona en Personal › Empleados / RRHH." };
-  const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
-  const { fichaIessDe, afiliadaSegunOverlay } = await import("./empleados_api.ts");
-  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
-  if (!afiliadaSegunOverlay(overlays, persona)) {
-    return { error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: persona };
-  }
-  const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
+/**
+ * TK166: horas del rol de un mes (las MISMAS que muestra Mi asistencia): asistencia de la app y, si un día no
+ * tiene marcas, Jibble; clasificadas en normales / suplementarias 50 % / extraordinarias 100 % / descanso 100 %,
+ * con el recorte del rol RRHH: el total del mes de cada tipo se trunca a bloques de 15 min (recorte15).
+ */
+export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number) {
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let nomina = { hayDatos: false, dias: [] as Row[], hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, diasJibble: 0, diasPropios: 0, faltas: 0 };
-  try { nomina = await horasDeEmpleada(ctx, persona, per.anio, per.mes) as typeof nomina; } catch { /* sin asistencia */ }
+  try { nomina = await horasDeEmpleada(ctx, persona, anio, mes) as unknown as typeof nomina; } catch { /* sin asistencia */ }
   const dias: Record<string, DiaHorasRol | undefined> = {};
   for (const d0 of (nomina.dias || []) as Row[]) {
     const d = d0 as Row;
@@ -204,11 +202,33 @@ async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?:
   }
   const hoy = ecuadorParts(ctx.now).ymd;
   const horas = clasificarHorasRol({
-    anio: per.anio, mes: per.mes, hoy,
+    anio: anio, mes: mes, hoy,
     horario: horarioRrhhDe(persona),
     feriados: await feriadosDe(ctx),
     dias, permisos,
   });
+  return { nomina, horas };
+}
+
+/** TK166: décimos y fondo mensualizados o acumulados según la ficha (beta_empleados). Sin dato = mensualizado. */
+export function mensualDe(overlays: Row[], persona: string): { dec13: boolean; dec14: boolean; fondo: boolean } {
+  const key = normNombre(persona);
+  const o = overlays.find((r) => normNombre(s(r.nombre_app)) === key || normNombre(s(r.nombre_app)).split(" ")[0] === key.split(" ")[0]);
+  return { dec13: o?.dec13_mensual !== false, dec14: o?.dec14_mensual !== false, fondo: o?.fondo_mensual !== false };
+}
+
+export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number): Promise<Row> {
+  const per = parsePeriodo(periodoRaw, anio, mes);
+  const emp = await empleadaDe(ctx, nombre);
+  if (!emp) return { error: "No encuentro a esa persona en Personal › Empleados / RRHH." };
+  const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  const { fichaIessDe, afiliadaSegunOverlay } = await import("./empleados_api.ts");
+  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
+  if (!afiliadaSegunOverlay(overlays, persona)) {
+    return { error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: persona };
+  }
+  const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
+  const { nomina, horas } = await horasRolDe(ctx, persona, per.anio, per.mes);
   const { comisionesDeTablas } = await import("./handlers_extra.ts");
   const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
   const { multasBetaRol } = await import("./multas_beta_api.ts");
@@ -229,6 +249,7 @@ async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?:
     sueldoBase, bono, fondo, fechaIngreso: s(emp.fecha_ingreso) || "2020-01-01",
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
     anticipo: 0, multasDetalle: mBeta.detalle || [], fuenteHoras,
+    mensual: mensualDe(overlays, persona),
   });
   return { ok: true, ...per, persona, snap };
 }

@@ -138,7 +138,7 @@ describe("asistencia", () => {
     assert.equal(pago.horasExtra, 3);
   });
 
-  it("vacaciones aprobadas cuentan el día y Jibble no pisa un marcaje", () => {
+  it("vacaciones aprobadas cuentan el día; desde el 20/11/2026 la marca de la app manda sobre Jibble", () => {
     const vac = calcularDia("2026-10-21", [], cfg, feriados, [{ tipo: "VACACIONES", estado: "APROBADO", desde: "2026-10-21", hasta: "2026-10-21", horas: 8 }]);
     assert.equal(vac.fuente, "permiso");
     assert.equal(vac.falta, false);
@@ -148,8 +148,16 @@ describe("asistencia", () => {
     const gana = calcularDia("2026-10-21", [
       marca("entrada", "2026-10-21", "09:00"), marca("salida", "2026-10-21", "13:00"),
     ], cfg, feriados, [], { fecha: "2026-10-21", payrollMin: 480, suplMin: 0, extrMin: 0, descMin: 0 });
-    assert.equal(gana.fuente, "marcaje");
-    assert.equal(gana.ordinaryMin, 240);
+    // TK166: antes del 20/11/2026 el día con Jibble se queda con Jibble (lo que se pagó)…
+    assert.equal(gana.fuente, "jibble");
+    // …y desde el 20/11/2026 manda la marca de la app; Jibble solo cubre los días sin marcas.
+    const app = calcularDia("2026-11-23", [
+      marca("entrada", "2026-11-23", "09:00"), marca("salida", "2026-11-23", "13:00"),
+    ], cfg, feriados, [], { fecha: "2026-11-23", payrollMin: 480, suplMin: 0, extrMin: 0, descMin: 0 });
+    assert.equal(app.fuente, "marcaje");
+    assert.equal(app.ordinaryMin, 240);
+    const respaldo = calcularDia("2026-11-24", [], cfg, feriados, [], { fecha: "2026-11-24", payrollMin: 480, suplMin: 0, extrMin: 0, descMin: 0 });
+    assert.equal(respaldo.fuente, "jibble");
   });
 
   it("la secuencia de marcas y el candado de corrección", () => {

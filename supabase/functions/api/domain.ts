@@ -1153,6 +1153,8 @@ export type RolOficialIn = {
   anticipo?: number; hip?: number; quir?: number; sandalo?: number; multas?: number;
   comFaciales: number; comExtras: number; comRecepcion: number; comProductos: number; comPaquetes: number;
   fondoReserva: boolean; fechaIngreso?: string; anio?: number; mes?: number;
+  /** TK166: false = la persona pidió el décimo ACUMULADO (no se paga en el rol del mes; se provisiona). */
+  dec13Mensual?: boolean; dec14Mensual?: boolean; fondoMensual?: boolean;
 };
 
 export type RolOficialOut = {
@@ -1161,6 +1163,8 @@ export type RolOficialOut = {
   comFacialesExtrasRecep: number; comPaquetes: number; comProductos: number; comisiones: number;
   hrsSupl: number; valSupl: number; hrsExtr: number; valExtr: number; hrsDesc: number; valDesc: number;
   ingresoAportable: number; dec13: number; dec14: number; fondoReserva: number;
+  dec13Mensual: boolean; dec14Mensual: boolean; fondoMensual: boolean;
+  dec13Acumulado: number; dec14Acumulado: number; fondoReservaIess: number;
   totalIngresos: number; iess: number; anticipo: number; prestHip: number; prestQuir: number;
   prestOtro: number; multas: number; egresos: number; totalEgresos: number; totalRecibir: number;
   iessPatronal: number; secap: number; iece: number; aportePatronal: number; aportePatronalPct: number;
@@ -1199,8 +1203,12 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
     const dias = (fin.getTime() - ing.getTime()) / 86400000;
     fondoOk = dias >= 365;
   }
-  const fondoReserva = fondoOk ? A * FONDO_RESERVA_PCT : 0;
-  const totalIngresos = A + dec13 + dec14 + fondoReserva;
+  const fondoCalc = fondoOk ? A * FONDO_RESERVA_PCT : 0;
+  // Mensualizado (por defecto, Art. 111/113 CT) se paga en el rol; acumulado se provisiona y no suma.
+  const dec13Mensual = input.dec13Mensual !== false, dec14Mensual = input.dec14Mensual !== false, fondoMensual = input.fondoMensual !== false;
+  const dec13Pago = dec13Mensual ? dec13 : 0, dec14Pago = dec14Mensual ? dec14 : 0;
+  const fondoReserva = fondoMensual ? fondoCalc : 0;
+  const totalIngresos = A + dec13Pago + dec14Pago + fondoReserva;
   const iess = A * IESS_PERSONAL_PCT;
   const anticipo = Number(input.anticipo) || 0;
   const prestHip = Number(input.hip) || 0;
@@ -1217,7 +1225,10 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
   return {
     sueldo, bono, comFaciales, comExtras, comRecepcion, comFacialesExtrasRecep, comPaquetes, comProductos, comisiones,
     hrsSupl, valSupl, hrsExtr, valExtr, hrsDesc, valDesc,
-    ingresoAportable: A, dec13, dec14, fondoReserva,
+    ingresoAportable: A, dec13: dec13Pago, dec14: dec14Pago, fondoReserva,
+    dec13Mensual, dec14Mensual, fondoMensual,
+    dec13Acumulado: dec13Mensual ? 0 : round2(dec13), dec14Acumulado: dec14Mensual ? 0 : round2(dec14),
+    fondoReservaIess: fondoMensual ? 0 : round2(fondoCalc),
     totalIngresos, iess, anticipo, prestHip, prestQuir, prestOtro, multas, egresos, totalEgresos, totalRecibir,
     iessPatronal, secap, iece, aportePatronal, aportePatronalPct: 0.1215,
     costoEmpresa: round2(totalIngresos + aportePatronal),
