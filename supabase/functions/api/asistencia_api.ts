@@ -284,28 +284,34 @@ extend("asis_marcar", "any", async (p, ctx, ses) => {
   const lat = p.lat == null || p.lat === "" ? null : n(p.lat);
   const lng = p.lng == null || p.lng === "" ? null : n(p.lng);
   const accuracy = p.precision_m == null || p.precision_m === "" ? null : n(p.precision_m);
-  const fotoIn = selfieBytes(s(p.foto));
-  if ("error" in fotoIn) {
-    await auditar(ctx, ses, "rechazo", { nombre, motivo: fotoIn.error, despues: { tipo } });
-    return { error: fotoIn.error };
+  // TK175 (Emilia, urgente): una marca NUNCA se pierde por la foto. Sin selfie no se marca, pero si la foto es
+  // muy grande, de un formato raro (HEIC) o no se puede subir, la marca se guarda sin foto y queda en la auditoría.
+  if (!s(p.foto)) {
+    await auditar(ctx, ses, "rechazo", { nombre, motivo: "La marca pide una selfie.", despues: { tipo } });
+    return { error: "La marca pide una selfie." };
   }
+  const fotoIn = selfieBytes(s(p.foto));
+  const fotoAviso: string[] = [];
+  if ("error" in fotoIn) fotoAviso.push(fotoIn.error);
   const geo = evaluarUbicacion(cfg, lat, lng, accuracy);
   if (!geo.ok) {
     await auditar(ctx, ses, "rechazo", { nombre, motivo: geo.error, despues: { tipo, distancia: geo.distancia ?? null } });
     return { error: geo.error, distancia: geo.distancia };
   }
-  const subida = await subirSelfie(ctx, ses.uid, fecha, tipo, fotoIn);
-  if ("error" in subida) {
-    await auditar(ctx, ses, "rechazo", { nombre, motivo: subida.error, despues: { tipo } });
-    return { error: subida.error };
+  let fotoPath: string | null = null;
+  if (!("error" in fotoIn)) {
+    const subida = await subirSelfie(ctx, ses.uid, fecha, tipo, fotoIn).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    if ("error" in subida) fotoAviso.push(subida.error);
+    else fotoPath = subida.path;
   }
   const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
     usuario_id: ses.uid, nombre, tipo, ts, lat, lng, precision_m: accuracy,
-    dentro_radio: true, foto: subida.path, origen: s(p.origen) === "recepcion" ? "recepcion" : "telefono", anulado: false,
+    dentro_radio: true, foto: fotoPath, origen: s(p.origen) === "recepcion" ? "recepcion" : "telefono", anulado: false,
     origin: enPrueba(ctx.db) ? "test" : undefined,
   });
   const dia = calcularDia(fecha, marcajesDe(await ctx.db.all("asistencia_marcajes"), nombre), cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
-  return { ok: true, id: saved?.id, marcaje: { id: saved?.id, nombre, tipo, ts }, dia };
+  if (fotoAviso.length) await auditar(ctx, ses, "selfie_omitida", { nombre, marcaje_id: s(saved?.id), motivo: "Marca guardada sin foto: " + fotoAviso.join(" · "), despues: { tipo, ts } }).catch(() => null);
+  return { ok: true, id: saved?.id, marcaje: { id: saved?.id, nombre, tipo, ts }, dia, sinFoto: fotoAviso.length ? true : undefined };
 });
 
 extend("asis_hoy", "any", async (p, ctx, ses) => {
