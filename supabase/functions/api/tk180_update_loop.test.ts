@@ -13,7 +13,7 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.ok(enSw && enHtml);
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-20-TK181c");
+    assert.equal(enSw, "sunsu-2026-11-20-TK182b");
   });
   it("en la app nativa (TestFlight) no hay banner ni chequeo de SW", () => {
     assert.match(upd, /Capacitor\.isNativePlatform\(\)/);
@@ -44,5 +44,14 @@ describe("TK182 cámara y WhatsApp en la tabla de Tickets de la computadora", ()
     assert.match(bs, /_histCelda\(t,c,showPrices,i\)/);
     assert.match(html, /\.mob-acts\.tk-acts-row \{ flex-direction: row;/);
     assert.match(html, /\.mob-acts \{ display: inline-flex; flex-direction: column;/); // celular sigue vertical
+  });
+});
+
+describe("TK182b factura completa en la tabla de Tickets", () => {
+  const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
+  it("Factura con ancho fijo y sin «…»", () => {
+    assert.match(html, /\.tk-table th\[data-c="fac"\] \{ width: 172px; \}/);
+    assert.match(html, /\.tk-table td\[data-c="fac"\] \{ overflow: visible; text-overflow: clip; white-space: nowrap; \}/);
+    assert.match(bs, /replace\(\/\^<td\/,'<td data-c="'\+c\.k\+'"'\)/);
   });
 });
