@@ -60,7 +60,7 @@ export function claveDe(r: Row, so: string): string {
 function prodDeLinea(l: Row): { sku: string; qty: number; ventaNeta?: number; compraComision?: number } {
   return {
     sku: s(l.sku), qty: n(l.cantidad) || 1,
-    ...(l.snapshot_at != null && l.snapshot_at !== "" ? { ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision) } : {}),
+    ...(l.snapshot_at != null && l.snapshot_at !== "" ? { ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision), comision: n(l.comision) } : {}),
   };
 }
 function productosDeLineas(L: Row[]) {
