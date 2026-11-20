@@ -6008,7 +6008,18 @@ function _histFacTag(t,facn,anul){
   var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
   return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
 }
+/* TK156 (Emilia t702u): colores de cosmetóloga/usuario bien marcados (saturados, buen contraste sobre blanco). */
+var _HIST_COL_FUERTE=[[/andrea/i,'#1D4ED8'],[/daniela/i,'#B45309'],[/dejaneira/i,'#047857'],[/alejandra/i,'#BE185D'],[/evelyn/i,'#7E22CE'],[/^emi\b|emilia/i,'#4338CA'],[/efch|esteban/i,'#0F766E']];
+var _HIST_COL_EXTRA=['#9F1239','#0369A1','#15803D','#6D28D9','#C2410C','#0E7490','#A21CAF','#4D7C0F'];
 function _histColorQuien(nombre){
+  var raw0=String(nombre||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+  if(!raw0) return '';
+  for(var j=0;j<_HIST_COL_FUERTE.length;j++) if(_HIST_COL_FUERTE[j][0].test(raw0)) return _HIST_COL_FUERTE[j][1];
+  var hsh=0, k0=raw0.toLowerCase().split(/\s+/)[0];
+  for(var q=0;q<k0.length;q++) hsh=(hsh*31+k0.charCodeAt(q))>>>0;
+  return _HIST_COL_EXTRA[hsh%_HIST_COL_EXTRA.length];
+}
+function _histColorQuienPerfil(nombre){
   var raw=String(nombre||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
   if(!raw) return '';
   var low=raw.toLowerCase();

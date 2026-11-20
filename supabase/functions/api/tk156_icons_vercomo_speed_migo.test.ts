@@ -361,3 +361,19 @@ describe("TK156 cero fugas de fotos/vouchers entre tickets nativos (sheet_row nu
     assert.match(tk, /if \(d && Array\.isArray\(d\.documentos\)\) d\.documentos = docsUnicos\(d\.documentos\);/);
   });
 });
+
+describe("TK156 colores marcados de cosmetóloga (t702u)", () => {
+  it("cada nombre tiene un color saturado distinto y nunca gris pálido", () => {
+    const ini = screens.indexOf("var _HIST_COL_FUERTE="), fin = screens.indexOf("function _histColorQuienPerfil(");
+    const col = new Function(screens.slice(ini, fin) + "; return _histColorQuien;")() as (n: string) => string;
+    const L = ["Evelyn Torres", "Andrea Robles", "Daniela Mora", "Alejandra Rodriguez (alejandra)", "Dejaneira", "Emi", "EFCH"].map(col);
+    assert.equal(new Set(L).size, L.length);
+    for (const c of L.concat(col("Valeria Nueva"))) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+      const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      assert.ok(lum < 0.45, c + " debe contrastar sobre blanco");
+      assert.ok(Math.max(r, g, b) - Math.min(r, g, b) > 60, c + " debe ser saturado");
+    }
+    assert.equal(col(""), "");
+  });
+});
