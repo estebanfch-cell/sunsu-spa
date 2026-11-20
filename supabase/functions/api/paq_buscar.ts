@@ -135,9 +135,14 @@ export function vistaPaqueteBusca(r: Row, match: VistaPaqueteBusca["match"], sco
 function codigoNorm(v: unknown): string {
   return s(v).trim().toUpperCase().replace(/\s+/g, "");
 }
-function qEsCodigoPack(q: string): string {
-  const m = /^pack-?\s*0*(\d+)$/i.exec(s(q).trim());
-  return m ? "PACK-" + m[1].padStart(3, "0") : "";
+/** PACK-623 o PQ-0023 (sistema nuevo, beta_codigo). */
+export function qEsCodigoPack(q: string): string {
+  const t = s(q).trim();
+  const pack = /^pack-?\s*0*(\d+)$/i.exec(t);
+  if (pack) return "PACK-" + pack[1].padStart(3, "0");
+  const pq = /^pq-?\s*0*(\d+)$/i.exec(t);
+  if (pq) return "PQ-" + pq[1].padStart(4, "0");
+  return "";
 }
 function qPareceCedula(q: string): boolean {
   const d = cedDigitosPack(q);
@@ -150,18 +155,23 @@ export function buscarPaquetesEn(rows: Row[], p: {
   apellido?: string;
   soloActivos?: boolean;
   limiteSugerencias?: number;
-}): { resultados: VistaPaqueteBusca[]; sugerencias: VistaPaqueteBusca[] } {
+}): { resultados: VistaPaqueteBusca[]; sugerencias: VistaPaqueteBusca[]; agotados: VistaPaqueteBusca[] } {
   const q = s(p.q).trim();
   const nombreQ = s(p.nombre).trim(), apellidoQ = s(p.apellido).trim();
   const queryNombre = [nombreQ, apellidoQ].filter(Boolean).join(" ") || (!qPareceCedula(q) && !qEsCodigoPack(q) ? q : "");
   const codigoQ = qEsCodigoPack(q);
   const resultados: VistaPaqueteBusca[] = [];
   const fuzzy: VistaPaqueteBusca[] = [];
+  const agotados: VistaPaqueteBusca[] = [];
   const seen = new Set<string>();
+  const seenAgo = new Set<string>();
   const push = (list: VistaPaqueteBusca[], v: VistaPaqueteBusca | null) => {
     if (!v) return;
-    if (p.soloActivos && !packEstaActivo(v as unknown as Row, v)) return;
     const k = String(v.id ?? v.fila ?? "") + ":" + v.codigo;
+    if (p.soloActivos && !packEstaActivo(v as unknown as Row, v)) {
+      if (list === resultados && !seenAgo.has(k)) { seenAgo.add(k); agotados.push(v); }
+      return;
+    }
     if (seen.has(k) && list === resultados) return;
     if (list === resultados) seen.add(k);
     list.push(v);
@@ -175,7 +185,8 @@ export function buscarPaquetesEn(rows: Row[], p: {
     }
     if (codigoQ) {
       const c = codigoNorm(codigoPaquete(r));
-      if (c === codigoQ || c.replace(/^PACK-0+/, "PACK-") === codigoQ.replace(/^PACK-0+/, "PACK-") || c.endsWith(codigoQ.replace(/^PACK-/, ""))) {
+      const loose = (x: string) => x.replace(/^(PACK|PQ)-0+/, "$1-");
+      if (c === codigoQ || loose(c) === loose(codigoQ) || (codigoQ.startsWith("PACK-") && c.endsWith(codigoQ.replace(/^PACK-/, "")))) {
         push(resultados, vistaPaqueteBusca(r, "codigo", 900));
         continue;
       }
@@ -208,5 +219,5 @@ export function buscarPaquetesEn(rows: Row[], p: {
 
   resultados.sort((a, b) => b.score - a.score || b.quedan - a.quedan);
   const lim = n(p.limiteSugerencias) || 8;
-  return { resultados, sugerencias: fuzzy.slice(0, lim) };
+  return { resultados, sugerencias: fuzzy.slice(0, lim), agotados };
 }
