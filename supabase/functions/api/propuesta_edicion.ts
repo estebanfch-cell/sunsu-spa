@@ -1,3 +1,4 @@
+import { leerFecha, fechaComo } from "./fecha_flexible.ts";
 // TK154 (Emilia t671u): «Me llegó esta solicitud, pero no sé qué me está pidiendo que cambie… debería hacerme ver
 // los cambios, y ahí un lockdown, veo los cambios y apruebo».
 // Propuesta estructurada (sin I/O): la chica propone, el ticket real no cambia; la admin ve Antes → Después y aprueba.
@@ -24,6 +25,13 @@ export function diffCampos(antes: Row, despues: Row, explicitos = false): Row[] 
     if (PRIVADOS.has(k) || !(k in despues) || despues[k] === undefined || despues[k] === null) continue;
     const a = norm(antes[k]), d = norm(despues[k]);
     if (!d && !explicitos) continue;
+    if (k === "retorno") {
+      // TK185: misma fecha escrita distinto (12/19/2026 vs 2026-12-19) no es un cambio; se muestra como ellas la escriben.
+      const fa = leerFecha(a), fd = leerFecha(d);
+      if ((fa ? fa.iso : a) === (fd ? fd.iso : d)) continue;
+      out.push({ campo: lbl, clave: k, antes: fa ? fechaComo(fa.iso, fd ? fd.estilo : "dmy") : (a || "—"), despues: d || "—" });
+      continue;
+    }
     if (a === d) continue;
     out.push({ campo: lbl, clave: k, antes: a || "—", despues: d || "—" });
   }

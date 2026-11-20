@@ -1,6 +1,7 @@
 // TK141: la chica edita un ticket con el formulario que ya conoce; Emilia aprueba.
 // El canje de paquete se elige explícitamente (paquete + sesión) y no se marca solo.
 import { extend } from "./handlers.ts";
+import { leerFecha, FECHA_NO_ENTIENDO } from "./fecha_flexible.ts";
 import { esAdmin } from "./permisos.ts";
 import {
   USO_FIELDS, cedulasCompatibles, comisionFacialLinea, cicloInicio, marcaDePersona,
@@ -12,12 +13,12 @@ import { textoCanje } from "./sin_cobro.ts";
 import { snapProducto, comisionUnidad, ventaNetaLineas } from "./productos.ts";
 import { calcularTicket } from "./ticket_beta.ts";
 import { compraParaComision } from "./domain.ts";
-import { diffCampos, diffDescuento, propuestaAnulacion, propuestaEdicion, resumenSolicitudTicket } from "./propuesta_edicion.ts";
+import { CAMPOS_DIFF, diffCampos, diffDescuento, propuestaAnulacion, propuestaEdicion, resumenSolicitudTicket } from "./propuesta_edicion.ts";
 import { origConMarca, rechazoSegundaMarca } from "./handlers.ts";
 
 export type LinProp = {
   tipo: string; sku: string; nombre: string; cantidad: number; precio_unit: number;
-  descuento_tipo?: string | null; descuento_valor?: number; excluir_comision?: boolean;
+  descuento_tipo?: string | null; descuento_valor?: number; excluir_comision?: boolean; total_linea?: number;
 };
 
 function cobroEsCanjePaquete(p: Row): boolean {
@@ -301,6 +302,32 @@ export async function pedirAnulacionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<
   return { ok: true, id, clave, tipo: "anular", propuesta, mensaje: "Se le solicitó al administrador eliminar este ticket" };
 }
 
+/**
+ * TK185 (Emilia): una línea que la chica NO tocó (misma cantidad y precio) conserva su prorrateo/descuento de paquete
+ * (p. ej. Facial Reset 3x1 $95 → $31.46). El formulario de edición lo perdía y la propuesta subía el total sin querer.
+ */
+export function conservarProrrateo(nuevas: LinProp[], antes: Row[]): LinProp[] {
+  const prev = new Map<string, Row>();
+  for (const l of antes || []) prev.set(s(l.tipo) + "|" + skuCode(s(l.sku) || s(l.nombre)), l);
+  return nuevas.map((l) => {
+    const old = prev.get(s(l.tipo) + "|" + skuCode(s(l.sku) || s(l.nombre)));
+    if (!old) return l;
+    const explicito = !!s(l.descuento_tipo) && n(l.descuento_valor) > 0;
+    if (explicito || n(old.cantidad) !== n(l.cantidad) || n(old.precio_unit) !== n(l.precio_unit)) return l;
+    if (!s(old.descuento_tipo) || !(n(old.descuento_valor) > 0)) return l;
+    return { ...l, descuento_tipo: s(old.descuento_tipo), descuento_valor: n(old.descuento_valor), ...(n(old.total_linea) > 0 ? { total_linea: n(old.total_linea) } : {}) };
+  });
+}
+
+/** TK185: de los datos del formulario, solo los que cambian (como en el comparativo). Vacío sin intención explícita = sin cambio. */
+export function datosCambiados(antes: Row, des: Row, explicitos: boolean): Row {
+  const out: Row = {};
+  const comparables = new Set(CAMPOS_DIFF.map(([k]) => k));
+  if (explicitos) for (const [k, v] of Object.entries(des || {})) if (!comparables.has(k)) out[k] = v;
+  for (const c of diffCampos(antes || {}, des || {}, explicitos)) { const k = s(c.clave); if (k) out[k] = des[k]; }
+  return out;
+}
+
 export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
   if (p.anular === true || s(p.tipo) === "anular" || s(p.tipo) === "eliminacion") return pedirAnulacionTicket(p, ctx, ses);
   if (esAdmin(ses.rol) && p.forzar_solicitud !== true) return { error: "Un admin guarda el cambio directo o lo aprueba en Aprobaciones" };
@@ -326,6 +353,11 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
     return old && n(old.precio_unit) > 0 ? { ...l, precio_unit: n(old.precio_unit) } : l;
   });
   if (!lineas.length) return { error: "Agrega al menos un servicio o producto" };
+  lineas = conservarProrrateo(lineas, (antes.lineas || []) as Row[]);
+  {
+    const dRaw = (form.datos && typeof form.datos === "object" ? (form.datos as Row).retorno : form.fechaRetorno);
+    if (s(dRaw).trim() && !leerFecha(dRaw)) return { error: FECHA_NO_ENTIENDO };
+  }
   const tot = calcTotales(lineas, p.descuento as Row | undefined);
   const pagadoAntes = n((antes.totales as Row | undefined)?.pagado);
   tot.pagado = pagadoAntes;
@@ -350,6 +382,8 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
     });
     comDes = round2(comDes);
   } catch { comDes = 0; }
+  // TK185: si ninguna línea cambia, la comisión tampoco (no inventar «$0.00 → $3.00»).
+  if (diffLineas((antes.lineas || []) as Row[], lineas as unknown as Row[]).every((x) => s(x.estado) === "igual")) comDes = n(antes.comision);
   const diff = diffEdicion(antes, form, lineas, tot, comDes);
   const motivo = s(p.motivo).trim() || "Edición del ticket";
   const recBase = {
@@ -359,7 +393,8 @@ export async function pedirEdicionTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Ro
     etiqueta: "Edición de " + clave,
     enlace: "#/m/tickets/t/" + encodeURIComponent(clave),
     propuestos: {
-      edicion_form: true, form, lineas, datos: form.datos || { nombre: form.nombre, apellido: form.apellido, cedula: form.cedula, factura: form.factura, notas: form.notas, recomendaciones: form.recomendaciones, retorno: form.fechaRetorno },
+      // TK185: solo los datos que de verdad cambian (antes iba factura "" y al aprobar borraba la factura).
+      edicion_form: true, form, lineas, datos: datosCambiados((antes.datos || {}) as Row, (form.datos || { nombre: form.nombre, apellido: form.apellido, cedula: form.cedula, factura: form.factura, notas: form.notas, recomendaciones: form.recomendaciones, retorno: form.fechaRetorno }) as Row, !!form.datos),
       colQ: colQDePick(paqPickDe(form)) || s(form.colQ), facial_hecho: s(form.facial), servicios_adicionales: s(form.extras), paqPick: paqPickDe(form), diff,
       // TK154: propuesta estructurada (antes / después / diff legible). Se aplica tal cual al aprobar.
       propuesta: propuestaEdicion(antes, { lineas, totales: tot, datos: form.datos || null, descuento: p.descuento ?? null }, diff, motivo),
@@ -432,7 +467,10 @@ export async function aplicarEdicionTicket(ctx: Ctx, ses: Ses, fila: string, pro
   const r = await ticketPorClave(ctx, fila);
   if (!r) return { error: "Ticket no encontrado" };
   const form = (propuestos.form && typeof propuestos.form === "object" ? propuestos.form : propuestos) as Row;
-  const lineas = (Array.isArray(propuestos.lineas) ? propuestos.lineas : formALineas(form)) as LinProp[];
+  let lineas = (Array.isArray(propuestos.lineas) ? propuestos.lineas : formALineas(form)) as LinProp[];
+  // TK185: propuestas viejas sin el prorrateo → se conserva el de la línea actual si no cambió cantidad ni precio.
+  const antesL = (sol?.antes && typeof sol.antes === "object" && Array.isArray((sol.antes as Row).lineas)) ? (sol.antes as Row).lineas as Row[] : (await snapshotTicket(ctx, ses, r)).lineas as Row[];
+  lineas = conservarProrrateo(lineas, antesL || []);
   const cosm = s(r.atendido_por); // NUNCA el admin que aprueba
   const actor = actorOf(ses);
   const pick = paqPickDe(form) || paqPickDe(propuestos);
@@ -441,11 +479,17 @@ export async function aplicarEdicionTicket(ctx: Ctx, ses: Ses, fila: string, pro
   if (canjeAntes && !canjeNuevo) {
     await revertirUsoDeTicket(ctx, actor, s(r.so_num) || fila);
   }
+  // TK185: si las líneas quedan iguales (solo cambian notas/recomendaciones/fecha), no se reescriben: así no se piden
+  // justificaciones ni se recalcula un ticket que nadie tocó.
+  const sinCambioLineas = !propuestos.descuento && diffLineas(antesL || [], lineas as unknown as Row[]).every((x) => s(x.estado) === "igual");
+  // Descuento que el ticket YA tenía (prorrateo de paquete): no se le pide justificación nueva.
+  const carried = lineas.some((l) => n(l.descuento_valor) > 0 && (antesL || []).some((o) => s(o.tipo) === s(l.tipo) && skuCode(s(o.sku) || s(o.nombre)) === skuCode(s(l.sku) || s(l.nombre)) && n(o.descuento_valor) === n(l.descuento_valor)));
   const g = await guardarTodo(ctx, ses, r, {
-    lineas,
+    ...(sinCambioLineas ? {} : { lineas }),
+    ...(carried && !s(form.justificacion_descuento) ? { justificacion_descuento: "Prorrateo del paquete (sin cambio)" } : {}),
     datos: (propuestos.datos && typeof propuestos.datos === "object" ? propuestos.datos : {}) as Row,
     descuento: propuestos.descuento,
-    justificacion_descuento: s(form.justificacion_descuento),
+    ...(s(form.justificacion_descuento) ? { justificacion_descuento: s(form.justificacion_descuento) } : {}),
     _via: "solicitud aprobada (edición" + (sol && s(sol.solicitante) ? " pedida por " + s(sol.solicitante) : "") + ")",
   });
   if (g.error) return g;
@@ -491,7 +535,8 @@ export async function prepararPropuestaTicket(ctx: Ctx, ses: Ses, fila: string, 
   if (!r) return null;
   const antes = await snapshotTicket(ctx, ses, r);
   if (tipo === "eliminacion") return { propuestos: { propuesta: propuestaAnulacion(antes, motivo) }, antes };
-  const lineas = (Array.isArray(propuestos.lineas) ? propuestos.lineas : antes.lineas) as LinProp[];
+  const lineas = conservarProrrateo((Array.isArray(propuestos.lineas) ? propuestos.lineas : antes.lineas) as LinProp[], (antes.lineas || []) as Row[]);
+  if (Array.isArray(propuestos.lineas)) propuestos = { ...propuestos, lineas };
   const desc = (propuestos.descuento && typeof propuestos.descuento === "object" ? propuestos.descuento : antes.descuento) as Row | undefined;
   const tot = calcTotales(lineas, desc && s(desc.tipo) ? desc : undefined);
   const pagadoAntes = n((antes.totales as Row | undefined)?.pagado);

@@ -16,8 +16,8 @@ const api = file("supabase/functions/api/clientes_beta_api.ts");
 
 describe("TK158 chrome compacto y carpetas de documentos", () => {
   it("sube el pin de caché a TK158 y no toca sunsu.html", () => {
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK184"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK184"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK185"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK185"/);
     assert.match(html, /20261120tk178/);
     const sunsu = file("sunsu.html");
     assert.doesNotMatch(sunsu, /TK158/);
