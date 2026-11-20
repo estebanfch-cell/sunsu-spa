@@ -77,22 +77,28 @@ export async function snapsPorClave(db: { all: (t: string) => Promise<Row[]> }):
     if (!k) return;
     out.set(k, [...(out.get(k) || []), s0]);
   };
+  // TK161: si el ticket ya tiene snapshot en beta_ticket_lineas, no sumar también beta_ticket_snaps (doble conteo, p.ej. TK-SO-1915 / ML-002).
+  const conLineas = new Set<string>();
   try {
     for (const l of await db.all("beta_ticket_lineas")) {
       if (l.snapshot_at == null || l.snapshot_at === "") continue;
       const tipo = s(l.tipo);
       if (tipo !== "producto" && tipo !== "paquete") continue;
-      add(s(l.ticket_clave), {
+      const k = s(l.ticket_clave);
+      add(k, {
         sku: s(l.sku), qty: n(l.cantidad),
         ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision),
         costoReal: n(l.costo_real), comision: n(l.comision), utilidad: n(l.utilidad),
         faltaCosto: l.falta_costo === true, esPaquete: tipo === "paquete",
       });
+      conLineas.add(k);
     }
   } catch { /* sin líneas beta */ }
   try {
     for (const l of await db.all("beta_ticket_snaps")) {
-      add(s(l.ticket_clave), {
+      const k = s(l.ticket_clave);
+      if (conLineas.has(k)) continue;
+      add(k, {
         sku: s(l.sku), qty: n(l.qty),
         ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision),
         costoReal: n(l.costo_real), comision: n(l.comision), utilidad: n(l.utilidad),

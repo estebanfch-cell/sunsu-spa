@@ -909,7 +909,8 @@ export function comisionProductos(
   for (const it of items) {
     if (it.excluido || !(it.venta > 0)) continue;
     const over = it.sku && porSku ? porSku[skuCode(it.sku)] : undefined;
-    const margen = (it.venta - (it.compra || 0)) * it.qty;
+    // TK161: piso 0, igual que comisionUnidad. Una venta descontada bajo el costo de comisión no genera comisión negativa.
+    const margen = Math.max(0, (it.venta - (it.compra || 0)) * it.qty);
     if (over && (over.pct != null || over.fijo != null)) {
       if (over.pct != null) t += margen * over.pct;
       if (over.fijo != null) t += over.fijo * it.qty;
