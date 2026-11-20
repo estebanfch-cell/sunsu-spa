@@ -71,14 +71,17 @@ describe("TK73 empleados e IESS", () => {
     assert.match(js, /#\/m\/personal\/empleados/);
     assert.match(js, /¿Afiliada al IESS\?/);
     assert.match(js, /¿Tiene usuario\?/);
-    assert.match(js, /Descuentos IESS/);
+    // TK170: sin campo manual de «descuento IESS»; el 9,45 % es automático y los préstamos IESS van aparte.
+    assert.match(js, /Préstamo IESS/);
+    assert.match(js, /Aporte personal 9,45 %: automático/);
+    assert.doesNotMatch(js, /Descuentos IESS/);
     assert.match(js, /Orden de compra de servicios/);
     assert.match(js, /Los horarios se guardan al cambiar el dato, sin lápiz/);
     assert.doesNotMatch(js, /✏️|ix-pencil|data-edit="pencil"/);
     assert.match(nav, /#\/m\/personal\/empleados/);
-    assert.match(beta, /mc-empleados\.js\?v=20261120tk169/);
+    assert.match(beta, /mc-empleados\.js\?v=20261120tk170/);
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(sw, /sunsu-2026-11-20-TK169/);  });
+    assert.match(sw, /sunsu-2026-11-20-TK170/);  });
   it("omite la fila de notas de RRHH y no deja ver el módulo al personal", async () => {
     assert.equal(esFilaNotasRrhh({ nombre_app: "", nombre_jibble: "ℹ️ Solo modificar esta hoja en el sistema central" }), true);
     assert.equal(esFilaNotasRrhh({ nombre_app: "Andrea Robles", nombre_jibble: "Andrea" }), false);
@@ -163,7 +166,7 @@ describe("TK73 empleados e IESS", () => {
     }
   });
 
-  it("si no está afiliada no hay rol: se genera OC de servicios por comisiones menos multas", async () => {
+  it("si no está afiliada: rol sin IESS con el total a facturar y OC de servicios por ese total", async () => {
     const db = seed();
     db.tables.set("multas_descuentos", [
       { cosmetologa: "Daniela Mora", fecha: "2026-10-10", monto: 30, tipo: "multa", motivo: "atraso" },
@@ -181,17 +184,27 @@ describe("TK73 empleados e IESS", () => {
     assert.match(String(rol.error), /no está afiliada al IESS/);
     assert.equal(rol.ocServicios, true);
 
+    // TK170: su rol (sin IESS ni décimos/fondo) dice cuánto factura: sueldo + bonos + comisiones + horas − multas.
+    const arm = await handle("getRolIndividual", { token: "t-emi", sheet: "OCTUBRE_2026", cedula: String((db.tables.get("rrhh_empleadas") || []).find((r) => /Daniela/.test(String(r.nombre_app)))?.cedula || "") }, c) as Row;
     const oc = await handle("emp_oc_servicios", { token: "t-emi", nombre: "Daniela Mora", periodo: "2026-10" }, c) as Row;
     assert.equal(oc.ok, true, String(oc.error || JSON.stringify(oc)));
     assert.equal(oc.comisiones, 230);
     assert.equal(oc.multas, 30);
-    assert.equal(oc.total, 200);
-    assert.equal(oc.subtotal, Math.round((200 / 1.15) * 100) / 100);
-    assert.equal(Number(oc.iva), Math.round((200 - Number(oc.subtotal)) * 100) / 100);
+    const fact = Number(((arm.data || {}) as Row).facturar);
+    if (arm.ok) {
+      assert.equal(((arm.data as Row).afiliada), false);
+      assert.equal(Number((arm.data as Row).iess), 0);
+      assert.equal(Number((arm.data as Row).dec13), 0);
+      assert.match(String((arm.data as Row).mensajeFactura), /Debes facturarnos \$/);
+      assert.equal(oc.total, fact);
+    }
+    assert.ok(Number(oc.total) >= 200);
+    assert.equal(oc.subtotal, Math.round((Number(oc.total) / 1.15) * 100) / 100);
+    assert.equal(Number(oc.iva), Math.round((Number(oc.total) - Number(oc.subtotal)) * 100) / 100);
     assert.match(String(oc.numero), /^OC-2026-\d{4}$/);
     assert.match(String(oc.nota), /factura/);
     const row = (db.tables.get("erp_oc") || []).find((r) => r.id === oc.id)!;
-    assert.equal(row.total, 200);
+    assert.equal(row.total, oc.total);
     assert.equal((row.snap as Row).tipo, "servicios_empleado");
     assert.equal((row.snap as Row).conIva, true);
     const lin = (db.tables.get("erp_oc_lineas") || []).find((r) => r.oc_id === oc.id)!;
