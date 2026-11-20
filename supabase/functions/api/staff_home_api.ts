@@ -65,7 +65,8 @@ function ticketsPrevios(tks: Row[], opts: { ced: string; nombre: string; apellid
     if (!fecha || fecha >= opts.antesDe) return false;
     if (opts.ced && mismaCed(t.id_3, opts.ced)) return true;
     if (opts.ced && normCedula(t.id_3) && !mismaCed(t.id_3, opts.ced)) return false;
-    return normNombre(s(t.nombre)) === clienteNom && normNombre(s(t.apellido)).split(" ")[0] === clienteAp;
+    const tn = normNombre(s(t.nombre)), ta = normNombre(s(t.apellido)).split(" ")[0];
+    return (tn === clienteNom || tn.split(" ")[0] === clienteNom.split(" ")[0]) && ta === clienteAp;
   }).sort((x, y) => s(y.timestamp).localeCompare(s(x.timestamp)));
 }
 
@@ -134,7 +135,7 @@ extend("staff_home", "any", async (p, ctx, ses) => {
   const TK_SLIM = ["id", "timestamp", "nombre", "apellido", "facial_hecho", "notas", "notas_generales", "so_num", "beta_num", "sheet_row", "borrado_at", "id_3"];
   const REG_SLIM = ["id", "cedula", "nombre", "apellido", "sheet_row", "borrado_at", "timestamp"];
   const PAQ_SLIM = ["id", "cedula", "nombres", "apellidos", "completo", "borrado_at", "sku", "paquete", "codigo", "beta_codigo", "factura", "ano", "mes", "dia", "orig",
-    "uso_1", "fecha_1", "uso_2", "fecha_2", "uso_3", "fecha_3", "uso_4", "fecha_4", "uso_5", "fecha_5", "uso_6", "fecha_6"];
+    "uso_1", "fecha_1", "uso_2", "fecha_2", "uso_3", "fecha_3", "uso4", "fecha_4", "uso_5", "fecha_5", "uso_6", "fecha_6"];
   const [links, tksRes, regsRes, kpisDash, paqsRes, giftsRes, catsRes, ajPaqRes, ajGiftRes] = await Promise.all([
     consultar(ctx.db, "beta_citas_ticket", { cols: ["appointment_id", "ticket_clave"] }).then((r) => r.rows).catch(() => [] as Row[]),
     consultar(ctx.db, "tickets", { cols: TK_SLIM }).then((r) => r.rows).catch(() => [] as Row[]),
