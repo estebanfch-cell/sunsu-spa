@@ -53,6 +53,7 @@ import "./legacy_solicitudes_api.ts";
 import "./aprobaciones_api.ts";
 import "./ticket_edicion_api.ts";
 import "./voucher_ocr_api.ts";
+import "./portal_api.ts";
 import { SupabaseDb } from "./db.ts";
 import { LEGACY_APPS_SCRIPT_URL } from "./domain.ts";
 import type { Row } from "./domain.ts";

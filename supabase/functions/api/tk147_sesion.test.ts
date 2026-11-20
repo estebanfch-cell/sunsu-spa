@@ -47,8 +47,8 @@ describe("TK147 sesión persistente, encabezado, PIN y reseteo", () => {
     assert.match(html, /api\("logout"/);
     assert.match(html, /localStorage\.removeItem\("sunsu\.beta\.sesion"\)/);
     assert.doesNotMatch(html, /if \(!who\.ok\) \{ state\.token = ""; localStorage\.removeItem\("sunsu\.beta\.token"\); paintLogin\(who\.error\); return; \}/);
-    assert.match(sw, /sunsu-2026-11-19-TK160/);
-    assert.match(html, /sunsu-2026-11-19-TK160/);
+    assert.match(sw, /sunsu-2026-11-20-TK163/);
+    assert.match(html, /sunsu-2026-11-20-TK163/);
     assert.doesNotMatch(html, /sunsu-beta-2026-11-19-TK146/);
   });
 

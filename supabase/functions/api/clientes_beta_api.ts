@@ -27,6 +27,8 @@ export const CAMPOS_CLIENTE: [string, string][] = [
   ["alergias", "Alergias"], ["medicacion", "Medicación"], ["condiciones", "Condiciones"], ["reacciones", "Reacciones previas"],
   ["exfoliantes", "Exfoliantes / retinoides"], ["extracciones", "Desea extracciones"], ["autorizaFotos", "Autoriza fotos"], ["ciclo", "Ciclo menstrual"], ["cortesia", "Cortesía complementaria"],
   ["consentimiento", "Aprueba consentimiento"], ["notas", "Notas"],
+  // TK163: lo que la clienta escribe en «Mi perfil» de la app (el equipo lo ve en la ficha).
+  ["preferencias", "Preferencias (de la clienta)"], ["notaClienta", "Nota de la clienta"],
 ];
 /** Solo lectura en la ficha (vienen del formulario de registro). */
 export const CAMPOS_LECTURA: [string, string][] = [["registrada", "Fecha de registro"], ["ultimoRegistro", "Último registro"]];
@@ -205,7 +207,7 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
   return payload;
 });
 
-async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
+export async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   const admin = esAdmin(ses.rol);
   const matriz = await matrizSes(ctx);
   const key = canonDeClave(key0), claves = clavesGuardadas(key);
@@ -404,7 +406,7 @@ export async function propagarDesdeTicket(ctx: Ctx, ses: Ses, key: string, datos
   if (!key || !Object.keys(cambios).length) return { ok: true, sinCambios: true };
   return await guardarCliente(ctx, ses, key, cambios, "desde ticket " + so);
 }
-async function guardarCliente(ctx: Ctx, ses: Ses, key0: string, cambios: Row, via: string): Promise<Row> {
+export async function guardarCliente(ctx: Ctx, ses: Ses, key0: string, cambios: Row, via: string): Promise<Row> {
   if (!(await hay(ctx))) return { error: FALTA };
   const key = canonDeClave(key0);
   const permitidos = new Set(CAMPOS_CLIENTE.map(([k]) => k));

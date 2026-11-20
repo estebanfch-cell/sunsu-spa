@@ -2490,6 +2490,7 @@ function moduloDeRuta(route) {
   if (route.mod === "aperturas") return route.sub === "costo" ? "inventario" : "inicio";
   // 🔑 Mi acceso: cada quien el suyo (la lista del equipo la decide el servidor: solo admin).
   if (route.mod === "acceso") return "inicio";
+  if (route.mod === "portal") return "inicio"; // 📱 Cuentas de la app: el servidor exige admin
   if (route.mod === "solicitudes") return "inicio";
   // 🏷️ Códigos de barras: mismo permiso que Productos (generar/asignar es solo admin en el servidor).
   if (route.mod === "barras") return "productos";
@@ -2502,6 +2503,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "agenda") return "Agenda";
   if (route.mod === "aperturas") return route.sub === "costo" ? "Costo por facial" : "Abrir producto";
   if (route.mod === "acceso") return "Mi acceso";
+  if (route.mod === "portal") return "Cuentas de la app";
   if (route.mod === "solicitudes") return "Mis solicitudes";
   if (route.mod === "barras") return "Códigos de barras";
   if (route.mod === "clientes") return window.MCClientes ? (route.sub === "c" ? "Clienta" : route.sub === "docs" ? "Documentos sin asignar" : route.sub === "duplicados" ? "Clientas duplicadas" : "Clientes") : "Registro de clientas";
@@ -2564,6 +2566,22 @@ function autosize(root) {
 
 function paintLogin(msg) {
   try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
+  // TK163: inicio de la app = «Iniciar sesión» (usuario o correo + contraseña) / «Crear cuenta». El PIN del
+  // equipo queda como acceso discreto («Personal Sunsu: entrar con PIN») mientras todas crean su usuario.
+  if (window.SunsuPortal && !window._sunsuLoginViejo) { window.SunsuPortal.paintInicio(msg); return; }
+  window._sunsuLoginViejo = false;
+  paintLoginEquipo(msg);
+}
+window.paintLoginPin = function () { localStorage.setItem("sunsu.beta.loginModo", "pin"); window._sunsuLoginViejo = true; paintLogin(""); };
+window.sunsuEntrarEquipo = function (data) {
+  state.token = data.token;
+  localStorage.setItem("sunsu.beta.token", data.token);
+  applySession(data);
+  if (data.debe_cambiar) { paintCambiarClave(); return; }
+  go("#/m/inicio");
+};
+function paintLoginEquipo(msg) {
+  try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
   try { if (window.MCPagos && window.MCPagos.limpiarCache) window.MCPagos.limpiarCache(); } catch (eP) {}
   document.body.classList.remove("app-on", "kb-open");
   const modo = localStorage.getItem("sunsu.beta.loginModo") === "usuario" ? "usuario" : "pin";
@@ -2589,7 +2607,8 @@ function paintLogin(msg) {
       </form>
       <p class="lg-legal"><a href="https://app.sunsuspa.com/privacy.html" target="_blank" rel="noopener">Privacidad</a> · <a href="https://app.sunsuspa.com/support.html" target="_blank" rel="noopener">Soporte</a></p>
     </main>`;
-  document.querySelectorAll(".lg-tab").forEach((b) => b.addEventListener("click", () => { localStorage.setItem("sunsu.beta.loginModo", b.dataset.modo); paintLogin(""); }));
+  document.querySelectorAll(".lg-tab").forEach((b) => b.addEventListener("click", () => { localStorage.setItem("sunsu.beta.loginModo", b.dataset.modo); paintLoginEquipo(""); }));
+  { const f = document.getElementById("login-form"); if (f && window.SunsuPortal) { const v = document.createElement("p"); v.className = "lg-olvido"; v.innerHTML = '<button type="button" id="lg-inicio">← Volver al inicio</button>'; f.appendChild(v); v.querySelector("button").onclick = () => window.SunsuPortal.paintInicio(""); } }
   const olvido = document.getElementById("lg-olvido");
   if (olvido) olvido.addEventListener("click", () => paintOlvido());
   const ver = document.getElementById("lg-ver");
@@ -2915,7 +2934,7 @@ function paintShell(title) {
         ${plus}
         
         <nav>${nav}</nav>
-        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a>${puedeVerComo() ? ` · <button class="ver-como-nav" type="button" data-ver-como="1" title="Ver como…">👁 Ver como…</button>` : ""} · <button class="salir" type="button">Salir</button></div>
+        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a>${state.admin ? ` · <a class="mi-acceso" href="#/m/portal" title="Clientas y proveedores con cuenta en la app">📱 App</a>` : ""}${puedeVerComo() ? ` · <button class="ver-como-nav" type="button" data-ver-como="1" title="Ver como…">👁 Ver como…</button>` : ""} · <button class="salir" type="button">Salir</button></div>
       </aside>
       <div class="fly" id="fly" hidden></div>
       <div class="reloj-sheet card" id="reloj-sheet" hidden>
@@ -3231,7 +3250,7 @@ function pantallaSunsu(route) {
   if (m === "rol_pagos" || (m === "personal" && route.sub === "rol")) return "";
   if (m === "personal" && route.sub === "permisos") return "";
   if (m === "personal" && route.sub === "multas" && window.MCMultas) return "";
-  if (m === "aperturas" || m === "acceso" || m === "barras") return "";
+  if (m === "aperturas" || m === "acceso" || m === "barras" || m === "portal") return "";
   if (m === "personal" && route.sub === "multas") return "multas";
   if (m === "usuarios" || m === "permisos" || m === "configuracion") return "";
   return "";
@@ -3332,6 +3351,11 @@ async function draw() {
   if (previewOn() && !state.user) {
     state.token = "preview";
     applySession(previewApi("whoami"));
+  }
+  if (window.SunsuPortal) {
+    const ct = window.SunsuPortal.tokenClave();
+    if (ct) { window.SunsuPortal.paintClave(ct); return; }
+    if (!state.token && window.SunsuPortal.activo()) { window.SunsuPortal.paint(); return; }
   }
   if (!state.token) { paintLogin(); return; }
   if (!state.user) {
@@ -3474,6 +3498,7 @@ async function draw() {
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "multas" && window.MCMultas) window.MCMultas.wire(main, route);
     if (route.kind === "mod" && route.mod === "aperturas" && window.MCAperturas) window.MCAperturas.wire(main, route);
     if (route.kind === "mod" && route.mod === "acceso" && window.MCAcceso) window.MCAcceso.wire(main, route);
+    if (route.kind === "mod" && route.mod === "portal" && window.MCPortalAdmin) window.MCPortalAdmin.wire(main, route);
     if (route.kind === "mod" && route.mod === "barras" && window.MCBarras) window.MCBarras.wire(main, route);
     if (route.kind === "mod" && route.mod === "caja" && window.MCCaja) window.MCCaja.wire(main, route);
     if (route.kind === "mod" && route.mod === "borradores" && window.MCBorradores) window.MCBorradores.wire(main, route);
@@ -3550,6 +3575,7 @@ async function renderMod(route) {
   if (route.mod === "aperturas" && window.MCAperturas) return window.MCAperturas.render(route);
   if (route.mod === "solicitudes") return renderMisSolicitudes();
   if (route.mod === "acceso" && window.MCAcceso) return window.MCAcceso.render(route);
+  if (route.mod === "portal" && window.MCPortalAdmin) return window.MCPortalAdmin.render(route);
   if (route.mod === "barras" && window.MCBarras) return window.MCBarras.render(route);
   if (route.mod === "paquetes" && window.MCPaquetes) return window.MCPaquetes.render(route);
   if (route.mod === "paquetes") return renderPaquetes();
@@ -8071,7 +8097,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK160";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK163";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8194,44 +8220,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk160"></script>
-<script src="mc-scan.js?v=20261119tk160"></script>
-<script src="mc-buscar.js?v=20261119tk160"></script>
-<script src="descuento_justif.js?v=20261119tk160"></script>
-<script src="beta-screens.js?v=20261119tk160"></script>
-<script src="beta-inline.js?v=20261119tk160"></script>
-<script src="mc-productos.js?v=20261119tk160"></script>
-<script src="mc-nav.js?v=20261119tk160"></script>
-<script src="mc-permisos.js?v=20261119tk160"></script>
-<script src="mc-protocolos.js?v=20261119tk160"></script>
-<script src="mc-conteo.js?v=20261119tk160"></script>
-<script src="mc-transferencias.js?v=20261119tk160"></script>
-<script src="mc-ajustes.js?v=20261119tk160"></script>
-<script src="vendor-qrcode.js?v=20261119tk160"></script>
-<script src="mc-wa.js?v=20261119tk160"></script>
-<script src="mc-tickets.js?v=20261119tk160"></script>
-<script src="mc-maestro.js?v=20261119tk160"></script>
-<script src="mc-empleados.js?v=20261119tk160"></script>
-<script src="mc-edit.js?v=20261119tk160"></script>
-<script src="mc-paquetes.js?v=20261119tk160"></script>
-<script src="mc-aperturas.js?v=20261119tk160"></script>
-<script src="mc-acceso.js?v=20261119tk160"></script>
-<script src="mc-barras.js?v=20261119tk160"></script>
-<script src="mc-caja.js?v=20261119tk160"></script>
-<script src="mc-giftcards.js?v=20261119tk160"></script>
-<script src="mc-multas.js?v=20261119tk160"></script>
-<script src="mc-clientes.js?v=20261119tk160"></script>
-<script src="mc-clientes-dup.js?v=20261119tk160"></script>
-<script src="mc-docpdf.js?v=20261119tk160"></script>
-<script src="mc-compras.js?v=20261119tk160"></script>
-<script src="mc-consignacion.js?v=20261119tk160"></script>
-<script src="mc-proveedores.js?v=20261119tk160"></script>
-<script src="mc-recepciones.js?v=20261119tk160"></script>
-<script src="mc-movil.js?v=20261119tk160"></script>
-<script src="mc-promociones.js?v=20261119tk160"></script>
-<script src="mc-agenda.js?v=20261119tk160"></script>
-<script src="mc-staff-home.js?v=20261119tk160"></script>
-<script src="mc-borradores.js?v=20261119tk160"></script><script>
+<script src="vendor-zxing.js?v=20261120tk163"></script>
+<script src="mc-scan.js?v=20261120tk163"></script>
+<script src="mc-buscar.js?v=20261120tk163"></script>
+<script src="descuento_justif.js?v=20261120tk163"></script>
+<script src="beta-screens.js?v=20261120tk163"></script>
+<script src="beta-inline.js?v=20261120tk163"></script>
+<script src="mc-productos.js?v=20261120tk163"></script>
+<script src="mc-nav.js?v=20261120tk163"></script>
+<script src="mc-permisos.js?v=20261120tk163"></script>
+<script src="mc-protocolos.js?v=20261120tk163"></script>
+<script src="mc-conteo.js?v=20261120tk163"></script>
+<script src="mc-transferencias.js?v=20261120tk163"></script>
+<script src="mc-ajustes.js?v=20261120tk163"></script>
+<script src="vendor-qrcode.js?v=20261120tk163"></script>
+<script src="mc-wa.js?v=20261120tk163"></script>
+<script src="mc-tickets.js?v=20261120tk163"></script>
+<script src="mc-maestro.js?v=20261120tk163"></script>
+<script src="mc-empleados.js?v=20261120tk163"></script>
+<script src="mc-edit.js?v=20261120tk163"></script>
+<script src="mc-paquetes.js?v=20261120tk163"></script>
+<script src="mc-aperturas.js?v=20261120tk163"></script>
+<script src="mc-acceso.js?v=20261120tk163"></script>
+<script src="mc-barras.js?v=20261120tk163"></script>
+<script src="mc-caja.js?v=20261120tk163"></script>
+<script src="mc-giftcards.js?v=20261120tk163"></script>
+<script src="mc-multas.js?v=20261120tk163"></script>
+<script src="mc-clientes.js?v=20261120tk163"></script>
+<script src="mc-clientes-dup.js?v=20261120tk163"></script>
+<script src="mc-docpdf.js?v=20261120tk163"></script>
+<script src="mc-compras.js?v=20261120tk163"></script>
+<script src="mc-consignacion.js?v=20261120tk163"></script>
+<script src="mc-proveedores.js?v=20261120tk163"></script>
+<script src="mc-recepciones.js?v=20261120tk163"></script>
+<script src="mc-movil.js?v=20261120tk163"></script>
+<script src="mc-promociones.js?v=20261120tk163"></script>
+<script src="mc-agenda.js?v=20261120tk163"></script>
+<script src="mc-staff-home.js?v=20261120tk163"></script>
+<script src="mc-borradores.js?v=20261120tk163"></script>
+<script src="mc-portal.js?v=20261120tk163"></script>
+<script src="mc-portal-admin.js?v=20261120tk163"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {

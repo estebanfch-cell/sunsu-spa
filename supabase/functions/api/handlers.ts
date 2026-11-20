@@ -762,8 +762,16 @@ export async function doLoginPass(p: R, ctx: Ctx): Promise<R> {
   };
   let creds: R[] = [];
   try { creds = await ctx.db.all("beta_credenciales"); } catch { return { error: "El acceso con usuario todavía no está activo" }; }
-  const c = creds.find((x) => normUsuario(x.usuario) === usuario) || null;
-  if (!c) { await hashPass(pass, "0".repeat(32), ITER); return fallo(null); }
+  // TK163: se entra con usuario o con correo. Si no es del equipo, se prueba la cuenta de la app (clienta/proveedor).
+  const c = creds.find((x) => normUsuario(x.usuario) === usuario) || (usuario.includes("@") ? creds.find((x) => s(x.email).trim().toLowerCase() === usuario) : null) || null;
+  if (!c) {
+    if (usuario.includes("@")) {
+      const { portalLogin } = await import("./portal_api.ts");
+      const pr = await portalLogin(ctx, usuario, pass);
+      if (pr) { if (pr.error && /incorrect/i.test(s(pr.error))) return fallo(null); return pr; }
+    }
+    await hashPass(pass, "0".repeat(32), ITER); return fallo(null);
+  }
   if (bloqueada(c, ctx.now)) return { error: "Demasiados intentos. Espera unos minutos." };
   const h = await hashPass(pass, s(c.pass_salt), n(c.iteraciones) || ITER);
   if (!igualSeguro(h, s(c.pass_hash))) return fallo(c);
@@ -1187,6 +1195,11 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
 }
 
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
+  // TK163: app de clientas y proveedores. Sus acciones van aparte y con su propia sesión (nunca la del equipo).
+  if (action.startsWith("portal_")) {
+    const { portalHandle } = await import("./portal_api.ts");
+    return portalHandle(action, p, ctx);
+  }
   if (action === "logout") {
     const tk = s(p.token);
     if (tk) await ctx.db.write("logout", "sesiones", "delete", { token: tk }, null).catch(() => null);
