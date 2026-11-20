@@ -39,12 +39,30 @@ export function codigoTomado(rows: Row[], codigo: string, propioId?: unknown): b
   const k = normCod(codigo);
   return !!k && rows.some((r) => normCod(r.codigo_gc) === k && (propioId == null || String(r.id) !== String(propioId)));
 }
+/** TK188: códigos en blanco (sin vender) del año, en el MISMO orden en que se reparten (número de código, sin repetidos).
+ *  Lo usan «Siguiente código» (Gift Cards y ticket), gcb_vender y el «Generar» del ticket: siempre el mismo código. */
+export function blancosGift(rows: Row[], yy: string): Row[] {
+  const rep = repetidos(rows);
+  return rows.filter((r) => !r.borrado_at && s(r.origin) !== "test" && !vendidaGift(r) && !usadaGift(r) && s(r.codigo_gc).trim().startsWith(yy + "-") && !rep.has(normCod(r.codigo_gc)))
+    .sort((a, b) => numDe(a.codigo_gc) - numDe(b.codigo_gc));
+}
+/** TK189: la gift card quedó eliminada SOLO porque se canceló el ticket que la vendió (TK155): su código se puede reactivar. */
+export function anuladaPorCancelacion(r: Row): boolean {
+  const o = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  return !!r.borrado_at && o.anulado_por_ticket != null && s(o.anulado_por_ticket) !== "";
+}
+/** TK189: fila a reactivar para un código: no hay fila viva con ese código y hay una anulada por cancelación. */
+export function giftReactivable(rows: Row[], codigo: string): Row | null {
+  const k = normCod(codigo);
+  if (!k) return null;
+  const mismas = rows.filter((r) => normCod(r.codigo_gc) === k && s(r.origin) !== "test");
+  if (mismas.some((r) => !r.borrado_at)) return null;
+  return mismas.filter(anuladaPorCancelacion).sort((a, b) => s(b.borrado_at).localeCompare(s(a.borrado_at)))[0] || null;
+}
 /** Siguiente código para vender: el primer código en blanco del año que no esté repetido;
  *  si no queda, YY-(máximo+1), que es nuevo y único. */
 export function siguienteGift(rows: Row[], yy: string): { codigo: string; id: unknown | null } {
-  const rep = repetidos(rows);
-  const blancos = rows.filter((r) => !r.borrado_at && s(r.origin) !== "test" && !vendidaGift(r) && !usadaGift(r) && s(r.codigo_gc).trim().startsWith(yy + "-") && !rep.has(normCod(r.codigo_gc)))
-    .sort((a, b) => numDe(a.codigo_gc) - numDe(b.codigo_gc));
+  const blancos = blancosGift(rows, yy);
   if (blancos.length) return { codigo: s(blancos[0].codigo_gc).trim(), id: blancos[0].id ?? null };
   let max = 0;
   for (const r of rows) { const m = /^(\d{2})-(\d+)$/.exec(s(r.codigo_gc).trim()); if (m && m[1] === yy) max = Math.max(max, Number(m[2])); }

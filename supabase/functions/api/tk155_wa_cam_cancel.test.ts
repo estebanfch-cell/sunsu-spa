@@ -192,9 +192,11 @@ describe("TK155 reversa completa al cancelar", () => {
     // c) sesión canjeada → libre
     const p8 = pq.find((x) => x.id === 8)!;
     assert.equal(p8.uso_2, false); assert.equal(p8.fecha_2, "");
-    // d) gift comprada → eliminada; gift canjeada → saldo devuelto; la ajena intacta
+    // d) gift comprada → TK189: vuelve a «Disponible» con el mismo código (no se entierra); gift canjeada → saldo devuelto; la ajena intacta
     const gc = db.tables.get("gift_cards")!;
-    assert.ok(gc.find((x) => x.id === 500)!.borrado_at);
+    const g500 = gc.find((x) => x.id === 500)!;
+    assert.ok(!g500.borrado_at); assert.equal(g500.dia, null); assert.equal(g500.nombre_comprador, "");
+    assert.equal((((g500.orig as Row).historial_anulado as Row[])[0]).ticket, "TK-SO-1938");
     const g400 = gc.find((x) => x.id === 400)!;
     assert.equal(g400.usado, false); assert.equal(Number(g400.saldo), 20);
     assert.equal(((g400.orig as Row).usos as Row[]).length, 0);
@@ -232,8 +234,8 @@ describe("TK155 menú Acciones ancho en el celular (t683u)", () => {
 
 describe("TK155 versión", () => {
   it("caché y motor en TK155", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-20-TK186"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK186"/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-20-TK189"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK189"/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });

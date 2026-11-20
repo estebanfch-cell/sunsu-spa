@@ -18,6 +18,7 @@
     s.textContent = [
       "@media(max-width:640px){.mcgc-sheet{display:none!important}}",
       ".mcgc-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.mcgc-h h2{margin:0;font-size:1.2rem;flex:1}",
+      ".mcgc-sig{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#FFF4E5;border:1.5px solid #E8B04B;color:#7A4E00;font-size:.85rem;white-space:nowrap}.mcgc-sig b{font-size:1rem;letter-spacing:.02em}",
       ".mcgc-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.mcgc-tools input[type=search]{flex:1;min-width:220px;padding:9px 11px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:9px;font:inherit}",
       ".mcgc-chip{border:1.5px solid var(--cream-d,#e6dccb);background:var(--white,#fff);border-radius:999px;padding:5px 12px;font:inherit;font-size:.78rem;font-weight:700;color:var(--navy-d,#2b3f5c);cursor:pointer}.mcgc-chip.on{background:var(--navy-d,#2b3f5c);color:#fff;border-color:var(--navy-d,#2b3f5c)}",
       ".mcgc-t tbody tr{cursor:pointer}.mcgc-t tbody tr:hover{background:rgba(61,90,122,.05)}.mcgc-cod{font-weight:800;color:var(--navy-d,#2b3f5c);white-space:nowrap}.mcgc-sub{color:var(--gray,#8a93a6);font-size:.72rem}",
@@ -128,7 +129,8 @@
 function listaHtml() {
     var c = K.cuenta || {};
     var chip = function (k, t, nn) { return '<button type="button" class="mcgc-chip' + (K.estado === k ? " on" : "") + '" data-est="' + k + '">' + t + (nn != null ? " (" + nn + ")" : "") + "</button>"; };
-    return '<div id="mcgc-root"><div class="mcgc-h"><h2>🎁 Gift cards</h2><button class="btn small" type="button" data-go="#/m/gift/cards/nueva">＋ Vender gift card</button></div>' +
+    /* TK188: «Siguiente código» visible para escribirlo en la tarjeta física ANTES de crear el ticket (no reserva nada). */
+    return '<div id="mcgc-root"><div class="mcgc-h"><h2>🎁 Gift cards</h2>' + (K.siguiente ? '<span class="mcgc-sig" id="mcgc-sig-top" title="Escríbelo en la tarjeta física. No se reserva: el ticket o la venta lo usa al guardar.">Siguiente código: <b>' + e(K.siguiente) + "</b></span>" : "") + '<button class="btn small" type="button" data-go="#/m/gift/cards/nueva">＋ Vender gift card</button></div>' +
       '<div class="mcgc-tools ss-bar"><input type="search" id="mcgc-q" placeholder="🔎 Código, comprador, cédula, para, factura o ticket" value="' + e(K.q) + '"></div>' +
       '<div class="ss-chip-row">' + chip("vigentes", "Vigentes", c.vigentes) + chip("usadas", "Usadas", c.usadas) + chip("vencidas", "Vencidas", c.vencidas) + chip("todas", "Todas", c.todas) + chip("disponibles", "Códigos libres", c.disponibles) + "</div>" +
       '<div class="mob-cards ss-cards" id="mcgc-cards">' + (K.items.length ? K.items.map(cardGc).join("") : '<p class="mccf-sub">Sin gift cards.</p>') + "</div>" +

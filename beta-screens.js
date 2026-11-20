@@ -1492,6 +1492,7 @@ function renderTicket(c){
         '<button onclick="generarCodigoGC()" id="gc-gen-btn" style="padding:9px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.75rem;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">🎲 Generar</button>'+
       '</div>'+
       '<div id="gc-codigo-badge" style="display:'+(T.gcVenta&&T.gcVenta.codigo&&T.gcVenta.gcFila?'block':'none')+';font-size:0.65rem;color:var(--green);margin-top:4px">✅ Código '+(T.gcVenta&&T.gcVenta.codigo||'')+' reservado</div>'+
+      '<div id="gc-sig-hint" class="gc-sig-hint" style="display:none"></div>'+
     '</div>'+
     '<div class="field"><label>Descripción / Nota</label>'+
       '<textarea placeholder="Ej: regalo cumpleaños, incluye topping PDRN..." oninput="if(T.gcVenta)T.gcVenta.nota=this.value">'+(T.gcVenta&&T.gcVenta.nota||'')+'</textarea>'+
@@ -2137,6 +2138,28 @@ function generarCodigoGC_paq(idx, n){
     .catch(function(){toast('❌ Error de conexión','#B86B6B');});
 }
 
+/* TK188: «Siguiente código: 26-XXX» en la venta de gift card del ticket (y en la venta suelta). Solo lectura
+   (gcb_siguiente): no reserva ni escribe nada; «Generar» y el ticket usan exactamente ese mismo código. */
+function _gcSigPintar(id){
+  var el=document.getElementById(id||'gc-sig-hint'); if(!el||typeof api!=='function') return;
+  api('gcb_siguiente',{}).then(function(r){
+    if(!r||r.error||!r.codigo){ el.style.display='none'; return; }
+    el.style.display='block';
+    el.innerHTML='Siguiente código: <b>'+String(r.codigo).replace(/[<>&"]/g,'')+'</b> <span style="opacity:.75">· escríbelo en la tarjeta física (no se reserva)</span>';
+  }).catch(function(){ el.style.display='none'; });
+}
+
+(function(){
+  /* TK188: pinta el «Siguiente código» cada vez que aparece el campo (ticket nuevo o venta suelta), sin tocar renderTicket. */
+  if(typeof MutationObserver==='undefined'||!document||!document.documentElement) return;
+  var pend=false;
+  new MutationObserver(function(){
+    if(pend) return; pend=true;
+    setTimeout(function(){ pend=false;
+      document.querySelectorAll('.gc-sig-hint:not([data-cargado])').forEach(function(el){ el.setAttribute('data-cargado','1'); _gcSigPintar(el.id); });
+    },60);
+  }).observe(document.documentElement,{childList:true,subtree:true});
+})();
 function generarCodigoGC(){
   var btn=document.getElementById('gc-gen-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳...';}
@@ -3351,6 +3374,7 @@ function enviarTicket(){
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
     toast('✅ '+((d&&(d.ticket||d.beta_num))||_tkNum)+' registrado'+_gcMsg,'#6A9E7A');
+    if(d&&d.gc_error) setTimeout(function(){ toast('⚠️ '+d.gc_error,'#C9A227'); },1800);
     if(d&&d.cuadre&&(Number(d.cuadre.borradores_vinculados||0)>0||Number(d.cuadre.links||0)>0)){
       toast('Factura aplicada al ticket · salió de Borradores','var(--green)');
     }
@@ -4063,6 +4087,7 @@ function renderGCVenta(c){
           <input type="text" id="gc-cod" placeholder="Ej: 26-134..." oninput="GC.codigo=this.value;GC.gcFila=null;updateGCPrev()" style="flex:1">
           <button onclick="generarCodigoGC_standalone()" id="gc-gen-btn2" style="padding:9px 12px;background:var(--pink);color:white;border:none;border-radius:9px;font-size:0.75rem;font-weight:700;cursor:pointer;white-space:nowrap">🎲 Generar</button>
         </div>
+        <div id="gc-sig-hint2" class="gc-sig-hint" style="display:none"></div>
         <div id="gc-cod-msg" style="display:none;margin-top:4px;font-size:0.65rem;color:var(--green)"></div>
       </div>
       <div class="field"><label>Descripción / Nota</label>
