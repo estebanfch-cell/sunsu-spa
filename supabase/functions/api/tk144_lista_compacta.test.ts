@@ -70,7 +70,7 @@ describe("TK144 tarjetas compactas de la lista", () => {
   });
 
   it("la API enriquece la página en lote y guarda quién creó el ticket nuevo", () => {
-    assert.match(lista, /enriquecerItemsLista\(ctx\.db, filas, items, cabMap\)/);
+    assert.match(lista, /enriquecerItemsLista\(ctx\.db, filas, items, cabMap(, \{ map, canje: canjeFacial \})?\)/);
     assert.doesNotMatch(lista, /for \(const it of items\)[\s\S]{0,200}consultar\(/);
     assert.match(handlers, /creado_por = s\(ses/);
   });
@@ -101,7 +101,7 @@ describe("TK144 tarjetas compactas de la lista", () => {
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK153"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-19-TK154"/);
   });
 
   it("fila 1 es ticket-factura, el creador va de su color y la cámara queda bajo la chica", () => {

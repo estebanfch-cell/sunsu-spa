@@ -1552,6 +1552,8 @@ export const SOLICITUD_HOOKS: Record<string, {
   fila: (ctx: Ctx, ses: Ses, fila: string) => Promise<{ row: Row; antes: Row; etiqueta?: string; enlace?: string } | { error: string }>;
   aplicar: (ctx: Ctx, ses: Ses, fila: string, propuestos: Row, sol?: Row) => Promise<Row>;
   borrar?: (ctx: Ctx, ses: Ses, fila: string, motivo: string, sol?: Row) => Promise<Row>;
+  /** TK154: arma la propuesta estructurada (antes / después / diff) sin tocar la fila real. */
+  preparar?: (ctx: Ctx, ses: Ses, fila: string, tipo: string, propuestos: Row, motivo: string, hecho: Row) => Promise<{ propuestos: Row; antes?: Row } | null>;
 }> = {};
 async function filaSolicitud(ctx: Ctx, ses: Ses, tabla: string, fila: string): Promise<{ row: Row; antes: Row; etiqueta?: string; enlace?: string } | { error: string }> {
   if (SOLICITUD_HOOKS[tabla]) return SOLICITUD_HOOKS[tabla].fila(ctx, ses, fila);
@@ -1727,10 +1729,17 @@ async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; d
   const hecho = await filaSolicitud(ctx, ses, tabla, fila);
   if ("error" in hecho) return hecho;
   const id = crypto.randomUUID();
-  const propuestos = tipo === "cambio" && p.propuestos && typeof p.propuestos === "object" ? p.propuestos as Row : {};
+  let propuestos = tipo === "cambio" && p.propuestos && typeof p.propuestos === "object" ? p.propuestos as Row : {};
+  let antesRec = hecho.antes;
+  if (SOLICITUD_HOOKS[tabla]?.preparar) {
+    try {
+      const prep = await SOLICITUD_HOOKS[tabla].preparar!(ctx, ses, fila, tipo, propuestos, motivo, hecho as unknown as Row);
+      if (prep) { propuestos = prep.propuestos; if (prep.antes) antesRec = prep.antes; }
+    } catch { /* sin comparativo: se guarda como antes */ }
+  }
   const rec = {
     id, solicitante: ses.name, solicitante_uid: ses.uid, creado: ctx.now.toISOString(),
-    tabla, fila, tipo, propuestos, antes: hecho.antes, motivo, estado: "pendiente",
+    tabla, fila, tipo, propuestos, antes: antesRec, motivo, estado: "pendiente",
     ...(hecho.etiqueta ? { etiqueta: hecho.etiqueta } : {}), ...(hecho.enlace ? { enlace: hecho.enlace } : {}),
   } as Row;
   if (prueba) {

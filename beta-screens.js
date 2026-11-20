@@ -1541,8 +1541,9 @@ function renderTicket(c){
   const _cotMode=!!window._esCotizacion;
   const _cotBanner=_cotMode?'<div class="card" id="cot-banner" style="background:#FBF3E3;border:1.5px solid var(--gold);margin-bottom:12px"><div style="font-weight:800;color:var(--gold);letter-spacing:0.2px">Esto es una COTIZACIÓN</div><div style="font-size:0.72rem;margin-top:4px">Se guarda como COT y se descarga el PDF. No mueve stock, comisiones ni gift cards.</div></div>':'';
   const _editClave=window._tkEdicion&&window._tkEdicion.clave;
-  const _editBanner=_editClave?'<div class="card" id="tk-edit-banner" style="background:#EEF3FB;border:1.5px solid #3E7CB1;margin-bottom:12px"><div style="font-weight:800;color:#1A2744">Editando ticket '+_tkEsc(_editClave)+'</div><div style="font-size:0.74rem;margin-top:4px;color:var(--navy)">Está todo prellenado. Haz los cambios (por ejemplo el facial y el canje de paquete) y pulsa «Solicitar aprobación para la edición». No se guarda hasta que Emilia o Emi lo aprueben.</div></div>':'';
-  const _etiqEnviar=_cotMode?'✓ Guardar cotización':(_editClave?'📨 Solicitar aprobación para la edición':'✓ Enviar Ticket');
+  // TK154 (Emilia t671u): modo «Proponer cambios». El ticket real no cambia hasta que un admin apruebe.
+  const _editBanner=_editClave?'<div class="card" id="tk-edit-banner" style="background:#F3E8FF;border:1.5px solid #7C3AED;margin-bottom:12px"><div style="font-weight:800;color:#4C1D95">Propuesta de edición — los cambios se aplicarán solo cuando un admin apruebe</div><div style="font-size:0.74rem;margin-top:4px;color:var(--navy)">Ticket '+_tkEsc(_editClave)+': está todo prellenado. Agrega, quita o cambia líneas, precios, descuento o notas y pulsa «Enviar propuesta para aprobación» (te pedirá el motivo). El ticket queda bloqueado e igual hasta que lo aprueben.</div><button type="button" id="tk-edit-anular" onclick="_tkPedirAnulacionForm()" style="margin-top:8px;background:white;color:#B42318;border:1.5px solid #B42318;border-radius:9px;padding:6px 10px;font-size:0.74rem;font-weight:800;cursor:pointer">🚫 Solicitar anulación / cancelación de este ticket</button></div>':'';
+  const _etiqEnviar=_cotMode?'✓ Guardar cotización':(_editClave?'📨 Enviar propuesta para aprobación':'✓ Enviar Ticket');
   const _notasCard=_cotMode?'':`
     <div class="card">
       <div class="card-title">📝 Notas</div>
@@ -3246,18 +3247,25 @@ function enviarTicket(){
     });
     return;
   }
-  if(btn){btn.disabled=true;btn.textContent=window._tkEdicion?'⏳ Enviando solicitud...':'⏳ Enviando...';}
+  var _motEd='';
   if(window._tkEdicion&&window._tkEdicion.clave){
-    Promise.resolve(window.api('tk_edicion_pedir',{clave:window._tkEdicion.clave,form:payload,motivo:'Edición del ticket'}))
+    _motEd=prompt('Propuesta de edición — los cambios se aplicarán solo cuando un admin apruebe.\n\nMotivo del cambio (obligatorio):');
+    if(_motEd==null) return;
+    _motEd=String(_motEd).trim();
+    if(_motEd.length<3){ toast('Escribe el motivo del cambio','#B86B6B'); return; }
+  }
+  if(btn){btn.disabled=true;btn.textContent=window._tkEdicion?'⏳ Enviando propuesta...':'⏳ Enviando...';}
+  if(window._tkEdicion&&window._tkEdicion.clave){
+    Promise.resolve(window.api('tk_edicion_pedir',{clave:window._tkEdicion.clave,form:payload,motivo:_motEd}))
       .then(function(d){
-        if(d&&d.error){ toast(d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Solicitar aprobación para la edición';} return; }
+        if(d&&d.error){ toast(d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Enviar propuesta para aprobación';} return; }
         var clave=window._tkEdicion.clave;
-        toast((d&&d.mensaje)||'Listo, tu solicitud de edición se envió a administración para aprobación','#6A9E7A');
+        toast((d&&d.mensaje)||'📨 Propuesta enviada: el ticket no cambia hasta que un admin la apruebe','#6A9E7A');
         window._tkEdicion=null; window._ticketOrigen='';
         if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco();
         if(typeof go==='function') go('#/m/tickets/t/'+encodeURIComponent(clave));
       })
-      .catch(function(e){ toast((e&&e.message)||'No se pudo enviar la solicitud','#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Solicitar aprobación para la edición';} });
+      .catch(function(e){ toast((e&&e.message)||'No se pudo enviar la solicitud','#B86B6B'); if(btn){btn.disabled=false;btn.textContent='📨 Enviar propuesta para aprobación';} });
     return;
   }
 
@@ -5689,8 +5697,18 @@ function _tkEdicionPendienteDe(t){
   var k=String((t&&(t.so_num||t.clave))||'');
   return (k&&m[k])||null;
 }
+/* TK154 (Emilia t672u/t675u): ticket con solicitud de edición/eliminación pendiente → violeta brillante en la lista.
+   Viene marcado desde tk_historial (solicitud_pendiente) o del cruce con tk_ediciones_pendientes. */
+function _tkSolPend(t){
+  if(!t) return null;
+  if(t.solicitud_edicion_pendiente&&typeof t.solicitud_edicion_pendiente==='object') return t.solicitud_edicion_pendiente;
+  var m=_tkEdicionPendienteDe(t);
+  if(m) return m;
+  return t.solicitud_pendiente===true?{tipo:'editar'}:null;
+}
 function _tkPillEdicion(t){
-  return _tkEdicionPendienteDe(t)?_tkPill('edicionpend','Edición pendiente'):'';
+  var sp=_tkSolPend(t); if(!sp) return '';
+  return '<span class="tk-pill tk-pill-solpend" title="Tiene una solicitud pendiente de aprobación">'+(sp.tipo==='anular'?'🟣 Eliminar · revisar':'🟣 Revisar solicitud')+'</span>';
 }
 function _tkCargarEdiciones(){
   if(typeof api!=='function' && typeof window.api!=='function') return;
@@ -5700,6 +5718,8 @@ function _tkCargarEdiciones(){
     items.forEach(function(it){ if(it&&it.clave) m[String(it.clave)]=it; });
     window._tkEdiciones=m;
     if(document.getElementById('hist-res')) _histActualizarRes(!!window._histEsStaff, true);
+    /* TK154: precalentar el detalle de los tickets con solicitud pendiente (abren al instante desde el aviso). */
+    try{ if(window.MCTickets&&typeof window.MCTickets.precargar==='function') items.slice(0,6).forEach(function(it,ix){ setTimeout(function(){ window.MCTickets.precargar(it.clave); }, 400*ix); }); }catch(_e){}
   }).catch(function(){});
 }
 
@@ -5784,7 +5804,7 @@ function _histMasterHTML(tickets, showPrices){
     var on=_histClave(t)===sel?' on':'';
     var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
     var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
-    return '<tr class="tk-row'+on+(fl?' tk-flagged':fa?' tk-falta':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
+    return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return _histCelda(t,c,showPrices); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
     var ar=st.k===c.k?(st.d>0?' ▲':' ▼'):'';
@@ -5906,35 +5926,92 @@ function _histThumbsHTML(t, res){
     var u=String(f.url||'');
     var a=String(f.archivo||'');
     if(u.indexOf('archivo:')===0){ a=u.slice(8); u=''; }
-    if((u&&(u.indexOf('http')===0||u.indexOf('data:image')===0))||a) fotos.push({url:u,archivo:a});
+    var du0=String(f.dataUrl||'');
+    if((u&&(u.indexOf('http')===0||u.indexOf('data:image')===0))||a||du0) fotos.push({url:u,archivo:a,dataUrl:du0.indexOf('data:image')===0?du0:''});
   });
   var more=Number(t.fotosMore);
   if(!(more>0)) more=Math.max(0, fotos.length-4);
   fotos=fotos.slice(0,4);
   if(!fotos.length && !res) return '';
   var h='<div class="mob-thumbs">';
+  /* TK154 (Emilia t674u): fotitos al instante. URL/dataUrl directo (sin lazy ni hidden); archivo: desde caché
+     en memoria/sessionStorage y, si falta, todas juntas en UN fotos_batch (espacio reservado, sin saltos). */
+  var pri=(window._histThumbN=(window._histThumbN||0)+1)<=24;
   fotos.forEach(function(f){
-    if(f.url) h+='<img class="mob-th" src="'+_histEsc(f.url)+'" alt="" loading="lazy" onerror="this.remove()">';
-    else if(f.archivo) h+='<img class="mob-th" data-arch="'+_histEsc(f.archivo)+'" alt="" hidden>';
+    var du=f.dataUrl||'';
+    if(!du&&f.archivo) du=_fotoThumbGet(f.archivo);
+    if(f.url||du) h+='<img class="mob-th" src="'+_histEsc(du||f.url)+'" alt="" decoding="async"'+(pri?' fetchpriority="high"':'')+' onerror="this.remove()">';
+    else if(f.archivo) h+='<img class="mob-th mob-th-wait" data-arch="'+_histEsc(f.archivo)+'" alt="" decoding="async">';
   });
   if(more>0) h+='<span class="mob-thmore">+'+more+'</span>';
   if(res) h+='<span class="mob-res">'+_histEsc(res)+'</span>';
   return h+'</div>';
 }
+/* TK154: caché de miniaturas archivo:<id> (memoria + sessionStorage con tope) para pintar sin esperar. */
+var _FOTO_SS='sunsu.th.', _FOTO_SS_MAX=120;
+function _fotoThumbGet(id){
+  id=String(id||''); if(!id) return '';
+  var c=window._fotoThumbCache=window._fotoThumbCache||{};
+  if(c[id]) return c[id];
+  try{ var v=sessionStorage.getItem(_FOTO_SS+id); if(v){ c[id]=v; return v; } }catch(_e){}
+  return '';
+}
+function _fotoThumbPut(id, dataUrl){
+  id=String(id||''); if(!id||!dataUrl) return;
+  var c=window._fotoThumbCache=window._fotoThumbCache||{};
+  c[id]=dataUrl;
+  try{
+    if(dataUrl.length>400000) return; /* las grandes solo en memoria */
+    var idx=JSON.parse(sessionStorage.getItem(_FOTO_SS+'_idx')||'[]');
+    if(idx.indexOf(id)<0) idx.push(id);
+    while(idx.length>_FOTO_SS_MAX){ var viejo=idx.shift(); try{ sessionStorage.removeItem(_FOTO_SS+viejo); }catch(_e2){} }
+    sessionStorage.setItem(_FOTO_SS+id, dataUrl);
+    sessionStorage.setItem(_FOTO_SS+'_idx', JSON.stringify(idx));
+  }catch(_e){ /* sessionStorage lleno: queda en memoria */ }
+}
+function _histPintarThumb(im, dataUrl){
+  im.src=dataUrl; im.removeAttribute('hidden'); im.classList.remove('mob-th-wait'); im.removeAttribute('data-arch');
+  im.onerror=function(){ im.remove(); };
+}
 function _histCargarThumbs(root){
+  window._histThumbN=0; /* la próxima pintada vuelve a dar prioridad a las primeras tarjetas */
   var imgs=(root||document).querySelectorAll('.mob-th[data-arch]');
   if(!imgs.length) return;
+  var porId={}, ids=[];
   Array.prototype.forEach.call(imgs, function(im){
     var id=im.getAttribute('data-arch');
     if(!id){ im.remove(); return; }
+    var c=_fotoThumbGet(id);
+    if(c){ _histPintarThumb(im, c); return; }
+    if(!porId[id]){ porId[id]=[]; ids.push(id); }
+    porId[id].push(im);
+  });
+  if(!ids.length||typeof api!=='function') return;
+  function uno(id){
+    /* respaldo de 1 foto si el lote falla */
     var pedir=(typeof api==='function')?Promise.resolve(api('fotoB64',{id:id})):Promise.reject();
     pedir.then(function(d){
-      if(!d||!d.ok||!d.b64){ im.remove(); return; }
-      im.src='data:'+(d.mime||'image/jpeg')+';base64,'+d.b64;
-      im.removeAttribute('hidden');
-      im.onerror=function(){ im.remove(); };
-    }).catch(function(){ im.remove(); });
-  });
+      var L=porId[id]||[];
+      if(!d||!d.ok||!d.b64){ L.forEach(function(im){ im.remove(); }); return; }
+      var du='data:'+(d.mime||'image/jpeg')+';base64,'+d.b64;
+      _fotoThumbPut(id, du);
+      L.forEach(function(im){ _histPintarThumb(im, du); });
+    }).catch(function(){ (porId[id]||[]).forEach(function(im){ im.remove(); }); });
+  }
+  function lote(L){
+    if(!L.length) return;
+    Promise.resolve(api('fotos_batch',{ids:L.slice(0,60)})).then(function(r){
+      if(!r||!r.ok||!r.items){ L.forEach(uno); return; }
+      L.slice(0,60).forEach(function(id){
+        var x=r.items[id];
+        if(x&&x.b64){ var du='data:'+(x.mime||'image/jpeg')+';base64,'+x.b64; _fotoThumbPut(id, du); (porId[id]||[]).forEach(function(im){ _histPintarThumb(im, du); }); }
+        else if((r.faltan||[]).indexOf(id)<0) (porId[id]||[]).forEach(function(im){ im.remove(); });
+      });
+      var resto=(r.faltan||[]).concat(L.slice(60));
+      if(resto.length) lote(resto);
+    }).catch(function(){ L.forEach(uno); });
+  }
+  lote(ids);
 }
 function _histCardHTML(t, i, showPrices){
   var Lf=(window._tkLeds||{})[String(t.tkRow)], fl=Lf&&Lf.flag, fa=!fl&&Lf&&Lf.falta&&Lf.falta.length?Lf.falta:null;
@@ -5949,7 +6026,7 @@ function _histCardHTML(t, i, showPrices){
   var colWho=_histColorQuien((t.orig&&t.orig.creado_por)||t.creado_por||t.atendido_por||t.cosmetologa||who);
   var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
-  return '<div class="mob-card'+(fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
+  return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
     +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
     +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
@@ -19650,50 +19727,60 @@ function _tkCargarEdicion(d, clave){
   else if(typeof showTab==='function'){ showTab('ticket'); if(typeof renderTicket==='function') renderTicket(document.getElementById('content')); }
 }
 window._tkCargarEdicion=_tkCargarEdicion;
+/* TK154: desde el formulario de propuesta, pedir anular el ticket (duplicado, etc.). No toca el ticket real. */
+function _tkPedirAnulacionForm(){
+  var ed=window._tkEdicion; if(!ed||!ed.clave) return;
+  var m=prompt('Se le solicitará al administrador eliminar este ticket.\n\nMotivo (obligatorio), ej. «Ticket ya realizado anteriormente»:');
+  if(m==null) return; m=String(m).trim();
+  if(m.length<3){ toast('Escribe el motivo','#B86B6B'); return; }
+  var clave=ed.clave;
+  Promise.resolve(window.api('tk_edicion_pedir',{clave:clave,anular:true,motivo:m})).then(function(d){
+    if(d&&d.error){ toast(d.error,'#B86B6B'); return; }
+    toast('📨 Se le solicitó al administrador eliminar este ticket','#6A9E7A');
+    window._tkEdicion=null; window._ticketOrigen='';
+    if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco();
+    if(typeof go==='function') go('#/m/tickets/t/'+encodeURIComponent(clave));
+  }).catch(function(e){ toast((e&&e.message)||'No se pudo enviar','#B86B6B'); });
+}
+window._tkPedirAnulacionForm=_tkPedirAnulacionForm;
 
 function _tkMoneyDiff(v){
   var n=Number(v); if(!isFinite(n)) n=0;
   return '$'+n.toFixed(2);
 }
-function _tkPintarDiffEdicion(diff){
+/* TK154-DIFF-INI (Emilia t671u): comparativo Antes → Después de una propuesta de edición o eliminación.
+   + verde agregada · − rojo eliminada · ~ ámbar modificada. Nombre completo siempre (sin recortes ni scroll horizontal en 390px). */
+function _tkPintarDiffEdicion(x){
+  function E(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function M(v){ var n=Number(v); if(!isFinite(n)) n=0; return '$'+n.toFixed(2); }
+  function LT(l){ var c=Number(l.cantidad)||1; var tot=(l.total!=null&&l.total!=='')?Number(l.total):c*(Number(l.precio_unit)||0); return c+' × '+M(l.precio_unit)+' = '+M(tot); }
+  if(!x) return '<p class="note">Sin detalle de cambios.</p>';
+  var res=(x.tipo==='anular'||x.tipo==='editar'||x.tipo==='legacy'||x.legible||x.lockdown)?x:null;
+  if(res&&res.tipo==='anular'){
+    var ta=res.total&&res.total.antes;
+    return '<div class="tk-diff tk-diff-anular"><div class="tk-d-badge">🚫 Solicita anular este ticket</div>'+(ta!=null?'<div class="tk-d-tot">Total que se anularía: <b>'+M(ta)+'</b></div>':'')+'</div>';
+  }
+  if(res&&(res.tipo==='legacy'||res.legacy)) return '<div class="tk-diff"><p class="tk-d-legacy">'+E(res.aviso||'Solicitud anterior sin detalle de cambios; al aprobar se habilitará la edición manual')+'</p></div>';
+  var diff=res?res.diff:x;
   if(!diff) return '<p class="note">Sin detalle de cambios.</p>';
-  var h='<div class="tk-diff">';
-  h+='<div class="tk-diff-h">Resumen de la edición · Antes → Después</div>';
-  (diff.cabecera||[]).forEach(function(c){
-    h+='<div class="tk-diff-cab"><b>'+_tkEsc(c.campo||'')+':</b> <span class="antes">Antes: '+_tkEsc(c.antes||'—')+'</span> <span class="flecha">→</span> <span class="despues">Ahora: '+_tkEsc(c.despues||'—')+'</span></div>';
+  var it=[];
+  (diff.cabecera||[]).forEach(function(c){ it.push({s:'~',k:'mod',t:c.campo,d:'Antes: '+(c.antes||'—')+' → Después: '+(c.despues||'—')}); });
+  var iguales=0;
+  (diff.lineas||[]).forEach(function(l){
+    var nom=l.nombre||l.sku||'';
+    if(l.estado==='agregada') it.push({s:'+',k:'add',t:nom,d:LT(l)});
+    else if(l.estado==='eliminada') it.push({s:'−',k:'del',t:nom,d:LT(l)});
+    else if(l.estado==='modificada') it.push({s:'~',k:'mod',t:nom,d:'Antes: '+LT({cantidad:l.antes_cantidad,precio_unit:l.antes_precio_unit,total:l.antes_total})+' → Después: '+LT(l)});
+    else iguales++;
   });
-  var L=diff.lineas||[];
-  if(L.length){
-    h+='<div class="tk-diff-lh">Líneas</div>';
-    L.forEach(function(l){
-      var st=l.estado||'igual';
-      var sku=_tkEsc(l.sku||'');
-      var nom=_tkEsc(l.nombre||'');
-      var desc='';
-      if(l.descuento_tipo&&Number(l.descuento_valor)>0) desc=' · desc '+_tkEsc(l.descuento_tipo)+' '+l.descuento_valor;
-      var ahora=sku+' · '+nom+' · cant '+_tkEsc(l.cantidad)+' · '+_tkMoneyDiff(l.precio_unit)+desc;
-      var cuerpo;
-      if(st==='agregada') cuerpo='<span class="despues">Agregada: '+ahora+'</span>';
-      else if(st==='eliminada') cuerpo='<span class="antes">Eliminada: '+ahora+'</span>';
-      else if(st==='modificada') cuerpo='<span class="antes">Antes: '+sku+' · cant '+_tkEsc(l.antes_cantidad)+' · '+_tkMoneyDiff(l.antes_precio_unit)+'</span> <span class="flecha">→</span> <span class="despues">Ahora: cant '+_tkEsc(l.cantidad)+' · '+_tkMoneyDiff(l.precio_unit)+desc+'</span>';
-      else cuerpo='<span class="igual">Sin cambio: '+ahora+'</span>';
-      h+='<div class="tk-diff-ln '+st+'">'+cuerpo+'</div>';
-    });
-  }
-  var ta=(diff.totales&&diff.totales.antes)||{}, td=(diff.totales&&diff.totales.despues)||{};
-  function fila(lbl, a, b){
-    var ch=Number(a)!==Number(b);
-    return '<div class="tk-diff-tot'+(ch?' ch':'')+'"><b>'+lbl+'</b> <span class="antes">'+_tkMoneyDiff(a)+'</span> <span class="flecha">→</span> <span class="despues">'+_tkMoneyDiff(b)+'</span></div>';
-  }
-  h+='<div class="tk-diff-lh">Totales</div>';
-  h+=fila('Subtotal', ta.subtotal, td.subtotal);
-  h+=fila('IVA 15%', ta.iva, td.iva);
-  h+=fila('Total', ta.total, td.total);
-  h+=fila('Pagado', ta.pagado, td.pagado);
-  h+=fila('Saldo', ta.saldo, td.saldo);
-  var ca=(diff.comision&&diff.comision.antes), cd=(diff.comision&&diff.comision.despues);
-  h+='<div class="tk-diff-tot ch"><b>Comisión estimada</b> <span class="antes">'+_tkMoneyDiff(ca)+'</span> <span class="flecha">→</span> <span class="despues">'+_tkMoneyDiff(cd)+'</span></div>';
-  h+='</div>';
-  return h;
+  var h='<div class="tk-diff"><div class="tk-diff-h">Cambios propuestos · Antes → Después</div>';
+  h+=it.length?'<ul class="tk-dl">'+it.map(function(i){ return '<li class="tk-d tk-d-'+i.k+'"><span class="tk-d-s">'+i.s+'</span><span class="tk-d-tx"><b class="tk-d-n">'+E(i.t)+'</b><span class="tk-d-det">'+E(i.d)+'</span></span></li>'; }).join('')+'</ul>':'<p class="note">No hay cambios en líneas ni datos.</p>';
+  if(iguales) h+='<div class="tk-d-igual">'+iguales+' línea'+(iguales===1?'':'s')+' sin cambio</div>';
+  var A=(diff.totales&&diff.totales.antes)||{}, D=(diff.totales&&diff.totales.despues)||{};
+  if(diff.totales&&Math.round((Number(A.total)||0)*100)!==Math.round((Number(D.total)||0)*100)) h+='<div class="tk-d-tot">Total: <b>'+M(A.total)+' → '+M(D.total)+'</b></div>';
+  var ca=diff.comision&&diff.comision.antes, cd=diff.comision&&diff.comision.despues;
+  if(diff.comision&&Math.round((Number(ca)||0)*100)!==Math.round((Number(cd)||0)*100)) h+='<div class="tk-d-com">Comisión estimada: '+M(ca)+' → '+M(cd)+'</div>';
+  return h+'</div>';
 }
+/* TK154-DIFF-FIN */
 window._tkPintarDiffEdicion=_tkPintarDiffEdicion;

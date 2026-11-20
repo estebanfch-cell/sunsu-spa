@@ -572,22 +572,37 @@ SOLICITUD_HOOKS["ticket_detalle"] = {
     const clave = claveDe(r, leerSerie(r, "so_num"));
     return { row: r, antes: { total: (v.totales as Row).total, lineas: (v.lineas as Row[]).map((l) => s(l.sku) + " ×" + n(l.cantidad) + " $" + n(l.total_linea)).join(", ") }, etiqueta: "Edición de " + clave, enlace: "#/m/tickets/t/" + encodeURIComponent(clave) };
   },
+  // TK154: guarda antes/después/diff para que la admin vea qué cambia (el ticket real no se toca).
+  preparar: async (ctx, ses, fila, tipo, propuestos, motivo) => {
+    const { prepararPropuestaTicket } = await import("./ticket_edicion_api.ts");
+    return await prepararPropuestaTicket(ctx, ses, fila, tipo, propuestos, motivo);
+  },
+  // TK154: «Aprobar y aplicar» aplica EXACTAMENTE la propuesta y el ticket sigue bloqueado para el personal.
   aplicar: async (ctx, ses, fila, propuestos, sol) => {
     if (propuestos && (propuestos as Row).edicion_form) {
       const { aplicarEdicionTicket } = await import("./ticket_edicion_api.ts");
-      return await aplicarEdicionTicket(ctx, ses, fila, propuestos as Row, sol);
+      const out = await aplicarEdicionTicket(ctx, ses, fila, propuestos as Row, sol);
+      return out.error ? out : { ...out, lockdown: true };
+    }
+    const { propuestaVacia, soloAplicable } = await import("./propuesta_edicion.ts");
+    if (propuestaVacia((propuestos || {}) as Row)) {
+      // Solicitud anterior (solo motivo): no hay nada que aplicar; la admin edita a mano si hace falta.
+      try { await logAccion(ctx.db, actorOf(ses), "APROBAR SOLICITUD", fila + " · sin detalle de cambios (anterior)" + (sol && s(sol.solicitante) ? " · pedido por " + s(sol.solicitante) : "")); } catch { /* */ }
+      return { ok: true, legacy: true, sin_cambios: true, lockdown: true };
     }
     const r = await ticketPorClave(ctx, fila);
     if (!r) return { error: "Ticket no encontrado" };
     const qurl = s((propuestos as Row).quitar_comprobante);
-    const rest = { ...(propuestos as Row) };
+    const rest = soloAplicable({ ...(propuestos as Row) });
     delete rest.quitar_comprobante;
     if (qurl) {
       const q = await quitarComprobante(ctx, ses, r, qurl);
       if (q.error) return q;
       if (!Object.keys(rest).filter((k) => k !== "_via" && rest[k] != null && rest[k] !== "").length) return q;
     }
-    return await reflags(ctx, ses, rest, await guardarTodo(ctx, ses, r, { ...rest, _via: "solicitud aprobada" }));
+    const out = await reflags(ctx, ses, rest, await guardarTodo(ctx, ses, r, { ...rest, _via: "solicitud aprobada" }));
+    if (out && !out.error) { try { await logAccion(ctx.db, actorOf(ses), "APROBAR EDICIÓN", fila + (sol && s(sol.solicitante) ? " · pedido por " + s(sol.solicitante) : "")); } catch { /* */ } }
+    return out && !out.error ? { ...out, lockdown: true } : out;
   },
   // «Solicitar eliminación» (TK59): al aprobar, la admin cancela el ticket (no se borra; queda Cancelado).
   borrar: async (ctx, ses, fila, motivo, sol) => {
