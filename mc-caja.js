@@ -1,4 +1,4 @@
-// 💵 Pagos + caja chica (TK19). MCPagos: tarjeta de pagos dentro del ticket. MCCaja: Caja chica (#/m/caja) y
+// 💵 Pagos + caja chica (TK19, TK169 compacta). MCPagos: tarjeta de pagos dentro del ticket. MCCaja: Caja chica (#/m/caja) y
 // Pagos recibidos (#/m/caja/pagos). Todo en la beta; la caja de la hoja solo se lee para arrancar con su saldo.
 (function () {
   "use strict";
@@ -14,12 +14,12 @@
     s.textContent = [
       ".mccj-migo-alerta{margin:6px 0;padding:8px 10px;border-radius:9px;background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800;font-size:.8rem}.mccj-migo-ok{margin:6px 0;padding:6px 10px;border-radius:9px;background:#F0FDF4;border:1px solid #16A34A;color:#166534;font-weight:700;font-size:.78rem}",
       ".ocr-chip{display:block;margin:4px 0;padding:5px 9px;border-radius:9px;font-size:.74rem;font-weight:700;line-height:1.3}.ocr-ok{background:#F0FDF4;border:1px solid #16A34A;color:#166534}.ocr-mal{background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800}.ocr-par{background:#FFFBEB;border:1px solid #D97706;color:#92400E}.ocr-gris{background:#F8FAFC;border:1px solid #CBD5E1;color:#475569}.ocr-leer{display:inline-flex;align-items:center;gap:4px;margin:4px 0;padding:4px 9px;border:1px solid var(--cream-d,#e5dccf);border-radius:9px;background:#fff;font:inherit;font-size:.74rem;font-weight:700;color:var(--navy-d,#1e2a44);cursor:pointer}.ocr-nota{font-size:.66rem;color:#16A34A;font-weight:700;margin-left:4px}",
-      ".mccj{max-width:980px}.mccj h2{margin:0 0 6px;font-size:1.2rem}.mccj-sub{font-size:.76rem;color:var(--gray,#8a93a6)}",
-      ".mccj-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08))}",
-      ".mccj-saldo{font-size:2rem;font-weight:800;color:var(--navy,#2c3e66)}.mccj-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}",
+      ".mccj{max-width:980px}.mccj h2{margin:0;font-size:1rem;line-height:1.2}.mccj-sub{font-size:.7rem;color:var(--gray,#8a93a6)}.mccj-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:0 0 8px}.mccj-pagos{display:inline-block;margin-top:1px;font-size:.7rem;font-weight:700;color:var(--navy,#2c3e66);text-decoration:none}.mccj-saldo-box{text-align:right}.mccj-saldo-box .mccj-sub{margin:0}.mccj-toolbar{display:flex;align-items:center;gap:6px;margin:0 0 8px;flex-wrap:wrap}.mccj-toolbar .btn{width:auto;min-height:0;height:30px;padding:4px 10px;font-size:12px;border-radius:8px;white-space:nowrap;flex:0 0 auto}.mccj-dd{position:relative}.mccj-menu{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:230px;background:#fff;border:1px solid var(--cream-d,#e6dccb);border-radius:10px;box-shadow:0 8px 24px rgba(26,39,68,.14);padding:4px;display:flex;flex-direction:column}.mccj-menu[hidden]{display:none}.mccj-menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:8px;font:inherit;font-size:.8rem;font-weight:650;cursor:pointer;color:var(--navy,#2c3e66);white-space:nowrap}.mccj-menu button:hover,.mccj-menu button:focus{background:var(--blue-l,#eef3fb);outline:none}",
+      ".mccj-card{background:#fff;border-radius:12px;padding:8px 10px;margin:8px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08))}",
+      ".mccj-saldo{font-size:1.25rem;font-weight:800;line-height:1.1;color:var(--navy,#2c3e66)}.mccj-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mccj-acts .btn{width:auto;min-height:0;padding:5px 10px;font-size:12px;border-radius:8px}",
       ".mccj-t{width:100%;border-collapse:collapse;font-size:.8rem}.mccj-t th{text-align:left;color:var(--gray,#8a93a6);font-size:.7rem;padding:5px;border-bottom:1.2px solid var(--cream-d,#e6dccb)}.mccj-t td{padding:6px 5px;border-bottom:1px solid #f1ede6;vertical-align:top}.mccj-t .num{text-align:right;white-space:nowrap}",
       ".mccj-t tr.anul td{color:#9aa0ab;text-decoration:line-through}.mccj-t tr.anul td.mccj-keep{text-decoration:none}",
-      ".mccj-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.mccj-chips button{border:1.5px solid var(--cream-d,#e6dccb);background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:.76rem;cursor:pointer}.mccj-chips button.on{border-color:var(--navy,#2c3e66);background:var(--blue-l,#eef3fb);font-weight:800}.mccj-chips input[type=date]{width:auto;flex:0 0 auto;padding:4px 8px;font-size:.78rem;margin:0}",
+      ".mccj-chips{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin:0 0 6px}.mccj-chips button{border:1.5px solid var(--cream-d,#e6dccb);background:#fff;border-radius:999px;padding:3px 8px;font:inherit;font-size:.7rem;font-weight:650;cursor:pointer;color:var(--navy,#2c3e66);height:28px}.mccj-chips button.on{border-color:var(--navy,#2c3e66);background:var(--blue-l,#eef3fb);font-weight:800}.mccj-dates{display:inline-flex;align-items:center;gap:3px}.mccj-dates-sep{color:var(--gray,#8a93a6);font-size:.7rem}.mccj-chips input[type=date],.mccj-dates input[type=date]{width:auto!important;flex:0 0 auto!important;max-width:128px;height:28px!important;min-height:0!important;padding:2px 6px!important;font-size:.7rem!important;margin:0!important;border-radius:8px;box-sizing:border-box}",
       ".mccj-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.mccj-f label{font-size:.72rem;color:var(--gray,#8a93a6);display:flex;flex-direction:column;gap:3px}.mccj-f input,.mccj-f select,.mccj-f textarea{padding:9px 10px;border:1.5px solid var(--cream-d,#e6dccb);border-radius:10px;font:inherit}",
       ".pg-vrow{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;width:100%}.pg-vrow input{flex:1 1 140px;min-width:0}.pg-vbtn{flex:0 0 auto;white-space:nowrap!important;align-self:stretch;display:inline-flex;align-items:center;margin:0;cursor:pointer;font-size:.72rem;padding:8px 10px}",
       ".pg-thumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.pg-th{position:relative;display:inline-block;flex:none}.pg-th-open{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--cream-d,#e6dccb);padding:0;background:#f4f5f8;cursor:pointer;display:block}.pg-th-x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#1A2744;color:#fff;font-size:12px;line-height:20px;cursor:pointer;padding:0}",
@@ -40,7 +40,7 @@
       ".mccj-pay-add{border:0;background:none;color:var(--navy,#5B7FA6);font:inherit;font-size:.76rem;font-weight:700;padding:4px 0;cursor:pointer}",
       ".mccj-pay .pg-thumbs{margin-top:4px}.mccj-pay .pg-th-open{width:36px;height:36px}",
       ".mccj-ov{position:fixed;inset:0;background:rgba(40,50,70,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}.mccj-ov>div{background:#fff;border-radius:16px;padding:18px;max-width:520px;width:100%;max-height:92vh;overflow:auto}",
-      ".mccj-tot{display:flex;gap:8px;flex-wrap:wrap}.mccj-tot span{background:var(--blue-l,#eef3fb);border-radius:10px;padding:6px 10px;font-size:.78rem}.mccj-tot b{display:block;font-size:.95rem}",
+      ".mccj-tot{display:flex;gap:4px;flex-wrap:wrap}.mccj-tot span{background:var(--blue-l,#eef3fb);border-radius:8px;padding:3px 8px;font-size:.68rem;line-height:1.25}.mccj-tot b{display:inline;font-size:.72rem;margin-left:4px}",
       ".mccj-in{color:#2e7d52;font-weight:700}.mccj-out{color:#b03a2e;font-weight:700}.mccj-pill{font-size:.66rem;border-radius:999px;padding:2px 8px;background:#eef0f4;color:#6b7280;font-weight:800}",
     ].join("\n");
     document.head.appendChild(s);
@@ -380,27 +380,33 @@
 
   // ---------- Caja chica ----------
   var K = { desde: hoyEc(), hasta: hoyEc(), rango: "hoy", d: null, p: null };
-  function rangos() { return [["hoy", "Hoy", 0], ["7", "7 días", 6], ["30", "30 días", 29], ["mes", "Este mes", -1]]; }
+  function rangos() { return [["hoy", "Hoy", 0], ["7", "7 días", 6], ["30", "30 días", 29], ["mes", "Mes", -1]]; }
   function aplicarRango(id) {
     K.rango = id; K.hasta = hoyEc();
     if (id === "hoy") K.desde = K.hasta; else if (id === "mes") K.desde = K.hasta.slice(0, 8) + "01"; else K.desde = diasAtras(Number(id) - 1);
   }
   function chipsHtml() {
     return '<div class="mccj-chips">' + rangos().map(function (r) { return '<button type="button" data-rg="' + r[0] + '" class="' + (K.rango === r[0] ? "on" : "") + '">' + r[1] + "</button>"; }).join("") +
-      '<input type="date" id="cj-desde" value="' + e(K.desde) + '"> <input type="date" id="cj-hasta" value="' + e(K.hasta) + '"></div>';
+      '<span class="mccj-dates"><input type="date" id="cj-desde" value="' + e(K.desde) + '" aria-label="Desde"><span class="mccj-dates-sep">–</span><input type="date" id="cj-hasta" value="' + e(K.hasta) + '" aria-label="Hasta"></span></div>';
   }
   function cajaHtml() {
     var d = K.d;
     if (!d) return '<p class="mccj-sub">Cargando…</p>';
     if (d.error) return '<p class="err">' + e(d.error) + "</p>";
-    var h = '<div class="mccj"><h2>💵 Caja chica</h2><p class="mccj-sub">Efectivo de la oficina: ingresos, gastos, propinas, depósitos y cuadre. El efectivo de los tickets entra solo cuando se registra el pago. <a href="#/m/caja/pagos">Ver pagos recibidos →</a></p>';
+    var h = '<div class="mccj"><div class="mccj-head"><div><h2>💵 Caja chica</h2><a class="mccj-pagos" href="#/m/caja/pagos">Ver pagos →</a></div>' + (d.iniciada ? '<div class="mccj-saldo-box"><div class="mccj-sub">Saldo</div><div class="mccj-saldo">' + $m(d.saldo) + "</div></div>" : "") + "</div>";
     if (!d.iniciada) {
       return h + '<div class="mccj-card"><b>La caja todavía no está abierta.</b>' + (d.hoja ? '<p class="mccj-sub">La caja de la hoja tiene ' + $m(d.hoja.saldo) + " (último movimiento " + e(d.hoja.fecha) + ").</p>" : "") +
-        (d.admin ? '<div class="mccj-acts">' + (d.hoja ? '<button class="btn" type="button" id="cj-abrir-hoja">Abrir con el saldo de la hoja (' + $m(d.hoja.saldo) + ")</button>" : "") + '<button class="btn ghost" type="button" id="cj-abrir">Abrir con otro monto</button></div>' : '<p class="mccj-sub">Pídele a un admin que la abra.</p>') + "</div></div>";
+        (d.admin ? '<div class="mccj-acts">' + (d.hoja ? '<button class="btn small" type="button" id="cj-abrir-hoja">Abrir con el saldo de la hoja (' + $m(d.hoja.saldo) + ")</button>" : "") + '<button class="btn ghost small" type="button" id="cj-abrir">Abrir con otro monto</button></div>' : '<p class="mccj-sub">Pídele a un admin que la abra.</p>') + "</div></div>";
     }
     var tot = (d.porTipo || []).map(function (x) { return "<span>" + e(x.etiqueta) + "<b>" + (x.entrada ? '<span class="mccj-in">+' + $m(x.entrada) + "</span> " : "") + (x.salida ? '<span class="mccj-out">−' + $m(x.salida) + "</span>" : "") + "</b></span>"; }).join("");
-    h += '<div class="mccj-card"><div class="mccj-sub">Saldo en caja</div><div class="mccj-saldo">' + $m(d.saldo) + "</div>" +
-      '<div class="mccj-acts"><button class="btn" type="button" data-mov="gasto">💸 Gasto</button><button class="btn ghost" type="button" data-mov="consumo">🧾 Consumo</button>' + (d.admin ? '<button class="btn ghost" type="button" data-mov="ingreso">➕ Ingreso</button>' : "") + '<button class="btn ghost" type="button" data-mov="deposito">🏦 Entrega para depósito</button>' + (d.admin ? '<button class="btn ghost" type="button" data-mov="propina_entrada">💝 Propina recibida</button><button class="btn ghost" type="button" data-mov="propina_pago">💝 Pago de propinas</button>' : "") + '<button class="btn ghost" type="button" id="cj-cuadre">⚖️ Cuadre / cierre</button></div></div>';
+    h += '<div class="mccj-toolbar"><div class="mccj-dd"><button class="btn small" type="button" id="cj-reg" aria-haspopup="menu" aria-expanded="false" aria-controls="cj-reg-menu">Registrar ▾</button>' +
+      '<div class="mccj-menu" id="cj-reg-menu" role="menu" hidden>' +
+      '<button type="button" role="menuitem" data-mov="gasto">💸 Gasto</button>' +
+      '<button type="button" role="menuitem" data-mov="consumo">🧾 Consumo</button>' +
+      (d.admin ? '<button type="button" role="menuitem" data-mov="ingreso">➕ Ingreso</button>' : "") +
+      '<button type="button" role="menuitem" data-mov="deposito">🏦 Entrega para depósito</button>' +
+      (d.admin ? '<button type="button" role="menuitem" data-mov="propina_entrada">💝 Propina recibida</button><button type="button" role="menuitem" data-mov="propina_pago">💝 Pago de propinas</button>' : "") +
+      '</div></div><button class="btn ghost small" type="button" id="cj-cuadre">⚖️ Cuadre</button></div>';
     h += '<div class="mccj-card">' + chipsHtml() + (tot ? '<div class="mccj-tot">' + tot + "</div>" : "") +
       ((d.movimientos || []).length ? '<table class="mccj-t" style="margin-top:8px"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Saldo</th><th></th></tr></thead><tbody>' +
         d.movimientos.map(function (m) {
@@ -431,8 +437,34 @@
     var f = function () { if (d1.value && d2.value) { K.desde = d1.value; K.hasta = d2.value; K.rango = ""; rep(main); } };
     if (d1) d1.onchange = f; if (d2) d2.onchange = f;
   }
+  function cerrarMenuReg() {
+    var menu = document.getElementById("cj-reg-menu"), btn = document.getElementById("cj-reg");
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function wireMenuReg(main) {
+    var btn = main.querySelector("#cj-reg"), menu = main.querySelector("#cj-reg-menu");
+    if (!btn || !menu) return;
+    btn.onclick = function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    if (!wireCaja._out) {
+      wireCaja._out = function (ev) {
+        var m = document.getElementById("cj-reg-menu"), b = document.getElementById("cj-reg");
+        if (!m || m.hidden) return;
+        if (m.contains(ev.target) || (b && b.contains(ev.target))) return;
+        cerrarMenuReg();
+      };
+      document.addEventListener("click", wireCaja._out);
+      document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") cerrarMenuReg(); });
+    }
+  }
   function wireCaja(main) {
     wireRango(main, repCaja);
+    wireMenuReg(main);
     var ah = main.querySelector("#cj-abrir-hoja");
     if (ah) ah.onclick = async function () { if (!confirm("¿Abrir la caja con " + $m(K.d.hoja.saldo) + "?")) return; var r = await api("cj_iniciar", { desdeHoja: true }); if (!r || !r.ok) { toast2((r && r.error) || "No se pudo", 1); return; } toast2("Caja abierta"); repCaja(main); };
     var ab = main.querySelector("#cj-abrir");
@@ -445,6 +477,7 @@
     main.querySelectorAll("[data-mov]").forEach(function (b) {
       b.onclick = function () {
         var tipo = b.getAttribute("data-mov");
+        cerrarMenuReg();
         modal(formMov(tipo), async function (ov) {
           var comp = await leerArchivo(ov.querySelector("#cm-comp"));
           var cat = ov.querySelector("#cm-cat");
