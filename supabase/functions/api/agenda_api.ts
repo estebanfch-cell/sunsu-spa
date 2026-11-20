@@ -4,7 +4,7 @@
 // Acuity no tiene borrado definitivo de citas en su API: solo cancelar (queda el registro y se libera el horario).
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, conTelefono } from "./lib.ts";
+import { actorOf, conTelefono, espejo, kvGet, kvSet } from "./lib.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import { esCanje, telefonoEc, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
 import { acuityCache, acuityReq, citaDeNombre, citasRango, fechaCita, limpiarCacheAcuity, nombreCita } from "./acuity.ts";
@@ -13,6 +13,7 @@ import { rellenarContactosDeFuentes } from "./clientes_contacto_api.ts";
 import { claveRegistro } from "./ventas.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { aplicarPlantilla, digitosWa, mezclarPlantillas, plantillasDefault, respuestaWa, telefonoDeFuentes } from "./wa_lib.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const hoyEc = (ctx: Ctx) => new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
@@ -42,7 +43,7 @@ function etiquetaDe(a: Row): string { const L = Array.isArray(a.labels) ? a.labe
 function vistaCita(a: Row, extra: Row = {}): Row {
   return {
     id: a.id, datetime: s(a.datetime), fecha: fechaCita(a), hora: s(a.time), fin: s(a.endTime), duracion: n(a.duration), calendarID: a.calendarID, calendario: s(a.calendar),
-    tipo: s(a.type), tipoID: a.appointmentTypeID, nueva: /PRIMERA/i.test(s(a.type)), etiqueta: etiquetaDe(a), notas: s(a.notes), addonIDs: a.addonIDs || [],
+    tipo: s(a.type), tipoID: a.appointmentTypeID, tipo_visible: tipoVisible(a.type), nueva: extra.nueva === true, etiqueta: etiquetaDe(a), notas: s(a.notes), addonIDs: a.addonIDs || [],
     nombre: s(a.firstName), apellido: s(a.lastName), cancelada: a.canceled === true, ...extra,
   };
 }
@@ -54,6 +55,78 @@ async function contexto(ctx: Ctx, ses: Ses) {
   return { niv, cals, mios } as const;
 }
 function puedeCal(c: { niv: string; mios: number[] }, calID: unknown): boolean { return c.niv === "todos" || c.mios.includes(Number(calID)); }
+
+/** Texto de intake de Acuity (no es el tratamiento). */
+export function tipoEsIntake(tipo: unknown): boolean {
+  return /primera\s*vez|gracias por regresar/i.test(s(tipo));
+}
+export function tipoVisible(tipo: unknown): string {
+  return tipoEsIntake(tipo) ? "" : s(tipo);
+}
+export function claveWaCita(id: unknown): string {
+  return "apt:" + s(id);
+}
+/** Fecha y hora al estilo del mensaje viejo de confirmación (es-EC, 12 h). */
+export function fmtCitaWa(iso: unknown): { dia: string; hora: string } {
+  const raw = s(iso).replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+  const dt = new Date(raw);
+  if (isNaN(dt.getTime())) return { dia: "", hora: "" };
+  const dia = new Intl.DateTimeFormat("es-EC", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Guayaquil" }).format(dt);
+  const hora = new Intl.DateTimeFormat("es-EC", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Guayaquil" }).format(dt);
+  return { dia, hora };
+}
+function visitasPrevias(tks: Row[], nombre: string, apellido: string, antesDe: string, ced?: string): boolean {
+  const pn = normNombre(nombre).split(" ")[0], ap = normNombre(apellido).split(" ")[0];
+  return tks.some((t) => {
+    if (t.borrado_at) return false;
+    const f = ymdUtc(t.timestamp);
+    if (!f || f >= antesDe) return false;
+    const cedT = normCedula(t.id_3);
+    if (ced && cedT) return cedT === ced;
+    return normNombre(s(t.nombre)).split(" ")[0] === pn && normNombre(s(t.apellido)).split(" ")[0] === ap;
+  });
+}
+function etiquetaCerrada(et: string): boolean {
+  return /CONFIRMADA|COMPLETADO|INGRESADO|NO LLEGO/.test(et.toUpperCase());
+}
+async function plantillasWa(ctx: Ctx): Promise<Record<string, string>> {
+  const m = new Map<string, string>();
+  try {
+    for (const r of await todas(ctx, "configuracion")) {
+      const k = s(r.col_1).toUpperCase();
+      if (k) m.set(k, s(r.col_2));
+    }
+  } catch { /* defaults */ }
+  return mezclarPlantillas(m);
+}
+function linkRegistro(plantillas: Record<string, string>): string {
+  let l = s(plantillas["LINK REGISTRO"] || plantillasDefault()["LINK REGISTRO"]).trim();
+  if (l && !/^https?:\/\//i.test(l)) l = "https://" + l.replace(/^\/+/, "");
+  return l;
+}
+function sinTelefono(row: Row): Row {
+  const out = { ...row };
+  delete out.telefono; delete out.phone; delete out.tel; delete out.celular; delete out.digitos; delete out.email;
+  return out;
+}
+async function enviadosCita(ctx: Ctx): Promise<Set<string>> {
+  const ids = new Set<string>();
+  try {
+    for (const r of await todas(ctx, "wa_enviados")) {
+      if (s(r.tipo) !== "cita_confirmacion") continue;
+      const k = s(r.clave);
+      if (k) ids.add(k.replace(/^apt:/, ""));
+      const ap = r.data && typeof r.data === "object" ? s((r.data as Row).appointment_id) : "";
+      if (ap) ids.add(ap);
+    }
+  } catch { /* */ }
+  try {
+    const store = await kvGet(ctx.db, "SUNSU_CITA_WA");
+    for (const k of Object.keys(store)) if (k) ids.add(k.replace(/^apt:/, ""));
+  } catch { /* */ }
+  return ids;
+}
+
 
 extend("ag_meta", "any", async (_p, ctx, ses) => {
   const c = await contexto(ctx, ses);
@@ -87,12 +160,23 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
   } catch { /* el listado de citas no depende del relleno */ }
   const vis = L.filter((a) => c.niv === "todos" || c.mios.includes(Number(a.calendarID)));
   const links = await todas(ctx, "beta_citas_ticket");
-  const tks = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at && ymdUtc(t.timestamp) >= desde && ymdUtc(t.timestamp) <= hasta);
+  const tksAll = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at);
+  const tks = tksAll.filter((t) => ymdUtc(t.timestamp) >= desde && ymdUtc(t.timestamp) <= hasta);
+  const waOk = await enviadosCita(ctx);
+  const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
   const citas = vis.map((a) => {
     const f = fechaCita(a), ln = links.find((x) => s(x.appointment_id) === s(a.id));
     const tk = ln ? null : tks.find((t) => ymdUtc(t.timestamp) === f && citaDeNombre([a], s(t.nombre), s(t.apellido)));
     const et = etiquetaDe(a).toUpperCase();
-    return vistaCita(a, { ticket: ln ? s(ln.ticket_clave) : tk ? claveDe(tk, leerSerie(tk, "so_num")) : "", atendida: !!ln || !!tk || et === "COMPLETADO" || et.includes("INGRESADO") });
+    const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+    const ced = ficha ? normCedula(ficha.cedula) : "";
+    const nueva = !visitasPrevias(tksAll, s(a.firstName), s(a.lastName), f || desde, ced);
+    return sinTelefono(vistaCita(a, {
+      ticket: ln ? s(ln.ticket_clave) : tk ? claveDe(tk, leerSerie(tk, "so_num")) : "",
+      atendida: !!ln || !!tk || et === "COMPLETADO" || et.includes("INGRESADO"),
+      nueva,
+      wa_enviado: waOk.has(s(a.id)),
+    }));
   }).sort((x, y) => s(x.datetime).localeCompare(s(y.datetime)));
   const porDia: Record<string, Record<string, number>> = {};
   for (const x of citas) { const d = porDia[s(x.fecha)] ||= { total: 0 }; d.total++; d[s(x.calendarID)] = (d[s(x.calendarID)] || 0) + 1; }
@@ -199,6 +283,47 @@ async function ponerEtiqueta(ctx: Ctx, aptId: string, prefijo: string, siNoTiene
   return { ok: true, etiqueta: s(lab.name) };
 }
 const ETQ_STAFF = new Set(["NO LLEGO"]);
+
+/** WhatsApp de confirmación: el teléfono se resuelve aquí y no se devuelve suelto (solo el wa.me). */
+extend("ag_wa", "any", async (p, ctx, ses) => {
+  const c = await contexto(ctx, ses);
+  if ("error" in c) return c;
+  if (c.niv !== "todos") return { error: "Solo recepción o admin confirma citas por WhatsApp" };
+  const id = s(p.id);
+  if (!id) return { error: "Falta la cita" };
+  const cur = await acuityReq(ctx, "appointments/" + encodeURIComponent(id));
+  if ("error" in cur) return { error: cur.error };
+  const a = cur.data as Row;
+  if (!puedeCal(c, a.calendarID)) return { error: "Esa cita no es de tu calendario" };
+  if (a.canceled === true) return { error: "La cita está cancelada" };
+  const et = etiquetaDe(a).toUpperCase();
+  if (etiquetaCerrada(et)) return { error: "Esta cita ya está " + et.toLowerCase() };
+  const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
+  const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+  const ced = ficha ? normCedula(ficha.cedula) : "";
+  const tksAll = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at);
+  const nueva = !visitasPrevias(tksAll, s(a.firstName), s(a.lastName), fechaCita(a) || hoyEc(ctx), ced);
+  const tel = digitosWa(a.phone) || telefonoDeFuentes([a, ficha]);
+  const plantillas = await plantillasWa(ctx);
+  const nom = (s(a.firstName).split(" ")[0] || s(a.firstName)).trim();
+  const fh = fmtCitaWa(a.datetime);
+  const bloqueReg = nueva ? aplicarPlantilla(plantillas["MENSAJE REGISTRO PRIMERA VISITA"] || plantillasDefault()["MENSAJE REGISTRO PRIMERA VISITA"], { link: linkRegistro(plantillas) }) : "";
+  const texto = aplicarPlantilla(plantillas["MENSAJE CONFIRMACION CITA"] || plantillasDefault()["MENSAJE CONFIRMACION CITA"], { nombre: nom, dia: fh.dia, hora: fh.hora, registro: bloqueReg });
+  const out = sinTelefono(respuestaWa({ digitos: tel, texto, tipos: ["cita"], tipoMensaje: "cita_confirmacion" }));
+  if (out.tiene_tel === true) {
+    const clave = claveWaCita(id);
+    const wa: Row = { tipo: "cita_confirmacion", clave, ts: hoyEc(ctx), usuario: actorOf(ses), data: { appointment_id: id } };
+    try {
+      const store = await kvGet(ctx.db, "SUNSU_CITA_WA");
+      store[clave] = { u: actorOf(ses), ts: hoyEc(ctx), tipo: "cita_confirmacion" };
+      await kvSet(ctx.db, actorOf(ses), "SUNSU_CITA_WA", store);
+    } catch { /* */ }
+    await espejo(ctx.db, actorOf(ses), "wa_enviados", wa);
+    out.wa_enviado = true;
+  }
+  return out;
+});
+
 extend("ag_etiqueta", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
