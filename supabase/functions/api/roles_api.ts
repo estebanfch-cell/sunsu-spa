@@ -149,6 +149,16 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
   const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
   const { afiliadaSegunOverlay } = await import("./empleados_api.ts");
   const anioFiltro = n(p.anio) || 0;
+  // TK166: el neto del historial sale del detalle congelado (ingresos − IESS 9.45 % − descuentos), no del total de ingresos.
+  const detalles = await ctx.db.all("beta_rol_hist_detalle").catch(() => [] as Row[]);
+  const cedN = (v: unknown) => s(v).replace(/\.0+$/, "").replace(/\D/g, "");
+  const netoDe = (periodo: string, cedula: unknown, total: number, r: Row): number => {
+    const hit = detalles.find((x) => s(x.periodo).toUpperCase() === periodo.toUpperCase() && cedN(x.cedula) === cedN(cedula));
+    const d = hit && hit.detalle && typeof hit.detalle === "object" ? hit.detalle as Row : null;
+    if (d && d.neto != null) return n(d.neto);
+    const aportable = n(r.sueldo) + n(r.bono) + n(r.comisiones) + n(r.extras_m_o_q);
+    return Math.round((total - aportable * 0.0945) * 100) / 100;
+  };
   const items: Row[] = [];
   for (const [periodo, filas] of porPeriodo) {
     const anio = anioDeClave(periodo);
@@ -164,7 +174,7 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
         periodo, etiqueta: etiquetaPeriodo(periodo), anio,
         persona, cedula: s(r.cedula),
         totalIngresos: n(r.total_ingresos_u),
-        neto: n(r.total_ingresos_u),
+        neto: netoDe(periodo, r.cedula, n(r.total_ingresos_u), r),
         publicado: pub,
         estado: "aprobado",
         fuente: "historial",

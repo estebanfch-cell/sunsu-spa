@@ -273,6 +273,9 @@ function aliases(d: DiaAsistencia): DiaAsistencia {
   };
 }
 
+/** Desde esta fecha la asistencia marcada en la app tiene prioridad sobre Jibble (TK166). */
+export const APP_PRIORIDAD_DESDE = "2026-11-20";
+
 export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: AsistenciaConfig, feriados: string[], permisos: PermisoIn[], jibble?: JibbleIn | null, jornada?: JornadaDia | null): DiaAsistencia {
   const fer = new Set(feriados);
   const perm = permisoEn(permisos, fecha, config.jornada_horas);
@@ -284,8 +287,11 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
     supl50Min: 0, supl100Min: 0, extraordinariasMin: 0, extrFueraHorarioMin: 0,
     esFeriado: fer.has(fecha), esDescanso: descanso,
   };
-  if (!delDia.length) {
-    if (jibble && (jibble.payrollMin || jibble.suplMin || jibble.extrMin || jibble.descMin)) {
+  const conJibble = !!(jibble && (jibble.payrollMin || jibble.suplMin || jibble.extrMin || jibble.descMin));
+  // TK166 (Emilia t763u): desde el 20/11/2026 manda la marca de la app; Jibble queda de respaldo para los días
+  // sin marcas. Antes de esa fecha, el día que tiene Jibble se queda con Jibble (fue lo que se pagó).
+  if (!delDia.length || (conJibble && fecha < APP_PRIORIDAD_DESDE)) {
+    if (jibble && conJibble) {
       return {
         ...vacio, fuente: "jibble", workedMin: jibble.payrollMin, ordinaryMin: jibble.payrollMin,
         suplMin: jibble.suplMin, extrMin: jibble.extrMin, descMin: jibble.descMin, diaContado: true,

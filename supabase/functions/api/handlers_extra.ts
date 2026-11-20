@@ -356,93 +356,28 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     const snap = (aprobado.snapshot && typeof aprobado.snapshot === "object") ? aprobado.snapshot as R : {};
     return { ok: true, data: { ...snap, fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
   }
-  if (histRow && acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos") {
-    const data = rolDesdeHistorial(histRow, periodo);
-    return { ok: true, data, fuente: "historial", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
+  // TK166: un mes del Historial RRHH ya se pagó — todos (admin y personal) ven ese rol, con el detalle
+  // línea por línea (congelado en beta_rol_hist_detalle o armado al vuelo desde la hoja del mes).
+  if (histRow) {
+    const clave = clavePeriodo(periodo);
+    const { detalleGuardadoDe, detalleHistorialDe } = await import("./rol_historial_detalle.ts");
+    let data: R | null = await detalleGuardadoDe(ctx, clave, s(histRow.cedula)).catch(() => null);
+    if (!data) {
+      try { data = (await detalleHistorialDe(ctx, histRow, clave, etiquetaPeriodo(clave), true)).d; } catch { data = rolDesdeHistorial(histRow, periodo); }
+    }
+    return { ok: true, data: { ...data, estado: "aprobado" }, fuente: "historial", estado: "aprobado", periodo: clave, etiqueta: etiquetaPeriodo(clave) };
   }
   if (!e || !mes) return { ok: false, error: "Empleada o periodo no encontrado" };
   const noPub = await exigirRolPublicado(ctx, ses, periodo, s(e.nombre_app) || s(e.apellidos_y_nombres));
   if (noPub) return { ok: false, error: noPub };
-  const { fichaIessDe } = await import("./empleados_api.ts");
-  const iessFicha = await fichaIessDe(ctx, s(e.nombre_app) || s(e.apellidos_y_nombres), `${anio}-${String(mes).padStart(2, "0")}-25`);
-  if (!iessFicha.afiliada) {
-    return { ok: false, error: "Esta persona no está afiliada al IESS: se le genera una Orden de compra de servicios en lugar del rol de pagos.", ocServicios: true, nombre: s(e.nombre_app) || s(e.apellidos_y_nombres) };
-  }
-  const { horasDeEmpleada } = await import("./asistencia_api.ts");
-  let horas = { hayDatos: false, hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, atrasoMin: 0, faltas: 0, diasLaborados: null as number | null, diasJibble: 0, diasPropios: 0 };
-  try { horas = await horasDeEmpleada(ctx, s(e.nombre_app), anio, mes); } catch { /* 0010 todavía no aplicado */ }
-  const rpcArgs: R = { p_nombre_app: s(e.nombre_app), p_anio: anio, p_mes: mes };
-  if (horas.hayDatos) {
-    rpcArgs.p_hrs_supl = horas.hrsSupl;
-    rpcArgs.p_hrs_extr = horas.hrsExtr;
-    rpcArgs.p_hrs_desc = horas.hrsDesc;
-    if (horas.diasLaborados != null) rpcArgs.p_dias_laborados = horas.diasLaborados;
-  }
-  let rpc: R | null = null;
-  try { rpc = await ctx.db.rpc("rol_calcular", rpcArgs) as R; } catch { rpc = null; }
-  const calculado = rpc && !rpc.error ? rpc : null;
-  const com = calculado
-    ? {
-      comFaciales: n(calculado.com_faciales), comExtras: n(calculado.com_extras), comRecepcion: n(calculado.com_recepcion),
-      comProductos: n(calculado.com_productos), comPaquetes: n(calculado.com_paquetes), multas: n(calculado.multas_descuentos),
-    }
-    : await comisionesDeTablas(ctx, s(e.nombre_app), anio, mes);
-  // Multas de la beta (beta_multas) del mismo corte 26→25: se suman a las del sistema central.
-  const cicloM = cicloInicio(`${anio}-${String(mes).padStart(2, "0")}-25`), finM = cicloFin(cicloM);
-  const { multasBetaRol } = await import("./multas_beta_api.ts");
-  const mBeta = await multasBetaRol(ctx.db, s(e.nombre_app) || s(e.apellidos_y_nombres), cicloM, finM);
-  com.multas = round2(n(com.multas) + mBeta.total);
-  const multasCentral = (await ctx.db.all("multas_descuentos").catch(() => [] as R[])).filter((r) => {
-    if (r.borrado_at) return false;
-    const f = ymdUtc(r.fecha);
-    return !!f && f >= cicloM && f <= finM && normNombre(s(r.cosmetologa) || s(r.empleada) || s(r.nombre)).startsWith(normNombre(s(e.nombre_app)).split(" ")[0] || "—");
-  }).map((r) => ({ tipo: s(r.tipo) || "MULTA", fecha: ymdUtc(r.fecha), monto: n(r.monto), motivo: s(r.motivo), fuente: "sistema" }));
-  const dinero = (...keys: string[]) => {
-    for (const k of keys) if (n(e[k]) > 0) return n(e[k]);
-    return 0;
-  };
-  const finMes = anio && mes ? new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10) : "";
-  const cfg = finMes ? pagoVigente(await pagoFilas(ctx), s(e.nombre_app) || s(e.apellidos_y_nombres), finMes) : null;
-  const sueldoBase = cfg ? n(cfg.sueldo) : dinero("sueldo_base", "sueldo", "sueldo_mensual");
-  const bonoFijo = cfg ? n(cfg.bono) : dinero("bono_fijo", "bono");
-  const local = rolCalcular({
-    sueldo: sueldoBase, bono: bonoFijo, fondoReserva: cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(e.fondo_reserva).toUpperCase() === "SI",
-    iessPct: cfg && cfg.iess_pct != null && cfg.iess_pct !== "" ? n(cfg.iess_pct) : undefined,
-    fondoDesde: cfg ? s(cfg.fondo_desde) || null : null,
-    vacacionesDesdeAnio: cfg && cfg.vacaciones_desde_anio != null && cfg.vacaciones_desde_anio !== "" ? n(cfg.vacaciones_desde_anio) : undefined,
-    fechaIngreso: s(e.fecha_ingreso) || "2020-01-01", anio, mes,
-    diasLaborados: horas.hayDatos ? horas.diasLaborados : null,
-    hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc,
-    comFaciales: com.comFaciales, comExtras: com.comExtras, comRecepcion: com.comRecepcion,
-    comProductos: com.comProductos, comPaquetes: com.comPaquetes, multas: com.multas,
-    hip: iessFicha.hip, quir: iessFicha.quir, sandalo: iessFicha.otros,
-  });
-  const costoH = sueldoBase / 240;
-  // Con configurador manda el cálculo local: rol_calcular SQL sigue leyendo la ficha, no pago_config.
-  // egresos del PDF es lo que va además del IESS (el PDF suma iess + egresos).
-  const deHoja = rpc && !rpc.error && !cfg ? rpc : null;
-  const iess = deHoja ? n(deHoja.iess_personal) : local.iess;
-  const iessDesc = round2(iessFicha.hip + iessFicha.quir + iessFicha.otros);
-  // rol_calcular (SQL) no conoce beta_multas ni descuentos IESS manuales: se suman aquí.
-  const egresosConIess = deHoja ? round2(n(deHoja.total_egresos) + mBeta.total + iessDesc) : local.egresos;
-  const data = {
-    nombre: s(e.apellidos_y_nombres) || s(e.nombre_app), cedula: s(e.cedula), cargo: s(e.cargo),
-    diasNorm: horas.hayDatos ? horas.diasLaborados : "", diasJibble: horas.hayDatos ? horas.diasJibble : "", diasDesc: "", diasFest: "", sueldo: local.sueldo, bono: local.bono,
-    comFaciales: local.comFaciales, comPaquetes: local.comPaquetes, comProductos: local.comProductos,
-    hrsSupl: horas.hrsSupl, valSupl: round2(horas.hrsSupl * costoH * 1.5),
-    hrsExtr: horas.hrsExtr, valExtr: round2(horas.hrsExtr * costoH * 2),
-    hrsDesc: horas.hrsDesc, valDesc: round2(horas.hrsDesc * costoH * 2),
-    atrasoMin: horas.atrasoMin, faltas: horas.faltas,
-    fuenteHoras: !horas.hayDatos ? "sin_marcajes" : (horas.diasJibble && !horas.diasPropios ? "jibble" : "asistencia"),
-    dec13: local.dec13, dec14: local.dec14, fondoReserva: local.fondoReserva, vacaciones: local.vacaciones,
-    totalIngresos: deHoja ? n(deHoja.total_ingresos) : local.totalIngresos,
-    iess,
-    egresos: round2(Math.max(0, egresosConIess - iess)),
-    totalRecibir: deHoja ? round2(n(deHoja.total_recibir) - mBeta.total - iessDesc) : local.totalRecibir,
-    anticipo: 0, prestHip: iessFicha.hip, prestQuir: iessFicha.quir, prestOtro: iessFicha.otros, sheet, multasDetalle: [...multasCentral, ...mBeta.detalle.map((x) => ({ ...x, tipo: "MULTA " + s(x.concepto) }))], multasBeta: mBeta.total,
-    fuente: deHoja ? "rol_calcular" : "beta-local",
-  };
-  return { ok: true, data };
+  // TK166: un mes sin Historial RRHH se calcula con el MISMO motor que «Crear rol» (horas de Mi asistencia
+  // con recorte a 15 min, comisiones del ciclo, 13°/14°/fondo según la ficha, IESS 9.45 %). Antes usaba un
+  // cálculo aparte (fondo = sueldo/12, vacaciones mensualizadas) y no traía el detalle por tipo ($NaN).
+  const { armarEntrada } = await import("./roles_crear_api.ts");
+  const armado = await armarEntrada(ctx, s(e.nombre_app) || s(e.apellidos_y_nombres), periodo, anio, mes);
+  if (armado.error) return { ok: false, ...armado };
+  const snap = armado.snap as R;
+  return { ok: true, data: { ...snap, sheet, fuente: "motor-rrhh" }, fuente: "motor-rrhh", periodo: clavePeriodo(periodo), etiqueta: etiquetaPeriodo(clavePeriodo(periodo)) };
 });
 
 function dineroDe(row: R | undefined, keys: string[]): number {

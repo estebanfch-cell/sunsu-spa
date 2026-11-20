@@ -89,6 +89,11 @@
       + '<div class="emp-field" id="emp-user-wrap"' + (it.tieneUsuario ? "" : " hidden") + '><span class="emp-k">Usuario vinculado</span>'
       + '<select class="emp-in" id="emp-usuario">' + uopts + "</select></div>"
       + '<div class="emp-field"><span class="emp-k">¿Afiliada al IESS?</span>' + siNo("afiliada_iess", it.afiliadaIess !== false, "Sí", "No") + "</div>"
+      + (it.afiliadaIess !== false
+        ? '<div class="emp-field"><span class="emp-k">Décimo tercero</span>' + siNo("dec13_mensual", it.dec13Mensual !== false, "Mensual", "Acumulado") + "</div>"
+          + '<div class="emp-field"><span class="emp-k">Décimo cuarto</span>' + siNo("dec14_mensual", it.dec14Mensual !== false, "Mensual", "Acumulado") + "</div>"
+          + '<div class="emp-field"><span class="emp-k">Fondo de reserva</span>' + siNo("fondo_mensual", it.fondoMensual !== false, "En el rol", "Al IESS") + "</div>"
+        : "")
       + "</section>";
   }
 

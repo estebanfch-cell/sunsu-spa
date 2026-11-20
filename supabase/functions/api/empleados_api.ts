@@ -109,6 +109,9 @@ function pubEmpleada(rrhh: Row | undefined, overlay: Row | undefined, usuario: R
     usuarioNombre: usuario ? (s(usuario.nombre) || s(usuario.name)) : null,
     usuarioRol: usuario ? s(usuario.rol || usuario.role) : null,
     afiliadaIess: overlay ? overlay.afiliada_iess !== false : true,
+    dec13Mensual: overlay?.dec13_mensual !== false,
+    dec14Mensual: overlay?.dec14_mensual !== false,
+    fondoMensual: overlay?.fondo_mensual !== false,
     proveedorId: s(overlay?.proveedor_id) || null,
     horarioId: horario ? s(horario.id) : null,
     horarioNombre: horario ? s(horario.nombre) : null,
@@ -256,6 +259,9 @@ extend("emp_guardar", "any", async (p, ctx, ses) => {
   if (p.tiene_usuario === false || p.tiene_usuario === "0" || p.tiene_usuario === "no") extra.usuario_id = null;
   else if (p.usuario_id != null) extra.usuario_id = s(p.usuario_id) || null;
   if (p.notas != null) extra.notas = s(p.notas);
+  // TK166: décimo tercero / cuarto / fondo de reserva mensualizados (sí) o acumulados (no)
+  const siNoB = (v: unknown) => v === true || v === "1" || s(v).toLowerCase() === "si" || s(v).toLowerCase() === "sí" || s(v).toLowerCase() === "true";
+  for (const k of ["dec13_mensual", "dec14_mensual", "fondo_mensual"]) if (p[k] != null) extra[k] = siNoB(p[k]);
   const ov = await asegurarOverlay(ctx, ses, nombre, extra);
   return { ok: true, id: s(ov.id), nombre };
 });
