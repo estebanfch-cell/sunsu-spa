@@ -13,7 +13,7 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.ok(enSw && enHtml);
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-20-TK182b");
+    assert.equal(enSw, "sunsu-2026-11-20-TK182c");
   });
   it("en la app nativa (TestFlight) no hay banner ni chequeo de SW", () => {
     assert.match(upd, /Capacitor\.isNativePlatform\(\)/);
@@ -53,5 +53,16 @@ describe("TK182b factura completa en la tabla de Tickets", () => {
     assert.match(html, /\.tk-table th\[data-c="fac"\] \{ width: 172px; \}/);
     assert.match(html, /\.tk-table td\[data-c="fac"\] \{ overflow: visible; text-overflow: clip; white-space: nowrap; \}/);
     assert.match(bs, /replace\(\/\^<td\/,'<td data-c="'\+c\.k\+'"'\)/);
+  });
+});
+
+describe("TK182c nombre de la clienta siempre completo", () => {
+  const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
+  it("Clienta sin «…»; en tabla angosta Forma de pago se corta y la factura muestra los últimos dígitos", () => {
+    assert.match(html, /td\[data-c="cli"\] \{ white-space: normal; overflow: visible; text-overflow: clip;/);
+    assert.match(html, /@container tklist \(max-width: 1100px\)/);
+    assert.match(html, /td\[data-c="fac"\] \.tk-fac-corta \{ display: inline; \}/);
+    assert.match(bs, /<span class="tk-fac-corta">…'\+_histEsc\(fc\)/);
+    assert.match(bs, /<span class="tk-fac" title="'\+_histEsc\(ff\)\+'">/);
   });
 });

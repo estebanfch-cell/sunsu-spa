@@ -28,6 +28,6 @@ describe("TK106 · historial de roles del personal", () => {
     const html = beta();
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     assert.match(html, /20261120tk178/);
-    assert.match(sw, /sunsu-2026-11-20-TK182b/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
+    assert.match(sw, /sunsu-2026-11-20-TK182c/);    assert.doesNotMatch(sw, /sunsu-beta-2026-11-18-TK107/);
   });
 });
