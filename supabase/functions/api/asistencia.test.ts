@@ -235,8 +235,9 @@ describe("asistencia", () => {
     const id = (await db.all("asistencia_marcajes"))[0].id;
     const no = await handle("asis_corregir", { token, id, ts: instanteEcuador("2026-10-21", "09:05"), motivo: "reloj mal" }, ctx);
     assert.match(String((no as { error?: string }).error), /admin/);
-    const si = await handle("asis_corregir", { token: "t-emi", id, ts: instanteEcuador("2026-10-21", "09:05"), motivo: "el reloj del teléfono iba adelantado" }, ctx);
-    assert.equal((si as { ok?: boolean }).ok, true);
+    // TK172: una corrección no puede quedar en el futuro (ahora son las 09:00).
+    const si = await handle("asis_corregir", { token: "t-emi", id, ts: instanteEcuador("2026-10-21", "08:55"), motivo: "el reloj del teléfono iba adelantado" }, ctx);
+    assert.equal((si as { ok?: boolean }).ok, true, String((si as { error?: string }).error));
     const aud = (await db.all("asistencia_auditoria")).find((r) => r.accion === "correccion");
     assert.equal((aud?.antes as { ts?: string }).ts?.includes("14:00"), true);
     assert.equal(aud?.actor?.toString().includes("Emi"), true);
