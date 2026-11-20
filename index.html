@@ -1121,6 +1121,19 @@
   .tk-table th[data-c="acc"] { width: 78px; }
   .tk-table td[data-c="fac"] { overflow: visible; text-overflow: clip; white-space: nowrap; }
   .tk-table td[data-c="fac"] .tk-fac { font-size: 0.72rem; letter-spacing: 0; }
+  /* TK182c (Emilia t795u): el nombre de la clienta SIEMPRE completo (puede bajar de línea, nunca «…»).
+     Si la tabla es angosta (menú lateral), primero se acorta Forma de pago y la factura muestra solo los últimos dígitos. */
+  .tk-list { container-type: inline-size; container-name: tklist; }
+  .tk-table td[data-c="cli"] { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.25; }
+  .tk-fac-corta { display: none; }
+  @container tklist (max-width: 1100px) {
+    .tk-table th[data-c="fac"] { width: 92px; }
+    .tk-table th[data-c="fpago"] { width: 96px; }
+    .tk-table td[data-c="fpago"] { overflow: hidden; text-overflow: ellipsis; }
+    .tk-table td[data-c="fpago"] > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+    .tk-table td[data-c="fac"] .tk-fac-full { display: none; }
+    .tk-table td[data-c="fac"] .tk-fac-corta { display: inline; }
+  }
   .mob-acts.tk-acts-row { flex-direction: row; gap: 8px; justify-content: flex-end; vertical-align: middle; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
@@ -8505,7 +8518,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK182b"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK182c"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8686,7 +8699,7 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk179"></script>
-<script src="beta-screens.js?v=20261120tk182b"></script>
+<script src="beta-screens.js?v=20261120tk182c"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261120tk179"></script>
