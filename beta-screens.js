@@ -251,7 +251,7 @@ let EXTRAS=[
   {sku:'SUNSU-14',n:'Ampolla Especial Hidratación',t:10.00},
   {sku:'SUNSU-15',n:'Ampolla Especial',t:10.00},
   {sku:'SUNSU-16',n:'Peeling Enzimático',t:12.00},
-  {sku:'SUNSU-31',n:'PDRN Serum',t:20.00},
+  {sku:'SUNSU-31',n:'PDRN Serum',t:15.00},
   {sku:'SUNSU-32',n:'Exosome Serum',t:20.00},
   {sku:'SUNSU-33',n:'Skin Análisis',t:15.00},
   {sku:'SUNSU-36',n:'Yoga Facial Drenante',t:15.00},
