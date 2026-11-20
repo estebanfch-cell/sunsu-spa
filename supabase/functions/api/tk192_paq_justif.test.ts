@@ -76,9 +76,9 @@ describe("TK192 · front canje y motivo de descuento", () => {
     assert.match(just, /id: "prepagado"/);
   });
   it("cache TK192 igual en index y sw", () => {
-    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK194"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK194"/);
-    assert.match(html, /beta-screens\.js\?v=20261120tk194/);
-    assert.match(html, /descuento_justif\.js\?v=20261120tk194/);
+    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK195"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK195"/);
+    assert.match(html, /beta-screens\.js\?v=20261120tk195/);
+    assert.match(html, /descuento_justif\.js\?v=20261120tk195/);
   });
 });
