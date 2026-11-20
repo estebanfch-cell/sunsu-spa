@@ -383,6 +383,16 @@ extend("asis_periodo", "any", async (p, ctx, ses) => {
   return { ok: true, anio, mes, personas };
 });
 
+/** TK172 (Emilia t774u): admin edita marcas solo del período abierto (mes en curso) y nunca en el futuro. */
+function fueraDePeriodo(ctx: Ctx, ts: string): string | null {
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const f = ymdDeTs(ts);
+  if (!f) return "Hora inválida.";
+  if (f.slice(0, 7) !== hoy.slice(0, 7)) return "Solo se editan marcas del período abierto (mes en curso).";
+  if (new Date(ts).getTime() > ctx.now.getTime()) return "No se pone una marca en el futuro.";
+  return null;
+}
+
 extend("asis_corregir", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin corrige una marca" };
   if (!s(p.motivo)) return { error: "La corrección necesita un motivo" };
@@ -391,8 +401,19 @@ extend("asis_corregir", "any", async (p, ctx, ses) => {
   if (!hit) return { error: "Marca no encontrada" };
   const antes = { tipo: hit.tipo, ts: hit.ts, anulado: hit.anulado === true };
   const patch: R = {};
-  if (s(p.tipo)) patch.tipo = s(p.tipo);
-  if (s(p.ts)) patch.ts = s(p.ts);
+  const fueraAntes = fueraDePeriodo(ctx, s(hit.ts));
+  if (fueraAntes && !/futuro/.test(fueraAntes)) return { error: fueraAntes };
+  if (s(p.tipo)) {
+    if (!["entrada", "salida", "almuerzo_inicio", "almuerzo_fin"].includes(s(p.tipo))) return { error: "Tipo de marca desconocido." };
+    patch.tipo = s(p.tipo);
+  }
+  if (s(p.ts)) {
+    const d = new Date(s(p.ts));
+    if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s(p.ts)) || Number.isNaN(d.getTime())) return { error: "Hora inválida (usa 2026-10-21T09:05:00-05:00)" };
+    const fuera = fueraDePeriodo(ctx, d.toISOString());
+    if (fuera) return { error: fuera };
+    patch.ts = d.toISOString();
+  }
   if (p.anulado === true || s(p.anulado) === "true") { patch.anulado = true; patch.motivo_anulacion = s(p.motivo); }
   if (p.anulado === false || s(p.anulado) === "false") { patch.anulado = false; patch.motivo_anulacion = ""; }
   if (!Object.keys(patch).length) return { error: "Nada que corregir" };
@@ -530,6 +551,8 @@ extend("asis_marca_manual", "any", async (p, ctx, ses) => {
   const d = new Date(s(p.ts));
   if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s(p.ts)) || Number.isNaN(d.getTime())) return { error: "Hora inválida (usa 2026-10-21T09:05:00-05:00)" };
   if (d.getTime() > ctx.now.getTime()) return { error: "No se agrega una marca en el futuro." };
+  const fuera = fueraDePeriodo(ctx, d.toISOString());
+  if (fuera) return { error: fuera };
   const e = await empleadaDe(ctx, nombre);
   const saved = await ctx.db.write(actorOf(ses), "asistencia_marcajes", "insert", {}, {
     usuario_id: s(e?.nombre_app) || nombre, nombre, tipo, ts: d.toISOString(), origen: "manual",
@@ -537,6 +560,29 @@ extend("asis_marca_manual", "any", async (p, ctx, ses) => {
   });
   await auditar(ctx, ses, "marca_manual", { nombre, marcaje_id: s(saved?.id), despues: { tipo, ts: d.toISOString() }, motivo: s(p.motivo) });
   return { ok: true, id: saved?.id };
+});
+
+extend("asis_marcas_admin", "any", async (p, ctx, ses) => {
+  // TK172: marcas de la app de UNA empleada en UN día del período abierto, con su historial de cambios.
+  if (!esAdmin(ses.rol)) return { error: "Solo admin edita las marcas del equipo" };
+  const nombre = s(p.nombre);
+  if (!nombre) return { error: "Falta la empleada" };
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(s(p.fecha)) ? s(p.fecha) : hoy;
+  if (fecha.slice(0, 7) !== hoy.slice(0, 7) || fecha > hoy) return { error: "Solo se editan marcas del período abierto, hasta hoy." };
+  const [marc, perms, fer, cfg, aud] = await Promise.all([
+    ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos").catch(() => [] as Row[]), feriadosDe(ctx), configDe(ctx),
+    ctx.db.all("asistencia_auditoria").catch(() => [] as Row[]),
+  ]);
+  const jib = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
+  const delDia = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha).sort((a, b) => s(a.ts).localeCompare(s(b.ts)));
+  const ids = new Set(delDia.map((r) => s(r.id)));
+  const j = jibbleDe(jib, nombre).find((x) => x.fecha === fecha) || null;
+  const dia = calcularDia(fecha, marcajesDe(marc, nombre), cfg, fer, permisosDe(perms, nombre), j);
+  const historial = aud.filter((r) => ids.has(s(r.marcaje_id)) || (mismo(s(r.nombre), nombre) && /marca_manual|correccion/.test(s(r.accion)) && (ymdDeTs(s((r.despues as Row)?.ts)) === fecha || ymdDeTs(s((r.antes as Row)?.ts)) === fecha)))
+    .sort((a, b) => s(b.ts).localeCompare(s(a.ts))).slice(0, 30).map(audPub);
+  const ini = hoy.slice(0, 8) + "01";
+  return { ok: true, nombre, fecha, hoy, desde: ini, marcas: delDia.map(marcaPub), dia, historial, jibble: !!j };
 });
 
 extend("asis_dia", "any", async (p, ctx, ses) => {
