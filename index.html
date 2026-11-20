@@ -1642,6 +1642,7 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
     .prov-sheet { display: none !important; }
   }
 .prerol-marcas{margin-top:12px}.mk-tools{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.mk-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0;border-bottom:1px solid #eee}.mk-row.mk-anulada{opacity:.55}.mk-sel,.mk-in{font-size:14px;padding:4px 6px;max-width:150px}.mk-hora{width:96px}
+.asis-botones{display:flex;gap:10px;align-items:stretch;margin:4px 0 8px}.asis-btn{flex:1;border:0;border-radius:16px;padding:18px 12px;font-size:20px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:84px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}.asis-verde{background:#2e9e4f;color:#fff}.asis-amarillo{background:#f5c518;color:#3b2f00;cursor:default;flex:1.4}.asis-rojo{background:#d93636;color:#fff;flex:1}.asis-listo{background:#e8f5ec;color:#1d5e33;cursor:default}.asis-crono{font-size:30px;font-variant-numeric:tabular-nums;letter-spacing:1px}.asis-k{font-size:13px;font-weight:600;opacity:.9}.asis-pausa .asis-crono{opacity:.6}.asis-mini{display:flex;justify-content:flex-end;margin:-2px 0 6px}.asis-btn:active{transform:scale(.98)}
 </style>
 </head>
 <body>
@@ -5323,12 +5324,7 @@ async function renderAsistencia() {
     <div id="asis-mes"></div>` : "";
   // TK166 (Emilia t763u): botones de marca y el estado de hoy ARRIBA de todo, antes del calendario.
   const trabajadoHoy = (cal && cal.bloques && cal.bloques.hoy && cal.bloques.hoy.total && cal.bloques.hoy.total.texto) || "0 min";
-  const botones = !state.admin || hoy.empleada ? `<div class="tools asis-marcar-top">
-      <button class="btn" type="button" data-marca="entrada">Entrar</button>
-      <button class="btn ghost" type="button" data-marca="almuerzo_inicio">Iniciar almuerzo</button>
-      <button class="btn ghost" type="button" data-marca="almuerzo_fin">Fin almuerzo</button>
-      <button class="btn" type="button" data-marca="salida">Salir</button>
-    </div>` : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`;
+  const botones = !state.admin || hoy.empleada ? htmlBotonesAsis(hoy.marcajes || []) : `<p class="note">Esta cuenta de admin no tiene ficha de empleada. La marca de entrada queda en Personal solo cuando la persona está en RR.HH.</p>`;
   return sel + `
     <div class="card asis-hoy-top">
       ${botones}
@@ -5342,6 +5338,69 @@ async function renderAsistencia() {
     ${admin}
     <h2>Auditoría</h2>
     <div class="list">${audit || `<p class="note">Sin correcciones recientes.</p>`}</div>`;
+}
+
+// TK174 (Emilia t780u): botón grande VERDE para entrar; trabajando = botón AMARILLO con cronómetro y botón
+// ROJO de salida al lado; almuerzo pausa el cronómetro; al salir queda el total del día.
+function estadoAsisHoy(marcajes) {
+  const ms = (marcajes || []).filter((m) => !m.anulado).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  let trabajadoMs = 0, desde = null, almuerzoDesde = null, almuerzoMs = 0, estado = "fuera", tuvoAlmuerzo = false;
+  for (const m of ms) {
+    const t = Date.parse(m.ts);
+    if (!Number.isFinite(t)) continue;
+    if (m.tipo === "entrada" || m.tipo === "almuerzo_fin") {
+      if (m.tipo === "almuerzo_fin" && almuerzoDesde != null) { almuerzoMs += t - almuerzoDesde; almuerzoDesde = null; }
+      desde = t; estado = "trabajando";
+    } else if (m.tipo === "almuerzo_inicio") {
+      if (desde != null) trabajadoMs += t - desde;
+      desde = null; almuerzoDesde = t; estado = "almuerzo"; tuvoAlmuerzo = true;
+    } else if (m.tipo === "salida") {
+      if (desde != null) trabajadoMs += t - desde;
+      desde = null; estado = "terminado";
+    }
+  }
+  return { estado, trabajadoMs, desde, almuerzoDesde, almuerzoMs, tuvoAlmuerzo };
+}
+function fmtCrono(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return String(Math.floor(s / 3600)).padStart(2, "0") + ":" + String(Math.floor((s % 3600) / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+function htmlBotonesAsis(marcajes) {
+  const e = estadoAsisHoy(marcajes);
+  const ahora = Date.now();
+  const trab = e.trabajadoMs + (e.desde != null ? ahora - e.desde : 0);
+  const data = `data-crono-base="${e.trabajadoMs}" data-crono-desde="${e.desde ?? ""}" data-alm-desde="${e.almuerzoDesde ?? ""}"`;
+  if (e.estado === "fuera") {
+    return `<div class="asis-botones" data-asis-estado="fuera"><button class="asis-btn asis-verde" type="button" data-marca="entrada">Registrar entrada</button></div>`;
+  }
+  if (e.estado === "trabajando") {
+    return `<div class="asis-botones" data-asis-estado="trabajando" ${data}>
+      <div class="asis-btn asis-amarillo" role="status" aria-live="polite"><span class="asis-k">Trabajando · hoy</span><span class="asis-crono" data-crono>${fmtCrono(trab)}</span></div>
+      <button class="asis-btn asis-rojo" type="button" data-marca="salida">Registrar salida</button>
+    </div>${e.tuvoAlmuerzo ? "" : `<div class="asis-mini"><button class="btn ghost small" type="button" data-marca="almuerzo_inicio">Iniciar almuerzo</button></div>`}`;
+  }
+  if (e.estado === "almuerzo") {
+    return `<div class="asis-botones" data-asis-estado="almuerzo" ${data}>
+      <div class="asis-btn asis-amarillo asis-pausa" role="status"><span class="asis-k">En almuerzo · <span data-alm-crono>${fmtCrono(ahora - e.almuerzoDesde)}</span></span><span class="asis-crono">${fmtCrono(trab)}</span><span class="asis-k">trabajado (en pausa)</span></div>
+      <button class="asis-btn asis-verde" type="button" data-marca="almuerzo_fin">Fin almuerzo</button>
+    </div>`;
+  }
+  return `<div class="asis-botones" data-asis-estado="terminado"><div class="asis-btn asis-listo" role="status"><span class="asis-k">Jornada terminada ✓</span><span class="asis-crono">${fmtCrono(trab)}</span><span class="asis-k">trabajado hoy</span></div></div>`;
+}
+function wireCronoAsis(main) {
+  if (window._asisTick) { clearInterval(window._asisTick); window._asisTick = null; }
+  const box = main.querySelector(".asis-botones[data-crono-base]");
+  if (!box) return;
+  const base = Number(box.getAttribute("data-crono-base") || 0);
+  const desde = Number(box.getAttribute("data-crono-desde") || 0);
+  const alm = Number(box.getAttribute("data-alm-desde") || 0);
+  window._asisTick = setInterval(() => {
+    if (!document.body.contains(box)) { clearInterval(window._asisTick); window._asisTick = null; return; }
+    const c = box.querySelector("[data-crono]");
+    if (c && desde) c.textContent = fmtCrono(base + Date.now() - desde);
+    const a = box.querySelector("[data-alm-crono]");
+    if (a && alm) a.textContent = fmtCrono(Date.now() - alm);
+  }, 1000);
 }
 
 function sheetRol(fecha) {
@@ -7757,6 +7816,7 @@ function wireAsistencia(main) {
   main.querySelectorAll("[data-marca]").forEach((b) => {
     b.onclick = () => abrirCamara(b.getAttribute("data-marca"));
   });
+  wireCronoAsis(main);
   const perm = main.querySelector("#f-asis-perm");
   if (perm) perm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -8040,7 +8100,11 @@ async function marcarAsistencia(tipo, foto) {
     return;
   }
   let data;
+  const regBtn = document.getElementById("reloj-registrar");
+  const regTxt = regBtn ? regBtn.textContent : "";
+  if (regBtn) { regBtn.disabled = true; regBtn.textContent = "Registrando…"; }
   try { data = await api("asis_marcar", body); } catch (e) { data = { error: "No se pudo enviar la marca. Revisa la conexión e intenta de nuevo." }; }
+  if (regBtn) { regBtn.disabled = false; regBtn.textContent = regTxt; }
   if (!data || data.error) {
     const msg = "No se registró la marca: " + ((data && data.error) || "error desconocido");
     if (err) err.textContent = msg;
@@ -8330,7 +8394,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK175";
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK174";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8453,46 +8517,46 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261120tk175"></script>
-<script src="mc-scan.js?v=20261120tk175"></script>
-<script src="mc-buscar.js?v=20261120tk175"></script>
-<script src="descuento_justif.js?v=20261120tk175"></script>
-<script src="beta-screens.js?v=20261120tk175"></script>
-<script src="beta-inline.js?v=20261120tk175"></script>
-<script src="mc-productos.js?v=20261120tk175"></script>
-<script src="mc-nav.js?v=20261120tk175"></script>
-<script src="mc-permisos.js?v=20261120tk175"></script>
-<script src="mc-protocolos.js?v=20261120tk175"></script>
-<script src="mc-conteo.js?v=20261120tk175"></script>
-<script src="mc-transferencias.js?v=20261120tk175"></script>
-<script src="mc-ajustes.js?v=20261120tk175"></script>
-<script src="vendor-qrcode.js?v=20261120tk175"></script>
-<script src="mc-wa.js?v=20261120tk175"></script>
-<script src="mc-tickets.js?v=20261120tk175"></script>
-<script src="mc-maestro.js?v=20261120tk175"></script>
-<script src="mc-empleados.js?v=20261120tk175"></script>
-<script src="mc-edit.js?v=20261120tk175"></script>
-<script src="mc-paquetes.js?v=20261120tk175"></script>
-<script src="mc-aperturas.js?v=20261120tk175"></script>
-<script src="mc-acceso.js?v=20261120tk175"></script>
-<script src="mc-barras.js?v=20261120tk175"></script>
-<script src="mc-caja.js?v=20261120tk175"></script>
-<script src="mc-giftcards.js?v=20261120tk175"></script>
-<script src="mc-multas.js?v=20261120tk175"></script>
-<script src="mc-clientes.js?v=20261120tk175"></script>
-<script src="mc-clientes-dup.js?v=20261120tk175"></script>
-<script src="mc-docpdf.js?v=20261120tk175"></script>
-<script src="mc-compras.js?v=20261120tk175"></script>
-<script src="mc-consignacion.js?v=20261120tk175"></script>
-<script src="mc-proveedores.js?v=20261120tk175"></script>
-<script src="mc-recepciones.js?v=20261120tk175"></script>
-<script src="mc-movil.js?v=20261120tk175"></script>
-<script src="mc-promociones.js?v=20261120tk175"></script>
-<script src="mc-agenda.js?v=20261120tk175"></script>
-<script src="mc-staff-home.js?v=20261120tk175"></script>
-<script src="mc-borradores.js?v=20261120tk175"></script>
-<script src="mc-portal.js?v=20261120tk175"></script>
-<script src="mc-portal-admin.js?v=20261120tk175"></script><script>
+<script src="vendor-zxing.js?v=20261120tk174"></script>
+<script src="mc-scan.js?v=20261120tk174"></script>
+<script src="mc-buscar.js?v=20261120tk174"></script>
+<script src="descuento_justif.js?v=20261120tk174"></script>
+<script src="beta-screens.js?v=20261120tk174"></script>
+<script src="beta-inline.js?v=20261120tk174"></script>
+<script src="mc-productos.js?v=20261120tk174"></script>
+<script src="mc-nav.js?v=20261120tk174"></script>
+<script src="mc-permisos.js?v=20261120tk174"></script>
+<script src="mc-protocolos.js?v=20261120tk174"></script>
+<script src="mc-conteo.js?v=20261120tk174"></script>
+<script src="mc-transferencias.js?v=20261120tk174"></script>
+<script src="mc-ajustes.js?v=20261120tk174"></script>
+<script src="vendor-qrcode.js?v=20261120tk174"></script>
+<script src="mc-wa.js?v=20261120tk174"></script>
+<script src="mc-tickets.js?v=20261120tk174"></script>
+<script src="mc-maestro.js?v=20261120tk174"></script>
+<script src="mc-empleados.js?v=20261120tk174"></script>
+<script src="mc-edit.js?v=20261120tk174"></script>
+<script src="mc-paquetes.js?v=20261120tk174"></script>
+<script src="mc-aperturas.js?v=20261120tk174"></script>
+<script src="mc-acceso.js?v=20261120tk174"></script>
+<script src="mc-barras.js?v=20261120tk174"></script>
+<script src="mc-caja.js?v=20261120tk174"></script>
+<script src="mc-giftcards.js?v=20261120tk174"></script>
+<script src="mc-multas.js?v=20261120tk174"></script>
+<script src="mc-clientes.js?v=20261120tk174"></script>
+<script src="mc-clientes-dup.js?v=20261120tk174"></script>
+<script src="mc-docpdf.js?v=20261120tk174"></script>
+<script src="mc-compras.js?v=20261120tk174"></script>
+<script src="mc-consignacion.js?v=20261120tk174"></script>
+<script src="mc-proveedores.js?v=20261120tk174"></script>
+<script src="mc-recepciones.js?v=20261120tk174"></script>
+<script src="mc-movil.js?v=20261120tk174"></script>
+<script src="mc-promociones.js?v=20261120tk174"></script>
+<script src="mc-agenda.js?v=20261120tk174"></script>
+<script src="mc-staff-home.js?v=20261120tk174"></script>
+<script src="mc-borradores.js?v=20261120tk174"></script>
+<script src="mc-portal.js?v=20261120tk174"></script>
+<script src="mc-portal-admin.js?v=20261120tk174"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {
