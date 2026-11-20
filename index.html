@@ -3147,7 +3147,7 @@ function paintShell(title) {
       pintarFly();
       const menu = document.getElementById("crear-menu");
       if (menu) menu.hidden = false;
-      pintarReloj();
+      pintarCrearMenu();
       void cargarReloj().catch(() => null);
     };
   });
@@ -6558,17 +6558,59 @@ function pintarCrearMenu() {
   box.querySelectorAll("[data-go]").forEach((b) => {
     b.onclick = () => { menu.hidden = true; go(b.getAttribute("data-go")); };
   });
+  pintarCrearAsis();
+  wireReloj(menu);
+}
+// TK197 (Emilia): panel de Mi asistencia dentro de «Crear»: horario de hoy, marcas, tiempo trabajado y los
+// mismos botones (htmlBotonesAsis) con la misma cámara + ubicación + validación del servidor (abrirCamara).
+let asisHoyCrear = null;
+function htmlCrearAsis(hoy) {
+  const cfg = hoy.config || {};
+  const h = hoy.horarioHoy;
+  const hor = h ? (h.trabaja ? `${esc(h.desde || "")}–${esc(h.hasta || "")}` : "Hoy es tu día libre") : (cfg.hora_entrada ? `${esc(cfg.hora_entrada)}–${esc(cfg.hora_salida || "")}` : "Sin horario asignado");
+  const ms = (hoy.marcajes || []).filter((m) => !m.anulado).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  const marcas = ms.length ? ms.map((m) => `<span class="crear-asis-m">${esc(hmEc(m.ts))} ${esc(etiquetaMarca(m.tipo))}</span>`).join(" · ") : "Todavía no marcas hoy.";
+  return `<div class="card-title" style="font-size:1rem">🕒 Mi asistencia hoy</div>
+    <p class="note" style="margin:2px 0">Horario: <b>${hor}</b></p>
+    <p class="note" style="margin:2px 0">Marcas: ${marcas}</p>
+    ${htmlBotonesAsis(hoy.marcajes || [])}
+    <button class="btn ghost small" type="button" data-go-asis="1">Ver Mi asistencia</button>`;
+}
+function pintarCrearAsis() {
+  const el = document.getElementById("crear-asis");
+  if (!el || !asisHoyCrear || asisHoyCrear.error) return;
+  el.innerHTML = htmlCrearAsis(asisHoyCrear);
+  const menu = document.getElementById("crear-menu");
+  el.querySelectorAll("[data-marca]").forEach((b) => {
+    b.onclick = () => { if (menu) menu.hidden = true; abrirCamara(b.getAttribute("data-marca")); };
+  });
+  const ver = el.querySelector("[data-go-asis]");
+  if (ver) ver.onclick = () => { if (menu) menu.hidden = true; go("#/m/personal/asistencia"); };
+  if (window._crearAsisTick) clearInterval(window._crearAsisTick);
+  const box = el.querySelector(".asis-botones[data-crono-base]");
+  if (!box) return;
+  const base = Number(box.getAttribute("data-crono-base") || 0);
+  const desde = Number(box.getAttribute("data-crono-desde") || 0);
+  const alm = Number(box.getAttribute("data-alm-desde") || 0);
+  window._crearAsisTick = setInterval(() => {
+    if (!document.body.contains(box)) { clearInterval(window._crearAsisTick); window._crearAsisTick = null; return; }
+    const c = box.querySelector("[data-crono]");
+    if (c && desde) c.textContent = fmtCrono(base + Date.now() - desde);
+    const a = box.querySelector("[data-alm-crono]");
+    if (a && alm) a.textContent = fmtCrono(Date.now() - alm);
+  }, 1000);
 }
 function pintarReloj() {
   document.querySelectorAll("[data-reloj-host]").forEach((el) => { el.innerHTML = htmlReloj(); });
-  pintarCrearMenu();
   wireReloj(document.getElementById("app"));
 }
 async function cargarReloj() {
   if (!muestraReloj()) return;
   const data = await api("asis_hoy");
   if (data && data.reloj) reloj = { ...data.reloj, _t0: Date.now() };
+  if (data && data.ok) asisHoyCrear = data;
   pintarReloj();
+  pintarCrearMenu();
   if (relojTick) clearInterval(relojTick);
   relojTick = null;
   if (reloj.abierto) relojTick = setInterval(() => pintarReloj(), 1000);
@@ -8586,7 +8628,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK196"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK197"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

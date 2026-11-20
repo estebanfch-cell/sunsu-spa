@@ -231,13 +231,15 @@
       [ok("caja"), "💵 Ingreso / gasto de caja chica", "#/m/caja/nuevo", ""],
       [true, "📦 Abrir producto", "#/m/aperturas", ""],
       // TK196 (Andrea 20/11): la marca sale del estado real de hoy y se decide otra vez al tocar («auto»).
-      [muestra && !abierta, "📷 Registrar entrada", "", "auto"],
-      [muestra && abierta && reloj.almuerzo === "fin", "📷 Fin almuerzo", "", "auto"],
-      [muestra && abierta && reloj.almuerzo !== "fin", "📷 Registrar salida", "", "auto"],
+      // TK197 (Emilia): en «Crear» va el MISMO panel de Mi asistencia (horario, marcas, tiempo y botones).
+      [muestra && !abierta, "📷 Registrar entrada", "", "panel"],
+      [muestra && abierta && reloj.almuerzo === "fin", "📷 Fin almuerzo", "", "panel"],
+      [muestra && abierta && reloj.almuerzo !== "fin", "📷 Registrar salida", "", "panel"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {
     return crearItems().map(function (x, i) {
+      if (x[3] === "panel") return '<div id="crear-asis" class="crear-asis"><button class="btn block" type="button" data-reloj-open="auto">' + e(x[1]) + "</button></div>";
       var acc = x[3] ? ' data-reloj-open="' + e(x[3]) + '"' : ' data-go="' + e(x[2]) + '"';
       return '<button class="btn ' + (i === 0 ? "" : "ghost ") + 'block" type="button"' + acc + ">" + e(x[1]) + "</button>";
     }).join("");

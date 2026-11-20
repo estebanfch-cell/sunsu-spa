@@ -5,13 +5,13 @@ const nav = await Deno.readTextFile(new URL("../../../mc-nav.js", import.meta.ur
 
 Deno.test("TK196: el menú Crear se repinta con el estado real del reloj", () => {
   assert(html.includes("function pintarCrearMenu()"));
-  assert(/function pintarReloj\(\) \{[\s\S]{0,200}pintarCrearMenu\(\)/.test(html));
+  assert(/async function cargarReloj\(\) \{[\s\S]{0,400}pintarCrearMenu\(\)/.test(html));
   assert(html.includes("abrirCamara(siguienteMarcaReloj())"));
 });
 
 Deno.test("TK196: Crear ofrece salida / fin de almuerzo según el estado", () => {
-  assert(nav.includes('"📷 Registrar salida", "", "auto"'));
-  assert(nav.includes('"📷 Fin almuerzo", "", "auto"'));
+  assert(nav.includes('"📷 Registrar salida", "", "panel"'));
+  assert(nav.includes('"📷 Fin almuerzo", "", "panel"'));
 });
 
 Deno.test("TK196: cache igual en index.html y sw.js", async () => {
@@ -40,4 +40,12 @@ Deno.test("TK196: Crear con entrada abierta → Registrar salida; almuerzo abier
   assert(t.includes("📷 Registrar salida") && !t.includes("📷 Registrar entrada"));
   const l = crearCon({ abierto: true, almuerzo: "fin" });
   assert(l.includes("📷 Fin almuerzo") && !l.includes("📷 Registrar salida"));
+});
+
+Deno.test("TK197: Crear muestra el panel de Mi asistencia (horario, marcas, mismos botones)", async () => {
+  assert(/function htmlCrearAsis\(hoy\) \{[\s\S]{0,1200}htmlBotonesAsis\(hoy\.marcajes/.test(html));
+  assert(/function pintarCrearAsis\(\) \{[\s\S]{0,600}abrirCamara\(b\.getAttribute\("data-marca"\)\)/.test(html));
+  assert(nav.includes('id="crear-asis"'));
+  const api = await Deno.readTextFile(new URL("./asistencia_api.ts", import.meta.url));
+  assert(api.includes("horarioHoy"));
 });
