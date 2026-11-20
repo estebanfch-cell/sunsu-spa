@@ -620,9 +620,20 @@
   }
   #paq-box #paq-busca::placeholder { color: #6B7280; opacity: 1; }
   #paq-box .paq-card.done { opacity: 0.85; background: #F7F4EE; }
+  #paq-box .paq-card-nuevo { border: 2px solid #6B5B95 !important; background: #F4F0FA; }
+  #paq-box .paq-lista-lbl { font-size: 0.72rem; font-weight: 800; color: var(--lavender, #6B5B95); margin: 10px 0 6px; }
+  #paq-box .paq-ses-nuevo, #paq-box .paq-alt { min-height: 44px; width: 100%; box-sizing: border-box; }
+  #cobro-pack-hint { margin-top: 8px; }
+  #cobro-pack-hint .cobro-pack-hint { border-radius: 10px; padding: 10px 12px; font-size: 0.78rem; font-weight: 650; line-height: 1.4; }
+  #cobro-pack-hint .cobro-pack-hint.ok { background: #E8F5EC; border: 1.5px solid var(--green, #2E7D4F); color: #1B6B45; }
+  #cobro-pack-hint .cobro-pack-hint.warn { background: #FFF4E0; border: 1.5px solid #E0A93B; color: #8A5A16; }
+  #cobro-pack-hint .cobro-pack-hint.info { background: #F4F0FA; border: 1.5px solid #C8C0E0; color: var(--navy, #1A2744); }
+  #cobro-pack-hint .cobro-pack-switch { display: inline-block; margin-top: 8px; min-height: 44px; padding: 8px 12px; border: none; border-radius: 10px; background: var(--navy, #1f3a5f); color: #fff; font-weight: 800; font-size: 0.76rem; cursor: pointer; }
   @media (max-width: 860px) {
     #paq-box .paq-busca-wrap, #paq-box #paq-busca { display: block !important; visibility: visible !important; }
     #paq-box #paq-busca { min-height: 44px !important; font-size: 16px !important; }
+    #paq-box .paq-ses-nuevo, #paq-box .paq-alt, #cobro-pack-hint .cobro-pack-switch { min-height: 44px !important; }
+    #cobro-pack-hint .cobro-pack-hint { font-size: 0.8rem; }
   }
   .gc-box { background: var(--gold-l); border: 1.5px solid var(--gold-m); border-radius: 10px; padding: 12px 13px; margin-top: 9px; }
   .box-lbl { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; display: block; }
@@ -8555,7 +8566,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK193"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK194"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8735,8 +8746,8 @@ window.SunsuUpdate.init();
 <script src="vendor-zxing.js?v=20261120tk179"></script>
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
-<script src="descuento_justif.js?v=20261120tk193"></script>
-<script src="beta-screens.js?v=20261120tk193"></script>
+<script src="descuento_justif.js?v=20261120tk194"></script>
+<script src="beta-screens.js?v=20261120tk194"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261120tk186"></script>

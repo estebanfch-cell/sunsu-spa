@@ -61,8 +61,8 @@ describe("TK193 · buscador siempre visible en el ticket", () => {
     assert.match(html, /#paq-box #paq-busca[\s\S]{0,400}display: block !important/);
     assert.match(html, /min-height: 44px !important/);
     assert.match(html, /@media \(max-width: 860px\)[\s\S]{0,300}#paq-box #paq-busca/);
-    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK193"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK193"/);
-    assert.match(html, /beta-screens\.js\?v=20261120tk193/);
+    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-20-TK194"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK194"/);
+    assert.match(html, /beta-screens\.js\?v=20261120tk194/);
   });
 });
