@@ -209,6 +209,20 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";
     const sinCobro = tipoSinCobro(r);
     if (sinCobro) it.sin_cobro = sinCobro;
+    // TK156 (Emilia t691u): resumen de pagos en el item → el detalle pinta «Pagos · saldo $0.00» al instante (sin flash falso).
+    {
+      const pagosT = (pagosPorClave.get(clave) || []) as Row[];
+      const pagadoB = sumaPagosBeta(pagosT);
+      const totalT = n(cabMap.get(clave)?.total) || n(r.estimado);
+      const pmT = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
+      const formaT = s(pmT?.forma) || s(d.forma_pago) || formaMigo;
+      it.pagos_resumen = {
+        total: round2(totalT), pagadoBeta: round2(pagadoB), legado: cobrado ? round2(Math.max(0, totalT - pagadoB)) : 0,
+        saldo: cobrado || it.anulado === true ? 0 : round2(Math.max(0, totalT - pagadoB)),
+        forma: formaT, ...(pmT ? { factura_migo: s(pmT.factura) || s(d.factura), migo_sin_forma: !formaT } : {}),
+        pagos: pagosT.map((x) => ({ id: s(x.id), fecha: s(x.fecha), metodo: s(x.metodo), monto: n(x.monto), ref: s(x.ref), registrado_por: s(x.registrado_por) })),
+      };
+    }
     it.estado_doc = (it.anulado === true || (cobrado && (facReal || !!sinCobro || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
     it.led = {
       a: faseA(r) ? 1 : 0, p: cobrado ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
@@ -219,7 +233,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
-      ...(faltaTodo(r, d).length ? { falta: faltaTodo(r, d) } : {}),
+      // TK156 (Emilia t687u): factura Migo ligada sin forma de pago → aviso amarillo para recepción.
+      ...((() => {
+        const pmL = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
+        const sinForma = !!pmL && !s(pmL.forma) && !s(d.forma_pago);
+        const fa = [...faltaTodo(r, d), ...(sinForma ? ["Forma de pago (factura Migo sin forma)"] : [])];
+        return { ...(fa.length ? { falta: fa } : {}), ...(sinForma ? { migoSinForma: 1 } : {}) };
+      })()),
       ...((() => {
         const comps = (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true);
         const beta = pagosPorClave.get(clave) || [];

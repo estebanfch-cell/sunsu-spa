@@ -12,6 +12,7 @@
     if (document.getElementById("mccj-css")) return;
     var s = document.createElement("style"); s.id = "mccj-css";
     s.textContent = [
+      ".mccj-migo-alerta{margin:6px 0;padding:8px 10px;border-radius:9px;background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800;font-size:.8rem}.mccj-migo-ok{margin:6px 0;padding:6px 10px;border-radius:9px;background:#F0FDF4;border:1px solid #16A34A;color:#166534;font-weight:700;font-size:.78rem}",
       ".mccj{max-width:980px}.mccj h2{margin:0 0 6px;font-size:1.2rem}.mccj-sub{font-size:.76rem;color:var(--gray,#8a93a6)}",
       ".mccj-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08))}",
       ".mccj-saldo{font-size:2rem;font-weight:800;color:var(--navy,#2c3e66)}.mccj-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}",
@@ -150,121 +151,163 @@
     }
     return h + "</div>";
   }
+  /* TK156: caché de Pagos por ticket (memoria + sessionStorage; sin teléfonos ni cédulas). */
+  var PG_MEM = {};
+  function pgKey(clave) { return "sunsu.pgcache.v1|" + clave; }
+  function guardarPagos(clave, r) {
+    PG_MEM[clave] = r;
+    try { sessionStorage.setItem(pgKey(clave), JSON.stringify(r)); } catch (x) {}
+  }
+  function itemDeLista(clave) {
+    var L = window._histData || [], i, t;
+    for (i = 0; i < L.length; i++) { t = L[i]; if (t && (String(t.so_num || "") === String(clave) || String(t.beta_num || "") === String(clave) || String(t.clave || "") === String(clave))) return t; }
+    return null;
+  }
+  /** Lo último conocido de los pagos del ticket: caché propia o el resumen de la lista (solo si ya está pagado). */
+  function pagosPrevios(clave) {
+    // Solo se reusa al instante lo ya PAGADO: un saldo pendiente siempre lo confirma el servidor (nunca un saldo falso).
+    var c0 = PG_MEM[clave];
+    if (!c0) { try { var t0 = sessionStorage.getItem(pgKey(clave)); if (t0) { c0 = JSON.parse(t0); PG_MEM[clave] = c0; } } catch (x) {} }
+    if (c0 && c0.ok && Number(c0.saldo) <= 0.009) return c0;
+    var it = itemDeLista(clave), pr = it && it.pagos_resumen;
+    if (!pr || !(pr.saldo <= 0.009)) return null;
+    return { ok: true, previo: true, saldo: 0, pagadoBeta: pr.pagadoBeta || 0, legado: pr.legado || 0, beta: pr.pagos || [], pagosLegado: pr.legado > 0 ? [{ fecha: it.fecha ? it.fecha + "T" + (it.hora || "12:00") + ":00Z" : "", metodo: pr.forma || "no_registrado", monto: pr.legado, registrado_por: pr.factura_migo ? "Factura Migo " + String(pr.factura_migo).split("-").pop().replace(/^0+/, "") : "Sistema anterior" }] : [], fotos: [], metodos: [{ id: "efectivo", nombre: "Efectivo" }, { id: "tarjeta", nombre: "Tarjeta" }, { id: "transferencia", nombre: "Transferencia" }, { id: "deuna", nombre: "DeUna" }, { id: "no_registrado", nombre: "Método no registrado" }], factura_migo: pr.factura_migo || "", forma_migo: pr.forma || "", migo_sin_forma: !!pr.migo_sin_forma, admin: false };
+  }
+  function limpiarPagosCache() {
+    PG_MEM = {};
+    try { for (var i = sessionStorage.length - 1; i >= 0; i--) { var k = sessionStorage.key(i); if (k && k.indexOf("sunsu.pgcache.") === 0) sessionStorage.removeItem(k); } } catch (x) {}
+  }
   var MCPagos = {
     montar: async function (host, clave, totalFn, onPagado, onFoto) {
       css();
       var total = totalFn();
+      // TK156 (Emilia t691u): nada de «saldo $175» falso mientras carga. Se pinta al instante con lo último conocido
+      // (caché del ticket o el resumen que ya trajo la lista); si no hay, un bloque neutro SIN saldo ni formulario.
+      var seq = host._pgSeq = (host._pgSeq || 0) + 1;
+      var pre = pagosPrevios(clave);
+      if (pre) pintarPagos(pre); else host.innerHTML = '<div class="mccf-card mccj-card mccj-pay mccj-pay-cargando"><div class="mccj-pay-h"><span>💵 Pagos</span></div></div>';
       var r = await api("pg_ticket", { clave: clave, total: total });
-      if (!r || !r.ok) { host.innerHTML = ""; return; }
-      if (onPagado) onPagado(r.pagadoBeta || 0);
-      var met = { canje: "Canje (paquete/gift)", mixto: "Varios métodos", otro: "Otro", "gift card": "Gift card", "cortesía": "Cortesía", sin: "Sin método" };
-      (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
-      var filaPago = function (p, puedeAnular) {
-        var th = p.foto ? thumbHtml(p.foto, "Voucher", true) : "";
-        var quien = p.registrado_por || p.por || "";
-        return '<div class="mccj-pay-item"><span class="mccj-pay-item-t">' + e(fh(p.fecha)) + " · " + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? " · " + e(p.ref) : "") + (quien ? ' <span class="mccj-sub">' + e(quien) + "</span>" : "") + "</span>" + th + '<span class="mccj-pay-item-m">' + $m(p.monto) + "</span>" +
-          (r.admin && puedeAnular ? '<button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button>' : "") + "</div>";
-      };
-      var filas = (r.pagosLegado || []).map(function (p) { return filaPago(p, false); }).join("") + (r.beta || []).map(function (p) { return filaPago(p, true); }).join("");
-      // TK82: el saldo lo manda la API (ya aplica redondeo ≤ $0.05 y anulado). No recomputar con el total de líneas.
-      var saldo = Math.max(0, Math.round((r.saldo != null ? r.saldo : (total - (r.legado || 0) - (r.pagadoBeta || 0))) * 100) / 100);
-      var prefill = saldo > 0.05 ? saldo.toFixed(2) : "";
-      var opts = '<option value="">Forma de pago</option>' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("");
-      var formHtml = '<div class="mccj-pay-f" id="pg-form">' +
-        '<div class="mccj-pay-row"><select id="pg-met" aria-label="Forma de pago" title="Forma de pago">' + opts + "</select>" +
-        '<input id="pg-monto" inputmode="decimal" value="' + prefill + '" placeholder="Monto" aria-label="Monto" title="Monto">' +
-        '<label class="btn ghost small pg-vbtn mccj-pay-cam" title="Voucher: tomar foto, fototeca, archivos o PDF" aria-label="Adjuntar voucher">📷<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></div>' +
-        '<div class="mccj-pay-row"><input id="pg-ref" placeholder="N.° ref. / voucher" aria-label="N.° ref. / voucher" title="N.° de referencia o voucher. El efectivo entra solo a la caja chica.">' +
-        '<button class="btn mccj-pay-ok" type="button" id="pg-ok">Registrar</button></div>' +
-        '<div id="pg-prev" class="pg-thumbs"></div></div>';
-      var formVisible = saldo > 0.009;
-      host.innerHTML = '<div class="mccf-card mccj-card mccj-pay"><div class="mccj-pay-h"><span>💵 Pagos · saldo ' + $m(saldo) + "</span></div>" +
-        (filas || "") +
-        (formVisible ? formHtml : (filas ? '<button type="button" class="mccj-pay-add" id="pg-add">+ Pago</button>' + '<div hidden id="pg-form-wrap">' + formHtml + "</div>" : formHtml)) +
-        (!formVisible ? pagosFaltanBtnsHtml(r) : "") +
-        "</div>";
-      // TK97: un solo botón 📷 Voucher (sin capture) junto al campo. Sube al instante al ticket y se enlaza al registrar el pago.
-      var foto = "", fotoListo = false, selM = host.querySelector("#pg-met"), prevF = host.querySelector("#pg-prev");
-      var pideFoto = function () { var m = selM && selM.value; return m === "tarjeta" || m === "transferencia"; };
-      var pintThumbs = function () {
-        if (!prevF) return;
-        var h = "";
-        (r.fotos || []).forEach(function (f) { if (f && f.url) h += thumbHtml(f.url, "Voucher", true); });
-        if (foto && !fotoListo) h += (/^data:image\//.test(foto) ? '<span class="pg-th"><img class="pg-th-open" src="' + foto + '" alt="Voucher"></span>' : "<span class=\"mccj-sub\">📄 Listo</span>");
-        prevF.innerHTML = h || (fotoListo ? "" : "");
-        cargarThumbs(host);
-        wireQuitar(host, clave, function () { MCPagos.montar(host, clave, totalFn, onPagado, onFoto); });
-        host.querySelectorAll("[data-pv]").forEach(function (b) {
-          b.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(b.getAttribute("data-pv"), b.getAttribute("data-pvn") || "Voucher"); };
-        });
-      };
-      pintThumbs();
-      var addBtn = host.querySelector("#pg-add");
-      if (addBtn) addBtn.onclick = function () {
-        var wrap = host.querySelector("#pg-form-wrap");
-        if (wrap) wrap.hidden = false;
-        addBtn.hidden = true;
-      };
-      var markCam = function () {
-        var hay = !!(foto || fotoListo || (r.fotos && r.fotos.some(function (f) { return f && f.url; })));
-        host.querySelectorAll(".pg-vbtn").forEach(function (b) { b.classList.toggle("on", hay); });
-      };
-      markCam();
-      var inpV = host.querySelector("#pg-voucher");
-      if (inpV) inpV.onchange = async function () {
-        var f = inpV.files && inpV.files[0]; inpV.value = ""; if (!f) return;
-        try { foto = await comprimirFoto(f); } catch (x) { foto = ""; toast2((x && x.message) || "No se pudo leer", 1); return; }
-        fotoListo = false;
-        pintThumbs(); markCam();
-        toast2("⏳ Subiendo voucher…");
-        try {
-          var up = await api("tk_subir_doc", { clave: clave, imagen: foto });
-          if (!up || up.error) { toast2((up && up.error) || "No se pudo subir", 1); return; }
-          fotoListo = true;
-          toast2("✓ Voucher subido");
-          if (onFoto) onFoto();
-          var rec = await api("pg_ticket", { clave: clave, total: totalFn() });
-          if (rec && rec.ok) { r.fotos = rec.fotos; r.beta = rec.beta; r.admin = rec.admin; }
+      if (seq !== host._pgSeq) return;
+      if (!r || !r.ok) { if (!pre) host.innerHTML = ""; return; }
+      guardarPagos(clave, r);
+      pintarPagos(r);
+      function pintarPagos(r) {
+        if (onPagado) onPagado(r.pagadoBeta || 0);
+        var met = { canje: "Canje (paquete/gift)", mixto: "Varios métodos", otro: "Otro", "gift card": "Gift card", "cortesía": "Cortesía", sin: "Sin método" };
+        (r.metodos || []).forEach(function (m) { met[m.id] = m.nombre; });
+        var filaPago = function (p, puedeAnular) {
+          var th = p.foto ? thumbHtml(p.foto, "Voucher", true) : "";
+          var quien = p.registrado_por || p.por || "";
+          return '<div class="mccj-pay-item"><span class="mccj-pay-item-t">' + e(fh(p.fecha)) + " · " + e(p.nombre || met[p.metodo] || p.metodo) + (p.ref ? " · " + e(p.ref) : "") + (quien ? ' <span class="mccj-sub">' + e(quien) + "</span>" : "") + "</span>" + th + '<span class="mccj-pay-item-m">' + $m(p.monto) + "</span>" +
+            (r.admin && puedeAnular ? '<button class="btn ghost small" type="button" data-pg-anul="' + e(p.id) + '">Anular</button>' : "") + "</div>";
+        };
+        var filas = (r.pagosLegado || []).map(function (p) { return filaPago(p, false); }).join("") + (r.beta || []).map(function (p) { return filaPago(p, true); }).join("");
+        // TK82: el saldo lo manda la API (ya aplica redondeo ≤ $0.05 y anulado). No recomputar con el total de líneas.
+        var saldo = Math.max(0, Math.round((r.saldo != null ? r.saldo : (total - (r.legado || 0) - (r.pagadoBeta || 0))) * 100) / 100);
+        var prefill = saldo > 0.05 ? saldo.toFixed(2) : "";
+        var opts = '<option value="">Forma de pago</option>' + (r.metodos || []).map(function (m) { return '<option value="' + e(m.id) + '">' + e(m.nombre) + "</option>"; }).join("");
+        var formHtml = '<div class="mccj-pay-f" id="pg-form">' +
+          '<div class="mccj-pay-row"><select id="pg-met" aria-label="Forma de pago" title="Forma de pago">' + opts + "</select>" +
+          '<input id="pg-monto" inputmode="decimal" value="' + prefill + '" placeholder="Monto" aria-label="Monto" title="Monto">' +
+          '<label class="btn ghost small pg-vbtn mccj-pay-cam" title="Voucher: tomar foto, fototeca, archivos o PDF" aria-label="Adjuntar voucher">📷<input id="pg-voucher" type="file" accept="image/*,application/pdf" hidden></label></div>' +
+          '<div class="mccj-pay-row"><input id="pg-ref" placeholder="N.° ref. / voucher" aria-label="N.° ref. / voucher" title="N.° de referencia o voucher. El efectivo entra solo a la caja chica.">' +
+          '<button class="btn mccj-pay-ok" type="button" id="pg-ok">Registrar</button></div>' +
+          '<div id="pg-prev" class="pg-thumbs"></div></div>';
+        var formVisible = saldo > 0.009;
+        // TK156 (Emilia t687u): cobro por factura Migo ligada → se ve aquí (forma de pago) o se avisa si Migo no la trae.
+        var facM = r.factura_migo ? String(r.factura_migo).split("-").pop().replace(/^0+/, "") : "";
+        var migoHtml = !r.factura_migo ? "" : (r.migo_sin_forma
+          ? '<div class="mccj-migo-alerta" role="alert">⚠️ Factura Migo ' + e(facM) + " sin forma de pago — falta registrarla en Migo o aquí</div>"
+          : '<div class="mccj-migo-ok">✅ Pagado vía factura Migo ' + e(facM) + (r.forma_migo ? " · " + e(met[r.forma_migo] || r.forma_migo) : "") + " · " + $m(r.legado || 0) + "</div>");
+        host.innerHTML = '<div class="mccf-card mccj-card mccj-pay"><div class="mccj-pay-h"><span>💵 Pagos · saldo ' + $m(saldo) + "</span></div>" +
+          migoHtml +
+          (filas || "") +
+          (formVisible ? formHtml : (filas ? '<button type="button" class="mccj-pay-add" id="pg-add">+ Pago</button>' + '<div hidden id="pg-form-wrap">' + formHtml + "</div>" : formHtml)) +
+          (!formVisible ? pagosFaltanBtnsHtml(r) : "") +
+          "</div>";
+        // TK97: un solo botón 📷 Voucher (sin capture) junto al campo. Sube al instante al ticket y se enlaza al registrar el pago.
+        var foto = "", fotoListo = false, selM = host.querySelector("#pg-met"), prevF = host.querySelector("#pg-prev");
+        var pideFoto = function () { var m = selM && selM.value; return m === "tarjeta" || m === "transferencia"; };
+        var pintThumbs = function () {
+          if (!prevF) return;
+          var h = "";
+          (r.fotos || []).forEach(function (f) { if (f && f.url) h += thumbHtml(f.url, "Voucher", true); });
+          if (foto && !fotoListo) h += (/^data:image\//.test(foto) ? '<span class="pg-th"><img class="pg-th-open" src="' + foto + '" alt="Voucher"></span>' : "<span class=\"mccj-sub\">📄 Listo</span>");
+          prevF.innerHTML = h || (fotoListo ? "" : "");
+          cargarThumbs(host);
+          wireQuitar(host, clave, function () { MCPagos.montar(host, clave, totalFn, onPagado, onFoto); });
+          host.querySelectorAll("[data-pv]").forEach(function (b) {
+            b.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (window.MCPrevia) window.MCPrevia.abrir(b.getAttribute("data-pv"), b.getAttribute("data-pvn") || "Voucher"); };
+          });
+        };
+        pintThumbs();
+        var addBtn = host.querySelector("#pg-add");
+        if (addBtn) addBtn.onclick = function () {
+          var wrap = host.querySelector("#pg-form-wrap");
+          if (wrap) wrap.hidden = false;
+          addBtn.hidden = true;
+        };
+        var markCam = function () {
+          var hay = !!(foto || fotoListo || (r.fotos && r.fotos.some(function (f) { return f && f.url; })));
+          host.querySelectorAll(".pg-vbtn").forEach(function (b) { b.classList.toggle("on", hay); });
+        };
+        markCam();
+        var inpV = host.querySelector("#pg-voucher");
+        if (inpV) inpV.onchange = async function () {
+          var f = inpV.files && inpV.files[0]; inpV.value = ""; if (!f) return;
+          try { foto = await comprimirFoto(f); } catch (x) { foto = ""; toast2((x && x.message) || "No se pudo leer", 1); return; }
+          fotoListo = false;
           pintThumbs(); markCam();
-        } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
-      };
-      host.querySelectorAll(".pg-voucher-faltan").forEach(function (inp) {
-        inp.onchange = async function () {
-          var f = inp.files && inp.files[0]; inp.value = ""; if (!f) return;
           toast2("⏳ Subiendo voucher…");
           try {
-            var data = await comprimirFoto(f);
-            var body = { clave: clave, imagen: data }, pagoId = inp.getAttribute("data-pago-id");
-            if (pagoId) body.pago_id = pagoId;
-            var up = await api("tk_subir_doc", body);
+            var up = await api("tk_subir_doc", { clave: clave, imagen: foto });
             if (!up || up.error) { toast2((up && up.error) || "No se pudo subir", 1); return; }
+            fotoListo = true;
             toast2("✓ Voucher subido");
             if (onFoto) onFoto();
-            MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
+            var rec = await api("pg_ticket", { clave: clave, total: totalFn() });
+            if (rec && rec.ok) { r.fotos = rec.fotos; r.beta = rec.beta; r.admin = rec.admin; }
+            pintThumbs(); markCam();
           } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
         };
-      });
-      var ok = host.querySelector("#pg-ok");
-      if (ok) ok.onclick = async function () {
-        var hayFoto = fotoListo || !!(r.fotos && r.fotos.some(function (f) { return f && f.url && !f.pago_id; })) || !!foto;
-        if (pideFoto() && !hayFoto) { toast2(selM.value === "tarjeta" ? "Adjunta el voucher de la tarjeta (📷 Voucher)" : "Adjunta el comprobante de la transferencia (📷 Voucher)", 1); try { host.querySelector(".pg-vbtn").scrollIntoView({ block: "nearest" }); } catch (x) {} return; }
-        ok.disabled = true;
-        var body = { clave: clave, total: totalFn(), metodo: selM.value, monto: host.querySelector("#pg-monto").value, ref: host.querySelector("#pg-ref").value };
-        if (foto && !fotoListo) body.imagen = foto;
-        var x = await api("pg_registrar", body);
-        if (x && x.mayor && confirm(x.error + ". ¿Registrarlo igual?")) { body.forzar = true; x = await api("pg_registrar", body); }
-        ok.disabled = false;
-        if (!x || !x.ok) { toast2((x && x.error) || "No se pudo registrar", 1); return; }
-        toast2((x.foto || fotoListo || body.imagen) ? "Pago registrado · ✓ comprobante subido" : "Pago registrado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto); if ((x.foto || fotoListo || body.imagen) && onFoto) onFoto();
-      };
-      host.querySelectorAll("[data-pg-anul]").forEach(function (b) {
-        b.onclick = async function () {
-          var motivo = prompt("Motivo para anular el pago:"); if (!motivo) return;
-          var x = await api("pg_anular", { id: b.getAttribute("data-pg-anul"), motivo: motivo });
-          if (!x || !x.ok) { toast2((x && x.error) || "No se pudo anular", 1); return; }
-          toast2("Pago anulado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
+        host.querySelectorAll(".pg-voucher-faltan").forEach(function (inp) {
+          inp.onchange = async function () {
+            var f = inp.files && inp.files[0]; inp.value = ""; if (!f) return;
+            toast2("⏳ Subiendo voucher…");
+            try {
+              var data = await comprimirFoto(f);
+              var body = { clave: clave, imagen: data }, pagoId = inp.getAttribute("data-pago-id");
+              if (pagoId) body.pago_id = pagoId;
+              var up = await api("tk_subir_doc", body);
+              if (!up || up.error) { toast2((up && up.error) || "No se pudo subir", 1); return; }
+              toast2("✓ Voucher subido");
+              if (onFoto) onFoto();
+              MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
+            } catch (x) { toast2((x && x.message) || "No se pudo subir", 1); }
+          };
+        });
+        var ok = host.querySelector("#pg-ok");
+        if (ok) ok.onclick = async function () {
+          var hayFoto = fotoListo || !!(r.fotos && r.fotos.some(function (f) { return f && f.url && !f.pago_id; })) || !!foto;
+          if (pideFoto() && !hayFoto) { toast2(selM.value === "tarjeta" ? "Adjunta el voucher de la tarjeta (📷 Voucher)" : "Adjunta el comprobante de la transferencia (📷 Voucher)", 1); try { host.querySelector(".pg-vbtn").scrollIntoView({ block: "nearest" }); } catch (x) {} return; }
+          ok.disabled = true;
+          var body = { clave: clave, total: totalFn(), metodo: selM.value, monto: host.querySelector("#pg-monto").value, ref: host.querySelector("#pg-ref").value };
+          if (foto && !fotoListo) body.imagen = foto;
+          var x = await api("pg_registrar", body);
+          if (x && x.mayor && confirm(x.error + ". ¿Registrarlo igual?")) { body.forzar = true; x = await api("pg_registrar", body); }
+          ok.disabled = false;
+          if (!x || !x.ok) { toast2((x && x.error) || "No se pudo registrar", 1); return; }
+          toast2((x.foto || fotoListo || body.imagen) ? "Pago registrado · ✓ comprobante subido" : "Pago registrado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto); if ((x.foto || fotoListo || body.imagen) && onFoto) onFoto();
         };
-      });
+        host.querySelectorAll("[data-pg-anul]").forEach(function (b) {
+          b.onclick = async function () {
+            var motivo = prompt("Motivo para anular el pago:"); if (!motivo) return;
+            var x = await api("pg_anular", { id: b.getAttribute("data-pg-anul"), motivo: motivo });
+            if (!x || !x.ok) { toast2((x && x.error) || "No se pudo anular", 1); return; }
+            toast2("Pago anulado"); MCPagos.montar(host, clave, totalFn, onPagado, onFoto);
+          };
+        });
+      }
     },
   };
 
@@ -375,6 +418,7 @@
   }
   async function repPagos(main) { K.p = await api("pg_lista", { desde: K.desde, hasta: K.hasta }); var r = main.querySelector("#mccj-root"); if (r) { r.innerHTML = pagosHtml(); wireRango(main, repPagos); } }
 
+  MCPagos.limpiarCache = limpiarPagosCache;
   window.MCPagos = MCPagos;
   window.MCVoucher = { comprimir: comprimirFoto, thumbHtml: thumbHtml, cargarThumbs: cargarThumbs, wireQuitar: wireQuitar, btnHtml: function (cls) {
     return '<label class="btn ghost small pg-vbtn mctk-voucher" style="cursor:pointer;white-space:nowrap;flex:0 0 auto">📷 Voucher<input type="file" class="' + (cls || "mctk-voucher-inp") + '" accept="image/*,application/pdf" hidden></label>';

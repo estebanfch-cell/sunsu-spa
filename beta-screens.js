@@ -5507,20 +5507,95 @@ function _buildTicketCard(t, showPrices){
 // ══════ HISTORIAL ══════
 function renderHistorial(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
   window._histCosmFiltro='';
   window._tkServer=true;
-  _tkPedir({desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()}, false).then(function(ok){
+  var q0={desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()};
+  var pintar=function(){ if(isAdmin) mostrarHistorialAdmin(c,'','',''); else mostrarHistorialStaff(c,'',''); };
+  /* TK156 (Emilia t688u): stale-while-revalidate. Si hay lista guardada se pinta al instante (sin «Cargando historial…»)
+     y se refresca en segundo plano; solo se vuelve a pintar si cambió algo, conservando el scroll. */
+  var firma0=_tkCacheAplicar(q0);
+  if(firma0){
+    pintar();
+    _tkPedir(q0,false).then(function(ok){
+      if(!ok||!document.body.contains(c)) return;
+      if(_tkFirma(window._histData)===firma0) return;
+      var y=window.scrollY||0;
+      pintar();
+      try{ window.scrollTo(0,y); }catch(eS){}
+    });
+    _histAutoRefresh();
+    return;
+  }
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  _tkPedir(q0, false).then(function(ok){
     if(!ok){
       c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ No se pudo cargar la lista<br><br>'
         +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
       return;
     }
-    if(isAdmin) mostrarHistorialAdmin(c,'','','');
-    else mostrarHistorialStaff(c,'','');
+    pintar();
     _histAutoRefresh();
   });
 }
+/* ── TK156: caché de la lista de Tickets (memoria + sessionStorage sin teléfonos ni cédulas) ── */
+var _TK_CACHE_MEM={};
+function _tkCacheId(q){
+  var real=null, vista='';
+  try{ real=(typeof state!=='undefined'&&state&&(state.userReal||state.user))||null; vista=(typeof state!=='undefined'&&state&&state.vista&&state.vista.uid)||''; }catch(e){}
+  var uid=(real&&(real.id||real.uid||real.name))||(typeof CU!=='undefined'&&CU&&(CU.id||CU.name))||'';
+  var local=window.SUNSU_LOCAL||'';
+  try{ local=local||localStorage.getItem('sunsu.local')||''; }catch(e2){}
+  return 'sunsu.tkcache.v1|'+uid+'|'+vista+'|'+local+'|'+_tkClave(q||{});
+}
+function _tkFirma(items){
+  try{ return JSON.stringify((items||[]).map(function(t){ return [t.so_num||t.beta_num||t.tkRow,t.estimado,t.estado_doc,t.anulado?1:0,t.solicitud_pendiente?1:0,t.factura,t.led?JSON.stringify(t.led):'',(t.fotos||'').length,(t.lineas||[]).length]; })); }catch(e){ return String(Math.random()); }
+}
+function _tkSinPII(it){
+  var o={}, k;
+  for(k in it){ if(Object.prototype.hasOwnProperty.call(it,k)&&!/^(telefono|tel|celular|cedula|id_3|email|correo|ruc)$/i.test(k)) o[k]=it[k]; }
+  return o;
+}
+function _tkCacheGuardar(q,r){
+  if(!r||!r.ok) return;
+  var id=_tkCacheId(q), v={items:r.items||[],total:r.total,suma:r.suma,hayMas:r.hayMas,ts:Date.now()};
+  _TK_CACHE_MEM[id]=v;
+  try{
+    var txt=JSON.stringify({items:(v.items||[]).slice(0,120).map(_tkSinPII),total:v.total,suma:v.suma,hayMas:v.hayMas||(v.items||[]).length>120,ts:v.ts});
+    if(txt.length<1500000) sessionStorage.setItem(id,txt);
+  }catch(e){}
+}
+function _tkCacheLeer(q){
+  var id=_tkCacheId(q), v=_TK_CACHE_MEM[id];
+  if(v) return v;
+  try{ var t=sessionStorage.getItem(id); if(t){ v=JSON.parse(t); _TK_CACHE_MEM[id]=v; return v; } }catch(e){}
+  return null;
+}
+/** Pone la lista guardada como datos actuales. Devuelve su firma (o '' si no había). */
+function _tkCacheAplicar(q){
+  var v=_tkCacheLeer(q);
+  if(!v||!v.items||!v.items.length) return '';
+  var items=v.items.slice();
+  window._tkLeds=window._tkLeds||{};
+  items.forEach(_tkLedGuardar);
+  if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function'){ try{ window.MCTickets.cacheLineasLista(items); }catch(e){} }
+  _histData=items; window._histData=items;
+  window._tkTot={total:v.total, suma:v.suma, hayMas:v.hayMas};
+  window._tkLim=items.length; window._tkQ=q; window._tkKey=_tkClave(q);
+  return _tkFirma(items);
+}
+function _tkCacheLimpiar(){
+  _TK_CACHE_MEM={};
+  try{ for(var i=sessionStorage.length-1;i>=0;i--){ var k=sessionStorage.key(i); if(k&&k.indexOf('sunsu.tkcache.')===0) sessionStorage.removeItem(k); } }catch(e){}
+  window._tkPrecalentado=false;
+}
+/** Precalienta la lista por defecto en segundo plano (al iniciar la app). */
+function _tkPrecalentar(){
+  if(typeof api!=='function') return;
+  var q={desde:'',hasta:'',cosm:'',q:''}, f=_tkF();
+  if(_tkCacheLeer(q)) return;
+  Promise.resolve(api('tk_historial',{desde:'',hasta:'',cosm:'',q:'',est:f.est||'',seg:f.seg||'',offset:0,limit:50})).then(function(r){ if(r&&r.ok) _tkCacheGuardar(q,r); }).catch(function(){});
+}
+window._tkCacheLimpiar=_tkCacheLimpiar; window._tkPrecalentar=_tkPrecalentar; window._tkCacheAplicar=_tkCacheAplicar;
 // ── Lista paginada desde Supabase (hotfix 17/11): 50 filas + «Mostrar más»; LED en lote; Acuity después ──
 /* TK155 (Emilia t679u): clave única de LEDs por ticket. Los tickets creados en Supabase tienen tkRow=null:
    antes todos escribían en _tkLeds["null"] y se contagiaban (todos los WhatsApp en verde). */
@@ -5559,6 +5634,7 @@ function _tkPedir(q, mas){
     window._tkCargandoLista=false;
     if(!r||!r.ok) { toast((r&&r.error)||'No se pudo cargar la lista','#B86B6B'); return false; }
     var items=r.items||[];
+    if(!mas&&!off) _tkCacheGuardar(q,r);
     window._tkLeds=window._tkLeds||{};
     items.forEach(_tkLedGuardar);
     if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function') window.MCTickets.cacheLineasLista(items);
@@ -5642,21 +5718,76 @@ function _histBuscarGo(esStaff){
   var f0=window._histFiltroActual||{};fh=null;
   if(esStaff) mostrarHistorialStaff(c,f0.desde||'',f0.hasta||''); else mostrarHistorialAdmin(c,f0.desde||'',f0.hasta||'',window._histCosmFiltro);
 }
-// Búsqueda EN VIVO: re-filtra sola 350ms después de dejar de teclear (mín. 2 caracteres)
+// TK156 (Emilia t694u): búsqueda EN VIVO letra por letra en 0 ms — filtra en memoria la lista ya cargada,
+// repinta SOLO #hist-res (el <input> no se toca: no se pierde el foco ni el teclado del iPhone) y, con ≥2 letras,
+// pide en silencio (300 ms, con secuencia) tickets más antiguos para anexarlos sin parpadeo.
+function _tkNorm(v){ return String(v==null?'':v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function _histTextoBusq(t){
+  if(t&&t._busqTxt) return t._busqTxt;
+  var lin=[].concat(t.lineas||[], t.items||[], t.detalle||[]).map(function(l){ return l&&(l.nombre||l.desc||l.descripcion||l.producto||l.servicio)||''; }).join(' ');
+  var est=''; try{ est=_histEstadoDoc(t); }catch(_e){}
+  var fac=''; try{ fac=_histFactura(t)||''; }catch(_e2){}
+  var h=_tkNorm([t.so_num,t.beta_num,t.clave,t.nombre,t.apellido,t.cliente,t.cedula,fac,t.factura,t.cosmetologa,est,t.estado,t.estado_doc,t.servicios,t.facial,t.tratamiento,lin].join(' | '));
+  try{ Object.defineProperty(t,'_busqTxt',{value:h,enumerable:false,writable:true,configurable:true}); }catch(_e3){}
+  return h;
+}
+function _histMatchRapido(t, qn){
+  if(!qn) return true;
+  var h=_histTextoBusq(t);
+  return qn.split(/\s+/).every(function(w){ return !w||h.indexOf(w)>=0; });
+}
+function _histListaLocal(qn){
+  var base=window._histBase||window._histData||_histData||[], vistos={}, out=[];
+  base.concat(window._histData||[]).forEach(function(t){
+    var k=String(t.so_num||t.clave||(t.tkRow!=null?'r'+t.tkRow:'')||JSON.stringify([t.fecha,t.nombre,t.estimado]));
+    if(vistos[k]) return; vistos[k]=1;
+    if(_histMatchRapido(t,qn)) out.push(t);
+  });
+  return out;
+}
+function _histPintarLocal(esStaff){
+  var res=document.getElementById('hist-res'); if(!res) return false;
+  var q=(window._histBusqueda||'').trim(), qn=_tkNorm(q), f=window._histFiltroActual||{};
+  var L=_histListaLocal(qn), tot0=window._tkTot;
+  if(q) window._tkTot=null; /* el resumen cuenta lo filtrado al instante */
+  try{
+  if(esStaff) res.innerHTML=_histResStaffHTML(L, q.toLowerCase());
+  else res.innerHTML=_histResAdminHTML(L, window._histCosmFiltro||'', f.desde||'', f.hasta||'', q.toLowerCase());
+  } finally { if(q) window._tkTot=tot0; }
+  _histTrasPintar();
+  return true;
+}
+function _histBuscarFondo(esStaff, q){
+  if(!window._tkServer||typeof _tkPedir!=='function') return;
+  var f=window._histFiltroActual||{};
+  var qq={desde:f.desde||'',hasta:f.hasta||'',cosm:esStaff?'':(window._histCosmFiltro||''),q:q.toLowerCase()};
+  if(_tkClave(qq)===window._tkKey) return;
+  window._tkKey=_tkClave(qq); window._tkLim=50;
+  _tkPedir(qq,false).then(function(ok){ if(ok&&(window._histBusqueda||'').trim()===q) _histPintarLocal(esStaff); });
+}
+function _histVolverBase(esStaff){
+  window._tkSeq=(window._tkSeq||0)+1; /* respuestas de búsquedas viejas se ignoran */
+  window._tkCargandoLista=false;
+  if(window._histBase){ _histData=window._histBase; window._histData=_histData; window._tkQ=window._histBaseQ||window._tkQ; window._tkKey=window._histBaseKey||window._tkKey; if(window._histBaseTot) window._tkTot=window._histBaseTot; }
+  window._histBase=null;
+  return _histPintarLocal(esStaff);
+}
 function _histBuscarLive(esStaff){
-  clearTimeout(window._histBuscarTimer);
-  window._histBuscarTimer=setTimeout(function(){
-    var el=document.getElementById('hist-buscar');
-    var q=(el?el.value:'').trim();
-    if(q.length===1) return; // 1 letra traería demasiado — espera la segunda
-    if(q===(window._histBusqueda||'')) return; // sin cambios
-    _histBuscarGo(esStaff);
-  },350);
+  clearTimeout(window._histBuscarTimer); clearTimeout(window._tkDeb);
+  var el=document.getElementById('hist-buscar');
+  var q=(el?el.value:'').trim();
+  if(!window._histBase&&q){ window._histBase=(window._histData||_histData||[]).slice(); window._histBaseQ=window._tkQ; window._histBaseKey=window._tkKey; window._histBaseTot=window._tkTot; }
+  window._histBusqueda=q;
+  if(!q){ if(!_histVolverBase(esStaff)) _histBuscarGo(esStaff); return; }
+  if(!_histPintarLocal(esStaff)) return;
+  if(_tkNorm(q).length>=2) window._histBuscarTimer=setTimeout(function(){ if((window._histBusqueda||'').trim()===q) _histBuscarFondo(esStaff,q); },300);
 }
 function _histBuscarClear(esStaff){
   window._histBusqueda='';
   var elC=document.getElementById('hist-buscar');
   if(elC) elC.value='';
+  clearTimeout(window._histBuscarTimer);
+  if(window._histBase&&_histVolverBase(esStaff)) return;
   if(_histActualizarRes(esStaff)) return;
   var c=document.getElementById('content');
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
@@ -5863,10 +5994,19 @@ function _histFacCorta(t){
 function _histFacNum(t){
   var ff=_tkFacFull(t); if(!ff) return '';
   var m=String(ff).trim().match(/^(\d{3})-(\d{3})-(\d{6,12})$/);
-  if(m) return m[1]+'-'+m[2]+'-'+String(Number(m[3]));
+  /* TK156 (Emilia t699u): formato SRI completo 001-001-000002976 (9 dígitos), sin recortar ceros. */
+  if(m) return m[1]+'-'+m[2]+'-'+String(Number(m[3])).padStart(9,'0');
   var nOnly=String(ff).trim().match(/(\d{6,12})$/);
-  if(nOnly) return String(Number(nOnly[1]));
+  if(nOnly) return String(Number(nOnly[1])).padStart(9,'0');
   return String(ff).replace(/\.0+$/,'');
+}
+/* TK156 (Emilia t699u–t701u): junto al Nº, la factura completa (mismo gris de fecha/valor, un pelín más chica);
+   sin factura: «Canje · sin factura» ($0, gris) o «Sin factura» (ámbar suave) para ver rápido qué falta facturar. */
+function _histFacTag(t,facn,anul){
+  if(facn) return '<span class="mob-fac"> - '+_histEsc(facn)+'</span>';
+  if(anul||(t&&(t.borrador||t.por_completar))) return '';
+  var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
+  return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
 }
 function _histColorQuien(nombre){
   var raw=String(nombre||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
@@ -6058,7 +6198,7 @@ function _histCardHTML(t, i, showPrices){
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
   var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
   var facn=_histFacNum(t);
-  var l1=(_histNum(t)||'—')+(facn?(' - '+facn):'');
+  var l1=(_histNum(t)||'—');
   var l3=[_histFechaFmt(t.fecha)];
   if(showPrices) l3.push('$'+_histMontos(t).tot.toFixed(2));
   var who=_histCreador(t);
@@ -6066,7 +6206,7 @@ function _histCardHTML(t, i, showPrices){
   var res=_histResumenTxt(t);
   var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span>'+est+'</div>'
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
     +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
     +_histThumbsHTML(t, res)

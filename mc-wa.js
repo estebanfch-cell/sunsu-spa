@@ -108,7 +108,7 @@
     var L = w._histVisibles || w._histData || [];
     for (var i = 0; i < L.length; i++) {
       var t = L[i], c = (w.MCTickets && MCTickets.claveDe) ? MCTickets.claveDe(t) : (t.so_num || t.clave);
-      if (String(c) === String(clave) || String(t.so_num) === String(clave) || String(t.tkRow) === String(clave)) return t;
+      if (String(c) === String(clave) || String(t.so_num) === String(clave) || (t.tkRow != null && t.tkRow !== "" && !/^(null|undefined|0)$/.test(String(t.tkRow)) && String(t.tkRow) === String(clave))) return t;
     }
     return null;
   }

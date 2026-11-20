@@ -293,10 +293,11 @@ describe("TK123 Productos: filtros, escáner y sin-costo físico", () => {
     assert.match(js, /mcp-bulk:not\(\[hidden\]\)\{display:flex\}/);
     assert.match(js, /mcp-bulk\[hidden\]\{display:none!important\}/);
   });
-  it("Simulación y Ver como no aparecen en la cabecera", () => {
+  it("Simulación no aparece en la cabecera; «Ver como…» es el propio pill del admin (TK156, Emilia t686u)", () => {
     const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.equal(html.includes('id="btn-prueba"'), false);
-    assert.equal(html.includes('id="btn-ver-como"'), false);
+    assert.equal((html.match(/id="btn-ver-como"/g) || []).length, 1);
+    assert.match(html, /id="btn-ver-como" class="top-user top-user-btn"/);
   });
   it("el escáner compartido usa BarcodeDetector y cae a ZXing vendido, sin CDN", () => {
     const scan = readFileSync(new URL("../../../mc-scan.js", import.meta.url), "utf8");
