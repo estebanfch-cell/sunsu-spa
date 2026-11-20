@@ -710,11 +710,16 @@
   .crow { display: flex; justify-content: space-between; font-size: 0.76rem; padding: 3px 0; color: var(--gray); }
   .crow .v { font-weight: 700; color: var(--navy); }
   .ctotal { display: flex; justify-content: space-between; font-size: 0.92rem; font-weight: 800; padding-top: 9px; margin-top: 5px; border-top: 1px solid var(--gray-ll); }
-  .com-sum { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem 4.6rem; column-gap: 6px; width: 100%; max-width: 100%; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .com-sum { display: grid; grid-template-columns: minmax(0, 1fr) 4.6rem; column-gap: 6px; width: 100%; max-width: 100%; overflow: hidden; font-variant-numeric: tabular-nums; }
   .com-sum-hd { font-size: 0.58rem; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.03em; color: var(--gray); padding: 0 0 5px; border-bottom: 1px solid var(--gray-ll); }
-  .com-sum-hd span:nth-child(2), .com-sum-hd span:nth-child(3), .com-sum .num { text-align: right; }
+  .com-sum-hd span:nth-child(2), .com-sum .num { text-align: right; }
+  .com-bar.ss-bar, .com-bar.tools { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 6px; margin: 0 0 8px; }
+  .com-bar label, .com-bar .com-lab { display: flex; flex-direction: column; align-items: stretch; gap: 3px; margin: 0; flex: 1 1 0; min-width: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gray); }
+  .com-bar select { height: 36px; padding: 0 8px; border: 1px solid var(--cream-d); border-radius: 8px; background: #fff; font: inherit; font-size: 16px; width: 100%; min-width: 0; box-sizing: border-box; }
+  .com-bar .btn, .com-bar #com-ver { white-space: nowrap; flex: 0 0 auto; height: 36px; }
+  .com-bar .com-quien { font-size: 0.92rem; color: var(--navy-d); text-transform: none; letter-spacing: 0; font-weight: 700; align-self: center; }
   .com-row { border-bottom: 1px solid var(--gray-ll); }
-  .com-row summary { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem 4.6rem; column-gap: 6px; align-items: center; min-height: 36px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 0.74rem; color: var(--gray); overflow: hidden; }
+  .com-row summary { display: grid; grid-template-columns: minmax(0, 1fr) 4.6rem; column-gap: 6px; align-items: center; min-height: 36px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 0.74rem; color: var(--gray); overflow: hidden; }
   .com-row summary::-webkit-details-marker { display: none; }
   .com-row summary .cat { display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; }
   .com-row summary .cat::before { content: "▸"; margin-right: 5px; color: var(--gray); flex-shrink: 0; }
@@ -2525,6 +2530,19 @@ function tituloRuta(route, tab) {
   return (MENU.find((m) => m[0] === route.mod) || ["", "Sistema central"])[1];
 }
 
+function bindDataGo(root) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll("[data-go]").forEach((b) => {
+    b.onclick = (ev) => {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      const shell = document.getElementById("shell");
+      if (shell) shell.classList.remove("nav-open");
+      const menu = document.getElementById("crear-menu");
+      if (menu) menu.hidden = true;
+      go(b.getAttribute("data-go"));
+    };
+  });
+}
 function go(hash) {
   if (typeof window._ticketAntesDeIr === "function") window._ticketAntesDeIr(hash);
   if (location.hash === hash) draw();
@@ -4934,9 +4952,9 @@ async function renderComisiones() {
   window._com = data;
   const opts = `<option value="Todas">Todas</option>` + (data.personas || []).map((n) => `<option value="${esc(n)}" ${n === data.persona ? "selected" : ""}>${esc(n)}</option>`).join("");
   const cicloOpts = ciclos.map((c, i) => `<option value="${esc(c)}">${esc(c)} → ${esc(cicloFinUi(c))}${i === 0 ? " · vigente" : ""}</option>`).join("");
-  return `<div class="tools">
-      ${state.admin ? `<label>Persona <select id="com-persona">${opts}</select></label>` : `<strong>${esc(data.persona || "")}</strong>`}
-      <label>Ciclo <select id="com-ciclo">${cicloOpts}</select></label>
+  return `<div class="ss-bar tools com-bar">
+      ${state.admin ? `<label class="com-lab">Persona <select id="com-persona">${opts}</select></label>` : `<strong class="com-quien">${esc(data.persona || "")}</strong>`}
+      <label class="com-lab">Ciclo <select id="com-ciclo">${cicloOpts}</select></label>
       <button class="btn small" type="button" id="com-ver">Ver</button>
     </div>
     <div id="com-tabla"></div>
@@ -6950,14 +6968,13 @@ function emoCom(concepto) {
 }
 function htmlComCard(persona, filas, detalle) {
   const d = detalle || {};
-  const cabeza = `<div class="com-sum com-sum-hd" aria-hidden="true"><span>Categoría</span><span>Vendido</span><span>Comisión</span></div>`;
+  const cabeza = `<div class="com-sum com-sum-hd" aria-hidden="true"><span>Categoría</span><span>Comisión</span></div>`;
   const cuerpo = (filas || []).map((f) => {
-    const vendido = money(f.vendido == null ? 0 : f.vendido);
     if (f.concepto === "Total") {
-      return `<div class="ctotal com-sum"><span>${emoCom("Total")}</span><span class="num">${vendido}</span><span class="num">${money(f.total)}</span></div>`;
+      return `<div class="ctotal com-sum"><span>${emoCom("Total")}</span><span class="num">${money(f.total)}</span></div>`;
     }
     const valor = f.concepto === "Faciales" && d.comFac === false ? "—" : money(f.total);
-    return `<details class="com-row"><summary><span class="cat"><span class="cat-txt">${esc(emoCom(f.concepto))}</span></span><span class="num">${vendido}</span><span class="num">${valor}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
+    return `<details class="com-row"><summary><span class="cat"><span class="cat-txt">${esc(emoCom(f.concepto))}</span></span><span class="num">${valor}</span></summary>${htmlComDet(f.concepto, d, f.total)}</details>`;
   }).join("");
   return `<div class="cosm-card"><div class="cosm-hdr" style="background:#3D5A7A"><span>💰 ${esc(persona || "")}</span></div><div class="cosm-body">${cabeza}${cuerpo}</div></div>`;
 }
@@ -7053,15 +7070,7 @@ function bind(main) {
   bindCfgPriv(main);
   bindCfgJump(main);
   bindAprobaciones(main);
-  main.querySelectorAll("[data-go]").forEach((b) => {
-    b.onclick = () => {
-      const shell = document.getElementById("shell");
-      if (shell) shell.classList.remove("nav-open");
-      const menu = document.getElementById("crear-menu");
-      if (menu) menu.hidden = true;
-      go(b.getAttribute("data-go"));
-    };
-  });
+  bindDataGo(main);
   const filtro = main.querySelector("#filtro");
   if (filtro) filtro.addEventListener("input", () => {
     const q = filtro.value.toLowerCase();
@@ -8056,7 +8065,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK158";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK160";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -8179,44 +8188,44 @@ function mostrarNuevaVersion() { if (window.SunsuUpdate) window.SunsuUpdate.pint
 function revisarVersionServidor() { if (window.SunsuUpdate) window.SunsuUpdate.revisarVersionServidor(); }
 window.SunsuUpdate.init();
 </script>
-<script src="vendor-zxing.js?v=20261119tk158"></script>
-<script src="mc-scan.js?v=20261119tk158"></script>
-<script src="mc-buscar.js?v=20261119tk158"></script>
-<script src="descuento_justif.js?v=20261119tk158"></script>
-<script src="beta-screens.js?v=20261119tk158"></script>
-<script src="beta-inline.js?v=20261119tk158"></script>
-<script src="mc-productos.js?v=20261119tk158"></script>
-<script src="mc-nav.js?v=20261119tk158"></script>
-<script src="mc-permisos.js?v=20261119tk158"></script>
-<script src="mc-protocolos.js?v=20261119tk158"></script>
-<script src="mc-conteo.js?v=20261119tk158"></script>
-<script src="mc-transferencias.js?v=20261119tk158"></script>
-<script src="mc-ajustes.js?v=20261119tk158"></script>
-<script src="vendor-qrcode.js?v=20261119tk158"></script>
-<script src="mc-wa.js?v=20261119tk158"></script>
-<script src="mc-tickets.js?v=20261119tk158"></script>
-<script src="mc-maestro.js?v=20261119tk158"></script>
-<script src="mc-empleados.js?v=20261119tk158"></script>
-<script src="mc-edit.js?v=20261119tk158"></script>
-<script src="mc-paquetes.js?v=20261119tk158"></script>
-<script src="mc-aperturas.js?v=20261119tk158"></script>
-<script src="mc-acceso.js?v=20261119tk158"></script>
-<script src="mc-barras.js?v=20261119tk158"></script>
-<script src="mc-caja.js?v=20261119tk158"></script>
-<script src="mc-giftcards.js?v=20261119tk158"></script>
-<script src="mc-multas.js?v=20261119tk158"></script>
-<script src="mc-clientes.js?v=20261119tk158"></script>
-<script src="mc-clientes-dup.js?v=20261119tk158"></script>
-<script src="mc-docpdf.js?v=20261119tk158"></script>
-<script src="mc-compras.js?v=20261119tk158"></script>
-<script src="mc-consignacion.js?v=20261119tk158"></script>
-<script src="mc-proveedores.js?v=20261119tk158"></script>
-<script src="mc-recepciones.js?v=20261119tk158"></script>
-<script src="mc-movil.js?v=20261119tk158"></script>
-<script src="mc-promociones.js?v=20261119tk158"></script>
-<script src="mc-agenda.js?v=20261119tk158"></script>
-<script src="mc-staff-home.js?v=20261119tk158"></script>
-<script src="mc-borradores.js?v=20261119tk158"></script><script>
+<script src="vendor-zxing.js?v=20261119tk160"></script>
+<script src="mc-scan.js?v=20261119tk160"></script>
+<script src="mc-buscar.js?v=20261119tk160"></script>
+<script src="descuento_justif.js?v=20261119tk160"></script>
+<script src="beta-screens.js?v=20261119tk160"></script>
+<script src="beta-inline.js?v=20261119tk160"></script>
+<script src="mc-productos.js?v=20261119tk160"></script>
+<script src="mc-nav.js?v=20261119tk160"></script>
+<script src="mc-permisos.js?v=20261119tk160"></script>
+<script src="mc-protocolos.js?v=20261119tk160"></script>
+<script src="mc-conteo.js?v=20261119tk160"></script>
+<script src="mc-transferencias.js?v=20261119tk160"></script>
+<script src="mc-ajustes.js?v=20261119tk160"></script>
+<script src="vendor-qrcode.js?v=20261119tk160"></script>
+<script src="mc-wa.js?v=20261119tk160"></script>
+<script src="mc-tickets.js?v=20261119tk160"></script>
+<script src="mc-maestro.js?v=20261119tk160"></script>
+<script src="mc-empleados.js?v=20261119tk160"></script>
+<script src="mc-edit.js?v=20261119tk160"></script>
+<script src="mc-paquetes.js?v=20261119tk160"></script>
+<script src="mc-aperturas.js?v=20261119tk160"></script>
+<script src="mc-acceso.js?v=20261119tk160"></script>
+<script src="mc-barras.js?v=20261119tk160"></script>
+<script src="mc-caja.js?v=20261119tk160"></script>
+<script src="mc-giftcards.js?v=20261119tk160"></script>
+<script src="mc-multas.js?v=20261119tk160"></script>
+<script src="mc-clientes.js?v=20261119tk160"></script>
+<script src="mc-clientes-dup.js?v=20261119tk160"></script>
+<script src="mc-docpdf.js?v=20261119tk160"></script>
+<script src="mc-compras.js?v=20261119tk160"></script>
+<script src="mc-consignacion.js?v=20261119tk160"></script>
+<script src="mc-proveedores.js?v=20261119tk160"></script>
+<script src="mc-recepciones.js?v=20261119tk160"></script>
+<script src="mc-movil.js?v=20261119tk160"></script>
+<script src="mc-promociones.js?v=20261119tk160"></script>
+<script src="mc-agenda.js?v=20261119tk160"></script>
+<script src="mc-staff-home.js?v=20261119tk160"></script>
+<script src="mc-borradores.js?v=20261119tk160"></script><script>
 try {
   var _sunsuDraw = draw();
   if (_sunsuDraw && typeof _sunsuDraw.catch === "function") {

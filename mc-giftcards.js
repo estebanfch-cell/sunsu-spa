@@ -137,6 +137,7 @@ function listaHtml() {
       '<div class="mcgc-acts" style="justify-content:space-between"><span class="mccf-sub">' + e(K.items.length) + " de " + e(K.total) + (K.siguiente ? " · siguiente código: <b>" + e(K.siguiente) + "</b>" : "") + "</span>" + (K.items.length < K.total ? '<button class="btn ghost small" type="button" id="mcgc-mas">Cargar más</button>' : "") + "</div></div></div>";
   }
   function wireLista(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var t = null, q = main.querySelector("#mcgc-q");
     if (q) q.oninput = function () { clearTimeout(t); t = setTimeout(async function () { K.q = q.value.trim(); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }, 300); };
     main.querySelectorAll("[data-est]").forEach(function (b) { b.onclick = async function () { K.estado = b.getAttribute("data-est"); try { await cargarLista(false); repLista(main); } catch (x) { toast2(x.message, true); } }; });
@@ -342,6 +343,7 @@ function listaHtml() {
   function descargar(blob, nombre) { var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
   async function repDet(main) { var root = main.querySelector("#mcgc-root"); if (root) { root.outerHTML = detHtml(); wireDet(main); } }
   function wireDet(main) {
+    if (typeof bindDataGo === "function") bindDataGo(main);
     var v = K.d.item, recargar = async function () { await cargarDet(String(v.id)); repDet(main); };
     var us = main.querySelector("#mcgc-usar"); if (us) us.onclick = function () {
       var hoy = K.d.hoy, yo = (window.CU && window.CU.name) || "", pers = K.d.personas || [];
