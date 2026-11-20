@@ -8,7 +8,7 @@ import { actorOf, logAccion } from "./lib.ts";
 import { cicloFin, cicloInicio, ecuadorParts, n, normNombre, rolCalcularOficial, round2, s, type Row } from "./domain.ts";
 import { esAdmin } from "./permisos.ts";
 import { clavePeriodo, etiquetaPeriodo, estaPublicado } from "./roles_api.ts";
-import { clasificarHorasRol, horarioRrhhDe, type DiaHorasRol } from "./horas_rol.ts";
+import { clasificarHorasRol, enMapaRrhh, horarioRolDeTabla, horarioRrhhDe, type DiaHorasRol } from "./horas_rol.ts";
 
 const MESES: Record<string, number> = {
   ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
@@ -201,6 +201,20 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
  * tiene marcas, Jibble; clasificadas en normales / suplementarias 50 % / extraordinarias 100 % / descanso 100 %,
  * con el recorte del rol RRHH: el total del mes de cada tipo se trunca a bloques de 15 min (recorte15).
  */
+/** TK173: quien no está en el mapa histórico RRHH usa el horario asignado en Horarios (p. ej. Evelyn). */
+export async function horarioRolDe(ctx: Ctx, persona: string) {
+  if (enMapaRrhh(persona)) return horarioRrhhDe(persona);
+  try {
+    const { cargarHorarios } = await import("./horarios_api.ts");
+    const { horarioAsignado } = await import("./horarios.ts");
+    const pack = await cargarHorarios(ctx);
+    const h = horarioAsignado(pack.horarios, pack.asignaciones, [persona]);
+    const r = h && !h.esDefault ? horarioRolDeTabla(h) : null;
+    if (r) return r;
+  } catch { /* sin horarios */ }
+  return horarioRrhhDe(persona);
+}
+
 export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number, opts: { ingreso?: string | null } = {}) {
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let nomina = { hayDatos: false, dias: [] as Row[], hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, diasJibble: 0, diasPropios: 0, faltas: 0 };
@@ -231,7 +245,7 @@ export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: n
   if (ingreso && hoy < ingreso) hoy = ingreso;
   const horas = clasificarHorasRol({
     anio: anio, mes: mes, hoy,
-    horario: horarioRrhhDe(persona),
+    horario: await horarioRolDe(ctx, persona),
     feriados: await feriadosDe(ctx),
     dias, permisos, ingreso: ingreso || null,
   });
