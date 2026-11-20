@@ -12,6 +12,7 @@
     if (document.getElementById("mccj-css")) return;
     var s = document.createElement("style"); s.id = "mccj-css";
     s.textContent = [
+      ".mccj-migo-alerta{margin:6px 0;padding:8px 10px;border-radius:9px;background:#FEF2F2;border:1.5px solid #DC2626;color:#991B1B;font-weight:800;font-size:.8rem}.mccj-migo-ok{margin:6px 0;padding:6px 10px;border-radius:9px;background:#F0FDF4;border:1px solid #16A34A;color:#166534;font-weight:700;font-size:.78rem}",
       ".mccj{max-width:980px}.mccj h2{margin:0 0 6px;font-size:1.2rem}.mccj-sub{font-size:.76rem;color:var(--gray,#8a93a6)}",
       ".mccj-card{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.08))}",
       ".mccj-saldo{font-size:2rem;font-weight:800;color:var(--navy,#2c3e66)}.mccj-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}",
@@ -178,7 +179,13 @@
         '<button class="btn mccj-pay-ok" type="button" id="pg-ok">Registrar</button></div>' +
         '<div id="pg-prev" class="pg-thumbs"></div></div>';
       var formVisible = saldo > 0.009;
+      // TK156 (Emilia t687u): cobro por factura Migo ligada → se ve aquí (forma de pago) o se avisa si Migo no la trae.
+      var facM = r.factura_migo ? String(r.factura_migo).split("-").pop().replace(/^0+/, "") : "";
+      var migoHtml = !r.factura_migo ? "" : (r.migo_sin_forma
+        ? '<div class="mccj-migo-alerta" role="alert">⚠️ Factura Migo ' + e(facM) + " sin forma de pago — falta registrarla en Migo o aquí</div>"
+        : '<div class="mccj-migo-ok">✅ Pagado vía factura Migo ' + e(facM) + (r.forma_migo ? " · " + e(met[r.forma_migo] || r.forma_migo) : "") + " · " + $m(r.legado || 0) + "</div>");
       host.innerHTML = '<div class="mccf-card mccj-card mccj-pay"><div class="mccj-pay-h"><span>💵 Pagos · saldo ' + $m(saldo) + "</span></div>" +
+        migoHtml +
         (filas || "") +
         (formVisible ? formHtml : (filas ? '<button type="button" class="mccj-pay-add" id="pg-add">+ Pago</button>' + '<div hidden id="pg-form-wrap">' + formHtml + "</div>" : formHtml)) +
         (!formVisible ? pagosFaltanBtnsHtml(r) : "") +

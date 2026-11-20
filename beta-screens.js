@@ -5507,20 +5507,95 @@ function _buildTicketCard(t, showPrices){
 // ══════ HISTORIAL ══════
 function renderHistorial(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
   window._histCosmFiltro='';
   window._tkServer=true;
-  _tkPedir({desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()}, false).then(function(ok){
+  var q0={desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()};
+  var pintar=function(){ if(isAdmin) mostrarHistorialAdmin(c,'','',''); else mostrarHistorialStaff(c,'',''); };
+  /* TK156 (Emilia t688u): stale-while-revalidate. Si hay lista guardada se pinta al instante (sin «Cargando historial…»)
+     y se refresca en segundo plano; solo se vuelve a pintar si cambió algo, conservando el scroll. */
+  var firma0=_tkCacheAplicar(q0);
+  if(firma0){
+    pintar();
+    _tkPedir(q0,false).then(function(ok){
+      if(!ok||!document.body.contains(c)) return;
+      if(_tkFirma(window._histData)===firma0) return;
+      var y=window.scrollY||0;
+      pintar();
+      try{ window.scrollTo(0,y); }catch(eS){}
+    });
+    _histAutoRefresh();
+    return;
+  }
+  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando historial...</div>';
+  _tkPedir(q0, false).then(function(ok){
     if(!ok){
       c.innerHTML='<div class="card" style="text-align:center;color:var(--red)">⚠️ No se pudo cargar la lista<br><br>'
         +'<button onclick="renderHistorial(document.getElementById(\'content\'))" style="padding:8px 18px;background:var(--navy);color:white;border:none;border-radius:9px;font-size:0.8rem;cursor:pointer">🔄 Reintentar</button></div>';
       return;
     }
-    if(isAdmin) mostrarHistorialAdmin(c,'','','');
-    else mostrarHistorialStaff(c,'','');
+    pintar();
     _histAutoRefresh();
   });
 }
+/* ── TK156: caché de la lista de Tickets (memoria + sessionStorage sin teléfonos ni cédulas) ── */
+var _TK_CACHE_MEM={};
+function _tkCacheId(q){
+  var real=null, vista='';
+  try{ real=(typeof state!=='undefined'&&state&&(state.userReal||state.user))||null; vista=(typeof state!=='undefined'&&state&&state.vista&&state.vista.uid)||''; }catch(e){}
+  var uid=(real&&(real.id||real.uid||real.name))||(typeof CU!=='undefined'&&CU&&(CU.id||CU.name))||'';
+  var local=window.SUNSU_LOCAL||'';
+  try{ local=local||localStorage.getItem('sunsu.local')||''; }catch(e2){}
+  return 'sunsu.tkcache.v1|'+uid+'|'+vista+'|'+local+'|'+_tkClave(q||{});
+}
+function _tkFirma(items){
+  try{ return JSON.stringify((items||[]).map(function(t){ return [t.so_num||t.beta_num||t.tkRow,t.estimado,t.estado_doc,t.anulado?1:0,t.solicitud_pendiente?1:0,t.factura,t.led?JSON.stringify(t.led):'',(t.fotos||'').length,(t.lineas||[]).length]; })); }catch(e){ return String(Math.random()); }
+}
+function _tkSinPII(it){
+  var o={}, k;
+  for(k in it){ if(Object.prototype.hasOwnProperty.call(it,k)&&!/^(telefono|tel|celular|cedula|id_3|email|correo|ruc)$/i.test(k)) o[k]=it[k]; }
+  return o;
+}
+function _tkCacheGuardar(q,r){
+  if(!r||!r.ok) return;
+  var id=_tkCacheId(q), v={items:r.items||[],total:r.total,suma:r.suma,hayMas:r.hayMas,ts:Date.now()};
+  _TK_CACHE_MEM[id]=v;
+  try{
+    var txt=JSON.stringify({items:(v.items||[]).slice(0,120).map(_tkSinPII),total:v.total,suma:v.suma,hayMas:v.hayMas||(v.items||[]).length>120,ts:v.ts});
+    if(txt.length<1500000) sessionStorage.setItem(id,txt);
+  }catch(e){}
+}
+function _tkCacheLeer(q){
+  var id=_tkCacheId(q), v=_TK_CACHE_MEM[id];
+  if(v) return v;
+  try{ var t=sessionStorage.getItem(id); if(t){ v=JSON.parse(t); _TK_CACHE_MEM[id]=v; return v; } }catch(e){}
+  return null;
+}
+/** Pone la lista guardada como datos actuales. Devuelve su firma (o '' si no había). */
+function _tkCacheAplicar(q){
+  var v=_tkCacheLeer(q);
+  if(!v||!v.items||!v.items.length) return '';
+  var items=v.items.slice();
+  window._tkLeds=window._tkLeds||{};
+  items.forEach(_tkLedGuardar);
+  if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function'){ try{ window.MCTickets.cacheLineasLista(items); }catch(e){} }
+  _histData=items; window._histData=items;
+  window._tkTot={total:v.total, suma:v.suma, hayMas:v.hayMas};
+  window._tkLim=items.length; window._tkQ=q; window._tkKey=_tkClave(q);
+  return _tkFirma(items);
+}
+function _tkCacheLimpiar(){
+  _TK_CACHE_MEM={};
+  try{ for(var i=sessionStorage.length-1;i>=0;i--){ var k=sessionStorage.key(i); if(k&&k.indexOf('sunsu.tkcache.')===0) sessionStorage.removeItem(k); } }catch(e){}
+  window._tkPrecalentado=false;
+}
+/** Precalienta la lista por defecto en segundo plano (al iniciar la app). */
+function _tkPrecalentar(){
+  if(typeof api!=='function') return;
+  var q={desde:'',hasta:'',cosm:'',q:''}, f=_tkF();
+  if(_tkCacheLeer(q)) return;
+  Promise.resolve(api('tk_historial',{desde:'',hasta:'',cosm:'',q:'',est:f.est||'',seg:f.seg||'',offset:0,limit:50})).then(function(r){ if(r&&r.ok) _tkCacheGuardar(q,r); }).catch(function(){});
+}
+window._tkCacheLimpiar=_tkCacheLimpiar; window._tkPrecalentar=_tkPrecalentar; window._tkCacheAplicar=_tkCacheAplicar;
 // ── Lista paginada desde Supabase (hotfix 17/11): 50 filas + «Mostrar más»; LED en lote; Acuity después ──
 /* TK155 (Emilia t679u): clave única de LEDs por ticket. Los tickets creados en Supabase tienen tkRow=null:
    antes todos escribían en _tkLeds["null"] y se contagiaban (todos los WhatsApp en verde). */
@@ -5559,6 +5634,7 @@ function _tkPedir(q, mas){
     window._tkCargandoLista=false;
     if(!r||!r.ok) { toast((r&&r.error)||'No se pudo cargar la lista','#B86B6B'); return false; }
     var items=r.items||[];
+    if(!mas&&!off) _tkCacheGuardar(q,r);
     window._tkLeds=window._tkLeds||{};
     items.forEach(_tkLedGuardar);
     if(window.MCTickets&&typeof window.MCTickets.cacheLineasLista==='function') window.MCTickets.cacheLineasLista(items);

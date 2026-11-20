@@ -294,6 +294,8 @@
     wireDetail: function (main, route) { if (window.MCTickets) window.MCTickets.wire(main, route); },
     ensureItems: async function () {
       if ((window._histData || []).length) return true;
+      // TK156: lista guardada (precalentada) → al instante; se refresca sola después.
+      try { if (window._tkCacheAplicar && window._tkCacheAplicar(window._tkQ || { desde: "", hasta: "", cosm: "", q: "" })) return true; } catch (eC) {}
       if (typeof api !== "function") return false;
       try {
         var q = window._tkQ || { desde: "", hasta: "", cosm: "", q: "" };

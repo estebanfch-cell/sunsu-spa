@@ -219,7 +219,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
-      ...(faltaTodo(r, d).length ? { falta: faltaTodo(r, d) } : {}),
+      // TK156 (Emilia t687u): factura Migo ligada sin forma de pago → aviso amarillo para recepción.
+      ...((() => {
+        const pmL = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
+        const sinForma = !!pmL && !s(pmL.forma) && !s(d.forma_pago);
+        const fa = [...faltaTodo(r, d), ...(sinForma ? ["Forma de pago (factura Migo sin forma)"] : [])];
+        return { ...(fa.length ? { falta: fa } : {}), ...(sinForma ? { migoSinForma: 1 } : {}) };
+      })()),
       ...((() => {
         const comps = (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : []).filter((x) => x && x.borrado !== true);
         const beta = pagosPorClave.get(clave) || [];

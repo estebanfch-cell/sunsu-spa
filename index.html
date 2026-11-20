@@ -865,6 +865,12 @@
     letter-spacing: 0.01em; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; line-height: 30px; border: 0; flex: 0 1 auto;
   }
+  /* TK156: pill del admin = botón «Ver como…». */
+  .top-user-btn { cursor: pointer; font-family: inherit; -webkit-appearance: none; appearance: none; gap: 0; }
+  .top-user-btn .top-user-n { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .top-user-btn .top-user-car { margin-left: 4px; font-size: 0.62rem; opacity: 0.85; flex: 0 0 auto; }
+  .top-user-btn:active { background: rgba(255,255,255,0.28); }
+  .ver-como-nav { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
   .top-user .dot { width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; flex: 0 0 8px; background: #F4E3B2; }
   .aviso-pin-5d {
     margin: 0; padding: 10px 12px; background: #FFF8EE; border-bottom: 1px solid #E8D4B0;
@@ -1069,13 +1075,16 @@
   .mob-acts { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto; }
   .mob-cam, .mob-wa { flex: 0 0 28px; width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 2px solid #DC2626; border-radius: 50%; background: #fff; font-size: 13px; line-height: 1; cursor: pointer; color: var(--navy-d); }
   .mob-cam.ok, .mob-wa.ok { color: #16A34A; border-color: #16A34A; background: #f3faf6; }
-  .mob-wa { color: #25D366; }
   .mob-wa .wa-icon { width: 15px; height: 15px; display: block; }
   /* TK155: #content label { display: revert } ganaba por especificidad y corría la cámara a la esquina. */
   #content label.mob-cam, .mob-cam, .mob-wa { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important; margin: 0 !important; line-height: 1 !important; }
   .mob-cam .cam-icon { width: 15px; height: 15px; display: block; }
   #content label.mob-cam, .mob-cam { color: #DC2626; }
   #content label.mob-cam.ok, .mob-cam.ok { color: #16A34A; }
+  /* TK156 (Emilia t685u): todo rojo o todo verde — borde Y dibujo (cámara y WhatsApp heredan currentColor). */
+  .mob-cam, .mob-wa, #content label.mob-cam, #content .mob-wa { color: #DC2626 !important; border-color: #DC2626 !important; }
+  .mob-cam.ok, .mob-wa.ok, #content label.mob-cam.ok, #content .mob-wa.ok { color: #16A34A !important; border-color: #16A34A !important; }
+  .mob-cam svg, .mob-cam svg *, .mob-wa svg, .mob-wa svg * { fill: currentColor !important; stroke: none !important; color: inherit !important; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
   /* TK154: la fotito que todavía llega reserva su espacio (sin saltos) con un tono suave. */
@@ -2244,10 +2253,19 @@ function colorUserDot(u) {
   }
   return "";
 }
+/** TK156 (Emilia t686u): el admin (fuera de «Ver como») puede abrir «Ver como…». */
+function puedeVerComo() {
+  if (state.vista) return false;
+  const u = state.userReal || state.user || {};
+  return !!(state.admin || (state.userReal && state.userReal.admin) || /admin/i.test(String(u.role || u.rol || "")));
+}
 function htmlTopUser() {
   const nom = nombreHeader();
   if (!nom) return "";
   const who = state.userReal || state.user || {};
+  if (puedeVerComo()) {
+    return `<button type="button" id="btn-ver-como" class="top-user top-user-btn" title="Ver como…" aria-label="Ver como…">${colorUserDot(who)}<span class="top-user-n">${esc(nom)}</span><span class="top-user-car" aria-hidden="true">▾</span></button>`;
+  }
   return `<span class="top-user" id="top-user" title="${esc(nom)}">${colorUserDot(who)}<span>${esc(nom)}</span></span>`;
 }
 function debeAvisoPin() {
@@ -2392,6 +2410,7 @@ function autosize(root) {
 }
 
 function paintLogin(msg) {
+  try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
   document.body.classList.remove("app-on", "kb-open");
   const modo = localStorage.getItem("sunsu.beta.loginModo") === "usuario" ? "usuario" : "pin";
   const campos = modo === "usuario" ? `
@@ -2741,7 +2760,7 @@ function paintShell(title) {
         ${plus}
         
         <nav>${nav}</nav>
-        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a> · <button class="salir" type="button">Salir</button></div>
+        <div class="who"><strong>${esc(u.short || u.name || "")}</strong>${esc(u.role || "")}${u.es_cosmetologa ? " · cuenta para N" : ""}<br><a class="mi-acceso" href="#/m/acceso" title="Usuario y contraseña">🔑 Mi acceso</a>${puedeVerComo() ? ` · <button class="ver-como-nav" type="button" data-ver-como="1" title="Ver como…">👁 Ver como…</button>` : ""} · <button class="salir" type="button">Salir</button></div>
       </aside>
       <div class="fly" id="fly" hidden></div>
       <div class="reloj-sheet card" id="reloj-sheet" hidden>
@@ -2846,9 +2865,12 @@ function paintShell(title) {
   if (btnAvisoLuego) btnAvisoLuego.onclick = () => cerrarAvisoPinSesion();
   pintarModalAvisoPin();
   const btnVista = document.getElementById("btn-ver-como");
-  if (btnVista) btnVista.onclick = () => abrirVerComo();
+  if (btnVista) btnVista.onclick = (ev) => { if (ev) ev.stopPropagation(); abrirVerComo(); };
+  document.querySelectorAll("[data-ver-como]").forEach((b) => { b.onclick = (ev) => { if (ev) { ev.preventDefault(); ev.stopPropagation(); } abrirVerComo(); }; });
   if (window.SunsuInline) SunsuInline.contar();
   void pintarBadgeNotif();
+  // TK156 (Emilia t688u): Tickets ya listo antes de entrar (lista precalentada en segundo plano).
+  if (!window._tkPrecalentado && window._tkPrecalentar) { window._tkPrecalentado = true; setTimeout(function () { try { window._tkPrecalentar(); } catch (eP) {} }, 300); }
   const btnNotif = document.getElementById("btn-notificaciones");
   if (btnNotif && btnNotif.dataset.wired !== "1") {
     btnNotif.dataset.wired = "1";
@@ -5868,6 +5890,7 @@ async function abrirVerComo() {
   });
 }
 async function entrarVista(user) {
+  try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
   const data = await api("ver_como", { uid: user.id });
   const sheet = document.getElementById("vista-sheet");
   if (!data || data.error || !data.user) {
@@ -5886,6 +5909,7 @@ async function entrarVista(user) {
   draw();
 }
 function salirVista() {
+  try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
   state.vista = null;
   state.vistaPrueba = false;
   sessionStorage.removeItem("sunsu.beta.vista.prueba");
@@ -7825,7 +7849,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-19-TK155";
+window.SUNSU_CACHE = "sunsu-2026-11-19-TK156";
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
