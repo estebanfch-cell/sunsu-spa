@@ -1342,7 +1342,7 @@ function renderTicket(c){
       '<div class="canje-box" id="paq-box" style="display:'+(T.cobro==='paquete'?'block':'none')+'">'+
         '<span class="box-lbl" style="color:var(--lavender)">Canje de paquete — elige paquete y sesión</span>'+
         '<p style="margin:4px 0 8px;font-size:0.72rem;color:var(--gray);font-weight:600;line-height:1.4">El sistema te recomienda uno, pero tú marcas cuál y qué sesión se descarga. No se marca solo.</p>'+
-        '<input id="paq-busca" type="search" autocomplete="off" placeholder="Buscar paquete activo: nombre, apellido, cédula o PACK-…" value="'+_tkEsc(window._paqBuscaQ||'')+'" oninput="_paqBuscarManual(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.8rem;outline:none;background:white;font-family:inherit;margin:0 0 8px;box-sizing:border-box">'+
+        '<input id="paq-busca" type="search" autocomplete="off" placeholder="Buscar paquete activo: nombre, apellido, cédula, PACK- o PQ-…" value="'+_tkEsc(window._paqBuscaQ||'')+'" oninput="_paqBuscarManual(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid #C8C0E0;border-radius:9px;font-size:0.8rem;outline:none;background:white;font-family:inherit;margin:0 0 8px;box-sizing:border-box">'+
         '<div id="paq-lista" class="paq-lista"></div>'+
         '<select id="paq-pick" hidden onchange="_paqElegir(this.value)"></select>'+
         '<div id="paq-conf" style="margin:8px 0"></div>'+
@@ -1715,7 +1715,7 @@ function _paqPintarLista(){
         var usada=!!(u.usado||u.u||u.fecha||u.f);
         var on=sel&&T.paqConfirmado&&Number(T.paqPick.idx)===k;
         if(usada) ses+='<div class="paq-ses used">Sesión '+(k+1)+'/'+tot+' · usada '+_tkEsc(u.fecha||u.f||'')+'</div>';
-        else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" onclick="event.preventDefault();event.stopPropagation();_paqElegirSesionDe(\''+origen+'\','+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
+        else ses+='<button type="button" class="paq-ses-btn'+(on?' on':'')+'" data-origen="'+origen+'" data-i="'+i+'" data-k="'+k+'" onclick="event.preventDefault();event.stopPropagation();(window._paqElegirSesionDe||_paqElegirSesionDe)(\''+origen+'\','+i+','+k+')">Descargar sesión #'+(k+1)+' de '+tot+'</button>';
       }
       return '<div class="paq-card'+(sel?' sel':'')+(origen==='activos'&&rec===i?' rec':'')+'">'
         +'<div class="paq-hd"><b>'+_tkEsc(p.codigo||('PACK-'+p.fila))+'</b> '+recBadge+(badge?(' <span class="paq-rec">'+_tkEsc(badge)+'</span>'):'')+'</div>'
@@ -1733,12 +1733,24 @@ function _paqPintarLista(){
   } else if(act.length){
     h+=cards(act,'activos','');
   } else {
-    h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para esta cédula. Revisa el número, elige una sugerencia o busca por nombre / PACK.</div>';
+    h+='<div style="font-size:0.74rem;color:#8A5A16;font-weight:700;background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin-bottom:8px">No encontré paquetes activos para esta cédula. Revisa el número, elige una sugerencia o busca por nombre / PACK / PQ.</div>';
+    var ago=window._paqAgotados||[];
+    if(ago.length){
+      h+='<div style="font-size:0.72rem;color:var(--navy);background:#F4F0FA;border:1.5px solid #C8C0E0;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-weight:600">Esta cédula sí tiene paquete, pero ya está completo: '+ago.map(function(p){ var tot=Number(p.total)||3, us=_paqUsadas(p); return _tkEsc((p.codigo||('PACK-'+p.fila))+' · '+(p.paquete||p.sku||'')+' · '+us+'/'+tot); }).join('; ')+'. Si es canje de un familiar, búscalo por nombre o código.</div>';
+    }
     if(sug.length){
       h+='<div style="font-size:0.72rem;font-weight:700;color:var(--lavender);margin:8px 0 6px">Sugerencias por el nombre de la clienta</div>'+cards(sug,'sugerencias','Sugerido');
     }
   }
   box.innerHTML=h;
+  box.onclick=function(ev){
+    var t=ev&&ev.target;
+    var btn=t&&t.closest?t.closest('.paq-ses-btn'):null;
+    if(!btn||!box.contains(btn)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var o=btn.getAttribute('data-origen')||'', i=btn.getAttribute('data-i'), k=btn.getAttribute('data-k');
+    if(typeof window._paqElegirSesionDe==='function') window._paqElegirSesionDe(o,i,k);
+  };
 }
 function _paqPintarConfirm(){
   var box=document.getElementById('paq-conf'); if(!box) return;
@@ -1763,7 +1775,7 @@ function _paqCargarPicker(){
   var ced=_cedQuery(T.cedula);
   window._paqSugeridoI=null;
   if(T.paqPick&&T.paqPickCed&&T.paqPickCed!==ced){ T.paqPick=null; T.paqConfirmado=false; }
-  if(!ced && !(T.nombre||T.apellido)){ window._paqActivos=[]; window._paqTodos=[]; window._paqSugeridos=[]; _paqPintarConfirm(); return; }
+  if(!ced && !(T.nombre||T.apellido)){ window._paqActivos=[]; window._paqTodos=[]; window._paqSugeridos=[]; window._paqAgotados=[]; _paqPintarConfirm(); return; }
   var lista=document.getElementById('paq-lista');
   if(lista) lista.innerHTML='<div style="font-size:0.74rem;color:var(--gray)">Buscando paquetes…</div>';
   var url=APPS_SCRIPT_URL+'?action=buscarPaquetes&q='+encodeURIComponent(ced)
@@ -1779,6 +1791,7 @@ function _paqCargarPicker(){
         return !p.anulado && !p.completo && us<tot;
       });
       window._paqActivos=act; window._paqTodos=mios;
+      window._paqAgotados=act.length?[]:((d&&d.agotados)||[]);
       window._paqSugeridos=act.length?[]:((d&&d.sugerencias)||[]);
       window._paqSugeridoI=act.length?_paqSugerido(act):-1;
       if(sel){
@@ -1830,12 +1843,16 @@ function _paqElegirSesionDe(origen,i,k){
   var tot=Number(p.total)||3, u=(p.usos||[])[k]||{};
   if(u&&(u.usado||u.u||u.fecha||u.f)) return;
   if(origen==='busca'||origen==='sugerencias') _paqMarcarOtroCanje(p);
-  T.paqPick={i:Number(i), fila:p.fila, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||'', origen:origen};
+  var filaPick=(p.fila!=null&&String(p.fila)!=='')?p.fila:(p.id!=null?p.id:p.codigo);
+  T.paqPick={i:Number(i), fila:filaPick, idx:k, total:tot, nombre:((p.codigo?p.codigo+' · ':'')+(p.paquete||p.sku||'paquete')), codigo:p.codigo||'', sku:p.sku||'', origen:origen};
   T.usoPaq=(k+1)+'/'+tot;
   T.paqConfirmado=true; T.paqPickCed=_cedQuery(T.cedula);
   var sel=document.getElementById('paq-pick'); if(sel&&origen==='activos') sel.value=String(i);
   _paqPintarConfirm();
 }
+window._paqElegirSesionDe=_paqElegirSesionDe;
+window._paqElegirSesion=_paqElegirSesion;
+window._paqElegirSesionNuevo=_paqElegirSesionNuevo;
 function _paqElegirSesion(i,k){ _paqElegirSesionDe('activos',i,k); }
 function _paqElegirSesionNuevo(){
   T.paqPick={fila:'nuevo', idx:0, total:T.pack6?6:3, nombre:'Paquete nuevo de este ticket'};
@@ -2543,6 +2560,24 @@ function _dscJustifOtra(v){
   T.justificacionOtra=v;
   T.justificacionDescuento=v;
 }
+// TK192: el motivo tiene que aparecer al tipear el monto, sin re-renderizar
+// el input (en iPhone eso cierra el teclado). Se inserta debajo del valor.
+function _dscJustifEnsure(){
+  var slot=document.getElementById('dsc-justif-slot');
+  if(!slot) return;
+  var J=window.SunsuDescJustif;
+  var d=T.descuento||{};
+  var m=0;
+  if(d.tipo==='custom'){
+    if(d.customMode==='pct'&&d.customPct>0) m=1;
+    else if(d.custom>0) m=d.custom;
+  }
+  var html=J?_dscJustifHTML(m):'';
+  var has=!!slot.querySelector('#dsc-justif');
+  if(html&&!has) slot.innerHTML=html;
+  else if(!html&&has) slot.innerHTML='';
+}
+window._dscJustifEnsure=_dscJustifEnsure;
 
 function updatePreview(){
   var _aeFocus=document.activeElement;
@@ -2744,12 +2779,13 @@ function updatePreview(){
             style="flex:1;padding:6px 9px;border:1.5px solid #D8D0EE;border-radius:8px;background:#fff;color:var(--navy);font-size:0.82rem;font-weight:700;outline:none">
           <span style="font-size:0.65rem;opacity:0.6">${T.descuento.customMode==='pct'?'sobre':'del total'}</span>
         </div>
+        <div id="dsc-justif-slot">${_dscJustifHTML(dscMonto)}</div> /* TK192 Facial prepagado / paquete: visible al tipear el monto */
         ${T.descuento.customMode==='pct'?`<div style="display:flex;gap:5px;flex-wrap:wrap">
           ${['Facial','Paquete','Productos','Gift Card','Total'].map(op=>`<button onclick="T.descuento.customTarget='${op}';updatePreview()" style="padding:4px 9px;border-radius:7px;border:1.5px solid ${T.descuento.customTarget===op?'rgba(255,255,255,0.8)':'rgba(255,255,255,0.2)'};background:${T.descuento.customTarget===op?'rgba(255,255,255,0.2)':'transparent'};color:white;font-size:0.65rem;font-weight:${T.descuento.customTarget===op?'700':'400'};cursor:pointer">${op}</button>`).join('')}
         </div>`:''}
       </div>`:''}
       ${directoActive?`<div style="font-size:0.68rem;color:#E8C07A;margin-top:4px;opacity:0.85">💼 Pago directo — $0.00 para Sunsu</div>`:''}
-      ${_dscJustifHTML(dscMonto)}
+      ${customActive?'':_dscJustifHTML(dscMonto)}
     </div>`;
 
   box.innerHTML=`<div class="preview">
@@ -2798,6 +2834,7 @@ function _dscLive(){
   if(g('pv-grav')) g('pv-grav').textContent='$'+(tf/1.15).toFixed(2);
   if(g('pv-iva')) g('pv-iva').textContent='$'+(tf-tf/1.15).toFixed(2);
   if(g('pv-tot')) g('pv-tot').textContent='$'+tf.toFixed(2);
+  if(typeof _dscJustifEnsure==='function') _dscJustifEnsure();
 }
 // ── PROMOS V2: helpers compartidos (preview y envío usan EXACTAMENTE el mismo cálculo) ──
 // Unidades cobrables del ticket: cada una {sku, p} (productos: una unidad por cantidad).
@@ -3316,7 +3353,8 @@ function enviarTicket(){
     return _hayDescEnvio && !(T.justificacionDescuento||'').trim();
   })();
   if(_faltaJust){
-    var justEl=document.getElementById('dsc-justif-otra')||document.getElementById('dsc-justif-sel')||document.getElementById('dsc-justif')||document.getElementById('migo-just-desc');
+    if(typeof _dscJustifEnsure==='function') _dscJustifEnsure();
+    var justEl=document.getElementById('dsc-justif-otra')||document.getElementById('dsc-justif-sel')||document.getElementById('dsc-justif')||document.getElementById('migo-just-desc')||document.getElementById('dsc-justif-slot');
     if(justEl){
       if(justEl.scrollIntoView) justEl.scrollIntoView({behavior:'smooth',block:'center'});
       if(justEl.focus) justEl.focus();

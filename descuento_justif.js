@@ -1,6 +1,7 @@
 /* TK145: motivo de descuento en Nuevo/Editar ticket (dropdown + reglas de no bloquear). */
 (function (root) {
   var OPS = [
+    { id: "prepagado", label: "Facial prepagado / paquete" },
     { id: "giftcard", label: "Gift card" },
     { id: "promo", label: "Promoción" },
     { id: "cortesia", label: "Cortesía" },
