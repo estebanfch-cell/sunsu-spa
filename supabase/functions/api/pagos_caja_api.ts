@@ -10,7 +10,7 @@ import { veTicket } from "./inline_api.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar } from "./query.ts";
 import { leerSerie } from "./series.ts";
-import { CATEGORIAS_GASTO, ENTRAN, ETQ_CAJA, ETQ_METODO, METODOS, SALEN, estadoCobro, filasPagoLegado, metodosPago, montoDe, pagosDe, saldoDe } from "./pagos_caja.ts";
+import { CATEGORIAS_GASTO, ENTRAN, ETQ_CAJA, ETQ_METODO, METODOS, MOV_PERSONAL, SALEN, estadoCobro, filasPagoLegado, metodosPago, montoDe, pagosDe, saldoDe } from "./pagos_caja.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 async function hay(ctx: Ctx): Promise<boolean> { try { await ctx.db.all("beta_caja_movimientos"); return true; } catch { return false; } }
@@ -236,6 +236,7 @@ extend("cj_mov", "any", async (p, ctx, ses) => {
   if (!(await hay(ctx))) return { error: FALTA };
   const tipo = s(p.tipo);
   if (!SALEN.has(tipo) && !ENTRAN.has(tipo)) return { error: "Tipo inválido" };
+  if (!esAdmin(ses.rol) && !MOV_PERSONAL.has(tipo)) return { error: "Solo puedes registrar gastos, consumos o entregas para depósito" };
   const movs = await todas(ctx, "beta_caja_movimientos");
   if (!movs.some((m) => s(m.tipo) === "apertura" && m.anulado !== true)) return { error: "Primero un admin abre la caja" };
   const monto = montoDe(p.monto);
