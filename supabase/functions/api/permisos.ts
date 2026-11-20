@@ -407,6 +407,7 @@ const LECTURA_VISTA = new Set([
   "buscarPaquetes", "buscarGiftCards", "buscarCliente", "existeCedula", "getRegistro",
   "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos",
   "cl_doc_url", "cl_buscar",
+  "ag_meta", "ag_citas", "ag_cita", // Agenda en «Ver como» (TK181): solo lectura, sin teléfonos para recepción
 ]);
 
 /** Módulo que habilita una acción (para el nivel por usuario). */
