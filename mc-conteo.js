@@ -44,6 +44,8 @@
       "#cc .cc-kb,#mccf-root .cc-kb{flex:0 0 auto;min-width:44px;height:40px;padding:0 8px;border-radius:8px;border:1.5px solid var(--navy-d);background:var(--navy-d);color:#fff;font-weight:700;font-size:12px}",
       "#cc .cc-kb.on,#mccf-root .cc-kb.on{background:var(--gold);border-color:var(--gold);color:var(--navy-d)}",
       "#cc .cc-list,#mccf-root .cc-list{background:var(--white);border:1px solid var(--cream-d);border-radius:12px;overflow:hidden}",
+      "#cc .cc-fam,#mccf-root .cc-fam{position:sticky;top:52px;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--cream);border-bottom:1px solid var(--cream-d);font-size:12.5px;font-weight:800;color:var(--navy-d)}",
+      "#cc .cc-fam span,#mccf-root .cc-fam span{font-weight:600;color:var(--gray);font-size:12px}",
       "#cc .cc-ln,#mccf-root .cc-ln{display:flex;align-items:center;gap:8px;padding:5px 8px;min-height:48px;box-sizing:border-box;border-bottom:1px solid var(--cream-d)}",
       "#cc .cc-ln.cc-ya,#mccf-root .cc-ln.cc-ya{outline:2px solid var(--gold);background:var(--gold-l);border-radius:8px}",
       "#cc .cc-hits button[disabled],#mccf-root .cc-hits button[disabled]{opacity:.55;pointer-events:none}",
@@ -189,8 +191,19 @@
     var d = C.cur, can = d.puedeContar, cab = d.conteo.bodega === "CABINA";
     var L = lineasVis();
     var bl = ciego();
+    var body = "", prev = null, i, j, fam, n, ok, cols = 4 + (bl ? 0 : 2) + (cab ? 1 : 0);
+    for (i = 0; i < L.length; i++) {
+      fam = familiaDeSku(L[i].sku);
+      if (fam !== prev) {
+        n = 0; ok = 0;
+        for (j = i; j < L.length && familiaDeSku(L[j].sku) === fam; j++) { n++; if (L[j].estado && L[j].estado !== "pendiente") ok++; }
+        body += '<tr class="cc-fam"><td colspan="' + cols + '"><b>' + e(FAM_ETQ[fam] || fam) + "</b> · " + ok + "/" + n + "</td></tr>";
+        prev = fam;
+      }
+      body += lineaHtml(L[i], can, cab);
+    }
     return '<table class="mccf-t"><thead><tr><th>Producto</th>' + (bl ? "" : '<th class="num">Sistema</th>') + '<th class="num">Contado</th><th></th>' + (cab ? '<th class="mccf-hide">Sububicación real</th>' : "") + (bl ? "" : '<th class="num">Diferencia</th>') + "</tr></thead><tbody>" +
-      (L.length ? L.map(function (l) { return lineaHtml(l, can, cab); }).join("") : '<tr><td colspan="6" class="mccf-sub" style="padding:14px">' + ((d.lineas || []).length ? "Sin productos con ese filtro." : "Sin líneas.") + "</td></tr>") + "</tbody></table>";
+      (L.length ? body : '<tr><td colspan="6" class="mccf-sub" style="padding:14px">' + ((d.lineas || []).length ? "Sin productos con ese filtro." : "Sin líneas.") + "</td></tr>") + "</tbody></table>";
   }
   function kpisHtml(c) {
     if (ciego()) return '<div class="mccf-kpis"><div class="mccf-kpi"><b>' + e(c.contadas) + "/" + e(c.lineas) + '</b>contados</div><div class="mccf-kpi"><b>' + e(c.pendientes) + '</b>pendientes</div></div>';
@@ -579,7 +592,7 @@
   }
   function pintarLista() {
     var box = document.getElementById("mccf-lista");
-    if (box) box.innerHTML = lineasFiltradas().map(lineaSecHtml).join("");
+    if (box) box.innerHTML = listaConSecciones(lineasFiltradas());
   }
   /** Suma la sububicación a todos los desplegables del conteo, la deja elegida en esa fila y no recarga ni borra cantidades. */
   function aplicarSubCreada(codigo, nombre, lineaId) {
@@ -629,6 +642,28 @@
     if (window.MCBuscar) return window.MCBuscar.filtrar(L, q, function (l) { return [[l.sku, l.skuVisible, l.codigo, l.codigoBarras].concat(l.barras || []), [l.nombre, l.marca, l.fromSub, l.sububicacion, l.subContada]]; });
     var n = q.toLowerCase();
     return L.filter(function (l) { return (l.sku + " " + l.nombre + " " + (l.fromSub || "")).toLowerCase().indexOf(n) >= 0; });
+  }
+  var FAM_ETQ = { ML: "ML — Dr.esthe", HT: "HT — ANUA", AS: "AS — Eyenlip", PH: "PH — APHLORA", VK: "VK — Maira Moya", JN: "JN — Varios", BV: "BV — Bruno Vassari", SU: "SU — SUNSU" };
+  function familiaDeSku(sku) {
+    var m = String(sku || "").toUpperCase().match(/^([A-Z]{2,10})-/);
+    return m ? m[1] : "OTROS";
+  }
+  function listaConSecciones(L) {
+    var html = "", prev = null, i, j, fam, n, ok;
+    for (i = 0; i < L.length; i++) {
+      fam = familiaDeSku(L[i].sku);
+      if (fam !== prev) {
+        n = 0; ok = 0;
+        for (j = i; j < L.length && familiaDeSku(L[j].sku) === fam; j++) {
+          n++;
+          if (L[j].estado && L[j].estado !== "pendiente") ok++;
+        }
+        html += '<div class="cc-fam" id="cc-fam-' + e(fam) + '"><b>' + e(FAM_ETQ[fam] || fam) + "</b><span>" + ok + "/" + n + "</span></div>";
+        prev = fam;
+      }
+      html += lineaSecHtml(L[i]);
+    }
+    return html;
   }
   function barraConteoHtml(can, nOk, nLin) {
     return '<div class="cc-top"><div class="cc-qwrap"><input id="mccf-f" type="search" placeholder="🔍 Escanea o busca código / nombre" value="' + e(C.filtro) + '" autocomplete="off" aria-label="Buscar o escanear">' +
@@ -747,7 +782,7 @@
     var badge = (l.buscar ? ' <span class="cc-skb">🔎 buscar después</span>' : "") + (l.otraSub ? ' <span style="color:var(--navy)">📍 ' + e(l.otraSub) + (l.otraQty != null ? " · " + e(l.otraQty) : "") + "</span>" : "");
     var h = '<div class="cc-ln' + (l.buscar ? " cc-skip" : "") + '" id="cc-l' + e(l.id) + '">' +
       '<div style="flex:1;min-width:0"><div class="cc-nm">' + e(l.nombre) + "</div>" + badge + '<div class="cc-cd">' + e(l.sku) + "</div></div>" +
-      '<div class="cc-sub">' + e(l.fromSub || "—") + "<div>esp. " + e(l.esperado) + "</div></div>" +
+      '<div class="cc-sub">' + e(l.fromSub || "—") + (C.cur && C.cur.ciego ? "" : "<div>esp. " + e(l.esperado) + "</div>") + "</div>" +
       '<input class="cc-q' + (v === "" ? " cc-vacio" : "") + '" id="cc-c' + e(l.id) + '" data-cf-cant="' + e(l.id) + '" type="text" inputmode="' + (C.pad ? "none" : "decimal") + '" autocomplete="off" value="' + e(v) + '"' + (C.sec && C.sec.puedeOperar ? "" : " disabled") + ">" +
       '<button class="cc-mn" type="button" data-cf-menu="' + e(l.id) + '" aria-label="Más">···</button></div>';
     if (op) {
@@ -794,7 +829,7 @@
       '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
       barraConteoHtml(can, nOk, s.lineas) +
       recHtml(d.movimientos) +
-      '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
+      '<div class="cc-list" id="mccf-lista">' + listaConSecciones(L) + "</div>" +
       '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
       [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +
@@ -1030,9 +1065,10 @@
     return '<div id="cc"><div id="mccf-root"><div class="cc-secbar"><button class="chip" type="button" data-go="#/m/conteos">←</button>' +
       "<h2>" + e(s.nombre) + " " + pill(s.estado, s.estadoNombre) + "</h2>" +
       '<span class="cc-when">' + e(fecha(s.iniciadoAt)) + "</span></div>" +
+      (c.nota ? '<p class="cc-help" style="margin-top:0">' + e(c.nota) + "</p>" : "") +
       barraConteoHtml(can, s.contadas, s.lineas) +
       recHtml(C.sec.movimientos) +
-      '<div class="cc-list" id="mccf-lista">' + L.map(lineaSecHtml).join("") + "</div>" +
+      '<div class="cc-list" id="mccf-lista">' + listaConSecciones(L) + "</div>" +
       '<div id="mccf-hits" class="cc-hits" hidden></div>' +
       '<div class="cc-numpad' + (C.pad ? " on" : "") + '" id="mccf-numpad">' +
       [1,2,3,4,5,6,7,8,9,".","0","⌫"].map(function (k) { return '<button type="button" data-cf-key="' + e(k) + '">' + e(k) + "</button>"; }).join("") + "</div>" +

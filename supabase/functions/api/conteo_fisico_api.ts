@@ -252,11 +252,21 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
   if (s(r.c.estado) !== "asignado") return { ok: true, ya: true };
   const bodega = s(r.c.bodega), sub = s(r.c.sububicacion);
   const fams = s(r.c.familias).split(",").filter(Boolean);
-  // Foto del stock del sistema AHORA: productos inventariables activos con stock en esa bodega/sub.
+  const famOrd = new Map(fams.map((f, i) => [f, i]));
+  const famDe = (sku: unknown) => {
+    const m = s(sku).toUpperCase().match(/^([A-Z]{2,10})-/);
+    return m ? m[1] : "";
+  };
+  // Foto del stock del sistema AHORA. Sin filtro de familia: solo productos con stock en esa bodega.
+  // Con familias (p. ej. consignación): todos los activos de esas familias, también en 0, en el orden pedido.
   const prods = (await listaProductos(ctx, ses)).filter((x) => x.tipo !== "servicio" && x.activo !== false)
-    .filter((x) => !fams.length || fams.some((f) => s(x.sku).startsWith(f + "-")))
-    .map((x) => ({ x, q: sistemaDe(x, bodega, sub) })).filter((o) => Math.abs(o.q) > 1e-9)
-    .sort((a, b) => s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true }));
+    .filter((x) => !fams.length || fams.some((f) => s(x.sku).startsWith(f + "-") || s(x.skuVisible).startsWith(f + "-")))
+    .map((x) => ({ x, q: sistemaDe(x, bodega, sub) })).filter((o) => fams.length || Math.abs(o.q) > 1e-9)
+    .sort((a, b) => {
+      const ia = famOrd.has(famDe(a.x.sku)) ? famOrd.get(famDe(a.x.sku))! : 99;
+      const ib = famOrd.has(famDe(b.x.sku)) ? famOrd.get(famDe(b.x.sku))! : 99;
+      return ia - ib || s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true });
+    });
   let i = 0;
   for (const o of prods.slice(0, 1500)) {
     await ctx.db.write(actorOf(ses), "beta_conteo_lineas", "insert", {}, {
