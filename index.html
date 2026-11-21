@@ -2268,6 +2268,64 @@ function lecturaEnVista(accion) {
   if (accion.startsWith("get") || accion.endsWith("_list") || accion.endsWith("_get")) return true;
   return ["ag_meta", "ag_citas", "ag_cita", "whoami", "version", "getVersion", "home", "erp_home", "asis_hoy", "asis_periodo", "asis_auditoria", "asis_config", "asis_dia", "asis_foto", "asis_vacaciones", "asis_aviso", "asis_calendario", "roles_lista", "horarios_list", "push_clave", "staff_home", "tk_historial", "tk_reagendadas", "citas_proximas", "stk_saldo", "stk_kardex", "clientes_resumen", "cliente_detalle", "personal_personas", "reporte_consumos", "periodo_consignacion", "reorden_sugerir", "refs", "buscarPaquetes", "buscarGiftCards", "pq_lista", "gcb_lista", "buscarCliente", "existeCedula", "usuarioBloqueado", "betaTablas", "betaFilas", "cabinaManoObraSugerida", "refrescarTelefonos", "cl_doc_url", "cl_buscar"].includes(accion);
 }
+// TK205: tipo de documento (Cédula, RUC, Pasaporte, Otro). Solo Cédula/RUC se validan; Pasaporte/Otro son alfanumérico libre.
+window.SunsuIdent = (function () {
+  function checksum(c) {
+    if (!/^\d{10}$/.test(c)) return false;
+    var prov = Number(c.slice(0, 2));
+    if (!((prov >= 1 && prov <= 24) || prov === 30) || Number(c[2]) >= 6) return false;
+    var sum = 0;
+    for (var i = 0; i < 9; i++) { var x = Number(c[i]) * (i % 2 === 0 ? 2 : 1); if (x > 9) x -= 9; sum += x; }
+    return (10 - (sum % 10)) % 10 === Number(c[9]);
+  }
+  function limpio(v) { return String(v == null ? "" : v).trim().toUpperCase().replace(/[\s.-]/g, ""); }
+  var TIPOS = [
+    { id: "cedula", etq: "Cédula" },
+    { id: "ruc", etq: "RUC" },
+    { id: "pasaporte", etq: "Pasaporte" },
+    { id: "otro", etq: "Otro (documento de identidad extranjero)" }
+  ];
+  function tipos() { return TIPOS; }
+  function etq(id) { var t = TIPOS.filter(function (x) { return x.id === id; })[0]; return t ? t.etq : (id || "Cédula"); }
+  function selectHtml(id, val, attrs) {
+    val = val || "cedula";
+    return '<label>Tipo de documento</label><select id="' + id + '" name="' + id + '" ' + (attrs || "") + ">" +
+      TIPOS.map(function (t) { return '<option value="' + t.id + '"' + (t.id === val ? " selected" : "") + ">" + t.etq + "</option>"; }).join("") +
+      "</select>";
+  }
+  function rucOk(t) {
+    if (!/^\d{13}$/.test(t)) return false;
+    if (t.slice(-3) === "001" && (checksum(t.slice(0, 10)) || checksum("0" + t.slice(0, 9)))) return true;
+    var d3 = Number(t[2]);
+    return d3 === 6 || d3 === 9 || t.slice(-3) === "001";
+  }
+  function detectar(v, tipo) {
+    tipo = String(tipo || "cedula").toLowerCase();
+    var t = limpio(v);
+    if (!t) return { tipo: tipo, valor: "", error: "Escribe el número de documento" };
+    if (tipo === "pasaporte" || tipo === "otro") {
+      if (!/^[A-Z0-9]{2,30}$/.test(t)) return { tipo: tipo, valor: t, error: "Escribe un documento con letras o números" };
+      return { tipo: tipo, valor: t, error: null };
+    }
+    if (tipo === "ruc") {
+      if (rucOk(t)) return { tipo: "ruc", valor: t, error: null };
+      return { tipo: "ruc", valor: t, error: "Ese RUC no es válido. Si es un pasaporte u otro documento, cámbialo arriba.", sugerencia: "pasaporte" };
+    }
+    if (t.length === 10 && checksum(t)) return { tipo: "cedula", valor: t, error: null };
+    if (/^\d{9}$/.test(t) && checksum("0" + t)) return { tipo: "cedula", valor: "0" + t, error: null };
+    if (rucOk(t)) return { tipo: "ruc", valor: t, error: null };
+    var msg = /^\d+$/.test(t) && t.length === 10
+      ? "Esa cédula no es válida. Si es un pasaporte u otro documento, cámbialo arriba."
+      : "La cédula tiene 10 dígitos. Si es un pasaporte u otro documento, cámbialo arriba.";
+    return { tipo: "cedula", valor: t, error: msg, sugerencia: /^[A-Z0-9]{2,30}$/.test(t) ? "pasaporte" : undefined };
+  }
+  function padId(d) {
+    if (d.length === 9 && checksum("0" + d)) return "0" + d;
+    if (d.length === 12 && /001$/.test(d) && checksum("0" + d.slice(0, 9))) return "0" + d;
+    return d;
+  }
+  return { checksum: checksum, limpio: limpio, tipos: tipos, etq: etq, selectHtml: selectHtml, detectar: detectar, padId: padId };
+})();
 // Formato único de identificaciones y celulares (Emilia 17/11): lo usan todas las pantallas y cada respuesta de la api.
 // Cédula/RUC/pasaporte sin «.0», puntos ni espacios (con el 0 de provincia); celular +593 99 999 9999. Solo lectura.
 window.MCFmt = (function () {
@@ -2279,7 +2337,7 @@ window.MCFmt = (function () {
     if (/[a-z]/i.test(t)) { var a = t.toUpperCase().replace(/[^A-Z0-9]/g, ""); return /\d/.test(a) && a.length >= 5 && !/\s\S+\s/.test(t) ? a : t; }
     var d = t.replace(/\D/g, "");
     if (!d) return t;
-    return d.length === 9 || d.length === 12 ? "0" + d : d;
+    return window.SunsuIdent ? window.SunsuIdent.padId(d) : (d.length === 9 || d.length === 12 ? "0" + d : d);
   }
   function tel(v) {
     var t = String(v == null ? "" : v).trim();
@@ -4516,7 +4574,7 @@ function htmlFichaCliente(c) {
   if (!fila) return "";
   if (SunsuInline.edita()) {
     const pares = [
-      ["nombre", "Nombre", c.nombres || ""], ["apellido", "Apellido", c.apellido || ""], ["cedula", "Cédula", c.cedula || ""],
+      ["nombre", "Nombre", c.nombres || ""], ["apellido", "Apellido", c.apellido || ""], ["tipoIdentificacion", "Tipo de documento", c.tipoIdentificacion || c.tipo_identificacion || "cedula"], ["cedula", "Identificación", c.cedula || ""],
     ];
     if ("telefono" in c) pares.push(["telefono", "Teléfono", c.telefono || ""]);
     pares.push(
@@ -7019,7 +7077,8 @@ async function renderTicketEditor(clave) {
     <p class="note">${esc(t.so_num || clave)}${t.beta_num ? " · " + esc(t.beta_num) : ""} · ${esc(t.fecha || "")} ${esc(t.hora || "")}</p>
     <label>Nombre</label><input name="nombre" value="${esc(t.nombre || "")}" required>
     <label>Apellido</label><input name="apellido" value="${esc(t.apellido || "")}">
-    <label>Cédula</label><input name="cedula" value="${esc(t.cedula || "")}">
+    ${(window.SunsuIdent?window.SunsuIdent.selectHtml("tipo_identificacion", t.tipo_identificacion||t.tipoIdentificacion||"cedula"):'<label>Tipo de documento</label><select name="tipo_identificacion"><option value="cedula">Cédula</option><option value="ruc">RUC</option><option value="pasaporte">Pasaporte</option><option value="otro">Otro (documento de identidad extranjero)</option></select>')}
+    <label>Identificación</label><input name="cedula" value="${esc(t.cedula || "")}" maxlength="30">
     <label>Facial</label><input name="facial" value="${esc(t.facial || "")}">
     <label>Paquete x3</label><input name="pack3" value="${esc(t.pack3 || "")}">
     <label>Paquete x6</label><input name="pack6" value="${esc(t.pack6 || "")}">
@@ -8634,7 +8693,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-21-TK204"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-21-TK205"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

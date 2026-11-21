@@ -150,7 +150,7 @@ async function crearCuenta(ctx: Ctx, row: Row): Promise<Row> {
 async function signupCliente(ctx: Ctx, p: Row): Promise<Row> {
   const nombre = s(p.nombre).trim().replace(/\s+/g, " ");
   const en = validarNombre(nombre); if (en) return { error: en };
-  const ei = validarIdentificacion(p.cedula); if (ei) return { error: ei };
+  const ei = validarIdentificacion(p.cedula, false, p.tipo_identificacion || p.tipoIdentificacion); if (ei) return { error: ei };
   const et = validarTelefono(p.telefono); if (et) return { error: et };
   const nac = s(p.nacimiento).trim();
   if (nac && !/^\d{4}-\d{2}-\d{2}$/.test(nac)) return { error: "Fecha de nacimiento: usa AAAA-MM-DD" };
@@ -203,7 +203,7 @@ async function provsConHoja(ctx: Ctx): Promise<Row[]> {
 async function signupProveedor(ctx: Ctx, p: Row): Promise<Row> {
   const nombre = s(p.nombre).trim().replace(/\s+/g, " ");
   const en = validarNombre(nombre); if (en) return { error: "Escribe el nombre o razón social" };
-  const ei = validarIdentificacion(p.ruc ?? p.cedula, true); if (ei) return { error: ei };
+  const ei = validarIdentificacion(p.ruc ?? p.cedula, true, p.tipo_identificacion || p.tipoIdentificacion); if (ei) return { error: ei };
   const et = validarTelefono(p.telefono); if (et) return { error: et };
   if (p.acepta !== true && p.acepta !== "true") return { error: "Acepta la política de privacidad para continuar" };
   const base = await signupComun(ctx, p); if (base.error) return base;
