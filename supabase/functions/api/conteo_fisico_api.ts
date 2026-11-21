@@ -85,6 +85,10 @@ export function sistemaDe(p: Row, bodega: string, sub: string): number {
   if (bodega === "CABINA" && sub) return n((p.porSubCabina as Row | undefined)?.[sub]);
   return n((p.porGrupo as Row | undefined)?.[bodega]);
 }
+/** Bodega de la línea (Venta=CONSIGNACION, kardex Consignación=BCONSIG) o, si no hay, la del conteo. */
+export function bodegaDeLinea(l: Row, c: Row): string {
+  return (s(l.bodega) || s(c.bodega)).toUpperCase();
+}
 export function resumenLineas(L: Row[]): Row {
   const contadas = L.filter((l) => s(l.estado) !== "pendiente").length;
   const dif = L.filter((l) => s(l.estado) !== "pendiente" && Math.abs(difLinea(l)) > 1e-9);
@@ -210,21 +214,22 @@ extend("cf_get", "any", async (p, ctx, ses) => {
   const desde = s(r.c.iniciado_at), hasta = s(r.c.enviado_at) || s(r.c.cerrado_at);
   const prods = s(r.c.estado) === "asignado" ? [] : await listaProductos(ctx, ses);
   const porId = new Map(prods.map((x) => [s(x.id), x]));
-  const bod = s(r.c.bodega);
   const recs: Row[] = [];
   const lineas = [];
   for (const l of r.L) {
-    const subLin = s(l.sub_contada) || s(l.sububicacion) || s(r.c.sububicacion);
+    const bod = bodegaDeLinea(l, r.c);
+    const subLin = s(l.sub_contada) || s(l.sububicacion) || (bod === s(r.c.bodega) ? s(r.c.sububicacion) : "");
     const movs = desde ? await movsDurante(ctx, s(l.producto_id), bod, desde, hasta) : [];
     const pr = porId.get(s(l.producto_id));
     const vivo = pr ? (subLin && bod === "CABINA" ? (Math.abs(sistemaDe(pr, bod, subLin)) > 1e-9 ? sistemaDe(pr, bod, subLin) : sistemaDe(pr, bod, "")) : sistemaDe(pr, bod, subLin) || sistemaDe(pr, bod, "")) : n(l.sistema);
     const esp = cerrado ? (l.esperado != null && l.esperado !== "" ? n(l.esperado) : n(l.sistema)) : round2(vivo);
     const mov = movs.reduce((a, m) => a + n(m.delta), 0);
     for (const m of movs) recs.push({ ...m, sku: s(m.sku) || s(l.sku), lineaId: l.id });
-    const fromSub = subLin && !/^CABINA_?\d+$/i.test(subLin) && subLin !== "SIN" ? subLin : (subLin ? (subLin.replace(/^CABINA_?/, "Cabina ") ) : bodegaNombre(bod));
+    const etqBod = bodegaNombre(bod);
+    const fromSub = subLin && !/^CABINA_?\d+$/i.test(subLin) && subLin !== "SIN" ? (etqBod + " · " + subLin) : (subLin && /^CABINA_?\d+$/i.test(subLin) ? (etqBod + " · " + subLin.replace(/^CABINA_?/, "Cabina ")) : etqBod);
     lineas.push({
       id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre),
-      sububicacion: s(l.sububicacion), fromSub, subCodigo: subLin,
+      bodega: bod, sububicacion: s(l.sububicacion), fromSub, subCodigo: subLin,
       sistema: admin ? n(l.sistema) : null, mov: round2(mov), esperado: esp,
       contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado),
       subContada: s(l.sub_contada), buscar: l.buscar === true, otraSub: s(l.otra_sub),
@@ -241,7 +246,7 @@ extend("cf_get", "any", async (p, ctx, ses) => {
     puedeContar, puedeOperar: operar, puedeTerminar: operar,
     puedeEmpezar: (admin || esAsignada(r.c, ses)) && s(r.c.estado) === "asignado",
     puedeRevisar: admin && s(r.c.estado) === "en_revision",
-    subs: await subsDe(ctx, bod),
+    subs: await subsDe(ctx, s(r.c.bodega)),
   };
 });
 
@@ -257,21 +262,32 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
     const m = s(sku).toUpperCase().match(/^([A-Z]{2,10})-/);
     return m ? m[1] : "";
   };
-  // Foto del stock del sistema AHORA. Sin filtro de familia: solo productos con stock en esa bodega.
-  // Con familias (p. ej. consignación): todos los activos de esas familias, también en 0, en el orden pedido.
-  const prods = (await listaProductos(ctx, ses)).filter((x) => x.tipo !== "servicio" && x.activo !== false)
-    .filter((x) => !fams.length || fams.some((f) => s(x.sku).startsWith(f + "-") || s(x.skuVisible).startsWith(f + "-")))
-    .map((x) => ({ x, q: sistemaDe(x, bodega, sub) })).filter((o) => fams.length || Math.abs(o.q) > 1e-9)
-    .sort((a, b) => {
-      const ia = famOrd.has(famDe(a.x.sku)) ? famOrd.get(famDe(a.x.sku))! : 99;
-      const ib = famOrd.has(famDe(b.x.sku)) ? famOrd.get(famDe(b.x.sku))! : 99;
-      return ia - ib || s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true });
-    });
+  const destOrd = ["CONSIGNACION", "BCONSIG", "CABINA", "OFICINA"];
+  // Foto del stock AHORA. Sin familias: solo lo que tiene stock en esa bodega.
+  // Con familias (consignación): todos los activos, también en 0. Si la bodega es Venta
+  // (clave CONSIGNACION), se cuenta también el kardex Consignación (BCONSIG), una línea por bodega.
+  const destinos = (bodega === "CONSIGNACION" && fams.length) ? ["CONSIGNACION", "BCONSIG"] : [bodega];
+  const base = (await listaProductos(ctx, ses)).filter((x) => x.tipo !== "servicio" && x.activo !== false)
+    .filter((x) => !fams.length || fams.some((f) => s(x.sku).startsWith(f + "-") || s(x.skuVisible).startsWith(f + "-")));
+  const prods: { x: Row; q: number; dest: string }[] = [];
+  for (const dest of destinos) {
+    for (const x of base) {
+      const q = sistemaDe(x, dest, dest === bodega ? sub : "");
+      if (!fams.length && Math.abs(q) <= 1e-9) continue;
+      prods.push({ x, q, dest });
+    }
+  }
+  prods.sort((a, b) => {
+    const ia = famOrd.has(famDe(a.x.sku)) ? famOrd.get(famDe(a.x.sku))! : 99;
+    const ib = famOrd.has(famDe(b.x.sku)) ? famOrd.get(famDe(b.x.sku))! : 99;
+    const da = destOrd.indexOf(a.dest), db = destOrd.indexOf(b.dest);
+    return ia - ib || s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true }) || (da < 0 ? 9 : da) - (db < 0 ? 9 : db);
+  });
   let i = 0;
   for (const o of prods.slice(0, 1500)) {
     await ctx.db.write(actorOf(ses), "beta_conteo_lineas", "insert", {}, {
       id: crypto.randomUUID(), conteo_id: r.c.id, orden: ++i, producto_id: s(o.x.id), sku: s(o.x.skuVisible || o.x.sku), nombre: s(o.x.nombre),
-      sububicacion: sub || subUnica(o.x, bodega) || null, sistema: round2(o.q), estado: "pendiente",
+      bodega: o.dest, sububicacion: (o.dest === bodega ? (sub || subUnica(o.x, o.dest) || null) : null), sistema: round2(o.q), estado: "pendiente",
     });
   }
   await ctx.db.write(actorOf(ses), "beta_conteos", "update", { id: r.c.id }, { estado: "en_conteo", iniciado_at: ctx.now.toISOString(), iniciado_por: actorOf(ses), updated_at: ctx.now.toISOString() });
@@ -279,10 +295,11 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
 });
 
 function lineaConteoOut(row: Row, c: Row, ses: Ses, ya: boolean): Row {
+  const bod = bodegaDeLinea(row, c);
   const sub = s(row.sub_contada) || s(row.sububicacion);
   return {
     id: s(row.id), orden: n(row.orden), productoId: s(row.producto_id), sku: s(row.sku), nombre: s(row.nombre),
-    sububicacion: s(row.sububicacion), fromSub: sub || bodegaNombre(s(c.bodega), s(c.sububicacion)), subCodigo: sub,
+    bodega: bod, sububicacion: s(row.sububicacion), fromSub: sub ? bodegaNombre(bod) + " · " + sub : bodegaNombre(bod, s(c.sububicacion)), subCodigo: sub,
     sistema: esAdmin(ses.rol) ? n(row.sistema) : null, mov: 0, esperado: n(row.esperado ?? row.sistema),
     contado: row.contado == null || row.contado === "" ? null : n(row.contado), estado: s(row.estado),
     subContada: sub, buscar: row.buscar === true, otraSub: s(row.otra_sub), otraQty: row.otra_qty == null || row.otra_qty === "" ? null : n(row.otra_qty),
@@ -323,24 +340,24 @@ extend("cf_guardar", "any", async (p, ctx, ses) => {
       || (code ? prods.find((x) => skuCode(s(x.sku)) === code || skuCode(s(x.skuVisible)) === code) : undefined)
       || (barra ? prods.find((x) => (Array.isArray(x.barras) ? x.barras : []).some((b) => s(b) === barra)) : undefined);
     if (!pr || pr.tipo === "servicio") return { error: "Ese producto no está en Productos" };
-    const ya = r.L.find((l) => s(l.producto_id) === s(pr.id));
-    // Un producto, una sola línea por conteo. Si ya está, devolvemos esa línea (idempotente; un doble toque no inserta otra).
+    const bodAdd = (s(a.bodega) || s(r.c.bodega)).toUpperCase();
+    const ya = r.L.find((l) => s(l.producto_id) === s(pr.id) && bodegaDeLinea(l, r.c) === bodAdd);
+    // Un producto, una sola línea por bodega del conteo. Si ya está, devolvemos esa línea.
     if (ya) {
       return { ok: true, cambiadas, agregada: ya.id, ya: true, linea: lineaConteoOut(ya, r.c, ses, true) };
     }
-    // Producto que no estaba en la foto inicial de la bodega: el esperado es 0 (o el stock real si lo hubiera).
-    const sistema = sistemaDe(pr, s(r.c.bodega), s(r.c.sububicacion));
+    const sistema = sistemaDe(pr, bodAdd, bodAdd === s(r.c.bodega) ? s(r.c.sububicacion) : "");
     const cont = a.contado == null || a.contado === "" ? null : n(a.contado);
     agregada = {
       id: crypto.randomUUID(), conteo_id: r.c.id, orden: r.L.reduce((m, l) => Math.max(m, n(l.orden)), 0) + 1, producto_id: s(pr.id), sku: s(pr.skuVisible || pr.sku),
-      nombre: s(pr.nombre), sububicacion: s(r.c.sububicacion) || null, sistema: round2(sistema), esperado: round2(sistema),
+      nombre: s(pr.nombre), bodega: bodAdd, sububicacion: bodAdd === s(r.c.bodega) ? (s(r.c.sububicacion) || null) : null, sistema: round2(sistema), esperado: round2(sistema),
       contado: cont, estado: cont == null ? "pendiente" : "contado",
       agregado: true, contado_por: cont == null ? null : actor, contado_at: cont == null ? null : now,
     };
     try {
       await ctx.db.write(actor, "beta_conteo_lineas", "insert", {}, agregada);
     } catch (err) {
-      const otra = (await cargar(ctx, s(r.c.id)))?.L.find((l) => s(l.producto_id) === s(pr.id));
+      const otra = (await cargar(ctx, s(r.c.id)))?.L.find((l) => s(l.producto_id) === s(pr.id) && bodegaDeLinea(l, r.c) === bodAdd);
       if (otra) return { ok: true, cambiadas, agregada: otra.id, ya: true, linea: lineaConteoOut(otra, r.c, ses, true) };
       throw err;
     }
@@ -356,15 +373,16 @@ extend("cf_enviar", "any", async (p, ctx, ses) => {
   if (s(r.c.estado) !== "en_conteo") return { error: "El conteo no está en conteo" };
   const buscar = r.L.filter((l) => l.buscar === true).length;
   if (buscar) return { error: buscar + " producto(s) en «Buscar después»: encuéntralos antes de terminar" };
-  const pend = r.L.filter((l) => s(l.estado) === "pendiente" && (l.contado == null || l.contado === "") && !s(l.otra_sub)).length;
-  if (pend && p.forzar !== true) return { ok: false, error: "Faltan " + pend + " productos por contar (cuenta o marca «No está»)", faltan: pend, pregunta: "Quedan " + pend + " producto(s) sin contar; no se ajustarán. ¿Terminar y enviar a revisión?" };
+  const pend = r.L.filter((l) => s(l.estado) === "pendiente" && (l.contado == null || l.contado === "") && s(l.estado) !== "no_encontrado").length;
+  if (pend) return { error: "Faltan " + pend + " productos por contar. Escribe la cantidad (0 si no hay) o marca «No está». No se puede terminar con líneas en blanco.", faltan: pend };
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const prods = await listaProductos(ctx, ses);
   const porId = new Map(prods.map((x) => [s(x.id), x]));
   for (const l of r.L) {
     const pr = porId.get(s(l.producto_id));
-    const subLin = s(l.sub_contada) || s(l.sububicacion) || s(r.c.sububicacion);
-    const vivo = pr ? (sistemaDe(pr, s(r.c.bodega), subLin) || sistemaDe(pr, s(r.c.bodega), "")) : n(l.sistema);
+    const bod = bodegaDeLinea(l, r.c);
+    const subLin = s(l.sub_contada) || s(l.sububicacion) || (bod === s(r.c.bodega) ? s(r.c.sububicacion) : "");
+    const vivo = pr ? (sistemaDe(pr, bod, subLin) || sistemaDe(pr, bod, "")) : n(l.sistema);
     await ctx.db.write(actor, "beta_conteo_lineas", "update", { id: l.id }, { esperado: round2(vivo), updated_at: now });
   }
   await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "en_revision", enviado_at: now, enviado_por: actor, updated_at: now });
