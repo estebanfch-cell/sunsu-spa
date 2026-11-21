@@ -29,13 +29,13 @@ describe("asistencia", () => {
     assert.match(vacio.recuerda, /entrada/);
     const abierto = estadoReloj([marca("entrada", "2026-10-21", "09:00")], "2026-10-21T15:30:00Z");
     assert.equal(abierto.accion, "salida");
-    assert.equal(abierto.almuerzo, "inicio");
+    assert.equal(abierto.almuerzo, null);
     assert.equal(abierto.transcurridoMin, 90);
     const lunch = estadoReloj([
       marca("entrada", "2026-10-21", "09:00"),
       marca("almuerzo_inicio", "2026-10-21", "13:00"),
     ], "2026-10-21T18:00:00Z");
-    assert.equal(lunch.almuerzo, "fin");
+    assert.equal(lunch.almuerzo, null);
     assert.equal(lunch.transcurridoMin, 240);
     const cerrado = estadoReloj([
       marca("entrada", "2026-10-21", "09:00"),
@@ -48,10 +48,11 @@ describe("asistencia", () => {
       marca("almuerzo_inicio", "2026-10-21", "13:00"),
       marca("almuerzo_fin", "2026-10-21", "14:00"),
     ], "salida"), null);
-    assert.match(String(validarSecuencia([
+    // TK198: la salida siempre se puede marcar, aunque haya quedado un almuerzo abierto.
+    assert.equal(validarSecuencia([
       marca("entrada", "2026-10-21", "09:00"),
       marca("almuerzo_inicio", "2026-10-21", "13:00"),
-    ], "salida")), /almuerzo/);
+    ], "salida"), null);
   });
 
   it("mide el radio del spa", () => {
@@ -69,7 +70,7 @@ describe("asistencia", () => {
     assert.equal(evaluarUbicacion(on, spa.lat, spa.lng, 400).ok, false);
   });
 
-  it("un día de 9 a 18 con almuerzo es jornada, sin almuerzo sobra una suplementaria", () => {
+  it("TK198: un día de 9 a 18 es jornada con o sin marca de almuerzo; extra solo fuera del horario", () => {
     const con = calcularDia("2026-10-21", [
       marca("entrada", "2026-10-21", "09:00"),
       marca("almuerzo_inicio", "2026-10-21", "13:00"),
@@ -85,8 +86,11 @@ describe("asistencia", () => {
       marca("salida", "2026-10-21", "18:00"),
     ], cfg, feriados, []);
     assert.equal(sin.ordinaryMin, 480);
-    assert.equal(sin.suplMin, 60);
-    assert.equal(sin.almuerzoPendiente, true);
+    assert.equal(sin.suplMin, 0);
+    assert.equal(sin.almuerzoPendiente, false);
+    const tarde = calcularDia("2026-10-21", [marca("entrada", "2026-10-21", "08:30"), marca("salida", "2026-10-21", "18:40")], cfg, feriados, []);
+    assert.equal(tarde.ordinaryMin, 480);
+    assert.equal(tarde.suplMin, 40);
   });
 
   it("la llegada tarde, el sábado y la madrugada caen en su bolsa", () => {
