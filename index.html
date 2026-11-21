@@ -2954,7 +2954,7 @@ function iconoReloj(salida) {
 }
 function htmlReloj() {
   const abierto = !!reloj.abierto;
-  const texto = abierto ? (reloj.almuerzo === "fin" ? "Fin almuerzo" : "Marcar salida") : "Marcar entrada";
+  const texto = abierto ? "Marcar salida" : "Marcar entrada";
   let crono = "";
   if (abierto) {
     const base = Number(reloj.transcurridoMin || 0) * 60000 + Math.max(0, Date.now() - (reloj._t0 || Date.now()));
@@ -5441,7 +5441,6 @@ async function renderAsistencia() {
     <div class="card asis-hoy-top">
       ${botones}
       <p class="note">Hoy: <b>${esc(estadoHoy)}</b> · trabajado hoy <b>${esc(trabajadoHoy)}</b>${(dia.atrasoMin || 0) > 0 ? " · atraso " + esc(dia.atrasoMin) + " min" : ""}.</p>
-      ${dia.almuerzoPendiente ? `<p class="note">Falta el almuerzo. Esas horas no se descuentan solas.</p>` : ""}
       <p class="note">Entrar abre la cámara frontal, tomas la foto y pulsas Registrar. Cada marca pide una selfie y estar dentro del radio del spa (${esc(cfg.radio_m ?? 20)} m).${cfg.punto_listo ? "" : " Falta guardar el punto del spa."} La hora la pone el servidor, no el teléfono.</p>
     </div>
     ${htmlAsisCalendario(cal, vistaAsis, fechaAsis)}
@@ -5455,7 +5454,8 @@ async function renderAsistencia() {
 // TK174 (Emilia t780u): botón grande VERDE para entrar; trabajando = botón AMARILLO con cronómetro y botón
 // ROJO de salida al lado; almuerzo pausa el cronómetro; al salir queda el total del día.
 function estadoAsisHoy(marcajes) {
-  const ms = (marcajes || []).filter((m) => !m.anulado).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  // TK198 (Emilia): el almuerzo no se marca; las marcas de almuerzo que existan no cambian el estado.
+  const ms = (marcajes || []).filter((m) => !m.anulado && m.tipo !== "almuerzo_inicio" && m.tipo !== "almuerzo_fin").slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   let trabajadoMs = 0, desde = null, almuerzoDesde = null, almuerzoMs = 0, estado = "fuera", tuvoAlmuerzo = false;
   for (const m of ms) {
     const t = Date.parse(m.ts);
@@ -5489,7 +5489,7 @@ function htmlBotonesAsis(marcajes) {
     return `<div class="asis-botones" data-asis-estado="trabajando" ${data}>
       <div class="asis-btn asis-amarillo" role="status" aria-live="polite"><span class="asis-k">Trabajando · hoy</span><span class="asis-crono" data-crono>${fmtCrono(trab)}</span></div>
       <button class="asis-btn asis-rojo" type="button" data-marca="salida">Registrar salida</button>
-    </div>${e.tuvoAlmuerzo ? "" : `<div class="asis-mini"><button class="btn ghost small" type="button" data-marca="almuerzo_inicio">Iniciar almuerzo</button></div>`}`;
+    </div>`;
   }
   if (e.estado === "almuerzo") {
     return `<div class="asis-botones" data-asis-estado="almuerzo" ${data}>
@@ -6523,7 +6523,6 @@ function wireReloj(root) {
       // TK196 (Andrea 20/11): nunca confiar en un botón dibujado antes de cargar el estado. Se pide el
       // estado real de hoy y se abre la marca que toca: entrada, fin de almuerzo o salida.
       const raw = b.getAttribute("data-reloj-open");
-      if (raw === "almuerzo_inicio" || raw === "almuerzo_fin") { abrirCamara(raw); return; }
       void cargarReloj().catch(() => null).then(() => abrirCamara(siguienteMarcaReloj()));
     };
   });
@@ -6546,8 +6545,7 @@ function wireReloj(root) {
   }
 }
 function siguienteMarcaReloj() {
-  if (!reloj || !reloj.abierto) return "entrada";
-  return reloj.almuerzo === "fin" ? "almuerzo_fin" : "salida";
+  return reloj && reloj.abierto ? "salida" : "entrada";
 }
 // TK196: el menú «Crear» se dibujaba con el estado por defecto (sin entrada) y nunca se actualizaba.
 function pintarCrearMenu() {
@@ -8628,7 +8626,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK197"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK198"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

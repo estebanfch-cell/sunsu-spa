@@ -44,7 +44,8 @@ describe("TK176 tablero del equipo", () => {
     ] });
     assert.match(html, /tab-verde" data-tab-persona="Andrea"[\s\S]*Por entrar · entra 10:00/);
     assert.match(html, /tab-amarillo" data-tab-persona="Daniela"[\s\S]*entró 09:30/);
-    assert.match(html, /tab-azul" data-tab-persona="Alejandra"[\s\S]*En almuerzo[\s\S]*03:32:00/);
+    // TK198: el almuerzo ya no se marca; una marca vieja no pausa a nadie.
+    assert.match(html, /tab-amarillo" data-tab-persona="Alejandra"[\s\S]*entró 09:28/);
     assert.match(html, /tab-rojo" data-tab-persona="Evelyn"[\s\S]*Fuera[\s\S]*09:00:00/);
     assert.match(html, /tab-gris" data-tab-persona="Dejaneira"[\s\S]*Descanso hoy/);
     assert.match(src, /cargarTableroAsis\(main\);\n  \}, 45000\);/);

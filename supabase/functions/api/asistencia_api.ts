@@ -992,7 +992,7 @@ export function recalcularDiaJibble(raw: Row, fecha: string, config: ReturnType<
   }
   if (li && lf) { marcas.push({ tipo: "almuerzo_inicio", ts: li }, { tipo: "almuerzo_fin", ts: lf }); }
   marcas.push({ tipo: "salida", ts: new Date(fin).toISOString() });
-  const d = calcularDia(fecha, marcas as never, config, feriados, [], null, jornada as never);
+  const d = calcularDia(fecha, marcas as never, config, feriados, [], null, jornada as never, true);
   const alm = li && lf ? Math.round((Date.parse(lf) - Date.parse(li)) / 60000) : 0;
   return { abierto: false, workedMin: n(d.workedMin), suplMin: n(d.suplMin), extrMin: n(d.extrMin), descMin: n(d.descMin), almuerzoMin: alm };
 }
