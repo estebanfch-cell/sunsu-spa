@@ -89,7 +89,8 @@ const ORDEN_BODEGA = (consigId: string, ventaId: string) => (id: string) => {
   return 2;
 };
 
-/** Orden de descuento: consignación del proveedor primero, después stock propio. Nunca deja un lote en negativo. */
+/** Orden de descuento (TK200): stock propio primero, después consignación del proveedor
+ *  (bodega CONSIGNACION, luego lotes de proveedor en Venta). Nunca deja un lote en negativo. */
 export function repartirSalidaVenta(qty: number, lots: LoteStock[], consigId: string, ventaId: string): { tomas: TomaLote[]; resto: number } {
   const need = round4(Math.max(0, qty));
   if (!(need > 0)) return { tomas: [], resto: 0 };
@@ -98,11 +99,11 @@ export function repartirSalidaVenta(qty: number, lots: LoteStock[], consigId: st
     .filter((l) => (l.bodega_id === consigId || l.bodega_id === ventaId) && n(l.cantidad) > 0)
     .slice()
     .sort((a, b) => {
+      const oa = propietarioDe(a) === PROP_SUNSU ? 0 : 1;
+      const ob = propietarioDe(b) === PROP_SUNSU ? 0 : 1;
+      if (oa !== ob) return oa - ob;
       const db = ordenBod(a.bodega_id) - ordenBod(b.bodega_id);
       if (db) return db;
-      const oa = propietarioDe(a) === PROP_CONSIG ? 0 : 1;
-      const ob = propietarioDe(b) === PROP_CONSIG ? 0 : 1;
-      if (oa !== ob) return oa - ob;
       return s(a.lote).localeCompare(s(b.lote));
     });
   const tomas: TomaLote[] = [];
