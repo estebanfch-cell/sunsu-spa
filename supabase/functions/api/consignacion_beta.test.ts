@@ -117,16 +117,24 @@ describe("bodega CONSIGNACION (TK27)", () => {
     assert.equal(mov(db, "a", CONS), 2);
     assert.equal(mov(db, "a", VEN), 0);
   });
-  it("la venta toma primero de CONSIGNACION (sin dejarla negativa) y el resto de Venta; la edición devuelve a donde salió", async () => {
+  it("la venta toma primero stock propio de Venta y, si falta, CONSIGNACION (sin dejarla negativa); la edición devuelve a donde salió", async () => {
     const db = semilla27();
     db.tables.get("erp_stock")!.push({ id: 2, producto_id: "a", bodega_id: CONS, cantidad: 2 });
+    // Venta tiene 7 propias: las 3 salen de ahí, no de consignación.
     await runErp("stock_delta", { moves: [{ sku: "HT-001", bodega_id: VEN, delta: -3, tipo: "venta", ticket_ref: "T1", legacy_ref: "vta:T1" }] }, db, "admin", new Date("2026-11-17T20:00:00Z"));
-    assert.equal(mov(db, "a", CONS), -2);
-    assert.equal(mov(db, "a", VEN), -1);
-    // edición del ticket: quita 2 → vuelven a CONSIGNACION (de ahí salieron)
+    assert.equal(mov(db, "a", CONS), 0);
+    assert.equal(mov(db, "a", VEN), -3);
+    // edición del ticket: quita 2 → vuelven a Venta (de ahí salieron)
     await runErp("stock_delta", { moves: [{ sku: "HT-001", bodega_id: VEN, delta: 2, tipo: "anulacion", ticket_ref: "T1", legacy_ref: "edit:T1:x" }] }, db, "admin", new Date("2026-11-17T20:05:00Z"));
     assert.equal(mov(db, "a", CONS), 0);
     assert.equal(mov(db, "a", VEN), -1);
+    // si lo propio no alcanza, el resto sale de CONSIGNACION, sin dejarla negativa
+    const db3 = semilla27();
+    db3.tables.get("erp_stock")!.find((x) => x.producto_id === "a" && x.bodega_id === VEN)!.cantidad = 1;
+    db3.tables.get("erp_stock")!.push({ id: 2, producto_id: "a", bodega_id: CONS, cantidad: 2 });
+    await runErp("stock_delta", { moves: [{ sku: "HT-001", bodega_id: VEN, delta: -3, tipo: "venta", ticket_ref: "T3", legacy_ref: "vta:T3" }] }, db3, "admin", new Date("2026-11-17T20:00:00Z"));
+    assert.equal(mov(db3, "a", VEN), -1);
+    assert.equal(mov(db3, "a", CONS), -2);
     // sin stock en CONSIGNACION sigue saliendo de Venta
     const db2 = semilla27();
     await runErp("stock_delta", { moves: [{ sku: "HT-001", bodega_id: VEN, delta: -1, tipo: "venta", ticket_ref: "T2" }] }, db2, "admin", new Date("2026-11-17T20:00:00Z"));

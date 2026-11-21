@@ -71,7 +71,7 @@ describe("TK127 aliases", () => {
 });
 
 describe("TK127 orden de descuento", () => {
-  it("INV-110: primero consignación del proveedor, después stock de Sunsu en Venta", () => {
+  it("INV-110: primero stock de Sunsu en Venta, después consignación del proveedor", () => {
     const lots = [
       { bodega_id: VENTA, lote: "SUNSU", sububicacion: "", cantidad: 4, propietario: PROP_SUNSU },
       { bodega_id: CONSIG, lote: "CONSIG", sububicacion: "", cantidad: 3, propietario: PROP_CONSIG },
@@ -79,16 +79,13 @@ describe("TK127 orden de descuento", () => {
     ];
     const r = repartirSalidaVenta(6, lots, CONSIG, VENTA);
     assert.equal(r.resto, 0);
-    assert.equal(r.tomas.length, 3);
-    assert.equal(r.tomas[0].bodega_id, CONSIG);
-    assert.equal(r.tomas[0].propietario, PROP_CONSIG);
-    assert.equal(r.tomas[0].toma, 3);
-    assert.equal(r.tomas[1].bodega_id, VENTA);
+    assert.equal(r.tomas.length, 2);
+    assert.equal(r.tomas[0].bodega_id, VENTA);
+    assert.equal(r.tomas[0].propietario, PROP_SUNSU);
+    assert.equal(r.tomas[0].toma, 4);
+    assert.equal(r.tomas[1].bodega_id, CONSIG);
     assert.equal(r.tomas[1].propietario, PROP_CONSIG);
     assert.equal(r.tomas[1].toma, 2);
-    assert.equal(r.tomas[2].bodega_id, VENTA);
-    assert.equal(r.tomas[2].propietario, PROP_SUNSU);
-    assert.equal(r.tomas[2].toma, 1);
   });
 
   it("no deja un lote en negativo: el resto queda si no hay más stock", () => {
@@ -119,7 +116,7 @@ function seedVenta(stock: Row[]) {
 }
 
 describe("TK127 ticket: descuento con dueño (ejemplo INV-110)", () => {
-  it("vende 5: 3 del proveedor en consignación y 2 propias; liquidación solo paga las 3", async () => {
+  it("vende 5: 4 propias y 1 del proveedor; liquidación solo paga la 1 de consignación", async () => {
     const db = seedVenta([
       { id: "s1", producto_id: PID, bodega_id: CONSIG, sububicacion: "", lote: "CONSIG", cantidad: 3, propietario: PROP_CONSIG },
       { id: "s2", producto_id: PID, bodega_id: VENTA, sububicacion: "", lote: "SUNSU", cantidad: 4, propietario: PROP_SUNSU },
@@ -132,10 +129,10 @@ describe("TK127 ticket: descuento con dueño (ejemplo INV-110)", () => {
     assert.equal(ventas.length, 2);
     const cons = ventas.find((x) => x.bodega_id === CONSIG)!;
     const own = ventas.find((x) => x.bodega_id === VENTA)!;
-    assert.equal(cons.delta, -3);
-    assert.equal((cons as Row).propietario, PROP_CONSIG);
-    assert.equal(own.delta, -2);
+    assert.equal(own.delta, -4);
     assert.equal((own as Row).propietario, PROP_SUNSU);
+    assert.equal(cons.delta, -1);
+    assert.equal((cons as Row).propietario, PROP_CONSIG);
     assert.equal(cons.lote, "CONSIG");
     assert.equal(own.lote, "SUNSU");
 
@@ -148,12 +145,12 @@ describe("TK127 ticket: descuento con dueño (ejemplo INV-110)", () => {
     assert.equal(vtas.reduce((a, m) => a + n(m.delta), 0), -5);
     const bods = db.tables.get("erp_bodegas") || [];
     const paga = vtas.reduce((a, m) => a + qtyPagableProveedor(m, bods.find((b) => String(b.id) === String(m.bodega_id))), 0);
-    assert.equal(paga, 3);
+    assert.equal(paga, 1);
 
     const hayCons = (await db.all("erp_stock")).find((r) => r.bodega_id === CONSIG && r.producto_id === PID);
     const hayOwn = (await db.all("erp_stock")).find((r) => r.bodega_id === VENTA && r.producto_id === PID);
-    assert.equal(n(hayCons?.cantidad), 0);
-    assert.equal(n(hayOwn?.cantidad), 2);
+    assert.equal(n(hayCons?.cantidad), 2);
+    assert.equal(n(hayOwn?.cantidad), 0);
     // Dueño se conserva: lo que quedó en Venta sigue siendo de Sunsu.
     assert.equal(hayOwn?.propietario, PROP_SUNSU);
   });
