@@ -180,7 +180,10 @@ function clasificarIntervalo(inicio: string, fin: string, config: AsistenciaConf
     const hh = p.hh === 24 ? 0 : p.hh;
     const cur = hh * 60 + p.mm;
     const jHoy = !fechaDia || p.ymd === fechaDia ? jornada : undefined;
-    if (esDescansoDia(p.ymd, feriados, jHoy)) out.desc++;
+    // TK199 (Emilia t835u): feriado y descanso por separado, como el rol: una fecha de la tabla de feriados es
+    // feriado (100 %, va en «extr») aunque caiga en día de descanso; el descanso del horario va en «desc».
+    if (feriados.has(p.ymd)) out.extr++;
+    else if (esDescansoDia(p.ymd, feriados, jHoy)) out.desc++;
     else if (hh < 6) out.extr++;
     else if (!config.cuenta_antes && cur < entrada) { /* llegada temprana no se paga */ }
     else if (cur >= entrada && cur < salida) out.dentro++;
@@ -289,7 +292,10 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
     if (jibble && conJibble) {
       return {
         ...vacio, fuente: "jibble", workedMin: jibble.payrollMin, ordinaryMin: jibble.payrollMin,
-        suplMin: jibble.suplMin, extrMin: jibble.extrMin, descMin: jibble.descMin, diaContado: true,
+        // TK199: en un feriado, lo que Jibble guardó como descanso se muestra como feriado (mismo 100 %).
+        suplMin: jibble.suplMin,
+        extrMin: jibble.extrMin + (fer.has(fecha) ? jibble.descMin : 0),
+        descMin: fer.has(fecha) ? 0 : jibble.descMin, diaContado: true,
       };
     }
     if (perm.full) return aliases({ ...vacio, fuente: "permiso", diaContado: true });
