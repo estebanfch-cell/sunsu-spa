@@ -75,3 +75,12 @@ Deno.test("TK199: feriado y descanso por separado (feriado aunque caiga en desca
   assertEquals([r.hrsExtr, r.hrsDesc], [7.5, 0]);
   assert(html.includes('fila("Feriado 100%"') && html.includes('fila("Descanso 100%"'));
 });
+
+Deno.test("TK204: Mi asistencia sin «Este mes»; la tabla del rol sale de rolHorasMesDe (mismo armado que el rol)", async () => {
+  assert(!html.includes('tot("mes","Este mes"'));
+  assert(html.includes("igual que tu rol de pagos"));
+  const api = await Deno.readTextFile(new URL("./asistencia_api.ts", import.meta.url));
+  assert(api.includes("rolHorasMesDe(ctx, nombre, y, m)"));
+  const rc = await Deno.readTextFile(new URL("./roles_crear_api.ts", import.meta.url));
+  assert(rc.includes("export async function rolHorasMesDe"));
+});

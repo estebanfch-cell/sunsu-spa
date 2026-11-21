@@ -259,6 +259,35 @@ export function mensualDe(overlays: Row[], persona: string): { dec13: boolean; d
   return { dec13: o?.dec13_mensual !== false, dec14: o?.dec14_mensual !== false, fondo: o?.fondo_mensual !== false };
 }
 
+/**
+ * TK204 (Emilia t847u): las horas y valores del rol del mes tal como salen en Rol de pagos, para «Para tu rol de
+ * pagos» en Mi asistencia. Si ya hay un rol guardado de ese mes, manda ese (con sus ajustes); si no, el mismo
+ * armado que «Crear rol» (horario, ingreso, sueldo vigente, recorte de 15 min y valor oficial).
+ */
+export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes: number): Promise<Row | null> {
+  const emp = await empleadaDe(ctx, nombre);
+  if (!emp) return null;
+  const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  const desdeSnap = (snap: Row, fuente: string): Row => ({
+    anio, mes, fuente,
+    hrsNormales: n(snap.hrsOrdinarias), hrsSupl: n(snap.hrsSupl), hrsExtr: n(snap.hrsExtr), hrsDesc: n(snap.hrsDesc),
+    valSupl: n(snap.valSupl), valExtr: n(snap.valExtr), valDesc: n(snap.valDesc),
+    diasTrabajados: n(snap.diasTrabajados), diasAsumidos: n(snap.diasAsumidos), diasFalta: n(snap.faltas),
+    diasFeriado: n(snap.diasFest), diasDescanso: n(snap.diasDesc), diasPermiso: n(snap.diasPermiso),
+  });
+  const clave = clavePeriodo(NOMBRE_MES[mes] + "_" + anio);
+  const guardados = (await ctx.db.all("beta_roles").catch(() => [] as Row[]))
+    .filter((r) => clavePeriodo(r.periodo) === clave && s(r.origin) !== "test" && normNombre(s(r.persona)) === normNombre(persona) && r.snapshot && typeof r.snapshot === "object")
+    .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)));
+  if (guardados[0]) return desdeSnap(guardados[0].snapshot as Row, s(guardados[0].estado) || "guardado");
+  const { horas } = await horasRolDe(ctx, persona, anio, mes, { ingreso: s(emp.fecha_ingreso).slice(0, 10) || null });
+  const last = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
+  const cfg = await pagoVigenteDe(ctx, persona, last);
+  const sueldoBase = cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
+  const calc = rolCalcularOficial({ sueldoBase, bono: 0, faltas: 0, hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc, anio, mes } as never) as unknown as Row;
+  return desdeSnap({ ...horas, valSupl: calc.valSupl, valExtr: calc.valExtr, valDesc: calc.valDesc, faltas: horas.diasFalta }, "calculado");
+}
+
 export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number): Promise<Row> {
   const per = parsePeriodo(periodoRaw, anio, mes);
   const emp = await empleadaDe(ctx, nombre);

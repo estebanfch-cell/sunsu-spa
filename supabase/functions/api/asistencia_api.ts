@@ -881,6 +881,12 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
       appDesde: (await import("./asistencia.ts")).APP_PRIORIDAD_DESDE,
     };
   } catch { rolMes = null; }
+  // TK204 (Emilia t847u): «Para tu rol de pagos» = exactamente el Rol de pagos (mismo armado y valores).
+  try {
+    const { rolHorasMesDe } = await import("./roles_crear_api.ts");
+    const exacto = await rolHorasMesDe(ctx, nombre, y, m);
+    if (exacto) rolMes = { ...(rolMes || {}), ...exacto };
+  } catch { /* se queda el cálculo anterior */ }
   return {
     ok: true, vista, fecha: ancla, desde, hasta, nombre, nombreMostrar: mostrar, color, rolMes,
     feriados,
