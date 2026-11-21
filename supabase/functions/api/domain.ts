@@ -320,10 +320,13 @@ export function cedulasCompatibles(a: unknown, b: unknown): boolean {
   if (lo.length >= 10 && hi.startsWith(lo) && (hi.length === lo.length + 1 || (hi.length === lo.length + 3 && hi.endsWith("001")))) return true;
   return false;
 }
-/** Para mostrar: la cédula de 10 dígitos (con el 0 de provincia), o el pasaporte limpio. Nunca «.0» ni puntos. */
+/** Para mostrar: la cédula de 10 dígitos (con el 0 de provincia), o el pasaporte limpio. Nunca «.0» ni puntos.
+ *  TK205: un número de 9 dígitos SOLO se antepone 0 si, así, es una cédula válida (la hoja perdió el 0 de provincia).
+ *  Un pasaporte numérico (ej. 164804287) se deja tal cual. */
 export function cedulaVer(v: unknown): string {
   const c = normCedula(v);
-  return /^\d{9}$/.test(c) ? "0" + c : c;
+  if (/^\d{9}$/.test(c) && cedulaChecksum("0" + c)) return "0" + c;
+  return c;
 }
 /**
  * Identificación para mostrar en cualquier módulo (cédula, RUC, pasaporte): sin «.0», sin puntos ni espacios,
@@ -338,7 +341,9 @@ export function idVer(v: unknown): string {
   if (/[a-z]/i.test(t)) { const a = t.toUpperCase().replace(/[^A-Z0-9]/g, ""); return /\d/.test(a) && a.length >= 5 && !/\s\S+\s/.test(t) ? a : t; }
   const d = t.replace(/\D/g, "");
   if (!d) return t;
-  return d.length === 9 || d.length === 12 ? "0" + d : d;
+  if (d.length === 9 && cedulaChecksum("0" + d)) return "0" + d;
+  if (d.length === 12 && d.endsWith("001") && cedulaChecksum("0" + d.slice(0, 9))) return "0" + d;
+  return d;
 }
 /** Claves de respuesta que son identificaciones o teléfonos (sin tildes, minúsculas, _). */
 const RX_ID = /(^|_)(cedula|cedulas|ruc|ci|pasaporte|identificacion|id_3|ced)(_|$)/;
@@ -363,15 +368,103 @@ export function formatearRespuesta<T>(v: T, prof = 0): T {
   }
   return v;
 }
-/** Dígito verificador de cédula ecuatoriana (módulo 10). */
-export function cedulaValida(v: unknown): boolean {
-  const c = cedulaVer(v);
+/** Dígito verificador de cédula ecuatoriana (módulo 10) sobre exactamente 10 dígitos. No rellena ceros. */
+export function cedulaChecksum(c: string): boolean {
   if (!/^\d{10}$/.test(c)) return false;
   const prov = Number(c.slice(0, 2));
   if (!((prov >= 1 && prov <= 24) || prov === 30) || Number(c[2]) >= 6) return false;
   let sum = 0;
   for (let i = 0; i < 9; i++) { let x = Number(c[i]) * (i % 2 === 0 ? 2 : 1); if (x > 9) x -= 9; sum += x; }
   return (10 - (sum % 10)) % 10 === Number(c[9]);
+}
+/** True si es cédula (10 dígitos, o 9 que al anteponer 0 sí calzan). Un pasaporte numérico no pasa. */
+export function cedulaValida(v: unknown): boolean {
+  const d = digitosCed(v);
+  if (cedulaChecksum(d)) return true;
+  if (d.length === 9 && cedulaChecksum("0" + d)) return true;
+  return false;
+}
+
+/** Tipo de identificación del SRI / Migo: 05 cédula, 04 RUC, 06 pasaporte, 08 documento de identidad extranjero (Otro). */
+export const SRI_TIPO_ID = { cedula: "05", ruc: "04", pasaporte: "06", otro: "08" } as const;
+export type TipoIdentificacion = "cedula" | "ruc" | "pasaporte" | "otro";
+export const TIPOS_DOCUMENTO: { id: TipoIdentificacion; etq: string; sri: string }[] = [
+  { id: "cedula", etq: "Cédula", sri: SRI_TIPO_ID.cedula },
+  { id: "ruc", etq: "RUC", sri: SRI_TIPO_ID.ruc },
+  { id: "pasaporte", etq: "Pasaporte", sri: SRI_TIPO_ID.pasaporte },
+  { id: "otro", etq: "Otro (documento de identidad extranjero)", sri: SRI_TIPO_ID.otro },
+];
+
+export type Identificacion = {
+  tipo: TipoIdentificacion | "";
+  valor: string;
+  sri: string;
+  error: string | null;
+  /** Si Cédula/RUC no calzan, sugerir Pasaporte u Otro en vez de solo bloquear. */
+  sugerencia?: TipoIdentificacion;
+};
+
+function identLimpio(v: unknown): string {
+  return s(v).trim().toUpperCase().replace(/[\s.-]/g, "");
+}
+function normTipoDoc(v: unknown): TipoIdentificacion | "" {
+  const t = s(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (t === "cedula" || t === "05" || t === "ci") return "cedula";
+  if (t === "ruc" || t === "04") return "ruc";
+  if (t === "pasaporte" || t === "06" || t === "passport") return "pasaporte";
+  if (t === "otro" || t === "08" || t === "extranjero" || t === "exterior" || t === "documento extranjero") return "otro";
+  return "";
+}
+/** Pasaporte u Otro: cualquier alfanumérico (2 a 30), sin checksum ni largo de cédula. */
+function esAlfanumericoDoc(t: string): boolean {
+  return /^[A-Z0-9]{2,30}$/.test(t);
+}
+
+function rucValido(t: string): { ok: boolean; valor: string } {
+  if (!/^\d{13}$/.test(t)) return { ok: false, valor: t };
+  // Persona natural: cédula + 001. Sociedades / públicos: 13 dígitos (3er dígito 6 o 9) se aceptan tal cual.
+  if (t.endsWith("001") && (cedulaChecksum(t.slice(0, 10)) || cedulaChecksum("0" + t.slice(0, 9)))) {
+    return { ok: true, valor: cedulaChecksum(t.slice(0, 10)) ? t : "0" + t.slice(0, 12) };
+  }
+  const d3 = Number(t[2]);
+  if (((d3 === 6 || d3 === 9) && /^\d{13}$/.test(t)) || t.endsWith("001")) return { ok: true, valor: t };
+  return { ok: false, valor: t };
+}
+
+/** Valida según el tipo elegido (por defecto Cédula). Solo Cédula y RUC tienen checksum/largo.
+ *  Pasaporte y Otro aceptan cualquier alfanumérico. Si Cédula/RUC fallan, devuelve sugerencia (pasaporte) sin inventar el tipo. */
+export function detectarIdentificacion(v: unknown, tipoForzado?: unknown): Identificacion {
+  const tipo = normTipoDoc(tipoForzado) || "cedula";
+  const t = identLimpio(v);
+  if (!t) return { tipo, valor: "", sri: SRI_TIPO_ID[tipo], error: "Escribe el número de documento" };
+  const libre = (kind: "pasaporte" | "otro"): Identificacion => {
+    if (!esAlfanumericoDoc(t)) return { tipo: kind, valor: t, sri: SRI_TIPO_ID[kind], error: "Escribe un documento con letras o números" };
+    return { tipo: kind, valor: t, sri: SRI_TIPO_ID[kind], error: null };
+  };
+  if (tipo === "pasaporte") return libre("pasaporte");
+  if (tipo === "otro") return libre("otro");
+  if (tipo === "ruc") {
+    const r = rucValido(t);
+    if (r.ok) return { tipo: "ruc", valor: r.valor, sri: SRI_TIPO_ID.ruc, error: null };
+    return {
+      tipo: "ruc", valor: t, sri: "", error: "Ese RUC no es válido. Si es un pasaporte u otro documento, cámbialo arriba.",
+      sugerencia: esAlfanumericoDoc(t) ? "pasaporte" : undefined,
+    };
+  }
+  // Cédula (default)
+  if (t.length === 10 && cedulaChecksum(t)) return { tipo: "cedula", valor: t, sri: SRI_TIPO_ID.cedula, error: null };
+  if (/^\d{9}$/.test(t) && cedulaChecksum("0" + t)) return { tipo: "cedula", valor: "0" + t, sri: SRI_TIPO_ID.cedula, error: null };
+  const r = rucValido(t);
+  if (r.ok) return { tipo: "ruc", valor: r.valor, sri: SRI_TIPO_ID.ruc, error: null };
+  const msg = /^\d+$/.test(t) && (t.length === 10)
+    ? "Esa cédula no es válida. Si es un pasaporte u otro documento, cámbialo arriba."
+    : "La cédula tiene 10 dígitos. Si es un pasaporte u otro documento, cámbialo arriba.";
+  return { tipo: "cedula", valor: t, sri: "", error: msg, sugerencia: esAlfanumericoDoc(t) ? "pasaporte" : undefined };
+}
+
+/** null si la identificación es válida para el tipo (Cédula/RUC validados; Pasaporte/Otro alfanumérico). */
+export function validarIdentificacionCliente(v: unknown, tipoForzado?: unknown): string | null {
+  return detectarIdentificacion(v, tipoForzado).error;
 }
 export function normNombre(v: unknown): string {
   return s(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();

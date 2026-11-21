@@ -383,7 +383,7 @@ window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,_gcFacial:'',_gcEtiqueta:'',justificacionDescuento:'',justificacionMotivo:'',justificacionOtra:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,tipoIdentificacion:'cedula',cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,_gcFacial:'',_gcEtiqueta:'',justificacionDescuento:'',justificacionMotivo:'',justificacionOtra:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,caja:false,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -1586,8 +1586,12 @@ function renderTicket(c){
           <div id="cli-sug" class="cli-sug" hidden></div>
           <div id="cli-sel" class="note" style="margin-top:4px"></div>
         </div>
-        <div class="field"><label>Cédula / ID</label>
-          <input type="text" id="inp-ced" placeholder="Ingresa la cédula..." inputmode="numeric" autocomplete="off" value="${(T.cedula||'').replace(/"/g,'&quot;')}" oninput="T.cedula=this.value;window._cedAutofill=false;T.clienteCodigo='';T.clienteKey='';var _cv=(typeof _cedQuery==='function'?_cedQuery(this.value):this.value.replace(/\D/g,''));if(_cv.length===9||_cv.length===10||_cv.length===13){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
+        <div class="field"><label>Tipo de documento</label>
+          <select id="inp-tipo-doc" onchange="T.tipoIdentificacion=this.value;_identHint();">${(function(){var cur=T.tipoIdentificacion||'cedula';var opts=[['cedula','Cédula'],['ruc','RUC'],['pasaporte','Pasaporte'],['otro','Otro (documento de identidad extranjero)']];return opts.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>';}).join('');})()}</select>
+        </div>
+        <div class="field"><label>Identificación</label>
+          <input type="text" id="inp-ced" placeholder="Número de documento" maxlength="30" inputmode="${(T.tipoIdentificacion==='pasaporte'||T.tipoIdentificacion==='otro')?'text':'numeric'}" autocomplete="off" value="${(T.cedula||'').replace(/"/g,'&quot;')}" oninput="T.cedula=this.value;window._cedAutofill=false;T.clienteCodigo='';T.clienteKey='';_identHint();var _cv=(typeof _identQuery==='function'?_identQuery(this.value):this.value.trim());if(_cv.length>=5){buscarEnRegistroSheet('ced',_cv);if(T.cobro==='paquete')_paqCargarPicker();}">
+          <div id="ident-hint" class="note" style="margin-top:6px" hidden></div>
         </div>
         <div class="two-col">
           <div class="field"><label>Nombre</label><input type="text" id="inp-nom" placeholder="Nombre" autocomplete="off" value="${(T.nombre||'').replace(/"/g,'&quot;')}" oninput="T.nombre=this.value;_lookupNombreTicket()"></div>
@@ -1651,6 +1655,28 @@ function selFacial(sku){
 function _cedQuery(v){
   // TK190: quitar «.0» de Excel ANTES de los no-dígitos, si no 604070706.0 se vuelve 6040707060.
   return String(v||'').trim().replace(/\.0+$/,'').replace(/\D/g,'');
+}
+function _identQuery(v){
+  var t=String(v||'').trim().toUpperCase().replace(/[\s.-]/g,'');
+  if(/[A-Z]/.test(t)) return t;
+  return _cedQuery(v);
+}
+function _identSetTipo(tipo){
+  T.tipoIdentificacion=tipo||'cedula';
+  var sel=document.getElementById('inp-tipo-doc'); if(sel) sel.value=T.tipoIdentificacion;
+  var el=document.getElementById('inp-ced'); if(el) el.setAttribute('inputmode', (tipo==='pasaporte'||tipo==='otro')?'text':'numeric');
+  _identHint();
+}
+function _identHint(){
+  var box=document.getElementById('ident-hint');
+  var val=(document.getElementById('inp-ced')||{}).value||T.cedula||'';
+  var tipo=T.tipoIdentificacion||'cedula';
+  if(!box) return;
+  if(!val.trim() || tipo==='pasaporte' || tipo==='otro'){ box.hidden=true; box.innerHTML=''; return; }
+  var det=window.SunsuIdent?window.SunsuIdent.detectar(val, tipo):null;
+  if(!det||!det.error){ box.hidden=true; box.innerHTML=''; return; }
+  box.hidden=false;
+  box.innerHTML=det.error+' <button type="button" class="btn small" style="margin:4px 4px 0 0" onclick="_identSetTipo(\'pasaporte\')">Usar Pasaporte</button><button type="button" class="btn small" style="margin:4px 4px 0 0" onclick="_identSetTipo(\'otro\')">Usar Otro</button>';
 }
 function _cedNorm(v){
   var d=_cedQuery(v).replace(/^0+/,'');
@@ -3291,7 +3317,14 @@ function enviarTicket(){
   const recomEl=document.getElementById('inp-recom');
   const notasEl=document.getElementById('inp-notas');
 
-  if(!T.esSunsu&&!(cedEl?.value||'').trim()){toast('Ingresa la cédula del cliente','#B86B6B');return;}
+  if(!T.esSunsu&&!(cedEl?.value||'').trim()){toast('Ingresa la identificación del cliente','#B86B6B');return;}
+  if(!T.esSunsu){
+    var _tipoEl=document.getElementById('inp-tipo-doc');
+    if(_tipoEl&&_tipoEl.value) T.tipoIdentificacion=_tipoEl.value;
+    var _idet=window.SunsuIdent?window.SunsuIdent.detectar((cedEl.value||'').trim(), T.tipoIdentificacion||'cedula'):null;
+    if(_idet&&_idet.error){ toast(_idet.error,'#B86B6B'); if(typeof _identHint==='function') _identHint(); return; }
+    if(_idet&&_idet.valor){ T.cedula=_idet.valor; if(cedEl) cedEl.value=_idet.valor; if(_idet.tipo&&_idet.tipo!=='cedula'&&_idet.tipo!==(T.tipoIdentificacion||'cedula')&&_idet.tipo==='ruc'){ T.tipoIdentificacion='ruc'; if(_tipoEl) _tipoEl.value='ruc'; } }
+  }
   const tieneAlgo=T.facial||T.pack3||T.pack6||Object.values(T.extras).some(v=>v)||Object.values(T.productos).some(q=>q>0)||(T.gcVenta&&T.gcVenta.activo&&(T.gcVenta.codigo||T.gcVenta.deFactura));
   if(!tieneAlgo){toast('Agrega al menos un servicio o producto','#B86B6B');return;}
   if(T.facial&&!T.cobro){toast('Indica cómo se cobra el facial','#B86B6B');return;}
@@ -3475,6 +3508,7 @@ function enviarTicket(){
     cosmetologa_elegida: !!(document.getElementById('tk-atendido-por')),
     esSunsu:        T.esSunsu,
     cedula:         T.esSunsu?'1793219469001':(cedEl?.value||'').trim(),
+    tipo_identificacion: T.esSunsu?'ruc':(T.tipoIdentificacion||'cedula'),
     nombre:         T.esSunsu?'Sunsu':(nomEl?.value||'').trim(),
     clienteCodigo:  T.esSunsu?'':(T.clienteCodigo||''),
     clienteKey:     T.esSunsu?'':(T.clienteKey||''),
@@ -8534,6 +8568,13 @@ function _cliElegir(i){
   var nEl=document.getElementById('inp-nom'), aEl=document.getElementById('inp-ape'), cEl=document.getElementById('inp-ced');
   if(nEl){nEl.value=nom;T.nombre=nom;} if(aEl){aEl.value=ape;T.apellido=ape;}
   if(cEl&&c.cedula){cEl.value=c.cedula;T.cedula=c.cedula;window._cedAutofill=false;}
+  T.tipoIdentificacion=c.tipoIdentificacion||c.tipo_identificacion||'cedula';
+  if(!c.tipoIdentificacion&&!c.tipo_identificacion&&c.cedula&&window.SunsuIdent){
+    var _d0=window.SunsuIdent.detectar(c.cedula,'cedula');
+    if(_d0&&_d0.error) T.tipoIdentificacion=_d0.sugerencia||'pasaporte';
+    else if(_d0&&_d0.tipo) T.tipoIdentificacion=_d0.tipo;
+  }
+  if(typeof _identSetTipo==='function') _identSetTipo(T.tipoIdentificacion);
   T.clienteCodigo=c.codigo||''; T.clienteKey=c.key||''; T._clienteNuevo=false;
   var box=document.getElementById('cli-sug'); if(box) box.hidden=true;
   var q=document.getElementById('inp-cli-q'); if(q) q.value='';
@@ -12627,7 +12668,9 @@ function renderRegistroForm(c){
   c.innerHTML='<div style="font-size:0.88rem;font-weight:800;color:var(--navy);margin-bottom:3px">📝 Tarjeta de Registro</div>'
     +'<div style="font-size:0.62rem;color:var(--gray);margin-bottom:13px">Registro inicial de clientes · Sunsu Spa</div>'
     +tarj('👤 Datos personales',
-      inp('rg-cedula','Cédula *','1712345678','tel')
+      '<div class="field"><label>Tipo de documento</label><select id="rg-tipo-doc" onchange="_regIdentHint()"><option value="cedula" selected>Cédula</option><option value="ruc">RUC</option><option value="pasaporte">Pasaporte</option><option value="otro">Otro (documento de identidad extranjero)</option></select></div>'
+      +inp('rg-cedula','Identificación *','Número de documento','text')
+      +'<div id="rg-ident-hint" class="note" style="margin:0 0 10px" hidden></div>'
       +inp('rg-nombre','Nombre *','María José')
       +inp('rg-apellido','Apellido *','Torres')
       +inp('rg-nac','Fecha de nacimiento *','', 'date')
@@ -12659,7 +12702,7 @@ function renderRegistroForm(c){
       +_regChips('autorizaFotos',['SI','NO']))
     +'<button onclick="enviarRegistroCliente(this)" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:0.86rem;font-weight:800;cursor:pointer;margin-bottom:20px">✅ Registrar cliente</button>';
   // Verificación instantánea de cédula mientras teclea
-  var inpCed=document.getElementById('rg-cedula');
+  var inpCed=document.getElementById('rg-cedula'); if(inpCed&&!inpCed._identBound){inpCed._identBound=true;inpCed.addEventListener('input',function(){if(typeof _regIdentHint==='function')_regIdentHint();});}
   if(inpCed){
     inpCed.addEventListener('input',function(){
       clearTimeout(window._cedChkT);
@@ -12702,11 +12745,27 @@ function reintentarRegistro(){
   })
   .catch(function(e){toast('❌ '+e.message,'#B86B6B');});
 }
+function _regIdentHint(){
+  var box=document.getElementById('rg-ident-hint');
+  var el=document.getElementById('rg-cedula');
+  var tipo=((document.getElementById('rg-tipo-doc')||{}).value)||'cedula';
+  if(el) el.setAttribute('inputmode',(tipo==='pasaporte'||tipo==='otro')?'text':'numeric');
+  if(!box) return;
+  var val=(el&&el.value)||'';
+  if(!val.trim()||tipo==='pasaporte'||tipo==='otro'){box.hidden=true;box.innerHTML='';return;}
+  var det=window.SunsuIdent?window.SunsuIdent.detectar(val,tipo):null;
+  if(!det||!det.error){box.hidden=true;box.innerHTML='';return;}
+  box.hidden=false;
+  box.innerHTML=det.error+' <button type="button" onclick="(function(){var s=document.getElementById(\'rg-tipo-doc\');if(s)s.value=\'pasaporte\';_regIdentHint();})()">Usar Pasaporte</button> <button type="button" onclick="(function(){var s=document.getElementById(\'rg-tipo-doc\');if(s)s.value=\'otro\';_regIdentHint();})()">Usar Otro</button>';
+}
 function enviarRegistroCliente(btn, forzar){
   var v=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
   var s=window._regSel||{};
   var m=function(id){return (s[id]||[]).join(', ');};
-  if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('❌ Cédula, nombre y apellido son obligatorios','#B86B6B');return;}
+  if(!v('rg-cedula')||!v('rg-nombre')||!v('rg-apellido')){toast('❌ Identificación, nombre y apellido son obligatorios','#B86B6B');return;}
+  var _rgTipo=v('rg-tipo-doc')||'cedula';
+  var _rgDet=window.SunsuIdent?window.SunsuIdent.detectar(v('rg-cedula'), _rgTipo):null;
+  if(_rgDet&&_rgDet.error){toast('❌ '+_rgDet.error,'#B86B6B');if(typeof _regIdentHint==='function')_regIdentHint();return;}
   if(!v('rg-tel')){toast('❌ El teléfono es obligatorio','#B86B6B');return;}
   if(!s.autorizaFotos){toast('❌ Falta responder la autorización de fotos','#B86B6B');return;}
   if(!s.consentimiento){toast('❌ Falta aceptar el consentimiento informado','#B86B6B');return;}
@@ -12715,7 +12774,7 @@ function enviarRegistroCliente(btn, forzar){
   if(nac){var p=nac.split('-'); if(p.length===3) nac=p[1]+'/'+p[2]+'/'+p[0];} // MM/DD/YYYY como el forms
   if(btn){btn.textContent='⏳ Registrando...';btn.disabled=true;}
   window._regUltimoPayload={accion:'registrarCliente', forzar:'actualizar',
-      cedula:v('rg-cedula'), nombre:v('rg-nombre'), apellido:v('rg-apellido'),
+      cedula:v('rg-cedula'), tipo_identificacion:v('rg-tipo-doc')||'cedula', nombre:v('rg-nombre'), apellido:v('rg-apellido'),
       nacimiento:nac, sector:v('rg-sector'), telefono:v('rg-tel'),
       tipoPiel:s.tipoPiel||'', estado:s.estado||'',
       alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),
@@ -12724,7 +12783,7 @@ function enviarRegistroCliente(btn, forzar){
       autorizaFotos:s.autorizaFotos||'', consentimiento:'SI', firma:v('rg-firma')};
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'registrarCliente', forzar:forzar||'',
-      cedula:v('rg-cedula'), nombre:v('rg-nombre'), apellido:v('rg-apellido'),
+      cedula:v('rg-cedula'), tipo_identificacion:v('rg-tipo-doc')||'cedula', nombre:v('rg-nombre'), apellido:v('rg-apellido'),
       nacimiento:nac, sector:v('rg-sector'), telefono:v('rg-tel'),
       tipoPiel:s.tipoPiel||'', estado:s.estado||'',
       alergias:v('rg-alergias'), medicacion:v('rg-medicacion'), condiciones:v('rg-condiciones'),

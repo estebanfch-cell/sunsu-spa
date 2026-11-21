@@ -9,7 +9,7 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, facialesDeTicket, paquetesDeTicket, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq, tarifaFacial } from "./domain.ts";
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, facialesDeTicket, paquetesDeTicket, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq, tarifaFacial, detectarIdentificacion } from "./domain.ts";
 import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
@@ -845,6 +845,15 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   if (facCli && !s(p.cedula)) {
     try { const { clienteDeFactura } = await import("./cliente_factura.ts"); const c = await clienteDeFactura(ctx, facCli); if (c && c.cedula) p = { ...p, cedula: c.cedula }; } catch { /* sin datos del RIDE */ }
   }
+  const tipoDoc = s(p.tipo_identificacion || p.tipoIdentificacion);
+  if (!p.esSunsu && s(p.cedula).trim()) {
+    const det = detectarIdentificacion(p.cedula, tipoDoc || "cedula");
+    if (det.error) return { error: det.error, ...(det.sugerencia ? { sugerencia: det.sugerencia } : {}) };
+    p = { ...p, cedula: det.valor, tipo_identificacion: det.tipo, tipo_identificacion_sri: det.sri };
+  } else if (tipoDoc) {
+    const det = detectarIdentificacion(p.cedula || "1793219469001", tipoDoc);
+    p = { ...p, tipo_identificacion: det.tipo || tipoDoc, tipo_identificacion_sri: det.sri };
+  }
   const { exigeJustificacionDescuento } = await import("./cuadre_lineas.ts");
   const lineDesc = Array.isArray(p.lineDescuentos) ? p.lineDescuentos as { monto?: unknown; v?: unknown; valor?: unknown }[] : [];
   const montoDesc = lineDesc.reduce((a, x) => a + n(x.monto ?? x.v ?? x.valor), 0) + (typeof p.descuento === "number" ? n(p.descuento) : 0);
@@ -904,6 +913,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       ...(s(p.clienteCodigo) || s(p.clienteKey) ? { cliente_codigo: s(p.clienteCodigo), cliente_key: s(p.clienteKey) } : {}),
       ...(descLineas(p.lineDescuentos).length ? { desc_lineas: descLineas(p.lineDescuentos) } : {}),
       ...(s(p.justificacion_descuento).trim() ? { justificacion_descuento: s(p.justificacion_descuento).trim().slice(0, 400) } : {}),
+      ...(s(p.tipo_identificacion) ? { tipo_identificacion: s(p.tipo_identificacion), tipo_identificacion_sri: s(p.tipo_identificacion_sri) } : {}),
     },
   };
   const prod = productosPatch((p.productos || {}) as R, false, base);
@@ -1335,9 +1345,12 @@ async function getRegistro(p: R, ctx: Ctx): Promise<R> {
   return { ok: true, data };
 }
 async function registrarCliente(p: R, ctx: Ctx, ses: Ses): Promise<R> {
-  const ced = normCedula(p.cedula);
+  const det = detectarIdentificacion(p.cedula, p.tipo_identificacion || p.tipoIdentificacion || "cedula");
+  if (det.error) return { error: det.error, ...(det.sugerencia ? { sugerencia: det.sugerencia } : {}) };
+  const ced = normCedula(det.valor) || s(det.valor);
   const nombre = s(p.nombre);
-  if (!ced || !nombre) return { error: "Cédula y nombre son obligatorios" };
+  if (!ced || !nombre) return { error: "Identificación y nombre son obligatorios" };
+  p = { ...p, cedula: det.valor, tipo_identificacion: det.tipo, tipo_identificacion_sri: det.sri };
   const rows = await ctx.db.all("clientas_registro");
   const ex = rows.find((r) => normCedula(r.cedula) === ced);
   const campos = camposRegistro(p);
@@ -1352,7 +1365,7 @@ async function registrarCliente(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const savedCli = await ctx.db.write(actor, "clientas_registro", "insert", {}, {
     sheet_row, timestamp: ec.isoWall, cedula: ced, ...campos,
     apruebo_consentimiento_individual: "SI — " + `${pad(ec.d)}/${pad(ec.m)}/${ec.y} ${ec.hm}`,
-    orig: { cedula: ced, nombre },
+    orig: { cedula: ced, nombre, ...(s(p.tipo_identificacion) ? { tipo_identificacion: s(p.tipo_identificacion), tipo_identificacion_sri: s(p.tipo_identificacion_sri) } : {}) },
   });
   return { ok: true, fila: savedCli?.sheet_row ?? sheet_row };
 }
