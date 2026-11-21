@@ -117,6 +117,17 @@ describe("conteo físico beta", () => {
     assert.equal(ap.stockAplicado, true, JSON.stringify(ap));
     assert.ok((db.tables.get("beta_stock_movimientos") || []).some((m) => m.tipo === "conteo"));
   });
+  it("TK201: con familias incluye ceros, respeta el orden pedido y sin familias no cambia el recorte", async () => {
+    const { h } = semilla();
+    const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "ML,HT" });
+    const ini = await h("cf_iniciar", "cos", { id: cr.id });
+    assert.equal(ini.lineas, 3);
+    const g = await h("cf_get", "adm", { id: cr.id });
+    assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.sistema]), [["ML-001", 5], ["ML-002", 2], ["HT-001", 0]]);
+    const cr2 = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-bea", forzar: true });
+    const ini2 = await h("cf_iniciar", "otra", { id: cr2.id });
+    assert.equal(ini2.lineas, 2);
+  });
 });
 
 describe("TK116 conteo general vivo como MineCore", () => {
