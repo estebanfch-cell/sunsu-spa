@@ -51,6 +51,9 @@
       "#cc .cc-hits button[disabled],#mccf-root .cc-hits button[disabled]{opacity:.55;pointer-events:none}",
       "#cc .cc-nm,#mccf-root .cc-nm{font-weight:700;font-size:13px;color:var(--text);line-height:1.22;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}",
       "#cc .cc-cd,#mccf-root .cc-cd{font-size:11.5px;color:var(--gray);white-space:normal;line-height:1.3}",
+      "#cc .cc-ori,#mccf-root .cc-ori{display:inline-block;margin-left:6px;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:700;vertical-align:middle;white-space:nowrap}",
+      "#cc .cc-ori.consig,#mccf-root .cc-ori.consig{border:1.5px solid var(--navy);color:var(--navy);background:#EEF3FA}",
+      "#cc .cc-ori.propio,#mccf-root .cc-ori.propio{border:1.5px solid var(--gold);color:#9a6b00;background:var(--gold-l)}",
       "#cc .cc-sub,#mccf-root .cc-sub{flex:0 0 auto;text-align:right;font-size:12.5px;color:var(--navy-d);white-space:nowrap;line-height:1.25}",
       "#cc .cc-mn,#mccf-root .cc-mn{flex:0 0 24px;height:40px;background:none;border:none;color:var(--gray);font-size:20px;padding:0;cursor:pointer}",
       "#cc .cc-mpop,#mccf-root .cc-mpop{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--blue-ll,#F5F8FC);border-bottom:1px solid var(--cream-d)}",
@@ -781,7 +784,7 @@
     var v = valLinea(l), op = C.menu === l.id, otra = C.otra === l.id;
     var badge = (l.buscar ? ' <span class="cc-skb">🔎 buscar después</span>' : "") + (l.otraSub ? ' <span style="color:var(--navy)">📍 ' + e(l.otraSub) + (l.otraQty != null ? " · " + e(l.otraQty) : "") + "</span>" : "");
     var h = '<div class="cc-ln' + (l.buscar ? " cc-skip" : "") + '" id="cc-l' + e(l.id) + '">' +
-      '<div style="flex:1;min-width:0"><div class="cc-nm">' + e(l.nombre) + "</div>" + badge + '<div class="cc-cd">' + e(l.sku) + "</div></div>" +
+      '<div style="flex:1;min-width:0"><div class="cc-nm">' + e(l.nombre) + "</div>" + badge + '<div class="cc-cd">' + e(l.sku) + (function(ori, nom){ nom = nom || (ori === "propio" ? "Propio/Nuestro" : ori ? "Consignación" : ""); return nom ? ' <span class="cc-ori ' + (ori === "propio" ? "propio" : "consig") + '">' + e(nom) + "</span>" : ""; })(l.origen, l.origenNombre) + "</div></div>" +
       '<div class="cc-sub">' + e(l.fromSub || "—") + (C.cur && C.cur.ciego ? "" : "<div>esp. " + e(l.esperado) + "</div>") + "</div>" +
       '<input class="cc-q' + (v === "" ? " cc-vacio" : "") + '" id="cc-c' + e(l.id) + '" data-cf-cant="' + e(l.id) + '" type="text" inputmode="' + (C.pad ? "none" : "decimal") + '" autocomplete="off" value="' + e(v) + '"' + (C.sec && C.sec.puedeOperar ? "" : " disabled") + ">" +
       '<button class="cc-mn" type="button" data-cf-menu="' + e(l.id) + '" aria-label="Más">···</button></div>';
