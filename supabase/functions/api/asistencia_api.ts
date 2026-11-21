@@ -128,23 +128,27 @@ export function hmDeMinutos(min: number): { h: number; min: number; texto: strin
   return { h, min: m, texto, totalMin: t };
 }
 
-export function minutosDeNomina(horas: NominaHoras): { trabajadas: number; normales: number; extra50: number; extra100: number } {
+export function minutosDeNomina(horas: NominaHoras): { trabajadas: number; normales: number; extra50: number; extra100: number; feriado100: number; descanso100: number } {
   const dias = horas.dias || [];
   if (dias.length) {
-    let worked = 0, ordinary = 0, e50 = 0, e100 = 0;
+    let worked = 0, ordinary = 0, e50 = 0, fer = 0, desc = 0;
     for (const d of dias) {
       ordinary += Number(d.ordinaryMin) || 0;
       e50 += Number(d.supl50Min || d.suplMin) || 0;
-      e100 += (Number(d.supl100Min || d.extrMin) || 0) + (Number(d.extraordinariasMin || d.descMin) || 0);
+      // TK199: «Feriado 100 %» y «Descanso 100 %» por separado (igual que el rol).
+      fer += Number(d.supl100Min || d.extrMin) || 0;
+      desc += Number(d.extraordinariasMin || d.descMin) || 0;
       worked += Number(d.workedMin) || 0;
     }
-    return { trabajadas: worked || ordinary + e50 + e100, normales: ordinary, extra50: e50, extra100: e100 };
+    return { trabajadas: worked || ordinary + e50 + fer + desc, normales: ordinary, extra50: e50, extra100: fer + desc, feriado100: fer, descanso100: desc };
   }
   return {
     trabajadas: Math.round((horas.hrsTrabajadas || 0) * 60),
     normales: Math.round((horas.hrsOrdinarias || 0) * 60),
     extra50: Math.round((horas.hrsSupl || 0) * 60),
     extra100: Math.round(((horas.hrsExtr || 0) + (horas.hrsDesc || 0)) * 60),
+    feriado100: Math.round((horas.hrsExtr || 0) * 60),
+    descanso100: Math.round((horas.hrsDesc || 0) * 60),
   };
 }
 
@@ -155,6 +159,8 @@ export function bloqueDeHoras(horas: NominaHoras) {
     normales: hmDeMinutos(m.normales),
     extra50: hmDeMinutos(m.extra50),
     extra100: hmDeMinutos(m.extra100),
+    feriado100: hmDeMinutos(m.feriado100),
+    descanso100: hmDeMinutos(m.descanso100),
     atrasoMin: horas.atrasoMin || 0,
     faltas: horas.faltas || 0,
     diasAsistidos: horas.diasPropios || 0,

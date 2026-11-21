@@ -12,7 +12,7 @@ describe("TK177 Mi asistencia ordenada", () => {
     const html = f({ mes: 11, hrsNormales: 99.85, hrsSupl: 2.75, valSupl: 8.28, hrsExtr: 9.5, valExtr: 38.15, regla: "recorte 15", diasTrabajados: 12 });
     assert.match(html, /<table class="asis-rol-tabla">/);
     assert.match(html, /<td>Suplementarias 50%<\/td><td class="num">2 h 45 min<\/td><td class="num">\$8\.28<\/td>/);
-    assert.match(html, /<td>Extraordinarias 100%<\/td>/);
+    assert.match(html, /<td>Feriado 100%<\/td>/); // TK199
     assert.doesNotMatch(html, /días trabajados|recorte/);
     assert.doesNotMatch(src, /Sumar rango/);
   });
