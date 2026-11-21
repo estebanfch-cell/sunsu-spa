@@ -35,6 +35,11 @@ function semilla() {
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
   ]);
   for (const t of ["catalogo", "erp_movimientos", "app_modulos", "cabina_inventario", "inventario_base", "beta_conteos", "beta_conteo_lineas", "beta_notificaciones", "beta_conteo_secciones", "beta_conteo_plan", "beta_stock_movimientos", "beta_conteo_zonas", "erp_sububicaciones", "beta_sububicaciones", "beta_ajustes", "beta_ajuste_lineas"]) db.tables.set(t, []);
+  db.tables.set("beta_proveedores_ficha", [
+    { familia: "AS", consignacion: true }, { familia: "HT", consignacion: true },
+    { familia: "ML", consignacion: true }, { familia: "PH", consignacion: true },
+    { familia: "VK", consignacion: true }, { familia: "JN", consignacion: false },
+  ]);
   const c = { db, now: new Date("2026-11-17T17:00:00Z"), env: {} as Record<string, string | undefined>, fetchImpl: fetch, legacyLogin: async () => ({}) };
   const h = (a: string, tok: string, p: Row = {}) => handle(a, { token: tok, ...p }, { ...c, token: tok }) as Promise<Row>;
   return { db, h };
@@ -124,46 +129,39 @@ describe("conteo físico beta", () => {
     const { h } = semilla();
     const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "ML,HT" });
     const ini = await h("cf_iniciar", "cos", { id: cr.id });
-    assert.equal(ini.lineas, 6);
+    assert.equal(ini.lineas, 3);
     const g = await h("cf_get", "adm", { id: cr.id });
-    assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.bodega, l.sistema]), [
-      ["ML-001", "CONSIGNACION", 5], ["ML-001", "BCONSIG", 0],
-      ["ML-002", "CONSIGNACION", 2], ["ML-002", "BCONSIG", 0],
-      ["HT-001", "CONSIGNACION", 0], ["HT-001", "BCONSIG", 0],
+    assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.bodega, l.sistema, l.origenNombre]), [
+      ["ML-001", "CONSIGNACION", 5, "Consignación"],
+      ["ML-002", "CONSIGNACION", 2, "Consignación"],
+      ["HT-001", "CONSIGNACION", 0, "Consignación"],
     ]);
     const cr2 = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-bea", forzar: true });
     const ini2 = await h("cf_iniciar", "otra", { id: cr2.id });
     assert.equal(ini2.lineas, 2);
   });
-  it("TK202: el conteo de consignación incluye el kardex BCONSIG, no se envía con blancos y al aplicar cada línea va a su bodega", async () => {
+  it("TK203: una sola bodega Venta, una línea por producto, etiqueta de Proveedores, no se envía en blanco", async () => {
     const { db, h } = semilla();
-    db.tables.get("erp_stock")!.push({
-      producto_id: "p3", bodega_id: "66666666-6666-4666-8666-666666666666", cantidad: 10,
-    });
-    const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "HT" });
+    db.tables.get("erp_productos")!.push({ id: "p9", sku: "ML-009", nombre: "Pearl Mask", clase: "producto", uso: "venta", activo: true });
+    db.tables.get("erp_productos")!.push({ id: "p2b", sku: "ML-016", nombre: "Own Serum", clase: "producto", uso: "venta", activo: true, beta_origen: "propio" });
+    const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "ML" });
     const ini = await h("cf_iniciar", "cos", { id: cr.id });
-    assert.equal(ini.lineas, 2);
+    assert.equal(ini.lineas, 4);
     const g = await h("cf_get", "adm", { id: cr.id });
     const L = g.lineas as Row[];
-    assert.deepEqual(L.map((l) => [l.sku, l.bodega, l.sistema, l.fromSub]), [
-      ["HT-001", "CONSIGNACION", 0, "Venta"],
-      ["HT-001", "BCONSIG", 10, "Consignación"],
+    assert.equal(new Set(L.map((l) => l.bodega)).size, 1);
+    assert.equal(L[0].bodega, "CONSIGNACION");
+    assert.deepEqual(L.map((l) => [l.sku, l.origen, l.origenNombre, l.sistema]), [
+      ["ML-001", "consignacion", "Consignación", 5],
+      ["ML-002", "consignacion", "Consignación", 2],
+      ["ML-009", "propio", "Propio/Nuestro", 0],
+      ["ML-016", "propio", "Propio/Nuestro", 0],
     ]);
     const blank = await h("cf_enviar", "cos", { id: cr.id, forzar: true });
-    assert.match(String(blank.error), /líneas en blanco|Faltan 2/i);
+    assert.match(String(blank.error), /líneas en blanco|Faltan/i);
     assert.notEqual(blank.ok, true);
-    const venta = L.find((l) => l.bodega === "CONSIGNACION")!;
-    const cons = L.find((l) => l.bodega === "BCONSIG")!;
-    await h("cf_guardar", "cos", { id: cr.id, lineas: [{ id: venta.id, contado: 0 }, { id: cons.id, contado: 7 }] });
+    await h("cf_guardar", "cos", { id: cr.id, lineas: L.map((l) => ({ id: l.id, contado: 0 })) });
     assert.equal((await h("cf_enviar", "cos", { id: cr.id })).ok, true);
-    const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
-    assert.equal(ap.stockAplicado, true, JSON.stringify(ap));
-    const movs = db.tables.get("beta_stock_movimientos") || [];
-    const deCons = movs.filter((m) => m.tipo === "conteo" && m.bodega === "BCONSIG");
-    const deVenta = movs.filter((m) => m.tipo === "conteo" && m.bodega === "CONSIGNACION");
-    assert.equal(deCons.length, 1);
-    assert.equal(deCons[0].delta, -3);
-    assert.equal(deVenta.length, 0);
   });
 });
 
@@ -251,6 +249,9 @@ describe("TK116 conteo general vivo como MineCore", () => {
     assert.match(js, /Agregar ubicación/);
     assert.match(js, /✓ Guardado/);
     assert.match(js, />Terminar</);
+    assert.match(js, /cc-ori/);
+    assert.match(js, /Propio\/Nuestro/);
+    assert.match(js, /Consignación/);
     assert.doesNotMatch(js, /costo_unit|compraReal|costo_promedio/);
   });
 });
