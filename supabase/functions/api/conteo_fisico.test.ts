@@ -26,7 +26,10 @@ function semilla() {
     { id: "p2", sku: "ML-002", nombre: "Cream", clase: "producto", uso: "venta", activo: true },
     { id: "p3", sku: "HT-001", nombre: "Oil", clase: "producto", uso: "venta", activo: true },
   ]);
-  db.tables.set("erp_bodegas", [{ id: "11111111-1111-4111-8111-111111111111", codigo: "VENTA", nombre: "Venta", tipo: "venta" }]);
+  db.tables.set("erp_bodegas", [
+    { id: "11111111-1111-4111-8111-111111111111", codigo: "VENTA", nombre: "Venta", tipo: "venta" },
+    { id: "66666666-6666-4666-8666-666666666666", codigo: "CONSIGNACION", nombre: "Consignación", tipo: "consignacion" },
+  ]);
   db.tables.set("erp_stock", [
     { producto_id: "p1", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 5 },
     { producto_id: "p2", bodega_id: "11111111-1111-4111-8111-111111111111", cantidad: 2 },
@@ -121,12 +124,46 @@ describe("conteo físico beta", () => {
     const { h } = semilla();
     const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "ML,HT" });
     const ini = await h("cf_iniciar", "cos", { id: cr.id });
-    assert.equal(ini.lineas, 3);
+    assert.equal(ini.lineas, 6);
     const g = await h("cf_get", "adm", { id: cr.id });
-    assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.sistema]), [["ML-001", 5], ["ML-002", 2], ["HT-001", 0]]);
+    assert.deepEqual((g.lineas as Row[]).map((l) => [l.sku, l.bodega, l.sistema]), [
+      ["ML-001", "CONSIGNACION", 5], ["ML-001", "BCONSIG", 0],
+      ["ML-002", "CONSIGNACION", 2], ["ML-002", "BCONSIG", 0],
+      ["HT-001", "CONSIGNACION", 0], ["HT-001", "BCONSIG", 0],
+    ]);
     const cr2 = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-bea", forzar: true });
     const ini2 = await h("cf_iniciar", "otra", { id: cr2.id });
     assert.equal(ini2.lineas, 2);
+  });
+  it("TK202: el conteo de consignación incluye el kardex BCONSIG, no se envía con blancos y al aplicar cada línea va a su bodega", async () => {
+    const { db, h } = semilla();
+    db.tables.get("erp_stock")!.push({
+      producto_id: "p3", bodega_id: "66666666-6666-4666-8666-666666666666", cantidad: 10,
+    });
+    const cr = await h("cf_crear", "adm", { bodega: "CONSIGNACION", asignado_a: "u-ana", familias: "HT" });
+    const ini = await h("cf_iniciar", "cos", { id: cr.id });
+    assert.equal(ini.lineas, 2);
+    const g = await h("cf_get", "adm", { id: cr.id });
+    const L = g.lineas as Row[];
+    assert.deepEqual(L.map((l) => [l.sku, l.bodega, l.sistema, l.fromSub]), [
+      ["HT-001", "CONSIGNACION", 0, "Venta"],
+      ["HT-001", "BCONSIG", 10, "Consignación"],
+    ]);
+    const blank = await h("cf_enviar", "cos", { id: cr.id, forzar: true });
+    assert.match(String(blank.error), /líneas en blanco|Faltan 2/i);
+    assert.notEqual(blank.ok, true);
+    const venta = L.find((l) => l.bodega === "CONSIGNACION")!;
+    const cons = L.find((l) => l.bodega === "BCONSIG")!;
+    await h("cf_guardar", "cos", { id: cr.id, lineas: [{ id: venta.id, contado: 0 }, { id: cons.id, contado: 7 }] });
+    assert.equal((await h("cf_enviar", "cos", { id: cr.id })).ok, true);
+    const ap = await h("cf_revisar", "adm", { id: cr.id, que: "aprobar" });
+    assert.equal(ap.stockAplicado, true, JSON.stringify(ap));
+    const movs = db.tables.get("beta_stock_movimientos") || [];
+    const deCons = movs.filter((m) => m.tipo === "conteo" && m.bodega === "BCONSIG");
+    const deVenta = movs.filter((m) => m.tipo === "conteo" && m.bodega === "CONSIGNACION");
+    assert.equal(deCons.length, 1);
+    assert.equal(deCons[0].delta, -3);
+    assert.equal(deVenta.length, 0);
   });
 });
 
