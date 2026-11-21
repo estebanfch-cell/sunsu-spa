@@ -11,7 +11,7 @@ Deno.test("TK196: el menú Crear se repinta con el estado real del reloj", () =>
 
 Deno.test("TK196: Crear ofrece salida / fin de almuerzo según el estado", () => {
   assert(nav.includes('"📷 Registrar salida", "", "panel"'));
-  assert(nav.includes('"📷 Fin almuerzo", "", "panel"'));
+  assert(!nav.includes("Fin almuerzo"));
 });
 
 Deno.test("TK196: cache igual en index.html y sw.js", async () => {
@@ -39,7 +39,7 @@ Deno.test("TK196: Crear con entrada abierta → Registrar salida; almuerzo abier
   const t = crearCon({ abierto: true, almuerzo: "inicio" });
   assert(t.includes("📷 Registrar salida") && !t.includes("📷 Registrar entrada"));
   const l = crearCon({ abierto: true, almuerzo: "fin" });
-  assert(l.includes("📷 Fin almuerzo") && !l.includes("📷 Registrar salida"));
+  assert(l.includes("📷 Registrar salida") && !l.some((x) => /almuerzo/i.test(x)));
 });
 
 Deno.test("TK197: Crear muestra el panel de Mi asistencia (horario, marcas, mismos botones)", async () => {
@@ -48,4 +48,16 @@ Deno.test("TK197: Crear muestra el panel de Mi asistencia (horario, marcas, mism
   assert(nav.includes('id="crear-asis"'));
   const api = await Deno.readTextFile(new URL("./asistencia_api.ts", import.meta.url));
   assert(api.includes("horarioHoy"));
+});
+
+import { calcularDia, configDesde } from "./asistencia.ts";
+Deno.test("TK198: extra solo fuera del horario asignado; 9:30–18:30 completo = 0 extra", () => {
+  const cfg = configDesde(undefined);
+  const j = { trabaja: true, desde: "09:30", hasta: "18:30" };
+  const m = (tipo: string, hm: string) => ({ id: tipo + hm, nombre: "X", tipo, ts: `2026-11-20T${hm}:00-05:00`, anulado: false });
+  const d = calcularDia("2026-11-20", [m("entrada", "09:30"), m("salida", "18:30")], cfg, [], [], null, j as never);
+  assertEquals([d.ordinaryMin, d.suplMin, d.almuerzoPendiente], [480, 0, false]);
+  const a = calcularDia("2026-11-20", [m("entrada", "09:28"), m("salida", "19:04")], cfg, [], [], null, j as never);
+  assertEquals([a.ordinaryMin, a.suplMin], [480, 34]);
+  assert(!html.includes("Falta el almuerzo"));
 });
