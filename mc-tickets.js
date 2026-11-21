@@ -1145,7 +1145,8 @@
     var dmy = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.slice(8, 10) + "/" + f.slice(5, 7) + "/" + f.slice(2, 4) : "";
     var claveTk = String(K.d.clave || ""), mejor = null, vig = null;
     (items || []).forEach(function (p) {
-      if (String(p.cedula || "").split(".")[0] !== ced) return;
+      var _ck = function (v) { return String(v || "").split(".")[0].replace(/\D/g, "").replace(/^0+/, ""); };
+      if (_ck(p.cedula) !== _ck(ced)) return;
       var esP3 = P3.some(function (s) { return String(p.sku || "").indexOf(s) >= 0; }), total = Number(p.total) || (esP3 ? 3 : 6);
       var usos = (p.usos || []).slice(0, total), usado = function (u) { return !!(u && (u.usado || u.u || u.fecha || u.f)); };
       var us = usos.filter(usado).length, ses = -1;

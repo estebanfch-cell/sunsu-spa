@@ -2400,6 +2400,17 @@ async function api(accion, body = {}) {
     if (engHdr && window.SunsuUpdate && window.SunsuUpdate.notarMotor) window.SunsuUpdate.notarMotor(engHdr);
   } catch (eHdr) {}
   if (window.MCFmt) data = window.MCFmt.resp(data);
+  // TK206: getSeguimientoPaquetes devuelve usado/fecha; las tarjetas leen u/f.
+  if (accion === "getSeguimientoPaquetes" && data && Array.isArray(data.items)) {
+    data.items.forEach(function (p) {
+      if (!Array.isArray(p.usos)) return;
+      p.usos = p.usos.map(function (u) {
+        var hecho = !!(u && (u.usado || u.u || u.fecha || u.f));
+        var txt = (u && (u.fecha || u.f)) || "";
+        return Object.assign({}, u, { u: hecho, f: txt, usado: !!(u && u.usado) || hecho, fecha: txt });
+      });
+    });
+  }
   if (data && typeof data === "object") {
     if (res && res.status === 401) data.auth_error = true;
     if (res && res.status >= 500) { data.red = true; data.transitorio = true; }
@@ -8693,7 +8704,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-21-TK205"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-21-TK206"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
