@@ -19,14 +19,14 @@ describe("TK174 botones de Mi asistencia", () => {
     assert.match(trab, /asis-amarillo/);
     assert.match(trab, /data-crono>\d{2}:\d{2}:\d{2}/);
     assert.match(trab, /asis-rojo[^>]*data-marca="salida">Registrar salida/);
-    assert.match(trab, /data-marca="almuerzo_inicio"/);
+    // TK198 (Emilia): sin botones de almuerzo; una marca de almuerzo vieja no cambia el estado.
+    assert.doesNotMatch(trab, /almuerzo/);
     const alm = fns.htmlBotonesAsis([{ tipo: "entrada", ts: ts("09:30") }, { tipo: "almuerzo_inicio", ts: ts("13:00") }]);
-    assert.match(alm, /En almuerzo/);
-    assert.match(alm, /03:30:00/);
-    assert.match(alm, /data-marca="almuerzo_fin">Fin almuerzo/);
+    assert.match(alm, /asis-rojo[^>]*data-marca="salida">Registrar salida/);
+    assert.doesNotMatch(alm, /Fin almuerzo|Iniciar almuerzo/);
     const fin = fns.htmlBotonesAsis([{ tipo: "entrada", ts: ts("09:30") }, { tipo: "almuerzo_inicio", ts: ts("13:00") }, { tipo: "almuerzo_fin", ts: ts("14:00") }, { tipo: "salida", ts: ts("18:30") }]);
     assert.match(fin, /Jornada terminada/);
-    assert.match(fin, /08:00:00/);
+    assert.match(fin, /09:00:00/);
     assert.doesNotMatch(fin, /data-marca=/);
     // las marcas anuladas no cuentan
     assert.match(fns.htmlBotonesAsis([{ tipo: "entrada", ts: ts("09:30"), anulado: true }]), /Registrar entrada/);

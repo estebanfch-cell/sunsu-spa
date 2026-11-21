@@ -233,8 +233,7 @@
       // TK196 (Andrea 20/11): la marca sale del estado real de hoy y se decide otra vez al tocar («auto»).
       // TK197 (Emilia): en «Crear» va el MISMO panel de Mi asistencia (horario, marcas, tiempo y botones).
       [muestra && !abierta, "📷 Registrar entrada", "", "panel"],
-      [muestra && abierta && reloj.almuerzo === "fin", "📷 Fin almuerzo", "", "panel"],
-      [muestra && abierta && reloj.almuerzo !== "fin", "📷 Registrar salida", "", "panel"],
+      [muestra && abierta, "📷 Registrar salida", "", "panel"],
     ].filter(function (x) { return x[0]; });
   }
   function crearHtml() {

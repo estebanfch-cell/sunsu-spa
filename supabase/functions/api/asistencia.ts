@@ -210,7 +210,8 @@ export function validarSecuencia(marcajes: MarcajeIn[], tipo: string): string | 
     if (lunchOut) return "El almuerzo ya terminó.";
     return null;
   }
-  if (tipo === "salida") return lunchIn && !lunchOut ? "Cierra el almuerzo antes de salir." : null;
+  // TK198 (Emilia): el almuerzo ya no se marca; la salida siempre se puede registrar.
+  if (tipo === "salida") return null;
   return "Tipo de marca desconocido.";
 }
 
@@ -233,15 +234,9 @@ export function estadoReloj(marcajes: MarcajeIn[], ahoraIso: string): RelojHoy {
     return { accion: "entrada", etiqueta: "Marcar entrada", almuerzo: null, abierto: false, transcurridoMin: 0, recuerda: "Recuerda marcar tu entrada." };
   }
   const entrada = vivos[lastEntrada];
-  const despues = vivos.slice(lastEntrada + 1);
-  const lunchIn = despues.find((m) => m.tipo === "almuerzo_inicio");
-  const lunchOut = despues.find((m) => m.tipo === "almuerzo_fin");
-  const almuerzo = !lunchIn ? "inicio" : !lunchOut ? "fin" : null;
-  let ms = new Date(ahoraIso).getTime() - new Date(entrada.ts).getTime();
-  if (lunchIn) {
-    const fin = lunchOut ? new Date(lunchOut.ts).getTime() : new Date(ahoraIso).getTime();
-    ms -= Math.max(0, fin - new Date(lunchIn.ts).getTime());
-  }
+  // TK198: sin botones de almuerzo; el reloj solo ofrece entrada y salida y no descuenta almuerzo.
+  const almuerzo = null;
+  const ms = new Date(ahoraIso).getTime() - new Date(entrada.ts).getTime();
   return {
     accion: "salida", etiqueta: "Marcar salida", almuerzo, abierto: true,
     transcurridoMin: Math.max(0, Math.round(ms / 60000)),
@@ -276,7 +271,7 @@ function aliases(d: DiaAsistencia): DiaAsistencia {
 /** Desde esta fecha la asistencia marcada en la app tiene prioridad sobre Jibble (TK166). */
 export const APP_PRIORIDAD_DESDE = "2026-11-20";
 
-export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: AsistenciaConfig, feriados: string[], permisos: PermisoIn[], jibble?: JibbleIn | null, jornada?: JornadaDia | null): DiaAsistencia {
+export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: AsistenciaConfig, feriados: string[], permisos: PermisoIn[], jibble?: JibbleIn | null, jornada?: JornadaDia | null, legadoAlmuerzo = false): DiaAsistencia {
   const fer = new Set(feriados);
   const perm = permisoEn(permisos, fecha, config.jornada_horas);
   const delDia = marcasDelDia(marcajes, fecha);
@@ -311,20 +306,24 @@ export function calcularDia(fecha: string, marcajes: MarcajeIn[], config: Asiste
   if (!entrada || !salida) {
     return aliases({ ...vacio, fuente: "marcaje", atrasoMin: atraso, abierto: !!entrada && !salida, diaContado: !!entrada, falta: false });
   }
-  const tramos: [string, string][] = lunchIn && lunchOut
+  // TK198 (Emilia t830u): las horas extra se cuentan SOLO fuera del horario asignado (antes de la entrada o
+  // después de la salida del horario), nunca por pasar de 8 h. El almuerzo va dentro del horario y no se marca:
+  // las marcas de almuerzo (si quedaron) no cambian el cálculo.
+  // legadoAlmuerzo: solo la comparación histórica de Jibble (TK170) conserva la regla vieja de pausas.
+  const tramos: [string, string][] = legadoAlmuerzo && lunchIn && lunchOut
     ? [[entrada.ts, lunchIn.ts], [lunchOut.ts, salida.ts]]
     : [[entrada.ts, salida.ts]];
   let clase = { dentro: 0, supl: 0, extr: 0, desc: 0 };
   for (const [a, b] of tramos) clase = sumarClase(clase, clasificarIntervalo(a, b, config, fer, jornada, fecha));
   const tope = Math.round(config.jornada_horas * 60);
   const ordinaryMin = Math.min(clase.dentro, tope);
-  const suplMin = clase.supl + Math.max(0, clase.dentro - tope);
+  const suplMin = clase.supl + (legadoAlmuerzo ? Math.max(0, clase.dentro - tope) : 0);
   const workedMin = ordinaryMin + suplMin + clase.extr + clase.desc;
   const almuerzoMin = lunchIn && lunchOut ? Math.max(0, Math.round((new Date(lunchOut.ts).getTime() - new Date(lunchIn.ts).getTime()) / 60000)) : 0;
   const extrFueraHorarioMin = descanso ? Math.max(0, workedMin - tope) : 0;
   return aliases({
     fecha, fuente: "marcaje", workedMin, ordinaryMin, suplMin, extrMin: clase.extr, descMin: clase.desc,
-    atrasoMin: atraso, almuerzoMin, abierto: false, almuerzoPendiente: !(lunchIn && lunchOut), falta: false, diaContado: true,
+    atrasoMin: atraso, almuerzoMin, abierto: false, almuerzoPendiente: false, falta: false, diaContado: true,
     supl50Min: 0, supl100Min: 0, extraordinariasMin: 0, extrFueraHorarioMin,
     esFeriado: fer.has(fecha), esDescanso: descanso,
   });
