@@ -5,7 +5,7 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { acceso, esAdmin, matrizDe, puedePriv, type PrivFlag } from "./permisos.ts";
-import { cedulaVer, n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
+import { cedulaVer, detectarIdentificacion, n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { consultar, type Filtro } from "./query.ts";
 import { claveCliente, claveRegistro, clienteDetalle, clientesResumen, codigoCliente, numeroTicket, registrosDeClave, saldoGift, ticketsDeClave } from "./ventas.ts";
@@ -23,7 +23,7 @@ export const lite = (ses: Ses) => ({ rol: ses.rol, name: ses.name, short: ses.sh
 
 /** Campos de la ficha que se pueden corregir en la beta (clave → etiqueta). */
 export const CAMPOS_CLIENTE: [string, string][] = [
-  ["nombres", "Nombre"], ["apellido", "Apellido"], ["cedula", "Cédula"], ["telefono", "Teléfono"], ["email", "Email"],
+  ["nombres", "Nombre"], ["apellido", "Apellido"], ["tipoIdentificacion", "Tipo de documento"], ["cedula", "Identificación"], ["telefono", "Teléfono"], ["email", "Email"],
   ["nacimiento", "Nacimiento"], ["sector", "Sector"], ["tipoPiel", "Tipo de piel"], ["estado", "Estado actual"],
   ["alergias", "Alergias"], ["medicacion", "Medicación"], ["condiciones", "Condiciones"], ["reacciones", "Reacciones previas"],
   ["exfoliantes", "Exfoliantes / retinoides"], ["extracciones", "Desea extracciones"], ["autorizaFotos", "Autoriza fotos"], ["ciclo", "Ciclo menstrual"], ["cortesia", "Cortesía complementaria"],
@@ -33,7 +33,7 @@ export const CAMPOS_CLIENTE: [string, string][] = [
 ];
 /** TK183 (Emilia t797u/t799u): el personal corrige directo (con historial quién/cuándo/antes/después) todo lo que NO
  *  sea dato de contacto/identidad ni una autorización. Estos van SIEMPRE por solicitud a administración. */
-export const CAMPOS_CON_SOLICITUD = new Set(["nombres", "apellido", "cedula", "telefono", "email", "sector", "autorizaFotos", "consentimiento"]);
+export const CAMPOS_CON_SOLICITUD = new Set(["nombres", "apellido", "tipoIdentificacion", "cedula", "telefono", "email", "sector", "autorizaFotos", "consentimiento"]);
 export const CAMPOS_DIRECTOS_STAFF = CAMPOS_CLIENTE.map(([k]) => k).filter((k) => !CAMPOS_CON_SOLICITUD.has(k));
 /** Solo lectura en la ficha (vienen del formulario de registro). */
 export const CAMPOS_LECTURA: [string, string][] = [["registrada", "Fecha de registro"], ["ultimoRegistro", "Último registro"]];
@@ -421,7 +421,12 @@ export async function guardarCliente(ctx: Ctx, ses: Ses, key0: string, cambios: 
   const limpio: Row = {};
   for (const [k, v] of Object.entries(cambios || {})) if (permitidos.has(k)) limpio[k] = s(v).trim().slice(0, 500);
   if (!Object.keys(limpio).length) return { error: "Nada que cambiar" };
-  if (limpio.cedula && !/^\d{10}(\d{3})?$|^[A-Z0-9-]{5,20}$/i.test(String(limpio.cedula))) return { error: "Cédula inválida" };
+  if (limpio.cedula) {
+    const det = detectarIdentificacion(limpio.cedula, limpio.tipoIdentificacion);
+    if (det.error) return { error: det.error, sugerencia: det.sugerencia };
+    limpio.cedula = det.valor;
+    if (det.tipo) limpio.tipoIdentificacion = det.tipo;
+  }
   if (limpio.nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(String(limpio.nacimiento))) return { error: "Nacimiento: usa AAAA-MM-DD" };
   if (limpio.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(limpio.email))) return { error: "Email inválido" };
   if ("autorizaFotos" in limpio) { const v = siNo(limpio.autorizaFotos); if (!v) return { error: "Autoriza fotos: SI o NO" }; limpio.autorizaFotos = v; }
@@ -604,7 +609,7 @@ extend("cl_buscar", "any", async (p, ctx, ses) => {
   const items = canon.map((k) => fusionarFilas(k, grupos.get(k) || [])).filter((r) => r.borrado !== true).slice(0, 8).map((r) => {
     const d = (r.datos || {}) as Row, k = canonDeClave(s(r.key));
     const nombre = ((s(d.nombres) || "") + " " + (s(d.apellido) || "")).trim() || s(r.nombre);
-    return { key: k, codigo: s(r.codigo), nombre, cedula: cedulaVer(s(d.cedula) || s(r.cedula) || (k.startsWith("c:") ? k.slice(2) : "")), ...(tel ? { telefono: telefonoEc(s(d.telefono) || s(r.telefono)) } : {}) };
+    return { key: k, codigo: s(r.codigo), nombre, cedula: cedulaVer(s(d.cedula) || s(r.cedula) || (k.startsWith("c:") ? k.slice(2) : "")), tipoIdentificacion: s(d.tipoIdentificacion || d.tipo_identificacion) || "", ...(tel ? { telefono: telefonoEc(s(d.telefono) || s(r.telefono)) } : {}) };
   });
   return { ok: true, items };
 });
