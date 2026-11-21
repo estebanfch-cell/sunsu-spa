@@ -26,9 +26,10 @@ export function usoCompatible(uso: string, tipoBodega: string): boolean {
   return uso === tipoBodega;
 }
 
-/** TK27 + TK127: una venta que sale de Venta toma primero el stock de consignación
- *  del proveedor (bodega CONSIGNACION, luego lotes de proveedor en Venta), nunca en
- *  negativo; el resto sale del stock propio. El dueño viaja en el movimiento.
+/** TK27 + TK127 + TK200: una venta que sale de Venta toma primero el stock propio
+ *  (lotes de Sunsu en Venta); si no alcanza, la consignación del proveedor
+ *  (bodega CONSIGNACION, luego lotes de proveedor en Venta), nunca en negativo.
+ *  El dueño viaja en el movimiento.
  *  Una devolución por edición («edit:…») vuelve a los mismos lotes que el ticket sacó. */
 export async function ventasDesdeConsignacion(db: Db, steps: Step[], bodegas: Row[]): Promise<Step[]> {
   const cons = bodegas.find((b) => s(b.codigo).toUpperCase() === "CONSIGNACION" || s(b.tipo) === "consignacion");
