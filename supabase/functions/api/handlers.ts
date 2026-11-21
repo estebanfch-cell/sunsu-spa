@@ -14,6 +14,7 @@ import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
+import { ticketRecienCreado } from "./ticket_idempotencia.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConvPaqueteGC, saldoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
@@ -595,7 +596,12 @@ function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   return { mlt: round2(mlt), desc: round2(desc) };
 }
 function usosDe(r: R) {
-  return USO_FIELDS.map(([u, f]) => ({ usado: b(r[u]) || !!s(r[f]), fecha: s(r[f]) }));
+  // TK206: la tarjeta de paquete (y pantallas viejas) leen u/f; el API devolvía solo usado/fecha → 0 sesiones.
+  return USO_FIELDS.map(([u, f]) => {
+    const fecha = s(r[f]);
+    const usado = b(r[u]) || !!fecha;
+    return { usado, fecha, u: usado, f: fecha };
+  });
 }
 function blankDia(v: unknown): boolean {
   if (v == null || v === "" || v === false) return true;
@@ -853,6 +859,22 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   } else if (tipoDoc) {
     const det = detectarIdentificacion(p.cedula || "1793219469001", tipoDoc);
     p = { ...p, tipo_identificacion: det.tipo || tipoDoc, tipo_identificacion_sri: det.sri };
+  }
+  if (!p.esSunsu && !p.forzar_duplicado) {
+    try {
+      const cedVars = cedVariantes([p.cedula]);
+      const rec = cedVars.length
+        ? (await consultar(ctx.db, "tickets", { filtros: [{ col: "id_3", op: "in", val: cedVars.slice(0, 20) }], limite: 30, orden: [{ col: "id", dir: "desc" }] })).rows
+        : [];
+      const dup = ticketRecienCreado(rec, p, ctx.now);
+      if (dup) {
+        const num = s(dup.so_num) || s(dup.beta_num);
+        return {
+          ok: true, duplicado: true, ticket: num, so_num: s(dup.so_num), beta_num: s(dup.beta_num),
+          mensaje: "Este ticket ya se envió hace un momento (" + num + "). No se creó otro.",
+        };
+      }
+    } catch { /* si falla la búsqueda, se sigue el alta normal */ }
   }
   const { exigeJustificacionDescuento } = await import("./cuadre_lineas.ts");
   const lineDesc = Array.isArray(p.lineDescuentos) ? p.lineDescuentos as { monto?: unknown; v?: unknown; valor?: unknown }[] : [];
