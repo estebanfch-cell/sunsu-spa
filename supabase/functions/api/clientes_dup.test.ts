@@ -41,14 +41,15 @@ describe("🔗 clientas duplicadas", () => {
   it("cédula/RUC: sin .0, RUC 001 = cédula, 0 de provincia al mostrar, dígito verificador", () => {
     fijarAlias({});
     for (const v of ["1716768062", "1716768062001", "1716768062.0", "17167680620010", "1716768062001.0"]) assert.equal(normCedula(v), "1716768062");
-    assert.equal(cedulaVer("0912345678001"), "0912345678");
+    assert.equal(cedulaVer("0604070706001"), "0604070706");
     assert.equal(normCedula("A80302695 "), "A80302695");
     assert.equal(normCedula("Emily Hernaiz"), "");
     assert.equal(cedulaValida("1716768062"), true);
     assert.equal(cedulaValida("1716768063"), false);
     assert.equal(claveCliente({ id_3: "1716768062001.0" }), "c:1716768062");    // Formato de lectura en todos los módulos: RUC de proveedor queda RUC, sin .0; celular +593.
     assert.equal(idVer("1793161898001.0"), "1793161898001");
-    assert.equal(idVer(912345678), "0912345678");
+    assert.equal(idVer(604070706), "0604070706");
+    assert.equal(idVer(164804287), "164804287");
     const r = formatearRespuesta({ items: [{ RUC: "1793161898001.0", "TELÉFONO": "987684789.0", telefono: 982553873, nombre: "Ana 1.0" }] });
     assert.deepEqual(r.items[0], { RUC: "1793161898001", "TELÉFONO": "+593 98 768 4789", telefono: "+593 98 255 3873", nombre: "Ana 1.0" });
   });

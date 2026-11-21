@@ -1,18 +1,21 @@
 // TK163 · Portal de clientas y proveedores (Emilia 20/11). Reglas puras (sin base): validaciones, coincidencias
 // para atar la cuenta a la clienta / proveedor y la limpieza de lo que ve cada quien. Se prueban en portal.test.ts.
-import { cedulasCompatibles, n, normCedula, normNombre, s, type Row } from "./domain.ts";
+import { cedulasCompatibles, detectarIdentificacion, n, normCedula, normNombre, s, type Row } from "./domain.ts";
 
-/** Cédula ecuatoriana (10 dígitos con dígito verificador), RUC (13, termina en 001) o pasaporte (5–20 letras/números). */
-export function validarIdentificacion(v: unknown, permitirRuc = false): string | null {
-  const t = s(v).trim().toUpperCase().replace(/[\s.-]/g, "");
-  if (!t) return "Escribe tu cédula";
-  if (/^\d+$/.test(t)) {
-    if (t.length === 10) return cedulaEcValida(t) ? null : "Esa cédula no es válida";
-    if (permitirRuc && t.length === 13 && t.endsWith("001")) return null;
-    return permitirRuc ? "Escribe una cédula de 10 dígitos o un RUC de 13" : "La cédula tiene 10 dígitos";
+/** Cédula (checksum), RUC (si permitirRuc) o, si el tipo es Pasaporte/Otro o el valor trae letras, documento alfanumérico sin checksum.
+ *  Si un número no calza como cédula, el error sugiere cambiar el tipo (no solo «inválida»). */
+export function validarIdentificacion(v: unknown, permitirRuc = false, tipo?: unknown): string | null {
+  const raw = s(v).trim().toUpperCase().replace(/[\s.-]/g, "");
+  if (!raw) return "Escribe tu cédula, RUC o pasaporte";
+  const tip = s(tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (tip === "pasaporte" || tip === "06" || tip === "otro" || tip === "08") {
+    return detectarIdentificacion(raw, tip === "otro" || tip === "08" ? "otro" : "pasaporte").error;
   }
-  if (/^[A-Z0-9]{5,20}$/.test(t) && /\d/.test(t)) return null; // pasaporte
-  return "Esa identificación no es válida";
+  if (/[A-Z]/.test(raw)) return detectarIdentificacion(raw, "pasaporte").error; // pasaporte con letras, sin tipo
+  if (permitirRuc && /^\d{13}$/.test(raw)) return detectarIdentificacion(raw, "ruc").error;
+  const det = detectarIdentificacion(raw, tip || "cedula");
+  if (!det.error) return det.tipo === "ruc" && !permitirRuc ? "Escribe una cédula de 10 dígitos o un RUC de 13" : null;
+  return det.error;
 }
 export function cedulaEcValida(c: string): boolean {
   if (!/^\d{10}$/.test(c)) return false;

@@ -168,7 +168,7 @@
     });
   }
   function cols() {
-    var c = [["nombre", "Clienta"], ["codigo", "Código"], ["cedula", "Cédula"], ["visitas", "Visitas", 1], ["ultima", "Última visita"]];
+    var c = [["nombre", "Clienta"], ["codigo", "Código"], ["cedula", "Identificación"], ["visitas", "Visitas", 1], ["ultima", "Última visita"]];
     if (K.admin) c.push(["total", "Total gastado", 1]);
     if (K.admin && (K.L || []).some(function (x) { return "telefono" in x; })) c.push(["telefono", "Teléfono"]);
     c.push(["paquetesActivos", "Paquetes", 1]);
@@ -604,11 +604,18 @@
   }
   function regHtmlViejo() {
     var d = K.d;
-    if (K.edit) return '<div class="mccl-reg">' + d.campos.map(function (c) { return "<div><b>" + e(lblE(c[1])) + '</b><input data-c="' + e(c[0]) + '" value="' + e(d.datos[c[0]] || "") + '"' + (c[0] === "nacimiento" ? ' type="date"' : "") + "></div>"; }).join("") + "</div>" +
+    if (K.edit) return '<div class="mccl-reg">' + d.campos.map(function (c) {
+      if (c[0] === "tipoIdentificacion") {
+        var cur = d.datos.tipoIdentificacion || "cedula";
+        var opts = (window.SunsuIdent ? window.SunsuIdent.tipos() : [{id:"cedula",etq:"Cédula"},{id:"ruc",etq:"RUC"},{id:"pasaporte",etq:"Pasaporte"},{id:"otro",etq:"Otro (documento de identidad extranjero)"}]);
+        return "<div><b>" + e(lblE(c[1])) + '</b><select data-c="' + e(c[0]) + '">' + opts.map(function (o) { return '<option value="' + o.id + '"' + (o.id === cur ? " selected" : "") + ">" + o.etq + "</option>"; }).join("") + "</select></div>";
+      }
+      return "<div><b>" + e(lblE(c[1])) + '</b><input data-c="' + e(c[0]) + '" value="' + e(d.datos[c[0]] || "") + '"' + (c[0] === "nacimiento" ? ' type="date"' : "") + "></div>";
+    }).join("") + "</div>" +
       (d.puedeEditar ? "" : '<p style="margin:10px 0 4px;font-size:.8rem;font-weight:700">Motivo del cambio</p><input type="text" id="mccl-mot" style="width:100%;padding:8px;border:1.5px solid var(--cream-d);border-radius:9px" placeholder="Ej. cambió de teléfono">') +
       '<p class="err" id="mccl-err"></p><div class="mccl-acts"><button class="btn small" type="button" id="mccl-ok">' + (d.puedeEditar ? "Guardar" : "Enviar solicitud") + '</button><button class="btn ghost small" type="button" id="mccl-no">Cancelar</button></div>';
     var v = d.campos.filter(function (c) { return d.datos[c[0]]; });
-    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : d.datos[c[0]]) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
+    return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : (c[0]==="tipoIdentificacion"&&window.SunsuIdent?window.SunsuIdent.etq(d.datos[c[0]]):d.datos[c[0]])) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
   }
   function htmlFicha() {
     var d = K.d, r = d.resumen, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
@@ -617,7 +624,7 @@
     if (d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
     return '<div id="mccl-root"><p><button class="btn ghost small" type="button" id="mccl-volver" data-go="#/m/clientes">← Volver a la lista</button></p>' +
       (d.borrado ? '<p class="err">Clienta eliminada' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
-      '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · CI " + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
+      '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · " + e((window.SunsuIdent&&d.datos.tipoIdentificacion)?window.SunsuIdent.etq(d.datos.tipoIdentificacion)+" ":"") + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
       '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
       (d.borrado ? (d.puedeEditar ? '<button class="btn ghost small" type="button" id="mccl-rest">Restaurar</button>' : "") :
         '<button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div></div>" +

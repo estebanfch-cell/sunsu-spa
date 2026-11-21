@@ -115,9 +115,13 @@
       '<div class="lg-tabs" role="tablist"><button type="button" class="lg-tab' + (cli ? " on" : "") + '" data-t="cliente">Soy clienta</button><button type="button" class="lg-tab' + (cli ? "" : " on") + '" data-t="proveedor">Soy proveedor</button></div>' +
       "<h2>Crear cuenta</h2>" +
       (cli ? '<label for="c-n">Nombre completo</label><input id="c-n" autocomplete="name" maxlength="120" required>' +
-        '<label for="c-c">Cédula (o pasaporte)</label><input id="c-c" inputmode="numeric" autocomplete="off" maxlength="20" required>'
+        '<label for="c-tipo">Tipo de documento</label><select id="c-tipo"><option value="cedula" selected>Cédula</option><option value="ruc">RUC</option><option value="pasaporte">Pasaporte</option><option value="otro">Otro (documento de identidad extranjero)</option></select>' +
+        '<label for="c-c">Identificación</label><input id="c-c" autocomplete="off" maxlength="30" required>' +
+        '<p class="pt-muted" id="c-ident-hint" hidden></p>'
         : '<label for="c-n">Nombre o razón social</label><input id="c-n" autocomplete="organization" maxlength="120" required>' +
-        '<label for="c-c">RUC o cédula</label><input id="c-c" inputmode="numeric" maxlength="20" required>') +
+        '<label for="c-tipo">Tipo de documento</label><select id="c-tipo"><option value="ruc" selected>RUC</option><option value="cedula">Cédula</option><option value="pasaporte">Pasaporte</option><option value="otro">Otro (documento de identidad extranjero)</option></select>' +
+        '<label for="c-c">Identificación</label><input id="c-c" maxlength="30" required>' +
+        '<p class="pt-muted" id="c-ident-hint" hidden></p>') +
       '<label for="c-e">Correo</label><input id="c-e" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="160" required>' +
       '<label for="c-t">Teléfono</label><input id="c-t" type="tel" autocomplete="tel" maxlength="20" required>' +
       (cli ? '<label for="c-b">Fecha de nacimiento (opcional)</label><input id="c-b" type="date">' : "") +
@@ -132,7 +136,7 @@
     $("pt-cf").onsubmit = async function (ev) {
       ev.preventDefault();
       var body = { nombre: $("c-n").value.trim(), email: $("c-e").value.trim().toLowerCase(), telefono: $("c-t").value.trim(), password: $("c-p").value, password2: $("c-p").value, acepta: $("c-a").checked };
-      if (cli) { body.cedula = $("c-c").value.trim(); body.nacimiento = $("c-b").value || ""; } else body.ruc = $("c-c").value.trim();
+      if (cli) { body.cedula = $("c-c").value.trim(); body.tipo_identificacion = ($("c-tipo")&&$("c-tipo").value)||"cedula"; body.nacimiento = $("c-b").value || ""; } else { body.ruc = $("c-c").value.trim(); body.tipo_identificacion = ($("c-tipo")&&$("c-tipo").value)||"ruc"; }
       if (!body.acepta) { $("c-err").textContent = "Acepta la política de privacidad para continuar"; return; }
       var b = $("c-go"); b.disabled = true;
       var d = await papi(cli ? "portal_signup_cliente" : "portal_signup_proveedor", body);
@@ -353,7 +357,7 @@
     var h = "";
     if (cli) {
       var p = P.data.perfil || {};
-      h += '<div class="pt-card pt-f"><h3>Mi perfil</h3><div class="pt-row"><div><small>Código</small><br><b>' + e(P.data.codigo || "—") + '</b></div><div style="text-align:right"><small>Cédula</small><br><b>' + e(p.cedula || "—") + "</b></div></div>" +
+      h += '<div class="pt-card pt-f"><h3>Mi perfil</h3><div class="pt-row"><div><small>Código</small><br><b>' + e(P.data.codigo || "—") + '</b></div><div style="text-align:right"><small>Identificación</small><br><b>' + e(p.cedula || "—") + "</b></div></div>" +
         (P.data.campos || []).map(function (c) { var k = c[0], tipo = k === "nacimiento" ? "date" : k === "email" ? "email" : k === "telefono" ? "tel" : "text"; var largo = /alergias|medicacion|condiciones|preferencias|notaClienta/.test(k); return '<label for="pf-' + k + '">' + e(c[1]) + "</label>" + (largo ? '<textarea id="pf-' + k + '" data-pf="' + k + '" rows="2" maxlength="500">' + e(p[k] || "") + "</textarea>" : '<input id="pf-' + k + '" data-pf="' + k + '" type="' + tipo + '" maxlength="160" value="' + e(p[k] || "") + '">'); }).join("") +
         '<p class="pt-muted">Tu cédula y código no se cambian. Si algo está mal, escríbenos.</p><p class="err" id="pf-err"></p><button class="pt-btn" id="pf-ok">Guardar cambios</button></div>';
     }
