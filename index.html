@@ -5352,7 +5352,10 @@ function htmlAsisRolMes(r) {
   if (Number(r.hrsSupl)) filas.push(fila("Suplementarias 50%", r.hrsSupl, r.valSupl));
   if (Number(r.hrsExtr)) filas.push(fila("Feriado 100%", r.hrsExtr, r.valExtr));
   if (Number(r.hrsDesc)) filas.push(fila("Descanso 100%", r.hrsDesc, r.valDesc));
-  return `<div class="asis-rol-mes"><h3>Para tu rol de pagos de ${esc(MES)}</h3><table class="asis-rol-tabla"><thead><tr><th></th><th class="num">Horas</th><th class="num">Valor</th></tr></thead><tbody>${filas.join("")}</tbody></table></div>`;
+  const ult = new Date(Date.UTC(r.anio || 2026, r.mes || 1, 0)).getUTCDate();
+  const asum = Number(r.diasAsumidos) || 0;
+  const nota = `<p class="note">Del 1 al ${ult} de ${esc(MES)}, igual que tu rol de pagos.${asum ? ` Desde hoy hasta el ${ult} se cuenta la jornada completa de tu horario (${asum} día${asum === 1 ? "" : "s"}).` : ""} Las horas extra se cuentan en bloques de 15 min.</p>`;
+  return `<div class="asis-rol-mes"><h3>Para tu rol de pagos de ${esc(MES)}</h3>${nota}<table class="asis-rol-tabla"><thead><tr><th></th><th class="num">Horas</th><th class="num">Valor</th></tr></thead><tbody>${filas.join("")}</tbody></table></div>`;
 }
 function htmlAsisCalendario(cal, vista, fecha) {
   if (!cal || cal.error) return cal && cal.error ? `<p class="err">${esc(cal.error)}</p>` : "";
@@ -5368,14 +5371,15 @@ function htmlAsisCalendario(cal, vista, fecha) {
     return `<div class="asis-dia"><div>${esc(d.fecha)}</div><div class="note">${esc(marca)}</div><div class="hm">${mins ? esc(hHm(mins)) : "—"}</div></div>`;
   }).join("");
   const cuerpo = vista === "mes" ? htmlAsisMesGrid(cal, fecha) : vista === "semana" ? htmlAsisSemanaGrid(cal, fecha) : `<div class="asis-dias">${listaDias || `<p class="note">Sin marcas en este periodo.</p>`}</div>`;
-  const histRows = (cal.historial || []).map((h) => {
+  // TK204: el mes en curso no se lista en el historial (sus horas están en la tabla del rol).
+  const histRows = (cal.historial || []).filter((h) => h.cerrado).map((h) => {
     const etiqueta = String(h.anio) + "-" + String(h.mes).padStart(2, "0");
     return `<button class="asis-hist-row" type="button" data-asis-mes="${esc(etiqueta + "-01")}"><span>${esc(etiqueta)}${h.cerrado ? " · cerrado" : ""}</span><b>${esc((h.total && h.total.texto) || "0 min")}</b></button>`;
   }).join("");
   return `<div class="card" id="asis-dash" style="--asis-color:${esc(cal.color || "#E7DBFF")};margin-top:14px">
     <div class="card-title">Horas de ${esc(tit)}</div>
-    <div class="asis-totales">${tot("hoy","Hoy", b.hoy)}${tot("semana","Esta semana (" + textoSemanaAsis(typeof ymdGuayaquil === "function" ? ymdGuayaquil() : (fecha || "")) + ")", b.semana)}${tot("mes","Este mes", b.mes)}</div>
-    ${htmlDesgloseHoras(desgloseVista)}
+    <div class="asis-totales">${tot("hoy","Hoy", b.hoy)}${tot("semana","Esta semana (" + textoSemanaAsis(typeof ymdGuayaquil === "function" ? ymdGuayaquil() : (fecha || "")) + ")", b.semana)}</div>
+    ${/* TK204 (Emilia t847u): sin «Este mes» ni su desglose; las horas del mes salen SOLO de la tabla del rol. */ ""}
     ${htmlAsisRolMes(cal.rolMes)}
     <div class="asis-tabs">${tabs}</div>
     ${cuerpo}
@@ -8630,7 +8634,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK203"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-21-TK204"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
