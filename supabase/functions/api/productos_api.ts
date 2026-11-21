@@ -177,6 +177,8 @@ function fila(p: Row, b: Base): Row {
     skuCabina: skuInternoDe(p, s(p.codigo_interno) || s(cab?.codigo) || code),
     pendienteConteo: p.beta_pendiente_conteo === true,
     pendienteConteoTxt: p.beta_pendiente_conteo === true ? FLAG_PENDIENTE_CONTEO : "",
+    beta_origen: s(p.beta_origen),
+    bodega_origen_venta: s(p.bodega_origen_venta),
     // Incluye el código de la hoja de cabina (cabina_inventario) si el producto aún no tiene uno propio.
     barras: [...new Set([s(p.codigo_barras).replace(/\.0$/, ""), ...arr(p.beta_codigos).map((x) => s((x as Row).codigo)), s(p.codigo_barras) || arr(p.beta_codigos).length ? "" : s(cab?.codigo_barras).replace(/\.0+$/, "")].filter(Boolean))],
   };

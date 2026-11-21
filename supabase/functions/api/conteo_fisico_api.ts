@@ -13,6 +13,7 @@ import { n, round2, s, skuCode, type Row } from "./domain.ts";
 import { BOD_CABINA, BOD_CASA, BOD_VENTA, GRUPO_NOMBRE, SUBS_CABINA } from "./productos.ts";
 import { listaProductos } from "./productos_api.ts";
 import { aplicarConteoAStock } from "./conteo_aplica_stock.ts";
+import { consigEfectiva, famsConsig } from "./consig_config.ts";
 
 export const BODEGAS_CONTEO = ["CONSIGNACION", "CABINA", "OFICINA"] as const;
 export const ESTADOS_CONTEO: Record<string, string> = {
@@ -88,6 +89,11 @@ export function sistemaDe(p: Row, bodega: string, sub: string): number {
 /** Bodega de la línea (Venta=CONSIGNACION, kardex Consignación=BCONSIG) o, si no hay, la del conteo. */
 export function bodegaDeLinea(l: Row, c: Row): string {
   return (s(l.bodega) || s(c.bodega)).toUpperCase();
+}
+/** Etiqueta visible: Consignación si el proveedor está ON y el producto no está apagado (área Proveedores). */
+export function origenConteo(p: Row | undefined, on: Set<string>): { origen: string; origenNombre: string } {
+  if (p && consigEfectiva(p, on)) return { origen: "consignacion", origenNombre: "Consignación" };
+  return { origen: "propio", origenNombre: "Propio/Nuestro" };
 }
 export function resumenLineas(L: Row[]): Row {
   const contadas = L.filter((l) => s(l.estado) !== "pendiente").length;
@@ -214,6 +220,7 @@ extend("cf_get", "any", async (p, ctx, ses) => {
   const desde = s(r.c.iniciado_at), hasta = s(r.c.enviado_at) || s(r.c.cerrado_at);
   const prods = s(r.c.estado) === "asignado" ? [] : await listaProductos(ctx, ses);
   const porId = new Map(prods.map((x) => [s(x.id), x]));
+  const onConsig = await famsConsig(ctx);
   const recs: Row[] = [];
   const lineas = [];
   for (const l of r.L) {
@@ -227,9 +234,11 @@ extend("cf_get", "any", async (p, ctx, ses) => {
     for (const m of movs) recs.push({ ...m, sku: s(m.sku) || s(l.sku), lineaId: l.id });
     const etqBod = bodegaNombre(bod);
     const fromSub = subLin && !/^CABINA_?\d+$/i.test(subLin) && subLin !== "SIN" ? (etqBod + " · " + subLin) : (subLin && /^CABINA_?\d+$/i.test(subLin) ? (etqBod + " · " + subLin.replace(/^CABINA_?/, "Cabina ")) : etqBod);
+    const ori = origenConteo(pr, onConsig);
     lineas.push({
       id: l.id, orden: n(l.orden), productoId: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre),
       bodega: bod, sububicacion: s(l.sububicacion), fromSub, subCodigo: subLin,
+      origen: ori.origen, origenNombre: ori.origenNombre,
       sistema: admin ? n(l.sistema) : null, mov: round2(mov), esperado: esp,
       contado: l.contado == null || l.contado === "" ? null : n(l.contado), estado: s(l.estado),
       subContada: s(l.sub_contada), buscar: l.buscar === true, otraSub: s(l.otra_sub),
@@ -262,32 +271,23 @@ extend("cf_iniciar", "any", async (p, ctx, ses) => {
     const m = s(sku).toUpperCase().match(/^([A-Z]{2,10})-/);
     return m ? m[1] : "";
   };
-  const destOrd = ["CONSIGNACION", "BCONSIG", "CABINA", "OFICINA"];
-  // Foto del stock AHORA. Sin familias: solo lo que tiene stock en esa bodega.
-  // Con familias (consignación): todos los activos, también en 0. Si la bodega es Venta
-  // (clave CONSIGNACION), se cuenta también el kardex Consignación (BCONSIG), una línea por bodega.
-  const destinos = (bodega === "CONSIGNACION" && fams.length) ? ["CONSIGNACION", "BCONSIG"] : [bodega];
+  // Foto del stock AHORA, una sola bodega, una línea por producto.
+  // Con familias (consignación/venta): todos los activos de esas familias, también en 0.
+  // Sin familias: solo lo que tiene stock en esa bodega.
   const base = (await listaProductos(ctx, ses)).filter((x) => x.tipo !== "servicio" && x.activo !== false)
     .filter((x) => !fams.length || fams.some((f) => s(x.sku).startsWith(f + "-") || s(x.skuVisible).startsWith(f + "-")));
-  const prods: { x: Row; q: number; dest: string }[] = [];
-  for (const dest of destinos) {
-    for (const x of base) {
-      const q = sistemaDe(x, dest, dest === bodega ? sub : "");
-      if (!fams.length && Math.abs(q) <= 1e-9) continue;
-      prods.push({ x, q, dest });
-    }
-  }
-  prods.sort((a, b) => {
-    const ia = famOrd.has(famDe(a.x.sku)) ? famOrd.get(famDe(a.x.sku))! : 99;
-    const ib = famOrd.has(famDe(b.x.sku)) ? famOrd.get(famDe(b.x.sku))! : 99;
-    const da = destOrd.indexOf(a.dest), db = destOrd.indexOf(b.dest);
-    return ia - ib || s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true }) || (da < 0 ? 9 : da) - (db < 0 ? 9 : db);
-  });
+  const prods = base.map((x) => ({ x, q: sistemaDe(x, bodega, sub) }))
+    .filter((o) => fams.length || Math.abs(o.q) > 1e-9)
+    .sort((a, b) => {
+      const ia = famOrd.has(famDe(a.x.sku)) ? famOrd.get(famDe(a.x.sku))! : 99;
+      const ib = famOrd.has(famDe(b.x.sku)) ? famOrd.get(famDe(b.x.sku))! : 99;
+      return ia - ib || s(a.x.sku).localeCompare(s(b.x.sku), "es", { numeric: true });
+    });
   let i = 0;
   for (const o of prods.slice(0, 1500)) {
     await ctx.db.write(actorOf(ses), "beta_conteo_lineas", "insert", {}, {
       id: crypto.randomUUID(), conteo_id: r.c.id, orden: ++i, producto_id: s(o.x.id), sku: s(o.x.skuVisible || o.x.sku), nombre: s(o.x.nombre),
-      bodega: o.dest, sububicacion: (o.dest === bodega ? (sub || subUnica(o.x, o.dest) || null) : null), sistema: round2(o.q), estado: "pendiente",
+      bodega, sububicacion: sub || subUnica(o.x, bodega) || null, sistema: round2(o.q), estado: "pendiente",
     });
   }
   await ctx.db.write(actorOf(ses), "beta_conteos", "update", { id: r.c.id }, { estado: "en_conteo", iniciado_at: ctx.now.toISOString(), iniciado_por: actorOf(ses), updated_at: ctx.now.toISOString() });
