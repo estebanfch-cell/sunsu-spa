@@ -10,7 +10,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { n, round2, s, type Row } from "./domain.ts";
 import { listaProductos } from "./productos_api.ts";
-import { bodegaNombre, sistemaDe } from "./conteo_fisico_api.ts";
+import { bodegaDeLinea, bodegaNombre, sistemaDe } from "./conteo_fisico_api.ts";
 import { PROP_CONSIG, PROP_SUNSU, esBodegaInterna, propietarioDe } from "./inventario_modelo.ts";
 
 export function lineaContada(l: Row): boolean {
@@ -69,14 +69,15 @@ export async function aplicarConteoAStock(ctx: Ctx, ses: Ses, c: Row, L: Row[]):
   const filas: Row[] = [];
   for (const l of contadas) {
     const pr = porId.get(s(l.producto_id));
-    const sub = subDeLinea(l, s(c.sububicacion));
-    const ahora = pr ? round2(sistemaDe(pr, bodega, "")) : round2(n(l.sistema));
+    const bod = bodegaDeLinea(l, c);
+    const sub = subDeLinea(l, bod === bodega ? s(c.sububicacion) : "");
+    const ahora = pr ? round2(sistemaDe(pr, bod, "")) : round2(n(l.sistema));
     const despues = cantidadContada(l);
     const dif = round2(despues - ahora);
     filas.push({
       producto_id: s(l.producto_id), sku: s(pr?.skuVisible || pr?.sku || l.sku), nombre: s(pr?.nombre || l.nombre),
-      sub, antes: ahora, despues, diferencia: dif,
-      propietario: duenioDeBodega(bodega, stockRows, s(l.producto_id)),
+      bodega: bod, sub, antes: ahora, despues, diferencia: dif,
+      propietario: duenioDeBodega(bod, stockRows, s(l.producto_id)),
     });
   }
   const conDif = filas.filter((f) => Math.abs(n(f.diferencia)) > 1e-9);
@@ -95,6 +96,7 @@ export async function aplicarConteoAStock(ctx: Ctx, ses: Ses, c: Row, L: Row[]):
     } catch { /* si falta 0047, igual se escriben los movimientos */ }
     let i = 0;
     for (const f of conDif) {
+      const bod = s(f.bodega) || bodega;
       try {
         await ctx.db.write(actor, "beta_ajuste_lineas", "insert", {}, {
           id: crypto.randomUUID(), ajuste_id: ajusteId, orden: ++i,
@@ -104,10 +106,10 @@ export async function aplicarConteoAStock(ctx: Ctx, ses: Ses, c: Row, L: Row[]):
       } catch { /* ok */ }
       await ctx.db.write(actor, "beta_stock_movimientos", "insert", {}, {
         id: crypto.randomUUID(), fecha: now, producto_id: s(f.producto_id), sku: s(f.sku),
-        bodega, sububicacion: s(f.sub) || null, delta: n(f.diferencia),
+        bodega: bod, sububicacion: s(f.sub) || null, delta: n(f.diferencia),
         tipo: "conteo", doc_id: s(c.id), doc_numero: s(c.numero), actor,
-        nota: "Conteo físico " + s(c.numero) + (numero ? " · " + numero : "") + (s(f.sub) ? " · " + s(f.sub) : ""),
-        propietario: s(f.propietario) || (esBodegaInterna(bodega) ? PROP_SUNSU : PROP_CONSIG),
+        nota: "Conteo físico " + s(c.numero) + (numero ? " · " + numero : "") + " · " + bodegaNombre(bod) + (s(f.sub) ? " · " + s(f.sub) : ""),
+        propietario: s(f.propietario) || (esBodegaInterna(bod) ? PROP_SUNSU : PROP_CONSIG),
       });
     }
   }
