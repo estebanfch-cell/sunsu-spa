@@ -533,8 +533,8 @@ extend("cf_sec_cerrar", "any", async (p, ctx, ses) => {
   const L = await lineasDe(ctx, s(r.s.id));
   const buscar = L.filter((l) => l.buscar === true).length;
   if (buscar) return { error: buscar + " producto(s) en «Buscar después»: encuéntralos antes de terminar la sección" };
-  const faltan = L.filter((l) => (l.contado == null || l.contado === "") && s(l.estado) !== "no_encontrado" && !s(l.otra_sub)).length;
-  if (faltan && p.forzar !== true) return { ok: false, faltan, pregunta: "Quedan " + faltan + " producto(s) sin contar; no se ajustarán. ¿Terminar la sección y enviarla a revisión?" };
+  const faltan = L.filter((l) => (l.contado == null || l.contado === "") && s(l.estado) !== "no_encontrado").length;
+  if (faltan) return { error: "Faltan " + faltan + " productos por contar. Escribe la cantidad (0 si no hay) o marca «No está». No se puede terminar con líneas en blanco.", faltan };
   const actor = actorOf(ses), now = ctx.now.toISOString();
   const prods = await listaProductos(ctx, ses);
   const porId = new Map(prods.map((x) => [s(x.id), x]));

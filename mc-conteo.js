@@ -1004,11 +1004,7 @@
       var ep = d.modo === "bodega" ? "cf_enviar" : "cf_sec_cerrar";
       var ident = d.modo === "bodega" ? d.conteo.id : d.seccion.id;
       var r = await api(ep, { id: ident });
-      if (r && r.faltan) {
-        if (!confirm(r.pregunta || ("Quedan " + r.faltan + " sin contar. ¿Terminar y enviar a revisión?"))) return;
-        r = await api(ep, { id: ident, forzar: true });
-      }
-      if (!r || r.error) return alert((r && r.error) || "No se pudo terminar");
+      if (!r || r.error || r.faltan) return alert((r && (r.error || (r.faltan ? ("Faltan " + r.faltan + " productos por contar. Escribe la cantidad (0 si no hay) o marca «No está».") : ""))) || "No se pudo terminar");
       go(d.modo === "bodega" ? "#/m/conteos" : "#/m/conteos/cf/" + encodeURIComponent(d.conteo.id));
     };
     var okb = main.querySelector("#mccf-sec-ok");
