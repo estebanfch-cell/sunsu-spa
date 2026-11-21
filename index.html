@@ -5247,7 +5247,11 @@ function htmlDesgloseHoras(b) {
   const parts = [];
   if ((b.normales && b.normales.totalMin) > 0) parts.push("Horas normales: " + esc(b.normales.texto));
   if ((b.extra50 && b.extra50.totalMin) > 0) parts.push("Horas extra 50%: " + esc(b.extra50.texto));
-  if ((b.extra100 && b.extra100.totalMin) > 0) parts.push("Horas extra 100%: " + esc(b.extra100.texto));
+  // TK199 (Emilia t835u): feriado y descanso por separado, igual que el rol de pagos.
+  if (b.feriado100 || b.descanso100) {
+    if ((b.feriado100 && b.feriado100.totalMin) > 0) parts.push("Feriado 100%: " + esc(b.feriado100.texto));
+    if ((b.descanso100 && b.descanso100.totalMin) > 0) parts.push("Descanso 100%: " + esc(b.descanso100.texto));
+  } else if ((b.extra100 && b.extra100.totalMin) > 0) parts.push("Horas extra 100%: " + esc(b.extra100.texto));
   if ((b.atrasoMin || 0) > 0) parts.push("Atraso: " + esc(b.atrasoMin) + " min");
   return parts.length ? `<div class="asis-desglose">${parts.join(" · ")}</div>` : "";
 }
@@ -5346,8 +5350,8 @@ function htmlAsisRolMes(r) {
   const fila = (lbl, hrs, val) => `<tr><td>${esc(lbl)}</td><td class="num">${esc(h(hrs))}</td><td class="num">${val != null ? "$" + mon2(val) : "—"}</td></tr>`;
   const filas = [fila("Normales", r.hrsNormales, null)];
   if (Number(r.hrsSupl)) filas.push(fila("Suplementarias 50%", r.hrsSupl, r.valSupl));
-  if (Number(r.hrsExtr)) filas.push(fila("Extraordinarias 100%", r.hrsExtr, r.valExtr));
-  if (Number(r.hrsDesc)) filas.push(fila("Descanso / feriado 100%", r.hrsDesc, r.valDesc));
+  if (Number(r.hrsExtr)) filas.push(fila("Feriado 100%", r.hrsExtr, r.valExtr));
+  if (Number(r.hrsDesc)) filas.push(fila("Descanso 100%", r.hrsDesc, r.valDesc));
   return `<div class="asis-rol-mes"><h3>Para tu rol de pagos de ${esc(MES)}</h3><table class="asis-rol-tabla"><thead><tr><th></th><th class="num">Horas</th><th class="num">Valor</th></tr></thead><tbody>${filas.join("")}</tbody></table></div>`;
 }
 function htmlAsisCalendario(cal, vista, fecha) {
@@ -5916,7 +5920,7 @@ function htmlPreRol(r) {
     <div class="rol-line"><span class="concepto">Total trabajado</span><span class="monto">${esc(hm(h.trabajadoMin))}</span></div>
     <div class="rol-line"><span class="concepto">Normales</span><span class="monto">${esc(hm(h.normalesMin))}</span></div>
     ${h.suplMin ? `<div class="rol-line"><span class="concepto">Suplementarias 50%</span><span class="monto">${esc(hm(h.suplMin))}</span></div>` : ""}
-    ${h.extrMin ? `<div class="rol-line"><span class="concepto">Extraordinarias 100% (noche/feriado)</span><span class="monto">${esc(hm(h.extrMin))}</span></div>` : ""}
+    ${h.extrMin ? `<div class="rol-line"><span class="concepto">Feriado 100%</span><span class="monto">${esc(hm(h.extrMin))}</span></div>` : ""}
     ${h.descMin ? `<div class="rol-line"><span class="concepto">Descanso 100%</span><span class="monto">${esc(hm(h.descMin))}</span></div>` : ""}
     <p class="note">${h.diasConMarca ? esc(h.diasConMarca) + " día(s) con marca de la app · " : ""}${esc(h.diasJibble)} día(s) de Jibble${h.faltas ? " · " + esc(h.faltas) + " falta(s)" : ""}.</p>` : "";
   const supuesto = d.asumidoDesde ? `<p class="note">Desde el ${esc(fmtDiaCorto(d.asumidoDesde))} hasta fin de mes se asume la jornada del horario${d.ultimoDato ? " (último dato: " + esc(fmtDiaCorto(d.ultimoDato)) + ")" : " (sin marcas ni Jibble este mes)"}.</p>` : "";
@@ -6077,9 +6081,9 @@ function htmlRolEditable(d, campo, linea, hrs) {
     ${campo("comProductos", d.comProductos, "Comisión productos")}
     ${campo("hrsSupl", d.hrsSupl, "Horas suplementarias 50% (hrs)")}
     ${linea("Valor suplementarias", d.valSupl)}
-    ${campo("hrsExtr", d.hrsExtr, "Horas extraordinarias 100% (hrs)")}
-    ${linea("Valor extraordinarias", d.valExtr)}
-    ${campo("hrsDesc", d.hrsDesc, "Horas descanso/feriado 100% (hrs)")}
+    ${campo("hrsExtr", d.hrsExtr, "Horas feriado 100% (hrs)")}
+    ${linea("Valor feriado", d.valExtr)}
+    ${campo("hrsDesc", d.hrsDesc, "Horas descanso 100% (hrs)")}
     ${linea("Valor descanso", d.valDesc)}
     ${linea("Décimo tercero", d.dec13)}
     ${linea("Décimo cuarto", d.dec14)}
@@ -8626,7 +8630,7 @@ window.addEventListener("hashchange", () => {
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
 });
-window.SUNSU_CACHE = "sunsu-2026-11-20-TK198"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-20-TK199"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

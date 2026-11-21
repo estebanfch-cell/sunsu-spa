@@ -61,3 +61,17 @@ Deno.test("TK198: extra solo fuera del horario asignado; 9:30–18:30 completo =
   assertEquals([a.ordinaryMin, a.suplMin], [480, 34]);
   assert(!html.includes("Falta el almuerzo"));
 });
+
+import { clasificarHorasRol } from "./horas_rol.ts";
+Deno.test("TK199: feriado y descanso por separado (feriado aunque caiga en descanso)", () => {
+  const cfg = configDesde(undefined);
+  const m = (f: string, tipo: string, hm: string) => ({ id: f + tipo, nombre: "X", tipo, ts: `${f}T${hm}:00-05:00`, anulado: false });
+  const fer = calcularDia("2026-11-20", [m("2026-11-20", "entrada", "10:03"), m("2026-11-20", "salida", "18:30")], cfg, ["2026-11-20"], [], null, { trabaja: true, desde: "10:00", hasta: "19:00" } as never);
+  assertEquals([fer.extrMin, fer.descMin], [507, 0]);
+  const sab = calcularDia("2026-11-07", [m("2026-11-07", "entrada", "09:54"), m("2026-11-07", "salida", "17:35")], cfg, [], [], null, { trabaja: false, desde: null, hasta: null } as never);
+  assertEquals([sab.extrMin, sab.descMin], [0, 461]);
+  const r = clasificarHorasRol({ anio: 2026, mes: 11, hoy: "2026-11-30", horario: { diasDescanso: [0, 6], jornadaMins: 480 }, feriados: ["2026-11-07"],
+    dias: { "2026-11-07": { fecha: "2026-11-07", nomMin: 461, suplMin: 0, festMin: 0, descMin: 461 } } });
+  assertEquals([r.hrsExtr, r.hrsDesc], [7.5, 0]);
+  assert(html.includes('fila("Feriado 100%"') && html.includes('fila("Descanso 100%"'));
+});
